@@ -5,4 +5,4 @@ front end of letletme.top
 - Next.JS
 - Prisma
 - TailwindCSS
-ESLint + Prettier
+- ESLint + Prettier
