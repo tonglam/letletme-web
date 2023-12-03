@@ -1,10 +1,10 @@
 # letletme-web
-front end of letletme.top
+Front end of letletme.top
 # Tech Stack
 - Typescript
 - Next.JS
 - TailwindCSS
-- ESLint + Prettier
+- ESLint + Prettier + lint-staged
 - Zod
 - shadcn/ui
 - daisyUI
