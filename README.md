@@ -1,8 +1,10 @@
-# letletme_web
+# letletme-web
 front end of letletme.top
 # Tech Stack
 - Typescript
 - Next.JS
-- Prisma
 - TailwindCSS
 - ESLint + Prettier
+- Zod
+- shadcn/ui
+- daisyUI
