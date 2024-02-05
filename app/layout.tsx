@@ -1,38 +1,39 @@
-import './globals.css'
-import { Inter as FontSans } from 'next/font/google'
-import { ThemeProvider } from '@/components/ThemeProvider'
-import Header from '@/components/Header'
-import Footer from '@/components/Footer'
+import { ThemeProvider } from '@/components/ThemeProvider';
+import Footer from '@/components/footer/Footer';
+import Header from '@/components/header/Header';
+import { Inter as FontSans } from 'next/font/google';
+import './globals.css';
 
 export const metadata = {
-  title: 'Let Let Me',
-  description: 'Let Let Me Fpl Tools'
-}
+	title: 'Let Let Me',
+	description: 'Let Let Me Fpl Tools'
+};
 
 export const fontSans = FontSans({
-  subsets: ['latin'],
-  variable: '--font-sans'
-})
+	subsets: ['latin'],
+	variable: '--font-sans'
+});
 
 export default function RootLayout({
-  children
+	children
 }: {
-  children: React.ReactNode
+	children: React.ReactNode;
 }) {
-  return (
-    <html lang="en">
-      <body>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <Header />
-          {children}
-          <Footer />
-        </ThemeProvider>
-      </body>
-    </html>
-  )
+	return (
+		<html lang="en">
+			<head />
+			<body>
+				<ThemeProvider
+					attribute="class"
+					defaultTheme="light"
+					enableSystem
+					disableTransitionOnChange
+				>
+					<Header />
+					{children}
+					<Footer />
+				</ThemeProvider>
+			</body>
+		</html>
+	);
 }
