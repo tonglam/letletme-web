@@ -1,70 +1,62 @@
-'use client';
+'use client'
 
-import { DarkModeIcon } from '@/components/icons/DarkMode';
-import { GithubIcon } from '@/components/icons/Github';
-import { LogoIcon } from '@/components/icons/Logo';
-import { NavMenu } from '@/components/navbar/NavBar';
-import { useState } from 'react';
-import { AiOutlineClose, AiOutlineMenu } from 'react-icons/ai';
-import { EntryIcon } from '../icons/Entry';
+import DarkModeIcon from '@/components/iconButton/DarkMode'
+import UserIcon from '@/components/iconButton/Entry'
+import GithubIcon from '@/components/iconButton/Github'
+import Logo from '@/components/iconButton/Logo'
+import NavBar from '@/components/navbar/NavBar'
+import NavSideBar from '@/components/navbar/NavSideBar'
+import { Cross2Icon } from '@radix-ui/react-icons'
+import { useState } from 'react'
+import { AiOutlineMenu } from 'react-icons/ai'
 
-const Navbar = () => {
-	const [open, setOpen] = useState(false);
+export const Header = () => {
+	const [openNav, setOpenNav] = useState(false)
 
 	const handleNav = () => {
-		setOpen(!open);
-	};
+		setOpenNav(!openNav)
+	}
 
 	return (
-		<nav className="fixed w-full h-20 top-0 left-0 shadow-sm">
-			<div className="flex justify-between p-6">
-				<div className="flex">
-					<LogoIcon />
-					<div className="hidden sm:flex ml-12">
-						<NavMenu />
-					</div>
+		<nav className="flex w-full h-14 top-0 left-0 shadow-sm items-center justify-between pr-4 md:px-12">
+			<div className="w-1/2">
+				<Logo />
+			</div>
+			<div className="hidden md:flex ml-12">
+				<NavBar />
+			</div>
+			<div className="flex items-center">
+				<div className="flex cursor-pointer">
+					<GithubIcon />
+					<DarkModeIcon />
+					<UserIcon />
 				</div>
-				<div className="flex">
-					{/* github icon */}
-					<div className="hidden sm:flex">
-						<GithubIcon />
-					</div>
-					<div className="flex items-center gap-4">
-						{/* sun & moon icons */}
-						<DarkModeIcon />
-						<EntryIcon />
-						{/* mobile navigation menu*/}
-						<div
-							onClick={handleNav}
-							className="sm:hidden cursor-pointer"
-						>
-							<AiOutlineMenu size={25} />
-						</div>
-					</div>
-					{/* mobile navigation */}
-					<div
-						className={
-							open
-								? 'fixed left-0 top-0 w-[65%] md:hidden h-screen p-10 duration-500'
-								: 'fixed left-[-100%] top-0 p-10 ease-in duration-500'
-						}
-					>
-						<div
-							onClick={handleNav}
-							className="cursor-pointer"
-						>
-							<AiOutlineClose size={25} />
-						</div>
-						<div className="px-8">
-							<div className="flex flex-col gap-8 font-bold tracking-wider mt-10">
-								{/* <NavSideMenu /> */}
-							</div>
-						</div>
-					</div>
+				<div
+					className="flex ml-4"
+					onClick={handleNav}
+				>
+					<AiOutlineMenu size={25} />
+				</div>
+			</div>
+			{/* mobile side navigation */}
+			<div
+				className={
+					openNav
+						? 'absolute left-0 top-0 w-[60%] h-full bg-emerald-500 text-white ease-in-out duration-500'
+						: 'absolute left-[-100%] top-0 bottom-0 w-full ease-in-out duration-500'
+				}
+			>
+				{openNav}
+				<div
+					className="absolute top-2 right-2 cursor-pointer"
+					onClick={handleNav}
+				>
+					<Cross2Icon className="h-[1.2rem] w-[1.2rem]" />
+				</div>
+				<div className="flex flex-col uppercase pt-24">
+					<NavSideBar />
 				</div>
 			</div>
 		</nav>
-	);
-};
-
-export default Navbar;
+	)
+}

@@ -14,7 +14,7 @@ const liveLinks: { title: string; href: string; description: string }[] = [
 		href: '/live/match',
 		description: '查看实时更新的比赛结果'
 	}
-];
+]
 
 const summaryLinks: { title: string; href: string; description: string }[] = [
 	{
@@ -37,7 +37,7 @@ const summaryLinks: { title: string; href: string; description: string }[] = [
 		href: '/summary/groupTournament',
 		description: '查看团战数据'
 	}
-];
+]
 
 const statLinks: { title: string; href: string; description: string }[] = [
 	{
@@ -60,10 +60,12 @@ const statLinks: { title: string; href: string; description: string }[] = [
 		href: '/stat/team/[teamId]',
 		description: '查看球队数据'
 	}
-];
+]
 
-export const NavLinks = {
+const NavLinks = {
 	liveLinks,
 	summaryLinks,
 	statLinks
-};
+}
+
+export default NavLinks

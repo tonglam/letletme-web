@@ -1,7 +1,7 @@
 // import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
-export const EntryIcon = () => {
+function Entry() {
 	return (
 		<section>
 			{/* <Button
@@ -31,5 +31,7 @@ export const EntryIcon = () => {
 				</AvatarFallback>
 			</Avatar>
 		</section>
-	);
-};
+	)
+}
+
+export default Entry

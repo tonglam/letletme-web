@@ -1,95 +1,44 @@
-import { Separator } from '@/components/ui/separator';
+// import { CountDown } from '@/components/countDown/CountDown'
+import NexFixture from '@/components/table/FixtureTable'
+// import picture from '@/public/images/donot_trust.png'
+// import Image from 'next/image'
 
 export default function Home() {
 	return (
-		<main className="flex min-h-full flex-col items-center justify-between p-5">
-			{/* <section className="w-full mx-auto">
-				<Image
-					className="border-4 border-black dark:border-slate-500 drop-shadow-xl shadow-black rounded-full mx-auto mt-8"
-					src={picture}
-					alt="Welcome Picture"
-					priority={true}
-				/>
-			</section>
-			<br /> */}
-			<div className="text-2xl items-center">
-				<p>GW15</p>
-				<p>2021-12-06 03:30:00</p>
-				<p>这破游戏</p>
-			</div>
-			<br />
-			<div>
-				<div className="space-y-1">
-					<h4 className="text-xl font-bold text-slate-500 leading-none">
-						GW15 赛程
-					</h4>
+		<main className="flex flex-col w-full items-center justify-between">
+			<div className="flex flex-col w-full items-center justify-between">
+				<div className="flex flex-col space-y-12 mt-8">
+					{/* <div className="flex mx-auto">
+					<Image
+						className="border-2 border-black dark:border-slate-500 drop-shadow-xl shadow-black rounded-lg mx-auto"
+						src={picture}
+						alt="Welcome"
+						sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+						priority={true}
+					/>
 				</div>
-				<Separator className="my-4" />
-				<div>
-					<ul>
-						<li className="flex h-5 items-center space-x-4 text-base">
-							<div className="font-medium">Arsenal vs Manchester City</div>
-							<Separator orientation="vertical" />
-							<div>2023-12-06 03:30:00</div>
-						</li>
-						<Separator className="my-2" />
-						<li className="flex h-5 items-center space-x-4 text-base">
-							<div className="font-medium">Arsenal vs Manchester City</div>
-							<Separator orientation="vertical" />
-							<div>2023-12-06 03:30:00</div>
-						</li>
-						<Separator className="my-2" />
-						<li className="flex h-5 items-center space-x-4 text-base">
-							<div className="font-medium">Arsenal vs Manchester City</div>
-							<Separator orientation="vertical" />
-							<div>2023-12-06 03:30:00</div>
-						</li>
-						<Separator className="my-2" />
-						<li className="flex h-5 items-center space-x-4 text-base">
-							<div className="font-medium">Arsenal vs Manchester City</div>
-							<Separator orientation="vertical" />
-							<div>2023-12-06 03:30:00</div>
-						</li>
-						<Separator className="my-2" />
-						<li className="flex h-5 items-center space-x-4 text-base">
-							<div className="font-medium">Arsenal vs Manchester City</div>
-							<Separator orientation="vertical" />
-							<div>2023-12-06 03:30:00</div>
-						</li>
-						<Separator className="my-2" />
-						<li className="flex h-5 items-center space-x-4 text-base">
-							<div className="font-medium">Arsenal vs Manchester City</div>
-							<Separator orientation="vertical" />
-							<div>2023-12-06 03:30:00</div>
-						</li>
-						<Separator className="my-2" />
-						<li className="flex h-5 items-center space-x-4 text-base">
-							<div className="font-medium">Arsenal vs Manchester City</div>
-							<Separator orientation="vertical" />
-							<div>2023-12-06 03:30:00</div>
-						</li>
-						<Separator className="my-2" />
-						<li className="flex h-5 items-center space-x-4 text-base">
-							<div className="font-medium">Arsenal vs Manchester City</div>
-							<Separator orientation="vertical" />
-							<div>2023-12-06 03:30:00</div>
-						</li>
-						<Separator className="my-2" />
-						<li className="flex h-5 items-center space-x-4 text-base">
-							<div className="font-medium">Arsenal vs Manchester City</div>
-							<Separator orientation="vertical" />
-							<div>2023-12-06 03:30:00</div>
-						</li>
-						<Separator className="my-2" />
-						<li className="flex h-5 items-center space-x-4 text-base">
-							<div className="font-medium">Arsenal vs Manchester City</div>
-							<Separator orientation="vertical" />
-							<div>2023-12-06 03:30:00</div>
-						</li>
-						<Separator className="my-2" />
-					</ul>
+				<div className="mx-auto">
+					<CountDown utcTime="2024-02-10T11:00:00Z" />
+				</div> */}
+					{/* next fixtures */}
+					<NexFixture />
+					{/* <div>
+						<ul>
+							<li className="flex h-5 items-center space-x-4 text-base">
+								<div className="font-medium">Arsenal vs Manchester City</div>
+								<Separator orientation="vertical" />
+								<div>2023-12-06 03:30:00</div>
+							</li>
+							<Separator className="my-2" />
+							<li className="flex h-5 items-center space-x-4 text-base">
+								<div className="font-medium">Arsenal vs Manchester City</div>
+								<Separator orientation="vertical" />
+								<div>2023-12-06 03:30:00</div>
+							</li>
+						</ul>
+					</div> */}
 				</div>
 			</div>
 		</main>
-	);
+	)
 }

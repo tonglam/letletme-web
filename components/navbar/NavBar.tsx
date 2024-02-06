@@ -1,4 +1,6 @@
-import { NavLinks } from '@/components/navbar/NavLinks';
+'use client'
+
+import NavLinks from '@/components/navbar/NavLinks'
 import {
 	NavigationMenu,
 	NavigationMenuContent,
@@ -6,76 +8,78 @@ import {
 	NavigationMenuLink,
 	NavigationMenuList,
 	NavigationMenuTrigger
-} from '@/components/ui/navigation-menu';
-import { cn } from '@/lib/utils';
-import * as React from 'react';
+} from '@/components/ui/navigation-menu'
+import { cn } from '@/lib/utils'
+import * as React from 'react'
 
-const NavigationTriggerClass = 'text-lg gap-2';
+const NavigationTriggerClass = 'text-lg gap-2'
 
 const NavigationItemClass =
-	'grid w-[400px] p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px]';
+	'grid w-[400px] p-4 md:w-[500px] md:grid-cols-2 md:w-[600px]'
 
-export function NavMenu() {
+function NavBar() {
 	return (
-		<NavigationMenu>
-			<NavigationMenuList>
-				<NavigationMenuItem>
-					<NavigationMenuTrigger className={NavigationTriggerClass}>
-						实时
-					</NavigationMenuTrigger>
-					<NavigationMenuContent>
-						<ul className={NavigationItemClass}>
-							{NavLinks.liveLinks.map(component => (
-								<ListItem
-									key={component.title}
-									title={component.title}
-									href={component.href}
-								>
-									{component.description}
-								</ListItem>
-							))}
-						</ul>
-					</NavigationMenuContent>
-				</NavigationMenuItem>
-				<NavigationMenuItem>
-					<NavigationMenuTrigger className={NavigationTriggerClass}>
-						统计
-					</NavigationMenuTrigger>
-					<NavigationMenuContent>
-						<ul className={NavigationItemClass}>
-							{NavLinks.summaryLinks.map(component => (
-								<ListItem
-									key={component.title}
-									title={component.title}
-									href={component.href}
-								>
-									{component.description}
-								</ListItem>
-							))}
-						</ul>
-					</NavigationMenuContent>
-				</NavigationMenuItem>
-				<NavigationMenuItem>
-					<NavigationMenuTrigger className={NavigationTriggerClass}>
-						数据
-					</NavigationMenuTrigger>
-					<NavigationMenuContent>
-						<ul className={NavigationItemClass}>
-							{NavLinks.statLinks.map(component => (
-								<ListItem
-									key={component.title}
-									title={component.title}
-									href={component.href}
-								>
-									{component.description}
-								</ListItem>
-							))}
-						</ul>
-					</NavigationMenuContent>
-				</NavigationMenuItem>
-			</NavigationMenuList>
-		</NavigationMenu>
-	);
+		<section>
+			<NavigationMenu>
+				<NavigationMenuList>
+					<NavigationMenuItem>
+						<NavigationMenuTrigger className={NavigationTriggerClass}>
+							实时
+						</NavigationMenuTrigger>
+						<NavigationMenuContent>
+							<ul className={NavigationItemClass}>
+								{NavLinks.liveLinks.map(component => (
+									<ListItem
+										key={component.title}
+										title={component.title}
+										href={component.href}
+									>
+										{component.description}
+									</ListItem>
+								))}
+							</ul>
+						</NavigationMenuContent>
+					</NavigationMenuItem>
+					<NavigationMenuItem>
+						<NavigationMenuTrigger className={NavigationTriggerClass}>
+							统计
+						</NavigationMenuTrigger>
+						<NavigationMenuContent>
+							<ul className={NavigationItemClass}>
+								{NavLinks.summaryLinks.map(component => (
+									<ListItem
+										key={component.title}
+										title={component.title}
+										href={component.href}
+									>
+										{component.description}
+									</ListItem>
+								))}
+							</ul>
+						</NavigationMenuContent>
+					</NavigationMenuItem>
+					<NavigationMenuItem>
+						<NavigationMenuTrigger className={NavigationTriggerClass}>
+							数据
+						</NavigationMenuTrigger>
+						<NavigationMenuContent>
+							<ul className={NavigationItemClass}>
+								{NavLinks.statLinks.map(component => (
+									<ListItem
+										key={component.title}
+										title={component.title}
+										href={component.href}
+									>
+										{component.description}
+									</ListItem>
+								))}
+							</ul>
+						</NavigationMenuContent>
+					</NavigationMenuItem>
+				</NavigationMenuList>
+			</NavigationMenu>
+		</section>
+	)
 }
 
 const ListItem = React.forwardRef<
@@ -100,6 +104,8 @@ const ListItem = React.forwardRef<
 				</a>
 			</NavigationMenuLink>
 		</li>
-	);
-});
-ListItem.displayName = 'ListItem';
+	)
+})
+ListItem.displayName = 'ListItem'
+
+export default NavBar

@@ -1,8 +1,8 @@
-import Link from 'next/link';
+import Link from 'next/link'
 
-export default function Footer() {
+export const Footer = () => {
 	return (
-		<footer className="bg-white footer footer-center p-4 text-content">
+		<footer className="footer footer-center p-4 text-content mt-8">
 			<aside>
 				<Link
 					href="http://beian.miit.gov.cn"
@@ -12,5 +12,5 @@ export default function Footer() {
 				</Link>
 			</aside>
 		</footer>
-	);
+	)
 }
