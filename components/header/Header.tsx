@@ -18,7 +18,7 @@ export const Header = () => {
 	}
 
 	return (
-		<nav className="flex w-full h-14 top-0 left-0 shadow-sm items-center justify-between pr-4 md:px-12">
+		<nav className="flex w-full h-14 top-0 left-0 shadow-sm items-center justify-between pr-4 md:px-16 lg:px-64">
 			<div className="w-1/2">
 				<Logo />
 			</div>
@@ -32,17 +32,16 @@ export const Header = () => {
 					<UserIcon />
 				</div>
 				<div
-					className="flex ml-4"
+					className="sm:hidden flex ml-4"
 					onClick={handleNav}
 				>
 					<AiOutlineMenu size={25} />
 				</div>
 			</div>
-			{/* mobile side navigation */}
 			<div
 				className={
 					openNav
-						? 'absolute left-0 top-0 w-[60%] h-full bg-emerald-500 text-white ease-in-out duration-500'
+						? 'absolute left-0 top-0 w-[70%] h-full bg-emerald-400 text-white ease-in-out duration-500'
 						: 'absolute left-[-100%] top-0 bottom-0 w-full ease-in-out duration-500'
 				}
 			>

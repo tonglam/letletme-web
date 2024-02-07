@@ -23,9 +23,9 @@ function NavSideBar() {
 	return (
 		<section>
 			<Menu>
-				<Menu.Item>
+				<Menu.Item className="space-y-2 text-xl">
 					<Menu.Dropdown
-						label="实时"
+						label={NavLinks.liveLinks[0].label}
 						onClick={toggleLiveOpen}
 						open={openSideLive}
 					>
@@ -36,7 +36,7 @@ function NavSideBar() {
 						))}
 					</Menu.Dropdown>
 					<Menu.Dropdown
-						label="统计"
+						label={NavLinks.summaryLinks[0].label}
 						onClick={toggleSummaryOpen}
 						open={openSideSummary}
 					>
@@ -47,7 +47,7 @@ function NavSideBar() {
 						))}
 					</Menu.Dropdown>
 					<Menu.Dropdown
-						label="数据"
+						label={NavLinks.statLinks[0].label}
 						onClick={toggleStatOpen}
 						open={openSideStat}
 					>
