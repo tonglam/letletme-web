@@ -5,22 +5,22 @@ const liveLinks: {
 	description: string
 }[] = [
 	{
-		label: '实时',
-		title: '球队',
+		label: 'Live',
+		title: 'Team',
 		href: '/live/entry/[entry]',
-		description: '查看球队实时得分'
+		description: "View the team's real-time score"
 	},
 	{
-		label: '实时',
-		title: '联赛',
+		label: 'Live',
+		title: 'Tournament',
 		href: '/live/tournament/[tournamentId]',
-		description: '查看联赛实时得分和排名'
+		description: "View the tournament's real-time score and ranking"
 	},
 	{
-		label: '实时',
-		title: '比赛',
+		label: 'Live',
+		title: 'Match',
 		href: '/live/match',
-		description: '查看实时更新的比赛结果'
+		description: 'View the real-time score of the Premier League match'
 	}
 ]
 
@@ -31,28 +31,22 @@ const summaryLinks: {
 	description: string
 }[] = [
 	{
-		label: '统计',
-		title: '比赛周',
+		label: 'Summary',
+		title: 'Gameweek',
 		href: '/summary/overall',
-		description: '查看比赛周总体数据'
+		description: 'View overall matchweek data'
 	},
 	{
-		label: '统计',
-		title: '球队',
+		label: 'Summary',
+		title: 'Team',
 		href: '/summary/entry/[entry]',
-		description: '查看球队统计数据'
+		description: 'View team statistics.'
 	},
 	{
-		label: '统计',
-		title: '联赛',
+		label: 'Summary',
+		title: 'Tournament',
 		href: '/summary/tournament/[tournamentId]',
-		description: '查看联赛统计数据'
-	},
-	{
-		label: '统计',
-		title: '团战',
-		href: '/summary/groupTournament',
-		description: '查看团战数据'
+		description: 'View league statistics'
 	}
 ]
 
@@ -63,35 +57,27 @@ const statLinks: {
 	description: string
 }[] = [
 	{
-		label: '数据',
-		title: '身价变化',
+		label: 'Stat',
+		title: 'Price Change',
 		href: '/stat/price',
-		description: '查看每日价格涨跌'
+		description: 'View the daily price changes'
 	},
 	{
-		label: '数据',
-		title: '阵容选择',
+		label: 'Stat',
+		title: 'Selection Result',
 		href: '/stat/select',
-		description: '查看联赛每轮阵容选择结果'
+		description: 'View the event lineup selection results of the tournament'
 	},
 	{
-		label: '数据',
-		title: '球员数据',
+		label: 'Stat',
+		title: 'Player Data',
 		href: '/stat/player/[element]',
-		description: '查看球员数据'
-	},
-	{
-		label: '数据',
-		title: '球队数据',
-		href: '/stat/team/[teamId]',
-		description: '查看球队数据'
+		description: 'View player data'
 	}
 ]
 
-const NavLinks = {
+export const NavLinks = {
 	liveLinks,
 	summaryLinks,
 	statLinks
 }
-
-export default NavLinks

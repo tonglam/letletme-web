@@ -1,4 +1,4 @@
-import { getLogger } from '@/lib/logger'
+import { getLogger } from '@/utils/logger'
 import type { AppProps } from 'next/app'
 
 export default function App({ Component, pageProps }: AppProps) {

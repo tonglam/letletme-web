@@ -2,7 +2,7 @@ import LogoPic from '@/public/assets/logo.svg'
 import Image from 'next/image'
 import Link from 'next/link'
 
-function Logo() {
+export const LogoIcon = () => {
 	return (
 		<section>
 			<Link href="/">
@@ -16,5 +16,3 @@ function Logo() {
 		</section>
 	)
 }
-
-export default Logo

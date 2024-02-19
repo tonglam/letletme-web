@@ -9,7 +9,10 @@ Front end of letletme.top
 - TailwindCSS
 - ESLint + Prettier + lint-staged
 - Zod
-- shadcn/ui
-- react daisyUI
-- pino
+- Shadcn/ui
+- React daisyUI
+- Pino
 - Zustand
+- Clerk
+- Vitest
+- ?Playwright

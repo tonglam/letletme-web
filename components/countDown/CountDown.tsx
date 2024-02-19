@@ -1,35 +1,29 @@
-'use client'
-
 import { useCountdown } from '@/hooks/useCountDown'
 import { Countdown } from 'react-daisyui'
 
-interface CountDownProps {
-	utcTime: string
-}
-
-export function CountDown({ utcTime }: CountDownProps) {
+export const CountDown = ({ utcTime }: { utcTime: string }) => {
 	const [days, hours, minutes, seconds] = useCountdown(utcTime)
 
 	const boxStyle =
-			'flex flex-col p-3 bg-emerald-400 rounded-box text-white-content',
-		fontStyle = 'font-mono text-6xl'
+			'flex flex-col bg-emerald-400 rounded-box justify-items-center text-white-content size-16 lg:size-24 px-3 pt-2 lg:pt-4',
+		fontStyle = 'font-mono text-3xl lg:text-5xl pl-0.5 lg:pl-1.5'
 
 	return (
 		<section>
-			<div className="grid grid-flow-col gap-5 text-center auto-cols-max">
+			<div className="flex space-x-2 text-center">
 				<div className={boxStyle}>
 					<Countdown
 						className={fontStyle}
 						value={days}
 					/>
-					days
+					day
 				</div>
 				<div className={boxStyle}>
 					<Countdown
 						className={fontStyle}
 						value={hours}
 					/>
-					hours
+					hour
 				</div>
 				<div className={boxStyle}>
 					<Countdown

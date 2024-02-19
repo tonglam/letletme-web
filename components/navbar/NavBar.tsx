@@ -1,6 +1,4 @@
-'use client'
-
-import NavLinks from '@/components/navbar/NavLinks'
+import { NavLinks } from '@/components/navbar/NavLinks'
 import {
 	NavigationMenu,
 	NavigationMenuContent,
@@ -17,7 +15,7 @@ const NavigationTriggerClass = 'text-lg gap-2'
 const NavigationItemClass =
 	'grid w-[400px] p-4 md:w-[500px] md:grid-cols-2 md:w-[600px]'
 
-function NavBar() {
+export const NavBar = () => {
 	return (
 		<section>
 			<NavigationMenu>
@@ -107,5 +105,3 @@ const ListItem = React.forwardRef<
 	)
 })
 ListItem.displayName = 'ListItem'
-
-export default NavBar
