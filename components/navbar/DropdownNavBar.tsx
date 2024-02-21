@@ -1,23 +1,106 @@
 'use client'
 
+import { NavLinks } from '@/components/navbar/NavLinks'
 import { Button } from '@/components/ui/button'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuGroup,
 	DropdownMenuItem,
-	DropdownMenuLabel,
 	DropdownMenuPortal,
 	DropdownMenuSeparator,
-	DropdownMenuShortcut,
 	DropdownMenuSub,
 	DropdownMenuSubContent,
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import fplstatistics from '@/public/images/externalSites/fplstatistics.ico'
+import hub from '@/public/images/externalSites/hub.ico'
+import liveFPL from '@/public/images/externalSites/liveFPL.ico'
 import { GitHubLogoIcon as Github } from '@radix-ui/react-icons'
-import { LogOut, Mail, MessageSquare, PlusCircle, UserPlus } from 'lucide-react'
+import { LogOut } from 'lucide-react'
+import Image, { StaticImageData } from 'next/image'
+import Link from 'next/link'
+import React from 'react'
 import { AiOutlineMenu } from 'react-icons/ai'
+import {
+	HiMiniPresentationChartLine,
+	HiNewspaper,
+	HiRocketLaunch,
+	HiUserCircle
+} from 'react-icons/hi2'
+import { IoStatsChart } from 'react-icons/io5'
+
+const iconDefalutStyle = 'mr-2 h-10 w-6'
+const subMenuDefalutStyle =
+	'flex mr-2 h-10 w-30 space-x-2 text-sm items-center justify-start'
+
+const CustomerDropDownItemContent = ({
+	children,
+	title,
+	href
+}: {
+	children?: React.ReactNode
+	title: string
+	href?: string
+	icon?: string
+}) => {
+	return (
+		<DropdownMenuItem>
+			<div className={iconDefalutStyle}>{children}</div>
+			{href && (
+				<Link
+					className={children ? '' : subMenuDefalutStyle + 'pr-8'}
+					href={href}
+					target="_blank"
+				/>
+			)}
+			{title}
+		</DropdownMenuItem>
+	)
+}
+
+const CustomerDropDownSubTrigger = ({
+	children,
+	title
+}: {
+	children: React.ReactNode
+	title: string
+}) => {
+	return (
+		<DropdownMenuSubTrigger>
+			{children}
+			<span>{title}</span>
+		</DropdownMenuSubTrigger>
+	)
+}
+
+const CustomerSubDropdownMenuItem = ({
+	url,
+	picture,
+	title
+}: {
+	url: string
+	picture: StaticImageData
+	title: string
+}) => {
+	return (
+		<DropdownMenuItem>
+			<Link
+				className={subMenuDefalutStyle}
+				href={url}
+				target="_blank"
+			>
+				<Image
+					className="size-4"
+					src={picture}
+					alt={picture.toString()}
+				/>
+				{title}
+			</Link>
+		</DropdownMenuItem>
+	)
+}
 
 export const DropdownNavBar = () => {
 	return (
@@ -31,91 +114,102 @@ export const DropdownNavBar = () => {
 						<AiOutlineMenu className="w-1/2 h-3/4" />
 					</Button>
 				</DropdownMenuTrigger>
-				<DropdownMenuContent className="w-56">
-					<DropdownMenuLabel>My Account</DropdownMenuLabel>
+				<DropdownMenuContent className="w-52 h-screen">
+					<CustomerDropDownItemContent
+						title="My Account"
+						href="/user"
+					>
+						<HiUserCircle className={iconDefalutStyle} />
+					</CustomerDropDownItemContent>
 					<DropdownMenuSeparator />
 					<DropdownMenuGroup>
 						<DropdownMenuSub>
-							<DropdownMenuSubTrigger>
-								<UserPlus className="mr-2 h-4 w-4" />
-								<span>Live</span>
-							</DropdownMenuSubTrigger>
+							<CustomerDropDownSubTrigger title="Live">
+								<HiMiniPresentationChartLine className={iconDefalutStyle} />
+							</CustomerDropDownSubTrigger>
 							<DropdownMenuPortal>
 								<DropdownMenuSubContent>
-									<DropdownMenuItem>
-										<Mail className="mr-2 h-4 w-4" />
-										<span>Email</span>
-									</DropdownMenuItem>
-									<DropdownMenuItem>
-										<MessageSquare className="mr-2 h-4 w-4" />
-										<span>Message</span>
-									</DropdownMenuItem>
-									<DropdownMenuSeparator />
-									<DropdownMenuItem>
-										<PlusCircle className="mr-2 h-4 w-4" />
-										<span>More...</span>
-									</DropdownMenuItem>
+									{NavLinks.liveLinks.map(link => (
+										<CustomerDropDownItemContent
+											key={link.id}
+											title={link.title}
+											href={link.href}
+										></CustomerDropDownItemContent>
+									))}
 								</DropdownMenuSubContent>
 							</DropdownMenuPortal>
 						</DropdownMenuSub>
 						<DropdownMenuSub>
-							<DropdownMenuSubTrigger>
-								<UserPlus className="mr-2 h-4 w-4" />
-								<span>Summary</span>
-							</DropdownMenuSubTrigger>
+							<CustomerDropDownSubTrigger title="Summary">
+								<HiNewspaper className={iconDefalutStyle} />
+							</CustomerDropDownSubTrigger>
 							<DropdownMenuPortal>
 								<DropdownMenuSubContent>
-									<DropdownMenuItem>
-										<Mail className="mr-2 h-4 w-4" />
-										<span>Email</span>
-									</DropdownMenuItem>
-									<DropdownMenuItem>
-										<MessageSquare className="mr-2 h-4 w-4" />
-										<span>Message</span>
-									</DropdownMenuItem>
-									<DropdownMenuSeparator />
-									<DropdownMenuItem>
-										<PlusCircle className="mr-2 h-4 w-4" />
-										<span>More...</span>
-									</DropdownMenuItem>
+									{NavLinks.summaryLinks.map(link => (
+										<CustomerDropDownItemContent
+											key={link.id}
+											title={link.title}
+											href={link.href}
+										/>
+									))}
 								</DropdownMenuSubContent>
 							</DropdownMenuPortal>
 						</DropdownMenuSub>
 						<DropdownMenuSub>
-							<DropdownMenuSubTrigger>
-								<UserPlus className="mr-2 h-4 w-4" />
-								<span>Stat</span>
-							</DropdownMenuSubTrigger>
+							<CustomerDropDownSubTrigger title="Stat">
+								<IoStatsChart className={iconDefalutStyle} />
+							</CustomerDropDownSubTrigger>
 							<DropdownMenuPortal>
 								<DropdownMenuSubContent>
-									<DropdownMenuItem>
-										<Mail className="mr-2 h-4 w-4" />
-										<span>Email</span>
-									</DropdownMenuItem>
-									<DropdownMenuItem>
-										<MessageSquare className="mr-2 h-4 w-4" />
-										<span>Message</span>
-									</DropdownMenuItem>
-									<DropdownMenuSeparator />
-									<DropdownMenuItem>
-										<PlusCircle className="mr-2 h-4 w-4" />
-										<span>More...</span>
-									</DropdownMenuItem>
+									{NavLinks.statLinks.map(link => (
+										<CustomerDropDownItemContent
+											key={link.id}
+											title={link.title}
+											href={link.href}
+										/>
+									))}
 								</DropdownMenuSubContent>
 							</DropdownMenuPortal>
 						</DropdownMenuSub>
 					</DropdownMenuGroup>
 					<DropdownMenuSeparator />
-					<DropdownMenuItem>
-						<Github className="mr-2 h-4 w-4" />
-						<span>GitHub</span>
-					</DropdownMenuItem>
+					<DropdownMenuSub>
+						<CustomerDropDownSubTrigger title="Price Predictor">
+							<HiRocketLaunch className={iconDefalutStyle} />
+						</CustomerDropDownSubTrigger>
+						<DropdownMenuPortal>
+							<DropdownMenuSubContent>
+								<CustomerSubDropdownMenuItem
+									url="https://www.fplstatistics.co.uk/"
+									picture={fplstatistics}
+									title="Statistics"
+								/>
+								<DropdownMenuSeparator />
+								<CustomerSubDropdownMenuItem
+									url="https://www.livefpl.net/prices"
+									picture={liveFPL}
+									title="Live FPL"
+								/>
+								<DropdownMenuSeparator />
+								<CustomerSubDropdownMenuItem
+									url="https://www.fantasyfootballhub.co.uk/fantasy-premier-league-price-rises"
+									picture={hub}
+									title="Hub"
+								/>
+							</DropdownMenuSubContent>
+						</DropdownMenuPortal>
+					</DropdownMenuSub>
+					<CustomerDropDownItemContent
+						title="GitHub"
+						href="https://github.com/tonglam/letletme-web"
+					>
+						<Github className={iconDefalutStyle} />
+					</CustomerDropDownItemContent>
 					<DropdownMenuSeparator />
-					<DropdownMenuItem>
-						<LogOut className="mr-2 h-4 w-4" />
-						<span>Log out</span>
-						<DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
-					</DropdownMenuItem>
+					<CustomerDropDownItemContent title="Log out">
+						<LogOut className={iconDefalutStyle} />
+					</CustomerDropDownItemContent>
+					<DropdownMenuSeparator />
 				</DropdownMenuContent>
 			</DropdownMenu>
 		</div>

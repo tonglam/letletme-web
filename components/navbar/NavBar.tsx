@@ -28,7 +28,7 @@ export const NavBar = () => {
 							<ul className={NavigationItemClass}>
 								{NavLinks.liveLinks.map(component => (
 									<ListItem
-										key={component.title}
+										key={component.id}
 										title={component.title}
 										href={component.href}
 									>
@@ -46,7 +46,7 @@ export const NavBar = () => {
 							<ul className={NavigationItemClass}>
 								{NavLinks.summaryLinks.map(component => (
 									<ListItem
-										key={component.title}
+										key={component.id}
 										title={component.title}
 										href={component.href}
 									>
@@ -64,7 +64,7 @@ export const NavBar = () => {
 							<ul className={NavigationItemClass}>
 								{NavLinks.statLinks.map(component => (
 									<ListItem
-										key={component.title}
+										key={component.id}
 										title={component.title}
 										href={component.href}
 									>

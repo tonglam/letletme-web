@@ -1,22 +1,30 @@
-const liveLinks: {
+export type LinkProps = {
+	id: number
 	label: string
 	title: string
 	href: string
 	description: string
-}[] = [
+	icon?: string
+}
+
+const liveLinks: LinkProps[] = [
 	{
+		id: 1,
 		label: 'Live',
 		title: 'Team',
-		href: '/live/entry/[entry]',
-		description: "View the team's real-time score"
+		href: '/live/entry/1',
+		description: "View the team's real-time score",
+		icon: 'TbScoreboard'
 	},
 	{
+		id: 2,
 		label: 'Live',
 		title: 'Tournament',
-		href: '/live/tournament/[tournamentId]',
+		href: '/live/tournament/1',
 		description: "View the tournament's real-time score and ranking"
 	},
 	{
+		id: 3,
 		label: 'Live',
 		title: 'Match',
 		href: '/live/match',
@@ -24,54 +32,50 @@ const liveLinks: {
 	}
 ]
 
-const summaryLinks: {
-	label: string
-	title: string
-	href: string
-	description: string
-}[] = [
+const summaryLinks: LinkProps[] = [
 	{
+		id: 1,
 		label: 'Summary',
 		title: 'Gameweek',
 		href: '/summary/overall',
 		description: 'View overall matchweek data'
 	},
 	{
+		id: 2,
 		label: 'Summary',
 		title: 'Team',
-		href: '/summary/entry/[entry]',
+		href: '/summary/entry/1',
 		description: 'View team statistics.'
 	},
 	{
+		id: 3,
 		label: 'Summary',
 		title: 'Tournament',
-		href: '/summary/tournament/[tournamentId]',
+		href: '/summary/tournament/1',
 		description: 'View league statistics'
 	}
 ]
 
-const statLinks: {
-	label: string
-	title: string
-	href: string
-	description: string
-}[] = [
+const statLinks: LinkProps[] = [
 	{
+		id: 1,
 		label: 'Stat',
 		title: 'Price Change',
 		href: '/stat/price',
 		description: 'View the daily price changes'
 	},
 	{
+		id: 2,
 		label: 'Stat',
-		title: 'Selection Result',
+		title: 'Selection',
 		href: '/stat/select',
 		description: 'View the event lineup selection results of the tournament'
 	},
 	{
+		id: 3,
 		label: 'Stat',
-		title: 'Player Data',
-		href: '/stat/player/[element]',
+		title: 'Player',
+		href: '/stat/player/1',
 		description: 'View player data'
 	}
 ]

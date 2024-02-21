@@ -1,5 +1,8 @@
-import { DDLCard } from '@/components/card/DDLCard'
-import { FixtureCard, FixtureCardProps } from '@/components/card/FixtureCard'
+import { DDLCard } from '@/components/card/ddl/DDLCard'
+import {
+	FixtureCard,
+	FixtureCardProps
+} from '@/components/card/fixture/FixtureCard'
 import { API_COMMON } from '@/lib/config'
 import picture from '@/public/images/donot_trust.png'
 import { getLogger } from '@/utils/logger'
@@ -8,7 +11,7 @@ import { Suspense } from 'react'
 
 const logger = getLogger('app:page')
 
-async function getDDL() {
+async function fetchDDL() {
 	const res = await fetch(API_COMMON.CURRENT_EVENT_AND_NEXT_UTC_DEADLINE, {
 		next: { tags: ['event'] }
 	})
@@ -21,7 +24,7 @@ async function getDDL() {
 	return await res.json()
 }
 
-async function getNextFixtures(event: number) {
+async function fetchNextFixtures(event: number) {
 	const res = await fetch(`${API_COMMON.QRY_NEXT_FIXTURE}?event=${event}`, {
 		next: { tags: ['event'] }
 	})
@@ -36,14 +39,14 @@ async function getNextFixtures(event: number) {
 
 export default async function Home() {
 	const { event, utcDeadline }: { event: string; utcDeadline: string } =
-		await getDDL()
+		await fetchDDL()
 	const gw = parseInt(event)
 
-	const fixtures: FixtureCardProps[] = await getNextFixtures(gw)
+	const fixtures: FixtureCardProps[] = await fetchNextFixtures(gw)
 
 	return (
 		<main>
-			<div className="container flex flex-col w-full min-h-full items-center justify-between space-y-6 mt-16">
+			<div className="container flex flex-col w-full min-h-screen items-center justify-between space-y-6 mt-16">
 				<Image
 					className="border-2 border-black dark:border-slate-500 drop-shadow-xl shadow-black rounded-lg"
 					src={picture}

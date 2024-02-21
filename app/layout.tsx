@@ -36,7 +36,9 @@ export default function RootLayout({
 						<Header />
 						{children}
 						<Footer />
-						<BottomNavBar />
+						<div className="flex pl-2 md:hidden">
+							<BottomNavBar />
+						</div>
 					</ThemeProvider>
 				</body>
 			</html>

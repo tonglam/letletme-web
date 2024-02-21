@@ -1,4 +1,4 @@
-import { PlayAgainstCard } from '@/components/card/PlayAgainstCard'
+import { PlayAgainstCard } from '@/components/card/fixture/PlayAgainstCard'
 import { parseISO } from 'date-fns'
 
 export type FixtureCardProps = {

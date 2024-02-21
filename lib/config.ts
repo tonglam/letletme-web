@@ -1,5 +1,6 @@
 const LETLETME_BASE_URL: string = process.env.LETLETME_BASE!
 const LETLETME_BASE_COMMON_URL: string = LETLETME_BASE_URL + 'common/'
+const LETLETME_BASE_STAT_URL: string = LETLETME_BASE_URL + 'stat/'
 
 // common
 const CURRENT_EVENT_AND_NEXT_UTC_DEADLINE: string =
@@ -10,6 +11,14 @@ const QRY_NEXT_FIXTURE: string = LETLETME_BASE_COMMON_URL + 'qryNextFixture'
 export const API_COMMON = {
 	CURRENT_EVENT_AND_NEXT_UTC_DEADLINE,
 	QRY_NEXT_FIXTURE
+}
+
+// stat
+const QRY_PLAYER_PRICE_CHANGE: string =
+	LETLETME_BASE_STAT_URL + 'qryPlayerPriceChange'
+
+export const API_STAT = {
+	QRY_PLAYER_PRICE_CHANGE
 }
 
 // Premeir League Teams Logos
