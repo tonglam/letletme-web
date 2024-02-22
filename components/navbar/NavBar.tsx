@@ -15,9 +15,9 @@ const NavigationTriggerClass = 'text-lg gap-2'
 const NavigationItemClass =
 	'grid w-[400px] p-4 md:w-[500px] md:grid-cols-2 md:w-[600px]'
 
-export const NavBar = () => {
+function NavBar() {
 	return (
-		<section>
+		<>
 			<NavigationMenu>
 				<NavigationMenuList>
 					<NavigationMenuItem>
@@ -76,7 +76,7 @@ export const NavBar = () => {
 					</NavigationMenuItem>
 				</NavigationMenuList>
 			</NavigationMenu>
-		</section>
+		</>
 	)
 }
 
@@ -105,3 +105,5 @@ const ListItem = React.forwardRef<
 	)
 })
 ListItem.displayName = 'ListItem'
+
+export { NavBar }

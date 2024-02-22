@@ -28,7 +28,7 @@ const LOGO_RESOURCE: { [key: string]: string } = {
 	WOL: PL_TEAMS_LOGO.WOL_LOGO
 }
 
-export const PlayAgainstCard = ({
+function PlayAgainstCard({
 	homeTeamName,
 	homeTeamShortName,
 	awayTeamName,
@@ -40,7 +40,7 @@ export const PlayAgainstCard = ({
 	awayTeamName: string
 	awayTeamShortName: string
 	kickOffTime: Date
-}) => {
+}) {
 	return (
 		<div
 			className="flex h-full w-full p-4 items-center justify-items-center outline outline-gray-200 rounded-xl gap-1"
@@ -85,3 +85,5 @@ export const PlayAgainstCard = ({
 		</div>
 	)
 }
+
+export { PlayAgainstCard }

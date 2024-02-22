@@ -1,16 +1,16 @@
 'use client'
 
-import { CountDown } from '@/components/countDown/CountDown'
+import CountDown from '@/components/countDown/CountDown'
 import { useEventInfoStore } from '@/hooks/useEventInfoStore'
 import { format, parseISO } from 'date-fns'
 
-export const DDLCard = ({
+function DDLCard({
 	nextEvent,
 	utcDeadline
 }: {
 	nextEvent: number
 	utcDeadline: string
-}) => {
+}) {
 	const setEventInfo = useEventInfoStore(state => state.setEventInfo)
 	setEventInfo(nextEvent, utcDeadline)
 
@@ -26,3 +26,5 @@ export const DDLCard = ({
 		</div>
 	)
 }
+
+export { DDLCard }

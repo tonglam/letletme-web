@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-export const Footer = () => {
+function Footer() {
 	return (
 		<footer className="footer footer-center p-4 text-content mt-8">
 			<aside>
@@ -16,3 +16,5 @@ export const Footer = () => {
 		</footer>
 	)
 }
+
+export { Footer }

@@ -3,10 +3,10 @@
 import { Table } from 'react-daisyui'
 import { IoMdArrowDropupCircle } from 'react-icons/io'
 
-export const PriceChangeTable = () => {
+function PriceChangeTable() {
 	return (
-		<div className="overflow-x-auto">
-			<Table className="rounded-box">
+		<>
+			<Table className="rounded-box overflow-x-auto">
 				<Table.Head>
 					<span />
 					<span>Player</span>
@@ -56,6 +56,8 @@ export const PriceChangeTable = () => {
 					</Table.Row>
 				</Table.Body>
 			</Table>
-		</div>
+		</>
 	)
 }
+
+export { PriceChangeTable }

@@ -8,10 +8,11 @@ import {
 import { MoonIcon, SunIcon } from '@radix-ui/react-icons'
 import { useTheme } from 'next-themes'
 
-export const DarkModeButton = () => {
+function DarkModeButton() {
 	const { setTheme } = useTheme()
+
 	return (
-		<div>
+		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button
@@ -35,6 +36,8 @@ export const DarkModeButton = () => {
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
-		</div>
+		</>
 	)
 }
+
+export { DarkModeButton }

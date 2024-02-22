@@ -1,4 +1,4 @@
-export type LinkProps = {
+export interface LinkProps {
 	id: number
 	label: string
 	title: string

@@ -35,76 +35,9 @@ const iconDefalutStyle = 'mr-2 h-10 w-6'
 const subMenuDefalutStyle =
 	'flex mr-2 h-10 w-30 space-x-2 text-sm items-center justify-start'
 
-const CustomerDropDownItemContent = ({
-	children,
-	title,
-	href
-}: {
-	children?: React.ReactNode
-	title: string
-	href?: string
-	icon?: string
-}) => {
+function DropdownNavBar() {
 	return (
-		<DropdownMenuItem>
-			<div className={iconDefalutStyle}>{children}</div>
-			{href && (
-				<Link
-					className={children ? '' : subMenuDefalutStyle + 'pr-8'}
-					href={href}
-					target="_blank"
-				/>
-			)}
-			{title}
-		</DropdownMenuItem>
-	)
-}
-
-const CustomerDropDownSubTrigger = ({
-	children,
-	title
-}: {
-	children: React.ReactNode
-	title: string
-}) => {
-	return (
-		<DropdownMenuSubTrigger>
-			{children}
-			<span>{title}</span>
-		</DropdownMenuSubTrigger>
-	)
-}
-
-const CustomerSubDropdownMenuItem = ({
-	url,
-	picture,
-	title
-}: {
-	url: string
-	picture: StaticImageData
-	title: string
-}) => {
-	return (
-		<DropdownMenuItem>
-			<Link
-				className={subMenuDefalutStyle}
-				href={url}
-				target="_blank"
-			>
-				<Image
-					className="size-4"
-					src={picture}
-					alt={picture.toString()}
-				/>
-				{title}
-			</Link>
-		</DropdownMenuItem>
-	)
-}
-
-export const DropdownNavBar = () => {
-	return (
-		<div>
+		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button
@@ -212,6 +145,75 @@ export const DropdownNavBar = () => {
 					<DropdownMenuSeparator />
 				</DropdownMenuContent>
 			</DropdownMenu>
-		</div>
+		</>
 	)
 }
+
+function CustomerDropDownItemContent({
+	children,
+	title,
+	href
+}: {
+	children?: React.ReactNode
+	title: string
+	href?: string
+	icon?: string
+}) {
+	return (
+		<DropdownMenuItem>
+			<div className={iconDefalutStyle}>{children}</div>
+			{href && (
+				<Link
+					className={children ? '' : subMenuDefalutStyle + 'pr-8'}
+					href={href}
+					target="_blank"
+				/>
+			)}
+			{title}
+		</DropdownMenuItem>
+	)
+}
+
+function CustomerDropDownSubTrigger({
+	children,
+	title
+}: {
+	children: React.ReactNode
+	title: string
+}) {
+	return (
+		<DropdownMenuSubTrigger>
+			{children}
+			<span>{title}</span>
+		</DropdownMenuSubTrigger>
+	)
+}
+
+function CustomerSubDropdownMenuItem({
+	url,
+	picture,
+	title
+}: {
+	url: string
+	picture: StaticImageData
+	title: string
+}) {
+	return (
+		<DropdownMenuItem>
+			<Link
+				className={subMenuDefalutStyle}
+				href={url}
+				target="_blank"
+			>
+				<Image
+					className="size-4"
+					src={picture}
+					alt={picture.toString()}
+				/>
+				{title}
+			</Link>
+		</DropdownMenuItem>
+	)
+}
+
+export { DropdownNavBar }

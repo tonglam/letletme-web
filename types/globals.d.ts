@@ -10,7 +10,7 @@ declare global {
 	}
 }
 
-export type PriceChangeResData = {
+export interface PriceChangeResData {
 	changDate: string
 	changeType: PriceChangeType
 	element: number

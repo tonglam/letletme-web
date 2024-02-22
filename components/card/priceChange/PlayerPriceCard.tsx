@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 
-export type PlayerPriceCardProps = {
+export interface PlayerPriceCardProps {
 	element: number
 	webName: string
 	elementTypeName: string
@@ -12,11 +12,11 @@ export type PlayerPriceCardProps = {
 	lastValue: number
 }
 
-export const PlayerPriceCard = ({
+function PlayerPriceCard({
 	playerPriceProps
 }: {
 	playerPriceProps: PlayerPriceCardProps
-}) => {
+}) {
 	return (
 		<div
 			className="flex h-full w-full p-3 items-center justify-items-center gap-1"
@@ -37,3 +37,5 @@ export const PlayerPriceCard = ({
 		</div>
 	)
 }
+
+export { PlayerPriceCard }

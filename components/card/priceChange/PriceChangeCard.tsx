@@ -11,18 +11,7 @@ import { format } from 'date-fns'
 
 const logger = getLogger('app:stat:price')
 
-async function fetchPriceChange(date: string) {
-	const res = await fetch(`${API_STAT.QRY_PLAYER_PRICE_CHANGE}?date=20240220`)
-
-	if (!res.ok) {
-		logger.error('Failed to fetch data')
-		throw new Error('Failed to fetch data')
-	}
-
-	return await res.json()
-}
-
-export const PriceChangeCard = async () => {
+async function PriceChangeCard() {
 	const date = format(new Date(), 'yyyyMMdd')
 
 	const { Rise, Faller, Start } = (await fetchPriceChange(date)) as {
@@ -68,7 +57,7 @@ export const PriceChangeCard = async () => {
 	})
 
 	return (
-		<div></div>
+		<></>
 
 		// <div className="items-center space-y-4">
 		// 	{riseChanges && (
@@ -98,3 +87,16 @@ export const PriceChangeCard = async () => {
 		// </div>
 	)
 }
+
+async function fetchPriceChange(date: string) {
+	const res = await fetch(`${API_STAT.QRY_PLAYER_PRICE_CHANGE}?date=20240220`)
+
+	if (!res.ok) {
+		logger.error('Failed to fetch data')
+		throw new Error('Failed to fetch data')
+	}
+
+	return await res.json()
+}
+
+export { PriceChangeCard }

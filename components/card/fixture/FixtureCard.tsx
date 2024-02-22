@@ -1,7 +1,7 @@
 import { PlayAgainstCard } from '@/components/card/fixture/PlayAgainstCard'
 import { parseISO } from 'date-fns'
 
-export type FixtureCardProps = {
+export interface FixtureCardProps {
 	teamName: string
 	teamShortName: string
 	againstTeamName: string
@@ -9,7 +9,7 @@ export type FixtureCardProps = {
 	kickoffTime: string
 }
 
-export const FixtureCard = ({ fixtures }: { fixtures: FixtureCardProps[] }) => {
+function FixtureCard({ fixtures }: { fixtures: FixtureCardProps[] }) {
 	return (
 		<div className="grid justify-items-stretch gap-2">
 			{fixtures.map((data, index) => {
@@ -27,3 +27,5 @@ export const FixtureCard = ({ fixtures }: { fixtures: FixtureCardProps[] }) => {
 		</div>
 	)
 }
+
+export { FixtureCard }

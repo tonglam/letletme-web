@@ -1,9 +1,11 @@
 import { UserButton } from '@clerk/nextjs'
 
-export const EntryButton = () => {
+function EntryButton() {
 	return (
-		<div>
+		<>
 			<UserButton afterSignOutUrl="/" />
-		</div>
+		</>
 	)
 }
+
+export { EntryButton }

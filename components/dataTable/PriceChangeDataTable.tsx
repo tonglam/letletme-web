@@ -15,12 +15,12 @@ import {
 	useReactTable
 } from '@tanstack/react-table'
 
-interface DataTableProps<TData, TValue> {
+export interface DataTableProps<TData, TValue> {
 	columns: ColumnDef<TData, TValue>[]
 	data: TData[]
 }
 
-export function PriceChangeDataTable<TData, TValue>({
+function PriceChangeDataTable<TData, TValue>({
 	columns,
 	data
 }: DataTableProps<TData, TValue>) {
@@ -30,7 +30,7 @@ export function PriceChangeDataTable<TData, TValue>({
 		getCoreRowModel: getCoreRowModel()
 	})
 	return (
-		<div className="w-full">
+		<>
 			<Table>
 				<TableHeader>
 					{table.getHeaderGroups().map(headerGroup => (
@@ -76,6 +76,8 @@ export function PriceChangeDataTable<TData, TValue>({
 					)}
 				</TableBody>
 			</Table>
-		</div>
+		</>
 	)
 }
+
+export default PriceChangeDataTable

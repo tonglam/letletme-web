@@ -2,9 +2,9 @@ import { Button } from '@/components/ui/button'
 import { GitHubLogoIcon } from '@radix-ui/react-icons'
 import Link from 'next/link'
 
-export const GithubIcon = () => {
+function GithubIcon() {
 	return (
-		<div>
+		<>
 			<Button
 				variant="ghost"
 				size="icon"
@@ -16,6 +16,8 @@ export const GithubIcon = () => {
 					<GitHubLogoIcon className="h-[1.5rem] w-[1.5rem] transition-all" />
 				</Link>
 			</Button>
-		</div>
+		</>
 	)
 }
+
+export { GithubIcon }

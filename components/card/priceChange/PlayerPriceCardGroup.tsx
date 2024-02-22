@@ -4,15 +4,15 @@ import {
 } from '@/components/card/priceChange/PlayerPriceCard'
 import React from 'react'
 
-export const PlayerPriceCardGroup = ({
+function PlayerPriceCardGroup({
 	children,
 	priceChanges
 }: {
 	children: React.ReactNode
 	priceChanges: PlayerPriceCardProps[]
-}) => {
+}) {
 	return (
-		<div>
+		<>
 			{priceChanges.map(priceChange => (
 				<div
 					key={priceChange.element}
@@ -22,6 +22,8 @@ export const PlayerPriceCardGroup = ({
 					<PlayerPriceCard playerPriceProps={priceChange} />
 				</div>
 			))}
-		</div>
+		</>
 	)
 }
+
+export { PlayerPriceCardGroup }
