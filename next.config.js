@@ -1,9 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-	env: {
-		LETLETME_BASE: 'https://letletme.top/api/',
-		PL_RESOURCE_BASE: 'https://resources.premierleague.com/premierleague/'
-	}
-}
+  output: 'export',
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  images: { unoptimized: true },
+  // Disable font optimization since we're using static export
+  optimizeFonts: false,
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

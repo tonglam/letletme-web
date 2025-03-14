@@ -1,47 +1,40 @@
-import { Footer } from '@/components/footer/Footer'
-import { Header } from '@/components/header/Header'
-import { BottomNavBar } from '@/components/navbar/BottomNavBar'
-import { ThemeProvider } from '@/components/provider/ThemeProvider'
-import { ClerkProvider } from '@clerk/nextjs'
-import { Metadata } from 'next'
-import { Inter as FontSans } from 'next/font/google'
-import './globals.css'
+import './globals.css';
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import { AuthProvider } from '@/lib/auth-context';
+import { ThemeProvider } from '@/components/theme/ThemeProvider';
+
+// Configure font with display: swap to prevent FOIT
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap',
+  preload: true,
+});
 
 export const metadata: Metadata = {
-	title: 'Let Let Me',
-	description: 'Let Let Me Fpl Tools'
-}
-
-export const fontSans = FontSans({
-	subsets: ['latin'],
-	variable: '--font-sans'
-})
+  title: 'LetLetMe - Fantasy Premier League Helper',
+  description: 'The ultimate Fantasy Premier League companion for tracking statistics, tournaments, and live points',
+};
 
 export default function RootLayout({
-	children
+  children,
 }: {
-	children: React.ReactNode
+  children: React.ReactNode;
 }) {
-	return (
-		<ClerkProvider>
-			<html lang="en">
-				<head />
-				<body>
-					<ThemeProvider
-						attribute="class"
-						defaultTheme="light"
-						enableSystem
-						disableTransitionOnChange
-					>
-						<Header />
-						{children}
-						<Footer />
-						<div className="flex pl-2 md:hidden">
-							<BottomNavBar />
-						</div>
-					</ThemeProvider>
-				</body>
-			</html>
-		</ClerkProvider>
-	)
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </ThemeProvider>
+      </body>
+    </html>
+  );
 }

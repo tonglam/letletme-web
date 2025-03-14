@@ -1,68 +1,71 @@
-import { DDLCard } from '@/components/card/ddl/DDLCard'
-import {
-	FixtureCard,
-	FixtureCardProps
-} from '@/components/card/fixture/FixtureCard'
-import { API_COMMON } from '@/lib/config'
-import picture from '@/public/images/donot_trust.png'
-import { getLogger } from '@/utils/logger'
-import Image from 'next/image'
-import { Suspense } from 'react'
+"use client";
 
-const logger = getLogger('app:page')
+import RootLayout from "@/components/layout/RootLayout";
+import { DeadlineSection } from "@/components/home/DeadlineSection";
+import { PriceChangesSection } from "@/components/home/PriceChangesSection";
+import { H2HSection } from "@/components/home/H2HSection";
+import { StatsSection } from "@/components/home/StatsSection";
+import { TeamOfTheWeekSection } from "@/components/home/TeamOfTheWeekSection";
+import { GameweekStatsSection } from "@/components/home/GameweekStatsSection";
+import { MatchesSection } from "@/components/home/MatchesSection";
+import { TestimonialsSection } from "@/components/home/TestimonialsSection";
 
-async function fetchDDL() {
-	const res = await fetch(API_COMMON.CURRENT_EVENT_AND_NEXT_UTC_DEADLINE, {
-		next: { tags: ['event'] }
-	})
+export default function Home() {
+  return (
+    <RootLayout className="!px-0">
+      <div className="flex flex-col">
+        {/* Deadline section - Light primary background */}
+        <section className="bg-primary/5">
+          <div className="container max-w-4xl mx-auto px-4">
+            <DeadlineSection />
+          </div>
+        </section>
 
-	if (!res.ok) {
-		logger.error('Failed to fetch data')
-		throw new Error('Failed to fetch data')
-	}
+        {/* Price changes section - White background */}
+        <section className="bg-background py-8">
+          <div className="container max-w-4xl mx-auto px-4">
+            <PriceChangesSection />
+          </div>
+        </section>
 
-	return await res.json()
-}
+        {/* H2H section - Light gray background */}
+        <section className="bg-muted/30 py-8">
+          <div className="container max-w-4xl mx-auto px-4">
+            <H2HSection />
+          </div>
+        </section>
 
-async function fetchNextFixtures(event: number) {
-	const res = await fetch(`${API_COMMON.QRY_NEXT_FIXTURE}?event=${event}`, {
-		next: { tags: ['event'] }
-	})
+        {/* Stats section - White background */}
+        <section className="bg-background py-8">
+          <div className="container max-w-4xl mx-auto px-4">
+            <StatsSection />
+          </div>
+        </section>
 
-	if (!res.ok) {
-		logger.error('Failed to fetch data')
-		throw new Error('Failed to fetch data')
-	}
+        {/* Team of the Week and Gameweek Stats - Light gray background */}
+        <section className="bg-muted/30 py-8">
+          <div className="container max-w-4xl mx-auto px-4">
+            <div className="grid md:grid-cols-2 gap-8">
+              <TeamOfTheWeekSection />
+              <GameweekStatsSection />
+            </div>
+          </div>
+        </section>
 
-	return await res.json()
-}
+        {/* Matches section - White background */}
+        <section className="bg-background py-8">
+          <div className="container max-w-4xl mx-auto px-4">
+            <MatchesSection />
+          </div>
+        </section>
 
-export default async function Home() {
-	const { event, utcDeadline }: { event: string; utcDeadline: string } =
-		await fetchDDL()
-	const gw = parseInt(event)
-
-	const fixtures: FixtureCardProps[] = await fetchNextFixtures(gw)
-
-	return (
-		<main>
-			<div className="container flex flex-col w-full min-h-screen items-center justify-between space-y-6 mt-16">
-				<Image
-					className="border-2 border-black dark:border-slate-500 drop-shadow-xl shadow-black rounded-lg"
-					src={picture}
-					alt="Welcome"
-					priority={true}
-				/>
-				<Suspense fallback={<p>Loading...</p>}>
-					<DDLCard
-						nextEvent={gw + 1}
-						utcDeadline={utcDeadline}
-					/>
-				</Suspense>
-				<Suspense fallback={<p>Loading...</p>}>
-					<FixtureCard fixtures={fixtures} />
-				</Suspense>
-			</div>
-		</main>
-	)
+        {/* Testimonials section - Light primary background */}
+        <section className="bg-primary/5">
+          <div className="container max-w-4xl mx-auto px-4">
+            <TestimonialsSection />
+          </div>
+        </section>
+      </div>
+    </RootLayout>
+  );
 }
