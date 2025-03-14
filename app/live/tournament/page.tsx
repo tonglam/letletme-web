@@ -1,4 +1,5 @@
 import { tournaments } from '@/lib/tournament-data'
+import { Suspense } from 'react'
 import TournamentClient from './TournamentClient'
 
 type PageProps = {
@@ -7,5 +8,9 @@ type PageProps = {
 }
 
 export default async function Page({ searchParams }: PageProps) {
-	return <TournamentClient tournaments={tournaments} />
+	return (
+		<Suspense fallback={<div>Loading...</div>}>
+			<TournamentClient tournaments={tournaments} />
+		</Suspense>
+	)
 }

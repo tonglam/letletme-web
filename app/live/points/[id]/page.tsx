@@ -1,4 +1,5 @@
 import { Metadata } from 'next'
+import { Suspense } from 'react'
 import { generateStaticParams } from './staticParams'
 import TeamPointsClient from './TeamPointsClient'
 
@@ -22,5 +23,9 @@ type PageProps = {
 
 export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await params
-	return <TeamPointsClient params={{ id }} />
+	return (
+		<Suspense fallback={<div>Loading...</div>}>
+			<TeamPointsClient params={{ id }} />
+		</Suspense>
+	)
 }
