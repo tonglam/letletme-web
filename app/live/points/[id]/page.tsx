@@ -4,17 +4,19 @@ import TeamPointsClient from './TeamPointsClient'
 
 export { generateStaticParams }
 
-type Props = {
+interface PageProps {
 	params: { id: string }
 	searchParams: { [key: string]: string | undefined }
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({
+	params
+}: PageProps): Promise<Metadata> {
 	return {
 		title: `Points - ${params.id}`
 	}
 }
 
-export default function Page({ params, searchParams }: Props) {
+export default async function Page({ params, searchParams }: PageProps) {
 	return <TeamPointsClient params={params} />
 }
