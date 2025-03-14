@@ -44,7 +44,7 @@ LetLetMe is a comprehensive web application for Fantasy Premier League enthusias
 
 ## Project Structure
 
-```
+```text
 letletme-web/
 ├── app/                  # Next.js App Router pages
 │   ├── auth/             # Authentication routes
