@@ -1,86 +1,122 @@
-"use client";
+'use client'
 
-import React, { useEffect, useState } from "react";
-import RootLayout from "@/components/layout/RootLayout";
-import { PlayerList } from "@/components/live/PlayerList";
-import { TeamStats } from "@/components/live/TeamStats";
-import { TransferSection } from "@/components/live/TransferSection";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BackToTournament } from "@/components/live/BackToTournament";
-import { useSearchParams } from "next/navigation";
-import { startingPlayers, benchPlayers, teamStats } from "@/lib/temp-data";
+import RootLayout from '@/components/layout/RootLayout'
+import { BackToTournament } from '@/components/live/BackToTournament'
+import { PlayerList } from '@/components/live/PlayerList'
+import { TeamStats } from '@/components/live/TeamStats'
+import { TransferSection } from '@/components/live/TransferSection'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { benchPlayers, startingPlayers, teamStats } from '@/lib/temp-data'
+import { useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
-export default function TeamPointsClient({ params }: { params: { id: string } }) {
-  const searchParams = useSearchParams();
-  const tournamentId = searchParams.get("tournamentId");
-  const teamId = params.id;
-  
-  // Mock additional team info
-  const [teamInfo, setTeamInfo] = useState({
-    ...teamStats,
-    teamName: teamId === "1" ? "Arsenal Guangzhou FC" : 
-              teamId === "2" ? "沉迷于搬砖不想披" : 
-              teamId === "3" ? "世俱杯冠军阿森纳" : 
-              teamId === "4" ? "Lord Bendtner" : 
-              teamId === "5" ? "JackieHooooooo" : "let let red arrow↓↑↓",
-    playerName: teamId === "1" ? "Gunners Fan" : 
-               teamId === "2" ? "Brick Layer" : 
-               teamId === "3" ? "Arsenal Champion" : 
-               teamId === "4" ? "Nick B" : 
-               teamId === "5" ? "Jackie H" : "tong",
-    points: teamId === "1" ? 78 : 
-            teamId === "2" ? 77 : 
-            teamId === "3" ? 76 : 
-            teamId === "4" ? 73 : 
-            teamId === "5" ? 71 : 54
-  });
+type TeamPointsClientProps = {
+	params: { id: string }
+}
 
-  // For production, you would fetch the team data based on the ID
-  useEffect(() => {
-    console.log(`Fetching data for team ID: ${teamId}`);
-    // This would be an API call in production
-  }, [teamId]);
+export default function TeamPointsClient({ params }: TeamPointsClientProps) {
+	const searchParams = useSearchParams()
+	const tournamentId = searchParams.get('tournamentId')
+	const teamId = params.id
 
-  return (
-    <RootLayout>
-      <div className="container max-w-4xl mx-auto px-4 py-8">
-        {tournamentId && (
-          <BackToTournament tournamentId={tournamentId} />
-        )}
-        
-        <TeamStats stats={teamInfo} />
+	// Mock additional team info
+	const [teamInfo, setTeamInfo] = useState({
+		...teamStats,
+		teamName:
+			teamId === '1'
+				? 'Arsenal Guangzhou FC'
+				: teamId === '2'
+				? '沉迷于搬砖不想披'
+				: teamId === '3'
+				? '世俱杯冠军阿森纳'
+				: teamId === '4'
+				? 'Lord Bendtner'
+				: teamId === '5'
+				? 'JackieHooooooo'
+				: 'let let red arrow↓↑↓',
+		playerName:
+			teamId === '1'
+				? 'Gunners Fan'
+				: teamId === '2'
+				? 'Brick Layer'
+				: teamId === '3'
+				? 'Arsenal Champion'
+				: teamId === '4'
+				? 'Nick B'
+				: teamId === '5'
+				? 'Jackie H'
+				: 'tong',
+		points:
+			teamId === '1'
+				? 78
+				: teamId === '2'
+				? 77
+				: teamId === '3'
+				? 76
+				: teamId === '4'
+				? 73
+				: teamId === '5'
+				? 71
+				: 54
+	})
 
-        <Tabs defaultValue="list" className="w-full">
-          <div className="bg-card rounded-lg p-4 mb-6 shadow-sm">
-            <TabsList className="w-full grid grid-cols-2 gap-2 sm:gap-4">
-              <TabsTrigger value="list" className="w-full">List View</TabsTrigger>
-              <TabsTrigger value="pitch" className="w-full">Pitch View</TabsTrigger>
-            </TabsList>
-          </div>
+	// For production, you would fetch the team data based on the ID
+	useEffect(() => {
+		console.log(`Fetching data for team ID: ${teamId}`)
+		// This would be an API call in production
+	}, [teamId])
 
-          <TabsContent value="list">
-            <div className="bg-card rounded-lg shadow-sm overflow-hidden">
-              <PlayerList 
-                startingPlayers={startingPlayers}
-                benchPlayers={benchPlayers}
-              />
-            </div>
-          </TabsContent>
+	return (
+		<RootLayout>
+			<div className="container max-w-4xl mx-auto px-4 py-8">
+				{tournamentId && <BackToTournament tournamentId={tournamentId} />}
 
-          <TabsContent value="pitch">
-            <div className="bg-card rounded-lg shadow-md p-8">
-              <div className="text-center text-muted-foreground">
-                <h3 className="text-lg font-semibold mb-2">Coming Soon</h3>
-                <p>The pitch view feature is currently under development.</p>
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
-        
-        <div className="mt-8">
-          <TransferSection />
-        </div>
-      </div>
-    </RootLayout>
-  );
+				<TeamStats stats={teamInfo} />
+
+				<Tabs
+					defaultValue="list"
+					className="w-full"
+				>
+					<div className="bg-card rounded-lg p-4 mb-6 shadow-sm">
+						<TabsList className="w-full grid grid-cols-2 gap-2 sm:gap-4">
+							<TabsTrigger
+								value="list"
+								className="w-full"
+							>
+								List View
+							</TabsTrigger>
+							<TabsTrigger
+								value="pitch"
+								className="w-full"
+							>
+								Pitch View
+							</TabsTrigger>
+						</TabsList>
+					</div>
+
+					<TabsContent value="list">
+						<div className="bg-card rounded-lg shadow-sm overflow-hidden">
+							<PlayerList
+								startingPlayers={startingPlayers}
+								benchPlayers={benchPlayers}
+							/>
+						</div>
+					</TabsContent>
+
+					<TabsContent value="pitch">
+						<div className="bg-card rounded-lg shadow-md p-8">
+							<div className="text-center text-muted-foreground">
+								<h3 className="text-lg font-semibold mb-2">Coming Soon</h3>
+								<p>The pitch view feature is currently under development.</p>
+							</div>
+						</div>
+					</TabsContent>
+				</Tabs>
+
+				<div className="mt-8">
+					<TransferSection />
+				</div>
+			</div>
+		</RootLayout>
+	)
 }
