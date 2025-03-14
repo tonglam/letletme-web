@@ -1,40 +1,45 @@
-import './globals.css';
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import { AuthProvider } from '@/lib/auth-context';
-import { ThemeProvider } from '@/components/theme/ThemeProvider';
+import { ThemeProvider } from '@/components/theme/ThemeProvider'
+import { AuthProvider } from '@/lib/auth-context'
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import './globals.css'
 
-// Configure font with display: swap to prevent FOIT
-const inter = Inter({ 
-  subsets: ['latin'],
-  display: 'swap',
-  preload: true,
-});
+const inter = Inter({
+	subsets: ['latin'],
+	display: 'swap',
+	preload: false,
+	adjustFontFallback: false
+})
 
 export const metadata: Metadata = {
-  title: 'LetLetMe - Fantasy Premier League Helper',
-  description: 'The ultimate Fantasy Premier League companion for tracking statistics, tournaments, and live points',
-};
+	title: 'LetLetMe - Fantasy Premier League Tool',
+	description:
+		'The ultimate Fantasy Premier League companion for tracking statistics, tournaments, and live points',
+	icons: {
+		icon: [{ url: '/favicon.ico' }]
+	}
+}
 
 export default function RootLayout({
-  children,
+	children
 }: {
-  children: React.ReactNode;
+	children: React.ReactNode
 }) {
-  return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <AuthProvider>
-            {children}
-          </AuthProvider>
-        </ThemeProvider>
-      </body>
-    </html>
-  );
+	return (
+		<html
+			lang="en"
+			suppressHydrationWarning
+		>
+			<body className={inter.className}>
+				<ThemeProvider
+					attribute="class"
+					defaultTheme="system"
+					enableSystem
+					disableTransitionOnChange
+				>
+					<AuthProvider>{children}</AuthProvider>
+				</ThemeProvider>
+			</body>
+		</html>
+	)
 }
