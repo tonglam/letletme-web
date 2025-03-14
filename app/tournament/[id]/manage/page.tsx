@@ -1,8 +1,14 @@
 import { generateStaticParams } from '../staticParams'
-export { generateStaticParams }
-
 import { ManageTournamentClient } from './client'
 
-export default function Page({ params }: { params: { id: string } }) {
-	return <ManageTournamentClient params={params} />
+export { generateStaticParams }
+
+type PageProps = {
+	params: Promise<{ id: string }>
+	searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}
+
+export default async function Page({ params }: PageProps) {
+	const { id } = await params
+	return <ManageTournamentClient params={{ id }} />
 }
