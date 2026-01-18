@@ -1,36 +1,20 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { TrendingUp, TrendingDown } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
+import { executeQuery } from "@/lib/graphql-client";
+import { GET_PLAYER_VALUES, type PlayerValuesResponse } from "@/lib/graphql/queries";
+import { TrendingDown, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface PriceChange {
   position: string;
   player: string;
   club: string;
   price: number;
+  priceChange?: number;
 }
-
-const priceRises: PriceChange[] = [
-  { position: "MID", player: "Saka", club: "ARS", price: 9.1 },
-  { position: "FWD", player: "Haaland", club: "MCI", price: 13.2 },
-  { position: "MID", player: "Foden", club: "MCI", price: 8.1 },
-  { position: "DEF", player: "Trippier", club: "NEW", price: 7.0 },
-  { position: "MID", player: "Ødegaard", club: "ARS", price: 8.4 }
-];
-
-const priceFalls: PriceChange[] = [
-  { position: "MID", player: "Son", club: "TOT", price: 9.6 },
-  { position: "FWD", player: "Watkins", club: "AVL", price: 8.7 },
-  { position: "DEF", player: "Robertson", club: "LIV", price: 6.4 },
-  { position: "MID", player: "Rashford", club: "MUN", price: 8.2 },
-  { position: "FWD", player: "Álvarez", club: "MCI", price: 6.8 }
-];
 
 function PriceList({ title, changes, type }: { 
   title: string;
@@ -47,52 +31,174 @@ function PriceList({ title, changes, type }: {
     ? "text-emerald-600 dark:text-emerald-400"
     : "text-rose-600 dark:text-rose-400";
 
+  const bgClassName = type === "rise"
+    ? "border-emerald-200 dark:border-emerald-900"
+    : "border-rose-200 dark:border-rose-900";
+
+  const getPositionColor = (position: string) => {
+    switch (position) {
+      case "GKP": return "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300";
+      case "DEF": return "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300";
+      case "MID": return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300";
+      case "FWD": return "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300";
+      default: return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
+    }
+  };
+
   return (
-    <div>
-      <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-2 mb-4">
         {icon}
-        {title}
-      </h3>
-      <div className="space-y-2 bg-background/50 rounded-lg p-2 sm:p-3">
-        {changes.map((change, index) => (
-          <button
-            key={index}
-            className="w-full flex items-center justify-between p-2 sm:p-3 rounded-lg bg-accent/50 hover:bg-accent/70 transition-colors text-left"
-            onClick={() => console.log(`Clicked on ${change.player}`)}
-            aria-label={`View details for ${change.player}`}
-          >
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <span className="text-xs sm:text-sm font-medium text-muted-foreground w-8 shrink-0">
+        <h3 className="text-xl font-bold">{title}</h3>
+        {changes.length > 0 && (
+          <Badge variant="secondary" className="ml-auto">
+            {changes.length}
+          </Badge>
+        )}
+      </div>
+      <div className={`space-y-2 rounded-lg p-3 border ${bgClassName} flex-1`}>
+        {changes.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            No {type === "rise" ? "rises" : "falls"} to display
+          </div>
+        ) : (
+          changes.map((change, index) => (
+            <button
+              key={index}
+              className="w-full flex items-center gap-3 p-3 rounded-lg bg-background/80 hover:bg-background border border-border/50 hover:border-border transition-all text-left group"
+              onClick={() => console.log(`Clicked on ${change.player}`)}
+              aria-label={`View details for ${change.player}`}
+            >
+              <Badge 
+                variant="secondary" 
+                className={`shrink-0 text-xs font-semibold ${getPositionColor(change.position)}`}
+              >
                 {change.position}
-              </span>
-              <span className="text-xs sm:text-sm font-medium text-muted-foreground w-8 shrink-0">
-                {change.club}
-              </span>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-sm font-medium truncate flex-1">{change.player}</span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{change.player}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            <span className={`text-xs sm:text-sm font-medium ml-2 shrink-0 ${priceClassName}`}>
-              £{change.price.toFixed(1)}m
-            </span>
-          </button>
-        ))}
+              </Badge>
+              
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
+                    {change.player}
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground truncate block">
+                  {change.club}
+                </span>
+              </div>
+
+              <div className="flex flex-col items-end shrink-0">
+                <span className={`text-base font-bold ${priceClassName}`}>
+                  £{(change.price / 10).toFixed(1)}m
+                </span>
+                {change.priceChange !== undefined && (
+                  <span className={`text-xs ${priceClassName} font-medium`}>
+                    {type === "rise" ? "+" : ""}£{(Math.abs(change.priceChange) / 10).toFixed(1)}m
+                  </span>
+                )}
+              </div>
+            </button>
+          ))
+        )}
       </div>
     </div>
   );
 }
 
 export function PriceChangesSection() {
+  const [priceRises, setPriceRises] = useState<PriceChange[]>([]);
+  const [priceFalls, setPriceFalls] = useState<PriceChange[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPlayerValues = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const response = await executeQuery<PlayerValuesResponse>(
+          GET_PLAYER_VALUES
+        );
+
+        // Separate players into rises and falls based on value vs lastValue
+        // value > lastValue = Rise, value < lastValue = Fall
+        const risesWithData: Array<PriceChange & { value: number }> = [];
+        const fallsWithData: Array<PriceChange & { value: number }> = [];
+
+        response.playerValues.forEach((player) => {
+          const priceChangeAmount = Math.abs(player.value - player.lastValue);
+          const priceChange: PriceChange = {
+            position: player.position,
+            player: player.playerName,
+            club: player.teamName,
+            price: player.value, // Will be divided by 10 when displaying
+            priceChange: priceChangeAmount,
+          };
+
+          if (player.value > player.lastValue) {
+            // Price rose
+            risesWithData.push({ ...priceChange, value: player.value });
+          } else if (player.value < player.lastValue) {
+            // Price fell
+            fallsWithData.push({ ...priceChange, value: player.value });
+          }
+          // If value === lastValue, skip (no change)
+        });
+
+        // Sort by value (descending for rises, ascending for falls) and take top 5
+        risesWithData.sort((a, b) => b.value - a.value);
+        fallsWithData.sort((a, b) => a.value - b.value);
+
+        setPriceRises(risesWithData.slice(0, 5).map(({ value, ...rest }) => rest));
+        setPriceFalls(fallsWithData.slice(0, 5).map(({ value, ...rest }) => rest));
+      } catch (err) {
+        console.error("Failed to fetch player values:", err);
+        setError("Failed to load price changes");
+        // Set empty arrays on error
+        setPriceRises([]);
+        setPriceFalls([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPlayerValues();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <Card className="rounded-none sm:rounded-lg p-4 sm:p-6">
+        <div className="grid md:grid-cols-2 gap-6">
+          <div>
+            <Skeleton className="h-6 w-32 mb-6" />
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          </div>
+          <div>
+            <Skeleton className="h-6 w-32 mb-6" />
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
   return (
-    <Card className="rounded-none sm:rounded-lg p-4 sm:p-6">
-      <div className="grid md:grid-cols-2 gap-6">
+    <Card className="rounded-none sm:rounded-lg p-4 sm:p-6 lg:p-8">
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+          <p className="text-sm text-destructive">{error}</p>
+        </div>
+      )}
+      <div className="grid md:grid-cols-2 gap-6 lg:gap-8">
         <PriceList
           title="Price Rises"
           changes={priceRises}

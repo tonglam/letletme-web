@@ -1,21 +1,61 @@
 "use client";
 
-import React from "react";
-import { useRouter } from "next/navigation";
+import { GameweekSelector } from "@/components/data/GameweekSelector";
 import RootLayout from "@/components/layout/RootLayout";
 import { PlayerList } from "@/components/live/PlayerList";
 import { TeamStats } from "@/components/live/TeamStats";
 import { TransferSection } from "@/components/live/TransferSection";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { GameweekSelector } from "@/components/data/GameweekSelector";
-import { startingPlayers, benchPlayers, teamStats } from "@/lib/temp-data";
+import { executeQuery } from "@/lib/graphql-client";
+import { GET_CURRENT_AND_NEXT_EVENTS, type EventsResponse } from "@/lib/graphql/queries";
+import { benchPlayers, startingPlayers, teamStats } from "@/lib/temp-data";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function LivePoints() {
   const router = useRouter();
-  const currentGameweek = 21; // Current gameweek
-  const [selectedGameweek, setSelectedGameweek] = useState(currentGameweek);
-  
+  const [currentGameweek, setCurrentGameweek] = useState<number | undefined>(undefined);
+  const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCurrentGameweek = async () => {
+      try {
+        setIsLoading(true);
+        const response = await executeQuery<EventsResponse>(
+          GET_CURRENT_AND_NEXT_EVENTS
+        );
+        
+        const currentEvent = response.current?.[0];
+        if (currentEvent) {
+          setCurrentGameweek(currentEvent.id);
+          setSelectedGameweek(currentEvent.id);
+        }
+      } catch (err) {
+        console.error("Failed to fetch current gameweek:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCurrentGameweek();
+  }, []);
+
+  if (isLoading || currentGameweek === undefined) {
+    return (
+      <RootLayout>
+        <div className="container max-w-4xl mx-auto px-4 py-8">
+          <div className="mb-6">
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <Skeleton className="h-64 w-full mb-6" />
+          <Skeleton className="h-96 w-full" />
+        </div>
+      </RootLayout>
+    );
+  }
+
   return (
     <RootLayout>
       <div className="container max-w-4xl mx-auto px-4 py-8">

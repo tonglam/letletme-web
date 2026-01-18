@@ -2,9 +2,19 @@
 
 import { Card } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { executeQuery } from '@/lib/graphql-client'
+import {
+	GET_CURRENT_AND_NEXT_EVENTS,
+	GET_EVENT_FIXTURES,
+	type EventFixturesResponse,
+	type EventsResponse,
+	type Fixture
+} from '@/lib/graphql/queries'
 import { format } from 'date-fns'
 import Image from 'next/image'
+import { useEffect, useState } from 'react'
 
 interface Match {
 	date: string
@@ -15,99 +25,12 @@ interface Match {
 		awayTeam: string
 		awayTeamShort: string
 		time: string
+		homeScore: number | null
+		awayScore: number | null
+		finished: boolean
+		started: boolean
 	}[]
 }
-
-const matches: Match[] = [
-	{
-		date: 'Wednesday 15 January 2025',
-		dateObj: new Date('2025-01-15'),
-		matches: [
-			{
-				homeTeam: 'Brentford',
-				homeTeamShort: 'BRE',
-				awayTeam: 'Man City',
-				awayTeamShort: 'MCI',
-				time: '03:30'
-			},
-			{
-				homeTeam: 'Chelsea',
-				homeTeamShort: 'CHE',
-				awayTeam: 'Bournemouth',
-				awayTeamShort: 'BOU',
-				time: '03:30'
-			},
-			{
-				homeTeam: 'West Ham',
-				homeTeamShort: 'WHU',
-				awayTeam: 'Fulham',
-				awayTeamShort: 'FUL',
-				time: '03:30'
-			},
-			{
-				homeTeam: "Nott'm Forest",
-				homeTeamShort: 'NFO',
-				awayTeam: 'Liverpool',
-				awayTeamShort: 'LIV',
-				time: '04:00'
-			}
-		]
-	},
-	{
-		date: 'Thursday 16 January 2025',
-		dateObj: new Date('2025-01-16'),
-		matches: [
-			{
-				homeTeam: 'Arsenal',
-				homeTeamShort: 'ARS',
-				awayTeam: 'Crystal Palace',
-				awayTeamShort: 'CRY',
-				time: '03:30'
-			},
-			{
-				homeTeam: 'Brighton',
-				homeTeamShort: 'BHA',
-				awayTeam: 'Wolves',
-				awayTeamShort: 'WOL',
-				time: '03:30'
-			}
-		]
-	},
-	{
-		date: 'Friday 17 January 2025',
-		dateObj: new Date('2025-01-17'),
-		matches: [
-			{
-				homeTeam: 'Manchester United',
-				homeTeamShort: 'MUN',
-				awayTeam: 'Tottenham',
-				awayTeamShort: 'TOT',
-				time: '03:30'
-			},
-			{
-				homeTeam: 'Aston Villa',
-				homeTeamShort: 'AVL',
-				awayTeam: 'Newcastle',
-				awayTeamShort: 'NEW',
-				time: '04:00'
-			},
-			{
-				homeTeam: 'Sheffield United',
-				homeTeamShort: 'SHU',
-				awayTeam: 'Everton',
-				awayTeamShort: 'EVE',
-				time: '04:15'
-			},
-			{
-				homeTeam: 'Luton Town',
-				homeTeamShort: 'LUT',
-				awayTeam: 'Burnley',
-				awayTeamShort: 'BUR',
-				time: '04:30'
-			}
-		]
-	}
-]
 
 function MatchList({ matches }: { matches: Match['matches'] }) {
 	return (
@@ -136,7 +59,13 @@ function MatchList({ matches }: { matches: Match['matches'] }) {
 							</div>
 
 							<div className="px-4 py-2 bg-background rounded-lg font-mono text-sm md:text-base font-semibold text-center mx-auto">
-								{match.time}
+								{match.finished && match.homeScore !== null && match.awayScore !== null ? (
+									<span className="text-lg">
+										{match.homeScore} - {match.awayScore}
+									</span>
+								) : (
+									<span>{match.time}</span>
+								)}
 							</div>
 
 							<div className="flex items-center justify-start space-x-3">
@@ -166,6 +95,174 @@ function MatchList({ matches }: { matches: Match['matches'] }) {
 }
 
 export function MatchesSection() {
+	const [matches, setMatches] = useState<Match[]>([])
+	const [isLoading, setIsLoading] = useState(true)
+	const [error, setError] = useState<string | null>(null)
+
+	useEffect(() => {
+		const fetchMatches = async () => {
+			try {
+				setIsLoading(true)
+				setError(null)
+
+				// First, get the next event ID
+				const eventsResponse = await executeQuery<EventsResponse>(
+					GET_CURRENT_AND_NEXT_EVENTS
+				)
+
+				const nextEvent = eventsResponse.next?.[0]
+				if (!nextEvent) {
+					throw new Error('No next gameweek found')
+				}
+
+				// Then fetch fixtures for the next event
+				const fixturesResponse = await executeQuery<EventFixturesResponse>(
+					GET_EVENT_FIXTURES,
+					{ eventId: nextEvent.id }
+				)
+
+				// Transform fixtures into matches grouped by date
+				const fixtures = fixturesResponse.eventFixtures || []
+				
+				// Group fixtures by date
+				const matchesByDate = new Map<string, Fixture[]>()
+				
+				fixtures.forEach(fixture => {
+					// Parse kickoff time and convert to local timezone
+					let kickoffDate: Date
+					if (fixture.kickoffTime.includes('Z') || fixture.kickoffTime.includes('+')) {
+						kickoffDate = new Date(fixture.kickoffTime)
+					} else {
+						const isoString = fixture.kickoffTime.replace(' ', 'T') + 'Z'
+						kickoffDate = new Date(isoString)
+					}
+					
+					// Use date as key (YYYY-MM-DD format)
+					const dateKey = format(kickoffDate, 'yyyy-MM-dd')
+					
+					if (!matchesByDate.has(dateKey)) {
+						matchesByDate.set(dateKey, [])
+					}
+					matchesByDate.get(dateKey)?.push(fixture)
+				})
+
+				// Convert map to array and sort by date
+				const matchesArray: Match[] = Array.from(matchesByDate.entries())
+					.sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+					.map(([dateKey, fixturesForDate]) => {
+						const firstFixture = fixturesForDate[0]
+						let kickoffDate: Date
+						if (firstFixture.kickoffTime.includes('Z') || firstFixture.kickoffTime.includes('+')) {
+							kickoffDate = new Date(firstFixture.kickoffTime)
+						} else {
+							const isoString = firstFixture.kickoffTime.replace(' ', 'T') + 'Z'
+							kickoffDate = new Date(isoString)
+						}
+
+						// Sort fixtures by kickoff time
+						const sortedFixtures = fixturesForDate.sort((a, b) => {
+							let dateA: Date, dateB: Date
+							if (a.kickoffTime.includes('Z') || a.kickoffTime.includes('+')) {
+								dateA = new Date(a.kickoffTime)
+							} else {
+								dateA = new Date(a.kickoffTime.replace(' ', 'T') + 'Z')
+							}
+							if (b.kickoffTime.includes('Z') || b.kickoffTime.includes('+')) {
+								dateB = new Date(b.kickoffTime)
+							} else {
+								dateB = new Date(b.kickoffTime.replace(' ', 'T') + 'Z')
+							}
+							return dateA.getTime() - dateB.getTime()
+						})
+
+						return {
+							date: format(kickoffDate, 'EEEE dd MMMM yyyy'),
+							dateObj: kickoffDate,
+							matches: sortedFixtures.map(fixture => {
+								let fixtureDate: Date
+								if (fixture.kickoffTime.includes('Z') || fixture.kickoffTime.includes('+')) {
+									fixtureDate = new Date(fixture.kickoffTime)
+								} else {
+									fixtureDate = new Date(fixture.kickoffTime.replace(' ', 'T') + 'Z')
+								}
+								
+								return {
+									homeTeam: fixture.homeTeam.name,
+									homeTeamShort: fixture.homeTeam.shortName,
+									awayTeam: fixture.awayTeam.name,
+									awayTeamShort: fixture.awayTeam.shortName,
+									time: format(fixtureDate, 'HH:mm'),
+									homeScore: fixture.homeScore,
+									awayScore: fixture.awayScore,
+									finished: fixture.finished,
+									started: fixture.started
+								}
+							})
+						}
+					})
+
+				setMatches(matchesArray)
+			} catch (err) {
+				console.error('Failed to fetch matches:', err)
+				const errorMessage = err instanceof Error ? err.message : String(err)
+				if (errorMessage.includes('Failed to fetch')) {
+					setError('Unable to connect to server. Please try again later.')
+				} else {
+					setError('Failed to load matches. Please try again later.')
+				}
+			} finally {
+				setIsLoading(false)
+			}
+		}
+
+		fetchMatches()
+	}, [])
+
+	if (isLoading) {
+		return (
+			<div className="flex-grow mb-8">
+				<Card className="p-4 md:p-6">
+					<h2 className="text-xl font-bold mb-6 flex items-center rounded-none sm:rounded-lg">
+						Upcoming Matches
+					</h2>
+					<div className="space-y-4">
+						{[1, 2, 3].map((i) => (
+							<Skeleton key={i} className="h-20 w-full" />
+						))}
+					</div>
+				</Card>
+			</div>
+		)
+	}
+
+	if (error) {
+		return (
+			<div className="flex-grow mb-8">
+				<Card className="p-4 md:p-6">
+					<h2 className="text-xl font-bold mb-6 flex items-center rounded-none sm:rounded-lg">
+						Upcoming Matches
+					</h2>
+					<p className="text-sm text-destructive text-center py-8">{error}</p>
+				</Card>
+			</div>
+		)
+	}
+
+	if (matches.length === 0) {
+		return (
+			<div className="flex-grow mb-8">
+				<Card className="p-4 md:p-6">
+					<h2 className="text-xl font-bold mb-6 flex items-center rounded-none sm:rounded-lg">
+						Upcoming Matches
+					</h2>
+					<p className="text-sm text-muted-foreground text-center py-8">
+						No matches scheduled for the next gameweek.
+					</p>
+				</Card>
+			</div>
+		)
+	}
+
 	return (
 		<div className="flex-grow mb-8">
 			<Card className="p-4 md:p-6">
@@ -179,7 +276,7 @@ export function MatchesSection() {
 						defaultValue={matches[0].date}
 						className="w-full"
 					>
-						<TabsList className="grid grid-cols-3 mb-4">
+						<TabsList className="grid mb-4" style={{ gridTemplateColumns: `repeat(${matches.length}, 1fr)` }}>
 							{matches.map(matchDay => (
 								<TabsTrigger
 									key={matchDay.date}
