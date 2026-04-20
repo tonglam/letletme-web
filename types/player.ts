@@ -5,6 +5,8 @@ export interface Player {
   teamShort: string;
   position: "GKP" | "DEF" | "MID" | "FWD";
   playingStatus: "NOT_STARTED" | "PLAYING" | "FINISHED";
+  isBench?: boolean;
+  breakdownStats?: PlayerBreakdownStat[];
   stats: {
     minutes: number;
     goals: number;
@@ -23,4 +25,10 @@ export interface Player {
   };
   isCaptain?: boolean;
   isViceCaptain?: boolean;
+}
+
+export interface PlayerBreakdownStat {
+  identifier: string;
+  value: number;
+  points: number;
 }

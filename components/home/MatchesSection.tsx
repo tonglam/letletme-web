@@ -9,14 +9,13 @@ import {
 	GET_CURRENT_AND_NEXT_EVENTS,
 	GET_EVENT_FIXTURES,
 	type EventFixturesResponse,
-	type EventsResponse,
-	type Fixture
+	type EventsResponse
 } from '@/lib/graphql/queries'
 import { format } from 'date-fns'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
 
-interface Match {
+interface MatchDay {
 	date: string
 	dateObj: Date
 	matches: {
@@ -32,7 +31,7 @@ interface Match {
 	}[]
 }
 
-function MatchList({ matches }: { matches: Match['matches'] }) {
+function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 	return (
 		<div className="space-y-4 md:space-y-6">
 			{matches.map((match, matchIndex) => (
@@ -59,7 +58,9 @@ function MatchList({ matches }: { matches: Match['matches'] }) {
 							</div>
 
 							<div className="px-4 py-2 bg-background rounded-lg font-mono text-sm md:text-base font-semibold text-center mx-auto">
-								{match.finished && match.homeScore !== null && match.awayScore !== null ? (
+								{match.finished &&
+								match.homeScore !== null &&
+								match.awayScore !== null ? (
 									<span className="text-lg">
 										{match.homeScore} - {match.awayScore}
 									</span>
@@ -95,7 +96,8 @@ function MatchList({ matches }: { matches: Match['matches'] }) {
 }
 
 export function MatchesSection() {
-	const [matches, setMatches] = useState<Match[]>([])
+	const [matchDays, setMatchDays] = useState<MatchDay[]>([])
+	const [nextGameweek, setNextGameweek] = useState<number | null>(null)
 	const [isLoading, setIsLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
 
@@ -105,111 +107,56 @@ export function MatchesSection() {
 				setIsLoading(true)
 				setError(null)
 
-				// First, get the next event ID
-				const eventsResponse = await executeQuery<EventsResponse>(
+				const eventsData = await executeQuery<EventsResponse>(
 					GET_CURRENT_AND_NEXT_EVENTS
 				)
+				const nextEventId = eventsData.next[0]?.id
+				if (!nextEventId) throw new Error('No upcoming event found')
+				setNextGameweek(nextEventId)
 
-				const nextEvent = eventsResponse.next?.[0]
-				if (!nextEvent) {
-					throw new Error('No next gameweek found')
-				}
-
-				// Then fetch fixtures for the next event
-				const fixturesResponse = await executeQuery<EventFixturesResponse>(
+				const fixturesData = await executeQuery<EventFixturesResponse>(
 					GET_EVENT_FIXTURES,
-					{ eventId: nextEvent.id }
+					{ eventId: nextEventId }
 				)
 
-				// Transform fixtures into matches grouped by date
-				const fixtures = fixturesResponse.eventFixtures || []
-				
-				// Group fixtures by date
-				const matchesByDate = new Map<string, Fixture[]>()
-				
-				fixtures.forEach(fixture => {
-					// Parse kickoff time and convert to local timezone
-					let kickoffDate: Date
-					if (fixture.kickoffTime.includes('Z') || fixture.kickoffTime.includes('+')) {
-						kickoffDate = new Date(fixture.kickoffTime)
-					} else {
-						const isoString = fixture.kickoffTime.replace(' ', 'T') + 'Z'
-						kickoffDate = new Date(isoString)
-					}
-					
-					// Use date as key (YYYY-MM-DD format)
-					const dateKey = format(kickoffDate, 'yyyy-MM-dd')
-					
-					if (!matchesByDate.has(dateKey)) {
-						matchesByDate.set(dateKey, [])
-					}
-					matchesByDate.get(dateKey)?.push(fixture)
-				})
+				// Group by date
+				const byDate = new Map<string, typeof fixturesData.eventFixtures>()
+				for (const fixture of fixturesData.eventFixtures) {
+					const dateKey = format(new Date(fixture.kickoffTime), 'yyyy-MM-dd')
+					if (!byDate.has(dateKey)) byDate.set(dateKey, [])
+					byDate.get(dateKey)!.push(fixture)
+				}
 
-				// Convert map to array and sort by date
-				const matchesArray: Match[] = Array.from(matchesByDate.entries())
-					.sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-					.map(([dateKey, fixturesForDate]) => {
-						const firstFixture = fixturesForDate[0]
-						let kickoffDate: Date
-						if (firstFixture.kickoffTime.includes('Z') || firstFixture.kickoffTime.includes('+')) {
-							kickoffDate = new Date(firstFixture.kickoffTime)
-						} else {
-							const isoString = firstFixture.kickoffTime.replace(' ', 'T') + 'Z'
-							kickoffDate = new Date(isoString)
-						}
-
-						// Sort fixtures by kickoff time
-						const sortedFixtures = fixturesForDate.sort((a, b) => {
-							let dateA: Date, dateB: Date
-							if (a.kickoffTime.includes('Z') || a.kickoffTime.includes('+')) {
-								dateA = new Date(a.kickoffTime)
-							} else {
-								dateA = new Date(a.kickoffTime.replace(' ', 'T') + 'Z')
-							}
-							if (b.kickoffTime.includes('Z') || b.kickoffTime.includes('+')) {
-								dateB = new Date(b.kickoffTime)
-							} else {
-								dateB = new Date(b.kickoffTime.replace(' ', 'T') + 'Z')
-							}
-							return dateA.getTime() - dateB.getTime()
-						})
-
+				const days: MatchDay[] = Array.from(byDate.entries())
+					.sort(([a], [b]) => a.localeCompare(b))
+					.map(([, dayFixtures]) => {
+						const sorted = dayFixtures.sort(
+							(a, b) =>
+								new Date(a.kickoffTime).getTime() -
+								new Date(b.kickoffTime).getTime()
+						)
+						const firstKickoff = new Date(sorted[0].kickoffTime)
 						return {
-							date: format(kickoffDate, 'EEEE dd MMMM yyyy'),
-							dateObj: kickoffDate,
-							matches: sortedFixtures.map(fixture => {
-								let fixtureDate: Date
-								if (fixture.kickoffTime.includes('Z') || fixture.kickoffTime.includes('+')) {
-									fixtureDate = new Date(fixture.kickoffTime)
-								} else {
-									fixtureDate = new Date(fixture.kickoffTime.replace(' ', 'T') + 'Z')
-								}
-								
-								return {
-									homeTeam: fixture.homeTeam.name,
-									homeTeamShort: fixture.homeTeam.shortName,
-									awayTeam: fixture.awayTeam.name,
-									awayTeamShort: fixture.awayTeam.shortName,
-									time: format(fixtureDate, 'HH:mm'),
-									homeScore: fixture.homeScore,
-									awayScore: fixture.awayScore,
-									finished: fixture.finished,
-									started: fixture.started
-								}
-							})
+							date: format(firstKickoff, 'EEEE dd MMMM yyyy'),
+							dateObj: firstKickoff,
+							matches: sorted.map(f => ({
+								homeTeam: f.homeTeam.name,
+								homeTeamShort: f.homeTeam.shortName,
+								awayTeam: f.awayTeam.name,
+								awayTeamShort: f.awayTeam.shortName,
+								time: format(new Date(f.kickoffTime), 'HH:mm'),
+								homeScore: f.finished ? (f.homeScore ?? null) : null,
+								awayScore: f.finished ? (f.awayScore ?? null) : null,
+								finished: f.finished,
+								started: f.started
+							}))
 						}
 					})
 
-				setMatches(matchesArray)
+				setMatchDays(days)
 			} catch (err) {
 				console.error('Failed to fetch matches:', err)
-				const errorMessage = err instanceof Error ? err.message : String(err)
-				if (errorMessage.includes('Failed to fetch')) {
-					setError('Unable to connect to server. Please try again later.')
-				} else {
-					setError('Failed to load matches. Please try again later.')
-				}
+				setError('Failed to load matches. Please try again later.')
 			} finally {
 				setIsLoading(false)
 			}
@@ -224,10 +171,18 @@ export function MatchesSection() {
 				<Card className="p-4 md:p-6">
 					<h2 className="text-xl font-bold mb-6 flex items-center rounded-none sm:rounded-lg">
 						Upcoming Matches
+						{nextGameweek !== null && (
+							<span className="ml-2 text-sm font-medium text-muted-foreground">
+								(Next GW: {nextGameweek})
+							</span>
+						)}
 					</h2>
 					<div className="space-y-4">
-						{[1, 2, 3].map((i) => (
-							<Skeleton key={i} className="h-20 w-full" />
+						{[1, 2, 3].map(i => (
+							<Skeleton
+								key={i}
+								className="h-20 w-full"
+							/>
 						))}
 					</div>
 				</Card>
@@ -241,6 +196,11 @@ export function MatchesSection() {
 				<Card className="p-4 md:p-6">
 					<h2 className="text-xl font-bold mb-6 flex items-center rounded-none sm:rounded-lg">
 						Upcoming Matches
+						{nextGameweek !== null && (
+							<span className="ml-2 text-sm font-medium text-muted-foreground">
+								(Next GW: {nextGameweek})
+							</span>
+						)}
 					</h2>
 					<p className="text-sm text-destructive text-center py-8">{error}</p>
 				</Card>
@@ -248,12 +208,17 @@ export function MatchesSection() {
 		)
 	}
 
-	if (matches.length === 0) {
+	if (matchDays.length === 0) {
 		return (
 			<div className="flex-grow mb-8">
 				<Card className="p-4 md:p-6">
 					<h2 className="text-xl font-bold mb-6 flex items-center rounded-none sm:rounded-lg">
 						Upcoming Matches
+						{nextGameweek !== null && (
+							<span className="ml-2 text-sm font-medium text-muted-foreground">
+								(GW: {nextGameweek})
+							</span>
+						)}
 					</h2>
 					<p className="text-sm text-muted-foreground text-center py-8">
 						No matches scheduled for the next gameweek.
@@ -268,16 +233,25 @@ export function MatchesSection() {
 			<Card className="p-4 md:p-6">
 				<h2 className="text-xl font-bold mb-6 flex items-center rounded-none sm:rounded-lg">
 					Upcoming Matches
+					{nextGameweek !== null && (
+						<span className="ml-2 text-sm font-medium text-muted-foreground">
+							(Next GW: {nextGameweek})
+						</span>
+					)}
 				</h2>
 
-				{/* Mobile view with tabs */}
 				<div className="md:hidden">
 					<Tabs
-						defaultValue={matches[0].date}
+						defaultValue={matchDays[0].date}
 						className="w-full"
 					>
-						<TabsList className="grid mb-4" style={{ gridTemplateColumns: `repeat(${matches.length}, 1fr)` }}>
-							{matches.map(matchDay => (
+						<TabsList
+							className="grid mb-4"
+							style={{
+								gridTemplateColumns: `repeat(${matchDays.length}, 1fr)`
+							}}
+						>
+							{matchDays.map(matchDay => (
 								<TabsTrigger
 									key={matchDay.date}
 									value={matchDay.date}
@@ -287,7 +261,7 @@ export function MatchesSection() {
 								</TabsTrigger>
 							))}
 						</TabsList>
-						{matches.map(matchDay => (
+						{matchDays.map(matchDay => (
 							<TabsContent
 								key={matchDay.date}
 								value={matchDay.date}
@@ -298,9 +272,8 @@ export function MatchesSection() {
 					</Tabs>
 				</div>
 
-				{/* Desktop view with all days */}
 				<div className="hidden md:block">
-					{matches.map((matchDay, dayIndex) => (
+					{matchDays.map((matchDay, dayIndex) => (
 						<div
 							key={matchDay.date}
 							className="max-w-4xl mx-auto"
@@ -309,7 +282,9 @@ export function MatchesSection() {
 								{format(matchDay.dateObj, 'EEEE dd MMMM yyyy')}
 							</h3>
 							<MatchList matches={matchDay.matches} />
-							{dayIndex < matches.length - 1 && <Separator className="mt-8" />}
+							{dayIndex < matchDays.length - 1 && (
+								<Separator className="mt-8" />
+							)}
 						</div>
 					))}
 				</div>

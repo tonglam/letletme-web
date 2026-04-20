@@ -490,14 +490,14 @@ export default function CreateTournament() {
                     </Alert>
                   )}
 
-                  {!showTable && isValidUrl() && (
-                    <Alert className="bg-blue-50 border-blue-200 mt-3">
-                      <Info className="h-4 w-4 text-blue-600" />
-                      <AlertDescription className="text-blue-800">
-                        The URL format is valid. Click "Fetch" to load participants from this league.
-                      </AlertDescription>
-                    </Alert>
-                  )}
+	                  {!showTable && isValidUrl() && (
+	                    <Alert className="bg-blue-50 border-blue-200 mt-3">
+	                      <Info className="h-4 w-4 text-blue-600" />
+	                      <AlertDescription className="text-blue-800">
+	                        The URL format is valid. Click &quot;Fetch&quot; to load participants from this league.
+	                      </AlertDescription>
+	                    </Alert>
+	                  )}
 
                   {isUrlValid && showTable && (
                     <div className="mt-4">

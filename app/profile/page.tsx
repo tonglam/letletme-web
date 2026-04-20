@@ -137,31 +137,37 @@ export default function ProfilePage() {
               </div>
               
               <h3 className="font-medium mt-4 mb-2">Recent Activity</h3>
-              <div className="space-y-2">
-                <div className="bg-accent/20 p-3 rounded-lg flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-primary" />
-                    <span>Joined "Premier League Fan Cup"</span>
-                  </div>
-                  <span className="text-sm text-muted-foreground">2 days ago</span>
-                </div>
-                
-                <div className="bg-accent/20 p-3 rounded-lg flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <Trophy className="h-4 w-4 text-primary" />
-                    <span>Ranked 3rd in "Mini-League Challenge"</span>
-                  </div>
-                  <span className="text-sm text-muted-foreground">1 week ago</span>
-                </div>
-                
-                <div className="bg-accent/20 p-3 rounded-lg flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-primary" />
-                    <span>Created "Work Colleagues Cup"</span>
-                  </div>
-                  <span className="text-sm text-muted-foreground">2 weeks ago</span>
-                </div>
-              </div>
+	              <div className="space-y-2">
+	                <div className="bg-accent/20 p-3 rounded-lg flex justify-between items-center">
+	                  <div className="flex items-center gap-2">
+	                    <Calendar className="h-4 w-4 text-primary" />
+	                    <span>
+	                      Joined &quot;Premier League Fan Cup&quot;
+	                    </span>
+	                  </div>
+	                  <span className="text-sm text-muted-foreground">2 days ago</span>
+	                </div>
+	                
+	                <div className="bg-accent/20 p-3 rounded-lg flex justify-between items-center">
+	                  <div className="flex items-center gap-2">
+	                    <Trophy className="h-4 w-4 text-primary" />
+	                    <span>
+	                      Ranked 3rd in &quot;Mini-League Challenge&quot;
+	                    </span>
+	                  </div>
+	                  <span className="text-sm text-muted-foreground">1 week ago</span>
+	                </div>
+	                
+	                <div className="bg-accent/20 p-3 rounded-lg flex justify-between items-center">
+	                  <div className="flex items-center gap-2">
+	                    <Users className="h-4 w-4 text-primary" />
+	                    <span>
+	                      Created &quot;Work Colleagues Cup&quot;
+	                    </span>
+	                  </div>
+	                  <span className="text-sm text-muted-foreground">2 weeks ago</span>
+	                </div>
+	              </div>
             </div>
           </Card>
         </div>

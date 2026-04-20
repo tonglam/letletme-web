@@ -8,7 +8,7 @@ import {
   GET_TOP_TRANSFERS_IN,
   GET_TOP_TRANSFERS_OUT,
   type EventsResponse,
-  type TopTransfersResponse
+  type TopTransfersResponse,
 } from "@/lib/graphql/queries";
 import { useEffect, useState } from "react";
 import { TransferList } from "./TransferList";
@@ -18,22 +18,9 @@ interface Transfer {
   player: string;
   club: string;
   transfers: number;
+  selectedByPercent?: number | null;
+  points?: number | null;
 }
-
-// Helper function to normalize position
-const normalizePosition = (pos: string | undefined): string => {
-  if (!pos) return "UNK";
-  const upper = pos.toUpperCase().trim();
-  if (upper === "GKP" || upper === "GK") return "GKP";
-  if (upper === "DEF") return "DEF";
-  if (upper === "MID") return "MID";
-  if (upper === "FWD") return "FWD";
-  if (upper.includes("GOALKEEPER")) return "GKP";
-  if (upper.includes("DEFENDER")) return "DEF";
-  if (upper.includes("MIDFIELDER")) return "MID";
-  if (upper.includes("FORWARD")) return "FWD";
-  return upper;
-};
 
 export function GameweekStatsSection() {
   const [transfersIn, setTransfersIn] = useState<Transfer[]>([]);
@@ -47,46 +34,42 @@ export function GameweekStatsSection() {
         setIsLoading(true);
         setError(null);
 
-        // First, get current gameweek
-        const eventsResponse = await executeQuery<EventsResponse>(
+        const eventsData = await executeQuery<EventsResponse>(
           GET_CURRENT_AND_NEXT_EVENTS
         );
-        
-        const currentEvent = eventsResponse.current?.[0];
-        if (!currentEvent) {
-          throw new Error("No current gameweek found");
-        }
+        const currentEventId = eventsData.current[0]?.id;
+        if (!currentEventId) throw new Error("No current event found");
 
-        // Fetch transfers in and out
-        const [transfersInResponse, transfersOutResponse] = await Promise.all([
-          executeQuery<TopTransfersResponse>(
-            GET_TOP_TRANSFERS_IN,
-            { eventId: currentEvent.id, limit: 5 }
-          ),
-          executeQuery<TopTransfersResponse>(
-            GET_TOP_TRANSFERS_OUT,
-            { eventId: currentEvent.id, limit: 5 }
-          )
+        const [inData, outData] = await Promise.all([
+          executeQuery<TopTransfersResponse>(GET_TOP_TRANSFERS_IN, {
+            eventId: currentEventId,
+            limit: 5,
+          }),
+          executeQuery<TopTransfersResponse>(GET_TOP_TRANSFERS_OUT, {
+            eventId: currentEventId,
+            limit: 5,
+          }),
         ]);
 
-        // Map transfers in
-        const mappedTransfersIn: Transfer[] = (transfersInResponse.topTransfersIn || []).map((transfer) => ({
-          position: normalizePosition(transfer.player.position),
-          player: transfer.player.webName,
-          club: transfer.player.team?.shortName || transfer.player.team?.name || "",
-          transfers: transfer.transfersInEvent,
-        }));
+        const toTransfer = (
+          item: NonNullable<TopTransfersResponse["topTransfersIn"]>[number],
+          direction: "in" | "out"
+        ): Transfer => ({
+          position: item.player.position ?? "UNK",
+          player: item.player.webName,
+          club: item.player.team?.shortName ?? item.player.team?.name ?? "",
+          transfers:
+            direction === "in" ? item.transfersInEvent : item.transfersOutEvent,
+          selectedByPercent: item.player.selectedByPercent ?? null,
+          points: item.player.totalPoints ?? null,
+        });
 
-        // Map transfers out
-        const mappedTransfersOut: Transfer[] = (transfersOutResponse.topTransfersOut || []).map((transfer) => ({
-          position: normalizePosition(transfer.player.position),
-          player: transfer.player.webName,
-          club: transfer.player.team?.shortName || transfer.player.team?.name || "",
-          transfers: transfer.transfersOutEvent,
-        }));
-
-        setTransfersIn(mappedTransfersIn);
-        setTransfersOut(mappedTransfersOut);
+        setTransfersIn(
+          (inData.topTransfersIn ?? []).map((i) => toTransfer(i, "in"))
+        );
+        setTransfersOut(
+          (outData.topTransfersOut ?? []).map((i) => toTransfer(i, "out"))
+        );
       } catch (err) {
         console.error("Failed to fetch transfers:", err);
         setError("Failed to load transfers");
@@ -109,22 +92,16 @@ export function GameweekStatsSection() {
       )}
       {isLoading ? (
         <div className="space-y-6">
-          <div>
-            <Skeleton className="h-6 w-32 mb-4" />
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-14 w-full rounded-lg" />
-              ))}
+          {[0, 1].map((i) => (
+            <div key={i}>
+              <Skeleton className="h-6 w-32 mb-4" />
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5].map((j) => (
+                  <Skeleton key={j} className="h-14 w-full rounded-lg" />
+                ))}
+              </div>
             </div>
-          </div>
-          <div>
-            <Skeleton className="h-6 w-32 mb-4" />
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-14 w-full rounded-lg" />
-              ))}
-            </div>
-          </div>
+          ))}
         </div>
       ) : (
         <div className="space-y-6">

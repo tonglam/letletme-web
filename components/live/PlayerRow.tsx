@@ -1,17 +1,17 @@
 "use client";
 
-import { Player } from "@/types/player";
-import { Clock, Play, CheckCircle2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useMemo, useState } from "react";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { PlayerDetailModal } from "./PlayerDetailModal";
+import { cn } from "@/lib/utils";
+import { Player } from "@/types/player";
 import { PlayerDetail } from "@/types/player-detail";
+import { CheckCircle2, Clock, Play } from "lucide-react";
+import { useMemo, useState } from "react";
+import { PlayerDetailModal } from "./PlayerDetailModal";
 
 interface PlayerRowProps {
   player: Player;
@@ -22,6 +22,40 @@ interface StatConfig {
   key: keyof Player["stats"];
   description: string;
 }
+
+const breakdownLabelMap: Record<string, string> = {
+  minutes: "Appearance",
+  goals_scored: "Goals",
+  assists: "Assists",
+  clean_sheets: "Clean Sheet",
+  saves: "Saves",
+  penalties_saved: "Penalty Saved",
+  penalties_missed: "Penalty Missed",
+  yellow_cards: "Yellow Card",
+  red_cards: "Red Card",
+  own_goals: "Own Goal",
+  goals_conceded: "Goals Conceded",
+  bonus: "Bonus Points",
+  total: "Total Points",
+  total_points: "Total Points"
+};
+
+const breakdownOrder = [
+  "minutes",
+  "goals_scored",
+  "assists",
+  "clean_sheets",
+  "saves",
+  "penalties_saved",
+  "penalties_missed",
+  "yellow_cards",
+  "red_cards",
+  "own_goals",
+  "goals_conceded",
+  "bonus",
+  "total",
+  "total_points"
+] as const;
 
 const positionStats: Record<Player["position"], StatConfig[]> = {
   GKP: [
@@ -87,18 +121,50 @@ export function PlayerRow({ player }: PlayerRowProps) {
     return positionStats[player.position];
   }, [player.position]);
 
-  // Convert Player to PlayerDetail for the modal
-  const playerDetail: PlayerDetail = useMemo(() => {
-    // Calculate point breakdown
-    const pointsBreakdown = [];
+  const breakdownFromExplain = useMemo(() => {
+    if (!player.breakdownStats || player.breakdownStats.length === 0) {
+      return [];
+    }
+
+    const totals = player.breakdownStats.reduce<Map<string, number>>((acc, stat) => {
+      const current = acc.get(stat.identifier) ?? 0;
+      acc.set(stat.identifier, current + stat.points);
+      return acc;
+    }, new Map());
+
+    const orderedKeys = new Set<string>(breakdownOrder);
+
+    const orderedBreakdown = breakdownOrder
+      .map(identifier => {
+        const points = totals.get(identifier);
+        if (points === undefined || points === 0) {
+          return null;
+        }
+        return {
+          category: breakdownLabelMap[identifier] ?? identifier,
+          points
+        };
+      })
+      .filter(Boolean) as { category: string; points: number }[];
+
+    const remaining = Array.from(totals.entries())
+      .filter(([identifier, points]) => !orderedKeys.has(identifier) && points !== 0)
+      .map(([identifier, points]) => ({
+        category: breakdownLabelMap[identifier] ?? identifier,
+        points
+      }));
+
+    return [...orderedBreakdown, ...remaining];
+  }, [player.breakdownStats]);
+
+  const computedFallbackBreakdown = useMemo(() => {
+    const pointsBreakdown: { category: string; points: number }[] = [];
     
-    // Minutes points
     if (player.stats.minutes > 0) {
       const minutesPoints = player.stats.minutes >= 60 ? 2 : 1;
       pointsBreakdown.push({ category: "Appearance", points: minutesPoints });
     }
     
-    // Goal points
     if (player.stats.goals > 0) {
       const pointsPerGoal = player.position === "FWD" ? 4 : 
                            player.position === "MID" ? 5 : 
@@ -107,13 +173,11 @@ export function PlayerRow({ player }: PlayerRowProps) {
       pointsBreakdown.push({ category: "Goals", points: goalPoints });
     }
     
-    // Assist points
     if (player.stats.assists > 0) {
       const assistPoints = player.stats.assists * 3;
       pointsBreakdown.push({ category: "Assists", points: assistPoints });
     }
     
-    // Clean sheet points
     if (player.stats.cleanSheets > 0) {
       const csPoints = player.position === "GKP" || player.position === "DEF" ? 4 : 
                       player.position === "MID" ? 1 : 0;
@@ -122,7 +186,6 @@ export function PlayerRow({ player }: PlayerRowProps) {
       }
     }
     
-    // Saves points
     if (player.stats.saves && player.stats.saves > 0) {
       const savePoints = Math.floor(player.stats.saves / 3);
       if (savePoints > 0) {
@@ -130,29 +193,33 @@ export function PlayerRow({ player }: PlayerRowProps) {
       }
     }
     
-    // Penalty saves
     if (player.stats.savePenalty && player.stats.savePenalty > 0) {
       const penSavePoints = player.stats.savePenalty * 5;
       pointsBreakdown.push({ category: "Penalty Saved", points: penSavePoints });
     }
     
-    // Yellow cards
     if (player.stats.yellowCards > 0) {
       const ycPoints = -1 * player.stats.yellowCards;
       pointsBreakdown.push({ category: "Yellow Card", points: ycPoints });
     }
     
-    // Red cards
     if (player.stats.redCards > 0) {
       const rcPoints = -3 * player.stats.redCards;
       pointsBreakdown.push({ category: "Red Card", points: rcPoints });
     }
     
-    // Bonus points
     if (player.stats.bonusPoints > 0) {
       pointsBreakdown.push({ category: "Bonus Points", points: player.stats.bonusPoints });
     }
     
+    return pointsBreakdown;
+  }, [player]);
+
+  // Convert Player to PlayerDetail for the modal
+  const playerDetail: PlayerDetail = useMemo(() => {
+    const pointsBreakdown =
+      breakdownFromExplain.length > 0 ? breakdownFromExplain : computedFallbackBreakdown;
+
     return {
       id: player.id,
       name: player.name,
@@ -160,8 +227,8 @@ export function PlayerRow({ player }: PlayerRowProps) {
       teamShort: player.teamShort,
       position: player.position,
       points: player.stats.points,
-      ownershipPercentage: Math.round(Math.random() * 50 * 10) / 10, // Random ownership for demo
-      bps: Math.floor(Math.random() * 100), // Random BPS for demo
+      ownershipPercentage: 0,
+      bps: 0,
       bonusPoints: player.stats.bonusPoints,
       stats: {
         minutes: player.stats.minutes,
@@ -173,15 +240,16 @@ export function PlayerRow({ player }: PlayerRowProps) {
         yellowCards: player.stats.yellowCards,
         redCards: player.stats.redCards
       },
-      pointsBreakdown: pointsBreakdown
+      pointsBreakdown
     };
-  }, [player]);
+  }, [player, breakdownFromExplain, computedFallbackBreakdown]);
 
   return (
     <>
       <div 
         className={cn(
           "p-3 sm:p-4 hover:bg-accent/50 transition-colors border-b last:border-b-0 cursor-pointer",
+          player.isBench ? "bg-muted/20" : "",
           statusConfig[player.playingStatus].bgClassName,
           "relative"
         )}
@@ -251,17 +319,22 @@ export function PlayerRow({ player }: PlayerRowProps) {
                       console.log(`Clicked Total Points: ${player.stats.points} (Bonus: ${player.stats.bonusPoints})`);
                     }}
                   >
-                    <div className="text-muted-foreground text-xs font-medium">PTS</div>
-                    <div className="font-bold text-xs sm:text-sm">
-                      {player.stats.points}
-                      {player.stats.bonusPoints > 0 && (
-                        <span className="text-primary ml-1">+{player.stats.bonusPoints}</span>
-                      )}
+                  <div className="text-muted-foreground text-xs font-medium">PTS</div>
+                  <div className="font-bold text-xs sm:text-sm">
+                    {player.stats.points}
+                  </div>
+                  {player.stats.bonusPoints > 0 && (
+                    <div className="text-[10px] sm:text-xs text-primary font-medium">
+                      BONUS +{player.stats.bonusPoints}
                     </div>
+                  )}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Total Points: {player.stats.points} (Bonus: {player.stats.bonusPoints})</p>
+                <p>Total points: {player.stats.points}</p>
+                {player.stats.bonusPoints > 0 && (
+                  <p>Bonus: {player.stats.bonusPoints}</p>
+                )}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

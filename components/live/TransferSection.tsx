@@ -1,39 +1,27 @@
 "use client";
 
-import { ArrowRightCircle, ArrowLeftCircle } from "lucide-react";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { formatCompactNumber } from "@/lib/utils";
+import { PlayerDetail } from "@/types/player-detail";
+import { ArrowLeftCircle, ArrowRightCircle } from "lucide-react";
 import { useState } from "react";
 import { PlayerDetailModal } from "./PlayerDetailModal";
-import { PlayerDetail } from "@/types/player-detail";
 
-interface Transfer {
+export interface Transfer {
   position: string;
   player: string;
   club: string;
-  cost: number;
+  cost?: number;
 }
 
-interface TransferPair {
+export interface TransferPair {
   in: Transfer;
   out: Transfer;
 }
-
-const transfers: TransferPair[] = [
-  {
-    in: { position: "MID", player: "Marmoush", club: "MCI", cost: 5.6 },
-    out: { position: "FWD", player: "Cunha", club: "WOL", cost: 6.8 }
-  },
-  {
-    in: { position: "FWD", player: "Haaland", club: "MCI", cost: 14.0 },
-    out: { position: "MID", player: "Maddison", club: "TOT", cost: 8.7 }
-  }
-];
 
 function TransferRow({ transfer }: { transfer: TransferPair }) {
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerDetail | null>(null);
@@ -176,9 +164,11 @@ function TransferRow({ transfer }: { transfer: TransferPair }) {
                 </Tooltip>
               </TooltipProvider>
             </div>
-            <span className="text-xs sm:text-sm font-medium text-rose-600 dark:text-rose-400 ml-2">
-              £{transfer.out.cost.toFixed(1)}m
-            </span>
+            {typeof transfer.out.cost === "number" && (
+              <span className="text-xs sm:text-sm font-medium text-rose-600 dark:text-rose-400 ml-2">
+                £{transfer.out.cost.toFixed(1)}m
+              </span>
+            )}
           </div>
 
           {/* Transfer In */}
@@ -206,9 +196,11 @@ function TransferRow({ transfer }: { transfer: TransferPair }) {
                 </Tooltip>
               </TooltipProvider>
             </div>
-            <span className="text-xs sm:text-sm font-medium text-emerald-600 dark:text-emerald-400 ml-2">
-              £{transfer.in.cost.toFixed(1)}m
-            </span>
+            {typeof transfer.in.cost === "number" && (
+              <span className="text-xs sm:text-sm font-medium text-emerald-600 dark:text-emerald-400 ml-2">
+                £{transfer.in.cost.toFixed(1)}m
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -223,16 +215,25 @@ function TransferRow({ transfer }: { transfer: TransferPair }) {
   );
 }
 
-export function TransferSection() {
+export function TransferSection({ transfers }: { transfers?: TransferPair[] }) {
+  // Only use provided transfers, never fall back to mock data
+  const list = transfers ?? [];
+
   return (
     <div className="bg-card rounded-lg shadow-sm overflow-hidden">
       <div className="p-4 text-sm font-medium text-muted-foreground border-b">
         Transfers
       </div>
       <div>
-        {transfers.map((transfer, index) => (
-          <TransferRow key={index} transfer={transfer} />
-        ))}
+        {list.length > 0 ? (
+          list.map((transfer, index) => (
+            <TransferRow key={index} transfer={transfer} />
+          ))
+        ) : (
+          <div className="p-8 text-center text-sm text-muted-foreground">
+            No transfers made this gameweek
+          </div>
+        )}
       </div>
     </div>
   );

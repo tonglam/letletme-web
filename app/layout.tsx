@@ -3,15 +3,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { AuthProvider } from '@/lib/auth-context'
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
-
-const inter = Inter({
-	subsets: ['latin'],
-	display: 'swap',
-	preload: false,
-	adjustFontFallback: false
-})
 
 export const metadata: Metadata = {
 	title: 'LetLetMe - Fantasy Premier League Tool',
@@ -32,7 +24,7 @@ export default function RootLayout({
 			lang="en"
 			suppressHydrationWarning
 		>
-			<body className={inter.className}>
+			<body className="font-sans antialiased">
 				<ThemeProvider
 					attribute="class"
 					defaultTheme="system"

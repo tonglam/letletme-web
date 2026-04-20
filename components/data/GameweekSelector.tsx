@@ -14,18 +14,28 @@ interface GameweekSelectorProps {
   onGameweekChange: (gameweek: number) => void;
   className?: string;
   currentGameweek?: number;
+  selectedGameweek?: number;
+  disabled?: boolean;
 }
 
 export function GameweekSelector({ 
   onGameweekChange, 
   className = "",
-  currentGameweek = 21 
+  currentGameweek = 21,
+  selectedGameweek,
+  disabled = false
 }: GameweekSelectorProps) {
+  const maxGameweek = Math.max(1, currentGameweek);
+  const effectiveSelectedGameweek =
+    selectedGameweek !== undefined && selectedGameweek <= maxGameweek
+      ? selectedGameweek
+      : maxGameweek;
+
   // Generate gameweeks for selection
   const generateGameweeks = () => {
     const gameweeks = [];
     
-    for (let i = 1; i <= 38; i++) {
+    for (let i = 1; i <= maxGameweek; i++) {
       gameweeks.push({
         value: i,
         label: `Gameweek ${i}${i === currentGameweek ? ' (Current)' : ''}`
@@ -42,8 +52,9 @@ export function GameweekSelector({
       <div>
         <p className="text-sm text-muted-foreground mb-2">Select Gameweek</p>
         <Select
-          defaultValue={currentGameweek.toString()}
+          value={effectiveSelectedGameweek.toString()}
           onValueChange={(value) => onGameweekChange(parseInt(value))}
+          disabled={disabled}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select gameweek" />

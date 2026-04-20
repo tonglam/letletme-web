@@ -9,6 +9,8 @@ interface Transfer {
   player: string;
   club: string;
   transfers: number;
+  selectedByPercent?: number | null;
+  points?: number | null;
 }
 
 interface TransferListProps {
@@ -80,11 +82,19 @@ export function TransferList({ title, transfers, type }: TransferListProps) {
                     {transfer.player}
                   </span>
                 </div>
-                {transfer.club && (
-                  <span className="text-xs text-muted-foreground truncate block">
-                    {transfer.club}
-                  </span>
-                )}
+                <span className="text-xs text-muted-foreground truncate block">
+                  {[
+                    transfer.club || "",
+                    `Sel ${
+                      typeof transfer.selectedByPercent === "number"
+                        ? `${transfer.selectedByPercent.toFixed(1)}%`
+                        : "-"
+                    }`,
+                    `Pts ${typeof transfer.points === "number" ? transfer.points : "-"}`,
+                  ]
+                    .filter((part) => part.length > 0)
+                    .join(" | ")}
+                </span>
               </div>
 
               <div className="flex flex-col items-end shrink-0">

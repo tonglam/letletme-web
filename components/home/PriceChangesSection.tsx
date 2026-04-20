@@ -4,7 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { executeQuery } from "@/lib/graphql-client";
-import { GET_PLAYER_VALUES, type PlayerValuesResponse } from "@/lib/graphql/queries";
+import {
+  GET_PLAYER_VALUES,
+  type PlayerValuesResponse,
+} from "@/lib/graphql/queries";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -16,32 +19,44 @@ interface PriceChange {
   priceChange?: number;
 }
 
-function PriceList({ title, changes, type }: { 
+function PriceList({
+  title,
+  changes,
+  type,
+}: {
   title: string;
   changes: PriceChange[];
   type: "rise" | "fall";
 }) {
-  const icon = type === "rise" ? (
-    <TrendingUp className="w-5 h-5 shrink-0 text-emerald-500" />
-  ) : (
-    <TrendingDown className="w-5 h-5 shrink-0 text-rose-500" />
-  );
+  const icon =
+    type === "rise" ? (
+      <TrendingUp className="w-5 h-5 shrink-0 text-emerald-500" />
+    ) : (
+      <TrendingDown className="w-5 h-5 shrink-0 text-rose-500" />
+    );
 
-  const priceClassName = type === "rise" 
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-rose-600 dark:text-rose-400";
+  const priceClassName =
+    type === "rise"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : "text-rose-600 dark:text-rose-400";
 
-  const bgClassName = type === "rise"
-    ? "border-emerald-200 dark:border-emerald-900"
-    : "border-rose-200 dark:border-rose-900";
+  const bgClassName =
+    type === "rise"
+      ? "border-emerald-200 dark:border-emerald-900"
+      : "border-rose-200 dark:border-rose-900";
 
   const getPositionColor = (position: string) => {
     switch (position) {
-      case "GKP": return "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300";
-      case "DEF": return "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300";
-      case "MID": return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300";
-      case "FWD": return "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300";
-      default: return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
+      case "GKP":
+        return "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300";
+      case "DEF":
+        return "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300";
+      case "MID":
+        return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300";
+      case "FWD":
+        return "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300";
+      default:
+        return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
     }
   };
 
@@ -56,7 +71,9 @@ function PriceList({ title, changes, type }: {
           </Badge>
         )}
       </div>
-      <div className={`space-y-2 rounded-lg p-3 border ${bgClassName} flex-1`}>
+      <div
+        className={`space-y-2 rounded-lg p-3 border ${bgClassName} flex-1`}
+      >
         {changes.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground text-sm">
             No {type === "rise" ? "rises" : "falls"} to display
@@ -69,13 +86,13 @@ function PriceList({ title, changes, type }: {
               onClick={() => console.log(`Clicked on ${change.player}`)}
               aria-label={`View details for ${change.player}`}
             >
-              <Badge 
-                variant="secondary" 
+              <Badge
+                variant="secondary"
                 className={`shrink-0 text-xs font-semibold ${getPositionColor(change.position)}`}
               >
                 {change.position}
               </Badge>
-              
+
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
@@ -93,7 +110,8 @@ function PriceList({ title, changes, type }: {
                 </span>
                 {change.priceChange !== undefined && (
                   <span className={`text-xs ${priceClassName} font-medium`}>
-                    {type === "rise" ? "+" : ""}£{(Math.abs(change.priceChange) / 10).toFixed(1)}m
+                    {type === "rise" ? "+" : ""}£
+                    {(Math.abs(change.priceChange) / 10).toFixed(1)}m
                   </span>
                 )}
               </div>
@@ -117,45 +135,34 @@ export function PriceChangesSection() {
         setIsLoading(true);
         setError(null);
 
-        const response = await executeQuery<PlayerValuesResponse>(
-          GET_PLAYER_VALUES
-        );
+        const data = await executeQuery<PlayerValuesResponse>(GET_PLAYER_VALUES);
 
-        // Separate players into rises and falls based on value vs lastValue
-        // value > lastValue = Rise, value < lastValue = Fall
-        const risesWithData: Array<PriceChange & { value: number }> = [];
-        const fallsWithData: Array<PriceChange & { value: number }> = [];
-
-        response.playerValues.forEach((player) => {
-          const priceChangeAmount = Math.abs(player.value - player.lastValue);
-          const priceChange: PriceChange = {
-            position: player.position,
-            player: player.playerName,
-            club: player.teamName,
-            price: player.value, // Will be divided by 10 when displaying
-            priceChange: priceChangeAmount,
-          };
-
-          if (player.value > player.lastValue) {
-            // Price rose
-            risesWithData.push({ ...priceChange, value: player.value });
-          } else if (player.value < player.lastValue) {
-            // Price fell
-            fallsWithData.push({ ...priceChange, value: player.value });
-          }
-          // If value === lastValue, skip (no change)
+        const toChange = (p: PlayerValuesResponse["playerValues"][number]): PriceChange => ({
+          position: p.position,
+          player: p.playerName,
+          club: p.teamName,
+          price: p.value,
+          priceChange: Math.abs(p.value - p.lastValue),
         });
 
-        // Sort by value (descending for rises, ascending for falls) and take top 5
-        risesWithData.sort((a, b) => b.value - a.value);
-        fallsWithData.sort((a, b) => a.value - b.value);
+        setPriceRises(
+          data.playerValues
+            .filter((p) => p.value > p.lastValue)
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5)
+            .map(toChange)
+        );
 
-        setPriceRises(risesWithData.slice(0, 5).map(({ value, ...rest }) => rest));
-        setPriceFalls(fallsWithData.slice(0, 5).map(({ value, ...rest }) => rest));
+        setPriceFalls(
+          data.playerValues
+            .filter((p) => p.value < p.lastValue)
+            .sort((a, b) => a.value - b.value)
+            .slice(0, 5)
+            .map(toChange)
+        );
       } catch (err) {
         console.error("Failed to fetch player values:", err);
         setError("Failed to load price changes");
-        // Set empty arrays on error
         setPriceRises([]);
         setPriceFalls([]);
       } finally {
@@ -170,22 +177,16 @@ export function PriceChangesSection() {
     return (
       <Card className="rounded-none sm:rounded-lg p-4 sm:p-6">
         <div className="grid md:grid-cols-2 gap-6">
-          <div>
-            <Skeleton className="h-6 w-32 mb-6" />
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
+          {[0, 1].map((i) => (
+            <div key={i}>
+              <Skeleton className="h-6 w-32 mb-6" />
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5].map((j) => (
+                  <Skeleton key={j} className="h-12 w-full" />
+                ))}
+              </div>
             </div>
-          </div>
-          <div>
-            <Skeleton className="h-6 w-32 mb-6" />
-            <div className="space-y-2">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          </div>
+          ))}
         </div>
       </Card>
     );
@@ -199,16 +200,8 @@ export function PriceChangesSection() {
         </div>
       )}
       <div className="grid md:grid-cols-2 gap-6 lg:gap-8">
-        <PriceList
-          title="Price Rises"
-          changes={priceRises}
-          type="rise"
-        />
-        <PriceList
-          title="Price Falls"
-          changes={priceFalls}
-          type="fall"
-        />
+        <PriceList title="Price Rises" changes={priceRises} type="rise" />
+        <PriceList title="Price Falls" changes={priceFalls} type="fall" />
       </div>
     </Card>
   );

@@ -1,0 +1,2668 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link "LetLetMe" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img [ref=e6]
+        - generic [ref=e8]: LetLetMe
+      - generic [ref=e9]:
+        - generic [ref=e10]:
+          - button "Live" [ref=e11] [cursor=pointer]:
+            - img
+            - text: Live
+            - img
+          - button "Tournament" [ref=e12] [cursor=pointer]:
+            - img
+            - text: Tournament
+            - img
+          - button "Stats" [ref=e13] [cursor=pointer]:
+            - img
+            - text: Stats
+            - img
+          - button "Data" [ref=e14] [cursor=pointer]:
+            - img
+            - text: Data
+            - img
+          - button [ref=e15] [cursor=pointer]:
+            - img
+          - link "Login" [ref=e16] [cursor=pointer]:
+            - /url: /auth/login
+            - img
+            - text: Login
+        - button "Toggle theme" [ref=e17] [cursor=pointer]:
+          - img
+          - img
+          - generic [ref=e18]: Toggle theme
+  - generic [ref=e20]:
+    - generic [ref=e21]:
+      - heading "Live Matches" [level=1] [ref=e22]
+      - button "Refresh matches" [ref=e77] [cursor=pointer]:
+        - img
+        - generic [ref=e78]: Refresh matches
+    - generic [ref=e79]:
+      - tablist [ref=e81]:
+        - tab "Live Now" [selected] [ref=e82] [cursor=pointer]
+        - tab "Finished" [ref=e83] [cursor=pointer]
+        - tab "Not Started" [ref=e84] [cursor=pointer]
+        - tab "All Matches" [ref=e85] [cursor=pointer]
+      - tabpanel "Live Now" [ref=e86]:
+        - generic [ref=e87]:
+          - button "Next match" [ref=e89] [cursor=pointer]:
+            - img [ref=e90]
+          - generic [ref=e92]:
+            - generic [ref=e94]:
+              - img [ref=e95]
+              - generic [ref=e98]: April 18, 2026 19:30
+            - generic [ref=e99]:
+              - generic [ref=e101]:
+                - generic [ref=e102]: Brentford
+                - img "Brentford logo" [ref=e104]
+              - generic [ref=e106]:
+                - generic [ref=e107]: 0 - 0
+                - generic [ref=e109]:
+                  - img [ref=e110]
+                  - generic [ref=e112]: 90'
+              - generic [ref=e114]:
+                - img "Fulham logo" [ref=e116]
+                - generic [ref=e117]: Fulham
+            - generic [ref=e118]:
+              - generic [ref=e119]:
+                - img [ref=e120]
+                - heading "Defensive Contribution" [level=3] [ref=e122]
+              - generic [ref=e124]:
+                - generic [ref=e125]: Damsgaard
+                - generic [ref=e126]: (BRE)
+                - generic [ref=e127]: 🛡️ 12
+            - generic [ref=e128]:
+              - generic [ref=e129]:
+                - img [ref=e130]
+                - heading "Saves" [level=3] [ref=e134]
+              - generic [ref=e136]:
+                - generic [ref=e137]: Leno
+                - generic [ref=e138]: (FUL)
+                - generic [ref=e139]: 🧤 4
+            - generic [ref=e140]:
+              - generic [ref=e141]:
+                - img [ref=e142]
+                - heading "Yellow Cards" [level=3] [ref=e144]
+              - generic [ref=e146]:
+                - generic [ref=e147]: Lukić
+                - generic [ref=e148]: (FUL)
+                - generic [ref=e149]: 🟨 1
+            - generic [ref=e150]:
+              - generic [ref=e151]:
+                - img [ref=e152]
+                - heading "Bonus Point System (BPS)" [level=3] [ref=e153]
+              - generic [ref=e154]:
+                - generic [ref=e155]:
+                  - generic [ref=e156]: Leno
+                  - generic [ref=e157]: (FUL)
+                  - generic [ref=e158]: "34"
+                - generic [ref=e159]:
+                  - generic [ref=e160]: Kayode
+                  - generic [ref=e161]: (BRE)
+                  - generic [ref=e162]: "27"
+                - generic [ref=e163]:
+                  - generic [ref=e164]: Castagne
+                  - generic [ref=e165]: (FUL)
+                  - generic [ref=e166]: "26"
+                - generic [ref=e167]:
+                  - generic [ref=e168]: Van den Berg
+                  - generic [ref=e169]: (BRE)
+                  - generic [ref=e170]: "24"
+                - generic [ref=e171]:
+                  - generic [ref=e172]: Andersen
+                  - generic [ref=e173]: (FUL)
+                  - generic [ref=e174]: "24"
+            - generic [ref=e175]:
+              - tablist [ref=e176]:
+                - tab "Brentford Brentford" [selected] [ref=e177] [cursor=pointer]:
+                  - img "Brentford" [ref=e179]
+                  - generic [ref=e180]: Brentford
+                - tab "Fulham Fulham" [ref=e181] [cursor=pointer]:
+                  - img "Fulham" [ref=e183]
+                  - generic [ref=e184]: Fulham
+              - tabpanel "Brentford Brentford" [ref=e185]:
+                - button "Kayode +2 10 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e186] [cursor=pointer]:
+                  - generic [ref=e187]:
+                    - generic [ref=e188]: Kayode
+                    - generic [ref=e189]:
+                      - generic [ref=e190]: "+2"
+                      - generic [ref=e191]: 10 pts
+                  - generic [ref=e192]:
+                    - generic [ref=e193]:
+                      - generic [ref=e194]: ⏱️ MIN
+                      - generic [ref=e195]: "90"
+                    - generic [ref=e196]:
+                      - generic [ref=e197]: 🛡️ CS
+                      - generic [ref=e198]: "1"
+                - button "Kelleher 6 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e199] [cursor=pointer]:
+                  - generic [ref=e200]:
+                    - generic [ref=e201]: Kelleher
+                    - generic [ref=e203]: 6 pts
+                  - generic [ref=e204]:
+                    - generic [ref=e205]:
+                      - generic [ref=e206]: ⏱️ MIN
+                      - generic [ref=e207]: "90"
+                    - generic [ref=e208]:
+                      - generic [ref=e209]: 🛡️ CS
+                      - generic [ref=e210]: "1"
+                - button "Collins 6 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e211] [cursor=pointer]:
+                  - generic [ref=e212]:
+                    - generic [ref=e213]: Collins
+                    - generic [ref=e215]: 6 pts
+                  - generic [ref=e216]:
+                    - generic [ref=e217]:
+                      - generic [ref=e218]: ⏱️ MIN
+                      - generic [ref=e219]: "90"
+                    - generic [ref=e220]:
+                      - generic [ref=e221]: 🛡️ CS
+                      - generic [ref=e222]: "1"
+                - button "Lewis-Potter 6 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e223] [cursor=pointer]:
+                  - generic [ref=e224]:
+                    - generic [ref=e225]: Lewis-Potter
+                    - generic [ref=e227]: 6 pts
+                  - generic [ref=e228]:
+                    - generic [ref=e229]:
+                      - generic [ref=e230]: ⏱️ MIN
+                      - generic [ref=e231]: "90"
+                    - generic [ref=e232]:
+                      - generic [ref=e233]: 🛡️ CS
+                      - generic [ref=e234]: "1"
+                - button "Van den Berg 6 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e235] [cursor=pointer]:
+                  - generic [ref=e236]:
+                    - generic [ref=e237]: Van den Berg
+                    - generic [ref=e239]: 6 pts
+                  - generic [ref=e240]:
+                    - generic [ref=e241]:
+                      - generic [ref=e242]: ⏱️ MIN
+                      - generic [ref=e243]: "90"
+                    - generic [ref=e244]:
+                      - generic [ref=e245]: 🛡️ CS
+                      - generic [ref=e246]: "1"
+                - button "Damsgaard 5 pts ⏱️ MIN 90 🛡️ CS 1 🛡️ Def 12" [ref=e247] [cursor=pointer]:
+                  - generic [ref=e248]:
+                    - generic [ref=e249]: Damsgaard
+                    - generic [ref=e251]: 5 pts
+                  - generic [ref=e252]:
+                    - generic [ref=e253]:
+                      - generic [ref=e254]: ⏱️ MIN
+                      - generic [ref=e255]: "90"
+                    - generic [ref=e256]:
+                      - generic [ref=e257]: 🛡️ CS
+                      - generic [ref=e258]: "1"
+                    - generic [ref=e259]:
+                      - generic [ref=e260]: 🛡️ Def
+                      - generic [ref=e261]: "12"
+                - button "O.Dango 3 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e262] [cursor=pointer]:
+                  - generic [ref=e263]:
+                    - generic [ref=e264]: O.Dango
+                    - generic [ref=e266]: 3 pts
+                  - generic [ref=e267]:
+                    - generic [ref=e268]:
+                      - generic [ref=e269]: ⏱️ MIN
+                      - generic [ref=e270]: "90"
+                    - generic [ref=e271]:
+                      - generic [ref=e272]: 🛡️ CS
+                      - generic [ref=e273]: "1"
+                - button "Schade 3 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e274] [cursor=pointer]:
+                  - generic [ref=e275]:
+                    - generic [ref=e276]: Schade
+                    - generic [ref=e278]: 3 pts
+                  - generic [ref=e279]:
+                    - generic [ref=e280]:
+                      - generic [ref=e281]: ⏱️ MIN
+                      - generic [ref=e282]: "90"
+                    - generic [ref=e283]:
+                      - generic [ref=e284]: 🛡️ CS
+                      - generic [ref=e285]: "1"
+                - button "Jensen 3 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e286] [cursor=pointer]:
+                  - generic [ref=e287]:
+                    - generic [ref=e288]: Jensen
+                    - generic [ref=e290]: 3 pts
+                  - generic [ref=e291]:
+                    - generic [ref=e292]:
+                      - generic [ref=e293]: ⏱️ MIN
+                      - generic [ref=e294]: "90"
+                    - generic [ref=e295]:
+                      - generic [ref=e296]: 🛡️ CS
+                      - generic [ref=e297]: "1"
+                - button "Yarmoliuk 3 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e298] [cursor=pointer]:
+                  - generic [ref=e299]:
+                    - generic [ref=e300]: Yarmoliuk
+                    - generic [ref=e302]: 3 pts
+                  - generic [ref=e303]:
+                    - generic [ref=e304]:
+                      - generic [ref=e305]: ⏱️ MIN
+                      - generic [ref=e306]: "90"
+                    - generic [ref=e307]:
+                      - generic [ref=e308]: 🛡️ CS
+                      - generic [ref=e309]: "1"
+                - button "Thiago 2 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e310] [cursor=pointer]:
+                  - generic [ref=e311]:
+                    - generic [ref=e312]: Thiago
+                    - generic [ref=e314]: 2 pts
+                  - generic [ref=e315]:
+                    - generic [ref=e316]:
+                      - generic [ref=e317]: ⏱️ MIN
+                      - generic [ref=e318]: "90"
+                    - generic [ref=e319]:
+                      - generic [ref=e320]: 🛡️ CS
+                      - generic [ref=e321]: "1"
+        - generic [ref=e322]:
+          - generic [ref=e323]:
+            - button "Previous match" [ref=e324] [cursor=pointer]:
+              - img [ref=e325]
+            - button "Next match" [ref=e327] [cursor=pointer]:
+              - img [ref=e328]
+          - generic [ref=e330]:
+            - generic [ref=e332]:
+              - img [ref=e333]
+              - generic [ref=e336]: April 18, 2026 22:00
+            - generic [ref=e337]:
+              - generic [ref=e339]:
+                - generic [ref=e340]: Leeds
+                - img "Leeds logo" [ref=e342]
+              - generic [ref=e344]:
+                - generic [ref=e345]: 3 - 0
+                - generic [ref=e347]:
+                  - img [ref=e348]
+                  - generic [ref=e350]: 90'
+              - generic [ref=e352]:
+                - img "Wolves logo" [ref=e354]
+                - generic [ref=e355]: Wolves
+            - generic [ref=e356]:
+              - generic [ref=e357]:
+                - img [ref=e358]
+                - heading "Goals" [level=3] [ref=e362]
+              - generic [ref=e363]:
+                - generic [ref=e364]:
+                  - generic [ref=e365]: Justin
+                  - generic [ref=e366]: (LEE)
+                  - generic [ref=e367]: ⚽ 1
+                - generic [ref=e368]:
+                  - generic [ref=e369]: Okafor
+                  - generic [ref=e370]: (LEE)
+                  - generic [ref=e371]: ⚽ 1
+                - generic [ref=e372]:
+                  - generic [ref=e373]: Calvert-Lewin
+                  - generic [ref=e374]: (LEE)
+                  - generic [ref=e375]: ⚽ 1
+            - generic [ref=e376]:
+              - generic [ref=e377]:
+                - img [ref=e378]
+                - heading "Assists" [level=3] [ref=e382]
+              - generic [ref=e383]:
+                - generic [ref=e384]:
+                  - generic [ref=e385]: Okafor
+                  - generic [ref=e386]: (LEE)
+                  - generic [ref=e387]: 👟 1
+                - generic [ref=e388]:
+                  - generic [ref=e389]: Aaronson
+                  - generic [ref=e390]: (LEE)
+                  - generic [ref=e391]: 👟 1
+            - generic [ref=e392]:
+              - generic [ref=e393]:
+                - img [ref=e394]
+                - heading "Defensive Contribution" [level=3] [ref=e396]
+              - generic [ref=e397]:
+                - generic [ref=e398]:
+                  - generic [ref=e399]: Toti
+                  - generic [ref=e400]: (WOL)
+                  - generic [ref=e401]: 🛡️ 18
+                - generic [ref=e402]:
+                  - generic [ref=e403]: Justin
+                  - generic [ref=e404]: (LEE)
+                  - generic [ref=e405]: 🛡️ 17
+                - generic [ref=e406]:
+                  - generic [ref=e407]: André
+                  - generic [ref=e408]: (WOL)
+                  - generic [ref=e409]: 🛡️ 14
+                - generic [ref=e410]:
+                  - generic [ref=e411]: S.Bueno
+                  - generic [ref=e412]: (WOL)
+                  - generic [ref=e413]: 🛡️ 11
+                - generic [ref=e414]:
+                  - generic [ref=e415]: J.Gomes
+                  - generic [ref=e416]: (WOL)
+                  - generic [ref=e417]: 🛡️ 10
+            - generic [ref=e418]:
+              - generic [ref=e419]:
+                - img [ref=e420]
+                - heading "Saves" [level=3] [ref=e424]
+              - generic [ref=e425]:
+                - generic [ref=e426]:
+                  - generic [ref=e427]: Bentley
+                  - generic [ref=e428]: (WOL)
+                  - generic [ref=e429]: 🧤 3
+                - generic [ref=e430]:
+                  - generic [ref=e431]: Darlow
+                  - generic [ref=e432]: (LEE)
+                  - generic [ref=e433]: 🧤 1
+            - generic [ref=e434]:
+              - generic [ref=e435]:
+                - img [ref=e436]
+                - heading "Yellow Cards" [level=3] [ref=e438]
+              - generic [ref=e439]:
+                - generic [ref=e440]:
+                  - generic [ref=e441]: Justin
+                  - generic [ref=e442]: (LEE)
+                  - generic [ref=e443]: 🟨 1
+                - generic [ref=e444]:
+                  - generic [ref=e445]: Aaronson
+                  - generic [ref=e446]: (LEE)
+                  - generic [ref=e447]: 🟨 1
+                - generic [ref=e448]:
+                  - generic [ref=e449]: H.Bueno
+                  - generic [ref=e450]: (WOL)
+                  - generic [ref=e451]: 🟨 1
+            - generic [ref=e452]:
+              - generic [ref=e453]:
+                - img [ref=e454]
+                - heading "Bonus Point System (BPS)" [level=3] [ref=e455]
+              - generic [ref=e456]:
+                - generic [ref=e457]:
+                  - generic [ref=e458]: Justin
+                  - generic [ref=e459]: (LEE)
+                  - generic [ref=e460]: "42"
+                - generic [ref=e461]:
+                  - generic [ref=e462]: Okafor
+                  - generic [ref=e463]: (LEE)
+                  - generic [ref=e464]: "42"
+                - generic [ref=e465]:
+                  - generic [ref=e466]: Struijk
+                  - generic [ref=e467]: (LEE)
+                  - generic [ref=e468]: "31"
+                - generic [ref=e469]:
+                  - generic [ref=e470]: Bijol
+                  - generic [ref=e471]: (LEE)
+                  - generic [ref=e472]: "27"
+                - generic [ref=e473]:
+                  - generic [ref=e474]: Darlow
+                  - generic [ref=e475]: (LEE)
+                  - generic [ref=e476]: "26"
+            - generic [ref=e477]:
+              - tablist [ref=e478]:
+                - tab "Leeds Leeds" [selected] [ref=e479] [cursor=pointer]:
+                  - img "Leeds" [ref=e481]
+                  - generic [ref=e482]: Leeds
+                - tab "Wolves Wolves" [ref=e483] [cursor=pointer]:
+                  - img "Wolves" [ref=e485]
+                  - generic [ref=e486]: Wolves
+              - tabpanel "Leeds Leeds" [ref=e487]:
+                - button "Justin +3 19 pts ⏱️ MIN 90 ⚽ Goals 1 🛡️ CS 1 🛡️ Def 17 🟨 YC 1" [ref=e488] [cursor=pointer]:
+                  - generic [ref=e489]:
+                    - generic [ref=e490]: Justin
+                    - generic [ref=e491]:
+                      - generic [ref=e492]: "+3"
+                      - generic [ref=e493]: 19 pts
+                  - generic [ref=e494]:
+                    - generic [ref=e495]:
+                      - generic [ref=e496]: ⏱️ MIN
+                      - generic [ref=e497]: "90"
+                    - generic [ref=e498]:
+                      - generic [ref=e499]: ⚽ Goals
+                      - generic [ref=e500]: "1"
+                    - generic [ref=e501]:
+                      - generic [ref=e502]: 🛡️ CS
+                      - generic [ref=e503]: "1"
+                    - generic [ref=e504]:
+                      - generic [ref=e505]: 🛡️ Def
+                      - generic [ref=e506]: "17"
+                    - generic [ref=e507]:
+                      - generic [ref=e508]: 🟨 YC
+                      - generic [ref=e509]: "1"
+                - button "Okafor +3 17 pts ⏱️ MIN 66 ⚽ Goals 1 👟 Assists 1 🛡️ CS 1" [ref=e510] [cursor=pointer]:
+                  - generic [ref=e511]:
+                    - generic [ref=e512]: Okafor
+                    - generic [ref=e513]:
+                      - generic [ref=e514]: "+3"
+                      - generic [ref=e515]: 17 pts
+                  - generic [ref=e516]:
+                    - generic [ref=e517]:
+                      - generic [ref=e518]: ⏱️ MIN
+                      - generic [ref=e519]: "66"
+                    - generic [ref=e520]:
+                      - generic [ref=e521]: ⚽ Goals
+                      - generic [ref=e522]: "1"
+                    - generic [ref=e523]:
+                      - generic [ref=e524]: 👟 Assists
+                      - generic [ref=e525]: "1"
+                    - generic [ref=e526]:
+                      - generic [ref=e527]: 🛡️ CS
+                      - generic [ref=e528]: "1"
+                - button "Struijk +1 8 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e529] [cursor=pointer]:
+                  - generic [ref=e530]:
+                    - generic [ref=e531]: Struijk
+                    - generic [ref=e532]:
+                      - generic [ref=e533]: "+1"
+                      - generic [ref=e534]: 8 pts
+                  - generic [ref=e535]:
+                    - generic [ref=e536]:
+                      - generic [ref=e537]: ⏱️ MIN
+                      - generic [ref=e538]: "90"
+                    - generic [ref=e539]:
+                      - generic [ref=e540]: 🛡️ CS
+                      - generic [ref=e541]: "1"
+                - button "Darlow 6 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e542] [cursor=pointer]:
+                  - generic [ref=e543]:
+                    - generic [ref=e544]: Darlow
+                    - generic [ref=e546]: 6 pts
+                  - generic [ref=e547]:
+                    - generic [ref=e548]:
+                      - generic [ref=e549]: ⏱️ MIN
+                      - generic [ref=e550]: "90"
+                    - generic [ref=e551]:
+                      - generic [ref=e552]: 🛡️ CS
+                      - generic [ref=e553]: "1"
+                - button "Bogle 6 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e554] [cursor=pointer]:
+                  - generic [ref=e555]:
+                    - generic [ref=e556]: Bogle
+                    - generic [ref=e558]: 6 pts
+                  - generic [ref=e559]:
+                    - generic [ref=e560]:
+                      - generic [ref=e561]: ⏱️ MIN
+                      - generic [ref=e562]: "90"
+                    - generic [ref=e563]:
+                      - generic [ref=e564]: 🛡️ CS
+                      - generic [ref=e565]: "1"
+                - button "Bijol 6 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e566] [cursor=pointer]:
+                  - generic [ref=e567]:
+                    - generic [ref=e568]: Bijol
+                    - generic [ref=e570]: 6 pts
+                  - generic [ref=e571]:
+                    - generic [ref=e572]:
+                      - generic [ref=e573]: ⏱️ MIN
+                      - generic [ref=e574]: "90"
+                    - generic [ref=e575]:
+                      - generic [ref=e576]: 🛡️ CS
+                      - generic [ref=e577]: "1"
+                - button "Gudmundsson 6 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e578] [cursor=pointer]:
+                  - generic [ref=e579]:
+                    - generic [ref=e580]: Gudmundsson
+                    - generic [ref=e582]: 6 pts
+                  - generic [ref=e583]:
+                    - generic [ref=e584]:
+                      - generic [ref=e585]: ⏱️ MIN
+                      - generic [ref=e586]: "90"
+                    - generic [ref=e587]:
+                      - generic [ref=e588]: 🛡️ CS
+                      - generic [ref=e589]: "1"
+                - button "Calvert-Lewin 6 pts ⏱️ MIN 90 ⚽ Goals 1 🛡️ CS 1" [ref=e590] [cursor=pointer]:
+                  - generic [ref=e591]:
+                    - generic [ref=e592]: Calvert-Lewin
+                    - generic [ref=e594]: 6 pts
+                  - generic [ref=e595]:
+                    - generic [ref=e596]:
+                      - generic [ref=e597]: ⏱️ MIN
+                      - generic [ref=e598]: "90"
+                    - generic [ref=e599]:
+                      - generic [ref=e600]: ⚽ Goals
+                      - generic [ref=e601]: "1"
+                    - generic [ref=e602]:
+                      - generic [ref=e603]: 🛡️ CS
+                      - generic [ref=e604]: "1"
+                - button "Aaronson 5 pts ⏱️ MIN 77 👟 Assists 1 🛡️ CS 1 🟨 YC 1" [ref=e605] [cursor=pointer]:
+                  - generic [ref=e606]:
+                    - generic [ref=e607]: Aaronson
+                    - generic [ref=e609]: 5 pts
+                  - generic [ref=e610]:
+                    - generic [ref=e611]:
+                      - generic [ref=e612]: ⏱️ MIN
+                      - generic [ref=e613]: "77"
+                    - generic [ref=e614]:
+                      - generic [ref=e615]: 👟 Assists
+                      - generic [ref=e616]: "1"
+                    - generic [ref=e617]:
+                      - generic [ref=e618]: 🛡️ CS
+                      - generic [ref=e619]: "1"
+                    - generic [ref=e620]:
+                      - generic [ref=e621]: 🟨 YC
+                      - generic [ref=e622]: "1"
+                - button "Ampadu 3 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e623] [cursor=pointer]:
+                  - generic [ref=e624]:
+                    - generic [ref=e625]: Ampadu
+                    - generic [ref=e627]: 3 pts
+                  - generic [ref=e628]:
+                    - generic [ref=e629]:
+                      - generic [ref=e630]: ⏱️ MIN
+                      - generic [ref=e631]: "90"
+                    - generic [ref=e632]:
+                      - generic [ref=e633]: 🛡️ CS
+                      - generic [ref=e634]: "1"
+                - button "Tanaka 3 pts ⏱️ MIN 90 🛡️ CS 1" [ref=e635] [cursor=pointer]:
+                  - generic [ref=e636]:
+                    - generic [ref=e637]: Tanaka
+                    - generic [ref=e639]: 3 pts
+                  - generic [ref=e640]:
+                    - generic [ref=e641]:
+                      - generic [ref=e642]: ⏱️ MIN
+                      - generic [ref=e643]: "90"
+                    - generic [ref=e644]:
+                      - generic [ref=e645]: 🛡️ CS
+                      - generic [ref=e646]: "1"
+                - button "Gruev 1 pts ⏱️ MIN 12" [ref=e647] [cursor=pointer]:
+                  - generic [ref=e648]:
+                    - generic [ref=e649]: Gruev
+                    - generic [ref=e651]: 1 pts
+                  - generic [ref=e653]:
+                    - generic [ref=e654]: ⏱️ MIN
+                    - generic [ref=e655]: "12"
+                - button "Nmecha 1 pts ⏱️ MIN 1" [ref=e656] [cursor=pointer]:
+                  - generic [ref=e657]:
+                    - generic [ref=e658]: Nmecha
+                    - generic [ref=e660]: 1 pts
+                  - generic [ref=e662]:
+                    - generic [ref=e663]: ⏱️ MIN
+                    - generic [ref=e664]: "1"
+                - button "Rodon 1 pts ⏱️ MIN 1" [ref=e665] [cursor=pointer]:
+                  - generic [ref=e666]:
+                    - generic [ref=e667]: Rodon
+                    - generic [ref=e669]: 1 pts
+                  - generic [ref=e671]:
+                    - generic [ref=e672]: ⏱️ MIN
+                    - generic [ref=e673]: "1"
+                - button "Gnonto 1 pts ⏱️ MIN 23" [ref=e674] [cursor=pointer]:
+                  - generic [ref=e675]:
+                    - generic [ref=e676]: Gnonto
+                    - generic [ref=e678]: 1 pts
+                  - generic [ref=e680]:
+                    - generic [ref=e681]: ⏱️ MIN
+                    - generic [ref=e682]: "23"
+                - button "Longstaff 1 pts ⏱️ MIN 1" [ref=e683] [cursor=pointer]:
+                  - generic [ref=e684]:
+                    - generic [ref=e685]: Longstaff
+                    - generic [ref=e687]: 1 pts
+                  - generic [ref=e689]:
+                    - generic [ref=e690]: ⏱️ MIN
+                    - generic [ref=e691]: "1"
+        - generic [ref=e692]:
+          - generic [ref=e693]:
+            - button "Previous match" [ref=e694] [cursor=pointer]:
+              - img [ref=e695]
+            - button "Next match" [ref=e697] [cursor=pointer]:
+              - img [ref=e698]
+          - generic [ref=e700]:
+            - generic [ref=e702]:
+              - img [ref=e703]
+              - generic [ref=e706]: April 18, 2026 22:00
+            - generic [ref=e707]:
+              - generic [ref=e709]:
+                - generic [ref=e710]: Newcastle
+                - img "Newcastle logo" [ref=e712]
+              - generic [ref=e714]:
+                - generic [ref=e715]: 1 - 2
+                - generic [ref=e717]:
+                  - img [ref=e718]
+                  - generic [ref=e720]: 90'
+              - generic [ref=e722]:
+                - img "Bournemouth logo" [ref=e724]
+                - generic [ref=e725]: Bournemouth
+            - generic [ref=e726]:
+              - generic [ref=e727]:
+                - img [ref=e728]
+                - heading "Goals" [level=3] [ref=e732]
+              - generic [ref=e733]:
+                - generic [ref=e734]:
+                  - generic [ref=e735]: Osula
+                  - generic [ref=e736]: (NEW)
+                  - generic [ref=e737]: ⚽ 1
+                - generic [ref=e738]:
+                  - generic [ref=e739]: Truffert
+                  - generic [ref=e740]: (BOU)
+                  - generic [ref=e741]: ⚽ 1
+                - generic [ref=e742]:
+                  - generic [ref=e743]: Tavernier
+                  - generic [ref=e744]: (BOU)
+                  - generic [ref=e745]: ⚽ 1
+            - generic [ref=e746]:
+              - generic [ref=e747]:
+                - img [ref=e748]
+                - heading "Assists" [level=3] [ref=e752]
+              - generic [ref=e753]:
+                - generic [ref=e754]:
+                  - generic [ref=e755]: Evanilson
+                  - generic [ref=e756]: (BOU)
+                  - generic [ref=e757]: 👟 1
+                - generic [ref=e758]:
+                  - generic [ref=e759]: Rayan
+                  - generic [ref=e760]: (BOU)
+                  - generic [ref=e761]: 👟 1
+            - generic [ref=e762]:
+              - generic [ref=e763]:
+                - img [ref=e764]
+                - heading "Defensive Contribution" [level=3] [ref=e766]
+              - generic [ref=e767]:
+                - generic [ref=e768]:
+                  - generic [ref=e769]: L.Miley
+                  - generic [ref=e770]: (NEW)
+                  - generic [ref=e771]: 🛡️ 12
+                - generic [ref=e772]:
+                  - generic [ref=e773]: Botman
+                  - generic [ref=e774]: (NEW)
+                  - generic [ref=e775]: 🛡️ 12
+                - generic [ref=e776]:
+                  - generic [ref=e777]: Hill
+                  - generic [ref=e778]: (BOU)
+                  - generic [ref=e779]: 🛡️ 12
+                - generic [ref=e780]:
+                  - generic [ref=e781]: Christie
+                  - generic [ref=e782]: (BOU)
+                  - generic [ref=e783]: 🛡️ 10
+                - generic [ref=e784]:
+                  - generic [ref=e785]: Scott
+                  - generic [ref=e786]: (BOU)
+                  - generic [ref=e787]: 🛡️ 10
+            - generic [ref=e788]:
+              - generic [ref=e789]:
+                - img [ref=e790]
+                - heading "Saves" [level=3] [ref=e794]
+              - generic [ref=e795]:
+                - generic [ref=e796]:
+                  - generic [ref=e797]: Petrović
+                  - generic [ref=e798]: (BOU)
+                  - generic [ref=e799]: 🧤 2
+                - generic [ref=e800]:
+                  - generic [ref=e801]: Ramsdale
+                  - generic [ref=e802]: (NEW)
+                  - generic [ref=e803]: 🧤 1
+            - generic [ref=e804]:
+              - generic [ref=e805]:
+                - img [ref=e806]
+                - heading "Yellow Cards" [level=3] [ref=e808]
+              - generic [ref=e809]:
+                - generic [ref=e810]:
+                  - generic [ref=e811]: Botman
+                  - generic [ref=e812]: (NEW)
+                  - generic [ref=e813]: 🟨 1
+                - generic [ref=e814]:
+                  - generic [ref=e815]: J.Murphy
+                  - generic [ref=e816]: (NEW)
+                  - generic [ref=e817]: 🟨 1
+                - generic [ref=e818]:
+                  - generic [ref=e819]: Tavernier
+                  - generic [ref=e820]: (BOU)
+                  - generic [ref=e821]: 🟨 1
+                - generic [ref=e822]:
+                  - generic [ref=e823]: Christie
+                  - generic [ref=e824]: (BOU)
+                  - generic [ref=e825]: 🟨 1
+                - generic [ref=e826]:
+                  - generic [ref=e827]: Petrović
+                  - generic [ref=e828]: (BOU)
+                  - generic [ref=e829]: 🟨 1
+                - generic [ref=e830]:
+                  - generic [ref=e831]: Scott
+                  - generic [ref=e832]: (BOU)
+                  - generic [ref=e833]: 🟨 1
+            - generic [ref=e834]:
+              - generic [ref=e835]:
+                - img [ref=e836]
+                - heading "Bonus Point System (BPS)" [level=3] [ref=e837]
+              - generic [ref=e838]:
+                - generic [ref=e839]:
+                  - generic [ref=e840]: Osula
+                  - generic [ref=e841]: (NEW)
+                  - generic [ref=e842]: "30"
+                - generic [ref=e843]:
+                  - generic [ref=e844]: Truffert
+                  - generic [ref=e845]: (BOU)
+                  - generic [ref=e846]: "27"
+                - generic [ref=e847]:
+                  - generic [ref=e848]: Tavernier
+                  - generic [ref=e849]: (BOU)
+                  - generic [ref=e850]: "26"
+                - generic [ref=e851]:
+                  - generic [ref=e852]: Scott
+                  - generic [ref=e853]: (BOU)
+                  - generic [ref=e854]: "23"
+                - generic [ref=e855]:
+                  - generic [ref=e856]: Rayan
+                  - generic [ref=e857]: (BOU)
+                  - generic [ref=e858]: "20"
+            - generic [ref=e859]:
+              - tablist [ref=e860]:
+                - tab "Newcastle Newcastle" [selected] [ref=e861] [cursor=pointer]:
+                  - img "Newcastle" [ref=e863]
+                  - generic [ref=e864]: Newcastle
+                - tab "Bournemouth Bournemouth" [ref=e865] [cursor=pointer]:
+                  - img "Bournemouth" [ref=e867]
+                  - generic [ref=e868]: Bournemouth
+              - tabpanel "Newcastle Newcastle" [ref=e869]:
+                - button "Osula +3 12 pts ⏱️ MIN 90 ⚽ Goals 1" [ref=e870] [cursor=pointer]:
+                  - generic [ref=e871]:
+                    - generic [ref=e872]: Osula
+                    - generic [ref=e873]:
+                      - generic [ref=e874]: "+3"
+                      - generic [ref=e875]: 12 pts
+                  - generic [ref=e876]:
+                    - generic [ref=e877]:
+                      - generic [ref=e878]: ⏱️ MIN
+                      - generic [ref=e879]: "90"
+                    - generic [ref=e880]:
+                      - generic [ref=e881]: ⚽ Goals
+                      - generic [ref=e882]: "1"
+                - button "L.Miley 4 pts ⏱️ MIN 90 🛡️ Def 12" [ref=e883] [cursor=pointer]:
+                  - generic [ref=e884]:
+                    - generic [ref=e885]: L.Miley
+                    - generic [ref=e887]: 4 pts
+                  - generic [ref=e888]:
+                    - generic [ref=e889]:
+                      - generic [ref=e890]: ⏱️ MIN
+                      - generic [ref=e891]: "90"
+                    - generic [ref=e892]:
+                      - generic [ref=e893]: 🛡️ Def
+                      - generic [ref=e894]: "12"
+                - button "Botman 2 pts ⏱️ MIN 90 🛡️ Def 12 🟨 YC 1 ⚽ GC 2" [ref=e895] [cursor=pointer]:
+                  - generic [ref=e896]:
+                    - generic [ref=e897]: Botman
+                    - generic [ref=e899]: 2 pts
+                  - generic [ref=e900]:
+                    - generic [ref=e901]:
+                      - generic [ref=e902]: ⏱️ MIN
+                      - generic [ref=e903]: "90"
+                    - generic [ref=e904]:
+                      - generic [ref=e905]: 🛡️ Def
+                      - generic [ref=e906]: "12"
+                    - generic [ref=e907]:
+                      - generic [ref=e908]: 🟨 YC
+                      - generic [ref=e909]: "1"
+                    - generic [ref=e910]:
+                      - generic [ref=e911]: ⚽ GC
+                      - generic [ref=e912]: "2"
+                - button "J.Ramsey 2 pts ⏱️ MIN 61" [ref=e913] [cursor=pointer]:
+                  - generic [ref=e914]:
+                    - generic [ref=e915]: J.Ramsey
+                    - generic [ref=e917]: 2 pts
+                  - generic [ref=e919]:
+                    - generic [ref=e920]: ⏱️ MIN
+                    - generic [ref=e921]: "61"
+                - button "Livramento 2 pts ⏱️ MIN 73" [ref=e922] [cursor=pointer]:
+                  - generic [ref=e923]:
+                    - generic [ref=e924]: Livramento
+                    - generic [ref=e926]: 2 pts
+                  - generic [ref=e928]:
+                    - generic [ref=e929]: ⏱️ MIN
+                    - generic [ref=e930]: "73"
+                - button "Elanga 2 pts ⏱️ MIN 61" [ref=e931] [cursor=pointer]:
+                  - generic [ref=e932]:
+                    - generic [ref=e933]: Elanga
+                    - generic [ref=e935]: 2 pts
+                  - generic [ref=e937]:
+                    - generic [ref=e938]: ⏱️ MIN
+                    - generic [ref=e939]: "61"
+                - button "Barnes 2 pts ⏱️ MIN 90" [ref=e940] [cursor=pointer]:
+                  - generic [ref=e941]:
+                    - generic [ref=e942]: Barnes
+                    - generic [ref=e944]: 2 pts
+                  - generic [ref=e946]:
+                    - generic [ref=e947]: ⏱️ MIN
+                    - generic [ref=e948]: "90"
+                - button "Tonali 2 pts ⏱️ MIN 85" [ref=e949] [cursor=pointer]:
+                  - generic [ref=e950]:
+                    - generic [ref=e951]: Tonali
+                    - generic [ref=e953]: 2 pts
+                  - generic [ref=e955]:
+                    - generic [ref=e956]: ⏱️ MIN
+                    - generic [ref=e957]: "85"
+                - button "Ramsdale 1 pts ⏱️ MIN 90 ⚽ GC 2" [ref=e958] [cursor=pointer]:
+                  - generic [ref=e959]:
+                    - generic [ref=e960]: Ramsdale
+                    - generic [ref=e962]: 1 pts
+                  - generic [ref=e963]:
+                    - generic [ref=e964]:
+                      - generic [ref=e965]: ⏱️ MIN
+                      - generic [ref=e966]: "90"
+                    - generic [ref=e967]:
+                      - generic [ref=e968]: ⚽ GC
+                      - generic [ref=e969]: "2"
+                - button "Woltemade 1 pts ⏱️ MIN 4" [ref=e970] [cursor=pointer]:
+                  - generic [ref=e971]:
+                    - generic [ref=e972]: Woltemade
+                    - generic [ref=e974]: 1 pts
+                  - generic [ref=e976]:
+                    - generic [ref=e977]: ⏱️ MIN
+                    - generic [ref=e978]: "4"
+                - button "Hall 1 pts ⏱️ MIN 45" [ref=e979] [cursor=pointer]:
+                  - generic [ref=e980]:
+                    - generic [ref=e981]: Hall
+                    - generic [ref=e983]: 1 pts
+                  - generic [ref=e985]:
+                    - generic [ref=e986]: ⏱️ MIN
+                    - generic [ref=e987]: "45"
+                - button "Thiaw 1 pts ⏱️ MIN 90 ⚽ GC 2" [ref=e988] [cursor=pointer]:
+                  - generic [ref=e989]:
+                    - generic [ref=e990]: Thiaw
+                    - generic [ref=e992]: 1 pts
+                  - generic [ref=e993]:
+                    - generic [ref=e994]:
+                      - generic [ref=e995]: ⏱️ MIN
+                      - generic [ref=e996]: "90"
+                    - generic [ref=e997]:
+                      - generic [ref=e998]: ⚽ GC
+                      - generic [ref=e999]: "2"
+                - button "Burn 1 pts ⏱️ MIN 16" [ref=e1000] [cursor=pointer]:
+                  - generic [ref=e1001]:
+                    - generic [ref=e1002]: Burn
+                    - generic [ref=e1004]: 1 pts
+                  - generic [ref=e1006]:
+                    - generic [ref=e1007]: ⏱️ MIN
+                    - generic [ref=e1008]: "16"
+                - button "Trippier 1 pts ⏱️ MIN 45" [ref=e1009] [cursor=pointer]:
+                  - generic [ref=e1010]:
+                    - generic [ref=e1011]: Trippier
+                    - generic [ref=e1013]: 1 pts
+                  - generic [ref=e1015]:
+                    - generic [ref=e1016]: ⏱️ MIN
+                    - generic [ref=e1017]: "45"
+                - button "Bruno G. 1 pts ⏱️ MIN 28" [ref=e1018] [cursor=pointer]:
+                  - generic [ref=e1019]:
+                    - generic [ref=e1020]: Bruno G.
+                    - generic [ref=e1022]: 1 pts
+                  - generic [ref=e1024]:
+                    - generic [ref=e1025]: ⏱️ MIN
+                    - generic [ref=e1026]: "28"
+        - generic [ref=e1027]:
+          - generic [ref=e1028]:
+            - button "Previous match" [ref=e1029] [cursor=pointer]:
+              - img [ref=e1030]
+            - button "Next match" [ref=e1032] [cursor=pointer]:
+              - img [ref=e1033]
+          - generic [ref=e1035]:
+            - generic [ref=e1037]:
+              - img [ref=e1038]
+              - generic [ref=e1041]: April 19, 2026 00:30
+            - generic [ref=e1042]:
+              - generic [ref=e1044]:
+                - generic [ref=e1045]: Spurs
+                - img "Spurs logo" [ref=e1047]
+              - generic [ref=e1049]:
+                - generic [ref=e1050]: 2 - 2
+                - generic [ref=e1052]:
+                  - img [ref=e1053]
+                  - generic [ref=e1055]: 90'
+              - generic [ref=e1057]:
+                - img "Brighton logo" [ref=e1059]
+                - generic [ref=e1060]: Brighton
+            - generic [ref=e1061]:
+              - generic [ref=e1062]:
+                - img [ref=e1063]
+                - heading "Goals" [level=3] [ref=e1067]
+              - generic [ref=e1068]:
+                - generic [ref=e1069]:
+                  - generic [ref=e1070]: Xavi
+                  - generic [ref=e1071]: (TOT)
+                  - generic [ref=e1072]: ⚽ 1
+                - generic [ref=e1073]:
+                  - generic [ref=e1074]: Pedro Porro
+                  - generic [ref=e1075]: (TOT)
+                  - generic [ref=e1076]: ⚽ 1
+                - generic [ref=e1077]:
+                  - generic [ref=e1078]: Mitoma
+                  - generic [ref=e1079]: (BHA)
+                  - generic [ref=e1080]: ⚽ 1
+                - generic [ref=e1081]:
+                  - generic [ref=e1082]: Georginio
+                  - generic [ref=e1083]: (BHA)
+                  - generic [ref=e1084]: ⚽ 1
+            - generic [ref=e1085]:
+              - generic [ref=e1086]:
+                - img [ref=e1087]
+                - heading "Assists" [level=3] [ref=e1091]
+              - generic [ref=e1092]:
+                - generic [ref=e1093]:
+                  - generic [ref=e1094]: Xavi
+                  - generic [ref=e1095]: (TOT)
+                  - generic [ref=e1096]: 👟 1
+                - generic [ref=e1097]:
+                  - generic [ref=e1098]: Bergvall
+                  - generic [ref=e1099]: (TOT)
+                  - generic [ref=e1100]: 👟 1
+                - generic [ref=e1101]:
+                  - generic [ref=e1102]: Groß
+                  - generic [ref=e1103]: (BHA)
+                  - generic [ref=e1104]: 👟 1
+                - generic [ref=e1105]:
+                  - generic [ref=e1106]: Van Hecke
+                  - generic [ref=e1107]: (BHA)
+                  - generic [ref=e1108]: 👟 1
+            - generic [ref=e1109]:
+              - generic [ref=e1110]:
+                - img [ref=e1111]
+                - heading "Defensive Contribution" [level=3] [ref=e1113]
+              - generic [ref=e1114]:
+                - generic [ref=e1115]:
+                  - generic [ref=e1116]: Van Hecke
+                  - generic [ref=e1117]: (BHA)
+                  - generic [ref=e1118]: 🛡️ 16
+                - generic [ref=e1119]:
+                  - generic [ref=e1120]: Bentancur
+                  - generic [ref=e1121]: (TOT)
+                  - generic [ref=e1122]: 🛡️ 12
+                - generic [ref=e1123]:
+                  - generic [ref=e1124]: Danso
+                  - generic [ref=e1125]: (TOT)
+                  - generic [ref=e1126]: 🛡️ 12
+                - generic [ref=e1127]:
+                  - generic [ref=e1128]: Pedro Porro
+                  - generic [ref=e1129]: (TOT)
+                  - generic [ref=e1130]: 🛡️ 11
+            - generic [ref=e1131]:
+              - generic [ref=e1132]:
+                - img [ref=e1133]
+                - heading "Saves" [level=3] [ref=e1137]
+              - generic [ref=e1138]:
+                - generic [ref=e1139]:
+                  - generic [ref=e1140]: Verbruggen
+                  - generic [ref=e1141]: (BHA)
+                  - generic [ref=e1142]: 🧤 4
+                - generic [ref=e1143]:
+                  - generic [ref=e1144]: Kinsky
+                  - generic [ref=e1145]: (TOT)
+                  - generic [ref=e1146]: 🧤 1
+            - generic [ref=e1147]:
+              - generic [ref=e1148]:
+                - img [ref=e1149]
+                - heading "Yellow Cards" [level=3] [ref=e1151]
+              - generic [ref=e1152]:
+                - generic [ref=e1153]:
+                  - generic [ref=e1154]: Xavi
+                  - generic [ref=e1155]: (TOT)
+                  - generic [ref=e1156]: 🟨 1
+                - generic [ref=e1157]:
+                  - generic [ref=e1158]: Danso
+                  - generic [ref=e1159]: (TOT)
+                  - generic [ref=e1160]: 🟨 1
+                - generic [ref=e1161]:
+                  - generic [ref=e1162]: Bissouma
+                  - generic [ref=e1163]: (TOT)
+                  - generic [ref=e1164]: 🟨 1
+                - generic [ref=e1165]:
+                  - generic [ref=e1166]: Wieffer
+                  - generic [ref=e1167]: (BHA)
+                  - generic [ref=e1168]: 🟨 1
+            - generic [ref=e1169]:
+              - generic [ref=e1170]:
+                - img [ref=e1171]
+                - heading "Bonus Point System (BPS)" [level=3] [ref=e1172]
+              - generic [ref=e1173]:
+                - generic [ref=e1174]:
+                  - generic [ref=e1175]: Groß
+                  - generic [ref=e1176]: (BHA)
+                  - generic [ref=e1177]: "35"
+                - generic [ref=e1178]:
+                  - generic [ref=e1179]: Xavi
+                  - generic [ref=e1180]: (TOT)
+                  - generic [ref=e1181]: "33"
+                - generic [ref=e1182]:
+                  - generic [ref=e1183]: Pedro Porro
+                  - generic [ref=e1184]: (TOT)
+                  - generic [ref=e1185]: "25"
+                - generic [ref=e1186]:
+                  - generic [ref=e1187]: Mitoma
+                  - generic [ref=e1188]: (BHA)
+                  - generic [ref=e1189]: "24"
+                - generic [ref=e1190]:
+                  - generic [ref=e1191]: Georginio
+                  - generic [ref=e1192]: (BHA)
+                  - generic [ref=e1193]: "22"
+            - generic [ref=e1194]:
+              - tablist [ref=e1195]:
+                - tab "Spurs Spurs" [selected] [ref=e1196] [cursor=pointer]:
+                  - img "Spurs" [ref=e1198]
+                  - generic [ref=e1199]: Spurs
+                - tab "Brighton Brighton" [ref=e1200] [cursor=pointer]:
+                  - img "Brighton" [ref=e1202]
+                  - generic [ref=e1203]: Brighton
+              - tabpanel "Spurs Spurs" [ref=e1204]:
+                - button "Xavi +2 13 pts ⏱️ MIN 90 ⚽ Goals 1 👟 Assists 1 🟨 YC 1" [ref=e1205] [cursor=pointer]:
+                  - generic [ref=e1206]:
+                    - generic [ref=e1207]: Xavi
+                    - generic [ref=e1208]:
+                      - generic [ref=e1209]: "+2"
+                      - generic [ref=e1210]: 13 pts
+                  - generic [ref=e1211]:
+                    - generic [ref=e1212]:
+                      - generic [ref=e1213]: ⏱️ MIN
+                      - generic [ref=e1214]: "90"
+                    - generic [ref=e1215]:
+                      - generic [ref=e1216]: ⚽ Goals
+                      - generic [ref=e1217]: "1"
+                    - generic [ref=e1218]:
+                      - generic [ref=e1219]: 👟 Assists
+                      - generic [ref=e1220]: "1"
+                    - generic [ref=e1221]:
+                      - generic [ref=e1222]: 🟨 YC
+                      - generic [ref=e1223]: "1"
+                - button "Pedro Porro +1 11 pts ⏱️ MIN 90 ⚽ Goals 1 🛡️ Def 11 ⚽ GC 2" [ref=e1224] [cursor=pointer]:
+                  - generic [ref=e1225]:
+                    - generic [ref=e1226]: Pedro Porro
+                    - generic [ref=e1227]:
+                      - generic [ref=e1228]: "+1"
+                      - generic [ref=e1229]: 11 pts
+                  - generic [ref=e1230]:
+                    - generic [ref=e1231]:
+                      - generic [ref=e1232]: ⏱️ MIN
+                      - generic [ref=e1233]: "90"
+                    - generic [ref=e1234]:
+                      - generic [ref=e1235]: ⚽ Goals
+                      - generic [ref=e1236]: "1"
+                    - generic [ref=e1237]:
+                      - generic [ref=e1238]: 🛡️ Def
+                      - generic [ref=e1239]: "11"
+                    - generic [ref=e1240]:
+                      - generic [ref=e1241]: ⚽ GC
+                      - generic [ref=e1242]: "2"
+                - button "Bentancur 4 pts ⏱️ MIN 66 🛡️ Def 12" [ref=e1243] [cursor=pointer]:
+                  - generic [ref=e1244]:
+                    - generic [ref=e1245]: Bentancur
+                    - generic [ref=e1247]: 4 pts
+                  - generic [ref=e1248]:
+                    - generic [ref=e1249]:
+                      - generic [ref=e1250]: ⏱️ MIN
+                      - generic [ref=e1251]: "66"
+                    - generic [ref=e1252]:
+                      - generic [ref=e1253]: 🛡️ Def
+                      - generic [ref=e1254]: "12"
+                - button "Bergvall 4 pts ⏱️ MIN 14 👟 Assists 1" [ref=e1255] [cursor=pointer]:
+                  - generic [ref=e1256]:
+                    - generic [ref=e1257]: Bergvall
+                    - generic [ref=e1259]: 4 pts
+                  - generic [ref=e1260]:
+                    - generic [ref=e1261]:
+                      - generic [ref=e1262]: ⏱️ MIN
+                      - generic [ref=e1263]: "14"
+                    - generic [ref=e1264]:
+                      - generic [ref=e1265]: 👟 Assists
+                      - generic [ref=e1266]: "1"
+                - button "Danso 2 pts ⏱️ MIN 90 🛡️ Def 12 🟨 YC 1 ⚽ GC 2" [ref=e1267] [cursor=pointer]:
+                  - generic [ref=e1268]:
+                    - generic [ref=e1269]: Danso
+                    - generic [ref=e1271]: 2 pts
+                  - generic [ref=e1272]:
+                    - generic [ref=e1273]:
+                      - generic [ref=e1274]: ⏱️ MIN
+                      - generic [ref=e1275]: "90"
+                    - generic [ref=e1276]:
+                      - generic [ref=e1277]: 🛡️ Def
+                      - generic [ref=e1278]: "12"
+                    - generic [ref=e1279]:
+                      - generic [ref=e1280]: 🟨 YC
+                      - generic [ref=e1281]: "1"
+                    - generic [ref=e1282]:
+                      - generic [ref=e1283]: ⚽ GC
+                      - generic [ref=e1284]: "2"
+                - button "Udogie 2 pts ⏱️ MIN 75" [ref=e1285] [cursor=pointer]:
+                  - generic [ref=e1286]:
+                    - generic [ref=e1287]: Udogie
+                    - generic [ref=e1289]: 2 pts
+                  - generic [ref=e1291]:
+                    - generic [ref=e1292]: ⏱️ MIN
+                    - generic [ref=e1293]: "75"
+                - button "Gallagher 2 pts ⏱️ MIN 75" [ref=e1294] [cursor=pointer]:
+                  - generic [ref=e1295]:
+                    - generic [ref=e1296]: Gallagher
+                    - generic [ref=e1298]: 2 pts
+                  - generic [ref=e1300]:
+                    - generic [ref=e1301]: ⏱️ MIN
+                    - generic [ref=e1302]: "75"
+                - button "Solanke 2 pts ⏱️ MIN 90" [ref=e1303] [cursor=pointer]:
+                  - generic [ref=e1304]:
+                    - generic [ref=e1305]: Solanke
+                    - generic [ref=e1307]: 2 pts
+                  - generic [ref=e1309]:
+                    - generic [ref=e1310]: ⏱️ MIN
+                    - generic [ref=e1311]: "90"
+                - button "Spence 1 pts ⏱️ MIN 14" [ref=e1312] [cursor=pointer]:
+                  - generic [ref=e1313]:
+                    - generic [ref=e1314]: Spence
+                    - generic [ref=e1316]: 1 pts
+                  - generic [ref=e1318]:
+                    - generic [ref=e1319]: ⏱️ MIN
+                    - generic [ref=e1320]: "14"
+                - button "Van de Ven 1 pts ⏱️ MIN 90 ⚽ GC 2" [ref=e1321] [cursor=pointer]:
+                  - generic [ref=e1322]:
+                    - generic [ref=e1323]: Van de Ven
+                    - generic [ref=e1325]: 1 pts
+                  - generic [ref=e1326]:
+                    - generic [ref=e1327]:
+                      - generic [ref=e1328]: ⏱️ MIN
+                      - generic [ref=e1329]: "90"
+                    - generic [ref=e1330]:
+                      - generic [ref=e1331]: ⚽ GC
+                      - generic [ref=e1332]: "2"
+                - button "Gray 1 pts ⏱️ MIN 33" [ref=e1333] [cursor=pointer]:
+                  - generic [ref=e1334]:
+                    - generic [ref=e1335]: Gray
+                    - generic [ref=e1337]: 1 pts
+                  - generic [ref=e1339]:
+                    - generic [ref=e1340]: ⏱️ MIN
+                    - generic [ref=e1341]: "33"
+                - button "J.Palhinha 1 pts ⏱️ MIN 23" [ref=e1342] [cursor=pointer]:
+                  - generic [ref=e1343]:
+                    - generic [ref=e1344]: J.Palhinha
+                    - generic [ref=e1346]: 1 pts
+                  - generic [ref=e1348]:
+                    - generic [ref=e1349]: ⏱️ MIN
+                    - generic [ref=e1350]: "23"
+                - button "Kinsky 1 pts ⏱️ MIN 90 ⚽ GC 2" [ref=e1351] [cursor=pointer]:
+                  - generic [ref=e1352]:
+                    - generic [ref=e1353]: Kinsky
+                    - generic [ref=e1355]: 1 pts
+                  - generic [ref=e1356]:
+                    - generic [ref=e1357]:
+                      - generic [ref=e1358]: ⏱️ MIN
+                      - generic [ref=e1359]: "90"
+                    - generic [ref=e1360]:
+                      - generic [ref=e1361]: ⚽ GC
+                      - generic [ref=e1362]: "2"
+                - button "Tel 1 pts ⏱️ MIN 33" [ref=e1363] [cursor=pointer]:
+                  - generic [ref=e1364]:
+                    - generic [ref=e1365]: Tel
+                    - generic [ref=e1367]: 1 pts
+                  - generic [ref=e1369]:
+                    - generic [ref=e1370]: ⏱️ MIN
+                    - generic [ref=e1371]: "33"
+                - button "Kolo Muani 1 pts ⏱️ MIN 56" [ref=e1372] [cursor=pointer]:
+                  - generic [ref=e1373]:
+                    - generic [ref=e1374]: Kolo Muani
+                    - generic [ref=e1376]: 1 pts
+                  - generic [ref=e1378]:
+                    - generic [ref=e1379]: ⏱️ MIN
+                    - generic [ref=e1380]: "56"
+        - generic [ref=e1381]:
+          - generic [ref=e1382]:
+            - button "Previous match" [ref=e1383] [cursor=pointer]:
+              - img [ref=e1384]
+            - button "Next match" [ref=e1386] [cursor=pointer]:
+              - img [ref=e1387]
+          - generic [ref=e1389]:
+            - generic [ref=e1391]:
+              - img [ref=e1392]
+              - generic [ref=e1395]: April 19, 2026 03:00
+            - generic [ref=e1396]:
+              - generic [ref=e1398]:
+                - generic [ref=e1399]: Chelsea
+                - img "Chelsea logo" [ref=e1401]
+              - generic [ref=e1403]:
+                - generic [ref=e1404]: 0 - 1
+                - generic [ref=e1406]:
+                  - img [ref=e1407]
+                  - generic [ref=e1409]: 90'
+              - generic [ref=e1411]:
+                - img "Man Utd logo" [ref=e1413]
+                - generic [ref=e1414]: Man Utd
+            - generic [ref=e1415]:
+              - generic [ref=e1416]:
+                - img [ref=e1417]
+                - heading "Goals" [level=3] [ref=e1421]
+              - generic [ref=e1423]:
+                - generic [ref=e1424]: Cunha
+                - generic [ref=e1425]: (MUN)
+                - generic [ref=e1426]: ⚽ 1
+            - generic [ref=e1427]:
+              - generic [ref=e1428]:
+                - img [ref=e1429]
+                - heading "Assists" [level=3] [ref=e1433]
+              - generic [ref=e1435]:
+                - generic [ref=e1436]: B.Fernandes
+                - generic [ref=e1437]: (MUN)
+                - generic [ref=e1438]: 👟 1
+            - generic [ref=e1439]:
+              - generic [ref=e1440]:
+                - img [ref=e1441]
+                - heading "Defensive Contribution" [level=3] [ref=e1443]
+              - generic [ref=e1444]:
+                - generic [ref=e1445]:
+                  - generic [ref=e1446]: Casemiro
+                  - generic [ref=e1447]: (MUN)
+                  - generic [ref=e1448]: 🛡️ 23
+                - generic [ref=e1449]:
+                  - generic [ref=e1450]: Mainoo
+                  - generic [ref=e1451]: (MUN)
+                  - generic [ref=e1452]: 🛡️ 12
+                - generic [ref=e1453]:
+                  - generic [ref=e1454]: Caicedo
+                  - generic [ref=e1455]: (CHE)
+                  - generic [ref=e1456]: 🛡️ 11
+                - generic [ref=e1457]:
+                  - generic [ref=e1458]: Shaw
+                  - generic [ref=e1459]: (MUN)
+                  - generic [ref=e1460]: 🛡️ 10
+                - generic [ref=e1461]:
+                  - generic [ref=e1462]: Heaven
+                  - generic [ref=e1463]: (MUN)
+                  - generic [ref=e1464]: 🛡️ 10
+            - generic [ref=e1465]:
+              - generic [ref=e1466]:
+                - img [ref=e1467]
+                - heading "Saves" [level=3] [ref=e1471]
+              - generic [ref=e1472]:
+                - generic [ref=e1473]:
+                  - generic [ref=e1474]: Lammens
+                  - generic [ref=e1475]: (MUN)
+                  - generic [ref=e1476]: 🧤 3
+                - generic [ref=e1477]:
+                  - generic [ref=e1478]: Sánchez
+                  - generic [ref=e1479]: (CHE)
+                  - generic [ref=e1480]: 🧤 1
+            - generic [ref=e1481]:
+              - generic [ref=e1482]:
+                - img [ref=e1483]
+                - heading "Yellow Cards" [level=3] [ref=e1485]
+              - generic [ref=e1486]:
+                - generic [ref=e1487]:
+                  - generic [ref=e1488]: Hato
+                  - generic [ref=e1489]: (CHE)
+                  - generic [ref=e1490]: 🟨 1
+                - generic [ref=e1491]:
+                  - generic [ref=e1492]: Cunha
+                  - generic [ref=e1493]: (MUN)
+                  - generic [ref=e1494]: 🟨 1
+                - generic [ref=e1495]:
+                  - generic [ref=e1496]: Mainoo
+                  - generic [ref=e1497]: (MUN)
+                  - generic [ref=e1498]: 🟨 1
+                - generic [ref=e1499]:
+                  - generic [ref=e1500]: Mount
+                  - generic [ref=e1501]: (MUN)
+                  - generic [ref=e1502]: 🟨 1
+            - generic [ref=e1503]:
+              - generic [ref=e1504]:
+                - img [ref=e1505]
+                - heading "Bonus Point System (BPS)" [level=3] [ref=e1506]
+              - generic [ref=e1507]:
+                - generic [ref=e1508]:
+                  - generic [ref=e1509]: Shaw
+                  - generic [ref=e1510]: (MUN)
+                  - generic [ref=e1511]: "30"
+                - generic [ref=e1512]:
+                  - generic [ref=e1513]: Heaven
+                  - generic [ref=e1514]: (MUN)
+                  - generic [ref=e1515]: "30"
+                - generic [ref=e1516]:
+                  - generic [ref=e1517]: Lammens
+                  - generic [ref=e1518]: (MUN)
+                  - generic [ref=e1519]: "30"
+                - generic [ref=e1520]:
+                  - generic [ref=e1521]: Dalot
+                  - generic [ref=e1522]: (MUN)
+                  - generic [ref=e1523]: "29"
+                - generic [ref=e1524]:
+                  - generic [ref=e1525]: Cunha
+                  - generic [ref=e1526]: (MUN)
+                  - generic [ref=e1527]: "25"
+            - generic [ref=e1528]:
+              - tablist [ref=e1529]:
+                - tab "Chelsea Chelsea" [selected] [ref=e1530] [cursor=pointer]:
+                  - img "Chelsea" [ref=e1532]
+                  - generic [ref=e1533]: Chelsea
+                - tab "Man Utd Man Utd" [ref=e1534] [cursor=pointer]:
+                  - img "Man Utd" [ref=e1536]
+                  - generic [ref=e1537]: Man Utd
+              - tabpanel "Chelsea Chelsea" [ref=e1538]:
+                - button "Gusto 2 pts ⏱️ MIN 80" [ref=e1539] [cursor=pointer]:
+                  - generic [ref=e1540]:
+                    - generic [ref=e1541]: Gusto
+                    - generic [ref=e1543]: 2 pts
+                  - generic [ref=e1545]:
+                    - generic [ref=e1546]: ⏱️ MIN
+                    - generic [ref=e1547]: "80"
+                - button "Fofana 2 pts ⏱️ MIN 80" [ref=e1548] [cursor=pointer]:
+                  - generic [ref=e1549]:
+                    - generic [ref=e1550]: Fofana
+                    - generic [ref=e1552]: 2 pts
+                  - generic [ref=e1554]:
+                    - generic [ref=e1555]: ⏱️ MIN
+                    - generic [ref=e1556]: "80"
+                - button "Palmer 2 pts ⏱️ MIN 90" [ref=e1557] [cursor=pointer]:
+                  - generic [ref=e1558]:
+                    - generic [ref=e1559]: Palmer
+                    - generic [ref=e1561]: 2 pts
+                  - generic [ref=e1563]:
+                    - generic [ref=e1564]: ⏱️ MIN
+                    - generic [ref=e1565]: "90"
+                - button "Neto 2 pts ⏱️ MIN 90" [ref=e1566] [cursor=pointer]:
+                  - generic [ref=e1567]:
+                    - generic [ref=e1568]: Neto
+                    - generic [ref=e1570]: 2 pts
+                  - generic [ref=e1572]:
+                    - generic [ref=e1573]: ⏱️ MIN
+                    - generic [ref=e1574]: "90"
+                - button "Delap 2 pts ⏱️ MIN 90" [ref=e1575] [cursor=pointer]:
+                  - generic [ref=e1576]:
+                    - generic [ref=e1577]: Delap
+                    - generic [ref=e1579]: 2 pts
+                  - generic [ref=e1581]:
+                    - generic [ref=e1582]: ⏱️ MIN
+                    - generic [ref=e1583]: "90"
+                - button "Sánchez 2 pts ⏱️ MIN 90" [ref=e1584] [cursor=pointer]:
+                  - generic [ref=e1585]:
+                    - generic [ref=e1586]: Sánchez
+                    - generic [ref=e1588]: 2 pts
+                  - generic [ref=e1590]:
+                    - generic [ref=e1591]: ⏱️ MIN
+                    - generic [ref=e1592]: "90"
+                - button "Cucurella 2 pts ⏱️ MIN 90" [ref=e1593] [cursor=pointer]:
+                  - generic [ref=e1594]:
+                    - generic [ref=e1595]: Cucurella
+                    - generic [ref=e1597]: 2 pts
+                  - generic [ref=e1599]:
+                    - generic [ref=e1600]: ⏱️ MIN
+                    - generic [ref=e1601]: "90"
+                - button "Enzo 2 pts ⏱️ MIN 87" [ref=e1602] [cursor=pointer]:
+                  - generic [ref=e1603]:
+                    - generic [ref=e1604]: Enzo
+                    - generic [ref=e1606]: 2 pts
+                  - generic [ref=e1608]:
+                    - generic [ref=e1609]: ⏱️ MIN
+                    - generic [ref=e1610]: "87"
+                - button "Caicedo 2 pts ⏱️ MIN 90" [ref=e1611] [cursor=pointer]:
+                  - generic [ref=e1612]:
+                    - generic [ref=e1613]: Caicedo
+                    - generic [ref=e1615]: 2 pts
+                  - generic [ref=e1617]:
+                    - generic [ref=e1618]: ⏱️ MIN
+                    - generic [ref=e1619]: "90"
+                - button "Garnacho 2 pts ⏱️ MIN 74" [ref=e1620] [cursor=pointer]:
+                  - generic [ref=e1621]:
+                    - generic [ref=e1622]: Garnacho
+                    - generic [ref=e1624]: 2 pts
+                  - generic [ref=e1626]:
+                    - generic [ref=e1627]: ⏱️ MIN
+                    - generic [ref=e1628]: "74"
+                - button "Chalobah 1 pts ⏱️ MIN 9" [ref=e1629] [cursor=pointer]:
+                  - generic [ref=e1630]:
+                    - generic [ref=e1631]: Chalobah
+                    - generic [ref=e1633]: 1 pts
+                  - generic [ref=e1635]:
+                    - generic [ref=e1636]: ⏱️ MIN
+                    - generic [ref=e1637]: "9"
+                - button "Acheampong 1 pts ⏱️ MIN 9" [ref=e1638] [cursor=pointer]:
+                  - generic [ref=e1639]:
+                    - generic [ref=e1640]: Acheampong
+                    - generic [ref=e1642]: 1 pts
+                  - generic [ref=e1644]:
+                    - generic [ref=e1645]: ⏱️ MIN
+                    - generic [ref=e1646]: "9"
+                - button "Hato 1 pts ⏱️ MIN 90 🟨 YC 1" [ref=e1647] [cursor=pointer]:
+                  - generic [ref=e1648]:
+                    - generic [ref=e1649]: Hato
+                    - generic [ref=e1651]: 1 pts
+                  - generic [ref=e1652]:
+                    - generic [ref=e1653]:
+                      - generic [ref=e1654]: ⏱️ MIN
+                      - generic [ref=e1655]: "90"
+                    - generic [ref=e1656]:
+                      - generic [ref=e1657]: 🟨 YC
+                      - generic [ref=e1658]: "1"
+                - button "Estêvão 1 pts ⏱️ MIN 15" [ref=e1659] [cursor=pointer]:
+                  - generic [ref=e1660]:
+                    - generic [ref=e1661]: Estêvão
+                    - generic [ref=e1663]: 1 pts
+                  - generic [ref=e1665]:
+                    - generic [ref=e1666]: ⏱️ MIN
+                    - generic [ref=e1667]: "15"
+                - button "Lavia 1 pts ⏱️ MIN 2" [ref=e1668] [cursor=pointer]:
+                  - generic [ref=e1669]:
+                    - generic [ref=e1670]: Lavia
+                    - generic [ref=e1672]: 1 pts
+                  - generic [ref=e1674]:
+                    - generic [ref=e1675]: ⏱️ MIN
+                    - generic [ref=e1676]: "2"
+        - generic [ref=e1677]:
+          - generic [ref=e1678]:
+            - button "Previous match" [ref=e1679] [cursor=pointer]:
+              - img [ref=e1680]
+            - button "Next match" [ref=e1682] [cursor=pointer]:
+              - img [ref=e1683]
+          - generic [ref=e1685]:
+            - generic [ref=e1687]:
+              - img [ref=e1688]
+              - generic [ref=e1691]: April 19, 2026 21:00
+            - generic [ref=e1692]:
+              - generic [ref=e1694]:
+                - generic [ref=e1695]: Aston Villa
+                - img "Aston Villa logo" [ref=e1697]
+              - generic [ref=e1699]:
+                - generic [ref=e1700]: 4 - 3
+                - generic [ref=e1702]:
+                  - img [ref=e1703]
+                  - generic [ref=e1705]: 90'
+              - generic [ref=e1707]:
+                - img "Sunderland logo" [ref=e1709]
+                - generic [ref=e1710]: Sunderland
+            - generic [ref=e1711]:
+              - generic [ref=e1712]:
+                - img [ref=e1713]
+                - heading "Goals" [level=3] [ref=e1717]
+              - generic [ref=e1718]:
+                - generic [ref=e1719]:
+                  - generic [ref=e1720]: Watkins
+                  - generic [ref=e1721]: (AVL)
+                  - generic [ref=e1722]: ⚽ 2
+                - generic [ref=e1723]:
+                  - generic [ref=e1724]: Rogers
+                  - generic [ref=e1725]: (AVL)
+                  - generic [ref=e1726]: ⚽ 1
+                - generic [ref=e1727]:
+                  - generic [ref=e1728]: Abraham
+                  - generic [ref=e1729]: (AVL)
+                  - generic [ref=e1730]: ⚽ 1
+                - generic [ref=e1731]:
+                  - generic [ref=e1732]: Rigg
+                  - generic [ref=e1733]: (SUN)
+                  - generic [ref=e1734]: ⚽ 1
+                - generic [ref=e1735]:
+                  - generic [ref=e1736]: Hume
+                  - generic [ref=e1737]: (SUN)
+                  - generic [ref=e1738]: ⚽ 1
+                - generic [ref=e1739]:
+                  - generic [ref=e1740]: Isidor
+                  - generic [ref=e1741]: (SUN)
+                  - generic [ref=e1742]: ⚽ 1
+            - generic [ref=e1743]:
+              - generic [ref=e1744]:
+                - img [ref=e1745]
+                - heading "Assists" [level=3] [ref=e1749]
+              - generic [ref=e1750]:
+                - generic [ref=e1751]:
+                  - generic [ref=e1752]: Watkins
+                  - generic [ref=e1753]: (AVL)
+                  - generic [ref=e1754]: 👟 1
+                - generic [ref=e1755]:
+                  - generic [ref=e1756]: Maatsen
+                  - generic [ref=e1757]: (AVL)
+                  - generic [ref=e1758]: 👟 1
+                - generic [ref=e1759]:
+                  - generic [ref=e1760]: McGinn
+                  - generic [ref=e1761]: (AVL)
+                  - generic [ref=e1762]: 👟 1
+                - generic [ref=e1763]:
+                  - generic [ref=e1764]: Digne
+                  - generic [ref=e1765]: (AVL)
+                  - generic [ref=e1766]: 👟 1
+                - generic [ref=e1767]:
+                  - generic [ref=e1768]: E.Le Fée
+                  - generic [ref=e1769]: (SUN)
+                  - generic [ref=e1770]: 👟 1
+                - generic [ref=e1771]:
+                  - generic [ref=e1772]: Sadiki
+                  - generic [ref=e1773]: (SUN)
+                  - generic [ref=e1774]: 👟 1
+            - generic [ref=e1775]:
+              - generic [ref=e1776]:
+                - img [ref=e1777]
+                - heading "Defensive Contribution" [level=3] [ref=e1779]
+              - generic [ref=e1780]:
+                - generic [ref=e1781]:
+                  - generic [ref=e1782]: E.Le Fée
+                  - generic [ref=e1783]: (SUN)
+                  - generic [ref=e1784]: 🛡️ 12
+                - generic [ref=e1785]:
+                  - generic [ref=e1786]: Xhaka
+                  - generic [ref=e1787]: (SUN)
+                  - generic [ref=e1788]: 🛡️ 11
+            - generic [ref=e1789]:
+              - generic [ref=e1790]:
+                - img [ref=e1791]
+                - heading "Saves" [level=3] [ref=e1795]
+              - generic [ref=e1796]:
+                - generic [ref=e1797]:
+                  - generic [ref=e1798]: Martinez
+                  - generic [ref=e1799]: (AVL)
+                  - generic [ref=e1800]: 🧤 4
+                - generic [ref=e1801]:
+                  - generic [ref=e1802]: Roefs
+                  - generic [ref=e1803]: (SUN)
+                  - generic [ref=e1804]: 🧤 3
+            - generic [ref=e1805]:
+              - generic [ref=e1806]:
+                - img [ref=e1807]
+                - heading "Yellow Cards" [level=3] [ref=e1809]
+              - generic [ref=e1810]:
+                - generic [ref=e1811]:
+                  - generic [ref=e1812]: Onana
+                  - generic [ref=e1813]: (AVL)
+                  - generic [ref=e1814]: 🟨 1
+                - generic [ref=e1815]:
+                  - generic [ref=e1816]: Sadiki
+                  - generic [ref=e1817]: (SUN)
+                  - generic [ref=e1818]: 🟨 1
+                - generic [ref=e1819]:
+                  - generic [ref=e1820]: Ballard
+                  - generic [ref=e1821]: (SUN)
+                  - generic [ref=e1822]: 🟨 1
+                - generic [ref=e1823]:
+                  - generic [ref=e1824]: Mukiele
+                  - generic [ref=e1825]: (SUN)
+                  - generic [ref=e1826]: 🟨 1
+            - generic [ref=e1827]:
+              - generic [ref=e1828]:
+                - img [ref=e1829]
+                - heading "Bonus Point System (BPS)" [level=3] [ref=e1830]
+              - generic [ref=e1831]:
+                - generic [ref=e1832]:
+                  - generic [ref=e1833]: Watkins
+                  - generic [ref=e1834]: (AVL)
+                  - generic [ref=e1835]: "70"
+                - generic [ref=e1836]:
+                  - generic [ref=e1837]: E.Le Fée
+                  - generic [ref=e1838]: (SUN)
+                  - generic [ref=e1839]: "37"
+                - generic [ref=e1840]:
+                  - generic [ref=e1841]: Rogers
+                  - generic [ref=e1842]: (AVL)
+                  - generic [ref=e1843]: "35"
+                - generic [ref=e1844]:
+                  - generic [ref=e1845]: Abraham
+                  - generic [ref=e1846]: (AVL)
+                  - generic [ref=e1847]: "32"
+                - generic [ref=e1848]:
+                  - generic [ref=e1849]: Isidor
+                  - generic [ref=e1850]: (SUN)
+                  - generic [ref=e1851]: "28"
+            - generic [ref=e1852]:
+              - tablist [ref=e1853]:
+                - tab "Aston Villa Aston Villa" [selected] [ref=e1854] [cursor=pointer]:
+                  - img "Aston Villa" [ref=e1856]
+                  - generic [ref=e1857]: Aston Villa
+                - tab "Sunderland Sunderland" [ref=e1858] [cursor=pointer]:
+                  - img "Sunderland" [ref=e1860]
+                  - generic [ref=e1861]: Sunderland
+              - tabpanel "Aston Villa Aston Villa" [ref=e1862]:
+                - button "Watkins +3 19 pts ⏱️ MIN 79 ⚽ Goals 2 👟 Assists 1" [ref=e1863] [cursor=pointer]:
+                  - generic [ref=e1864]:
+                    - generic [ref=e1865]: Watkins
+                    - generic [ref=e1866]:
+                      - generic [ref=e1867]: "+3"
+                      - generic [ref=e1868]: 19 pts
+                  - generic [ref=e1869]:
+                    - generic [ref=e1870]:
+                      - generic [ref=e1871]: ⏱️ MIN
+                      - generic [ref=e1872]: "79"
+                    - generic [ref=e1873]:
+                      - generic [ref=e1874]: ⚽ Goals
+                      - generic [ref=e1875]: "2"
+                    - generic [ref=e1876]:
+                      - generic [ref=e1877]: 👟 Assists
+                      - generic [ref=e1878]: "1"
+                - button "Rogers +1 9 pts ⏱️ MIN 90 ⚽ Goals 1" [ref=e1879] [cursor=pointer]:
+                  - generic [ref=e1880]:
+                    - generic [ref=e1881]: Rogers
+                    - generic [ref=e1882]:
+                      - generic [ref=e1883]: "+1"
+                      - generic [ref=e1884]: 9 pts
+                  - generic [ref=e1885]:
+                    - generic [ref=e1886]:
+                      - generic [ref=e1887]: ⏱️ MIN
+                      - generic [ref=e1888]: "90"
+                    - generic [ref=e1889]:
+                      - generic [ref=e1890]: ⚽ Goals
+                      - generic [ref=e1891]: "1"
+                - button "Abraham 5 pts ⏱️ MIN 10 ⚽ Goals 1" [ref=e1892] [cursor=pointer]:
+                  - generic [ref=e1893]:
+                    - generic [ref=e1894]: Abraham
+                    - generic [ref=e1896]: 5 pts
+                  - generic [ref=e1897]:
+                    - generic [ref=e1898]:
+                      - generic [ref=e1899]: ⏱️ MIN
+                      - generic [ref=e1900]: "10"
+                    - generic [ref=e1901]:
+                      - generic [ref=e1902]: ⚽ Goals
+                      - generic [ref=e1903]: "1"
+                - button "Maatsen 5 pts ⏱️ MIN 69 👟 Assists 1" [ref=e1904] [cursor=pointer]:
+                  - generic [ref=e1905]:
+                    - generic [ref=e1906]: Maatsen
+                    - generic [ref=e1908]: 5 pts
+                  - generic [ref=e1909]:
+                    - generic [ref=e1910]:
+                      - generic [ref=e1911]: ⏱️ MIN
+                      - generic [ref=e1912]: "69"
+                    - generic [ref=e1913]:
+                      - generic [ref=e1914]: 👟 Assists
+                      - generic [ref=e1915]: "1"
+                - button "McGinn 5 pts ⏱️ MIN 79 👟 Assists 1" [ref=e1916] [cursor=pointer]:
+                  - generic [ref=e1917]:
+                    - generic [ref=e1918]: McGinn
+                    - generic [ref=e1920]: 5 pts
+                  - generic [ref=e1921]:
+                    - generic [ref=e1922]:
+                      - generic [ref=e1923]: ⏱️ MIN
+                      - generic [ref=e1924]: "79"
+                    - generic [ref=e1925]:
+                      - generic [ref=e1926]: 👟 Assists
+                      - generic [ref=e1927]: "1"
+                - button "Digne 3 pts ⏱️ MIN 20 👟 Assists 1 ⚽ GC 2" [ref=e1928] [cursor=pointer]:
+                  - generic [ref=e1929]:
+                    - generic [ref=e1930]: Digne
+                    - generic [ref=e1932]: 3 pts
+                  - generic [ref=e1933]:
+                    - generic [ref=e1934]:
+                      - generic [ref=e1935]: ⏱️ MIN
+                      - generic [ref=e1936]: "20"
+                    - generic [ref=e1937]:
+                      - generic [ref=e1938]: 👟 Assists
+                      - generic [ref=e1939]: "1"
+                    - generic [ref=e1940]:
+                      - generic [ref=e1941]: ⚽ GC
+                      - generic [ref=e1942]: "2"
+                - button "Martinez 2 pts ⏱️ MIN 90 🧤 Saves 4 ⚽ GC 3" [ref=e1943] [cursor=pointer]:
+                  - generic [ref=e1944]:
+                    - generic [ref=e1945]: Martinez
+                    - generic [ref=e1947]: 2 pts
+                  - generic [ref=e1948]:
+                    - generic [ref=e1949]:
+                      - generic [ref=e1950]: ⏱️ MIN
+                      - generic [ref=e1951]: "90"
+                    - generic [ref=e1952]:
+                      - generic [ref=e1953]: 🧤 Saves
+                      - generic [ref=e1954]: "4"
+                    - generic [ref=e1955]:
+                      - generic [ref=e1956]: ⚽ GC
+                      - generic [ref=e1957]: "3"
+                - button "Tielemans 2 pts ⏱️ MIN 90" [ref=e1958] [cursor=pointer]:
+                  - generic [ref=e1959]:
+                    - generic [ref=e1960]: Tielemans
+                    - generic [ref=e1962]: 2 pts
+                  - generic [ref=e1964]:
+                    - generic [ref=e1965]: ⏱️ MIN
+                    - generic [ref=e1966]: "90"
+                - button "Barkley 2 pts ⏱️ MIN 69" [ref=e1967] [cursor=pointer]:
+                  - generic [ref=e1968]:
+                    - generic [ref=e1969]: Barkley
+                    - generic [ref=e1971]: 2 pts
+                  - generic [ref=e1973]:
+                    - generic [ref=e1974]: ⏱️ MIN
+                    - generic [ref=e1975]: "69"
+                - button "Mings 1 pts ⏱️ MIN 90 ⚽ GC 3" [ref=e1976] [cursor=pointer]:
+                  - generic [ref=e1977]:
+                    - generic [ref=e1978]: Mings
+                    - generic [ref=e1980]: 1 pts
+                  - generic [ref=e1981]:
+                    - generic [ref=e1982]:
+                      - generic [ref=e1983]: ⏱️ MIN
+                      - generic [ref=e1984]: "90"
+                    - generic [ref=e1985]:
+                      - generic [ref=e1986]: ⚽ GC
+                      - generic [ref=e1987]: "3"
+                - button "Sancho 1 pts ⏱️ MIN 10" [ref=e1988] [cursor=pointer]:
+                  - generic [ref=e1989]:
+                    - generic [ref=e1990]: Sancho
+                    - generic [ref=e1992]: 1 pts
+                  - generic [ref=e1994]:
+                    - generic [ref=e1995]: ⏱️ MIN
+                    - generic [ref=e1996]: "10"
+                - button "Cash 1 pts ⏱️ MIN 90 ⚽ GC 3" [ref=e1997] [cursor=pointer]:
+                  - generic [ref=e1998]:
+                    - generic [ref=e1999]: Cash
+                    - generic [ref=e2001]: 1 pts
+                  - generic [ref=e2002]:
+                    - generic [ref=e2003]:
+                      - generic [ref=e2004]: ⏱️ MIN
+                      - generic [ref=e2005]: "90"
+                    - generic [ref=e2006]:
+                      - generic [ref=e2007]: ⚽ GC
+                      - generic [ref=e2008]: "3"
+                - button "Onana 1 pts ⏱️ MIN 90 🟨 YC 1" [ref=e2009] [cursor=pointer]:
+                  - generic [ref=e2010]:
+                    - generic [ref=e2011]: Onana
+                    - generic [ref=e2013]: 1 pts
+                  - generic [ref=e2014]:
+                    - generic [ref=e2015]:
+                      - generic [ref=e2016]: ⏱️ MIN
+                      - generic [ref=e2017]: "90"
+                    - generic [ref=e2018]:
+                      - generic [ref=e2019]: 🟨 YC
+                      - generic [ref=e2020]: "1"
+                - button "Konsa 1 pts ⏱️ MIN 90 ⚽ GC 3" [ref=e2021] [cursor=pointer]:
+                  - generic [ref=e2022]:
+                    - generic [ref=e2023]: Konsa
+                    - generic [ref=e2025]: 1 pts
+                  - generic [ref=e2026]:
+                    - generic [ref=e2027]:
+                      - generic [ref=e2028]: ⏱️ MIN
+                      - generic [ref=e2029]: "90"
+                    - generic [ref=e2030]:
+                      - generic [ref=e2031]: ⚽ GC
+                      - generic [ref=e2032]: "3"
+                - button "Buendía 1 pts ⏱️ MIN 20" [ref=e2033] [cursor=pointer]:
+                  - generic [ref=e2034]:
+                    - generic [ref=e2035]: Buendía
+                    - generic [ref=e2037]: 1 pts
+                  - generic [ref=e2039]:
+                    - generic [ref=e2040]: ⏱️ MIN
+                    - generic [ref=e2041]: "20"
+        - generic [ref=e2042]:
+          - generic [ref=e2043]:
+            - button "Previous match" [ref=e2044] [cursor=pointer]:
+              - img [ref=e2045]
+            - button "Next match" [ref=e2047] [cursor=pointer]:
+              - img [ref=e2048]
+          - generic [ref=e2050]:
+            - generic [ref=e2052]:
+              - img [ref=e2053]
+              - generic [ref=e2056]: April 19, 2026 21:00
+            - generic [ref=e2057]:
+              - generic [ref=e2059]:
+                - generic [ref=e2060]: Nott'm Forest
+                - img "Nott'm Forest logo" [ref=e2062]
+              - generic [ref=e2064]:
+                - generic [ref=e2065]: 4 - 1
+                - generic [ref=e2067]:
+                  - img [ref=e2068]
+                  - generic [ref=e2070]: 90'
+              - generic [ref=e2072]:
+                - img "Burnley logo" [ref=e2074]
+                - generic [ref=e2075]: Burnley
+            - generic [ref=e2076]:
+              - generic [ref=e2077]:
+                - img [ref=e2078]
+                - heading "Goals" [level=3] [ref=e2082]
+              - generic [ref=e2083]:
+                - generic [ref=e2084]:
+                  - generic [ref=e2085]: Gibbs-White
+                  - generic [ref=e2086]: (NFO)
+                  - generic [ref=e2087]: ⚽ 3
+                - generic [ref=e2088]:
+                  - generic [ref=e2089]: Igor Jesus
+                  - generic [ref=e2090]: (NFO)
+                  - generic [ref=e2091]: ⚽ 1
+                - generic [ref=e2092]:
+                  - generic [ref=e2093]: Flemming
+                  - generic [ref=e2094]: (BUR)
+                  - generic [ref=e2095]: ⚽ 1
+            - generic [ref=e2096]:
+              - generic [ref=e2097]:
+                - img [ref=e2098]
+                - heading "Assists" [level=3] [ref=e2102]
+              - generic [ref=e2103]:
+                - generic [ref=e2104]:
+                  - generic [ref=e2105]: Milenković
+                  - generic [ref=e2106]: (NFO)
+                  - generic [ref=e2107]: 👟 1
+                - generic [ref=e2108]:
+                  - generic [ref=e2109]: Hutchinson
+                  - generic [ref=e2110]: (NFO)
+                  - generic [ref=e2111]: 👟 1
+                - generic [ref=e2112]:
+                  - generic [ref=e2113]: Dominguez
+                  - generic [ref=e2114]: (NFO)
+                  - generic [ref=e2115]: 👟 1
+                - generic [ref=e2116]:
+                  - generic [ref=e2117]: Yates
+                  - generic [ref=e2118]: (NFO)
+                  - generic [ref=e2119]: 👟 1
+                - generic [ref=e2120]:
+                  - generic [ref=e2121]: Hartman
+                  - generic [ref=e2122]: (BUR)
+                  - generic [ref=e2123]: 👟 1
+            - generic [ref=e2124]:
+              - generic [ref=e2125]:
+                - img [ref=e2126]
+                - heading "Defensive Contribution" [level=3] [ref=e2128]
+              - generic [ref=e2129]:
+                - generic [ref=e2130]:
+                  - generic [ref=e2131]: Estève
+                  - generic [ref=e2132]: (BUR)
+                  - generic [ref=e2133]: 🛡️ 14
+                - generic [ref=e2134]:
+                  - generic [ref=e2135]: Florentino
+                  - generic [ref=e2136]: (BUR)
+                  - generic [ref=e2137]: 🛡️ 13
+                - generic [ref=e2138]:
+                  - generic [ref=e2139]: Sangaré
+                  - generic [ref=e2140]: (NFO)
+                  - generic [ref=e2141]: 🛡️ 12
+                - generic [ref=e2142]:
+                  - generic [ref=e2143]: Anderson
+                  - generic [ref=e2144]: (NFO)
+                  - generic [ref=e2145]: 🛡️ 11
+                - generic [ref=e2146]:
+                  - generic [ref=e2147]: Ward-Prowse
+                  - generic [ref=e2148]: (BUR)
+                  - generic [ref=e2149]: 🛡️ 10
+            - generic [ref=e2150]:
+              - generic [ref=e2151]:
+                - img [ref=e2152]
+                - heading "Saves" [level=3] [ref=e2156]
+              - generic [ref=e2158]:
+                - generic [ref=e2159]: Sels
+                - generic [ref=e2160]: (NFO)
+                - generic [ref=e2161]: 🧤 2
+            - generic [ref=e2162]:
+              - generic [ref=e2163]:
+                - img [ref=e2164]
+                - heading "Yellow Cards" [level=3] [ref=e2166]
+              - generic [ref=e2167]:
+                - generic [ref=e2168]:
+                  - generic [ref=e2169]: Florentino
+                  - generic [ref=e2170]: (BUR)
+                  - generic [ref=e2171]: 🟨 1
+                - generic [ref=e2172]:
+                  - generic [ref=e2173]: Walker
+                  - generic [ref=e2174]: (BUR)
+                  - generic [ref=e2175]: 🟨 1
+            - generic [ref=e2176]:
+              - generic [ref=e2177]:
+                - img [ref=e2178]
+                - heading "Bonus Point System (BPS)" [level=3] [ref=e2179]
+              - generic [ref=e2180]:
+                - generic [ref=e2181]:
+                  - generic [ref=e2182]: Gibbs-White
+                  - generic [ref=e2183]: (NFO)
+                  - generic [ref=e2184]: "71"
+                - generic [ref=e2185]:
+                  - generic [ref=e2186]: Igor Jesus
+                  - generic [ref=e2187]: (NFO)
+                  - generic [ref=e2188]: "34"
+                - generic [ref=e2189]:
+                  - generic [ref=e2190]: Flemming
+                  - generic [ref=e2191]: (BUR)
+                  - generic [ref=e2192]: "29"
+                - generic [ref=e2193]:
+                  - generic [ref=e2194]: Dominguez
+                  - generic [ref=e2195]: (NFO)
+                  - generic [ref=e2196]: "17"
+                - generic [ref=e2197]:
+                  - generic [ref=e2198]: Milenković
+                  - generic [ref=e2199]: (NFO)
+                  - generic [ref=e2200]: "15"
+            - generic [ref=e2201]:
+              - tablist [ref=e2202]:
+                - tab "Nott'm Forest Nott'm Forest" [selected] [ref=e2203] [cursor=pointer]:
+                  - img "Nott'm Forest" [ref=e2205]
+                  - generic [ref=e2206]: Nott'm Forest
+                - tab "Burnley Burnley" [ref=e2207] [cursor=pointer]:
+                  - img "Burnley" [ref=e2209]
+                  - generic [ref=e2210]: Burnley
+              - tabpanel "Nott'm Forest Nott'm Forest" [ref=e2211]:
+                - button "Gibbs-White +3 23 pts ⏱️ MIN 88 ⚽ Goals 3" [ref=e2212] [cursor=pointer]:
+                  - generic [ref=e2213]:
+                    - generic [ref=e2214]: Gibbs-White
+                    - generic [ref=e2215]:
+                      - generic [ref=e2216]: "+3"
+                      - generic [ref=e2217]: 23 pts
+                  - generic [ref=e2218]:
+                    - generic [ref=e2219]:
+                      - generic [ref=e2220]: ⏱️ MIN
+                      - generic [ref=e2221]: "88"
+                    - generic [ref=e2222]:
+                      - generic [ref=e2223]: ⚽ Goals
+                      - generic [ref=e2224]: "3"
+                - button "Igor Jesus +2 9 pts ⏱️ MIN 45 ⚽ Goals 1" [ref=e2225] [cursor=pointer]:
+                  - generic [ref=e2226]:
+                    - generic [ref=e2227]: Igor Jesus
+                    - generic [ref=e2228]:
+                      - generic [ref=e2229]: "+2"
+                      - generic [ref=e2230]: 9 pts
+                  - generic [ref=e2231]:
+                    - generic [ref=e2232]:
+                      - generic [ref=e2233]: ⏱️ MIN
+                      - generic [ref=e2234]: "45"
+                    - generic [ref=e2235]:
+                      - generic [ref=e2236]: ⚽ Goals
+                      - generic [ref=e2237]: "1"
+                - button "Milenković 5 pts ⏱️ MIN 90 👟 Assists 1" [ref=e2238] [cursor=pointer]:
+                  - generic [ref=e2239]:
+                    - generic [ref=e2240]: Milenković
+                    - generic [ref=e2242]: 5 pts
+                  - generic [ref=e2243]:
+                    - generic [ref=e2244]:
+                      - generic [ref=e2245]: ⏱️ MIN
+                      - generic [ref=e2246]: "90"
+                    - generic [ref=e2247]:
+                      - generic [ref=e2248]: 👟 Assists
+                      - generic [ref=e2249]: "1"
+                - button "Hutchinson 5 pts ⏱️ MIN 87 👟 Assists 1" [ref=e2250] [cursor=pointer]:
+                  - generic [ref=e2251]:
+                    - generic [ref=e2252]: Hutchinson
+                    - generic [ref=e2254]: 5 pts
+                  - generic [ref=e2255]:
+                    - generic [ref=e2256]:
+                      - generic [ref=e2257]: ⏱️ MIN
+                      - generic [ref=e2258]: "87"
+                    - generic [ref=e2259]:
+                      - generic [ref=e2260]: 👟 Assists
+                      - generic [ref=e2261]: "1"
+                - button "Dominguez 4 pts ⏱️ MIN 1 👟 Assists 1" [ref=e2262] [cursor=pointer]:
+                  - generic [ref=e2263]:
+                    - generic [ref=e2264]: Dominguez
+                    - generic [ref=e2266]: 4 pts
+                  - generic [ref=e2267]:
+                    - generic [ref=e2268]:
+                      - generic [ref=e2269]: ⏱️ MIN
+                      - generic [ref=e2270]: "1"
+                    - generic [ref=e2271]:
+                      - generic [ref=e2272]: 👟 Assists
+                      - generic [ref=e2273]: "1"
+                - button "Sangaré 4 pts ⏱️ MIN 90 🛡️ Def 12" [ref=e2274] [cursor=pointer]:
+                  - generic [ref=e2275]:
+                    - generic [ref=e2276]: Sangaré
+                    - generic [ref=e2278]: 4 pts
+                  - generic [ref=e2279]:
+                    - generic [ref=e2280]:
+                      - generic [ref=e2281]: ⏱️ MIN
+                      - generic [ref=e2282]: "90"
+                    - generic [ref=e2283]:
+                      - generic [ref=e2284]: 🛡️ Def
+                      - generic [ref=e2285]: "12"
+                - button "Yates 4 pts ⏱️ MIN 14 👟 Assists 1" [ref=e2286] [cursor=pointer]:
+                  - generic [ref=e2287]:
+                    - generic [ref=e2288]: Yates
+                    - generic [ref=e2290]: 4 pts
+                  - generic [ref=e2291]:
+                    - generic [ref=e2292]:
+                      - generic [ref=e2293]: ⏱️ MIN
+                      - generic [ref=e2294]: "14"
+                    - generic [ref=e2295]:
+                      - generic [ref=e2296]: 👟 Assists
+                      - generic [ref=e2297]: "1"
+                - button "Sels 2 pts ⏱️ MIN 90" [ref=e2298] [cursor=pointer]:
+                  - generic [ref=e2299]:
+                    - generic [ref=e2300]: Sels
+                    - generic [ref=e2302]: 2 pts
+                  - generic [ref=e2304]:
+                    - generic [ref=e2305]: ⏱️ MIN
+                    - generic [ref=e2306]: "90"
+                - button "Aina 2 pts ⏱️ MIN 90" [ref=e2307] [cursor=pointer]:
+                  - generic [ref=e2308]:
+                    - generic [ref=e2309]: Aina
+                    - generic [ref=e2311]: 2 pts
+                  - generic [ref=e2313]:
+                    - generic [ref=e2314]: ⏱️ MIN
+                    - generic [ref=e2315]: "90"
+                - button "N.Williams 2 pts ⏱️ MIN 90" [ref=e2316] [cursor=pointer]:
+                  - generic [ref=e2317]:
+                    - generic [ref=e2318]: N.Williams
+                    - generic [ref=e2320]: 2 pts
+                  - generic [ref=e2322]:
+                    - generic [ref=e2323]: ⏱️ MIN
+                    - generic [ref=e2324]: "90"
+                - button "Anderson 2 pts ⏱️ MIN 90" [ref=e2325] [cursor=pointer]:
+                  - generic [ref=e2326]:
+                    - generic [ref=e2327]: Anderson
+                    - generic [ref=e2329]: 2 pts
+                  - generic [ref=e2331]:
+                    - generic [ref=e2332]: ⏱️ MIN
+                    - generic [ref=e2333]: "90"
+                - button "Wood 2 pts ⏱️ MIN 75" [ref=e2334] [cursor=pointer]:
+                  - generic [ref=e2335]:
+                    - generic [ref=e2336]: Wood
+                    - generic [ref=e2338]: 2 pts
+                  - generic [ref=e2340]:
+                    - generic [ref=e2341]: ⏱️ MIN
+                    - generic [ref=e2342]: "75"
+                - button "Jair Cunha 1 pts ⏱️ MIN 48" [ref=e2343] [cursor=pointer]:
+                  - generic [ref=e2344]:
+                    - generic [ref=e2345]: Jair Cunha
+                    - generic [ref=e2347]: 1 pts
+                  - generic [ref=e2349]:
+                    - generic [ref=e2350]: ⏱️ MIN
+                    - generic [ref=e2351]: "48"
+                - button "Morato 1 pts ⏱️ MIN 2" [ref=e2352] [cursor=pointer]:
+                  - generic [ref=e2353]:
+                    - generic [ref=e2354]: Morato
+                    - generic [ref=e2356]: 1 pts
+                  - generic [ref=e2358]:
+                    - generic [ref=e2359]: ⏱️ MIN
+                    - generic [ref=e2360]: "2"
+                - button "Murillo 1 pts ⏱️ MIN 41" [ref=e2361] [cursor=pointer]:
+                  - generic [ref=e2362]:
+                    - generic [ref=e2363]: Murillo
+                    - generic [ref=e2365]: 1 pts
+                  - generic [ref=e2367]:
+                    - generic [ref=e2368]: ⏱️ MIN
+                    - generic [ref=e2369]: "41"
+                - button "Bakwa 1 pts ⏱️ MIN 45" [ref=e2370] [cursor=pointer]:
+                  - generic [ref=e2371]:
+                    - generic [ref=e2372]: Bakwa
+                    - generic [ref=e2374]: 1 pts
+                  - generic [ref=e2376]:
+                    - generic [ref=e2377]: ⏱️ MIN
+                    - generic [ref=e2378]: "45"
+        - generic [ref=e2379]:
+          - generic [ref=e2380]:
+            - button "Previous match" [ref=e2381] [cursor=pointer]:
+              - img [ref=e2382]
+            - button "Next match" [ref=e2384] [cursor=pointer]:
+              - img [ref=e2385]
+          - generic [ref=e2387]:
+            - generic [ref=e2389]:
+              - img [ref=e2390]
+              - generic [ref=e2393]: April 19, 2026 21:00
+            - generic [ref=e2394]:
+              - generic [ref=e2396]:
+                - generic [ref=e2397]: Everton
+                - img "Everton logo" [ref=e2399]
+              - generic [ref=e2401]:
+                - generic [ref=e2402]: 1 - 2
+                - generic [ref=e2404]:
+                  - img [ref=e2405]
+                  - generic [ref=e2407]: 90'
+              - generic [ref=e2409]:
+                - img "Liverpool logo" [ref=e2411]
+                - generic [ref=e2412]: Liverpool
+            - generic [ref=e2413]:
+              - generic [ref=e2414]:
+                - img [ref=e2415]
+                - heading "Goals" [level=3] [ref=e2419]
+              - generic [ref=e2420]:
+                - generic [ref=e2421]:
+                  - generic [ref=e2422]: Beto
+                  - generic [ref=e2423]: (EVE)
+                  - generic [ref=e2424]: ⚽ 1
+                - generic [ref=e2425]:
+                  - generic [ref=e2426]: M.Salah
+                  - generic [ref=e2427]: (LIV)
+                  - generic [ref=e2428]: ⚽ 1
+                - generic [ref=e2429]:
+                  - generic [ref=e2430]: Virgil
+                  - generic [ref=e2431]: (LIV)
+                  - generic [ref=e2432]: ⚽ 1
+            - generic [ref=e2433]:
+              - generic [ref=e2434]:
+                - img [ref=e2435]
+                - heading "Assists" [level=3] [ref=e2439]
+              - generic [ref=e2440]:
+                - generic [ref=e2441]:
+                  - generic [ref=e2442]: Dewsbury-Hall
+                  - generic [ref=e2443]: (EVE)
+                  - generic [ref=e2444]: 👟 1
+                - generic [ref=e2445]:
+                  - generic [ref=e2446]: Gakpo
+                  - generic [ref=e2447]: (LIV)
+                  - generic [ref=e2448]: 👟 1
+                - generic [ref=e2449]:
+                  - generic [ref=e2450]: Szoboszlai
+                  - generic [ref=e2451]: (LIV)
+                  - generic [ref=e2452]: 👟 1
+            - generic [ref=e2453]:
+              - generic [ref=e2454]:
+                - img [ref=e2455]
+                - heading "Defensive Contribution" [level=3] [ref=e2457]
+              - generic [ref=e2458]:
+                - generic [ref=e2459]:
+                  - generic [ref=e2460]: C.Jones
+                  - generic [ref=e2461]: (LIV)
+                  - generic [ref=e2462]: 🛡️ 28
+                - generic [ref=e2463]:
+                  - generic [ref=e2464]: Konaté
+                  - generic [ref=e2465]: (LIV)
+                  - generic [ref=e2466]: 🛡️ 13
+                - generic [ref=e2467]:
+                  - generic [ref=e2468]: Ndiaye
+                  - generic [ref=e2469]: (EVE)
+                  - generic [ref=e2470]: 🛡️ 12
+                - generic [ref=e2471]:
+                  - generic [ref=e2472]: Mykolenko
+                  - generic [ref=e2473]: (EVE)
+                  - generic [ref=e2474]: 🛡️ 12
+                - generic [ref=e2475]:
+                  - generic [ref=e2476]: Garner
+                  - generic [ref=e2477]: (EVE)
+                  - generic [ref=e2478]: 🛡️ 12
+                - generic [ref=e2479]:
+                  - generic [ref=e2480]: Dewsbury-Hall
+                  - generic [ref=e2481]: (EVE)
+                  - generic [ref=e2482]: 🛡️ 11
+                - generic [ref=e2483]:
+                  - generic [ref=e2484]: Branthwaite
+                  - generic [ref=e2485]: (EVE)
+                  - generic [ref=e2486]: 🛡️ 10
+            - generic [ref=e2487]:
+              - generic [ref=e2488]:
+                - img [ref=e2489]
+                - heading "Saves" [level=3] [ref=e2493]
+              - generic [ref=e2494]:
+                - generic [ref=e2495]:
+                  - generic [ref=e2496]: Pickford
+                  - generic [ref=e2497]: (EVE)
+                  - generic [ref=e2498]: 🧤 3
+                - generic [ref=e2499]:
+                  - generic [ref=e2500]: Mamardashvili
+                  - generic [ref=e2501]: (LIV)
+                  - generic [ref=e2502]: 🧤 2
+                - generic [ref=e2503]:
+                  - generic [ref=e2504]: Woodman
+                  - generic [ref=e2505]: (LIV)
+                  - generic [ref=e2506]: 🧤 1
+            - generic [ref=e2507]:
+              - generic [ref=e2508]:
+                - img [ref=e2509]
+                - heading "Yellow Cards" [level=3] [ref=e2511]
+              - generic [ref=e2512]:
+                - generic [ref=e2513]:
+                  - generic [ref=e2514]: Garner
+                  - generic [ref=e2515]: (EVE)
+                  - generic [ref=e2516]: 🟨 1
+                - generic [ref=e2517]:
+                  - generic [ref=e2518]: Pickford
+                  - generic [ref=e2519]: (EVE)
+                  - generic [ref=e2520]: 🟨 1
+            - generic [ref=e2521]:
+              - generic [ref=e2522]:
+                - img [ref=e2523]
+                - heading "Bonus Point System (BPS)" [level=3] [ref=e2524]
+              - generic [ref=e2525]:
+                - generic [ref=e2526]:
+                  - generic [ref=e2527]: M.Salah
+                  - generic [ref=e2528]: (LIV)
+                  - generic [ref=e2529]: "32"
+                - generic [ref=e2530]:
+                  - generic [ref=e2531]: Beto
+                  - generic [ref=e2532]: (EVE)
+                  - generic [ref=e2533]: "31"
+                - generic [ref=e2534]:
+                  - generic [ref=e2535]: Dewsbury-Hall
+                  - generic [ref=e2536]: (EVE)
+                  - generic [ref=e2537]: "28"
+                - generic [ref=e2538]:
+                  - generic [ref=e2539]: Virgil
+                  - generic [ref=e2540]: (LIV)
+                  - generic [ref=e2541]: "26"
+                - generic [ref=e2542]:
+                  - generic [ref=e2543]: Gakpo
+                  - generic [ref=e2544]: (LIV)
+                  - generic [ref=e2545]: "25"
+            - generic [ref=e2546]:
+              - tablist [ref=e2547]:
+                - tab "Everton Everton" [selected] [ref=e2548] [cursor=pointer]:
+                  - img "Everton" [ref=e2550]
+                  - generic [ref=e2551]: Everton
+                - tab "Liverpool Liverpool" [ref=e2552] [cursor=pointer]:
+                  - img "Liverpool" [ref=e2554]
+                  - generic [ref=e2555]: Liverpool
+              - tabpanel "Everton Everton" [ref=e2556]:
+                - button "Beto +2 10 pts ⏱️ MIN 72 ⚽ Goals 1" [ref=e2557] [cursor=pointer]:
+                  - generic [ref=e2558]:
+                    - generic [ref=e2559]: Beto
+                    - generic [ref=e2560]:
+                      - generic [ref=e2561]: "+2"
+                      - generic [ref=e2562]: 10 pts
+                  - generic [ref=e2563]:
+                    - generic [ref=e2564]:
+                      - generic [ref=e2565]: ⏱️ MIN
+                      - generic [ref=e2566]: "72"
+                    - generic [ref=e2567]:
+                      - generic [ref=e2568]: ⚽ Goals
+                      - generic [ref=e2569]: "1"
+                - button "Dewsbury-Hall +1 7 pts ⏱️ MIN 90 👟 Assists 1" [ref=e2570] [cursor=pointer]:
+                  - generic [ref=e2571]:
+                    - generic [ref=e2572]: Dewsbury-Hall
+                    - generic [ref=e2573]:
+                      - generic [ref=e2574]: "+1"
+                      - generic [ref=e2575]: 7 pts
+                  - generic [ref=e2576]:
+                    - generic [ref=e2577]:
+                      - generic [ref=e2578]: ⏱️ MIN
+                      - generic [ref=e2579]: "90"
+                    - generic [ref=e2580]:
+                      - generic [ref=e2581]: 👟 Assists
+                      - generic [ref=e2582]: "1"
+                - button "Branthwaite 4 pts ⏱️ MIN 86 🛡️ Def 10" [ref=e2583] [cursor=pointer]:
+                  - generic [ref=e2584]:
+                    - generic [ref=e2585]: Branthwaite
+                    - generic [ref=e2587]: 4 pts
+                  - generic [ref=e2588]:
+                    - generic [ref=e2589]:
+                      - generic [ref=e2590]: ⏱️ MIN
+                      - generic [ref=e2591]: "86"
+                    - generic [ref=e2592]:
+                      - generic [ref=e2593]: 🛡️ Def
+                      - generic [ref=e2594]: "10"
+                - button "Ndiaye 4 pts ⏱️ MIN 90 🛡️ Def 12" [ref=e2595] [cursor=pointer]:
+                  - generic [ref=e2596]:
+                    - generic [ref=e2597]: Ndiaye
+                    - generic [ref=e2599]: 4 pts
+                  - generic [ref=e2600]:
+                    - generic [ref=e2601]:
+                      - generic [ref=e2602]: ⏱️ MIN
+                      - generic [ref=e2603]: "90"
+                    - generic [ref=e2604]:
+                      - generic [ref=e2605]: 🛡️ Def
+                      - generic [ref=e2606]: "12"
+                - button "Mykolenko 3 pts ⏱️ MIN 90 🛡️ Def 12 ⚽ GC 2" [ref=e2607] [cursor=pointer]:
+                  - generic [ref=e2608]:
+                    - generic [ref=e2609]: Mykolenko
+                    - generic [ref=e2611]: 3 pts
+                  - generic [ref=e2612]:
+                    - generic [ref=e2613]:
+                      - generic [ref=e2614]: ⏱️ MIN
+                      - generic [ref=e2615]: "90"
+                    - generic [ref=e2616]:
+                      - generic [ref=e2617]: 🛡️ Def
+                      - generic [ref=e2618]: "12"
+                    - generic [ref=e2619]:
+                      - generic [ref=e2620]: ⚽ GC
+                      - generic [ref=e2621]: "2"
+                - button "Garner 3 pts ⏱️ MIN 90 🛡️ Def 12 🟨 YC 1" [ref=e2622] [cursor=pointer]:
+                  - generic [ref=e2623]:
+                    - generic [ref=e2624]: Garner
+                    - generic [ref=e2626]: 3 pts
+                  - generic [ref=e2627]:
+                    - generic [ref=e2628]:
+                      - generic [ref=e2629]: ⏱️ MIN
+                      - generic [ref=e2630]: "90"
+                    - generic [ref=e2631]:
+                      - generic [ref=e2632]: 🛡️ Def
+                      - generic [ref=e2633]: "12"
+                    - generic [ref=e2634]:
+                      - generic [ref=e2635]: 🟨 YC
+                      - generic [ref=e2636]: "1"
+                - button "Gana 2 pts ⏱️ MIN 90" [ref=e2637] [cursor=pointer]:
+                  - generic [ref=e2638]:
+                    - generic [ref=e2639]: Gana
+                    - generic [ref=e2641]: 2 pts
+                  - generic [ref=e2643]:
+                    - generic [ref=e2644]: ⏱️ MIN
+                    - generic [ref=e2645]: "90"
+                - button "McNeil 2 pts ⏱️ MIN 79" [ref=e2646] [cursor=pointer]:
+                  - generic [ref=e2647]:
+                    - generic [ref=e2648]: McNeil
+                    - generic [ref=e2650]: 2 pts
+                  - generic [ref=e2652]:
+                    - generic [ref=e2653]: ⏱️ MIN
+                    - generic [ref=e2654]: "79"
+                - button "Tarkowski 1 pts ⏱️ MIN 90 ⚽ GC 2" [ref=e2655] [cursor=pointer]:
+                  - generic [ref=e2656]:
+                    - generic [ref=e2657]: Tarkowski
+                    - generic [ref=e2659]: 1 pts
+                  - generic [ref=e2660]:
+                    - generic [ref=e2661]:
+                      - generic [ref=e2662]: ⏱️ MIN
+                      - generic [ref=e2663]: "90"
+                    - generic [ref=e2664]:
+                      - generic [ref=e2665]: ⚽ GC
+                      - generic [ref=e2666]: "2"
+                - button "O'Brien 1 pts ⏱️ MIN 90 ⚽ GC 2" [ref=e2667] [cursor=pointer]:
+                  - generic [ref=e2668]:
+                    - generic [ref=e2669]: O'Brien
+                    - generic [ref=e2671]: 1 pts
+                  - generic [ref=e2672]:
+                    - generic [ref=e2673]:
+                      - generic [ref=e2674]: ⏱️ MIN
+                      - generic [ref=e2675]: "90"
+                    - generic [ref=e2676]:
+                      - generic [ref=e2677]: ⚽ GC
+                      - generic [ref=e2678]: "2"
+                - button "Keane 1 pts ⏱️ MIN 3" [ref=e2679] [cursor=pointer]:
+                  - generic [ref=e2680]:
+                    - generic [ref=e2681]: Keane
+                    - generic [ref=e2683]: 1 pts
+                  - generic [ref=e2685]:
+                    - generic [ref=e2686]: ⏱️ MIN
+                    - generic [ref=e2687]: "3"
+                - button "George 1 pts ⏱️ MIN 10" [ref=e2688] [cursor=pointer]:
+                  - generic [ref=e2689]:
+                    - generic [ref=e2690]: George
+                    - generic [ref=e2692]: 1 pts
+                  - generic [ref=e2694]:
+                    - generic [ref=e2695]: ⏱️ MIN
+                    - generic [ref=e2696]: "10"
+                - button "Pickford 1 pts ⏱️ MIN 90 🧤 Saves 3 🟨 YC 1 ⚽ GC 2" [ref=e2697] [cursor=pointer]:
+                  - generic [ref=e2698]:
+                    - generic [ref=e2699]: Pickford
+                    - generic [ref=e2701]: 1 pts
+                  - generic [ref=e2702]:
+                    - generic [ref=e2703]:
+                      - generic [ref=e2704]: ⏱️ MIN
+                      - generic [ref=e2705]: "90"
+                    - generic [ref=e2706]:
+                      - generic [ref=e2707]: 🧤 Saves
+                      - generic [ref=e2708]: "3"
+                    - generic [ref=e2709]:
+                      - generic [ref=e2710]: 🟨 YC
+                      - generic [ref=e2711]: "1"
+                    - generic [ref=e2712]:
+                      - generic [ref=e2713]: ⚽ GC
+                      - generic [ref=e2714]: "2"
+                - button "Barry 1 pts ⏱️ MIN 17" [ref=e2715] [cursor=pointer]:
+                  - generic [ref=e2716]:
+                    - generic [ref=e2717]: Barry
+                    - generic [ref=e2719]: 1 pts
+                  - generic [ref=e2721]:
+                    - generic [ref=e2722]: ⏱️ MIN
+                    - generic [ref=e2723]: "17"
+        - generic [ref=e2724]:
+          - button "Previous match" [ref=e2726] [cursor=pointer]:
+            - img [ref=e2727]
+          - generic [ref=e2729]:
+            - generic [ref=e2731]:
+              - img [ref=e2732]
+              - generic [ref=e2735]: April 19, 2026 23:30
+            - generic [ref=e2736]:
+              - generic [ref=e2738]:
+                - generic [ref=e2739]: Man City
+                - img "Man City logo" [ref=e2741]
+              - generic [ref=e2743]:
+                - generic [ref=e2744]: 2 - 1
+                - generic [ref=e2746]:
+                  - img [ref=e2747]
+                  - generic [ref=e2749]: 90'
+              - generic [ref=e2751]:
+                - img "Arsenal logo" [ref=e2753]
+                - generic [ref=e2754]: Arsenal
+            - generic [ref=e2755]:
+              - generic [ref=e2756]:
+                - img [ref=e2757]
+                - heading "Goals" [level=3] [ref=e2761]
+              - generic [ref=e2762]:
+                - generic [ref=e2763]:
+                  - generic [ref=e2764]: Cherki
+                  - generic [ref=e2765]: (MCI)
+                  - generic [ref=e2766]: ⚽ 1
+                - generic [ref=e2767]:
+                  - generic [ref=e2768]: Haaland
+                  - generic [ref=e2769]: (MCI)
+                  - generic [ref=e2770]: ⚽ 1
+                - generic [ref=e2771]:
+                  - generic [ref=e2772]: Havertz
+                  - generic [ref=e2773]: (ARS)
+                  - generic [ref=e2774]: ⚽ 1
+            - generic [ref=e2775]:
+              - generic [ref=e2776]:
+                - img [ref=e2777]
+                - heading "Assists" [level=3] [ref=e2781]
+              - generic [ref=e2782]:
+                - generic [ref=e2783]:
+                  - generic [ref=e2784]: O'Reilly
+                  - generic [ref=e2785]: (MCI)
+                  - generic [ref=e2786]: 👟 1
+                - generic [ref=e2787]:
+                  - generic [ref=e2788]: Matheus N.
+                  - generic [ref=e2789]: (MCI)
+                  - generic [ref=e2790]: 👟 1
+            - generic [ref=e2791]:
+              - generic [ref=e2792]:
+                - img [ref=e2793]
+                - heading "Defensive Contribution" [level=3] [ref=e2795]
+              - generic [ref=e2796]:
+                - generic [ref=e2797]:
+                  - generic [ref=e2798]: Khusanov
+                  - generic [ref=e2799]: (MCI)
+                  - generic [ref=e2800]: 🛡️ 10
+                - generic [ref=e2801]:
+                  - generic [ref=e2802]: Rodrigo
+                  - generic [ref=e2803]: (MCI)
+                  - generic [ref=e2804]: 🛡️ 10
+                - generic [ref=e2805]:
+                  - generic [ref=e2806]: Zubimendi
+                  - generic [ref=e2807]: (ARS)
+                  - generic [ref=e2808]: 🛡️ 10
+                - generic [ref=e2809]:
+                  - generic [ref=e2810]: Rice
+                  - generic [ref=e2811]: (ARS)
+                  - generic [ref=e2812]: 🛡️ 10
+            - generic [ref=e2813]:
+              - generic [ref=e2814]:
+                - img [ref=e2815]
+                - heading "Saves" [level=3] [ref=e2819]
+              - generic [ref=e2820]:
+                - generic [ref=e2821]:
+                  - generic [ref=e2822]: Raya
+                  - generic [ref=e2823]: (ARS)
+                  - generic [ref=e2824]: 🧤 2
+                - generic [ref=e2825]:
+                  - generic [ref=e2826]: Donnarumma
+                  - generic [ref=e2827]: (MCI)
+                  - generic [ref=e2828]: 🧤 1
+            - generic [ref=e2829]:
+              - generic [ref=e2830]:
+                - img [ref=e2831]
+                - heading "Yellow Cards" [level=3] [ref=e2833]
+              - generic [ref=e2834]:
+                - generic [ref=e2835]:
+                  - generic [ref=e2836]: Haaland
+                  - generic [ref=e2837]: (MCI)
+                  - generic [ref=e2838]: 🟨 1
+                - generic [ref=e2839]:
+                  - generic [ref=e2840]: Guéhi
+                  - generic [ref=e2841]: (MCI)
+                  - generic [ref=e2842]: 🟨 1
+                - generic [ref=e2843]:
+                  - generic [ref=e2844]: Gabriel
+                  - generic [ref=e2845]: (ARS)
+                  - generic [ref=e2846]: 🟨 1
+                - generic [ref=e2847]:
+                  - generic [ref=e2848]: Mosquera
+                  - generic [ref=e2849]: (ARS)
+                  - generic [ref=e2850]: 🟨 1
+            - generic [ref=e2851]:
+              - generic [ref=e2852]:
+                - img [ref=e2853]
+                - heading "Bonus Point System (BPS)" [level=3] [ref=e2854]
+              - generic [ref=e2855]:
+                - generic [ref=e2856]:
+                  - generic [ref=e2857]: Cherki
+                  - generic [ref=e2858]: (MCI)
+                  - generic [ref=e2859]: "34"
+                - generic [ref=e2860]:
+                  - generic [ref=e2861]: O'Reilly
+                  - generic [ref=e2862]: (MCI)
+                  - generic [ref=e2863]: "31"
+                - generic [ref=e2864]:
+                  - generic [ref=e2865]: Haaland
+                  - generic [ref=e2866]: (MCI)
+                  - generic [ref=e2867]: "25"
+                - generic [ref=e2868]:
+                  - generic [ref=e2869]: Matheus N.
+                  - generic [ref=e2870]: (MCI)
+                  - generic [ref=e2871]: "23"
+                - generic [ref=e2872]:
+                  - generic [ref=e2873]: Havertz
+                  - generic [ref=e2874]: (ARS)
+                  - generic [ref=e2875]: "21"
+            - generic [ref=e2876]:
+              - tablist [ref=e2877]:
+                - tab "Man City Man City" [selected] [ref=e2878] [cursor=pointer]:
+                  - img "Man City" [ref=e2880]
+                  - generic [ref=e2881]: Man City
+                - tab "Arsenal Arsenal" [ref=e2882] [cursor=pointer]:
+                  - img "Arsenal" [ref=e2884]
+                  - generic [ref=e2885]: Arsenal
+              - tabpanel "Man City Man City" [ref=e2886]:
+                - button "Cherki +3 13 pts ⏱️ MIN 84 ⚽ Goals 1" [ref=e2887] [cursor=pointer]:
+                  - generic [ref=e2888]:
+                    - generic [ref=e2889]: Cherki
+                    - generic [ref=e2890]:
+                      - generic [ref=e2891]: "+3"
+                      - generic [ref=e2892]: 13 pts
+                  - generic [ref=e2893]:
+                    - generic [ref=e2894]:
+                      - generic [ref=e2895]: ⏱️ MIN
+                      - generic [ref=e2896]: "84"
+                    - generic [ref=e2897]:
+                      - generic [ref=e2898]: ⚽ Goals
+                      - generic [ref=e2899]: "1"
+                - button "O'Reilly +2 9 pts ⏱️ MIN 90 👟 Assists 1" [ref=e2900] [cursor=pointer]:
+                  - generic [ref=e2901]:
+                    - generic [ref=e2902]: O'Reilly
+                    - generic [ref=e2903]:
+                      - generic [ref=e2904]: "+2"
+                      - generic [ref=e2905]: 9 pts
+                  - generic [ref=e2906]:
+                    - generic [ref=e2907]:
+                      - generic [ref=e2908]: ⏱️ MIN
+                      - generic [ref=e2909]: "90"
+                    - generic [ref=e2910]:
+                      - generic [ref=e2911]: 👟 Assists
+                      - generic [ref=e2912]: "1"
+                - button "Haaland +1 7 pts ⏱️ MIN 90 ⚽ Goals 1 🟨 YC 1" [ref=e2913] [cursor=pointer]:
+                  - generic [ref=e2914]:
+                    - generic [ref=e2915]: Haaland
+                    - generic [ref=e2916]:
+                      - generic [ref=e2917]: "+1"
+                      - generic [ref=e2918]: 7 pts
+                  - generic [ref=e2919]:
+                    - generic [ref=e2920]:
+                      - generic [ref=e2921]: ⏱️ MIN
+                      - generic [ref=e2922]: "90"
+                    - generic [ref=e2923]:
+                      - generic [ref=e2924]: ⚽ Goals
+                      - generic [ref=e2925]: "1"
+                    - generic [ref=e2926]:
+                      - generic [ref=e2927]: 🟨 YC
+                      - generic [ref=e2928]: "1"
+                - button "Matheus N. 5 pts ⏱️ MIN 90 👟 Assists 1" [ref=e2929] [cursor=pointer]:
+                  - generic [ref=e2930]:
+                    - generic [ref=e2931]: Matheus N.
+                    - generic [ref=e2933]: 5 pts
+                  - generic [ref=e2934]:
+                    - generic [ref=e2935]:
+                      - generic [ref=e2936]: ⏱️ MIN
+                      - generic [ref=e2937]: "90"
+                    - generic [ref=e2938]:
+                      - generic [ref=e2939]: 👟 Assists
+                      - generic [ref=e2940]: "1"
+                - button "Khusanov 4 pts ⏱️ MIN 90 🛡️ Def 10" [ref=e2941] [cursor=pointer]:
+                  - generic [ref=e2942]:
+                    - generic [ref=e2943]: Khusanov
+                    - generic [ref=e2945]: 4 pts
+                  - generic [ref=e2946]:
+                    - generic [ref=e2947]:
+                      - generic [ref=e2948]: ⏱️ MIN
+                      - generic [ref=e2949]: "90"
+                    - generic [ref=e2950]:
+                      - generic [ref=e2951]: 🛡️ Def
+                      - generic [ref=e2952]: "10"
+                - button "Semenyo 2 pts ⏱️ MIN 90" [ref=e2953] [cursor=pointer]:
+                  - generic [ref=e2954]:
+                    - generic [ref=e2955]: Semenyo
+                    - generic [ref=e2957]: 2 pts
+                  - generic [ref=e2959]:
+                    - generic [ref=e2960]: ⏱️ MIN
+                    - generic [ref=e2961]: "90"
+                - button "Bernardo 2 pts ⏱️ MIN 90" [ref=e2962] [cursor=pointer]:
+                  - generic [ref=e2963]:
+                    - generic [ref=e2964]: Bernardo
+                    - generic [ref=e2966]: 2 pts
+                  - generic [ref=e2968]:
+                    - generic [ref=e2969]: ⏱️ MIN
+                    - generic [ref=e2970]: "90"
+                - button "Doku 2 pts ⏱️ MIN 87" [ref=e2971] [cursor=pointer]:
+                  - generic [ref=e2972]:
+                    - generic [ref=e2973]: Doku
+                    - generic [ref=e2975]: 2 pts
+                  - generic [ref=e2977]:
+                    - generic [ref=e2978]: ⏱️ MIN
+                    - generic [ref=e2979]: "87"
+                - button "Rodrigo 2 pts ⏱️ MIN 87" [ref=e2980] [cursor=pointer]:
+                  - generic [ref=e2981]:
+                    - generic [ref=e2982]: Rodrigo
+                    - generic [ref=e2984]: 2 pts
+                  - generic [ref=e2986]:
+                    - generic [ref=e2987]: ⏱️ MIN
+                    - generic [ref=e2988]: "87"
+                - button "Donnarumma 2 pts ⏱️ MIN 90" [ref=e2989] [cursor=pointer]:
+                  - generic [ref=e2990]:
+                    - generic [ref=e2991]: Donnarumma
+                    - generic [ref=e2993]: 2 pts
+                  - generic [ref=e2995]:
+                    - generic [ref=e2996]: ⏱️ MIN
+                    - generic [ref=e2997]: "90"
+                - button "Guéhi 1 pts ⏱️ MIN 90 🟨 YC 1" [ref=e2998] [cursor=pointer]:
+                  - generic [ref=e2999]:
+                    - generic [ref=e3000]: Guéhi
+                    - generic [ref=e3002]: 1 pts
+                  - generic [ref=e3003]:
+                    - generic [ref=e3004]:
+                      - generic [ref=e3005]: ⏱️ MIN
+                      - generic [ref=e3006]: "90"
+                    - generic [ref=e3007]:
+                      - generic [ref=e3008]: 🟨 YC
+                      - generic [ref=e3009]: "1"
+                - button "Foden 1 pts ⏱️ MIN 5" [ref=e3010] [cursor=pointer]:
+                  - generic [ref=e3011]:
+                    - generic [ref=e3012]: Foden
+                    - generic [ref=e3014]: 1 pts
+                  - generic [ref=e3016]:
+                    - generic [ref=e3017]: ⏱️ MIN
+                    - generic [ref=e3018]: "5"
+                - button "Savinho 1 pts ⏱️ MIN 2" [ref=e3019] [cursor=pointer]:
+                  - generic [ref=e3020]:
+                    - generic [ref=e3021]: Savinho
+                    - generic [ref=e3023]: 1 pts
+                  - generic [ref=e3025]:
+                    - generic [ref=e3026]: ⏱️ MIN
+                    - generic [ref=e3027]: "2"
+                - button "N.Gonzalez 1 pts ⏱️ MIN 2" [ref=e3028] [cursor=pointer]:
+                  - generic [ref=e3029]:
+                    - generic [ref=e3030]: N.Gonzalez
+                    - generic [ref=e3032]: 1 pts
+                  - generic [ref=e3034]:
+                    - generic [ref=e3035]: ⏱️ MIN
+                    - generic [ref=e3036]: "2"
+                - button "Aké 1 pts ⏱️ MIN 1" [ref=e3037] [cursor=pointer]:
+                  - generic [ref=e3038]:
+                    - generic [ref=e3039]: Aké
+                    - generic [ref=e3041]: 1 pts
+                  - generic [ref=e3043]:
+                    - generic [ref=e3044]: ⏱️ MIN
+                    - generic [ref=e3045]: "1"
+  - contentinfo [ref=e25]:
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - img [ref=e29]
+          - generic [ref=e31]: LetLetMe
+        - button "WeChat Mini-Program" [ref=e33] [cursor=pointer]:
+          - img
+          - generic [ref=e34]: WeChat Mini-Program
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - heading "FPL" [level=3] [ref=e37]
+          - list [ref=e38]:
+            - listitem [ref=e39]:
+              - link "Player Stats" [ref=e40] [cursor=pointer]:
+                - /url: /data/player-stats
+            - listitem [ref=e41]:
+              - link "Team Stats" [ref=e42] [cursor=pointer]:
+                - /url: /data/team-stats
+            - listitem [ref=e43]:
+              - link "Price Changes" [ref=e44] [cursor=pointer]:
+                - /url: /data/price-changes
+        - generic [ref=e45]:
+          - heading "Live" [level=3] [ref=e46]
+          - list [ref=e47]:
+            - listitem [ref=e48]:
+              - link "Live Points" [ref=e49] [cursor=pointer]:
+                - /url: /live/points
+            - listitem [ref=e50]:
+              - link "Tournaments" [ref=e51] [cursor=pointer]:
+                - /url: /live/tournament
+            - listitem [ref=e52]:
+              - link "Matches" [ref=e53] [cursor=pointer]:
+                - /url: /live/matches
+        - generic [ref=e54]:
+          - heading "Stats" [level=3] [ref=e55]
+          - list [ref=e56]:
+            - listitem [ref=e57]:
+              - link "Gameweek Stats" [ref=e58] [cursor=pointer]:
+                - /url: /stats/gameweek
+            - listitem [ref=e59]:
+              - link "Team Stats" [ref=e60] [cursor=pointer]:
+                - /url: /stats/team
+            - listitem [ref=e61]:
+              - link "Tournament Stats" [ref=e62] [cursor=pointer]:
+                - /url: /stats/tournament
+        - generic [ref=e63]:
+          - heading "Tournaments" [level=3] [ref=e64]
+          - list [ref=e65]:
+            - listitem [ref=e66]:
+              - link "My Tournaments" [ref=e67] [cursor=pointer]:
+                - /url: /tournament/list?mine=true
+            - listitem [ref=e68]:
+              - link "Create Tournament" [ref=e69] [cursor=pointer]:
+                - /url: /tournament/create
+            - listitem [ref=e70]:
+              - link "Live Tournaments" [ref=e71] [cursor=pointer]:
+                - /url: /live/tournament
+      - generic [ref=e72]:
+        - generic [ref=e73]: © 2025 LetLetMe. All rights reserved.
+        - generic [ref=e74]:
+          - button "English" [ref=e75] [cursor=pointer]
+          - button "中文" [ref=e76] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=e3051] [cursor=pointer]:
+    - img [ref=e3052]
+  - alert [ref=e3055]

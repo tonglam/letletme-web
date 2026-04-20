@@ -531,11 +531,12 @@ export default function PlayerStatsPage() {
 											<div className="bg-accent/30 rounded-lg p-3 text-center">
 												<p className="text-xs text-muted-foreground mb-1">
 													Minutes
-												</p>
-												<p className="text-xl font-bold">
-													{playerStats.minutes}'
-												</p>
-											</div>
+													</p>
+													<p className="text-xl font-bold">
+														{playerStats.minutes}
+														{"'"}
+													</p>
+												</div>
 											<div className="bg-accent/30 rounded-lg p-3 text-center">
 												<p className="text-xs text-muted-foreground mb-1">
 													Bonus

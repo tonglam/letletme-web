@@ -76,12 +76,12 @@ export function H2HSection() {
                     >
                       {match.homeTeam.name}
                     </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>View {match.homeTeam.name}'s team</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+	                  </TooltipTrigger>
+	                  <TooltipContent>
+	                    <p>View {match.homeTeam.name} team</p>
+	                  </TooltipContent>
+	                </Tooltip>
+	              </TooltipProvider>
             </div>
             
             <div className="flex items-center gap-1.5 sm:gap-3 justify-center">
@@ -105,12 +105,12 @@ export function H2HSection() {
                     >
                       {match.awayTeam.name}
                     </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>View {match.awayTeam.name}'s team</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+	                  </TooltipTrigger>
+	                  <TooltipContent>
+	                    <p>View {match.awayTeam.name} team</p>
+	                  </TooltipContent>
+	                </Tooltip>
+	              </TooltipProvider>
             </div>
           </div>
         ))}

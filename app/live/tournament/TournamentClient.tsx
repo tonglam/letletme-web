@@ -7,9 +7,11 @@ import { TournamentHeader } from '@/components/tournament/TournamentHeader'
 import { TournamentSelector } from '@/components/tournament/TournamentSelector'
 import { TournamentTable } from '@/components/tournament/TournamentTable'
 import { Card } from '@/components/ui/card'
+import { executeQuery } from '@/lib/graphql-client'
+import { GET_CURRENT_AND_NEXT_EVENTS, type EventsResponse } from '@/lib/graphql/queries'
 import { Tournament } from '@/types/tournament'
 import { useSearchParams } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const DEFAULT_TOURNAMENT_ID = 't1'
 
@@ -23,14 +25,55 @@ export default function TournamentClient({
 	const searchParams = useSearchParams()
 	const tournamentIdFromUrl =
 		searchParams.get('tournamentId') || DEFAULT_TOURNAMENT_ID
-	const currentGameweek = 21 // Current gameweek
 
 	const [searchQuery, setSearchQuery] = useState<string>('')
-	const [selectedGameweek, setSelectedGameweek] = useState(currentGameweek)
+	const [currentGameweek, setCurrentGameweek] = useState<number | undefined>(
+		undefined
+	)
+	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(
+		undefined
+	)
+
+	useEffect(() => {
+		let isCancelled = false
+
+		const loadCurrentGameweek = async () => {
+			try {
+				const eventsResponse = await executeQuery<EventsResponse>(
+					GET_CURRENT_AND_NEXT_EVENTS
+				)
+				const currentEventId = eventsResponse.current?.[0]?.id
+
+				if (isCancelled || !currentEventId) {
+					return
+				}
+
+				setCurrentGameweek(currentEventId)
+				setSelectedGameweek(previous => previous ?? currentEventId)
+			} catch (error) {
+				console.error('Failed to load current gameweek:', error)
+
+				if (isCancelled) {
+					return
+				}
+
+				const fallbackGameweek = 21
+				setCurrentGameweek(fallbackGameweek)
+				setSelectedGameweek(previous => previous ?? fallbackGameweek)
+			}
+		}
+
+		loadCurrentGameweek()
+
+		return () => {
+			isCancelled = true
+		}
+	}, [])
 
 	// Find the current tournament based on the selected ID
 	const currentTournament =
 		tournaments.find(t => t.id === tournamentIdFromUrl) || tournaments[0]
+	const displayGameweek = selectedGameweek ?? currentGameweek ?? 1
 
 	return (
 		<RootLayout>
@@ -45,15 +88,19 @@ export default function TournamentClient({
 				/>
 
 				<Card className="p-4 mb-6">
-					<GameweekSelector
-						onGameweekChange={setSelectedGameweek}
-						currentGameweek={currentGameweek}
-					/>
+					{currentGameweek !== undefined ? (
+						<GameweekSelector
+							onGameweekChange={setSelectedGameweek}
+							currentGameweek={currentGameweek}
+						/>
+					) : (
+						<p className="text-sm text-muted-foreground">Loading gameweek...</p>
+					)}
 				</Card>
 
 				<TournamentHeader
 					name={currentTournament.name}
-					gameweek={selectedGameweek}
+					gameweek={displayGameweek}
 					averagePoints={currentTournament.averagePoints}
 					highestPoints={currentTournament.highestPoints}
 					totalEntries={currentTournament.totalEntries}

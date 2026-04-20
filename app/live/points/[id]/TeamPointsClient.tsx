@@ -21,7 +21,8 @@ export default function TeamPointsClient({ params }: TeamPointsClientProps) {
 
 	// Mock additional team info
 	const [teamInfo, setTeamInfo] = useState({
-		...teamStats,
+		// migrate old mock shape to new TeamStats cards
+		chips: teamStats.chips,
 		teamName:
 			teamId === '1'
 				? 'Arsenal Guangzhou FC'
@@ -46,7 +47,7 @@ export default function TeamPointsClient({ params }: TeamPointsClientProps) {
 				: teamId === '5'
 				? 'Jackie H'
 				: 'tong',
-		points:
+		livePoints:
 			teamId === '1'
 				? 78
 				: teamId === '2'
@@ -57,7 +58,21 @@ export default function TeamPointsClient({ params }: TeamPointsClientProps) {
 				? 73
 				: teamId === '5'
 				? 71
-				: 54
+				: 54,
+		transferCost: 0,
+		captainName: 'Haaland',
+		liveTotalPoints:
+			teamId === '1'
+				? 1213
+				: teamId === '2'
+				? 1210
+				: teamId === '3'
+				? 1208
+				: teamId === '4'
+				? 1201
+				: teamId === '5'
+				? 1198
+				: 1213
 	})
 
 	// For production, you would fetch the team data based on the ID

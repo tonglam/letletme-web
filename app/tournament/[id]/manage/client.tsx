@@ -139,11 +139,11 @@ export function ManageTournamentClient({ params }: { params: { id: string } }) {
 
 					<Alert className="mb-6 bg-blue-50 border-blue-200">
 						<Info className="h-4 w-4 text-blue-600" />
-						<AlertDescription className="text-blue-800">
-							You can edit basic tournament details below. To change tournament
-							structure or format, you'll need to create a new tournament.
-						</AlertDescription>
-					</Alert>
+							<AlertDescription className="text-blue-800">
+								You can edit basic tournament details below. To change tournament
+								structure or format, you&apos;ll need to create a new tournament.
+							</AlertDescription>
+						</Alert>
 
 					<form onSubmit={handleSubmit(onSubmit)}>
 						<div className="space-y-6">
@@ -320,12 +320,12 @@ export function ManageTournamentClient({ params }: { params: { id: string } }) {
 							<AlertDialogContent>
 								<AlertDialogHeader>
 									<AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-									<AlertDialogDescription>
-										This action cannot be undone. This will permanently delete
-										the tournament "{mockTournamentData.name}" and remove all
-										associated data from our servers.
-									</AlertDialogDescription>
-								</AlertDialogHeader>
+										<AlertDialogDescription>
+											This action cannot be undone. This will permanently delete
+											the tournament &quot;{mockTournamentData.name}&quot; and remove all
+											associated data from our servers.
+										</AlertDialogDescription>
+									</AlertDialogHeader>
 								<AlertDialogFooter>
 									<AlertDialogCancel>Cancel</AlertDialogCancel>
 									<AlertDialogAction

@@ -75,7 +75,7 @@ export default function LoginPage() {
 					<Separator className="my-4" />
 					<div className="text-center text-sm">
 						<p>
-							Don't have an account?{' '}
+							Don&apos;t have an account?{' '}
 							<Link
 								href="/auth/register"
 								className="text-primary hover:underline"

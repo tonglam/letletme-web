@@ -136,10 +136,10 @@ export function TournamentHelp({ className }: TournamentHelpProps) {
               </TabsTrigger>
             </TabsList>
             
-            <TabsContent value="rules" className="space-y-6">
-              <div className="text-muted-foreground mb-4">
-                <p>Here's everything you need to know about setting up and running a tournament. Follow these guidelines to create an engaging and fair competition for all participants.</p>
-              </div>
+	            <TabsContent value="rules" className="space-y-6">
+	              <div className="text-muted-foreground mb-4">
+	                <p>Here&apos;s everything you need to know about setting up and running a tournament. Follow these guidelines to create an engaging and fair competition for all participants.</p>
+	              </div>
               
               {tournamentRules.map((rule, index) => (
                 <div key={index} className="space-y-2">
@@ -169,10 +169,10 @@ export function TournamentHelp({ className }: TournamentHelpProps) {
               </div>
             </TabsContent>
             
-            <TabsContent value="faq" className="space-y-6">
-              <div className="text-muted-foreground mb-4">
-                <p>Common questions about tournament creation and management. If you don't find your answer here, feel free to contact support.</p>
-              </div>
+	            <TabsContent value="faq" className="space-y-6">
+	              <div className="text-muted-foreground mb-4">
+	                <p>Common questions about tournament creation and management. If you don&apos;t find your answer here, feel free to contact support.</p>
+	              </div>
               
               <div className="space-y-6">
                 {tournamentFAQs.map((faq, index) => (

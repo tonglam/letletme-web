@@ -18,8 +18,17 @@ const getGraphQLEndpoint = () => {
 };
 
 // Helper function to execute GraphQL queries using fetch
-export async function executeQuery<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+interface ExecuteQueryOptions {
+  cache?: RequestCache;
+}
+
+export async function executeQuery<T>(
+  query: string,
+  variables?: Record<string, unknown>,
+  options?: ExecuteQueryOptions,
+): Promise<T> {
   const endpoint = getGraphQLEndpoint();
+  const cache = options?.cache ?? 'no-store';
   
   try {
     console.log('GraphQL Request:', {
@@ -30,6 +39,7 @@ export async function executeQuery<T>(query: string, variables?: Record<string, 
     
     const response = await fetch(endpoint, {
       method: 'POST',
+      cache,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -47,17 +57,30 @@ export async function executeQuery<T>(query: string, variables?: Record<string, 
     const result = await response.json();
     
     if (result.errors) {
-      const errorMessages = result.errors.map((err: { message: string; path?: string[]; extensions?: unknown }) => {
-        const path = err.path ? ` at ${err.path.join('.')}` : '';
-        return `${err.message}${path}`;
-      }).join('; ');
+      const errorMessages = result.errors
+        .map((err: { message?: string; path?: string[]; extensions?: unknown }, index: number) => {
+          const fallback =
+            typeof err === 'object' && err !== null
+              ? JSON.stringify(err)
+              : String(err);
+          const safeFallback =
+            fallback && fallback !== '{}'
+              ? fallback
+              : `Unknown GraphQL error at index ${index}`;
+          const message = err?.message && err.message.trim().length > 0
+            ? err.message
+            : safeFallback;
+          const path = Array.isArray(err?.path) ? ` at ${err.path.join('.')}` : '';
+          return `${message}${path}`;
+        })
+        .join('; ');
       
       console.error('GraphQL errors:', {
         errors: result.errors,
         fullError: JSON.stringify(result.errors, null, 2)
       });
       
-      throw new Error(`GraphQL Error: ${errorMessages}`);
+      throw new Error(`GraphQL Error: ${errorMessages || 'Unknown GraphQL error'}`);
     }
     
     console.log('GraphQL Response:', result.data);

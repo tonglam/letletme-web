@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Player } from "@/types/player";
 import { PlayerRow } from "./PlayerRow";
 
@@ -9,7 +10,7 @@ interface PlayerListProps {
   benchPlayers?: Player[];
 }
 
-export function PlayerList({ players, startingPlayers, benchPlayers }: PlayerListProps) {
+function PlayerListComponent({ players, startingPlayers, benchPlayers }: PlayerListProps) {
   // Handle both direct players array and separate starting/bench arrays
   if (players) {
     return (
@@ -43,3 +44,5 @@ export function PlayerList({ players, startingPlayers, benchPlayers }: PlayerLis
     </div>
   );
 }
+
+export const PlayerList = memo(PlayerListComponent);
