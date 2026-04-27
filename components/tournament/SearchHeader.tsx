@@ -1,8 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Search, Filter, ChevronDown } from "lucide-react";
+import { Search, X } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -10,171 +9,74 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuPortal,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useState } from "react";
 
 interface SearchHeaderProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+  captainOptions: string[];
+  chipFilter: string;
+  onChipFilterChange: (value: string) => void;
+  captainFilter: string;
+  onCaptainFilterChange: (value: string) => void;
 }
 
-export function SearchHeader({ searchQuery, setSearchQuery }: SearchHeaderProps) {
-  const [searchOption, setSearchOption] = useState<string>("team");
-  const [filterOptions, setFilterOptions] = useState({
-    chips: "all",
-    status: "all",
-    captain: "all"
-  });
-
-  // Handle search option change
-  const handleSearchOptionChange = (value: string) => {
-    setSearchOption(value);
-  };
-
-  // Generate placeholder text based on search option
-  const getPlaceholderText = () => {
-    switch (searchOption) {
-      case "team":
-        return "Search by team name...";
-      case "manager":
-        return "Search by manager name...";
-      case "captain":
-        return "Search by captain name...";
-      default:
-        return "Search...";
-    }
-  };
-
+export function SearchHeader({
+  searchQuery,
+  setSearchQuery,
+  captainOptions,
+  chipFilter,
+  onChipFilterChange,
+  captainFilter,
+  onCaptainFilterChange,
+}: SearchHeaderProps) {
   return (
-    <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-      <div className="flex-1 flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute top-1/2 left-3 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={getPlaceholderText()}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 w-full"
-          />
-        </div>
-        
-        <Select value={searchOption} onValueChange={handleSearchOptionChange}>
-          <SelectTrigger className="w-[130px]">
-            <SelectValue placeholder="Search by" />
+    <div className="mb-6 space-y-3">
+      <div className="relative w-full">
+        <Search className="absolute top-1/2 left-3 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by team or manager..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9 pr-9 w-full"
+        />
+        {searchQuery.trim().length > 0 && (
+          <button
+            type="button"
+            aria-label="Clear search"
+            className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            onClick={() => setSearchQuery("")}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <Select value={chipFilter} onValueChange={onChipFilterChange}>
+          <SelectTrigger>
+            <SelectValue placeholder="Filter by chip" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="team">Team</SelectItem>
-            <SelectItem value="manager">Manager</SelectItem>
-            <SelectItem value="captain">Captain</SelectItem>
+            <SelectItem value="all">All Chips</SelectItem>
+            <SelectItem value="triple">Triple Captain</SelectItem>
+            <SelectItem value="bench">Bench Boost</SelectItem>
+            <SelectItem value="wildcard">Wildcard</SelectItem>
           </SelectContent>
         </Select>
-      </div>
-      
-      <div className="flex gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              <span>Filter</span>
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56">
-            <DropdownMenuLabel>Filter Options</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-xs">Chips</DropdownMenuLabel>
-              <DropdownMenuItem 
-                className={filterOptions.chips === "all" ? "bg-accent" : ""}
-                onClick={() => setFilterOptions({...filterOptions, chips: "all"})}
-              >
-                All Teams
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className={filterOptions.chips === "triple" ? "bg-accent" : ""}
-                onClick={() => setFilterOptions({...filterOptions, chips: "triple"})}
-              >
-                Triple Captain
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className={filterOptions.chips === "bench" ? "bg-accent" : ""}
-                onClick={() => setFilterOptions({...filterOptions, chips: "bench"})}
-              >
-                Bench Boost
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className={filterOptions.chips === "wildcard" ? "bg-accent" : ""}
-                onClick={() => setFilterOptions({...filterOptions, chips: "wildcard"})}
-              >
-                Wildcard
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            
-            <DropdownMenuSeparator />
-            
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-xs">Status</DropdownMenuLabel>
-              <DropdownMenuItem
-                className={filterOptions.status === "all" ? "bg-accent" : ""}
-                onClick={() => setFilterOptions({...filterOptions, status: "all"})}
-              >
-                All Teams
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className={filterOptions.status === "complete" ? "bg-accent" : ""}
-                onClick={() => setFilterOptions({...filterOptions, status: "complete"})}
-              >
-                Completed
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className={filterOptions.status === "playing" ? "bg-accent" : ""}
-                onClick={() => setFilterOptions({...filterOptions, status: "playing"})}
-              >
-                Still Playing
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            
-            <DropdownMenuSeparator />
-            
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-xs">Captain</DropdownMenuLabel>
-              <DropdownMenuItem
-                className={filterOptions.captain === "all" ? "bg-accent" : ""}
-                onClick={() => setFilterOptions({...filterOptions, captain: "all"})}
-              >
-                All Captains
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className={filterOptions.captain === "salah" ? "bg-accent" : ""}
-                onClick={() => setFilterOptions({...filterOptions, captain: "salah"})}
-              >
-                M.Salah
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className={filterOptions.captain === "haaland" ? "bg-accent" : ""}
-                onClick={() => setFilterOptions({...filterOptions, captain: "haaland"})}
-              >
-                Haaland
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className={filterOptions.captain === "son" ? "bg-accent" : ""}
-                onClick={() => setFilterOptions({...filterOptions, captain: "son"})}
-              >
-                Son
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+
+        <Select value={captainFilter} onValueChange={onCaptainFilterChange}>
+          <SelectTrigger>
+            <SelectValue placeholder="Filter by captain" />
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            <SelectItem value="all">All Captains</SelectItem>
+            {captainOptions.map((captain) => (
+              <SelectItem key={captain} value={captain}>
+                {captain}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );

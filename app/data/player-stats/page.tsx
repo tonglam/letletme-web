@@ -1,1424 +1,949 @@
 'use client'
 
-import { GameweekSelector } from '@/components/data/GameweekSelector'
-import { PlayerSelector } from '@/components/data/PlayerSelector'
-import { StatsTable } from '@/components/data/StatsTable'
 import RootLayout from '@/components/layout/RootLayout'
+import {
+	PlayerDirectoryPicker,
+	type PlayerDirectoryOption
+} from '@/components/player/PlayerDirectoryPicker'
+import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { PlayerOption } from '@/types/common'
-import { PlayerStats } from '@/types/player-stats'
+import { executeQuery } from '@/lib/graphql-client'
+import {
+	GET_CURRENT_AND_NEXT_EVENTS,
+	GET_PLAYER_DETAIL,
+	type EventsResponse,
+	type PlayerDetailData,
+	type PlayerDetailFixture,
+	type PlayerDetailResponse
+} from '@/lib/graphql/queries'
+import { format } from 'date-fns'
 import {
 	Activity,
-	AlertTriangle,
+	ArrowDownRight,
+	ArrowUpRight,
 	BarChart3,
-	ChevronDown,
-	ChevronUp,
-	Clock,
-	Goal,
-	Percent,
-	PieChart,
+	Calendar,
 	Shield,
-	Star,
-	Target,
-	TrendingUp,
 	Trophy,
 	User,
+	X,
 	Zap
 } from 'lucide-react'
-import Image from 'next/image'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
-// Mock data generator for player statistics
-const generatePlayerStats = (
-	player: PlayerOption | null,
-	gameweek: number
-): PlayerStats | null => {
-	if (!player) return null
+const RECENT_PLAYERS_KEY_1 = 'player-stats-recent-1'
+const RECENT_PLAYERS_KEY_2 = 'player-stats-recent-2'
+const RECENT_PLAYERS_MAX = 5
 
-	// Adjust stats based on position
-	const isGoalkeeper = player.position === 'GKP'
-	const isDefender = player.position === 'DEF'
-	const isMidfielder = player.position === 'MID'
-	const isForward = player.position === 'FWD'
-
-	// Base stats that will be adjusted
-	const baseStats = {
-		// Basic info
-		player,
-		gameweek,
-
-		// Match data - assume 1 match per gameweek
-		matchesPlayed: 1,
-		minutes: isGoalkeeper
-			? 90
-			: Math.min(90, 60 + Math.floor(Math.random() * 31)),
-
-		// Attacking stats
-		goals: 0,
-		assists: 0,
-		expectedGoals: 0,
-		expectedAssists: 0,
-		shotsTotal: 0,
-		shotsOnTarget: 0,
-		bigChancesCreated: 0,
-		keyPasses: 0,
-
-		// Defensive stats
-		cleanSheets: 0,
-		goalsConceded: 0,
-		tackles: 0,
-		interceptions: 0,
-		clearances: 0,
-		blocks: 0,
-
-		// FPL stats
-		points: 0,
-		bonus: 0,
-		priceChange: 0,
-		selectedBy: 0,
-		form: 0,
-		influenceScore: 0,
-		creativityScore: 0,
-		threatScore: 0,
-
-		// Advanced metrics
-		xGPerShot: 0,
-		xGOutperformance: 0,
-		shotsPerGame: 0,
-		tacklesPerGame: 0,
-		minutesPerGoal: 0,
-		pointsPerGame: 0,
-		xAPerGame: 0,
-		chanceCreationRate: 0,
-		passCompletionRate: 0,
-		defensiveActions: 0,
-		defensiveActionsPerGame: 0,
-		valueForMoney: 0,
-
-		// Season totals
-		seasonGoals: 0,
-		seasonAssists: 0,
-		seasonCleanSheets: 0,
-		seasonPoints: 0,
-		seasonBonusPoints: 0,
-		seasonAppearances: 0,
-		seasonMinutes: 0,
-
-		// Historical data
-		priceHistory: [] as number[],
-		pointsHistory: [] as number[],
-		formHistory: [] as number[],
-		ownershipHistory: [] as number[]
+function loadRecentPlayers(key: string): PlayerDirectoryOption[] {
+	try {
+		const raw = localStorage.getItem(key)
+		return raw ? (JSON.parse(raw) as PlayerDirectoryOption[]) : []
+	} catch {
+		return []
 	}
-
-	// Generate stats based on position and player ID (used as a seed for consistency)
-	const seed = parseInt(player.id) + gameweek
-	const random = (max: number, min: number = 0) =>
-		min + (((seed % 100) + Math.random() * 100) % (max - min + 1))
-
-	// Adjust attacking stats
-	if (isForward) {
-		baseStats.goals = random(0, 2) > 1.7 ? 1 : 0
-		baseStats.assists = random(0, 2) > 1.8 ? 1 : 0
-		baseStats.expectedGoals = parseFloat((0.3 + random(0, 7) / 10).toFixed(2))
-		baseStats.expectedAssists = parseFloat((0.1 + random(0, 4) / 10).toFixed(2))
-		baseStats.shotsTotal = Math.floor(2 + random(0, 6))
-		baseStats.shotsOnTarget = Math.floor(
-			baseStats.shotsTotal * (0.3 + random(0, 4) / 10)
-		)
-		baseStats.bigChancesCreated = random(0, 2) > 1.5 ? 1 : 0
-		baseStats.keyPasses = Math.floor(random(0, 3))
-		baseStats.seasonGoals = Math.floor(5 + random(0, 15))
-		baseStats.seasonAssists = Math.floor(2 + random(0, 8))
-	} else if (isMidfielder) {
-		baseStats.goals = random(0, 2) > 1.8 ? 1 : 0
-		baseStats.assists = random(0, 2) > 1.7 ? 1 : 0
-		baseStats.expectedGoals = parseFloat((0.1 + random(0, 5) / 10).toFixed(2))
-		baseStats.expectedAssists = parseFloat((0.2 + random(0, 5) / 10).toFixed(2))
-		baseStats.shotsTotal = Math.floor(1 + random(0, 4))
-		baseStats.shotsOnTarget = Math.floor(
-			baseStats.shotsTotal * (0.3 + random(0, 4) / 10)
-		)
-		baseStats.bigChancesCreated = random(0, 2) > 1.4 ? 1 : 0
-		baseStats.keyPasses = Math.floor(1 + random(0, 4))
-		baseStats.seasonGoals = Math.floor(3 + random(0, 12))
-		baseStats.seasonAssists = Math.floor(4 + random(0, 12))
-	} else if (isDefender) {
-		baseStats.goals = random(0, 10) > 9.5 ? 1 : 0
-		baseStats.assists = random(0, 10) > 9 ? 1 : 0
-		baseStats.expectedGoals = parseFloat((0 + random(0, 2) / 10).toFixed(2))
-		baseStats.expectedAssists = parseFloat((0 + random(0, 3) / 10).toFixed(2))
-		baseStats.shotsTotal = Math.floor(random(0, 2))
-		baseStats.shotsOnTarget = Math.floor(
-			baseStats.shotsTotal * (0.2 + random(0, 4) / 10)
-		)
-		baseStats.bigChancesCreated = random(0, 10) > 9 ? 1 : 0
-		baseStats.keyPasses = Math.floor(random(0, 2))
-		baseStats.seasonGoals = Math.floor(random(0, 5))
-		baseStats.seasonAssists = Math.floor(random(0, 6))
-	}
-
-	// Adjust defensive stats
-	const teamQuality = ['MCI', 'ARS', 'LIV'].includes(player.team)
-		? 0.7
-		: ['TOT', 'AVL', 'NEW', 'CHE', 'MUN'].includes(player.team)
-		? 0.5
-		: 0.3
-
-	// Determine clean sheet and goals conceded based on team quality
-	if (random(0, 10) / 10 < teamQuality) {
-		baseStats.cleanSheets = 1
-		baseStats.goalsConceded = 0
-	} else {
-		baseStats.cleanSheets = 0
-		baseStats.goalsConceded = Math.floor(1 + random(0, 2))
-	}
-
-	// Season clean sheets
-	baseStats.seasonCleanSheets = Math.floor(5 + teamQuality * 10 + random(0, 5))
-
-	if (isGoalkeeper) {
-		baseStats.tackles = 0
-		baseStats.interceptions = Math.floor(random(0, 2))
-		baseStats.clearances = Math.floor(random(0, 3))
-		baseStats.blocks = Math.floor(random(0, 1))
-	} else if (isDefender) {
-		baseStats.tackles = Math.floor(1 + random(0, 5))
-		baseStats.interceptions = Math.floor(1 + random(0, 4))
-		baseStats.clearances = Math.floor(2 + random(0, 6))
-		baseStats.blocks = Math.floor(random(0, 3))
-	} else if (isMidfielder) {
-		baseStats.tackles = Math.floor(random(0, 4))
-		baseStats.interceptions = Math.floor(random(0, 3))
-		baseStats.clearances = Math.floor(random(0, 2))
-		baseStats.blocks = Math.floor(random(0, 1))
-	} else if (isForward) {
-		baseStats.tackles = Math.floor(random(0, 2))
-		baseStats.interceptions = Math.floor(random(0, 1))
-		baseStats.clearances = 0
-		baseStats.blocks = 0
-	}
-
-	// Calculate points
-	let points = 0
-
-	// Appearance points
-	if (baseStats.minutes >= 60) {
-		points += 2
-	} else if (baseStats.minutes > 0) {
-		points += 1
-	}
-
-	// Goals points
-	if (isGoalkeeper || isDefender) {
-		points += baseStats.goals * 6
-	} else if (isMidfielder) {
-		points += baseStats.goals * 5
-	} else {
-		points += baseStats.goals * 4
-	}
-
-	// Assists points
-	points += baseStats.assists * 3
-
-	// Clean sheet points
-	if (baseStats.cleanSheets > 0) {
-		if (isGoalkeeper || isDefender) {
-			points += 4
-		} else if (isMidfielder) {
-			points += 1
-		}
-	}
-
-	// Goals conceded points
-	if ((isGoalkeeper || isDefender) && baseStats.minutes >= 60) {
-		points -= Math.floor(baseStats.goalsConceded / 2)
-	}
-
-	// Bonus points
-	const bonusPoints = Math.floor(random(0, 3))
-	points += bonusPoints
-	baseStats.bonus = bonusPoints
-
-	// Other FPL stats
-	baseStats.points = points
-	baseStats.priceChange = parseFloat(((random(0, 20) - 10) / 10).toFixed(1))
-	baseStats.selectedBy = parseFloat((5 + random(0, 70)).toFixed(1))
-	baseStats.form = parseFloat((points / 4 + random(0, 20) / 10).toFixed(1))
-	baseStats.influenceScore = parseFloat((20 + random(0, 60)).toFixed(1))
-	baseStats.creativityScore = parseFloat((20 + random(0, 60)).toFixed(1))
-	baseStats.threatScore = parseFloat((20 + random(0, 60)).toFixed(1))
-
-	// Season totals
-	baseStats.seasonAppearances = Math.floor(15 + random(0, 5))
-	baseStats.seasonMinutes = Math.floor(
-		baseStats.seasonAppearances * 80 + random(0, 200)
-	)
-	baseStats.seasonPoints = Math.floor(
-		baseStats.seasonAppearances * 4 + points + random(0, 40)
-	)
-	baseStats.seasonBonusPoints = Math.floor(random(0, 15))
-
-	// Advanced metrics
-	baseStats.xGPerShot =
-		baseStats.shotsTotal > 0
-			? parseFloat((baseStats.expectedGoals / baseStats.shotsTotal).toFixed(2))
-			: 0
-	baseStats.xGOutperformance = parseFloat(
-		(baseStats.goals - baseStats.expectedGoals).toFixed(2)
-	)
-	baseStats.shotsPerGame = parseFloat(
-		(baseStats.shotsTotal / baseStats.matchesPlayed).toFixed(1)
-	)
-	baseStats.tacklesPerGame = parseFloat(
-		(baseStats.tackles / baseStats.matchesPlayed).toFixed(1)
-	)
-	baseStats.minutesPerGoal =
-		baseStats.goals > 0 ? Math.floor(baseStats.minutes / baseStats.goals) : 0
-	baseStats.pointsPerGame = parseFloat(
-		(baseStats.points / baseStats.matchesPlayed).toFixed(1)
-	)
-	baseStats.xAPerGame = parseFloat(
-		(baseStats.expectedAssists / baseStats.matchesPlayed).toFixed(2)
-	)
-	baseStats.chanceCreationRate = parseFloat(
-		(
-			((baseStats.keyPasses + baseStats.bigChancesCreated * 2) /
-				baseStats.minutes) *
-			90
-		).toFixed(2)
-	)
-	baseStats.passCompletionRate = parseFloat((70 + random(0, 20)).toFixed(1))
-	baseStats.defensiveActions =
-		baseStats.tackles +
-		baseStats.interceptions +
-		baseStats.clearances +
-		baseStats.blocks
-	baseStats.defensiveActionsPerGame = parseFloat(
-		(baseStats.defensiveActions / baseStats.matchesPlayed).toFixed(1)
-	)
-	baseStats.valueForMoney = parseFloat(
-		(baseStats.seasonPoints / player.price).toFixed(1)
-	)
-
-	// Historical data - generate 10 gameweeks of data
-	const generateHistory = (base: number, variance: number, trend: number) => {
-		return Array.from({ length: 10 }, (_, i) => {
-			const value =
-				base + random(variance * 100) / 100 - variance / 2 + trend * i
-			return parseFloat(value.toFixed(1))
-		})
-	}
-
-	baseStats.priceHistory = generateHistory(player.price - 0.5, 0.2, 0.05)
-	baseStats.pointsHistory = Array.from({ length: 10 }, () =>
-		Math.floor(random(12, 1))
-	)
-	baseStats.formHistory = generateHistory(baseStats.form - 1, 1, 0.1)
-	baseStats.ownershipHistory = generateHistory(baseStats.selectedBy - 5, 3, 0.5)
-
-	return baseStats
 }
 
-// Generate player history for multiple gameweeks
-const generatePlayerHistory = (
-	player: PlayerOption | null,
-	currentGameweek: number
-): PlayerStats[] => {
-	if (!player) return []
-
-	const history: PlayerStats[] = []
-
-	// Generate stats for last 10 gameweeks
-	for (let gw = Math.max(1, currentGameweek - 9); gw <= currentGameweek; gw++) {
-		const stats = generatePlayerStats(player, gw)
-		if (stats) {
-			history.push(stats)
-		}
+function saveRecentPlayer(key: string, player: PlayerDirectoryOption) {
+	try {
+		const existing = loadRecentPlayers(key).filter(p => p.id !== player.id)
+		localStorage.setItem(key, JSON.stringify([player, ...existing].slice(0, RECENT_PLAYERS_MAX)))
+	} catch {
+		// localStorage unavailable — silently ignore
 	}
+}
 
-	return history
+const DIFFICULTY_COLORS: Record<number, string> = {
+	1: 'bg-emerald-500',
+	2: 'bg-green-400',
+	3: 'bg-amber-400',
+	4: 'bg-orange-500',
+	5: 'bg-red-600'
+}
+
+const formatPrice = (raw: number) => `£${(raw / 10).toFixed(1)}m`
+
+const formatPriceDiff = (current: number, start: number) => {
+	const diff = current - start
+	if (diff === 0) return null
+	const sign = diff > 0 ? '+' : ''
+	return `${sign}${(diff / 10).toFixed(1)}m`
+}
+
+function StatCell({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+	return (
+		<div className="bg-accent/30 rounded-lg p-3 text-center">
+			<p className="text-xs text-muted-foreground mb-1">{label}</p>
+			<p className="text-xl font-bold">{value}</p>
+			{sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+		</div>
+	)
+}
+
+function IctBar({ label, value, color, max = 100 }: { label: string; value: number; color: string; max?: number }) {
+	const pct = Math.min(100, (value / max) * 100)
+	return (
+		<div>
+			<div className="flex justify-between items-center mb-1">
+				<span className="text-sm">{label}</span>
+				<span className="text-sm font-medium">{value}</span>
+			</div>
+			<div className="w-full bg-muted rounded-full h-2">
+				<div className={`${color} h-2 rounded-full`} style={{ width: `${pct}%` }} />
+			</div>
+		</div>
+	)
+}
+
+function CompareRow({
+	label,
+	v1,
+	v2,
+	higherIsBetter = true,
+}: {
+	label: string
+	v1: string | number
+	v2: string | number
+	higherIsBetter?: boolean
+}) {
+	const n1 = parseFloat(String(v1).replace(/[^0-9.-]/g, ''))
+	const n2 = parseFloat(String(v2).replace(/[^0-9.-]/g, ''))
+	const valid = !isNaN(n1) && !isNaN(n2) && n1 !== n2
+	const p1Wins = valid && (higherIsBetter ? n1 > n2 : n1 < n2)
+	const p2Wins = valid && (higherIsBetter ? n2 > n1 : n2 < n1)
+	return (
+		<div className="grid grid-cols-3 items-center py-2 border-b last:border-0 text-sm">
+			<span className={`text-right pr-4 font-medium tabular-nums ${p1Wins ? 'text-primary' : ''}`}>{v1}</span>
+			<span className="text-center text-xs text-muted-foreground">{label}</span>
+			<span className={`text-left pl-4 font-medium tabular-nums ${p2Wins ? 'text-primary' : ''}`}>{v2}</span>
+		</div>
+	)
+}
+
+function CompareSectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
+	return (
+		<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-2">
+			{icon}
+			{label}
+		</h3>
+	)
+}
+
+function DualIctBar({
+	label,
+	v1,
+	v2,
+	name1,
+	name2,
+	max,
+}: {
+	label: string
+	v1: number
+	v2: number
+	name1: string
+	name2: string
+	max: number
+}) {
+	const pct1 = Math.min(100, (v1 / max) * 100)
+	const pct2 = Math.min(100, (v2 / max) * 100)
+	return (
+		<div className="space-y-1">
+			<div className="flex justify-between items-center text-xs text-muted-foreground">
+				<span>{label}</span>
+			</div>
+			<div className="flex items-center gap-2 text-xs">
+				<span className="w-16 text-right truncate text-muted-foreground">{name1}</span>
+				<div className="flex-1 bg-muted rounded-full h-2">
+					<div className="bg-blue-500 h-2 rounded-full" style={{ width: `${pct1}%` }} />
+				</div>
+				<span className="w-8 font-medium">{v1}</span>
+			</div>
+			<div className="flex items-center gap-2 text-xs">
+				<span className="w-16 text-right truncate text-muted-foreground">{name2}</span>
+				<div className="flex-1 bg-muted rounded-full h-2">
+					<div className="bg-amber-500 h-2 rounded-full" style={{ width: `${pct2}%` }} />
+				</div>
+				<span className="w-8 font-medium">{v2}</span>
+			</div>
+		</div>
+	)
+}
+
+function PlayerDetailSkeleton() {
+	return (
+		<div className="space-y-4">
+			<Skeleton className="h-32 w-full rounded-lg" />
+			<Skeleton className="h-12 w-full rounded-lg" />
+			<Skeleton className="h-64 w-full rounded-lg" />
+		</div>
+	)
+}
+
+function PlayerMiniCard({
+	detail,
+	currentGameweek,
+	accent,
+}: {
+	detail: PlayerDetailData
+	currentGameweek: number | undefined
+	accent: string
+}) {
+	const priceDiff = formatPriceDiff(detail.price, detail.startPrice)
+	return (
+		<Card className={`p-4 border-t-2 ${accent}`}>
+			<div className="flex items-center gap-2 mb-1">
+				<span className="font-bold truncate">{detail.webName}</span>
+				<Badge variant="outline" className="text-xs shrink-0">{detail.elementTypeName}</Badge>
+			</div>
+			<p className="text-xs text-muted-foreground mb-3">{detail.teamShortName}</p>
+			<div className="grid grid-cols-3 gap-2">
+				<div className="text-center">
+					<p className="text-[10px] text-muted-foreground">Price</p>
+					<p className="text-sm font-bold">{formatPrice(detail.price)}</p>
+					{priceDiff && (
+						<p className={`text-[10px] ${priceDiff.startsWith('+') ? 'text-emerald-500' : 'text-rose-500'}`}>
+							{priceDiff}
+						</p>
+					)}
+				</div>
+				<div className="text-center">
+					<p className="text-[10px] text-muted-foreground">GW{currentGameweek}</p>
+					<p className="text-sm font-bold text-primary">{detail.eventPoints}</p>
+				</div>
+				<div className="text-center">
+					<p className="text-[10px] text-muted-foreground">Total</p>
+					<p className="text-sm font-bold">{detail.totalPoints}</p>
+				</div>
+				<div className="text-center">
+					<p className="text-[10px] text-muted-foreground">Selected</p>
+					<p className="text-sm font-bold">{detail.selectedByPercent}%</p>
+				</div>
+				<div className="text-center">
+					<p className="text-[10px] text-muted-foreground">Form</p>
+					<p className="text-sm font-bold">{detail.form ?? '—'}</p>
+				</div>
+			</div>
+		</Card>
+	)
 }
 
 export default function PlayerStatsPage() {
-	const currentGameweek = 21
-	const [selectedPlayer, setSelectedPlayer] = useState<PlayerOption | null>(
-		null
-	)
-	const [selectedGameweek, setSelectedGameweek] =
-		useState<number>(currentGameweek)
-	const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null)
-	const [playerHistory, setPlayerHistory] = useState<PlayerStats[]>([])
+	const [currentGameweek, setCurrentGameweek] = useState<number | undefined>(undefined)
+
+	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDirectoryOption | null>(null)
+	const [recentPlayers, setRecentPlayers] = useState<PlayerDirectoryOption[]>([])
+	const [playerDetail, setPlayerDetail] = useState<PlayerDetailData | null>(null)
+	const [isLoading, setIsLoading] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+
+	const [selectedPlayer2, setSelectedPlayer2] = useState<PlayerDirectoryOption | null>(null)
+	const [recentPlayers2, setRecentPlayers2] = useState<PlayerDirectoryOption[]>([])
+	const [playerDetail2, setPlayerDetail2] = useState<PlayerDetailData | null>(null)
+	const [isLoading2, setIsLoading2] = useState(false)
+	const [error2, setError2] = useState<string | null>(null)
+
+	const isComparing = playerDetail !== null && playerDetail2 !== null
 
 	useEffect(() => {
-		// Update player stats when player or gameweek changes
-		if (selectedPlayer) {
-			setPlayerStats(generatePlayerStats(selectedPlayer, selectedGameweek))
-			setPlayerHistory(generatePlayerHistory(selectedPlayer, currentGameweek))
-		} else {
-			setPlayerStats(null)
-			setPlayerHistory([])
+		setRecentPlayers(loadRecentPlayers(RECENT_PLAYERS_KEY_1))
+		setRecentPlayers2(loadRecentPlayers(RECENT_PLAYERS_KEY_2))
+	}, [])
+
+	useEffect(() => {
+		const init = async () => {
+			try {
+				const eventsData = await executeQuery<EventsResponse>(GET_CURRENT_AND_NEXT_EVENTS)
+				const current = eventsData.current?.[0]
+				if (current) setCurrentGameweek(current.id)
+			} catch {
+				// GW will remain undefined
+			}
 		}
-	}, [selectedPlayer, selectedGameweek, currentGameweek])
+		void init()
+	}, [])
 
-	// Safe calculation helper functions to prevent NaN
-	const getPercentage = (value: number, total: number) => {
-		if (!total || total === 0) return 0
-		return Math.round((value / total) * 100)
-	}
+	const fetchPlayerDetail = useCallback(async (playerId: number, eventId: number) => {
+		setIsLoading(true)
+		setError(null)
+		try {
+			const res = await executeQuery<PlayerDetailResponse>(GET_PLAYER_DETAIL, { playerId, eventId })
+			setPlayerDetail(res.playerDetail)
+		} catch (err) {
+			setError(err instanceof Error ? err.message : 'Failed to load player data.')
+			setPlayerDetail(null)
+		} finally {
+			setIsLoading(false)
+		}
+	}, [])
 
-	const getSafeWidthStyle = (percentage: number) => {
-		if (isNaN(percentage) || percentage < 0) return '0%'
-		if (percentage > 100) return '100%'
-		return `${percentage}%`
-	}
+	const fetchPlayerDetail2 = useCallback(async (playerId: number, eventId: number) => {
+		setIsLoading2(true)
+		setError2(null)
+		try {
+			const res = await executeQuery<PlayerDetailResponse>(GET_PLAYER_DETAIL, { playerId, eventId })
+			setPlayerDetail2(res.playerDetail)
+		} catch (err) {
+			setError2(err instanceof Error ? err.message : 'Failed to load player data.')
+			setPlayerDetail2(null)
+		} finally {
+			setIsLoading2(false)
+		}
+	}, [])
+
+	const handleSelectPlayer = useCallback((player: PlayerDirectoryOption) => {
+		setSelectedPlayer(player)
+		saveRecentPlayer(RECENT_PLAYERS_KEY_1, player)
+		setRecentPlayers(loadRecentPlayers(RECENT_PLAYERS_KEY_1))
+	}, [])
+
+	const handleSelectPlayer2 = useCallback((player: PlayerDirectoryOption) => {
+		setSelectedPlayer2(player)
+		saveRecentPlayer(RECENT_PLAYERS_KEY_2, player)
+		setRecentPlayers2(loadRecentPlayers(RECENT_PLAYERS_KEY_2))
+	}, [])
+
+	const clearPlayer2 = useCallback(() => {
+		setSelectedPlayer2(null)
+		setPlayerDetail2(null)
+		setError2(null)
+	}, [])
+
+	useEffect(() => {
+		if (!selectedPlayer || !currentGameweek) return
+		void fetchPlayerDetail(Number(selectedPlayer.id), currentGameweek)
+	}, [selectedPlayer, currentGameweek, fetchPlayerDetail])
+
+	useEffect(() => {
+		if (!selectedPlayer2 || !currentGameweek) return
+		void fetchPlayerDetail2(Number(selectedPlayer2.id), currentGameweek)
+	}, [selectedPlayer2, currentGameweek, fetchPlayerDetail2])
+
+	const priceDiff = playerDetail ? formatPriceDiff(playerDetail.price, playerDetail.startPrice) : null
 
 	return (
 		<RootLayout>
 			<div className="container max-w-4xl mx-auto px-4 py-8">
-				<h1 className="text-3xl font-bold mb-6">Player Statistics</h1>
+				<h1 className="text-2xl font-bold mb-6">Player Statistics</h1>
 
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-					<PlayerSelector
-						onPlayerChange={setSelectedPlayer}
-						includeAllOptions={false}
-					/>
+				{/* Player pickers */}
+				<div className="space-y-4 mb-6">
+					{/* Player 1 */}
+					<div>
+						<p className="text-sm text-muted-foreground mb-2">Player 1</p>
+						<PlayerDirectoryPicker
+							onSelect={handleSelectPlayer}
+							excludedPlayerIds={selectedPlayer2 ? [selectedPlayer2.id] : []}
+						/>
+						{recentPlayers.length > 0 && (
+							<div className="flex flex-wrap items-center gap-2 mt-2">
+								<span className="text-xs text-muted-foreground shrink-0">Recent:</span>
+								{recentPlayers.map(p => (
+									<button
+										key={p.id}
+										type="button"
+										onClick={() => handleSelectPlayer(p)}
+										className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
+											selectedPlayer?.id === p.id
+												? 'bg-primary text-primary-foreground border-primary'
+												: 'bg-accent/40 hover:bg-accent border-transparent'
+										}`}
+									>
+										{p.name}
+										<span className="text-[10px] opacity-70">{p.teamShortName}</span>
+									</button>
+								))}
+								<button
+									type="button"
+									onClick={() => {
+										localStorage.removeItem(RECENT_PLAYERS_KEY_1)
+										setRecentPlayers([])
+										setSelectedPlayer(null)
+										setPlayerDetail(null)
+									}}
+									className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
+								>
+									Clear
+								</button>
+							</div>
+						)}
+					</div>
 
-					<GameweekSelector
-						onGameweekChange={setSelectedGameweek}
-						currentGameweek={currentGameweek}
-					/>
+					{/* Divider */}
+					<div className="flex items-center gap-3">
+						<div className="flex-1 border-t border-dashed" />
+						<span className="text-xs text-muted-foreground font-medium">vs</span>
+						<div className="flex-1 border-t border-dashed" />
+					</div>
+
+					{/* Player 2 */}
+					<div>
+						<div className="flex items-center justify-between mb-2">
+							<p className="text-sm text-muted-foreground">Player 2 (optional)</p>
+							{selectedPlayer2 && (
+								<button
+									type="button"
+									onClick={clearPlayer2}
+									className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+								>
+									<X className="h-3 w-3" />
+									Remove
+								</button>
+							)}
+						</div>
+						<PlayerDirectoryPicker
+							onSelect={handleSelectPlayer2}
+							excludedPlayerIds={selectedPlayer ? [selectedPlayer.id] : []}
+						/>
+						{recentPlayers2.length > 0 && (
+							<div className="flex flex-wrap items-center gap-2 mt-2">
+								<span className="text-xs text-muted-foreground shrink-0">Recent:</span>
+								{recentPlayers2.map(p => (
+									<button
+										key={p.id}
+										type="button"
+										onClick={() => handleSelectPlayer2(p)}
+										className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
+											selectedPlayer2?.id === p.id
+												? 'bg-primary text-primary-foreground border-primary'
+												: 'bg-accent/40 hover:bg-accent border-transparent'
+										}`}
+									>
+										{p.name}
+										<span className="text-[10px] opacity-70">{p.teamShortName}</span>
+									</button>
+								))}
+								<button
+									type="button"
+									onClick={() => {
+										localStorage.removeItem(RECENT_PLAYERS_KEY_2)
+										setRecentPlayers2([])
+										clearPlayer2()
+									}}
+									className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
+								>
+									Clear
+								</button>
+							</div>
+						)}
+					</div>
 				</div>
 
+				{/* Main content */}
 				{!selectedPlayer ? (
 					<Card className="p-8 text-center">
 						<User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-						<h2 className="text-lg font-medium">
-							Select a player to view statistics
-						</h2>
-						<p className="text-muted-foreground mt-2">
-							Player stats include match performance, expected goals, and more.
+						<h2 className="text-lg font-medium">Select a player to view statistics</h2>
+						<p className="text-muted-foreground mt-2 text-sm">
+							Search by name or filter by team and position above.
 						</p>
 					</Card>
-				) : (
+				) : isLoading || (selectedPlayer2 && isLoading2) ? (
+					<PlayerDetailSkeleton />
+				) : error ? (
+					<Card className="p-8 text-center">
+						<p className="text-sm text-destructive">{error}</p>
+					</Card>
+				) : playerDetail ? (
 					<>
-						<Card className="p-6 mb-6">
-							<div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
-								<div className="flex flex-col items-center">
-									<div className="relative w-28 h-28 mb-2">
-										<div className="absolute inset-0 flex items-center justify-center bg-muted rounded-full">
-											<User className="h-16 w-16 text-muted-foreground" />
-										</div>
+						{/* Header */}
+						{isComparing ? (
+							<div className="grid grid-cols-2 gap-3 mb-6">
+								<PlayerMiniCard detail={playerDetail} currentGameweek={currentGameweek} accent="border-blue-500" />
+								<PlayerMiniCard detail={playerDetail2!} currentGameweek={currentGameweek} accent="border-amber-500" />
+							</div>
+						) : (
+							<Card className="p-5 mb-6">
+								<div className="flex items-center gap-2 mb-1">
+									<h2 className="text-2xl font-bold">{playerDetail.webName}</h2>
+									<Badge variant="outline" className="text-xs">{playerDetail.elementTypeName}</Badge>
+								</div>
+								<p className="text-sm text-muted-foreground mb-4">{playerDetail.teamShortName}</p>
+								<div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+									<div className="bg-accent/30 rounded-lg p-3 text-center">
+										<p className="text-xs text-muted-foreground mb-1">Price</p>
+										<p className="font-bold">{formatPrice(playerDetail.price)}</p>
+										{priceDiff && (
+											<p className={`text-xs mt-0.5 ${priceDiff.startsWith('+') ? 'text-emerald-500' : 'text-rose-500'}`}>
+												{priceDiff}
+											</p>
+										)}
 									</div>
-									<div className="text-center">
-										<span className="inline-block bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-medium">
-											{selectedPlayer.position}
-										</span>
+									<div className="bg-accent/30 rounded-lg p-3 text-center">
+										<p className="text-xs text-muted-foreground mb-1">GW {currentGameweek} Pts</p>
+										<p className="font-bold text-primary">{playerDetail.eventPoints}</p>
+									</div>
+									<div className="bg-accent/30 rounded-lg p-3 text-center">
+										<p className="text-xs text-muted-foreground mb-1">Total Pts</p>
+										<p className="font-bold">{playerDetail.totalPoints}</p>
+									</div>
+									<div className="bg-accent/30 rounded-lg p-3 text-center">
+										<p className="text-xs text-muted-foreground mb-1">Selected</p>
+										<p className="font-bold">{playerDetail.selectedByPercent}%</p>
+									</div>
+									<div className="bg-accent/30 rounded-lg p-3 text-center">
+										<p className="text-xs text-muted-foreground mb-1">Form</p>
+										<p className="font-bold">{playerDetail.form ?? '-'}</p>
 									</div>
 								</div>
+							</Card>
+						)}
 
-								<div className="flex-1 text-center sm:text-left">
-									<h2 className="text-2xl font-bold">{selectedPlayer.name}</h2>
-									<div className="flex items-center justify-center sm:justify-start gap-2 mb-4">
-										<div className="relative w-5 h-5">
-											<Image
-												alt={`${selectedPlayer.team} logo`}
-												src={`/team-logos/${selectedPlayer.team.toUpperCase()}.png`}
-												width={32}
-												height={32}
-											/>
-										</div>
-										<span className="text-muted-foreground">
-											{selectedPlayer.team}
-										</span>
-									</div>
+						{/* Comparison column headers */}
+						{isComparing && (
+							<div className="grid grid-cols-3 text-sm font-semibold mb-2 px-1">
+								<span className="text-right pr-4 text-blue-500 truncate">{playerDetail.webName}</span>
+								<span />
+								<span className="text-left pl-4 text-amber-500 truncate">{playerDetail2!.webName}</span>
+							</div>
+						)}
 
-									<div className="grid grid-cols-3 gap-4 mb-4">
-										<div className="bg-accent/30 rounded-lg p-3 text-center">
-											<p className="text-xs text-muted-foreground mb-1">
-												Price
-											</p>
-											<p className="font-bold">
-												£{selectedPlayer.price.toFixed(1)}m
-											</p>
-											{playerStats && playerStats.priceChange !== 0 && (
-												<p
-													className={`text-xs ${
-														playerStats.priceChange > 0
-															? 'text-emerald-500'
-															: 'text-rose-500'
-													}`}
-												>
-													{playerStats.priceChange > 0 ? '+' : ''}
-													{playerStats.priceChange.toFixed(1)}m
-												</p>
-											)}
+						<Tabs defaultValue="overview">
+							<TabsList className="w-full grid grid-cols-4 mb-6">
+								<TabsTrigger value="overview">Overview</TabsTrigger>
+								<TabsTrigger value="season">Season</TabsTrigger>
+								<TabsTrigger value="ict">ICT</TabsTrigger>
+								<TabsTrigger value="fixtures">Fixtures</TabsTrigger>
+							</TabsList>
+
+							{/* OVERVIEW */}
+							<TabsContent value="overview">
+								{isComparing ? (
+									<Card className="p-5 space-y-5">
+										<div>
+											<CompareSectionHeader icon={<BarChart3 className="h-4 w-4" />} label={`GW ${currentGameweek}`} />
+											<CompareRow label="Points" v1={playerDetail.eventPoints} v2={playerDetail2!.eventPoints} />
 										</div>
-										{playerStats && (
+										<div>
+											<CompareSectionHeader icon={<Trophy className="h-4 w-4" />} label="Season Totals" />
+											<CompareRow label="Total Points" v1={playerDetail.totalPoints} v2={playerDetail2!.totalPoints} />
+											<CompareRow label="Goals" v1={playerDetail.goalsScored} v2={playerDetail2!.goalsScored} />
+											<CompareRow label="Assists" v1={playerDetail.assists} v2={playerDetail2!.assists} />
+											<CompareRow label="Clean Sheets" v1={playerDetail.cleanSheets} v2={playerDetail2!.cleanSheets} />
+											<CompareRow label="Minutes" v1={playerDetail.minutes} v2={playerDetail2!.minutes} />
+										</div>
+										<div>
+											<CompareSectionHeader icon={<Activity className="h-4 w-4" />} label="Ownership & Transfers" />
+											<CompareRow label="Selected By %" v1={`${playerDetail.selectedByPercent}%`} v2={`${playerDetail2!.selectedByPercent}%`} />
+											<CompareRow label="Season In" v1={playerDetail.seasonTransfersIn.toLocaleString()} v2={playerDetail2!.seasonTransfersIn.toLocaleString()} />
+											<CompareRow label="Season Out" v1={playerDetail.seasonTransfersOut.toLocaleString()} v2={playerDetail2!.seasonTransfersOut.toLocaleString()} higherIsBetter={false} />
+											<CompareRow label="GW Net" v1={(playerDetail.transfersInEvent - playerDetail.transfersOutEvent).toLocaleString()} v2={(playerDetail2!.transfersInEvent - playerDetail2!.transfersOutEvent).toLocaleString()} />
+										</div>
+									</Card>
+								) : (
+									<Card className="p-5 space-y-6">
+										<div>
+											<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+												<BarChart3 className="h-4 w-4" />
+												GW {currentGameweek}
+											</h3>
+											<StatCell label="Points" value={playerDetail.eventPoints} />
+										</div>
+										<div>
+											<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+												<Trophy className="h-4 w-4" />
+												Season Totals
+											</h3>
+											<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+												<StatCell label="Goals" value={playerDetail.goalsScored} />
+												<StatCell label="Assists" value={playerDetail.assists} />
+												<StatCell label="Clean Sheets" value={playerDetail.cleanSheets} />
+												<StatCell label="Minutes" value={playerDetail.minutes} />
+											</div>
+										</div>
+										<div>
+											<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+												<Activity className="h-4 w-4" />
+												Ownership & Transfers
+											</h3>
+											<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+												<StatCell label="Selected By" value={`${playerDetail.selectedByPercent}%`} />
+												<StatCell label="Season In" value={playerDetail.seasonTransfersIn.toLocaleString()} />
+												<StatCell label="Season Out" value={playerDetail.seasonTransfersOut.toLocaleString()} />
+												<StatCell label="GW Net" value={(playerDetail.transfersInEvent - playerDetail.transfersOutEvent).toLocaleString()} />
+											</div>
+										</div>
+									</Card>
+								)}
+							</TabsContent>
+
+							{/* SEASON STATS */}
+							<TabsContent value="season">
+								{isComparing ? (
+									<Card className="p-5 space-y-5">
+										<div>
+											<CompareSectionHeader icon={<Trophy className="h-4 w-4" />} label="Attacking" />
+											<CompareRow label="Goals" v1={playerDetail.goalsScored} v2={playerDetail2!.goalsScored} />
+											<CompareRow label="Assists" v1={playerDetail.assists} v2={playerDetail2!.assists} />
+										</div>
+										<div>
+											<CompareSectionHeader icon={<Shield className="h-4 w-4" />} label="Defensive" />
+											<CompareRow label="Clean Sheets" v1={playerDetail.cleanSheets} v2={playerDetail2!.cleanSheets} />
+											<CompareRow label="Goals Conceded" v1={playerDetail.goalsConceded} v2={playerDetail2!.goalsConceded} higherIsBetter={false} />
+											<CompareRow label="Saves" v1={playerDetail.saves} v2={playerDetail2!.saves} />
+											<CompareRow label="Pen. Saved" v1={playerDetail.penaltiesSaved} v2={playerDetail2!.penaltiesSaved} />
+											<CompareRow label="Own Goals" v1={playerDetail.ownGoals} v2={playerDetail2!.ownGoals} higherIsBetter={false} />
+										</div>
+										<div>
+											<CompareSectionHeader icon={<Activity className="h-4 w-4" />} label="Discipline" />
+											<CompareRow label="Yellow Cards" v1={playerDetail.yellowCards} v2={playerDetail2!.yellowCards} higherIsBetter={false} />
+											<CompareRow label="Red Cards" v1={playerDetail.redCards} v2={playerDetail2!.redCards} higherIsBetter={false} />
+										</div>
+										<div>
+											<CompareSectionHeader icon={null} label="FPL" />
+											<CompareRow label="Bonus" v1={playerDetail.bonus} v2={playerDetail2!.bonus} />
+											<CompareRow label="BPS" v1={playerDetail.bps} v2={playerDetail2!.bps} />
+											<CompareRow label="Minutes" v1={playerDetail.minutes} v2={playerDetail2!.minutes} />
+											<CompareRow label="Total Points" v1={playerDetail.totalPoints} v2={playerDetail2!.totalPoints} />
+										</div>
+										<div>
+											<CompareSectionHeader icon={null} label="Price" />
+											<CompareRow label="Current" v1={formatPrice(playerDetail.price)} v2={formatPrice(playerDetail2!.price)} higherIsBetter={false} />
+											<CompareRow label="Start" v1={formatPrice(playerDetail.startPrice)} v2={formatPrice(playerDetail2!.startPrice)} higherIsBetter={false} />
+										</div>
+									</Card>
+								) : (
+									<Card className="p-5 space-y-6">
+										{/* GKP */}
+										{playerDetail.elementType === 1 && (
 											<>
-												<div className="bg-accent/30 rounded-lg p-3 text-center">
-													<p className="text-xs text-muted-foreground mb-1">
-														Form
-													</p>
-													<p className="font-bold">{playerStats.form}</p>
-													<p className="text-xs text-muted-foreground">
-														PPG: {playerStats.pointsPerGame}
-													</p>
+												<div>
+													<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+														<Shield className="h-4 w-4" />
+														Goalkeeping
+													</h3>
+													<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+														<StatCell label="Saves" value={playerDetail.saves} />
+														<StatCell label="Pen. Saved" value={playerDetail.penaltiesSaved} />
+														<StatCell label="Clean Sheets" value={playerDetail.cleanSheets} />
+														<StatCell label="Goals Conceded" value={playerDetail.goalsConceded} />
+													</div>
 												</div>
-												<div className="bg-accent/30 rounded-lg p-3 text-center">
-													<p className="text-xs text-muted-foreground mb-1">
-														Selected By
-													</p>
-													<p className="font-bold">{playerStats.selectedBy}%</p>
-													<div className="flex items-center justify-center text-xs">
-														{playerStats.ownershipHistory[9] <
-														playerStats.ownershipHistory[8] ? (
-															<ChevronDown className="h-3 w-3 text-rose-500" />
-														) : (
-															<ChevronUp className="h-3 w-3 text-emerald-500" />
-														)}
-														<span
-															className={
-																playerStats.ownershipHistory[9] <
-																playerStats.ownershipHistory[8]
-																	? 'text-rose-500'
-																	: 'text-emerald-500'
-															}
-														>
-															{Math.abs(
-																playerStats.ownershipHistory[9] -
-																	playerStats.ownershipHistory[8]
-															).toFixed(1)}
-															%
-														</span>
+												<div>
+													<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+														<Trophy className="h-4 w-4" />
+														Outfield
+													</h3>
+													<div className="grid grid-cols-3 gap-3">
+														<StatCell label="Goals" value={playerDetail.goalsScored} />
+														<StatCell label="Assists" value={playerDetail.assists} />
+														<StatCell label="Own Goals" value={playerDetail.ownGoals} />
 													</div>
 												</div>
 											</>
 										)}
-									</div>
-								</div>
-							</div>
-						</Card>
-
-						{playerStats ? (
-							<Tabs defaultValue="overview">
-								<TabsList className="w-full grid grid-cols-6 mb-6">
-									<TabsTrigger value="overview">Overview</TabsTrigger>
-									<TabsTrigger value="attacking">Attacking</TabsTrigger>
-									<TabsTrigger value="defensive">Defensive</TabsTrigger>
-									<TabsTrigger value="advanced">Advanced</TabsTrigger>
-									<TabsTrigger value="fpl">FPL</TabsTrigger>
-									<TabsTrigger value="history">History</TabsTrigger>
-								</TabsList>
-
-								<TabsContent value="overview">
-									<Card className="p-6">
-										<h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-											<BarChart3 className="h-5 w-5 text-primary" />
-											Gameweek {selectedGameweek} Performance
-										</h3>
-
-										<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Points
-												</p>
-												<p className="text-xl font-bold text-primary">
-													{playerStats.points}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Minutes
-													</p>
-													<p className="text-xl font-bold">
-														{playerStats.minutes}
-														{"'"}
-													</p>
-												</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Bonus
-												</p>
-												<p className="text-xl font-bold text-yellow-500">
-													{playerStats.bonus}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Value
-												</p>
-												<p className="text-xl font-bold">
-													{playerStats.valueForMoney}
-												</p>
-											</div>
-										</div>
-
-										<h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-											<TrendingUp className="h-5 w-5 text-primary" />
-											Season Summary
-										</h3>
-
-										<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Appearances
-												</p>
-												<p className="font-bold">
-													{playerStats.seasonAppearances}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Minutes
-												</p>
-												<p className="font-bold">{playerStats.seasonMinutes}</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Goals
-												</p>
-												<p className="font-bold">{playerStats.seasonGoals}</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Assists
-												</p>
-												<p className="font-bold">{playerStats.seasonAssists}</p>
-											</div>
-										</div>
-
-										<h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-											<Activity className="h-5 w-5 text-primary" />
-											Key Performance Indicators
-										</h3>
-
-										<div className="grid grid-cols-3 gap-4">
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Influence
-												</p>
-												<p className="font-bold">
-													{playerStats.influenceScore}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Creativity
-												</p>
-												<p className="font-bold">
-													{playerStats.creativityScore}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Threat
-												</p>
-												<p className="font-bold">{playerStats.threatScore}</p>
-											</div>
-										</div>
-									</Card>
-								</TabsContent>
-
-								<TabsContent value="attacking">
-									<Card className="p-6">
-										<h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-											<Goal className="h-5 w-5 text-primary" />
-											Attacking Statistics
-										</h3>
-
-										<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Goals
-												</p>
-												<p className="text-xl font-bold text-primary">
-													{playerStats.goals}
-												</p>
-												<p className="text-xs text-muted-foreground">
-													Season: {playerStats.seasonGoals}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Assists
-												</p>
-												<p className="text-xl font-bold text-primary">
-													{playerStats.assists}
-												</p>
-												<p className="text-xs text-muted-foreground">
-													Season: {playerStats.seasonAssists}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">xG</p>
-												<p className="text-xl font-bold">
-													{playerStats.expectedGoals}
-												</p>
-												<p
-													className={`text-xs ${
-														playerStats.xGOutperformance >= 0
-															? 'text-emerald-500'
-															: 'text-rose-500'
-													}`}
-												>
-													{playerStats.xGOutperformance >= 0 ? '+' : ''}
-													{playerStats.xGOutperformance}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">xA</p>
-												<p className="text-xl font-bold">
-													{playerStats.expectedAssists}
-												</p>
-												<p className="text-xs text-muted-foreground">
-													per game: {playerStats.xAPerGame}
-												</p>
-											</div>
-										</div>
-
-										<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Shots
-												</p>
-												<p className="font-bold">{playerStats.shotsTotal}</p>
-												<p className="text-xs text-muted-foreground">
-													per game: {playerStats.shotsPerGame}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Shots on Target
-												</p>
-												<p className="font-bold">{playerStats.shotsOnTarget}</p>
-												<p className="text-xs text-muted-foreground">
-													Accuracy:{' '}
-													{playerStats.shotsTotal > 0
-														? (
-																(playerStats.shotsOnTarget /
-																	playerStats.shotsTotal) *
-																	100 || 0
-														  ).toFixed(0)
-														: 0}
-													%
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Big Chances Created
-												</p>
-												<p className="font-bold">
-													{playerStats.bigChancesCreated}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Key Passes
-												</p>
-												<p className="font-bold">{playerStats.keyPasses}</p>
-											</div>
-										</div>
-
-										<h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-											<BarChart3 className="h-5 w-5 text-primary" />
-											Advanced Attacking Metrics
-										</h3>
-
-										<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													xG Per Shot
-												</p>
-												<p className="font-bold">{playerStats.xGPerShot}</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Minutes Per Goal
-												</p>
-												<p className="font-bold">
-													{playerStats.minutesPerGoal || '-'}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Chance Creation Rate
-												</p>
-												<p className="font-bold">
-													{playerStats.chanceCreationRate}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Pass Completion
-												</p>
-												<p className="font-bold">
-													{playerStats.passCompletionRate}%
-												</p>
-											</div>
-										</div>
-									</Card>
-								</TabsContent>
-
-								<TabsContent value="defensive">
-									<Card className="p-6">
-										<h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-											<Shield className="h-5 w-5 text-primary" />
-											Defensive Statistics
-										</h3>
-
-										<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Clean Sheets
-												</p>
-												<p className="text-xl font-bold text-primary">
-													{playerStats.cleanSheets}
-												</p>
-												<p className="text-xs text-muted-foreground">
-													Season: {playerStats.seasonCleanSheets}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Goals Conceded
-												</p>
-												<p className="text-xl font-bold text-rose-500">
-													{playerStats.goalsConceded}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Tackles
-												</p>
-												<p className="text-xl font-bold">
-													{playerStats.tackles}
-												</p>
-												<p className="text-xs text-muted-foreground">
-													per game: {playerStats.tacklesPerGame}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Interceptions
-												</p>
-												<p className="text-xl font-bold">
-													{playerStats.interceptions}
-												</p>
-											</div>
-										</div>
-
-										<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Clearances
-												</p>
-												<p className="font-bold">{playerStats.clearances}</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Blocks
-												</p>
-												<p className="font-bold">{playerStats.blocks}</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Defensive Actions
-												</p>
-												<p className="font-bold">
-													{playerStats.defensiveActions}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Actions Per Game
-												</p>
-												<p className="font-bold">
-													{playerStats.defensiveActionsPerGame}
-												</p>
-											</div>
-										</div>
-
-										<h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-											<PieChart className="h-5 w-5 text-primary" />
-											Defensive Contribution Breakdown
-										</h3>
-
-										<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-											<div className="bg-accent/30 rounded-lg p-4">
-												<div className="flex justify-between items-center mb-2">
-													<span className="text-sm">Tackles</span>
-													<span className="text-sm font-medium">
-														{getPercentage(
-															playerStats.tackles,
-															playerStats.defensiveActions
-														)}
-														%
-													</span>
-												</div>
-												<div className="w-full bg-muted rounded-full h-2.5">
-													<div
-														className="bg-blue-500 h-2.5 rounded-full"
-														style={{
-															width: getSafeWidthStyle(
-																getPercentage(
-																	playerStats.tackles,
-																	playerStats.defensiveActions
-																)
-															)
-														}}
-													></div>
-												</div>
-
-												<div className="flex justify-between items-center mb-2 mt-3">
-													<span className="text-sm">Interceptions</span>
-													<span className="text-sm font-medium">
-														{getPercentage(
-															playerStats.interceptions,
-															playerStats.defensiveActions
-														)}
-														%
-													</span>
-												</div>
-												<div className="w-full bg-muted rounded-full h-2.5">
-													<div
-														className="bg-green-500 h-2.5 rounded-full"
-														style={{
-															width: getSafeWidthStyle(
-																getPercentage(
-																	playerStats.interceptions,
-																	playerStats.defensiveActions
-																)
-															)
-														}}
-													></div>
-												</div>
-											</div>
-
-											<div className="bg-accent/30 rounded-lg p-4">
-												<div className="flex justify-between items-center mb-2">
-													<span className="text-sm">Clearances</span>
-													<span className="text-sm font-medium">
-														{getPercentage(
-															playerStats.clearances,
-															playerStats.defensiveActions
-														)}
-														%
-													</span>
-												</div>
-												<div className="w-full bg-muted rounded-full h-2.5">
-													<div
-														className="bg-purple-500 h-2.5 rounded-full"
-														style={{
-															width: getSafeWidthStyle(
-																getPercentage(
-																	playerStats.clearances,
-																	playerStats.defensiveActions
-																)
-															)
-														}}
-													></div>
-												</div>
-
-												<div className="flex justify-between items-center mb-2 mt-3">
-													<span className="text-sm">Blocks</span>
-													<span className="text-sm font-medium">
-														{getPercentage(
-															playerStats.blocks,
-															playerStats.defensiveActions
-														)}
-														%
-													</span>
-												</div>
-												<div className="w-full bg-muted rounded-full h-2.5">
-													<div
-														className="bg-orange-500 h-2.5 rounded-full"
-														style={{
-															width: getSafeWidthStyle(
-																getPercentage(
-																	playerStats.blocks,
-																	playerStats.defensiveActions
-																)
-															)
-														}}
-													></div>
-												</div>
-											</div>
-										</div>
-									</Card>
-								</TabsContent>
-
-								<TabsContent value="advanced">
-									<Card className="p-6">
-										<h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-											<Target className="h-5 w-5 text-primary" />
-											Advanced Statistics
-										</h3>
-
-										<div className="grid grid-cols-2 gap-4 mb-6">
-											<div className="bg-accent/30 rounded-lg p-3">
-												<p className="text-xs text-muted-foreground mb-1">
-													xG Performance
-												</p>
-												<div className="flex items-center gap-2">
-													<p className="text-lg font-bold">
-														{playerStats.xGOutperformance.toFixed(2)}
-													</p>
-													{playerStats.xGOutperformance > 0 ? (
-														<span className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full">
-															Overperforming
-														</span>
-													) : (
-														<span className="text-xs px-2 py-1 bg-rose-100 text-rose-700 rounded-full">
-															Underperforming
-														</span>
-													)}
-												</div>
-												<p className="text-xs text-muted-foreground mt-1">
-													Goals: {playerStats.goals} | xG:{' '}
-													{playerStats.expectedGoals}
-												</p>
-											</div>
-
-											<div className="bg-accent/30 rounded-lg p-3">
-												<p className="text-xs text-muted-foreground mb-1">
-													Value For Money
-												</p>
-												<div className="flex items-center gap-2">
-													<p className="text-lg font-bold">
-														{playerStats.valueForMoney}
-													</p>
-													{playerStats.valueForMoney > 20 ? (
-														<span className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full">
-															Excellent
-														</span>
-													) : playerStats.valueForMoney > 15 ? (
-														<span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
-															Good
-														</span>
-													) : (
-														<span className="text-xs px-2 py-1 bg-amber-100 text-amber-700 rounded-full">
-															Average
-														</span>
-													)}
-												</div>
-												<p className="text-xs text-muted-foreground mt-1">
-													Points: {playerStats.seasonPoints} | Price: £
-													{selectedPlayer.price.toFixed(1)}m
-												</p>
-											</div>
-										</div>
-
-										<div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													xG Per Shot
-												</p>
-												<p className="font-bold">{playerStats.xGPerShot}</p>
-												<p className="text-xs text-muted-foreground mt-1">
-													Shot Quality
-												</p>
-											</div>
-
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Chance Creation Rate
-												</p>
-												<p className="font-bold">
-													{playerStats.chanceCreationRate}
-												</p>
-												<p className="text-xs text-muted-foreground mt-1">
-													Per 90 minutes
-												</p>
-											</div>
-
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Pass Completion
-												</p>
-												<p className="font-bold">
-													{playerStats.passCompletionRate}%
-												</p>
-												<p className="text-xs text-muted-foreground mt-1">
-													Pass Accuracy
-												</p>
-											</div>
-										</div>
-
-										<h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-											<Zap className="h-5 w-5 text-primary" />
-											Performance Metrics
-										</h3>
-
-										<div className="grid grid-cols-1 gap-4">
-											{/* ICT Index Components */}
-											<div className="bg-accent/30 rounded-lg p-4">
-												<div className="flex justify-between items-center mb-2">
-													<span className="text-sm">Influence</span>
-													<span className="text-sm font-medium">
-														{playerStats.influenceScore}
-													</span>
-												</div>
-												<div className="w-full bg-muted rounded-full h-2.5">
-													<div
-														className="bg-blue-500 h-2.5 rounded-full"
-														style={{
-															width: getSafeWidthStyle(
-																Math.min(
-																	100,
-																	(playerStats.influenceScore / 100) * 100
-																)
-															)
-														}}
-													></div>
-												</div>
-
-												<div className="flex justify-between items-center mb-2 mt-3">
-													<span className="text-sm">Creativity</span>
-													<span className="text-sm font-medium">
-														{playerStats.creativityScore}
-													</span>
-												</div>
-												<div className="w-full bg-muted rounded-full h-2.5">
-													<div
-														className="bg-emerald-500 h-2.5 rounded-full"
-														style={{
-															width: getSafeWidthStyle(
-																Math.min(
-																	100,
-																	(playerStats.creativityScore / 100) * 100
-																)
-															)
-														}}
-													></div>
-												</div>
-
-												<div className="flex justify-between items-center mb-2 mt-3">
-													<span className="text-sm">Threat</span>
-													<span className="text-sm font-medium">
-														{playerStats.threatScore}
-													</span>
-												</div>
-												<div className="w-full bg-muted rounded-full h-2.5">
-													<div
-														className="bg-rose-500 h-2.5 rounded-full"
-														style={{
-															width: getSafeWidthStyle(
-																Math.min(
-																	100,
-																	(playerStats.threatScore / 100) * 100
-																)
-															)
-														}}
-													></div>
-												</div>
-
-												<div className="flex justify-between items-center mb-2 mt-3">
-													<span className="text-sm font-medium">ICT Index</span>
-													<span className="text-sm font-medium">
-														{(
-															(playerStats.influenceScore +
-																playerStats.creativityScore +
-																playerStats.threatScore) /
-															3
-														).toFixed(1)}
-													</span>
-												</div>
-												<div className="w-full bg-muted rounded-full h-2.5">
-													<div
-														className="bg-primary h-2.5 rounded-full"
-														style={{
-															width: getSafeWidthStyle(
-																Math.min(
-																	100,
-																	((playerStats.influenceScore +
-																		playerStats.creativityScore +
-																		playerStats.threatScore) /
-																		3 /
-																		100) *
-																		100
-																)
-															)
-														}}
-													></div>
-												</div>
-											</div>
-										</div>
-									</Card>
-								</TabsContent>
-
-								<TabsContent value="fpl">
-									<Card className="p-6">
-										<h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-											<Trophy className="h-5 w-5 text-primary" />
-											FPL Performance
-										</h3>
-
-										<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													GW Points
-												</p>
-												<p className="text-xl font-bold text-primary">
-													{playerStats.points}
-												</p>
-												<p className="text-xs text-muted-foreground">
-													Season: {playerStats.seasonPoints}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Bonus Points
-												</p>
-												<p className="text-xl font-bold text-yellow-500">
-													{playerStats.bonus}
-												</p>
-												<p className="text-xs text-muted-foreground">
-													Season: {playerStats.seasonBonusPoints}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Form
-												</p>
-												<p className="text-xl font-bold">{playerStats.form}</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Price Change
-												</p>
-												<p
-													className={`text-xl font-bold ${
-														playerStats.priceChange > 0
-															? 'text-emerald-500'
-															: playerStats.priceChange < 0
-															? 'text-rose-500'
-															: ''
-													}`}
-												>
-													{playerStats.priceChange > 0 ? '+' : ''}
-													{playerStats.priceChange.toFixed(1)}
-												</p>
-											</div>
-										</div>
-
-										<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-											<div className="bg-accent/30 rounded-lg p-4">
-												<p className="text-sm font-medium mb-2">
-													Points Per Game
-												</p>
-												<div className="flex items-center">
-													<p className="text-3xl font-bold">
-														{playerStats.pointsPerGame}
-													</p>
-													<div className="ml-4">
-														<p className="text-xs text-muted-foreground">
-															Season Points: {playerStats.seasonPoints}
-														</p>
-														<p className="text-xs text-muted-foreground">
-															Appearances: {playerStats.seasonAppearances}
-														</p>
+										{/* DEF */}
+										{playerDetail.elementType === 2 && (
+											<>
+												<div>
+													<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+														<Shield className="h-4 w-4" />
+														Defensive
+													</h3>
+													<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+														<StatCell label="Clean Sheets" value={playerDetail.cleanSheets} />
+														<StatCell label="Goals Conceded" value={playerDetail.goalsConceded} />
+														<StatCell label="Own Goals" value={playerDetail.ownGoals} />
+														<StatCell label="Pen. Saved" value={playerDetail.penaltiesSaved} />
 													</div>
 												</div>
-											</div>
-
-											<div className="bg-accent/30 rounded-lg p-4">
-												<p className="text-sm font-medium mb-2">
-													Ownership Trend
-												</p>
-												<div className="flex items-center">
-													<p className="text-3xl font-bold">
-														{playerStats.selectedBy}%
-													</p>
-													<div className="ml-4 flex items-center">
-														{playerStats.ownershipHistory[9] <
-														playerStats.ownershipHistory[8] ? (
-															<>
-																<ChevronDown className="h-4 w-4 text-rose-500 mr-1" />
-																<p className="text-sm text-rose-500">Falling</p>
-															</>
-														) : (
-															<>
-																<ChevronUp className="h-4 w-4 text-emerald-500 mr-1" />
-																<p className="text-sm text-emerald-500">
-																	Rising
-																</p>
-															</>
-														)}
+												<div>
+													<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+														<Trophy className="h-4 w-4" />
+														Attacking
+													</h3>
+													<div className="grid grid-cols-2 gap-3">
+														<StatCell label="Goals" value={playerDetail.goalsScored} />
+														<StatCell label="Assists" value={playerDetail.assists} />
 													</div>
 												</div>
+											</>
+										)}
+										{/* MID */}
+										{playerDetail.elementType === 3 && (
+											<>
+												<div>
+													<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+														<Trophy className="h-4 w-4" />
+														Attacking
+													</h3>
+													<div className="grid grid-cols-2 gap-3">
+														<StatCell label="Goals" value={playerDetail.goalsScored} />
+														<StatCell label="Assists" value={playerDetail.assists} />
+													</div>
+												</div>
+												<div>
+													<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+														<Shield className="h-4 w-4" />
+														Defensive
+													</h3>
+													<div className="grid grid-cols-2 gap-3">
+														<StatCell label="Clean Sheets" value={playerDetail.cleanSheets} />
+														<StatCell label="Goals Conceded" value={playerDetail.goalsConceded} />
+													</div>
+												</div>
+											</>
+										)}
+										{/* FWD */}
+										{playerDetail.elementType === 4 && (
+											<div>
+												<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+													<Trophy className="h-4 w-4" />
+													Attacking
+												</h3>
+												<div className="grid grid-cols-2 gap-3">
+													<StatCell label="Goals" value={playerDetail.goalsScored} />
+													<StatCell label="Assists" value={playerDetail.assists} />
+												</div>
+											</div>
+										)}
+										{/* All — Discipline */}
+										<div>
+											<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
+												<Activity className="h-4 w-4" />
+												Discipline
+											</h3>
+											<div className="grid grid-cols-2 gap-3">
+												<StatCell label="Yellow Cards" value={playerDetail.yellowCards} />
+												<StatCell label="Red Cards" value={playerDetail.redCards} />
 											</div>
 										</div>
-
-										<h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-											<Star className="h-5 w-5 text-primary" />
-											FPL Value Metrics
-										</h3>
-
-										<div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Points/£m
-												</p>
-												<p className="font-bold">{playerStats.valueForMoney}</p>
+										{/* All — FPL */}
+										<div>
+											<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">FPL</h3>
+											<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+												<StatCell label="Bonus" value={playerDetail.bonus} />
+												<StatCell label="BPS" value={playerDetail.bps} />
+												<StatCell label="Minutes" value={playerDetail.minutes} />
+												<StatCell label="Total Points" value={playerDetail.totalPoints} />
 											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Minutes/Point
-												</p>
-												<p className="font-bold">
-													{playerStats.seasonPoints > 0
-														? (
-																playerStats.seasonMinutes /
-																playerStats.seasonPoints
-														  ).toFixed(1)
-														: '0'}
-												</p>
-											</div>
-											<div className="bg-accent/30 rounded-lg p-3 text-center">
-												<p className="text-xs text-muted-foreground mb-1">
-													Consistency Rate
-												</p>
-												<p className="font-bold">
-													{Math.floor(40 + Math.random() * 45)}%
-												</p>
+										</div>
+										{/* Price */}
+										<div>
+											<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Price</h3>
+											<div className="grid grid-cols-3 gap-3">
+												<StatCell label="Current" value={formatPrice(playerDetail.price)} />
+												<StatCell label="Start" value={formatPrice(playerDetail.startPrice)} />
+												<StatCell label="Change" value={priceDiff ?? '—'} />
 											</div>
 										</div>
 									</Card>
-								</TabsContent>
+								)}
+							</TabsContent>
 
-								<TabsContent value="history">
-									<Card className="p-6">
-										<h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-											<Clock className="h-5 w-5 text-primary" />
-											Gameweek History
+							{/* ICT */}
+							<TabsContent value="ict">
+								{isComparing ? (
+									<Card className="p-5 space-y-5">
+										<div>
+											<CompareSectionHeader icon={<Zap className="h-4 w-4" />} label="ICT Values" />
+											<CompareRow label="Influence" v1={playerDetail.influence} v2={playerDetail2!.influence} />
+											<CompareRow label="Creativity" v1={playerDetail.creativity} v2={playerDetail2!.creativity} />
+											<CompareRow label="Threat" v1={playerDetail.threat} v2={playerDetail2!.threat} />
+											<CompareRow label="ICT Index" v1={playerDetail.ictIndex} v2={playerDetail2!.ictIndex} />
+										</div>
+										<div className="space-y-4 pt-2">
+											<DualIctBar label="Influence" v1={playerDetail.influence} v2={playerDetail2!.influence} name1={playerDetail.webName} name2={playerDetail2!.webName} max={1500} />
+											<DualIctBar label="Creativity" v1={playerDetail.creativity} v2={playerDetail2!.creativity} name1={playerDetail.webName} name2={playerDetail2!.webName} max={800} />
+											<DualIctBar label="Threat" v1={playerDetail.threat} v2={playerDetail2!.threat} name1={playerDetail.webName} name2={playerDetail2!.webName} max={2000} />
+											<DualIctBar label="ICT Index" v1={playerDetail.ictIndex} v2={playerDetail2!.ictIndex} name1={playerDetail.webName} name2={playerDetail2!.webName} max={300} />
+										</div>
+									</Card>
+								) : (
+									<Card className="p-5">
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4 flex items-center gap-2">
+											<Zap className="h-4 w-4" />
+											ICT Index
 										</h3>
+										<div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+											<StatCell label="Influence" value={playerDetail.influence} />
+											<StatCell label="Creativity" value={playerDetail.creativity} />
+											<StatCell label="Threat" value={playerDetail.threat} />
+											<StatCell label="ICT Index" value={playerDetail.ictIndex} />
+										</div>
+										<div className="space-y-4">
+											<IctBar label="Influence" value={playerDetail.influence} color="bg-blue-500" max={1500} />
+											<IctBar label="Creativity" value={playerDetail.creativity} color="bg-emerald-500" max={800} />
+											<IctBar label="Threat" value={playerDetail.threat} color="bg-rose-500" max={2000} />
+											<IctBar label="ICT Index" value={playerDetail.ictIndex} color="bg-primary" max={300} />
+										</div>
+									</Card>
+								)}
+							</TabsContent>
 
-										<StatsTable
-											title=""
-											data={playerHistory}
-											columns={[
-												{
-													key: 'gameweek',
-													label: 'GW'
-												},
-												{
-													key: 'minutes',
-													label: 'MIN',
-													className: 'text-center'
-												},
-												{
-													key: 'goals',
-													label: 'G',
-													className: 'text-center'
-												},
-												{
-													key: 'assists',
-													label: 'A',
-													className: 'text-center'
-												},
-												{
-													key: 'cleanSheets',
-													label: 'CS',
-													className: 'text-center'
-												},
-												{
-													key: 'bonus',
-													label: 'BPS',
-													className: 'text-center text-yellow-500'
-												},
-												{
-													key: 'points',
-													label: 'PTS',
-													className: 'text-center font-bold'
+							{/* FIXTURES */}
+							<TabsContent value="fixtures">
+								{isComparing ? (
+									<Card className="p-5">
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4 flex items-center gap-2">
+											<Calendar className="h-4 w-4" />
+											Fixtures
+										</h3>
+										<div className="grid grid-cols-[2rem_1fr_1fr] gap-2 mb-2 px-1 text-sm font-semibold">
+											<span />
+											<span className="text-blue-500 truncate">{playerDetail.webName}</span>
+											<span className="text-amber-500 truncate">{playerDetail2!.webName}</span>
+										</div>
+										<div className="space-y-0.5">
+											{(() => {
+												const groupByGW = (fixtures: PlayerDetailFixture[]) => {
+													const map = new Map<number, PlayerDetailFixture[]>()
+													for (const f of fixtures) {
+														const arr = map.get(f.event) ?? []
+														arr.push(f)
+														map.set(f.event, arr)
+													}
+													return map
 												}
-											]}
-										/>
 
-										<h3 className="text-lg font-bold mt-6 mb-4 flex items-center gap-2">
-											<Percent className="h-5 w-5 text-primary" />
-											Ownership History
-										</h3>
+												const f1Map = groupByGW(playerDetail.fixtures)
+												const f2Map = groupByGW(playerDetail2!.fixtures)
 
-										<div className="bg-accent/30 rounded-lg p-4">
-											<div className="h-40 flex items-end justify-between gap-1">
-												{playerStats.ownershipHistory.map((value, index) => {
-													// Ensure height is valid
-													const height = Math.max(0, value * 2)
+												const gws = Array.from(
+													new Set([...Array.from(f1Map.keys()), ...Array.from(f2Map.keys())])
+												).sort((a, b) => a - b)
+
+												const renderFixtureStack = (fixtures: PlayerDetailFixture[] | undefined) => {
+													if (!fixtures || fixtures.length === 0) {
+														return (
+															<span className="text-xs font-medium text-amber-600 dark:text-amber-400">BGW</span>
+														)
+													}
 													return (
-														<div
-															key={index}
-															className="flex-1 flex flex-col items-center"
-														>
-															<div
-																className="w-full bg-primary/60 hover:bg-primary transition-colors rounded-t"
-																style={{ height: `${height}px` }}
-															></div>
-															<p className="text-xs text-muted-foreground mt-1">
-																{currentGameweek - 9 + index}
-															</p>
+														<div className="space-y-0.5">
+															{fixtures.map((f, i) => (
+																<div key={i} className="flex items-center gap-1.5 min-w-0">
+																	<span className="truncate text-xs font-medium">
+																		{f.againstTeamShortName} ({f.wasHome ? 'H' : 'A'})
+																	</span>
+																	{f.finished && f.score ? (
+																		<span className="font-mono text-[10px] shrink-0">{f.score}</span>
+																	) : null}
+																	<div
+																		className={`w-1.5 h-1.5 rounded-full shrink-0 ${DIFFICULTY_COLORS[f.difficulty] ?? 'bg-muted'}`}
+																		title={`Difficulty: ${f.difficulty}`}
+																	/>
+																</div>
+															))}
 														</div>
 													)
-												})}
-											</div>
-										</div>
+												}
 
-										<h3 className="text-lg font-bold mt-6 mb-4 flex items-center gap-2">
-											<TrendingUp className="h-5 w-5 text-primary" />
-											Price History
-										</h3>
-
-										<div className="bg-accent/30 rounded-lg p-4">
-											<div className="h-40 flex items-end justify-between gap-1">
-												{playerStats.priceHistory.map((value, index) => {
-													const minPrice = Math.min(...playerStats.priceHistory)
-													const height = Math.max(0, (value - minPrice) * 100)
-													const isRising =
-														index > 0 &&
-														value > playerStats.priceHistory[index - 1]
-													const isFalling =
-														index > 0 &&
-														value < playerStats.priceHistory[index - 1]
+												return gws.map(gw => {
+													const g1 = f1Map.get(gw)
+													const g2 = f2Map.get(gw)
+													const isDGW = (g1?.length ?? 0) > 1 || (g2?.length ?? 0) > 1
+													const isCurrentGw = gw === currentGameweek
 
 													return (
 														<div
-															key={index}
-															className="flex-1 flex flex-col items-center"
+															key={gw}
+															className={`grid grid-cols-[2rem_1fr_1fr] gap-2 items-start px-2 py-1.5 rounded-md ${
+																isCurrentGw ? 'bg-primary/10 border border-primary/20' : 'hover:bg-accent/40'
+															}`}
 														>
-															<div
-																className={`w-full ${
-																	isRising
-																		? 'bg-emerald-500'
-																		: isFalling
-																		? 'bg-rose-500'
-																		: 'bg-blue-500'
-																} rounded-t`}
-																style={{ height: `${height}px` }}
-															></div>
-															<p className="text-xs text-muted-foreground mt-1">
-																{currentGameweek - 9 + index}
-															</p>
+															<div className="flex flex-col items-start gap-0.5 pt-0.5">
+																<span className="text-xs text-muted-foreground">GW{gw}</span>
+																{isDGW && (
+																	<Badge variant="secondary" className="text-[9px] h-3.5 px-1 leading-none">DGW</Badge>
+																)}
+															</div>
+															{renderFixtureStack(g1)}
+															{renderFixtureStack(g2)}
 														</div>
 													)
-												})}
-											</div>
+												})
+											})()}
 										</div>
 									</Card>
-								</TabsContent>
-							</Tabs>
-						) : (
-							<Card className="p-8 text-center">
-								<AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-								<h2 className="text-lg font-medium">No data available</h2>
-								<p className="text-muted-foreground mt-2">
-									Statistics not available for this player in the selected
-									gameweek.
-								</p>
-							</Card>
-						)}
+								) : (
+									<Card className="p-5">
+										<h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4 flex items-center gap-2">
+											<Calendar className="h-4 w-4" />
+											All Fixtures
+										</h3>
+										<div className="space-y-1">
+											{(() => {
+												const groupByGW = (fixtures: PlayerDetailFixture[]) => {
+													const map = new Map<number, PlayerDetailFixture[]>()
+													for (const f of fixtures) {
+														const arr = map.get(f.event) ?? []
+														arr.push(f)
+														map.set(f.event, arr)
+													}
+													return map
+												}
+												const grouped = groupByGW(playerDetail.fixtures)
+												const gws = Array.from(grouped.keys()).sort((a, b) => a - b)
+
+												return gws.map(gw => {
+													const fixtures = grouped.get(gw)!
+													const isSelected = gw === currentGameweek
+													const isDGW = fixtures.length > 1
+													const isBGW = fixtures.length === 1 && fixtures[0].bgw
+
+													return (
+														<div
+															key={gw}
+															className={`px-3 py-2 rounded-md text-sm ${
+																isSelected ? 'bg-primary/10 border border-primary/20' : 'hover:bg-accent/40'
+															}`}
+														>
+															<div className="flex items-center gap-2 mb-1">
+																<span className="text-xs text-muted-foreground w-8 shrink-0">GW{gw}</span>
+																{isDGW && (
+																	<Badge variant="secondary" className="text-[9px] h-3.5 px-1 leading-none">DGW</Badge>
+																)}
+																{isBGW && (
+																	<Badge variant="outline" className="text-[9px] h-3.5 px-1 leading-none text-amber-600 border-amber-400">BGW</Badge>
+																)}
+															</div>
+															{fixtures.map((fixture, i) => {
+																const opponent = `${fixture.againstTeamShortName} (${fixture.wasHome ? 'H' : 'A'})`
+																const kickoff = format(new Date(fixture.kickoffTime), 'dd MMM HH:mm')
+																return (
+																	<div key={i} className="flex items-center justify-between">
+																		<div className="flex items-center gap-2 min-w-0">
+																			<span className="w-8 shrink-0" />
+																			<span className="font-medium truncate">{opponent}</span>
+																		</div>
+																		<div className="flex items-center gap-3 shrink-0 ml-2">
+																			<span className="text-xs text-muted-foreground">{kickoff}</span>
+																			{fixture.finished && fixture.score ? (
+																				<span className="font-mono text-xs font-semibold w-10 text-center">{fixture.score}</span>
+																			) : (
+																				<span className="text-xs text-muted-foreground w-10 text-center">—</span>
+																)}
+																			<div
+																				className={`w-2 h-2 rounded-full shrink-0 ${DIFFICULTY_COLORS[fixture.difficulty] ?? 'bg-muted'}`}
+																				title={`Difficulty: ${fixture.difficulty}`}
+																			/>
+																		</div>
+																	</div>
+																)
+															})}
+														</div>
+													)
+												})
+											})()}
+										</div>
+										<div className="mt-4 pt-3 border-t flex items-center gap-4 text-xs text-muted-foreground">
+											<span className="flex items-center gap-1.5">
+												<ArrowUpRight className="h-3 w-3 text-emerald-500" />
+												Transfers In: {playerDetail.seasonTransfersIn.toLocaleString()}
+											</span>
+											<span className="flex items-center gap-1.5">
+												<ArrowDownRight className="h-3 w-3 text-rose-500" />
+												Transfers Out: {playerDetail.seasonTransfersOut.toLocaleString()}
+											</span>
+										</div>
+									</Card>
+								)}
+							</TabsContent>
+						</Tabs>
 					</>
-				)}
+				) : null}
 			</div>
 		</RootLayout>
 	)

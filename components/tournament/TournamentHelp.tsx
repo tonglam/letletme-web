@@ -107,7 +107,7 @@ export function TournamentHelp({ className }: TournamentHelpProps) {
       <Button
         variant="outline"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 mb-4"
+        className="flex items-center gap-2"
       >
         {isOpen ? (
           <>
@@ -123,7 +123,7 @@ export function TournamentHelp({ className }: TournamentHelpProps) {
       </Button>
 
       {isOpen && (
-        <Card className="p-6 mb-8 animate-in fade-in-50 duration-300">
+        <Card className="mt-4 p-6 mb-8 animate-in fade-in-50 duration-300">
           <Tabs defaultValue="rules">
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="rules" className="flex items-center gap-2">

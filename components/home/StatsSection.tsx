@@ -12,6 +12,7 @@ import {
   type EventsResponse,
 } from "@/lib/graphql/queries";
 import homeStats from "@/lib/home-stats";
+import { formatChipName, formatCompactNumber } from "@/lib/utils";
 import { ArrowRightCircle, Crown, Trophy, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -78,7 +79,9 @@ export function StatsSection() {
           {
             label: "Top Chip Played",
             value: mostPlayedChip
-              ? `${mostPlayedChip.chipName} (${mostPlayedChip.numberPlayed})`
+              ? `${formatChipName(mostPlayedChip.chipName)} (${formatCompactNumber(
+                  mostPlayedChip.numberPlayed
+                )})`
               : "N/A",
             icon: <ArrowRightCircle className="w-5 h-5 text-green-500" />,
           },

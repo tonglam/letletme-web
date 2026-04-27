@@ -34,7 +34,6 @@ export function Footer() {
             <h3 className="text-lg font-bold mb-4 text-primary">FPL</h3>
             <ul className="space-y-3">
               <li><Link href="/data/player-stats" className="text-muted-foreground hover:text-primary transition-colors">Player Stats</Link></li>
-              <li><Link href="/data/team-stats" className="text-muted-foreground hover:text-primary transition-colors">Team Stats</Link></li>
               <li><Link href="/data/price-changes" className="text-muted-foreground hover:text-primary transition-colors">Price Changes</Link></li>
             </ul>
           </div>

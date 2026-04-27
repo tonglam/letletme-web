@@ -15,18 +15,19 @@ interface TournamentSelectorProps {
   tournaments: Tournament[];
   currentTournamentId: string;
   onTournamentChange: (tournamentId: string) => void;
+  className?: string;
 }
 
 export function TournamentSelector({
   tournaments,
   currentTournamentId,
-  onTournamentChange
+  onTournamentChange,
+  className,
 }: TournamentSelectorProps) {
-  // Find current tournament
   const currentTournament = tournaments.find(t => t.id === currentTournamentId) || tournaments[0];
-  
+
   return (
-    <Card className="p-4 mb-6">
+    <Card className={className ?? "p-4 mb-6"}>
       <div className="flex flex-col sm:flex-row items-center gap-3">
         <div className="flex items-center gap-2">
           <Trophy className="h-5 w-5 text-primary" />

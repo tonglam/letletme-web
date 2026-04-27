@@ -9,29 +9,90 @@ import {
 	TooltipProvider,
 	TooltipTrigger
 } from '@/components/ui/tooltip'
+import { executeQuery } from '@/lib/graphql-client'
+import {
+	GET_EVENT_LIVE_EXPLAIN,
+	GET_PLAYER_LIVE,
+	type EventLiveExplainResponse,
+	type PlayerLiveResponse,
+	type PlayerLiveStats,
+} from '@/lib/graphql/queries'
 import { Match, PlayerStat } from '@/types/match'
 import { PlayerDetail } from '@/types/player-detail'
 import { format } from 'date-fns'
-import { Activity, AlertTriangle, Award, BarChart2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Eye, Save, Shield, Target, User, XCircle } from 'lucide-react'
+import { Activity, AlertTriangle, Award, BarChart2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Eye, Shield, Target, User, XCircle } from 'lucide-react'
 import Image from 'next/image'
 import { memo, useMemo, useRef, useState } from 'react'
 import { PlayerDetailModal } from './PlayerDetailModal'
+
+// elementType: 1=GKP, 2=DEF, 3=MID, 4=FWD
+function buildBreakdownFromPlayerLive(
+	stats: PlayerLiveStats,
+	elementType: number
+): { category: string; points: number; value: number }[] {
+	const rows: { category: string; points: number; value: number }[] = []
+
+	const minutesPts = stats.minutes === 0 ? 0 : stats.minutes < 60 ? 1 : 2
+	if (minutesPts > 0) rows.push({ category: 'Minutes Played', points: minutesPts, value: stats.minutes })
+
+	if (stats.goalsScored > 0) {
+		const pts = elementType <= 2 ? 6 : elementType === 3 ? 5 : 4
+		rows.push({ category: 'Goals Scored', points: stats.goalsScored * pts, value: stats.goalsScored })
+	}
+
+	if (stats.assists > 0)
+		rows.push({ category: 'Assists', points: stats.assists * 3, value: stats.assists })
+
+	if (stats.cleanSheets > 0 && stats.minutes >= 60) {
+		const pts = elementType <= 2 ? 4 : elementType === 3 ? 1 : 0
+		if (pts > 0) rows.push({ category: 'Clean Sheet', points: pts, value: stats.cleanSheets })
+	}
+
+	const concededPts = elementType <= 2 ? -Math.floor(stats.goalsConceded / 2) : 0
+	if (concededPts < 0)
+		rows.push({ category: 'Goals Conceded', points: concededPts, value: stats.goalsConceded })
+
+	if (stats.saves > 0) {
+		const savePts = Math.floor(stats.saves / 3)
+		if (savePts > 0) rows.push({ category: 'Saves', points: savePts, value: stats.saves })
+	}
+
+	if (stats.penaltiesSaved > 0)
+		rows.push({ category: 'Penalty Saved', points: stats.penaltiesSaved * 5, value: stats.penaltiesSaved })
+
+	if (stats.penaltiesMissed > 0)
+		rows.push({ category: 'Penalty Missed', points: stats.penaltiesMissed * -2, value: stats.penaltiesMissed })
+
+	if (stats.ownGoals > 0)
+		rows.push({ category: 'Own Goal', points: stats.ownGoals * -2, value: stats.ownGoals })
+
+	if (stats.yellowCards > 0)
+		rows.push({ category: 'Yellow Card', points: stats.yellowCards * -1, value: stats.yellowCards })
+
+	if (stats.redCards > 0)
+		rows.push({ category: 'Red Card', points: stats.redCards * -3, value: stats.redCards })
+
+	if (stats.bonus > 0)
+		rows.push({ category: 'Bonus', points: stats.bonus, value: stats.bonus })
+
+	return rows
+}
 
 interface MatchCardProps {
 	match: Match
 	allMatches?: Match[]
 	currentIndex?: number
+	eventId?: number
 }
 
-function MatchCardComponent({ match, allMatches, currentIndex }: MatchCardProps) {
+function MatchCardComponent({ match, allMatches, currentIndex, eventId }: MatchCardProps) {
 	const cardRef = useRef<HTMLDivElement>(null)
 	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDetail | null>(
 		null
 	)
 	const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
-	const [isPlayerListExpanded, setIsPlayerListExpanded] = useState(
-		match.status === 'LIVE' || match.status === 'HT'
-	)
+	const [isLoadingPlayerDetail, setIsLoadingPlayerDetail] = useState(false)
+	const [isPlayerListExpanded, setIsPlayerListExpanded] = useState(false)
 
 	// Get bonus points if available or create empty array
 	const bonusPoints = match.bonusPoints || []
@@ -188,92 +249,26 @@ function MatchCardComponent({ match, allMatches, currentIndex }: MatchCardProps)
 		return 'text-rose-500'
 	}
 
-	// Convert PlayerStat to PlayerDetail structure
-	const openPlayerDetail = (
+	const getPositionFromElementType = (
+		elementType: number | undefined
+	): 'GKP' | 'DEF' | 'MID' | 'FWD' => {
+		switch (elementType) {
+			case 1: return 'GKP'
+			case 2: return 'DEF'
+			case 3: return 'MID'
+			case 4: return 'FWD'
+			default: return 'MID'
+		}
+	}
+
+	const openPlayerDetail = async (
 		player: PlayerStat,
 		team: string,
 		teamShort: string
 	) => {
-		const getPositionFromElementType = (
-			elementType: number | undefined
-		): 'GKP' | 'DEF' | 'MID' | 'FWD' => {
-			switch (elementType) {
-				case 1:
-					return 'GKP'
-				case 2:
-					return 'DEF'
-				case 3:
-					return 'MID'
-				case 4:
-					return 'FWD'
-				default:
-					return 'MID'
-			}
-		}
-
-		// Calculate points based on stats
-		let totalPoints = 0
-		const pointsBreakdown: { category: string; points: number }[] = []
 		const position = getPositionFromElementType(player.elementType)
-
-		if (player.goals && player.goals > 0) {
-			const pointsPerGoal =
-				position === 'FWD' ? 4 : position === 'MID' ? 5 : 6
-			const goalPoints = player.goals * pointsPerGoal
-			totalPoints += goalPoints
-			pointsBreakdown.push({ category: 'Goals', points: goalPoints })
-		}
-
-		if (player.assists && player.assists > 0) {
-			const assistPoints = player.assists * 3
-			totalPoints += assistPoints
-			pointsBreakdown.push({ category: 'Assists', points: assistPoints })
-		}
-
-		// Use live player minutes from data instead of a fixed value.
 		const minutesPlayed = player.minutes ?? 0
-		if (minutesPlayed >= 60) {
-			totalPoints += 2
-			pointsBreakdown.push({ category: 'Appearance', points: 2 })
-		} else if (minutesPlayed > 0) {
-			totalPoints += 1
-			pointsBreakdown.push({ category: 'Appearance', points: 1 })
-		}
-
 		const cleanSheets = player.cleanSheets ?? 0
-		if (cleanSheets > 0) {
-			const csPoints =
-				position === 'GKP' || position === 'DEF'
-					? 4
-					: position === 'MID'
-					? 1
-					: 0
-			if (csPoints > 0) {
-				totalPoints += csPoints
-				pointsBreakdown.push({ category: 'Clean Sheet', points: csPoints })
-			}
-		}
-
-		// Deduct for yellow cards
-		if (player.yellow_cards && player.yellow_cards > 0) {
-			const ycPoints = -1 * player.yellow_cards
-			totalPoints += ycPoints
-			pointsBreakdown.push({ category: 'Yellow Card', points: ycPoints })
-		}
-
-		// Deduct for red cards
-		if (player.red_cards && player.red_cards > 0) {
-			const rcPoints = -3 * player.red_cards
-			totalPoints += rcPoints
-			pointsBreakdown.push({ category: 'Red Card', points: rcPoints })
-		}
-
-		// Add bonus points if available
-		const bonusPoints = player.bonus_points || 0
-		if (bonusPoints > 0) {
-			totalPoints += bonusPoints
-			pointsBreakdown.push({ category: 'Bonus Points', points: bonusPoints })
-		}
 
 		const playerDetail: PlayerDetail = {
 			id: player.player,
@@ -281,7 +276,7 @@ function MatchCardComponent({ match, allMatches, currentIndex }: MatchCardProps)
 			team: team,
 			teamShort: teamShort,
 			position: position,
-			points: player.totalPoints ?? totalPoints,
+			points: player.totalPoints ?? 0,
 			ownershipPercentage: 0,
 			bps: player.bps || 0,
 			bonusPoints: player.bonus_points || 0,
@@ -295,11 +290,53 @@ function MatchCardComponent({ match, allMatches, currentIndex }: MatchCardProps)
 				yellowCards: player.yellow_cards || 0,
 				redCards: player.red_cards || 0
 			},
-			pointsBreakdown: pointsBreakdown
+			pointsBreakdown: []
 		}
 
+		setIsLoadingPlayerDetail(true)
 		setSelectedPlayer(playerDetail)
 		setIsDetailModalOpen(true)
+
+		if (!player.element || !eventId) {
+			setIsLoadingPlayerDetail(false)
+			return
+		}
+
+		try {
+			const [explainData, liveData] = await Promise.all([
+				executeQuery<EventLiveExplainResponse>(GET_EVENT_LIVE_EXPLAIN, {
+					eventId,
+					elementId: player.element,
+				}),
+				executeQuery<PlayerLiveResponse>(GET_PLAYER_LIVE, {
+					playerId: player.element,
+					eventId,
+				}),
+			])
+
+			const explain = explainData.eventLiveExplain
+			const live = liveData.playerLive
+
+			setSelectedPlayer(prev => {
+				if (!prev) return prev
+				const update: Partial<PlayerDetail> = {}
+				if (explain) {
+					update.name = explain.player.webName || prev.name
+					if (explain.selectedBy != null) update.ownershipPercentage = explain.selectedBy
+				}
+				if (live) {
+					update.points = live.totalPoints
+					update.bps = live.bps
+					update.bonusPoints = live.bonus
+					update.pointsBreakdown = buildBreakdownFromPlayerLive(live, player.elementType ?? 3)
+				}
+				return { ...prev, ...update }
+			})
+		} catch {
+			// keep empty breakdown — modal is already open
+		} finally {
+			setIsLoadingPlayerDetail(false)
+		}
 	}
 
 	const navigateToMatch = (direction: 'prev' | 'next') => {
@@ -568,11 +605,37 @@ function MatchCardComponent({ match, allMatches, currentIndex }: MatchCardProps)
 					</div>
 				)}
 
+				{/* BPS Section */}
+				{match.status !== 'UPCOMING' && match.status !== 'NOT_STARTED' && bpsData.length > 0 && (
+					<div className="bg-accent/30 rounded-md p-3">
+						<div className="flex items-center mb-2 gap-1.5">
+							<BarChart2 className="h-4 w-4 text-blue-500" />
+							<h3 className="text-sm font-medium">Bonus Point System (BPS)</h3>
+						</div>
+						<div className="flex flex-wrap gap-2">
+							{bpsData.map((bps, idx) => (
+								<div
+									key={idx}
+									className="flex items-center gap-1 bg-background rounded-full px-3 py-1 text-xs"
+								>
+									<span className="font-medium">{bps.player}</span>
+									<span className="text-muted-foreground">
+										({bps.team})
+									</span>
+									<span className={`font-bold ${getBpsColor(bps.score)}`}>
+										{bps.score}
+									</span>
+								</div>
+							))}
+						</div>
+					</div>
+				)}
+
 				{/* Saves Section */}
 				{match.status !== 'UPCOMING' && match.status !== 'NOT_STARTED' && playersWithSaves.length > 0 && (
 					<div className="bg-accent/30 rounded-md p-3">
 						<div className="flex items-center mb-2 gap-1.5">
-							<Save className="h-4 w-4 text-cyan-500" />
+							<span className="text-base leading-none">🧤</span>
 							<h3 className="text-sm font-medium">Saves</h3>
 						</div>
 						<div className="flex flex-wrap gap-2">
@@ -633,32 +696,6 @@ function MatchCardComponent({ match, allMatches, currentIndex }: MatchCardProps)
 									<span className="text-muted-foreground">({player.team})</span>
 									<span className="font-bold text-red-600">
 										🟥 {player.value}
-									</span>
-								</div>
-							))}
-						</div>
-					</div>
-				)}
-
-				{/* BPS Section */}
-				{match.status !== 'UPCOMING' && match.status !== 'NOT_STARTED' && bpsData.length > 0 && (
-					<div className="bg-accent/30 rounded-md p-3">
-						<div className="flex items-center mb-2 gap-1.5">
-							<BarChart2 className="h-4 w-4 text-blue-500" />
-							<h3 className="text-sm font-medium">Bonus Point System (BPS)</h3>
-						</div>
-						<div className="flex flex-wrap gap-2">
-							{bpsData.map((bps, idx) => (
-								<div
-									key={idx}
-									className="flex items-center gap-1 bg-background rounded-full px-3 py-1 text-xs"
-								>
-									<span className="font-medium">{bps.player}</span>
-									<span className="text-muted-foreground">
-										({bps.team})
-									</span>
-									<span className={`font-bold ${getBpsColor(bps.score)}`}>
-										{bps.score}
 									</span>
 								</div>
 							))}
@@ -1095,6 +1132,7 @@ function MatchCardComponent({ match, allMatches, currentIndex }: MatchCardProps)
 				player={selectedPlayer}
 				isOpen={isDetailModalOpen}
 				onClose={() => setIsDetailModalOpen(false)}
+				isLoading={isLoadingPlayerDetail}
 			/>
 		</Card>
 	)

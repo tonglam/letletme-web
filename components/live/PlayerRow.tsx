@@ -6,6 +6,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Player } from "@/types/player";
 import { PlayerDetail } from "@/types/player-detail";
@@ -116,6 +117,11 @@ const statusConfig = {
 export function PlayerRow({ player }: PlayerRowProps) {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const StatusIcon = statusConfig[player.playingStatus].icon;
+  const roleLabel = player.isBench
+    ? player.isBenchBoostActive
+      ? "Bench (BB)"
+      : "Bench"
+    : "Start XI";
 
   const stats = useMemo(() => {
     return positionStats[player.position];
@@ -249,7 +255,9 @@ export function PlayerRow({ player }: PlayerRowProps) {
       <div 
         className={cn(
           "p-3 sm:p-4 hover:bg-accent/50 transition-colors border-b last:border-b-0 cursor-pointer",
-          player.isBench ? "bg-muted/20" : "",
+          player.isBench
+            ? "bg-amber-500/10 border-l-4 border-l-amber-500/60"
+            : "border-l-4 border-l-emerald-500/50",
           statusConfig[player.playingStatus].bgClassName,
           "relative"
         )}
@@ -261,6 +269,19 @@ export function PlayerRow({ player }: PlayerRowProps) {
             <div className="w-20 sm:w-24 flex items-center text-xs sm:text-sm font-medium flex-shrink-0">
               <StatusIcon className={cn("h-4 w-4", statusConfig[player.playingStatus].className)} />
               <span className="w-14 sm:w-16 text-center">{player.teamShort}</span>
+            </div>
+            <div className="mr-2 flex-shrink-0">
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[10px] sm:text-xs",
+                  player.isBench
+                    ? "bg-amber-500/15 text-amber-700 border-amber-300 dark:text-amber-300 dark:border-amber-700"
+                    : "bg-emerald-500/15 text-emerald-700 border-emerald-300 dark:text-emerald-300 dark:border-emerald-700"
+                )}
+              >
+                {roleLabel}
+              </Badge>
             </div>
             <TooltipProvider>
               <Tooltip>

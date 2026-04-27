@@ -54,7 +54,6 @@ export const menuItems: MenuItem[] = [
 			{ label: 'Price Changes', href: '/data/price-changes' },
 			{ label: 'Selections', href: '/data/selections' },
 			{ label: 'Player Stats', href: '/data/player-stats' },
-			{ label: 'Team Stats', href: '/data/team-stats' }
-		]
+			]
 	}
 ]

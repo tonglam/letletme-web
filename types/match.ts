@@ -40,6 +40,7 @@ export interface Match {
 
 export interface PlayerStat {
   player: string;
+  element?: number;
   elementType?: number; // 1=GKP, 2=DEF, 3=MID, 4=FWD
   minutes?: number;
   goals?: number;

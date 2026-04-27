@@ -11,6 +11,7 @@ interface TeamStatsProps {
     transferCost: number;
     captainName: string;
     liveTotalPoints: number;
+    played: string;
     chips: {
       bench: boolean;
       triple: boolean;
@@ -29,7 +30,11 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
             <p className="text-muted-foreground truncate">{stats.playerName}</p>
           </div>
 
-          <div className="sm:text-right">
+          <div className="flex items-center gap-3 sm:justify-end">
+            <div className="flex flex-col items-end">
+              <span className="text-xs text-muted-foreground">Played</span>
+              <span className="text-sm font-semibold tabular-nums">{stats.played}</span>
+            </div>
             <div className="flex flex-wrap sm:justify-end gap-2">
               {Object.entries(stats.chips).some(([_, active]) => active) ? (
                 Object.entries(stats.chips).map(

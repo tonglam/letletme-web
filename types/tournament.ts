@@ -1,3 +1,14 @@
+export interface TournamentEntryPick {
+  element: number;
+  webName: string;
+  teamShortName: string;
+  teamName: string;
+  elementTypeName: string;
+  position: number;
+  isCaptain: boolean;
+  isViceCaptain: boolean;
+}
+
 export interface TournamentEntry {
   id: string;
   rank: number;
@@ -7,10 +18,15 @@ export interface TournamentEntry {
   captainName: string;
   captainTeam: string;
   captainPoints: number;
+  gwPoints?: number;
+  gwNetPoints?: number;
+  eventCost?: number;
+  overallRank?: number;
   livePoints: number;
   totalPoints: number;
   playersPlayed: number;
   playersToPlay: number;
+  picks: TournamentEntryPick[];
   chips: {
     bench: boolean;
     triple: boolean;

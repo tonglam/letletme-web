@@ -1,185 +1,282 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import RootLayout from "@/components/layout/RootLayout";
-import { TournamentHeader } from "@/components/tournament/TournamentHeader";
-import { SearchHeader } from "@/components/tournament/SearchHeader";
-import { TournamentTable } from "@/components/tournament/TournamentTable";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { tournaments } from "@/lib/tournament-data";
-import { ArrowLeft, TrendingUp, TrendingDown, Calendar, Users, BarChart2 } from "lucide-react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react"
+import RootLayout from "@/components/layout/RootLayout"
+import { TournamentHeader } from "@/components/tournament/TournamentHeader"
+import { SearchHeader } from "@/components/tournament/SearchHeader"
+import { TournamentTable } from "@/components/tournament/TournamentTable"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { executeQuery } from "@/lib/graphql-client"
+import {
+	GET_CURRENT_AND_NEXT_EVENTS,
+	GET_ENTRY_TOURNAMENTS,
+	type EntryTournament,
+	type EntryTournamentsResponse,
+	type EventsResponse
+} from "@/lib/graphql/queries"
+import {
+	formatTournamentState
+} from "@/lib/tournament/liveTournament"
+import { ArrowLeft, Calendar, Users } from "lucide-react"
+import Link from "next/link"
 
-export default function TournamentDetailClient({ params }: { params: { id: string } }) {
-  const tournamentId = params.id;
-  const [searchQuery, setSearchQuery] = useState("");
-  
-  // Find the tournament by ID
-  const tournament = tournaments.find(t => t.id === tournamentId) || tournaments[0];
-  
-  return (
-    <RootLayout>
-      <div className="container max-w-4xl mx-auto px-4 py-8">
-        <Link href="/live/tournament">
-          <Button variant="ghost" className="flex items-center gap-1 text-primary hover:text-primary/80 mb-4">
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back to All Tournaments</span>
-          </Button>
-        </Link>
-        
-        <TournamentHeader 
-          name={tournament.name}
-          gameweek={tournament.gameweek}
-          averagePoints={tournament.averagePoints}
-          highestPoints={tournament.highestPoints}
-          totalEntries={tournament.totalEntries}
-        />
-        
-        <Tabs defaultValue="standings" className="mb-6">
-          <Card className="p-4 mb-6">
-            <TabsList className="w-full grid grid-cols-3 gap-2">
-              <TabsTrigger value="standings">Standings</TabsTrigger>
-              <TabsTrigger value="stats">Tournament Stats</TabsTrigger>
-              <TabsTrigger value="rules">Rules</TabsTrigger>
-            </TabsList>
-          </Card>
-          
-          <TabsContent value="standings">
-            <SearchHeader 
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-            />
-            
-            <TournamentTable 
-              entries={tournament.entries}
-              searchQuery={searchQuery}
-              tournamentId={tournamentId}
-            />
-          </TabsContent>
-          
-          <TabsContent value="stats">
-            <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">Tournament Statistics</h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3 flex items-center">
-                      <TrendingUp className="mr-2 h-5 w-5 text-emerald-500" />
-                      Top Performers
-                    </h3>
-                    <div className="space-y-2">
-                      {tournament.entries.slice(0, 3).map((entry, i) => (
-                        <div key={i} className="flex justify-between items-center p-3 bg-accent/30 rounded-lg">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold">{i + 1}.</span>
-                            <span className="font-medium">{entry.teamName}</span>
-                          </div>
-                          <span className="font-bold">{entry.totalPoints} pts</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3 flex items-center">
-                      <Users className="mr-2 h-5 w-5 text-blue-500" />
-                      Participant Count
-                    </h3>
-                    <div className="text-3xl font-bold">{tournament.totalEntries}</div>
-                    <p className="text-sm text-muted-foreground">Total teams participating</p>
-                  </div>
-                </div>
-                
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3 flex items-center">
-                      <TrendingDown className="mr-2 h-5 w-5 text-rose-500" />
-                      Bottom Performers
-                    </h3>
-                    <div className="space-y-2">
-                      {tournament.entries.slice(-3).map((entry, i) => (
-                        <div key={i} className="flex justify-between items-center p-3 bg-accent/30 rounded-lg">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold">{tournament.entries.length - 2 + i}.</span>
-                            <span className="font-medium">{entry.teamName}</span>
-                          </div>
-                          <span className="font-bold">{entry.totalPoints} pts</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3 flex items-center">
-                      <Calendar className="mr-2 h-5 w-5 text-purple-500" />
-                      Tournament Period
-                    </h3>
-                    <div className="text-xl font-bold">Gameweek {tournament.gameweek}</div>
-                    <p className="text-sm text-muted-foreground">Current gameweek</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-8">
-                <h3 className="text-lg font-semibold mb-3 flex items-center">
-                  <BarChart2 className="mr-2 h-5 w-5 text-yellow-500" />
-                  Points Distribution
-                </h3>
-                <div className="bg-accent/30 p-6 rounded-lg flex items-center justify-center h-64">
-                  <p className="text-muted-foreground">Points distribution chart coming soon</p>
-                </div>
-              </div>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="rules">
-            <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">Tournament Rules</h2>
-              
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-2">Scoring System</h3>
-                  <p className="text-muted-foreground mb-2">
-                    The tournament uses the standard Fantasy Premier League points system for all participants.
-                  </p>
-                  <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                    <li>Players receive points based on their FPL performance in each gameweek</li>
-                    <li>Captain points count double</li>
-                    <li>All chips and transfers are allowed as per FPL rules</li>
-                  </ul>
-                </div>
-                
-                <div>
-                  <h3 className="text-lg font-semibold mb-2">Tournament Format</h3>
-                  <p className="text-muted-foreground mb-2">
-                    This tournament follows a league format where all teams compete against each other.
-                  </p>
-                  <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                    <li>Teams are ranked by total FPL points accumulated</li>
-                    <li>Tiebreakers are resolved by overall FPL rank</li>
-                    <li>The tournament runs from GW{tournament.gameweek-5} to GW{tournament.gameweek+10}</li>
-                  </ul>
-                </div>
-                
-                <div>
-                  <h3 className="text-lg font-semibold mb-2">Prizes and Recognition</h3>
-                  <p className="text-muted-foreground mb-2">
-                    Winners receive recognition and bragging rights among participants.
-                  </p>
-                  <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                    <li>1st Place: Tournament Champion Trophy (digital)</li>
-                    <li>2nd Place: Silver Medal Badge</li>
-                    <li>3rd Place: Bronze Medal Badge</li>
-                  </ul>
-                </div>
-              </div>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </RootLayout>
-  );
+const formatGroupMode = (groupMode: string): string => {
+	if (groupMode === "H2H") {
+		return "Head-to-head"
+	}
+	if (groupMode === "POINTS_RACES") {
+		return "Points race"
+	}
+	return "No group stage"
+}
+
+const formatKnockoutMode = (knockoutMode: string): string => {
+	if (knockoutMode === "SINGLE_ELIMINATION") {
+		return "Single elimination"
+	}
+	if (knockoutMode === "DOUBLE_ELIMINATION") {
+		return "Home & away"
+	}
+	return "No knockout stage"
+}
+
+export default function TournamentDetailClient({ params, entryId }: { params: { id: string }; entryId: number }) {
+	const tournamentId = params.id
+	const [searchQuery, setSearchQuery] = useState("")
+	const [currentGameweek, setCurrentGameweek] = useState<number>(1)
+	const [tournament, setTournament] = useState<EntryTournament | null>(null)
+	const [isLoading, setIsLoading] = useState<boolean>(true)
+	const [loadError, setLoadError] = useState<string | null>(null)
+
+	useEffect(() => {
+		let isCancelled = false
+
+		const loadTournament = async () => {
+			try {
+				setIsLoading(true)
+				setLoadError(null)
+
+				const [eventsData, tournamentsData] = await Promise.all([
+					executeQuery<EventsResponse>(GET_CURRENT_AND_NEXT_EVENTS),
+					executeQuery<EntryTournamentsResponse>(GET_ENTRY_TOURNAMENTS, {
+						entryId: entryId
+					})
+				])
+
+				if (isCancelled) {
+					return
+				}
+
+				const eventId = eventsData.current?.[0]?.id
+				if (eventId) {
+					setCurrentGameweek(eventId)
+				}
+
+				const selectedTournament =
+					tournamentsData.entryTournaments.find(
+						entryTournament => String(entryTournament.id) === tournamentId
+					) ?? null
+
+				setTournament(selectedTournament)
+			} catch (error) {
+				if (isCancelled) {
+					return
+				}
+				const message =
+					error instanceof Error ? error.message : "Failed to load tournament"
+				setLoadError(message)
+				setTournament(null)
+			} finally {
+				if (!isCancelled) {
+					setIsLoading(false)
+				}
+			}
+		}
+
+		loadTournament()
+
+		return () => {
+			isCancelled = true
+		}
+	}, [tournamentId])
+
+	const tournamentHeaderData = useMemo(() => {
+		if (!tournament) {
+			return null
+		}
+
+		return {
+			name: tournament.name,
+			gameweek: currentGameweek,
+			averagePoints: 0,
+			highestPoints: 0,
+			totalEntries: tournament.totalTeamNum
+		}
+	}, [currentGameweek, tournament])
+
+	return (
+		<RootLayout>
+			<div className="container max-w-4xl mx-auto px-4 py-8">
+				<Link href="/live/tournament">
+					<Button
+						variant="ghost"
+						className="flex items-center gap-1 text-primary hover:text-primary/80 mb-4"
+					>
+						<ArrowLeft className="h-4 w-4" />
+						<span>Back to All Tournaments</span>
+					</Button>
+				</Link>
+
+				{loadError && (
+					<Card className="p-4 mb-6 border-destructive/30 bg-destructive/5 text-destructive text-sm">
+						{loadError}
+					</Card>
+				)}
+
+				{isLoading && (
+					<Card className="p-6 text-sm text-muted-foreground mb-6">
+						Loading tournament...
+					</Card>
+				)}
+
+				{!isLoading && !tournament && !loadError && (
+					<Card className="p-6 text-sm text-muted-foreground mb-6">
+						This tournament is unavailable or you do not have access.
+					</Card>
+				)}
+
+				{tournament && tournamentHeaderData && (
+					<>
+						<TournamentHeader
+							name={tournamentHeaderData.name}
+							gameweek={tournamentHeaderData.gameweek}
+							averagePoints={tournamentHeaderData.averagePoints}
+							highestPoints={tournamentHeaderData.highestPoints}
+							totalEntries={tournamentHeaderData.totalEntries}
+							tournamentId={String(tournament.id)}
+						/>
+
+						<Tabs defaultValue="standings" className="mb-6">
+							<Card className="p-4 mb-6">
+								<TabsList className="w-full grid grid-cols-3 gap-2">
+									<TabsTrigger value="standings">Standings</TabsTrigger>
+									<TabsTrigger value="stats">Tournament Stats</TabsTrigger>
+									<TabsTrigger value="rules">Rules</TabsTrigger>
+								</TabsList>
+							</Card>
+
+							<TabsContent value="standings">
+								<SearchHeader
+									searchQuery={searchQuery}
+									setSearchQuery={setSearchQuery}
+									captainOptions={[]}
+									chipFilter="all"
+									onChipFilterChange={() => {}}
+									captainFilter="all"
+									onCaptainFilterChange={() => {}}
+								/>
+
+								<TournamentTable
+									entries={[]}
+									searchQuery={searchQuery}
+									tournamentId={String(tournament.id)}
+								/>
+							</TabsContent>
+
+							<TabsContent value="stats">
+								<Card className="p-6">
+									<h2 className="text-xl font-bold mb-6">Tournament Statistics</h2>
+
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+										<div className="space-y-2 rounded-lg bg-accent/30 p-4">
+											<div className="text-sm text-muted-foreground">Creator</div>
+											<div className="font-semibold">{tournament.creator}</div>
+										</div>
+
+										<div className="space-y-2 rounded-lg bg-accent/30 p-4">
+											<div className="text-sm text-muted-foreground">League Type</div>
+											<div className="font-semibold">{tournament.leagueType}</div>
+										</div>
+
+										<div className="space-y-2 rounded-lg bg-accent/30 p-4">
+											<div className="text-sm text-muted-foreground flex items-center gap-2">
+												<Users className="h-4 w-4 text-emerald-500" />
+												Participant Count
+											</div>
+											<div className="text-2xl font-bold">{tournament.totalTeamNum}</div>
+										</div>
+
+										<div className="space-y-2 rounded-lg bg-accent/30 p-4">
+											<div className="text-sm text-muted-foreground flex items-center gap-2">
+												<Calendar className="h-4 w-4 text-purple-500" />
+												Status
+											</div>
+											<div className="text-2xl font-bold">
+												{formatTournamentState(tournament.state)}
+											</div>
+										</div>
+									</div>
+								</Card>
+							</TabsContent>
+
+							<TabsContent value="rules">
+								<Card className="p-6">
+									<h2 className="text-xl font-bold mb-6">Tournament Rules</h2>
+
+									<div className="space-y-6 text-muted-foreground">
+										<div>
+											<h3 className="text-lg font-semibold mb-2 text-foreground">
+												Group Stage
+											</h3>
+											<ul className="list-disc pl-5 space-y-1">
+												<li>Mode: {formatGroupMode(tournament.groupMode)}</li>
+												<li>Teams per group: {tournament.groupTeamNum}</li>
+												<li>Groups: {tournament.groupNum}</li>
+												<li>
+													Gameweeks:{" "}
+													{tournament.groupStartedEventId && tournament.groupEndedEventId
+														? `GW${tournament.groupStartedEventId} - GW${tournament.groupEndedEventId}`
+														: "Not scheduled"}
+												</li>
+											</ul>
+										</div>
+
+										<div>
+											<h3 className="text-lg font-semibold mb-2 text-foreground">
+												Knockout Stage
+											</h3>
+											<ul className="list-disc pl-5 space-y-1">
+												<li>Mode: {formatKnockoutMode(tournament.knockoutMode)}</li>
+												<li>
+													Teams:{" "}
+													{tournament.knockoutTeamNum !== null
+														? tournament.knockoutTeamNum
+														: "Not configured"}
+												</li>
+												<li>
+													Rounds:{" "}
+													{tournament.knockoutRounds !== null
+														? tournament.knockoutRounds
+														: "Not configured"}
+												</li>
+												<li>
+													Gameweeks:{" "}
+													{tournament.knockoutStartedEventId &&
+													tournament.knockoutEndedEventId
+														? `GW${tournament.knockoutStartedEventId} - GW${tournament.knockoutEndedEventId}`
+														: "Not scheduled"}
+												</li>
+											</ul>
+										</div>
+									</div>
+								</Card>
+							</TabsContent>
+						</Tabs>
+					</>
+				)}
+			</div>
+		</RootLayout>
+	)
 }

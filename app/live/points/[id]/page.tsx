@@ -2,8 +2,6 @@ import { Metadata } from 'next'
 import { Suspense } from 'react'
 import TeamPointsClient from './TeamPointsClient'
 
-export const dynamicParams = false
-
 export async function generateMetadata({
 	params
 }: {
@@ -15,20 +13,6 @@ export async function generateMetadata({
 	}
 }
 
-export function generateStaticParams() {
-	// Pre-generate routes for known team IDs (required for static export)
-	return [
-		{ id: '1' },
-		{ id: '2' },
-		{ id: '3' },
-		{ id: '4' },
-		{ id: '5' },
-		{ id: '6' },
-		{ id: '7' },
-		{ id: '8' }
-	]
-}
-
 type PageProps = {
 	params: Promise<{ id: string }>
 	searchParams: Promise<{ [key: string]: string | string[] | undefined }>
@@ -36,6 +20,7 @@ type PageProps = {
 
 export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await params
+	const { tournamentId } = await searchParams
 	return (
 		<Suspense
 			fallback={
@@ -46,7 +31,10 @@ export default async function Page({ params, searchParams }: PageProps) {
 				</div>
 			}
 		>
-			<TeamPointsClient params={{ id }} />
+			<TeamPointsClient
+				entryId={Number(id)}
+				tournamentId={typeof tournamentId === 'string' ? tournamentId : undefined}
+			/>
 		</Suspense>
 	)
 }

@@ -28,6 +28,7 @@ import {
 } from '@/lib/graphql/queries'
 import { teamFullNames, type PlayerOption, type Position, type Team } from '@/types/common'
 import { format, parseISO } from 'date-fns'
+import { X } from 'lucide-react'
 import { useMemo } from 'react'
 import { useEffect, useState } from 'react'
 
@@ -448,6 +449,21 @@ export default function PriceChangesPage() {
 		[playerHistoryRows]
 	)
 
+	const hasDailyPriceChanges =
+		priceChanges.rises.length > 0 || priceChanges.falls.length > 0
+
+	const currentPlayerPrice = useMemo(() => {
+		if (selectedPlayerPriceSnapshot) {
+			return selectedPlayerPriceSnapshot.newPrice
+		}
+
+		if (playerHistoryRows.length > 0) {
+			return playerHistoryRows[0].newPrice
+		}
+
+		return null
+	}, [playerHistoryRows, selectedPlayerPriceSnapshot])
+
 	return (
 		<RootLayout>
 			<div className="container max-w-4xl mx-auto px-4 py-8">
@@ -498,12 +514,23 @@ export default function PriceChangesPage() {
 								</SelectContent>
 							</Select>
 
-							<div className="md:col-span-2">
+							<div className="md:col-span-2 relative">
 								<Input
 									value={playerSearchTerm}
 									onChange={event => setPlayerSearchTerm(event.target.value)}
 									placeholder="Type player name to search..."
+									className={playerSearchTerm ? 'pr-10' : ''}
 								/>
+								{playerSearchTerm && (
+									<button
+										type="button"
+										aria-label="Clear player search"
+										onClick={() => setPlayerSearchTerm('')}
+										className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+									>
+										<X className="h-4 w-4" />
+									</button>
+								)}
 							</div>
 						</div>
 
@@ -628,6 +655,10 @@ export default function PriceChangesPage() {
 								<div className="text-sm text-muted-foreground">
 									Loading price changes...
 								</div>
+							) : !hasDailyPriceChanges ? (
+								<div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
+									No price changes have been recorded for today yet.
+								</div>
 							) : (
 								<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 									<PriceChangeList
@@ -654,8 +685,8 @@ export default function PriceChangesPage() {
 								<p className="text-muted-foreground mb-6">
 									{selectedPlayer.position} | {selectedPlayer.teamShortName} |
 									Current Price:{' '}
-									{selectedPlayerPriceSnapshot
-										? `£${selectedPlayerPriceSnapshot.newPrice.toFixed(1)}m`
+									{currentPlayerPrice !== null
+										? `£${currentPlayerPrice.toFixed(1)}m`
 										: 'N/A'}
 								</p>
 
@@ -668,6 +699,14 @@ export default function PriceChangesPage() {
 								{isHistoryLoading ? (
 									<div className="text-sm text-muted-foreground">
 										Loading player price history...
+									</div>
+								) : playerHistoryRows.length === 0 ? (
+									<div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
+										No historical price changes are available for{' '}
+										<span className="font-medium text-foreground">
+											{selectedPlayer.name}
+										</span>{' '}
+										right now. GraphQL returned no history rows for this player.
 									</div>
 								) : (
 									<StatsTable
@@ -697,7 +736,7 @@ export default function PriceChangesPage() {
 												key: 'change',
 												label: 'Change',
 												format: (_, row) => {
-													const typedRow = row as PriceHistoryRow
+													const typedRow = row as unknown as PriceHistoryRow
 													const change = typedRow.change
 													const className =
 														change > 0

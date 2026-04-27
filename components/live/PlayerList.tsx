@@ -11,6 +11,8 @@ interface PlayerListProps {
 }
 
 function PlayerListComponent({ players, startingPlayers, benchPlayers }: PlayerListProps) {
+  const benchBoostActive = !!benchPlayers?.some(player => player.isBenchBoostActive);
+
   // Handle both direct players array and separate starting/bench arrays
   if (players) {
     return (
@@ -34,7 +36,7 @@ function PlayerListComponent({ players, startingPlayers, benchPlayers }: PlayerL
       {benchPlayers && benchPlayers.length > 0 && (
         <div className="bg-accent/20">
           <div className="p-4 text-sm font-medium text-muted-foreground">
-            Substitutes
+            {benchBoostActive ? "Substitutes (Bench Boost active)" : "Substitutes"}
           </div>
           {benchPlayers.map((player) => (
             <PlayerRow key={player.id} player={player} />

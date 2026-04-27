@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { formatCompactNumber } from "@/lib/utils";
+import { formatCompactNumber, normalizePosition } from "@/lib/utils";
 import { ArrowLeftCircle, ArrowRightCircle } from "lucide-react";
 
 interface Transfer {
@@ -35,8 +35,7 @@ export function TransferList({ title, transfers, type }: TransferListProps) {
     : "border-rose-200 dark:border-rose-900";
 
   const getPositionColor = (position: string) => {
-    const upper = position.toUpperCase();
-    switch (upper) {
+    switch (normalizePosition(position)) {
       case "GKP": return "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300";
       case "DEF": return "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300";
       case "MID": return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300";
@@ -73,7 +72,7 @@ export function TransferList({ title, transfers, type }: TransferListProps) {
                 variant="secondary" 
                 className={`shrink-0 text-xs font-semibold ${getPositionColor(transfer.position)}`}
               >
-                {transfer.position}
+                {normalizePosition(transfer.position)}
               </Badge>
               
               <div className="flex-1 min-w-0">

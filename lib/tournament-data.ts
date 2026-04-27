@@ -23,6 +23,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1788,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: true,
@@ -42,6 +43,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1684,
         playersPlayed: 12,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -61,6 +63,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1909,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -80,6 +83,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1555,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -99,6 +103,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1836,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -118,6 +123,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1810,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -137,6 +143,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1779,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -156,6 +163,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1861,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -175,6 +183,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1723,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: true,
           triple: false,
@@ -194,6 +203,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1690,
         playersPlayed: 10,
         playersToPlay: 1,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -213,6 +223,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1644,
         playersPlayed: 10,
         playersToPlay: 1,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -232,6 +243,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1678,
         playersPlayed: 9,
         playersToPlay: 2,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -261,6 +273,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1624,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -280,6 +293,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1702,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: true,
@@ -299,6 +313,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1618,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -318,6 +333,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1756,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -337,6 +353,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1693,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: true,
           triple: false,
@@ -366,6 +383,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1921,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -385,6 +403,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1953,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -404,6 +423,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1768,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -423,6 +443,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1702,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,
@@ -442,6 +463,7 @@ export const tournaments: Tournament[] = [
         totalPoints: 1834,
         playersPlayed: 11,
         playersToPlay: 0,
+        picks: [],
         chips: {
           bench: false,
           triple: false,

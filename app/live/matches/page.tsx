@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { executeQuery } from "@/lib/graphql-client";
 import {
+  GET_CURRENT_AND_NEXT_EVENTS,
   GET_LIVE_MATCHES,
+  type EventsResponse,
   type MatchPlayerData,
   type LiveMatchesResponse,
 } from "@/lib/graphql/queries";
@@ -106,6 +108,7 @@ function transformLiveMatches(data: LiveMatchesResponse["liveMatches"]): Match[]
   const mapPlayers = (players: MatchPlayerData[] | undefined) =>
     (players ?? []).map((player) => ({
       player: player.webName,
+      element: player.element,
       elementType: player.elementType,
       minutes: player.minutes,
       goals: player.goalsScored ?? 0,
@@ -289,21 +292,20 @@ function AutoRefreshCountdown({
     }
 
     setCountdown(LIVE_MATCHES_AUTO_REFRESH_SECONDS);
+    const remainingRef = { current: LIVE_MATCHES_AUTO_REFRESH_SECONDS };
 
     const intervalId = window.setInterval(() => {
-      setCountdown((previous) => {
-        if (previous === null || previous <= 1) {
-          if (!refreshInFlightRef.current) {
-            refreshInFlightRef.current = true;
-            void onRefreshRef.current().finally(() => {
-              refreshInFlightRef.current = false;
-            });
-          }
-          return LIVE_MATCHES_AUTO_REFRESH_SECONDS;
+      remainingRef.current -= 1;
+      if (remainingRef.current <= 0) {
+        remainingRef.current = LIVE_MATCHES_AUTO_REFRESH_SECONDS;
+        if (!refreshInFlightRef.current) {
+          refreshInFlightRef.current = true;
+          void onRefreshRef.current().finally(() => {
+            refreshInFlightRef.current = false;
+          });
         }
-
-        return previous - 1;
-      });
+      }
+      setCountdown(remainingRef.current);
     }, 1000);
 
     return () => {
@@ -328,6 +330,7 @@ export default function LiveMatches() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [eventId, setEventId] = useState<number | undefined>(undefined);
   const hasSavedTabPreference = useRef(false);
   const isFetchInFlight = useRef(false);
 
@@ -410,12 +413,24 @@ export default function LiveMatches() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    executeQuery<EventsResponse>(GET_CURRENT_AND_NEXT_EVENTS)
+      .then((data) => setEventId(data.current?.[0]?.id))
+      .catch(() => {/* silent — eventId stays undefined */});
+  }, []);
+
   const matchesByTab = useMemo(() => {
     return {
       live: matches.filter(
         (match) => match.status === "LIVE" || match.status === "HT"
       ),
-      finished: matches.filter((match) => match.status === "FT"),
+      finished: matches
+        .filter((match) => match.status === "FT")
+        .sort((a, b) => {
+          const tA = new Date(a.kickoff || "").getTime();
+          const tB = new Date(b.kickoff || "").getTime();
+          return (isNaN(tB) ? 1 : 0) - (isNaN(tA) ? 1 : 0) || tB - tA;
+        }),
       "not-started": matches.filter((match) => match.status === "NOT_STARTED"),
       upcoming: matches.filter((match) => match.status === "UPCOMING"),
     } satisfies Record<LiveMatchesTab, Match[]>;
@@ -524,6 +539,7 @@ export default function LiveMatches() {
                   match={match}
                   allMatches={activeMatches}
                   currentIndex={i}
+                  eventId={eventId}
                 />
               ))
             ) : (

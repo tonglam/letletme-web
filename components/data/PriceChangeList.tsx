@@ -14,7 +14,8 @@ interface PriceChange {
 	player: PlayerOption
 	oldPrice: number
 	newPrice: number
-	date: string
+	date: string | null
+	positionKnown?: boolean
 	transfersIn?: number
 	transfersOut?: number
 }

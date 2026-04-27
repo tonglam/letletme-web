@@ -2,37 +2,195 @@
 
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import RootLayout from '@/components/layout/RootLayout'
+import { PlayerOwnershipFilter } from '@/components/player/PlayerOwnershipFilter'
+import { TeamExposureFilter } from '@/components/player/TeamExposureFilter'
 import { SearchHeader } from '@/components/tournament/SearchHeader'
 import { TournamentHeader } from '@/components/tournament/TournamentHeader'
 import { TournamentSelector } from '@/components/tournament/TournamentSelector'
 import { TournamentTable } from '@/components/tournament/TournamentTable'
 import { Card } from '@/components/ui/card'
 import { executeQuery } from '@/lib/graphql-client'
-import { GET_CURRENT_AND_NEXT_EVENTS, type EventsResponse } from '@/lib/graphql/queries'
+import {
+	GET_CURRENT_AND_NEXT_EVENTS,
+	GET_ENTRY_TOURNAMENTS,
+	GET_TOURNAMENT_LIVE_POINTS,
+	type EntryTournamentsResponse,
+	type EventsResponse,
+	type TournamentLiveCalcData,
+	type TournamentLivePointsResponse
+} from '@/lib/graphql/queries'
+import {
+	mapEntryTournamentToLiveTournament
+} from '@/lib/tournament/liveTournament'
+import { TournamentEntry } from '@/types/tournament'
 import { Tournament } from '@/types/tournament'
-import { useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-const DEFAULT_TOURNAMENT_ID = 't1'
-
-interface TournamentClientProps {
-	tournaments: Tournament[]
+type LiveTournamentStats = {
+	averagePoints: number
+	highestPoints: number
+	totalEntries: number
 }
 
-export default function TournamentClient({
-	tournaments
-}: TournamentClientProps) {
+const mapEventChipToFlags = (eventChip: string | null) => ({
+	bench: eventChip === 'BENCH_BOOST',
+	triple: eventChip === 'TRIPLE_CAPTAIN',
+	wildcard: eventChip === 'WILDCARD'
+})
+
+const buildRankMap = (rows: TournamentLiveCalcData[]): Map<number, number> => {
+	const sorted = [...rows].sort((a, b) => {
+		if (b.liveNetPoints !== a.liveNetPoints) {
+			return b.liveNetPoints - a.liveNetPoints
+		}
+		if (b.liveTotalPoints !== a.liveTotalPoints) {
+			return b.liveTotalPoints - a.liveTotalPoints
+		}
+		return a.entry - b.entry
+	})
+
+	return new Map(sorted.map((row, index) => [row.entry, index + 1]))
+}
+
+const buildTournamentEntries = (
+	currentRows: TournamentLiveCalcData[],
+	previousRows: TournamentLiveCalcData[]
+): TournamentEntry[] => {
+	const currentRankByEntryId = buildRankMap(currentRows)
+	const previousRankByEntryId = buildRankMap(previousRows)
+
+	return currentRows.map(row => ({
+		id: String(row.entry),
+		rank: currentRankByEntryId.get(row.entry) ?? 0,
+		previousRank:
+			previousRankByEntryId.get(row.entry) ?? currentRankByEntryId.get(row.entry) ?? 0,
+		teamName: row.entryName ?? `Entry ${row.entry}`,
+		managerName: row.playerName ?? '-',
+		captainName: row.pickList.find(player => player.isCaptain)?.webName ?? row.captainName ?? 'N/A',
+		captainTeam: row.pickList.find(player => player.isCaptain)?.teamShortName ?? 'N/A',
+		captainPoints: 0,
+		gwPoints: row.livePoints ?? 0,
+		gwNetPoints: row.liveNetPoints ?? row.livePoints ?? 0,
+		eventCost: row.transferCost ?? 0,
+		overallRank: row.overallRank ?? 0,
+		livePoints: row.liveNetPoints ?? row.livePoints ?? 0,
+		totalPoints: row.liveTotalPoints ?? 0,
+		playersPlayed: row.played ?? 0,
+		playersToPlay: row.toPlay ?? 0,
+		picks: row.pickList.map(player => ({
+			element: player.element,
+			webName: player.webName,
+			teamShortName: player.teamShortName,
+			teamName: player.teamName,
+			elementTypeName: player.elementTypeName,
+			position: player.position,
+			isCaptain: player.isCaptain,
+			isViceCaptain: player.isViceCaptain
+		})),
+		chips: mapEventChipToFlags(row.chip)
+	}))
+}
+
+const buildTournamentStats = (entries: TournamentEntry[]): LiveTournamentStats => {
+	if (entries.length === 0) {
+		return {
+			averagePoints: 0,
+			highestPoints: 0,
+			totalEntries: 0
+		}
+	}
+
+	const totalPoints = entries.reduce((sum, entry) => sum + entry.livePoints, 0)
+	const highestPoints = entries.reduce(
+		(max, entry) => Math.max(max, entry.livePoints),
+		entries[0]?.livePoints ?? 0
+	)
+
+	return {
+		averagePoints: Math.round(totalPoints / entries.length),
+		highestPoints,
+		totalEntries: entries.length
+	}
+}
+
+export default function TournamentClient({ entryId }: { entryId: number }) {
+	const router = useRouter()
 	const searchParams = useSearchParams()
-	const tournamentIdFromUrl =
-		searchParams.get('tournamentId') || DEFAULT_TOURNAMENT_ID
 
 	const [searchQuery, setSearchQuery] = useState<string>('')
-	const [currentGameweek, setCurrentGameweek] = useState<number | undefined>(
-		undefined
-	)
-	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(
-		undefined
-	)
+	const [chipFilter, setChipFilter] = useState<string>('all')
+	const [captainFilter, setCaptainFilter] = useState<string>('all')
+	const [tournaments, setTournaments] = useState<Tournament[]>([])
+	const [loadError, setLoadError] = useState<string | null>(null)
+	const [resultsError, setResultsError] = useState<string | null>(null)
+	const [isLoadingTournaments, setIsLoadingTournaments] = useState<boolean>(true)
+	const [isLoadingResults, setIsLoadingResults] = useState<boolean>(false)
+	const [currentGameweek, setCurrentGameweek] = useState<number | undefined>(undefined)
+	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(undefined)
+	const [selectedEntries, setSelectedEntries] = useState<TournamentEntry[]>([])
+	const [ownershipMatchedEntryIds, setOwnershipMatchedEntryIds] = useState<string[] | null>(null)
+	const [teamExposureMatchedEntryIds, setTeamExposureMatchedEntryIds] = useState<string[] | null>(null)
+	const [selectedStats, setSelectedStats] = useState<LiveTournamentStats>({
+		averagePoints: 0,
+		highestPoints: 0,
+		totalEntries: 0
+	})
+
+	const tournamentIdFromUrl = searchParams.get('tournamentId')
+
+	const selectedTournament = useMemo(() => {
+		const currentTournament = tournaments.find(t => t.id === tournamentIdFromUrl)
+		return currentTournament ?? tournaments[0] ?? null
+	}, [tournamentIdFromUrl, tournaments])
+
+	useEffect(() => {
+		let isCancelled = false
+
+		const loadEntryTournaments = async () => {
+			try {
+				setIsLoadingTournaments(true)
+				setLoadError(null)
+
+				const data = await executeQuery<EntryTournamentsResponse>(
+					GET_ENTRY_TOURNAMENTS,
+					{
+						entryId: entryId
+					}
+				)
+
+				if (isCancelled) {
+					return
+				}
+
+				const mappedTournaments = data.entryTournaments.map(entryTournament =>
+					mapEntryTournamentToLiveTournament(entryTournament)
+				)
+				setTournaments(mappedTournaments)
+			} catch (error) {
+				if (isCancelled) {
+					return
+				}
+
+				const message =
+					error instanceof Error
+						? error.message
+						: 'Failed to load tournaments from API'
+				setLoadError(message)
+				setTournaments([])
+			} finally {
+				if (!isCancelled) {
+					setIsLoadingTournaments(false)
+				}
+			}
+		}
+
+		loadEntryTournaments()
+
+		return () => {
+			isCancelled = true
+		}
+	}, [])
 
 	useEffect(() => {
 		let isCancelled = false
@@ -70,52 +228,257 @@ export default function TournamentClient({
 		}
 	}, [])
 
-	// Find the current tournament based on the selected ID
-	const currentTournament =
-		tournaments.find(t => t.id === tournamentIdFromUrl) || tournaments[0]
+	useEffect(() => {
+		if (!selectedTournament || selectedGameweek === undefined) {
+			setSelectedEntries([])
+			setSelectedStats({ averagePoints: 0, highestPoints: 0, totalEntries: 0 })
+			return
+		}
+
+		let isCancelled = false
+
+		const loadTournamentResults = async () => {
+			try {
+				setIsLoadingResults(true)
+				setResultsError(null)
+
+				const tournamentId = Number(selectedTournament.id)
+				const [currentResponse, previousResponse] = await Promise.all([
+					executeQuery<TournamentLivePointsResponse>(GET_TOURNAMENT_LIVE_POINTS, {
+						tournamentId,
+						eventId: selectedGameweek
+					}),
+					selectedGameweek > 1
+						? executeQuery<TournamentLivePointsResponse>(GET_TOURNAMENT_LIVE_POINTS, {
+								tournamentId,
+								eventId: selectedGameweek - 1
+						  })
+						: Promise.resolve({
+								calcLivePointsForTournament: {
+									results: [],
+									errors: [],
+									meta: {
+										eventId: selectedGameweek - 1,
+										totalEntries: 0,
+										succeededCount: 0,
+										failedCount: 0
+									}
+								}
+						  })
+				])
+
+				if (isCancelled) {
+					return
+				}
+
+				const currentBatch = currentResponse.calcLivePointsForTournament
+				const previousBatch = previousResponse.calcLivePointsForTournament
+				if (currentBatch.meta.failedCount > 0) {
+					setResultsError(
+						`Partial results: ${currentBatch.meta.failedCount}/${currentBatch.meta.totalEntries} entries failed to calculate.`
+					)
+				}
+
+				const entries = buildTournamentEntries(
+					currentBatch.results ?? [],
+					previousBatch.results ?? []
+				)
+
+				setSelectedEntries(entries)
+				setSelectedStats(buildTournamentStats(entries))
+			} catch (error) {
+				if (isCancelled) {
+					return
+				}
+
+				const message =
+					error instanceof Error
+						? error.message
+						: 'Failed to load tournament standings from API'
+				setResultsError(message)
+				setSelectedEntries([])
+				setSelectedStats({ averagePoints: 0, highestPoints: 0, totalEntries: 0 })
+			} finally {
+				if (!isCancelled) {
+					setIsLoadingResults(false)
+				}
+			}
+		}
+
+		loadTournamentResults()
+
+		return () => {
+			isCancelled = true
+		}
+	}, [selectedGameweek, selectedTournament])
+
+	useEffect(() => {
+		setOwnershipMatchedEntryIds(null)
+		setTeamExposureMatchedEntryIds(null)
+	}, [selectedGameweek, selectedTournament?.id])
+
 	const displayGameweek = selectedGameweek ?? currentGameweek ?? 1
+	const captainOptions = useMemo(
+		() =>
+			Array.from(
+				new Set(
+					selectedEntries
+						.map(entry => entry.captainName)
+						.filter(name => !!name && name !== 'N/A')
+				)
+			).sort((a, b) => a.localeCompare(b)),
+		[selectedEntries]
+	)
+
+	const handleOwnershipMatchedEntryIdsChange = useCallback((entryIds: string[] | null) => {
+		setOwnershipMatchedEntryIds(entryIds)
+	}, [])
+
+	const handleTeamExposureMatchedEntryIdsChange = useCallback((entryIds: string[] | null) => {
+		setTeamExposureMatchedEntryIds(entryIds)
+	}, [])
+
+	const ownershipMatchedEntrySet = useMemo(
+		() => ownershipMatchedEntryIds ? new Set(ownershipMatchedEntryIds) : null,
+		[ownershipMatchedEntryIds]
+	)
+
+	const teamExposureMatchedEntrySet = useMemo(
+		() => teamExposureMatchedEntryIds ? new Set(teamExposureMatchedEntryIds) : null,
+		[teamExposureMatchedEntryIds]
+	)
+
+	const filteredEntries = useMemo(() => {
+		const query = searchQuery.trim().toLowerCase()
+		const captainQuery = captainFilter.trim().toLowerCase()
+		return selectedEntries.filter(entry => {
+			const matchesSearch =
+				query.length === 0 ||
+				entry.teamName.toLowerCase().includes(query) ||
+				entry.managerName.toLowerCase().includes(query)
+
+			const matchesChip =
+				chipFilter === 'all' ||
+				(chipFilter === 'triple' && entry.chips.triple) ||
+				(chipFilter === 'bench' && entry.chips.bench) ||
+				(chipFilter === 'wildcard' && entry.chips.wildcard)
+
+			const matchesCaptain =
+				captainFilter === 'all' ||
+				captainQuery.length === 0 ||
+				entry.captainName.toLowerCase() === captainQuery
+
+			const matchesOwnership =
+				ownershipMatchedEntrySet === null ||
+				ownershipMatchedEntrySet.has(entry.id)
+
+			const matchesTeamExposure =
+				teamExposureMatchedEntrySet === null ||
+				teamExposureMatchedEntrySet.has(entry.id)
+
+			return matchesSearch && matchesChip && matchesCaptain && matchesOwnership && matchesTeamExposure
+		})
+	}, [captainFilter, chipFilter, ownershipMatchedEntrySet, teamExposureMatchedEntrySet, searchQuery, selectedEntries])
 
 	return (
 		<RootLayout>
 			<div className="container max-w-4xl mx-auto px-4 py-8">
-				<TournamentSelector
-					tournaments={tournaments}
-					currentTournamentId={tournamentIdFromUrl}
-					onTournamentChange={id => {
-						// Handle tournament change
-						window.location.href = `/live/tournament?tournamentId=${id}`
-					}}
-				/>
+				{loadError && (
+					<Card className="p-4 mb-6 border-destructive/30 bg-destructive/5 text-destructive text-sm">
+						{loadError}
+					</Card>
+				)}
+
+				{resultsError && (
+					<Card className="p-4 mb-6 border-destructive/30 bg-destructive/5 text-destructive text-sm">
+						{resultsError}
+					</Card>
+				)}
+
+				{tournaments.length > 0 && selectedTournament && (
+					<TournamentSelector
+						tournaments={tournaments}
+						currentTournamentId={selectedTournament.id}
+						onTournamentChange={id => {
+							router.push(`/live/tournament?tournamentId=${id}`)
+						}}
+					/>
+				)}
 
 				<Card className="p-4 mb-6">
 					{currentGameweek !== undefined ? (
 						<GameweekSelector
 							onGameweekChange={setSelectedGameweek}
 							currentGameweek={currentGameweek}
+							selectedGameweek={selectedGameweek}
+							disabled={isLoadingResults}
 						/>
 					) : (
 						<p className="text-sm text-muted-foreground">Loading gameweek...</p>
 					)}
 				</Card>
 
-				<TournamentHeader
-					name={currentTournament.name}
-					gameweek={displayGameweek}
-					averagePoints={currentTournament.averagePoints}
-					highestPoints={currentTournament.highestPoints}
-					totalEntries={currentTournament.totalEntries}
-				/>
+				{isLoadingTournaments && (
+					<Card className="p-6 text-sm text-muted-foreground">
+						Loading tournaments...
+					</Card>
+				)}
 
-				<SearchHeader
-					searchQuery={searchQuery}
-					setSearchQuery={setSearchQuery}
-				/>
+				{!isLoadingTournaments && !selectedTournament && (
+					<Card className="p-6 text-sm text-muted-foreground">
+						No tournaments available for this account yet.
+					</Card>
+				)}
 
-				<TournamentTable
-					entries={currentTournament.entries}
-					searchQuery={searchQuery}
-					tournamentId={tournamentIdFromUrl}
-				/>
+				{selectedTournament && (
+					<>
+						<TournamentHeader
+							name={selectedTournament.name}
+							gameweek={displayGameweek}
+							averagePoints={selectedStats.averagePoints}
+							highestPoints={selectedStats.highestPoints}
+							totalEntries={selectedStats.totalEntries || selectedTournament.totalEntries}
+							tournamentId={selectedTournament.id}
+						/>
+
+						<SearchHeader
+							searchQuery={searchQuery}
+							setSearchQuery={setSearchQuery}
+							captainOptions={captainOptions}
+							chipFilter={chipFilter}
+							onChipFilterChange={setChipFilter}
+							captainFilter={captainFilter}
+							onCaptainFilterChange={setCaptainFilter}
+						/>
+
+						{isLoadingResults ? (
+							<Card className="p-6 text-sm text-muted-foreground mb-6">
+								Loading tournament standings...
+							</Card>
+						) : (
+							<>
+								<PlayerOwnershipFilter
+									key={`${selectedTournament.id}-${displayGameweek}`}
+									entries={selectedEntries}
+									onMatchedEntryIdsChange={handleOwnershipMatchedEntryIdsChange}
+								/>
+
+								<TeamExposureFilter
+									key={`team-${selectedTournament.id}-${displayGameweek}`}
+									entries={selectedEntries}
+									onMatchedEntryIdsChange={handleTeamExposureMatchedEntryIdsChange}
+								/>
+
+								<TournamentTable
+									entries={filteredEntries}
+									searchQuery=""
+									tournamentId={selectedTournament.id}
+									gameweek={displayGameweek}
+								/>
+							</>
+						)}
+					</>
+				)}
 			</div>
 		</RootLayout>
 	)

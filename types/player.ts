@@ -6,6 +6,7 @@ export interface Player {
   position: "GKP" | "DEF" | "MID" | "FWD";
   playingStatus: "NOT_STARTED" | "PLAYING" | "FINISHED";
   isBench?: boolean;
+  isBenchBoostActive?: boolean;
   breakdownStats?: PlayerBreakdownStat[];
   stats: {
     minutes: number;

@@ -1,54 +1,66 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import RootLayout from "@/components/layout/RootLayout";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSession } from "@/lib/auth-client";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { StatsTable } from "@/components/data/StatsTable";
-import { 
-  Trophy, 
-  Users, 
-  ArrowRight, 
-  ArrowLeft,
-  BarChart2, 
-  Medal, 
-  Crown,
-  TrendingUp,
-  Calendar,
-  Star
-} from "lucide-react";
+import RootLayout from "@/components/layout/RootLayout";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { executeQuery } from "@/lib/graphql-client";
+import {
+  GET_CURRENT_AND_NEXT_EVENTS,
+  GET_ENTRY_TOURNAMENTS,
+  GET_TOURNAMENT_ENTRY_RANKING_SUMMARY,
+  GET_TOURNAMENT_EVENT_RESULTS,
+  type EntryTournament,
+  type EntryTournamentsResponse,
+  type EventsResponse,
+  type TournamentEntryRankingSummary,
+  type TournamentEntryRankingSummaryResponse,
+  type TournamentEventResultItem,
+  type TournamentEventResultsResponse,
+} from "@/lib/graphql/queries";
 import { formatCompactNumber } from "@/lib/utils";
+import { ArrowUp, ArrowDown, Calendar, Crown, Star, Trophy, Users } from "lucide-react";
 
-// Interfaces for tournament stats
-interface TournamentStats {
-  id: string;
-  name: string;
-  createdBy: string;
-  playerCount: number;
-  currentGameweek: number;
-  startGameweek: number;
-  endGameweek: number;
-  myRank: number;
-  myPreviousRank: number;
-  myTeam: {
-    name: string;
-    points: number;
-    captaincy: {
-      name: string;
-      team: string;
-      points: number;
-    };
-  };
-  topPerformers: TopPerformer[];
-  standings: Standing[];
-  captainStats: CaptainStat[];
-  chipUsage: ChipUsage[];
-  h2hRecord?: H2HRecord[];
+interface StandingRow {
+  entryId: number;
+  rank: number;
+  previousRank: number;
+  teamName: string;
+  managerName: string;
+  gameweekPoints: number;
+  totalPoints: number;
+  overallRank: number;
+  teamValue: number | null;
+}
+
+interface CaptainRow {
+  player: string;
+  team: string;
+  count: number;
+  percentage: number;
+  averagePoints: number;
+}
+
+interface ChipRow {
+  chip: string;
+  count: number;
+  percentage: number;
+  averagePoints: number;
 }
 
 interface TopPerformer {
+  entryId: number;
   rank: number;
   teamName: string;
   managerName: string;
@@ -60,697 +72,552 @@ interface TopPerformer {
   };
 }
 
-interface Standing {
-  rank: number;
-  previousRank: number;
-  teamName: string;
-  managerName: string;
-  gameweekPoints: number;
-  totalPoints: number;
+interface PlayerMeta {
+  webName: string;
+  teamShortName: string;
 }
 
-interface CaptainStat {
-  player: string;
-  team: string;
-  count: number;
-  percentage: number;
-  averagePoints: number;
+interface TournamentStatsViewModel {
+  tournament: EntryTournament;
+  currentGameweek: number;
+  startGameweek: number | null;
+  endGameweek: number | null;
+  myRank: number | null;
+  myPreviousRank: number | null;
+  myTeam: {
+    name: string;
+    points: number | null;
+    eventCost: number | null;
+    captaincy: {
+      name: string;
+      team: string;
+      points: number | null;
+    };
+  } | null;
+  topPerformers: TopPerformer[];
+  standings: StandingRow[];
+  captainStats: CaptainRow[];
+  chipUsage: ChipRow[];
 }
 
-interface ChipUsage {
-  chip: string;
-  count: number;
-  percentage: number;
-  averagePoints: number;
+interface TournamentRankingRow {
+  label: string;
+  value: string;
+  rankLabel: string;
+  rank: string;
 }
 
-interface H2HRecord {
-  opponent: string;
-  wins: number;
-  draws: number;
-  losses: number;
-  pointsFor: number;
-  pointsAgainst: number;
-}
-
-// Mock tournament data
-const mockTournaments = [
-  {
-    id: "t1",
-    name: "Premier League Fan Cup",
-    createdBy: "tong",
-    playerCount: 21568,
-    currentGameweek: 21,
-    startGameweek: 16,
-    endGameweek: 26,
-    myRank: 1345,
-    myPreviousRank: 1532,
-    myTeam: {
-      name: "Arsenal Guangzhou FC",
-      points: 78,
-      captaincy: {
-        name: "M.Salah",
-        team: "LIV",
-        points: 14
-      }
-    },
-    topPerformers: [
-      {
-        rank: 1,
-        teamName: "Arsenal Guangzhou FC",
-        managerName: "Gunners Fan",
-        points: 78,
-        captain: {
-          name: "M.Salah",
-          team: "LIV",
-          points: 14
-        }
-      },
-      {
-        rank: 2,
-        teamName: "沉迷于搬砖不想披",
-        managerName: "Brick Layer",
-        points: 77,
-        captain: {
-          name: "M.Salah",
-          team: "LIV",
-          points: 14
-        }
-      },
-      {
-        rank: 3,
-        teamName: "世俱杯冠军阿森纳",
-        managerName: "Arsenal Champion",
-        points: 76,
-        captain: {
-          name: "M.Salah",
-          team: "LIV",
-          points: 14
-        }
-      },
-      {
-        rank: 4,
-        teamName: "Lord Bendtner",
-        managerName: "Nick B",
-        points: 73,
-        captain: {
-          name: "M.Salah",
-          team: "LIV",
-          points: 12
-        }
-      },
-      {
-        rank: 5,
-        teamName: "JackieHooooooo",
-        managerName: "Jackie H",
-        points: 71,
-        captain: {
-          name: "M.Salah",
-          team: "LIV",
-          points: 14
-        }
-      }
-    ],
-    standings: [
-      {
-        rank: 1,
-        previousRank: 3,
-        teamName: "Arsenal Guangzhou FC",
-        managerName: "Gunners Fan",
-        gameweekPoints: 78,
-        totalPoints: 1788
-      },
-      {
-        rank: 2,
-        previousRank: 1,
-        teamName: "沉迷于搬砖不想披",
-        managerName: "Brick Layer",
-        gameweekPoints: 77,
-        totalPoints: 1684
-      },
-      {
-        rank: 3,
-        previousRank: 2,
-        teamName: "世俱杯冠军阿森纳",
-        managerName: "Arsenal Champion",
-        gameweekPoints: 76,
-        totalPoints: 1909
-      },
-      {
-        rank: 4,
-        previousRank: 8,
-        teamName: "Lord Bendtner",
-        managerName: "Nick B",
-        gameweekPoints: 73,
-        totalPoints: 1555
-      },
-      {
-        rank: 5,
-        previousRank: 4,
-        teamName: "JackieHooooooo",
-        managerName: "Jackie H",
-        gameweekPoints: 71,
-        totalPoints: 1836
-      },
-      {
-        rank: 6,
-        previousRank: 5,
-        teamName: "WHY NOT",
-        managerName: "Just Because",
-        gameweekPoints: 71,
-        totalPoints: 1810
-      },
-      {
-        rank: 7,
-        previousRank: 6,
-        teamName: "杀猪会 tong牛合屋之人",
-        managerName: "Tong",
-        gameweekPoints: 71,
-        totalPoints: 1779
-      },
-      {
-        rank: 8,
-        previousRank: 10,
-        teamName: "Arminia Bielefeld",
-        managerName: "German Fan",
-        gameweekPoints: 71,
-        totalPoints: 1861
-      },
-      {
-        rank: 9,
-        previousRank: 7,
-        teamName: "Chelsea Forever Blue",
-        managerName: "Blues Fan",
-        gameweekPoints: 68,
-        totalPoints: 1723
-      },
-      {
-        rank: 10,
-        previousRank: 9,
-        teamName: "Spurs Are On Fire",
-        managerName: "Tottenham Loyal",
-        gameweekPoints: 67,
-        totalPoints: 1690
-      }
-    ],
-    captainStats: [
-      {
-        player: "M.Salah",
-        team: "LIV",
-        count: 8965,
-        percentage: 41.6,
-        averagePoints: 14
-      },
-      {
-        player: "Haaland",
-        team: "MCI",
-        count: 6748,
-        percentage: 31.3,
-        averagePoints: 12
-      },
-      {
-        player: "Son",
-        team: "TOT",
-        count: 2164,
-        percentage: 10.0,
-        averagePoints: 9
-      },
-      {
-        player: "Palmer",
-        team: "CHE",
-        count: 1523,
-        percentage: 7.1,
-        averagePoints: 12
-      },
-      {
-        player: "Saka",
-        team: "ARS",
-        count: 1078,
-        percentage: 5.0,
-        averagePoints: 7
-      },
-      {
-        player: "Others",
-        team: "N/A",
-        count: 1090,
-        percentage: 5.0,
-        averagePoints: 4
-      }
-    ],
-    chipUsage: [
-      {
-        chip: "Bench Boost",
-        count: 756,
-        percentage: 3.5,
-        averagePoints: 86
-      },
-      {
-        chip: "Triple Captain",
-        count: 621,
-        percentage: 2.9,
-        averagePoints: 92
-      },
-      {
-        chip: "Wildcard",
-        count: 435,
-        percentage: 2.0,
-        averagePoints: 84
-      },
-      {
-        chip: "Free Hit",
-        count: 389,
-        percentage: 1.8,
-        averagePoints: 79
-      }
-    ]
-  },
-  {
-    id: "t2",
-    name: "Champions League Fantasy",
-    createdBy: "Alex",
-    playerCount: 15784,
-    currentGameweek: 21,
-    startGameweek: 18,
-    endGameweek: 28,
-    myRank: 879,
-    myPreviousRank: 1023,
-    myTeam: {
-      name: "Arsenal Guangzhou FC",
-      points: 72,
-      captaincy: {
-        name: "M.Salah",
-        team: "LIV",
-        points: 16
-      }
-    },
-    topPerformers: [
-      {
-        rank: 1,
-        teamName: "沉迷于搬砖不想披",
-        managerName: "Brick Layer",
-        points: 74,
-        captain: {
-          name: "M.Salah",
-          team: "LIV",
-          points: 14
-        }
-      },
-      {
-        rank: 2,
-        teamName: "Arsenal Guangzhou FC",
-        managerName: "Gunners Fan",
-        points: 72,
-        captain: {
-          name: "M.Salah",
-          team: "LIV",
-          points: 16
-        }
-      },
-      {
-        rank: 3,
-        teamName: "Citizens Army",
-        managerName: "City Fan",
-        points: 70,
-        captain: {
-          name: "Haaland",
-          team: "MCI",
-          points: 12
-        }
-      },
-      {
-        rank: 4,
-        teamName: "JackieHooooooo",
-        managerName: "Jackie H",
-        points: 68,
-        captain: {
-          name: "M.Salah",
-          team: "LIV",
-          points: 14
-        }
-      },
-      {
-        rank: 5,
-        teamName: "Chelsea Forever Blue",
-        managerName: "Blues Fan",
-        points: 67,
-        captain: {
-          name: "Haaland",
-          team: "MCI",
-          points: 12
-        }
-      }
-    ],
-    standings: [
-      {
-        rank: 1,
-        previousRank: 2,
-        teamName: "沉迷于搬砖不想披",
-        managerName: "Brick Layer",
-        gameweekPoints: 74,
-        totalPoints: 1624
-      },
-      {
-        rank: 2,
-        previousRank: 1,
-        teamName: "Arsenal Guangzhou FC",
-        managerName: "Gunners Fan",
-        gameweekPoints: 72,
-        totalPoints: 1702
-      },
-      {
-        rank: 3,
-        previousRank: 5,
-        teamName: "Citizens Army",
-        managerName: "City Fan",
-        gameweekPoints: 70,
-        totalPoints: 1618
-      },
-      {
-        rank: 4,
-        previousRank: 3,
-        teamName: "JackieHooooooo",
-        managerName: "Jackie H",
-        gameweekPoints: 68,
-        totalPoints: 1756
-      },
-      {
-        rank: 5,
-        previousRank: 8,
-        teamName: "Chelsea Forever Blue",
-        managerName: "Blues Fan",
-        gameweekPoints: 67,
-        totalPoints: 1693
-      }
-    ],
-    captainStats: [
-      {
-        player: "M.Salah",
-        team: "LIV",
-        count: 7138,
-        percentage: 45.2,
-        averagePoints: 14
-      },
-      {
-        player: "Haaland",
-        team: "MCI",
-        count: 5159,
-        percentage: 32.7,
-        averagePoints: 12
-      },
-      {
-        player: "Son",
-        team: "TOT",
-        count: 1342,
-        percentage: 8.5,
-        averagePoints: 9
-      },
-      {
-        player: "Saka",
-        team: "ARS",
-        count: 1063,
-        percentage: 6.7,
-        averagePoints: 7
-      },
-      {
-        player: "Palmer",
-        team: "CHE",
-        count: 647,
-        percentage: 4.1,
-        averagePoints: 12
-      },
-      {
-        player: "Others",
-        team: "N/A",
-        count: 435,
-        percentage: 2.8,
-        averagePoints: 4
-      }
-    ],
-    chipUsage: [
-      {
-        chip: "Bench Boost",
-        count: 558,
-        percentage: 3.5,
-        averagePoints: 82
-      },
-      {
-        chip: "Triple Captain",
-        count: 478,
-        percentage: 3.0,
-        averagePoints: 89
-      },
-      {
-        chip: "Wildcard",
-        count: 316,
-        percentage: 2.0,
-        averagePoints: 78
-      },
-      {
-        chip: "Free Hit",
-        count: 284,
-        percentage: 1.8,
-        averagePoints: 75
-      }
-    ],
-    h2hRecord: [
-      {
-        opponent: "Dino's Dream Team",
-        wins: 2,
-        draws: 1,
-        losses: 0,
-        pointsFor: 186,
-        pointsAgainst: 153
-      },
-      {
-        opponent: "Red Devils United",
-        wins: 2,
-        draws: 0,
-        losses: 1,
-        pointsFor: 175,
-        pointsAgainst: 164
-      },
-      {
-        opponent: "Blue Moon Rising",
-        wins: 1,
-        draws: 1,
-        losses: 1,
-        pointsFor: 168,
-        pointsAgainst: 162
-      },
-      {
-        opponent: "The Gunner Way",
-        wins: 1,
-        draws: 0,
-        losses: 2,
-        pointsFor: 156,
-        pointsAgainst: 172
-      }
-    ]
-  },
-  {
-    id: "t3",
-    name: "FPL Content Creators Cup",
-    createdBy: "Sarah",
-    playerCount: 7631,
-    currentGameweek: 21,
-    startGameweek: 15,
-    endGameweek: 25,
-    myRank: 2456,
-    myPreviousRank: 2189,
-    myTeam: {
-      name: "Arsenal Guangzhou FC",
-      points: 78,
-      captaincy: {
-        name: "M.Salah",
-        team: "LIV",
-        points: 14
-      }
-    },
-    topPerformers: [
-      {
-        rank: 1,
-        teamName: "Arminia Bielefeld",
-        managerName: "German Fan",
-        points: 85,
-        captain: {
-          name: "M.Salah",
-          team: "LIV",
-          points: 16
-        }
-      },
-      {
-        rank: 2,
-        teamName: "世俱杯冠军阿森纳",
-        managerName: "Arsenal Champion",
-        points: 82,
-        captain: {
-          name: "M.Salah",
-          team: "LIV",
-          points: 14
-        }
-      },
-      {
-        rank: 3,
-        teamName: "Spurs Are On Fire",
-        managerName: "Tottenham Loyal",
-        points: 78,
-        captain: {
-          name: "Son",
-          team: "TOT",
-          points: 18
-        }
-      },
-      {
-        rank: 4,
-        teamName: "Manchester is Red",
-        managerName: "United Fan",
-        points: 76,
-        captain: {
-          name: "Fernandes",
-          team: "MUN",
-          points: 14
-        }
-      },
-      {
-        rank: 5,
-        teamName: "WHY NOT",
-        managerName: "Just Because",
-        points: 74,
-        captain: {
-          name: "M.Salah",
-          team: "LIV",
-          points: 14
-        }
-      }
-    ],
-    standings: [
-      {
-        rank: 1,
-        previousRank: 4,
-        teamName: "Arminia Bielefeld",
-        managerName: "German Fan",
-        gameweekPoints: 85,
-        totalPoints: 1921
-      },
-      {
-        rank: 2,
-        previousRank: 1,
-        teamName: "世俱杯冠军阿森纳",
-        managerName: "Arsenal Champion",
-        gameweekPoints: 82,
-        totalPoints: 1953
-      },
-      {
-        rank: 3,
-        previousRank: 2,
-        teamName: "Spurs Are On Fire",
-        managerName: "Tottenham Loyal",
-        gameweekPoints: 78,
-        totalPoints: 1768
-      },
-      {
-        rank: 4,
-        previousRank: 3,
-        teamName: "Manchester is Red",
-        managerName: "United Fan",
-        gameweekPoints: 76,
-        totalPoints: 1702
-      },
-      {
-        rank: 5,
-        previousRank: 5,
-        teamName: "WHY NOT",
-        managerName: "Just Because",
-        gameweekPoints: 74,
-        totalPoints: 1834
-      }
-    ],
-    captainStats: [
-      {
-        player: "M.Salah",
-        team: "LIV",
-        count: 3423,
-        percentage: 44.9,
-        averagePoints: 14
-      },
-      {
-        player: "Haaland",
-        team: "MCI",
-        count: 1984,
-        percentage: 26.0,
-        averagePoints: 12
-      },
-      {
-        player: "Son",
-        team: "TOT",
-        count: 832,
-        percentage: 10.9,
-        averagePoints: 18
-      },
-      {
-        player: "Palmer",
-        team: "CHE",
-        count: 458,
-        percentage: 6.0,
-        averagePoints: 12
-      },
-      {
-        player: "Fernandes",
-        team: "MUN",
-        count: 412,
-        percentage: 5.4,
-        averagePoints: 14
-      },
-      {
-        player: "Others",
-        team: "N/A",
-        count: 522,
-        percentage: 6.8,
-        averagePoints: 6
-      }
-    ],
-    chipUsage: [
-      {
-        chip: "Bench Boost",
-        count: 305,
-        percentage: 4.0,
-        averagePoints: 88
-      },
-      {
-        chip: "Triple Captain",
-        count: 282,
-        percentage: 3.7,
-        averagePoints: 94
-      },
-      {
-        chip: "Wildcard",
-        count: 176,
-        percentage: 2.3,
-        averagePoints: 86
-      },
-      {
-        chip: "Free Hit",
-        count: 153,
-        percentage: 2.0,
-        averagePoints: 81
-      }
-    ]
+const formatStateBadge = (state: string): { label: string; className: string } => {
+  switch (state) {
+    case "ACTIVE":
+      return { label: "Live", className: "bg-emerald-500/10 text-emerald-600 border-emerald-200" };
+    case "COMPLETED":
+      return { label: "Completed", className: "bg-muted text-muted-foreground border-muted-foreground/20" };
+    case "PENDING":
+      return { label: "Pending", className: "bg-yellow-500/10 text-yellow-600 border-yellow-200" };
+    default:
+      return { label: state, className: "bg-muted text-muted-foreground border-muted-foreground/20" };
   }
+};
+
+const formatLeagueType = (leagueType: string): string => {
+  switch (leagueType) {
+    case "H2H": return "Head-to-Head";
+    case "CLASSIC": return "Classic";
+    default: return leagueType;
+  }
+};
+
+const formatGroupMode = (mode: string): string | null => {
+  switch (mode) {
+    case "POINTS_RACES": return "Points Race";
+    case "BATTLE_RACES": return "Battle Race";
+    case "NO_GROUP": return null;
+    default: return null;
+  }
+};
+
+const formatKnockoutMode = (mode: string): string | null => {
+  switch (mode) {
+    case "SINGLE_ELIMINATION": return "Single Elim.";
+    case "DOUBLE_ELIMINATION": return "Double Elim.";
+    case "HEAD_TO_HEAD": return "H2H";
+    case "NO_KNOCKOUT": return null;
+    default: return null;
+  }
+};
+
+const formatChipLabel = (chip: string | null): string => {
+  switch (chip) {
+    case "BENCH_BOOST":
+      return "Bench Boost";
+    case "TRIPLE_CAPTAIN":
+      return "Triple Captain";
+    case "FREE_HIT":
+      return "Free Hit";
+    case "WILDCARD":
+      return "Wildcard";
+    default:
+      return "No Chip";
+  }
+};
+
+const getGameweekRange = (
+  tournament: EntryTournament,
+): { start: number | null; end: number | null } => ({
+  start: tournament.groupStartedEventId ?? tournament.knockoutStartedEventId ?? null,
+  end: tournament.groupEndedEventId ?? tournament.knockoutEndedEventId ?? null,
+});
+
+const formatMoneyValue = (value: number | null): string =>
+  value === null ? "-" : `£${(value / 10).toFixed(1)}m`;
+
+const formatRankValue = (value: number | null): string =>
+  value === null ? "-" : formatCompactNumber(value);
+
+const formatPointsValue = (value: number | null): string =>
+  value === null ? "-" : `${value} pts`;
+
+const buildTournamentRankingRows = (
+  rankingSummary: TournamentEntryRankingSummary | null,
+): TournamentRankingRow[] => [
+  {
+    label: "Overall Rank",
+    value: formatRankValue(rankingSummary?.overallRank ?? null),
+    rankLabel: "Tournament Rank",
+    rank: formatRankValue(rankingSummary?.tournamentOverallRank ?? null),
+  },
+  {
+    label: "Team Value",
+    value: formatMoneyValue(rankingSummary?.teamValue ?? null),
+    rankLabel: "Tournament Team Value Rank",
+    rank: formatRankValue(rankingSummary?.tournamentTeamValueRank ?? null),
+  },
+  {
+    label: "Transfers Num",
+    value:
+      rankingSummary?.transfersNum === null || rankingSummary?.transfersNum === undefined
+        ? "-"
+        : String(rankingSummary.transfersNum),
+    rankLabel: "Tournament Transfers Rank",
+    rank: formatRankValue(rankingSummary?.tournamentTransfersRank ?? null),
+  },
+  {
+    label: "Total Costs",
+    value: formatPointsValue(rankingSummary?.totalCosts ?? null),
+    rankLabel: "Tournament Costs Rank",
+    rank: formatRankValue(rankingSummary?.tournamentCostsRank ?? null),
+  },
+  {
+    label: "Total Bench Points",
+    value: formatPointsValue(rankingSummary?.totalBenchPoints ?? null),
+    rankLabel: "Tournament Bench Rank",
+    rank: formatRankValue(rankingSummary?.tournamentBenchPointsRank ?? null),
+  },
+  {
+    label: "Auto Sub Points",
+    value: formatPointsValue(rankingSummary?.autoSubPoints ?? null),
+    rankLabel: "Tournament Auto-sub Rank",
+    rank: formatRankValue(rankingSummary?.tournamentAutoSubRank ?? null),
+  },
 ];
 
-export default function TournamentStatsPage() {
-  const [selectedTournamentId, setSelectedTournamentId] = useState<string>("t1");
-  const [tournamentStats, setTournamentStats] = useState<TournamentStats | null>(null);
-  
-  useEffect(() => {
-    // Find the selected tournament and set its stats
-    const tournament = mockTournaments.find(t => t.id === selectedTournamentId);
-    if (tournament) {
-      setTournamentStats(tournament as TournamentStats);
+const fetchPlayerMetaByIds = async (
+  ids: number[],
+): Promise<Record<number, PlayerMeta>> => {
+  const uniqueIds = Array.from(
+    new Set(ids.filter((id) => Number.isInteger(id) && id > 0)),
+  );
+  if (uniqueIds.length === 0) {
+    return {};
+  }
+
+  const selection = uniqueIds
+    .map((id) => `p${id}: player(id: ${id}) { webName team { shortName name } }`)
+    .join("\n");
+  const query = `query GetTournamentCaptainMeta {\n${selection}\n}`;
+  const data = await executeQuery<
+    Record<
+      string,
+      | {
+          webName?: string | null;
+          team?: { shortName?: string | null; name?: string | null } | null;
+        }
+      | null
+    >
+  >(query);
+
+  const result: Record<number, PlayerMeta> = {};
+  for (const id of uniqueIds) {
+    const value = data[`p${id}`];
+    const webName = value?.webName;
+    if (typeof webName === "string" && webName.length > 0) {
+      result[id] = {
+        webName,
+        teamShortName: value?.team?.shortName ?? value?.team?.name ?? "N/A",
+      };
     }
-  }, [selectedTournamentId]);
-  
-  if (!tournamentStats) {
+  }
+  return result;
+};
+
+const buildTournamentStats = (
+  tournament: EntryTournament,
+  currentGameweek: number,
+  currentRows: TournamentEventResultItem[],
+  previousRows: TournamentEventResultItem[],
+  playerMetaById: Record<number, PlayerMeta>,
+  entryId: number,
+): TournamentStatsViewModel => {
+  const previousRankByEntryId = new Map<number, number>();
+  previousRows.forEach((row) => {
+    if (row.eventGroupRank !== null) {
+      previousRankByEntryId.set(row.entryId, row.eventGroupRank);
+    }
+  });
+
+  const standings = currentRows.map((row) => ({
+    entryId: row.entryId,
+    rank: row.eventGroupRank ?? 0,
+    previousRank: previousRankByEntryId.get(row.entryId) ?? row.eventGroupRank ?? 0,
+    teamName: row.entryName ?? `Entry ${row.entryId}`,
+    managerName: row.playerName ?? "-",
+    gameweekPoints: row.eventNetPoints ?? row.eventPoints ?? 0,
+    totalPoints: row.overallPoints ?? 0,
+    overallRank: row.overallRank ?? 0,
+    teamValue: row.teamValue ?? null,
+  }));
+
+  const topPerformers = currentRows.slice(0, 5).map((row, index) => {
+    const captainMeta =
+      row.captainId !== null ? playerMetaById[row.captainId] : undefined;
+
+    return {
+      entryId: row.entryId,
+      rank: row.eventGroupRank ?? index + 1,
+      teamName: row.entryName ?? `Entry ${row.entryId}`,
+      managerName: row.playerName ?? "-",
+      points: row.eventNetPoints ?? row.eventPoints ?? 0,
+      captain: {
+        name: captainMeta?.webName ?? "N/A",
+        team: captainMeta?.teamShortName ?? "N/A",
+        points: row.captainPoints ?? 0,
+      },
+    };
+  });
+
+  const myRow = currentRows.find((row) => row.entryId === entryId) ?? null;
+  const myPreviousRank =
+    myRow !== null
+      ? previousRankByEntryId.get(myRow.entryId) ?? myRow.eventGroupRank ?? null
+      : null;
+  const myCaptainMeta =
+    myRow?.captainId !== null && myRow?.captainId !== undefined
+      ? playerMetaById[myRow.captainId]
+      : undefined;
+
+  const captainBuckets = new Map<number, { count: number; totalCaptainPoints: number }>();
+  currentRows.forEach((row) => {
+    if (row.captainId === null) {
+      return;
+    }
+    const bucket = captainBuckets.get(row.captainId) ?? {
+      count: 0,
+      totalCaptainPoints: 0,
+    };
+    bucket.count += 1;
+    bucket.totalCaptainPoints += row.captainPoints ?? 0;
+    captainBuckets.set(row.captainId, bucket);
+  });
+
+  const captainStats = Array.from(captainBuckets.entries())
+    .map(([captainId, bucket]) => ({
+      player: playerMetaById[captainId]?.webName ?? `Player ${captainId}`,
+      team: playerMetaById[captainId]?.teamShortName ?? "N/A",
+      count: bucket.count,
+      percentage:
+        currentRows.length > 0
+          ? Number(((bucket.count / currentRows.length) * 100).toFixed(1))
+          : 0,
+      averagePoints:
+        bucket.count > 0
+          ? Number((bucket.totalCaptainPoints / bucket.count).toFixed(1))
+          : 0,
+    }))
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 8);
+
+  const chipBuckets = new Map<string, { count: number; totalPoints: number }>();
+  currentRows.forEach((row) => {
+    if (!row.eventChip) {
+      return;
+    }
+    const bucket = chipBuckets.get(row.eventChip) ?? { count: 0, totalPoints: 0 };
+    bucket.count += 1;
+    bucket.totalPoints += row.eventNetPoints ?? row.eventPoints ?? 0;
+    chipBuckets.set(row.eventChip, bucket);
+  });
+
+  const chipUsage = Array.from(chipBuckets.entries())
+    .map(([chip, bucket]) => ({
+      chip: formatChipLabel(chip),
+      count: bucket.count,
+      percentage:
+        currentRows.length > 0
+          ? Number(((bucket.count / currentRows.length) * 100).toFixed(1))
+          : 0,
+      averagePoints:
+        bucket.count > 0 ? Number((bucket.totalPoints / bucket.count).toFixed(1)) : 0,
+    }))
+    .sort((left, right) => right.count - left.count);
+
+  const { start, end } = getGameweekRange(tournament);
+
+  return {
+    tournament,
+    currentGameweek,
+    startGameweek: start,
+    endGameweek: end,
+    myRank: myRow?.eventGroupRank ?? null,
+    myPreviousRank,
+    myTeam:
+      myRow === null
+        ? null
+        : {
+            name: myRow.entryName ?? `Entry ${myRow.entryId}`,
+            points: myRow.eventNetPoints ?? myRow.eventPoints ?? null,
+            eventCost: myRow.eventCost ?? null,
+            captaincy: {
+              name: myCaptainMeta?.webName ?? "N/A",
+              team: myCaptainMeta?.teamShortName ?? "N/A",
+              points: myRow.captainPoints ?? null,
+            },
+          },
+    topPerformers,
+    standings,
+    captainStats,
+    chipUsage,
+  };
+};
+
+export default function TournamentStatsPage() {
+  const { data: sessionData } = useSession();
+  const entryId = sessionData?.user?.fplEntryId ?? 0;
+
+  const [tournaments, setTournaments] = useState<EntryTournament[]>([]);
+  const [selectedTournamentId, setSelectedTournamentId] = useState<string>("");
+  const [currentGameweek, setCurrentGameweek] = useState<number>(1);
+  const [dataGameweek, setDataGameweek] = useState<number | null>(null);
+  const [tournamentStats, setTournamentStats] = useState<TournamentStatsViewModel | null>(null);
+  const [rankingSummary, setRankingSummary] = useState<TournamentEntryRankingSummary | null>(null);
+  const [standingsSearch, setStandingsSearch] = useState("");
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const eventResultsCacheRef = useRef<Map<string, TournamentEventResultItem[]>>(new Map());
+  const playerMetaCacheRef = useRef<Map<number, PlayerMeta>>(new Map());
+  const rankingSummaryCacheRef = useRef<Map<string, TournamentEntryRankingSummary>>(new Map());
+
+  const selectedTournament = useMemo(
+    () => tournaments.find((item) => String(item.id) === selectedTournamentId) ?? null,
+    [selectedTournamentId, tournaments],
+  );
+
+  const filteredStandings = useMemo(() => {
+    if (!tournamentStats) {
+      return [];
+    }
+
+    const query = standingsSearch.trim().toLowerCase();
+    if (!query) {
+      return tournamentStats.standings;
+    }
+
+    return tournamentStats.standings.filter(
+      (row) =>
+        row.teamName.toLowerCase().includes(query) ||
+        row.managerName.toLowerCase().includes(query),
+    );
+  }, [standingsSearch, tournamentStats]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const bootstrap = async () => {
+      try {
+        setIsBootstrapping(true);
+        setError(null);
+
+        const [eventsData, tournamentsData] = await Promise.all([
+          executeQuery<EventsResponse>(GET_CURRENT_AND_NEXT_EVENTS),
+          executeQuery<EntryTournamentsResponse>(GET_ENTRY_TOURNAMENTS, {
+            entryId: entryId,
+          }),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        const fetchedCurrentGameweek = eventsData.current[0]?.id ?? 1;
+        setCurrentGameweek(fetchedCurrentGameweek);
+        setTournaments(tournamentsData.entryTournaments);
+        setSelectedTournamentId(
+          previous => previous || String(tournamentsData.entryTournaments[0]?.id ?? ""),
+        );
+      } catch (loadError) {
+        console.error("Failed to bootstrap tournament stats:", loadError);
+        if (!cancelled) {
+          setError("Failed to load tournament list.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsBootstrapping(false);
+        }
+      }
+    };
+
+    void bootstrap();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isBootstrapping || !selectedTournament) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadStats = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const fetchResults = async (eventId: number): Promise<TournamentEventResultItem[]> => {
+          if (eventId <= 0) {
+            return [];
+          }
+
+          const cacheKey = `${selectedTournament.id}:${eventId}`;
+          const cached = eventResultsCacheRef.current.get(cacheKey);
+          if (cached) {
+            return cached;
+          }
+
+          const response = await executeQuery<TournamentEventResultsResponse>(
+            GET_TOURNAMENT_EVENT_RESULTS,
+            {
+              tournamentId: selectedTournament.id,
+              eventId,
+            },
+          );
+          const rows = response.tournamentEventResults ?? [];
+          eventResultsCacheRef.current.set(cacheKey, rows);
+          return rows;
+        };
+
+        // Walk back from currentGameweek to find the latest GW with data (max 5 attempts).
+        let latestGw = currentGameweek;
+        let currentRows: TournamentEventResultItem[] = [];
+        for (let attempt = 0; attempt < 5; attempt++) {
+          currentRows = await fetchResults(latestGw - attempt);
+          if (currentRows.length > 0) {
+            latestGw = latestGw - attempt;
+            break;
+          }
+        }
+
+        if (cancelled) return;
+
+        const fetchRankingSummary = async (): Promise<TournamentEntryRankingSummary> => {
+          const cacheKey = `${selectedTournament.id}:${latestGw}:${entryId}`;
+          const cached = rankingSummaryCacheRef.current.get(cacheKey);
+          if (cached) {
+            return cached;
+          }
+
+          const response = await executeQuery<TournamentEntryRankingSummaryResponse>(
+            GET_TOURNAMENT_ENTRY_RANKING_SUMMARY,
+            {
+              tournamentId: selectedTournament.id,
+              eventId: latestGw,
+              entryId: entryId,
+            },
+          );
+          const summary = response.tournamentEntryRankingSummary;
+          rankingSummaryCacheRef.current.set(cacheKey, summary);
+          return summary;
+        };
+
+        const [previousRows, fetchedRankingSummary] = await Promise.all([
+          fetchResults(latestGw - 1),
+          fetchRankingSummary().catch((err) => {
+            console.warn("Ranking summary unavailable:", err);
+            return null;
+          }),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        const captainIds = currentRows
+          .map((row) => row.captainId)
+          .filter((value): value is number => value !== null && value > 0);
+        const missingCaptainIds = Array.from(new Set(captainIds)).filter(
+          (id) => !playerMetaCacheRef.current.has(id),
+        );
+
+        if (missingCaptainIds.length > 0) {
+          const playerMeta = await fetchPlayerMetaByIds(missingCaptainIds);
+          if (cancelled) {
+            return;
+          }
+          Object.entries(playerMeta).forEach(([id, value]) => {
+            playerMetaCacheRef.current.set(Number(id), value);
+          });
+        }
+
+        const playerMetaById = Object.fromEntries(playerMetaCacheRef.current.entries());
+        setDataGameweek(latestGw);
+        setRankingSummary(fetchedRankingSummary);
+        setTournamentStats(
+          buildTournamentStats(
+            selectedTournament,
+            latestGw,
+            currentRows,
+            previousRows,
+            playerMetaById,
+            entryId,
+          ),
+        );
+      } catch (loadError) {
+        console.error("Failed to load tournament stats:", loadError);
+        setTournamentStats(null);
+        setRankingSummary(null);
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Failed to load tournament stats from API.",
+        );
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadStats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isBootstrapping, currentGameweek, selectedTournament]);
+
+  if (isBootstrapping) {
     return (
       <RootLayout>
         <div className="container max-w-4xl mx-auto px-4 py-8">
@@ -761,12 +628,18 @@ export default function TournamentStatsPage() {
       </RootLayout>
     );
   }
-  
+
   return (
     <RootLayout>
       <div className="container max-w-4xl mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-6">Tournament Stats</h1>
-        
+
+        {error && (
+          <Card className="p-4 mb-6 border-destructive/30 bg-destructive/5">
+            <p className="text-sm text-destructive">{error}</p>
+          </Card>
+        )}
+
         <Card className="p-6 mb-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -774,294 +647,414 @@ export default function TournamentStatsPage() {
                 <Trophy className="h-5 w-5 text-primary" />
                 <span className="font-medium">Select Tournament:</span>
               </div>
-              
-              <Select
-                value={selectedTournamentId}
-                onValueChange={setSelectedTournamentId}
-              >
+
+              <Select value={selectedTournamentId} onValueChange={setSelectedTournamentId}>
                 <SelectTrigger className="w-[250px]">
                   <SelectValue placeholder="Select tournament" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockTournaments.map(tournament => (
-                    <SelectItem key={tournament.id} value={tournament.id}>
+                  {tournaments.map((tournament) => (
+                    <SelectItem key={tournament.id} value={String(tournament.id)}>
                       {tournament.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            
-            <div className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">
-                GW {tournamentStats.startGameweek} - GW {tournamentStats.endGameweek}
-              </span>
-            </div>
+
           </div>
-          
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div>
-              <h2 className="text-xl font-bold">{tournamentStats.name}</h2>
-              <p className="text-muted-foreground">Created by {tournamentStats.createdBy}</p>
-            </div>
-            
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                <Users className="h-3.5 w-3.5 mr-1.5" />
-                {formatCompactNumber(tournamentStats.playerCount)} Participants
-              </Badge>
-              
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                <Calendar className="h-3.5 w-3.5 mr-1.5" />
-                GW {tournamentStats.currentGameweek}
-              </Badge>
-            </div>
-          </div>
-        </Card>
-        
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-bold mb-6">My Performance</h2>
-          
-          <div className="flex flex-col sm:flex-row items-center gap-6">
-            <div className="bg-primary/10 p-6 rounded-lg text-center sm:flex-1">
-              <p className="text-sm text-muted-foreground mb-1">My Rank</p>
-              <p className="text-2xl font-bold">{formatCompactNumber(tournamentStats.myRank)}</p>
-              
-              <div className="flex items-center justify-center mt-2">
-                {tournamentStats.myPreviousRank > tournamentStats.myRank ? (
-                  <div className="flex items-center text-emerald-600 text-sm">
-                    <ArrowLeft className="h-4 w-4 mr-1" />
-                    <span>Up {formatCompactNumber(tournamentStats.myPreviousRank - tournamentStats.myRank)}</span>
+
+          {selectedTournament && (() => {
+            const stateBadge = formatStateBadge(selectedTournament.state);
+            const groupPhaseLabel = formatGroupMode(selectedTournament.groupMode);
+            const knockoutPhaseLabel = formatKnockoutMode(selectedTournament.knockoutMode);
+            return (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <h2 className="text-xl font-bold">{selectedTournament.name}</h2>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedTournament.state !== "ACTIVE" && (
+                      <Badge variant="outline" className={stateBadge.className}>{stateBadge.label}</Badge>
+                    )}
+                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                      {formatLeagueType(selectedTournament.leagueType)}
+                    </Badge>
+                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                      <Users className="h-3.5 w-3.5 mr-1" />
+                      {formatCompactNumber(selectedTournament.totalTeamNum)}
+                    </Badge>
+                    {dataGameweek !== null && (
+                      <Badge variant="outline" className="bg-muted text-muted-foreground border-muted-foreground/20">
+                        <Calendar className="h-3.5 w-3.5 mr-1" />
+                        as of GW{dataGameweek}
+                      </Badge>
+                    )}
                   </div>
-                ) : tournamentStats.myPreviousRank < tournamentStats.myRank ? (
-                  <div className="flex items-center text-rose-600 text-sm">
-                    <ArrowRight className="h-4 w-4 mr-1" />
-                    <span>Down {formatCompactNumber(tournamentStats.myRank - tournamentStats.myPreviousRank)}</span>
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground text-sm">No change</div>
-                )}
+                </div>
+
+                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+                  {groupPhaseLabel && selectedTournament.groupStartedEventId !== null && (
+                    <span>
+                      Group ({groupPhaseLabel}): GW{selectedTournament.groupStartedEventId}
+                      {selectedTournament.groupEndedEventId !== null ? `–${selectedTournament.groupEndedEventId}` : "+"}
+                    </span>
+                  )}
+                  {knockoutPhaseLabel && selectedTournament.knockoutStartedEventId !== null && (
+                    <span>
+                      Knockout ({knockoutPhaseLabel}): GW{selectedTournament.knockoutStartedEventId}
+                      {selectedTournament.knockoutEndedEventId !== null ? `–${selectedTournament.knockoutEndedEventId}` : "+"}
+                    </span>
+                  )}
+                  {selectedTournament.groupQualifyNum !== null && (
+                    <span>Top {selectedTournament.groupQualifyNum} qualify per group</span>
+                  )}
+                </div>
               </div>
-            </div>
-            
-            <div className="bg-primary/10 p-6 rounded-lg text-center sm:flex-1">
-              <p className="text-sm text-muted-foreground mb-1">Current Gameweek</p>
-              <p className="text-2xl font-bold">{tournamentStats.myTeam.points} pts</p>
-              
-              <div className="flex items-center justify-center mt-2 text-sm">
-                <span>Captain: {tournamentStats.myTeam.captaincy.name} ({tournamentStats.myTeam.captaincy.points} pts)</span>
-              </div>
-            </div>
-            
-            <div className="bg-primary/10 p-6 rounded-lg text-center sm:flex-1">
-              <p className="text-sm text-muted-foreground mb-1">Top Performer</p>
-              <p className="text-2xl font-bold">{tournamentStats.topPerformers[0].points} pts</p>
-              
-              <div className="flex items-center justify-center mt-2 text-sm">
-                <span className="truncate">{tournamentStats.topPerformers[0].teamName}</span>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
         </Card>
-        
-        <Tabs defaultValue="standings" className="space-y-6">
-          <TabsList className="w-full grid grid-cols-3">
-            <TabsTrigger value="standings">
-              <Trophy className="h-4 w-4 mr-2" />
-              Standings
-            </TabsTrigger>
-            <TabsTrigger value="captains">
-              <Crown className="h-4 w-4 mr-2" />
-              Captains
-            </TabsTrigger>
-            <TabsTrigger value="chips">
-              <Star className="h-4 w-4 mr-2" />
-              Chips
-            </TabsTrigger>
-          </TabsList>
-          
-          {/* Standings Tab */}
-          <TabsContent value="standings">
-            <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6">Tournament Standings</h2>
-              
-              <StatsTable
-                title=""
-                data={tournamentStats.standings}
-                columns={[
-                  { 
-                    key: "rank", 
-                    label: "Rank", 
-                    className: "text-center",
-                    format: (value, row) => (
-                      <div className="flex flex-col items-center">
-                        <span className="font-bold">{value}</span>
-                        <span className="text-xs">
-                          {row.previousRank < value ? (
-                            <span className="text-rose-500">▼ {value - row.previousRank}</span>
-                          ) : row.previousRank > value ? (
-                            <span className="text-emerald-500">▲ {row.previousRank - value}</span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
+
+        {!tournamentStats ? (
+          <Card className="p-6">
+            <p className="text-muted-foreground">
+              {isLoading ? "Loading tournament stats..." : "No tournament stats available."}
+            </p>
+          </Card>
+        ) : (
+          <>
+            <Card className="p-6 mb-6">
+              <h2 className="text-xl font-bold mb-6">My Performance</h2>
+
+              <div className="grid grid-cols-2 justify-items-center gap-6 xl:grid-cols-4">
+                <div className="bg-primary/10 p-6 rounded-lg text-center w-full max-w-[220px]">
+                  <p className="text-sm text-muted-foreground mb-1">My Rank</p>
+                  <p className="text-2xl font-bold">
+                    {tournamentStats.myRank === null ? "-" : formatCompactNumber(tournamentStats.myRank)}
+                  </p>
+
+                  <div className="flex items-center justify-center mt-2">
+                    {tournamentStats.myRank === null || tournamentStats.myPreviousRank === null ? (
+                      <div className="text-muted-foreground text-sm">
+                        This team is not in this tournament
+                      </div>
+                    ) : tournamentStats.myPreviousRank > tournamentStats.myRank ? (
+                      <div className="flex items-center text-emerald-600 text-sm">
+                        <ArrowUp className="h-4 w-4 mr-1" />
+                        <span>
+                          Up {formatCompactNumber(tournamentStats.myPreviousRank - tournamentStats.myRank)}
                         </span>
                       </div>
-                    )
-                  },
-                  { 
-                    key: "teamName", 
-                    label: "Team",
-                    format: (value, row) => (
-                      <div className="flex flex-col">
-                        <span className="font-medium">{value}</span>
-                        <span className="text-xs text-muted-foreground">{row.managerName}</span>
+                    ) : tournamentStats.myPreviousRank < tournamentStats.myRank ? (
+                      <div className="flex items-center text-rose-600 text-sm">
+                        <ArrowDown className="h-4 w-4 mr-1" />
+                        <span>
+                          Down {formatCompactNumber(tournamentStats.myRank - tournamentStats.myPreviousRank)}
+                        </span>
                       </div>
-                    )
-                  },
-                  { 
-                    key: "gameweekPoints", 
-                    label: "GW", 
-                    className: "text-center font-medium" 
-                  },
-                  { 
-                    key: "totalPoints", 
-                    label: "Total", 
-                    className: "text-right font-bold" 
-                  }
-                ]}
-              />
-            </Card>
-          </TabsContent>
-          
-          {/* Captains Tab */}
-          <TabsContent value="captains">
-            <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <Crown className="h-5 w-5 text-yellow-500" />
-                Most Captained Players
-              </h2>
-              
-              <div className="space-y-4">
-                {tournamentStats.captainStats.map((stat, index) => (
-                  <div key={index} className="bg-accent/30 p-4 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-primary/10 p-2 rounded-full text-primary text-lg font-bold min-w-[32px] text-center">
-                          {index + 1}
-                        </div>
-                        
-                        <div>
-                          <div className="font-bold text-lg flex items-center gap-2">
-                            {stat.player}
-                            {stat.team !== "N/A" && (
-                              <span className="text-sm text-muted-foreground">({stat.team})</span>
-                            )}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {formatCompactNumber(stat.count)} managers ({stat.percentage}%)
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="text-right">
-                        <div className="text-lg font-bold">{stat.averagePoints}</div>
-                        <div className="text-xs text-muted-foreground">avg. points</div>
-                      </div>
-                    </div>
+                    ) : (
+                      <div className="text-muted-foreground text-sm">No change</div>
+                    )}
                   </div>
-                ))}
+                </div>
+
+                <div className="bg-primary/10 p-6 rounded-lg text-center w-full max-w-[220px]">
+                  <p className="text-sm text-muted-foreground mb-1">Current Gameweek</p>
+                  <p className="text-2xl font-bold">
+                    {tournamentStats.myTeam?.points === null || tournamentStats.myTeam === null
+                      ? "-"
+                      : `${tournamentStats.myTeam.points} pts`}
+                  </p>
+                  <div className="flex items-center justify-center mt-2 text-sm text-muted-foreground">
+                    <span>
+                      Event Cost:{" "}
+                      {tournamentStats.myTeam?.eventCost === null ||
+                      tournamentStats.myTeam?.eventCost === undefined
+                        ? "-"
+                        : `${tournamentStats.myTeam.eventCost} pts`}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-primary/10 p-6 rounded-lg text-center w-full max-w-[220px]">
+                  <p className="text-sm text-muted-foreground mb-1">Captain</p>
+                  <p className="text-2xl font-bold">
+                    {tournamentStats.myTeam?.captaincy.name ?? "N/A"}
+                  </p>
+                  <div className="flex items-center justify-center mt-2 text-sm">
+                    <span>
+                      {tournamentStats.myTeam?.captaincy.team &&
+                      tournamentStats.myTeam.captaincy.team !== "N/A"
+                        ? `${tournamentStats.myTeam.captaincy.team} `
+                        : ""}
+                      ({tournamentStats.myTeam?.captaincy.points ?? 0} pts)
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-primary/10 p-6 rounded-lg text-center w-full max-w-[220px]">
+                  <p className="text-sm text-muted-foreground mb-1">Top Score</p>
+                  <p className="text-2xl font-bold">
+                    {tournamentStats.topPerformers[0]
+                      ? `${tournamentStats.topPerformers[0].points} pts`
+                      : "-"}
+                  </p>
+
+                  <div className="flex items-center justify-center mt-2 text-sm">
+                    <span className="truncate">
+                      {tournamentStats.topPerformers[0]?.teamName ?? "No data"}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </Card>
-          </TabsContent>
-          
-          {/* Chips Tab */}
-          <TabsContent value="chips">
-            <Card className="p-6">
-              <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <Star className="h-5 w-5 text-yellow-500" />
-                Chip Usage
-              </h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {tournamentStats.chipUsage.map((chip, index) => (
-                  <div key={index} className="bg-accent/30 p-4 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="font-bold text-lg">{chip.chip}</h3>
-                        <div className="text-sm text-muted-foreground">
-                          {formatCompactNumber(chip.count)} managers ({chip.percentage}%)
+
+              {tournamentStats.topPerformers.length > 0 && (
+                <div className="mt-6 pt-6 border-t">
+                  <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                    <Trophy className="h-4 w-4 text-yellow-500" />
+                    GW{dataGameweek} Top Performers
+                  </h3>
+                  <div className="space-y-2">
+                    {tournamentStats.topPerformers.map((performer, index) => (
+                      <div key={performer.entryId ?? index} className="flex items-center justify-between gap-2 text-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs text-muted-foreground w-4 text-right shrink-0">{performer.rank}</span>
+                          <span className="font-medium truncate">{performer.teamName}</span>
+                          <span className="text-xs text-muted-foreground hidden sm:inline truncate">({performer.managerName})</span>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0 text-right">
+                          <span className="text-xs text-muted-foreground hidden sm:inline">
+                            {performer.captain.name !== "N/A" ? `${performer.captain.name} (C) ${performer.captain.points}pts` : ""}
+                          </span>
+                          <span className="font-bold text-primary">{performer.points} pts</span>
                         </div>
                       </div>
-                      
-                      <div className="text-right">
-                        <div className="text-lg font-bold">{chip.averagePoints}</div>
-                        <div className="text-xs text-muted-foreground">avg. points</div>
-                      </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              
-              {tournamentStats.h2hRecord && (
-                <div className="mt-8">
-                  <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-primary" />
-                    Head-to-Head Record
-                  </h2>
-                  
-                  <StatsTable
-                    title=""
-                    data={tournamentStats.h2hRecord}
-                    columns={[
-                      { 
-                        key: "opponent", 
-                        label: "Opponent"
-                      },
-                      { 
-                        key: "record", 
-                        label: "Record",
-                        format: (_, row) => (
-                          <div className="flex justify-center items-center gap-1">
-                            <span className="text-emerald-600 font-medium">{row.wins}</span>
-                            <span>-</span>
-                            <span className="text-muted-foreground">{row.draws}</span>
-                            <span>-</span>
-                            <span className="text-rose-600 font-medium">{row.losses}</span>
-                          </div>
-                        ),
-                        className: "text-center"
-                      },
-                      { 
-                        key: "pointsFor", 
-                        label: "PF", 
-                        className: "text-center" 
-                      },
-                      { 
-                        key: "pointsAgainst", 
-                        label: "PA", 
-                        className: "text-center" 
-                      },
-                      { 
-                        key: "pointsDiff", 
-                        label: "Diff",
-                        format: (_, row) => {
-                          const diff = row.pointsFor - row.pointsAgainst;
-                          return (
-                            <div className={`text-right font-medium ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : ''}`}>
-                              {diff > 0 ? '+' : ''}{diff}
-                            </div>
-                          );
-                        },
-                        className: "text-right"
-                      }
-                    ]}
-                  />
                 </div>
               )}
             </Card>
-          </TabsContent>
-        </Tabs>
+
+            <Card className="p-6 mb-6">
+              <h2 className="text-xl font-bold mb-6">My Tournament Ranking</h2>
+
+              <div className="overflow-hidden rounded-lg border">
+                {buildTournamentRankingRows(rankingSummary).map((row, index) => (
+                  <div
+                    key={row.label}
+                    className={`grid grid-cols-1 gap-4 px-4 py-4 sm:grid-cols-2 sm:gap-6 sm:px-6 ${
+                      index !== 0 ? "border-t" : ""
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <p className="text-sm text-foreground/80">{row.label}</p>
+                      <p className="text-base font-semibold text-right">{row.value}</p>
+                    </div>
+
+                    <div className="flex items-start justify-between gap-4">
+                      <p className="text-sm text-muted-foreground">{row.rankLabel}</p>
+                      <p className="text-base font-semibold text-right">{row.rank}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Tabs defaultValue="standings" className="space-y-6">
+              <TabsList className="w-full grid grid-cols-3">
+                <TabsTrigger value="standings">
+                  <Trophy className="h-4 w-4 mr-2" />
+                  Standings
+                </TabsTrigger>
+                <TabsTrigger value="captains">
+                  <Crown className="h-4 w-4 mr-2" />
+                  Captains
+                </TabsTrigger>
+                <TabsTrigger value="chips">
+                  <Star className="h-4 w-4 mr-2" />
+                  Chips
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="standings">
+                <Card className="p-6">
+                  <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
+                    <h2 className="text-xl font-bold">Standing</h2>
+                    <Input
+                      value={standingsSearch}
+                      onChange={(event) => setStandingsSearch(event.target.value)}
+                      placeholder="Search by team or player name"
+                      className="sm:max-w-xs"
+                    />
+                  </div>
+
+                  <StatsTable<StandingRow>
+                    title=""
+                    data={filteredStandings}
+                    rowKeyField="entryId"
+                    columns={[
+                      {
+                        key: "rank",
+                        label: "Rank",
+                        className: "text-center",
+                        sortable: true,
+                        sortDefault: "asc",
+                        format: (value, row) => {
+                          const r = row as unknown as StandingRow;
+                          const rank = Number(value);
+                          return (
+                            <div className="flex flex-col items-center">
+                              <span className="font-bold">{rank}</span>
+                              <span className="text-xs">
+                                {r.previousRank < rank ? (
+                                  <span className="text-rose-500">▼ {rank - r.previousRank}</span>
+                                ) : r.previousRank > rank ? (
+                                  <span className="text-emerald-500">▲ {r.previousRank - rank}</span>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </span>
+                            </div>
+                          );
+                        },
+                      },
+                      {
+                        key: "teamName",
+                        label: "Team",
+                        sortable: true,
+                        sortDefault: "asc",
+                        sortValue: (row) => {
+                          const r = row as StandingRow;
+                          return `${r.teamName.toLowerCase()}\u0000${r.managerName.toLowerCase()}`;
+                        },
+                        format: (value, row) => {
+                          const r = row as unknown as StandingRow;
+                          return (
+                            <div className="flex flex-col">
+                              <span className="font-medium">{String(value)}</span>
+                              <span className="text-xs text-muted-foreground">{r.managerName}</span>
+                            </div>
+                          );
+                        },
+                      },
+                      {
+                        key: "gameweekPoints",
+                        label: "GW Points",
+                        className: "text-center font-medium",
+                        sortable: true,
+                        sortDefault: "desc",
+                      },
+                      {
+                        key: "totalPoints",
+                        label: "Total Points",
+                        className: "text-right font-bold",
+                        sortable: true,
+                        sortDefault: "desc",
+                      },
+                      {
+                        key: "overallRank",
+                        label: "OR",
+                        className: "text-right font-medium",
+                        sortable: true,
+                        sortDefault: "asc",
+                        format: (value) => formatCompactNumber(Number(value)),
+                      },
+                      {
+                        key: "teamValue",
+                        label: "Value",
+                        className: "text-right text-muted-foreground hidden md:table-cell",
+                        sortable: true,
+                        sortDefault: "desc",
+                        format: (value) => formatMoneyValue(value === null || value === undefined ? null : Number(value)),
+                      },
+                    ]}
+                  />
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="captains">
+                <Card className="p-6">
+                  <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <Crown className="h-5 w-5 text-yellow-500" />
+                    Most Captained Players
+                  </h2>
+
+                  <div className="space-y-4">
+                    {tournamentStats.captainStats.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No captain data available for this event.
+                      </p>
+                    ) : (
+                      tournamentStats.captainStats.map((stat, index) => (
+                        <div key={`${stat.player}-${index}`} className="bg-accent/30 p-4 rounded-lg">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                              <div className="bg-primary/10 p-2 rounded-full text-primary text-lg font-bold min-w-[32px] text-center">
+                                {index + 1}
+                              </div>
+
+                              <div>
+                                <div className="font-bold text-lg flex items-center gap-2">
+                                  {stat.player}
+                                  {stat.team !== "N/A" && (
+                                    <span className="text-sm text-muted-foreground">({stat.team})</span>
+                                  )}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {formatCompactNumber(stat.count)} managers ({stat.percentage}%)
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <div className="text-lg font-bold">{stat.averagePoints}</div>
+                              <div className="text-xs text-muted-foreground">avg. captain pts</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="chips">
+                <Card className="p-6">
+                  <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <Star className="h-5 w-5 text-yellow-500" />
+                    Chip Usage
+                  </h2>
+
+                  {tournamentStats.chipUsage.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No chip usage recorded for this event.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {tournamentStats.chipUsage.map((chip, index) => (
+                        <div key={`${chip.chip}-${index}`} className="bg-accent/30 p-4 rounded-lg">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <h3 className="font-bold text-lg">{chip.chip}</h3>
+                              <div className="text-sm text-muted-foreground">
+                                {formatCompactNumber(chip.count)} managers ({chip.percentage}%)
+                              </div>
+                            </div>
+
+                            <div className="text-right">
+                              <div className="text-lg font-bold">{chip.averagePoints}</div>
+                              <div className="text-xs text-muted-foreground">avg. net points</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </>
+        )}
       </div>
     </RootLayout>
   );

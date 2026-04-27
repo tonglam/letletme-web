@@ -21,5 +21,6 @@ export interface PlayerDetail {
   pointsBreakdown: {
     category: string;
     points: number;
+    value?: number;
   }[];
 }

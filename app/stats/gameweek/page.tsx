@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import RootLayout from "@/components/layout/RootLayout";
 import { Card } from "@/components/ui/card";
+import { PlayerList } from "@/components/player/PlayerList";
 import { GameweekSelector } from "@/components/data/GameweekSelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +21,7 @@ import {
   type TopTransfer,
   type TopTransfersResponse,
 } from "@/lib/graphql/queries";
-import { formatCompactNumber } from "@/lib/utils";
+import { formatCompactNumber, normalizePosition, type PositionCode } from "@/lib/utils";
 import {
   ArrowLeftCircle,
   ArrowRightCircle,
@@ -106,33 +107,12 @@ interface TransferTrend {
   points: number | null;
 }
 
-type PositionCode = "GKP" | "DEF" | "MID" | "FWD" | "UNK";
-
 const POSITION_ORDER: Record<PositionCode, number> = {
   GKP: 0,
   DEF: 1,
   MID: 2,
   FWD: 3,
   UNK: 99,
-};
-
-const normalizePosition = (position?: string | null): PositionCode => {
-  switch (position) {
-    case "GKP":
-    case "GOALKEEPER":
-      return "GKP";
-    case "DEF":
-    case "DEFENDER":
-      return "DEF";
-    case "MID":
-    case "MIDFIELDER":
-      return "MID";
-    case "FWD":
-    case "FORWARD":
-      return "FWD";
-    default:
-      return "UNK";
-  }
 };
 
 const FALLBACK_OVERALL_STATS: OverallGameweekStats = {
@@ -181,7 +161,9 @@ const chipPlayCount = (chipPlays: ChipPlayEntry[], chipName: string): number | n
 };
 
 const fetchPlayerNamesByIds = async (ids: number[]): Promise<Record<number, string>> => {
-  const uniqueIds = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
+  const uniqueIds = Array.from(
+    new Set(ids.filter((id) => Number.isInteger(id) && id > 0)),
+  );
   if (uniqueIds.length === 0) {
     return {};
   }
@@ -597,30 +579,7 @@ export default function GameweekStatsPage() {
               ) : dreamTeam.length === 0 ? (
                 <div className="text-sm text-muted-foreground">No dream team data available.</div>
               ) : (
-                <div className="rounded-xl border border-border/60 overflow-hidden bg-card/40">
-                  <div>
-                    {dreamTeam.map((player, index) => (
-                      <div
-                        key={player.id}
-                        className={`grid grid-cols-[1.3fr_0.8fr_0.7fr] gap-1.5 px-4 py-3 items-center ${
-                          index % 2 === 0 ? "bg-background/60" : "bg-background/20"
-                        }`}
-                      >
-                        <span className="font-medium">{player.name}</span>
-                        <div className="text-center">
-                          <Badge variant="outline" className="min-w-12 justify-center">
-                            {player.team ?? "N/A"}
-                          </Badge>
-                        </div>
-                        <div className="text-center">
-                          <Badge variant="secondary" className="min-w-11 justify-center">
-                            {player.position}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <PlayerList players={dreamTeam} />
               )}
             </Card>
           </TabsContent>
@@ -641,29 +600,7 @@ export default function GameweekStatsPage() {
               ) : haulPlayers.length === 0 ? (
                 <div className="text-sm text-muted-foreground">No double-digit hauls for this gameweek yet.</div>
               ) : (
-                <div className="rounded-xl border border-border/60 overflow-hidden bg-card/40">
-                  {haulPlayers.map((player, index) => (
-                    <div
-                      key={player.id}
-                      className={`grid grid-cols-[1.3fr_0.8fr_0.7fr_0.5fr] gap-1.5 px-4 py-3 items-center ${
-                        index % 2 === 0 ? "bg-background/60" : "bg-background/20"
-                      }`}
-                    >
-                      <span className="font-medium">{player.name}</span>
-                      <div className="text-center">
-                        <Badge variant="outline" className="min-w-12 justify-center">
-                          {player.team ?? "N/A"}
-                        </Badge>
-                      </div>
-                      <div className="text-center">
-                        <Badge variant="secondary" className="min-w-11 justify-center">
-                          {player.position}
-                        </Badge>
-                      </div>
-                      <span className="text-right font-bold text-primary">{player.points}</span>
-                    </div>
-                  ))}
-                </div>
+                <PlayerList players={haulPlayers} />
               )}
             </Card>
           </TabsContent>

@@ -9,7 +9,7 @@ import {
   type PlayerValuesResponse,
 } from "@/lib/graphql/queries";
 import { TrendingDown, TrendingUp } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface PriceChange {
   position: string;
@@ -18,6 +18,9 @@ interface PriceChange {
   price: number;
   priceChange?: number;
 }
+
+const PAGE_SIZE = 5;
+const AUTOPLAY_INTERVAL = 3500;
 
 function PriceList({
   title,
@@ -28,6 +31,29 @@ function PriceList({
   changes: PriceChange[];
   type: "rise" | "fall";
 }) {
+  const [page, setPage] = useState(0);
+  const [animating, setAnimating] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const pages = Math.ceil(changes.length / PAGE_SIZE);
+
+  const advance = useCallback(() => {
+    setAnimating(true);
+    setTimeout(() => {
+      setPage((p) => (p + 1) % pages);
+      setAnimating(false);
+    }, 250);
+  }, [pages]);
+
+  useEffect(() => {
+    if (pages <= 1) return;
+    timerRef.current = setInterval(advance, AUTOPLAY_INTERVAL);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [advance, pages]);
+
+  // Reset page when data changes
+  useEffect(() => { setPage(0); }, [changes]);
+
   const icon =
     type === "rise" ? (
       <TrendingUp className="w-5 h-5 shrink-0 text-emerald-500" />
@@ -45,6 +71,9 @@ function PriceList({
       ? "border-emerald-200 dark:border-emerald-900"
       : "border-rose-200 dark:border-rose-900";
 
+  const dotActiveColor =
+    type === "rise" ? "bg-emerald-500" : "bg-rose-500";
+
   const getPositionColor = (position: string) => {
     switch (position) {
       case "GKP":
@@ -59,6 +88,8 @@ function PriceList({
         return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
     }
   };
+
+  const visibleChanges = changes.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
   return (
     <div className="flex flex-col h-full">
@@ -79,46 +110,69 @@ function PriceList({
             No {type === "rise" ? "rises" : "falls"} to display
           </div>
         ) : (
-          changes.map((change, index) => (
-            <button
-              key={index}
-              className="w-full flex items-center gap-3 p-3 rounded-lg bg-background/80 hover:bg-background border border-border/50 hover:border-border transition-all text-left group"
-              onClick={() => console.log(`Clicked on ${change.player}`)}
-              aria-label={`View details for ${change.player}`}
-            >
-              <Badge
-                variant="secondary"
-                className={`shrink-0 text-xs font-semibold ${getPositionColor(change.position)}`}
+          <div
+            className="transition-opacity duration-250"
+            style={{ opacity: animating ? 0 : 1 }}
+          >
+            {visibleChanges.map((change, index) => (
+              <button
+                key={`${page}-${index}`}
+                className="w-full flex items-center gap-3 p-3 rounded-lg bg-background/80 hover:bg-background border border-border/50 hover:border-border transition-all text-left group mb-2 last:mb-0"
+                onClick={() => console.log(`Clicked on ${change.player}`)}
+                aria-label={`View details for ${change.player}`}
               >
-                {change.position}
-              </Badge>
+                <Badge
+                  variant="secondary"
+                  className={`shrink-0 text-xs font-semibold ${getPositionColor(change.position)}`}
+                >
+                  {change.position}
+                </Badge>
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
-                    {change.player}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
+                      {change.player}
+                    </span>
+                  </div>
+                  <span className="text-xs text-muted-foreground truncate block">
+                    {change.club}
                   </span>
                 </div>
-                <span className="text-xs text-muted-foreground truncate block">
-                  {change.club}
-                </span>
-              </div>
 
-              <div className="flex flex-col items-end shrink-0">
-                <span className={`text-base font-bold ${priceClassName}`}>
-                  £{(change.price / 10).toFixed(1)}m
-                </span>
-                {change.priceChange !== undefined && (
-                  <span className={`text-xs ${priceClassName} font-medium`}>
-                    {type === "rise" ? "+" : ""}£
-                    {(Math.abs(change.priceChange) / 10).toFixed(1)}m
+                <div className="flex flex-col items-end shrink-0">
+                  <span className={`text-base font-bold ${priceClassName}`}>
+                    £{(change.price / 10).toFixed(1)}m
                   </span>
-                )}
-              </div>
-            </button>
-          ))
+                  {change.priceChange !== undefined && (
+                    <span className={`text-xs ${priceClassName} font-medium`}>
+                      {type === "rise" ? "+" : ""}£
+                      {(Math.abs(change.priceChange) / 10).toFixed(1)}m
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
         )}
       </div>
+      {pages > 1 && (
+        <div className="flex justify-center gap-1.5 mt-3">
+          {Array.from({ length: pages }).map((_, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                if (timerRef.current) clearInterval(timerRef.current);
+                setPage(i);
+                timerRef.current = setInterval(advance, AUTOPLAY_INTERVAL);
+              }}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                i === page ? `w-4 ${dotActiveColor}` : "w-1.5 bg-muted-foreground/30"
+              }`}
+              aria-label={`Go to page ${i + 1}`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -149,7 +203,6 @@ export function PriceChangesSection() {
           data.playerValues
             .filter((p) => p.value > p.lastValue)
             .sort((a, b) => b.value - a.value)
-            .slice(0, 5)
             .map(toChange)
         );
 
@@ -157,7 +210,6 @@ export function PriceChangesSection() {
           data.playerValues
             .filter((p) => p.value < p.lastValue)
             .sort((a, b) => a.value - b.value)
-            .slice(0, 5)
             .map(toChange)
         );
       } catch (err) {

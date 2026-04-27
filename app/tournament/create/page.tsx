@@ -6,7 +6,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { 
   Select, 
   SelectContent, 
@@ -38,9 +37,8 @@ import {
   Check, 
   Info, 
   Link as LinkIcon,
-  Calendar,
+  WandSparkles,
   AlertCircle,
-  ExternalLink,
   AlertTriangle
 } from "lucide-react";
 import { 
@@ -54,33 +52,25 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { TournamentHelp } from "@/components/tournament/TournamentHelp";
-
-// Define tournament types
-const tournamentTypes = [
-  { value: "standard", label: "Standard" },
-  { value: "swiss", label: "Swiss Tournament" },
-  { value: "knockout", label: "Knockout Tournament" }
-];
+import { useSession } from "@/lib/auth-client";
 
 // Define participant sources
 const participantSources = [
-  { value: "official", label: "Official Fantasy League" },
-  { value: "custom", label: "Custom Selection" },
-  { value: "manual", label: "Manual Entry" }
+  { value: "official", label: "Official" },
+  { value: "custom", label: "Custom" },
 ];
 
 // Define group formats
 const groupFormats = [
-  { value: "none", label: "No Group Stage" },
-  { value: "points", label: "Points-based" },
-  { value: "headToHead", label: "Head-to-Head" }
+  { value: "none", label: "No Group" },
+  { value: "points", label: "Points Race" },
 ];
 
 // Define knockout formats
 const knockoutFormats = [
-  { value: "none", label: "No Knockout Stage" },
+  { value: "none", label: "No Knockout" },
   { value: "single", label: "Single Elimination" },
-  { value: "double", label: "Home & Away" }
+  { value: "double", label: "Double Elimination" }
 ];
 
 // Define gameweeks
@@ -96,30 +86,25 @@ const fplUrlRegex = /^https:\/\/fantasy\.premierleague\.com\/leagues\/\d+\/(stan
 // Type for form data
 const formSchema = z.object({
   tournamentName: z.string().min(3, "Tournament name must be at least 3 characters"),
-  adminId: z.string().optional(),
-  creator: z.string().optional(),
-  participantSource: z.enum(["official", "custom", "manual"]),
-  tournamentType: z.enum(["standard", "swiss", "knockout"]),
+  adminId: z.string().regex(/^\d+$/, "Admin ID must be a positive number"),
+  creator: z.string().trim().min(1, "Creator is required"),
+  participantSource: z.enum(["official", "custom"]),
+  tournamentType: z.literal("standard"),
   leagueUrl: z.string()
     .refine(val => val === "" || fplUrlRegex.test(val), {
       message: "Please enter a valid Fantasy Premier League URL (e.g., https://fantasy.premierleague.com/leagues/12345/standings)",
     })
     .optional()
     .or(z.literal("")),
-  participantCount: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 1, {
-    message: "Must be a number greater than 1",
+  participantCount: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
+    message: "Must be a number greater than 0",
   }),
-  groupFormat: z.enum(["none", "points", "headToHead"]),
+  groupFormat: z.enum(["none", "points"]),
   startGameweek: z.string(),
   endGameweek: z.string(),
-  teamsPerGroup: z.string().optional(),
-  useAverageScore: z.boolean().optional(),
+  groupNum: z.string().optional(),
   qualifiersPerGroup: z.string().optional(),
   knockoutFormat: z.enum(["none", "single", "double"]),
-  knockoutRounds: z.string().optional(),
-  matchesPerRound: z.string().optional(),
-  knockoutStartGW: z.string().optional(),
-  knockoutEndGW: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -134,10 +119,21 @@ interface Participant {
   selected: boolean;
 }
 
+type ParticipantApiItem = Omit<Participant, "selected">;
+type PersistedFeedback = {
+  submitSuccess: string | null;
+  submitError: string | null;
+  setupError: string | null;
+};
+
+const CREATE_TOURNAMENT_FEEDBACK_KEY = "create-tournament-feedback";
+
 // Create column helper for the table
 const columnHelper = createColumnHelper<Participant>();
 
 export default function CreateTournament() {
+  const { data: sessionData } = useSession();
+  const user = sessionData?.user ?? null;
   // Form handling
   const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -148,26 +144,28 @@ export default function CreateTournament() {
       participantSource: "official",
       tournamentType: "standard",
       leagueUrl: "",
-      participantCount: "4",
-      groupFormat: "none",
-      startGameweek: "GW22",
+      participantCount: "0",
+      groupFormat: "points",
+      startGameweek: "GW1",
       endGameweek: "GW38",
-      teamsPerGroup: "2",
-      useAverageScore: false,
-      qualifiersPerGroup: "2",
+      groupNum: "1",
+      qualifiersPerGroup: "",
       knockoutFormat: "none",
-      knockoutRounds: "2",
-      matchesPerRound: "1",
-      knockoutStartGW: "",
-      knockoutEndGW: "",
     }
   });
 
   // Watch form values for conditional rendering
   const participantSource = watch("participantSource");
   const leagueUrl = watch("leagueUrl");
+  const tournamentName = watch("tournamentName");
   const groupFormat = watch("groupFormat");
   const knockoutFormat = watch("knockoutFormat");
+  const startGameweek = watch("startGameweek");
+  const endGameweek = watch("endGameweek");
+  const groupNum = watch("groupNum");
+  const qualifiersPerGroup = watch("qualifiersPerGroup");
+  const adminIdValue = watch("adminId");
+  const creatorValue = watch("creator");
   
   // Mock data for the participants table
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -175,15 +173,244 @@ export default function CreateTournament() {
   const [showTable, setShowTable] = useState(false);
   const [isUrlValid, setIsUrlValid] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [urlValidationError, setUrlValidationError] = useState<string | null>(null);
   const [isDomainValid, setIsDomainValid] = useState(true);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [createdTournamentId, setCreatedTournamentId] = useState<number | null>(null);
+  const [setupStatus, setSetupStatus] = useState<"pending" | "processing" | "ready" | "failed" | null>(null);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [createdParticipantCount, setCreatedParticipantCount] = useState<number | null>(null);
+  const [fetchedLeagueUrl, setFetchedLeagueUrl] = useState<string | null>(null);
+  const [isCheckingName, setIsCheckingName] = useState(false);
+  const [nameCheckMessage, setNameCheckMessage] = useState<string | null>(null);
+  const [isNameAvailable, setIsNameAvailable] = useState<boolean | null>(null);
+
+  const parseGameweekNumber = (value?: string) => {
+    const parsed = Number(value?.replace("GW", ""));
+    return Number.isInteger(parsed) ? parsed : 0;
+  };
+
+  const persistFeedbackAndReload = (payload: PersistedFeedback) => {
+    try {
+      window.sessionStorage.setItem(
+        CREATE_TOURNAMENT_FEEDBACK_KEY,
+        JSON.stringify(payload),
+      );
+    } catch {
+      // If sessionStorage is unavailable, continue with refresh anyway.
+    }
+    window.location.reload();
+  };
+
+  const totalEntries = showTable
+    ? participantSource === "official"
+      ? participants.length
+      : selectedParticipants.length
+    : 0;
+  const groupStartNumber = parseGameweekNumber(startGameweek);
+  const groupEndNumber = parseGameweekNumber(endGameweek);
+  const groupRounds = Math.max(groupEndNumber - groupStartNumber + 1, 0);
+  const groupCount = Math.max(Number(groupNum || "1") || 1, 1);
+  const groupQualifyCount = Math.max(Number(qualifiersPerGroup || "0") || 0, 0);
+  const computedGroupTeamNum =
+    groupFormat === "points" ? Math.ceil(totalEntries / groupCount) : totalEntries;
+  const groupStepReady =
+    showTable &&
+    totalEntries >= 2 &&
+    groupStartNumber > 0 &&
+    groupEndNumber >= groupStartNumber &&
+    (groupFormat === "none" ||
+      (groupCount >= 1 &&
+        (knockoutFormat === "none" ||
+          (groupQualifyCount >= 1 &&
+            groupCount * groupQualifyCount <= totalEntries))));
+  const knockoutPlayAgainstNum =
+    knockoutFormat === "single" ? 1 : knockoutFormat === "double" ? 2 : 0;
+  const computedKnockoutTeamNum =
+    knockoutFormat === "none"
+      ? 0
+      : groupFormat === "points"
+        ? groupCount * groupQualifyCount
+        : totalEntries;
+  const computedKnockoutEventNum =
+    computedKnockoutTeamNum >= 2 ? Math.ceil(Math.log2(computedKnockoutTeamNum)) : 0;
+  const computedKnockoutRounds =
+    knockoutFormat === "double"
+      ? computedKnockoutEventNum * 2
+      : computedKnockoutEventNum;
+  const computedKnockoutStartGwNumber = groupEndNumber > 0 ? groupEndNumber + 1 : 0;
+  const computedKnockoutEndGwNumber =
+    computedKnockoutStartGwNumber > 0
+      ? computedKnockoutStartGwNumber + Math.max(computedKnockoutRounds - 1, 0)
+      : 0;
+  const knockoutStepReady =
+    groupStepReady &&
+    (knockoutFormat === "none" ||
+      (computedKnockoutTeamNum >= 2 &&
+        computedKnockoutStartGwNumber > 0 &&
+        computedKnockoutEndGwNumber <= 38));
+
+  const applyAutoMode = () => {
+    setValue("participantSource", "official");
+    setValue("tournamentType", "standard");
+    setValue("groupFormat", "points");
+    setValue("startGameweek", "GW1");
+    setValue("endGameweek", "GW38");
+    setValue("groupNum", "1");
+    setValue("knockoutFormat", "none");
+    setValue("qualifiersPerGroup", "");
+    setSubmitError(null);
+    setSubmitSuccess(null);
+  };
 
   // Update participant count based on league URL or selected participants
   useEffect(() => {
-    if (showTable && selectedParticipants.length > 0) {
+    if (showTable) {
       setValue("participantCount", selectedParticipants.length.toString());
     }
   }, [selectedParticipants, setValue, showTable]);
+
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(CREATE_TOURNAMENT_FEEDBACK_KEY);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as PersistedFeedback;
+      setSubmitSuccess(parsed.submitSuccess ?? null);
+      setSubmitError(parsed.submitError ?? null);
+      setSetupError(parsed.setupError ?? null);
+      window.sessionStorage.removeItem(CREATE_TOURNAMENT_FEEDBACK_KEY);
+    } catch {
+      window.sessionStorage.removeItem(CREATE_TOURNAMENT_FEEDBACK_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    if (!watch("creator")) {
+      setValue("creator", (user.name ?? user.email ?? "").toLowerCase());
+    }
+    if (!watch("adminId")) {
+      setValue("adminId", String(user.fplEntryId ?? ""));
+    }
+  }, [setValue, user, watch]);
+
+  useEffect(() => {
+    const normalizedName = tournamentName?.trim() ?? "";
+
+    if (normalizedName.length === 0) {
+      setIsCheckingName(false);
+      setIsNameAvailable(null);
+      setNameCheckMessage(null);
+      return;
+    }
+
+    if (normalizedName.length < 3) {
+      setIsCheckingName(false);
+      setIsNameAvailable(false);
+      setNameCheckMessage("Tournament name must be at least 3 characters.");
+      return;
+    }
+
+    let isCancelled = false;
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        setIsCheckingName(true);
+        const response = await fetch(
+          `/api/tournaments/check-name?name=${encodeURIComponent(normalizedName)}`,
+        );
+        const result = await response.json();
+
+        if (isCancelled) {
+          return;
+        }
+
+        setIsNameAvailable(Boolean(result.available));
+        setNameCheckMessage(result.message ?? null);
+      } catch {
+        if (isCancelled) {
+          return;
+        }
+
+        setIsNameAvailable(false);
+        setNameCheckMessage("Failed to check tournament name.");
+      } finally {
+        if (!isCancelled) {
+          setIsCheckingName(false);
+        }
+      }
+    }, 400);
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [tournamentName]);
+
+  useEffect(() => {
+    if (showTable && participantSource === "official") {
+      setSelectedParticipants(participants.map((participant) => participant.id));
+    }
+  }, [participantSource, participants, showTable]);
+
+  useEffect(() => {
+    if (!fetchedLeagueUrl || leagueUrl === fetchedLeagueUrl) {
+      return;
+    }
+
+    setShowTable(false);
+    setIsUrlValid(false);
+    setParticipants([]);
+    setSelectedParticipants([]);
+    setFetchedLeagueUrl(null);
+  }, [fetchedLeagueUrl, leagueUrl]);
+
+  useEffect(() => {
+    if (!createdTournamentId || !setupStatus || setupStatus === "ready" || setupStatus === "failed") {
+      return;
+    }
+
+    let cancelled = false;
+    const intervalId = window.setInterval(async () => {
+      try {
+        const response = await fetch(`/api/tournaments/setup-status?id=${createdTournamentId}`, {
+          cache: "no-store",
+        });
+        const result = await response.json();
+
+        if (cancelled || !response.ok || !result.success) {
+          return;
+        }
+
+        setSetupStatus(result.setupStatus);
+        setSetupError(result.setupError ?? null);
+
+        if (result.setupStatus === "ready") {
+          setSubmitSuccess(
+            `Tournament created successfully with ${createdParticipantCount ?? totalEntries} entries.`
+          );
+        } else if (result.setupStatus === "failed") {
+          setSubmitError(result.setupError || "Tournament setup failed after creation.");
+          setSubmitSuccess(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setSetupError("Tournament was created, but setup status could not be refreshed.");
+        }
+      }
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [createdParticipantCount, createdTournamentId, setupStatus, totalEntries]);
 
   // Validate URL on change with more detailed validation
   useEffect(() => {
@@ -223,7 +450,11 @@ export default function CreateTournament() {
         <input 
           type="checkbox" 
           checked={selectedParticipants.includes(row.original.id)}
+          disabled={participantSource === "official"}
           onChange={(e) => {
+            if (participantSource === "official") {
+              return;
+            }
             if (e.target.checked) {
               setSelectedParticipants(prev => [...prev, row.original.id]);
             } else {
@@ -242,14 +473,6 @@ export default function CreateTournament() {
       header: 'Manager',
       cell: info => info.getValue(),
     }),
-    columnHelper.accessor('overallRank', {
-      header: 'Overall Rank',
-      cell: info => info.getValue().toLocaleString(),
-    }),
-    columnHelper.accessor('totalPoints', {
-      header: 'Total Points',
-      cell: info => info.getValue(),
-    }),
   ];
 
   // Initialize the table
@@ -265,63 +488,166 @@ export default function CreateTournament() {
   };
 
   // Function to fetch participants from URL
-  const fetchParticipants = () => {
+  const fetchParticipants = async () => {
     if (!isValidUrl()) {
       setUrlValidationError("Please enter a valid Fantasy Premier League URL");
       return;
     }
     
     setIsLoading(true);
+    setSubmitError(null);
+    setSubmitSuccess(null);
     setUrlValidationError(null);
-    
-    // Simulate API call with timeout
-    setTimeout(() => {
-      // Mock data for demonstration
-      const mockParticipants: Participant[] = [
-        { id: '1', team: 'Arsenal Guangzhou FC', manager: 'Gunners Fan', overallRank: 120456, totalPoints: 1788, selected: false },
-        { id: '2', team: '沉迷于搬砖不想披', manager: 'Brick Layer', overallRank: 345678, totalPoints: 1684, selected: false },
-        { id: '3', team: '世俱杯冠军阿森纳', manager: 'Arsenal Champion', overallRank: 67890, totalPoints: 1909, selected: false },
-        { id: '4', team: 'Lord Bendtner', manager: 'Nick B', overallRank: 234567, totalPoints: 1555, selected: false },
-        { id: '5', team: 'JackieHooooooo', manager: 'Jackie H', overallRank: 456789, totalPoints: 1836, selected: false },
-        { id: '6', team: 'WHY NOT', manager: 'Just Because', overallRank: 678901, totalPoints: 1810, selected: false },
-        { id: '7', team: '杀猪会 tong牛合屋之人', manager: 'Tong', overallRank: 123456, totalPoints: 1779, selected: false },
-        { id: '8', team: 'Arminia Bielefeld', manager: 'German Fan', overallRank: 789012, totalPoints: 1861, selected: false },
-      ];
-      
-      setParticipants(mockParticipants);
+
+    try {
+      const response = await fetch(
+        `/api/tournaments/participants?leagueUrl=${encodeURIComponent(leagueUrl || "")}`
+      );
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to fetch participants");
+      }
+
+      const fetchedParticipants: Participant[] = (result.participants || []).map((participant: ParticipantApiItem) => ({
+        ...participant,
+        selected: participantSource === "official",
+      }));
+
+      setParticipants(fetchedParticipants);
       setShowTable(true);
       setIsUrlValid(true);
-      setIsLoading(false);
-      
-      // Pre-select the first 4 participants
-      const initialSelection = mockParticipants.slice(0, 4).map(p => p.id);
+      setFetchedLeagueUrl(leagueUrl || null);
+
+      const initialSelection = participantSource === "official"
+        ? fetchedParticipants.map((participant) => participant.id)
+        : [];
       setSelectedParticipants(initialSelection);
-    }, 1500);
+    } catch (error) {
+      setUrlValidationError(
+        error instanceof Error ? error.message : "Failed to fetch participants"
+      );
+      setParticipants([]);
+      setSelectedParticipants([]);
+      setShowTable(false);
+      setIsUrlValid(false);
+      setFetchedLeagueUrl(null);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Handle form submission
-  const onSubmit = (data: FormData) => {
-    // If we're using official league but haven't fetched participants
-    if (data.participantSource === "official" && !showTable) {
+  const onSubmit = async (data: FormData) => {
+    setSubmitError(null);
+    setSubmitSuccess(null);
+    setSetupError(null);
+    setCreatedTournamentId(null);
+    setSetupStatus(null);
+    setCreatedParticipantCount(null);
+
+    // Both participant source types require fetched league participants
+    if (!showTable) {
       if (!isValidUrl()) {
         setUrlValidationError("Please enter a valid Fantasy Premier League URL and fetch participants before submitting");
         return;
       }
       
-      alert("Please fetch participants from the league URL before creating the tournament");
+      setSubmitError("Please fetch participants from the league URL before creating the tournament.");
+      return;
+    }
+
+    if (data.participantSource === "custom" && selectedParticipants.length === 0) {
+      setSubmitError("Please select participants for custom selection.");
       return;
     }
     
     // Add selected participants to the data
-    const submissionData = {
-      ...data,
-      selectedParticipants: participants
-        .filter(p => selectedParticipants.includes(p.id))
-        .map(p => ({ id: p.id, team: p.team, manager: p.manager }))
-    };
-    
-    console.log(submissionData);
-    alert("Tournament created successfully!");
+    const participantIds = data.participantSource === "official"
+      ? participants.map((participant) => participant.id)
+      : selectedParticipants;
+
+    if (participantIds.length < 2) {
+      setSubmitError("Tournament requires at least 2 participants.");
+      return;
+    }
+
+    if (isCheckingName) {
+      setSubmitError("Tournament name is still being checked.");
+      return;
+    }
+
+    if (isNameAvailable === false) {
+      setSubmitError("Tournament name must be unique.");
+      return;
+    }
+
+    if (!groupStepReady) {
+      setSubmitError("Please complete the group phase settings before creating the tournament.");
+      return;
+    }
+
+    if (!knockoutStepReady) {
+      setSubmitError("Please complete the knockout phase settings before creating the tournament.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch("/api/tournaments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...data,
+          selectedParticipantIds: participantIds,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to create tournament");
+      }
+
+      const participantCount = result.tournament?.participantCount ?? participantIds.length;
+      const nextSetupStatus =
+        result.setupStatus === "processing" || result.setupStatus === "ready" || result.setupStatus === "failed"
+          ? result.setupStatus
+          : "pending";
+
+      setCreatedTournamentId(result.tournament?.id ?? null);
+      setCreatedParticipantCount(participantCount);
+      setSetupStatus(nextSetupStatus);
+      setSetupError(null);
+
+      if (nextSetupStatus === "ready") {
+        persistFeedbackAndReload({
+          submitSuccess: `Tournament created successfully with ${participantCount} entries.`,
+          submitError: null,
+          setupError: null,
+        });
+      } else if (nextSetupStatus === "failed") {
+        persistFeedbackAndReload({
+          submitSuccess: null,
+          submitError: "Tournament was created, but backend setup failed.",
+          setupError: null,
+        });
+      } else {
+        persistFeedbackAndReload({
+          submitSuccess: `Tournament created with ${participantCount} entries. Backend setup is still running.`,
+          submitError: null,
+          setupError: null,
+        });
+      }
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Failed to create tournament"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -332,8 +658,9 @@ export default function CreateTournament() {
           <h1 className="text-3xl font-bold">Create Tournament</h1>
         </div>
         
-        {/* Help and FAQ Section */}
-        <TournamentHelp className="mb-8" />
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-3">
+          <TournamentHelp />
+        </div>
         
         <form onSubmit={handleSubmit(onSubmit)}>
           <Card className="p-6 mb-8">
@@ -362,6 +689,19 @@ export default function CreateTournament() {
                 {errors.tournamentName && (
                   <p className="text-sm text-red-500">{errors.tournamentName.message}</p>
                 )}
+                {!errors.tournamentName && nameCheckMessage && (
+                  <p
+                    className={`text-sm ${
+                      isCheckingName
+                        ? "text-muted-foreground"
+                        : isNameAvailable
+                          ? "text-emerald-600"
+                          : "text-red-500"
+                    }`}
+                  >
+                    {isCheckingName ? "Checking tournament name..." : nameCheckMessage}
+                  </p>
+                )}
               </div>
               
               <div className="grid gap-3">
@@ -371,9 +711,16 @@ export default function CreateTournament() {
                 <Input 
                   id="admin-id"
                   {...register("adminId")}
-                  placeholder="12"
-                  readOnly
+                  placeholder="15702"
+                  onFocus={() => {
+                    if (!adminIdValue?.trim()) {
+                      setValue("adminId", "15702", { shouldValidate: true });
+                    }
+                  }}
                 />
+                {errors.adminId && (
+                  <p className="text-sm text-red-500">{errors.adminId.message}</p>
+                )}
               </div>
               
               <div className="grid gap-3">
@@ -384,8 +731,15 @@ export default function CreateTournament() {
                   id="creator"
                   {...register("creator")}
                   placeholder="tong"
-                  readOnly
+                  onFocus={() => {
+                    if (!creatorValue?.trim()) {
+                      setValue("creator", "tong", { shouldValidate: true });
+                    }
+                  }}
                 />
+                {errors.creator && (
+                  <p className="text-sm text-red-500">{errors.creator.message}</p>
+                )}
               </div>
             </div>
           </Card>
@@ -414,32 +768,17 @@ export default function CreateTournament() {
                     </RadioGroup>
                   )}
                 />
+                <p className="text-sm text-muted-foreground">
+                  Official includes all entries from the league URL; Custom lets you pick a subset after fetching.
+                </p>
               </div>
               
               <div className="grid gap-3">
                 <Label>Tournament Type <span className="text-red-500">*</span></Label>
-                <Controller
-                  name="tournamentType"
-                  control={control}
-                  render={({ field }) => (
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      className="flex flex-col space-y-1"
-                    >
-                      {tournamentTypes.map((type) => (
-                        <div key={type.value} className="flex items-center space-x-2">
-                          <RadioGroupItem value={type.value} id={`type-${type.value}`} />
-                          <Label htmlFor={`type-${type.value}`}>{type.label}</Label>
-                        </div>
-                      ))}
-                    </RadioGroup>
-                  )}
-                />
+                <Input value="Standard" readOnly />
               </div>
               
-              {participantSource === "official" && (
-                <div className="space-y-3">
+              <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <Label htmlFor="league-url">Official League URL <span className="text-red-500">*</span></Label>
                     <TooltipProvider>
@@ -511,6 +850,31 @@ export default function CreateTournament() {
                           <span>League loaded successfully</span>
                         </div>
                       </div>
+
+                      <div className="mb-4 flex justify-end">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="flex items-center gap-2"
+                                onClick={applyAutoMode}
+                              >
+                                <WandSparkles className="h-4 w-4" />
+                                <span>Auto Generate Mode</span>
+                                <Info className="h-4 w-4 text-muted-foreground" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="w-72">
+                                Fills the preset mode: Official data, Standard type, Points Race,
+                                GW1 to GW38, Group Num 1, and No Knockout.
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
                       
                       <div className="border rounded-md overflow-hidden">
                         <Table>
@@ -547,23 +911,29 @@ export default function CreateTournament() {
                         </Table>
                         
                         <div className="p-3 bg-accent/20 border-t flex justify-between items-center">
-                          <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => {
-                              if (selectedParticipants.length === participants.length) {
-                                setSelectedParticipants([]);
-                              } else {
-                                setSelectedParticipants(participants.map(p => p.id));
-                              }
-                            }}
-                          >
-                            {selectedParticipants.length === participants.length 
-                              ? "Deselect All" 
-                              : "Select All"}
-                          </Button>
-                          
+                          {participantSource === "custom" ? (
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
+                                if (selectedParticipants.length === participants.length) {
+                                  setSelectedParticipants([]);
+                                } else {
+                                  setSelectedParticipants(participants.map((participant) => participant.id));
+                                }
+                              }}
+                            >
+                              {selectedParticipants.length === participants.length 
+                                ? "Deselect All" 
+                                : "Select All"}
+                            </Button>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">
+                              Official source includes all teams
+                            </span>
+                          )}
+
                           <div className="text-sm text-muted-foreground">
                             Showing {participants.length} teams
                           </div>
@@ -572,45 +942,17 @@ export default function CreateTournament() {
                     </div>
                   )}
                 </div>
-              )}
-              
-              {participantSource !== "official" && (
-                <div className="grid gap-3">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="participant-count">Participant Count <span className="text-red-500">*</span></Label>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Number of teams participating in the tournament</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  <Input 
-                    id="participant-count"
-                    type="number"
-                    min="2"
-                    {...register("participantCount")}
-                  />
-                  {errors.participantCount && (
-                    <p className="text-sm text-red-500">{errors.participantCount.message}</p>
-                  )}
-                </div>
-              )}
             </div>
           </Card>
           
-          {((leagueUrl && isUrlValid) || participantSource !== "official") && (
+          {showTable && (
             <>
               <Card className="p-6 mb-8">
-                <h2 className="text-xl font-semibold mb-6">Group Stage Settings</h2>
+                <h2 className="text-xl font-semibold mb-6">Group Phase</h2>
                 
                 <div className="space-y-6">
                   <div className="grid gap-3">
-                    <Label>Group Format <span className="text-red-500">*</span></Label>
+                    <Label>Group Mode <span className="text-red-500">*</span></Label>
                     <Controller
                       name="groupFormat"
                       control={control}
@@ -680,221 +1022,181 @@ export default function CreateTournament() {
                     </div>
                   </div>
                   
-                  {groupFormat !== "none" && (
-                    <>
-                      <div className="grid gap-3">
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor="teams-per-group">Teams Per Group <span className="text-red-500">*</span></Label>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Number of teams in each group</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </div>
+                  {groupFormat === "points" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-3">
+                        <Label htmlFor="group-num">Group Number <span className="text-red-500">*</span></Label>
                         <Input 
-                          id="teams-per-group"
+                          id="group-num"
                           type="number"
-                          min="2"
-                          {...register("teamsPerGroup")}
+                          min="1"
+                          {...register("groupNum")}
                         />
-                        <div className="text-sm text-muted-foreground">
-                          Estimated Groups: {Math.ceil(Number(watch("participantCount")) / Number(watch("teamsPerGroup") || 2))}
-                        </div>
                       </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {knockoutFormat !== "none" && (
                         <div className="space-y-3">
-                          <div className="flex items-center gap-2">
-                            <Label htmlFor="use-average-score">Use Average Points</Label>
-                          </div>
-                          <Controller
-                            name="useAverageScore"
-                            control={control}
-                            render={({ field }) => (
-                              <div className="flex items-center h-10">
-                                <input
-                                  type="checkbox"
-                                  id="use-average-score"
-                                  checked={field.value}
-                                  onChange={(e) => field.onChange(e.target.checked)}
-                                  className="w-4 h-4 border-gray-300 rounded"
-                                />
-                                <label htmlFor="use-average-score" className="ml-2 text-sm text-muted-foreground">
-                                  All teams must have equal number of players
-                                </label>
-                              </div>
-                            )}
-                          />
-                        </div>
-                        
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2">
-                            <Label htmlFor="qualifiers-per-group">Qualifiers Per Group <span className="text-red-500">*</span></Label>
-                          </div>
+                          <Label htmlFor="qualifiers-per-group">Group Qualify Number <span className="text-red-500">*</span></Label>
                           <Input 
                             id="qualifiers-per-group"
                             type="number"
                             min="1"
                             {...register("qualifiersPerGroup")}
                           />
-                          <div className="text-sm text-muted-foreground">
-                            Teams advancing from each group
-                          </div>
                         </div>
-                      </div>
-                    </>
+                      )}
+                    </div>
                   )}
-                  
-                  <div className="flex items-center gap-2 bg-accent/30 p-4 rounded-lg">
-                    <Calendar className="h-5 w-5 text-muted-foreground" />
-                    <div className="text-sm text-muted-foreground">
-                      Tournament will run for <span className="font-semibold">{
-                        (() => {
-                          const startGw = parseInt(watch("startGameweek").replace("GW", "")) || 1;
-                          const endGw = parseInt(watch("endGameweek").replace("GW", "")) || 38;
-                          return endGw - startGw + 1;
-                        })()
-                      } gameweeks</span>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="rounded-lg bg-accent/30 p-4">
+                      <div className="text-sm text-muted-foreground">Total Entries</div>
+                      <div className="text-2xl font-semibold">{totalEntries}</div>
+                    </div>
+                    <div className="rounded-lg bg-accent/30 p-4">
+                      <div className="text-sm text-muted-foreground">Group Rounds</div>
+                      <div className="text-2xl font-semibold">{groupRounds}</div>
+                    </div>
+                    <div className="rounded-lg bg-accent/30 p-4">
+                      <div className="text-sm text-muted-foreground">Group Team Num</div>
+                      <div className="text-2xl font-semibold">{computedGroupTeamNum}</div>
+                    </div>
+                    <div className="rounded-lg bg-accent/30 p-4">
+                      <div className="text-sm text-muted-foreground">Group Num</div>
+                      <div className="text-2xl font-semibold">
+                        {groupFormat === "points" ? groupCount : 1}
+                      </div>
                     </div>
                   </div>
+
+                  {groupFormat === "points" && knockoutFormat !== "none" && groupCount * groupQualifyCount > totalEntries && (
+                    <Alert className="bg-red-50 border-red-200">
+                      <AlertCircle className="h-4 w-4 text-red-600" />
+                      <AlertDescription className="text-red-800">
+                        Group qualify total cannot exceed the total selected entries.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
               </Card>
               
-              <Card className="p-6 mb-8">
-                <h2 className="text-xl font-semibold mb-6">Knockout Stage Settings</h2>
-                
-                <div className="space-y-6">
-                  <div className="grid gap-3">
-                    <Label>Knockout Format <span className="text-red-500">*</span></Label>
-                    <Controller
-                      name="knockoutFormat"
-                      control={control}
-                      render={({ field }) => (
-                        <Select 
-                          value={field.value} 
-                          onValueChange={field.onChange}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select format" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {knockoutFormats.map((format) => (
-                              <SelectItem key={format.value} value={format.value}>
-                                {format.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
+              {groupStepReady && (
+                <Card className="p-6 mb-8">
+                  <h2 className="text-xl font-semibold mb-6">Knockout Phase</h2>
                   
-                  {knockoutFormat !== "none" && (
-                    <>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2">
-                            <Label htmlFor="knockout-rounds">Number of Rounds <span className="text-red-500">*</span></Label>
-                          </div>
-                          <Input 
-                            id="knockout-rounds"
-                            type="number"
-                            min="1"
-                            {...register("knockoutRounds")}
-                          />
-                          <div className="text-sm text-muted-foreground">
-                            Participants: {Math.pow(2, Number(watch("knockoutRounds") || 1))} teams
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2">
-                            <Label htmlFor="matches-per-round">Matches Per Round <span className="text-red-500">*</span></Label>
-                          </div>
-                          <Input 
-                            id="matches-per-round"
-                            type="number"
-                            min="1"
-                            max={knockoutFormat === "single" ? "1" : "2"}
-                            {...register("matchesPerRound")}
-                          />
-                          {knockoutFormat === "double" && (
-                            <div className="text-sm text-muted-foreground">
-                              Home & Away requires 2 matches per round
-                            </div>
-                          )}
+                  <div className="space-y-6">
+                    <div className="grid gap-3">
+                      <Label>Knockout Mode <span className="text-red-500">*</span></Label>
+                      <Controller
+                        name="knockoutFormat"
+                        control={control}
+                        render={({ field }) => (
+                          <Select 
+                            value={field.value} 
+                            onValueChange={field.onChange}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select format" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {knockoutFormats.map((format) => (
+                                <SelectItem key={format.value} value={format.value}>
+                                  {format.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="rounded-lg bg-accent/30 p-4">
+                        <div className="text-sm text-muted-foreground">Knockout Team Num</div>
+                        <div className="text-2xl font-semibold">
+                          {knockoutFormat === "none" ? "--" : computedKnockoutTeamNum}
                         </div>
                       </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-3">
-                          <Label htmlFor="knockout-start-gw">Start Gameweek <span className="text-red-500">*</span></Label>
-                          <Controller
-                            name="knockoutStartGW"
-                            control={control}
-                            render={({ field }) => (
-                              <Select value={field.value || ""} onValueChange={field.onChange}>
-                                <SelectTrigger id="knockout-start-gw">
-                                  <SelectValue placeholder="Select gameweek" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {gameweeks.map((gw) => (
-                                    <SelectItem key={gw.value} value={gw.value}>
-                                      {gw.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          />
-                        </div>
-                        
-                        <div className="space-y-3">
-                          <Label htmlFor="knockout-end-gw">End Gameweek <span className="text-red-500">*</span></Label>
-                          <Controller
-                            name="knockoutEndGW"
-                            control={control}
-                            render={({ field }) => (
-                              <Select value={field.value || ""} onValueChange={field.onChange}>
-                                <SelectTrigger id="knockout-end-gw">
-                                  <SelectValue placeholder="Select gameweek" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {gameweeks.map((gw) => (
-                                    <SelectItem key={gw.value} value={gw.value}>
-                                      {gw.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          />
+                      <div className="rounded-lg bg-accent/30 p-4">
+                        <div className="text-sm text-muted-foreground">Knockout Start GW</div>
+                        <div className="text-2xl font-semibold">
+                          {knockoutFormat === "none" || computedKnockoutStartGwNumber <= 0
+                            ? "--"
+                            : `GW${computedKnockoutStartGwNumber}`}
                         </div>
                       </div>
-                      
-                      <Alert className="bg-amber-50 border-amber-200">
-                        <AlertCircle className="h-4 w-4 text-amber-600" />
-                        <AlertDescription className="text-amber-800">
-                          Knockout rounds require at least {Number(watch("knockoutRounds") || 1) * Number(watch("matchesPerRound") || 1)} gameweeks
+                      <div className="rounded-lg bg-accent/30 p-4">
+                        <div className="text-sm text-muted-foreground">Knockout End GW</div>
+                        <div className="text-2xl font-semibold">
+                          {knockoutFormat === "none" || computedKnockoutEndGwNumber <= 0
+                            ? "--"
+                            : `GW${computedKnockoutEndGwNumber}`}
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-accent/30 p-4">
+                        <div className="text-sm text-muted-foreground">Knockout Rounds</div>
+                        <div className="text-2xl font-semibold">
+                          {knockoutFormat === "none" ? "--" : computedKnockoutRounds}
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-accent/30 p-4">
+                        <div className="text-sm text-muted-foreground">Knockout Event Num</div>
+                        <div className="text-2xl font-semibold">
+                          {knockoutFormat === "none" ? "--" : computedKnockoutEventNum}
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-accent/30 p-4">
+                        <div className="text-sm text-muted-foreground">Knockout Play Against Num</div>
+                        <div className="text-2xl font-semibold">
+                          {knockoutFormat === "none" ? "--" : knockoutPlayAgainstNum}
+                        </div>
+                      </div>
+                    </div>
+
+                    {knockoutFormat !== "none" && computedKnockoutTeamNum < 2 && (
+                      <Alert className="bg-red-50 border-red-200">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="text-red-800">
+                          Knockout phase needs at least 2 qualifying teams.
                         </AlertDescription>
                       </Alert>
-                    </>
-                  )}
-                </div>
-              </Card>
+                    )}
+
+                    {knockoutFormat !== "none" && computedKnockoutEndGwNumber > 38 && (
+                      <Alert className="bg-red-50 border-red-200">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="text-red-800">
+                          Knockout phase exceeds GW38. Reduce qualifying teams or use no knockout.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                </Card>
+              )}
             </>
           )}
           
+          {(submitError || submitSuccess || setupError) && (
+            <Alert className={`mb-6 ${submitError ? "bg-red-50 border-red-200" : "bg-emerald-50 border-emerald-200"}`}>
+              {submitError ? (
+                <AlertCircle className="h-4 w-4 text-red-600" />
+              ) : (
+                <Check className="h-4 w-4 text-emerald-600" />
+              )}
+              <AlertDescription className={submitError ? "text-red-800" : "text-emerald-800"}>
+                {submitError || submitSuccess || setupError}
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <Users className="text-muted-foreground h-5 w-5" />
               <span className="text-sm text-muted-foreground">
-                Participants: {participantSource === "official" && showTable ? selectedParticipants.length : watch("participantCount")}
+                Participants: {showTable
+                  ? participantSource === "official"
+                    ? participants.length
+                    : selectedParticipants.length
+                  : "--"}
               </span>
             </div>
             
@@ -902,9 +1204,16 @@ export default function CreateTournament() {
               type="submit" 
               size="lg"
               className="flex items-center gap-2"
-              disabled={participantSource === "official" && !showTable}
+              disabled={
+                !showTable ||
+                !groupStepReady ||
+                !knockoutStepReady ||
+                isSubmitting ||
+                isCheckingName ||
+                isNameAvailable === false
+              }
             >
-              Create Tournament
+              {isSubmitting ? "Creating..." : "Create Tournament"}
               <Check className="h-4 w-4" />
             </Button>
           </div>

@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { PlayerList } from "@/components/player/PlayerList";
 import { Skeleton } from "@/components/ui/skeleton";
 import { executeQuery } from "@/lib/graphql-client";
 import {
@@ -10,12 +11,14 @@ import {
   type EventsResponse,
   type LiveScoresResponse,
 } from "@/lib/graphql/queries";
+import { normalizePosition } from "@/lib/utils";
 import { useEffect, useState } from "react";
 
 interface TeamPlayer {
   id: number;
   position: string;
   name: string;
+  team: string;
   points: number;
 }
 
@@ -55,8 +58,9 @@ export function TeamOfTheWeekSection() {
           .filter((s) => s.inDreamTeam)
           .map((s) => ({
             id: s.player.id,
-            position: s.player.position ?? "UNK",
+            position: normalizePosition(s.player.position),
             name: s.player.webName,
+            team: s.player.team?.shortName ?? s.player.team?.name ?? "",
             points: s.totalPoints,
           }))
           .sort((a, b) => {
@@ -78,21 +82,6 @@ export function TeamOfTheWeekSection() {
 
     fetchData();
   }, []);
-
-  const getPositionColor = (position: string) => {
-    switch (position) {
-      case "GKP":
-        return "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300";
-      case "DEF":
-        return "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300";
-      case "MID":
-        return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300";
-      case "FWD":
-        return "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300";
-      default:
-        return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
-    }
-  };
 
   return (
     <Card className="rounded-none sm:rounded-lg p-4 sm:p-6 lg:p-8">
@@ -125,33 +114,7 @@ export function TeamOfTheWeekSection() {
           ))}
         </div>
       ) : teamOfTheWeek.length > 0 ? (
-        <div className="space-y-2">
-          {teamOfTheWeek.map((player) => (
-            <button
-              key={player.id}
-              className="w-full flex items-center gap-3 p-3 rounded-lg bg-background/80 hover:bg-background border border-border/50 hover:border-border transition-all text-left group"
-              onClick={() => console.log(`Clicked on ${player.name}`)}
-              aria-label={`View details for ${player.name}`}
-            >
-              <Badge
-                variant="secondary"
-                className={`shrink-0 text-xs font-semibold ${getPositionColor(player.position)}`}
-              >
-                {player.position}
-              </Badge>
-              <div className="flex-1 min-w-0">
-                <span className="text-sm font-semibold truncate group-hover:text-primary transition-colors block">
-                  {player.name}
-                </span>
-              </div>
-              <div className="flex flex-col items-end shrink-0">
-                <span className="text-lg font-bold text-primary">
-                  {player.points}
-                </span>
-              </div>
-            </button>
-          ))}
-        </div>
+        <PlayerList players={teamOfTheWeek} />
       ) : (
         <div className="text-center py-12 text-muted-foreground">
           <p className="text-sm">No team of the week data available</p>

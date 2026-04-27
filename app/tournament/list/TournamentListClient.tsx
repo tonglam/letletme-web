@@ -1,6 +1,12 @@
 'use client'
 
 import RootLayout from '@/components/layout/RootLayout'
+import { executeQuery } from '@/lib/graphql-client'
+import {
+	GET_ENTRY_TOURNAMENTS,
+	type EntryTournament,
+	type EntryTournamentsResponse
+} from '@/lib/graphql/queries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -25,7 +31,6 @@ import {
 	ArrowUpDown,
 	Calendar,
 	ExternalLink,
-	Filter,
 	MoreHorizontal,
 	Plus,
 	Search,
@@ -33,114 +38,196 @@ import {
 	Users
 } from 'lucide-react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-// Mock data for tournaments
-const mockTournaments = [
-	{
-		id: 't1',
-		name: 'Premier League Fan Cup',
-		managerId: '12',
-		managerName: 'tong',
-		participantCount: 12,
-		groupFormat: 'points',
-		knockoutFormat: 'single',
-		startGameweek: 'GW22',
-		endGameweek: 'GW38',
-		created: '2024-01-15',
-		lastUpdated: '2024-04-10',
-		isActive: true,
-		progress: 65 // percent complete
-	},
-	{
-		id: 't2',
-		name: 'Champions League Fantasy',
-		managerId: '12',
-		managerName: 'tong',
-		participantCount: 8,
-		groupFormat: 'points',
-		knockoutFormat: 'double',
-		startGameweek: 'GW25',
-		endGameweek: 'GW35',
-		created: '2024-02-05',
-		lastUpdated: '2024-04-08',
-		isActive: true,
-		progress: 40
-	},
-	{
-		id: 't3',
-		name: 'FPL Content Creators Cup',
-		managerId: '15',
-		managerName: 'Alex',
-		participantCount: 16,
-		groupFormat: 'headToHead',
-		knockoutFormat: 'single',
-		startGameweek: 'GW20',
-		endGameweek: 'GW30',
-		created: '2024-01-02',
-		lastUpdated: '2024-03-28',
-		isActive: false,
-		progress: 100
-	},
-	{
-		id: 't4',
-		name: 'Mini-League Challenge',
-		managerId: '12',
-		managerName: 'tong',
-		participantCount: 4,
-		groupFormat: 'none',
-		knockoutFormat: 'single',
-		startGameweek: 'GW30',
-		endGameweek: 'GW34',
-		created: '2024-03-25',
-		lastUpdated: '2024-04-01',
-		isActive: true,
-		progress: 20
-	},
-	{
-		id: 't5',
-		name: 'Work Colleagues Cup',
-		managerId: '18',
-		managerName: 'Sarah',
-		participantCount: 6,
-		groupFormat: 'points',
-		knockoutFormat: 'none',
-		startGameweek: 'GW15',
-		endGameweek: 'GW38',
-		created: '2023-12-10',
-		lastUpdated: '2024-04-11',
-		isActive: true,
-		progress: 72
+
+type TournamentRow = {
+	id: string
+	name: string
+	managerName: string
+	participantCount: number
+	leagueType: string
+	state: string
+	groupFormat: 'none' | 'points' | 'headToHead'
+	knockoutFormat: 'none' | 'single' | 'double'
+	startGameweek: string
+	endGameweek: string
+	updatedAt: string
+	progress: number
+}
+
+type SortOption =
+	| 'updatedDesc'
+	| 'updatedAsc'
+	| 'nameAsc'
+	| 'nameDesc'
+	| 'participantsDesc'
+
+const mapGroupFormat = (groupMode: string): TournamentRow['groupFormat'] => {
+	if (groupMode === 'POINTS_RACES') {
+		return 'points'
 	}
-]
+	if (groupMode === 'H2H') {
+		return 'headToHead'
+	}
+	return 'none'
+}
 
-export default function TournamentListClient() {
-	const searchParams = useSearchParams()
-	const mineParam = searchParams.get('mine')
+const mapKnockoutFormat = (knockoutMode: string): TournamentRow['knockoutFormat'] => {
+	if (knockoutMode === 'SINGLE_ELIMINATION') {
+		return 'single'
+	}
+	if (knockoutMode === 'DOUBLE_ELIMINATION') {
+		return 'double'
+	}
+	return 'none'
+}
 
+const mapTournamentToRow = (tournament: EntryTournament): TournamentRow => {
+	const startGameweek = tournament.groupStartedEventId
+		? `GW${tournament.groupStartedEventId}`
+		: '-'
+	const endGameweek = tournament.groupEndedEventId
+		? `GW${tournament.groupEndedEventId}`
+		: '-'
+	const progress =
+		tournament.state === 'COMPLETED' ? 100 : tournament.state === 'ACTIVE' ? 50 : 0
+
+	return {
+		id: String(tournament.id),
+		name: tournament.name,
+		managerName: tournament.creator,
+		participantCount: tournament.totalTeamNum,
+		leagueType: tournament.leagueType,
+		state: tournament.state,
+		groupFormat: mapGroupFormat(tournament.groupMode),
+		knockoutFormat: mapKnockoutFormat(tournament.knockoutMode),
+		startGameweek,
+		endGameweek,
+		updatedAt: tournament.updatedAt,
+		progress
+	}
+}
+
+const formatDate = (isoDate: string): string => {
+	const parsed = new Date(isoDate)
+	if (Number.isNaN(parsed.getTime())) {
+		return '-'
+	}
+	return parsed.toLocaleDateString()
+}
+
+const getStateLabel = (state: string): string => {
+	if (state === 'ACTIVE') {
+		return 'Active'
+	}
+	if (state === 'COMPLETED') {
+		return 'Completed'
+	}
+	if (state === 'PENDING') {
+		return 'Pending'
+	}
+	return state
+}
+
+const getProgressLabel = (state: string): string => {
+	if (state === 'COMPLETED') {
+		return 'Finished'
+	}
+	if (state === 'ACTIVE') {
+		return 'In progress'
+	}
+	if (state === 'PENDING') {
+		return 'Not started'
+	}
+	return 'In progress'
+}
+
+export default function TournamentListClient({ entryId }: { entryId: number }) {
 	const [searchQuery, setSearchQuery] = useState('')
-	const [showOnlyMine, setShowOnlyMine] = useState(mineParam === 'true')
 	const [showOnlyActive, setShowOnlyActive] = useState(false)
+	const [showOnlyKnockout, setShowOnlyKnockout] = useState(false)
+	const [tournaments, setTournaments] = useState<TournamentRow[]>([])
+	const [isLoading, setIsLoading] = useState(true)
+	const [loadError, setLoadError] = useState<string | null>(null)
+	const [sortOption, setSortOption] = useState<SortOption>('updatedDesc')
 
-	// Initialize showOnlyMine from URL parameter
 	useEffect(() => {
-		if (mineParam === 'true') {
-			setShowOnlyMine(true)
+		let isCancelled = false
+
+		const loadEntryTournaments = async () => {
+			try {
+				setIsLoading(true)
+				setLoadError(null)
+				const data = await executeQuery<EntryTournamentsResponse>(
+					GET_ENTRY_TOURNAMENTS,
+					{
+						entryId: entryId
+					}
+				)
+				if (isCancelled) {
+					return
+				}
+				setTournaments(data.entryTournaments.map(mapTournamentToRow))
+			} catch (error) {
+				if (isCancelled) {
+					return
+				}
+				const message =
+					error instanceof Error ? error.message : 'Failed to load tournaments'
+				setLoadError(message)
+				setTournaments([])
+			} finally {
+				if (!isCancelled) {
+					setIsLoading(false)
+				}
+			}
 		}
-	}, [mineParam])
+
+		loadEntryTournaments()
+
+		return () => {
+			isCancelled = true
+		}
+	}, [])
 
 	// Filter tournaments based on search and filters
-	const filteredTournaments = mockTournaments.filter(tournament => {
-		const matchesSearch =
-			tournament.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			tournament.managerName.toLowerCase().includes(searchQuery.toLowerCase())
+	const filteredTournaments = useMemo(() => {
+		const normalizedQuery = searchQuery.trim().toLowerCase()
+		const filtered = tournaments.filter(tournament => {
+			const matchesSearch =
+				tournament.name.toLowerCase().includes(normalizedQuery) ||
+				tournament.managerName.toLowerCase().includes(normalizedQuery)
 
-		const matchesMine = showOnlyMine ? tournament.managerId === '12' : true
-		const matchesActive = showOnlyActive ? tournament.isActive : true
+			const matchesActive = showOnlyActive
+				? tournament.state === 'ACTIVE'
+				: true
+			const matchesKnockout = showOnlyKnockout
+				? tournament.knockoutFormat !== 'none'
+				: true
 
-		return matchesSearch && matchesMine && matchesActive
-	})
+			return matchesSearch && matchesActive && matchesKnockout
+		})
+
+		return filtered.sort((a, b) => {
+			if (sortOption === 'nameAsc') {
+				return a.name.localeCompare(b.name)
+			}
+			if (sortOption === 'nameDesc') {
+				return b.name.localeCompare(a.name)
+			}
+			if (sortOption === 'participantsDesc') {
+				return b.participantCount - a.participantCount
+			}
+
+			const aUpdatedAt = new Date(a.updatedAt).getTime()
+			const bUpdatedAt = new Date(b.updatedAt).getTime()
+			if (sortOption === 'updatedAsc') {
+				return aUpdatedAt - bUpdatedAt
+			}
+			return bUpdatedAt - aUpdatedAt
+		})
+	}, [searchQuery, showOnlyActive, showOnlyKnockout, sortOption, tournaments])
 
 	return (
 		<RootLayout>
@@ -160,6 +247,11 @@ export default function TournamentListClient() {
 				</div>
 
 				<Card className="p-6 mb-8">
+					{loadError && (
+						<div className="mb-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+							{loadError}
+						</div>
+					)}
 					<div className="flex flex-col md:flex-row gap-4 mb-6">
 						<div className="relative flex-1">
 							<Search className="absolute top-1/2 left-3 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -173,12 +265,12 @@ export default function TournamentListClient() {
 
 						<div className="flex flex-wrap gap-2">
 							<Button
-								variant={showOnlyMine ? 'default' : 'outline'}
+								variant="default"
 								size="sm"
-								onClick={() => setShowOnlyMine(!showOnlyMine)}
 								className="flex items-center gap-2"
+								disabled
 							>
-								My Tournaments
+								Joined Tournaments
 							</Button>
 
 							<Button
@@ -189,53 +281,14 @@ export default function TournamentListClient() {
 							>
 								Active Only
 							</Button>
-
-							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<Button
-										variant="outline"
-										size="sm"
-										className="flex items-center gap-2"
-									>
-										<Filter className="h-4 w-4" />
-										<span className="hidden sm:inline">More Filters</span>
-									</Button>
-								</DropdownMenuTrigger>
-								<DropdownMenuContent
-									align="end"
-									className="w-56"
-								>
-									<DropdownMenuLabel>Filter Options</DropdownMenuLabel>
-									<DropdownMenuSeparator />
-									<DropdownMenuItem>
-										<div className="flex items-center w-full justify-between">
-											<span>Group Stage Only</span>
-											<input
-												type="checkbox"
-												className="h-4 w-4"
-											/>
-										</div>
-									</DropdownMenuItem>
-									<DropdownMenuItem>
-										<div className="flex items-center w-full justify-between">
-											<span>Knockout Only</span>
-											<input
-												type="checkbox"
-												className="h-4 w-4"
-											/>
-										</div>
-									</DropdownMenuItem>
-									<DropdownMenuItem>
-										<div className="flex items-center w-full justify-between">
-											<span>Completed</span>
-											<input
-												type="checkbox"
-												className="h-4 w-4"
-											/>
-										</div>
-									</DropdownMenuItem>
-								</DropdownMenuContent>
-							</DropdownMenu>
+							<Button
+								variant={showOnlyKnockout ? 'default' : 'outline'}
+								size="sm"
+								onClick={() => setShowOnlyKnockout(!showOnlyKnockout)}
+								className="flex items-center gap-2"
+							>
+								Knockout Only
+							</Button>
 
 							<DropdownMenu>
 								<DropdownMenuTrigger asChild>
@@ -254,11 +307,23 @@ export default function TournamentListClient() {
 								>
 									<DropdownMenuLabel>Sort Options</DropdownMenuLabel>
 									<DropdownMenuSeparator />
-									<DropdownMenuItem>Newest First</DropdownMenuItem>
-									<DropdownMenuItem>Oldest First</DropdownMenuItem>
-									<DropdownMenuItem>Name (A-Z)</DropdownMenuItem>
-									<DropdownMenuItem>Name (Z-A)</DropdownMenuItem>
-									<DropdownMenuItem>Most Participants</DropdownMenuItem>
+									<DropdownMenuItem onClick={() => setSortOption('updatedDesc')}>
+										Last Updated (Newest)
+									</DropdownMenuItem>
+									<DropdownMenuItem onClick={() => setSortOption('updatedAsc')}>
+										Last Updated (Oldest)
+									</DropdownMenuItem>
+									<DropdownMenuItem onClick={() => setSortOption('nameAsc')}>
+										Name (A-Z)
+									</DropdownMenuItem>
+									<DropdownMenuItem onClick={() => setSortOption('nameDesc')}>
+										Name (Z-A)
+									</DropdownMenuItem>
+									<DropdownMenuItem
+										onClick={() => setSortOption('participantsDesc')}
+									>
+										Most Participants
+									</DropdownMenuItem>
 								</DropdownMenuContent>
 							</DropdownMenu>
 						</div>
@@ -269,7 +334,9 @@ export default function TournamentListClient() {
 							<TableHeader>
 								<TableRow>
 									<TableHead>Tournament</TableHead>
+									<TableHead>Participants</TableHead>
 									<TableHead>Manager</TableHead>
+									<TableHead>Type</TableHead>
 									<TableHead>Format</TableHead>
 									<TableHead>Gameweeks</TableHead>
 									<TableHead>Progress</TableHead>
@@ -278,31 +345,54 @@ export default function TournamentListClient() {
 								</TableRow>
 							</TableHeader>
 							<TableBody>
+								{isLoading && (
+									<TableRow>
+										<TableCell
+											colSpan={9}
+											className="text-center text-muted-foreground"
+										>
+											Loading tournaments...
+										</TableCell>
+									</TableRow>
+								)}
+								{!isLoading && filteredTournaments.length === 0 && (
+									<TableRow>
+										<TableCell
+											colSpan={9}
+											className="text-center text-muted-foreground"
+										>
+											{loadError
+												? 'Unable to show tournaments.'
+												: 'No tournaments match your filters.'}
+										</TableCell>
+									</TableRow>
+								)}
 								{filteredTournaments.map(tournament => (
 									<TableRow key={tournament.id}>
 										<TableCell>
 											<div className="font-medium">{tournament.name}</div>
-											<div className="text-sm text-muted-foreground">
-												{tournament.participantCount} participants
-											</div>
 										</TableCell>
+										<TableCell>{tournament.participantCount}</TableCell>
 										<TableCell>{tournament.managerName}</TableCell>
 										<TableCell>
-											<div className="flex flex-col gap-1">
-												<Badge variant="outline">
+											<Badge variant="outline">{tournament.leagueType}</Badge>
+										</TableCell>
+										<TableCell>
+											<div className="text-sm leading-5">
+												<div>
 													{tournament.groupFormat === 'none'
 														? 'No Groups'
 														: tournament.groupFormat === 'points'
 														? 'Points Based'
 														: 'Head-to-Head'}
-												</Badge>
-												<Badge variant="outline">
+												</div>
+												<div className="text-muted-foreground">
 													{tournament.knockoutFormat === 'none'
 														? 'No Knockout'
 														: tournament.knockoutFormat === 'single'
 														? 'Single Elimination'
 														: 'Home & Away'}
-												</Badge>
+												</div>
 											</div>
 										</TableCell>
 										<TableCell>
@@ -321,14 +411,16 @@ export default function TournamentListClient() {
 												/>
 											</div>
 											<div className="text-sm text-muted-foreground mt-1">
-												{tournament.progress}%
+												{getProgressLabel(tournament.state)}
 											</div>
 										</TableCell>
 										<TableCell>
 											<Badge
-												variant={tournament.isActive ? 'default' : 'secondary'}
+												variant={
+													tournament.state === 'ACTIVE' ? 'default' : 'secondary'
+												}
 											>
-												{tournament.isActive ? 'Active' : 'Completed'}
+												{getStateLabel(tournament.state)}
 											</Badge>
 										</TableCell>
 										<TableCell>
@@ -351,19 +443,15 @@ export default function TournamentListClient() {
 															View Details
 														</Link>
 													</DropdownMenuItem>
-													{tournament.managerId === '12' && (
-														<>
-															<DropdownMenuItem>
-																<Link
-																	href={`/tournament/${tournament.id}/manage`}
-																	className="flex items-center gap-2"
-																>
-																	<Users className="h-4 w-4" />
-																	Manage Tournament
-																</Link>
-															</DropdownMenuItem>
-														</>
-													)}
+													<DropdownMenuItem>
+														<Link
+															href={`/tournament/${tournament.id}/manage`}
+															className="flex items-center gap-2"
+														>
+															<Users className="h-4 w-4" />
+															Manage Tournament
+														</Link>
+													</DropdownMenuItem>
 												</DropdownMenuContent>
 											</DropdownMenu>
 										</TableCell>

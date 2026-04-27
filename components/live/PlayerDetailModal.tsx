@@ -17,12 +17,14 @@ interface PlayerDetailModalProps {
 	player: PlayerDetail | null
 	isOpen: boolean
 	onClose: () => void
+	isLoading?: boolean
 }
 
 export function PlayerDetailModal({
 	player,
 	isOpen,
-	onClose
+	onClose,
+	isLoading = false
 }: PlayerDetailModalProps) {
 	if (!player) return null
 
@@ -164,7 +166,11 @@ export function PlayerDetailModal({
 						</div>
 
 						<div className="space-y-1 rounded-lg border bg-card/50 p-1">
-							{player.pointsBreakdown.length > 0 ? (
+							{isLoading ? (
+								<div className="px-3 py-4 text-sm text-muted-foreground text-center">
+									Loading breakdown...
+								</div>
+							) : player.pointsBreakdown.length > 0 ? (
 								player.pointsBreakdown.map((item, index) => (
 									<div
 										key={`${item.category}-${index}`}
@@ -176,6 +182,9 @@ export function PlayerDetailModal({
 											</div>
 											<div>
 												<span className="text-sm font-medium">{item.category}</span>
+												{item.value !== undefined && item.value !== 0 && (
+													<span className="text-xs text-muted-foreground ml-1.5">({item.value})</span>
+												)}
 											</div>
 										</div>
 										<span

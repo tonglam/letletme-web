@@ -22,6 +22,7 @@ import {
 } from '@/lib/graphql/queries'
 import type { Player, PlayerBreakdownStat } from '@/types/player'
 import { Loader2, RefreshCw } from 'lucide-react'
+import { useSession } from '@/lib/auth-client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 type NumericPositionMode = 'elementType' | 'squadOrder'
@@ -37,8 +38,6 @@ type BreakdownLookup = Map<
 >
 
 const LIVE_POINTS_AUTO_REFRESH_SECONDS = 60
-const DEFAULT_ENTRY_ID = 15702
-
 const aggregateBreakdownStats = (
 	stats?: PlayerBreakdownStat[]
 ): AggregatedBreakdown => {
@@ -216,7 +215,15 @@ function LivePointsAutoRefreshCountdown({
 	)
 }
 
-export default function LivePoints() {
+	export default function LivePoints() {
+	const { data: sessionData } = useSession()
+	const entryId = sessionData?.user?.fplEntryId ?? 0
+
+	if (sessionData && !entryId) {
+		window.location.href = '/onboarding/bind-entry'
+		return null
+	}
+
 	const [currentGameweek, setCurrentGameweek] = useState<number | undefined>(
 		undefined
 	)
@@ -235,6 +242,7 @@ export default function LivePoints() {
 
 	const fetchLivePointsForGameweek = useCallback(
 		async (eventId: number) => {
+			if (!entryId) return
 			const requestId = requestIdRef.current + 1
 			requestIdRef.current = requestId
 
@@ -251,7 +259,7 @@ export default function LivePoints() {
 					GET_LIVE_POINTS,
 					{
 						eventId,
-						entryId: DEFAULT_ENTRY_ID
+						entryId: entryId
 					}
 				)
 
@@ -276,7 +284,7 @@ export default function LivePoints() {
 								return
 							}
 
-							const flattenedStats = playerExplain.breakdown.flatMap(
+							const flattenedStats = (playerExplain.breakdown ?? []).flatMap(
 								entry => entry.stats
 							)
 
@@ -296,7 +304,8 @@ export default function LivePoints() {
 
 				const allPlayers: Player[] = sortedPicks.map(pick => {
 					const isCaptain = live.captainName === pick.webName
-					const isBench = !benchBoostActive && pick.position >= 12
+					// Keep bench-vs-starting distinction stable, even when Bench Boost is active.
+					const isBench = pick.position >= 12
 					const position = normalizePosition(pick.elementType, 'elementType')
 					const breakdownEntry = breakdownLookup.get(String(pick.element))
 					const breakdownStats = breakdownEntry?.stats ?? []
@@ -338,6 +347,7 @@ export default function LivePoints() {
 						position,
 						playingStatus,
 						isBench,
+						isBenchBoostActive: benchBoostActive,
 						breakdownStats,
 						stats: {
 							minutes,
@@ -366,13 +376,8 @@ export default function LivePoints() {
 
 				hasLoadedLiveDataRef.current = true
 				setLiveData(live)
-				if (benchBoostActive) {
-					setStartingPlayers(allPlayers)
-					setBenchPlayers([])
-				} else {
-					setStartingPlayers(allPlayers.filter(p => !p.isBench))
-					setBenchPlayers(allPlayers.filter(p => p.isBench))
-				}
+				setStartingPlayers(allPlayers.filter(p => !p.isBench))
+				setBenchPlayers(allPlayers.filter(p => p.isBench))
 				setEntryTransfers([])
 			} catch (err) {
 				if (requestId !== requestIdRef.current) {
@@ -391,7 +396,7 @@ export default function LivePoints() {
 				}
 			}
 		},
-		[]
+		[entryId]
 	)
 
 	useEffect(() => {
@@ -536,6 +541,9 @@ export default function LivePoints() {
 		pick => (pick.minutes ?? 0) > 0 && (pick.minutes ?? 0) < 90
 	)
 
+	const startingPicks = liveData.pickList.filter(p => p.position <= 11)
+	const playedCount = startingPicks.filter(p => (p.minutes ?? 0) > 0).length
+
 	const derivedTeamStats = {
 		teamName: liveData.entryName ?? `Entry ${liveData.entry}`,
 		playerName: liveData.playerName ?? '',
@@ -543,6 +551,7 @@ export default function LivePoints() {
 		transferCost: liveData.transferCost ?? 0,
 		captainName: liveData.captainName,
 		liveTotalPoints: liveData.liveTotalPoints,
+		played: `${playedCount}/${startingPicks.length}`,
 		chips: {
 			bench: !!liveData.chip && liveData.chip.toLowerCase().includes('bench'),
 			triple:

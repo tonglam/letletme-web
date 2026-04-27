@@ -28,6 +28,205 @@ export interface EventsResponse {
 	next: NextEvent[]
 }
 
+// Query to fetch tournaments joined by current entry
+export const GET_ENTRY_TOURNAMENTS = `
+  query GetEntryTournaments($entryId: Int!) {
+    entryTournaments(entryId: $entryId) {
+      id
+      name
+      creator
+      adminEntryId
+      leagueId
+      leagueType
+      totalTeamNum
+      tournamentMode
+      groupMode
+      groupTeamNum
+      groupNum
+      groupStartedEventId
+      groupEndedEventId
+      groupAutoAverages
+      groupRounds
+      groupPlayAgainstNum
+      groupQualifyNum
+      knockoutMode
+      knockoutTeamNum
+      knockoutRounds
+      knockoutEventNum
+      knockoutStartedEventId
+      knockoutEndedEventId
+      knockoutPlayAgainstNum
+      state
+      createdAt
+      updatedAt
+    }
+  }
+`
+
+export type EntryTournamentState = 'ACTIVE' | 'COMPLETED' | 'PENDING'
+
+export interface EntryTournament {
+	id: number
+	name: string
+	creator: string
+	adminEntryId: number
+	leagueId: number
+	leagueType: string
+	totalTeamNum: number
+	tournamentMode: string
+	groupMode: string
+	groupTeamNum: number
+	groupNum: number
+	groupStartedEventId: number | null
+	groupEndedEventId: number | null
+	groupAutoAverages: boolean
+	groupRounds: number | null
+	groupPlayAgainstNum: number | null
+	groupQualifyNum: number | null
+	knockoutMode: string
+	knockoutTeamNum: number | null
+	knockoutRounds: number | null
+	knockoutEventNum: number | null
+	knockoutStartedEventId: number | null
+	knockoutEndedEventId: number | null
+	knockoutPlayAgainstNum: number | null
+	state: EntryTournamentState | string
+	createdAt: string
+	updatedAt: string
+}
+
+export interface EntryTournamentsResponse {
+	entryTournaments: EntryTournament[]
+}
+
+export const GET_TOURNAMENT_EVENT_RESULTS = `
+  query GetTournamentEventResults($tournamentId: Int!, $eventId: Int!) {
+    tournamentEventResults(tournamentId: $tournamentId, eventId: $eventId) {
+      tournament {
+        id
+        name
+        creator
+        adminEntryId
+        leagueId
+        leagueType
+        totalTeamNum
+        tournamentMode
+        groupMode
+        groupTeamNum
+        groupNum
+        groupStartedEventId
+        groupEndedEventId
+        groupAutoAverages
+        groupRounds
+        groupPlayAgainstNum
+        groupQualifyNum
+        knockoutMode
+        knockoutTeamNum
+        knockoutRounds
+        knockoutEventNum
+        knockoutStartedEventId
+        knockoutEndedEventId
+        knockoutPlayAgainstNum
+        state
+        createdAt
+        updatedAt
+      }
+      event {
+        id
+        name
+      }
+      groupId
+      entryId
+      entryName
+      playerName
+      eventGroupRank
+      eventPoints
+      eventCost
+      eventNetPoints
+      eventRank
+      overallPoints
+      overallRank
+      eventChip
+      captainId
+      captainPoints
+      teamValue
+      bank
+    }
+  }
+`
+
+export interface TournamentEventResultItem {
+	tournament: EntryTournament
+	event: {
+		id: number
+		name: string
+	}
+	groupId: number
+	entryId: number
+	entryName: string | null
+	playerName: string | null
+	eventGroupRank: number | null
+	eventPoints: number | null
+	eventCost: number | null
+	eventNetPoints: number | null
+	eventRank: number | null
+	overallPoints: number | null
+	overallRank: number | null
+	eventChip: string | null
+	captainId: number | null
+	captainPoints: number | null
+	teamValue: number | null
+	bank: number | null
+}
+
+export interface TournamentEventResultsResponse {
+	tournamentEventResults: TournamentEventResultItem[]
+}
+
+export const GET_TOURNAMENT_ENTRY_RANKING_SUMMARY = `
+  query GetTournamentEntryRankingSummary($tournamentId: Int!, $eventId: Int!, $entryId: Int!) {
+    tournamentEntryRankingSummary(
+      tournamentId: $tournamentId
+      eventId: $eventId
+      entryId: $entryId
+    ) {
+      entryId
+      overallRank
+      tournamentOverallRank
+      teamValue
+      tournamentTeamValueRank
+      transfersNum
+      tournamentTransfersRank
+      totalCosts
+      tournamentCostsRank
+      totalBenchPoints
+      tournamentBenchPointsRank
+      autoSubPoints
+      tournamentAutoSubRank
+    }
+  }
+`
+
+export interface TournamentEntryRankingSummary {
+	entryId: number
+	overallRank: number | null
+	tournamentOverallRank: number | null
+	teamValue: number | null
+	tournamentTeamValueRank: number | null
+	transfersNum: number | null
+	tournamentTransfersRank: number | null
+	totalCosts: number | null
+	tournamentCostsRank: number | null
+	totalBenchPoints: number | null
+	tournamentBenchPointsRank: number | null
+	autoSubPoints: number | null
+	tournamentAutoSubRank: number | null
+}
+
+export interface TournamentEntryRankingSummaryResponse {
+	tournamentEntryRankingSummary: TournamentEntryRankingSummary
+}
+
 // Query to fetch a single event stats snapshot
 export const GET_EVENT_STATS_BY_ID = `
   query GetEventStatsById($eventId: Int!) {
@@ -61,6 +260,207 @@ export interface EventStatsByIdResponse {
 	event: EventStatsById | null
 }
 
+export const GET_EVENT_STATS = `
+  query GetEventStats($eventId: Int!, $limit: Int) {
+    eventStats(eventId: $eventId, limit: $limit) {
+      eventId
+      mostSelectedPlayers {
+        id
+        webName
+        teamShortName
+        position
+        selectedByPercent
+        eoByPercent
+      }
+      captainSelect {
+        id
+        webName
+        teamShortName
+        position
+        selectedByPercent
+        eoByPercent
+      }
+      viceCaptainSelect {
+        id
+        webName
+        teamShortName
+        position
+        selectedByPercent
+        eoByPercent
+      }
+      mostTransferIn {
+        id
+        webName
+        teamShortName
+        position
+        selectedByPercent
+        eoByPercent
+      }
+      mostTransferOut {
+        id
+        webName
+        teamShortName
+        position
+        selectedByPercent
+        eoByPercent
+      }
+    }
+  }
+`
+
+export interface EventStatPlayer {
+	id: number
+	webName: string
+	teamShortName: string
+	position: string
+	selectedByPercent: number
+	eoByPercent: number
+}
+
+export interface EventStatsData {
+	eventId: number
+	mostSelectedPlayers: EventStatPlayer[]
+	captainSelect: EventStatPlayer[]
+	viceCaptainSelect: EventStatPlayer[]
+	mostTransferIn: EventStatPlayer[]
+	mostTransferOut: EventStatPlayer[]
+}
+
+export interface EventStatsResponse {
+	eventStats: EventStatsData | null
+}
+
+export const GET_TOURNAMENT_SELECTION_STATS = `
+  query TournamentSelectionStats($tournamentId: Int!, $eventId: Int!, $limit: Int) {
+    tournamentSelectionStats(tournamentId: $tournamentId, eventId: $eventId, limit: $limit) {
+      eventId
+      tournamentId
+      totalEntries
+      mostSelectedPlayers {
+        id
+        webName
+        teamShortName
+        position
+        selectedByPercent
+        eoByPercent
+      }
+      captainSelect {
+        id
+        webName
+        teamShortName
+        position
+        selectedByPercent
+        eoByPercent
+      }
+      mostTransferIn {
+        id
+        webName
+        teamShortName
+        position
+        selectedByPercent
+        transfersEvent
+      }
+      mostTransferOut {
+        id
+        webName
+        teamShortName
+        position
+        selectedByPercent
+        transfersEvent
+      }
+    }
+  }
+`
+
+export interface TournamentStatPlayer {
+	id: number
+	webName: string
+	teamShortName: string
+	position: string
+	selectedByPercent: number
+	eoByPercent?: number
+	transfersEvent?: number
+}
+
+export interface TournamentSelectionStatsData {
+	eventId: number
+	tournamentId: number
+	totalEntries: number
+	mostSelectedPlayers: TournamentStatPlayer[]
+	captainSelect: TournamentStatPlayer[]
+	mostTransferIn: TournamentStatPlayer[]
+	mostTransferOut: TournamentStatPlayer[]
+}
+
+export interface TournamentSelectionStatsResponse {
+	tournamentSelectionStats: TournamentSelectionStatsData | null
+}
+
+export const GET_PLAYER_DETAIL = `
+  query GetPlayerDetail($playerId: Int!, $eventId: Int!) {
+    playerDetail(playerId: $playerId, eventId: $eventId) {
+      id webName teamShortName elementType elementTypeName
+      price startPrice totalPoints
+      selectedByPercent form seasonTransfersIn seasonTransfersOut
+      transfersInEvent transfersOutEvent
+      eventPoints minutes goalsScored assists cleanSheets goalsConceded
+      ownGoals penaltiesSaved yellowCards redCards saves
+      bonus bps influence creativity threat ictIndex
+      fixtures { event againstTeamShortName wasHome finished kickoffTime score difficulty bgw }
+    }
+  }
+`
+
+export interface PlayerDetailFixture {
+  event: number
+  againstTeamShortName: string
+  wasHome: boolean
+  finished: boolean
+  kickoffTime: string
+  score: string | null
+  difficulty: number
+  bgw: boolean
+}
+
+export interface PlayerDetailData {
+  id: number
+  webName: string
+  teamShortName: string
+  elementType: number
+  elementTypeName: string
+  price: number
+  startPrice: number
+  totalPoints: number
+  selectedByPercent: number
+  form: number | null
+  seasonTransfersIn: number
+  seasonTransfersOut: number
+  transfersInEvent: number
+  transfersOutEvent: number
+  eventPoints: number
+  minutes: number
+  goalsScored: number
+  assists: number
+  cleanSheets: number
+  goalsConceded: number
+  ownGoals: number
+  penaltiesSaved: number
+  yellowCards: number
+  redCards: number
+  saves: number
+  bonus: number
+  bps: number
+  influence: number
+  creativity: number
+  threat: number
+  ictIndex: number
+  fixtures: PlayerDetailFixture[]
+}
+
+export interface PlayerDetailResponse {
+  playerDetail: PlayerDetailData
+}
+
 // Query to fetch player values
 export const GET_PLAYER_VALUES = `
   query GetPlayerValues {
@@ -92,8 +492,8 @@ export interface PlayerValuesResponse {
 
 // Query to fetch full player directory for selector/search
 export const GET_PLAYERS_FOR_PICKER = `
-  query GetPlayersForPicker($limit: Int!, $offset: Int!) {
-    players(limit: $limit, offset: $offset) {
+  query GetPlayersForPicker($filter: PlayersFilter, $limit: Int!, $offset: Int!) {
+    players(filter: $filter, limit: $limit, offset: $offset) {
       id
       webName
       position
@@ -102,6 +502,16 @@ export const GET_PLAYERS_FOR_PICKER = `
         name
         shortName
       }
+    }
+  }
+`
+
+export const GET_TEAMS_FOR_PICKER = `
+  query GetTeamsForPicker {
+    teams {
+      id
+      name
+      shortName
     }
   }
 `
@@ -125,6 +535,16 @@ export interface PlayerDirectoryItem {
 
 export interface PlayersForPickerResponse {
 	players: PlayerDirectoryItem[]
+}
+
+export interface TeamForPickerItem {
+	id: number
+	name: string
+	shortName: string
+}
+
+export interface TeamsForPickerResponse {
+	teams: TeamForPickerItem[]
 }
 
 // Query to fetch historical player value changes
@@ -518,6 +938,278 @@ export interface LiveCalcDataResponse {
 	calcLivePointsByEntry: LiveCalcData
 }
 
+// Query to fetch live points for all entries in a tournament
+export const GET_TOURNAMENT_LIVE_POINTS = `
+  query GetTournamentLivePoints($eventId: Int!, $tournamentId: Int!) {
+    calcLivePointsForTournament(eventId: $eventId, tournamentId: $tournamentId) {
+      results {
+        entry
+        entryName
+        playerName
+        overallRank
+        chip
+        livePoints
+        transferCost
+        liveNetPoints
+        liveTotalPoints
+        played
+        toPlay
+        captainName
+        pickList {
+          element
+          webName
+          elementTypeName
+          position
+          isCaptain
+          isViceCaptain
+          teamShortName
+          teamName
+        }
+      }
+      errors {
+        entryId
+        message
+      }
+      meta {
+        eventId
+        totalEntries
+        succeededCount
+        failedCount
+      }
+    }
+  }
+`
+
+export interface BatchCalcError {
+	entryId: number
+	message: string
+}
+
+export interface BatchCalcMeta {
+	eventId: number
+	totalEntries: number
+	succeededCount: number
+	failedCount: number
+}
+
+export interface TournamentLiveCalcData {
+	entry: number
+	entryName: string
+	playerName: string
+	overallRank: number
+	chip: string | null
+	livePoints: number
+	transferCost: number
+	liveNetPoints: number
+	liveTotalPoints: number
+	played: number
+	toPlay: number
+	captainName: string
+	pickList: Array<{
+		element: number
+		webName: string
+		elementTypeName: string
+		position: number
+		isCaptain: boolean
+		isViceCaptain: boolean
+		teamShortName: string
+		teamName: string
+	}>
+}
+
+export interface TournamentLivePointsResponse {
+	calcLivePointsForTournament: {
+		results: TournamentLiveCalcData[]
+		errors: BatchCalcError[]
+		meta: BatchCalcMeta
+	}
+}
+
+// Query to fetch entry result for a specific event
+export const GET_ENTRY_EVENT_RESULT = `
+  query GetEntryEventResult($entryId: Int!, $eventId: Int!) {
+    entryEventResult(entryId: $entryId, eventId: $eventId) {
+      eventId
+      eventPoints
+      overallPoints
+      overallRank
+      eventTransfers
+      eventTransfersCost
+      eventNetPoints
+      eventBenchPoints
+      eventChip
+      eventCaptainPoints
+      eventPlayedCaptain {
+        webName
+      }
+      eventPicks {
+        webName
+        teamShortName
+        teamName
+        elementTypeName
+        isCaptain
+        isViceCaptain
+        multiplier
+        totalPoints
+        minutes
+        position
+      }
+      teamValue
+      bank
+      entry {
+        id
+        entryName
+        playerName
+        totalTransfers
+        region
+      }
+    }
+  }
+`
+
+export interface EntryEventResult {
+	eventId: number
+	eventPoints: number
+	overallPoints: number
+	overallRank: number
+	eventTransfers: number
+	eventTransfersCost: number
+	eventNetPoints: number
+	eventBenchPoints: number
+	eventChip: string
+	eventCaptainPoints: number
+	eventPlayedCaptain: {
+		webName: string
+	} | null
+	eventPicks: EntryEventPick[]
+	teamValue: number | null
+	bank: number | null
+	entry: {
+		id: number
+		entryName: string
+		playerName: string | null
+		totalTransfers: number | null
+		region: string | null
+	}
+}
+
+export interface EntryEventPick {
+	webName: string
+	teamShortName: string
+	teamName: string
+	elementTypeName: string
+	isCaptain: boolean
+	isViceCaptain: boolean
+	multiplier: number
+	totalPoints: number
+	minutes: number
+	position: number
+}
+
+export interface EntryEventResultResponse {
+	entryEventResult: EntryEventResult | null
+}
+
+// Query to fetch full historical event results for an entry
+export const GET_ENTRY_HISTORY = `
+  query GetEntryHistory($entryId: Int!) {
+    entryHistory(entryId: $entryId) {
+      results {
+        eventId
+        eventChip
+        eventPoints
+        eventRank
+        overallPoints
+        overallRank
+        eventTransfers
+        eventTransfersCost
+        eventNetPoints
+        teamValue
+        bank
+      }
+      history {
+        season
+        totalPoints
+        overallRank
+      }
+    }
+  }
+`
+
+export interface EntryHistoryItem {
+	eventId: number
+	eventChip: string
+	eventPoints: number
+	eventRank: number | null
+	overallPoints: number
+	overallRank: number
+	eventTransfers: number
+	eventTransfersCost: number
+	eventNetPoints: number
+	teamValue: number | null
+	bank: number | null
+}
+
+export interface EntryHistoryResponse {
+	entryHistory: {
+		results: EntryHistoryItem[]
+		history: EntrySeasonHistoryItem[]
+	}
+}
+
+export interface EntrySeasonHistoryItem {
+	season: string
+	totalPoints: number
+	overallRank: number
+}
+
+// Query to fetch entry transfer history grouped by gameweek
+export const GET_ENTRY_TRANSFER_HISTORY = `
+  query GetEntryTransferHistory($entryId: Int!) {
+    entryTransferHistory(entryId: $entryId) {
+      eventId
+      eventTransfers
+      eventTransfersCost
+      transfers {
+        event
+        elementInWebName
+        elementInTypeName
+        elementInTeamShortName
+        elementInCost
+        elementOutWebName
+        elementOutTypeName
+        elementOutTeamShortName
+        elementOutCost
+        time
+      }
+    }
+  }
+`
+
+export interface EntryTransferMove {
+	event: number
+	elementInWebName: string
+	elementInTypeName: string
+	elementInTeamShortName: string
+	elementInCost: number
+	elementOutWebName: string
+	elementOutTypeName: string
+	elementOutTeamShortName: string
+	elementOutCost: number
+	time: string
+}
+
+export interface EntryGameweekTransfers {
+	eventId: number
+	eventTransfers: number
+	eventTransfersCost: number
+	transfers: EntryTransferMove[]
+}
+
+export interface EntryTransferHistoryResponse {
+	entryTransferHistory: EntryGameweekTransfers[]
+}
+
 // Query to fetch live matches
 export const GET_LIVE_MATCHES = `
   query GetLiveMatches {
@@ -847,24 +1539,17 @@ export interface LiveMatchesResponse {
 	liveMatches: LiveMatchesData
 }
 
-// Query to fetch player breakdown (explain) data for an event
 export const GET_EVENT_LIVE_EXPLAIN = `
   query EventLiveExplainPlayer($eventId: Int!, $elementId: Int!) {
     eventLiveExplain(eventId: $eventId, elementId: $elementId) {
+      elementId
+      selectedBy
       player {
         id
         webName
         team {
           id
           shortName
-        }
-      }
-      breakdown {
-        fixtureId
-        stats {
-          identifier
-          value
-          points
         }
       }
     }
@@ -883,6 +1568,8 @@ export interface PlayerBreakdownEntry {
 }
 
 export interface EventLiveExplainItem {
+	elementId: number
+	selectedBy: number | null
 	player: {
 		id: number
 		webName: string
@@ -891,9 +1578,51 @@ export interface EventLiveExplainItem {
 			shortName: string
 		}
 	}
-	breakdown: PlayerBreakdownEntry[]
+	breakdown?: PlayerBreakdownEntry[]
 }
 
 export interface EventLiveExplainResponse {
-	eventLiveExplain: EventLiveExplainItem
+	eventLiveExplain: EventLiveExplainItem | null
+}
+
+export const GET_PLAYER_LIVE = `
+  query PlayerLive($playerId: Int!, $eventId: Int) {
+    playerLive(playerId: $playerId, eventId: $eventId) {
+      minutes
+      goalsScored
+      assists
+      cleanSheets
+      goalsConceded
+      ownGoals
+      penaltiesSaved
+      penaltiesMissed
+      yellowCards
+      redCards
+      saves
+      bonus
+      bps
+      totalPoints
+    }
+  }
+`
+
+export interface PlayerLiveStats {
+	minutes: number
+	goalsScored: number
+	assists: number
+	cleanSheets: number
+	goalsConceded: number
+	ownGoals: number
+	penaltiesSaved: number
+	penaltiesMissed: number
+	yellowCards: number
+	redCards: number
+	saves: number
+	bonus: number
+	bps: number
+	totalPoints: number
+}
+
+export interface PlayerLiveResponse {
+	playerLive: PlayerLiveStats | null
 }

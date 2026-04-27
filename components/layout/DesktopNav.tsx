@@ -7,6 +7,8 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { HeaderProfileCard } from '@/components/profile/HeaderProfileCard'
+import { useSession } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
 import { ChevronDown, Globe, UserCircle } from 'lucide-react'
 import Link from 'next/link'
@@ -23,15 +25,14 @@ export function DesktopNav({
 	setCurrentLang,
 	languages
 }: DesktopNavProps) {
+	const { data: session } = useSession()
+
 	return (
 		<div className="hidden md:flex items-center space-x-2 ml-8">
 			{menuItems.map(item => (
 				<DropdownMenu key={item.id}>
 					<DropdownMenuTrigger asChild>
-						<Button
-							variant="ghost"
-							className="px-2"
-						>
+						<Button variant="ghost" className="px-2">
 							<item.icon className="h-5 w-5 mr-2" />
 							{item.label}
 							<ChevronDown className="ml-2 h-4 w-4" />
@@ -56,10 +57,7 @@ export function DesktopNav({
 
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<Button
-						variant="ghost"
-						size="icon"
-					>
+					<Button variant="ghost" size="icon">
 						<Globe className="h-5 w-5" />
 					</Button>
 				</DropdownMenuTrigger>
@@ -79,16 +77,16 @@ export function DesktopNav({
 				</DropdownMenuContent>
 			</DropdownMenu>
 
-			<Button
-				variant="ghost"
-				className="px-2"
-				asChild
-			>
-				<Link href="/auth/login">
-					<UserCircle className="h-5 w-5 mr-2" />
-					Login
-				</Link>
-			</Button>
+			{session ? (
+				<HeaderProfileCard />
+			) : (
+				<Button variant="ghost" className="px-2" asChild>
+					<Link href="/auth/login">
+						<UserCircle className="h-5 w-5 mr-2" />
+						Login
+					</Link>
+				</Button>
+			)}
 		</div>
 	)
 }
