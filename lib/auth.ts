@@ -8,36 +8,29 @@ import * as authSchema from '@/lib/db/schema/auth'
 import { sendPasswordResetEmail, sendVerificationEmail } from '@/lib/mailer'
 
 const baseURL = process.env.BETTER_AUTH_URL ?? 'http://localhost:3000'
-const secret = process.env.BETTER_AUTH_SECRET
 
-if (!secret) {
-	throw new Error('BETTER_AUTH_SECRET is not set')
-}
-
-export const auth = betterAuth({
+export const authConfig = {
 	baseURL,
-	secret,
 	database: drizzleAdapter(db, {
 		provider: 'pg',
-		// Supabase owns the `auth` schema; our tables live in `bauth`
 		schema: {
 			user: authSchema.user,
 			session: authSchema.session,
 			account: authSchema.account,
 			verification: authSchema.verification,
-			},
+		},
 	}),
 	emailAndPassword: {
 		enabled: true,
 		requireEmailVerification: true,
 		minPasswordLength: 10,
 		autoSignIn: false,
-		sendResetPassword: async ({ user, url }) => {
+		sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
 			await sendPasswordResetEmail({ to: user.email, resetUrl: url })
 		},
 	},
 	emailVerification: {
-		sendVerificationEmail: async ({ user, url }) => {
+		sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string }) => {
 			await sendVerificationEmail({ to: user.email, verifyUrl: url })
 		},
 		autoSignInAfterVerification: true,
@@ -51,7 +44,7 @@ export const auth = betterAuth({
 	account: {
 		accountLinking: {
 			enabled: true,
-			trustedProviders: ['google'],
+			trustedProviders: ['google'] as const,
 		},
 	},
 	session: {
@@ -68,11 +61,24 @@ export const auth = betterAuth({
 	trustedOrigins: [baseURL],
 	user: {
 		additionalFields: {
-			fplEntryId: { type: 'number', required: false, input: false },
-			fplEntryBoundAt: { type: 'date', required: false, input: false },
+			fplEntryId: { type: 'number' as const, required: false, input: false },
+			fplEntryBoundAt: { type: 'date' as const, required: false, input: false },
 		},
 	},
-	plugins: [],
-})
+	plugins: [] as const,
+} satisfies Parameters<typeof betterAuth>[0]
 
-export type Session = typeof auth.$Infer.Session
+type AuthInstance = ReturnType<typeof betterAuth<typeof authConfig>>
+
+let _auth: AuthInstance | undefined
+
+export function getAuth(): AuthInstance {
+	if (!_auth) {
+		const secret = process.env.BETTER_AUTH_SECRET
+		if (!secret) throw new Error('BETTER_AUTH_SECRET is not set')
+		_auth = betterAuth({ ...authConfig, secret } as Parameters<typeof betterAuth>[0]) as unknown as AuthInstance
+	}
+	return _auth
+}
+
+export type Session = AuthInstance['$Infer']['Session']

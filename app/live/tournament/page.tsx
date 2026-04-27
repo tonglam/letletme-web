@@ -1,8 +1,10 @@
-import { auth } from '@/lib/auth'
+import { getAuth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import TournamentClient from './TournamentClient'
+
+export const dynamic = 'force-dynamic'
 
 type PageProps = {
 	params: Promise<Record<string, never>>
@@ -10,7 +12,7 @@ type PageProps = {
 }
 
 export default async function Page({ searchParams }: PageProps) {
-	const session = await auth.api.getSession({ headers: await headers() })
+	const session = await getAuth().api.getSession({ headers: await headers() })
 
 	if (!session) {
 		redirect('/auth/login?next=/live/tournament')

@@ -2,15 +2,17 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { auth } from '@/lib/auth'
+import { getAuth } from '@/lib/auth'
 import { Gamepad, Hash } from 'lucide-react'
+
+export const dynamic = 'force-dynamic'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { bindFplEntry } from './actions'
 import BindEntryForm from './BindEntryForm'
 
 export default async function BindEntryPage() {
-	const session = await auth.api.getSession({ headers: await headers() })
+	const session = await getAuth().api.getSession({ headers: await headers() })
 
 	if (!session) {
 		redirect('/auth/login?next=/onboarding/bind-entry')

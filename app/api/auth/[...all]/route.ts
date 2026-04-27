@@ -1,5 +1,11 @@
 import { toNextJsHandler } from 'better-auth/next-js'
 
-import { auth } from '@/lib/auth'
+import { getAuth } from '@/lib/auth'
 
-export const { GET, POST } = toNextJsHandler(auth)
+export function GET(...args: Parameters<ReturnType<typeof toNextJsHandler>['GET']>) {
+	return toNextJsHandler(getAuth()).GET(...args)
+}
+
+export function POST(...args: Parameters<ReturnType<typeof toNextJsHandler>['POST']>) {
+	return toNextJsHandler(getAuth()).POST(...args)
+}

@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { auth } from '@/lib/auth'
+import { getAuth } from '@/lib/auth'
 import { db, schema } from '@/lib/db'
 import { validateFplEntry } from '@/lib/fpl'
 import { eq } from 'drizzle-orm'
@@ -14,8 +14,10 @@ import { AvatarUpload } from './AvatarUpload'
 import RebindEntryForm from './RebindEntryForm'
 import SignOutButton from './SignOutButton'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ProfilePage() {
-	const session = await auth.api.getSession({ headers: await headers() })
+	const session = await getAuth().api.getSession({ headers: await headers() })
 
 	if (!session) {
 		redirect('/auth/login?next=/profile')

@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+import { getAuth } from '@/lib/auth'
 import { type NextRequest, NextResponse } from 'next/server'
 
 // Routes that require a session — full prefix match (all sub-paths are also protected).
@@ -54,7 +54,7 @@ function requiresAuth(pathname: string): boolean {
 export async function proxy(req: NextRequest) {
 	const { pathname } = req.nextUrl
 
-	const session = await auth.api.getSession({ headers: req.headers })
+	const session = await getAuth().api.getSession({ headers: req.headers })
 
 	// Global rule: authenticated users without a bound FPL entry are always
 	// redirected to onboarding first, regardless of which page they're visiting.

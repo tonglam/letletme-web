@@ -1,6 +1,6 @@
 'use server'
 
-import { auth } from '@/lib/auth'
+import { getAuth } from '@/lib/auth'
 import { db, schema } from '@/lib/db'
 import { uploadAvatar } from '@/lib/supabase-storage'
 import { eq } from 'drizzle-orm'
@@ -12,7 +12,7 @@ export async function updateAvatar(
 	formData: FormData,
 ): Promise<{ error?: string; imageUrl?: string }> {
 	const reqHeaders = await headers()
-	const session = await auth.api.getSession({ headers: reqHeaders })
+	const session = await getAuth().api.getSession({ headers: reqHeaders })
 	if (!session) return { error: 'Not authenticated' }
 
 	const file = formData.get('avatar')

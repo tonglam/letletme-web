@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+import { type Session, getAuth } from '@/lib/auth'
 import { createHmac } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -34,9 +34,9 @@ function isCacheableQuery(query: unknown): boolean {
 }
 
 export async function POST(request: NextRequest) {
-	let session: Awaited<ReturnType<typeof auth.api.getSession>>
+	let session: Session | null
 	try {
-		session = await auth.api.getSession({ headers: request.headers })
+		session = await getAuth().api.getSession({ headers: request.headers })
 	} catch {
 		session = null
 	}
