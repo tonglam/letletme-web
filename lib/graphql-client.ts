@@ -1,19 +1,13 @@
-// GraphQL endpoint URL - uses environment variable or falls back to dev/prod based on NODE_ENV
-// In development, use Next.js API route to avoid CORS issues
 const getGraphQLEndpoint = () => {
   if (process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT) {
     return process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT;
   }
-  
-  if (process.env.NODE_ENV === 'production') {
-    return 'https://www.letletme.top/graphql';
-  }
-  
+
   // In development, use Next.js API route (build absolute URL for client-side)
   if (typeof window !== 'undefined') {
     return `${window.location.origin}/api/graphql`;
   }
-  
+
   return '/api/graphql';
 };
 
