@@ -400,7 +400,7 @@ function LivePointsAutoRefreshCountdown({
 	)
 
 	useEffect(() => {
-		const fetchCurrentGameweek = async () => {
+		const init = async () => {
 			try {
 				const eventsResponse = await executeQuery<EventsResponse>(
 					GET_CURRENT_AND_NEXT_EVENTS
@@ -410,7 +410,9 @@ function LivePointsAutoRefreshCountdown({
 					throw new Error('No current gameweek found')
 				}
 				setCurrentGameweek(currentEvent.id)
-				setSelectedGameweek(prev => prev ?? currentEvent.id)
+				setSelectedGameweek(currentEvent.id)
+				// Fetch live points immediately — no second effect needed
+				void fetchLivePointsForGameweek(currentEvent.id)
 			} catch (err) {
 				console.error('Failed to fetch current gameweek:', err)
 				const message =
@@ -422,15 +424,10 @@ function LivePointsAutoRefreshCountdown({
 			}
 		}
 
-		void fetchCurrentGameweek()
-	}, [])
-
-	useEffect(() => {
-		if (selectedGameweek === undefined) {
-			return
-		}
-		void fetchLivePointsForGameweek(selectedGameweek)
-	}, [fetchLivePointsForGameweek, selectedGameweek])
+		void init()
+	// fetchLivePointsForGameweek is stable (depends only on entryId via useCallback)
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [fetchLivePointsForGameweek])
 
 	if (isLoading && !liveData) {
 		return (
@@ -524,7 +521,10 @@ function LivePointsAutoRefreshCountdown({
 				<div className="container max-w-4xl mx-auto px-4 py-8">
 					<div className="mb-6">
 						<GameweekSelector
-							onGameweekChange={setSelectedGameweek}
+							onGameweekChange={(gw) => {
+								setSelectedGameweek(gw)
+								void fetchLivePointsForGameweek(gw)
+							}}
 							currentGameweek={currentGameweek}
 							selectedGameweek={selectedGameweek}
 						/>
@@ -576,7 +576,10 @@ function LivePointsAutoRefreshCountdown({
 				)}
 				<div className="mb-6">
 					<GameweekSelector
-						onGameweekChange={setSelectedGameweek}
+						onGameweekChange={(gw) => {
+							setSelectedGameweek(gw)
+							void fetchLivePointsForGameweek(gw)
+						}}
 						currentGameweek={currentGameweek}
 						selectedGameweek={selectedGameweek}
 						disabled={isLoading || isRefreshing}

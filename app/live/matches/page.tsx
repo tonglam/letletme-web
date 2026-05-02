@@ -409,14 +409,14 @@ export default function LiveMatches() {
       }
     }
 
-    fetchMatches();
+    // Both fetches are independent — run in parallel
+    void Promise.all([
+      fetchMatches(),
+      executeQuery<EventsResponse>(GET_CURRENT_AND_NEXT_EVENTS)
+        .then((data) => setEventId(data.current?.[0]?.id))
+        .catch(() => { /* silent — eventId stays undefined */ }),
+    ]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    executeQuery<EventsResponse>(GET_CURRENT_AND_NEXT_EVENTS)
-      .then((data) => setEventId(data.current?.[0]?.id))
-      .catch(() => {/* silent — eventId stays undefined */});
   }, []);
 
   const matchesByTab = useMemo(() => {

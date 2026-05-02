@@ -29,7 +29,10 @@ function isCacheableQuery(query: unknown): boolean {
 		query.includes('GetEntryHistory') ||
 		query.includes('entryHistory(') ||
 		query.includes('GetEntryTransferHistory') ||
-		query.includes('entryTransferHistory(')
+		query.includes('entryTransferHistory(') ||
+		query.includes('GetCurrentAndNextEvents') ||
+		query.includes('GetEventFixtures') ||
+		query.includes('GetPlayerValues')
 	)
 }
 

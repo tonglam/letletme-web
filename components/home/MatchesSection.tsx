@@ -6,15 +6,14 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_CURRENT_AND_NEXT_EVENTS,
 	GET_EVENT_FIXTURES,
 	type EventFixturesResponse,
-	type EventsResponse
+	type Fixture,
 } from '@/lib/graphql/queries'
 import { format } from 'date-fns'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Image from 'next/image'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 const MAX_GAMEWEEK = 38
 
@@ -89,20 +88,16 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 							</div>
 						</div>
 					</div>
-					{matchIndex < matches.length - 1 && (
-						<Separator className="my-4 md:my-6" />
-					)}
+					{matchIndex < matches.length - 1 && <Separator className="my-4 md:my-6" />}
 				</div>
 			))}
 		</div>
 	)
 }
 
-function parseFixturesToMatchDays(
-	fixturesData: EventFixturesResponse
-): MatchDay[] {
-	const byDate = new Map<string, typeof fixturesData.eventFixtures>()
-	for (const fixture of fixturesData.eventFixtures) {
+function parseFixturesToMatchDays(fixtures: Fixture[]): MatchDay[] {
+	const byDate = new Map<string, Fixture[]>()
+	for (const fixture of fixtures) {
 		const dateKey = format(new Date(fixture.kickoffTime), 'yyyy-MM-dd')
 		if (!byDate.has(dateKey)) byDate.set(dateKey, [])
 		byDate.get(dateKey)!.push(fixture)
@@ -113,13 +108,13 @@ function parseFixturesToMatchDays(
 		.map(([, dayFixtures]) => {
 			const sorted = dayFixtures.sort(
 				(a, b) =>
-					new Date(a.kickoffTime).getTime() - new Date(b.kickoffTime).getTime()
+					new Date(a.kickoffTime).getTime() - new Date(b.kickoffTime).getTime(),
 			)
 			const firstKickoff = new Date(sorted[0].kickoffTime)
 			return {
 				date: format(firstKickoff, 'EEEE dd MMMM yyyy'),
 				dateObj: firstKickoff,
-				matches: sorted.map(f => ({
+				matches: sorted.map((f) => ({
 					homeTeam: f.homeTeam.name,
 					homeTeamShort: f.homeTeam.shortName,
 					awayTeam: f.awayTeam.name,
@@ -128,22 +123,35 @@ function parseFixturesToMatchDays(
 					homeScore: f.finished ? (f.homeScore ?? null) : null,
 					awayScore: f.finished ? (f.awayScore ?? null) : null,
 					finished: f.finished,
-					started: f.started
-				}))
+					started: f.started,
+				})),
 			}
 		})
 }
 
-export function MatchesSection() {
-	const [nextEventId, setNextEventId] = useState<number | null>(null)
-	const [selectedEventId, setSelectedEventId] = useState<number | null>(null)
-	const [matchDays, setMatchDays] = useState<MatchDay[]>([])
-	const [isLoadingInit, setIsLoadingInit] = useState(true)
+interface MatchesSectionProps {
+	initialEventId: number | null
+	initialFixtures: EventFixturesResponse | null
+}
+
+export function MatchesSection({ initialEventId, initialFixtures }: MatchesSectionProps) {
+	// nextEventId acts as the lower navigation boundary (can't go below the current next GW)
+	const [nextEventId] = useState<number | null>(initialEventId)
+	const [selectedEventId, setSelectedEventId] = useState<number | null>(initialEventId)
 	const [isLoadingFixtures, setIsLoadingFixtures] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 
-	// Cache: eventId -> MatchDay[]
-	const cache = useRef<Map<number, MatchDay[]>>(new Map())
+	// Pre-populate the fixture cache with server-fetched initial data
+	const cache = useRef<Map<number, MatchDay[]>>(
+		initialEventId !== null && initialFixtures
+			? new Map([[initialEventId, parseFixturesToMatchDays(initialFixtures.eventFixtures)]])
+			: new Map(),
+	)
+
+	const [matchDays, setMatchDays] = useState<MatchDay[]>(() => {
+		if (!initialFixtures || initialEventId === null) return []
+		return parseFixturesToMatchDays(initialFixtures.eventFixtures)
+	})
 
 	const fetchFixtures = useCallback(async (eventId: number) => {
 		if (cache.current.has(eventId)) {
@@ -153,11 +161,8 @@ export function MatchesSection() {
 		setIsLoadingFixtures(true)
 		setError(null)
 		try {
-			const data = await executeQuery<EventFixturesResponse>(
-				GET_EVENT_FIXTURES,
-				{ eventId }
-			)
-			const days = parseFixturesToMatchDays(data)
+			const data = await executeQuery<EventFixturesResponse>(GET_EVENT_FIXTURES, { eventId })
+			const days = parseFixturesToMatchDays(data.eventFixtures)
 			cache.current.set(eventId, days)
 			setMatchDays(days)
 		} catch {
@@ -167,33 +172,12 @@ export function MatchesSection() {
 		}
 	}, [])
 
-	useEffect(() => {
-		const init = async () => {
-			try {
-				setIsLoadingInit(true)
-				const eventsData = await executeQuery<EventsResponse>(
-					GET_CURRENT_AND_NEXT_EVENTS
-				)
-				const nextId = eventsData.next[0]?.id
-				if (!nextId) throw new Error('No upcoming event found')
-				setNextEventId(nextId)
-				setSelectedEventId(nextId)
-				await fetchFixtures(nextId)
-			} catch {
-				setError('Failed to load matches. Please try again later.')
-			} finally {
-				setIsLoadingInit(false)
-			}
-		}
-		init()
-	}, [fetchFixtures])
-
 	const handlePrev = () => {
 		if (selectedEventId === null || nextEventId === null) return
 		if (selectedEventId <= nextEventId) return
 		const prev = selectedEventId - 1
 		setSelectedEventId(prev)
-		fetchFixtures(prev)
+		void fetchFixtures(prev)
 	}
 
 	const handleNext = () => {
@@ -201,10 +185,11 @@ export function MatchesSection() {
 		if (selectedEventId >= MAX_GAMEWEEK) return
 		const next = selectedEventId + 1
 		setSelectedEventId(next)
-		fetchFixtures(next)
+		void fetchFixtures(next)
 	}
 
-	const canGoPrev = selectedEventId !== null && nextEventId !== null && selectedEventId > nextEventId
+	const canGoPrev =
+		selectedEventId !== null && nextEventId !== null && selectedEventId > nextEventId
 	const canGoNext = selectedEventId !== null && selectedEventId < MAX_GAMEWEEK
 
 	const header = (
@@ -238,18 +223,14 @@ export function MatchesSection() {
 		</div>
 	)
 
-	if (isLoadingInit) {
+	if (!initialEventId) {
 		return (
 			<div className="flex-grow mb-8">
 				<Card className="p-4 md:p-6">
-					<div className="flex items-center justify-between mb-6">
-						<h2 className="text-xl font-bold">Upcoming Matches</h2>
-					</div>
-					<div className="space-y-4">
-						{[1, 2, 3].map(i => (
-							<Skeleton key={i} className="h-20 w-full" />
-						))}
-					</div>
+					<h2 className="text-xl font-bold mb-6">Upcoming Matches</h2>
+					<p className="text-sm text-muted-foreground text-center py-8">
+						Unable to load fixtures
+					</p>
 				</Card>
 			</div>
 		)
@@ -268,8 +249,11 @@ export function MatchesSection() {
 
 	const fixturesContent = isLoadingFixtures ? (
 		<div className="space-y-4">
-			{[1, 2, 3].map(i => (
-				<Skeleton key={i} className="h-20 w-full" />
+			{[1, 2, 3].map((i) => (
+				<Skeleton
+					key={i}
+					className="h-20 w-full"
+				/>
 			))}
 		</div>
 	) : matchDays.length === 0 ? (
@@ -279,12 +263,15 @@ export function MatchesSection() {
 	) : (
 		<>
 			<div className="md:hidden">
-				<Tabs defaultValue={matchDays[0].date} className="w-full">
+				<Tabs
+					defaultValue={matchDays[0].date}
+					className="w-full"
+				>
 					<TabsList
 						className="grid mb-4"
 						style={{ gridTemplateColumns: `repeat(${matchDays.length}, 1fr)` }}
 					>
-						{matchDays.map(matchDay => (
+						{matchDays.map((matchDay) => (
 							<TabsTrigger
 								key={matchDay.date}
 								value={matchDay.date}
@@ -294,8 +281,11 @@ export function MatchesSection() {
 							</TabsTrigger>
 						))}
 					</TabsList>
-					{matchDays.map(matchDay => (
-						<TabsContent key={matchDay.date} value={matchDay.date}>
+					{matchDays.map((matchDay) => (
+						<TabsContent
+							key={matchDay.date}
+							value={matchDay.date}
+						>
 							<MatchList matches={matchDay.matches} />
 						</TabsContent>
 					))}
@@ -304,7 +294,10 @@ export function MatchesSection() {
 
 			<div className="hidden md:block">
 				{matchDays.map((matchDay, dayIndex) => (
-					<div key={matchDay.date} className="max-w-4xl mx-auto">
+					<div
+						key={matchDay.date}
+						className="max-w-4xl mx-auto"
+					>
 						<h3 className="text-xl font-semibold text-muted-foreground mb-6 mt-8 text-center">
 							{format(matchDay.dateObj, 'EEEE dd MMMM yyyy')}
 						</h3>
@@ -315,9 +308,7 @@ export function MatchesSection() {
 			</div>
 
 			<div className="mt-6 pt-4 border-t text-center max-w-4xl mx-auto">
-				<p className="text-sm text-muted-foreground">
-					All times are shown in your local timezone
-				</p>
+				<p className="text-sm text-muted-foreground">All times are shown in your local timezone</p>
 			</div>
 		</>
 	)
