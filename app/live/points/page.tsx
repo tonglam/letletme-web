@@ -13,13 +13,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_CURRENT_AND_NEXT_EVENTS,
 	GET_LIVE_POINTS,
 	type EventLiveExplainResponse,
-	type EventsResponse,
 	type LiveCalcData,
 	type LiveCalcDataResponse
 } from '@/lib/graphql/queries'
+import { useEvent } from '@/lib/event-context'
 import type { Player, PlayerBreakdownStat } from '@/types/player'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { useSession } from '@/lib/auth-client'
@@ -218,6 +217,7 @@ function LivePointsAutoRefreshCountdown({
 	export default function LivePoints() {
 	const { data: sessionData } = useSession()
 	const entryId = sessionData?.user?.fplEntryId ?? 0
+	const { currentEventId } = useEvent()
 
 	if (sessionData && !entryId) {
 		window.location.href = '/onboarding/bind-entry'
@@ -225,10 +225,10 @@ function LivePointsAutoRefreshCountdown({
 	}
 
 	const [currentGameweek, setCurrentGameweek] = useState<number | undefined>(
-		undefined
+		currentEventId ?? undefined
 	)
 	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(
-		undefined
+		currentEventId ?? undefined
 	)
 	const [isLoading, setIsLoading] = useState(true)
 	const [isRefreshing, setIsRefreshing] = useState(false)
@@ -400,34 +400,15 @@ function LivePointsAutoRefreshCountdown({
 	)
 
 	useEffect(() => {
-		const init = async () => {
-			try {
-				const eventsResponse = await executeQuery<EventsResponse>(
-					GET_CURRENT_AND_NEXT_EVENTS
-				)
-				const currentEvent = eventsResponse.current?.[0]
-				if (!currentEvent) {
-					throw new Error('No current gameweek found')
-				}
-				setCurrentGameweek(currentEvent.id)
-				setSelectedGameweek(currentEvent.id)
-				// Fetch live points immediately — no second effect needed
-				void fetchLivePointsForGameweek(currentEvent.id)
-			} catch (err) {
-				console.error('Failed to fetch current gameweek:', err)
-				const message =
-					err instanceof Error
-						? err.message
-						: 'Unknown error while loading gameweek data'
-				setError(message)
-				setIsLoading(false)
-			}
+		if (selectedGameweek !== undefined) {
+			void fetchLivePointsForGameweek(selectedGameweek)
+		} else {
+			setError('No current gameweek found')
+			setIsLoading(false)
 		}
-
-		void init()
-	// fetchLivePointsForGameweek is stable (depends only on entryId via useCallback)
+	// selectedGameweek is the initializer value from context — stable at mount
 	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [fetchLivePointsForGameweek])
+	}, [])
 
 	if (isLoading && !liveData) {
 		return (

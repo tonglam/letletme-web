@@ -11,13 +11,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_CURRENT_AND_NEXT_EVENTS,
 	GET_PLAYER_DETAIL,
-	type EventsResponse,
 	type PlayerDetailData,
 	type PlayerDetailFixture,
 	type PlayerDetailResponse
 } from '@/lib/graphql/queries'
+import { useEvent } from '@/lib/event-context'
 import { format } from 'date-fns'
 import {
 	Activity,
@@ -255,7 +254,8 @@ function PlayerMiniCard({
 }
 
 export default function PlayerStatsPage() {
-	const [currentGameweek, setCurrentGameweek] = useState<number | undefined>(undefined)
+	const { currentEventId } = useEvent()
+	const [currentGameweek] = useState<number | undefined>(currentEventId ?? undefined)
 
 	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDirectoryOption | null>(null)
 	const [recentPlayers, setRecentPlayers] = useState<PlayerDirectoryOption[]>([])
@@ -276,18 +276,6 @@ export default function PlayerStatsPage() {
 		setRecentPlayers2(loadRecentPlayers(RECENT_PLAYERS_KEY_2))
 	}, [])
 
-	useEffect(() => {
-		const init = async () => {
-			try {
-				const eventsData = await executeQuery<EventsResponse>(GET_CURRENT_AND_NEXT_EVENTS)
-				const current = eventsData.current?.[0]
-				if (current) setCurrentGameweek(current.id)
-			} catch {
-				// GW will remain undefined
-			}
-		}
-		void init()
-	}, [])
 
 	const fetchPlayerDetail = useCallback(async (playerId: number, eventId: number) => {
 		setIsLoading(true)

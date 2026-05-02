@@ -7,18 +7,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useSession } from '@/lib/auth-client'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_CURRENT_AND_NEXT_EVENTS,
 	GET_ENTRY_TOURNAMENTS,
 	GET_TOURNAMENT_SELECTION_STATS,
 	type EntryTournamentsResponse,
-	type EventsResponse,
 	type TournamentSelectionStatsResponse,
 	type TournamentStatPlayer
 } from '@/lib/graphql/queries'
+import { useEvent } from '@/lib/event-context'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 import { Tournament } from '@/types/tournament'
 import { Crown, TrendingDown, TrendingUp, Users } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 function positionLabel(position: string): string {
 	switch (position.toUpperCase()) {
@@ -148,14 +147,23 @@ function StatList({
 	)
 }
 
+interface StatsResult {
+	selection: TournamentStatPlayer[]
+	captain: TournamentStatPlayer[]
+	transferIn: TournamentStatPlayer[]
+	transferOut: TournamentStatPlayer[]
+}
+
 export default function SelectionsPage() {
 	const { data: sessionData } = useSession()
 	const entryId = sessionData?.user?.fplEntryId ?? 0
+	const { currentEventId } = useEvent()
 
 	const [tournaments, setTournaments] = useState<Tournament[]>([])
 	const [selectedTournamentId, setSelectedTournamentId] = useState<string>('')
-	const [currentGameweek, setCurrentGameweek] = useState<number>(1)
-	const [selectedGameweek, setSelectedGameweek] = useState<number>(1)
+	const [currentGameweek] = useState<number>(currentEventId ?? 1)
+	const [selectedGameweek, setSelectedGameweek] = useState<number>(currentEventId ?? 1)
+	const statsCache = useRef<Map<string, StatsResult>>(new Map())
 	const [isLoadingTournaments, setIsLoadingTournaments] = useState(true)
 	const [isLoadingStats, setIsLoadingStats] = useState(false)
 	const [selectionData, setSelectionData] = useState<TournamentStatPlayer[]>([])
@@ -168,21 +176,13 @@ export default function SelectionsPage() {
 	>([])
 
 	useEffect(() => {
-		Promise.all([
-			executeQuery<EntryTournamentsResponse>(GET_ENTRY_TOURNAMENTS, {
-				entryId: entryId
-			}),
-			executeQuery<EventsResponse>(GET_CURRENT_AND_NEXT_EVENTS)
-		])
-			.then(([tournamentsData, eventsData]) => {
+		executeQuery<EntryTournamentsResponse>(GET_ENTRY_TOURNAMENTS, { entryId })
+			.then(tournamentsData => {
 				const mapped = tournamentsData.entryTournaments.map(
 					mapEntryTournamentToLiveTournament
 				)
 				setTournaments(mapped)
 				if (mapped.length > 0) setSelectedTournamentId(mapped[0].id)
-				const gw = eventsData.current?.[0]?.id ?? 1
-				setCurrentGameweek(gw)
-				setSelectedGameweek(gw)
 			})
 			.catch(() => {})
 			.finally(() => setIsLoadingTournaments(false))
@@ -190,21 +190,33 @@ export default function SelectionsPage() {
 
 	const fetchStats = useCallback(
 		async (tournamentId: number, eventId: number) => {
+			const cacheKey = `${tournamentId}:${eventId}`
+			const cached = statsCache.current.get(cacheKey)
+			if (cached) {
+				setSelectionData(cached.selection)
+				setCaptainData(cached.captain)
+				setTransferInData(cached.transferIn)
+				setTransferOutData(cached.transferOut)
+				return
+			}
 			setIsLoadingStats(true)
 			try {
 				const data = await executeQuery<TournamentSelectionStatsResponse>(
 					GET_TOURNAMENT_SELECTION_STATS,
-					{
-						tournamentId,
-						eventId,
-						limit: 10
-					}
+					{ tournamentId, eventId, limit: 10 }
 				)
 				const stats = data.tournamentSelectionStats
-				setSelectionData(stats?.mostSelectedPlayers ?? [])
-				setCaptainData(stats?.captainSelect ?? [])
-				setTransferInData(stats?.mostTransferIn ?? [])
-				setTransferOutData(stats?.mostTransferOut ?? [])
+				const result: StatsResult = {
+					selection: stats?.mostSelectedPlayers ?? [],
+					captain: stats?.captainSelect ?? [],
+					transferIn: stats?.mostTransferIn ?? [],
+					transferOut: stats?.mostTransferOut ?? [],
+				}
+				statsCache.current.set(cacheKey, result)
+				setSelectionData(result.selection)
+				setCaptainData(result.captain)
+				setTransferInData(result.transferIn)
+				setTransferOutData(result.transferOut)
 			} catch {
 				setSelectionData([])
 				setCaptainData([])

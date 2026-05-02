@@ -13,13 +13,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_CURRENT_AND_NEXT_EVENTS,
 	GET_LIVE_POINTS,
 	type EventLiveExplainResponse,
-	type EventsResponse,
 	type LiveCalcData,
 	type LiveCalcDataResponse
 } from '@/lib/graphql/queries'
+import { useEvent } from '@/lib/event-context'
 import type { Player, PlayerBreakdownStat } from '@/types/player'
 import { ChevronLeft, Loader2, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
@@ -164,8 +163,9 @@ interface TeamPointsClientProps {
 }
 
 export default function TeamPointsClient({ entryId, tournamentId }: TeamPointsClientProps) {
-	const [currentGameweek, setCurrentGameweek] = useState<number | undefined>(undefined)
-	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(undefined)
+	const { currentEventId } = useEvent()
+	const [currentGameweek] = useState<number | undefined>(currentEventId ?? undefined)
+	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(currentEventId ?? undefined)
 	const [isLoading, setIsLoading] = useState(true)
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [error, setError] = useState<string | undefined>(undefined)
@@ -312,27 +312,15 @@ export default function TeamPointsClient({ entryId, tournamentId }: TeamPointsCl
 	)
 
 	useEffect(() => {
-		const fetchCurrentGameweek = async () => {
-			try {
-				const eventsResponse = await executeQuery<EventsResponse>(GET_CURRENT_AND_NEXT_EVENTS)
-				const currentEvent = eventsResponse.current?.[0]
-				if (!currentEvent) throw new Error('No current gameweek found')
-				setCurrentGameweek(currentEvent.id)
-				setSelectedGameweek(prev => prev ?? currentEvent.id)
-			} catch (err) {
-				console.error('Failed to fetch current gameweek:', err)
-				const message = err instanceof Error ? err.message : 'Unknown error while loading gameweek data'
-				setError(message)
-				setIsLoading(false)
-			}
+		if (selectedGameweek !== undefined) {
+			void fetchLivePointsForGameweek(selectedGameweek)
+		} else {
+			setError('No current gameweek found')
+			setIsLoading(false)
 		}
-		void fetchCurrentGameweek()
+	// selectedGameweek initializer from context — stable at mount
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [])
-
-	useEffect(() => {
-		if (selectedGameweek === undefined) return
-		void fetchLivePointsForGameweek(selectedGameweek)
-	}, [fetchLivePointsForGameweek, selectedGameweek])
 
 	const backHref = tournamentId ? `/live/tournament/${tournamentId}` : '/live/tournament'
 

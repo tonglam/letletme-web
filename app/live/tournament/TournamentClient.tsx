@@ -11,14 +11,13 @@ import { TournamentTable } from '@/components/tournament/TournamentTable'
 import { Card } from '@/components/ui/card'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_CURRENT_AND_NEXT_EVENTS,
 	GET_ENTRY_TOURNAMENTS,
 	GET_TOURNAMENT_LIVE_POINTS,
 	type EntryTournamentsResponse,
-	type EventsResponse,
 	type TournamentLiveCalcData,
 	type TournamentLivePointsResponse
 } from '@/lib/graphql/queries'
+import { useEvent } from '@/lib/event-context'
 import {
 	mapEntryTournamentToLiveTournament
 } from '@/lib/tournament/liveTournament'
@@ -117,6 +116,7 @@ const buildTournamentStats = (entries: TournamentEntry[]): LiveTournamentStats =
 export default function TournamentClient({ entryId }: { entryId: number }) {
 	const router = useRouter()
 	const searchParams = useSearchParams()
+	const { currentEventId } = useEvent()
 
 	const [searchQuery, setSearchQuery] = useState<string>('')
 	const [chipFilter, setChipFilter] = useState<string>('all')
@@ -126,8 +126,8 @@ export default function TournamentClient({ entryId }: { entryId: number }) {
 	const [resultsError, setResultsError] = useState<string | null>(null)
 	const [isLoadingTournaments, setIsLoadingTournaments] = useState<boolean>(true)
 	const [isLoadingResults, setIsLoadingResults] = useState<boolean>(false)
-	const [currentGameweek, setCurrentGameweek] = useState<number | undefined>(undefined)
-	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(undefined)
+	const [currentGameweek] = useState<number | undefined>(currentEventId ?? undefined)
+	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(currentEventId ?? undefined)
 	const [selectedEntries, setSelectedEntries] = useState<TournamentEntry[]>([])
 	const [ownershipMatchedEntryIds, setOwnershipMatchedEntryIds] = useState<string[] | null>(null)
 	const [teamExposureMatchedEntryIds, setTeamExposureMatchedEntryIds] = useState<string[] | null>(null)
@@ -192,41 +192,6 @@ export default function TournamentClient({ entryId }: { entryId: number }) {
 		}
 	}, [])
 
-	useEffect(() => {
-		let isCancelled = false
-
-		const loadCurrentGameweek = async () => {
-			try {
-				const eventsResponse = await executeQuery<EventsResponse>(
-					GET_CURRENT_AND_NEXT_EVENTS
-				)
-				const currentEventId = eventsResponse.current?.[0]?.id
-
-				if (isCancelled || !currentEventId) {
-					return
-				}
-
-				setCurrentGameweek(currentEventId)
-				setSelectedGameweek(previous => previous ?? currentEventId)
-			} catch (error) {
-				console.error('Failed to load current gameweek:', error)
-
-				if (isCancelled) {
-					return
-				}
-
-				const fallbackGameweek = 21
-				setCurrentGameweek(fallbackGameweek)
-				setSelectedGameweek(previous => previous ?? fallbackGameweek)
-			}
-		}
-
-		loadCurrentGameweek()
-
-		return () => {
-			isCancelled = true
-		}
-	}, [])
 
 	useEffect(() => {
 		if (!selectedTournament || selectedGameweek === undefined) {

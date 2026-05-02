@@ -270,19 +270,20 @@ const fetchTransferHistorySafely = async (entryId: number): Promise<EntryGamewee
 
 const entryEventCache = new Map<number, EntryEventResult | null>();
 const entryEventInFlightCache = new Map<number, Promise<EntryEventResult | null>>();
-let entryHistoryCache: EntryHistoryResponse["entryHistory"] | null = null;
-let entryHistoryInFlight: Promise<EntryHistoryResponse["entryHistory"]> | null = null;
-let transferHistoryCache: EntryGameweekTransfers[] | null = null;
-let transferHistoryInFlight: Promise<EntryGameweekTransfers[]> | null = null;
+const entryHistoryCache = new Map<number, EntryHistoryResponse["entryHistory"]>();
+const entryHistoryInFlight = new Map<number, Promise<EntryHistoryResponse["entryHistory"]>>();
+const transferHistoryCache = new Map<number, EntryGameweekTransfers[]>();
+const transferHistoryInFlight = new Map<number, Promise<EntryGameweekTransfers[]>>();
 
 const getEntryHistoryCached = async (entryId: number): Promise<EntryHistoryResponse["entryHistory"]> => {
-  if (entryHistoryCache) return entryHistoryCache;
-  if (!entryHistoryInFlight) {
-    entryHistoryInFlight = executeQuery<EntryHistoryResponse>(GET_ENTRY_HISTORY, { entryId }, { cache: "force-cache" })
-      .then((response) => { entryHistoryCache = response.entryHistory; return response.entryHistory; })
-      .finally(() => { entryHistoryInFlight = null; });
-  }
-  return entryHistoryInFlight;
+  if (entryHistoryCache.has(entryId)) return entryHistoryCache.get(entryId)!;
+  const inflight = entryHistoryInFlight.get(entryId);
+  if (inflight) return inflight;
+  const request = executeQuery<EntryHistoryResponse>(GET_ENTRY_HISTORY, { entryId }, { cache: "force-cache" })
+    .then((response) => { entryHistoryCache.set(entryId, response.entryHistory); return response.entryHistory; })
+    .finally(() => { entryHistoryInFlight.delete(entryId); });
+  entryHistoryInFlight.set(entryId, request);
+  return request;
 };
 
 const getEntryEventResultCached = async (entryId: number, eventId: number): Promise<EntryEventResult | null> => {
@@ -304,13 +305,14 @@ const getNoDataMessage = (selectedEventId: number): string =>
   `No team stats available for Gameweek ${selectedEventId}.`;
 
 const getTransferHistoryCached = async (entryId: number): Promise<EntryGameweekTransfers[]> => {
-  if (transferHistoryCache) return transferHistoryCache;
-  if (!transferHistoryInFlight) {
-    transferHistoryInFlight = fetchTransferHistorySafely(entryId)
-      .then((response) => { transferHistoryCache = response; return response; })
-      .finally(() => { transferHistoryInFlight = null; });
-  }
-  return transferHistoryInFlight;
+  if (transferHistoryCache.has(entryId)) return transferHistoryCache.get(entryId)!;
+  const inflight = transferHistoryInFlight.get(entryId);
+  if (inflight) return inflight;
+  const request = fetchTransferHistorySafely(entryId)
+    .then((response) => { transferHistoryCache.set(entryId, response); return response; })
+    .finally(() => { transferHistoryInFlight.delete(entryId); });
+  transferHistoryInFlight.set(entryId, request);
+  return request;
 };
 
 type TeamStatsTab = "squad" | "transfer" | "history" | "chips";

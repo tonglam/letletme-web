@@ -6,12 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { executeQuery } from "@/lib/graphql-client";
 import {
-  GET_CURRENT_AND_NEXT_EVENTS,
   GET_LIVE_MATCHES,
-  type EventsResponse,
   type MatchPlayerData,
   type LiveMatchesResponse,
 } from "@/lib/graphql/queries";
+import { useEvent } from "@/lib/event-context";
 import { teamFullNames } from "@/types/common";
 import { Match } from "@/types/match";
 import { RefreshCw } from "lucide-react";
@@ -325,12 +324,13 @@ function AutoRefreshCountdown({
 }
 
 export default function LiveMatches() {
+  const { currentEventId } = useEvent();
+  const eventId = currentEventId ?? undefined;
   const [matches, setMatches] = useState<Match[]>([]);
   const [activeTab, setActiveTab] = useState<LiveMatchesTab>("live");
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [eventId, setEventId] = useState<number | undefined>(undefined);
   const hasSavedTabPreference = useRef(false);
   const isFetchInFlight = useRef(false);
 
@@ -409,13 +409,7 @@ export default function LiveMatches() {
       }
     }
 
-    // Both fetches are independent — run in parallel
-    void Promise.all([
-      fetchMatches(),
-      executeQuery<EventsResponse>(GET_CURRENT_AND_NEXT_EVENTS)
-        .then((data) => setEventId(data.current?.[0]?.id))
-        .catch(() => { /* silent — eventId stays undefined */ }),
-    ]);
+    void fetchMatches();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

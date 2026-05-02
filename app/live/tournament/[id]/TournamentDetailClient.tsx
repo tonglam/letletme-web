@@ -10,12 +10,11 @@ import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { executeQuery } from "@/lib/graphql-client"
 import {
-	GET_CURRENT_AND_NEXT_EVENTS,
 	GET_ENTRY_TOURNAMENTS,
 	type EntryTournament,
 	type EntryTournamentsResponse,
-	type EventsResponse
 } from "@/lib/graphql/queries"
+import { useEvent } from "@/lib/event-context"
 import {
 	formatTournamentState
 } from "@/lib/tournament/liveTournament"
@@ -44,8 +43,9 @@ const formatKnockoutMode = (knockoutMode: string): string => {
 
 export default function TournamentDetailClient({ params, entryId }: { params: { id: string }; entryId: number }) {
 	const tournamentId = params.id
+	const { currentEventId } = useEvent()
 	const [searchQuery, setSearchQuery] = useState("")
-	const [currentGameweek, setCurrentGameweek] = useState<number>(1)
+	const [currentGameweek] = useState<number>(currentEventId ?? 1)
 	const [tournament, setTournament] = useState<EntryTournament | null>(null)
 	const [isLoading, setIsLoading] = useState<boolean>(true)
 	const [loadError, setLoadError] = useState<string | null>(null)
@@ -58,20 +58,13 @@ export default function TournamentDetailClient({ params, entryId }: { params: { 
 				setIsLoading(true)
 				setLoadError(null)
 
-				const [eventsData, tournamentsData] = await Promise.all([
-					executeQuery<EventsResponse>(GET_CURRENT_AND_NEXT_EVENTS),
-					executeQuery<EntryTournamentsResponse>(GET_ENTRY_TOURNAMENTS, {
-						entryId: entryId
-					})
-				])
+				const tournamentsData = await executeQuery<EntryTournamentsResponse>(
+					GET_ENTRY_TOURNAMENTS,
+					{ entryId: entryId }
+				)
 
 				if (isCancelled) {
 					return
-				}
-
-				const eventId = eventsData.current?.[0]?.id
-				if (eventId) {
-					setCurrentGameweek(eventId)
 				}
 
 				const selectedTournament =

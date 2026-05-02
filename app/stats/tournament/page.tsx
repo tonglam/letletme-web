@@ -17,18 +17,17 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { executeQuery } from "@/lib/graphql-client";
 import {
-  GET_CURRENT_AND_NEXT_EVENTS,
   GET_ENTRY_TOURNAMENTS,
   GET_TOURNAMENT_ENTRY_RANKING_SUMMARY,
   GET_TOURNAMENT_EVENT_RESULTS,
   type EntryTournament,
   type EntryTournamentsResponse,
-  type EventsResponse,
   type TournamentEntryRankingSummary,
   type TournamentEntryRankingSummaryResponse,
   type TournamentEventResultItem,
   type TournamentEventResultsResponse,
 } from "@/lib/graphql/queries";
+import { useEvent } from "@/lib/event-context";
 import { formatCompactNumber } from "@/lib/utils";
 import { ArrowUp, ArrowDown, Calendar, Crown, Star, Trophy, Users } from "lucide-react";
 
@@ -403,10 +402,11 @@ const buildTournamentStats = (
 export default function TournamentStatsPage() {
   const { data: sessionData } = useSession();
   const entryId = sessionData?.user?.fplEntryId ?? 0;
+  const { currentEventId } = useEvent();
 
   const [tournaments, setTournaments] = useState<EntryTournament[]>([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState<string>("");
-  const [currentGameweek, setCurrentGameweek] = useState<number>(1);
+  const [currentGameweek] = useState<number>(currentEventId ?? 1);
   const [dataGameweek, setDataGameweek] = useState<number | null>(null);
   const [tournamentStats, setTournamentStats] = useState<TournamentStatsViewModel | null>(null);
   const [rankingSummary, setRankingSummary] = useState<TournamentEntryRankingSummary | null>(null);
@@ -448,19 +448,15 @@ export default function TournamentStatsPage() {
         setIsBootstrapping(true);
         setError(null);
 
-        const [eventsData, tournamentsData] = await Promise.all([
-          executeQuery<EventsResponse>(GET_CURRENT_AND_NEXT_EVENTS),
-          executeQuery<EntryTournamentsResponse>(GET_ENTRY_TOURNAMENTS, {
-            entryId: entryId,
-          }),
-        ]);
+        const tournamentsData = await executeQuery<EntryTournamentsResponse>(
+          GET_ENTRY_TOURNAMENTS,
+          { entryId: entryId },
+        );
 
         if (cancelled) {
           return;
         }
 
-        const fetchedCurrentGameweek = eventsData.current[0]?.id ?? 1;
-        setCurrentGameweek(fetchedCurrentGameweek);
         setTournaments(tournamentsData.entryTournaments);
         setSelectedTournamentId(
           previous => previous || String(tournamentsData.entryTournaments[0]?.id ?? ""),
@@ -519,13 +515,17 @@ export default function TournamentStatsPage() {
           return rows;
         };
 
-        // Walk back from currentGameweek to find the latest GW with data (max 5 attempts).
+        // Parallel walkback: fetch up to 5 GWs simultaneously, take the first with data.
+        const walkbackGws = [0, 1, 2, 3, 4]
+          .map(offset => currentGameweek - offset)
+          .filter(gw => gw > 0);
+        const walkbackResults = await Promise.all(walkbackGws.map(gw => fetchResults(gw)));
         let latestGw = currentGameweek;
         let currentRows: TournamentEventResultItem[] = [];
-        for (let attempt = 0; attempt < 5; attempt++) {
-          currentRows = await fetchResults(latestGw - attempt);
-          if (currentRows.length > 0) {
-            latestGw = latestGw - attempt;
+        for (let i = 0; i < walkbackResults.length; i++) {
+          if (walkbackResults[i].length > 0) {
+            latestGw = walkbackGws[i];
+            currentRows = walkbackResults[i];
             break;
           }
         }
