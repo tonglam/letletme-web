@@ -1,18 +1,27 @@
-import { pgSchema, text, boolean, timestamp, integer } from 'drizzle-orm/pg-core'
+import { pgSchema, text, boolean, timestamp, integer, uniqueIndex, index } from 'drizzle-orm/pg-core'
 
 const authSchema = pgSchema('bauth')
 
-export const user = authSchema.table('user', {
-	id: text('id').primaryKey(),
-	name: text('name').notNull(),
-	email: text('email').notNull().unique(),
-	emailVerified: boolean('email_verified').notNull().default(false),
-	image: text('image'),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-	fplEntryId: integer('fpl_entry_id'),
-	fplEntryBoundAt: timestamp('fpl_entry_bound_at', { withTimezone: true }),
-})
+export const user = authSchema.table(
+	'user',
+	{
+		id: text('id').primaryKey(),
+		name: text('name'),
+		email: text('email'),
+		emailVerified: boolean('email_verified').notNull().default(false),
+		image: text('image'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+		fplEntryId: integer('fpl_entry_id'),
+		fplEntryBoundAt: timestamp('fpl_entry_bound_at', { withTimezone: true }),
+		/** Matches production `bauth.user.openid` (WeChat / Mini Program identifier). */
+		openid: text('openid'),
+	},
+	table => ({
+		emailUnique: uniqueIndex('user_email_unique').on(table.email),
+		openIdIdx: index('idx_bauth_user_openid').on(table.openid),
+	}),
+)
 
 export const session = authSchema.table('session', {
 	id: text('id').primaryKey(),
@@ -61,3 +70,35 @@ export const jwks = authSchema.table('jwks', {
 	privateKey: text('private_key').notNull(),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+/** Only present after `0001_miniprogram_account.sql` is applied — enable with `MINIPROGRAM_ACCOUNT_STORAGE=true`. */
+export const miniProgramEmailCode = authSchema.table('mini_program_email_code', {
+	id: text('id').primaryKey(),
+	email: text('email').notNull(),
+	deviceId: text('device_id').notNull(),
+	codeHash: text('code_hash').notNull(),
+	attempts: integer('attempts').notNull().default(0),
+	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+	consumedAt: timestamp('consumed_at', { withTimezone: true }),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/** Only present after `0001_miniprogram_account.sql` is applied — enable with `MINIPROGRAM_ACCOUNT_STORAGE=true`. */
+export const miniProgramSession = authSchema.table(
+	'mini_program_session',
+	{
+		id: text('id').primaryKey(),
+		tokenHash: text('token_hash').notNull(),
+		userId: text('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		deviceId: text('device_id').notNull(),
+		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+		lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
+		revokedAt: timestamp('revoked_at', { withTimezone: true }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	},
+	table => ({
+		tokenHashIdx: uniqueIndex('mini_program_session_token_hash_idx').on(table.tokenHash),
+	}),
+)

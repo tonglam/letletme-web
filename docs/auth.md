@@ -24,6 +24,10 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 
+# WeChat Mini Program login
+WECHAT_MINIPROGRAM_APP_ID=
+WECHAT_MINIPROGRAM_APP_SECRET=
+
 # Backend proxy signing key
 BACKEND_PROXY_SECRET=<openssl rand -base64 32>
 
@@ -52,7 +56,7 @@ psql $DIRECT_DATABASE_URL -f drizzle/<generated>.sql
 > `drizzle-kit migrate` hangs against the pgbouncer URL (port 6543, transaction mode can't run DDL).
 > Always apply migrations via `psql` against port 5432.
 
-**Tables:** `bauth.user` · `bauth.session` · `bauth.account` · `bauth.verification`
+**Tables:** `bauth.user` · `bauth.session` · `bauth.account` · `bauth.verification` · `bauth.mini_program_email_code` · `bauth.mini_program_session`
 
 **Custom columns on `bauth.user`:**
 
@@ -60,6 +64,9 @@ psql $DIRECT_DATABASE_URL -f drizzle/<generated>.sql
 |---|---|---|
 | `fpl_entry_id` | integer, nullable | Bound FPL manager/entry number |
 | `fpl_entry_bound_at` | timestamptz, nullable | When the entry was last bound |
+| `wechat_open_id` | text, nullable, unique | WeChat Mini Program `openid` linked to this website user |
+| `wechat_union_id` | text, nullable, unique | WeChat `unionid` when available for cross-app identity matching |
+| `wechat_bound_at` | timestamptz, nullable | When the WeChat Mini Program identity was linked |
 
 ---
 
@@ -111,6 +118,17 @@ After any first login where `fplEntryId` is null, middleware redirects to `/onbo
 4. Redirect to `/`
 
 Entry can be re-bound anytime from `/profile`.
+
+### Mini Program account linking
+The Mini Program must not send or store a raw WeChat user identifier from the client. It calls `wx.login()` and sends the short-lived code to this web backend.
+
+1. Mini Program tries `POST /api/miniprogram/wechat/login` with `{ code, deviceId }`.
+2. The backend exchanges the code with WeChat `jscode2session`.
+3. If `wechat_open_id` is already linked in `bauth.user`, the backend returns a Mini Program session token and profile.
+4. If not linked, the Mini Program falls back to email-code linking through `/api/miniprogram/email/start` and `/api/miniprogram/email/confirm`.
+5. Email confirmation may include `wechatCode`; the backend links that `openid` to the same `bauth.user` row that already owns `fpl_entry_id`.
+
+This keeps the website bind relationship and Mini Program identity on one player row: `bauth.user.fpl_entry_id` + `bauth.user.wechat_open_id`.
 
 ---
 

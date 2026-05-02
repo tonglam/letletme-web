@@ -72,23 +72,42 @@ const formatPriceDiff = (current: number, start: number) => {
 	return `${sign}${(diff / 10).toFixed(1)}m`
 }
 
-function StatCell({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+function StatCell({
+	label,
+	value,
+	sub,
+}: {
+	label: string
+	value: string | number | null
+	sub?: string
+}) {
 	return (
 		<div className="bg-accent/30 rounded-lg p-3 text-center">
 			<p className="text-xs text-muted-foreground mb-1">{label}</p>
-			<p className="text-xl font-bold">{value}</p>
+			<p className="text-xl font-bold">{value ?? '—'}</p>
 			{sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
 		</div>
 	)
 }
 
-function IctBar({ label, value, color, max = 100 }: { label: string; value: number; color: string; max?: number }) {
-	const pct = Math.min(100, (value / max) * 100)
+function IctBar({
+	label,
+	value,
+	color,
+	max = 100,
+}: {
+	label: string
+	value: number | null
+	color: string
+	max?: number
+}) {
+	const numeric = value ?? 0
+	const pct = Math.min(100, (numeric / max) * 100)
 	return (
 		<div>
 			<div className="flex justify-between items-center mb-1">
 				<span className="text-sm">{label}</span>
-				<span className="text-sm font-medium">{value}</span>
+				<span className="text-sm font-medium">{numeric}</span>
 			</div>
 			<div className="w-full bg-muted rounded-full h-2">
 				<div className={`${color} h-2 rounded-full`} style={{ width: `${pct}%` }} />
@@ -104,20 +123,22 @@ function CompareRow({
 	higherIsBetter = true,
 }: {
 	label: string
-	v1: string | number
-	v2: string | number
+	v1: string | number | null
+	v2: string | number | null
 	higherIsBetter?: boolean
 }) {
-	const n1 = parseFloat(String(v1).replace(/[^0-9.-]/g, ''))
-	const n2 = parseFloat(String(v2).replace(/[^0-9.-]/g, ''))
+	const dv1 = v1 ?? '—'
+	const dv2 = v2 ?? '—'
+	const n1 = parseFloat(String(dv1).replace(/[^0-9.-]/g, ''))
+	const n2 = parseFloat(String(dv2).replace(/[^0-9.-]/g, ''))
 	const valid = !isNaN(n1) && !isNaN(n2) && n1 !== n2
 	const p1Wins = valid && (higherIsBetter ? n1 > n2 : n1 < n2)
 	const p2Wins = valid && (higherIsBetter ? n2 > n1 : n2 < n1)
 	return (
 		<div className="grid grid-cols-3 items-center py-2 border-b last:border-0 text-sm">
-			<span className={`text-right pr-4 font-medium tabular-nums ${p1Wins ? 'text-primary' : ''}`}>{v1}</span>
+			<span className={`text-right pr-4 font-medium tabular-nums ${p1Wins ? 'text-primary' : ''}`}>{dv1}</span>
 			<span className="text-center text-xs text-muted-foreground">{label}</span>
-			<span className={`text-left pl-4 font-medium tabular-nums ${p2Wins ? 'text-primary' : ''}`}>{v2}</span>
+			<span className={`text-left pl-4 font-medium tabular-nums ${p2Wins ? 'text-primary' : ''}`}>{dv2}</span>
 		</div>
 	)
 }
@@ -140,14 +161,16 @@ function DualIctBar({
 	max,
 }: {
 	label: string
-	v1: number
-	v2: number
+	v1: number | null
+	v2: number | null
 	name1: string
 	name2: string
 	max: number
 }) {
-	const pct1 = Math.min(100, (v1 / max) * 100)
-	const pct2 = Math.min(100, (v2 / max) * 100)
+	const n1 = v1 ?? 0
+	const n2 = v2 ?? 0
+	const pct1 = Math.min(100, (n1 / max) * 100)
+	const pct2 = Math.min(100, (n2 / max) * 100)
 	return (
 		<div className="space-y-1">
 			<div className="flex justify-between items-center text-xs text-muted-foreground">
@@ -158,14 +181,14 @@ function DualIctBar({
 				<div className="flex-1 bg-muted rounded-full h-2">
 					<div className="bg-blue-500 h-2 rounded-full" style={{ width: `${pct1}%` }} />
 				</div>
-				<span className="w-8 font-medium">{v1}</span>
+				<span className="w-8 font-medium">{n1}</span>
 			</div>
 			<div className="flex items-center gap-2 text-xs">
 				<span className="w-16 text-right truncate text-muted-foreground">{name2}</span>
 				<div className="flex-1 bg-muted rounded-full h-2">
 					<div className="bg-amber-500 h-2 rounded-full" style={{ width: `${pct2}%` }} />
 				</div>
-				<span className="w-8 font-medium">{v2}</span>
+				<span className="w-8 font-medium">{n2}</span>
 			</div>
 		</div>
 	)
@@ -218,7 +241,9 @@ function PlayerMiniCard({
 				</div>
 				<div className="text-center">
 					<p className="text-[10px] text-muted-foreground">Selected</p>
-					<p className="text-sm font-bold">{detail.selectedByPercent}%</p>
+					<p className="text-sm font-bold">
+						{detail.selectedByPercent != null ? `${detail.selectedByPercent}%` : '—'}
+					</p>
 				</div>
 				<div className="text-center">
 					<p className="text-[10px] text-muted-foreground">Form</p>
@@ -480,7 +505,9 @@ export default function PlayerStatsPage() {
 									</div>
 									<div className="bg-accent/30 rounded-lg p-3 text-center">
 										<p className="text-xs text-muted-foreground mb-1">Selected</p>
-										<p className="font-bold">{playerDetail.selectedByPercent}%</p>
+										<p className="font-bold">
+											{playerDetail.selectedByPercent != null ? `${playerDetail.selectedByPercent}%` : '—'}
+										</p>
 									</div>
 									<div className="bg-accent/30 rounded-lg p-3 text-center">
 										<p className="text-xs text-muted-foreground mb-1">Form</p>
@@ -525,7 +552,11 @@ export default function PlayerStatsPage() {
 										</div>
 										<div>
 											<CompareSectionHeader icon={<Activity className="h-4 w-4" />} label="Ownership & Transfers" />
-											<CompareRow label="Selected By %" v1={`${playerDetail.selectedByPercent}%`} v2={`${playerDetail2!.selectedByPercent}%`} />
+											<CompareRow
+												label="Selected By %"
+												v1={playerDetail.selectedByPercent != null ? `${playerDetail.selectedByPercent}%` : null}
+												v2={playerDetail2!.selectedByPercent != null ? `${playerDetail2!.selectedByPercent}%` : null}
+											/>
 											<CompareRow label="Season In" v1={playerDetail.seasonTransfersIn.toLocaleString()} v2={playerDetail2!.seasonTransfersIn.toLocaleString()} />
 											<CompareRow label="Season Out" v1={playerDetail.seasonTransfersOut.toLocaleString()} v2={playerDetail2!.seasonTransfersOut.toLocaleString()} higherIsBetter={false} />
 											<CompareRow label="GW Net" v1={(playerDetail.transfersInEvent - playerDetail.transfersOutEvent).toLocaleString()} v2={(playerDetail2!.transfersInEvent - playerDetail2!.transfersOutEvent).toLocaleString()} />
@@ -558,7 +589,14 @@ export default function PlayerStatsPage() {
 												Ownership & Transfers
 											</h3>
 											<div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-												<StatCell label="Selected By" value={`${playerDetail.selectedByPercent}%`} />
+												<StatCell
+													label="Selected By"
+													value={
+														playerDetail.selectedByPercent != null
+															? `${playerDetail.selectedByPercent}%`
+															: null
+													}
+												/>
 												<StatCell label="Season In" value={playerDetail.seasonTransfersIn.toLocaleString()} />
 												<StatCell label="Season Out" value={playerDetail.seasonTransfersOut.toLocaleString()} />
 												<StatCell label="GW Net" value={(playerDetail.transfersInEvent - playerDetail.transfersOutEvent).toLocaleString()} />
@@ -901,7 +939,9 @@ export default function PlayerStatsPage() {
 															</div>
 															{fixtures.map((fixture, i) => {
 																const opponent = `${fixture.againstTeamShortName} (${fixture.wasHome ? 'H' : 'A'})`
-																const kickoff = format(new Date(fixture.kickoffTime), 'dd MMM HH:mm')
+																const kickoff = fixture.kickoffTime
+																	? format(new Date(fixture.kickoffTime), 'dd MMM HH:mm')
+																	: '—'
 																return (
 																	<div key={i} className="flex items-center justify-between">
 																		<div className="flex items-center gap-2 min-w-0">

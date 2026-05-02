@@ -41,11 +41,10 @@ export function StatsSection() {
 				if (!currentEventId) throw new Error('No current event found')
 				setCurrentGameweek(currentEventId)
 
-				const currentSeason = homeStats.getCurrentSeasonKey()
 				const resultData = await executeQuery<EventOverallResultResponse>(
 					GET_EVENT_OVERALL_RESULT,
-					{ season: currentSeason },
-					{ cache: 'force-cache' }
+					undefined,
+					{ cache: 'force-cache' },
 				)
 
 				const result: EventOverallResult | null =

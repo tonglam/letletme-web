@@ -1,3 +1,11 @@
+/** YYYY-MM-DD in UTC for GraphQL `Date` (e.g. `playerValues(changeDate: …)`). */
+export function utcCalendarDateISO(date: Date = new Date()): string {
+	const y = date.getUTCFullYear()
+	const m = String(date.getUTCMonth() + 1).padStart(2, '0')
+	const d = String(date.getUTCDate()).padStart(2, '0')
+	return `${y}-${m}-${d}`
+}
+
 // Query to fetch current gameweek ID and next gameweek deadline
 export const GET_CURRENT_AND_NEXT_EVENTS = `
   query GetCurrentAndNextEvents {
@@ -260,81 +268,9 @@ export interface EventStatsByIdResponse {
 	event: EventStatsById | null
 }
 
-export const GET_EVENT_STATS = `
-  query GetEventStats($eventId: Int!, $limit: Int) {
-    eventStats(eventId: $eventId, limit: $limit) {
-      eventId
-      mostSelectedPlayers {
-        id
-        webName
-        teamShortName
-        position
-        selectedByPercent
-        eoByPercent
-      }
-      captainSelect {
-        id
-        webName
-        teamShortName
-        position
-        selectedByPercent
-        eoByPercent
-      }
-      viceCaptainSelect {
-        id
-        webName
-        teamShortName
-        position
-        selectedByPercent
-        eoByPercent
-      }
-      mostTransferIn {
-        id
-        webName
-        teamShortName
-        position
-        selectedByPercent
-        eoByPercent
-      }
-      mostTransferOut {
-        id
-        webName
-        teamShortName
-        position
-        selectedByPercent
-        eoByPercent
-      }
-    }
-  }
-`
-
-export interface EventStatPlayer {
-	id: number
-	webName: string
-	teamShortName: string
-	position: string
-	selectedByPercent: number
-	eoByPercent: number
-}
-
-export interface EventStatsData {
-	eventId: number
-	mostSelectedPlayers: EventStatPlayer[]
-	captainSelect: EventStatPlayer[]
-	viceCaptainSelect: EventStatPlayer[]
-	mostTransferIn: EventStatPlayer[]
-	mostTransferOut: EventStatPlayer[]
-}
-
-export interface EventStatsResponse {
-	eventStats: EventStatsData | null
-}
-
 export const GET_TOURNAMENT_SELECTION_STATS = `
   query TournamentSelectionStats($tournamentId: Int!, $eventId: Int!, $limit: Int) {
     tournamentSelectionStats(tournamentId: $tournamentId, eventId: $eventId, limit: $limit) {
-      eventId
-      tournamentId
       totalEntries
       mostSelectedPlayers {
         id
@@ -349,6 +285,7 @@ export const GET_TOURNAMENT_SELECTION_STATS = `
         webName
         teamShortName
         position
+        captainByPercent
         selectedByPercent
         eoByPercent
       }
@@ -378,13 +315,12 @@ export interface TournamentStatPlayer {
 	teamShortName: string
 	position: string
 	selectedByPercent: number
+	captainByPercent?: number
 	eoByPercent?: number
 	transfersEvent?: number
 }
 
 export interface TournamentSelectionStatsData {
-	eventId: number
-	tournamentId: number
 	totalEntries: number
 	mostSelectedPlayers: TournamentStatPlayer[]
 	captainSelect: TournamentStatPlayer[]
@@ -412,59 +348,59 @@ export const GET_PLAYER_DETAIL = `
 `
 
 export interface PlayerDetailFixture {
-  event: number
-  againstTeamShortName: string
-  wasHome: boolean
-  finished: boolean
-  kickoffTime: string
-  score: string | null
-  difficulty: number
-  bgw: boolean
+	event: number
+	againstTeamShortName: string
+	wasHome: boolean
+	finished: boolean
+	kickoffTime: string | null
+	score: string | null
+	difficulty: number
+	bgw: boolean
 }
 
 export interface PlayerDetailData {
-  id: number
-  webName: string
-  teamShortName: string
-  elementType: number
-  elementTypeName: string
-  price: number
-  startPrice: number
-  totalPoints: number
-  selectedByPercent: number
-  form: number | null
-  seasonTransfersIn: number
-  seasonTransfersOut: number
-  transfersInEvent: number
-  transfersOutEvent: number
-  eventPoints: number
-  minutes: number
-  goalsScored: number
-  assists: number
-  cleanSheets: number
-  goalsConceded: number
-  ownGoals: number
-  penaltiesSaved: number
-  yellowCards: number
-  redCards: number
-  saves: number
-  bonus: number
-  bps: number
-  influence: number
-  creativity: number
-  threat: number
-  ictIndex: number
-  fixtures: PlayerDetailFixture[]
+	id: number
+	webName: string
+	teamShortName: string
+	elementType: number
+	elementTypeName: string
+	price: number
+	startPrice: number
+	totalPoints: number
+	selectedByPercent?: number | null
+	form: number | null
+	seasonTransfersIn: number
+	seasonTransfersOut: number
+	transfersInEvent: number
+	transfersOutEvent: number
+	eventPoints: number | null
+	minutes: number | null
+	goalsScored: number | null
+	assists: number | null
+	cleanSheets: number | null
+	goalsConceded: number | null
+	ownGoals: number | null
+	penaltiesSaved: number | null
+	yellowCards: number | null
+	redCards: number | null
+	saves: number | null
+	bonus: number | null
+	bps: number | null
+	influence: number
+	creativity: number
+	threat: number
+	ictIndex: number
+	fixtures: PlayerDetailFixture[]
 }
 
 export interface PlayerDetailResponse {
-  playerDetail: PlayerDetailData
+	playerDetail: PlayerDetailData | null
 }
 
 // Query to fetch player values
 export const GET_PLAYER_VALUES = `
-  query GetPlayerValues {
-    playerValues {
+  query GetPlayerValues($changeDate: Date!) {
+    playerValues(changeDate: $changeDate) {
       playerId
       playerName
       teamName
@@ -549,8 +485,8 @@ export interface TeamsForPickerResponse {
 
 // Query to fetch historical player value changes
 export const GET_PLAYER_VALUE_HISTORY = `
-  query GetPlayerValueHistory($playerId: Int!, $limit: Int) {
-    playerValueHistory(playerId: $playerId, limit: $limit) {
+  query GetPlayerValueHistory($playerId: Int!, $fromDate: DateTime, $toDate: DateTime) {
+    playerValueHistory(playerId: $playerId, fromDate: $fromDate, toDate: $toDate) {
       playerId
       changeDate
       oldValue
@@ -580,9 +516,10 @@ export interface PlayerValueHistoryResponse {
 
 // Query to fetch event overall result
 export const GET_EVENT_OVERALL_RESULT = `
-  query GetEventOverallResult($season: Int!) {
-    eventOverallResult(season: $season) {
+  query GetEventOverallResult {
+    eventOverallResult {
       event
+      finished
       averageScore
       highestScore
       highestScoringEntry
@@ -657,6 +594,7 @@ export interface ChipPlay {
 // Type for event overall result
 export interface EventOverallResult {
 	event: number
+	finished: boolean
 	averageScore: number
 	highestScore: number
 	highestScoringEntry: number

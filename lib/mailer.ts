@@ -48,3 +48,20 @@ export async function sendPasswordResetEmail({
 <p>This link expires in 1 hour. If you did not request a reset, ignore this email.</p>`,
 	})
 }
+
+export async function sendMiniProgramEmailCode({
+	to,
+	code,
+}: {
+	to: string
+	code: string
+}) {
+	await getResend().emails.send({
+		from: FROM,
+		to,
+		subject: 'Link your LetLetMe Mini Program',
+		html: `<p>Use this code to link your LetLetMe account in the WeChat Mini Program:</p>
+<p style="font-size: 24px; font-weight: 700; letter-spacing: 4px;">${code}</p>
+<p>This code expires in 10 minutes. If you did not request this, ignore this email.</p>`,
+	})
+}

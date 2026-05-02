@@ -12,14 +12,14 @@ export function AvatarUpload({
 	image,
 }: {
 	name: string | null | undefined
-	email: string
+	email: string | null | undefined
 	image: string | null | undefined
 }) {
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const [uploading, setUploading] = useState(false)
 	const [preview, setPreview] = useState<string | null>(null)
 
-	const initials = (name ?? email).charAt(0).toUpperCase()
+	const initials = (name ?? email ?? '?').charAt(0).toUpperCase()
 	const src = preview ?? image ?? undefined
 
 	const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -16,21 +16,26 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_PLAYERS_FOR_PICKER,
 	GET_PLAYER_VALUE_HISTORY,
 	GET_PLAYER_VALUES,
-	type PlayersForPickerResponse,
+	GET_PLAYERS_FOR_PICKER,
+	utcCalendarDateISO,
 	type PlayerDirectoryItem,
+	type PlayersForPickerResponse,
+	type PlayerValue,
 	type PlayerValueHistoryItem,
 	type PlayerValueHistoryResponse,
-	type PlayerValue,
 	type PlayerValuesResponse
 } from '@/lib/graphql/queries'
-import { teamFullNames, type PlayerOption, type Position, type Team } from '@/types/common'
+import {
+	teamFullNames,
+	type PlayerOption,
+	type Position,
+	type Team
+} from '@/types/common'
 import { format, parseISO } from 'date-fns'
 import { X } from 'lucide-react'
-import { useMemo } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 interface PriceChange {
 	player: PlayerOption
@@ -89,7 +94,9 @@ const TEAM_NAME_TO_SHORT: Record<string, Team> = {
 	Burnley: 'BUR'
 }
 
-const parsePosition = (position: string): { normalized: Position; known: boolean } => {
+const parsePosition = (
+	position: string
+): { normalized: Position; known: boolean } => {
 	const normalizedInput = position.trim().toLowerCase()
 
 	if (
@@ -133,9 +140,12 @@ const parsePosition = (position: string): { normalized: Position; known: boolean
 	return { normalized: 'MID', known: false }
 }
 
-const normalizeTeam = (teamName: string): Team => TEAM_NAME_TO_SHORT[teamName] ?? 'ALL'
+const normalizeTeam = (teamName: string): Team =>
+	TEAM_NAME_TO_SHORT[teamName] ?? 'ALL'
 
-const directoryPositionToShort = (position: PlayerDirectoryItem['position']): Position => {
+const directoryPositionToShort = (
+	position: PlayerDirectoryItem['position']
+): Position => {
 	switch (position) {
 		case 'GOALKEEPER':
 			return 'GKP'
@@ -184,14 +194,14 @@ const toPriceHistoryRow = (item: PlayerValueHistoryItem): PriceHistoryRow => {
 		item.changeType === 'RISE'
 			? 'Rise'
 			: item.changeType === 'FALL'
-			? 'Fall'
-			: item.changeType === 'UNCHANGED'
-			? 'No change'
-			: computedChange > 0
-			? 'Rise'
-			: computedChange < 0
-			? 'Fall'
-			: 'No change'
+				? 'Fall'
+				: item.changeType === 'UNCHANGED'
+					? 'No change'
+					: computedChange > 0
+						? 'Rise'
+						: computedChange < 0
+							? 'Fall'
+							: 'No change'
 
 	return {
 		date: item.changeDate,
@@ -205,8 +215,8 @@ const toPriceHistoryRow = (item: PlayerValueHistoryItem): PriceHistoryRow => {
 			typeof item.transfersIn === 'number'
 				? `${item.transfersIn.toLocaleString()} in`
 				: typeof item.transfersOut === 'number'
-				? `${item.transfersOut.toLocaleString()} out`
-				: '—'
+					? `${item.transfersOut.toLocaleString()} out`
+					: '—'
 	}
 }
 
@@ -232,7 +242,9 @@ export default function PriceChangesPage() {
 	const [activeTab, setActiveTab] = useState<string>('daily')
 	const [isLoading, setIsLoading] = useState<boolean>(true)
 	const [error, setError] = useState<string | null>(null)
-	const [playerHistoryRows, setPlayerHistoryRows] = useState<PriceHistoryRow[]>([])
+	const [playerHistoryRows, setPlayerHistoryRows] = useState<PriceHistoryRow[]>(
+		[]
+	)
 	const [isHistoryLoading, setIsHistoryLoading] = useState<boolean>(false)
 	const [historyError, setHistoryError] = useState<string | null>(null)
 
@@ -242,7 +254,9 @@ export default function PriceChangesPage() {
 				setIsLoading(true)
 				setError(null)
 
-				const data = await executeQuery<PlayerValuesResponse>(GET_PLAYER_VALUES)
+				const data = await executeQuery<PlayerValuesResponse>(GET_PLAYER_VALUES, {
+					changeDate: utcCalendarDateISO(),
+				})
 				const mapped = data.playerValues.map(toPriceChange)
 				setAllPriceChanges(mapped)
 				setPriceChanges({
@@ -254,7 +268,10 @@ export default function PriceChangesPage() {
 						.sort((a, b) => a.newPrice - b.newPrice)
 				})
 			} catch (unexpectedError) {
-				console.error('Unexpected error loading price changes:', unexpectedError)
+				console.error(
+					'Unexpected error loading price changes:',
+					unexpectedError
+				)
 				setError('Failed to load price changes from GraphQL.')
 				setAllPriceChanges([])
 				setPriceChanges({ rises: [], falls: [] })
@@ -314,22 +331,25 @@ export default function PriceChangesPage() {
 	)
 
 	const selectedPlayerPriceSnapshot = useMemo(
-		() => allPriceChanges.find(item => item.player.id === selectedPlayerId) ?? null,
+		() =>
+			allPriceChanges.find(item => item.player.id === selectedPlayerId) ?? null,
 		[allPriceChanges, selectedPlayerId]
 	)
 
 	const availableTeams = useMemo(() => {
 		if (!hasLoadedPlayers) {
-			return ['ALL', ...Object.keys(teamFullNames).filter(key => key !== 'ALL').sort()] as string[]
+			return [
+				'ALL',
+				...Object.keys(teamFullNames)
+					.filter(key => key !== 'ALL')
+					.sort()
+			] as string[]
 		}
 
 		const teams = new Set<string>(['ALL'])
 
 		allPlayers.forEach(player => {
-			if (
-				positionFilter === 'ALL' ||
-				player.position === positionFilter
-			) {
+			if (positionFilter === 'ALL' || player.position === positionFilter) {
 				teams.add(player.teamShortName)
 			}
 		})
@@ -358,7 +378,8 @@ export default function PriceChangesPage() {
 			.filter(player => {
 				const matchesPosition =
 					positionFilter === 'ALL' || player.position === positionFilter
-				const matchesTeam = teamFilter === 'ALL' || player.teamShortName === teamFilter
+				const matchesTeam =
+					teamFilter === 'ALL' || player.teamShortName === teamFilter
 				return matchesPosition && matchesTeam
 			})
 			.sort((a, b) => a.name.localeCompare(b.name))
@@ -386,8 +407,8 @@ export default function PriceChangesPage() {
 		() =>
 			Boolean(
 				selectedPlayerId &&
-					selectedPlayer &&
-					!filteredPlayerOptions.some(player => player.id === selectedPlayerId)
+				selectedPlayer &&
+				!filteredPlayerOptions.some(player => player.id === selectedPlayerId)
 			),
 		[selectedPlayerId, selectedPlayer, filteredPlayerOptions]
 	)
@@ -415,20 +436,22 @@ export default function PriceChangesPage() {
 					GET_PLAYER_VALUE_HISTORY,
 					{
 						playerId: Number(selectedPlayerId),
-						limit: 30
-					}
+					},
 				)
 
 				const mappedRows = data.playerValueHistory
+					.slice(0, 30)
 					.map(toPriceHistoryRow)
 					.sort(
-						(a, b) =>
-							new Date(b.date).getTime() - new Date(a.date).getTime()
+						(a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
 					)
 
 				setPlayerHistoryRows(mappedRows)
 			} catch (fetchHistoryError) {
-				console.error('Failed to fetch player value history:', fetchHistoryError)
+				console.error(
+					'Failed to fetch player value history:',
+					fetchHistoryError
+				)
 				setHistoryError('Failed to load player price history from GraphQL.')
 				setPlayerHistoryRows([])
 			} finally {
@@ -492,7 +515,9 @@ export default function PriceChangesPage() {
 											key={team}
 											value={team}
 										>
-											{team === 'ALL' ? 'All Teams' : teamFullNames[team as Team] ?? team}
+											{team === 'ALL'
+												? 'All Teams'
+												: (teamFullNames[team as Team] ?? team)}
 										</SelectItem>
 									))}
 								</SelectContent>
@@ -500,7 +525,9 @@ export default function PriceChangesPage() {
 
 							<Select
 								value={positionFilter}
-								onValueChange={value => setPositionFilter(value as PositionFilter)}
+								onValueChange={value =>
+									setPositionFilter(value as PositionFilter)
+								}
 							>
 								<SelectTrigger>
 									<SelectValue placeholder="Filter by position" />
@@ -558,7 +585,10 @@ export default function PriceChangesPage() {
 						{selectedPlayer && (
 							<div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-md border px-3 py-2">
 								<p className="text-xs sm:text-sm text-muted-foreground">
-									Selected: <span className="font-medium text-foreground">{selectedPlayer.name}</span>{' '}
+									Selected:{' '}
+									<span className="font-medium text-foreground">
+										{selectedPlayer.name}
+									</span>{' '}
 									({selectedPlayer.position} | {selectedPlayer.teamShortName})
 								</p>
 								<Button
@@ -604,7 +634,9 @@ export default function PriceChangesPage() {
 													isSelected ? 'bg-accent' : ''
 												}`}
 											>
-												<span className="font-medium truncate">{change.name}</span>
+												<span className="font-medium truncate">
+													{change.name}
+												</span>
 												<span className="shrink-0 text-xs text-muted-foreground">
 													{change.position} | {change.teamShortName}
 												</span>
@@ -615,8 +647,9 @@ export default function PriceChangesPage() {
 							</div>
 						</div>
 						<p className="mt-2 text-xs text-muted-foreground">
-							Showing {visiblePlayerOptions.length} of {filteredPlayerOptions.length}{' '}
-							filtered players ({playerDirectoryTotal} total)
+							Showing {visiblePlayerOptions.length} of{' '}
+							{filteredPlayerOptions.length} filtered players (
+							{playerDirectoryTotal} total)
 						</p>
 						{playersError && (
 							<p className="mt-1 text-xs text-destructive">{playersError}</p>
@@ -647,9 +680,7 @@ export default function PriceChangesPage() {
 
 					<TabsContent value="daily">
 						<Card className="p-6">
-							<h2 className="text-2xl font-bold mb-2">
-								Latest Price Changes
-							</h2>
+							<h2 className="text-2xl font-bold mb-2">Latest Price Changes</h2>
 
 							{isLoading ? (
 								<div className="text-sm text-muted-foreground">
@@ -742,8 +773,8 @@ export default function PriceChangesPage() {
 														change > 0
 															? 'text-emerald-600'
 															: change < 0
-															? 'text-rose-600'
-															: 'text-muted-foreground'
+																? 'text-rose-600'
+																: 'text-muted-foreground'
 													return (
 														<span className={className}>
 															{change > 0 ? '+' : ''}£{change.toFixed(1)}m
@@ -757,7 +788,7 @@ export default function PriceChangesPage() {
 															key: 'transferFlow',
 															label: 'Transfers'
 														}
-												  ]
+													]
 												: [])
 										]}
 									/>
@@ -770,7 +801,6 @@ export default function PriceChangesPage() {
 						)}
 					</TabsContent>
 				</Tabs>
-
 			</div>
 		</RootLayout>
 	)
