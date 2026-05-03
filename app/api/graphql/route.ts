@@ -9,7 +9,6 @@ const GRAPHQL_ENDPOINT =
 const USER_CONTEXT_PATTERNS = [
 	'entryHistory(',
 	'entryTransferHistory(',
-	'calcLivePointsByEntry(',
 	'entryTournaments(',
 	'tournamentLivePoints(',
 	'tournamentEntryRankingSummary(',
