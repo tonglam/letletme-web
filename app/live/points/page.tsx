@@ -219,11 +219,6 @@ function LivePointsAutoRefreshCountdown({
 	const entryId = sessionData?.user?.fplEntryId ?? 0
 	const { currentEventId } = useEvent()
 
-	if (sessionData && !entryId) {
-		window.location.href = '/onboarding/bind-entry'
-		return null
-	}
-
 	const [currentGameweek, setCurrentGameweek] = useState<number | undefined>(
 		currentEventId ?? undefined
 	)
@@ -400,15 +395,37 @@ function LivePointsAutoRefreshCountdown({
 	)
 
 	useEffect(() => {
+		if (!entryId) {
+			setIsLoading(false)
+			return
+		}
 		if (selectedGameweek !== undefined) {
 			void fetchLivePointsForGameweek(selectedGameweek)
 		} else {
 			setError('No current gameweek found')
 			setIsLoading(false)
 		}
-	// selectedGameweek is the initializer value from context — stable at mount
+	// selectedGameweek and entryId are stable initializer values from mount
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [])
+
+	if (!entryId && !isLoading) {
+		return (
+			<RootLayout>
+				<div className="container max-w-4xl mx-auto px-4 py-8">
+					<h1 className="text-3xl font-bold mb-6">Live Points</h1>
+					<div className="bg-card rounded-lg shadow-sm p-8 text-center">
+						<p className="text-muted-foreground mb-4">
+							Sign in and link your FPL account to view your live points.
+						</p>
+						<a href="/auth/login?next=/live/points" className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2">
+							Sign in
+						</a>
+					</div>
+				</div>
+			</RootLayout>
+		)
+	}
 
 	if (isLoading && !liveData) {
 		return (
