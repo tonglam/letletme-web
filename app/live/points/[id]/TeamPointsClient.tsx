@@ -127,10 +127,13 @@ function LivePointsAutoRefreshCountdown({
 
 	useEffect(() => {
 		if (!enabled) {
-			setCountdown(null)
-			return
+			const resetTimer = window.setTimeout(() => setCountdown(null), 0)
+			return () => window.clearTimeout(resetTimer)
 		}
-		setCountdown(LIVE_POINTS_AUTO_REFRESH_SECONDS)
+		const initialTimer = window.setTimeout(
+			() => setCountdown(LIVE_POINTS_AUTO_REFRESH_SECONDS),
+			0
+		)
 		const intervalId = window.setInterval(() => {
 			setCountdown(previous => {
 				if (previous === null || previous <= 1) {
@@ -145,7 +148,10 @@ function LivePointsAutoRefreshCountdown({
 				return previous - 1
 			})
 		}, 1000)
-		return () => { window.clearInterval(intervalId) }
+		return () => {
+			window.clearTimeout(initialTimer)
+			window.clearInterval(intervalId)
+		}
 	}, [enabled])
 
 	if (!enabled || countdown === null) return null
@@ -157,24 +163,144 @@ function LivePointsAutoRefreshCountdown({
 	)
 }
 
+function mapLiveDataToPlayers(
+	live: LiveCalcData,
+	breakdownLookup: BreakdownLookup
+): Player[] {
+	const benchBoostActive = !!live.chip && live.chip.toLowerCase().includes('bench')
+	const sortedPicks = [...live.pickList].sort((a, b) => a.position - b.position)
+
+	return sortedPicks.map(pick => {
+		const isCaptain = live.captainName === pick.webName
+		const isBench = pick.position >= 12
+		const position = normalizePosition(pick.elementType, 'elementType')
+		const breakdownEntry = breakdownLookup.get(String(pick.element))
+		const breakdownStats = breakdownEntry?.stats ?? []
+		const aggregatedBreakdown = aggregateBreakdownStats(breakdownStats)
+
+		const getValue = (identifier: string) => aggregatedBreakdown.get(identifier)?.value
+		const getPoints = (identifier: string) => aggregatedBreakdown.get(identifier)?.points
+
+		const minutes = getValue('minutes') ?? pick.minutes
+		const goalsScored = getValue('goals_scored') ?? pick.goalsScored
+		const assists = getValue('assists') ?? pick.assists
+		const cleanSheets = getValue('clean_sheets') ?? 0
+		const saves = getValue('saves') ?? 0
+		const penaltiesSaved = getValue('penalties_saved') ?? 0
+		const yellowCards = getValue('yellow_cards') ?? 0
+		const redCards = getValue('red_cards') ?? 0
+		const bonusPoints = getPoints('bonus') ?? pick.bonus
+		const totalPoints = getPoints('total') ?? getPoints('total_points') ?? pick.totalPoints
+
+		let playingStatus: Player['playingStatus']
+		if (minutes >= 90) {
+			playingStatus = 'FINISHED'
+		} else if (minutes > 0 || pick.starts) {
+			playingStatus = 'PLAYING'
+		} else {
+			playingStatus = 'NOT_STARTED'
+		}
+
+		return {
+			id: String(pick.element),
+			name: pick.webName,
+			team: breakdownEntry?.teamShortName ?? '',
+			teamShort: breakdownEntry?.teamShortName ?? '',
+			position,
+			playingStatus,
+			isBench,
+			isBenchBoostActive: benchBoostActive,
+			breakdownStats,
+			stats: {
+				minutes,
+				goals: goalsScored,
+				expectedGoals: pick.expectedGoals ?? 0,
+				expectedAssists: pick.expectedAssists ?? 0,
+				expectedGoalInvolvements: pick.expectedGoalInvolvements ?? 0,
+				expectedGoalsConceded: pick.expectedGoalsConceded ?? 0,
+				assists,
+				saves,
+				savePenalty: penaltiesSaved,
+				cleanSheets,
+				yellowCards,
+				redCards,
+				points: totalPoints,
+				bonusPoints: bonusPoints ?? 0
+			},
+			isCaptain,
+			isViceCaptain: false
+		}
+	})
+}
+
 interface TeamPointsClientProps {
 	entryId: number
 	tournamentId?: string
+	initialEventId?: number
+	initialLiveData?: LiveCalcData
 }
 
-export default function TeamPointsClient({ entryId, tournamentId }: TeamPointsClientProps) {
+export default function TeamPointsClient({
+	entryId,
+	tournamentId,
+	initialEventId,
+	initialLiveData
+}: TeamPointsClientProps) {
 	const { currentEventId } = useEvent()
-	const [currentGameweek] = useState<number | undefined>(currentEventId ?? undefined)
-	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(currentEventId ?? undefined)
-	const [isLoading, setIsLoading] = useState(true)
+	const seededEventId = initialLiveData?.event ?? initialEventId ?? currentEventId ?? undefined
+	const initialPlayers = initialLiveData
+		? mapLiveDataToPlayers(initialLiveData, new Map())
+		: []
+	const [currentGameweek] = useState<number | undefined>(currentEventId ?? initialEventId ?? undefined)
+	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(seededEventId)
+	const [isLoading, setIsLoading] = useState(!initialLiveData)
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [error, setError] = useState<string | undefined>(undefined)
-	const [liveData, setLiveData] = useState<LiveCalcData | undefined>(undefined)
-	const [startingPlayers, setStartingPlayers] = useState<Player[]>([])
-	const [benchPlayers, setBenchPlayers] = useState<Player[]>([])
+	const [liveData, setLiveData] = useState<LiveCalcData | undefined>(initialLiveData)
+	const [startingPlayers, setStartingPlayers] = useState<Player[]>(
+		initialPlayers.filter(p => !p.isBench)
+	)
+	const [benchPlayers, setBenchPlayers] = useState<Player[]>(
+		initialPlayers.filter(p => p.isBench)
+	)
 	const [entryTransfers, setEntryTransfers] = useState<TransferPair[]>([])
 	const requestIdRef = useRef(0)
-	const hasLoadedLiveDataRef = useRef(false)
+	const hasLoadedLiveDataRef = useRef(!!initialLiveData)
+
+	const enrichPlayersWithExplain = useCallback(
+		async (live: LiveCalcData, eventId: number, requestId: number) => {
+			const uniqueElementIds = Array.from(new Set(live.pickList.map(pick => pick.element)))
+			const explainBatchQuery = buildEventLiveExplainBatchQuery(uniqueElementIds)
+			if (!explainBatchQuery) return
+
+			try {
+				const explainBatchResponse = await executeQuery<
+					Record<string, EventLiveExplainResponse['eventLiveExplain'] | null>
+				>(explainBatchQuery, { eventId }, { cache: 'no-store' })
+
+				if (requestId !== requestIdRef.current) return
+
+				const breakdownLookup: BreakdownLookup = new Map()
+				Object.values(explainBatchResponse).forEach(playerExplain => {
+					if (!playerExplain) return
+					const flattenedStats = (playerExplain.breakdown ?? []).flatMap(
+						entry => entry.stats
+					)
+					breakdownLookup.set(String(playerExplain.player.id), {
+						teamShortName: playerExplain.player.team?.shortName ?? '',
+						stats: rollupBreakdownStats(flattenedStats)
+					})
+				})
+
+				const enrichedPlayers = mapLiveDataToPlayers(live, breakdownLookup)
+				setStartingPlayers(enrichedPlayers.filter(p => !p.isBench))
+				setBenchPlayers(enrichedPlayers.filter(p => p.isBench))
+			} catch (explainError) {
+				console.warn('Failed to fetch explain stats batch:', explainError)
+			}
+		},
+		[setBenchPlayers, setStartingPlayers]
+	)
 
 	const fetchLivePointsForGameweek = useCallback(
 		async (eventId: number) => {
@@ -192,110 +318,24 @@ export default function TeamPointsClient({ entryId, tournamentId }: TeamPointsCl
 			try {
 				const liveResponse = await executeQuery<LiveCalcDataResponse>(
 					GET_LIVE_POINTS,
-					{ eventId, entryId }
+					{ eventId, entryId },
+					{ cache: 'no-store' }
 				)
 
 				const live = liveResponse.calcLivePointsByEntry
-				const benchBoostActive = !!live.chip && live.chip.toLowerCase().includes('bench')
-				const uniqueElementIds = Array.from(new Set(live.pickList.map(pick => pick.element)))
-
-				const breakdownLookup: BreakdownLookup = new Map()
-				const explainBatchQuery = buildEventLiveExplainBatchQuery(uniqueElementIds)
-
-				if (explainBatchQuery) {
-					try {
-						const explainBatchResponse = await executeQuery<
-							Record<string, EventLiveExplainResponse['eventLiveExplain'] | null>
-						>(explainBatchQuery, { eventId })
-
-						Object.values(explainBatchResponse).forEach(playerExplain => {
-							if (!playerExplain) return
-							const flattenedStats = (playerExplain.breakdown ?? []).flatMap(
-								entry => entry.stats
-							)
-							breakdownLookup.set(String(playerExplain.player.id), {
-								teamShortName: playerExplain.player.team?.shortName ?? '',
-								stats: rollupBreakdownStats(flattenedStats)
-							})
-						})
-					} catch (explainError) {
-						console.warn('Failed to fetch explain stats batch:', explainError)
-					}
-				}
-
-				const sortedPicks = [...live.pickList].sort((a, b) => a.position - b.position)
-
-				const allPlayers: Player[] = sortedPicks.map(pick => {
-					const isCaptain = live.captainName === pick.webName
-					const isBench = pick.position >= 12
-					const position = normalizePosition(pick.elementType, 'elementType')
-					const breakdownEntry = breakdownLookup.get(String(pick.element))
-					const breakdownStats = breakdownEntry?.stats ?? []
-					const aggregatedBreakdown = aggregateBreakdownStats(breakdownStats)
-
-					const getValue = (identifier: string) => aggregatedBreakdown.get(identifier)?.value
-					const getPoints = (identifier: string) => aggregatedBreakdown.get(identifier)?.points
-
-					const minutes = getValue('minutes') ?? pick.minutes
-					const goalsScored = getValue('goals_scored') ?? pick.goalsScored
-					const assists = getValue('assists') ?? pick.assists
-					const cleanSheets = getValue('clean_sheets') ?? 0
-					const saves = getValue('saves') ?? 0
-					const penaltiesSaved = getValue('penalties_saved') ?? 0
-					const yellowCards = getValue('yellow_cards') ?? 0
-					const redCards = getValue('red_cards') ?? 0
-					const bonusPoints = getPoints('bonus') ?? pick.bonus
-					const totalPoints = getPoints('total') ?? getPoints('total_points') ?? pick.totalPoints
-
-					let playingStatus: Player['playingStatus']
-					if (minutes >= 90) {
-						playingStatus = 'FINISHED'
-					} else if (minutes > 0) {
-						playingStatus = 'PLAYING'
-					} else if (pick.starts) {
-						playingStatus = 'PLAYING'
-					} else {
-						playingStatus = 'NOT_STARTED'
-					}
-
-					return {
-						id: String(pick.element),
-						name: pick.webName,
-						team: breakdownEntry?.teamShortName ?? '',
-						teamShort: breakdownEntry?.teamShortName ?? '',
-						position,
-						playingStatus,
-						isBench,
-						isBenchBoostActive: benchBoostActive,
-						breakdownStats,
-						stats: {
-							minutes,
-							goals: goalsScored,
-							expectedGoals: pick.expectedGoals ?? 0,
-							expectedAssists: pick.expectedAssists ?? 0,
-							expectedGoalInvolvements: pick.expectedGoalInvolvements ?? 0,
-							expectedGoalsConceded: pick.expectedGoalsConceded ?? 0,
-							assists,
-							saves,
-							savePenalty: penaltiesSaved,
-							cleanSheets,
-							yellowCards,
-							redCards,
-							points: totalPoints,
-							bonusPoints: bonusPoints ?? 0
-						},
-						isCaptain,
-						isViceCaptain: false
-					}
-				})
 
 				if (requestId !== requestIdRef.current) return
 
+				const allPlayers = mapLiveDataToPlayers(live, new Map())
 				hasLoadedLiveDataRef.current = true
 				setLiveData(live)
 				setStartingPlayers(allPlayers.filter(p => !p.isBench))
 				setBenchPlayers(allPlayers.filter(p => p.isBench))
 				setEntryTransfers([])
+				setIsLoading(false)
+				setIsRefreshing(false)
+
+				void enrichPlayersWithExplain(live, eventId, requestId)
 			} catch (err) {
 				if (requestId !== requestIdRef.current) return
 				console.error('Failed to fetch live points:', err)
@@ -308,15 +348,43 @@ export default function TeamPointsClient({ entryId, tournamentId }: TeamPointsCl
 				}
 			}
 		},
-		[entryId]
+		[
+			enrichPlayersWithExplain,
+			entryId,
+			setBenchPlayers,
+			setEntryTransfers,
+			setError,
+			setIsLoading,
+			setIsRefreshing,
+			setLiveData,
+			setStartingPlayers
+		]
 	)
 
 	useEffect(() => {
-		if (selectedGameweek !== undefined) {
-			void fetchLivePointsForGameweek(selectedGameweek)
-		} else {
-			setError('No current gameweek found')
-			setIsLoading(false)
+		let cancelled = false
+		if (initialLiveData && selectedGameweek === initialLiveData.event) {
+			const requestId = requestIdRef.current + 1
+			requestIdRef.current = requestId
+			void enrichPlayersWithExplain(initialLiveData, initialLiveData.event, requestId)
+			return () => {
+				cancelled = true
+			}
+		}
+
+		const loadTimer = window.setTimeout(() => {
+			if (cancelled) return
+			if (selectedGameweek !== undefined) {
+				void fetchLivePointsForGameweek(selectedGameweek)
+			} else {
+				setError('No current gameweek found')
+				setIsLoading(false)
+			}
+		}, 0)
+
+		return () => {
+			cancelled = true
+			window.clearTimeout(loadTimer)
 		}
 	// selectedGameweek initializer from context — stable at mount
 	// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -388,7 +456,10 @@ export default function TeamPointsClient({ entryId, tournamentId }: TeamPointsCl
 					</div>
 					<div className="mb-6">
 						<GameweekSelector
-							onGameweekChange={setSelectedGameweek}
+							onGameweekChange={(gw) => {
+								setSelectedGameweek(gw)
+								void fetchLivePointsForGameweek(gw)
+							}}
 							currentGameweek={currentGameweek}
 							selectedGameweek={selectedGameweek}
 						/>
@@ -401,9 +472,10 @@ export default function TeamPointsClient({ entryId, tournamentId }: TeamPointsCl
 		)
 	}
 
-	const hasActiveLiveMatch = liveData.pickList.some(
-		pick => (pick.minutes ?? 0) > 0 && (pick.minutes ?? 0) < 90
-	)
+	const shouldAutoRefresh =
+		selectedGameweek !== undefined &&
+		currentGameweek !== undefined &&
+		selectedGameweek === currentGameweek
 
 	const startingPicks = liveData.pickList.filter(p => p.position <= 11)
 	const playedCount = startingPicks.filter(p => (p.minutes ?? 0) > 0).length
@@ -444,20 +516,23 @@ export default function TeamPointsClient({ entryId, tournamentId }: TeamPointsCl
 
 				<div className="mb-6">
 					<GameweekSelector
-						onGameweekChange={setSelectedGameweek}
+						onGameweekChange={(gw) => {
+							setSelectedGameweek(gw)
+							void fetchLivePointsForGameweek(gw)
+						}}
 						currentGameweek={currentGameweek}
 						selectedGameweek={selectedGameweek}
 						disabled={isLoading || isRefreshing}
 					/>
 					<div className="mt-2 flex items-center justify-between">
 						<p className="text-xs text-muted-foreground">
-							{hasActiveLiveMatch
-								? 'Auto refreshes every minute while live matches are active.'
-								: 'No live matches in progress. Auto refresh paused.'}
+							{shouldAutoRefresh
+								? 'Auto refreshes every minute for the current gameweek.'
+								: 'Auto refresh paused for past or unavailable gameweeks.'}
 						</p>
 						<div className="flex items-center gap-3">
 							<LivePointsAutoRefreshCountdown
-								enabled={hasActiveLiveMatch}
+								enabled={shouldAutoRefresh}
 								onRefresh={async () => {
 									if (selectedGameweek !== undefined) {
 										await fetchLivePointsForGameweek(selectedGameweek)

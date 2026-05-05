@@ -4,7 +4,6 @@ import { Card } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { getAuth } from '@/lib/auth'
 import { db, schema } from '@/lib/db'
-import { validateFplEntry } from '@/lib/fpl'
 import { eq } from 'drizzle-orm'
 import { Trophy, Users } from 'lucide-react'
 import { headers } from 'next/headers'
@@ -32,14 +31,6 @@ export default async function ProfilePage() {
 		.limit(1)
 
 	const profile = dbUser ?? user
-
-	let fplInfo: { teamName: string; managerName: string } | null = null
-	if (profile.fplEntryId) {
-		const result = await validateFplEntry(profile.fplEntryId)
-		if (result.valid) {
-			fplInfo = { teamName: result.teamName!, managerName: result.managerName! }
-		}
-	}
 
 	return (
 		<div className="container max-w-4xl mx-auto px-4 py-8">
@@ -97,7 +88,7 @@ export default async function ProfilePage() {
 
 						<div className="bg-accent/30 p-4 rounded-lg">
 							<h3 className="font-medium mb-3">FPL Team</h3>
-							<RebindEntryForm currentEntryId={profile.fplEntryId} fplInfo={fplInfo} />
+							<RebindEntryForm currentEntryId={profile.fplEntryId} fplInfo={null} />
 						</div>
 
 						<div className="bg-accent/30 p-4 rounded-lg">

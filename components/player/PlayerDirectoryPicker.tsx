@@ -26,6 +26,7 @@ type TeamFilter = "ALL" | string;
 
 const PLAYER_PICKER_PAGE_SIZE = 200;
 const DEFAULT_VISIBLE_PLAYER_RESULTS = 10;
+const MIN_SEARCH_LENGTH = 2;
 
 export interface PlayerDirectoryOption {
   id: string;
@@ -160,6 +161,25 @@ export function PlayerDirectoryPicker({
 
   useEffect(() => {
     let isCancelled = false;
+    const normalizedSearch = searchTerm.trim();
+    const hasServerFilter =
+      selectedTeam !== null ||
+      positionFilter !== "ALL" ||
+      normalizedSearch.length >= MIN_SEARCH_LENGTH;
+
+    if (!hasServerFilter) {
+      const resetTimer = window.setTimeout(() => {
+        if (isCancelled) return;
+        setPlayers([]);
+        setError(null);
+        setIsPlayersLoading(false);
+      }, 0);
+
+      return () => {
+        isCancelled = true;
+        window.clearTimeout(resetTimer);
+      };
+    }
 
     const fetchPlayers = async () => {
       try {
@@ -228,7 +248,7 @@ export function PlayerDirectoryPicker({
     return () => {
       isCancelled = true;
     };
-  }, [positionFilter, selectedTeam]);
+  }, [positionFilter, searchTerm, selectedTeam]);
 
   const excludedIds = useMemo(
     () => new Set(excludedPlayerIds),
@@ -242,7 +262,8 @@ export function PlayerDirectoryPicker({
 
   useEffect(() => {
     if (!availableTeams.includes(teamFilter)) {
-      setTeamFilter("ALL");
+      const resetTimer = window.setTimeout(() => setTeamFilter("ALL"), 0);
+      return () => window.clearTimeout(resetTimer);
     }
   }, [availableTeams, teamFilter]);
 
@@ -265,7 +286,7 @@ export function PlayerDirectoryPicker({
   const hasActiveFilter =
     positionFilter !== "ALL" ||
     teamFilter !== "ALL" ||
-    searchTerm.trim().length > 0;
+    searchTerm.trim().length >= MIN_SEARCH_LENGTH;
 
   const visiblePlayers = hasActiveFilter ? filteredPlayers : [];
 

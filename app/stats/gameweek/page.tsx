@@ -1,18 +1,25 @@
-import { executeQuery } from '@/lib/graphql-client'
-import { GET_CURRENT_AND_NEXT_EVENTS, type EventsResponse } from '@/lib/graphql/queries'
+import { getCurrentAndNextEvents } from '@/lib/events'
+import { fetchOverallGameweekStats } from '@/lib/gameweek-overall-stats'
 import GameweekStatsClient from './GameweekStatsClient'
 
 export default async function GameweekStatsPage() {
-	let currentGameweek = 1
+	const data = await getCurrentAndNextEvents()
+	const currentGameweek = data?.current[0]?.id ?? 1
+	let initialOverallStats: Awaited<ReturnType<typeof fetchOverallGameweekStats>> | null = null
+
 	try {
-		const data = await executeQuery<EventsResponse>(
-			GET_CURRENT_AND_NEXT_EVENTS,
-			undefined,
-			{ cache: 'force-cache', next: { revalidate: 300 } },
-		)
-		currentGameweek = data.current[0]?.id ?? 1
+		initialOverallStats = await fetchOverallGameweekStats(currentGameweek, {
+			cache: 'force-cache',
+			next: { revalidate: 300 },
+		})
 	} catch (err) {
-		console.error('[gameweek-stats] RSC fetch failed:', err)
+		console.error('Failed to load initial gameweek overview:', err)
 	}
-	return <GameweekStatsClient currentGameweek={currentGameweek} />
+
+	return (
+		<GameweekStatsClient
+			currentGameweek={currentGameweek}
+			initialOverallStats={initialOverallStats}
+		/>
+	)
 }

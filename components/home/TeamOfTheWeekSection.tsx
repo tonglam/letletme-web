@@ -1,8 +1,6 @@
-'use client'
-
+import { PlayerList, type PlayerListItem } from '@/components/player/PlayerList'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
-import { PlayerList } from '@/components/player/PlayerList'
 import { Skeleton } from '@/components/ui/skeleton'
 import { executeQuery } from '@/lib/graphql-client'
 import {
@@ -10,75 +8,31 @@ import {
 	type LiveScoresResponse,
 } from '@/lib/graphql/queries'
 import { normalizePosition } from '@/lib/utils'
-import { useEffect, useState } from 'react'
-
-interface TeamPlayer {
-	id: number
-	position: string
-	name: string
-	team: string
-	points: number
-}
 
 interface TeamOfTheWeekSectionProps {
 	currentEventId: number | null
 }
 
-export function TeamOfTheWeekSection({ currentEventId }: TeamOfTheWeekSectionProps) {
-	const [teamOfTheWeek, setTeamOfTheWeek] = useState<TeamPlayer[]>([])
-	const [isLoading, setIsLoading] = useState(currentEventId !== null)
-	const [error, setError] = useState<string | null>(null)
+export function TeamOfTheWeekSectionFallback({ currentEventId }: TeamOfTheWeekSectionProps) {
+	return (
+		<TeamOfTheWeekCard
+			currentEventId={currentEventId}
+			teamOfTheWeek={[]}
+			isLoading
+		/>
+	)
+}
 
-	useEffect(() => {
-		if (!currentEventId) {
-			setIsLoading(false)
-			return
-		}
-
-		const fetchData = async () => {
-			try {
-				setIsLoading(true)
-				setError(null)
-
-				const scoresData = await executeQuery<LiveScoresResponse>(GET_LIVE_SCORES, {
-					eventId: currentEventId,
-				})
-
-				const positionOrder: Record<string, number> = {
-					GKP: 0,
-					DEF: 1,
-					MID: 2,
-					FWD: 3,
-				}
-
-				const players: TeamPlayer[] = scoresData.liveScores
-					.filter((s) => s.inDreamTeam)
-					.map((s) => ({
-						id: s.player.id,
-						position: normalizePosition(s.player.position),
-						name: s.player.webName,
-						team: s.player.team?.shortName ?? s.player.team?.name ?? '',
-						points: s.totalPoints,
-					}))
-					.sort((a, b) => {
-						const orderDiff =
-							(positionOrder[a.position] ?? 99) - (positionOrder[b.position] ?? 99)
-						return orderDiff !== 0 ? orderDiff : b.points - a.points
-					})
-
-				setTeamOfTheWeek(players)
-			} catch (err) {
-				console.error('Failed to fetch team of the week:', err)
-				setError('Failed to load team of the week')
-				setTeamOfTheWeek([])
-			} finally {
-				setIsLoading(false)
-			}
-		}
-
-		void fetchData()
-	}, [currentEventId])
-
+function TeamOfTheWeekCard({
+	currentEventId,
+	teamOfTheWeek,
+	isLoading = false,
+	error,
+}: TeamOfTheWeekSectionProps & {
+	teamOfTheWeek: PlayerListItem[]
+	isLoading?: boolean
+	error?: string | null
+}) {
 	return (
 		<Card className="rounded-none sm:rounded-lg p-4 sm:p-6 lg:p-8">
 			<div className="flex items-center justify-between mb-6">
@@ -108,13 +62,67 @@ export function TeamOfTheWeekSection({ currentEventId }: TeamOfTheWeekSectionPro
 						/>
 					))}
 				</div>
-			) : teamOfTheWeek.length > 0 ? (
-				<PlayerList players={teamOfTheWeek} />
 			) : (
-				<div className="text-center py-12 text-muted-foreground">
-					<p className="text-sm">No team of the week data available</p>
-				</div>
+				<PlayerList
+					players={teamOfTheWeek}
+					emptyText="No team of the week data available"
+				/>
 			)}
 		</Card>
+	)
+}
+
+export async function TeamOfTheWeekSection({ currentEventId }: TeamOfTheWeekSectionProps) {
+	if (!currentEventId) {
+		return (
+			<TeamOfTheWeekCard
+				currentEventId={currentEventId}
+				teamOfTheWeek={[]}
+			/>
+		)
+	}
+
+	let players: PlayerListItem[] = []
+	let error: string | null = null
+
+	try {
+		const scoresData = await executeQuery<LiveScoresResponse>(
+			GET_LIVE_SCORES,
+			{ eventId: currentEventId },
+			{ cache: 'force-cache', next: { revalidate: 300 } },
+		)
+
+		const positionOrder: Record<string, number> = {
+			GKP: 0,
+			DEF: 1,
+			MID: 2,
+			FWD: 3,
+		}
+
+		players = scoresData.liveScores
+			.filter(s => s.inDreamTeam)
+			.map(s => ({
+				id: s.player.id,
+				position: normalizePosition(s.player.position),
+				name: s.player.webName,
+				team: s.player.team?.shortName ?? s.player.team?.name ?? '',
+				points: s.totalPoints,
+			}))
+			.sort((a, b) => {
+				const orderDiff =
+					(positionOrder[a.position] ?? 99) - (positionOrder[b.position] ?? 99)
+				return orderDiff !== 0 ? orderDiff : (b.points ?? 0) - (a.points ?? 0)
+			})
+	} catch (err) {
+		console.error('Failed to fetch team of the week:', err)
+		error = 'Failed to load team of the week'
+	}
+
+	return (
+		<TeamOfTheWeekCard
+			currentEventId={currentEventId}
+			teamOfTheWeek={players}
+			error={error}
+		/>
 	)
 }

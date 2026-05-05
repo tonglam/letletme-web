@@ -9,15 +9,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TransferList } from "@/components/home/TransferList";
 import { executeQuery } from "@/lib/graphql-client";
 import {
-  GET_EVENT_STATS_BY_ID,
   GET_LIVE_SCORES,
   GET_TOP_TRANSFERS_IN,
   GET_TOP_TRANSFERS_OUT,
-  type EventStatsByIdResponse,
   type LiveScoresResponse,
   type TopTransfer,
   type TopTransfersResponse,
 } from "@/lib/graphql/queries";
+import {
+  FALLBACK_OVERALL_STATS,
+  fetchOverallGameweekStats,
+  type OverallGameweekStats,
+} from "@/lib/gameweek-overall-stats";
 import { formatCompactNumber, normalizePosition, type PositionCode } from "@/lib/utils";
 import {
   ArrowLeftCircle,
@@ -28,22 +31,6 @@ import {
   TrendingUp,
   Trophy,
 } from "lucide-react";
-
-interface OverallGameweekStats {
-  averagePoints: number | null;
-  highestPoints: number | null;
-  mostCaptained: { name: string; count: number | null };
-  mostViceCaptained: { name: string };
-  mostTransferredIn: { name: string; team: string; count: number | null };
-  mostSelectedPlayer: { name: string; id: number | null };
-  mostTransferInPlayer: { name: string; id: number | null };
-  chipsPlayed: {
-    benchBoost: number | null;
-    tripleCaptain: number | null;
-    wildcard: number | null;
-    freeHit: number | null;
-  } | null;
-}
 
 interface DreamTeamPlayer {
   id: number;
@@ -81,17 +68,6 @@ interface TransferTrend {
 
 const POSITION_ORDER: Record<PositionCode, number> = { GKP: 0, DEF: 1, MID: 2, FWD: 3, UNK: 99 };
 
-const FALLBACK_OVERALL_STATS: OverallGameweekStats = {
-  averagePoints: null,
-  highestPoints: null,
-  mostCaptained: { name: "N/A", count: null },
-  mostViceCaptained: { name: "N/A" },
-  mostTransferredIn: { name: "N/A", team: "N/A", count: null },
-  mostSelectedPlayer: { name: "N/A", id: null },
-  mostTransferInPlayer: { name: "N/A", id: null },
-  chipsPlayed: { benchBoost: null, tripleCaptain: null, wildcard: null, freeHit: null },
-};
-
 const mapTransferTrend = (entry: TopTransfer, type: "in" | "out"): TransferTrend => ({
   id: entry.player.id,
   name: entry.player.webName,
@@ -104,47 +80,29 @@ const mapTransferTrend = (entry: TopTransfer, type: "in" | "out"): TransferTrend
   points: entry.player.totalPoints ?? null,
 });
 
-interface ChipPlayEntry { chipName?: string; numberPlayed?: number }
-
-const parseChipPlays = (value: unknown): ChipPlayEntry[] => {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is ChipPlayEntry => typeof item === "object" && item !== null);
-};
-
-const chipPlayCount = (chipPlays: ChipPlayEntry[], chipName: string): number | null => {
-  const found = chipPlays.find((chip) => chip.chipName === chipName);
-  return found?.numberPlayed ?? null;
-};
-
-const fetchPlayerNamesByIds = async (ids: number[]): Promise<Record<number, string>> => {
-  const uniqueIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)));
-  if (uniqueIds.length === 0) return {};
-  const selection = uniqueIds.map((id) => `p${id}: player(id: ${id}) { webName }`).join("\n");
-  const query = `query GetPlayerNamesByIds {\n${selection}\n}`;
-  const data = await executeQuery<Record<string, { webName?: string | null } | null>>(query);
-  const result: Record<number, string> = {};
-  for (const id of uniqueIds) {
-    const value = data[`p${id}`]?.webName;
-    if (typeof value === "string" && value.length > 0) result[id] = value;
-  }
-  return result;
-};
-
 interface GameweekStatsClientProps {
   currentGameweek: number;
+  initialOverallStats?: OverallGameweekStats | null;
 }
 
-export default function GameweekStatsClient({ currentGameweek: initialCurrentGameweek }: GameweekStatsClientProps) {
+export default function GameweekStatsClient({
+  currentGameweek: initialCurrentGameweek,
+  initialOverallStats = null,
+}: GameweekStatsClientProps) {
   const [currentGameweek] = useState<number>(initialCurrentGameweek);
   const [selectedGameweek, setSelectedGameweek] = useState<number>(initialCurrentGameweek);
   const [activeTab, setActiveTab] = useState<"overall" | "dreamteam" | "haul" | "transfers">("overall");
-  const [overallStats, setOverallStats] = useState<OverallGameweekStats>(FALLBACK_OVERALL_STATS);
+  const [overallStats, setOverallStats] = useState<OverallGameweekStats>(
+    initialOverallStats ?? FALLBACK_OVERALL_STATS,
+  );
   const [dreamTeam, setDreamTeam] = useState<DreamTeamPlayer[]>([]);
   const [transferTrends, setTransferTrends] = useState<{ in: TransferTrend[]; out: TransferTrend[] }>({ in: [], out: [] });
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [isLoadingOverall, setIsLoadingOverall] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const overallCacheRef = useRef<Map<number, OverallGameweekStats>>(new Map());
+  const overallCacheRef = useRef<Map<number, OverallGameweekStats>>(
+    new Map(initialOverallStats ? [[initialCurrentGameweek, initialOverallStats]] : []),
+  );
   const dreamCacheRef = useRef<Map<number, DreamTeamPlayer[]>>(new Map());
   const transfersCacheRef = useRef<Map<number, { in: TransferTrend[]; out: TransferTrend[] }>>(new Map());
 
@@ -167,32 +125,7 @@ export default function GameweekStatsClient({ currentGameweek: initialCurrentGam
           if (!cancelled) setOverallStats(cachedOverall);
         } else {
           setIsLoadingOverall(true);
-          const eventStatsData = await executeQuery<EventStatsByIdResponse>(GET_EVENT_STATS_BY_ID, { eventId: selectedGameweek });
-          const eventStats = eventStatsData.event ?? null;
-          const playerNameMap = await fetchPlayerNamesByIds([
-            eventStats?.mostSelected ?? 0,
-            eventStats?.mostTransferredIn ?? 0,
-            eventStats?.mostCaptained ?? 0,
-            eventStats?.mostViceCaptained ?? 0,
-          ]);
-          const chipPlays = parseChipPlays(eventStats?.chipPlays);
-          const overallSnapshot: OverallGameweekStats = {
-            averagePoints: eventStats?.averageEntryScore ?? null,
-            highestPoints: eventStats?.highestScore ?? null,
-            mostCaptained: { name: playerNameMap[eventStats?.mostCaptained ?? -1] ?? "N/A", count: null },
-            mostViceCaptained: { name: playerNameMap[eventStats?.mostViceCaptained ?? -1] ?? "N/A" },
-            mostTransferredIn: { name: "N/A", team: "N/A", count: null },
-            mostSelectedPlayer: { name: playerNameMap[eventStats?.mostSelected ?? -1] ?? "N/A", id: eventStats?.mostSelected ?? null },
-            mostTransferInPlayer: { name: playerNameMap[eventStats?.mostTransferredIn ?? -1] ?? "N/A", id: eventStats?.mostTransferredIn ?? null },
-            chipsPlayed: eventStats
-              ? {
-                  benchBoost: chipPlayCount(chipPlays, "bboost"),
-                  tripleCaptain: chipPlayCount(chipPlays, "3xc"),
-                  wildcard: chipPlayCount(chipPlays, "wildcard"),
-                  freeHit: chipPlayCount(chipPlays, "freehit"),
-                }
-              : FALLBACK_OVERALL_STATS.chipsPlayed,
-          };
+          const overallSnapshot = await fetchOverallGameweekStats(selectedGameweek);
           overallCacheRef.current.set(selectedGameweek, overallSnapshot);
           if (!cancelled) setOverallStats(overallSnapshot);
           setIsLoadingOverall(false);

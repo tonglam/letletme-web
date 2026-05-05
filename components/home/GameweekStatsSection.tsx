@@ -1,14 +1,12 @@
-'use client'
-
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_TOP_TRANSFERS_IN,
 	GET_TOP_TRANSFERS_OUT,
+	type TopTransfer,
 	type TopTransfersResponse,
 } from '@/lib/graphql/queries'
-import { useEffect, useState } from 'react'
 import { TransferList } from './TransferList'
 
 interface Transfer {
@@ -24,64 +22,27 @@ interface GameweekStatsSectionProps {
 	currentEventId: number | null
 }
 
-export function GameweekStatsSection({ currentEventId }: GameweekStatsSectionProps) {
-	const [transfersIn, setTransfersIn] = useState<Transfer[]>([])
-	const [transfersOut, setTransfersOut] = useState<Transfer[]>([])
-	const [isLoading, setIsLoading] = useState(currentEventId !== null)
-	const [error, setError] = useState<string | null>(null)
+export function GameweekStatsSectionFallback() {
+	return (
+		<GameweekStatsCard
+			transfersIn={[]}
+			transfersOut={[]}
+			isLoading
+		/>
+	)
+}
 
-	useEffect(() => {
-		if (!currentEventId) {
-			setIsLoading(false)
-			return
-		}
-
-		const fetchData = async () => {
-			try {
-				setIsLoading(true)
-				setError(null)
-
-				const [inData, outData] = await Promise.all([
-					executeQuery<TopTransfersResponse>(GET_TOP_TRANSFERS_IN, {
-						eventId: currentEventId,
-						limit: 5,
-					}),
-					executeQuery<TopTransfersResponse>(GET_TOP_TRANSFERS_OUT, {
-						eventId: currentEventId,
-						limit: 5,
-					}),
-				])
-
-				const toTransfer = (
-					item: NonNullable<TopTransfersResponse['topTransfersIn']>[number],
-					direction: 'in' | 'out',
-				): Transfer => ({
-					position: item.player.position ?? 'UNK',
-					player: item.player.webName,
-					club: item.player.team?.shortName ?? item.player.team?.name ?? '',
-					transfers:
-						direction === 'in' ? item.transfersInEvent : item.transfersOutEvent,
-					selectedByPercent: item.player.selectedByPercent ?? null,
-					points: item.player.totalPoints ?? null,
-				})
-
-				setTransfersIn((inData.topTransfersIn ?? []).map((i) => toTransfer(i, 'in')))
-				setTransfersOut(
-					(outData.topTransfersOut ?? []).map((i) => toTransfer(i, 'out')),
-				)
-			} catch (err) {
-				console.error('Failed to fetch transfers:', err)
-				setError('Failed to load transfers')
-				setTransfersIn([])
-				setTransfersOut([])
-			} finally {
-				setIsLoading(false)
-			}
-		}
-
-		void fetchData()
-	}, [currentEventId])
-
+function GameweekStatsCard({
+	transfersIn,
+	transfersOut,
+	isLoading = false,
+	error,
+}: {
+	transfersIn: Transfer[]
+	transfersOut: Transfer[]
+	isLoading?: boolean
+	error?: string | null
+}) {
 	return (
 		<Card className="rounded-none sm:rounded-lg p-4 sm:p-6 lg:p-8">
 			{error && (
@@ -91,11 +52,11 @@ export function GameweekStatsSection({ currentEventId }: GameweekStatsSectionPro
 			)}
 			{isLoading ? (
 				<div className="space-y-6">
-					{[0, 1].map((i) => (
+					{[0, 1].map(i => (
 						<div key={i}>
 							<Skeleton className="h-6 w-32 mb-4" />
 							<div className="space-y-2">
-								{[1, 2, 3, 4, 5].map((j) => (
+								{[1, 2, 3, 4, 5].map(j => (
 									<Skeleton
 										key={j}
 										className="h-14 w-full rounded-lg"
@@ -120,5 +81,64 @@ export function GameweekStatsSection({ currentEventId }: GameweekStatsSectionPro
 				</div>
 			)}
 		</Card>
+	)
+}
+
+const toTransfer = (item: TopTransfer, direction: 'in' | 'out'): Transfer => ({
+	position: item.player.position ?? 'UNK',
+	player: item.player.webName,
+	club: item.player.team?.shortName ?? item.player.team?.name ?? '',
+	transfers: direction === 'in' ? item.transfersInEvent : item.transfersOutEvent,
+	selectedByPercent: item.player.selectedByPercent ?? null,
+	points: item.player.totalPoints ?? null,
+})
+
+export async function GameweekStatsSection({ currentEventId }: GameweekStatsSectionProps) {
+	if (!currentEventId) {
+		return (
+			<GameweekStatsCard
+				transfersIn={[]}
+				transfersOut={[]}
+			/>
+		)
+	}
+
+	let transfersIn: Transfer[] = []
+	let transfersOut: Transfer[] = []
+	let error: string | null = null
+
+	try {
+		const [inData, outData] = await Promise.all([
+			executeQuery<TopTransfersResponse>(
+				GET_TOP_TRANSFERS_IN,
+				{
+					eventId: currentEventId,
+					limit: 5,
+				},
+				{ cache: 'force-cache', next: { revalidate: 300 } },
+			),
+			executeQuery<TopTransfersResponse>(
+				GET_TOP_TRANSFERS_OUT,
+				{
+					eventId: currentEventId,
+					limit: 5,
+				},
+				{ cache: 'force-cache', next: { revalidate: 300 } },
+			),
+		])
+
+		transfersIn = (inData.topTransfersIn ?? []).map(i => toTransfer(i, 'in'))
+		transfersOut = (outData.topTransfersOut ?? []).map(i => toTransfer(i, 'out'))
+	} catch (err) {
+		console.error('Failed to fetch transfers:', err)
+		error = 'Failed to load transfers'
+	}
+
+	return (
+		<GameweekStatsCard
+			transfersIn={transfersIn}
+			transfersOut={transfersOut}
+			error={error}
+		/>
 	)
 }

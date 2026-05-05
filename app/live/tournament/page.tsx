@@ -1,5 +1,14 @@
-import { getAuth } from '@/lib/auth'
-import { headers } from 'next/headers'
+import { getCurrentEntryId } from '@/lib/session'
+import { getCurrentAndNextEvents } from '@/lib/events'
+import { executeQuery } from '@/lib/graphql-client'
+import {
+	GET_ENTRY_TOURNAMENTS,
+	GET_TOURNAMENT_LIVE_POINTS,
+	type EntryTournamentsResponse,
+	type TournamentLiveCalcData,
+	type TournamentLivePointsResponse,
+} from '@/lib/graphql/queries'
+import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 import { Suspense } from 'react'
 import TournamentClient from './TournamentClient'
 
@@ -11,18 +20,58 @@ type PageProps = {
 }
 
 export default async function Page({ searchParams }: PageProps) {
-	void searchParams
-	let entryId = 0
-	try {
-		const session = await getAuth().api.getSession({ headers: await headers() })
-		entryId = session?.user?.fplEntryId ?? 0
-	} catch {
-		// unauthenticated — show empty state in client
+	const resolvedSearchParams = await searchParams
+	const [entryId, events] = await Promise.all([
+		getCurrentEntryId(),
+		getCurrentAndNextEvents(),
+	])
+	const currentEventId = events?.current[0]?.id ?? 1
+	let initialTournaments: ReturnType<typeof mapEntryTournamentToLiveTournament>[] = []
+	let initialSelectedTournamentId = ''
+	let initialCurrentRows: TournamentLiveCalcData[] = []
+
+	if (entryId) {
+		try {
+			const tournamentsData = await executeQuery<EntryTournamentsResponse>(
+				GET_ENTRY_TOURNAMENTS,
+				{ entryId },
+				{ cache: 'no-store' },
+			)
+			initialTournaments = tournamentsData.entryTournaments.map(
+				mapEntryTournamentToLiveTournament,
+			)
+			const requestedTournamentId =
+				typeof resolvedSearchParams.tournamentId === 'string'
+					? resolvedSearchParams.tournamentId
+					: ''
+			initialSelectedTournamentId =
+				initialTournaments.find(tournament => tournament.id === requestedTournamentId)?.id ??
+				initialTournaments[0]?.id ??
+				''
+
+			const tournamentId = Number(initialSelectedTournamentId)
+			if (tournamentId > 0) {
+				const currentResponse = await executeQuery<TournamentLivePointsResponse>(
+					GET_TOURNAMENT_LIVE_POINTS,
+					{ tournamentId, eventId: currentEventId },
+					{ cache: 'no-store' },
+				)
+				initialCurrentRows = currentResponse.calcLivePointsForTournament.results ?? []
+			}
+		} catch (err) {
+			console.error('Failed to seed live tournament page:', err)
+		}
 	}
 
 	return (
 		<Suspense fallback={<div>Loading...</div>}>
-			<TournamentClient entryId={entryId} />
+			<TournamentClient
+				entryId={entryId ?? 0}
+				initialTournaments={initialTournaments}
+				initialSelectedTournamentId={initialSelectedTournamentId}
+				initialEventId={currentEventId}
+				initialCurrentRows={initialCurrentRows}
+			/>
 		</Suspense>
 	)
 }

@@ -1151,7 +1151,7 @@ export interface EntryTransferHistoryResponse {
 // Query to fetch live matches
 export const GET_LIVE_MATCHES = `
   query GetLiveMatches {
-    liveMatches {
+    liveMatches(upcoming: true) {
       nextEvent {
         matchId
         minutes
@@ -1170,12 +1170,10 @@ export const GET_LIVE_MATCHES = `
         homeTeamId
         homeTeamName
         homeTeamShortName
-        homePosition
         homeScore
         awayTeamId
         awayTeamName
         awayTeamShortName
-        awayPosition
         awayScore
         kickoffTime
         playStatus
@@ -1186,19 +1184,11 @@ export const GET_LIVE_MATCHES = `
         homeTeamId
         homeTeamName
         homeTeamShortName
-        homePosition
         homeScore
         homeTeamDataList {
           element
-          code
           webName
-          price
           elementType
-          elementTypeName
-          teamId
-          teamCode
-          teamName
-          teamShortName
           minutes
           goalsScored
           assists
@@ -1214,29 +1204,15 @@ export const GET_LIVE_MATCHES = `
           bonus
           bps
           totalPoints
-          starts
-          expectedGoals
-          expectedAssists
-          expectedGoalInvolvements
-          expectedGoalsConceded
-          inDreamTeam
         }
         awayTeamId
         awayTeamName
         awayTeamShortName
-        awayPosition
         awayScore
         awayTeamDataList {
           element
-          code
           webName
-          price
           elementType
-          elementTypeName
-          teamId
-          teamCode
-          teamName
-          teamShortName
           minutes
           goalsScored
           assists
@@ -1252,12 +1228,6 @@ export const GET_LIVE_MATCHES = `
           bonus
           bps
           totalPoints
-          starts
-          expectedGoals
-          expectedAssists
-          expectedGoalInvolvements
-          expectedGoalsConceded
-          inDreamTeam
         }
         kickoffTime
         playStatus

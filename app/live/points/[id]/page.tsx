@@ -1,6 +1,15 @@
 import { Metadata } from 'next'
 import { Suspense } from 'react'
+import { getCurrentAndNextEvents } from '@/lib/events'
+import { executeQuery } from '@/lib/graphql-client'
+import {
+	GET_LIVE_POINTS,
+	type LiveCalcData,
+	type LiveCalcDataResponse
+} from '@/lib/graphql/queries'
 import TeamPointsClient from './TeamPointsClient'
+
+export const dynamic = 'force-dynamic'
 
 export async function generateMetadata({
 	params
@@ -21,6 +30,24 @@ type PageProps = {
 export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await params
 	const { tournamentId } = await searchParams
+	const entryId = Number(id)
+	const events = await getCurrentAndNextEvents()
+	const currentEventId = events?.current[0]?.id
+	let initialLiveData: LiveCalcData | undefined
+
+	if (Number.isInteger(entryId) && entryId > 0 && currentEventId !== undefined) {
+		try {
+			const liveResponse = await executeQuery<LiveCalcDataResponse>(
+				GET_LIVE_POINTS,
+				{ eventId: currentEventId, entryId },
+				{ cache: 'no-store' }
+			)
+			initialLiveData = liveResponse.calcLivePointsByEntry
+		} catch (err) {
+			console.error('Failed to seed live points page:', err)
+		}
+	}
+
 	return (
 		<Suspense
 			fallback={
@@ -32,8 +59,10 @@ export default async function Page({ params, searchParams }: PageProps) {
 			}
 		>
 			<TeamPointsClient
-				entryId={Number(id)}
+				entryId={entryId}
 				tournamentId={typeof tournamentId === 'string' ? tournamentId : undefined}
+				initialEventId={currentEventId}
+				initialLiveData={initialLiveData}
 			/>
 		</Suspense>
 	)

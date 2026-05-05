@@ -1,10 +1,11 @@
 import { Footer } from '@/components/layout/Footer'
 import { Navbar } from '@/components/layout/Navbar'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
-import { executeQuery } from '@/lib/graphql-client'
-import { GET_CURRENT_AND_NEXT_EVENTS, type EventsResponse } from '@/lib/graphql/queries'
+import { getCurrentAndNextEvents } from '@/lib/events'
 import { EventProvider } from '@/lib/event-context'
+import { getCurrentSeasonKey } from '@/lib/season'
 import type { Metadata } from 'next'
+import Script from 'next/script'
 import { Toaster } from 'sonner'
 import './globals.css'
 
@@ -17,26 +18,32 @@ export const metadata: Metadata = {
 	}
 }
 
+const themeBootstrapScript = `
+(() => {
+	try {
+		const storedTheme = window.localStorage.getItem('theme');
+		const theme = storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system'
+			? storedTheme
+			: 'system';
+		const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+		const resolvedTheme = theme === 'system' ? systemTheme : theme;
+		document.documentElement.classList.remove('light', 'dark');
+		document.documentElement.classList.add(resolvedTheme);
+		document.documentElement.style.colorScheme = resolvedTheme;
+	} catch {}
+})();
+`
+
 export default async function RootLayout({
 	children
 }: {
 	children: React.ReactNode
 }) {
-	let currentEventId: number | null = null
-	let nextEventId: number | null = null
-	let deadlineTime: string | null = null
-	try {
-		const data = await executeQuery<EventsResponse>(
-			GET_CURRENT_AND_NEXT_EVENTS,
-			undefined,
-			{ cache: 'force-cache', next: { revalidate: 300 } },
-		)
-		currentEventId = data.current[0]?.id ?? null
-		nextEventId = data.next[0]?.id ?? null
-		deadlineTime = data.next[0]?.deadlineTime ?? null
-	} catch (err) {
-		console.error('[layout] Failed to fetch current event:', err)
-	}
+	const data = await getCurrentAndNextEvents()
+	const currentEventId = data?.current[0]?.id ?? null
+	const nextEventId = data?.next[0]?.id ?? null
+	const deadlineTime = data?.next[0]?.deadlineTime ?? null
+	const seasonKey = getCurrentSeasonKey()
 
 	return (
 		<html
@@ -44,8 +51,12 @@ export default async function RootLayout({
 			suppressHydrationWarning
 		>
 			<body className="font-sans antialiased">
+				<Script
+					id="theme-bootstrap"
+					strategy="beforeInteractive"
+					dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
+				/>
 				<ThemeProvider
-					attribute="class"
 					defaultTheme="system"
 					enableSystem
 					disableTransitionOnChange
@@ -54,6 +65,8 @@ export default async function RootLayout({
 						currentEventId={currentEventId}
 						nextEventId={nextEventId}
 						deadlineTime={deadlineTime}
+						seasonKey={seasonKey}
+						entryId={null}
 					>
 						<Navbar />
 						{children}

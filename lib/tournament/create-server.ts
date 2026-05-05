@@ -1,8 +1,5 @@
 import 'server-only';
 
-import { existsSync, readFileSync } from 'fs';
-import path from 'path';
-
 export type LeagueType = 'classic' | 'h2h';
 
 export interface TournamentParticipant {
@@ -38,12 +35,6 @@ type RawStandingsResponse = {
 
 const FPL_HOSTNAME = 'fantasy.premierleague.com';
 const FPL_API_BASE_URL = 'https://fantasy.premierleague.com/api';
-const ENV_SEARCH_PATHS = [
-  path.join(process.cwd(), '.env.local'),
-  path.join(process.cwd(), '.env'),
-  path.join(process.cwd(), '..', 'letletme-graphql', '.env'),
-  path.join(process.cwd(), '..', 'letletme_data', '.env'),
-];
 
 const unwrapEnvValue = (value: string): string => {
   const trimmed = value.trim();
@@ -209,35 +200,7 @@ export const parseGameweek = (value?: string | null): number | null => {
 export const readEnvValue = (key: string): string | null => {
   const directValue = process.env[key];
   if (directValue && directValue.trim().length > 0) {
-    return directValue;
-  }
-
-  for (const filePath of ENV_SEARCH_PATHS) {
-    if (!existsSync(filePath)) {
-      continue;
-    }
-
-    const contents = readFileSync(filePath, 'utf8');
-    const lines = contents.split(/\r?\n/);
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) {
-        continue;
-      }
-
-      const separatorIndex = trimmed.indexOf('=');
-      if (separatorIndex === -1) {
-        continue;
-      }
-
-      const currentKey = trimmed.slice(0, separatorIndex).trim();
-      if (currentKey !== key) {
-        continue;
-      }
-
-      return unwrapEnvValue(trimmed.slice(separatorIndex + 1));
-    }
+    return unwrapEnvValue(directValue);
   }
 
   return null;

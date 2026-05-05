@@ -1,5 +1,4 @@
-import { getAuth } from '@/lib/auth'
-import { headers } from 'next/headers'
+import { getCurrentSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import TournamentListClient from './TournamentListClient'
@@ -7,7 +6,7 @@ import TournamentListClient from './TournamentListClient'
 export const dynamic = 'force-dynamic'
 
 export default async function Page() {
-	const session = await getAuth().api.getSession({ headers: await headers() })
+	const session = await getCurrentSession()
 
 	if (!session) {
 		redirect('/auth/login?next=/tournament/list')
