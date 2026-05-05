@@ -31,11 +31,18 @@ interface DeadlineSectionProps {
 export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionProps) {
 	const deadline = deadlineTime ? new Date(deadlineTime) : null
 	const [timeLeft, setTimeLeft] = useState<TimeLeft>({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+	const [formattedDeadline, setFormattedDeadline] = useState('')
 
 	useEffect(() => {
-		if (!deadline) return
+		if (!deadline) {
+			const resetTimer = window.setTimeout(() => setFormattedDeadline(''), 0)
+			return () => window.clearTimeout(resetTimer)
+		}
 		const updateTimeLeft = () => setTimeLeft(computeTimeLeft(deadline))
-		const initialTimer = window.setTimeout(updateTimeLeft, 0)
+		const initialTimer = window.setTimeout(() => {
+			setFormattedDeadline(`Deadline: ${format(deadline, 'EEE d MMM yyyy, HH:mm')}`)
+			updateTimeLeft()
+		}, 0)
 		const timer = setInterval(() => setTimeLeft(computeTimeLeft(deadline)), 1000)
 		return () => {
 			window.clearTimeout(initialTimer)
@@ -43,10 +50,6 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [deadlineTime]) // depend on the string prop so the timer restarts if deadline changes
-
-	const formattedDeadline = deadline
-		? `Deadline: ${format(deadline, 'EEE d MMM yyyy, HH:mm')}`
-		: ''
 
 	return (
 		<div className="py-12 mb-0">
