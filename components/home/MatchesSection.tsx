@@ -13,13 +13,13 @@ import {
 import { format } from 'date-fns'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Image from 'next/image'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const MAX_GAMEWEEK = 38
 
 interface MatchDay {
 	date: string
-	dateObj: Date
+	tabLabel: string
 	matches: {
 		homeTeam: string
 		homeTeamShort: string
@@ -31,6 +31,59 @@ interface MatchDay {
 		finished: boolean
 		started: boolean
 	}[]
+}
+
+const SHORT_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+const LONG_WEEKDAYS = [
+	'Sunday',
+	'Monday',
+	'Tuesday',
+	'Wednesday',
+	'Thursday',
+	'Friday',
+	'Saturday',
+] as const
+const LONG_MONTHS = [
+	'January',
+	'February',
+	'March',
+	'April',
+	'May',
+	'June',
+	'July',
+	'August',
+	'September',
+	'October',
+	'November',
+	'December',
+] as const
+
+function pad2(value: number): string {
+	return String(value).padStart(2, '0')
+}
+
+function getDateKey(date: Date, useLocalTime: boolean): string {
+	if (useLocalTime) return format(date, 'yyyy-MM-dd')
+	return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`
+}
+
+function formatFixtureDate(date: Date, useLocalTime: boolean): string {
+	if (useLocalTime) return format(date, 'EEEE dd MMMM yyyy')
+	return `${LONG_WEEKDAYS[date.getUTCDay()]} ${pad2(date.getUTCDate())} ${
+		LONG_MONTHS[date.getUTCMonth()]
+	} ${date.getUTCFullYear()}`
+}
+
+function formatFixtureTab(date: Date, useLocalTime: boolean): string {
+	if (useLocalTime) return format(date, 'EEE dd/MM')
+	return `${SHORT_WEEKDAYS[date.getUTCDay()]} ${pad2(date.getUTCDate())}/${pad2(
+		date.getUTCMonth() + 1,
+	)}`
+}
+
+function formatFixtureTime(date: Date, useLocalTime: boolean): string {
+	if (useLocalTime) return format(date, 'HH:mm')
+	return `${pad2(date.getUTCHours())}:${pad2(date.getUTCMinutes())}`
 }
 
 function MatchList({ matches }: { matches: MatchDay['matches'] }) {
@@ -95,10 +148,10 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 	)
 }
 
-function parseFixturesToMatchDays(fixtures: Fixture[]): MatchDay[] {
+function parseFixturesToMatchDays(fixtures: Fixture[], useLocalTime: boolean): MatchDay[] {
 	const byDate = new Map<string, Fixture[]>()
 	for (const fixture of fixtures) {
-		const dateKey = format(new Date(fixture.kickoffTime), 'yyyy-MM-dd')
+		const dateKey = getDateKey(new Date(fixture.kickoffTime), useLocalTime)
 		if (!byDate.has(dateKey)) byDate.set(dateKey, [])
 		byDate.get(dateKey)!.push(fixture)
 	}
@@ -112,14 +165,14 @@ function parseFixturesToMatchDays(fixtures: Fixture[]): MatchDay[] {
 			)
 			const firstKickoff = new Date(sorted[0].kickoffTime)
 			return {
-				date: format(firstKickoff, 'EEEE dd MMMM yyyy'),
-				dateObj: firstKickoff,
+				date: formatFixtureDate(firstKickoff, useLocalTime),
+				tabLabel: formatFixtureTab(firstKickoff, useLocalTime),
 				matches: sorted.map((f) => ({
 					homeTeam: f.homeTeam.name,
 					homeTeamShort: f.homeTeam.shortName,
 					awayTeam: f.awayTeam.name,
 					awayTeamShort: f.awayTeam.shortName,
-					time: format(new Date(f.kickoffTime), 'HH:mm'),
+					time: formatFixtureTime(new Date(f.kickoffTime), useLocalTime),
 					homeScore: f.finished ? (f.homeScore ?? null) : null,
 					awayScore: f.finished ? (f.awayScore ?? null) : null,
 					finished: f.finished,
@@ -138,39 +191,49 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 	// nextEventId acts as the lower navigation boundary (can't go below the current next GW)
 	const [nextEventId] = useState<number | null>(initialEventId)
 	const [selectedEventId, setSelectedEventId] = useState<number | null>(initialEventId)
+	const [useLocalTimezone, setUseLocalTimezone] = useState(false)
 	const [isLoadingFixtures, setIsLoadingFixtures] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 
-	// Pre-populate the fixture cache with server-fetched initial data
-	const cache = useRef<Map<number, MatchDay[]>>(
+	// Pre-populate the fixture cache with server-fetched initial data.
+	const cache = useRef<Map<number, Fixture[]>>(
 		initialEventId !== null && initialFixtures
-			? new Map([[initialEventId, parseFixturesToMatchDays(initialFixtures.eventFixtures)]])
+			? new Map([[initialEventId, initialFixtures.eventFixtures]])
 			: new Map(),
 	)
 
 	const [matchDays, setMatchDays] = useState<MatchDay[]>(() => {
 		if (!initialFixtures || initialEventId === null) return []
-		return parseFixturesToMatchDays(initialFixtures.eventFixtures)
+		return parseFixturesToMatchDays(initialFixtures.eventFixtures, false)
 	})
+
+	useEffect(() => {
+		const timer = window.setTimeout(() => {
+			setUseLocalTimezone(true)
+			if (selectedEventId !== null && cache.current.has(selectedEventId)) {
+				setMatchDays(parseFixturesToMatchDays(cache.current.get(selectedEventId)!, true))
+			}
+		}, 0)
+		return () => window.clearTimeout(timer)
+	}, [selectedEventId])
 
 	const fetchFixtures = useCallback(async (eventId: number) => {
 		if (cache.current.has(eventId)) {
-			setMatchDays(cache.current.get(eventId)!)
+			setMatchDays(parseFixturesToMatchDays(cache.current.get(eventId)!, useLocalTimezone))
 			return
 		}
 		setIsLoadingFixtures(true)
 		setError(null)
 		try {
 			const data = await executeQuery<EventFixturesResponse>(GET_EVENT_FIXTURES, { eventId })
-			const days = parseFixturesToMatchDays(data.eventFixtures)
-			cache.current.set(eventId, days)
-			setMatchDays(days)
+			cache.current.set(eventId, data.eventFixtures)
+			setMatchDays(parseFixturesToMatchDays(data.eventFixtures, useLocalTimezone))
 		} catch {
 			setError('Failed to load fixtures. Please try again.')
 		} finally {
 			setIsLoadingFixtures(false)
 		}
-	}, [])
+	}, [useLocalTimezone])
 
 	const handlePrev = () => {
 		if (selectedEventId === null || nextEventId === null) return
@@ -270,16 +333,16 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 					<TabsList
 						className="grid mb-4"
 						style={{ gridTemplateColumns: `repeat(${matchDays.length}, 1fr)` }}
-					>
-						{matchDays.map((matchDay) => (
-							<TabsTrigger
-								key={matchDay.date}
-								value={matchDay.date}
-								className="text-xs"
-							>
-								{format(matchDay.dateObj, 'EEE dd/MM')}
-							</TabsTrigger>
-						))}
+						>
+							{matchDays.map((matchDay) => (
+								<TabsTrigger
+									key={matchDay.date}
+									value={matchDay.date}
+									className="text-xs"
+								>
+									{matchDay.tabLabel}
+								</TabsTrigger>
+							))}
 					</TabsList>
 					{matchDays.map((matchDay) => (
 						<TabsContent
@@ -293,14 +356,14 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 			</div>
 
 			<div className="hidden md:block">
-				{matchDays.map((matchDay, dayIndex) => (
-					<div
-						key={matchDay.date}
-						className="max-w-4xl mx-auto"
-					>
-						<h3 className="text-xl font-semibold text-muted-foreground mb-6 mt-8 text-center">
-							{format(matchDay.dateObj, 'EEEE dd MMMM yyyy')}
-						</h3>
+					{matchDays.map((matchDay, dayIndex) => (
+						<div
+							key={matchDay.date}
+							className="max-w-4xl mx-auto"
+						>
+							<h3 className="text-xl font-semibold text-muted-foreground mb-6 mt-8 text-center">
+								{matchDay.date}
+							</h3>
 						<MatchList matches={matchDay.matches} />
 						{dayIndex < matchDays.length - 1 && <Separator className="mt-8" />}
 					</div>
