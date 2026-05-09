@@ -13,6 +13,7 @@ const getGraphQLEndpoint = () => {
 interface ExecuteQueryOptions {
   cache?: RequestCache
   next?: { revalidate?: number | false; tags?: string[] }
+  headers?: Record<string, string>
 }
 
 type GraphQLErrorLike = {
@@ -79,12 +80,13 @@ async function doFetch<T>(
   cache: RequestCache,
   next: ExecuteQueryOptions['next'],
   isClient: boolean,
+  extraHeaders?: Record<string, string>,
 ): Promise<T> {
   try {
     const fetchOptions: RequestInit & { next?: ExecuteQueryOptions['next'] } = {
       method: 'POST',
       cache,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...extraHeaders },
       body: JSON.stringify({ query, variables }),
     }
 
@@ -183,5 +185,5 @@ export async function executeQuery<T>(
     return promise
   }
 
-  return doFetch<T>(endpoint, query, variables, cache, options?.next, false)
+  return doFetch<T>(endpoint, query, variables, cache, options?.next, false, options?.headers)
 }
