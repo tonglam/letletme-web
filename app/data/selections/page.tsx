@@ -1,5 +1,5 @@
 import { getCurrentAndNextEvents } from '@/lib/events'
-import { executeQuery } from '@/lib/graphql-client'
+import { executeServerQuery } from '@/lib/graphql-server'
 import {
 	GET_ENTRY_TOURNAMENTS,
 	GET_TOURNAMENT_SELECTION_STATS,
@@ -32,7 +32,7 @@ export default async function SelectionsPage() {
 
 	if (entryId) {
 		try {
-			const tournamentsData = await executeQuery<EntryTournamentsResponse>(
+			const tournamentsData = await executeServerQuery<EntryTournamentsResponse>(
 				GET_ENTRY_TOURNAMENTS,
 				{ entryId },
 				{ cache: 'no-store' },
@@ -43,7 +43,7 @@ export default async function SelectionsPage() {
 
 			const firstTournamentId = Number(initialTournaments[0]?.id)
 			if (firstTournamentId > 0) {
-				const statsData = await executeQuery<TournamentSelectionStatsResponse>(
+				const statsData = await executeServerQuery<TournamentSelectionStatsResponse>(
 					GET_TOURNAMENT_SELECTION_STATS,
 					{ tournamentId: firstTournamentId, eventId: currentGameweek, limit: 10 },
 					{ cache: 'no-store' },

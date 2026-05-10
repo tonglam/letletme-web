@@ -1,5 +1,5 @@
 import { getCurrentAndNextEvents } from "@/lib/events";
-import { executeQuery } from "@/lib/graphql-client";
+import { executeServerQuery } from "@/lib/graphql-server";
 import {
   GET_ENTRY_TOURNAMENTS,
   GET_TOURNAMENT_EVENT_RESULTS,
@@ -25,7 +25,7 @@ async function fetchTournamentResults(
     return [];
   }
 
-  const response = await executeQuery<TournamentEventResultsResponse>(
+  const response = await executeServerQuery<TournamentEventResultsResponse>(
     GET_TOURNAMENT_EVENT_RESULTS,
     { tournamentId, eventId },
     { cache: "no-store" },
@@ -48,7 +48,7 @@ export default async function TournamentStatsPage({ searchParams }: PageProps) {
 
   if (entryId) {
     try {
-      const tournamentsData = await executeQuery<EntryTournamentsResponse>(
+      const tournamentsData = await executeServerQuery<EntryTournamentsResponse>(
         GET_ENTRY_TOURNAMENTS,
         { entryId },
         { cache: "no-store" },

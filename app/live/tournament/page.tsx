@@ -1,7 +1,6 @@
 import { getCurrentEntryId } from '@/lib/session'
 import { getCurrentAndNextEvents } from '@/lib/events'
-import { executeQuery } from '@/lib/graphql-client'
-import { getServerUserContextHeaders } from '@/lib/server-user-context'
+import { executeServerQuery } from '@/lib/graphql-server'
 import {
 	GET_ENTRY_TOURNAMENTS,
 	GET_TOURNAMENT_LIVE_POINTS,
@@ -33,11 +32,10 @@ export default async function Page({ searchParams }: PageProps) {
 
 	if (entryId) {
 		try {
-			const authHeaders = await getServerUserContextHeaders()
-			const tournamentsData = await executeQuery<EntryTournamentsResponse>(
+			const tournamentsData = await executeServerQuery<EntryTournamentsResponse>(
 				GET_ENTRY_TOURNAMENTS,
 				{ entryId },
-				{ cache: 'no-store', headers: authHeaders },
+				{ cache: 'no-store' },
 			)
 			initialTournaments = tournamentsData.entryTournaments.map(
 				mapEntryTournamentToLiveTournament,
@@ -53,10 +51,10 @@ export default async function Page({ searchParams }: PageProps) {
 
 			const tournamentId = Number(initialSelectedTournamentId)
 			if (tournamentId > 0) {
-				const currentResponse = await executeQuery<TournamentLivePointsResponse>(
+				const currentResponse = await executeServerQuery<TournamentLivePointsResponse>(
 					GET_TOURNAMENT_LIVE_POINTS,
 					{ tournamentId, eventId: currentEventId },
-					{ cache: 'no-store', headers: authHeaders },
+					{ cache: 'no-store' },
 				)
 				initialCurrentRows = currentResponse.calcLivePointsForTournament.results ?? []
 			}

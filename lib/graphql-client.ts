@@ -10,7 +10,7 @@ const getGraphQLEndpoint = () => {
   return `${window.location.origin}/api/graphql`
 }
 
-interface ExecuteQueryOptions {
+export interface ExecuteQueryOptions {
   cache?: RequestCache
   next?: { revalidate?: number | false; tags?: string[] }
   headers?: Record<string, string>
