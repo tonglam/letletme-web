@@ -9,7 +9,7 @@ import {
 	SelectValue
 } from '@/components/ui/select'
 import { PlayerOption, Position, Team } from '@/types/common'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 // Extended position type for filtering
 type FilterPosition = Position | 'ALL'
@@ -99,59 +99,55 @@ export function PlayerSelector({
 	)
 	const [selectedPlayer, setSelectedPlayer] = useState<string>('')
 
-	// Get unique teams based on selected position
-	const getTeams = (): Team[] => {
-		const teams = new Set<Team>()
-
+	const teams = (() => {
+		const teamSet = new Set<Team>()
 		if (includeAllOptions) {
-			teams.add('ALL')
+			teamSet.add('ALL')
 		}
-
 		mockPlayers.forEach(player => {
 			if (selectedPosition === 'ALL' || player.position === selectedPosition) {
-				teams.add(player.team)
+				teamSet.add(player.team)
 			}
 		})
+		return Array.from(teamSet).sort()
+	})()
 
-		return Array.from(teams).sort()
+	const effectiveTeam = teams.includes(selectedTeam)
+		? selectedTeam
+		: includeAllOptions
+			? 'ALL'
+			: (teams[0] ?? selectedTeam)
+
+	const filteredPlayers = mockPlayers
+		.filter(player => {
+			const positionMatch =
+				selectedPosition === 'ALL' || player.position === selectedPosition
+			const teamMatch = effectiveTeam === 'ALL' || player.team === effectiveTeam
+			return positionMatch && teamMatch
+		})
+		.sort((a, b) => a.name.localeCompare(b.name))
+
+	const effectiveSelectedPlayer = filteredPlayers.some(p => p.id === selectedPlayer)
+		? selectedPlayer
+		: ''
+
+	const handlePositionChange = (value: FilterPosition) => {
+		setSelectedPosition(value)
+		setSelectedPlayer('')
+		onPlayerChange(null)
 	}
 
-	// Get filtered players based on selected position and team
-	const getFilteredPlayers = (): PlayerOption[] => {
-		return mockPlayers
-			.filter(player => {
-				const positionMatch =
-					selectedPosition === 'ALL' || player.position === selectedPosition
-				const teamMatch = selectedTeam === 'ALL' || player.team === selectedTeam
-				return positionMatch && teamMatch
-			})
-			.sort((a, b) => a.name.localeCompare(b.name))
+	const handleTeamChange = (value: Team) => {
+		setSelectedTeam(value)
+		setSelectedPlayer('')
+		onPlayerChange(null)
 	}
 
-	// Reset selections when position/team changes
-	useEffect(() => {
-		const filteredPlayers = getFilteredPlayers()
-		if (
-			filteredPlayers.length > 0 &&
-			!filteredPlayers.some(p => p.id === selectedPlayer)
-		) {
-			setSelectedPlayer('')
-			onPlayerChange(null)
-		}
-	}, [selectedPosition, selectedTeam])
-
-	// Send selected player to parent component
-	useEffect(() => {
-		if (selectedPlayer) {
-			const player = mockPlayers.find(p => p.id === selectedPlayer) || null
-			onPlayerChange(player)
-		} else {
-			onPlayerChange(null)
-		}
-	}, [selectedPlayer, onPlayerChange])
-
-	const teams = getTeams()
-	const filteredPlayers = getFilteredPlayers()
+	const handlePlayerChange = (playerId: string) => {
+		setSelectedPlayer(playerId)
+		const player = mockPlayers.find(p => p.id === playerId) ?? null
+		onPlayerChange(player)
+	}
 
 	return (
 		<Card className={`p-4 ${className}`}>
@@ -160,9 +156,7 @@ export function PlayerSelector({
 					<p className="text-sm text-muted-foreground mb-2">Position</p>
 					<Select
 						value={selectedPosition}
-						onValueChange={value =>
-							setSelectedPosition(value as FilterPosition)
-						}
+						onValueChange={value => handlePositionChange(value as FilterPosition)}
 					>
 						<SelectTrigger>
 							<SelectValue placeholder="Select position" />
@@ -180,8 +174,8 @@ export function PlayerSelector({
 				<div>
 					<p className="text-sm text-muted-foreground mb-2">Team</p>
 					<Select
-						value={selectedTeam}
-						onValueChange={value => setSelectedTeam(value as Team)}
+						value={effectiveTeam}
+						onValueChange={value => handleTeamChange(value as Team)}
 					>
 						<SelectTrigger>
 							<SelectValue placeholder="Select" />
@@ -202,8 +196,8 @@ export function PlayerSelector({
 				<div>
 					<p className="text-sm text-muted-foreground mb-2">Player</p>
 					<Select
-						value={selectedPlayer}
-						onValueChange={setSelectedPlayer}
+						value={effectiveSelectedPlayer}
+						onValueChange={handlePlayerChange}
 					>
 						<SelectTrigger>
 							<SelectValue placeholder="Select" />

@@ -189,7 +189,7 @@ export default function TournamentListClient({ entryId }: { entryId: number }) {
 		return () => {
 			isCancelled = true
 		}
-	}, [])
+	}, [entryId])
 
 	// Filter tournaments based on search and filters
 	const filteredTournaments = useMemo(() => {

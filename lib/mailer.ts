@@ -15,6 +15,27 @@ function getResend() {
 
 const FROM = process.env.MAIL_FROM ?? 'no-reply@letletme.top'
 
+async function sendEmail(options: {
+	to: string
+	subject: string
+	html: string
+}): Promise<void> {
+	const { data, error } = await getResend().emails.send({
+		from: FROM,
+		to: options.to,
+		subject: options.subject,
+		html: options.html,
+	})
+
+	if (error) {
+		throw new Error(`Failed to send email: ${error.message}`)
+	}
+
+	if (!data?.id) {
+		throw new Error('Failed to send email: no message id returned')
+	}
+}
+
 export async function sendVerificationEmail({
 	to,
 	verifyUrl,
@@ -22,8 +43,7 @@ export async function sendVerificationEmail({
 	to: string
 	verifyUrl: string
 }) {
-	await getResend().emails.send({
-		from: FROM,
+	await sendEmail({
 		to,
 		subject: 'Verify your LetLetMe account',
 		html: `<p>Click the link below to verify your email address:</p>
@@ -39,8 +59,7 @@ export async function sendPasswordResetEmail({
 	to: string
 	resetUrl: string
 }) {
-	await getResend().emails.send({
-		from: FROM,
+	await sendEmail({
 		to,
 		subject: 'Reset your LetLetMe password',
 		html: `<p>Click the link below to reset your password:</p>
@@ -56,8 +75,7 @@ export async function sendMiniProgramEmailCode({
 	to: string
 	code: string
 }) {
-	await getResend().emails.send({
-		from: FROM,
+	await sendEmail({
 		to,
 		subject: 'Link your LetLetMe Mini Program',
 		html: `<p>Use this code to link your LetLetMe account in the WeChat Mini Program:</p>

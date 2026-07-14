@@ -1,17 +1,23 @@
 import 'server-only'
 
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-const secretKey = process.env.SUPABASE_SECRET_KEY
+let _supabaseAdmin: SupabaseClient | undefined
 
-if (!url) throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set')
-if (!secretKey) throw new Error('SUPABASE_SECRET_KEY is not set')
+function getSupabaseAdmin(): SupabaseClient {
+	if (_supabaseAdmin) return _supabaseAdmin
 
-// Secret-key client — server only, bypasses RLS for storage operations.
-export const supabaseAdmin = createClient(url, secretKey, {
-	auth: { persistSession: false },
-})
+	const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+	const secretKey = process.env.SUPABASE_SECRET_KEY
+
+	if (!url) throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set')
+	if (!secretKey) throw new Error('SUPABASE_SECRET_KEY is not set')
+
+	_supabaseAdmin = createClient(url, secretKey, {
+		auth: { persistSession: false },
+	})
+	return _supabaseAdmin
+}
 
 export const AVATAR_BUCKET = 'letletme'
 
@@ -20,6 +26,7 @@ export async function uploadAvatar(
 	file: Blob,
 	contentType: string,
 ): Promise<string> {
+	const supabaseAdmin = getSupabaseAdmin()
 	const path = `${userId}.jpg`
 
 	const { error } = await supabaseAdmin.storage

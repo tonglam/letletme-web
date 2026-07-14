@@ -29,6 +29,7 @@ export default async function Page({ searchParams }: PageProps) {
 	let initialTournaments: ReturnType<typeof mapEntryTournamentToLiveTournament>[] = []
 	let initialSelectedTournamentId = ''
 	let initialCurrentRows: TournamentLiveCalcData[] = []
+	let initialPreviousRows: TournamentLiveCalcData[] = []
 
 	if (entryId) {
 		try {
@@ -51,12 +52,24 @@ export default async function Page({ searchParams }: PageProps) {
 
 			const tournamentId = Number(initialSelectedTournamentId)
 			if (tournamentId > 0) {
-				const currentResponse = await executeServerQuery<TournamentLivePointsResponse>(
-					GET_TOURNAMENT_LIVE_POINTS,
-					{ tournamentId, eventId: currentEventId },
-					{ cache: 'no-store' },
-				)
+				const previousEventId = currentEventId > 1 ? currentEventId - 1 : null
+				const [currentResponse, previousResponse] = await Promise.all([
+					executeServerQuery<TournamentLivePointsResponse>(
+						GET_TOURNAMENT_LIVE_POINTS,
+						{ tournamentId, eventId: currentEventId },
+						{ cache: 'no-store' },
+					),
+					previousEventId
+						? executeServerQuery<TournamentLivePointsResponse>(
+								GET_TOURNAMENT_LIVE_POINTS,
+								{ tournamentId, eventId: previousEventId },
+								{ cache: 'no-store' },
+							).catch(() => null)
+						: Promise.resolve(null),
+				])
 				initialCurrentRows = currentResponse.calcLivePointsForTournament.results ?? []
+				initialPreviousRows =
+					previousResponse?.calcLivePointsForTournament.results ?? []
 			}
 		} catch (err) {
 			console.error('Failed to seed live tournament page:', err)
@@ -71,6 +84,7 @@ export default async function Page({ searchParams }: PageProps) {
 				initialSelectedTournamentId={initialSelectedTournamentId}
 				initialEventId={currentEventId}
 				initialCurrentRows={initialCurrentRows}
+				initialPreviousRows={initialPreviousRows}
 			/>
 		</Suspense>
 	)

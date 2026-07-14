@@ -269,12 +269,21 @@ export default function PlayerStatsPage() {
 	const [isLoading2, setIsLoading2] = useState(false)
 	const [error2, setError2] = useState<string | null>(null)
 
-	const isComparing = playerDetail !== null && playerDetail2 !== null
-
+	// Load recent players after hydration: reading localStorage during the
+	// initial render would make client HTML diverge from the prerendered HTML.
 	useEffect(() => {
-		setRecentPlayers(loadRecentPlayers(RECENT_PLAYERS_KEY_1))
-		setRecentPlayers2(loadRecentPlayers(RECENT_PLAYERS_KEY_2))
+		let cancelled = false
+		queueMicrotask(() => {
+			if (cancelled) return
+			setRecentPlayers(loadRecentPlayers(RECENT_PLAYERS_KEY_1))
+			setRecentPlayers2(loadRecentPlayers(RECENT_PLAYERS_KEY_2))
+		})
+		return () => {
+			cancelled = true
+		}
 	}, [])
+
+	const isComparing = playerDetail !== null && playerDetail2 !== null
 
 
 	const fetchPlayerDetail = useCallback(async (playerId: number, eventId: number) => {
@@ -325,12 +334,26 @@ export default function PlayerStatsPage() {
 
 	useEffect(() => {
 		if (!selectedPlayer || !currentGameweek) return
-		void fetchPlayerDetail(Number(selectedPlayer.id), currentGameweek)
+		let cancelled = false
+		void Promise.resolve().then(async () => {
+			if (cancelled) return
+			await fetchPlayerDetail(Number(selectedPlayer.id), currentGameweek)
+		})
+		return () => {
+			cancelled = true
+		}
 	}, [selectedPlayer, currentGameweek, fetchPlayerDetail])
 
 	useEffect(() => {
 		if (!selectedPlayer2 || !currentGameweek) return
-		void fetchPlayerDetail2(Number(selectedPlayer2.id), currentGameweek)
+		let cancelled = false
+		void Promise.resolve().then(async () => {
+			if (cancelled) return
+			await fetchPlayerDetail2(Number(selectedPlayer2.id), currentGameweek)
+		})
+		return () => {
+			cancelled = true
+		}
 	}, [selectedPlayer2, currentGameweek, fetchPlayerDetail2])
 
 	const priceDiff = playerDetail ? formatPriceDiff(playerDetail.price, playerDetail.startPrice) : null

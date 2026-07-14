@@ -164,6 +164,11 @@ async function doFetch<T>(
 // Tracks in-flight client-side requests to deduplicate simultaneous identical calls
 const pendingClientRequests = new Map<string, Promise<unknown>>()
 
+/** Clear in-flight GraphQL dedup cache (call on login/logout/rebind). */
+export function clearPendingClientQueries(): void {
+  pendingClientRequests.clear()
+}
+
 export async function executeQuery<T>(
   query: string,
   variables?: Record<string, unknown>,

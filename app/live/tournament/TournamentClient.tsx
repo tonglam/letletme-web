@@ -19,94 +19,32 @@ import {
 } from '@/lib/graphql/queries'
 import { useEvent } from '@/lib/event-context'
 import {
+	buildTournamentEntries,
+	buildTournamentStats,
+	type LiveTournamentStats,
+} from '@/lib/tournament/liveEntries'
+import {
 	mapEntryTournamentToLiveTournament
 } from '@/lib/tournament/liveTournament'
 import { TournamentEntry } from '@/types/tournament'
 import { Tournament } from '@/types/tournament'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-type LiveTournamentStats = {
-	averagePoints: number
-	highestPoints: number
-	totalEntries: number
-}
-
-const mapEventChipToFlags = (eventChip: string | null) => ({
-	bench: eventChip === 'BENCH_BOOST',
-	triple: eventChip === 'TRIPLE_CAPTAIN',
-	wildcard: eventChip === 'WILDCARD'
-})
-
-const buildRankMap = (rows: TournamentLiveCalcData[]): Map<number, number> => {
-	const sorted = [...rows].sort((a, b) => {
-		if (b.liveNetPoints !== a.liveNetPoints) {
-			return b.liveNetPoints - a.liveNetPoints
-		}
-		if (b.liveTotalPoints !== a.liveTotalPoints) {
-			return b.liveTotalPoints - a.liveTotalPoints
-		}
-		return a.entry - b.entry
-	})
-
-	return new Map(sorted.map((row, index) => [row.entry, index + 1]))
-}
-
-const buildTournamentEntries = (
-	currentRows: TournamentLiveCalcData[],
-): TournamentEntry[] => {
-	const currentRankByEntryId = buildRankMap(currentRows)
-
-	return currentRows.map(row => ({
-		id: String(row.entry),
-		rank: currentRankByEntryId.get(row.entry) ?? 0,
-		previousRank: currentRankByEntryId.get(row.entry) ?? 0,
-		teamName: row.entryName ?? `Entry ${row.entry}`,
-		managerName: row.playerName ?? '-',
-		captainName: row.pickList.find(player => player.isCaptain)?.webName ?? row.captainName ?? 'N/A',
-		captainTeam: row.pickList.find(player => player.isCaptain)?.teamShortName ?? 'N/A',
-		captainPoints: 0,
-		gwPoints: row.livePoints ?? 0,
-		gwNetPoints: row.liveNetPoints ?? row.livePoints ?? 0,
-		eventCost: row.transferCost ?? 0,
-		overallRank: row.overallRank ?? 0,
-		livePoints: row.liveNetPoints ?? row.livePoints ?? 0,
-		totalPoints: row.liveTotalPoints ?? 0,
-		playersPlayed: row.played ?? 0,
-		playersToPlay: row.toPlay ?? 0,
-		picks: row.pickList.map(player => ({
-			element: player.element,
-			webName: player.webName,
-			teamShortName: player.teamShortName,
-			teamName: player.teamName,
-			elementTypeName: player.elementTypeName,
-			position: player.position,
-			isCaptain: player.isCaptain,
-			isViceCaptain: player.isViceCaptain
-		})),
-		chips: mapEventChipToFlags(row.chip)
-	}))
-}
-
-const buildTournamentStats = (entries: TournamentEntry[]): LiveTournamentStats => {
-	if (entries.length === 0) {
-		return {
-			averagePoints: 0,
-			highestPoints: 0,
-			totalEntries: 0
-		}
-	}
-
-	const totalPoints = entries.reduce((sum, entry) => sum + entry.livePoints, 0)
-	const highestPoints = entries.reduce(
-		(max, entry) => Math.max(max, entry.livePoints),
-		entries[0]?.livePoints ?? 0
+const fetchLivePoints = async (
+	tournamentId: number,
+	eventId: number,
+): Promise<{ rows: TournamentLiveCalcData[]; failedCount: number; totalEntries: number }> => {
+	const response = await executeQuery<TournamentLivePointsResponse>(
+		GET_TOURNAMENT_LIVE_POINTS,
+		{ tournamentId, eventId },
 	)
-
+	const batch = response.calcLivePointsForTournament
 	return {
-		averagePoints: Math.round(totalPoints / entries.length),
-		highestPoints,
-		totalEntries: entries.length
+		rows: batch.results ?? [],
+		failedCount: batch.meta.failedCount,
+		totalEntries: batch.meta.totalEntries,
 	}
 }
 
@@ -116,6 +54,7 @@ interface TournamentClientProps {
 	initialSelectedTournamentId?: string
 	initialEventId?: number
 	initialCurrentRows?: TournamentLiveCalcData[]
+	initialPreviousRows?: TournamentLiveCalcData[]
 }
 
 export default function TournamentClient({
@@ -124,6 +63,7 @@ export default function TournamentClient({
 	initialSelectedTournamentId = '',
 	initialEventId,
 	initialCurrentRows = [],
+	initialPreviousRows = [],
 }: TournamentClientProps) {
 	const router = useRouter()
 	const searchParams = useSearchParams()
@@ -135,12 +75,14 @@ export default function TournamentClient({
 	const [tournaments, setTournaments] = useState<Tournament[]>(initialTournaments)
 	const [loadError, setLoadError] = useState<string | null>(null)
 	const [resultsError, setResultsError] = useState<string | null>(null)
-	const [isLoadingTournaments, setIsLoadingTournaments] = useState<boolean>(initialTournaments.length === 0)
+	const [isLoadingTournaments, setIsLoadingTournaments] = useState<boolean>(
+		entryId > 0 && initialTournaments.length === 0,
+	)
 	const [isLoadingResults, setIsLoadingResults] = useState<boolean>(false)
 	const [currentGameweek] = useState<number | undefined>(currentEventId ?? initialEventId ?? undefined)
 	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(initialEventId ?? currentEventId ?? undefined)
 	const initialEntries = initialCurrentRows.length > 0
-		? buildTournamentEntries(initialCurrentRows)
+		? buildTournamentEntries(initialCurrentRows, initialPreviousRows)
 		: []
 	const [selectedEntries, setSelectedEntries] = useState<TournamentEntry[]>(initialEntries)
 	const [ownershipMatchedEntryIds, setOwnershipMatchedEntryIds] = useState<string[] | null>(null)
@@ -163,6 +105,9 @@ export default function TournamentClient({
 
 	useEffect(() => {
 		let isCancelled = false
+		if (entryId <= 0) {
+			return
+		}
 		if (initialTournaments.length > 0) {
 			return
 		}
@@ -235,28 +180,34 @@ export default function TournamentClient({
 				setResultsError(null)
 
 				const tournamentId = Number(selectedTournament.id)
-				const currentResponse = await executeQuery<TournamentLivePointsResponse>(
-					GET_TOURNAMENT_LIVE_POINTS,
-					{
-						tournamentId,
-						eventId: selectedGameweek
-					}
-				)
+				const previousEventId = selectedGameweek > 1 ? selectedGameweek - 1 : null
+
+				const [currentBatch, previousBatch] = await Promise.all([
+					fetchLivePoints(tournamentId, selectedGameweek),
+					previousEventId
+						? fetchLivePoints(tournamentId, previousEventId).catch(() => ({
+								rows: [] as TournamentLiveCalcData[],
+								failedCount: 0,
+								totalEntries: 0,
+							}))
+						: Promise.resolve({
+								rows: [] as TournamentLiveCalcData[],
+								failedCount: 0,
+								totalEntries: 0,
+							}),
+				])
 
 				if (isCancelled) {
 					return
 				}
 
-				const currentBatch = currentResponse.calcLivePointsForTournament
-				if (currentBatch.meta.failedCount > 0) {
+				if (currentBatch.failedCount > 0) {
 					setResultsError(
-						`Partial results: ${currentBatch.meta.failedCount}/${currentBatch.meta.totalEntries} entries failed to calculate.`
+						`Partial results: ${currentBatch.failedCount}/${currentBatch.totalEntries} entries failed to calculate.`
 					)
 				}
 
-				const entries = buildTournamentEntries(
-					currentBatch.results ?? []
-				)
+				const entries = buildTournamentEntries(currentBatch.rows, previousBatch.rows)
 
 				setSelectedEntries(entries)
 				setSelectedStats(buildTournamentStats(entries))
@@ -356,6 +307,21 @@ export default function TournamentClient({
 			return matchesSearch && matchesChip && matchesCaptain && matchesOwnership && matchesTeamExposure
 		})
 	}, [captainFilter, chipFilter, ownershipMatchedEntrySet, teamExposureMatchedEntrySet, searchQuery, selectedEntries])
+
+	if (entryId <= 0) {
+		return (
+			<RootLayout>
+				<div className="container max-w-4xl mx-auto px-4 py-8">
+					<Card className="p-6 text-sm text-muted-foreground">
+						Sign in and bind an FPL entry to view live tournament standings.{' '}
+						<Link href="/auth/login?next=/live/tournament" className="text-primary underline">
+							Sign in
+						</Link>
+					</Card>
+				</div>
+			</RootLayout>
+		)
+	}
 
 	return (
 		<RootLayout>

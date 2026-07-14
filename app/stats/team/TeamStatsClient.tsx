@@ -268,12 +268,15 @@ const fetchTransferHistorySafely = async (entryId: number): Promise<EntryGamewee
   }
 };
 
-const entryEventCache = new Map<number, EntryEventResult | null>();
-const entryEventInFlightCache = new Map<number, Promise<EntryEventResult | null>>();
+const entryEventCache = new Map<string, EntryEventResult | null>();
+const entryEventInFlightCache = new Map<string, Promise<EntryEventResult | null>>();
 const entryHistoryCache = new Map<number, EntryHistoryResponse["entryHistory"]>();
 const entryHistoryInFlight = new Map<number, Promise<EntryHistoryResponse["entryHistory"]>>();
 const transferHistoryCache = new Map<number, EntryGameweekTransfers[]>();
 const transferHistoryInFlight = new Map<number, Promise<EntryGameweekTransfers[]>>();
+
+const entryEventCacheKey = (entryId: number, eventId: number): string =>
+  `${entryId}:${eventId}`;
 
 const getEntryHistoryCached = async (entryId: number): Promise<EntryHistoryResponse["entryHistory"]> => {
   if (entryHistoryCache.has(entryId)) return entryHistoryCache.get(entryId)!;
@@ -287,17 +290,18 @@ const getEntryHistoryCached = async (entryId: number): Promise<EntryHistoryRespo
 };
 
 const getEntryEventResultCached = async (entryId: number, eventId: number): Promise<EntryEventResult | null> => {
-  if (entryEventCache.has(eventId)) return entryEventCache.get(eventId) ?? null;
-  const cachedInFlight = entryEventInFlightCache.get(eventId);
+  const cacheKey = entryEventCacheKey(entryId, eventId);
+  if (entryEventCache.has(cacheKey)) return entryEventCache.get(cacheKey) ?? null;
+  const cachedInFlight = entryEventInFlightCache.get(cacheKey);
   if (cachedInFlight) return cachedInFlight;
   const request = executeQuery<EntryEventResultResponse>(GET_ENTRY_EVENT_RESULT, { eventId, entryId }, { cache: "force-cache" })
     .then((response) => {
       const result = response.entryEventResult ?? null;
-      entryEventCache.set(eventId, result);
+      entryEventCache.set(cacheKey, result);
       return result;
     })
-    .finally(() => { entryEventInFlightCache.delete(eventId); });
-  entryEventInFlightCache.set(eventId, request);
+    .finally(() => { entryEventInFlightCache.delete(cacheKey); });
+  entryEventInFlightCache.set(cacheKey, request);
   return request;
 };
 

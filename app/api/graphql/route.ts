@@ -5,34 +5,54 @@ import { NextRequest, NextResponse } from 'next/server'
 const GRAPHQL_ENDPOINT =
 	process.env.GRAPHQL_ENDPOINT || 'http://localhost:4000/graphql'
 
-// Queries that carry user-specific entry data and therefore require a session.
-const USER_CONTEXT_PATTERNS = [
-	'entryHistory(',
-	'entryTransferHistory(',
-	'entryTournaments(',
-	'tournamentLivePoints(',
-	'tournamentEntryRankingSummary(',
-]
-
-function requiresUserContext(query: unknown): boolean {
-	if (typeof query !== 'string') return false
-	return USER_CONTEXT_PATTERNS.some(p => query.includes(p))
+type QueryPolicy = {
+	pattern: string
+	requiresAuth: boolean
+	cacheable: boolean
 }
 
-function isCacheableQuery(query: unknown): boolean {
-	if (typeof query !== 'string') return false
-	return (
-		query.includes('eventOverallResult') ||
-		query.includes('GetEventStatsById') ||
-		query.includes('event(id:') ||
-		query.includes('GetEntryHistory') ||
-		query.includes('entryHistory(') ||
-		query.includes('GetEntryTransferHistory') ||
-		query.includes('entryTransferHistory(') ||
-		query.includes('GetCurrentAndNextEvents') ||
-		query.includes('GetEventFixtures') ||
-		query.includes('GetPlayerValues')
-	)
+/**
+ * Single source of truth for GraphQL proxy behavior.
+ * A query must never be both requiresAuth and cacheable — public CDN caches
+ * cannot safely store session-scoped responses.
+ */
+const QUERY_POLICIES: QueryPolicy[] = [
+	// Session-gated (never cacheable)
+	{ pattern: 'entryHistory(', requiresAuth: true, cacheable: false },
+	{ pattern: 'entryTransferHistory(', requiresAuth: true, cacheable: false },
+	{ pattern: 'entryTournaments(', requiresAuth: true, cacheable: false },
+	{ pattern: 'calcLivePointsForTournament(', requiresAuth: true, cacheable: false },
+	{ pattern: 'tournamentEntryRankingSummary(', requiresAuth: true, cacheable: false },
+	{ pattern: 'GetEntryHistory', requiresAuth: true, cacheable: false },
+	{ pattern: 'GetEntryTransferHistory', requiresAuth: true, cacheable: false },
+
+	// Public and safe to cache briefly
+	{ pattern: 'eventOverallResult', requiresAuth: false, cacheable: true },
+	{ pattern: 'GetEventStatsById', requiresAuth: false, cacheable: true },
+	{ pattern: 'event(id:', requiresAuth: false, cacheable: true },
+	{ pattern: 'GetCurrentAndNextEvents', requiresAuth: false, cacheable: true },
+	{ pattern: 'GetEventFixtures', requiresAuth: false, cacheable: true },
+	{ pattern: 'GetPlayerValues', requiresAuth: false, cacheable: true },
+]
+
+function resolveQueryPolicy(query: unknown): { requiresAuth: boolean; cacheable: boolean } {
+	if (typeof query !== 'string') {
+		return { requiresAuth: false, cacheable: false }
+	}
+
+	let requiresAuth = false
+	let cacheable = false
+
+	for (const policy of QUERY_POLICIES) {
+		if (!query.includes(policy.pattern)) continue
+		if (policy.requiresAuth) requiresAuth = true
+		if (policy.cacheable) cacheable = true
+	}
+
+	// Auth-gated responses must never be publicly cached.
+	if (requiresAuth) cacheable = false
+
+	return { requiresAuth, cacheable }
 }
 
 export async function POST(request: NextRequest) {
@@ -50,7 +70,10 @@ export async function POST(request: NextRequest) {
 		return NextResponse.json({ errors: [{ message: 'Invalid JSON' }] }, { status: 400 })
 	}
 
-	if (requiresUserContext((body as Record<string, unknown>)?.query) && !session) {
+	const query = (body as Record<string, unknown>)?.query
+	const { requiresAuth, cacheable } = resolveQueryPolicy(query)
+
+	if (requiresAuth && !session) {
 		return NextResponse.json(
 			{ errors: [{ message: 'Unauthenticated' }] },
 			{ status: 401 },
@@ -103,7 +126,6 @@ export async function POST(request: NextRequest) {
 			{ status: 502 },
 		)
 	}
-	const cacheable = isCacheableQuery((body as Record<string, unknown>)?.query)
 
 	return NextResponse.json(data, {
 		headers: {

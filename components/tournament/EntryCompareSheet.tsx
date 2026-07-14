@@ -157,10 +157,11 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 		if (!open) return
 
 		let cancelled = false
-		setIsLoading(true)
-		setLiveData([null, null])
+		void Promise.resolve().then(async () => {
+			if (cancelled) return
+			setIsLoading(true)
+			setLiveData([null, null])
 
-		const fetchBoth = async () => {
 			const [resA, resB] = await Promise.allSettled([
 				executeQuery<LiveCalcDataResponse>(GET_LIVE_POINTS, {
 					entryId: Number(entries[0].id),
@@ -178,9 +179,8 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 			const b = resB.status === 'fulfilled' ? resB.value.calcLivePointsByEntry : null
 			setLiveData([a, b])
 			setIsLoading(false)
-		}
+		})
 
-		void fetchBoth()
 		return () => { cancelled = true }
 	}, [open, entries, gameweek])
 

@@ -5,7 +5,14 @@ import { getCurrentSession } from '@/lib/session'
 
 export async function getServerUserContextHeaders(): Promise<Record<string, string>> {
 	const secret = process.env.BACKEND_PROXY_SECRET
-	if (!secret) return {}
+	if (!secret) {
+		if (process.env.NODE_ENV === 'production') {
+			throw new Error(
+				'BACKEND_PROXY_SECRET is required in production for authenticated GraphQL requests',
+			)
+		}
+		return {}
+	}
 
 	const session = await getCurrentSession()
 	if (!session?.user) return {}

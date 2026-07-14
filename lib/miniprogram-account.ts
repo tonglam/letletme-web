@@ -10,6 +10,7 @@ import {
 	assertValidWeChatLoginCode,
 	assertValidDeviceId,
 	hashMiniProgramSecret,
+	hashesEqual,
 	isExpired,
 	normalizeEmail,
 	normalizeOptionalWeChatUnionId,
@@ -215,7 +216,7 @@ export async function confirmMiniProgramEmailBinding(input: {
 		throw new MiniProgramAuthError('Code is invalid or expired', 400)
 	}
 
-	if (pending.codeHash !== hashMiniProgramSecret(code)) {
+	if (!hashesEqual(pending.codeHash, hashMiniProgramSecret(code))) {
 		await db
 			.update(schema.miniProgramEmailCode)
 			.set({ attempts: pending.attempts + 1 })

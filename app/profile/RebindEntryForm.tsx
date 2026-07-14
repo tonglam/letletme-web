@@ -27,12 +27,12 @@ export default function RebindEntryForm({
 
 		if (state?.success) {
 			toast.success(state.success)
-			setEditing(false)
+			queueMicrotask(() => setEditing(false))
 			router.refresh()
 		} else if (state?.error) {
 			toast.error(state.error)
 		}
-	}, [state])
+	}, [state, router])
 
 	if (!editing) {
 		return (

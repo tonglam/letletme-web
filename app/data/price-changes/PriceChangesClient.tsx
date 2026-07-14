@@ -266,6 +266,7 @@ export default function PriceChangesClient({ initialPlayerValues }: PriceChanges
 
 	const filteredPlayerOptions = useMemo(() => {
 		const searchLower = playerSearchTerm.trim().toLowerCase()
+		const effectiveTeamFilter = availableTeams.includes(teamFilter) ? teamFilter : 'ALL'
 		if (searchLower.length > 0) {
 			return allPlayers
 				.filter(player => player.name.toLowerCase().includes(searchLower))
@@ -274,11 +275,11 @@ export default function PriceChangesClient({ initialPlayerValues }: PriceChanges
 		return allPlayers
 			.filter(player => {
 				const matchesPosition = positionFilter === 'ALL' || player.position === positionFilter
-				const matchesTeam = teamFilter === 'ALL' || player.teamShortName === teamFilter
+				const matchesTeam = effectiveTeamFilter === 'ALL' || player.teamShortName === effectiveTeamFilter
 				return matchesPosition && matchesTeam
 			})
 			.sort((a, b) => a.name.localeCompare(b.name))
-	}, [allPlayers, positionFilter, teamFilter, playerSearchTerm])
+	}, [allPlayers, availableTeams, positionFilter, teamFilter, playerSearchTerm])
 
 	const shouldUseDefaultLimit = positionFilter === 'ALL' && playerSearchTerm.trim().length === 0
 
@@ -289,6 +290,7 @@ export default function PriceChangesClient({ initialPlayerValues }: PriceChanges
 
 	const hasMoreFilteredPlayers = shouldUseDefaultLimit && filteredPlayerOptions.length > DEFAULT_VISIBLE_PLAYER_RESULTS
 	const playerDirectoryTotal = hasLoadedPlayers ? allPlayers.length : 0
+	const selectTeamValue = availableTeams.includes(teamFilter) ? teamFilter : 'ALL'
 
 	const selectedPlayerOutsideFilters = useMemo(
 		() => Boolean(selectedPlayerId && selectedPlayer && !filteredPlayerOptions.some(player => player.id === selectedPlayerId)),
@@ -296,37 +298,43 @@ export default function PriceChangesClient({ initialPlayerValues }: PriceChanges
 	)
 
 	useEffect(() => {
-		if (!availableTeams.includes(teamFilter)) setTeamFilter('ALL')
-	}, [availableTeams, teamFilter])
-
-	useEffect(() => {
 		if (!selectedPlayerId) {
-			setPlayerHistoryRows([])
-			setIsHistoryLoading(false)
-			setHistoryError(null)
-			return
+			const resetTimer = window.setTimeout(() => {
+				setPlayerHistoryRows([])
+				setIsHistoryLoading(false)
+				setHistoryError(null)
+			}, 0)
+			return () => window.clearTimeout(resetTimer)
 		}
-		const fetchHistory = async () => {
+		let cancelled = false
+		void Promise.resolve().then(async () => {
+			if (cancelled) return
 			try {
 				setIsHistoryLoading(true)
 				setHistoryError(null)
 				const data = await executeQuery<PlayerValueHistoryResponse>(GET_PLAYER_VALUE_HISTORY, {
 					playerId: Number(selectedPlayerId),
 				})
+				if (cancelled) return
 				const mappedRows = data.playerValueHistory
 					.slice(0, 30)
 					.map(toPriceHistoryRow)
 					.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 				setPlayerHistoryRows(mappedRows)
 			} catch (fetchHistoryError) {
+				if (cancelled) return
 				console.error('Failed to fetch player value history:', fetchHistoryError)
 				setHistoryError('Failed to load player price history from GraphQL.')
 				setPlayerHistoryRows([])
 			} finally {
-				setIsHistoryLoading(false)
+				if (!cancelled) {
+					setIsHistoryLoading(false)
+				}
 			}
+		})
+		return () => {
+			cancelled = true
 		}
-		void fetchHistory()
 	}, [selectedPlayerId])
 
 	const hasTransferData = useMemo(
@@ -351,7 +359,7 @@ export default function PriceChangesClient({ initialPlayerValues }: PriceChanges
 					<Card className="p-3 sm:p-4">
 						<p className="text-sm text-muted-foreground mb-2">Select Player</p>
 						<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-							<Select value={teamFilter} onValueChange={value => setTeamFilter(value)}>
+							<Select value={selectTeamValue} onValueChange={value => setTeamFilter(value)}>
 								<SelectTrigger>
 									<SelectValue placeholder="Filter by team" />
 								</SelectTrigger>

@@ -164,7 +164,6 @@ export default function CreateTournament() {
   const endGameweek = watch("endGameweek");
   const groupNum = watch("groupNum");
   const qualifiersPerGroup = watch("qualifiersPerGroup");
-  const adminIdValue = watch("adminId");
   const creatorValue = watch("creator");
   
   // Mock data for the participants table
@@ -708,15 +707,10 @@ export default function CreateTournament() {
                 <div className="flex items-center gap-2">
                   <Label htmlFor="admin-id">Admin ID <span className="text-red-500">*</span></Label>
                 </div>
-                <Input 
+                <Input
                   id="admin-id"
                   {...register("adminId")}
-                  placeholder="15702"
-                  onFocus={() => {
-                    if (!adminIdValue?.trim()) {
-                      setValue("adminId", "15702", { shouldValidate: true });
-                    }
-                  }}
+                  placeholder="FPL Entry ID"
                 />
                 {errors.adminId && (
                   <p className="text-sm text-red-500">{errors.adminId.message}</p>

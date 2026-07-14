@@ -1,7 +1,6 @@
-import { generateStaticParams } from './staticParams'
 import TournamentDetailClient from './TournamentDetailClient'
 
-export { generateStaticParams }
+export const dynamic = 'force-dynamic'
 
 type PageProps = {
 	params: Promise<{ id: string }>

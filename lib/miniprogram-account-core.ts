@@ -1,4 +1,4 @@
-import { createHash } from 'crypto'
+import { createHash, timingSafeEqual } from 'crypto'
 
 export class MiniProgramAuthError extends Error {
 	status: number
@@ -85,6 +85,15 @@ export function normalizeOptionalWeChatUnionId(value: unknown): string | null {
 
 export function hashMiniProgramSecret(value: string): string {
 	return createHash('sha256').update(value).digest('hex')
+}
+
+export function hashesEqual(left: string, right: string): boolean {
+	const leftBuf = Buffer.from(left)
+	const rightBuf = Buffer.from(right)
+	if (leftBuf.length !== rightBuf.length) {
+		return false
+	}
+	return timingSafeEqual(leftBuf, rightBuf)
 }
 
 export function getBearerToken(header: string | null): string | null {

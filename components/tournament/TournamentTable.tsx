@@ -70,8 +70,8 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
 
   // Sort entries based on current sort column and direction
   const sortedEntries = [...filteredEntries].sort((a, b) => {
-    let valueA: any;
-    let valueB: any;
+    let valueA: string | number;
+    let valueB: string | number;
 
     // Determine which column to sort by
     switch (sortColumn) {
@@ -106,6 +106,10 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
       case "playersPlayed":
         valueA = a.playersPlayed ?? 0;
         valueB = b.playersPlayed ?? 0;
+        break;
+      case "rank":
+        valueA = a.rank;
+        valueB = b.rank;
         break;
       default:
         valueA = a.gwNetPoints ?? a.livePoints;
@@ -229,7 +233,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
           </TableHeader>
           <TableBody>
             {sortedEntries.length > 0 ? (
-              sortedEntries.map((entry, index) => {
+              sortedEntries.map((entry) => {
                 const isChecked = compareSelection.some(e => e.id === entry.id);
                 const isDisabled = !isChecked && compareSelection.length >= 2;
                 return (
@@ -245,7 +249,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
                     />
                   </TableCell>
                   <TableCell className="font-medium">
-                    {index + 1}
+                    {entry.rank > 0 ? entry.rank : "—"}
                   </TableCell>
                   <TableCell>
                     <Link 

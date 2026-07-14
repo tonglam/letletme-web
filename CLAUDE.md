@@ -6,13 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `npm run dev` — Start dev server at http://localhost:3000
 - `npm run build` — Build for production
-- `npm run lint` — Run ESLint (no test suite exists)
+- `npm run lint` — Run ESLint
+- `npm test` — Run unit tests
 - `npx tsc --noEmit` — Type-check without building
 
 ## Architecture
 
 ### Tech Stack
-- **Next.js 15** (App Router), **React 18**, **TypeScript**
+- **Next.js 16** (App Router), **React 19**, **TypeScript**
 - **TailwindCSS 3** + **Shadcn/UI** (Radix primitives in `components/ui/`)
 - **GraphQL** via a Next.js proxy route handler
 - **Lucide React** for icons, **next-themes** for dark/light mode
@@ -22,9 +23,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 All queries are defined in `lib/graphql/queries.ts` (21 queries, ~1400 lines) alongside their TypeScript response types. Never write raw query strings outside this file.
 
 `executeQuery<T>(query, variables?)` in `lib/graphql-client.ts` handles all fetching:
-- In dev/build: routes through the Next.js proxy at `/api/graphql`
-- In production: calls `https://www.letletme.top/graphql` directly
-- The proxy (`app/api/graphql/route.ts`) adds `Cache-Control: max-age=300` for event-history/stats queries and `no-store` for live/real-time queries
+- Client-side: routes through the Next.js proxy at `/api/graphql`
+- Server-side: uses `executeServerQuery` with signed `X-User-Context` headers when a session exists
+- The proxy (`app/api/graphql/route.ts`) uses a unified query policy: session-gated operations are never publicly cached; public stats queries get `Cache-Control: max-age=300`
 
 ### Page Architecture Pattern
 
@@ -37,9 +38,9 @@ Example: `app/live/tournament/page.tsx` → `TournamentClient.tsx`.
 ### Tournament Live Points Flow
 
 `/live/tournament` is the most complex page:
-1. Fetches entry tournaments for `DEFAULT_ENTRY_ID = 15702` (hardcoded in `lib/tournament/liveTournament.ts`)
+1. Fetches entry tournaments for the signed-in user's FPL entry (`getCurrentEntryId()` from session)
 2. Fetches `GET_TOURNAMENT_LIVE_POINTS` for the selected tournament + gameweek (in parallel with previous GW for rank deltas)
-3. Builds `TournamentEntry[]` with live rank, net points, and pick lists in `TournamentClient.tsx`
+3. Builds `TournamentEntry[]` with live rank, net points, and pick lists via `lib/tournament/liveEntries.ts`
 4. Filters applied in order: search/chip/captain → `PlayerOwnershipFilter` → `TeamExposureFilter` — all as `string[] | null` intersected in `filteredEntries` useMemo
 
 ### Filter Pattern
