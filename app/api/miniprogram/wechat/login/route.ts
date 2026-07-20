@@ -1,21 +1,24 @@
 import { signInMiniProgramWithWeChat } from '@/lib/miniprogram-account'
-import { MiniProgramAuthError } from '@/lib/miniprogram-account-core'
-import { NextResponse } from 'next/server'
+import {
+	enforceMiniProgramRateLimits,
+	miniProgramErrorResponse,
+	miniProgramSuccessResponse,
+	readMiniProgramJson,
+} from '@/lib/miniprogram-route-security'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
 	try {
-		const body = await request.json()
+		const body = await readMiniProgramJson(request)
+		await enforceMiniProgramRateLimits({ request, scope: 'wechat-login', body })
 		const result = await signInMiniProgramWithWeChat({
 			code: body?.code,
 			deviceId: body?.deviceId,
 		})
 
-		return NextResponse.json({ success: true, ...result })
+		return miniProgramSuccessResponse({ success: true, ...result })
 	} catch (error) {
-		const status = error instanceof MiniProgramAuthError ? error.status : 500
-		const message = error instanceof Error ? error.message : 'Failed to sign in'
-		return NextResponse.json({ success: false, error: message }, { status })
+		return miniProgramErrorResponse(error, 'Failed to sign in')
 	}
 }

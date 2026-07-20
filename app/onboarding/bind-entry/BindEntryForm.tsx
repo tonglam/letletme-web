@@ -31,21 +31,40 @@ export default function BindEntryForm() {
 				</Alert>
 			)}
 
-			<div className="space-y-1">
-				<Label htmlFor="entryId">FPL Entry ID</Label>
-				<Input
-					id="entryId"
-					name="entryId"
-					type="number"
-					min={1}
-					required
-					placeholder="e.g. 123456"
-				/>
-			</div>
-
-			<Button type="submit" className="w-full" disabled={isPending}>
-				{isPending ? 'Verifying…' : 'Link team'}
-			</Button>
+			{state?.challengeId && state.requiredName ? (
+				<>
+					<input type="hidden" name="challengeId" value={state.challengeId} />
+					<Alert>
+						<AlertDescription className="space-y-2">
+							<p>
+								In FPL, temporarily change team <strong>{state.entryId}</strong> to this exact name:
+							</p>
+							<p className="font-mono text-lg font-semibold">{state.requiredName}</p>
+							<p className="text-xs">Save the name in FPL, then confirm here within 15 minutes.</p>
+						</AlertDescription>
+					</Alert>
+					<Button type="submit" className="w-full" disabled={isPending}>
+						{isPending ? 'Checking FPL…' : 'I changed the team name — verify'}
+					</Button>
+				</>
+			) : (
+				<>
+					<div className="space-y-1">
+						<Label htmlFor="entryId">FPL Entry ID</Label>
+						<Input
+							id="entryId"
+							name="entryId"
+							type="number"
+							min={1}
+							required
+							placeholder="e.g. 123456"
+						/>
+					</div>
+					<Button type="submit" className="w-full" disabled={isPending}>
+						{isPending ? 'Starting challenge…' : 'Verify team ownership'}
+					</Button>
+				</>
+			)}
 		</form>
 	)
 }

@@ -9,6 +9,12 @@ interface ExecuteQueryOptions {
   next?: { revalidate?: number | false; tags?: string[] };
 }
 
+type QueryExecutor = <T>(
+  query: string,
+  variables?: Record<string, unknown>,
+  options?: ExecuteQueryOptions,
+) => Promise<T>;
+
 export interface OverallGameweekStats {
   averagePoints: number | null;
   highestPoints: number | null;
@@ -54,13 +60,14 @@ const chipPlayCount = (chipPlays: ChipPlayEntry[], chipName: string): number | n
 const fetchPlayerNamesByIds = async (
   ids: number[],
   options?: ExecuteQueryOptions,
+  executor: QueryExecutor = executeQuery,
 ): Promise<Record<number, string>> => {
   const uniqueIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)));
   if (uniqueIds.length === 0) return {};
 
   const selection = uniqueIds.map((id) => `p${id}: player(id: ${id}) { webName }`).join("\n");
   const query = `query GetPlayerNamesByIds {\n${selection}\n}`;
-  const data = await executeQuery<Record<string, { webName?: string | null } | null>>(
+  const data = await executor<Record<string, { webName?: string | null } | null>>(
     query,
     undefined,
     options,
@@ -78,8 +85,9 @@ const fetchPlayerNamesByIds = async (
 export const fetchOverallGameweekStats = async (
   eventId: number,
   options?: ExecuteQueryOptions,
+  executor: QueryExecutor = executeQuery,
 ): Promise<OverallGameweekStats> => {
-  const eventStatsData = await executeQuery<EventStatsByIdResponse>(
+  const eventStatsData = await executor<EventStatsByIdResponse>(
     GET_EVENT_STATS_BY_ID,
     { eventId },
     options,
@@ -93,6 +101,7 @@ export const fetchOverallGameweekStats = async (
       eventStats?.mostViceCaptained ?? 0,
     ],
     options,
+    executor,
   );
   const chipPlays = parseChipPlays(eventStats?.chipPlays);
 

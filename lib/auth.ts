@@ -18,6 +18,7 @@ export const authConfig = {
 			session: authSchema.session,
 			account: authSchema.account,
 			verification: authSchema.verification,
+			rateLimit: authSchema.betterAuthRateLimit,
 		},
 	}),
 	emailAndPassword: {
@@ -61,12 +62,13 @@ export const authConfig = {
 		useSecureCookies: process.env.NODE_ENV === 'production',
 		crossSubDomainCookies: { enabled: false },
 	},
-	rateLimit: { enabled: true, window: 60, max: 100 },
+	rateLimit: { enabled: true, window: 60, max: 100, storage: 'database' },
 	trustedOrigins: [baseURL],
 	user: {
 		additionalFields: {
 			fplEntryId: { type: 'number' as const, required: false, input: false },
 			fplEntryBoundAt: { type: 'date' as const, required: false, input: false },
+			fplEntryVerifiedAt: { type: 'date' as const, required: false, input: false },
 		},
 	},
 	plugins: [] as const,
@@ -86,3 +88,11 @@ export function getAuth(): AuthInstance {
 }
 
 export type Session = AuthInstance['$Infer']['Session']
+
+/** Authorization checks must bypass Better Auth's five-minute cookie cache. */
+export async function getAuthorizationSession(headers: Headers): Promise<Session | null> {
+	return getAuth().api.getSession({
+		headers,
+		query: { disableCookieCache: true },
+	})
+}

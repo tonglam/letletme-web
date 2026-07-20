@@ -6,6 +6,19 @@ Front end of [letletme.top](https://letletme.top) - A Fantasy Premier League (FP
 
 LetLetMe is a comprehensive web application for Fantasy Premier League enthusiasts. It provides tools for tracking player and team statistics, managing tournaments, viewing live match data, and more.
 
+This repository is the UI and identity authority in a four-repository system:
+
+- `letletme_data` validates FPL input and is the sole writer of canonical
+  `public` domain tables and shared Redis read models.
+- `letletme-graphql` exposes public and authorized product reads.
+- `letletme-web` owns Better Auth, verified FPL binding, Mini Program sessions,
+  and the browser-to-service boundary.
+- `letletme-wechat-miniprogram` is a native client with no direct database or
+  shared-cache access.
+
+PostgreSQL is authoritative. Redis, signed request envelopes, server-rendered
+caches, and browser state are derived and replaceable.
+
 ## Features
 
 - **Home Dashboard**: View deadlines, price changes, head-to-head comparisons, and match information
@@ -20,15 +33,14 @@ LetLetMe is a comprehensive web application for Fantasy Premier League enthusias
 ### Core Technologies
 
 - **TypeScript**: Type-safe JavaScript for better developer experience
-- **Next.js 15**: React framework with App Router for server and client components
+- **Next.js 16**: React framework with App Router for server and client components
 - **TailwindCSS**: Utility-first CSS framework for styling
 - **Shadcn/UI**: Reusable UI components built with Radix UI and Tailwind
 
-### State Management & Form Handling
+### Form Handling
 
 - **React Hook Form**: Form validation and handling
 - **Zod**: Schema validation for forms and data
-- **Zustand**: Lightweight state management
 
 ### UI/UX
 
@@ -39,7 +51,6 @@ LetLetMe is a comprehensive web application for Fantasy Premier League enthusias
 ### Development Tools
 
 - **ESLint**: JavaScript/TypeScript linting
-- **Prettier**: Code formatting
 - **Next.js App Router**: File-based routing system
 
 ## Project Structure
@@ -77,8 +88,10 @@ letletme-web/
 
 ### Prerequisites
 
-- Node.js 18.x or higher
-- npm or yarn
+- Node.js 22
+- npm
+- PostgreSQL 15+ for auth/migration work
+- Running GraphQL and Data services for full local functionality
 
 ### Installation
 
@@ -92,26 +105,36 @@ letletme-web/
 2. Install dependencies
 
    ```bash
-   npm install
-   # or
-   yarn install
+   npm ci
    ```
 
-3. Run the development server
+3. Configure and migrate
+
+   ```bash
+   cp .env.example .env.local
+   npm run db:migrate
+   npm run db:migrate:status
+   ```
+
+4. Run the development server
 
    ```bash
    npm run dev
-   # or
-   yarn dev
    ```
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser
+5. Open [http://localhost:3000](http://localhost:3000) in your browser
 
 ## Build and Deployment
 
 ```bash
 # Build for production
 npm run build
+
+# Repository verification
+npm test
+npm run lint
+npx tsc --noEmit
+npm audit --audit-level=high
 
 # Start production server
 npm run start

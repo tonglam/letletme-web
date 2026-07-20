@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { z } from 'zod';
+
 export type LeagueType = 'classic' | 'h2h';
 
 export interface TournamentParticipant {
@@ -26,15 +28,33 @@ type RawStandingsResult = {
   total?: number | string | null;
 };
 
-type RawStandingsResponse = {
-  standings?: {
-    results?: RawStandingsResult[];
-    has_next?: boolean;
-  };
-};
+const RawStandingsResultSchema: z.ZodType<RawStandingsResult> = z
+  .object({
+    entry: z.number().int().positive().optional(),
+    entry_name: z.string().optional(),
+    player_name: z.string().optional(),
+    player_first_name: z.string().optional(),
+    player_last_name: z.string().optional(),
+    rank: z.union([z.number(), z.string()]).nullable().optional(),
+    rank_sort: z.union([z.number(), z.string()]).nullable().optional(),
+    total: z.union([z.number(), z.string()]).nullable().optional(),
+  })
+  .passthrough();
+
+const RawStandingsResponseSchema = z
+  .object({
+    standings: z.object({
+      results: z.array(RawStandingsResultSchema),
+      has_next: z.boolean().optional(),
+    }),
+  })
+  .passthrough();
 
 const FPL_HOSTNAME = 'fantasy.premierleague.com';
 const FPL_API_BASE_URL = 'https://fantasy.premierleague.com/api';
+const FPL_PAGE_TIMEOUT_MS = 10_000;
+const FPL_TOTAL_TIMEOUT_MS = 30_000;
+const MAX_STANDINGS_PAGES = 100;
 
 const unwrapEnvValue = (value: string): string => {
   const trimmed = value.trim();
@@ -138,22 +158,40 @@ export const fetchLeagueParticipants = async (
   const participantMap = new Map<string, TournamentParticipant>();
   let page = 1;
   let hasNext = true;
+  const deadline = Date.now() + FPL_TOTAL_TIMEOUT_MS;
 
   while (hasNext) {
-    const response = await fetch(`${endpointBase}?page_standings=${page}`, {
-      cache: 'no-store',
-    });
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      throw new Error('League standings request exceeded the 30 second safety limit.');
+    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      Math.min(FPL_PAGE_TIMEOUT_MS, remainingMs),
+    );
+    let response: Response;
+    try {
+      response = await fetch(`${endpointBase}?page_standings=${page}`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('League standings request timed out.');
+      }
+      throw new Error('Fantasy Premier League standings are unavailable.');
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       throw new Error(`Failed to fetch league standings (HTTP ${response.status}).`);
     }
 
-    const payload = (await response.json()) as RawStandingsResponse;
-    const results = payload.standings?.results;
-
-    if (!Array.isArray(results)) {
-      throw new Error('League standings response is missing participant results.');
-    }
+    const parsed = RawStandingsResponseSchema.safeParse(await response.json());
+    if (!parsed.success) throw new Error('League standings response has an invalid shape.');
+    const results = parsed.data.standings.results;
 
     for (const result of results) {
       const participant = mapStandingToParticipant(result);
@@ -163,10 +201,10 @@ export const fetchLeagueParticipants = async (
       participantMap.set(participant.id, participant);
     }
 
-    hasNext = payload.standings?.has_next === true;
+    hasNext = parsed.data.standings.has_next === true;
     page += 1;
 
-    if (page > 100) {
+    if (page > MAX_STANDINGS_PAGES) {
       throw new Error('League standings pagination exceeded the safety limit.');
     }
   }

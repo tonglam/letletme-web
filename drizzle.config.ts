@@ -12,6 +12,10 @@ export default defineConfig({
 	dialect: 'postgresql',
 	schema: './lib/db/schema/auth.ts',
 	out: './drizzle',
+	migrations: {
+		schema: 'bauth',
+		table: '__drizzle_migrations',
+	},
 	schemaFilter: ['bauth'],
 	dbCredentials: { url: databaseUrl },
 	strict: true,

@@ -12,63 +12,19 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { isProtectedApi, isProtectedPage, requiresVerifiedEntry } from '../../lib/route-protection'
 
-// ─── extracted logic (mirrors middleware.ts) ──────────────────────────────────
-
-// Mirrors the actual middleware.ts logic exactly
-const PROTECTED_PREFIXES = [
-	'/profile',
-	'/tournament/create',
-	'/onboarding',
-	'/live/tournament',
-	'/data/selections',
-	'/stats/team',
-	'/stats/tournament',
-	'/tournament/list',
-]
-
-const EXACT_PROTECTED = ['/live/points']
-
-const PROTECTED_API_PREFIXES = ['/api/tournaments']
-
-const ENTRY_GATED_PREFIXES = [
-	'/live/points',   // exact only — /live/points/[id] is public
-	'/live/tournament',
-	'/data/selections',
-	'/stats/team',
-	'/stats/tournament',
-	'/tournament/list',
-]
-
-function isProtected(pathname: string): boolean {
-	if (EXACT_PROTECTED.some(p => pathname === p)) return true
-	return (
-		PROTECTED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/')) ||
-		PROTECTED_API_PREFIXES.some(p => pathname.startsWith(p))
-	)
-}
-
-function requiresAuth(pathname: string): boolean {
-	if (pathname.match(/^\/tournament\/[^/]+\/manage(\/|$)/)) return true
-	return isProtected(pathname)
-}
-
-function requiresEntryId(pathname: string): boolean {
-	// /live/points exact is entry-gated; /live/points/[id] is public
-	if (pathname === '/live/points') return true
-	return ENTRY_GATED_PREFIXES.filter(p => p !== '/live/points')
-		.some(p => pathname === p || pathname.startsWith(p + '/'))
-}
-
-type MockSession = { user: { fplEntryId: number | null } } | null
+type MockSession = {
+	user: { fplEntryId: number | null; fplEntryVerifiedAt: string | null }
+} | null
 
 function resolveMiddlewareOutcome(
 	pathname: string,
 	session: MockSession,
 ): 'pass' | { redirect: string } {
-	if (!requiresAuth(pathname)) return 'pass'
+	if (!isProtectedPage(pathname) && !isProtectedApi(pathname)) return 'pass'
 	if (!session) return { redirect: `/auth/login?next=${encodeURIComponent(pathname)}` }
-	if (!session.user.fplEntryId && requiresEntryId(pathname)) {
+	if (!session.user.fplEntryVerifiedAt && requiresVerifiedEntry(pathname)) {
 		return { redirect: '/onboarding/bind-entry' }
 	}
 	return 'pass'
@@ -76,8 +32,12 @@ function resolveMiddlewareOutcome(
 
 // ─── tests ────────────────────────────────────────────────────────────────────
 
-const withEntry: MockSession = { user: { fplEntryId: 15702 } }
-const withoutEntry: MockSession = { user: { fplEntryId: null } }
+const withEntry: MockSession = {
+	user: { fplEntryId: 15702, fplEntryVerifiedAt: '2026-07-18T00:00:00Z' },
+}
+const withoutEntry: MockSession = {
+	user: { fplEntryId: 15702, fplEntryVerifiedAt: null },
+}
 const noSession: MockSession = null
 
 describe('middleware — public routes', () => {
@@ -129,6 +89,7 @@ describe('middleware — fplEntryId gate', () => {
 		'/data/selections',
 		'/stats/team',
 		'/stats/tournament',
+		'/tournament/create',
 		'/tournament/list',
 	]
 

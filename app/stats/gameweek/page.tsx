@@ -1,5 +1,6 @@
 import { getCurrentAndNextEvents } from '@/lib/events'
 import { fetchOverallGameweekStats } from '@/lib/gameweek-overall-stats'
+import { executePublicServerQuery } from '@/lib/graphql-server'
 import GameweekStatsClient from './GameweekStatsClient'
 
 export default async function GameweekStatsPage() {
@@ -11,7 +12,7 @@ export default async function GameweekStatsPage() {
 		initialOverallStats = await fetchOverallGameweekStats(currentGameweek, {
 			cache: 'force-cache',
 			next: { revalidate: 300 },
-		})
+		}, executePublicServerQuery)
 	} catch (err) {
 		console.error('Failed to load initial gameweek overview:', err)
 	}
