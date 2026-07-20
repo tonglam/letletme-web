@@ -1,8 +1,5 @@
 const getGraphQLEndpoint = () => {
-  if (process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT) {
-    return process.env.NEXT_PUBLIC_GRAPHQL_ENDPOINT
-  }
-  // Server-side (RSC/route handlers): call backend directly, skip the proxy
+	// Server-side (RSC/route handlers): call backend directly, skip the proxy
   if (typeof window === 'undefined') {
     return process.env.GRAPHQL_ENDPOINT || 'http://localhost:4000/graphql'
   }

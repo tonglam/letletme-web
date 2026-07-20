@@ -1,6 +1,7 @@
 import { LiveMatchesClient } from '@/app/live/matches/LiveMatchesClient'
 import RootLayout from '@/components/layout/RootLayout'
 import { getLiveMatches } from '@/lib/live-matches'
+import { executePublicServerQuery } from '@/lib/graphql-server'
 import { Suspense } from 'react'
 
 export const dynamic = 'force-dynamic'
@@ -38,7 +39,7 @@ async function LiveMatchesContent() {
 	let initialError: string | null = null
 
 	try {
-		matches = await getLiveMatches()
+		matches = await getLiveMatches(executePublicServerQuery)
 	} catch (err) {
 		console.error('Failed to fetch live matches:', err)
 		initialError = err instanceof Error ? err.message : 'Failed to load matches'

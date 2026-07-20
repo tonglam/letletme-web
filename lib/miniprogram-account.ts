@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { randomBytes, randomInt, randomUUID } from 'crypto'
-import { and, desc, eq, gt, isNull } from 'drizzle-orm'
+import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm'
 
 import { db, schema } from '@/lib/db'
 import { sendMiniProgramEmailCode } from '@/lib/mailer'
@@ -10,6 +10,7 @@ import {
 	assertValidWeChatLoginCode,
 	assertValidDeviceId,
 	hashMiniProgramSecret,
+	hashMiniProgramChallenge,
 	hashesEqual,
 	isExpired,
 	normalizeEmail,
@@ -18,8 +19,9 @@ import {
 } from '@/lib/miniprogram-account-core'
 
 const CODE_TTL_MS = 10 * 60 * 1000
-const SESSION_TTL_MS = 365 * 24 * 60 * 60 * 1000
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const MAX_ATTEMPTS = 5
+const WECHAT_EXCHANGE_TIMEOUT_MS = 10_000
 
 function assertMiniProgramPersistenceEnabled(): void {
 	if (process.env.MINIPROGRAM_ACCOUNT_STORAGE !== 'true') {
@@ -39,17 +41,20 @@ export interface MiniProgramAccountProfile {
 	createdAt: string
 	fplEntryId: number | null
 	fplEntryBoundAt: string | null
+	fplEntryVerifiedAt: string | null
 	wechatLinked: boolean
 }
 
 export interface MiniProgramConfirmResult {
 	token: string
+	expiresAt: string
 	profile: MiniProgramAccountProfile
 }
 
 export interface MiniProgramWeChatLoginResult {
 	linked: boolean
 	token?: string
+	expiresAt?: string
 	profile?: MiniProgramAccountProfile
 }
 
@@ -66,6 +71,14 @@ function generateToken(): string {
 	return randomBytes(32).toString('base64url')
 }
 
+function hashEmailCode(code: string): string {
+	const pepper = process.env.BETTER_AUTH_SECRET
+	if (!pepper) {
+		throw new MiniProgramAuthError('Mini Program account security is not configured', 503)
+	}
+	return hashMiniProgramChallenge(code, pepper)
+}
+
 function mapProfile(user: typeof schema.user.$inferSelect): MiniProgramAccountProfile {
 	return {
 		id: user.id,
@@ -76,35 +89,13 @@ function mapProfile(user: typeof schema.user.$inferSelect): MiniProgramAccountPr
 		createdAt: user.createdAt.toISOString(),
 		fplEntryId: user.fplEntryId,
 		fplEntryBoundAt: user.fplEntryBoundAt?.toISOString() ?? null,
+		fplEntryVerifiedAt: user.fplEntryVerifiedAt?.toISOString() ?? null,
 		wechatLinked: Boolean(user.openid),
 	}
 }
 
-async function createMiniProgramSession(userId: string, deviceId: string): Promise<string> {
-	assertMiniProgramPersistenceEnabled()
-	const now = new Date()
-	const token = generateToken()
-	await db.insert(schema.miniProgramSession).values({
-		id: randomUUID(),
-		tokenHash: hashMiniProgramSecret(token),
-		userId,
-		deviceId,
-		expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
-	})
-
-	return token
-}
-
-async function assertWeChatIdentityAvailable(identity: WeChatIdentity, userId: string): Promise<void> {
-	const [openIdOwner] = await db
-		.select({ id: schema.user.id })
-		.from(schema.user)
-		.where(eq(schema.user.openid, identity.openId))
-		.limit(1)
-
-	if (openIdOwner && openIdOwner.id !== userId) {
-		throw new MiniProgramAuthError('This WeChat account is already linked to another user', 409)
-	}
+function isUniqueViolation(error: unknown): boolean {
+	return Boolean(error && typeof error === 'object' && 'code' in error && error.code === '23505')
 }
 
 export async function exchangeWeChatLoginCode(codeInput: unknown): Promise<WeChatIdentity> {
@@ -123,10 +114,16 @@ export async function exchangeWeChatLoginCode(codeInput: unknown): Promise<WeCha
 		grant_type: 'authorization_code',
 	})
 
-	const response = await fetch(`https://api.weixin.qq.com/sns/jscode2session?${params.toString()}`, {
-		method: 'GET',
-		cache: 'no-store',
-	})
+	let response: Response
+	try {
+		response = await fetch(`https://api.weixin.qq.com/sns/jscode2session?${params.toString()}`, {
+			method: 'GET',
+			cache: 'no-store',
+			signal: AbortSignal.timeout(WECHAT_EXCHANGE_TIMEOUT_MS),
+		})
+	} catch {
+		throw new MiniProgramAuthError('WeChat login is temporarily unavailable', 503)
+	}
 
 	type Code2SessionResponse = {
 		openid?: string
@@ -135,9 +132,18 @@ export async function exchangeWeChatLoginCode(codeInput: unknown): Promise<WeCha
 		errmsg?: string
 	}
 
-	const payload = await response.json() as Code2SessionResponse
+	let payload: Code2SessionResponse
+	try {
+		payload = await response.json() as Code2SessionResponse
+	} catch {
+		throw new MiniProgramAuthError('WeChat login is temporarily unavailable', 503)
+	}
 	if (!response.ok || !payload.openid || payload.errcode) {
-		throw new MiniProgramAuthError(payload.errmsg || 'WeChat login failed', 401)
+		console.warn('[mini auth] WeChat code exchange rejected', {
+			status: response.status,
+			errcode: payload.errcode,
+		})
+		throw new MiniProgramAuthError('WeChat login failed', 401)
 	}
 
 	return {
@@ -154,35 +160,36 @@ export async function startMiniProgramEmailBinding(input: {
 	const email = normalizeEmail(input.email)
 	const deviceId = assertValidDeviceId(input.deviceId)
 
-	const [user] = await db
-		.select()
-		.from(schema.user)
-		.where(eq(schema.user.email, email))
-		.limit(1)
-
-	if (!user) {
-		return
-	}
-
 	const now = new Date()
 	const code = generateEmailCode()
+	const found = await db.transaction(async tx => {
+		// User is always locked before pending codes to match confirmation/challenge ordering.
+		const [user] = await tx
+			.select({ id: schema.user.id })
+			.from(schema.user)
+			.where(eq(schema.user.email, email))
+			.limit(1)
+			.for('update')
+		if (!user) return false
 
-	await db
-		.update(schema.miniProgramEmailCode)
-		.set({ consumedAt: now })
-		.where(and(
-			eq(schema.miniProgramEmailCode.email, email),
-			eq(schema.miniProgramEmailCode.deviceId, deviceId),
-			isNull(schema.miniProgramEmailCode.consumedAt),
-		))
-
-	await db.insert(schema.miniProgramEmailCode).values({
-		id: randomUUID(),
-		email,
-		deviceId,
-		codeHash: hashMiniProgramSecret(code),
-		expiresAt: new Date(now.getTime() + CODE_TTL_MS),
+		await tx
+			.update(schema.miniProgramEmailCode)
+			.set({ consumedAt: now })
+			.where(and(
+				eq(schema.miniProgramEmailCode.email, email),
+				eq(schema.miniProgramEmailCode.deviceId, deviceId),
+				isNull(schema.miniProgramEmailCode.consumedAt),
+			))
+		await tx.insert(schema.miniProgramEmailCode).values({
+			id: randomUUID(),
+			email,
+			deviceId,
+			codeHash: hashEmailCode(code),
+			expiresAt: new Date(now.getTime() + CODE_TTL_MS),
+		})
+		return true
 	})
+	if (!found) return
 
 	await sendMiniProgramEmailCode({ to: email, code })
 }
@@ -191,7 +198,7 @@ export async function confirmMiniProgramEmailBinding(input: {
 	email: unknown
 	deviceId: unknown
 	code: unknown
-	wechatCode?: unknown
+	wechatCode: unknown
 }): Promise<MiniProgramConfirmResult> {
 	assertMiniProgramPersistenceEnabled()
 	const email = normalizeEmail(input.email)
@@ -200,71 +207,67 @@ export async function confirmMiniProgramEmailBinding(input: {
 	if (!/^\d{6}$/.test(code)) {
 		throw new MiniProgramAuthError('Enter the 6-digit code', 400)
 	}
-
-	const [pending] = await db
-		.select()
-		.from(schema.miniProgramEmailCode)
-		.where(and(
-			eq(schema.miniProgramEmailCode.email, email),
-			eq(schema.miniProgramEmailCode.deviceId, deviceId),
-			isNull(schema.miniProgramEmailCode.consumedAt),
-		))
-		.orderBy(desc(schema.miniProgramEmailCode.createdAt))
-		.limit(1)
-
-	if (!pending || isExpired(pending.expiresAt) || pending.attempts >= MAX_ATTEMPTS) {
-		throw new MiniProgramAuthError('Code is invalid or expired', 400)
-	}
-
-	if (!hashesEqual(pending.codeHash, hashMiniProgramSecret(code))) {
-		await db
-			.update(schema.miniProgramEmailCode)
-			.set({ attempts: pending.attempts + 1 })
-			.where(eq(schema.miniProgramEmailCode.id, pending.id))
-		throw new MiniProgramAuthError('Code is invalid or expired', 400)
-	}
-
-	const [user] = await db
-		.select()
-		.from(schema.user)
-		.where(eq(schema.user.email, email))
-		.limit(1)
-
-	if (!user) {
-		throw new MiniProgramAuthError('Code is invalid or expired', 400)
-	}
-
-	const wechatIdentity = input.wechatCode
-		? await exchangeWeChatLoginCode(input.wechatCode)
-		: null
-
-	if (wechatIdentity) {
-		await assertWeChatIdentityAvailable(wechatIdentity, user.id)
-	}
-
+	// The network exchange is deliberately outside the database transaction.
+	const wechatIdentity = await exchangeWeChatLoginCode(input.wechatCode)
 	const now = new Date()
-	const token = await createMiniProgramSession(user.id, deviceId)
+	const token = generateToken()
+	const expiresAt = new Date(now.getTime() + SESSION_TTL_MS)
+	try {
+		const result = await db.transaction(async tx => {
+			const [user] = await tx.select().from(schema.user)
+				.where(eq(schema.user.email, email)).limit(1).for('update')
+			if (!user) return { kind: 'invalid' as const }
 
-	let linkedUser = user
-	if (wechatIdentity) {
-		const [updatedUser] = await db
-			.update(schema.user)
-			.set({
-				openid: wechatIdentity.openId,
-				updatedAt: now,
+			const [pending] = await tx.select().from(schema.miniProgramEmailCode)
+				.where(and(
+					eq(schema.miniProgramEmailCode.email, email),
+					eq(schema.miniProgramEmailCode.deviceId, deviceId),
+					isNull(schema.miniProgramEmailCode.consumedAt),
+				))
+				.orderBy(desc(schema.miniProgramEmailCode.createdAt)).limit(1).for('update')
+			if (!pending || isExpired(pending.expiresAt) || pending.attempts >= MAX_ATTEMPTS) {
+				return { kind: 'invalid' as const }
+			}
+			if (!hashesEqual(pending.codeHash, hashEmailCode(code))) {
+				await tx.update(schema.miniProgramEmailCode)
+					.set({ attempts: sql`${schema.miniProgramEmailCode.attempts} + 1` })
+					.where(and(
+						eq(schema.miniProgramEmailCode.id, pending.id),
+						sql`${schema.miniProgramEmailCode.attempts} < ${MAX_ATTEMPTS}`,
+					))
+				return { kind: 'invalid' as const }
+			}
+
+			const [owner] = await tx.select({ id: schema.user.id }).from(schema.user)
+				.where(eq(schema.user.openid, wechatIdentity.openId)).limit(1)
+			if (owner && owner.id !== user.id) return { kind: 'conflict' as const }
+
+			const [linkedUser] = await tx.update(schema.user)
+				.set({ openid: wechatIdentity.openId, updatedAt: now })
+				.where(eq(schema.user.id, user.id)).returning()
+			await tx.update(schema.miniProgramSession).set({ revokedAt: now })
+				.where(and(
+					eq(schema.miniProgramSession.userId, user.id),
+					eq(schema.miniProgramSession.deviceId, deviceId),
+					isNull(schema.miniProgramSession.revokedAt),
+				))
+			await tx.insert(schema.miniProgramSession).values({
+				id: randomUUID(), tokenHash: hashMiniProgramSecret(token), userId: user.id,
+				deviceId, expiresAt, lastUsedAt: now,
 			})
-			.where(eq(schema.user.id, user.id))
-			.returning()
-
-		linkedUser = updatedUser ?? user
+			await tx.update(schema.miniProgramEmailCode).set({ consumedAt: now })
+				.where(eq(schema.miniProgramEmailCode.id, pending.id))
+			return { kind: 'ok' as const, user: linkedUser ?? user }
+		})
+		if (result.kind === 'invalid') throw new MiniProgramAuthError('Code is invalid or expired', 400)
+		if (result.kind === 'conflict') throw new MiniProgramAuthError('This WeChat account is already linked to another user', 409)
+		return { token, expiresAt: expiresAt.toISOString(), profile: mapProfile(result.user) }
+	} catch (error) {
+		if (isUniqueViolation(error)) {
+			throw new MiniProgramAuthError('This WeChat account is already linked to another user', 409)
+		}
+		throw error
 	}
-
-	await db
-		.update(schema.miniProgramEmailCode)
-		.set({ consumedAt: now })
-		.where(eq(schema.miniProgramEmailCode.id, pending.id))
-
-	return { token, profile: mapProfile(linkedUser) }
 }
 
 export async function signInMiniProgramWithWeChat(input: {
@@ -285,11 +288,33 @@ export async function signInMiniProgramWithWeChat(input: {
 		return { linked: false }
 	}
 
-	await assertWeChatIdentityAvailable(identity, user.id)
-
-	const linkedUser = user
-	const token = await createMiniProgramSession(user.id, deviceId)
-	return { linked: true, token, profile: mapProfile(linkedUser) }
+	const now = new Date()
+	const token = generateToken()
+	const expiresAt = new Date(now.getTime() + SESSION_TTL_MS)
+	const linkedUser = await db.transaction(async tx => {
+		const [lockedUser] = await tx.select().from(schema.user)
+			.where(eq(schema.user.id, user.id)).limit(1).for('update')
+		if (!lockedUser || lockedUser.openid !== identity.openId) {
+			throw new MiniProgramAuthError('Unauthenticated', 401)
+		}
+		await tx.update(schema.miniProgramSession).set({ revokedAt: now })
+			.where(and(
+				eq(schema.miniProgramSession.userId, lockedUser.id),
+				eq(schema.miniProgramSession.deviceId, deviceId),
+				isNull(schema.miniProgramSession.revokedAt),
+			))
+		await tx.insert(schema.miniProgramSession).values({
+			id: randomUUID(), tokenHash: hashMiniProgramSecret(token), userId: lockedUser.id,
+			deviceId, expiresAt, lastUsedAt: now,
+		})
+		return lockedUser
+	})
+	return {
+		linked: true,
+		token,
+		expiresAt: expiresAt.toISOString(),
+		profile: mapProfile(linkedUser),
+	}
 }
 
 export async function getMiniProgramProfileByToken(token: string): Promise<MiniProgramAccountProfile> {

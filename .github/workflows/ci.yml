@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  NODE_ENV: test
+  DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/testdb
+  DIRECT_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/testdb
+  BETTER_AUTH_SECRET: ci-better-auth-secret-at-least-thirty-two-characters
+  BETTER_AUTH_URL: http://localhost:3000
+  BACKEND_PROXY_SECRET: ci-backend-proxy-secret
+  MINIPROGRAM_ACCOUNT_STORAGE: "true"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.9-alpine@sha256:7c688148e5e156d0e86df7ba8ae5a05a2386aaec1e2ad8e6d11bdf10504b1fb7
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d testdb"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Create Supabase client-role stubs
+        run: |
+          node --input-type=module <<'EOF'
+          import postgres from 'postgres'
+          const sql = postgres(process.env.DIRECT_DATABASE_URL, { max: 1 })
+          for (const role of ['anon', 'authenticated']) {
+            await sql.unsafe(`DO $$ BEGIN CREATE ROLE ${role} NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$`)
+          }
+          await sql.end()
+          EOF
+      - name: Fresh and repeat migrations
+        run: |
+          npm run db:migrate
+          npm run db:migrate
+          npm run db:migrate:status
+      - run: npm test
+        env:
+          RUN_DB_INTEGRATION: "true"
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm run build
+      - run: npm audit --audit-level=moderate
+      - uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+        with:
+          scan-args: |-
+            --recursive
+            ./
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

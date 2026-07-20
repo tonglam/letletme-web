@@ -1,5 +1,5 @@
 import { cache } from 'react'
-import { executeQuery } from '@/lib/graphql-client'
+import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_CURRENT_AND_NEXT_EVENTS,
 	type EventsResponse,
@@ -7,7 +7,7 @@ import {
 
 export const getCurrentAndNextEvents = cache(async (): Promise<EventsResponse | null> => {
 	try {
-		return await executeQuery<EventsResponse>(
+		return await executePublicServerQuery<EventsResponse>(
 			GET_CURRENT_AND_NEXT_EVENTS,
 			undefined,
 			{ cache: 'force-cache', next: { revalidate: 300 } },

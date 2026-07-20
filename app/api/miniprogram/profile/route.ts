@@ -1,6 +1,9 @@
 import { getMiniProgramProfileByToken } from '@/lib/miniprogram-account'
 import { getBearerToken, MiniProgramAuthError } from '@/lib/miniprogram-account-core'
-import { NextResponse } from 'next/server'
+import {
+	miniProgramErrorResponse,
+	miniProgramSuccessResponse,
+} from '@/lib/miniprogram-route-security'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,10 +15,8 @@ export async function GET(request: Request) {
 		}
 
 		const profile = await getMiniProgramProfileByToken(token)
-		return NextResponse.json({ success: true, profile })
+		return miniProgramSuccessResponse({ success: true, profile })
 	} catch (error) {
-		const status = error instanceof MiniProgramAuthError ? error.status : 500
-		const message = error instanceof Error ? error.message : 'Failed to load profile'
-		return NextResponse.json({ success: false, error: message }, { status })
+		return miniProgramErrorResponse(error, 'Failed to load profile')
 	}
 }

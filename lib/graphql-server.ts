@@ -15,3 +15,12 @@ export async function executeServerQuery<T>(
 	const authHeaders = await getServerUserContextHeaders()
 	return executeQuery<T>(query, variables, { ...options, headers: authHeaders })
 }
+
+/** Public RSC reads omit request-derived headers so Next's shared fetch cache stays effective. */
+export async function executePublicServerQuery<T>(
+	query: string,
+	variables?: Record<string, unknown>,
+	options?: Omit<ExecuteQueryOptions, 'headers'>,
+): Promise<T> {
+	return executeQuery<T>(query, variables, options)
+}

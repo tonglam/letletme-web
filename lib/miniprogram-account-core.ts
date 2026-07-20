@@ -1,12 +1,14 @@
-import { createHash, timingSafeEqual } from 'crypto'
+import { createHash, createHmac, timingSafeEqual } from 'crypto'
 
 export class MiniProgramAuthError extends Error {
 	status: number
+	retryAfterSeconds?: number
 
-	constructor(message: string, status = 400) {
+	constructor(message: string, status = 400, retryAfterSeconds?: number) {
 		super(message)
 		this.name = 'MiniProgramAuthError'
 		this.status = status
+		this.retryAfterSeconds = retryAfterSeconds
 	}
 }
 
@@ -85,6 +87,10 @@ export function normalizeOptionalWeChatUnionId(value: unknown): string | null {
 
 export function hashMiniProgramSecret(value: string): string {
 	return createHash('sha256').update(value).digest('hex')
+}
+
+export function hashMiniProgramChallenge(value: string, pepper: string): string {
+	return createHmac('sha256', pepper).update(value).digest('hex')
 }
 
 export function hashesEqual(left: string, right: string): boolean {

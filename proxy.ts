@@ -1,35 +1,6 @@
 import { getAuth } from '@/lib/auth'
+import { isProtectedApi, isProtectedPage, requiresVerifiedEntry } from '@/lib/route-protection'
 import { type NextRequest, NextResponse } from 'next/server'
-
-// Page routes that require a session. Tournament-related pages depend on an
-// entry id; profile stays protected so users can manage that binding.
-const PROTECTED_PAGE_PREFIXES = [
-	'/data/selections',
-	'/live/tournament',
-	'/stats/tournament',
-	'/tournament',
-	'/profile',
-]
-
-// API routes that require a session (exact prefix match is fine).
-const PROTECTED_API_PREFIXES = ['/api/tournaments']
-
-function isProtectedPage(pathname: string): boolean {
-	return PROTECTED_PAGE_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))
-}
-
-function isProtectedApi(pathname: string): boolean {
-	return PROTECTED_API_PREFIXES.some(p => pathname.startsWith(p))
-}
-
-function requiresEntryId(pathname: string): boolean {
-	return (
-		pathname === '/stats/tournament' ||
-		pathname === '/data/selections' ||
-		pathname.startsWith('/live/tournament') ||
-		pathname.startsWith('/tournament')
-	)
-}
 
 export async function proxy(req: NextRequest) {
 	const { pathname } = req.nextUrl
@@ -56,7 +27,7 @@ export async function proxy(req: NextRequest) {
 
 	// Tournament pages need a linked FPL entry. Profile stays reachable so users
 	// can add or change their entry id there.
-	if (protectedPage && !session.user.fplEntryId && requiresEntryId(pathname)) {
+	if (protectedPage && !session.user.fplEntryVerifiedAt && requiresVerifiedEntry(pathname)) {
 		return NextResponse.redirect(new URL('/onboarding/bind-entry', req.url))
 	}
 

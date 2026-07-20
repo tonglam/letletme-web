@@ -88,7 +88,11 @@ export default async function ProfilePage() {
 
 						<div className="bg-accent/30 p-4 rounded-lg">
 							<h3 className="font-medium mb-3">FPL Team</h3>
-							<RebindEntryForm currentEntryId={profile.fplEntryId} fplInfo={null} />
+							<RebindEntryForm
+								currentEntryId={profile.fplEntryId}
+								verified={Boolean(profile.fplEntryVerifiedAt)}
+								fplInfo={null}
+							/>
 						</div>
 
 						<div className="bg-accent/30 p-4 rounded-lg">

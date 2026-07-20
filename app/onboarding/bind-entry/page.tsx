@@ -8,7 +8,6 @@ import { Gamepad, Hash } from 'lucide-react'
 export const dynamic = 'force-dynamic'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { bindFplEntry } from './actions'
 import BindEntryForm from './BindEntryForm'
 
 export default async function BindEntryPage() {
@@ -19,7 +18,7 @@ export default async function BindEntryPage() {
 	}
 
 	// Already bound — skip onboarding
-	if (session.user.fplEntryId) {
+	if (session.user.fplEntryVerifiedAt) {
 		redirect('/')
 	}
 

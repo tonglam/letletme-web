@@ -12,6 +12,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
+import { buildGraphQLUserContextHeaders } from '../../lib/graphql-envelope'
 
 // ─── helpers (mirrors the production code in app/api/graphql/route.ts) ────────
 
@@ -132,5 +133,37 @@ describe('HMAC envelope — verification', () => {
 		const result = verifyEnvelope('!!!not-base64url!!!', 'sig', SECRET)
 		assert.equal(result.valid, false)
 		assert.equal(result.reason, 'malformed context header')
+	})
+})
+
+describe('production GraphQL envelope contract', () => {
+	it('signs only verified FPL entry IDs into the v2 audience-bound envelope', () => {
+		const verified = buildGraphQLUserContextHeaders(
+			{
+				id: 'user-verified',
+				fplEntryId: 15702,
+				fplEntryVerifiedAt: '2026-07-18T00:00:00.000Z',
+			},
+			SECRET,
+			1_700_000_000,
+		)
+		const decoded = JSON.parse(
+			Buffer.from(verified['X-User-Context'], 'base64url').toString('utf8'),
+		)
+		assert.equal(decoded.v, 2)
+		assert.equal(decoded.aud, 'letletme-graphql')
+		assert.equal(decoded.eid, 15702)
+		assert.equal(decoded.exp - decoded.iat, 60)
+
+		const unverified = buildGraphQLUserContextHeaders(
+			{ id: 'user-unverified', fplEntryId: 15702, fplEntryVerifiedAt: null },
+			SECRET,
+			1_700_000_000,
+		)
+		const unverifiedDecoded = JSON.parse(
+			Buffer.from(unverified['X-User-Context'], 'base64url').toString('utf8'),
+		)
+		assert.equal(unverifiedDecoded.eid, null)
+		assert.equal(unverifiedDecoded.evat, null)
 	})
 })
