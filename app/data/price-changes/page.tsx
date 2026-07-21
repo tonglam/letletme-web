@@ -1,4 +1,4 @@
-import { executeQuery } from '@/lib/graphql-client'
+import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_PLAYER_VALUES,
 	utcCalendarDateISO,
@@ -10,7 +10,7 @@ import PriceChangesClient from './PriceChangesClient'
 export default async function PriceChangesPage() {
 	let initialPlayerValues: PlayerValue[] | null = null
 	try {
-		const data = await executeQuery<PlayerValuesResponse>(
+		const data = await executePublicServerQuery<PlayerValuesResponse>(
 			GET_PLAYER_VALUES,
 			{ changeDate: utcCalendarDateISO() },
 			{ cache: 'force-cache', next: { revalidate: 3600 } },

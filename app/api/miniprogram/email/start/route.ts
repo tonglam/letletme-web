@@ -1,24 +1,27 @@
 import { startMiniProgramEmailBinding } from '@/lib/miniprogram-account'
-import { MiniProgramAuthError } from '@/lib/miniprogram-account-core'
-import { NextResponse } from 'next/server'
+import {
+	enforceMiniProgramRateLimits,
+	miniProgramErrorResponse,
+	miniProgramSuccessResponse,
+	readMiniProgramJson,
+} from '@/lib/miniprogram-route-security'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
 	try {
-		const body = await request.json()
+		const body = await readMiniProgramJson(request)
+		await enforceMiniProgramRateLimits({ request, scope: 'email-start', body })
 		await startMiniProgramEmailBinding({
 			email: body?.email,
 			deviceId: body?.deviceId,
 		})
 
-		return NextResponse.json({
+		return miniProgramSuccessResponse({
 			success: true,
 			message: 'If that email belongs to a LetLetMe account, a code has been sent.',
 		})
 	} catch (error) {
-		const status = error instanceof MiniProgramAuthError ? error.status : 500
-		const message = error instanceof Error ? error.message : 'Failed to send code'
-		return NextResponse.json({ success: false, error: message }, { status })
+		return miniProgramErrorResponse(error, 'Failed to send code')
 	}
 }

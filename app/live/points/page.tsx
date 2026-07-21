@@ -300,7 +300,9 @@ export default function LivePoints() {
 	const { currentEventId, entryId: sharedEntryId } = useEvent()
 	const { data: sessionData } = useSession()
 	const initialEntryId = sharedEntryId ?? 0
-	const sessionEntryId = sessionData?.user?.fplEntryId ?? 0
+	const sessionEntryId = sessionData?.user?.fplEntryVerifiedAt
+		? (sessionData.user.fplEntryId ?? 0)
+		: 0
 
 	const [currentGameweek, setCurrentGameweek] = useState<number | undefined>(
 		currentEventId ?? undefined
@@ -341,7 +343,8 @@ export default function LivePoints() {
 			const uniqueElementIds = Array.from(
 				new Set(live.pickList.map(pick => pick.element))
 			)
-			const explainBatchQuery = buildEventLiveExplainBatchQuery(uniqueElementIds)
+			const explainBatchQuery =
+				buildEventLiveExplainBatchQuery(uniqueElementIds)
 			if (!explainBatchQuery) return
 
 			try {
@@ -477,8 +480,8 @@ export default function LivePoints() {
 			cancelled = true
 			window.clearTimeout(loadTimer)
 		}
-	// selectedGameweek and entryId are stable initializer values from mount
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// selectedGameweek and entryId are stable initializer values from mount
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [activeEntryId])
 
 	const entrySearch = (
@@ -510,9 +513,7 @@ export default function LivePoints() {
 							Enter an FPL entry ID to view live points.
 						</p>
 						{entrySearch}
-						{error && (
-							<p className="mt-3 text-sm text-destructive">{error}</p>
-						)}
+						{error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 					</div>
 				</div>
 			</RootLayout>
@@ -629,7 +630,7 @@ export default function LivePoints() {
 					</div>
 					<div className="mb-6">
 						<GameweekSelector
-							onGameweekChange={(gw) => {
+							onGameweekChange={gw => {
 								setSelectedGameweek(gw)
 								void fetchLivePointsForGameweek(gw)
 							}}
@@ -688,7 +689,7 @@ export default function LivePoints() {
 						{entrySearch}
 					</div>
 					<GameweekSelector
-						onGameweekChange={(gw) => {
+						onGameweekChange={gw => {
 							setSelectedGameweek(gw)
 							void fetchLivePointsForGameweek(gw)
 						}}
@@ -696,15 +697,15 @@ export default function LivePoints() {
 						selectedGameweek={selectedGameweek}
 						disabled={isLoading || isRefreshing}
 					/>
-						<div className="mt-2 flex items-center justify-between">
-							<p className="text-xs text-muted-foreground">
-								{shouldAutoRefresh
-									? 'Auto refreshes every minute for the current gameweek.'
-									: 'Auto refresh paused for past or unavailable gameweeks.'}
-							</p>
-							<div className="flex items-center gap-3">
-								<LivePointsAutoRefreshCountdown
-									enabled={shouldAutoRefresh}
+					<div className="mt-2 flex items-center justify-between">
+						<p className="text-xs text-muted-foreground">
+							{shouldAutoRefresh
+								? 'Auto refreshes every minute for the current gameweek.'
+								: 'Auto refresh paused for past or unavailable gameweeks.'}
+						</p>
+						<div className="flex items-center gap-3">
+							<LivePointsAutoRefreshCountdown
+								enabled={shouldAutoRefresh}
 								onRefresh={async () => {
 									if (selectedGameweek !== undefined) {
 										await fetchLivePointsForGameweek(selectedGameweek)

@@ -1,45 +1,62 @@
 'use server'
 
-import { getAuth } from '@/lib/auth'
-import { db, schema } from '@/lib/db'
-import { validateFplEntry } from '@/lib/fpl'
-import { eq } from 'drizzle-orm'
+import { getAuthorizationSession } from '@/lib/auth'
+import {
+	FplBindingError,
+	confirmFplEntryBindingChallenge,
+	startFplEntryBindingChallenge,
+} from '@/lib/fpl-entry-binding'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation' // used for unauthenticated guard
 
-type BindResult = { error?: string; success?: string }
+export type BindResult = {
+	error?: string
+	success?: string
+	challengeId?: string
+	entryId?: number
+	requiredName?: string
+	expiresAt?: string
+}
 
 export async function bindFplEntry(
 	prevState: BindResult | null,
 	formData: FormData,
 ): Promise<BindResult> {
 	const reqHeaders = await headers()
-	const session = await getAuth().api.getSession({ headers: reqHeaders })
+	const session = await getAuthorizationSession(reqHeaders)
 
 	if (!session) {
 		redirect('/auth/login')
 	}
 
-	const raw = formData.get('entryId')
-	const entryId = Number(raw)
+	try {
+		const challengeId = formData.get('challengeId')
+		if (challengeId) {
+			const verified = await confirmFplEntryBindingChallenge(
+				session.user.id,
+				challengeId,
+			)
+			return {
+				success: `${verified.teamName} (${verified.managerName}) verified successfully`,
+				entryId: verified.entryId,
+			}
+		}
 
-	if (!Number.isInteger(entryId) || entryId <= 0) {
-		return { error: 'Enter a valid FPL entry ID (positive integer)' }
-	}
-
-	const { valid, teamName, managerName } = await validateFplEntry(entryId)
-
-	if (!valid) {
+		const challenge = await startFplEntryBindingChallenge(
+			session.user.id,
+			formData.get('entryId'),
+		)
 		return {
-			error: `No FPL team found with ID ${entryId}. Check your FPL entry number.`,
+			challengeId: challenge.id,
+			entryId: challenge.entryId,
+			requiredName: challenge.requiredName,
+			expiresAt: challenge.expiresAt,
+		}
+	} catch (error) {
+		return {
+			error: error instanceof FplBindingError || error instanceof Error
+				? error.message
+				: 'Unable to verify the FPL entry',
 		}
 	}
-
-	// input: false on additionalFields blocks auth.api.updateUser — write directly.
-	await db
-		.update(schema.user)
-		.set({ fplEntryId: entryId, fplEntryBoundAt: new Date() })
-		.where(eq(schema.user.id, session.user.id))
-
-	return { success: `${teamName} (${managerName}) linked successfully` }
 }

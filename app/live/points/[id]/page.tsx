@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
 import { Suspense } from 'react'
 import { getCurrentAndNextEvents } from '@/lib/events'
-import { executeQuery } from '@/lib/graphql-client'
+import { executeServerQuery } from '@/lib/graphql-server'
 import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
@@ -37,7 +37,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 
 	if (Number.isInteger(entryId) && entryId > 0 && currentEventId !== undefined) {
 		try {
-			const liveResponse = await executeQuery<LiveCalcDataResponse>(
+			const liveResponse = await executeServerQuery<LiveCalcDataResponse>(
 				GET_LIVE_POINTS,
 				{ eventId: currentEventId, entryId },
 				{ cache: 'no-store' }

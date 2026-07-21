@@ -18,7 +18,7 @@ import RootLayout from '@/components/layout/RootLayout'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getCurrentAndNextEvents } from '@/lib/events'
-import { executeQuery } from '@/lib/graphql-client'
+import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_EVENT_FIXTURES,
 	GET_EVENT_OVERALL_RESULT,
@@ -31,10 +31,10 @@ import { Suspense } from 'react'
 async function safeQuery<T>(
 	query: string,
 	variables?: Record<string, unknown>,
-	options?: Parameters<typeof executeQuery>[2],
+	options?: Parameters<typeof executePublicServerQuery>[2],
 ): Promise<T | null> {
 	try {
-		return await executeQuery<T>(query, variables, options)
+		return await executePublicServerQuery<T>(query, variables, options)
 	} catch (err) {
 		console.error('[page] RSC fetch failed:', err)
 		return null
