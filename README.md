@@ -134,7 +134,7 @@ npm run build
 npm test
 npm run lint
 npx tsc --noEmit
-npm audit --audit-level=high
+npm audit --audit-level=moderate
 
 # Start production server
 npm run start
