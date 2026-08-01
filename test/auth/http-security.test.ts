@@ -19,6 +19,13 @@ test('ignores spoofed forwarding headers outside verified provider boundaries', 
 	assert.equal(resolveProviderClientIp(new Headers({
 		host: 'www.letletme.top', 'cf-connecting-ip': '1.2.3.4', 'cf-ray': 'real-marker',
 	})), '1.2.3.4')
+	process.env.BETTER_AUTH_URL = 'https://letletme.top'
+	assert.equal(resolveProviderClientIp(new Headers({
+		host: 'www.letletme.top', 'x-vercel-forwarded-for': '1.2.3.4', 'x-vercel-id': 'syd1::abc',
+	})), '1.2.3.4')
+	assert.equal(resolveProviderClientIp(new Headers({
+		host: 'evil.example', 'x-vercel-forwarded-for': '1.2.3.4', 'x-vercel-id': 'syd1::spoofed',
+	})), 'unknown')
 	assert.equal(resolveProviderClientIp(new Headers({
 		host: 'preview.vercel.app', 'x-vercel-forwarded-for': '1.2.3.4', 'x-vercel-id': 'iad1::abc',
 	})), '1.2.3.4')
