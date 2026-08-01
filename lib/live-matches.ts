@@ -7,6 +7,12 @@ import { executeQuery } from '@/lib/graphql-client'
 import { teamFullNames } from '@/types/common'
 import type { Match } from '@/types/match'
 
+type QueryExecutor = <T>(
+	query: string,
+	variables?: Record<string, unknown>,
+	options?: { cache?: RequestCache; next?: { revalidate?: number | false; tags?: string[] } },
+) => Promise<T>
+
 function getTeamShortName(fullName: string): string {
 	const normalized = fullName
 		.replace(/Man City/gi, 'Manchester City')
@@ -213,8 +219,8 @@ export function transformLiveMatches(
 	return matches
 }
 
-export async function getLiveMatches(): Promise<Match[]> {
-	const data = await executeQuery<LiveMatchesResponse>(
+export async function getLiveMatches(executor: QueryExecutor = executeQuery): Promise<Match[]> {
+	const data = await executor<LiveMatchesResponse>(
 		GET_LIVE_MATCHES,
 		undefined,
 		{ cache: 'force-cache', next: { revalidate: 30 } },

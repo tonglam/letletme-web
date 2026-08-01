@@ -11,12 +11,14 @@ import { updateFplEntry } from './actions'
 
 export default function RebindEntryForm({
 	currentEntryId,
+	verified,
 	fplInfo,
 }: {
 	currentEntryId: number | null | undefined
+	verified: boolean
 	fplInfo: { teamName: string; managerName: string } | null
 }) {
-	const [editing, setEditing] = useState(!currentEntryId)
+	const [editing, setEditing] = useState(!currentEntryId || !verified)
 	const [state, formAction, isPending] = useActionState(updateFplEntry, null)
 	const prevStateRef = useRef(state)
 	const router = useRouter()
@@ -34,7 +36,7 @@ export default function RebindEntryForm({
 		}
 	}, [state, router])
 
-	if (!editing) {
+	if (!editing && verified) {
 		return (
 			<div className="flex w-full min-w-0 items-center justify-between gap-3">
 				<div className="flex flex-col gap-0.5">
@@ -63,6 +65,21 @@ export default function RebindEntryForm({
 
 	return (
 		<form action={formAction} className="space-y-3">
+			{state?.error && <p className="text-sm text-destructive">{state.error}</p>}
+			{state?.challengeId && state.requiredName ? (
+				<>
+					<input type="hidden" name="challengeId" value={state.challengeId} />
+					<div className="rounded-md border p-3 text-sm space-y-2">
+						<p>Change FPL team {state.newEntryId} to this exact name:</p>
+						<p className="font-mono text-base font-semibold">{state.requiredName}</p>
+						<p className="text-xs text-muted-foreground">Save it in FPL, then verify within 15 minutes.</p>
+					</div>
+					<Button type="submit" size="sm" disabled={isPending}>
+						{isPending ? 'Checking…' : 'Verify changed team name'}
+					</Button>
+				</>
+			) : (
+				<>
 			{currentEntryId && (
 				<p className="text-xs text-muted-foreground">
 					Currently linked to <span className="font-mono font-medium">{currentEntryId}</span>
@@ -86,7 +103,7 @@ export default function RebindEntryForm({
 					/>
 				</div>
 				<Button type="submit" size="sm" className="h-8" disabled={isPending}>
-					{isPending ? 'Saving…' : 'Save'}
+					{isPending ? 'Starting…' : 'Start verification'}
 				</Button>
 				{currentEntryId && (
 					<Button
@@ -100,6 +117,8 @@ export default function RebindEntryForm({
 					</Button>
 				)}
 			</div>
+				</>
+			)}
 		</form>
 	)
 }

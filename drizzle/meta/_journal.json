@@ -8,6 +8,41 @@
 			"when": 1777262481279,
 			"tag": "0000_right_ultimatum",
 			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1777520000000,
+			"tag": "0001_miniprogram_account",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1784352000000,
+			"tag": "0002_verified_fpl_binding",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1784438400000,
+			"tag": "0003_second_pass_security",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1784611200000,
+			"tag": "0004_lock_down_bauth",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1784635200000,
+			"tag": "0005_better_auth_rate_limit",
+			"breakpoints": true
 		}
 	]
 }

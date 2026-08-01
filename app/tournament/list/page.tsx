@@ -1,4 +1,4 @@
-import { getCurrentSession } from '@/lib/session'
+import { getCurrentEntryId, getCurrentSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import TournamentListClient from './TournamentListClient'
@@ -12,7 +12,10 @@ export default async function Page() {
 		redirect('/auth/login?next=/tournament/list')
 	}
 
-	const entryId = session.user.fplEntryId ?? 0
+	const entryId = await getCurrentEntryId()
+	if (!entryId) {
+		redirect('/onboarding/bind-entry')
+	}
 
 	return (
 		<Suspense fallback={<div>Loading...</div>}>

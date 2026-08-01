@@ -6,6 +6,7 @@ import {
 	assertValidWeChatLoginCode,
 	assertValidDeviceId,
 	getBearerToken,
+	hashMiniProgramChallenge,
 	hashMiniProgramSecret,
 	isExpired,
 	normalizeEmail,
@@ -63,6 +64,15 @@ describe('mini program account secret handling', () => {
 		assert.notEqual(hash, '123456')
 		assert.match(hash, /^[a-f0-9]{64}$/)
 		assert.equal(hashMiniProgramSecret('123456'), hash)
+	})
+
+	it('uses a keyed hash for low-entropy email challenges', () => {
+		const first = hashMiniProgramChallenge('123456', 'pepper-a')
+		const second = hashMiniProgramChallenge('123456', 'pepper-b')
+
+		assert.match(first, /^[a-f0-9]{64}$/)
+		assert.notEqual(first, second)
+		assert.equal(first, hashMiniProgramChallenge('123456', 'pepper-a'))
 	})
 
 	it('extracts bearer tokens case-insensitively', () => {

@@ -8,6 +8,10 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import {
+	assertFplEntryId,
+	fplTeamNamesMatch,
+} from '../../lib/fpl-binding-core'
 
 // ─── validation logic (mirrors actions.ts) ────────────────────────────────────
 
@@ -102,5 +106,17 @@ describe('FPL API response parsing', () => {
 			name: 'Team Cher',
 		}
 		assert.equal(parseManagerName(data), 'Cher ')
+	})
+})
+
+describe('FPL ownership challenge matching', () => {
+	it('requires an exact trimmed, case-insensitive team name', () => {
+		assert.equal(fplTeamNamesMatch('  llm-a1b2c3 ', 'LLM-A1B2C3'), true)
+		assert.equal(fplTeamNamesMatch('LLM-A1B2C3 FC', 'LLM-A1B2C3'), false)
+	})
+
+	it('uses the shared positive-integer validator', () => {
+		assert.equal(assertFplEntryId('15702'), 15702)
+		assert.throws(() => assertFplEntryId('1.5'))
 	})
 })

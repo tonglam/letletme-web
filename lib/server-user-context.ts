@@ -1,34 +1,30 @@
 import 'server-only'
 
-import { createHmac } from 'crypto'
-import { getCurrentSession } from '@/lib/session'
+import { headers } from 'next/headers'
+import { getAuthorizationSession } from '@/lib/auth'
+import { buildGraphQLUserContextHeaders } from '@/lib/graphql-envelope'
+import { buildIngressContextHeaders, buildOpaqueRateLimitSubject } from '@/lib/http-security'
+
+function requireProxySecret(): string | null {
+	const secret = process.env.BACKEND_PROXY_SECRET
+	if (!secret && process.env.NODE_ENV === 'production') {
+		throw new Error('BACKEND_PROXY_SECRET is required in production for GraphQL requests')
+	}
+	return secret ?? null
+}
 
 export async function getServerUserContextHeaders(): Promise<Record<string, string>> {
-	const secret = process.env.BACKEND_PROXY_SECRET
+	const secret = requireProxySecret()
 	if (!secret) {
-		if (process.env.NODE_ENV === 'production') {
-			throw new Error(
-				'BACKEND_PROXY_SECRET is required in production for authenticated GraphQL requests',
-			)
-		}
 		return {}
 	}
 
-	const session = await getCurrentSession()
-	if (!session?.user) return {}
-
-	const now = Math.floor(Date.now() / 1000)
-	const envelope = {
-		uid: session.user.id,
-		eid: (session.user as { fplEntryId?: number | null }).fplEntryId ?? null,
-		iat: now,
-		exp: now + 60,
+	const requestHeaders = await headers()
+	const subject = buildOpaqueRateLimitSubject(requestHeaders, secret)
+	const result = buildIngressContextHeaders(subject, secret)
+	const session = await getAuthorizationSession(requestHeaders)
+	if (session?.user) {
+		Object.assign(result, buildGraphQLUserContextHeaders(session.user, secret))
 	}
-	const payload = JSON.stringify(envelope)
-	const sig = createHmac('sha256', secret).update(payload).digest('base64url')
-
-	return {
-		'X-User-Context': Buffer.from(payload).toString('base64url'),
-		'X-User-Context-Sig': sig,
-	}
+	return result
 }

@@ -1,104 +1,99 @@
-import { type Session, getAuth } from '@/lib/auth'
-import { createHmac } from 'crypto'
+import { getAuthorizationSession } from '@/lib/auth'
+import { buildGraphQLUserContextHeaders } from '@/lib/graphql-envelope'
+import {
+	buildIngressContextHeaders,
+	buildOpaqueRateLimitSubject,
+	checkDatabaseRateLimit,
+	PayloadTooLargeError,
+	readBoundedJson,
+} from '@/lib/http-security'
+import { getOperationAST, parse } from 'graphql'
 import { NextRequest, NextResponse } from 'next/server'
 
-const GRAPHQL_ENDPOINT =
-	process.env.GRAPHQL_ENDPOINT || 'http://localhost:4000/graphql'
+const GRAPHQL_ENDPOINT = process.env.GRAPHQL_ENDPOINT || 'http://localhost:4000/graphql'
+const MAX_GRAPHQL_BODY_BYTES = 256 * 1024
 
-type QueryPolicy = {
-	pattern: string
-	requiresAuth: boolean
-	cacheable: boolean
+function isReadOnlyGraphQL(body: unknown): boolean {
+	if (!body || typeof body !== 'object') return false
+	const value = body as { query?: unknown; operationName?: unknown }
+	if (typeof value.query !== 'string') return false
+	try {
+		const operation = getOperationAST(
+			parse(value.query),
+			typeof value.operationName === 'string' ? value.operationName : undefined,
+		)
+		return operation?.operation === 'query'
+	} catch {
+		return false
+	}
 }
 
-/**
- * Single source of truth for GraphQL proxy behavior.
- * A query must never be both requiresAuth and cacheable — public CDN caches
- * cannot safely store session-scoped responses.
- */
-const QUERY_POLICIES: QueryPolicy[] = [
-	// Session-gated (never cacheable)
-	{ pattern: 'entryHistory(', requiresAuth: true, cacheable: false },
-	{ pattern: 'entryTransferHistory(', requiresAuth: true, cacheable: false },
-	{ pattern: 'entryTournaments(', requiresAuth: true, cacheable: false },
-	{ pattern: 'calcLivePointsForTournament(', requiresAuth: true, cacheable: false },
-	{ pattern: 'tournamentEntryRankingSummary(', requiresAuth: true, cacheable: false },
-	{ pattern: 'GetEntryHistory', requiresAuth: true, cacheable: false },
-	{ pattern: 'GetEntryTransferHistory', requiresAuth: true, cacheable: false },
-
-	// Public and safe to cache briefly
-	{ pattern: 'eventOverallResult', requiresAuth: false, cacheable: true },
-	{ pattern: 'GetEventStatsById', requiresAuth: false, cacheable: true },
-	{ pattern: 'event(id:', requiresAuth: false, cacheable: true },
-	{ pattern: 'GetCurrentAndNextEvents', requiresAuth: false, cacheable: true },
-	{ pattern: 'GetEventFixtures', requiresAuth: false, cacheable: true },
-	{ pattern: 'GetPlayerValues', requiresAuth: false, cacheable: true },
-]
-
-function resolveQueryPolicy(query: unknown): { requiresAuth: boolean; cacheable: boolean } {
-	if (typeof query !== 'string') {
-		return { requiresAuth: false, cacheable: false }
-	}
-
-	let requiresAuth = false
-	let cacheable = false
-
-	for (const policy of QUERY_POLICIES) {
-		if (!query.includes(policy.pattern)) continue
-		if (policy.requiresAuth) requiresAuth = true
-		if (policy.cacheable) cacheable = true
-	}
-
-	// Auth-gated responses must never be publicly cached.
-	if (requiresAuth) cacheable = false
-
-	return { requiresAuth, cacheable }
+function noStoreJson(body: unknown, status: number, headers: Record<string, string> = {}) {
+	return NextResponse.json(body, {
+		status,
+		headers: { 'Cache-Control': 'no-store', ...headers },
+	})
 }
 
 export async function POST(request: NextRequest) {
-	let session: Session | null
-	try {
-		session = await getAuth().api.getSession({ headers: request.headers })
-	} catch {
-		session = null
-	}
-
 	let body: unknown
 	try {
-		body = await request.json()
-	} catch {
-		return NextResponse.json({ errors: [{ message: 'Invalid JSON' }] }, { status: 400 })
-	}
-
-	const query = (body as Record<string, unknown>)?.query
-	const { requiresAuth, cacheable } = resolveQueryPolicy(query)
-
-	if (requiresAuth && !session) {
-		return NextResponse.json(
-			{ errors: [{ message: 'Unauthenticated' }] },
-			{ status: 401 },
-		)
-	}
-
-	const forwardHeaders: Record<string, string> = {
-		'Content-Type': 'application/json',
-	}
-
-	if (session?.user && process.env.BACKEND_PROXY_SECRET) {
-		const now = Math.floor(Date.now() / 1000)
-		const envelope = {
-			uid: session.user.id,
-			eid: session.user.fplEntryId ?? null,
-			iat: now,
-			exp: now + 60,
+		body = await readBoundedJson(request, MAX_GRAPHQL_BODY_BYTES)
+	} catch (error) {
+		if (error instanceof PayloadTooLargeError) {
+			return noStoreJson(
+				{ errors: [{ message: 'Payload too large', extensions: { code: 'PAYLOAD_TOO_LARGE' } }] },
+				413,
+			)
 		}
-		const payload = JSON.stringify(envelope)
-		const sig = createHmac('sha256', process.env.BACKEND_PROXY_SECRET)
-			.update(payload)
-			.digest('base64url')
-		forwardHeaders['X-User-Context'] =
-			Buffer.from(payload).toString('base64url')
-		forwardHeaders['X-User-Context-Sig'] = sig
+		return noStoreJson({ errors: [{ message: 'Invalid JSON' }] }, 400)
+	}
+
+	const secret = process.env.BACKEND_PROXY_SECRET
+	if (!secret && process.env.NODE_ENV === 'production') {
+		return noStoreJson({ errors: [{ message: 'Proxy security is unavailable' }] }, 503)
+	}
+	const subject = buildOpaqueRateLimitSubject(request.headers, secret || 'development-only')
+	try {
+		const rate = await checkDatabaseRateLimit({
+			scope: 'graphql-proxy-ip',
+			subject,
+			limit: 120,
+			windowSeconds: 60,
+		})
+		if (!rate.allowed) {
+			return noStoreJson(
+				{ errors: [{ message: 'Too many requests', extensions: { code: 'RATE_LIMITED' } }] },
+				429,
+				{ 'Retry-After': String(rate.retryAfterSeconds) },
+			)
+		}
+	} catch (error) {
+		// Only valid read-only GraphQL operations may fail open while the limiter is unavailable.
+		if (!isReadOnlyGraphQL(body)) {
+			console.error('[graphql proxy] rate-limit storage unavailable:', error)
+			return noStoreJson(
+				{ errors: [{ message: 'Request safety checks are unavailable' }] },
+				503,
+			)
+		}
+		console.warn('[graphql proxy] rate-limit storage unavailable; read-only request allowed')
+	}
+
+	let session = null
+	try {
+		session = await getAuthorizationSession(request.headers)
+	} catch (error) {
+		console.error('[graphql proxy] authorization session lookup failed:', error)
+		return noStoreJson({ errors: [{ message: 'Authentication unavailable' }] }, 503)
+	}
+
+	const forwardHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+	if (secret) {
+		Object.assign(forwardHeaders, buildIngressContextHeaders(subject, secret))
+		if (session?.user) {
+			Object.assign(forwardHeaders, buildGraphQLUserContextHeaders(session.user, secret))
+		}
 	}
 
 	let response: Response
@@ -109,29 +104,18 @@ export async function POST(request: NextRequest) {
 			headers: forwardHeaders,
 			body: JSON.stringify(body),
 		})
-	} catch (err) {
-		console.error('[graphql proxy] upstream fetch failed:', err)
-		return NextResponse.json(
-			{ errors: [{ message: 'Upstream unavailable' }] },
-			{ status: 502 },
-		)
+	} catch (error) {
+		console.error('[graphql proxy] upstream fetch failed:', error)
+		return noStoreJson({ errors: [{ message: 'Upstream unavailable' }] }, 502)
 	}
 
-	let data: unknown
-	try {
-		data = await response.json()
-	} catch {
-		return NextResponse.json(
-			{ errors: [{ message: `Upstream returned non-JSON (status ${response.status})` }] },
-			{ status: 502 },
-		)
+	const safeHeaders = new Headers({ 'Cache-Control': 'no-store' })
+	for (const name of ['content-type', 'content-language', 'retry-after']) {
+		const value = response.headers.get(name)
+		if (value) safeHeaders.set(name, value)
 	}
-
-	return NextResponse.json(data, {
-		headers: {
-			'Cache-Control': cacheable
-				? 'public, max-age=300, s-maxage=300, stale-while-revalidate=3600'
-				: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
-		},
+	return new NextResponse(await response.arrayBuffer(), {
+		status: response.status,
+		headers: safeHeaders,
 	})
 }
