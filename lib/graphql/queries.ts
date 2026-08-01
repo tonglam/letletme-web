@@ -1153,140 +1153,92 @@ export const GET_LIVE_MATCHES = `
   query GetLiveMatches {
     liveMatches(upcoming: true) {
       nextEvent {
-        matchId
-        minutes
-        homeTeamId
-        homeTeamName
-        homeTeamShortName
-        awayTeamId
-        awayTeamName
-        awayTeamShortName
-        kickoffTime
-        playStatus
+        ...LiveMatchIdentity
       }
       notStarted {
-        matchId
-        minutes
-        homeTeamId
-        homeTeamName
-        homeTeamShortName
+        ...LiveMatchIdentity
         homeScore
-        awayTeamId
-        awayTeamName
-        awayTeamShortName
         awayScore
-        kickoffTime
-        playStatus
       }
       playing {
-        matchId
-        minutes
-        homeTeamId
-        homeTeamName
-        homeTeamShortName
+        ...LiveMatchIdentity
         homeScore
         homeTeamDataList {
-          element
-          webName
-          elementType
-          minutes
-          goalsScored
-          assists
-          cleanSheets
-          goalsConceded
-          ownGoals
-          penaltiesSaved
-          penaltiesMissed
-          yellowCards
-          redCards
-          saves
-          defensiveContribution
-          bonus
-          bps
-          totalPoints
+          ...LivePlayingPlayer
         }
-        awayTeamId
-        awayTeamName
-        awayTeamShortName
         awayScore
         awayTeamDataList {
-          element
-          webName
-          elementType
-          minutes
-          goalsScored
-          assists
-          cleanSheets
-          goalsConceded
-          ownGoals
-          penaltiesSaved
-          penaltiesMissed
-          yellowCards
-          redCards
-          saves
-          defensiveContribution
-          bonus
-          bps
-          totalPoints
+          ...LivePlayingPlayer
         }
-        kickoffTime
-        playStatus
       }
       finished {
-        matchId
-        minutes
-        homeTeamId
-        homeTeamName
-        homeTeamShortName
+        ...LiveMatchIdentity
         homePosition
         homeScore
         homeTeamDataList {
-          element
-          webName
-          elementType
-          minutes
-          goalsScored
-          assists
-          cleanSheets
-          goalsConceded
-          ownGoals
-          yellowCards
-          redCards
-          saves
-          defensiveContribution
-          bonus
-          bps
-          totalPoints
-          inDreamTeam
+          ...LiveFinishedPlayer
         }
-        awayTeamId
-        awayTeamName
-        awayTeamShortName
         awayPosition
         awayScore
         awayTeamDataList {
-          element
-          webName
-          elementType
-          minutes
-          goalsScored
-          assists
-          cleanSheets
-          goalsConceded
-          ownGoals
-          yellowCards
-          redCards
-          saves
-          defensiveContribution
-          bonus
-          bps
-          totalPoints
-          inDreamTeam
+          ...LiveFinishedPlayer
         }
-        kickoffTime
-        playStatus
       }
     }
+  }
+
+  fragment LiveMatchIdentity on LiveMatchData {
+    matchId
+    minutes
+    homeTeamId
+    homeTeamName
+    homeTeamShortName
+    awayTeamId
+    awayTeamName
+    awayTeamShortName
+    kickoffTime
+    playStatus
+  }
+
+  fragment LivePlayingPlayer on ElementEventResultData {
+    element
+    webName
+    elementType
+    minutes
+    goalsScored
+    assists
+    cleanSheets
+    goalsConceded
+    ownGoals
+    penaltiesSaved
+    penaltiesMissed
+    yellowCards
+    redCards
+    saves
+    defensiveContribution
+    bonus
+    bps
+    totalPoints
+  }
+
+  fragment LiveFinishedPlayer on ElementEventResultData {
+    element
+    webName
+    elementType
+    minutes
+    goalsScored
+    assists
+    cleanSheets
+    goalsConceded
+    ownGoals
+    yellowCards
+    redCards
+    saves
+    defensiveContribution
+    bonus
+    bps
+    totalPoints
+    inDreamTeam
   }
 `
 

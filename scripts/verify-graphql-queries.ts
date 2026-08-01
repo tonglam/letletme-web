@@ -125,6 +125,7 @@ type Case = {
 	query: string
 	variables?: Record<string, unknown> | undefined
 	skip?: boolean
+	requiresPublishedPicks?: boolean
 }
 
 async function main() {
@@ -137,16 +138,20 @@ async function main() {
 	console.log(`Verifying queries against ${endpoint}\n`)
 
 	const boot = await gql(GET_CURRENT_AND_NEXT_EVENTS)
-	const eventIdRaw = boot.data?.current as { id?: number }[] | undefined
-	const eventId = eventIdRaw?.[0]?.id
 	if (boot.errors?.length) {
 		console.error(boot.errors)
 		process.exit(1)
 	}
+	const currentEvents = boot.data?.current as { id?: number }[] | undefined
+	const nextEvents = boot.data?.next as { id?: number }[] | undefined
+	const currentEventId = currentEvents?.[0]?.id
+	const nextEventId = nextEvents?.[0]?.id
+	const eventId = currentEventId ?? nextEventId
 	if (typeof eventId !== 'number') {
-		console.error('Bootstrap failed: no current event id', boot.data)
+		console.error('Bootstrap failed: no current or next event id', boot.data)
 		process.exit(1)
 	}
+	const hasPublishedPicks = typeof currentEventId === 'number'
 
 	const entryId = entryIdDefault
 	let tournamentId: number | null = tournamentIdFromEnv
@@ -182,13 +187,15 @@ async function main() {
 			name: 'GET_TOURNAMENT_EVENT_RESULTS',
 			query: GET_TOURNAMENT_EVENT_RESULTS,
 			variables: { tournamentId, eventId },
-			skip: tournamentId === null
+			skip: tournamentId === null,
+			requiresPublishedPicks: true
 		},
 		{
 			name: 'GET_TOURNAMENT_ENTRY_RANKING_SUMMARY',
 			query: GET_TOURNAMENT_ENTRY_RANKING_SUMMARY,
 			variables: { tournamentId, eventId, entryId },
-			skip: tournamentId === null
+			skip: tournamentId === null,
+			requiresPublishedPicks: true
 		},
 		{
 			name: 'GET_EVENT_STATS_BY_ID',
@@ -199,7 +206,8 @@ async function main() {
 			name: 'GET_TOURNAMENT_SELECTION_STATS',
 			query: GET_TOURNAMENT_SELECTION_STATS,
 			variables: { tournamentId, eventId, limit: 20 },
-			skip: tournamentId === null
+			skip: tournamentId === null,
+			requiresPublishedPicks: true
 		},
 		{
 			name: 'GET_PLAYER_DETAIL',
@@ -246,18 +254,21 @@ async function main() {
 		{
 			name: 'GET_LIVE_POINTS',
 			query: GET_LIVE_POINTS,
-			variables: { eventId, entryId }
+			variables: { eventId, entryId },
+			requiresPublishedPicks: true
 		},
 		{
 			name: 'GET_TOURNAMENT_LIVE_POINTS',
 			query: GET_TOURNAMENT_LIVE_POINTS,
 			variables: { eventId, tournamentId },
-			skip: tournamentId === null
+			skip: tournamentId === null,
+			requiresPublishedPicks: true
 		},
 		{
 			name: 'GET_ENTRY_EVENT_RESULT',
 			query: GET_ENTRY_EVENT_RESULT,
-			variables: { entryId, eventId }
+			variables: { entryId, eventId },
+			requiresPublishedPicks: true
 		},
 		{
 			name: 'GET_ENTRY_HISTORY',
@@ -285,12 +296,15 @@ async function main() {
 	for (const c of cases) {
 		const anonProxyBlocked = shouldSkipDueToAnonymousProxy(endpoint, c.query)
 		const noTournament = Boolean(c.skip)
-		if (anonProxyBlocked || noTournament) {
+		const noPublishedPicks = Boolean(c.requiresPublishedPicks && !hasPublishedPicks)
+		if (anonProxyBlocked || noTournament || noPublishedPicks) {
 			results.push({
 				name: c.name,
 				status: 'skip',
 				detail:
-					anonProxyBlocked && noTournament
+					noPublishedPicks
+						? 'pre-season dataset requires published picks/live data'
+						: anonProxyBlocked && noTournament
 						? 'anonymous /api/graphql + no tournament id'
 						: anonProxyBlocked
 							? 'anonymous /api/graphql (needs signed session)'
@@ -327,7 +341,7 @@ async function main() {
 		`\nsummary: ${results.length} cases; failed ${failed.length}; skipped ${skipped.length}`
 	)
 	console.log(
-		`current event id: ${eventId}; entry ${entryId}; player ${playerId}; tournament ${tournamentId ?? 'none'}`
+		`event context: current ${currentEventId ?? 'none'}, next ${nextEventId ?? 'none'}, using ${eventId}; entry ${entryId}; player ${playerId}; tournament ${tournamentId ?? 'none'}`
 	)
 	if (failed.length) process.exit(1)
 }
