@@ -39,22 +39,28 @@ const validIp = (value: string | null): string | null => {
 	return isIP(candidate) ? candidate : null
 }
 
-function expectedProductionHost(): string {
+function expectedProductionHosts(): Set<string> {
+	const hosts = new Set<string>()
 	for (const raw of [process.env.BETTER_AUTH_URL, process.env.NEXT_PUBLIC_APP_URL]) {
 		if (!raw) continue
 		try {
-			return new URL(raw).host.toLowerCase()
+			hosts.add(new URL(raw).host.toLowerCase())
 		} catch {}
 	}
-	return 'www.letletme.top'
+	if (hosts.has('letletme.top') || hosts.has('www.letletme.top') || hosts.size === 0) {
+		hosts.add('letletme.top')
+		hosts.add('www.letletme.top')
+	}
+	return hosts
 }
 
 export function resolveProviderClientIp(headers: Headers): string {
 	const host = (headers.get('host') ?? '').toLowerCase()
-	if (host === expectedProductionHost() && headers.has('cf-ray')) {
+	const isExpectedProductionHost = expectedProductionHosts().has(host)
+	if (isExpectedProductionHost && headers.has('cf-ray')) {
 		return validIp(headers.get('cf-connecting-ip')) ?? 'unknown'
 	}
-	if (host.endsWith('.vercel.app') && headers.has('x-vercel-id')) {
+	if ((isExpectedProductionHost || host.endsWith('.vercel.app')) && headers.has('x-vercel-id')) {
 		return validIp(headers.get('x-vercel-forwarded-for')?.split(',')[0] ?? null) ?? 'unknown'
 	}
 	return 'unknown'

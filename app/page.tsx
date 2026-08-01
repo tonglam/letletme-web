@@ -3,7 +3,6 @@ import {
 	GameweekStatsSection,
 	GameweekStatsSectionFallback,
 } from '@/components/home/GameweekStatsSection'
-import { H2HSection } from '@/components/home/H2HSection'
 import { MatchesSection } from '@/components/home/MatchesSection'
 import {
 	PriceChangesSection,
@@ -124,12 +123,6 @@ export default async function Home() {
 						<Suspense fallback={<PriceChangesSectionFallback />}>
 							<PriceChangesSection />
 						</Suspense>
-					</div>
-				</section>
-
-				<section className="bg-muted/30 py-8">
-					<div className="container max-w-4xl mx-auto px-4">
-						<H2HSection />
 					</div>
 				</section>
 
