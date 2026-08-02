@@ -3,9 +3,11 @@ import { Button } from '@/components/ui/button'
 import { AlertCircle, Check, Users } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
+import type { TournamentCreationMode } from '../_lib/tournament-form'
 
 interface TournamentCreateActionsProps {
 	canSubmit: boolean
+	creationMode: TournamentCreationMode
 	createdTournamentId: number | null
 	isSubmitting: boolean
 	participantCount: number
@@ -13,7 +15,7 @@ interface TournamentCreateActionsProps {
 	submitSuccess: string | null
 }
 
-export function TournamentCreateActions({ canSubmit, createdTournamentId, isSubmitting, participantCount, submitError, submitSuccess }: TournamentCreateActionsProps) {
+export function TournamentCreateActions({ canSubmit, creationMode, createdTournamentId, isSubmitting, participantCount, submitError, submitSuccess }: TournamentCreateActionsProps) {
 	const t = useTranslations('TournamentCreate')
 	return (
 		<div className="flex flex-col gap-6">
@@ -30,7 +32,12 @@ export function TournamentCreateActions({ canSubmit, createdTournamentId, isSubm
 					<Button asChild size="lg"><Link href={`/tournament/${createdTournamentId}`}>{t('viewTournament')}</Link></Button>
 				) : (
 					<Button type="submit" size="lg" disabled={!canSubmit || isSubmitting}>
-						{isSubmitting ? t('creating') : t('create')} <Check data-icon="inline-end" aria-hidden="true" />
+						{isSubmitting
+							? t('creating')
+							: creationMode === 'classic'
+								? t('copyClassic')
+								: t('create')}{' '}
+						<Check data-icon="inline-end" aria-hidden="true" />
 					</Button>
 				)}
 			</div>

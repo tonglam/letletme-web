@@ -3,6 +3,8 @@ import { describe, it } from 'node:test'
 
 import {
 	computeTournamentPlan,
+	getImportedTournamentName,
+	isCurrentLeaguePreviewRequest,
 	isPowerOfTwo,
 	tournamentFormSchema,
 	validateLeagueUrl,
@@ -20,8 +22,66 @@ describe('tournament creation model', () => {
 				valid: false,
 				domainValid: false,
 				message: 'Only secure URLs from fantasy.premierleague.com are allowed.',
+				leagueId: null,
+				leagueType: null,
 			},
 		)
+	})
+
+	it('accepts the localized classic URL copied from FPL', () => {
+		assert.deepEqual(
+			validateLeagueUrl(
+				'https://fantasy.premierleague.com/en/leagues/8863/standings/c',
+				undefined,
+				{ classicOnly: true },
+			),
+			{
+				valid: true,
+				domainValid: true,
+				message: null,
+				leagueId: 8863,
+				leagueType: 'classic',
+			},
+		)
+	})
+
+	it('keeps head-to-head import reserved without removing custom URL support', () => {
+		const url = 'https://fantasy.premierleague.com/en/leagues/99/standings/h'
+		assert.equal(validateLeagueUrl(url).valid, true)
+		assert.deepEqual(validateLeagueUrl(url, undefined, { classicOnly: true }), {
+			valid: false,
+			domainValid: true,
+			message: 'Use an FPL Classic standings URL. Head-to-head import is coming later.',
+			leagueId: 99,
+			leagueType: 'h2h',
+		})
+	})
+
+	it('uses the official league name without making it a required input', () => {
+		assert.equal(getImportedTournamentName(' ♪ü♪让让群联赛10周年 ', 8863), '♪ü♪让让群联赛10周年')
+		assert.equal(getImportedTournamentName('x', 8863), 'FPL League 8863')
+	})
+
+	it('ignores a league preview completed after switching creation mode', () => {
+		assert.equal(isCurrentLeaguePreviewRequest({
+			requestId: 4,
+			currentRequestId: 4,
+			requestMode: 'classic',
+			currentMode: 'custom',
+			requestedLeagueUrl: 'https://fantasy.premierleague.com/en/leagues/8863/standings/c',
+			currentLeagueUrl: 'https://fantasy.premierleague.com/en/leagues/8863/standings/c',
+		}), false)
+	})
+
+	it('applies only the latest preview for the current mode and URL', () => {
+		assert.equal(isCurrentLeaguePreviewRequest({
+			requestId: 4,
+			currentRequestId: 4,
+			requestMode: 'classic',
+			currentMode: 'classic',
+			requestedLeagueUrl: 'https://fantasy.premierleague.com/en/leagues/8863/standings/c',
+			currentLeagueUrl: '  https://fantasy.premierleague.com/en/leagues/8863/standings/c  ',
+		}), true)
 	})
 
 	it('requires a power-of-two knockout field', () => {

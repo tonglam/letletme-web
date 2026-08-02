@@ -1,15 +1,19 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import {
 	computeTournamentPlan,
 	createTournamentFormSchema,
 	DEFAULT_TOURNAMENT_FORM,
+	getImportedTournamentName,
+	isCurrentLeaguePreviewRequest,
 	validateLeagueUrl,
+	type LeaguePreview,
 	type Participant,
 	type ParticipantApiItem,
+	type TournamentCreationMode,
 	type TournamentFormData,
 } from '../_lib/tournament-form'
 import { useTranslations } from 'next-intl'
@@ -43,7 +47,7 @@ export function useCreateTournament() {
 		defaultValues: DEFAULT_TOURNAMENT_FORM,
 		mode: 'onChange',
 	})
-	const { control, setValue } = form
+	const { control, getValues, setValue } = form
 	const participantSource = useWatch({ control, name: 'participantSource' })
 	const leagueUrl = useWatch({ control, name: 'leagueUrl' })
 	const tournamentName = useWatch({ control, name: 'tournamentName' })
@@ -54,7 +58,9 @@ export function useCreateTournament() {
 	const qualifiersPerGroup = useWatch({ control, name: 'qualifiersPerGroup' })
 	const knockoutFormat = useWatch({ control, name: 'knockoutFormat' })
 	const normalizedTournamentName = tournamentName?.trim() ?? ''
+	const normalizedLeagueUrl = leagueUrl?.trim() ?? ''
 
+	const [creationMode, setCreationMode] = useState<TournamentCreationMode>('classic')
 	const [participants, setParticipants] = useState<Participant[]>([])
 	const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([])
 	const [participantsLoaded, setParticipantsLoaded] = useState(false)
@@ -70,13 +76,21 @@ export function useCreateTournament() {
 	const [submitSuccess, setSubmitSuccess] = useState<string | null>(null)
 	const [createdTournamentId, setCreatedTournamentId] = useState<number | null>(null)
 	const [createdTournamentName, setCreatedTournamentName] = useState('')
+	const [loadedLeague, setLoadedLeague] = useState<LeaguePreview | null>(null)
+	const creationModeRef = useRef<TournamentCreationMode>('classic')
+	const participantRequestIdRef = useRef(0)
+	const participantAbortControllerRef = useRef<AbortController | null>(null)
 
 	const leagueUrlState = useMemo(() => validateLeagueUrl(leagueUrl ?? '', {
 		domainInvalid: t('domainInvalid'),
 		pathInvalid: t('leagueUrlPathInvalid'),
 		incomplete: t('leagueUrlIncomplete'),
-	}), [leagueUrl, t])
-	const participantsAreCurrent = participantsLoaded && fetchedLeagueUrl === leagueUrl
+		classicOnly: t('classicOnly'),
+	}, { classicOnly: creationMode === 'classic' }), [creationMode, leagueUrl, t])
+	const participantsAreCurrent =
+		participantsLoaded &&
+		fetchedLeagueUrl === normalizedLeagueUrl &&
+		(creationMode !== 'classic' || loadedLeague?.leagueType === 'classic')
 	const effectiveSelectedParticipantIds = participantSource === 'official' && participantsAreCurrent
 		? participants.map((participant) => participant.id)
 		: selectedParticipantIds
@@ -155,10 +169,31 @@ export function useCreateTournament() {
 		setCreatedTournamentName('')
 	}
 
+	const applyClassicMode = (startEvent = loadedLeague?.startEvent ?? 1) => {
+		setValue('participantSource', 'official', { shouldValidate: true })
+		setValue('groupFormat', 'points', { shouldValidate: true })
+		setValue('startGameweek', `GW${startEvent}` as TournamentFormData['startGameweek'], { shouldValidate: true })
+		setValue('endGameweek', 'GW38', { shouldValidate: true })
+		setValue('groupNum', '1', { shouldValidate: true })
+		setValue('knockoutFormat', 'none', { shouldValidate: true })
+		setValue('qualifiersPerGroup', '', { shouldValidate: true })
+	}
+
+	const changeCreationMode = (mode: TournamentCreationMode) => {
+		creationModeRef.current = mode
+		participantRequestIdRef.current += 1
+		participantAbortControllerRef.current?.abort()
+		participantAbortControllerRef.current = null
+		setIsLoadingParticipants(false)
+		setCreationMode(mode)
+		if (mode === 'classic') applyClassicMode()
+		clearFeedback()
+	}
+
 	const applyAutoMode = () => {
 		setValue('participantSource', 'official')
 		setValue('groupFormat', 'points')
-		setValue('startGameweek', 'GW1')
+		setValue('startGameweek', `GW${loadedLeague?.startEvent ?? 1}` as TournamentFormData['startGameweek'])
 		setValue('endGameweek', 'GW38')
 		setValue('groupNum', '1')
 		setValue('knockoutFormat', 'none')
@@ -185,13 +220,46 @@ export function useCreateTournament() {
 			setParticipantError(leagueUrlState.message ?? t('leagueUrlInvalid'))
 			return
 		}
+		participantAbortControllerRef.current?.abort()
+		const controller = new AbortController()
+		const requestId = participantRequestIdRef.current + 1
+		const requestMode = creationModeRef.current
+		const requestedLeagueUrl = normalizedLeagueUrl
+		participantRequestIdRef.current = requestId
+		participantAbortControllerRef.current = controller
+		const isCurrentRequest = () => isCurrentLeaguePreviewRequest({
+			requestId,
+			currentRequestId: participantRequestIdRef.current,
+			requestMode,
+			currentMode: creationModeRef.current,
+			requestedLeagueUrl,
+			currentLeagueUrl: getValues('leagueUrl'),
+		})
 		setIsLoadingParticipants(true)
 		setParticipantsLoaded(false)
+		setLoadedLeague(null)
 		clearFeedback()
 		try {
-			const response = await fetch(`/api/tournaments/participants?leagueUrl=${encodeURIComponent(leagueUrl ?? '')}`)
+			const response = await fetch(`/api/tournaments/participants?leagueUrl=${encodeURIComponent(requestedLeagueUrl)}`, {
+				signal: controller.signal,
+			})
 			const result = await readJson(response)
+			if (!isCurrentRequest()) return
 			if (!response.ok) throw new Error(t('participantsLoadFailed'))
+			const leagueId = typeof result.leagueId === 'number' && Number.isSafeInteger(result.leagueId)
+				? result.leagueId
+				: null
+			const leagueType = result.leagueType === 'classic' || result.leagueType === 'h2h'
+				? result.leagueType
+				: null
+			const leagueName = typeof result.leagueName === 'string' ? result.leagueName.trim() : ''
+			const startEvent = typeof result.startEvent === 'number' && Number.isInteger(result.startEvent) && result.startEvent >= 1 && result.startEvent <= 38
+				? result.startEvent
+				: 1
+			if (!leagueId || !leagueType) throw new Error(t('participantsLoadFailed'))
+			if (creationMode === 'classic' && leagueType !== 'classic') {
+				throw new Error(t('classicOnly'))
+			}
 			const rawParticipants = Array.isArray(result.participants) ? result.participants : []
 			const fetchedParticipants = rawParticipants.filter((item): item is ParticipantApiItem => {
 				if (!item || typeof item !== 'object') return false
@@ -206,19 +274,38 @@ export function useCreateTournament() {
 					Number.isFinite(participant.totalPoints) &&
 					participant.totalPoints >= 0
 			})
+			const leaguePreview: LeaguePreview = {
+				leagueId,
+				leagueName: leagueName || `FPL League ${leagueId}`,
+				leagueType,
+				startEvent,
+			}
 			setParticipants(fetchedParticipants)
 			setSelectedParticipantIds(participantSource === 'official' ? fetchedParticipants.map((participant) => participant.id) : [])
 			setParticipantsLoaded(true)
-			setFetchedLeagueUrl(leagueUrl ?? null)
+			setFetchedLeagueUrl(requestedLeagueUrl)
+			setLoadedLeague(leaguePreview)
+			if (creationMode === 'classic') {
+				applyClassicMode(startEvent)
+				setValue('tournamentName', getImportedTournamentName(leaguePreview.leagueName, leagueId), {
+					shouldDirty: true,
+					shouldValidate: true,
+				})
+			}
 			if (fetchedParticipants.length < 2) setParticipantError(t('leagueNeedsTwo'))
-		} catch {
-			setParticipantError(t('participantsLoadFailed'))
+		} catch (error) {
+			if (!isCurrentRequest() || (error instanceof Error && error.name === 'AbortError')) return
+			setParticipantError(error instanceof Error ? error.message : t('participantsLoadFailed'))
 			setParticipants([])
 			setSelectedParticipantIds([])
 			setParticipantsLoaded(false)
 			setFetchedLeagueUrl(null)
+			setLoadedLeague(null)
 		} finally {
-			setIsLoadingParticipants(false)
+			if (requestId === participantRequestIdRef.current) {
+				participantAbortControllerRef.current = null
+				setIsLoadingParticipants(false)
+			}
 		}
 	}
 
@@ -226,6 +313,10 @@ export function useCreateTournament() {
 		clearFeedback()
 		if (!participantsAreCurrent) {
 			setSubmitError(t('fetchBeforeCreate'))
+			return
+		}
+		if (creationMode === 'classic' && loadedLeague?.leagueType !== 'classic') {
+			setSubmitError(t('classicOnly'))
 			return
 		}
 		const participantIds = data.participantSource === 'official'
@@ -250,10 +341,26 @@ export function useCreateTournament() {
 
 		setIsSubmitting(true)
 		try {
+			const payload = creationMode === 'classic'
+				? {
+					...data,
+					creationMode,
+					participantSource: 'official' as const,
+					tournamentType: 'standard',
+					leagueUrl: normalizedLeagueUrl,
+					groupFormat: 'points' as const,
+					startGameweek: `GW${loadedLeague?.startEvent ?? 1}`,
+					endGameweek: 'GW38',
+					groupNum: '1',
+					qualifiersPerGroup: '',
+					knockoutFormat: 'none' as const,
+					selectedParticipantIds: participantIds,
+				}
+				: { ...data, creationMode, tournamentType: 'standard', selectedParticipantIds: participantIds }
 			const response = await fetch('/api/tournaments', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ ...data, tournamentType: 'standard', selectedParticipantIds: participantIds }),
+				body: JSON.stringify(payload),
 			})
 			const result = await readJson(response)
 			if (!response.ok) throw new Error(t('createFailed'))
@@ -282,6 +389,8 @@ export function useCreateTournament() {
 
 	return {
 		applyAutoMode,
+		changeCreationMode,
+		creationMode,
 		createdTournamentId: currentCreatedTournamentId,
 		fetchParticipants,
 		form,
@@ -293,6 +402,7 @@ export function useCreateTournament() {
 		knockoutFormat,
 		leagueUrl,
 		leagueUrlState,
+		loadedLeague: participantsAreCurrent ? loadedLeague : null,
 		nameCheckMessage: currentNameCheckMessage,
 		onSubmit,
 		participantError,
