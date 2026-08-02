@@ -1,7 +1,7 @@
 # Frontend architecture, performance, and UX review
 
 Date: 2 August 2026
-Release branches: `codex/frontend-review-improvements`, `codex/hydration-readiness`, `codex/disable-cloudflare-transform`
+Release branches: `codex/frontend-review-improvements`, `codex/hydration-readiness`, `codex/disable-cloudflare-transform`, `codex/stream-homepage-shell`
 
 ## Executive verdict
 
@@ -31,7 +31,7 @@ No known P0 or P1 frontend issue remains from this review. Production rollout an
 - Split GraphQL queries and types into event, entry, player, live, price, and tournament operation modules.
 - Kept page/layout files server-first and moved interactivity into explicit client components.
 - Removed the root events dependency and obsolete global event context so unrelated pages do not wait on the backend.
-- Added global loading, error, global-error, and not-found boundaries plus shared page loading/state components.
+- Added global error, global-error, and not-found boundaries plus shared route/section loading and page-state components. The root loading boundary was removed after it was shown to hold back the already-rendered homepage shell; the data-heavy live-points route keeps its dedicated loading UI.
 
 ### Backend boundaries and tournament management
 
@@ -70,13 +70,14 @@ No known P0 or P1 frontend issue remains from this review. Production rollout an
 - Re-enabled Next.js image optimization and reduced display-font preload cost.
 - Server-seeded key routes to avoid avoidable client waterfalls and removed duplicated data work.
 - Prevented Cloudflare from rewriting Next.js streaming and hydration scripts by adding `no-transform` to HTML document responses while preserving public revalidation, private-page `no-store`, API caching, and RSC caching behavior.
+- Streamed the homepage hero directly instead of first committing a generic route skeleton. Section-level Suspense fallbacks still cover slower deadline, price, and insight data without delaying the primary heading or calls to action.
 - Added a sampled Web Vitals reporter for CLS, FCP, INP, LCP, and TTFB. Dynamic identifiers and query strings are normalized out, payloads are bounded, no user identity is included, and delivery uses `sendBeacon` with a keepalive fallback.
-- The comparable local Lighthouse home run recorded 96 performance, 100 accessibility, 100 best practices, 100 SEO, 0.8 s FCP, 2.7 s LCP, 0 ms blocking time, and zero layout shift. A mobile production-origin run recorded 99 performance, 1.2 s FCP, 2.2 s LCP, 20 ms blocking time, and zero layout shift. The Cloudflare-rewritten response had scored 78 before the delivery-layer fix, which isolated the edge transformation as the regression rather than the application bundle.
+- The comparable local Lighthouse home run recorded 96 performance, 100 accessibility, 100 best practices, 100 SEO, 0.8 s FCP, 2.7 s LCP, 0 ms blocking time, and zero layout shift. A mobile production-origin run recorded 99 performance, 1.2 s FCP, 2.2 s LCP, 20 ms blocking time, and zero layout shift. The Cloudflare-rewritten response had scored 78 before the delivery-layer fix; edge-safe repeat runs scored 88–92 with 100 accessibility/best-practices/SEO, 7 ms blocking time, and zero layout shift. The remaining variance traced to the root loading boundary, and local production verification of the direct shell observed the hero paint in 0.12–0.16 s.
 
 ## Automated verification
 
 - Frontend unit/security/model tests: 98 total, 96 passed, 2 database-only tests skipped, 0 failed.
-- Playwright browser suite: 9 passed, covering CDN transformation protection, pre-hydration controls, desktop/mobile navigation, skip link, axe accessibility, theme persistence, in-app auth errors, corrupt storage plus backend failure, and protected-route redirects.
+- Playwright browser suite: 9 passed, covering direct homepage-shell streaming, CDN transformation protection, pre-hydration controls, desktop/mobile navigation, skip link, axe accessibility, theme persistence, in-app auth errors, corrupt storage plus backend failure, and protected-route redirects.
 - Frontend ESLint: passed with zero warnings or errors.
 - Frontend TypeScript: passed.
 - Frontend production build: passed on Next.js 16.2.12. Backend-dependent static routes rendered their intended fallback states while the local GraphQL service was deliberately unavailable.
