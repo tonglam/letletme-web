@@ -10,7 +10,11 @@ import { Link } from '@/i18n/navigation'
 import { localizeHref, type AppLocale } from '@/i18n/routing'
 import { signUp } from '@/lib/auth-client'
 import { getAuthErrorKey } from '@/lib/auth-error'
-import { absoluteAuthUrl, onboardingRedirectPath } from '@/lib/auth-redirects'
+import {
+	absoluteAuthUrl,
+	onboardingRedirectPath,
+	verificationCallbackPath
+} from '@/lib/auth-redirects'
 import { Gamepad } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useState } from 'react'
@@ -40,12 +44,16 @@ export default function SignupClient() {
 		}
 		setPending(true)
 		try {
+			const onboardingPath = onboardingRedirectPath('/')
 			const { error: err } = await signUp.email({
 				name,
 				email,
 				password,
 				callbackURL: absoluteAuthUrl(
-					localizeHref(onboardingRedirectPath('/'), locale),
+					localizeHref(
+						verificationCallbackPath(onboardingPath),
+						locale
+					),
 					window.location.origin
 				)
 			})

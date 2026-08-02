@@ -24,6 +24,19 @@ export function onboardingRedirectPath(
 	return `/onboarding/bind-entry?next=${encodeURIComponent(destination)}`
 }
 
+/** Public landing page that can render verification errors before onboarding. */
+export function verificationCallbackPath(
+	next: string | null | undefined
+): string {
+	const destination = safeRedirectPath(next)
+	return `/auth/verify-email?next=${encodeURIComponent(destination)}`
+}
+
+/** Better Auth may replace the error value supplied to an OAuth callback. */
+export function hasOAuthCallbackError(searchParams: URLSearchParams): boolean {
+	return searchParams.has('oauthError') || searchParams.has('error')
+}
+
 export function absoluteAuthUrl(path: string, origin: string): string {
 	return new URL(safeRedirectPath(path), origin).toString()
 }

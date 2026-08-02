@@ -23,11 +23,30 @@ describe('auth response cache policy', () => {
 				'Set-Cookie': 'letletme.session_token=token; HttpOnly'
 			}
 		})
-		withPrivateNoStore(response)
+		const wrapped = withPrivateNoStore(response)
 
-		assert.equal(response.status, 429)
-		assert.equal(response.headers.get('retry-after'), '45')
-		assert.match(response.headers.get('set-cookie') ?? '', /HttpOnly/)
+		assert.equal(wrapped.status, 429)
+		assert.equal(wrapped.headers.get('retry-after'), '45')
+		assert.match(wrapped.headers.get('set-cookie') ?? '', /HttpOnly/)
+	})
+
+	it('clones immutable redirect headers before applying the policy', () => {
+		const redirect = Response.redirect(
+			'https://letletme.top/onboarding/bind-entry',
+			302
+		)
+
+		const wrapped = withPrivateNoStore(redirect)
+
+		assert.equal(wrapped.status, 302)
+		assert.equal(
+			wrapped.headers.get('location'),
+			'https://letletme.top/onboarding/bind-entry'
+		)
+		assert.equal(
+			wrapped.headers.get('cache-control'),
+			'private, no-store, max-age=0'
+		)
 	})
 
 	it('normalizes Better Auth retry metadata to the standard header', () => {

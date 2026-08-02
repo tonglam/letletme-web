@@ -3,8 +3,10 @@ import { describe, it } from 'node:test'
 
 import {
 	absoluteAuthUrl,
+	hasOAuthCallbackError,
 	onboardingRedirectPath,
-	safeRedirectPath
+	safeRedirectPath,
+	verificationCallbackPath
 } from '../../lib/auth-redirects'
 
 describe('auth redirect policy', () => {
@@ -32,6 +34,25 @@ describe('auth redirect policy', () => {
 			onboardingRedirectPath('/tournament/42/manage?tab=members'),
 			'/onboarding/bind-entry?next=%2Ftournament%2F42%2Fmanage%3Ftab%3Dmembers'
 		)
+	})
+
+	it('routes verification through a public callback before onboarding', () => {
+		assert.equal(
+			verificationCallbackPath(onboardingRedirectPath('/profile')),
+			'/auth/verify-email?next=%2Fonboarding%2Fbind-entry%3Fnext%3D%252Fprofile'
+		)
+	})
+
+	it('recognizes provider-replaced OAuth callback errors', () => {
+		assert.equal(
+			hasOAuthCallbackError(new URLSearchParams('error=access_denied')),
+			true
+		)
+		assert.equal(
+			hasOAuthCallbackError(new URLSearchParams('oauthError=1')),
+			true
+		)
+		assert.equal(hasOAuthCallbackError(new URLSearchParams('next=%2F')), false)
 	})
 
 	it('builds absolute Better Auth callback URLs from safe paths', () => {

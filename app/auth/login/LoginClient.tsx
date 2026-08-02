@@ -15,7 +15,11 @@ import {
 } from '@/i18n/routing'
 import { getAuthErrorKey } from '@/lib/auth-error'
 import { signIn } from '@/lib/auth-client'
-import { absoluteAuthUrl, onboardingRedirectPath } from '@/lib/auth-redirects'
+import {
+	absoluteAuthUrl,
+	hasOAuthCallbackError,
+	onboardingRedirectPath
+} from '@/lib/auth-redirects'
 import { Gamepad } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
@@ -33,7 +37,9 @@ function LoginForm() {
 	const [password, setPassword] = useState('')
 	const [pending, setPending] = useState(false)
 	const [error, setError] = useState<string | null>(() =>
-		searchParams.get('error') === 'oauth' ? t('errors.socialLoginFailed') : null
+		hasOAuthCallbackError(searchParams)
+			? t('errors.socialLoginFailed')
+			: null
 	)
 
 	const handleEmailLogin = async (e: React.FormEvent) => {
@@ -75,7 +81,7 @@ function LoginForm() {
 				newUserCallbackURL: onboardingUrl,
 				errorCallbackURL: absoluteAuthUrl(
 					localizeHref(
-						`/auth/login?error=oauth&next=${encodeURIComponent(next)}`,
+						`/auth/login?oauthError=1&next=${encodeURIComponent(next)}`,
 						locale
 					),
 					window.location.origin

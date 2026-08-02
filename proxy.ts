@@ -4,7 +4,7 @@ import {
 	localizePathname,
 	stripLocaleFromPathname
 } from '@/i18n/routing'
-import { getAuth } from '@/lib/auth'
+import { getAuthorizationSession } from '@/lib/auth'
 import {
 	isProtectedApi,
 	isProtectedPage,
@@ -47,7 +47,7 @@ export async function proxy(req: NextRequest) {
 	if (requestedPathname.startsWith('/api/')) {
 		if (!isProtectedApi(requestedPathname)) return NextResponse.next()
 
-		const session = await getAuth().api.getSession({ headers: req.headers })
+		const session = await getAuthorizationSession(req.headers)
 		return session
 			? NextResponse.next()
 			: NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
@@ -67,7 +67,9 @@ export async function proxy(req: NextRequest) {
 		return withDocumentCacheHeaders(req, i18nResponse)
 	}
 
-	const session = await getAuth().api.getSession({ headers: req.headers })
+	// Protected routes must observe entry verification and revocation immediately,
+	// rather than trusting the five-minute session cookie cache.
+	const session = await getAuthorizationSession(req.headers)
 
 	if (!session) {
 		const url = req.nextUrl.clone()
