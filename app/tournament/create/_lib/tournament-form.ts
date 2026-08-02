@@ -1,4 +1,12 @@
 import { z } from 'zod'
+import {
+	isSupportedLeagueUrl,
+	LeagueUrlError,
+	parseLeagueUrl,
+	type LeagueType,
+} from '@/lib/tournament/league-url'
+
+export type TournamentCreationMode = 'classic' | 'custom'
 
 export const PARTICIPANT_SOURCES = [
 	{ value: 'official', label: 'Official' },
@@ -20,9 +28,6 @@ export const GAMEWEEKS = Array.from({ length: 38 }, (_, index) => ({
 	value: `GW${index + 1}`,
 	label: `Gameweek ${index + 1}`,
 }))
-
-export const FPL_LEAGUE_URL_PATTERN =
-	/^https:\/\/fantasy\.premierleague\.com\/leagues\/\d+\/(standings|admin|join)(?:[/?#].*)?$/
 
 const positiveIntegerString = (message: string) => z.string().trim().regex(/^[1-9]\d*$/, message)
 
@@ -55,7 +60,7 @@ export const createTournamentFormSchema = (messages: TournamentFormMessages = DE
 	return z.object({
 	tournamentName: z.string().trim().min(3, messages.nameTooShort).max(80, messages.nameTooLong),
 	participantSource: z.enum(['official', 'custom']),
-	leagueUrl: z.string().refine((value) => FPL_LEAGUE_URL_PATTERN.test(value), {
+	leagueUrl: z.string().refine(isSupportedLeagueUrl, {
 		message: messages.validLeagueUrl,
 	}),
 	groupFormat: z.enum(['none', 'points']),
@@ -108,6 +113,19 @@ export interface Participant {
 }
 
 export type ParticipantApiItem = Participant
+
+export interface LeaguePreview {
+	leagueId: number
+	leagueName: string
+	leagueType: LeagueType
+	startEvent: number
+}
+
+export function getImportedTournamentName(leagueName: string, leagueId: number): string {
+	const normalized = leagueName.trim()
+	const fallback = `FPL League ${leagueId}`
+	return (normalized.length >= 3 ? normalized : fallback).slice(0, 80)
+}
 
 export interface TournamentPlan {
 	totalEntries: number
@@ -218,26 +236,59 @@ export interface LeagueUrlMessages {
 	domainInvalid: string
 	pathInvalid: string
 	incomplete: string
+	classicOnly: string
 }
 
 const DEFAULT_LEAGUE_URL_MESSAGES: LeagueUrlMessages = {
 	domainInvalid: 'Only secure URLs from fantasy.premierleague.com are allowed.',
 	pathInvalid: 'Use a league standings, admin, or join URL.',
 	incomplete: 'Enter a complete URL beginning with https://.',
+	classicOnly: 'Use an FPL Classic standings URL. Head-to-head import is coming later.',
 }
 
-export function validateLeagueUrl(value: string, messages: LeagueUrlMessages = DEFAULT_LEAGUE_URL_MESSAGES): { valid: boolean; domainValid: boolean; message: string | null } {
-	if (!value) return { valid: false, domainValid: true, message: null }
+export interface LeagueUrlValidation {
+	valid: boolean
+	domainValid: boolean
+	message: string | null
+	leagueId: number | null
+	leagueType: LeagueType | null
+}
+
+export function validateLeagueUrl(
+	value: string,
+	messages: LeagueUrlMessages = DEFAULT_LEAGUE_URL_MESSAGES,
+	options: { classicOnly?: boolean } = {},
+): LeagueUrlValidation {
+	if (!value.trim()) {
+		return { valid: false, domainValid: true, message: null, leagueId: null, leagueType: null }
+	}
 	try {
-		const url = new URL(value)
-		if (url.protocol !== 'https:' || url.hostname !== 'fantasy.premierleague.com') {
-			return { valid: false, domainValid: false, message: messages.domainInvalid }
+		const parsed = parseLeagueUrl(value)
+		if (options.classicOnly && (parsed.leagueType !== 'classic' || parsed.surface !== 'standings')) {
+			return {
+				valid: false,
+				domainValid: true,
+				message: messages.classicOnly,
+				leagueId: parsed.leagueId,
+				leagueType: parsed.leagueType,
+			}
 		}
-		if (!FPL_LEAGUE_URL_PATTERN.test(value)) {
-			return { valid: false, domainValid: true, message: messages.pathInvalid }
+		return {
+			valid: true,
+			domainValid: true,
+			message: null,
+			leagueId: parsed.leagueId,
+			leagueType: parsed.leagueType,
 		}
-		return { valid: true, domainValid: true, message: null }
-	} catch {
-		return { valid: false, domainValid: false, message: messages.incomplete }
+	} catch (error) {
+		if (error instanceof LeagueUrlError) {
+			if (error.code === 'domain') {
+				return { valid: false, domainValid: false, message: messages.domainInvalid, leagueId: null, leagueType: null }
+			}
+			if (error.code === 'incomplete') {
+				return { valid: false, domainValid: false, message: messages.incomplete, leagueId: null, leagueType: null }
+			}
+		}
+		return { valid: false, domainValid: true, message: messages.pathInvalid, leagueId: null, leagueType: null }
 	}
 }
