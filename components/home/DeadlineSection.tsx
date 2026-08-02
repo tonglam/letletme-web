@@ -127,7 +127,7 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 
 			{deadlinePassed ? (
 				<div className="mt-6 flex items-center gap-3 rounded-lg border border-pink/40 bg-pink/10 px-4 py-4">
-					<span className="rounded-sm bg-pink px-2 py-0.5 font-mono text-xs font-bold uppercase tracking-[0.2em] text-white">
+					<span className="rounded-sm bg-pink px-2 py-0.5 font-mono text-xs font-bold uppercase tracking-[0.2em] text-pink-950">
 						{t('liveTag')}
 					</span>
 					<p className="font-display text-lg font-semibold uppercase tracking-wide">
