@@ -7,9 +7,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useHydrated } from '@/hooks/use-hydrated'
 import { Link } from '@/i18n/navigation'
-import { localizePathname, type AppLocale } from '@/i18n/routing'
+import { localizeHref, type AppLocale } from '@/i18n/routing'
 import { signUp } from '@/lib/auth-client'
 import { getAuthErrorKey } from '@/lib/auth-error'
+import { absoluteAuthUrl, onboardingRedirectPath } from '@/lib/auth-redirects'
 import { Gamepad } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useState } from 'react'
@@ -38,18 +39,33 @@ export default function SignupClient() {
 			return
 		}
 		setPending(true)
-		const { error: err } = await signUp.email({
-			name,
-			email,
-			password,
-			callbackURL: localizePathname('/auth/verify-email', locale),
-		})
-		setPending(false)
-		if (err) {
-			setError(t(`errors.${getAuthErrorKey(err, 'signupFailed')}`))
-			return
+		try {
+			const { error: err } = await signUp.email({
+				name,
+				email,
+				password,
+				callbackURL: absoluteAuthUrl(
+					localizeHref(onboardingRedirectPath('/'), locale),
+					window.location.origin
+				)
+			})
+			if (err) {
+				setError(t(`errors.${getAuthErrorKey(err, 'signupFailed')}`))
+				return
+			}
+			setSent(true)
+		} catch (cause) {
+			setError(
+				t(
+					`errors.${getAuthErrorKey(
+						cause instanceof Error ? { message: cause.message } : null,
+						'signupFailed'
+					)}`
+				)
+			)
+		} finally {
+			setPending(false)
 		}
-		setSent(true)
 	}
 
 	return (
@@ -93,7 +109,11 @@ export default function SignupClient() {
 							</Alert>
 						)}
 
-						<form onSubmit={handleSubmit} className="space-y-4" aria-busy={!hydrated || pending}>
+						<form
+							onSubmit={handleSubmit}
+							className="space-y-4"
+							aria-busy={!hydrated || pending}
+						>
 							<div className="space-y-1">
 								<Label htmlFor="name">{t('name')}</Label>
 								<Input
@@ -146,14 +166,21 @@ export default function SignupClient() {
 									onChange={e => setConfirm(e.target.value)}
 								/>
 							</div>
-							<Button type="submit" className="w-full" disabled={!hydrated || pending}>
+							<Button
+								type="submit"
+								className="w-full"
+								disabled={!hydrated || pending}
+							>
 								{pending ? t('creatingAccount') : t('createAccount')}
 							</Button>
 						</form>
 
 						<p className="text-center text-sm text-muted-foreground mt-4">
 							{t('alreadyAccount')}{' '}
-							<Link href="/auth/login" className="text-primary underline underline-offset-4 hover:no-underline">
+							<Link
+								href="/auth/login"
+								className="text-primary underline underline-offset-4 hover:no-underline"
+							>
 								{t('signIn')}
 							</Link>
 						</p>
