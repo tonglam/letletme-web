@@ -81,7 +81,7 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 			<div className="mb-6 flex items-center justify-between">
 				<h2 className="flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
 					<span className="rounded-md bg-plum px-2 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
-						GW{currentEventId}
+						GW{overallResult.event}
 					</span>
 					<span>{t('gameweekStats')}</span>
 				</h2>

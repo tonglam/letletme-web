@@ -15,23 +15,27 @@ import {
 
 export function PriceChangesSectionFallback() {
 	return (
-		<Card className="rounded-none sm:rounded-lg p-4 sm:p-6">
-			<div className="grid md:grid-cols-2 gap-6">
-				{[0, 1].map(i => (
-					<div key={i}>
-						<Skeleton className="h-6 w-32 mb-6" />
-						<div className="space-y-2">
-							{[1, 2, 3, 4, 5].map(j => (
-								<Skeleton
-									key={j}
-									className="h-12 w-full"
-								/>
-							))}
-						</div>
+		<section className="py-10">
+			<div className="mx-auto max-w-4xl px-4">
+				<Card className="rounded-none sm:rounded-lg p-4 sm:p-6">
+					<div className="grid md:grid-cols-2 gap-6">
+						{[0, 1].map(i => (
+							<div key={i}>
+								<Skeleton className="h-6 w-32 mb-6" />
+								<div className="space-y-2">
+									{[1, 2, 3, 4, 5].map(j => (
+										<Skeleton
+											key={j}
+											className="h-12 w-full"
+										/>
+									))}
+								</div>
+							</div>
+						))}
 					</div>
-				))}
+				</Card>
 			</div>
-		</Card>
+		</section>
 	)
 }
 
@@ -55,11 +59,14 @@ export async function PriceChangesSection() {
 			{ cache: 'force-cache', next: { revalidate: 300 }, timeoutMs: 5_000 },
 		)
 
-		priceRises = data.playerValues
+		// Rows without a previous price (lastValue = 0) are season-baseline
+		// imports, not market movement — never render them as rises/falls.
+		const changes = data.playerValues.filter(p => p.lastValue > 0)
+		priceRises = changes
 			.filter(p => p.value > p.lastValue)
 			.sort((a, b) => b.value - a.value)
 			.map(toChange)
-		priceFalls = data.playerValues
+		priceFalls = changes
 			.filter(p => p.value < p.lastValue)
 			.sort((a, b) => a.value - b.value)
 			.map(toChange)
@@ -68,11 +75,20 @@ export async function PriceChangesSection() {
 		hasError = true
 	}
 
+	// Pre-season (prices locked) and no-change days: hide the section entirely.
+	if (priceRises.length === 0 && priceFalls.length === 0) {
+		return null
+	}
+
 	return (
-		<PriceChangesSectionClient
-			priceRises={priceRises}
-			priceFalls={priceFalls}
-			hasError={hasError}
-		/>
+		<section className="py-10">
+			<div className="mx-auto max-w-4xl px-4">
+				<PriceChangesSectionClient
+					priceRises={priceRises}
+					priceFalls={priceFalls}
+					hasError={hasError}
+				/>
+			</div>
+		</section>
 	)
 }

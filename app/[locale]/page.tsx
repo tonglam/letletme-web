@@ -200,24 +200,28 @@ async function HomeInsights() {
 
 	return (
 		<>
-			<section className="py-10">
-				<div className="mx-auto max-w-4xl px-4">
-					<StatsSection currentEventId={currentEventId} overallResult={overallResult} />
-				</div>
-			</section>
+			{currentEventId !== null && (
+				<>
+					<section className="py-10">
+						<div className="mx-auto max-w-4xl px-4">
+							<StatsSection currentEventId={currentEventId} overallResult={overallResult} />
+						</div>
+					</section>
 
-			<section className="border-y bg-secondary/40 py-10">
-				<div className="mx-auto max-w-4xl px-4">
-					<div className="grid gap-8 md:grid-cols-2">
-						<Suspense fallback={<TeamOfTheWeekSectionFallback currentEventId={currentEventId} />}>
-							<TeamOfTheWeekSection currentEventId={currentEventId} />
-						</Suspense>
-						<Suspense fallback={<GameweekStatsSectionFallback />}>
-							<GameweekStatsSection currentEventId={currentEventId} />
-						</Suspense>
-					</div>
-				</div>
-			</section>
+					<section className="border-y bg-secondary/40 py-10">
+						<div className="mx-auto max-w-4xl px-4">
+							<div className="grid gap-8 md:grid-cols-2">
+								<Suspense fallback={<TeamOfTheWeekSectionFallback currentEventId={currentEventId} />}>
+									<TeamOfTheWeekSection currentEventId={currentEventId} />
+								</Suspense>
+								<Suspense fallback={<GameweekStatsSectionFallback />}>
+									<GameweekStatsSection currentEventId={currentEventId} />
+								</Suspense>
+							</div>
+						</div>
+					</section>
+				</>
+			)}
 
 			<section className="py-10">
 				<div className="mx-auto max-w-4xl px-4">
@@ -254,13 +258,9 @@ export default async function Home({ params }: { params: LocaleParams }) {
 			<div className="flex flex-col">
 				<HomeHero />
 
-				<section className="py-10">
-					<div className="mx-auto max-w-4xl px-4">
-						<Suspense fallback={<PriceChangesSectionFallback />}>
-							<PriceChangesSection />
-						</Suspense>
-					</div>
-				</section>
+				<Suspense fallback={<PriceChangesSectionFallback />}>
+					<PriceChangesSection />
+				</Suspense>
 
 				<Suspense fallback={<PageInsightsFallback />}>
 					<HomeInsights />
