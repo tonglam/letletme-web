@@ -159,7 +159,7 @@ export default function TournamentListClient({
 			<div className="container max-w-6xl mx-auto px-4 py-8">
 				<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
 					<div className="flex items-center gap-3">
-						<Trophy className="h-8 w-8 text-primary" />
+						<Trophy className="h-8 w-8 text-primary-ink" />
 						<h1 className="text-3xl font-bold">{t('title')}</h1>
 					</div>
 

@@ -19,7 +19,7 @@ const TONES: Record<MatchHighlightKind, string> = {
 	goals: 'text-success',
 	assists: 'text-info',
 	defensive: 'text-info',
-	bps: 'text-primary',
+	bps: 'text-primary-ink',
 	saves: 'text-info',
 	yellow: 'text-warning',
 	red: 'text-destructive',

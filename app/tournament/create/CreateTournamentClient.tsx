@@ -29,7 +29,7 @@ export default function CreateTournamentClient() {
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
 				<header className="mb-8 flex items-center gap-3">
-					<Trophy className="size-8 text-primary" aria-hidden="true" />
+					<Trophy className="size-8 text-primary-ink" aria-hidden="true" />
 					<h1 className="text-3xl font-bold">{t('title')}</h1>
 				</header>
 				<div className="mb-8"><TournamentHelp /></div>

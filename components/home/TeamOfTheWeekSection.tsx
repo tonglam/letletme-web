@@ -36,10 +36,10 @@ function TeamOfTheWeekCard({
 }) {
 	const t = useTranslations('Home')
 	return (
-		<Card className="rounded-none sm:rounded-lg p-4 sm:p-6 lg:p-8">
-			<div className="flex items-center justify-between mb-6">
-				<h2 className="text-xl font-bold flex items-center gap-2">
-					<span className="bg-primary/10 text-primary px-3 py-1.5 rounded-lg text-sm font-semibold">
+		<Card className="rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8">
+			<div className="mb-6 flex items-center justify-between">
+				<h2 className="flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
+					<span className="rounded-md bg-plum px-2 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
 						{currentEventId ? `GW${currentEventId}` : 'GW'}
 					</span>
 					<span>{t('teamOfWeek')}</span>

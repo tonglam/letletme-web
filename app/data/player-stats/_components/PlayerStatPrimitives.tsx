@@ -152,11 +152,11 @@ export function CompareRow({
 
 	return (
 		<div className="grid grid-cols-3 items-center border-b py-2 text-sm last:border-0">
-			<span className={`pr-4 text-right font-medium tabular-nums ${firstWins ? 'text-primary' : ''}`}>
+			<span className={`pr-4 text-right font-medium tabular-nums ${firstWins ? 'text-primary-ink' : ''}`}>
 				{displayValue1}
 			</span>
 			<span className="text-center text-xs text-muted-foreground">{translateLabel(label)}</span>
-			<span className={`pl-4 text-left font-medium tabular-nums ${secondWins ? 'text-primary' : ''}`}>
+			<span className={`pl-4 text-left font-medium tabular-nums ${secondWins ? 'text-primary-ink' : ''}`}>
 				{displayValue2}
 			</span>
 		</div>
@@ -287,7 +287,7 @@ function MiniMetric({
 	return (
 		<div className="text-center">
 			<p className="text-[10px] text-muted-foreground">{label}</p>
-			<p className={`text-sm font-bold ${emphasis ? 'text-primary' : ''}`}>{value ?? '—'}</p>
+			<p className={`text-sm font-bold ${emphasis ? 'text-primary-ink' : ''}`}>{value ?? '—'}</p>
 			{sub ? (
 				<p className={`text-[10px] ${positive ? 'text-success' : 'text-destructive'}`}>{sub}</p>
 			) : null}

@@ -49,7 +49,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 				>
 					<Avatar className="h-6 w-6">
 						<AvatarImage src={user.image ?? undefined} alt={user.name ?? ''} />
-						<AvatarFallback className="text-xs bg-primary/10 text-primary">
+						<AvatarFallback className="text-xs bg-primary/10 text-primary-ink">
 							{initials}
 						</AvatarFallback>
 					</Avatar>
@@ -64,7 +64,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 				<div className="p-4 flex gap-3 items-center">
 					<Avatar className="h-10 w-10 shrink-0">
 						<AvatarImage src={user.image ?? undefined} alt={user.name ?? ''} />
-						<AvatarFallback className="bg-primary/10 text-primary">
+						<AvatarFallback className="bg-primary/10 text-primary-ink">
 							{initials}
 						</AvatarFallback>
 					</Avatar>

@@ -53,7 +53,7 @@ export function TournamentStatsHeader({
 		<Card className="mb-6 p-6">
 			<div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
 				<label htmlFor="tournament-stats-select" className="flex items-center gap-2 font-medium">
-					<Trophy className="size-5 text-primary" aria-hidden="true" />
+					<Trophy className="size-5 text-primary-ink" aria-hidden="true" />
 					{t('tournament')}
 				</label>
 				<Select value={selectedTournamentId} onValueChange={onTournamentChange}>
@@ -76,10 +76,10 @@ export function TournamentStatsHeader({
 						<h2 className="text-xl font-bold">{selectedTournament.name}</h2>
 						<div className="flex flex-wrap gap-1.5">
 							{stateBadge ? <Badge variant="outline" className={stateBadge.className}>{stateLabel}</Badge> : null}
-							<Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">
+							<Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary-ink">
 								{leagueType}
 							</Badge>
-							<Badge variant="outline" className="gap-1 border-primary/20 bg-primary/10 text-primary">
+							<Badge variant="outline" className="gap-1 border-primary/20 bg-primary/10 text-primary-ink">
 								<Users aria-hidden="true" />
 								{t('teams', { count: format.number(selectedTournament.totalTeamNum, { notation: 'compact' }) })}
 							</Badge>

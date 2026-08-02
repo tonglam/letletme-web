@@ -12,6 +12,7 @@ import {
 import { TrendingDown, TrendingUp } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { positionBadgeClass } from '@/lib/position-style'
 
 export interface PriceChange {
 	position: string
@@ -57,21 +58,6 @@ function PriceList({
 
 	const dotActiveColor = type === 'rise' ? 'bg-success' : 'bg-destructive'
 
-	const getPositionColor = (position: string) => {
-		switch (position) {
-			case 'GKP':
-				return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-			case 'DEF':
-				return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-			case 'MID':
-				return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-			case 'FWD':
-				return 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'
-			default:
-				return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-		}
-	}
-
 	const visibleChanges = changes.slice(
 		safePage * PAGE_SIZE,
 		safePage * PAGE_SIZE + PAGE_SIZE
@@ -81,7 +67,7 @@ function PriceList({
 		<div className="flex h-full flex-col">
 			<div className="mb-4 flex items-center gap-2">
 				{icon}
-				<h3 className="text-xl font-bold">{title}</h3>
+				<h3 className="font-display text-lg font-bold uppercase tracking-[0.1em]">{title}</h3>
 				{changes.length > 0 && (
 					<Badge
 						variant="secondary"
@@ -105,7 +91,7 @@ function PriceList({
 							>
 								<Badge
 									variant="secondary"
-									className={`shrink-0 text-xs font-semibold ${getPositionColor(change.position)}`}
+									className={`shrink-0 text-xs font-semibold ${positionBadgeClass(change.position)}`}
 								>
 									{change.position}
 								</Badge>
@@ -171,7 +157,8 @@ export function PriceChangesSectionClient({
 	return (
 		<Card className="overflow-hidden rounded-none sm:rounded-xl">
 			<CardHeader className="pb-4">
-				<CardTitle asChild className="text-2xl">
+				<p className="chyron">{t('transferMarket')}</p>
+				<CardTitle asChild className="font-display text-2xl font-bold uppercase tracking-wide">
 					<h2>{t('marketMovement')}</h2>
 				</CardTitle>
 				<CardDescription>{t('marketDescription')}</CardDescription>

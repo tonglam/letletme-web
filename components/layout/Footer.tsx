@@ -1,7 +1,7 @@
-import { Badge } from '@/components/ui/badge'
 import { Link } from '@/i18n/navigation'
-import { Gamepad, QrCode } from 'lucide-react'
+import { QrCode } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
+import { LogoCrest, LogoWordmark } from './Logo'
 
 const footerGroups = [
 	{
@@ -42,32 +42,36 @@ export async function Footer() {
 	const currentYear = new Date().getFullYear()
 
 	return (
-		<footer className="mt-16 border-t bg-card/60">
+		<footer className="fascia texture-grain mt-16 border-t-2 border-electric">
 			<div className="mx-auto w-full max-w-6xl px-4 py-12 lg:px-8">
 				<div className="mb-10 flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
 					<div className="flex items-center gap-3">
-						<span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-							<Gamepad aria-hidden="true" className="size-5" />
-						</span>
+						<LogoCrest className="size-11" />
 						<div>
-							<p className="font-display text-lg font-bold tracking-tight">LetLetMe</p>
-							<p className="text-sm text-muted-foreground">{t('tagline')}</p>
+							<LogoWordmark className="text-lg" />
+							<p className="mt-1 text-sm text-fascia-foreground/60">{t('tagline')}</p>
 						</div>
 					</div>
-					<Badge variant="outline" className="w-fit gap-2 py-1.5">
-						<QrCode aria-hidden="true" className="size-4" />
+					<span className="inline-flex w-fit items-center gap-2 rounded-md border border-electric/40 bg-white/5 px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.18em] text-fascia-foreground/80">
+						<QrCode aria-hidden="true" className="size-4 text-electric" />
 						{t('miniProgram')}
-					</Badge>
+					</span>
 				</div>
 
-				<nav aria-label={t('navigation')} className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+				<nav
+					aria-label={t('navigation')}
+					className="grid grid-cols-2 gap-8 border-t border-white/10 pt-8 sm:grid-cols-4"
+				>
 					{footerGroups.map(group => (
 						<div key={group.labelKey}>
-							<p className="mb-3 text-sm font-semibold text-foreground">{t(group.labelKey)}</p>
+							<p className="chyron mb-4 !text-fascia-foreground/70">{t(group.labelKey)}</p>
 							<ul className="flex flex-col gap-2.5">
 								{group.links.map(link => (
 									<li key={link.href}>
-										<Link href={link.href} className="text-sm text-muted-foreground transition-colors hover:text-primary">
+										<Link
+											href={link.href}
+											className="text-sm text-fascia-foreground/60 underline-offset-4 transition-colors hover:text-electric hover:underline"
+										>
 											{t(link.labelKey)}
 										</Link>
 									</li>
@@ -77,9 +81,11 @@ export async function Footer() {
 					))}
 				</nav>
 
-				<div className="mt-10 flex flex-col gap-2 border-t pt-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+				<div className="mt-10 flex flex-col gap-2 border-t border-white/10 pt-6 text-sm text-fascia-foreground/50 sm:flex-row sm:items-center sm:justify-between">
 					<p>{t('rights', { year: currentYear })}</p>
-					<p>{t('builtFor')}</p>
+					<p className="font-display text-xs font-semibold uppercase tracking-[0.18em]">
+						{t('builtFor')}
+					</p>
 				</div>
 			</div>
 		</footer>

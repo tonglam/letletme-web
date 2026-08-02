@@ -1,8 +1,9 @@
+import { LogoCrest } from '@/components/layout/Logo'
 import { Card } from '@/components/ui/card'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
 import { getAuth } from '@/lib/auth'
-import { Gamepad, Hash } from 'lucide-react'
+import { Hash } from 'lucide-react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import BindEntryForm from '@/app/onboarding/bind-entry/BindEntryForm'
@@ -40,14 +41,14 @@ export default async function BindEntryPage({ params }: PageProps) {
 	return (
 		<div className="flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center bg-muted/30 p-4">
 			<div className="mb-6 flex items-center gap-2">
-				<Gamepad className="h-8 w-8 text-primary" />
-				<h1 className="text-2xl font-bold">LetLetMe</h1>
+				<LogoCrest className="size-10" />
+				<h1 className="font-display text-2xl font-bold uppercase tracking-[0.06em]">LetLetMe</h1>
 			</div>
 
 			<Card className="w-full max-w-md p-6">
 				<div className="mb-6 text-center">
 					<div className="flex justify-center mb-3">
-						<Hash className="h-10 w-10 text-primary" />
+						<Hash className="h-10 w-10 text-primary-ink" />
 					</div>
 					<h2 className="text-2xl font-bold tracking-tight">
 						{t('title')}

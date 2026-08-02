@@ -49,7 +49,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
                     active && (
                       <span
                         key={chip}
-                        className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary"
+                        className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary-ink"
                       >
                         {chipLabels[chip] ?? chip.toUpperCase()}
                       </span>
@@ -66,7 +66,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
           <div className="bg-primary/5 rounded-lg p-4">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 rounded-full bg-primary/10">
-                <Zap className="w-5 h-5 text-primary" />
+                <Zap className="w-5 h-5 text-primary-ink" />
               </div>
               <span className="text-sm text-muted-foreground">{t("livePoints")}</span>
             </div>
@@ -76,7 +76,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
           <div className="bg-primary/5 rounded-lg p-4">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 rounded-full bg-primary/10">
-                <Repeat className="w-5 h-5 text-primary" />
+                <Repeat className="w-5 h-5 text-primary-ink" />
               </div>
               <span className="text-sm text-muted-foreground">{t("transferCost")}</span>
             </div>
@@ -92,7 +92,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
           <div className="bg-primary/5 rounded-lg p-4">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 rounded-full bg-primary/10">
-                <Crown className="w-5 h-5 text-primary" />
+                <Crown className="w-5 h-5 text-primary-ink" />
               </div>
               <span className="text-sm text-muted-foreground">{t("captain")}</span>
             </div>
@@ -102,7 +102,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
           <div className="bg-primary/5 rounded-lg p-4">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 rounded-full bg-primary/10">
-                <Trophy className="w-5 h-5 text-primary" />
+                <Trophy className="w-5 h-5 text-primary-ink" />
               </div>
               <span className="text-sm text-muted-foreground">{t("liveTotal")}</span>
             </div>

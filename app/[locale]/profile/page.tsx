@@ -70,7 +70,7 @@ export default async function ProfilePage({ params }: PageProps) {
 
 						<div className="w-full flex flex-col gap-3">
 							<div className="flex items-center gap-2 text-sm">
-								<Trophy className="h-4 w-4 text-primary" />
+								<Trophy className="h-4 w-4 text-primary-ink" />
 								<span>{t('memberSince', { year: new Date(profile.createdAt).getFullYear() })}</span>
 							</div>
 						</div>
@@ -83,7 +83,7 @@ export default async function ProfilePage({ params }: PageProps) {
 
 				<Card className="md:col-span-2 p-6">
 					<h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-						<Trophy className="h-5 w-5 text-primary" />
+						<Trophy className="h-5 w-5 text-primary-ink" />
 						{t('account')}
 					</h2>
 
@@ -126,7 +126,7 @@ export default async function ProfilePage({ params }: PageProps) {
 									<span>{t('password')}</span>
 									<Link
 										href="/auth/forgot-password"
-										className="text-xs text-primary underline underline-offset-4 hover:no-underline"
+										className="text-xs text-primary-ink underline underline-offset-4 hover:no-underline"
 									>
 										{t('change')}
 									</Link>

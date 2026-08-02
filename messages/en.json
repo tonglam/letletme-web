@@ -98,9 +98,11 @@
     }
   },
   "Home": {
-    "analyticsLive": "FPL analytics, live",
-    "headline": "See the gameweek before the rank settles.",
-    "intro": "Live scoring, player form, and tournament context in one focused matchday workspace.",
+    "matchdayBadge": "Matchday centre · FPL live",
+    "headline": "Every point. Every rival. <marker>Live.</marker>",
+    "intro": "Live scoring, player form, price moves and private tournaments — one touchline desk for Fantasy Premier League managers.",
+    "liveTag": "Live",
+    "transferMarket": "Transfer market",
     "openLivePoints": "Open live points",
     "comparePlayers": "Compare players",
     "livePoints": "Live points",

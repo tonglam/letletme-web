@@ -48,7 +48,7 @@ function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player
 				<span className="font-medium">{player.player}</span>
 				<span className="flex shrink-0 items-center gap-2">
 					{(player.bonus_points ?? 0) > 0 ? <Badge variant="outline" className="border-warning/30 text-warning">+{player.bonus_points}</Badge> : null}
-					<Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">{t('pointsBadge', { points: player.totalPoints ?? 0 })}</Badge>
+					<Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary-ink">{t('pointsBadge', { points: player.totalPoints ?? 0 })}</Badge>
 				</span>
 			</span>
 			{metrics.length > 0 ? (

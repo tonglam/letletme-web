@@ -98,9 +98,11 @@
     }
   },
   "Home": {
-    "analyticsLive": "FPL 实时数据分析",
-    "headline": "在排名落定前，先看清本轮走势。",
-    "intro": "实时计分、球员状态和锦标赛信息，集中在一个清晰的比赛日工作区。",
+    "matchdayBadge": "比赛日中心 · FPL 实时",
+    "headline": "每个积分，每个对手，<marker>实时</marker>呈现。",
+    "intro": "实时计分、球员状态、价格变化与私人锦标赛——FPL 经理的场边指挥席。",
+    "liveTag": "直播",
+    "transferMarket": "转会市场",
     "openLivePoints": "查看实时积分",
     "comparePlayers": "比较球员",
     "livePoints": "实时积分",

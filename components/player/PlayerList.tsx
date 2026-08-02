@@ -1,7 +1,8 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { normalizePosition, type PositionCode } from "@/lib/utils";
+import { positionBadgeClass } from "@/lib/position-style";
+import { normalizePosition } from "@/lib/utils";
 import { useTranslations } from "next-intl";
 
 export interface PlayerListItem {
@@ -11,21 +12,6 @@ export interface PlayerListItem {
   team?: string | null;
   points?: number | null;
 }
-
-const getPositionColor = (position: PositionCode) => {
-  switch (position) {
-    case "GKP":
-      return "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300";
-    case "DEF":
-      return "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300";
-    case "MID":
-      return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300";
-    case "FWD":
-      return "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300";
-    default:
-      return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
-  }
-};
 
 export function PlayerList({
   players,
@@ -56,7 +42,7 @@ export function PlayerList({
           >
             <Badge
               variant="secondary"
-              className={`shrink-0 text-xs font-semibold ${getPositionColor(position)}`}
+              className={`shrink-0 text-xs font-semibold ${positionBadgeClass(position)}`}
             >
               {position}
             </Badge>
@@ -74,7 +60,7 @@ export function PlayerList({
 
             {typeof player.points === "number" ? (
               <div className="flex flex-col items-end shrink-0">
-                <span className="text-lg font-bold text-primary">
+                <span className="text-lg font-bold text-primary-ink">
                   {player.points}
                 </span>
               </div>

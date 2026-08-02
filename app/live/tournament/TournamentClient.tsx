@@ -291,7 +291,7 @@ export default function TournamentClient({
 				<div className="container max-w-4xl mx-auto px-4 py-8">
 					<Card className="p-6 text-sm text-muted-foreground">
 						{t('signInPrompt')}{' '}
-						<Link href="/auth/login?next=/live/tournament" className="text-primary underline">
+						<Link href="/auth/login?next=/live/tournament" className="text-primary-ink underline">
 							{t('signIn')}
 						</Link>
 					</Card>

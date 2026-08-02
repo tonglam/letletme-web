@@ -80,7 +80,7 @@ export function TournamentHelp({ className }: TournamentHelpProps) {
 							{helpSections.map(({ title, icon: Icon, items }, index) => (
 								<div key={title}>
 									<div className="mb-2 flex items-center gap-2">
-										<span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+										<span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary-ink">
 											<Icon aria-hidden="true" className="size-4" />
 										</span>
 										<h3 className="font-semibold">{title}</h3>

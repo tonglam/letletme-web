@@ -1,5 +1,6 @@
 'use client'
 
+import { HeaderProfileCard, type NavigationUser } from '@/components/profile/HeaderProfileCard'
 import { Button } from '@/components/ui/button'
 import {
 	DropdownMenu,
@@ -8,9 +9,8 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { HeaderProfileCard, type NavigationUser } from '@/components/profile/HeaderProfileCard'
 import { Link } from '@/i18n/navigation'
-import { ChevronDown, UserCircle } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { menuItems } from './config'
 
@@ -18,14 +18,16 @@ export function DesktopNav({ user }: { user: NavigationUser | null }) {
 	const t = useTranslations('Navigation')
 
 	return (
-		<div className="ml-6 hidden items-center gap-1 md:flex">
+		<div className="ml-6 hidden items-center gap-0.5 md:flex">
 			{menuItems.map(item => (
 				<DropdownMenu key={item.id}>
 					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" className="px-2.5">
-							<item.icon data-icon="inline-start" />
+						<Button
+							variant="ghost"
+							className="px-3 font-display text-[13px] font-semibold uppercase tracking-[0.14em] text-fascia-foreground/70 hover:bg-white/5 hover:text-fascia-foreground focus-visible:ring-electric data-[state=open]:text-fascia-foreground"
+						>
 							{t(item.labelKey)}
-							<ChevronDown data-icon="inline-end" />
+							<ChevronDown data-icon="inline-end" className="opacity-60" />
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent>
@@ -43,11 +45,12 @@ export function DesktopNav({ user }: { user: NavigationUser | null }) {
 			{user ? (
 				<HeaderProfileCard user={user} />
 			) : (
-				<Button variant="ghost" className="px-2" asChild>
-					<Link href="/auth/login">
-						<UserCircle data-icon="inline-start" />
-						{t('login')}
-					</Link>
+				<Button
+					size="sm"
+					className="ml-2 font-display text-[13px] font-semibold uppercase tracking-[0.14em] shadow-sticker-sm transition-transform hover:-translate-y-px"
+					asChild
+				>
+					<Link href="/auth/login">{t('login')}</Link>
 				</Button>
 			)}
 		</div>

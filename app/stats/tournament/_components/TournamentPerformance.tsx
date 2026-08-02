@@ -81,7 +81,7 @@ export function TournamentPerformance({ dataGameweek, stats }: { dataGameweek: n
 								</div>
 								<div className="flex shrink-0 items-center gap-3 text-right">
 									{performer.captain.name !== 'N/A' ? <span className="hidden text-xs text-muted-foreground sm:inline">{t('captainPoints', { name: performer.captain.name, points: t('pointsValue', { points: performer.captain.points }) })}</span> : null}
-									<span className="font-bold text-primary">{t('pointsValue', { points: performer.points })}</span>
+									<span className="font-bold text-primary-ink">{t('pointsValue', { points: performer.points })}</span>
 								</div>
 							</div>
 						))}

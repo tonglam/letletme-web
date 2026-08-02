@@ -106,7 +106,7 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
                 <div className="flex items-center gap-3 px-2 py-2">
                   <Avatar className="h-8 w-8 shrink-0">
                     <AvatarImage src={user.image ?? undefined} alt={user.name ?? ""} />
-                    <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                    <AvatarFallback className="bg-primary/10 text-primary-ink text-xs">
                       {initials}
                     </AvatarFallback>
                   </Avatar>

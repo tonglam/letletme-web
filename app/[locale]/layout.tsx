@@ -9,7 +9,7 @@ import { routing } from '@/i18n/routing'
 import type { Metadata } from 'next'
 import { hasLocale, NextIntlClientProvider } from 'next-intl'
 import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server'
-import { Barlow } from 'next/font/google'
+import { Barlow, Barlow_Condensed, IBM_Plex_Mono } from 'next/font/google'
 import { notFound } from 'next/navigation'
 import Script from 'next/script'
 import { Suspense } from 'react'
@@ -17,8 +17,22 @@ import '../globals.css'
 
 const barlow = Barlow({
 	subsets: ['latin'],
-	weight: '700',
+	weight: ['400', '500', '600', '700'],
 	variable: '--font-barlow',
+	display: 'swap',
+})
+
+const barlowCondensed = Barlow_Condensed({
+	subsets: ['latin'],
+	weight: ['500', '600', '700'],
+	variable: '--font-display',
+	display: 'swap',
+})
+
+const plexMono = IBM_Plex_Mono({
+	subsets: ['latin'],
+	weight: ['500', '600'],
+	variable: '--font-mono',
 	display: 'swap',
 })
 
@@ -81,7 +95,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
 	return (
 		<html
 			lang={locale}
-			className={barlow.variable}
+			className={`${barlow.variable} ${barlowCondensed.variable} ${plexMono.variable}`}
 			data-locale={locale}
 			data-scroll-behavior="smooth"
 			suppressHydrationWarning

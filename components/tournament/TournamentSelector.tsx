@@ -32,7 +32,7 @@ export function TournamentSelector({
     <Card className={className ?? "p-4 mb-6"}>
       <div className="flex flex-col sm:flex-row items-center gap-3">
         <div className="flex items-center gap-2">
-          <Trophy className="h-5 w-5 text-primary" />
+          <Trophy className="h-5 w-5 text-primary-ink" />
           <span className="font-medium">{t("selectTournament")}</span>
         </div>
         
@@ -52,7 +52,7 @@ export function TournamentSelector({
               >
                 <span className="truncate">{t.name}</span>
                 {t.id === currentTournamentId && (
-                  <Trophy className="h-4 w-4 text-primary ml-2" />
+                  <Trophy className="h-4 w-4 text-primary-ink ml-2" />
                 )}
               </DropdownMenuItem>
             ))}
