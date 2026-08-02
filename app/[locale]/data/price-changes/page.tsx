@@ -34,7 +34,9 @@ export default async function PriceChangesPage({ params }: PageProps) {
 			{ changeDate: utcCalendarDateISO() },
 			{ cache: 'force-cache', next: { revalidate: 3600 } },
 		)
-		initialPlayerValues = data.playerValues
+		// Rows without a previous price (lastValue = 0) are season-baseline
+		// imports, not price changes — exclude them at the single choke point.
+		initialPlayerValues = data.playerValues.filter(p => p.lastValue > 0)
 	} catch (err) {
 		console.error('[price-changes] RSC fetch failed:', err)
 		initialError = t('priceChangesUnavailable')
