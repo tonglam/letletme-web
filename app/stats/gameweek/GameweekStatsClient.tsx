@@ -23,7 +23,7 @@ import {
   fetchOverallGameweekStats,
   type OverallGameweekStats,
 } from "@/lib/gameweek-overall-stats";
-import { formatCompactNumber, normalizePosition, type PositionCode } from "@/lib/utils";
+import { normalizePosition, type PositionCode } from "@/lib/utils";
 import {
   ArrowLeftCircle,
   ArrowRightCircle,
@@ -33,6 +33,7 @@ import {
   TrendingUp,
   Trophy,
 } from "lucide-react";
+import { useFormatter, useTranslations } from "next-intl";
 
 interface DreamTeamPlayer {
   id: number;
@@ -91,6 +92,8 @@ export default function GameweekStatsClient({
   currentGameweek: initialCurrentGameweek,
   initialOverallStats = null,
 }: GameweekStatsClientProps) {
+  const t = useTranslations("GameweekStats");
+  const formatter = useFormatter();
   const [currentGameweek] = useState<number>(initialCurrentGameweek);
   const [selectedGameweek, setSelectedGameweek] = useState<number>(initialCurrentGameweek);
   const [activeTab, setActiveTab] = useState<"overall" | "dreamteam" | "haul" | "transfers">("overall");
@@ -185,7 +188,7 @@ export default function GameweekStatsClient({
       } catch (err) {
         console.error("Failed to load selected gameweek stats:", err);
         if (!cancelled) {
-          setError("Failed to load selected gameweek data.");
+          setError(t("loadFailed"));
           if (activeTab === "dreamteam" || activeTab === "haul") setDreamTeam([]);
           if (activeTab === "transfers") setTransferTrends({ in: [], out: [] });
           setOverallStats(FALLBACK_OVERALL_STATS);
@@ -201,7 +204,7 @@ export default function GameweekStatsClient({
 
     void loadGameweekData();
     return () => { cancelled = true; };
-  }, [activeTab, initialCurrentGameweek, selectedGameweek]);
+  }, [activeTab, initialCurrentGameweek, selectedGameweek, t]);
 
   const haulPlayers = useMemo<HaulPlayer[]>(
     () =>
@@ -221,15 +224,16 @@ export default function GameweekStatsClient({
     [dreamTeam],
   );
 
-  const formatStat = (value: number | null, fallbackTip = "Pending official update") =>
+  const formatStat = (value: number | null, fallbackTip = t("pendingOfficial")) =>
     typeof value === "number" ? String(value) : fallbackTip;
-  const formatCount = (value: number | null, fallbackTip = "Not provided yet") =>
-    typeof value === "number" ? formatCompactNumber(value) : fallbackTip;
+  const formatCount = (value: number | null, fallbackTip = t("notProvided")) =>
+    typeof value === "number" ? formatter.number(value, { notation: "compact" }) : fallbackTip;
+  const displayName = (name: string) => name === "N/A" ? t("notAvailable") : name;
 
   return (
     <PageShell>
       <div className="container max-w-4xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-6">Gameweek Stats</h1>
+        <h1 className="text-3xl font-bold mb-6">{t("title")}</h1>
 
         {error && (
           <Card className="p-4 mb-6 border-destructive/30 bg-destructive/5">
@@ -247,39 +251,39 @@ export default function GameweekStatsClient({
 
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)} className="space-y-6">
           <TabsList className="w-full grid grid-cols-4 mb-4">
-            <TabsTrigger value="overall"><BarChart2 className="h-4 w-4 mr-2" />Overall</TabsTrigger>
-            <TabsTrigger value="dreamteam"><Trophy className="h-4 w-4 mr-2" />Dream Team</TabsTrigger>
-            <TabsTrigger value="haul"><Star className="h-4 w-4 mr-2" />Haul</TabsTrigger>
-            <TabsTrigger value="transfers"><TrendingUp className="h-4 w-4 mr-2" />Transfers</TabsTrigger>
+            <TabsTrigger value="overall"><BarChart2 className="h-4 w-4 mr-2" />{t("overall")}</TabsTrigger>
+            <TabsTrigger value="dreamteam"><Trophy className="h-4 w-4 mr-2" />{t("dreamTeam")}</TabsTrigger>
+            <TabsTrigger value="haul"><Star className="h-4 w-4 mr-2" />{t("haul")}</TabsTrigger>
+            <TabsTrigger value="transfers"><TrendingUp className="h-4 w-4 mr-2" />{t("transfers")}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overall">
             <Card className="p-6 mb-6">
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <BarChart2 className="h-5 w-5 text-primary" />
-                Gameweek {selectedGameweek} Overview
+                {t("overview", { gameweek: selectedGameweek })}
               </h2>
-              {isLoadingOverall && <p className="text-xs text-muted-foreground mb-3">Loading overview...</p>}
+              {isLoadingOverall && <p className="text-xs text-muted-foreground mb-3">{t("loadingOverview")}</p>}
 
               <div className="grid grid-cols-2 gap-6 mb-6">
                 <div className="space-y-6">
                   <div className="bg-accent/30 p-4 rounded-lg">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">Average Points</h3>
-                    <div className="text-2xl font-bold">{formatStat(overallStats.averagePoints, "Awaiting event aggregation")}</div>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-1">{t("averagePoints")}</h3>
+                    <div className="text-2xl font-bold">{formatStat(overallStats.averagePoints, t("awaitingAggregation"))}</div>
                   </div>
                   <div className="bg-accent/30 p-4 rounded-lg">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">Highest Points</h3>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-1">{t("highestPoints")}</h3>
                     <div className="text-2xl font-bold">{formatStat(overallStats.highestPoints)}</div>
                   </div>
                 </div>
                 <div className="space-y-6">
                   <div className="bg-accent/30 p-4 rounded-lg">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">Most Captained</h3>
-                    <div className="text-xl font-bold mb-1">{overallStats.mostCaptained.name}</div>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-1">{t("mostCaptained")}</h3>
+                    <div className="text-xl font-bold mb-1">{displayName(overallStats.mostCaptained.name)}</div>
                   </div>
                   <div className="bg-accent/30 p-4 rounded-lg">
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">Most Vice-Captained</h3>
-                    <div className="text-xl font-bold mb-1">{overallStats.mostViceCaptained.name}</div>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-1">{t("mostViceCaptained")}</h3>
+                    <div className="text-xl font-bold mb-1">{displayName(overallStats.mostViceCaptained.name)}</div>
                   </div>
                 </div>
               </div>
@@ -288,28 +292,28 @@ export default function GameweekStatsClient({
                 <div>
                   <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
                     <TrendingUp className="h-5 w-5 text-emerald-500" />
-                    Most Selected Player
+                    {t("mostSelected")}
                   </h3>
                   <div className="bg-emerald-50 dark:bg-emerald-950/20 p-4 rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="bg-emerald-100 dark:bg-emerald-900/30 p-2.5 rounded-full">
                         <ArrowRightCircle className="h-6 w-6 text-emerald-500" />
                       </div>
-                      <div className="text-xl font-bold mb-1">{overallStats.mostSelectedPlayer.name}</div>
+                      <div className="text-xl font-bold mb-1">{displayName(overallStats.mostSelectedPlayer.name)}</div>
                     </div>
                   </div>
                 </div>
                 <div>
                   <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
                     <TrendingDown className="h-5 w-5 text-rose-500" />
-                    Most Transferred-In Player
+                    {t("mostTransferredIn")}
                   </h3>
                   <div className="bg-rose-50 dark:bg-rose-950/20 p-4 rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="bg-rose-100 dark:bg-rose-900/30 p-2.5 rounded-full">
                         <ArrowLeftCircle className="h-6 w-6 text-rose-500" />
                       </div>
-                      <div className="text-xl font-bold mb-1">{overallStats.mostTransferInPlayer.name}</div>
+                      <div className="text-xl font-bold mb-1">{displayName(overallStats.mostTransferInPlayer.name)}</div>
                     </div>
                   </div>
                 </div>
@@ -319,24 +323,24 @@ export default function GameweekStatsClient({
             <Card className="p-6 mb-6">
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <Star className="h-5 w-5 text-yellow-500" />
-                Chips Played
+                {t("chipsPlayed")}
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
-                  <div className="font-bold text-lg text-blue-600 mb-1">Bench Boost</div>
-                  <div className="text-2xl font-bold">{formatCount(overallStats.chipsPlayed?.benchBoost ?? null, "No chip usage reported")}</div>
+                  <div className="font-bold text-lg text-blue-600 mb-1">{t("benchBoost")}</div>
+                  <div className="text-2xl font-bold">{formatCount(overallStats.chipsPlayed?.benchBoost ?? null, t("noChipUsage"))}</div>
                 </div>
                 <div className="bg-emerald-50 dark:bg-emerald-950/20 p-4 rounded-lg">
-                  <div className="font-bold text-lg text-emerald-600 mb-1">Triple Captain</div>
-                  <div className="text-2xl font-bold">{formatCount(overallStats.chipsPlayed?.tripleCaptain ?? null, "No chip usage reported")}</div>
+                  <div className="font-bold text-lg text-emerald-600 mb-1">{t("tripleCaptain")}</div>
+                  <div className="text-2xl font-bold">{formatCount(overallStats.chipsPlayed?.tripleCaptain ?? null, t("noChipUsage"))}</div>
                 </div>
                 <div className="bg-purple-50 dark:bg-purple-950/20 p-4 rounded-lg">
-                  <div className="font-bold text-lg text-purple-600 mb-1">Wildcard</div>
-                  <div className="text-2xl font-bold">{formatCount(overallStats.chipsPlayed?.wildcard ?? null, "No chip usage reported")}</div>
+                  <div className="font-bold text-lg text-purple-600 mb-1">{t("wildcard")}</div>
+                  <div className="text-2xl font-bold">{formatCount(overallStats.chipsPlayed?.wildcard ?? null, t("noChipUsage"))}</div>
                 </div>
                 <div className="bg-amber-50 dark:bg-amber-950/20 p-4 rounded-lg">
-                  <div className="font-bold text-lg text-amber-600 mb-1">Free Hit</div>
-                  <div className="text-2xl font-bold">{formatCount(overallStats.chipsPlayed?.freeHit ?? null, "No chip usage reported")}</div>
+                  <div className="font-bold text-lg text-amber-600 mb-1">{t("freeHit")}</div>
+                  <div className="text-2xl font-bold">{formatCount(overallStats.chipsPlayed?.freeHit ?? null, t("noChipUsage"))}</div>
                 </div>
               </div>
             </Card>
@@ -346,12 +350,12 @@ export default function GameweekStatsClient({
             <Card className="p-6">
               <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
                 <Trophy className="h-5 w-5 text-yellow-500" />
-                Gameweek {selectedGameweek} Dream Team
+                {t("dreamTeamTitle", { gameweek: selectedGameweek })}
               </h2>
               {isLoadingDetails ? (
-                <div className="text-sm text-muted-foreground">Loading dream team...</div>
+                <div className="text-sm text-muted-foreground">{t("loadingDreamTeam")}</div>
               ) : dreamTeam.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No dream team data available.</div>
+                <div className="text-sm text-muted-foreground">{t("noDreamTeam")}</div>
               ) : (
                 <PlayerList players={dreamTeam} />
               )}
@@ -362,15 +366,15 @@ export default function GameweekStatsClient({
             <Card className="p-6">
               <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
                 <Star className="h-5 w-5 text-yellow-500" />
-                Double-digit Hauls
+                {t("doubleDigitHauls")}
               </h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Live player hauls from Dream Team performances in this gameweek.
+                {t("haulDescription")}
               </p>
               {isLoadingDetails ? (
-                <div className="text-sm text-muted-foreground">Loading haul data...</div>
+                <div className="text-sm text-muted-foreground">{t("loadingHauls")}</div>
               ) : haulPlayers.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No double-digit hauls for this gameweek yet.</div>
+                <div className="text-sm text-muted-foreground">{t("noHauls")}</div>
               ) : (
                 <PlayerList players={haulPlayers} />
               )}
@@ -380,13 +384,13 @@ export default function GameweekStatsClient({
           <TabsContent value="transfers">
             {isLoadingDetails ? (
               <Card className="p-6">
-                <p className="text-sm text-muted-foreground">Loading transfer trends...</p>
+                <p className="text-sm text-muted-foreground">{t("loadingTransfers")}</p>
               </Card>
             ) : (
               <Card className="p-6">
                 <div className="space-y-6">
                   <TransferList
-                    title="Top Transfers In"
+                    title={t("topTransfersIn")}
                     type="in"
                     transfers={transferTrends.in.map((trend) => ({
                       position: trend.position,
@@ -398,7 +402,7 @@ export default function GameweekStatsClient({
                     }))}
                   />
                   <TransferList
-                    title="Top Transfers Out"
+                    title={t("topTransfersOut")}
                     type="out"
                     transfers={transferTrends.out.map((trend) => ({
                       position: trend.position,
@@ -415,7 +419,7 @@ export default function GameweekStatsClient({
           </TabsContent>
         </Tabs>
         {isLoadingDetails && (
-          <p className="text-xs text-muted-foreground mt-4">Refreshing gameweek data...</p>
+          <p className="text-xs text-muted-foreground mt-4">{t("refreshing")}</p>
         )}
       </div>
     </PageShell>

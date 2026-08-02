@@ -21,6 +21,7 @@ import {
 } from "@/lib/graphql/operations/players";
 import { cn } from "@/lib/utils";
 import { Shirt, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 
 interface TeamExposureFilterProps {
@@ -29,17 +30,12 @@ interface TeamExposureFilterProps {
   className?: string;
 }
 
-const scopeLabels: Record<OwnershipScope, string> = {
-  any: "Any",
-  starter: "Starter",
-  bench: "Bench",
-};
-
 export function TeamExposureFilter({
   entries,
   onMatchedEntryIdsChange,
   className,
 }: TeamExposureFilterProps) {
+  const t = useTranslations("Filters");
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [count, setCount] = useState<number>(1);
   const [scope, setScope] = useState<OwnershipScope>("any");
@@ -79,6 +75,11 @@ export function TeamExposureFilter({
   );
 
   const isActive = selectedTeam !== null;
+  const scopeLabels: Record<OwnershipScope, string> = {
+    any: t("any"),
+    starter: t("starter"),
+    bench: t("bench"),
+  };
 
   useEffect(() => {
     onMatchedEntryIdsChange(isActive ? summary.matchedEntryIds : null);
@@ -99,11 +100,14 @@ export function TeamExposureFilter({
         <div>
           <div className="flex items-center gap-2 text-sm font-medium">
             <Shirt className="h-4 w-4 text-primary" />
-            Team exposure
+            {t("teamExposure")}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            Matched {summary.matchedCount} / {summary.totalCount} (
-            {summary.percentage}%)
+            {t("matched", {
+              matched: summary.matchedCount,
+              total: summary.totalCount,
+              percentage: summary.percentage,
+            })}
           </div>
         </div>
 
@@ -114,8 +118,8 @@ export function TeamExposureFilter({
             onValueChange={(v) => setSelectedTeam(v || null)}
             disabled={teamOptions.length === 0}
           >
-            <SelectTrigger className="h-8 w-[160px]" aria-label="Select team for exposure filter">
-              <SelectValue placeholder="Select team" />
+            <SelectTrigger className="h-8 w-[160px]" aria-label={t("selectTeamAria")}>
+              <SelectValue placeholder={t("selectTeam")} />
             </SelectTrigger>
             <SelectContent>
               {teamOptions.map((team) => (
@@ -131,7 +135,7 @@ export function TeamExposureFilter({
             value={String(count)}
             onValueChange={(v) => setCount(Number(v))}
           >
-            <SelectTrigger className="h-8 w-[80px]" aria-label="Minimum players from team">
+            <SelectTrigger className="h-8 w-[80px]" aria-label={t("minimumPlayers")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -146,13 +150,13 @@ export function TeamExposureFilter({
             value={scope}
             onValueChange={(v) => setScope(v as OwnershipScope)}
           >
-            <SelectTrigger className="h-8 w-[110px]" aria-label="Team exposure squad scope">
+            <SelectTrigger className="h-8 w-[110px]" aria-label={t("teamScope")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="any">Any</SelectItem>
-              <SelectItem value="starter">Starter</SelectItem>
-              <SelectItem value="bench">Bench</SelectItem>
+              <SelectItem value="any">{t("any")}</SelectItem>
+              <SelectItem value="starter">{t("starter")}</SelectItem>
+              <SelectItem value="bench">{t("bench")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -167,7 +171,7 @@ export function TeamExposureFilter({
             </span>
             <button
               type="button"
-              aria-label="Remove team filter"
+              aria-label={t("removeTeam")}
               className="rounded-sm text-muted-foreground hover:text-foreground"
               onClick={handleClear}
             >
@@ -181,12 +185,12 @@ export function TeamExposureFilter({
             className="h-7 px-2 text-xs"
             onClick={handleClear}
           >
-            Clear
+            {t("clearAll")}
           </Button>
         </div>
       ) : (
         <div className="mt-3 rounded-md bg-accent/30 px-3 py-2 text-xs text-muted-foreground">
-          No team exposure filter active.
+          {t("noTeamFilter")}
         </div>
       )}
     </div>

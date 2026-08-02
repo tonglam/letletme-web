@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { PlayerDetailData } from '@/lib/graphql/operations/players'
 import { User } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { PlayerFixturesTab } from './PlayerFixturesTab'
 import { PlayerIctTab } from './PlayerIctTab'
 import { PlayerOverviewTab } from './PlayerOverviewTab'
@@ -29,21 +30,33 @@ interface PlayerStatsViewProps {
 }
 
 function SinglePlayerHeader({ player, currentGameweek }: { player: PlayerDetailData; currentGameweek?: number }) {
+	const t = useTranslations('PlayerStats.labels')
+	const position = useTranslations('PlayerDirectory')
 	const priceDiff = formatPriceDiff(player.price, player.startPrice)
+	const positionName =
+		player.elementType === 1
+			? position('goalkeeper')
+			: player.elementType === 2
+				? position('defender')
+				: player.elementType === 3
+					? position('midfielder')
+					: player.elementType === 4
+						? position('forward')
+						: player.elementTypeName
 
 	return (
 		<Card className="mb-6 p-5">
 			<div className="mb-1 flex items-center gap-2">
 				<h2 className="text-2xl font-bold">{player.webName}</h2>
-				<Badge variant="outline" className="text-xs">{player.elementTypeName}</Badge>
+				<Badge variant="outline" className="text-xs">{positionName}</Badge>
 			</div>
 			<p className="mb-4 text-sm text-muted-foreground">{player.teamShortName}</p>
 			<div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-				<StatCell label="Price" value={formatPrice(player.price)} sub={priceDiff ?? undefined} />
-				<StatCell label={`GW ${currentGameweek ?? '—'} Pts`} value={player.eventPoints} />
-				<StatCell label="Total Pts" value={player.totalPoints} />
-				<StatCell label="Selected" value={player.selectedByPercent == null ? '—' : `${player.selectedByPercent}%`} />
-				<StatCell label="Form" value={player.form ?? '—'} />
+				<StatCell label={t('price')} value={formatPrice(player.price)} sub={priceDiff ?? undefined} />
+				<StatCell label={t('gwPoints', { gameweek: currentGameweek ?? '—' })} value={player.eventPoints} />
+				<StatCell label={t('totalPts')} value={player.totalPoints} />
+				<StatCell label={t('selected')} value={player.selectedByPercent == null ? '—' : `${player.selectedByPercent}%`} />
+				<StatCell label={t('form')} value={player.form ?? '—'} />
 			</div>
 		</Card>
 	)
@@ -84,12 +97,14 @@ export function PlayerStatsView({
 	comparisonError,
 	currentGameweek,
 }: PlayerStatsViewProps) {
+	const t = useTranslations('PlayerStats')
+
 	if (!selectedPlayer) {
 		return (
 			<Card className="p-8 text-center">
 				<User className="mx-auto mb-4 size-12 text-muted-foreground" />
-				<h2 className="text-lg font-medium">Select a player to view statistics</h2>
-				<p className="mt-2 text-sm text-muted-foreground">Search by name or filter by team and position above.</p>
+				<h2 className="text-lg font-medium">{t('selectPrompt')}</h2>
+				<p className="mt-2 text-sm text-muted-foreground">{t('selectHelp')}</p>
 			</Card>
 		)
 	}
@@ -115,10 +130,10 @@ export function PlayerStatsView({
 			)}
 			<Tabs defaultValue="overview">
 				<TabsList className="mb-6 grid w-full grid-cols-4">
-					<TabsTrigger value="overview">Overview</TabsTrigger>
-					<TabsTrigger value="season">Season</TabsTrigger>
-					<TabsTrigger value="ict">ICT</TabsTrigger>
-					<TabsTrigger value="fixtures">Fixtures</TabsTrigger>
+					<TabsTrigger value="overview">{t('overview')}</TabsTrigger>
+					<TabsTrigger value="season">{t('season')}</TabsTrigger>
+					<TabsTrigger value="ict">{t('ict')}</TabsTrigger>
+					<TabsTrigger value="fixtures">{t('fixtures')}</TabsTrigger>
 				</TabsList>
 				<TabsContent value="overview">
 					<PlayerOverviewTab player={player} comparison={comparison} currentGameweek={currentGameweek} />

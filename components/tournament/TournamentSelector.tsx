@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { useTranslations } from "next-intl";
 
 interface TournamentSelectorProps {
   tournaments: Tournament[];
@@ -24,6 +25,7 @@ export function TournamentSelector({
   onTournamentChange,
   className,
 }: TournamentSelectorProps) {
+  const t = useTranslations("Common");
   const currentTournament = tournaments.find(t => t.id === currentTournamentId) || tournaments[0];
 
   return (
@@ -31,7 +33,7 @@ export function TournamentSelector({
       <div className="flex flex-col sm:flex-row items-center gap-3">
         <div className="flex items-center gap-2">
           <Trophy className="h-5 w-5 text-primary" />
-          <span className="font-medium">Select Tournament:</span>
+          <span className="font-medium">{t("selectTournament")}</span>
         </div>
         
         <DropdownMenu>

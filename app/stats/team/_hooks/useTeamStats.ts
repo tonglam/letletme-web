@@ -7,7 +7,6 @@ import {
 	entryEventCacheKey,
 	getEntryEventResultCached,
 	getEntryHistoryCached,
-	getNoDataMessage,
 	getTransferHistoryCached,
 	isTeamStatsTab,
 	LIVE_CACHE_TTL_MS,
@@ -15,6 +14,7 @@ import {
 	type TeamStatsTab,
 	type TeamStatsViewModel,
 } from '../_lib/team-stats-model'
+import { useTranslations } from 'next-intl'
 
 interface UseTeamStatsOptions {
 	entryId: number
@@ -31,6 +31,7 @@ export function useTeamStats({
 	initialError,
 	initialRequestComplete,
 }: UseTeamStatsOptions) {
+	const t = useTranslations('TeamStats')
 	const [currentGameweek, setCurrentGameweek] = useState(initialCurrentGameweek)
 	const [selectedGameweek, setSelectedGameweek] = useState(initialCurrentGameweek)
 	const [activeTab, setActiveTab] = useState<TeamStatsTab>('squad')
@@ -41,7 +42,7 @@ export function useTeamStats({
 	const [error, setError] = useState<string | null>(initialError)
 	const [emptyStateMessage, setEmptyStateMessage] = useState<string | null>(
 		initialRequestComplete && !initialEntryEventResult && initialCurrentGameweek
-			? getNoDataMessage(initialCurrentGameweek)
+			? t('noStatsForGameweek', { gameweek: initialCurrentGameweek })
 			: null,
 	)
 	const requestIdRef = useRef(0)
@@ -78,7 +79,7 @@ export function useTeamStats({
 					activeTab === 'transfer'
 						? getTransferHistoryCached(entryId).catch((transferError) => {
 							console.warn('Transfer details unavailable:', transferError)
-							transferWarning.message = 'Team stats loaded, but transfer details are unavailable.'
+							transferWarning.message = t('transferDetailsUnavailable')
 							return []
 						})
 						: Promise.resolve(null),
@@ -92,7 +93,7 @@ export function useTeamStats({
 				}
 				if (!entryEventResult) {
 					setTeamStats(null)
-					setEmptyStateMessage(getNoDataMessage(selectedGameweek))
+					setEmptyStateMessage(t('noStatsForGameweek', { gameweek: selectedGameweek }))
 					return
 				}
 				setError(transferWarning.message)
@@ -107,7 +108,7 @@ export function useTeamStats({
 			} catch (loadError) {
 				if (requestId !== requestIdRef.current) return
 				console.error('Failed to load team stats:', loadError)
-				setError('Failed to load team stats from API.')
+				setError(t('loadFailed'))
 				setTeamStats(null)
 			} finally {
 				if (requestId === requestIdRef.current) setIsLoading(false)
@@ -118,7 +119,7 @@ export function useTeamStats({
 		return () => {
 			requestIdRef.current += 1
 		}
-	}, [activeTab, entryId, initialEntryEventResult, selectedGameweek])
+	}, [activeTab, entryId, initialEntryEventResult, selectedGameweek, t])
 
 	return {
 		activeTab,

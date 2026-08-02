@@ -7,6 +7,7 @@ import type { Match, PlayerStat } from '@/types/match'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import Image from 'next/image'
 import { useId, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { getPlayerMetrics, getPlayersWithPoints, type PlayerMetric } from './match-card-model'
 
 type MatchTeam = Match['homeTeam']
@@ -20,7 +21,22 @@ const METRIC_TONES: Record<PlayerMetric['tone'], string> = {
 }
 
 function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player: PlayerStat) => void }) {
+	const t = useTranslations('LiveMatches')
 	const metrics = getPlayerMetrics(player)
+	const metricLabels: Record<string, string> = {
+		MIN: t('minutesShort'),
+		Goals: t('goals'),
+		Assists: t('assists'),
+		CS: t('cleanSheetShort'),
+		Def: t('defensiveShort'),
+		Saves: t('saves'),
+		YC: t('yellowCardShort'),
+		RC: t('redCardShort'),
+		PS: t('penaltySavedShort'),
+		PM: t('penaltyMissedShort'),
+		OG: t('ownGoalShort'),
+		GC: t('goalsConcededShort'),
+	}
 	return (
 		<Button
 			type="button"
@@ -32,14 +48,14 @@ function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player
 				<span className="font-medium">{player.player}</span>
 				<span className="flex shrink-0 items-center gap-2">
 					{(player.bonus_points ?? 0) > 0 ? <Badge variant="outline" className="border-warning/30 text-warning">+{player.bonus_points}</Badge> : null}
-					<Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">{player.totalPoints ?? 0} pts</Badge>
+					<Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">{t('pointsBadge', { points: player.totalPoints ?? 0 })}</Badge>
 				</span>
 			</span>
 			{metrics.length > 0 ? (
 				<span className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
 					{metrics.map((metric) => (
 						<span key={metric.label} className={`flex items-center justify-between gap-2 rounded px-2 py-1 text-xs ${METRIC_TONES[metric.tone]}`}>
-							<span className="font-semibold">{metric.label}</span><span className="font-bold">{metric.value}</span>
+							<span className="font-semibold">{metricLabels[metric.label] ?? metric.label}</span><span className="font-bold">{metric.value}</span>
 						</span>
 					))}
 				</span>
@@ -49,8 +65,9 @@ function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player
 }
 
 function TeamPlayers({ team, onSelect }: { team: MatchTeam; onSelect: (player: PlayerStat, team: MatchTeam) => void }) {
+	const t = useTranslations('LiveMatches')
 	const players = getPlayersWithPoints(team.players)
-	if (players.length === 0) return <p className="py-4 text-center text-sm text-muted-foreground">No players have points yet.</p>
+	if (players.length === 0) return <p className="py-4 text-center text-sm text-muted-foreground">{t('noPlayerPoints')}</p>
 	return (
 		<div className="flex flex-col gap-2">
 			{players.map((player) => (
@@ -66,14 +83,15 @@ interface MatchPlayerListProps {
 }
 
 export function MatchPlayerList({ match, onSelectPlayer }: MatchPlayerListProps) {
+	const t = useTranslations('LiveMatches')
 	const [expanded, setExpanded] = useState(false)
 	const contentId = useId()
 	const selectPlayer = (player: PlayerStat, team: MatchTeam) => onSelectPlayer(player, team.name, team.shortName)
 
 	return (
-		<section aria-label="Player points" className="flex flex-col gap-3">
+		<section aria-label={t('playerPoints')} className="flex flex-col gap-3">
 			<Button type="button" variant="outline" className="w-full justify-between bg-accent/20" onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} aria-controls={contentId}>
-				Player List
+				{t('playerList')}
 				{expanded ? <ChevronUp data-icon="inline-end" aria-hidden="true" /> : <ChevronDown data-icon="inline-end" aria-hidden="true" />}
 			</Button>
 

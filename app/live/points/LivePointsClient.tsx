@@ -8,6 +8,7 @@ import { EntrySearchForm } from './_components/EntrySearchForm'
 import { LivePointsDashboard } from './_components/LivePointsDashboard'
 import { LivePointsLoading } from './_components/LivePointsLoading'
 import { useLivePoints } from './_hooks/useLivePoints'
+import { useTranslations } from 'next-intl'
 
 interface LivePointsClientProps {
 	initialEntryId: number
@@ -20,6 +21,7 @@ export default function LivePointsClient({
 	initialEventId,
 	initialLiveData,
 }: LivePointsClientProps) {
+	const t = useTranslations('LivePoints')
 	const livePoints = useLivePoints({ initialEntryId, initialEventId, initialLiveData })
 	const entrySearch = (
 		<EntrySearchForm
@@ -33,7 +35,7 @@ export default function LivePointsClient({
 	if (!livePoints.activeEntryId && !livePoints.isLoading) {
 		content = (
 			<Card className="p-6 sm:p-8">
-				<p className="mb-4 text-muted-foreground">Enter an FPL entry ID to view live points.</p>
+				<p className="mb-4 text-muted-foreground">{t('enterEntry')}</p>
 				{entrySearch}
 				{livePoints.error ? <p className="mt-3 text-sm text-destructive" role="alert">{livePoints.error}</p> : null}
 			</Card>
@@ -57,7 +59,7 @@ export default function LivePointsClient({
 					selectedGameweek={livePoints.selectedGameweek}
 				/>
 				<p className="mt-6 text-center text-sm text-destructive" role="alert">
-					{livePoints.error ?? 'No live data available for this team.'}
+					{livePoints.error ?? t('noData')}
 				</p>
 			</>
 		)
@@ -83,7 +85,7 @@ export default function LivePointsClient({
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
-				<h1 className="mb-6 text-3xl font-bold">Live Points</h1>
+				<h1 className="mb-6 text-3xl font-bold">{t('title')}</h1>
 				{content}
 			</div>
 		</PageShell>

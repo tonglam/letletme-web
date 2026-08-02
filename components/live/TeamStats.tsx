@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 import { Crown, Repeat, Trophy, Zap } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 interface TeamStatsProps {
   stats: {
@@ -21,6 +22,12 @@ interface TeamStatsProps {
 }
 
 function TeamStatsComponent({ stats }: TeamStatsProps) {
+  const t = useTranslations("LivePoints");
+  const chipLabels: Record<string, string> = {
+    bench: t("benchBoost"),
+    triple: t("tripleCaptain"),
+    wildcard: t("wildcard"),
+  };
   return (
     <div className="bg-card rounded-lg shadow-sm overflow-hidden mb-8">
       <div className="p-6">
@@ -32,7 +39,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
 
           <div className="flex items-center gap-3 sm:justify-end">
             <div className="flex flex-col items-end">
-              <span className="text-xs text-muted-foreground">Played</span>
+              <span className="text-xs text-muted-foreground">{t("played")}</span>
               <span className="text-sm font-semibold tabular-nums">{stats.played}</span>
             </div>
             <div className="flex flex-wrap sm:justify-end gap-2">
@@ -44,12 +51,12 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
                         key={chip}
                         className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary"
                       >
-                        {chip.toUpperCase()}
+                        {chipLabels[chip] ?? chip.toUpperCase()}
                       </span>
                     )
                 )
               ) : (
-                <span className="text-sm text-muted-foreground">No active chips</span>
+                <span className="text-sm text-muted-foreground">{t("noActiveChips")}</span>
               )}
             </div>
           </div>
@@ -61,7 +68,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
               <div className="p-2 rounded-full bg-primary/10">
                 <Zap className="w-5 h-5 text-primary" />
               </div>
-              <span className="text-sm text-muted-foreground">Live Points</span>
+              <span className="text-sm text-muted-foreground">{t("livePoints")}</span>
             </div>
             <div className="text-2xl font-bold">{stats.livePoints}</div>
           </div>
@@ -71,7 +78,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
               <div className="p-2 rounded-full bg-primary/10">
                 <Repeat className="w-5 h-5 text-primary" />
               </div>
-              <span className="text-sm text-muted-foreground">Transfer Cost</span>
+              <span className="text-sm text-muted-foreground">{t("transferCost")}</span>
             </div>
             <div className="text-2xl font-bold">
               {stats.transferCost > 0 ? (
@@ -87,7 +94,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
               <div className="p-2 rounded-full bg-primary/10">
                 <Crown className="w-5 h-5 text-primary" />
               </div>
-              <span className="text-sm text-muted-foreground">Captain</span>
+              <span className="text-sm text-muted-foreground">{t("captain")}</span>
             </div>
             <div className="text-lg font-bold truncate">{stats.captainName}</div>
           </div>
@@ -97,7 +104,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
               <div className="p-2 rounded-full bg-primary/10">
                 <Trophy className="w-5 h-5 text-primary" />
               </div>
-              <span className="text-sm text-muted-foreground">Live Total</span>
+              <span className="text-sm text-muted-foreground">{t("liveTotal")}</span>
             </div>
             <div className="text-2xl font-bold">{stats.liveTotalPoints}</div>
           </div>

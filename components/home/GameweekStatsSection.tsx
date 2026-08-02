@@ -8,6 +8,7 @@ import {
 	type TopTransfersResponse,
 } from '@/lib/graphql/operations/prices'
 import { TransferList } from './TransferList'
+import { useTranslations } from 'next-intl'
 
 interface Transfer {
 	position: string
@@ -36,18 +37,19 @@ function GameweekStatsCard({
 	transfersIn,
 	transfersOut,
 	isLoading = false,
-	error,
+	hasError,
 }: {
 	transfersIn: Transfer[]
 	transfersOut: Transfer[]
 	isLoading?: boolean
-	error?: string | null
+	hasError?: boolean
 }) {
+	const t = useTranslations('Home')
 	return (
 		<Card className="rounded-none sm:rounded-lg p-4 sm:p-6 lg:p-8">
-			{error && (
+			{hasError && (
 				<div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-					<p className="text-sm text-destructive">{error}</p>
+					<p className="text-sm text-destructive">{t('transfersFailed')}</p>
 				</div>
 			)}
 			{isLoading ? (
@@ -69,12 +71,12 @@ function GameweekStatsCard({
 			) : (
 				<div className="space-y-6">
 					<TransferList
-						title="Top Transfers In"
+						title={t('topTransfersIn')}
 						transfers={transfersIn}
 						type="in"
 					/>
 					<TransferList
-						title="Top Transfers Out"
+						title={t('topTransfersOut')}
 						transfers={transfersOut}
 						type="out"
 					/>
@@ -105,7 +107,7 @@ export async function GameweekStatsSection({ currentEventId }: GameweekStatsSect
 
 	let transfersIn: Transfer[] = []
 	let transfersOut: Transfer[] = []
-	let error: string | null = null
+	let hasError = false
 
 	try {
 		const [inData, outData] = await Promise.all([
@@ -131,14 +133,14 @@ export async function GameweekStatsSection({ currentEventId }: GameweekStatsSect
 		transfersOut = (outData.topTransfersOut ?? []).map(i => toTransfer(i, 'out'))
 	} catch (err) {
 		console.error('Failed to fetch transfers:', err)
-		error = 'Failed to load transfers'
+		hasError = true
 	}
 
 	return (
 		<GameweekStatsCard
 			transfersIn={transfersIn}
 			transfersOut={transfersOut}
-			error={error}
+			hasError={hasError}
 		/>
 	)
 }

@@ -20,13 +20,14 @@ export default function GlobalError({
 			<body className="min-h-svh bg-background text-foreground antialiased">
 				<main className="mx-auto flex min-h-svh max-w-xl flex-col items-center justify-center gap-5 px-6 text-center">
 					<p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">LetLetMe</p>
-					<h1 className="text-3xl font-bold tracking-tight">The app shell could not start</h1>
+					<h1 className="text-3xl font-bold tracking-tight">The app shell could not start / 应用无法启动</h1>
 					<p className="text-muted-foreground">
-						Try loading the application again. Your account and tournament data have not been changed.
+						Try loading the application again. Your data has not been changed.<br />
+						请重新加载应用。您的数据未被更改。
 					</p>
 					<Button onClick={reset}>
 						<RotateCcw data-icon="inline-start" />
-						Reload LetLetMe
+						Reload LetLetMe / 重新加载
 					</Button>
 				</main>
 			</body>

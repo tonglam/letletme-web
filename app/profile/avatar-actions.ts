@@ -10,28 +10,33 @@ const MAX_BYTES = 5 * 1024 * 1024 // 5 MB
 
 export async function updateAvatar(
 	formData: FormData,
-): Promise<{ error?: string; imageUrl?: string }> {
+): Promise<{ errorCode?: 'notAuthenticated' | 'noFile' | 'fileTooLarge' | 'invalidFile' | 'uploadFailed'; imageUrl?: string }> {
 	const reqHeaders = await headers()
 	const session = await getAuthorizationSession(reqHeaders)
-	if (!session) return { error: 'Not authenticated' }
+	if (!session) return { errorCode: 'notAuthenticated' }
 
 	const file = formData.get('avatar')
 	if (!(file instanceof File) || file.size === 0) {
-		return { error: 'No file provided' }
+		return { errorCode: 'noFile' }
 	}
 	if (file.size > MAX_BYTES) {
-		return { error: 'Image must be under 5 MB' }
+		return { errorCode: 'fileTooLarge' }
 	}
 	if (!file.type.startsWith('image/')) {
-		return { error: 'File must be an image' }
+		return { errorCode: 'invalidFile' }
 	}
 
-	const imageUrl = await uploadAvatar(session.user.id, file, file.type)
+	try {
+		const imageUrl = await uploadAvatar(session.user.id, file, file.type)
 
-	await db
-		.update(schema.user)
-		.set({ image: imageUrl })
-		.where(eq(schema.user.id, session.user.id))
+		await db
+			.update(schema.user)
+			.set({ image: imageUrl })
+			.where(eq(schema.user.id, session.user.id))
 
-	return { imageUrl }
+		return { imageUrl }
+	} catch (error) {
+		console.error('[avatar] Failed to update:', error)
+		return { errorCode: 'uploadFailed' }
+	}
 }

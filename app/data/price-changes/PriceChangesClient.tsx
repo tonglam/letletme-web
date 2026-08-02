@@ -33,8 +33,8 @@ import {
 	type Position,
 	type Team
 } from '@/types/common'
-import { format, parseISO } from 'date-fns'
 import { X } from 'lucide-react'
+import { useFormatter, useTranslations } from 'next-intl'
 import { useEffect, useMemo, useState } from 'react'
 
 interface PriceChange {
@@ -52,10 +52,10 @@ interface PriceHistoryRow {
 	oldPrice: number
 	newPrice: number
 	change: number
-	movement: string
+	movement: 'rise' | 'fall' | 'noChange'
 	transfersIn?: number
 	transfersOut?: number
-	transferFlow: string
+	transferFlow: 'in' | 'out' | 'none'
 }
 
 type PositionFilter = Position | 'ALL'
@@ -145,12 +145,12 @@ const toPriceHistoryRow = (item: PlayerValueHistoryItem): PriceHistoryRow => {
 	const newPrice = item.newValue / 10
 	const computedChange = newPrice - oldPrice
 	const movement =
-		item.changeType === 'RISE' ? 'Rise'
-		: item.changeType === 'FALL' ? 'Fall'
-		: item.changeType === 'UNCHANGED' ? 'No change'
-		: computedChange > 0 ? 'Rise'
-		: computedChange < 0 ? 'Fall'
-		: 'No change'
+		item.changeType === 'RISE' ? 'rise'
+		: item.changeType === 'FALL' ? 'fall'
+		: item.changeType === 'UNCHANGED' ? 'noChange'
+		: computedChange > 0 ? 'rise'
+		: computedChange < 0 ? 'fall'
+		: 'noChange'
 	return {
 		date: item.changeDate,
 		oldPrice,
@@ -160,15 +160,10 @@ const toPriceHistoryRow = (item: PlayerValueHistoryItem): PriceHistoryRow => {
 		transfersIn: item.transfersIn ?? undefined,
 		transfersOut: item.transfersOut ?? undefined,
 		transferFlow:
-			typeof item.transfersIn === 'number' ? `${item.transfersIn.toLocaleString()} in`
-			: typeof item.transfersOut === 'number' ? `${item.transfersOut.toLocaleString()} out`
-			: '—'
+			typeof item.transfersIn === 'number' ? 'in'
+			: typeof item.transfersOut === 'number' ? 'out'
+			: 'none'
 	}
-}
-
-const formatHistoryDate = (value: string): string => {
-	const parsed = parseISO(value)
-	return Number.isNaN(parsed.getTime()) ? value : format(parsed, 'dd MMM yyyy')
 }
 
 const computeRisesFalls = (playerValues: PlayerValue[]) => {
@@ -189,6 +184,8 @@ export default function PriceChangesClient({
 	initialPlayerValues,
 	initialError
 }: PriceChangesClientProps) {
+	const t = useTranslations('PriceChanges')
+	const formatter = useFormatter()
 	const allPriceChanges = useMemo(
 		() => initialPlayerValues?.map(toPriceChange) ?? [],
 		[initialPlayerValues]
@@ -234,14 +231,14 @@ export default function PriceChangesClient({
 				setHasLoadedPlayers(true)
 			} catch (fetchPlayersError) {
 				console.error('Failed to fetch players directory:', fetchPlayersError)
-				setPlayersError('Failed to load player directory.')
+				setPlayersError(t('directoryFailed'))
 				setAllPlayers([])
 			} finally {
 				setIsPlayersLoading(false)
 			}
 		}
 		void fetchPlayersDirectory()
-	}, [shouldRequestPlayers, hasLoadedPlayers])
+	}, [shouldRequestPlayers, hasLoadedPlayers, t])
 
 	const selectedPlayer = useMemo(
 		() => allPlayers.find(player => player.id === selectedPlayerId) ?? null,
@@ -328,7 +325,7 @@ export default function PriceChangesClient({
 			} catch (fetchHistoryError) {
 				if (cancelled) return
 				console.error('Failed to fetch player value history:', fetchHistoryError)
-				setHistoryError('Failed to load player price history from GraphQL.')
+				setHistoryError(t('historyFailed'))
 				setPlayerHistoryRows([])
 			} finally {
 				if (!cancelled) {
@@ -339,7 +336,7 @@ export default function PriceChangesClient({
 		return () => {
 			cancelled = true
 		}
-	}, [selectedPlayerId])
+	}, [selectedPlayerId, t])
 
 	const hasTransferData = useMemo(
 		() => playerHistoryRows.some(row => typeof row.transfersIn === 'number' || typeof row.transfersOut === 'number'),
@@ -354,59 +351,66 @@ export default function PriceChangesClient({
 		return null
 	}, [playerHistoryRows, selectedPlayerPriceSnapshot])
 
+	const formatHistoryDate = (value: string): string => {
+		const parsed = new Date(value)
+		return Number.isNaN(parsed.getTime())
+			? value
+			: formatter.dateTime(parsed, { day: '2-digit', month: 'short', year: 'numeric' })
+	}
+
 	return (
 		<PageShell>
 			<div className="container max-w-4xl mx-auto px-4 py-8">
-				<h1 className="text-3xl font-bold mb-6">Price Changes</h1>
+				<h1 className="text-3xl font-bold mb-6">{t('title')}</h1>
 				{initialError && (
 					<Alert variant="destructive" className="mb-6">
-						<AlertTitle>Price data unavailable</AlertTitle>
+						<AlertTitle>{t('dataUnavailable')}</AlertTitle>
 						<AlertDescription>{initialError}</AlertDescription>
 					</Alert>
 				)}
 
 				<div className="mb-6">
 					<Card className="p-3 sm:p-4">
-						<p className="text-sm text-muted-foreground mb-2">Select Player</p>
+						<p className="text-sm text-muted-foreground mb-2">{t('selectPlayer')}</p>
 						<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-3">
 							<Select value={selectTeamValue} onValueChange={value => setTeamFilter(value)}>
-								<SelectTrigger aria-label="Filter players by team">
-									<SelectValue placeholder="Filter by team" />
+								<SelectTrigger aria-label={t('filterTeam')}>
+									<SelectValue placeholder={t('filterByTeam')} />
 								</SelectTrigger>
 								<SelectContent>
 									{availableTeams.map(team => (
 										<SelectItem key={team} value={team}>
-											{team === 'ALL' ? 'All Teams' : (teamFullNames[team as Team] ?? team)}
+											{team === 'ALL' ? t('allTeams') : (teamFullNames[team as Team] ?? team)}
 										</SelectItem>
 									))}
 								</SelectContent>
 							</Select>
 
 							<Select value={positionFilter} onValueChange={value => setPositionFilter(value as PositionFilter)}>
-								<SelectTrigger aria-label="Filter players by position">
-									<SelectValue placeholder="Filter by position" />
+								<SelectTrigger aria-label={t('filterPosition')}>
+									<SelectValue placeholder={t('filterByPosition')} />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="ALL">All Positions</SelectItem>
-									<SelectItem value="GKP">Goalkeeper</SelectItem>
-									<SelectItem value="DEF">Defender</SelectItem>
-									<SelectItem value="MID">Midfielder</SelectItem>
-									<SelectItem value="FWD">Forward</SelectItem>
+									<SelectItem value="ALL">{t('allPositions')}</SelectItem>
+									<SelectItem value="GKP">{t('goalkeeper')}</SelectItem>
+									<SelectItem value="DEF">{t('defender')}</SelectItem>
+									<SelectItem value="MID">{t('midfielder')}</SelectItem>
+									<SelectItem value="FWD">{t('forward')}</SelectItem>
 								</SelectContent>
 							</Select>
 
 							<div className="md:col-span-2 relative">
 								<Input
-									aria-label="Search players by name"
+									aria-label={t('searchPlayers')}
 									value={playerSearchTerm}
 									onChange={event => setPlayerSearchTerm(event.target.value)}
-									placeholder="Type player name to search..."
+									placeholder={t('searchPlaceholder')}
 									className={playerSearchTerm ? 'pr-10' : ''}
 								/>
 								{playerSearchTerm && (
 									<button
 										type="button"
-										aria-label="Clear player search"
+										aria-label={t('clearSearch')}
 										onClick={() => setPlayerSearchTerm('')}
 										className="absolute right-3 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 									>
@@ -418,14 +422,14 @@ export default function PriceChangesClient({
 
 						{selectedPlayerOutsideFilters && selectedPlayer && (
 							<div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-								<span>Current selected player is outside active filters: {selectedPlayer.name}</span>
+								<span>{t('outsideFilters', { name: selectedPlayer.name })}</span>
 								<Button
 									type="button"
 									variant="ghost"
 									size="sm"
 									onClick={() => { setPositionFilter('ALL'); setTeamFilter('ALL'); setPlayerSearchTerm('') }}
 								>
-									Clear filters
+									{t('clearFilters')}
 								</Button>
 							</div>
 						)}
@@ -433,9 +437,11 @@ export default function PriceChangesClient({
 						{selectedPlayer && (
 							<div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-md border px-3 py-2">
 								<p className="text-xs sm:text-sm text-muted-foreground">
-									Selected:{' '}
-									<span className="font-medium text-foreground">{selectedPlayer.name}</span>{' '}
-									({selectedPlayer.position} | {selectedPlayer.teamShortName})
+									{t('selected', {
+										name: selectedPlayer.name,
+										position: selectedPlayer.position,
+										team: selectedPlayer.teamShortName,
+									})}
 								</p>
 								<Button
 									type="button"
@@ -443,7 +449,7 @@ export default function PriceChangesClient({
 									size="sm"
 									onClick={() => { setSelectedPlayerId(''); setActiveTab('daily') }}
 								>
-									Clear selected player
+									{t('clearSelected')}
 								</Button>
 							</div>
 						)}
@@ -451,13 +457,13 @@ export default function PriceChangesClient({
 						<div className="rounded-md border">
 							<div className="max-h-64 sm:max-h-72 overflow-y-auto">
 								{isPlayersLoading ? (
-									<div className="p-3 text-sm text-muted-foreground">Loading players...</div>
+									<div className="p-3 text-sm text-muted-foreground">{t('loadingPlayers')}</div>
 								) : !hasLoadedPlayers ? (
 									<div className="p-3 text-sm text-muted-foreground">
-										Select team/position or start typing to load players.
+										{t('loadPrompt')}
 									</div>
 								) : visiblePlayerOptions.length === 0 ? (
-									<div className="p-3 text-sm text-muted-foreground">No players match current filters.</div>
+									<div className="p-3 text-sm text-muted-foreground">{t('noMatches')}</div>
 								) : (
 									visiblePlayerOptions.map(change => {
 										const isSelected = selectedPlayerId === change.id
@@ -479,12 +485,16 @@ export default function PriceChangesClient({
 							</div>
 						</div>
 						<p className="mt-2 text-xs text-muted-foreground">
-							Showing {visiblePlayerOptions.length} of {filteredPlayerOptions.length} filtered players ({playerDirectoryTotal} total)
+							{t('resultCount', {
+								visible: visiblePlayerOptions.length,
+								filtered: filteredPlayerOptions.length,
+								total: playerDirectoryTotal,
+							})}
 						</p>
 						{playersError && <p className="mt-1 text-xs text-destructive">{playersError}</p>}
 						{hasMoreFilteredPlayers && (
 							<p className="mt-1 text-xs text-muted-foreground">
-								Default view shows 10 players. Select a specific position or use search to see all matching players.
+								{t('defaultLimit')}
 							</p>
 						)}
 					</Card>
@@ -492,25 +502,25 @@ export default function PriceChangesClient({
 
 				<Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
 					<TabsList className="grid grid-cols-2 mb-4">
-						<TabsTrigger value="daily">Daily Price Changes</TabsTrigger>
+						<TabsTrigger value="daily">{t('dailyTab')}</TabsTrigger>
 						<TabsTrigger value="player" disabled={!selectedPlayerId}>
-							Player Price History
+							{t('historyTab')}
 						</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="daily">
 						<Card className="p-6">
-							<h2 className="text-2xl font-bold mb-2">Latest Price Changes</h2>
+							<h2 className="text-2xl font-bold mb-2">{t('latest')}</h2>
 							{!hasDailyPriceChanges ? (
 								<div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
 									{initialError
-										? 'Latest changes cannot be shown until the price service recovers.'
-										: 'No price changes have been recorded for today yet.'}
+										? t('serviceRecovery')
+										: t('noneToday')}
 								</div>
 							) : (
 								<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-									<PriceChangeList title="Price Rises" changes={priceChanges.rises} type="rise" />
-									<PriceChangeList title="Price Falls" changes={priceChanges.falls} type="fall" />
+									<PriceChangeList title={t('rises')} changes={priceChanges.rises} type="rise" />
+									<PriceChangeList title={t('falls')} changes={priceChanges.falls} type="fall" />
 								</div>
 							)}
 						</Card>
@@ -519,10 +529,13 @@ export default function PriceChangesClient({
 					<TabsContent value="player">
 						{selectedPlayer ? (
 							<Card className="p-6">
-								<h2 className="text-2xl font-bold mb-2">Price History for {selectedPlayer.name}</h2>
+								<h2 className="text-2xl font-bold mb-2">{t('historyFor', { name: selectedPlayer.name })}</h2>
 								<p className="text-muted-foreground mb-6">
-									{selectedPlayer.position} | {selectedPlayer.teamShortName} | Current Price:{' '}
-									{currentPlayerPrice !== null ? `£${currentPlayerPrice.toFixed(1)}m` : 'N/A'}
+									{t('playerSummary', {
+										position: selectedPlayer.position,
+										team: selectedPlayer.teamShortName,
+										price: currentPlayerPrice !== null ? `£${currentPlayerPrice.toFixed(1)}m` : '—',
+									})}
 								</p>
 
 								{historyError && (
@@ -532,25 +545,23 @@ export default function PriceChangesClient({
 								)}
 
 								{isHistoryLoading ? (
-									<div className="text-sm text-muted-foreground">Loading player price history...</div>
+									<div className="text-sm text-muted-foreground">{t('loadingHistory')}</div>
 								) : playerHistoryRows.length === 0 ? (
 									<div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
-										No historical price changes are available for{' '}
-										<span className="font-medium text-foreground">{selectedPlayer.name}</span>{' '}
-										right now. GraphQL returned no history rows for this player.
+										{t('noHistory', { name: selectedPlayer.name })}
 									</div>
 								) : (
 									<StatsTable
-										title="Historical Price Changes"
+										title={t('historical')}
 										data={playerHistoryRows}
 										columns={[
-											{ key: 'date', label: 'Date', format: value => formatHistoryDate(value as string) },
-											{ key: 'oldPrice', label: 'Old Price', format: value => `£${(value as number).toFixed(1)}m` },
-											{ key: 'newPrice', label: 'New Price', format: value => `£${(value as number).toFixed(1)}m` },
-											{ key: 'movement', label: 'Movement' },
+											{ key: 'date', label: t('date'), format: value => formatHistoryDate(value as string) },
+											{ key: 'oldPrice', label: t('oldPrice'), format: value => `£${(value as number).toFixed(1)}m` },
+											{ key: 'newPrice', label: t('newPrice'), format: value => `£${(value as number).toFixed(1)}m` },
+											{ key: 'movement', label: t('movement'), format: value => t(value as 'rise' | 'fall' | 'noChange') },
 											{
 												key: 'change',
-												label: 'Change',
+												label: t('change'),
 												format: (_, row) => {
 													const typedRow = row as unknown as PriceHistoryRow
 													const change = typedRow.change
@@ -561,14 +572,23 @@ export default function PriceChangesClient({
 													return <span className={className}>{change > 0 ? '+' : ''}£{change.toFixed(1)}m</span>
 												}
 											},
-											...(hasTransferData ? [{ key: 'transferFlow', label: 'Transfers' }] : [])
+											...(hasTransferData ? [{
+												key: 'transferFlow',
+												label: t('transfers'),
+												format: (_value: unknown, row: Record<string, unknown>) => {
+													const typedRow = row as unknown as PriceHistoryRow
+													if (typedRow.transferFlow === 'in') return t('transfersInShort', { count: formatter.number(typedRow.transfersIn ?? 0) })
+													if (typedRow.transferFlow === 'out') return t('transfersOutShort', { count: formatter.number(typedRow.transfersOut ?? 0) })
+													return '—'
+												},
+											}] : [])
 										]}
 									/>
 								)}
 							</Card>
 						) : (
 							<Card className="p-6 text-sm text-muted-foreground">
-								Select a player to view available price data from GraphQL.
+								{t('selectForHistory')}
 							</Card>
 						)}
 					</TabsContent>

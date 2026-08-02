@@ -5,6 +5,7 @@ import { TeamChipsTab } from './TeamChipsTab'
 import { TeamHistoryTab } from './TeamHistoryTab'
 import { TeamSquadTab } from './TeamSquadTab'
 import { TeamTransfersTab } from './TeamTransfersTab'
+import { useTranslations } from 'next-intl'
 
 interface TeamStatsTabsProps {
 	activeTab: TeamStatsTab
@@ -13,24 +14,25 @@ interface TeamStatsTabsProps {
 }
 
 export function TeamStatsTabs({ activeTab, onTabChange, stats }: TeamStatsTabsProps) {
+	const t = useTranslations('TeamStats')
 	return (
 		<Tabs value={activeTab} onValueChange={onTabChange} className="flex flex-col gap-6">
 			<TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
 				<TabsTrigger value="squad" className="gap-2">
 					<Users data-icon="inline-start" aria-hidden="true" />
-					Squad
+					{t('squad')}
 				</TabsTrigger>
 				<TabsTrigger value="transfer" className="gap-2">
 					<ArrowRightLeft data-icon="inline-start" aria-hidden="true" />
-					Transfers
+					{t('transfers')}
 				</TabsTrigger>
 				<TabsTrigger value="chips" className="gap-2">
 					<Star data-icon="inline-start" aria-hidden="true" />
-					Chips
+					{t('chips')}
 				</TabsTrigger>
 				<TabsTrigger value="history" className="gap-2">
 					<Calendar data-icon="inline-start" aria-hidden="true" />
-					History
+					{t('history')}
 				</TabsTrigger>
 			</TabsList>
 

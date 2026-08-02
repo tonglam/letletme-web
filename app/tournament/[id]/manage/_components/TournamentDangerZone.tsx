@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LoaderCircle, Trash2, TriangleAlert } from 'lucide-react'
 import { useState, type MouseEvent } from 'react'
+import { useTranslations } from 'next-intl'
 
 export function TournamentDangerZone({
 	isDeleting,
@@ -33,6 +34,7 @@ export function TournamentDangerZone({
 	onDelete: () => Promise<boolean>
 	tournamentName: string
 }) {
+	const t = useTranslations('TournamentManage')
 	const [open, setOpen] = useState(false)
 	const [confirmation, setConfirmation] = useState('')
 	const confirmed = confirmation === tournamentName
@@ -53,30 +55,30 @@ export function TournamentDangerZone({
 		<Card className="border-destructive/40">
 			<CardHeader>
 				<CardTitle asChild className="flex items-center gap-2 text-xl text-destructive">
-					<h2><TriangleAlert aria-hidden="true" /> Danger zone</h2>
+					<h2><TriangleAlert aria-hidden="true" /> {t('dangerZone')}</h2>
 				</CardTitle>
 				<CardDescription>
-					Deleting a tournament permanently removes its groups, fixtures, results, and statistics.
+					{t('dangerDescription')}
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="flex flex-col gap-4 rounded-b-lg bg-destructive/5 py-5 sm:flex-row sm:items-center sm:justify-between">
 				<div>
-					<p className="font-medium">Delete this tournament</p>
-					<p className="text-sm text-muted-foreground">This action cannot be undone.</p>
+					<p className="font-medium">{t('deleteThis')}</p>
+					<p className="text-sm text-muted-foreground">{t('cannotUndo')}</p>
 				</div>
 				<AlertDialog open={open} onOpenChange={handleOpenChange}>
 					<AlertDialogTrigger asChild>
-						<Button variant="destructive"><Trash2 aria-hidden="true" /> Delete tournament</Button>
+						<Button variant="destructive"><Trash2 aria-hidden="true" /> {t('deleteTournament')}</Button>
 					</AlertDialogTrigger>
 					<AlertDialogContent>
 						<AlertDialogHeader>
-							<AlertDialogTitle>Delete “{tournamentName}”?</AlertDialogTitle>
+							<AlertDialogTitle>{t('deleteTitle', { name: tournamentName })}</AlertDialogTitle>
 							<AlertDialogDescription>
-								All tournament data will be removed permanently. Enter the exact tournament name to confirm.
+								{t('deleteDescription')}
 							</AlertDialogDescription>
 						</AlertDialogHeader>
 						<div className="space-y-2">
-							<Label htmlFor="delete-confirmation">Tournament name</Label>
+							<Label htmlFor="delete-confirmation">{t('name')}</Label>
 							<Input
 								id="delete-confirmation"
 								autoComplete="off"
@@ -85,14 +87,14 @@ export function TournamentDangerZone({
 							/>
 						</div>
 						<AlertDialogFooter>
-							<AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+							<AlertDialogCancel disabled={isDeleting}>{t('cancel')}</AlertDialogCancel>
 							<AlertDialogAction
 								className={buttonVariants({ variant: 'destructive' })}
 								disabled={!confirmed || isDeleting}
 								onClick={handleDelete}
 							>
 								{isDeleting ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Trash2 aria-hidden="true" />}
-								{isDeleting ? 'Deleting…' : 'Delete permanently'}
+								{isDeleting ? t('deleting') : t('deletePermanently')}
 							</AlertDialogAction>
 						</AlertDialogFooter>
 					</AlertDialogContent>

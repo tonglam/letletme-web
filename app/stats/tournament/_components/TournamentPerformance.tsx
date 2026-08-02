@@ -1,7 +1,7 @@
 import { Card } from '@/components/ui/card'
-import { formatCompactNumber } from '@/lib/utils'
 import { ArrowDown, ArrowUp, Trophy } from 'lucide-react'
 import type { TournamentStatsViewModel } from '../_lib/tournament-stats-model'
+import { useFormatter, useTranslations } from 'next-intl'
 
 function Metric({ label, value, detail }: { label: string; value: string; detail: React.ReactNode }) {
 	return (
@@ -14,50 +14,54 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
 }
 
 function RankMovement({ stats }: { stats: TournamentStatsViewModel }) {
+	const t = useTranslations('TournamentStats')
+	const format = useFormatter()
 	if (stats.myRank === null || stats.myPreviousRank === null) {
-		return <span className="text-muted-foreground">This team is not in the tournament</span>
+		return <span className="text-muted-foreground">{t('notInTournament')}</span>
 	}
 	if (stats.myPreviousRank > stats.myRank) {
 		return (
 			<span className="inline-flex items-center gap-1 text-success">
-				<ArrowUp aria-hidden="true" /> Up {formatCompactNumber(stats.myPreviousRank - stats.myRank)}
+				<ArrowUp aria-hidden="true" /> {t('up', { count: format.number(stats.myPreviousRank - stats.myRank, { notation: 'compact' }) })}
 			</span>
 		)
 	}
 	if (stats.myPreviousRank < stats.myRank) {
 		return (
 			<span className="inline-flex items-center gap-1 text-destructive">
-				<ArrowDown aria-hidden="true" /> Down {formatCompactNumber(stats.myRank - stats.myPreviousRank)}
+				<ArrowDown aria-hidden="true" /> {t('down', { count: format.number(stats.myRank - stats.myPreviousRank, { notation: 'compact' }) })}
 			</span>
 		)
 	}
-	return <span className="text-muted-foreground">No change</span>
+	return <span className="text-muted-foreground">{t('noChange')}</span>
 }
 
 export function TournamentPerformance({ dataGameweek, stats }: { dataGameweek: number | null; stats: TournamentStatsViewModel }) {
+	const t = useTranslations('TournamentStats')
+	const format = useFormatter()
 	return (
 		<Card className="mb-6 p-6">
-			<h2 className="mb-6 text-xl font-bold">My Performance</h2>
+			<h2 className="mb-6 text-xl font-bold">{t('myPerformance')}</h2>
 			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 				<Metric
-					label="My Rank"
-					value={stats.myRank === null ? '—' : formatCompactNumber(stats.myRank)}
+					label={t('myRank')}
+					value={stats.myRank === null ? '—' : format.number(stats.myRank, { notation: 'compact' })}
 					detail={<RankMovement stats={stats} />}
 				/>
 				<Metric
-					label={dataGameweek === null ? 'Latest Gameweek' : `Gameweek ${dataGameweek}`}
-					value={stats.myTeam?.points == null ? '—' : `${stats.myTeam.points} pts`}
-					detail={<span className="text-muted-foreground">Event cost: {stats.myTeam?.eventCost == null ? '—' : `${stats.myTeam.eventCost} pts`}</span>}
+					label={dataGameweek === null ? t('latestGameweek') : t('gameweek', { gameweek: dataGameweek })}
+					value={stats.myTeam?.points == null ? '—' : t('pointsValue', { points: stats.myTeam.points })}
+					detail={<span className="text-muted-foreground">{t('eventCost', { points: stats.myTeam?.eventCost == null ? '—' : t('pointsValue', { points: stats.myTeam.eventCost }) })}</span>}
 				/>
 				<Metric
-					label="Captain"
-					value={stats.myTeam?.captaincy.name ?? 'N/A'}
-					detail={<span>{stats.myTeam?.captaincy.team !== 'N/A' ? `${stats.myTeam?.captaincy.team} · ` : ''}{stats.myTeam?.captaincy.points ?? 0} pts</span>}
+					label={t('captain')}
+					value={stats.myTeam?.captaincy.name === 'N/A' ? '—' : (stats.myTeam?.captaincy.name ?? '—')}
+					detail={<span>{stats.myTeam?.captaincy.team !== 'N/A' ? `${stats.myTeam?.captaincy.team} · ` : ''}{t('pointsValue', { points: stats.myTeam?.captaincy.points ?? 0 })}</span>}
 				/>
 				<Metric
-					label="Top Score"
-					value={stats.topPerformers[0] ? `${stats.topPerformers[0].points} pts` : '—'}
-					detail={<span className="truncate">{stats.topPerformers[0]?.teamName ?? 'No data'}</span>}
+					label={t('topScore')}
+					value={stats.topPerformers[0] ? t('pointsValue', { points: stats.topPerformers[0].points }) : '—'}
+					detail={<span className="truncate">{stats.topPerformers[0]?.teamName ?? t('noData')}</span>}
 				/>
 			</div>
 
@@ -65,7 +69,7 @@ export function TournamentPerformance({ dataGameweek, stats }: { dataGameweek: n
 				<div className="mt-6 border-t pt-6">
 					<h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
 						<Trophy className="size-4 text-warning" aria-hidden="true" />
-						GW{dataGameweek} Top Performers
+						{t('topPerformers', { gameweek: dataGameweek ?? '—' })}
 					</h3>
 					<div className="flex flex-col gap-2">
 						{stats.topPerformers.map((performer) => (
@@ -76,8 +80,8 @@ export function TournamentPerformance({ dataGameweek, stats }: { dataGameweek: n
 									<span className="hidden truncate text-xs text-muted-foreground sm:inline">({performer.managerName})</span>
 								</div>
 								<div className="flex shrink-0 items-center gap-3 text-right">
-									{performer.captain.name !== 'N/A' ? <span className="hidden text-xs text-muted-foreground sm:inline">{performer.captain.name} (C) {performer.captain.points} pts</span> : null}
-									<span className="font-bold text-primary">{performer.points} pts</span>
+									{performer.captain.name !== 'N/A' ? <span className="hidden text-xs text-muted-foreground sm:inline">{t('captainPoints', { name: performer.captain.name, points: t('pointsValue', { points: performer.captain.points }) })}</span> : null}
+									<span className="font-bold text-primary">{t('pointsValue', { points: performer.points })}</span>
 								</div>
 							</div>
 						))}

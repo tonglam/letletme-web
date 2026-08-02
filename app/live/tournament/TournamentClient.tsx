@@ -27,8 +27,9 @@ import {
 } from '@/lib/tournament/liveTournament'
 import { TournamentEntry } from '@/types/tournament'
 import { Tournament } from '@/types/tournament'
-import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { Link, useRouter } from '@/i18n/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const fetchLivePoints = async (
@@ -64,6 +65,7 @@ export default function TournamentClient({
 	initialCurrentRows = [],
 	initialResultsLoaded = false,
 }: TournamentClientProps) {
+	const t = useTranslations('LiveTournament')
 	const router = useRouter()
 	const searchParams = useSearchParams()
 
@@ -130,16 +132,12 @@ export default function TournamentClient({
 					mapEntryTournamentToLiveTournament(entryTournament)
 				)
 				setTournaments(mappedTournaments)
-			} catch (error) {
+			} catch {
 				if (isCancelled) {
 					return
 				}
 
-				const message =
-					error instanceof Error
-						? error.message
-						: 'Failed to load tournaments from API'
-				setLoadError(message)
+				setLoadError(t('listFailed'))
 				setTournaments([])
 			} finally {
 				if (!isCancelled) {
@@ -153,7 +151,7 @@ export default function TournamentClient({
 		return () => {
 			isCancelled = true
 		}
-	}, [entryId, initialTournaments.length])
+	}, [entryId, initialTournaments.length, t])
 
 
 	useEffect(() => {
@@ -186,7 +184,7 @@ export default function TournamentClient({
 
 				if (currentBatch.failedCount > 0) {
 					setResultsError(
-						`Partial results: ${currentBatch.failedCount}/${currentBatch.totalEntries} entries failed to calculate.`
+						t('partialResults', { failed: currentBatch.failedCount, total: currentBatch.totalEntries })
 					)
 				}
 
@@ -194,16 +192,12 @@ export default function TournamentClient({
 
 				setSelectedEntries(entries)
 				setSelectedStats(buildTournamentStats(entries))
-			} catch (error) {
+			} catch {
 				if (isCancelled) {
 					return
 				}
 
-				const message =
-					error instanceof Error
-						? error.message
-						: 'Failed to load tournament standings from API'
-				setResultsError(message)
+				setResultsError(t('standingsFailed'))
 				setSelectedEntries([])
 				setSelectedStats({ averagePoints: 0, highestPoints: 0, totalEntries: 0 })
 			} finally {
@@ -218,7 +212,7 @@ export default function TournamentClient({
 		return () => {
 			isCancelled = true
 		}
-	}, [selectedGameweek, selectedTournament])
+	}, [selectedGameweek, selectedTournament, t])
 
 	useEffect(() => {
 		const resetTimer = window.setTimeout(() => {
@@ -296,9 +290,9 @@ export default function TournamentClient({
 			<PageShell>
 				<div className="container max-w-4xl mx-auto px-4 py-8">
 					<Card className="p-6 text-sm text-muted-foreground">
-						Sign in and bind an FPL entry to view live tournament standings.{' '}
+						{t('signInPrompt')}{' '}
 						<Link href="/auth/login?next=/live/tournament" className="text-primary underline">
-							Sign in
+							{t('signIn')}
 						</Link>
 					</Card>
 				</div>
@@ -342,13 +336,13 @@ export default function TournamentClient({
 
 				{isLoadingTournaments && (
 					<Card className="p-6 text-sm text-muted-foreground">
-						Loading tournaments...
+						{t('loadingTournaments')}
 					</Card>
 				)}
 
 				{!isLoadingTournaments && !selectedTournament && (
 					<Card className="p-6 text-sm text-muted-foreground">
-						No tournaments available for this account yet.
+						{t('noTournaments')}
 					</Card>
 				)}
 
@@ -373,7 +367,7 @@ export default function TournamentClient({
 
 						{isLoadingResults ? (
 							<Card className="p-6 text-sm text-muted-foreground mb-6">
-								Loading tournament standings...
+								{t('loadingStandings')}
 							</Card>
 						) : (
 							<>

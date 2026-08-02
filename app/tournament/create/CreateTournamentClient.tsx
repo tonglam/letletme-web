@@ -11,8 +11,10 @@ import { TournamentInformationCard } from './_components/TournamentInformationCa
 import { TournamentKnockoutPhaseCard } from './_components/TournamentKnockoutPhaseCard'
 import { TournamentParticipantsCard } from './_components/TournamentParticipantsCard'
 import { useCreateTournament } from './_hooks/useCreateTournament'
+import { useTranslations } from 'next-intl'
 
 export default function CreateTournamentClient() {
+	const t = useTranslations('TournamentCreate')
 	const hydrated = useHydrated()
 	const state = useCreateTournament()
 	const canSubmit =
@@ -28,7 +30,7 @@ export default function CreateTournamentClient() {
 			<div className="container mx-auto max-w-4xl px-4 py-8">
 				<header className="mb-8 flex items-center gap-3">
 					<Trophy className="size-8 text-primary" aria-hidden="true" />
-					<h1 className="text-3xl font-bold">Create Tournament</h1>
+					<h1 className="text-3xl font-bold">{t('title')}</h1>
 				</header>
 				<div className="mb-8"><TournamentHelp /></div>
 

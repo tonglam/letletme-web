@@ -1,59 +1,78 @@
+import { routing } from '@/i18n/routing'
+import { getLocaleFromInternalPathname, localizePathname, stripLocaleFromPathname } from '@/i18n/routing'
 import { getAuth } from '@/lib/auth'
 import { isProtectedApi, isProtectedPage, requiresVerifiedEntry } from '@/lib/route-protection'
+import createMiddleware from 'next-intl/middleware'
 import { type NextRequest, NextResponse } from 'next/server'
 
+const handleI18nRouting = createMiddleware(routing)
+
+function copyCookies(from: NextResponse, to: NextResponse) {
+	for (const cookie of from.cookies.getAll()) {
+		to.cookies.set(cookie)
+	}
+	return to
+}
+
+function withDocumentCacheHeaders(req: NextRequest, response: NextResponse, privateDocument = false) {
+	const acceptsHtml = req.headers.get('accept')?.includes('text/html') ?? false
+	if ((req.method === 'GET' || req.method === 'HEAD') && acceptsHtml) {
+		// Cloudflare must not rewrite Next.js streaming or hydration scripts.
+		response.headers.set(
+			'Cache-Control',
+			privateDocument
+				? 'private, no-store, no-transform'
+				: 'public, max-age=0, must-revalidate, no-transform',
+		)
+	}
+	return response
+}
+
 export async function proxy(req: NextRequest) {
-	const { pathname } = req.nextUrl
-	const protectedPage = isProtectedPage(pathname)
-	const protectedApi = isProtectedApi(pathname)
-	const passThrough = (privateDocument = false) => {
-		const response = NextResponse.next()
-		const acceptsHtml = req.headers.get('accept')?.includes('text/html') ?? false
+	const requestedPathname = req.nextUrl.pathname
 
-		if (
-			(req.method === 'GET' || req.method === 'HEAD') &&
-			acceptsHtml &&
-			!pathname.startsWith('/api/')
-		) {
-			// Cloudflare must not rewrite Next.js streaming or hydration scripts.
-			// Keep public revalidation and private session pages explicit because a
-			// proxy response header replaces Next.js's downstream Cache-Control value.
-			response.headers.set(
-				'Cache-Control',
-				privateDocument
-					? 'private, no-store, no-transform'
-					: 'public, max-age=0, must-revalidate, no-transform',
-			)
-		}
+	// APIs and machine-facing integrations stay unprefixed and outside locale routing.
+	if (requestedPathname.startsWith('/api/')) {
+		if (!isProtectedApi(requestedPathname)) return NextResponse.next()
 
-		return response
+		const session = await getAuth().api.getSession({ headers: req.headers })
+		return session
+			? NextResponse.next()
+			: NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 	}
 
-	if (!protectedPage && !protectedApi) {
-		return passThrough()
+	const i18nResponse = handleI18nRouting(req)
+	if (i18nResponse.headers.has('location')) return i18nResponse
+
+	const internalUrl = new URL(
+		i18nResponse.headers.get('x-middleware-rewrite') ?? req.url,
+	)
+	const locale = getLocaleFromInternalPathname(internalUrl.pathname)
+	const pathname = stripLocaleFromPathname(internalUrl.pathname)
+	const protectedPage = isProtectedPage(pathname)
+
+	if (!protectedPage) {
+		return withDocumentCacheHeaders(req, i18nResponse)
 	}
 
 	const session = await getAuth().api.getSession({ headers: req.headers })
 
 	if (!session) {
-		if (protectedApi) {
-			return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
-		}
-
 		const url = req.nextUrl.clone()
-		url.pathname = '/auth/login'
+		url.pathname = localizePathname('/auth/login', locale)
 		url.search = ''
-		url.searchParams.set('next', `${pathname}${req.nextUrl.search}`)
-		return NextResponse.redirect(url)
+		url.searchParams.set('next', `${requestedPathname}${req.nextUrl.search}`)
+		return copyCookies(i18nResponse, NextResponse.redirect(url))
 	}
 
-	// Tournament pages need a linked FPL entry. Profile stays reachable so users
-	// can add or change their entry id there.
-	if (protectedPage && !session.user.fplEntryVerifiedAt && requiresVerifiedEntry(pathname)) {
-		return NextResponse.redirect(new URL('/onboarding/bind-entry', req.url))
+	if (!session.user.fplEntryVerifiedAt && requiresVerifiedEntry(pathname)) {
+		const url = req.nextUrl.clone()
+		url.pathname = localizePathname('/onboarding/bind-entry', locale)
+		url.search = ''
+		return copyCookies(i18nResponse, NextResponse.redirect(url))
 	}
 
-	return passThrough(protectedPage)
+	return withDocumentCacheHeaders(req, i18nResponse, true)
 }
 
 export const config = {

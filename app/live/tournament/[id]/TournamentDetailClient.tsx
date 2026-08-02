@@ -16,31 +16,9 @@ import {
 	buildTournamentEntries,
 	buildTournamentStats,
 } from "@/lib/tournament/liveEntries"
-import {
-	formatTournamentState
-} from "@/lib/tournament/liveTournament"
 import { ArrowLeft, Calendar, Settings, Users } from "lucide-react"
-import Link from "next/link"
-
-const formatGroupMode = (groupMode: string): string => {
-	if (groupMode === "H2H") {
-		return "Head-to-head"
-	}
-	if (groupMode === "POINTS_RACES") {
-		return "Points race"
-	}
-	return "No group stage"
-}
-
-const formatKnockoutMode = (knockoutMode: string): string => {
-	if (knockoutMode === "SINGLE_ELIMINATION") {
-		return "Single elimination"
-	}
-	if (knockoutMode === "DOUBLE_ELIMINATION") {
-		return "Home & away"
-	}
-	return "No knockout stage"
-}
+import { Link } from "@/i18n/navigation"
+import { useTranslations } from "next-intl"
 
 export default function TournamentDetailClient({
 	canManage,
@@ -55,6 +33,7 @@ export default function TournamentDetailClient({
 	initialRows: TournamentLiveCalcData[]
 	initialError: string | null
 }) {
+	const t = useTranslations("LiveTournament")
 	const [searchQuery, setSearchQuery] = useState("")
 	const entries = useMemo(() => buildTournamentEntries(initialRows), [initialRows])
 
@@ -72,6 +51,24 @@ export default function TournamentDetailClient({
 			totalEntries: standingsStats.totalEntries || tournament.totalTeamNum
 		}
 	}, [standingsStats, tournament])
+	const formatGroupMode = (groupMode: string) => groupMode === "H2H"
+		? t("headToHead")
+		: groupMode === "POINTS_RACES"
+			? t("pointsRace")
+			: t("noGroup")
+	const formatKnockoutMode = (knockoutMode: string) => knockoutMode === "SINGLE_ELIMINATION"
+		? t("singleElimination")
+		: knockoutMode === "DOUBLE_ELIMINATION"
+			? t("homeAway")
+			: t("noKnockout")
+	const formatState = (state: string) => state === "ACTIVE"
+		? t("active")
+		: state === "COMPLETED"
+			? t("completed")
+			: state === "PENDING"
+				? t("pending")
+				: state
+	const leagueType = tournament?.leagueType === "H2H" ? t("headToHead") : tournament?.leagueType === "CLASSIC" ? t("classic") : tournament?.leagueType
 
 	return (
 		<PageShell>
@@ -84,13 +81,13 @@ export default function TournamentDetailClient({
 					>
 						<Link href="/live/tournament">
 							<ArrowLeft aria-hidden="true" />
-							<span>Back to all tournaments</span>
+							<span>{t("backToTournaments")}</span>
 						</Link>
 					</Button>
 					{canManage && tournament ? (
 						<Button variant="outline" asChild>
 							<Link href={`/tournament/${tournament.id}/manage`}>
-								<Settings aria-hidden="true" /> Manage
+								<Settings aria-hidden="true" /> {t("manage")}
 							</Link>
 						</Button>
 					) : null}
@@ -104,7 +101,7 @@ export default function TournamentDetailClient({
 
 				{!tournament && !initialError && (
 					<Card className="p-6 text-sm text-muted-foreground mb-6">
-						This tournament is unavailable or you do not have access.
+						{t("unavailable")}
 					</Card>
 				)}
 
@@ -120,9 +117,9 @@ export default function TournamentDetailClient({
 						<Tabs defaultValue="standings" className="mb-6">
 							<Card className="p-4 mb-6">
 								<TabsList className="w-full grid grid-cols-3 gap-2">
-									<TabsTrigger value="standings">Standings</TabsTrigger>
-									<TabsTrigger value="stats">Tournament Stats</TabsTrigger>
-									<TabsTrigger value="rules">Rules</TabsTrigger>
+									<TabsTrigger value="standings">{t("standings")}</TabsTrigger>
+									<TabsTrigger value="stats">{t("tournamentStats")}</TabsTrigger>
+									<TabsTrigger value="rules">{t("rules")}</TabsTrigger>
 								</TabsList>
 							</Card>
 
@@ -144,30 +141,30 @@ export default function TournamentDetailClient({
 									</>
 								) : (
 									<Card className="p-6 text-sm text-muted-foreground">
-										Live standings are unavailable until the current gameweek can be confirmed.
+										{t("liveUnavailable")}
 									</Card>
 								)}
 							</TabsContent>
 
 							<TabsContent value="stats">
 								<Card className="p-6">
-									<h2 className="text-xl font-bold mb-6">Tournament Statistics</h2>
+									<h2 className="text-xl font-bold mb-6">{t("statistics")}</h2>
 
 									<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 										<div className="space-y-2 rounded-lg bg-accent/30 p-4">
-											<div className="text-sm text-muted-foreground">Creator</div>
+											<div className="text-sm text-muted-foreground">{t("creator")}</div>
 											<div className="font-semibold">{tournament.creator}</div>
 										</div>
 
 										<div className="space-y-2 rounded-lg bg-accent/30 p-4">
-											<div className="text-sm text-muted-foreground">League Type</div>
-											<div className="font-semibold">{tournament.leagueType}</div>
+											<div className="text-sm text-muted-foreground">{t("leagueType")}</div>
+											<div className="font-semibold">{leagueType}</div>
 										</div>
 
 										<div className="space-y-2 rounded-lg bg-accent/30 p-4">
 											<div className="text-sm text-muted-foreground flex items-center gap-2">
 												<Users className="h-4 w-4 text-emerald-500" />
-												Participant Count
+												{t("participantCount")}
 											</div>
 											<div className="text-2xl font-bold">{tournament.totalTeamNum}</div>
 										</div>
@@ -175,10 +172,10 @@ export default function TournamentDetailClient({
 										<div className="space-y-2 rounded-lg bg-accent/30 p-4">
 											<div className="text-sm text-muted-foreground flex items-center gap-2">
 												<Calendar className="h-4 w-4 text-purple-500" />
-												Status
+												{t("status")}
 											</div>
 											<div className="text-2xl font-bold">
-												{formatTournamentState(tournament.state)}
+												{formatState(tournament.state)}
 											</div>
 										</div>
 									</div>
@@ -187,50 +184,41 @@ export default function TournamentDetailClient({
 
 							<TabsContent value="rules">
 								<Card className="p-6">
-									<h2 className="text-xl font-bold mb-6">Tournament Rules</h2>
+									<h2 className="text-xl font-bold mb-6">{t("tournamentRules")}</h2>
 
 									<div className="space-y-6 text-muted-foreground">
 										<div>
 											<h3 className="text-lg font-semibold mb-2 text-foreground">
-												Group Stage
+												{t("groupStage")}
 											</h3>
 											<ul className="list-disc pl-5 space-y-1">
-												<li>Mode: {formatGroupMode(tournament.groupMode)}</li>
-												<li>Teams per group: {tournament.groupTeamNum}</li>
-												<li>Groups: {tournament.groupNum}</li>
+												<li>{t("mode", { mode: formatGroupMode(tournament.groupMode) })}</li>
+												<li>{t("teamsPerGroup", { count: tournament.groupTeamNum })}</li>
+												<li>{t("groups", { count: tournament.groupNum })}</li>
 												<li>
-													Gameweeks:{" "}
-													{tournament.groupStartedEventId && tournament.groupEndedEventId
-														? `GW${tournament.groupStartedEventId} - GW${tournament.groupEndedEventId}`
-														: "Not scheduled"}
+													{t("gameweeks", { value: tournament.groupStartedEventId && tournament.groupEndedEventId
+														? t("gameweekRange", { start: tournament.groupStartedEventId, end: tournament.groupEndedEventId })
+														: t("notScheduled") })}
 												</li>
 											</ul>
 										</div>
 
 										<div>
 											<h3 className="text-lg font-semibold mb-2 text-foreground">
-												Knockout Stage
+												{t("knockoutStage")}
 											</h3>
 											<ul className="list-disc pl-5 space-y-1">
-												<li>Mode: {formatKnockoutMode(tournament.knockoutMode)}</li>
+												<li>{t("mode", { mode: formatKnockoutMode(tournament.knockoutMode) })}</li>
 												<li>
-													Teams:{" "}
-													{tournament.knockoutTeamNum !== null
-														? tournament.knockoutTeamNum
-														: "Not configured"}
+													{t("teamsCount", { count: tournament.knockoutTeamNum !== null ? tournament.knockoutTeamNum : t("notConfigured") })}
 												</li>
 												<li>
-													Rounds:{" "}
-													{tournament.knockoutRounds !== null
-														? tournament.knockoutRounds
-														: "Not configured"}
+													{t("rounds", { count: tournament.knockoutRounds !== null ? tournament.knockoutRounds : t("notConfigured") })}
 												</li>
 												<li>
-													Gameweeks:{" "}
-													{tournament.knockoutStartedEventId &&
-													tournament.knockoutEndedEventId
-														? `GW${tournament.knockoutStartedEventId} - GW${tournament.knockoutEndedEventId}`
-														: "Not scheduled"}
+													{t("gameweeks", { value: tournament.knockoutStartedEventId && tournament.knockoutEndedEventId
+														? t("gameweekRange", { start: tournament.knockoutStartedEventId, end: tournament.knockoutEndedEventId })
+														: t("notScheduled") })}
 												</li>
 											</ul>
 										</div>

@@ -32,7 +32,8 @@ import {
 	Settings,
 	Trophy
 } from 'lucide-react'
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
+import { useTranslations } from 'next-intl'
 import { useMemo, useState } from 'react'
 
 type TournamentRow = {
@@ -45,8 +46,8 @@ type TournamentRow = {
 	state: string
 	groupFormat: 'none' | 'points' | 'headToHead'
 	knockoutFormat: 'none' | 'single' | 'double'
-	startGameweek: string
-	endGameweek: string
+	startGameweek: number | null
+	endGameweek: number | null
 	updatedAt: string
 }
 
@@ -78,12 +79,6 @@ const mapKnockoutFormat = (knockoutMode: string): TournamentRow['knockoutFormat'
 }
 
 const mapTournamentToRow = (tournament: EntryTournament): TournamentRow => {
-	const startGameweek = tournament.groupStartedEventId
-		? `GW${tournament.groupStartedEventId}`
-		: '-'
-	const endGameweek = tournament.groupEndedEventId
-		? `GW${tournament.groupEndedEventId}`
-		: '-'
 	return {
 		id: String(tournament.id),
 		adminEntryId: tournament.adminEntryId,
@@ -94,23 +89,10 @@ const mapTournamentToRow = (tournament: EntryTournament): TournamentRow => {
 		state: tournament.state,
 		groupFormat: mapGroupFormat(tournament.groupMode),
 		knockoutFormat: mapKnockoutFormat(tournament.knockoutMode),
-		startGameweek,
-		endGameweek,
+		startGameweek: tournament.groupStartedEventId,
+		endGameweek: tournament.groupEndedEventId,
 		updatedAt: tournament.updatedAt
 	}
-}
-
-const getStateLabel = (state: string): string => {
-	if (state === 'ACTIVE') {
-		return 'Active'
-	}
-	if (state === 'COMPLETED') {
-		return 'Completed'
-	}
-	if (state === 'PENDING') {
-		return 'Pending'
-	}
-	return state
 }
 
 export default function TournamentListClient({
@@ -122,6 +104,7 @@ export default function TournamentListClient({
 	initialTournaments: EntryTournament[]
 	initialError: string | null
 }) {
+	const t = useTranslations('TournamentList')
 	const [searchQuery, setSearchQuery] = useState('')
 	const [showOnlyActive, setShowOnlyActive] = useState(false)
 	const [showOnlyKnockout, setShowOnlyKnockout] = useState(false)
@@ -130,6 +113,8 @@ export default function TournamentListClient({
 		[initialTournaments],
 	)
 	const [sortOption, setSortOption] = useState<SortOption>('updatedDesc')
+	const getStateLabel = (state: string) => state === 'ACTIVE' ? t('active') : state === 'COMPLETED' ? t('completed') : state === 'PENDING' ? t('pending') : state
+	const getLeagueType = (type: string) => type === 'H2H' ? t('headToHead') : type === 'CLASSIC' ? t('classic') : type
 
 	// Filter tournaments based on search and filters
 	const filteredTournaments = useMemo(() => {
@@ -175,13 +160,13 @@ export default function TournamentListClient({
 				<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
 					<div className="flex items-center gap-3">
 						<Trophy className="h-8 w-8 text-primary" />
-						<h1 className="text-3xl font-bold">Tournaments</h1>
+						<h1 className="text-3xl font-bold">{t('title')}</h1>
 					</div>
 
 					<Button className="flex items-center gap-2" asChild>
 						<Link href="/tournament/create">
 							<Plus className="h-4 w-4" />
-							Create Tournament
+							{t('create')}
 						</Link>
 					</Button>
 				</div>
@@ -196,8 +181,8 @@ export default function TournamentListClient({
 						<div className="relative flex-1">
 							<Search className="absolute top-1/2 left-3 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
 							<Input
-								aria-label="Search tournaments"
-								placeholder="Search tournaments..."
+								aria-label={t('search')}
+								placeholder={t('searchPlaceholder')}
 								value={searchQuery}
 								onChange={e => setSearchQuery(e.target.value)}
 								className="pl-9"
@@ -212,7 +197,7 @@ export default function TournamentListClient({
 								aria-pressed={showOnlyActive}
 								className="flex items-center gap-2"
 							>
-								Active Only
+								{t('activeOnly')}
 							</Button>
 							<Button
 								variant={showOnlyKnockout ? 'default' : 'outline'}
@@ -221,7 +206,7 @@ export default function TournamentListClient({
 								aria-pressed={showOnlyKnockout}
 								className="flex items-center gap-2"
 							>
-								Knockout Only
+								{t('knockoutOnly')}
 							</Button>
 
 							<DropdownMenu>
@@ -232,31 +217,31 @@ export default function TournamentListClient({
 										className="flex items-center gap-2"
 									>
 										<ArrowUpDown className="h-4 w-4" />
-										<span className="hidden sm:inline">Sort</span>
+										<span className="hidden sm:inline">{t('sort')}</span>
 									</Button>
 								</DropdownMenuTrigger>
 								<DropdownMenuContent
 									align="end"
 									className="w-56"
 								>
-									<DropdownMenuLabel>Sort Options</DropdownMenuLabel>
+									<DropdownMenuLabel>{t('sortOptions')}</DropdownMenuLabel>
 									<DropdownMenuSeparator />
 									<DropdownMenuItem onClick={() => setSortOption('updatedDesc')}>
-										Last Updated (Newest)
+										{t('updatedNewest')}
 									</DropdownMenuItem>
 									<DropdownMenuItem onClick={() => setSortOption('updatedAsc')}>
-										Last Updated (Oldest)
+										{t('updatedOldest')}
 									</DropdownMenuItem>
 									<DropdownMenuItem onClick={() => setSortOption('nameAsc')}>
-										Name (A-Z)
+										{t('nameAscending')}
 									</DropdownMenuItem>
 									<DropdownMenuItem onClick={() => setSortOption('nameDesc')}>
-										Name (Z-A)
+										{t('nameDescending')}
 									</DropdownMenuItem>
 									<DropdownMenuItem
 										onClick={() => setSortOption('participantsDesc')}
 									>
-										Most Participants
+										{t('mostParticipants')}
 									</DropdownMenuItem>
 								</DropdownMenuContent>
 							</DropdownMenu>
@@ -267,14 +252,14 @@ export default function TournamentListClient({
 						<Table>
 							<TableHeader>
 								<TableRow>
-									<TableHead>Tournament</TableHead>
-									<TableHead>Participants</TableHead>
-									<TableHead>Manager</TableHead>
-									<TableHead>Type</TableHead>
-									<TableHead>Format</TableHead>
-									<TableHead>Gameweeks</TableHead>
-									<TableHead>Status</TableHead>
-									<TableHead>Actions</TableHead>
+									<TableHead>{t('tournament')}</TableHead>
+									<TableHead>{t('participants')}</TableHead>
+									<TableHead>{t('manager')}</TableHead>
+									<TableHead>{t('type')}</TableHead>
+									<TableHead>{t('format')}</TableHead>
+									<TableHead>{t('gameweeks')}</TableHead>
+									<TableHead>{t('status')}</TableHead>
+									<TableHead>{t('actions')}</TableHead>
 								</TableRow>
 							</TableHeader>
 							<TableBody>
@@ -285,8 +270,8 @@ export default function TournamentListClient({
 											className="text-center text-muted-foreground"
 										>
 											{initialError
-												? 'Unable to show tournaments.'
-												: 'No tournaments match your filters.'}
+												? t('unable')
+												: t('noMatches')}
 										</TableCell>
 									</TableRow>
 								)}
@@ -298,23 +283,23 @@ export default function TournamentListClient({
 										<TableCell>{tournament.participantCount}</TableCell>
 										<TableCell>{tournament.managerName}</TableCell>
 										<TableCell>
-											<Badge variant="outline">{tournament.leagueType}</Badge>
+											<Badge variant="outline">{getLeagueType(tournament.leagueType)}</Badge>
 										</TableCell>
 										<TableCell>
 											<div className="text-sm leading-5">
 												<div>
 													{tournament.groupFormat === 'none'
-														? 'No Groups'
+												? t('noGroups')
 														: tournament.groupFormat === 'points'
-														? 'Points Based'
-														: 'Head-to-Head'}
+												? t('pointsBased')
+												: t('headToHead')}
 												</div>
 												<div className="text-muted-foreground">
 													{tournament.knockoutFormat === 'none'
-														? 'No Knockout'
+												? t('noKnockout')
 														: tournament.knockoutFormat === 'single'
-														? 'Single Elimination'
-														: 'Home & Away'}
+												? t('singleElimination')
+												: t('homeAway')}
 												</div>
 											</div>
 										</TableCell>
@@ -322,7 +307,7 @@ export default function TournamentListClient({
 											<div className="flex items-center gap-2">
 												<Calendar className="h-4 w-4 text-muted-foreground" />
 												<span>
-													{tournament.startGameweek} - {tournament.endGameweek}
+												{tournament.startGameweek ? t('gameweek', { gameweek: tournament.startGameweek }) : '—'} – {tournament.endGameweek ? t('gameweek', { gameweek: tournament.endGameweek }) : '—'}
 												</span>
 											</div>
 										</TableCell>
@@ -341,7 +326,7 @@ export default function TournamentListClient({
 													<Button
 														variant="ghost"
 														size="icon"
-														aria-label={`Actions for ${tournament.name}`}
+														aria-label={t('actionsFor', { name: tournament.name })}
 													>
 														<MoreHorizontal className="h-4 w-4" />
 													</Button>
@@ -353,7 +338,7 @@ export default function TournamentListClient({
 															className="flex items-center gap-2"
 														>
 															<ExternalLink className="h-4 w-4" />
-													View live details
+															{t('viewLive')}
 												</Link>
 											</DropdownMenuItem>
 											{tournament.adminEntryId === currentEntryId ? (
@@ -363,7 +348,7 @@ export default function TournamentListClient({
 														className="flex items-center gap-2"
 													>
 														<Settings className="h-4 w-4" />
-														Manage tournament
+																{t('manage')}
 													</Link>
 												</DropdownMenuItem>
 											) : null}

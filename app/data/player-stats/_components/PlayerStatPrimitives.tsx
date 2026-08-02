@@ -1,8 +1,69 @@
+'use client'
+
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { PlayerDetailData } from '@/lib/graphql/operations/players'
 import type { ReactNode } from 'react'
+import { useTranslations } from 'next-intl'
+
+const STAT_LABEL_KEYS = {
+	Price: 'price',
+	Points: 'points',
+	'Total Points': 'totalPoints',
+	'Total Pts': 'totalPts',
+	Total: 'total',
+	Selected: 'selected',
+	'Selected By': 'selectedBy',
+	'Selected By %': 'selectedByPercent',
+	Form: 'form',
+	'Season Totals': 'seasonTotals',
+	Goals: 'goals',
+	Assists: 'assists',
+	'Clean Sheets': 'cleanSheets',
+	Minutes: 'minutes',
+	'Ownership & Transfers': 'ownershipTransfers',
+	'Season In': 'seasonIn',
+	'Season Out': 'seasonOut',
+	'GW Net': 'gwNet',
+	Goalkeeping: 'goalkeeping',
+	Saves: 'saves',
+	'Pen. Saved': 'penaltiesSaved',
+	'Goals Conceded': 'goalsConceded',
+	Outfield: 'outfield',
+	'Own Goals': 'ownGoals',
+	Defensive: 'defensive',
+	Attacking: 'attacking',
+	Discipline: 'discipline',
+	FPL: 'fpl',
+	'Yellow Cards': 'yellowCards',
+	'Red Cards': 'redCards',
+	Bonus: 'bonus',
+	BPS: 'bps',
+	Current: 'current',
+	Start: 'start',
+	Change: 'change',
+	'ICT Values': 'ictValues',
+	Influence: 'influence',
+	Creativity: 'creativity',
+	Threat: 'threat',
+	'ICT Index': 'ictIndex',
+} as const
+
+function useTranslatedStatLabel() {
+	const t = useTranslations('PlayerStats.labels')
+
+	return (label: string) => {
+		const gameweekPoints = /^GW\s+(.+)\s+Pts$/.exec(label)
+		if (gameweekPoints) return t('gwPoints', { gameweek: gameweekPoints[1] })
+
+		const gameweek = /^GW\s+(.+)$/.exec(label)
+		if (gameweek) return t('gameweek', { gameweek: gameweek[1] })
+
+		const key = STAT_LABEL_KEYS[label as keyof typeof STAT_LABEL_KEYS]
+		return key ? t(key) : label
+	}
+}
 
 export const DIFFICULTY_COLORS: Record<number, string> = {
 	1: 'bg-success',
@@ -30,9 +91,11 @@ export function StatCell({
 	value: string | number | null
 	sub?: string
 }) {
+	const translateLabel = useTranslatedStatLabel()
+
 	return (
 		<div className="rounded-lg bg-accent/30 p-3 text-center">
-			<p className="mb-1 text-xs text-muted-foreground">{label}</p>
+			<p className="mb-1 text-xs text-muted-foreground">{translateLabel(label)}</p>
 			<p className="text-xl font-bold">{value ?? '—'}</p>
 			{sub ? <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p> : null}
 		</div>
@@ -50,13 +113,14 @@ export function IctBar({
 	color: string
 	max?: number
 }) {
+	const translateLabel = useTranslatedStatLabel()
 	const numeric = value ?? 0
 	const percentage = Math.min(100, (numeric / max) * 100)
 
 	return (
 		<div>
 			<div className="mb-1 flex items-center justify-between">
-				<span className="text-sm">{label}</span>
+				<span className="text-sm">{translateLabel(label)}</span>
 				<span className="text-sm font-medium">{numeric}</span>
 			</div>
 			<div className="h-2 w-full rounded-full bg-muted">
@@ -77,6 +141,7 @@ export function CompareRow({
 	v2: string | number | null
 	higherIsBetter?: boolean
 }) {
+	const translateLabel = useTranslatedStatLabel()
 	const displayValue1 = v1 ?? '—'
 	const displayValue2 = v2 ?? '—'
 	const value1 = Number.parseFloat(String(displayValue1).replace(/[^0-9.-]/g, ''))
@@ -90,7 +155,7 @@ export function CompareRow({
 			<span className={`pr-4 text-right font-medium tabular-nums ${firstWins ? 'text-primary' : ''}`}>
 				{displayValue1}
 			</span>
-			<span className="text-center text-xs text-muted-foreground">{label}</span>
+			<span className="text-center text-xs text-muted-foreground">{translateLabel(label)}</span>
 			<span className={`pl-4 text-left font-medium tabular-nums ${secondWins ? 'text-primary' : ''}`}>
 				{displayValue2}
 			</span>
@@ -99,10 +164,12 @@ export function CompareRow({
 }
 
 export function CompareSectionHeader({ icon, label }: { icon: ReactNode; label: string }) {
+	const translateLabel = useTranslatedStatLabel()
+
 	return (
 		<h3 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
 			{icon}
-			{label}
+			{translateLabel(label)}
 		</h3>
 	)
 }
@@ -122,6 +189,7 @@ export function DualIctBar({
 	name2: string
 	max: number
 }) {
+	const translateLabel = useTranslatedStatLabel()
 	const value1 = v1 ?? 0
 	const value2 = v2 ?? 0
 	const percentage1 = Math.min(100, (value1 / max) * 100)
@@ -129,7 +197,7 @@ export function DualIctBar({
 
 	return (
 		<div className="flex flex-col gap-1">
-			<span className="text-xs text-muted-foreground">{label}</span>
+			<span className="text-xs text-muted-foreground">{translateLabel(label)}</span>
 			<div className="flex items-center gap-2 text-xs">
 				<span className="w-16 truncate text-right text-muted-foreground">{name1}</span>
 				<div className="h-2 flex-1 rounded-full bg-muted">
@@ -149,8 +217,10 @@ export function DualIctBar({
 }
 
 export function PlayerDetailSkeleton() {
+	const t = useTranslations('PlayerStats')
+
 	return (
-		<div className="flex flex-col gap-4" aria-label="Loading player statistics">
+		<div className="flex flex-col gap-4" aria-label={t('loadingStats')}>
 			<Skeleton className="h-32 w-full rounded-lg" />
 			<Skeleton className="h-12 w-full rounded-lg" />
 			<Skeleton className="h-64 w-full rounded-lg" />
@@ -167,23 +237,35 @@ export function PlayerMiniCard({
 	currentGameweek: number | undefined
 	accent: 'info' | 'warning'
 }) {
+	const t = useTranslations('PlayerStats.labels')
+	const position = useTranslations('PlayerDirectory')
 	const priceDiff = formatPriceDiff(detail.price, detail.startPrice)
+	const positionName =
+		detail.elementType === 1
+			? position('goalkeeper')
+			: detail.elementType === 2
+				? position('defender')
+				: detail.elementType === 3
+					? position('midfielder')
+					: detail.elementType === 4
+						? position('forward')
+						: detail.elementTypeName
 
 	return (
 		<Card className={`border-t-2 p-4 ${accent === 'info' ? 'border-info' : 'border-warning'}`}>
 			<div className="mb-1 flex items-center gap-2">
 				<span className="truncate font-bold">{detail.webName}</span>
 				<Badge variant="outline" className="shrink-0 text-xs">
-					{detail.elementTypeName}
+					{positionName}
 				</Badge>
 			</div>
 			<p className="mb-3 text-xs text-muted-foreground">{detail.teamShortName}</p>
 			<div className="grid grid-cols-3 gap-2">
-				<MiniMetric label="Price" value={formatPrice(detail.price)} sub={priceDiff ?? undefined} positive={priceDiff?.startsWith('+')} />
-				<MiniMetric label={`GW${currentGameweek ?? '—'}`} value={detail.eventPoints} emphasis />
-				<MiniMetric label="Total" value={detail.totalPoints} />
-				<MiniMetric label="Selected" value={detail.selectedByPercent == null ? '—' : `${detail.selectedByPercent}%`} />
-				<MiniMetric label="Form" value={detail.form ?? '—'} />
+				<MiniMetric label={t('price')} value={formatPrice(detail.price)} sub={priceDiff ?? undefined} positive={priceDiff?.startsWith('+')} />
+				<MiniMetric label={t('gameweek', { gameweek: currentGameweek ?? '—' })} value={detail.eventPoints} emphasis />
+				<MiniMetric label={t('total')} value={detail.totalPoints} />
+				<MiniMetric label={t('selected')} value={detail.selectedByPercent == null ? '—' : `${detail.selectedByPercent}%`} />
+				<MiniMetric label={t('form')} value={detail.form ?? '—'} />
 			</div>
 		</Card>
 	)

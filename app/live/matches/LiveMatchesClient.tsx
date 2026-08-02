@@ -13,6 +13,7 @@ import { transformLiveMatches } from '@/lib/live-matches'
 import { usePageActive } from '@/hooks/use-page-active'
 import type { Match } from '@/types/match'
 import { RefreshCw } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const LIVE_MATCHES_TAB_STORAGE_KEY = 'live-matches-active-tab'
@@ -22,27 +23,27 @@ type LiveStatusTab = Match['status']
 
 const TAB_CONFIG: ReadonlyArray<{
 	value: LiveMatchesTab
-	label: string
+	labelKey: 'noLive' | 'noFinished' | 'noNotStarted' | 'noUpcoming'
 	statuses: ReadonlyArray<LiveStatusTab>
 }> = [
 	{
 		value: 'live',
-		label: 'No live matches',
+		labelKey: 'noLive',
 		statuses: ['LIVE', 'HT'],
 	},
 	{
 		value: 'finished',
-		label: 'No finished matches',
+		labelKey: 'noFinished',
 		statuses: ['FT'],
 	},
 	{
 		value: 'not-started',
-		label: 'No matches not started',
+		labelKey: 'noNotStarted',
 		statuses: ['NOT_STARTED'],
 	},
 	{
 		value: 'upcoming',
-		label: 'No upcoming matches',
+		labelKey: 'noUpcoming',
 		statuses: ['UPCOMING'],
 	},
 ] as const
@@ -76,6 +77,7 @@ function AutoRefreshCountdown({
 	enabled: boolean
 	onRefresh: () => Promise<void>
 }) {
+	const t = useTranslations('LiveMatches')
 	const [countdown, setCountdown] = useState(LIVE_MATCHES_AUTO_REFRESH_SECONDS)
 	const refreshInFlightRef = useRef(false)
 	const onRefreshRef = useRef(onRefresh)
@@ -114,7 +116,7 @@ function AutoRefreshCountdown({
 
 	return (
 		<p className="text-xs text-muted-foreground">
-			Auto refresh in {countdown}s
+			{t('autoRefresh', { seconds: countdown })}
 		</p>
 	)
 }
@@ -128,6 +130,7 @@ export function LiveMatchesClient({
 	initialError?: string | null
 	currentEventId?: number
 }) {
+	const t = useTranslations('LiveMatches')
 	const isPageActive = usePageActive()
 	const [matches, setMatches] = useState<Match[]>(initialMatches)
 	const [activeTab, setActiveTab] = useState<LiveMatchesTab>(() =>
@@ -160,14 +163,14 @@ export function LiveMatchesClient({
 			}
 		} catch (err) {
 			console.error('Failed to fetch live matches:', err)
-			setError(err instanceof Error ? err.message : 'Failed to load matches')
+			setError(t('none'))
 			setMatches([])
 		} finally {
 			setIsLoading(false)
 			setIsRefreshing(false)
 			isFetchInFlight.current = false
 		}
-	}, [])
+	}, [t])
 
 	const handleTabChange = (value: string) => {
 		if (!isLiveMatchesTab(value)) return
@@ -219,14 +222,14 @@ export function LiveMatchesClient({
 			<PageShell>
 				<div className="container max-w-4xl mx-auto px-4 py-8">
 					<div className="flex items-center justify-between mb-8">
-						<h1 className="text-3xl font-bold">Live Matches</h1>
+						<h1 className="text-3xl font-bold">{t('title')}</h1>
 						<Button variant="outline" size="icon" disabled className="shrink-0">
 							<RefreshCw className="h-4 w-4" />
-							<span className="sr-only">Refresh matches</span>
+							<span className="sr-only">{t('refresh')}</span>
 						</Button>
 					</div>
 					<div className="flex items-center justify-center py-12">
-						<p className="text-muted-foreground">Loading matches...</p>
+						<p className="text-muted-foreground">{t('loading')}</p>
 					</div>
 				</div>
 			</PageShell>
@@ -238,7 +241,7 @@ export function LiveMatchesClient({
 			<PageShell>
 				<div className="container max-w-4xl mx-auto px-4 py-8">
 					<div className="flex items-center justify-between mb-8">
-						<h1 className="text-3xl font-bold">Live Matches</h1>
+						<h1 className="text-3xl font-bold">{t('title')}</h1>
 						<Button
 							variant="outline"
 							size="icon"
@@ -247,13 +250,13 @@ export function LiveMatchesClient({
 							className="shrink-0"
 						>
 							<RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-							<span className="sr-only">Refresh matches</span>
+							<span className="sr-only">{t('refresh')}</span>
 						</Button>
 					</div>
 					<div className="flex flex-col items-center justify-center py-12 gap-4">
-						<p className="text-destructive">Error: {error}</p>
+						<p className="text-destructive">{t('error', { message: error })}</p>
 						<Button onClick={() => fetchMatches(true)} variant="outline">
-							Try Again
+							{t('tryAgain')}
 						</Button>
 					</div>
 				</div>
@@ -265,7 +268,7 @@ export function LiveMatchesClient({
 		<PageShell>
 			<div className="container max-w-4xl mx-auto px-4 py-8">
 				<div className="flex items-center justify-between mb-8">
-					<h1 className="text-3xl font-bold">Live Matches</h1>
+					<h1 className="text-3xl font-bold">{t('title')}</h1>
 					<div className="flex flex-col items-end gap-1">
 						<Button
 							variant="outline"
@@ -275,7 +278,7 @@ export function LiveMatchesClient({
 							className="shrink-0"
 						>
 							<RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-							<span className="sr-only">Refresh matches</span>
+							<span className="sr-only">{t('refresh')}</span>
 						</Button>
 						<AutoRefreshCountdown
 							enabled={hasLiveMatches && isPageActive}
@@ -287,16 +290,16 @@ export function LiveMatchesClient({
 					<div className="bg-card rounded-lg p-4 mb-6 shadow-sm">
 						<TabsList className="w-full grid grid-cols-4 gap-2 sm:gap-4">
 							<TabsTrigger value="live" className="w-full">
-								Live Now
+								{t('liveNow')}
 							</TabsTrigger>
 							<TabsTrigger value="finished" className="w-full">
-								Finished
+								{t('finished')}
 							</TabsTrigger>
 							<TabsTrigger value="not-started" className="w-full">
-								Not Started
+								{t('notStarted')}
 							</TabsTrigger>
 							<TabsTrigger value="upcoming" className="w-full">
-								Upcoming
+								{t('upcoming')}
 							</TabsTrigger>
 						</TabsList>
 					</div>
@@ -314,7 +317,7 @@ export function LiveMatchesClient({
 							))
 						) : (
 							<p className="text-center text-muted-foreground py-8">
-								{activeTabConfig?.label ?? 'No matches available'}
+								{activeTabConfig ? t(activeTabConfig.labelKey) : t('none')}
 							</p>
 						)}
 					</TabsContent>

@@ -8,6 +8,7 @@ import { db } from '@/lib/db'
 import * as authSchema from '@/lib/db/schema/auth'
 import { checkDatabaseRateLimit } from '@/lib/http-security'
 import { sendPasswordResetEmail, sendVerificationEmail } from '@/lib/mailer'
+import { getRequestLocale } from '@/i18n/request-locale'
 
 const baseURL = process.env.BETTER_AUTH_URL ?? 'http://localhost:3000'
 
@@ -49,13 +50,13 @@ export const authConfig = {
 		requireEmailVerification: true,
 		minPasswordLength: 10,
 		autoSignIn: false,
-		sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
-			await sendPasswordResetEmail({ to: user.email, resetUrl: url })
+		sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }, request?: Request) => {
+			await sendPasswordResetEmail({ to: user.email, resetUrl: url, locale: getRequestLocale(request) })
 		},
 	},
 	emailVerification: {
-		sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string }) => {
-			await sendVerificationEmail({ to: user.email, verifyUrl: url })
+		sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string }, request?: Request) => {
+			await sendVerificationEmail({ to: user.email, verifyUrl: url, locale: getRequestLocale(request) })
 		},
 		autoSignInAfterVerification: true,
 	},

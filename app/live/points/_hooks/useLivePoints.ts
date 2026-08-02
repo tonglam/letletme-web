@@ -9,6 +9,7 @@ import {
 	type LiveCalcDataResponse,
 } from '@/lib/graphql/operations/live'
 import type { Player } from '@/types/player'
+import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
 	buildEventLiveExplainBatchQuery,
@@ -24,6 +25,7 @@ interface UseLivePointsOptions {
 }
 
 export function useLivePoints({ initialEntryId, initialEventId, initialLiveData }: UseLivePointsOptions) {
+	const t = useTranslations('LivePoints')
 	const isPageActive = usePageActive()
 	const seededEventId = initialLiveData?.event ?? initialEventId
 	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(seededEventId)
@@ -104,7 +106,7 @@ export function useLivePoints({ initialEntryId, initialEventId, initialLiveData 
 			} catch (fetchError) {
 				if (requestId !== requestIdRef.current) return
 				console.error('Failed to fetch live points:', fetchError)
-				setError(fetchError instanceof Error ? fetchError.message : 'Unknown error while loading live points')
+				setError(t('loadFailed'))
 			} finally {
 				if (requestId === requestIdRef.current) {
 					setIsLoading(false)
@@ -112,13 +114,13 @@ export function useLivePoints({ initialEntryId, initialEventId, initialLiveData 
 				}
 			}
 		},
-		[activeEntryId, enrichLivePointBreakdowns],
+		[activeEntryId, enrichLivePointBreakdowns, t],
 	)
 
 	const submitEntry = useCallback(() => {
 		const nextEntryId = Number(entryIdInput)
 		if (!Number.isInteger(nextEntryId) || nextEntryId <= 0) {
-			setError('Enter a valid FPL entry ID.')
+			setError(t('invalidEntry'))
 			return false
 		}
 
@@ -131,7 +133,7 @@ export function useLivePoints({ initialEntryId, initialEventId, initialLiveData 
 		setError(undefined)
 		setIsLoading(true)
 		return true
-	}, [entryIdInput])
+	}, [entryIdInput, t])
 
 	const changeGameweek = useCallback(
 		(gameweek: number) => {
@@ -162,7 +164,7 @@ export function useLivePoints({ initialEntryId, initialEventId, initialLiveData 
 			if (cancelled) return
 			if (selectedGameweek !== undefined) void fetchLivePointsForGameweek(selectedGameweek)
 			else {
-				setError('No current gameweek found')
+				setError(t('noCurrentGameweek'))
 				setIsLoading(false)
 			}
 		}, 0)

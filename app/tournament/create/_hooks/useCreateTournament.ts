@@ -5,13 +5,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import {
 	computeTournamentPlan,
+	createTournamentFormSchema,
 	DEFAULT_TOURNAMENT_FORM,
-	tournamentFormSchema,
 	validateLeagueUrl,
 	type Participant,
 	type ParticipantApiItem,
 	type TournamentFormData,
 } from '../_lib/tournament-form'
+import { useTranslations } from 'next-intl'
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
 	try {
@@ -25,8 +26,20 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 }
 
 export function useCreateTournament() {
+	const t = useTranslations('TournamentCreate')
+	const schema = useMemo(() => createTournamentFormSchema({
+		nameTooShort: t('errors.nameTooShort'),
+		nameTooLong: t('errors.nameTooLong'),
+		validGameweek: t('errors.validGameweek'),
+		validLeagueUrl: t('errors.validLeagueUrl'),
+		gameweekOrder: t('errors.gameweekOrder'),
+		groupPositive: t('errors.groupPositive'),
+		groupInvalid: t('errors.groupInvalid'),
+		qualifierPositive: t('errors.qualifierPositive'),
+		qualifierInvalid: t('errors.qualifierInvalid'),
+	}), [t])
 	const form = useForm<TournamentFormData>({
-		resolver: zodResolver(tournamentFormSchema),
+		resolver: zodResolver(schema),
 		defaultValues: DEFAULT_TOURNAMENT_FORM,
 		mode: 'onChange',
 	})
@@ -58,7 +71,11 @@ export function useCreateTournament() {
 	const [createdTournamentId, setCreatedTournamentId] = useState<number | null>(null)
 	const [createdTournamentName, setCreatedTournamentName] = useState('')
 
-	const leagueUrlState = useMemo(() => validateLeagueUrl(leagueUrl ?? ''), [leagueUrl])
+	const leagueUrlState = useMemo(() => validateLeagueUrl(leagueUrl ?? '', {
+		domainInvalid: t('domainInvalid'),
+		pathInvalid: t('leagueUrlPathInvalid'),
+		incomplete: t('leagueUrlIncomplete'),
+	}), [leagueUrl, t])
 	const participantsAreCurrent = participantsLoaded && fetchedLeagueUrl === leagueUrl
 	const effectiveSelectedParticipantIds = participantSource === 'official' && participantsAreCurrent
 		? participants.map((participant) => participant.id)
@@ -83,12 +100,12 @@ export function useCreateTournament() {
 	const currentNameCheckMessage = normalizedTournamentName.length === 0
 		? null
 		: normalizedTournamentName.length < 3
-			? 'Tournament name must be at least 3 characters.'
+			? t('errors.nameTooShort')
 			: normalizedTournamentName.length > 80
-				? 'Tournament name must be at most 80 characters.'
+				? t('errors.nameTooLong')
 			: activeNameCheck
 				? nameCheckMessage
-				: 'Checking tournament name…'
+				: t('checkingName')
 	const currentSubmitSuccess = createdTournamentName === normalizedTournamentName ? submitSuccess : null
 	const currentCreatedTournamentId = createdTournamentName === normalizedTournamentName ? createdTournamentId : null
 
@@ -101,7 +118,7 @@ export function useCreateTournament() {
 			setCheckedTournamentName(normalizedTournamentName)
 			setIsCheckingName(true)
 			setIsNameAvailable(null)
-			setNameCheckMessage('Checking tournament name…')
+			setNameCheckMessage(t('checkingName'))
 			try {
 				const response = await fetch(`/api/tournaments/check-name?name=${encodeURIComponent(normalizedTournamentName)}`, {
 					signal: controller.signal,
@@ -109,12 +126,14 @@ export function useCreateTournament() {
 				const result = await readJson(response)
 				if (cancelled) return
 				setIsNameAvailable(response.ok && result.available === true)
-				setNameCheckMessage(typeof result.message === 'string' ? result.message : response.ok ? null : 'The name could not be checked.')
+				setNameCheckMessage(response.ok
+					? result.available === true ? t('nameAvailable') : t('nameUnavailable')
+					: t('nameCheckFailed'))
 			} catch (error) {
 				if (error instanceof Error && error.name === 'AbortError') return
 				if (!cancelled) {
 					setIsNameAvailable(false)
-					setNameCheckMessage('The name could not be checked. Please try again.')
+					setNameCheckMessage(t('nameCheckFailed'))
 				}
 			} finally {
 				if (!cancelled) setIsCheckingName(false)
@@ -126,7 +145,7 @@ export function useCreateTournament() {
 			controller.abort()
 			window.clearTimeout(timeoutId)
 		}
-	}, [hasValidNameLength, normalizedTournamentName])
+	}, [hasValidNameLength, normalizedTournamentName, t])
 
 	const clearFeedback = () => {
 		setParticipantError(null)
@@ -163,7 +182,7 @@ export function useCreateTournament() {
 
 	const fetchParticipants = async () => {
 		if (!leagueUrlState.valid) {
-			setParticipantError(leagueUrlState.message ?? 'Enter a valid Fantasy Premier League URL.')
+			setParticipantError(leagueUrlState.message ?? t('leagueUrlInvalid'))
 			return
 		}
 		setIsLoadingParticipants(true)
@@ -172,7 +191,7 @@ export function useCreateTournament() {
 		try {
 			const response = await fetch(`/api/tournaments/participants?leagueUrl=${encodeURIComponent(leagueUrl ?? '')}`)
 			const result = await readJson(response)
-			if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'The league participants could not be loaded.')
+			if (!response.ok) throw new Error(t('participantsLoadFailed'))
 			const rawParticipants = Array.isArray(result.participants) ? result.participants : []
 			const fetchedParticipants = rawParticipants.filter((item): item is ParticipantApiItem => {
 				if (!item || typeof item !== 'object') return false
@@ -191,9 +210,9 @@ export function useCreateTournament() {
 			setSelectedParticipantIds(participantSource === 'official' ? fetchedParticipants.map((participant) => participant.id) : [])
 			setParticipantsLoaded(true)
 			setFetchedLeagueUrl(leagueUrl ?? null)
-			if (fetchedParticipants.length < 2) setParticipantError('This league needs at least two entries to create a tournament.')
-		} catch (error) {
-			setParticipantError(error instanceof Error ? error.message : 'The league participants could not be loaded.')
+			if (fetchedParticipants.length < 2) setParticipantError(t('leagueNeedsTwo'))
+		} catch {
+			setParticipantError(t('participantsLoadFailed'))
 			setParticipants([])
 			setSelectedParticipantIds([])
 			setParticipantsLoaded(false)
@@ -206,26 +225,26 @@ export function useCreateTournament() {
 	const onSubmit = async (data: TournamentFormData) => {
 		clearFeedback()
 		if (!participantsAreCurrent) {
-			setSubmitError('Fetch the league participants before creating the tournament.')
+			setSubmitError(t('fetchBeforeCreate'))
 			return
 		}
 		const participantIds = data.participantSource === 'official'
 			? participants.map((participant) => participant.id)
 			: selectedParticipantIds
 		if (participantIds.length < 2) {
-			setSubmitError('A tournament requires at least two participants.')
+			setSubmitError(t('requiresTwo'))
 			return
 		}
 		if (currentIsCheckingName || currentIsNameAvailable !== true) {
-			setSubmitError('Confirm that the tournament name is available before continuing.')
+			setSubmitError(t('confirmName'))
 			return
 		}
 		if (!plan.groupReady) {
-			setSubmitError('Complete the group phase settings before creating the tournament.')
+			setSubmitError(t('completeGroup'))
 			return
 		}
 		if (!plan.knockoutReady) {
-			setSubmitError('Complete the knockout phase settings before creating the tournament.')
+			setSubmitError(t('completeKnockout'))
 			return
 		}
 
@@ -237,7 +256,7 @@ export function useCreateTournament() {
 				body: JSON.stringify({ ...data, tournamentType: 'standard', selectedParticipantIds: participantIds }),
 			})
 			const result = await readJson(response)
-			if (!response.ok) throw new Error(typeof result.error === 'string' ? result.error : 'The tournament could not be created.')
+			if (!response.ok) throw new Error(t('createFailed'))
 			const tournament = result.tournament && typeof result.tournament === 'object'
 				? result.tournament as Record<string, unknown>
 				: {}
@@ -249,13 +268,13 @@ export function useCreateTournament() {
 			setIsNameAvailable(false)
 			setSubmitSuccess(
 				setupStatus === 'failed'
-					? `Tournament created with ${participantCount} entries, but its initial setup needs attention.`
+					? t('createdFailedSetup', { count: participantCount })
 					: setupStatus === 'ready'
-						? `Tournament created successfully with ${participantCount} entries.`
-						: `Tournament created with ${participantCount} entries. Setup is continuing in the background.`,
+						? t('createdReady', { count: participantCount })
+						: t('createdProcessing', { count: participantCount }),
 			)
-		} catch (error) {
-			setSubmitError(error instanceof Error ? error.message : 'The tournament could not be created.')
+		} catch {
+			setSubmitError(t('createFailed'))
 		} finally {
 			setIsSubmitting(false)
 		}

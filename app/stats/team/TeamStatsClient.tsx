@@ -9,6 +9,7 @@ import { AlertCircle } from 'lucide-react'
 import { TeamStatsSummary } from './_components/TeamStatsSummary'
 import { TeamStatsTabs } from './_components/TeamStatsTabs'
 import { useTeamStats } from './_hooks/useTeamStats'
+import { useTranslations } from 'next-intl'
 
 interface TeamStatsClientProps {
 	entryId: number
@@ -19,6 +20,7 @@ interface TeamStatsClientProps {
 }
 
 export default function TeamStatsClient(props: TeamStatsClientProps) {
+	const t = useTranslations('TeamStats')
 	const {
 		activeTab,
 		currentGameweek,
@@ -34,7 +36,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
-				<h1 className="mb-6 text-3xl font-bold">My Team Stats</h1>
+				<h1 className="mb-6 text-3xl font-bold">{t('title')}</h1>
 
 				{error ? (
 					<Alert variant="destructive" className="mb-6">
@@ -59,7 +61,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 				) : (
 					<Card className="p-6" aria-live="polite" aria-busy={isLoading}>
 						<p className="text-muted-foreground">
-							{isLoading ? 'Loading team stats…' : (emptyStateMessage ?? 'No team stats available.')}
+							{isLoading ? t('loading') : (emptyStateMessage ?? t('noStats'))}
 						</p>
 					</Card>
 				)}

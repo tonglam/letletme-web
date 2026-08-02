@@ -12,6 +12,7 @@ import {
 	Zap
 } from 'lucide-react'
 import Image from 'next/image'
+import { useTranslations } from 'next-intl'
 
 interface PlayerDetailModalProps {
 	player: PlayerDetail | null
@@ -26,7 +27,26 @@ export function PlayerDetailModal({
 	onClose,
 	isLoading = false
 }: PlayerDetailModalProps) {
+	const t = useTranslations('LivePoints')
 	if (!player) return null
+	const breakdownLabels: Record<string, string> = {
+		Appearance: t('appearance'),
+		'Minutes Played': t('minutesPlayed'),
+		Goals: t('goals'),
+		'Goals Scored': t('goalsScored'),
+		Assists: t('assists'),
+		'Clean Sheet': t('cleanSheet'),
+		Saves: t('saves'),
+		'Penalty Saved': t('penaltySaved'),
+		'Penalty Missed': t('penaltyMissed'),
+		'Own Goal': t('ownGoal'),
+		'Goals Conceded': t('goalsConceded'),
+		'Yellow Card': t('yellowCard'),
+		'Red Card': t('redCard'),
+		Bonus: t('bonusPoints'),
+		'Bonus Points': t('bonusPoints'),
+		'Total Points': t('totalPoints'),
+	}
 
 	// BPS color based on value
 	const getBpsColor = (score: number) => {
@@ -57,7 +77,7 @@ export function PlayerDetailModal({
 		<Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
 			<DialogContent className="max-w-lg p-0 overflow-hidden sm:max-w-lg">
 				<DialogTitle className="sr-only">
-					{player.name} - Player Details
+					{t('playerDetails', { player: player.name })}
 				</DialogTitle>
 
 				{/* Enhanced Header section */}
@@ -66,7 +86,7 @@ export function PlayerDetailModal({
 						<div className="flex items-center gap-3 flex-1 min-w-0">
 							<div className="relative w-12 h-12 flex-shrink-0 rounded-full bg-background/50 p-1 border-2 border-primary/20">
 								<Image
-									alt={`${player.team} logo`}
+									alt={t('teamLogo', { team: player.team })}
 									src={`/images/team-logos/${player.teamShort.toUpperCase()}.png`}
 									width={40}
 									height={40}
@@ -92,20 +112,20 @@ export function PlayerDetailModal({
 					<div className="flex items-end justify-between">
 						<div className="flex flex-col">
 							<span className="text-xs text-muted-foreground mb-1">
-								Total Points
+								{t('totalPoints')}
 							</span>
 							<div className="flex items-baseline gap-2">
 								<span className="text-4xl font-bold text-primary">
 									{player.points}
 								</span>
-								<span className="text-sm text-muted-foreground mb-1">pts</span>
+								<span className="text-sm text-muted-foreground mb-1">{t('pointsAbbreviation')}</span>
 							</div>
 						</div>
 						{player.bonusPoints > 0 && (
 							<div className="flex items-center gap-2 bg-yellow-500/20 dark:bg-yellow-500/10 px-3 py-2 rounded-lg border border-yellow-500/30">
 								<Award className="h-4 w-4 text-yellow-600 dark:text-yellow-500" />
 								<span className="text-sm font-semibold text-yellow-600 dark:text-yellow-500">
-									+{player.bonusPoints} Bonus
+									{t('bonus', { points: player.bonusPoints })}
 								</span>
 							</div>
 						)}
@@ -120,7 +140,7 @@ export function PlayerDetailModal({
 							<div className="flex items-center gap-2 mb-2">
 								<Users className="h-4 w-4 text-muted-foreground" />
 								<span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-									Ownership
+									{t('ownership')}
 								</span>
 							</div>
 							<div className="text-2xl font-bold">{player.ownershipPercentage}%</div>
@@ -148,11 +168,11 @@ export function PlayerDetailModal({
 								<div className="flex items-center gap-2 mb-2">
 									<Zap className="h-4 w-4 text-emerald-500" />
 									<span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-										Status
+										{t('status')}
 									</span>
 								</div>
 								<div className="text-lg font-semibold text-emerald-500">
-									Active
+									{t('active')}
 								</div>
 							</div>
 						)}
@@ -162,13 +182,13 @@ export function PlayerDetailModal({
 					<div>
 						<div className="flex items-center gap-2 mb-4">
 							<Zap className="h-5 w-5 text-primary" />
-							<h3 className="text-lg font-semibold">Point Breakdown</h3>
+							<h3 className="text-lg font-semibold">{t('pointBreakdown')}</h3>
 						</div>
 
 						<div className="space-y-1 rounded-lg border bg-card/50 p-1">
 							{isLoading ? (
 								<div className="px-3 py-4 text-sm text-muted-foreground text-center">
-									Loading breakdown...
+									{t('loadingBreakdown')}
 								</div>
 							) : player.pointsBreakdown.length > 0 ? (
 								player.pointsBreakdown.map((item, index) => (
@@ -181,7 +201,7 @@ export function PlayerDetailModal({
 												<Zap className="h-4 w-4 text-primary" />
 											</div>
 											<div>
-												<span className="text-sm font-medium">{item.category}</span>
+												<span className="text-sm font-medium">{breakdownLabels[item.category] ?? item.category}</span>
 												{item.value !== undefined && item.value !== 0 && (
 													<span className="text-xs text-muted-foreground ml-1.5">({item.value})</span>
 												)}
@@ -202,7 +222,7 @@ export function PlayerDetailModal({
 								))
 							) : (
 								<div className="px-3 py-4 text-sm text-muted-foreground text-center">
-									No point events available
+									{t('noPointEvents')}
 								</div>
 							)}
 						</div>
@@ -212,7 +232,7 @@ export function PlayerDetailModal({
 					<div className="pt-4 border-t border-border">
 						<div className="flex items-center justify-between mb-3">
 							<span className="text-sm font-medium text-muted-foreground">
-								Positive Points
+								{t('positivePoints')}
 							</span>
 							<span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
 								+{positivePoints}
@@ -221,7 +241,7 @@ export function PlayerDetailModal({
 						{negativePoints > 0 && (
 							<div className="flex items-center justify-between mb-3">
 								<span className="text-sm font-medium text-muted-foreground">
-									Negative Points
+									{t('negativePoints')}
 								</span>
 								<span className="text-lg font-bold text-rose-500 dark:text-rose-400">
 									-{negativePoints}
@@ -230,7 +250,7 @@ export function PlayerDetailModal({
 						)}
 						<Separator className="my-3" />
 						<div className="flex items-center justify-between">
-							<span className="text-base font-semibold">Total Points</span>
+							<span className="text-base font-semibold">{t('totalPoints')}</span>
 							<span className="text-2xl font-bold text-primary">
 								{player.points}
 							</span>

@@ -22,6 +22,7 @@ import {
 import { resolveTeamDisplayName } from "@/lib/team-display";
 import { cn } from "@/lib/utils";
 import { Plus, Users, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 
 interface PlayerOwnershipFilterProps {
@@ -31,24 +32,13 @@ interface PlayerOwnershipFilterProps {
   className?: string;
 }
 
-const scopeLabels: Record<OwnershipScope, string> = {
-  any: "Any",
-  starter: "Starter",
-  bench: "Bench",
-};
-
-const captainModeLabels: Record<OwnershipCaptainMode, string> = {
-  any: "Any captain",
-  selectedCaptain: "Selected is captain",
-  selectedViceCaptain: "Selected is vice captain",
-};
-
 export function PlayerOwnershipFilter({
   entries,
   onMatchedEntryIdsChange,
   initialScope = "any",
   className,
 }: PlayerOwnershipFilterProps) {
+  const t = useTranslations("Filters");
   const [scope, setScope] = useState<OwnershipScope>(initialScope);
   const [captainMode, setCaptainMode] = useState<OwnershipCaptainMode>("any");
   const [selectedPlayers, setSelectedPlayers] = useState<
@@ -68,6 +58,16 @@ export function PlayerOwnershipFilter({
   );
 
   const isActive = selectedPlayers.length > 0;
+  const scopeLabels: Record<OwnershipScope, string> = {
+    any: t("any"),
+    starter: t("starter"),
+    bench: t("bench"),
+  };
+  const captainModeLabels: Record<OwnershipCaptainMode, string> = {
+    any: t("anyCaptain"),
+    selectedCaptain: t("selectedCaptain"),
+    selectedViceCaptain: t("selectedViceCaptain"),
+  };
 
   useEffect(() => {
     onMatchedEntryIdsChange(isActive ? summary.matchedEntryIds : null);
@@ -96,11 +96,14 @@ export function PlayerOwnershipFilter({
         <div>
           <div className="flex items-center gap-2 text-sm font-medium">
             <Users className="h-4 w-4 text-primary" />
-            Player ownership
+            {t("playerOwnership")}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            Matched {summary.matchedCount} / {summary.totalCount} (
-            {summary.percentage}%)
+            {t("matched", {
+              matched: summary.matchedCount,
+              total: summary.totalCount,
+              percentage: summary.percentage,
+            })}
           </div>
         </div>
 
@@ -109,13 +112,13 @@ export function PlayerOwnershipFilter({
             value={scope}
             onValueChange={(value) => setScope(value as OwnershipScope)}
           >
-            <SelectTrigger className="h-8 w-[120px]" aria-label="Player ownership squad scope">
+            <SelectTrigger className="h-8 w-[120px]" aria-label={t("ownershipScope")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="any">Any</SelectItem>
-              <SelectItem value="starter">Starter</SelectItem>
-              <SelectItem value="bench">Bench</SelectItem>
+              <SelectItem value="any">{t("any")}</SelectItem>
+              <SelectItem value="starter">{t("starter")}</SelectItem>
+              <SelectItem value="bench">{t("bench")}</SelectItem>
             </SelectContent>
           </Select>
 
@@ -123,16 +126,16 @@ export function PlayerOwnershipFilter({
             value={captainMode}
             onValueChange={(value) => setCaptainMode(value as OwnershipCaptainMode)}
           >
-            <SelectTrigger className="h-8 w-[180px]" aria-label="Player captaincy filter">
+            <SelectTrigger className="h-8 w-[180px]" aria-label={t("captaincyFilter")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="any">Any captain</SelectItem>
+              <SelectItem value="any">{t("anyCaptain")}</SelectItem>
               <SelectItem value="selectedCaptain">
-                Selected is captain
+                {t("selectedCaptain")}
               </SelectItem>
               <SelectItem value="selectedViceCaptain">
-                Selected is vice captain
+                {t("selectedViceCaptain")}
               </SelectItem>
             </SelectContent>
           </Select>
@@ -144,7 +147,7 @@ export function PlayerOwnershipFilter({
             onClick={() => setIsPickerOpen((open) => !open)}
           >
             <Plus className="h-4 w-4" />
-            Add Player
+            {t("addPlayer")}
           </Button>
         </div>
       </div>
@@ -165,7 +168,7 @@ export function PlayerOwnershipFilter({
               </span>
               <button
                 type="button"
-                aria-label={`Remove ${player.name}`}
+                aria-label={t("removePlayer", { name: player.name })}
                 className="rounded-sm text-muted-foreground hover:text-foreground"
                 onClick={() => removePlayer(player.id)}
               >
@@ -180,12 +183,12 @@ export function PlayerOwnershipFilter({
             className="h-7 px-2 text-xs"
             onClick={() => setSelectedPlayers([])}
           >
-            Clear all
+            {t("clearAll")}
           </Button>
         </div>
       ) : (
         <div className="mt-3 rounded-md bg-accent/30 px-3 py-2 text-xs text-muted-foreground">
-          No player ownership filter active.
+          {t("noOwnershipFilter")}
         </div>
       )}
 

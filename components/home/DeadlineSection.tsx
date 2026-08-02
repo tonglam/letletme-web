@@ -2,9 +2,9 @@
 
 import { Card } from '@/components/ui/card'
 import { CalendarClock } from 'lucide-react'
-import { format } from 'date-fns'
 import { usePageActive } from '@/hooks/use-page-active'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/navigation'
+import { useLocale, useTranslations } from 'next-intl'
 import { useEffect, useMemo, useState } from 'react'
 
 interface TimeLeft {
@@ -32,6 +32,8 @@ interface DeadlineSectionProps {
 }
 
 export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionProps) {
+	const locale = useLocale()
+	const t = useTranslations('Home')
 	const deadline = useMemo(() => (deadlineTime ? new Date(deadlineTime) : null), [deadlineTime])
 	const [timeLeft, setTimeLeft] = useState<TimeLeft>({ days: 0, hours: 0, minutes: 0, seconds: 0 })
 	const [formattedDeadline, setFormattedDeadline] = useState('')
@@ -55,7 +57,15 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 		}
 
 		const initialTimer = window.setTimeout(() => {
-			setFormattedDeadline(`Deadline: ${format(deadline, 'EEE d MMM yyyy, HH:mm')}`)
+			const formatted = new Intl.DateTimeFormat(locale, {
+				weekday: 'short',
+				day: 'numeric',
+				month: 'short',
+				year: 'numeric',
+				hour: '2-digit',
+				minute: '2-digit',
+			}).format(deadline)
+			setFormattedDeadline(t('deadline', { date: formatted }))
 			updateTimeLeft()
 		}, 0)
 		const tickTimer = isPageActive ? setInterval(updateTimeLeft, 1000) : undefined
@@ -86,7 +96,7 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 			if (expireTimer !== undefined) window.clearTimeout(expireTimer)
 			if (refreshTimer !== undefined) clearInterval(refreshTimer)
 		}
-	}, [deadline, isPageActive, router])
+	}, [deadline, isPageActive, locale, router, t])
 
 	if (!nextEventId || !deadlineTime) {
 		return (
@@ -95,9 +105,9 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 					<span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
 						<CalendarClock aria-hidden="true" className="size-5" />
 					</span>
-					<h2 className="text-2xl font-bold">Gameweek schedule unavailable</h2>
+					<h2 className="text-2xl font-bold">{t('scheduleUnavailable')}</h2>
 					<p className="text-muted-foreground">
-						The live data service is not responding yet. You can still browse the rest of the app.
+						{t('scheduleUnavailableDescription')}
 					</p>
 				</div>
 			</div>
@@ -107,10 +117,10 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 	return (
 		<div className="py-10">
 			<div className="text-center">
-				<p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">Next deadline</p>
-				<h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Gameweek {nextEventId}</h2>
+				<p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">{t('nextDeadline')}</p>
+				<h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{t('gameweek', { number: nextEventId })}</h2>
 				{deadlinePassed ? (
-					<p className="mt-3 text-lg text-muted-foreground">Gameweek in progress</p>
+					<p className="mt-3 text-lg text-muted-foreground">{t('inProgress')}</p>
 				) : (
 					<>
 						<p className="mt-3 text-base text-muted-foreground sm:text-lg">{formattedDeadline}</p>
@@ -118,10 +128,10 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 							<div className="grid grid-cols-4 gap-3 sm:gap-10">
 								{(
 									[
-										{ value: timeLeft.days, label: 'Days' },
-										{ value: timeLeft.hours, label: 'Hours' },
-										{ value: timeLeft.minutes, label: 'Minutes' },
-										{ value: timeLeft.seconds, label: 'Seconds' },
+										{ value: timeLeft.days, label: t('days') },
+										{ value: timeLeft.hours, label: t('hours') },
+										{ value: timeLeft.minutes, label: t('minutes') },
+										{ value: timeLeft.seconds, label: t('seconds') },
 									] as const
 								).map(({ value, label }) => (
 									<div

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Card } from "@/components/ui/card";
 import { 
   Select,
@@ -25,6 +26,7 @@ export function GameweekSelector({
   selectedGameweek,
   disabled = false
 }: GameweekSelectorProps) {
+  const t = useTranslations("Common");
   const maxGameweek = Math.max(1, currentGameweek);
   const effectiveSelectedGameweek =
     selectedGameweek !== undefined && selectedGameweek <= maxGameweek
@@ -38,7 +40,7 @@ export function GameweekSelector({
     for (let i = 1; i <= maxGameweek; i++) {
       gameweeks.push({
         value: i,
-        label: `Gameweek ${i}${i === currentGameweek ? ' (Current)' : ''}`
+        label: `${t("gameweekOption", { gameweek: i })}${i === currentGameweek ? ` (${t("currentSuffix")})` : ''}`
       });
     }
     
@@ -50,14 +52,14 @@ export function GameweekSelector({
   return (
     <Card className={`p-4 ${className}`}>
       <div>
-        <p className="text-sm text-muted-foreground mb-2">Select Gameweek</p>
+        <p className="text-sm text-muted-foreground mb-2">{t("selectGameweek")}</p>
         <Select
           value={effectiveSelectedGameweek.toString()}
           onValueChange={(value) => onGameweekChange(parseInt(value))}
           disabled={disabled}
         >
-          <SelectTrigger aria-label="Select gameweek">
-            <SelectValue placeholder="Select gameweek" />
+          <SelectTrigger aria-label={t("selectGameweek")}>
+            <SelectValue placeholder={t("selectGameweek")} />
           </SelectTrigger>
           <SelectContent>
             {gameweeks.map((gw) => (

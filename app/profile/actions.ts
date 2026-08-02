@@ -1,8 +1,8 @@
 'use server'
 
 import { getAuthorizationSession } from '@/lib/auth'
+import { getFplBindingErrorCode, type FplBindingErrorCode } from '@/lib/fpl-binding-error-code'
 import {
-	FplBindingError,
 	confirmFplEntryBindingChallenge,
 	startFplEntryBindingChallenge,
 } from '@/lib/fpl-entry-binding'
@@ -10,8 +10,10 @@ import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 
 export type UpdateResult = {
-	error?: string
-	success?: string
+	errorCode?: FplBindingErrorCode
+	success?: boolean
+	teamName?: string
+	managerName?: string
 	newEntryId?: number
 	challengeId?: string
 	requiredName?: string
@@ -25,18 +27,17 @@ export async function updateFplEntry(
 	const reqHeaders = await headers()
 	const session = await getAuthorizationSession(reqHeaders)
 
-	if (!session) return { error: 'Not authenticated' }
+	if (!session) return { errorCode: 'notAuthenticated' }
 
 	try {
 		const challengeId = formData.get('challengeId')
 		if (challengeId) {
-			const verified = await confirmFplEntryBindingChallenge(
-				session.user.id,
-				challengeId,
-			)
+			const verified = await confirmFplEntryBindingChallenge(session.user.id, challengeId)
 			revalidatePath('/profile')
 			return {
-				success: `Verified ${verified.teamName} (${verified.managerName})`,
+				success: true,
+				teamName: verified.teamName,
+				managerName: verified.managerName,
 				newEntryId: verified.entryId,
 			}
 		}
@@ -53,9 +54,9 @@ export async function updateFplEntry(
 		}
 	} catch (error) {
 		return {
-			error: error instanceof FplBindingError || error instanceof Error
-				? error.message
-				: 'Unable to verify the FPL entry',
+			...prevState,
+			success: undefined,
+			errorCode: getFplBindingErrorCode(error),
 		}
 	}
 }

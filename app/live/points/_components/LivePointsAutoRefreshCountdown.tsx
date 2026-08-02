@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { LIVE_POINTS_AUTO_REFRESH_SECONDS } from '../_lib/live-points-model'
+import { useTranslations } from 'next-intl'
 
 export function LivePointsAutoRefreshCountdown({
 	enabled,
@@ -10,6 +11,7 @@ export function LivePointsAutoRefreshCountdown({
 	enabled: boolean
 	onRefresh: () => Promise<void>
 }) {
+	const t = useTranslations('LivePoints')
 	const [countdown, setCountdown] = useState<number | null>(null)
 	const refreshInFlightRef = useRef(false)
 	const onRefreshRef = useRef(onRefresh)
@@ -51,5 +53,5 @@ export function LivePointsAutoRefreshCountdown({
 
 	if (!enabled || countdown === null) return null
 
-	return <span className="text-xs text-muted-foreground">Next refresh in {countdown}s</span>
+	return <span className="text-xs text-muted-foreground">{t('nextRefresh', { seconds: countdown })}</span>
 }

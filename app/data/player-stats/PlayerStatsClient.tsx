@@ -1,6 +1,7 @@
 'use client'
 
 import PageShell from '@/components/layout/PageShell'
+import { useTranslations } from 'next-intl'
 import { PlayerSelectionPanel } from './_components/PlayerSelectionPanel'
 import { PlayerStatsView } from './_components/PlayerStatsView'
 import { usePlayerDetailSlot } from './_hooks/usePlayerDetailSlot'
@@ -9,6 +10,7 @@ const RECENT_PLAYERS_KEY_1 = 'player-stats-recent-1'
 const RECENT_PLAYERS_KEY_2 = 'player-stats-recent-2'
 
 export default function PlayerStatsClient({ currentGameweek }: { currentGameweek?: number }) {
+	const t = useTranslations('PlayerStats')
 	const firstPlayer = usePlayerDetailSlot({
 		storageKey: RECENT_PLAYERS_KEY_1,
 		eventId: currentGameweek,
@@ -21,7 +23,7 @@ export default function PlayerStatsClient({ currentGameweek }: { currentGameweek
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
-				<h1 className="mb-6 text-2xl font-bold">Player Statistics</h1>
+				<h1 className="mb-6 text-2xl font-bold">{t('title')}</h1>
 				<PlayerSelectionPanel
 					first={{
 						selectedPlayer: firstPlayer.selectedPlayer,

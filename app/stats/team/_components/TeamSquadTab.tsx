@@ -9,21 +9,33 @@ import {
 	TableRow,
 } from '@/components/ui/table'
 import { CheckCircle2, Clock } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import type { TeamStatsViewModel } from '../_lib/team-stats-model'
 
 export function TeamSquadTab({ picks }: { picks: TeamStatsViewModel['eventPicks'] }) {
+	const t = useTranslations('TeamStats')
+	const position = useTranslations('PlayerDirectory')
+	const positionName = (value: string) => {
+		const normalized = value.toUpperCase()
+		if (normalized === 'GKP' || normalized === 'GOALKEEPER') return position('goalkeeper')
+		if (normalized === 'DEF' || normalized === 'DEFENDER') return position('defender')
+		if (normalized === 'MID' || normalized === 'MIDFIELDER') return position('midfielder')
+		if (normalized === 'FWD' || normalized === 'FORWARD') return position('forward')
+		return value
+	}
+
 	return (
 		<Card className="p-6">
-			<h2 className="mb-4 text-xl font-bold">Picks</h2>
+			<h2 className="mb-4 text-xl font-bold">{t('picks')}</h2>
 			<div className="overflow-hidden rounded-lg border">
 				<Table>
 					<TableHeader>
 						<TableRow>
-							<TableHead>Player</TableHead>
-							<TableHead className="text-center">Position</TableHead>
-							<TableHead className="text-center">Min</TableHead>
-							<TableHead className="text-center">Pts</TableHead>
-							<TableHead className="text-right">Role</TableHead>
+							<TableHead>{t('player')}</TableHead>
+							<TableHead className="text-center">{t('position')}</TableHead>
+							<TableHead className="text-center">{t('minutesShort')}</TableHead>
+							<TableHead className="text-center">{t('pointsShort')}</TableHead>
+							<TableHead className="text-right">{t('role')}</TableHead>
 						</TableRow>
 					</TableHeader>
 					<TableBody>
@@ -44,10 +56,10 @@ export function TeamSquadTab({ picks }: { picks: TeamStatsViewModel['eventPicks'
 											<p className="mt-1 text-xs text-muted-foreground">{pick.teamName}</p>
 										</div>
 									</TableCell>
-									<TableCell className="text-center"><Badge variant="secondary">{pick.elementTypeName}</Badge></TableCell>
+									<TableCell className="text-center"><Badge variant="secondary">{positionName(pick.elementTypeName)}</Badge></TableCell>
 									<TableCell className="text-center">
 										<span className="inline-flex items-center justify-center gap-1">
-											{played ? <CheckCircle2 className="size-3.5 shrink-0 text-info" aria-label="Played" /> : <Clock className="size-3.5 shrink-0 text-muted-foreground" aria-label="Not played" />}
+											{played ? <CheckCircle2 className="size-3.5 shrink-0 text-info" aria-label={t('played')} /> : <Clock className="size-3.5 shrink-0 text-muted-foreground" aria-label={t('notPlayed')} />}
 											{pick.minutes}
 										</span>
 									</TableCell>
@@ -55,7 +67,7 @@ export function TeamSquadTab({ picks }: { picks: TeamStatsViewModel['eventPicks'
 										<span className={pick.totalPoints > 0 ? 'text-success' : undefined}>{pick.totalPoints}</span>
 									</TableCell>
 									<TableCell className="text-right">
-										<Badge variant={isBench ? 'outline' : 'default'}>{isBench ? 'Bench' : 'Starter'}</Badge>
+										<Badge variant={isBench ? 'outline' : 'default'}>{isBench ? t('bench') : t('starter')}</Badge>
 									</TableCell>
 								</TableRow>
 							)

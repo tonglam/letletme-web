@@ -149,7 +149,7 @@ export const mapApiDataToTeamStats = (
 				bank: item.bank
 			})),
 		seasonHistoryRows: [...entrySeasonHistory].map((item, index) => ({
-			seasonOrder: toOrdinal(index + 1),
+			seasonOrder: String(index + 1),
 			season: item.season,
 			totalPoints: item.totalPoints,
 			overallRank: item.overallRank
@@ -213,16 +213,6 @@ export const formatMoney = (value: number | null): string => {
 
 export const formatPlayerValue = (value: number): string => {
 	return `£${(value / 10).toFixed(1)}m`
-}
-
-const toOrdinal = (value: number): string => {
-	const mod100 = value % 100
-	if (mod100 >= 11 && mod100 <= 13) return `${value}th`
-	const mod10 = value % 10
-	if (mod10 === 1) return `${value}st`
-	if (mod10 === 2) return `${value}nd`
-	if (mod10 === 3) return `${value}rd`
-	return `${value}th`
 }
 
 interface TimedCacheValue<T> {
@@ -339,9 +329,6 @@ export const getEntryEventResultCached = async (
 	entryEventInFlightCache.set(cacheKey, request)
 	return request
 }
-
-export const getNoDataMessage = (selectedEventId: number): string =>
-	`No team stats available for Gameweek ${selectedEventId}.`
 
 export const getTransferHistoryCached = async (
 	entryId: number

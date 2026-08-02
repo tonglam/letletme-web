@@ -10,6 +10,7 @@ import type { LiveCalcData } from '@/lib/graphql/operations/live'
 import type { Player } from '@/types/player'
 import { Loader2, RefreshCw } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useTranslations } from 'next-intl'
 import { deriveLiveTeamStats } from '../_lib/live-points-model'
 import { LivePointsAutoRefreshCountdown } from './LivePointsAutoRefreshCountdown'
 
@@ -40,6 +41,7 @@ export function LivePointsDashboard({
 	onGameweekChange: (gameweek: number) => void
 	onRefresh: () => Promise<void>
 }) {
+	const t = useTranslations('LivePoints')
 	const autoRefreshEnabled = shouldAutoRefresh && isPageActive
 
 	return (
@@ -55,10 +57,10 @@ export function LivePointsDashboard({
 				<div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 					<p className="text-xs text-muted-foreground">
 						{autoRefreshEnabled
-							? 'Auto refreshes every minute while this page is active.'
+							? t('autoActive')
 							: shouldAutoRefresh
-								? 'Auto refresh paused while this tab is hidden or offline.'
-								: 'Auto refresh paused for past or unavailable gameweeks.'}
+								? t('autoHidden')
+								: t('autoPast')}
 					</p>
 					<div className="flex items-center gap-3">
 						<LivePointsAutoRefreshCountdown enabled={autoRefreshEnabled} onRefresh={onRefresh} />
@@ -69,7 +71,7 @@ export function LivePointsDashboard({
 							disabled={isLoading || isRefreshing || selectedGameweek === undefined}
 						>
 							<RefreshCw data-icon="inline-start" className={isRefreshing ? 'animate-spin' : undefined} />
-							Refresh
+							{t('refresh')}
 						</Button>
 					</div>
 				</div>
@@ -79,7 +81,7 @@ export function LivePointsDashboard({
 				{isRefreshing ? (
 					<div className="mb-3 flex items-center justify-end gap-2 text-sm text-muted-foreground">
 						<Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" />
-						<span>Updating live points…</span>
+						<span>{t('updating')}</span>
 					</div>
 				) : null}
 			</div>
@@ -89,7 +91,7 @@ export function LivePointsDashboard({
 			</div>
 
 			<section aria-labelledby="live-squad-heading">
-				<h2 id="live-squad-heading" className="mb-3 text-xl font-bold">Squad</h2>
+				<h2 id="live-squad-heading" className="mb-3 text-xl font-bold">{t('squad')}</h2>
 				<Card className={cn('overflow-hidden', isRefreshing && 'opacity-75 transition-opacity')}>
 					<PlayerList startingPlayers={startingPlayers} benchPlayers={benchPlayers} />
 				</Card>

@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { ReactNode } from 'react'
+import { useTranslations } from 'next-intl'
 
 export function LivePointsLoading({
 	entrySearch,
@@ -15,6 +16,7 @@ export function LivePointsLoading({
 	currentGameweek: number
 	selectedGameweek?: number
 }) {
+	const t = useTranslations('LivePoints')
 	return (
 		<>
 			{entrySearch ? <Card className="mb-4 p-4">{entrySearch}</Card> : null}
@@ -29,7 +31,7 @@ export function LivePointsLoading({
 				) : (
 					<Skeleton className="h-16 w-full rounded-lg" />
 				)}
-				<p className="mt-2 text-xs text-muted-foreground">Loading live points for entry {activeEntryId}...</p>
+				<p className="mt-2 text-xs text-muted-foreground">{t('loadingEntry', { entryId: activeEntryId })}</p>
 			</div>
 			<Card className="mb-8 p-6">
 				<Skeleton className="mb-2 h-8 w-48" />
