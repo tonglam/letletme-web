@@ -3,13 +3,9 @@
 import { getAuthorizationSession } from '@/lib/auth'
 import {
 	getFplBindingErrorCode,
-	shouldRetainFplBindingChallenge,
 	type FplBindingErrorCode,
 } from '@/lib/fpl-binding-error-code'
-import {
-	confirmFplEntryBindingChallenge,
-	startFplEntryBindingChallenge,
-} from '@/lib/fpl-entry-binding'
+import { bindFplEntryDirectly } from '@/lib/fpl-entry-binding'
 import { headers } from 'next/headers'
 
 export type BindResult = {
@@ -17,14 +13,11 @@ export type BindResult = {
 	success?: boolean
 	teamName?: string
 	managerName?: string
-	challengeId?: string
 	entryId?: number
-	requiredName?: string
-	expiresAt?: string
 }
 
 export async function bindFplEntry(
-	prevState: BindResult | null,
+	_prevState: BindResult | null,
 	formData: FormData,
 ): Promise<BindResult> {
 	const reqHeaders = await headers()
@@ -33,37 +26,14 @@ export async function bindFplEntry(
 	if (!session) return { errorCode: 'notAuthenticated' }
 
 	try {
-		const challengeId = formData.get('challengeId')
-		if (challengeId) {
-			const verified = await confirmFplEntryBindingChallenge(session.user.id, challengeId)
-			return {
-				success: true,
-				teamName: verified.teamName,
-				managerName: verified.managerName,
-				entryId: verified.entryId,
-			}
-		}
-
-		const challenge = await startFplEntryBindingChallenge(
-			session.user.id,
-			formData.get('entryId'),
-		)
+		const bound = await bindFplEntryDirectly(session.user.id, formData.get('entryId'))
 		return {
-			challengeId: challenge.id,
-			entryId: challenge.entryId,
-			requiredName: challenge.requiredName,
-			 expiresAt: challenge.expiresAt,
+			success: true,
+			teamName: bound.teamName,
+			managerName: bound.managerName,
+			entryId: bound.entryId,
 		}
 	} catch (error) {
-		const errorCode = getFplBindingErrorCode(error)
-		if (!prevState?.challengeId || !shouldRetainFplBindingChallenge(errorCode)) {
-			return { errorCode }
-		}
-
-		return {
-			...prevState,
-			success: undefined,
-			errorCode,
-		}
+		return { errorCode: getFplBindingErrorCode(error) }
 	}
 }

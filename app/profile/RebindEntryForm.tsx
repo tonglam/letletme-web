@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useRouter } from '@/i18n/navigation'
-import { Check, Copy, ExternalLink, Pencil, X } from 'lucide-react'
+import { ExternalLink, Pencil, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useActionState, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -21,7 +21,6 @@ export default function RebindEntryForm({
 }) {
 	const t = useTranslations('Profile')
 	const [editing, setEditing] = useState(!currentEntryId || !verified)
-	const [copied, setCopied] = useState(false)
 	const [state, formAction, isPending] = useActionState(updateFplEntry, null)
 	const prevStateRef = useRef(state)
 	const router = useRouter()
@@ -69,47 +68,7 @@ export default function RebindEntryForm({
 	return (
 		<form action={formAction} className="space-y-3">
 			{state?.errorCode && <p className="text-sm text-destructive">{t(`errors.${state.errorCode}`)}</p>}
-			{state?.challengeId && state.requiredName ? (
-				<>
-					<input type="hidden" name="challengeId" value={state.challengeId} />
-					<div className="rounded-md border p-3 text-sm space-y-2">
-						<p>{t('changeExactName', { entryId: state.newEntryId ?? '—' })}</p>
-						<div className="flex items-center gap-2">
-							<p className="font-mono text-base font-semibold">{state.requiredName}</p>
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								className="h-7 gap-1 px-2 text-xs"
-								onClick={async () => {
-									if (!state.requiredName) return
-									await navigator.clipboard.writeText(state.requiredName)
-									setCopied(true)
-									toast.success(t('nameCopied'))
-									setTimeout(() => setCopied(false), 2000)
-								}}
-							>
-								{copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
-								{t('copyName')}
-							</Button>
-						</div>
-						<p className="text-xs text-muted-foreground">{t('saveAndVerify')}</p>
-						<a
-							href="https://fantasy.premierleague.com/en/entry-update"
-							target="_blank"
-							rel="noopener noreferrer"
-							className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-ink underline underline-offset-4 hover:no-underline"
-						>
-							<ExternalLink aria-hidden="true" className="size-3.5" />
-							{t('openTeamDetails')}
-						</a>
-					</div>
-					<Button type="submit" size="sm" disabled={isPending}>
-						{isPending ? t('checking') : t('verifyChangedName')}
-					</Button>
-				</>
-			) : (
-				<>
+
 			{currentEntryId && (
 				<p className="text-xs text-muted-foreground">
 					{t('currentlyLinked', { entryId: currentEntryId })}
@@ -136,7 +95,7 @@ export default function RebindEntryForm({
 					/>
 				</div>
 				<Button type="submit" size="sm" className="h-8" disabled={isPending}>
-					{isPending ? t('starting') : t('startVerification')}
+					{isPending ? t('linking') : t('linkTeam')}
 				</Button>
 				{currentEntryId && (
 					<Button
@@ -163,8 +122,6 @@ export default function RebindEntryForm({
 					{t('openFpl')}
 				</a>
 			</div>
-				</>
-			)}
 		</form>
 	)
 }

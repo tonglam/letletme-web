@@ -221,3 +221,51 @@ export async function confirmFplEntryBindingChallenge(
 		verifiedAt: now.toISOString(),
 	}
 }
+
+/**
+ * Product decision: an FPL entry ID is not a strong asset, so binding does
+ * not require proving ownership — pasting the ID (or a URL containing it)
+ * is enough. The unique constraint on user.fpl_entry_id still prevents two
+ * accounts from holding the same entry. The rename-challenge machinery
+ * above is retained but no longer used by the binding actions.
+ */
+export async function bindFplEntryDirectly(
+	userId: string,
+	entryIdInput: unknown,
+): Promise<{ entryId: number; teamName: string; managerName: string; verifiedAt: string }> {
+	const entryId = assertFplEntryId(entryIdInput)
+	const entry = await validateFplEntry(entryId)
+	if (!entry.valid || !entry.teamName || !entry.managerName) {
+		throw new FplBindingError(
+			`No FPL team found with ID ${entryId}. Check your FPL entry number.`,
+		)
+	}
+
+	const boundAt = new Date()
+	try {
+		const [updated] = await db
+			.update(schema.user)
+			.set({
+				fplEntryId: entryId,
+				fplEntryBoundAt: boundAt,
+				fplEntryVerifiedAt: boundAt,
+				updatedAt: boundAt,
+			})
+			.where(eq(schema.user.id, userId))
+			.returning({ id: schema.user.id })
+
+		if (!updated) throw new FplBindingError('Not authenticated', 401)
+	} catch (error) {
+		if (isUniqueViolation(error)) {
+			throw new FplBindingError('This FPL entry is already verified by another account', 409)
+		}
+		throw error
+	}
+
+	return {
+		entryId,
+		teamName: entry.teamName,
+		managerName: entry.managerName,
+		verifiedAt: boundAt.toISOString(),
+	}
+}
