@@ -249,6 +249,8 @@ export async function bindFplEntryDirectly(
 				fplEntryId: entryId,
 				fplEntryBoundAt: boundAt,
 				fplEntryVerifiedAt: boundAt,
+				fplTeamName: entry.teamName,
+				fplManagerName: entry.managerName,
 				updatedAt: boundAt,
 			})
 			.where(eq(schema.user.id, userId))
@@ -277,6 +279,8 @@ export async function unlinkFplEntry(userId: string): Promise<void> {
 			fplEntryId: null,
 			fplEntryBoundAt: null,
 			fplEntryVerifiedAt: null,
+			fplTeamName: null,
+			fplManagerName: null,
 			updatedAt: new Date(),
 		})
 		.where(eq(schema.user.id, userId))

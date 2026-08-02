@@ -114,7 +114,11 @@ export default async function ProfilePage({ params }: PageProps) {
 							<RebindEntryForm
 								currentEntryId={verifiedEntryId}
 								verified={verifiedEntryId !== null}
-								fplInfo={null}
+								fplInfo={
+									verifiedEntryId !== null && profile.fplTeamName && profile.fplManagerName
+										? { teamName: profile.fplTeamName, managerName: profile.fplManagerName }
+										: null
+								}
 							/>
 						</div>
 

@@ -56,6 +56,11 @@ export default function RebindEntryForm({
 
 	const linkedEntryId = currentEntryId ?? (state?.success ? state.newEntryId : null)
 	const isLinked = !cleared && (verified || Boolean(state?.success))
+	const displayInfo =
+		fplInfo ??
+		(state?.success && state.teamName && state.managerName
+			? { teamName: state.teamName, managerName: state.managerName }
+			: null)
 
 	const handleUnlink = () => {
 		startUnlink(async () => {
@@ -79,9 +84,9 @@ export default function RebindEntryForm({
 						<span className="text-sm font-mono font-medium">{linkedEntryId}</span>
 						<span className="text-xs text-muted-foreground">{t('linked')}</span>
 					</div>
-					{fplInfo && (
+					{displayInfo && (
 						<span className="text-xs text-muted-foreground">
-							{fplInfo.teamName} · {fplInfo.managerName}
+							{displayInfo.teamName} · {displayInfo.managerName}
 						</span>
 					)}
 				</div>

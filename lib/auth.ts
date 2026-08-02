@@ -99,6 +99,8 @@ export const authConfig = {
 			fplEntryId: { type: 'number' as const, required: false, input: false },
 			fplEntryBoundAt: { type: 'date' as const, required: false, input: false },
 			fplEntryVerifiedAt: { type: 'date' as const, required: false, input: false },
+			fplTeamName: { type: 'string' as const, required: false, input: false },
+			fplManagerName: { type: 'string' as const, required: false, input: false },
 		},
 	},
 	plugins: [] as const,

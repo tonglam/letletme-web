@@ -12,7 +12,7 @@ import {
 import { signOut } from '@/lib/auth-client'
 import { getVerifiedFplEntryId } from '@/lib/fpl-binding-core'
 import { Link, useRouter } from '@/i18n/navigation'
-import { LogOut, Settings } from 'lucide-react'
+import { LogOut, Settings, Trophy } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
@@ -22,6 +22,8 @@ export interface NavigationUser {
 	image?: string | null
 	fplEntryId?: number | null
 	fplEntryVerifiedAt?: Date | string | null
+	fplTeamName?: string | null
+	fplManagerName?: string | null
 }
 
 export function HeaderProfileCard({ user }: { user: NavigationUser }) {
@@ -83,6 +85,15 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 						<p className="text-xs text-muted-foreground truncate mt-0.5">
 							{user.email}
 						</p>
+						{verifiedEntryId !== null && user.fplTeamName ? (
+							<p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground truncate">
+								<Trophy aria-hidden="true" className="size-3 shrink-0 text-primary-ink" />
+								<span className="truncate">
+									{user.fplTeamName}
+									{user.fplManagerName ? ` · ${user.fplManagerName}` : ''}
+								</span>
+							</p>
+						) : null}
 					</div>
 				</div>
 
