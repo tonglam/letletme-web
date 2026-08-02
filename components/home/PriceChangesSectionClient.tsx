@@ -154,6 +154,13 @@ export function PriceChangesSectionClient({
 	const t = useTranslations('Home')
 	const hasChanges = priceRises.length > 0 || priceFalls.length > 0
 
+	// The market widget is non-essential dashboard content — when the data
+	// service is unreachable, drop the section instead of greeting visitors
+	// with an error banner.
+	if (hasError && !hasChanges) {
+		return null
+	}
+
 	return (
 		<Card className="overflow-hidden rounded-none sm:rounded-xl">
 			<CardHeader className="pb-4">

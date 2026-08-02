@@ -187,13 +187,10 @@ async function HomeInsights() {
 		return (
 			<section className="py-10">
 				<div className="mx-auto max-w-4xl px-4">
-					<div className="rounded-xl border bg-card p-8 text-center">
+					<div className="rounded-xl border border-dashed px-6 py-5 text-center">
 						<p className="chyron justify-center">{t('gameweekStats')}</p>
-						<h2 className="mt-3 font-display text-2xl font-bold uppercase tracking-wide">
-							{t('insightsUnavailable')}
-						</h2>
-						<p className="mx-auto mt-2 max-w-lg text-muted-foreground">
-							{t('insightsUnavailableDescription')}
+						<p className="mt-2 text-sm font-medium text-muted-foreground">
+							{t('insightsUnavailable')} — {t('insightsUnavailableDescription')}
 						</p>
 					</div>
 				</div>
