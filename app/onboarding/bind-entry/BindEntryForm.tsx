@@ -65,10 +65,13 @@ export default function BindEntryForm() {
 						<Input
 							id="entryId"
 							name="entryId"
-							type="number"
-							min={1}
+							type="text"
 							required
 							placeholder={t('entryPlaceholder')}
+							onChange={e => {
+								const match = e.target.value.match(/\/entry\/(\d+)/)
+								if (match) e.target.value = match[1]
+							}}
 						/>
 					</div>
 					<Button type="submit" className="w-full" disabled={isPending}>

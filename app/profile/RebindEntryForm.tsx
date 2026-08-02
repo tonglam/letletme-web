@@ -105,12 +105,15 @@ export default function RebindEntryForm({
 					<Input
 						id="entryId"
 						name="entryId"
-						type="number"
-						min={1}
+						type="text"
 						required
 						placeholder={t('entryPlaceholder')}
 						defaultValue={currentEntryId ?? ''}
 						className="h-8 text-sm"
+						onChange={e => {
+							const match = e.target.value.match(/\/entry\/(\d+)/)
+							if (match) e.target.value = match[1]
+						}}
 					/>
 				</div>
 				<Button type="submit" size="sm" className="h-8" disabled={isPending}>
@@ -132,13 +135,13 @@ export default function RebindEntryForm({
 			<div className="rounded-md bg-muted/50 p-2.5 text-xs text-muted-foreground space-y-1.5">
 				<p>{t('findEntryHint')}</p>
 				<a
-					href="https://fantasy.premierleague.com/api/me/"
+					href="https://fantasy.premierleague.com/en/my-team"
 					target="_blank"
 					rel="noopener noreferrer"
 					className="inline-flex items-center gap-1 font-medium text-primary-ink underline underline-offset-4 hover:no-underline"
 				>
 					<ExternalLink aria-hidden="true" className="size-3" />
-					{t('showMyTeamId')}
+					{t('openFpl')}
 				</a>
 			</div>
 				</>

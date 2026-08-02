@@ -76,13 +76,13 @@ export default async function BindEntryPage({ params }: PageProps) {
 						<li>
 							{t('example')}{' '}
 							<span className="font-mono">
-								&quot;entry&quot;: <strong>123456</strong>
+								…/en/entry/<strong>123456</strong>/history
 							</span>
 						</li>
 					</ol>
 					<Button variant="outline" size="sm" className="mt-3 w-full" asChild>
 						<a
-							href="https://fantasy.premierleague.com/api/me/"
+							href="https://fantasy.premierleague.com/en/my-team"
 							target="_blank"
 							rel="noopener noreferrer"
 						>
@@ -90,7 +90,6 @@ export default async function BindEntryPage({ params }: PageProps) {
 							{t('openFplPage')}
 						</a>
 					</Button>
-					<p className="mt-2">{t('noteIfNull')}</p>
 				</div>
 
 				<BindEntryForm />
