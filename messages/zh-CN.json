@@ -1176,6 +1176,7 @@
   "Footer": {
     "tagline": "更清晰地做出 FPL 决策，远离信息噪音。",
     "miniProgram": "微信小程序",
+    "scanMiniProgram": "微信扫码，进入小程序",
     "fplData": "FPL 数据",
     "playerStats": "球员数据",
     "priceChanges": "价格变化",

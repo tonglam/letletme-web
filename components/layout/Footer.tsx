@@ -1,7 +1,7 @@
 import { Link } from '@/i18n/navigation'
-import { QrCode } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 import { LogoMark, LogoWordmark } from './Logo'
+import { MiniProgramPopover } from './MiniProgramPopover'
 
 const footerGroups = [
 	{
@@ -52,10 +52,7 @@ export async function Footer() {
 							<p className="mt-1 text-sm text-fascia-foreground/60">{t('tagline')}</p>
 						</div>
 					</div>
-					<span className="inline-flex w-fit items-center gap-2 rounded-md border border-electric/40 bg-white/5 px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.18em] text-fascia-foreground/80">
-						<QrCode aria-hidden="true" className="size-4 text-electric" />
-						{t('miniProgram')}
-					</span>
+					<MiniProgramPopover label={t('miniProgram')} scanText={t('scanMiniProgram')} />
 				</div>
 
 				<nav
