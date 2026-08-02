@@ -42,7 +42,7 @@ export async function Footer() {
 	const currentYear = new Date().getFullYear()
 
 	return (
-		<footer className="fascia texture-grain mt-16 border-t-2 border-electric">
+		<footer className="fascia texture-grain relative mt-16 border-t-2 border-electric">
 			<div className="mx-auto w-full max-w-6xl px-4 py-12 lg:px-8">
 				<div className="mb-10 flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
 					<div className="flex items-center gap-3">
