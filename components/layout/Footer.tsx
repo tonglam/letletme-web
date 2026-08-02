@@ -1,8 +1,7 @@
 import { Link } from '@/i18n/navigation'
-import { QrCode } from 'lucide-react'
-import Image from 'next/image'
 import { getTranslations } from 'next-intl/server'
 import { LogoMark, LogoWordmark } from './Logo'
+import { MiniProgramPopover } from './MiniProgramPopover'
 
 const footerGroups = [
 	{
@@ -53,33 +52,7 @@ export async function Footer() {
 							<p className="mt-1 text-sm text-fascia-foreground/60">{t('tagline')}</p>
 						</div>
 					</div>
-					<div className="group relative w-fit">
-						<button
-							type="button"
-							aria-describedby="footer-miniprogram-qr"
-							className="inline-flex items-center gap-2 rounded-md border border-electric/40 bg-white/5 px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.18em] text-fascia-foreground/80 transition-colors hover:border-electric hover:text-electric focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-electric"
-						>
-							<QrCode aria-hidden="true" className="size-4 text-electric" />
-							{t('miniProgram')}
-						</button>
-						<div
-							id="footer-miniprogram-qr"
-							className="invisible absolute bottom-full left-1/2 z-50 mb-3 -translate-x-1/2 translate-y-1 rounded-lg border border-electric/40 bg-fascia p-3 opacity-0 shadow-xl transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100 sm:left-auto sm:right-0 sm:translate-x-0"
-						>
-							<div className="rounded-md bg-white p-2">
-								<Image
-									src="/images/miniprogram.webp"
-									alt={t('scanMiniProgram')}
-									width={140}
-									height={140}
-									className="size-[140px]"
-								/>
-							</div>
-							<p className="mt-2 text-center text-xs text-fascia-foreground/70">
-								{t('scanMiniProgram')}
-							</p>
-						</div>
-					</div>
+					<MiniProgramPopover label={t('miniProgram')} scanText={t('scanMiniProgram')} />
 				</div>
 
 				<nav
