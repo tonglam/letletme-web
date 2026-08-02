@@ -1,7 +1,7 @@
 import { Link } from '@/i18n/navigation'
 import { QrCode } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
-import { LogoCrest, LogoWordmark } from './Logo'
+import { LogoMark, LogoWordmark } from './Logo'
 
 const footerGroups = [
 	{
@@ -46,7 +46,7 @@ export async function Footer() {
 			<div className="mx-auto w-full max-w-6xl px-4 py-12 lg:px-8">
 				<div className="mb-10 flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
 					<div className="flex items-center gap-3">
-						<LogoCrest className="size-11" />
+						<LogoMark className="size-11 text-electric" />
 						<div>
 							<LogoWordmark className="text-lg" />
 							<p className="mt-1 text-sm text-fascia-foreground/60">{t('tagline')}</p>

@@ -1,4 +1,4 @@
-import { LogoCrest } from '@/components/layout/Logo'
+import { LogoMark } from '@/components/layout/Logo'
 import { Card } from '@/components/ui/card'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
@@ -41,7 +41,7 @@ export default async function BindEntryPage({ params }: PageProps) {
 	return (
 		<div className="flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center bg-muted/30 p-4">
 			<div className="mb-6 flex items-center gap-2">
-				<LogoCrest className="size-10" />
+				<LogoMark className="size-10 text-plum dark:text-electric" />
 				<h1 className="font-display text-2xl font-bold uppercase tracking-[0.06em]">LetLetMe</h1>
 			</div>
 

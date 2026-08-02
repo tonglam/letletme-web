@@ -1,11 +1,12 @@
 import { cn } from '@/lib/utils'
 
 /**
- * LetLetMe crest — a football club shield with a ball and jersey-style "LLM"
- * lettering. Always rendered on the plum fascia (header/footer), so the
- * palette is fixed brand plum + electric green + chalk.
+ * LetLetMe mark — two L's drawn as a climbing staircase with the ball at
+ * the peak. LLM climbing: live points and rank going up. The steps inherit
+ * `currentColor` (electric on the plum fascia, plum on light surfaces);
+ * the ball is always broadcast pink — the memorable anchor of the mark.
  */
-export function LogoCrest({ className }: { className?: string }) {
+export function LogoMark({ className }: { className?: string }) {
 	return (
 		<svg
 			viewBox="0 0 48 48"
@@ -14,32 +15,13 @@ export function LogoCrest({ className }: { className?: string }) {
 			fill="none"
 		>
 			<path
-				d="M24 2.6 42 8.3V23.2c0 10.3-7.1 17.3-18 21.4C13.1 40.5 6 33.5 6 23.2V8.3L24 2.6Z"
-				fill="hsl(288 100% 11%)"
-				stroke="hsl(152 100% 50%)"
-				strokeWidth="2.6"
-				strokeLinejoin="round"
-			/>
-			{/* ball */}
-			<circle cx="24" cy="17" r="6.4" fill="hsl(152 100% 50%)" />
-			<path
-				d="M24 13.9l2.95 2.15-1.13 3.47h-3.64l-1.13-3.47L24 13.9Z"
-				fill="hsl(288 100% 11%)"
-			/>
-			<path
-				d="M24 10.6v3.3M27 15.9l2.6-1.5M26.4 19.7l2.4 2M21.6 19.7l-2.4 2M21 15.9l-2.6-1.5"
-				stroke="hsl(288 100% 11%)"
-				strokeWidth="1.1"
-				strokeLinecap="round"
-			/>
-			{/* LLM jersey lettering */}
-			<path
-				d="M13.5 29.5v7.2h4.4M22 29.5v7.2h4.4M30.5 36.7v-7.2l3 3.9 3-3.9v7.2"
-				stroke="hsl(48 33% 96%)"
-				strokeWidth="2.4"
+				d="M8 38H22V26H34V14"
+				stroke="currentColor"
+				strokeWidth="6"
 				strokeLinecap="square"
 				strokeLinejoin="miter"
 			/>
+			<circle cx="41" cy="10.5" r="4.5" fill="hsl(330 100% 58%)" />
 		</svg>
 	)
 }
