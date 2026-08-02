@@ -6,9 +6,31 @@ export async function proxy(req: NextRequest) {
 	const { pathname } = req.nextUrl
 	const protectedPage = isProtectedPage(pathname)
 	const protectedApi = isProtectedApi(pathname)
+	const passThrough = (privateDocument = false) => {
+		const response = NextResponse.next()
+		const acceptsHtml = req.headers.get('accept')?.includes('text/html') ?? false
+
+		if (
+			(req.method === 'GET' || req.method === 'HEAD') &&
+			acceptsHtml &&
+			!pathname.startsWith('/api/')
+		) {
+			// Cloudflare must not rewrite Next.js streaming or hydration scripts.
+			// Keep public revalidation and private session pages explicit because a
+			// proxy response header replaces Next.js's downstream Cache-Control value.
+			response.headers.set(
+				'Cache-Control',
+				privateDocument
+					? 'private, no-store, no-transform'
+					: 'public, max-age=0, must-revalidate, no-transform',
+			)
+		}
+
+		return response
+	}
 
 	if (!protectedPage && !protectedApi) {
-		return NextResponse.next()
+		return passThrough()
 	}
 
 	const session = await getAuth().api.getSession({ headers: req.headers })
@@ -31,7 +53,7 @@ export async function proxy(req: NextRequest) {
 		return NextResponse.redirect(new URL('/onboarding/bind-entry', req.url))
 	}
 
-	return NextResponse.next()
+	return passThrough(protectedPage)
 }
 
 export const config = {
