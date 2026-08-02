@@ -9,20 +9,22 @@ import {
 	TableRow,
 } from '@/components/ui/table'
 import { ArrowRight } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { formatPlayerValue, type TeamStatsViewModel } from '../_lib/team-stats-model'
 
 export function TeamTransfersTab({ rows }: { rows: TeamStatsViewModel['transferRows'] }) {
+	const t = useTranslations('TeamStats')
 	return (
 		<Card className="p-6">
-			<h2 className="mb-4 text-xl font-bold">Transfer History</h2>
+			<h2 className="mb-4 text-xl font-bold">{t('transferHistory')}</h2>
 			<div className="overflow-hidden rounded-lg border bg-card/40">
 				<Table>
 					<TableHeader>
 						<TableRow>
-							<TableHead className="w-20 text-center">GW</TableHead>
-							<TableHead className="w-32 text-center">Transfers</TableHead>
-							<TableHead className="w-32 text-center">Cost</TableHead>
-							<TableHead className="min-w-[360px]">Moves</TableHead>
+							<TableHead className="w-20 text-center">{t('gameweekShort')}</TableHead>
+							<TableHead className="w-32 text-center">{t('transfers')}</TableHead>
+							<TableHead className="w-32 text-center">{t('cost')}</TableHead>
+							<TableHead className="min-w-[360px]">{t('moves')}</TableHead>
 						</TableRow>
 					</TableHeader>
 					<TableBody>
@@ -41,17 +43,17 @@ export function TeamTransfersTab({ rows }: { rows: TeamStatsViewModel['transferR
 									<div className="flex flex-col gap-2 py-1">
 										{row.moves.length === 0 ? (
 											<p className="rounded-md border border-dashed bg-background/60 px-3 py-2.5 text-sm text-muted-foreground">
-												{row.transfers > 0 ? 'Transfer happened; player details are unavailable.' : 'No transfer'}
+												{row.transfers > 0 ? t('detailsUnavailable') : t('noTransfer')}
 											</p>
 										) : (
 											row.moves.map((move, index) => (
 												<div key={`${row.gameweek}-${move.outName}-${move.inName}-${index}`} className="rounded-md border bg-background/80 px-3 py-2.5">
 													<p className="flex flex-wrap items-center gap-1 text-sm font-medium leading-5">
-														<span className="text-muted-foreground">OUT</span> {move.outName} ({move.outTeam})
+												<span className="text-muted-foreground">{t('out')}</span> {move.outName} ({move.outTeam})
 														<ArrowRight className="mx-1 size-3.5 text-muted-foreground" aria-hidden="true" />
-														<span className="text-muted-foreground">IN</span> {move.inName} ({move.inTeam})
+												<span className="text-muted-foreground">{t('in')}</span> {move.inName} ({move.inTeam})
 													</p>
-													<p className="mt-1.5 text-xs text-muted-foreground">Sold: {formatPlayerValue(move.outCost)} · Bought: {formatPlayerValue(move.inCost)}</p>
+											<p className="mt-1.5 text-xs text-muted-foreground">{t('soldBought', { sold: formatPlayerValue(move.outCost), bought: formatPlayerValue(move.inCost) })}</p>
 												</div>
 											))
 										)}

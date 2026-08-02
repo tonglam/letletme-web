@@ -1,5 +1,8 @@
+"use client";
+
 import { Badge } from "@/components/ui/badge";
 import { normalizePosition, type PositionCode } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 export interface PlayerListItem {
   id: number;
@@ -31,10 +34,12 @@ export function PlayerList({
   players: PlayerListItem[];
   emptyText?: string;
 }) {
+  const t = useTranslations("PlayerDirectory");
+
   if (players.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
-        <p className="text-sm">{emptyText ?? "No players available"}</p>
+        <p className="text-sm">{emptyText ?? t("noPlayersAvailable")}</p>
       </div>
     );
   }

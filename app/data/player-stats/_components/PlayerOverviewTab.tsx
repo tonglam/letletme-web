@@ -1,6 +1,7 @@
 import { Card } from '@/components/ui/card'
 import type { PlayerDetailData } from '@/lib/graphql/operations/players'
 import { Activity, BarChart3, Trophy } from 'lucide-react'
+import { useFormatter } from 'next-intl'
 import { CompareRow, CompareSectionHeader, StatCell } from './PlayerStatPrimitives'
 
 export function PlayerOverviewTab({
@@ -12,6 +13,8 @@ export function PlayerOverviewTab({
 	comparison: PlayerDetailData | null
 	currentGameweek?: number
 }) {
+	const format = useFormatter()
+
 	if (comparison) {
 		return (
 			<Card className="flex flex-col gap-5 p-5">
@@ -34,9 +37,9 @@ export function PlayerOverviewTab({
 						v1={player.selectedByPercent == null ? null : `${player.selectedByPercent}%`}
 						v2={comparison.selectedByPercent == null ? null : `${comparison.selectedByPercent}%`}
 					/>
-					<CompareRow label="Season In" v1={player.seasonTransfersIn.toLocaleString()} v2={comparison.seasonTransfersIn.toLocaleString()} />
-					<CompareRow label="Season Out" v1={player.seasonTransfersOut.toLocaleString()} v2={comparison.seasonTransfersOut.toLocaleString()} higherIsBetter={false} />
-					<CompareRow label="GW Net" v1={(player.transfersInEvent - player.transfersOutEvent).toLocaleString()} v2={(comparison.transfersInEvent - comparison.transfersOutEvent).toLocaleString()} />
+					<CompareRow label="Season In" v1={format.number(player.seasonTransfersIn)} v2={format.number(comparison.seasonTransfersIn)} />
+					<CompareRow label="Season Out" v1={format.number(player.seasonTransfersOut)} v2={format.number(comparison.seasonTransfersOut)} higherIsBetter={false} />
+					<CompareRow label="GW Net" v1={format.number(player.transfersInEvent - player.transfersOutEvent)} v2={format.number(comparison.transfersInEvent - comparison.transfersOutEvent)} />
 				</section>
 			</Card>
 		)
@@ -61,9 +64,9 @@ export function PlayerOverviewTab({
 				<CompareSectionHeader icon={<Activity className="size-4" />} label="Ownership & Transfers" />
 				<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
 					<StatCell label="Selected By" value={player.selectedByPercent == null ? null : `${player.selectedByPercent}%`} />
-					<StatCell label="Season In" value={player.seasonTransfersIn.toLocaleString()} />
-					<StatCell label="Season Out" value={player.seasonTransfersOut.toLocaleString()} />
-					<StatCell label="GW Net" value={(player.transfersInEvent - player.transfersOutEvent).toLocaleString()} />
+					<StatCell label="Season In" value={format.number(player.seasonTransfersIn)} />
+					<StatCell label="Season Out" value={format.number(player.seasonTransfersOut)} />
+					<StatCell label="GW Net" value={format.number(player.transfersInEvent - player.transfersOutEvent)} />
 				</div>
 			</section>
 		</Card>

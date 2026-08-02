@@ -10,9 +10,9 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { signOut } from '@/lib/auth-client'
+import { Link, useRouter } from '@/i18n/navigation'
 import { LogOut, Settings } from 'lucide-react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 export interface NavigationUser {
@@ -24,6 +24,7 @@ export interface NavigationUser {
 
 export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 	const router = useRouter()
+	const t = useTranslations('Navigation')
 	const [signingOut, setSigningOut] = useState(false)
 	const initials = (user.name ?? user.email).charAt(0).toUpperCase()
 
@@ -44,7 +45,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 				<Button
 					variant="ghost"
 					className="h-9 gap-2 px-2"
-					aria-label={`Open account menu for ${user.name ?? user.email}`}
+					aria-label={t('openAccountMenu', { name: user.name ?? user.email })}
 				>
 					<Avatar className="h-6 w-6">
 						<AvatarImage src={user.image ?? undefined} alt={user.name ?? ''} />
@@ -88,7 +89,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 					<DropdownMenuItem asChild>
 						<Link href="/profile" className="cursor-pointer">
 							<Settings className="h-4 w-4 mr-2" />
-							Profile settings
+							{t('profileSettings')}
 						</Link>
 					</DropdownMenuItem>
 					<DropdownMenuItem
@@ -97,7 +98,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 						className="text-destructive focus:text-destructive cursor-pointer"
 					>
 						<LogOut className="h-4 w-4 mr-2" />
-						{signingOut ? 'Signing out…' : 'Sign out'}
+						{signingOut ? t('signingOut') : t('signOut')}
 					</DropdownMenuItem>
 				</div>
 			</DropdownMenuContent>

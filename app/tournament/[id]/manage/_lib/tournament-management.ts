@@ -1,13 +1,18 @@
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import { z } from 'zod'
 
-export const tournamentNameSchema = z.object({
+export const createTournamentNameSchema = (messages = {
+	tooShort: 'Tournament name must be at least 3 characters',
+	tooLong: 'Tournament name must be 80 characters or fewer',
+}) => z.object({
 	name: z
 		.string()
 		.trim()
-		.min(3, 'Tournament name must be at least 3 characters')
-		.max(80, 'Tournament name must be 80 characters or fewer'),
+		.min(3, messages.tooShort)
+		.max(80, messages.tooLong),
 })
+
+export const tournamentNameSchema = createTournamentNameSchema()
 
 export type TournamentNameForm = z.infer<typeof tournamentNameSchema>
 

@@ -12,6 +12,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 export type StatsTableRow = Record<string, unknown>;
 
@@ -93,6 +94,7 @@ export function StatsTable<T extends object = object>({
   className = "",
   rowKeyField,
 }: StatsTableProps<T>) {
+  const t = useTranslations("Common");
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
@@ -197,7 +199,7 @@ export function StatsTable<T extends object = object>({
             {sortedData.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={columns.length} className="text-center py-4">
-                  No data available
+                  {t("noDataAvailable")}
                 </TableCell>
               </TableRow>
             ) : (

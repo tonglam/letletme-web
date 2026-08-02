@@ -18,6 +18,7 @@ import {
 	type LucideIcon,
 } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 
 interface TournamentHelpProps {
 	className?: string
@@ -29,70 +30,21 @@ interface HelpSection {
 	items: string[]
 }
 
-const helpSections: HelpSection[] = [
-	{
-		title: 'Choose participants',
-		icon: Users,
-		items: [
-			'Fetch a league from an official fantasy.premierleague.com league URL.',
-			'Official selection includes every fetched entry; Custom lets you choose a subset.',
-			'At least two entries are required before creation.',
-		],
-	},
-	{
-		title: 'Choose a format',
-		icon: Trophy,
-		items: [
-			'The current tournament type is Standard.',
-			'Use no group stage or a points-race group stage, then optionally add single or double elimination.',
-			'The summary on the form shows the team and round counts calculated from your choices.',
-		],
-	},
-	{
-		title: 'Check the schedule',
-		icon: CalendarRange,
-		items: [
-			'Group-stage gameweeks must be in order and within the 38-gameweek season.',
-			'When enabled, the knockout phase starts after the selected group-stage window.',
-			'The form prevents creation when the calculated knockout rounds would run past gameweek 38.',
-		],
-	},
-	{
-		title: 'Create and follow setup',
-		icon: ListChecks,
-		items: [
-			'The tournament name is checked before submission.',
-			'After creation, the page reports whether backend setup is ready, still processing, or failed.',
-			'Viewing is supported; editing and deleting tournaments are not available yet.',
-		],
-	},
-]
-
-const faqs = [
-	{
-		question: 'Can I edit a tournament after creating it?',
-		answer:
-			'Not yet. Review the participants, format, and schedule before you create it. The current service supports creation and viewing only.',
-	},
-	{
-		question: 'Why must I fetch a league first?',
-		answer:
-			'The fetched league supplies the real FPL entry IDs used by the tournament. Custom selection changes which fetched entries are included.',
-	},
-	{
-		question: 'How is the knockout schedule calculated?',
-		answer:
-			'The form calculates the required rounds from the number of qualifying entries and the selected elimination format, then places them after the group-stage end gameweek.',
-	},
-	{
-		question: 'What if setup is still processing?',
-		answer:
-			'The tournament has been accepted, but its backend setup is not ready yet. Keep the reported status and check the tournament again later.',
-	},
-] as const
-
 export function TournamentHelp({ className }: TournamentHelpProps) {
+	const t = useTranslations('TournamentHelp')
 	const [isOpen, setIsOpen] = useState(false)
+	const helpSections: HelpSection[] = [
+		{ title: t('participantsTitle'), icon: Users, items: [t('participantsOne'), t('participantsTwo'), t('participantsThree')] },
+		{ title: t('formatTitle'), icon: Trophy, items: [t('formatOne'), t('formatTwo'), t('formatThree')] },
+		{ title: t('scheduleTitle'), icon: CalendarRange, items: [t('scheduleOne'), t('scheduleTwo'), t('scheduleThree')] },
+		{ title: t('createTitle'), icon: ListChecks, items: [t('createOne'), t('createTwo'), t('createThree')] },
+	]
+	const faqs = [
+		{ question: t('editQuestion'), answer: t('editAnswer') },
+		{ question: t('fetchQuestion'), answer: t('fetchAnswer') },
+		{ question: t('scheduleQuestion'), answer: t('scheduleAnswer') },
+		{ question: t('processingQuestion'), answer: t('processingAnswer') },
+	]
 
 	return (
 		<div className={className}>
@@ -103,7 +55,7 @@ export function TournamentHelp({ className }: TournamentHelpProps) {
 				aria-controls="tournament-help-content"
 			>
 				<CircleHelp data-icon="inline-start" />
-				{isOpen ? 'Hide help' : 'Show help'}
+				{isOpen ? t('hide') : t('show')}
 				<ChevronDown
 					data-icon="inline-end"
 					className={cn('transition-transform', isOpen && 'rotate-180')}
@@ -116,11 +68,11 @@ export function TournamentHelp({ className }: TournamentHelpProps) {
 						<TabsList className="mb-6 grid w-full grid-cols-2">
 							<TabsTrigger value="setup" className="gap-2">
 								<BookOpen aria-hidden="true" className="size-4" />
-								Setup guide
+								{t('setupGuide')}
 							</TabsTrigger>
 							<TabsTrigger value="faq" className="gap-2">
 								<FileQuestion aria-hidden="true" className="size-4" />
-								FAQ
+								{t('faq')}
 							</TabsTrigger>
 						</TabsList>
 
@@ -152,9 +104,9 @@ export function TournamentHelp({ className }: TournamentHelpProps) {
 								</div>
 							))}
 							<Alert variant="info">
-								<AlertTitle>Current capability</AlertTitle>
+								<AlertTitle>{t('capabilityTitle')}</AlertTitle>
 								<AlertDescription>
-									Create and view flows are available. Update and delete controls stay hidden until those backend operations exist.
+									{t('capabilityDescription')}
 								</AlertDescription>
 							</Alert>
 						</TabsContent>

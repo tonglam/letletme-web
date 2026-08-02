@@ -25,13 +25,38 @@ export const FPL_LEAGUE_URL_PATTERN =
 	/^https:\/\/fantasy\.premierleague\.com\/leagues\/\d+\/(standings|admin|join)(?:[/?#].*)?$/
 
 const positiveIntegerString = (message: string) => z.string().trim().regex(/^[1-9]\d*$/, message)
-const gameweekString = z.string().regex(/^GW(?:[1-9]|[12]\d|3[0-8])$/, 'Select a valid gameweek.')
 
-export const tournamentFormSchema = z.object({
-	tournamentName: z.string().trim().min(3, 'Tournament name must be at least 3 characters').max(80, 'Tournament name must be at most 80 characters'),
+export interface TournamentFormMessages {
+	nameTooShort: string
+	nameTooLong: string
+	validGameweek: string
+	validLeagueUrl: string
+	gameweekOrder: string
+	groupPositive: string
+	groupInvalid: string
+	qualifierPositive: string
+	qualifierInvalid: string
+}
+
+const DEFAULT_FORM_MESSAGES: TournamentFormMessages = {
+	nameTooShort: 'Tournament name must be at least 3 characters',
+	nameTooLong: 'Tournament name must be at most 80 characters',
+	validGameweek: 'Select a valid gameweek.',
+	validLeagueUrl: 'Enter a valid Fantasy Premier League URL.',
+	gameweekOrder: 'End gameweek must be on or after the start gameweek.',
+	groupPositive: 'Group number must be a positive whole number.',
+	groupInvalid: 'Enter a valid group number.',
+	qualifierPositive: 'Qualifiers per group must be a positive whole number.',
+	qualifierInvalid: 'Enter a valid qualifier count.',
+}
+
+export const createTournamentFormSchema = (messages: TournamentFormMessages = DEFAULT_FORM_MESSAGES) => {
+	const gameweekString = z.string().regex(/^GW(?:[1-9]|[12]\d|3[0-8])$/, messages.validGameweek)
+	return z.object({
+	tournamentName: z.string().trim().min(3, messages.nameTooShort).max(80, messages.nameTooLong),
 	participantSource: z.enum(['official', 'custom']),
 	leagueUrl: z.string().refine((value) => FPL_LEAGUE_URL_PATTERN.test(value), {
-		message: 'Enter a valid Fantasy Premier League URL.',
+		message: messages.validLeagueUrl,
 	}),
 	groupFormat: z.enum(['none', 'points']),
 	startGameweek: gameweekString,
@@ -44,30 +69,33 @@ export const tournamentFormSchema = z.object({
 		context.addIssue({
 			code: z.ZodIssueCode.custom,
 			path: ['endGameweek'],
-			message: 'End gameweek must be on or after the start gameweek.',
+			message: messages.gameweekOrder,
 		})
 	}
 	if (values.groupFormat === 'points') {
-		const result = positiveIntegerString('Group number must be a positive whole number.').safeParse(values.groupNum ?? '')
+		const result = positiveIntegerString(messages.groupPositive).safeParse(values.groupNum ?? '')
 		if (!result.success) {
 			context.addIssue({
 				code: z.ZodIssueCode.custom,
 				path: ['groupNum'],
-				message: result.error.issues[0]?.message ?? 'Enter a valid group number.',
+				message: result.error.issues[0]?.message ?? messages.groupInvalid,
 			})
 		}
 	}
 	if (values.groupFormat === 'points' && values.knockoutFormat !== 'none') {
-		const result = positiveIntegerString('Qualifiers per group must be a positive whole number.').safeParse(values.qualifiersPerGroup ?? '')
+		const result = positiveIntegerString(messages.qualifierPositive).safeParse(values.qualifiersPerGroup ?? '')
 		if (!result.success) {
 			context.addIssue({
 				code: z.ZodIssueCode.custom,
 				path: ['qualifiersPerGroup'],
-				message: result.error.issues[0]?.message ?? 'Enter a valid qualifier count.',
+				message: result.error.issues[0]?.message ?? messages.qualifierInvalid,
 			})
 		}
 	}
 })
+}
+
+export const tournamentFormSchema = createTournamentFormSchema()
 
 export type TournamentFormData = z.infer<typeof tournamentFormSchema>
 
@@ -186,18 +214,30 @@ export function computeTournamentPlan(
 	}
 }
 
-export function validateLeagueUrl(value: string): { valid: boolean; domainValid: boolean; message: string | null } {
+export interface LeagueUrlMessages {
+	domainInvalid: string
+	pathInvalid: string
+	incomplete: string
+}
+
+const DEFAULT_LEAGUE_URL_MESSAGES: LeagueUrlMessages = {
+	domainInvalid: 'Only secure URLs from fantasy.premierleague.com are allowed.',
+	pathInvalid: 'Use a league standings, admin, or join URL.',
+	incomplete: 'Enter a complete URL beginning with https://.',
+}
+
+export function validateLeagueUrl(value: string, messages: LeagueUrlMessages = DEFAULT_LEAGUE_URL_MESSAGES): { valid: boolean; domainValid: boolean; message: string | null } {
 	if (!value) return { valid: false, domainValid: true, message: null }
 	try {
 		const url = new URL(value)
 		if (url.protocol !== 'https:' || url.hostname !== 'fantasy.premierleague.com') {
-			return { valid: false, domainValid: false, message: 'Only secure URLs from fantasy.premierleague.com are allowed.' }
+			return { valid: false, domainValid: false, message: messages.domainInvalid }
 		}
 		if (!FPL_LEAGUE_URL_PATTERN.test(value)) {
-			return { valid: false, domainValid: true, message: 'Use a league standings, admin, or join URL.' }
+			return { valid: false, domainValid: true, message: messages.pathInvalid }
 		}
 		return { valid: true, domainValid: true, message: null }
 	} catch {
-		return { valid: false, domainValid: false, message: 'Enter a complete URL beginning with https://.' }
+		return { valid: false, domainValid: false, message: messages.incomplete }
 	}
 }

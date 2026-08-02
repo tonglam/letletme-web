@@ -1,7 +1,6 @@
 import type { PlayerLiveStats } from '@/lib/graphql/operations/live'
 import type { Match, PlayerStat } from '@/types/match'
 import type { PlayerDetail } from '@/types/player-detail'
-import { format } from 'date-fns'
 
 export type MatchHighlightKind =
 	| 'bonus'
@@ -171,9 +170,16 @@ export function buildBreakdownFromPlayerLive(
 	return rows
 }
 
-export function formatMatchKickoff(kickoff: string): string | null {
+export function formatMatchKickoff(kickoff: string, locale: string): string | null {
 	if (!kickoff) return null
 	const date = new Date(kickoff)
 	if (Number.isNaN(date.getTime())) return null
-	return format(date, 'MMMM d, yyyy HH:mm')
+	return new Intl.DateTimeFormat(locale, {
+		month: 'long',
+		day: 'numeric',
+		year: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
+		hourCycle: 'h23',
+	}).format(date)
 }

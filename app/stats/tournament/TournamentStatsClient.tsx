@@ -10,8 +10,10 @@ import { TournamentRanking } from './_components/TournamentRanking'
 import { TournamentStatsHeader } from './_components/TournamentStatsHeader'
 import { TournamentStatsTabs } from './_components/TournamentStatsTabs'
 import { useTournamentStats, type TournamentStatsClientProps } from './_hooks/useTournamentStats'
+import { useTranslations } from 'next-intl'
 
 export default function TournamentStatsClient(props: TournamentStatsClientProps) {
+	const t = useTranslations('TournamentStats')
 	const {
 		dataGameweek,
 		error,
@@ -28,12 +30,12 @@ export default function TournamentStatsClient(props: TournamentStatsClientProps)
 		tournaments,
 	} = useTournamentStats(props)
 
-	if (isBootstrapping) return <PageLoading label="Loading tournament statistics" />
+	if (isBootstrapping) return <PageLoading label={t('loadingPage')} />
 
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
-				<h1 className="mb-6 text-3xl font-bold">Tournament Stats</h1>
+				<h1 className="mb-6 text-3xl font-bold">{t('title')}</h1>
 
 				{error ? (
 					<Alert variant="destructive" className="mb-6">
@@ -64,7 +66,7 @@ export default function TournamentStatsClient(props: TournamentStatsClientProps)
 				) : (
 					<Card className="p-6" aria-live="polite" aria-busy={isLoading}>
 						<p className="text-muted-foreground">
-							{isLoading ? 'Loading tournament stats…' : 'No tournament stats are available.'}
+							{isLoading ? t('loading') : t('noStats')}
 						</p>
 					</Card>
 				)}

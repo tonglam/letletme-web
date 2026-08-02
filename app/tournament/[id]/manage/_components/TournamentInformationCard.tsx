@@ -6,10 +6,7 @@ import {
 	CardTitle,
 } from '@/components/ui/card'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
-import {
-	formatTournamentDate,
-	getTournamentStructure,
-} from '../_lib/tournament-management'
+import { useFormatter, useTranslations } from 'next-intl'
 
 const Detail = ({ label, value }: { label: string; value: string | number }) => (
 	<div className="rounded-lg border bg-muted/30 p-3">
@@ -19,28 +16,38 @@ const Detail = ({ label, value }: { label: string; value: string | number }) => 
 )
 
 export function TournamentInformationCard({ tournament }: { tournament: EntryTournament }) {
-	const structure = getTournamentStructure(tournament)
+	const t = useTranslations('TournamentManage')
+	const format = useFormatter()
+	const groupStage = tournament.groupMode === 'NONE' ? t('noGroup') : tournament.groupMode === 'H2H' ? t('headToHeadGroups') : t('pointsRaceGroups')
+	const knockoutStage = tournament.knockoutMode === 'NONE' ? t('noKnockout') : tournament.knockoutMode === 'DOUBLE_ELIMINATION' ? t('homeAwayKnockout') : t('singleKnockout')
+	const gameweekRange = (start: number | null, end: number | null) => start && end ? t('gameweekRange', { start, end }) : t('notScheduled')
+	const state = tournament.state === 'ACTIVE' ? t('active') : tournament.state === 'COMPLETED' ? t('completed') : tournament.state === 'PENDING' ? t('pending') : tournament.state
+	const leagueType = tournament.leagueType === 'CLASSIC' ? t('classic') : tournament.leagueType === 'H2H' ? t('headToHead') : tournament.leagueType
+	const date = (value: string) => {
+		const timestamp = Date.parse(value)
+		return Number.isFinite(timestamp) ? format.dateTime(new Date(timestamp), { day: 'numeric', month: 'short', year: 'numeric' }) : t('unknown')
+	}
 
 	return (
 		<Card>
 			<CardHeader>
 				<CardTitle asChild className="text-xl">
-					<h2>Tournament information</h2>
+					<h2>{t('information')}</h2>
 				</CardTitle>
-				<CardDescription>Read-only details from the current tournament record.</CardDescription>
+				<CardDescription>{t('informationDescription')}</CardDescription>
 			</CardHeader>
 			<CardContent>
 				<dl className="grid gap-3 sm:grid-cols-2">
-					<Detail label="Administrator" value={tournament.creator} />
-					<Detail label="Status" value={structure.state} />
-					<Detail label="League type" value={structure.type} />
-					<Detail label="Participants" value={tournament.totalTeamNum} />
-					<Detail label="Group stage" value={structure.groupStage} />
-					<Detail label="Group gameweeks" value={structure.groupGameweeks} />
-					<Detail label="Knockout stage" value={structure.knockoutStage} />
-					<Detail label="Knockout gameweeks" value={structure.knockoutGameweeks} />
-					<Detail label="Created" value={formatTournamentDate(tournament.createdAt)} />
-					<Detail label="Last updated" value={formatTournamentDate(tournament.updatedAt)} />
+					<Detail label={t('administrator')} value={tournament.creator} />
+					<Detail label={t('status')} value={state} />
+					<Detail label={t('leagueType')} value={leagueType} />
+					<Detail label={t('participants')} value={tournament.totalTeamNum} />
+					<Detail label={t('groupStage')} value={groupStage} />
+					<Detail label={t('groupGameweeks')} value={gameweekRange(tournament.groupStartedEventId, tournament.groupEndedEventId)} />
+					<Detail label={t('knockoutStage')} value={knockoutStage} />
+					<Detail label={t('knockoutGameweeks')} value={gameweekRange(tournament.knockoutStartedEventId, tournament.knockoutEndedEventId)} />
+					<Detail label={t('created')} value={date(tournament.createdAt)} />
+					<Detail label={t('lastUpdated')} value={date(tournament.updatedAt)} />
 				</dl>
 			</CardContent>
 		</Card>

@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { formatCompactNumber, normalizePosition } from "@/lib/utils";
 import { ArrowLeftCircle, ArrowRightCircle } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 interface Transfer {
   position: string;
@@ -18,6 +19,7 @@ interface TransferListProps {
 }
 
 export function TransferList({ title, transfers, type }: TransferListProps) {
+  const t = useTranslations("Home");
   const icon = type === "in" ? (
     <ArrowRightCircle className="w-5 h-5 shrink-0 text-emerald-500" />
   ) : (
@@ -56,7 +58,7 @@ export function TransferList({ title, transfers, type }: TransferListProps) {
       <div className={`space-y-2 rounded-lg p-3 border ${bgClassName} flex-1`}>
         {transfers.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground text-sm">
-            No transfers to display
+            {t("noTransfers")}
           </div>
         ) : (
           transfers.map((transfer) => (
@@ -80,12 +82,12 @@ export function TransferList({ title, transfers, type }: TransferListProps) {
                 <span className="text-xs text-muted-foreground truncate block">
                   {[
                     transfer.club || "",
-                    `Sel ${
+                    t("selectedShort", { value:
                       typeof transfer.selectedByPercent === "number"
                         ? `${transfer.selectedByPercent.toFixed(1)}%`
                         : "-"
-                    }`,
-                    `Pts ${typeof transfer.points === "number" ? transfer.points : "-"}`,
+                    }),
+                    t("pointsShort", { value: typeof transfer.points === "number" ? transfer.points : "-" }),
                   ]
                     .filter((part) => part.length > 0)
                     .join(" | ")}

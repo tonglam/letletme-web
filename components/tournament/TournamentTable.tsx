@@ -20,9 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import Link from "next/link";
-import { formatCompactNumber } from "@/lib/utils";
+import { Link } from "@/i18n/navigation";
 import { EntryCompareSheet } from "./EntryCompareSheet";
+import { useFormatter, useTranslations } from "next-intl";
 
 interface TournamentTableProps {
   entries: TournamentEntry[];
@@ -32,6 +32,8 @@ interface TournamentTableProps {
 }
 
 export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }: TournamentTableProps) {
+  const t = useTranslations("LiveTournament");
+  const format = useFormatter();
   const [sortColumn, setSortColumn] = useState<string>("gwPoints");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [compareSelection, setCompareSelection] = useState<TournamentEntry[]>([]);
@@ -48,13 +50,13 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
   };
 
   const sortOptions = [
-    { value: "gwPoints", label: "GW Pts" },
-    { value: "gwNetPoints", label: "GW Net" },
-    { value: "eventCost", label: "Cost" },
-    { value: "playersPlayed", label: "Played" },
-    { value: "totalPoints", label: "Total Pts" },
-    { value: "overallRank", label: "OR" },
-    { value: "teamName", label: "Team" },
+    { value: "gwPoints", label: t("gameweekPointsShort") },
+    { value: "gwNetPoints", label: t("gameweekNetShort") },
+    { value: "eventCost", label: t("cost") },
+    { value: "playersPlayed", label: t("played") },
+    { value: "totalPoints", label: t("totalPointsShort") },
+    { value: "overallRank", label: t("overallRankShort") },
+    { value: "teamName", label: t("team") },
   ];
 
   // Filter entries based on search query
@@ -130,10 +132,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
 
   const formatOverallRank = (rank?: number) => {
     if (!rank || rank <= 0) return "-";
-    return formatCompactNumber(rank)
-      .replace("K", "k")
-      .replace("M", "m")
-      .replace("B", "b");
+    return format.number(rank, { notation: "compact" });
   };
 
   const formatNetPoints = (points: number) => {
@@ -149,7 +148,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
     <div className="bg-card rounded-lg overflow-hidden shadow-sm">
       <div className="border-b p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Sort by</span>
+          <span className="text-sm text-muted-foreground">{t("sortBy")}</span>
           <Select
             value={sortColumn}
             onValueChange={(nextColumn) => {
@@ -157,7 +156,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
               setSortDirection(getDefaultDirectionForColumn(nextColumn));
             }}
           >
-            <SelectTrigger className="h-8 w-[150px]" aria-label="Sort tournament standings">
+            <SelectTrigger className="h-8 w-[150px]" aria-label={t("sortStandings")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -173,11 +172,11 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
           {compareSelection.length === 0 && (
             <span className="text-xs text-muted-foreground flex items-center gap-1">
               <GitCompareArrows className="h-3.5 w-3.5" />
-              Tick 2 teams to compare
+              {t("comparePrompt")}
             </span>
           )}
           {compareSelection.length === 1 && (
-            <span className="text-xs text-muted-foreground">Select 1 more to compare</span>
+            <span className="text-xs text-muted-foreground">{t("compareOneMore")}</span>
           )}
           {compareSelection.length === 2 && (
             <Button
@@ -187,7 +186,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
               onClick={() => setIsCompareOpen(true)}
             >
               <GitCompareArrows className="h-3.5 w-3.5" />
-              Compare (2)
+              {t("compareCount", { count: 2 })}
             </Button>
           )}
           {compareSelection.length > 0 && (
@@ -196,7 +195,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               onClick={() => setCompareSelection([])}
             >
-              Clear
+              {t("clear")}
             </button>
           )}
           <button
@@ -207,12 +206,12 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
             {sortDirection === "asc" ? (
               <>
                 <ArrowUp className="h-4 w-4" />
-                Asc
+                {t("ascending")}
               </>
             ) : (
               <>
                 <ArrowDown className="h-4 w-4" />
-                Desc
+                {t("descending")}
               </>
             )}
           </button>
@@ -223,12 +222,12 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
           <TableHeader>
             <TableRow>
               <TableHead className="w-8 pr-0" />
-              <TableHead className="w-16">Rank</TableHead>
-              <TableHead>Team</TableHead>
-              <TableHead className="text-right">GW Pts</TableHead>
-              <TableHead className="text-right">Total Pts</TableHead>
-              <TableHead className="text-right hidden md:table-cell">OR</TableHead>
-              <TableHead className="text-right hidden md:table-cell">Played</TableHead>
+              <TableHead className="w-16">{t("rank")}</TableHead>
+              <TableHead>{t("team")}</TableHead>
+              <TableHead className="text-right">{t("gameweekPointsShort")}</TableHead>
+              <TableHead className="text-right">{t("totalPointsShort")}</TableHead>
+              <TableHead className="text-right hidden md:table-cell">{t("overallRankShort")}</TableHead>
+              <TableHead className="text-right hidden md:table-cell">{t("played")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -245,7 +244,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
                       disabled={isDisabled}
                       onChange={() => toggleCompare(entry)}
                       className="h-3.5 w-3.5 rounded border-muted-foreground/30 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                      aria-label={`Select ${entry.teamName} for comparison`}
+                      aria-label={t("selectForComparison", { team: entry.teamName })}
                     />
                   </TableCell>
                   <TableCell className="font-medium">
@@ -287,7 +286,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
                       {(entry.eventCost ?? 0) > 0 ? ` (-${entry.eventCost})` : ""}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Net {formatNetPoints(entry.gwNetPoints ?? entry.livePoints)}
+                      {t("netPoints", { points: formatNetPoints(entry.gwNetPoints ?? entry.livePoints) })}
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-medium">
@@ -305,7 +304,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
             ) : (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                  No teams found matching your search criteria
+                  {t("noMatchingTeams")}
                 </TableCell>
               </TableRow>
             )}

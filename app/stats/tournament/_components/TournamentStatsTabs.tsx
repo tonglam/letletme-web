@@ -5,6 +5,7 @@ import type { StandingRow, TournamentStatsViewModel } from '../_lib/tournament-s
 import { TournamentCaptainsTab } from './TournamentCaptainsTab'
 import { TournamentChipsTab } from './TournamentChipsTab'
 import { TournamentStandingsTab } from './TournamentStandingsTab'
+import { useTranslations } from 'next-intl'
 
 interface TournamentStatsTabsProps {
 	filteredStandings: StandingRow[]
@@ -14,17 +15,18 @@ interface TournamentStatsTabsProps {
 }
 
 export function TournamentStatsTabs({ filteredStandings, onSearchChange, search, stats }: TournamentStatsTabsProps) {
+	const t = useTranslations('TournamentStats')
 	return (
 		<Tabs defaultValue="standings" className="flex flex-col gap-6">
 			<TabsList className="grid h-auto w-full grid-cols-3">
 				<TabsTrigger value="standings" className="gap-2">
-					<Trophy data-icon="inline-start" aria-hidden="true" /> Standings
+					<Trophy data-icon="inline-start" aria-hidden="true" /> {t('standings')}
 				</TabsTrigger>
 				<TabsTrigger value="captains" className="gap-2">
-					<Crown data-icon="inline-start" aria-hidden="true" /> Captains
+					<Crown data-icon="inline-start" aria-hidden="true" /> {t('captains')}
 				</TabsTrigger>
 				<TabsTrigger value="chips" className="gap-2">
-					<Star data-icon="inline-start" aria-hidden="true" /> Chips
+					<Star data-icon="inline-start" aria-hidden="true" /> {t('chips')}
 				</TabsTrigger>
 			</TabsList>
 			<TabsContent value="standings" className="mt-0">

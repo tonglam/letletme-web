@@ -7,6 +7,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { X } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 interface PlayerSlotProps {
 	label: string
@@ -30,11 +31,13 @@ function RecentPlayers({
 	onSelect: (player: PlayerDirectoryOption) => void
 	onClear: () => void
 }) {
+	const t = useTranslations('PlayerStats')
+
 	if (players.length === 0) return null
 
 	return (
 		<div className="mt-2 flex flex-wrap items-center gap-2">
-			<span className="shrink-0 text-xs text-muted-foreground">Recent:</span>
+			<span className="shrink-0 text-xs text-muted-foreground">{t('recent')}</span>
 			{players.map((player) => (
 				<Button
 					key={player.id}
@@ -49,7 +52,7 @@ function RecentPlayers({
 				</Button>
 			))}
 			<Button type="button" variant="ghost" size="sm" onClick={onClear} className="h-7 px-2 text-xs">
-				Clear recent
+				{t('clearRecent')}
 			</Button>
 		</div>
 	)
@@ -65,16 +68,18 @@ function PlayerSlot({
 	onClearRecent,
 	onClearSelection,
 }: PlayerSlotProps) {
+	const t = useTranslations('PlayerStats')
+
 	return (
 		<section aria-label={label}>
 			<div className="mb-2 flex items-center justify-between">
 				<p className="text-sm text-muted-foreground">
-					{label}{optional ? ' (optional)' : ''}
+					{label}{optional ? ` (${t('optional')})` : ''}
 				</p>
 				{selectedPlayer && onClearSelection ? (
 					<Button type="button" variant="ghost" size="sm" onClick={onClearSelection}>
 						<X data-icon="inline-start" />
-						Remove
+						{t('remove')}
 					</Button>
 				) : null}
 			</div>
@@ -99,15 +104,17 @@ export function PlayerSelectionPanel({
 	first: Omit<PlayerSlotProps, 'label' | 'optional'>
 	second: Omit<PlayerSlotProps, 'label' | 'optional'>
 }) {
+	const t = useTranslations('PlayerStats')
+
 	return (
 		<div className="mb-6 flex flex-col gap-4">
-			<PlayerSlot label="Player 1" {...first} />
+			<PlayerSlot label={t('playerOne')} {...first} />
 			<div className="flex items-center gap-3" aria-hidden="true">
 				<Separator className="flex-1" />
-				<span className="text-xs font-medium text-muted-foreground">vs</span>
+				<span className="text-xs font-medium text-muted-foreground">{t('versus')}</span>
 				<Separator className="flex-1" />
 			</div>
-			<PlayerSlot label="Player 2" optional {...second} />
+			<PlayerSlot label={t('playerTwo')} optional {...second} />
 		</div>
 	)
 }

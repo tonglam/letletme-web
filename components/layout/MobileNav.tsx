@@ -18,15 +18,16 @@ import {
 } from "@/components/ui/sheet";
 import { signOut } from "@/lib/auth-client";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { ChevronDown, LogOut, Menu, Settings, UserCircle } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { menuItems } from "./config";
 
 export function MobileNav({ user }: { user: NavigationUser | null }) {
   const router = useRouter();
+  const t = useTranslations("Navigation");
   const hydrated = useHydrated();
   const [signingOut, setSigningOut] = useState(false);
   const [openCollapsible, setOpenCollapsible] = useState<string | null>(null);
@@ -55,12 +56,12 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
             aria-busy={!hydrated}
           >
             <Menu aria-hidden="true" />
-            <span className="sr-only">Open navigation menu</span>
+            <span className="sr-only">{t("openMenu")}</span>
           </Button>
         </SheetTrigger>
         <SheetContent side="right" className="w-[300px] sm:w-[400px] flex flex-col">
           <SheetHeader>
-            <SheetTitle>Menu</SheetTitle>
+            <SheetTitle>{t("menu")}</SheetTitle>
           </SheetHeader>
 
           <div className="flex-1 overflow-y-auto">
@@ -75,7 +76,7 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
                     <Button variant="ghost" className="w-full justify-between" size="lg">
 						<div className="flex items-center gap-2">
                         <item.icon data-icon="inline-start" />
-                        {item.label}
+                        {t(item.labelKey)}
                       </div>
                       <ChevronDown
 						className={cn("transition-transform",
@@ -86,9 +87,9 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
                   </CollapsibleTrigger>
                   <CollapsibleContent className="flex flex-col gap-2 px-4 py-2">
                     {item.items.map((subItem) => (
-                      <SheetClose key={subItem.label} asChild>
+                      <SheetClose key={subItem.labelKey} asChild>
                         <Button variant="ghost" className="w-full justify-start text-sm" asChild>
-                          <Link href={subItem.href}>{subItem.label}</Link>
+                          <Link href={subItem.href}>{t(subItem.labelKey)}</Link>
                         </Button>
                       </SheetClose>
                     ))}
@@ -118,7 +119,7 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
                   <Button variant="ghost" className="w-full justify-start" asChild>
                     <Link href="/profile">
                       <Settings data-icon="inline-start" />
-                      Profile settings
+                      {t("profileSettings")}
                     </Link>
                   </Button>
                 </SheetClose>
@@ -129,7 +130,7 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
                   disabled={signingOut}
                 >
                   <LogOut data-icon="inline-start" />
-                  {signingOut ? "Signing out…" : "Sign out"}
+                  {signingOut ? t("signingOut") : t("signOut")}
                 </Button>
               </div>
             ) : (
@@ -137,7 +138,7 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
                 <Button variant="ghost" className="w-full justify-start" asChild>
                   <Link href="/auth/login">
                     <UserCircle data-icon="inline-start" />
-                    Login
+                    {t("login")}
                   </Link>
                 </Button>
               </SheetClose>

@@ -12,6 +12,7 @@ import { Player } from "@/types/player";
 import { PlayerDetail } from "@/types/player-detail";
 import { CheckCircle2, Clock, Play } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { PlayerDetailModal } from "./PlayerDetailModal";
 
 interface PlayerRowProps {
@@ -115,13 +116,29 @@ const statusConfig = {
 };
 
 export function PlayerRow({ player }: PlayerRowProps) {
+  const t = useTranslations("LivePoints");
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const StatusIcon = statusConfig[player.playingStatus].icon;
   const roleLabel = player.isBench
     ? player.isBenchBoostActive
-      ? "Bench (BB)"
-      : "Bench"
-    : "Start XI";
+      ? t("benchBoostRole")
+      : t("bench")
+    : t("startXi");
+
+  const statDescriptions: Record<string, string> = {
+    "Minutes Played": t("minutesPlayed"),
+    "Expected Goals Conceded": t("expectedGoalsConceded"),
+    "Clean Sheets": t("cleanSheets"),
+    "Saves": t("saves"),
+    "Penalties Saved": t("penaltiesSaved"),
+    "Yellow Cards": t("yellowCards"),
+    "Red Cards": t("redCards"),
+    "Goals": t("goals"),
+    "Assists": t("assists"),
+    "Expected Goal Involvements": t("expectedGoalInvolvements"),
+    "Expected Goals": t("expectedGoals"),
+    "Expected Assists": t("expectedAssists"),
+  };
 
   const stats = useMemo(() => {
     return positionStats[player.position];
@@ -263,7 +280,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
         )}
         role="button"
         tabIndex={0}
-        aria-label={`View details for ${player.name}`}
+        aria-label={t("viewPlayer", { player: player.name })}
         onClick={() => setIsDetailModalOpen(true)}
         onKeyDown={event => {
           if (event.key === "Enter" || event.key === " ") {
@@ -323,14 +340,14 @@ export function PlayerRow({ player }: PlayerRowProps) {
                     <div
                       tabIndex={0}
                       className="rounded p-1.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label={`${stat.description}: ${player.stats[stat.key] || 0}`}
+                    aria-label={t("statValue", { stat: statDescriptions[stat.description] ?? stat.description, value: player.stats[stat.key] || 0 })}
                     >
                       <div className="text-muted-foreground mb-1.5 text-center font-medium">{stat.label}</div>
                       <div className="text-center">{player.stats[stat.key] || 0}</div>
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>{stat.description}: {player.stats[stat.key] || 0}</p>
+                    <p>{t("statValue", { stat: statDescriptions[stat.description] ?? stat.description, value: player.stats[stat.key] || 0 })}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -343,7 +360,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
                   <div
                     tabIndex={0}
                     className="w-10 rounded p-1.5 text-right focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-12 md:w-16"
-                    aria-label={`Total points: ${player.stats.points}. Bonus: ${player.stats.bonusPoints}`}
+                    aria-label={t("pointsAndBonus", { points: player.stats.points, bonus: player.stats.bonusPoints })}
                   >
                   <div className="text-muted-foreground text-xs font-medium">PTS</div>
                   <div className="font-bold text-xs sm:text-sm">
@@ -351,15 +368,15 @@ export function PlayerRow({ player }: PlayerRowProps) {
                   </div>
                   {player.stats.bonusPoints > 0 && (
                     <div className="text-[10px] sm:text-xs text-primary font-medium">
-                      BONUS +{player.stats.bonusPoints}
+                      {t("bonusLabel", { points: player.stats.bonusPoints })}
                     </div>
                   )}
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
-                <p>Total points: {player.stats.points}</p>
+                <p>{t("statValue", { stat: t("totalPoints"), value: player.stats.points })}</p>
                 {player.stats.bonusPoints > 0 && (
-                  <p>Bonus: {player.stats.bonusPoints}</p>
+                  <p>{t("bonusValue", { points: player.stats.bonusPoints })}</p>
                 )}
                 </TooltipContent>
               </Tooltip>

@@ -13,6 +13,7 @@ import {
 	type TournamentEventResultsResponse,
 } from '@/lib/graphql/operations/tournaments'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { fetchPlayerMetaByIds } from '../_lib/tournament-stats-data'
 import {
 	buildTournamentStats,
@@ -49,6 +50,7 @@ export function useTournamentStats({
 	initialCurrentRows,
 	initialError,
 }: TournamentStatsClientProps) {
+	const t = useTranslations('TournamentStats')
 	const initialSelectedTournament =
 		initialTournaments.find((item) => String(item.id) === initialSelectedTournamentId) ?? null
 	const initialStats =
@@ -124,7 +126,7 @@ export function useTournamentStats({
 				setSelectedTournamentId((previous) => previous || String(data.entryTournaments[0]?.id ?? ''))
 			} catch (loadError) {
 				console.error('Failed to bootstrap tournament stats:', loadError)
-				if (!cancelled) setError('The tournament list could not be loaded. Please try again.')
+				if (!cancelled) setError(t('listFailed'))
 			} finally {
 				if (!cancelled) setIsBootstrapping(false)
 			}
@@ -134,7 +136,7 @@ export function useTournamentStats({
 		return () => {
 			cancelled = true
 		}
-	}, [entryId, initialTournaments.length])
+	}, [entryId, initialTournaments.length, t])
 
 	useEffect(() => {
 		if (isBootstrapping || !selectedTournament) return
@@ -237,7 +239,7 @@ export function useTournamentStats({
 				if (!cancelled) {
 					setTournamentStats(null)
 					setRankingSummary(null)
-					setError('Tournament statistics are temporarily unavailable. Please try again.')
+					setError(t('loadFailed'))
 				}
 			} finally {
 				if (!cancelled) setIsLoading(false)
@@ -248,7 +250,7 @@ export function useTournamentStats({
 		return () => {
 			cancelled = true
 		}
-	}, [entryId, initialCurrentGameweek, isBootstrapping, selectedTournament])
+	}, [entryId, initialCurrentGameweek, isBootstrapping, selectedTournament, t])
 
 	return {
 		dataGameweek,

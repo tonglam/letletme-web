@@ -8,6 +8,7 @@ import {
 	type LiveScoresResponse,
 } from '@/lib/graphql/operations/live'
 import { normalizePosition } from '@/lib/utils'
+import { useTranslations } from 'next-intl'
 
 interface TeamOfTheWeekSectionProps {
 	currentEventId: number | null
@@ -27,12 +28,13 @@ function TeamOfTheWeekCard({
 	currentEventId,
 	teamOfTheWeek,
 	isLoading = false,
-	error,
+	hasError,
 }: TeamOfTheWeekSectionProps & {
 	teamOfTheWeek: PlayerListItem[]
 	isLoading?: boolean
-	error?: string | null
+	hasError?: boolean
 }) {
+	const t = useTranslations('Home')
 	return (
 		<Card className="rounded-none sm:rounded-lg p-4 sm:p-6 lg:p-8">
 			<div className="flex items-center justify-between mb-6">
@@ -40,16 +42,16 @@ function TeamOfTheWeekCard({
 					<span className="bg-primary/10 text-primary px-3 py-1.5 rounded-lg text-sm font-semibold">
 						{currentEventId ? `GW${currentEventId}` : 'GW'}
 					</span>
-					<span>Team of the Week</span>
+					<span>{t('teamOfWeek')}</span>
 				</h2>
 				{teamOfTheWeek.length > 0 && !isLoading && (
-					<Badge variant="secondary">{teamOfTheWeek.length} players</Badge>
+					<Badge variant="secondary">{t('playerCount', { count: teamOfTheWeek.length })}</Badge>
 				)}
 			</div>
 
-			{error && (
+			{hasError && (
 				<div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-					<p className="text-sm text-destructive">{error}</p>
+					<p className="text-sm text-destructive">{t('teamOfWeekFailed')}</p>
 				</div>
 			)}
 
@@ -65,7 +67,7 @@ function TeamOfTheWeekCard({
 			) : (
 				<PlayerList
 					players={teamOfTheWeek}
-					emptyText="No team of the week data available"
+					emptyText={t('noTeamOfWeek')}
 				/>
 			)}
 		</Card>
@@ -83,7 +85,7 @@ export async function TeamOfTheWeekSection({ currentEventId }: TeamOfTheWeekSect
 	}
 
 	let players: PlayerListItem[] = []
-	let error: string | null = null
+	let hasError = false
 
 	try {
 		const scoresData = await executePublicServerQuery<LiveScoresResponse>(
@@ -115,14 +117,14 @@ export async function TeamOfTheWeekSection({ currentEventId }: TeamOfTheWeekSect
 			})
 	} catch (err) {
 		console.error('Failed to fetch team of the week:', err)
-		error = 'Failed to load team of the week'
+		hasError = true
 	}
 
 	return (
 		<TeamOfTheWeekCard
 			currentEventId={currentEventId}
 			teamOfTheWeek={players}
-			error={error}
+			hasError={hasError}
 		/>
 	)
 }

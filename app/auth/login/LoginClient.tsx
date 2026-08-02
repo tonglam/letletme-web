@@ -7,18 +7,22 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { useHydrated } from '@/hooks/use-hydrated'
+import { Link, useRouter } from '@/i18n/navigation'
+import { getSafeInternalHref, localizeHref, type AppLocale } from '@/i18n/routing'
+import { getAuthErrorKey } from '@/lib/auth-error'
 import { signIn } from '@/lib/auth-client'
 import { Gamepad } from 'lucide-react'
-import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useLocale, useTranslations } from 'next-intl'
+import { useSearchParams } from 'next/navigation'
 import { Suspense, useState } from 'react'
 
 function LoginForm() {
 	const router = useRouter()
+	const locale = useLocale() as AppLocale
+	const t = useTranslations('Auth')
 	const hydrated = useHydrated()
 	const searchParams = useSearchParams()
-	const raw = searchParams.get('next') ?? '/'
-	const next = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/'
+	const next = getSafeInternalHref(searchParams.get('next') ?? '/')
 
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
@@ -32,7 +36,7 @@ function LoginForm() {
 		const { error: err } = await signIn.email({ email, password })
 		setPending(false)
 		if (err) {
-			setError(err.message ?? 'Login failed')
+			setError(t(`errors.${getAuthErrorKey(err, 'loginFailed')}`))
 			return
 		}
 		router.push(next)
@@ -41,9 +45,9 @@ function LoginForm() {
 	const handleSocial = async (provider: 'google') => {
 		setError(null)
 		try {
-			await signIn.social({ provider, callbackURL: next })
+			await signIn.social({ provider, callbackURL: localizeHref(next, locale) })
 		} catch (err) {
-			setError(err instanceof Error ? err.message : `${provider} sign-in failed`)
+			setError(t(`errors.${getAuthErrorKey(err instanceof Error ? { message: err.message } : null, 'socialLoginFailed')}`))
 		}
 	}
 
@@ -56,9 +60,9 @@ function LoginForm() {
 
 			<Card className="w-full max-w-md p-6">
 				<div className="mb-6 text-center">
-					<h2 className="text-2xl font-bold tracking-tight">Sign in</h2>
+					<h2 className="text-2xl font-bold tracking-tight">{t('signIn')}</h2>
 					<p className="text-sm text-muted-foreground">
-						Choose a method to continue
+						{t('chooseMethod')}
 					</p>
 				</div>
 
@@ -73,7 +77,7 @@ function LoginForm() {
 
 				<form onSubmit={handleEmailLogin} className="space-y-4" aria-busy={!hydrated || pending}>
 					<div className="space-y-1">
-						<Label htmlFor="email">Email</Label>
+						<Label htmlFor="email">{t('email')}</Label>
 						<Input
 							id="email"
 							type="email"
@@ -86,12 +90,12 @@ function LoginForm() {
 					</div>
 					<div className="space-y-1">
 						<div className="flex items-center justify-between">
-							<Label htmlFor="password">Password</Label>
+							<Label htmlFor="password">{t('password')}</Label>
 							<Link
 								href="/auth/forgot-password"
 								className="text-xs text-primary underline underline-offset-4 hover:no-underline"
 							>
-								Forgot password?
+								{t('forgotPassword')}
 							</Link>
 						</div>
 						<Input
@@ -105,14 +109,14 @@ function LoginForm() {
 						/>
 					</div>
 					<Button type="submit" className="w-full" disabled={!hydrated || pending}>
-						{pending ? 'Signing in…' : 'Sign in'}
+						{pending ? t('signingIn') : t('signIn')}
 					</Button>
 				</form>
 
 				<div className="relative my-6">
 					<Separator />
 					<span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">
-						or
+						{t('or')}
 					</span>
 				</div>
 
@@ -140,15 +144,15 @@ function LoginForm() {
 							fill="#EA4335"
 						/>
 					</svg>
-					Continue with Google
+					{t('continueGoogle')}
 				</Button>
 
 				<Separator className="my-6" />
 
 				<p className="text-center text-sm text-muted-foreground">
-					Don&apos;t have an account?{' '}
+					{t('noAccount')}{' '}
 					<Link href="/auth/signup" className="text-primary underline underline-offset-4 hover:no-underline">
-						Sign up
+						{t('signUp')}
 					</Link>
 				</p>
 			</Card>

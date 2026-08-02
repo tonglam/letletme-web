@@ -2,16 +2,21 @@
 
 import { getAuthorizationSession } from '@/lib/auth'
 import {
-	FplBindingError,
+	getFplBindingErrorCode,
+	shouldRetainFplBindingChallenge,
+	type FplBindingErrorCode,
+} from '@/lib/fpl-binding-error-code'
+import {
 	confirmFplEntryBindingChallenge,
 	startFplEntryBindingChallenge,
 } from '@/lib/fpl-entry-binding'
 import { headers } from 'next/headers'
-import { redirect } from 'next/navigation' // used for unauthenticated guard
 
 export type BindResult = {
-	error?: string
-	success?: string
+	errorCode?: FplBindingErrorCode
+	success?: boolean
+	teamName?: string
+	managerName?: string
 	challengeId?: string
 	entryId?: number
 	requiredName?: string
@@ -25,19 +30,16 @@ export async function bindFplEntry(
 	const reqHeaders = await headers()
 	const session = await getAuthorizationSession(reqHeaders)
 
-	if (!session) {
-		redirect('/auth/login')
-	}
+	if (!session) return { errorCode: 'notAuthenticated' }
 
 	try {
 		const challengeId = formData.get('challengeId')
 		if (challengeId) {
-			const verified = await confirmFplEntryBindingChallenge(
-				session.user.id,
-				challengeId,
-			)
+			const verified = await confirmFplEntryBindingChallenge(session.user.id, challengeId)
 			return {
-				success: `${verified.teamName} (${verified.managerName}) verified successfully`,
+				success: true,
+				teamName: verified.teamName,
+				managerName: verified.managerName,
 				entryId: verified.entryId,
 			}
 		}
@@ -50,13 +52,18 @@ export async function bindFplEntry(
 			challengeId: challenge.id,
 			entryId: challenge.entryId,
 			requiredName: challenge.requiredName,
-			expiresAt: challenge.expiresAt,
+			 expiresAt: challenge.expiresAt,
 		}
 	} catch (error) {
+		const errorCode = getFplBindingErrorCode(error)
+		if (!prevState?.challengeId || !shouldRetainFplBindingChallenge(errorCode)) {
+			return { errorCode }
+		}
+
 		return {
-			error: error instanceof FplBindingError || error instanceof Error
-				? error.message
-				: 'Unable to verify the FPL entry',
+			...prevState,
+			success: undefined,
+			errorCode,
 		}
 	}
 }

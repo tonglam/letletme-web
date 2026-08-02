@@ -8,6 +8,7 @@ import {
 	type PlayerDetailResponse,
 } from '@/lib/graphql/operations/players'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 
 const STORAGE_VERSION = 1
 const RECENT_PLAYERS_MAX = 5
@@ -66,6 +67,7 @@ export function usePlayerDetailSlot({
 	storageKey: string
 	eventId?: number
 }) {
+	const t = useTranslations('PlayerStats')
 	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDirectoryOption | null>(null)
 	const [recentPlayers, setRecentPlayers] = useState<PlayerDirectoryOption[]>([])
 	const [playerDetail, setPlayerDetail] = useState<PlayerDetailData | null>(null)
@@ -85,7 +87,7 @@ export function usePlayerDetailSlot({
 
 	const loadPlayerDetail = useCallback(async (player: PlayerDirectoryOption) => {
 		if (!eventId) {
-			setError('The current gameweek is unavailable.')
+			setError(t('currentGameweekUnavailable'))
 			return
 		}
 		const requestId = requestIdRef.current + 1
@@ -100,18 +102,14 @@ export function usePlayerDetailSlot({
 			})
 			if (requestId !== requestIdRef.current) return
 			setPlayerDetail(response.playerDetail)
-		} catch (loadError) {
+		} catch {
 			if (requestId !== requestIdRef.current) return
 			setPlayerDetail(null)
-			setError(
-				loadError instanceof Error
-					? loadError.message
-					: 'Failed to load player data.',
-			)
+			setError(t('loadFailed'))
 		} finally {
 			if (requestId === requestIdRef.current) setIsLoading(false)
 		}
-	}, [eventId])
+	}, [eventId, t])
 
 	const selectPlayer = useCallback((player: PlayerDirectoryOption) => {
 		setSelectedPlayer(player)

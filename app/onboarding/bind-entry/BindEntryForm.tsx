@@ -4,29 +4,31 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/navigation'
+import { useTranslations } from 'next-intl'
 import { useEffect, useActionState } from 'react'
 import { toast } from 'sonner'
 import { bindFplEntry } from './actions'
 
 export default function BindEntryForm() {
 	const router = useRouter()
+	const t = useTranslations('Onboarding')
 	const [state, formAction, isPending] = useActionState(bindFplEntry, null)
 
 	useEffect(() => {
-		if (state?.success) {
-			toast.success(state.success)
+		if (state?.success && state.teamName && state.managerName) {
+			toast.success(t('verified', { teamName: state.teamName, managerName: state.managerName }))
 			router.push('/')
 		}
-	}, [state, router])
+	}, [state, router, t])
 
 	return (
 		<form action={formAction} className="space-y-4">
-			{state?.error && (
+			{state?.errorCode && (
 				<Alert
 					variant="destructive"
 				>
-					<AlertDescription>{state.error}</AlertDescription>
+					<AlertDescription>{t(`errors.${state.errorCode}`)}</AlertDescription>
 				</Alert>
 			)}
 
@@ -36,31 +38,31 @@ export default function BindEntryForm() {
 					<Alert>
 						<AlertDescription className="space-y-2">
 							<p>
-								In FPL, temporarily change team <strong>{state.entryId}</strong> to this exact name:
+								{t('changeTeamName', { entryId: state.entryId ?? '—' })}
 							</p>
 							<p className="font-mono text-lg font-semibold">{state.requiredName}</p>
-							<p className="text-xs">Save the name in FPL, then confirm here within 15 minutes.</p>
+							<p className="text-xs">{t('saveAndConfirm')}</p>
 						</AlertDescription>
 					</Alert>
 					<Button type="submit" className="w-full" disabled={isPending}>
-						{isPending ? 'Checking FPL…' : 'I changed the team name — verify'}
+						{isPending ? t('checkingFpl') : t('changedVerify')}
 					</Button>
 				</>
 			) : (
 				<>
 					<div className="space-y-1">
-						<Label htmlFor="entryId">FPL Entry ID</Label>
+						<Label htmlFor="entryId">{t('entryId')}</Label>
 						<Input
 							id="entryId"
 							name="entryId"
 							type="number"
 							min={1}
 							required
-							placeholder="e.g. 123456"
+							placeholder={t('entryPlaceholder')}
 						/>
 					</div>
 					<Button type="submit" className="w-full" disabled={isPending}>
-						{isPending ? 'Starting challenge…' : 'Verify team ownership'}
+						{isPending ? t('startingChallenge') : t('verifyOwnership')}
 					</Button>
 				</>
 			)}

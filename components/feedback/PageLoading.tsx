@@ -1,11 +1,15 @@
 import PageShell from '@/components/layout/PageShell'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useTranslations } from 'next-intl'
 
-export function PageLoading({ label = 'Loading page' }: { label?: string }) {
+
+export function PageLoading({ label }: { label?: string }) {
+	const t = useTranslations('Common')
+	const accessibleLabel = label ?? t('loadingPage')
 	return (
 		<PageShell>
-			<div className="mx-auto w-full max-w-4xl px-4 py-8" aria-busy="true" aria-label={label}>
+			<div className="mx-auto w-full max-w-4xl px-4 py-8" aria-busy="true" aria-label={accessibleLabel}>
 				<div className="mb-8 flex items-center justify-between gap-4">
 					<div className="flex flex-col gap-3">
 						<Skeleton className="h-4 w-24" />
@@ -21,7 +25,7 @@ export function PageLoading({ label = 'Loading page' }: { label?: string }) {
 						))}
 					</div>
 				</Card>
-				<span className="sr-only">{label}</span>
+				<span className="sr-only">{accessibleLabel}</span>
 			</div>
 		</PageShell>
 	)

@@ -9,9 +9,9 @@ import {
 	type LiveCalcData,
 	type LiveCalcDataResponse,
 } from '@/lib/graphql/operations/live'
-import { formatCompactNumber } from '@/lib/utils'
 import type { TournamentEntry } from '@/types/tournament'
 import { useEffect, useState } from 'react'
+import { useFormatter, useTranslations } from 'next-intl'
 
 interface EntryCompareSheetProps {
 	entries: [TournamentEntry, TournamentEntry]
@@ -45,11 +45,6 @@ function elementTypeLabel(elementType: number, position: number): string {
 		case 4: return 'FWD'
 		default: return '—'
 	}
-}
-
-function formatOR(rank?: number) {
-	if (!rank || rank <= 0) return '—'
-	return formatCompactNumber(rank).replace('K', 'k').replace('M', 'm').replace('B', 'b')
 }
 
 function ChipBadges({ chips }: { chips: { bench: boolean; triple: boolean; wildcard: boolean } }) {
@@ -150,6 +145,8 @@ function PlayerCompareRow({ leftPick, rightPick, posLabel, isBench }: PlayerComp
 }
 
 export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: EntryCompareSheetProps) {
+	const t = useTranslations('LiveTournament')
+	const format = useFormatter()
 	const [liveData, setLiveData] = useState<[LiveCalcData | null, LiveCalcData | null]>([null, null])
 	const [isLoading, setIsLoading] = useState(false)
 
@@ -204,6 +201,7 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 		: [...entryB.picks].sort((a, b) => a.position - b.position)
 
 	const maxPicks = Math.max(picksA.length, picksB.length)
+	const formatOR = (rank?: number) => !rank || rank <= 0 ? '—' : format.number(rank, { notation: 'compact' })
 
 	return (
 		<Sheet open={open} onOpenChange={onOpenChange}>
@@ -214,16 +212,16 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 				<SheetHeader className="p-4 pb-3 border-b">
 					<SheetTitle className="text-sm">
 						<span className="text-primary">{entryA.teamName}</span>
-						<span className="text-muted-foreground mx-2">vs</span>
+						<span className="text-muted-foreground mx-2">{t('versus')}</span>
 						<span className="text-primary">{entryB.teamName}</span>
 					</SheetTitle>
-					<p className="text-xs text-muted-foreground">GW{gameweek} Comparison</p>
+					<p className="text-xs text-muted-foreground">{t('comparison', { gameweek })}</p>
 				</SheetHeader>
 
 				<div className="flex-1 overflow-y-auto">
 					{/* Overview section */}
 					<div className="px-3 pt-3 pb-1">
-						<p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1 px-1">Overview</p>
+						<p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1 px-1">{t('overview')}</p>
 						<div className="border rounded-lg overflow-hidden">
 							{/* Entry headers */}
 							<div className="grid grid-cols-[1fr_auto_1fr] bg-muted/30 px-3 py-2">
@@ -234,45 +232,45 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 
 							<div className="px-3">
 								<OverviewRow
-									label="Manager"
+									label={t('manager')}
 									leftValue={<span className="text-foreground text-xs">{entryA.managerName}</span>}
 									rightValue={<span className="text-foreground text-xs">{entryB.managerName}</span>}
 								/>
 								<OverviewRow
-									label="GW Pts"
+									label={t('gameweekPointsShort')}
 									leftValue={costA > 0 ? `${gwPtsA} (-${costA})` : gwPtsA}
 									rightValue={costB > 0 ? `${gwPtsB} (-${costB})` : gwPtsB}
 									leftWins={gwPtsA > gwPtsB}
 									rightWins={gwPtsB > gwPtsA}
 								/>
 								<OverviewRow
-									label="GW Net"
+									label={t('gameweekNetShort')}
 									leftValue={gwNetA}
 									rightValue={gwNetB}
 									leftWins={gwNetA > gwNetB}
 									rightWins={gwNetB > gwNetA}
 								/>
 								<OverviewRow
-									label="Total Pts"
+									label={t('totalPointsShort')}
 									leftValue={totalA}
 									rightValue={totalB}
 									leftWins={totalA > totalB}
 									rightWins={totalB > totalA}
 								/>
 								<OverviewRow
-									label="Overall Rank"
+									label={t('overallRank')}
 									leftValue={formatOR(entryA.overallRank)}
 									rightValue={formatOR(entryB.overallRank)}
 									leftWins={!!entryA.overallRank && !!entryB.overallRank && entryA.overallRank < entryB.overallRank}
 									rightWins={!!entryA.overallRank && !!entryB.overallRank && entryB.overallRank < entryA.overallRank}
 								/>
 								<OverviewRow
-									label="Chip"
+									label={t('chip')}
 									leftValue={<ChipBadges chips={entryA.chips} />}
 									rightValue={<ChipBadges chips={entryB.chips} />}
 								/>
 								<OverviewRow
-									label="Played"
+									label={t('played')}
 									leftValue={`${entryA.playersPlayed}/${entryA.playersPlayed + entryA.playersToPlay}`}
 									rightValue={`${entryB.playersPlayed}/${entryB.playersPlayed + entryB.playersToPlay}`}
 									leftWins={entryA.playersPlayed > entryB.playersPlayed}
@@ -284,7 +282,7 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 
 					{/* Squad comparison section */}
 					<div className="px-3 pt-4 pb-4">
-						<p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1 px-1">Squad Comparison</p>
+						<p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1 px-1">{t('squadComparison')}</p>
 
 						{isLoading ? (
 							<div className="border rounded-lg overflow-hidden">
@@ -307,7 +305,7 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 
 								{/* Starting XI label */}
 								<div className="px-3 py-1 bg-muted/10 border-b">
-									<span className="text-[10px] text-muted-foreground font-medium">Starting XI</span>
+									<span className="text-[10px] text-muted-foreground font-medium">{t('startingEleven')}</span>
 								</div>
 
 								{Array.from({ length: Math.min(11, maxPicks) }).map((_, i) => {
@@ -359,7 +357,7 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 								{/* Bench label */}
 								{maxPicks > 11 && (
 									<div className="px-3 py-1 bg-accent/30 border-b border-t">
-										<span className="text-[10px] text-muted-foreground font-medium">Substitutes</span>
+										<span className="text-[10px] text-muted-foreground font-medium">{t('substitutes')}</span>
 									</div>
 								)}
 

@@ -1,3 +1,5 @@
+import { stripLocaleFromPathname } from '@/i18n/routing'
+
 const WEB_VITAL_NAMES = new Set(['CLS', 'FCP', 'FID', 'INP', 'LCP', 'TTFB'])
 const WEB_VITAL_RATINGS = new Set(['good', 'needs-improvement', 'poor'])
 const DEVICE_GROUPS = new Set(['mobile', 'tablet', 'desktop'])
@@ -21,7 +23,8 @@ const routePatterns: Array<[RegExp, string]> = [
 
 export const normalizeMetricPage = (pathname: string) => {
 	const safePath = pathname.startsWith('/') ? pathname.split('?')[0].split('#')[0] : '/unknown'
-	const normalized = safePath.replace(/\/{2,}/g, '/').slice(0, 128)
+	const unlocalizedPath = stripLocaleFromPathname(safePath)
+	const normalized = unlocalizedPath.replace(/\/{2,}/g, '/').slice(0, 128)
 	return routePatterns.find(([pattern]) => pattern.test(normalized))?.[1] ?? normalized
 }
 

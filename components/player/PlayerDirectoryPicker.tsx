@@ -20,6 +20,7 @@ import { resolveTeamDisplayName } from "@/lib/team-display";
 import { type Position } from "@/types/common";
 import { Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 type PositionFilter = Position | "ALL";
 type TeamFilter = "ALL" | string;
@@ -97,6 +98,7 @@ export function PlayerDirectoryPicker({
   excludedPlayerIds = [],
   className = "",
 }: PlayerDirectoryPickerProps) {
+  const t = useTranslations("PlayerDirectory");
   const [teams, setTeams] = useState<TeamDirectoryOption[]>([]);
   const [players, setPlayers] = useState<PlayerDirectoryOption[]>([]);
   const [isTeamsLoading, setIsTeamsLoading] = useState(false);
@@ -137,7 +139,7 @@ export function PlayerDirectoryPicker({
         console.error("Failed to fetch teams directory:", fetchError);
 
         if (!isCancelled) {
-          setError("Failed to load team directory.");
+          setError(t("teamsFailed"));
           setTeams([]);
         }
       } finally {
@@ -152,7 +154,7 @@ export function PlayerDirectoryPicker({
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [t]);
 
   const selectedTeam = useMemo(
     () => teams.find((team) => team.shortName === teamFilter) ?? null,
@@ -233,7 +235,7 @@ export function PlayerDirectoryPicker({
         console.error("Failed to fetch players directory:", fetchError);
 
         if (!isCancelled) {
-          setError("Failed to load player directory.");
+          setError(t("playersFailed"));
           setPlayers([]);
         }
       } finally {
@@ -248,7 +250,7 @@ export function PlayerDirectoryPicker({
     return () => {
       isCancelled = true;
     };
-  }, [positionFilter, searchTerm, selectedTeam]);
+  }, [positionFilter, searchTerm, selectedTeam, t]);
 
   const excludedIds = useMemo(
     () => new Set(excludedPlayerIds),
@@ -300,21 +302,21 @@ export function PlayerDirectoryPicker({
           onValueChange={(value) => setTeamFilter(value)}
           disabled={isTeamsLoading}
         >
-          <SelectTrigger aria-label="Filter players by team">
+          <SelectTrigger aria-label={t("filterTeam")}>
             <SelectValue
-              placeholder={isTeamsLoading ? "Loading teams..." : "Filter by team"}
+              placeholder={isTeamsLoading ? t("loadingTeams") : t("filterTeam")}
             />
           </SelectTrigger>
           <SelectContent className="max-h-72">
             {isTeamsLoading ? (
               <SelectItem value="loading" disabled>
-                Loading teams...
+                {t("loadingTeams")}
               </SelectItem>
             ) : (
               availableTeams.map((team) => (
                 <SelectItem key={team} value={team}>
                   {team === "ALL"
-                    ? "All Teams"
+                    ? t("allTeams")
                     : resolveTeamDisplayName(
                         team,
                         teams.find((item) => item.shortName === team)?.name
@@ -329,31 +331,31 @@ export function PlayerDirectoryPicker({
           value={positionFilter}
           onValueChange={(value) => setPositionFilter(value as PositionFilter)}
         >
-          <SelectTrigger aria-label="Filter players by position">
-            <SelectValue placeholder="Filter by position" />
+          <SelectTrigger aria-label={t("filterPosition")}>
+            <SelectValue placeholder={t("filterPosition")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">All Positions</SelectItem>
-            <SelectItem value="GKP">Goalkeeper</SelectItem>
-            <SelectItem value="DEF">Defender</SelectItem>
-            <SelectItem value="MID">Midfielder</SelectItem>
-            <SelectItem value="FWD">Forward</SelectItem>
+            <SelectItem value="ALL">{t("allPositions")}</SelectItem>
+            <SelectItem value="GKP">{t("goalkeeper")}</SelectItem>
+            <SelectItem value="DEF">{t("defender")}</SelectItem>
+            <SelectItem value="MID">{t("midfielder")}</SelectItem>
+            <SelectItem value="FWD">{t("forward")}</SelectItem>
           </SelectContent>
         </Select>
 
         <div className="relative sm:col-span-2">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            aria-label="Search players by name"
+            aria-label={t("search")}
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Type player name..."
+            placeholder={t("searchPlaceholder")}
             className="pl-9 pr-9"
           />
           {searchTerm.trim().length > 0 && (
             <button
               type="button"
-              aria-label="Clear player search"
+              aria-label={t("clearSearch")}
               onClick={() => setSearchTerm("")}
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
@@ -369,15 +371,15 @@ export function PlayerDirectoryPicker({
             <div role="status" className="p-3 text-sm text-destructive">{error}</div>
           ) : !hasActiveFilter ? (
             <div className="p-3 text-sm text-muted-foreground">
-              Select a team, position, or type a name to search.
+              {t("prompt")}
             </div>
           ) : isLoading ? (
             <div className="p-3 text-sm text-muted-foreground">
-              Loading players...
+              {t("loadingPlayers")}
             </div>
           ) : visiblePlayers.length === 0 ? (
             <div className="p-3 text-sm text-muted-foreground">
-              No players match current filters.
+              {t("noPlayers")}
             </div>
           ) : (
             visiblePlayers.map((player) => (
@@ -405,7 +407,7 @@ export function PlayerDirectoryPicker({
 
       {hasActiveFilter && (
         <div className="mt-2 text-xs text-muted-foreground">
-          {visiblePlayers.length} of {filteredPlayers.length} players
+          {t("resultCount", { visible: visiblePlayers.length, total: filteredPlayers.length })}
         </div>
       )}
     </div>

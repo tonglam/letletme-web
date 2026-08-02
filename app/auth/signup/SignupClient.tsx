@@ -6,13 +6,18 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useHydrated } from '@/hooks/use-hydrated'
+import { Link } from '@/i18n/navigation'
+import { localizePathname, type AppLocale } from '@/i18n/routing'
 import { signUp } from '@/lib/auth-client'
+import { getAuthErrorKey } from '@/lib/auth-error'
 import { Gamepad } from 'lucide-react'
-import Link from 'next/link'
+import { useLocale, useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 export default function SignupClient() {
 	const hydrated = useHydrated()
+	const t = useTranslations('Auth')
+	const locale = useLocale() as AppLocale
 	const [name, setName] = useState('')
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
@@ -25,18 +30,23 @@ export default function SignupClient() {
 		e.preventDefault()
 		setError(null)
 		if (password !== confirm) {
-			setError('Passwords do not match')
+			setError(t('errors.passwordMismatch'))
 			return
 		}
 		if (password.length < 10) {
-			setError('Password must be at least 10 characters')
+			setError(t('errors.passwordTooShort'))
 			return
 		}
 		setPending(true)
-		const { error: err } = await signUp.email({ name, email, password })
+		const { error: err } = await signUp.email({
+			name,
+			email,
+			password,
+			callbackURL: localizePathname('/auth/verify-email', locale),
+		})
 		setPending(false)
 		if (err) {
-			setError(err.message ?? 'Sign up failed')
+			setError(t(`errors.${getAuthErrorKey(err, 'signupFailed')}`))
 			return
 		}
 		setSent(true)
@@ -52,26 +62,25 @@ export default function SignupClient() {
 			<Card className="w-full max-w-md p-6">
 				{sent ? (
 					<div className="text-center space-y-2">
-						<h2 className="text-xl font-bold">Check your email</h2>
+						<h2 className="text-xl font-bold">{t('checkEmail')}</h2>
 						<p className="text-sm text-muted-foreground">
-							A verification link has been sent to <strong>{email}</strong>.
-							Click it to activate your account.
+							{t('verificationSent', { email })}
 						</p>
 						<Link
 							href="/auth/login"
 							className="mt-4 block text-sm text-primary underline underline-offset-4 hover:no-underline"
 						>
-							Back to login
+							{t('backToLogin')}
 						</Link>
 					</div>
 				) : (
 					<>
 						<div className="mb-6 text-center">
 							<h2 className="text-2xl font-bold tracking-tight">
-								Create account
+								{t('createAccount')}
 							</h2>
 							<p className="text-sm text-muted-foreground">
-								Sign up with email and password
+								{t('signupInstructions')}
 							</p>
 						</div>
 
@@ -86,7 +95,7 @@ export default function SignupClient() {
 
 						<form onSubmit={handleSubmit} className="space-y-4" aria-busy={!hydrated || pending}>
 							<div className="space-y-1">
-								<Label htmlFor="name">Name</Label>
+								<Label htmlFor="name">{t('name')}</Label>
 								<Input
 									id="name"
 									type="text"
@@ -98,7 +107,7 @@ export default function SignupClient() {
 								/>
 							</div>
 							<div className="space-y-1">
-								<Label htmlFor="email">Email</Label>
+								<Label htmlFor="email">{t('email')}</Label>
 								<Input
 									id="email"
 									type="email"
@@ -110,7 +119,7 @@ export default function SignupClient() {
 								/>
 							</div>
 							<div className="space-y-1">
-								<Label htmlFor="password">Password</Label>
+								<Label htmlFor="password">{t('password')}</Label>
 								<Input
 									id="password"
 									type="password"
@@ -122,11 +131,11 @@ export default function SignupClient() {
 									onChange={e => setPassword(e.target.value)}
 								/>
 								<p className="text-xs text-muted-foreground">
-									Minimum 10 characters
+									{t('minimumPassword')}
 								</p>
 							</div>
 							<div className="space-y-1">
-								<Label htmlFor="confirm">Confirm password</Label>
+								<Label htmlFor="confirm">{t('confirmPassword')}</Label>
 								<Input
 									id="confirm"
 									type="password"
@@ -138,14 +147,14 @@ export default function SignupClient() {
 								/>
 							</div>
 							<Button type="submit" className="w-full" disabled={!hydrated || pending}>
-								{pending ? 'Creating account…' : 'Create account'}
+								{pending ? t('creatingAccount') : t('createAccount')}
 							</Button>
 						</form>
 
 						<p className="text-center text-sm text-muted-foreground mt-4">
-							Already have an account?{' '}
+							{t('alreadyAccount')}{' '}
 							<Link href="/auth/login" className="text-primary underline underline-offset-4 hover:no-underline">
-								Sign in
+								{t('signIn')}
 							</Link>
 						</p>
 					</>

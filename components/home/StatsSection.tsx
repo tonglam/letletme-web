@@ -4,8 +4,9 @@ import type {
 	EventOverallResult,
 } from '@/lib/graphql/operations/events'
 import homeStats from '@/lib/home-stats'
-import { formatChipName, formatCompactNumber } from '@/lib/utils'
+import { formatCompactNumber } from '@/lib/utils'
 import { ArrowRightCircle, Crown, Trophy, Zap } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 interface StatsSectionProps {
 	currentEventId: number | null
@@ -20,6 +21,7 @@ const iconBgs = [
 ]
 
 export function StatsSection({ currentEventId, overallResult }: StatsSectionProps) {
+	const t = useTranslations('Home')
 	if (!overallResult || !currentEventId) {
 		return (
 			<Card className="rounded-none sm:rounded-lg p-4 sm:p-6 lg:p-8">
@@ -28,11 +30,11 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 						<span className="bg-primary/10 text-primary px-3 py-1.5 rounded-lg text-sm font-semibold">
 							GW
 						</span>
-						<span>Gameweek Stats</span>
+						<span>{t('gameweekStats')}</span>
 					</h2>
 				</div>
 				<div className="text-center py-12 text-muted-foreground">
-					<p className="text-sm">No stats available</p>
+					<p className="text-sm">{t('noStats')}</p>
 				</div>
 			</Card>
 		)
@@ -42,28 +44,34 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 		(max, chip) => (!max || chip.numberPlayed > max.numberPlayed ? chip : max),
 		null,
 	)
+	const chipLabels: Record<string, string> = {
+		bboost: t('benchBoost'),
+		'3xc': t('tripleCaptain'),
+		wildcard: t('wildcard'),
+		freehit: t('freeHit'),
+	}
 
 	const stats = [
 		{
-			label: 'Highest Score',
+			label: t('highestScore'),
 			value: overallResult.highestScore?.toString() ?? '0',
 			icon: <Trophy className="w-5 h-5 text-yellow-500" />,
 		},
 		{
-			label: 'Top Scorer',
+			label: t('topScorer'),
 			value: homeStats.formatTopScorerValue(overallResult.topElementInfo),
 			icon: <Zap className="w-5 h-5 text-blue-500" />,
 		},
 		{
-			label: 'Most Selected Captain',
+			label: t('mostSelectedCaptain'),
 			value: overallResult.mostCaptainedPlayer?.webName ?? 'N/A',
 			icon: <Crown className="w-5 h-5 text-purple-500" />,
 		},
 		{
-			label: 'Top Chip Played',
+			label: t('topChipPlayed'),
 			value: mostPlayedChip
-				? `${formatChipName(mostPlayedChip.chipName)} (${formatCompactNumber(mostPlayedChip.numberPlayed)})`
-				: 'N/A',
+				? `${chipLabels[mostPlayedChip.chipName] ?? mostPlayedChip.chipName ?? t('unknownChip')} (${formatCompactNumber(mostPlayedChip.numberPlayed)})`
+				: t('unknownChip'),
 			icon: <ArrowRightCircle className="w-5 h-5 text-green-500" />,
 		},
 	]
@@ -75,7 +83,7 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 					<span className="bg-primary/10 text-primary px-3 py-1.5 rounded-lg text-sm font-semibold">
 						{`GW${currentEventId}`}
 					</span>
-					<span>Gameweek Stats</span>
+					<span>{t('gameweekStats')}</span>
 				</h2>
 			</div>
 			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

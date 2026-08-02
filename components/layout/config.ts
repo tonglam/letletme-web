@@ -8,10 +8,21 @@ import {
 
 interface MenuItem {
 	id: string
-	label: string
+	labelKey: 'live' | 'tournament' | 'stats' | 'data'
 	icon: typeof LucideIcon
 	items: {
-		label: string
+		labelKey:
+			| 'livePoints'
+			| 'liveTournaments'
+			| 'liveMatches'
+			| 'myTournaments'
+			| 'createTournaments'
+			| 'gameweekStats'
+			| 'teamStats'
+			| 'tournamentStats'
+			| 'priceChanges'
+			| 'selections'
+			| 'playerStats'
 		href: string
 	}[]
 }
@@ -19,41 +30,41 @@ interface MenuItem {
 export const menuItems: MenuItem[] = [
 	{
 		id: 'live',
-		label: 'Live',
+		labelKey: 'live',
 		icon: Timer,
 		items: [
-			{ label: 'Live Points', href: '/live/points' },
-			{ label: 'Live Tournaments', href: '/live/tournament' },
-			{ label: 'Live Matches', href: '/live/matches' }
+			{ labelKey: 'livePoints', href: '/live/points' },
+			{ labelKey: 'liveTournaments', href: '/live/tournament' },
+			{ labelKey: 'liveMatches', href: '/live/matches' }
 		]
 	},
 	{
 		id: 'tournament',
-		label: 'Tournament',
+		labelKey: 'tournament',
 		icon: Medal,
 		items: [
-			{ label: 'My Tournaments', href: '/tournament/list?mine=true' },
-			{ label: 'Create Tournaments', href: '/tournament/create' }
+			{ labelKey: 'myTournaments', href: '/tournament/list?mine=true' },
+			{ labelKey: 'createTournaments', href: '/tournament/create' }
 		]
 	},
 	{
 		id: 'stats',
-		label: 'Stats',
+		labelKey: 'stats',
 		icon: Trophy,
 		items: [
-			{ label: 'Gameweek Stats', href: '/stats/gameweek' },
-			{ label: 'Team Stats', href: '/stats/team' },
-			{ label: 'Tournament Stats', href: '/stats/tournament' }
+			{ labelKey: 'gameweekStats', href: '/stats/gameweek' },
+			{ labelKey: 'teamStats', href: '/stats/team' },
+			{ labelKey: 'tournamentStats', href: '/stats/tournament' }
 		]
 	},
 	{
 		id: 'data',
-		label: 'Data',
+		labelKey: 'data',
 		icon: BarChart2,
 		items: [
-			{ label: 'Price Changes', href: '/data/price-changes' },
-			{ label: 'Selections', href: '/data/selections' },
-			{ label: 'Player Stats', href: '/data/player-stats' }
+			{ labelKey: 'priceChanges', href: '/data/price-changes' },
+			{ labelKey: 'selections', href: '/data/selections' },
+			{ labelKey: 'playerStats', href: '/data/player-stats' }
 		]
 	}
 ]

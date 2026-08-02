@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/card'
 import { TrendingDown, TrendingUp } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 
 export interface PriceChange {
 	position: string
@@ -31,6 +32,7 @@ function PriceList({
 	changes: PriceChange[]
 	type: 'rise' | 'fall'
 }) {
+	const t = useTranslations('Home')
 	const [page, setPage] = useState(0)
 
 	const pages = Math.ceil(changes.length / PAGE_SIZE)
@@ -92,7 +94,7 @@ function PriceList({
 			<div className={`flex flex-1 flex-col gap-2 rounded-xl border p-3 ${bgClassName}`}>
 				{changes.length === 0 ? (
 					<div className="text-center py-8 text-muted-foreground text-sm">
-						No {type === 'rise' ? 'rises' : 'falls'} to display
+						{type === 'rise' ? t('noRises') : t('noFalls')}
 					</div>
 				) : (
 					<div className="flex flex-col gap-2">
@@ -142,7 +144,7 @@ function PriceList({
 							key={i}
 							onClick={() => setPage(i)}
 							className="flex size-6 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							aria-label={`Go to page ${i + 1}`}
+							aria-label={t('goToPage', { page: i + 1 })}
 							aria-current={i === safePage ? 'page' : undefined}
 						>
 							<span className={`h-1.5 rounded-full transition-[width] ${i === safePage ? `w-4 ${dotActiveColor}` : 'w-1.5 bg-muted-foreground/40'}`} />
@@ -157,38 +159,39 @@ function PriceList({
 export function PriceChangesSectionClient({
 	priceRises,
 	priceFalls,
-	error,
+	hasError,
 }: {
 	priceRises: PriceChange[]
 	priceFalls: PriceChange[]
-	error?: string | null
+	hasError?: boolean
 }) {
+	const t = useTranslations('Home')
 	const hasChanges = priceRises.length > 0 || priceFalls.length > 0
 
 	return (
 		<Card className="overflow-hidden rounded-none sm:rounded-xl">
 			<CardHeader className="pb-4">
 				<CardTitle asChild className="text-2xl">
-					<h2>Market movement</h2>
+					<h2>{t('marketMovement')}</h2>
 				</CardTitle>
-				<CardDescription>Price changes that can shape your next transfer decision.</CardDescription>
+				<CardDescription>{t('marketDescription')}</CardDescription>
 			</CardHeader>
 			<CardContent>
-				{error && (
+				{hasError && (
 					<Alert variant="destructive" className="mb-5">
-						<AlertTitle>Price data unavailable</AlertTitle>
-						<AlertDescription>{error}</AlertDescription>
+						<AlertTitle>{t('priceDataUnavailable')}</AlertTitle>
+						<AlertDescription>{t('priceChangesFailed')}</AlertDescription>
 					</Alert>
 				)}
-				{!error || hasChanges ? (
+				{!hasError || hasChanges ? (
 					<div className="grid gap-6 md:grid-cols-2 lg:gap-8">
 						<PriceList
-							title="Price Rises"
+							title={t('priceRises')}
 							changes={priceRises}
 							type="rise"
 						/>
 						<PriceList
-							title="Price Falls"
+							title={t('priceFalls')}
 							changes={priceFalls}
 							type="fall"
 						/>

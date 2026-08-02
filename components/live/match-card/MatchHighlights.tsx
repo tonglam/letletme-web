@@ -1,6 +1,7 @@
 import { Activity, AlertTriangle, Award, BarChart2, Shield, Target, XCircle } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { MatchHighlightGroup, MatchHighlightKind } from './match-card-model'
+import { useTranslations } from 'next-intl'
 
 const ICONS: Record<MatchHighlightKind, LucideIcon> = {
 	bonus: Award,
@@ -30,15 +31,26 @@ function formatValue(kind: MatchHighlightKind, value: number) {
 }
 
 export function MatchHighlights({ groups }: { groups: MatchHighlightGroup[] }) {
+	const t = useTranslations('LiveMatches')
+	const titles: Record<MatchHighlightKind, string> = {
+		bonus: t('bonusPoints'),
+		goals: t('goals'),
+		assists: t('assists'),
+		defensive: t('defensiveContribution'),
+		bps: t('bps'),
+		saves: t('saves'),
+		yellow: t('yellowCards'),
+		red: t('redCards'),
+	}
 	if (groups.length === 0) return null
 	return (
-		<section aria-label="Match highlights" className="flex flex-col gap-3">
+		<section aria-label={t('matchHighlights')} className="flex flex-col gap-3">
 			{groups.map((group) => {
 				const Icon = ICONS[group.kind]
 				return (
 					<div key={group.kind} className="rounded-md bg-accent/30 p-3">
 						<h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
-							<Icon className={TONES[group.kind]} aria-hidden="true" /> {group.title}
+							<Icon className={TONES[group.kind]} aria-hidden="true" /> {titles[group.kind]}
 						</h3>
 						<div className="flex flex-wrap gap-2">
 							{group.items.map((item, index) => (

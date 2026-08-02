@@ -6,14 +6,17 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useHydrated } from '@/hooks/use-hydrated'
+import { Link, useRouter } from '@/i18n/navigation'
 import { authClient } from '@/lib/auth-client'
+import { getAuthErrorKey } from '@/lib/auth-error'
 import { Gamepad } from 'lucide-react'
-import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
+import { useSearchParams } from 'next/navigation'
 import { Suspense, useState } from 'react'
 
 function ResetPasswordForm() {
 	const router = useRouter()
+	const t = useTranslations('Auth')
 	const hydrated = useHydrated()
 	const searchParams = useSearchParams()
 	const token = searchParams.get('token') ?? ''
@@ -27,11 +30,11 @@ function ResetPasswordForm() {
 		e.preventDefault()
 		setError(null)
 		if (password !== confirm) {
-			setError('Passwords do not match')
+			setError(t('errors.passwordMismatch'))
 			return
 		}
 		if (password.length < 10) {
-			setError('Password must be at least 10 characters')
+			setError(t('errors.passwordTooShort'))
 			return
 		}
 		setPending(true)
@@ -41,7 +44,7 @@ function ResetPasswordForm() {
 		})
 		setPending(false)
 		if (err) {
-			setError(err.message ?? 'Reset failed')
+			setError(t(`errors.${getAuthErrorKey(err, 'resetFailed')}`))
 			return
 		}
 		router.push('/auth/login')
@@ -51,9 +54,9 @@ function ResetPasswordForm() {
 		return (
 			<Card className="w-full max-w-md p-6 text-center">
 				<p className="text-sm text-muted-foreground">
-					Invalid or expired reset link.{' '}
+					{t('invalidResetLink')}{' '}
 					<Link href="/auth/forgot-password" className="text-primary underline underline-offset-4 hover:no-underline">
-						Request a new one
+						{t('requestNewLink')}
 					</Link>
 				</p>
 			</Card>
@@ -63,9 +66,9 @@ function ResetPasswordForm() {
 	return (
 		<Card className="w-full max-w-md p-6">
 			<div className="mb-6 text-center">
-				<h2 className="text-2xl font-bold tracking-tight">New password</h2>
+				<h2 className="text-2xl font-bold tracking-tight">{t('newPassword')}</h2>
 				<p className="text-sm text-muted-foreground">
-					Choose a strong password (min 10 characters)
+					{t('strongPassword')}
 				</p>
 			</div>
 
@@ -80,7 +83,7 @@ function ResetPasswordForm() {
 
 			<form onSubmit={handleSubmit} className="space-y-4" aria-busy={!hydrated || pending}>
 				<div className="space-y-1">
-					<Label htmlFor="password">Password</Label>
+					<Label htmlFor="password">{t('password')}</Label>
 					<Input
 						id="password"
 						type="password"
@@ -93,7 +96,7 @@ function ResetPasswordForm() {
 					/>
 				</div>
 				<div className="space-y-1">
-					<Label htmlFor="confirm">Confirm password</Label>
+					<Label htmlFor="confirm">{t('confirmPassword')}</Label>
 					<Input
 						id="confirm"
 						type="password"
@@ -105,7 +108,7 @@ function ResetPasswordForm() {
 					/>
 				</div>
 				<Button type="submit" className="w-full" disabled={!hydrated || pending}>
-					{pending ? 'Saving…' : 'Set new password'}
+					{pending ? t('saving') : t('setNewPassword')}
 				</Button>
 			</form>
 		</Card>

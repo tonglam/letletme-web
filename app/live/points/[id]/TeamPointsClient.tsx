@@ -4,8 +4,9 @@ import { GameweekSelector } from '@/components/data/GameweekSelector'
 import PageShell from '@/components/layout/PageShell'
 import { Button } from '@/components/ui/button'
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
+import { Link } from '@/i18n/navigation'
 import { ArrowLeft } from 'lucide-react'
-import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { LivePointsDashboard } from '../_components/LivePointsDashboard'
 import { LivePointsLoading } from '../_components/LivePointsLoading'
 import { useLivePoints } from '../_hooks/useLivePoints'
@@ -23,6 +24,7 @@ export default function TeamPointsClient({
 	initialEventId,
 	initialLiveData,
 }: TeamPointsClientProps) {
+	const t = useTranslations('LivePoints')
 	const livePoints = useLivePoints({
 		initialEntryId: entryId,
 		initialEventId,
@@ -48,7 +50,7 @@ export default function TeamPointsClient({
 					selectedGameweek={livePoints.selectedGameweek}
 				/>
 				<p className="mt-6 text-center text-sm text-destructive" role="alert">
-					{livePoints.error ?? 'No live data is available for this team.'}
+					{livePoints.error ?? t('noData')}
 				</p>
 			</>
 		)
@@ -74,9 +76,9 @@ export default function TeamPointsClient({
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
 				<Button variant="ghost" className="-ml-3 mb-4" asChild>
-					<Link href={backHref}><ArrowLeft aria-hidden="true" /> Back to tournament</Link>
+					<Link href={backHref}><ArrowLeft aria-hidden="true" /> {t('backTournament')}</Link>
 				</Button>
-				<h1 className="mb-6 text-3xl font-bold">Team live points</h1>
+				<h1 className="mb-6 text-3xl font-bold">{t('teamTitle')}</h1>
 				{content}
 			</div>
 		</PageShell>

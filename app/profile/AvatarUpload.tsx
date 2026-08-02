@@ -2,6 +2,7 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Camera } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { updateAvatar } from './avatar-actions'
@@ -15,6 +16,7 @@ export function AvatarUpload({
 	email: string | null | undefined
 	image: string | null | undefined
 }) {
+	const t = useTranslations('Profile')
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const [uploading, setUploading] = useState(false)
 	const [preview, setPreview] = useState<string | null>(null)
@@ -35,17 +37,17 @@ export function AvatarUpload({
 		try {
 			const formData = new FormData()
 			formData.set('avatar', file)
-			const { error, imageUrl } = await updateAvatar(formData)
+			const { errorCode, imageUrl } = await updateAvatar(formData)
 
-			if (error) {
-				toast.error(error)
+			if (errorCode) {
+				toast.error(t(`errors.${errorCode}`))
 				setPreview(null)
 			} else {
-				toast.success('Avatar updated')
+				toast.success(t('avatarUpdated'))
 				setPreview(imageUrl ?? null)
 			}
 		} catch {
-			toast.error('Failed to update avatar')
+			toast.error(t('avatarFailed'))
 			setPreview(null)
 		} finally {
 			URL.revokeObjectURL(localUrl)
@@ -68,7 +70,7 @@ export function AvatarUpload({
 				className="relative group rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 				onClick={() => fileInputRef.current?.click()}
 				disabled={uploading}
-				title="Change avatar"
+				title={t('changeAvatar')}
 			>
 				<Avatar className="h-24 w-24">
 					<AvatarImage src={src} alt={name ?? ''} />
@@ -85,7 +87,7 @@ export function AvatarUpload({
 				</div>
 			</button>
 
-			<p className="text-xs text-muted-foreground">Click to change avatar</p>
+			<p className="text-xs text-muted-foreground">{t('clickAvatar')}</p>
 		</div>
 	)
 }

@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import type { Match } from '@/types/match'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 interface MatchNavigationProps {
 	allMatches?: Match[]
@@ -8,6 +9,7 @@ interface MatchNavigationProps {
 }
 
 export function MatchNavigation({ allMatches, currentIndex }: MatchNavigationProps) {
+	const t = useTranslations('LiveMatches')
 	if (!allMatches || currentIndex === undefined) return null
 	const hasPrevious = currentIndex > 0
 	const hasNext = currentIndex < allMatches.length - 1
@@ -21,14 +23,14 @@ export function MatchNavigation({ allMatches, currentIndex }: MatchNavigationPro
 	}
 
 	return (
-		<nav aria-label="Match navigation" className="absolute right-4 top-4 z-10 flex items-center gap-2">
+		<nav aria-label={t('matchNavigation')} className="absolute right-4 top-4 z-10 flex items-center gap-2">
 			{hasPrevious ? (
-				<Button type="button" variant="outline" size="icon" className="rounded-full bg-background/80 backdrop-blur-sm" onClick={() => navigate('previous')} aria-label="Previous match">
+				<Button type="button" variant="outline" size="icon" className="rounded-full bg-background/80 backdrop-blur-sm" onClick={() => navigate('previous')} aria-label={t('previousMatch')}>
 					<ChevronLeft aria-hidden="true" />
 				</Button>
 			) : null}
 			{hasNext ? (
-				<Button type="button" variant="outline" size="icon" className="rounded-full bg-background/80 backdrop-blur-sm" onClick={() => navigate('next')} aria-label="Next match">
+				<Button type="button" variant="outline" size="icon" className="rounded-full bg-background/80 backdrop-blur-sm" onClick={() => navigate('next')} aria-label={t('nextMatch')}>
 					<ChevronRight aria-hidden="true" />
 				</Button>
 			) : null}

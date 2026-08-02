@@ -46,7 +46,7 @@ const toChange = (p: PlayerValuesResponse['playerValues'][number]): PriceChange 
 export async function PriceChangesSection() {
 	let priceRises: PriceChange[] = []
 	let priceFalls: PriceChange[] = []
-	let error: string | null = null
+	let hasError = false
 
 	try {
 		const data = await executePublicServerQuery<PlayerValuesResponse>(
@@ -65,14 +65,14 @@ export async function PriceChangesSection() {
 			.map(toChange)
 	} catch (err) {
 		console.error('Failed to fetch player values:', err)
-		error = 'Failed to load price changes'
+		hasError = true
 	}
 
 	return (
 		<PriceChangesSectionClient
 			priceRises={priceRises}
 			priceFalls={priceFalls}
-			error={error}
+			hasError={hasError}
 		/>
 	)
 }

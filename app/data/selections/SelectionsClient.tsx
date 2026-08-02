@@ -12,6 +12,7 @@ import {
 } from '@/lib/graphql/operations/tournaments'
 import { Tournament } from '@/types/tournament'
 import { Crown, TrendingDown, TrendingUp, Users } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 function positionLabel(position: string): string {
@@ -100,13 +101,14 @@ function StatList({
 	barColor: string
 	sortBy?: 'selectedByPercent' | 'eoByPercent' | 'transfersEvent' | 'captainByPercent'
 }) {
+	const t = useTranslations('Selections')
 	const sorted = sortBy
 		? [...data].sort((a, b) => (b[sortBy] ?? 0) - (a[sortBy] ?? 0))
 		: data
 	if (data.length === 0) {
 		return (
 			<div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-				No data available.
+				{t('noData')}
 			</div>
 		)
 	}
@@ -115,7 +117,7 @@ function StatList({
 			<div className="grid grid-cols-[1.5rem_1fr_3.5rem] items-center gap-x-2 px-3 py-2 bg-muted/40 border-b">
 				<span />
 				<span className="text-xs font-medium text-muted-foreground">
-					Player
+					{t('player')}
 				</span>
 				<div className="flex flex-col items-end">
 					<span className="text-[10px] font-medium text-muted-foreground">
@@ -162,6 +164,7 @@ export default function SelectionsClient({
 	initialStats,
 	initialGameweek,
 }: SelectionsClientProps) {
+	const t = useTranslations('Selections')
 	const [tournaments] = useState<Tournament[]>(initialTournaments)
 	const [selectedTournamentId, setSelectedTournamentId] = useState<string>(initialSelectedTournamentId)
 	const [currentGameweek] = useState<number>(initialGameweek)
@@ -245,13 +248,13 @@ export default function SelectionsClient({
 	return (
 		<PageShell>
 			<div className="container max-w-4xl mx-auto px-4 py-8">
-				<h1 className="text-3xl font-bold mb-6">Tournament Selections</h1>
+				<h1 className="text-3xl font-bold mb-6">{t('title')}</h1>
 
 				{/* Pickers */}
 				<div className="space-y-4 mb-6">
 					{isLoadingTournaments ? (
 						<div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
-							Loading tournaments…
+							{t('loadingTournaments')}
 						</div>
 					) : tournaments.length > 0 ? (
 						<TournamentSelector
@@ -262,7 +265,7 @@ export default function SelectionsClient({
 						/>
 					) : (
 						<div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
-							No tournaments found
+							{t('noTournaments')}
 						</div>
 					)}
 
@@ -280,25 +283,25 @@ export default function SelectionsClient({
 							value="selections"
 							className="gap-1.5"
 						>
-							<Users className="h-4 w-4" /> Selections
+							<Users className="h-4 w-4" /> {t('selections')}
 						</TabsTrigger>
 						<TabsTrigger
 							value="captain"
 							className="gap-1.5"
 						>
-							<Crown className="h-4 w-4" /> Captain
+							<Crown className="h-4 w-4" /> {t('captain')}
 						</TabsTrigger>
 						<TabsTrigger
 							value="transfers-in"
 							className="gap-1.5"
 						>
-							<TrendingUp className="h-4 w-4" /> Transfers In
+							<TrendingUp className="h-4 w-4" /> {t('transfersIn')}
 						</TabsTrigger>
 						<TabsTrigger
 							value="transfers-out"
 							className="gap-1.5"
 						>
-							<TrendingDown className="h-4 w-4" /> Transfers Out
+							<TrendingDown className="h-4 w-4" /> {t('transfersOut')}
 						</TabsTrigger>
 					</TabsList>
 
@@ -306,14 +309,14 @@ export default function SelectionsClient({
 						<TabsContent value="selections">
 							{isLoadingStats ? (
 								<div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-									Loading…
+									{t('loading')}
 								</div>
 							) : (
 								<StatList
 									data={selectionData}
-									leftLabel="Selected"
+									leftLabel={t('selected')}
 									leftField="selectedByPercent"
-									rightLabel="EO"
+									rightLabel={t('effectiveOwnership')}
 									rightField="eoByPercent"
 									barColor="bg-blue-500"
 								/>
@@ -323,14 +326,14 @@ export default function SelectionsClient({
 						<TabsContent value="captain">
 							{isLoadingStats ? (
 								<div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-									Loading…
+									{t('loading')}
 								</div>
 							) : (
 								<StatList
 									data={captainData}
-									leftLabel="Captain"
+									leftLabel={t('captainShort')}
 									leftField="captainByPercent"
-									rightLabel="EO"
+									rightLabel={t('effectiveOwnership')}
 									rightField="eoByPercent"
 									barColor="bg-yellow-500"
 									sortBy="captainByPercent"
@@ -341,14 +344,14 @@ export default function SelectionsClient({
 						<TabsContent value="transfers-in">
 							{isLoadingStats ? (
 								<div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-									Loading…
+									{t('loading')}
 								</div>
 							) : (
 								<StatList
 									data={transferInData}
-									leftLabel="In %"
+									leftLabel={t('inPercent')}
 									leftField="selectedByPercent"
-									rightLabel="Count"
+									rightLabel={t('count')}
 									rightField="transfersEvent"
 									barColor="bg-emerald-500"
 									sortBy="transfersEvent"
@@ -359,14 +362,14 @@ export default function SelectionsClient({
 						<TabsContent value="transfers-out">
 							{isLoadingStats ? (
 								<div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-									Loading…
+									{t('loading')}
 								</div>
 							) : (
 								<StatList
 									data={transferOutData}
-									leftLabel="Out %"
+									leftLabel={t('outPercent')}
 									leftField="selectedByPercent"
-									rightLabel="Count"
+									rightLabel={t('count')}
 									rightField="transfersEvent"
 									barColor="bg-red-500"
 									sortBy="transfersEvent"

@@ -9,6 +9,7 @@ import {
 import { formatCompactNumber } from '@/lib/utils'
 import { PlayerOption } from '@/types/common'
 import { ArrowLeftCircle, ArrowRightCircle } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 interface PriceChange {
 	player: PlayerOption
@@ -31,6 +32,7 @@ export function PriceChangeList({
 	changes,
 	type
 }: PriceChangeListProps) {
+	const t = useTranslations('PriceChangeList')
 	const icon =
 		type === 'rise' ? (
 			<ArrowRightCircle className="h-5 w-5 shrink-0 text-emerald-500" />
@@ -98,12 +100,8 @@ export function PriceChangeList({
 							{(change.transfersIn || change.transfersOut) && (
 								<span className="text-xs text-muted-foreground mt-1">
 									{type === 'rise'
-										? `${formatCompactNumber(
-												change.transfersIn || 0
-										  )} transfers in`
-										: `${formatCompactNumber(
-												change.transfersOut || 0
-										  )} transfers out`}
+										? t('transfersIn', { count: formatCompactNumber(change.transfersIn || 0) })
+										: t('transfersOut', { count: formatCompactNumber(change.transfersOut || 0) })}
 								</span>
 							)}
 						</div>

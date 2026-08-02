@@ -6,13 +6,18 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useHydrated } from '@/hooks/use-hydrated'
+import { Link } from '@/i18n/navigation'
+import { localizePathname, type AppLocale } from '@/i18n/routing'
 import { authClient } from '@/lib/auth-client'
+import { getAuthErrorKey } from '@/lib/auth-error'
 import { Gamepad } from 'lucide-react'
-import Link from 'next/link'
+import { useLocale, useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 export default function ForgotPasswordClient() {
 	const hydrated = useHydrated()
+	const locale = useLocale() as AppLocale
+	const t = useTranslations('Auth')
 	const [email, setEmail] = useState('')
 	const [pending, setPending] = useState(false)
 	const [error, setError] = useState<string | null>(null)
@@ -24,11 +29,11 @@ export default function ForgotPasswordClient() {
 		setPending(true)
 		const { error: err } = await authClient.requestPasswordReset({
 			email,
-			redirectTo: '/auth/reset-password',
+			redirectTo: localizePathname('/auth/reset-password', locale),
 		})
 		setPending(false)
 		if (err) {
-			setError(err.message ?? 'Failed to send reset email')
+			setError(t(`errors.${getAuthErrorKey(err, 'resetEmailFailed')}`))
 			return
 		}
 		setSent(true)
@@ -44,26 +49,25 @@ export default function ForgotPasswordClient() {
 			<Card className="w-full max-w-md p-6">
 				{sent ? (
 					<div className="text-center space-y-2">
-						<h2 className="text-xl font-bold">Check your email</h2>
+						<h2 className="text-xl font-bold">{t('checkEmail')}</h2>
 						<p className="text-sm text-muted-foreground">
-							If <strong>{email}</strong> is registered, a password reset link
-							has been sent. Check your inbox.
+							{t('forgotSent', { email })}
 						</p>
 						<Link
 							href="/auth/login"
 							className="mt-4 block text-sm text-primary underline underline-offset-4 hover:no-underline"
 						>
-							Back to login
+							{t('backToLogin')}
 						</Link>
 					</div>
 				) : (
 					<>
 						<div className="mb-6 text-center">
 							<h2 className="text-2xl font-bold tracking-tight">
-								Reset password
+								{t('resetPassword')}
 							</h2>
 							<p className="text-sm text-muted-foreground">
-								Enter your email and we&apos;ll send a reset link
+								{t('resetInstructions')}
 							</p>
 						</div>
 
@@ -78,7 +82,7 @@ export default function ForgotPasswordClient() {
 
 						<form onSubmit={handleSubmit} className="space-y-4" aria-busy={!hydrated || pending}>
 							<div className="space-y-1">
-								<Label htmlFor="email">Email</Label>
+								<Label htmlFor="email">{t('email')}</Label>
 								<Input
 									id="email"
 									type="email"
@@ -90,13 +94,13 @@ export default function ForgotPasswordClient() {
 								/>
 							</div>
 							<Button type="submit" className="w-full" disabled={!hydrated || pending}>
-								{pending ? 'Sending…' : 'Send reset link'}
+								{pending ? t('sending') : t('sendResetLink')}
 							</Button>
 						</form>
 
 						<p className="text-center text-sm text-muted-foreground mt-4">
 							<Link href="/auth/login" className="text-primary underline underline-offset-4 hover:no-underline">
-								Back to login
+								{t('backToLogin')}
 							</Link>
 						</p>
 					</>

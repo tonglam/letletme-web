@@ -17,9 +17,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { CheckCircle2, Info, LoaderCircle, Save } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import {
-	tournamentNameSchema,
+	createTournamentNameSchema,
 	type TournamentNameForm,
 } from '../_lib/tournament-management'
+import { useMemo } from 'react'
+import { useTranslations } from 'next-intl'
 
 export function TournamentSettingsCard({
 	currentName,
@@ -32,14 +34,19 @@ export function TournamentSettingsCard({
 	mutationState: { kind: 'idle' | 'success' | 'error'; message: string | null }
 	onSubmit: (data: TournamentNameForm) => Promise<boolean>
 }) {
+	const t = useTranslations('TournamentManage')
 	const hydrated = useHydrated()
+	const schema = useMemo(() => createTournamentNameSchema({
+		tooShort: t('nameTooShort'),
+		tooLong: t('nameTooLong'),
+	}), [t])
 	const {
 		formState: { errors, isDirty },
 		handleSubmit,
 		register,
 		reset,
 	} = useForm<TournamentNameForm>({
-		resolver: zodResolver(tournamentNameSchema),
+		resolver: zodResolver(schema),
 		defaultValues: { name: currentName },
 	})
 
@@ -51,10 +58,10 @@ export function TournamentSettingsCard({
 		<Card>
 			<CardHeader>
 				<CardTitle asChild className="text-xl">
-					<h2>Tournament settings</h2>
+					<h2>{t('settings')}</h2>
 				</CardTitle>
 				<CardDescription>
-					Rename this tournament. Its administrator and competition structure stay fixed.
+					{t('settingsDescription')}
 				</CardDescription>
 			</CardHeader>
 			<form onSubmit={submit} noValidate aria-busy={!hydrated || isSaving}>
@@ -62,12 +69,12 @@ export function TournamentSettingsCard({
 					<Alert variant="info">
 						<Info aria-hidden="true" />
 						<AlertDescription>
-							Structural changes could invalidate existing results, so create a new tournament for a different format.
+							{t('structureWarning')}
 						</AlertDescription>
 					</Alert>
 
 					<div className="space-y-2">
-						<Label htmlFor="tournament-name">Tournament name</Label>
+						<Label htmlFor="tournament-name">{t('name')}</Label>
 						<Input
 							id="tournament-name"
 							autoComplete="off"
@@ -83,7 +90,7 @@ export function TournamentSettingsCard({
 							</p>
 						) : (
 							<p id="tournament-name-help" className="text-sm text-muted-foreground">
-								3–80 characters.
+								{t('nameHelp')}
 							</p>
 						)}
 					</div>
@@ -100,7 +107,7 @@ export function TournamentSettingsCard({
 				<CardFooter className="justify-end">
 					<Button type="submit" disabled={!hydrated || isSaving || !isDirty}>
 						{isSaving ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Save aria-hidden="true" />}
-						{isSaving ? 'Saving…' : 'Save name'}
+						{isSaving ? t('saving') : t('saveName')}
 					</Button>
 				</CardFooter>
 			</form>

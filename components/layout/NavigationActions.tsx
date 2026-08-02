@@ -3,6 +3,7 @@
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { useSession } from '@/lib/auth-client'
 import { DesktopNav } from './DesktopNav'
+import { LanguageSwitcher } from './LanguageSwitcher'
 import { MobileNav } from './MobileNav'
 
 export function NavigationActions() {
@@ -12,6 +13,7 @@ export function NavigationActions() {
 	return (
 		<>
 			<DesktopNav user={user} />
+			<LanguageSwitcher />
 			<ThemeToggle />
 			<MobileNav user={user} />
 		</>

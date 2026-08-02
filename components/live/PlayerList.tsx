@@ -3,6 +3,7 @@
 import { memo } from "react";
 import { Player } from "@/types/player";
 import { PlayerRow } from "./PlayerRow";
+import { useTranslations } from "next-intl";
 
 interface PlayerListProps {
   players?: Player[];
@@ -11,6 +12,7 @@ interface PlayerListProps {
 }
 
 function PlayerListComponent({ players, startingPlayers, benchPlayers }: PlayerListProps) {
+  const t = useTranslations("LivePoints");
   const benchBoostActive = !!benchPlayers?.some(player => player.isBenchBoostActive);
 
   // Handle both direct players array and separate starting/bench arrays
@@ -36,7 +38,7 @@ function PlayerListComponent({ players, startingPlayers, benchPlayers }: PlayerL
       {benchPlayers && benchPlayers.length > 0 && (
         <div className="bg-accent/20">
           <div className="p-4 text-sm font-medium text-muted-foreground">
-            {benchBoostActive ? "Substitutes (Bench Boost active)" : "Substitutes"}
+            {benchBoostActive ? t("substitutesBenchBoost") : t("substitutes")}
           </div>
           {benchPlayers.map((player) => (
             <PlayerRow key={player.id} player={player} />
