@@ -19,6 +19,8 @@ export const user = authSchema.table(
 		/** Bind-time snapshot of the FPL team/manager name — display only. */
 		fplTeamName: text('fpl_team_name'),
 		fplManagerName: text('fpl_manager_name'),
+		/** Last successful lazy re-sync of the name snapshot; gates the 24h refresh. */
+		fplIdentityRefreshedAt: timestamp('fpl_identity_refreshed_at', { withTimezone: true }),
 		/** Matches production `bauth.user.openid` (WeChat / Mini Program identifier). */
 		openid: text('openid'),
 	},

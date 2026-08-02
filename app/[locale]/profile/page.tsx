@@ -7,7 +7,7 @@ import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
 import { getAuth } from '@/lib/auth'
 import { db, schema } from '@/lib/db'
-import { getVerifiedFplEntryId } from '@/lib/fpl-binding-core'
+import { getVerifiedFplEntryId, isFplIdentitySnapshotStale } from '@/lib/fpl-binding-core'
 import { refreshFplIdentitySnapshot } from '@/lib/fpl-entry-binding'
 import { eq } from 'drizzle-orm'
 import { Trophy, Users } from 'lucide-react'
@@ -54,8 +54,13 @@ export default async function ProfilePage({ params }: PageProps) {
 	const profile = dbUser ?? user
 	const verifiedEntryId = getVerifiedFplEntryId(profile)
 
-	// Post-response: re-sync the name snapshot if it is stale (throttled daily)
-	if (verifiedEntryId !== null) {
+	// Post-response: re-sync the name snapshot when the persisted snapshot is
+	// stale (older than 24h or never refreshed). The throttle marker lives on
+	// the user row, so it holds across serverless instances and cold starts.
+	if (
+		verifiedEntryId !== null &&
+		isFplIdentitySnapshotStale(dbUser?.fplIdentityRefreshedAt)
+	) {
 		after(async () => {
 			await refreshFplIdentitySnapshot(user.id, verifiedEntryId)
 		})

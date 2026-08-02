@@ -253,6 +253,7 @@ export async function bindFplEntryDirectly(
 				fplEntryVerifiedAt: boundAt,
 				fplTeamName: entry.teamName,
 				fplManagerName: entry.managerName,
+				fplIdentityRefreshedAt: boundAt,
 				updatedAt: boundAt,
 			})
 			.where(eq(schema.user.id, userId))
@@ -288,6 +289,7 @@ export async function unlinkFplEntry(userId: string): Promise<void> {
 			fplEntryVerifiedAt: null,
 			fplTeamName: null,
 			fplManagerName: null,
+			fplIdentityRefreshedAt: null,
 			updatedAt: new Date(),
 		})
 		.where(eq(schema.user.id, userId))
@@ -296,29 +298,31 @@ export async function unlinkFplEntry(userId: string): Promise<void> {
 	if (!updated) throw new FplBindingError('Not authenticated', 401)
 }
 
-const IDENTITY_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000
-const identityRefreshLog = new Map<string, number>()
-
 /**
- * Lazily re-sync the display-only team/manager name snapshot from FPL,
- * throttled to once per user per day. Scheduled via next/server after()
- * from the profile page, so it never blocks a render; FPL failures leave
- * the previous snapshot untouched.
+ * Re-sync the display-only team/manager name snapshot from FPL. Callers gate
+ * invocations on the persisted fplIdentityRefreshedAt column (see the profile
+ * page), so the once-per-day throttle survives serverless cold starts and
+ * this function always performs the fetch when invoked.
+ *
+ * The update is constrained by the still-current fplEntryId: if the user
+ * rebinds while this lookup is in flight, the stale snapshot for the old
+ * entry cannot overwrite the fresh names stored by the new bind. FPL
+ * failures leave both the previous snapshot and the timestamp untouched, so
+ * the next profile view retries.
  */
 export async function refreshFplIdentitySnapshot(
 	userId: string,
 	entryId: number,
 ): Promise<void> {
-	const now = Date.now()
-	const lastRefresh = identityRefreshLog.get(userId)
-	if (lastRefresh && now - lastRefresh < IDENTITY_REFRESH_INTERVAL_MS) return
-	identityRefreshLog.set(userId, now)
-
 	const entry = await validateFplEntry(entryId)
 	if (!entry.valid || !entry.teamName || !entry.managerName) return
 
 	await db
 		.update(schema.user)
-		.set({ fplTeamName: entry.teamName, fplManagerName: entry.managerName })
-		.where(eq(schema.user.id, userId))
+		.set({
+			fplTeamName: entry.teamName,
+			fplManagerName: entry.managerName,
+			fplIdentityRefreshedAt: new Date(),
+		})
+		.where(and(eq(schema.user.id, userId), eq(schema.user.fplEntryId, entryId)))
 }

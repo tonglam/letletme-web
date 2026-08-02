@@ -15,8 +15,10 @@ type FetchCall = { url: string; init?: RequestInit }
 let savedEnv: Record<string, string | undefined>
 let savedFetch: typeof globalThis.fetch
 let savedWarn: typeof console.warn
+let savedInfo: typeof console.info
 let fetchCalls: FetchCall[]
 let warnCalls: string[]
+let infoCalls: string[]
 
 const stubFetch = (impl: (url: string, init?: RequestInit) => Promise<Response>) => {
 	globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
@@ -31,9 +33,12 @@ beforeEach(() => {
 	for (const key of ENV_KEYS) delete process.env[key]
 	savedFetch = globalThis.fetch
 	savedWarn = console.warn
+	savedInfo = console.info
 	fetchCalls = []
 	warnCalls = []
+	infoCalls = []
 	console.warn = (...args: unknown[]) => warnCalls.push(args.map(String).join(' '))
+	console.info = (...args: unknown[]) => infoCalls.push(args.map(String).join(' '))
 })
 
 afterEach(() => {
@@ -43,6 +48,7 @@ afterEach(() => {
 	}
 	globalThis.fetch = savedFetch
 	console.warn = savedWarn
+	console.info = savedInfo
 })
 
 describe('requestEntryInfoSync', () => {
@@ -85,22 +91,37 @@ describe('requestEntryInfoSync', () => {
 		assert.equal(headers.get('x-api-key'), null)
 	})
 
-	it('returns a hint on 401 without throwing', async () => {
+	it('returns a non-retryable hint on 401 without throwing', async () => {
 		stubFetch(async () => new Response('unauthorized', { status: 401 }))
 
 		const result = await requestEntryInfoSync(6953)
 
 		assert.equal(result.ok, false)
-		if (!result.ok) assert.match(result.reason, /401|LETLETME_DATA_API_KEY/)
+		if (!result.ok) {
+			assert.match(result.reason, /401|LETLETME_DATA_API_KEY/)
+			assert.equal(result.retryable, false)
+		}
 	})
 
-	it('reports server errors with the status code', async () => {
+	it('reports server errors with the status code as retryable', async () => {
 		stubFetch(async () => new Response('boom', { status: 500 }))
 
 		const result = await requestEntryInfoSync(6953)
 
 		assert.equal(result.ok, false)
-		if (!result.ok) assert.match(result.reason, /500/)
+		if (!result.ok) {
+			assert.match(result.reason, /500/)
+			assert.equal(result.retryable, true)
+		}
+	})
+
+	it('reports client errors as non-retryable', async () => {
+		stubFetch(async () => new Response('not found', { status: 404 }))
+
+		const result = await requestEntryInfoSync(6953)
+
+		assert.equal(result.ok, false)
+		if (!result.ok) assert.equal(result.retryable, false)
 	})
 
 	it('reports unavailability when the service is down and never throws', async () => {
@@ -111,7 +132,10 @@ describe('requestEntryInfoSync', () => {
 		const result = await requestEntryInfoSync(6953)
 
 		assert.equal(result.ok, false)
-		if (!result.ok) assert.match(result.reason, /unavailable/)
+		if (!result.ok) {
+			assert.match(result.reason, /unavailable/)
+			assert.equal(result.retryable, true)
+		}
 	})
 
 	it('aborts after the injected timeout', async () => {
@@ -137,9 +161,44 @@ describe('syncEntryAfterBind', () => {
 			throw new Error('connect ECONNREFUSED')
 		})
 
-		await syncEntryAfterBind(6953)
+		await syncEntryAfterBind(6953, { retryDelaysMs: [] })
 
 		assert.equal(warnCalls.length, 1)
 		assert.match(warnCalls[0], /\[entry-sync\]/)
+	})
+
+	it('retries a transient failure and succeeds on a later attempt', async () => {
+		let calls = 0
+		stubFetch(async () => {
+			calls += 1
+			return calls < 3
+				? new Response('boom', { status: 500 })
+				: new Response('{"success":true}', { status: 200 })
+		})
+
+		await syncEntryAfterBind(6953, { retryDelaysMs: [1, 1] })
+
+		assert.equal(fetchCalls.length, 3)
+		assert.equal(warnCalls.length, 0)
+		assert.equal(infoCalls.length, 1)
+		assert.match(infoCalls[0], /\[entry-sync\] synced entry 6953/)
+	})
+
+	it('does not retry non-retryable failures', async () => {
+		stubFetch(async () => new Response('unauthorized', { status: 401 }))
+
+		await syncEntryAfterBind(6953, { retryDelaysMs: [1, 1] })
+
+		assert.equal(fetchCalls.length, 1)
+		assert.equal(warnCalls.length, 1)
+	})
+
+	it('gives up after the configured attempts and reports the count', async () => {
+		stubFetch(async () => new Response('boom', { status: 503 }))
+
+		await syncEntryAfterBind(6953, { retryDelaysMs: [1, 1] })
+
+		assert.equal(fetchCalls.length, 3)
+		assert.match(warnCalls[0], /after 3 attempt\(s\)/)
 	})
 })

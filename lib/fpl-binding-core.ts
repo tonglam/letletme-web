@@ -2,6 +2,23 @@ export const FPL_BINDING_CHALLENGE_TTL_MS = 15 * 60 * 1000
 export const FPL_BINDING_MAX_ATTEMPTS = 10
 export const FPL_BINDING_CREATION_LIMIT = 3
 
+/** How long a bind-time team/manager name snapshot is trusted before a lazy re-sync. */
+export const FPL_IDENTITY_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Whether the persisted name snapshot is due for a re-sync. Accepts Date or
+ * ISO string so both the Drizzle row and the session payload shape work.
+ */
+export function isFplIdentitySnapshotStale(
+	refreshedAt: Date | string | null | undefined,
+	now: Date = new Date(),
+): boolean {
+	if (!refreshedAt) return true
+	const refreshed = refreshedAt instanceof Date ? refreshedAt : new Date(refreshedAt)
+	if (!Number.isFinite(refreshed.getTime())) return true
+	return now.getTime() - refreshed.getTime() >= FPL_IDENTITY_REFRESH_INTERVAL_MS
+}
+
 export type FplEntryBindingState = {
 	fplEntryId?: number | null
 	fplEntryVerifiedAt?: Date | string | null

@@ -51,10 +51,14 @@ export default function RebindEntryForm({
 				setCleared(false)
 				setEditing(false)
 			})
-			// Bypass better-auth's 5-min session cookie cache so the header and
-			// every useSession() consumer see the new binding immediately.
-			void refetchSession({ query: { disableCookieCache: true } })
-			router.refresh()
+			// Refresh the session past better-auth's 5-min cookie cache before
+			// re-rendering, so the header and every useSession() consumer (and
+			// any navigation to a verified-entry page gated by proxy.ts) see the
+			// new binding immediately. refetch() never rejects.
+			void (async () => {
+				await refetchSession({ query: { disableCookieCache: true } })
+				router.refresh()
+			})()
 		} else if (state?.errorCode) {
 			toast.error(t(`errors.${state.errorCode}`))
 		}
@@ -75,7 +79,7 @@ export default function RebindEntryForm({
 				setCleared(true)
 				setEditing(true)
 				toast.success(t('unlinked'))
-				void refetchSession({ query: { disableCookieCache: true } })
+				await refetchSession({ query: { disableCookieCache: true } })
 				router.refresh()
 			} else if (result.errorCode) {
 				toast.error(t(`errors.${result.errorCode}`))

@@ -18,13 +18,17 @@ export default function BindEntryForm() {
 	const { refetch: refetchSession } = useSession()
 
 	useEffect(() => {
-		if (state?.success && state.teamName && state.managerName) {
-			toast.success(t('verified', { teamName: state.teamName, managerName: state.managerName }))
-			// Refresh the session past better-auth's cookie cache so the header
-			// shows the new binding on the page we navigate to.
-			void refetchSession({ query: { disableCookieCache: true } })
+		if (!(state?.success && state.teamName && state.managerName)) return
+		toast.success(t('verified', { teamName: state.teamName, managerName: state.managerName }))
+		void (async () => {
+			// Await the session refresh (bypassing better-auth's cookie cache)
+			// BEFORE navigating — otherwise the destination page or proxy.ts can
+			// still see the pre-bind session for up to five minutes and bounce a
+			// newly linked user back here. refetch() never rejects (failures land
+			// in its error state), so navigation always proceeds.
+			await refetchSession({ query: { disableCookieCache: true } })
 			router.push('/')
-		}
+		})()
 	}, [state, router, t, refetchSession])
 
 	return (
