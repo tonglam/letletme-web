@@ -109,7 +109,7 @@ export function PlayerOwnershipFilter({
             value={scope}
             onValueChange={(value) => setScope(value as OwnershipScope)}
           >
-            <SelectTrigger className="h-8 w-[120px]">
+            <SelectTrigger className="h-8 w-[120px]" aria-label="Player ownership squad scope">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -123,7 +123,7 @@ export function PlayerOwnershipFilter({
             value={captainMode}
             onValueChange={(value) => setCaptainMode(value as OwnershipCaptainMode)}
           >
-            <SelectTrigger className="h-8 w-[180px]">
+            <SelectTrigger className="h-8 w-[180px]" aria-label="Player captaincy filter">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

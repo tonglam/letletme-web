@@ -1,23 +1,17 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import RootLayout from "@/components/layout/RootLayout"
+import { useMemo, useState } from "react"
+import PageShell from "@/components/layout/PageShell"
 import { TournamentHeader } from "@/components/tournament/TournamentHeader"
 import { SearchHeader } from "@/components/tournament/SearchHeader"
 import { TournamentTable } from "@/components/tournament/TournamentTable"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { executeQuery } from "@/lib/graphql-client"
 import {
-	GET_ENTRY_TOURNAMENTS,
-	GET_TOURNAMENT_LIVE_POINTS,
 	type EntryTournament,
-	type EntryTournamentsResponse,
 	type TournamentLiveCalcData,
-	type TournamentLivePointsResponse,
-} from "@/lib/graphql/queries"
-import { useEvent } from "@/lib/event-context"
+} from "@/lib/graphql/operations/tournaments"
 import {
 	buildTournamentEntries,
 	buildTournamentStats,
@@ -25,8 +19,7 @@ import {
 import {
 	formatTournamentState
 } from "@/lib/tournament/liveTournament"
-import { type TournamentEntry } from "@/types/tournament"
-import { ArrowLeft, Calendar, Users } from "lucide-react"
+import { ArrowLeft, Calendar, Settings, Users } from "lucide-react"
 import Link from "next/link"
 
 const formatGroupMode = (groupMode: string): string => {
@@ -49,132 +42,21 @@ const formatKnockoutMode = (knockoutMode: string): string => {
 	return "No knockout stage"
 }
 
-const fetchLivePoints = async (
-	tournamentId: number,
-	eventId: number,
-): Promise<TournamentLiveCalcData[]> => {
-	const response = await executeQuery<TournamentLivePointsResponse>(
-		GET_TOURNAMENT_LIVE_POINTS,
-		{ tournamentId, eventId },
-	)
-	return response.calcLivePointsForTournament.results ?? []
-}
-
-export default function TournamentDetailClient({ params, entryId }: { params: { id: string }; entryId: number }) {
-	const tournamentId = params.id
-	const { currentEventId } = useEvent()
+export default function TournamentDetailClient({
+	canManage,
+	tournament,
+	currentGameweek,
+	initialRows,
+	initialError,
+}: {
+	canManage: boolean
+	tournament: EntryTournament | null
+	currentGameweek?: number
+	initialRows: TournamentLiveCalcData[]
+	initialError: string | null
+}) {
 	const [searchQuery, setSearchQuery] = useState("")
-	const [currentGameweek] = useState<number>(currentEventId ?? 1)
-	const [tournament, setTournament] = useState<EntryTournament | null>(null)
-	const [entries, setEntries] = useState<TournamentEntry[]>([])
-	const [isLoading, setIsLoading] = useState<boolean>(true)
-	const [isLoadingStandings, setIsLoadingStandings] = useState<boolean>(false)
-	const [loadError, setLoadError] = useState<string | null>(null)
-	const [standingsError, setStandingsError] = useState<string | null>(null)
-
-	useEffect(() => {
-		let isCancelled = false
-
-		const loadTournament = async () => {
-			if (entryId <= 0) {
-				setIsLoading(false)
-				setLoadError("Sign in and bind an FPL entry to view this tournament.")
-				setTournament(null)
-				return
-			}
-
-			try {
-				setIsLoading(true)
-				setLoadError(null)
-
-				const tournamentsData = await executeQuery<EntryTournamentsResponse>(
-					GET_ENTRY_TOURNAMENTS,
-					{ entryId: entryId }
-				)
-
-				if (isCancelled) {
-					return
-				}
-
-				const selectedTournament =
-					tournamentsData.entryTournaments.find(
-						entryTournament => String(entryTournament.id) === tournamentId
-					) ?? null
-
-				setTournament(selectedTournament)
-			} catch (error) {
-				if (isCancelled) {
-					return
-				}
-				const message =
-					error instanceof Error ? error.message : "Failed to load tournament"
-				setLoadError(message)
-				setTournament(null)
-			} finally {
-				if (!isCancelled) {
-					setIsLoading(false)
-				}
-			}
-		}
-
-		loadTournament()
-
-		return () => {
-			isCancelled = true
-		}
-	}, [tournamentId, entryId])
-
-	useEffect(() => {
-		let isCancelled = false
-
-		const loadStandings = async () => {
-			if (!tournament || currentGameweek <= 0) {
-				setEntries([])
-				return
-			}
-
-			try {
-				setIsLoadingStandings(true)
-				setStandingsError(null)
-
-				const tournamentNumericId = tournament.id
-				const previousEventId = currentGameweek > 1 ? currentGameweek - 1 : null
-
-				const [currentRows, previousRows] = await Promise.all([
-					fetchLivePoints(tournamentNumericId, currentGameweek),
-					previousEventId
-						? fetchLivePoints(tournamentNumericId, previousEventId).catch(
-								() => [] as TournamentLiveCalcData[],
-							)
-						: Promise.resolve([] as TournamentLiveCalcData[]),
-				])
-
-				if (isCancelled) {
-					return
-				}
-
-				setEntries(buildTournamentEntries(currentRows, previousRows))
-			} catch (error) {
-				if (isCancelled) {
-					return
-				}
-				const message =
-					error instanceof Error ? error.message : "Failed to load standings"
-				setStandingsError(message)
-				setEntries([])
-			} finally {
-				if (!isCancelled) {
-					setIsLoadingStandings(false)
-				}
-			}
-		}
-
-		loadStandings()
-
-		return () => {
-			isCancelled = true
-		}
-	}, [tournament, currentGameweek])
+	const entries = useMemo(() => buildTournamentEntries(initialRows), [initialRows])
 
 	const standingsStats = useMemo(() => buildTournamentStats(entries), [entries])
 
@@ -185,39 +67,42 @@ export default function TournamentDetailClient({ params, entryId }: { params: { 
 
 		return {
 			name: tournament.name,
-			gameweek: currentGameweek,
 			averagePoints: standingsStats.averagePoints,
 			highestPoints: standingsStats.highestPoints,
 			totalEntries: standingsStats.totalEntries || tournament.totalTeamNum
 		}
-	}, [currentGameweek, standingsStats, tournament])
+	}, [standingsStats, tournament])
 
 	return (
-		<RootLayout>
+		<PageShell>
 			<div className="container max-w-4xl mx-auto px-4 py-8">
-				<Link href="/live/tournament">
+				<div className="mb-4 flex flex-wrap items-center justify-between gap-2">
 					<Button
 						variant="ghost"
-						className="flex items-center gap-1 text-primary hover:text-primary/80 mb-4"
+						className="-ml-3 text-primary hover:text-primary/80"
+						asChild
 					>
-						<ArrowLeft className="h-4 w-4" />
-						<span>Back to All Tournaments</span>
+						<Link href="/live/tournament">
+							<ArrowLeft aria-hidden="true" />
+							<span>Back to all tournaments</span>
+						</Link>
 					</Button>
-				</Link>
+					{canManage && tournament ? (
+						<Button variant="outline" asChild>
+							<Link href={`/tournament/${tournament.id}/manage`}>
+								<Settings aria-hidden="true" /> Manage
+							</Link>
+						</Button>
+					) : null}
+				</div>
 
-				{loadError && (
+				{initialError && (
 					<Card className="p-4 mb-6 border-destructive/30 bg-destructive/5 text-destructive text-sm">
-						{loadError}
+						{initialError}
 					</Card>
 				)}
 
-				{isLoading && (
-					<Card className="p-6 text-sm text-muted-foreground mb-6">
-						Loading tournament...
-					</Card>
-				)}
-
-				{!isLoading && !tournament && !loadError && (
+				{!tournament && !initialError && (
 					<Card className="p-6 text-sm text-muted-foreground mb-6">
 						This tournament is unavailable or you do not have access.
 					</Card>
@@ -227,11 +112,9 @@ export default function TournamentDetailClient({ params, entryId }: { params: { 
 					<>
 						<TournamentHeader
 							name={tournamentHeaderData.name}
-							gameweek={tournamentHeaderData.gameweek}
 							averagePoints={tournamentHeaderData.averagePoints}
 							highestPoints={tournamentHeaderData.highestPoints}
 							totalEntries={tournamentHeaderData.totalEntries}
-							tournamentId={String(tournament.id)}
 						/>
 
 						<Tabs defaultValue="standings" className="mb-6">
@@ -244,33 +127,25 @@ export default function TournamentDetailClient({ params, entryId }: { params: { 
 							</Card>
 
 							<TabsContent value="standings">
-								<SearchHeader
-									searchQuery={searchQuery}
-									setSearchQuery={setSearchQuery}
-									captainOptions={[]}
-									chipFilter="all"
-									onChipFilterChange={() => {}}
-									captainFilter="all"
-									onCaptainFilterChange={() => {}}
-								/>
+								{currentGameweek ? (
+									<>
+										<SearchHeader
+											searchQuery={searchQuery}
+											setSearchQuery={setSearchQuery}
+											showFilters={false}
+										/>
 
-								{standingsError && (
-									<Card className="p-4 mb-4 border-destructive/30 bg-destructive/5 text-destructive text-sm">
-										{standingsError}
-									</Card>
-								)}
-
-								{isLoadingStandings ? (
-									<Card className="p-6 text-sm text-muted-foreground">
-										Loading standings...
-									</Card>
+										<TournamentTable
+											entries={entries}
+											searchQuery={searchQuery}
+											tournamentId={String(tournament.id)}
+											gameweek={currentGameweek}
+										/>
+									</>
 								) : (
-									<TournamentTable
-										entries={entries}
-										searchQuery={searchQuery}
-										tournamentId={String(tournament.id)}
-										gameweek={currentGameweek}
-									/>
+									<Card className="p-6 text-sm text-muted-foreground">
+										Live standings are unavailable until the current gameweek can be confirmed.
+									</Card>
 								)}
 							</TabsContent>
 
@@ -366,6 +241,6 @@ export default function TournamentDetailClient({ params, entryId }: { params: { 
 					</>
 				)}
 			</div>
-		</RootLayout>
+		</PageShell>
 	)
 }

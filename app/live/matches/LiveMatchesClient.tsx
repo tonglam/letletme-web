@@ -1,13 +1,16 @@
 'use client'
 
-import RootLayout from '@/components/layout/RootLayout'
+import PageShell from '@/components/layout/PageShell'
 import { MatchCard } from '@/components/live/MatchCard'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
-import { GET_LIVE_MATCHES, type LiveMatchesResponse } from '@/lib/graphql/queries'
-import { useEvent } from '@/lib/event-context'
+import {
+	GET_LIVE_MATCHES,
+	type LiveMatchesResponse,
+} from '@/lib/graphql/operations/live'
 import { transformLiveMatches } from '@/lib/live-matches'
+import { usePageActive } from '@/hooks/use-page-active'
 import type { Match } from '@/types/match'
 import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -119,12 +122,13 @@ function AutoRefreshCountdown({
 export function LiveMatchesClient({
 	initialMatches,
 	initialError,
+	currentEventId,
 }: {
 	initialMatches: Match[]
 	initialError?: string | null
+	currentEventId?: number
 }) {
-	const { currentEventId } = useEvent()
-	const eventId = currentEventId ?? undefined
+	const isPageActive = usePageActive()
 	const [matches, setMatches] = useState<Match[]>(initialMatches)
 	const [activeTab, setActiveTab] = useState<LiveMatchesTab>(() =>
 		getPreferredTab(initialMatches),
@@ -170,11 +174,20 @@ export function LiveMatchesClient({
 
 		setActiveTab(value)
 		hasSavedTabPreference.current = true
-		localStorage.setItem(LIVE_MATCHES_TAB_STORAGE_KEY, value)
+		try {
+			window.localStorage.setItem(LIVE_MATCHES_TAB_STORAGE_KEY, value)
+		} catch {
+			// Tab preference is optional.
+		}
 	}
 
 	useEffect(() => {
-		const savedTab = localStorage.getItem(LIVE_MATCHES_TAB_STORAGE_KEY)
+		let savedTab: string | null = null
+		try {
+			savedTab = window.localStorage.getItem(LIVE_MATCHES_TAB_STORAGE_KEY)
+		} catch {
+			return
+		}
 		if (savedTab && isLiveMatchesTab(savedTab)) {
 			hasSavedTabPreference.current = true
 			const timeoutId = window.setTimeout(() => setActiveTab(savedTab), 0)
@@ -203,7 +216,7 @@ export function LiveMatchesClient({
 
 	if (isLoading && !isRefreshing) {
 		return (
-			<RootLayout>
+			<PageShell>
 				<div className="container max-w-4xl mx-auto px-4 py-8">
 					<div className="flex items-center justify-between mb-8">
 						<h1 className="text-3xl font-bold">Live Matches</h1>
@@ -216,13 +229,13 @@ export function LiveMatchesClient({
 						<p className="text-muted-foreground">Loading matches...</p>
 					</div>
 				</div>
-			</RootLayout>
+			</PageShell>
 		)
 	}
 
 	if (error && !isRefreshing) {
 		return (
-			<RootLayout>
+			<PageShell>
 				<div className="container max-w-4xl mx-auto px-4 py-8">
 					<div className="flex items-center justify-between mb-8">
 						<h1 className="text-3xl font-bold">Live Matches</h1>
@@ -244,12 +257,12 @@ export function LiveMatchesClient({
 						</Button>
 					</div>
 				</div>
-			</RootLayout>
+			</PageShell>
 		)
 	}
 
 	return (
-		<RootLayout>
+		<PageShell>
 			<div className="container max-w-4xl mx-auto px-4 py-8">
 				<div className="flex items-center justify-between mb-8">
 					<h1 className="text-3xl font-bold">Live Matches</h1>
@@ -265,7 +278,7 @@ export function LiveMatchesClient({
 							<span className="sr-only">Refresh matches</span>
 						</Button>
 						<AutoRefreshCountdown
-							enabled={hasLiveMatches}
+							enabled={hasLiveMatches && isPageActive}
 							onRefresh={() => fetchMatches(true)}
 						/>
 					</div>
@@ -296,7 +309,7 @@ export function LiveMatchesClient({
 									match={match}
 									allMatches={activeMatches}
 									currentIndex={i}
-									eventId={eventId}
+									eventId={currentEventId}
 								/>
 							))
 						) : (
@@ -307,6 +320,6 @@ export function LiveMatchesClient({
 					</TabsContent>
 				</Tabs>
 			</div>
-		</RootLayout>
+		</PageShell>
 	)
 }

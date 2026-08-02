@@ -10,12 +10,12 @@ import {
 } from "@/components/ui/select";
 import { executeQuery } from "@/lib/graphql-client";
 import {
-  GET_PLAYERS_FOR_PICKER,
-  GET_TEAMS_FOR_PICKER,
-  type PlayerDirectoryItem,
-  type PlayersForPickerResponse,
-  type TeamsForPickerResponse,
-} from "@/lib/graphql/queries";
+	GET_PLAYERS_FOR_PICKER,
+	GET_TEAMS_FOR_PICKER,
+	type PlayerDirectoryItem,
+	type PlayersForPickerResponse,
+	type TeamsForPickerResponse,
+} from "@/lib/graphql/operations/players";
 import { resolveTeamDisplayName } from "@/lib/team-display";
 import { type Position } from "@/types/common";
 import { Search, X } from "lucide-react";
@@ -300,7 +300,7 @@ export function PlayerDirectoryPicker({
           onValueChange={(value) => setTeamFilter(value)}
           disabled={isTeamsLoading}
         >
-          <SelectTrigger>
+          <SelectTrigger aria-label="Filter players by team">
             <SelectValue
               placeholder={isTeamsLoading ? "Loading teams..." : "Filter by team"}
             />
@@ -329,7 +329,7 @@ export function PlayerDirectoryPicker({
           value={positionFilter}
           onValueChange={(value) => setPositionFilter(value as PositionFilter)}
         >
-          <SelectTrigger>
+          <SelectTrigger aria-label="Filter players by position">
             <SelectValue placeholder="Filter by position" />
           </SelectTrigger>
           <SelectContent>
@@ -344,6 +344,7 @@ export function PlayerDirectoryPicker({
         <div className="relative sm:col-span-2">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            aria-label="Search players by name"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Type player name..."
@@ -364,7 +365,9 @@ export function PlayerDirectoryPicker({
 
       <div className="mt-3 rounded-md border">
         <div className="max-h-64 overflow-y-auto">
-          {!hasActiveFilter ? (
+          {error ? (
+            <div role="status" className="p-3 text-sm text-destructive">{error}</div>
+          ) : !hasActiveFilter ? (
             <div className="p-3 text-sm text-muted-foreground">
               Select a team, position, or type a name to search.
             </div>
@@ -372,8 +375,6 @@ export function PlayerDirectoryPicker({
             <div className="p-3 text-sm text-muted-foreground">
               Loading players...
             </div>
-          ) : error ? (
-            <div className="p-3 text-sm text-destructive">{error}</div>
           ) : visiblePlayers.length === 0 ? (
             <div className="p-3 text-sm text-muted-foreground">
               No players match current filters.

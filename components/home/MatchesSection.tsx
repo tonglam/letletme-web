@@ -9,7 +9,7 @@ import {
 	GET_EVENT_FIXTURES,
 	type EventFixturesResponse,
 	type Fixture,
-} from '@/lib/graphql/queries'
+} from '@/lib/graphql/operations/events'
 import { format } from 'date-fns'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Image from 'next/image'

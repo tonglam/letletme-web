@@ -1,0 +1,185 @@
+export const GET_ENTRY_EVENT_RESULT = `
+  query GetEntryEventResult($entryId: Int!, $eventId: Int!) {
+    entryEventResult(entryId: $entryId, eventId: $eventId) {
+      eventId
+      eventPoints
+      overallPoints
+      overallRank
+      eventTransfers
+      eventTransfersCost
+      eventNetPoints
+      eventBenchPoints
+      eventChip
+      eventCaptainPoints
+      eventPlayedCaptain {
+        webName
+      }
+      eventPicks {
+        webName
+        teamShortName
+        teamName
+        elementTypeName
+        isCaptain
+        isViceCaptain
+        multiplier
+        totalPoints
+        minutes
+        position
+      }
+      teamValue
+      bank
+      entry {
+        id
+        entryName
+        playerName
+        totalTransfers
+        region
+      }
+    }
+  }
+`
+
+export interface EntryEventResult {
+	eventId: number
+	eventPoints: number
+	overallPoints: number
+	overallRank: number
+	eventTransfers: number
+	eventTransfersCost: number
+	eventNetPoints: number
+	eventBenchPoints: number
+	eventChip: string
+	eventCaptainPoints: number
+	eventPlayedCaptain: {
+		webName: string
+	} | null
+	eventPicks: EntryEventPick[]
+	teamValue: number | null
+	bank: number | null
+	entry: {
+		id: number
+		entryName: string
+		playerName: string | null
+		totalTransfers: number | null
+		region: string | null
+	}
+}
+
+export interface EntryEventPick {
+	webName: string
+	teamShortName: string
+	teamName: string
+	elementTypeName: string
+	isCaptain: boolean
+	isViceCaptain: boolean
+	multiplier: number
+	totalPoints: number
+	minutes: number
+	position: number
+}
+
+export interface EntryEventResultResponse {
+	entryEventResult: EntryEventResult | null
+}
+
+// Query to fetch full historical event results for an entry
+export const GET_ENTRY_HISTORY = `
+  query GetEntryHistory($entryId: Int!) {
+    entryHistory(entryId: $entryId) {
+      results {
+        eventId
+        eventChip
+        eventPoints
+        eventRank
+        overallPoints
+        overallRank
+        eventTransfers
+        eventTransfersCost
+        eventNetPoints
+        teamValue
+        bank
+      }
+      history {
+        season
+        totalPoints
+        overallRank
+      }
+    }
+  }
+`
+
+export interface EntryHistoryItem {
+	eventId: number
+	eventChip: string
+	eventPoints: number
+	eventRank: number | null
+	overallPoints: number
+	overallRank: number
+	eventTransfers: number
+	eventTransfersCost: number
+	eventNetPoints: number
+	teamValue: number | null
+	bank: number | null
+}
+
+export interface EntryHistoryResponse {
+	entryHistory: {
+		results: EntryHistoryItem[]
+		history: EntrySeasonHistoryItem[]
+	}
+}
+
+export interface EntrySeasonHistoryItem {
+	season: string
+	totalPoints: number
+	overallRank: number
+}
+
+// Query to fetch entry transfer history grouped by gameweek
+export const GET_ENTRY_TRANSFER_HISTORY = `
+  query GetEntryTransferHistory($entryId: Int!) {
+    entryTransferHistory(entryId: $entryId) {
+      eventId
+      eventTransfers
+      eventTransfersCost
+      transfers {
+        event
+        elementInWebName
+        elementInTypeName
+        elementInTeamShortName
+        elementInCost
+        elementOutWebName
+        elementOutTypeName
+        elementOutTeamShortName
+        elementOutCost
+        time
+      }
+    }
+  }
+`
+
+export interface EntryTransferMove {
+	event: number
+	elementInWebName: string
+	elementInTypeName: string
+	elementInTeamShortName: string
+	elementInCost: number
+	elementOutWebName: string
+	elementOutTypeName: string
+	elementOutTeamShortName: string
+	elementOutCost: number
+	time: string
+}
+
+export interface EntryGameweekTransfers {
+	eventId: number
+	eventTransfers: number
+	eventTransfersCost: number
+	transfers: EntryTransferMove[]
+}
+
+export interface EntryTransferHistoryResponse {
+	entryTransferHistory: EntryGameweekTransfers[]
+}
+
+// Query to fetch live matches

@@ -1,12 +1,12 @@
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { executeQuery } from '@/lib/graphql-client'
+import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_TOP_TRANSFERS_IN,
 	GET_TOP_TRANSFERS_OUT,
 	type TopTransfer,
 	type TopTransfersResponse,
-} from '@/lib/graphql/queries'
+} from '@/lib/graphql/operations/prices'
 import { TransferList } from './TransferList'
 
 interface Transfer {
@@ -109,21 +109,21 @@ export async function GameweekStatsSection({ currentEventId }: GameweekStatsSect
 
 	try {
 		const [inData, outData] = await Promise.all([
-			executeQuery<TopTransfersResponse>(
+			executePublicServerQuery<TopTransfersResponse>(
 				GET_TOP_TRANSFERS_IN,
 				{
 					eventId: currentEventId,
 					limit: 5,
 				},
-				{ cache: 'force-cache', next: { revalidate: 300 } },
+				{ cache: 'force-cache', next: { revalidate: 300 }, timeoutMs: 5_000 },
 			),
-			executeQuery<TopTransfersResponse>(
+			executePublicServerQuery<TopTransfersResponse>(
 				GET_TOP_TRANSFERS_OUT,
 				{
 					eventId: currentEventId,
 					limit: 5,
 				},
-				{ cache: 'force-cache', next: { revalidate: 300 } },
+				{ cache: 'force-cache', next: { revalidate: 300 }, timeoutMs: 5_000 },
 			),
 		])
 

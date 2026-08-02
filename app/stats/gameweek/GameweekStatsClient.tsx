@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import RootLayout from "@/components/layout/RootLayout";
+import PageShell from "@/components/layout/PageShell";
 import { Card } from "@/components/ui/card";
 import { PlayerList } from "@/components/player/PlayerList";
 import { GameweekSelector } from "@/components/data/GameweekSelector";
@@ -9,13 +9,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TransferList } from "@/components/home/TransferList";
 import { executeQuery } from "@/lib/graphql-client";
 import {
-  GET_LIVE_SCORES,
-  GET_TOP_TRANSFERS_IN,
-  GET_TOP_TRANSFERS_OUT,
-  type LiveScoresResponse,
-  type TopTransfer,
-  type TopTransfersResponse,
-} from "@/lib/graphql/queries";
+	GET_LIVE_SCORES,
+	type LiveScoresResponse,
+} from "@/lib/graphql/operations/live";
+import {
+	GET_TOP_TRANSFERS_IN,
+	GET_TOP_TRANSFERS_OUT,
+	type TopTransfer,
+	type TopTransfersResponse,
+} from "@/lib/graphql/operations/prices";
 import {
   FALLBACK_OVERALL_STATS,
   fetchOverallGameweekStats,
@@ -101,7 +103,7 @@ export default function GameweekStatsClient({
   const [isLoadingOverall, setIsLoadingOverall] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const overallCacheRef = useRef<Map<number, OverallGameweekStats>>(
-    new Map(initialOverallStats ? [[initialCurrentGameweek, initialOverallStats]] : []),
+    new Map(initialOverallStats && initialCurrentGameweek ? [[initialCurrentGameweek, initialOverallStats]] : []),
   );
   const dreamCacheRef = useRef<Map<number, DreamTeamPlayer[]>>(new Map());
   const transfersCacheRef = useRef<Map<number, { in: TransferTrend[]; out: TransferTrend[] }>>(new Map());
@@ -199,7 +201,7 @@ export default function GameweekStatsClient({
 
     void loadGameweekData();
     return () => { cancelled = true; };
-  }, [activeTab, selectedGameweek]);
+  }, [activeTab, initialCurrentGameweek, selectedGameweek]);
 
   const haulPlayers = useMemo<HaulPlayer[]>(
     () =>
@@ -225,7 +227,7 @@ export default function GameweekStatsClient({
     typeof value === "number" ? formatCompactNumber(value) : fallbackTip;
 
   return (
-    <RootLayout>
+    <PageShell>
       <div className="container max-w-4xl mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-6">Gameweek Stats</h1>
 
@@ -416,6 +418,6 @@ export default function GameweekStatsClient({
           <p className="text-xs text-muted-foreground mt-4">Refreshing gameweek data...</p>
         )}
       </div>
-    </RootLayout>
+    </PageShell>
   );
 }

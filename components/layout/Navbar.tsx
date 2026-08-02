@@ -1,49 +1,22 @@
-"use client";
-
-import { Gamepad } from "lucide-react";
-import { DesktopNav } from "./DesktopNav";
-import { MobileNav } from "./MobileNav";
-import { useState } from "react";
-import Link from "next/link";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
-
-const languages = [
-  { code: "en", label: "English" },
-  { code: "zh", label: "中文" }
-];
+import { Gamepad } from 'lucide-react'
+import Link from 'next/link'
+import { NavigationActions } from './NavigationActions'
 
 export function Navbar() {
-  const [openCollapsible, setOpenCollapsible] = useState<string | null>(null);
-  const [currentLang, setCurrentLang] = useState("en");
-
   return (
-    <nav className="sticky top-0 z-50 bg-background border-b">
-      <div className="mx-auto w-full px-4 sm:container sm:px-4 lg:px-8 sm:max-w-4xl py-3 flex justify-between items-center">
-        <div className="flex items-center">
-          <Link href="/" className="flex items-center space-x-2">
-            <Gamepad className="h-6 w-6 text-primary" />
-            <span className="text-2xl font-bold">LetLetMe</span>
-          </Link>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          <DesktopNav
-            currentLang={currentLang}
-            setCurrentLang={setCurrentLang}
-            languages={languages}
-          />
-          
-          <ThemeToggle />
-          
-          <MobileNav
-            openCollapsible={openCollapsible}
-            setOpenCollapsible={setOpenCollapsible}
-            currentLang={currentLang}
-            setCurrentLang={setCurrentLang}
-            languages={languages}
-          />
+    <nav aria-label="Primary" className="sticky top-0 z-50 border-b bg-background/90 backdrop-blur-xl">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 lg:px-8">
+        <Link href="/" className="flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+          <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+            <Gamepad aria-hidden="true" className="size-5" />
+          </span>
+          <span className="font-display text-xl font-bold tracking-tight">LetLetMe</span>
+        </Link>
+
+        <div className="flex items-center gap-2">
+          <NavigationActions />
         </div>
       </div>
     </nav>
-  );
+  )
 }

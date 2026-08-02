@@ -50,10 +50,10 @@ export function PriceChangeList({
 				{title}
 			</h3>
 			<div className="space-y-2 bg-background/50 rounded-lg p-2 sm:p-3">
-				{changes.map((change, index) => (
+				{changes.map(change => (
 					<div
-						key={index}
-						className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-accent/50 hover:bg-accent/70 transition-colors cursor-pointer"
+						key={change.player.id}
+						className="flex items-center justify-between rounded-lg bg-accent/50 p-2 sm:p-3"
 					>
 						<div className="flex items-center gap-2 min-w-0 flex-1">
 							<span className="text-xs sm:text-sm font-medium text-muted-foreground w-8 shrink-0">
@@ -65,7 +65,10 @@ export function PriceChangeList({
 							<TooltipProvider>
 								<Tooltip>
 									<TooltipTrigger asChild>
-										<span className="text-sm font-medium truncate flex-1">
+										<span
+											tabIndex={0}
+											className="flex-1 truncate rounded-sm text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+										>
 											{change.player.name}
 										</span>
 									</TooltipTrigger>

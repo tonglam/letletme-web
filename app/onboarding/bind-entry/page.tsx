@@ -4,11 +4,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { getAuth } from '@/lib/auth'
 import { Gamepad, Hash } from 'lucide-react'
-
-export const dynamic = 'force-dynamic'
 import { headers } from 'next/headers'
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import BindEntryForm from './BindEntryForm'
+
+export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+	title: 'Link FPL team',
+	description: 'Link and verify your FPL entry for personalised LetLetMe features.',
+	robots: { index: false, follow: false },
+}
 
 export default async function BindEntryPage() {
 	const session = await getAuth().api.getSession({ headers: await headers() })
@@ -23,7 +30,7 @@ export default async function BindEntryPage() {
 	}
 
 	return (
-		<div className="flex min-h-screen flex-col items-center justify-center bg-muted/30 p-4">
+		<div className="flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center bg-muted/30 p-4">
 			<div className="mb-6 flex items-center gap-2">
 				<Gamepad className="h-8 w-8 text-primary" />
 				<h1 className="text-2xl font-bold">LetLetMe</h1>

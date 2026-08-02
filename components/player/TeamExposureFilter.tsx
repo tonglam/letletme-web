@@ -16,9 +16,9 @@ import {
 import { type OwnershipScope } from "@/lib/player-ownership-filter";
 import { executeQuery } from "@/lib/graphql-client";
 import {
-  GET_TEAMS_FOR_PICKER,
-  type TeamsForPickerResponse,
-} from "@/lib/graphql/queries";
+	GET_TEAMS_FOR_PICKER,
+	type TeamsForPickerResponse,
+} from "@/lib/graphql/operations/players";
 import { cn } from "@/lib/utils";
 import { Shirt, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -114,7 +114,7 @@ export function TeamExposureFilter({
             onValueChange={(v) => setSelectedTeam(v || null)}
             disabled={teamOptions.length === 0}
           >
-            <SelectTrigger className="h-8 w-[160px]">
+            <SelectTrigger className="h-8 w-[160px]" aria-label="Select team for exposure filter">
               <SelectValue placeholder="Select team" />
             </SelectTrigger>
             <SelectContent>
@@ -131,7 +131,7 @@ export function TeamExposureFilter({
             value={String(count)}
             onValueChange={(v) => setCount(Number(v))}
           >
-            <SelectTrigger className="h-8 w-[80px]">
+            <SelectTrigger className="h-8 w-[80px]" aria-label="Minimum players from team">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -146,7 +146,7 @@ export function TeamExposureFilter({
             value={scope}
             onValueChange={(v) => setScope(v as OwnershipScope)}
           >
-            <SelectTrigger className="h-8 w-[110px]">
+            <SelectTrigger className="h-8 w-[110px]" aria-label="Team exposure squad scope">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

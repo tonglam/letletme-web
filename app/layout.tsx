@@ -1,18 +1,30 @@
+import { AppToaster } from '@/components/feedback/AppToaster'
+import { WebVitalsReporter } from '@/components/analytics/WebVitalsReporter'
 import { Footer } from '@/components/layout/Footer'
 import { Navbar } from '@/components/layout/Navbar'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
-import { getCurrentAndNextEvents } from '@/lib/events'
-import { EventProvider } from '@/lib/event-context'
-import { getCurrentSeasonKey } from '@/lib/season'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { Metadata } from 'next'
+import { Barlow } from 'next/font/google'
 import Script from 'next/script'
-import { Toaster } from 'sonner'
+import { Suspense } from 'react'
 import './globals.css'
 
+const barlow = Barlow({
+	subsets: ['latin'],
+	weight: '700',
+	variable: '--font-barlow',
+	display: 'swap',
+})
+
 export const metadata: Metadata = {
-	title: 'LetLetMe - Fantasy Premier League Tool',
+	applicationName: 'LetLetMe',
+	title: {
+		default: 'LetLetMe — Fantasy Premier League analytics',
+		template: '%s | LetLetMe',
+	},
 	description:
-		'The ultimate Fantasy Premier League companion for tracking statistics, tournaments, and live points',
+		'Fantasy Premier League live points, player analytics, and tournament tools in one focused workspace.',
 	icons: {
 		icon: [{ url: '/favicon.ico' }]
 	}
@@ -34,23 +46,19 @@ const themeBootstrapScript = `
 })();
 `
 
-export default async function RootLayout({
+export default function RootLayout({
 	children
 }: {
 	children: React.ReactNode
 }) {
-	const data = await getCurrentAndNextEvents()
-	const currentEventId = data?.current[0]?.id ?? null
-	const nextEventId = data?.next[0]?.id ?? null
-	const deadlineTime = data?.next[0]?.deadlineTime ?? null
-	const seasonKey = getCurrentSeasonKey()
-
 	return (
 		<html
 			lang="en"
+			className={barlow.variable}
+			data-scroll-behavior="smooth"
 			suppressHydrationWarning
 		>
-			<body className="font-sans antialiased">
+			<body className="min-h-svh bg-background font-sans text-foreground antialiased">
 				<Script
 					id="theme-bootstrap"
 					strategy="beforeInteractive"
@@ -61,18 +69,23 @@ export default async function RootLayout({
 					enableSystem
 					disableTransitionOnChange
 				>
-					<EventProvider
-						currentEventId={currentEventId}
-						nextEventId={nextEventId}
-						deadlineTime={deadlineTime}
-						seasonKey={seasonKey}
-						entryId={null}
-					>
+					<TooltipProvider>
+						<a
+							href="#main-content"
+							className="fixed left-4 top-4 z-[100] -translate-y-24 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg transition-transform focus:translate-y-0"
+						>
+							Skip to main content
+						</a>
 						<Navbar />
-						{children}
+						<main id="main-content" tabIndex={-1}>
+							{children}
+						</main>
 						<Footer />
-						<Toaster richColors position="top-center" />
-					</EventProvider>
+						<Suspense>
+							<AppToaster />
+							<WebVitalsReporter />
+						</Suspense>
+					</TooltipProvider>
 				</ThemeProvider>
 			</body>
 		</html>

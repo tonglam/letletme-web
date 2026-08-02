@@ -2,7 +2,7 @@ import {
 	GET_LIVE_MATCHES,
 	type LiveMatchesResponse,
 	type MatchPlayerData,
-} from '@/lib/graphql/queries'
+} from '@/lib/graphql/operations/live'
 import { executeQuery } from '@/lib/graphql-client'
 import { teamFullNames } from '@/types/common'
 import type { Match } from '@/types/match'

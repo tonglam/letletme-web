@@ -9,20 +9,22 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { signOut, useSession } from '@/lib/auth-client'
+import { signOut } from '@/lib/auth-client'
 import { LogOut, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
-export function HeaderProfileCard() {
-	const { data: session } = useSession()
+export interface NavigationUser {
+	name?: string | null
+	email: string
+	image?: string | null
+	fplEntryId?: number | null
+}
+
+export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 	const router = useRouter()
 	const [signingOut, setSigningOut] = useState(false)
-
-	if (!session) return null
-
-	const { user } = session
 	const initials = (user.name ?? user.email).charAt(0).toUpperCase()
 
 	const handleSignOut = async () => {
@@ -39,7 +41,11 @@ export function HeaderProfileCard() {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button variant="ghost" className="px-2 gap-2 h-9">
+				<Button
+					variant="ghost"
+					className="h-9 gap-2 px-2"
+					aria-label={`Open account menu for ${user.name ?? user.email}`}
+				>
 					<Avatar className="h-6 w-6">
 						<AvatarImage src={user.image ?? undefined} alt={user.name ?? ''} />
 						<AvatarFallback className="text-xs bg-primary/10 text-primary">

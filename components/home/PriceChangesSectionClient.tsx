@@ -1,9 +1,16 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
-import { Card } from '@/components/ui/card'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from '@/components/ui/card'
 import { TrendingDown, TrendingUp } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 
 export interface PriceChange {
 	position: string
@@ -14,7 +21,6 @@ export interface PriceChange {
 }
 
 const PAGE_SIZE = 5
-const AUTOPLAY_INTERVAL = 3500
 
 function PriceList({
 	title,
@@ -26,50 +32,28 @@ function PriceList({
 	type: 'rise' | 'fall'
 }) {
 	const [page, setPage] = useState(0)
-	const [animating, setAnimating] = useState(false)
-	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
 	const pages = Math.ceil(changes.length / PAGE_SIZE)
-
-	const advance = useCallback(() => {
-		setAnimating(true)
-		setTimeout(() => {
-			setPage(p => (p + 1) % pages)
-			setAnimating(false)
-		}, 250)
-	}, [pages])
-
-	useEffect(() => {
-		if (pages <= 1) return
-		timerRef.current = setInterval(advance, AUTOPLAY_INTERVAL)
-		return () => {
-			if (timerRef.current) clearInterval(timerRef.current)
-		}
-	}, [advance, pages])
-
-	useEffect(() => {
-		const resetTimer = setTimeout(() => setPage(0), 0)
-		return () => clearTimeout(resetTimer)
-	}, [changes])
+	const safePage = pages > 0 ? Math.min(page, pages - 1) : 0
 
 	const icon =
 		type === 'rise' ? (
-			<TrendingUp className="w-5 h-5 shrink-0 text-emerald-500" />
+			<TrendingUp aria-hidden="true" className="size-5 shrink-0 text-success" />
 		) : (
-			<TrendingDown className="w-5 h-5 shrink-0 text-rose-500" />
+			<TrendingDown aria-hidden="true" className="size-5 shrink-0 text-destructive" />
 		)
 
 	const priceClassName =
 		type === 'rise'
-			? 'text-emerald-600 dark:text-emerald-400'
-			: 'text-rose-600 dark:text-rose-400'
+			? 'text-success'
+			: 'text-destructive'
 
 	const bgClassName =
 		type === 'rise'
-			? 'border-emerald-200 dark:border-emerald-900'
-			: 'border-rose-200 dark:border-rose-900'
+			? 'border-success/30'
+			: 'border-destructive/30'
 
-	const dotActiveColor = type === 'rise' ? 'bg-emerald-500' : 'bg-rose-500'
+	const dotActiveColor = type === 'rise' ? 'bg-success' : 'bg-destructive'
 
 	const getPositionColor = (position: string) => {
 		switch (position) {
@@ -87,13 +71,13 @@ function PriceList({
 	}
 
 	const visibleChanges = changes.slice(
-		page * PAGE_SIZE,
-		page * PAGE_SIZE + PAGE_SIZE
+		safePage * PAGE_SIZE,
+		safePage * PAGE_SIZE + PAGE_SIZE
 	)
 
 	return (
-		<div className="flex flex-col h-full">
-			<div className="flex items-center gap-2 mb-4">
+		<div className="flex h-full flex-col">
+			<div className="mb-4 flex items-center gap-2">
 				{icon}
 				<h3 className="text-xl font-bold">{title}</h3>
 				{changes.length > 0 && (
@@ -105,22 +89,17 @@ function PriceList({
 					</Badge>
 				)}
 			</div>
-			<div className={`space-y-2 rounded-lg p-3 border ${bgClassName} flex-1`}>
+			<div className={`flex flex-1 flex-col gap-2 rounded-xl border p-3 ${bgClassName}`}>
 				{changes.length === 0 ? (
 					<div className="text-center py-8 text-muted-foreground text-sm">
 						No {type === 'rise' ? 'rises' : 'falls'} to display
 					</div>
 				) : (
-					<div
-						className="transition-opacity duration-250"
-						style={{ opacity: animating ? 0 : 1 }}
-					>
+					<div className="flex flex-col gap-2">
 						{visibleChanges.map((change, index) => (
-							<button
-								key={`${page}-${index}`}
-								className="w-full flex items-center gap-3 p-3 rounded-lg bg-background/80 hover:bg-background border border-border/50 hover:border-border transition-all text-left group mb-2 last:mb-0"
-								onClick={() => console.log(`Clicked on ${change.player}`)}
-								aria-label={`View details for ${change.player}`}
+							<div
+								key={`${safePage}-${change.player}-${index}`}
+								className="flex w-full items-center gap-3 rounded-lg border border-border/60 bg-background/80 p-3 text-left"
 							>
 								<Badge
 									variant="secondary"
@@ -130,8 +109,8 @@ function PriceList({
 								</Badge>
 
 								<div className="flex-1 min-w-0">
-									<div className="flex items-center gap-2 mb-1">
-										<span className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
+									<div className="mb-1 flex items-center gap-2">
+										<span className="truncate text-sm font-semibold">
 											{change.player}
 										</span>
 									</div>
@@ -151,28 +130,23 @@ function PriceList({
 										</span>
 									)}
 								</div>
-							</button>
+							</div>
 						))}
 					</div>
 				)}
 			</div>
 			{pages > 1 && (
-				<div className="flex justify-center gap-1.5 mt-3">
+				<div className="mt-3 flex justify-center gap-1">
 					{Array.from({ length: pages }).map((_, i) => (
 						<button
 							key={i}
-							onClick={() => {
-								if (timerRef.current) clearInterval(timerRef.current)
-								setPage(i)
-								timerRef.current = setInterval(advance, AUTOPLAY_INTERVAL)
-							}}
-							className={`h-1.5 rounded-full transition-all duration-300 ${
-								i === page
-									? `w-4 ${dotActiveColor}`
-									: 'w-1.5 bg-muted-foreground/30'
-							}`}
+							onClick={() => setPage(i)}
+							className="flex size-6 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							aria-label={`Go to page ${i + 1}`}
-						/>
+							aria-current={i === safePage ? 'page' : undefined}
+						>
+							<span className={`h-1.5 rounded-full transition-[width] ${i === safePage ? `w-4 ${dotActiveColor}` : 'w-1.5 bg-muted-foreground/40'}`} />
+						</button>
 					))}
 				</div>
 			)}
@@ -189,25 +163,38 @@ export function PriceChangesSectionClient({
 	priceFalls: PriceChange[]
 	error?: string | null
 }) {
+	const hasChanges = priceRises.length > 0 || priceFalls.length > 0
+
 	return (
-		<Card className="rounded-none sm:rounded-lg p-4 sm:p-6 lg:p-8">
-			{error && (
-				<div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-					<p className="text-sm text-destructive">{error}</p>
-				</div>
-			)}
-			<div className="grid md:grid-cols-2 gap-6 lg:gap-8">
-				<PriceList
-					title="Price Rises"
-					changes={priceRises}
-					type="rise"
-				/>
-				<PriceList
-					title="Price Falls"
-					changes={priceFalls}
-					type="fall"
-				/>
-			</div>
+		<Card className="overflow-hidden rounded-none sm:rounded-xl">
+			<CardHeader className="pb-4">
+				<CardTitle asChild className="text-2xl">
+					<h2>Market movement</h2>
+				</CardTitle>
+				<CardDescription>Price changes that can shape your next transfer decision.</CardDescription>
+			</CardHeader>
+			<CardContent>
+				{error && (
+					<Alert variant="destructive" className="mb-5">
+						<AlertTitle>Price data unavailable</AlertTitle>
+						<AlertDescription>{error}</AlertDescription>
+					</Alert>
+				)}
+				{!error || hasChanges ? (
+					<div className="grid gap-6 md:grid-cols-2 lg:gap-8">
+						<PriceList
+							title="Price Rises"
+							changes={priceRises}
+							type="rise"
+						/>
+						<PriceList
+							title="Price Falls"
+							changes={priceFalls}
+							type="fall"
+						/>
+					</div>
+				) : null}
+			</CardContent>
 		</Card>
 	)
 }

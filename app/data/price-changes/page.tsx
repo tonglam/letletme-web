@@ -1,14 +1,23 @@
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_PLAYER_VALUES,
-	utcCalendarDateISO,
 	type PlayerValue,
 	type PlayerValuesResponse,
-} from '@/lib/graphql/queries'
+} from '@/lib/graphql/operations/prices'
+import {
+	utcCalendarDateISO,
+} from '@/lib/graphql/operations/events'
 import PriceChangesClient from './PriceChangesClient'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+	title: 'Price changes',
+	description: 'Track daily FPL price movement and individual player price history.',
+}
 
 export default async function PriceChangesPage() {
 	let initialPlayerValues: PlayerValue[] | null = null
+	let initialError: string | null = null
 	try {
 		const data = await executePublicServerQuery<PlayerValuesResponse>(
 			GET_PLAYER_VALUES,
@@ -18,6 +27,12 @@ export default async function PriceChangesPage() {
 		initialPlayerValues = data.playerValues
 	} catch (err) {
 		console.error('[price-changes] RSC fetch failed:', err)
+		initialError = 'Daily price changes are temporarily unavailable.'
 	}
-	return <PriceChangesClient initialPlayerValues={initialPlayerValues} />
+	return (
+		<PriceChangesClient
+			initialPlayerValues={initialPlayerValues}
+			initialError={initialError}
+		/>
+	)
 }

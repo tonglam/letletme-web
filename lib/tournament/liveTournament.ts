@@ -1,4 +1,6 @@
-import { type EntryTournament } from '@/lib/graphql/queries'
+import {
+	type EntryTournament,
+} from '@/lib/graphql/operations/tournaments'
 import { type Tournament } from '@/types/tournament'
 
 export const mapEntryTournamentToLiveTournament = (

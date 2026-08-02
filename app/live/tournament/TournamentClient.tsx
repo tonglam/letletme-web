@@ -1,7 +1,7 @@
 'use client'
 
 import { GameweekSelector } from '@/components/data/GameweekSelector'
-import RootLayout from '@/components/layout/RootLayout'
+import PageShell from '@/components/layout/PageShell'
 import { PlayerOwnershipFilter } from '@/components/player/PlayerOwnershipFilter'
 import { TeamExposureFilter } from '@/components/player/TeamExposureFilter'
 import { SearchHeader } from '@/components/tournament/SearchHeader'
@@ -15,9 +15,8 @@ import {
 	GET_TOURNAMENT_LIVE_POINTS,
 	type EntryTournamentsResponse,
 	type TournamentLiveCalcData,
-	type TournamentLivePointsResponse
-} from '@/lib/graphql/queries'
-import { useEvent } from '@/lib/event-context'
+	type TournamentLivePointsResponse,
+} from '@/lib/graphql/operations/tournaments'
 import {
 	buildTournamentEntries,
 	buildTournamentStats,
@@ -52,9 +51,9 @@ interface TournamentClientProps {
 	entryId: number
 	initialTournaments?: Tournament[]
 	initialSelectedTournamentId?: string
-	initialEventId?: number
+	initialEventId: number
 	initialCurrentRows?: TournamentLiveCalcData[]
-	initialPreviousRows?: TournamentLiveCalcData[]
+	initialResultsLoaded?: boolean
 }
 
 export default function TournamentClient({
@@ -63,11 +62,10 @@ export default function TournamentClient({
 	initialSelectedTournamentId = '',
 	initialEventId,
 	initialCurrentRows = [],
-	initialPreviousRows = [],
+	initialResultsLoaded = false,
 }: TournamentClientProps) {
 	const router = useRouter()
 	const searchParams = useSearchParams()
-	const { currentEventId } = useEvent()
 
 	const [searchQuery, setSearchQuery] = useState<string>('')
 	const [chipFilter, setChipFilter] = useState<string>('all')
@@ -79,10 +77,10 @@ export default function TournamentClient({
 		entryId > 0 && initialTournaments.length === 0,
 	)
 	const [isLoadingResults, setIsLoadingResults] = useState<boolean>(false)
-	const [currentGameweek] = useState<number | undefined>(currentEventId ?? initialEventId ?? undefined)
-	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(initialEventId ?? currentEventId ?? undefined)
+	const [currentGameweek] = useState<number>(initialEventId)
+	const [selectedGameweek, setSelectedGameweek] = useState<number>(initialEventId)
 	const initialEntries = initialCurrentRows.length > 0
-		? buildTournamentEntries(initialCurrentRows, initialPreviousRows)
+		? buildTournamentEntries(initialCurrentRows)
 		: []
 	const [selectedEntries, setSelectedEntries] = useState<TournamentEntry[]>(initialEntries)
 	const [ownershipMatchedEntryIds, setOwnershipMatchedEntryIds] = useState<string[] | null>(null)
@@ -91,7 +89,7 @@ export default function TournamentClient({
 		buildTournamentStats(initialEntries)
 	)
 	const initialResultsKeyRef = useRef(
-		initialCurrentRows.length > 0 && initialSelectedTournamentId && initialEventId
+		initialResultsLoaded && initialSelectedTournamentId && initialEventId
 			? `${initialSelectedTournamentId}:${initialEventId}`
 			: null
 	)
@@ -180,22 +178,7 @@ export default function TournamentClient({
 				setResultsError(null)
 
 				const tournamentId = Number(selectedTournament.id)
-				const previousEventId = selectedGameweek > 1 ? selectedGameweek - 1 : null
-
-				const [currentBatch, previousBatch] = await Promise.all([
-					fetchLivePoints(tournamentId, selectedGameweek),
-					previousEventId
-						? fetchLivePoints(tournamentId, previousEventId).catch(() => ({
-								rows: [] as TournamentLiveCalcData[],
-								failedCount: 0,
-								totalEntries: 0,
-							}))
-						: Promise.resolve({
-								rows: [] as TournamentLiveCalcData[],
-								failedCount: 0,
-								totalEntries: 0,
-							}),
-				])
+				const currentBatch = await fetchLivePoints(tournamentId, selectedGameweek)
 
 				if (isCancelled) {
 					return
@@ -207,7 +190,7 @@ export default function TournamentClient({
 					)
 				}
 
-				const entries = buildTournamentEntries(currentBatch.rows, previousBatch.rows)
+				const entries = buildTournamentEntries(currentBatch.rows)
 
 				setSelectedEntries(entries)
 				setSelectedStats(buildTournamentStats(entries))
@@ -245,7 +228,7 @@ export default function TournamentClient({
 		return () => window.clearTimeout(resetTimer)
 	}, [selectedGameweek, selectedTournament?.id])
 
-	const displayGameweek = selectedGameweek ?? currentGameweek ?? 1
+	const displayGameweek = selectedGameweek
 	const captainOptions = useMemo(
 		() =>
 			Array.from(
@@ -310,7 +293,7 @@ export default function TournamentClient({
 
 	if (entryId <= 0) {
 		return (
-			<RootLayout>
+			<PageShell>
 				<div className="container max-w-4xl mx-auto px-4 py-8">
 					<Card className="p-6 text-sm text-muted-foreground">
 						Sign in and bind an FPL entry to view live tournament standings.{' '}
@@ -319,12 +302,12 @@ export default function TournamentClient({
 						</Link>
 					</Card>
 				</div>
-			</RootLayout>
+			</PageShell>
 		)
 	}
 
 	return (
-		<RootLayout>
+		<PageShell>
 			<div className="container max-w-4xl mx-auto px-4 py-8">
 				{loadError && (
 					<Card className="p-4 mb-6 border-destructive/30 bg-destructive/5 text-destructive text-sm">
@@ -349,16 +332,12 @@ export default function TournamentClient({
 				)}
 
 				<Card className="p-4 mb-6">
-					{currentGameweek !== undefined ? (
-						<GameweekSelector
-							onGameweekChange={setSelectedGameweek}
-							currentGameweek={currentGameweek}
-							selectedGameweek={selectedGameweek}
-							disabled={isLoadingResults}
-						/>
-					) : (
-						<p className="text-sm text-muted-foreground">Loading gameweek...</p>
-					)}
+					<GameweekSelector
+						onGameweekChange={setSelectedGameweek}
+						currentGameweek={currentGameweek}
+						selectedGameweek={selectedGameweek}
+						disabled={isLoadingResults}
+					/>
 				</Card>
 
 				{isLoadingTournaments && (
@@ -377,11 +356,9 @@ export default function TournamentClient({
 					<>
 						<TournamentHeader
 							name={selectedTournament.name}
-							gameweek={displayGameweek}
 							averagePoints={selectedStats.averagePoints}
 							highestPoints={selectedStats.highestPoints}
 							totalEntries={selectedStats.totalEntries || selectedTournament.totalEntries}
-							tournamentId={selectedTournament.id}
 						/>
 
 						<SearchHeader
@@ -423,6 +400,6 @@ export default function TournamentClient({
 					</>
 				)}
 			</div>
-		</RootLayout>
+		</PageShell>
 	)
 }

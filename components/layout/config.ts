@@ -12,7 +12,7 @@ interface MenuItem {
 	icon: typeof LucideIcon
 	items: {
 		label: string
-		href?: string
+		href: string
 	}[]
 }
 
@@ -53,7 +53,7 @@ export const menuItems: MenuItem[] = [
 		items: [
 			{ label: 'Price Changes', href: '/data/price-changes' },
 			{ label: 'Selections', href: '/data/selections' },
-			{ label: 'Player Stats', href: '/data/player-stats' },
-			]
+			{ label: 'Player Stats', href: '/data/player-stats' }
+		]
 	}
 ]

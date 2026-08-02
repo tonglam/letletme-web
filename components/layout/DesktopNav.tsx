@@ -4,85 +4,45 @@ import { Button } from '@/components/ui/button'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { HeaderProfileCard } from '@/components/profile/HeaderProfileCard'
-import { useSession } from '@/lib/auth-client'
-import { cn } from '@/lib/utils'
-import { ChevronDown, Globe, UserCircle } from 'lucide-react'
+import { HeaderProfileCard, type NavigationUser } from '@/components/profile/HeaderProfileCard'
+import { ChevronDown, UserCircle } from 'lucide-react'
 import Link from 'next/link'
 import { menuItems } from './config'
 
-interface DesktopNavProps {
-	currentLang: string
-	setCurrentLang: (lang: string) => void
-	languages: { code: string; label: string }[]
-}
-
-export function DesktopNav({
-	currentLang,
-	setCurrentLang,
-	languages
-}: DesktopNavProps) {
-	const { data: session } = useSession()
-
+export function DesktopNav({ user }: { user: NavigationUser | null }) {
 	return (
-		<div className="hidden md:flex items-center space-x-2 ml-8">
+		<div className="ml-6 hidden items-center gap-1 md:flex">
 			{menuItems.map(item => (
 				<DropdownMenu key={item.id}>
 					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" className="px-2">
-							<item.icon className="h-5 w-5 mr-2" />
+						<Button variant="ghost" className="px-2.5">
+							<item.icon data-icon="inline-start" />
 							{item.label}
-							<ChevronDown className="ml-2 h-4 w-4" />
+							<ChevronDown data-icon="inline-end" />
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent>
-						{item.items.map(subItem => (
-							<DropdownMenuItem
-								key={subItem.label}
-								asChild={!!subItem.href}
-							>
-								{subItem.href ? (
+						<DropdownMenuGroup>
+							{item.items.map(subItem => (
+								<DropdownMenuItem key={subItem.label} asChild>
 									<Link href={subItem.href}>{subItem.label}</Link>
-								) : (
-									subItem.label
-								)}
-							</DropdownMenuItem>
-						))}
+								</DropdownMenuItem>
+							))}
+						</DropdownMenuGroup>
 					</DropdownMenuContent>
 				</DropdownMenu>
 			))}
 
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button variant="ghost" size="icon">
-						<Globe className="h-5 w-5" />
-					</Button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent>
-					{languages.map(lang => (
-						<DropdownMenuItem
-							key={lang.code}
-							className={cn(
-								'cursor-pointer',
-								currentLang === lang.code && 'bg-accent'
-							)}
-							onClick={() => setCurrentLang(lang.code)}
-						>
-							{lang.label}
-						</DropdownMenuItem>
-					))}
-				</DropdownMenuContent>
-			</DropdownMenu>
-
-			{session ? (
-				<HeaderProfileCard />
+			{user ? (
+				<HeaderProfileCard user={user} />
 			) : (
 				<Button variant="ghost" className="px-2" asChild>
 					<Link href="/auth/login">
-						<UserCircle className="h-5 w-5 mr-2" />
+						<UserCircle data-icon="inline-start" />
 						Login
 					</Link>
 				</Button>

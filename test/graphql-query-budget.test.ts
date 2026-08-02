@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { parse, visit } from 'graphql'
-import { GET_LIVE_MATCHES } from '../lib/graphql/queries'
+import {
+	GET_LIVE_MATCHES,
+} from '../lib/graphql/operations/live'
 
 describe('GraphQL request budget', () => {
 	it('keeps GET_LIVE_MATCHES below the production 200-node guard', () => {

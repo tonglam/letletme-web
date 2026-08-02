@@ -2,11 +2,11 @@ import { PlayerList, type PlayerListItem } from '@/components/player/PlayerList'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { executeQuery } from '@/lib/graphql-client'
+import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_LIVE_SCORES,
 	type LiveScoresResponse,
-} from '@/lib/graphql/queries'
+} from '@/lib/graphql/operations/live'
 import { normalizePosition } from '@/lib/utils'
 
 interface TeamOfTheWeekSectionProps {
@@ -86,10 +86,10 @@ export async function TeamOfTheWeekSection({ currentEventId }: TeamOfTheWeekSect
 	let error: string | null = null
 
 	try {
-		const scoresData = await executeQuery<LiveScoresResponse>(
+		const scoresData = await executePublicServerQuery<LiveScoresResponse>(
 			GET_LIVE_SCORES,
 			{ eventId: currentEventId },
-			{ cache: 'force-cache', next: { revalidate: 300 } },
+			{ cache: 'force-cache', next: { revalidate: 300 }, timeoutMs: 5_000 },
 		)
 
 		const positionOrder: Record<string, number> = {

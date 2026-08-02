@@ -1,8 +1,8 @@
 import { executeQuery } from "@/lib/graphql-client";
 import {
-  GET_EVENT_STATS_BY_ID,
-  type EventStatsByIdResponse,
-} from "@/lib/graphql/queries";
+	GET_EVENT_STATS_BY_ID,
+	type EventStatsByIdResponse,
+} from "@/lib/graphql/operations/events";
 
 interface ExecuteQueryOptions {
   cache?: RequestCache;

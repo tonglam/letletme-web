@@ -1,11 +1,13 @@
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { executeQuery } from '@/lib/graphql-client'
+import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_PLAYER_VALUES,
-	utcCalendarDateISO,
 	type PlayerValuesResponse,
-} from '@/lib/graphql/queries'
+} from '@/lib/graphql/operations/prices'
+import {
+	utcCalendarDateISO,
+} from '@/lib/graphql/operations/events'
 import {
 	PriceChangesSectionClient,
 	type PriceChange,
@@ -47,10 +49,10 @@ export async function PriceChangesSection() {
 	let error: string | null = null
 
 	try {
-		const data = await executeQuery<PlayerValuesResponse>(
+		const data = await executePublicServerQuery<PlayerValuesResponse>(
 			GET_PLAYER_VALUES,
 			{ changeDate: utcCalendarDateISO() },
-			{ cache: 'force-cache', next: { revalidate: 300 } },
+			{ cache: 'force-cache', next: { revalidate: 300 }, timeoutMs: 5_000 },
 		)
 
 		priceRises = data.playerValues

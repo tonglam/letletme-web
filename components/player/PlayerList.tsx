@@ -1,5 +1,3 @@
-"use client";
-
 import { Badge } from "@/components/ui/badge";
 import { normalizePosition, type PositionCode } from "@/lib/utils";
 
@@ -47,11 +45,9 @@ export function PlayerList({
         const position = normalizePosition(player.position);
 
         return (
-          <button
+          <div
             key={player.id}
-            className="w-full flex items-center gap-3 p-3 rounded-lg bg-background/80 hover:bg-background border border-border/50 hover:border-border transition-all text-left group"
-            onClick={() => console.log(`Clicked on ${player.name}`)}
-            aria-label={`View details for ${player.name}`}
+            className="flex w-full items-center gap-3 rounded-lg border border-border/50 bg-background/80 p-3 text-left"
           >
             <Badge
               variant="secondary"
@@ -61,7 +57,7 @@ export function PlayerList({
             </Badge>
 
             <div className="flex-1 min-w-0">
-              <span className="text-sm font-semibold truncate group-hover:text-primary transition-colors block">
+              <span className="text-sm font-semibold truncate block">
                 {player.name}
               </span>
               {player.team ? (
@@ -78,7 +74,7 @@ export function PlayerList({
                 </span>
               </div>
             ) : null}
-          </button>
+          </div>
         );
       })}
     </div>

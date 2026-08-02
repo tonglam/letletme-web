@@ -13,7 +13,7 @@ import {
 interface GameweekSelectorProps {
   onGameweekChange: (gameweek: number) => void;
   className?: string;
-  currentGameweek?: number;
+  currentGameweek: number;
   selectedGameweek?: number;
   disabled?: boolean;
 }
@@ -21,7 +21,7 @@ interface GameweekSelectorProps {
 export function GameweekSelector({ 
   onGameweekChange, 
   className = "",
-  currentGameweek = 21,
+  currentGameweek,
   selectedGameweek,
   disabled = false
 }: GameweekSelectorProps) {
@@ -56,7 +56,7 @@ export function GameweekSelector({
           onValueChange={(value) => onGameweekChange(parseInt(value))}
           disabled={disabled}
         >
-          <SelectTrigger>
+          <SelectTrigger aria-label="Select gameweek">
             <SelectValue placeholder="Select gameweek" />
           </SelectTrigger>
           <SelectContent>

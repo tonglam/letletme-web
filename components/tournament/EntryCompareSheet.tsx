@@ -7,8 +7,8 @@ import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
-	type LiveCalcDataResponse
-} from '@/lib/graphql/queries'
+	type LiveCalcDataResponse,
+} from '@/lib/graphql/operations/live'
 import { formatCompactNumber } from '@/lib/utils'
 import type { TournamentEntry } from '@/types/tournament'
 import { useEffect, useState } from 'react'

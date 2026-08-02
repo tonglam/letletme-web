@@ -1,5 +1,3 @@
-"use client";
-
 import { Badge } from "@/components/ui/badge";
 import { formatCompactNumber, normalizePosition } from "@/lib/utils";
 import { ArrowLeftCircle, ArrowRightCircle } from "lucide-react";
@@ -61,12 +59,10 @@ export function TransferList({ title, transfers, type }: TransferListProps) {
             No transfers to display
           </div>
         ) : (
-          transfers.map((transfer, index) => (
-            <button
-              key={index}
-              className="w-full flex items-center gap-3 p-3 rounded-lg bg-background/80 hover:bg-background border border-border/50 hover:border-border transition-all text-left group"
-              onClick={() => console.log(`Clicked on ${transfer.player}`)}
-              aria-label={`View details for ${transfer.player}`}
+          transfers.map((transfer) => (
+            <div
+              key={`${transfer.player}-${transfer.club}`}
+              className="flex w-full items-center gap-3 rounded-lg border border-border/50 bg-background/80 p-3 text-left"
             >
               <Badge 
                 variant="secondary" 
@@ -77,7 +73,7 @@ export function TransferList({ title, transfers, type }: TransferListProps) {
               
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-semibold truncate group-hover:text-primary transition-colors">
+                  <span className="text-sm font-semibold truncate">
                     {transfer.player}
                   </span>
                 </div>
@@ -101,7 +97,7 @@ export function TransferList({ title, transfers, type }: TransferListProps) {
                   {formatCompactNumber(transfer.transfers)}
                 </span>
               </div>
-            </button>
+            </div>
           ))
         )}
       </div>

@@ -6,11 +6,9 @@ import { formatCompactNumber } from "@/lib/utils";
 
 interface TournamentHeaderProps {
   name: string;
-  gameweek: number;
   averagePoints: number;
   highestPoints: number;
   totalEntries: number;
-  tournamentId?: string;
 }
 
 export function TournamentHeader({

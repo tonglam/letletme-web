@@ -25,7 +25,6 @@ export default function BindEntryForm() {
 			{state?.error && (
 				<Alert
 					variant="destructive"
-					className="bg-red-50 text-red-800 border-red-200"
 				>
 					<AlertDescription>{state.error}</AlertDescription>
 				</Alert>
