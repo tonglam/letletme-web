@@ -190,7 +190,7 @@
     "stepTwo": "Go to “Points” or “Pick Team”",
     "stepThree": "Your entry ID is the number in the URL",
     "example": "For example:",
-    "openFplPage": "Open my FPL team page",
+    "openFplPage": "Open fantasy.premierleague.com",
     "changeTeamName": "In FPL, temporarily change team {entryId} to this exact name:",
     "saveAndConfirm": "Save the name in FPL, then confirm here within 15 minutes.",
     "openFplRename": "Open FPL to edit the team name",
