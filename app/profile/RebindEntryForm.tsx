@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useRouter } from '@/i18n/navigation'
 import { useSession } from '@/lib/auth-client'
+import { clearPendingClientQueries } from '@/lib/graphql-client'
 import { ClipboardPaste, ExternalLink, Link2Off, MousePointerClick, Pencil, Trophy, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useActionState, useEffect, useRef, useState, useTransition } from 'react'
@@ -51,6 +52,10 @@ export default function RebindEntryForm({
 				setCleared(false)
 				setEditing(false)
 			})
+			// The binding identity changed: drop in-flight entry-scoped GraphQL
+			// requests so a later identical query cannot reuse a promise issued
+			// under the previous entry (dedupe keys exclude the entry).
+			clearPendingClientQueries()
 			// Refresh the session past better-auth's 5-min cookie cache before
 			// re-rendering, so the header and every useSession() consumer (and
 			// any navigation to a verified-entry page gated by proxy.ts) see the
@@ -79,6 +84,7 @@ export default function RebindEntryForm({
 				setCleared(true)
 				setEditing(true)
 				toast.success(t('unlinked'))
+				clearPendingClientQueries()
 				await refetchSession({ query: { disableCookieCache: true } })
 				router.refresh()
 			} else if (result.errorCode) {

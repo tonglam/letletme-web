@@ -8,7 +8,7 @@ import { localizeHref } from '@/i18n/routing'
 import { getAuth } from '@/lib/auth'
 import { db, schema } from '@/lib/db'
 import { getVerifiedFplEntryId, isFplIdentitySnapshotStale } from '@/lib/fpl-binding-core'
-import { refreshFplIdentitySnapshot } from '@/lib/fpl-entry-binding'
+import { claimFplIdentityRefresh, refreshFplIdentitySnapshot } from '@/lib/fpl-entry-binding'
 import { eq } from 'drizzle-orm'
 import { Trophy, Users } from 'lucide-react'
 import { headers } from 'next/headers'
@@ -55,11 +55,13 @@ export default async function ProfilePage({ params }: PageProps) {
 	const verifiedEntryId = getVerifiedFplEntryId(profile)
 
 	// Post-response: re-sync the name snapshot when the persisted snapshot is
-	// stale (older than 24h or never refreshed). The throttle marker lives on
-	// the user row, so it holds across serverless instances and cold starts.
+	// stale (older than 24h or never refreshed). The cheap staleness read comes
+	// from the already-loaded row; the claim UPDATE below then atomically
+	// picks a single winner across concurrent tabs/instances.
 	if (
 		verifiedEntryId !== null &&
-		isFplIdentitySnapshotStale(dbUser?.fplIdentityRefreshedAt)
+		isFplIdentitySnapshotStale(dbUser?.fplIdentityRefreshedAt) &&
+		(await claimFplIdentityRefresh(user.id, verifiedEntryId))
 	) {
 		after(async () => {
 			await refreshFplIdentitySnapshot(user.id, verifiedEntryId)

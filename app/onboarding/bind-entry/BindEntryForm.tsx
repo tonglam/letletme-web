@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useRouter } from '@/i18n/navigation'
 import { useSession } from '@/lib/auth-client'
+import { clearPendingClientQueries } from '@/lib/graphql-client'
 import { useTranslations } from 'next-intl'
 import { useEffect, useActionState } from 'react'
 import { toast } from 'sonner'
@@ -20,6 +21,7 @@ export default function BindEntryForm() {
 	useEffect(() => {
 		if (!(state?.success && state.teamName && state.managerName)) return
 		toast.success(t('verified', { teamName: state.teamName, managerName: state.managerName }))
+		clearPendingClientQueries()
 		void (async () => {
 			// Await the session refresh (bypassing better-auth's cookie cache)
 			// BEFORE navigating — otherwise the destination page or proxy.ts can

@@ -60,9 +60,8 @@ export async function generateMetadata({ params }: LocaleLayoutProps): Promise<M
 		},
 		description: t('description'),
 		alternates: localizedAlternates('/', locale),
-		icons: {
-			icon: [{ url: '/favicon.ico' }],
-		},
+		// No icons override: the file-based app/icon.svg convention supplies the
+		// matchday mark; public/favicon.ico remains as the legacy fallback.
 	}
 }
 

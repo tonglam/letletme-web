@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { randomBytes, randomUUID } from 'crypto'
-import { and, count, desc, eq, gte, isNull, sql } from 'drizzle-orm'
+import { and, count, desc, eq, gte, isNull, lt, or, sql } from 'drizzle-orm'
 import { after } from 'next/server'
 
 import { db, schema } from '@/lib/db'
@@ -10,6 +10,9 @@ import {
 	FPL_BINDING_CHALLENGE_TTL_MS,
 	FPL_BINDING_CREATION_LIMIT,
 	FPL_BINDING_MAX_ATTEMPTS,
+	FPL_BINDING_RATE_LIMIT_MAX,
+	FPL_BINDING_RATE_LIMIT_WINDOW_SECONDS,
+	FPL_IDENTITY_REFRESH_INTERVAL_MS,
 	assertFplEntryId,
 	fplTeamNamesMatch,
 } from '@/lib/fpl-binding-core'
@@ -224,6 +227,47 @@ export async function confirmFplEntryBindingChallenge(
 	}
 }
 
+const BINDING_RATE_LIMIT_SCOPE = 'fpl-entry-binding'
+
+/**
+ * Durable per-user fixed-window limit on binding attempts, backed by the
+ * request_rate_limits table so it holds across serverless instances. The
+ * upsert increments atomically, so concurrent attempts count exactly. Every
+ * invocation consumes quota — including invalid IDs — because the point is
+ * to cap upstream FPL and data-service traffic per account. Stale buckets
+ * are tiny and expire-indexed; no janitor for now.
+ */
+async function assertBindingRateLimit(userId: string): Promise<void> {
+	const windowMs = FPL_BINDING_RATE_LIMIT_WINDOW_SECONDS * 1000
+	const now = Date.now()
+	const bucketStart = new Date(Math.floor(now / windowMs) * windowMs)
+	const expiresAt = new Date(bucketStart.getTime() + 2 * windowMs)
+
+	const [bucket] = await db
+		.insert(schema.requestRateLimit)
+		.values({
+			scope: BINDING_RATE_LIMIT_SCOPE,
+			subject: userId,
+			bucketStart,
+			windowSeconds: FPL_BINDING_RATE_LIMIT_WINDOW_SECONDS,
+			count: 1,
+			expiresAt,
+		})
+		.onConflictDoUpdate({
+			target: [
+				schema.requestRateLimit.scope,
+				schema.requestRateLimit.subject,
+				schema.requestRateLimit.bucketStart,
+			],
+			set: { count: sql`${schema.requestRateLimit.count} + 1` },
+		})
+		.returning({ count: schema.requestRateLimit.count })
+
+	if ((bucket?.count ?? 0) > FPL_BINDING_RATE_LIMIT_MAX) {
+		throw new FplBindingError('Too many binding attempts; try again later', 429)
+	}
+}
+
 /**
  * Product decision: an FPL entry ID is not a strong asset, so binding does
  * not require proving ownership — pasting the ID (or a URL containing it)
@@ -235,6 +279,7 @@ export async function bindFplEntryDirectly(
 	userId: string,
 	entryIdInput: unknown,
 ): Promise<{ entryId: number; teamName: string; managerName: string; verifiedAt: string }> {
+	await assertBindingRateLimit(userId)
 	const entryId = assertFplEntryId(entryIdInput)
 	const entry = await validateFplEntry(entryId)
 	if (!entry.valid || !entry.teamName || !entry.managerName) {
@@ -299,23 +344,58 @@ export async function unlinkFplEntry(userId: string): Promise<void> {
 }
 
 /**
+ * Atomically claim the identity-refresh window for this user+entry: exactly
+ * one concurrent caller (across tabs/instances) gets true and schedules the
+ * post-response lookup; everyone else gets false. Callers should still
+ * pre-check staleness from the already-loaded row to keep the hot path
+ * write-free — this UPDATE only runs once the snapshot looks stale.
+ */
+export async function claimFplIdentityRefresh(
+	userId: string,
+	entryId: number,
+): Promise<boolean> {
+	const now = new Date()
+	const staleBefore = new Date(now.getTime() - FPL_IDENTITY_REFRESH_INTERVAL_MS)
+	const claimed = await db
+		.update(schema.user)
+		.set({ fplIdentityRefreshedAt: now })
+		.where(
+			and(
+				eq(schema.user.id, userId),
+				eq(schema.user.fplEntryId, entryId),
+				or(
+					isNull(schema.user.fplIdentityRefreshedAt),
+					lt(schema.user.fplIdentityRefreshedAt, staleBefore),
+				),
+			),
+		)
+		.returning({ id: schema.user.id })
+	return claimed.length > 0
+}
+
+/**
  * Re-sync the display-only team/manager name snapshot from FPL. Callers gate
- * invocations on the persisted fplIdentityRefreshedAt column (see the profile
- * page), so the once-per-day throttle survives serverless cold starts and
- * this function always performs the fetch when invoked.
+ * invocations via claimFplIdentityRefresh, so this always performs the fetch
+ * when invoked.
  *
  * The update is constrained by the still-current fplEntryId: if the user
  * rebinds while this lookup is in flight, the stale snapshot for the old
- * entry cannot overwrite the fresh names stored by the new bind. FPL
- * failures leave both the previous snapshot and the timestamp untouched, so
- * the next profile view retries.
+ * entry cannot overwrite the fresh names stored by the new bind. On FPL
+ * failure the claimed window is released (timestamp reset to NULL) so the
+ * next profile view retries instead of waiting out a full 24h lockout.
  */
 export async function refreshFplIdentitySnapshot(
 	userId: string,
 	entryId: number,
 ): Promise<void> {
 	const entry = await validateFplEntry(entryId)
-	if (!entry.valid || !entry.teamName || !entry.managerName) return
+	if (!entry.valid || !entry.teamName || !entry.managerName) {
+		await db
+			.update(schema.user)
+			.set({ fplIdentityRefreshedAt: null })
+			.where(and(eq(schema.user.id, userId), eq(schema.user.fplEntryId, entryId)))
+		return
+	}
 
 	await db
 		.update(schema.user)

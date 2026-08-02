@@ -2,6 +2,16 @@ export const FPL_BINDING_CHALLENGE_TTL_MS = 15 * 60 * 1000
 export const FPL_BINDING_MAX_ATTEMPTS = 10
 export const FPL_BINDING_CREATION_LIMIT = 3
 
+/**
+ * Per-user cap on direct binding attempts within a fixed window, enforced
+ * durably via the request_rate_limits table. Every attempt performs an
+ * uncached FPL lookup plus an entry-info sync, and Server Actions bypass the
+ * API route rate limiter — this restores the guard the retired challenge
+ * path had.
+ */
+export const FPL_BINDING_RATE_LIMIT_WINDOW_SECONDS = 60 * 60
+export const FPL_BINDING_RATE_LIMIT_MAX = 10
+
 /** How long a bind-time team/manager name snapshot is trusted before a lazy re-sync. */
 export const FPL_IDENTITY_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000
 
