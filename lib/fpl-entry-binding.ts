@@ -2,8 +2,10 @@ import 'server-only'
 
 import { randomBytes, randomUUID } from 'crypto'
 import { and, count, desc, eq, gte, isNull, sql } from 'drizzle-orm'
+import { after } from 'next/server'
 
 import { db, schema } from '@/lib/db'
+import { syncEntryAfterBind } from '@/lib/entry-sync'
 import {
 	FPL_BINDING_CHALLENGE_TTL_MS,
 	FPL_BINDING_CREATION_LIMIT,
@@ -263,6 +265,11 @@ export async function bindFplEntryDirectly(
 		}
 		throw error
 	}
+
+	// Post-response: land the entry in letletme_data's entry_infos so the daily
+	// cron and GraphQL entry(id) pick it up. Failure-isolated — syncEntryAfterBind
+	// never throws, and after() runs it after the action's response is sent.
+	after(() => syncEntryAfterBind(entryId))
 
 	return {
 		entryId,
