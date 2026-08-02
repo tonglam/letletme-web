@@ -3,7 +3,7 @@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { QrCode } from 'lucide-react'
 import Image from 'next/image'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 type MiniProgramPopoverProps = {
 	label: string
@@ -15,6 +15,9 @@ export function MiniProgramPopover({ label, scanText }: MiniProgramPopoverProps)
 	// Explicit activation pins the popover open; only hover-only opens
 	// auto-close when the pointer leaves.
 	const [pinned, setPinned] = useState(false)
+	// Whether the current open session came from explicit activation. A ref
+	// (not state) so it is still readable when close-autofocus fires.
+	const activatedRef = useRef(false)
 
 	const handleOpenChange = (next: boolean) => {
 		setOpen(next)
@@ -37,6 +40,7 @@ export function MiniProgramPopover({ label, scanText }: MiniProgramPopoverProps)
 							// Hover already opens the popover; stop Radix's toggle so an
 							// explicit activation pins it open instead of closing it.
 							e.preventDefault()
+							activatedRef.current = true
 							setPinned(true)
 							setOpen(true)
 						}}
@@ -54,6 +58,13 @@ export function MiniProgramPopover({ label, scanText }: MiniProgramPopoverProps)
 					// Content is presentational — keep focus on the trigger so a
 					// hover-open never steals focus from another control.
 					onOpenAutoFocus={e => e.preventDefault()}
+					onCloseAutoFocus={e => {
+						// Only an activated session (Escape after click/keyboard)
+						// returns focus to the trigger; a hover-only close must
+						// leave focus wherever the user had it.
+						if (!activatedRef.current) e.preventDefault()
+						activatedRef.current = false
+					}}
 					className="w-auto border-electric/40 bg-fascia p-3 text-fascia-foreground"
 				>
 					<div className="rounded-md bg-white p-2">
