@@ -54,3 +54,20 @@ export function stripLocaleFromHref(href: string): string {
 	const suffix = suffixIndex === -1 ? '' : href.slice(suffixIndex)
 	return `${stripLocaleFromPathname(pathname)}${suffix}`
 }
+
+const INTERNAL_HREF_BASE = 'https://letletme.invalid'
+
+export function getSafeInternalHref(href: string): string {
+	const stripped = stripLocaleFromHref(href)
+	if (!stripped.startsWith('/') || stripped.startsWith('//') || stripped.includes('\\')) {
+		return '/'
+	}
+
+	try {
+		if (new URL(stripped, INTERNAL_HREF_BASE).origin !== INTERNAL_HREF_BASE) return '/'
+	} catch {
+		return '/'
+	}
+
+	return stripped
+}

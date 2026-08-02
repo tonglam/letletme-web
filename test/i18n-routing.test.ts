@@ -4,6 +4,7 @@ import test from 'node:test'
 
 import {
 	getLocaleFromInternalPathname,
+	getSafeInternalHref,
 	isAppLocale,
 	LANGUAGE_COOKIE,
 	localizeHref,
@@ -38,6 +39,15 @@ test('reads and removes only supported locale prefixes', () => {
 	assert.equal(isAppLocale('zh'), false)
 })
 
+test('accepts only same-origin return paths after removing locale prefixes', () => {
+	assert.equal(getSafeInternalHref('/zh-CN/data/player-stats?compare=7#season'), '/data/player-stats?compare=7#season')
+	assert.equal(getSafeInternalHref('/en//evil.example'), '/')
+	assert.equal(getSafeInternalHref('/zh-CN//evil.example'), '/')
+	assert.equal(getSafeInternalHref('//evil.example'), '/')
+	assert.equal(getSafeInternalHref('/\\evil.example'), '/')
+	assert.equal(getSafeInternalHref('https://evil.example'), '/')
+})
+
 test('persists the language preference in the configured one-year cookie', () => {
 	assert.equal(LANGUAGE_COOKIE.name, 'NEXT_LOCALE')
 	assert.equal(LANGUAGE_COOKIE.maxAge, 60 * 60 * 24 * 365)
@@ -60,6 +70,12 @@ test('request locale prioritizes cookie, then localized referrer, then browser l
 	})), 'zh-CN')
 	assert.equal(getRequestLocale(new Request('https://letletme.top', {
 		headers: { 'accept-language': 'zh-HK,zh;q=0.9,en;q=0.8' },
+	})), 'zh-CN')
+	assert.equal(getRequestLocale(new Request('https://letletme.top', {
+		headers: { 'accept-language': 'en-US,en;q=0.9,zh;q=0' },
+	})), 'en')
+	assert.equal(getRequestLocale(new Request('https://letletme.top', {
+		headers: { 'accept-language': 'fr-FR,zh-CN;q=0.8,en;q=0.7' },
 	})), 'zh-CN')
 	assert.equal(getRequestLocale(new Request('https://letletme.top', {
 		headers: {

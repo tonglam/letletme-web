@@ -17,6 +17,8 @@ describe('privacy-safe web vitals', () => {
 	it('removes query strings and dynamic identifiers from page groups', () => {
 		assert.equal(normalizeMetricPage('/live/tournament/987?token=secret'), '/live/tournament/:tournamentId')
 		assert.equal(normalizeMetricPage('/tournament/54/manage'), '/tournament/:tournamentId/manage')
+		assert.equal(normalizeMetricPage('/zh-CN/live/points/123456'), '/live/points/:entryId')
+		assert.equal(normalizeMetricPage('/en/tournament/54/manage'), '/tournament/:tournamentId/manage')
 	})
 
 	it('accepts a bounded core web vital without adding user identity', () => {

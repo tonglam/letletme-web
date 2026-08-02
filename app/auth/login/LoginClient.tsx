@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { useHydrated } from '@/hooks/use-hydrated'
 import { Link, useRouter } from '@/i18n/navigation'
-import { localizeHref, stripLocaleFromHref, type AppLocale } from '@/i18n/routing'
+import { getSafeInternalHref, localizeHref, type AppLocale } from '@/i18n/routing'
 import { getAuthErrorKey } from '@/lib/auth-error'
 import { signIn } from '@/lib/auth-client'
 import { Gamepad } from 'lucide-react'
@@ -22,8 +22,7 @@ function LoginForm() {
 	const t = useTranslations('Auth')
 	const hydrated = useHydrated()
 	const searchParams = useSearchParams()
-	const raw = searchParams.get('next') ?? '/'
-	const next = stripLocaleFromHref(raw.startsWith('/') && !raw.startsWith('//') ? raw : '/')
+	const next = getSafeInternalHref(searchParams.get('next') ?? '/')
 
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')

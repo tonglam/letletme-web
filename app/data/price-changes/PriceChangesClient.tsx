@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
+import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
 import {
 	GET_PLAYER_VALUE_HISTORY,
 	type PlayerValue,
@@ -352,10 +353,15 @@ export default function PriceChangesClient({
 	}, [playerHistoryRows, selectedPlayerPriceSnapshot])
 
 	const formatHistoryDate = (value: string): string => {
-		const parsed = new Date(value)
-		return Number.isNaN(parsed.getTime())
+		const parsed = parseCalendarDate(value)
+		return !parsed
 			? value
-			: formatter.dateTime(parsed, { day: '2-digit', month: 'short', year: 'numeric' })
+			: formatter.dateTime(parsed, {
+				day: '2-digit',
+				month: 'short',
+				year: 'numeric',
+				timeZone: CALENDAR_DATE_TIME_ZONE,
+			})
 	}
 
 	return (
