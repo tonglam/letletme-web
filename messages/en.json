@@ -1176,6 +1176,7 @@
   "Footer": {
     "tagline": "Sharper FPL decisions, without the noise.",
     "miniProgram": "WeChat Mini Program",
+    "scanMiniProgram": "Scan with WeChat to open the mini program",
     "fplData": "FPL data",
     "playerStats": "Player stats",
     "priceChanges": "Price changes",
