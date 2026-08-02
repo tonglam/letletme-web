@@ -33,6 +33,8 @@
     "bindEntryDescription": "关联并验证您的 FPL 参赛 ID，以使用 LetLetMe 个性化功能。",
     "profileTitle": "我的资料",
     "profileDescription": "管理您的 LetLetMe 账户和已验证的 FPL 参赛 ID。",
+    "sessionsTitle": "登录设备",
+    "sessionsDescription": "查看并退出已登录您的 LetLetMe 账户的设备。",
     "gameweekStatsTitle": "GW 统计",
     "gameweekStatsDescription": "查看 FPL GW 整体表现、转会和梦之队数据。",
     "teamStatsTitle": "我的球队统计",
@@ -240,6 +242,8 @@
     "cancel": "取消",
     "signOut": "退出登录",
     "signingOut": "正在退出…",
+    "activeSessions": "登录设备",
+    "manage": "管理",
     "errors": {
       "notAuthenticated": "登录状态已过期，请重新登录后再试。",
       "noFile": "请选择要上传的图片。",
@@ -252,8 +256,39 @@
       "verificationUnavailable": "目前无法验证 FPL 球队，请稍后重试。",
       "nameMismatch": "球队名称尚未匹配，请在 FPL 中保存精确名称后重试。",
       "alreadyBound": "该 FPL 参赛 ID 已被其他账户验证。",
-      "verificationFailed": "无法验证 FPL 参赛 ID，请重试。"
+      "verificationFailed": "无法验证 FPL 参赛 ID，请重试。",
+      "signOutFailed": "无法退出登录，请重试。"
     }
+  },
+  "Sessions": {
+    "title": "登录设备",
+    "intro": "查看已登录 {email} 的浏览器和设备。",
+    "backToProfile": "返回个人资料",
+    "loading": "正在加载登录设备…",
+    "loadFailed": "无法加载登录设备，请重试。",
+    "empty": "未找到登录设备，请刷新页面后重试。",
+    "listLabel": "登录设备",
+    "unknownBrowserDevice": "未知浏览器或设备",
+    "unknownDevice": "未知设备",
+    "browser": "浏览器",
+    "deviceLabel": "{platform} 上的 {browser}",
+    "thisDevice": "当前设备",
+    "lastActive": "上次活动时间：{date}",
+    "expires": "到期时间：{date}",
+    "signOut": "退出登录",
+    "signingOut": "正在退出…",
+    "sessionSignedOut": "已退出该设备",
+    "signOutFailed": "无法退出该设备，请重试。",
+    "otherSessionsSignedOut": "已退出其他设备",
+    "signOutOthers": "退出其他设备",
+    "signOutOthersFailed": "无法退出其他设备，请重试。",
+    "controlsTitle": "登录控制",
+    "controlsDescription": "如果您不认识某台设备或使用过共享电脑，请使用这些控制。",
+    "signOutEverywhere": "退出所有设备",
+    "signOutAllFailed": "无法退出所有设备，请重试。",
+    "confirmTitle": "要退出所有设备吗？",
+    "confirmDescription": "所有网页端登录（包括当前设备）都将失效，您需要重新登录。",
+    "cancel": "取消"
   },
   "TournamentManagePage": {
     "unavailableTitle": "锦标赛管理暂时无法使用",
@@ -1122,6 +1157,7 @@
     "profileSettings": "个人设置",
     "signOut": "退出登录",
     "signingOut": "正在退出…",
+    "signOutFailed": "无法退出登录，请重试。",
     "openAccountMenu": "打开 {name} 的账户菜单"
   },
   "Language": {

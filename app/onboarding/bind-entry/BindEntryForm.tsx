@@ -12,7 +12,7 @@ import { useEffect, useActionState } from 'react'
 import { toast } from 'sonner'
 import { bindFplEntry } from './actions'
 
-export default function BindEntryForm() {
+export default function BindEntryForm({ next }: { next: string }) {
 	const router = useRouter()
 	const t = useTranslations('Onboarding')
 	const [state, formAction, isPending] = useActionState(bindFplEntry, null)
@@ -29,16 +29,17 @@ export default function BindEntryForm() {
 			// newly linked user back here. refetch() never rejects (failures land
 			// in its error state), so navigation always proceeds.
 			await refetchSession({ query: { disableCookieCache: true } })
-			router.push('/')
+			router.push(next)
 		})()
-	}, [state, router, t, refetchSession])
+	}, [state, router, next, t, refetchSession])
 
 	return (
-		<form action={formAction} className="space-y-4">
+		<form
+			action={formAction}
+			className="space-y-4"
+		>
 			{state?.errorCode && (
-				<Alert
-					variant="destructive"
-				>
+				<Alert variant="destructive">
 					<AlertDescription>{t(`errors.${state.errorCode}`)}</AlertDescription>
 				</Alert>
 			)}

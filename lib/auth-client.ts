@@ -51,8 +51,13 @@ const {
 } = authClient
 
 export async function signOut(...args: Parameters<typeof rawSignOut>) {
+	const result = await rawSignOut(...args)
+	if (!result.error) clearPendingClientQueries()
+	return result
+}
+
+export function clearAuthClientState() {
 	clearPendingClientQueries()
-	return rawSignOut(...args)
 }
 
 export { signIn, signUp, useSession, getSession }

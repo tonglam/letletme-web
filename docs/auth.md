@@ -27,6 +27,7 @@ GOOGLE_CLIENT_SECRET=
 # WeChat Mini Program login
 WECHAT_MINIPROGRAM_APP_ID=
 WECHAT_MINIPROGRAM_APP_SECRET=
+MINIPROGRAM_ACCOUNT_STORAGE=true       # only after the bauth migrations are applied
 
 # Backend proxy signing key
 BACKEND_PROXY_SECRET=<openssl rand -base64 32>
@@ -36,7 +37,7 @@ TOURNAMENT_API_KEY=<openssl rand -base64 32>
 
 # Email (Resend)
 RESEND_API_KEY=
-MAIL_FROM=no-reply@letletme.top
+MAIL_FROM=LetLetMe <no-reply@qitonglan.com>  # sender domain must be verified in Resend
 ```
 
 ---
@@ -108,6 +109,8 @@ Setup:
 2. API Keys → Create API Key (Sending access) → copy to `RESEND_API_KEY`
 
 Without a verified domain, Resend will reject outbound emails in production.
+Better Auth registers delivery as a request-lifecycle background task so signup
+and reset responses do not disclose account state through mail-provider timing.
 
 ---
 
@@ -117,7 +120,7 @@ Without a verified domain, Resend will reject outbound emails in production.
 
 ```
 Sign up → verification email sent → user clicks link → auto sign-in → /onboarding/bind-entry
-Forgot password → reset email sent → user clicks link → new password form → signed in
+Forgot password → reset email sent → user clicks link → new password form → all existing sessions revoked
 ```
 
 ### Google OAuth
@@ -129,7 +132,10 @@ Click "Continue with Google" → Google consent screen → callback /api/auth/ca
 
 ### FPL entry binding
 
-After any first login where `fplEntryVerifiedAt` is null, middleware redirects to `/onboarding/bind-entry`.
+After every email or Google login, the callback passes through `/onboarding/bind-entry`.
+Users with a verified entry continue immediately to the validated `next` path;
+unverified users stay in onboarding. Protected-route redirects retain that
+destination so a successful binding returns the user to their original task.
 
 1. User enters their FPL entry ID (found at `fantasy.premierleague.com/team/[id]/`)
 2. The server validates the public entry and creates a 15-minute `LLM-XXXXXX` team-name challenge.
@@ -169,7 +175,8 @@ Mini Program never supplies an entry ID to login.
 - **Lifetime:** 7 days, renewed if session is >24 h old and `getSession` is called
 - **Cookie cache:** 5-minute TTL (`letletme.session_data`) to avoid DB round-trips on every request
 - **Cookies:** `httpOnly`, `SameSite=Lax`, `Secure` in production, prefix `letletme`
-- **Sign out everywhere:** `/profile/sessions` → "Sign out everywhere" calls `authClient.revokeSessions()`; password reset also revokes all other sessions
+- **Session controls:** `/profile/sessions` lists active devices and can revoke one session, every other session, or every session
+- **Password reset:** revokes all existing website sessions before a new login
 
 Cookie-cached sessions are display-only. GraphQL envelopes, RSC backend
 headers, tournament mutations, binding actions, and other authorization
@@ -214,20 +221,20 @@ request.
 
 ## Route protection
 
-| Route                     | Requires                        |
-| ------------------------- | ------------------------------- |
-| `/profile`                | session                         |
-| `/onboarding/bind-entry`  | session                         |
-| `/tournament/create`      | session                         |
-| `/tournament/[id]/manage` | session                         |
+| Route                     | Requires                                                                         |
+| ------------------------- | -------------------------------------------------------------------------------- |
+| `/profile`                | session                                                                          |
+| `/onboarding/bind-entry`  | session                                                                          |
+| `/tournament/create`      | session                                                                          |
+| `/tournament/[id]/manage` | session                                                                          |
 | `/api/tournaments/*`      | session; mutations/previews also require verified `fplEntryId` in their handlers |
-| `/live/points`            | session + verified `fplEntryId` |
-| `/live/tournament`        | session + verified `fplEntryId` |
-| `/data/selections`        | session + verified `fplEntryId` |
-| `/stats/team`             | session + verified `fplEntryId` |
-| `/stats/tournament`       | session + verified `fplEntryId` |
-| `/tournament/list`        | session + verified `fplEntryId` |
-| everything else           | public                          |
+| `/live/points`            | session + verified `fplEntryId`                                                  |
+| `/live/tournament`        | session + verified `fplEntryId`                                                  |
+| `/data/selections`        | session + verified `fplEntryId`                                                  |
+| `/stats/team`             | session + verified `fplEntryId`                                                  |
+| `/stats/tournament`       | session + verified `fplEntryId`                                                  |
+| `/tournament/list`        | session + verified `fplEntryId`                                                  |
+| everything else           | public                                                                           |
 
 `/live/points/[id]` (with an ID segment) is **public** — anyone can view another team. Only the root `/live/points` (your own team) is gated.
 
@@ -243,9 +250,12 @@ handler/RSC. Proxy checks never replace data-access authorization.
 - GraphQL request bodies are capped at 256 KiB and every proxied POST is
   `Cache-Control: no-store`; upstream status and `Retry-After` are preserved.
 - Auth request bodies are capped at 16 KiB. Database-backed limits are
-  120/minute/IP for GraphQL, 5/minute/IP and device for login/confirmation,
+  120/minute/IP for GraphQL, 5/minute/IP for Better Auth writes, 5/minute/IP and device for Mini Program login/confirmation,
   and 5/minute/IP plus 3/hour/email for email start. Auth fails closed if the
-  limiter is unavailable; valid read-only GraphQL may fail open with a metric.
+  limiter is unavailable. Better Auth additionally applies a database-backed
+  100/minute default, 3/10-seconds to sign-in/sign-up/password-change paths, and
+  3/minute to reset/verification mail paths. Valid read-only GraphQL may fail
+  open with a metric. Every 429 response carries a standard `Retry-After` value.
 - CSRF: Better Auth's origin + Fetch-Metadata checks are enabled — do not disable
 - `BETTER_AUTH_SECRET` signs session cookies — rotate immediately if compromised (invalidates all sessions)
 - `BACKEND_PROXY_SECRET` signs the user context envelope — rotate with a coordinated backend deploy

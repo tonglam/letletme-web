@@ -33,6 +33,8 @@
     "bindEntryDescription": "Link and verify your FPL entry for personalised LetLetMe features.",
     "profileTitle": "My profile",
     "profileDescription": "Manage your LetLetMe account and verified FPL entry.",
+    "sessionsTitle": "Active sessions",
+    "sessionsDescription": "Review and sign out devices connected to your LetLetMe account.",
     "gameweekStatsTitle": "Gameweek statistics",
     "gameweekStatsDescription": "Explore overall FPL gameweek performance, transfers, and dream-team data.",
     "teamStatsTitle": "My team statistics",
@@ -240,6 +242,8 @@
     "cancel": "Cancel",
     "signOut": "Sign out",
     "signingOut": "Signing out…",
+    "activeSessions": "Active sessions",
+    "manage": "Manage",
     "errors": {
       "notAuthenticated": "Your session has expired. Sign in and try again.",
       "noFile": "Choose an image to upload.",
@@ -252,8 +256,39 @@
       "verificationUnavailable": "The FPL team cannot be verified right now. Please try again.",
       "nameMismatch": "The team name does not match yet. Save the exact name in FPL and try again.",
       "alreadyBound": "This FPL entry is already verified by another account.",
-      "verificationFailed": "Unable to verify the FPL entry. Please try again."
+      "verificationFailed": "Unable to verify the FPL entry. Please try again.",
+      "signOutFailed": "Could not sign out. Please try again."
     }
+  },
+  "Sessions": {
+    "title": "Active sessions",
+    "intro": "Review browsers and devices signed in to {email}.",
+    "backToProfile": "Back to profile",
+    "loading": "Loading active sessions…",
+    "loadFailed": "Could not load active sessions. Please try again.",
+    "empty": "No active sessions were returned. Refresh the page to try again.",
+    "listLabel": "Active sessions",
+    "unknownBrowserDevice": "Unknown browser or device",
+    "unknownDevice": "Unknown device",
+    "browser": "Browser",
+    "deviceLabel": "{browser} on {platform}",
+    "thisDevice": "This device",
+    "lastActive": "Last active {date}",
+    "expires": "Expires {date}",
+    "signOut": "Sign out",
+    "signingOut": "Signing out…",
+    "sessionSignedOut": "Session signed out",
+    "signOutFailed": "Could not sign out this session. Please try again.",
+    "otherSessionsSignedOut": "Other sessions signed out",
+    "signOutOthers": "Sign out other sessions",
+    "signOutOthersFailed": "Could not sign out other sessions. Please try again.",
+    "controlsTitle": "Session controls",
+    "controlsDescription": "Use these controls if you do not recognise a device or shared computer.",
+    "signOutEverywhere": "Sign out everywhere",
+    "signOutAllFailed": "Could not sign out all sessions. Please try again.",
+    "confirmTitle": "Sign out on every device?",
+    "confirmDescription": "Every website session, including this one, will be revoked. You will need to sign in again.",
+    "cancel": "Cancel"
   },
   "TournamentManagePage": {
     "unavailableTitle": "Tournament management is temporarily unavailable",
@@ -1122,6 +1157,7 @@
     "profileSettings": "Profile settings",
     "signOut": "Sign out",
     "signingOut": "Signing out…",
+    "signOutFailed": "Could not sign out. Please try again.",
     "openAccountMenu": "Open account menu for {name}"
   },
   "Language": {

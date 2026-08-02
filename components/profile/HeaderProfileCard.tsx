@@ -7,7 +7,7 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
-	DropdownMenuTrigger,
+	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { signOut } from '@/lib/auth-client'
 import { getVerifiedFplEntryId } from '@/lib/fpl-binding-core'
@@ -15,6 +15,7 @@ import { Link, useRouter } from '@/i18n/navigation'
 import { LogOut, Settings, Trophy } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
+import { toast } from 'sonner'
 
 export interface NavigationUser {
 	name?: string | null
@@ -36,9 +37,15 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 	const handleSignOut = async () => {
 		setSigningOut(true)
 		try {
-			await signOut()
+			const { error } = await signOut()
+			if (error) {
+				toast.error(t('signOutFailed'))
+				return
+			}
 			router.push('/')
 			router.refresh()
+		} catch {
+			toast.error(t('signOutFailed'))
 		} finally {
 			setSigningOut(false)
 		}
@@ -53,7 +60,10 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 					aria-label={t('openAccountMenu', { name: user.name ?? user.email })}
 				>
 					<Avatar className="h-6 w-6">
-						<AvatarImage src={user.image ?? undefined} alt={user.name ?? ''} />
+						<AvatarImage
+							src={user.image ?? undefined}
+							alt={user.name ?? ''}
+						/>
 						<AvatarFallback className="text-xs bg-primary/10 text-primary-ink">
 							{initials}
 						</AvatarFallback>
@@ -64,11 +74,18 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 				</Button>
 			</DropdownMenuTrigger>
 
-			<DropdownMenuContent align="end" className="w-64 p-0" sideOffset={8}>
+			<DropdownMenuContent
+				align="end"
+				className="w-64 p-0"
+				sideOffset={8}
+			>
 				{/* Profile header */}
 				<div className="p-4 flex gap-3 items-center">
 					<Avatar className="h-10 w-10 shrink-0">
-						<AvatarImage src={user.image ?? undefined} alt={user.name ?? ''} />
+						<AvatarImage
+							src={user.image ?? undefined}
+							alt={user.name ?? ''}
+						/>
 						<AvatarFallback className="bg-primary/10 text-primary-ink">
 							{initials}
 						</AvatarFallback>
@@ -106,7 +123,10 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 
 				<div className="p-1">
 					<DropdownMenuItem asChild>
-						<Link href="/profile" className="cursor-pointer">
+						<Link
+							href="/profile"
+							className="cursor-pointer"
+						>
 							<Settings className="h-4 w-4 mr-2" />
 							{t('profileSettings')}
 						</Link>

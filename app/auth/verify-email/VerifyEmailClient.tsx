@@ -2,15 +2,25 @@
 
 import { LogoMark } from '@/components/layout/Logo'
 import { Card } from '@/components/ui/card'
-import { Link } from '@/i18n/navigation'
+import { Link, useRouter } from '@/i18n/navigation'
+import { getSafeInternalHref } from '@/i18n/routing'
+import { onboardingRedirectPath } from '@/lib/auth-redirects'
 import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 
 function VerifyEmailContent() {
+	const router = useRouter()
 	const searchParams = useSearchParams()
 	const t = useTranslations('Auth')
 	const error = searchParams.get('error')
+	const next = getSafeInternalHref(
+		searchParams.get('next') ?? onboardingRedirectPath('/')
+	)
+
+	useEffect(() => {
+		if (!error) router.replace(next)
+	}, [error, next, router])
 
 	if (error) {
 		return (

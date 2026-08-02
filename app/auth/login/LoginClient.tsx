@@ -9,9 +9,18 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { useHydrated } from '@/hooks/use-hydrated'
 import { Link, useRouter } from '@/i18n/navigation'
-import { getSafeInternalHref, localizeHref, type AppLocale } from '@/i18n/routing'
+import {
+	getSafeInternalHref,
+	localizeHref,
+	type AppLocale
+} from '@/i18n/routing'
 import { getAuthErrorKey } from '@/lib/auth-error'
 import { signIn } from '@/lib/auth-client'
+import {
+	absoluteAuthUrl,
+	hasOAuthCallbackError,
+	onboardingRedirectPath
+} from '@/lib/auth-redirects'
 import { useLocale, useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useState } from 'react'
@@ -27,27 +36,70 @@ function LoginForm() {
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
 	const [pending, setPending] = useState(false)
-	const [error, setError] = useState<string | null>(null)
+	const [error, setError] = useState<string | null>(() =>
+		hasOAuthCallbackError(searchParams)
+			? t('errors.socialLoginFailed')
+			: null
+	)
 
 	const handleEmailLogin = async (e: React.FormEvent) => {
 		e.preventDefault()
 		setPending(true)
 		setError(null)
-		const { error: err } = await signIn.email({ email, password })
-		setPending(false)
-		if (err) {
-			setError(t(`errors.${getAuthErrorKey(err, 'loginFailed')}`))
-			return
+		try {
+			const { error: err } = await signIn.email({ email, password })
+			if (err) {
+				setError(t(`errors.${getAuthErrorKey(err, 'loginFailed')}`))
+				return
+			}
+			router.push(onboardingRedirectPath(next))
+		} catch (cause) {
+			setError(
+				t(
+					`errors.${getAuthErrorKey(
+						cause instanceof Error ? { message: cause.message } : null,
+						'loginFailed'
+					)}`
+				)
+			)
+		} finally {
+			setPending(false)
 		}
-		router.push(next)
 	}
 
 	const handleSocial = async (provider: 'google') => {
+		setPending(true)
 		setError(null)
 		try {
-			await signIn.social({ provider, callbackURL: localizeHref(next, locale) })
+			const onboardingUrl = absoluteAuthUrl(
+				localizeHref(onboardingRedirectPath(next), locale),
+				window.location.origin
+			)
+			const { error: err } = await signIn.social({
+				provider,
+				callbackURL: onboardingUrl,
+				newUserCallbackURL: onboardingUrl,
+				errorCallbackURL: absoluteAuthUrl(
+					localizeHref(
+						`/auth/login?oauthError=1&next=${encodeURIComponent(next)}`,
+						locale
+					),
+					window.location.origin
+				)
+			})
+			if (err)
+				setError(t(`errors.${getAuthErrorKey(err, 'socialLoginFailed')}`))
 		} catch (err) {
-			setError(t(`errors.${getAuthErrorKey(err instanceof Error ? { message: err.message } : null, 'socialLoginFailed')}`))
+			setError(
+				t(
+					`errors.${getAuthErrorKey(
+						err instanceof Error ? { message: err.message } : null,
+						'socialLoginFailed'
+					)}`
+				)
+			)
+		} finally {
+			setPending(false)
 		}
 	}
 
@@ -61,9 +113,7 @@ function LoginForm() {
 			<Card className="w-full max-w-md p-6">
 				<div className="mb-6 text-center">
 					<h2 className="text-2xl font-bold tracking-tight">{t('signIn')}</h2>
-					<p className="text-sm text-muted-foreground">
-						{t('chooseMethod')}
-					</p>
+					<p className="text-sm text-muted-foreground">{t('chooseMethod')}</p>
 				</div>
 
 				{error && (
@@ -75,7 +125,11 @@ function LoginForm() {
 					</Alert>
 				)}
 
-				<form onSubmit={handleEmailLogin} className="space-y-4" aria-busy={!hydrated || pending}>
+				<form
+					onSubmit={handleEmailLogin}
+					className="space-y-4"
+					aria-busy={!hydrated || pending}
+				>
 					<div className="space-y-1">
 						<Label htmlFor="email">{t('email')}</Label>
 						<Input
@@ -108,7 +162,11 @@ function LoginForm() {
 							onChange={e => setPassword(e.target.value)}
 						/>
 					</div>
-					<Button type="submit" className="w-full" disabled={!hydrated || pending}>
+					<Button
+						type="submit"
+						className="w-full"
+						disabled={!hydrated || pending}
+					>
 						{pending ? t('signingIn') : t('signIn')}
 					</Button>
 				</form>
@@ -123,10 +181,13 @@ function LoginForm() {
 				<Button
 					variant="outline"
 					className="w-full"
-					disabled={!hydrated}
+					disabled={!hydrated || pending}
 					onClick={() => handleSocial('google')}
 				>
-					<svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
+					<svg
+						className="mr-2 h-4 w-4"
+						viewBox="0 0 24 24"
+					>
 						<path
 							d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
 							fill="#4285F4"
@@ -151,7 +212,10 @@ function LoginForm() {
 
 				<p className="text-center text-sm text-muted-foreground">
 					{t('noAccount')}{' '}
-					<Link href="/auth/signup" className="text-primary-ink underline underline-offset-4 hover:no-underline">
+					<Link
+						href="/auth/signup"
+						className="text-primary-ink underline underline-offset-4 hover:no-underline"
+					>
 						{t('signUp')}
 					</Link>
 				</p>
