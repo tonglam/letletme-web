@@ -34,11 +34,6 @@ export default async function BindEntryPage({ params }: PageProps) {
 		redirect(localizeHref('/auth/login?next=/onboarding/bind-entry', locale))
 	}
 
-	// Already bound — skip onboarding
-	if (session.user.fplEntryVerifiedAt) {
-		redirect(localizeHref('/', locale))
-	}
-
 	return (
 		<div className="flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center bg-muted/30 p-4">
 			<div className="mb-6 flex items-center gap-2">

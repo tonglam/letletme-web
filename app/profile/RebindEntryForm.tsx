@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useRouter } from '@/i18n/navigation'
-import { Pencil, X } from 'lucide-react'
+import { ExternalLink, Pencil, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useActionState, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -75,6 +75,15 @@ export default function RebindEntryForm({
 						<p>{t('changeExactName', { entryId: state.newEntryId ?? '—' })}</p>
 						<p className="font-mono text-base font-semibold">{state.requiredName}</p>
 						<p className="text-xs text-muted-foreground">{t('saveAndVerify')}</p>
+						<a
+							href="https://fantasy.premierleague.com/en/entry-update"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-ink underline underline-offset-4 hover:no-underline"
+						>
+							<ExternalLink aria-hidden="true" className="size-3.5" />
+							{t('openTeamDetails')}
+						</a>
 					</div>
 					<Button type="submit" size="sm" disabled={isPending}>
 						{isPending ? t('checking') : t('verifyChangedName')}
@@ -118,6 +127,19 @@ export default function RebindEntryForm({
 						<X className="h-4 w-4" />
 					</Button>
 				)}
+			</div>
+
+			<div className="rounded-md bg-muted/50 p-2.5 text-xs text-muted-foreground space-y-1.5">
+				<p>{t('findEntryHint')}</p>
+				<a
+					href="https://fantasy.premierleague.com/api/me/"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="inline-flex items-center gap-1 font-medium text-primary-ink underline underline-offset-4 hover:no-underline"
+				>
+					<ExternalLink aria-hidden="true" className="size-3" />
+					{t('showMyTeamId')}
+				</a>
 			</div>
 				</>
 			)}
