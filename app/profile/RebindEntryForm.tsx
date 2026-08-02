@@ -11,12 +11,13 @@ import {
 	AlertDialogTitle,
 	AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useRouter } from '@/i18n/navigation'
 import { useSession } from '@/lib/auth-client'
-import { ClipboardPaste, ExternalLink, Link2Off, MousePointerClick, Pencil, X } from 'lucide-react'
+import { ClipboardPaste, ExternalLink, Link2Off, MousePointerClick, Pencil, Trophy, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useActionState, useEffect, useRef, useState, useTransition } from 'react'
 import { toast } from 'sonner'
@@ -83,20 +84,36 @@ export default function RebindEntryForm({
 	}
 
 	if (!editing && isLinked) {
+		const title = displayInfo?.teamName ?? `#${linkedEntryId}`
+		const subtitle = [
+			displayInfo?.managerName,
+			displayInfo?.teamName ? `#${linkedEntryId}` : null,
+		]
+			.filter(Boolean)
+			.join(' · ')
+
 		return (
 			<div className="flex w-full min-w-0 items-center justify-between gap-3">
-				<div className="flex flex-col gap-0.5">
-					<div className="flex items-center gap-2">
-						<span className="text-sm font-mono font-medium">{linkedEntryId}</span>
-						<span className="text-xs text-muted-foreground">{t('linked')}</span>
+				<div className="flex min-w-0 items-center gap-3">
+					<span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10">
+						<Trophy aria-hidden="true" className="size-5 text-primary-ink" />
+					</span>
+					<div className="min-w-0">
+						<div className="flex items-center gap-2">
+							<p className="truncate text-sm font-semibold leading-tight">{title}</p>
+							<Badge
+								variant="outline"
+								className="shrink-0 border-success/30 bg-success/10 text-success"
+							>
+								{t('linked')}
+							</Badge>
+						</div>
+						{subtitle && (
+							<p className="truncate text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+						)}
 					</div>
-					{displayInfo && (
-						<span className="text-xs text-muted-foreground">
-							{displayInfo.teamName} · {displayInfo.managerName}
-						</span>
-					)}
 				</div>
-				<div className="flex items-center gap-1">
+				<div className="flex shrink-0 items-center gap-1">
 					<Button
 						variant="ghost"
 						size="sm"
