@@ -2,6 +2,7 @@
 
 import PageShell from '@/components/layout/PageShell'
 import { TournamentHelp } from '@/components/tournament/TournamentHelp'
+import { useHydrated } from '@/hooks/use-hydrated'
 import { Trophy } from 'lucide-react'
 import { FormProvider } from 'react-hook-form'
 import { TournamentCreateActions } from './_components/TournamentCreateActions'
@@ -12,6 +13,7 @@ import { TournamentParticipantsCard } from './_components/TournamentParticipants
 import { useCreateTournament } from './_hooks/useCreateTournament'
 
 export default function CreateTournamentClient() {
+	const hydrated = useHydrated()
 	const state = useCreateTournament()
 	const canSubmit =
 		state.participantsLoaded &&
@@ -31,7 +33,12 @@ export default function CreateTournamentClient() {
 				<div className="mb-8"><TournamentHelp /></div>
 
 				<FormProvider {...state.form}>
-					<form onSubmit={state.form.handleSubmit(state.onSubmit)} noValidate>
+					<form
+						onSubmit={state.form.handleSubmit(state.onSubmit)}
+						noValidate
+						inert={!hydrated || state.isSubmitting}
+						aria-busy={!hydrated || state.isSubmitting}
+					>
 						<TournamentInformationCard isCheckingName={state.isCheckingName} isNameAvailable={state.isNameAvailable} nameCheckMessage={state.nameCheckMessage} />
 						<TournamentParticipantsCard
 							applyAutoMode={state.applyAutoMode}

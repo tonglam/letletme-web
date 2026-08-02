@@ -1,6 +1,17 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
+test('client-only navigation controls stay unavailable until hydration', async ({ browser }) => {
+	const page = await browser.newPage({ javaScriptEnabled: false })
+	await page.setViewportSize({ width: 390, height: 844 })
+	await page.goto('/')
+
+	await expect(page.getByRole('button', { name: 'Open navigation menu' })).toBeDisabled()
+	await expect(page.getByRole('button', { name: 'Change color theme' })).toBeDisabled()
+
+	await page.close()
+})
+
 test('public home has a keyboard skip path and no detectable accessibility violations', async ({ page }) => {
 	await page.goto('/')
 	await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
