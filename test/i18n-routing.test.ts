@@ -61,6 +61,12 @@ test('request locale prioritizes cookie, then localized referrer, then browser l
 	assert.equal(getRequestLocale(new Request('https://letletme.top', {
 		headers: { 'accept-language': 'zh-HK,zh;q=0.9,en;q=0.8' },
 	})), 'zh-CN')
+	assert.equal(getRequestLocale(new Request('https://letletme.top', {
+		headers: {
+			cookie: 'NEXT_LOCALE=%',
+			referer: 'https://letletme.top/zh-CN/auth/signup',
+		},
+	})), 'zh-CN')
 	assert.equal(getRequestLocale(), 'en')
 })
 

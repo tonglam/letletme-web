@@ -1,7 +1,11 @@
 'use server'
 
 import { getAuthorizationSession } from '@/lib/auth'
-import { getFplBindingErrorCode, type FplBindingErrorCode } from '@/lib/fpl-binding-error-code'
+import {
+	getFplBindingErrorCode,
+	shouldRetainFplBindingChallenge,
+	type FplBindingErrorCode,
+} from '@/lib/fpl-binding-error-code'
 import {
 	confirmFplEntryBindingChallenge,
 	startFplEntryBindingChallenge,
@@ -48,13 +52,18 @@ export async function bindFplEntry(
 			challengeId: challenge.id,
 			entryId: challenge.entryId,
 			requiredName: challenge.requiredName,
-			expiresAt: challenge.expiresAt,
+			 expiresAt: challenge.expiresAt,
 		}
 	} catch (error) {
+		const errorCode = getFplBindingErrorCode(error)
+		if (!prevState?.challengeId || !shouldRetainFplBindingChallenge(errorCode)) {
+			return { errorCode }
+		}
+
 		return {
 			...prevState,
 			success: undefined,
-			errorCode: getFplBindingErrorCode(error),
+			errorCode,
 		}
 	}
 }

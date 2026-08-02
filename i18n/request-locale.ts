@@ -8,7 +8,12 @@ export function getRequestLocale(request?: Request): AppLocale {
 		?.split(';')
 		.map(part => part.trim().split('='))
 		.find(([name]) => name === 'NEXT_LOCALE')?.[1]
-	const decodedCookie = cookie ? decodeURIComponent(cookie) : undefined
+	let decodedCookie: string | undefined
+	if (cookie) {
+		try {
+			decodedCookie = decodeURIComponent(cookie)
+		} catch {}
+	}
 	if (isAppLocale(decodedCookie)) return decodedCookie
 
 	const referer = request.headers.get('referer')

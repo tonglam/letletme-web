@@ -12,6 +12,7 @@ import {
 	assertFplEntryId,
 	fplTeamNamesMatch,
 } from '../../lib/fpl-binding-core'
+import { shouldRetainFplBindingChallenge } from '../../lib/fpl-binding-error-code'
 
 // ─── validation logic (mirrors actions.ts) ────────────────────────────────────
 
@@ -118,5 +119,15 @@ describe('FPL ownership challenge matching', () => {
 	it('uses the shared positive-integer validator', () => {
 		assert.equal(assertFplEntryId('15702'), 15702)
 		assert.throws(() => assertFplEntryId('1.5'))
+	})
+})
+
+describe('FPL ownership challenge recovery', () => {
+	it('retains the challenge only for errors the user can retry', () => {
+		assert.equal(shouldRetainFplBindingChallenge('nameMismatch'), true)
+		assert.equal(shouldRetainFplBindingChallenge('verificationUnavailable'), true)
+		assert.equal(shouldRetainFplBindingChallenge('challengeExpired'), false)
+		assert.equal(shouldRetainFplBindingChallenge('alreadyBound'), false)
+		assert.equal(shouldRetainFplBindingChallenge('verificationFailed'), false)
 	})
 })

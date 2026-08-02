@@ -1,5 +1,3 @@
-import { FplBindingError } from './fpl-entry-binding'
-
 export type FplBindingErrorCode =
 	| 'notAuthenticated'
 	| 'entryNotFound'
@@ -10,8 +8,14 @@ export type FplBindingErrorCode =
 	| 'alreadyBound'
 	| 'verificationFailed'
 
+export function shouldRetainFplBindingChallenge(
+	errorCode: FplBindingErrorCode,
+): boolean {
+	return errorCode === 'nameMismatch' || errorCode === 'verificationUnavailable'
+}
+
 export function getFplBindingErrorCode(error: unknown): FplBindingErrorCode {
-	if (!(error instanceof FplBindingError) && !(error instanceof Error)) {
+	if (!(error instanceof Error)) {
 		return 'verificationFailed'
 	}
 
