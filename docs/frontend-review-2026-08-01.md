@@ -7,7 +7,7 @@ Release branches: `codex/frontend-review-improvements`, `codex/hydration-readine
 
 The reviewed frontend is release-ready. Next.js Server Components own route composition and initial data where useful, interactive work is contained in small client islands, volatile data is never presented as cached truth, and backend failures render explicit recovery states. The largest feature clients and the monolithic GraphQL operation file have been decomposed, tournament management now has an authenticated server-owned mutation path, and automated coverage protects the public mobile, accessibility, auth-error, storage-recovery, and outage experiences.
 
-No known P0 or P1 frontend issue remains from this review. Production rollout and authenticated live validation are tracked as release activities rather than deferred code work.
+No known P0 or P1 frontend issue remains from this review. The frontend and matching tournament-management API changes are merged, deployed, and live-verified; production Web Vitals collection remains ongoing operational measurement rather than deferred code work.
 
 | Area | Verdict | Evidence |
 | --- | --- | --- |
@@ -72,7 +72,15 @@ No known P0 or P1 frontend issue remains from this review. Production rollout an
 - Prevented Cloudflare from rewriting Next.js streaming and hydration scripts by adding `no-transform` to HTML document responses while preserving public revalidation, private-page `no-store`, API caching, and RSC caching behavior.
 - Streamed the homepage hero directly instead of first committing a generic route skeleton. Section-level Suspense fallbacks still cover slower deadline, price, and insight data without delaying the primary heading or calls to action.
 - Added a sampled Web Vitals reporter for CLS, FCP, INP, LCP, and TTFB. Dynamic identifiers and query strings are normalized out, payloads are bounded, no user identity is included, and delivery uses `sendBeacon` with a keepalive fallback.
-- The comparable local Lighthouse home run recorded 96 performance, 100 accessibility, 100 best practices, 100 SEO, 0.8 s FCP, 2.7 s LCP, 0 ms blocking time, and zero layout shift. A mobile production-origin run recorded 99 performance, 1.2 s FCP, 2.2 s LCP, 20 ms blocking time, and zero layout shift. The Cloudflare-rewritten response had scored 78 before the delivery-layer fix; edge-safe repeat runs scored 88–92 with 100 accessibility/best-practices/SEO, 7 ms blocking time, and zero layout shift. The remaining variance traced to the root loading boundary, and local production verification of the direct shell observed the hero paint in 0.12–0.16 s.
+- The comparable local Lighthouse home run recorded 96 performance, 100 accessibility, 100 best practices, 100 SEO, 0.8 s FCP, 2.7 s LCP, 0 ms blocking time, and zero layout shift. A mobile production-origin run recorded 99 performance, 1.2 s FCP, 2.2 s LCP, 20 ms blocking time, and zero layout shift. The Cloudflare-rewritten response had scored 78 before the delivery-layer fix; edge-safe repeat runs scored 88–92 with 100 accessibility/best-practices/SEO, 7 ms blocking time, and zero layout shift. After removing the root loading boundary, ordinary production mobile-browser runs observed the hero paint in 0.34–0.58 s. Lighthouse's simulated-mobile repeats remained variable at 83–84 performance and 4.1–4.5 s LCP while retaining 100 accessibility/best-practices/SEO, 7–9 ms blocking time, and zero layout shift; the same browser and user agent without Lighthouse simulation painted in 0.34 s, so this lab-only React streaming variance is recorded separately from runtime behavior.
+
+## Production release verification
+
+- Web release `fff1f1668ca71d93789ba03b41179c74d7737f2e` passed CI and deployed successfully to `https://letletme.top` through Vercel deployment `dpl_7qeuXeUWqhNLyrNJ9tswizYWjWaj`.
+- Data API release `14941bf5975958426135357e6091a232d6fe4c46` passed CI and deployment; live health and readiness checks confirmed PostgreSQL, Redis, and the active-season dependency.
+- The live browser suite passed all 9 scenarios. Repeated early-interaction checks passed 9 of 9 attempts.
+- The final HTML response includes `no-transform`, contains the primary hero in the initial document, and contains neither the removed root loading shell nor injected Rocket Loader scripts.
+- The production Web Vitals endpoint accepted a valid report with `204`, rejected malformed input with `400`, and rejected a cross-site request with `403`.
 
 ## Automated verification
 
