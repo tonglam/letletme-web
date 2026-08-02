@@ -44,7 +44,7 @@ export default function BindEntryForm() {
 							<p className="font-mono text-lg font-semibold">{state.requiredName}</p>
 							<p className="text-xs">{t('saveAndConfirm')}</p>
 							<a
-								href="https://fantasy.premierleague.com/"
+								href="https://fantasy.premierleague.com/en/entry-update"
 								target="_blank"
 								rel="noopener noreferrer"
 								className="inline-flex items-center gap-1.5 font-medium text-primary-ink underline underline-offset-4 hover:no-underline"

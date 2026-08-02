@@ -63,20 +63,31 @@ export default async function BindEntryPage({ params }: PageProps) {
 					<p className="font-medium mb-1">{t('findEntryId')}</p>
 					<ol className="list-decimal list-inside space-y-1">
 						<li>
-							{t('stepOne')}
+							{t.rich('stepOne', {
+								fpl: chunks => (
+									<a
+										href="https://fantasy.premierleague.com/"
+										target="_blank"
+										rel="noopener noreferrer"
+										className="font-medium text-primary-ink underline underline-offset-4 hover:no-underline"
+									>
+										{chunks}
+									</a>
+								),
+							})}
 						</li>
 						<li>{t('stepTwo')}</li>
 						<li>{t('stepThree')}</li>
 						<li>
 							{t('example')}{' '}
 							<span className="font-mono">
-								…/entry/<strong>123456</strong>/event/…
+								&quot;entry&quot;: <strong>123456</strong>
 							</span>
 						</li>
 					</ol>
 					<Button variant="outline" size="sm" className="mt-3 w-full" asChild>
 						<a
-							href="https://fantasy.premierleague.com/"
+							href="https://fantasy.premierleague.com/api/me/"
 							target="_blank"
 							rel="noopener noreferrer"
 						>
@@ -84,6 +95,7 @@ export default async function BindEntryPage({ params }: PageProps) {
 							{t('openFplPage')}
 						</a>
 					</Button>
+					<p className="mt-2">{t('noteIfNull')}</p>
 				</div>
 
 				<BindEntryForm />
