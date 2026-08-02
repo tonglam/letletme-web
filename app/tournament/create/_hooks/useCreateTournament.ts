@@ -1,13 +1,14 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import {
 	computeTournamentPlan,
 	createTournamentFormSchema,
 	DEFAULT_TOURNAMENT_FORM,
 	getImportedTournamentName,
+	isCurrentLeaguePreviewRequest,
 	validateLeagueUrl,
 	type LeaguePreview,
 	type Participant,
@@ -46,7 +47,7 @@ export function useCreateTournament() {
 		defaultValues: DEFAULT_TOURNAMENT_FORM,
 		mode: 'onChange',
 	})
-	const { control, setValue } = form
+	const { control, getValues, setValue } = form
 	const participantSource = useWatch({ control, name: 'participantSource' })
 	const leagueUrl = useWatch({ control, name: 'leagueUrl' })
 	const tournamentName = useWatch({ control, name: 'tournamentName' })
@@ -76,6 +77,9 @@ export function useCreateTournament() {
 	const [createdTournamentId, setCreatedTournamentId] = useState<number | null>(null)
 	const [createdTournamentName, setCreatedTournamentName] = useState('')
 	const [loadedLeague, setLoadedLeague] = useState<LeaguePreview | null>(null)
+	const creationModeRef = useRef<TournamentCreationMode>('classic')
+	const participantRequestIdRef = useRef(0)
+	const participantAbortControllerRef = useRef<AbortController | null>(null)
 
 	const leagueUrlState = useMemo(() => validateLeagueUrl(leagueUrl ?? '', {
 		domainInvalid: t('domainInvalid'),
@@ -176,6 +180,11 @@ export function useCreateTournament() {
 	}
 
 	const changeCreationMode = (mode: TournamentCreationMode) => {
+		creationModeRef.current = mode
+		participantRequestIdRef.current += 1
+		participantAbortControllerRef.current?.abort()
+		participantAbortControllerRef.current = null
+		setIsLoadingParticipants(false)
 		setCreationMode(mode)
 		if (mode === 'classic') applyClassicMode()
 		clearFeedback()
@@ -211,13 +220,31 @@ export function useCreateTournament() {
 			setParticipantError(leagueUrlState.message ?? t('leagueUrlInvalid'))
 			return
 		}
+		participantAbortControllerRef.current?.abort()
+		const controller = new AbortController()
+		const requestId = participantRequestIdRef.current + 1
+		const requestMode = creationModeRef.current
+		const requestedLeagueUrl = normalizedLeagueUrl
+		participantRequestIdRef.current = requestId
+		participantAbortControllerRef.current = controller
+		const isCurrentRequest = () => isCurrentLeaguePreviewRequest({
+			requestId,
+			currentRequestId: participantRequestIdRef.current,
+			requestMode,
+			currentMode: creationModeRef.current,
+			requestedLeagueUrl,
+			currentLeagueUrl: getValues('leagueUrl'),
+		})
 		setIsLoadingParticipants(true)
 		setParticipantsLoaded(false)
 		setLoadedLeague(null)
 		clearFeedback()
 		try {
-			const response = await fetch(`/api/tournaments/participants?leagueUrl=${encodeURIComponent(normalizedLeagueUrl)}`)
+			const response = await fetch(`/api/tournaments/participants?leagueUrl=${encodeURIComponent(requestedLeagueUrl)}`, {
+				signal: controller.signal,
+			})
 			const result = await readJson(response)
+			if (!isCurrentRequest()) return
 			if (!response.ok) throw new Error(t('participantsLoadFailed'))
 			const leagueId = typeof result.leagueId === 'number' && Number.isSafeInteger(result.leagueId)
 				? result.leagueId
@@ -256,7 +283,7 @@ export function useCreateTournament() {
 			setParticipants(fetchedParticipants)
 			setSelectedParticipantIds(participantSource === 'official' ? fetchedParticipants.map((participant) => participant.id) : [])
 			setParticipantsLoaded(true)
-			setFetchedLeagueUrl(normalizedLeagueUrl)
+			setFetchedLeagueUrl(requestedLeagueUrl)
 			setLoadedLeague(leaguePreview)
 			if (creationMode === 'classic') {
 				applyClassicMode(startEvent)
@@ -267,6 +294,7 @@ export function useCreateTournament() {
 			}
 			if (fetchedParticipants.length < 2) setParticipantError(t('leagueNeedsTwo'))
 		} catch (error) {
+			if (!isCurrentRequest() || (error instanceof Error && error.name === 'AbortError')) return
 			setParticipantError(error instanceof Error ? error.message : t('participantsLoadFailed'))
 			setParticipants([])
 			setSelectedParticipantIds([])
@@ -274,7 +302,10 @@ export function useCreateTournament() {
 			setFetchedLeagueUrl(null)
 			setLoadedLeague(null)
 		} finally {
-			setIsLoadingParticipants(false)
+			if (requestId === participantRequestIdRef.current) {
+				participantAbortControllerRef.current = null
+				setIsLoadingParticipants(false)
+			}
 		}
 	}
 

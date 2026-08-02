@@ -121,6 +121,28 @@ export interface LeaguePreview {
 	startEvent: number
 }
 
+export interface LeaguePreviewRequestContext {
+	requestId: number
+	currentRequestId: number
+	requestMode: TournamentCreationMode
+	currentMode: TournamentCreationMode
+	requestedLeagueUrl: string
+	currentLeagueUrl: string
+}
+
+export function isCurrentLeaguePreviewRequest({
+	requestId,
+	currentRequestId,
+	requestMode,
+	currentMode,
+	requestedLeagueUrl,
+	currentLeagueUrl,
+}: LeaguePreviewRequestContext): boolean {
+	return requestId === currentRequestId &&
+		requestMode === currentMode &&
+		requestedLeagueUrl === currentLeagueUrl.trim()
+}
+
 export function getImportedTournamentName(leagueName: string, leagueId: number): string {
 	const normalized = leagueName.trim()
 	const fallback = `FPL League ${leagueId}`
