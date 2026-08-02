@@ -17,6 +17,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { signOut } from "@/lib/auth-client";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { cn } from "@/lib/utils";
 import { ChevronDown, LogOut, Menu, Settings, UserCircle } from "lucide-react";
 import Link from "next/link";
@@ -26,6 +27,7 @@ import { menuItems } from "./config";
 
 export function MobileNav({ user }: { user: NavigationUser | null }) {
   const router = useRouter();
+  const hydrated = useHydrated();
   const [signingOut, setSigningOut] = useState(false);
   const [openCollapsible, setOpenCollapsible] = useState<string | null>(null);
 
@@ -46,7 +48,12 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
     <div className="md:hidden">
       <Sheet>
         <SheetTrigger asChild>
-          <Button variant="ghost" size="icon">
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!hydrated}
+            aria-busy={!hydrated}
+          >
             <Menu aria-hidden="true" />
             <span className="sr-only">Open navigation menu</span>
           </Button>

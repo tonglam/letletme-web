@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { useHydrated } from '@/hooks/use-hydrated'
 import { signIn } from '@/lib/auth-client'
 import { Gamepad } from 'lucide-react'
 import Link from 'next/link'
@@ -14,6 +15,7 @@ import { Suspense, useState } from 'react'
 
 function LoginForm() {
 	const router = useRouter()
+	const hydrated = useHydrated()
 	const searchParams = useSearchParams()
 	const raw = searchParams.get('next') ?? '/'
 	const next = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/'
@@ -69,7 +71,7 @@ function LoginForm() {
 					</Alert>
 				)}
 
-				<form onSubmit={handleEmailLogin} className="space-y-4">
+				<form onSubmit={handleEmailLogin} className="space-y-4" aria-busy={!hydrated || pending}>
 					<div className="space-y-1">
 						<Label htmlFor="email">Email</Label>
 						<Input
@@ -77,6 +79,7 @@ function LoginForm() {
 							type="email"
 							autoComplete="email"
 							required
+							disabled={!hydrated || pending}
 							value={email}
 							onChange={e => setEmail(e.target.value)}
 						/>
@@ -96,11 +99,12 @@ function LoginForm() {
 							type="password"
 							autoComplete="current-password"
 							required
+							disabled={!hydrated || pending}
 							value={password}
 							onChange={e => setPassword(e.target.value)}
 						/>
 					</div>
-					<Button type="submit" className="w-full" disabled={pending}>
+					<Button type="submit" className="w-full" disabled={!hydrated || pending}>
 						{pending ? 'Signing in…' : 'Sign in'}
 					</Button>
 				</form>
@@ -115,6 +119,7 @@ function LoginForm() {
 				<Button
 					variant="outline"
 					className="w-full"
+					disabled={!hydrated}
 					onClick={() => handleSocial('google')}
 				>
 					<svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">

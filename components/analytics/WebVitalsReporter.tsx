@@ -3,6 +3,7 @@
 import { normalizeMetricPage } from '@/lib/analytics/web-vitals'
 import { usePathname } from 'next/navigation'
 import { useReportWebVitals } from 'next/web-vitals'
+import { useCallback, useEffect, useRef } from 'react'
 
 const getSampleRate = () => {
 	const configured = Number(process.env.NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE)
@@ -29,11 +30,18 @@ const shouldSample = (metricId: string, page: string) => {
 	return (hash >>> 0) / 2 ** 32 < sampleRate
 }
 
+type ReportWebVitalsCallback = Parameters<typeof useReportWebVitals>[0]
+
 export function WebVitalsReporter() {
 	const pathname = usePathname()
+	const pageRef = useRef(normalizeMetricPage(pathname))
 	const page = normalizeMetricPage(pathname)
+	useEffect(() => {
+		pageRef.current = page
+	}, [page])
 
-	useReportWebVitals(metric => {
+	const reportWebVital = useCallback<ReportWebVitalsCallback>(metric => {
+		const page = pageRef.current
 		if (!shouldSample(metric.id, page)) return
 
 		const payload = JSON.stringify({
@@ -60,7 +68,9 @@ export function WebVitalsReporter() {
 			body: payload,
 			keepalive: true,
 		})
-	})
+	}, [])
+
+	useReportWebVitals(reportWebVital)
 
 	return null
 }

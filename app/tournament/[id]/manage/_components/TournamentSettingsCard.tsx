@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useHydrated } from '@/hooks/use-hydrated'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CheckCircle2, Info, LoaderCircle, Save } from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -31,6 +32,7 @@ export function TournamentSettingsCard({
 	mutationState: { kind: 'idle' | 'success' | 'error'; message: string | null }
 	onSubmit: (data: TournamentNameForm) => Promise<boolean>
 }) {
+	const hydrated = useHydrated()
 	const {
 		formState: { errors, isDirty },
 		handleSubmit,
@@ -55,7 +57,7 @@ export function TournamentSettingsCard({
 					Rename this tournament. Its administrator and competition structure stay fixed.
 				</CardDescription>
 			</CardHeader>
-			<form onSubmit={submit} noValidate>
+			<form onSubmit={submit} noValidate aria-busy={!hydrated || isSaving}>
 				<CardContent className="space-y-5">
 					<Alert variant="info">
 						<Info aria-hidden="true" />
@@ -71,6 +73,7 @@ export function TournamentSettingsCard({
 							autoComplete="off"
 							aria-describedby={errors.name ? 'tournament-name-error' : 'tournament-name-help'}
 							aria-invalid={Boolean(errors.name)}
+							disabled={!hydrated || isSaving}
 							maxLength={80}
 							{...register('name')}
 						/>
@@ -95,7 +98,7 @@ export function TournamentSettingsCard({
 					) : null}
 				</CardContent>
 				<CardFooter className="justify-end">
-					<Button type="submit" disabled={isSaving || !isDirty}>
+					<Button type="submit" disabled={!hydrated || isSaving || !isDirty}>
 						{isSaving ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Save aria-hidden="true" />}
 						{isSaving ? 'Saving…' : 'Save name'}
 					</Button>

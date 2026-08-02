@@ -4,6 +4,7 @@ import * as React from "react";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { Button } from "@/components/ui/button";
+import { useHydrated } from "@/hooks/use-hydrated";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,11 +15,18 @@ import {
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
+  const hydrated = useHydrated();
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Change color theme">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Change color theme"
+          aria-busy={!hydrated}
+          disabled={!hydrated}
+        >
           <Sun aria-hidden="true" className="rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
           <Moon aria-hidden="true" className="absolute rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           <span className="sr-only">Toggle theme</span>

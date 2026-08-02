@@ -1,7 +1,7 @@
 # Frontend architecture, performance, and UX review
 
 Date: 2 August 2026
-Branch: `codex/frontend-review-improvements`
+Release branches: `codex/frontend-review-improvements`, `codex/hydration-readiness`
 
 ## Executive verdict
 
@@ -16,8 +16,8 @@ No known P0 or P1 frontend issue remains from this review. Production rollout an
 | Repository organization | Strong | GraphQL operations are grouped by domain; route-private code is colocated; reusable primitives remain shared. |
 | SOLID and composition | Strong | Data access, state orchestration, derivation, and presentation have explicit boundaries; composition replaces boolean-heavy monoliths. |
 | Backend API use | Strong | Server-owned identity, bounded bodies, timeouts, same-origin mutation checks, accurate field contracts, and honest errors. |
-| Fallbacks and rendering | Strong | Global, route, section, empty, partial-data, offline, timeout, and not-found states are present and browser-tested. |
-| User performance | Strong lab baseline | Lighthouse home scored 96 performance and 100 accessibility/best-practices/SEO; production RUM now records privacy-bounded Core Web Vitals. |
+| Fallbacks and rendering | Strong | Global, route, section, empty, partial-data, offline, timeout, not-found, and pre-hydration states are present and browser-tested. |
+| User performance | Strong lab baseline | Lighthouse home scored 96 performance and 100 accessibility/best-practices/SEO; production RUM now records privacy-bounded, rate-limited Core Web Vitals. |
 | Cache, storage, context, state | Strong | Cache policy follows volatility; browser storage is small and validated; bounded in-memory caches replace global context where appropriate. |
 | shadcn and Tailwind | Strong | Shared shadcn primitives, semantic design tokens, consistent focus/contrast/radius behavior, and responsive Tailwind composition. |
 | UI/UX and accessibility | Strong | Keyboard skip path, accessible dialogs/forms, mobile navigation, meaningful status language, reduced motion, and no axe violations in covered flows. |
@@ -41,6 +41,7 @@ No known P0 or P1 frontend issue remains from this review. Production rollout an
 - Replaced browser-native confirmation with a controlled shadcn Alert Dialog requiring the exact tournament name before deletion.
 - Tightened tournament creation contracts for secure FPL URLs, name length, gameweek ordering, positive numeric structure fields, bounded participant lists, and malformed participant responses.
 - Added request cancellation and timeouts to GraphQL and tournament service calls; live/authenticated requests remain `no-store`.
+- Prevented early taps and controlled-input changes from being lost by keeping client-only navigation and stateful forms disabled until their React island is hydrated.
 
 ### State, caching, and resilience
 
@@ -74,7 +75,7 @@ No known P0 or P1 frontend issue remains from this review. Production rollout an
 ## Automated verification
 
 - Frontend unit/security/model tests: 98 total, 96 passed, 2 database-only tests skipped, 0 failed.
-- Playwright browser suite: 7 passed, covering desktop/mobile navigation, skip link, axe accessibility, theme persistence, in-app auth errors, corrupt storage plus backend failure, and protected-route redirects.
+- Playwright browser suite: 8 passed, covering pre-hydration controls, desktop/mobile navigation, skip link, axe accessibility, theme persistence, in-app auth errors, corrupt storage plus backend failure, and protected-route redirects.
 - Frontend ESLint: passed with zero warnings or errors.
 - Frontend TypeScript: passed.
 - Frontend production build: passed on Next.js 16.2.12. Backend-dependent static routes rendered their intended fallback states while the local GraphQL service was deliberately unavailable.

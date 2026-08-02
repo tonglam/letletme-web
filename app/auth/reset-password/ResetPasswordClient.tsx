@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useHydrated } from '@/hooks/use-hydrated'
 import { authClient } from '@/lib/auth-client'
 import { Gamepad } from 'lucide-react'
 import Link from 'next/link'
@@ -13,6 +14,7 @@ import { Suspense, useState } from 'react'
 
 function ResetPasswordForm() {
 	const router = useRouter()
+	const hydrated = useHydrated()
 	const searchParams = useSearchParams()
 	const token = searchParams.get('token') ?? ''
 
@@ -76,7 +78,7 @@ function ResetPasswordForm() {
 				</Alert>
 			)}
 
-			<form onSubmit={handleSubmit} className="space-y-4">
+			<form onSubmit={handleSubmit} className="space-y-4" aria-busy={!hydrated || pending}>
 				<div className="space-y-1">
 					<Label htmlFor="password">Password</Label>
 					<Input
@@ -84,6 +86,7 @@ function ResetPasswordForm() {
 						type="password"
 						autoComplete="new-password"
 						required
+						disabled={!hydrated || pending}
 						minLength={10}
 						value={password}
 						onChange={e => setPassword(e.target.value)}
@@ -96,11 +99,12 @@ function ResetPasswordForm() {
 						type="password"
 						autoComplete="new-password"
 						required
+						disabled={!hydrated || pending}
 						value={confirm}
 						onChange={e => setConfirm(e.target.value)}
 					/>
 				</div>
-				<Button type="submit" className="w-full" disabled={pending}>
+				<Button type="submit" className="w-full" disabled={!hydrated || pending}>
 					{pending ? 'Saving…' : 'Set new password'}
 				</Button>
 			</form>

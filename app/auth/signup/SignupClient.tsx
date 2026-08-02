@@ -5,14 +5,14 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useHydrated } from '@/hooks/use-hydrated'
 import { signUp } from '@/lib/auth-client'
 import { Gamepad } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 export default function SignupClient() {
-	const router = useRouter()
+	const hydrated = useHydrated()
 	const [name, setName] = useState('')
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
@@ -84,7 +84,7 @@ export default function SignupClient() {
 							</Alert>
 						)}
 
-						<form onSubmit={handleSubmit} className="space-y-4">
+						<form onSubmit={handleSubmit} className="space-y-4" aria-busy={!hydrated || pending}>
 							<div className="space-y-1">
 								<Label htmlFor="name">Name</Label>
 								<Input
@@ -92,6 +92,7 @@ export default function SignupClient() {
 									type="text"
 									autoComplete="name"
 									required
+									disabled={!hydrated || pending}
 									value={name}
 									onChange={e => setName(e.target.value)}
 								/>
@@ -103,6 +104,7 @@ export default function SignupClient() {
 									type="email"
 									autoComplete="email"
 									required
+									disabled={!hydrated || pending}
 									value={email}
 									onChange={e => setEmail(e.target.value)}
 								/>
@@ -114,6 +116,7 @@ export default function SignupClient() {
 									type="password"
 									autoComplete="new-password"
 									required
+									disabled={!hydrated || pending}
 									minLength={10}
 									value={password}
 									onChange={e => setPassword(e.target.value)}
@@ -129,11 +132,12 @@ export default function SignupClient() {
 									type="password"
 									autoComplete="new-password"
 									required
+									disabled={!hydrated || pending}
 									value={confirm}
 									onChange={e => setConfirm(e.target.value)}
 								/>
 							</div>
-							<Button type="submit" className="w-full" disabled={pending}>
+							<Button type="submit" className="w-full" disabled={!hydrated || pending}>
 								{pending ? 'Creating account…' : 'Create account'}
 							</Button>
 						</form>
