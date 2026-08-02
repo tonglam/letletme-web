@@ -89,7 +89,9 @@ test('malformed player history does not break the comparison screen', async ({ p
 
 	await expect(page.getByRole('heading', { name: 'Player Statistics' })).toBeVisible()
 	await expect(page.getByRole('button', { name: 'Clear recent' })).toHaveCount(0)
-	await expect(page.getByText('Failed to load team directory.').first()).toBeVisible()
+	await expect(
+		page.getByRole('status').filter({ hasText: 'Failed to load the team directory.' }).first(),
+	).toBeVisible()
 })
 
 test('protected tournament creation returns an unauthenticated user to sign-in safely', async ({ page }) => {
