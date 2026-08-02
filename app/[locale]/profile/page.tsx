@@ -5,10 +5,10 @@ import { Separator } from '@/components/ui/separator'
 import { Link } from '@/i18n/navigation'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
-import { getAuth } from '@/lib/auth'
+import { getAuthorizationSession } from '@/lib/auth'
 import { db, schema } from '@/lib/db'
 import { eq } from 'drizzle-orm'
-import { Trophy, Users } from 'lucide-react'
+import { MonitorSmartphone, Trophy, Users } from 'lucide-react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { AvatarUpload } from '@/app/profile/AvatarUpload'
@@ -27,14 +27,14 @@ export async function generateMetadata({ params }: PageProps) {
 		pathname: '/profile',
 		titleKey: 'profileTitle',
 		descriptionKey: 'profileDescription',
-		noIndex: true,
+		noIndex: true
 	})
 }
 
 export default async function ProfilePage({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	const t = await getTranslations('Profile')
-	const session = await getAuth().api.getSession({ headers: await headers() })
+	const session = await getAuthorizationSession(await headers())
 
 	if (!session) {
 		redirect(localizeHref('/auth/login?next=/profile', locale))
@@ -71,7 +71,11 @@ export default async function ProfilePage({ params }: PageProps) {
 						<div className="w-full flex flex-col gap-3">
 							<div className="flex items-center gap-2 text-sm">
 								<Trophy className="h-4 w-4 text-primary" />
-								<span>{t('memberSince', { year: new Date(profile.createdAt).getFullYear() })}</span>
+								<span>
+									{t('memberSince', {
+										year: new Date(profile.createdAt).getFullYear()
+									})}
+								</span>
 							</div>
 						</div>
 
@@ -100,7 +104,10 @@ export default async function ProfilePage({ params }: PageProps) {
 										{t('verified')}
 									</Badge>
 								) : (
-									<Badge variant="outline" className="text-muted-foreground">
+									<Badge
+										variant="outline"
+										className="text-muted-foreground"
+									>
 										{t('unverified')}
 									</Badge>
 								)}
@@ -130,6 +137,19 @@ export default async function ProfilePage({ params }: PageProps) {
 									>
 										{t('change')}
 									</Link>
+								</div>
+								<div className="flex items-center justify-between gap-4">
+									<span className="flex items-center gap-2">
+										<MonitorSmartphone className="h-4 w-4" />
+										{t('activeSessions')}
+									</span>
+									<Button
+										asChild
+										variant="outline"
+										size="sm"
+									>
+										<Link href="/profile/sessions">{t('manage')}</Link>
+									</Button>
 								</div>
 							</div>
 						</div>

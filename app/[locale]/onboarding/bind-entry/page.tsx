@@ -1,7 +1,7 @@
 import { Card } from '@/components/ui/card'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import { localizeHref } from '@/i18n/routing'
-import { getAuth } from '@/lib/auth'
+import { getSafeInternalHref, localizeHref } from '@/i18n/routing'
+import { getAuthorizationSession } from '@/lib/auth'
 import { Gamepad, Hash } from 'lucide-react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -10,7 +10,10 @@ import { getTranslations } from 'next-intl/server'
 
 export const dynamic = 'force-dynamic'
 
-type PageProps = { params: LocaleParams }
+type PageProps = {
+	params: LocaleParams
+	searchParams: Promise<{ next?: string }>
+}
 
 export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
@@ -19,22 +22,28 @@ export async function generateMetadata({ params }: PageProps) {
 		pathname: '/onboarding/bind-entry',
 		titleKey: 'bindEntryTitle',
 		descriptionKey: 'bindEntryDescription',
-		noIndex: true,
+		noIndex: true
 	})
 }
 
-export default async function BindEntryPage({ params }: PageProps) {
+export default async function BindEntryPage({
+	params,
+	searchParams
+}: PageProps) {
 	const { locale } = await getPageLocale(params)
 	const t = await getTranslations('Onboarding')
-	const session = await getAuth().api.getSession({ headers: await headers() })
+	const next = getSafeInternalHref((await searchParams).next ?? '/')
+	const session = await getAuthorizationSession(await headers())
 
 	if (!session) {
-		redirect(localizeHref('/auth/login?next=/onboarding/bind-entry', locale))
+		redirect(
+			localizeHref(`/auth/login?next=${encodeURIComponent(next)}`, locale)
+		)
 	}
 
 	// Already bound — skip onboarding
 	if (session.user.fplEntryVerifiedAt) {
-		redirect(localizeHref('/', locale))
+		redirect(localizeHref(next, locale))
 	}
 
 	return (
@@ -49,9 +58,7 @@ export default async function BindEntryPage({ params }: PageProps) {
 					<div className="flex justify-center mb-3">
 						<Hash className="h-10 w-10 text-primary" />
 					</div>
-					<h2 className="text-2xl font-bold tracking-tight">
-						{t('title')}
-					</h2>
+					<h2 className="text-2xl font-bold tracking-tight">{t('title')}</h2>
 					<p className="text-sm text-muted-foreground mt-1">
 						{t('description')}
 					</p>
@@ -60,9 +67,7 @@ export default async function BindEntryPage({ params }: PageProps) {
 				<div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground mb-6">
 					<p className="font-medium mb-1">{t('findEntryId')}</p>
 					<ol className="list-decimal list-inside space-y-1">
-						<li>
-							{t('stepOne')}
-						</li>
+						<li>{t('stepOne')}</li>
 						<li>{t('stepTwo')}</li>
 						<li>{t('stepThree')}</li>
 						<li>
@@ -74,7 +79,7 @@ export default async function BindEntryPage({ params }: PageProps) {
 					</ol>
 				</div>
 
-				<BindEntryForm />
+				<BindEntryForm next={next} />
 			</Card>
 		</div>
 	)

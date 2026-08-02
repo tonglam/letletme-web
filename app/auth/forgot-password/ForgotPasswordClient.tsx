@@ -7,9 +7,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useHydrated } from '@/hooks/use-hydrated'
 import { Link } from '@/i18n/navigation'
-import { localizePathname, type AppLocale } from '@/i18n/routing'
+import { localizeHref, type AppLocale } from '@/i18n/routing'
 import { authClient } from '@/lib/auth-client'
 import { getAuthErrorKey } from '@/lib/auth-error'
+import { absoluteAuthUrl } from '@/lib/auth-redirects'
 import { Gamepad } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useState } from 'react'
@@ -27,16 +28,31 @@ export default function ForgotPasswordClient() {
 		e.preventDefault()
 		setError(null)
 		setPending(true)
-		const { error: err } = await authClient.requestPasswordReset({
-			email,
-			redirectTo: localizePathname('/auth/reset-password', locale),
-		})
-		setPending(false)
-		if (err) {
-			setError(t(`errors.${getAuthErrorKey(err, 'resetEmailFailed')}`))
-			return
+		try {
+			const { error: err } = await authClient.requestPasswordReset({
+				email,
+				redirectTo: absoluteAuthUrl(
+					localizeHref('/auth/reset-password', locale),
+					window.location.origin
+				)
+			})
+			if (err) {
+				setError(t(`errors.${getAuthErrorKey(err, 'resetEmailFailed')}`))
+				return
+			}
+			setSent(true)
+		} catch (cause) {
+			setError(
+				t(
+					`errors.${getAuthErrorKey(
+						cause instanceof Error ? { message: cause.message } : null,
+						'resetEmailFailed'
+					)}`
+				)
+			)
+		} finally {
+			setPending(false)
 		}
-		setSent(true)
 	}
 
 	return (
@@ -80,7 +96,11 @@ export default function ForgotPasswordClient() {
 							</Alert>
 						)}
 
-						<form onSubmit={handleSubmit} className="space-y-4" aria-busy={!hydrated || pending}>
+						<form
+							onSubmit={handleSubmit}
+							className="space-y-4"
+							aria-busy={!hydrated || pending}
+						>
 							<div className="space-y-1">
 								<Label htmlFor="email">{t('email')}</Label>
 								<Input
@@ -93,13 +113,20 @@ export default function ForgotPasswordClient() {
 									onChange={e => setEmail(e.target.value)}
 								/>
 							</div>
-							<Button type="submit" className="w-full" disabled={!hydrated || pending}>
+							<Button
+								type="submit"
+								className="w-full"
+								disabled={!hydrated || pending}
+							>
 								{pending ? t('sending') : t('sendResetLink')}
 							</Button>
 						</form>
 
 						<p className="text-center text-sm text-muted-foreground mt-4">
-							<Link href="/auth/login" className="text-primary underline underline-offset-4 hover:no-underline">
+							<Link
+								href="/auth/login"
+								className="text-primary underline underline-offset-4 hover:no-underline"
+							>
 								{t('backToLogin')}
 							</Link>
 						</p>
