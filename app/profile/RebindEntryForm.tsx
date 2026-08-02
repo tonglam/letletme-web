@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useRouter } from '@/i18n/navigation'
-import { ExternalLink, Link2Off, MousePointerClick, Pencil, X } from 'lucide-react'
+import { ClipboardPaste, ExternalLink, Link2Off, MousePointerClick, Pencil, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useActionState, useEffect, useRef, useState, useTransition } from 'react'
 import { toast } from 'sonner'
@@ -180,17 +180,24 @@ export default function RebindEntryForm({
 								{chunks}
 							</span>
 						),
+						paste: chunks => (
+							<span className="inline-flex items-center gap-1 rounded-md border border-primary/50 bg-primary/10 px-1.5 py-0.5 align-baseline font-semibold text-primary-ink">
+								<ClipboardPaste aria-hidden="true" className="size-3" />
+								{chunks}
+							</span>
+						),
 					})}
 				</p>
-				<a
-					href="https://fantasy.premierleague.com/en/my-team"
-					target="_blank"
-					rel="noopener noreferrer"
-					className="inline-flex items-center gap-1 font-medium text-primary-ink underline underline-offset-4 hover:no-underline"
-				>
-					<ExternalLink aria-hidden="true" className="size-3" />
-					{t('openFpl')}
-				</a>
+				<Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" asChild>
+					<a
+						href="https://fantasy.premierleague.com/en/my-team"
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						<ExternalLink data-icon="inline-start" />
+						{t('openFpl')}
+					</a>
+				</Button>
 			</div>
 		</form>
 	)

@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
 import { getAuth } from '@/lib/auth'
-import { ExternalLink, Hash, MousePointerClick } from 'lucide-react'
+import { ClipboardPaste, ExternalLink, Hash, MousePointerClick } from 'lucide-react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import BindEntryForm from '@/app/onboarding/bind-entry/BindEntryForm'
@@ -81,7 +81,16 @@ export default async function BindEntryPage({ params }: PageProps) {
 								),
 							})}
 						</li>
-						<li>{t('stepThree')}</li>
+						<li>
+							{t.rich('stepThree', {
+								paste: chunks => (
+									<span className="inline-flex items-center gap-1 rounded-md border border-primary/50 bg-primary/10 px-1.5 py-0.5 align-baseline font-semibold text-primary-ink">
+										<ClipboardPaste aria-hidden="true" className="size-3" />
+										{chunks}
+									</span>
+								),
+							})}
+						</li>
 						<li>
 							{t('example')}{' '}
 							<span className="font-mono">
@@ -89,7 +98,7 @@ export default async function BindEntryPage({ params }: PageProps) {
 							</span>
 						</li>
 					</ol>
-					<Button variant="outline" size="sm" className="mt-3 w-full" asChild>
+					<Button size="sm" className="mt-3 w-full" asChild>
 						<a
 							href="https://fantasy.premierleague.com/en/my-team"
 							target="_blank"
