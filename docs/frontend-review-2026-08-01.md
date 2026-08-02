@@ -1,7 +1,7 @@
 # Frontend architecture, performance, and UX review
 
 Date: 2 August 2026
-Release branches: `codex/frontend-review-improvements`, `codex/hydration-readiness`
+Release branches: `codex/frontend-review-improvements`, `codex/hydration-readiness`, `codex/disable-cloudflare-transform`
 
 ## Executive verdict
 
@@ -17,7 +17,7 @@ No known P0 or P1 frontend issue remains from this review. Production rollout an
 | SOLID and composition | Strong | Data access, state orchestration, derivation, and presentation have explicit boundaries; composition replaces boolean-heavy monoliths. |
 | Backend API use | Strong | Server-owned identity, bounded bodies, timeouts, same-origin mutation checks, accurate field contracts, and honest errors. |
 | Fallbacks and rendering | Strong | Global, route, section, empty, partial-data, offline, timeout, not-found, and pre-hydration states are present and browser-tested. |
-| User performance | Strong lab baseline | Lighthouse home scored 96 performance and 100 accessibility/best-practices/SEO; production RUM now records privacy-bounded, rate-limited Core Web Vitals. |
+| User performance | Strong lab baseline | Mobile Lighthouse at the unmodified production origin scored 99 performance and 100 accessibility/best-practices/SEO; production RUM records privacy-bounded, rate-limited Core Web Vitals. |
 | Cache, storage, context, state | Strong | Cache policy follows volatility; browser storage is small and validated; bounded in-memory caches replace global context where appropriate. |
 | shadcn and Tailwind | Strong | Shared shadcn primitives, semantic design tokens, consistent focus/contrast/radius behavior, and responsive Tailwind composition. |
 | UI/UX and accessibility | Strong | Keyboard skip path, accessible dialogs/forms, mobile navigation, meaningful status language, reduced motion, and no axe violations in covered flows. |
@@ -69,13 +69,14 @@ No known P0 or P1 frontend issue remains from this review. Production rollout an
 
 - Re-enabled Next.js image optimization and reduced display-font preload cost.
 - Server-seeded key routes to avoid avoidable client waterfalls and removed duplicated data work.
+- Prevented Cloudflare from rewriting Next.js streaming and hydration scripts by adding `no-transform` to HTML document responses while preserving public revalidation, private-page `no-store`, API caching, and RSC caching behavior.
 - Added a sampled Web Vitals reporter for CLS, FCP, INP, LCP, and TTFB. Dynamic identifiers and query strings are normalized out, payloads are bounded, no user identity is included, and delivery uses `sendBeacon` with a keepalive fallback.
-- The comparable local Lighthouse home run recorded 96 performance, 100 accessibility, 100 best practices, 100 SEO, 0.8 s FCP, 2.7 s LCP, 0 ms blocking time, and zero layout shift.
+- The comparable local Lighthouse home run recorded 96 performance, 100 accessibility, 100 best practices, 100 SEO, 0.8 s FCP, 2.7 s LCP, 0 ms blocking time, and zero layout shift. A mobile production-origin run recorded 99 performance, 1.2 s FCP, 2.2 s LCP, 20 ms blocking time, and zero layout shift. The Cloudflare-rewritten response had scored 78 before the delivery-layer fix, which isolated the edge transformation as the regression rather than the application bundle.
 
 ## Automated verification
 
 - Frontend unit/security/model tests: 98 total, 96 passed, 2 database-only tests skipped, 0 failed.
-- Playwright browser suite: 8 passed, covering pre-hydration controls, desktop/mobile navigation, skip link, axe accessibility, theme persistence, in-app auth errors, corrupt storage plus backend failure, and protected-route redirects.
+- Playwright browser suite: 9 passed, covering CDN transformation protection, pre-hydration controls, desktop/mobile navigation, skip link, axe accessibility, theme persistence, in-app auth errors, corrupt storage plus backend failure, and protected-route redirects.
 - Frontend ESLint: passed with zero warnings or errors.
 - Frontend TypeScript: passed.
 - Frontend production build: passed on Next.js 16.2.12. Backend-dependent static routes rendered their intended fallback states while the local GraphQL service was deliberately unavailable.

@@ -1,6 +1,15 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
+test('HTML documents prevent CDN script rewriting without weakening revalidation', async ({ request }) => {
+	const response = await request.get('/', { headers: { Accept: 'text/html' } })
+	const cacheControl = response.headers()['cache-control']
+
+	expect(response.ok()).toBe(true)
+	expect(cacheControl).toContain('no-transform')
+	expect(cacheControl).toContain('must-revalidate')
+})
+
 test('client-only navigation controls stay unavailable until hydration', async ({ browser }) => {
 	const page = await browser.newPage({ javaScriptEnabled: false })
 	await page.setViewportSize({ width: 390, height: 844 })
