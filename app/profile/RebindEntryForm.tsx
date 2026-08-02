@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useRouter } from '@/i18n/navigation'
-import { ExternalLink, Pencil, X } from 'lucide-react'
+import { ExternalLink, MousePointerClick, Pencil, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useActionState, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -111,7 +111,16 @@ export default function RebindEntryForm({
 			</div>
 
 			<div className="rounded-md bg-muted/50 p-2.5 text-xs text-muted-foreground space-y-1.5">
-				<p>{t('findEntryHint')}</p>
+				<p>
+					{t.rich('findEntryHint', {
+						gh: chunks => (
+							<span className="inline-flex items-center gap-1 rounded-md border border-primary/50 bg-primary/10 px-1.5 py-0.5 align-baseline font-semibold text-primary-ink">
+								<MousePointerClick aria-hidden="true" className="size-3" />
+								{chunks}
+							</span>
+						),
+					})}
+				</p>
 				<a
 					href="https://fantasy.premierleague.com/en/my-team"
 					target="_blank"
