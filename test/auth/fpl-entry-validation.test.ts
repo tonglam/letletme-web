@@ -11,6 +11,7 @@ import assert from 'node:assert/strict'
 import {
 	assertFplEntryId,
 	fplTeamNamesMatch,
+	getVerifiedFplEntryId,
 } from '../../lib/fpl-binding-core'
 import { shouldRetainFplBindingChallenge } from '../../lib/fpl-binding-error-code'
 
@@ -119,6 +120,35 @@ describe('FPL ownership challenge matching', () => {
 	it('uses the shared positive-integer validator', () => {
 		assert.equal(assertFplEntryId('15702'), 15702)
 		assert.throws(() => assertFplEntryId('1.5'))
+	})
+})
+
+describe('verified FPL entry selection', () => {
+	it('does not expose a legacy entry ID without ownership verification', () => {
+		assert.equal(
+			getVerifiedFplEntryId({
+				fplEntryId: 15702,
+				fplEntryVerifiedAt: null,
+			}),
+			null,
+		)
+	})
+
+	it('returns an entry ID only when its verification timestamp is valid', () => {
+		assert.equal(
+			getVerifiedFplEntryId({
+				fplEntryId: 15702,
+				fplEntryVerifiedAt: '2026-08-02T00:00:00.000Z',
+			}),
+			15702,
+		)
+		assert.equal(
+			getVerifiedFplEntryId({
+				fplEntryId: 15702,
+				fplEntryVerifiedAt: 'not-a-date',
+			}),
+			null,
+		)
 	})
 })
 

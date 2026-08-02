@@ -9,7 +9,7 @@ test('homepage streams its real shell and prevents CDN script rewriting', async 
 	expect(response.ok()).toBe(true)
 	expect(cacheControl).toContain('no-transform')
 	expect(cacheControl).toContain('must-revalidate')
-	expect(html).toContain('See the gameweek before the rank settles.')
+	expect(html).toContain('Every point. Every rival.')
 	expect(html).not.toContain('aria-label="Loading page"')
 })
 

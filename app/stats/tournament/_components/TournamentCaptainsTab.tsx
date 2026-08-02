@@ -19,7 +19,7 @@ export function TournamentCaptainsTab({ rows }: { rows: CaptainRow[] }) {
 						<li key={`${stat.player}-${stat.team}`} className="rounded-lg bg-accent/30 p-4">
 							<div className="flex items-center justify-between gap-4">
 								<div className="flex min-w-0 items-center gap-3">
-									<span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">{index + 1}</span>
+									<span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary-ink">{index + 1}</span>
 									<div className="min-w-0">
 										<p className="truncate text-lg font-bold">{stat.player}{stat.team !== 'N/A' ? <span className="ml-2 text-sm font-normal text-muted-foreground">({stat.team})</span> : null}</p>
 										<p className="text-sm text-muted-foreground">{t('managerCount', { count: format.number(stat.count, { notation: 'compact' }), percentage: stat.percentage })}</p>

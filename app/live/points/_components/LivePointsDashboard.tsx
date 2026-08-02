@@ -80,7 +80,7 @@ export function LivePointsDashboard({
 			<div aria-live="polite" className="min-h-5">
 				{isRefreshing ? (
 					<div className="mb-3 flex items-center justify-end gap-2 text-sm text-muted-foreground">
-						<Loader2 className="size-4 animate-spin text-primary" aria-hidden="true" />
+						<Loader2 className="size-4 animate-spin text-primary-ink" aria-hidden="true" />
 						<span>{t('updating')}</span>
 					</div>
 				) : null}

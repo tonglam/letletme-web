@@ -1,5 +1,6 @@
 'use client'
 
+import { LogoMark } from '@/components/layout/Logo'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -15,7 +16,6 @@ import {
 	onboardingRedirectPath,
 	verificationCallbackPath
 } from '@/lib/auth-redirects'
-import { Gamepad } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useState } from 'react'
 
@@ -79,8 +79,8 @@ export default function SignupClient() {
 	return (
 		<div className="flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center bg-muted/30 p-4">
 			<div className="mb-6 flex items-center gap-2">
-				<Gamepad className="h-8 w-8 text-primary" />
-				<h1 className="text-2xl font-bold">LetLetMe</h1>
+				<LogoMark className="size-10 text-plum dark:text-electric" />
+				<h1 className="font-display text-2xl font-bold uppercase tracking-[0.06em]">LetLetMe</h1>
 			</div>
 
 			<Card className="w-full max-w-md p-6">
@@ -92,7 +92,7 @@ export default function SignupClient() {
 						</p>
 						<Link
 							href="/auth/login"
-							className="mt-4 block text-sm text-primary underline underline-offset-4 hover:no-underline"
+							className="mt-4 block text-sm text-primary-ink underline underline-offset-4 hover:no-underline"
 						>
 							{t('backToLogin')}
 						</Link>
@@ -187,7 +187,7 @@ export default function SignupClient() {
 							{t('alreadyAccount')}{' '}
 							<Link
 								href="/auth/login"
-								className="text-primary underline underline-offset-4 hover:no-underline"
+								className="text-primary-ink underline underline-offset-4 hover:no-underline"
 							>
 								{t('signIn')}
 							</Link>

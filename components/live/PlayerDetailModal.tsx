@@ -115,7 +115,7 @@ export function PlayerDetailModal({
 								{t('totalPoints')}
 							</span>
 							<div className="flex items-baseline gap-2">
-								<span className="text-4xl font-bold text-primary">
+								<span className="text-4xl font-bold text-primary-ink">
 									{player.points}
 								</span>
 								<span className="text-sm text-muted-foreground mb-1">{t('pointsAbbreviation')}</span>
@@ -181,7 +181,7 @@ export function PlayerDetailModal({
 					{/* Point Breakdown Section */}
 					<div>
 						<div className="flex items-center gap-2 mb-4">
-							<Zap className="h-5 w-5 text-primary" />
+							<Zap className="h-5 w-5 text-primary-ink" />
 							<h3 className="text-lg font-semibold">{t('pointBreakdown')}</h3>
 						</div>
 
@@ -198,7 +198,7 @@ export function PlayerDetailModal({
 									>
 										<div className="flex items-center gap-3">
 											<div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
-												<Zap className="h-4 w-4 text-primary" />
+												<Zap className="h-4 w-4 text-primary-ink" />
 											</div>
 											<div>
 												<span className="text-sm font-medium">{breakdownLabels[item.category] ?? item.category}</span>
@@ -251,7 +251,7 @@ export function PlayerDetailModal({
 						<Separator className="my-3" />
 						<div className="flex items-center justify-between">
 							<span className="text-base font-semibold">{t('totalPoints')}</span>
-							<span className="text-2xl font-bold text-primary">
+							<span className="text-2xl font-bold text-primary-ink">
 								{player.points}
 							</span>
 						</div>

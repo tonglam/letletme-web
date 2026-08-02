@@ -76,7 +76,7 @@ export default function TournamentDetailClient({
 				<div className="mb-4 flex flex-wrap items-center justify-between gap-2">
 					<Button
 						variant="ghost"
-						className="-ml-3 text-primary hover:text-primary/80"
+						className="-ml-3 text-primary-ink hover:text-primary-ink/80"
 						asChild
 					>
 						<Link href="/live/tournament">

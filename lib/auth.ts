@@ -147,7 +147,9 @@ export const authConfig = {
 				type: 'date' as const,
 				required: false,
 				input: false
-			}
+			},
+			fplTeamName: { type: 'string' as const, required: false, input: false },
+			fplManagerName: { type: 'string' as const, required: false, input: false }
 		}
 	},
 	plugins: [] as const

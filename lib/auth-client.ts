@@ -24,6 +24,16 @@ const additionalUserFields = {
 			type: 'date' as const,
 			required: false as const,
 			input: false as const
+		},
+		fplTeamName: {
+			type: 'string' as const,
+			required: false as const,
+			input: false as const
+		},
+		fplManagerName: {
+			type: 'string' as const,
+			required: false as const,
+			input: false as const
 		}
 	}
 }

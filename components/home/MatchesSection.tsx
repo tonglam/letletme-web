@@ -99,15 +99,15 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 								</span>
 							</div>
 
-							<div className="px-4 py-2 bg-background rounded-lg font-mono text-sm md:text-base font-semibold text-center mx-auto">
+							<div className="mx-auto rounded-md border border-electric/25 bg-plum px-4 py-2 text-center font-mono text-sm font-semibold text-electric md:text-base">
 								{match.finished &&
 								match.homeScore !== null &&
 								match.awayScore !== null ? (
-									<span className="text-lg">
+									<span className="text-lg tabular-nums">
 										{match.homeScore} - {match.awayScore}
 									</span>
 								) : (
-									<span>{match.time}</span>
+									<span className="tabular-nums">{match.time}</span>
 								)}
 							</div>
 
@@ -245,12 +245,12 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 	const canGoNext = selectedEventId !== null && selectedEventId < MAX_GAMEWEEK
 
 	const header = (
-		<div className="flex items-center justify-between mb-6">
-			<h2 className="text-xl font-bold flex items-center gap-2">
+		<div className="mb-6 flex items-center justify-between">
+			<h2 className="flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
 				{t('upcomingMatches')}
 				{selectedEventId !== null && (
-					<span className="text-sm font-medium text-muted-foreground">
-						(GW {selectedEventId})
+					<span className="rounded-md bg-plum px-2 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
+						GW{selectedEventId}
 					</span>
 				)}
 			</h2>
@@ -277,25 +277,21 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 
 	if (!initialEventId) {
 		return (
-			<div className="flex-grow mb-8">
-				<Card className="p-4 md:p-6">
-					<h2 className="text-xl font-bold mb-6">{t('upcomingMatches')}</h2>
-					<p className="text-sm text-muted-foreground text-center py-8">
-						{t('fixturesUnavailable')}
-					</p>
-				</Card>
-			</div>
+			<Card className="p-4 md:p-6">
+				<h2 className="mb-6 font-display text-xl font-bold uppercase tracking-wide">{t('upcomingMatches')}</h2>
+				<p className="py-8 text-center text-sm text-muted-foreground">
+					{t('fixturesUnavailable')}
+				</p>
+			</Card>
 		)
 	}
 
 	if (error) {
 		return (
-			<div className="flex-grow mb-8">
-				<Card className="p-4 md:p-6">
-					{header}
-					<p className="text-sm text-destructive text-center py-8">{error}</p>
-				</Card>
-			</div>
+			<Card className="p-4 md:p-6">
+				{header}
+				<p className="py-8 text-center text-sm text-destructive">{error}</p>
+			</Card>
 		)
 	}
 
@@ -350,7 +346,7 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 							key={matchDay.date}
 							className="max-w-4xl mx-auto"
 						>
-							<h3 className="text-xl font-semibold text-muted-foreground mb-6 mt-8 text-center">
+							<h3 className="mb-6 mt-8 text-center font-display text-lg font-semibold uppercase tracking-[0.12em] text-muted-foreground">
 								{matchDay.date}
 							</h3>
 						<MatchList matches={matchDay.matches} />
@@ -366,11 +362,9 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 	)
 
 	return (
-		<div className="flex-grow mb-8">
-			<Card className="p-4 md:p-6">
-				{header}
-				{fixturesContent}
-			</Card>
-		</div>
+		<Card className="p-4 md:p-6">
+			{header}
+			{fixturesContent}
+		</Card>
 	)
 }

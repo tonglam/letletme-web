@@ -21,6 +21,7 @@ export function getFplBindingErrorCode(error: unknown): FplBindingErrorCode {
 
 	const message = error.message.toLowerCase()
 	if (message.includes('not authenticated')) return 'notAuthenticated'
+	if (message.includes('valid fpl entry id')) return 'entryNotFound'
 	if (message.includes('no fpl team found')) return 'entryNotFound'
 	if (message.includes('too many binding')) return 'tooManyChallenges'
 	if (message.includes('invalid or expired') || message.includes('challenge is required')) {

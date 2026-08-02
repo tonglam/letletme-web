@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { positionBadgeClass } from "@/lib/position-style";
 import { formatCompactNumber, normalizePosition } from "@/lib/utils";
 import { ArrowLeftCircle, ArrowRightCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -21,34 +22,24 @@ interface TransferListProps {
 export function TransferList({ title, transfers, type }: TransferListProps) {
   const t = useTranslations("Home");
   const icon = type === "in" ? (
-    <ArrowRightCircle className="w-5 h-5 shrink-0 text-emerald-500" />
+    <ArrowRightCircle aria-hidden="true" className="w-5 h-5 shrink-0 text-success" />
   ) : (
-    <ArrowLeftCircle className="w-5 h-5 shrink-0 text-rose-500" />
+    <ArrowLeftCircle aria-hidden="true" className="w-5 h-5 shrink-0 text-destructive" />
   );
 
-  const valueClassName = type === "in" 
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-rose-600 dark:text-rose-400";
+  const valueClassName = type === "in"
+    ? "text-success"
+    : "text-destructive";
 
   const bgClassName = type === "in"
-    ? "border-emerald-200 dark:border-emerald-900"
-    : "border-rose-200 dark:border-rose-900";
-
-  const getPositionColor = (position: string) => {
-    switch (normalizePosition(position)) {
-      case "GKP": return "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300";
-      case "DEF": return "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300";
-      case "MID": return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300";
-      case "FWD": return "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300";
-      default: return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
-    }
-  };
+    ? "border-success/30"
+    : "border-destructive/30";
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 mb-4">
         {icon}
-        <h3 className="text-xl font-bold">{title}</h3>
+        <h3 className="font-display text-lg font-bold uppercase tracking-[0.1em]">{title}</h3>
         {transfers.length > 0 && (
           <Badge variant="secondary" className="ml-auto">
             {transfers.length}
@@ -66,9 +57,9 @@ export function TransferList({ title, transfers, type }: TransferListProps) {
               key={`${transfer.player}-${transfer.club}`}
               className="flex w-full items-center gap-3 rounded-lg border border-border/50 bg-background/80 p-3 text-left"
             >
-              <Badge 
-                variant="secondary" 
-                className={`shrink-0 text-xs font-semibold ${getPositionColor(transfer.position)}`}
+              <Badge
+                variant="secondary"
+                className={`shrink-0 text-xs font-semibold ${positionBadgeClass(transfer.position)}`}
               >
                 {normalizePosition(transfer.position)}
               </Badge>

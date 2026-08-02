@@ -35,7 +35,7 @@ function ManagerSummary({ manager, align }: { manager: NonNullable<MatchTeam['ma
 				</TooltipTrigger>
 				<TooltipContent><p>{manager.name}</p></TooltipContent>
 			</Tooltip>
-			<span className="shrink-0 font-medium text-primary">{t('pointsShort', { points: manager.points })}</span>
+			<span className="shrink-0 font-medium text-primary-ink">{t('pointsShort', { points: manager.points })}</span>
 		</div>
 	)
 }

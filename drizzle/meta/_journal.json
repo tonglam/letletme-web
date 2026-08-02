@@ -43,6 +43,20 @@
 			"when": 1784635200000,
 			"tag": "0005_better_auth_rate_limit",
 			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1785686400000,
+			"tag": "0006_fpl_identity_names",
+			"breakpoints": true
+		},
+		{
+			"idx": 7,
+			"version": "7",
+			"when": 1785690000000,
+			"tag": "0007_fpl_identity_refreshed_at",
+			"breakpoints": true
 		}
 	]
 }

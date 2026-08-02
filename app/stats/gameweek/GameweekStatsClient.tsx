@@ -260,7 +260,7 @@ export default function GameweekStatsClient({
           <TabsContent value="overall">
             <Card className="p-6 mb-6">
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <BarChart2 className="h-5 w-5 text-primary" />
+                <BarChart2 className="h-5 w-5 text-primary-ink" />
                 {t("overview", { gameweek: selectedGameweek })}
               </h2>
               {isLoadingOverall && <p className="text-xs text-muted-foreground mb-3">{t("loadingOverview")}</p>}

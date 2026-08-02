@@ -7,10 +7,13 @@ import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
 import { getAuthorizationSession } from '@/lib/auth'
 import { db, schema } from '@/lib/db'
+import { getVerifiedFplEntryId, isFplIdentitySnapshotStale } from '@/lib/fpl-binding-core'
+import { claimFplIdentityRefresh, refreshFplIdentitySnapshot } from '@/lib/fpl-entry-binding'
 import { eq } from 'drizzle-orm'
 import { MonitorSmartphone, Trophy, Users } from 'lucide-react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { after } from 'next/server'
 import { AvatarUpload } from '@/app/profile/AvatarUpload'
 import RebindEntryForm from '@/app/profile/RebindEntryForm'
 import SignOutButton from '@/app/profile/SignOutButton'
@@ -49,6 +52,21 @@ export default async function ProfilePage({ params }: PageProps) {
 		.limit(1)
 
 	const profile = dbUser ?? user
+	const verifiedEntryId = getVerifiedFplEntryId(profile)
+
+	// Post-response: re-sync the name snapshot when the persisted snapshot is
+	// stale (older than 24h or never refreshed). The cheap staleness read comes
+	// from the already-loaded row; the claim UPDATE below then atomically
+	// picks a single winner across concurrent tabs/instances.
+	if (
+		verifiedEntryId !== null &&
+		isFplIdentitySnapshotStale(dbUser?.fplIdentityRefreshedAt) &&
+		(await claimFplIdentityRefresh(user.id, verifiedEntryId))
+	) {
+		after(async () => {
+			await refreshFplIdentitySnapshot(user.id, verifiedEntryId)
+		})
+	}
 
 	return (
 		<div className="container max-w-4xl mx-auto px-4 py-8">
@@ -70,7 +88,7 @@ export default async function ProfilePage({ params }: PageProps) {
 
 						<div className="w-full flex flex-col gap-3">
 							<div className="flex items-center gap-2 text-sm">
-								<Trophy className="h-4 w-4 text-primary" />
+								<Trophy className="h-4 w-4 text-primary-ink" />
 								<span>
 									{t('memberSince', {
 										year: new Date(profile.createdAt).getFullYear()
@@ -87,7 +105,7 @@ export default async function ProfilePage({ params }: PageProps) {
 
 				<Card className="md:col-span-2 p-6">
 					<h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-						<Trophy className="h-5 w-5 text-primary" />
+						<Trophy className="h-5 w-5 text-primary-ink" />
 						{t('account')}
 					</h2>
 
@@ -117,9 +135,13 @@ export default async function ProfilePage({ params }: PageProps) {
 						<div className="bg-accent/30 p-4 rounded-lg">
 							<h3 className="font-medium mb-3">{t('fplTeam')}</h3>
 							<RebindEntryForm
-								currentEntryId={profile.fplEntryId}
-								verified={Boolean(profile.fplEntryVerifiedAt)}
-								fplInfo={null}
+								currentEntryId={verifiedEntryId}
+								verified={verifiedEntryId !== null}
+								fplInfo={
+									verifiedEntryId !== null && profile.fplTeamName && profile.fplManagerName
+										? { teamName: profile.fplTeamName, managerName: profile.fplManagerName }
+										: null
+								}
 							/>
 						</div>
 
@@ -133,7 +155,7 @@ export default async function ProfilePage({ params }: PageProps) {
 									<span>{t('password')}</span>
 									<Link
 										href="/auth/forgot-password"
-										className="text-xs text-primary underline underline-offset-4 hover:no-underline"
+										className="text-xs text-primary-ink underline underline-offset-4 hover:no-underline"
 									>
 										{t('change')}
 									</Link>

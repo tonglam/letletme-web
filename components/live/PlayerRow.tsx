@@ -367,7 +367,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
                     {player.stats.points}
                   </div>
                   {player.stats.bonusPoints > 0 && (
-                    <div className="text-[10px] sm:text-xs text-primary font-medium">
+                    <div className="text-[10px] sm:text-xs text-primary-ink font-medium">
                       {t("bonusLabel", { points: player.stats.bonusPoints })}
                     </div>
                   )}

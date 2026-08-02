@@ -26,7 +26,7 @@ export default function ManageTournamentClient({ tournament }: { tournament: Ent
 				</Button>
 
 				<header className="flex items-start gap-3">
-					<div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+					<div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary-ink">
 						<Trophy className="size-6" aria-hidden="true" />
 					</div>
 					<div className="min-w-0">

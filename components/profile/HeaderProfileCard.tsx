@@ -10,8 +10,9 @@ import {
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { signOut } from '@/lib/auth-client'
+import { getVerifiedFplEntryId } from '@/lib/fpl-binding-core'
 import { Link, useRouter } from '@/i18n/navigation'
-import { LogOut, Settings } from 'lucide-react'
+import { LogOut, Settings, Trophy } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -21,6 +22,9 @@ export interface NavigationUser {
 	email: string
 	image?: string | null
 	fplEntryId?: number | null
+	fplEntryVerifiedAt?: Date | string | null
+	fplTeamName?: string | null
+	fplManagerName?: string | null
 }
 
 export function HeaderProfileCard({ user }: { user: NavigationUser }) {
@@ -28,6 +32,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 	const t = useTranslations('Navigation')
 	const [signingOut, setSigningOut] = useState(false)
 	const initials = (user.name ?? user.email).charAt(0).toUpperCase()
+	const verifiedEntryId = getVerifiedFplEntryId(user)
 
 	const handleSignOut = async () => {
 		setSigningOut(true)
@@ -59,7 +64,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 							src={user.image ?? undefined}
 							alt={user.name ?? ''}
 						/>
-						<AvatarFallback className="text-xs bg-primary/10 text-primary">
+						<AvatarFallback className="text-xs bg-primary/10 text-primary-ink">
 							{initials}
 						</AvatarFallback>
 					</Avatar>
@@ -81,24 +86,38 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 							src={user.image ?? undefined}
 							alt={user.name ?? ''}
 						/>
-						<AvatarFallback className="bg-primary/10 text-primary">
+						<AvatarFallback className="bg-primary/10 text-primary-ink">
 							{initials}
 						</AvatarFallback>
 					</Avatar>
 					<div className="flex-1 min-w-0">
 						<p className="font-semibold text-sm leading-tight truncate">
 							{user.name ?? '—'}
-							{user.fplEntryId && (
-								<span className="font-normal text-muted-foreground ml-1">
-									#{user.fplEntryId}
-								</span>
-							)}
 						</p>
 						<p className="text-xs text-muted-foreground truncate mt-0.5">
 							{user.email}
 						</p>
 					</div>
 				</div>
+
+				{/* FPL club card */}
+				{verifiedEntryId !== null ? (
+					<div className="px-3 pb-3">
+						<div className="flex items-center gap-2.5 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5">
+							<span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/15">
+								<Trophy aria-hidden="true" className="size-4 text-primary-ink" />
+							</span>
+							<div className="min-w-0 flex-1">
+								<p className="truncate text-sm font-semibold leading-tight">
+									{user.fplTeamName ?? `#${verifiedEntryId}`}
+								</p>
+								<p className="truncate text-xs text-muted-foreground leading-tight mt-0.5">
+									{user.fplManagerName ? `${user.fplManagerName} · ` : ''}#{verifiedEntryId}
+								</p>
+							</div>
+						</div>
+					</div>
+				) : null}
 
 				<DropdownMenuSeparator />
 

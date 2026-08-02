@@ -1,6 +1,5 @@
 'use client'
 
-import { Card } from '@/components/ui/card'
 import { CalendarClock } from 'lucide-react'
 import { usePageActive } from '@/hooks/use-page-active'
 import { useRouter } from '@/i18n/navigation'
@@ -100,55 +99,68 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 
 	if (!nextEventId || !deadlineTime) {
 		return (
-			<div className="py-10 text-center">
-				<div className="mx-auto flex max-w-lg flex-col items-center gap-3 rounded-2xl border bg-card p-7 shadow-sm">
-					<span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-						<CalendarClock aria-hidden="true" className="size-5" />
-					</span>
-					<h2 className="text-2xl font-bold">{t('scheduleUnavailable')}</h2>
-					<p className="text-muted-foreground">
-						{t('scheduleUnavailableDescription')}
-					</p>
-				</div>
+			<div className="scoreboard texture-grain rounded-xl p-6 sm:p-7">
+				<p className="chyron !text-electric">{t('nextDeadline')}</p>
+				<h2 className="mt-3 font-display text-2xl font-bold uppercase tracking-wide">
+					{t('scheduleUnavailable')}
+				</h2>
+				<p className="mt-2 text-sm text-fascia-foreground/60">
+					{t('scheduleUnavailableDescription')}
+				</p>
 			</div>
 		)
 	}
 
 	return (
-		<div className="py-10">
-			<div className="text-center">
-				<p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">{t('nextDeadline')}</p>
-				<h2 className="text-3xl font-bold tracking-tight sm:text-4xl">{t('gameweek', { number: nextEventId })}</h2>
-				{deadlinePassed ? (
-					<p className="mt-3 text-lg text-muted-foreground">{t('inProgress')}</p>
-				) : (
-					<>
-						<p className="mt-3 text-base text-muted-foreground sm:text-lg">{formattedDeadline}</p>
-						<Card className="mt-6 inline-block rounded-2xl p-5 sm:p-7">
-							<div className="grid grid-cols-4 gap-3 sm:gap-10">
-								{(
-									[
-										{ value: timeLeft.days, label: t('days') },
-										{ value: timeLeft.hours, label: t('hours') },
-										{ value: timeLeft.minutes, label: t('minutes') },
-										{ value: timeLeft.seconds, label: t('seconds') },
-									] as const
-								).map(({ value, label }) => (
-									<div
-										key={label}
-										className="text-center"
-									>
-										<div className="text-3xl font-bold tabular-nums sm:text-5xl">
-											{value}
-										</div>
-										<div className="mt-1 text-xs text-muted-foreground sm:text-sm">{label}</div>
-									</div>
-								))}
-							</div>
-						</Card>
-					</>
-				)}
+		<div className="scoreboard texture-grain rounded-xl p-6 sm:p-7">
+			<div className="flex items-center justify-between gap-3">
+				<p className="chyron !text-electric">{t('nextDeadline')}</p>
+				<span className="flex items-center gap-2 rounded-sm border border-electric/30 bg-electric/10 px-2 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-electric">
+					<span className="live-dot" aria-hidden="true" />
+					GW{nextEventId}
+				</span>
 			</div>
+
+			<h2 className="mt-4 font-display text-3xl font-bold uppercase leading-none tracking-wide sm:text-4xl">
+				{t('gameweek', { number: nextEventId })}
+			</h2>
+
+			{deadlinePassed ? (
+				<div className="mt-6 flex items-center gap-3 rounded-lg border border-pink/40 bg-pink/10 px-4 py-4">
+					<span className="rounded-sm bg-pink px-2 py-0.5 font-mono text-xs font-bold uppercase tracking-[0.2em] text-pink-950">
+						{t('liveTag')}
+					</span>
+					<p className="font-display text-lg font-semibold uppercase tracking-wide">
+						{t('inProgress')}
+					</p>
+				</div>
+			) : (
+				<>
+					<div className="mt-6 grid grid-cols-4 divide-x divide-white/10 overflow-hidden rounded-lg border border-white/10 bg-black/25">
+						{(
+							[
+								{ value: timeLeft.days, label: t('days') },
+								{ value: timeLeft.hours, label: t('hours') },
+								{ value: timeLeft.minutes, label: t('minutes') },
+								{ value: timeLeft.seconds, label: t('seconds') },
+							] as const
+						).map(({ value, label }) => (
+							<div key={label} className="px-1 py-3 text-center sm:py-4">
+								<div className="font-mono text-3xl font-semibold tabular-nums text-electric [text-shadow:0_0_18px_hsl(var(--electric)/0.45)] sm:text-4xl">
+									{String(value).padStart(2, '0')}
+								</div>
+								<div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-fascia-foreground/50">
+									{label}
+								</div>
+							</div>
+						))}
+					</div>
+					<p className="mt-4 flex items-center gap-2 text-xs text-fascia-foreground/60">
+						<CalendarClock aria-hidden="true" className="size-3.5 shrink-0 text-electric" />
+						{formattedDeadline}
+					</p>
+				</>
+			)}
 		</div>
 	)
 }

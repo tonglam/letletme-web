@@ -27,7 +27,7 @@ export function TeamChipsTab({ stats }: { stats: TeamStatsViewModel }) {
 	return (
 		<Card className="p-6">
 			<h2 className="mb-4 flex items-center gap-2 text-xl font-bold">
-				<Clock className="size-5 text-primary" aria-hidden="true" />
+				<Clock className="size-5 text-primary-ink" aria-hidden="true" />
 				{t('chipUsage')}
 			</h2>
 			<div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">

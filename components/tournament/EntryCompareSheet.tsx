@@ -75,11 +75,11 @@ interface OverviewRowProps {
 function OverviewRow({ label, leftValue, rightValue, leftWins, rightWins }: OverviewRowProps) {
 	return (
 		<div className="grid grid-cols-[1fr_auto_1fr] items-center py-2 border-b last:border-0">
-			<div className={`text-right pr-3 text-sm ${leftWins ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
+			<div className={`text-right pr-3 text-sm ${leftWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}>
 				{leftValue}
 			</div>
 			<div className="text-xs text-muted-foreground text-center min-w-[80px] px-1">{label}</div>
-			<div className={`text-left pl-3 text-sm ${rightWins ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
+			<div className={`text-left pl-3 text-sm ${rightWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}>
 				{rightValue}
 			</div>
 		</div>
@@ -112,7 +112,7 @@ function PlayerCompareRow({ leftPick, rightPick, posLabel, isBench }: PlayerComp
 							{leftPick.webName}{leftPick.isCaptain ? ' (C)' : ''}
 						</span>
 						<PlayedDot status={leftStatus} />
-						<span className={`text-xs font-mono w-6 text-right flex-shrink-0 ${leftWins ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
+						<span className={`text-xs font-mono w-6 text-right flex-shrink-0 ${leftWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}>
 							{leftPts}
 						</span>
 					</>
@@ -128,7 +128,7 @@ function PlayerCompareRow({ leftPick, rightPick, posLabel, isBench }: PlayerComp
 			<div className="flex items-center gap-1.5 justify-start">
 				{rightPick ? (
 					<>
-						<span className={`text-xs font-mono w-6 text-left flex-shrink-0 ${rightWins ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
+						<span className={`text-xs font-mono w-6 text-left flex-shrink-0 ${rightWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}>
 							{rightPts}
 						</span>
 						<PlayedDot status={rightStatus} />
@@ -211,9 +211,9 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 			>
 				<SheetHeader className="p-4 pb-3 border-b">
 					<SheetTitle className="text-sm">
-						<span className="text-primary">{entryA.teamName}</span>
+						<span className="text-primary-ink">{entryA.teamName}</span>
 						<span className="text-muted-foreground mx-2">{t('versus')}</span>
-						<span className="text-primary">{entryB.teamName}</span>
+						<span className="text-primary-ink">{entryB.teamName}</span>
 					</SheetTitle>
 					<p className="text-xs text-muted-foreground">{t('comparison', { gameweek })}</p>
 				</SheetHeader>

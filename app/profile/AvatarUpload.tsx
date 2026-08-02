@@ -74,7 +74,7 @@ export function AvatarUpload({
 			>
 				<Avatar className="h-24 w-24">
 					<AvatarImage src={src} alt={name ?? ''} />
-					<AvatarFallback className="text-2xl bg-primary/10 text-primary">
+					<AvatarFallback className="text-2xl bg-primary/10 text-primary-ink">
 						{initials}
 					</AvatarFallback>
 				</Avatar>

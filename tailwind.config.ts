@@ -6,12 +6,34 @@ const config: Config = {
     './pages/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
     './app/**/*.{js,ts,jsx,tsx,mdx}',
+    // lib helpers declare static class maps too (e.g. position-badge colours)
+    './lib/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {
       fontFamily: {
-        sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
-        display: ['var(--font-barlow)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: [
+          'var(--font-barlow)',
+          'ui-sans-serif',
+          'system-ui',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'PingFang SC',
+          'Hiragino Sans GB',
+          'Microsoft YaHei',
+          'sans-serif',
+        ],
+        display: [
+          'var(--font-display)',
+          'var(--font-barlow)',
+          'ui-sans-serif',
+          'system-ui',
+          'PingFang SC',
+          'Hiragino Sans GB',
+          'Microsoft YaHei',
+          'sans-serif',
+        ],
+        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
@@ -24,6 +46,13 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       colors: {
+        plum: 'hsl(var(--plum))',
+        electric: 'hsl(var(--electric))',
+        pink: 'hsl(var(--pink))',
+        fascia: {
+          DEFAULT: 'hsl(var(--fascia))',
+          foreground: 'hsl(var(--fascia-foreground))',
+        },
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {
@@ -37,6 +66,7 @@ const config: Config = {
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
+          ink: 'hsl(var(--primary-ink))',
         },
         secondary: {
           DEFAULT: 'hsl(var(--secondary))',

@@ -253,7 +253,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
                   <TableCell>
                     <Link 
                       href={`/live/points/${entry.id}${tournamentId ? `?tournamentId=${tournamentId}` : ''}`} 
-                      className="font-medium hover:text-primary transition-colors"
+                      className="font-medium hover:text-primary-ink transition-colors"
                     >
                       {entry.teamName}
                     </Link>
@@ -281,7 +281,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="font-bold text-primary">
+                    <div className="font-bold text-primary-ink">
                       {(entry.gwPoints ?? entry.livePoints)}
                       {(entry.eventCost ?? 0) > 0 ? ` (-${entry.eventCost})` : ""}
                     </div>
