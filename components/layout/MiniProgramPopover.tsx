@@ -12,17 +12,32 @@ type MiniProgramPopoverProps = {
 
 export function MiniProgramPopover({ label, scanText }: MiniProgramPopoverProps) {
 	const [open, setOpen] = useState(false)
+	// Explicit activation pins the popover open; only hover-only opens
+	// auto-close when the pointer leaves.
+	const [pinned, setPinned] = useState(false)
+
+	const handleOpenChange = (next: boolean) => {
+		setOpen(next)
+		if (!next) setPinned(false)
+	}
 
 	return (
-		<div className="w-fit" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-			<Popover open={open} onOpenChange={setOpen}>
+		<div
+			className="w-fit"
+			onMouseEnter={() => setOpen(true)}
+			onMouseLeave={() => {
+				if (!pinned) setOpen(false)
+			}}
+		>
+			<Popover open={open} onOpenChange={handleOpenChange}>
 				<PopoverTrigger asChild>
 					<button
 						type="button"
 						onClick={e => {
 							// Hover already opens the popover; stop Radix's toggle so an
-							// explicit activation keeps it open instead of closing it.
+							// explicit activation pins it open instead of closing it.
 							e.preventDefault()
+							setPinned(true)
 							setOpen(true)
 						}}
 						className="inline-flex items-center gap-2 rounded-md border border-electric/40 bg-white/5 px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.18em] text-fascia-foreground/80 transition-colors hover:border-electric hover:text-electric focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-electric"
