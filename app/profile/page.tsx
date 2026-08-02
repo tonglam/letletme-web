@@ -7,6 +7,7 @@ import { db, schema } from '@/lib/db'
 import { eq } from 'drizzle-orm'
 import { Trophy, Users } from 'lucide-react'
 import { headers } from 'next/headers'
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { AvatarUpload } from './AvatarUpload'
@@ -14,6 +15,12 @@ import RebindEntryForm from './RebindEntryForm'
 import SignOutButton from './SignOutButton'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+	title: 'My profile',
+	description: 'Manage your LetLetMe account and verified FPL entry.',
+	robots: { index: false, follow: false },
+}
 
 export default async function ProfilePage() {
 	const session = await getAuth().api.getSession({ headers: await headers() })
@@ -75,7 +82,10 @@ export default async function ProfilePage() {
 							<div className="flex justify-between items-center">
 								<p className="text-sm">{profile.email}</p>
 								{profile.emailVerified ? (
-									<Badge className="bg-green-50 text-green-700 border-green-200">
+									<Badge
+										variant="outline"
+										className="border-success/30 bg-success/10 text-success"
+									>
 										Verified
 									</Badge>
 								) : (
@@ -105,7 +115,7 @@ export default async function ProfilePage() {
 									<span>Password</span>
 									<Link
 										href="/auth/forgot-password"
-										className="text-primary hover:underline text-xs"
+										className="text-xs text-primary underline underline-offset-4 hover:no-underline"
 									>
 										Change
 									</Link>

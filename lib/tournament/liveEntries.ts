@@ -1,4 +1,6 @@
-import { type TournamentLiveCalcData } from '@/lib/graphql/queries'
+import {
+	type TournamentLiveCalcData,
+} from '@/lib/graphql/operations/tournaments'
 import { type TournamentEntry } from '@/types/tournament'
 
 export type LiveTournamentStats = {
@@ -29,16 +31,12 @@ export const buildRankMap = (rows: TournamentLiveCalcData[]): Map<number, number
 
 export const buildTournamentEntries = (
 	currentRows: TournamentLiveCalcData[],
-	previousRows: TournamentLiveCalcData[] = [],
 ): TournamentEntry[] => {
 	const currentRankByEntryId = buildRankMap(currentRows)
-	const previousRankByEntryId =
-		previousRows.length > 0 ? buildRankMap(previousRows) : currentRankByEntryId
 
 	return currentRows.map(row => ({
 		id: String(row.entry),
 		rank: currentRankByEntryId.get(row.entry) ?? 0,
-		previousRank: previousRankByEntryId.get(row.entry) ?? currentRankByEntryId.get(row.entry) ?? 0,
 		teamName: row.entryName ?? `Entry ${row.entry}`,
 		managerName: row.playerName ?? '-',
 		captainName:

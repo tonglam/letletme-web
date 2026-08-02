@@ -11,7 +11,10 @@ export interface ExecuteQueryOptions {
   cache?: RequestCache
   next?: { revalidate?: number | false; tags?: string[] }
   headers?: Record<string, string>
+  timeoutMs?: number
 }
+
+const DEFAULT_GRAPHQL_TIMEOUT_MS = 15_000
 
 type GraphQLErrorLike = {
   message?: string
@@ -78,13 +81,21 @@ async function doFetch<T>(
   next: ExecuteQueryOptions['next'],
   isClient: boolean,
   extraHeaders?: Record<string, string>,
+  timeoutMs = DEFAULT_GRAPHQL_TIMEOUT_MS,
 ): Promise<T> {
+  const controller = new AbortController()
+  const safeTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0
+    ? timeoutMs
+    : DEFAULT_GRAPHQL_TIMEOUT_MS
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), safeTimeoutMs)
+
   try {
     const fetchOptions: RequestInit & { next?: ExecuteQueryOptions['next'] } = {
       method: 'POST',
       cache,
       headers: { 'Content-Type': 'application/json', ...extraHeaders },
       body: JSON.stringify({ query, variables }),
+      signal: controller.signal,
     }
 
     if (isClient) fetchOptions.credentials = 'include'
@@ -92,11 +103,21 @@ async function doFetch<T>(
 
     const response = await fetch(endpoint, fetchOptions)
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
+    const result = await response.json().catch(() => null)
 
-    const result = await response.json()
+    if (!response.ok) {
+		const responseErrors = normalizeGraphQLErrors(result?.errors)
+		const responseMessage = responseErrors.find(isMeaningfulGraphQLError)?.message
+		throw new Error(
+			responseMessage?.trim()
+				? responseMessage.trim()
+				: `Request failed with status ${response.status}`,
+		)
+	}
+
+	if (!result || typeof result !== 'object') {
+		throw new Error('GraphQL response was not valid JSON.')
+	}
 
     const normalizedErrors = normalizeGraphQLErrors(result.errors)
     const meaningfulErrors = normalizedErrors.filter(isMeaningfulGraphQLError)
@@ -147,14 +168,20 @@ async function doFetch<T>(
 
     return result.data as T
   } catch (error) {
+    const normalizedError =
+      error instanceof Error && error.name === 'AbortError'
+        ? new Error(`GraphQL request timed out after ${safeTimeoutMs / 1000}s`)
+        : error
     const message =
-      error instanceof Error
-        ? error.message
-        : typeof error === 'string'
-          ? error
-          : safeSerializeForLog(error)
+      normalizedError instanceof Error
+		? normalizedError.message
+		: typeof normalizedError === 'string'
+		  ? normalizedError
+		  : safeSerializeForLog(normalizedError)
     console.error(`GraphQL query error [${endpoint}]: ${message}`)
-    throw error
+	throw normalizedError
+	} finally {
+		globalThis.clearTimeout(timeoutId)
   }
 }
 
@@ -180,12 +207,30 @@ export async function executeQuery<T>(
     const pending = pendingClientRequests.get(key) as Promise<T> | undefined
     if (pending) return pending
 
-    const promise = doFetch<T>(endpoint, query, variables, cache, options?.next, true).finally(
+	const promise = doFetch<T>(
+		endpoint,
+		query,
+		variables,
+		cache,
+		options?.next,
+		true,
+		undefined,
+		options?.timeoutMs,
+	).finally(
       () => pendingClientRequests.delete(key),
     )
     pendingClientRequests.set(key, promise)
     return promise
   }
 
-  return doFetch<T>(endpoint, query, variables, cache, options?.next, false, options?.headers)
+	return doFetch<T>(
+		endpoint,
+		query,
+		variables,
+		cache,
+		options?.next,
+		false,
+		options?.headers,
+		options?.timeoutMs,
+	)
 }

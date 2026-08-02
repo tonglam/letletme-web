@@ -1,9 +1,11 @@
 'use client'
 
 import { Card } from '@/components/ui/card'
+import { CalendarClock } from 'lucide-react'
 import { format } from 'date-fns'
+import { usePageActive } from '@/hooks/use-page-active'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 interface TimeLeft {
 	days: number
@@ -30,11 +32,12 @@ interface DeadlineSectionProps {
 }
 
 export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionProps) {
-	const deadline = deadlineTime ? new Date(deadlineTime) : null
+	const deadline = useMemo(() => (deadlineTime ? new Date(deadlineTime) : null), [deadlineTime])
 	const [timeLeft, setTimeLeft] = useState<TimeLeft>({ days: 0, hours: 0, minutes: 0, seconds: 0 })
 	const [formattedDeadline, setFormattedDeadline] = useState('')
 	const [deadlinePassed, setDeadlinePassed] = useState(false)
 	const router = useRouter()
+	const isPageActive = usePageActive()
 
 	useEffect(() => {
 		if (!deadline) {
@@ -55,7 +58,7 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 			setFormattedDeadline(`Deadline: ${format(deadline, 'EEE d MMM yyyy, HH:mm')}`)
 			updateTimeLeft()
 		}, 0)
-		const tickTimer = setInterval(updateTimeLeft, 1000)
+		const tickTimer = isPageActive ? setInterval(updateTimeLeft, 1000) : undefined
 
 		// When deadline has passed, the backend's event cache will eventually expire and
 		// return the next GW. Poll via router.refresh() so the UI updates without a manual
@@ -69,34 +72,50 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 		}
 
 		const msUntilDeadline = deadline.getTime() - Date.now()
-		if (msUntilDeadline <= 0) {
-			startRefreshing()
-		} else {
-			expireTimer = window.setTimeout(startRefreshing, msUntilDeadline + 500)
+		if (isPageActive) {
+			if (msUntilDeadline <= 0) {
+				startRefreshing()
+			} else {
+				expireTimer = window.setTimeout(startRefreshing, msUntilDeadline + 500)
+			}
 		}
 
 		return () => {
 			window.clearTimeout(initialTimer)
-			clearInterval(tickTimer)
+			if (tickTimer !== undefined) clearInterval(tickTimer)
 			if (expireTimer !== undefined) window.clearTimeout(expireTimer)
 			if (refreshTimer !== undefined) clearInterval(refreshTimer)
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [deadlineTime]) // depend on the string prop so the timer restarts if deadline changes
+	}, [deadline, isPageActive, router])
+
+	if (!nextEventId || !deadlineTime) {
+		return (
+			<div className="py-10 text-center">
+				<div className="mx-auto flex max-w-lg flex-col items-center gap-3 rounded-2xl border bg-card p-7 shadow-sm">
+					<span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+						<CalendarClock aria-hidden="true" className="size-5" />
+					</span>
+					<h2 className="text-2xl font-bold">Gameweek schedule unavailable</h2>
+					<p className="text-muted-foreground">
+						The live data service is not responding yet. You can still browse the rest of the app.
+					</p>
+				</div>
+			</div>
+		)
+	}
 
 	return (
-		<div className="py-12 mb-0">
+		<div className="py-10">
 			<div className="text-center">
-				<h1 className="text-4xl font-bold mb-4">
-					{nextEventId ? `Gameweek ${nextEventId}` : 'Gameweek'}
-				</h1>
+				<p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary">Next deadline</p>
+				<h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Gameweek {nextEventId}</h2>
 				{deadlinePassed ? (
-					<p className="text-xl text-muted-foreground">Gameweek in progress</p>
+					<p className="mt-3 text-lg text-muted-foreground">Gameweek in progress</p>
 				) : (
 					<>
-						<p className="text-xl text-muted-foreground mb-8">{formattedDeadline}</p>
-						<Card className="inline-block p-6 md:p-8 lg:p-10">
-							<div className="grid grid-cols-4 gap-4 md:gap-12 lg:gap-16">
+						<p className="mt-3 text-base text-muted-foreground sm:text-lg">{formattedDeadline}</p>
+						<Card className="mt-6 inline-block rounded-2xl p-5 sm:p-7">
+							<div className="grid grid-cols-4 gap-3 sm:gap-10">
 								{(
 									[
 										{ value: timeLeft.days, label: 'Days' },
@@ -109,10 +128,10 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 										key={label}
 										className="text-center"
 									>
-										<div className="text-4xl font-bold mb-1 md:text-5xl lg:text-6xl">
+										<div className="text-3xl font-bold tabular-nums sm:text-5xl">
 											{value}
 										</div>
-										<div className="text-sm text-muted-foreground">{label}</div>
+										<div className="mt-1 text-xs text-muted-foreground sm:text-sm">{label}</div>
 									</div>
 								))}
 							</div>

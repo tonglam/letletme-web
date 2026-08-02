@@ -1,16 +1,15 @@
 'use client'
 
 import { GameweekSelector } from '@/components/data/GameweekSelector'
-import RootLayout from '@/components/layout/RootLayout'
+import PageShell from '@/components/layout/PageShell'
 import { TournamentSelector } from '@/components/tournament/TournamentSelector'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_TOURNAMENT_SELECTION_STATS,
 	type TournamentSelectionStatsResponse,
-	type TournamentStatPlayer
-} from '@/lib/graphql/queries'
-import { useEvent } from '@/lib/event-context'
+	type TournamentStatPlayer,
+} from '@/lib/graphql/operations/tournaments'
 import { Tournament } from '@/types/tournament'
 import { Crown, TrendingDown, TrendingUp, Users } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -163,17 +162,16 @@ export default function SelectionsClient({
 	initialStats,
 	initialGameweek,
 }: SelectionsClientProps) {
-	const { currentEventId } = useEvent()
-
 	const [tournaments] = useState<Tournament[]>(initialTournaments)
 	const [selectedTournamentId, setSelectedTournamentId] = useState<string>(initialSelectedTournamentId)
-	const [currentGameweek] = useState<number>(currentEventId ?? initialGameweek)
+	const [currentGameweek] = useState<number>(initialGameweek)
 	const [selectedGameweek, setSelectedGameweek] = useState<number>(initialGameweek)
 	const statsCache = useRef<Map<string, StatsResult>>(
 		new Map(initialStats && initialSelectedTournamentId
 			? [[`${initialSelectedTournamentId}:${initialGameweek}`, initialStats]]
 			: [])
 	)
+	const statsRequestIdRef = useRef(0)
 	const [isLoadingTournaments] = useState(false)
 	const [isLoadingStats, setIsLoadingStats] = useState(false)
 	const [selectionData, setSelectionData] = useState<TournamentStatPlayer[]>(initialStats?.selection ?? [])
@@ -187,6 +185,8 @@ export default function SelectionsClient({
 
 	const fetchStats = useCallback(
 		async (tournamentId: number, eventId: number) => {
+			const requestId = statsRequestIdRef.current + 1
+			statsRequestIdRef.current = requestId
 			const cacheKey = `${tournamentId}:${eventId}`
 			const cached = statsCache.current.get(cacheKey)
 			if (cached) {
@@ -194,6 +194,7 @@ export default function SelectionsClient({
 				setCaptainData(cached.captain)
 				setTransferInData(cached.transferIn)
 				setTransferOutData(cached.transferOut)
+				setIsLoadingStats(false)
 				return
 			}
 			setIsLoadingStats(true)
@@ -209,18 +210,20 @@ export default function SelectionsClient({
 					transferIn: stats?.mostTransferIn ?? [],
 					transferOut: stats?.mostTransferOut ?? [],
 				}
+				if (requestId !== statsRequestIdRef.current) return
 				statsCache.current.set(cacheKey, result)
 				setSelectionData(result.selection)
 				setCaptainData(result.captain)
 				setTransferInData(result.transferIn)
 				setTransferOutData(result.transferOut)
 			} catch {
+				if (requestId !== statsRequestIdRef.current) return
 				setSelectionData([])
 				setCaptainData([])
 				setTransferInData([])
 				setTransferOutData([])
 			} finally {
-				setIsLoadingStats(false)
+				if (requestId === statsRequestIdRef.current) setIsLoadingStats(false)
 			}
 		},
 		[]
@@ -240,7 +243,7 @@ export default function SelectionsClient({
 		: `GW${selectedGameweek}`
 
 	return (
-		<RootLayout>
+		<PageShell>
 			<div className="container max-w-4xl mx-auto px-4 py-8">
 				<h1 className="text-3xl font-bold mb-6">Tournament Selections</h1>
 
@@ -373,6 +376,6 @@ export default function SelectionsClient({
 					</div>
 				</Tabs>
 			</div>
-		</RootLayout>
+		</PageShell>
 	)
 }

@@ -2,7 +2,8 @@
 
 import { PriceChangeList } from '@/components/data/PriceChangeList'
 import { StatsTable } from '@/components/data/StatsTable'
-import RootLayout from '@/components/layout/RootLayout'
+import PageShell from '@/components/layout/PageShell'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -17,13 +18,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_PLAYER_VALUE_HISTORY,
-	GET_PLAYERS_FOR_PICKER,
-	type PlayerDirectoryItem,
-	type PlayersForPickerResponse,
 	type PlayerValue,
 	type PlayerValueHistoryItem,
 	type PlayerValueHistoryResponse,
-} from '@/lib/graphql/queries'
+} from '@/lib/graphql/operations/prices'
+import {
+	GET_PLAYERS_FOR_PICKER,
+	type PlayerDirectoryItem,
+	type PlayersForPickerResponse,
+} from '@/lib/graphql/operations/players'
 import {
 	teamFullNames,
 	type PlayerOption,
@@ -179,21 +182,22 @@ const computeRisesFalls = (playerValues: PlayerValue[]) => {
 
 interface PriceChangesClientProps {
 	initialPlayerValues: PlayerValue[] | null
+	initialError: string | null
 }
 
-export default function PriceChangesClient({ initialPlayerValues }: PriceChangesClientProps) {
+export default function PriceChangesClient({
+	initialPlayerValues,
+	initialError
+}: PriceChangesClientProps) {
 	const allPriceChanges = useMemo(
 		() => initialPlayerValues?.map(toPriceChange) ?? [],
-		// initialPlayerValues is a stable prop — only recompute if it changes
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[]
+		[initialPlayerValues]
 	)
 	const priceChanges = useMemo(() => {
 		if (!initialPlayerValues) return { rises: [] as PriceChange[], falls: [] as PriceChange[] }
 		const { rises, falls } = computeRisesFalls(initialPlayerValues)
 		return { rises, falls }
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [])
+	}, [initialPlayerValues])
 	const [allPlayers, setAllPlayers] = useState<PickerPlayer[]>([])
 	const [hasLoadedPlayers, setHasLoadedPlayers] = useState<boolean>(false)
 	const [isPlayersLoading, setIsPlayersLoading] = useState<boolean>(false)
@@ -351,16 +355,22 @@ export default function PriceChangesClient({ initialPlayerValues }: PriceChanges
 	}, [playerHistoryRows, selectedPlayerPriceSnapshot])
 
 	return (
-		<RootLayout>
+		<PageShell>
 			<div className="container max-w-4xl mx-auto px-4 py-8">
 				<h1 className="text-3xl font-bold mb-6">Price Changes</h1>
+				{initialError && (
+					<Alert variant="destructive" className="mb-6">
+						<AlertTitle>Price data unavailable</AlertTitle>
+						<AlertDescription>{initialError}</AlertDescription>
+					</Alert>
+				)}
 
 				<div className="mb-6">
 					<Card className="p-3 sm:p-4">
 						<p className="text-sm text-muted-foreground mb-2">Select Player</p>
 						<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-3">
 							<Select value={selectTeamValue} onValueChange={value => setTeamFilter(value)}>
-								<SelectTrigger>
+								<SelectTrigger aria-label="Filter players by team">
 									<SelectValue placeholder="Filter by team" />
 								</SelectTrigger>
 								<SelectContent>
@@ -373,7 +383,7 @@ export default function PriceChangesClient({ initialPlayerValues }: PriceChanges
 							</Select>
 
 							<Select value={positionFilter} onValueChange={value => setPositionFilter(value as PositionFilter)}>
-								<SelectTrigger>
+								<SelectTrigger aria-label="Filter players by position">
 									<SelectValue placeholder="Filter by position" />
 								</SelectTrigger>
 								<SelectContent>
@@ -387,6 +397,7 @@ export default function PriceChangesClient({ initialPlayerValues }: PriceChanges
 
 							<div className="md:col-span-2 relative">
 								<Input
+									aria-label="Search players by name"
 									value={playerSearchTerm}
 									onChange={event => setPlayerSearchTerm(event.target.value)}
 									placeholder="Type player name to search..."
@@ -492,7 +503,9 @@ export default function PriceChangesClient({ initialPlayerValues }: PriceChanges
 							<h2 className="text-2xl font-bold mb-2">Latest Price Changes</h2>
 							{!hasDailyPriceChanges ? (
 								<div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
-									No price changes have been recorded for today yet.
+									{initialError
+										? 'Latest changes cannot be shown until the price service recovers.'
+										: 'No price changes have been recorded for today yet.'}
 								</div>
 							) : (
 								<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -561,6 +574,6 @@ export default function PriceChangesClient({ initialPlayerValues }: PriceChanges
 					</TabsContent>
 				</Tabs>
 			</div>
-		</RootLayout>
+		</PageShell>
 	)
 }

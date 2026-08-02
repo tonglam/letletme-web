@@ -1,5 +1,7 @@
 import { getCurrentEntryId } from '@/lib/session'
 import { getCurrentAndNextEvents } from '@/lib/events'
+import { PageState } from '@/components/feedback/PageState'
+import PageShell from '@/components/layout/PageShell'
 import { executeServerQuery } from '@/lib/graphql-server'
 import {
 	GET_ENTRY_TOURNAMENTS,
@@ -7,12 +9,19 @@ import {
 	type EntryTournamentsResponse,
 	type TournamentLiveCalcData,
 	type TournamentLivePointsResponse,
-} from '@/lib/graphql/queries'
+} from '@/lib/graphql/operations/tournaments'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
+import type { Metadata } from 'next'
+import { CalendarX2 } from 'lucide-react'
 import { Suspense } from 'react'
 import TournamentClient from './TournamentClient'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = {
+	title: 'Live tournaments',
+	description: 'Follow live standings and squad exposure across your tournaments.',
+}
 
 type PageProps = {
 	params: Promise<Record<string, never>>
@@ -25,11 +34,23 @@ export default async function Page({ searchParams }: PageProps) {
 		getCurrentEntryId(),
 		getCurrentAndNextEvents(),
 	])
-	const currentEventId = events?.current[0]?.id ?? 1
+	const currentEventId = events?.current[0]?.id
+
+	if (!currentEventId) {
+		return (
+			<PageShell>
+				<PageState
+					icon={CalendarX2}
+					title="Live tournament data is unavailable"
+					description="The current FPL gameweek could not be confirmed. No fallback gameweek has been assumed."
+				/>
+			</PageShell>
+		)
+	}
 	let initialTournaments: ReturnType<typeof mapEntryTournamentToLiveTournament>[] = []
 	let initialSelectedTournamentId = ''
 	let initialCurrentRows: TournamentLiveCalcData[] = []
-	let initialPreviousRows: TournamentLiveCalcData[] = []
+	let initialResultsLoaded = false
 
 	if (entryId) {
 		try {
@@ -51,25 +72,14 @@ export default async function Page({ searchParams }: PageProps) {
 				''
 
 			const tournamentId = Number(initialSelectedTournamentId)
-			if (tournamentId > 0) {
-				const previousEventId = currentEventId > 1 ? currentEventId - 1 : null
-				const [currentResponse, previousResponse] = await Promise.all([
-					executeServerQuery<TournamentLivePointsResponse>(
+			if (tournamentId > 0 && currentEventId) {
+				const currentResponse = await executeServerQuery<TournamentLivePointsResponse>(
 						GET_TOURNAMENT_LIVE_POINTS,
 						{ tournamentId, eventId: currentEventId },
 						{ cache: 'no-store' },
-					),
-					previousEventId
-						? executeServerQuery<TournamentLivePointsResponse>(
-								GET_TOURNAMENT_LIVE_POINTS,
-								{ tournamentId, eventId: previousEventId },
-								{ cache: 'no-store' },
-							).catch(() => null)
-						: Promise.resolve(null),
-				])
+					)
 				initialCurrentRows = currentResponse.calcLivePointsForTournament.results ?? []
-				initialPreviousRows =
-					previousResponse?.calcLivePointsForTournament.results ?? []
+				initialResultsLoaded = true
 			}
 		} catch (err) {
 			console.error('Failed to seed live tournament page:', err)
@@ -77,14 +87,14 @@ export default async function Page({ searchParams }: PageProps) {
 	}
 
 	return (
-		<Suspense fallback={<div>Loading...</div>}>
+		<Suspense fallback={<div className="mx-auto max-w-4xl px-4 py-12 text-sm text-muted-foreground">Loading tournaments…</div>}>
 			<TournamentClient
 				entryId={entryId ?? 0}
 				initialTournaments={initialTournaments}
 				initialSelectedTournamentId={initialSelectedTournamentId}
 				initialEventId={currentEventId}
 				initialCurrentRows={initialCurrentRows}
-				initialPreviousRows={initialPreviousRows}
+				initialResultsLoaded={initialResultsLoaded}
 			/>
 		</Suspense>
 	)

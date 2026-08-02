@@ -61,20 +61,6 @@ export interface PlayerOption {
 	price: number
 }
 
-// Transfer types
-export interface Transfer {
-	player: string
-	team: Team
-	price: number
-	priceChange: number
-	selected: number
-}
-
-export interface TransferPair {
-	in: Transfer
-	out: Transfer
-}
-
 // Price change types
 export interface PriceChange {
 	player: string

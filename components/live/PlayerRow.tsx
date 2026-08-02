@@ -254,14 +254,23 @@ export function PlayerRow({ player }: PlayerRowProps) {
     <>
       <div 
         className={cn(
-          "p-3 sm:p-4 hover:bg-accent/50 transition-colors border-b last:border-b-0 cursor-pointer",
+          "cursor-pointer border-b p-3 transition-colors last:border-b-0 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:p-4",
           player.isBench
             ? "bg-amber-500/10 border-l-4 border-l-amber-500/60"
             : "border-l-4 border-l-emerald-500/50",
           statusConfig[player.playingStatus].bgClassName,
           "relative"
         )}
+        role="button"
+        tabIndex={0}
+        aria-label={`View details for ${player.name}`}
         onClick={() => setIsDetailModalOpen(true)}
+        onKeyDown={event => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setIsDetailModalOpen(true);
+          }
+        }}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center min-w-0">
@@ -311,16 +320,14 @@ export function PlayerRow({ player }: PlayerRowProps) {
               <TooltipProvider key={stat.key}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button 
-                      className="text-center hover:bg-accent rounded p-1.5 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        console.log(`Clicked ${stat.description}: ${player.stats[stat.key]}`);
-                      }}
+                    <div
+                      tabIndex={0}
+                      className="rounded p-1.5 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`${stat.description}: ${player.stats[stat.key] || 0}`}
                     >
                       <div className="text-muted-foreground mb-1.5 text-center font-medium">{stat.label}</div>
                       <div className="text-center">{player.stats[stat.key] || 0}</div>
-                    </button>
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>{stat.description}: {player.stats[stat.key] || 0}</p>
@@ -333,12 +340,10 @@ export function PlayerRow({ player }: PlayerRowProps) {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button 
-                    className="w-10 sm:w-12 md:w-16 text-right hover:bg-accent rounded p-1.5 transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      console.log(`Clicked Total Points: ${player.stats.points} (Bonus: ${player.stats.bonusPoints})`);
-                    }}
+                  <div
+                    tabIndex={0}
+                    className="w-10 rounded p-1.5 text-right focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-12 md:w-16"
+                    aria-label={`Total points: ${player.stats.points}. Bonus: ${player.stats.bonusPoints}`}
                   >
                   <div className="text-muted-foreground text-xs font-medium">PTS</div>
                   <div className="font-bold text-xs sm:text-sm">
@@ -349,7 +354,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
                       BONUS +{player.stats.bonusPoints}
                     </div>
                   )}
-                  </button>
+                  </div>
                 </TooltipTrigger>
                 <TooltipContent>
                 <p>Total points: {player.stats.points}</p>

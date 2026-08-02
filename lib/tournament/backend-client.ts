@@ -43,9 +43,9 @@ export async function tournamentApiFetch(
   init?: RequestInit,
   request?: Request,
 ): Promise<Response> {
+  const baseUrl = getTournamentApiBaseUrl(request);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
-  const baseUrl = getTournamentApiBaseUrl(request);
   const method = (init?.method ?? 'GET').toUpperCase();
   const apiKey = process.env.TOURNAMENT_API_KEY?.trim();
   if (!SAFE_METHODS.has(method) && !apiKey) {
@@ -56,17 +56,24 @@ export async function tournamentApiFetch(
   const requestHeaders = new Headers(init?.headers);
   requestHeaders.set('Content-Type', 'application/json');
   if (apiKey) requestHeaders.set('x-api-key', apiKey);
+  const signals = [controller.signal, init?.signal, request?.signal].filter(
+    (signal): signal is AbortSignal => Boolean(signal),
+  );
+  const signal = signals.length === 1 ? controller.signal : AbortSignal.any(signals);
 
   try {
     return await fetch(`${baseUrl}${path}`, {
       ...init,
-      signal: controller.signal,
+      signal,
       headers: requestHeaders,
       cache: 'no-store',
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`Tournament backend timed out after ${DEFAULT_TIMEOUT_MS / 1000}s: ${baseUrl}`);
+      if (controller.signal.aborted) {
+        throw new Error(`Tournament backend timed out after ${DEFAULT_TIMEOUT_MS / 1000}s: ${baseUrl}`);
+      }
+      throw new Error('Tournament backend request was cancelled.');
     }
 
     throw new Error(`Tournament backend is unavailable: ${baseUrl}`);

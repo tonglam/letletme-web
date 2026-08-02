@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const GRAPHQL_ENDPOINT = process.env.GRAPHQL_ENDPOINT || 'http://localhost:4000/graphql'
 const MAX_GRAPHQL_BODY_BYTES = 256 * 1024
+const GRAPHQL_UPSTREAM_TIMEOUT_MS = 15_000
 
 function isReadOnlyGraphQL(body: unknown): boolean {
 	if (!body || typeof body !== 'object') return false
@@ -97,16 +98,34 @@ export async function POST(request: NextRequest) {
 	}
 
 	let response: Response
+	const upstreamController = new AbortController()
+	const timeoutId = globalThis.setTimeout(
+		() => upstreamController.abort(),
+		GRAPHQL_UPSTREAM_TIMEOUT_MS,
+	)
+	const abortUpstream = () => upstreamController.abort()
+	if (request.signal.aborted) {
+		upstreamController.abort()
+	} else {
+		request.signal.addEventListener('abort', abortUpstream, { once: true })
+	}
 	try {
 		response = await fetch(GRAPHQL_ENDPOINT, {
 			method: 'POST',
 			cache: 'no-store',
 			headers: forwardHeaders,
 			body: JSON.stringify(body),
+			signal: upstreamController.signal,
 		})
 	} catch (error) {
+		if (error instanceof Error && error.name === 'AbortError') {
+			return noStoreJson({ errors: [{ message: 'Upstream timed out' }] }, 504)
+		}
 		console.error('[graphql proxy] upstream fetch failed:', error)
 		return noStoreJson({ errors: [{ message: 'Upstream unavailable' }] }, 502)
+	} finally {
+		globalThis.clearTimeout(timeoutId)
+		request.signal.removeEventListener('abort', abortUpstream)
 	}
 
 	const safeHeaders = new Headers({ 'Cache-Control': 'no-store' })

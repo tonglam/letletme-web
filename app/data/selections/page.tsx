@@ -6,9 +6,11 @@ import {
 	type EntryTournamentsResponse,
 	type TournamentSelectionStatsResponse,
 	type TournamentStatPlayer,
-} from '@/lib/graphql/queries'
+} from '@/lib/graphql/operations/tournaments'
 import { getCurrentEntryId } from '@/lib/session'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
+import { CalendarX2 } from 'lucide-react'
+import type { Metadata } from 'next'
 import SelectionsClient from './SelectionsClient'
 
 interface StatsResult {
@@ -20,12 +22,29 @@ interface StatsResult {
 
 export const dynamic = 'force-dynamic'
 
+export const metadata: Metadata = {
+	title: 'Tournament selections',
+	description: 'Compare player selection, captaincy, and transfer trends across a tournament.',
+}
+
 export default async function SelectionsPage() {
 	const [entryId, events] = await Promise.all([
 		getCurrentEntryId(),
 		getCurrentAndNextEvents(),
 	])
-	const currentGameweek = events?.current[0]?.id ?? 1
+	const currentGameweek = events?.current[0]?.id
+
+	if (!currentGameweek) {
+		return (
+			<PageShell>
+				<PageState
+					icon={CalendarX2}
+					title="Selection data is unavailable"
+					description="The current FPL gameweek could not be confirmed. No fallback gameweek has been assumed."
+				/>
+			</PageShell>
+		)
+	}
 
 	let initialTournaments: ReturnType<typeof mapEntryTournamentToLiveTournament>[] = []
 	let initialStats: StatsResult | null = null
@@ -70,3 +89,5 @@ export default async function SelectionsPage() {
 		/>
 	)
 }
+import { PageState } from '@/components/feedback/PageState'
+import PageShell from '@/components/layout/PageShell'

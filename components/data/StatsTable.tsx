@@ -29,7 +29,7 @@ export interface StatsTableColumn {
 }
 
 interface StatsTableProps<T extends object = object> {
-  title: string;
+  title?: string;
   data: T[];
   columns: StatsTableColumn[];
   className?: string;
@@ -130,9 +130,11 @@ export function StatsTable<T extends object = object>({
 
   return (
     <Card className={`overflow-hidden ${className}`}>
-      <div className="p-4 border-b">
-        <h3 className="text-lg font-semibold">{title}</h3>
-      </div>
+      {title ? (
+        <div className="border-b p-4">
+          <h3 className="text-lg font-semibold">{title}</h3>
+        </div>
+      ) : null}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>

@@ -1,4 +1,4 @@
-import TournamentDetailClient from './TournamentDetailClient'
+import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,5 +9,5 @@ type PageProps = {
 
 export default async function Page({ params }: PageProps) {
 	const { id } = await params
-	return <TournamentDetailClient params={{ id }} />
+	redirect(`/live/tournament/${id}`)
 }

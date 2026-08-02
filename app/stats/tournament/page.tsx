@@ -1,17 +1,26 @@
 import { getCurrentAndNextEvents } from "@/lib/events";
+import { PageState } from "@/components/feedback/PageState";
+import PageShell from "@/components/layout/PageShell";
 import { executeServerQuery } from "@/lib/graphql-server";
 import {
-  GET_ENTRY_TOURNAMENTS,
-  GET_TOURNAMENT_EVENT_RESULTS,
-  type EntryTournament,
-  type EntryTournamentsResponse,
-  type TournamentEventResultItem,
-  type TournamentEventResultsResponse,
-} from "@/lib/graphql/queries";
+	GET_ENTRY_TOURNAMENTS,
+	GET_TOURNAMENT_EVENT_RESULTS,
+	type EntryTournament,
+	type EntryTournamentsResponse,
+	type TournamentEventResultItem,
+	type TournamentEventResultsResponse,
+} from "@/lib/graphql/operations/tournaments";
 import { getCurrentEntryId } from "@/lib/session";
 import TournamentStatsClient from "./TournamentStatsClient";
+import { CalendarX } from "lucide-react";
+import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Tournament statistics",
+  description: "Review tournament standings, captaincy, chips, and ranking movement.",
+};
 
 type PageProps = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -39,7 +48,19 @@ export default async function TournamentStatsPage({ searchParams }: PageProps) {
     getCurrentEntryId(),
     getCurrentAndNextEvents(),
   ]);
-  const currentGameweek = events?.current[0]?.id ?? 1;
+  const currentGameweek = events?.current[0]?.id;
+
+  if (!currentGameweek) {
+    return (
+      <PageShell>
+        <PageState
+          icon={CalendarX}
+          title="Tournament statistics are unavailable"
+          description="The current gameweek could not be resolved. No fallback gameweek has been assumed."
+        />
+      </PageShell>
+    );
+  }
   let initialTournaments: EntryTournament[] = [];
   let initialSelectedTournamentId = "";
   let initialDataGameweek: number | null = null;

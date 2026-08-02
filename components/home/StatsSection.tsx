@@ -2,7 +2,7 @@ import { Card } from '@/components/ui/card'
 import type {
 	ChipPlay,
 	EventOverallResult,
-} from '@/lib/graphql/queries'
+} from '@/lib/graphql/operations/events'
 import homeStats from '@/lib/home-stats'
 import { formatChipName, formatCompactNumber } from '@/lib/utils'
 import { ArrowRightCircle, Crown, Trophy, Zap } from 'lucide-react'
@@ -82,7 +82,7 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 				{stats.map((stat, index) => (
 					<div
 						key={index}
-						className="group p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+						className="rounded-lg border bg-card p-4"
 					>
 						<div className={`inline-flex p-3 rounded-lg mb-3 ${iconBgs[index]}`}>
 							{stat.icon}

@@ -28,7 +28,7 @@ interface TournamentTableProps {
   entries: TournamentEntry[];
   searchQuery: string;
   tournamentId?: string;
-  gameweek?: number;
+  gameweek: number;
 }
 
 export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }: TournamentTableProps) {
@@ -157,7 +157,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
               setSortDirection(getDefaultDirectionForColumn(nextColumn));
             }}
           >
-            <SelectTrigger className="h-8 w-[150px]">
+            <SelectTrigger className="h-8 w-[150px]" aria-label="Sort tournament standings">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -317,7 +317,7 @@ export function TournamentTable({ entries, searchQuery, tournamentId, gameweek }
     {isCompareOpen && compareSelection.length === 2 && (
       <EntryCompareSheet
         entries={[compareSelection[0], compareSelection[1]]}
-        gameweek={gameweek ?? 1}
+        gameweek={gameweek}
         open={isCompareOpen}
         onOpenChange={setIsCompareOpen}
       />

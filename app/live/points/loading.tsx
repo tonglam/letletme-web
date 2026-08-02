@@ -1,9 +1,9 @@
-import RootLayout from '@/components/layout/RootLayout'
+import PageShell from '@/components/layout/PageShell'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export default function Loading() {
 	return (
-		<RootLayout>
+		<PageShell>
 			<div className="container max-w-4xl mx-auto px-4 py-8">
 				<div className="mb-6 space-y-2">
 					<Skeleton className="h-5 w-40" />
@@ -54,6 +54,6 @@ export default function Loading() {
 					))}
 				</div>
 			</div>
-		</RootLayout>
+		</PageShell>
 	)
 }
