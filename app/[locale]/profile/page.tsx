@@ -8,10 +8,12 @@ import { localizeHref } from '@/i18n/routing'
 import { getAuth } from '@/lib/auth'
 import { db, schema } from '@/lib/db'
 import { getVerifiedFplEntryId } from '@/lib/fpl-binding-core'
+import { refreshFplIdentitySnapshot } from '@/lib/fpl-entry-binding'
 import { eq } from 'drizzle-orm'
 import { Trophy, Users } from 'lucide-react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { after } from 'next/server'
 import { AvatarUpload } from '@/app/profile/AvatarUpload'
 import RebindEntryForm from '@/app/profile/RebindEntryForm'
 import SignOutButton from '@/app/profile/SignOutButton'
@@ -51,6 +53,13 @@ export default async function ProfilePage({ params }: PageProps) {
 
 	const profile = dbUser ?? user
 	const verifiedEntryId = getVerifiedFplEntryId(profile)
+
+	// Post-response: re-sync the name snapshot if it is stale (throttled daily)
+	if (verifiedEntryId !== null) {
+		after(async () => {
+			await refreshFplIdentitySnapshot(user.id, verifiedEntryId)
+		})
+	}
 
 	return (
 		<div className="container max-w-4xl mx-auto px-4 py-8">

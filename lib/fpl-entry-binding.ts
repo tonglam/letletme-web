@@ -288,3 +288,30 @@ export async function unlinkFplEntry(userId: string): Promise<void> {
 
 	if (!updated) throw new FplBindingError('Not authenticated', 401)
 }
+
+const IDENTITY_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000
+const identityRefreshLog = new Map<string, number>()
+
+/**
+ * Lazily re-sync the display-only team/manager name snapshot from FPL,
+ * throttled to once per user per day. Scheduled via next/server after()
+ * from the profile page, so it never blocks a render; FPL failures leave
+ * the previous snapshot untouched.
+ */
+export async function refreshFplIdentitySnapshot(
+	userId: string,
+	entryId: number,
+): Promise<void> {
+	const now = Date.now()
+	const lastRefresh = identityRefreshLog.get(userId)
+	if (lastRefresh && now - lastRefresh < IDENTITY_REFRESH_INTERVAL_MS) return
+	identityRefreshLog.set(userId, now)
+
+	const entry = await validateFplEntry(entryId)
+	if (!entry.valid || !entry.teamName || !entry.managerName) return
+
+	await db
+		.update(schema.user)
+		.set({ fplTeamName: entry.teamName, fplManagerName: entry.managerName })
+		.where(eq(schema.user.id, userId))
+}
