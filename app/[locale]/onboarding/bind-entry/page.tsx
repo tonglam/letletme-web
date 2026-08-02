@@ -1,9 +1,10 @@
 import { LogoMark } from '@/components/layout/Logo'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
 import { getAuth } from '@/lib/auth'
-import { Hash } from 'lucide-react'
+import { ExternalLink, Hash } from 'lucide-react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import BindEntryForm from '@/app/onboarding/bind-entry/BindEntryForm'
@@ -73,6 +74,16 @@ export default async function BindEntryPage({ params }: PageProps) {
 							</span>
 						</li>
 					</ol>
+					<Button variant="outline" size="sm" className="mt-3 w-full" asChild>
+						<a
+							href="https://fantasy.premierleague.com/entry/me/"
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							<ExternalLink data-icon="inline-start" />
+							{t('openFplPage')}
+						</a>
+					</Button>
 				</div>
 
 				<BindEntryForm />

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useRouter } from '@/i18n/navigation'
+import { ExternalLink } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useEffect, useActionState } from 'react'
 import { toast } from 'sonner'
@@ -42,6 +43,15 @@ export default function BindEntryForm() {
 							</p>
 							<p className="font-mono text-lg font-semibold">{state.requiredName}</p>
 							<p className="text-xs">{t('saveAndConfirm')}</p>
+							<a
+								href="https://fantasy.premierleague.com/entry/me/"
+								target="_blank"
+								rel="noopener noreferrer"
+								className="inline-flex items-center gap-1.5 font-medium text-primary-ink underline underline-offset-4 hover:no-underline"
+							>
+								<ExternalLink aria-hidden="true" className="size-3.5" />
+								{t('openFplRename')}
+							</a>
 						</AlertDescription>
 					</Alert>
 					<Button type="submit" className="w-full" disabled={isPending}>
