@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useRouter } from '@/i18n/navigation'
+import { useSession } from '@/lib/auth-client'
 import { ClipboardPaste, ExternalLink, Link2Off, MousePointerClick, Pencil, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useActionState, useEffect, useRef, useState, useTransition } from 'react'
@@ -37,6 +38,7 @@ export default function RebindEntryForm({
 	const prevStateRef = useRef(state)
 	const [unlinking, startUnlink] = useTransition()
 	const router = useRouter()
+	const { refetch: refetchSession } = useSession()
 
 	useEffect(() => {
 		if (state === prevStateRef.current) return
@@ -48,11 +50,14 @@ export default function RebindEntryForm({
 				setCleared(false)
 				setEditing(false)
 			})
+			// Bypass better-auth's 5-min session cookie cache so the header and
+			// every useSession() consumer see the new binding immediately.
+			void refetchSession({ query: { disableCookieCache: true } })
 			router.refresh()
 		} else if (state?.errorCode) {
 			toast.error(t(`errors.${state.errorCode}`))
 		}
-	}, [state, router, t])
+	}, [state, router, t, refetchSession])
 
 	const linkedEntryId = currentEntryId ?? (state?.success ? state.newEntryId : null)
 	const isLinked = !cleared && (verified || Boolean(state?.success))
@@ -69,6 +74,7 @@ export default function RebindEntryForm({
 				setCleared(true)
 				setEditing(true)
 				toast.success(t('unlinked'))
+				void refetchSession({ query: { disableCookieCache: true } })
 				router.refresh()
 			} else if (result.errorCode) {
 				toast.error(t(`errors.${result.errorCode}`))

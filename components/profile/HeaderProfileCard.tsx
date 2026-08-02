@@ -76,26 +76,31 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 					<div className="flex-1 min-w-0">
 						<p className="font-semibold text-sm leading-tight truncate">
 							{user.name ?? '—'}
-							{verifiedEntryId !== null ? (
-								<span className="font-normal text-muted-foreground ml-1">
-									#{verifiedEntryId}
-								</span>
-							) : null}
 						</p>
 						<p className="text-xs text-muted-foreground truncate mt-0.5">
 							{user.email}
 						</p>
-						{verifiedEntryId !== null && user.fplTeamName ? (
-							<p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground truncate">
-								<Trophy aria-hidden="true" className="size-3 shrink-0 text-primary-ink" />
-								<span className="truncate">
-									{user.fplTeamName}
-									{user.fplManagerName ? ` · ${user.fplManagerName}` : ''}
-								</span>
-							</p>
-						) : null}
 					</div>
 				</div>
+
+				{/* FPL club card */}
+				{verifiedEntryId !== null ? (
+					<div className="px-3 pb-3">
+						<div className="flex items-center gap-2.5 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5">
+							<span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/15">
+								<Trophy aria-hidden="true" className="size-4 text-primary-ink" />
+							</span>
+							<div className="min-w-0 flex-1">
+								<p className="truncate text-sm font-semibold leading-tight">
+									{user.fplTeamName ?? `#${verifiedEntryId}`}
+								</p>
+								<p className="truncate text-xs text-muted-foreground leading-tight mt-0.5">
+									{user.fplManagerName ? `${user.fplManagerName} · ` : ''}#{verifiedEntryId}
+								</p>
+							</div>
+						</div>
+					</div>
+				) : null}
 
 				<DropdownMenuSeparator />
 
