@@ -83,7 +83,7 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 				>
 					<div className="flex flex-col md:flex-row md:items-center bg-accent/50 rounded-lg p-4 hover:bg-accent/70 transition-colors">
 						<div className="grid grid-cols-3 items-center flex-1 gap-4">
-							<div className="flex items-center justify-end space-x-3">
+							<div className="flex items-center justify-start space-x-3">
 								<div className="relative w-8 h-8 md:w-10 md:h-10">
 									<Image
 										alt={t('teamLogo', { team: match.homeTeam })}
@@ -93,7 +93,7 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 										className="w-full h-full object-contain"
 									/>
 								</div>
-								<span className="font-semibold text-sm md:text-base text-right">
+								<span className="font-semibold text-sm md:text-base text-left">
 									<span className="hidden md:inline">{match.homeTeam}</span>
 									<span className="md:hidden">{match.homeTeamShort}</span>
 								</span>
@@ -112,10 +112,6 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 							</div>
 
 							<div className="flex items-center justify-start space-x-3">
-								<span className="font-semibold text-sm md:text-base">
-									<span className="hidden md:inline">{match.awayTeam}</span>
-									<span className="md:hidden">{match.awayTeamShort}</span>
-								</span>
 								<div className="relative w-8 h-8 md:w-10 md:h-10">
 									<Image
 										alt={t('teamLogo', { team: match.awayTeam })}
@@ -125,6 +121,10 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 										className="w-full h-full object-contain"
 									/>
 								</div>
+								<span className="font-semibold text-sm md:text-base">
+									<span className="hidden md:inline">{match.awayTeam}</span>
+									<span className="md:hidden">{match.awayTeamShort}</span>
+								</span>
 							</div>
 						</div>
 					</div>
