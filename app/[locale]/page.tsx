@@ -127,7 +127,7 @@ function HomeHero() {
 							className="font-display text-base font-semibold uppercase tracking-[0.1em]"
 							asChild
 						>
-							<Link href="/data/player-stats">{t('comparePlayers')}</Link>
+							<Link href="/live/tournament">{t('liveTournamentStandings')}</Link>
 						</Button>
 					</div>
 
