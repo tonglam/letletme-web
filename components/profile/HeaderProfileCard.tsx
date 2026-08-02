@@ -10,6 +10,7 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { signOut } from '@/lib/auth-client'
+import { getVerifiedFplEntryId } from '@/lib/fpl-binding-core'
 import { Link, useRouter } from '@/i18n/navigation'
 import { LogOut, Settings } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -20,6 +21,7 @@ export interface NavigationUser {
 	email: string
 	image?: string | null
 	fplEntryId?: number | null
+	fplEntryVerifiedAt?: Date | string | null
 }
 
 export function HeaderProfileCard({ user }: { user: NavigationUser }) {
@@ -27,6 +29,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 	const t = useTranslations('Navigation')
 	const [signingOut, setSigningOut] = useState(false)
 	const initials = (user.name ?? user.email).charAt(0).toUpperCase()
+	const verifiedEntryId = getVerifiedFplEntryId(user)
 
 	const handleSignOut = async () => {
 		setSigningOut(true)
@@ -71,11 +74,11 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 					<div className="flex-1 min-w-0">
 						<p className="font-semibold text-sm leading-tight truncate">
 							{user.name ?? '—'}
-							{user.fplEntryId && (
+							{verifiedEntryId !== null ? (
 								<span className="font-normal text-muted-foreground ml-1">
-									#{user.fplEntryId}
+									#{verifiedEntryId}
 								</span>
-							)}
+							) : null}
 						</p>
 						<p className="text-xs text-muted-foreground truncate mt-0.5">
 							{user.email}

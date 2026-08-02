@@ -7,6 +7,7 @@ import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
 import { getAuth } from '@/lib/auth'
 import { db, schema } from '@/lib/db'
+import { getVerifiedFplEntryId } from '@/lib/fpl-binding-core'
 import { eq } from 'drizzle-orm'
 import { Trophy, Users } from 'lucide-react'
 import { headers } from 'next/headers'
@@ -49,6 +50,7 @@ export default async function ProfilePage({ params }: PageProps) {
 		.limit(1)
 
 	const profile = dbUser ?? user
+	const verifiedEntryId = getVerifiedFplEntryId(profile)
 
 	return (
 		<div className="container max-w-4xl mx-auto px-4 py-8">
@@ -110,8 +112,8 @@ export default async function ProfilePage({ params }: PageProps) {
 						<div className="bg-accent/30 p-4 rounded-lg">
 							<h3 className="font-medium mb-3">{t('fplTeam')}</h3>
 							<RebindEntryForm
-								currentEntryId={profile.fplEntryId}
-								verified={Boolean(profile.fplEntryVerifiedAt)}
+								currentEntryId={verifiedEntryId}
+								verified={verifiedEntryId !== null}
 								fplInfo={null}
 							/>
 						</div>

@@ -76,7 +76,7 @@ export default async function BindEntryPage({ params }: PageProps) {
 					</ol>
 					<Button variant="outline" size="sm" className="mt-3 w-full" asChild>
 						<a
-							href="https://fantasy.premierleague.com/entry/me/"
+							href="https://fantasy.premierleague.com/"
 							target="_blank"
 							rel="noopener noreferrer"
 						>
