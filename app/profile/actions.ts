@@ -5,7 +5,7 @@ import {
 	getFplBindingErrorCode,
 	type FplBindingErrorCode,
 } from '@/lib/fpl-binding-error-code'
-import { bindFplEntryDirectly } from '@/lib/fpl-entry-binding'
+import { bindFplEntryDirectly, unlinkFplEntry as unlinkUserFplEntry } from '@/lib/fpl-entry-binding'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 
@@ -35,6 +35,24 @@ export async function updateFplEntry(
 			managerName: bound.managerName,
 			newEntryId: bound.entryId,
 		}
+	} catch (error) {
+		return { errorCode: getFplBindingErrorCode(error) }
+	}
+}
+
+export async function unlinkFplEntry(): Promise<{
+	errorCode?: FplBindingErrorCode
+	success?: boolean
+}> {
+	const reqHeaders = await headers()
+	const session = await getAuthorizationSession(reqHeaders)
+
+	if (!session) return { errorCode: 'notAuthenticated' }
+
+	try {
+		await unlinkUserFplEntry(session.user.id)
+		revalidatePath('/profile')
+		return { success: true }
 	} catch (error) {
 		return { errorCode: getFplBindingErrorCode(error) }
 	}

@@ -232,6 +232,12 @@
     "linking": "正在关联…",
     "linkTeam": "关联球队",
     "entryVerified": "已关联 {teamName}（{managerName}）。",
+    "unlink": "解除关联",
+    "unlinking": "正在解除…",
+    "unlinkTitle": "解除 FPL 球队关联？",
+    "unlinkConfirm": "将解除与参赛 ID {entryId} 的关联。与该球队相关的功能将暂停，直到您重新关联。",
+    "unlinked": "已解除关联。",
+    "cancel": "取消",
     "signOut": "退出登录",
     "signingOut": "正在退出…",
     "errors": {

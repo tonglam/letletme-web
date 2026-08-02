@@ -1,14 +1,25 @@
 'use client'
 
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useRouter } from '@/i18n/navigation'
-import { ExternalLink, MousePointerClick, Pencil, X } from 'lucide-react'
+import { ExternalLink, Link2Off, MousePointerClick, Pencil, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useActionState, useEffect, useRef, useState } from 'react'
+import { useActionState, useEffect, useRef, useState, useTransition } from 'react'
 import { toast } from 'sonner'
-import { updateFplEntry } from './actions'
+import { unlinkFplEntry, updateFplEntry } from './actions'
 
 export default function RebindEntryForm({
 	currentEntryId,
@@ -21,8 +32,10 @@ export default function RebindEntryForm({
 }) {
 	const t = useTranslations('Profile')
 	const [editing, setEditing] = useState(!currentEntryId || !verified)
+	const [cleared, setCleared] = useState(false)
 	const [state, formAction, isPending] = useActionState(updateFplEntry, null)
 	const prevStateRef = useRef(state)
+	const [unlinking, startUnlink] = useTransition()
 	const router = useRouter()
 
 	useEffect(() => {
@@ -31,19 +44,39 @@ export default function RebindEntryForm({
 
 		if (state?.success && state.teamName && state.managerName) {
 			toast.success(t('entryVerified', { teamName: state.teamName, managerName: state.managerName }))
-			queueMicrotask(() => setEditing(false))
+			queueMicrotask(() => {
+				setCleared(false)
+				setEditing(false)
+			})
 			router.refresh()
 		} else if (state?.errorCode) {
 			toast.error(t(`errors.${state.errorCode}`))
 		}
 	}, [state, router, t])
 
-	if (!editing && verified) {
+	const linkedEntryId = currentEntryId ?? (state?.success ? state.newEntryId : null)
+	const isLinked = !cleared && (verified || Boolean(state?.success))
+
+	const handleUnlink = () => {
+		startUnlink(async () => {
+			const result = await unlinkFplEntry()
+			if (result.success) {
+				setCleared(true)
+				setEditing(true)
+				toast.success(t('unlinked'))
+				router.refresh()
+			} else if (result.errorCode) {
+				toast.error(t(`errors.${result.errorCode}`))
+			}
+		})
+	}
+
+	if (!editing && isLinked) {
 		return (
 			<div className="flex w-full min-w-0 items-center justify-between gap-3">
 				<div className="flex flex-col gap-0.5">
 					<div className="flex items-center gap-2">
-						<span className="text-sm font-mono font-medium">{currentEntryId ?? state?.newEntryId}</span>
+						<span className="text-sm font-mono font-medium">{linkedEntryId}</span>
 						<span className="text-xs text-muted-foreground">{t('linked')}</span>
 					</div>
 					{fplInfo && (
@@ -52,15 +85,43 @@ export default function RebindEntryForm({
 						</span>
 					)}
 				</div>
-				<Button
-					variant="ghost"
-					size="sm"
-					className="h-7 px-2 text-xs"
-					onClick={() => setEditing(true)}
-				>
-					<Pencil className="h-3 w-3 mr-1" />
-					{t('changeEntry')}
-				</Button>
+				<div className="flex items-center gap-1">
+					<Button
+						variant="ghost"
+						size="sm"
+						className="h-7 px-2 text-xs"
+						onClick={() => setEditing(true)}
+					>
+						<Pencil className="h-3 w-3 mr-1" />
+						{t('changeEntry')}
+					</Button>
+					<AlertDialog>
+						<AlertDialogTrigger asChild>
+							<Button
+								variant="ghost"
+								size="sm"
+								className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+							>
+								<Link2Off className="h-3 w-3 mr-1" />
+								{t('unlink')}
+							</Button>
+						</AlertDialogTrigger>
+						<AlertDialogContent>
+							<AlertDialogHeader>
+								<AlertDialogTitle>{t('unlinkTitle')}</AlertDialogTitle>
+								<AlertDialogDescription>
+									{t('unlinkConfirm', { entryId: linkedEntryId ?? '—' })}
+								</AlertDialogDescription>
+							</AlertDialogHeader>
+							<AlertDialogFooter>
+								<AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+								<AlertDialogAction onClick={handleUnlink} disabled={unlinking}>
+									{unlinking ? t('unlinking') : t('unlink')}
+								</AlertDialogAction>
+							</AlertDialogFooter>
+						</AlertDialogContent>
+					</AlertDialog>
+				</div>
 			</div>
 		)
 	}
@@ -69,9 +130,9 @@ export default function RebindEntryForm({
 		<form action={formAction} className="space-y-3">
 			{state?.errorCode && <p className="text-sm text-destructive">{t(`errors.${state.errorCode}`)}</p>}
 
-			{currentEntryId && (
+			{isLinked && linkedEntryId && (
 				<p className="text-xs text-muted-foreground">
-					{t('currentlyLinked', { entryId: currentEntryId })}
+					{t('currentlyLinked', { entryId: linkedEntryId })}
 				</p>
 			)}
 
@@ -86,7 +147,7 @@ export default function RebindEntryForm({
 						type="text"
 						required
 						placeholder={t('entryPlaceholder')}
-						defaultValue={currentEntryId ?? ''}
+						defaultValue={isLinked ? (linkedEntryId ?? '') : ''}
 						className="h-8 text-sm"
 						onChange={e => {
 							const match = e.target.value.match(/\/entry\/(\d+)/)
@@ -97,7 +158,7 @@ export default function RebindEntryForm({
 				<Button type="submit" size="sm" className="h-8" disabled={isPending}>
 					{isPending ? t('linking') : t('linkTeam')}
 				</Button>
-				{currentEntryId && (
+				{isLinked && (
 					<Button
 						type="button"
 						variant="ghost"

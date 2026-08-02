@@ -269,3 +269,18 @@ export async function bindFplEntryDirectly(
 		verifiedAt: boundAt.toISOString(),
 	}
 }
+
+export async function unlinkFplEntry(userId: string): Promise<void> {
+	const [updated] = await db
+		.update(schema.user)
+		.set({
+			fplEntryId: null,
+			fplEntryBoundAt: null,
+			fplEntryVerifiedAt: null,
+			updatedAt: new Date(),
+		})
+		.where(eq(schema.user.id, userId))
+		.returning({ id: schema.user.id })
+
+	if (!updated) throw new FplBindingError('Not authenticated', 401)
+}

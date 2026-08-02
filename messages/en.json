@@ -232,6 +232,12 @@
     "linking": "Linking…",
     "linkTeam": "Link team",
     "entryVerified": "Linked {teamName} ({managerName}).",
+    "unlink": "Unlink",
+    "unlinking": "Unlinking…",
+    "unlinkTitle": "Unlink FPL team?",
+    "unlinkConfirm": "This removes the link to entry {entryId}. Features tied to this team pause until you link again.",
+    "unlinked": "FPL team unlinked.",
+    "cancel": "Cancel",
     "signOut": "Sign out",
     "signingOut": "Signing out…",
     "errors": {
