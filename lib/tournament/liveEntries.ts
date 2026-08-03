@@ -65,6 +65,27 @@ export const buildTournamentEntries = (
 	}))
 }
 
+export const mergePartialTournamentRows = ({
+	nextRows,
+	previousRows,
+	failedEntryIds,
+	preserveFailed
+}: {
+	nextRows: TournamentLiveCalcData[]
+	previousRows: TournamentLiveCalcData[]
+	failedEntryIds: readonly number[]
+	preserveFailed: boolean
+}): TournamentLiveCalcData[] => {
+	if (!preserveFailed || failedEntryIds.length === 0) return nextRows
+
+	const failed = new Set(failedEntryIds)
+	const refreshed = new Set(nextRows.map(row => row.entry))
+	const retained = previousRows.filter(
+		row => failed.has(row.entry) && !refreshed.has(row.entry)
+	)
+	return [...nextRows, ...retained]
+}
+
 export const buildTournamentStats = (entries: TournamentEntry[]): LiveTournamentStats => {
 	if (entries.length === 0) {
 		return {

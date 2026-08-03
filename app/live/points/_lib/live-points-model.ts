@@ -13,7 +13,6 @@ export type BreakdownLookup = Map<
 	}
 >
 
-export const LIVE_POINTS_AUTO_REFRESH_SECONDS = 60
 const aggregateBreakdownStats = (
 	stats?: PlayerBreakdownStat[]
 ): AggregatedBreakdown => {
@@ -38,9 +37,11 @@ export const rollupBreakdownStats = (
 	}))
 }
 
-export function buildEventLiveExplainBatchQuery(elementIds: number[]): string | null {
+export function buildEventLiveExplainBatchQuery(
+	elementIds: number[]
+): string | null {
 	const safeElementIds = Array.from(
-		new Set(elementIds.filter((id) => Number.isSafeInteger(id) && id > 0)),
+		new Set(elementIds.filter(id => Number.isSafeInteger(id) && id > 0))
 	).slice(0, 15)
 	if (safeElementIds.length === 0) {
 		return null
@@ -217,8 +218,10 @@ export function mapLiveDataToPlayers(
 }
 
 export function deriveLiveTeamStats(live: LiveCalcData) {
-	const startingPicks = live.pickList.filter((pick) => pick.position <= 11)
-	const playedCount = startingPicks.filter((pick) => (pick.minutes ?? 0) > 0).length
+	const startingPicks = live.pickList.filter(pick => pick.position <= 11)
+	const playedCount = startingPicks.filter(
+		pick => (pick.minutes ?? 0) > 0
+	).length
 	const normalizedChip = live.chip?.toLowerCase() ?? ''
 
 	return {
@@ -231,8 +234,9 @@ export function deriveLiveTeamStats(live: LiveCalcData) {
 		played: `${playedCount}/${startingPicks.length}`,
 		chips: {
 			bench: normalizedChip.includes('bench'),
-			triple: normalizedChip.includes('3x') || normalizedChip.includes('triple'),
-			wildcard: normalizedChip.includes('wildcard'),
-		},
+			triple:
+				normalizedChip.includes('3x') || normalizedChip.includes('triple'),
+			wildcard: normalizedChip.includes('wildcard')
+		}
 	}
 }

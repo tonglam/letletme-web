@@ -6,8 +6,9 @@ import {
 	type EntryTournament,
 	type EntryTournamentsResponse,
 	type TournamentLiveCalcData,
-	type TournamentLivePointsResponse,
+	type TournamentLivePointsResponse
 } from '@/lib/graphql/operations/tournaments'
+import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import { getCurrentEntryId } from '@/lib/session'
 import TournamentDetailClient from '@/app/live/tournament/[id]/TournamentDetailClient'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
@@ -21,7 +22,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: `/live/tournament/${encodeURIComponent(id)}`,
 		titleKey: 'tournamentStandingsTitle',
-		descriptionKey: 'tournamentStandingsDescription',
+		descriptionKey: 'tournamentStandingsDescription'
 	})
 }
 
@@ -32,16 +33,20 @@ type PageProps = {
 
 export default async function Page({ params }: PageProps) {
 	const { id } = await getPageLocale(params)
-	const t = await getTranslations('States')
+	const [t, liveT] = await Promise.all([
+		getTranslations('States'),
+		getTranslations('LiveTournament')
+	])
 	const tournamentId = Number(id)
 	const [entryId, events] = await Promise.all([
 		getCurrentEntryId(),
-		getCurrentAndNextEvents(),
+		getCurrentAndNextEvents()
 	])
 	const currentEventId = events?.current[0]?.id
 	let tournament: EntryTournament | null = null
 	let initialRows: TournamentLiveCalcData[] = []
 	let initialError: string | null = null
+	let initialSnapshot: LiveSnapshotStatus | null = null
 
 	if (!entryId) {
 		initialError = t('bindEntryRequired')
@@ -49,25 +54,38 @@ export default async function Page({ params }: PageProps) {
 		initialError = t('invalidTournamentLink')
 	} else {
 		try {
-			const tournamentsData = await executeServerQuery<EntryTournamentsResponse>(
-				GET_ENTRY_TOURNAMENTS,
-				{ entryId },
-				{ cache: 'no-store' },
-			)
+			const tournamentsData =
+				await executeServerQuery<EntryTournamentsResponse>(
+					GET_ENTRY_TOURNAMENTS,
+					{ entryId },
+					{ cache: 'no-store' }
+				)
 			tournament =
-				tournamentsData.entryTournaments.find(item => item.id === tournamentId) ?? null
+				tournamentsData.entryTournaments.find(
+					item => item.id === tournamentId
+				) ?? null
 
 			if (!tournament) {
 				initialError = t('tournamentNoAccess')
 			} else if (!currentEventId) {
 				initialError = t('currentGameweekUnavailable')
 			} else {
-				const standings = await executeServerQuery<TournamentLivePointsResponse>(
-					GET_TOURNAMENT_LIVE_POINTS,
-					{ tournamentId, eventId: currentEventId },
-					{ cache: 'no-store' },
-				)
-				initialRows = standings.calcLivePointsForTournament.results ?? []
+				const standings =
+					await executeServerQuery<TournamentLivePointsResponse>(
+						GET_TOURNAMENT_LIVE_POINTS,
+						{ tournamentId, eventId: currentEventId },
+						{ cache: 'no-store' }
+					)
+				const batch = standings.calcLivePointsForTournament
+				initialRows = batch.results ?? []
+				if (batch.meta.failedCount > 0) {
+					initialError = liveT('partialResults', {
+						failed: batch.meta.failedCount,
+						total: batch.meta.totalEntries
+					})
+				} else {
+					initialSnapshot = standings.liveSnapshot
+				}
 			}
 		} catch (error) {
 			console.error('[tournament detail] Failed to load:', error)
@@ -77,11 +95,14 @@ export default async function Page({ params }: PageProps) {
 
 	return (
 		<TournamentDetailClient
-			canManage={Boolean(tournament && entryId && tournament.adminEntryId === entryId)}
+			canManage={Boolean(
+				tournament && entryId && tournament.adminEntryId === entryId
+			)}
 			tournament={tournament}
 			currentGameweek={currentEventId}
 			initialRows={initialRows}
 			initialError={initialError}
+			initialSnapshot={initialSnapshot}
 		/>
 	)
 }

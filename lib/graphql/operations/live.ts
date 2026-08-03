@@ -51,9 +51,28 @@ export interface LiveScoresResponse {
 	liveScores: LiveScore[]
 }
 
+export const GET_LIVE_SNAPSHOT = `
+  query GetLiveSnapshot($eventId: Int) {
+    liveSnapshot(eventId: $eventId) {
+      eventId
+      revision
+      state
+      publishedAt
+      checkedAt
+    }
+  }
+`
+
 // Query to fetch top transfers in
 export const GET_LIVE_POINTS = `
   query GetLiveCalcPoints($eventId: Int!, $entryId: Int!) {
+    liveSnapshot(eventId: $eventId) {
+      eventId
+      revision
+      state
+      publishedAt
+      checkedAt
+    }
     calcLivePointsByEntry(eventId: $eventId, entryId: $entryId) {
       entry
       event
@@ -122,12 +141,34 @@ export interface LiveCalcData {
 }
 
 export interface LiveCalcDataResponse {
+	liveSnapshot: LiveSnapshotStatus | null
 	calcLivePointsByEntry: LiveCalcData
+}
+
+export type LiveSnapshotState = 'SCHEDULED' | 'LIVE' | 'SETTLED'
+
+export interface LiveSnapshotStatus {
+	eventId: number
+	revision: string
+	state: LiveSnapshotState
+	publishedAt: string
+	checkedAt: string
+}
+
+export interface LiveSnapshotResponse {
+	liveSnapshot: LiveSnapshotStatus | null
 }
 
 // Query to fetch live points for all entries in a tournament
 export const GET_LIVE_MATCHES = `
   query GetLiveMatches {
+    liveSnapshot {
+      eventId
+      revision
+      state
+      publishedAt
+      checkedAt
+    }
     liveMatches(upcoming: true) {
       nextEvent {
         ...LiveMatchIdentity
@@ -373,6 +414,7 @@ export interface LiveMatchesData {
 }
 
 export interface LiveMatchesResponse {
+	liveSnapshot: LiveSnapshotStatus | null
 	liveMatches: LiveMatchesData
 }
 

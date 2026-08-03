@@ -1,7 +1,7 @@
 import { LiveMatchesClient } from '@/app/live/matches/LiveMatchesClient'
 import PageShell from '@/components/layout/PageShell'
 import { getCurrentAndNextEvents } from '@/lib/events'
-import { getLiveMatches } from '@/lib/live-matches'
+import { getLiveMatchesSnapshot } from '@/lib/live-matches'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { useTranslations } from 'next-intl'
@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/live/matches',
 		titleKey: 'liveMatchesTitle',
-		descriptionKey: 'liveMatchesDescription',
+		descriptionKey: 'liveMatchesDescription'
 	})
 }
 
@@ -33,13 +33,15 @@ function LiveMatchesFallback() {
 				</div>
 				<div className="bg-card rounded-lg p-4 mb-6 shadow-sm">
 					<div className="grid grid-cols-4 gap-2 sm:gap-4">
-						{[t('liveNow'), t('finished'), t('notStarted'), t('upcoming')].map((label) => (
-							<div
-								key={label}
-								className="h-9 rounded-md bg-muted/60"
-								aria-label={label}
-							/>
-						))}
+						{[t('liveNow'), t('finished'), t('notStarted'), t('upcoming')].map(
+							label => (
+								<div
+									key={label}
+									className="h-9 rounded-md bg-muted/60"
+									aria-label={label}
+								/>
+							)
+						)}
 					</div>
 				</div>
 				<div className="space-y-4">
@@ -53,27 +55,37 @@ function LiveMatchesFallback() {
 
 async function LiveMatchesContent() {
 	const t = await getTranslations('States')
-	let matches: Awaited<ReturnType<typeof getLiveMatches>> = []
+	let matches: Awaited<ReturnType<typeof getLiveMatchesSnapshot>>['matches'] =
+		[]
+	let snapshot: Awaited<ReturnType<typeof getLiveMatchesSnapshot>>['snapshot'] =
+		null
 	let initialError: string | null = null
 	let currentEventId: number | undefined
 
-	try {
-		const [matchesResult, events] = await Promise.all([
-			getLiveMatches(executePublicServerQuery),
-			getCurrentAndNextEvents(),
-		])
-		matches = matchesResult
-		currentEventId = events?.current[0]?.id
-	} catch (err) {
-		console.error('Failed to fetch live matches:', err)
+	const [liveResult, eventsResult] = await Promise.allSettled([
+		getLiveMatchesSnapshot(executePublicServerQuery),
+		getCurrentAndNextEvents()
+	])
+	if (liveResult.status === 'fulfilled') {
+		matches = liveResult.value.matches
+		snapshot = liveResult.value.snapshot
+	} else {
+		console.error('Failed to fetch live matches:', liveResult.reason)
 		initialError = t('matchesFailed')
 	}
+	if (eventsResult.status === 'fulfilled') {
+		currentEventId = eventsResult.value?.current[0]?.id
+	} else {
+		console.error('Failed to fetch current live event:', eventsResult.reason)
+	}
+	currentEventId ??= snapshot?.eventId
 
 	return (
 		<LiveMatchesClient
 			initialMatches={matches}
 			initialError={initialError}
 			currentEventId={currentEventId}
+			initialSnapshot={snapshot}
 		/>
 	)
 }

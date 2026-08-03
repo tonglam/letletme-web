@@ -1,57 +1,21 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { LIVE_POINTS_AUTO_REFRESH_SECONDS } from '../_lib/live-points-model'
+import { LiveAutoRefreshCountdown } from '@/components/live/LiveAutoRefreshCountdown'
 import { useTranslations } from 'next-intl'
 
 export function LivePointsAutoRefreshCountdown({
 	enabled,
-	onRefresh,
+	onRefresh
 }: {
 	enabled: boolean
 	onRefresh: () => Promise<void>
 }) {
 	const t = useTranslations('LivePoints')
-	const [countdown, setCountdown] = useState<number | null>(null)
-	const refreshInFlightRef = useRef(false)
-	const onRefreshRef = useRef(onRefresh)
-
-	useEffect(() => {
-		onRefreshRef.current = onRefresh
-	}, [onRefresh])
-
-	useEffect(() => {
-		if (!enabled) {
-			const resetTimer = window.setTimeout(() => setCountdown(null), 0)
-			return () => window.clearTimeout(resetTimer)
-		}
-
-		const initialTimer = window.setTimeout(
-			() => setCountdown(LIVE_POINTS_AUTO_REFRESH_SECONDS),
-			0,
-		)
-		const intervalId = window.setInterval(() => {
-			setCountdown((previous) => {
-				if (previous === null || previous <= 1) {
-					if (!refreshInFlightRef.current) {
-						refreshInFlightRef.current = true
-						void onRefreshRef.current().finally(() => {
-							refreshInFlightRef.current = false
-						})
-					}
-					return LIVE_POINTS_AUTO_REFRESH_SECONDS
-				}
-				return previous - 1
-			})
-		}, 1000)
-
-		return () => {
-			window.clearTimeout(initialTimer)
-			window.clearInterval(intervalId)
-		}
-	}, [enabled])
-
-	if (!enabled || countdown === null) return null
-
-	return <span className="text-xs text-muted-foreground">{t('nextRefresh', { seconds: countdown })}</span>
+	return (
+		<LiveAutoRefreshCountdown
+			enabled={enabled}
+			onRefresh={onRefresh}
+			renderLabel={seconds => t('nextRefresh', { seconds })}
+		/>
+	)
 }

@@ -6,6 +6,7 @@ import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
 	type LiveCalcDataResponse,
+	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import { getCurrentEntryId } from '@/lib/session'
 import { CalendarX2 } from 'lucide-react'
@@ -23,7 +24,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/live/points',
 		titleKey: 'livePointsTitle',
-		descriptionKey: 'livePointsDescription',
+		descriptionKey: 'livePointsDescription'
 	})
 }
 
@@ -32,10 +33,11 @@ export default async function LivePointsPage({ params }: PageProps) {
 	const t = await getTranslations('States')
 	const [entryId, events] = await Promise.all([
 		getCurrentEntryId(),
-		getCurrentAndNextEvents(),
+		getCurrentAndNextEvents()
 	])
 	const currentEventId = events?.current[0]?.id
 	let initialLiveData: LiveCalcData | undefined
+	let initialSnapshot: LiveSnapshotStatus | null = null
 
 	if (!currentEventId) {
 		return (
@@ -54,9 +56,10 @@ export default async function LivePointsPage({ params }: PageProps) {
 			const response = await executeServerQuery<LiveCalcDataResponse>(
 				GET_LIVE_POINTS,
 				{ eventId: currentEventId, entryId },
-				{ cache: 'no-store' },
+				{ cache: 'no-store' }
 			)
 			initialLiveData = response.calcLivePointsByEntry
+			initialSnapshot = response.liveSnapshot
 		} catch (error) {
 			console.error('[live points] Failed to seed current entry:', error)
 		}
@@ -67,6 +70,7 @@ export default async function LivePointsPage({ params }: PageProps) {
 			initialEntryId={entryId ?? 0}
 			initialEventId={currentEventId}
 			initialLiveData={initialLiveData}
+			initialSnapshot={initialSnapshot}
 		/>
 	)
 }

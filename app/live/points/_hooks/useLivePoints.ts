@@ -4,10 +4,18 @@ import { usePageActive } from '@/hooks/use-page-active'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_LIVE_POINTS,
+	GET_LIVE_SNAPSHOT,
 	type EventLiveExplainResponse,
 	type LiveCalcData,
 	type LiveCalcDataResponse,
+	type LiveSnapshotResponse,
+	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
+import {
+	liveSnapshotNeedsRefresh,
+	shouldPollLiveSnapshot,
+	shouldRefreshLiveExplain
+} from '@/lib/live-refresh'
 import type { Player } from '@/types/player'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -15,39 +23,81 @@ import {
 	buildEventLiveExplainBatchQuery,
 	type BreakdownLookup,
 	mapLiveDataToPlayers,
-	rollupBreakdownStats,
+	rollupBreakdownStats
 } from '../_lib/live-points-model'
 
 interface UseLivePointsOptions {
 	initialEntryId: number
 	initialEventId: number
 	initialLiveData?: LiveCalcData
+	initialSnapshot?: LiveSnapshotStatus | null
 }
 
-export function useLivePoints({ initialEntryId, initialEventId, initialLiveData }: UseLivePointsOptions) {
+export function useLivePoints({
+	initialEntryId,
+	initialEventId,
+	initialLiveData,
+	initialSnapshot
+}: UseLivePointsOptions) {
 	const t = useTranslations('LivePoints')
 	const isPageActive = usePageActive()
 	const seededEventId = initialLiveData?.event ?? initialEventId
-	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(seededEventId)
-	const [isLoading, setIsLoading] = useState(initialEntryId > 0 && !initialLiveData)
+	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(
+		seededEventId
+	)
+	const [isLoading, setIsLoading] = useState(
+		initialEntryId > 0 && !initialLiveData
+	)
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [error, setError] = useState<string>()
-	const [liveData, setLiveData] = useState<LiveCalcData | undefined>(initialLiveData)
+	const [liveData, setLiveData] = useState<LiveCalcData | undefined>(
+		initialLiveData
+	)
+	const [snapshot, setSnapshot] = useState<LiveSnapshotStatus | null>(
+		initialSnapshot ?? null
+	)
+	const snapshotRef = useRef<LiveSnapshotStatus | null>(initialSnapshot ?? null)
 	const [startingPlayers, setStartingPlayers] = useState<Player[]>(() =>
-		initialLiveData ? mapLiveDataToPlayers(initialLiveData, new Map()).filter((player) => !player.isBench) : [],
+		initialLiveData
+			? mapLiveDataToPlayers(initialLiveData, new Map()).filter(
+					player => !player.isBench
+				)
+			: []
 	)
 	const [benchPlayers, setBenchPlayers] = useState<Player[]>(() =>
-		initialLiveData ? mapLiveDataToPlayers(initialLiveData, new Map()).filter((player) => player.isBench) : [],
+		initialLiveData
+			? mapLiveDataToPlayers(initialLiveData, new Map()).filter(
+					player => player.isBench
+				)
+			: []
 	)
-	const [entryIdInput, setEntryIdInput] = useState(initialEntryId ? String(initialEntryId) : '')
+	const [entryIdInput, setEntryIdInput] = useState(
+		initialEntryId ? String(initialEntryId) : ''
+	)
 	const [activeEntryId, setActiveEntryId] = useState(initialEntryId)
 	const requestIdRef = useRef(0)
 	const hasLoadedLiveDataRef = useRef(Boolean(initialLiveData))
 	const skipInitialFetchRef = useRef(Boolean(initialLiveData))
+	const lastExplainAttemptAtRef = useRef(0)
+	const inFlightRequestRef = useRef<{
+		key: string
+		promise: Promise<void>
+	} | null>(null)
+	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
+		snapshotRef.current = next
+		setSnapshot(next)
+	}, [])
 
 	const enrichLivePointBreakdowns = useCallback(
 		async (requestId: number, eventId: number, live: LiveCalcData) => {
-			const uniqueElementIds = Array.from(new Set(live.pickList.map((pick) => pick.element)))
+			const now = Date.now()
+			if (!shouldRefreshLiveExplain(lastExplainAttemptAtRef.current, now))
+				return
+			lastExplainAttemptAtRef.current = now
+
+			const uniqueElementIds = Array.from(
+				new Set(live.pickList.map(pick => pick.element))
+			)
 			const query = buildEventLiveExplainBatchQuery(uniqueElementIds)
 			if (!query) return
 
@@ -61,60 +111,77 @@ export function useLivePoints({ initialEntryId, initialEventId, initialLiveData 
 				const breakdownLookup: BreakdownLookup = new Map()
 				for (const playerExplain of Object.values(response)) {
 					if (!playerExplain) continue
-					const flattenedStats = (playerExplain.breakdown ?? []).flatMap((entry) => entry.stats)
+					const flattenedStats = (playerExplain.breakdown ?? []).flatMap(
+						entry => entry.stats
+					)
 					breakdownLookup.set(String(playerExplain.player.id), {
 						teamShortName: playerExplain.player.team?.shortName ?? '',
-						stats: rollupBreakdownStats(flattenedStats),
+						stats: rollupBreakdownStats(flattenedStats)
 					})
 				}
 
 				const enrichedPlayers = mapLiveDataToPlayers(live, breakdownLookup)
-				setStartingPlayers(enrichedPlayers.filter((player) => !player.isBench))
-				setBenchPlayers(enrichedPlayers.filter((player) => player.isBench))
+				setStartingPlayers(enrichedPlayers.filter(player => !player.isBench))
+				setBenchPlayers(enrichedPlayers.filter(player => player.isBench))
 			} catch (explainError) {
 				console.warn('Failed to fetch explain stats batch:', explainError)
 			}
 		},
-		[],
+		[]
 	)
 
 	const fetchLivePointsForGameweek = useCallback(
-		async (eventId: number) => {
-			if (!activeEntryId) return
+		(eventId: number): Promise<void> => {
+			if (!activeEntryId) return Promise.resolve()
+			const requestKey = `${activeEntryId}:${eventId}`
+			if (inFlightRequestRef.current?.key === requestKey) {
+				return inFlightRequestRef.current.promise
+			}
+
 			const requestId = requestIdRef.current + 1
 			requestIdRef.current = requestId
-			const initialLoad = !hasLoadedLiveDataRef.current
-			if (initialLoad) setIsLoading(true)
-			else setIsRefreshing(true)
-			setError(undefined)
+			const request = (async () => {
+				const initialLoad = !hasLoadedLiveDataRef.current
+				if (initialLoad) setIsLoading(true)
+				else setIsRefreshing(true)
+				setError(undefined)
 
-			try {
-				const liveResponse = await executeQuery<LiveCalcDataResponse>(
-					GET_LIVE_POINTS,
-					{ eventId, entryId: activeEntryId },
-					{ cache: 'no-store' },
-				)
-				const live = liveResponse.calcLivePointsByEntry
-				if (requestId !== requestIdRef.current) return
+				try {
+					const liveResponse = await executeQuery<LiveCalcDataResponse>(
+						GET_LIVE_POINTS,
+						{ eventId, entryId: activeEntryId },
+						{ cache: 'no-store' }
+					)
+					const live = liveResponse.calcLivePointsByEntry
+					if (requestId !== requestIdRef.current) return
 
-				const allPlayers = mapLiveDataToPlayers(live, new Map())
-				hasLoadedLiveDataRef.current = true
-				setLiveData(live)
-				setStartingPlayers(allPlayers.filter((player) => !player.isBench))
-				setBenchPlayers(allPlayers.filter((player) => player.isBench))
-				void enrichLivePointBreakdowns(requestId, eventId, live)
-			} catch (fetchError) {
-				if (requestId !== requestIdRef.current) return
-				console.error('Failed to fetch live points:', fetchError)
-				setError(t('loadFailed'))
-			} finally {
-				if (requestId === requestIdRef.current) {
-					setIsLoading(false)
-					setIsRefreshing(false)
+					const allPlayers = mapLiveDataToPlayers(live, new Map())
+					hasLoadedLiveDataRef.current = true
+					setLiveData(live)
+					acceptSnapshot(liveResponse.liveSnapshot)
+					setStartingPlayers(allPlayers.filter(player => !player.isBench))
+					setBenchPlayers(allPlayers.filter(player => player.isBench))
+					void enrichLivePointBreakdowns(requestId, eventId, live)
+				} catch (fetchError) {
+					if (requestId !== requestIdRef.current) return
+					console.error('Failed to fetch live points:', fetchError)
+					setError(t('loadFailed'))
+				} finally {
+					if (requestId === requestIdRef.current) {
+						setIsLoading(false)
+						setIsRefreshing(false)
+					}
 				}
-			}
+			})()
+			inFlightRequestRef.current = { key: requestKey, promise: request }
+			void request.finally(() => {
+				if (inFlightRequestRef.current?.promise === request) {
+					inFlightRequestRef.current = null
+				}
+			})
+			return request
 		},
-		[activeEntryId, enrichLivePointBreakdowns, t],
+		[acceptSnapshot, activeEntryId, enrichLivePointBreakdowns, t]
 	)
 
 	const submitEntry = useCallback(() => {
@@ -130,22 +197,49 @@ export function useLivePoints({ initialEntryId, initialEventId, initialLiveData 
 		setLiveData(undefined)
 		setStartingPlayers([])
 		setBenchPlayers([])
+		acceptSnapshot(null)
+		lastExplainAttemptAtRef.current = 0
 		setError(undefined)
 		setIsLoading(true)
 		return true
-	}, [entryIdInput, t])
+	}, [acceptSnapshot, entryIdInput, t])
 
 	const changeGameweek = useCallback(
 		(gameweek: number) => {
+			lastExplainAttemptAtRef.current = 0
 			setSelectedGameweek(gameweek)
 			void fetchLivePointsForGameweek(gameweek)
 		},
-		[fetchLivePointsForGameweek],
+		[fetchLivePointsForGameweek]
 	)
 
 	const refresh = useCallback(async () => {
-		if (selectedGameweek !== undefined) await fetchLivePointsForGameweek(selectedGameweek)
+		if (selectedGameweek !== undefined)
+			await fetchLivePointsForGameweek(selectedGameweek)
 	}, [fetchLivePointsForGameweek, selectedGameweek])
+
+	const autoRefresh = useCallback(async () => {
+		if (selectedGameweek === undefined) return
+		const requestId = requestIdRef.current
+		try {
+			const probe = await executeQuery<LiveSnapshotResponse>(
+				GET_LIVE_SNAPSHOT,
+				{ eventId: selectedGameweek },
+				{ cache: 'no-store' }
+			)
+			if (requestId !== requestIdRef.current) return
+			if (!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)) {
+				acceptSnapshot(probe.liveSnapshot)
+				setError(undefined)
+				return
+			}
+			await fetchLivePointsForGameweek(selectedGameweek)
+		} catch (probeError) {
+			if (requestId !== requestIdRef.current) return
+			console.error('Failed to check live points freshness:', probeError)
+			setError(t('loadFailed'))
+		}
+	}, [acceptSnapshot, fetchLivePointsForGameweek, selectedGameweek, t])
 
 	useEffect(() => {
 		if (!activeEntryId) return
@@ -154,7 +248,11 @@ export function useLivePoints({ initialEntryId, initialEventId, initialLiveData 
 			if (initialLiveData) {
 				const requestId = requestIdRef.current + 1
 				requestIdRef.current = requestId
-				void enrichLivePointBreakdowns(requestId, initialLiveData.event, initialLiveData)
+				void enrichLivePointBreakdowns(
+					requestId,
+					initialLiveData.event,
+					initialLiveData
+				)
 			}
 			return
 		}
@@ -162,7 +260,8 @@ export function useLivePoints({ initialEntryId, initialEventId, initialLiveData 
 		let cancelled = false
 		const loadTimer = window.setTimeout(() => {
 			if (cancelled) return
-			if (selectedGameweek !== undefined) void fetchLivePointsForGameweek(selectedGameweek)
+			if (selectedGameweek !== undefined)
+				void fetchLivePointsForGameweek(selectedGameweek)
 			else {
 				setError(t('noCurrentGameweek'))
 				setIsLoading(false)
@@ -177,11 +276,16 @@ export function useLivePoints({ initialEntryId, initialEventId, initialLiveData 
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [activeEntryId])
 
-	const shouldAutoRefresh =
-		selectedGameweek !== undefined && selectedGameweek === initialEventId
+	const shouldAutoRefresh = shouldPollLiveSnapshot({
+		isPageActive: true,
+		currentEventId: initialEventId,
+		selectedEventId: selectedGameweek,
+		snapshot
+	})
 
 	return {
 		activeEntryId,
+		autoRefresh,
 		benchPlayers,
 		changeGameweek,
 		currentGameweek: initialEventId,
@@ -196,6 +300,6 @@ export function useLivePoints({ initialEntryId, initialEventId, initialLiveData 
 		setEntryIdInput,
 		shouldAutoRefresh,
 		startingPlayers,
-		submitEntry,
+		submitEntry
 	}
 }

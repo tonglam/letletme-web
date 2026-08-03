@@ -14,20 +14,38 @@ export default defineConfig({
 		baseURL,
 		trace: 'retain-on-failure',
 		screenshot: 'only-on-failure',
-		video: 'retain-on-failure',
+		video: 'retain-on-failure'
 	},
 	projects: [
 		{
 			name: 'chromium',
-			use: { ...devices['Desktop Chrome'] },
-		},
+			use: { ...devices['Desktop Chrome'] }
+		}
 	],
 	webServer: externalBaseUrl
 		? undefined
-		: {
-				command: 'npm run dev -- --hostname 127.0.0.1 --port 3100',
-				url: baseURL,
-				reuseExistingServer: !process.env.CI,
-				timeout: 120_000,
-			},
+		: [
+				{
+					command: 'node e2e/fixtures/live-graphql-server.mjs',
+					url: 'http://127.0.0.1:4100/health',
+					reuseExistingServer: !process.env.CI,
+					timeout: 30_000
+				},
+				{
+					// The cache and streaming assertions describe deployed behavior. Next's
+					// development server intentionally replaces document cache headers.
+					command:
+						'npm run build -- --webpack && npm run start -- --hostname 127.0.0.1 --port 3100',
+					env: {
+						...process.env,
+						BACKEND_PROXY_SECRET: 'playwright-backend-proxy-secret-at-least-32-bytes',
+						BETTER_AUTH_SECRET: 'playwright-better-auth-secret-at-least-32-bytes',
+						GRAPHQL_ENDPOINT: 'http://127.0.0.1:4100/graphql',
+						GRAPHQL_SERVICE_TOKEN: 'playwright-graphql-service-token-at-least-32-bytes'
+					},
+					url: baseURL,
+					reuseExistingServer: !process.env.CI,
+					timeout: 120_000
+				}
+			]
 })
