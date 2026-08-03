@@ -1,5 +1,6 @@
 import { getAuthorizationSession } from '@/lib/auth'
 import { buildGraphQLUserContextHeaders } from '@/lib/graphql-envelope'
+import { readForwardableMiniProgramAuthorization } from '@/lib/graphql-proxy-security'
 import {
 	buildIngressContextHeaders,
 	buildOpaqueRateLimitSubject,
@@ -7,27 +8,11 @@ import {
 	PayloadTooLargeError,
 	readBoundedJson,
 } from '@/lib/http-security'
-import { getOperationAST, parse } from 'graphql'
 import { NextRequest, NextResponse } from 'next/server'
 
 const GRAPHQL_ENDPOINT = process.env.GRAPHQL_ENDPOINT || 'http://localhost:4000/graphql'
 const MAX_GRAPHQL_BODY_BYTES = 256 * 1024
 const GRAPHQL_UPSTREAM_TIMEOUT_MS = 15_000
-
-function isReadOnlyGraphQL(body: unknown): boolean {
-	if (!body || typeof body !== 'object') return false
-	const value = body as { query?: unknown; operationName?: unknown }
-	if (typeof value.query !== 'string') return false
-	try {
-		const operation = getOperationAST(
-			parse(value.query),
-			typeof value.operationName === 'string' ? value.operationName : undefined,
-		)
-		return operation?.operation === 'query'
-	} catch {
-		return false
-	}
-}
 
 function noStoreJson(body: unknown, status: number, headers: Record<string, string> = {}) {
 	return NextResponse.json(body, {
@@ -50,6 +35,19 @@ export async function POST(request: NextRequest) {
 		return noStoreJson({ errors: [{ message: 'Invalid JSON' }] }, 400)
 	}
 
+	const authorization = readForwardableMiniProgramAuthorization(request.headers)
+	if (!authorization.ok) {
+		return noStoreJson(
+			{
+				errors: [{
+					message: 'Invalid Authorization header',
+					extensions: { code: 'INVALID_AUTHORIZATION_HEADER' },
+				}],
+			},
+			400,
+		)
+	}
+
 	const secret = process.env.BACKEND_PROXY_SECRET
 	if (!secret && process.env.NODE_ENV === 'production') {
 		return noStoreJson({ errors: [{ message: 'Proxy security is unavailable' }] }, 503)
@@ -70,15 +68,16 @@ export async function POST(request: NextRequest) {
 			)
 		}
 	} catch (error) {
-		// Only valid read-only GraphQL operations may fail open while the limiter is unavailable.
-		if (!isReadOnlyGraphQL(body)) {
-			console.error('[graphql proxy] rate-limit storage unavailable:', error)
-			return noStoreJson(
-				{ errors: [{ message: 'Request safety checks are unavailable' }] },
-				503,
-			)
-		}
-		console.warn('[graphql proxy] rate-limit storage unavailable; read-only request allowed')
+		console.error('[graphql proxy] rate-limit storage unavailable:', error)
+		return noStoreJson(
+			{
+				errors: [{
+					message: 'Request safety checks are unavailable',
+					extensions: { code: 'RATE_LIMIT_STORAGE_UNAVAILABLE' },
+				}],
+			},
+			503,
+		)
 	}
 
 	let session = null
@@ -90,6 +89,9 @@ export async function POST(request: NextRequest) {
 	}
 
 	const forwardHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+	if (authorization.value) {
+		forwardHeaders.Authorization = authorization.value
+	}
 	if (secret) {
 		Object.assign(forwardHeaders, buildIngressContextHeaders(subject, secret))
 		if (session?.user) {

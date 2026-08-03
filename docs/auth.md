@@ -32,6 +32,9 @@ MINIPROGRAM_ACCOUNT_STORAGE=true       # only after the bauth migrations are app
 # Backend proxy signing key
 BACKEND_PROXY_SECRET=<openssl rand -base64 32>
 
+# Independent GraphQL trusted-service credential for cached public RSC reads
+GRAPHQL_SERVICE_TOKEN=<openssl rand -base64 32>
+
 # Internal Data mutation credential (server only)
 TOURNAMENT_API_KEY=<openssl rand -base64 32>
 
@@ -68,9 +71,9 @@ and `authenticated`. Web, GraphQL Mini Program validation, and migration roles
 must use reviewed direct/service database credentials; browser JWTs never query
 `bauth`.
 
-Only authenticated server reads attach a signed ingress and user envelope.
-Public RSC reads carry no request-derived headers, so Next's shared fetch cache
-remains effective and GraphQL treats them as public product queries.
+Authenticated server reads attach a signed ingress and user envelope. Public
+RSC reads carry only `X-GraphQL-Service-Token`, with no request-derived headers,
+so Next's shared fetch cache remains effective without creating a user identity.
 
 **Tables:** `bauth.user` · `bauth.session` · `bauth.account` · `bauth.verification` · `bauth.rate_limit` · `bauth.request_rate_limits` · `bauth.mini_program_email_code` · `bauth.mini_program_session` · `bauth.fpl_entry_binding_challenges`
 
@@ -209,10 +212,10 @@ X-Ingress-Context-Sig: HMAC-SHA256(payload, BACKEND_PROXY_SECRET)
 ```
 
 `sub` is a keyed opaque client-IP subject; raw IPs are neither forwarded nor
-stored. Cacheable public RSC requests omit request-derived headers so static
-rendering and Next's shared fetch cache remain effective; GraphQL treats those
-as ordinary public reads. Production trusts `CF-Connecting-IP` only on the
-expected Cloudflare host with Cloudflare metadata, and preview traffic trusts
+stored. Cacheable public RSC requests send only the independent
+`X-GraphQL-Service-Token`; GraphQL assigns those reads a shared service budget
+but no principal. Production trusts `CF-Connecting-IP` only on the expected
+Cloudflare host with Cloudflare metadata, and preview traffic trusts
 `x-vercel-forwarded-for` only on a Vercel preview host with Vercel metadata.
 Caller-supplied `X-Forwarded-For` is discarded before Better Auth handles a
 request.
@@ -250,18 +253,24 @@ handler/RSC. Proxy checks never replace data-access authorization.
 - GraphQL request bodies are capped at 256 KiB and every proxied POST is
   `Cache-Control: no-store`; upstream status and `Retry-After` are preserved.
 - Auth request bodies are capped at 16 KiB. Database-backed limits are
-  120/minute/IP for GraphQL, 5/minute/IP for Better Auth writes, 5/minute/IP and device for Mini Program login/confirmation,
+  120 requests/minute per opaque client subject at the Web proxy, 5/minute/IP
+  for Better Auth writes, 5/minute/IP and device for Mini Program login/confirmation,
   and 5/minute/IP plus 3/hour/email for email start. Auth fails closed if the
   limiter is unavailable. Better Auth additionally applies a database-backed
   100/minute default, 3/10-seconds to sign-in/sign-up/password-change paths, and
-  3/minute to reset/verification mail paths. Valid read-only GraphQL may fail
-  open with a metric. Every 429 response carries a standard `Retry-After` value.
+  3/minute to reset/verification mail paths. GraphQL applies a second weighted
+  Redis budget of 120 units/minute per signed client subject and 600 units/minute
+  for the shared public-RSC subject. Both proxy and GraphQL limits fail closed,
+  and every 429 response carries a standard `Retry-After` value.
 - CSRF: Better Auth's origin + Fetch-Metadata checks are enabled — do not disable
 - `BETTER_AUTH_SECRET` signs session cookies — rotate immediately if compromised (invalidates all sessions)
 - `BACKEND_PROXY_SECRET` signs the user context envelope — rotate with a coordinated backend deploy
+- `GRAPHQL_SERVICE_TOKEN` identifies trusted public server ingress only; it must
+  never be exposed to a browser or used as a user credential.
 - `TOURNAMENT_API_KEY` authenticates Web to Data. Data stores only its SHA-256
   digest; rotate with an overlap window and never expose the plaintext to a client.
 - Tournament `adminId` and creator identity are overwritten from the verified
   server session. Browser-supplied identity fields are ignored.
-- Never log `X-User-Context-Sig`, password reset tokens, or OAuth `state` params
+- Never log GraphQL service/ingress tokens, `X-User-Context-Sig`, password reset
+  tokens, or OAuth `state` params
 - The `next` redirect param on `/auth/login` is validated to be a relative path (prevents open redirect)
