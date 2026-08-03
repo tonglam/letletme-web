@@ -14,6 +14,7 @@ import createMiddleware from 'next-intl/middleware'
 import { type NextRequest, NextResponse } from 'next/server'
 
 const handleI18nRouting = createMiddleware(routing)
+const DEFAULT_LOCALE_PREFIX = `/${routing.defaultLocale}`
 
 function copyCookies(from: NextResponse, to: NextResponse) {
 	for (const cookie of from.cookies.getAll()) {
@@ -53,8 +54,18 @@ export async function proxy(req: NextRequest) {
 			: NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 	}
 
-	const i18nResponse = handleI18nRouting(req)
-	if (i18nResponse.headers.has('location')) return i18nResponse
+	const isDefaultLocalePath =
+		requestedPathname === DEFAULT_LOCALE_PREFIX ||
+		requestedPathname.startsWith(`${DEFAULT_LOCALE_PREFIX}/`)
+	let i18nResponse: NextResponse
+	if (isDefaultLocalePath) {
+		const requestHeaders = new Headers(req.headers)
+		requestHeaders.set('x-next-intl-locale', routing.defaultLocale)
+		i18nResponse = NextResponse.next({ request: { headers: requestHeaders } })
+	} else {
+		i18nResponse = handleI18nRouting(req)
+		if (i18nResponse.headers.has('location')) return i18nResponse
+	}
 
 	const internalUrl = new URL(
 		i18nResponse.headers.get('x-middleware-rewrite') ?? req.url

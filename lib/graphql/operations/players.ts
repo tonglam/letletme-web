@@ -79,6 +79,26 @@ export const GET_PLAYERS_FOR_PICKER = `
   }
 `
 
+// Bounded name search for interactive pickers. Unlike `players`, this query is
+// filtered before PostgreSQL returns rows and never downloads the full roster.
+export const SEARCH_PLAYERS_FOR_PICKER = `
+  query SearchPlayersForPicker($search: String!, $limit: Int = 20, $cursor: Int) {
+    playersForPicker(search: $search, limit: $limit, cursor: $cursor) {
+      items {
+        id
+        webName
+        position
+        team {
+          id
+          name
+          shortName
+        }
+      }
+      nextCursor
+    }
+  }
+`
+
 export const GET_TEAMS_FOR_PICKER = `
   query GetTeamsForPicker {
     teams {
@@ -108,6 +128,13 @@ export interface PlayerDirectoryItem {
 
 export interface PlayersForPickerResponse {
 	players: PlayerDirectoryItem[]
+}
+
+export interface PlayerSearchForPickerResponse {
+	playersForPicker: {
+		items: PlayerDirectoryItem[]
+		nextCursor: number | null
+	}
 }
 
 export interface TeamForPickerItem {

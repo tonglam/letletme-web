@@ -30,11 +30,13 @@ import {
 	GET_LIVE_MATCHES,
 	GET_LIVE_POINTS,
 	GET_LIVE_SCORES,
+	GET_MARKET_PULSE,
 	GET_PLAYER_DETAIL,
 	GET_PLAYER_LIVE,
 	GET_PLAYER_VALUE_HISTORY,
 	GET_PLAYER_VALUES,
 	GET_PLAYERS_FOR_PICKER,
+	SEARCH_PLAYERS_FOR_PICKER,
 	GET_TEAMS_FOR_PICKER,
 	GET_TOP_TRANSFERS_IN,
 	GET_TOP_TRANSFERS_OUT,
@@ -220,9 +222,19 @@ async function main() {
 			variables: { changeDate: utcCalendarDateISO() }
 		},
 		{
+			name: 'GET_MARKET_PULSE',
+			query: GET_MARKET_PULSE,
+			variables: { days: 14 }
+		},
+		{
 			name: 'GET_PLAYERS_FOR_PICKER',
 			query: GET_PLAYERS_FOR_PICKER,
 			variables: { filter: null, limit: 20, offset: 0 }
+		},
+		{
+			name: 'SEARCH_PLAYERS_FOR_PICKER',
+			query: SEARCH_PLAYERS_FOR_PICKER,
+			variables: { search: 'a', limit: 20, cursor: null }
 		},
 		{ name: 'GET_TEAMS_FOR_PICKER', query: GET_TEAMS_FOR_PICKER },
 		{
