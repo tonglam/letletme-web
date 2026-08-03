@@ -20,8 +20,10 @@ import type { Player } from '@/types/player'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+	breakdownLookupForRequest,
 	buildEventLiveExplainBatchQuery,
 	type BreakdownLookup,
+	type CachedBreakdownLookup,
 	mapLiveDataToPlayers,
 	rollupBreakdownStats
 } from '../_lib/live-points-model'
@@ -79,6 +81,7 @@ export function useLivePoints({
 	const hasLoadedLiveDataRef = useRef(Boolean(initialLiveData))
 	const skipInitialFetchRef = useRef(Boolean(initialLiveData))
 	const lastExplainAttemptAtRef = useRef(0)
+	const breakdownCacheRef = useRef<CachedBreakdownLookup | null>(null)
 	const inFlightRequestRef = useRef<{
 		key: string
 		promise: Promise<void>
@@ -89,7 +92,12 @@ export function useLivePoints({
 	}, [])
 
 	const enrichLivePointBreakdowns = useCallback(
-		async (requestId: number, eventId: number, live: LiveCalcData) => {
+		async (
+			requestId: number,
+			eventId: number,
+			live: LiveCalcData,
+			requestKey: string
+		) => {
 			const now = Date.now()
 			if (!shouldRefreshLiveExplain(lastExplainAttemptAtRef.current, now))
 				return
@@ -120,6 +128,7 @@ export function useLivePoints({
 					})
 				}
 
+				breakdownCacheRef.current = { requestKey, lookup: breakdownLookup }
 				const enrichedPlayers = mapLiveDataToPlayers(live, breakdownLookup)
 				setStartingPlayers(enrichedPlayers.filter(player => !player.isBench))
 				setBenchPlayers(enrichedPlayers.filter(player => player.isBench))
@@ -155,13 +164,16 @@ export function useLivePoints({
 					const live = liveResponse.calcLivePointsByEntry
 					if (requestId !== requestIdRef.current) return
 
-					const allPlayers = mapLiveDataToPlayers(live, new Map())
+					const allPlayers = mapLiveDataToPlayers(
+						live,
+						breakdownLookupForRequest(breakdownCacheRef.current, requestKey)
+					)
 					hasLoadedLiveDataRef.current = true
 					setLiveData(live)
 					acceptSnapshot(liveResponse.liveSnapshot)
 					setStartingPlayers(allPlayers.filter(player => !player.isBench))
 					setBenchPlayers(allPlayers.filter(player => player.isBench))
-					void enrichLivePointBreakdowns(requestId, eventId, live)
+					void enrichLivePointBreakdowns(requestId, eventId, live, requestKey)
 				} catch (fetchError) {
 					if (requestId !== requestIdRef.current) return
 					console.error('Failed to fetch live points:', fetchError)
@@ -199,6 +211,7 @@ export function useLivePoints({
 		setBenchPlayers([])
 		acceptSnapshot(null)
 		lastExplainAttemptAtRef.current = 0
+		breakdownCacheRef.current = null
 		setError(undefined)
 		setIsLoading(true)
 		return true
@@ -251,7 +264,8 @@ export function useLivePoints({
 				void enrichLivePointBreakdowns(
 					requestId,
 					initialLiveData.event,
-					initialLiveData
+					initialLiveData,
+					`${activeEntryId}:${initialLiveData.event}`
 				)
 			}
 			return

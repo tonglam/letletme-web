@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+	breakdownLookupForRequest,
 	buildEventLiveExplainBatchQuery,
 	rollupBreakdownStats,
 } from '../app/live/points/_lib/live-points-model'
@@ -37,5 +38,21 @@ describe('live-points model', () => {
 
 	it('returns no query when every element ID is invalid', () => {
 		assert.equal(buildEventLiveExplainBatchQuery([0, -1, Number.NaN]), null)
+	})
+
+	it('reuses explain enrichment only for the same entry and gameweek', () => {
+		const lookup = new Map([
+			[
+				'10',
+				{
+					teamShortName: 'ARS',
+					stats: [{ identifier: 'clean_sheets', value: 1, points: 4 }]
+				}
+			]
+		])
+		const cached = { requestKey: '101:33', lookup }
+
+		assert.equal(breakdownLookupForRequest(cached, '101:33'), lookup)
+		assert.equal(breakdownLookupForRequest(cached, '101:34').size, 0)
 	})
 })

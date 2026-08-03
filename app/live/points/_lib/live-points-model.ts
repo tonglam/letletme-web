@@ -13,6 +13,18 @@ export type BreakdownLookup = Map<
 	}
 >
 
+export type CachedBreakdownLookup = {
+	requestKey: string
+	lookup: BreakdownLookup
+}
+
+export function breakdownLookupForRequest(
+	cached: CachedBreakdownLookup | null,
+	requestKey: string
+): BreakdownLookup {
+	return cached?.requestKey === requestKey ? cached.lookup : new Map()
+}
+
 const aggregateBreakdownStats = (
 	stats?: PlayerBreakdownStat[]
 ): AggregatedBreakdown => {
