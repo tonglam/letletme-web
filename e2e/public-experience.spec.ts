@@ -49,11 +49,77 @@ test('mobile navigation expands a group and closes after navigation', async ({ p
 	const dataGroup = dialog.getByRole('button', { name: 'Data' })
 	await dataGroup.click()
 	await expect(dataGroup).toHaveAttribute('aria-expanded', 'true')
-	await dialog.getByRole('link', { name: 'Price Changes' }).click()
+	await dialog.getByRole('link', { name: 'Market' }).click()
 
 	await expect(page).toHaveURL(/\/data\/price-changes$/)
 	await expect(dialog).toBeHidden()
 	expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('Market stays accessible and usable on a 390px Simplified Chinese screen', async ({ page }) => {
+	await page.route('**/api/auth/**', route =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }),
+	)
+	await page.route('**/api/graphql', async route => {
+		const request = route.request()
+		const body = request.postDataJSON() as { query?: string }
+		if (body.query?.includes('playersForPicker')) {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					data: {
+						playersForPicker: {
+							items: [{
+								id: 1,
+								webName: 'Saka',
+								position: 'MIDFIELDER',
+								team: { id: 1, name: 'Arsenal', shortName: 'ARS' },
+							}],
+							nextCursor: null,
+						},
+					},
+				}),
+			})
+			return
+		}
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				data: {
+					playerValueHistory: [{
+						playerId: 1,
+						changeDate: '2026-08-03T00:00:00.000Z',
+						oldValue: 99,
+						newValue: 100,
+						changeType: 'RISE',
+						transfersIn: null,
+						transfersOut: null,
+					}],
+				},
+			}),
+		})
+	})
+	await page.setViewportSize({ width: 390, height: 844 })
+	await page.goto('/zh-CN/data/price-changes')
+
+	await expect(page.getByRole('heading', { level: 1, name: 'FPL 市场' })).toBeVisible()
+	await expect(page.getByText(/自开始追踪以来/).first()).toBeVisible()
+
+	const risers = page.getByRole('tab', { name: /上升/ })
+	await risers.focus()
+	await page.keyboard.press('ArrowRight')
+	await expect(page.getByRole('tab', { name: /下降/ })).toHaveAttribute('aria-selected', 'true')
+
+	const lookup = page.getByRole('region', { name: '球员身价历史' })
+	await lookup.getByRole('combobox', { name: '按姓名搜索球员' }).fill('Sa')
+	await lookup.getByRole('button', { name: /Saka/ }).click()
+	await expect(lookup.getByText('£9.9m → £10.0m')).toBeVisible()
+
+	expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+	const accessibility = await new AxeBuilder({ page }).analyze()
+	expect(accessibility.violations).toEqual([])
 })
 
 test('theme choice persists across a reload', async ({ page }) => {

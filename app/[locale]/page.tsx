@@ -4,10 +4,7 @@ import {
 	GameweekStatsSectionFallback,
 } from '@/components/home/GameweekStatsSection'
 import { MatchesSection } from '@/components/home/MatchesSection'
-import {
-	PriceChangesSection,
-	PriceChangesSectionFallback,
-} from '@/components/home/PriceChangesSection'
+import { MarketTeaser, MarketTeaserFallback } from '@/components/home/MarketTeaser'
 import { StatsSection } from '@/components/home/StatsSection'
 import {
 	TeamOfTheWeekSection,
@@ -258,8 +255,8 @@ export default async function Home({ params }: { params: LocaleParams }) {
 			<div className="flex flex-col">
 				<HomeHero />
 
-				<Suspense fallback={<PriceChangesSectionFallback />}>
-					<PriceChangesSection />
+				<Suspense fallback={<MarketTeaserFallback />}>
+					<MarketTeaser />
 				</Suspense>
 
 				<Suspense fallback={<PageInsightsFallback />}>
