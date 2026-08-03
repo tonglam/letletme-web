@@ -74,7 +74,7 @@ function PlayerSlot({
 		<section aria-label={label}>
 			<div className="mb-2 flex items-center justify-between">
 				<p className="text-sm text-muted-foreground">
-					{label}{optional ? ` (${t('optional')})` : ''}
+					{label}{optional ? t('optionalSuffix') : ''}
 				</p>
 				{selectedPlayer && onClearSelection ? (
 					<Button type="button" variant="ghost" size="sm" onClick={onClearSelection}>

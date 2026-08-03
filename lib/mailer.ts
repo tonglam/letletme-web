@@ -49,11 +49,11 @@ export async function sendVerificationEmail({
 	const chinese = locale === 'zh-CN'
 	await sendEmail({
 		to,
-		subject: chinese ? '验证您的 LetLetMe 账户' : 'Verify your LetLetMe account',
+		subject: chinese ? '验证你的 LetLetMe 账户' : 'Verify your LetLetMe account',
 		html: chinese
-			? `<p>点击下方链接验证您的邮箱地址：</p>
+			? `<p>点击下方链接验证你的邮箱地址：</p>
 <p><a href="${verifyUrl}">${verifyUrl}</a></p>
-<p>此链接将在 24 小时后过期。如果您没有注册，请忽略此邮件。</p>`
+<p>此链接将在 24 小时后过期。如果你没有注册，请忽略此邮件。</p>`
 			: `<p>Click the link below to verify your email address:</p>
 <p><a href="${verifyUrl}">${verifyUrl}</a></p>
 <p>This link expires in 24 hours. If you did not sign up, ignore this email.</p>`,
@@ -72,11 +72,11 @@ export async function sendPasswordResetEmail({
 	const chinese = locale === 'zh-CN'
 	await sendEmail({
 		to,
-		subject: chinese ? '重置您的 LetLetMe 密码' : 'Reset your LetLetMe password',
+		subject: chinese ? '重置你的 LetLetMe 密码' : 'Reset your LetLetMe password',
 		html: chinese
-			? `<p>点击下方链接重置您的密码：</p>
+			? `<p>点击下方链接重置你的密码：</p>
 <p><a href="${resetUrl}">${resetUrl}</a></p>
-<p>此链接将在 1 小时后过期。如果您没有申请重置密码，请忽略此邮件。</p>`
+<p>此链接将在 1 小时后过期。如果你没有申请重置密码，请忽略此邮件。</p>`
 			: `<p>Click the link below to reset your password:</p>
 <p><a href="${resetUrl}">${resetUrl}</a></p>
 <p>This link expires in 1 hour. If you did not request a reset, ignore this email.</p>`,
