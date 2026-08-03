@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { executeQuery, type ExecuteQueryOptions } from '@/lib/graphql-client'
+import { getGraphQLServiceTokenHeaders } from '@/lib/graphql-service-token'
 import { getServerUserContextHeaders } from '@/lib/server-user-context'
 
 // Use this instead of executeQuery in RSC pages.
@@ -22,5 +23,8 @@ export async function executePublicServerQuery<T>(
 	variables?: Record<string, unknown>,
 	options?: Omit<ExecuteQueryOptions, 'headers'>,
 ): Promise<T> {
-	return executeQuery<T>(query, variables, options)
+	return executeQuery<T>(query, variables, {
+		...options,
+		headers: getGraphQLServiceTokenHeaders(),
+	})
 }
