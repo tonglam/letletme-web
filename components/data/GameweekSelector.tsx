@@ -40,7 +40,9 @@ export function GameweekSelector({
     for (let i = 1; i <= maxGameweek; i++) {
       gameweeks.push({
         value: i,
-        label: `${t("gameweekOption", { gameweek: i })}${i === currentGameweek ? ` (${t("currentSuffix")})` : ''}`
+        label: i === currentGameweek
+          ? t("gameweekCurrentOption", { gameweek: i })
+          : t("gameweekOption", { gameweek: i })
       });
     }
     

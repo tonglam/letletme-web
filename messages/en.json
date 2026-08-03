@@ -445,7 +445,7 @@
     "title": "Player Statistics",
     "playerOne": "Player 1",
     "playerTwo": "Player 2",
-    "optional": "optional",
+    "optionalSuffix": " (optional)",
     "recent": "Recent:",
     "clearRecent": "Clear recent",
     "remove": "Remove",
@@ -542,7 +542,7 @@
     "tournament": "Tournament",
     "selectGameweek": "Select gameweek",
     "gameweekOption": "Gameweek {gameweek}",
-    "currentSuffix": "Current",
+    "gameweekCurrentOption": "Gameweek {gameweek} (Current)",
     "noDataAvailable": "No data available",
     "selectTournament": "Select Tournament:"
   },

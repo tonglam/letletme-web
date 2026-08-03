@@ -23,7 +23,7 @@ export default function GlobalError({
 					<h1 className="text-3xl font-bold tracking-tight">The app shell could not start / 应用无法启动</h1>
 					<p className="text-muted-foreground">
 						Try loading the application again. Your data has not been changed.<br />
-						请重新加载应用。您的数据未被更改。
+						请重新加载应用，您的数据未受影响。
 					</p>
 					<Button onClick={reset}>
 						<RotateCcw data-icon="inline-start" />
