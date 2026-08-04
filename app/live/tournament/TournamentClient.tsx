@@ -356,12 +356,14 @@ export default function TournamentClient({
 	}, [selectedGameweek, selectedTournament?.id])
 
 	const displayGameweek = selectedGameweek
-	const autoRefreshEnabled = shouldPollLiveSnapshot({
-		isPageActive,
-		currentEventId: currentGameweek,
-		selectedEventId: selectedGameweek,
-		snapshot
-	})
+	const autoRefreshEnabled =
+		standingsReady &&
+		shouldPollLiveSnapshot({
+			isPageActive,
+			currentEventId: currentGameweek,
+			selectedEventId: selectedGameweek,
+			snapshot
+		})
 	const refreshTournamentResults = useCallback(async () => {
 		if (!selectedTournament) return
 		await loadTournamentResults(
@@ -373,7 +375,7 @@ export default function TournamentClient({
 		)
 	}, [loadTournamentResults, selectedGameweek, selectedTournament])
 	const autoRefreshTournamentResults = useCallback((): Promise<void> => {
-		if (!selectedTournament) return Promise.resolve()
+		if (!selectedTournament || !standingsReady) return Promise.resolve()
 		if (freshnessRequestRef.current) return freshnessRequestRef.current
 
 		const requestId = resultsRequestIdRef.current
@@ -411,6 +413,7 @@ export default function TournamentClient({
 		refreshTournamentResults,
 		selectedGameweek,
 		selectedTournament,
+		standingsReady,
 		t
 	])
 	const captainOptions = useMemo(
