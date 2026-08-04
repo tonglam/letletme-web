@@ -3,11 +3,15 @@
 // where the server-only marker throws. Server-side by usage: imported from
 // lib/fpl-entry-binding.ts (server-only) and operator scripts.
 
-const ENTRY_SYNC_TIMEOUT_MS = 10_000 // sync does 2 FPL fetches + DB + Redis writes
+const ENTRY_SYNC_TIMEOUT_MS = 10_000
 
 export type EntrySyncResult =
-	| { ok: true }
+	| { ok: true; status: 'queued'; jobId: string }
+	| { ok: true; status: 'completed'; jobId: null }
 	| { ok: false; reason: string; retryable: boolean }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const getEntrySyncBaseUrl = (): string =>
 	(
@@ -44,7 +48,28 @@ export async function requestEntryInfoSync(
 			signal: controller.signal,
 			cache: 'no-store',
 		})
-		if (res.ok) return { ok: true }
+		if (res.ok) {
+			if (res.status !== 202) {
+				// Backward-compatible during rolling deploys against the former synchronous endpoint.
+				return { ok: true, status: 'completed', jobId: null }
+			}
+
+			const body: unknown = await res.json().catch(() => null)
+			if (
+				isRecord(body) &&
+				body.status === 'queued' &&
+				typeof body.jobId === 'string' &&
+				body.jobId.length > 0
+			) {
+				return { ok: true, status: 'queued', jobId: body.jobId }
+			}
+
+			return {
+				ok: false,
+				retryable: true,
+				reason: 'invalid queued response from entry sync service',
+			}
+		}
 		if (res.status === 401 || res.status === 403) {
 			return {
 				ok: false,
@@ -90,8 +115,10 @@ export async function syncEntryAfterBind(
 		result = await requestEntryInfoSync(entryId)
 		attempts += 1
 	}
-	if (result.ok) {
-		console.info(`[entry-sync] synced entry ${entryId} into entry_infos`)
+	if (result.ok && result.status === 'queued') {
+		console.info(`[entry-sync] queued entry ${entryId} as job ${result.jobId}`)
+	} else if (result.ok) {
+		console.info(`[entry-sync] synchronously completed entry ${entryId}`)
 	} else {
 		console.warn(
 			`[entry-sync] sync failed for entry ${entryId} after ${attempts} attempt(s): ${result.reason}`,
