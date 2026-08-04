@@ -36,6 +36,7 @@ export default function CreateTournamentClient() {
 						<h1 className="text-3xl font-bold">{t('title')}</h1>
 						<p className="mt-1 text-sm leading-6 text-muted-foreground">{t('subtitle')}</p>
 					</div>
+					<TournamentHelp className="ml-auto shrink-0" />
 				</header>
 
 				<FormProvider {...state.form}>
@@ -71,7 +72,6 @@ export default function CreateTournamentClient() {
 							</>
 						) : (
 							<>
-								<div className="mb-8"><TournamentHelp /></div>
 								<TournamentInformationCard isCheckingName={state.isCheckingName} isNameAvailable={state.isNameAvailable} nameCheckMessage={state.nameCheckMessage} />
 								<TournamentParticipantsCard
 									applyAutoMode={state.applyAutoMode}
