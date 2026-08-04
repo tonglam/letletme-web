@@ -18,7 +18,7 @@ const Detail = ({ label, value }: { label: string; value: string | number }) => 
 export function TournamentInformationCard({ tournament }: { tournament: EntryTournament }) {
 	const t = useTranslations('TournamentManage')
 	const format = useFormatter()
-	const groupStage = tournament.groupMode === 'NONE' ? t('noGroup') : tournament.groupMode === 'H2H' ? t('headToHeadGroups') : t('pointsRaceGroups')
+	const groupStage = tournament.groupMode === 'NONE' ? t('noGroup') : tournament.groupMode === 'BATTLE_RACES' ? t('headToHeadGroups') : t('pointsRaceGroups')
 	const knockoutStage = tournament.knockoutMode === 'NO_KNOCKOUT' ? t('noKnockout') : tournament.knockoutMode === 'DOUBLE_ELIMINATION' ? t('homeAwayKnockout') : t('singleKnockout')
 	const gameweekRange = (start: number | null, end: number | null) => start && end ? t('gameweekRange', { start, end }) : t('notScheduled')
 	const state = tournament.state === 'ACTIVE' ? t('active') : tournament.state === 'FINISHED' ? t('completed') : t('paused')

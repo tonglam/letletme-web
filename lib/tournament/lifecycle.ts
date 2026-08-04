@@ -90,6 +90,10 @@ export const shouldPollTournamentSetup = ({
 	online &&
 	(setupStatus === 'PENDING' || setupStatus === 'PROCESSING')
 
+export const isTournamentSetupInFlight = (
+	status: TournamentSetupStatus
+): boolean => status === 'PENDING' || status === 'PROCESSING'
+
 export const isTournamentRosterSyncInFlight = (
 	status: TournamentSetupStatus | null
 ): boolean => status === 'PENDING' || status === 'PROCESSING'

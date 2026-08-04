@@ -1,7 +1,10 @@
 'use client'
 
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
-import { isTournamentRosterSyncInFlight } from '@/lib/tournament/lifecycle'
+import {
+	isTournamentRosterSyncInFlight,
+	isTournamentSetupInFlight,
+} from '@/lib/tournament/lifecycle'
 import { useRouter } from '@/i18n/navigation'
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
@@ -21,8 +24,30 @@ type MutationState =
 export function useTournamentManagement(tournament: EntryTournament) {
 	const t = useTranslations('TournamentManage')
 	const router = useRouter()
-	const [currentTournament, setCurrentTournament] = useState(tournament)
-	const [currentName, setCurrentName] = useState(tournament.name)
+	const [tournamentState, setTournamentState] = useState(() => ({
+		serverTournament: tournament,
+		currentTournament: tournament,
+	}))
+	let currentTournament = tournamentState.currentTournament
+	if (tournamentState.serverTournament !== tournament) {
+		currentTournament = tournament
+		setTournamentState({
+			serverTournament: tournament,
+			currentTournament: tournament,
+		})
+	}
+	const updateCurrentTournament = (
+		update: (current: EntryTournament) => EntryTournament
+	) => {
+		setTournamentState(current => ({
+			serverTournament: tournament,
+			currentTournament: update(
+				current.serverTournament === tournament
+					? current.currentTournament
+					: tournament
+			),
+		}))
+	}
 	const [isSaving, setIsSaving] = useState(false)
 	const [isDeleting, setIsDeleting] = useState(false)
 	const [pendingAction, setPendingAction] = useState<TournamentManagementAction | null>(null)
@@ -33,20 +58,22 @@ export function useTournamentManagement(tournament: EntryTournament) {
 	const rosterSyncInFlight = isTournamentRosterSyncInFlight(
 		currentTournament.rosterSyncStatus
 	)
+	const setupInFlight = isTournamentSetupInFlight(currentTournament.setupStatus)
+	const lifecycleWorkInFlight = rosterSyncInFlight || setupInFlight
 
 	useEffect(() => {
-		if (!rosterSyncInFlight) return
+		if (!lifecycleWorkInFlight) return
 		const timer = window.setInterval(() => {
 			if (document.visibilityState === 'visible' && navigator.onLine) {
 				router.refresh()
 			}
 		}, 5_000)
 		return () => window.clearInterval(timer)
-	}, [rosterSyncInFlight, router])
+	}, [lifecycleWorkInFlight, router])
 
 	const renameTournament = async ({ name }: TournamentNameForm) => {
 		const normalizedName = name.trim()
-		if (normalizedName === currentName) {
+		if (normalizedName === currentTournament.name) {
 			setMutationState({ kind: 'success', message: t('nameCurrent') })
 			return true
 		}
@@ -61,8 +88,10 @@ export function useTournamentManagement(tournament: EntryTournament) {
 			})
 			if (!response.ok) throw new Error(t('nameUpdateFailed'))
 
-			setCurrentName(normalizedName)
-			setCurrentTournament(current => ({ ...current, name: normalizedName }))
+			updateCurrentTournament(current => ({
+				...current,
+				name: normalizedName,
+			}))
 			setMutationState({ kind: 'success', message: t('nameUpdated') })
 			router.refresh()
 			return true
@@ -91,7 +120,7 @@ export function useTournamentManagement(tournament: EntryTournament) {
 			})
 			if (!response.ok) throw new Error('action failed')
 
-			setCurrentTournament(current => {
+			updateCurrentTournament(current => {
 				if (action === 'pause') return { ...current, state: 'INACTIVE' }
 				if (action === 'resume') {
 					return { ...current, setupStatus: 'PENDING', setupPhase: 'QUEUED' }
@@ -145,7 +174,7 @@ export function useTournamentManagement(tournament: EntryTournament) {
 	}
 
 	return {
-		currentName,
+		currentName: currentTournament.name,
 		currentTournament,
 		deleteTournament,
 		isDeleting,
