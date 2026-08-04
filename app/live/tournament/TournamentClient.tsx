@@ -102,8 +102,9 @@ export default function TournamentClient({
 	const [tournaments, setTournaments] =
 		useState<Tournament[]>(initialTournaments)
 	const [loadError, setLoadError] = useState<string | null>(null)
-	const [resultsError, setResultsError] =
-		useState<string | null>(initialResultsError)
+	const [resultsError, setResultsError] = useState<string | null>(
+		initialResultsError
+	)
 	const [isLoadingTournaments, setIsLoadingTournaments] = useState<boolean>(
 		entryId > 0 && initialTournaments.length === 0
 	)
@@ -311,7 +312,11 @@ export default function TournamentClient({
 	}, [entryId, isPageActive, selectedTournament, standingsReady])
 
 	useEffect(() => {
-		if (!selectedTournament || !standingsReady || selectedGameweek === undefined) {
+		if (
+			!selectedTournament ||
+			!standingsReady ||
+			selectedGameweek === undefined
+		) {
 			resultsRequestIdRef.current += 1
 			const resetTimer = window.setTimeout(() => {
 				setIsLoadingResults(false)
@@ -380,7 +385,9 @@ export default function TournamentClient({
 					{ cache: 'no-store' }
 				)
 				if (requestId !== resultsRequestIdRef.current) return
-				if (!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)) {
+				if (
+					!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)
+				) {
 					acceptSnapshot(probe.liveSnapshot)
 					if (failedEntryCountRef.current === 0) setResultsError(null)
 					return
@@ -388,10 +395,7 @@ export default function TournamentClient({
 				await refreshTournamentResults()
 			} catch (probeError) {
 				if (requestId !== resultsRequestIdRef.current) return
-				console.error(
-					'Failed to check live tournament freshness:',
-					probeError
-				)
+				console.error('Failed to check live tournament freshness:', probeError)
 				setResultsError(t('standingsFailed'))
 			}
 		})()
@@ -539,7 +543,9 @@ export default function TournamentClient({
 						onGameweekChange={setSelectedGameweek}
 						currentGameweek={currentGameweek}
 						selectedGameweek={selectedGameweek}
-						disabled={isLoadingResults || Boolean(selectedTournament && !standingsReady)}
+						disabled={
+							isLoadingResults || Boolean(selectedTournament && !standingsReady)
+						}
 					/>
 					<div className="mt-2 flex justify-end">
 						<LiveAutoRefreshCountdown

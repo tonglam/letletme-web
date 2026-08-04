@@ -54,7 +54,8 @@ export const GET_ENTRY_TOURNAMENTS = `${TOURNAMENT_INFO_FIELDS}
 `
 
 export type EntryTournamentState = 'ACTIVE' | 'INACTIVE' | 'FINISHED'
-export type TournamentSetupStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED'
+export type TournamentSetupStatus =
+	'PENDING' | 'PROCESSING' | 'READY' | 'FAILED'
 export type TournamentSetupPhase =
 	| 'QUEUED'
 	| 'SYNCING_ENTRIES'

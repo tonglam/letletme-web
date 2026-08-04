@@ -258,7 +258,10 @@ export default function TournamentDetailClient({
 					)
 				}
 			} catch (refreshError) {
-				console.error('Failed to refresh live tournament standings:', refreshError)
+				console.error(
+					'Failed to refresh live tournament standings:',
+					refreshError
+				)
 				setError(t('standingsFailed'))
 			} finally {
 				setIsRefreshing(false)
@@ -266,7 +269,8 @@ export default function TournamentDetailClient({
 		})()
 		refreshInFlightRef.current = request
 		void request.finally(() => {
-			if (refreshInFlightRef.current === request) refreshInFlightRef.current = null
+			if (refreshInFlightRef.current === request)
+				refreshInFlightRef.current = null
 		})
 		return request
 	}, [acceptSnapshot, currentGameweek, currentTournament, standingsReady, t])
@@ -286,7 +290,9 @@ export default function TournamentDetailClient({
 					{ cache: 'no-store' }
 				)
 				if (generation !== refreshGenerationRef.current) return
-				if (!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)) {
+				if (
+					!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)
+				) {
 					acceptSnapshot(probe.liveSnapshot)
 					if (failedEntryCountRef.current === 0) setError(null)
 					return
@@ -305,12 +311,16 @@ export default function TournamentDetailClient({
 			}
 		})
 		return request
-	}, [acceptSnapshot, currentGameweek, currentTournament, refreshStandings, standingsReady, t])
+	}, [
+		acceptSnapshot,
+		currentGameweek,
+		currentTournament,
+		refreshStandings,
+		standingsReady,
+		t
+	])
 
-	const entries = useMemo(
-		() => buildTournamentEntries(rows),
-		[rows]
-	)
+	const entries = useMemo(() => buildTournamentEntries(rows), [rows])
 	const standingsStats = useMemo(() => buildTournamentStats(entries), [entries])
 	const insightsReady = currentTournament
 		? areTournamentInsightsReady(currentTournament)
@@ -784,8 +794,7 @@ export default function TournamentDetailClient({
 																	? t('gameweekRange', {
 																			start:
 																				currentTournament.knockoutStartedEventId,
-																			end:
-																				currentTournament.knockoutEndedEventId
+																			end: currentTournament.knockoutEndedEventId
 																		})
 																	: t('notScheduled')
 														})}

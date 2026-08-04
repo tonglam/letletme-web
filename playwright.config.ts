@@ -49,8 +49,10 @@ export default defineConfig({
 						...process.env,
 						NODE_ENV: 'production',
 						BETTER_AUTH_URL: baseURL,
-						BACKEND_PROXY_SECRET: 'playwright-backend-proxy-secret-at-least-32-bytes',
-						BETTER_AUTH_SECRET: 'playwright-better-auth-secret-at-least-32-bytes',
+						BACKEND_PROXY_SECRET:
+							'playwright-backend-proxy-secret-at-least-32-bytes',
+						BETTER_AUTH_SECRET:
+							'playwright-better-auth-secret-at-least-32-bytes',
 						GRAPHQL_ENDPOINT: `${graphqlFixtureURL}/graphql`,
 						GRAPHQL_SERVICE_TOKEN: graphqlServiceToken
 					},
