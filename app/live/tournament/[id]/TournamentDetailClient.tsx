@@ -160,7 +160,11 @@ export default function TournamentDetailClient({
 				)
 				if (!response.ok) throw new Error('status unavailable')
 				const status = normalizeTournamentSetupStatus(await response.json())
-				if (!status || status.tournamentId !== tournamentId || stopped) return
+				if (!status || status.tournamentId !== tournamentId) {
+					if (!stopped) timer = setTimeout(poll, 5_000)
+					return
+				}
+				if (stopped) return
 
 				const standingsJustPublished =
 					!previousStandingsReadyAt.current && Boolean(status.standingsReadyAt)

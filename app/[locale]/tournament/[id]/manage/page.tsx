@@ -75,7 +75,12 @@ export default async function Page({ params }: PageProps) {
 		return <NoManagementAccess id={id} />
 	}
 
-	return <ManageTournamentClient key={tournament.updatedAt} tournament={tournament} />
+	return (
+		<ManageTournamentClient
+			key={`${tournament.updatedAt}:${tournament.rosterSyncStatus ?? 'none'}`}
+			tournament={tournament}
+		/>
+	)
 }
 
 async function NoManagementAccess({ id }: { id: string }) {

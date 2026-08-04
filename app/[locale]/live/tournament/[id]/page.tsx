@@ -1,11 +1,13 @@
 import { getCurrentAndNextEvents } from '@/lib/events'
 import { executeServerQuery } from '@/lib/graphql-server'
 import {
-	GET_TOURNAMENT_SHELL,
 	GET_TOURNAMENT_LIVE_POINTS,
+	GET_TOURNAMENT_METADATA,
+	GET_TOURNAMENT_PARTICIPANTS,
 	type EntryTournament,
 	type TournamentParticipant,
-	type TournamentShellResponse,
+	type TournamentMetadataResponse,
+	type TournamentParticipantsResponse,
 	type TournamentLiveCalcData,
 	type TournamentLivePointsResponse
 } from '@/lib/graphql/operations/tournaments'
@@ -59,35 +61,44 @@ export default async function Page({ params, searchParams }: PageProps) {
 		initialError = t('invalidTournamentLink')
 	} else {
 		try {
-			const shell = await executeServerQuery<TournamentShellResponse>(
-				GET_TOURNAMENT_SHELL,
+			const metadata = await executeServerQuery<TournamentMetadataResponse>(
+				GET_TOURNAMENT_METADATA,
 				{ tournamentId, entryId },
 				{ cache: 'no-store' }
 			)
-			tournament = shell.tournament
-			participants = shell.tournamentParticipants
+			tournament = metadata.tournament
 
 			if (!tournament) {
 				initialError = t('tournamentNoAccess')
-			} else if (!tournament.standingsReadyAt) {
-				// The shell remains usable while setup publishes standings.
-			} else if (!currentEventId) {
-				initialError = t('currentGameweekUnavailable')
 			} else {
-				const standings =
-					await executeServerQuery<TournamentLivePointsResponse>(
-						GET_TOURNAMENT_LIVE_POINTS,
-						{ tournamentId, eventId: currentEventId },
+				const participantsRequest =
+					executeServerQuery<TournamentParticipantsResponse>(
+						GET_TOURNAMENT_PARTICIPANTS,
+						{ tournamentId },
 						{ cache: 'no-store' }
 					)
-				const seed = getTournamentLiveBatchSeed(standings)
-				initialRows = seed.rows
-				initialSnapshot = seed.snapshot
-				if (seed.failedCount > 0) {
-					initialError = liveT('partialResults', {
-						failed: seed.failedCount,
-						total: seed.totalEntries
-					})
+
+				if (tournament.standingsReadyAt && currentEventId) {
+					const [participantData, standings] = await Promise.all([
+						participantsRequest,
+						executeServerQuery<TournamentLivePointsResponse>(
+							GET_TOURNAMENT_LIVE_POINTS,
+							{ tournamentId, eventId: currentEventId },
+							{ cache: 'no-store' }
+						)
+					])
+					participants = participantData.tournamentParticipants
+					const seed = getTournamentLiveBatchSeed(standings)
+					initialRows = seed.rows
+					initialSnapshot = seed.snapshot
+					if (seed.failedCount > 0) {
+						initialError = liveT('partialResults', {
+							failed: seed.failedCount,
+							total: seed.totalEntries
+						})
+					}
+				} else {
+					participants = (await participantsRequest).tournamentParticipants
 				}
 			}
 		} catch (error) {

@@ -119,11 +119,8 @@ export interface TournamentParticipant {
 	playerName: string | null
 }
 
-export const GET_TOURNAMENT_SHELL = `${TOURNAMENT_INFO_FIELDS}
-  query GetTournamentShell($tournamentId: Int!, $entryId: Int!) {
-    tournament(tournamentId: $tournamentId, entryId: $entryId) {
-      ...TournamentInfoFields
-    }
+export const GET_TOURNAMENT_PARTICIPANTS = `
+  query GetTournamentParticipants($tournamentId: Int!) {
     tournamentParticipants(tournamentId: $tournamentId) {
       entryId
       entryName
@@ -132,8 +129,7 @@ export const GET_TOURNAMENT_SHELL = `${TOURNAMENT_INFO_FIELDS}
   }
 `
 
-export interface TournamentShellResponse {
-	tournament: EntryTournament | null
+export interface TournamentParticipantsResponse {
 	tournamentParticipants: TournamentParticipant[]
 }
 

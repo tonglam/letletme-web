@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
 	getTournamentLifecycleBadge,
+	isTournamentRosterSyncInFlight,
 	normalizeTournamentSetupStatus,
 	shouldPollTournamentSetup
 } from '@/lib/tournament/lifecycle'
@@ -87,6 +88,14 @@ describe('tournament lifecycle presentation', () => {
 			}),
 			false
 		)
+	})
+
+	it('treats queued and processing roster synchronization as in flight', () => {
+		assert.equal(isTournamentRosterSyncInFlight('PENDING'), true)
+		assert.equal(isTournamentRosterSyncInFlight('PROCESSING'), true)
+		assert.equal(isTournamentRosterSyncInFlight('READY'), false)
+		assert.equal(isTournamentRosterSyncInFlight('FAILED'), false)
+		assert.equal(isTournamentRosterSyncInFlight(null), false)
 	})
 
 	it('normalizes the safe lowercase service response without accepting invalid counters', () => {

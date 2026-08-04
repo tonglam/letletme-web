@@ -1,8 +1,9 @@
 'use client'
 
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
+import { isTournamentRosterSyncInFlight } from '@/lib/tournament/lifecycle'
 import { useRouter } from '@/i18n/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import type { TournamentNameForm } from '../_lib/tournament-management'
 
@@ -29,6 +30,19 @@ export function useTournamentManagement(tournament: EntryTournament) {
 		kind: 'idle',
 		message: null,
 	})
+	const rosterSyncInFlight = isTournamentRosterSyncInFlight(
+		currentTournament.rosterSyncStatus
+	)
+
+	useEffect(() => {
+		if (!rosterSyncInFlight) return
+		const timer = window.setInterval(() => {
+			if (document.visibilityState === 'visible' && navigator.onLine) {
+				router.refresh()
+			}
+		}, 5_000)
+		return () => window.clearInterval(timer)
+	}, [rosterSyncInFlight, router])
 
 	const renameTournament = async ({ name }: TournamentNameForm) => {
 		const normalizedName = name.trim()
@@ -61,7 +75,12 @@ export function useTournamentManagement(tournament: EntryTournament) {
 	}
 
 	const runAction = async (action: TournamentManagementAction) => {
-		if (pendingAction) return false
+		if (
+			pendingAction ||
+			(action === 'retry_roster' && rosterSyncInFlight)
+		) {
+			return false
+		}
 		setPendingAction(action)
 		setMutationState({ kind: 'idle', message: null })
 		try {
