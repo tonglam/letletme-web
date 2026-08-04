@@ -17,6 +17,7 @@ import {
 	type TournamentFormData,
 } from '../_lib/tournament-form'
 import { useTranslations } from 'next-intl'
+import { useRouter } from '@/i18n/navigation'
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
 	try {
@@ -31,6 +32,7 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 
 export function useCreateTournament() {
 	const t = useTranslations('TournamentCreate')
+	const router = useRouter()
 	const schema = useMemo(() => createTournamentFormSchema({
 		nameTooShort: t('errors.nameTooShort'),
 		nameTooLong: t('errors.nameTooLong'),
@@ -367,7 +369,10 @@ export function useCreateTournament() {
 			const tournament = result.tournament && typeof result.tournament === 'object'
 				? result.tournament as Record<string, unknown>
 				: {}
-			const tournamentId = typeof tournament.id === 'number' ? tournament.id : null
+			const tournamentId = typeof tournament.id === 'number' && Number.isSafeInteger(tournament.id)
+				? tournament.id
+				: null
+			if (!tournamentId) throw new Error(t('createFailed'))
 			const participantCount = typeof tournament.participantCount === 'number' ? tournament.participantCount : participantIds.length
 			const setupStatus = result.setupStatus
 			setCreatedTournamentId(tournamentId)
@@ -380,6 +385,7 @@ export function useCreateTournament() {
 						? t('createdReady', { count: participantCount })
 						: t('createdProcessing', { count: participantCount }),
 			)
+			router.push(`/tournament/${tournamentId}?created=1`)
 		} catch {
 			setSubmitError(t('createFailed'))
 		} finally {

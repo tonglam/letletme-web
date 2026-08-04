@@ -12,6 +12,11 @@ import {
 	type TournamentEventResultItem,
 	type TournamentEventResultsResponse,
 } from '@/lib/graphql/operations/tournaments'
+import { usePageActive } from '@/hooks/use-page-active'
+import {
+	areTournamentInsightsReady,
+	isTournamentSetupInFlight,
+} from '@/lib/tournament/lifecycle'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { fetchPlayerMetaByIds } from '../_lib/tournament-stats-data'
@@ -19,6 +24,7 @@ import {
 	buildTournamentStats,
 	type PlayerMeta,
 	type TournamentStatsViewModel,
+	resolveTournamentStatsLoadState,
 } from '../_lib/tournament-stats-model'
 
 export interface TournamentStatsClientProps {
@@ -51,10 +57,13 @@ export function useTournamentStats({
 	initialError,
 }: TournamentStatsClientProps) {
 	const t = useTranslations('TournamentStats')
+	const pageActive = usePageActive()
 	const initialSelectedTournament =
 		initialTournaments.find((item) => String(item.id) === initialSelectedTournamentId) ?? null
 	const initialStats =
-		initialSelectedTournament && initialDataGameweek !== null
+		initialSelectedTournament &&
+		areTournamentInsightsReady(initialSelectedTournament) &&
+		initialDataGameweek !== null
 			? buildTournamentStats(
 					initialSelectedTournament,
 					initialDataGameweek,
@@ -77,7 +86,12 @@ export function useTournamentStats({
 	const eventResultsCacheRef = useRef<Map<string, TournamentEventResultItem[]>>(
 		(() => {
 			const cache = new Map<string, TournamentEventResultItem[]>()
-			if (initialSelectedTournamentId && initialDataGameweek !== null) {
+			if (
+				initialSelectedTournamentId &&
+				initialSelectedTournament &&
+				areTournamentInsightsReady(initialSelectedTournament) &&
+				initialDataGameweek !== null
+			) {
 				cache.set(`${initialSelectedTournamentId}:${initialDataGameweek}`, initialCurrentRows)
 			}
 			return cache
@@ -90,6 +104,14 @@ export function useTournamentStats({
 		() => tournaments.find((item) => String(item.id) === selectedTournamentId) ?? null,
 		[selectedTournamentId, tournaments],
 	)
+	const insightsReady = selectedTournament
+		? areTournamentInsightsReady(selectedTournament)
+		: false
+	const statsLoadState = resolveTournamentStatsLoadState({
+		isBootstrapping,
+		hasSelectedTournament: Boolean(selectedTournament),
+		insightsReady,
+	})
 	const filteredStandings = useMemo(() => {
 		if (!tournamentStats) return []
 		const query = standingsSearch.trim().toLowerCase()
@@ -136,10 +158,53 @@ export function useTournamentStats({
 		return () => {
 			cancelled = true
 		}
-	}, [entryId, initialTournaments.length, t])
+		}, [entryId, initialTournaments.length, t])
 
 	useEffect(() => {
-		if (isBootstrapping || !selectedTournament) return
+		if (
+			!pageActive ||
+			!selectedTournament ||
+			insightsReady ||
+			!isTournamentSetupInFlight(selectedTournament.setupStatus)
+		) {
+			return
+		}
+
+		let cancelled = false
+		let timer: number | undefined
+		const poll = async () => {
+			try {
+				const data = await executeQuery<EntryTournamentsResponse>(GET_ENTRY_TOURNAMENTS, {
+					entryId,
+				})
+				if (!cancelled) setTournaments(data.entryTournaments)
+			} catch (pollError) {
+				console.warn('Tournament setup status unavailable:', pollError)
+			} finally {
+				if (!cancelled) timer = window.setTimeout(poll, 5_000)
+			}
+		}
+
+		timer = window.setTimeout(poll, 5_000)
+		return () => {
+			cancelled = true
+			if (timer !== undefined) window.clearTimeout(timer)
+		}
+	}, [entryId, insightsReady, pageActive, selectedTournament])
+
+	useEffect(() => {
+		if (statsLoadState === 'waiting') return
+		if (statsLoadState === 'reset') {
+			const resetTimer = window.setTimeout(() => {
+				setIsLoading(false)
+				setDataGameweek(null)
+				setTournamentStats(null)
+				setRankingSummary(null)
+				setError(null)
+			}, 0)
+			return () => window.clearTimeout(resetTimer)
+		}
+		if (!selectedTournament) return
 		let cancelled = false
 		const tournament = selectedTournament
 
@@ -250,12 +315,13 @@ export function useTournamentStats({
 		return () => {
 			cancelled = true
 		}
-	}, [entryId, initialCurrentGameweek, isBootstrapping, selectedTournament, t])
+	}, [entryId, initialCurrentGameweek, selectedTournament, statsLoadState, t])
 
 	return {
 		dataGameweek,
 		error,
 		filteredStandings,
+		insightsReady,
 		isBootstrapping,
 		isLoading,
 		rankingSummary,

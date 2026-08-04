@@ -6,6 +6,10 @@ import {
 	GET_LIVE_MATCHES
 } from '../lib/graphql/operations/live'
 import { GET_MARKET_PULSE } from '../lib/graphql/operations/market'
+import {
+	GET_TOURNAMENT_METADATA,
+	GET_TOURNAMENT_PARTICIPANTS
+} from '../lib/graphql/operations/tournaments'
 
 describe('GraphQL request budget', () => {
 	it('uses one root field for the fifteen-player live explanation batch', () => {
@@ -37,5 +41,13 @@ describe('GraphQL request budget', () => {
 		visit(document, { enter: () => void (astNodes += 1) })
 
 		assert.ok(astNodes < 200, `GET_MARKET_PULSE has ${astNodes} AST nodes`)
+	})
+
+	it('keeps tournament authorization and participant details in separate operations', () => {
+		assert.doesNotMatch(GET_TOURNAMENT_METADATA, /tournamentParticipants/)
+		assert.doesNotMatch(
+			GET_TOURNAMENT_PARTICIPANTS,
+			/\btournament\s*\(/
+		)
 	})
 })

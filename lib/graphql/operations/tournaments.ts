@@ -1,40 +1,71 @@
 import type { LiveSnapshotStatus } from './live'
 
-export const GET_ENTRY_TOURNAMENTS = `
+export const TOURNAMENT_INFO_FIELDS = `
+  fragment TournamentInfoFields on TournamentInfo {
+    id
+    name
+    creator
+    adminEntryId
+    leagueId
+    leagueType
+    sourceLeagueName
+    totalTeamNum
+    tournamentMode
+    groupMode
+    groupTeamNum
+    groupNum
+    groupStartedEventId
+    groupEndedEventId
+    groupAutoAverages
+    groupRounds
+    groupPlayAgainstNum
+    groupQualifyNum
+    knockoutMode
+    knockoutTeamNum
+    knockoutRounds
+    knockoutEventNum
+    knockoutStartedEventId
+    knockoutEndedEventId
+    knockoutPlayAgainstNum
+    state
+    rosterMode
+    rosterSyncStatus
+    rosterLastSyncedAt
+    setupStatus
+    setupPhase
+    setupCompletedUnits
+    setupTotalUnits
+    setupProgressUpdatedAt
+    standingsReadyAt
+    setupHasWarnings
+    setupStartedAt
+    setupFinishedAt
+    createdAt
+    updatedAt
+  }
+`
+
+export const GET_ENTRY_TOURNAMENTS = `${TOURNAMENT_INFO_FIELDS}
   query GetEntryTournaments($entryId: Int!) {
     entryTournaments(entryId: $entryId) {
-      id
-      name
-      creator
-      adminEntryId
-      leagueId
-      leagueType
-      totalTeamNum
-      tournamentMode
-      groupMode
-      groupTeamNum
-      groupNum
-      groupStartedEventId
-      groupEndedEventId
-      groupAutoAverages
-      groupRounds
-      groupPlayAgainstNum
-      groupQualifyNum
-      knockoutMode
-      knockoutTeamNum
-      knockoutRounds
-      knockoutEventNum
-      knockoutStartedEventId
-      knockoutEndedEventId
-      knockoutPlayAgainstNum
-      state
-      createdAt
-      updatedAt
+      ...TournamentInfoFields
     }
   }
 `
 
-export type EntryTournamentState = 'ACTIVE' | 'COMPLETED' | 'PENDING'
+export type EntryTournamentState = 'ACTIVE' | 'INACTIVE' | 'FINISHED'
+export type TournamentSetupStatus =
+	'PENDING' | 'PROCESSING' | 'READY' | 'FAILED'
+export type TournamentSetupPhase =
+	| 'QUEUED'
+	| 'SYNCING_ENTRIES'
+	| 'BUILDING_STRUCTURE'
+	| 'CALCULATING_STANDINGS'
+	| 'ENRICHING_HISTORY'
+	| 'FINALIZING'
+	| 'READY'
+	| 'FAILED'
+export type TournamentRosterMode = 'SNAPSHOT' | 'OFFICIAL_SYNC'
 
 export interface EntryTournament {
 	id: number
@@ -43,6 +74,7 @@ export interface EntryTournament {
 	adminEntryId: number
 	leagueId: number
 	leagueType: string
+	sourceLeagueName: string | null
 	totalTeamNum: number
 	tournamentMode: string
 	groupMode: string
@@ -61,7 +93,19 @@ export interface EntryTournament {
 	knockoutStartedEventId: number | null
 	knockoutEndedEventId: number | null
 	knockoutPlayAgainstNum: number | null
-	state: EntryTournamentState | string
+	state: EntryTournamentState
+	rosterMode: TournamentRosterMode
+	rosterSyncStatus: TournamentSetupStatus | null
+	rosterLastSyncedAt: string | null
+	setupStatus: TournamentSetupStatus
+	setupPhase: TournamentSetupPhase
+	setupCompletedUnits: number
+	setupTotalUnits: number
+	setupProgressUpdatedAt: string | null
+	standingsReadyAt: string | null
+	setupHasWarnings: boolean
+	setupStartedAt: string | null
+	setupFinishedAt: string | null
 	createdAt: string
 	updatedAt: string
 }
@@ -70,37 +114,55 @@ export interface EntryTournamentsResponse {
 	entryTournaments: EntryTournament[]
 }
 
-export const GET_TOURNAMENT_EVENT_RESULTS = `
+export interface TournamentParticipant {
+	entryId: number
+	entryName: string | null
+	playerName: string | null
+}
+
+export const GET_TOURNAMENT_PARTICIPANTS = `
+  query GetTournamentParticipants($tournamentId: Int!) {
+    tournamentParticipants(tournamentId: $tournamentId) {
+      entryId
+      entryName
+      playerName
+    }
+  }
+`
+
+export interface TournamentParticipantsResponse {
+	tournamentParticipants: TournamentParticipant[]
+}
+
+export const GET_TOURNAMENT_METADATA = `${TOURNAMENT_INFO_FIELDS}
+  query GetTournamentMetadata($tournamentId: Int!, $entryId: Int!) {
+    tournament(tournamentId: $tournamentId, entryId: $entryId) {
+      ...TournamentInfoFields
+    }
+  }
+`
+
+export interface TournamentMetadataResponse {
+	tournament: EntryTournament | null
+}
+
+export const GET_MANAGED_TOURNAMENT = `${TOURNAMENT_INFO_FIELDS}
+  query GetManagedTournament($tournamentId: Int!, $entryId: Int!) {
+    managedTournament(tournamentId: $tournamentId, entryId: $entryId) {
+      ...TournamentInfoFields
+    }
+  }
+`
+
+export interface ManagedTournamentResponse {
+	managedTournament: EntryTournament | null
+}
+
+export const GET_TOURNAMENT_EVENT_RESULTS = `${TOURNAMENT_INFO_FIELDS}
   query GetTournamentEventResults($tournamentId: Int!, $eventId: Int!) {
     tournamentEventResults(tournamentId: $tournamentId, eventId: $eventId) {
       tournament {
-        id
-        name
-        creator
-        adminEntryId
-        leagueId
-        leagueType
-        totalTeamNum
-        tournamentMode
-        groupMode
-        groupTeamNum
-        groupNum
-        groupStartedEventId
-        groupEndedEventId
-        groupAutoAverages
-        groupRounds
-        groupPlayAgainstNum
-        groupQualifyNum
-        knockoutMode
-        knockoutTeamNum
-        knockoutRounds
-        knockoutEventNum
-        knockoutStartedEventId
-        knockoutEndedEventId
-        knockoutPlayAgainstNum
-        state
-        createdAt
-        updatedAt
+        ...TournamentInfoFields
       }
       event {
         id

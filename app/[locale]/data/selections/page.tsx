@@ -9,6 +9,7 @@ import {
 } from '@/lib/graphql/operations/tournaments'
 import { getCurrentEntryId } from '@/lib/session'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
+import { areTournamentInsightsReady } from '@/lib/tournament/lifecycle'
 import { CalendarX2 } from 'lucide-react'
 import SelectionsClient from '@/app/data/selections/SelectionsClient'
 import { PageState } from '@/components/feedback/PageState'
@@ -72,8 +73,13 @@ export default async function SelectionsPage({ params }: PageProps) {
 				mapEntryTournamentToLiveTournament,
 			)
 
-			const firstTournamentId = Number(initialTournaments[0]?.id)
-			if (firstTournamentId > 0) {
+			const firstTournament = initialTournaments[0]
+			const firstTournamentId = Number(firstTournament?.id)
+			if (
+				firstTournamentId > 0 &&
+				firstTournament &&
+				areTournamentInsightsReady(firstTournament)
+			) {
 				const statsData = await executeServerQuery<TournamentSelectionStatsResponse>(
 					GET_TOURNAMENT_SELECTION_STATS,
 					{ tournamentId: firstTournamentId, eventId: currentGameweek, limit: 10 },
@@ -94,6 +100,7 @@ export default async function SelectionsPage({ params }: PageProps) {
 
 	return (
 		<SelectionsClient
+			entryId={entryId ?? 0}
 			initialTournaments={initialTournaments}
 			initialSelectedTournamentId={initialTournaments[0]?.id ?? ''}
 			initialStats={initialStats}

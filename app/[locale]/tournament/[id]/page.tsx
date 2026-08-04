@@ -9,7 +9,9 @@ type PageProps = {
 	searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
-export default async function Page({ params }: PageProps) {
+export default async function Page({ params, searchParams }: PageProps) {
 	const { id, locale } = await getPageLocale(params)
-	redirect(localizeHref(`/live/tournament/${id}`, locale))
+	const query = await searchParams
+	const created = query.created === '1' ? '?created=1' : ''
+	redirect(localizeHref(`/live/tournament/${id}${created}`, locale))
 }

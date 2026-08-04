@@ -1,10 +1,13 @@
 import { getCurrentAndNextEvents } from '@/lib/events'
 import { executeServerQuery } from '@/lib/graphql-server'
 import {
-	GET_ENTRY_TOURNAMENTS,
 	GET_TOURNAMENT_LIVE_POINTS,
+	GET_TOURNAMENT_METADATA,
+	GET_TOURNAMENT_PARTICIPANTS,
 	type EntryTournament,
-	type EntryTournamentsResponse,
+	type TournamentParticipant,
+	type TournamentMetadataResponse,
+	type TournamentParticipantsResponse,
 	type TournamentLiveCalcData,
 	type TournamentLivePointsResponse
 } from '@/lib/graphql/operations/tournaments'
@@ -32,7 +35,7 @@ type PageProps = {
 	searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
-export default async function Page({ params }: PageProps) {
+export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await getPageLocale(params)
 	const [t, liveT] = await Promise.all([
 		getTranslations('States'),
@@ -46,8 +49,11 @@ export default async function Page({ params }: PageProps) {
 	const currentEventId = events?.current[0]?.id
 	let tournament: EntryTournament | null = null
 	let initialRows: TournamentLiveCalcData[] = []
+	let participants: TournamentParticipant[] = []
 	let initialError: string | null = null
 	let initialSnapshot: LiveSnapshotStatus | null = null
+	const query = await searchParams
+	const justCreated = query.created === '1'
 
 	if (!entryId) {
 		initialError = t('bindEntryRequired')
@@ -55,36 +61,52 @@ export default async function Page({ params }: PageProps) {
 		initialError = t('invalidTournamentLink')
 	} else {
 		try {
-			const tournamentsData =
-				await executeServerQuery<EntryTournamentsResponse>(
-					GET_ENTRY_TOURNAMENTS,
-					{ entryId },
-					{ cache: 'no-store' }
-				)
-			tournament =
-				tournamentsData.entryTournaments.find(
-					item => item.id === tournamentId
-				) ?? null
+			const metadata = await executeServerQuery<TournamentMetadataResponse>(
+				GET_TOURNAMENT_METADATA,
+				{ tournamentId, entryId },
+				{ cache: 'no-store' }
+			)
+			tournament = metadata.tournament
 
 			if (!tournament) {
 				initialError = t('tournamentNoAccess')
-			} else if (!currentEventId) {
-				initialError = t('currentGameweekUnavailable')
 			} else {
-				const standings =
-					await executeServerQuery<TournamentLivePointsResponse>(
-						GET_TOURNAMENT_LIVE_POINTS,
-						{ tournamentId, eventId: currentEventId },
+				const participantsRequest =
+					executeServerQuery<TournamentParticipantsResponse>(
+						GET_TOURNAMENT_PARTICIPANTS,
+						{ tournamentId },
 						{ cache: 'no-store' }
 					)
-				const seed = getTournamentLiveBatchSeed(standings)
-				initialRows = seed.rows
-				initialSnapshot = seed.snapshot
-				if (seed.failedCount > 0) {
-					initialError = liveT('partialResults', {
-						failed: seed.failedCount,
-						total: seed.totalEntries
-					})
+						.then(data => data.tournamentParticipants)
+						.catch(error => {
+							console.warn(
+								'[tournament detail] Participant roster unavailable:',
+								error
+							)
+							return []
+						})
+
+				if (tournament.standingsReadyAt && currentEventId) {
+					const [loadedParticipants, standings] = await Promise.all([
+						participantsRequest,
+						executeServerQuery<TournamentLivePointsResponse>(
+							GET_TOURNAMENT_LIVE_POINTS,
+							{ tournamentId, eventId: currentEventId },
+							{ cache: 'no-store' }
+						)
+					])
+					participants = loadedParticipants
+					const seed = getTournamentLiveBatchSeed(standings)
+					initialRows = seed.rows
+					initialSnapshot = seed.snapshot
+					if (seed.failedCount > 0) {
+						initialError = liveT('partialResults', {
+							failed: seed.failedCount,
+							total: seed.totalEntries
+						})
+					}
+				} else {
+					participants = await participantsRequest
 				}
 			}
 		} catch (error) {
@@ -95,6 +117,7 @@ export default async function Page({ params }: PageProps) {
 
 	return (
 		<TournamentDetailClient
+			key={`${tournament?.updatedAt ?? 'missing'}:${tournament?.setupProgressUpdatedAt ?? ''}`}
 			canManage={Boolean(
 				tournament && entryId && tournament.adminEntryId === entryId
 			)}
@@ -103,6 +126,8 @@ export default async function Page({ params }: PageProps) {
 			initialRows={initialRows}
 			initialError={initialError}
 			initialSnapshot={initialSnapshot}
+			initialParticipants={participants}
+			justCreated={justCreated}
 		/>
 	)
 }

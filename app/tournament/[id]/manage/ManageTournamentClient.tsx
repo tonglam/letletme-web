@@ -9,6 +9,7 @@ import { Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { TournamentDangerZone } from './_components/TournamentDangerZone'
 import { TournamentInformationCard } from './_components/TournamentInformationCard'
+import { TournamentOperationsCard } from './_components/TournamentOperationsCard'
 import { TournamentSettingsCard } from './_components/TournamentSettingsCard'
 import { useTournamentManagement } from './_hooks/useTournamentManagement'
 
@@ -48,7 +49,12 @@ export default function ManageTournamentClient({ tournament }: { tournament: Ent
 					mutationState={management.mutationState}
 					onSubmit={management.renameTournament}
 				/>
-				<TournamentInformationCard tournament={tournament} />
+				<TournamentOperationsCard
+					tournament={management.currentTournament}
+					pendingAction={management.pendingAction}
+					onAction={management.runAction}
+				/>
+				<TournamentInformationCard tournament={management.currentTournament} />
 				<TournamentDangerZone
 					isDeleting={management.isDeleting}
 					onDelete={management.deleteTournament}

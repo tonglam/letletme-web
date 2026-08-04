@@ -195,7 +195,9 @@ const server = createServer((request, response) => {
 			json(response, 200, {
 				data: {
 					eventLiveExplains: elementIds.map(elementId => {
-						const pick = livePicks.find(candidate => candidate.element === elementId)
+						const pick = livePicks.find(
+							candidate => candidate.element === elementId
+						)
 						return {
 							elementId,
 							stats: {
@@ -214,19 +216,19 @@ const server = createServer((request, response) => {
 								bonus: pick?.bonus ?? 0
 							},
 							contributions: [
-							{ identifier: 'minutes', value: 45, points: 1 },
-							...(elementId === 1
-								? [{ identifier: 'goals_scored', value: 1, points: 6 }]
-								: []),
-							...(elementId === 1
-								? [
-										{
-											identifier: 'goals_conceded',
-											value: 2,
-											points: -1
-										}
-									]
-								: [])
+								{ identifier: 'minutes', value: 45, points: 1 },
+								...(elementId === 1
+									? [{ identifier: 'goals_scored', value: 1, points: 6 }]
+									: []),
+								...(elementId === 1
+									? [
+											{
+												identifier: 'goals_conceded',
+												value: 2,
+												points: -1
+											}
+										]
+									: [])
 							]
 						}
 					})
@@ -264,6 +266,14 @@ const server = createServer((request, response) => {
 						newPlayers: [],
 						priceChanges: []
 					}
+				}
+			})
+			return
+		}
+		if (query.includes('GetEventOverallResult')) {
+			json(response, 200, {
+				data: {
+					eventOverallResult: []
 				}
 			})
 			return

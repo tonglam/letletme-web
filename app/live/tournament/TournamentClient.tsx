@@ -35,6 +35,10 @@ import {
 	type LiveTournamentStats
 } from '@/lib/tournament/liveEntries'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
+import {
+	areTournamentStandingsReady,
+	isTournamentSetupInFlight
+} from '@/lib/tournament/lifecycle'
 import { Tournament } from '@/types/tournament'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useSearchParams } from 'next/navigation'
@@ -87,6 +91,7 @@ export default function TournamentClient({
 	initialSnapshot
 }: TournamentClientProps) {
 	const t = useTranslations('LiveTournament')
+	const lifecycleT = useTranslations('TournamentLifecycle')
 	const isPageActive = usePageActive()
 	const router = useRouter()
 	const searchParams = useSearchParams()
@@ -97,8 +102,9 @@ export default function TournamentClient({
 	const [tournaments, setTournaments] =
 		useState<Tournament[]>(initialTournaments)
 	const [loadError, setLoadError] = useState<string | null>(null)
-	const [resultsError, setResultsError] =
-		useState<string | null>(initialResultsError)
+	const [resultsError, setResultsError] = useState<string | null>(
+		initialResultsError
+	)
 	const [isLoadingTournaments, setIsLoadingTournaments] = useState<boolean>(
 		entryId > 0 && initialTournaments.length === 0
 	)
@@ -150,6 +156,9 @@ export default function TournamentClient({
 		)
 		return currentTournament ?? tournaments[0] ?? null
 	}, [initialSelectedTournamentId, tournamentIdFromUrl, tournaments])
+	const standingsReady = selectedTournament
+		? areTournamentStandingsReady(selectedTournament)
+		: false
 
 	const loadTournamentResults = useCallback(
 		(
@@ -265,9 +274,53 @@ export default function TournamentClient({
 	}, [entryId, initialTournaments.length, t])
 
 	useEffect(() => {
-		if (!selectedTournament || selectedGameweek === undefined) {
+		if (
+			!isPageActive ||
+			!selectedTournament ||
+			standingsReady ||
+			!isTournamentSetupInFlight(selectedTournament.setupStatus)
+		) {
+			return
+		}
+
+		let cancelled = false
+		let timer: number | undefined
+		const poll = async () => {
+			try {
+				const data = await executeQuery<EntryTournamentsResponse>(
+					GET_ENTRY_TOURNAMENTS,
+					{ entryId },
+					{ cache: 'no-store' }
+				)
+				if (!cancelled) {
+					setTournaments(
+						data.entryTournaments.map(mapEntryTournamentToLiveTournament)
+					)
+				}
+			} catch (pollError) {
+				console.warn('Tournament setup status unavailable:', pollError)
+			} finally {
+				if (!cancelled) timer = window.setTimeout(poll, 5_000)
+			}
+		}
+
+		timer = window.setTimeout(poll, 5_000)
+		return () => {
+			cancelled = true
+			if (timer !== undefined) window.clearTimeout(timer)
+		}
+	}, [entryId, isPageActive, selectedTournament, standingsReady])
+
+	useEffect(() => {
+		if (
+			!selectedTournament ||
+			!standingsReady ||
+			selectedGameweek === undefined
+		) {
 			resultsRequestIdRef.current += 1
 			const resetTimer = window.setTimeout(() => {
+				setIsLoadingResults(false)
+				setResultsError(null)
 				setSelectedRows([])
 			}, 0)
 			return () => window.clearTimeout(resetTimer)
@@ -290,7 +343,8 @@ export default function TournamentClient({
 		acceptSnapshot,
 		loadTournamentResults,
 		selectedGameweek,
-		selectedTournament
+		selectedTournament,
+		standingsReady
 	])
 
 	useEffect(() => {
@@ -302,12 +356,14 @@ export default function TournamentClient({
 	}, [selectedGameweek, selectedTournament?.id])
 
 	const displayGameweek = selectedGameweek
-	const autoRefreshEnabled = shouldPollLiveSnapshot({
-		isPageActive,
-		currentEventId: currentGameweek,
-		selectedEventId: selectedGameweek,
-		snapshot
-	})
+	const autoRefreshEnabled =
+		standingsReady &&
+		shouldPollLiveSnapshot({
+			isPageActive,
+			currentEventId: currentGameweek,
+			selectedEventId: selectedGameweek,
+			snapshot
+		})
 	const refreshTournamentResults = useCallback(async () => {
 		if (!selectedTournament) return
 		await loadTournamentResults(
@@ -319,7 +375,7 @@ export default function TournamentClient({
 		)
 	}, [loadTournamentResults, selectedGameweek, selectedTournament])
 	const autoRefreshTournamentResults = useCallback((): Promise<void> => {
-		if (!selectedTournament) return Promise.resolve()
+		if (!selectedTournament || !standingsReady) return Promise.resolve()
 		if (freshnessRequestRef.current) return freshnessRequestRef.current
 
 		const requestId = resultsRequestIdRef.current
@@ -331,7 +387,9 @@ export default function TournamentClient({
 					{ cache: 'no-store' }
 				)
 				if (requestId !== resultsRequestIdRef.current) return
-				if (!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)) {
+				if (
+					!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)
+				) {
 					acceptSnapshot(probe.liveSnapshot)
 					if (failedEntryCountRef.current === 0) setResultsError(null)
 					return
@@ -339,10 +397,7 @@ export default function TournamentClient({
 				await refreshTournamentResults()
 			} catch (probeError) {
 				if (requestId !== resultsRequestIdRef.current) return
-				console.error(
-					'Failed to check live tournament freshness:',
-					probeError
-				)
+				console.error('Failed to check live tournament freshness:', probeError)
 				setResultsError(t('standingsFailed'))
 			}
 		})()
@@ -358,6 +413,7 @@ export default function TournamentClient({
 		refreshTournamentResults,
 		selectedGameweek,
 		selectedTournament,
+		standingsReady,
 		t
 	])
 	const captainOptions = useMemo(
@@ -490,7 +546,9 @@ export default function TournamentClient({
 						onGameweekChange={setSelectedGameweek}
 						currentGameweek={currentGameweek}
 						selectedGameweek={selectedGameweek}
-						disabled={isLoadingResults}
+						disabled={
+							isLoadingResults || Boolean(selectedTournament && !standingsReady)
+						}
 					/>
 					<div className="mt-2 flex justify-end">
 						<LiveAutoRefreshCountdown
@@ -513,7 +571,22 @@ export default function TournamentClient({
 					</Card>
 				)}
 
-				{selectedTournament && (
+				{selectedTournament && !standingsReady && (
+					<Card className="p-8 text-center">
+						<p className="font-semibold">
+							{selectedTournament.setupStatus === 'FAILED'
+								? lifecycleT('memberFailure')
+								: lifecycleT('standingsPreparing')}
+						</p>
+						<p className="mt-1 text-sm text-muted-foreground">
+							{selectedTournament.setupStatus === 'FAILED'
+								? lifecycleT('insightsLoading')
+								: lifecycleT('standingsPreparingDescription')}
+						</p>
+					</Card>
+				)}
+
+				{selectedTournament && standingsReady && (
 					<>
 						<TournamentHeader
 							name={selectedTournament.name}

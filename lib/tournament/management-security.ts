@@ -43,3 +43,38 @@ export const buildAuthoritativeTournamentRename = (body: unknown, entryId: numbe
 export const buildAuthoritativeTournamentDelete = (entryId: number) => ({
 	adminEntryId: getVerifiedEntryId(entryId),
 })
+
+export type TournamentManagementAction =
+	| 'retry_setup'
+	| 'retry_roster'
+	| 'pause'
+	| 'resume'
+	| 'enable_official_sync'
+
+const tournamentManagementActions = new Set<TournamentManagementAction>([
+	'retry_setup',
+	'retry_roster',
+	'pause',
+	'resume',
+	'enable_official_sync',
+])
+
+export const buildAuthoritativeTournamentAction = (body: unknown, entryId: number) => {
+	if (!body || typeof body !== 'object' || Array.isArray(body)) {
+		throw new InvalidTournamentManagementPayloadError('Request body must be an object')
+	}
+	const keys = Object.keys(body)
+	const action = (body as { action?: unknown }).action
+	if (
+		keys.length !== 1 ||
+		typeof action !== 'string' ||
+		!tournamentManagementActions.has(action as TournamentManagementAction)
+	) {
+		throw new InvalidTournamentManagementPayloadError('Unsupported tournament management action')
+	}
+
+	return {
+		action: action as TournamentManagementAction,
+		adminEntryId: getVerifiedEntryId(entryId),
+	}
+}

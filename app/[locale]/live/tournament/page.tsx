@@ -13,6 +13,7 @@ import {
 import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 import { getTournamentLiveBatchSeed } from '@/lib/tournament/liveEntries'
+import { areTournamentStandingsReady } from '@/lib/tournament/lifecycle'
 import { CalendarX2 } from 'lucide-react'
 import { Suspense } from 'react'
 import TournamentClient from '@/app/live/tournament/TournamentClient'
@@ -92,7 +93,15 @@ export default async function Page({ params, searchParams }: PageProps) {
 				''
 
 			const tournamentId = Number(initialSelectedTournamentId)
-			if (tournamentId > 0 && currentEventId) {
+			const selectedTournament = initialTournaments.find(
+				tournament => tournament.id === initialSelectedTournamentId
+			)
+			if (
+				tournamentId > 0 &&
+				currentEventId &&
+				selectedTournament &&
+				areTournamentStandingsReady(selectedTournament)
+			) {
 				const currentResponse =
 					await executeServerQuery<TournamentLivePointsResponse>(
 						GET_TOURNAMENT_LIVE_POINTS,

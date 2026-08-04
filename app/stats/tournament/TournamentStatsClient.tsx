@@ -14,10 +14,12 @@ import { useTranslations } from 'next-intl'
 
 export default function TournamentStatsClient(props: TournamentStatsClientProps) {
 	const t = useTranslations('TournamentStats')
+	const lifecycleT = useTranslations('TournamentLifecycle')
 	const {
 		dataGameweek,
 		error,
 		filteredStandings,
+		insightsReady,
 		isBootstrapping,
 		isLoading,
 		rankingSummary,
@@ -52,7 +54,7 @@ export default function TournamentStatsClient(props: TournamentStatsClientProps)
 					tournaments={tournaments}
 				/>
 
-				{tournamentStats ? (
+				{insightsReady && tournamentStats ? (
 					<>
 						<TournamentPerformance dataGameweek={dataGameweek} stats={tournamentStats} />
 						<TournamentRanking summary={rankingSummary} />
@@ -66,7 +68,17 @@ export default function TournamentStatsClient(props: TournamentStatsClientProps)
 				) : (
 					<Card className="p-6" aria-live="polite" aria-busy={isLoading}>
 						<p className="text-muted-foreground">
-							{isLoading ? t('loading') : t('noStats')}
+							{isLoading
+								? t('loading')
+								: selectedTournament && !insightsReady
+									? selectedTournament.setupStatus === 'FAILED'
+										? lifecycleT('memberFailure')
+										: selectedTournament.setupHasWarnings
+											? lifecycleT('warningSummary')
+											: selectedTournament.standingsReadyAt
+												? lifecycleT('enrichingMessage')
+												: lifecycleT('leavePageMessage')
+									: t('noStats')}
 						</p>
 					</Card>
 				)}

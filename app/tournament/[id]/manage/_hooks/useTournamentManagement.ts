@@ -1,10 +1,21 @@
 'use client'
 
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
+import {
+	isTournamentRosterSyncInFlight,
+	isTournamentSetupInFlight,
+} from '@/lib/tournament/lifecycle'
 import { useRouter } from '@/i18n/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import type { TournamentNameForm } from '../_lib/tournament-management'
+
+export type TournamentManagementAction =
+	| 'retry_setup'
+	| 'retry_roster'
+	| 'pause'
+	| 'resume'
+	| 'enable_official_sync'
 
 type MutationState =
 	| { kind: 'idle'; message: null }
@@ -13,17 +24,56 @@ type MutationState =
 export function useTournamentManagement(tournament: EntryTournament) {
 	const t = useTranslations('TournamentManage')
 	const router = useRouter()
-	const [currentName, setCurrentName] = useState(tournament.name)
+	const [tournamentState, setTournamentState] = useState(() => ({
+		serverTournament: tournament,
+		currentTournament: tournament,
+	}))
+	let currentTournament = tournamentState.currentTournament
+	if (tournamentState.serverTournament !== tournament) {
+		currentTournament = tournament
+		setTournamentState({
+			serverTournament: tournament,
+			currentTournament: tournament,
+		})
+	}
+	const updateCurrentTournament = (
+		update: (current: EntryTournament) => EntryTournament
+	) => {
+		setTournamentState(current => ({
+			serverTournament: tournament,
+			currentTournament: update(
+				current.serverTournament === tournament
+					? current.currentTournament
+					: tournament
+			),
+		}))
+	}
 	const [isSaving, setIsSaving] = useState(false)
 	const [isDeleting, setIsDeleting] = useState(false)
+	const [pendingAction, setPendingAction] = useState<TournamentManagementAction | null>(null)
 	const [mutationState, setMutationState] = useState<MutationState>({
 		kind: 'idle',
 		message: null,
 	})
+	const rosterSyncInFlight = isTournamentRosterSyncInFlight(
+		currentTournament.rosterSyncStatus
+	)
+	const setupInFlight = isTournamentSetupInFlight(currentTournament.setupStatus)
+	const lifecycleWorkInFlight = rosterSyncInFlight || setupInFlight
+
+	useEffect(() => {
+		if (!lifecycleWorkInFlight) return
+		const timer = window.setInterval(() => {
+			if (document.visibilityState === 'visible' && navigator.onLine) {
+				router.refresh()
+			}
+		}, 5_000)
+		return () => window.clearInterval(timer)
+	}, [lifecycleWorkInFlight, router])
 
 	const renameTournament = async ({ name }: TournamentNameForm) => {
 		const normalizedName = name.trim()
-		if (normalizedName === currentName) {
+		if (normalizedName === currentTournament.name) {
 			setMutationState({ kind: 'success', message: t('nameCurrent') })
 			return true
 		}
@@ -38,18 +88,69 @@ export function useTournamentManagement(tournament: EntryTournament) {
 			})
 			if (!response.ok) throw new Error(t('nameUpdateFailed'))
 
-			setCurrentName(normalizedName)
+			updateCurrentTournament(current => ({
+				...current,
+				name: normalizedName,
+			}))
 			setMutationState({ kind: 'success', message: t('nameUpdated') })
 			router.refresh()
 			return true
 		} catch {
-			setMutationState({
-				kind: 'error',
-				message: t('nameUpdateFailed'),
-			})
+			setMutationState({ kind: 'error', message: t('nameUpdateFailed') })
 			return false
 		} finally {
 			setIsSaving(false)
+		}
+	}
+
+	const runAction = async (action: TournamentManagementAction) => {
+		if (
+			pendingAction ||
+			(action === 'retry_roster' && rosterSyncInFlight) ||
+			(action === 'resume' && setupInFlight)
+		) {
+			return false
+		}
+		setPendingAction(action)
+		setMutationState({ kind: 'idle', message: null })
+		try {
+			const response = await fetch(`/api/tournaments/${tournament.id}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action }),
+			})
+			if (!response.ok) throw new Error('action failed')
+
+			updateCurrentTournament(current => {
+				if (action === 'pause') return { ...current, state: 'INACTIVE' }
+				if (action === 'resume') {
+					return { ...current, setupStatus: 'PENDING', setupPhase: 'QUEUED' }
+				}
+				if (action === 'retry_setup') {
+					return {
+						...current,
+						setupStatus: 'PENDING',
+						setupPhase: 'QUEUED',
+						setupHasWarnings: false,
+					}
+				}
+				if (action === 'retry_roster') {
+					return { ...current, rosterSyncStatus: 'PROCESSING' }
+				}
+				return {
+					...current,
+					rosterMode: 'OFFICIAL_SYNC',
+					rosterSyncStatus: 'PROCESSING',
+				}
+			})
+			setMutationState({ kind: 'success', message: t(`actionSuccess.${action}`) })
+			router.refresh()
+			return true
+		} catch {
+			setMutationState({ kind: 'error', message: t(`actionFailed.${action}`) })
+			return false
+		} finally {
+			setPendingAction(null)
 		}
 	}
 
@@ -66,10 +167,7 @@ export function useTournamentManagement(tournament: EntryTournament) {
 			router.refresh()
 			return true
 		} catch {
-			setMutationState({
-				kind: 'error',
-				message: t('deleteFailed'),
-			})
+			setMutationState({ kind: 'error', message: t('deleteFailed') })
 			return false
 		} finally {
 			setIsDeleting(false)
@@ -77,11 +175,14 @@ export function useTournamentManagement(tournament: EntryTournament) {
 	}
 
 	return {
-		currentName,
+		currentName: currentTournament.name,
+		currentTournament,
 		deleteTournament,
 		isDeleting,
 		isSaving,
 		mutationState,
+		pendingAction,
 		renameTournament,
+		runAction,
 	}
 }
