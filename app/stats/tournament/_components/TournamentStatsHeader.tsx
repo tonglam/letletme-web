@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
+import { TournamentLifecycleBadge } from '@/components/tournament/TournamentLifecycleBadge'
 import {
 	Select,
 	SelectContent,
@@ -9,7 +10,6 @@ import {
 } from '@/components/ui/select'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import { Calendar, Trophy, Users } from 'lucide-react'
-import { formatStateBadge } from '../_lib/tournament-stats-model'
 import { useFormatter, useTranslations } from 'next-intl'
 
 interface TournamentStatsHeaderProps {
@@ -29,17 +29,6 @@ export function TournamentStatsHeader({
 }: TournamentStatsHeaderProps) {
 	const t = useTranslations('TournamentStats')
 	const format = useFormatter()
-	const stateBadge = selectedTournament
-		? formatStateBadge(selectedTournament.state)
-		: null
-	const stateLabel =
-		selectedTournament?.state === 'ACTIVE'
-			? t('live')
-			: selectedTournament?.state === 'FINISHED'
-				? t('completed')
-				: selectedTournament?.state === 'INACTIVE'
-					? t('paused')
-					: selectedTournament?.state
 	const groupPhaseLabel =
 		selectedTournament?.groupMode === 'POINTS_RACES'
 			? t('pointsRace')
@@ -102,14 +91,7 @@ export function TournamentStatsHeader({
 					<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 						<h2 className="text-xl font-bold">{selectedTournament.name}</h2>
 						<div className="flex flex-wrap gap-1.5">
-							{stateBadge ? (
-								<Badge
-									variant="outline"
-									className={stateBadge.className}
-								>
-									{stateLabel}
-								</Badge>
-							) : null}
+							<TournamentLifecycleBadge tournament={selectedTournament} />
 							<Badge
 								variant="outline"
 								className="border-primary/20 bg-primary/10 text-primary-ink"

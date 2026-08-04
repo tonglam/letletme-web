@@ -21,7 +21,10 @@ import {
 } from '@/components/ui/card'
 import { TournamentLifecycleBadge } from '@/components/tournament/TournamentLifecycleBadge'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
-import { isTournamentRosterSyncInFlight } from '@/lib/tournament/lifecycle'
+import {
+	isTournamentRosterSyncInFlight,
+	isTournamentSetupInFlight
+} from '@/lib/tournament/lifecycle'
 import { LoaderCircle, Pause, Play, RefreshCw, UsersRound } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { ReactNode } from 'react'
@@ -46,6 +49,7 @@ export function TournamentOperationsCard({
 	const rosterSyncInFlight = isTournamentRosterSyncInFlight(
 		tournament.rosterSyncStatus
 	)
+	const setupInFlight = isTournamentSetupInFlight(tournament.setupStatus)
 	const actionIcon = (action: TournamentManagementAction, icon: ReactNode) =>
 		pendingAction === action ? (
 			<LoaderCircle
@@ -93,7 +97,7 @@ export function TournamentOperationsCard({
 					{tournament.state === 'FINISHED' ? null : tournament.state ===
 					  'INACTIVE' ? (
 						<Button
-							disabled={busy}
+							disabled={busy || setupInFlight}
 							onClick={() => void onAction('resume')}
 						>
 							{actionIcon('resume', <Play aria-hidden="true" />)} {t('resume')}

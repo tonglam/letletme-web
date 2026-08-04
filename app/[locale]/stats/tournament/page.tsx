@@ -11,6 +11,7 @@ import {
 	type TournamentEventResultsResponse,
 } from "@/lib/graphql/operations/tournaments";
 import { getCurrentEntryId } from "@/lib/session";
+import { areTournamentInsightsReady } from "@/lib/tournament/lifecycle";
 import TournamentStatsClient from "@/app/stats/tournament/TournamentStatsClient";
 import { CalendarX } from "lucide-react";
 import { getPageLocale, getPageMetadata, type LocaleParams } from "@/i18n/page";
@@ -94,8 +95,11 @@ export default async function TournamentStatsPage({ params, searchParams }: Page
           ? requestedTournamentId
           : String(initialTournaments[0]?.id ?? "");
 
-      const tournamentId = Number(initialSelectedTournamentId);
-      if (tournamentId > 0) {
+      const selectedTournament = initialTournaments.find(
+        (tournament) => String(tournament.id) === initialSelectedTournamentId,
+      );
+      const tournamentId = selectedTournament?.id ?? 0;
+      if (tournamentId > 0 && selectedTournament && areTournamentInsightsReady(selectedTournament)) {
         let latestGw = currentGameweek;
         let currentRows = await fetchTournamentResults(tournamentId, latestGw);
 

@@ -760,6 +760,38 @@ export default function TournamentDetailClient({
 													)
 												})}
 											</li>
+											{currentTournament.knockoutMode !== 'NO_KNOCKOUT' ? (
+												<>
+													<li>
+														{t('teamsCount', {
+															count:
+																currentTournament.knockoutTeamNum ??
+																t('notConfigured')
+														})}
+													</li>
+													<li>
+														{t('rounds', {
+															count:
+																currentTournament.knockoutRounds ??
+																t('notConfigured')
+														})}
+													</li>
+													<li>
+														{t('gameweeks', {
+															value:
+																currentTournament.knockoutStartedEventId &&
+																currentTournament.knockoutEndedEventId
+																	? t('gameweekRange', {
+																			start:
+																				currentTournament.knockoutStartedEventId,
+																			end:
+																				currentTournament.knockoutEndedEventId
+																		})
+																	: t('notScheduled')
+														})}
+													</li>
+												</>
+											) : null}
 										</ul>
 									</Card>
 									<Card className="p-6">

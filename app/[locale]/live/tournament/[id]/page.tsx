@@ -77,9 +77,17 @@ export default async function Page({ params, searchParams }: PageProps) {
 						{ tournamentId },
 						{ cache: 'no-store' }
 					)
+						.then(data => data.tournamentParticipants)
+						.catch(error => {
+							console.warn(
+								'[tournament detail] Participant roster unavailable:',
+								error
+							)
+							return []
+						})
 
 				if (tournament.standingsReadyAt && currentEventId) {
-					const [participantData, standings] = await Promise.all([
+					const [loadedParticipants, standings] = await Promise.all([
 						participantsRequest,
 						executeServerQuery<TournamentLivePointsResponse>(
 							GET_TOURNAMENT_LIVE_POINTS,
@@ -87,7 +95,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 							{ cache: 'no-store' }
 						)
 					])
-					participants = participantData.tournamentParticipants
+					participants = loadedParticipants
 					const seed = getTournamentLiveBatchSeed(standings)
 					initialRows = seed.rows
 					initialSnapshot = seed.snapshot
@@ -98,7 +106,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 						})
 					}
 				} else {
-					participants = (await participantsRequest).tournamentParticipants
+					participants = await participantsRequest
 				}
 			}
 		} catch (error) {

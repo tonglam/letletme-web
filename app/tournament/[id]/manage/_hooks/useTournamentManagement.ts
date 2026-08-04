@@ -106,7 +106,8 @@ export function useTournamentManagement(tournament: EntryTournament) {
 	const runAction = async (action: TournamentManagementAction) => {
 		if (
 			pendingAction ||
-			(action === 'retry_roster' && rosterSyncInFlight)
+			(action === 'retry_roster' && rosterSyncInFlight) ||
+			(action === 'resume' && setupInFlight)
 		) {
 			return false
 		}
