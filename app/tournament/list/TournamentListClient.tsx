@@ -3,6 +3,7 @@
 import PageShell from '@/components/layout/PageShell'
 import { TournamentLifecycleBadge } from '@/components/tournament/TournamentLifecycleBadge'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
+import { mapTournamentGroupFormat } from '@/lib/tournament/liveTournament'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -46,7 +47,7 @@ type TournamentRow = {
 	participantCount: number
 	leagueType: string
 	state: string
-	groupFormat: 'none' | 'points' | 'headToHead'
+	groupFormat: ReturnType<typeof mapTournamentGroupFormat>
 	knockoutFormat: 'none' | 'single' | 'double'
 	startGameweek: number | null
 	endGameweek: number | null
@@ -59,16 +60,6 @@ type SortOption =
 	| 'nameAsc'
 	| 'nameDesc'
 	| 'participantsDesc'
-
-const mapGroupFormat = (groupMode: string): TournamentRow['groupFormat'] => {
-	if (groupMode === 'POINTS_RACES') {
-		return 'points'
-	}
-	if (groupMode === 'H2H') {
-		return 'headToHead'
-	}
-	return 'none'
-}
 
 const mapKnockoutFormat = (knockoutMode: string): TournamentRow['knockoutFormat'] => {
 	if (knockoutMode === 'SINGLE_ELIMINATION') {
@@ -90,7 +81,7 @@ const mapTournamentToRow = (tournament: EntryTournament): TournamentRow => {
 		participantCount: tournament.totalTeamNum,
 		leagueType: tournament.leagueType,
 		state: tournament.state,
-		groupFormat: mapGroupFormat(tournament.groupMode),
+		groupFormat: mapTournamentGroupFormat(tournament.groupMode),
 		knockoutFormat: mapKnockoutFormat(tournament.knockoutMode),
 		startGameweek: tournament.groupStartedEventId,
 		endGameweek: tournament.groupEndedEventId,

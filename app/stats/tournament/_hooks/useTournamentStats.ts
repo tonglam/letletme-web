@@ -24,6 +24,7 @@ import {
 	buildTournamentStats,
 	type PlayerMeta,
 	type TournamentStatsViewModel,
+	resolveTournamentStatsLoadState,
 } from '../_lib/tournament-stats-model'
 
 export interface TournamentStatsClientProps {
@@ -106,6 +107,11 @@ export function useTournamentStats({
 	const insightsReady = selectedTournament
 		? areTournamentInsightsReady(selectedTournament)
 		: false
+	const statsLoadState = resolveTournamentStatsLoadState({
+		isBootstrapping,
+		hasSelectedTournament: Boolean(selectedTournament),
+		insightsReady,
+	})
 	const filteredStandings = useMemo(() => {
 		if (!tournamentStats) return []
 		const query = standingsSearch.trim().toLowerCase()
@@ -187,7 +193,12 @@ export function useTournamentStats({
 	}, [entryId, insightsReady, pageActive, selectedTournament])
 
 	useEffect(() => {
-		if (isBootstrapping || !selectedTournament || !insightsReady) return
+		if (statsLoadState === 'waiting') return
+		if (statsLoadState === 'reset') {
+			const resetTimer = window.setTimeout(() => setIsLoading(false), 0)
+			return () => window.clearTimeout(resetTimer)
+		}
+		if (!selectedTournament) return
 		let cancelled = false
 		const tournament = selectedTournament
 
@@ -298,7 +309,7 @@ export function useTournamentStats({
 		return () => {
 			cancelled = true
 		}
-	}, [entryId, initialCurrentGameweek, insightsReady, isBootstrapping, selectedTournament, t])
+	}, [entryId, initialCurrentGameweek, selectedTournament, statsLoadState, t])
 
 	return {
 		dataGameweek,

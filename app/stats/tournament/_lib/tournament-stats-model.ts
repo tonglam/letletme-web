@@ -70,6 +70,22 @@ export interface TournamentRankingRow {
 	rank: string
 }
 
+export type TournamentStatsLoadState = 'waiting' | 'reset' | 'load'
+
+export const resolveTournamentStatsLoadState = ({
+	isBootstrapping,
+	hasSelectedTournament,
+	insightsReady,
+}: {
+	isBootstrapping: boolean
+	hasSelectedTournament: boolean
+	insightsReady: boolean
+}): TournamentStatsLoadState => {
+	if (isBootstrapping) return 'waiting'
+	if (!hasSelectedTournament || !insightsReady) return 'reset'
+	return 'load'
+}
+
 export const formatStateBadge = (state: string): { label: string; className: string } => {
 	switch (state) {
 		case 'ACTIVE':

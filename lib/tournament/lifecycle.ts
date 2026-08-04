@@ -77,6 +77,10 @@ export const areTournamentInsightsReady = (
 	tournament.setupStatus === 'READY' &&
 	!tournament.setupHasWarnings
 
+export const areTournamentStandingsReady = (
+	tournament: Pick<EntryTournament, 'standingsReadyAt'>
+): boolean => Boolean(tournament.standingsReadyAt)
+
 export const shouldPollTournamentSetup = ({
 	setupStatus,
 	visible,

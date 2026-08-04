@@ -4,12 +4,20 @@ import { GameweekSelector } from '@/components/data/GameweekSelector'
 import PageShell from '@/components/layout/PageShell'
 import { TournamentSelector } from '@/components/tournament/TournamentSelector'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { usePageActive } from '@/hooks/use-page-active'
 import { executeQuery } from '@/lib/graphql-client'
 import {
+	GET_ENTRY_TOURNAMENTS,
 	GET_TOURNAMENT_SELECTION_STATS,
+	type EntryTournamentsResponse,
 	type TournamentSelectionStatsResponse,
 	type TournamentStatPlayer,
 } from '@/lib/graphql/operations/tournaments'
+import {
+	areTournamentInsightsReady,
+	isTournamentSetupInFlight,
+} from '@/lib/tournament/lifecycle'
+import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 import { Tournament } from '@/types/tournament'
 import { Crown, TrendingDown, TrendingUp, Users } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -152,6 +160,7 @@ interface StatsResult {
 }
 
 interface SelectionsClientProps {
+	entryId: number
 	initialTournaments: Tournament[]
 	initialSelectedTournamentId: string
 	initialStats: StatsResult | null
@@ -159,13 +168,16 @@ interface SelectionsClientProps {
 }
 
 export default function SelectionsClient({
+	entryId,
 	initialTournaments,
 	initialSelectedTournamentId,
 	initialStats,
 	initialGameweek,
 }: SelectionsClientProps) {
 	const t = useTranslations('Selections')
-	const [tournaments] = useState<Tournament[]>(initialTournaments)
+	const lifecycleT = useTranslations('TournamentLifecycle')
+	const pageActive = usePageActive()
+	const [tournaments, setTournaments] = useState<Tournament[]>(initialTournaments)
 	const [selectedTournamentId, setSelectedTournamentId] = useState<string>(initialSelectedTournamentId)
 	const [currentGameweek] = useState<number>(initialGameweek)
 	const [selectedGameweek, setSelectedGameweek] = useState<number>(initialGameweek)
@@ -185,6 +197,12 @@ export default function SelectionsClient({
 	const [transferOutData, setTransferOutData] = useState<
 		TournamentStatPlayer[]
 	>(initialStats?.transferOut ?? [])
+	const selectedTournament = tournaments.find(
+		tournament => tournament.id === selectedTournamentId,
+	)
+	const insightsReady = selectedTournament
+		? areTournamentInsightsReady(selectedTournament)
+		: false
 
 	const fetchStats = useCallback(
 		async (tournamentId: number, eventId: number) => {
@@ -233,13 +251,55 @@ export default function SelectionsClient({
 	)
 
 	useEffect(() => {
-		const tid = parseInt(selectedTournamentId, 10)
-		if (tid && selectedGameweek) fetchStats(tid, selectedGameweek)
-	}, [selectedTournamentId, selectedGameweek, fetchStats])
+		if (
+			!pageActive ||
+			!selectedTournament ||
+			insightsReady ||
+			!isTournamentSetupInFlight(selectedTournament.setupStatus)
+		) {
+			return
+		}
 
-	const selectedTournament = tournaments.find(
-		t => t.id === selectedTournamentId
-	)
+		let cancelled = false
+		let timer: number | undefined
+		const poll = async () => {
+			try {
+				const data = await executeQuery<EntryTournamentsResponse>(GET_ENTRY_TOURNAMENTS, {
+					entryId,
+				})
+				if (!cancelled) {
+					setTournaments(data.entryTournaments.map(mapEntryTournamentToLiveTournament))
+				}
+			} catch (pollError) {
+				console.warn('Tournament setup status unavailable:', pollError)
+			} finally {
+				if (!cancelled) timer = window.setTimeout(poll, 5_000)
+			}
+		}
+
+		timer = window.setTimeout(poll, 5_000)
+		return () => {
+			cancelled = true
+			if (timer !== undefined) window.clearTimeout(timer)
+		}
+	}, [entryId, insightsReady, pageActive, selectedTournament])
+
+	useEffect(() => {
+		if (!selectedTournament || !insightsReady) {
+			statsRequestIdRef.current += 1
+			const resetTimer = window.setTimeout(() => {
+				setIsLoadingStats(false)
+				setSelectionData([])
+				setCaptainData([])
+				setTransferInData([])
+				setTransferOutData([])
+			}, 0)
+			return () => window.clearTimeout(resetTimer)
+		}
+
+		const tid = Number(selectedTournament.id)
+		if (tid > 0 && selectedGameweek > 0) void fetchStats(tid, selectedGameweek)
+	}, [fetchStats, insightsReady, selectedGameweek, selectedTournament])
 
 	const subtitle = selectedTournament
 		? `${selectedTournament.name} · GW${selectedGameweek}`
@@ -273,40 +333,51 @@ export default function SelectionsClient({
 						currentGameweek={currentGameweek}
 						selectedGameweek={selectedGameweek}
 						onGameweekChange={setSelectedGameweek}
-						disabled={isLoadingStats}
+						disabled={isLoadingStats || Boolean(selectedTournament && !insightsReady)}
 					/>
 				</div>
 
-				<Tabs defaultValue="selections">
-					<TabsList className="grid grid-cols-4 mb-4 w-full">
-						<TabsTrigger
-							value="selections"
-							className="gap-1.5"
-						>
-							<Users className="h-4 w-4" /> {t('selections')}
-						</TabsTrigger>
-						<TabsTrigger
-							value="captain"
-							className="gap-1.5"
-						>
-							<Crown className="h-4 w-4" /> {t('captain')}
-						</TabsTrigger>
-						<TabsTrigger
-							value="transfers-in"
-							className="gap-1.5"
-						>
-							<TrendingUp className="h-4 w-4" /> {t('transfersIn')}
-						</TabsTrigger>
-						<TabsTrigger
-							value="transfers-out"
-							className="gap-1.5"
-						>
-							<TrendingDown className="h-4 w-4" /> {t('transfersOut')}
-						</TabsTrigger>
-					</TabsList>
+				{selectedTournament && !insightsReady ? (
+					<div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground" aria-live="polite">
+						{selectedTournament.setupStatus === 'FAILED'
+							? lifecycleT('memberFailure')
+							: selectedTournament.setupHasWarnings
+								? lifecycleT('warningSummary')
+								: selectedTournament.standingsReadyAt
+									? lifecycleT('enrichingMessage')
+									: lifecycleT('leavePageMessage')}
+					</div>
+				) : (
+					<Tabs defaultValue="selections">
+						<TabsList className="grid grid-cols-4 mb-4 w-full">
+							<TabsTrigger
+								value="selections"
+								className="gap-1.5"
+							>
+								<Users className="h-4 w-4" /> {t('selections')}
+							</TabsTrigger>
+							<TabsTrigger
+								value="captain"
+								className="gap-1.5"
+							>
+								<Crown className="h-4 w-4" /> {t('captain')}
+							</TabsTrigger>
+							<TabsTrigger
+								value="transfers-in"
+								className="gap-1.5"
+							>
+								<TrendingUp className="h-4 w-4" /> {t('transfersIn')}
+							</TabsTrigger>
+							<TabsTrigger
+								value="transfers-out"
+								className="gap-1.5"
+							>
+								<TrendingDown className="h-4 w-4" /> {t('transfersOut')}
+							</TabsTrigger>
+						</TabsList>
 
-					<div className="max-w-lg mx-auto">
-						<TabsContent value="selections">
+						<div className="max-w-lg mx-auto">
+							<TabsContent value="selections">
 							{isLoadingStats ? (
 								<div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
 									{t('loading')}
@@ -321,9 +392,9 @@ export default function SelectionsClient({
 									barColor="bg-blue-500"
 								/>
 							)}
-						</TabsContent>
+							</TabsContent>
 
-						<TabsContent value="captain">
+							<TabsContent value="captain">
 							{isLoadingStats ? (
 								<div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
 									{t('loading')}
@@ -339,9 +410,9 @@ export default function SelectionsClient({
 									sortBy="captainByPercent"
 								/>
 							)}
-						</TabsContent>
+							</TabsContent>
 
-						<TabsContent value="transfers-in">
+							<TabsContent value="transfers-in">
 							{isLoadingStats ? (
 								<div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
 									{t('loading')}
@@ -357,9 +428,9 @@ export default function SelectionsClient({
 									sortBy="transfersEvent"
 								/>
 							)}
-						</TabsContent>
+							</TabsContent>
 
-						<TabsContent value="transfers-out">
+							<TabsContent value="transfers-out">
 							{isLoadingStats ? (
 								<div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
 									{t('loading')}
@@ -375,9 +446,10 @@ export default function SelectionsClient({
 									sortBy="transfersEvent"
 								/>
 							)}
-						</TabsContent>
-					</div>
-				</Tabs>
+							</TabsContent>
+						</div>
+					</Tabs>
+				)}
 			</div>
 		</PageShell>
 	)

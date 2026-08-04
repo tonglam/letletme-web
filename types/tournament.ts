@@ -1,3 +1,5 @@
+import type { TournamentSetupStatus } from '@/lib/graphql/operations/tournaments';
+
 export interface TournamentEntryPick {
   element: number;
   webName: string;
@@ -42,4 +44,7 @@ export interface Tournament {
   averagePoints: number;
   highestPoints: number;
   totalEntries: number;
+  setupStatus: TournamentSetupStatus;
+  standingsReadyAt: string | null;
+  setupHasWarnings: boolean;
 }

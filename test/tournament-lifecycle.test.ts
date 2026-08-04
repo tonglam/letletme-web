@@ -1,12 +1,19 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
+	areTournamentStandingsReady,
 	getTournamentLifecycleBadge,
 	isTournamentRosterSyncInFlight,
 	isTournamentSetupInFlight,
 	normalizeTournamentSetupStatus,
 	shouldPollTournamentSetup
 } from '@/lib/tournament/lifecycle'
+import {
+	mapEntryTournamentToLiveTournament,
+	mapTournamentGroupFormat,
+} from '@/lib/tournament/liveTournament'
+import { resolveTournamentStatsLoadState } from '@/app/stats/tournament/_lib/tournament-stats-model'
+import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 
 const lifecycle = (
 	overrides: Partial<Parameters<typeof getTournamentLifecycleBadge>[0]> = {}
@@ -104,6 +111,47 @@ describe('tournament lifecycle presentation', () => {
 		assert.equal(isTournamentSetupInFlight('PROCESSING'), true)
 		assert.equal(isTournamentSetupInFlight('READY'), false)
 		assert.equal(isTournamentSetupInFlight('FAILED'), false)
+	})
+
+	it('preserves readiness in the shared tournament view', () => {
+		const mapped = mapEntryTournamentToLiveTournament({
+			id: 12,
+			name: 'Setup shell',
+			totalTeamNum: 75,
+			setupStatus: 'PROCESSING',
+			standingsReadyAt: null,
+			setupHasWarnings: false,
+		} as EntryTournament)
+
+		assert.equal(mapped.setupStatus, 'PROCESSING')
+		assert.equal(mapped.standingsReadyAt, null)
+		assert.equal(mapped.setupHasWarnings, false)
+		assert.equal(areTournamentStandingsReady(mapped), false)
+	})
+
+	it('maps the canonical battle-race group mode', () => {
+		assert.equal(mapTournamentGroupFormat('POINTS_RACES'), 'points')
+		assert.equal(mapTournamentGroupFormat('BATTLE_RACES'), 'headToHead')
+		assert.equal(mapTournamentGroupFormat('NONE'), 'none')
+	})
+
+	it('resets a cancelled stats load when the new tournament is not ready', () => {
+		assert.equal(
+			resolveTournamentStatsLoadState({
+				isBootstrapping: false,
+				hasSelectedTournament: true,
+				insightsReady: false,
+			}),
+			'reset',
+		)
+		assert.equal(
+			resolveTournamentStatsLoadState({
+				isBootstrapping: false,
+				hasSelectedTournament: true,
+				insightsReady: true,
+			}),
+			'load',
+		)
 	})
 
 	it('normalizes the safe lowercase service response without accepting invalid counters', () => {
