@@ -377,6 +377,7 @@
     "active": "Active",
     "pointBreakdown": "Point Breakdown",
     "loadingBreakdown": "Loading breakdown…",
+    "breakdownPending": "Detailed points are still syncing. The live total and stats above are current.",
     "noPointEvents": "No point events available",
     "positivePoints": "Positive Points",
     "negativePoints": "Negative Points",

@@ -183,111 +183,24 @@ export function PlayerRow({ player }: PlayerRowProps) {
     return [...orderedBreakdown, ...remaining];
   }, [player.breakdownStats]);
 
-  const computedFallbackBreakdown = useMemo(() => {
-    const pointsBreakdown: PlayerDetail["pointsBreakdown"] = [];
-    
-    if (player.stats.minutes > 0) {
-      const minutesPoints = player.stats.minutes >= 60 ? 2 : 1;
-      pointsBreakdown.push({ category: "Appearance", points: minutesPoints });
-    }
-    
-    if (player.stats.goals > 0) {
-      const pointsPerGoal = player.position === "FWD" ? 4 : 
-                           player.position === "MID" ? 5 : 
-                           player.position === "DEF" ? 6 : 6;
-      const goalPoints = player.stats.goals * pointsPerGoal;
-      pointsBreakdown.push({ category: "Goals", points: goalPoints });
-    }
-    
-    if (player.stats.assists > 0) {
-      const assistPoints = player.stats.assists * 3;
-      pointsBreakdown.push({ category: "Assists", points: assistPoints });
-    }
-    
-    if (player.stats.cleanSheets > 0) {
-      const csPoints = player.position === "GKP" || player.position === "DEF" ? 4 : 
-                      player.position === "MID" ? 1 : 0;
-      if (csPoints > 0) {
-        pointsBreakdown.push({ category: "Clean Sheet", points: csPoints });
-      }
-    }
-    
-    if (player.stats.saves && player.stats.saves > 0) {
-      const savePoints = Math.floor(player.stats.saves / 3);
-      if (savePoints > 0) {
-        pointsBreakdown.push({ category: "Saves", points: savePoints });
-      }
-    }
-    
-    if (player.stats.savePenalty && player.stats.savePenalty > 0) {
-      const penSavePoints = player.stats.savePenalty * 5;
-      pointsBreakdown.push({ category: "Penalty Saved", points: penSavePoints });
-    }
-
-    const goalsConceded = player.stats.goalsConceded ?? 0;
-    if ((player.position === "GKP" || player.position === "DEF") && goalsConceded >= 2) {
-      pointsBreakdown.push({
-        category: "Goals Conceded",
-        points: -Math.floor(goalsConceded / 2)
-      });
-    }
-
-    const ownGoals = player.stats.ownGoals ?? 0;
-    if (ownGoals > 0) {
-      pointsBreakdown.push({ category: "Own Goal", points: ownGoals * -2 });
-    }
-
-    const penaltiesMissed = player.stats.penaltiesMissed ?? 0;
-    if (penaltiesMissed > 0) {
-      pointsBreakdown.push({
-        category: "Penalty Missed",
-        points: penaltiesMissed * -2
-      });
-    }
-
-    const defensiveContribution = player.stats.defensiveContribution ?? 0;
-    const earnsDefensivePoints =
-      (player.position === "DEF" && defensiveContribution >= 10) ||
-      ((player.position === "MID" || player.position === "FWD") &&
-        defensiveContribution >= 12);
-    if (earnsDefensivePoints) {
-      pointsBreakdown.push({
-        category: "Defensive Contribution",
-        points: 2,
-        value: defensiveContribution
-      });
-    }
-    
-    if (player.stats.yellowCards > 0) {
-      const ycPoints = -1 * player.stats.yellowCards;
-      pointsBreakdown.push({ category: "Yellow Card", points: ycPoints });
-    }
-    
-    if (player.stats.redCards > 0) {
-      const rcPoints = -3 * player.stats.redCards;
-      pointsBreakdown.push({ category: "Red Card", points: rcPoints });
-    }
-    
-    if (player.stats.bonusPoints > 0) {
-      pointsBreakdown.push({ category: "Bonus Points", points: player.stats.bonusPoints });
-    }
-    
-    return pointsBreakdown;
-  }, [player]);
 
   // Convert Player to PlayerDetail for the modal
   const playerDetail: PlayerDetail = useMemo(() => {
+    const hasExplanation = player.breakdownStats !== undefined;
     const explanationMatchesCurrentStats =
       liveExplanationMatchesCurrentStats(player);
     const explanationMatchesCurrentTotal =
-      breakdownFromExplain.length > 0 &&
+      hasExplanation &&
       explanationMatchesCurrentStats &&
       breakdownFromExplain.reduce((sum, item) => sum + item.points, 0) ===
         player.stats.points;
-    const pointsBreakdown =
-      explanationMatchesCurrentTotal
-        ? breakdownFromExplain
-        : computedFallbackBreakdown;
+    // Fixture thresholds (appearance, clean sheets, saves, goals conceded, and
+    // defensive contributions) cannot be reconstructed from event aggregates
+    // in a double gameweek. Keep the live total authoritative and wait for the
+    // persisted per-fixture explanation instead of displaying invented rows.
+    const pointsBreakdown = explanationMatchesCurrentTotal
+      ? breakdownFromExplain
+      : [];
 
     return {
       id: player.id,
@@ -299,6 +212,9 @@ export function PlayerRow({ player }: PlayerRowProps) {
       ownershipPercentage: 0,
       bps: 0,
       bonusPoints: player.stats.bonusPoints,
+      breakdownPending:
+        !explanationMatchesCurrentTotal &&
+        player.playingStatus !== "NOT_STARTED",
       stats: {
         minutes: player.stats.minutes,
         goals: player.stats.goals,
@@ -311,7 +227,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
       },
       pointsBreakdown
     };
-  }, [player, breakdownFromExplain, computedFallbackBreakdown]);
+  }, [player, breakdownFromExplain]);
 
   return (
     <>

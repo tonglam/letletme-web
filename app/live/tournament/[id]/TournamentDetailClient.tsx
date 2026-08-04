@@ -62,6 +62,7 @@ export default function TournamentDetailClient({
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const refreshInFlightRef = useRef<Promise<void> | null>(null)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
+	const failedEntryCountRef = useRef(initialError ? 1 : 0)
 	const refreshGenerationRef = useRef(0)
 	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
 		snapshotRef.current = next
@@ -84,6 +85,7 @@ export default function TournamentDetailClient({
 					{ cache: 'no-store' }
 				)
 				const batch = response.calcLivePointsForTournament
+				failedEntryCountRef.current = batch.meta.failedCount
 				setRows(previousRows =>
 					mergePartialTournamentRows({
 						nextRows: batch.results ?? [],
@@ -92,9 +94,7 @@ export default function TournamentDetailClient({
 						preserveFailed: true
 					})
 				)
-				acceptSnapshot(
-					batch.meta.failedCount > 0 ? null : response.liveSnapshot
-				)
+				acceptSnapshot(response.liveSnapshot)
 				if (batch.meta.failedCount > 0) {
 					setError(
 						t('partialResults', {
@@ -136,7 +136,7 @@ export default function TournamentDetailClient({
 				if (generation !== refreshGenerationRef.current) return
 				if (!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)) {
 					acceptSnapshot(probe.liveSnapshot)
-					setError(null)
+					if (failedEntryCountRef.current === 0) setError(null)
 					return
 				}
 				await refreshStandings()

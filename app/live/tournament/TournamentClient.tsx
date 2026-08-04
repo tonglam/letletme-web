@@ -131,6 +131,7 @@ export default function TournamentClient({
 			: null
 	)
 	const resultsRequestIdRef = useRef(0)
+	const failedEntryCountRef = useRef(initialResultsError ? 1 : 0)
 	const resultsInFlightRef = useRef<{
 		key: string
 		promise: Promise<void>
@@ -179,9 +180,8 @@ export default function TournamentClient({
 						)
 					}
 
-					acceptSnapshot(
-						currentBatch.failedCount > 0 ? null : currentBatch.snapshot
-					)
+					failedEntryCountRef.current = currentBatch.failedCount
+					acceptSnapshot(currentBatch.snapshot)
 					setSelectedRows(previousRows =>
 						mergePartialTournamentRows({
 							nextRows: currentBatch.rows,
@@ -333,7 +333,7 @@ export default function TournamentClient({
 				if (requestId !== resultsRequestIdRef.current) return
 				if (!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)) {
 					acceptSnapshot(probe.liveSnapshot)
-					setResultsError(null)
+					if (failedEntryCountRef.current === 0) setResultsError(null)
 					return
 				}
 				await refreshTournamentResults()

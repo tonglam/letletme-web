@@ -114,6 +114,7 @@ describe('live-points model', () => {
 		assert.equal(player.stats.points, 19)
 		assert.equal(player.breakdownStats?.length, 3)
 		assert.equal(player.playingStatus, 'PLAYING')
+		assert.equal(mapLiveDataToPlayers(live, new Map())[0]?.breakdownStats, undefined)
 
 		const [settledPlayer] = mapLiveDataToPlayers(
 			{
@@ -187,7 +188,7 @@ describe('live-points model', () => {
 				{ identifier: 'defensive_contribution', value: 10, points: 2 }
 			],
 			stats: {
-				minutes: 90,
+				minutes: 0,
 				goals: 0,
 				expectedGoals: 0,
 				expectedAssists: 0,
@@ -204,7 +205,7 @@ describe('live-points model', () => {
 				yellowCards: 0,
 				redCards: 0,
 				points: 2,
-				bonusPoints: 2
+				bonusPoints: 0
 			}
 		} satisfies Pick<Player, 'breakdownStats' | 'stats'>
 
@@ -215,6 +216,41 @@ describe('live-points model', () => {
 				stats: { ...player.stats, defensiveContribution: 10 }
 			}),
 			true
+		)
+	})
+
+	it('rejects an explanation that omits newly nonzero scoring categories', () => {
+		const player = {
+			breakdownStats: [{ identifier: 'minutes', value: 90, points: 2 }],
+			stats: {
+				minutes: 90,
+				goals: 1,
+				expectedGoals: 0,
+				expectedAssists: 0,
+				expectedGoalInvolvements: 0,
+				expectedGoalsConceded: 0,
+				assists: 0,
+				saves: 0,
+				savePenalty: 0,
+				cleanSheets: 0,
+				goalsConceded: 0,
+				defensiveContribution: 0,
+				ownGoals: 0,
+				penaltiesMissed: 0,
+				yellowCards: 1,
+				redCards: 1,
+				points: 2,
+				bonusPoints: 0
+			}
+		} satisfies Pick<Player, 'breakdownStats' | 'stats'>
+
+		assert.equal(liveExplanationMatchesCurrentStats(player), false)
+		assert.equal(
+			liveExplanationMatchesCurrentStats({
+				...player,
+				breakdownStats: undefined
+			}),
+			false
 		)
 	})
 })

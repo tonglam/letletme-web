@@ -377,6 +377,7 @@
     "active": "正常",
     "pointBreakdown": "积分明细",
     "loadingBreakdown": "正在加载积分明细…",
+    "breakdownPending": "积分明细仍在同步中，上方的实时总分和数据均为最新。",
     "noPointEvents": "暂无积分事件",
     "positivePoints": "加分",
     "negativePoints": "扣分",

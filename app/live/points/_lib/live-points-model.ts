@@ -96,6 +96,7 @@ export function normalizeLiveExplainElementIds(elementIds: number[]): number[] {
 export function liveExplanationMatchesCurrentStats(
 	player: Pick<Player, 'breakdownStats' | 'stats'>
 ): boolean {
+	if (!player.breakdownStats) return false
 	const currentValues: Partial<Record<string, number>> = {
 		minutes: player.stats.minutes,
 		goals_scored: player.stats.goals,
@@ -111,10 +112,13 @@ export function liveExplanationMatchesCurrentStats(
 		defensive_contribution: player.stats.defensiveContribution ?? 0,
 		bonus: player.stats.bonusPoints
 	}
+	const explainedValues = aggregateBreakdownStats(player.breakdownStats)
 
-	return (player.breakdownStats ?? []).every(stat => {
-		const currentValue = currentValues[stat.identifier]
-		return currentValue === undefined || stat.value === currentValue
+	return Object.entries(currentValues).every(([identifier, currentValue]) => {
+		return (
+			currentValue === undefined ||
+			(explainedValues.get(identifier)?.value ?? 0) === currentValue
+		)
 	})
 }
 
@@ -194,7 +198,7 @@ export function mapLiveDataToPlayers(
 		const isBench = pick.position >= 12
 		const position = normalizePosition(pick.elementType, 'elementType')
 		const breakdownEntry = breakdownLookup.get(String(pick.element))
-		const breakdownStats = breakdownEntry?.stats ?? []
+		const breakdownStats = breakdownEntry?.stats
 
 		// The entry calculation is refreshed with the live snapshot. Explanation
 		// rows persist less often and enrich only the modal point breakdown; they
