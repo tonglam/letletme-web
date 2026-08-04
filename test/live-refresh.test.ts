@@ -13,8 +13,14 @@ import {
 	shouldPollLiveSnapshot,
 	shouldRefreshLiveExplain
 } from '../lib/live-refresh'
-import { mergePartialTournamentRows } from '../lib/tournament/liveEntries'
-import type { TournamentLiveCalcData } from '../lib/graphql/operations/tournaments'
+import {
+	getTournamentLiveBatchSeed,
+	mergePartialTournamentRows
+} from '../lib/tournament/liveEntries'
+import type {
+	TournamentLiveCalcData,
+	TournamentLivePointsResponse
+} from '../lib/graphql/operations/tournaments'
 
 const snapshot = (state: LiveSnapshotStatus['state']): LiveSnapshotStatus => ({
 	eventId: 33,
@@ -151,6 +157,35 @@ describe('live matches server snapshot', () => {
 })
 
 describe('partial tournament refreshes', () => {
+	it('preserves a settled producer snapshot beside partial row errors', () => {
+		const settled = snapshot('SETTLED')
+		const seed = getTournamentLiveBatchSeed({
+			liveSnapshot: settled,
+			calcLivePointsForTournament: {
+				results: [{ entry: 1 }] as TournamentLiveCalcData[],
+				errors: [{ entryId: 2, message: 'temporary failure' }],
+				meta: {
+					eventId: 33,
+					totalEntries: 2,
+					succeededCount: 1,
+					failedCount: 1
+				}
+			}
+		} satisfies TournamentLivePointsResponse)
+
+		assert.equal(seed.snapshot, settled)
+		assert.equal(seed.failedCount, 1)
+		assert.equal(
+			shouldPollLiveSnapshot({
+				isPageActive: true,
+				currentEventId: 33,
+				selectedEventId: 33,
+				snapshot: seed.snapshot
+			}),
+			false
+		)
+	})
+
 	it('keeps the last-good row only for entries that failed this refresh', () => {
 		const previousRows = [
 			{ entry: 1, liveNetPoints: 10 },

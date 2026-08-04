@@ -12,6 +12,7 @@ import {
 } from '@/lib/graphql/operations/tournaments'
 import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
+import { getTournamentLiveBatchSeed } from '@/lib/tournament/liveEntries'
 import { CalendarX2 } from 'lucide-react'
 import { Suspense } from 'react'
 import TournamentClient from '@/app/live/tournament/TournamentClient'
@@ -98,16 +99,14 @@ export default async function Page({ params, searchParams }: PageProps) {
 						{ tournamentId, eventId: currentEventId },
 						{ cache: 'no-store' }
 					)
-				initialCurrentRows =
-					currentResponse.calcLivePointsForTournament.results ?? []
-				const batch = currentResponse.calcLivePointsForTournament
-				if (batch.meta.failedCount > 0) {
+				const seed = getTournamentLiveBatchSeed(currentResponse)
+				initialCurrentRows = seed.rows
+				initialSnapshot = seed.snapshot
+				if (seed.failedCount > 0) {
 					initialResultsError = liveT('partialResults', {
-						failed: batch.meta.failedCount,
-						total: batch.meta.totalEntries
+						failed: seed.failedCount,
+						total: seed.totalEntries
 					})
-				} else {
-					initialSnapshot = currentResponse.liveSnapshot
 				}
 				initialResultsLoaded = true
 			}

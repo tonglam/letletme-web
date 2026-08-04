@@ -1,5 +1,6 @@
 import {
 	type TournamentLiveCalcData,
+	type TournamentLivePointsResponse,
 } from '@/lib/graphql/operations/tournaments'
 import { type TournamentEntry } from '@/types/tournament'
 
@@ -8,6 +9,20 @@ export type LiveTournamentStats = {
 	highestPoints: number
 	totalEntries: number
 }
+
+/**
+ * Keep producer metadata independent from per-entry calculation failures.
+ * A partial batch can still carry a valid SETTLED snapshot that must stop
+ * revision polling while its row error remains visible to the user.
+ */
+export const getTournamentLiveBatchSeed = (
+	response: TournamentLivePointsResponse,
+) => ({
+	rows: response.calcLivePointsForTournament.results ?? [],
+	snapshot: response.liveSnapshot,
+	failedCount: response.calcLivePointsForTournament.meta.failedCount,
+	totalEntries: response.calcLivePointsForTournament.meta.totalEntries,
+})
 
 const mapEventChipToFlags = (eventChip: string | null) => ({
 	bench: eventChip === 'BENCH_BOOST',

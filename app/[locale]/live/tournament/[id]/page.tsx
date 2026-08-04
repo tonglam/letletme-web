@@ -12,6 +12,7 @@ import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import { getCurrentEntryId } from '@/lib/session'
 import TournamentDetailClient from '@/app/live/tournament/[id]/TournamentDetailClient'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
+import { getTournamentLiveBatchSeed } from '@/lib/tournament/liveEntries'
 import { getTranslations } from 'next-intl/server'
 
 export const dynamic = 'force-dynamic'
@@ -76,15 +77,14 @@ export default async function Page({ params }: PageProps) {
 						{ tournamentId, eventId: currentEventId },
 						{ cache: 'no-store' }
 					)
-				const batch = standings.calcLivePointsForTournament
-				initialRows = batch.results ?? []
-				if (batch.meta.failedCount > 0) {
+				const seed = getTournamentLiveBatchSeed(standings)
+				initialRows = seed.rows
+				initialSnapshot = seed.snapshot
+				if (seed.failedCount > 0) {
 					initialError = liveT('partialResults', {
-						failed: batch.meta.failedCount,
-						total: batch.meta.totalEntries
+						failed: seed.failedCount,
+						total: seed.totalEntries
 					})
-				} else {
-					initialSnapshot = standings.liveSnapshot
 				}
 			}
 		} catch (error) {
