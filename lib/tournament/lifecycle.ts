@@ -53,13 +53,13 @@ export const getTournamentLifecycleBadge = (
 		| 'setupHasWarnings'
 	>
 ): TournamentLifecycleBadge => {
-	if (tournament.state === 'FINISHED') return 'finished'
 	if (
 		tournament.rosterSyncStatus === 'FAILED' ||
-		(tournament.setupStatus === 'FAILED' && !tournament.standingsReadyAt)
+		tournament.setupStatus === 'FAILED'
 	) {
 		return 'needsAttention'
 	}
+	if (tournament.state === 'FINISHED') return 'finished'
 	if (tournament.state === 'INACTIVE') return 'paused'
 	if (!tournament.standingsReadyAt) return 'settingUp'
 	if (tournament.setupStatus !== 'READY') return 'standingsReady'

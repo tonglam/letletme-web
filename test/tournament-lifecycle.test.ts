@@ -42,6 +42,12 @@ describe('tournament lifecycle presentation', () => {
 			),
 			'needsAttention'
 		)
+		assert.equal(
+			getTournamentLifecycleBadge(
+				lifecycle({ setupStatus: 'FAILED' })
+			),
+			'needsAttention'
+		)
 	})
 
 	it('separates shell, standings, enrichment, warnings, and pause states', () => {

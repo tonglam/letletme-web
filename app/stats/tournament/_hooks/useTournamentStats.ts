@@ -195,7 +195,13 @@ export function useTournamentStats({
 	useEffect(() => {
 		if (statsLoadState === 'waiting') return
 		if (statsLoadState === 'reset') {
-			const resetTimer = window.setTimeout(() => setIsLoading(false), 0)
+			const resetTimer = window.setTimeout(() => {
+				setIsLoading(false)
+				setDataGameweek(null)
+				setTournamentStats(null)
+				setRankingSummary(null)
+				setError(null)
+			}, 0)
 			return () => window.clearTimeout(resetTimer)
 		}
 		if (!selectedTournament) return
