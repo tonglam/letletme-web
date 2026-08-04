@@ -7,6 +7,7 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 		Boolean(process.env.PLAYWRIGHT_BASE_URL),
 		'Uses the deterministic local GraphQL fixture'
 	)
+	await page.clock.install()
 
 	let batchPayload:
 		| {
@@ -15,6 +16,7 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 		  }
 		| undefined
 	let clientLivePointsRequests = 0
+	let explainBatchRequests = 0
 	let releaseExplain!: () => void
 	const explainGate = new Promise<void>(resolve => {
 		releaseExplain = resolve
@@ -25,6 +27,7 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 			variables?: { eventId?: number; elementIds?: number[] }
 		}
 		if (payload.query?.includes('EventLiveExplainBatch')) {
+			explainBatchRequests += 1
 			batchPayload = payload
 			const elementIds = payload.variables?.elementIds ?? []
 			await explainGate
@@ -34,6 +37,21 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 					data: {
 						eventLiveExplains: elementIds.map(elementId => ({
 							elementId,
+							stats: {
+								minutes: 45,
+								goalsScored: elementId === 1 ? 1 : 0,
+								assists: 0,
+								cleanSheets: 0,
+								goalsConceded: elementId === 1 ? 2 : 0,
+								ownGoals: 0,
+								penaltiesSaved: 0,
+								penaltiesMissed: 0,
+								yellowCards: 0,
+								redCards: 0,
+								saves: 0,
+								defensiveContribution: 0,
+								bonus: 0
+							},
 							contributions: [
 								{ identifier: 'minutes', value: 45, points: 1 },
 								...(elementId === 1
@@ -106,6 +124,45 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 		detail.getByText('Goals Conceded', { exact: true })
 	).toBeVisible()
 	await expect(detail.getByText('-1', { exact: true }).first()).toBeVisible()
+
+	await page.clock.fastForward(10 * 60 * 1000)
+	await expect.poll(() => explainBatchRequests).toBeGreaterThanOrEqual(2)
+})
+
+test('live points keeps polling after the seed and first client load fail', async ({
+	page
+}) => {
+	test.skip(
+		Boolean(process.env.PLAYWRIGHT_BASE_URL),
+		'Uses the deterministic local GraphQL fixture'
+	)
+	await page.clock.install()
+
+	let clientLivePointsRequests = 0
+	await page.route('**/api/graphql', async route => {
+		const payload = route.request().postDataJSON() as { query?: string }
+		if (payload.query?.includes('GetLiveCalcPoints')) {
+			clientLivePointsRequests += 1
+		}
+		await route.continue()
+	})
+
+	await page.goto('/live/points/999')
+	await expect(
+		page.getByRole('heading', { level: 1, name: 'Team live points' })
+	).toBeVisible()
+	await expect(
+		page.getByText('Live points could not be loaded. Please try again.', {
+			exact: true
+		})
+	).toBeVisible()
+	await expect(page.getByText(/Next refresh in \d+s/)).toBeVisible()
+
+	await page.clock.fastForward(30_000)
+	await expect.poll(() => clientLivePointsRequests).toBe(2)
+	await expect(
+		page.getByRole('button', { name: /View details for Player/ })
+	).toHaveCount(15)
 })
 
 test('scheduled match polling is overlap-safe, keeps last-good data, and resumes immediately', async ({

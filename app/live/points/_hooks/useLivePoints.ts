@@ -13,6 +13,7 @@ import {
 	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import {
+	LIVE_EXPLAIN_REFRESH_INTERVAL_MS,
 	liveSnapshotNeedsRefresh,
 	shouldPollLiveSnapshot,
 	shouldRefreshLiveExplain
@@ -145,7 +146,8 @@ export function useLivePoints({
 						playerExplain.contributions ??
 						(playerExplain.breakdown ?? []).flatMap(entry => entry.stats)
 					breakdownLookup.set(String(playerExplain.elementId), {
-						stats: rollupBreakdownStats(flattenedStats)
+						stats: rollupBreakdownStats(flattenedStats),
+						explanationStats: playerExplain.stats
 					})
 				}
 
@@ -275,6 +277,18 @@ export function useLivePoints({
 			if (!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)) {
 				acceptSnapshot(probe.liveSnapshot)
 				setError(undefined)
+				const latestLive = latestLiveDataRef.current
+				if (
+					latestLive?.requestKey === currentRequestKeyRef.current &&
+					latestLive.live.event === selectedGameweek
+				) {
+					await enrichLivePointBreakdowns(
+						requestIdRef.current,
+						selectedGameweek,
+						latestLive.live,
+						latestLive.requestKey
+					)
+				}
 				return
 			}
 			await fetchLivePointsForGameweek(selectedGameweek)
@@ -283,7 +297,13 @@ export function useLivePoints({
 			console.error('Failed to check live points freshness:', probeError)
 			setError(t('loadFailed'))
 		}
-	}, [acceptSnapshot, fetchLivePointsForGameweek, selectedGameweek, t])
+	}, [
+		acceptSnapshot,
+		enrichLivePointBreakdowns,
+		fetchLivePointsForGameweek,
+		selectedGameweek,
+		t
+	])
 
 	useEffect(() => {
 		if (!activeEntryId) return
@@ -320,6 +340,50 @@ export function useLivePoints({
 		// Loading a new entry is the trigger; the selected gameweek is read at that point.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [activeEntryId])
+
+	useEffect(() => {
+		if (
+			!isPageActive ||
+			snapshot?.state !== 'SETTLED' ||
+			selectedGameweek === undefined ||
+			snapshot.eventId !== selectedGameweek
+		) {
+			return
+		}
+		const requestKey = currentRequestKeyRef.current
+		const latestLive = latestLiveDataRef.current
+		if (!requestKey || latestLive?.requestKey !== requestKey) return
+
+		// Snapshot polling intentionally stops once the event settles. Keep one
+		// bounded explanation-only retry aligned with the durable persistence
+		// cadence so a previous-cycle or transiently failed detail batch can land.
+		const elapsed = Date.now() - lastExplainAttemptAtRef.current
+		const delay = Math.max(0, LIVE_EXPLAIN_REFRESH_INTERVAL_MS - elapsed)
+		const retryTimer = window.setTimeout(() => {
+			const currentLive = latestLiveDataRef.current
+			if (
+				currentRequestKeyRef.current !== requestKey ||
+				currentLive?.requestKey !== requestKey
+			) {
+				return
+			}
+			void enrichLivePointBreakdowns(
+				requestIdRef.current,
+				selectedGameweek,
+				currentLive.live,
+				requestKey
+			)
+		}, delay)
+
+		return () => window.clearTimeout(retryTimer)
+	}, [
+		enrichLivePointBreakdowns,
+		isPageActive,
+		selectedGameweek,
+		snapshot?.eventId,
+		snapshot?.revision,
+		snapshot?.state
+	])
 
 	const shouldAutoRefresh = shouldPollLiveSnapshot({
 		isPageActive: true,

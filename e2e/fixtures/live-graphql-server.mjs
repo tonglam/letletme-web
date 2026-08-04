@@ -76,6 +76,8 @@ const livePicks = Array.from({ length: 15 }, (_, index) => {
 	}
 })
 
+let recoveryEntryRequestCount = 0
+
 const server = createServer((request, response) => {
 	if (request.method === 'GET' && request.url === '/health') {
 		json(response, 200, { ok: true })
@@ -150,6 +152,14 @@ const server = createServer((request, response) => {
 			return
 		}
 		if (query.includes('GetLiveCalcPoints')) {
+			const requestedEntry = Number(variables.entryId) || 123
+			if (requestedEntry === 999 && recoveryEntryRequestCount < 2) {
+				recoveryEntryRequestCount += 1
+				json(response, 200, {
+					errors: [{ message: 'Temporary live points failure' }]
+				})
+				return
+			}
 			json(response, 200, {
 				data: {
 					liveSnapshot: {
@@ -160,7 +170,7 @@ const server = createServer((request, response) => {
 						checkedAt: '2026-08-04T18:00:30.000Z'
 					},
 					calcLivePointsByEntry: {
-						entry: 123,
+						entry: requestedEntry,
 						event: 33,
 						entryName: 'E2E United',
 						playerName: 'Test Manager',
@@ -184,9 +194,26 @@ const server = createServer((request, response) => {
 				: []
 			json(response, 200, {
 				data: {
-					eventLiveExplains: elementIds.map(elementId => ({
-						elementId,
-						contributions: [
+					eventLiveExplains: elementIds.map(elementId => {
+						const pick = livePicks.find(candidate => candidate.element === elementId)
+						return {
+							elementId,
+							stats: {
+								minutes: pick?.minutes ?? 0,
+								goalsScored: pick?.goalsScored ?? 0,
+								assists: pick?.assists ?? 0,
+								cleanSheets: pick?.cleanSheets ?? 0,
+								goalsConceded: pick?.goalsConceded ?? 0,
+								ownGoals: pick?.ownGoals ?? 0,
+								penaltiesSaved: pick?.penaltiesSaved ?? 0,
+								penaltiesMissed: pick?.penaltiesMissed ?? 0,
+								yellowCards: pick?.yellowCards ?? 0,
+								redCards: pick?.redCards ?? 0,
+								saves: pick?.saves ?? 0,
+								defensiveContribution: pick?.defensiveContribution ?? 0,
+								bonus: pick?.bonus ?? 0
+							},
+							contributions: [
 							{ identifier: 'minutes', value: 45, points: 1 },
 							...(elementId === 1
 								? [{ identifier: 'goals_scored', value: 1, points: 6 }]
@@ -200,8 +227,9 @@ const server = createServer((request, response) => {
 										}
 									]
 								: [])
-						]
-					}))
+							]
+						}
+					})
 				}
 			})
 			return

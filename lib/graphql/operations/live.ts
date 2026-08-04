@@ -467,6 +467,21 @@ export const GET_EVENT_LIVE_EXPLAINS = `
   query EventLiveExplainBatch($eventId: Int!, $elementIds: [Int!]!) {
     eventLiveExplains(eventId: $eventId, elementIds: $elementIds) {
       elementId
+      stats {
+        minutes
+        goalsScored
+        assists
+        cleanSheets
+        goalsConceded
+        ownGoals
+        penaltiesSaved
+        penaltiesMissed
+        yellowCards
+        redCards
+        saves
+        defensiveContribution
+        bonus
+      }
       contributions {
         identifier
         value
@@ -489,6 +504,21 @@ export interface PlayerBreakdownEntry {
 
 export interface EventLiveExplainItem {
 	elementId: number
+	stats?: {
+		minutes?: number | null
+		goalsScored?: number | null
+		assists?: number | null
+		cleanSheets?: number | null
+		goalsConceded?: number | null
+		ownGoals?: number | null
+		penaltiesSaved?: number | null
+		penaltiesMissed?: number | null
+		yellowCards?: number | null
+		redCards?: number | null
+		saves?: number | null
+		defensiveContribution?: number | null
+		bonus?: number | null
+	}
 	selectedBy?: number | null
 	player?: {
 		id: number

@@ -253,4 +253,44 @@ describe('live-points model', () => {
 			false
 		)
 	})
+
+	it('accepts omitted zero-point contributions when persisted raw stats match', () => {
+		const player = {
+			breakdownStats: [{ identifier: 'minutes', value: 90, points: 2 }],
+			explanationStats: {
+				minutes: 90,
+				goalsConceded: 1,
+				saves: 2
+			},
+			stats: {
+				minutes: 90,
+				goals: 0,
+				expectedGoals: 0,
+				expectedAssists: 0,
+				expectedGoalInvolvements: 0,
+				expectedGoalsConceded: 0,
+				assists: 0,
+				saves: 2,
+				savePenalty: 0,
+				cleanSheets: 0,
+				goalsConceded: 1,
+				defensiveContribution: 0,
+				ownGoals: 0,
+				penaltiesMissed: 0,
+				yellowCards: 0,
+				redCards: 0,
+				points: 2,
+				bonusPoints: 0
+			}
+		} satisfies Pick<Player, 'breakdownStats' | 'explanationStats' | 'stats'>
+
+		assert.equal(liveExplanationMatchesCurrentStats(player), true)
+		assert.equal(
+			liveExplanationMatchesCurrentStats({
+				...player,
+				explanationStats: { ...player.explanationStats, saves: 1 }
+			}),
+			false
+		)
+	})
 })

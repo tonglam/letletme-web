@@ -38,7 +38,7 @@ export function LivePointsDashboard({
 	error?: string
 	isPageActive: boolean
 	shouldAutoRefresh: boolean
-	liveData: LiveCalcData
+	liveData?: LiveCalcData
 	startingPlayers: Player[]
 	benchPlayers: Player[]
 	onGameweekChange: (gameweek: number) => void
@@ -109,32 +109,40 @@ export function LivePointsDashboard({
 					>
 						{error}
 					</p>
+				) : !isRefreshing && !liveData ? (
+					<p className="mb-3 text-sm text-muted-foreground" role="status">
+						{t('noData')}
+					</p>
 				) : null}
 			</div>
 
-			<div className={cn(isRefreshing && 'opacity-75 transition-opacity')}>
-				<TeamStats stats={deriveLiveTeamStats(liveData)} />
-			</div>
+			{liveData ? (
+				<>
+					<div className={cn(isRefreshing && 'opacity-75 transition-opacity')}>
+						<TeamStats stats={deriveLiveTeamStats(liveData)} />
+					</div>
 
-			<section aria-labelledby="live-squad-heading">
-				<h2
-					id="live-squad-heading"
-					className="mb-3 text-xl font-bold"
-				>
-					{t('squad')}
-				</h2>
-				<Card
-					className={cn(
-						'overflow-hidden',
-						isRefreshing && 'opacity-75 transition-opacity'
-					)}
-				>
-					<PlayerList
-						startingPlayers={startingPlayers}
-						benchPlayers={benchPlayers}
-					/>
-				</Card>
-			</section>
+					<section aria-labelledby="live-squad-heading">
+						<h2
+							id="live-squad-heading"
+							className="mb-3 text-xl font-bold"
+						>
+							{t('squad')}
+						</h2>
+						<Card
+							className={cn(
+								'overflow-hidden',
+								isRefreshing && 'opacity-75 transition-opacity'
+							)}
+						>
+							<PlayerList
+								startingPlayers={startingPlayers}
+								benchPlayers={benchPlayers}
+							/>
+						</Card>
+					</section>
+				</>
+			) : null}
 		</>
 	)
 }

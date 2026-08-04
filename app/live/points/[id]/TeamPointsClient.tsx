@@ -1,6 +1,5 @@
 'use client'
 
-import { GameweekSelector } from '@/components/data/GameweekSelector'
 import PageShell from '@/components/layout/PageShell'
 import { Button } from '@/components/ui/button'
 import type {
@@ -48,22 +47,6 @@ export default function TeamPointsClient({
 				currentGameweek={livePoints.currentGameweek}
 				selectedGameweek={livePoints.selectedGameweek}
 			/>
-		)
-	} else if (!livePoints.liveData) {
-		content = (
-			<>
-				<GameweekSelector
-					onGameweekChange={livePoints.changeGameweek}
-					currentGameweek={livePoints.currentGameweek}
-					selectedGameweek={livePoints.selectedGameweek}
-				/>
-				<p
-					className="mt-6 text-center text-sm text-destructive"
-					role="alert"
-				>
-					{livePoints.error ?? t('noData')}
-				</p>
-			</>
 		)
 	} else {
 		content = (

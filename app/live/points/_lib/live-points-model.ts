@@ -14,6 +14,7 @@ export type BreakdownLookup = Map<
 	string,
 	{
 		stats: PlayerBreakdownStat[]
+		explanationStats?: Player['explanationStats']
 	}
 >
 
@@ -94,31 +95,36 @@ export function normalizeLiveExplainElementIds(elementIds: number[]): number[] {
 }
 
 export function liveExplanationMatchesCurrentStats(
-	player: Pick<Player, 'breakdownStats' | 'stats'>
+	player: Pick<Player, 'breakdownStats' | 'explanationStats' | 'stats'>
 ): boolean {
 	if (!player.breakdownStats) return false
-	const currentValues: Partial<Record<string, number>> = {
-		minutes: player.stats.minutes,
-		goals_scored: player.stats.goals,
-		assists: player.stats.assists,
-		clean_sheets: player.stats.cleanSheets,
-		goals_conceded: player.stats.goalsConceded ?? 0,
-		own_goals: player.stats.ownGoals ?? 0,
-		penalties_saved: player.stats.savePenalty,
-		penalties_missed: player.stats.penaltiesMissed ?? 0,
-		yellow_cards: player.stats.yellowCards,
-		red_cards: player.stats.redCards,
-		saves: player.stats.saves,
-		defensive_contribution: player.stats.defensiveContribution ?? 0,
-		bonus: player.stats.bonusPoints
-	}
+	const currentValues = [
+		['minutes', 'minutes', player.stats.minutes],
+		['goalsScored', 'goals_scored', player.stats.goals],
+		['assists', 'assists', player.stats.assists],
+		['cleanSheets', 'clean_sheets', player.stats.cleanSheets],
+		['goalsConceded', 'goals_conceded', player.stats.goalsConceded ?? 0],
+		['ownGoals', 'own_goals', player.stats.ownGoals ?? 0],
+		['penaltiesSaved', 'penalties_saved', player.stats.savePenalty],
+		['penaltiesMissed', 'penalties_missed', player.stats.penaltiesMissed ?? 0],
+		['yellowCards', 'yellow_cards', player.stats.yellowCards],
+		['redCards', 'red_cards', player.stats.redCards],
+		['saves', 'saves', player.stats.saves],
+		[
+			'defensiveContribution',
+			'defensive_contribution',
+			player.stats.defensiveContribution ?? 0
+		],
+		['bonus', 'bonus', player.stats.bonusPoints]
+	] as const
 	const explainedValues = aggregateBreakdownStats(player.breakdownStats)
 
-	return Object.entries(currentValues).every(([identifier, currentValue]) => {
-		return (
-			currentValue === undefined ||
-			(explainedValues.get(identifier)?.value ?? 0) === currentValue
-		)
+	return currentValues.every(([statsKey, identifier, currentValue]) => {
+		const persistedValue = player.explanationStats?.[statsKey]
+		if (persistedValue !== undefined && persistedValue !== null) {
+			return persistedValue === currentValue
+		}
+		return (explainedValues.get(identifier)?.value ?? 0) === currentValue
 	})
 }
 
@@ -199,6 +205,7 @@ export function mapLiveDataToPlayers(
 		const position = normalizePosition(pick.elementType, 'elementType')
 		const breakdownEntry = breakdownLookup.get(String(pick.element))
 		const breakdownStats = breakdownEntry?.stats
+		const explanationStats = breakdownEntry?.explanationStats
 
 		// The entry calculation is refreshed with the live snapshot. Explanation
 		// rows persist less often and enrich only the modal point breakdown; they
@@ -227,6 +234,7 @@ export function mapLiveDataToPlayers(
 			isBench,
 			isBenchBoostActive: benchBoostActive,
 			breakdownStats,
+			explanationStats,
 			stats: {
 				minutes,
 				goals: pick.goalsScored,

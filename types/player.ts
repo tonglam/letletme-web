@@ -8,6 +8,7 @@ export interface Player {
   isBench?: boolean;
   isBenchBoostActive?: boolean;
   breakdownStats?: PlayerBreakdownStat[];
+  explanationStats?: PlayerExplanationStats;
   stats: {
     minutes: number;
     goals: number;
@@ -36,4 +37,20 @@ export interface PlayerBreakdownStat {
   identifier: string;
   value: number;
   points: number;
+}
+
+export interface PlayerExplanationStats {
+  minutes?: number | null;
+  goalsScored?: number | null;
+  assists?: number | null;
+  cleanSheets?: number | null;
+  goalsConceded?: number | null;
+  ownGoals?: number | null;
+  penaltiesSaved?: number | null;
+  penaltiesMissed?: number | null;
+  yellowCards?: number | null;
+  redCards?: number | null;
+  saves?: number | null;
+  defensiveContribution?: number | null;
+  bonus?: number | null;
 }

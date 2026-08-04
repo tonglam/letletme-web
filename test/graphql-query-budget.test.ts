@@ -10,11 +10,17 @@ import { GET_MARKET_PULSE } from '../lib/graphql/operations/market'
 describe('GraphQL request budget', () => {
 	it('uses one root field for the fifteen-player live explanation batch', () => {
 		const document = parse(GET_EVENT_LIVE_EXPLAINS)
+		let astNodes = 0
+		visit(document, { enter: () => void (astNodes += 1) })
 		const operation = document.definitions.find(
 			definition => definition.kind === 'OperationDefinition'
 		)
 		assert.ok(operation?.kind === 'OperationDefinition')
 		assert.equal(operation.selectionSet.selections.length, 1)
+		assert.ok(
+			astNodes < 200,
+			`GET_EVENT_LIVE_EXPLAINS has ${astNodes} AST nodes`
+		)
 	})
 
 	it('keeps GET_LIVE_MATCHES below the production 200-node guard', () => {
