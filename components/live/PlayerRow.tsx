@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { liveExplanationMatchesCurrentStats } from "@/app/live/points/_lib/live-points-model";
 import { Player } from "@/types/player";
 import { PlayerDetail } from "@/types/player-detail";
 import { CheckCircle2, Clock, Play } from "lucide-react";
@@ -37,6 +38,7 @@ const breakdownLabelMap: Record<string, string> = {
   red_cards: "Red Card",
   own_goals: "Own Goal",
   goals_conceded: "Goals Conceded",
+  defensive_contribution: "Defensive Contribution",
   bonus: "Bonus Points",
   total: "Total Points",
   total_points: "Total Points"
@@ -54,6 +56,7 @@ const breakdownOrder = [
   "red_cards",
   "own_goals",
   "goals_conceded",
+  "defensive_contribution",
   "bonus",
   "total",
   "total_points"
@@ -180,68 +183,24 @@ export function PlayerRow({ player }: PlayerRowProps) {
     return [...orderedBreakdown, ...remaining];
   }, [player.breakdownStats]);
 
-  const computedFallbackBreakdown = useMemo(() => {
-    const pointsBreakdown: { category: string; points: number }[] = [];
-    
-    if (player.stats.minutes > 0) {
-      const minutesPoints = player.stats.minutes >= 60 ? 2 : 1;
-      pointsBreakdown.push({ category: "Appearance", points: minutesPoints });
-    }
-    
-    if (player.stats.goals > 0) {
-      const pointsPerGoal = player.position === "FWD" ? 4 : 
-                           player.position === "MID" ? 5 : 
-                           player.position === "DEF" ? 6 : 6;
-      const goalPoints = player.stats.goals * pointsPerGoal;
-      pointsBreakdown.push({ category: "Goals", points: goalPoints });
-    }
-    
-    if (player.stats.assists > 0) {
-      const assistPoints = player.stats.assists * 3;
-      pointsBreakdown.push({ category: "Assists", points: assistPoints });
-    }
-    
-    if (player.stats.cleanSheets > 0) {
-      const csPoints = player.position === "GKP" || player.position === "DEF" ? 4 : 
-                      player.position === "MID" ? 1 : 0;
-      if (csPoints > 0) {
-        pointsBreakdown.push({ category: "Clean Sheet", points: csPoints });
-      }
-    }
-    
-    if (player.stats.saves && player.stats.saves > 0) {
-      const savePoints = Math.floor(player.stats.saves / 3);
-      if (savePoints > 0) {
-        pointsBreakdown.push({ category: "Saves", points: savePoints });
-      }
-    }
-    
-    if (player.stats.savePenalty && player.stats.savePenalty > 0) {
-      const penSavePoints = player.stats.savePenalty * 5;
-      pointsBreakdown.push({ category: "Penalty Saved", points: penSavePoints });
-    }
-    
-    if (player.stats.yellowCards > 0) {
-      const ycPoints = -1 * player.stats.yellowCards;
-      pointsBreakdown.push({ category: "Yellow Card", points: ycPoints });
-    }
-    
-    if (player.stats.redCards > 0) {
-      const rcPoints = -3 * player.stats.redCards;
-      pointsBreakdown.push({ category: "Red Card", points: rcPoints });
-    }
-    
-    if (player.stats.bonusPoints > 0) {
-      pointsBreakdown.push({ category: "Bonus Points", points: player.stats.bonusPoints });
-    }
-    
-    return pointsBreakdown;
-  }, [player]);
 
   // Convert Player to PlayerDetail for the modal
   const playerDetail: PlayerDetail = useMemo(() => {
-    const pointsBreakdown =
-      breakdownFromExplain.length > 0 ? breakdownFromExplain : computedFallbackBreakdown;
+    const hasExplanation = player.breakdownStats !== undefined;
+    const explanationMatchesCurrentStats =
+      liveExplanationMatchesCurrentStats(player);
+    const explanationMatchesCurrentTotal =
+      hasExplanation &&
+      explanationMatchesCurrentStats &&
+      breakdownFromExplain.reduce((sum, item) => sum + item.points, 0) ===
+        player.stats.points;
+    // Fixture thresholds (appearance, clean sheets, saves, goals conceded, and
+    // defensive contributions) cannot be reconstructed from event aggregates
+    // in a double gameweek. Keep the live total authoritative and wait for the
+    // persisted per-fixture explanation instead of displaying invented rows.
+    const pointsBreakdown = explanationMatchesCurrentTotal
+      ? breakdownFromExplain
+      : [];
 
     return {
       id: player.id,
@@ -253,6 +212,9 @@ export function PlayerRow({ player }: PlayerRowProps) {
       ownershipPercentage: 0,
       bps: 0,
       bonusPoints: player.stats.bonusPoints,
+      breakdownPending:
+        !explanationMatchesCurrentTotal &&
+        player.playingStatus !== "NOT_STARTED",
       stats: {
         minutes: player.stats.minutes,
         goals: player.stats.goals,
@@ -265,7 +227,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
       },
       pointsBreakdown
     };
-  }, [player, breakdownFromExplain, computedFallbackBreakdown]);
+  }, [player, breakdownFromExplain]);
 
   return (
     <>

@@ -51,9 +51,28 @@ export interface LiveScoresResponse {
 	liveScores: LiveScore[]
 }
 
+export const GET_LIVE_SNAPSHOT = `
+  query GetLiveSnapshot($eventId: Int) {
+    liveSnapshot(eventId: $eventId) {
+      eventId
+      revision
+      state
+      publishedAt
+      checkedAt
+    }
+  }
+`
+
 // Query to fetch top transfers in
 export const GET_LIVE_POINTS = `
   query GetLiveCalcPoints($eventId: Int!, $entryId: Int!) {
+    liveSnapshot(eventId: $eventId) {
+      eventId
+      revision
+      state
+      publishedAt
+      checkedAt
+    }
     calcLivePointsByEntry(eventId: $eventId, entryId: $entryId) {
       entry
       event
@@ -70,13 +89,27 @@ export const GET_LIVE_POINTS = `
         elementType
         position
         webName
+        teamName
+        teamShortName
         minutes
         goalsScored
         assists
+        cleanSheets
+        goalsConceded
+        defensiveContribution
+        ownGoals
+        penaltiesSaved
+        penaltiesMissed
+        yellowCards
+        redCards
+        saves
         bonus
         bps
         totalPoints
         starts
+        isGwStarted
+        isGwFinished
+        isPlayed
         expectedGoals
         expectedAssists
         expectedGoalInvolvements
@@ -93,13 +126,27 @@ export interface LivePick {
 	elementType: number
 	position: number
 	webName: string
+	teamName: string
+	teamShortName: string
 	minutes: number
 	goalsScored: number
 	assists: number
+	cleanSheets: number
+	goalsConceded: number
+	defensiveContribution: number
+	ownGoals: number
+	penaltiesSaved: number
+	penaltiesMissed: number
+	yellowCards: number
+	redCards: number
+	saves: number
 	bonus: number
 	bps: number
 	totalPoints: number
-	starts: boolean
+	starts: boolean | null
+	isGwStarted: boolean
+	isGwFinished: boolean
+	isPlayed: boolean
 	expectedGoals: number | null
 	expectedAssists: number | null
 	expectedGoalInvolvements: number | null
@@ -122,12 +169,34 @@ export interface LiveCalcData {
 }
 
 export interface LiveCalcDataResponse {
+	liveSnapshot: LiveSnapshotStatus | null
 	calcLivePointsByEntry: LiveCalcData
+}
+
+export type LiveSnapshotState = 'SCHEDULED' | 'LIVE' | 'SETTLED'
+
+export interface LiveSnapshotStatus {
+	eventId: number
+	revision: string
+	state: LiveSnapshotState
+	publishedAt: string
+	checkedAt: string
+}
+
+export interface LiveSnapshotResponse {
+	liveSnapshot: LiveSnapshotStatus | null
 }
 
 // Query to fetch live points for all entries in a tournament
 export const GET_LIVE_MATCHES = `
   query GetLiveMatches {
+    liveSnapshot {
+      eventId
+      revision
+      state
+      publishedAt
+      checkedAt
+    }
     liveMatches(upcoming: true) {
       nextEvent {
         ...LiveMatchIdentity
@@ -373,6 +442,7 @@ export interface LiveMatchesData {
 }
 
 export interface LiveMatchesResponse {
+	liveSnapshot: LiveSnapshotStatus | null
 	liveMatches: LiveMatchesData
 }
 
@@ -393,9 +463,37 @@ export const GET_EVENT_LIVE_EXPLAIN = `
   }
 `
 
+export const GET_EVENT_LIVE_EXPLAINS = `
+  query EventLiveExplainBatch($eventId: Int!, $elementIds: [Int!]!) {
+    eventLiveExplains(eventId: $eventId, elementIds: $elementIds) {
+      elementId
+      stats {
+        minutes
+        goalsScored
+        assists
+        cleanSheets
+        goalsConceded
+        ownGoals
+        penaltiesSaved
+        penaltiesMissed
+        yellowCards
+        redCards
+        saves
+        defensiveContribution
+        bonus
+      }
+      contributions {
+        identifier
+        value
+        points
+      }
+    }
+  }
+`
+
 export interface PlayerBreakdownStat {
 	identifier: string
-	value: number
+	value: number | null
 	points: number
 }
 
@@ -406,20 +504,40 @@ export interface PlayerBreakdownEntry {
 
 export interface EventLiveExplainItem {
 	elementId: number
-	selectedBy: number | null
-	player: {
+	stats?: {
+		minutes?: number | null
+		goalsScored?: number | null
+		assists?: number | null
+		cleanSheets?: number | null
+		goalsConceded?: number | null
+		ownGoals?: number | null
+		penaltiesSaved?: number | null
+		penaltiesMissed?: number | null
+		yellowCards?: number | null
+		redCards?: number | null
+		saves?: number | null
+		defensiveContribution?: number | null
+		bonus?: number | null
+	}
+	selectedBy?: number | null
+	player?: {
 		id: number
 		webName: string
 		team: {
 			id: number
 			shortName: string
-		}
-	}
+		} | null
+	} | null
+	contributions?: PlayerBreakdownStat[]
 	breakdown?: PlayerBreakdownEntry[]
 }
 
 export interface EventLiveExplainResponse {
 	eventLiveExplain: EventLiveExplainItem | null
+}
+
+export interface EventLiveExplainsResponse {
+	eventLiveExplains: EventLiveExplainItem[]
 }
 
 export const GET_PLAYER_LIVE = `

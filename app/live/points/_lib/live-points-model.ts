@@ -4,18 +4,68 @@ import type { Player, PlayerBreakdownStat } from '@/types/player'
 type NumericPositionMode = 'elementType' | 'squadOrder'
 
 type AggregatedBreakdown = Map<string, { value: number; points: number }>
+type BreakdownStatInput = {
+	identifier: string
+	value: number | null
+	points: number
+}
 
 export type BreakdownLookup = Map<
 	string,
 	{
-		teamShortName: string
 		stats: PlayerBreakdownStat[]
+		explanationStats?: Player['explanationStats']
 	}
 >
 
-export const LIVE_POINTS_AUTO_REFRESH_SECONDS = 60
+export type CachedBreakdownLookup = {
+	requestKey: string
+	lookup: BreakdownLookup
+}
+
+export type LiveDataForRequest = {
+	requestKey: string
+	live: LiveCalcData
+}
+
+export function selectLiveDataForExplainResponse({
+	responseRequestId,
+	currentRequestId,
+	requestKey,
+	currentRequestKey,
+	responseLive,
+	currentLive
+}: {
+	responseRequestId: number
+	currentRequestId: number
+	requestKey: string
+	currentRequestKey: string | null
+	responseLive: LiveCalcData
+	currentLive: LiveDataForRequest | null
+}): LiveCalcData | null {
+	const latestLiveForRequest =
+		currentLive?.requestKey === requestKey ? currentLive.live : null
+	if (responseRequestId === currentRequestId) {
+		return latestLiveForRequest ?? responseLive
+	}
+
+	// A manual refresh can supersede the live-points request while its explain
+	// enrichment remains in flight. Keep that response only when the latest
+	// request still targets the same entry and event, and apply it to the newest
+	// accepted live data rather than overwriting the UI with the older snapshot.
+	if (currentRequestKey !== requestKey) return null
+	return latestLiveForRequest
+}
+
+export function breakdownLookupForRequest(
+	cached: CachedBreakdownLookup | null,
+	requestKey: string
+): BreakdownLookup {
+	return cached?.requestKey === requestKey ? cached.lookup : new Map()
+}
+
 const aggregateBreakdownStats = (
-	stats?: PlayerBreakdownStat[]
+	stats?: readonly BreakdownStatInput[]
 ): AggregatedBreakdown => {
 	return (stats ?? []).reduce<AggregatedBreakdown>((acc, stat) => {
 		const existing = acc.get(stat.identifier) ?? { value: 0, points: 0 }
@@ -28,7 +78,7 @@ const aggregateBreakdownStats = (
 }
 
 export const rollupBreakdownStats = (
-	stats?: PlayerBreakdownStat[]
+	stats?: readonly BreakdownStatInput[]
 ): PlayerBreakdownStat[] => {
 	const aggregated = aggregateBreakdownStats(stats)
 	return Array.from(aggregated.entries()).map(([identifier, totals]) => ({
@@ -38,43 +88,44 @@ export const rollupBreakdownStats = (
 	}))
 }
 
-export function buildEventLiveExplainBatchQuery(elementIds: number[]): string | null {
-	const safeElementIds = Array.from(
-		new Set(elementIds.filter((id) => Number.isSafeInteger(id) && id > 0)),
+export function normalizeLiveExplainElementIds(elementIds: number[]): number[] {
+	return Array.from(
+		new Set(elementIds.filter(id => Number.isSafeInteger(id) && id > 0))
 	).slice(0, 15)
-	if (safeElementIds.length === 0) {
-		return null
-	}
+}
 
-	const fields = safeElementIds
-		.map(
-			elementId => `
-      e${elementId}: eventLiveExplain(eventId: $eventId, elementId: ${elementId}) {
-        player {
-          id
-          webName
-          team {
-            id
-            shortName
-          }
-        }
-        breakdown {
-          fixtureId
-          stats {
-            identifier
-            value
-            points
-          }
-        }
-      }`
-		)
-		.join('\n')
+export function liveExplanationMatchesCurrentStats(
+	player: Pick<Player, 'breakdownStats' | 'explanationStats' | 'stats'>
+): boolean {
+	if (!player.breakdownStats) return false
+	const currentValues = [
+		['minutes', 'minutes', player.stats.minutes],
+		['goalsScored', 'goals_scored', player.stats.goals],
+		['assists', 'assists', player.stats.assists],
+		['cleanSheets', 'clean_sheets', player.stats.cleanSheets],
+		['goalsConceded', 'goals_conceded', player.stats.goalsConceded ?? 0],
+		['ownGoals', 'own_goals', player.stats.ownGoals ?? 0],
+		['penaltiesSaved', 'penalties_saved', player.stats.savePenalty],
+		['penaltiesMissed', 'penalties_missed', player.stats.penaltiesMissed ?? 0],
+		['yellowCards', 'yellow_cards', player.stats.yellowCards],
+		['redCards', 'red_cards', player.stats.redCards],
+		['saves', 'saves', player.stats.saves],
+		[
+			'defensiveContribution',
+			'defensive_contribution',
+			player.stats.defensiveContribution ?? 0
+		],
+		['bonus', 'bonus', player.stats.bonusPoints]
+	] as const
+	const explainedValues = aggregateBreakdownStats(player.breakdownStats)
 
-	return `
-    query GetEventLiveExplainBatch($eventId: Int!) {
-      ${fields}
-    }
-  `
+	return currentValues.every(([statsKey, identifier, currentValue]) => {
+		const persistedValue = player.explanationStats?.[statsKey]
+		if (persistedValue !== undefined && persistedValue !== null) {
+			return persistedValue === currentValue
+		}
+		return (explainedValues.get(identifier)?.value ?? 0) === currentValue
+	})
 }
 
 function normalizePosition(
@@ -153,32 +204,21 @@ export function mapLiveDataToPlayers(
 		const isBench = pick.position >= 12
 		const position = normalizePosition(pick.elementType, 'elementType')
 		const breakdownEntry = breakdownLookup.get(String(pick.element))
-		const breakdownStats = breakdownEntry?.stats ?? []
-		const aggregatedBreakdown = aggregateBreakdownStats(breakdownStats)
+		const breakdownStats = breakdownEntry?.stats
+		const explanationStats = breakdownEntry?.explanationStats
 
-		const getValue = (identifier: string) =>
-			aggregatedBreakdown.get(identifier)?.value
-		const getPoints = (identifier: string) =>
-			aggregatedBreakdown.get(identifier)?.points
-
-		const minutes = getValue('minutes') ?? pick.minutes
-		const goalsScored = getValue('goals_scored') ?? pick.goalsScored
-		const assists = getValue('assists') ?? pick.assists
-		const cleanSheets = getValue('clean_sheets') ?? 0
-		const saves = getValue('saves') ?? 0
-		const penaltiesSaved = getValue('penalties_saved') ?? 0
-		const yellowCards = getValue('yellow_cards') ?? 0
-		const redCards = getValue('red_cards') ?? 0
-		const bonusPoints = getPoints('bonus') ?? pick.bonus
-		const totalPoints =
-			getPoints('total') ?? getPoints('total_points') ?? pick.totalPoints
+		// The entry calculation is refreshed with the live snapshot. Explanation
+		// rows persist less often and enrich only the modal point breakdown; they
+		// must never overwrite current match stats or the calculated total.
+		const minutes = pick.minutes
 
 		let playingStatus: Player['playingStatus']
-		if (minutes >= 90) {
+		if (pick.isGwFinished) {
 			playingStatus = 'FINISHED'
-		} else if (minutes > 0) {
-			playingStatus = 'PLAYING'
-		} else if (pick.starts) {
+		} else if (
+			pick.isGwStarted &&
+			(pick.isPlayed || minutes > 0 || pick.starts === true)
+		) {
 			playingStatus = 'PLAYING'
 		} else {
 			playingStatus = 'NOT_STARTED'
@@ -187,28 +227,33 @@ export function mapLiveDataToPlayers(
 		return {
 			id: String(pick.element),
 			name: pick.webName,
-			team: breakdownEntry?.teamShortName ?? '',
-			teamShort: breakdownEntry?.teamShortName ?? '',
+			team: pick.teamName,
+			teamShort: pick.teamShortName,
 			position,
 			playingStatus,
 			isBench,
 			isBenchBoostActive: benchBoostActive,
 			breakdownStats,
+			explanationStats,
 			stats: {
 				minutes,
-				goals: goalsScored,
+				goals: pick.goalsScored,
 				expectedGoals: pick.expectedGoals ?? 0,
 				expectedAssists: pick.expectedAssists ?? 0,
 				expectedGoalInvolvements: pick.expectedGoalInvolvements ?? 0,
 				expectedGoalsConceded: pick.expectedGoalsConceded ?? 0,
-				assists,
-				saves,
-				savePenalty: penaltiesSaved,
-				cleanSheets,
-				yellowCards,
-				redCards,
-				points: totalPoints,
-				bonusPoints: bonusPoints ?? 0
+				assists: pick.assists,
+				saves: pick.saves,
+				savePenalty: pick.penaltiesSaved,
+				cleanSheets: pick.cleanSheets,
+				goalsConceded: pick.goalsConceded,
+				defensiveContribution: pick.defensiveContribution,
+				ownGoals: pick.ownGoals,
+				penaltiesMissed: pick.penaltiesMissed,
+				yellowCards: pick.yellowCards,
+				redCards: pick.redCards,
+				points: pick.totalPoints,
+				bonusPoints: pick.bonus
 			},
 			isCaptain,
 			isViceCaptain: false
@@ -217,8 +262,10 @@ export function mapLiveDataToPlayers(
 }
 
 export function deriveLiveTeamStats(live: LiveCalcData) {
-	const startingPicks = live.pickList.filter((pick) => pick.position <= 11)
-	const playedCount = startingPicks.filter((pick) => (pick.minutes ?? 0) > 0).length
+	const startingPicks = live.pickList.filter(pick => pick.position <= 11)
+	const playedCount = startingPicks.filter(
+		pick => (pick.minutes ?? 0) > 0
+	).length
 	const normalizedChip = live.chip?.toLowerCase() ?? ''
 
 	return {
@@ -231,8 +278,9 @@ export function deriveLiveTeamStats(live: LiveCalcData) {
 		played: `${playedCount}/${startingPicks.length}`,
 		chips: {
 			bench: normalizedChip.includes('bench'),
-			triple: normalizedChip.includes('3x') || normalizedChip.includes('triple'),
-			wildcard: normalizedChip.includes('wildcard'),
-		},
+			triple:
+				normalizedChip.includes('3x') || normalizedChip.includes('triple'),
+			wildcard: normalizedChip.includes('wildcard')
+		}
 	}
 }

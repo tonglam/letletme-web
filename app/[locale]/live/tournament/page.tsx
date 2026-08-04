@@ -8,9 +8,11 @@ import {
 	GET_TOURNAMENT_LIVE_POINTS,
 	type EntryTournamentsResponse,
 	type TournamentLiveCalcData,
-	type TournamentLivePointsResponse,
+	type TournamentLivePointsResponse
 } from '@/lib/graphql/operations/tournaments'
+import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
+import { getTournamentLiveBatchSeed } from '@/lib/tournament/liveEntries'
 import { CalendarX2 } from 'lucide-react'
 import { Suspense } from 'react'
 import TournamentClient from '@/app/live/tournament/TournamentClient'
@@ -25,7 +27,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/live/tournament',
 		titleKey: 'liveTournamentsTitle',
-		descriptionKey: 'liveTournamentsDescription',
+		descriptionKey: 'liveTournamentsDescription'
 	})
 }
 
@@ -36,11 +38,14 @@ type PageProps = {
 
 export default async function Page({ params, searchParams }: PageProps) {
 	await getPageLocale(params)
-	const t = await getTranslations('States')
+	const [t, liveT] = await Promise.all([
+		getTranslations('States'),
+		getTranslations('LiveTournament')
+	])
 	const resolvedSearchParams = await searchParams
 	const [entryId, events] = await Promise.all([
 		getCurrentEntryId(),
-		getCurrentAndNextEvents(),
+		getCurrentAndNextEvents()
 	])
 	const currentEventId = events?.current[0]?.id
 
@@ -55,38 +60,54 @@ export default async function Page({ params, searchParams }: PageProps) {
 			</PageShell>
 		)
 	}
-	let initialTournaments: ReturnType<typeof mapEntryTournamentToLiveTournament>[] = []
+	let initialTournaments: ReturnType<
+		typeof mapEntryTournamentToLiveTournament
+	>[] = []
 	let initialSelectedTournamentId = ''
 	let initialCurrentRows: TournamentLiveCalcData[] = []
 	let initialResultsLoaded = false
+	let initialResultsError: string | null = null
+	let initialSnapshot: LiveSnapshotStatus | null = null
 
 	if (entryId) {
 		try {
-			const tournamentsData = await executeServerQuery<EntryTournamentsResponse>(
-				GET_ENTRY_TOURNAMENTS,
-				{ entryId },
-				{ cache: 'no-store' },
-			)
+			const tournamentsData =
+				await executeServerQuery<EntryTournamentsResponse>(
+					GET_ENTRY_TOURNAMENTS,
+					{ entryId },
+					{ cache: 'no-store' }
+				)
 			initialTournaments = tournamentsData.entryTournaments.map(
-				mapEntryTournamentToLiveTournament,
+				mapEntryTournamentToLiveTournament
 			)
 			const requestedTournamentId =
 				typeof resolvedSearchParams.tournamentId === 'string'
 					? resolvedSearchParams.tournamentId
 					: ''
 			initialSelectedTournamentId =
-				initialTournaments.find(tournament => tournament.id === requestedTournamentId)?.id ??
+				initialTournaments.find(
+					tournament => tournament.id === requestedTournamentId
+				)?.id ??
 				initialTournaments[0]?.id ??
 				''
 
 			const tournamentId = Number(initialSelectedTournamentId)
 			if (tournamentId > 0 && currentEventId) {
-				const currentResponse = await executeServerQuery<TournamentLivePointsResponse>(
+				const currentResponse =
+					await executeServerQuery<TournamentLivePointsResponse>(
 						GET_TOURNAMENT_LIVE_POINTS,
 						{ tournamentId, eventId: currentEventId },
-						{ cache: 'no-store' },
+						{ cache: 'no-store' }
 					)
-				initialCurrentRows = currentResponse.calcLivePointsForTournament.results ?? []
+				const seed = getTournamentLiveBatchSeed(currentResponse)
+				initialCurrentRows = seed.rows
+				initialSnapshot = seed.snapshot
+				if (seed.failedCount > 0) {
+					initialResultsError = liveT('partialResults', {
+						failed: seed.failedCount,
+						total: seed.totalEntries
+					})
+				}
 				initialResultsLoaded = true
 			}
 		} catch (err) {
@@ -95,7 +116,13 @@ export default async function Page({ params, searchParams }: PageProps) {
 	}
 
 	return (
-		<Suspense fallback={<div className="mx-auto max-w-4xl px-4 py-12 text-sm text-muted-foreground">{t('loadingTournaments')}</div>}>
+		<Suspense
+			fallback={
+				<div className="mx-auto max-w-4xl px-4 py-12 text-sm text-muted-foreground">
+					{t('loadingTournaments')}
+				</div>
+			}
+		>
 			<TournamentClient
 				entryId={entryId ?? 0}
 				initialTournaments={initialTournaments}
@@ -103,6 +130,8 @@ export default async function Page({ params, searchParams }: PageProps) {
 				initialEventId={currentEventId}
 				initialCurrentRows={initialCurrentRows}
 				initialResultsLoaded={initialResultsLoaded}
+				initialResultsError={initialResultsError}
+				initialSnapshot={initialSnapshot}
 			/>
 		</Suspense>
 	)

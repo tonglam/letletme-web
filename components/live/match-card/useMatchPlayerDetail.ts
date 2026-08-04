@@ -38,7 +38,7 @@ export function useMatchPlayerDetail(eventId?: number) {
 				const live = liveData.playerLive
 				return {
 					...current,
-					name: explain?.player.webName || current.name,
+					name: explain?.player?.webName || current.name,
 					ownershipPercentage: explain?.selectedBy ?? current.ownershipPercentage,
 					points: live?.totalPoints ?? current.points,
 					bps: live?.bps ?? current.bps,

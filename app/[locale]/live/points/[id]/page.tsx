@@ -7,6 +7,7 @@ import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
 	type LiveCalcDataResponse,
+	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import TeamPointsClient from '@/app/live/points/[id]/TeamPointsClient'
 import { CalendarX2 } from 'lucide-react'
@@ -15,14 +16,12 @@ import { getTranslations } from 'next-intl/server'
 
 export const dynamic = 'force-dynamic'
 
-export async function generateMetadata({
-	params
-}: PageProps) {
+export async function generateMetadata({ params }: PageProps) {
 	const { id, locale } = await getPageLocale(params)
 	const metadata = await getPageMetadata({
 		locale,
 		pathname: `/live/points/${encodeURIComponent(id)}`,
-		titleKey: 'entryPointsTitle',
+		titleKey: 'entryPointsTitle'
 	})
 	const t = await getTranslations({ locale, namespace: 'PageMetadata' })
 	return { ...metadata, title: t('entryPointsTitle', { id }) }
@@ -41,6 +40,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	const events = await getCurrentAndNextEvents()
 	const currentEventId = events?.current[0]?.id
 	let initialLiveData: LiveCalcData | undefined
+	let initialSnapshot: LiveSnapshotStatus | null = null
 
 	if (!currentEventId) {
 		return (
@@ -62,6 +62,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 				{ cache: 'no-store' }
 			)
 			initialLiveData = liveResponse.calcLivePointsByEntry
+			initialSnapshot = liveResponse.liveSnapshot
 		} catch (err) {
 			console.error('Failed to seed live points page:', err)
 		}
@@ -79,9 +80,12 @@ export default async function Page({ params, searchParams }: PageProps) {
 		>
 			<TeamPointsClient
 				entryId={entryId}
-				tournamentId={typeof tournamentId === 'string' ? tournamentId : undefined}
+				tournamentId={
+					typeof tournamentId === 'string' ? tournamentId : undefined
+				}
 				initialEventId={currentEventId}
 				initialLiveData={initialLiveData}
+				initialSnapshot={initialSnapshot}
 			/>
 		</Suspense>
 	)

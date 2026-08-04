@@ -8,6 +8,7 @@ export interface PlayerDetail {
   ownershipPercentage: number;
   bps: number;
   bonusPoints: number;
+  breakdownPending?: boolean;
   stats: {
     minutes: number;
     goals: number;

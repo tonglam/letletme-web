@@ -1,7 +1,8 @@
 import {
 	GET_LIVE_MATCHES,
 	type LiveMatchesResponse,
-	type MatchPlayerData,
+	type LiveSnapshotStatus,
+	type MatchPlayerData
 } from '@/lib/graphql/operations/live'
 import { executeQuery } from '@/lib/graphql-client'
 import { teamFullNames } from '@/types/common'
@@ -10,7 +11,10 @@ import type { Match } from '@/types/match'
 type QueryExecutor = <T>(
 	query: string,
 	variables?: Record<string, unknown>,
-	options?: { cache?: RequestCache; next?: { revalidate?: number | false; tags?: string[] } },
+	options?: {
+		cache?: RequestCache
+		next?: { revalidate?: number | false; tags?: string[] }
+	}
 ) => Promise<T>
 
 function getTeamShortName(fullName: string): string {
@@ -22,14 +26,14 @@ function getTeamShortName(fullName: string): string {
 		.trim()
 
 	const entry = Object.entries(teamFullNames).find(
-		([, name]) => name.toLowerCase() === normalized.toLowerCase(),
+		([, name]) => name.toLowerCase() === normalized.toLowerCase()
 	)
 
 	if (!entry) {
 		const partialMatch = Object.entries(teamFullNames).find(
 			([, name]) =>
 				name.toLowerCase().includes(normalized.toLowerCase()) ||
-				normalized.toLowerCase().includes(name.toLowerCase()),
+				normalized.toLowerCase().includes(name.toLowerCase())
 		)
 		if (partialMatch) return partialMatch[0]
 	}
@@ -38,7 +42,7 @@ function getTeamShortName(fullName: string): string {
 }
 
 export function transformLiveMatches(
-	data: LiveMatchesResponse['liveMatches'],
+	data: LiveMatchesResponse['liveMatches']
 ): Match[] {
 	const matches: Match[] = []
 
@@ -46,7 +50,7 @@ export function transformLiveMatches(
 
 	const toMatchStatus = (
 		playStatus: string | undefined,
-		bucket: LiveMatchesBucket,
+		bucket: LiveMatchesBucket
 	): Match['status'] => {
 		const status = (playStatus ?? '').toUpperCase()
 
@@ -57,7 +61,7 @@ export function transformLiveMatches(
 	}
 
 	const mapPlayers = (players: MatchPlayerData[] | undefined) =>
-		(players ?? []).map((player) => ({
+		(players ?? []).map(player => ({
 			player: player.webName,
 			element: player.element,
 			elementType: player.elementType,
@@ -75,7 +79,7 @@ export function transformLiveMatches(
 			bps: player.bps ?? 0,
 			defensiveContribution: player.defensiveContribution ?? 0,
 			saves: player.saves ?? 0,
-			totalPoints: player.totalPoints ?? 0,
+			totalPoints: player.totalPoints ?? 0
 		}))
 
 	const makeMatch = (
@@ -90,7 +94,7 @@ export function transformLiveMatches(
 		kickoffTime: string,
 		minute: number,
 		homePlayers: Match['homeTeam']['players'],
-		awayPlayers: Match['awayTeam']['players'],
+		awayPlayers: Match['awayTeam']['players']
 	): Match => ({
 		id,
 		homeTeam: {
@@ -101,7 +105,7 @@ export function transformLiveMatches(
 			shots: 0,
 			shotsOnTarget: 0,
 			corners: 0,
-			players: homePlayers,
+			players: homePlayers
 		},
 		awayTeam: {
 			name: awayTeamName,
@@ -111,15 +115,15 @@ export function transformLiveMatches(
 			shots: 0,
 			shotsOnTarget: 0,
 			corners: 0,
-			players: awayPlayers,
+			players: awayPlayers
 		},
 		status,
 		minute,
 		kickoff: kickoffTime,
-		viewers: 0,
+		viewers: 0
 	})
 
-	data.nextEvent.forEach((m) =>
+	data.nextEvent.forEach(m =>
 		matches.push(
 			makeMatch(
 				`next-${m.matchId}`,
@@ -133,12 +137,12 @@ export function transformLiveMatches(
 				m.kickoffTime,
 				m.minutes ?? 0,
 				[],
-				[],
-			),
-		),
+				[]
+			)
+		)
 	)
 
-	data.notStarted.forEach((m) =>
+	data.notStarted.forEach(m =>
 		matches.push(
 			makeMatch(
 				`ns-${m.matchId}`,
@@ -152,12 +156,12 @@ export function transformLiveMatches(
 				m.kickoffTime,
 				m.minutes ?? 0,
 				[],
-				[],
-			),
-		),
+				[]
+			)
+		)
 	)
 
-	data.playing.forEach((m) =>
+	data.playing.forEach(m =>
 		matches.push(
 			makeMatch(
 				`live-${m.matchId}`,
@@ -171,12 +175,12 @@ export function transformLiveMatches(
 				m.kickoffTime,
 				m.minutes ?? 0,
 				mapPlayers(m.homeTeamDataList),
-				mapPlayers(m.awayTeamDataList),
-			),
-		),
+				mapPlayers(m.awayTeamDataList)
+			)
+		)
 	)
 
-	data.finished.forEach((m) =>
+	data.finished.forEach(m =>
 		matches.push(
 			makeMatch(
 				`ft-${m.matchId}`,
@@ -190,9 +194,9 @@ export function transformLiveMatches(
 				m.kickoffTime,
 				m.minutes ?? 0,
 				mapPlayers(m.homeTeamDataList),
-				mapPlayers(m.awayTeamDataList),
-			),
-		),
+				mapPlayers(m.awayTeamDataList)
+			)
+		)
 	)
 
 	const statusPriority: Record<Match['status'], number> = {
@@ -200,7 +204,7 @@ export function transformLiveMatches(
 		HT: 1,
 		NOT_STARTED: 2,
 		UPCOMING: 3,
-		FT: 4,
+		FT: 4
 	}
 
 	matches.sort((a, b) => {
@@ -219,11 +223,27 @@ export function transformLiveMatches(
 	return matches
 }
 
-export async function getLiveMatches(executor: QueryExecutor = executeQuery): Promise<Match[]> {
+export interface LiveMatchesSnapshot {
+	matches: Match[]
+	snapshot: LiveSnapshotStatus | null
+}
+
+export async function getLiveMatchesSnapshot(
+	executor: QueryExecutor = executeQuery
+): Promise<LiveMatchesSnapshot> {
 	const data = await executor<LiveMatchesResponse>(
 		GET_LIVE_MATCHES,
 		undefined,
-		{ cache: 'force-cache', next: { revalidate: 30 } },
+		{ cache: 'no-store' }
 	)
-	return transformLiveMatches(data.liveMatches)
+	return {
+		matches: transformLiveMatches(data.liveMatches),
+		snapshot: data.liveSnapshot
+	}
+}
+
+export async function getLiveMatches(
+	executor: QueryExecutor = executeQuery
+): Promise<Match[]> {
+	return (await getLiveMatchesSnapshot(executor)).matches
 }

@@ -41,6 +41,7 @@ export function PlayerDetailModal({
 		'Penalty Missed': t('penaltyMissed'),
 		'Own Goal': t('ownGoal'),
 		'Goals Conceded': t('goalsConceded'),
+		'Defensive Contribution': t('defensiveContribution'),
 		'Yellow Card': t('yellowCard'),
 		'Red Card': t('redCard'),
 		Bonus: t('bonusPoints'),
@@ -222,7 +223,9 @@ export function PlayerDetailModal({
 								))
 							) : (
 								<div className="px-3 py-4 text-sm text-muted-foreground text-center">
-									{t('noPointEvents')}
+									{player.breakdownPending
+										? t('breakdownPending')
+										: t('noPointEvents')}
 								</div>
 							)}
 						</div>
@@ -230,23 +233,27 @@ export function PlayerDetailModal({
 
 					{/* Points Summary */}
 					<div className="pt-4 border-t border-border">
-						<div className="flex items-center justify-between mb-3">
-							<span className="text-sm font-medium text-muted-foreground">
-								{t('positivePoints')}
-							</span>
-							<span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-								+{positivePoints}
-							</span>
-						</div>
-						{negativePoints > 0 && (
-							<div className="flex items-center justify-between mb-3">
-								<span className="text-sm font-medium text-muted-foreground">
-									{t('negativePoints')}
-								</span>
-								<span className="text-lg font-bold text-rose-500 dark:text-rose-400">
-									-{negativePoints}
-								</span>
-							</div>
+						{player.pointsBreakdown.length > 0 && (
+							<>
+								<div className="flex items-center justify-between mb-3">
+									<span className="text-sm font-medium text-muted-foreground">
+										{t('positivePoints')}
+									</span>
+									<span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+										+{positivePoints}
+									</span>
+								</div>
+								{negativePoints > 0 && (
+									<div className="flex items-center justify-between mb-3">
+										<span className="text-sm font-medium text-muted-foreground">
+											{t('negativePoints')}
+										</span>
+										<span className="text-lg font-bold text-rose-500 dark:text-rose-400">
+											-{negativePoints}
+										</span>
+									</div>
+								)}
+							</>
 						)}
 						<Separator className="my-3" />
 						<div className="flex items-center justify-between">

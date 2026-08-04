@@ -1,9 +1,11 @@
 'use client'
 
-import { GameweekSelector } from '@/components/data/GameweekSelector'
 import PageShell from '@/components/layout/PageShell'
 import { Card } from '@/components/ui/card'
-import type { LiveCalcData } from '@/lib/graphql/operations/live'
+import type {
+	LiveCalcData,
+	LiveSnapshotStatus
+} from '@/lib/graphql/operations/live'
 import { EntrySearchForm } from './_components/EntrySearchForm'
 import { LivePointsDashboard } from './_components/LivePointsDashboard'
 import { LivePointsLoading } from './_components/LivePointsLoading'
@@ -14,15 +16,22 @@ interface LivePointsClientProps {
 	initialEntryId: number
 	initialEventId: number
 	initialLiveData?: LiveCalcData
+	initialSnapshot?: LiveSnapshotStatus | null
 }
 
 export default function LivePointsClient({
 	initialEntryId,
 	initialEventId,
 	initialLiveData,
+	initialSnapshot
 }: LivePointsClientProps) {
 	const t = useTranslations('LivePoints')
-	const livePoints = useLivePoints({ initialEntryId, initialEventId, initialLiveData })
+	const livePoints = useLivePoints({
+		initialEntryId,
+		initialEventId,
+		initialLiveData,
+		initialSnapshot
+	})
 	const entrySearch = (
 		<EntrySearchForm
 			value={livePoints.entryIdInput}
@@ -37,7 +46,14 @@ export default function LivePointsClient({
 			<Card className="p-6 sm:p-8">
 				<p className="mb-4 text-muted-foreground">{t('enterEntry')}</p>
 				{entrySearch}
-				{livePoints.error ? <p className="mt-3 text-sm text-destructive" role="alert">{livePoints.error}</p> : null}
+				{livePoints.error ? (
+					<p
+						className="mt-3 text-sm text-destructive"
+						role="alert"
+					>
+						{livePoints.error}
+					</p>
+				) : null}
 			</Card>
 		)
 	} else if (livePoints.isLoading && !livePoints.liveData) {
@@ -49,20 +65,6 @@ export default function LivePointsClient({
 				selectedGameweek={livePoints.selectedGameweek}
 			/>
 		)
-	} else if (!livePoints.liveData) {
-		content = (
-			<>
-				<Card className="mb-6 p-4">{entrySearch}</Card>
-				<GameweekSelector
-					onGameweekChange={livePoints.changeGameweek}
-					currentGameweek={livePoints.currentGameweek}
-					selectedGameweek={livePoints.selectedGameweek}
-				/>
-				<p className="mt-6 text-center text-sm text-destructive" role="alert">
-					{livePoints.error ?? t('noData')}
-				</p>
-			</>
-		)
 	} else {
 		content = (
 			<LivePointsDashboard
@@ -71,12 +73,14 @@ export default function LivePointsClient({
 				selectedGameweek={livePoints.selectedGameweek}
 				isLoading={livePoints.isLoading}
 				isRefreshing={livePoints.isRefreshing}
+				error={livePoints.error}
 				isPageActive={livePoints.isPageActive}
 				shouldAutoRefresh={livePoints.shouldAutoRefresh}
 				liveData={livePoints.liveData}
 				startingPlayers={livePoints.startingPlayers}
 				benchPlayers={livePoints.benchPlayers}
 				onGameweekChange={livePoints.changeGameweek}
+				onAutoRefresh={livePoints.autoRefresh}
 				onRefresh={livePoints.refresh}
 			/>
 		)

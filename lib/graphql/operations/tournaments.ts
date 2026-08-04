@@ -1,3 +1,5 @@
+import type { LiveSnapshotStatus } from './live'
+
 export const GET_ENTRY_TOURNAMENTS = `
   query GetEntryTournaments($entryId: Int!) {
     entryTournaments(entryId: $entryId) {
@@ -263,6 +265,13 @@ export interface TournamentSelectionStatsResponse {
 
 export const GET_TOURNAMENT_LIVE_POINTS = `
   query GetTournamentLivePoints($eventId: Int!, $tournamentId: Int!) {
+    liveSnapshot(eventId: $eventId) {
+      eventId
+      revision
+      state
+      publishedAt
+      checkedAt
+    }
     calcLivePointsForTournament(eventId: $eventId, tournamentId: $tournamentId) {
       results {
         entry
@@ -340,6 +349,7 @@ export interface TournamentLiveCalcData {
 }
 
 export interface TournamentLivePointsResponse {
+	liveSnapshot: LiveSnapshotStatus | null
 	calcLivePointsForTournament: {
 		results: TournamentLiveCalcData[]
 		errors: BatchCalcError[]
