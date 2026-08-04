@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 
-import { requestEntryInfoSync, syncEntryAfterBind } from '../lib/entry-sync'
+import {
+	countEntrySyncResults,
+	requestEntryInfoSync,
+	syncEntryAfterBind,
+} from '../lib/entry-sync'
 
 const ENV_KEYS = [
 	'LETLETME_DATA_URL',
@@ -55,11 +59,16 @@ describe('requestEntryInfoSync', () => {
 	it('posts to the configured base URL with the configured API key', async () => {
 		process.env.LETLETME_DATA_URL = 'http://data:4001/'
 		process.env.LETLETME_DATA_API_KEY = 'k1'
-		stubFetch(async () => new Response('{"success":true}', { status: 200 }))
+		stubFetch(
+			async () =>
+				new Response('{"success":true,"status":"queued","jobId":"entry-info-6953"}', {
+					status: 202,
+				}),
+		)
 
 		const result = await requestEntryInfoSync(6953)
 
-		assert.deepEqual(result, { ok: true })
+		assert.deepEqual(result, { ok: true, status: 'queued', jobId: 'entry-info-6953' })
 		assert.equal(fetchCalls.length, 1)
 		assert.equal(fetchCalls[0].url, 'http://data:4001/entry-info/6953/sync')
 		assert.equal(fetchCalls[0].init?.method, 'POST')
@@ -74,7 +83,7 @@ describe('requestEntryInfoSync', () => {
 
 		const result = await requestEntryInfoSync(42)
 
-		assert.equal(result.ok, true)
+		assert.deepEqual(result, { ok: true, status: 'completed', jobId: null })
 		assert.equal(fetchCalls[0].url, 'http://127.0.0.1:4001/entry-info/42/sync')
 		const headers = new Headers(fetchCalls[0].init?.headers)
 		assert.equal(headers.get('x-api-key'), 't-key')
@@ -85,7 +94,7 @@ describe('requestEntryInfoSync', () => {
 
 		const result = await requestEntryInfoSync(7)
 
-		assert.equal(result.ok, true)
+		assert.deepEqual(result, { ok: true, status: 'completed', jobId: null })
 		assert.equal(fetchCalls[0].url, 'http://127.0.0.1:4001/entry-info/7/sync')
 		const headers = new Headers(fetchCalls[0].init?.headers)
 		assert.equal(headers.get('x-api-key'), null)
@@ -111,6 +120,18 @@ describe('requestEntryInfoSync', () => {
 		assert.equal(result.ok, false)
 		if (!result.ok) {
 			assert.match(result.reason, /500/)
+			assert.equal(result.retryable, true)
+		}
+	})
+
+	it('rejects a malformed queued response as retryable', async () => {
+		stubFetch(async () => new Response('{"success":true,"status":"queued"}', { status: 202 }))
+
+		const result = await requestEntryInfoSync(6953)
+
+		assert.equal(result.ok, false)
+		if (!result.ok) {
+			assert.match(result.reason, /invalid queued response/)
 			assert.equal(result.retryable, true)
 		}
 	})
@@ -155,6 +176,20 @@ describe('requestEntryInfoSync', () => {
 	})
 })
 
+describe('countEntrySyncResults', () => {
+	it('keeps queued work separate from completed synchronization', () => {
+		assert.deepEqual(
+			countEntrySyncResults([
+				{ ok: true, status: 'queued', jobId: 'job-1' },
+				{ ok: true, status: 'queued', jobId: 'job-2' },
+				{ ok: true, status: 'completed', jobId: null },
+				{ ok: false, retryable: true, reason: 'unavailable' },
+			]),
+			{ completed: 1, queued: 2, failed: 1 },
+		)
+	})
+})
+
 describe('syncEntryAfterBind', () => {
 	it('warns with the [entry-sync] prefix on failure and does not throw', async () => {
 		stubFetch(async () => {
@@ -171,9 +206,11 @@ describe('syncEntryAfterBind', () => {
 		let calls = 0
 		stubFetch(async () => {
 			calls += 1
-			return calls < 3
+		return calls < 3
 				? new Response('boom', { status: 500 })
-				: new Response('{"success":true}', { status: 200 })
+				: new Response('{"success":true,"status":"queued","jobId":"job-3"}', {
+						status: 202,
+					})
 		})
 
 		await syncEntryAfterBind(6953, { retryDelaysMs: [1, 1] })
@@ -181,7 +218,7 @@ describe('syncEntryAfterBind', () => {
 		assert.equal(fetchCalls.length, 3)
 		assert.equal(warnCalls.length, 0)
 		assert.equal(infoCalls.length, 1)
-		assert.match(infoCalls[0], /\[entry-sync\] synced entry 6953/)
+		assert.match(infoCalls[0], /\[entry-sync\] queued entry 6953 as job job-3/)
 	})
 
 	it('does not retry non-retryable failures', async () => {
