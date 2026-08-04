@@ -3,9 +3,10 @@
 import { usePageActive } from '@/hooks/use-page-active'
 import { executeQuery } from '@/lib/graphql-client'
 import {
+	GET_EVENT_LIVE_EXPLAINS,
 	GET_LIVE_POINTS,
 	GET_LIVE_SNAPSHOT,
-	type EventLiveExplainResponse,
+	type EventLiveExplainsResponse,
 	type LiveCalcData,
 	type LiveCalcDataResponse,
 	type LiveSnapshotResponse,
@@ -21,10 +22,10 @@ import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
 	breakdownLookupForRequest,
-	buildEventLiveExplainBatchQuery,
 	type BreakdownLookup,
 	type CachedBreakdownLookup,
 	mapLiveDataToPlayers,
+	normalizeLiveExplainElementIds,
 	rollupBreakdownStats
 } from '../_lib/live-points-model'
 
@@ -103,27 +104,26 @@ export function useLivePoints({
 				return
 			lastExplainAttemptAtRef.current = now
 
-			const uniqueElementIds = Array.from(
-				new Set(live.pickList.map(pick => pick.element))
+			const elementIds = normalizeLiveExplainElementIds(
+				live.pickList.map(pick => pick.element)
 			)
-			const query = buildEventLiveExplainBatchQuery(uniqueElementIds)
-			if (!query) return
+			if (elementIds.length === 0) return
 
 			try {
-				const response = await executeQuery<
-					Record<string, EventLiveExplainResponse['eventLiveExplain'] | null>
-				>(query, { eventId }, { cache: 'no-store' })
+				const response = await executeQuery<EventLiveExplainsResponse>(
+					GET_EVENT_LIVE_EXPLAINS,
+					{ eventId, elementIds },
+					{ cache: 'no-store' }
+				)
 
 				if (requestId !== requestIdRef.current) return
 
 				const breakdownLookup: BreakdownLookup = new Map()
-				for (const playerExplain of Object.values(response)) {
-					if (!playerExplain) continue
-					const flattenedStats = (playerExplain.breakdown ?? []).flatMap(
-						entry => entry.stats
-					)
-					breakdownLookup.set(String(playerExplain.player.id), {
-						teamShortName: playerExplain.player.team?.shortName ?? '',
+				for (const playerExplain of response.eventLiveExplains) {
+					const flattenedStats =
+						playerExplain.contributions ??
+						(playerExplain.breakdown ?? []).flatMap(entry => entry.stats)
+					breakdownLookup.set(String(playerExplain.elementId), {
 						stats: rollupBreakdownStats(flattenedStats)
 					})
 				}
@@ -133,6 +133,9 @@ export function useLivePoints({
 				setStartingPlayers(enrichedPlayers.filter(player => !player.isBench))
 				setBenchPlayers(enrichedPlayers.filter(player => player.isBench))
 			} catch (explainError) {
+				if (lastExplainAttemptAtRef.current === now) {
+					lastExplainAttemptAtRef.current = 0
+				}
 				console.warn('Failed to fetch explain stats batch:', explainError)
 			}
 		},

@@ -40,6 +40,42 @@ const marketPlayer = {
 	selectedByPercent: 32.5
 }
 
+const livePicks = Array.from({ length: 15 }, (_, index) => {
+	const element = index + 1
+	return {
+		element,
+		elementType: element <= 2 ? 1 : element <= 7 ? 2 : element <= 12 ? 3 : 4,
+		position: element,
+		webName: `Player ${element}`,
+		teamName: 'Arsenal',
+		teamShortName: 'ARS',
+		minutes: 45,
+		goalsScored: element === 1 ? 1 : 0,
+		assists: 0,
+		cleanSheets: 0,
+		goalsConceded: element === 1 ? 2 : 0,
+		defensiveContribution: 0,
+		ownGoals: 0,
+		penaltiesSaved: 0,
+		penaltiesMissed: 0,
+		yellowCards: 0,
+		redCards: 0,
+		saves: 0,
+		bonus: 0,
+		bps: 10,
+		totalPoints: element === 1 ? 6 : 1,
+		starts: element <= 11,
+		isGwStarted: true,
+		isGwFinished: false,
+		isPlayed: true,
+		expectedGoals: null,
+		expectedAssists: null,
+		expectedGoalInvolvements: null,
+		expectedGoalsConceded: null,
+		inDreamTeam: false
+	}
+})
+
 const server = createServer((request, response) => {
 	if (request.method === 'GET' && request.url === '/health') {
 		json(response, 200, { ok: true })
@@ -57,9 +93,14 @@ const server = createServer((request, response) => {
 	})
 	request.on('end', () => {
 		let query = ''
+		let variables = {}
 		try {
 			const body = JSON.parse(raw)
 			query = typeof body.query === 'string' ? body.query : ''
+			variables =
+				body.variables && typeof body.variables === 'object'
+					? body.variables
+					: {}
 		} catch {
 			json(response, 400, { errors: [{ message: 'Invalid JSON' }] })
 			return
@@ -108,6 +149,63 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
+		if (query.includes('GetLiveCalcPoints')) {
+			json(response, 200, {
+				data: {
+					liveSnapshot: {
+						eventId: 33,
+						revision: 'a'.repeat(24),
+						state: 'LIVE',
+						publishedAt: '2026-08-04T18:00:00.000Z',
+						checkedAt: '2026-08-04T18:00:30.000Z'
+					},
+					calcLivePointsByEntry: {
+						entry: 123,
+						event: 33,
+						entryName: 'E2E United',
+						playerName: 'Test Manager',
+						chip: null,
+						livePoints: 22,
+						transferCost: 0,
+						liveNetPoints: 22,
+						liveTotalPoints: 1234,
+						captainName: 'Player 1',
+						pickList: livePicks
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('EventLiveExplainBatch')) {
+			const elementIds = Array.isArray(variables.elementIds)
+				? variables.elementIds
+						.filter(id => Number.isInteger(id) && id > 0)
+						.slice(0, 15)
+				: []
+			json(response, 200, {
+				data: {
+					eventLiveExplains: elementIds.map(elementId => ({
+						elementId,
+						contributions: [
+							{ identifier: 'minutes', value: 45, points: 1 },
+							...(elementId === 1
+								? [{ identifier: 'goals_scored', value: 1, points: 6 }]
+								: []),
+							...(elementId === 1
+								? [
+										{
+											identifier: 'goals_conceded',
+											value: 2,
+											points: -1
+										}
+									]
+								: [])
+						]
+					}))
+				}
+			})
+			return
+		}
 		if (query.includes('GetMarketPulse')) {
 			json(response, 200, {
 				data: {
@@ -123,12 +221,14 @@ const server = createServer((request, response) => {
 						},
 						mostSelected: [],
 						ownershipMovers: {
-							risers: [{
-								player: marketPlayer,
-								previousSelectedByPercent: 31.5,
-								selectedByPercent: 32.5,
-								change: 1
-							}],
+							risers: [
+								{
+									player: marketPlayer,
+									previousSelectedByPercent: 31.5,
+									selectedByPercent: 32.5,
+									change: 1
+								}
+							],
 							fallers: []
 						},
 						transferMovers: [],

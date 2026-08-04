@@ -19,6 +19,10 @@ export interface Player {
     saves: number;
     savePenalty: number;
     cleanSheets: number;
+    goalsConceded?: number;
+    defensiveContribution?: number;
+    ownGoals?: number;
+    penaltiesMissed?: number;
     yellowCards: number;
     redCards: number;
     points: number;

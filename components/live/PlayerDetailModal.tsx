@@ -41,6 +41,7 @@ export function PlayerDetailModal({
 		'Penalty Missed': t('penaltyMissed'),
 		'Own Goal': t('ownGoal'),
 		'Goals Conceded': t('goalsConceded'),
+		'Defensive Contribution': t('defensiveContribution'),
 		'Yellow Card': t('yellowCard'),
 		'Red Card': t('redCard'),
 		Bonus: t('bonusPoints'),

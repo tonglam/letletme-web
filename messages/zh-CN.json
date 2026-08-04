@@ -416,6 +416,7 @@
     "redCards": "红牌",
     "ownGoal": "乌龙球",
     "goalsConceded": "失球",
+    "defensiveContribution": "防守贡献",
     "expectedGoalsConceded": "预期失球",
     "expectedGoalInvolvements": "预期参与进球",
     "expectedGoals": "预期进球",

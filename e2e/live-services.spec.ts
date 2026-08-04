@@ -1,5 +1,86 @@
 import { expect, test } from '@playwright/test'
 
+test('live points enriches all fifteen picks through one bounded GraphQL root', async ({
+	page
+}) => {
+	test.skip(
+		Boolean(process.env.PLAYWRIGHT_BASE_URL),
+		'Uses the deterministic local GraphQL fixture'
+	)
+
+	let batchPayload:
+		| {
+				query?: string
+				variables?: { eventId?: number; elementIds?: number[] }
+		  }
+		| undefined
+	await page.route('**/api/graphql', async route => {
+		const payload = route.request().postDataJSON() as {
+			query?: string
+			variables?: { eventId?: number; elementIds?: number[] }
+		}
+		if (payload.query?.includes('EventLiveExplainBatch')) {
+			batchPayload = payload
+			const elementIds = payload.variables?.elementIds ?? []
+			await route.fulfill({
+				status: 200,
+				json: {
+					data: {
+						eventLiveExplains: elementIds.map(elementId => ({
+							elementId,
+							contributions: [
+								{ identifier: 'minutes', value: 45, points: 1 },
+								...(elementId === 1
+									? [{ identifier: 'goals_scored', value: 1, points: 6 }]
+									: []),
+								...(elementId === 1
+									? [
+											{
+												identifier: 'goals_conceded',
+												value: 2,
+												points: -1
+											}
+										]
+									: [])
+							]
+						}))
+					}
+				}
+			})
+			return
+		}
+		await route.continue()
+	})
+
+	await page.goto('/live/points/123')
+
+	await expect(
+		page.getByRole('heading', { level: 1, name: 'Team live points' })
+	).toBeVisible()
+	await expect(
+		page.getByRole('button', { name: /View details for Player/ })
+	).toHaveCount(15)
+	await expect(page.getByText('ARS', { exact: true })).toHaveCount(15)
+	await expect
+		.poll(() => batchPayload?.variables?.elementIds?.length ?? 0)
+		.toBe(15)
+
+	expect(batchPayload?.variables).toEqual({
+		eventId: 33,
+		elementIds: Array.from({ length: 15 }, (_, index) => index + 1)
+	})
+	expect(batchPayload?.query?.match(/eventLiveExplains\s*\(/g)).toHaveLength(1)
+	expect(batchPayload?.query).not.toMatch(/eventLiveExplain\s*\(/)
+	expect(batchPayload?.query).not.toMatch(/\bplayer\s*\{/)
+
+	await page
+		.getByRole('button', { name: 'View details for Player 1', exact: true })
+		.click()
+	const detail = page.getByRole('dialog')
+	await expect(detail.getByText('Goals Conceded', { exact: true })).toBeVisible()
+	await expect(detail.getByText('-1', { exact: true }).first()).toBeVisible()
+})
+
 test('scheduled match polling is overlap-safe, keeps last-good data, and resumes immediately', async ({
 	context,
 	page

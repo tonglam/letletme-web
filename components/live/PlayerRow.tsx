@@ -37,6 +37,7 @@ const breakdownLabelMap: Record<string, string> = {
   red_cards: "Red Card",
   own_goals: "Own Goal",
   goals_conceded: "Goals Conceded",
+  defensive_contribution: "Defensive Contribution",
   bonus: "Bonus Points",
   total: "Total Points",
   total_points: "Total Points"
@@ -54,6 +55,7 @@ const breakdownOrder = [
   "red_cards",
   "own_goals",
   "goals_conceded",
+  "defensive_contribution",
   "bonus",
   "total",
   "total_points"
@@ -181,7 +183,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
   }, [player.breakdownStats]);
 
   const computedFallbackBreakdown = useMemo(() => {
-    const pointsBreakdown: { category: string; points: number }[] = [];
+    const pointsBreakdown: PlayerDetail["pointsBreakdown"] = [];
     
     if (player.stats.minutes > 0) {
       const minutesPoints = player.stats.minutes >= 60 ? 2 : 1;
@@ -220,6 +222,40 @@ export function PlayerRow({ player }: PlayerRowProps) {
       const penSavePoints = player.stats.savePenalty * 5;
       pointsBreakdown.push({ category: "Penalty Saved", points: penSavePoints });
     }
+
+    const goalsConceded = player.stats.goalsConceded ?? 0;
+    if ((player.position === "GKP" || player.position === "DEF") && goalsConceded >= 2) {
+      pointsBreakdown.push({
+        category: "Goals Conceded",
+        points: -Math.floor(goalsConceded / 2)
+      });
+    }
+
+    const ownGoals = player.stats.ownGoals ?? 0;
+    if (ownGoals > 0) {
+      pointsBreakdown.push({ category: "Own Goal", points: ownGoals * -2 });
+    }
+
+    const penaltiesMissed = player.stats.penaltiesMissed ?? 0;
+    if (penaltiesMissed > 0) {
+      pointsBreakdown.push({
+        category: "Penalty Missed",
+        points: penaltiesMissed * -2
+      });
+    }
+
+    const defensiveContribution = player.stats.defensiveContribution ?? 0;
+    const earnsDefensivePoints =
+      (player.position === "DEF" && defensiveContribution >= 10) ||
+      ((player.position === "MID" || player.position === "FWD") &&
+        defensiveContribution >= 12);
+    if (earnsDefensivePoints) {
+      pointsBreakdown.push({
+        category: "Defensive Contribution",
+        points: 2,
+        value: defensiveContribution
+      });
+    }
     
     if (player.stats.yellowCards > 0) {
       const ycPoints = -1 * player.stats.yellowCards;
@@ -240,8 +276,35 @@ export function PlayerRow({ player }: PlayerRowProps) {
 
   // Convert Player to PlayerDetail for the modal
   const playerDetail: PlayerDetail = useMemo(() => {
+    const currentBreakdownValues: Partial<Record<string, number>> = {
+      minutes: player.stats.minutes,
+      goals_scored: player.stats.goals,
+      assists: player.stats.assists,
+      clean_sheets: player.stats.cleanSheets,
+      goals_conceded: player.stats.goalsConceded ?? 0,
+      own_goals: player.stats.ownGoals ?? 0,
+      penalties_saved: player.stats.savePenalty,
+      penalties_missed: player.stats.penaltiesMissed ?? 0,
+      yellow_cards: player.stats.yellowCards,
+      red_cards: player.stats.redCards,
+      saves: player.stats.saves,
+      bonus: player.stats.bonusPoints
+    };
+    const explanationMatchesCurrentStats = (player.breakdownStats ?? []).every(
+      stat => {
+        const currentValue = currentBreakdownValues[stat.identifier];
+        return currentValue === undefined || stat.value === currentValue;
+      }
+    );
+    const explanationMatchesCurrentTotal =
+      breakdownFromExplain.length > 0 &&
+      explanationMatchesCurrentStats &&
+      breakdownFromExplain.reduce((sum, item) => sum + item.points, 0) ===
+        player.stats.points;
     const pointsBreakdown =
-      breakdownFromExplain.length > 0 ? breakdownFromExplain : computedFallbackBreakdown;
+      explanationMatchesCurrentTotal
+        ? breakdownFromExplain
+        : computedFallbackBreakdown;
 
     return {
       id: player.id,

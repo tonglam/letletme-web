@@ -89,13 +89,27 @@ export const GET_LIVE_POINTS = `
         elementType
         position
         webName
+        teamName
+        teamShortName
         minutes
         goalsScored
         assists
+        cleanSheets
+        goalsConceded
+        defensiveContribution
+        ownGoals
+        penaltiesSaved
+        penaltiesMissed
+        yellowCards
+        redCards
+        saves
         bonus
         bps
         totalPoints
         starts
+        isGwStarted
+        isGwFinished
+        isPlayed
         expectedGoals
         expectedAssists
         expectedGoalInvolvements
@@ -112,13 +126,27 @@ export interface LivePick {
 	elementType: number
 	position: number
 	webName: string
+	teamName: string
+	teamShortName: string
 	minutes: number
 	goalsScored: number
 	assists: number
+	cleanSheets: number
+	goalsConceded: number
+	defensiveContribution: number
+	ownGoals: number
+	penaltiesSaved: number
+	penaltiesMissed: number
+	yellowCards: number
+	redCards: number
+	saves: number
 	bonus: number
 	bps: number
 	totalPoints: number
-	starts: boolean
+	starts: boolean | null
+	isGwStarted: boolean
+	isGwFinished: boolean
+	isPlayed: boolean
 	expectedGoals: number | null
 	expectedAssists: number | null
 	expectedGoalInvolvements: number | null
@@ -435,9 +463,22 @@ export const GET_EVENT_LIVE_EXPLAIN = `
   }
 `
 
+export const GET_EVENT_LIVE_EXPLAINS = `
+  query EventLiveExplainBatch($eventId: Int!, $elementIds: [Int!]!) {
+    eventLiveExplains(eventId: $eventId, elementIds: $elementIds) {
+      elementId
+      contributions {
+        identifier
+        value
+        points
+      }
+    }
+  }
+`
+
 export interface PlayerBreakdownStat {
 	identifier: string
-	value: number
+	value: number | null
 	points: number
 }
 
@@ -448,20 +489,25 @@ export interface PlayerBreakdownEntry {
 
 export interface EventLiveExplainItem {
 	elementId: number
-	selectedBy: number | null
-	player: {
+	selectedBy?: number | null
+	player?: {
 		id: number
 		webName: string
 		team: {
 			id: number
 			shortName: string
-		}
-	}
+		} | null
+	} | null
+	contributions?: PlayerBreakdownStat[]
 	breakdown?: PlayerBreakdownEntry[]
 }
 
 export interface EventLiveExplainResponse {
 	eventLiveExplain: EventLiveExplainItem | null
+}
+
+export interface EventLiveExplainsResponse {
+	eventLiveExplains: EventLiveExplainItem[]
 }
 
 export const GET_PLAYER_LIVE = `
