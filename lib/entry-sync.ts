@@ -10,6 +10,25 @@ export type EntrySyncResult =
 	| { ok: true; status: 'completed'; jobId: null }
 	| { ok: false; reason: string; retryable: boolean }
 
+export type EntrySyncBatchCounts = {
+	completed: number
+	queued: number
+	failed: number
+}
+
+export const countEntrySyncResults = (
+	results: readonly EntrySyncResult[]
+): EntrySyncBatchCounts =>
+	results.reduce<EntrySyncBatchCounts>(
+		(counts, result) => {
+			if (!result.ok) counts.failed += 1
+			else if (result.status === 'queued') counts.queued += 1
+			else counts.completed += 1
+			return counts
+		},
+		{ completed: 0, queued: 0, failed: 0 }
+	)
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value)
 

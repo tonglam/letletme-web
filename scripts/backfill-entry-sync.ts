@@ -16,9 +16,13 @@
  */
 import postgres from 'postgres'
 
-import { requestEntryInfoSync } from '../lib/entry-sync'
+import {
+	countEntrySyncResults,
+	requestEntryInfoSync,
+	type EntrySyncResult,
+} from '../lib/entry-sync'
 
-const POLITENESS_DELAY_MS = 300 // each sync makes 2 FPL API calls
+const POLITENESS_DELAY_MS = 300 // avoid burst-queuing a large bound-entry set
 
 const databaseUrl = process.env.DATABASE_URL
 if (!databaseUrl) {
@@ -37,23 +41,28 @@ async function main() {
 
 	console.log(`Backfilling ${rows.length} bound entries…`)
 
-	let ok = 0
-	let failed = 0
+	const results: EntrySyncResult[] = []
 	for (const row of rows) {
 		const result = await requestEntryInfoSync(row.fpl_entry_id)
-		if (result.ok) {
-			ok += 1
-			console.log(`  ✓ ${row.fpl_entry_id}`)
+		results.push(result)
+		if (result.ok && result.status === 'queued') {
+			console.log(
+				`  ↻ ${row.fpl_entry_id} queued as job ${result.jobId}`,
+			)
+		} else if (result.ok) {
+			console.log(`  ✓ ${row.fpl_entry_id} completed`)
 		} else {
-			failed += 1
 			console.warn(`  ✗ ${row.fpl_entry_id}: ${result.reason}`)
 		}
 		await new Promise(resolve => setTimeout(resolve, POLITENESS_DELAY_MS))
 	}
 
 	await sql.end()
-	console.log(`Done: ${ok} synced, ${failed} failed`)
-	process.exit(failed > 0 ? 1 : 0)
+	const counts = countEntrySyncResults(results)
+	console.log(
+		`Done: ${counts.completed} completed, ${counts.queued} queued, ${counts.failed} failed`,
+	)
+	process.exit(counts.failed > 0 ? 1 : 0)
 }
 
 void main()

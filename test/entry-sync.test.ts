@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 
-import { requestEntryInfoSync, syncEntryAfterBind } from '../lib/entry-sync'
+import {
+	countEntrySyncResults,
+	requestEntryInfoSync,
+	syncEntryAfterBind,
+} from '../lib/entry-sync'
 
 const ENV_KEYS = [
 	'LETLETME_DATA_URL',
@@ -169,6 +173,20 @@ describe('requestEntryInfoSync', () => {
 
 		assert.equal(result.ok, false)
 		if (!result.ok) assert.match(result.reason, /timed out/)
+	})
+})
+
+describe('countEntrySyncResults', () => {
+	it('keeps queued work separate from completed synchronization', () => {
+		assert.deepEqual(
+			countEntrySyncResults([
+				{ ok: true, status: 'queued', jobId: 'job-1' },
+				{ ok: true, status: 'queued', jobId: 'job-2' },
+				{ ok: true, status: 'completed', jobId: null },
+				{ ok: false, retryable: true, reason: 'unavailable' },
+			]),
+			{ completed: 1, queued: 2, failed: 1 },
+		)
 	})
 })
 
