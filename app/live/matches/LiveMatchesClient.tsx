@@ -158,7 +158,9 @@ export function LiveMatchesClient({
 					{ eventId },
 					{ cache: 'no-store' }
 				)
-				if (!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)) {
+				if (
+					!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)
+				) {
 					acceptSnapshot(probe.liveSnapshot)
 					setError(null)
 					return
@@ -263,18 +265,25 @@ export function LiveMatchesClient({
 				<div className="container max-w-4xl mx-auto px-4 py-8">
 					<div className="flex items-center justify-between mb-8">
 						<h1 className="text-3xl font-bold">{t('title')}</h1>
-						<Button
-							variant="outline"
-							size="icon"
-							onClick={() => fetchMatches(true)}
-							disabled={isRefreshing}
-							className="shrink-0"
-						>
-							<RefreshCw
-								className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
+						<div className="flex flex-col items-end gap-1">
+							<Button
+								variant="outline"
+								size="icon"
+								onClick={() => fetchMatches(true)}
+								disabled={isRefreshing}
+								className="shrink-0"
+							>
+								<RefreshCw
+									className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
+								/>
+								<span className="sr-only">{t('refresh')}</span>
+							</Button>
+							<LiveAutoRefreshCountdown
+								enabled={autoRefreshEnabled}
+								onRefresh={autoRefreshMatches}
+								renderLabel={seconds => t('autoRefresh', { seconds })}
 							/>
-							<span className="sr-only">{t('refresh')}</span>
-						</Button>
+						</div>
 					</div>
 					<div className="flex flex-col items-center justify-center py-12 gap-4">
 						<p className="text-destructive">{t('error', { message: error })}</p>

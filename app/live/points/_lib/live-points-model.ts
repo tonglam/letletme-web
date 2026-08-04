@@ -22,6 +22,40 @@ export type CachedBreakdownLookup = {
 	lookup: BreakdownLookup
 }
 
+export type LiveDataForRequest = {
+	requestKey: string
+	live: LiveCalcData
+}
+
+export function selectLiveDataForExplainResponse({
+	responseRequestId,
+	currentRequestId,
+	requestKey,
+	currentRequestKey,
+	responseLive,
+	currentLive
+}: {
+	responseRequestId: number
+	currentRequestId: number
+	requestKey: string
+	currentRequestKey: string | null
+	responseLive: LiveCalcData
+	currentLive: LiveDataForRequest | null
+}): LiveCalcData | null {
+	const latestLiveForRequest =
+		currentLive?.requestKey === requestKey ? currentLive.live : null
+	if (responseRequestId === currentRequestId) {
+		return latestLiveForRequest ?? responseLive
+	}
+
+	// A manual refresh can supersede the live-points request while its explain
+	// enrichment remains in flight. Keep that response only when the latest
+	// request still targets the same entry and event, and apply it to the newest
+	// accepted live data rather than overwriting the UI with the older snapshot.
+	if (currentRequestKey !== requestKey) return null
+	return latestLiveForRequest
+}
+
 export function breakdownLookupForRequest(
 	cached: CachedBreakdownLookup | null,
 	requestKey: string
@@ -57,6 +91,31 @@ export function normalizeLiveExplainElementIds(elementIds: number[]): number[] {
 	return Array.from(
 		new Set(elementIds.filter(id => Number.isSafeInteger(id) && id > 0))
 	).slice(0, 15)
+}
+
+export function liveExplanationMatchesCurrentStats(
+	player: Pick<Player, 'breakdownStats' | 'stats'>
+): boolean {
+	const currentValues: Partial<Record<string, number>> = {
+		minutes: player.stats.minutes,
+		goals_scored: player.stats.goals,
+		assists: player.stats.assists,
+		clean_sheets: player.stats.cleanSheets,
+		goals_conceded: player.stats.goalsConceded ?? 0,
+		own_goals: player.stats.ownGoals ?? 0,
+		penalties_saved: player.stats.savePenalty,
+		penalties_missed: player.stats.penaltiesMissed ?? 0,
+		yellow_cards: player.stats.yellowCards,
+		red_cards: player.stats.redCards,
+		saves: player.stats.saves,
+		defensive_contribution: player.stats.defensiveContribution ?? 0,
+		bonus: player.stats.bonusPoints
+	}
+
+	return (player.breakdownStats ?? []).every(stat => {
+		const currentValue = currentValues[stat.identifier]
+		return currentValue === undefined || stat.value === currentValue
+	})
 }
 
 function normalizePosition(

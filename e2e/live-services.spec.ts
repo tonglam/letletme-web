@@ -14,6 +14,11 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 				variables?: { eventId?: number; elementIds?: number[] }
 		  }
 		| undefined
+	let clientLivePointsRequests = 0
+	let releaseExplain!: () => void
+	const explainGate = new Promise<void>(resolve => {
+		releaseExplain = resolve
+	})
 	await page.route('**/api/graphql', async route => {
 		const payload = route.request().postDataJSON() as {
 			query?: string
@@ -22,6 +27,7 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 		if (payload.query?.includes('EventLiveExplainBatch')) {
 			batchPayload = payload
 			const elementIds = payload.variables?.elementIds ?? []
+			await explainGate
 			await route.fulfill({
 				status: 200,
 				json: {
@@ -31,7 +37,7 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 							contributions: [
 								{ identifier: 'minutes', value: 45, points: 1 },
 								...(elementId === 1
-									? [{ identifier: 'goals_scored', value: 1, points: 6 }]
+									? [{ identifier: 'goals_scored', value: 1, points: 5 }]
 									: []),
 								...(elementId === 1
 									? [
@@ -41,6 +47,15 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 												points: -1
 											}
 										]
+									: []),
+								...(elementId === 1
+									? [
+											{
+												identifier: 'manual_refresh_explain',
+												value: 1,
+												points: 1
+											}
+										]
 									: [])
 							]
 						}))
@@ -48,6 +63,9 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 				}
 			})
 			return
+		}
+		if (payload.query?.includes('GetLiveCalcPoints')) {
+			clientLivePointsRequests += 1
 		}
 		await route.continue()
 	})
@@ -73,11 +91,20 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 	expect(batchPayload?.query).not.toMatch(/eventLiveExplain\s*\(/)
 	expect(batchPayload?.query).not.toMatch(/\bplayer\s*\{/)
 
+	await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+	await expect.poll(() => clientLivePointsRequests).toBe(1)
+	releaseExplain()
+
 	await page
 		.getByRole('button', { name: 'View details for Player 1', exact: true })
 		.click()
 	const detail = page.getByRole('dialog')
-	await expect(detail.getByText('Goals Conceded', { exact: true })).toBeVisible()
+	await expect(
+		detail.getByText('manual_refresh_explain', { exact: true })
+	).toBeVisible()
+	await expect(
+		detail.getByText('Goals Conceded', { exact: true })
+	).toBeVisible()
 	await expect(detail.getByText('-1', { exact: true }).first()).toBeVisible()
 })
 

@@ -3,11 +3,14 @@ import { describe, it } from 'node:test'
 
 import {
 	breakdownLookupForRequest,
+	liveExplanationMatchesCurrentStats,
 	mapLiveDataToPlayers,
 	normalizeLiveExplainElementIds,
-	rollupBreakdownStats
+	rollupBreakdownStats,
+	selectLiveDataForExplainResponse
 } from '../app/live/points/_lib/live-points-model'
 import type { LiveCalcData } from '../lib/graphql/operations/live'
+import type { Player } from '../types/player'
 
 describe('live-points model', () => {
 	it('rolls fixture breakdown rows up by identifier', () => {
@@ -139,5 +142,79 @@ describe('live-points model', () => {
 
 		assert.equal(breakdownLookupForRequest(cached, '101:33'), lookup)
 		assert.equal(breakdownLookupForRequest(cached, '101:34').size, 0)
+	})
+
+	it('applies a superseded same-key explain response to the latest live data', () => {
+		const original = {
+			entry: 101,
+			event: 33,
+			livePoints: 10,
+			transferCost: 0,
+			liveNetPoints: 10,
+			liveTotalPoints: 1000,
+			captainName: 'Captain',
+			pickList: []
+		} satisfies LiveCalcData
+		const refreshed = { ...original, livePoints: 12 }
+
+		assert.equal(
+			selectLiveDataForExplainResponse({
+				responseRequestId: 1,
+				currentRequestId: 2,
+				requestKey: '101:33',
+				currentRequestKey: '101:33',
+				responseLive: original,
+				currentLive: { requestKey: '101:33', live: refreshed }
+			}),
+			refreshed
+		)
+		assert.equal(
+			selectLiveDataForExplainResponse({
+				responseRequestId: 1,
+				currentRequestId: 2,
+				requestKey: '101:33',
+				currentRequestKey: '101:34',
+				responseLive: original,
+				currentLive: { requestKey: '101:34', live: refreshed }
+			}),
+			null
+		)
+	})
+
+	it('rejects cached defensive points when the current contribution changed', () => {
+		const player = {
+			breakdownStats: [
+				{ identifier: 'defensive_contribution', value: 10, points: 2 }
+			],
+			stats: {
+				minutes: 90,
+				goals: 0,
+				expectedGoals: 0,
+				expectedAssists: 0,
+				expectedGoalInvolvements: 0,
+				expectedGoalsConceded: 0,
+				assists: 0,
+				saves: 0,
+				savePenalty: 0,
+				cleanSheets: 0,
+				goalsConceded: 0,
+				defensiveContribution: 0,
+				ownGoals: 0,
+				penaltiesMissed: 0,
+				yellowCards: 0,
+				redCards: 0,
+				points: 2,
+				bonusPoints: 2
+			}
+		} satisfies Pick<Player, 'breakdownStats' | 'stats'>
+
+		assert.equal(liveExplanationMatchesCurrentStats(player), false)
+		assert.equal(
+			liveExplanationMatchesCurrentStats({
+				...player,
+				stats: { ...player.stats, defensiveContribution: 10 }
+			}),
+			true
+		)
 	})
 })

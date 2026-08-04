@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { liveExplanationMatchesCurrentStats } from "@/app/live/points/_lib/live-points-model";
 import { Player } from "@/types/player";
 import { PlayerDetail } from "@/types/player-detail";
 import { CheckCircle2, Clock, Play } from "lucide-react";
@@ -276,26 +277,8 @@ export function PlayerRow({ player }: PlayerRowProps) {
 
   // Convert Player to PlayerDetail for the modal
   const playerDetail: PlayerDetail = useMemo(() => {
-    const currentBreakdownValues: Partial<Record<string, number>> = {
-      minutes: player.stats.minutes,
-      goals_scored: player.stats.goals,
-      assists: player.stats.assists,
-      clean_sheets: player.stats.cleanSheets,
-      goals_conceded: player.stats.goalsConceded ?? 0,
-      own_goals: player.stats.ownGoals ?? 0,
-      penalties_saved: player.stats.savePenalty,
-      penalties_missed: player.stats.penaltiesMissed ?? 0,
-      yellow_cards: player.stats.yellowCards,
-      red_cards: player.stats.redCards,
-      saves: player.stats.saves,
-      bonus: player.stats.bonusPoints
-    };
-    const explanationMatchesCurrentStats = (player.breakdownStats ?? []).every(
-      stat => {
-        const currentValue = currentBreakdownValues[stat.identifier];
-        return currentValue === undefined || stat.value === currentValue;
-      }
-    );
+    const explanationMatchesCurrentStats =
+      liveExplanationMatchesCurrentStats(player);
     const explanationMatchesCurrentTotal =
       breakdownFromExplain.length > 0 &&
       explanationMatchesCurrentStats &&
