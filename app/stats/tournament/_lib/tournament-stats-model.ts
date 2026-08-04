@@ -74,10 +74,10 @@ export const formatStateBadge = (state: string): { label: string; className: str
 	switch (state) {
 		case 'ACTIVE':
 			return { label: 'Live', className: 'border-success/30 bg-success/10 text-success' }
-		case 'COMPLETED':
+		case 'FINISHED':
 			return { label: 'Completed', className: 'border-border bg-muted text-muted-foreground' }
-		case 'PENDING':
-			return { label: 'Pending', className: 'border-warning/30 bg-warning/10 text-warning' }
+		case 'INACTIVE':
+			return { label: 'Paused', className: 'border-warning/30 bg-warning/10 text-warning' }
 		default:
 			return { label: state, className: 'border-border bg-muted text-muted-foreground' }
 	}

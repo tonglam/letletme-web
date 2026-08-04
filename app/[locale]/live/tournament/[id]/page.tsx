@@ -1,10 +1,11 @@
 import { getCurrentAndNextEvents } from '@/lib/events'
 import { executeServerQuery } from '@/lib/graphql-server'
 import {
-	GET_ENTRY_TOURNAMENTS,
+	GET_TOURNAMENT_SHELL,
 	GET_TOURNAMENT_LIVE_POINTS,
 	type EntryTournament,
-	type EntryTournamentsResponse,
+	type TournamentParticipant,
+	type TournamentShellResponse,
 	type TournamentLiveCalcData,
 	type TournamentLivePointsResponse
 } from '@/lib/graphql/operations/tournaments'
@@ -32,7 +33,7 @@ type PageProps = {
 	searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
-export default async function Page({ params }: PageProps) {
+export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await getPageLocale(params)
 	const [t, liveT] = await Promise.all([
 		getTranslations('States'),
@@ -46,8 +47,11 @@ export default async function Page({ params }: PageProps) {
 	const currentEventId = events?.current[0]?.id
 	let tournament: EntryTournament | null = null
 	let initialRows: TournamentLiveCalcData[] = []
+	let participants: TournamentParticipant[] = []
 	let initialError: string | null = null
 	let initialSnapshot: LiveSnapshotStatus | null = null
+	const query = await searchParams
+	const justCreated = query.created === '1'
 
 	if (!entryId) {
 		initialError = t('bindEntryRequired')
@@ -55,19 +59,18 @@ export default async function Page({ params }: PageProps) {
 		initialError = t('invalidTournamentLink')
 	} else {
 		try {
-			const tournamentsData =
-				await executeServerQuery<EntryTournamentsResponse>(
-					GET_ENTRY_TOURNAMENTS,
-					{ entryId },
-					{ cache: 'no-store' }
-				)
-			tournament =
-				tournamentsData.entryTournaments.find(
-					item => item.id === tournamentId
-				) ?? null
+			const shell = await executeServerQuery<TournamentShellResponse>(
+				GET_TOURNAMENT_SHELL,
+				{ tournamentId, entryId },
+				{ cache: 'no-store' }
+			)
+			tournament = shell.tournament
+			participants = shell.tournamentParticipants
 
 			if (!tournament) {
 				initialError = t('tournamentNoAccess')
+			} else if (!tournament.standingsReadyAt) {
+				// The shell remains usable while setup publishes standings.
 			} else if (!currentEventId) {
 				initialError = t('currentGameweekUnavailable')
 			} else {
@@ -95,6 +98,7 @@ export default async function Page({ params }: PageProps) {
 
 	return (
 		<TournamentDetailClient
+			key={`${tournament?.updatedAt ?? 'missing'}:${tournament?.setupProgressUpdatedAt ?? ''}`}
 			canManage={Boolean(
 				tournament && entryId && tournament.adminEntryId === entryId
 			)}
@@ -103,6 +107,8 @@ export default async function Page({ params }: PageProps) {
 			initialRows={initialRows}
 			initialError={initialError}
 			initialSnapshot={initialSnapshot}
+			initialParticipants={participants}
+			justCreated={justCreated}
 		/>
 	)
 }

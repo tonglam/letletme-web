@@ -268,6 +268,14 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
+		if (query.includes('GetEventOverallResult')) {
+			json(response, 200, {
+				data: {
+					eventOverallResult: []
+				}
+			})
+			return
+		}
 
 		json(response, 503, {
 			errors: [{ message: 'No deterministic fixture for this E2E query' }]

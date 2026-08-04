@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+	buildAuthoritativeTournamentAction,
 	buildAuthoritativeTournamentDelete,
 	buildAuthoritativeTournamentRename,
 	InvalidTournamentManagementPayloadError,
@@ -15,11 +16,23 @@ describe('tournament management boundary', () => {
 			adminEntryId: 15702,
 		})
 		assert.deepEqual(buildAuthoritativeTournamentDelete(15702), { adminEntryId: 15702 })
+		assert.deepEqual(buildAuthoritativeTournamentAction({ action: 'retry_setup' }, 15702), {
+			action: 'retry_setup',
+			adminEntryId: 15702,
+		})
 	})
 
 	it('rejects browser-controlled identity and fields other than name', () => {
 		assert.throws(
 			() => buildAuthoritativeTournamentRename({ name: 'Secure Cup', adminEntryId: 999 }, 15702),
+			InvalidTournamentManagementPayloadError,
+		)
+		assert.throws(
+			() => buildAuthoritativeTournamentAction({ action: 'pause', adminEntryId: 999 }, 15702),
+			InvalidTournamentManagementPayloadError,
+		)
+		assert.throws(
+			() => buildAuthoritativeTournamentAction({ action: 'drop_database' }, 15702),
 			InvalidTournamentManagementPayloadError,
 		)
 		assert.throws(

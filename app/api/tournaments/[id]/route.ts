@@ -6,6 +6,7 @@ import {
 } from '@/lib/tournament/backend-client'
 import {
 	buildAuthoritativeTournamentDelete,
+	buildAuthoritativeTournamentAction,
 	buildAuthoritativeTournamentRename,
 	InvalidTournamentManagementPayloadError,
 	isTrustedTournamentMutationRequest,
@@ -134,6 +135,53 @@ export async function DELETE(request: Request, context: RouteContext) {
 		)
 		return proxyResponse(response)
 	} catch (error) {
+		return handleBackendError(error)
+	}
+}
+
+export async function POST(request: Request, context: RouteContext) {
+	const tournamentId = await getTournamentId(context)
+	if (!tournamentId) return errorResponse('Invalid tournament ID', 400)
+
+	const session = await getMutationSession(request)
+	if (isResponse(session)) return session
+
+	try {
+		const body = await readBoundedJson(request, MAX_UPDATE_BODY_BYTES)
+		const { action, adminEntryId } = buildAuthoritativeTournamentAction(
+			body,
+			session.user.fplEntryId,
+		)
+		const target = action === 'retry_setup'
+			? { path: 'setup', method: 'POST', payload: { adminEntryId } }
+			: action === 'retry_roster'
+				? { path: 'roster-sync', method: 'POST', payload: { adminEntryId } }
+				: action === 'enable_official_sync'
+					? {
+						path: 'roster-mode',
+						method: 'PATCH',
+						payload: { adminEntryId, rosterMode: 'official_sync' },
+					}
+					: {
+						path: 'state',
+						method: 'PATCH',
+						payload: { adminEntryId, state: action === 'pause' ? 'inactive' : 'active' },
+					}
+		const response = await tournamentApiFetch(
+			`/tournaments/${tournamentId}/${target.path}`,
+			{
+				method: target.method,
+				body: JSON.stringify(target.payload),
+			},
+			request,
+		)
+		return proxyResponse(response)
+	} catch (error) {
+		if (error instanceof PayloadTooLargeError) return errorResponse('Payload too large', 413)
+		if (error instanceof SyntaxError) return errorResponse('Invalid JSON body', 400)
+		if (error instanceof InvalidTournamentManagementPayloadError) {
+			return errorResponse(error.message, 400)
+		}
 		return handleBackendError(error)
 	}
 }

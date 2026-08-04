@@ -1,6 +1,7 @@
 'use client'
 
 import PageShell from '@/components/layout/PageShell'
+import { TournamentLifecycleBadge } from '@/components/tournament/TournamentLifecycleBadge'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -37,6 +38,7 @@ import { useTranslations } from 'next-intl'
 import { useMemo, useState } from 'react'
 
 type TournamentRow = {
+	tournament: EntryTournament
 	id: string
 	adminEntryId: number
 	name: string
@@ -80,6 +82,7 @@ const mapKnockoutFormat = (knockoutMode: string): TournamentRow['knockoutFormat'
 
 const mapTournamentToRow = (tournament: EntryTournament): TournamentRow => {
 	return {
+		tournament,
 		id: String(tournament.id),
 		adminEntryId: tournament.adminEntryId,
 		name: tournament.name,
@@ -113,7 +116,6 @@ export default function TournamentListClient({
 		[initialTournaments],
 	)
 	const [sortOption, setSortOption] = useState<SortOption>('updatedDesc')
-	const getStateLabel = (state: string) => state === 'ACTIVE' ? t('active') : state === 'COMPLETED' ? t('completed') : state === 'PENDING' ? t('pending') : state
 	const getLeagueType = (type: string) => type === 'H2H' ? t('headToHead') : type === 'CLASSIC' ? t('classic') : type
 
 	// Filter tournaments based on search and filters
@@ -312,13 +314,7 @@ export default function TournamentListClient({
 											</div>
 										</TableCell>
 										<TableCell>
-											<Badge
-												variant={
-													tournament.state === 'ACTIVE' ? 'default' : 'secondary'
-												}
-											>
-												{getStateLabel(tournament.state)}
-											</Badge>
+											<TournamentLifecycleBadge tournament={tournament.tournament} />
 										</TableCell>
 										<TableCell>
 											<DropdownMenu>

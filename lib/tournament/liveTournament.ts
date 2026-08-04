@@ -21,11 +21,11 @@ export const formatTournamentState = (state: string): string => {
 	if (state === 'ACTIVE') {
 		return 'Live'
 	}
-	if (state === 'COMPLETED') {
+	if (state === 'FINISHED') {
 		return 'Completed'
 	}
-	if (state === 'PENDING') {
-		return 'Pending'
+	if (state === 'INACTIVE') {
+		return 'Paused'
 	}
 	return state
 }

@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 
 import { getAuthorizationSession } from '@/lib/auth';
 import { tournamentApiFetch } from '@/lib/tournament/backend-client';
+import { executeServerQuery } from '@/lib/graphql-server';
+import {
+  GET_TOURNAMENT_METADATA,
+  type TournamentMetadataResponse,
+} from '@/lib/graphql/operations/tournaments';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +36,16 @@ export async function GET(request: Request) {
         { success: false, error: 'A valid tournament id is required.' },
         { status: 400 },
       );
+    }
+
+    const tournamentId = Number(id);
+    const access = await executeServerQuery<TournamentMetadataResponse>(
+      GET_TOURNAMENT_METADATA,
+      { tournamentId, entryId: session.user.fplEntryId },
+      { cache: 'no-store' },
+    );
+    if (!access.tournament) {
+      return NextResponse.json({ success: false, error: 'Tournament not found.' }, { status: 404 });
     }
 
     const response = await tournamentApiFetch(

@@ -1,8 +1,8 @@
 import { PageState } from '@/components/feedback/PageState'
 import { Button } from '@/components/ui/button'
 import {
-	GET_ENTRY_TOURNAMENTS,
-	type EntryTournamentsResponse,
+	GET_MANAGED_TOURNAMENT,
+	type ManagedTournamentResponse,
 } from '@/lib/graphql/operations/tournaments'
 import { executeServerQuery } from '@/lib/graphql-server'
 import { getCurrentEntryId, getCurrentSession } from '@/lib/session'
@@ -46,11 +46,11 @@ export default async function Page({ params }: PageProps) {
 		return <NoManagementAccess id={id} />
 	}
 
-	let response: EntryTournamentsResponse
+	let response: ManagedTournamentResponse
 	try {
-		response = await executeServerQuery<EntryTournamentsResponse>(
-			GET_ENTRY_TOURNAMENTS,
-			{ entryId },
+		response = await executeServerQuery<ManagedTournamentResponse>(
+			GET_MANAGED_TOURNAMENT,
+			{ tournamentId, entryId },
 			{ cache: 'no-store' },
 		)
 	} catch (error) {
@@ -70,12 +70,12 @@ export default async function Page({ params }: PageProps) {
 		)
 	}
 
-	const tournament = response.entryTournaments.find(item => item.id === tournamentId)
-	if (!tournament || tournament.adminEntryId !== entryId) {
+	const tournament = response.managedTournament
+	if (!tournament) {
 		return <NoManagementAccess id={id} />
 	}
 
-	return <ManageTournamentClient tournament={tournament} />
+	return <ManageTournamentClient key={tournament.updatedAt} tournament={tournament} />
 }
 
 async function NoManagementAccess({ id }: { id: string }) {
