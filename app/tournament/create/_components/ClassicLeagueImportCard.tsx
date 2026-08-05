@@ -73,7 +73,7 @@ export function ClassicLeagueImportCard({
 							<Input
 								id="league-url"
 								{...register('leagueUrl')}
-								placeholder="https://fantasy.premierleague.com/en/leagues/8863/standings/c"
+								placeholder="https://fantasy.premierleague.com/en/leagues/123456/standings/c"
 								autoComplete="url"
 								aria-invalid={Boolean(validationMessage)}
 								aria-describedby="classic-league-url-help classic-league-url-error"

@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
-import { Brackets, Copy, Swords } from 'lucide-react'
+import { Copy, SlidersHorizontal, Swords } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import type { TournamentCreationMode } from '../_lib/tournament-form'
 
@@ -63,7 +63,7 @@ export function TournamentCreationModeCard({
 							)}
 						>
 							<span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-foreground">
-								<Brackets aria-hidden="true" className="size-5" />
+								<SlidersHorizontal aria-hidden="true" className="size-5" />
 							</span>
 							<span>
 								<span className="font-semibold">{t('customPath')}</span>

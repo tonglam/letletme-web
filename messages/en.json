@@ -1212,7 +1212,7 @@
   },
   "TournamentHelp": {
     "show": "Show help",
-    "hide": "Hide help",
+    "title": "Tournament help",
     "setupGuide": "Setup guide",
     "faq": "FAQ",
     "participantsTitle": "Choose participants",
