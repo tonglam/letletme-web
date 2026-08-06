@@ -237,9 +237,9 @@ export function usePlayerDetailSlot({
 		} catch {
 			// Storage is optional.
 		}
+		// Only clear history chips — keep the active player panel mounted.
 		setRecentPlayers([])
-		clearSelection()
-	}, [clearSelection, storageKey])
+	}, [storageKey])
 
 	return {
 		selectedPlayer,

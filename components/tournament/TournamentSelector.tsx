@@ -26,7 +26,7 @@ export function TournamentSelector({
   className,
 }: TournamentSelectorProps) {
   const t = useTranslations("Common");
-  const currentTournament = tournaments.find(t => t.id === currentTournamentId) || tournaments[0];
+  const currentTournament = tournaments.find(t => t.id === currentTournamentId);
 
   return (
     <Card className={className ?? "mb-6 p-4"}>
@@ -43,7 +43,9 @@ export function TournamentSelector({
               className="w-full justify-between sm:max-w-md sm:flex-1"
               aria-label={t("selectTournament")}
             >
-              <span className="truncate">{currentTournament?.name ?? "—"}</span>
+              <span className="truncate">
+                {currentTournament?.name ?? t("selectTournament")}
+              </span>
               <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>

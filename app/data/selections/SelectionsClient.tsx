@@ -46,25 +46,37 @@ function positionLabel(position: string): string {
 	}
 }
 
+type StatValueFormat = 'percent' | 'number'
+
+function formatStatValue(value: number, format: StatValueFormat): string {
+	if (format === 'number') return String(Math.round(value))
+	return `${value.toFixed(1)}%`
+}
+
+function formatStatHeader(label: string, format: StatValueFormat): string {
+	return format === 'percent' ? `${label} %` : label
+}
+
 function StatRow({
 	player,
 	rank,
-	leftLabel,
 	leftValue,
-	rightLabel,
 	rightValue,
-	barColor
+	leftFormat,
+	rightFormat,
+	barColor,
 }: {
 	player: TournamentStatPlayer
 	rank: number
-	leftLabel: string
 	leftValue: number
-	rightLabel: string
 	rightValue: number
+	leftFormat: StatValueFormat
+	rightFormat: StatValueFormat
 	barColor: string
 }) {
-	const maxPercent = 100
-	const barWidth = Math.min((leftValue / maxPercent) * 100, 100)
+	// Bar width: percents are 0–100; counts use relative scale vs 100 as soft cap
+	const barSource = leftFormat === 'percent' ? leftValue : Math.min(leftValue, 100)
+	const barWidth = Math.min((barSource / 100) * 100, 100)
 	return (
 		<div className="flex items-center gap-2 border-b border-border/60 px-3 py-2.5 transition-colors last:border-b-0 hover:bg-muted/40">
 			<span className="w-5 text-right font-mono text-xs font-medium tabular-nums text-muted-foreground">
@@ -90,10 +102,10 @@ function StatRow({
 			</div>
 			<div className="flex w-14 shrink-0 flex-col items-end">
 				<span className="font-display text-xs font-semibold tabular-nums">
-					{leftValue.toFixed(1)}%
+					{formatStatValue(leftValue, leftFormat)}
 				</span>
 				<span className="text-[10px] tabular-nums text-muted-foreground">
-					{rightValue.toFixed(1)}%
+					{formatStatValue(rightValue, rightFormat)}
 				</span>
 			</div>
 		</div>
@@ -107,7 +119,9 @@ function StatList({
 	rightLabel,
 	rightField,
 	barColor,
-	sortBy
+	sortBy,
+	leftFormat = 'percent',
+	rightFormat = 'percent',
 }: {
 	data: TournamentStatPlayer[]
 	leftLabel: string
@@ -116,6 +130,8 @@ function StatList({
 	rightField: 'selectedByPercent' | 'eoByPercent' | 'transfersEvent'
 	barColor: string
 	sortBy?: 'selectedByPercent' | 'eoByPercent' | 'transfersEvent' | 'captainByPercent'
+	leftFormat?: StatValueFormat
+	rightFormat?: StatValueFormat
 }) {
 	const t = useTranslations('Selections')
 	const sorted = sortBy
@@ -137,10 +153,10 @@ function StatList({
 				</span>
 				<div className="flex flex-col items-end">
 					<span className="text-[10px] font-medium text-muted-foreground">
-						{leftLabel} %
+						{formatStatHeader(leftLabel, leftFormat)}
 					</span>
 					<span className="text-[10px] font-medium text-muted-foreground">
-						{rightLabel} %
+						{formatStatHeader(rightLabel, rightFormat)}
 					</span>
 				</div>
 			</div>
@@ -149,10 +165,10 @@ function StatList({
 					key={p.id}
 					player={p}
 					rank={i + 1}
-					leftLabel={leftLabel}
 					leftValue={p[leftField] ?? 0}
-					rightLabel={rightLabel}
 					rightValue={p[rightField] ?? 0}
+					leftFormat={leftFormat}
+					rightFormat={rightFormat}
 					barColor={barColor}
 				/>
 			))}
@@ -450,12 +466,14 @@ export default function SelectionsClient({
 								) : (
 									<StatList
 										data={transferInData}
-										leftLabel={t('inPercent')}
+										leftLabel={t('ownershipPercent')}
 										leftField="selectedByPercent"
 										rightLabel={t('count')}
 										rightField="transfersEvent"
 										barColor="bg-success/70"
 										sortBy="transfersEvent"
+										leftFormat="percent"
+										rightFormat="number"
 									/>
 								)}
 							</TabsContent>
@@ -468,12 +486,14 @@ export default function SelectionsClient({
 								) : (
 									<StatList
 										data={transferOutData}
-										leftLabel={t('outPercent')}
+										leftLabel={t('ownershipPercent')}
 										leftField="selectedByPercent"
 										rightLabel={t('count')}
 										rightField="transfersEvent"
 										barColor="bg-destructive/70"
 										sortBy="transfersEvent"
+										leftFormat="percent"
+										rightFormat="number"
 									/>
 								)}
 							</TabsContent>

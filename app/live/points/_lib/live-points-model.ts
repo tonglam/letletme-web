@@ -199,7 +199,13 @@ export function mapLiveDataToPlayers(
 	const sortedPicks = [...live.pickList].sort((a, b) => a.position - b.position)
 
 	return sortedPicks.map(pick => {
-		const isCaptain = live.captainName === pick.webName
+		// Prefer pick flags from the calc payload; fall back to captain name match.
+		const isCaptain =
+			pick.isCaptain === true ||
+			(!pick.isCaptain &&
+				!pick.isViceCaptain &&
+				live.captainName === pick.webName)
+		const isViceCaptain = pick.isViceCaptain === true
 		// Keep bench-vs-starting distinction stable, even when Bench Boost is active.
 		const isBench = pick.position >= 12
 		const position = normalizePosition(pick.elementType, 'elementType')
@@ -254,10 +260,10 @@ export function mapLiveDataToPlayers(
 				yellowCards: pick.yellowCards,
 				redCards: pick.redCards,
 				points: pick.totalPoints,
-				bonusPoints: pick.bonus
+				bonusPoints: pick.bonus,
 			},
 			isCaptain,
-			isViceCaptain: false
+			isViceCaptain,
 		}
 	})
 }
@@ -278,10 +284,20 @@ export function deriveLiveTeamStats(live: LiveCalcData) {
 		liveTotalPoints: live.liveTotalPoints,
 		played: `${playedCount}/${startingPicks.length}`,
 		chips: {
-			bench: normalizedChip.includes('bench'),
+			bench:
+				normalizedChip.includes('bench') ||
+				normalizedChip === 'bboost' ||
+				normalizedChip === 'bb',
 			triple:
-				normalizedChip.includes('3x') || normalizedChip.includes('triple'),
-			wildcard: normalizedChip.includes('wildcard')
-		}
+				normalizedChip.includes('3x') ||
+				normalizedChip.includes('triple') ||
+				normalizedChip === 'tc',
+			wildcard: normalizedChip.includes('wildcard') || normalizedChip === 'wc',
+			freeHit:
+				normalizedChip.includes('free') ||
+				normalizedChip === 'freehit' ||
+				normalizedChip === 'fh' ||
+				normalizedChip === 'free_hit',
+		},
 	}
 }

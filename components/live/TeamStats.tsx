@@ -18,6 +18,7 @@ interface TeamStatsProps {
 			bench: boolean
 			triple: boolean
 			wildcard: boolean
+			freeHit?: boolean
 		}
 	}
 }
@@ -87,6 +88,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
 		bench: t('benchBoost'),
 		triple: t('tripleCaptain'),
 		wildcard: t('wildcard'),
+		freeHit: t('freeHit'),
 	}
 	const activeChipNames = Object.entries(stats.chips)
 		.filter(([, active]) => active)

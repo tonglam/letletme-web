@@ -10,12 +10,28 @@ import type { TeamStatsViewModel } from '../_lib/team-stats-model'
 export function TeamChipsTab({ stats }: { stats: TeamStatsViewModel }) {
 	const t = useTranslations('TeamStats')
 	const chipName = (value: unknown) => {
-		const chip = String(value).toUpperCase()
-		if (chip === 'NONE') return t('chipNone')
-		if (chip === 'BBOOST' || chip === 'BENCH BOOST') return t('benchBoost')
-		if (chip === '3XC' || chip === 'TRIPLE CAPTAIN') return t('tripleCaptain')
-		if (chip === 'WILDCARD') return t('wildcard')
-		if (chip === 'FREEHIT' || chip === 'FREE HIT') return t('freeHit')
+		const chip = String(value).toUpperCase().replace(/[\s-]+/g, '_')
+		if (chip === 'NONE' || chip === '') return t('chipNone')
+		if (
+			chip === 'BB' ||
+			chip === 'BBOOST' ||
+			chip === 'BENCH_BOOST' ||
+			chip === 'BENCHBOOST'
+		) {
+			return t('benchBoost')
+		}
+		if (
+			chip === '3XC' ||
+			chip === 'TC' ||
+			chip === 'TRIPLE_CAPTAIN' ||
+			chip === 'TRIPLECAPTAIN'
+		) {
+			return t('tripleCaptain')
+		}
+		if (chip === 'WC' || chip === 'WILDCARD') return t('wildcard')
+		if (chip === 'FH' || chip === 'FREEHIT' || chip === 'FREE_HIT') {
+			return t('freeHit')
+		}
 		return String(value)
 	}
 	const chipCountColumns: StatsTableColumn[] = [

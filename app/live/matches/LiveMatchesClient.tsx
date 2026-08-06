@@ -105,6 +105,8 @@ export function LiveMatchesClient({
 	const snapshotRef = useRef<LiveSnapshotStatus | null>(initialSnapshot ?? null)
 	const hasSavedTabPreference = useRef(false)
 	const isFetchInFlight = useRef(false)
+	const pendingRefreshRef = useRef(false)
+	const mountedRef = useRef(true)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
 	const hasLastGoodData = useRef(initialMatches.length > 0)
 	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
@@ -112,9 +114,20 @@ export function LiveMatchesClient({
 		setSnapshot(next)
 	}, [])
 
+	useEffect(() => {
+		mountedRef.current = true
+		return () => {
+			mountedRef.current = false
+		}
+	}, [])
+
 	const fetchMatches = useCallback(
 		async (isRefresh = false) => {
-			if (isFetchInFlight.current) return
+			if (isFetchInFlight.current) {
+				// Coalesce concurrent manual/auto refreshes into one trailing fetch.
+				if (isRefresh) pendingRefreshRef.current = true
+				return
+			}
 
 			isFetchInFlight.current = true
 
@@ -126,6 +139,7 @@ export function LiveMatchesClient({
 				}
 				setError(null)
 				const data = await executeQuery<LiveMatchesResponse>(GET_LIVE_MATCHES)
+				if (!mountedRef.current) return
 				const mappedMatches = transformLiveMatches(data.liveMatches)
 				setMatches(mappedMatches)
 				acceptSnapshot(data.liveSnapshot)
@@ -136,11 +150,21 @@ export function LiveMatchesClient({
 				}
 			} catch (err) {
 				console.error('Failed to fetch live matches:', err)
-				setError(t(hasLastGoodData.current ? 'refreshFailed' : 'loadFailed'))
+				if (mountedRef.current) {
+					setError(t(hasLastGoodData.current ? 'refreshFailed' : 'loadFailed'))
+				}
 			} finally {
+				isFetchInFlight.current = false
+				if (!mountedRef.current) {
+					pendingRefreshRef.current = false
+					return
+				}
 				setIsLoading(false)
 				setIsRefreshing(false)
-				isFetchInFlight.current = false
+				if (pendingRefreshRef.current) {
+					pendingRefreshRef.current = false
+					void fetchMatches(true)
+				}
 			}
 		},
 		[acceptSnapshot, t]

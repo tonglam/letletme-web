@@ -64,6 +64,7 @@ export function SearchHeader(props: SearchHeaderProps) {
             <SelectItem value="triple">{t("tripleCaptain")}</SelectItem>
             <SelectItem value="bench">{t("benchBoost")}</SelectItem>
             <SelectItem value="wildcard">{t("wildcard")}</SelectItem>
+            <SelectItem value="freehit">{t("freeHit")}</SelectItem>
           </SelectContent>
         </Select>
 

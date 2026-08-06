@@ -5,8 +5,8 @@ export function resolveSelectedGameweek(
 ): { maxGameweek: number; selected: number } {
 	const maxGameweek = Math.max(1, currentGameweek)
 	const selected =
-		selectedGameweek !== undefined && selectedGameweek <= maxGameweek
-			? selectedGameweek
+		selectedGameweek !== undefined
+			? Math.min(maxGameweek, Math.max(1, selectedGameweek))
 			: maxGameweek
 	return { maxGameweek, selected }
 }

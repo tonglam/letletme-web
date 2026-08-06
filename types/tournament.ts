@@ -39,7 +39,10 @@ export interface TournamentEntry {
     bench: boolean;
     triple: boolean;
     wildcard: boolean;
+    freeHit: boolean;
   };
+  /** True when this row was retained from a previous failed calc batch. */
+  stale?: boolean;
 }
 
 export interface Tournament {
