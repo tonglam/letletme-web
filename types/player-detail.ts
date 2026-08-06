@@ -5,10 +5,15 @@ export interface PlayerDetail {
   teamShort: string;
   position: string;
   points: number;
-  ownershipPercentage: number;
-  bps: number;
+  /** null when live entry payload does not include ownership. */
+  ownershipPercentage: number | null;
+  /** null when BPS is not available on the live pick. */
+  bps: number | null;
   bonusPoints: number;
   breakdownPending?: boolean;
+  /** official explain vs pick-derived provisional when explain is empty/out of sync */
+  breakdownSource?: 'official' | 'provisional' | 'none';
+  playingStatus?: 'NOT_STARTED' | 'PLAYING' | 'FINISHED';
   stats: {
     minutes: number;
     goals: number;
@@ -18,6 +23,10 @@ export interface PlayerDetail {
     penaltiesSaved?: number;
     yellowCards: number;
     redCards: number;
+    goalsConceded?: number;
+    defensiveContribution?: number;
+    ownGoals?: number;
+    penaltiesMissed?: number;
   };
   pointsBreakdown: {
     category: string;

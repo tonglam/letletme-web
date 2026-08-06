@@ -1,5 +1,13 @@
 'use client'
 
+import {
+	TOURNAMENT_STATS_UI_MOCK_ENABLED,
+	getTournamentStatsUiMockEventResults,
+	getTournamentStatsUiMockPlayerMeta,
+	getTournamentStatsUiMockPreviousResults,
+	getTournamentStatsUiMockRankingSummary,
+	getTournamentStatsUiMockTournament,
+} from '@/lib/dev/tournament-stats-ui-mock'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_ENTRY_TOURNAMENTS,
@@ -68,8 +76,16 @@ export function useTournamentStats({
 					initialSelectedTournament,
 					initialDataGameweek,
 					initialCurrentRows,
-					[],
-					{},
+					// TEMP UI mock — previous ranks for deltas
+					TOURNAMENT_STATS_UI_MOCK_ENABLED
+						? getTournamentStatsUiMockPreviousResults(
+								initialDataGameweek,
+								entryId,
+							)
+						: [],
+					TOURNAMENT_STATS_UI_MOCK_ENABLED
+						? getTournamentStatsUiMockPlayerMeta()
+						: {},
 					entryId,
 				)
 			: null
@@ -78,7 +94,13 @@ export function useTournamentStats({
 	const [selectedTournamentId, setSelectedTournamentId] = useState(initialSelectedTournamentId)
 	const [dataGameweek, setDataGameweek] = useState<number | null>(initialDataGameweek)
 	const [tournamentStats, setTournamentStats] = useState<TournamentStatsViewModel | null>(initialStats)
-	const [rankingSummary, setRankingSummary] = useState<TournamentEntryRankingSummary | null>(null)
+	const [rankingSummary, setRankingSummary] =
+		useState<TournamentEntryRankingSummary | null>(
+			// TEMP UI mock
+			TOURNAMENT_STATS_UI_MOCK_ENABLED
+				? getTournamentStatsUiMockRankingSummary(entryId)
+				: null,
+		)
 	const [standingsSearch, setStandingsSearch] = useState('')
 	const [isBootstrapping, setIsBootstrapping] = useState(initialTournaments.length === 0 && entryId > 0)
 	const [isLoading, setIsLoading] = useState(false)
@@ -214,6 +236,37 @@ export function useTournamentStats({
 				setError(null)
 				setTournamentStats((current) => current?.tournament.id === tournament.id ? current : null)
 				setRankingSummary(null)
+
+				// TEMP UI mock — remove with lib/dev/tournament-stats-ui-mock.ts
+				if (TOURNAMENT_STATS_UI_MOCK_ENABLED) {
+					const mockTournament = getTournamentStatsUiMockTournament(entryId)
+					const latestGameweek = initialCurrentGameweek
+					const currentRows = getTournamentStatsUiMockEventResults(
+						latestGameweek,
+						entryId,
+					)
+					const previousRows = getTournamentStatsUiMockPreviousResults(
+						latestGameweek,
+						entryId,
+					)
+					const meta = getTournamentStatsUiMockPlayerMeta()
+					Object.entries(meta).forEach(([id, value]) =>
+						setBoundedCache(playerMetaCacheRef.current, Number(id), value),
+					)
+					setDataGameweek(latestGameweek)
+					setRankingSummary(getTournamentStatsUiMockRankingSummary(entryId))
+					setTournamentStats(
+						buildTournamentStats(
+							mockTournament.id === tournament.id ? tournament : mockTournament,
+							latestGameweek,
+							currentRows,
+							previousRows,
+							meta,
+							entryId,
+						),
+					)
+					return
+				}
 
 				const fetchResults = async (eventId: number): Promise<TournamentEventResultItem[]> => {
 					if (eventId <= 0) return []

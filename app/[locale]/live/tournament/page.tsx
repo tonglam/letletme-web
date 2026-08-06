@@ -1,24 +1,24 @@
-import { getCurrentEntryId } from '@/lib/session'
-import { getCurrentAndNextEvents } from '@/lib/events'
+import TournamentClient from '@/app/live/tournament/TournamentClient'
 import { PageState } from '@/components/feedback/PageState'
 import PageShell from '@/components/layout/PageShell'
-import { executeServerQuery } from '@/lib/graphql-server'
+import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
+import { getCurrentAndNextEvents } from '@/lib/events'
+import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import {
 	GET_ENTRY_TOURNAMENTS,
 	GET_TOURNAMENT_LIVE_POINTS,
 	type EntryTournamentsResponse,
 	type TournamentLiveCalcData,
-	type TournamentLivePointsResponse
+	type TournamentLivePointsResponse,
 } from '@/lib/graphql/operations/tournaments'
-import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
-import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
+import { executeServerQuery } from '@/lib/graphql-server'
+import { getCurrentEntryId } from '@/lib/session'
 import { getTournamentLiveBatchSeed } from '@/lib/tournament/liveEntries'
 import { areTournamentStandingsReady } from '@/lib/tournament/lifecycle'
+import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 import { CalendarX2 } from 'lucide-react'
-import { Suspense } from 'react'
-import TournamentClient from '@/app/live/tournament/TournamentClient'
-import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getTranslations } from 'next-intl/server'
+import { Suspense } from 'react'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/live/tournament',
 		titleKey: 'liveTournamentsTitle',
-		descriptionKey: 'liveTournamentsDescription'
+		descriptionKey: 'liveTournamentsDescription',
 	})
 }
 
@@ -41,12 +41,12 @@ export default async function Page({ params, searchParams }: PageProps) {
 	await getPageLocale(params)
 	const [t, liveT] = await Promise.all([
 		getTranslations('States'),
-		getTranslations('LiveTournament')
+		getTranslations('LiveTournament'),
 	])
 	const resolvedSearchParams = await searchParams
 	const [entryId, events] = await Promise.all([
 		getCurrentEntryId(),
-		getCurrentAndNextEvents()
+		getCurrentAndNextEvents(),
 	])
 	const currentEventId = events?.current[0]?.id
 
@@ -61,6 +61,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			</PageShell>
 		)
 	}
+
 	let initialTournaments: ReturnType<
 		typeof mapEntryTournamentToLiveTournament
 	>[] = []
@@ -76,10 +77,10 @@ export default async function Page({ params, searchParams }: PageProps) {
 				await executeServerQuery<EntryTournamentsResponse>(
 					GET_ENTRY_TOURNAMENTS,
 					{ entryId },
-					{ cache: 'no-store' }
+					{ cache: 'no-store' },
 				)
 			initialTournaments = tournamentsData.entryTournaments.map(
-				mapEntryTournamentToLiveTournament
+				mapEntryTournamentToLiveTournament,
 			)
 			const requestedTournamentId =
 				typeof resolvedSearchParams.tournamentId === 'string'
@@ -87,14 +88,14 @@ export default async function Page({ params, searchParams }: PageProps) {
 					: ''
 			initialSelectedTournamentId =
 				initialTournaments.find(
-					tournament => tournament.id === requestedTournamentId
+					tournament => tournament.id === requestedTournamentId,
 				)?.id ??
 				initialTournaments[0]?.id ??
 				''
 
 			const tournamentId = Number(initialSelectedTournamentId)
 			const selectedTournament = initialTournaments.find(
-				tournament => tournament.id === initialSelectedTournamentId
+				tournament => tournament.id === initialSelectedTournamentId,
 			)
 			if (
 				tournamentId > 0 &&
@@ -106,7 +107,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 					await executeServerQuery<TournamentLivePointsResponse>(
 						GET_TOURNAMENT_LIVE_POINTS,
 						{ tournamentId, eventId: currentEventId },
-						{ cache: 'no-store' }
+						{ cache: 'no-store' },
 					)
 				const seed = getTournamentLiveBatchSeed(currentResponse)
 				initialCurrentRows = seed.rows
@@ -114,7 +115,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 				if (seed.failedCount > 0) {
 					initialResultsError = liveT('partialResults', {
 						failed: seed.failedCount,
-						total: seed.totalEntries
+						total: seed.totalEntries,
 					})
 				}
 				initialResultsLoaded = true

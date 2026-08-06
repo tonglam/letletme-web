@@ -151,7 +151,7 @@ function singlePlayerSections(player: PlayerDetailData): Array<{ label: string; 
 export function PlayerSeasonTab({ player, comparison }: { player: PlayerDetailData; comparison: PlayerDetailData | null }) {
 	if (comparison) {
 		return (
-			<Card className="flex flex-col gap-5 p-5">
+			<Card className="flex flex-col gap-5 border-border/80 p-4 shadow-sm sm:p-5">
 				<section>
 					<CompareSectionHeader icon={<Trophy className="size-4" />} label="Attacking" />
 					<CompareRow label="Goals" v1={player.goalsScored} v2={comparison.goalsScored} />
@@ -187,7 +187,7 @@ export function PlayerSeasonTab({ player, comparison }: { player: PlayerDetailDa
 	}
 
 	return (
-		<Card className="flex flex-col gap-6 p-5">
+		<Card className="flex flex-col gap-6 border-border/80 p-4 shadow-sm sm:p-5">
 			{singlePlayerSections(player).map((section) => (
 				<MetricSection key={section.label} {...section} />
 			))}

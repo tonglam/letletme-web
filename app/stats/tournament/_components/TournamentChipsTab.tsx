@@ -1,7 +1,7 @@
-import { Card } from '@/components/ui/card'
+import { StatsSectionCard } from '@/components/stats/StatsSurfaces'
 import { Star } from 'lucide-react'
-import type { ChipRow } from '../_lib/tournament-stats-model'
 import { useFormatter, useTranslations } from 'next-intl'
+import type { ChipRow } from '../_lib/tournament-stats-model'
 
 export function TournamentChipsTab({ rows }: { rows: ChipRow[] }) {
 	const t = useTranslations('TournamentStats')
@@ -15,30 +15,43 @@ export function TournamentChipsTab({ rows }: { rows: ChipRow[] }) {
 		return chip
 	}
 	return (
-		<Card className="p-6">
-			<h2 className="mb-6 flex items-center gap-2 text-xl font-bold">
-				<Star className="size-5 text-warning" aria-hidden="true" /> {t('chipUsage')}
-			</h2>
+		<StatsSectionCard icon={Star} title={t('chipUsage')}>
 			{rows.length === 0 ? (
 				<p className="text-sm text-muted-foreground">{t('noChipData')}</p>
 			) : (
-				<div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-					{rows.map((chip) => (
-						<div key={chip.chip} className="rounded-lg bg-accent/30 p-4">
+				<div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
+					{rows.map(chip => (
+						<div
+							key={chip.chip}
+							className="rounded-lg border border-border/70 bg-muted/40 p-3 sm:p-4 dark:bg-muted/25"
+						>
 							<div className="flex items-center justify-between gap-4">
 								<div>
-									<h3 className="text-lg font-bold">{chipName(chip.chip)}</h3>
-									<p className="text-sm text-muted-foreground">{t('managerCount', { count: format.number(chip.count, { notation: 'compact' }), percentage: chip.percentage })}</p>
+									<h3 className="font-display text-base font-bold">
+										{chipName(chip.chip)}
+									</h3>
+									<p className="text-sm text-muted-foreground">
+										{t('managerCount', {
+											count: format.number(chip.count, {
+												notation: 'compact',
+											}),
+											percentage: chip.percentage,
+										})}
+									</p>
 								</div>
 								<div className="text-right">
-									<p className="text-lg font-bold">{chip.averagePoints}</p>
-									<p className="text-xs text-muted-foreground">{t('averageNetPoints')}</p>
+									<p className="font-display text-lg font-bold tabular-nums">
+										{chip.averagePoints}
+									</p>
+									<p className="text-xs text-muted-foreground">
+										{t('averageNetPoints')}
+									</p>
 								</div>
 							</div>
 						</div>
 					))}
 				</div>
 			)}
-		</Card>
+		</StatsSectionCard>
 	)
 }

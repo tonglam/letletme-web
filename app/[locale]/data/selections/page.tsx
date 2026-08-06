@@ -7,6 +7,13 @@ import {
 	type TournamentSelectionStatsResponse,
 	type TournamentStatPlayer,
 } from '@/lib/graphql/operations/tournaments'
+import {
+	SELECTIONS_MOCK_ENTRY_ID,
+	SELECTIONS_MOCK_EVENT_ID,
+	SELECTIONS_UI_MOCK_ENABLED,
+	getSelectionsUiMockStats,
+	getSelectionsUiMockTournaments,
+} from '@/lib/dev/selections-ui-mock'
 import { getCurrentEntryId } from '@/lib/session'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 import { areTournamentInsightsReady } from '@/lib/tournament/lifecycle'
@@ -41,6 +48,21 @@ export async function generateMetadata({ params }: PageProps) {
 export default async function SelectionsPage({ params }: PageProps) {
 	await getPageLocale(params)
 	const t = await getTranslations('States')
+
+	// TEMP UI mock — seed page without GraphQL / entry
+	if (SELECTIONS_UI_MOCK_ENABLED) {
+		const tournaments = getSelectionsUiMockTournaments()
+		return (
+			<SelectionsClient
+				entryId={SELECTIONS_MOCK_ENTRY_ID}
+				initialTournaments={tournaments}
+				initialSelectedTournamentId={tournaments[0]?.id ?? ''}
+				initialStats={getSelectionsUiMockStats()}
+				initialGameweek={SELECTIONS_MOCK_EVENT_ID}
+			/>
+		)
+	}
+
 	const [entryId, events] = await Promise.all([
 		getCurrentEntryId(),
 		getCurrentAndNextEvents(),
@@ -59,7 +81,8 @@ export default async function SelectionsPage({ params }: PageProps) {
 		)
 	}
 
-	let initialTournaments: ReturnType<typeof mapEntryTournamentToLiveTournament>[] = []
+	let initialTournaments: ReturnType<typeof mapEntryTournamentToLiveTournament>[] =
+		[]
 	let initialStats: StatsResult | null = null
 
 	if (entryId) {
@@ -80,11 +103,16 @@ export default async function SelectionsPage({ params }: PageProps) {
 				firstTournament &&
 				areTournamentInsightsReady(firstTournament)
 			) {
-				const statsData = await executeServerQuery<TournamentSelectionStatsResponse>(
-					GET_TOURNAMENT_SELECTION_STATS,
-					{ tournamentId: firstTournamentId, eventId: currentGameweek, limit: 10 },
-					{ cache: 'no-store' },
-				)
+				const statsData =
+					await executeServerQuery<TournamentSelectionStatsResponse>(
+						GET_TOURNAMENT_SELECTION_STATS,
+						{
+							tournamentId: firstTournamentId,
+							eventId: currentGameweek,
+							limit: 10,
+						},
+						{ cache: 'no-store' },
+					)
 				const stats = statsData.tournamentSelectionStats
 				initialStats = {
 					selection: stats?.mostSelectedPlayers ?? [],

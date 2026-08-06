@@ -1,15 +1,16 @@
 'use client'
 
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Card } from '@/components/ui/card'
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import PageShell from '@/components/layout/PageShell'
+import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Card } from '@/components/ui/card'
 import type { EntryEventResult } from '@/lib/graphql/operations/entries'
 import { AlertCircle } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { TeamStatsSummary } from './_components/TeamStatsSummary'
 import { TeamStatsTabs } from './_components/TeamStatsTabs'
 import { useTeamStats } from './_hooks/useTeamStats'
-import { useTranslations } from 'next-intl'
 
 interface TeamStatsClientProps {
 	entryId: number
@@ -36,7 +37,17 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
-				<h1 className="mb-6 text-3xl font-bold">{t('title')}</h1>
+				<StatsPageHeader
+					eyebrow={t('squad')}
+					title={t('title')}
+					badge={
+						selectedGameweek ? (
+							<span className="inline-flex w-fit items-center rounded-md bg-plum px-2.5 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
+								GW{selectedGameweek}
+							</span>
+						) : null
+					}
+				/>
 
 				{error ? (
 					<Alert variant="destructive" className="mb-6">
@@ -45,23 +56,34 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 					</Alert>
 				) : null}
 
-				<GameweekSelector
-					className="mb-6"
-					onGameweekChange={setSelectedGameweek}
-					currentGameweek={currentGameweek}
-					selectedGameweek={selectedGameweek}
-					disabled={isLoading || !currentGameweek}
-				/>
+				<div className="mb-5 sm:mb-6">
+					<GameweekSelector
+						onGameweekChange={setSelectedGameweek}
+						currentGameweek={currentGameweek}
+						selectedGameweek={selectedGameweek}
+						disabled={isLoading || !currentGameweek}
+					/>
+				</div>
 
 				{teamStats ? (
 					<>
 						<TeamStatsSummary stats={teamStats} />
-						<TeamStatsTabs activeTab={activeTab} onTabChange={setActiveTab} stats={teamStats} />
+						<TeamStatsTabs
+							activeTab={activeTab}
+							onTabChange={setActiveTab}
+							stats={teamStats}
+						/>
 					</>
 				) : (
-					<Card className="p-6" aria-live="polite" aria-busy={isLoading}>
-						<p className="text-muted-foreground">
-							{isLoading ? t('loading') : (emptyStateMessage ?? t('noStats'))}
+					<Card
+						className="border-border/80 p-6 shadow-sm"
+						aria-live="polite"
+						aria-busy={isLoading}
+					>
+						<p className="text-sm text-muted-foreground">
+							{isLoading
+								? t('loading')
+								: (emptyStateMessage ?? t('noStats'))}
 						</p>
 					</Card>
 				)}

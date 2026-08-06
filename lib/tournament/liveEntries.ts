@@ -49,35 +49,46 @@ export const buildTournamentEntries = (
 ): TournamentEntry[] => {
 	const currentRankByEntryId = buildRankMap(currentRows)
 
-	return currentRows.map(row => ({
-		id: String(row.entry),
-		rank: currentRankByEntryId.get(row.entry) ?? 0,
-		teamName: row.entryName ?? `Entry ${row.entry}`,
-		managerName: row.playerName ?? '-',
-		captainName:
-			row.pickList.find(player => player.isCaptain)?.webName ?? row.captainName ?? 'N/A',
-		captainTeam: row.pickList.find(player => player.isCaptain)?.teamShortName ?? 'N/A',
-		captainPoints: 0,
-		gwPoints: row.livePoints ?? 0,
-		gwNetPoints: row.liveNetPoints ?? row.livePoints ?? 0,
-		eventCost: row.transferCost ?? 0,
-		overallRank: row.overallRank ?? 0,
-		livePoints: row.liveNetPoints ?? row.livePoints ?? 0,
-		totalPoints: row.liveTotalPoints ?? 0,
-		playersPlayed: row.played ?? 0,
-		playersToPlay: row.toPlay ?? 0,
-		picks: row.pickList.map(player => ({
-			element: player.element,
-			webName: player.webName,
-			teamShortName: player.teamShortName,
-			teamName: player.teamName,
-			elementTypeName: player.elementTypeName,
-			position: player.position,
-			isCaptain: player.isCaptain,
-			isViceCaptain: player.isViceCaptain,
-		})),
-		chips: mapEventChipToFlags(row.chip),
-	}))
+	return currentRows.map(row => {
+		const captainPick = row.pickList.find(player => player.isCaptain)
+		const captainPoints =
+			row.activeCaptain?.points ??
+			(typeof captainPick?.totalPoints === 'number' ? captainPick.totalPoints : 0)
+
+		return {
+			id: String(row.entry),
+			rank: currentRankByEntryId.get(row.entry) ?? 0,
+			teamName: row.entryName ?? `Entry ${row.entry}`,
+			managerName: row.playerName ?? '-',
+			captainName:
+				captainPick?.webName ?? row.activeCaptain?.name ?? row.captainName ?? 'N/A',
+			captainTeam: captainPick?.teamShortName ?? 'N/A',
+			captainPoints,
+			gwPoints: row.livePoints ?? 0,
+			gwNetPoints: row.liveNetPoints ?? row.livePoints ?? 0,
+			eventCost: row.transferCost ?? 0,
+			overallRank: row.overallRank ?? 0,
+			lastOverallRank:
+				typeof row.lastOverallRank === 'number' ? row.lastOverallRank : undefined,
+			livePoints: row.liveNetPoints ?? row.livePoints ?? 0,
+			totalPoints: row.liveTotalPoints ?? 0,
+			playersPlayed: row.played ?? 0,
+			playersToPlay: row.toPlay ?? 0,
+			teamValue: typeof row.teamValue === 'number' ? row.teamValue : undefined,
+			bank: typeof row.bank === 'number' ? row.bank : undefined,
+			picks: row.pickList.map(player => ({
+				element: player.element,
+				webName: player.webName,
+				teamShortName: player.teamShortName,
+				teamName: player.teamName,
+				elementTypeName: player.elementTypeName,
+				position: player.position,
+				isCaptain: player.isCaptain,
+				isViceCaptain: player.isViceCaptain,
+			})),
+			chips: mapEventChipToFlags(row.chip),
+		}
+	})
 }
 
 export const mergePartialTournamentRows = ({

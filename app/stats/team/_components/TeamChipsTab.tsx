@@ -1,8 +1,11 @@
 import { StatsTable, type StatsTableColumn } from '@/components/data/StatsTable'
-import { Card } from '@/components/ui/card'
+import {
+	StatsMetricTile,
+	StatsSectionCard,
+} from '@/components/stats/StatsSurfaces'
 import { Clock } from 'lucide-react'
-import type { TeamStatsViewModel } from '../_lib/team-stats-model'
 import { useTranslations } from 'next-intl'
+import type { TeamStatsViewModel } from '../_lib/team-stats-model'
 
 export function TeamChipsTab({ stats }: { stats: TeamStatsViewModel }) {
 	const t = useTranslations('TeamStats')
@@ -25,20 +28,16 @@ export function TeamChipsTab({ stats }: { stats: TeamStatsViewModel }) {
 	]
 
 	return (
-		<Card className="p-6">
-			<h2 className="mb-4 flex items-center gap-2 text-xl font-bold">
-				<Clock className="size-5 text-primary-ink" aria-hidden="true" />
-				{t('chipUsage')}
-			</h2>
-			<div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-				<div className="rounded-lg bg-accent/30 p-4 text-center">
-					<p className="mb-1 text-xs text-muted-foreground">{t('currentEventChip')}</p>
-					<p className="text-base font-semibold">{chipName(stats.eventChip)}</p>
-				</div>
-				<div className="rounded-lg bg-accent/30 p-4 text-center">
-					<p className="mb-1 text-xs text-muted-foreground">{t('totalChipsUsed')}</p>
-					<p className="text-2xl font-bold">{stats.chipUsageRows.length}</p>
-				</div>
+		<StatsSectionCard icon={Clock} title={t('chipUsage')}>
+			<div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+				<StatsMetricTile
+					label={t('currentEventChip')}
+					value={chipName(stats.eventChip)}
+				/>
+				<StatsMetricTile
+					label={t('totalChipsUsed')}
+					value={stats.chipUsageRows.length}
+				/>
 			</div>
 
 			<div className="mb-6">
@@ -55,6 +54,6 @@ export function TeamChipsTab({ stats }: { stats: TeamStatsViewModel }) {
 				columns={chipUsageColumns}
 				rowKeyField="gameweek"
 			/>
-		</Card>
+		</StatsSectionCard>
 	)
 }

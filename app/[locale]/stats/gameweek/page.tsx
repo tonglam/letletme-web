@@ -1,11 +1,16 @@
+import GameweekStatsClient from '@/app/stats/gameweek/GameweekStatsClient'
 import { PageState } from '@/components/feedback/PageState'
 import PageShell from '@/components/layout/PageShell'
+import {
+	GAMEWEEK_STATS_MOCK_EVENT_ID,
+	GAMEWEEK_STATS_UI_MOCK_ENABLED,
+	getGameweekStatsUiMockOverall,
+} from '@/lib/dev/gameweek-stats-ui-mock'
 import { getCurrentAndNextEvents } from '@/lib/events'
 import { fetchOverallGameweekStats } from '@/lib/gameweek-overall-stats'
 import { executePublicServerQuery } from '@/lib/graphql-server'
-import { CalendarX2 } from 'lucide-react'
-import GameweekStatsClient from '@/app/stats/gameweek/GameweekStatsClient'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
+import { CalendarX2 } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 
 type PageProps = { params: LocaleParams }
@@ -23,6 +28,18 @@ export async function generateMetadata({ params }: PageProps) {
 export default async function GameweekStatsPage({ params }: PageProps) {
 	await getPageLocale(params)
 	const t = await getTranslations('States')
+
+	// TEMP UI mock — seed overview without GraphQL / isCurrent event
+	if (GAMEWEEK_STATS_UI_MOCK_ENABLED) {
+		const currentGameweek = GAMEWEEK_STATS_MOCK_EVENT_ID
+		return (
+			<GameweekStatsClient
+				currentGameweek={currentGameweek}
+				initialOverallStats={getGameweekStatsUiMockOverall(currentGameweek)}
+			/>
+		)
+	}
+
 	const data = await getCurrentAndNextEvents()
 	const currentGameweek = data?.current[0]?.id
 
@@ -38,13 +55,19 @@ export default async function GameweekStatsPage({ params }: PageProps) {
 		)
 	}
 
-	let initialOverallStats: Awaited<ReturnType<typeof fetchOverallGameweekStats>> | null = null
+	let initialOverallStats: Awaited<
+		ReturnType<typeof fetchOverallGameweekStats>
+	> | null = null
 
 	try {
-		initialOverallStats = await fetchOverallGameweekStats(currentGameweek, {
-			cache: 'force-cache',
-			next: { revalidate: 300 },
-		}, executePublicServerQuery)
+		initialOverallStats = await fetchOverallGameweekStats(
+			currentGameweek,
+			{
+				cache: 'force-cache',
+				next: { revalidate: 300 },
+			},
+			executePublicServerQuery,
+		)
 	} catch (err) {
 		console.error('Failed to load initial gameweek overview:', err)
 	}

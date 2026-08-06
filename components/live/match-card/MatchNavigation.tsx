@@ -8,7 +8,10 @@ interface MatchNavigationProps {
 	currentIndex?: number
 }
 
-export function MatchNavigation({ allMatches, currentIndex }: MatchNavigationProps) {
+export function MatchNavigation({
+	allMatches,
+	currentIndex,
+}: MatchNavigationProps) {
 	const t = useTranslations('LiveMatches')
 	if (!allMatches || currentIndex === undefined) return null
 	const hasPrevious = currentIndex > 0
@@ -16,24 +19,41 @@ export function MatchNavigation({ allMatches, currentIndex }: MatchNavigationPro
 	if (!hasPrevious && !hasNext) return null
 
 	const navigate = (direction: 'previous' | 'next') => {
-		const targetIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1
+		const targetIndex =
+			direction === 'next' ? currentIndex + 1 : currentIndex - 1
 		const targetMatch = allMatches[targetIndex]
 		if (!targetMatch) return
-		document.querySelector(`[data-match-id="${targetMatch.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+		document
+			.querySelector(`[data-match-id="${targetMatch.id}"]`)
+			?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 	}
 
 	return (
-		<nav aria-label={t('matchNavigation')} className="absolute right-4 top-4 z-10 flex items-center gap-2">
+		<>
 			{hasPrevious ? (
-				<Button type="button" variant="outline" size="icon" className="rounded-full bg-background/80 backdrop-blur-sm" onClick={() => navigate('previous')} aria-label={t('previousMatch')}>
-					<ChevronLeft aria-hidden="true" />
+				<Button
+					type="button"
+					variant="outline"
+					size="icon"
+					className="size-8 rounded-full border-border/70 bg-card/90 shadow-sm backdrop-blur-sm hover:bg-accent"
+					onClick={() => navigate('previous')}
+					aria-label={t('previousMatch')}
+				>
+					<ChevronLeft className="size-4" aria-hidden="true" />
 				</Button>
 			) : null}
 			{hasNext ? (
-				<Button type="button" variant="outline" size="icon" className="rounded-full bg-background/80 backdrop-blur-sm" onClick={() => navigate('next')} aria-label={t('nextMatch')}>
-					<ChevronRight aria-hidden="true" />
+				<Button
+					type="button"
+					variant="outline"
+					size="icon"
+					className="size-8 rounded-full border-border/70 bg-card/90 shadow-sm backdrop-blur-sm hover:bg-accent"
+					onClick={() => navigate('next')}
+					aria-label={t('nextMatch')}
+				>
+					<ChevronRight className="size-4" aria-hidden="true" />
 				</Button>
 			) : null}
-		</nav>
+		</>
 	)
 }

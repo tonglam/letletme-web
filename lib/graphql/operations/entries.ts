@@ -1,3 +1,31 @@
+export const GET_ENTRY = `
+  query GetEntry($id: Int!) {
+    entry(id: $id) {
+      id
+      entryName
+      playerName
+      overallPoints
+      overallRank
+      teamValue
+      bank
+    }
+  }
+`
+
+export interface EntrySummary {
+	id: number
+	entryName: string
+	playerName: string
+	overallPoints: number | null
+	overallRank: number | null
+	teamValue: number | null
+	bank: number | null
+}
+
+export interface EntrySummaryResponse {
+	entry: EntrySummary | null
+}
+
 export const GET_ENTRY_EVENT_RESULT = `
   query GetEntryEventResult($entryId: Int!, $eventId: Int!) {
     entryEventResult(entryId: $entryId, eventId: $eventId) {

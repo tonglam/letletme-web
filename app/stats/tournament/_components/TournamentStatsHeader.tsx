@@ -1,12 +1,12 @@
+import { TournamentLifecycleBadge } from '@/components/tournament/TournamentLifecycleBadge'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
-import { TournamentLifecycleBadge } from '@/components/tournament/TournamentLifecycleBadge'
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
-	SelectValue
+	SelectValue,
 } from '@/components/ui/select'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import { Calendar, Trophy, Users } from 'lucide-react'
@@ -25,7 +25,7 @@ export function TournamentStatsHeader({
 	onTournamentChange,
 	selectedTournament,
 	selectedTournamentId,
-	tournaments
+	tournaments,
 }: TournamentStatsHeaderProps) {
 	const t = useTranslations('TournamentStats')
 	const format = useFormatter()
@@ -51,14 +51,14 @@ export function TournamentStatsHeader({
 				: selectedTournament?.leagueType
 
 	return (
-		<Card className="mb-6 p-6">
-			<div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+		<Card className="mb-5 border-border/80 p-4 shadow-sm sm:mb-6 sm:p-6">
+			<div className="mb-5 flex flex-col items-start gap-3 sm:mb-6 sm:flex-row sm:items-center">
 				<label
 					htmlFor="tournament-stats-select"
-					className="flex items-center gap-2 font-medium"
+					className="flex items-center gap-2 font-display text-sm font-semibold"
 				>
 					<Trophy
-						className="size-5 text-primary-ink"
+						className="size-4 text-primary-ink"
 						aria-hidden="true"
 					/>
 					{t('tournament')}
@@ -89,24 +89,26 @@ export function TournamentStatsHeader({
 			{selectedTournament ? (
 				<div className="flex flex-col gap-3">
 					<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-						<h2 className="text-xl font-bold">{selectedTournament.name}</h2>
+						<h2 className="font-display text-xl font-bold tracking-tight">
+							{selectedTournament.name}
+						</h2>
 						<div className="flex flex-wrap gap-1.5">
 							<TournamentLifecycleBadge tournament={selectedTournament} />
 							<Badge
 								variant="outline"
-								className="border-primary/20 bg-primary/10 text-primary-ink"
+								className="border-border/70 bg-muted/40 text-foreground"
 							>
 								{leagueType}
 							</Badge>
 							<Badge
 								variant="outline"
-								className="gap-1 border-primary/20 bg-primary/10 text-primary-ink"
+								className="gap-1 border-border/70 bg-muted/40 text-foreground"
 							>
-								<Users aria-hidden="true" />
+								<Users className="size-3.5" aria-hidden="true" />
 								{t('teams', {
 									count: format.number(selectedTournament.totalTeamNum, {
-										notation: 'compact'
-									})
+										notation: 'compact',
+									}),
 								})}
 							</Badge>
 							{dataGameweek !== null ? (
@@ -114,7 +116,7 @@ export function TournamentStatsHeader({
 									variant="outline"
 									className="gap-1 border-border bg-muted text-muted-foreground"
 								>
-									<Calendar aria-hidden="true" />{' '}
+									<Calendar className="size-3.5" aria-hidden="true" />{' '}
 									{t('asOfGameweek', { gameweek: dataGameweek })}
 								</Badge>
 							) : null}
@@ -131,7 +133,7 @@ export function TournamentStatsHeader({
 									end:
 										selectedTournament.groupEndedEventId !== null
 											? `–${selectedTournament.groupEndedEventId}`
-											: '+'
+											: '+',
 								})}
 							</span>
 						) : null}
@@ -144,13 +146,15 @@ export function TournamentStatsHeader({
 									end:
 										selectedTournament.knockoutEndedEventId !== null
 											? `–${selectedTournament.knockoutEndedEventId}`
-											: '+'
+											: '+',
 								})}
 							</span>
 						) : null}
 						{selectedTournament.groupQualifyNum !== null ? (
 							<span>
-								{t('topQualify', { count: selectedTournament.groupQualifyNum })}
+								{t('topQualify', {
+									count: selectedTournament.groupQualifyNum,
+								})}
 							</span>
 						) : null}
 					</div>

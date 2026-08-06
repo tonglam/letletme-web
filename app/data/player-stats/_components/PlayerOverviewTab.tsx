@@ -17,7 +17,7 @@ export function PlayerOverviewTab({
 
 	if (comparison) {
 		return (
-			<Card className="flex flex-col gap-5 p-5">
+			<Card className="flex flex-col gap-5 border-border/80 p-4 shadow-sm sm:p-5">
 				<section>
 					<CompareSectionHeader icon={<BarChart3 className="size-4" />} label={`GW ${currentGameweek ?? '—'}`} />
 					<CompareRow label="Points" v1={player.eventPoints} v2={comparison.eventPoints} />
@@ -46,7 +46,7 @@ export function PlayerOverviewTab({
 	}
 
 	return (
-		<Card className="flex flex-col gap-6 p-5">
+		<Card className="flex flex-col gap-6 border-border/80 p-4 shadow-sm sm:p-5">
 			<section>
 				<CompareSectionHeader icon={<BarChart3 className="size-4" />} label={`GW ${currentGameweek ?? '—'}`} />
 				<StatCell label="Points" value={player.eventPoints} />

@@ -70,9 +70,9 @@ function ComparisonFixtures({
 	).sort((a, b) => a - b)
 
 	return (
-		<Card className="p-5">
-			<h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-				<Calendar className="size-4" />
+		<Card className="border-border/80 p-4 shadow-sm sm:p-5">
+			<h3 className="mb-4 flex items-center gap-2 font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+				<Calendar className="size-3.5 text-primary-ink" aria-hidden="true" />
 				{t('fixtures')}
 			</h3>
 			<div className="mb-2 grid grid-cols-[2rem_1fr_1fr] gap-2 px-1 text-sm font-semibold">
@@ -91,7 +91,9 @@ function ComparisonFixtures({
 						<div
 							key={gameweek}
 							className={`grid grid-cols-[2rem_1fr_1fr] items-start gap-2 rounded-md px-2 py-1.5 ${
-								isCurrent ? 'border border-primary/20 bg-primary/10' : 'hover:bg-accent/40'
+								isCurrent
+									? 'border border-border bg-muted/50'
+									: 'hover:bg-muted/40'
 							}`}
 						>
 							<div className="flex flex-col items-start gap-0.5 pt-0.5">
@@ -115,9 +117,9 @@ function SinglePlayerFixtures({ player, currentGameweek }: { player: PlayerDetai
 	const gameweeks = Array.from(fixturesByGameweek.keys()).sort((a, b) => a - b)
 
 	return (
-		<Card className="p-5">
-			<h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-				<Calendar className="size-4" />
+		<Card className="border-border/80 p-4 shadow-sm sm:p-5">
+			<h3 className="mb-4 flex items-center gap-2 font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+				<Calendar className="size-3.5 text-primary-ink" aria-hidden="true" />
 				{t('allFixtures')}
 			</h3>
 			<div className="flex flex-col gap-1">
@@ -131,7 +133,9 @@ function SinglePlayerFixtures({ player, currentGameweek }: { player: PlayerDetai
 						<div
 							key={gameweek}
 							className={`rounded-md px-3 py-2 text-sm ${
-								isCurrent ? 'border border-primary/20 bg-primary/10' : 'hover:bg-accent/40'
+								isCurrent
+									? 'border border-border bg-muted/50'
+									: 'hover:bg-muted/40'
 							}`}
 						>
 							<div className="mb-1 flex items-center gap-2">

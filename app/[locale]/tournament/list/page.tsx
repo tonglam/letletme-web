@@ -1,14 +1,14 @@
+import TournamentListClient from '@/app/tournament/list/TournamentListClient'
 import { executeServerQuery } from '@/lib/graphql-server'
 import {
 	GET_ENTRY_TOURNAMENTS,
 	type EntryTournament,
 	type EntryTournamentsResponse,
 } from '@/lib/graphql/operations/tournaments'
-import { getCurrentEntryId, getCurrentSession } from '@/lib/session'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
+import { getCurrentEntryId, getCurrentSession } from '@/lib/session'
 import { redirect } from 'next/navigation'
-import TournamentListClient from '@/app/tournament/list/TournamentListClient'
 import { getTranslations } from 'next-intl/server'
 
 export const dynamic = 'force-dynamic'

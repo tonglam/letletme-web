@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { PageState } from '@/components/feedback/PageState'
 import PageShell from '@/components/layout/PageShell'
 import { LiveAutoRefreshCountdown } from '@/components/live/LiveAutoRefreshCountdown'
 import { TournamentHeader } from '@/components/tournament/TournamentHeader'
@@ -11,46 +11,52 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-	type EntryTournament,
-	type TournamentLiveCalcData,
-	type TournamentParticipant,
-	GET_TOURNAMENT_LIVE_POINTS,
-	type TournamentLivePointsResponse
-} from '@/lib/graphql/operations/tournaments'
+import { usePageActive } from '@/hooks/use-page-active'
+import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_LIVE_SNAPSHOT,
 	type LiveSnapshotResponse,
-	type LiveSnapshotStatus
+	type LiveSnapshotStatus,
 } from '@/lib/graphql/operations/live'
-import { executeQuery } from '@/lib/graphql-client'
-import { usePageActive } from '@/hooks/use-page-active'
+import {
+	GET_TOURNAMENT_LIVE_POINTS,
+	type EntryTournament,
+	type TournamentLiveCalcData,
+	type TournamentLivePointsResponse,
+	type TournamentParticipant,
+} from '@/lib/graphql/operations/tournaments'
 import {
 	liveSnapshotNeedsRefresh,
-	shouldPollLiveSnapshot
+	shouldPollLiveSnapshot,
 } from '@/lib/live-refresh'
+import type { TournamentDetailLoadError } from '@/lib/tournament/detail-load-error'
 import {
 	areTournamentInsightsReady,
 	normalizeTournamentSetupStatus,
-	shouldPollTournamentSetup
+	shouldPollTournamentSetup,
 } from '@/lib/tournament/lifecycle'
 import {
 	buildTournamentEntries,
 	buildTournamentStats,
-	mergePartialTournamentRows
+	mergePartialTournamentRows,
 } from '@/lib/tournament/liveEntries'
+import { Link, useRouter } from '@/i18n/navigation'
 import {
 	ArrowLeft,
 	Calendar,
 	Check,
 	Circle,
+	KeyRound,
+	Link2Off,
 	LoaderCircle,
+	Lock,
 	RefreshCw,
+	ServerCrash,
 	Settings,
-	Users
+	Users,
 } from 'lucide-react'
-import { Link, useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const SETUP_PHASES = [
 	'SYNCING_ENTRIES',
@@ -70,16 +76,20 @@ export default function TournamentDetailClient({
 	tournament,
 	currentGameweek,
 	initialRows,
-	initialError,
+	loadError,
+	softError,
 	initialSnapshot,
 	initialParticipants,
-	justCreated
+	justCreated,
 }: {
 	canManage: boolean
 	tournament: EntryTournament | null
 	currentGameweek?: number
 	initialRows: TournamentLiveCalcData[]
-	initialError: string | null
+	/** Blocking failure — no tournament payload */
+	loadError: TournamentDetailLoadError | null
+	/** Soft banner while tournament is still shown (e.g. partial calc) */
+	softError: string | null
 	initialSnapshot?: LiveSnapshotStatus | null
 	initialParticipants: TournamentParticipant[]
 	justCreated: boolean
@@ -91,15 +101,15 @@ export default function TournamentDetailClient({
 	const [searchQuery, setSearchQuery] = useState('')
 	const [currentTournament, setCurrentTournament] = useState(tournament)
 	const [rows, setRows] = useState(initialRows)
-	const [error, setError] = useState(initialError)
+	const [error, setError] = useState(softError)
 	const [snapshot, setSnapshot] = useState<LiveSnapshotStatus | null>(
-		initialSnapshot ?? null
+		initialSnapshot ?? null,
 	)
 	const snapshotRef = useRef<LiveSnapshotStatus | null>(initialSnapshot ?? null)
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const refreshInFlightRef = useRef<Promise<void> | null>(null)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
-	const failedEntryCountRef = useRef(initialError ? 1 : 0)
+	const failedEntryCountRef = useRef(softError ? 1 : 0)
 	const refreshGenerationRef = useRef(0)
 	const [visible, setVisible] = useState(true)
 	const [online, setOnline] = useState(true)
@@ -235,8 +245,11 @@ export default function TournamentDetailClient({
 				setError(null)
 				const response = await executeQuery<TournamentLivePointsResponse>(
 					GET_TOURNAMENT_LIVE_POINTS,
-					{ tournamentId: currentTournament.id, eventId: currentGameweek },
-					{ cache: 'no-store' }
+					{
+						tournamentId: currentTournament.id,
+						eventId: currentGameweek,
+					},
+					{ cache: 'no-store' },
 				)
 				const batch = response.calcLivePointsForTournament
 				failedEntryCountRef.current = batch.meta.failedCount
@@ -245,22 +258,22 @@ export default function TournamentDetailClient({
 						nextRows: batch.results ?? [],
 						previousRows,
 						failedEntryIds: batch.errors.map(batchError => batchError.entryId),
-						preserveFailed: true
-					})
+						preserveFailed: true,
+					}),
 				)
 				acceptSnapshot(response.liveSnapshot)
 				if (batch.meta.failedCount > 0) {
 					setError(
 						t('partialResults', {
 							failed: batch.meta.failedCount,
-							total: batch.meta.totalEntries
-						})
+							total: batch.meta.totalEntries,
+						}),
 					)
 				}
 			} catch (refreshError) {
 				console.error(
 					'Failed to refresh live tournament standings:',
-					refreshError
+					refreshError,
 				)
 				setError(t('standingsFailed'))
 			} finally {
@@ -287,7 +300,7 @@ export default function TournamentDetailClient({
 				const probe = await executeQuery<LiveSnapshotResponse>(
 					GET_LIVE_SNAPSHOT,
 					{ eventId: currentGameweek },
-					{ cache: 'no-store' }
+					{ cache: 'no-store' },
 				)
 				if (generation !== refreshGenerationRef.current) return
 				if (
@@ -387,8 +400,82 @@ export default function TournamentDetailClient({
 		isPageActive,
 		currentEventId: currentGameweek,
 		selectedEventId: currentGameweek,
-		snapshot
+		snapshot,
 	})
+
+	// Full-page empty state for access / link / bind failures
+	if (loadError || !currentTournament) {
+		const kind = loadError ?? 'unavailable'
+		const icon =
+			kind === 'bind_entry'
+				? KeyRound
+				: kind === 'invalid_link'
+					? Link2Off
+					: kind === 'no_access'
+						? Lock
+						: ServerCrash
+		const titleKey =
+			kind === 'bind_entry'
+				? 'errorBindEntryTitle'
+				: kind === 'invalid_link'
+					? 'errorInvalidLinkTitle'
+					: kind === 'no_access'
+						? 'errorNoAccessTitle'
+						: 'errorUnavailableTitle'
+		const descriptionKey =
+			kind === 'bind_entry'
+				? 'errorBindEntryDescription'
+				: kind === 'invalid_link'
+					? 'errorInvalidLinkDescription'
+					: kind === 'no_access'
+						? 'errorNoAccessDescription'
+						: 'errorUnavailableDescription'
+
+		return (
+			<PageShell>
+				<PageState
+					icon={icon}
+					title={t(titleKey)}
+					description={t(descriptionKey)}
+					actions={
+						<>
+							{kind === 'bind_entry' ? (
+								<Button asChild>
+									<Link href="/onboarding/bind-entry">{t('errorCtaBindEntry')}</Link>
+								</Button>
+							) : null}
+							{kind === 'bind_entry' ? (
+								<Button variant="outline" asChild>
+									<Link href="/auth/login">{t('signIn')}</Link>
+								</Button>
+							) : null}
+							{kind !== 'bind_entry' ? (
+								<Button asChild>
+									<Link href="/tournament/list?mine=true">
+										{t('errorCtaMyTournaments')}
+									</Link>
+								</Button>
+							) : null}
+							{kind === 'no_access' || kind === 'unavailable' ? (
+								<Button variant="outline" asChild>
+									<Link href="/live/tournament">{t('errorCtaLiveList')}</Link>
+								</Button>
+							) : null}
+							{kind === 'unavailable' ? (
+								<Button
+									variant="outline"
+									onClick={() => router.refresh()}
+								>
+									<RefreshCw aria-hidden="true" />
+									{t('errorCtaRetry')}
+								</Button>
+							) : null}
+						</>
+					}
+				/>
+			</PageShell>
+		)
+	}
 
 	return (
 		<PageShell>
@@ -404,7 +491,7 @@ export default function TournamentDetailClient({
 							<span>{t('backToTournaments')}</span>
 						</Link>
 					</Button>
-					{canManage && currentTournament ? (
+					{canManage ? (
 						<Button
 							variant="outline"
 							asChild
@@ -424,7 +511,7 @@ export default function TournamentDetailClient({
 					{announcement}
 				</p>
 
-				{justCreated && currentTournament ? (
+				{justCreated ? (
 					<Alert
 						variant="success"
 						className="mb-6"
@@ -435,15 +522,12 @@ export default function TournamentDetailClient({
 				) : null}
 
 				{error ? (
-					<Card className="mb-6 border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-						{error}
-					</Card>
-				) : null}
-
-				{!currentTournament && !error ? (
-					<Card className="mb-6 p-6 text-sm text-muted-foreground">
-						{t('unavailable')}
-					</Card>
+					<Alert
+						variant="warning"
+						className="mb-6"
+					>
+						<AlertDescription>{error}</AlertDescription>
+					</Alert>
 				) : null}
 
 				{currentTournament ? (

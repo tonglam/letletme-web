@@ -340,6 +340,11 @@ export const GET_TOURNAMENT_LIVE_POINTS = `
         entryName
         playerName
         overallRank
+        lastOverallRank
+        overallPoints
+        teamValue
+        bank
+        value
         chip
         livePoints
         transferCost
@@ -348,6 +353,10 @@ export const GET_TOURNAMENT_LIVE_POINTS = `
         played
         toPlay
         captainName
+        activeCaptain {
+          name
+          points
+        }
         pickList {
           element
           webName
@@ -357,6 +366,7 @@ export const GET_TOURNAMENT_LIVE_POINTS = `
           isViceCaptain
           teamShortName
           teamName
+          totalPoints
         }
       }
       errors {
@@ -390,6 +400,15 @@ export interface TournamentLiveCalcData {
 	entryName: string
 	playerName: string
 	overallRank: number
+	/** Previous overall rank (for OR delta when available). */
+	lastOverallRank?: number | null
+	overallPoints?: number | null
+	/** Squad value in tenths of £m (e.g. 1005 → £100.5m). */
+	teamValue?: number | null
+	/** ITB in tenths of £m. */
+	bank?: number | null
+	/** teamValue + bank. */
+	value?: number | null
 	chip: string | null
 	livePoints: number
 	transferCost: number
@@ -398,6 +417,10 @@ export interface TournamentLiveCalcData {
 	played: number
 	toPlay: number
 	captainName: string
+	activeCaptain?: {
+		name: string
+		points: number
+	} | null
 	pickList: Array<{
 		element: number
 		webName: string
@@ -407,6 +430,7 @@ export interface TournamentLiveCalcData {
 		isViceCaptain: boolean
 		teamShortName: string
 		teamName: string
+		totalPoints?: number | null
 	}>
 }
 

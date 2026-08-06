@@ -2,9 +2,17 @@
 
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import PageShell from '@/components/layout/PageShell'
+import {
+	StatsPageHeader,
+	StatsTabsShell,
+} from '@/components/stats/StatsSurfaces'
 import { TournamentSelector } from '@/components/tournament/TournamentSelector'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { usePageActive } from '@/hooks/use-page-active'
+import {
+	SELECTIONS_UI_MOCK_ENABLED,
+	getSelectionsUiMockStats,
+} from '@/lib/dev/selections-ui-mock'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_ENTRY_TOURNAMENTS,
@@ -58,21 +66,21 @@ function StatRow({
 	const maxPercent = 100
 	const barWidth = Math.min((leftValue / maxPercent) * 100, 100)
 	return (
-		<div className="flex items-center gap-2 px-3 py-2 border-b last:border-b-0 hover:bg-accent/40 transition-colors">
-			<span className="w-5 text-right text-xs font-medium text-muted-foreground tabular-nums">
+		<div className="flex items-center gap-2 border-b border-border/60 px-3 py-2.5 transition-colors last:border-b-0 hover:bg-muted/40">
+			<span className="w-5 text-right font-mono text-xs font-medium tabular-nums text-muted-foreground">
 				{rank}
 			</span>
-			<div className="flex-1 min-w-0">
-				<div className="flex items-center justify-between mb-0.5">
-					<span className="font-medium text-sm truncate mr-2">
+			<div className="min-w-0 flex-1">
+				<div className="mb-0.5 flex items-center justify-between">
+					<span className="mr-2 truncate text-sm font-medium">
 						{player.webName}
 					</span>
-					<span className="text-[10px] text-muted-foreground shrink-0">
+					<span className="shrink-0 text-[10px] text-muted-foreground">
 						{player.teamShortName} · {positionLabel(player.position)}
 					</span>
 				</div>
 				<div className="flex items-center gap-1.5">
-					<div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
+					<div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
 						<div
 							className={`h-full rounded-full transition-all duration-500 ${barColor}`}
 							style={{ width: `${barWidth}%` }}
@@ -80,11 +88,11 @@ function StatRow({
 					</div>
 				</div>
 			</div>
-			<div className="flex flex-col items-end shrink-0 w-14">
-				<span className="text-xs font-semibold tabular-nums">
+			<div className="flex w-14 shrink-0 flex-col items-end">
+				<span className="font-display text-xs font-semibold tabular-nums">
 					{leftValue.toFixed(1)}%
 				</span>
-				<span className="text-[10px] text-muted-foreground tabular-nums">
+				<span className="text-[10px] tabular-nums text-muted-foreground">
 					{rightValue.toFixed(1)}%
 				</span>
 			</div>
@@ -115,16 +123,16 @@ function StatList({
 		: data
 	if (data.length === 0) {
 		return (
-			<div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+			<div className="rounded-lg border border-border/80 bg-card px-4 py-8 text-center text-sm text-muted-foreground shadow-sm">
 				{t('noData')}
 			</div>
 		)
 	}
 	return (
-		<div className="rounded-lg border bg-card overflow-hidden">
-			<div className="grid grid-cols-[1.5rem_1fr_3.5rem] items-center gap-x-2 px-3 py-2 bg-muted/40 border-b">
+		<div className="overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
+			<div className="grid grid-cols-[1.5rem_1fr_3.5rem] items-center gap-x-2 border-b border-border/60 bg-muted/30 px-3 py-2">
 				<span />
-				<span className="text-xs font-medium text-muted-foreground">
+				<span className="font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
 					{t('player')}
 				</span>
 				<div className="flex flex-col items-end">
@@ -220,17 +228,23 @@ export default function SelectionsClient({
 			}
 			setIsLoadingStats(true)
 			try {
-				const data = await executeQuery<TournamentSelectionStatsResponse>(
-					GET_TOURNAMENT_SELECTION_STATS,
-					{ tournamentId, eventId, limit: 10 }
-				)
-				const stats = data.tournamentSelectionStats
-				const result: StatsResult = {
-					selection: stats?.mostSelectedPlayers ?? [],
-					captain: stats?.captainSelect ?? [],
-					transferIn: stats?.mostTransferIn ?? [],
-					transferOut: stats?.mostTransferOut ?? [],
-				}
+				// TEMP UI mock — remove with lib/dev/selections-ui-mock.ts
+				const result: StatsResult = SELECTIONS_UI_MOCK_ENABLED
+					? getSelectionsUiMockStats()
+					: await (async () => {
+							const data =
+								await executeQuery<TournamentSelectionStatsResponse>(
+									GET_TOURNAMENT_SELECTION_STATS,
+									{ tournamentId, eventId, limit: 10 },
+								)
+							const stats = data.tournamentSelectionStats
+							return {
+								selection: stats?.mostSelectedPlayers ?? [],
+								captain: stats?.captainSelect ?? [],
+								transferIn: stats?.mostTransferIn ?? [],
+								transferOut: stats?.mostTransferOut ?? [],
+							}
+						})()
 				if (requestId !== statsRequestIdRef.current) return
 				statsCache.current.set(cacheKey, result)
 				setSelectionData(result.selection)
@@ -307,13 +321,26 @@ export default function SelectionsClient({
 
 	return (
 		<PageShell>
-			<div className="container max-w-4xl mx-auto px-4 py-8">
-				<h1 className="text-3xl font-bold mb-6">{t('title')}</h1>
+			<div className="container mx-auto max-w-4xl px-4 py-8">
+				<StatsPageHeader
+					eyebrow={t('selections')}
+					title={t('title')}
+					badge={
+						<span className="inline-flex w-fit items-center rounded-md bg-plum px-2.5 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
+							GW{selectedGameweek}
+						</span>
+					}
+				/>
+				{subtitle && selectedTournament ? (
+					<p className="-mt-4 mb-6 truncate text-sm text-muted-foreground">
+						{selectedTournament.name}
+					</p>
+				) : null}
 
 				{/* Pickers */}
-				<div className="space-y-4 mb-6">
+				<div className="mb-5 space-y-4 sm:mb-6">
 					{isLoadingTournaments ? (
-						<div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+						<div className="rounded-lg border border-border/80 bg-card p-4 text-sm text-muted-foreground shadow-sm">
 							{t('loadingTournaments')}
 						</div>
 					) : tournaments.length > 0 ? (
@@ -321,10 +348,10 @@ export default function SelectionsClient({
 							tournaments={tournaments}
 							currentTournamentId={selectedTournamentId}
 							onTournamentChange={setSelectedTournamentId}
-							className="p-4"
+							className="border-border/80 p-4 shadow-sm"
 						/>
 					) : (
-						<div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+						<div className="rounded-lg border border-border/80 bg-card p-4 text-sm text-muted-foreground shadow-sm">
 							{t('noTournaments')}
 						</div>
 					)}
@@ -333,12 +360,18 @@ export default function SelectionsClient({
 						currentGameweek={currentGameweek}
 						selectedGameweek={selectedGameweek}
 						onGameweekChange={setSelectedGameweek}
-						disabled={isLoadingStats || Boolean(selectedTournament && !insightsReady)}
+						disabled={
+							isLoadingStats ||
+							Boolean(selectedTournament && !insightsReady)
+						}
 					/>
 				</div>
 
 				{selectedTournament && !insightsReady ? (
-					<div className="rounded-lg border bg-card px-4 py-8 text-center text-sm text-muted-foreground" aria-live="polite">
+					<div
+						className="rounded-lg border border-border/80 bg-card px-4 py-8 text-center text-sm text-muted-foreground shadow-sm"
+						aria-live="polite"
+					>
 						{selectedTournament.setupStatus === 'FAILED'
 							? lifecycleT('memberFailure')
 							: selectedTournament.setupHasWarnings
@@ -348,104 +381,101 @@ export default function SelectionsClient({
 									: lifecycleT('leavePageMessage')}
 					</div>
 				) : (
-					<Tabs defaultValue="selections">
-						<TabsList className="grid grid-cols-4 mb-4 w-full">
-							<TabsTrigger
-								value="selections"
-								className="gap-1.5"
-							>
-								<Users className="h-4 w-4" /> {t('selections')}
-							</TabsTrigger>
-							<TabsTrigger
-								value="captain"
-								className="gap-1.5"
-							>
-								<Crown className="h-4 w-4" /> {t('captain')}
-							</TabsTrigger>
-							<TabsTrigger
-								value="transfers-in"
-								className="gap-1.5"
-							>
-								<TrendingUp className="h-4 w-4" /> {t('transfersIn')}
-							</TabsTrigger>
-							<TabsTrigger
-								value="transfers-out"
-								className="gap-1.5"
-							>
-								<TrendingDown className="h-4 w-4" /> {t('transfersOut')}
-							</TabsTrigger>
-						</TabsList>
+					<Tabs defaultValue="selections" className="space-y-5">
+						<StatsTabsShell>
+							<TabsList className="grid h-auto w-full grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
+								<TabsTrigger value="selections" className="gap-1.5">
+									<Users className="size-3.5 shrink-0" aria-hidden="true" />
+									<span className="truncate">{t('selections')}</span>
+								</TabsTrigger>
+								<TabsTrigger value="captain" className="gap-1.5">
+									<Crown className="size-3.5 shrink-0" aria-hidden="true" />
+									<span className="truncate">{t('captain')}</span>
+								</TabsTrigger>
+								<TabsTrigger value="transfers-in" className="gap-1.5">
+									<TrendingUp className="size-3.5 shrink-0" aria-hidden="true" />
+									<span className="truncate">{t('transfersIn')}</span>
+								</TabsTrigger>
+								<TabsTrigger value="transfers-out" className="gap-1.5">
+									<TrendingDown
+										className="size-3.5 shrink-0"
+										aria-hidden="true"
+									/>
+									<span className="truncate">{t('transfersOut')}</span>
+								</TabsTrigger>
+							</TabsList>
+						</StatsTabsShell>
 
-						<div className="max-w-lg mx-auto">
-							<TabsContent value="selections">
-							{isLoadingStats ? (
-								<div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-									{t('loading')}
-								</div>
-							) : (
-								<StatList
-									data={selectionData}
-									leftLabel={t('selected')}
-									leftField="selectedByPercent"
-									rightLabel={t('effectiveOwnership')}
-									rightField="eoByPercent"
-									barColor="bg-blue-500"
-								/>
-							)}
+						<div className="mx-auto max-w-lg">
+							<TabsContent value="selections" className="mt-0">
+								{isLoadingStats ? (
+									<div className="rounded-lg border border-border/80 bg-card px-4 py-10 text-center text-sm text-muted-foreground shadow-sm">
+										{t('loading')}
+									</div>
+								) : (
+									<StatList
+										data={selectionData}
+										leftLabel={t('selected')}
+										leftField="selectedByPercent"
+										rightLabel={t('effectiveOwnership')}
+										rightField="eoByPercent"
+										barColor="bg-primary/70"
+									/>
+								)}
 							</TabsContent>
 
-							<TabsContent value="captain">
-							{isLoadingStats ? (
-								<div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-									{t('loading')}
-								</div>
-							) : (
-								<StatList
-									data={captainData}
-									leftLabel={t('captainShort')}
-									leftField="captainByPercent"
-									rightLabel={t('effectiveOwnership')}
-									rightField="eoByPercent"
-									barColor="bg-yellow-500"
-									sortBy="captainByPercent"
-								/>
-							)}
+							<TabsContent value="captain" className="mt-0">
+								{isLoadingStats ? (
+									<div className="rounded-lg border border-border/80 bg-card px-4 py-10 text-center text-sm text-muted-foreground shadow-sm">
+										{t('loading')}
+									</div>
+								) : (
+									<StatList
+										data={captainData}
+										leftLabel={t('captainShort')}
+										leftField="captainByPercent"
+										rightLabel={t('effectiveOwnership')}
+										rightField="eoByPercent"
+										barColor="bg-muted-foreground/60"
+										sortBy="captainByPercent"
+									/>
+								)}
 							</TabsContent>
 
-							<TabsContent value="transfers-in">
-							{isLoadingStats ? (
-								<div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-									{t('loading')}
-								</div>
-							) : (
-								<StatList
-									data={transferInData}
-									leftLabel={t('inPercent')}
-									leftField="selectedByPercent"
-									rightLabel={t('count')}
-									rightField="transfersEvent"
-									barColor="bg-emerald-500"
-									sortBy="transfersEvent"
-								/>
-							)}
+							<TabsContent value="transfers-in" className="mt-0">
+								{isLoadingStats ? (
+									<div className="rounded-lg border border-border/80 bg-card px-4 py-10 text-center text-sm text-muted-foreground shadow-sm">
+										{t('loading')}
+									</div>
+								) : (
+									<StatList
+										data={transferInData}
+										leftLabel={t('inPercent')}
+										leftField="selectedByPercent"
+										rightLabel={t('count')}
+										rightField="transfersEvent"
+										barColor="bg-success/70"
+										sortBy="transfersEvent"
+									/>
+								)}
 							</TabsContent>
 
-							<TabsContent value="transfers-out">
-							{isLoadingStats ? (
-								<div className="rounded-lg border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-									{t('loading')}
-								</div>
-							) : (
-								<StatList
-									data={transferOutData}
-									leftLabel={t('outPercent')}
-									leftField="selectedByPercent"
-									rightLabel={t('count')}
-									rightField="transfersEvent"
-									barColor="bg-red-500"
-									sortBy="transfersEvent"
-								/>
-							)}
+							<TabsContent value="transfers-out" className="mt-0">
+								{isLoadingStats ? (
+									<div className="rounded-lg border border-border/80 bg-card px-4 py-10 text-center text-sm text-muted-foreground shadow-sm">
+										{t('loading')}
+									</div>
+								) : (
+									<StatList
+										data={transferOutData}
+										leftLabel={t('outPercent')}
+										leftField="selectedByPercent"
+										rightLabel={t('count')}
+										rightField="transfersEvent"
+										barColor="bg-destructive/70"
+										sortBy="transfersEvent"
+									/>
+								)}
 							</TabsContent>
 						</div>
 					</Tabs>

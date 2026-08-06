@@ -1,30 +1,29 @@
+import TeamPointsClient from '@/app/live/points/[id]/TeamPointsClient'
 import { PageState } from '@/components/feedback/PageState'
 import PageShell from '@/components/layout/PageShell'
-import { Suspense } from 'react'
+import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getCurrentAndNextEvents } from '@/lib/events'
-import { executeServerQuery } from '@/lib/graphql-server'
 import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
 	type LiveCalcDataResponse,
-	type LiveSnapshotStatus
+	type LiveSnapshotStatus,
 } from '@/lib/graphql/operations/live'
-import TeamPointsClient from '@/app/live/points/[id]/TeamPointsClient'
+import { executeServerQuery } from '@/lib/graphql-server'
 import { CalendarX2 } from 'lucide-react'
-import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getTranslations } from 'next-intl/server'
+import { Suspense } from 'react'
 
 export const dynamic = 'force-dynamic'
 
 export async function generateMetadata({ params }: PageProps) {
 	const { id, locale } = await getPageLocale(params)
-	const metadata = await getPageMetadata({
+	return getPageMetadata({
 		locale,
 		pathname: `/live/points/${encodeURIComponent(id)}`,
-		titleKey: 'entryPointsTitle'
+		titleKey: 'entryPointsTitle',
+		titleValues: { id },
 	})
-	const t = await getTranslations({ locale, namespace: 'PageMetadata' })
-	return { ...metadata, title: t('entryPointsTitle', { id }) }
 }
 
 type PageProps = {
@@ -59,7 +58,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			const liveResponse = await executeServerQuery<LiveCalcDataResponse>(
 				GET_LIVE_POINTS,
 				{ eventId: currentEventId, entryId },
-				{ cache: 'no-store' }
+				{ cache: 'no-store' },
 			)
 			initialLiveData = liveResponse.calcLivePointsByEntry
 			initialSnapshot = liveResponse.liveSnapshot
@@ -71,8 +70,8 @@ export default async function Page({ params, searchParams }: PageProps) {
 	return (
 		<Suspense
 			fallback={
-				<div className="container max-w-4xl mx-auto px-4 py-8">
-					<div className="bg-card rounded-lg shadow-sm p-6 text-sm text-muted-foreground">
+				<div className="container mx-auto max-w-4xl px-4 py-8">
+					<div className="rounded-lg bg-card p-6 text-sm text-muted-foreground shadow-sm">
 						{t('loadingTeamPoints')}
 					</div>
 				</div>

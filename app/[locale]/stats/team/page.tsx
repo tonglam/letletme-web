@@ -1,5 +1,11 @@
 import { PageState } from '@/components/feedback/PageState'
 import PageShell from '@/components/layout/PageShell'
+import {
+	TEAM_STATS_MOCK_ENTRY_ID,
+	TEAM_STATS_MOCK_EVENT_ID,
+	TEAM_STATS_UI_MOCK_ENABLED,
+	getTeamStatsUiMockEntryEventResult,
+} from '@/lib/dev/team-stats-ui-mock'
 import { getCurrentAndNextEvents } from '@/lib/events'
 import { executeServerQuery } from '@/lib/graphql-server'
 import {
@@ -32,6 +38,24 @@ export async function generateMetadata({ params }: PageProps) {
 export default async function TeamStatsPage({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	const t = await getTranslations('States')
+
+	// TEMP UI mock — seed page without auth / GraphQL
+	if (TEAM_STATS_UI_MOCK_ENABLED) {
+		const currentGameweek = TEAM_STATS_MOCK_EVENT_ID
+		return (
+			<TeamStatsClient
+				entryId={TEAM_STATS_MOCK_ENTRY_ID}
+				currentGameweek={currentGameweek}
+				initialEntryEventResult={getTeamStatsUiMockEntryEventResult(
+					currentGameweek,
+					TEAM_STATS_MOCK_ENTRY_ID,
+				)}
+				initialError={null}
+				initialRequestComplete={true}
+			/>
+		)
+	}
+
 	const [session, entryId, events] = await Promise.all([
 		getCurrentSession(),
 		getCurrentEntryId(),

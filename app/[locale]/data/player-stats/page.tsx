@@ -1,5 +1,9 @@
 import PlayerStatsClient from '@/app/data/player-stats/PlayerStatsClient'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
+import {
+	PLAYER_STATS_MOCK_EVENT_ID,
+	PLAYER_STATS_UI_MOCK_ENABLED,
+} from '@/lib/dev/player-stats-ui-mock'
 import { getCurrentAndNextEvents } from '@/lib/events'
 
 type PageProps = { params: LocaleParams }
@@ -16,6 +20,12 @@ export async function generateMetadata({ params }: PageProps) {
 
 export default async function PlayerStatsPage({ params }: PageProps) {
 	await getPageLocale(params)
+
+	// TEMP UI mock — seed GW without isCurrent event
+	if (PLAYER_STATS_UI_MOCK_ENABLED) {
+		return <PlayerStatsClient currentGameweek={PLAYER_STATS_MOCK_EVENT_ID} />
+	}
+
 	const events = await getCurrentAndNextEvents()
 	return <PlayerStatsClient currentGameweek={events?.current[0]?.id} />
 }

@@ -10,7 +10,8 @@ import {
 	type EventFixturesResponse,
 	type Fixture,
 } from '@/lib/graphql/operations/events'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { Link } from '@/i18n/navigation'
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import Image from 'next/image'
 import { useLocale, useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -245,32 +246,46 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 	const canGoNext = selectedEventId !== null && selectedEventId < MAX_GAMEWEEK
 
 	const header = (
-		<div className="mb-6 flex items-center justify-between">
-			<h2 className="flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
-				{t('upcomingMatches')}
-				{selectedEventId !== null && (
-					<span className="rounded-md bg-plum px-2 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
-						GW{selectedEventId}
-					</span>
-				)}
-			</h2>
-			<div className="flex items-center gap-1">
-				<button
-					onClick={handlePrev}
-					disabled={!canGoPrev || isLoadingFixtures}
-					aria-label={t('previousGameweek')}
-					className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+		<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+			<div>
+				<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+					{t('nextGameweekLabel')}
+				</p>
+				<h2 className="mt-1 flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
+					{t('upcomingMatches')}
+					{selectedEventId !== null && (
+						<span className="rounded-md bg-plum px-2 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
+							GW{selectedEventId}
+						</span>
+					)}
+				</h2>
+			</div>
+			<div className="flex flex-wrap items-center gap-2">
+				<Link
+					href="/live/matches"
+					className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
 				>
-					<ChevronLeft className="w-5 h-5" />
-				</button>
-				<button
-					onClick={handleNext}
-					disabled={!canGoNext || isLoadingFixtures}
-					aria-label={t('nextGameweek')}
-					className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
-				>
-					<ChevronRight className="w-5 h-5" />
-				</button>
+					{t('viewLiveMatches')}
+					<ArrowRight aria-hidden="true" className="size-4" />
+				</Link>
+				<div className="flex items-center gap-1">
+					<button
+						onClick={handlePrev}
+						disabled={!canGoPrev || isLoadingFixtures}
+						aria-label={t('previousGameweek')}
+						className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+					>
+						<ChevronLeft className="h-5 w-5" />
+					</button>
+					<button
+						onClick={handleNext}
+						disabled={!canGoNext || isLoadingFixtures}
+						aria-label={t('nextGameweek')}
+						className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+					>
+						<ChevronRight className="h-5 w-5" />
+					</button>
+				</div>
 			</div>
 		</div>
 	)

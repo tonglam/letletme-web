@@ -199,22 +199,30 @@ export function MarketPlayerLookup() {
 			</p>
 
 			{normalizedSearch.length >= MIN_SEARCH_LENGTH && players.length > 0 && (
-				<ul id="market-player-results" className="mt-3 max-h-72 overflow-y-auto rounded-lg border" aria-label={t('playerResults')}>
+				<ul
+					id="market-player-results"
+					className="mt-3 max-h-72 overflow-y-auto rounded-lg border border-border/80 bg-card shadow-sm"
+					aria-label={t('playerResults')}
+				>
 					{players.map(player => (
-						<li key={player.id} className="border-b last:border-b-0">
+						<li key={player.id} className="border-b border-border/60 last:border-b-0">
 							<button
 								type="button"
 								onClick={() => {
 									setSelectedPlayer(player)
 									setSearchTerm('')
 								}}
-								className="flex min-h-11 w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+								className="flex min-h-11 w-full items-center gap-3 px-3 py-2 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
 							>
 								<Badge className={positionBadgeClass(positionShort(player.position))}>
 									{positionShort(player.position)}
 								</Badge>
-								<span className="min-w-0 flex-1 truncate font-medium">{player.webName}</span>
-								<span className="shrink-0 text-xs text-muted-foreground">{player.team.shortName}</span>
+								<span className="min-w-0 flex-1 truncate text-sm font-medium">
+									{player.webName}
+								</span>
+								<span className="shrink-0 text-xs text-muted-foreground">
+									{player.team.shortName}
+								</span>
 							</button>
 						</li>
 					))}
@@ -222,47 +230,76 @@ export function MarketPlayerLookup() {
 			)}
 
 			{selectedPlayer && (
-				<div className="mt-6 border-t pt-6">
+				<div className="mt-6 border-t border-border/60 pt-6">
 					<div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 						<div>
 							<p className="chyron">{t('playerPriceHistory')}</p>
-							<h3 className="mt-2 text-2xl font-bold">{selectedPlayer.webName}</h3>
+							<h3 className="mt-1 font-display text-xl font-bold tracking-tight">
+								{selectedPlayer.webName}
+							</h3>
 							<p className="mt-1 text-sm text-muted-foreground">
 								{positionShort(selectedPlayer.position)} · {selectedPlayer.team.name}
-								{currentPrice !== null ? ` · £${(currentPrice / 10).toFixed(1)}m` : ''}
+								{currentPrice !== null
+									? ` · £${(currentPrice / 10).toFixed(1)}m`
+									: ''}
 							</p>
 						</div>
-						<Button variant="outline" className="min-h-11" onClick={() => setSelectedPlayer(null)}>
+						<Button
+							variant="outline"
+							className="min-h-11"
+							onClick={() => setSelectedPlayer(null)}
+						>
 							{t('clearSelected')}
 						</Button>
 					</div>
 
 					{historyError ? (
-						<p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+						<p
+							role="alert"
+							className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
+						>
 							{historyError}
 						</p>
 					) : isHistoryLoading ? (
-						<p role="status" className="text-sm text-muted-foreground">{t('loadingHistory')}</p>
+						<p role="status" className="text-sm text-muted-foreground">
+							{t('loadingHistory')}
+						</p>
 					) : history.length === 0 ? (
-						<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+						<p className="rounded-lg border border-dashed border-border/80 px-4 py-6 text-center text-sm text-muted-foreground">
 							{t('noHistory', { name: selectedPlayer.webName })}
 						</p>
 					) : (
-						<ol className="space-y-2" aria-label={t('historyFor', { name: selectedPlayer.webName })}>
+						<ol
+							className="space-y-2"
+							aria-label={t('historyFor', { name: selectedPlayer.webName })}
+						>
 							{history.map(item => {
 								const change = item.newValue - item.oldValue
 								return (
-									<li key={`${item.playerId}-${item.changeDate}`} className="grid min-h-14 grid-cols-[1fr_auto] items-center gap-3 rounded-lg border px-3 py-2 sm:grid-cols-[1fr_auto_auto]">
+									<li
+										key={`${item.playerId}-${item.changeDate}`}
+										className="grid min-h-14 grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border/70 bg-muted/40 px-3 py-2.5 dark:bg-muted/25 sm:grid-cols-[1fr_auto_auto]"
+									>
 										<div>
-											<p className="text-sm font-medium">{formatDate(item.changeDate)}</p>
+											<p className="text-sm font-medium">
+												{formatDate(item.changeDate)}
+											</p>
 											<p className="text-xs text-muted-foreground">
-												£{(item.oldValue / 10).toFixed(1)}m → £{(item.newValue / 10).toFixed(1)}m
+												£{(item.oldValue / 10).toFixed(1)}m → £
+												{(item.newValue / 10).toFixed(1)}m
 											</p>
 										</div>
-										<span className={`font-mono text-sm font-bold ${change > 0 ? 'text-success' : 'text-destructive'}`}>
+										<span
+											className={`font-display text-sm font-semibold tabular-nums ${
+												change > 0 ? 'text-success' : 'text-destructive'
+											}`}
+										>
 											{change > 0 ? '+' : ''}£{(change / 10).toFixed(1)}m
 										</span>
-										{(item.transfersIn !== null && item.transfersIn !== undefined) || (item.transfersOut !== null && item.transfersOut !== undefined) ? (
+										{(item.transfersIn !== null &&
+											item.transfersIn !== undefined) ||
+										(item.transfersOut !== null &&
+											item.transfersOut !== undefined) ? (
 											<span className="col-span-2 text-xs text-muted-foreground sm:col-span-1">
 												{t('historyTransfers', {
 													inCount: formatter.number(item.transfersIn ?? 0),

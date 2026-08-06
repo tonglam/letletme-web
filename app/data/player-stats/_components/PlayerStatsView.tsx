@@ -1,4 +1,5 @@
 import type { PlayerDirectoryOption } from '@/components/player/PlayerDirectoryPicker'
+import { StatsTabsShell } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -45,17 +46,35 @@ function SinglePlayerHeader({ player, currentGameweek }: { player: PlayerDetailD
 						: player.elementTypeName
 
 	return (
-		<Card className="mb-6 p-5">
+		<Card className="mb-6 border-border/80 p-4 shadow-sm sm:p-5">
 			<div className="mb-1 flex items-center gap-2">
-				<h2 className="text-2xl font-bold">{player.webName}</h2>
-				<Badge variant="outline" className="text-xs">{positionName}</Badge>
+				<h2 className="font-display text-2xl font-bold tracking-tight">
+					{player.webName}
+				</h2>
+				<Badge variant="outline" className="text-xs">
+					{positionName}
+				</Badge>
 			</div>
 			<p className="mb-4 text-sm text-muted-foreground">{player.teamShortName}</p>
 			<div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-				<StatCell label={t('price')} value={formatPrice(player.price)} sub={priceDiff ?? undefined} />
-				<StatCell label={t('gwPoints', { gameweek: currentGameweek ?? '—' })} value={player.eventPoints} />
+				<StatCell
+					label={t('price')}
+					value={formatPrice(player.price)}
+					sub={priceDiff ?? undefined}
+				/>
+				<StatCell
+					label={t('gwPoints', { gameweek: currentGameweek ?? '—' })}
+					value={player.eventPoints}
+				/>
 				<StatCell label={t('totalPts')} value={player.totalPoints} />
-				<StatCell label={t('selected')} value={player.selectedByPercent == null ? '—' : `${player.selectedByPercent}%`} />
+				<StatCell
+					label={t('selected')}
+					value={
+						player.selectedByPercent == null
+							? '—'
+							: `${player.selectedByPercent}%`
+					}
+				/>
 				<StatCell label={t('form')} value={player.form ?? '—'} />
 			</div>
 		</Card>
@@ -101,19 +120,20 @@ export function PlayerStatsView({
 
 	if (!selectedPlayer) {
 		return (
-			<Card className="p-8 text-center">
+			<Card className="border-border/80 p-8 text-center shadow-sm">
 				<User className="mx-auto mb-4 size-12 text-muted-foreground" />
-				<h2 className="text-lg font-medium">{t('selectPrompt')}</h2>
+				<h2 className="font-display text-lg font-medium">{t('selectPrompt')}</h2>
 				<p className="mt-2 text-sm text-muted-foreground">{t('selectHelp')}</p>
 			</Card>
 		)
 	}
 
-	if (isLoading || (selectedComparison && isComparisonLoading)) return <PlayerDetailSkeleton />
+	if (isLoading || (selectedComparison && isComparisonLoading))
+		return <PlayerDetailSkeleton />
 
 	if (error || comparisonError) {
 		return (
-			<Card className="p-8 text-center" role="alert">
+			<Card className="border-border/80 p-8 text-center shadow-sm" role="alert">
 				<p className="text-sm text-destructive">{error ?? comparisonError}</p>
 			</Card>
 		)
@@ -124,28 +144,45 @@ export function PlayerStatsView({
 	return (
 		<>
 			{comparison ? (
-				<ComparisonHeader player={player} comparison={comparison} currentGameweek={currentGameweek} />
+				<ComparisonHeader
+					player={player}
+					comparison={comparison}
+					currentGameweek={currentGameweek}
+				/>
 			) : (
-				<SinglePlayerHeader player={player} currentGameweek={currentGameweek} />
+				<SinglePlayerHeader
+					player={player}
+					currentGameweek={currentGameweek}
+				/>
 			)}
-			<Tabs defaultValue="overview">
-				<TabsList className="mb-6 grid w-full grid-cols-4">
-					<TabsTrigger value="overview">{t('overview')}</TabsTrigger>
-					<TabsTrigger value="season">{t('season')}</TabsTrigger>
-					<TabsTrigger value="ict">{t('ict')}</TabsTrigger>
-					<TabsTrigger value="fixtures">{t('fixtures')}</TabsTrigger>
-				</TabsList>
-				<TabsContent value="overview">
-					<PlayerOverviewTab player={player} comparison={comparison} currentGameweek={currentGameweek} />
+			<Tabs defaultValue="overview" className="space-y-5">
+				<StatsTabsShell>
+					<TabsList className="grid h-auto w-full grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
+						<TabsTrigger value="overview">{t('overview')}</TabsTrigger>
+						<TabsTrigger value="season">{t('season')}</TabsTrigger>
+						<TabsTrigger value="ict">{t('ict')}</TabsTrigger>
+						<TabsTrigger value="fixtures">{t('fixtures')}</TabsTrigger>
+					</TabsList>
+				</StatsTabsShell>
+				<TabsContent value="overview" className="mt-0">
+					<PlayerOverviewTab
+						player={player}
+						comparison={comparison}
+						currentGameweek={currentGameweek}
+					/>
 				</TabsContent>
-				<TabsContent value="season">
+				<TabsContent value="season" className="mt-0">
 					<PlayerSeasonTab player={player} comparison={comparison} />
 				</TabsContent>
-				<TabsContent value="ict">
+				<TabsContent value="ict" className="mt-0">
 					<PlayerIctTab player={player} comparison={comparison} />
 				</TabsContent>
-				<TabsContent value="fixtures">
-					<PlayerFixturesTab player={player} comparison={comparison} currentGameweek={currentGameweek} />
+				<TabsContent value="fixtures" className="mt-0">
+					<PlayerFixturesTab
+						player={player}
+						comparison={comparison}
+						currentGameweek={currentGameweek}
+					/>
 				</TabsContent>
 			</Tabs>
 		</>

@@ -94,10 +94,16 @@ export function StatCell({
 	const translateLabel = useTranslatedStatLabel()
 
 	return (
-		<div className="rounded-lg bg-accent/30 p-3 text-center">
-			<p className="mb-1 text-xs text-muted-foreground">{translateLabel(label)}</p>
-			<p className="text-xl font-bold">{value ?? '—'}</p>
-			{sub ? <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p> : null}
+		<div className="rounded-lg border border-border/70 bg-muted/40 p-3 text-center dark:bg-muted/25">
+			<p className="mb-1 font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+				{translateLabel(label)}
+			</p>
+			<p className="font-display text-xl font-bold tabular-nums tracking-wide text-foreground">
+				{value ?? '—'}
+			</p>
+			{sub ? (
+				<p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>
+			) : null}
 		</div>
 	)
 }
@@ -151,12 +157,18 @@ export function CompareRow({
 	const secondWins = comparable && (higherIsBetter ? value2 > value1 : value2 < value1)
 
 	return (
-		<div className="grid grid-cols-3 items-center border-b py-2 text-sm last:border-0">
-			<span className={`pr-4 text-right font-medium tabular-nums ${firstWins ? 'text-primary-ink' : ''}`}>
+		<div className="grid grid-cols-3 items-center border-b border-border/60 py-2.5 text-sm last:border-0">
+			<span
+				className={`pr-4 text-right font-display font-semibold tabular-nums ${firstWins ? 'text-primary-ink' : ''}`}
+			>
 				{displayValue1}
 			</span>
-			<span className="text-center text-xs text-muted-foreground">{translateLabel(label)}</span>
-			<span className={`pl-4 text-left font-medium tabular-nums ${secondWins ? 'text-primary-ink' : ''}`}>
+			<span className="text-center text-xs text-muted-foreground">
+				{translateLabel(label)}
+			</span>
+			<span
+				className={`pl-4 text-left font-display font-semibold tabular-nums ${secondWins ? 'text-primary-ink' : ''}`}
+			>
 				{displayValue2}
 			</span>
 		</div>
@@ -167,8 +179,10 @@ export function CompareSectionHeader({ icon, label }: { icon: ReactNode; label: 
 	const translateLabel = useTranslatedStatLabel()
 
 	return (
-		<h3 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-			{icon}
+		<h3 className="mb-2.5 flex items-center gap-2 font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+			{icon ? (
+				<span className="text-primary-ink [&_svg]:size-3.5">{icon}</span>
+			) : null}
 			{translateLabel(label)}
 		</h3>
 	)
@@ -252,9 +266,11 @@ export function PlayerMiniCard({
 						: detail.elementTypeName
 
 	return (
-		<Card className={`border-t-2 p-4 ${accent === 'info' ? 'border-info' : 'border-warning'}`}>
+		<Card
+			className={`border-border/80 border-t-2 p-4 shadow-sm ${accent === 'info' ? 'border-t-info' : 'border-t-warning'}`}
+		>
 			<div className="mb-1 flex items-center gap-2">
-				<span className="truncate font-bold">{detail.webName}</span>
+				<span className="truncate font-display font-bold">{detail.webName}</span>
 				<Badge variant="outline" className="shrink-0 text-xs">
 					{positionName}
 				</Badge>
@@ -285,11 +301,21 @@ function MiniMetric({
 	emphasis?: boolean
 }) {
 	return (
-		<div className="text-center">
-			<p className="text-[10px] text-muted-foreground">{label}</p>
-			<p className={`text-sm font-bold ${emphasis ? 'text-primary-ink' : ''}`}>{value ?? '—'}</p>
+		<div className="rounded-md border border-border/60 bg-muted/30 px-1.5 py-1.5 text-center dark:bg-muted/20">
+			<p className="font-display text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+				{label}
+			</p>
+			<p
+				className={`font-display text-sm font-bold tabular-nums ${emphasis ? 'text-foreground' : 'text-foreground'}`}
+			>
+				{value ?? '—'}
+			</p>
 			{sub ? (
-				<p className={`text-[10px] ${positive ? 'text-success' : 'text-destructive'}`}>{sub}</p>
+				<p
+					className={`text-[10px] ${positive ? 'text-success' : 'text-destructive'}`}
+				>
+					{sub}
+				</p>
 			) : null}
 		</div>
 	)

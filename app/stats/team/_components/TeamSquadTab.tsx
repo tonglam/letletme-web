@@ -25,8 +25,10 @@ export function TeamSquadTab({ picks }: { picks: TeamStatsViewModel['eventPicks'
 	}
 
 	return (
-		<Card className="p-6">
-			<h2 className="mb-4 text-xl font-bold">{t('picks')}</h2>
+		<Card className="border-border/80 p-4 shadow-sm sm:p-6">
+			<h2 className="mb-4 font-display text-lg font-bold tracking-tight sm:text-xl">
+				{t('picks')}
+			</h2>
 			<div className="overflow-hidden rounded-lg border">
 				<Table>
 					<TableHeader>

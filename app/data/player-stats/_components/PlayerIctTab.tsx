@@ -12,7 +12,7 @@ import {
 export function PlayerIctTab({ player, comparison }: { player: PlayerDetailData; comparison: PlayerDetailData | null }) {
 	if (comparison) {
 		return (
-			<Card className="flex flex-col gap-5 p-5">
+			<Card className="flex flex-col gap-5 border-border/80 p-4 shadow-sm sm:p-5">
 				<section>
 					<CompareSectionHeader icon={<Zap className="size-4" />} label="ICT Values" />
 					<CompareRow label="Influence" v1={player.influence} v2={comparison.influence} />
@@ -31,7 +31,7 @@ export function PlayerIctTab({ player, comparison }: { player: PlayerDetailData;
 	}
 
 	return (
-		<Card className="p-5">
+		<Card className="border-border/80 p-4 shadow-sm sm:p-5">
 			<CompareSectionHeader icon={<Zap className="size-4" />} label="ICT Index" />
 			<div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
 				<StatCell label="Influence" value={player.influence} />

@@ -7,6 +7,8 @@ export interface Player {
   playingStatus: "NOT_STARTED" | "PLAYING" | "FINISHED";
   isBench?: boolean;
   isBenchBoostActive?: boolean;
+  /** Bonus points system score from the live pick row (not ownership). */
+  bps?: number;
   breakdownStats?: PlayerBreakdownStat[];
   explanationStats?: PlayerExplanationStats;
   stats: {
