@@ -20,19 +20,30 @@ export async function getPageMetadata({
 	locale,
 	pathname,
 	titleKey,
+	titleValues,
 	descriptionKey,
+	descriptionValues,
 	noIndex = false,
 }: {
 	locale: AppLocale
 	pathname: string
 	titleKey: keyof IntlMessages['PageMetadata']
+	/** ICU message values for titleKey (e.g. { id } for "Points — {id}"). */
+	titleValues?: Record<string, string | number>
 	descriptionKey?: keyof IntlMessages['PageMetadata']
+	descriptionValues?: Record<string, string | number>
 	noIndex?: boolean
 }): Promise<Metadata> {
 	const t = await getTranslations({ locale, namespace: 'PageMetadata' })
 	return {
-		title: t(titleKey),
-		...(descriptionKey ? { description: t(descriptionKey) } : {}),
+		title: titleValues ? t(titleKey, titleValues) : t(titleKey),
+		...(descriptionKey
+			? {
+					description: descriptionValues
+						? t(descriptionKey, descriptionValues)
+						: t(descriptionKey),
+				}
+			: {}),
 		alternates: localizedAlternates(pathname, locale),
 		...(noIndex ? { robots: { index: false, follow: false } } : {}),
 	}

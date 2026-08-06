@@ -43,16 +43,16 @@ export default function ManageTournamentClient({ tournament }: { tournament: Ent
 					</Alert>
 				) : null}
 
+				<TournamentOperationsCard
+					tournament={management.currentTournament}
+					pendingAction={management.pendingAction}
+					onAction={management.runAction}
+				/>
 				<TournamentSettingsCard
 					currentName={management.currentName}
 					isSaving={management.isSaving}
 					mutationState={management.mutationState}
 					onSubmit={management.renameTournament}
-				/>
-				<TournamentOperationsCard
-					tournament={management.currentTournament}
-					pendingAction={management.pendingAction}
-					onAction={management.runAction}
 				/>
 				<TournamentInformationCard tournament={management.currentTournament} />
 				<TournamentDangerZone

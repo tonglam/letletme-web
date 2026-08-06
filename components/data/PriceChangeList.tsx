@@ -4,11 +4,11 @@ import {
 	Tooltip,
 	TooltipContent,
 	TooltipProvider,
-	TooltipTrigger
+	TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { formatCompactNumber } from '@/lib/utils'
 import { PlayerOption } from '@/types/common'
-import { ArrowLeftCircle, ArrowRightCircle } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 interface PriceChange {
@@ -30,38 +30,36 @@ interface PriceChangeListProps {
 export function PriceChangeList({
 	title,
 	changes,
-	type
+	type,
 }: PriceChangeListProps) {
 	const t = useTranslations('PriceChangeList')
 	const icon =
 		type === 'rise' ? (
-			<ArrowRightCircle className="h-5 w-5 shrink-0 text-emerald-500" />
+			<ArrowUpRight className="size-5 shrink-0 text-success" />
 		) : (
-			<ArrowLeftCircle className="h-5 w-5 shrink-0 text-rose-500" />
+			<ArrowDownRight className="size-5 shrink-0 text-destructive" />
 		)
 
 	const priceClassName =
-		type === 'rise'
-			? 'text-emerald-600 dark:text-emerald-400'
-			: 'text-rose-600 dark:text-rose-400'
+		type === 'rise' ? 'text-success' : 'text-destructive'
 
 	return (
 		<div>
-			<h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+			<h3 className="mb-4 flex items-center gap-2 font-display text-lg font-bold tracking-tight">
 				{icon}
 				{title}
 			</h3>
-			<div className="space-y-2 bg-background/50 rounded-lg p-2 sm:p-3">
+			<div className="space-y-2">
 				{changes.map(change => (
 					<div
 						key={change.player.id}
-						className="flex items-center justify-between rounded-lg bg-accent/50 p-2 sm:p-3"
+						className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/40 p-2.5 sm:p-3 dark:bg-muted/25"
 					>
-						<div className="flex items-center gap-2 min-w-0 flex-1">
-							<span className="text-xs sm:text-sm font-medium text-muted-foreground w-8 shrink-0">
+						<div className="flex min-w-0 flex-1 items-center gap-2">
+							<span className="w-8 shrink-0 text-xs font-medium text-muted-foreground sm:text-sm">
 								{change.player.position}
 							</span>
-							<span className="text-xs sm:text-sm font-medium text-muted-foreground w-8 shrink-0">
+							<span className="w-8 shrink-0 text-xs font-medium text-muted-foreground sm:text-sm">
 								{change.player.team}
 							</span>
 							<TooltipProvider>
@@ -78,18 +76,18 @@ export function PriceChangeList({
 										<p>
 											{change.player.name} ({change.player.team})
 										</p>
-										{change.date && (
+										{change.date ? (
 											<p className="text-xs text-muted-foreground">
 												{change.date}
 											</p>
-										)}
+										) : null}
 									</TooltipContent>
 								</Tooltip>
 							</TooltipProvider>
 						</div>
 						<div className="flex flex-col items-end">
 							<span
-								className={`text-xs sm:text-sm font-medium ml-2 shrink-0 ${priceClassName}`}
+								className={`ml-2 shrink-0 font-display text-xs font-semibold tabular-nums sm:text-sm ${priceClassName}`}
 							>
 								{type === 'rise' ? '+' : '-'}£
 								{Math.abs(change.newPrice - change.oldPrice).toFixed(1)}m
@@ -98,10 +96,14 @@ export function PriceChangeList({
 								{change.oldPrice.toFixed(1)}m → {change.newPrice.toFixed(1)}m
 							</span>
 							{(change.transfersIn || change.transfersOut) && (
-								<span className="text-xs text-muted-foreground mt-1">
+								<span className="mt-1 text-xs text-muted-foreground">
 									{type === 'rise'
-										? t('transfersIn', { count: formatCompactNumber(change.transfersIn || 0) })
-										: t('transfersOut', { count: formatCompactNumber(change.transfersOut || 0) })}
+										? t('transfersIn', {
+												count: formatCompactNumber(change.transfersIn || 0),
+											})
+										: t('transfersOut', {
+												count: formatCompactNumber(change.transfersOut || 0),
+											})}
 								</span>
 							)}
 						</div>

@@ -107,14 +107,18 @@ export function PlayerSelectionPanel({
 	const t = useTranslations('PlayerStats')
 
 	return (
-		<div className="mb-6 flex flex-col gap-4">
-			<PlayerSlot label={t('playerOne')} {...first} />
-			<div className="flex items-center gap-3" aria-hidden="true">
-				<Separator className="flex-1" />
-				<span className="text-xs font-medium text-muted-foreground">{t('versus')}</span>
-				<Separator className="flex-1" />
+		<div className="mb-6 rounded-lg border border-border/80 bg-card p-4 shadow-sm sm:p-5">
+			<div className="flex flex-col gap-4">
+				<PlayerSlot label={t('playerOne')} {...first} />
+				<div className="flex items-center gap-3" aria-hidden="true">
+					<Separator className="flex-1" />
+					<span className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+						{t('versus')}
+					</span>
+					<Separator className="flex-1" />
+				</div>
+				<PlayerSlot label={t('playerTwo')} optional {...second} />
 			</div>
-			<PlayerSlot label={t('playerTwo')} optional {...second} />
 		</div>
 	)
 }

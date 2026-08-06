@@ -1,15 +1,6 @@
-import { Card } from '@/components/ui/card'
+import { StatsMetricTile, StatsSectionCard } from '@/components/stats/StatsSurfaces'
 import { formatMoney, type TeamStatsViewModel } from '../_lib/team-stats-model'
 import { useFormatter, useTranslations } from 'next-intl'
-
-function Metric({ label, value }: { label: string; value: string | number }) {
-	return (
-		<div className="rounded-lg bg-accent/30 p-4 text-center">
-			<p className="mb-1 text-xs text-muted-foreground">{label}</p>
-			<p className="text-2xl font-bold">{value}</p>
-		</div>
-	)
-}
 
 export function TeamStatsSummary({ stats }: { stats: TeamStatsViewModel }) {
 	const t = useTranslations('TeamStats')
@@ -40,38 +31,70 @@ export function TeamStatsSummary({ stats }: { stats: TeamStatsViewModel }) {
 	})()
 
 	return (
-		<>
-			<Card className="mb-6 p-6">
-				<header className="mb-6">
-					<h2 className="text-xl font-bold">{stats.teamName}</h2>
-					<p className="mt-1 text-muted-foreground">
-						{stats.playerName} <span aria-hidden="true">•</span> {stats.region}
-					</p>
-				</header>
-				<div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-					<Metric label={t('teamValue')} value={formatMoney(stats.teamValue)} />
-					<Metric label={t('bank')} value={formatMoney(stats.bank)} />
-					<Metric label={t('totalTransfers')} value={stats.totalTransfers ?? '—'} />
+		<div className="mb-6 flex flex-col gap-5">
+			<StatsSectionCard title={stats.teamName}>
+				<p className="-mt-2 mb-4 text-sm text-muted-foreground">
+					{stats.playerName}{' '}
+					<span aria-hidden="true">·</span> {stats.region}
+				</p>
+				<div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+					<StatsMetricTile
+						label={t('teamValue')}
+						value={formatMoney(stats.teamValue)}
+					/>
+					<StatsMetricTile label={t('bank')} value={formatMoney(stats.bank)} />
+					<StatsMetricTile
+						label={t('totalTransfers')}
+						value={stats.totalTransfers ?? '—'}
+					/>
 				</div>
-				<div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-					<Metric label={t('overallPoints')} value={stats.overallPoints} />
-					<Metric label={t('overallRank')} value={format.number(stats.overallRank, { notation: 'compact' })} />
+				<div className="mt-3 grid grid-cols-1 gap-3 sm:mt-4 sm:grid-cols-2 sm:gap-4">
+					<StatsMetricTile
+						label={t('overallPoints')}
+						value={stats.overallPoints}
+					/>
+					<StatsMetricTile
+						label={t('overallRank')}
+						value={format.number(stats.overallRank, { notation: 'compact' })}
+					/>
 				</div>
-			</Card>
+			</StatsSectionCard>
 
-			<Card className="mb-6 p-6">
-				<div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-					<Metric label={t('eventPoints')} value={stats.eventPoints} />
-					<Metric label={t('transferCost')} value={stats.eventTransfersCost > 0 ? `-${stats.eventTransfersCost}` : 0} />
-					<Metric label={t('netPoints')} value={stats.eventNetPoints} />
-					<Metric label={t('eventTransfers')} value={stats.eventTransfers} />
+			<StatsSectionCard>
+				<div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+					<StatsMetricTile
+						label={t('eventPoints')}
+						value={stats.eventPoints}
+					/>
+					<StatsMetricTile
+						label={t('transferCost')}
+						value={
+							stats.eventTransfersCost > 0
+								? `-${stats.eventTransfersCost}`
+								: 0
+						}
+					/>
+					<StatsMetricTile
+						label={t('netPoints')}
+						value={stats.eventNetPoints}
+					/>
+					<StatsMetricTile
+						label={t('eventTransfers')}
+						value={stats.eventTransfers}
+					/>
 				</div>
-				<div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-					<Metric label={t('eventChip')} value={eventChip} />
-					<Metric label={t('benchPoints')} value={stats.eventBenchPoints} />
-					<Metric label={t('playedCaptain')} value={`${stats.eventPlayedCaptainName} (${stats.eventCaptainPoints})`} />
+				<div className="mt-3 grid grid-cols-1 gap-3 md:mt-4 md:grid-cols-3 md:gap-4">
+					<StatsMetricTile label={t('eventChip')} value={eventChip} />
+					<StatsMetricTile
+						label={t('benchPoints')}
+						value={stats.eventBenchPoints}
+					/>
+					<StatsMetricTile
+						label={t('playedCaptain')}
+						value={`${stats.eventPlayedCaptainName} (${stats.eventCaptainPoints})`}
+					/>
 				</div>
-			</Card>
-		</>
+			</StatsSectionCard>
+		</div>
 	)
 }

@@ -1,3 +1,9 @@
+import {
+	TEAM_STATS_UI_MOCK_ENABLED,
+	getTeamStatsUiMockEntryEventResult,
+	getTeamStatsUiMockHistory,
+	getTeamStatsUiMockTransfers,
+} from '@/lib/dev/team-stats-ui-mock'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_ENTRY_EVENT_RESULT,
@@ -279,6 +285,10 @@ export const entryEventCacheKey = (entryId: number, eventId: number): string =>
 export const getEntryHistoryCached = async (
 	entryId: number
 ): Promise<EntryHistoryResponse['entryHistory']> => {
+	// TEMP UI mock — remove with lib/dev/team-stats-ui-mock.ts
+	if (TEAM_STATS_UI_MOCK_ENABLED) {
+		return getTeamStatsUiMockHistory()
+	}
 	const cached = getFreshCacheValue(entryHistoryCache, entryId)
 	if (cached !== undefined) return cached
 	const inflight = entryHistoryInFlight.get(entryId)
@@ -308,6 +318,10 @@ export const getEntryEventResultCached = async (
 	entryId: number,
 	eventId: number
 ): Promise<EntryEventResult | null> => {
+	// TEMP UI mock — remove with lib/dev/team-stats-ui-mock.ts
+	if (TEAM_STATS_UI_MOCK_ENABLED) {
+		return getTeamStatsUiMockEntryEventResult(eventId, entryId)
+	}
 	const cacheKey = entryEventCacheKey(entryId, eventId)
 	const cached = getFreshCacheValue(entryEventCache, cacheKey)
 	if (cached !== undefined) return cached
@@ -333,6 +347,10 @@ export const getEntryEventResultCached = async (
 export const getTransferHistoryCached = async (
 	entryId: number
 ): Promise<EntryGameweekTransfers[]> => {
+	// TEMP UI mock — remove with lib/dev/team-stats-ui-mock.ts
+	if (TEAM_STATS_UI_MOCK_ENABLED) {
+		return getTeamStatsUiMockTransfers()
+	}
 	const cached = getFreshCacheValue(transferHistoryCache, entryId)
 	if (cached !== undefined) return cached
 	const inflight = transferHistoryInFlight.get(entryId)

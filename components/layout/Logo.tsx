@@ -26,6 +26,10 @@ export function LogoMark({ className }: { className?: string }) {
 	)
 }
 
+/**
+ * Wordmark: LetLetMe with the three brand letters LLM in electric green.
+ * (L)et(L)et(M)e — remaining letters inherit the ambient text colour.
+ */
 export function LogoWordmark({ className }: { className?: string }) {
 	return (
 		<span
@@ -34,8 +38,12 @@ export function LogoWordmark({ className }: { className?: string }) {
 				className,
 			)}
 		>
-			LetLet
-			<span className="text-electric">Me</span>
+			<span className="text-electric">L</span>
+			et
+			<span className="text-electric">L</span>
+			et
+			<span className="text-electric">M</span>
+			e
 		</span>
 	)
 }

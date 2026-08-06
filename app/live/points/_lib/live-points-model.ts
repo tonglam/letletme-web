@@ -233,6 +233,7 @@ export function mapLiveDataToPlayers(
 			playingStatus,
 			isBench,
 			isBenchBoostActive: benchBoostActive,
+			bps: pick.bps,
 			breakdownStats,
 			explanationStats,
 			stats: {

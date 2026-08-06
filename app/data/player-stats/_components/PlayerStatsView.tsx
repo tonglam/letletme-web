@@ -1,4 +1,5 @@
 import type { PlayerDirectoryOption } from '@/components/player/PlayerDirectoryPicker'
+import { StatsTabsShell } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -63,9 +64,11 @@ function SinglePlayerHeader({
 						: player.elementTypeName
 
 	return (
-		<Card className="mb-6 p-5">
+		<Card className="mb-6 border-border/80 p-4 shadow-sm sm:p-5">
 			<div className="mb-1 flex items-center gap-2">
-				<h2 className="text-2xl font-bold">{player.webName}</h2>
+				<h2 className="font-display text-2xl font-bold tracking-tight">
+					{player.webName}
+				</h2>
 				<Badge
 					variant="outline"
 					className="text-xs"
@@ -166,9 +169,11 @@ export function PlayerStatsView({
 
 	if (!selectedPlayer) {
 		return (
-			<Card className="p-8 text-center">
+			<Card className="border-border/80 p-8 text-center shadow-sm">
 				<User className="mx-auto mb-4 size-12 text-muted-foreground" />
-				<h2 className="text-lg font-medium">{t('selectPrompt')}</h2>
+				<h2 className="font-display text-lg font-medium">
+					{t('selectPrompt')}
+				</h2>
 				<p className="mt-2 text-sm text-muted-foreground">{t('selectHelp')}</p>
 			</Card>
 		)
@@ -180,7 +185,7 @@ export function PlayerStatsView({
 	if (error || comparisonError) {
 		return (
 			<Card
-				className="p-8 text-center"
+				className="border-border/80 p-8 text-center shadow-sm"
 				role="alert"
 			>
 				<p className="text-sm text-destructive">{error ?? comparisonError}</p>
@@ -207,46 +212,64 @@ export function PlayerStatsView({
 			<Tabs
 				key={`${selectedPlayer.id}:${selectedComparison?.id ?? ''}`}
 				defaultValue="overview"
+				className="space-y-5"
 				onValueChange={value => {
 					if (value !== 'state') return
 					onRequestState()
 					if (selectedComparison) onRequestComparisonState()
 				}}
 			>
-				<TabsList className="mb-6 grid h-auto w-full grid-cols-2 sm:grid-cols-5">
-					<TabsTrigger value="overview">{t('overview')}</TabsTrigger>
-					<TabsTrigger value="season">{t('season')}</TabsTrigger>
-					<TabsTrigger value="ict">{t('ict')}</TabsTrigger>
-					<TabsTrigger value="fixtures">{t('fixtures')}</TabsTrigger>
-					<TabsTrigger value="state">{t('state.tab')}</TabsTrigger>
-				</TabsList>
-				<TabsContent value="overview">
+				<StatsTabsShell>
+					<TabsList className="grid h-auto w-full grid-cols-2 gap-1.5 sm:grid-cols-5 sm:gap-2">
+						<TabsTrigger value="overview">{t('overview')}</TabsTrigger>
+						<TabsTrigger value="season">{t('season')}</TabsTrigger>
+						<TabsTrigger value="ict">{t('ict')}</TabsTrigger>
+						<TabsTrigger value="fixtures">{t('fixtures')}</TabsTrigger>
+						<TabsTrigger value="state">{t('state.tab')}</TabsTrigger>
+					</TabsList>
+				</StatsTabsShell>
+				<TabsContent
+					value="overview"
+					className="mt-0"
+				>
 					<PlayerOverviewTab
 						player={player}
 						comparison={comparison}
 						currentGameweek={currentGameweek}
 					/>
 				</TabsContent>
-				<TabsContent value="season">
+				<TabsContent
+					value="season"
+					className="mt-0"
+				>
 					<PlayerSeasonTab
 						player={player}
 						comparison={comparison}
 					/>
 				</TabsContent>
-				<TabsContent value="ict">
+				<TabsContent
+					value="ict"
+					className="mt-0"
+				>
 					<PlayerIctTab
 						player={player}
 						comparison={comparison}
 					/>
 				</TabsContent>
-				<TabsContent value="fixtures">
+				<TabsContent
+					value="fixtures"
+					className="mt-0"
+				>
 					<PlayerFixturesTab
 						player={player}
 						comparison={comparison}
 						currentGameweek={currentGameweek}
 					/>
 				</TabsContent>
-				<TabsContent value="state">
+				<TabsContent
+					value="state"
+					className="mt-0"
+				>
 					<PlayerStateTab
 						player={{
 							name: player.webName,

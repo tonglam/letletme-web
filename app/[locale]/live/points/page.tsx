@@ -1,17 +1,17 @@
+import LivePointsClient from '@/app/live/points/LivePointsClient'
 import { PageState } from '@/components/feedback/PageState'
 import PageShell from '@/components/layout/PageShell'
+import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getCurrentAndNextEvents } from '@/lib/events'
-import { executeServerQuery } from '@/lib/graphql-server'
 import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
 	type LiveCalcDataResponse,
-	type LiveSnapshotStatus
+	type LiveSnapshotStatus,
 } from '@/lib/graphql/operations/live'
+import { executeServerQuery } from '@/lib/graphql-server'
 import { getCurrentEntryId } from '@/lib/session'
 import { CalendarX2 } from 'lucide-react'
-import LivePointsClient from '@/app/live/points/LivePointsClient'
-import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getTranslations } from 'next-intl/server'
 
 export const dynamic = 'force-dynamic'
@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/live/points',
 		titleKey: 'livePointsTitle',
-		descriptionKey: 'livePointsDescription'
+		descriptionKey: 'livePointsDescription',
 	})
 }
 
@@ -33,7 +33,7 @@ export default async function LivePointsPage({ params }: PageProps) {
 	const t = await getTranslations('States')
 	const [entryId, events] = await Promise.all([
 		getCurrentEntryId(),
-		getCurrentAndNextEvents()
+		getCurrentAndNextEvents(),
 	])
 	const currentEventId = events?.current[0]?.id
 	let initialLiveData: LiveCalcData | undefined
@@ -56,7 +56,7 @@ export default async function LivePointsPage({ params }: PageProps) {
 			const response = await executeServerQuery<LiveCalcDataResponse>(
 				GET_LIVE_POINTS,
 				{ eventId: currentEventId, entryId },
-				{ cache: 'no-store' }
+				{ cache: 'no-store' },
 			)
 			initialLiveData = response.calcLivePointsByEntry
 			initialSnapshot = response.liveSnapshot

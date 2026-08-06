@@ -1,44 +1,14 @@
 import { Link } from '@/i18n/navigation'
 import { getTranslations } from 'next-intl/server'
+import { menuItems } from './config'
 import { LogoMark, LogoWordmark } from './Logo'
 import { MiniProgramPopover } from './MiniProgramPopover'
 
-const footerGroups = [
-	{
-		labelKey: 'fplData',
-		links: [
-			{ labelKey: 'playerStats', href: '/data/player-stats' },
-			{ labelKey: 'priceChanges', href: '/data/price-changes' },
-		],
-	},
-	{
-		labelKey: 'live',
-		links: [
-			{ labelKey: 'livePoints', href: '/live/points' },
-			{ labelKey: 'tournaments', href: '/live/tournament' },
-			{ labelKey: 'matches', href: '/live/matches' },
-		],
-	},
-	{
-		labelKey: 'analysis',
-		links: [
-			{ labelKey: 'gameweekStats', href: '/stats/gameweek' },
-			{ labelKey: 'teamStats', href: '/stats/team' },
-			{ labelKey: 'tournamentStats', href: '/stats/tournament' },
-		],
-	},
-	{
-		labelKey: 'tournaments',
-		links: [
-			{ labelKey: 'myTournaments', href: '/tournament/list?mine=true' },
-			{ labelKey: 'createTournament', href: '/tournament/create' },
-			{ labelKey: 'liveStandings', href: '/live/tournament' },
-		],
-	},
-] as const
-
 export async function Footer() {
-	const t = await getTranslations('Footer')
+	const [t, nav] = await Promise.all([
+		getTranslations('Footer'),
+		getTranslations('Navigation'),
+	])
 	const currentYear = new Date().getFullYear()
 
 	return (
@@ -49,27 +19,35 @@ export async function Footer() {
 						<LogoMark className="size-11 text-electric" />
 						<div>
 							<LogoWordmark className="text-lg" />
-							<p className="mt-1 text-sm text-fascia-foreground/60">{t('tagline')}</p>
+							<p className="mt-1 text-sm text-fascia-foreground/60">
+								{t('tagline')}
+							</p>
 						</div>
 					</div>
-					<MiniProgramPopover label={t('miniProgram')} scanText={t('scanMiniProgram')} />
+					<MiniProgramPopover
+						label={t('miniProgram')}
+						scanText={t('scanMiniProgram')}
+					/>
 				</div>
 
+				{/* Same groups/order/links as header menu (menuItems) */}
 				<nav
 					aria-label={t('navigation')}
 					className="grid grid-cols-2 gap-8 border-t border-white/10 pt-8 sm:grid-cols-4"
 				>
-					{footerGroups.map(group => (
-						<div key={group.labelKey}>
-							<p className="chyron mb-4 !text-fascia-foreground/70">{t(group.labelKey)}</p>
+					{menuItems.map(group => (
+						<div key={group.id}>
+							<p className="chyron mb-4 !text-fascia-foreground/70">
+								{nav(group.labelKey)}
+							</p>
 							<ul className="flex flex-col gap-2.5">
-								{group.links.map(link => (
-									<li key={link.href}>
+								{group.items.map(link => (
+									<li key={`${group.id}-${link.labelKey}`}>
 										<Link
 											href={link.href}
 											className="text-sm text-fascia-foreground/60 underline-offset-4 transition-colors hover:text-electric hover:underline"
 										>
-											{t(link.labelKey)}
+											{nav(link.labelKey)}
 										</Link>
 									</li>
 								))}

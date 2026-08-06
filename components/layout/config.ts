@@ -43,8 +43,8 @@ export const menuItems: MenuItem[] = [
 		labelKey: 'tournament',
 		icon: Medal,
 		items: [
-			{ labelKey: 'myTournaments', href: '/tournament/list?mine=true' },
-			{ labelKey: 'createTournaments', href: '/tournament/create' }
+			{ labelKey: 'createTournaments', href: '/tournament/create' },
+			{ labelKey: 'myTournaments', href: '/tournament/list?mine=true' }
 		]
 	},
 	{

@@ -9,19 +9,20 @@ import { SearchHeader } from '@/components/tournament/SearchHeader'
 import { TournamentHeader } from '@/components/tournament/TournamentHeader'
 import { TournamentSelector } from '@/components/tournament/TournamentSelector'
 import { TournamentTable } from '@/components/tournament/TournamentTable'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_LIVE_SNAPSHOT,
 	type LiveSnapshotResponse,
-	type LiveSnapshotStatus
+	type LiveSnapshotStatus,
 } from '@/lib/graphql/operations/live'
 import {
 	GET_ENTRY_TOURNAMENTS,
 	GET_TOURNAMENT_LIVE_POINTS,
 	type EntryTournamentsResponse,
 	type TournamentLiveCalcData,
-	type TournamentLivePointsResponse
+	type TournamentLivePointsResponse,
 } from '@/lib/graphql/operations/tournaments'
 import { usePageActive } from '@/hooks/use-page-active'
 import {
@@ -41,13 +42,14 @@ import {
 } from '@/lib/tournament/lifecycle'
 import { Tournament } from '@/types/tournament'
 import { Link, useRouter } from '@/i18n/navigation'
+import { RefreshCw } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const fetchLivePoints = async (
 	tournamentId: number,
-	eventId: number
+	eventId: number,
 ): Promise<{
 	rows: TournamentLiveCalcData[]
 	failedCount: number
@@ -57,7 +59,7 @@ const fetchLivePoints = async (
 }> => {
 	const response = await executeQuery<TournamentLivePointsResponse>(
 		GET_TOURNAMENT_LIVE_POINTS,
-		{ tournamentId, eventId }
+		{ tournamentId, eventId },
 	)
 	const batch = response.calcLivePointsForTournament
 	return {
@@ -65,7 +67,7 @@ const fetchLivePoints = async (
 		failedCount: batch.meta.failedCount,
 		failedEntryIds: batch.errors.map(error => error.entryId),
 		totalEntries: batch.meta.totalEntries,
-		snapshot: response.liveSnapshot
+		snapshot: response.liveSnapshot,
 	}
 }
 
@@ -240,8 +242,8 @@ export default function TournamentClient({
 				const data = await executeQuery<EntryTournamentsResponse>(
 					GET_ENTRY_TOURNAMENTS,
 					{
-						entryId: entryId
-					}
+						entryId: entryId,
+					},
 				)
 
 				if (isCancelled) {
@@ -249,7 +251,7 @@ export default function TournamentClient({
 				}
 
 				const mappedTournaments = data.entryTournaments.map(entryTournament =>
-					mapEntryTournamentToLiveTournament(entryTournament)
+					mapEntryTournamentToLiveTournament(entryTournament),
 				)
 				setTournaments(mappedTournaments)
 			} catch {
@@ -317,7 +319,9 @@ export default function TournamentClient({
 			!standingsReady ||
 			selectedGameweek === undefined
 		) {
+			// Invalidate any in-flight standings fetch for a previous selection.
 			resultsRequestIdRef.current += 1
+			resultsInFlightRef.current = null
 			const resetTimer = window.setTimeout(() => {
 				setIsLoadingResults(false)
 				setResultsError(null)
@@ -331,24 +335,35 @@ export default function TournamentClient({
 			return
 		}
 
+		// UX: drop previous tournament/GW rows in the same turn as selection change
+		// so we never paint "new header + old standings" for a frame.
+		resultsRequestIdRef.current += 1
+		resultsInFlightRef.current = null
+		setSelectedRows([])
+		setResultsError(null)
+		setIsLoadingResults(true)
 		acceptSnapshot(null)
 		void loadTournamentResults(
 			Number(selectedTournament.id),
 			selectedGameweek,
 			{
-				preserveOnError: false
-			}
+				preserveOnError: false,
+			},
 		)
 	}, [
 		acceptSnapshot,
 		loadTournamentResults,
 		selectedGameweek,
 		selectedTournament,
-		standingsReady
+		standingsReady,
 	])
 
 	useEffect(() => {
+		// Reset filters as soon as the tournament or GW changes (not after fetch).
 		const resetTimer = window.setTimeout(() => {
+			setSearchQuery('')
+			setChipFilter('all')
+			setCaptainFilter('all')
 			setOwnershipMatchedEntryIds(null)
 			setTeamExposureMatchedEntryIds(null)
 		}, 0)
@@ -384,7 +399,7 @@ export default function TournamentClient({
 				const probe = await executeQuery<LiveSnapshotResponse>(
 					GET_LIVE_SNAPSHOT,
 					{ eventId: selectedGameweek },
-					{ cache: 'no-store' }
+					{ cache: 'no-store' },
 				)
 				if (requestId !== resultsRequestIdRef.current) return
 				if (
@@ -536,7 +551,10 @@ export default function TournamentClient({
 						tournaments={tournaments}
 						currentTournamentId={selectedTournament.id}
 						onTournamentChange={id => {
-							router.push(`/live/tournament?tournamentId=${id}`)
+							if (id === selectedTournament.id) return
+							// replace avoids stacking history entries when browsing leagues;
+							// standings clear happens in the selection effect on URL change.
+							router.replace(`/live/tournament?tournamentId=${id}`)
 						}}
 					/>
 				)}
@@ -550,12 +568,30 @@ export default function TournamentClient({
 							isLoadingResults || Boolean(selectedTournament && !standingsReady)
 						}
 					/>
-					<div className="mt-2 flex justify-end">
+					<div className="mt-2 flex flex-wrap items-center justify-end gap-2 sm:gap-3">
 						<LiveAutoRefreshCountdown
 							enabled={autoRefreshEnabled}
 							onRefresh={autoRefreshTournamentResults}
 							renderLabel={seconds => t('nextRefresh', { seconds })}
 						/>
+						{/* Manual refresh — same idea as /live/points (auto countdown alone is easy to miss) */}
+						<Button
+							size="sm"
+							variant="outline"
+							onClick={() => void refreshTournamentResults()}
+							disabled={
+								!selectedTournament ||
+								!standingsReady ||
+								isLoadingResults ||
+								selectedGameweek === undefined
+							}
+						>
+							<RefreshCw
+								data-icon="inline-start"
+								className={isLoadingResults ? 'animate-spin' : undefined}
+							/>
+							{t('refresh')}
+						</Button>
 					</div>
 				</Card>
 
@@ -595,28 +631,48 @@ export default function TournamentClient({
 							totalEntries={
 								selectedStats.totalEntries || selectedTournament.totalEntries
 							}
-						/>
-
-						<SearchHeader
-							searchQuery={searchQuery}
-							setSearchQuery={setSearchQuery}
-							captainOptions={captainOptions}
-							chipFilter={chipFilter}
-							onChipFilterChange={setChipFilter}
-							captainFilter={captainFilter}
-							onCaptainFilterChange={setCaptainFilter}
+							isLoading={isLoadingResults}
 						/>
 
 						{isLoadingResults ? (
-							<Card className="p-6 text-sm text-muted-foreground mb-6">
-								{t('loadingStandings')}
-							</Card>
+							<div className="space-y-4" aria-busy="true" aria-live="polite">
+								<Card className="p-6 text-sm text-muted-foreground">
+									{t('loadingStandings')}
+								</Card>
+								<div className="overflow-hidden rounded-xl border border-border/80 bg-card">
+									<div className="divide-y divide-border/50">
+										{Array.from({ length: 8 }, (_, i) => (
+											<div
+												key={i}
+												className="flex items-center gap-3 px-4 py-3"
+											>
+												<div className="h-4 w-6 animate-pulse rounded bg-muted" />
+												<div className="h-4 min-w-0 flex-1 animate-pulse rounded bg-muted" />
+												<div className="h-4 w-12 animate-pulse rounded bg-muted" />
+												<div className="h-4 w-10 animate-pulse rounded bg-muted" />
+											</div>
+										))}
+									</div>
+								</div>
+							</div>
 						) : (
 							<>
+								<SearchHeader
+									searchQuery={searchQuery}
+									setSearchQuery={setSearchQuery}
+									captainOptions={captainOptions}
+									chipFilter={chipFilter}
+									onChipFilterChange={setChipFilter}
+									captainFilter={captainFilter}
+									onCaptainFilterChange={setCaptainFilter}
+								/>
+
 								<PlayerOwnershipFilter
 									key={`${selectedTournament.id}-${displayGameweek}`}
 									entries={selectedEntries}
-									onMatchedEntryIdsChange={handleOwnershipMatchedEntryIdsChange}
+									onMatchedEntryIdsChange={
+										handleOwnershipMatchedEntryIdsChange
+									}
 								/>
 
 								<TeamExposureFilter
@@ -628,6 +684,7 @@ export default function TournamentClient({
 								/>
 
 								<TournamentTable
+									key={`table-${selectedTournament.id}-${displayGameweek}`}
 									entries={filteredEntries}
 									searchQuery=""
 									tournamentId={selectedTournament.id}

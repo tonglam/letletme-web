@@ -43,7 +43,9 @@ type TournamentRow = {
 	id: string
 	adminEntryId: number
 	name: string
-	managerName: string
+	creatorName: string
+	/** Official FPL league name when copied (Classic import). */
+	sourceLeagueName: string | null
 	participantCount: number
 	leagueType: string
 	state: string
@@ -61,6 +63,24 @@ type SortOption =
 	| 'nameDesc'
 	| 'participantsDesc'
 
+/**
+ * League type — Classic (copy official FPL league) is the common path.
+ * Exclusive chips.
+ */
+type TypeFilter = 'all' | 'CLASSIC' | 'H2H'
+
+/** Lifecycle state filter — exclusive (not multi-select). */
+type StatusFilter = 'all' | 'ACTIVE' | 'FINISHED' | 'INACTIVE'
+
+const TYPE_FILTERS: ReadonlyArray<TypeFilter> = ['all', 'CLASSIC', 'H2H']
+
+const STATUS_FILTERS: ReadonlyArray<StatusFilter> = [
+	'all',
+	'ACTIVE',
+	'FINISHED',
+	'INACTIVE',
+]
+
 const mapKnockoutFormat = (knockoutMode: string): TournamentRow['knockoutFormat'] => {
 	if (knockoutMode === 'SINGLE_ELIMINATION') {
 		return 'single'
@@ -77,7 +97,8 @@ const mapTournamentToRow = (tournament: EntryTournament): TournamentRow => {
 		id: String(tournament.id),
 		adminEntryId: tournament.adminEntryId,
 		name: tournament.name,
-		managerName: tournament.creator,
+		creatorName: tournament.creator,
+		sourceLeagueName: tournament.sourceLeagueName,
 		participantCount: tournament.totalTeamNum,
 		leagueType: tournament.leagueType,
 		state: tournament.state,
@@ -100,8 +121,15 @@ export default function TournamentListClient({
 }) {
 	const t = useTranslations('TournamentList')
 	const [searchQuery, setSearchQuery] = useState('')
-	const [showOnlyActive, setShowOnlyActive] = useState(false)
-	const [showOnlyKnockout, setShowOnlyKnockout] = useState(false)
+	/**
+	 * Default Classic — most LetLetMe tournaments are copied official Classic leagues.
+	 * Users can switch to All / H2H.
+	 */
+	const [typeFilter, setTypeFilter] = useState<TypeFilter>('CLASSIC')
+	/** Exclusive status chip: all | active | finished | paused */
+	const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+	/** Show only tournaments this entry administers */
+	const [adminOnly, setAdminOnly] = useState(false)
 	const tournaments = useMemo(
 		() => initialTournaments.map(mapTournamentToRow),
 		[initialTournaments],
@@ -109,22 +137,51 @@ export default function TournamentListClient({
 	const [sortOption, setSortOption] = useState<SortOption>('updatedDesc')
 	const getLeagueType = (type: string) => type === 'H2H' ? t('headToHead') : type === 'CLASSIC' ? t('classic') : type
 
+	const typeFilterLabel = (filter: TypeFilter): string => {
+		switch (filter) {
+			case 'CLASSIC':
+				return t('filterClassic')
+			case 'H2H':
+				return t('filterH2h')
+			default:
+				return t('filterAll')
+		}
+	}
+
+	const statusFilterLabel = (filter: StatusFilter): string => {
+		switch (filter) {
+			case 'ACTIVE':
+				return t('filterActive')
+			case 'FINISHED':
+				return t('filterFinished')
+			case 'INACTIVE':
+				return t('filterPaused')
+			default:
+				return t('filterAll')
+		}
+	}
+
 	// Filter tournaments based on search and filters
 	const filteredTournaments = useMemo(() => {
 		const normalizedQuery = searchQuery.trim().toLowerCase()
 		const filtered = tournaments.filter(tournament => {
 			const matchesSearch =
+				!normalizedQuery ||
 				tournament.name.toLowerCase().includes(normalizedQuery) ||
-				tournament.managerName.toLowerCase().includes(normalizedQuery)
+				tournament.creatorName.toLowerCase().includes(normalizedQuery) ||
+				(tournament.sourceLeagueName?.toLowerCase().includes(normalizedQuery) ??
+					false)
 
-			const matchesActive = showOnlyActive
-				? tournament.state === 'ACTIVE'
-				: true
-			const matchesKnockout = showOnlyKnockout
-				? tournament.knockoutFormat !== 'none'
-				: true
+			const matchesType =
+				typeFilter === 'all' || tournament.leagueType === typeFilter
 
-			return matchesSearch && matchesActive && matchesKnockout
+			const matchesStatus =
+				statusFilter === 'all' || tournament.state === statusFilter
+
+			const matchesAdmin =
+				!adminOnly || tournament.adminEntryId === currentEntryId
+
+			return matchesSearch && matchesType && matchesStatus && matchesAdmin
 		})
 
 		return filtered.sort((a, b) => {
@@ -145,7 +202,15 @@ export default function TournamentListClient({
 			}
 			return bUpdatedAt - aUpdatedAt
 		})
-	}, [searchQuery, showOnlyActive, showOnlyKnockout, sortOption, tournaments])
+	}, [
+		adminOnly,
+		currentEntryId,
+		searchQuery,
+		sortOption,
+		statusFilter,
+		tournaments,
+		typeFilter,
+	])
 
 	return (
 		<PageShell>
@@ -182,24 +247,55 @@ export default function TournamentListClient({
 							/>
 						</div>
 
-						<div className="flex flex-wrap gap-2">
-							<Button
-								variant={showOnlyActive ? 'default' : 'outline'}
-								size="sm"
-								onClick={() => setShowOnlyActive(!showOnlyActive)}
-								aria-pressed={showOnlyActive}
-								className="flex items-center gap-2"
+						<div
+							className="flex flex-wrap items-center gap-2"
+							role="toolbar"
+							aria-label={t('filters')}
+						>
+							{/* Type first — Classic (official league copy) is the main product path */}
+							<div
+								className="flex flex-wrap gap-1.5"
+								role="group"
+								aria-label={t('filterType')}
 							>
-								{t('activeOnly')}
-							</Button>
-							<Button
-								variant={showOnlyKnockout ? 'default' : 'outline'}
-								size="sm"
-								onClick={() => setShowOnlyKnockout(!showOnlyKnockout)}
-								aria-pressed={showOnlyKnockout}
-								className="flex items-center gap-2"
+								{TYPE_FILTERS.map(filter => (
+									<Button
+										key={filter}
+										variant={typeFilter === filter ? 'default' : 'outline'}
+										size="sm"
+										onClick={() => setTypeFilter(filter)}
+										aria-pressed={typeFilter === filter}
+									>
+										{typeFilterLabel(filter)}
+									</Button>
+								))}
+							</div>
+							<div
+								className="flex flex-wrap gap-1.5"
+								role="group"
+								aria-label={t('filterStatus')}
 							>
-								{t('knockoutOnly')}
+								{STATUS_FILTERS.map(filter => (
+									<Button
+										key={filter}
+										variant={
+											statusFilter === filter ? 'default' : 'outline'
+										}
+										size="sm"
+										onClick={() => setStatusFilter(filter)}
+										aria-pressed={statusFilter === filter}
+									>
+										{statusFilterLabel(filter)}
+									</Button>
+								))}
+							</div>
+							<Button
+								variant={adminOnly ? 'default' : 'outline'}
+								size="sm"
+								onClick={() => setAdminOnly(current => !current)}
+								aria-pressed={adminOnly}
+							>
+								{t('filterAdminOnly')}
 							</Button>
 
 							<DropdownMenu>
@@ -247,7 +343,7 @@ export default function TournamentListClient({
 								<TableRow>
 									<TableHead>{t('tournament')}</TableHead>
 									<TableHead>{t('participants')}</TableHead>
-									<TableHead>{t('manager')}</TableHead>
+									<TableHead>{t('creator')}</TableHead>
 									<TableHead>{t('type')}</TableHead>
 									<TableHead>{t('format')}</TableHead>
 									<TableHead>{t('gameweeks')}</TableHead>
@@ -274,7 +370,7 @@ export default function TournamentListClient({
 											<div className="font-medium">{tournament.name}</div>
 										</TableCell>
 										<TableCell>{tournament.participantCount}</TableCell>
-										<TableCell>{tournament.managerName}</TableCell>
+										<TableCell>{tournament.creatorName}</TableCell>
 										<TableCell>
 											<Badge variant="outline">{getLeagueType(tournament.leagueType)}</Badge>
 										</TableCell>
@@ -326,20 +422,20 @@ export default function TournamentListClient({
 														>
 															<ExternalLink className="h-4 w-4" />
 															{t('viewLive')}
-												</Link>
-											</DropdownMenuItem>
-											{tournament.adminEntryId === currentEntryId ? (
-												<DropdownMenuItem asChild>
-													<Link
-														href={`/tournament/${tournament.id}/manage`}
-														className="flex items-center gap-2"
-													>
-														<Settings className="h-4 w-4" />
+														</Link>
+													</DropdownMenuItem>
+													{tournament.adminEntryId === currentEntryId ? (
+														<DropdownMenuItem asChild>
+															<Link
+																href={`/tournament/${tournament.id}/manage`}
+																className="flex items-center gap-2"
+															>
+																<Settings className="h-4 w-4" />
 																{t('manage')}
-													</Link>
-												</DropdownMenuItem>
-											) : null}
-										</DropdownMenuContent>
+															</Link>
+														</DropdownMenuItem>
+													) : null}
+												</DropdownMenuContent>
 											</DropdownMenu>
 										</TableCell>
 									</TableRow>

@@ -15,8 +15,10 @@ import { formatPlayerValue, type TeamStatsViewModel } from '../_lib/team-stats-m
 export function TeamTransfersTab({ rows }: { rows: TeamStatsViewModel['transferRows'] }) {
 	const t = useTranslations('TeamStats')
 	return (
-		<Card className="p-6">
-			<h2 className="mb-4 text-xl font-bold">{t('transferHistory')}</h2>
+		<Card className="border-border/80 p-4 shadow-sm sm:p-6">
+			<h2 className="mb-4 font-display text-lg font-bold tracking-tight sm:text-xl">
+				{t('transferHistory')}
+			</h2>
 			<div className="overflow-hidden rounded-lg border bg-card/40">
 				<Table>
 					<TableHeader>

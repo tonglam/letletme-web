@@ -310,8 +310,10 @@ export function LiveMatchesClient({
 						{t('error', { message: error })}
 					</p>
 				) : null}
-				<div className="flex items-center justify-between mb-8">
-					<h1 className="text-3xl font-bold">{t('title')}</h1>
+				<div className="mb-8 flex items-center justify-between">
+					<h1 className="font-display text-3xl font-bold tracking-tight">
+						{t('title')}
+					</h1>
 					<div className="flex flex-col items-end gap-1">
 						<Button
 							variant="outline"
@@ -336,8 +338,8 @@ export function LiveMatchesClient({
 					value={activeTab}
 					onValueChange={handleTabChange}
 				>
-					<div className="bg-card rounded-lg p-4 mb-6 shadow-sm">
-						<TabsList className="w-full grid grid-cols-4 gap-2 sm:gap-4">
+					<div className="mb-6 rounded-lg border border-border/80 bg-card p-4 shadow-sm">
+						<TabsList className="grid w-full grid-cols-4 gap-2 sm:gap-4">
 							<TabsTrigger
 								value="live"
 								className="w-full"
@@ -367,7 +369,7 @@ export function LiveMatchesClient({
 
 					<TabsContent
 						value={activeTab}
-						className="space-y-6"
+						className="space-y-5"
 					>
 						{activeMatches.length > 0 ? (
 							activeMatches.map((match, i) => (

@@ -1,11 +1,14 @@
-import { Card } from '@/components/ui/card'
+import { StatsSectionCard, StatsTabsShell } from '@/components/stats/StatsSurfaces'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Crown, Star, Trophy } from 'lucide-react'
-import type { StandingRow, TournamentStatsViewModel } from '../_lib/tournament-stats-model'
+import { useTranslations } from 'next-intl'
+import type {
+	StandingRow,
+	TournamentStatsViewModel,
+} from '../_lib/tournament-stats-model'
 import { TournamentCaptainsTab } from './TournamentCaptainsTab'
 import { TournamentChipsTab } from './TournamentChipsTab'
 import { TournamentStandingsTab } from './TournamentStandingsTab'
-import { useTranslations } from 'next-intl'
 
 interface TournamentStatsTabsProps {
 	filteredStandings: StandingRow[]
@@ -14,28 +17,46 @@ interface TournamentStatsTabsProps {
 	stats: TournamentStatsViewModel
 }
 
-export function TournamentStatsTabs({ filteredStandings, onSearchChange, search, stats }: TournamentStatsTabsProps) {
+export function TournamentStatsTabs({
+	filteredStandings,
+	onSearchChange,
+	search,
+	stats,
+}: TournamentStatsTabsProps) {
 	const t = useTranslations('TournamentStats')
 	return (
-		<Tabs defaultValue="standings" className="flex flex-col gap-6">
-			<TabsList className="grid h-auto w-full grid-cols-3">
-				<TabsTrigger value="standings" className="gap-2">
-					<Trophy data-icon="inline-start" aria-hidden="true" /> {t('standings')}
-				</TabsTrigger>
-				<TabsTrigger value="captains" className="gap-2">
-					<Crown data-icon="inline-start" aria-hidden="true" /> {t('captains')}
-				</TabsTrigger>
-				<TabsTrigger value="chips" className="gap-2">
-					<Star data-icon="inline-start" aria-hidden="true" /> {t('chips')}
-				</TabsTrigger>
-			</TabsList>
+		<Tabs defaultValue="standings" className="flex flex-col gap-5">
+			<StatsTabsShell>
+				<TabsList className="grid h-auto w-full grid-cols-3 gap-1.5 sm:gap-2">
+					<TabsTrigger value="standings" className="gap-1.5">
+						<Trophy className="size-3.5 shrink-0" aria-hidden="true" />
+						<span className="truncate">{t('standings')}</span>
+					</TabsTrigger>
+					<TabsTrigger value="captains" className="gap-1.5">
+						<Crown className="size-3.5 shrink-0" aria-hidden="true" />
+						<span className="truncate">{t('captains')}</span>
+					</TabsTrigger>
+					<TabsTrigger value="chips" className="gap-1.5">
+						<Star className="size-3.5 shrink-0" aria-hidden="true" />
+						<span className="truncate">{t('chips')}</span>
+					</TabsTrigger>
+				</TabsList>
+			</StatsTabsShell>
 			<TabsContent value="standings" className="mt-0">
-				<Card className="p-6">
-					<TournamentStandingsTab rows={filteredStandings} search={search} onSearchChange={onSearchChange} />
-				</Card>
+				<StatsSectionCard title={t('standings')}>
+					<TournamentStandingsTab
+						rows={filteredStandings}
+						search={search}
+						onSearchChange={onSearchChange}
+					/>
+				</StatsSectionCard>
 			</TabsContent>
-			<TabsContent value="captains" className="mt-0"><TournamentCaptainsTab rows={stats.captainStats} /></TabsContent>
-			<TabsContent value="chips" className="mt-0"><TournamentChipsTab rows={stats.chipUsage} /></TabsContent>
+			<TabsContent value="captains" className="mt-0">
+				<TournamentCaptainsTab rows={stats.captainStats} />
+			</TabsContent>
+			<TabsContent value="chips" className="mt-0">
+				<TournamentChipsTab rows={stats.chipUsage} />
+			</TabsContent>
 		</Tabs>
 	)
 }

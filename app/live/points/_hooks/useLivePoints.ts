@@ -189,14 +189,14 @@ export function useLivePoints({
 					const liveResponse = await executeQuery<LiveCalcDataResponse>(
 						GET_LIVE_POINTS,
 						{ eventId, entryId: activeEntryId },
-						{ cache: 'no-store' }
+						{ cache: 'no-store' },
 					)
 					const live = liveResponse.calcLivePointsByEntry
 					if (requestId !== requestIdRef.current) return
 
 					const allPlayers = mapLiveDataToPlayers(
 						live,
-						breakdownLookupForRequest(breakdownCacheRef.current, requestKey)
+						breakdownLookupForRequest(breakdownCacheRef.current, requestKey),
 					)
 					hasLoadedLiveDataRef.current = true
 					latestLiveDataRef.current = { requestKey, live }
@@ -271,7 +271,7 @@ export function useLivePoints({
 			const probe = await executeQuery<LiveSnapshotResponse>(
 				GET_LIVE_SNAPSHOT,
 				{ eventId: selectedGameweek },
-				{ cache: 'no-store' }
+				{ cache: 'no-store' },
 			)
 			if (requestId !== requestIdRef.current) return
 			if (!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)) {

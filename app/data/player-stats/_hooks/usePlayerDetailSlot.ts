@@ -1,6 +1,12 @@
 'use client'
 
 import type { PlayerDirectoryOption } from '@/components/player/PlayerDirectoryPicker'
+import {
+	PLAYER_STATS_MOCK_PLAYERS,
+	PLAYER_STATS_UI_MOCK_ENABLED,
+	getPlayerStatsUiMockDetail,
+	getPlayerStatsUiMockDetailFallback
+} from '@/lib/dev/player-stats-ui-mock'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_PLAYER_DETAIL,
@@ -97,7 +103,13 @@ export function usePlayerDetailSlot({
 	useEffect(() => {
 		let cancelled = false
 		queueMicrotask(() => {
-			if (!cancelled) setRecentPlayers(readRecentPlayers(storageKey))
+			if (cancelled) return
+			// TEMP UI mock — seed recent list for UI review
+			if (PLAYER_STATS_UI_MOCK_ENABLED) {
+				setRecentPlayers(PLAYER_STATS_MOCK_PLAYERS)
+				return
+			}
+			setRecentPlayers(readRecentPlayers(storageKey))
 		})
 		return () => {
 			cancelled = true
@@ -116,6 +128,21 @@ export function usePlayerDetailSlot({
 			setError(null)
 
 			try {
+				// TEMP UI mock — remove with lib/dev/player-stats-ui-mock.ts
+				if (PLAYER_STATS_UI_MOCK_ENABLED) {
+					const playerId = Number(player.id)
+					const detail =
+						getPlayerStatsUiMockDetail(playerId) ??
+						getPlayerStatsUiMockDetailFallback(
+							playerId,
+							player.name,
+							player.teamShortName
+						)
+					if (requestId !== requestIdRef.current) return
+					setPlayerDetail(detail)
+					return
+				}
+
 				const response = await executeQuery<PlayerDetailResponse>(
 					GET_PLAYER_DETAIL,
 					{

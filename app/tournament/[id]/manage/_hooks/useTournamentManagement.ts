@@ -6,8 +6,8 @@ import {
 	isTournamentSetupInFlight,
 } from '@/lib/tournament/lifecycle'
 import { useRouter } from '@/i18n/navigation'
-import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { useEffect, useState } from 'react'
 import type { TournamentNameForm } from '../_lib/tournament-management'
 
 export type TournamentManagementAction =
@@ -37,26 +37,27 @@ export function useTournamentManagement(tournament: EntryTournament) {
 		})
 	}
 	const updateCurrentTournament = (
-		update: (current: EntryTournament) => EntryTournament
+		update: (current: EntryTournament) => EntryTournament,
 	) => {
 		setTournamentState(current => ({
 			serverTournament: tournament,
 			currentTournament: update(
 				current.serverTournament === tournament
 					? current.currentTournament
-					: tournament
+					: tournament,
 			),
 		}))
 	}
 	const [isSaving, setIsSaving] = useState(false)
 	const [isDeleting, setIsDeleting] = useState(false)
-	const [pendingAction, setPendingAction] = useState<TournamentManagementAction | null>(null)
+	const [pendingAction, setPendingAction] =
+		useState<TournamentManagementAction | null>(null)
 	const [mutationState, setMutationState] = useState<MutationState>({
 		kind: 'idle',
 		message: null,
 	})
 	const rosterSyncInFlight = isTournamentRosterSyncInFlight(
-		currentTournament.rosterSyncStatus
+		currentTournament.rosterSyncStatus,
 	)
 	const setupInFlight = isTournamentSetupInFlight(currentTournament.setupStatus)
 	const lifecycleWorkInFlight = rosterSyncInFlight || setupInFlight
@@ -143,7 +144,10 @@ export function useTournamentManagement(tournament: EntryTournament) {
 					rosterSyncStatus: 'PROCESSING',
 				}
 			})
-			setMutationState({ kind: 'success', message: t(`actionSuccess.${action}`) })
+			setMutationState({
+				kind: 'success',
+				message: t(`actionSuccess.${action}`),
+			})
 			router.refresh()
 			return true
 		} catch {
