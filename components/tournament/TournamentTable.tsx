@@ -13,7 +13,7 @@ import { cn, formatCompactNumber } from '@/lib/utils'
 import type { TournamentEntry } from '@/types/tournament'
 import { ArrowDown, ArrowUp, GitCompareArrows } from 'lucide-react'
 import { useFormatter, useTranslations } from 'next-intl'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { EntryCompareSheet } from './EntryCompareSheet'
 
 interface TournamentTableProps {
@@ -68,54 +68,67 @@ export function TournamentTable({
 		{ value: 'eventCost', label: t('cost') },
 	]
 
-	const filteredEntries = entries.filter(entry => {
-		if (!searchQuery) return true
-		const query = searchQuery.toLowerCase()
-		return (
-			entry.teamName.toLowerCase().includes(query) ||
-			entry.managerName.toLowerCase().includes(query)
-		)
-	})
+	const sortedEntries = useMemo(() => {
+		const filtered = entries.filter(entry => {
+			if (!searchQuery) return true
+			const query = searchQuery.toLowerCase()
+			return (
+				entry.teamName.toLowerCase().includes(query) ||
+				entry.managerName.toLowerCase().includes(query)
+			)
+		})
 
-	const sortedEntries = [...filteredEntries].sort((a, b) => {
-		let valueA: number
-		let valueB: number
+		return [...filtered].sort((a, b) => {
+			// Stale retained rows always sort after live recalcs (any column).
+			if (Boolean(a.stale) !== Boolean(b.stale)) {
+				return a.stale ? 1 : -1
+			}
 
-		switch (sortColumn) {
-			case 'overallRank':
-				valueA = a.overallRank && a.overallRank > 0 ? a.overallRank : Number.MAX_SAFE_INTEGER
-				valueB = b.overallRank && b.overallRank > 0 ? b.overallRank : Number.MAX_SAFE_INTEGER
-				break
-			case 'eventCost':
-				valueA = a.eventCost ?? 0
-				valueB = b.eventCost ?? 0
-				break
-			case 'gwPoints':
-				valueA = a.gwPoints ?? a.livePoints
-				valueB = b.gwPoints ?? b.livePoints
-				break
-			case 'totalPoints':
-				valueA = a.totalPoints
-				valueB = b.totalPoints
-				break
-			case 'teamValue':
-				valueA = a.teamValue ?? -1
-				valueB = b.teamValue ?? -1
-				break
-			case 'standings':
-			case 'rank':
-			default:
-				valueA = a.rank > 0 ? a.rank : Number.MAX_SAFE_INTEGER
-				valueB = b.rank > 0 ? b.rank : Number.MAX_SAFE_INTEGER
-		}
+			let valueA: number
+			let valueB: number
 
-		const primary =
-			sortDirection === 'asc' ? valueA - valueB : valueB - valueA
-		if (primary !== 0) return primary
-		const rankDiff = (a.rank || 999999) - (b.rank || 999999)
-		if (rankDiff !== 0) return rankDiff
-		return a.id.localeCompare(b.id)
-	})
+			switch (sortColumn) {
+				case 'overallRank':
+					valueA =
+						a.overallRank && a.overallRank > 0
+							? a.overallRank
+							: Number.MAX_SAFE_INTEGER
+					valueB =
+						b.overallRank && b.overallRank > 0
+							? b.overallRank
+							: Number.MAX_SAFE_INTEGER
+					break
+				case 'eventCost':
+					valueA = a.eventCost ?? 0
+					valueB = b.eventCost ?? 0
+					break
+				case 'gwPoints':
+					valueA = a.gwPoints ?? a.livePoints
+					valueB = b.gwPoints ?? b.livePoints
+					break
+				case 'totalPoints':
+					valueA = a.totalPoints
+					valueB = b.totalPoints
+					break
+				case 'teamValue':
+					valueA = a.teamValue ?? -1
+					valueB = b.teamValue ?? -1
+					break
+				case 'standings':
+				case 'rank':
+				default:
+					valueA = a.rank > 0 ? a.rank : Number.MAX_SAFE_INTEGER
+					valueB = b.rank > 0 ? b.rank : Number.MAX_SAFE_INTEGER
+			}
+
+			const primary =
+				sortDirection === 'asc' ? valueA - valueB : valueB - valueA
+			if (primary !== 0) return primary
+			const rankDiff = (a.rank || 999999) - (b.rank || 999999)
+			if (rankDiff !== 0) return rankDiff
+			return a.id.localeCompare(b.id)
+		})
+	}, [entries, searchQuery, sortColumn, sortDirection])
 
 	const formatOverallRank = (rank?: number) => {
 		if (!rank || rank <= 0) return '—'
@@ -134,6 +147,7 @@ export function TournamentTable({
 		if (entry.chips.triple) chips.push('TC')
 		if (entry.chips.bench) chips.push('BB')
 		if (entry.chips.wildcard) chips.push('WC')
+		if (entry.chips.freeHit) chips.push('FH')
 		return chips.length ? chips.join(' · ') : null
 	}
 
@@ -271,7 +285,9 @@ export function TournamentTable({
 										'px-4 py-2.5 transition-colors',
 										'hover:bg-muted/30',
 										isChecked && 'bg-primary/[0.04]',
+										entry.stale && 'opacity-60',
 									)}
+									title={entry.stale ? t('staleRowHint') : undefined}
 								>
 									{/* Mobile / tablet */}
 									<div className="flex items-center gap-3 lg:hidden">
@@ -314,7 +330,7 @@ export function TournamentTable({
 											</div>
 											{hits > 0 ? (
 												<div className="font-mono text-[10px] text-destructive/90">
-													net {net}
+													{t('netLabel')} {net}
 												</div>
 											) : null}
 										</div>
@@ -364,7 +380,7 @@ export function TournamentTable({
 										</span>
 									</div>
 
-									{/* Desktop full row */}
+									{/* Desktop full row — opacity/title live on <li> only */}
 									<div
 										className="hidden items-center gap-2 lg:grid"
 										style={{ gridTemplateColumns: desktopCols }}
@@ -412,7 +428,7 @@ export function TournamentTable({
 											</p>
 											{entry.captainPoints > 0 ? (
 												<p className="font-mono text-[10px] tabular-nums text-muted-foreground">
-													{entry.captainPoints} pts
+													{entry.captainPoints} {t('ptsShort')}
 												</p>
 											) : null}
 										</div>
@@ -443,7 +459,7 @@ export function TournamentTable({
 											</div>
 											{hits > 0 ? (
 												<div className="font-mono text-[10px] tabular-nums text-destructive/90">
-													net {net}
+													{t('netLabel')} {net}
 												</div>
 											) : null}
 										</div>

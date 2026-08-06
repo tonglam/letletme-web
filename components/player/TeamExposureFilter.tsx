@@ -60,7 +60,9 @@ export function TeamExposureFilter({
 						.sort((a, b) => a.name.localeCompare(b.name)),
 				),
 			)
-			.catch(() => {})
+			.catch(error => {
+				console.warn('Team directory unavailable for exposure filter:', error)
+			})
 	}, [])
 
 	// Teams present in current standings (with display names from picker when possible)

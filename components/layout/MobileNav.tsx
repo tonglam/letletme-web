@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { ChevronDown, LogOut, Menu, Settings, Shirt, UserCircle, UserRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { toast } from "sonner";
 import { menuItems } from "./config";
 
 export function MobileNav({ user }: { user: NavigationUser | null }) {
@@ -36,9 +37,15 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
   const handleSignOut = async () => {
     setSigningOut(true);
     try {
-      await signOut();
+      const { error } = await signOut();
+      if (error) {
+        toast.error(t("signOutFailed"));
+        return;
+      }
       router.push("/");
       router.refresh();
+    } catch {
+      toast.error(t("signOutFailed"));
     } finally {
       setSigningOut(false);
     }

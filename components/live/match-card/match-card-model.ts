@@ -53,8 +53,10 @@ export function buildMatchHighlights(match: Match): MatchHighlightGroup[] {
 		{
 			kind: 'defensive',
 			title: 'Defensive Contribution',
-			items: sortedPlayerValues(players, (player) =>
-				(player.defensiveContribution ?? 0) >= 10 ? player.defensiveContribution : 0,
+			items: sortedPlayerValues(players, player =>
+				isDefensiveContributionEarned(player)
+					? (player.defensiveContribution ?? 0)
+					: 0,
 			),
 		},
 		{
@@ -95,7 +97,9 @@ export function getPlayerMetrics(player: PlayerStat): PlayerMetric[] {
 		(player.penalties_saved ?? 0) > 0 ? { label: 'PS', value: player.penalties_saved ?? 0, tone: 'success' } : null,
 		(player.penalties_missed ?? 0) > 0 ? { label: 'PM', value: player.penalties_missed ?? 0, tone: 'destructive' } : null,
 		(player.ownGoals ?? 0) > 0 ? { label: 'OG', value: player.ownGoals ?? 0, tone: 'destructive' } : null,
-		(player.goalsConceded ?? 0) >= 2 && (player.elementType === 1 || player.elementType === 2)
+		(player.goalsConceded ?? 0) >= 2 &&
+		(player.elementType === 1 || player.elementType === 2) &&
+		(player.minutes ?? 0) >= 60
 			? { label: 'GC', value: player.goalsConceded ?? 0, tone: 'warning' }
 			: null,
 	]
@@ -157,8 +161,18 @@ export function buildBreakdownFromPlayerLive(
 		const cleanSheetPoints = elementType <= 2 ? 4 : elementType === 3 ? 1 : 0
 		if (cleanSheetPoints > 0) rows.push({ category: 'Clean Sheet', points: cleanSheetPoints, value: stats.cleanSheets })
 	}
-	const concededPoints = elementType <= 2 ? -Math.floor(stats.goalsConceded / 2) : 0
-	if (concededPoints < 0) rows.push({ category: 'Goals Conceded', points: concededPoints, value: stats.goalsConceded })
+	// FPL only applies GC after 60' for GKP/DEF
+	const concededPoints =
+		elementType <= 2 && stats.minutes >= 60
+			? -Math.floor(stats.goalsConceded / 2)
+			: 0
+	if (concededPoints < 0) {
+		rows.push({
+			category: 'Goals Conceded',
+			points: concededPoints,
+			value: stats.goalsConceded,
+		})
+	}
 	const savePoints = Math.floor(stats.saves / 3)
 	if (savePoints > 0) rows.push({ category: 'Saves', points: savePoints, value: stats.saves })
 	if (stats.penaltiesSaved > 0) rows.push({ category: 'Penalty Saved', points: stats.penaltiesSaved * 5, value: stats.penaltiesSaved })

@@ -38,6 +38,7 @@ import {
 import {
 	buildTournamentEntries,
 	buildTournamentStats,
+	getRetainedFailedEntryIds,
 	mergePartialTournamentRows,
 } from '@/lib/tournament/liveEntries'
 import { Link, useRouter } from '@/i18n/navigation'
@@ -101,6 +102,9 @@ export default function TournamentDetailClient({
 	const [searchQuery, setSearchQuery] = useState('')
 	const [currentTournament, setCurrentTournament] = useState(tournament)
 	const [rows, setRows] = useState(initialRows)
+	const [staleEntryIds, setStaleEntryIds] = useState<ReadonlySet<number>>(
+		() => new Set(),
+	)
 	const [error, setError] = useState(softError)
 	const [snapshot, setSnapshot] = useState<LiveSnapshotStatus | null>(
 		initialSnapshot ?? null,
@@ -253,14 +257,28 @@ export default function TournamentDetailClient({
 				)
 				const batch = response.calcLivePointsForTournament
 				failedEntryCountRef.current = batch.meta.failedCount
-				setRows(previousRows =>
-					mergePartialTournamentRows({
-						nextRows: batch.results ?? [],
+				const failedIds = batch.errors.map(batchError => batchError.entryId)
+				const nextRows = batch.results ?? []
+				setRows(previousRows => {
+					const retainedIds = getRetainedFailedEntryIds({
+						nextRows,
 						previousRows,
-						failedEntryIds: batch.errors.map(batchError => batchError.entryId),
+						failedEntryIds: failedIds,
 						preserveFailed: true,
-					}),
-				)
+					})
+					const merged = mergePartialTournamentRows({
+						nextRows,
+						previousRows,
+						failedEntryIds: failedIds,
+						preserveFailed: true,
+					})
+					queueMicrotask(() => {
+						setStaleEntryIds(
+							retainedIds.length > 0 ? new Set(retainedIds) : new Set(),
+						)
+					})
+					return merged
+				})
 				acceptSnapshot(response.liveSnapshot)
 				if (batch.meta.failedCount > 0) {
 					setError(
@@ -333,7 +351,13 @@ export default function TournamentDetailClient({
 		t
 	])
 
-	const entries = useMemo(() => buildTournamentEntries(rows), [rows])
+	const entries = useMemo(
+		() =>
+			buildTournamentEntries(rows, {
+				staleEntryIds: staleEntryIds.size > 0 ? staleEntryIds : undefined,
+			}),
+		[rows, staleEntryIds],
+	)
 	const standingsStats = useMemo(() => buildTournamentStats(entries), [entries])
 	const insightsReady = currentTournament
 		? areTournamentInsightsReady(currentTournament)

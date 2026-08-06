@@ -29,6 +29,17 @@ describe('resolveSelectedGameweek', () => {
 			selected: 10,
 		})
 	})
+
+	it('clamps non-positive selection up to 1', () => {
+		assert.deepEqual(resolveSelectedGameweek(12, 0), {
+			maxGameweek: 12,
+			selected: 1,
+		})
+		assert.deepEqual(resolveSelectedGameweek(12, -3), {
+			maxGameweek: 12,
+			selected: 1,
+		})
+	})
 })
 
 describe('buildGameweekValuesDesc', () => {

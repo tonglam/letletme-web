@@ -189,7 +189,18 @@ export const buildTournamentStats = (
 		if (row.eventGroupRank !== null) previousRankByEntryId.set(row.entryId, row.eventGroupRank)
 	})
 
-	const standings = currentRows.map((row) => ({
+	// Do not trust API array order — sort by official group rank (nulls last).
+	const orderedRows = [...currentRows].sort((a, b) => {
+		const rankA = a.eventGroupRank
+		const rankB = b.eventGroupRank
+		if (rankA == null && rankB == null) return a.entryId - b.entryId
+		if (rankA == null) return 1
+		if (rankB == null) return -1
+		if (rankA !== rankB) return rankA - rankB
+		return a.entryId - b.entryId
+	})
+
+	const standings = orderedRows.map((row) => ({
 		entryId: row.entryId,
 		rank: row.eventGroupRank ?? 0,
 		previousRank: previousRankByEntryId.get(row.entryId) ?? row.eventGroupRank ?? 0,
@@ -201,7 +212,7 @@ export const buildTournamentStats = (
 		teamValue: row.teamValue ?? null,
 	}))
 
-	const topPerformers = currentRows.slice(0, 5).map((row, index) => {
+	const topPerformers = orderedRows.slice(0, 5).map((row, index) => {
 		const captainMeta = row.captainId !== null ? playerMetaById[row.captainId] : undefined
 		return {
 			entryId: row.entryId,

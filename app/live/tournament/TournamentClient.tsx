@@ -32,8 +32,9 @@ import {
 import {
 	buildTournamentEntries,
 	buildTournamentStats,
+	getRetainedFailedEntryIds,
 	mergePartialTournamentRows,
-	type LiveTournamentStats
+	type LiveTournamentStats,
 } from '@/lib/tournament/liveEntries'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 import {
@@ -120,9 +121,16 @@ export default function TournamentClient({
 		useState<number>(initialEventId)
 	const [selectedRows, setSelectedRows] =
 		useState<TournamentLiveCalcData[]>(initialCurrentRows)
+	const [staleEntryIds, setStaleEntryIds] = useState<ReadonlySet<number>>(
+		() => new Set(),
+	)
 	const selectedEntries = useMemo(
-		() => buildTournamentEntries(selectedRows),
-		[selectedRows]
+		() =>
+			buildTournamentEntries(selectedRows, {
+				staleEntryIds:
+					staleEntryIds.size > 0 ? staleEntryIds : undefined,
+			}),
+		[selectedRows, staleEntryIds],
 	)
 	const [ownershipMatchedEntryIds, setOwnershipMatchedEntryIds] = useState<
 		string[] | null
@@ -152,12 +160,21 @@ export default function TournamentClient({
 
 	const tournamentIdFromUrl = searchParams.get('tournamentId')
 
+	const requestedTournamentId =
+		(tournamentIdFromUrl ?? initialSelectedTournamentId) || null
 	const selectedTournament = useMemo(() => {
-		const currentTournament = tournaments.find(
-			t => t.id === (tournamentIdFromUrl ?? initialSelectedTournamentId)
-		)
-		return currentTournament ?? tournaments[0] ?? null
-	}, [initialSelectedTournamentId, tournamentIdFromUrl, tournaments])
+		if (tournaments.length === 0) return null
+		if (requestedTournamentId) {
+			return tournaments.find(t => t.id === requestedTournamentId) ?? null
+		}
+		return tournaments[0] ?? null
+	}, [requestedTournamentId, tournaments])
+	/** URL asked for a tournament that is not in this entry's membership list. */
+	const unknownTournamentFromUrl = Boolean(
+		tournamentIdFromUrl &&
+			tournaments.length > 0 &&
+			!tournaments.some(t => t.id === tournamentIdFromUrl),
+	)
 	const standingsReady = selectedTournament
 		? areTournamentStandingsReady(selectedTournament)
 		: false
@@ -193,19 +210,37 @@ export default function TournamentClient({
 
 					failedEntryCountRef.current = currentBatch.failedCount
 					acceptSnapshot(currentBatch.snapshot)
-					setSelectedRows(previousRows =>
-						mergePartialTournamentRows({
-							nextRows: currentBatch.rows,
+					// Read previous rows via functional update, then set rows + stale separately
+					// (avoid nested setState inside another updater).
+					setSelectedRows(previousRows => {
+						const nextRows = currentBatch.rows
+						const retainedIds = getRetainedFailedEntryIds({
+							nextRows,
 							previousRows,
 							failedEntryIds: currentBatch.failedEntryIds,
-							preserveFailed: options.preserveOnError
+							preserveFailed: options.preserveOnError,
 						})
-					)
+						const merged = mergePartialTournamentRows({
+							nextRows,
+							previousRows,
+							failedEntryIds: currentBatch.failedEntryIds,
+							preserveFailed: options.preserveOnError,
+						})
+						// Schedule after this updater commits — not inside the updater body.
+						queueMicrotask(() => {
+							if (requestId !== resultsRequestIdRef.current) return
+							setStaleEntryIds(
+								retainedIds.length > 0 ? new Set(retainedIds) : new Set(),
+							)
+						})
+						return merged
+					})
 				} catch {
 					if (requestId !== resultsRequestIdRef.current) return
 					setResultsError(t('standingsFailed'))
 					if (!options.preserveOnError) {
 						setSelectedRows([])
+						setStaleEntryIds(new Set())
 					}
 				} finally {
 					if (requestId === resultsRequestIdRef.current) {
@@ -326,6 +361,7 @@ export default function TournamentClient({
 				setIsLoadingResults(false)
 				setResultsError(null)
 				setSelectedRows([])
+				setStaleEntryIds(new Set())
 			}, 0)
 			return () => window.clearTimeout(resetTimer)
 		}
@@ -340,6 +376,7 @@ export default function TournamentClient({
 		resultsRequestIdRef.current += 1
 		resultsInFlightRef.current = null
 		setSelectedRows([])
+		setStaleEntryIds(new Set())
 		setResultsError(null)
 		setIsLoadingResults(true)
 		acceptSnapshot(null)
@@ -481,7 +518,8 @@ export default function TournamentClient({
 				chipFilter === 'all' ||
 				(chipFilter === 'triple' && entry.chips.triple) ||
 				(chipFilter === 'bench' && entry.chips.bench) ||
-				(chipFilter === 'wildcard' && entry.chips.wildcard)
+				(chipFilter === 'wildcard' && entry.chips.wildcard) ||
+				(chipFilter === 'freehit' && entry.chips.freeHit)
 
 			const matchesCaptain =
 				captainFilter === 'all' ||
@@ -540,20 +578,42 @@ export default function TournamentClient({
 					</Card>
 				)}
 
+				{unknownTournamentFromUrl && (
+					<Card className="mb-6 space-y-3 border-border/80 p-4 text-sm shadow-sm">
+						<p className="text-muted-foreground">{t('tournamentNotInList')}</p>
+						<div className="flex flex-wrap gap-2">
+							<Button
+								type="button"
+								size="sm"
+								variant="outline"
+								onClick={() => router.replace('/live/tournament')}
+							>
+								{t('clear')}
+							</Button>
+							<Button type="button" size="sm" variant="secondary" asChild>
+								<Link href="/tournament/list">{t('errorCtaMyTournaments')}</Link>
+							</Button>
+						</div>
+					</Card>
+				)}
+
 				{resultsError && (
 					<Card className="p-4 mb-6 border-destructive/30 bg-destructive/5 text-destructive text-sm">
 						{resultsError}
 					</Card>
 				)}
 
-				{tournaments.length > 0 && selectedTournament && (
+				{/* Always offer the membership list so a bad ?tournamentId= can be corrected in-place. */}
+				{tournaments.length > 0 && (
 					<TournamentSelector
 						tournaments={tournaments}
-						currentTournamentId={selectedTournament.id}
+						// Unknown URL id: force a non-matching value so every membership stays selectable.
+						currentTournamentId={
+							selectedTournament?.id ??
+							(unknownTournamentFromUrl ? '__unknown__' : '')
+						}
 						onTournamentChange={id => {
-							if (id === selectedTournament.id) return
-							// replace avoids stacking history entries when browsing leagues;
-							// standings clear happens in the selection effect on URL change.
+							if (selectedTournament && id === selectedTournament.id) return
 							router.replace(`/live/tournament?tournamentId=${id}`)
 						}}
 					/>
@@ -601,7 +661,9 @@ export default function TournamentClient({
 					</Card>
 				)}
 
-				{!isLoadingTournaments && !selectedTournament && (
+				{!isLoadingTournaments &&
+					!selectedTournament &&
+					!unknownTournamentFromUrl && (
 					<Card className="p-6 text-sm text-muted-foreground">
 						{t('noTournaments')}
 					</Card>

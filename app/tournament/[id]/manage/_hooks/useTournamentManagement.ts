@@ -21,6 +21,24 @@ type MutationState =
 	| { kind: 'idle'; message: null }
 	| { kind: 'success' | 'error'; message: string }
 
+/** Logical server snapshot — ignores object identity from router.refresh(). */
+function serverRevision(t: EntryTournament): string {
+	return [
+		t.id,
+		t.updatedAt,
+		t.name,
+		t.state,
+		t.setupStatus,
+		t.setupPhase,
+		t.setupCompletedUnits,
+		t.setupTotalUnits,
+		t.standingsReadyAt,
+		t.rosterSyncStatus,
+		t.rosterLastSyncedAt,
+		t.setupHasWarnings,
+	].join('|')
+}
+
 export function useTournamentManagement(tournament: EntryTournament) {
 	const t = useTranslations('TournamentManage')
 	const router = useRouter()
@@ -28,25 +46,40 @@ export function useTournamentManagement(tournament: EntryTournament) {
 		serverTournament: tournament,
 		currentTournament: tournament,
 	}))
-	let currentTournament = tournamentState.currentTournament
-	if (tournamentState.serverTournament !== tournament) {
-		currentTournament = tournament
-		setTournamentState({
-			serverTournament: tournament,
-			currentTournament: tournament,
+	// Sync server props outside render (setup poll calls router.refresh often).
+	// Only replace local state when the logical server revision changes — not on
+	// every new object reference — so optimistic renames survive polling.
+	useEffect(() => {
+		setTournamentState(current => {
+			if (current.serverTournament === tournament) return current
+			const prevRev = serverRevision(current.serverTournament)
+			const nextRev = serverRevision(tournament)
+			if (prevRev === nextRev) {
+				return { ...current, serverTournament: tournament }
+			}
+			return {
+				serverTournament: tournament,
+				currentTournament: tournament,
+			}
 		})
-	}
+	}, [tournament])
+	const currentTournament =
+		serverRevision(tournamentState.serverTournament) === serverRevision(tournament)
+			? tournamentState.currentTournament
+			: tournament
 	const updateCurrentTournament = (
 		update: (current: EntryTournament) => EntryTournament,
 	) => {
-		setTournamentState(current => ({
-			serverTournament: tournament,
-			currentTournament: update(
-				current.serverTournament === tournament
+		setTournamentState(current => {
+			const base =
+				serverRevision(current.serverTournament) === serverRevision(tournament)
 					? current.currentTournament
-					: tournament,
-			),
-		}))
+					: tournament
+			return {
+				serverTournament: tournament,
+				currentTournament: update(base),
+			}
+		})
 	}
 	const [isSaving, setIsSaving] = useState(false)
 	const [isDeleting, setIsDeleting] = useState(false)

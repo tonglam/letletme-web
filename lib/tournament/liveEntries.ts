@@ -28,6 +28,7 @@ const mapEventChipToFlags = (eventChip: string | null) => ({
 	bench: eventChip === 'BENCH_BOOST',
 	triple: eventChip === 'TRIPLE_CAPTAIN',
 	wildcard: eventChip === 'WILDCARD',
+	freeHit: eventChip === 'FREE_HIT',
 })
 
 export const buildRankMap = (rows: TournamentLiveCalcData[]): Map<number, number> => {
@@ -46,18 +47,26 @@ export const buildRankMap = (rows: TournamentLiveCalcData[]): Map<number, number
 
 export const buildTournamentEntries = (
 	currentRows: TournamentLiveCalcData[],
+	options?: { staleEntryIds?: ReadonlySet<number> },
 ): TournamentEntry[] => {
-	const currentRankByEntryId = buildRankMap(currentRows)
+	const staleIds = options?.staleEntryIds
+	// Rank only successful rows so retained failed scores cannot steal places.
+	const rankSource =
+		staleIds && staleIds.size > 0
+			? currentRows.filter(row => !staleIds.has(row.entry))
+			: currentRows
+	const currentRankByEntryId = buildRankMap(rankSource)
 
 	return currentRows.map(row => {
 		const captainPick = row.pickList.find(player => player.isCaptain)
 		const captainPoints =
 			row.activeCaptain?.points ??
 			(typeof captainPick?.totalPoints === 'number' ? captainPick.totalPoints : 0)
+		const stale = Boolean(staleIds?.has(row.entry))
 
 		return {
 			id: String(row.entry),
-			rank: currentRankByEntryId.get(row.entry) ?? 0,
+			rank: stale ? 0 : (currentRankByEntryId.get(row.entry) ?? 0),
 			teamName: row.entryName ?? `Entry ${row.entry}`,
 			managerName: row.playerName ?? '-',
 			captainName:
@@ -87,15 +96,41 @@ export const buildTournamentEntries = (
 				isViceCaptain: player.isViceCaptain,
 			})),
 			chips: mapEventChipToFlags(row.chip),
+			stale,
 		}
 	})
+}
+
+/**
+ * Entry IDs that were kept from the previous batch because they failed to
+ * recalculate and are not present in `nextRows`. Only these should be marked
+ * stale for ranking — never every id in `failedEntryIds` (some may still
+ * appear in a successful result row).
+ */
+export const getRetainedFailedEntryIds = ({
+	nextRows,
+	previousRows,
+	failedEntryIds,
+	preserveFailed,
+}: {
+	nextRows: TournamentLiveCalcData[]
+	previousRows: TournamentLiveCalcData[]
+	failedEntryIds: readonly number[]
+	preserveFailed: boolean
+}): number[] => {
+	if (!preserveFailed || failedEntryIds.length === 0) return []
+	const failed = new Set(failedEntryIds)
+	const refreshed = new Set(nextRows.map(row => row.entry))
+	return previousRows
+		.filter(row => failed.has(row.entry) && !refreshed.has(row.entry))
+		.map(row => row.entry)
 }
 
 export const mergePartialTournamentRows = ({
 	nextRows,
 	previousRows,
 	failedEntryIds,
-	preserveFailed
+	preserveFailed,
 }: {
 	nextRows: TournamentLiveCalcData[]
 	previousRows: TournamentLiveCalcData[]
@@ -107,13 +142,15 @@ export const mergePartialTournamentRows = ({
 	const failed = new Set(failedEntryIds)
 	const refreshed = new Set(nextRows.map(row => row.entry))
 	const retained = previousRows.filter(
-		row => failed.has(row.entry) && !refreshed.has(row.entry)
+		row => failed.has(row.entry) && !refreshed.has(row.entry),
 	)
 	return [...nextRows, ...retained]
 }
 
 export const buildTournamentStats = (entries: TournamentEntry[]): LiveTournamentStats => {
-	if (entries.length === 0) {
+	// Exclude stale retained rows so avg/highest are not inflated by failed recalcs.
+	const liveEntries = entries.filter(entry => !entry.stale)
+	if (liveEntries.length === 0) {
 		return {
 			averagePoints: 0,
 			highestPoints: 0,
@@ -121,15 +158,15 @@ export const buildTournamentStats = (entries: TournamentEntry[]): LiveTournament
 		}
 	}
 
-	const totalPoints = entries.reduce((sum, entry) => sum + entry.livePoints, 0)
-	const highestPoints = entries.reduce(
+	const totalPoints = liveEntries.reduce((sum, entry) => sum + entry.livePoints, 0)
+	const highestPoints = liveEntries.reduce(
 		(max, entry) => Math.max(max, entry.livePoints),
-		entries[0]?.livePoints ?? 0,
+		liveEntries[0]?.livePoints ?? 0,
 	)
 
 	return {
-		averagePoints: Math.round(totalPoints / entries.length),
+		averagePoints: Math.round(totalPoints / liveEntries.length),
 		highestPoints,
-		totalEntries: entries.length,
+		totalEntries: liveEntries.length,
 	}
 }

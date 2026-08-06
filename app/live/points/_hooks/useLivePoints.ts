@@ -180,9 +180,25 @@ export function useLivePoints({
 			requestIdRef.current = requestId
 			currentRequestKeyRef.current = requestKey
 			const request = (async () => {
+				const switchingGameweek =
+					hasLoadedLiveDataRef.current &&
+					latestLiveDataRef.current?.requestKey !== requestKey
 				const initialLoad = !hasLoadedLiveDataRef.current
-				if (initialLoad) setIsLoading(true)
-				else setIsRefreshing(true)
+				// Clear previous GW paint when switching so failures never show stale squad.
+				if (switchingGameweek) {
+					hasLoadedLiveDataRef.current = false
+					latestLiveDataRef.current = null
+					breakdownCacheRef.current = null
+					setLiveData(undefined)
+					setStartingPlayers([])
+					setBenchPlayers([])
+					acceptSnapshot(null)
+					setIsLoading(true)
+				} else if (initialLoad) {
+					setIsLoading(true)
+				} else {
+					setIsRefreshing(true)
+				}
 				setError(undefined)
 
 				try {
@@ -209,6 +225,15 @@ export function useLivePoints({
 					if (requestId !== requestIdRef.current) return
 					console.error('Failed to fetch live points:', fetchError)
 					setError(t('loadFailed'))
+					// Keep cleared state on GW switch failure — do not restore prior GW.
+					if (switchingGameweek) {
+						setLiveData(undefined)
+						setStartingPlayers([])
+						setBenchPlayers([])
+						acceptSnapshot(null)
+						latestLiveDataRef.current = null
+						hasLoadedLiveDataRef.current = false
+					}
 				} finally {
 					if (requestId === requestIdRef.current) {
 						setIsLoading(false)

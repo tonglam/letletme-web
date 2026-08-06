@@ -110,6 +110,8 @@ export const GET_LIVE_POINTS = `
         isGwStarted
         isGwFinished
         isPlayed
+        isCaptain
+        isViceCaptain
         expectedGoals
         expectedAssists
         expectedGoalInvolvements
@@ -147,6 +149,8 @@ export interface LivePick {
 	isGwStarted: boolean
 	isGwFinished: boolean
 	isPlayed: boolean
+	isCaptain: boolean
+	isViceCaptain: boolean
 	expectedGoals: number | null
 	expectedAssists: number | null
 	expectedGoalInvolvements: number | null

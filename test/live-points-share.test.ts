@@ -6,6 +6,7 @@ import {
 	formatLivePointsShareText,
 	formatShareFooter,
 } from '../app/live/points/_lib/live-points-share'
+import { formatChipName } from '../lib/utils'
 import type { Player } from '../types/player'
 
 const labels = {
@@ -216,5 +217,15 @@ describe('formatLivePointsShareText', () => {
 		assert.match(text, /# Entry 42 · GW3/)
 		assert.match(text, /C: —/)
 		assert.doesNotMatch(text, /https:\/\/letletme\.top/)
+	})
+})
+
+describe('formatChipName', () => {
+	it('maps API enums and short codes', () => {
+		assert.equal(formatChipName('BENCH_BOOST'), 'Bench Boost')
+		assert.equal(formatChipName('bboost'), 'Bench Boost')
+		assert.equal(formatChipName('TRIPLE_CAPTAIN'), 'Triple Captain')
+		assert.equal(formatChipName('FREE_HIT'), 'Free Hit')
+		assert.equal(formatChipName('WILDCARD'), 'Wildcard')
 	})
 })
