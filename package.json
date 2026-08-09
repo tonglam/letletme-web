@@ -13,6 +13,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:migrate:status": "tsx scripts/migrate-status.ts",
+    "db:runtime-contract": "tsx scripts/check-runtime-database-contract.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
