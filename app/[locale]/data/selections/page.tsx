@@ -1,39 +1,49 @@
+import SelectionsClient, {
+	type StatsResult,
+} from '@/app/data/selections/SelectionsClient'
+import { resolveInitialLeagueTrendsSelection } from '@/app/data/selections/_lib/league-trends'
+import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
+import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
 import { getCurrentAndNextEvents } from '@/lib/events'
-import { executeServerQuery } from '@/lib/graphql-server'
+import {
+	executePublicServerQuery,
+	executeServerQueryWithSession,
+} from '@/lib/graphql-server'
+import {
+	GET_ENTRY_EVENT_RESULT,
+	type EntryEventPick,
+	type EntryEventResultResponse,
+} from '@/lib/graphql/operations/entries'
+import {
+	GET_PUBLIC_LEAGUE_SELECTION_STATS,
+	GET_PUBLIC_LEAGUE_TRENDS,
+	type PublicLeagueSelectionStatsResponse,
+	type PublicLeagueTrend,
+	type PublicLeagueTrendsResponse,
+} from '@/lib/graphql/operations/leagues'
 import {
 	GET_ENTRY_TOURNAMENTS,
 	GET_TOURNAMENT_SELECTION_STATS,
 	type EntryTournamentsResponse,
+	type TournamentSelectionStatsData,
 	type TournamentSelectionStatsResponse,
-	type TournamentStatPlayer,
 } from '@/lib/graphql/operations/tournaments'
-import {
-	SELECTIONS_MOCK_ENTRY_ID,
-	SELECTIONS_MOCK_EVENT_ID,
-	SELECTIONS_UI_MOCK_ENABLED,
-	getSelectionsUiMockStats,
-	getSelectionsUiMockTournaments,
-} from '@/lib/dev/selections-ui-mock'
-import { getCurrentEntryId } from '@/lib/session'
-import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
+import { resolveReviewGameweekAnchor } from '@/lib/review-gameweek'
+import { getVerifiedEntryContext } from '@/lib/session'
 import { areTournamentInsightsReady } from '@/lib/tournament/lifecycle'
-import { CalendarX2 } from 'lucide-react'
-import SelectionsClient from '@/app/data/selections/SelectionsClient'
-import { PageState } from '@/components/feedback/PageState'
-import PageShell from '@/components/layout/PageShell'
-import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import { getTranslations } from 'next-intl/server'
-
-interface StatsResult {
-	selection: TournamentStatPlayer[]
-	captain: TournamentStatPlayer[]
-	transferIn: TournamentStatPlayer[]
-	transferOut: TournamentStatPlayer[]
-}
+import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
+import type { Tournament } from '@/types/tournament'
 
 export const dynamic = 'force-dynamic'
 
-type PageProps = { params: LocaleParams }
+type PageProps = {
+	params: LocaleParams
+	searchParams: Promise<{
+		scope?: string
+		tournament?: string
+		gw?: string
+	}>
+}
 
 export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
@@ -45,84 +55,142 @@ export async function generateMetadata({ params }: PageProps) {
 	})
 }
 
-export default async function SelectionsPage({ params }: PageProps) {
+function toStatsResult(
+	stats: TournamentSelectionStatsData | null | undefined,
+): StatsResult {
+	return {
+		totalEntries: stats?.totalEntries ?? 0,
+		selection: stats?.mostSelectedPlayers ?? [],
+		captain: stats?.captainSelect ?? [],
+		transferIn: stats?.mostTransferIn ?? [],
+		transferOut: stats?.mostTransferOut ?? [],
+	}
+}
+
+export default async function SelectionsPage({ params, searchParams }: PageProps) {
 	await getPageLocale(params)
-	const t = await getTranslations('States')
+	const query = await searchParams
 
-	// TEMP UI mock — seed page without GraphQL / entry
-	if (SELECTIONS_UI_MOCK_ENABLED) {
-		const tournaments = getSelectionsUiMockTournaments()
-		return (
-			<SelectionsClient
-				entryId={SELECTIONS_MOCK_ENTRY_ID}
-				initialTournaments={tournaments}
-				initialSelectedTournamentId={tournaments[0]?.id ?? ''}
-				initialStats={getSelectionsUiMockStats()}
-				initialGameweek={SELECTIONS_MOCK_EVENT_ID}
-			/>
-		)
-	}
-
-	const [entryId, events] = await Promise.all([
-		getCurrentEntryId(),
+	const [events, { session, entryId }] = await Promise.all([
 		getCurrentAndNextEvents(),
+		getVerifiedEntryContext(),
 	])
-	const currentGameweek = events?.current[0]?.id
+	const review = resolveReviewGameweekAnchor(events)
+	const defaultGameweek = review.anchorGw ?? 1
 
-	if (!currentGameweek) {
-		return (
-			<PageShell>
-				<PageState
-					icon={CalendarX2}
-					title={t('selectionUnavailableTitle')}
-					description={t('gameweekUnavailableDescription')}
-				/>
-			</PageShell>
+	let initialTournaments: Tournament[] = []
+	let publicLeagues: PublicLeagueTrend[] = []
+	let myLeaguesLoadFailed = false
+	let publicLeaguesLoadFailed = false
+
+	const [myLeaguesResult, publicLeaguesResult] = await Promise.allSettled([
+		entryId != null && session
+			? executeServerQueryWithSession<EntryTournamentsResponse>(
+					session,
+					GET_ENTRY_TOURNAMENTS,
+					{ entryId },
+					{ cache: 'no-store' },
+				)
+			: Promise.resolve({ entryTournaments: [] } as EntryTournamentsResponse),
+		executePublicServerQuery<PublicLeagueTrendsResponse>(
+			GET_PUBLIC_LEAGUE_TRENDS,
+			{},
+			publicFetchOptions({
+				revalidate: RevalidateSeconds.publicStats,
+				tags: [CacheTag.events],
+			}),
+		),
+	])
+
+	if (myLeaguesResult.status === 'fulfilled') {
+		initialTournaments = myLeaguesResult.value.entryTournaments.map(
+			mapEntryTournamentToLiveTournament,
+		)
+	} else {
+		myLeaguesLoadFailed = true
+		console.error('[league-trends] My Leagues seed failed:', myLeaguesResult.reason)
+	}
+	if (publicLeaguesResult.status === 'fulfilled') {
+		publicLeagues = publicLeaguesResult.value.publicLeagueTrends
+	} else {
+		publicLeaguesLoadFailed = true
+		console.error(
+			'[league-trends] Public Leagues seed failed:',
+			publicLeaguesResult.reason,
 		)
 	}
 
-	let initialTournaments: ReturnType<typeof mapEntryTournamentToLiveTournament>[] =
-		[]
+	const initialSelection = resolveInitialLeagueTrendsSelection({
+		scopeParam: query.scope,
+		tournamentParam: query.tournament,
+		gwParam: query.gw,
+		mineTournamentIds: initialTournaments.map(tournament => Number(tournament.id)),
+		publicLeagues,
+		defaultGameweek,
+	})
+
 	let initialStats: StatsResult | null = null
+	let initialEntryPicks: EntryEventPick[] = []
+	let initialStatsLoadFailed = false
+	const selectedTournamentId = initialSelection.tournamentId
 
-	if (entryId) {
-		try {
-			const tournamentsData = await executeServerQuery<EntryTournamentsResponse>(
-				GET_ENTRY_TOURNAMENTS,
-				{ entryId },
-				{ cache: 'no-store' },
-			)
-			initialTournaments = tournamentsData.entryTournaments.map(
-				mapEntryTournamentToLiveTournament,
-			)
-
-			const firstTournament = initialTournaments[0]
-			const firstTournamentId = Number(firstTournament?.id)
-			if (
-				firstTournamentId > 0 &&
-				firstTournament &&
-				areTournamentInsightsReady(firstTournament)
-			) {
-				const statsData =
-					await executeServerQuery<TournamentSelectionStatsResponse>(
-						GET_TOURNAMENT_SELECTION_STATS,
-						{
-							tournamentId: firstTournamentId,
-							eventId: currentGameweek,
-							limit: 10,
-						},
-						{ cache: 'no-store' },
-					)
-				const stats = statsData.tournamentSelectionStats
-				initialStats = {
-					selection: stats?.mostSelectedPlayers ?? [],
-					captain: stats?.captainSelect ?? [],
-					transferIn: stats?.mostTransferIn ?? [],
-					transferOut: stats?.mostTransferOut ?? [],
-				}
+	if (selectedTournamentId != null && initialSelection.scope === 'mine') {
+		const tournament = initialTournaments.find(
+			item => Number(item.id) === selectedTournamentId,
+		)
+		if (tournament && areTournamentInsightsReady(tournament) && session && entryId) {
+			const [statsResult, entryResult] = await Promise.allSettled([
+				executeServerQueryWithSession<TournamentSelectionStatsResponse>(
+					session,
+					GET_TOURNAMENT_SELECTION_STATS,
+					{
+						tournamentId: selectedTournamentId,
+						eventId: initialSelection.gameweek,
+						limit: 12,
+					},
+					{ cache: 'no-store' },
+				),
+				executeServerQueryWithSession<EntryEventResultResponse>(
+					session,
+					GET_ENTRY_EVENT_RESULT,
+					{ entryId, eventId: initialSelection.gameweek },
+					{ cache: 'no-store' },
+				),
+			])
+			if (statsResult.status === 'fulfilled') {
+				initialStats = toStatsResult(statsResult.value.tournamentSelectionStats)
+			} else {
+				initialStatsLoadFailed = true
+				console.error('[league-trends] initial My League stats failed:', statsResult.reason)
 			}
-		} catch (err) {
-			console.error('Failed to seed tournament selections:', err)
+			if (entryResult.status === 'fulfilled') {
+				initialEntryPicks = entryResult.value.entryEventResult?.eventPicks ?? []
+			} else {
+				initialStatsLoadFailed = true
+				console.error('[league-trends] initial entry picks failed:', entryResult.reason)
+			}
+		}
+	} else if (selectedTournamentId != null && initialSelection.scope === 'public') {
+		try {
+			const response =
+				await executePublicServerQuery<
+					PublicLeagueSelectionStatsResponse<TournamentSelectionStatsData>
+				>(
+					GET_PUBLIC_LEAGUE_SELECTION_STATS,
+					{
+						tournamentId: selectedTournamentId,
+						eventId: initialSelection.gameweek,
+						limit: 12,
+					},
+					publicFetchOptions({
+						revalidate: RevalidateSeconds.publicStats,
+						tags: [CacheTag.events],
+					}),
+				)
+			initialStats = toStatsResult(response.publicLeagueSelectionStats)
+		} catch (error) {
+			initialStatsLoadFailed = true
+			console.error('[league-trends] initial Public League stats failed:', error)
 		}
 	}
 
@@ -130,9 +198,14 @@ export default async function SelectionsPage({ params }: PageProps) {
 		<SelectionsClient
 			entryId={entryId ?? 0}
 			initialTournaments={initialTournaments}
-			initialSelectedTournamentId={initialTournaments[0]?.id ?? ''}
+			publicLeagues={publicLeagues}
+			initialSelection={initialSelection}
 			initialStats={initialStats}
-			initialGameweek={currentGameweek}
+			initialEntryPicks={initialEntryPicks}
+			currentGameweek={defaultGameweek}
+			myLeaguesLoadFailed={myLeaguesLoadFailed}
+			publicLeaguesLoadFailed={publicLeaguesLoadFailed}
+			initialStatsLoadFailed={initialStatsLoadFailed}
 		/>
 	)
 }

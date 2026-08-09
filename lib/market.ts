@@ -7,6 +7,8 @@ import type {
 
 export type MarketCoverageMode = 'empty' | 'one-day' | 'tracking' | 'last-14-days'
 export type MarketTeaserMode = 'price' | 'ownership' | 'selected' | 'empty'
+export type MarketViewMode =
+	'price-led' | 'availability-led' | 'ownership-led' | 'baseline'
 
 export function getMarketCoverageMode(coverage: MarketCoverage): MarketCoverageMode {
 	if (coverage.observedDays <= 0 || !coverage.latestDate) return 'empty'
@@ -25,6 +27,19 @@ export function getMarketTeaserMode(pulse: MarketPulse): MarketTeaserMode {
 	}
 	if (pulse.mostSelected.length > 0) return 'selected'
 	return 'empty'
+}
+
+/** Chooses the page narrative from evidence actually present in the response. */
+export function getMarketViewMode(pulse: MarketPulse): MarketViewMode {
+	if (pulse.priceChanges.length > 0) return 'price-led'
+	if (pulse.availabilityHighlights.length > 0) return 'availability-led'
+	if (
+		pulse.ownershipMovers.risers.length > 0 ||
+		pulse.ownershipMovers.fallers.length > 0
+	) {
+		return 'ownership-led'
+	}
+	return 'baseline'
 }
 
 export function rankOwnershipMovers(

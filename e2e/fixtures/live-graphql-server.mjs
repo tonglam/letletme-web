@@ -117,6 +117,169 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
+		if (query.includes('GetGameweekBoards')) {
+			const haul = (id, webName, totalPoints, inDreamTeam) => ({
+				player: {
+					id,
+					webName,
+					position: 'MIDFIELDER',
+					price: 100,
+					team: { name: 'Arsenal', shortName: 'ARS' }
+				},
+				inDreamTeam,
+				minutes: 90,
+				goalsScored: totalPoints >= 12 ? 2 : 1,
+				assists: 0,
+				cleanSheets: 1,
+				bonus: 3,
+				totalPoints
+			})
+			json(response, 200, {
+				data: {
+					event: {
+						id: 33,
+						deadlineTime: '2026-08-04T17:30:00.000Z',
+						finished: false,
+						isCurrent: true,
+						isNext: false
+					},
+					dreamTeam: [haul(1, 'Saka', 12, true)],
+					hauls: [
+						haul(1, 'Saka', 12, true),
+						haul(2, 'Palmer', 11, false)
+					],
+					liveSnapshot: {
+						eventId: 33,
+						revision: 'g'.repeat(24),
+						state: 'LIVE',
+						publishedAt: '2026-08-04T19:00:00.000Z',
+						checkedAt: '2026-08-04T19:00:30.000Z'
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('GetEventStatsById')) {
+			json(response, 200, {
+				data: {
+					event: {
+						id: Number(variables.eventId) || 33,
+						averageEntryScore: 52,
+						highestScore: 101,
+						mostSelected: null,
+						mostTransferredIn: null,
+						mostCaptained: null,
+						mostViceCaptained: null,
+						transfersMade: 12345,
+						chipPlays: []
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('GetEventFixtures')) {
+			const eventId = Number(variables.eventId)
+			const event = { id: eventId, name: `Gameweek ${eventId}` }
+			const team = (id, name, shortName) => ({ id, name, shortName })
+			const fixture = (id, homeTeam, awayTeam, homeDifficulty, awayDifficulty) => ({
+				id,
+				code: id,
+				event,
+				kickoffTime: '2026-08-09T15:00:00.000Z',
+				finished: false,
+				started: false,
+				homeTeam,
+				awayTeam,
+				homeScore: null,
+				awayScore: null,
+				homeTeamDifficulty: homeDifficulty,
+				awayTeamDifficulty: awayDifficulty
+			})
+			const arsenal = team(1, 'Arsenal', 'ARS')
+			const chelsea = team(2, 'Chelsea', 'CHE')
+			const everton = team(3, 'Everton', 'EVE')
+			const eventFixtures =
+				eventId === 33
+					? [
+							fixture(3301, arsenal, chelsea, 2, 4),
+							fixture(3302, everton, arsenal, 4, 2)
+						]
+					: eventId === 34
+						? [fixture(3401, chelsea, everton, 2, 3)]
+						: []
+			json(response, 200, { data: { eventFixtures } })
+			return
+		}
+		if (query.includes('GetTeamsForPicker')) {
+			json(response, 200, {
+				data: {
+					teams: [
+						{ id: 1, name: 'Arsenal', shortName: 'ARS' },
+						{ id: 2, name: 'Chelsea', shortName: 'CHE' },
+						{ id: 3, name: 'Everton', shortName: 'EVE' }
+					]
+				}
+			})
+			return
+		}
+		if (query.includes('PublicLeagueSelectionStats')) {
+			json(response, 200, {
+				data: {
+					publicLeagueSelectionStats: {
+						totalEntries: 1000,
+						mostSelectedPlayers: [{
+							id: 1,
+							webName: 'Saka',
+							teamShortName: 'ARS',
+							position: 'MIDFIELDER',
+							selectedByPercent: 72,
+							eoByPercent: 84
+						}],
+						captainSelect: [{
+							id: 1,
+							webName: 'Saka',
+							teamShortName: 'ARS',
+							position: 'MIDFIELDER',
+							captainByPercent: 24,
+							selectedByPercent: 72,
+							eoByPercent: 84
+						}],
+						mostTransferIn: [],
+						mostTransferOut: []
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('PublicLeagueTrends')) {
+			json(response, 200, {
+				data: {
+					publicLeagueTrends: [{
+						tournamentId: 777,
+						displayName: 'E2E Public League',
+						sortOrder: 1,
+						publishedAt: '2026-08-01T00:00:00.000Z',
+						updatedAt: '2026-08-04T19:00:00.000Z',
+						latestAvailableEventId: 33,
+						totalEntries: 1000
+					}]
+				}
+			})
+			return
+		}
+		if (query.includes('GetLiveScores')) {
+			json(response, 200, { data: { liveScores: [] } })
+			return
+		}
+		if (query.includes('GetTopTransfersIn') || query.includes('GetTopTransfersOut')) {
+			json(response, 200, {
+				data: {
+					...(query.includes('GetTopTransfersIn') ? { topTransfersIn: [] } : {}),
+					...(query.includes('GetTopTransfersOut') ? { topTransfersOut: [] } : {})
+				}
+			})
+			return
+		}
 		if (query.includes('GetLiveSnapshot')) {
 			json(response, 200, {
 				data: {
@@ -263,6 +426,7 @@ const server = createServer((request, response) => {
 						},
 						transferMovers: [],
 						availabilityUpdates: [],
+						availabilityHighlights: [],
 						newPlayers: [],
 						priceChanges: []
 					}

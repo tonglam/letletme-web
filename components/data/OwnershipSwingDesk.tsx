@@ -1,11 +1,12 @@
 'use client'
 
-import { StatsTabsShell } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
+import { Link } from '@/i18n/navigation'
 import type { MarketOwnershipMover } from '@/lib/graphql/operations/market'
 import { shortMarketPosition } from '@/lib/market'
 import { positionBadgeClass } from '@/lib/position-style'
+import { cn } from '@/lib/utils'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { useFormatter, useTranslations } from 'next-intl'
 
@@ -23,7 +24,7 @@ function MoverList({
 
 	if (movers.length === 0) {
 		return (
-			<p className="rounded-lg border border-dashed border-border/80 px-4 py-6 text-center text-sm text-muted-foreground">
+			<p className="rounded-md border border-dashed border-border/70 px-3 py-5 text-center text-xs text-muted-foreground">
 				{t(direction === 'rise' ? 'noOwnershipRisers' : 'noOwnershipFallers')}
 			</p>
 		)
@@ -31,7 +32,6 @@ function MoverList({
 
 	return (
 		<ol
-			className="space-y-2"
 			aria-label={t(direction === 'rise' ? 'ownershipRisers' : 'ownershipFallers')}
 		>
 			{movers.map(mover => {
@@ -49,45 +49,48 @@ function MoverList({
 				return (
 					<li
 						key={mover.player.playerId}
-						className="relative min-h-14 overflow-hidden rounded-lg border border-border/70 bg-muted/40 px-3 py-3 dark:bg-muted/25"
+						className="relative overflow-hidden border-b border-border/50 py-2 last:border-b-0"
 					>
 						<span
 							aria-hidden="true"
-							className={`absolute inset-y-0 left-0 opacity-[0.08] ${
-								direction === 'rise' ? 'bg-success' : 'bg-destructive'
-							}`}
+							className={cn(
+								'absolute inset-y-0 left-0 opacity-[0.07]',
+								direction === 'rise' ? 'bg-success' : 'bg-destructive',
+							)}
 							style={{ width: `${Math.max(magnitude * 100, 4)}%` }}
 						/>
-						<div className="relative flex items-center gap-3">
+						<div className="relative flex items-center gap-2.5">
 							<Badge
-								className={positionBadgeClass(
-									shortMarketPosition(mover.player.position),
+								className={cn(
+									positionBadgeClass(
+										shortMarketPosition(mover.player.position),
+									),
+									'shrink-0 text-[10px]',
 								)}
 							>
 								{shortMarketPosition(mover.player.position)}
 							</Badge>
 							<div className="min-w-0 flex-1">
-								<p className="truncate text-sm font-medium">
+								<Link
+									href={playerStatsHref({ p1: String(mover.player.playerId) })}
+									className="truncate text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+								>
 									{mover.player.webName}
-								</p>
-								<p className="text-xs text-muted-foreground">
+								</Link>
+								<p className="truncate text-[11px] text-muted-foreground">
 									{mover.player.teamShortName} ·{' '}
 									{t('ownershipFromTo', { from, to })}
 								</p>
 							</div>
 							<div
-								className={`flex shrink-0 flex-col items-end font-display text-sm font-semibold tabular-nums ${
-									direction === 'rise' ? 'text-success' : 'text-destructive'
-								}`}
+								className={cn(
+									'flex shrink-0 items-center gap-0.5 font-display text-sm font-semibold tabular-nums',
+									direction === 'rise' ? 'text-success' : 'text-destructive',
+								)}
 								title={t('ownershipChangeDetail', { from, to, delta })}
 							>
-								<span className="flex items-center gap-1">
-									<Icon aria-hidden="true" className="size-4" />
-									{delta}
-								</span>
-								<span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-									{t('ownershipLabel')}
-								</span>
+								<Icon aria-hidden="true" className="size-3.5" />
+								{delta}
 							</div>
 						</div>
 					</li>
@@ -97,6 +100,7 @@ function MoverList({
 	)
 }
 
+/** Rising | Falling side-by-side — no nested tabs. */
 export function OwnershipSwingDesk({
 	risers,
 	fallers,
@@ -107,23 +111,29 @@ export function OwnershipSwingDesk({
 	const t = useTranslations('Market')
 
 	return (
-		<Tabs defaultValue="risers" className="space-y-4">
-			<StatsTabsShell>
-				<TabsList className="grid h-auto w-full grid-cols-2 gap-1.5 sm:gap-2">
-					<TabsTrigger value="risers" className="gap-1.5">
-						{t('risersTab', { count: risers.length })}
-					</TabsTrigger>
-					<TabsTrigger value="fallers" className="gap-1.5">
-						{t('fallersTab', { count: fallers.length })}
-					</TabsTrigger>
-				</TabsList>
-			</StatsTabsShell>
-			<TabsContent value="risers" className="mt-0">
+		<div className="grid gap-6 sm:grid-cols-2 sm:gap-8">
+			<section aria-labelledby="ownership-risers-heading">
+				<p
+					id="ownership-risers-heading"
+					className="mb-2 flex items-center gap-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground"
+				>
+					<ArrowUpRight className="size-3.5 text-success" aria-hidden="true" />
+					{t('ownershipRisers')}
+					<span className="font-mono text-muted-foreground">({risers.length})</span>
+				</p>
 				<MoverList movers={risers} direction="rise" />
-			</TabsContent>
-			<TabsContent value="fallers" className="mt-0">
+			</section>
+			<section aria-labelledby="ownership-fallers-heading">
+				<p
+					id="ownership-fallers-heading"
+					className="mb-2 flex items-center gap-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-destructive"
+				>
+					<ArrowDownRight className="size-3.5" aria-hidden="true" />
+					{t('ownershipFallers')}
+					<span className="font-mono text-muted-foreground">({fallers.length})</span>
+				</p>
 				<MoverList movers={fallers} direction="fall" />
-			</TabsContent>
-		</Tabs>
+			</section>
+		</div>
 	)
 }

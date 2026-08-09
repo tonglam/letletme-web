@@ -1,8 +1,10 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
+import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Link } from '@/i18n/navigation'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_PLAYER_VALUE_HISTORY,
@@ -36,12 +38,33 @@ const positionShort = (position: PlayerDirectoryItem['position']): string => {
 	}
 }
 
-export function MarketPlayerLookup() {
+export type MarketPlayerLookupProps = {
+	/**
+	 * Seed selection from price-change row (or parent).
+	 * When `id` changes, history reloads for that player.
+	 */
+	seedPlayer?: PlayerDirectoryItem | null
+	/**
+	 * Drill-down mode: hide search until user opens it.
+	 * Standalone full mode shows search by default.
+	 */
+	compact?: boolean
+	onClearSeed?: () => void
+}
+
+export function MarketPlayerLookup({
+	seedPlayer = null,
+	compact = false,
+	onClearSeed,
+}: MarketPlayerLookupProps = {}) {
 	const t = useTranslations('Market')
 	const formatter = useFormatter()
 	const [searchTerm, setSearchTerm] = useState('')
 	const [players, setPlayers] = useState<PlayerDirectoryItem[]>([])
-	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDirectoryItem | null>(null)
+	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDirectoryItem | null>(
+		seedPlayer,
+	)
+	const [searchOpen, setSearchOpen] = useState(!compact)
 	const [history, setHistory] = useState<PlayerValueHistoryItem[]>([])
 	const [isSearching, setIsSearching] = useState(false)
 	const [isHistoryLoading, setIsHistoryLoading] = useState(false)
@@ -51,7 +74,7 @@ export function MarketPlayerLookup() {
 
 	useEffect(() => {
 		let cancelled = false
-		if (normalizedSearch.length < MIN_SEARCH_LENGTH) {
+		if (!searchOpen || normalizedSearch.length < MIN_SEARCH_LENGTH) {
 			const resetTimer = window.setTimeout(() => {
 				if (cancelled) return
 				setPlayers([])
@@ -71,7 +94,12 @@ export function MarketPlayerLookup() {
 					setSearchError(null)
 					const data = await executeQuery<PlayerSearchForPickerResponse>(
 						SEARCH_PLAYERS_FOR_PICKER,
-						{ search: normalizedSearch, limit: SEARCH_LIMIT, cursor: null },
+						{
+							search: normalizedSearch,
+							sort: 'NAME_ASC',
+							limit: SEARCH_LIMIT,
+							cursor: null,
+						},
 					)
 					if (!cancelled) setPlayers(data.playersForPicker.items)
 				} catch (error) {
@@ -90,7 +118,7 @@ export function MarketPlayerLookup() {
 			cancelled = true
 			window.clearTimeout(timer)
 		}
-	}, [normalizedSearch, t])
+	}, [normalizedSearch, searchOpen, t])
 
 	useEffect(() => {
 		let cancelled = false
@@ -111,9 +139,10 @@ export function MarketPlayerLookup() {
 			try {
 				setIsHistoryLoading(true)
 				setHistoryError(null)
-				const data = await executeQuery<PlayerValueHistoryResponse>(GET_PLAYER_VALUE_HISTORY, {
-					playerId: selectedPlayer.id,
-				})
+				const data = await executeQuery<PlayerValueHistoryResponse>(
+					GET_PLAYER_VALUE_HISTORY,
+					{ playerId: selectedPlayer.id },
+				)
 				if (!cancelled) {
 					setHistory(
 						data.playerValueHistory
@@ -158,99 +187,195 @@ export function MarketPlayerLookup() {
 			: value
 	}
 
+	const clearSelection = () => {
+		setSelectedPlayer(null)
+		onClearSeed?.()
+	}
+
 	return (
 		<div>
-			<label htmlFor="market-player-search" className="mb-2 block text-sm font-semibold">
-				{t('searchPlayers')}
-			</label>
-			<div className="relative">
-				<Search aria-hidden="true" className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-				<Input
-					id="market-player-search"
-					role="combobox"
-					value={searchTerm}
-					onChange={event => setSearchTerm(event.target.value)}
-					placeholder={t('searchPlaceholder')}
-					maxLength={50}
-					className="h-11 pl-9 pr-11"
-					aria-controls="market-player-results"
-					aria-describedby="market-player-search-status"
-					aria-expanded={normalizedSearch.length >= MIN_SEARCH_LENGTH}
-					aria-autocomplete="list"
-				/>
-				{searchTerm && (
-					<button
+			{/* One compact footer row: hint + action (not two full-width lines) */}
+			{compact && !searchOpen ? (
+				<div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+					<p className="min-w-0 flex-1 text-xs text-muted-foreground">
+						{selectedPlayer
+							? t('historySelectedHint', { name: selectedPlayer.webName })
+							: t('historyClickHint')}
+					</p>
+					<Button
 						type="button"
-						aria-label={t('clearSearch')}
-						onClick={() => setSearchTerm('')}
-						className="absolute right-0 top-0 flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						variant="ghost"
+						size="sm"
+						className="h-7 shrink-0 px-2 text-xs"
+						onClick={() => setSearchOpen(true)}
 					>
-						<X aria-hidden="true" className="size-4" />
-					</button>
-				)}
-			</div>
-			<p
-				id="market-player-search-status"
-				role="status"
-				aria-live="polite"
-				className={`mt-2 text-xs ${searchError ? 'text-destructive' : 'text-muted-foreground'}`}
-			>
-				{searchStatus}
-			</p>
+						<Search className="size-3.5" aria-hidden="true" />
+						{t('lookupAnotherPlayer')}
+					</Button>
+				</div>
+			) : null}
 
-			{normalizedSearch.length >= MIN_SEARCH_LENGTH && players.length > 0 && (
-				<ul
-					id="market-player-results"
-					className="mt-3 max-h-72 overflow-y-auto rounded-lg border border-border/80 bg-card shadow-sm"
-					aria-label={t('playerResults')}
-				>
-					{players.map(player => (
-						<li key={player.id} className="border-b border-border/60 last:border-b-0">
+			{searchOpen ? (
+				<>
+					<label
+						htmlFor="market-player-search"
+						className="mb-2 block text-sm font-semibold"
+					>
+						{t('searchPlayers')}
+					</label>
+					<div className="relative">
+						<Search
+							aria-hidden="true"
+							className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+						/>
+						<Input
+							id="market-player-search"
+							role="combobox"
+							value={searchTerm}
+							onChange={event => setSearchTerm(event.target.value)}
+							placeholder={t('searchPlaceholder')}
+							maxLength={50}
+							className="h-11 pl-9 pr-11"
+							aria-controls="market-player-results"
+							aria-describedby="market-player-search-status"
+							aria-expanded={normalizedSearch.length >= MIN_SEARCH_LENGTH}
+							aria-autocomplete="list"
+							autoFocus={compact}
+						/>
+						{searchTerm ? (
 							<button
 								type="button"
-								onClick={() => {
-									setSelectedPlayer(player)
-									setSearchTerm('')
-								}}
-								className="flex min-h-11 w-full items-center gap-3 px-3 py-2 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+								aria-label={t('clearSearch')}
+								onClick={() => setSearchTerm('')}
+								className="absolute right-0 top-0 flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							>
-								<Badge className={positionBadgeClass(positionShort(player.position))}>
-									{positionShort(player.position)}
-								</Badge>
-								<span className="min-w-0 flex-1 truncate text-sm font-medium">
-									{player.webName}
-								</span>
-								<span className="shrink-0 text-xs text-muted-foreground">
-									{player.team.shortName}
-								</span>
+								<X aria-hidden="true" className="size-4" />
 							</button>
-						</li>
-					))}
-				</ul>
-			)}
+						) : null}
+					</div>
+					<p
+						id="market-player-search-status"
+						role="status"
+						aria-live="polite"
+						className={`mt-2 text-xs ${searchError ? 'text-destructive' : 'text-muted-foreground'}`}
+					>
+						{searchStatus}
+					</p>
 
-			{selectedPlayer && (
-				<div className="mt-6 border-t border-border/60 pt-6">
+					{normalizedSearch.length >= MIN_SEARCH_LENGTH && players.length > 0 ? (
+						<ul
+							id="market-player-results"
+							className="mt-3 max-h-72 overflow-y-auto rounded-lg border border-border/80 bg-card shadow-sm"
+							aria-label={t('playerResults')}
+						>
+							{players.map(player => (
+								<li
+									key={player.id}
+									className="border-b border-border/60 last:border-b-0"
+								>
+								<div className="flex min-h-11 w-full items-center gap-3 px-3 py-2">
+									<Badge
+											className={positionBadgeClass(
+												positionShort(player.position),
+											)}
+										>
+											{positionShort(player.position)}
+										</Badge>
+									<Link
+										href={playerStatsHref({ p1: String(player.id) })}
+										className="min-w-0 flex-1 truncate text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+									>
+										{player.webName}
+									</Link>
+									<span className="shrink-0 text-xs text-muted-foreground">
+										{player.team.shortName}
+									</span>
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										className="h-8 shrink-0 px-2 text-xs"
+										onClick={() => {
+											setSelectedPlayer(player)
+											setSearchTerm('')
+											if (compact) setSearchOpen(false)
+											onClearSeed?.()
+										}}
+									>
+										{t('priceHistoryShort')}
+									</Button>
+								</div>
+								</li>
+							))}
+						</ul>
+					) : null}
+
+					{compact ? (
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							className="mt-2 h-8 text-xs"
+							onClick={() => {
+								setSearchOpen(false)
+								setSearchTerm('')
+							}}
+						>
+							{t('hideSearch')}
+						</Button>
+					) : null}
+				</>
+			) : null}
+
+			{selectedPlayer ? (
+				<div
+					className={
+						searchOpen || !compact
+							? 'mt-6 border-t border-border/60 pt-6'
+							: ''
+					}
+				>
 					<div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 						<div>
 							<p className="chyron">{t('playerPriceHistory')}</p>
 							<h3 className="mt-1 font-display text-xl font-bold tracking-tight">
-								{selectedPlayer.webName}
+								<Link
+									href={playerStatsHref({ p1: String(selectedPlayer.id) })}
+									className="text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+								>
+									{selectedPlayer.webName}
+								</Link>
 							</h3>
 							<p className="mt-1 text-sm text-muted-foreground">
-								{positionShort(selectedPlayer.position)} · {selectedPlayer.team.name}
+								{positionShort(selectedPlayer.position)} ·{' '}
+								{selectedPlayer.team.name}
 								{currentPrice !== null
 									? ` · £${(currentPrice / 10).toFixed(1)}m`
 									: ''}
 							</p>
 						</div>
-						<Button
-							variant="outline"
-							className="min-h-11"
-							onClick={() => setSelectedPlayer(null)}
-						>
-							{t('clearSelected')}
-						</Button>
+						<div className="flex flex-wrap items-center gap-2 sm:justify-end">
+							<Button
+								variant="outline"
+								size="sm"
+								className="min-h-9"
+								asChild
+							>
+								<Link
+									href={playerStatsHref({ p1: String(selectedPlayer.id) })}
+								>
+									{t('openPlayerStats')}
+								</Link>
+							</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								className="min-h-9"
+								onClick={clearSelection}
+							>
+								{t('clearSelected')}
+							</Button>
+						</div>
 					</div>
 
 					{historyError ? (
@@ -270,7 +395,7 @@ export function MarketPlayerLookup() {
 						</p>
 					) : (
 						<ol
-							className="space-y-2"
+							className="space-y-1.5"
 							aria-label={t('historyFor', { name: selectedPlayer.webName })}
 						>
 							{history.map(item => {
@@ -278,7 +403,7 @@ export function MarketPlayerLookup() {
 								return (
 									<li
 										key={`${item.playerId}-${item.changeDate}`}
-										className="grid min-h-14 grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border/70 bg-muted/40 px-3 py-2.5 dark:bg-muted/25 sm:grid-cols-[1fr_auto_auto]"
+										className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-border/50 py-2 last:border-b-0 sm:grid-cols-[1fr_auto_auto]"
 									>
 										<div>
 											<p className="text-sm font-medium">
@@ -313,7 +438,7 @@ export function MarketPlayerLookup() {
 						</ol>
 					)}
 				</div>
-			)}
+			) : null}
 		</div>
 	)
 }

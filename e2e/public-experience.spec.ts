@@ -51,7 +51,7 @@ test('mobile navigation expands a group and closes after navigation', async ({ p
 	await expect(dataGroup).toHaveAttribute('aria-expanded', 'true')
 	await dialog.getByRole('link', { name: 'Market' }).click()
 
-	await expect(page).toHaveURL(/\/data\/price-changes$/)
+	await expect(page).toHaveURL(/\/data\/market$/)
 	await expect(dialog).toBeHidden()
 	expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
@@ -102,24 +102,61 @@ test('Market stays accessible and usable on a 390px Simplified Chinese screen', 
 		})
 	})
 	await page.setViewportSize({ width: 390, height: 844 })
-	await page.goto('/zh-CN/data/price-changes')
+	await page.goto('/zh-CN/data/market')
 
-	await expect(page.getByRole('heading', { level: 1, name: 'FPL 市场' })).toBeVisible()
+	await expect(page.getByRole('heading', { level: 1, name: '市场' })).toBeVisible()
 	await expect(page.getByText(/自开始追踪以来/).first()).toBeVisible()
 
-	const risers = page.getByRole('tab', { name: /上升/ })
-	await risers.focus()
-	await page.keyboard.press('ArrowRight')
-	await expect(page.getByRole('tab', { name: /下降/ })).toHaveAttribute('aria-selected', 'true')
+	await expect(page.getByRole('region', { name: '上升 (1)' })).toBeVisible()
+	await expect(page.getByText('+1%').first()).toBeVisible()
 
-	const lookup = page.getByRole('region', { name: '球员身价历史' })
-	await lookup.getByRole('combobox', { name: '按姓名搜索球员' }).fill('Sa')
-	await lookup.getByRole('button', { name: /Saka/ }).click()
-	await expect(lookup.getByText('£9.9m → £10.0m')).toBeVisible()
+	await page.getByRole('combobox', { name: '按姓名搜索球员' }).fill('Sa')
+	const searchResult = page
+		.getByRole('list', { name: '球员搜索结果' })
+		.getByRole('listitem')
+		.filter({ has: page.getByRole('link', { name: 'Saka' }) })
+	await searchResult.getByRole('button', { name: '历史' }).click()
+	await expect(page.getByText('£9.9m → £10.0m')).toBeVisible()
 
 	expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 	const accessibility = await new AxeBuilder({ page }).analyze()
 	expect(accessibility.violations).toEqual([])
+})
+
+test('signed-out League Trends exposes only curated public aggregates on mobile', async ({ page }) => {
+	await page.setViewportSize({ width: 390, height: 844 })
+	await page.goto('/data/selections?scope=public&tournament=777&gw=33')
+
+	await expect(page.getByRole('heading', { level: 1, name: 'League Trends' })).toBeVisible()
+	await expect(page.getByText('E2E Public League').first()).toBeVisible()
+	await expect(page.getByText('Link an FPL entry to add My Leagues. Public Leagues remain available.')).toBeVisible()
+	await expect(page.getByRole('link', { name: 'Saka' }).first()).toHaveAttribute(
+		'href',
+		'/data/player-stats?p1=1',
+	)
+	expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('Gameweek keeps Dream Team and every 10+ haul independent during live play', async ({ page }) => {
+	await page.goto('/data/gameweek')
+
+	await expect(page.getByText('Provisional')).toBeVisible()
+	await expect(page.getByRole('heading', { name: 'Gameweek 33 Dream Team' })).toBeVisible()
+	await expect(page.getByRole('heading', { name: 'Double-digit Hauls' })).toBeVisible()
+	await expect(page.getByRole('link', { name: 'Palmer' })).toHaveAttribute(
+		'href',
+		'/data/player-stats?p1=2',
+	)
+})
+
+test('Fixtures renders every DGW match and explicit BGWs without horizontal overflow', async ({ page }) => {
+	await page.setViewportSize({ width: 390, height: 844 })
+	await page.goto('/data/fixtures')
+
+	await expect(page.getByRole('heading', { level: 1, name: 'Fixtures' })).toBeVisible()
+	await expect(page.getByText('DGW').first()).toBeVisible()
+	await expect(page.getByText('BGW').first()).toBeVisible()
+	expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
 
 test('theme choice persists across a reload', async ({ page }) => {
@@ -153,10 +190,10 @@ test('malformed player history does not break the comparison screen', async ({ p
 	await page.route('**/api/graphql', route => route.abort('connectionfailed'))
 	await page.goto('/data/player-stats')
 
-	await expect(page.getByRole('heading', { name: 'Player Statistics' })).toBeVisible()
+	await expect(page.getByRole('heading', { name: 'Player Stats' })).toBeVisible()
 	await expect(page.getByRole('button', { name: 'Clear recent' })).toHaveCount(0)
 	await expect(
-		page.getByRole('status').filter({ hasText: 'Failed to load the team directory.' }).first(),
+		page.getByRole('status').filter({ hasText: 'Failed to load the player directory.' }).first(),
 	).toBeVisible()
 })
 
