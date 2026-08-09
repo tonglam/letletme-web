@@ -200,7 +200,7 @@ export function useTournamentManagement(tournament: EntryTournament) {
 			})
 			if (!response.ok) throw new Error(t('deleteFailed'))
 
-			router.replace('/tournament/list')
+			router.replace('/tournament/browse')
 			router.refresh()
 			return true
 		} catch {

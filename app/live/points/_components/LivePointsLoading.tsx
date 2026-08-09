@@ -32,7 +32,7 @@ export function LivePointsLoading({
 				)}
 				<p className="mt-2 text-xs text-muted-foreground">{t('loadingEntry', { entryId: activeEntryId })}</p>
 			</div>
-			<Card className="mb-8 overflow-hidden border-electric/15 p-4 shadow-sticker-sm sm:p-6">
+			<Card className="mb-8 overflow-hidden border-border/80 p-4 shadow-sm sm:p-6">
 				<Skeleton className="mb-2 h-3 w-20" />
 				<Skeleton className="mb-2 h-8 w-48" />
 				<Skeleton className="mb-6 h-4 w-32" />
@@ -40,7 +40,7 @@ export function LivePointsLoading({
 					{[1, 2, 3, 4].map(item => (
 						<div
 							key={item}
-							className="rounded-lg border border-primary/10 bg-primary/5 px-3 py-3 sm:px-4"
+							className="rounded-lg border border-border/70 bg-muted/40 px-3 py-3 sm:px-4 dark:bg-muted/25"
 						>
 							<Skeleton className="mb-3 h-4 w-16" />
 							<Skeleton className="h-7 w-12" />
@@ -48,7 +48,7 @@ export function LivePointsLoading({
 					))}
 				</div>
 			</Card>
-			<Card className="mb-8 overflow-hidden">
+			<Card className="mb-8 overflow-hidden border-border/80 shadow-sm">
 				{Array.from({ length: 11 }, (_, index) => (
 					<div key={index} className="border-b p-4 last:border-b-0">
 						<div className="flex items-center justify-between">

@@ -20,27 +20,27 @@ test('localizes default and Simplified Chinese paths without changing query or h
 	assert.equal(localizePathname('/live/points', 'en'), '/live/points')
 	assert.equal(localizePathname('/live/points', 'zh-CN'), '/zh-CN/live/points')
 	assert.equal(
-		localizeHref('/data/player-stats?compare=7#season', 'zh-CN'),
-		'/zh-CN/data/player-stats?compare=7#season',
+		localizeHref('/data/player-stats?p1=7&p2=12#ps-season', 'zh-CN'),
+		'/zh-CN/data/player-stats?p1=7&p2=12#ps-season',
 	)
 })
 
 test('reads and removes only supported locale prefixes', () => {
-	assert.equal(getLocaleFromInternalPathname('/zh-CN/stats/team'), 'zh-CN')
-	assert.equal(getLocaleFromInternalPathname('/stats/team'), 'en')
-	assert.equal(stripLocaleFromPathname('/zh-CN/stats/team'), '/stats/team')
-	assert.equal(stripLocaleFromPathname('/en/stats/team'), '/stats/team')
-	assert.equal(stripLocaleFromPathname('/english/stats/team'), '/english/stats/team')
+	assert.equal(getLocaleFromInternalPathname('/zh-CN/me/team'), 'zh-CN')
+	assert.equal(getLocaleFromInternalPathname('/me/team'), 'en')
+	assert.equal(stripLocaleFromPathname('/zh-CN/me/team'), '/me/team')
+	assert.equal(stripLocaleFromPathname('/en/me/team'), '/me/team')
+	assert.equal(stripLocaleFromPathname('/english/me/team'), '/english/me/team')
 	assert.equal(
-		stripLocaleFromHref('/zh-CN/data/player-stats?compare=7#season'),
-		'/data/player-stats?compare=7#season',
+		stripLocaleFromHref('/zh-CN/data/player-stats?p1=7&p2=12#ps-season'),
+		'/data/player-stats?p1=7&p2=12#ps-season',
 	)
 	assert.equal(isAppLocale('zh-CN'), true)
 	assert.equal(isAppLocale('zh'), false)
 })
 
 test('accepts only same-origin return paths after removing locale prefixes', () => {
-	assert.equal(getSafeInternalHref('/zh-CN/data/player-stats?compare=7#season'), '/data/player-stats?compare=7#season')
+	assert.equal(getSafeInternalHref('/zh-CN/data/player-stats?p1=7&p2=12#ps-season'), '/data/player-stats?p1=7&p2=12#ps-season')
 	assert.equal(getSafeInternalHref('/en//evil.example'), '/')
 	assert.equal(getSafeInternalHref('/zh-CN//evil.example'), '/')
 	assert.equal(getSafeInternalHref('//evil.example'), '/')

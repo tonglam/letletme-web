@@ -1,5 +1,6 @@
 'use client'
 
+import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { CalendarClock } from 'lucide-react'
 import { usePageActive } from '@/hooks/use-page-active'
 import { useRouter } from '@/i18n/navigation'
@@ -115,9 +116,9 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 		<div className="scoreboard texture-grain rounded-xl p-6 sm:p-7">
 			<div className="flex items-center justify-between gap-3">
 				<p className="chyron !text-electric">{t('nextDeadline')}</p>
-				<span className="flex items-center gap-2 rounded-sm border border-electric/30 bg-electric/10 px-2 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-electric">
+				<span className="inline-flex items-center gap-2">
 					<span className="live-dot" aria-hidden="true" />
-					GW{nextEventId}
+					<GameweekBadge gameweek={nextEventId} size="sm" />
 				</span>
 			</div>
 

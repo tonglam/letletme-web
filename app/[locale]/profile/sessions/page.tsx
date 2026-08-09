@@ -1,4 +1,6 @@
 import SessionControls from '@/app/profile/sessions/SessionControls'
+import PageShell from '@/components/layout/PageShell'
+import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Button } from '@/components/ui/button'
 import { Link } from '@/i18n/navigation'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
@@ -27,32 +29,32 @@ export async function generateMetadata({ params }: PageProps) {
 export default async function SessionsPage({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	const t = await getTranslations('Sessions')
+	const profileT = await getTranslations('Profile')
 	const session = await getAuthorizationSession(await headers())
 	if (!session) {
 		redirect(localizeHref('/auth/login?next=/profile/sessions', locale))
 	}
 
 	return (
-		<div className="container mx-auto max-w-3xl px-4 py-8">
-			<Button
-				asChild
-				variant="ghost"
-				className="mb-4 -ml-3"
-			>
-				<Link href="/profile">
-					<ArrowLeft className="mr-2 h-4 w-4" />
-					{t('backToProfile')}
-				</Link>
-			</Button>
+		<PageShell>
+			<div className="container mx-auto max-w-4xl px-4 py-8">
+				<Button asChild variant="ghost" className="-ml-3 mb-2">
+					<Link href="/profile">
+						<ArrowLeft className="mr-2 size-4" aria-hidden="true" />
+						{t('backToProfile')}
+					</Link>
+				</Button>
 
-			<div className="mb-6">
-				<h1 className="text-3xl font-bold tracking-tight">{t('title')}</h1>
-				<p className="mt-2 text-sm text-muted-foreground">
+				<StatsPageHeader
+					eyebrow={profileT('security')}
+					title={t('title')}
+				/>
+				<p className="-mt-4 mb-6 text-sm text-muted-foreground">
 					{t('intro', { email: session.user.email })}
 				</p>
-			</div>
 
-			<SessionControls />
-		</div>
+				<SessionControls />
+			</div>
+		</PageShell>
 	)
 }

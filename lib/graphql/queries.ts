@@ -4,6 +4,7 @@
  */
 export * from './operations/entries'
 export * from './operations/events'
+export * from './operations/leagues'
 export * from './operations/live'
 export * from './operations/market'
 export * from './operations/players'

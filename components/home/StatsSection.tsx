@@ -1,3 +1,4 @@
+import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { Card } from '@/components/ui/card'
 import { Link } from '@/i18n/navigation'
 import type {
@@ -32,14 +33,12 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 							{t('thisGameweek')}
 						</p>
 						<h2 className="mt-1 flex items-center gap-2 font-display text-xl font-bold uppercase tracking-wide">
-							<span className="rounded-md bg-plum px-2 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
-								GW
-							</span>
+							<GameweekBadge gameweek={null} size="sm" />
 							<span>{t('gameweekStats')}</span>
 						</h2>
 					</div>
 					<Link
-						href="/stats/gameweek"
+						href="/data/gameweek"
 						className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
 					>
 						{t('viewGameweekStats')}
@@ -97,14 +96,12 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 						{t('thisGameweek')}
 					</p>
 					<h2 className="mt-1 flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
-						<span className="rounded-md bg-plum px-2 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
-							GW{overallResult.event}
-						</span>
+						<GameweekBadge gameweek={overallResult.event} size="sm" />
 						<span>{t('gameweekStats')}</span>
 					</h2>
 				</div>
 				<Link
-					href="/stats/gameweek"
+					href="/data/gameweek"
 					className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
 				>
 					{t('viewGameweekStats')}

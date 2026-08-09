@@ -24,8 +24,8 @@ All queries are defined in `lib/graphql/queries.ts` (21 queries, ~1400 lines) al
 
 `executeQuery<T>(query, variables?)` in `lib/graphql-client.ts` handles all fetching:
 - Client-side: routes through the Next.js proxy at `/api/graphql`
-- Server-side: uses `executeServerQuery` with signed `X-User-Context` headers when a session exists
-- The proxy (`app/api/graphql/route.ts`) uses a unified query policy: session-gated operations are never publicly cached; public stats queries get `Cache-Control: max-age=300`
+- Server-side: uses `executeServerQuery` with signed `X-User-Context` headers when a session exists; public RSC reads use `executePublicServerQuery` + `lib/cache-policy.ts` (`force-cache`, revalidate, tags)
+- The proxy (`app/api/graphql/route.ts`): session / Authorization / non-allowlisted ops → `Cache-Control: no-store`; allowlisted public ops (no session, no Authorization) → `public, s-maxage=60, stale-while-revalidate=300` (see `PUBLIC_GRAPHQL_OPERATION_NAMES`)
 
 ### Page Architecture Pattern
 
@@ -33,11 +33,11 @@ Pages with live data follow a strict split:
 - `page.tsx` — thin server component, renders a `<Suspense>` boundary wrapping `*Client.tsx`
 - `*Client.tsx` — owns all state, data fetching via `executeQuery`, and renders the full UI
 
-Example: `app/live/tournament/page.tsx` → `TournamentClient.tsx`.
+Example: `app/live/tournaments/page.tsx` → `TournamentClient.tsx`.
 
 ### Tournament Live Points Flow
 
-`/live/tournament` is the most complex page:
+`/live/tournaments` is the most complex page:
 1. Fetches entry tournaments for the signed-in user's FPL entry (`getCurrentEntryId()` from session)
 2. Fetches `GET_TOURNAMENT_LIVE_POINTS` for the selected tournament + gameweek (in parallel with previous GW for rank deltas)
 3. Builds `TournamentEntry[]` with live rank, net points, and pick lists via `lib/tournament/liveEntries.ts`
@@ -50,6 +50,20 @@ Both `PlayerOwnershipFilter` and `TeamExposureFilter` follow the same contract:
 - Emit `null` when inactive (no filter), or an array of matched IDs when active
 - Parent intersects all active filter sets in a single `filteredEntries` useMemo
 - Filter logic lives in a separate lib file (`lib/player-ownership-filter.ts`, `lib/team-exposure-filter.ts`)
+
+### Current gameweek (isCurrent) gate
+
+**Live** calculation and “this GW” SSR seeds **must** use `getCurrentEventId()` / `pickCurrentEventId()` from `lib/events.ts` (backed by `events(filter: { isCurrent: true })`).
+
+- **Order:** await `getCurrentEventId()` **before** entry/session seed queries when the page only needs current for gating (live points/matches/live tournaments). Auth redirects may run first on protected pages.
+- **Empty UI (Live only):** use shared `CurrentGameweekUnavailable` (not ad-hoc PageState copies).
+- **Route loading:** isCurrent-gated live routes use `GatedRouteLoading` in `loading.tsx` — not full dashboard skeletons (avoids fake “loaded UI” before empty state).
+- **Do not** fall back to `next[0].id` or `liveSnapshot.eventId` as the **live-calc** / this-GW seed event.
+- **Do not** wrap already-seeded client trees in useless Suspense that only flashes a second loading shell.
+
+**Me review** (`/me/team`, `/me/tournament`) must **not** hard-fail when `isCurrent` is empty. Use `resolveReviewGameweekAnchor()` from `lib/review-gameweek.ts` (current → next-derived → history max). Season history / tournament field still open; only Live keeps the hard gate.
+
+- **Out of scope for the Live gate:** home deadline (`next`), market, tournament CRUD, Me review anchors, user switching to a non-current GW after a valid seed.
 
 ### Key Conventions
 

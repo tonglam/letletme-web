@@ -35,9 +35,9 @@ function MetricTile({
 	valueClassName?: string
 }) {
 	return (
-		<div className="rounded-lg border border-primary/10 bg-primary/5 px-3 py-3 sm:px-4 sm:py-3.5">
+		<div className="rounded-lg border border-border/70 bg-muted/40 px-3 py-3 sm:px-4 sm:py-3.5 dark:bg-muted/25">
 			<div className="mb-2 flex items-center gap-2">
-				<span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary-ink sm:size-8">
+				<span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border/60 sm:size-8">
 					{icon}
 				</span>
 				<span className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-[11px]">
@@ -46,7 +46,7 @@ function MetricTile({
 			</div>
 			<div
 				className={cn(
-					'truncate font-display text-xl font-bold tabular-nums tracking-wide sm:text-2xl',
+					'truncate font-display text-xl font-bold tabular-nums tracking-wide text-foreground sm:text-2xl',
 					valueClassName,
 				)}
 			>
@@ -97,7 +97,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
 	const chipDisplay = chipActive ? activeChipNames.join(' · ') : t('noActiveChips')
 
 	return (
-		<div className="mb-8 overflow-hidden rounded-lg border border-electric/15 bg-card shadow-sticker-sm">
+		<div className="mb-8 overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
 			<div className="p-4 sm:p-6">
 				{/* Team identity + light meta (not metric tiles) */}
 				<div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between sm:gap-6">

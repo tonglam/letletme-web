@@ -3,6 +3,7 @@
 import PageShell from '@/components/layout/PageShell'
 import { LiveAutoRefreshCountdown } from '@/components/live/LiveAutoRefreshCountdown'
 import { MatchCard } from '@/components/live/MatchCard'
+import { StatsPageHeader, StatsTabsShell } from '@/components/stats/StatsSurfaces'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
@@ -172,7 +173,8 @@ export function LiveMatchesClient({
 
 	const autoRefreshMatches = useCallback((): Promise<void> => {
 		if (freshnessRequestRef.current) return freshnessRequestRef.current
-		const eventId = currentEventId ?? snapshotRef.current?.eventId
+		// isCurrent only — do not fall back to snapshot.eventId for poll identity
+		const eventId = currentEventId
 		if (!eventId) return Promise.resolve()
 
 		const request = (async () => {
@@ -249,7 +251,7 @@ export function LiveMatchesClient({
 		} satisfies Record<LiveMatchesTab, Match[]>
 	}, [matches])
 
-	const pollingEventId = currentEventId ?? snapshot?.eventId
+	const pollingEventId = currentEventId
 	const autoRefreshEnabled = shouldPollLiveSnapshot({
 		isPageActive,
 		currentEventId: pollingEventId,
@@ -259,23 +261,45 @@ export function LiveMatchesClient({
 	const activeTabConfig = TAB_CONFIG.find(config => config.value === activeTab)
 	const activeMatches = matchesByTab[activeTab]
 
+	const headerActions = (
+		<div className="flex flex-col items-end gap-1">
+			<Button
+				variant="outline"
+				size="icon"
+				onClick={() => fetchMatches(true)}
+				disabled={isRefreshing || isLoading}
+				className="shrink-0"
+			>
+				<RefreshCw
+					className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
+				/>
+				<span className="sr-only">{t('refresh')}</span>
+			</Button>
+			{!isLoading || isRefreshing ? (
+				<LiveAutoRefreshCountdown
+					enabled={autoRefreshEnabled}
+					onRefresh={autoRefreshMatches}
+					renderLabel={seconds => t('autoRefresh', { seconds })}
+				/>
+			) : null}
+		</div>
+	)
+
 	if (isLoading && !isRefreshing) {
 		return (
 			<PageShell>
-				<div className="container max-w-4xl mx-auto px-4 py-8">
-					<div className="flex items-center justify-between mb-8">
-						<h1 className="text-3xl font-bold">{t('title')}</h1>
-						<Button
-							variant="outline"
-							size="icon"
-							disabled
-							className="shrink-0"
-						>
-							<RefreshCw className="h-4 w-4" />
-							<span className="sr-only">{t('refresh')}</span>
-						</Button>
-					</div>
-					<div className="flex items-center justify-center py-12">
+				<div className="container mx-auto max-w-4xl px-4 py-8">
+					<StatsPageHeader
+						eyebrow={t('eyebrow')}
+						title={t('title')}
+						badge={
+							<Button variant="outline" size="icon" disabled className="shrink-0">
+								<RefreshCw className="h-4 w-4" />
+								<span className="sr-only">{t('refresh')}</span>
+							</Button>
+						}
+					/>
+					<div className="flex items-center justify-center rounded-lg border border-border/80 bg-card py-12 shadow-sm">
 						<p className="text-muted-foreground">{t('loading')}</p>
 					</div>
 				</div>
@@ -286,35 +310,17 @@ export function LiveMatchesClient({
 	if (error && matches.length === 0 && !isRefreshing) {
 		return (
 			<PageShell>
-				<div className="container max-w-4xl mx-auto px-4 py-8">
-					<div className="flex items-center justify-between mb-8">
-						<h1 className="text-3xl font-bold">{t('title')}</h1>
-						<div className="flex flex-col items-end gap-1">
-							<Button
-								variant="outline"
-								size="icon"
-								onClick={() => fetchMatches(true)}
-								disabled={isRefreshing}
-								className="shrink-0"
-							>
-								<RefreshCw
-									className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
-								/>
-								<span className="sr-only">{t('refresh')}</span>
-							</Button>
-							<LiveAutoRefreshCountdown
-								enabled={autoRefreshEnabled}
-								onRefresh={autoRefreshMatches}
-								renderLabel={seconds => t('autoRefresh', { seconds })}
-							/>
-						</div>
-					</div>
-					<div className="flex flex-col items-center justify-center py-12 gap-4">
-						<p className="text-destructive">{t('error', { message: error })}</p>
-						<Button
-							onClick={() => fetchMatches(true)}
-							variant="outline"
-						>
+				<div className="container mx-auto max-w-4xl px-4 py-8">
+					<StatsPageHeader
+						eyebrow={t('eyebrow')}
+						title={t('title')}
+						badge={headerActions}
+					/>
+					<div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-border/80 bg-card py-12 shadow-sm">
+						<p className="text-destructive" role="alert">
+							{t('error', { message: error })}
+						</p>
+						<Button onClick={() => fetchMatches(true)} variant="outline">
 							{t('tryAgain')}
 						</Button>
 					</div>
@@ -325,76 +331,36 @@ export function LiveMatchesClient({
 
 	return (
 		<PageShell>
-			<div className="container max-w-4xl mx-auto px-4 py-8">
+			<div className="container mx-auto max-w-4xl px-4 py-8">
 				{error ? (
-					<p
-						className="mb-4 text-sm text-destructive"
-						role="alert"
-					>
+					<p className="mb-4 text-sm text-destructive" role="alert">
 						{t('error', { message: error })}
 					</p>
 				) : null}
-				<div className="mb-8 flex items-center justify-between">
-					<h1 className="font-display text-3xl font-bold tracking-tight">
-						{t('title')}
-					</h1>
-					<div className="flex flex-col items-end gap-1">
-						<Button
-							variant="outline"
-							size="icon"
-							onClick={() => fetchMatches(true)}
-							disabled={isRefreshing || isLoading}
-							className="shrink-0"
-						>
-							<RefreshCw
-								className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
-							/>
-							<span className="sr-only">{t('refresh')}</span>
-						</Button>
-						<LiveAutoRefreshCountdown
-							enabled={autoRefreshEnabled}
-							onRefresh={autoRefreshMatches}
-							renderLabel={seconds => t('autoRefresh', { seconds })}
-						/>
-					</div>
-				</div>
-				<Tabs
-					value={activeTab}
-					onValueChange={handleTabChange}
-				>
-					<div className="mb-6 rounded-lg border border-border/80 bg-card p-4 shadow-sm">
-						<TabsList className="grid w-full grid-cols-4 gap-2 sm:gap-4">
-							<TabsTrigger
-								value="live"
-								className="w-full"
-							>
+				<StatsPageHeader
+					eyebrow={t('eyebrow')}
+					title={t('title')}
+					badge={headerActions}
+				/>
+				<Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-5">
+					<StatsTabsShell>
+						<TabsList className="grid h-auto w-full grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
+							<TabsTrigger value="live" className="w-full">
 								{t('liveNow')}
 							</TabsTrigger>
-							<TabsTrigger
-								value="finished"
-								className="w-full"
-							>
+							<TabsTrigger value="finished" className="w-full">
 								{t('finished')}
 							</TabsTrigger>
-							<TabsTrigger
-								value="not-started"
-								className="w-full"
-							>
+							<TabsTrigger value="not-started" className="w-full">
 								{t('notStarted')}
 							</TabsTrigger>
-							<TabsTrigger
-								value="upcoming"
-								className="w-full"
-							>
+							<TabsTrigger value="upcoming" className="w-full">
 								{t('upcoming')}
 							</TabsTrigger>
 						</TabsList>
-					</div>
+					</StatsTabsShell>
 
-					<TabsContent
-						value={activeTab}
-						className="space-y-5"
-					>
+					<TabsContent value={activeTab} className="mt-0 space-y-5">
 						{activeMatches.length > 0 ? (
 							activeMatches.map((match, i) => (
 								<MatchCard
@@ -406,7 +372,7 @@ export function LiveMatchesClient({
 								/>
 							))
 						) : (
-							<p className="text-center text-muted-foreground py-8">
+							<p className="rounded-lg border border-border/80 bg-card py-8 text-center text-muted-foreground shadow-sm">
 								{activeTabConfig ? t(activeTabConfig.labelKey) : t('none')}
 							</p>
 						)}

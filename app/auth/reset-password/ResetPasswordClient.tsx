@@ -52,7 +52,7 @@ function ResetPasswordForm() {
 
 	if (!token) {
 		return (
-			<Card className="w-full max-w-md p-6 text-center">
+			<Card className="w-full max-w-md border-border/80 p-6 text-center shadow-sm">
 				<p className="text-sm text-muted-foreground">
 					{t('invalidResetLink')}{' '}
 					<Link href="/auth/forgot-password" className="text-primary-ink underline underline-offset-4 hover:no-underline">
@@ -64,9 +64,9 @@ function ResetPasswordForm() {
 	}
 
 	return (
-		<Card className="w-full max-w-md p-6">
+		<Card className="w-full max-w-md border-border/80 p-6 shadow-sm">
 			<div className="mb-6 text-center">
-				<h2 className="text-2xl font-bold tracking-tight">{t('newPassword')}</h2>
+				<h2 className="font-display text-2xl font-bold tracking-tight">{t('newPassword')}</h2>
 				<p className="text-sm text-muted-foreground">
 					{t('strongPassword')}
 				</p>

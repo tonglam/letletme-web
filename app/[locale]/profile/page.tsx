@@ -1,3 +1,5 @@
+import PageShell from '@/components/layout/PageShell'
+import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -69,11 +71,12 @@ export default async function ProfilePage({ params }: PageProps) {
 	}
 
 	return (
-		<div className="container max-w-4xl mx-auto px-4 py-8">
-			<h1 className="text-3xl font-bold mb-6">{t('title')}</h1>
+		<PageShell>
+			<div className="container mx-auto max-w-4xl px-4 py-8">
+				<StatsPageHeader eyebrow={t('account')} title={t('title')} />
 
-			<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-				<Card className="md:col-span-1 p-6">
+			<div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+				<Card className="border-border/80 p-6 shadow-sm md:col-span-1">
 					<div className="flex flex-col items-center text-center">
 						<div className="mb-4">
 							<AvatarUpload
@@ -83,12 +86,14 @@ export default async function ProfilePage({ params }: PageProps) {
 							/>
 						</div>
 
-						<h2 className="text-xl font-bold mb-1">{profile.name}</h2>
-						<p className="text-muted-foreground mb-4">{profile.email}</p>
+						<h2 className="mb-1 font-display text-xl font-bold tracking-tight">
+							{profile.name}
+						</h2>
+						<p className="mb-4 text-muted-foreground">{profile.email}</p>
 
-						<div className="w-full flex flex-col gap-3">
+						<div className="flex w-full flex-col gap-3">
 							<div className="flex items-center gap-2 text-sm">
-								<Trophy className="h-4 w-4 text-primary-ink" />
+								<Trophy className="size-4 text-primary-ink" aria-hidden="true" />
 								<span>
 									{t('memberSince', {
 										year: new Date(profile.createdAt).getFullYear()
@@ -103,15 +108,15 @@ export default async function ProfilePage({ params }: PageProps) {
 					</div>
 				</Card>
 
-				<Card className="md:col-span-2 p-6">
-					<h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-						<Trophy className="h-5 w-5 text-primary-ink" />
+				<Card className="border-border/80 p-6 shadow-sm md:col-span-2">
+					<h2 className="mb-4 flex items-center gap-2 font-display text-lg font-bold tracking-tight sm:text-xl">
+						<Trophy className="size-5 text-primary-ink" aria-hidden="true" />
 						{t('account')}
 					</h2>
 
 					<div className="space-y-4">
-						<div className="bg-accent/30 p-4 rounded-lg">
-							<h3 className="font-medium mb-2">{t('email')}</h3>
+						<div className="rounded-lg border border-border/70 bg-muted/40 p-4 dark:bg-muted/25">
+							<h3 className="mb-2 font-medium">{t('email')}</h3>
 							<div className="flex justify-between items-center">
 								<p className="text-sm">{profile.email}</p>
 								{profile.emailVerified ? (
@@ -132,8 +137,8 @@ export default async function ProfilePage({ params }: PageProps) {
 							</div>
 						</div>
 
-						<div className="bg-accent/30 p-4 rounded-lg">
-							<h3 className="font-medium mb-3">{t('fplTeam')}</h3>
+						<div className="rounded-lg border border-border/70 bg-muted/40 p-4 dark:bg-muted/25">
+							<h3 className="mb-3 font-medium">{t('fplTeam')}</h3>
 							<RebindEntryForm
 								currentEntryId={verifiedEntryId}
 								verified={verifiedEntryId !== null}
@@ -145,9 +150,9 @@ export default async function ProfilePage({ params }: PageProps) {
 							/>
 						</div>
 
-						<div className="bg-accent/30 p-4 rounded-lg">
-							<h3 className="font-medium mb-3 flex items-center gap-2">
-								<Users className="h-4 w-4" />
+						<div className="rounded-lg border border-border/70 bg-muted/40 p-4 dark:bg-muted/25">
+							<h3 className="mb-3 flex items-center gap-2 font-medium">
+								<Users className="size-4" aria-hidden="true" />
 								{t('security')}
 							</h3>
 							<div className="space-y-2 text-sm">
@@ -162,14 +167,10 @@ export default async function ProfilePage({ params }: PageProps) {
 								</div>
 								<div className="flex items-center justify-between gap-4">
 									<span className="flex items-center gap-2">
-										<MonitorSmartphone className="h-4 w-4" />
+										<MonitorSmartphone className="size-4" aria-hidden="true" />
 										{t('activeSessions')}
 									</span>
-									<Button
-										asChild
-										variant="outline"
-										size="sm"
-									>
+									<Button asChild variant="outline" size="sm">
 										<Link href="/profile/sessions">{t('manage')}</Link>
 									</Button>
 								</div>
@@ -178,6 +179,7 @@ export default async function ProfilePage({ params }: PageProps) {
 					</div>
 				</Card>
 			</div>
-		</div>
+			</div>
+		</PageShell>
 	)
 }

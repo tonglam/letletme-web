@@ -24,7 +24,7 @@ function VerifyEmailContent() {
 
 	if (error) {
 		return (
-			<Card className="w-full max-w-md p-6 text-center space-y-2">
+			<Card className="w-full max-w-md space-y-2 border-border/80 p-6 text-center shadow-sm">
 				<h2 className="text-xl font-bold text-destructive">
 					{t('verificationFailed')}
 				</h2>
@@ -42,7 +42,7 @@ function VerifyEmailContent() {
 	}
 
 	return (
-		<Card className="w-full max-w-md p-6 text-center space-y-2">
+		<Card className="w-full max-w-md space-y-2 border-border/80 p-6 text-center shadow-sm">
 			<h2 className="text-xl font-bold">{t('emailVerified')}</h2>
 			<p className="text-sm text-muted-foreground">
 				{t('emailVerifiedDescription')}

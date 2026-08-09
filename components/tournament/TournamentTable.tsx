@@ -12,15 +12,32 @@ import { Link } from '@/i18n/navigation'
 import { cn, formatCompactNumber } from '@/lib/utils'
 import type { TournamentEntry } from '@/types/tournament'
 import { ArrowDown, ArrowUp, GitCompareArrows } from 'lucide-react'
+import dynamic from 'next/dynamic'
 import { useFormatter, useTranslations } from 'next-intl'
-import { useMemo, useState } from 'react'
-import { EntryCompareSheet } from './EntryCompareSheet'
+import { useEffect, useMemo, useState } from 'react'
+
+const EntryCompareSheet = dynamic(
+	() =>
+		import('./EntryCompareSheet').then(mod => ({
+			default: mod.EntryCompareSheet,
+		})),
+	{ ssr: false },
+)
+
+/**
+ * Large leagues (~100 teams): preview first, load more in steps, pin You.
+ * Keep in sync with stats tournament standings progressive defaults.
+ */
+const PREVIEW_ROWS = 20
+const ROW_STEP = 20
 
 interface TournamentTableProps {
 	entries: TournamentEntry[]
 	searchQuery: string
 	tournamentId?: string
 	gameweek: number
+	/** Signed-in viewer’s FPL entry — pin + highlight when off-screen */
+	viewerEntryId?: number
 }
 
 /** FPL money fields are tenths of £m (1005 → £100.5m). */
@@ -29,11 +46,34 @@ function formatTeamMoney(value: number | undefined): string {
 	return `£${(value / 10).toFixed(1)}m`
 }
 
+function isViewerEntry(entry: TournamentEntry, viewerEntryId?: number): boolean {
+	if (viewerEntryId == null || !Number.isFinite(viewerEntryId) || viewerEntryId <= 0) {
+		return false
+	}
+	return entry.id === String(viewerEntryId)
+}
+
+/** First N rows; if You is outside the window, pin at the end. */
+function takeVisibleWithPinMe(
+	sorted: TournamentEntry[],
+	visibleCount: number,
+	viewerEntryId?: number,
+): TournamentEntry[] {
+	if (sorted.length <= visibleCount) return sorted
+	const top = sorted.slice(0, visibleCount)
+	const me = sorted.find(e => isViewerEntry(e, viewerEntryId))
+	if (me && !top.some(e => e.id === me.id)) {
+		return [...top, me]
+	}
+	return top
+}
+
 export function TournamentTable({
 	entries,
 	searchQuery,
 	tournamentId,
 	gameweek,
+	viewerEntryId,
 }: TournamentTableProps) {
 	const t = useTranslations('LiveTournament')
 	const format = useFormatter()
@@ -43,6 +83,7 @@ export function TournamentTable({
 	const [compareMode, setCompareMode] = useState(false)
 	const [compareSelection, setCompareSelection] = useState<TournamentEntry[]>([])
 	const [isCompareOpen, setIsCompareOpen] = useState(false)
+	const [visibleCount, setVisibleCount] = useState(PREVIEW_ROWS)
 
 	const exitCompareMode = () => {
 		setCompareMode(false)
@@ -129,6 +170,20 @@ export function TournamentTable({
 			return a.id.localeCompare(b.id)
 		})
 	}, [entries, searchQuery, sortColumn, sortDirection])
+
+	useEffect(() => {
+		setVisibleCount(PREVIEW_ROWS)
+	}, [entries, searchQuery, sortColumn, sortDirection])
+
+	const visibleEntries = useMemo(
+		() => takeVisibleWithPinMe(sortedEntries, visibleCount, viewerEntryId),
+		[sortedEntries, visibleCount, viewerEntryId],
+	)
+	const total = sortedEntries.length
+	const hasMoreRows = total > visibleCount
+	const remaining = Math.max(0, total - visibleCount)
+	const canCollapse = visibleCount > PREVIEW_ROWS && total > PREVIEW_ROWS
+	const nextStep = Math.min(ROW_STEP, remaining)
 
 	const formatOverallRank = (rank?: number) => {
 		if (!rank || rank <= 0) return '—'
@@ -263,10 +318,11 @@ export function TournamentTable({
 				</div>
 
 				<ul className="divide-y divide-border/50">
-					{sortedEntries.length > 0 ? (
-						sortedEntries.map(entry => {
+					{visibleEntries.length > 0 ? (
+						visibleEntries.map(entry => {
 							const isChecked = compareSelection.some(e => e.id === entry.id)
 							const isDisabled = !isChecked && compareSelection.length >= 2
+							const isMe = isViewerEntry(entry, viewerEntryId)
 							const gwPts = entry.gwPoints ?? entry.livePoints
 							const hits = entry.eventCost ?? 0
 							const net = entry.gwNetPoints ?? entry.livePoints
@@ -285,6 +341,7 @@ export function TournamentTable({
 										'px-4 py-2.5 transition-colors',
 										'hover:bg-muted/30',
 										isChecked && 'bg-primary/[0.04]',
+										isMe && !isChecked && 'bg-primary/5 dark:bg-primary/10',
 										entry.stale && 'opacity-60',
 									)}
 									title={entry.stale ? t('staleRowHint') : undefined}
@@ -316,9 +373,17 @@ export function TournamentTable({
 										<div className="min-w-0 flex-1">
 											<Link
 												href={`/live/points/${entry.id}${tournamentId ? `?tournamentId=${tournamentId}` : ''}`}
-												className="block truncate text-sm font-semibold tracking-tight hover:text-primary-ink hover:underline"
+												className={cn(
+													'block truncate text-sm font-semibold tracking-tight hover:text-primary-ink hover:underline',
+													isMe && 'text-primary-ink',
+												)}
 											>
 												{entry.teamName}
+												{isMe ? (
+													<span className="ml-1.5 text-[11px] font-semibold text-primary-ink">
+														{t('youBadge')}
+													</span>
+												) : null}
 											</Link>
 											<p className="mt-0.5 truncate text-xs text-muted-foreground">
 												{entry.managerName}
@@ -412,9 +477,17 @@ export function TournamentTable({
 										<div className="min-w-0">
 											<Link
 												href={`/live/points/${entry.id}${tournamentId ? `?tournamentId=${tournamentId}` : ''}`}
-												className="block truncate text-sm font-semibold tracking-tight hover:text-primary-ink hover:underline"
+												className={cn(
+													'block truncate text-sm font-semibold tracking-tight hover:text-primary-ink hover:underline',
+													isMe && 'text-primary-ink',
+												)}
 											>
 												{entry.teamName}
+												{isMe ? (
+													<span className="ml-1.5 text-[11px] font-semibold text-primary-ink">
+														{t('youBadge')}
+													</span>
+												) : null}
 											</Link>
 											<p className="mt-0.5 truncate text-xs text-muted-foreground">
 												{entry.managerName}
@@ -473,6 +546,57 @@ export function TournamentTable({
 						</li>
 					)}
 				</ul>
+				{hasMoreRows || canCollapse ? (
+					<div className="flex flex-col items-center gap-2 border-t border-border/50 px-4 py-3">
+						{total > PREVIEW_ROWS ? (
+							<p className="text-xs text-muted-foreground">
+								{t('showingEntries', {
+									shown: Math.min(visibleCount, total),
+									total,
+								})}
+							</p>
+						) : null}
+						<div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto">
+							{hasMoreRows ? (
+								<>
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										className="min-h-10 w-full sm:w-auto"
+										onClick={() =>
+											setVisibleCount(count =>
+												Math.min(count + ROW_STEP, total),
+											)
+										}
+									>
+										{t('showMoreEntries', { count: nextStep })}
+									</Button>
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										className="min-h-10 w-full sm:w-auto"
+										onClick={() => setVisibleCount(total)}
+									>
+										{t('showAllEntries', { count: total })}
+									</Button>
+								</>
+							) : null}
+							{canCollapse ? (
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									className="min-h-10 w-full sm:w-auto"
+									onClick={() => setVisibleCount(PREVIEW_ROWS)}
+								>
+									{t('showLessEntries')}
+								</Button>
+							) : null}
+						</div>
+					</div>
+				) : null}
 			</section>
 
 			{isCompareOpen && compareSelection.length === 2 ? (

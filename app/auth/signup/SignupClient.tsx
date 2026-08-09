@@ -85,7 +85,7 @@ export default function SignupClient() {
 				</h1>
 			</div>
 
-			<Card className="w-full max-w-md p-6">
+			<Card className="w-full max-w-md border-border/80 p-6 shadow-sm">
 				{sent ? (
 					<div className="text-center space-y-2">
 						<h2 className="text-xl font-bold">{t('checkEmail')}</h2>
@@ -102,7 +102,7 @@ export default function SignupClient() {
 				) : (
 					<>
 						<div className="mb-6 text-center">
-							<h2 className="text-2xl font-bold tracking-tight">
+							<h2 className="font-display text-2xl font-bold tracking-tight">
 								{t('createAccount')}
 							</h2>
 							<p className="text-sm text-muted-foreground">

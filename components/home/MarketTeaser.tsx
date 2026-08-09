@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
+import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_MARKET_PULSE,
@@ -27,7 +28,7 @@ import { getTranslations } from 'next-intl/server'
 import { unstable_rethrow } from 'next/navigation'
 import { connection } from 'next/server'
 
-/** Home teaser keeps a short list; full desks live on /data/price-changes. */
+/** Home teaser keeps a short list; full desks live on /data/market. */
 const HOME_TEASER_LIMIT = 5
 const HOME_AVAILABILITY_LIMIT = 5
 /** Prefer publicly significant ownership; fill below this if the list is short. */
@@ -152,7 +153,10 @@ export async function MarketTeaser() {
 		response = await executePublicServerQuery<MarketPulseResponse>(
 			GET_MARKET_PULSE,
 			{ days: 14 },
-			{ cache: 'no-store', timeoutMs: 5_000 },
+			publicFetchOptions({
+				revalidate: RevalidateSeconds.market,
+				tags: [CacheTag.market],
+			}),
 		)
 	} catch (error) {
 		unstable_rethrow(error)
@@ -211,7 +215,7 @@ export async function MarketTeaser() {
 								asChild
 								className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-[0.08em]"
 							>
-								<Link href="/data/price-changes">
+								<Link href="/data/market">
 									{t('openMarket')} <ArrowRight aria-hidden="true" />
 								</Link>
 							</Button>

@@ -27,7 +27,9 @@ export default function GlobalError({
 						<span style={{ color: 'hsl(152 100% 50%)' }}>M</span>
 						e
 					</p>
-					<h1 className="text-3xl font-bold tracking-tight">The app shell could not start / 应用无法启动</h1>
+					<h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: 'system-ui, sans-serif' }}>
+						The app shell could not start / 应用无法启动
+					</h1>
 					<p className="text-muted-foreground">
 						Try loading the application again. Your data has not been changed.<br />
 						请重新加载应用，你的数据未受影响。

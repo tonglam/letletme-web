@@ -2,6 +2,7 @@
 
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { teamCrestSrc } from '@/lib/team-crest'
 import { cn } from '@/lib/utils'
 import type { PlayerDetail } from '@/types/player-detail'
 import { Zap } from 'lucide-react'
@@ -165,17 +166,17 @@ export function PlayerDetailModal({
 	}
 
 	const getBpsColor = (score: number) => {
-		if (score >= 50) return 'text-emerald-500 dark:text-emerald-400'
-		if (score >= 25) return 'text-blue-500 dark:text-blue-400'
+		if (score >= 50) return 'text-success'
+		if (score >= 25) return 'text-info'
 		if (score >= 0) return 'text-foreground'
-		return 'text-rose-500 dark:text-rose-400'
+		return 'text-destructive'
 	}
 
 	const getBpsBgColor = (score: number) => {
-		if (score >= 50) return 'bg-emerald-500/10 border-emerald-500/20'
-		if (score >= 25) return 'bg-blue-500/10 border-blue-500/20'
-		if (score >= 0) return 'bg-muted/40 border-border'
-		return 'bg-rose-500/10 border-rose-500/20'
+		if (score >= 50) return 'bg-success/10 border-success/25'
+		if (score >= 25) return 'bg-info/10 border-info/25'
+		if (score >= 0) return 'bg-muted/40 border-border/70'
+		return 'bg-destructive/10 border-destructive/25'
 	}
 
 	const breakdownSum = player.pointsBreakdown.reduce(
@@ -226,10 +227,11 @@ export function PlayerDetailModal({
 						<div className="relative size-12 shrink-0 rounded-full border-2 border-primary/20 bg-background/50 p-1">
 							<Image
 								alt={t('teamLogo', { team: player.team })}
-								src={`/images/team-logos/${player.teamShort.toUpperCase()}.png`}
+								src={teamCrestSrc(player.teamShort)}
 								width={40}
 								height={40}
-								className="rounded-full"
+								unoptimized
+								className="rounded-full object-contain"
 							/>
 						</div>
 						{/* Name + chips share one column so chips line up with the name */}
@@ -388,8 +390,8 @@ export function PlayerDetailModal({
 													className={cn(
 														'shrink-0 font-mono text-sm font-semibold tabular-nums',
 														item.points >= 0
-															? 'text-emerald-600 dark:text-emerald-400'
-															: 'text-rose-500 dark:text-rose-400',
+															? 'text-success'
+															: 'text-destructive',
 													)}
 												>
 													{item.points >= 0 ? '+' : ''}

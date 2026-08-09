@@ -75,7 +75,7 @@ export default async function Page({ params }: PageProps) {
 							<Link href={nextPath}>{common('tryAgain')}</Link>
 						</Button>
 						<Button variant="outline" asChild>
-							<Link href="/tournament/list">{t('back')}</Link>
+							<Link href="/tournament/browse">{t('back')}</Link>
 						</Button>
 					</>
 				}
@@ -106,10 +106,10 @@ async function NoManagementAccess({ id }: { id: string }) {
 			actions={
 				<>
 					<Button asChild>
-						<Link href={`/live/tournament/${id}`}>{t('view')}</Link>
+						<Link href={`/live/tournaments/${id}`}>{t('view')}</Link>
 					</Button>
 					<Button variant="outline" asChild>
-						<Link href="/tournament/list">{t('back')}</Link>
+						<Link href="/tournament/browse">{t('back')}</Link>
 					</Button>
 				</>
 			}

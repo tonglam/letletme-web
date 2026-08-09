@@ -53,6 +53,34 @@ export const GET_ENTRY_TOURNAMENTS = `${TOURNAMENT_INFO_FIELDS}
   }
 `
 
+/**
+ * List-page projection only — avoid the full TournamentInfoFields payload
+ * (knockout sizing, setup unit counters, etc.) on every list navigation.
+ */
+export const GET_ENTRY_TOURNAMENTS_LIST = `
+  query GetEntryTournamentsList($entryId: Int!) {
+    entryTournaments(entryId: $entryId) {
+      id
+      name
+      creator
+      adminEntryId
+      leagueType
+      sourceLeagueName
+      totalTeamNum
+      groupMode
+      knockoutMode
+      groupStartedEventId
+      groupEndedEventId
+      state
+      rosterSyncStatus
+      setupStatus
+      standingsReadyAt
+      setupHasWarnings
+      updatedAt
+    }
+  }
+`
+
 export type EntryTournamentState = 'ACTIVE' | 'INACTIVE' | 'FINISHED'
 export type TournamentSetupStatus =
 	'PENDING' | 'PROCESSING' | 'READY' | 'FAILED'
@@ -114,6 +142,32 @@ export interface EntryTournamentsResponse {
 	entryTournaments: EntryTournament[]
 }
 
+/** Fields returned by GET_ENTRY_TOURNAMENTS_LIST */
+export type EntryTournamentListItem = Pick<
+	EntryTournament,
+	| 'id'
+	| 'name'
+	| 'creator'
+	| 'adminEntryId'
+	| 'leagueType'
+	| 'sourceLeagueName'
+	| 'totalTeamNum'
+	| 'groupMode'
+	| 'knockoutMode'
+	| 'groupStartedEventId'
+	| 'groupEndedEventId'
+	| 'state'
+	| 'rosterSyncStatus'
+	| 'setupStatus'
+	| 'standingsReadyAt'
+	| 'setupHasWarnings'
+	| 'updatedAt'
+>
+
+export interface EntryTournamentsListResponse {
+	entryTournaments: EntryTournamentListItem[]
+}
+
 export interface TournamentParticipant {
 	entryId: number
 	entryName: string | null
@@ -158,12 +212,14 @@ export interface ManagedTournamentResponse {
 	managedTournament: EntryTournament | null
 }
 
-export const GET_TOURNAMENT_EVENT_RESULTS = `${TOURNAMENT_INFO_FIELDS}
+/**
+ * Slim field standings for review SSR/client.
+ * Do not nest full TournamentInfo per row (N× metadata was killing Me Tournament).
+ * Callers already have tournament from entryTournaments.
+ */
+export const GET_TOURNAMENT_EVENT_RESULTS = `
   query GetTournamentEventResults($tournamentId: Int!, $eventId: Int!) {
     tournamentEventResults(tournamentId: $tournamentId, eventId: $eventId) {
-      tournament {
-        ...TournamentInfoFields
-      }
       event {
         id
         name
@@ -189,7 +245,8 @@ export const GET_TOURNAMENT_EVENT_RESULTS = `${TOURNAMENT_INFO_FIELDS}
 `
 
 export interface TournamentEventResultItem {
-	tournament: EntryTournament
+	/** Optional — slim query omits; inject from selected tournament when needed */
+	tournament?: EntryTournament
 	event: {
 		id: number
 		name: string
@@ -236,6 +293,11 @@ export const GET_TOURNAMENT_ENTRY_RANKING_SUMMARY = `
       tournamentBenchPointsRank
       autoSubPoints
       tournamentAutoSubRank
+      overallPoints
+      leaderOverallPoints
+      gapToLeader
+      pointsBehindNext
+      pointsAheadOfPrev
     }
   }
 `
@@ -254,10 +316,90 @@ export interface TournamentEntryRankingSummary {
 	tournamentBenchPointsRank: number | null
 	autoSubPoints: number | null
 	tournamentAutoSubRank: number | null
+	/** Cumulative FPL points as of event (Phase 2) */
+	overallPoints?: number | null
+	leaderOverallPoints?: number | null
+	gapToLeader?: number | null
+	pointsBehindNext?: number | null
+	pointsAheadOfPrev?: number | null
 }
 
 export interface TournamentEntryRankingSummaryResponse {
 	tournamentEntryRankingSummary: TournamentEntryRankingSummary
+}
+
+export const GET_TOURNAMENT_SEASON_SNAPSHOT = `
+  query GetTournamentSeasonSnapshot($tournamentId: Int!, $eventId: Int!) {
+    tournamentSeasonSnapshot(tournamentId: $tournamentId, eventId: $eventId) {
+      asOfEventId
+      entryCount
+      leaderOverallPoints
+      secondOverallPoints
+      gapFirstSecond
+      averageOverallPoints
+      metrics {
+        key
+        leaderValue
+        leaderEntryId
+        leaderEntryName
+        leaderPlayerName
+        averageValue
+        higherIsBetter
+      }
+      standings {
+        entryId
+        rank
+        entryName
+        playerName
+        overallPoints
+        overallRank
+        teamValue
+      }
+    }
+  }
+`
+
+export type TournamentSeasonMetricKey =
+	| 'OVERALL_POINTS'
+	| 'TEAM_VALUE'
+	| 'TRANSFERS'
+	| 'TOTAL_COSTS'
+	| 'BENCH_POINTS'
+	| 'AUTO_SUB_POINTS'
+
+export interface TournamentSeasonMetricApi {
+	key: TournamentSeasonMetricKey
+	leaderValue: number | null
+	leaderEntryId: number | null
+	leaderEntryName: string | null
+	leaderPlayerName: string | null
+	averageValue: number | null
+	higherIsBetter: boolean
+}
+
+export interface TournamentSeasonStandingApiRow {
+	entryId: number
+	rank: number | null
+	entryName: string | null
+	playerName: string | null
+	overallPoints: number | null
+	overallRank?: number | null
+	teamValue?: number | null
+}
+
+export interface TournamentSeasonSnapshotApi {
+	asOfEventId: number
+	entryCount: number
+	leaderOverallPoints: number | null
+	secondOverallPoints: number | null
+	gapFirstSecond: number | null
+	averageOverallPoints: number | null
+	metrics: TournamentSeasonMetricApi[]
+	standings: TournamentSeasonStandingApiRow[]
+}
+
+export interface TournamentSeasonSnapshotResponse {
+	tournamentSeasonSnapshot: TournamentSeasonSnapshotApi
 }
 
 // Query to fetch a single event stats snapshot
