@@ -56,7 +56,7 @@ export default defineConfig({
 						GRAPHQL_ENDPOINT: `${graphqlFixtureURL}/graphql`,
 						GRAPHQL_SERVICE_TOKEN: graphqlServiceToken
 					},
-					url: baseURL,
+					url: `${baseURL}/favicon.ico`,
 					reuseExistingServer: false,
 					timeout: 180_000
 				}

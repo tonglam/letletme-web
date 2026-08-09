@@ -63,6 +63,246 @@ export interface PlayerDetailResponse {
 	playerDetail: PlayerDetailData | null
 }
 
+export const GET_PLAYER_STATE_PROFILE = /* GraphQL */ `
+	query GetPlayerStateProfile($playerId: Int!, $horizon: Int = 5) {
+		playerStateProfile(playerId: $playerId, horizon: $horizon) {
+			playerId
+			playerCode
+			teamId
+			position
+			season
+			horizon
+			asOfEventId
+			asOf
+			trend
+			confidence
+			fplOnly
+			dimensions {
+				kind
+				rating
+				direction
+				confidence
+				reasonCodes
+				metrics {
+					code
+					source
+					value
+					baseline
+					percentile
+					unit
+					sampleMinutes
+					sampleSize
+					smallSample
+					capability
+				}
+			}
+			ownBaseline {
+				weightedPercentile
+				seasons {
+					season
+					minutes
+					positionPercentile
+					weight
+					understatProcessPercentile
+				}
+			}
+			peerBaseline {
+				minimumMinutes
+				cohortSize
+				currentPercentile
+			}
+			careerTrajectory {
+				season
+				minutes
+				fplPositionPercentile
+				understatProcessPercentile
+				expectedMetricsAvailable
+			}
+			outlook {
+				rating
+				horizon
+				averageDifficulty
+				gameweeks {
+					eventId
+					bgw
+					dgw
+					averageDifficulty
+					fixtures {
+						opponentTeamShortName
+						wasHome
+						difficulty
+					}
+				}
+			}
+			coverage {
+				fplCurrent
+				understatCurrent
+				fplHistorySeasons
+				understatHistorySeasons
+				mappingStatus
+				metricCoverage
+				limitations
+				providers {
+					provider
+					scope
+					season
+					asOf
+					stale
+					available
+				}
+			}
+		}
+	}
+`
+
+export type PlayerStateTrend =
+	'RISING' | 'STABLE' | 'FALLING' | 'MIXED' | 'UNAVAILABLE' | 'UNKNOWN'
+
+export type PlayerStateConfidence = 'HIGH' | 'MEDIUM' | 'LOW'
+export type PlayerStateDirection = 'RISING' | 'STABLE' | 'FALLING' | 'UNKNOWN'
+
+export type PlayerStateDimensionKind =
+	| 'AVAILABILITY_ROLE'
+	| 'FPL_OUTPUT'
+	| 'REAL_WORLD_PROCESS'
+	| 'HISTORICAL_RELIABILITY'
+	| 'OUTLOOK'
+
+export type PlayerStateDimensionRating =
+	| 'SECURE'
+	| 'MANAGED'
+	| 'AT_RISK'
+	| 'STRONG'
+	| 'TYPICAL'
+	| 'WEAK'
+	| 'PROVEN'
+	| 'VARIABLE'
+	| 'EMERGING'
+	| 'INSUFFICIENT'
+	| 'FAVOURABLE'
+	| 'NEUTRAL'
+	| 'DIFFICULT'
+	| 'TEAM_CONTEXT_ONLY'
+	| 'UNAVAILABLE'
+	| 'UNKNOWN'
+
+export type PlayerStateMetricSource =
+	| 'FPL_CURRENT'
+	| 'FPL_HISTORY'
+	| 'UNDERSTAT_CURRENT'
+	| 'UNDERSTAT_HISTORY'
+	| 'DERIVED'
+
+export type PlayerStateMappingStatus =
+	'VERIFIED' | 'UNVERIFIED' | 'AMBIGUOUS' | 'QUARANTINED' | 'UNAVAILABLE'
+
+export type PlayerStateProvider = 'FPL' | 'UNDERSTAT'
+export type PlayerStateProviderScope = 'CURRENT' | 'HISTORY'
+
+export interface PlayerStateMetric {
+	code: string
+	source: PlayerStateMetricSource
+	value: number | null
+	baseline: number | null
+	percentile: number | null
+	unit: string
+	sampleMinutes: number | null
+	sampleSize: number | null
+	smallSample: boolean
+	capability: boolean
+}
+
+export interface PlayerStateDimension {
+	kind: PlayerStateDimensionKind
+	rating: PlayerStateDimensionRating
+	direction: PlayerStateDirection
+	confidence: PlayerStateConfidence
+	reasonCodes: string[]
+	metrics: PlayerStateMetric[]
+}
+
+export interface PlayerStateBaselineSeason {
+	season: string
+	minutes: number
+	positionPercentile: number | null
+	weight: number
+	understatProcessPercentile: number | null
+}
+
+export interface PlayerStateCareerPoint {
+	season: string
+	minutes: number
+	fplPositionPercentile: number | null
+	understatProcessPercentile: number | null
+	expectedMetricsAvailable: boolean
+}
+
+export interface PlayerStateOutlookGameweek {
+	eventId: number
+	bgw: boolean
+	dgw: boolean
+	averageDifficulty: number | null
+	fixtures: Array<{
+		opponentTeamShortName: string
+		wasHome: boolean
+		difficulty: number
+	}>
+}
+
+export interface PlayerStateProviderRevision {
+	provider: PlayerStateProvider
+	scope: PlayerStateProviderScope
+	season: string
+	asOf: string | null
+	stale: boolean
+	available: boolean
+}
+
+export interface PlayerStateProfileData {
+	playerId: number
+	playerCode: number
+	teamId: number
+	position: number
+	season: string
+	horizon: number
+	asOfEventId: number | null
+	asOf: string
+	trend: PlayerStateTrend
+	confidence: PlayerStateConfidence
+	fplOnly: boolean
+	dimensions: PlayerStateDimension[]
+	ownBaseline: {
+		weightedPercentile: number | null
+		seasons: PlayerStateBaselineSeason[]
+	}
+	peerBaseline: {
+		minimumMinutes: number
+		cohortSize: number
+		currentPercentile: number | null
+	}
+	careerTrajectory: PlayerStateCareerPoint[]
+	outlook: {
+		rating: PlayerStateDimensionRating
+		horizon: number
+		averageDifficulty: number | null
+		gameweeks: PlayerStateOutlookGameweek[]
+	}
+	coverage: {
+		fplCurrent: boolean
+		understatCurrent: boolean
+		fplHistorySeasons: string[]
+		understatHistorySeasons: string[]
+		mappingStatus: PlayerStateMappingStatus
+		metricCoverage: string[]
+		limitations: string[]
+		providers: PlayerStateProviderRevision[]
+	}
+}
+
+export interface PlayerStateProfileResponse {
+	playerStateProfile: PlayerStateProfileData | null
+}
+
 // Query to fetch player values
 export const GET_PLAYERS_FOR_PICKER = `
   query GetPlayersForPicker($filter: PlayersFilter, $limit: Int!, $offset: Int!) {
@@ -110,10 +350,7 @@ export const GET_TEAMS_FOR_PICKER = `
 `
 
 export type PlayerDirectoryPosition =
-	| 'GOALKEEPER'
-	| 'DEFENDER'
-	| 'MIDFIELDER'
-	| 'FORWARD'
+	'GOALKEEPER' | 'DEFENDER' | 'MIDFIELDER' | 'FORWARD'
 
 export interface PlayerDirectoryItem {
 	id: number

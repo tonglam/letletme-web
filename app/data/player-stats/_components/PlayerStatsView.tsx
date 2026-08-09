@@ -2,19 +2,23 @@ import type { PlayerDirectoryOption } from '@/components/player/PlayerDirectoryP
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import type { PlayerDetailData } from '@/lib/graphql/operations/players'
+import type {
+	PlayerDetailData,
+	PlayerStateProfileData
+} from '@/lib/graphql/operations/players'
 import { User } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { PlayerFixturesTab } from './PlayerFixturesTab'
 import { PlayerIctTab } from './PlayerIctTab'
 import { PlayerOverviewTab } from './PlayerOverviewTab'
 import { PlayerSeasonTab } from './PlayerSeasonTab'
+import { PlayerStateTab } from './PlayerStateTab'
 import {
 	formatPrice,
 	formatPriceDiff,
 	PlayerDetailSkeleton,
 	PlayerMiniCard,
-	StatCell,
+	StatCell
 } from './PlayerStatPrimitives'
 
 interface PlayerStatsViewProps {
@@ -22,14 +26,28 @@ interface PlayerStatsViewProps {
 	selectedComparison: PlayerDirectoryOption | null
 	player: PlayerDetailData | null
 	comparison: PlayerDetailData | null
+	playerState: PlayerStateProfileData | null
+	comparisonState: PlayerStateProfileData | null
 	isLoading: boolean
 	isComparisonLoading: boolean
+	isStateLoading: boolean
+	isComparisonStateLoading: boolean
 	error: string | null
 	comparisonError: string | null
+	stateError: string | null
+	comparisonStateError: string | null
+	onRequestState: () => void
+	onRequestComparisonState: () => void
 	currentGameweek?: number
 }
 
-function SinglePlayerHeader({ player, currentGameweek }: { player: PlayerDetailData; currentGameweek?: number }) {
+function SinglePlayerHeader({
+	player,
+	currentGameweek
+}: {
+	player: PlayerDetailData
+	currentGameweek?: number
+}) {
 	const t = useTranslations('PlayerStats.labels')
 	const position = useTranslations('PlayerDirectory')
 	const priceDiff = formatPriceDiff(player.price, player.startPrice)
@@ -48,15 +66,42 @@ function SinglePlayerHeader({ player, currentGameweek }: { player: PlayerDetailD
 		<Card className="mb-6 p-5">
 			<div className="mb-1 flex items-center gap-2">
 				<h2 className="text-2xl font-bold">{player.webName}</h2>
-				<Badge variant="outline" className="text-xs">{positionName}</Badge>
+				<Badge
+					variant="outline"
+					className="text-xs"
+				>
+					{positionName}
+				</Badge>
 			</div>
-			<p className="mb-4 text-sm text-muted-foreground">{player.teamShortName}</p>
+			<p className="mb-4 text-sm text-muted-foreground">
+				{player.teamShortName}
+			</p>
 			<div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-				<StatCell label={t('price')} value={formatPrice(player.price)} sub={priceDiff ?? undefined} />
-				<StatCell label={t('gwPoints', { gameweek: currentGameweek ?? '—' })} value={player.eventPoints} />
-				<StatCell label={t('totalPts')} value={player.totalPoints} />
-				<StatCell label={t('selected')} value={player.selectedByPercent == null ? '—' : `${player.selectedByPercent}%`} />
-				<StatCell label={t('form')} value={player.form ?? '—'} />
+				<StatCell
+					label={t('price')}
+					value={formatPrice(player.price)}
+					sub={priceDiff ?? undefined}
+				/>
+				<StatCell
+					label={t('gwPoints', { gameweek: currentGameweek ?? '—' })}
+					value={player.eventPoints}
+				/>
+				<StatCell
+					label={t('totalPts')}
+					value={player.totalPoints}
+				/>
+				<StatCell
+					label={t('selected')}
+					value={
+						player.selectedByPercent == null
+							? '—'
+							: `${player.selectedByPercent}%`
+					}
+				/>
+				<StatCell
+					label={t('form')}
+					value={player.form ?? '—'}
+				/>
 			</div>
 		</Card>
 	)
@@ -65,7 +110,7 @@ function SinglePlayerHeader({ player, currentGameweek }: { player: PlayerDetailD
 function ComparisonHeader({
 	player,
 	comparison,
-	currentGameweek,
+	currentGameweek
 }: {
 	player: PlayerDetailData
 	comparison: PlayerDetailData
@@ -74,13 +119,25 @@ function ComparisonHeader({
 	return (
 		<>
 			<div className="mb-6 grid grid-cols-2 gap-3">
-				<PlayerMiniCard detail={player} currentGameweek={currentGameweek} accent="info" />
-				<PlayerMiniCard detail={comparison} currentGameweek={currentGameweek} accent="warning" />
+				<PlayerMiniCard
+					detail={player}
+					currentGameweek={currentGameweek}
+					accent="info"
+				/>
+				<PlayerMiniCard
+					detail={comparison}
+					currentGameweek={currentGameweek}
+					accent="warning"
+				/>
 			</div>
 			<div className="mb-2 grid grid-cols-3 px-1 text-sm font-semibold">
-				<span className="truncate pr-4 text-right text-info">{player.webName}</span>
+				<span className="truncate pr-4 text-right text-info">
+					{player.webName}
+				</span>
 				<span />
-				<span className="truncate pl-4 text-left text-warning">{comparison.webName}</span>
+				<span className="truncate pl-4 text-left text-warning">
+					{comparison.webName}
+				</span>
 			</div>
 		</>
 	)
@@ -91,11 +148,19 @@ export function PlayerStatsView({
 	selectedComparison,
 	player,
 	comparison,
+	playerState,
+	comparisonState,
 	isLoading,
 	isComparisonLoading,
+	isStateLoading,
+	isComparisonStateLoading,
 	error,
 	comparisonError,
-	currentGameweek,
+	stateError,
+	comparisonStateError,
+	onRequestState,
+	onRequestComparisonState,
+	currentGameweek
 }: PlayerStatsViewProps) {
 	const t = useTranslations('PlayerStats')
 
@@ -109,11 +174,15 @@ export function PlayerStatsView({
 		)
 	}
 
-	if (isLoading || (selectedComparison && isComparisonLoading)) return <PlayerDetailSkeleton />
+	if (isLoading || (selectedComparison && isComparisonLoading))
+		return <PlayerDetailSkeleton />
 
 	if (error || comparisonError) {
 		return (
-			<Card className="p-8 text-center" role="alert">
+			<Card
+				className="p-8 text-center"
+				role="alert"
+			>
 				<p className="text-sm text-destructive">{error ?? comparisonError}</p>
 			</Card>
 		)
@@ -124,28 +193,78 @@ export function PlayerStatsView({
 	return (
 		<>
 			{comparison ? (
-				<ComparisonHeader player={player} comparison={comparison} currentGameweek={currentGameweek} />
+				<ComparisonHeader
+					player={player}
+					comparison={comparison}
+					currentGameweek={currentGameweek}
+				/>
 			) : (
-				<SinglePlayerHeader player={player} currentGameweek={currentGameweek} />
+				<SinglePlayerHeader
+					player={player}
+					currentGameweek={currentGameweek}
+				/>
 			)}
-			<Tabs defaultValue="overview">
-				<TabsList className="mb-6 grid w-full grid-cols-4">
+			<Tabs
+				key={`${selectedPlayer.id}:${selectedComparison?.id ?? ''}`}
+				defaultValue="overview"
+				onValueChange={value => {
+					if (value !== 'state') return
+					onRequestState()
+					if (selectedComparison) onRequestComparisonState()
+				}}
+			>
+				<TabsList className="mb-6 grid h-auto w-full grid-cols-2 sm:grid-cols-5">
 					<TabsTrigger value="overview">{t('overview')}</TabsTrigger>
 					<TabsTrigger value="season">{t('season')}</TabsTrigger>
 					<TabsTrigger value="ict">{t('ict')}</TabsTrigger>
 					<TabsTrigger value="fixtures">{t('fixtures')}</TabsTrigger>
+					<TabsTrigger value="state">{t('state.tab')}</TabsTrigger>
 				</TabsList>
 				<TabsContent value="overview">
-					<PlayerOverviewTab player={player} comparison={comparison} currentGameweek={currentGameweek} />
+					<PlayerOverviewTab
+						player={player}
+						comparison={comparison}
+						currentGameweek={currentGameweek}
+					/>
 				</TabsContent>
 				<TabsContent value="season">
-					<PlayerSeasonTab player={player} comparison={comparison} />
+					<PlayerSeasonTab
+						player={player}
+						comparison={comparison}
+					/>
 				</TabsContent>
 				<TabsContent value="ict">
-					<PlayerIctTab player={player} comparison={comparison} />
+					<PlayerIctTab
+						player={player}
+						comparison={comparison}
+					/>
 				</TabsContent>
 				<TabsContent value="fixtures">
-					<PlayerFixturesTab player={player} comparison={comparison} currentGameweek={currentGameweek} />
+					<PlayerFixturesTab
+						player={player}
+						comparison={comparison}
+						currentGameweek={currentGameweek}
+					/>
+				</TabsContent>
+				<TabsContent value="state">
+					<PlayerStateTab
+						player={{
+							name: player.webName,
+							profile: playerState,
+							isLoading: isStateLoading,
+							error: stateError
+						}}
+						comparison={
+							selectedComparison
+								? {
+										name: comparison?.webName ?? selectedComparison.name,
+										profile: comparisonState,
+										isLoading: isComparisonStateLoading,
+										error: comparisonStateError
+									}
+								: null
+						}
+					/>
 				</TabsContent>
 			</Tabs>
 		</>

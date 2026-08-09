@@ -10,12 +10,19 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/data/player-stats',
 		titleKey: 'playerStatsTitle',
-		descriptionKey: 'playerStatsDescription',
+		descriptionKey: 'playerStatsDescription'
 	})
 }
 
 export default async function PlayerStatsPage({ params }: PageProps) {
 	await getPageLocale(params)
 	const events = await getCurrentAndNextEvents()
-	return <PlayerStatsClient currentGameweek={events?.current[0]?.id} />
+	const currentGameweek = events?.current[0]?.id
+	const eventId = currentGameweek ?? events?.next[0]?.id
+	return (
+		<PlayerStatsClient
+			currentGameweek={currentGameweek}
+			eventId={eventId}
+		/>
+	)
 }

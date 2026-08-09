@@ -6,6 +6,7 @@ import {
 	GET_LIVE_MATCHES
 } from '../lib/graphql/operations/live'
 import { GET_MARKET_PULSE } from '../lib/graphql/operations/market'
+import { GET_PLAYER_STATE_PROFILE } from '../lib/graphql/operations/players'
 import {
 	GET_TOURNAMENT_METADATA,
 	GET_TOURNAMENT_PARTICIPANTS
@@ -43,11 +44,23 @@ describe('GraphQL request budget', () => {
 		assert.ok(astNodes < 200, `GET_MARKET_PULSE has ${astNodes} AST nodes`)
 	})
 
+	it('keeps the player-state profile bounded to one root field', () => {
+		const document = parse(GET_PLAYER_STATE_PROFILE)
+		let astNodes = 0
+		visit(document, { enter: () => void (astNodes += 1) })
+		const operation = document.definitions.find(
+			definition => definition.kind === 'OperationDefinition'
+		)
+		assert.ok(operation?.kind === 'OperationDefinition')
+		assert.equal(operation.selectionSet.selections.length, 1)
+		assert.ok(
+			astNodes < 200,
+			`GET_PLAYER_STATE_PROFILE has ${astNodes} AST nodes`
+		)
+	})
+
 	it('keeps tournament authorization and participant details in separate operations', () => {
 		assert.doesNotMatch(GET_TOURNAMENT_METADATA, /tournamentParticipants/)
-		assert.doesNotMatch(
-			GET_TOURNAMENT_PARTICIPANTS,
-			/\btournament\s*\(/
-		)
+		assert.doesNotMatch(GET_TOURNAMENT_PARTICIPANTS, /\btournament\s*\(/)
 	})
 })

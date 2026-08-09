@@ -9,15 +9,21 @@ import { usePlayerDetailSlot } from './_hooks/usePlayerDetailSlot'
 const RECENT_PLAYERS_KEY_1 = 'player-stats-recent-1'
 const RECENT_PLAYERS_KEY_2 = 'player-stats-recent-2'
 
-export default function PlayerStatsClient({ currentGameweek }: { currentGameweek?: number }) {
+export default function PlayerStatsClient({
+	currentGameweek,
+	eventId
+}: {
+	currentGameweek?: number
+	eventId?: number
+}) {
 	const t = useTranslations('PlayerStats')
 	const firstPlayer = usePlayerDetailSlot({
 		storageKey: RECENT_PLAYERS_KEY_1,
-		eventId: currentGameweek,
+		eventId
 	})
 	const secondPlayer = usePlayerDetailSlot({
 		storageKey: RECENT_PLAYERS_KEY_2,
-		eventId: currentGameweek,
+		eventId
 	})
 
 	return (
@@ -30,7 +36,7 @@ export default function PlayerStatsClient({ currentGameweek }: { currentGameweek
 						recentPlayers: firstPlayer.recentPlayers,
 						excludedPlayerId: secondPlayer.selectedPlayer?.id,
 						onSelect: firstPlayer.selectPlayer,
-						onClearRecent: firstPlayer.clearRecent,
+						onClearRecent: firstPlayer.clearRecent
 					}}
 					second={{
 						selectedPlayer: secondPlayer.selectedPlayer,
@@ -38,7 +44,7 @@ export default function PlayerStatsClient({ currentGameweek }: { currentGameweek
 						excludedPlayerId: firstPlayer.selectedPlayer?.id,
 						onSelect: secondPlayer.selectPlayer,
 						onClearRecent: secondPlayer.clearRecent,
-						onClearSelection: secondPlayer.clearSelection,
+						onClearSelection: secondPlayer.clearSelection
 					}}
 				/>
 				<PlayerStatsView
@@ -46,10 +52,18 @@ export default function PlayerStatsClient({ currentGameweek }: { currentGameweek
 					selectedComparison={secondPlayer.selectedPlayer}
 					player={firstPlayer.playerDetail}
 					comparison={secondPlayer.playerDetail}
+					playerState={firstPlayer.playerStateProfile}
+					comparisonState={secondPlayer.playerStateProfile}
 					isLoading={firstPlayer.isLoading}
 					isComparisonLoading={secondPlayer.isLoading}
+					isStateLoading={firstPlayer.isStateLoading}
+					isComparisonStateLoading={secondPlayer.isStateLoading}
 					error={firstPlayer.error}
 					comparisonError={secondPlayer.error}
+					stateError={firstPlayer.stateError}
+					comparisonStateError={secondPlayer.stateError}
+					onRequestState={firstPlayer.requestPlayerState}
+					onRequestComparisonState={secondPlayer.requestPlayerState}
 					currentGameweek={currentGameweek}
 				/>
 			</div>
