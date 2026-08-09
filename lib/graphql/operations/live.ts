@@ -51,6 +51,78 @@ export interface LiveScoresResponse {
 	liveScores: LiveScore[]
 }
 
+export const GET_GAMEWEEK_BOARDS = `
+  query GetGameweekBoards($eventId: Int!) {
+    event(id: $eventId) {
+      id
+      deadlineTime
+      finished
+      isCurrent
+      isNext
+    }
+    dreamTeam: liveScores(eventId: $eventId, filter: { inDreamTeam: true }) {
+      player {
+        id
+        webName
+        position
+        price
+        team {
+          name
+          shortName
+        }
+      }
+      inDreamTeam
+      minutes
+      goalsScored
+      assists
+      cleanSheets
+      bonus
+      totalPoints
+    }
+    hauls: liveScores(eventId: $eventId, filter: { minTotalPoints: 10 }) {
+      player {
+        id
+        webName
+        position
+        price
+        team {
+          name
+          shortName
+        }
+      }
+      inDreamTeam
+      minutes
+      goalsScored
+      assists
+      cleanSheets
+      bonus
+      totalPoints
+    }
+    liveSnapshot(eventId: $eventId) {
+      eventId
+      revision
+      state
+      publishedAt
+      checkedAt
+    }
+  }
+`
+
+export interface GameweekBoardEvent {
+	id: number
+	deadlineTime: string | null
+	finished: boolean
+	isCurrent: boolean
+	isNext: boolean
+}
+
+export interface GameweekBoardsResponse {
+	event: GameweekBoardEvent | null
+	dreamTeam: LiveScore[]
+	hauls: LiveScore[]
+	liveSnapshot: LiveSnapshotStatus | null
+}
+
 export const GET_LIVE_SNAPSHOT = `
   query GetLiveSnapshot($eventId: Int) {
     liveSnapshot(eventId: $eventId) {

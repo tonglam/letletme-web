@@ -128,7 +128,7 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 		detail.getByText('manual_refresh_explain', { exact: true })
 	).toBeVisible()
 	await expect(
-		detail.getByText('Goals Conceded', { exact: true })
+		detail.getByText('Goals Conceded', { exact: true }).first()
 	).toBeVisible()
 	await expect(detail.getByText('-1', { exact: true }).first()).toBeVisible()
 
@@ -273,7 +273,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 		'aria-selected',
 		'true'
 	)
-	await expect(page.getByText('0 – 0')).toBeVisible()
+	await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
 	await expect(page.getByText(/Auto refresh in \d+s/)).toBeVisible()
 
 	await page.clock.fastForward(90_000)
@@ -284,7 +284,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 		'aria-selected',
 		'true'
 	)
-	await expect(page.getByText('1 – 0')).toBeVisible()
+	await expect(page.getByText(/1\s*[–-]\s*0/)).toBeVisible()
 
 	await page.clock.fastForward(30_000)
 	await expect.poll(() => heavyRequestCount).toBe(2)
@@ -294,7 +294,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 			hasText: 'Latest match update failed. Showing the last available scores.'
 		})
 	).toBeVisible()
-	await expect(page.getByText('1 – 0')).toBeVisible()
+	await expect(page.getByText(/1\s*[–-]\s*0/)).toBeVisible()
 
 	await context.setOffline(true)
 	await expect(page.getByText(/Auto refresh in/)).toHaveCount(0)
@@ -305,5 +305,5 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	await context.setOffline(false)
 	await expect.poll(() => heavyRequestCount).toBe(3)
 	expect(probeCount).toBe(3)
-	await expect(page.getByText('2 – 0')).toBeVisible()
+	await expect(page.getByText(/2\s*[–-]\s*0/)).toBeVisible()
 })

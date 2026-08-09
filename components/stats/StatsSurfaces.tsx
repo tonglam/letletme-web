@@ -3,7 +3,10 @@ import { cn } from '@/lib/utils'
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-/** Neutral metric tile — soft muted surface, matchday-friendly */
+/**
+ * Metric tile — border only by default (no filled gray slab).
+ * Pass className if a page needs a surface fill.
+ */
 export function StatsMetricTile({
 	icon,
 	label,
@@ -11,6 +14,8 @@ export function StatsMetricTile({
 	detail,
 	valueClassName,
 	className,
+	onClick,
+	'aria-label': ariaLabel,
 }: {
 	icon?: ReactNode
 	label: string
@@ -18,17 +23,14 @@ export function StatsMetricTile({
 	detail?: ReactNode
 	valueClassName?: string
 	className?: string
+	onClick?: () => void
+	'aria-label'?: string
 }) {
-	return (
-		<div
-			className={cn(
-				'rounded-lg border border-border/70 bg-muted/40 px-3 py-3 sm:px-4 sm:py-3.5 dark:bg-muted/25',
-				className,
-			)}
-		>
+	const body = (
+		<>
 			<div className="mb-2 flex items-center gap-2">
 				{icon ? (
-					<span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border/60 sm:size-8">
+					<span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border/60 text-muted-foreground sm:size-8">
 						{icon}
 					</span>
 				) : null}
@@ -47,8 +49,25 @@ export function StatsMetricTile({
 			{detail != null ? (
 				<div className="mt-1.5 min-h-5 text-sm text-muted-foreground">{detail}</div>
 			) : null}
-		</div>
+		</>
 	)
+
+	const surface = cn(
+		'rounded-lg border border-border/70 bg-transparent px-3 py-3 sm:px-4 sm:py-3.5',
+		onClick &&
+			'w-full cursor-pointer text-left transition-colors hover:border-primary/35 hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+		className,
+	)
+
+	if (onClick) {
+		return (
+			<button type="button" onClick={onClick} aria-label={ariaLabel ?? label} className={surface}>
+				{body}
+			</button>
+		)
+	}
+
+	return <div className={surface}>{body}</div>
 }
 
 export function StatsSectionCard({
@@ -111,15 +130,22 @@ export function StatsPageHeader({
 	title,
 	badge,
 }: {
-	eyebrow: string
+	/** Optional chyron above the title; omit when not needed */
+	eyebrow?: string
 	title: string
 	badge?: ReactNode
 }) {
 	return (
 		<header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
 			<div className="min-w-0">
-				<p className="chyron">{eyebrow}</p>
-				<h1 className="mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+				{eyebrow ? <p className="chyron">{eyebrow}</p> : null}
+				<h1
+					className={
+						eyebrow
+							? 'mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl'
+							: 'font-display text-2xl font-bold tracking-tight sm:text-3xl'
+					}
+				>
 					{title}
 				</h1>
 			</div>

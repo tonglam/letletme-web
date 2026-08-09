@@ -24,7 +24,10 @@ import { useEffect, useMemo, useState } from 'react'
 interface GameweekSelectorProps {
 	onGameweekChange: (gameweek: number) => void
 	className?: string
+	/** Marks the “current” option in the list (and default max when maxGameweek omitted). */
 	currentGameweek: number
+	/** Upper bound for the selector; defaults to currentGameweek. */
+	maxGameweek?: number
 	selectedGameweek?: number
 	disabled?: boolean
 }
@@ -33,12 +36,16 @@ export function GameweekSelector({
 	onGameweekChange,
 	className = '',
 	currentGameweek,
+	maxGameweek: maxGameweekProp,
 	selectedGameweek,
 	disabled = false,
 }: GameweekSelectorProps) {
 	const t = useTranslations('Common')
 	const { maxGameweek, selected: effectiveSelectedGameweek } =
-		resolveSelectedGameweek(currentGameweek, selectedGameweek)
+		resolveSelectedGameweek(
+			maxGameweekProp ?? currentGameweek,
+			selectedGameweek,
+		)
 
 	// Newest first — current GW sits at the top of a long 1–38 list.
 	const gameweeks = useMemo(() => {

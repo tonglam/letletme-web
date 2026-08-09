@@ -152,7 +152,7 @@ export function TeamExposureFilter({
 	}
 
 	return (
-		<div className={cn('mb-6 rounded-lg border bg-card p-4', className)}>
+		<div className={cn('mb-4 rounded-lg border bg-card p-4 last:mb-0 md:mb-6', className)}>
 			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<div>
 					<div className="flex items-center gap-2 text-sm font-medium">
@@ -168,13 +168,16 @@ export function TeamExposureFilter({
 					</div>
 				</div>
 
-				<div className="flex flex-wrap items-center gap-2">
+				<div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
 					{/* Shared scope for all selected teams */}
 					<Select
 						value={scope}
 						onValueChange={v => setScope(v as OwnershipScope)}
 					>
-						<SelectTrigger className="h-8 w-[110px]" aria-label={t('teamScope')}>
+						<SelectTrigger
+							className="col-span-2 h-10 min-h-10 w-full sm:col-span-1 sm:h-9 sm:min-h-9 sm:w-[110px]"
+							aria-label={t('teamScope')}
+						>
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
@@ -190,7 +193,10 @@ export function TeamExposureFilter({
 						onValueChange={setPendingTeam}
 						disabled={teamOptions.length === 0}
 					>
-						<SelectTrigger className="h-8 w-[160px]" aria-label={t('selectTeamAria')}>
+						<SelectTrigger
+							className="col-span-2 h-10 min-h-10 w-full sm:col-span-1 sm:h-9 sm:min-h-9 sm:w-[160px]"
+							aria-label={t('selectTeamAria')}
+						>
 							<SelectValue placeholder={t('selectTeam')} />
 						</SelectTrigger>
 						<SelectContent>
@@ -206,7 +212,10 @@ export function TeamExposureFilter({
 						value={String(pendingCount)}
 						onValueChange={v => setPendingCount(Number(v))}
 					>
-						<SelectTrigger className="h-8 w-[80px]" aria-label={t('minimumPlayers')}>
+						<SelectTrigger
+							className="h-10 min-h-10 w-full sm:h-9 sm:min-h-9 sm:w-[80px]"
+							aria-label={t('minimumPlayers')}
+						>
 							<SelectValue />
 						</SelectTrigger>
 						<SelectContent>
@@ -219,7 +228,7 @@ export function TeamExposureFilter({
 					<Button
 						type="button"
 						variant="outline"
-						size="sm"
+						className="h-10 min-h-10 w-full sm:h-9 sm:min-h-9 sm:w-auto"
 						disabled={!pendingTeam}
 						onClick={addTeam}
 					>
