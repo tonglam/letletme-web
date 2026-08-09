@@ -1,10 +1,23 @@
 # LetLetMe Web
 
-Front end of [letletme.top](https://letletme.top) - A Fantasy Premier League (FPL) analytics and tournament management platform.
+Front end of [letletme.top](https://letletme.top) — a live-first, persistent Fantasy Premier League (FPL) context and custom-competition platform.
 
 ## Overview
 
-LetLetMe is a comprehensive web application for Fantasy Premier League enthusiasts. It provides tools for tracking player and team statistics, managing tournaments, viewing live match data, and more.
+LetLetMe helps FPL managers follow their teams, tracked official leagues, and custom competitions live; preserve the personal and competition context that matters across the season; and explore source-backed evidence without turning it into transfer advice.
+
+> **The whole gameweek. Your call.**
+
+The target public information architecture is:
+
+- **Live:** Follow every point, rank, and competition change as it happens.
+- **My FPL:** Return to a linked team, season history, official leagues, and remembered context.
+- **Competitions:** Track bounded official leagues and run LetLetMe competitions that go beyond official FPL formats.
+- **Explore:** Inspect players, fixtures, the market, field trends, comparisons, and attributed public-source briefings.
+
+LetLetMe does not operate a manager's official FPL team, build its own points forecasts, or issue `buy`, `sell`, or optimized-team recommendations. Official team actions remain on the official FPL website.
+
+See [LetLetMe Product Conclusions](docs/product/letletme-product-conclusions.md) for the full product definition, information architecture, resource priorities, assistant concept, retention model, and homepage direction. The companion [Four-Section Product Specification](docs/product/letletme-four-section-specification.md) defines the purpose, sub-pages, existing implementation, gaps, and next product work for Live, My FPL, Competitions, and Explore. The [Cross-Section Implementation Plan](docs/product/letletme-cross-section-implementation-plan.md) governs shared identities, contracts, dependency gates, migration boundaries, and delivery order across their section-specific plans.
 
 This repository is the UI and identity authority in a four-repository system:
 
@@ -21,12 +34,15 @@ caches, and browser state are derived and replaceable.
 
 ## Features
 
-- **Home Dashboard**: View deadlines, price changes, head-to-head comparisons, and match information
-- **Live Data**: Real-time updates during gameweeks
-- **Player & Team Statistics**: Detailed performance analytics
-- **Tournament Management**: Create and manage custom FPL tournaments
-- **User Profiles**: Personalized user experience
-- **Authentication**: Secure login and account management
+- **Live results:** Real-time team points, player contributions, matches, bonus state, and prepared tracked-official-league or custom-competition standings with provisional-state handling.
+- **My FPL review:** Settled team and competition results, season history, rank movement, captaincy, bench, hits, chips, transfers, and comparative league context.
+- **Prepared competitions:** Resource-bounded tracked official leagues with scheduled collection, plus custom membership, gameweek configuration, points races, groups, knockouts, live standings, completed results, and management tools.
+- **Explore tools:** Gameweek statistics, fixtures and difficulty, market movement, league trends and exposure, player profiles, and multi-player comparison.
+- **Personal context:** Verified FPL-team binding, authenticated private views, and the foundation for remembered teams, leagues, competitions, and followed interests.
+- **Trustworthy data states:** Official FPL facts, transparent LetLetMe calculations, separate verified match evidence, freshness, and graceful degraded states.
+- **Authentication:** Secure login, account management, and server-owned authorization for private operations.
+
+The public labels above describe the agreed product model. Some current route and source-directory names—such as `data`, `me`, and `tournament`—predate that information architecture and remain implementation names until a deliberate migration.
 
 ## Tech Stack
 
