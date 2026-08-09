@@ -6,6 +6,7 @@ import {
 	hasOAuthCallbackError,
 	onboardingRedirectPath,
 	safeRedirectPath,
+	verifiedUserDestination,
 	verificationCallbackPath
 } from '../../lib/auth-redirects'
 
@@ -33,6 +34,40 @@ describe('auth redirect policy', () => {
 		assert.equal(
 			onboardingRedirectPath('/tournament/42/manage?tab=members'),
 			'/onboarding/bind-entry?next=%2Ftournament%2F42%2Fmanage%3Ftab%3Dmembers'
+		)
+	})
+
+	it('sends an already verified returning user directly to the safe destination', () => {
+		assert.equal(
+			verifiedUserDestination('/tournament/list?mine=true', {
+				fplEntryId: 123456,
+				fplEntryVerifiedAt: '2026-08-09T00:00:00.000Z'
+			}),
+			'/tournament/list?mine=true'
+		)
+		assert.equal(
+			verifiedUserDestination('https://attacker.example', {
+				fplEntryId: 123456,
+				fplEntryVerifiedAt: new Date('2026-08-09T00:00:00.000Z')
+			}),
+			'/'
+		)
+	})
+
+	it('keeps unverified users in onboarding and avoids a verified-user redirect loop', () => {
+		assert.equal(
+			verifiedUserDestination('/profile', {
+				fplEntryId: 123456,
+				fplEntryVerifiedAt: null
+			}),
+			null
+		)
+		assert.equal(
+			verifiedUserDestination('/onboarding/bind-entry?next=%2Fprofile', {
+				fplEntryId: 123456,
+				fplEntryVerifiedAt: '2026-08-09T00:00:00.000Z'
+			}),
+			'/'
 		)
 	})
 

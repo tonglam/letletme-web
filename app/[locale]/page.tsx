@@ -29,6 +29,8 @@ import { useTranslations } from 'next-intl'
 import { getTranslations } from 'next-intl/server'
 import { Suspense } from 'react'
 
+export const dynamic = 'force-dynamic'
+
 async function safeQuery<T>(
 	query: string,
 	variables?: Record<string, unknown>,

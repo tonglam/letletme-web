@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getSafeInternalHref, localizeHref } from '@/i18n/routing'
 import { getAuthorizationSession } from '@/lib/auth'
+import { verifiedUserDestination } from '@/lib/auth-redirects'
 import { ClipboardPaste, ExternalLink, Hash, MousePointerClick } from 'lucide-react'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -43,6 +44,10 @@ export default async function BindEntryPage({
 		)
 	}
 
+	const verifiedDestination = verifiedUserDestination(next, session.user)
+	if (verifiedDestination) {
+		redirect(localizeHref(verifiedDestination, locale))
+	}
 
 	return (
 		<div className="flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center bg-muted/30 p-4">

@@ -8,6 +8,8 @@ import GameweekStatsClient from '@/app/stats/gameweek/GameweekStatsClient'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getTranslations } from 'next-intl/server'
 
+export const dynamic = 'force-dynamic'
+
 type PageProps = { params: LocaleParams }
 
 export async function generateMetadata({ params }: PageProps) {

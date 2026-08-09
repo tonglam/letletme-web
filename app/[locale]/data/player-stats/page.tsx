@@ -2,6 +2,8 @@ import PlayerStatsClient from '@/app/data/player-stats/PlayerStatsClient'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getCurrentAndNextEvents } from '@/lib/events'
 
+export const dynamic = 'force-dynamic'
+
 type PageProps = { params: LocaleParams }
 
 export async function generateMetadata({ params }: PageProps) {

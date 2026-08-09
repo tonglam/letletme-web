@@ -1,5 +1,10 @@
 const LOCAL_ORIGIN = 'https://letletme.local'
 
+type VerifiedFplBinding = {
+	fplEntryId?: number | null
+	fplEntryVerifiedAt?: Date | string | null
+}
+
 /** Returns a same-origin path suitable for a post-auth redirect. */
 export function safeRedirectPath(
 	value: string | null | undefined,
@@ -22,6 +27,27 @@ export function onboardingRedirectPath(
 ): string {
 	const destination = safeRedirectPath(next)
 	return `/onboarding/bind-entry?next=${encodeURIComponent(destination)}`
+}
+
+/** Skip onboarding for returning users whose FPL binding is already verified. */
+export function verifiedUserDestination(
+	next: string | null | undefined,
+	binding: VerifiedFplBinding
+): string | null {
+	const entryId = binding.fplEntryId
+	const verifiedAt = binding.fplEntryVerifiedAt
+	if (
+		typeof entryId !== 'number' ||
+		!Number.isSafeInteger(entryId) ||
+		entryId <= 0 ||
+		!verifiedAt ||
+		!Number.isFinite(new Date(verifiedAt).getTime())
+	) {
+		return null
+	}
+
+	const destination = safeRedirectPath(next)
+	return destination.startsWith('/onboarding/bind-entry') ? '/' : destination
 }
 
 /** Public landing page that can render verification errors before onboarding. */
