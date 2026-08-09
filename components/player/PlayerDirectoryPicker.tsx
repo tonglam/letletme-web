@@ -10,10 +10,10 @@ import {
 } from "@/components/ui/select";
 import { executeQuery } from "@/lib/graphql-client";
 import {
-	GET_PLAYERS_FOR_PICKER,
 	GET_TEAMS_FOR_PICKER,
+	SEARCH_PLAYERS_FOR_PICKER,
 	type PlayerDirectoryItem,
-	type PlayersForPickerResponse,
+	type PlayerSearchForPickerResponse,
 	type TeamsForPickerResponse,
 } from "@/lib/graphql/operations/players";
 import { resolveTeamDisplayName } from "@/lib/team-display";
@@ -25,9 +25,10 @@ import { useTranslations } from "next-intl";
 type PositionFilter = Position | "ALL";
 type TeamFilter = "ALL" | string;
 
-const PLAYER_PICKER_PAGE_SIZE = 200;
+const PLAYER_PICKER_PAGE_SIZE = 20;
 const DEFAULT_VISIBLE_PLAYER_RESULTS = 10;
 const MIN_SEARCH_LENGTH = 2;
+const PLAYER_PICKER_DEBOUNCE_MS = 200;
 
 export interface PlayerDirectoryOption {
   id: string;
@@ -101,6 +102,7 @@ export function PlayerDirectoryPicker({
   const t = useTranslations("PlayerDirectory");
   const [teams, setTeams] = useState<TeamDirectoryOption[]>([]);
   const [players, setPlayers] = useState<PlayerDirectoryOption[]>([]);
+  const [totalPlayers, setTotalPlayers] = useState(0);
   const [isTeamsLoading, setIsTeamsLoading] = useState(false);
   const [isPlayersLoading, setIsPlayersLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -173,6 +175,7 @@ export function PlayerDirectoryPicker({
       const resetTimer = window.setTimeout(() => {
         if (isCancelled) return;
         setPlayers([]);
+        setTotalPlayers(0);
         setError(null);
         setIsPlayersLoading(false);
       }, 0);
@@ -188,9 +191,6 @@ export function PlayerDirectoryPicker({
         setIsPlayersLoading(true);
         setError(null);
 
-        const playersAccumulator: PlayerDirectoryOption[] = [];
-        let offset = 0;
-
         const filter: {
           teamId?: number;
           position?: "GOALKEEPER" | "DEFENDER" | "MIDFIELDER" | "FORWARD";
@@ -204,39 +204,34 @@ export function PlayerDirectoryPicker({
           filter.position = shortPositionToDirectory(positionFilter);
         }
 
-        while (true) {
-          const result = await executeQuery<PlayersForPickerResponse>(
-            GET_PLAYERS_FOR_PICKER,
-            {
-              filter: Object.keys(filter).length > 0 ? filter : null,
-              limit: PLAYER_PICKER_PAGE_SIZE,
-              offset,
-            }
-          );
-
-          if (isCancelled) return;
-
-          const pagePlayers = result.players.map(toPickerPlayer);
-          playersAccumulator.push(...pagePlayers);
-
-          if (pagePlayers.length < PLAYER_PICKER_PAGE_SIZE) {
-            break;
+        const result = await executeQuery<PlayerSearchForPickerResponse>(
+          SEARCH_PLAYERS_FOR_PICKER,
+          {
+            search:
+              normalizedSearch.length >= MIN_SEARCH_LENGTH
+                ? normalizedSearch
+                : null,
+            filter: Object.keys(filter).length > 0 ? filter : null,
+            limit: PLAYER_PICKER_PAGE_SIZE,
+            cursor: null,
           }
-
-          offset += PLAYER_PICKER_PAGE_SIZE;
-        }
+        );
 
         if (isCancelled) return;
 
         setPlayers(
-          playersAccumulator.sort((a, b) => a.name.localeCompare(b.name))
+          result.playersForPicker.items
+            .map(toPickerPlayer)
+            .sort((a, b) => a.name.localeCompare(b.name))
         );
+        setTotalPlayers(result.playersForPicker.totalCount);
       } catch (fetchError) {
         console.error("Failed to fetch players directory:", fetchError);
 
         if (!isCancelled) {
           setError(t("playersFailed"));
           setPlayers([]);
+          setTotalPlayers(0);
         }
       } finally {
         if (!isCancelled) {
@@ -245,10 +240,14 @@ export function PlayerDirectoryPicker({
       }
     };
 
-    void fetchPlayers();
+    const fetchTimer = window.setTimeout(
+      () => void fetchPlayers(),
+      PLAYER_PICKER_DEBOUNCE_MS
+    );
 
     return () => {
       isCancelled = true;
+      window.clearTimeout(fetchTimer);
     };
   }, [positionFilter, searchTerm, selectedTeam, t]);
 
@@ -290,7 +289,9 @@ export function PlayerDirectoryPicker({
     teamFilter !== "ALL" ||
     searchTerm.trim().length >= MIN_SEARCH_LENGTH;
 
-  const visiblePlayers = hasActiveFilter ? filteredPlayers : [];
+  const visiblePlayers = hasActiveFilter
+    ? filteredPlayers.slice(0, DEFAULT_VISIBLE_PLAYER_RESULTS)
+    : [];
 
   const isLoading = isTeamsLoading || isPlayersLoading;
 
@@ -405,9 +406,9 @@ export function PlayerDirectoryPicker({
         </div>
       </div>
 
-      {hasActiveFilter && (
+      {hasActiveFilter && !isLoading && !error && (
         <div className="mt-2 text-xs text-muted-foreground">
-          {t("resultCount", { visible: visiblePlayers.length, total: filteredPlayers.length })}
+          {t("resultCount", { visible: visiblePlayers.length, total: totalPlayers })}
         </div>
       )}
     </div>
