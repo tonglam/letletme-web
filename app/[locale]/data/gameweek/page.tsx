@@ -12,6 +12,11 @@ import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 
 type PageProps = { params: LocaleParams }
 
+// Gameweek is anchored to the review/current event at request time. Static
+// generation can freeze an unavailable/preseason response from build time and
+// cannot reflect a newly settled or live GW when the page is opened.
+export const dynamic = 'force-dynamic'
+
 export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	return getPageMetadata({
