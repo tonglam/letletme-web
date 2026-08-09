@@ -39,7 +39,7 @@ export function SearchHeader(props: SearchHeaderProps) {
           placeholder={t("searchPlaceholder")}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9 pr-9 w-full"
+          className="h-10 min-h-10 w-full pl-9 pr-9 sm:h-9 sm:min-h-9"
         />
         {searchQuery.trim().length > 0 && (
           <button
@@ -54,9 +54,9 @@ export function SearchHeader(props: SearchHeaderProps) {
       </div>
 
       {props.showFilters !== false && (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Select value={props.chipFilter} onValueChange={props.onChipFilterChange}>
-          <SelectTrigger aria-label={t("filterChip")}>
+          <SelectTrigger className="h-10 min-h-10 sm:h-9 sm:min-h-9" aria-label={t("filterChip")}>
             <SelectValue placeholder={t("filterByChip")} />
           </SelectTrigger>
           <SelectContent>
@@ -69,7 +69,7 @@ export function SearchHeader(props: SearchHeaderProps) {
         </Select>
 
         <Select value={props.captainFilter} onValueChange={props.onCaptainFilterChange}>
-          <SelectTrigger aria-label={t("filterCaptain")}>
+          <SelectTrigger className="h-10 min-h-10 sm:h-9 sm:min-h-9" aria-label={t("filterCaptain")}>
             <SelectValue placeholder={t("filterByCaptain")} />
           </SelectTrigger>
           <SelectContent className="max-h-72">

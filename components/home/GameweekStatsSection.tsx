@@ -1,6 +1,8 @@
+import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
+import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_TOP_TRANSFERS_IN,
@@ -58,9 +60,7 @@ function GameweekStatsCard({
 						{t('thisGameweek')}
 					</p>
 					<h2 className="mt-1 flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
-						<span className="rounded-md bg-plum px-2 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
-							{currentEventId ? `GW${currentEventId}` : 'GW'}
-						</span>
+						<GameweekBadge gameweek={currentEventId} size="sm" />
 						<span>{t('transferDesk')}</span>
 					</h2>
 				</div>
@@ -143,7 +143,10 @@ export async function GameweekStatsSection({ currentEventId }: GameweekStatsSect
 					eventId: currentEventId,
 					limit: 5,
 				},
-				{ cache: 'force-cache', next: { revalidate: 300 }, timeoutMs: 5_000 },
+				publicFetchOptions({
+					revalidate: RevalidateSeconds.publicStats,
+					tags: [CacheTag.transfers, CacheTag.gameweekStats],
+				}),
 			),
 			executePublicServerQuery<TopTransfersResponse>(
 				GET_TOP_TRANSFERS_OUT,
@@ -151,7 +154,10 @@ export async function GameweekStatsSection({ currentEventId }: GameweekStatsSect
 					eventId: currentEventId,
 					limit: 5,
 				},
-				{ cache: 'force-cache', next: { revalidate: 300 }, timeoutMs: 5_000 },
+				publicFetchOptions({
+					revalidate: RevalidateSeconds.publicStats,
+					tags: [CacheTag.transfers, CacheTag.gameweekStats],
+				}),
 			),
 		])
 

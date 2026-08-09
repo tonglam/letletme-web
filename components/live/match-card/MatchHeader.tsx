@@ -1,4 +1,5 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { teamCrestSrc } from '@/lib/team-crest'
 import type { Match } from '@/types/match'
 import { Activity, Clock, Eye, User } from 'lucide-react'
 import Image from 'next/image'
@@ -107,9 +108,10 @@ function TeamSummary({
 	const logo = (
 		<Image
 			alt=""
-			src={`/images/team-logos/${team.shortName.toUpperCase()}.png`}
+			src={teamCrestSrc(team.shortName)}
 			width={32}
 			height={32}
+			unoptimized
 			className="size-8 shrink-0 object-contain md:size-9"
 		/>
 	)

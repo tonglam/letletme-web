@@ -15,23 +15,24 @@ import Script from 'next/script'
 import { Suspense } from 'react'
 import '../globals.css'
 
+// Trimmed weights for faster first paint; 500 falls back to 600 visually.
 const barlow = Barlow({
 	subsets: ['latin'],
-	weight: ['400', '500', '600', '700'],
+	weight: ['400', '600', '700'],
 	variable: '--font-barlow',
 	display: 'swap',
 })
 
 const barlowCondensed = Barlow_Condensed({
 	subsets: ['latin'],
-	weight: ['500', '600', '700'],
+	weight: ['600', '700'],
 	variable: '--font-display',
 	display: 'swap',
 })
 
 const plexMono = IBM_Plex_Mono({
 	subsets: ['latin'],
-	weight: ['500', '600'],
+	weight: ['500'],
 	variable: '--font-mono',
 	display: 'swap',
 })
@@ -102,7 +103,12 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
 			<body className="min-h-svh bg-background font-sans text-foreground antialiased">
 				<Script
 					id="theme-bootstrap"
-					strategy="beforeInteractive"
+					// This layout is behind the locale segment and can be re-rendered
+					// during client navigation. beforeInteractive would put a <script>
+					// in the client React tree, which React 19 correctly rejects.
+					// ThemeProvider applies the same value on mount; loading this
+					// bootstrap immediately after hydration avoids the client warning.
+					strategy="afterInteractive"
 					dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
 				/>
 				<NextIntlClientProvider messages={messages}>

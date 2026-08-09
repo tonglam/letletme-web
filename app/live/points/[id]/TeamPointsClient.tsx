@@ -1,6 +1,7 @@
 'use client'
 
 import PageShell from '@/components/layout/PageShell'
+import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Button } from '@/components/ui/button'
 import type {
 	LiveCalcData,
@@ -36,8 +37,8 @@ export default function TeamPointsClient({
 		initialSnapshot
 	})
 	const backHref = tournamentId
-		? `/live/tournament/${tournamentId}`
-		: '/live/tournament'
+		? `/live/tournaments/${tournamentId}`
+		: '/live/tournaments'
 
 	let content
 	if (livePoints.isLoading && !livePoints.liveData) {
@@ -73,14 +74,14 @@ export default function TeamPointsClient({
 			<div className="container mx-auto max-w-4xl px-4 py-8">
 				<Button
 					variant="ghost"
-					className="-ml-3 mb-4"
+					className="-ml-3 mb-2"
 					asChild
 				>
 					<Link href={backHref}>
 						<ArrowLeft aria-hidden="true" /> {t('backTournament')}
 					</Link>
 				</Button>
-				<h1 className="mb-6 text-3xl font-bold">{t('teamTitle')}</h1>
+				<StatsPageHeader eyebrow={t('livePoints')} title={t('teamTitle')} />
 				{content}
 			</div>
 		</PageShell>

@@ -1,8 +1,7 @@
 import TeamPointsClient from '@/app/live/points/[id]/TeamPointsClient'
-import { PageState } from '@/components/feedback/PageState'
-import PageShell from '@/components/layout/PageShell'
+import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGameweekUnavailable'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import { getCurrentAndNextEvents } from '@/lib/events'
+import { getCurrentEventId } from '@/lib/events'
 import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
@@ -10,9 +9,6 @@ import {
 	type LiveSnapshotStatus,
 } from '@/lib/graphql/operations/live'
 import { executeServerQuery } from '@/lib/graphql-server'
-import { CalendarX2 } from 'lucide-react'
-import { getTranslations } from 'next-intl/server'
-import { Suspense } from 'react'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,25 +29,17 @@ type PageProps = {
 
 export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await getPageLocale(params)
-	const t = await getTranslations('States')
 	const { tournamentId } = await searchParams
 	const entryId = Number(id)
-	const events = await getCurrentAndNextEvents()
-	const currentEventId = events?.current[0]?.id
+
+	// Gate first — no Suspense shell around seeded client work.
+	const currentEventId = await getCurrentEventId()
+	if (!currentEventId) {
+		return <CurrentGameweekUnavailable />
+	}
+
 	let initialLiveData: LiveCalcData | undefined
 	let initialSnapshot: LiveSnapshotStatus | null = null
-
-	if (!currentEventId) {
-		return (
-			<PageShell>
-				<PageState
-					icon={CalendarX2}
-					title={t('gameweekUnavailableTitle')}
-					description={t('gameweekUnavailableDescription')}
-				/>
-			</PageShell>
-		)
-	}
 
 	if (Number.isInteger(entryId) && entryId > 0) {
 		try {
@@ -68,24 +56,12 @@ export default async function Page({ params, searchParams }: PageProps) {
 	}
 
 	return (
-		<Suspense
-			fallback={
-				<div className="container mx-auto max-w-4xl px-4 py-8">
-					<div className="rounded-lg bg-card p-6 text-sm text-muted-foreground shadow-sm">
-						{t('loadingTeamPoints')}
-					</div>
-				</div>
-			}
-		>
-			<TeamPointsClient
-				entryId={entryId}
-				tournamentId={
-					typeof tournamentId === 'string' ? tournamentId : undefined
-				}
-				initialEventId={currentEventId}
-				initialLiveData={initialLiveData}
-				initialSnapshot={initialSnapshot}
-			/>
-		</Suspense>
+		<TeamPointsClient
+			entryId={entryId}
+			tournamentId={typeof tournamentId === 'string' ? tournamentId : undefined}
+			initialEventId={currentEventId}
+			initialLiveData={initialLiveData}
+			initialSnapshot={initialSnapshot}
+		/>
 	)
 }

@@ -42,11 +42,15 @@ function getPlayedStatus(pick: {
 function PlayedDot({ status }: { status: 'FINISHED' | 'PLAYING' | 'NOT_STARTED' }) {
 	const color =
 		status === 'FINISHED'
-			? 'bg-green-500'
+			? 'bg-success'
 			: status === 'PLAYING'
-				? 'bg-yellow-400'
+				? 'bg-warning'
 				: 'bg-muted-foreground/30'
-	return <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${color}`} />
+	return (
+		<span
+			className={`inline-block size-2 shrink-0 rounded-full ${color}`}
+		/>
+	)
 }
 
 function elementTypeLabel(elementType: number, position: number): string {
@@ -73,7 +77,7 @@ function ChipBadges({
 			{chips.bench && (
 				<Badge
 					variant="outline"
-					className="h-4 border-blue-200 bg-blue-500/10 px-1 text-[10px] text-blue-600"
+					className="h-4 border-info/30 bg-info/10 px-1 text-[10px] text-info"
 				>
 					BB
 				</Badge>
@@ -81,7 +85,7 @@ function ChipBadges({
 			{chips.triple && (
 				<Badge
 					variant="outline"
-					className="h-4 border-emerald-200 bg-emerald-500/10 px-1 text-[10px] text-emerald-600"
+					className="h-4 border-success/30 bg-success/10 px-1 text-[10px] text-success"
 				>
 					TC
 				</Badge>
@@ -89,7 +93,7 @@ function ChipBadges({
 			{chips.wildcard && (
 				<Badge
 					variant="outline"
-					className="h-4 border-purple-200 bg-purple-500/10 px-1 text-[10px] text-purple-600"
+					className="h-4 border-primary/30 bg-primary/10 px-1 text-[10px] text-primary-ink"
 				>
 					WC
 				</Badge>
@@ -97,7 +101,7 @@ function ChipBadges({
 			{chips.freeHit && (
 				<Badge
 					variant="outline"
-					className="h-4 border-amber-200 bg-amber-500/10 px-1 text-[10px] text-amber-700"
+					className="h-4 border-warning/30 bg-warning/10 px-1 text-[10px] text-warning"
 				>
 					FH
 				</Badge>

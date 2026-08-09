@@ -1,6 +1,7 @@
 'use client'
 
 import PageShell from '@/components/layout/PageShell'
+import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Card } from '@/components/ui/card'
 import type {
 	LiveCalcData,
@@ -89,7 +90,7 @@ export default function LivePointsClient({
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
-				<h1 className="mb-6 text-3xl font-bold">{t('title')}</h1>
+				<StatsPageHeader eyebrow={t('livePoints')} title={t('title')} />
 				{content}
 			</div>
 		</PageShell>

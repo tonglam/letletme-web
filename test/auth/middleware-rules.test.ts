@@ -46,8 +46,9 @@ describe('middleware — public routes', () => {
 		'/live/matches',
 		'/live/points/123',       // public id-suffixed variant
 		'/data/player-stats',
-		'/data/price-changes',
-		'/stats/gameweek',
+		'/data/market',
+		'/data/gameweek',
+		'/data/selections',
 		'/tournament/abc',        // public read-only tournament page
 		'/auth/login',
 		'/auth/signup',
@@ -85,12 +86,11 @@ describe('middleware — session gate', () => {
 describe('middleware — fplEntryId gate', () => {
 	const entryGatedPaths = [
 		'/live/points',
-		'/live/tournament',
-		'/data/selections',
-		'/stats/team',
-		'/stats/tournament',
+		'/live/tournaments',
+		'/me/team',
+		'/me/tournament',
 		'/tournament/create',
-		'/tournament/list',
+		'/tournament/browse',
 	]
 
 	for (const path of entryGatedPaths) {
@@ -113,8 +113,8 @@ describe('middleware — fplEntryId gate', () => {
 
 describe('middleware — login redirect encodes next param', () => {
 	it('preserves the original path in the next query param', () => {
-		const result = resolveMiddlewareOutcome('/stats/team', noSession)
+		const result = resolveMiddlewareOutcome('/me/team', noSession)
 		assert.ok(typeof result === 'object')
-		assert.ok(result.redirect.includes('next=%2Fstats%2Fteam'))
+		assert.ok(result.redirect.includes('next=%2Fme%2Fteam'))
 	})
 })

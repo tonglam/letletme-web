@@ -12,7 +12,7 @@ import {
 	mapEntryTournamentToLiveTournament,
 	mapTournamentGroupFormat,
 } from '@/lib/tournament/liveTournament'
-import { resolveTournamentStatsLoadState } from '@/app/stats/tournament/_lib/tournament-stats-model'
+import { resolveTournamentStatsLoadState } from '@/app/me/tournament/_lib/tournament-stats-model'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 
 const lifecycle = (

@@ -5,22 +5,25 @@ import {
 } from '@/components/home/GameweekStatsSection'
 import { MatchesSection } from '@/components/home/MatchesSection'
 import { MarketTeaser, MarketTeaserFallback } from '@/components/home/MarketTeaser'
+import {
+	PersonalDesk,
+	PersonalDeskBindPrompt,
+} from '@/components/home/PersonalDesk'
 import { StatsSection } from '@/components/home/StatsSection'
 import {
 	TeamOfTheWeekSection,
 	TeamOfTheWeekSectionFallback,
 } from '@/components/home/TeamOfTheWeekSection'
 import PageShell from '@/components/layout/PageShell'
+import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
 import { getPageLocale, type LocaleParams } from '@/i18n/page'
+import type { Session } from '@/lib/auth'
+import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
 import { getCurrentAndNextEvents } from '@/lib/events'
-import { executePublicServerQuery, executeServerQuery } from '@/lib/graphql-server'
-import {
-	GET_ENTRY,
-	type EntrySummaryResponse,
-} from '@/lib/graphql/operations/entries'
+import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_EVENT_FIXTURES,
 	GET_EVENT_OVERALL_RESULT,
@@ -28,12 +31,11 @@ import {
 	type EventOverallResultResponse,
 } from '@/lib/graphql/operations/events'
 import homeStats from '@/lib/home-stats'
-import { getCurrentSession } from '@/lib/session'
-import { formatCompactNumber, formatInteger } from '@/lib/utils'
+import { getVerifiedEntryContext } from '@/lib/session'
 import { ArrowRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { getTranslations } from 'next-intl/server'
-import { Suspense, type ReactNode } from 'react'
+import { Suspense } from 'react'
 
 async function safeQuery<T>(
 	query: string,
@@ -56,9 +58,7 @@ function MatchesSectionFallback({ eventId }: { eventId: number | null }) {
 				<h2 className="flex items-center gap-2 font-display text-xl font-bold uppercase tracking-wide">
 					{t('upcomingMatches')}
 					{eventId !== null && (
-						<span className="rounded-md bg-plum px-2 py-0.5 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
-							GW{eventId}
-						</span>
+						<GameweekBadge gameweek={eventId} size="sm" />
 					)}
 				</h2>
 				<div className="flex items-center gap-1">
@@ -92,166 +92,49 @@ function DeadlineScoreboardFallback() {
 function HomePersonalStripFallback() {
 	return (
 		<div
-			className="overflow-hidden rounded-xl border border-foreground/10 bg-card"
+			className="overflow-hidden rounded-xl border border-foreground/10 bg-card p-4 sm:p-5"
 			aria-hidden="true"
 		>
-			<div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between lg:p-5">
-				<div className="min-w-0 flex-1 space-y-2">
-					<Skeleton className="h-3 w-20" />
-					<Skeleton className="h-6 w-44" />
+			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+				<div className="min-w-0 space-y-2 sm:max-w-[16rem]">
+					<Skeleton className="h-6 w-40" />
 					<Skeleton className="h-4 w-28" />
 				</div>
-				<div className="grid w-full grid-cols-3 gap-2 lg:max-w-md">
+				<div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
 					<Skeleton className="h-14" />
 					<Skeleton className="h-14" />
 					<Skeleton className="h-14" />
 				</div>
-				<Skeleton className="h-10 w-full lg:w-40" />
 			</div>
 		</div>
 	)
 }
 
-function PersonalDeskShell({
-	accent = 'default',
-	children,
+function HomePersonalStrip({
+	session,
+	entryId,
 }: {
-	accent?: 'default' | 'warning'
-	children: ReactNode
+	session: Session | null
+	entryId: number | null
 }) {
-	const ringClass =
-		accent === 'warning' ? 'border-pink/35' : 'border-foreground/10'
-
-	return (
-		<article
-			className={`overflow-hidden rounded-xl border bg-card p-4 shadow-sticker-sm sm:p-5 ${ringClass}`}
-		>
-			{children}
-		</article>
-	)
-}
-
-async function HomePersonalStrip() {
-	const t = await getTranslations('Home')
-	const session = await getCurrentSession()
 	const user = session?.user
 
-	// Guests: hide the desk entirely. Hero CTAs + navbar sign-in already cover them;
-	// an empty "personal" band under the hero only adds noise.
+	// Guests: hide the desk entirely. Hero CTAs + navbar sign-in already cover them.
 	if (!user) {
 		return null
 	}
 
-	const entryId =
-		user.fplEntryVerifiedAt && typeof user.fplEntryId === 'number' ? user.fplEntryId : null
-
-	// Signed in but not bound: keep a compact prompt so the next step is obvious.
 	if (!entryId) {
-		return (
-			<PersonalDeskShell accent="warning">
-				<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-					<div className="min-w-0 max-w-xl">
-						<p className="font-display text-lg font-bold uppercase tracking-wide sm:text-xl">
-							{t('bindEntryTitle')}
-						</p>
-						<p className="mt-1.5 text-sm leading-6 text-muted-foreground">
-							{t('bindEntryPrompt')}
-						</p>
-					</div>
-					<Button
-						className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-[0.1em]"
-						asChild
-					>
-						<Link href="/onboarding/bind-entry">
-							{t('bindEntryCta')}
-							<ArrowRight data-icon="inline-end" />
-						</Link>
-					</Button>
-				</div>
-			</PersonalDeskShell>
-		)
+		return <PersonalDeskBindPrompt />
 	}
 
-	// Empty names stay blank (""). Null/missing numerics render as 0 — not mock ranks/values.
-	let teamName = ''
-	let managerName = ''
-	let overallPoints = 0
-	let overallRank = 0
-	let teamValue = 0
-
-	try {
-		// Session-scoped read: avoids requiring GRAPHQL_SERVICE_TOKEN for this strip.
-		const entryData = await executeServerQuery<EntrySummaryResponse>(
-			GET_ENTRY,
-			{ id: entryId },
-			{ cache: 'no-store', timeoutMs: 4_000 },
-		)
-		const entry = entryData.entry
-		if (entry) {
-			teamName = entry.entryName?.trim() ?? ''
-			managerName = entry.playerName?.trim() ?? ''
-			overallPoints = typeof entry.overallPoints === 'number' ? entry.overallPoints : 0
-			overallRank = typeof entry.overallRank === 'number' ? entry.overallRank : 0
-			teamValue = typeof entry.teamValue === 'number' ? entry.teamValue : 0
-		}
-	} catch (err) {
-		console.error('[home-personal-strip] entry fetch failed:', err)
-	}
-
-	const metricTiles = [
-		{
-			label: t('personalPointsLabel'),
-			value: formatInteger(overallPoints),
-		},
-		{
-			label: t('personalRankLabel'),
-			value: formatCompactNumber(overallRank),
-		},
-		{
-			label: t('personalTeamValueLabel'),
-			value: `£${(teamValue / 10).toFixed(1)}m`,
-		},
-	] as const
-
-	// Status strip only — navigation stays on the hero CTAs (live points / standings)
-	// and tournament pills so this desk doesn't repeat the same actions.
-	return (
-		<PersonalDeskShell>
-			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
-				<div className="min-w-0 sm:max-w-[16rem] sm:shrink-0">
-					<p className="truncate font-display text-xl font-bold uppercase leading-tight tracking-wide">
-						{teamName}
-					</p>
-					<p className="mt-1 truncate text-sm text-muted-foreground">
-						<span className="sr-only">{t('personalManagerLabel')}: </span>
-						{managerName}
-					</p>
-				</div>
-
-				<div className="grid min-w-0 flex-1 grid-cols-3 gap-px overflow-hidden rounded-lg border border-foreground/10 bg-foreground/10">
-					{metricTiles.map(tile => (
-						<div
-							key={tile.label}
-							className="bg-background px-2 py-2.5 text-center sm:px-3 sm:py-3"
-						>
-							<p className="font-mono text-base font-semibold tabular-nums tracking-tight text-primary-ink sm:text-lg">
-								{tile.value}
-							</p>
-							<p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-								{tile.label}
-							</p>
-						</div>
-					))}
-				</div>
-			</div>
-		</PersonalDeskShell>
-	)
+	return <PersonalDesk entryId={entryId} session={session} />
 }
 
 async function HomeHero() {
 	const t = await getTranslations('Home')
 	// Gate the desk band so guests never see a personal-strip skeleton flash.
-	const session = await getCurrentSession()
+	const { session, entryId } = await getVerifiedEntryContext()
 	const showPersonalDesk = Boolean(session?.user)
 
 	return (
@@ -290,7 +173,7 @@ async function HomeHero() {
 								className="font-display text-base font-semibold uppercase tracking-[0.1em]"
 								asChild
 							>
-								<Link href="/live/tournament">{t('liveTournamentStandings')}</Link>
+								<Link href="/live/tournaments">{t('liveTournamentStandings')}</Link>
 							</Button>
 						</div>
 					</div>
@@ -302,7 +185,7 @@ async function HomeHero() {
 
 				{showPersonalDesk ? (
 					<Suspense fallback={<HomePersonalStripFallback />}>
-						<HomePersonalStrip />
+						<HomePersonalStrip session={session} entryId={entryId} />
 					</Suspense>
 				) : null}
 			</div>
@@ -351,7 +234,7 @@ async function HomeTournamentBand() {
 						className="min-h-11 border-electric/50 bg-transparent font-display font-semibold uppercase tracking-[0.08em] text-electric hover:bg-electric hover:text-plum"
 						asChild
 					>
-						<Link href="/tournament/list">{t('browseTournaments')}</Link>
+						<Link href="/tournament/browse">{t('browseTournaments')}</Link>
 					</Button>
 					<Button
 						className="min-h-11 bg-electric font-display font-semibold uppercase tracking-[0.08em] text-plum hover:bg-electric/90"
@@ -372,11 +255,14 @@ async function HomeInsights() {
 	const t = await getTranslations('Home')
 	const [eventsData, overallResultData] = await Promise.all([
 		getCurrentAndNextEvents(),
-		safeQuery<EventOverallResultResponse>(GET_EVENT_OVERALL_RESULT, undefined, {
-			cache: 'force-cache',
-			next: { revalidate: 3600 },
-			timeoutMs: 5_000,
-		}),
+		safeQuery<EventOverallResultResponse>(
+			GET_EVENT_OVERALL_RESULT,
+			undefined,
+			publicFetchOptions({
+				revalidate: RevalidateSeconds.homeInsights,
+				tags: [CacheTag.gameweekStats, CacheTag.events],
+			}),
+		),
 	])
 	const currentEventId = eventsData?.current[0]?.id ?? null
 	const nextEventId = eventsData?.next[0]?.id ?? null
@@ -460,7 +346,10 @@ async function InitialMatchesSection({ eventId }: { eventId: number | null }) {
 		? await safeQuery<EventFixturesResponse>(
 				GET_EVENT_FIXTURES,
 				{ eventId },
-				{ cache: 'force-cache', next: { revalidate: 300 }, timeoutMs: 5_000 },
+				publicFetchOptions({
+					revalidate: RevalidateSeconds.publicStats,
+					tags: [CacheTag.fixtures, CacheTag.events],
+				}),
 			)
 		: null
 

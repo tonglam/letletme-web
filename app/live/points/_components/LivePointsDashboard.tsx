@@ -214,7 +214,7 @@ export function LivePointsDashboard({
 							<p className="chyron">{t('livePoints')}</p>
 							<h2
 								id="live-squad-heading"
-								className="mt-1 font-display text-2xl font-bold uppercase tracking-wide"
+								className="mt-1 font-display text-xl font-bold tracking-tight sm:text-2xl"
 							>
 								{t('squad')}
 							</h2>
@@ -224,7 +224,7 @@ export function LivePointsDashboard({
 						</div>
 						<Card
 							className={cn(
-								'overflow-hidden border-electric/15 shadow-sticker-sm',
+								'overflow-hidden border-border/80 shadow-sm',
 								isRefreshing && 'opacity-75 transition-opacity',
 							)}
 						>

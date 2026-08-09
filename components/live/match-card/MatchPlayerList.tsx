@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { teamCrestSrc } from '@/lib/team-crest'
 import type { Match, PlayerStat } from '@/types/match'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import Image from 'next/image'
@@ -68,9 +69,9 @@ function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player
 					{metrics.map(metric => {
 						const toneClass =
 							metric.label === 'YC'
-								? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
+								? 'bg-warning/15 text-warning'
 								: metric.label === 'RC'
-									? 'bg-red-600/15 text-red-600 dark:text-red-400'
+									? 'bg-destructive/15 text-destructive'
 									: METRIC_TONES[metric.tone]
 						return (
 							<span
@@ -137,11 +138,11 @@ export function MatchPlayerList({ match, onSelectPlayer }: MatchPlayerListProps)
 					<Tabs defaultValue={match.homeTeam.shortName} className="w-full">
 						<TabsList className="mb-2 grid h-auto w-full grid-cols-2">
 							<TabsTrigger value={match.homeTeam.shortName} className="gap-2">
-								<Image src={`/images/team-logos/${match.homeTeam.shortName.toUpperCase()}.png`} alt="" width={16} height={16} className="size-4 object-contain" />
+								<Image src={teamCrestSrc(match.homeTeam.shortName)} alt="" width={16} height={16} unoptimized className="size-4 object-contain" />
 								<span className="truncate">{match.homeTeam.name}</span>
 							</TabsTrigger>
 							<TabsTrigger value={match.awayTeam.shortName} className="gap-2">
-								<Image src={`/images/team-logos/${match.awayTeam.shortName.toUpperCase()}.png`} alt="" width={16} height={16} className="size-4 object-contain" />
+								<Image src={teamCrestSrc(match.awayTeam.shortName)} alt="" width={16} height={16} unoptimized className="size-4 object-contain" />
 								<span className="truncate">{match.awayTeam.name}</span>
 							</TabsTrigger>
 						</TabsList>

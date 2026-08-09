@@ -112,9 +112,9 @@ function LoginForm() {
 				</h1>
 			</div>
 
-			<Card className="w-full max-w-md p-6">
+			<Card className="w-full max-w-md border-border/80 p-6 shadow-sm">
 				<div className="mb-6 text-center">
-					<h2 className="text-2xl font-bold tracking-tight">{t('signIn')}</h2>
+					<h2 className="font-display text-2xl font-bold tracking-tight">{t('signIn')}</h2>
 					<p className="text-sm text-muted-foreground">{t('chooseMethod')}</p>
 				</div>
 

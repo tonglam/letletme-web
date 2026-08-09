@@ -16,7 +16,7 @@ export type WebVitalPayload = {
 
 const routePatterns: Array<[RegExp, string]> = [
 	[/^\/live\/points\/[^/]+$/, '/live/points/:entryId'],
-	[/^\/live\/tournament\/[^/]+$/, '/live/tournament/:tournamentId'],
+	[/^\/live\/tournaments\/[^/]+$/, '/live/tournaments/:tournamentId'],
 	[/^\/tournament\/[^/]+\/manage$/, '/tournament/:tournamentId/manage'],
 	[/^\/tournament\/[^/]+$/, '/tournament/:tournamentId'],
 ]

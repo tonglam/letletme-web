@@ -4,6 +4,7 @@ import type { MarketPulse } from '../lib/graphql/operations/market'
 import {
 	getMarketCoverageMode,
 	getMarketTeaserMode,
+	getMarketViewMode,
 	rankOwnershipMovers,
 	shortMarketPosition,
 } from '../lib/market'
@@ -22,6 +23,7 @@ const pulse = (): MarketPulse => ({
 	ownershipMovers: { risers: [], fallers: [] },
 	transferMovers: [],
 	availabilityUpdates: [],
+	availabilityHighlights: [],
 	newPlayers: [],
 	priceChanges: [],
 })
@@ -57,6 +59,31 @@ describe('Market presentation rules', () => {
 			oldPrice: 74, newPrice: 75, change: 1, direction: 'RISE',
 		}]
 		assert.equal(getMarketTeaserMode(data), 'price')
+	})
+
+	it('selects price, availability, ownership, then baseline as the page lead', () => {
+		const data = pulse()
+		assert.equal(getMarketViewMode(data), 'baseline')
+		const player = {
+			playerId: 1, playerCode: 1, webName: 'Player', teamId: 1,
+			teamName: 'Club', teamShortName: 'CLU', position: 'MIDFIELDER' as const,
+			price: 75, selectedByPercent: 20,
+		}
+		data.ownershipMovers.risers = [{
+			player, previousSelectedByPercent: 19, selectedByPercent: 20, change: 1,
+		}]
+		assert.equal(getMarketViewMode(data), 'ownership-led')
+		data.availabilityHighlights = [{
+			player, status: 'i', previousStatus: 'a', news: 'Injured',
+			newsAdded: null, observedDate: '2026-08-08',
+			chanceOfPlayingThisRound: 0, chanceOfPlayingNextRound: 0,
+		}]
+		assert.equal(getMarketViewMode(data), 'availability-led')
+		data.priceChanges = [{
+			player, changeDate: '2026-08-08', oldPrice: 74, newPrice: 75,
+			change: 1, direction: 'RISE',
+		}]
+		assert.equal(getMarketViewMode(data), 'price-led')
 	})
 
 	it('ranks ownership swings by magnitude and maps position labels', () => {
