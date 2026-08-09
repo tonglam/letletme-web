@@ -31,6 +31,35 @@ on:
         description: Exact APPROVE_V3_ACTIVATION phrase for the cutover run.
         required: false
         type: string
+  workflow_call:
+    inputs:
+      operation:
+        required: true
+        type: string
+      sha:
+        required: true
+        type: string
+      v3_cutover_run_id:
+        required: false
+        type: string
+        default: ''
+      v3_release_manifest_base64:
+        required: false
+        type: string
+        default: ''
+      v3_release_manifest_sha256:
+        required: false
+        type: string
+        default: ''
+      v3_cutover_approval:
+        required: false
+        type: string
+        default: ''
+    secrets:
+      V3_MIGRATION_DATABASE_URL:
+        required: true
+      V3_WEB_DB_PASSWORD:
+        required: true
 
 permissions:
   contents: read

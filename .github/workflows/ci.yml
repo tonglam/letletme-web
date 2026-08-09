@@ -3,6 +3,36 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: One explicit Data Platform v3 Web database operation.
+        required: true
+        type: choice
+        options:
+          - v3-preflight
+          - v3-activate-database
+          - v3-status
+      sha:
+        description: Exact frozen Web candidate commit SHA.
+        required: true
+        type: string
+      v3_cutover_run_id:
+        description: Exact v3 cutover run ID.
+        required: false
+        type: string
+      v3_release_manifest_base64:
+        description: Canonical base64 of the approved external v3 release manifest.
+        required: false
+        type: string
+      v3_release_manifest_sha256:
+        description: SHA-256 of the approved v3 release manifest.
+        required: false
+        type: string
+      v3_cutover_approval:
+        description: Exact APPROVE_V3_ACTIVATION phrase for the cutover run.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -23,6 +53,7 @@ env:
 
 jobs:
   verify:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -106,3 +137,15 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  v3_production_cutover:
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/v3-production-cutover.yml
+    with:
+      operation: ${{ inputs.operation }}
+      sha: ${{ inputs.sha }}
+      v3_cutover_run_id: ${{ inputs.v3_cutover_run_id }}
+      v3_release_manifest_base64: ${{ inputs.v3_release_manifest_base64 }}
+      v3_release_manifest_sha256: ${{ inputs.v3_release_manifest_sha256 }}
+      v3_cutover_approval: ${{ inputs.v3_cutover_approval }}
+    secrets: inherit

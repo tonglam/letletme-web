@@ -6,6 +6,7 @@ const workflow = readFileSync(
 	'.github/workflows/v3-production-cutover.yml',
 	'utf8'
 )
+const dispatchBridge = readFileSync('.github/workflows/ci.yml', 'utf8')
 
 function job(name: string, nextName?: string): string {
 	const start = workflow.indexOf(`\n  ${name}:`)
@@ -18,6 +19,30 @@ function job(name: string, nextName?: string): string {
 }
 
 describe('Web v3 production cutover workflow', () => {
+	it('is callable through the default-branch CI workflow without running normal CI', () => {
+		assert.match(workflow, /workflow_call:/)
+		assert.match(dispatchBridge, /workflow_dispatch:/)
+		assert.match(
+			dispatchBridge,
+			/verify:\n\s+if: github\.event_name != 'workflow_dispatch'/
+		)
+		assert.match(
+			dispatchBridge,
+			/uses: \.\/\.github\/workflows\/v3-production-cutover\.yml/
+		)
+		for (const input of [
+			'operation',
+			'sha',
+			'v3_cutover_run_id',
+			'v3_release_manifest_base64',
+			'v3_release_manifest_sha256',
+			'v3_cutover_approval'
+		]) {
+			assert.match(dispatchBridge, new RegExp(`${input}: \\$\\{\\{ inputs\\.${input} \\}\\}`))
+		}
+		assert.match(dispatchBridge, /secrets: inherit/)
+	})
+
 	it('keeps preflight read-only and accepts only 0008 as pending', () => {
 		const preflight = job('preflight', 'activate_database')
 		assert.match(preflight, /pending 0008_web_auth_runtime_role/)
