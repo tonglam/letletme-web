@@ -196,6 +196,12 @@ Rules:
 - Use a stable player identity where available and retain an explicit current-season mapping; do not rely on a seasonal element ID for cross-season saves.
 - Rival entry keys are season-scoped.
 - Competition keys resolve only to objects the user may read.
+- `my_fpl_saved_objects` has a PostgreSQL 15 unique constraint on
+  `(user_id, object_type, object_key, season_scope) NULLS NOT DISTINCT`; a nullable global season
+  scope is therefore one identity rather than an unlimited set of null duplicates. Save uses
+  `INSERT ... ON CONFLICT` against that exact key and returns the existing row on retries or
+  concurrent tabs. Delete addresses the same tuple, and per-user cap accounting is serialized in
+  the save transaction so two concurrent inserts cannot both pass the final slot.
 - A view-state row is keyed by `(user_id, season_scope, entry_id, scope, scope_key)`. Every read and
   acknowledgment supplies the resolved season-bound entry explicitly; rollover or a same-season
   rebind starts a distinct baseline and monotonic revision cursor rather than reusing another

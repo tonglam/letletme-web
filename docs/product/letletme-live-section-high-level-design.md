@@ -151,6 +151,12 @@ Responsibilities:
   either revision changes. Suppression is allowed only when the exact
   `(scope, season, eventId, revision, resultRevision)` token is unchanged; official or custom
   results can therefore recover without waiting for unrelated upstream facts.
+- A viewer-personalized match result has an additional `viewerImpactRevision`. When
+  `viewerEntryId` is supplied, this monotonic revision exists even while picks or impact data are
+  unavailable and advances whenever picks availability, the resolved squad, or any impact marker
+  changes. The match probe and suppression token bind both `viewerEntryId` and
+  `viewerImpactRevision`; a viewer-independent request omits both. A match calculation revision
+  can therefore never hide recovery of viewer picks or impact data.
 
 ### 4.3 Required GraphQL read models
 
@@ -162,7 +168,7 @@ Responsibilities:
 | `competitionLive(competitionId: ID!, event: EventRef!, viewerEntryId: Int)` | Return one competition identity, shared result metadata, viewer context, and a discriminated result body |
 | `competitionLiveResultMeta(competitionId: ID!, event: EventRef!)` | Cheap metadata probe for exactly the corresponding competition result scope |
 | `liveMatches(event: EventRef!, viewerEntryId: Int)` | Retain the current match groups and optionally include one linked entry's squad-impact map |
-| `liveMatchResultMeta(event: EventRef!, fixtureId: Int!)` | Cheap metadata probe for exactly one match result scope; an event board batches these probes without changing their identities |
+| `liveMatchResultMeta(event: EventRef!, fixtureId: Int!, viewerEntryId: Int)` | Cheap metadata probe for exactly one match result scope; when viewer impact is requested it returns the independently monotonic `viewerImpactRevision`, and an event board batches probes without changing fixture or viewer identity |
 
 `liveSnapshot(event: EventRef!)` and every repository/cache key below these roots use the same
 season-bearing event input. During compatibility, active-season wrappers may call the new roots,
@@ -428,6 +434,10 @@ Changes:
 7. Do not add a historical gameweek selector or calculate every related competition.
 8. Pass the server-resolved `EventRef` to `liveMatches`; current-event convenience UI must not
    remove season from the operation or cache key.
+9. Include the linked `viewerEntryId` in the match metadata probe and refresh token. A picks fetch
+   failure, recovery, squad change, or impact-map change advances `viewerImpactRevision` and forces
+   the full viewer-personalized match result to refetch even when official and match-result
+   revisions are unchanged.
 
 Primary files:
 

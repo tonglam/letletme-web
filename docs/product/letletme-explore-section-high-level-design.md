@@ -322,6 +322,7 @@ briefing.items
   item_id
   source_id
   external_id
+  original_item_id nullable
   canonical_url
   title nullable
   summary nullable
@@ -418,8 +419,15 @@ Rules:
   expired policy.
 - Full paywalled article bodies are not stored or rendered.
 - A model-assisted summary is labelled by `summary_method`, retains every source link, and cannot change the item's evidence class.
-- One item has one canonical source identity. Reposts may link to the original and are not counted as independent agreement.
-- Fingerprint and provider identity deduplicate retries and cross-topic reuse without deleting legitimate distinct items.
+- One item has one canonical source identity. `briefing.items` enforces
+  `UNIQUE (source_id, external_id)`, and ingestion uses an atomic conflict-safe upsert against that
+  key so concurrent retries or workers cannot create duplicate accepted items. A provider
+  correction updates the canonical row under the existing audit rules rather than inserting a
+  second identity.
+- Reposts use the explicit nullable `original_item_id` relationship and are not counted as
+  independent agreement. Fingerprints detect cross-source/repost relationships and content
+  changes, but never replace the provider-identity unique key or collapse legitimate distinct
+  provider items.
 - Corrections update status and retain audit history. Removal tombstones the item so caches and topic boards stop serving it.
 - Public text is stored/rendered as controlled plain text or sanitized allowed markup; arbitrary provider HTML and scripts are never rendered.
 - Embedded media uses an explicit provider allowlist and privacy/security policy. A normal source link remains available when embedding is disabled.
@@ -831,7 +839,9 @@ Rules:
 - Define a source-adapter interface for discovery, fetch, normalization, checkpoint, rate handling, removal detection, and rights-aware projection.
 - Enable no adapter until its source policy fixture is present.
 - Validate canonical URLs, provider IDs, publication times, locale, media type, and display mode.
-- Deduplicate by provider identity plus canonical fingerprint and preserve original/repost relationships.
+- Enforce the provider identity unique key and conflict-safe ingest transaction, then use the
+  canonical fingerprint to preserve explicit original/repost relationships without creating a
+  duplicate item during concurrent retry.
 - Add entity-link candidate generation and reviewed/verified publication gates.
 - Add topic assignment with explicit provenance; do not publish ambiguous player links.
 - Add transactional published-topic rename that persists the prior slug alias before changing the
