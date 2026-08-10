@@ -408,10 +408,14 @@ Rules:
   `METADATA`, `SUMMARY`, and `EXCERPT` modes never return transcript body segments, and no cache or
   public URL bypasses this repository-level projection.
 - Every opaque transcript cursor binds `item_id`, `source_content_hash`, `rights_revision`, and the
-  next character offset under the server signature. Each page rechecks both revisions against the
-  current transcript row before reading; correction, reingestion, or rights change returns a typed
-  restart-required result and never combines segments from different bodies. Transcript page
-  caches use the same hash/revision identity rather than only item and offset.
+  retention deadline plus the next character offset under the server signature. Each page rechecks
+  both revisions and current availability/retention against the transcript row before reading;
+  correction, reingestion, rights change, expiry, or removal returns a typed restart-required or
+  unavailable result and never combines segments from different bodies. Transcript page caches use
+  the same hash/revision/availability identity rather than only item and offset, their TTL is capped
+  at `retained_until`, and the retention worker purges all item pages when it expires. Repository
+  authorization and retention checks run before every cache read, so cached text cannot bypass an
+  expired policy.
 - Full paywalled article bodies are not stored or rendered.
 - A model-assisted summary is labelled by `summary_method`, retains every source link, and cannot change the item's evidence class.
 - One item has one canonical source identity. Reposts may link to the original and are not counted as independent agreement.
@@ -1007,7 +1011,8 @@ Flags control exposure, not schema correctness. Disabled features return an inte
 - Raw member non-publication and retention tests.
 - Briefing rights-mode projection tests from repository through cache payload.
 - Transcript storage/retention, stale-rights-revision denial, content-correction cursor restart,
-  segment pagination/character caps, and non-`TRANSCRIPT` leakage tests.
+  cache TTL/purge at `retained_until`, pre-cache availability enforcement, segment
+  pagination/character caps, and non-`TRANSCRIPT` leakage tests.
 - Source URL, fingerprint, repost, deduplication, correction, removal, and source-disable tests.
 - Entity ambiguity/review gate and season-safe player/team mapping tests.
 - Queue retry, checkpoint, rate, circuit-breaker, and idempotency tests.

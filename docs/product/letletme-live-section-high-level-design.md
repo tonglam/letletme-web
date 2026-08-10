@@ -145,18 +145,24 @@ Responsibilities:
   advance `resultRevision` even when `revision` is unchanged. Implementations must not derive
   `resultRevision` from `revision`; equality is allowed only as an incidental initial value for a
   projection proven to be completely and immutably determined by that snapshot.
-- The cheap refresh probe returns both revisions and Web performs a full fetch when either changes.
-  Suppression is allowed only when the exact `(season, eventId, revision, resultRevision)` token is
-  unchanged; a custom result can therefore recover without waiting for unrelated upstream facts.
+- Each result root has a scope-aware cheap metadata probe that returns both revisions for the same
+  entry, competition, or match identity; `liveSnapshot(event: EventRef!)` remains only the official
+  fact-snapshot probe and cannot stand in for a scoped result probe. Web performs a full fetch when
+  either revision changes. Suppression is allowed only when the exact
+  `(scope, season, eventId, revision, resultRevision)` token is unchanged; official or custom
+  results can therefore recover without waiting for unrelated upstream facts.
 
 ### 4.3 Required GraphQL read models
 
 | Read model | Implementation requirement |
 | --- | --- |
 | `calcLivePointsByEntry(event: EventRef!, entryId: Int!)` | Keep the current full entry contract and add shared result metadata; request all scoreboard fields already available in `LiveCalcData` |
+| `entryLiveResultMeta(event: EventRef!, entryId: Int!)` | Cheap metadata probe for exactly the corresponding entry result scope |
 | `entryPreparedCompetitions` | Return metadata and cheap viewer summaries only; never calculate a full table for every object |
 | `competitionLive(competitionId: ID!, event: EventRef!, viewerEntryId: Int)` | Return one competition identity, shared result metadata, viewer context, and a discriminated result body |
+| `competitionLiveResultMeta(competitionId: ID!, event: EventRef!)` | Cheap metadata probe for exactly the corresponding competition result scope |
 | `liveMatches(event: EventRef!, viewerEntryId: Int)` | Retain the current match groups and optionally include one linked entry's squad-impact map |
+| `liveMatchResultMeta(event: EventRef!, fixtureId: Int!)` | Cheap metadata probe for exactly one match result scope; an event board batches these probes without changing their identities |
 
 `liveSnapshot(event: EventRef!)` and every repository/cache key below these roots use the same
 season-bearing event input. During compatibility, active-season wrappers may call the new roots,
@@ -272,6 +278,8 @@ Tests:
 - Add `competitionLive` fixtures for official standings, points groups, and knockout results.
 - Extend snapshot tests for coverage, reason codes, composite snapshot/result revision probes, and
   official/custom result recovery without an upstream revision.
+- Give two entry/competition/match scopes in the same event different result revisions and prove
+  every cheap probe and Web suppression key selects only its requested scope.
 - Add same-numbered event/entry fixtures in two seasons and prove every Live repository and cache
   key selects only the requested `EventRef`.
 - Extend match-service tests for viewer-impact batching.

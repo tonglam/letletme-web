@@ -317,6 +317,8 @@ Web account_deletion_operations
   state: REQUESTED | PREFLIGHT_PASSED | AUTH_DELETE_IN_PROGRESS | AUTH_DELETED | CANCELED
   created_at
   updated_at
+  unique(principal_digest, fence_version)
+  unique active principal where state not in (AUTH_DELETED, CANCELED)
 ```
 
 `principal_digest` is a deterministic HMAC produced only by the trusted command boundary. Every
@@ -345,9 +347,13 @@ Rules:
   ownership while fenced. Web deletes the auth row only after a fresh zero-owner preflight for that
   fence version, then sends an idempotent finalize command that stores only the digest as `DELETED`,
   records the account-deletion audit event, changes archived rows to
-  `owner_deleted_archived`, and clears their management principal. Web serializes cancellation and
-  auth-row deletion on its durable `account_deletion_operations` row: the deletion worker locks the
-  row, rechecks the exact operation/fence version, changes it to `AUTH_DELETE_IN_PROGRESS`, and
+  `owner_deleted_archived`, and clears their management principal. Data makes repeated/concurrent
+  begin commands for one pending principal idempotently return the same fence version. Web inserts
+  or selects exactly one operation under the `(principal_digest, fence_version)` uniqueness
+  contract; a partial unique constraint also permits only one active operation for the principal.
+  Worker and cancellation lookup and lock by that principal/fence identity rather than trusting an
+  independently supplied `operation_id`. The deletion worker rechecks the exact operation/fence
+  version, changes it to `AUTH_DELETE_IN_PROGRESS`, and
   deletes the auth row in the same Web-database transaction. Cancellation takes the same lock and
   is accepted only from `REQUESTED` or `PREFLIGHT_PASSED`; once the worker claims the operation it
   is retry-to-finalize only and the Data fence remains closed. After Web durably records `CANCELED`,
@@ -922,9 +928,10 @@ Do not expose invitations before roster-lock semantics exist. Do not expose a fo
 - Archive and conditional hard-delete behavior.
 - Owner transfer plus the account-deletion fence across Web and Data, including a creation or
   transfer-to request authenticated before deletion begins, concurrent preflight, version mismatch,
-  cancellation racing a worker claim, rejection of cancellation after the atomic auth-delete
-  claim, stale-worker rejection after cancellation, idempotent finalization, and a failed preflight
-  causing no auth-row deletion.
+  concurrent/retried begin collapsing to one principal/fence operation, cancellation racing a
+  worker claim, rejection of cancellation after the atomic auth-delete claim, stale-worker
+  rejection after cancellation, idempotent finalization, and a failed preflight causing no auth-row
+  deletion.
 - Mobile tables/brackets, keyboard navigation, focus restoration, dialog labeling, status announcements, and reduced-motion behavior.
 - No native confirmation/notification UI.
 
