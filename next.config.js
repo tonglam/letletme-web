@@ -5,7 +5,7 @@ const withNextIntl = createNextIntlPlugin('./i18n/request.ts')
 
 const nextConfig = {
 	async redirects() {
-		const legacyRoutes = [
+		const localizedLegacyRoutes = [
 			['/:locale/stats/gameweek', '/:locale/data/gameweek'],
 			['/:locale/stats/team', '/:locale/me/team'],
 			['/:locale/stats/tournament', '/:locale/me/tournament'],
@@ -15,7 +15,13 @@ const nextConfig = {
 			['/:locale/tournament/list', '/:locale/tournament/browse'],
 			['/:locale/data/gameweek/gameweek', '/:locale/data/gameweek'],
 		]
-		return legacyRoutes.map(([source, destination]) => ({
+		const englishLegacyRoutes = localizedLegacyRoutes.map(
+			([source, destination]) => [
+				source.replace('/:locale', ''),
+				destination.replace('/:locale', ''),
+			],
+		)
+		return [...englishLegacyRoutes, ...localizedLegacyRoutes].map(([source, destination]) => ({
 			source,
 			destination,
 			permanent: true,

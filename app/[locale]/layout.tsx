@@ -11,7 +11,6 @@ import { hasLocale, NextIntlClientProvider } from 'next-intl'
 import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server'
 import { Barlow, Barlow_Condensed, IBM_Plex_Mono } from 'next/font/google'
 import { notFound } from 'next/navigation'
-import Script from 'next/script'
 import { Suspense } from 'react'
 import '../globals.css'
 
@@ -100,17 +99,13 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
 			data-scroll-behavior="smooth"
 			suppressHydrationWarning
 		>
-			<body className="min-h-svh bg-background font-sans text-foreground antialiased">
-				<Script
+			<head>
+				<script
 					id="theme-bootstrap"
-					// This layout is behind the locale segment and can be re-rendered
-					// during client navigation. beforeInteractive would put a <script>
-					// in the client React tree, which React 19 correctly rejects.
-					// ThemeProvider applies the same value on mount; loading this
-					// bootstrap immediately after hydration avoids the client warning.
-					strategy="afterInteractive"
 					dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
 				/>
+			</head>
+			<body className="min-h-svh bg-background font-sans text-foreground antialiased">
 				<NextIntlClientProvider messages={messages}>
 					<ThemeProvider defaultTheme="system" enableSystem disableTransitionOnChange>
 						<TooltipProvider>

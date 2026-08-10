@@ -142,6 +142,7 @@ export default async function TournamentStatsPage({
 	let initialTournaments: EntryTournament[] = []
 	let initialSelectedTournamentId = ''
 	let initialDataGameweek: number | null = null
+	let initialSliceGameweek: number | null = null
 	let initialCurrentRows: TournamentEventResultItem[] = []
 	let initialSeasonFieldRows: TournamentEventResultItem[] = []
 	let initialSeasonSnapshot: TournamentSeasonSnapshotApi | null = null
@@ -195,6 +196,7 @@ export default async function TournamentStatsPage({
 			usedFallbackGameweek = resolved.usedFallback
 
 			initialDataGameweek = probeRows.length > 0 ? latestGw : null
+			initialSliceGameweek = probeRows.length > 0 ? latestGw : null
 			initialSeasonFieldRows = probeRows
 			initialCurrentRows = probeRows
 
@@ -239,6 +241,7 @@ export default async function TournamentStatsPage({
 						? probeRows
 						: await fetchResults(session, tournamentId, targetGw)
 				initialCurrentRows = currentRows
+				initialSliceGameweek = targetGw
 
 				const captainIds = currentRows
 					.map(row => row.captainId)
@@ -287,6 +290,7 @@ export default async function TournamentStatsPage({
 				anchorGw: review.anchorGw,
 				anchorSource: review.source,
 				dataGameweek: initialDataGameweek,
+				sliceGameweek: initialSliceGameweek,
 				needsGameweekSeed,
 				rows: initialCurrentRows.length,
 				hasRanking: Boolean(initialRankingSummary),
@@ -316,6 +320,7 @@ export default async function TournamentStatsPage({
 				initialTournaments={initialTournaments}
 				initialSelectedTournamentId={initialSelectedTournamentId}
 				initialDataGameweek={initialDataGameweek}
+				initialSliceGameweek={initialSliceGameweek}
 				initialCurrentRows={initialCurrentRows}
 				initialSeasonFieldRows={initialSeasonFieldRows}
 				initialSeasonSnapshot={initialSeasonSnapshot}

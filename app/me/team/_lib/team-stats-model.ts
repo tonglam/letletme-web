@@ -385,8 +385,8 @@ export const mapApiDataToTeamStats = (
 					}),
 				)
 				.sort((a, b) => {
-					const aBench = a.multiplier === 0 ? 1 : 0
-					const bBench = b.multiplier === 0 ? 1 : 0
+					const aBench = a.position > 11 ? 1 : 0
+					const bBench = b.position > 11 ? 1 : 0
 					if (aBench !== bBench) return aBench - bBench
 					if (a.position !== b.position) return a.position - b.position
 					return (

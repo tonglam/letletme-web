@@ -91,8 +91,10 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 			: currentGameweek
 
 	const seedGw =
-		props.initialDataGameweek && props.initialDataGameweek > 0
-			? props.initialDataGameweek
+		props.initialSliceGameweek && props.initialSliceGameweek > 0
+			? props.initialSliceGameweek
+			: props.initialDataGameweek && props.initialDataGameweek > 0
+				? props.initialDataGameweek
 			: currentGameweek
 
 	const replaceQuery = useCallback(

@@ -48,6 +48,7 @@ import {
 	type TournamentStatsViewModel,
 	resolveTournamentStatsLoadState,
 } from '../_lib/tournament-stats-model'
+import { buildTournamentEventResultSeeds } from '../_lib/tournament-stats-seed'
 
 export interface TournamentStatsClientProps {
 	entryId: number
@@ -55,6 +56,8 @@ export interface TournamentStatsClientProps {
 	initialTournaments: EntryTournament[]
 	initialSelectedTournamentId: string
 	initialDataGameweek: number | null
+	/** Event ID represented by initialCurrentRows; may differ for a deep link. */
+	initialSliceGameweek: number | null
 	initialCurrentRows: TournamentEventResultItem[]
 	/** Latest-data-GW full field for Season A; defaults to initialCurrentRows */
 	initialSeasonFieldRows?: TournamentEventResultItem[]
@@ -112,6 +115,7 @@ export function useTournamentStats({
 	initialTournaments,
 	initialSelectedTournamentId,
 	initialDataGameweek,
+	initialSliceGameweek,
 	initialCurrentRows,
 	initialSeasonFieldRows,
 	initialSeasonSnapshot = null,
@@ -137,19 +141,15 @@ export function useTournamentStats({
 		hydratedRef.current = true
 		const tid = Number(initialSelectedTournamentId)
 		if (Number.isFinite(tid) && tid > 0 && initialDataGameweek != null) {
-			if (seasonFieldSeed.length > 0) {
-				seedEventResults(tid, initialDataGameweek, seasonFieldSeed)
-			}
+			buildTournamentEventResultSeeds({
+				dataGameweek: initialDataGameweek,
+				sliceGameweek: initialSliceGameweek,
+				seasonRows: seasonFieldSeed,
+				sliceRows: initialCurrentRows,
+				previousRows: initialPreviousRows,
+			}).forEach(seed => seedEventResults(tid, seed.eventId, seed.rows))
 			if (initialSeasonSnapshot) {
 				seedSeasonSnapshot(tid, initialDataGameweek, initialSeasonSnapshot)
-			}
-			if (initialCurrentRows.length > 0) {
-				// Warm current-slice cache (may equal season field seed on Season default)
-				seedEventResults(tid, initialDataGameweek, initialCurrentRows)
-			}
-			if (initialPreviousRows.length > 0 && initialDataGameweek > 1) {
-				// Always warm prev GW for risers/fallers when switching to GW view
-				seedEventResults(tid, initialDataGameweek - 1, initialPreviousRows)
 			}
 			if (initialRankingSummary) {
 				seedRanking(
@@ -172,6 +172,7 @@ export function useTournamentStats({
 		initialRankingSummary,
 		initialSeasonSnapshot,
 		initialSelectedTournamentId,
+		initialSliceGameweek,
 		seasonFieldSeed,
 	])
 
@@ -182,10 +183,10 @@ export function useTournamentStats({
 	const initialStats =
 		initialSelectedTournament &&
 		areTournamentInsightsReady(initialSelectedTournament) &&
-		initialDataGameweek !== null
+		initialSliceGameweek !== null
 			? buildTournamentStats(
 					initialSelectedTournament,
-					initialDataGameweek,
+					initialSliceGameweek,
 					initialCurrentRows,
 					initialPreviousRows,
 					{ ...getAllCachedPlayerMeta(), ...initialPlayerMeta },
@@ -224,8 +225,8 @@ export function useTournamentStats({
 	const [seasonPathLoading, setSeasonPathLoading] = useState(false)
 	const [error, setError] = useState<string | null>(initialError)
 	const [selectedGameweek, setSelectedGameweek] = useState(
-		initialDataGameweek && initialDataGameweek > 0
-			? initialDataGameweek
+		initialSliceGameweek && initialSliceGameweek > 0
+			? initialSliceGameweek
 			: initialCurrentGameweek,
 	)
 	const currentGameweek = initialCurrentGameweek

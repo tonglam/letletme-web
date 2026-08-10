@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { StatsSectionCard } from '@/components/stats/StatsSurfaces'
 import { positionBadgeClass } from '@/lib/position-style'
+import { isSquadStarter } from '@/lib/squad-picks'
 import { cn, normalizePosition } from '@/lib/utils'
 import { Users } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -91,7 +92,7 @@ function SquadPickRow({ pick }: { pick: Pick }) {
 	const pos = positionCode(pick.elementTypeName)
 	const fixture = fixtureLine(pick)
 	const stats = miniStats(pick, pos)
-	const isBench = pick.multiplier === 0
+	const isBench = !isSquadStarter(pick)
 
 	return (
 		<div
@@ -259,8 +260,8 @@ function SquadGroup({
 /** Live-points-style squad: card rows with fixture + mini stats. */
 export function TeamSquadSection({ picks }: { picks: EventPickViewModel[] }) {
 	const t = useTranslations('TeamStats')
-	const starters = picks.filter(p => p.multiplier > 0)
-	const bench = picks.filter(p => p.multiplier === 0)
+	const starters = picks.filter(isSquadStarter)
+	const bench = picks.filter(pick => !isSquadStarter(pick))
 
 	return (
 		<div className="mb-0">

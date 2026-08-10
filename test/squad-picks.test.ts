@@ -85,7 +85,7 @@ describe('positionCodeFromElementTypeName', () => {
 })
 
 describe('isSquadStarter', () => {
-	it('uses multiplier and bench slot', () => {
+	it('uses squad position even when Bench Boost makes every multiplier positive', () => {
 		assert.equal(
 			isSquadStarter({
 				elementId: 1,
@@ -93,7 +93,7 @@ describe('isSquadStarter', () => {
 				teamShortName: 'AAA',
 				elementTypeName: 'MID',
 				position: 11,
-				multiplier: 0,
+				multiplier: 1,
 				isCaptain: false,
 				isViceCaptain: false,
 			}),
@@ -106,7 +106,7 @@ describe('isSquadStarter', () => {
 				teamShortName: 'BBB',
 				elementTypeName: 'MID',
 				position: 12,
-				multiplier: 0,
+				multiplier: 1,
 				isCaptain: false,
 				isViceCaptain: false,
 			}),

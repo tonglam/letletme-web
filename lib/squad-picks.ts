@@ -68,8 +68,8 @@ export function positionCodeFromElementTypeName(elementTypeName: string): string
 	return 'MID'
 }
 
-export function isSquadStarter(pick: SquadPickSeed): boolean {
-	return pick.multiplier > 0 || pick.position <= 11
+export function isSquadStarter<T extends { position: number }>(pick: T): boolean {
+	return pick.position >= 1 && pick.position <= 11
 }
 
 export type SquadPositionCode = 'GKP' | 'DEF' | 'MID' | 'FWD'

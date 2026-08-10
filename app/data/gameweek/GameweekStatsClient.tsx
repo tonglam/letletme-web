@@ -95,6 +95,16 @@ export default function GameweekStatsClient({
 
 				setIsLoadingOverall(needsOverall)
 				setIsLoadingDetails(needsBoards)
+				if (needsOverall && !cancelled) {
+					setOverallStats(FALLBACK_OVERALL_STATS)
+				}
+				if (needsBoards && !cancelled) {
+					setDreamTeam([])
+					setHaulPlayers([])
+					setEventMeta(null)
+					setDisplayState(isPreseasonSelection ? 'scheduled' : null)
+					setPublishedAt(null)
+				}
 
 				const cachedOverall = overallCacheRef.current.get(selectedGameweek)
 				if (cachedOverall && !cancelled) setOverallStats(cachedOverall)
@@ -153,6 +163,7 @@ export default function GameweekStatsClient({
 					setOverallStats(overallResult.value)
 				} else if (overallResult.status === 'rejected') {
 					console.error('Failed to load selected gameweek overview:', overallResult.reason)
+					setOverallStats(FALLBACK_OVERALL_STATS)
 				}
 				if (boardsResult.status === 'fulfilled' && boardsResult.value) {
 					setDreamTeam(boardsResult.value.dreamTeam)
@@ -162,6 +173,11 @@ export default function GameweekStatsClient({
 					setPublishedAt(boardsResult.value.publishedAt)
 				} else if (boardsResult.status === 'rejected') {
 					console.error('Failed to load selected gameweek boards:', boardsResult.reason)
+					setDreamTeam([])
+					setHaulPlayers([])
+					setEventMeta(null)
+					setDisplayState(isPreseasonSelection ? 'scheduled' : null)
+					setPublishedAt(null)
 				}
 				if (overallResult.status === 'rejected' || boardsResult.status === 'rejected') {
 					setError(t('loadFailed'))
@@ -172,6 +188,9 @@ export default function GameweekStatsClient({
 					setError(t('loadFailed'))
 					setDreamTeam([])
 					setHaulPlayers([])
+					setEventMeta(null)
+					setDisplayState(preseason && selectedGameweek === 1 ? 'scheduled' : null)
+					setPublishedAt(null)
 					setOverallStats(FALLBACK_OVERALL_STATS)
 				}
 			} finally {

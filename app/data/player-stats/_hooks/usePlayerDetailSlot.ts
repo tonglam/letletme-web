@@ -30,6 +30,10 @@ interface StoredRecentPlayers {
 	players: PlayerDirectoryOption[]
 }
 
+type PlayerDetailLoadResult =
+	| { status: 'loaded'; detail: PlayerDetailData }
+	| { status: 'not-found' | 'failed' | 'superseded'; detail: null }
+
 function isPlayerDirectoryOption(
 	value: unknown
 ): value is PlayerDirectoryOption {
@@ -139,10 +143,10 @@ export function usePlayerDetailSlot({
 	}, [storageKey])
 
 	const loadPlayerDetail = useCallback(
-		async (player: PlayerDirectoryOption) => {
+		async (player: PlayerDirectoryOption): Promise<PlayerDetailLoadResult> => {
 			if (!eventId) {
 				setError(t('currentGameweekUnavailable'))
-				return null
+				return { status: 'failed', detail: null }
 			}
 			const requestId = requestIdRef.current + 1
 			requestIdRef.current = requestId
@@ -186,14 +190,20 @@ export function usePlayerDetailSlot({
 						eventId
 					}
 				)
-				if (requestId !== requestIdRef.current) return null
+				if (requestId !== requestIdRef.current) {
+					return { status: 'superseded', detail: null }
+				}
 				setPlayerDetail(response.playerDetail)
 				return response.playerDetail
+					? { status: 'loaded', detail: response.playerDetail }
+					: { status: 'not-found', detail: null }
 			} catch {
-				if (requestId !== requestIdRef.current) return null
+				if (requestId !== requestIdRef.current) {
+					return { status: 'superseded', detail: null }
+				}
 				setPlayerDetail(null)
 				setError(t('loadFailed'))
-				return null
+				return { status: 'failed', detail: null }
 			} finally {
 				if (requestId === requestIdRef.current) setIsLoading(false)
 			}
@@ -331,7 +341,7 @@ export function usePlayerDetailSlot({
 				teamName: ''
 			})
 
-			const detail = await loadPlayerDetail({
+			const result = await loadPlayerDetail({
 				id: String(playerId),
 				name: '',
 				position: 'MID',
@@ -339,13 +349,17 @@ export function usePlayerDetailSlot({
 				teamName: ''
 			})
 
-			if (!detail) {
+			if (result.status === 'superseded') return null
+
+			if (result.status !== 'loaded') {
 				setSelectedPlayer(null)
-				if (!opts?.silentNotFound) setError(t('playerNotFound'))
+				if (result.status === 'not-found' && !opts?.silentNotFound) {
+					setError(t('playerNotFound'))
+				}
 				return null
 			}
 
-			const player = playerDetailToDirectoryOption(detail)
+			const player = playerDetailToDirectoryOption(result.detail)
 			setSelectedPlayer(player)
 			setRecentPlayers(previous => {
 				const next = [
@@ -355,7 +369,7 @@ export function usePlayerDetailSlot({
 				writeRecentPlayers(storageKey, next)
 				return next
 			})
-			return detail
+			return result.detail
 		},
 		[eventId, loadPlayerDetail, storageKey, t]
 	)
