@@ -93,7 +93,7 @@ test('web security constraints serialize identity, session, and rate ownership',
 			anon_user: false,
 			anon_rate_limit: false,
 			authenticated_session: false,
-			policy_count: 10,
+			policy_count: 12,
 			invalid_policy_count: 0,
 			missing_rls: 0,
 		})
