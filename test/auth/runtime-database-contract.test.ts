@@ -54,9 +54,18 @@ describe('Web runtime database boundary', () => {
 		assert.match(graphqlMigration, /GRANT USAGE ON SCHEMA bauth TO letletme_graphql_reader/)
 		assert.match(
 			graphqlMigration,
-			/GRANT SELECT ON TABLE\s+bauth\."user",\s+bauth\.mini_program_session\s+TO letletme_graphql_reader/,
+			/GRANT SELECT \(id, fpl_entry_id, fpl_entry_verified_at\)\s+ON TABLE bauth\."user"\s+TO letletme_graphql_reader/,
+		)
+		assert.match(
+			graphqlMigration,
+			/GRANT SELECT \(user_id, token_hash, revoked_at, expires_at\)\s+ON TABLE bauth\.mini_program_session\s+TO letletme_graphql_reader/,
 		)
 		assert.match(graphqlMigration, /REVOKE ALL ON ALL TABLES IN SCHEMA bauth/)
+		assert.match(graphqlMigration, /FROM information_schema\.columns/)
+		assert.match(
+			graphqlMigration,
+			/REVOKE SELECT \(%I\), INSERT \(%I\), UPDATE \(%I\), REFERENCES \(%I\)/,
+		)
 		assert.match(graphqlMigration, /CREATE POLICY graphql_auth_reader_select/g)
 		assert.match(instrumentation, /await validateWebDatabaseContract\(\)/)
 		assert.match(instrumentation, /process\.exit\(1\)/)
@@ -143,6 +152,18 @@ test('GraphQL auth reader is confined to current Mini Program validation tables'
 			administrator.begin(async transaction => {
 				await transaction.unsafe('SET LOCAL ROLE letletme_graphql_reader')
 				await transaction`SELECT id FROM bauth.session LIMIT 0`
+			}),
+		)
+		await assert.rejects(
+			administrator.begin(async transaction => {
+				await transaction.unsafe('SET LOCAL ROLE letletme_graphql_reader')
+				await transaction`SELECT email FROM bauth."user" LIMIT 0`
+			}),
+		)
+		await assert.rejects(
+			administrator.begin(async transaction => {
+				await transaction.unsafe('SET LOCAL ROLE letletme_graphql_reader')
+				await transaction`SELECT device_id FROM bauth.mini_program_session LIMIT 0`
 			}),
 		)
 		await assert.rejects(

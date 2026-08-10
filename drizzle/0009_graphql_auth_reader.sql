@@ -43,10 +43,37 @@ REVOKE ALL ON ALL TABLES IN SCHEMA bauth FROM letletme_graphql_reader;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA bauth FROM letletme_graphql_reader;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA bauth FROM letletme_graphql_reader;
 
-GRANT SELECT ON TABLE
-	bauth."user",
-	bauth.mini_program_session
-TO letletme_graphql_reader;
+-- Table-level revokes do not remove column ACL entries. Clear every possible
+-- pre-existing column grant before installing the reviewed seven-column set.
+DO $graphql_auth_reader_columns$
+DECLARE
+	column_row record;
+BEGIN
+	FOR column_row IN
+		SELECT table_name, column_name
+		FROM information_schema.columns
+		WHERE table_schema = 'bauth'
+		ORDER BY table_name, ordinal_position
+	LOOP
+		EXECUTE format(
+			'REVOKE SELECT (%I), INSERT (%I), UPDATE (%I), REFERENCES (%I) ON TABLE bauth.%I FROM letletme_graphql_reader',
+			column_row.column_name,
+			column_row.column_name,
+			column_row.column_name,
+			column_row.column_name,
+			column_row.table_name
+		);
+	END LOOP;
+END
+$graphql_auth_reader_columns$;
+--> statement-breakpoint
+
+GRANT SELECT (id, fpl_entry_id, fpl_entry_verified_at)
+	ON TABLE bauth."user"
+	TO letletme_graphql_reader;
+GRANT SELECT (user_id, token_hash, revoked_at, expires_at)
+	ON TABLE bauth.mini_program_session
+	TO letletme_graphql_reader;
 --> statement-breakpoint
 
 ALTER TABLE bauth."user" ENABLE ROW LEVEL SECURITY;

@@ -271,11 +271,8 @@ export async function validateWebDatabaseContract(
 			ORDER BY tablename, policyname
 		`
 		const expectedGraphqlAuthTableNames = new Set<string>(GRAPHQL_AUTH_RUNTIME_TABLES)
-		const expectedPolicyCount =
-			WEB_AUTH_RUNTIME_TABLES.length + GRAPHQL_AUTH_RUNTIME_TABLES.length
-		if (authPolicies.length !== expectedPolicyCount) {
-			findings.push(`bauth runtime policy count is ${authPolicies.length}`)
-		}
+		let webRuntimePolicyCount = 0
+		let graphqlAuthPolicyCount = 0
 		for (const policy of authPolicies) {
 			const isWebRuntimePolicy =
 				expectedAuthTableNames.has(policy.table_name)
@@ -293,9 +290,20 @@ export async function validateWebDatabaseContract(
 				&& policy.command === 'SELECT'
 				&& expressionIsTrue(policy.using_expression)
 				&& policy.check_expression === null
+			if (isWebRuntimePolicy) webRuntimePolicyCount += 1
+			if (isGraphqlAuthPolicy) graphqlAuthPolicyCount += 1
 			if (!isWebRuntimePolicy && !isGraphqlAuthPolicy) {
 				findings.push(`bauth.${policy.table_name} has an invalid runtime policy`)
 			}
+		}
+		if (webRuntimePolicyCount !== WEB_AUTH_RUNTIME_TABLES.length) {
+			findings.push(`bauth Web runtime policy count is ${webRuntimePolicyCount}`)
+		}
+		if (
+			graphqlAuthPolicyCount !== 0
+			&& graphqlAuthPolicyCount !== GRAPHQL_AUTH_RUNTIME_TABLES.length
+		) {
+			findings.push(`bauth GraphQL auth policy count is ${graphqlAuthPolicyCount}`)
 		}
 
 		const [ledgerBoundary] = await client<NamedPrivilegeBoundary[]>`

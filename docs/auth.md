@@ -74,9 +74,12 @@ must use reviewed direct/service database credentials; browser JWTs never query
 Migration `0009_graphql_auth_reader` is the only GraphQL exception to the Web-owned
 boundary. It requires Data Platform v3's non-login `letletme_graphql_reader` role,
 revokes every existing `bauth` privilege from that role, then grants read-only RLS
-access to `bauth.user` and `bauth.mini_program_session`. Production applies this
-post-activation migration only through the `v3-migrate-database` repository dispatch
-from the exact protected `main` commit and the existing activation run token.
+access to only `user.id`, `user.fpl_entry_id`, `user.fpl_entry_verified_at`, and
+`mini_program_session.user_id`, `token_hash`, `revoked_at`, `expires_at`. Production
+activation runs only through `0008_web_auth_runtime_role`; `0009` is deferred to the
+`v3-migrate-database` repository dispatch from the exact protected `main` commit and
+the existing activation run token. The Web startup contract accepts the exact states
+before and after `0009`, while rejecting a partial or malformed GraphQL policy set.
 
 Authenticated server reads attach a signed ingress and user envelope. Public
 RSC reads carry only `X-GraphQL-Service-Token`, with no request-derived headers,
