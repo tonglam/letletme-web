@@ -234,14 +234,6 @@ export const GET_PLAYER_STATE_PROFILE = `
 		          sampleMinutes sampleSize smallSample capability
 		        }
 		      }
-	      ownBaseline {
-	        weightedPercentile
-	        seasons { season positionPercentile weight }
-	      }
-		      peerBaseline { position minimumMinutes cohortSize currentPercentile }
-		      careerTrajectory {
-		        season position minutes fplPositionPercentile understatProcessPercentile expectedMetricsAvailable
-	      }
 	      outlook {
 	        rating horizon averageDifficulty
 	        gameweeks {
@@ -253,10 +245,33 @@ export const GET_PLAYER_STATE_PROFILE = `
 	        fplCurrent understatCurrent
 	        fplHistorySeasons understatHistorySeasons
 	        mappingStatus metricCoverage limitations
-	        providers {
-	          provider scope season revision asOf freshnessSeconds stale available
-	        }
 	      }
+	    }
+	  }
+`
+
+/**
+ * History and provider revisions are behind the supporting-data disclosure.
+ * Keeping them separate leaves both documents below GraphQL's 200-node guard
+ * and avoids transferring the low-frequency context until it is requested.
+ */
+export const GET_PLAYER_STATE_CONTEXT = `
+  query GetPlayerStateContext($playerId: Int!, $horizon: Int = 5) {
+    playerStateProfile(playerId: $playerId, horizon: $horizon) {
+      playerId
+      ownBaseline {
+        weightedPercentile
+        seasons { season positionPercentile weight }
+      }
+      peerBaseline { position minimumMinutes cohortSize currentPercentile }
+      careerTrajectory {
+        season position minutes fplPositionPercentile understatProcessPercentile expectedMetricsAvailable
+      }
+      coverage {
+        providers {
+          provider scope season revision asOf freshnessSeconds stale available
+        }
+      }
     }
   }
 `
@@ -371,11 +386,7 @@ export interface PlayerStateBaselineSeason {
 }
 
 export type PlayerStateMappingStatus =
-	| 'VERIFIED'
-	| 'UNVERIFIED'
-	| 'AMBIGUOUS'
-	| 'QUARANTINED'
-	| 'UNAVAILABLE'
+	'VERIFIED' | 'UNVERIFIED' | 'AMBIGUOUS' | 'QUARANTINED' | 'UNAVAILABLE'
 
 export type PlayerStateProvider = 'FPL' | 'UNDERSTAT'
 export type PlayerStateProviderScope = 'CURRENT' | 'HISTORY'
@@ -439,8 +450,26 @@ export interface PlayerStateProfileData {
 	}
 }
 
+export type PlayerStateProfileCoreData = Omit<
+	PlayerStateProfileData,
+	'ownBaseline' | 'peerBaseline' | 'careerTrajectory' | 'coverage'
+> & {
+	coverage: Omit<PlayerStateProfileData['coverage'], 'providers'>
+}
+
+export type PlayerStateContextData = Pick<
+	PlayerStateProfileData,
+	'playerId' | 'ownBaseline' | 'peerBaseline' | 'careerTrajectory'
+> & {
+	coverage: Pick<PlayerStateProfileData['coverage'], 'providers'>
+}
+
 export interface PlayerStateProfileResponse {
-	playerStateProfile: PlayerStateProfileData | null
+	playerStateProfile: PlayerStateProfileCoreData | null
+}
+
+export interface PlayerStateContextResponse {
+	playerStateProfile: PlayerStateContextData | null
 }
 
 // Query to fetch player values
@@ -481,6 +510,7 @@ export const SEARCH_PLAYERS_FOR_PICKER = `
           shortName
         }
       }
+      totalCount
       nextCursor
     }
   }
@@ -521,6 +551,7 @@ export interface PlayersForPickerResponse {
 export interface PlayerSearchForPickerResponse {
 	playersForPicker: {
 		items: PlayerDirectoryItem[]
+		totalCount: number
 		nextCursor: number | null
 	}
 }

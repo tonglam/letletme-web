@@ -14,7 +14,14 @@ import type {
 import { ChevronDown, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useFormatter, useTranslations } from 'next-intl'
-import { startTransition, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import {
+	startTransition,
+	useCallback,
+	useEffect,
+	useMemo,
+	useState,
+	type ReactNode
+} from 'react'
 import { PlayerFixturesTab } from './PlayerFixturesTab'
 import { PlayerFplProfile } from './PlayerFplProfile'
 import { PlayerOverallCard, StickyPlayerIdentity } from './PlayerOverallCard'
@@ -50,10 +57,16 @@ interface PlayerStatsViewProps {
 	comparisonStateError: string | null
 	loadEvidence: (section: PlayerEvidenceSection) => Promise<void>
 	loadComparisonEvidence: (section: PlayerEvidenceSection) => Promise<void>
+	loadStateContext: () => Promise<void>
+	loadComparisonStateContext: () => Promise<void>
 	isEvidenceLoading: boolean
 	isComparisonEvidenceLoading: boolean
+	isStateContextLoading: boolean
+	isComparisonStateContextLoading: boolean
 	evidenceError: string | null
 	comparisonEvidenceError: string | null
+	stateContextError: string | null
+	comparisonStateContextError: string | null
 	anchorGw: number
 	seasonStatsAvailable: boolean
 }
@@ -91,7 +104,11 @@ function DeskSection({
 	children: ReactNode
 }) {
 	return (
-		<PlayerStatsSection id={id} title={title} hint={hint}>
+		<PlayerStatsSection
+			id={id}
+			title={title}
+			hint={hint}
+		>
 			{children}
 		</PlayerStatsSection>
 	)
@@ -114,7 +131,10 @@ function MetricGrid({ items }: { items: DisplayMetric[] }) {
 	)
 }
 
-function processMetricLabel(code: string, tl: ReturnType<typeof useTranslations>): string {
+function processMetricLabel(
+	code: string,
+	tl: ReturnType<typeof useTranslations>
+): string {
 	const labels: Record<string, string> = {
 		UNDERSTAT_NPXG_PER_90: tl('expectedGoals'),
 		UNDERSTAT_XG_PER_90: tl('expectedGoals'),
@@ -129,7 +149,9 @@ function processMetricLabel(code: string, tl: ReturnType<typeof useTranslations>
 		FPL_EXPECTED_GOAL_INVOLVEMENTS: tl('expectedGoalInvolvements'),
 		FPL_EXPECTED_GOALS_CONCEDED: tl('expectedGoalsConceded')
 	}
-	return labels[code] ?? code.replace(/^(UNDERSTAT|FPL)_/, '').replaceAll('_', ' ')
+	return (
+		labels[code] ?? code.replace(/^(UNDERSTAT|FPL)_/, '').replaceAll('_', ' ')
+	)
 }
 
 function processMetricValue(metric: PlayerStateMetric): string | number | null {
@@ -163,11 +185,11 @@ function ProcessSourceEvidence({
 	const secondMetrics = processMetrics(comparisonState)
 	const firstUnderstatAvailable = Boolean(
 		playerState?.coverage.understatCurrent &&
-		playerState.coverage.mappingStatus === 'VERIFIED',
+		playerState.coverage.mappingStatus === 'VERIFIED'
 	)
 	const secondUnderstatAvailable = Boolean(
 		comparisonState?.coverage.understatCurrent &&
-		comparisonState.coverage.mappingStatus === 'VERIFIED',
+		comparisonState.coverage.mappingStatus === 'VERIFIED'
 	)
 	const gkp = player.elementType === 1
 
@@ -198,9 +220,13 @@ function ProcessSourceEvidence({
 	if (comparison && samePosition) {
 		const metricCodes = Array.from(
 			new Set([
-				...(firstUnderstatAvailable ? firstMetrics.map(metric => metric.code) : []),
-				...(secondUnderstatAvailable ? secondMetrics.map(metric => metric.code) : []),
-			]),
+				...(firstUnderstatAvailable
+					? firstMetrics.map(metric => metric.code)
+					: []),
+				...(secondUnderstatAvailable
+					? secondMetrics.map(metric => metric.code)
+					: [])
+			])
 		)
 		return (
 			<div className="space-y-0.5">
@@ -215,7 +241,9 @@ function ProcessSourceEvidence({
 							label={processMetricLabel(metric.code, tl)}
 							v1={first ? processMetricValue(first) : null}
 							v2={second ? processMetricValue(second) : null}
-							higherIsBetter={!metric.code.includes('XGC') && !metric.code.includes('XGA')}
+							higherIsBetter={
+								!metric.code.includes('XGC') && !metric.code.includes('XGA')
+							}
 							emphasizeWinner={true}
 						/>
 					)
@@ -226,7 +254,9 @@ function ProcessSourceEvidence({
 
 	return (
 		<div>
-			<p className="mb-2 text-xs font-semibold text-muted-foreground">{tl('understatProcessSource')}</p>
+			<p className="mb-2 text-xs font-semibold text-muted-foreground">
+				{tl('understatProcessSource')}
+			</p>
 			<MetricGrid
 				items={firstMetrics.map(metric => ({
 					label: processMetricLabel(metric.code, tl),
@@ -433,7 +463,7 @@ function underlyingCompareMetrics(
 			first.expectedGoalsConceded,
 			second.expectedGoalsConceded,
 			'lower'
-			)
+		)
 		if ((first.minutes ?? 0) >= 180 || (second.minutes ?? 0) >= 180) {
 			add(
 				tl('expectedGoalsConcededPer90'),
@@ -569,10 +599,16 @@ export function PlayerStatsView({
 	comparisonStateError,
 	loadEvidence,
 	loadComparisonEvidence,
+	loadStateContext,
+	loadComparisonStateContext,
 	isEvidenceLoading,
 	isComparisonEvidenceLoading,
+	isStateContextLoading,
+	isComparisonStateContextLoading,
 	evidenceError,
 	comparisonEvidenceError,
+	stateContextError,
+	comparisonStateContextError,
 	anchorGw,
 	seasonStatsAvailable
 }: PlayerStatsViewProps) {
@@ -611,7 +647,9 @@ export function PlayerStatsView({
 				: requestedSection) ?? 'fixtures'
 		startTransition(() => {
 			setActiveSection(section)
-			setContextOpen(section === 'history' || section === 'market' || section === 'coverage')
+			setContextOpen(
+				section === 'history' || section === 'market' || section === 'coverage'
+			)
 		})
 	}, [hasSeasonStats, player])
 
@@ -630,15 +668,37 @@ export function PlayerStatsView({
 		// keeps the first render ordered as Overall → Fixtures and avoids a
 		// partial detail object winning a race with the Overall query.
 		if (!player) return
-		if (!['fixtures', 'recent', 'season', 'process'].includes(activeSection)) return
+		if (!['fixtures', 'recent', 'season', 'process'].includes(activeSection))
+			return
 		const evidenceSection = activeSection as PlayerEvidenceSection
 		void loadEvidence(evidenceSection)
 		if (comparison) void loadComparisonEvidence(evidenceSection)
 	}, [activeSection, comparison, loadComparisonEvidence, loadEvidence, player])
 
+	useEffect(() => {
+		if (!contextOpen) return
+		if (playerState && !stateContextError) void loadStateContext()
+		if (comparison && comparisonState && !comparisonStateContextError) {
+			void loadComparisonStateContext()
+		}
+	}, [
+		comparison,
+		comparisonStateContextError,
+		comparisonState,
+		contextOpen,
+		loadComparisonStateContext,
+		loadStateContext,
+		playerState,
+		stateContextError
+	])
+
 	const handleSectionJump = useCallback((section: PlayerStatsSectionId) => {
 		setActiveSection(section)
-		if (section === 'history' || section === 'market' || section === 'coverage') {
+		if (
+			section === 'history' ||
+			section === 'market' ||
+			section === 'coverage'
+		) {
 			setContextOpen(true)
 		}
 		scrollToPlayerStatsSection(section)
@@ -688,9 +748,9 @@ export function PlayerStatsView({
 	const underlyingRows = comparison
 		? underlyingCompareMetrics(player, comparison, tl)
 		: []
-	const evidenceIsOpen = (['fixtures', 'recent', 'season', 'process'] as PlayerStatsSectionId[]).includes(
-		activeSection
-	)
+	const evidenceIsOpen = (
+		['fixtures', 'recent', 'season', 'process'] as PlayerStatsSectionId[]
+	).includes(activeSection)
 
 	const renderEvidenceContent = (): ReactNode => {
 		if (!evidenceIsOpen) return null
@@ -706,7 +766,10 @@ export function PlayerStatsView({
 		if (evidenceError || comparisonEvidenceError) {
 			return (
 				<PlayerStatsSection title={t('detailedTitle')}>
-					<p className="rounded-lg border border-border/60 px-4 py-4 text-sm text-destructive" role="alert">
+					<p
+						className="rounded-lg border border-border/60 px-4 py-4 text-sm text-destructive"
+						role="alert"
+					>
 						{evidenceError ?? comparisonEvidenceError}
 					</p>
 				</PlayerStatsSection>
@@ -715,10 +778,18 @@ export function PlayerStatsView({
 
 		if (activeSection === 'fixtures') {
 			return (
-				<DeskSection id="ps-fixtures" title={t('fixturesTitle')} hint={t('fixturesHint')}>
+				<DeskSection
+					id="ps-fixtures"
+					title={t('fixturesTitle')}
+					hint={t('fixturesHint')}
+				>
 					<PlayerFixturesTab
 						player={player}
-						comparison={comparison?.teamShortName === player.teamShortName ? null : comparison}
+						comparison={
+							comparison?.teamShortName === player.teamShortName
+								? null
+								: comparison
+						}
 						currentGameweek={anchorGw}
 					/>
 				</DeskSection>
@@ -726,8 +797,15 @@ export function PlayerStatsView({
 		}
 		if (activeSection === 'recent' && hasSeasonStats) {
 			return (
-				<DeskSection id="ps-recent" title={t('recentTitle')} hint={t('recentHint')}>
-					<PlayerRecentGameweeks player={player} comparison={comparison} />
+				<DeskSection
+					id="ps-recent"
+					title={t('recentTitle')}
+					hint={t('recentHint')}
+				>
+					<PlayerRecentGameweeks
+						player={player}
+						comparison={comparison}
+					/>
 				</DeskSection>
 			)
 		}
@@ -736,7 +814,11 @@ export function PlayerStatsView({
 				<DeskSection
 					id="ps-season"
 					title={t('seasonTitle')}
-					hint={samePosition || !comparison ? t('seasonThrough', { gw: currentAsOf }) : t('crossPositionHint')}
+					hint={
+						samePosition || !comparison
+							? t('seasonThrough', { gw: currentAsOf })
+							: t('crossPositionHint')
+					}
 				>
 					{comparison ? (
 						<div className="space-y-0.5">
@@ -752,7 +834,12 @@ export function PlayerStatsView({
 							))}
 						</div>
 					) : (
-						<MetricGrid items={seasonMetricSpecs.map(spec => ({ label: spec.label, value: metricValue(player, spec.key) }))} />
+						<MetricGrid
+							items={seasonMetricSpecs.map(spec => ({
+								label: spec.label,
+								value: metricValue(player, spec.key)
+							}))}
+						/>
 					)}
 				</DeskSection>
 			)
@@ -762,10 +849,22 @@ export function PlayerStatsView({
 				<DeskSection
 					id="ps-process"
 					title={t('processTitle')}
-					hint={comparison && !samePosition ? t('crossPositionHint') : t('processHint')}
+					hint={
+						comparison && !samePosition
+							? t('crossPositionHint')
+							: t('processHint')
+					}
 				>
-					<span id="ps-underlying" className="sr-only" aria-hidden="true" />
-					<span id="ps-ict" className="sr-only" aria-hidden="true" />
+					<span
+						id="ps-underlying"
+						className="sr-only"
+						aria-hidden="true"
+					/>
+					<span
+						id="ps-ict"
+						className="sr-only"
+						aria-hidden="true"
+					/>
 					{comparison && !samePosition ? (
 						<p className="rounded-lg border border-border/60 px-3 py-3 text-sm text-muted-foreground">
 							{t('crossPositionHint')}
@@ -786,11 +885,25 @@ export function PlayerStatsView({
 					) : (
 						<div className="flex flex-col gap-4">
 							<div>
-								<p className="mb-2 text-xs font-semibold text-muted-foreground">{t('fplProcessSource')}</p>
+								<p className="mb-2 text-xs font-semibold text-muted-foreground">
+									{t('fplProcessSource')}
+								</p>
 								<MetricGrid items={expectedMetrics(player, tl)} />
 							</div>
-							{player.elementType === 1 ? <IctBar label={tl('influence')} value={player.influence} color="bg-info" max={1500} /> : null}
-							<IctBar label={tl('ictIndex')} value={player.ictIndex} color="bg-primary" max={300} />
+							{player.elementType === 1 ? (
+								<IctBar
+									label={tl('influence')}
+									value={player.influence}
+									color="bg-info"
+									max={1500}
+								/>
+							) : null}
+							<IctBar
+								label={tl('ictIndex')}
+								value={player.ictIndex}
+								color="bg-primary"
+								max={300}
+							/>
 							<ProcessSourceEvidence
 								player={player}
 								comparison={null}
@@ -884,9 +997,15 @@ export function PlayerStatsView({
 						aria-expanded={contextOpen}
 						aria-controls="ps-context-panel"
 					>
-						<span>{t(contextOpen ? 'closeSupportingData' : 'openSupportingData')}</span>
+						<span>
+							{t(contextOpen ? 'closeSupportingData' : 'openSupportingData')}
+						</span>
 						<ChevronDown
-							className={contextOpen ? 'rotate-180 transition-transform' : 'transition-transform'}
+							className={
+								contextOpen
+									? 'rotate-180 transition-transform'
+									: 'transition-transform'
+							}
 							aria-hidden="true"
 						/>
 					</Button>
@@ -897,19 +1016,50 @@ export function PlayerStatsView({
 					>
 						{contextOpen ? (
 							<>
-								<PlayerStateContext
-									player={player}
-									comparison={comparison}
-									profile={playerState}
-									comparisonProfile={comparisonState}
-								/>
+								{isStateContextLoading ||
+								(comparison && isComparisonStateContextLoading) ? (
+									<PlayerStatsSection title={t('detailedTitle')}>
+										<p className="text-sm text-muted-foreground">
+											{t('loadingStats')}
+										</p>
+									</PlayerStatsSection>
+								) : stateContextError || comparisonStateContextError ? (
+									<PlayerStatsSection title={t('detailedTitle')}>
+										<p
+											role="alert"
+											className="text-sm text-destructive"
+										>
+											{stateContextError ?? comparisonStateContextError}
+										</p>
+									</PlayerStatsSection>
+								) : (
+									<PlayerStateContext
+										player={player}
+										comparison={comparison}
+										profile={playerState}
+										comparisonProfile={comparisonState}
+									/>
+								)}
 								<div id="ps-market">
-									<DeskSection id="ps-market-section" title={t('marketTitle')} hint={t('marketHint')}>
-										<MarketSummary player={player} comparison={comparison} />
+									<DeskSection
+										id="ps-market-section"
+										title={t('marketTitle')}
+										hint={t('marketHint')}
+									>
+										<MarketSummary
+											player={player}
+											comparison={comparison}
+										/>
 										{comparison ? (
 											<div className="grid gap-4 sm:grid-cols-2">
-												<PlayerPriceHistoryBlock playerId={player.id} playerName={player.webName} />
-												<PlayerPriceHistoryBlock playerId={comparison.id} playerName={comparison.webName} />
+												<PlayerPriceHistoryBlock
+													playerId={player.id}
+													playerName={player.webName}
+												/>
+												<PlayerPriceHistoryBlock
+													playerId={comparison.id}
+													playerName={comparison.webName}
+												/>
 											</div>
 										) : (
 											<PlayerPriceHistoryBlock playerId={player.id} />

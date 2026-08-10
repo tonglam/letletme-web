@@ -45,8 +45,7 @@ interface BrowseFilterSnapshot {
 }
 
 const PLAYER_PICKER_PAGE_SIZE = 20
-const MAX_VISIBLE_PLAYER_RESULTS = 20
-const MAX_PICKER_REQUEST_PAGES = 3
+const PLAYER_PICKER_DEBOUNCE_MS = 200
 // A non-empty name fragment is a valid FPL search. The backend safely
 // normalizes short fragments, so do not silently turn a one-character query
 // into an unfiltered roster request.
@@ -68,6 +67,12 @@ interface TeamDirectoryOption {
 	id: number
 	shortName: string
 	name: string
+}
+
+interface PlayerDirectoryFilter {
+	teamId?: number
+	position?: PlayerDirectoryItem['position']
+	maxPrice?: number
 }
 
 interface PlayerDirectoryPickerProps {
@@ -166,8 +171,14 @@ export function PlayerDirectoryPicker({
 	const t = useTranslations('PlayerDirectory')
 	const [teams, setTeams] = useState<TeamDirectoryOption[]>([])
 	const [players, setPlayers] = useState<PlayerDirectoryOption[]>([])
+	const [totalPlayers, setTotalPlayers] = useState(0)
+	const [nextPlayersCursor, setNextPlayersCursor] = useState<number | null>(
+		null
+	)
 	const [isTeamsLoading, setIsTeamsLoading] = useState(false)
 	const [isPlayersLoading, setIsPlayersLoading] = useState(false)
+	const [isMorePlayersLoading, setIsMorePlayersLoading] = useState(false)
+	const [morePlayersError, setMorePlayersError] = useState<string | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [positionFilter, setPositionFilter] = useState<PositionFilter>(
 		defaultPosition ?? 'ALL'
@@ -181,6 +192,7 @@ export function PlayerDirectoryPicker({
 		statsAvailable ? 'total_desc' : 'own_desc'
 	)
 	const browseFiltersBeforeSearchRef = useRef<BrowseFilterSnapshot | null>(null)
+	const playerRequestVersionRef = useRef(0)
 
 	useEffect(() => {
 		let isCancelled = false
@@ -234,101 +246,76 @@ export function PlayerDirectoryPicker({
 		() => teams.find(team => team.shortName === teamFilter) ?? null,
 		[teamFilter, teams]
 	)
+	const serverPlayerFilter = useMemo<PlayerDirectoryFilter | null>(() => {
+		const filter: PlayerDirectoryFilter = {}
+		if (selectedTeam) filter.teamId = selectedTeam.id
+		if (positionFilter !== 'ALL') {
+			filter.position = shortPositionToDirectory(positionFilter)
+		}
+		if (maxPrice != null) filter.maxPrice = maxPrice
+		return Object.keys(filter).length > 0 ? filter : null
+	}, [maxPrice, positionFilter, selectedTeam])
 
 	useEffect(() => {
 		let isCancelled = false
+		const requestVersion = ++playerRequestVersionRef.current
 
 		const fetchPlayers = async () => {
 			try {
 				setIsPlayersLoading(true)
+				setIsMorePlayersLoading(false)
+				setMorePlayersError(null)
 				setError(null)
-				const playersAccumulator: PlayerDirectoryOption[] = []
-				const filter = {
-					...(selectedTeam ? { teamId: selectedTeam.id } : {}),
-					...(positionFilter === 'ALL'
-						? {}
-						: { position: shortPositionToDirectory(positionFilter) }),
-					...(maxPrice == null ? {} : { maxPrice })
-				}
-
-				let cursor: number | null = null
-				let fetchedPages = 0
-				const pageSize = PLAYER_PICKER_PAGE_SIZE
-				for (;;) {
-					const result: PlayerSearchForPickerResponse =
-						await executeQuery<PlayerSearchForPickerResponse>(
-							SEARCH_PLAYERS_FOR_PICKER,
-							{
-								search:
-									normalizedSearch.length >= MIN_SEARCH_LENGTH
-										? normalizedSearch
-										: null,
-								filter: Object.keys(filter).length > 0 ? filter : null,
-								sort: pickerSortToGraphql(sortBy),
-								limit: pageSize,
-								cursor
-							}
-						)
-
-					if (isCancelled) return
-
-					const pagePlayers = result.playersForPicker.items.map(toPickerPlayer)
-					playersAccumulator.push(...pagePlayers)
-					fetchedPages += 1
-					const matchingOwnershipCount = filterDirectoryPlayers(
-						playersAccumulator,
-						{
-							excludedIds: new Set(excludedPlayerIds),
-							positionFilter,
-							teamShortName: selectedTeam?.shortName ?? null,
-							maxPrice,
-							ownBand
-						}
-					).length
-					if (
-						result.playersForPicker.nextCursor == null ||
-						pagePlayers.length === 0 ||
-						ownBand === 'ANY' ||
-						matchingOwnershipCount >= MAX_VISIBLE_PLAYER_RESULTS ||
-						fetchedPages >= MAX_PICKER_REQUEST_PAGES
-					) {
-						break
+				const result = await executeQuery<PlayerSearchForPickerResponse>(
+					SEARCH_PLAYERS_FOR_PICKER,
+					{
+						search: isNameSearchActive ? normalizedSearch : null,
+						filter: serverPlayerFilter,
+						sort: pickerSortToGraphql(sortBy),
+						limit: PLAYER_PICKER_PAGE_SIZE,
+						cursor: null
 					}
-					cursor = result.playersForPicker.nextCursor
+				)
+
+				if (isCancelled || requestVersion !== playerRequestVersionRef.current) {
+					return
 				}
 
-				if (isCancelled) return
-
-				setPlayers(playersAccumulator)
+				setPlayers(result.playersForPicker.items.map(toPickerPlayer))
+				setTotalPlayers(result.playersForPicker.totalCount)
+				setNextPlayersCursor(result.playersForPicker.nextCursor)
 			} catch (fetchError) {
 				console.error('Failed to fetch players directory:', fetchError)
 
-				if (!isCancelled) {
+				if (
+					!isCancelled &&
+					requestVersion === playerRequestVersionRef.current
+				) {
 					setError(t('playersFailed'))
 					setPlayers([])
+					setTotalPlayers(0)
+					setNextPlayersCursor(null)
 				}
 			} finally {
-				if (!isCancelled) {
+				if (
+					!isCancelled &&
+					requestVersion === playerRequestVersionRef.current
+				) {
 					setIsPlayersLoading(false)
 				}
 			}
 		}
 
-		void fetchPlayers()
+		const fetchTimer = window.setTimeout(
+			() => void fetchPlayers(),
+			PLAYER_PICKER_DEBOUNCE_MS
+		)
 
 		return () => {
 			isCancelled = true
+			window.clearTimeout(fetchTimer)
 		}
-	}, [
-		maxPrice,
-		normalizedSearch,
-		ownBand,
-		positionFilter,
-		selectedTeam,
-		excludedPlayerIds,
-		sortBy,
-		t
-	])
+	}, [isNameSearchActive, normalizedSearch, serverPlayerFilter, sortBy, t])
 
 	const excludedIds = useMemo(
 		() => new Set(excludedPlayerIds),
@@ -366,7 +353,53 @@ export function PlayerDirectoryPicker({
 		sortBy
 	])
 
-	const visiblePlayers = filteredPlayers.slice(0, MAX_VISIBLE_PLAYER_RESULTS)
+	const loadMorePlayers = async () => {
+		if (isMorePlayersLoading || nextPlayersCursor === null) return
+		const requestVersion = playerRequestVersionRef.current
+		setMorePlayersError(null)
+
+		try {
+			setIsMorePlayersLoading(true)
+			const result = await executeQuery<PlayerSearchForPickerResponse>(
+				SEARCH_PLAYERS_FOR_PICKER,
+				{
+					search: isNameSearchActive ? normalizedSearch : null,
+					filter: serverPlayerFilter,
+					sort: pickerSortToGraphql(sortBy),
+					limit: PLAYER_PICKER_PAGE_SIZE,
+					cursor: nextPlayersCursor
+				}
+			)
+
+			if (requestVersion !== playerRequestVersionRef.current) return
+
+			setPlayers(currentPlayers => {
+				const byId = new Map(
+					currentPlayers.map(player => [player.id, player] as const)
+				)
+				for (const player of result.playersForPicker.items.map(
+					toPickerPlayer
+				)) {
+					byId.set(player.id, player)
+				}
+				return Array.from(byId.values())
+			})
+			setTotalPlayers(result.playersForPicker.totalCount)
+			setNextPlayersCursor(result.playersForPicker.nextCursor)
+		} catch (fetchError) {
+			console.error('Failed to fetch more players:', fetchError)
+			if (requestVersion === playerRequestVersionRef.current) {
+				setMorePlayersError(t('loadMoreFailed'))
+			}
+		} finally {
+			if (requestVersion === playerRequestVersionRef.current) {
+				setIsMorePlayersLoading(false)
+			}
+		}
+	}
+
+	const visiblePlayers = filteredPlayers
+	const canLoadMorePlayers = nextPlayersCursor !== null
 
 	const isLoading = isTeamsLoading || isPlayersLoading
 
@@ -608,7 +641,7 @@ export function PlayerDirectoryPicker({
 						<div className="p-3 text-sm text-muted-foreground">
 							{t('loadingPlayers')}
 						</div>
-					) : visiblePlayers.length === 0 ? (
+					) : visiblePlayers.length === 0 && !canLoadMorePlayers ? (
 						<div className="space-y-2 p-3 text-sm text-muted-foreground">
 							<p>{t('noPlayers')}</p>
 							{normalizedSearch && positionFilter !== 'ALL' ? (
@@ -690,12 +723,34 @@ export function PlayerDirectoryPicker({
 						))
 					)}
 				</div>
+				{canLoadMorePlayers && !error && !isPlayersLoading ? (
+					<div className="border-t p-2">
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							className="w-full"
+							disabled={isMorePlayersLoading}
+							onClick={() => void loadMorePlayers()}
+						>
+							{t(isMorePlayersLoading ? 'loadingMore' : 'loadMore')}
+						</Button>
+						{morePlayersError ? (
+							<p
+								role="status"
+								className="mt-1 text-center text-xs text-destructive"
+							>
+								{morePlayersError}
+							</p>
+						) : null}
+					</div>
+				) : null}
 			</div>
 
 			<div className="mt-2 text-xs text-muted-foreground">
 				{t('resultCount', {
 					visible: visiblePlayers.length,
-					total: filteredPlayers.length
+					total: totalPlayers
 				})}
 			</div>
 		</div>

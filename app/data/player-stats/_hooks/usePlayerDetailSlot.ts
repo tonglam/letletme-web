@@ -8,9 +8,11 @@ import {
 	GET_PLAYER_EVIDENCE_PRODUCTION,
 	GET_PLAYER_EVIDENCE_RECENT,
 	GET_PLAYER_OVERALL,
+	GET_PLAYER_STATE_CONTEXT,
 	GET_PLAYER_STATE_PROFILE,
 	type PlayerDetailData,
 	type PlayerDetailResponse,
+	type PlayerStateContextResponse,
 	type PlayerStateProfileData,
 	type PlayerStateProfileResponse
 } from '@/lib/graphql/operations/players'
@@ -75,6 +77,18 @@ function writeRecentPlayers(
 	}
 }
 
+function withEmptyStateContext(
+	core: NonNullable<PlayerStateProfileResponse['playerStateProfile']>
+): PlayerStateProfileData {
+	return {
+		...core,
+		ownBaseline: { weightedPercentile: null, seasons: [] },
+		peerBaseline: { minimumMinutes: 0, currentPercentile: null },
+		careerTrajectory: [],
+		coverage: { ...core.coverage, providers: [] }
+	}
+}
+
 export function usePlayerDetailSlot({
 	storageKey,
 	eventId
@@ -95,11 +109,16 @@ export function usePlayerDetailSlot({
 		useState<PlayerStateProfileData | null>(null)
 	const [isLoading, setIsLoading] = useState(false)
 	const [isStateLoading, setIsStateLoading] = useState(false)
+	const [isStateContextLoading, setIsStateContextLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [stateError, setStateError] = useState<string | null>(null)
+	const [stateContextError, setStateContextError] = useState<string | null>(
+		null
+	)
 	const [isEvidenceLoading, setIsEvidenceLoading] = useState(false)
 	const [evidenceError, setEvidenceError] = useState<string | null>(null)
 	const evidenceLoadedRef = useRef<Set<PlayerEvidenceSection>>(new Set())
+	const stateContextLoadedRef = useRef(false)
 	const evidenceLoaded = useCallback(() => {
 		if (!(evidenceLoadedRef.current instanceof Set)) {
 			evidenceLoadedRef.current = new Set<PlayerEvidenceSection>()
@@ -129,11 +148,14 @@ export function usePlayerDetailSlot({
 			requestIdRef.current = requestId
 			setIsLoading(true)
 			setIsStateLoading(true)
+			setIsStateContextLoading(false)
 			setIsEvidenceLoading(false)
 			setError(null)
 			setStateError(null)
+			setStateContextError(null)
 			setEvidenceError(null)
 			evidenceLoaded().clear()
+			stateContextLoadedRef.current = false
 
 			void executeQuery<PlayerStateProfileResponse>(GET_PLAYER_STATE_PROFILE, {
 				playerId: Number(player.id),
@@ -141,7 +163,11 @@ export function usePlayerDetailSlot({
 			})
 				.then(response => {
 					if (requestId !== requestIdRef.current) return
-					setPlayerStateProfile(response.playerStateProfile)
+					setPlayerStateProfile(
+						response.playerStateProfile
+							? withEmptyStateContext(response.playerStateProfile)
+							: null
+					)
 				})
 				.catch(() => {
 					if (requestId !== requestIdRef.current) return
@@ -175,6 +201,53 @@ export function usePlayerDetailSlot({
 		[eventId, evidenceLoaded, t]
 	)
 
+	const loadStateContext = useCallback(async () => {
+		if (
+			!selectedPlayer ||
+			!playerStateProfile ||
+			stateContextLoadedRef.current ||
+			isStateContextLoading
+		) {
+			return
+		}
+		const requestId = requestIdRef.current
+		setIsStateContextLoading(true)
+		setStateContextError(null)
+		try {
+			const response = await executeQuery<PlayerStateContextResponse>(
+				GET_PLAYER_STATE_CONTEXT,
+				{ playerId: Number(selectedPlayer.id), horizon: 5 }
+			)
+			if (requestId !== requestIdRef.current) return
+			const context = response.playerStateProfile
+			if (!context) throw new Error('Player state context unavailable')
+			if (playerStateProfile.playerId !== context.playerId) return
+			setPlayerStateProfile(previous =>
+				previous && previous.playerId === context.playerId
+					? {
+							...previous,
+							ownBaseline: context.ownBaseline,
+							peerBaseline: context.peerBaseline,
+							careerTrajectory: context.careerTrajectory,
+							coverage: {
+								...previous.coverage,
+								providers: context.coverage.providers
+							}
+						}
+					: previous
+			)
+			stateContextLoadedRef.current = true
+		} catch {
+			if (requestId === requestIdRef.current) {
+				setStateContextError(t('evidenceLoadFailed'))
+			}
+		} finally {
+			if (requestId === requestIdRef.current) {
+				setIsStateContextLoading(false)
+			}
+		}
+	}, [isStateContextLoading, playerStateProfile, selectedPlayer, t])
+
 	const loadEvidence = useCallback(
 		async (section: PlayerEvidenceSection) => {
 			if (!eventId || !selectedPlayer || evidenceLoaded().has(section)) return
@@ -188,7 +261,9 @@ export function usePlayerDetailSlot({
 				process: GET_PLAYER_EVIDENCE_PROCESS
 			}
 			try {
-				const response = await executeQuery<{ playerDetail: Partial<PlayerDetailData> | null }>(queryBySection[section], {
+				const response = await executeQuery<{
+					playerDetail: Partial<PlayerDetailData> | null
+				}>(queryBySection[section], {
 					playerId: Number(selectedPlayer.id),
 					eventId
 				})
@@ -202,7 +277,8 @@ export function usePlayerDetailSlot({
 					evidenceLoaded().add(section)
 				}
 			} catch {
-				if (requestId === requestIdRef.current) setEvidenceError(t('evidenceLoadFailed'))
+				if (requestId === requestIdRef.current)
+					setEvidenceError(t('evidenceLoadFailed'))
 			} finally {
 				if (requestId === requestIdRef.current) setIsEvidenceLoading(false)
 			}
@@ -217,8 +293,10 @@ export function usePlayerDetailSlot({
 			setPlayerStateProfile(null)
 			setError(null)
 			setStateError(null)
+			setStateContextError(null)
 			setEvidenceError(null)
 			evidenceLoaded().clear()
+			stateContextLoadedRef.current = false
 			void loadPlayerDetail(player)
 			setRecentPlayers(previous => {
 				const next = [
@@ -242,6 +320,7 @@ export function usePlayerDetailSlot({
 			setIsLoading(true)
 			setError(null)
 			setStateError(null)
+			setStateContextError(null)
 			setPlayerDetail(null)
 			setPlayerStateProfile(null)
 			setSelectedPlayer({
@@ -288,10 +367,13 @@ export function usePlayerDetailSlot({
 		setPlayerStateProfile(null)
 		setError(null)
 		setStateError(null)
+		setStateContextError(null)
 		setIsLoading(false)
-			setIsStateLoading(false)
-			setIsEvidenceLoading(false)
-			setEvidenceError(null)
+		setIsStateLoading(false)
+		setIsStateContextLoading(false)
+		setIsEvidenceLoading(false)
+		setEvidenceError(null)
+		stateContextLoadedRef.current = false
 		evidenceLoaded().clear()
 	}, [evidenceLoaded])
 
@@ -311,11 +393,14 @@ export function usePlayerDetailSlot({
 		playerStateProfile,
 		isLoading,
 		isStateLoading,
+		isStateContextLoading,
 		error,
 		stateError,
+		stateContextError,
 		isEvidenceLoading,
 		evidenceError,
 		loadEvidence,
+		loadStateContext,
 		selectPlayer,
 		selectPlayerById,
 		clearSelection,

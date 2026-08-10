@@ -85,10 +85,9 @@ export default function PlayerStatsClient({
 				setDeepLinkReady(true)
 				return
 			}
-			const firstDetail =
-				await firstSelectPlayerById(initialPlayerIds.p1, {
-					silentNotFound: true
-				})
+			const firstDetail = await firstSelectPlayerById(initialPlayerIds.p1, {
+				silentNotFound: true
+			})
 			if (firstDetail && initialPlayerIds.p2 != null) {
 				const secondDetail = await secondSelectPlayerById(initialPlayerIds.p2, {
 					silentNotFound: true
@@ -259,10 +258,16 @@ export default function PlayerStatsClient({
 					comparisonStateError={secondPlayer.stateError}
 					loadEvidence={firstPlayer.loadEvidence}
 					loadComparisonEvidence={secondPlayer.loadEvidence}
+					loadStateContext={firstPlayer.loadStateContext}
+					loadComparisonStateContext={secondPlayer.loadStateContext}
 					isEvidenceLoading={firstPlayer.isEvidenceLoading}
 					isComparisonEvidenceLoading={secondPlayer.isEvidenceLoading}
+					isStateContextLoading={firstPlayer.isStateContextLoading}
+					isComparisonStateContextLoading={secondPlayer.isStateContextLoading}
 					evidenceError={firstPlayer.evidenceError}
 					comparisonEvidenceError={secondPlayer.evidenceError}
+					stateContextError={firstPlayer.stateContextError}
+					comparisonStateContextError={secondPlayer.stateContextError}
 					anchorGw={anchorGw}
 					seasonStatsAvailable={seasonStatsAvailable}
 				/>
