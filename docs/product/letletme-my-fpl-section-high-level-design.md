@@ -177,6 +177,8 @@ my_fpl_saved_comparison_players
   comparison_id
   player_key
   position
+  unique (comparison_id, player_key)
+  unique (comparison_id, position)
 
 my_fpl_view_states
   user_id
@@ -200,8 +202,15 @@ Rules:
   `(user_id, object_type, object_key, season_scope) NULLS NOT DISTINCT`; a nullable global season
   scope is therefore one identity rather than an unlimited set of null duplicates. Save uses
   `INSERT ... ON CONFLICT` against that exact key and returns the existing row on retries or
-  concurrent tabs. Delete addresses the same tuple, and per-user cap accounting is serialized in
-  the save transaction so two concurrent inserts cannot both pass the final slot.
+  concurrent tabs. Delete requires the same explicit `seasonScope` (`GLOBAL` maps to the stored
+  null scope), and per-user cap accounting is serialized in the save transaction so two concurrent
+  inserts cannot both pass the final slot. Neither save nor delete resolves historical identity
+  from the active season.
+- Comparison membership enforces unique `(comparison_id, player_key)` and
+  `(comparison_id, position)` keys. Every create or replacement transaction locks the parent
+  `my_fpl_saved_comparisons` row, validates ownership and the comparison-size cap, and replaces the
+  ordered membership atomically. Concurrent tabs therefore cannot duplicate players, reuse an
+  ordering position, or independently pass the final slot.
 - A view-state row is keyed by `(user_id, season_scope, entry_id, scope, scope_key)`. Every read and
   acknowledgment supplies the resolved season-bound entry explicitly; rollover or a same-season
   rebind starts a distinct baseline and monotonic revision cursor rather than reusing another
@@ -215,7 +224,7 @@ Authenticated mutation endpoints:
 ```text
 GET    /api/my-fpl/saved
 POST   /api/my-fpl/saved
-DELETE /api/my-fpl/saved/[type]/[key]
+DELETE /api/my-fpl/saved/[type]/[key]?seasonScope=<season|GLOBAL>
 POST   /api/my-fpl/comparisons
 PATCH  /api/my-fpl/comparisons/[id]
 DELETE /api/my-fpl/comparisons/[id]
@@ -297,6 +306,7 @@ season
 eventId
 entryId
 snapshotRevision
+resultRevision
 capturedAt
 eventPoints
 eventNetPoints
@@ -310,9 +320,14 @@ squadMultiplierSignature
 
 Rules:
 
-- Keep at most one monotonic checkpoint per `(season, eventId, entryId)`; this is not a refresh history.
+- Keep at most one monotonic checkpoint per `(season, eventId, entryId)`; this is not a refresh
+  history. `resultRevision` is the independent monotonic revision for that exact entry-result scope,
+  not an alias of the official `snapshotRevision`.
 - At the last coherent `LIVE` revision before settlement, Data batch-calculates checkpoints for known entries that have complete stored event picks. It reuses the existing entry-picks scan rather than writing from a GraphQL query.
-- Update only from a complete same-event snapshot with a newer accepted revision.
+- Update only from a complete same-event result where both revisions are greater than or equal to
+  the stored values and at least one is greater. Reject a decrease or incomparable revision pair;
+  an entry-calculation correction or recovery may therefore replace the checkpoint when
+  `snapshotRevision` is unchanged but `resultRevision` advances.
 - Do not checkpoint partial, retained, stale-season, or failed calculations.
 - Freeze the checkpoint when the event becomes settled.
 - Compare it with the finalized `entry_event_results` record only after official finalization and rich-detail sync complete.

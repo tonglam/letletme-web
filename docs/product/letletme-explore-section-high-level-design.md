@@ -130,7 +130,8 @@ EvidenceContext
   evidenceClass
   sourceKey
   sourceLabel
-  season
+  seasonScope: GLOBAL | SEASON
+  season nullable
   eventId nullable
   scopeKind
   scopeKey nullable
@@ -172,6 +173,10 @@ availabilityState: AVAILABLE | MISSING | COLLECTION_FAILED | NOT_YET_CAPTURED | 
 
 Rules:
 
+- `seasonScope=SEASON` requires `season`; `seasonScope=GLOBAL` requires `season=null`. `eventId`
+  requires season scope and is interpreted only with that complete season/event identity. A
+  seasonless attributed Briefing item remains globally identified across rollover rather than
+  borrowing the active FPL season.
 - `exact=true` means the declared scope was fully observed, not that the upstream value is infallible.
 - A sampled cohort always sets `exact=false`, supplies `sampleSize`, and identifies its sampling method/version.
 - `denominator` is the number used for the displayed calculation; it is not silently substituted with target population.
@@ -322,6 +327,7 @@ briefing.items
   item_id
   source_id
   external_id
+  provider_revision
   original_item_id nullable
   canonical_url
   title nullable
@@ -421,9 +427,12 @@ Rules:
 - A model-assisted summary is labelled by `summary_method`, retains every source link, and cannot change the item's evidence class.
 - One item has one canonical source identity. `briefing.items` enforces
   `UNIQUE (source_id, external_id)`, and ingestion uses an atomic conflict-safe upsert against that
-  key so concurrent retries or workers cannot create duplicate accepted items. A provider
-  correction updates the canonical row under the existing audit rules rather than inserting a
-  second identity.
+  key so concurrent retries or workers cannot create duplicate accepted items. Each enabled source
+  adapter must normalize the provider's authoritative update/version sequence into a monotonically
+  comparable `provider_revision`; a source without a documented authoritative ordering contract is
+  not enabled. Conflict updates apply only when the incoming revision is greater, are idempotent at
+  equality, and are a no-op when lower. Corrections and removal tombstones use the same rule, so a
+  stale retry cannot overwrite corrected content or reactivate a removed item.
 - Reposts use the explicit nullable `original_item_id` relationship and are not counted as
   independent agreement. Fingerprints detect cross-source/repost relationships and content
   changes, but never replace the provider-identity unique key or collapse legitimate distinct
@@ -469,6 +478,7 @@ bauth.explore_source_preferences
   user_id
   source_id
   state: FOLLOW | MUTE
+  unique (user_id, source_id)
   created_at
   updated_at
 
@@ -476,6 +486,7 @@ bauth.explore_topic_preferences
   user_id
   topic_id
   state: FOLLOW | MUTE
+  unique (user_id, topic_id)
   created_at
   updated_at
 ```
@@ -484,7 +495,10 @@ Rules:
 
 - My FPL saved-player and comparison tables remain the authority for personal watchlist context; Explore does not duplicate them.
 - Source/topic IDs are validated against bounded GraphQL lookup before persistence.
-- Enforce explicit per-user caps and idempotent upsert/delete behaviour.
+- Enforce unique `(user_id, source_id)` and `(user_id, topic_id)` identities. Each preference
+  upsert/delete locks one stable per-user row, performs cap accounting and the conflict-safe write
+  in the same transaction, and returns the existing state on an equal retry. Concurrent requests
+  cannot create duplicates or independently pass the final per-user slot.
 - Muting removes the source/topic from personalized Overview and Briefing composition but does not alter public canonical topic pages.
 - Following affects ordering and relevant updates; it does not create an opaque engagement ranking or recommendation profile.
 - Anonymous users may browse public Briefing and keep only non-authoritative recent UI state on their device.
@@ -540,7 +554,7 @@ Initial route contract:
 /data/fixtures?season=<season>&from=<event>&horizon=<n>&team=<team>
 /data/market?view=<mode>&days=<n>
 /data/market?view=<mode>&season=<season>&through=<yyyy-mm-dd>&days=<n>&revision=<revision>
-/data/selections?cohort=<typed-key>&season=<season>&gw=<event>
+/data/selections?cohort=<typed-key>&season=<season>&gw=<event>&definitionRevision=<revision>
 /data/player-stats?p1=<player>&p2=<player>&section=<section>
 /data/briefing?topic=<slug>&player=<code>&team=<key>&season=<season>&gw=<event>&source=<id>
 /data/briefing/<topic-slug>
@@ -558,6 +572,10 @@ Rules:
 - Legacy event URLs without `season` remain compatibility inputs for the active season only and
   normalize/redirect to the season-bearing canonical URL. They are never emitted as historical
   canonical links.
+- A published cohort share or historical URL also carries its immutable `definitionRevision` and
+  resolves exactly `(cohort, season, event, definitionRevision)`. If that retained snapshot is no
+  longer available, the route returns an explicit unavailable state; it never silently substitutes
+  a later cohort definition or sample.
 - Gameweek, cohort, player comparison, and Briefing topic links render a useful server-selected state on first load.
 - Ordinary Market navigation may retain a relative `days` window. A Market share formatter must
   emit the fixed form with `season`, inclusive `through` date, bounded `days`, and immutable source

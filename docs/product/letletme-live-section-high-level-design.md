@@ -168,7 +168,13 @@ Responsibilities:
 | `competitionLive(competitionId: ID!, event: EventRef!, viewerEntryId: Int)` | Return one competition identity, shared result metadata, viewer context, and a discriminated result body |
 | `competitionLiveResultMeta(competitionId: ID!, event: EventRef!)` | Cheap metadata probe for exactly the corresponding competition result scope |
 | `liveMatches(event: EventRef!, viewerEntryId: Int)` | Retain the current match groups and optionally include one linked entry's squad-impact map |
+| `liveMatchBoardMeta(event: EventRef!)` | Cheap event-board metadata probe with an independently monotonic `boardRevision` that changes with fixture membership, board availability, or board-level coverage, including recovery from an empty/unavailable board |
 | `liveMatchResultMeta(event: EventRef!, fixtureId: Int!, viewerEntryId: Int)` | Cheap metadata probe for exactly one match result scope; when viewer impact is requested it returns the independently monotonic `viewerImpactRevision`, and an event board batches probes without changing fixture or viewer identity |
+
+Web always probes `liveMatchBoardMeta` before suppressing an event-board fetch. A changed
+`boardRevision` triggers the full board read even when the previous response had no fixture IDs;
+fixture-specific probes remain responsible for result and viewer-impact changes inside the known
+membership.
 
 `liveSnapshot(event: EventRef!)` and every repository/cache key below these roots use the same
 season-bearing event input. During compatibility, active-season wrappers may call the new roots,
