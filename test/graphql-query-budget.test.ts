@@ -74,6 +74,11 @@ describe('GraphQL request budget', () => {
 		assert.ok(root?.kind === 'Field')
 		assert.equal(root.name.value, 'playersForPicker')
 		assert.match(SEARCH_PLAYERS_FOR_PICKER, /\$filter:\s*PlayersFilter/)
+		assert.match(
+			SEARCH_PLAYERS_FOR_PICKER,
+			/\$ownershipBand:\s*PlayerPickerOwnershipBand/
+		)
+		assert.match(SEARCH_PLAYERS_FOR_PICKER, /ownershipBand:\s*\$ownershipBand/)
 		assert.match(SEARCH_PLAYERS_FOR_PICKER, /\$limit:\s*Int\s*=\s*20/)
 		assert.match(SEARCH_PLAYERS_FOR_PICKER, /\btotalCount\b/)
 

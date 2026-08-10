@@ -14,6 +14,7 @@ import {
 	GET_TEAMS_FOR_PICKER,
 	SEARCH_PLAYERS_FOR_PICKER,
 	type PlayerDirectoryItem,
+	type PlayerPickerOwnershipBand,
 	type PlayerSearchForPickerResponse,
 	type TeamsForPickerResponse
 } from '@/lib/graphql/operations/players'
@@ -133,6 +134,24 @@ const pickerSortToGraphql = (sort: PlayerDirectorySort) => {
 		case 'total_desc':
 		default:
 			return 'TOTAL_POINTS_DESC'
+	}
+}
+
+const ownBandToGraphql = (
+	band: OwnBand
+): PlayerPickerOwnershipBand | null => {
+	switch (band) {
+		case 'LE5':
+			return 'LE5'
+		case '5_15':
+			return 'GT5_LE15'
+		case '15_40':
+			return 'GT15_LE40'
+		case 'GE40':
+			return 'GT40'
+		case 'ANY':
+		default:
+			return null
 	}
 }
 
@@ -272,6 +291,7 @@ export function PlayerDirectoryPicker({
 						search: isNameSearchActive ? normalizedSearch : null,
 						filter: serverPlayerFilter,
 						sort: pickerSortToGraphql(sortBy),
+						ownershipBand: ownBandToGraphql(ownBand),
 						limit: PLAYER_PICKER_PAGE_SIZE,
 						cursor: null
 					}
@@ -315,7 +335,14 @@ export function PlayerDirectoryPicker({
 			isCancelled = true
 			window.clearTimeout(fetchTimer)
 		}
-	}, [isNameSearchActive, normalizedSearch, serverPlayerFilter, sortBy, t])
+	}, [
+		isNameSearchActive,
+		normalizedSearch,
+		serverPlayerFilter,
+		sortBy,
+		ownBand,
+		t
+	])
 
 	const excludedIds = useMemo(
 		() => new Set(excludedPlayerIds),
@@ -366,6 +393,7 @@ export function PlayerDirectoryPicker({
 					search: isNameSearchActive ? normalizedSearch : null,
 					filter: serverPlayerFilter,
 					sort: pickerSortToGraphql(sortBy),
+					ownershipBand: ownBandToGraphql(ownBand),
 					limit: PLAYER_PICKER_PAGE_SIZE,
 					cursor: nextPlayersCursor
 				}

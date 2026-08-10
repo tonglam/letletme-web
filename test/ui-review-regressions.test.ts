@@ -91,4 +91,43 @@ describe('asynchronous selection safety', () => {
 		)
 		assert.ok(staleGuard >= 0 && notFoundClear > staleGuard)
 	})
+
+	it('clears stale team and tournament models before uncached gameweek loads', async () => {
+		const [teamSource, tournamentSource] = await Promise.all([
+			readFile(
+				new URL('../app/me/team/_hooks/useTeamStats.ts', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/me/tournament/_hooks/useTournamentStats.ts',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		const teamLoad = teamSource.indexOf('const loadGw = async () =>')
+		const teamClear = teamSource.indexOf('setTeamStats(null)', teamLoad)
+		const teamRequest = teamSource.indexOf(
+			'await getEntryEventResultCached',
+			teamLoad
+		)
+		assert.ok(teamLoad >= 0 && teamClear > teamLoad && teamRequest > teamClear)
+
+		const tournamentLoad = tournamentSource.indexOf('async function loadGw()')
+		const tournamentClear = tournamentSource.indexOf(
+			'setTournamentStats(null)',
+			tournamentLoad
+		)
+		const tournamentRequest = tournamentSource.indexOf(
+			'await fetchTournamentEventResultsCached',
+			tournamentLoad
+		)
+		assert.ok(
+			tournamentLoad >= 0 &&
+				tournamentClear > tournamentLoad &&
+				tournamentRequest > tournamentClear
+		)
+	})
 })

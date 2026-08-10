@@ -266,6 +266,7 @@ export function useTeamStats({
 
 		const loadGw = async () => {
 			setIsLoading(true)
+			setTeamStats(null)
 			setEmptyStateMessage(null)
 			try {
 				const entryEventResult = await getEntryEventResultCached(

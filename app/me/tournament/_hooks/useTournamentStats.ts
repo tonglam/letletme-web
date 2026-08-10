@@ -423,6 +423,7 @@ export function useTournamentStats({
 
 		async function loadGw() {
 			setIsLoading(true)
+			setTournamentStats(null)
 			setError(null)
 			try {
 				const currentRows = await fetchTournamentEventResultsCached(
