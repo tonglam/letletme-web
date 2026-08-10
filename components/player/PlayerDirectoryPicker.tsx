@@ -117,6 +117,7 @@ export function PlayerDirectoryPicker({
   const [isTeamsLoading, setIsTeamsLoading] = useState(false);
   const [isPlayersLoading, setIsPlayersLoading] = useState(false);
   const [isMorePlayersLoading, setIsMorePlayersLoading] = useState(false);
+  const [morePlayersError, setMorePlayersError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [positionFilter, setPositionFilter] = useState<PositionFilter>("ALL");
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("ALL");
@@ -205,6 +206,7 @@ export function PlayerDirectoryPicker({
         setNextPlayersCursor(null);
         setVisiblePlayerLimit(DEFAULT_VISIBLE_PLAYER_RESULTS);
         setError(null);
+        setMorePlayersError(null);
         setIsPlayersLoading(false);
         setIsMorePlayersLoading(false);
       }, 0);
@@ -219,6 +221,7 @@ export function PlayerDirectoryPicker({
       try {
         setIsPlayersLoading(true);
         setIsMorePlayersLoading(false);
+        setMorePlayersError(null);
         setError(null);
 
         const result = await executeQuery<PlayerSearchForPickerResponse>(
@@ -314,6 +317,7 @@ export function PlayerDirectoryPicker({
 
   const loadMorePlayers = async () => {
     if (isMorePlayersLoading) return;
+    setMorePlayersError(null);
 
     if (visiblePlayerLimit < filteredPlayers.length) {
       setVisiblePlayerLimit(
@@ -329,7 +333,6 @@ export function PlayerDirectoryPicker({
 
     try {
       setIsMorePlayersLoading(true);
-      setError(null);
 
       const result = await executeQuery<PlayerSearchForPickerResponse>(
         SEARCH_PLAYERS_FOR_PICKER,
@@ -370,7 +373,7 @@ export function PlayerDirectoryPicker({
       console.error("Failed to fetch more players:", fetchError);
 
       if (requestVersion === playerRequestVersionRef.current) {
-        setError(t("playersFailed"));
+        setMorePlayersError(t("loadMoreFailed"));
       }
     } finally {
       if (requestVersion === playerRequestVersionRef.current) {
@@ -516,14 +519,24 @@ export function PlayerDirectoryPicker({
                 </button>
               ))}
               {canLoadMorePlayers && (
-                <button
-                  type="button"
-                  onClick={() => void loadMorePlayers()}
-                  disabled={isMorePlayersLoading}
-                  className="w-full px-3 py-3 text-center text-sm font-medium text-primary transition-colors hover:bg-accent/50 disabled:cursor-wait disabled:text-muted-foreground"
-                >
-                  {isMorePlayersLoading ? t("loadingMore") : t("loadMore")}
-                </button>
+                <>
+                  {morePlayersError && (
+                    <div
+                      role="status"
+                      className="border-b px-3 py-2 text-sm text-destructive"
+                    >
+                      {morePlayersError}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void loadMorePlayers()}
+                    disabled={isMorePlayersLoading}
+                    className="w-full px-3 py-3 text-center text-sm font-medium text-primary transition-colors hover:bg-accent/50 disabled:cursor-wait disabled:text-muted-foreground"
+                  >
+                    {isMorePlayersLoading ? t("loadingMore") : t("loadMore")}
+                  </button>
+                </>
               )}
             </>
           )}

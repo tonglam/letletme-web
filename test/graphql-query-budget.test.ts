@@ -92,6 +92,12 @@ describe('GraphQL request budget', () => {
 			pickerSource,
 			/visiblePlayers\.length === 0 && !canLoadMorePlayers/
 		)
+		const loadMoreSource = pickerSource.slice(
+			pickerSource.indexOf('const loadMorePlayers'),
+			pickerSource.indexOf('const hasActiveFilter')
+		)
+		assert.match(loadMoreSource, /setMorePlayersError/)
+		assert.doesNotMatch(loadMoreSource, /setError\(/)
 		assert.doesNotMatch(pickerSource, /GET_PLAYERS_FOR_PICKER/)
 	})
 

@@ -441,6 +441,7 @@
     "loadingPlayers": "Loading players…",
     "loadMore": "Show more players",
     "loadingMore": "Loading more players…",
+    "loadMoreFailed": "Could not load more players. Try again.",
     "noPlayers": "No players match the current filters.",
     "resultCount": "{visible} of {total} players",
     "teamsFailed": "Failed to load the team directory.",
