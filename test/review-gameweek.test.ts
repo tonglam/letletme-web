@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import {
 	isPreseasonReviewAnchor,
 	maxEventIdFromHistory,
+	resolveFixturePlanningGameweek,
 	resolveReviewGameweekAnchor,
 } from '@/lib/review-gameweek'
 
@@ -66,6 +67,25 @@ describe('resolveReviewGameweekAnchor', () => {
 			anchorGw: null,
 			source: 'none',
 		})
+	})
+})
+
+describe('resolveFixturePlanningGameweek', () => {
+	it('uses the active event and otherwise starts at the upcoming event', () => {
+		assert.equal(
+			resolveFixturePlanningGameweek({
+				current: [{ id: 28 }],
+				next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }],
+			}),
+			28,
+		)
+		assert.equal(
+			resolveFixturePlanningGameweek({
+				current: [],
+				next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }],
+			}),
+			29,
+		)
 	})
 })
 

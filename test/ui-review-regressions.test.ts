@@ -130,4 +130,36 @@ describe('asynchronous selection safety', () => {
 				tournamentRequest > tournamentClear
 		)
 	})
+
+	it('invalidates stale picker cursors and retries incomplete personalized stats', async () => {
+		const [pickerSource, selectionsSource, teamSource] = await Promise.all([
+			readFile(
+				new URL('../components/player/PlayerDirectoryPicker.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL('../app/data/selections/SelectionsClient.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL('../app/me/team/_hooks/useTeamStats.ts', import.meta.url),
+				'utf8'
+			)
+		])
+
+		assert.match(
+			pickerSource,
+			/nextPlayersQueryKeyRef\.current !== playerQueryKey/
+		)
+		assert.match(
+			selectionsSource,
+			/initialStats && initialSelection\.key && !initialStatsLoadFailed/
+		)
+		assert.match(
+			selectionsSource,
+			/if \(entryResult\.status === 'rejected'\) throw entryResult\.reason/
+		)
+		assert.match(teamSource, /setGameweekError\(null\)/)
+		assert.match(teamSource, /error: gameweekError \?\? baseError/)
+	})
 })

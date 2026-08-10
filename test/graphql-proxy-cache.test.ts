@@ -5,7 +5,10 @@ import {
 	isPublicCacheableGraphQLRequest,
 	PUBLIC_PROXY_CACHE_CONTROL,
 } from '../lib/cache-policy'
-import { resolveGraphQLProxyCacheControl } from '../lib/graphql-proxy-cache'
+import {
+	isSuccessfulGraphQLResponseBody,
+	resolveGraphQLProxyCacheControl,
+} from '../lib/graphql-proxy-cache'
 
 describe('GraphQL proxy public cache policy', () => {
 	it('extracts operationName from the body field', () => {
@@ -65,6 +68,7 @@ describe('GraphQL proxy public cache policy', () => {
 				hasSessionUser: false,
 				hasAuthorization: false,
 				responseOk: true,
+				responseBodyOk: true,
 			}),
 			PUBLIC_PROXY_CACHE_CONTROL,
 		)
@@ -74,6 +78,35 @@ describe('GraphQL proxy public cache policy', () => {
 				hasSessionUser: false,
 				hasAuthorization: false,
 				responseOk: false,
+				responseBodyOk: true,
+			}),
+			'no-store',
+		)
+	})
+
+	it('rejects HTTP-200 GraphQL error envelopes and malformed bodies', () => {
+		assert.equal(
+			isSuccessfulGraphQLResponseBody('{"data":{"events":[]}}'),
+			true,
+		)
+		assert.equal(
+			isSuccessfulGraphQLResponseBody(
+				'{"data":null,"errors":[{"message":"resolver failed"}]}',
+			),
+			false,
+		)
+		assert.equal(isSuccessfulGraphQLResponseBody('not-json'), false)
+
+		assert.equal(
+			resolveGraphQLProxyCacheControl({
+				body: {
+					operationName: 'GetCurrentAndNextEvents',
+					query: 'query GetCurrentAndNextEvents { __typename }',
+				},
+				hasSessionUser: false,
+				hasAuthorization: false,
+				responseOk: true,
+				responseBodyOk: false,
 			}),
 			'no-store',
 		)

@@ -194,6 +194,9 @@ export function PlayerDirectoryPicker({
 	const [nextPlayersCursor, setNextPlayersCursor] = useState<number | null>(
 		null
 	)
+	const [nextPlayersQueryKey, setNextPlayersQueryKey] = useState<string | null>(
+		null
+	)
 	const [isTeamsLoading, setIsTeamsLoading] = useState(false)
 	const [isPlayersLoading, setIsPlayersLoading] = useState(false)
 	const [isMorePlayersLoading, setIsMorePlayersLoading] = useState(false)
@@ -212,6 +215,7 @@ export function PlayerDirectoryPicker({
 	)
 	const browseFiltersBeforeSearchRef = useRef<BrowseFilterSnapshot | null>(null)
 	const playerRequestVersionRef = useRef(0)
+	const nextPlayersQueryKeyRef = useRef<string | null>(null)
 
 	useEffect(() => {
 		let isCancelled = false
@@ -274,10 +278,31 @@ export function PlayerDirectoryPicker({
 		if (maxPrice != null) filter.maxPrice = maxPrice
 		return Object.keys(filter).length > 0 ? filter : null
 	}, [maxPrice, positionFilter, selectedTeam])
+	const playerQueryKey = useMemo(
+		() =>
+			JSON.stringify({
+				search: isNameSearchActive ? normalizedSearch : null,
+				teamId: serverPlayerFilter?.teamId ?? null,
+				position: serverPlayerFilter?.position ?? null,
+				maxPrice: serverPlayerFilter?.maxPrice ?? null,
+				sortBy,
+				ownBand
+			}),
+		[
+			isNameSearchActive,
+			normalizedSearch,
+			serverPlayerFilter,
+			sortBy,
+			ownBand
+		]
+	)
 
 	useEffect(() => {
 		let isCancelled = false
 		const requestVersion = ++playerRequestVersionRef.current
+		nextPlayersQueryKeyRef.current = null
+		setNextPlayersQueryKey(null)
+		setNextPlayersCursor(null)
 
 		const fetchPlayers = async () => {
 			try {
@@ -303,6 +328,8 @@ export function PlayerDirectoryPicker({
 
 				setPlayers(result.playersForPicker.items.map(toPickerPlayer))
 				setTotalPlayers(result.playersForPicker.totalCount)
+				nextPlayersQueryKeyRef.current = playerQueryKey
+				setNextPlayersQueryKey(playerQueryKey)
 				setNextPlayersCursor(result.playersForPicker.nextCursor)
 			} catch (fetchError) {
 				console.error('Failed to fetch players directory:', fetchError)
@@ -314,6 +341,8 @@ export function PlayerDirectoryPicker({
 					setError(t('playersFailed'))
 					setPlayers([])
 					setTotalPlayers(0)
+					nextPlayersQueryKeyRef.current = null
+					setNextPlayersQueryKey(null)
 					setNextPlayersCursor(null)
 				}
 			} finally {
@@ -341,6 +370,7 @@ export function PlayerDirectoryPicker({
 		serverPlayerFilter,
 		sortBy,
 		ownBand,
+		playerQueryKey,
 		t
 	])
 
@@ -381,8 +411,15 @@ export function PlayerDirectoryPicker({
 	])
 
 	const loadMorePlayers = async () => {
-		if (isMorePlayersLoading || nextPlayersCursor === null) return
+		if (
+			isMorePlayersLoading ||
+			nextPlayersCursor === null ||
+			nextPlayersQueryKeyRef.current !== playerQueryKey
+		) {
+			return
+		}
 		const requestVersion = playerRequestVersionRef.current
+		const requestQueryKey = playerQueryKey
 		setMorePlayersError(null)
 
 		try {
@@ -399,7 +436,12 @@ export function PlayerDirectoryPicker({
 				}
 			)
 
-			if (requestVersion !== playerRequestVersionRef.current) return
+			if (
+				requestVersion !== playerRequestVersionRef.current ||
+				nextPlayersQueryKeyRef.current !== requestQueryKey
+			) {
+				return
+			}
 
 			setPlayers(currentPlayers => {
 				const byId = new Map(
@@ -413,6 +455,8 @@ export function PlayerDirectoryPicker({
 				return Array.from(byId.values())
 			})
 			setTotalPlayers(result.playersForPicker.totalCount)
+			nextPlayersQueryKeyRef.current = requestQueryKey
+			setNextPlayersQueryKey(requestQueryKey)
 			setNextPlayersCursor(result.playersForPicker.nextCursor)
 		} catch (fetchError) {
 			console.error('Failed to fetch more players:', fetchError)
@@ -427,7 +471,9 @@ export function PlayerDirectoryPicker({
 	}
 
 	const visiblePlayers = filteredPlayers
-	const canLoadMorePlayers = nextPlayersCursor !== null
+	const canLoadMorePlayers =
+		nextPlayersCursor !== null &&
+		nextPlayersQueryKey === playerQueryKey
 
 	const isLoading = isTeamsLoading || isPlayersLoading
 

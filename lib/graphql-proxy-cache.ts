@@ -8,8 +8,9 @@ export function resolveGraphQLProxyCacheControl(input: {
 	hasSessionUser: boolean
 	hasAuthorization: boolean
 	responseOk: boolean
+	responseBodyOk: boolean
 }): string {
-	if (!input.responseOk) return 'no-store'
+	if (!input.responseOk || !input.responseBodyOk) return 'no-store'
 	if (
 		isPublicCacheableGraphQLRequest({
 			body: input.body,
@@ -20,4 +21,20 @@ export function resolveGraphQLProxyCacheControl(input: {
 		return PUBLIC_PROXY_CACHE_CONTROL
 	}
 	return 'no-store'
+}
+
+export function isSuccessfulGraphQLResponseBody(body: string): boolean {
+	try {
+		const parsed: unknown = JSON.parse(body)
+		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+			return false
+		}
+		const envelope = parsed as Record<string, unknown>
+		if (Array.isArray(envelope.errors) && envelope.errors.length > 0) {
+			return false
+		}
+		return Object.prototype.hasOwnProperty.call(envelope, 'data')
+	} catch {
+		return false
+	}
 }

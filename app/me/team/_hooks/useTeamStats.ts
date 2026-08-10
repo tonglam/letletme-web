@@ -128,7 +128,8 @@ export function useTeamStats({
 	const [isTransfersLoading, setIsTransfersLoading] = useState(
 		() => !transfersSeeded && peekTransferHistory(entryId) === undefined,
 	)
-	const [error, setError] = useState<string | null>(initialError)
+	const [baseError, setBaseError] = useState<string | null>(initialError)
+	const [gameweekError, setGameweekError] = useState<string | null>(null)
 	const [emptyStateMessage, setEmptyStateMessage] = useState<string | null>(
 		null,
 	)
@@ -193,7 +194,7 @@ export function useTeamStats({
 				}
 			} catch (e) {
 				console.error('[team stats] history load failed:', e)
-				if (!cancelled) setError(t('loadFailed'))
+				if (!cancelled) setBaseError(t('loadFailed'))
 			}
 		})()
 		return () => {
@@ -220,7 +221,7 @@ export function useTeamStats({
 				if (!cancelled) {
 					// Mark empty so we do not retry forever this session
 					seedTransferHistoryCache(entryId, [])
-					setError(prev => prev ?? t('transferDetailsUnavailable'))
+					setBaseError(prev => prev ?? t('transferDetailsUnavailable'))
 				}
 			} finally {
 				if (!cancelled) setIsTransfersLoading(false)
@@ -241,6 +242,7 @@ export function useTeamStats({
 
 		const requestId = gwRequestIdRef.current + 1
 		gwRequestIdRef.current = requestId
+		setGameweekError(null)
 
 		const cachedEvent = peekEntryEventResult(entryId, selectedGameweek)
 		if (cachedEvent !== undefined && teamStats?.eventId === selectedGameweek) {
@@ -287,7 +289,7 @@ export function useTeamStats({
 			} catch (loadError) {
 				if (requestId !== gwRequestIdRef.current) return
 				console.error('[team stats] gameweek load failed:', loadError)
-				setError(t('loadFailed'))
+				setGameweekError(t('loadFailed'))
 				setTeamStats(null)
 			} finally {
 				if (requestId === gwRequestIdRef.current) setIsLoading(false)
@@ -331,7 +333,7 @@ export function useTeamStats({
 	return {
 		currentGameweek,
 		emptyStateMessage,
-		error,
+		error: gameweekError ?? baseError,
 		isLoading,
 		isTransfersLoading,
 		seasonLogs,

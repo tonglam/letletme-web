@@ -22,9 +22,7 @@ import {
 	type TeamForPickerItem,
 	type TeamsForPickerResponse,
 } from '@/lib/graphql/operations/players'
-import {
-	resolveReviewGameweekAnchor,
-} from '@/lib/review-gameweek'
+import { resolveFixturePlanningGameweek } from '@/lib/review-gameweek'
 import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
 import {
 	squadPickKeys,
@@ -64,8 +62,7 @@ export default async function FixturesPage({ params }: PageProps) {
 		getCurrentAndNextEvents(),
 		getVerifiedEntryContext(),
 	])
-	const review = resolveReviewGameweekAnchor(events)
-	const fromGw = review.anchorGw
+	const fromGw = resolveFixturePlanningGameweek(events)
 
 	if (fromGw == null || fromGw <= 0) {
 		return <CurrentGameweekUnavailable titleKey="fixturesUnavailableTitle" />

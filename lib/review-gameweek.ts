@@ -59,6 +59,13 @@ export function resolveReviewGameweekAnchor(
 	return { currentGw: null, anchorGw: null, source: 'none' }
 }
 
+/** Current active event, otherwise the next event, for forward fixture planning. */
+export function resolveFixturePlanningGameweek(
+	events: EventsResponse | null | undefined,
+): number | null {
+	return pickCurrentEventId(events) ?? positiveId(events?.next?.[0]?.id)
+}
+
 /** Max eventId from entry history results (for Team review anchor). */
 export function maxEventIdFromHistory(
 	results: Array<{ eventId?: number | null }> | null | undefined,

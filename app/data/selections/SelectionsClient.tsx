@@ -482,7 +482,7 @@ export default function SelectionsClient({
 	const statsRequestIdRef = useRef(0)
 	const statsCache = useRef(
 		new Map<string, CachedDesk>(
-			initialStats && initialSelection.key
+			initialStats && initialSelection.key && !initialStatsLoadFailed
 				? [
 						[
 							`${initialSelection.key}:${initialSelection.gameweek}`,
@@ -551,9 +551,7 @@ export default function SelectionsClient({
 						}),
 					])
 					if (statsResult.status === 'rejected') throw statsResult.reason
-					if (entryResult.status === 'rejected') {
-						console.error('[league-trends] entry picks request failed:', entryResult.reason)
-					}
+					if (entryResult.status === 'rejected') throw entryResult.reason
 					next = {
 						stats: toStatsResult(statsResult.value.tournamentSelectionStats),
 						entryPicks:
