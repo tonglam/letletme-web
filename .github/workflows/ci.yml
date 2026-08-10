@@ -65,8 +65,8 @@ jobs:
             created_at bigint
           )`
           // bauth.apikey predates this repository's Drizzle migration stream.
-          // Reproduce its production shape so the terminal cleanup migration is
-          // exercised by the fresh-chain CI path as well as production adoption.
+          // Reproduce its empty production shape so the terminal cleanup migration
+          // is exercised by the fresh-chain CI path as well as production adoption.
           await sql`CREATE SCHEMA bauth`
           await sql`CREATE TABLE bauth.apikey (
             id text PRIMARY KEY,
@@ -96,12 +96,6 @@ jobs:
           await sql`CREATE INDEX apikey_key_idx ON bauth.apikey (key)`
           await sql`CREATE INDEX apikey_referenceid_idx ON bauth.apikey (reference_id)`
           await sql`ALTER TABLE bauth.apikey ENABLE ROW LEVEL SECURITY`
-          await sql`INSERT INTO bauth.apikey (
-            id, reference_id, key, created_at, updated_at
-          ) VALUES
-            ('retired-api-key-1', 'retired-reference-1', 'retired-secret-1', now(), now()),
-            ('retired-api-key-2', 'retired-reference-2', 'retired-secret-2', now(), now()),
-            ('retired-api-key-3', 'retired-reference-3', 'retired-secret-3', now(), now())`
           await sql.end()
           EOF
       - name: Apply migrations and verify repeatability

@@ -15,9 +15,9 @@ DECLARE
 	api_key_count bigint;
 BEGIN
 	SELECT count(*) INTO api_key_count FROM bauth.apikey;
-	IF api_key_count <> 3 THEN
+	IF api_key_count <> 0 THEN
 		RAISE EXCEPTION
-			'expected exactly 3 retired API-key rows before cleanup, found %',
+			'expected the retired API-key table to be empty before cleanup, found % rows',
 			api_key_count;
 	END IF;
 END
