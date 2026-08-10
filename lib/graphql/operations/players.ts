@@ -1,19 +1,165 @@
-export const GET_PLAYER_DETAIL = `
-  query GetPlayerDetail($playerId: Int!, $eventId: Int!) {
-    playerDetail(playerId: $playerId, eventId: $eventId) {
-      id webName teamShortName elementType elementTypeName
-      price startPrice totalPoints
-      selectedByPercent form seasonTransfersIn seasonTransfersOut
-      transfersInEvent transfersOutEvent
-      eventPoints minutes goalsScored assists cleanSheets goalsConceded
-      ownGoals penaltiesSaved yellowCards redCards saves
-      bonus bps influence creativity threat ictIndex
-      fixtures { event againstTeamShortName wasHome finished kickoffTime score difficulty bgw }
+/** Lightweight player identity for captain labels etc. */
+export const GET_PLAYER_BASIC = `
+  query GetPlayerBasic($id: Int!) {
+    player(id: $id) {
+      webName
+      team {
+        shortName
+        name
+      }
     }
   }
 `
 
+export interface PlayerBasicResponse {
+	player: {
+		webName: string
+		team?: { shortName?: string | null; name?: string | null } | null
+	} | null
+}
+
+export const GET_PLAYER_DETAIL = `
+  query GetPlayerDetail($playerId: Int!, $eventId: Int!) {
+    playerDetail(playerId: $playerId, eventId: $eventId) {
+      id webName teamShortName elementType elementTypeName
+      price startPrice
+      statsContext { scope season asOfEventId }
+      availability {
+        status news newsAdded observedDate capturedAt
+        chanceOfPlayingThisRound chanceOfPlayingNextRound stale
+      }
+      totalPoints
+      selectedByPercent form seasonTransfersIn seasonTransfersOut
+      transfersInEvent transfersOutEvent
+      eventPoints minutes starts goalsScored assists cleanSheets goalsConceded
+      ownGoals penaltiesSaved yellowCards redCards saves
+      bonus bps
+      expectedGoals expectedAssists expectedGoalInvolvements expectedGoalsConceded
+      influence creativity threat ictIndex
+      recentGameweeks {
+        eventId provisional totalPoints minutes started
+        goalsScored assists cleanSheets saves bonus bps
+        opponents { teamShortName wasHome }
+      }
+      fixtures { id event againstTeamShortName wasHome finished kickoffTime score difficulty bgw }
+    }
+  }
+`
+
+/**
+ * The first request for a selected player is intentionally small. Evidence
+ * fields are requested only after the user opens an evidence view.
+ */
+export const GET_PLAYER_OVERALL = `
+  query GetPlayerOverall($playerId: Int!, $eventId: Int!) {
+    playerDetail(playerId: $playerId, eventId: $eventId) {
+      id webName teamShortName elementType elementTypeName
+      price startPrice
+      statsContext { scope season asOfEventId }
+      availability {
+        status news newsAdded observedDate capturedAt
+        chanceOfPlayingThisRound chanceOfPlayingNextRound stale
+      }
+      totalPoints selectedByPercent form transfersInEvent transfersOutEvent
+      fixtures { id event againstTeamShortName wasHome finished kickoffTime score difficulty bgw }
+    }
+  }
+`
+
+/**
+ * Full evidence is a second request and is cached per selected player. The
+ * UI still reveals it one tab at a time, while this preserves one compatible
+ * PlayerDetail contract for the existing resolver.
+ */
+export const GET_PLAYER_EVIDENCE = GET_PLAYER_DETAIL.replace(
+	'GetPlayerDetail',
+	'GetPlayerEvidence'
+)
+
+const PLAYER_EVIDENCE_IDENTITY = `
+      id webName teamShortName elementType elementTypeName
+      statsContext { scope season asOfEventId }
+`
+
+function playerEvidenceQuery(operationName: string, fields: string): string {
+	return `
+  query ${operationName}($playerId: Int!, $eventId: Int!) {
+    playerDetail(playerId: $playerId, eventId: $eventId) {
+      ${PLAYER_EVIDENCE_IDENTITY}
+      ${fields}
+    }
+  }
+`
+}
+
+export const GET_PLAYER_EVIDENCE_FIXTURES = playerEvidenceQuery(
+	'GetPlayerEvidenceFixtures',
+	`fixtures { id event againstTeamShortName wasHome finished kickoffTime score difficulty bgw }`
+)
+
+export const GET_PLAYER_EVIDENCE_RECENT = playerEvidenceQuery(
+	'GetPlayerEvidenceRecent',
+	`recentGameweeks {
+        eventId provisional totalPoints minutes started
+        goalsScored assists cleanSheets saves bonus bps
+        opponents { teamShortName wasHome }
+      }`
+)
+
+export const GET_PLAYER_EVIDENCE_PRODUCTION = playerEvidenceQuery(
+	'GetPlayerEvidenceProduction',
+	`totalPoints selectedByPercent form minutes starts goalsScored assists cleanSheets goalsConceded
+      ownGoals penaltiesSaved yellowCards redCards saves bonus bps`
+)
+
+export const GET_PLAYER_EVIDENCE_PROCESS = playerEvidenceQuery(
+	'GetPlayerEvidenceProcess',
+	`expectedGoals expectedAssists expectedGoalInvolvements expectedGoalsConceded
+      influence creativity threat ictIndex`
+)
+
+export type PlayerStatsScope =
+	'CURRENT_SEASON' | 'PREVIOUS_SEASON' | 'UNAVAILABLE'
+
+export interface PlayerStatsContext {
+	scope: PlayerStatsScope
+	season: string
+	asOfEventId: number | null
+}
+
+export interface PlayerAvailability {
+	status: string
+	news: string
+	newsAdded: string | null
+	observedDate: string
+	capturedAt: string
+	chanceOfPlayingThisRound: number | null
+	chanceOfPlayingNextRound: number | null
+	stale: boolean
+}
+
+export interface PlayerRecentOpponent {
+	teamShortName: string
+	wasHome: boolean
+}
+
+export interface PlayerRecentGameweek {
+	eventId: number
+	provisional: boolean
+	totalPoints: number
+	minutes: number | null
+	started: boolean | null
+	goalsScored: number | null
+	assists: number | null
+	cleanSheets: number | null
+	saves: number | null
+	bonus: number | null
+	bps: number | null
+	opponents: PlayerRecentOpponent[]
+}
+
 export interface PlayerDetailFixture {
+	id: number
 	event: number
 	againstTeamShortName: string
 	wasHome: boolean
@@ -32,15 +178,18 @@ export interface PlayerDetailData {
 	elementTypeName: string
 	price: number
 	startPrice: number
-	totalPoints: number
+	statsContext: PlayerStatsContext
+	availability: PlayerAvailability | null
+	totalPoints: number | null
 	selectedByPercent?: number | null
 	form: number | null
-	seasonTransfersIn: number
-	seasonTransfersOut: number
-	transfersInEvent: number
-	transfersOutEvent: number
+	seasonTransfersIn: number | null
+	seasonTransfersOut: number | null
+	transfersInEvent: number | null
+	transfersOutEvent: number | null
 	eventPoints: number | null
 	minutes: number | null
+	starts: number | null
 	goalsScored: number | null
 	assists: number | null
 	cleanSheets: number | null
@@ -52,10 +201,15 @@ export interface PlayerDetailData {
 	saves: number | null
 	bonus: number | null
 	bps: number | null
-	influence: number
-	creativity: number
-	threat: number
-	ictIndex: number
+	expectedGoals: number | null
+	expectedAssists: number | null
+	expectedGoalInvolvements: number | null
+	expectedGoalsConceded: number | null
+	influence: number | null
+	creativity: number | null
+	threat: number | null
+	ictIndex: number | null
+	recentGameweeks: PlayerRecentGameweek[]
 	fixtures: PlayerDetailFixture[]
 }
 
@@ -63,96 +217,63 @@ export interface PlayerDetailResponse {
 	playerDetail: PlayerDetailData | null
 }
 
-export const GET_PLAYER_STATE_PROFILE = /* GraphQL */ `
-	query GetPlayerStateProfile($playerId: Int!, $horizon: Int = 5) {
-		playerStateProfile(playerId: $playerId, horizon: $horizon) {
-			playerId
-			playerCode
-			teamId
-			position
-			season
-			horizon
-			asOfEventId
-			asOf
-			trend
-			confidence
-			fplOnly
-			dimensions {
-				kind
-				rating
-				direction
-				confidence
-				reasonCodes
-				metrics {
-					code
-					source
-					value
-					baseline
-					percentile
-					unit
-					sampleMinutes
-					sampleSize
-					smallSample
-					capability
-				}
-			}
-			ownBaseline {
-				weightedPercentile
-				seasons {
-					season
-					minutes
-					positionPercentile
-					weight
-					understatProcessPercentile
-				}
-			}
-			peerBaseline {
-				minimumMinutes
-				cohortSize
-				currentPercentile
-			}
-			careerTrajectory {
-				season
-				minutes
-				fplPositionPercentile
-				understatProcessPercentile
-				expectedMetricsAvailable
-			}
-			outlook {
-				rating
-				horizon
-				averageDifficulty
-				gameweeks {
-					eventId
-					bgw
-					dgw
-					averageDifficulty
-					fixtures {
-						opponentTeamShortName
-						wasHome
-						difficulty
-					}
-				}
-			}
-			coverage {
-				fplCurrent
-				understatCurrent
-				fplHistorySeasons
-				understatHistorySeasons
-				mappingStatus
-				metricCoverage
-				limitations
-				providers {
-					provider
-					scope
-					season
-					asOf
-					stale
-					available
-				}
-			}
-		}
-	}
+export const GET_PLAYER_STATE_PROFILE = `
+  query GetPlayerStateProfile($playerId: Int!, $horizon: Int = 5) {
+    playerStateProfile(playerId: $playerId, horizon: $horizon) {
+	      playerId teamId position season horizon asOfEventId asOf
+	      trend confidence fplOnly
+	      reasons { code dimension current baseline percentile }
+	      profileRadar {
+	        source position season asOfEventId sampleMinutes smallSample
+	        axes { code value percentile unit direction sampleMinutes available capability reasonCode }
+	      }
+	      dimensions {
+		        kind rating direction confidence reasonCodes
+		        metrics {
+		          code source value baseline percentile unit season
+		          sampleMinutes sampleSize smallSample capability
+		        }
+		      }
+	      outlook {
+	        rating horizon averageDifficulty
+	        gameweeks {
+	          eventId bgw dgw averageDifficulty
+	          fixtures { id opponentTeamShortName wasHome difficulty kickoffTime }
+	        }
+	      }
+	      coverage {
+	        fplCurrent understatCurrent
+	        fplHistorySeasons understatHistorySeasons
+	        mappingStatus metricCoverage limitations
+	      }
+	    }
+	  }
+`
+
+/**
+ * History and provider revisions are behind the supporting-data disclosure.
+ * Keeping them separate leaves both documents below GraphQL's 200-node guard
+ * and avoids transferring the low-frequency context until it is requested.
+ */
+export const GET_PLAYER_STATE_CONTEXT = `
+  query GetPlayerStateContext($playerId: Int!, $horizon: Int = 5) {
+    playerStateProfile(playerId: $playerId, horizon: $horizon) {
+      playerId
+      ownBaseline {
+        weightedPercentile
+        seasons { season positionPercentile weight }
+      }
+      peerBaseline { position minimumMinutes cohortSize currentPercentile }
+      careerTrajectory {
+        season position minutes fplPositionPercentile understatProcessPercentile expectedMetricsAvailable
+      }
+      coverage {
+        providers {
+          provider scope season revision asOf freshnessSeconds stale available
+        }
+      }
+    }
+  }
 `
 
 export type PlayerStateTrend =
@@ -186,12 +307,83 @@ export type PlayerStateDimensionRating =
 	| 'UNAVAILABLE'
 	| 'UNKNOWN'
 
-export type PlayerStateMetricSource =
-	| 'FPL_CURRENT'
-	| 'FPL_HISTORY'
-	| 'UNDERSTAT_CURRENT'
-	| 'UNDERSTAT_HISTORY'
-	| 'DERIVED'
+export interface PlayerStateMetric {
+	code: string
+	source?:
+		| 'FPL_CURRENT'
+		| 'FPL_HISTORY'
+		| 'UNDERSTAT_CURRENT'
+		| 'UNDERSTAT_HISTORY'
+		| 'DERIVED'
+	value: number | null
+	baseline?: number | null
+	percentile?: number | null
+	unit: string
+	season?: string | null
+	sampleMinutes?: number | null
+	sampleSize?: number | null
+	smallSample?: boolean
+	capability?: boolean
+}
+
+export interface PlayerStateReason {
+	code: string
+	dimension?: PlayerStateDimensionKind
+	current?: number | null
+	baseline?: number | null
+	percentile?: number | null
+}
+
+export interface PlayerStateDimension {
+	kind: PlayerStateDimensionKind
+	rating: PlayerStateDimensionRating
+	direction: PlayerStateDirection
+	confidence?: PlayerStateConfidence
+	reasonCodes: string[]
+	metrics: PlayerStateMetric[]
+}
+
+export type PlayerRadarAxis = {
+	code: string
+	value: number | null
+	percentile: number | null
+	unit: string
+	direction: 'HIGHER_IS_BETTER' | 'LOWER_IS_BETTER' | 'NEUTRAL'
+	sampleMinutes: number | null
+	available: boolean
+	capability: boolean
+	reasonCode?: string | null
+}
+
+export type PlayerRadarProfile = {
+	source: 'FPL'
+	position: number
+	season: string
+	asOfEventId: number | null
+	sampleMinutes: number
+	smallSample: boolean
+	axes: PlayerRadarAxis[]
+}
+
+export interface PlayerStateOutlookGameweek {
+	eventId: number
+	bgw: boolean
+	dgw: boolean
+	averageDifficulty?: number | null
+	fixtures: Array<{
+		id: number
+		opponentTeamShortName: string
+		wasHome?: boolean
+		difficulty: number
+		kickoffTime?: string | null
+	}>
+}
+
+export interface PlayerStateBaselineSeason {
+	season: string
+	positionPercentile: number | null
+	weight: number
+}
 
 export type PlayerStateMappingStatus =
 	'VERIFIED' | 'UNVERIFIED' | 'AMBIGUOUS' | 'QUARANTINED' | 'UNAVAILABLE'
@@ -199,68 +391,19 @@ export type PlayerStateMappingStatus =
 export type PlayerStateProvider = 'FPL' | 'UNDERSTAT'
 export type PlayerStateProviderScope = 'CURRENT' | 'HISTORY'
 
-export interface PlayerStateMetric {
-	code: string
-	source: PlayerStateMetricSource
-	value: number | null
-	baseline: number | null
-	percentile: number | null
-	unit: string
-	sampleMinutes: number | null
-	sampleSize: number | null
-	smallSample: boolean
-	capability: boolean
-}
-
-export interface PlayerStateDimension {
-	kind: PlayerStateDimensionKind
-	rating: PlayerStateDimensionRating
-	direction: PlayerStateDirection
-	confidence: PlayerStateConfidence
-	reasonCodes: string[]
-	metrics: PlayerStateMetric[]
-}
-
-export interface PlayerStateBaselineSeason {
-	season: string
-	minutes: number
-	positionPercentile: number | null
-	weight: number
-	understatProcessPercentile: number | null
-}
-
-export interface PlayerStateCareerPoint {
-	season: string
-	minutes: number
-	fplPositionPercentile: number | null
-	understatProcessPercentile: number | null
-	expectedMetricsAvailable: boolean
-}
-
-export interface PlayerStateOutlookGameweek {
-	eventId: number
-	bgw: boolean
-	dgw: boolean
-	averageDifficulty: number | null
-	fixtures: Array<{
-		opponentTeamShortName: string
-		wasHome: boolean
-		difficulty: number
-	}>
-}
-
 export interface PlayerStateProviderRevision {
 	provider: PlayerStateProvider
 	scope: PlayerStateProviderScope
 	season: string
+	revision: string | null
 	asOf: string | null
+	freshnessSeconds: number | null
 	stale: boolean
 	available: boolean
 }
 
 export interface PlayerStateProfileData {
 	playerId: number
-	playerCode: number
 	teamId: number
 	position: number
 	season: string
@@ -270,21 +413,29 @@ export interface PlayerStateProfileData {
 	trend: PlayerStateTrend
 	confidence: PlayerStateConfidence
 	fplOnly: boolean
+	reasons: PlayerStateReason[]
+	profileRadar: PlayerRadarProfile | null
 	dimensions: PlayerStateDimension[]
 	ownBaseline: {
 		weightedPercentile: number | null
 		seasons: PlayerStateBaselineSeason[]
 	}
 	peerBaseline: {
+		position?: number
 		minimumMinutes: number
-		cohortSize: number
+		cohortSize?: number
 		currentPercentile: number | null
 	}
-	careerTrajectory: PlayerStateCareerPoint[]
+	careerTrajectory: Array<{
+		season: string
+		position?: number
+		minutes?: number
+		fplPositionPercentile: number | null
+		understatProcessPercentile: number | null
+		expectedMetricsAvailable?: boolean
+	}>
 	outlook: {
 		rating: PlayerStateDimensionRating
-		horizon: number
-		averageDifficulty: number | null
 		gameweeks: PlayerStateOutlookGameweek[]
 	}
 	coverage: {
@@ -299,8 +450,26 @@ export interface PlayerStateProfileData {
 	}
 }
 
+export type PlayerStateProfileCoreData = Omit<
+	PlayerStateProfileData,
+	'ownBaseline' | 'peerBaseline' | 'careerTrajectory' | 'coverage'
+> & {
+	coverage: Omit<PlayerStateProfileData['coverage'], 'providers'>
+}
+
+export type PlayerStateContextData = Pick<
+	PlayerStateProfileData,
+	'playerId' | 'ownBaseline' | 'peerBaseline' | 'careerTrajectory'
+> & {
+	coverage: Pick<PlayerStateProfileData['coverage'], 'providers'>
+}
+
 export interface PlayerStateProfileResponse {
-	playerStateProfile: PlayerStateProfileData | null
+	playerStateProfile: PlayerStateProfileCoreData | null
+}
+
+export interface PlayerStateContextResponse {
+	playerStateProfile: PlayerStateContextData | null
 }
 
 // Query to fetch player values
@@ -310,6 +479,9 @@ export const GET_PLAYERS_FOR_PICKER = `
       id
       webName
       position
+      price
+      selectedByPercent
+      totalPoints
       team {
         id
         name
@@ -322,25 +494,24 @@ export const GET_PLAYERS_FOR_PICKER = `
 // Bounded name search for interactive pickers. Unlike `players`, this query is
 // filtered before PostgreSQL returns rows and never downloads the full roster.
 export const SEARCH_PLAYERS_FOR_PICKER = `
-  query SearchPlayersForPicker(
-    $search: String
-    $filter: PlayersFilter
-    $limit: Int = 20
-    $cursor: Int
-  ) {
-    playersForPicker(search: $search, filter: $filter, limit: $limit, cursor: $cursor) {
+  query SearchPlayersForPicker($search: String, $filter: PlayersFilter, $sort: PlayerPickerSort = TOTAL_POINTS_DESC, $ownershipBand: PlayerPickerOwnershipBand, $limit: Int = 20, $cursor: Int) {
+    playersForPicker(search: $search, filter: $filter, sort: $sort, ownershipBand: $ownershipBand, limit: $limit, cursor: $cursor) {
       items {
         id
         webName
         position
+        price
+        selectedByPercent
+        totalPoints
+        form
         team {
           id
           name
           shortName
         }
       }
-      nextCursor
       totalCount
+      nextCursor
     }
   }
 `
@@ -362,6 +533,10 @@ export interface PlayerDirectoryItem {
 	id: number
 	webName: string
 	position: PlayerDirectoryPosition
+	price: number
+	selectedByPercent?: number | null
+	totalPoints?: number | null
+	form?: number | null
 	team: {
 		id: number
 		name: string
@@ -376,10 +551,16 @@ export interface PlayersForPickerResponse {
 export interface PlayerSearchForPickerResponse {
 	playersForPicker: {
 		items: PlayerDirectoryItem[]
-		nextCursor: number | null
 		totalCount: number
+		nextCursor: number | null
 	}
 }
+
+export type PlayerPickerOwnershipBand =
+	| 'LE5'
+	| 'GT5_LE15'
+	| 'GT15_LE40'
+	| 'GT40'
 
 export interface TeamForPickerItem {
 	id: number

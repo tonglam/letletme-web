@@ -27,6 +27,18 @@ export interface StatsTableColumn {
   sortDefault?: "asc" | "desc";
   /** Custom value for ordering (e.g. combine team + manager) */
   sortValue?: (row: object) => string | number;
+  /**
+   * `secondary` columns are hidden below `md` to reduce horizontal scroll on phones.
+   * Prefer marking optional metrics secondary; rank/name/primary points stay primary.
+   */
+  priority?: "primary" | "secondary";
+}
+
+function columnVisibilityClass(column: StatsTableColumn): string | undefined {
+  if (column.priority === "secondary") {
+    return "hidden md:table-cell";
+  }
+  return undefined;
 }
 
 interface StatsTableProps<T extends object = object> {
@@ -137,9 +149,9 @@ export function StatsTable<T extends object = object>({
           <h3 className="text-lg font-semibold">{title}</h3>
         </div>
       ) : null}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overscroll-x-contain">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
             <TableRow>
               {columns.map((column) => {
                 const isActive = sortKey === column.key;
@@ -161,7 +173,11 @@ export function StatsTable<T extends object = object>({
                 return (
                   <TableHead
                     key={column.key}
-                    className={column.className}
+                    className={cn(
+                      "whitespace-nowrap bg-card/95",
+                      columnVisibilityClass(column),
+                      column.className,
+                    )}
                     aria-sort={ariaSort}
                   >
                     {column.sortable ? (
@@ -198,7 +214,10 @@ export function StatsTable<T extends object = object>({
           <TableBody>
             {sortedData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-center py-4">
+                <TableCell
+                  colSpan={Math.max(1, columns.filter((c) => c.priority !== "secondary").length)}
+                  className="py-4 text-center"
+                >
                   {t("noDataAvailable")}
                 </TableCell>
               </TableRow>
@@ -212,7 +231,10 @@ export function StatsTable<T extends object = object>({
                 return (
                   <TableRow key={keyFromField ?? rowIndex}>
                     {columns.map((column) => (
-                      <TableCell key={column.key} className={column.className}>
+                      <TableCell
+                        key={column.key}
+                        className={cn(columnVisibilityClass(column), column.className)}
+                      >
                         {column.format && rec[column.key] !== undefined
                           ? column.format(rec[column.key], rec)
                           : defaultCellContent(rec[column.key])}

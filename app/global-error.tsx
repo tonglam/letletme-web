@@ -19,8 +19,17 @@ export default function GlobalError({
 		<html lang="en">
 			<body className="min-h-svh bg-background text-foreground antialiased">
 				<main className="mx-auto flex min-h-svh max-w-xl flex-col items-center justify-center gap-5 px-6 text-center">
-					<p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary-ink">LetLetMe</p>
-					<h1 className="text-3xl font-bold tracking-tight">The app shell could not start / 应用无法启动</h1>
+					<p className="text-sm font-semibold uppercase tracking-[0.18em] text-foreground">
+						<span style={{ color: 'hsl(152 100% 50%)' }}>L</span>
+						et
+						<span style={{ color: 'hsl(152 100% 50%)' }}>L</span>
+						et
+						<span style={{ color: 'hsl(152 100% 50%)' }}>M</span>
+						e
+					</p>
+					<h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: 'system-ui, sans-serif' }}>
+						The app shell could not start / 应用无法启动
+					</h1>
 					<p className="text-muted-foreground">
 						Try loading the application again. Your data has not been changed.<br />
 						请重新加载应用，你的数据未受影响。

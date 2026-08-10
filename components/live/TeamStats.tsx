@@ -1,117 +1,165 @@
-"use client";
+'use client'
 
-import { memo } from "react";
-import { Crown, Repeat, Trophy, Zap } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { cn } from '@/lib/utils'
+import { Crown, Repeat, Trophy, Zap } from 'lucide-react'
+import { useTranslations } from 'next-intl'
+import { memo, type ReactNode } from 'react'
 
 interface TeamStatsProps {
-  stats: {
-    teamName: string;
-    playerName: string;
-    livePoints: number;
-    transferCost: number;
-    captainName: string;
-    liveTotalPoints: number;
-    played: string;
-    chips: {
-      bench: boolean;
-      triple: boolean;
-      wildcard: boolean;
-    };
-  };
+	stats: {
+		teamName: string
+		playerName: string
+		livePoints: number
+		transferCost: number
+		captainName: string
+		liveTotalPoints: number
+		played: string
+		chips: {
+			bench: boolean
+			triple: boolean
+			wildcard: boolean
+			freeHit?: boolean
+		}
+	}
+}
+
+function MetricTile({
+	icon,
+	label,
+	value,
+	valueClassName,
+}: {
+	icon: ReactNode
+	label: string
+	value: ReactNode
+	valueClassName?: string
+}) {
+	return (
+		<div className="rounded-lg border border-border/70 bg-muted/40 px-3 py-3 sm:px-4 sm:py-3.5 dark:bg-muted/25">
+			<div className="mb-2 flex items-center gap-2">
+				<span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border/60 sm:size-8">
+					{icon}
+				</span>
+				<span className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-[11px]">
+					{label}
+				</span>
+			</div>
+			<div
+				className={cn(
+					'truncate font-display text-xl font-bold tabular-nums tracking-wide text-foreground sm:text-2xl',
+					valueClassName,
+				)}
+			>
+				{value}
+			</div>
+		</div>
+	)
+}
+
+function MetaItem({
+	label,
+	value,
+	valueClassName,
+}: {
+	label: string
+	value: ReactNode
+	valueClassName?: string
+}) {
+	return (
+		<div className="flex min-w-0 items-baseline gap-2">
+			<span className="shrink-0 font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+				{label}
+			</span>
+			<span
+				className={cn(
+					'truncate font-mono text-sm font-semibold tabular-nums text-foreground',
+					valueClassName,
+				)}
+			>
+				{value}
+			</span>
+		</div>
+	)
 }
 
 function TeamStatsComponent({ stats }: TeamStatsProps) {
-  const t = useTranslations("LivePoints");
-  const chipLabels: Record<string, string> = {
-    bench: t("benchBoost"),
-    triple: t("tripleCaptain"),
-    wildcard: t("wildcard"),
-  };
-  return (
-    <div className="bg-card rounded-lg shadow-sm overflow-hidden mb-8">
-      <div className="p-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
-          <div className="min-w-0">
-            <h2 className="text-2xl font-bold mb-2 truncate">{stats.teamName}</h2>
-            <p className="text-muted-foreground truncate">{stats.playerName}</p>
-          </div>
+	const t = useTranslations('LivePoints')
+	const chipLabels: Record<string, string> = {
+		bench: t('benchBoost'),
+		triple: t('tripleCaptain'),
+		wildcard: t('wildcard'),
+		freeHit: t('freeHit'),
+	}
+	const activeChipNames = Object.entries(stats.chips)
+		.filter(([, active]) => active)
+		.map(([chip]) => chipLabels[chip] ?? chip)
+	const chipActive = activeChipNames.length > 0
+	const chipDisplay = chipActive ? activeChipNames.join(' · ') : t('noActiveChips')
 
-          <div className="flex items-center gap-3 sm:justify-end">
-            <div className="flex flex-col items-end">
-              <span className="text-xs text-muted-foreground">{t("played")}</span>
-              <span className="text-sm font-semibold tabular-nums">{stats.played}</span>
-            </div>
-            <div className="flex flex-wrap sm:justify-end gap-2">
-              {Object.entries(stats.chips).some(([_, active]) => active) ? (
-                Object.entries(stats.chips).map(
-                  ([chip, active]) =>
-                    active && (
-                      <span
-                        key={chip}
-                        className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary-ink"
-                      >
-                        {chipLabels[chip] ?? chip.toUpperCase()}
-                      </span>
-                    )
-                )
-              ) : (
-                <span className="text-sm text-muted-foreground">{t("noActiveChips")}</span>
-              )}
-            </div>
-          </div>
-        </div>
+	return (
+		<div className="mb-8 overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
+			<div className="p-4 sm:p-6">
+				{/* Team identity + light meta (not metric tiles) */}
+				<div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+					<div className="min-w-0">
+						<p className="chyron">{t('livePoints')}</p>
+						<h2 className="mt-1 truncate font-display text-2xl font-bold uppercase tracking-wide">
+							{stats.teamName}
+						</h2>
+						{stats.playerName ? (
+							<p className="mt-1 truncate text-sm text-muted-foreground">
+								{stats.playerName}
+							</p>
+						) : null}
+					</div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
-          <div className="bg-primary/5 rounded-lg p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 rounded-full bg-primary/10">
-                <Zap className="w-5 h-5 text-primary-ink" />
-              </div>
-              <span className="text-sm text-muted-foreground">{t("livePoints")}</span>
-            </div>
-            <div className="text-2xl font-bold">{stats.livePoints}</div>
-          </div>
-          
-          <div className="bg-primary/5 rounded-lg p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 rounded-full bg-primary/10">
-                <Repeat className="w-5 h-5 text-primary-ink" />
-              </div>
-              <span className="text-sm text-muted-foreground">{t("transferCost")}</span>
-            </div>
-            <div className="text-2xl font-bold">
-              {stats.transferCost > 0 ? (
-                <span className="text-destructive">-{stats.transferCost}</span>
-              ) : (
-                0
-              )}
-            </div>
-          </div>
-          
-          <div className="bg-primary/5 rounded-lg p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 rounded-full bg-primary/10">
-                <Crown className="w-5 h-5 text-primary-ink" />
-              </div>
-              <span className="text-sm text-muted-foreground">{t("captain")}</span>
-            </div>
-            <div className="text-lg font-bold truncate">{stats.captainName}</div>
-          </div>
+					<div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-t border-border/60 pt-3 sm:border-t-0 sm:pt-0">
+						<MetaItem label={t('played')} value={stats.played} />
+						<span className="hidden h-3 w-px bg-border sm:block" aria-hidden="true" />
+						<MetaItem
+							label={t('chip')}
+							value={chipDisplay}
+							valueClassName={
+								chipActive ? 'text-primary-ink' : 'text-muted-foreground'
+							}
+						/>
+					</div>
+				</div>
 
-          <div className="bg-primary/5 rounded-lg p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 rounded-full bg-primary/10">
-                <Trophy className="w-5 h-5 text-primary-ink" />
-              </div>
-              <span className="text-sm text-muted-foreground">{t("liveTotal")}</span>
-            </div>
-            <div className="text-2xl font-bold">{stats.liveTotalPoints}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+				{/* Core score metrics only — roomy 4-up grid */}
+				<div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-4">
+					<MetricTile
+						icon={<Zap className="size-3.5 sm:size-4" aria-hidden="true" />}
+						label={t('livePoints')}
+						value={stats.livePoints}
+						valueClassName="text-primary-ink"
+					/>
+					<MetricTile
+						icon={<Repeat className="size-3.5 sm:size-4" aria-hidden="true" />}
+						label={t('transferCost')}
+						value={
+							stats.transferCost > 0 ? (
+								<span className="text-destructive">-{stats.transferCost}</span>
+							) : (
+								0
+							)
+						}
+					/>
+					<MetricTile
+						icon={<Crown className="size-3.5 sm:size-4" aria-hidden="true" />}
+						label={t('captain')}
+						value={stats.captainName || '—'}
+						valueClassName="text-lg sm:text-xl"
+					/>
+					<MetricTile
+						icon={<Trophy className="size-3.5 sm:size-4" aria-hidden="true" />}
+						label={t('liveTotal')}
+						value={stats.liveTotalPoints}
+					/>
+				</div>
+			</div>
+		</div>
+	)
 }
 
-export const TeamStats = memo(TeamStatsComponent);
+export const TeamStats = memo(TeamStatsComponent)

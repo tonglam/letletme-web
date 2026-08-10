@@ -91,7 +91,7 @@ export function PlayerOwnershipFilter({
   };
 
   return (
-    <div className={cn("mb-6 rounded-lg border bg-card p-4", className)}>
+    <div className={cn("mb-4 rounded-lg border bg-card p-4 last:mb-0 md:mb-6", className)}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium">
@@ -107,12 +107,15 @@ export function PlayerOwnershipFilter({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
           <Select
             value={scope}
             onValueChange={(value) => setScope(value as OwnershipScope)}
           >
-            <SelectTrigger className="h-8 w-[120px]" aria-label={t("ownershipScope")}>
+            <SelectTrigger
+              className="h-10 w-full min-h-10 sm:h-9 sm:min-h-9 sm:w-[120px]"
+              aria-label={t("ownershipScope")}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -126,7 +129,10 @@ export function PlayerOwnershipFilter({
             value={captainMode}
             onValueChange={(value) => setCaptainMode(value as OwnershipCaptainMode)}
           >
-            <SelectTrigger className="h-8 w-[180px]" aria-label={t("captaincyFilter")}>
+            <SelectTrigger
+              className="h-10 w-full min-h-10 sm:h-9 sm:min-h-9 sm:w-[180px]"
+              aria-label={t("captaincyFilter")}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -143,7 +149,7 @@ export function PlayerOwnershipFilter({
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            className="h-10 min-h-10 w-full sm:h-9 sm:min-h-9 sm:w-auto"
             onClick={() => setIsPickerOpen((open) => !open)}
           >
             <Plus className="h-4 w-4" />

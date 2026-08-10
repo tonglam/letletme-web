@@ -1,6 +1,6 @@
 'use client'
 
-import { LogoMark } from '@/components/layout/Logo'
+import { LogoMark, LogoWordmark } from '@/components/layout/Logo'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -107,12 +107,14 @@ function LoginForm() {
 		<div className="flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center bg-muted/30 p-4">
 			<div className="mb-6 flex items-center gap-2">
 				<LogoMark className="size-10 text-plum dark:text-electric" />
-				<h1 className="font-display text-2xl font-bold uppercase tracking-[0.06em]">LetLetMe</h1>
+				<h1>
+					<LogoWordmark className="text-2xl" />
+				</h1>
 			</div>
 
-			<Card className="w-full max-w-md p-6">
+			<Card className="w-full max-w-md border-border/80 p-6 shadow-sm">
 				<div className="mb-6 text-center">
-					<h2 className="text-2xl font-bold tracking-tight">{t('signIn')}</h2>
+					<h2 className="font-display text-2xl font-bold tracking-tight">{t('signIn')}</h2>
 					<p className="text-sm text-muted-foreground">{t('chooseMethod')}</p>
 				</div>
 

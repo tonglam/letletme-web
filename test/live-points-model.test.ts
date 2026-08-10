@@ -84,6 +84,8 @@ describe('live-points model', () => {
 					isGwStarted: true,
 					isGwFinished: false,
 					isPlayed: true,
+					isCaptain: false,
+					isViceCaptain: false,
 					expectedGoals: null,
 					expectedAssists: null,
 					expectedGoalInvolvements: null,

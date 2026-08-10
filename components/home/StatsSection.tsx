@@ -1,11 +1,13 @@
+import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { Card } from '@/components/ui/card'
+import { Link } from '@/i18n/navigation'
 import type {
 	ChipPlay,
 	EventOverallResult,
 } from '@/lib/graphql/operations/events'
 import homeStats from '@/lib/home-stats'
 import { formatCompactNumber } from '@/lib/utils'
-import { ArrowRightCircle, Crown, Trophy, Zap } from 'lucide-react'
+import { ArrowRight, ArrowRightCircle, Crown, Trophy, Zap } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 interface StatsSectionProps {
@@ -25,13 +27,23 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 	if (!overallResult || !currentEventId) {
 		return (
 			<Card className="p-4 sm:p-6 lg:p-8">
-				<div className="mb-6 flex items-center justify-between">
-					<h2 className="flex items-center gap-2 font-display text-xl font-bold uppercase tracking-wide">
-						<span className="rounded-md bg-plum px-2 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
-							GW
-						</span>
-						<span>{t('gameweekStats')}</span>
-					</h2>
+				<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+							{t('thisGameweek')}
+						</p>
+						<h2 className="mt-1 flex items-center gap-2 font-display text-xl font-bold uppercase tracking-wide">
+							<GameweekBadge gameweek={null} size="sm" />
+							<span>{t('gameweekStats')}</span>
+						</h2>
+					</div>
+					<Link
+						href="/data/gameweek"
+						className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
+					>
+						{t('viewGameweekStats')}
+						<ArrowRight aria-hidden="true" className="size-4" />
+					</Link>
 				</div>
 				<div className="py-12 text-center text-muted-foreground">
 					<p className="text-sm">{t('noStats')}</p>
@@ -78,13 +90,23 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 
 	return (
 		<Card className="p-4 sm:p-6 lg:p-8">
-			<div className="mb-6 flex items-center justify-between">
-				<h2 className="flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
-					<span className="rounded-md bg-plum px-2 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
-						GW{overallResult.event}
-					</span>
-					<span>{t('gameweekStats')}</span>
-				</h2>
+			<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+						{t('thisGameweek')}
+					</p>
+					<h2 className="mt-1 flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
+						<GameweekBadge gameweek={overallResult.event} size="sm" />
+						<span>{t('gameweekStats')}</span>
+					</h2>
+				</div>
+				<Link
+					href="/data/gameweek"
+					className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
+				>
+					{t('viewGameweekStats')}
+					<ArrowRight aria-hidden="true" className="size-4" />
+				</Link>
 			</div>
 			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 				{stats.map((stat, index) => (

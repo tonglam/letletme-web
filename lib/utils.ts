@@ -39,15 +39,33 @@ export function formatInteger(number: number): string {
 
 const CHIP_LABELS: Record<string, string> = {
   bboost: 'Bench Boost',
+  bb: 'Bench Boost',
+  benchboost: 'Bench Boost',
+  bench_boost: 'Bench Boost',
   '3xc': 'Triple Captain',
+  tc: 'Triple Captain',
+  triplecaptain: 'Triple Captain',
+  triple_captain: 'Triple Captain',
   wildcard: 'Wildcard',
+  wc: 'Wildcard',
   freehit: 'Free Hit',
+  fh: 'Free Hit',
+  free_hit: 'Free Hit',
 };
 
+/** Normalize API enums (BENCH_BOOST) and short codes (bboost) for display. */
 export function formatChipName(chipName?: string | null): string {
   if (!chipName) {
     return 'Unknown';
   }
 
-  return CHIP_LABELS[chipName] ?? chipName;
+  const raw = chipName.trim().toLowerCase()
+  const compact = raw.replace(/[\s-]+/g, '_')
+  const nosep = raw.replace(/[\s_-]+/g, '')
+  return (
+    CHIP_LABELS[raw] ??
+    CHIP_LABELS[compact] ??
+    CHIP_LABELS[nosep] ??
+    chipName
+  )
 }

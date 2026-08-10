@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { teamCrestSrc } from '@/lib/team-crest'
 import type { Match, PlayerStat } from '@/types/match'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import Image from 'next/image'
@@ -41,23 +42,49 @@ function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player
 		<Button
 			type="button"
 			variant="ghost"
-			className="h-auto w-full flex-col items-stretch rounded-lg bg-accent/30 p-3 text-left whitespace-normal hover:bg-accent/50"
+			className="h-auto w-full flex-col items-stretch rounded-lg border border-transparent bg-accent/30 p-3 text-left whitespace-normal hover:border-border/50 hover:bg-accent/50"
 			onClick={() => onSelect(player)}
 		>
 			<span className="flex items-start justify-between gap-3">
 				<span className="font-medium">{player.player}</span>
 				<span className="flex shrink-0 items-center gap-2">
-					{(player.bonus_points ?? 0) > 0 ? <Badge variant="outline" className="border-warning/30 text-warning">+{player.bonus_points}</Badge> : null}
-					<Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary-ink">{t('pointsBadge', { points: player.totalPoints ?? 0 })}</Badge>
+					{(player.bonus_points ?? 0) > 0 ? (
+						<Badge
+							variant="outline"
+							className="h-5 border-warning/30 px-1.5 text-[11px] tabular-nums text-warning"
+						>
+							+{player.bonus_points}
+						</Badge>
+					) : null}
+					<Badge
+						variant="outline"
+						className="h-5 border-primary/20 bg-primary/10 px-1.5 text-[11px] tabular-nums text-primary-ink"
+					>
+						{t('pointsBadge', { points: player.totalPoints ?? 0 })}
+					</Badge>
 				</span>
 			</span>
 			{metrics.length > 0 ? (
-				<span className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-					{metrics.map((metric) => (
-						<span key={metric.label} className={`flex items-center justify-between gap-2 rounded px-2 py-1 text-xs ${METRIC_TONES[metric.tone]}`}>
-							<span className="font-semibold">{metricLabels[metric.label] ?? metric.label}</span><span className="font-bold">{metric.value}</span>
-						</span>
-					))}
+				<span className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-5">
+					{metrics.map(metric => {
+						const toneClass =
+							metric.label === 'YC'
+								? 'bg-warning/15 text-warning'
+								: metric.label === 'RC'
+									? 'bg-destructive/15 text-destructive'
+									: METRIC_TONES[metric.tone]
+						return (
+							<span
+								key={metric.label}
+								className={`flex items-center justify-between gap-2 rounded px-1.5 py-0.5 text-[11px] ${toneClass}`}
+							>
+								<span className="font-semibold">
+									{metricLabels[metric.label] ?? metric.label}
+								</span>
+								<span className="font-bold tabular-nums">{metric.value}</span>
+							</span>
+						)
+					})}
 				</span>
 			) : null}
 		</Button>
@@ -90,9 +117,20 @@ export function MatchPlayerList({ match, onSelectPlayer }: MatchPlayerListProps)
 
 	return (
 		<section aria-label={t('playerPoints')} className="flex flex-col gap-3">
-			<Button type="button" variant="outline" className="w-full justify-between bg-accent/20" onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} aria-controls={contentId}>
+			<Button
+				type="button"
+				variant="outline"
+				className="w-full justify-between border-border/70 bg-accent/20 hover:bg-accent/40"
+				onClick={() => setExpanded(current => !current)}
+				aria-expanded={expanded}
+				aria-controls={contentId}
+			>
 				{t('playerList')}
-				{expanded ? <ChevronUp data-icon="inline-end" aria-hidden="true" /> : <ChevronDown data-icon="inline-end" aria-hidden="true" />}
+				{expanded ? (
+					<ChevronUp data-icon="inline-end" aria-hidden="true" />
+				) : (
+					<ChevronDown data-icon="inline-end" aria-hidden="true" />
+				)}
 			</Button>
 
 			{expanded ? (
@@ -100,11 +138,11 @@ export function MatchPlayerList({ match, onSelectPlayer }: MatchPlayerListProps)
 					<Tabs defaultValue={match.homeTeam.shortName} className="w-full">
 						<TabsList className="mb-2 grid h-auto w-full grid-cols-2">
 							<TabsTrigger value={match.homeTeam.shortName} className="gap-2">
-								<Image src={`/images/team-logos/${match.homeTeam.shortName.toUpperCase()}.png`} alt="" width={16} height={16} className="size-4 object-contain" />
+								<Image src={teamCrestSrc(match.homeTeam.shortName)} alt="" width={16} height={16} unoptimized className="size-4 object-contain" />
 								<span className="truncate">{match.homeTeam.name}</span>
 							</TabsTrigger>
 							<TabsTrigger value={match.awayTeam.shortName} className="gap-2">
-								<Image src={`/images/team-logos/${match.awayTeam.shortName.toUpperCase()}.png`} alt="" width={16} height={16} className="size-4 object-contain" />
+								<Image src={teamCrestSrc(match.awayTeam.shortName)} alt="" width={16} height={16} unoptimized className="size-4 object-contain" />
 								<span className="truncate">{match.awayTeam.name}</span>
 							</TabsTrigger>
 						</TabsList>

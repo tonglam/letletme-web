@@ -1,3 +1,35 @@
+export const GET_ENTRY = `
+  query GetEntry($id: Int!) {
+    entry(id: $id) {
+      id
+      entryName
+      playerName
+      overallPoints
+      overallRank
+      teamValue
+      bank
+      totalTransfers
+      region
+    }
+  }
+`
+
+export interface EntrySummary {
+	id: number
+	entryName: string
+	playerName: string
+	overallPoints: number | null
+	overallRank: number | null
+	teamValue: number | null
+	bank: number | null
+	totalTransfers: number | null
+	region: string | null
+}
+
+export interface EntrySummaryResponse {
+	entry: EntrySummary | null
+}
+
 export const GET_ENTRY_EVENT_RESULT = `
   query GetEntryEventResult($entryId: Int!, $eventId: Int!) {
     entryEventResult(entryId: $entryId, eventId: $eventId) {
@@ -15,6 +47,7 @@ export const GET_ENTRY_EVENT_RESULT = `
         webName
       }
       eventPicks {
+        element
         webName
         teamShortName
         teamName
@@ -25,6 +58,24 @@ export const GET_ENTRY_EVENT_RESULT = `
         totalPoints
         minutes
         position
+        goalsScored
+        assists
+        cleanSheets
+        goalsConceded
+        yellowCards
+        redCards
+        saves
+        bonus
+        bps
+        againstShortName
+        wasHome
+        score
+        isPlayed
+        autoSub
+        expectedGoals
+        expectedAssists
+        expectedGoalInvolvements
+        expectedGoalsConceded
       }
       teamValue
       bank
@@ -66,6 +117,7 @@ export interface EntryEventResult {
 }
 
 export interface EntryEventPick {
+	element?: number | null
 	webName: string
 	teamShortName: string
 	teamName: string
@@ -76,6 +128,24 @@ export interface EntryEventPick {
 	totalPoints: number
 	minutes: number
 	position: number
+	goalsScored: number
+	assists: number
+	cleanSheets: number
+	goalsConceded: number
+	yellowCards: number
+	redCards: number
+	saves: number
+	bonus: number
+	bps: number
+	againstShortName: string
+	wasHome: string
+	score: string
+	isPlayed: boolean
+	autoSub: boolean
+	expectedGoals: number | null
+	expectedAssists: number | null
+	expectedGoalInvolvements: number | null
+	expectedGoalsConceded: number | null
 }
 
 export interface EntryEventResultResponse {
@@ -96,6 +166,14 @@ export const GET_ENTRY_HISTORY = `
         eventTransfers
         eventTransfersCost
         eventNetPoints
+        eventBenchPoints
+        eventCaptainPoints
+        eventPlayedCaptain {
+          webName
+          team {
+            shortName
+          }
+        }
         teamValue
         bank
       }
@@ -118,6 +196,12 @@ export interface EntryHistoryItem {
 	eventTransfers: number
 	eventTransfersCost: number
 	eventNetPoints: number
+	eventBenchPoints: number
+	eventCaptainPoints: number
+	eventPlayedCaptain: {
+		webName: string
+		team?: { shortName?: string | null } | null
+	} | null
 	teamValue: number | null
 	bank: number | null
 }

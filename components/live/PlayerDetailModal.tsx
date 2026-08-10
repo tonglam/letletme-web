@@ -2,15 +2,10 @@
 
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { Separator } from '@/components/ui/separator'
+import { teamCrestSrc } from '@/lib/team-crest'
 import { cn } from '@/lib/utils'
-import { PlayerDetail } from '@/types/player-detail'
-import {
-	Award,
-	TrendingUp,
-	Users,
-	Zap
-} from 'lucide-react'
+import type { PlayerDetail } from '@/types/player-detail'
+import { Zap } from 'lucide-react'
 import Image from 'next/image'
 import { useTranslations } from 'next-intl'
 
@@ -21,14 +16,135 @@ interface PlayerDetailModalProps {
 	isLoading?: boolean
 }
 
+function coreMatchStatKeys(position: string): Array<{
+	labelKey:
+		| 'minutesPlayed'
+		| 'goals'
+		| 'assists'
+		| 'cleanSheets'
+		| 'saves'
+		| 'penaltiesSaved'
+		| 'goalsConceded'
+		| 'defensiveContribution'
+		| 'yellowCards'
+		| 'redCards'
+		| 'bonusPoints'
+	getValue: (p: PlayerDetail) => number
+}> {
+	const common = [
+		{
+			labelKey: 'minutesPlayed' as const,
+			getValue: (p: PlayerDetail) => p.stats.minutes,
+		},
+		{
+			labelKey: 'goals' as const,
+			getValue: (p: PlayerDetail) => p.stats.goals,
+		},
+		{
+			labelKey: 'assists' as const,
+			getValue: (p: PlayerDetail) => p.stats.assists,
+		},
+		{
+			labelKey: 'yellowCards' as const,
+			getValue: (p: PlayerDetail) => p.stats.yellowCards,
+		},
+		{
+			labelKey: 'redCards' as const,
+			getValue: (p: PlayerDetail) => p.stats.redCards,
+		},
+		{
+			labelKey: 'bonusPoints' as const,
+			getValue: (p: PlayerDetail) => p.bonusPoints,
+		},
+	]
+
+	if (position === 'GKP') {
+		return [
+			common[0],
+			{
+				labelKey: 'saves',
+				getValue: p => p.stats.saves ?? 0,
+			},
+			{
+				labelKey: 'cleanSheets',
+				getValue: p => p.stats.cleanSheets,
+			},
+			{
+				labelKey: 'goalsConceded',
+				getValue: p => p.stats.goalsConceded ?? 0,
+			},
+			{
+				labelKey: 'penaltiesSaved',
+				getValue: p => p.stats.penaltiesSaved ?? 0,
+			},
+			common[3],
+			common[4],
+			common[5],
+		]
+	}
+
+	if (position === 'DEF') {
+		return [
+			common[0],
+			common[1],
+			common[2],
+			{
+				labelKey: 'cleanSheets',
+				getValue: p => p.stats.cleanSheets,
+			},
+			{
+				labelKey: 'goalsConceded',
+				getValue: p => p.stats.goalsConceded ?? 0,
+			},
+			{
+				labelKey: 'defensiveContribution',
+				getValue: p => p.stats.defensiveContribution ?? 0,
+			},
+			common[3],
+			common[4],
+			common[5],
+		]
+	}
+
+	if (position === 'MID') {
+		return [
+			common[0],
+			common[1],
+			common[2],
+			{
+				labelKey: 'cleanSheets',
+				getValue: p => p.stats.cleanSheets,
+			},
+			{
+				labelKey: 'defensiveContribution',
+				getValue: p => p.stats.defensiveContribution ?? 0,
+			},
+			common[3],
+			common[4],
+			common[5],
+		]
+	}
+
+	// FWD
+	return [
+		common[0],
+		common[1],
+		common[2],
+		common[3],
+		common[4],
+		common[5],
+	]
+}
+
 export function PlayerDetailModal({
 	player,
 	isOpen,
 	onClose,
-	isLoading = false
+	isLoading = false,
 }: PlayerDetailModalProps) {
 	const t = useTranslations('LivePoints')
 	if (!player) return null
+
 	const breakdownLabels: Record<string, string> = {
 		Appearance: t('appearance'),
 		'Minutes Played': t('minutesPlayed'),
@@ -49,218 +165,262 @@ export function PlayerDetailModal({
 		'Total Points': t('totalPoints'),
 	}
 
-	// BPS color based on value
 	const getBpsColor = (score: number) => {
-		if (score >= 50) return 'text-emerald-500 dark:text-emerald-400'
-		if (score >= 25) return 'text-blue-500 dark:text-blue-400'
-		if (score >= 0) return 'text-gray-500 dark:text-gray-400'
-		return 'text-rose-500 dark:text-rose-400'
+		if (score >= 50) return 'text-success'
+		if (score >= 25) return 'text-info'
+		if (score >= 0) return 'text-foreground'
+		return 'text-destructive'
 	}
 
 	const getBpsBgColor = (score: number) => {
-		if (score >= 50) return 'bg-emerald-500/10 border-emerald-500/20'
-		if (score >= 25) return 'bg-blue-500/10 border-blue-500/20'
-		if (score >= 0) return 'bg-gray-500/10 border-gray-500/20'
-		return 'bg-rose-500/10 border-rose-500/20'
+		if (score >= 50) return 'bg-success/10 border-success/25'
+		if (score >= 25) return 'bg-info/10 border-info/25'
+		if (score >= 0) return 'bg-muted/40 border-border/70'
+		return 'bg-destructive/10 border-destructive/25'
 	}
 
-	// Calculate total positive and negative points
-	const positivePoints = player.pointsBreakdown
-		.filter(item => item.points > 0)
-		.reduce((sum, item) => sum + item.points, 0)
-	const negativePoints = Math.abs(
-		player.pointsBreakdown
-			.filter(item => item.points < 0)
-			.reduce((sum, item) => sum + item.points, 0)
+	const breakdownSum = player.pointsBreakdown.reduce(
+		(sum, item) => sum + item.points,
+		0,
 	)
+
+	// Always show position-relevant match stats (including zeros) so the panel
+	// is not an empty grid when only minutes are non-zero.
+	const matchStatRows = coreMatchStatKeys(player.position).map(row => ({
+		label: t(row.labelKey),
+		value: row.getValue(player),
+	}))
+
+	// Optional extras that are usually zero — only show when non-zero
+	const extraRows = [
+		{
+			label: t('ownGoal'),
+			value: player.stats.ownGoals ?? 0,
+		},
+		{
+			label: t('penaltyMissed'),
+			value: player.stats.penaltiesMissed ?? 0,
+		},
+	].filter(row => row.value !== 0)
+
+	const allStatRows = [...matchStatRows, ...extraRows]
+
+	const statusLabel =
+		player.playingStatus === 'PLAYING'
+			? t('statusPlaying')
+			: player.playingStatus === 'FINISHED'
+				? t('statusFinished')
+				: player.playingStatus === 'NOT_STARTED'
+					? t('statusNotStarted')
+					: t('active')
 
 	return (
 		<Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-			<DialogContent className="max-w-lg p-0 overflow-hidden sm:max-w-lg">
+			<DialogContent className="max-w-lg overflow-hidden p-0 sm:max-w-lg">
 				<DialogTitle className="sr-only">
 					{t('playerDetails', { player: player.name })}
 				</DialogTitle>
 
-				{/* Enhanced Header section */}
-				<div className="relative bg-gradient-to-br from-primary/30 via-primary/20 to-primary/5 p-6 border-b border-border/50">
-					<div className="flex items-start justify-between mb-4">
-						<div className="flex items-center gap-3 flex-1 min-w-0">
-							<div className="relative w-12 h-12 flex-shrink-0 rounded-full bg-background/50 p-1 border-2 border-primary/20">
-								<Image
-									alt={t('teamLogo', { team: player.team })}
-									src={`/images/team-logos/${player.teamShort.toUpperCase()}.png`}
-									width={40}
-									height={40}
-									className="rounded-full"
-								/>
-							</div>
-							<div className="flex-1 min-w-0">
-								<h2 className="text-2xl font-bold truncate mb-1">
-									{player.name}
-								</h2>
-								<div className="flex items-center gap-2 text-sm text-muted-foreground">
-									<span>{player.team}</span>
-									<span>•</span>
-									<Badge variant="secondary" className="text-xs">
-										{player.position}
-									</Badge>
-								</div>
-							</div>
+				{/* Header: logo | name column (chips align with name left edge) */}
+				<div className="relative border-b border-border/50 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent p-5 pr-12 sm:p-6 sm:pr-14">
+					<div className="flex items-start gap-3">
+						<div className="relative size-12 shrink-0 rounded-full border-2 border-primary/20 bg-background/50 p-1">
+							<Image
+								alt={t('teamLogo', { team: player.team })}
+								src={teamCrestSrc(player.teamShort)}
+								width={40}
+								height={40}
+								unoptimized
+								className="rounded-full object-contain"
+							/>
 						</div>
-					</div>
+						{/* Name + chips share one column so chips line up with the name */}
+						<div className="min-w-0 flex-1">
+							<h2 className="truncate font-display text-xl font-bold uppercase tracking-wide sm:text-2xl">
+								{player.name}
+							</h2>
+							<div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+								<span className="truncate">{player.team}</span>
+								<span aria-hidden="true">·</span>
+								<Badge variant="secondary" className="text-xs">
+									{player.position}
+								</Badge>
+								<span aria-hidden="true">·</span>
+								<span className="text-xs font-medium uppercase tracking-wide">
+									{statusLabel}
+								</span>
+							</div>
 
-					{/* Points display */}
-					<div className="flex items-end justify-between">
-						<div className="flex flex-col">
-							<span className="text-xs text-muted-foreground mb-1">
-								{t('totalPoints')}
-							</span>
-							<div className="flex items-baseline gap-2">
-								<span className="text-4xl font-bold text-primary-ink">
-									{player.points}
-								</span>
-								<span className="text-sm text-muted-foreground mb-1">{t('pointsAbbreviation')}</span>
+							{/* Meta chips: PTS then BPS — left edge = player name */}
+							<div className="mt-3 flex flex-wrap items-center gap-2">
+								<div
+									className="inline-flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-1.5"
+									aria-label={
+										player.bonusPoints > 0
+											? t('pointsIncludingBonus', {
+													points: player.points,
+													bonus: player.bonusPoints,
+												})
+											: t('pointsTotalOnly', { points: player.points })
+									}
+								>
+									<span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+										{t('pointsAbbreviation')}
+									</span>
+									<span className="font-mono text-base font-bold tabular-nums text-primary-ink">
+										{player.points}
+									</span>
+									{player.bonusPoints > 0 ? (
+										<span className="font-mono text-xs font-semibold tabular-nums text-yellow-700 dark:text-yellow-400">
+											+{player.bonusPoints}
+										</span>
+									) : null}
+								</div>
+								{typeof player.bps === 'number' ? (
+									<div
+										className={cn(
+											'inline-flex items-center gap-2 rounded-md border px-3 py-1.5',
+											getBpsBgColor(player.bps),
+										)}
+									>
+										<span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+											BPS
+										</span>
+										<span
+											className={cn(
+												'font-mono text-base font-bold tabular-nums',
+												getBpsColor(player.bps),
+											)}
+										>
+											{player.bps}
+										</span>
+									</div>
+								) : null}
 							</div>
 						</div>
-						{player.bonusPoints > 0 && (
-							<div className="flex items-center gap-2 bg-yellow-500/20 dark:bg-yellow-500/10 px-3 py-2 rounded-lg border border-yellow-500/30">
-								<Award className="h-4 w-4 text-yellow-600 dark:text-yellow-500" />
-								<span className="text-sm font-semibold text-yellow-600 dark:text-yellow-500">
-									{t('bonus', { points: player.bonusPoints })}
-								</span>
-							</div>
-						)}
 					</div>
 				</div>
 
-				{/* Main content */}
-				<div className="p-6 space-y-6 max-h-[calc(100vh-300px)] overflow-y-auto">
-					{/* Stats overview cards */}
-					<div className="grid grid-cols-2 gap-3">
-						<div className="bg-card border rounded-lg p-4 hover:bg-accent/50 transition-colors">
-							<div className="flex items-center gap-2 mb-2">
-								<Users className="h-4 w-4 text-muted-foreground" />
-								<span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-									{t('ownership')}
-								</span>
-							</div>
-							<div className="text-2xl font-bold">{player.ownershipPercentage}%</div>
+				<div className="max-h-[min(60vh,28rem)] space-y-5 overflow-y-auto p-5 sm:p-6">
+					{/* Match stats — always show core grid */}
+					<div>
+						<div className="mb-3 flex items-center gap-2">
+							<Zap className="size-4 text-primary-ink" aria-hidden="true" />
+							<h3 className="font-display text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
+								{t('matchStats')}
+							</h3>
 						</div>
-
-						{player.bps > 0 ? (
-							<div
-								className={cn(
-									'border rounded-lg p-4 hover:opacity-90 transition-opacity',
-									getBpsBgColor(player.bps)
-								)}
-							>
-								<div className="flex items-center gap-2 mb-2">
-									<TrendingUp className="h-4 w-4 text-muted-foreground" />
-									<span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-										BPS
-									</span>
+						<div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+							{allStatRows.map(row => (
+								<div
+									key={row.label}
+									className="rounded-lg border border-border/70 bg-card/60 px-2.5 py-2"
+								>
+									<div className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+										{row.label}
+									</div>
+									<div
+										className={cn(
+											'mt-0.5 font-mono text-base font-bold tabular-nums sm:text-lg',
+											row.value !== 0 ? 'text-foreground' : 'text-muted-foreground/70',
+										)}
+									>
+										{row.value}
+									</div>
 								</div>
-								<div className={cn('text-2xl font-bold', getBpsColor(player.bps))}>
-									{player.bps}
-								</div>
-							</div>
-						) : (
-							<div className="bg-card border rounded-lg p-4 hover:bg-accent/50 transition-colors">
-								<div className="flex items-center gap-2 mb-2">
-									<Zap className="h-4 w-4 text-emerald-500" />
-									<span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-										{t('status')}
-									</span>
-								</div>
-								<div className="text-lg font-semibold text-emerald-500">
-									{t('active')}
-								</div>
-							</div>
-						)}
+							))}
+						</div>
 					</div>
 
-					{/* Point Breakdown Section */}
+					{/* Point breakdown — no second total strip */}
 					<div>
-						<div className="flex items-center gap-2 mb-4">
-							<Zap className="h-5 w-5 text-primary-ink" />
-							<h3 className="text-lg font-semibold">{t('pointBreakdown')}</h3>
+						<div className="mb-2 flex items-end justify-between gap-2">
+							<h3 className="font-display text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
+								{t('pointBreakdown')}
+							</h3>
+							{player.breakdownSource === 'provisional' ? (
+								<span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+									{t('breakdownProvisional')}
+								</span>
+							) : null}
 						</div>
-
-						<div className="space-y-1 rounded-lg border bg-card/50 p-1">
+						{player.breakdownSource === 'provisional' ? (
+							<p className="mb-2 text-xs text-muted-foreground">
+								{t('breakdownProvisionalHint')}
+							</p>
+						) : null}
+						<div className="overflow-hidden rounded-lg border border-border/70 bg-card/50">
 							{isLoading ? (
-								<div className="px-3 py-4 text-sm text-muted-foreground text-center">
+								<div className="px-3 py-4 text-center text-sm text-muted-foreground">
 									{t('loadingBreakdown')}
 								</div>
 							) : player.pointsBreakdown.length > 0 ? (
-								player.pointsBreakdown.map((item, index) => (
-									<div
-										key={`${item.category}-${index}`}
-										className="flex justify-between items-center px-3 py-2.5 rounded-md hover:bg-accent/50 transition-colors"
-									>
-										<div className="flex items-center gap-3">
-											<div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
-												<Zap className="h-4 w-4 text-primary-ink" />
-											</div>
-											<div>
-												<span className="text-sm font-medium">{breakdownLabels[item.category] ?? item.category}</span>
-												{item.value !== undefined && item.value !== 0 && (
-													<span className="text-xs text-muted-foreground ml-1.5">({item.value})</span>
-												)}
-											</div>
-										</div>
-										<span
-											className={cn(
-												'font-semibold',
-												item.points >= 0
-													? 'text-emerald-600 dark:text-emerald-400'
-													: 'text-rose-500 dark:text-rose-400'
-											)}
-										>
-											{item.points >= 0 ? '+' : ''}
-											{item.points}
+								<ul className="divide-y divide-border/60">
+									{player.pointsBreakdown.map((item, index) => {
+										const label =
+											breakdownLabels[item.category] ?? item.category
+										const isMinutes =
+											item.category === 'Appearance' ||
+											item.category === 'Minutes Played'
+										// Parenthetical count — never "×N" (reads like multiplication).
+										const countLabel =
+											item.value !== undefined && item.value !== 0
+												? isMinutes
+													? t('breakdownMinutesCount', {
+															minutes: item.value,
+														})
+													: t('breakdownEventCount', {
+															count: item.value,
+														})
+												: null
+										return (
+											<li
+												key={`${item.category}-${index}`}
+												className="flex items-center justify-between gap-3 px-3 py-2.5"
+											>
+												<span className="min-w-0 text-sm">
+													<span className="font-medium">{label}</span>
+													{countLabel ? (
+														<span className="ml-1.5 text-xs text-muted-foreground">
+															{countLabel}
+														</span>
+													) : null}
+												</span>
+												<span
+													className={cn(
+														'shrink-0 font-mono text-sm font-semibold tabular-nums',
+														item.points >= 0
+															? 'text-success'
+															: 'text-destructive',
+													)}
+												>
+													{item.points >= 0 ? '+' : ''}
+													{item.points}
+												</span>
+											</li>
+										)
+									})}
+									{/* Single reconciliation row — not a second hero total */}
+									<li className="flex items-center justify-between gap-3 bg-primary/5 px-3 py-2.5">
+										<span className="text-sm font-semibold">{t('breakdownSum')}</span>
+										<span className="font-mono text-sm font-bold tabular-nums text-primary-ink">
+											{breakdownSum >= 0 ? '+' : ''}
+											{breakdownSum}
+											{breakdownSum !== player.points ? (
+												<span className="ml-1.5 text-xs font-medium text-muted-foreground">
+													({t('liveTotalShort')}: {player.points})
+												</span>
+											) : null}
 										</span>
-									</div>
-								))
+									</li>
+								</ul>
 							) : (
-								<div className="px-3 py-4 text-sm text-muted-foreground text-center">
+								<div className="px-3 py-4 text-center text-sm text-muted-foreground">
 									{player.breakdownPending
 										? t('breakdownPending')
 										: t('noPointEvents')}
 								</div>
 							)}
-						</div>
-					</div>
-
-					{/* Points Summary */}
-					<div className="pt-4 border-t border-border">
-						{player.pointsBreakdown.length > 0 && (
-							<>
-								<div className="flex items-center justify-between mb-3">
-									<span className="text-sm font-medium text-muted-foreground">
-										{t('positivePoints')}
-									</span>
-									<span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-										+{positivePoints}
-									</span>
-								</div>
-								{negativePoints > 0 && (
-									<div className="flex items-center justify-between mb-3">
-										<span className="text-sm font-medium text-muted-foreground">
-											{t('negativePoints')}
-										</span>
-										<span className="text-lg font-bold text-rose-500 dark:text-rose-400">
-											-{negativePoints}
-										</span>
-									</div>
-								)}
-							</>
-						)}
-						<Separator className="my-3" />
-						<div className="flex items-center justify-between">
-							<span className="text-base font-semibold">{t('totalPoints')}</span>
-							<span className="text-2xl font-bold text-primary-ink">
-								{player.points}
-							</span>
 						</div>
 					</div>
 				</div>

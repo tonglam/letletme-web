@@ -26,36 +26,51 @@ export function TournamentSelector({
   className,
 }: TournamentSelectorProps) {
   const t = useTranslations("Common");
-  const currentTournament = tournaments.find(t => t.id === currentTournamentId) || tournaments[0];
+  const currentTournament = tournaments.find(t => t.id === currentTournamentId);
 
   return (
-    <Card className={className ?? "p-4 mb-6"}>
-      <div className="flex flex-col sm:flex-row items-center gap-3">
+    <Card className={className ?? "mb-6 p-4"}>
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
         <div className="flex items-center gap-2">
-          <Trophy className="h-5 w-5 text-primary-ink" />
+          <Trophy className="h-5 w-5 shrink-0 text-primary-ink" aria-hidden="true" />
           <span className="font-medium">{t("selectTournament")}</span>
         </div>
-        
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full sm:w-[300px] justify-between">
-              <span className="truncate">{currentTournament.name}</span>
-              <ChevronDown className="h-4 w-4 ml-2 opacity-50" />
+            <Button
+              variant="outline"
+              className="w-full justify-between sm:max-w-md sm:flex-1"
+              aria-label={t("selectTournament")}
+            >
+              <span className="truncate">
+                {currentTournament?.name ?? t("selectTournament")}
+              </span>
+              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-[300px]">
-            {tournaments.map((t) => (
-              <DropdownMenuItem
-                key={t.id}
-                onClick={() => onTournamentChange(t.id)}
-                className="flex justify-between items-center"
-              >
-                <span className="truncate">{t.name}</span>
-                {t.id === currentTournamentId && (
-                  <Trophy className="h-4 w-4 text-primary-ink ml-2" />
-                )}
-              </DropdownMenuItem>
-            ))}
+          <DropdownMenuContent
+            className="max-h-72 w-[var(--radix-dropdown-menu-trigger-width)] min-w-[16rem]"
+            align="start"
+          >
+            {tournaments.map((tournament) => {
+              const isCurrent = tournament.id === currentTournamentId;
+              return (
+                <DropdownMenuItem
+                  key={tournament.id}
+                  disabled={isCurrent}
+                  onSelect={() => {
+                    if (!isCurrent) onTournamentChange(tournament.id);
+                  }}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <span className="min-w-0 truncate">{tournament.name}</span>
+                  {isCurrent ? (
+                    <Trophy className="h-4 w-4 shrink-0 text-primary-ink" aria-hidden="true" />
+                  ) : null}
+                </DropdownMenuItem>
+              );
+            })}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

@@ -1,0 +1,120 @@
+import 'server-only'
+
+import {
+	CacheTag,
+	publicFetchOptions,
+	RevalidateSeconds
+} from '@/lib/cache-policy'
+import {
+	buildFdrDeskModel,
+	DEFAULT_FDR_HORIZON,
+	type FdrHorizon
+} from '@/lib/fixtures-fdr'
+import { getCurrentAndNextEvents } from '@/lib/events'
+import { executePublicServerQuery } from '@/lib/graphql-server'
+import {
+	GET_EVENT_FIXTURES,
+	type EventFixturesResponse,
+	type Fixture
+} from '@/lib/graphql/operations/events'
+import {
+	GET_MARKET_PULSE,
+	type MarketPulseResponse
+} from '@/lib/graphql/operations/market'
+import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
+import {
+	buildMarketCompareCandidates,
+	type MarketCompareCandidate
+} from '@/lib/market-compare'
+import {
+	resolveReviewGameweekAnchor,
+	type ReviewGameweekAnchorSource
+} from '@/lib/review-gameweek'
+import type { SquadPickSeed } from '@/lib/squad-picks'
+import { getVerifiedEntryContext } from '@/lib/session'
+
+export type PlayerStatsPersonalSeed = {
+	anchorGw: number
+	anchorSource: ReviewGameweekAnchorSource
+	mySquadPicks: SquadPickSeed[]
+	marketCompareCandidates: MarketCompareCandidate[]
+	seasonStatsAvailable: boolean
+}
+
+async function fetchEventFixtures(eventId: number): Promise<Fixture[]> {
+	const response = await executePublicServerQuery<EventFixturesResponse>(
+		GET_EVENT_FIXTURES,
+		{ eventId },
+		publicFetchOptions({
+			revalidate: RevalidateSeconds.publicStats,
+			tags: [CacheTag.fixtures, CacheTag.events]
+		})
+	)
+	return response.eventFixtures ?? []
+}
+
+export async function loadPlayerStatsPersonalSeed(
+	horizon: FdrHorizon = DEFAULT_FDR_HORIZON
+): Promise<PlayerStatsPersonalSeed | null> {
+	const [events, { session, entryId }] = await Promise.all([
+		getCurrentAndNextEvents(),
+		getVerifiedEntryContext()
+	])
+	const review = resolveReviewGameweekAnchor(events)
+	const anchorGw = review.anchorGw
+	if (anchorGw == null || anchorGw <= 0) return null
+	const seasonStatsAvailable =
+		review.currentGw != null ||
+		(review.source === 'next-derived' && anchorGw > 1) ||
+		review.source === 'history'
+
+	const eventIds = Array.from(
+		{ length: horizon },
+		(_, i) => anchorGw + i
+	).filter(id => id >= 1 && id <= 38)
+
+	const [fixtureListsResult, market, mySquadPicks] = await Promise.all([
+		Promise.allSettled(eventIds.map(id => fetchEventFixtures(id))),
+		executePublicServerQuery<MarketPulseResponse>(
+			GET_MARKET_PULSE,
+			{ days: 14 },
+			publicFetchOptions({
+				revalidate: RevalidateSeconds.market,
+				tags: [CacheTag.market]
+			})
+		).catch(err => {
+			console.error('[player-stats-seed] market pulse failed:', err)
+			return null
+		}),
+		entryId != null && session
+			? loadEntrySquadPicks(session, entryId, events).catch(err => {
+					console.error('[player-stats-seed] entry picks failed:', err)
+					return [] as SquadPickSeed[]
+				})
+			: Promise.resolve([] as SquadPickSeed[])
+	])
+
+	const fixturesByEvent = new Map<number, Fixture[]>()
+	eventIds.forEach((id, i) => {
+		const result = fixtureListsResult[i]
+		fixturesByEvent.set(id, result?.status === 'fulfilled' ? result.value : [])
+		if (result?.status === 'rejected') {
+			console.error(`[player-stats-seed] fixtures for GW${id} failed:`, result.reason)
+		}
+	})
+
+	const marketPulse = market?.marketPulse ?? null
+	const model = buildFdrDeskModel(fixturesByEvent, {
+		fromGw: anchorGw,
+		horizon,
+		marketPulse
+	})
+
+	return {
+		anchorGw,
+		anchorSource: review.source,
+		mySquadPicks,
+		marketCompareCandidates: buildMarketCompareCandidates(model),
+		seasonStatsAvailable
+	}
+}

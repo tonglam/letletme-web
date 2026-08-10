@@ -1,556 +1,832 @@
-"use client";
+'use client'
 
-import { Input } from "@/components/ui/input";
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { executeQuery } from "@/lib/graphql-client";
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue
+} from '@/components/ui/select'
+import { executeQuery } from '@/lib/graphql-client'
 import {
-  GET_TEAMS_FOR_PICKER,
-  SEARCH_PLAYERS_FOR_PICKER,
-  type PlayerDirectoryItem,
-  type PlayerSearchForPickerResponse,
-  type TeamsForPickerResponse,
-} from "@/lib/graphql/operations/players";
-import { resolveTeamDisplayName } from "@/lib/team-display";
-import { type Position } from "@/types/common";
-import { Search, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+	GET_TEAMS_FOR_PICKER,
+	SEARCH_PLAYERS_FOR_PICKER,
+	type PlayerDirectoryItem,
+	type PlayerPickerOwnershipBand,
+	type PlayerSearchForPickerResponse,
+	type TeamsForPickerResponse
+} from '@/lib/graphql/operations/players'
+import {
+	filterDirectoryPlayers,
+	formatMaxPriceLabel,
+	MAX_PRICE_OPTIONS,
+	OWN_BANDS,
+	sortDirectoryPlayers,
+	type MaxPrice,
+	type OwnBand,
+	type PlayerDirectorySort
+} from '@/lib/player-directory-filters'
+import { resolveTeamDisplayName } from '@/lib/team-display'
+import { type Position } from '@/types/common'
+import { RotateCcw, Search, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 
-type PositionFilter = Position | "ALL";
-type TeamFilter = "ALL" | string;
+type PositionFilter = Position | 'ALL'
+type TeamFilter = 'ALL' | string
 
-const PLAYER_PICKER_PAGE_SIZE = 20;
-const DEFAULT_VISIBLE_PLAYER_RESULTS = 10;
-const MIN_SEARCH_LENGTH = 2;
-const PLAYER_PICKER_DEBOUNCE_MS = 200;
+interface BrowseFilterSnapshot {
+	teamFilter: TeamFilter
+	positionFilter: PositionFilter
+	positionFilterExplicit: boolean
+	maxPrice: MaxPrice
+	ownBand: OwnBand
+}
+
+const PLAYER_PICKER_PAGE_SIZE = 20
+const PLAYER_PICKER_DEBOUNCE_MS = 200
+// A non-empty name fragment is a valid FPL search. The backend safely
+// normalizes short fragments, so do not silently turn a one-character query
+// into an unfiltered roster request.
+const MIN_SEARCH_LENGTH = 1
 
 export interface PlayerDirectoryOption {
-  id: string;
-  name: string;
-  position: Position;
-  teamShortName: string;
-  teamName: string;
+	id: string
+	name: string
+	position: Position
+	teamShortName: string
+	teamName: string
+	price?: number
+	selectedByPercent?: number | null
+	totalPoints?: number | null
+	form?: number | null
 }
 
 interface TeamDirectoryOption {
-  id: number;
-  shortName: string;
-  name: string;
+	id: number
+	shortName: string
+	name: string
 }
 
 interface PlayerDirectoryFilter {
-  teamId?: number;
-  position?: PlayerDirectoryItem["position"];
+	teamId?: number
+	position?: PlayerDirectoryItem['position']
+	maxPrice?: number
 }
 
 interface PlayerDirectoryPickerProps {
-  onSelect: (player: PlayerDirectoryOption) => void;
-  excludedPlayerIds?: string[];
-  className?: string;
+	onSelect: (player: PlayerDirectoryOption) => void
+	excludedPlayerIds?: string[]
+	className?: string
+	defaultPosition?: Position | null
+	statsAvailable?: boolean
 }
 
 const directoryPositionToShort = (
-  position: PlayerDirectoryItem["position"]
+	position: PlayerDirectoryItem['position']
 ): Position => {
-  switch (position) {
-    case "GOALKEEPER":
-      return "GKP";
-    case "DEFENDER":
-      return "DEF";
-    case "MIDFIELDER":
-      return "MID";
-    case "FORWARD":
-      return "FWD";
-    default:
-      return "MID";
-  }
-};
+	switch (position) {
+		case 'GOALKEEPER':
+			return 'GKP'
+		case 'DEFENDER':
+			return 'DEF'
+		case 'MIDFIELDER':
+			return 'MID'
+		case 'FORWARD':
+			return 'FWD'
+		default:
+			return 'MID'
+	}
+}
 
 const shortPositionToDirectory = (
-  position: Exclude<PositionFilter, "ALL">
-): PlayerDirectoryItem["position"] => {
-  switch (position) {
-    case "GKP":
-      return "GOALKEEPER";
-    case "DEF":
-      return "DEFENDER";
-    case "MID":
-      return "MIDFIELDER";
-    case "FWD":
-      return "FORWARD";
-    default:
-      return "MIDFIELDER";
-  }
-};
+	position: Exclude<PositionFilter, 'ALL'>
+): PlayerDirectoryItem['position'] => {
+	switch (position) {
+		case 'GKP':
+			return 'GOALKEEPER'
+		case 'DEF':
+			return 'DEFENDER'
+		case 'MID':
+			return 'MIDFIELDER'
+		case 'FWD':
+			return 'FORWARD'
+	}
+}
+
+const formatPickerPrice = (raw: number | undefined) =>
+	`£${((raw ?? 0) / 10).toFixed(1)}m`
+
+const pickerSortToGraphql = (sort: PlayerDirectorySort) => {
+	switch (sort) {
+		case 'name':
+			return 'NAME_ASC'
+		case 'form_desc':
+			return 'FORM_DESC'
+		case 'price_asc':
+			return 'PRICE_ASC'
+		case 'price_desc':
+			return 'PRICE_DESC'
+		case 'own_desc':
+			return 'OWNERSHIP_DESC'
+		case 'total_desc':
+		default:
+			return 'TOTAL_POINTS_DESC'
+	}
+}
+
+const ownBandToGraphql = (
+	band: OwnBand
+): PlayerPickerOwnershipBand | null => {
+	switch (band) {
+		case 'LE5':
+			return 'LE5'
+		case '5_15':
+			return 'GT5_LE15'
+		case '15_40':
+			return 'GT15_LE40'
+		case 'GE40':
+			return 'GT40'
+		case 'ANY':
+		default:
+			return null
+	}
+}
 
 const toPickerPlayer = (
-  player: PlayerDirectoryItem
+	player: PlayerDirectoryItem
 ): PlayerDirectoryOption => ({
-  id: player.id.toString(),
-  name: player.webName,
-  position: directoryPositionToShort(player.position),
-  teamShortName: player.team.shortName,
-  teamName: player.team.name,
-});
+	id: player.id.toString(),
+	name: player.webName,
+	position: directoryPositionToShort(player.position),
+	teamShortName: player.team.shortName,
+	teamName: player.team.name,
+	price: player.price,
+	selectedByPercent: player.selectedByPercent,
+	totalPoints: player.totalPoints,
+	form: player.form
+})
+
+const OWN_BAND_LABEL_KEYS: Record<
+	OwnBand,
+	'ownBandAny' | 'ownBandLe5' | 'ownBand5_15' | 'ownBand15_40' | 'ownBandGe40'
+> = {
+	ANY: 'ownBandAny',
+	LE5: 'ownBandLe5',
+	'5_15': 'ownBand5_15',
+	'15_40': 'ownBand15_40',
+	GE40: 'ownBandGe40'
+}
 
 export function PlayerDirectoryPicker({
-  onSelect,
-  excludedPlayerIds = [],
-  className = "",
+	onSelect,
+	excludedPlayerIds = [],
+	className = '',
+	defaultPosition = null,
+	statsAvailable = true
 }: PlayerDirectoryPickerProps) {
-  const t = useTranslations("PlayerDirectory");
-  const [teams, setTeams] = useState<TeamDirectoryOption[]>([]);
-  const [players, setPlayers] = useState<PlayerDirectoryOption[]>([]);
-  const [totalPlayers, setTotalPlayers] = useState(0);
-  const [nextPlayersCursor, setNextPlayersCursor] = useState<number | null>(
-    null
-  );
-  const [visiblePlayerLimit, setVisiblePlayerLimit] = useState(
-    DEFAULT_VISIBLE_PLAYER_RESULTS
-  );
-  const [isTeamsLoading, setIsTeamsLoading] = useState(false);
-  const [isPlayersLoading, setIsPlayersLoading] = useState(false);
-  const [isMorePlayersLoading, setIsMorePlayersLoading] = useState(false);
-  const [morePlayersError, setMorePlayersError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [positionFilter, setPositionFilter] = useState<PositionFilter>("ALL");
-  const [teamFilter, setTeamFilter] = useState<TeamFilter>("ALL");
-  const [searchTerm, setSearchTerm] = useState("");
-  const playerRequestVersionRef = useRef(0);
+	const t = useTranslations('PlayerDirectory')
+	const [teams, setTeams] = useState<TeamDirectoryOption[]>([])
+	const [players, setPlayers] = useState<PlayerDirectoryOption[]>([])
+	const [totalPlayers, setTotalPlayers] = useState(0)
+	const [nextPlayersCursor, setNextPlayersCursor] = useState<number | null>(
+		null
+	)
+	const [nextPlayersQueryKey, setNextPlayersQueryKey] = useState<string | null>(
+		null
+	)
+	const [isTeamsLoading, setIsTeamsLoading] = useState(false)
+	const [isPlayersLoading, setIsPlayersLoading] = useState(false)
+	const [isMorePlayersLoading, setIsMorePlayersLoading] = useState(false)
+	const [morePlayersError, setMorePlayersError] = useState<string | null>(null)
+	const [error, setError] = useState<string | null>(null)
+	const [positionFilter, setPositionFilter] = useState<PositionFilter>(
+		defaultPosition ?? 'ALL'
+	)
+	const [positionFilterExplicit, setPositionFilterExplicit] = useState(false)
+	const [teamFilter, setTeamFilter] = useState<TeamFilter>('ALL')
+	const [searchTerm, setSearchTerm] = useState('')
+	const [maxPrice, setMaxPrice] = useState<MaxPrice>(null)
+	const [ownBand, setOwnBand] = useState<OwnBand>('ANY')
+	const [sortBy, setSortBy] = useState<PlayerDirectorySort>(
+		statsAvailable ? 'total_desc' : 'own_desc'
+	)
+	const browseFiltersBeforeSearchRef = useRef<BrowseFilterSnapshot | null>(null)
+	const playerRequestVersionRef = useRef(0)
+	const nextPlayersQueryKeyRef = useRef<string | null>(null)
 
-  useEffect(() => {
-    let isCancelled = false;
+	useEffect(() => {
+		let isCancelled = false
 
-    const fetchTeams = async () => {
-      try {
-        setIsTeamsLoading(true);
-        setError(null);
+		const fetchTeams = async () => {
+			try {
+				setIsTeamsLoading(true)
+				setError(null)
+				const result =
+					await executeQuery<TeamsForPickerResponse>(GET_TEAMS_FOR_PICKER)
 
-        const result =
-          await executeQuery<TeamsForPickerResponse>(GET_TEAMS_FOR_PICKER);
+				if (isCancelled) return
 
-        if (isCancelled) return;
+				setTeams(
+					result.teams
+						.map(team => ({
+							id: team.id,
+							name: team.name,
+							shortName: team.shortName
+						}))
+						.sort((a, b) =>
+							resolveTeamDisplayName(a.shortName, a.name).localeCompare(
+								resolveTeamDisplayName(b.shortName, b.name)
+							)
+						)
+				)
+			} catch (fetchError) {
+				console.error('Failed to fetch teams directory:', fetchError)
 
-        setTeams(
-          result.teams
-            .map((team) => ({
-              id: team.id,
-              name: team.name,
-              shortName: team.shortName,
-            }))
-            .sort((a, b) =>
-              resolveTeamDisplayName(a.shortName, a.name).localeCompare(
-                resolveTeamDisplayName(b.shortName, b.name)
-              )
-            )
-        );
-      } catch (fetchError) {
-        console.error("Failed to fetch teams directory:", fetchError);
+				if (!isCancelled) {
+					setError(t('teamsFailed'))
+					setTeams([])
+				}
+			} finally {
+				if (!isCancelled) {
+					setIsTeamsLoading(false)
+				}
+			}
+		}
 
-        if (!isCancelled) {
-          setError(t("teamsFailed"));
-          setTeams([]);
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsTeamsLoading(false);
-        }
-      }
-    };
+		void fetchTeams()
 
-    void fetchTeams();
+		return () => {
+			isCancelled = true
+		}
+	}, [t])
 
-    return () => {
-      isCancelled = true;
-    };
-  }, [t]);
+	const normalizedSearch = searchTerm.trim()
+	const isNameSearchActive = normalizedSearch.length >= MIN_SEARCH_LENGTH
+	const selectedTeam = useMemo(
+		() => teams.find(team => team.shortName === teamFilter) ?? null,
+		[teamFilter, teams]
+	)
+	const serverPlayerFilter = useMemo<PlayerDirectoryFilter | null>(() => {
+		const filter: PlayerDirectoryFilter = {}
+		if (selectedTeam) filter.teamId = selectedTeam.id
+		if (positionFilter !== 'ALL') {
+			filter.position = shortPositionToDirectory(positionFilter)
+		}
+		if (maxPrice != null) filter.maxPrice = maxPrice
+		return Object.keys(filter).length > 0 ? filter : null
+	}, [maxPrice, positionFilter, selectedTeam])
+	const playerQueryKey = useMemo(
+		() =>
+			JSON.stringify({
+				search: isNameSearchActive ? normalizedSearch : null,
+				teamId: serverPlayerFilter?.teamId ?? null,
+				position: serverPlayerFilter?.position ?? null,
+				maxPrice: serverPlayerFilter?.maxPrice ?? null,
+				sortBy,
+				ownBand
+			}),
+		[
+			isNameSearchActive,
+			normalizedSearch,
+			serverPlayerFilter,
+			sortBy,
+			ownBand
+		]
+	)
 
-  const selectedTeam = useMemo(
-    () => teams.find((team) => team.shortName === teamFilter) ?? null,
-    [teamFilter, teams]
-  );
+	useEffect(() => {
+		let isCancelled = false
+		const requestVersion = ++playerRequestVersionRef.current
+		nextPlayersQueryKeyRef.current = null
+		setNextPlayersQueryKey(null)
+		setNextPlayersCursor(null)
 
-  const serverPlayerFilter = useMemo<PlayerDirectoryFilter | null>(() => {
-    const filter: PlayerDirectoryFilter = {};
+		const fetchPlayers = async () => {
+			try {
+				setIsPlayersLoading(true)
+				setIsMorePlayersLoading(false)
+				setMorePlayersError(null)
+				setError(null)
+				const result = await executeQuery<PlayerSearchForPickerResponse>(
+					SEARCH_PLAYERS_FOR_PICKER,
+					{
+						search: isNameSearchActive ? normalizedSearch : null,
+						filter: serverPlayerFilter,
+						sort: pickerSortToGraphql(sortBy),
+						ownershipBand: ownBandToGraphql(ownBand),
+						limit: PLAYER_PICKER_PAGE_SIZE,
+						cursor: null
+					}
+				)
 
-    if (selectedTeam) {
-      filter.teamId = selectedTeam.id;
-    }
+				if (isCancelled || requestVersion !== playerRequestVersionRef.current) {
+					return
+				}
 
-    if (positionFilter !== "ALL") {
-      filter.position = shortPositionToDirectory(positionFilter);
-    }
+				setPlayers(result.playersForPicker.items.map(toPickerPlayer))
+				setTotalPlayers(result.playersForPicker.totalCount)
+				nextPlayersQueryKeyRef.current = playerQueryKey
+				setNextPlayersQueryKey(playerQueryKey)
+				setNextPlayersCursor(result.playersForPicker.nextCursor)
+			} catch (fetchError) {
+				console.error('Failed to fetch players directory:', fetchError)
 
-    return Object.keys(filter).length > 0 ? filter : null;
-  }, [positionFilter, selectedTeam]);
+				if (
+					!isCancelled &&
+					requestVersion === playerRequestVersionRef.current
+				) {
+					setError(t('playersFailed'))
+					setPlayers([])
+					setTotalPlayers(0)
+					nextPlayersQueryKeyRef.current = null
+					setNextPlayersQueryKey(null)
+					setNextPlayersCursor(null)
+				}
+			} finally {
+				if (
+					!isCancelled &&
+					requestVersion === playerRequestVersionRef.current
+				) {
+					setIsPlayersLoading(false)
+				}
+			}
+		}
 
-  useEffect(() => {
-    let isCancelled = false;
-    const requestVersion = ++playerRequestVersionRef.current;
-    const normalizedSearch = searchTerm.trim();
-    const hasServerFilter =
-      serverPlayerFilter !== null ||
-      normalizedSearch.length >= MIN_SEARCH_LENGTH;
+		const fetchTimer = window.setTimeout(
+			() => void fetchPlayers(),
+			PLAYER_PICKER_DEBOUNCE_MS
+		)
 
-    if (!hasServerFilter) {
-      const resetTimer = window.setTimeout(() => {
-        if (isCancelled) return;
-        setPlayers([]);
-        setTotalPlayers(0);
-        setNextPlayersCursor(null);
-        setVisiblePlayerLimit(DEFAULT_VISIBLE_PLAYER_RESULTS);
-        setError(null);
-        setMorePlayersError(null);
-        setIsPlayersLoading(false);
-        setIsMorePlayersLoading(false);
-      }, 0);
+		return () => {
+			isCancelled = true
+			window.clearTimeout(fetchTimer)
+		}
+	}, [
+		isNameSearchActive,
+		normalizedSearch,
+		serverPlayerFilter,
+		sortBy,
+		ownBand,
+		playerQueryKey,
+		t
+	])
 
-      return () => {
-        isCancelled = true;
-        window.clearTimeout(resetTimer);
-      };
-    }
+	const excludedIds = useMemo(
+		() => new Set(excludedPlayerIds),
+		[excludedPlayerIds]
+	)
 
-    const fetchPlayers = async () => {
-      try {
-        setIsPlayersLoading(true);
-        setIsMorePlayersLoading(false);
-        setMorePlayersError(null);
-        setError(null);
+	const availableTeams = useMemo(
+		() => ['ALL', ...teams.map(team => team.shortName)],
+		[teams]
+	)
 
-        const result = await executeQuery<PlayerSearchForPickerResponse>(
-          SEARCH_PLAYERS_FOR_PICKER,
-          {
-            search:
-              normalizedSearch.length >= MIN_SEARCH_LENGTH
-                ? normalizedSearch
-                : null,
-            filter: serverPlayerFilter,
-            limit: PLAYER_PICKER_PAGE_SIZE,
-            cursor: null,
-          }
-        );
+	useEffect(() => {
+		if (!availableTeams.includes(teamFilter)) {
+			const resetTimer = window.setTimeout(() => setTeamFilter('ALL'), 0)
+			return () => window.clearTimeout(resetTimer)
+		}
+	}, [availableTeams, teamFilter])
 
-        if (isCancelled || requestVersion !== playerRequestVersionRef.current) {
-          return;
-        }
+	const filteredPlayers = useMemo(() => {
+		const filtered = filterDirectoryPlayers(players, {
+			excludedIds,
+			positionFilter,
+			teamShortName: teamFilter === 'ALL' ? null : teamFilter,
+			maxPrice,
+			ownBand
+		})
+		return sortDirectoryPlayers(filtered, sortBy)
+	}, [
+		excludedIds,
+		players,
+		positionFilter,
+		teamFilter,
+		maxPrice,
+		ownBand,
+		sortBy
+	])
 
-        setPlayers(
-          result.playersForPicker.items
-            .map(toPickerPlayer)
-            .sort((a, b) => a.name.localeCompare(b.name))
-        );
-        setTotalPlayers(result.playersForPicker.totalCount);
-        setNextPlayersCursor(result.playersForPicker.nextCursor);
-        setVisiblePlayerLimit(DEFAULT_VISIBLE_PLAYER_RESULTS);
-      } catch (fetchError) {
-        console.error("Failed to fetch players directory:", fetchError);
+	const loadMorePlayers = async () => {
+		if (
+			isMorePlayersLoading ||
+			nextPlayersCursor === null ||
+			nextPlayersQueryKeyRef.current !== playerQueryKey
+		) {
+			return
+		}
+		const requestVersion = playerRequestVersionRef.current
+		const requestQueryKey = playerQueryKey
+		setMorePlayersError(null)
 
-        if (
-          !isCancelled &&
-          requestVersion === playerRequestVersionRef.current
-        ) {
-          setError(t("playersFailed"));
-          setPlayers([]);
-          setTotalPlayers(0);
-          setNextPlayersCursor(null);
-        }
-      } finally {
-        if (
-          !isCancelled &&
-          requestVersion === playerRequestVersionRef.current
-        ) {
-          setIsPlayersLoading(false);
-        }
-      }
-    };
+		try {
+			setIsMorePlayersLoading(true)
+			const result = await executeQuery<PlayerSearchForPickerResponse>(
+				SEARCH_PLAYERS_FOR_PICKER,
+				{
+					search: isNameSearchActive ? normalizedSearch : null,
+					filter: serverPlayerFilter,
+					sort: pickerSortToGraphql(sortBy),
+					ownershipBand: ownBandToGraphql(ownBand),
+					limit: PLAYER_PICKER_PAGE_SIZE,
+					cursor: nextPlayersCursor
+				}
+			)
 
-    const fetchTimer = window.setTimeout(
-      () => void fetchPlayers(),
-      PLAYER_PICKER_DEBOUNCE_MS
-    );
+			if (
+				requestVersion !== playerRequestVersionRef.current ||
+				nextPlayersQueryKeyRef.current !== requestQueryKey
+			) {
+				return
+			}
 
-    return () => {
-      isCancelled = true;
-      window.clearTimeout(fetchTimer);
-    };
-  }, [searchTerm, serverPlayerFilter, t]);
+			setPlayers(currentPlayers => {
+				const byId = new Map(
+					currentPlayers.map(player => [player.id, player] as const)
+				)
+				for (const player of result.playersForPicker.items.map(
+					toPickerPlayer
+				)) {
+					byId.set(player.id, player)
+				}
+				return Array.from(byId.values())
+			})
+			setTotalPlayers(result.playersForPicker.totalCount)
+			nextPlayersQueryKeyRef.current = requestQueryKey
+			setNextPlayersQueryKey(requestQueryKey)
+			setNextPlayersCursor(result.playersForPicker.nextCursor)
+		} catch (fetchError) {
+			console.error('Failed to fetch more players:', fetchError)
+			if (requestVersion === playerRequestVersionRef.current) {
+				setMorePlayersError(t('loadMoreFailed'))
+			}
+		} finally {
+			if (requestVersion === playerRequestVersionRef.current) {
+				setIsMorePlayersLoading(false)
+			}
+		}
+	}
 
-  const excludedIds = useMemo(
-    () => new Set(excludedPlayerIds),
-    [excludedPlayerIds]
-  );
+	const visiblePlayers = filteredPlayers
+	const canLoadMorePlayers =
+		nextPlayersCursor !== null &&
+		nextPlayersQueryKey === playerQueryKey
 
-  const availableTeams = useMemo(
-    () => ["ALL", ...teams.map((team) => team.shortName)],
-    [teams]
-  );
+	const isLoading = isTeamsLoading || isPlayersLoading
 
-  useEffect(() => {
-    if (!availableTeams.includes(teamFilter)) {
-      const resetTimer = window.setTimeout(() => setTeamFilter("ALL"), 0);
-      return () => window.clearTimeout(resetTimer);
-    }
-  }, [availableTeams, teamFilter]);
+	const updateNameSearch = (value: string) => {
+		const nextIsNameSearchActive = value.trim().length >= MIN_SEARCH_LENGTH
+		if (nextIsNameSearchActive && !isNameSearchActive) {
+			browseFiltersBeforeSearchRef.current = {
+				teamFilter,
+				positionFilter,
+				positionFilterExplicit,
+				maxPrice,
+				ownBand
+			}
+			setTeamFilter('ALL')
+			setPositionFilter('ALL')
+			setPositionFilterExplicit(false)
+			setMaxPrice(null)
+			setOwnBand('ANY')
+		} else if (!nextIsNameSearchActive && isNameSearchActive) {
+			const previous = browseFiltersBeforeSearchRef.current
+			if (previous) {
+				setTeamFilter(previous.teamFilter)
+				setPositionFilter(previous.positionFilter)
+				setPositionFilterExplicit(previous.positionFilterExplicit)
+				setMaxPrice(previous.maxPrice)
+				setOwnBand(previous.ownBand)
+			}
+			browseFiltersBeforeSearchRef.current = null
+		}
+		setSearchTerm(value)
+	}
 
-  const filteredPlayers = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
+	const resetFilters = () => {
+		browseFiltersBeforeSearchRef.current = null
+		setSearchTerm('')
+		setPositionFilterExplicit(false)
+		setPositionFilter(defaultPosition ?? 'ALL')
+		setTeamFilter('ALL')
+		setMaxPrice(null)
+		setOwnBand('ANY')
+		setSortBy(statsAvailable ? 'total_desc' : 'own_desc')
+	}
 
-    return players
-      .filter((player) => {
-        if (excludedIds.has(player.id)) return false;
+	const maxPriceSelectValue =
+		maxPrice == null ? 'any' : formatMaxPriceLabel(maxPrice)
 
-        const matchesSearch =
-          normalizedSearch.length === 0 ||
-          player.name.toLowerCase().includes(normalizedSearch);
+	return (
+		<div className={className}>
+			<p className="mb-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+				{t('findPlayer')}
+			</p>
+			<div className="relative">
+				<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+				<Input
+					aria-label={t('search')}
+					value={searchTerm}
+					onChange={event => updateNameSearch(event.target.value)}
+					placeholder={t('searchPlaceholder')}
+					className="pl-9 pr-9"
+				/>
+				{searchTerm.trim().length > 0 && (
+					<button
+						type="button"
+						aria-label={t('clearSearch')}
+						onClick={() => updateNameSearch('')}
+						className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					>
+						<X className="h-4 w-4" />
+					</button>
+				)}
+			</div>
 
-        return matchesSearch;
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [excludedIds, players, searchTerm]);
+			<div className="mt-2 flex flex-wrap items-center gap-2">
+				<Select
+					value={teamFilter}
+					onValueChange={value => setTeamFilter(value)}
+					disabled={isTeamsLoading || isNameSearchActive}
+				>
+					<SelectTrigger
+						className="h-8 w-[min(100%,9rem)] text-xs"
+						aria-label={t('filterTeam')}
+					>
+						<SelectValue
+							placeholder={isTeamsLoading ? t('loadingTeams') : t('allTeams')}
+						/>
+					</SelectTrigger>
+					<SelectContent className="max-h-72">
+						{availableTeams.map(team => (
+							<SelectItem
+								key={team}
+								value={team}
+							>
+								{team === 'ALL'
+									? t('allTeams')
+									: resolveTeamDisplayName(
+											team,
+											teams.find(item => item.shortName === team)?.name
+										)}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
 
-  const loadMorePlayers = async () => {
-    if (isMorePlayersLoading) return;
-    setMorePlayersError(null);
+				<Select
+					value={positionFilter}
+					disabled={isNameSearchActive}
+					onValueChange={value => {
+						setPositionFilterExplicit(true)
+						setPositionFilter(value as PositionFilter)
+					}}
+				>
+					<SelectTrigger
+						className="h-8 w-[min(100%,7rem)] text-xs"
+						aria-label={t('filterPosition')}
+					>
+						<SelectValue placeholder={t('allPositions')} />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="ALL">{t('allPositions')}</SelectItem>
+						<SelectItem value="GKP">{t('goalkeeper')}</SelectItem>
+						<SelectItem value="DEF">{t('defender')}</SelectItem>
+						<SelectItem value="MID">{t('midfielder')}</SelectItem>
+						<SelectItem value="FWD">{t('forward')}</SelectItem>
+					</SelectContent>
+				</Select>
 
-    if (visiblePlayerLimit < filteredPlayers.length) {
-      setVisiblePlayerLimit(
-        (currentLimit) => currentLimit + DEFAULT_VISIBLE_PLAYER_RESULTS
-      );
-      return;
-    }
+				<Select
+					value={sortBy}
+					onValueChange={value => setSortBy(value as PlayerDirectorySort)}
+				>
+					<SelectTrigger
+						className="h-8 w-[min(100%,9.5rem)] text-xs"
+						aria-label={t('sortLabel')}
+					>
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						{statsAvailable ? (
+							<>
+								<SelectItem value="total_desc">{t('sortTotalDesc')}</SelectItem>
+								<SelectItem value="form_desc">{t('sortFormDesc')}</SelectItem>
+							</>
+						) : null}
+						<SelectItem value="price_desc">{t('sortPriceDesc')}</SelectItem>
+						<SelectItem value="price_asc">{t('sortPriceAsc')}</SelectItem>
+						<SelectItem value="own_desc">{t('sortOwnDesc')}</SelectItem>
+						<SelectItem value="name">{t('sortName')}</SelectItem>
+					</SelectContent>
+				</Select>
 
-    if (nextPlayersCursor === null) return;
+				<Select
+					value={maxPriceSelectValue}
+					disabled={isNameSearchActive}
+					onValueChange={value => {
+						if (value === 'any') {
+							setMaxPrice(null)
+							return
+						}
+						const raw = value.replace(/^le_/, '')
+						const parsed = Number(raw)
+						setMaxPrice(Number.isFinite(parsed) ? parsed : null)
+					}}
+				>
+					<SelectTrigger
+						className="h-8 w-[min(100%,6.5rem)] text-xs"
+						aria-label={t('maxPriceLabel')}
+					>
+						<SelectValue placeholder={t('maxPriceAny')} />
+					</SelectTrigger>
+					<SelectContent className="max-h-64">
+						{MAX_PRICE_OPTIONS.map(option => {
+							const value = option == null ? 'any' : formatMaxPriceLabel(option)
+							return (
+								<SelectItem
+									key={value}
+									value={value}
+								>
+									{option == null
+										? t('maxPriceAny')
+										: t('maxPriceLe', { price: (option / 10).toFixed(1) })}
+								</SelectItem>
+							)
+						})}
+					</SelectContent>
+				</Select>
 
-    const requestVersion = playerRequestVersionRef.current;
-    const normalizedSearch = searchTerm.trim();
+				<Select
+					value={ownBand}
+					disabled={isNameSearchActive}
+					onValueChange={value => setOwnBand(value as OwnBand)}
+				>
+					<SelectTrigger
+						className="h-8 w-[min(100%,6.5rem)] text-xs"
+						aria-label={t('ownBandLabel')}
+					>
+						{ownBand === 'ANY' ? (
+							<span>{t('ownBandLabel')}</span>
+						) : (
+							<SelectValue />
+						)}
+					</SelectTrigger>
+					<SelectContent>
+						{OWN_BANDS.map(band => (
+							<SelectItem
+								key={band}
+								value={band}
+							>
+								{t(OWN_BAND_LABEL_KEYS[band])}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
 
-    try {
-      setIsMorePlayersLoading(true);
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					className="h-8 gap-1 px-2 text-xs"
+					onClick={resetFilters}
+				>
+					<RotateCcw
+						className="size-3.5"
+						aria-hidden="true"
+					/>
+					{t('resetFilters')}
+				</Button>
+			</div>
 
-      const result = await executeQuery<PlayerSearchForPickerResponse>(
-        SEARCH_PLAYERS_FOR_PICKER,
-        {
-          search:
-            normalizedSearch.length >= MIN_SEARCH_LENGTH
-              ? normalizedSearch
-              : null,
-          filter: serverPlayerFilter,
-          limit: PLAYER_PICKER_PAGE_SIZE,
-          cursor: nextPlayersCursor,
-        }
-      );
+			<div className="mt-3 rounded-md border">
+				<div className="max-h-64 overflow-y-auto">
+					{error ? (
+						<div
+							role="status"
+							className="p-3 text-sm text-destructive"
+						>
+							{error}
+						</div>
+					) : isLoading ? (
+						<div className="p-3 text-sm text-muted-foreground">
+							{t('loadingPlayers')}
+						</div>
+					) : visiblePlayers.length === 0 && !canLoadMorePlayers ? (
+						<div className="space-y-2 p-3 text-sm text-muted-foreground">
+							<p>{t('noPlayers')}</p>
+							{normalizedSearch && positionFilter !== 'ALL' ? (
+								<div className="flex flex-wrap items-center gap-2">
+									<p className="text-xs">
+										{t('noPlayersTryAllPositions', {
+											query: normalizedSearch,
+											position: t(
+												positionFilter === 'GKP'
+													? 'goalkeeper'
+													: positionFilter === 'DEF'
+														? 'defender'
+														: positionFilter === 'MID'
+															? 'midfielder'
+															: 'forward'
+											)
+										})}
+									</p>
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										className="h-7 px-2 text-xs"
+										onClick={() => setPositionFilter('ALL')}
+									>
+										{t('searchAllPositions')}
+									</Button>
+								</div>
+							) : null}
+						</div>
+					) : (
+						visiblePlayers.map(player => (
+							<button
+								key={player.id}
+								type="button"
+								onClick={() => {
+									onSelect(player)
+									resetFilters()
+								}}
+								className="flex w-full items-center gap-2 border-b px-3 py-2.5 text-left text-sm transition-colors last:border-b-0 hover:bg-accent/50"
+							>
+								<span className="min-w-0 flex-1 truncate font-medium">
+									{player.name}
+								</span>
+								<span className="shrink-0 text-[10px] text-muted-foreground">
+									{player.position}
+								</span>
+								<span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+									{resolveTeamDisplayName(
+										player.teamShortName,
+										player.teamName
+									)}
+								</span>
+								{statsAvailable ? (
+									<>
+										<span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+											{t('totalPtsShort')}{' '}
+											<span className="font-medium text-foreground">
+												{player.totalPoints ?? '—'}
+											</span>
+										</span>
+										<span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+											{t('formShort')}{' '}
+											<span className="font-medium text-foreground">
+												{player.form ?? '—'}
+											</span>
+										</span>
+									</>
+								) : null}
+								<span className="shrink-0 text-xs tabular-nums font-medium">
+									{formatPickerPrice(player.price)}
+								</span>
+								<span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+									{player.selectedByPercent == null
+										? '—'
+										: `${player.selectedByPercent.toFixed(1)}%`}
+								</span>
+							</button>
+						))
+					)}
+				</div>
+				{canLoadMorePlayers && !error && !isPlayersLoading ? (
+					<div className="border-t p-2">
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							className="w-full"
+							disabled={isMorePlayersLoading}
+							onClick={() => void loadMorePlayers()}
+						>
+							{t(isMorePlayersLoading ? 'loadingMore' : 'loadMore')}
+						</Button>
+						{morePlayersError ? (
+							<p
+								role="status"
+								className="mt-1 text-center text-xs text-destructive"
+							>
+								{morePlayersError}
+							</p>
+						) : null}
+					</div>
+				) : null}
+			</div>
 
-      if (requestVersion !== playerRequestVersionRef.current) return;
-
-      setPlayers((currentPlayers) => {
-        const byId = new Map(
-          currentPlayers.map((player) => [player.id, player] as const)
-        );
-
-        for (const player of result.playersForPicker.items.map(
-          toPickerPlayer
-        )) {
-          byId.set(player.id, player);
-        }
-
-        return Array.from(byId.values()).sort((a, b) =>
-          a.name.localeCompare(b.name)
-        );
-      });
-      setTotalPlayers(result.playersForPicker.totalCount);
-      setNextPlayersCursor(result.playersForPicker.nextCursor);
-      setVisiblePlayerLimit(
-        (currentLimit) => currentLimit + DEFAULT_VISIBLE_PLAYER_RESULTS
-      );
-    } catch (fetchError) {
-      console.error("Failed to fetch more players:", fetchError);
-
-      if (requestVersion === playerRequestVersionRef.current) {
-        setMorePlayersError(t("loadMoreFailed"));
-      }
-    } finally {
-      if (requestVersion === playerRequestVersionRef.current) {
-        setIsMorePlayersLoading(false);
-      }
-    }
-  };
-
-  const hasActiveFilter =
-    positionFilter !== "ALL" ||
-    teamFilter !== "ALL" ||
-    searchTerm.trim().length >= MIN_SEARCH_LENGTH;
-
-  const visiblePlayers = hasActiveFilter
-    ? filteredPlayers.slice(0, visiblePlayerLimit)
-    : [];
-
-  const canLoadMorePlayers =
-    visiblePlayerLimit < filteredPlayers.length || nextPlayersCursor !== null;
-
-  const isLoading = isTeamsLoading || isPlayersLoading;
-
-  return (
-    <div className={className}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
-        <Select
-          value={teamFilter}
-          onValueChange={(value) => setTeamFilter(value)}
-          disabled={isTeamsLoading}
-        >
-          <SelectTrigger aria-label={t("filterTeam")}>
-            <SelectValue
-              placeholder={isTeamsLoading ? t("loadingTeams") : t("filterTeam")}
-            />
-          </SelectTrigger>
-          <SelectContent className="max-h-72">
-            {isTeamsLoading ? (
-              <SelectItem
-                value="loading"
-                disabled
-              >
-                {t("loadingTeams")}
-              </SelectItem>
-            ) : (
-              availableTeams.map((team) => (
-                <SelectItem
-                  key={team}
-                  value={team}
-                >
-                  {team === "ALL"
-                    ? t("allTeams")
-                    : resolveTeamDisplayName(
-                        team,
-                        teams.find((item) => item.shortName === team)?.name
-                      )}
-                </SelectItem>
-              ))
-            )}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={positionFilter}
-          onValueChange={(value) => setPositionFilter(value as PositionFilter)}
-        >
-          <SelectTrigger aria-label={t("filterPosition")}>
-            <SelectValue placeholder={t("filterPosition")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">{t("allPositions")}</SelectItem>
-            <SelectItem value="GKP">{t("goalkeeper")}</SelectItem>
-            <SelectItem value="DEF">{t("defender")}</SelectItem>
-            <SelectItem value="MID">{t("midfielder")}</SelectItem>
-            <SelectItem value="FWD">{t("forward")}</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <div className="relative sm:col-span-2">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            aria-label={t("search")}
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder={t("searchPlaceholder")}
-            className="pl-9 pr-9"
-          />
-          {searchTerm.trim().length > 0 && (
-            <button
-              type="button"
-              aria-label={t("clearSearch")}
-              onClick={() => setSearchTerm("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-3 rounded-md border">
-        <div className="max-h-64 overflow-y-auto">
-          {error ? (
-            <div
-              role="status"
-              className="p-3 text-sm text-destructive"
-            >
-              {error}
-            </div>
-          ) : !hasActiveFilter ? (
-            <div className="p-3 text-sm text-muted-foreground">
-              {t("prompt")}
-            </div>
-          ) : isLoading ? (
-            <div className="p-3 text-sm text-muted-foreground">
-              {t("loadingPlayers")}
-            </div>
-          ) : visiblePlayers.length === 0 && !canLoadMorePlayers ? (
-            <div className="p-3 text-sm text-muted-foreground">
-              {t("noPlayers")}
-            </div>
-          ) : (
-            <>
-              {visiblePlayers.map((player) => (
-                <button
-                  key={player.id}
-                  type="button"
-                  onClick={() => {
-                    onSelect(player);
-                    setSearchTerm("");
-                    setPositionFilter("ALL");
-                    setTeamFilter("ALL");
-                  }}
-                  className="flex w-full items-center justify-between gap-3 border-b px-3 py-3 text-left text-sm transition-colors hover:bg-accent/50"
-                >
-                  <span className="truncate font-medium">{player.name}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {player.position} |{" "}
-                    {resolveTeamDisplayName(
-                      player.teamShortName,
-                      player.teamName
-                    )}
-                  </span>
-                </button>
-              ))}
-              {canLoadMorePlayers && (
-                <>
-                  {morePlayersError && (
-                    <div
-                      role="status"
-                      className="border-b px-3 py-2 text-sm text-destructive"
-                    >
-                      {morePlayersError}
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void loadMorePlayers()}
-                    disabled={isMorePlayersLoading}
-                    className="w-full px-3 py-3 text-center text-sm font-medium text-primary transition-colors hover:bg-accent/50 disabled:cursor-wait disabled:text-muted-foreground"
-                  >
-                    {isMorePlayersLoading ? t("loadingMore") : t("loadMore")}
-                  </button>
-                </>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {hasActiveFilter && !isLoading && !error && (
-        <div className="mt-2 text-xs text-muted-foreground">
-          {t("resultCount", {
-            visible: visiblePlayers.length,
-            total: totalPlayers,
-          })}
-        </div>
-      )}
-    </div>
-  );
+			<div className="mt-2 text-xs text-muted-foreground">
+				{t('resultCount', {
+					visible: visiblePlayers.length,
+					total: totalPlayers
+				})}
+			</div>
+		</div>
+	)
 }

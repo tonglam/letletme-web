@@ -5,13 +5,20 @@ import { PlayerList } from '@/components/live/PlayerList'
 import { TeamStats } from '@/components/live/TeamStats'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
+import { APP_URL } from '@/i18n/config'
+import { localizePathname, type AppLocale } from '@/i18n/routing'
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
+import { cn } from '@/lib/utils'
 import type { Player } from '@/types/player'
-import { Loader2, RefreshCw } from 'lucide-react'
-import type { ReactNode } from 'react'
-import { useTranslations } from 'next-intl'
+import { Check, Copy, ImageIcon, Loader2, RefreshCw } from 'lucide-react'
+import { useLocale, useTranslations } from 'next-intl'
+import { useCallback, useState, type ReactNode } from 'react'
+import { toast } from 'sonner'
 import { deriveLiveTeamStats } from '../_lib/live-points-model'
+import {
+	copyTextToClipboard,
+	formatLivePointsShareText,
+} from '../_lib/live-points-share'
 import { LivePointsAutoRefreshCountdown } from './LivePointsAutoRefreshCountdown'
 
 export function LivePointsDashboard({
@@ -28,7 +35,7 @@ export function LivePointsDashboard({
 	benchPlayers,
 	onGameweekChange,
 	onAutoRefresh,
-	onRefresh
+	onRefresh,
 }: {
 	entrySearch?: ReactNode
 	currentGameweek: number
@@ -46,7 +53,62 @@ export function LivePointsDashboard({
 	onRefresh: () => Promise<void>
 }) {
 	const t = useTranslations('LivePoints')
+	const locale = useLocale() as AppLocale
 	const autoRefreshEnabled = shouldAutoRefresh && isPageActive
+	const [copied, setCopied] = useState(false)
+
+	const handleCopyShare = useCallback(async () => {
+		if (!liveData) return
+		const gameweek = selectedGameweek ?? liveData.event ?? currentGameweek
+		const entryId = liveData.entry
+		// Prefer browser origin so local/dev shares still open; fall back to prod base.
+		const origin =
+			typeof window !== 'undefined' ? window.location.origin : APP_URL.origin
+		const shareUrl = new URL(
+			localizePathname(`/live/points/${entryId}`, locale),
+			origin,
+		).toString()
+
+		const text = formatLivePointsShareText({
+			gameweek,
+			liveData,
+			startingPlayers,
+			benchPlayers,
+			labels: {
+				live: t('shareLive'),
+				net: t('shareNet'),
+				season: t('shareSeason'),
+				chip: t('shareChip'),
+				noChip: t('shareNoChip'),
+				captain: t('shareCaptain'),
+				startingXi: t('startingEleven'),
+				bench: t('substitutes'),
+				statusPlaying: t('statusPlaying'),
+				statusFinished: t('statusFinished'),
+				statusNotStarted: t('statusNotStarted'),
+				pts: t('pointsAbbreviation'),
+				hits: t('shareHits'),
+				// Pass {url} into next-intl — bare t('shareFooter') throws FORMATTING_ERROR
+				footer: t('shareFooter', { url: shareUrl }),
+			},
+		})
+		const ok = await copyTextToClipboard(text)
+		if (ok) {
+			setCopied(true)
+			toast.success(t('shareCopied'))
+			window.setTimeout(() => setCopied(false), 2000)
+		} else {
+			toast.error(t('shareCopyFailed'))
+		}
+	}, [
+		benchPlayers,
+		currentGameweek,
+		liveData,
+		locale,
+		selectedGameweek,
+		startingPlayers,
+		t,
+	])
 
 	return (
 		<>
@@ -66,11 +128,36 @@ export function LivePointsDashboard({
 								? t('autoHidden')
 								: t('autoPast')}
 					</p>
-					<div className="flex items-center gap-3">
+					<div className="flex items-center gap-2 sm:gap-3">
 						<LivePointsAutoRefreshCountdown
 							enabled={autoRefreshEnabled}
 							onRefresh={onAutoRefresh}
 						/>
+						<Button
+							size="sm"
+							variant="outline"
+							onClick={() => void handleCopyShare()}
+							disabled={!liveData || isLoading}
+							aria-label={t('shareCopy')}
+						>
+							{copied ? (
+								<Check data-icon="inline-start" className="text-primary-ink" />
+							) : (
+								<Copy data-icon="inline-start" />
+							)}
+							{copied ? t('shareCopiedShort') : t('shareCopy')}
+						</Button>
+						{/* TODO: design + implement share-as-image export */}
+						<Button
+							size="sm"
+							variant="outline"
+							onClick={() => toast.message(t('shareImageComingSoon'))}
+							disabled={!liveData || isLoading}
+							aria-label={t('shareCopyImage')}
+						>
+							<ImageIcon data-icon="inline-start" />
+							{t('shareCopyImage')}
+						</Button>
 						<Button
 							size="sm"
 							variant="outline"
@@ -123,16 +210,22 @@ export function LivePointsDashboard({
 					</div>
 
 					<section aria-labelledby="live-squad-heading">
-						<h2
-							id="live-squad-heading"
-							className="mb-3 text-xl font-bold"
-						>
-							{t('squad')}
-						</h2>
+						<div className="mb-3">
+							<p className="chyron">{t('livePoints')}</p>
+							<h2
+								id="live-squad-heading"
+								className="mt-1 font-display text-xl font-bold tracking-tight sm:text-2xl"
+							>
+								{t('squad')}
+							</h2>
+							<p className="mt-1.5 text-xs text-muted-foreground">
+								{t('ptsIncludeBonusHint')}
+							</p>
+						</div>
 						<Card
 							className={cn(
-								'overflow-hidden',
-								isRefreshing && 'opacity-75 transition-opacity'
+								'overflow-hidden border-border/80 shadow-sm',
+								isRefreshing && 'opacity-75 transition-opacity',
 							)}
 						>
 							<PlayerList

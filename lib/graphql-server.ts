@@ -1,8 +1,12 @@
 import 'server-only'
 
+import type { Session } from '@/lib/auth'
 import { executeQuery, type ExecuteQueryOptions } from '@/lib/graphql-client'
 import { getGraphQLServiceTokenHeaders } from '@/lib/graphql-service-token'
-import { getServerUserContextHeaders } from '@/lib/server-user-context'
+import {
+	buildServerUserContextHeaders,
+	getServerUserContextHeaders,
+} from '@/lib/server-user-context'
 
 // Use this instead of executeQuery in RSC pages.
 // Server-side calls bypass the /api/graphql proxy (which normally adds
@@ -14,6 +18,17 @@ export async function executeServerQuery<T>(
 	options?: Omit<ExecuteQueryOptions, 'headers'>,
 ): Promise<T> {
 	const authHeaders = await getServerUserContextHeaders()
+	return executeQuery<T>(query, variables, { ...options, headers: authHeaders })
+}
+
+/** Same as executeServerQuery but reuses an already-loaded session (no extra getSession). */
+export async function executeServerQueryWithSession<T>(
+	session: Session | null,
+	query: string,
+	variables?: Record<string, unknown>,
+	options?: Omit<ExecuteQueryOptions, 'headers'>,
+): Promise<T> {
+	const authHeaders = await buildServerUserContextHeaders(session)
 	return executeQuery<T>(query, variables, { ...options, headers: authHeaders })
 }
 

@@ -1,12 +1,11 @@
-import { LogoMark } from '@/components/layout/Logo'
+import { LogoMark, LogoWordmark } from '@/components/layout/Logo'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getSafeInternalHref, localizeHref } from '@/i18n/routing'
-import { getAuthorizationSession } from '@/lib/auth'
 import { verifiedUserDestination } from '@/lib/auth-redirects'
+import { getVerifiedEntryContext } from '@/lib/session'
 import { ClipboardPaste, ExternalLink, Hash, MousePointerClick } from 'lucide-react'
-import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import BindEntryForm from '@/app/onboarding/bind-entry/BindEntryForm'
 import { getTranslations } from 'next-intl/server'
@@ -36,7 +35,7 @@ export default async function BindEntryPage({
 	const { locale } = await getPageLocale(params)
 	const t = await getTranslations('Onboarding')
 	const next = getSafeInternalHref((await searchParams).next ?? '/')
-	const session = await getAuthorizationSession(await headers())
+	const { session } = await getVerifiedEntryContext()
 
 	if (!session) {
 		redirect(
@@ -53,21 +52,23 @@ export default async function BindEntryPage({
 		<div className="flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center bg-muted/30 p-4">
 			<div className="mb-6 flex items-center gap-2">
 				<LogoMark className="size-10 text-plum dark:text-electric" />
-				<h1 className="font-display text-2xl font-bold uppercase tracking-[0.06em]">LetLetMe</h1>
+				<h1>
+					<LogoWordmark className="text-2xl" />
+				</h1>
 			</div>
 
-			<Card className="w-full max-w-md p-6">
+			<Card className="w-full max-w-md border-border/80 p-6 shadow-sm">
 				<div className="mb-6 text-center">
 					<div className="flex justify-center mb-3">
 						<Hash className="h-10 w-10 text-primary-ink" />
 					</div>
-					<h2 className="text-2xl font-bold tracking-tight">{t('title')}</h2>
+					<h2 className="font-display text-2xl font-bold tracking-tight">{t('title')}</h2>
 					<p className="text-sm text-muted-foreground mt-1">
 						{t('description')}
 					</p>
 				</div>
 
-				<div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground mb-6">
+				<div className="rounded-lg border border-border/70 bg-muted/40 p-3 dark:bg-muted/25 text-xs text-muted-foreground mb-6">
 					<p className="font-medium mb-1">{t('findEntryId')}</p>
 					<ol className="list-decimal list-inside space-y-1">
 						<li>

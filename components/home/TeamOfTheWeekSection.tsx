@@ -1,7 +1,9 @@
 import { PlayerList, type PlayerListItem } from '@/components/player/PlayerList'
+import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_LIVE_SCORES,
@@ -37,16 +39,17 @@ function TeamOfTheWeekCard({
 	const t = useTranslations('Home')
 	return (
 		<Card className="rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8">
-			<div className="mb-6 flex items-center justify-between">
-				<h2 className="flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
-					<span className="rounded-md bg-plum px-2 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
-						{currentEventId ? `GW${currentEventId}` : 'GW'}
-					</span>
+			<div className="mb-6">
+				<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+					{t('thisGameweek')}
+				</p>
+				<h2 className="mt-1 flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
+					<GameweekBadge gameweek={currentEventId} size="sm" />
 					<span>{t('teamOfWeek')}</span>
+					{teamOfTheWeek.length > 0 && !isLoading && (
+						<Badge variant="secondary">{t('playerCount', { count: teamOfTheWeek.length })}</Badge>
+					)}
 				</h2>
-				{teamOfTheWeek.length > 0 && !isLoading && (
-					<Badge variant="secondary">{t('playerCount', { count: teamOfTheWeek.length })}</Badge>
-				)}
 			</div>
 
 			{hasError && (
@@ -91,7 +94,10 @@ export async function TeamOfTheWeekSection({ currentEventId }: TeamOfTheWeekSect
 		const scoresData = await executePublicServerQuery<LiveScoresResponse>(
 			GET_LIVE_SCORES,
 			{ eventId: currentEventId },
-			{ cache: 'force-cache', next: { revalidate: 300 }, timeoutMs: 5_000 },
+			publicFetchOptions({
+				revalidate: RevalidateSeconds.publicStats,
+				tags: [CacheTag.liveScores, CacheTag.gameweekStats],
+			}),
 		)
 
 		const positionOrder: Record<string, number> = {

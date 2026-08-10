@@ -11,27 +11,27 @@ import { hasLocale, NextIntlClientProvider } from 'next-intl'
 import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server'
 import { Barlow, Barlow_Condensed, IBM_Plex_Mono } from 'next/font/google'
 import { notFound } from 'next/navigation'
-import Script from 'next/script'
 import { Suspense } from 'react'
 import '../globals.css'
 
+// Trimmed weights for faster first paint; 500 falls back to 600 visually.
 const barlow = Barlow({
 	subsets: ['latin'],
-	weight: ['400', '500', '600', '700'],
+	weight: ['400', '600', '700'],
 	variable: '--font-barlow',
 	display: 'swap',
 })
 
 const barlowCondensed = Barlow_Condensed({
 	subsets: ['latin'],
-	weight: ['500', '600', '700'],
+	weight: ['600', '700'],
 	variable: '--font-display',
 	display: 'swap',
 })
 
 const plexMono = IBM_Plex_Mono({
 	subsets: ['latin'],
-	weight: ['500', '600'],
+	weight: ['500'],
 	variable: '--font-mono',
 	display: 'swap',
 })
@@ -99,12 +99,13 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
 			data-scroll-behavior="smooth"
 			suppressHydrationWarning
 		>
-			<body className="min-h-svh bg-background font-sans text-foreground antialiased">
-				<Script
+			<head>
+				<script
 					id="theme-bootstrap"
-					strategy="beforeInteractive"
 					dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
 				/>
+			</head>
+			<body className="min-h-svh bg-background font-sans text-foreground antialiased">
 				<NextIntlClientProvider messages={messages}>
 					<ThemeProvider defaultTheme="system" enableSystem disableTransitionOnChange>
 						<TooltipProvider>

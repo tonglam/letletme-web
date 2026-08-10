@@ -1,9 +1,10 @@
 import 'server-only'
 
 import { headers } from 'next/headers'
-import { getAuthorizationSession } from '@/lib/auth'
+import { getAuthorizationSession, type Session } from '@/lib/auth'
 import { buildGraphQLUserContextHeaders } from '@/lib/graphql-envelope'
 import { buildIngressContextHeaders, buildOpaqueRateLimitSubject } from '@/lib/http-security'
+import { getVerifiedEntryContext } from '@/lib/session'
 
 function requireProxySecret(): string | null {
 	const secret = process.env.BACKEND_PROXY_SECRET
@@ -13,7 +14,10 @@ function requireProxySecret(): string | null {
 	return secret ?? null
 }
 
-export async function getServerUserContextHeaders(): Promise<Record<string, string>> {
+/** Build GraphQL ingress + user headers without a second session round-trip. */
+export async function buildServerUserContextHeaders(
+	session: Session | null,
+): Promise<Record<string, string>> {
 	const secret = requireProxySecret()
 	if (!secret) {
 		return {}
@@ -22,9 +26,15 @@ export async function getServerUserContextHeaders(): Promise<Record<string, stri
 	const requestHeaders = await headers()
 	const subject = buildOpaqueRateLimitSubject(requestHeaders, secret)
 	const result = buildIngressContextHeaders(subject, secret)
-	const session = await getAuthorizationSession(requestHeaders)
 	if (session?.user) {
 		Object.assign(result, buildGraphQLUserContextHeaders(session.user, secret))
 	}
 	return result
+}
+
+export async function getServerUserContextHeaders(): Promise<Record<string, string>> {
+	// Prefer request-scoped verified context so list/live pages that already loaded
+	// session do not pay for another disableCookieCache getSession.
+	const { session } = await getVerifiedEntryContext()
+	return buildServerUserContextHeaders(session)
 }

@@ -1,18 +1,15 @@
-import { PageState } from '@/components/feedback/PageState'
-import PageShell from '@/components/layout/PageShell'
-import { getCurrentAndNextEvents } from '@/lib/events'
-import { executeServerQuery } from '@/lib/graphql-server'
+import LivePointsClient from '@/app/live/points/LivePointsClient'
+import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGameweekUnavailable'
+import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
+import { getCurrentEventId } from '@/lib/events'
 import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
 	type LiveCalcDataResponse,
-	type LiveSnapshotStatus
+	type LiveSnapshotStatus,
 } from '@/lib/graphql/operations/live'
+import { executeServerQuery } from '@/lib/graphql-server'
 import { getCurrentEntryId } from '@/lib/session'
-import { CalendarX2 } from 'lucide-react'
-import LivePointsClient from '@/app/live/points/LivePointsClient'
-import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import { getTranslations } from 'next-intl/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,39 +21,30 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/live/points',
 		titleKey: 'livePointsTitle',
-		descriptionKey: 'livePointsDescription'
+		descriptionKey: 'livePointsDescription',
 	})
 }
 
 export default async function LivePointsPage({ params }: PageProps) {
 	await getPageLocale(params)
-	const t = await getTranslations('States')
-	const [entryId, events] = await Promise.all([
-		getCurrentEntryId(),
-		getCurrentAndNextEvents()
-	])
-	const currentEventId = events?.current[0]?.id
+
+	// 1) Gate on isCurrent alone — do not wait on session/entry first.
+	const currentEventId = await getCurrentEventId()
+	if (!currentEventId) {
+		return <CurrentGameweekUnavailable />
+	}
+
+	// 2) Only then session-scoped seed.
+	const entryId = await getCurrentEntryId()
 	let initialLiveData: LiveCalcData | undefined
 	let initialSnapshot: LiveSnapshotStatus | null = null
-
-	if (!currentEventId) {
-		return (
-			<PageShell>
-				<PageState
-					icon={CalendarX2}
-					title={t('gameweekUnavailableTitle')}
-					description={t('gameweekUnavailableDescription')}
-				/>
-			</PageShell>
-		)
-	}
 
 	if (entryId) {
 		try {
 			const response = await executeServerQuery<LiveCalcDataResponse>(
 				GET_LIVE_POINTS,
 				{ eventId: currentEventId, entryId },
-				{ cache: 'no-store' }
+				{ cache: 'no-store' },
 			)
 			initialLiveData = response.calcLivePointsByEntry
 			initialSnapshot = response.liveSnapshot

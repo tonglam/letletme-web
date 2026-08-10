@@ -1,198 +1,280 @@
-"use client";
+'use client'
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '@/components/ui/select'
+import { type OwnershipScope } from '@/lib/player-ownership-filter'
 import {
-  getTeamExposureFilterSummary,
-  type TeamExposureEntry,
-} from "@/lib/team-exposure-filter";
-import { type OwnershipScope } from "@/lib/player-ownership-filter";
-import { executeQuery } from "@/lib/graphql-client";
+	getTeamExposureFilterSummary,
+	type TeamExposureEntry,
+	type TeamExposureRule,
+} from '@/lib/team-exposure-filter'
+import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_TEAMS_FOR_PICKER,
 	type TeamsForPickerResponse,
-} from "@/lib/graphql/operations/players";
-import { cn } from "@/lib/utils";
-import { Shirt, X } from "lucide-react";
-import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useState } from "react";
+} from '@/lib/graphql/operations/players'
+import { cn } from '@/lib/utils'
+import { Plus, Shirt, X } from 'lucide-react'
+import { useTranslations } from 'next-intl'
+import { useEffect, useMemo, useState } from 'react'
 
 interface TeamExposureFilterProps {
-  entries: TeamExposureEntry[];
-  onMatchedEntryIdsChange: (entryIds: string[] | null) => void;
-  className?: string;
+	entries: TeamExposureEntry[]
+	onMatchedEntryIdsChange: (entryIds: string[] | null) => void
+	className?: string
+}
+
+type SelectedTeam = {
+	shortName: string
+	name: string
+	count: number
 }
 
 export function TeamExposureFilter({
-  entries,
-  onMatchedEntryIdsChange,
-  className,
+	entries,
+	onMatchedEntryIdsChange,
+	className,
 }: TeamExposureFilterProps) {
-  const t = useTranslations("Filters");
-  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
-  const [count, setCount] = useState<number>(1);
-  const [scope, setScope] = useState<OwnershipScope>("any");
-  const [allTeams, setAllTeams] = useState<{ shortName: string; name: string }[]>([]);
+	const t = useTranslations('Filters')
+	const [pendingTeam, setPendingTeam] = useState<string>('')
+	const [pendingCount, setPendingCount] = useState<number>(1)
+	const [scope, setScope] = useState<OwnershipScope>('any')
+	const [selectedTeams, setSelectedTeams] = useState<SelectedTeam[]>([])
+	const [allTeams, setAllTeams] = useState<{ shortName: string; name: string }[]>(
+		[],
+	)
 
-  useEffect(() => {
-    executeQuery<TeamsForPickerResponse>(GET_TEAMS_FOR_PICKER)
-      .then((data) =>
-        setAllTeams(
-          data.teams
-            .map((t) => ({ shortName: t.shortName, name: t.name }))
-            .sort((a, b) => a.name.localeCompare(b.name))
-        )
-      )
-      .catch(() => {});
-  }, []);
+	useEffect(() => {
+		executeQuery<TeamsForPickerResponse>(GET_TEAMS_FOR_PICKER)
+			.then(data =>
+				setAllTeams(
+					data.teams
+						.map(team => ({ shortName: team.shortName, name: team.name }))
+						.sort((a, b) => a.name.localeCompare(b.name)),
+				),
+			)
+			.catch(error => {
+				console.warn('Team directory unavailable for exposure filter:', error)
+			})
+	}, [])
 
-  // Only show teams that actually appear in the current entries' picks
-  const pickedShortNames = useMemo(() => {
-    const set = new Set<string>();
-    for (const entry of entries) {
-      for (const pick of entry.picks) {
-        if (pick.teamShortName) set.add(pick.teamShortName);
-      }
-    }
-    return set;
-  }, [entries]);
+	// Teams present in current standings (with display names from picker when possible)
+	const teamsInStandings = useMemo(() => {
+		const byShort = new Map<string, string>()
+		for (const entry of entries) {
+			for (const pick of entry.picks) {
+				if (!pick.teamShortName) continue
+				if (!byShort.has(pick.teamShortName)) {
+					byShort.set(
+						pick.teamShortName,
+						pick.teamName || pick.teamShortName,
+					)
+				}
+			}
+		}
+		return byShort
+	}, [entries])
 
-  const teamOptions = useMemo(
-    () => allTeams.filter((t) => pickedShortNames.has(t.shortName)),
-    [allTeams, pickedShortNames]
-  );
+	const selectedShortNames = useMemo(
+		() => new Set(selectedTeams.map(team => team.shortName)),
+		[selectedTeams],
+	)
 
-  const summary = useMemo(
-    () => getTeamExposureFilterSummary(entries, selectedTeam, count, scope),
-    [entries, selectedTeam, count, scope]
-  );
+	const teamOptions = useMemo(() => {
+		const nameByShort = new Map(allTeams.map(t => [t.shortName, t.name]))
+		return Array.from(teamsInStandings.entries())
+			.filter(([shortName]) => !selectedShortNames.has(shortName))
+			.map(([shortName, fallbackName]) => ({
+				shortName,
+				name: nameByShort.get(shortName) ?? fallbackName,
+			}))
+			.sort((a, b) => a.name.localeCompare(b.name))
+	}, [allTeams, selectedShortNames, teamsInStandings])
 
-  const isActive = selectedTeam !== null;
-  const scopeLabels: Record<OwnershipScope, string> = {
-    any: t("any"),
-    starter: t("starter"),
-    bench: t("bench"),
-  };
+	const rules: TeamExposureRule[] = useMemo(
+		() =>
+			selectedTeams.map(team => ({
+				teamShortName: team.shortName,
+				exactCount: team.count,
+			})),
+		[selectedTeams],
+	)
 
-  useEffect(() => {
-    onMatchedEntryIdsChange(isActive ? summary.matchedEntryIds : null);
-  }, [isActive, onMatchedEntryIdsChange, summary.matchedEntryIds]);
+	const summary = useMemo(
+		() => getTeamExposureFilterSummary(entries, rules, scope),
+		[entries, rules, scope],
+	)
 
-  const handleClear = () => {
-    setSelectedTeam(null);
-    setCount(1);
-    setScope("any");
-  };
+	const isActive = selectedTeams.length > 0
+	const scopeLabels: Record<OwnershipScope, string> = {
+		any: t('any'),
+		starter: t('starter'),
+		bench: t('bench'),
+	}
 
-  const selectedTeamName =
-    allTeams.find((t) => t.shortName === selectedTeam)?.name ?? selectedTeam;
+	useEffect(() => {
+		onMatchedEntryIdsChange(isActive ? summary.matchedEntryIds : null)
+	}, [isActive, onMatchedEntryIdsChange, summary.matchedEntryIds])
 
-  return (
-    <div className={cn("mb-6 rounded-lg border bg-card p-4", className)}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Shirt className="h-4 w-4 text-primary-ink" />
-            {t("teamExposure")}
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            {t("matched", {
-              matched: summary.matchedCount,
-              total: summary.totalCount,
-              percentage: summary.percentage,
-            })}
-          </div>
-        </div>
+	const addTeam = () => {
+		if (!pendingTeam) return
+		if (selectedShortNames.has(pendingTeam)) return
+		const option = teamOptions.find(team => team.shortName === pendingTeam)
+		const name =
+			option?.name ??
+			allTeams.find(team => team.shortName === pendingTeam)?.name ??
+			pendingTeam
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Team picker */}
-          <Select
-            value={selectedTeam ?? ""}
-            onValueChange={(v) => setSelectedTeam(v || null)}
-            disabled={teamOptions.length === 0}
-          >
-            <SelectTrigger className="h-8 w-[160px]" aria-label={t("selectTeamAria")}>
-              <SelectValue placeholder={t("selectTeam")} />
-            </SelectTrigger>
-            <SelectContent>
-              {teamOptions.map((team) => (
-                <SelectItem key={team.shortName} value={team.shortName}>
-                  {team.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+		setSelectedTeams(current => [
+			...current,
+			{ shortName: pendingTeam, name, count: pendingCount },
+		])
+		setPendingTeam('')
+		setPendingCount(1)
+	}
 
-          {/* Count: 1–3 */}
-          <Select
-            value={String(count)}
-            onValueChange={(v) => setCount(Number(v))}
-          >
-            <SelectTrigger className="h-8 w-[80px]" aria-label={t("minimumPlayers")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">1</SelectItem>
-              <SelectItem value="2">2</SelectItem>
-              <SelectItem value="3">3</SelectItem>
-            </SelectContent>
-          </Select>
+	const removeTeam = (shortName: string) => {
+		setSelectedTeams(current => current.filter(team => team.shortName !== shortName))
+	}
 
-          {/* Scope: any / starter / bench */}
-          <Select
-            value={scope}
-            onValueChange={(v) => setScope(v as OwnershipScope)}
-          >
-            <SelectTrigger className="h-8 w-[110px]" aria-label={t("teamScope")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="any">{t("any")}</SelectItem>
-              <SelectItem value="starter">{t("starter")}</SelectItem>
-              <SelectItem value="bench">{t("bench")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+	const handleClear = () => {
+		setSelectedTeams([])
+		setPendingTeam('')
+		setPendingCount(1)
+		setScope('any')
+	}
 
-      {isActive ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Badge variant="outline" className="gap-2 rounded-md px-2 py-1">
-            <span className="font-medium">{selectedTeamName}</span>
-            <span className="text-muted-foreground">
-              {count} | {scopeLabels[scope]}
-            </span>
-            <button
-              type="button"
-              aria-label={t("removeTeam")}
-              className="rounded-sm text-muted-foreground hover:text-foreground"
-              onClick={handleClear}
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </Badge>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={handleClear}
-          >
-            {t("clearAll")}
-          </Button>
-        </div>
-      ) : (
-        <div className="mt-3 rounded-md bg-accent/30 px-3 py-2 text-xs text-muted-foreground">
-          {t("noTeamFilter")}
-        </div>
-      )}
-    </div>
-  );
+	return (
+		<div className={cn('mb-4 rounded-lg border bg-card p-4 last:mb-0 md:mb-6', className)}>
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<div className="flex items-center gap-2 text-sm font-medium">
+						<Shirt className="h-4 w-4 text-primary-ink" />
+						{t('teamExposure')}
+					</div>
+					<div className="mt-1 text-xs text-muted-foreground">
+						{t('matched', {
+							matched: summary.matchedCount,
+							total: summary.totalCount,
+							percentage: summary.percentage,
+						})}
+					</div>
+				</div>
+
+				<div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+					{/* Shared scope for all selected teams */}
+					<Select
+						value={scope}
+						onValueChange={v => setScope(v as OwnershipScope)}
+					>
+						<SelectTrigger
+							className="col-span-2 h-10 min-h-10 w-full sm:col-span-1 sm:h-9 sm:min-h-9 sm:w-[110px]"
+							aria-label={t('teamScope')}
+						>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="any">{t('any')}</SelectItem>
+							<SelectItem value="starter">{t('starter')}</SelectItem>
+							<SelectItem value="bench">{t('bench')}</SelectItem>
+						</SelectContent>
+					</Select>
+
+					{/* Pending team + count, then add like ownership */}
+					<Select
+						value={pendingTeam}
+						onValueChange={setPendingTeam}
+						disabled={teamOptions.length === 0}
+					>
+						<SelectTrigger
+							className="col-span-2 h-10 min-h-10 w-full sm:col-span-1 sm:h-9 sm:min-h-9 sm:w-[160px]"
+							aria-label={t('selectTeamAria')}
+						>
+							<SelectValue placeholder={t('selectTeam')} />
+						</SelectTrigger>
+						<SelectContent>
+							{teamOptions.map(team => (
+								<SelectItem key={team.shortName} value={team.shortName}>
+									{team.name}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+
+					<Select
+						value={String(pendingCount)}
+						onValueChange={v => setPendingCount(Number(v))}
+					>
+						<SelectTrigger
+							className="h-10 min-h-10 w-full sm:h-9 sm:min-h-9 sm:w-[80px]"
+							aria-label={t('minimumPlayers')}
+						>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="1">1</SelectItem>
+							<SelectItem value="2">2</SelectItem>
+							<SelectItem value="3">3</SelectItem>
+						</SelectContent>
+					</Select>
+
+					<Button
+						type="button"
+						variant="outline"
+						className="h-10 min-h-10 w-full sm:h-9 sm:min-h-9 sm:w-auto"
+						disabled={!pendingTeam}
+						onClick={addTeam}
+					>
+						<Plus className="h-4 w-4" />
+						{t('addTeam')}
+					</Button>
+				</div>
+			</div>
+
+			{selectedTeams.length > 0 ? (
+				<div className="mt-3 flex flex-wrap gap-2">
+					{selectedTeams.map(team => (
+						<Badge
+							key={team.shortName}
+							variant="outline"
+							className="gap-2 rounded-md px-2 py-1"
+						>
+							<span className="font-medium">{team.name}</span>
+							<span className="text-muted-foreground">
+								{team.shortName} · {team.count} · {scopeLabels[scope]}
+							</span>
+							<button
+								type="button"
+								aria-label={t('removeTeamItem', { team: team.name })}
+								className="rounded-sm text-muted-foreground hover:text-foreground"
+								onClick={() => removeTeam(team.shortName)}
+							>
+								<X className="h-3.5 w-3.5" />
+							</button>
+						</Badge>
+					))}
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className="h-7 px-2 text-xs"
+						onClick={handleClear}
+					>
+						{t('clearAll')}
+					</Button>
+				</div>
+			) : (
+				<div className="mt-3 rounded-md bg-accent/30 px-3 py-2 text-xs text-muted-foreground">
+					{t('noTeamFilter')}
+				</div>
+			)}
+		</div>
+	)
 }

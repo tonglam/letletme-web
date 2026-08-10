@@ -1,9 +1,9 @@
 'use client'
 
 import PageShell from '@/components/layout/PageShell'
+import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { TournamentHelp } from '@/components/tournament/TournamentHelp'
 import { useHydrated } from '@/hooks/use-hydrated'
-import { Trophy } from 'lucide-react'
 import { FormProvider } from 'react-hook-form'
 import { TournamentCreateActions } from './_components/TournamentCreateActions'
 import { ClassicLeagueImportCard } from './_components/ClassicLeagueImportCard'
@@ -30,14 +30,14 @@ export default function CreateTournamentClient() {
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
-				<header className="mb-8 flex items-start gap-3">
-					<Trophy className="mt-1 size-8 shrink-0 text-primary-ink" aria-hidden="true" />
-					<div>
-						<h1 className="text-3xl font-bold">{t('title')}</h1>
-						<p className="mt-1 text-sm leading-6 text-muted-foreground">{t('subtitle')}</p>
-					</div>
-					<TournamentHelp className="ml-auto shrink-0" />
-				</header>
+				<StatsPageHeader
+					eyebrow={t('eyebrow')}
+					title={t('title')}
+					badge={<TournamentHelp className="shrink-0" />}
+				/>
+				<p className="-mt-4 mb-8 max-w-2xl text-sm leading-6 text-muted-foreground">
+					{t('subtitle')}
+				</p>
 
 				<FormProvider {...state.form}>
 					<form

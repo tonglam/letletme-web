@@ -1,5 +1,8 @@
+import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Link } from '@/i18n/navigation'
+import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_TOP_TRANSFERS_IN,
@@ -7,8 +10,9 @@ import {
 	type TopTransfer,
 	type TopTransfersResponse,
 } from '@/lib/graphql/operations/prices'
-import { TransferList } from './TransferList'
+import { ArrowRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { TransferList } from './TransferList'
 
 interface Transfer {
 	position: string
@@ -29,6 +33,7 @@ export function GameweekStatsSectionFallback() {
 			transfersIn={[]}
 			transfersOut={[]}
 			isLoading
+			currentEventId={null}
 		/>
 	)
 }
@@ -38,17 +43,37 @@ function GameweekStatsCard({
 	transfersOut,
 	isLoading = false,
 	hasError,
+	currentEventId = null,
 }: {
 	transfersIn: Transfer[]
 	transfersOut: Transfer[]
 	isLoading?: boolean
 	hasError?: boolean
+	currentEventId?: number | null
 }) {
 	const t = useTranslations('Home')
 	return (
-		<Card className="rounded-none sm:rounded-lg p-4 sm:p-6 lg:p-8">
+		<Card className="rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8">
+			<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+				<div>
+					<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+						{t('thisGameweek')}
+					</p>
+					<h2 className="mt-1 flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
+						<GameweekBadge gameweek={currentEventId} size="sm" />
+						<span>{t('transferDesk')}</span>
+					</h2>
+				</div>
+				<Link
+					href="/data/selections"
+					className="inline-flex min-h-9 shrink-0 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
+				>
+					{t('viewSelections')}
+					<ArrowRight aria-hidden="true" className="size-4" />
+				</Link>
+			</div>
 			{hasError && (
-				<div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+				<div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 p-3">
 					<p className="text-sm text-destructive">{t('transfersFailed')}</p>
 				</div>
 			)}
@@ -101,6 +126,7 @@ export async function GameweekStatsSection({ currentEventId }: GameweekStatsSect
 			<GameweekStatsCard
 				transfersIn={[]}
 				transfersOut={[]}
+				currentEventId={currentEventId}
 			/>
 		)
 	}
@@ -117,7 +143,10 @@ export async function GameweekStatsSection({ currentEventId }: GameweekStatsSect
 					eventId: currentEventId,
 					limit: 5,
 				},
-				{ cache: 'force-cache', next: { revalidate: 300 }, timeoutMs: 5_000 },
+				publicFetchOptions({
+					revalidate: RevalidateSeconds.publicStats,
+					tags: [CacheTag.transfers, CacheTag.gameweekStats],
+				}),
 			),
 			executePublicServerQuery<TopTransfersResponse>(
 				GET_TOP_TRANSFERS_OUT,
@@ -125,7 +154,10 @@ export async function GameweekStatsSection({ currentEventId }: GameweekStatsSect
 					eventId: currentEventId,
 					limit: 5,
 				},
-				{ cache: 'force-cache', next: { revalidate: 300 }, timeoutMs: 5_000 },
+				publicFetchOptions({
+					revalidate: RevalidateSeconds.publicStats,
+					tags: [CacheTag.transfers, CacheTag.gameweekStats],
+				}),
 			),
 		])
 
@@ -141,6 +173,7 @@ export async function GameweekStatsSection({ currentEventId }: GameweekStatsSect
 			transfersIn={transfersIn}
 			transfersOut={transfersOut}
 			hasError={hasError}
+			currentEventId={currentEventId}
 		/>
 	)
 }

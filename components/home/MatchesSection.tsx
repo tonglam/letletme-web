@@ -1,5 +1,6 @@
 'use client'
 
+import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { Card } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -10,7 +11,9 @@ import {
 	type EventFixturesResponse,
 	type Fixture,
 } from '@/lib/graphql/operations/events'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { Link } from '@/i18n/navigation'
+import { teamCrestSrc } from '@/lib/team-crest'
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import Image from 'next/image'
 import { useLocale, useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -18,6 +21,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const MAX_GAMEWEEK = 38
 
 interface MatchDay {
+	/** Stable YYYY-MM-DD key for tabs (survives timezone/label reformatting). */
+	dateKey: string
 	date: string
 	tabLabel: string
 	matches: {
@@ -91,9 +96,10 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 								<div className="relative w-8 h-8 md:w-10 md:h-10">
 									<Image
 										alt={t('teamLogo', { team: match.homeTeam })}
-										src={`/images/team-logos/${match.homeTeamShort.toUpperCase()}.png`}
+										src={teamCrestSrc(match.homeTeamShort)}
 										width={40}
 										height={40}
+										unoptimized
 										className="w-full h-full object-contain"
 									/>
 								</div>
@@ -115,9 +121,10 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 								<div className="relative w-8 h-8 md:w-10 md:h-10">
 									<Image
 										alt={t('teamLogo', { team: match.awayTeam })}
-										src={`/images/team-logos/${match.awayTeamShort.toUpperCase()}.png`}
+										src={teamCrestSrc(match.awayTeamShort)}
 										width={40}
 										height={40}
+										unoptimized
 										className="w-full h-full object-contain"
 									/>
 								</div>
@@ -152,6 +159,7 @@ function parseFixturesToMatchDays(fixtures: Fixture[], useLocalTime: boolean, lo
 			)
 			const firstKickoff = new Date(sorted[0].kickoffTime)
 			return {
+				dateKey: getDateKey(firstKickoff, useLocalTime),
 				date: formatFixtureDate(firstKickoff, useLocalTime, locale),
 				tabLabel: formatFixtureTab(firstKickoff, useLocalTime, locale),
 				matches: sorted.map((f) => ({
@@ -183,6 +191,7 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 	const [useLocalTimezone, setUseLocalTimezone] = useState(false)
 	const [isLoadingFixtures, setIsLoadingFixtures] = useState(false)
 	const [error, setError] = useState<string | null>(null)
+	const [activeDayKey, setActiveDayKey] = useState<string | null>(null)
 
 	// Pre-populate the fixture cache with server-fetched initial data.
 	const cache = useRef<Map<number, Fixture[]>>(
@@ -195,16 +204,6 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 		if (!initialFixtures || initialEventId === null) return []
 		return parseFixturesToMatchDays(initialFixtures.eventFixtures, false, locale)
 	})
-
-	useEffect(() => {
-		const timer = window.setTimeout(() => {
-			setUseLocalTimezone(true)
-			if (selectedEventId !== null && cache.current.has(selectedEventId)) {
-				setMatchDays(parseFixturesToMatchDays(cache.current.get(selectedEventId)!, true, locale))
-			}
-		}, 0)
-		return () => window.clearTimeout(timer)
-	}, [locale, selectedEventId])
 
 	const fetchFixtures = useCallback(async (eventId: number) => {
 		if (cache.current.has(eventId)) {
@@ -223,6 +222,24 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 			setIsLoadingFixtures(false)
 		}
 	}, [locale, t, useLocalTimezone])
+
+	useEffect(() => {
+		const timer = window.setTimeout(() => {
+			setUseLocalTimezone(true)
+			if (selectedEventId !== null && cache.current.has(selectedEventId)) {
+				setMatchDays(parseFixturesToMatchDays(cache.current.get(selectedEventId)!, true, locale))
+			}
+		}, 0)
+		return () => window.clearTimeout(timer)
+	}, [locale, selectedEventId])
+
+	// RSC seed can fail (e.g. Next stream/cache TransformStream glitch) while eventId is known.
+	// Recover by fetching through the browser proxy instead of staying on an empty desk.
+	useEffect(() => {
+		if (selectedEventId === null) return
+		if (cache.current.has(selectedEventId)) return
+		void fetchFixtures(selectedEventId)
+	}, [fetchFixtures, selectedEventId])
 
 	const handlePrev = () => {
 		if (selectedEventId === null || nextEventId === null) return
@@ -244,33 +261,49 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 		selectedEventId !== null && nextEventId !== null && selectedEventId > nextEventId
 	const canGoNext = selectedEventId !== null && selectedEventId < MAX_GAMEWEEK
 
+	// Keep the mobile day tab in sync when timezone/locale rebuilds matchDays.
+	const activeDay =
+		matchDays.find(day => day.dateKey === activeDayKey)?.dateKey ?? matchDays[0]?.dateKey ?? ''
+
 	const header = (
-		<div className="mb-6 flex items-center justify-between">
-			<h2 className="flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
-				{t('upcomingMatches')}
-				{selectedEventId !== null && (
-					<span className="rounded-md bg-plum px-2 py-1 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
-						GW{selectedEventId}
-					</span>
-				)}
-			</h2>
-			<div className="flex items-center gap-1">
-				<button
-					onClick={handlePrev}
-					disabled={!canGoPrev || isLoadingFixtures}
-					aria-label={t('previousGameweek')}
-					className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
+		<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+			<div>
+				<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+					{t('nextGameweekLabel')}
+				</p>
+				<h2 className="mt-1 flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
+					{t('upcomingMatches')}
+					{selectedEventId !== null && (
+						<GameweekBadge gameweek={selectedEventId} size="sm" />
+					)}
+				</h2>
+			</div>
+			<div className="flex flex-wrap items-center gap-2">
+				<Link
+					href="/live/matches"
+					className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
 				>
-					<ChevronLeft className="w-5 h-5" />
-				</button>
-				<button
-					onClick={handleNext}
-					disabled={!canGoNext || isLoadingFixtures}
-					aria-label={t('nextGameweek')}
-					className="p-1.5 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed"
-				>
-					<ChevronRight className="w-5 h-5" />
-				</button>
+					{t('viewLiveMatches')}
+					<ArrowRight aria-hidden="true" className="size-4" />
+				</Link>
+				<div className="flex items-center gap-1">
+					<button
+						onClick={handlePrev}
+						disabled={!canGoPrev || isLoadingFixtures}
+						aria-label={t('previousGameweek')}
+						className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+					>
+						<ChevronLeft className="h-5 w-5" />
+					</button>
+					<button
+						onClick={handleNext}
+						disabled={!canGoNext || isLoadingFixtures}
+						aria-label={t('nextGameweek')}
+						className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+					>
+						<ChevronRight className="h-5 w-5" />
+					</button>
+				</div>
 			</div>
 		</div>
 	)
@@ -312,27 +345,28 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 		<>
 			<div className="md:hidden">
 				<Tabs
-					defaultValue={matchDays[0].date}
+					value={activeDay}
+					onValueChange={setActiveDayKey}
 					className="w-full"
 				>
 					<TabsList
 						className="grid mb-4"
 						style={{ gridTemplateColumns: `repeat(${matchDays.length}, 1fr)` }}
-						>
-							{matchDays.map((matchDay) => (
-								<TabsTrigger
-									key={matchDay.date}
-									value={matchDay.date}
-									className="text-xs"
-								>
-									{matchDay.tabLabel}
-								</TabsTrigger>
-							))}
+					>
+						{matchDays.map(matchDay => (
+							<TabsTrigger
+								key={matchDay.dateKey}
+								value={matchDay.dateKey}
+								className="text-xs"
+							>
+								{matchDay.tabLabel}
+							</TabsTrigger>
+						))}
 					</TabsList>
-					{matchDays.map((matchDay) => (
+					{matchDays.map(matchDay => (
 						<TabsContent
-							key={matchDay.date}
-							value={matchDay.date}
+							key={matchDay.dateKey}
+							value={matchDay.dateKey}
 						>
 							<MatchList matches={matchDay.matches} />
 						</TabsContent>
@@ -341,14 +375,14 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 			</div>
 
 			<div className="hidden md:block">
-					{matchDays.map((matchDay, dayIndex) => (
-						<div
-							key={matchDay.date}
-							className="max-w-4xl mx-auto"
-						>
-							<h3 className="mb-6 mt-8 text-center font-display text-lg font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-								{matchDay.date}
-							</h3>
+				{matchDays.map((matchDay, dayIndex) => (
+					<div
+						key={matchDay.dateKey}
+						className="max-w-4xl mx-auto"
+					>
+						<h3 className="mb-6 mt-8 text-center font-display text-lg font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+							{matchDay.date}
+						</h3>
 						<MatchList matches={matchDay.matches} />
 						{dayIndex < matchDays.length - 1 && <Separator className="mt-8" />}
 					</div>

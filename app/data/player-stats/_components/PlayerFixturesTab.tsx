@@ -1,10 +1,13 @@
 import { Badge } from '@/components/ui/badge'
-import { Card } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-import type { PlayerDetailData, PlayerDetailFixture } from '@/lib/graphql/operations/players'
-import { ArrowDownRight, ArrowUpRight, Calendar } from 'lucide-react'
-import { useFormatter, useTranslations } from 'next-intl'
+import type {
+	PlayerDetailData,
+	PlayerDetailFixture
+} from '@/lib/graphql/operations/players'
+import { cn } from '@/lib/utils'
+import { useTranslations } from 'next-intl'
 import { DIFFICULTY_COLORS } from './PlayerStatPrimitives'
+
+const UPCOMING_LIMIT = 8
 
 export function groupFixturesByGameweek(fixtures: PlayerDetailFixture[]) {
 	const grouped = new Map<number, PlayerDetailFixture[]>()
@@ -16,189 +19,214 @@ export function groupFixturesByGameweek(fixtures: PlayerDetailFixture[]) {
 	return grouped
 }
 
-function DifficultyDot({ difficulty }: { difficulty: number }) {
+function upcomingGameweeks(
+	fixtures: PlayerDetailFixture[],
+	fromGameweek: number
+): number[] {
+	const grouped = groupFixturesByGameweek(fixtures)
+	return Array.from(grouped.keys())
+		.filter(gw => gw >= fromGameweek)
+		.sort((a, b) => a - b)
+		.slice(0, UPCOMING_LIMIT)
+}
+
+function FixtureChip({
+	fixture,
+	emphasized = false
+}: {
+	fixture: PlayerDetailFixture
+	emphasized?: boolean
+}) {
 	const t = useTranslations('PlayerStats')
+	const blank = fixture.bgw
 
 	return (
 		<span
-			className={`size-2 shrink-0 rounded-full ${DIFFICULTY_COLORS[difficulty] ?? 'bg-muted'}`}
-			role="img"
-			aria-label={t('fixtureDifficulty', { difficulty })}
-			title={t('difficulty', { difficulty })}
-		/>
+			className={cn(
+				'inline-flex items-center gap-1.5 text-sm',
+				emphasized && 'text-primary-ink'
+			)}
+		>
+			{blank ? (
+				<span className="font-medium text-warning">BGW</span>
+			) : (
+				<>
+					<span
+						className={cn(
+							'size-1.5 shrink-0 rounded-full',
+							DIFFICULTY_COLORS[fixture.difficulty] ?? 'bg-muted'
+						)}
+						aria-hidden="true"
+					/>
+					<span className="font-medium">
+						{fixture.wasHome ? t('homeShort') : t('awayShort')}{' '}
+						{fixture.againstTeamShortName}
+					</span>
+					<span className="tabular-nums text-muted-foreground">
+						{t('difficultyShort', { difficulty: fixture.difficulty })}
+					</span>
+				</>
+			)}
+		</span>
 	)
 }
 
-function FixtureStack({ fixtures }: { fixtures?: PlayerDetailFixture[] }) {
-	const t = useTranslations('PlayerStats')
+function averageFdr(fixtures: PlayerDetailFixture[]): number | null {
+	const values = fixtures
+		.filter(fixture => !fixture.bgw && fixture.difficulty > 0)
+		.map(fixture => fixture.difficulty)
+	if (values.length === 0) return null
+	return values.reduce((total, value) => total + value, 0) / values.length
+}
 
-	if (!fixtures?.length) {
-		return <span className="text-xs font-medium text-warning">BGW</span>
+function UpcomingRun({
+	player,
+	comparison,
+	currentGameweek
+}: {
+	player: PlayerDetailData
+	comparison: PlayerDetailData | null
+	currentGameweek: number
+}) {
+	const t = useTranslations('PlayerStats')
+	const firstByGw = groupFixturesByGameweek(player.fixtures)
+	const secondByGw = comparison
+		? groupFixturesByGameweek(comparison.fixtures)
+		: null
+
+	const gameweeks = Array.from(
+		new Set([
+			...upcomingGameweeks(player.fixtures, currentGameweek),
+			...(comparison
+				? upcomingGameweeks(comparison.fixtures, currentGameweek)
+				: [])
+		])
+	)
+		.sort((a, b) => a - b)
+		.slice(0, UPCOMING_LIMIT)
+
+	if (gameweeks.length === 0) {
+		return (
+			<p className="text-sm text-muted-foreground">{t('nextFixturesEmpty')}</p>
+		)
 	}
 
 	return (
-		<div className="flex min-w-0 flex-col gap-0.5">
-			{fixtures.map((fixture, index) => (
-				<div key={`${fixture.event}-${fixture.againstTeamShortName}-${fixture.kickoffTime ?? index}`} className="flex min-w-0 items-center gap-1.5">
-					<span className="truncate text-xs font-medium">
-						{fixture.againstTeamShortName} ({fixture.wasHome ? t('homeShort') : t('awayShort')})
-					</span>
-					{fixture.finished && fixture.score ? (
-						<span className="shrink-0 font-mono text-[10px]">{fixture.score}</span>
-					) : null}
-					<DifficultyDot difficulty={fixture.difficulty} />
-				</div>
-			))}
-		</div>
-	)
-}
+		<div className="overflow-x-auto">
+			<table className="w-full min-w-[20rem] border-collapse text-sm">
+				<thead>
+					<tr className="border-b border-border/60 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+						<th className="py-2 pr-3 font-display">{t('fixturesColGw')}</th>
+						<th className="py-2 pr-3 font-display">
+							{comparison ? player.webName : t('fixturesColOpponent')}
+						</th>
+						{comparison ? (
+							<th className="py-2 font-display">{comparison.webName}</th>
+						) : null}
+					</tr>
+				</thead>
+				<tbody>
+					{gameweeks.map(gameweek => {
+						const first = firstByGw.get(gameweek) ?? []
+						const second = secondByGw?.get(gameweek) ?? []
+						const isDouble = first.length > 1 || second.length > 1
+						const isCurrent = gameweek === currentGameweek
+						const firstFdr = averageFdr(first)
+						const secondFdr = averageFdr(second)
+						const firstFdrWins = Boolean(
+							comparison?.elementType === player.elementType &&
+							firstFdr != null &&
+							secondFdr != null &&
+							firstFdr < secondFdr
+						)
+						const secondFdrWins = Boolean(
+							comparison?.elementType === player.elementType &&
+							firstFdr != null &&
+							secondFdr != null &&
+							secondFdr < firstFdr
+						)
 
-function ComparisonFixtures({
-	player,
-	comparison,
-	currentGameweek,
-}: {
-	player: PlayerDetailData
-	comparison: PlayerDetailData
-	currentGameweek?: number
-}) {
-	const t = useTranslations('PlayerStats')
-	const firstByGameweek = groupFixturesByGameweek(player.fixtures)
-	const secondByGameweek = groupFixturesByGameweek(comparison.fixtures)
-	const gameweeks = Array.from(
-		new Set([...Array.from(firstByGameweek.keys()), ...Array.from(secondByGameweek.keys())]),
-	).sort((a, b) => a - b)
-
-	return (
-		<Card className="p-5">
-			<h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-				<Calendar className="size-4" />
-				{t('fixtures')}
-			</h3>
-			<div className="mb-2 grid grid-cols-[2rem_1fr_1fr] gap-2 px-1 text-sm font-semibold">
-				<span />
-				<span className="truncate text-info">{player.webName}</span>
-				<span className="truncate text-warning">{comparison.webName}</span>
-			</div>
-			<div className="flex flex-col gap-0.5">
-				{gameweeks.map((gameweek) => {
-					const firstFixtures = firstByGameweek.get(gameweek)
-					const secondFixtures = secondByGameweek.get(gameweek)
-					const isDouble = (firstFixtures?.length ?? 0) > 1 || (secondFixtures?.length ?? 0) > 1
-					const isCurrent = gameweek === currentGameweek
-
-					return (
-						<div
-							key={gameweek}
-							className={`grid grid-cols-[2rem_1fr_1fr] items-start gap-2 rounded-md px-2 py-1.5 ${
-								isCurrent ? 'border border-primary/20 bg-primary/10' : 'hover:bg-accent/40'
-							}`}
-						>
-							<div className="flex flex-col items-start gap-0.5 pt-0.5">
-								<span className="text-xs text-muted-foreground">{t('gameweekShort', { gameweek })}</span>
-								{isDouble ? <Badge variant="secondary" className="h-3.5 px-1 text-[9px] leading-none">DGW</Badge> : null}
-							</div>
-							<FixtureStack fixtures={firstFixtures} />
-							<FixtureStack fixtures={secondFixtures} />
-						</div>
-					)
-				})}
-			</div>
-		</Card>
-	)
-}
-
-function SinglePlayerFixtures({ player, currentGameweek }: { player: PlayerDetailData; currentGameweek?: number }) {
-	const t = useTranslations('PlayerStats')
-	const format = useFormatter()
-	const fixturesByGameweek = groupFixturesByGameweek(player.fixtures)
-	const gameweeks = Array.from(fixturesByGameweek.keys()).sort((a, b) => a - b)
-
-	return (
-		<Card className="p-5">
-			<h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-				<Calendar className="size-4" />
-				{t('allFixtures')}
-			</h3>
-			<div className="flex flex-col gap-1">
-				{gameweeks.map((gameweek) => {
-					const fixtures = fixturesByGameweek.get(gameweek) ?? []
-					const isCurrent = gameweek === currentGameweek
-					const isDouble = fixtures.length > 1
-					const isBlank = fixtures.length === 1 && fixtures[0]?.bgw
-
-					return (
-						<div
-							key={gameweek}
-							className={`rounded-md px-3 py-2 text-sm ${
-								isCurrent ? 'border border-primary/20 bg-primary/10' : 'hover:bg-accent/40'
-							}`}
-						>
-							<div className="mb-1 flex items-center gap-2">
-								<span className="w-12 shrink-0 text-xs text-muted-foreground">{t('gameweekShort', { gameweek })}</span>
-								{isDouble ? <Badge variant="secondary" className="h-3.5 px-1 text-[9px] leading-none">DGW</Badge> : null}
-								{isBlank ? <Badge variant="outline" className="h-3.5 border-warning px-1 text-[9px] leading-none text-warning">BGW</Badge> : null}
-							</div>
-							{fixtures.map((fixture, index) => {
-								const kickoff = fixture.kickoffTime
-									? format.dateTime(new Date(fixture.kickoffTime), {
-										day: '2-digit',
-										month: 'short',
-										hour: '2-digit',
-										minute: '2-digit',
-										hourCycle: 'h23',
-									})
-									: '—'
-
-								return (
-									<div key={`${fixture.event}-${fixture.againstTeamShortName}-${fixture.kickoffTime ?? index}`} className="flex items-center justify-between">
-										<div className="flex min-w-0 items-center gap-2">
-											<span className="w-8 shrink-0" />
-											<span className="truncate font-medium">
-											{fixture.againstTeamShortName} ({fixture.wasHome ? t('homeShort') : t('awayShort')})
+						return (
+							<tr
+								key={gameweek}
+								className={cn(
+									'border-b border-border/40 last:border-0',
+									isCurrent && 'bg-muted/40'
+								)}
+							>
+								<td className="whitespace-nowrap py-2.5 pr-3 align-top tabular-nums text-muted-foreground">
+									<span className="inline-flex items-center gap-1.5">
+										{t('gameweekShort', { gameweek })}
+										{isDouble ? (
+											<Badge
+												variant="secondary"
+												className="h-3.5 px-1 text-[9px] leading-none"
+											>
+												DGW
+											</Badge>
+										) : null}
+									</span>
+								</td>
+								<td className="py-2.5 pr-3 align-top">
+									<div className="flex flex-col gap-1">
+										{first.length === 0 ? (
+											<span className="text-xs font-medium text-warning">
+												BGW
 											</span>
-										</div>
-										<div className="ml-2 flex shrink-0 items-center gap-3">
-											<span className="text-xs text-muted-foreground">{kickoff}</span>
-											<span className="w-10 text-center font-mono text-xs font-semibold">
-												{fixture.finished && fixture.score ? fixture.score : '—'}
-											</span>
-											<DifficultyDot difficulty={fixture.difficulty} />
-										</div>
+										) : (
+											first.map((fixture, index) => (
+												<FixtureChip
+													key={fixture.id || `${fixture.event}-${index}`}
+													fixture={fixture}
+													emphasized={firstFdrWins}
+												/>
+											))
+										)}
 									</div>
-								)
-							})}
-						</div>
-					)
-				})}
-			</div>
-			<Separator className="my-4" />
-			<div className="flex items-center gap-4 text-xs text-muted-foreground">
-				<span className="flex items-center gap-1.5">
-					<ArrowUpRight className="size-3 text-success" />
-					{t('transfersIn', { count: format.number(player.seasonTransfersIn) })}
-				</span>
-				<span className="flex items-center gap-1.5">
-					<ArrowDownRight className="size-3 text-destructive" />
-					{t('transfersOut', { count: format.number(player.seasonTransfersOut) })}
-				</span>
-			</div>
-		</Card>
+								</td>
+								{comparison ? (
+									<td className="py-2.5 align-top">
+										<div className="flex flex-col gap-1">
+											{second.length === 0 ? (
+												<span className="text-xs font-medium text-warning">
+													BGW
+												</span>
+											) : (
+												second.map((fixture, index) => (
+													<FixtureChip
+														key={fixture.id || `${fixture.event}-${index}`}
+														fixture={fixture}
+														emphasized={secondFdrWins}
+													/>
+												))
+											)}
+										</div>
+									</td>
+								) : null}
+							</tr>
+						)
+					})}
+				</tbody>
+			</table>
+		</div>
 	)
 }
 
 export function PlayerFixturesTab({
 	player,
 	comparison,
-	currentGameweek,
+	currentGameweek
 }: {
 	player: PlayerDetailData
 	comparison: PlayerDetailData | null
 	currentGameweek?: number
 }) {
-	return comparison ? (
-		<ComparisonFixtures player={player} comparison={comparison} currentGameweek={currentGameweek} />
-	) : (
-		<SinglePlayerFixtures player={player} currentGameweek={currentGameweek} />
+	const fromGw = currentGameweek ?? 1
+	return (
+		<UpcomingRun
+			player={player}
+			comparison={comparison}
+			currentGameweek={fromGw}
+		/>
 	)
 }

@@ -24,16 +24,25 @@ export interface TournamentEntry {
   gwNetPoints?: number;
   eventCost?: number;
   overallRank?: number;
+  /** Previous overall rank for delta display. */
+  lastOverallRank?: number;
   livePoints: number;
   totalPoints: number;
   playersPlayed: number;
   playersToPlay: number;
+  /** Squad value in tenths of £m (1005 → £100.5m). */
+  teamValue?: number;
+  /** Bank / ITB in tenths of £m. */
+  bank?: number;
   picks: TournamentEntryPick[];
   chips: {
     bench: boolean;
     triple: boolean;
     wildcard: boolean;
+    freeHit: boolean;
   };
+  /** True when this row was retained from a previous failed calc batch. */
+  stale?: boolean;
 }
 
 export interface Tournament {

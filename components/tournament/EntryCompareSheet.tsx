@@ -20,20 +20,37 @@ interface EntryCompareSheetProps {
 	onOpenChange: (open: boolean) => void
 }
 
-function getPlayedStatus(minutes: number, starts: boolean): 'FINISHED' | 'PLAYING' | 'NOT_STARTED' {
-	if (minutes >= 90) return 'FINISHED'
-	if (minutes > 0 || starts) return 'PLAYING'
+function getPlayedStatus(pick: {
+	minutes?: number | null
+	starts?: boolean | null
+	isGwFinished?: boolean | null
+	isGwStarted?: boolean | null
+	isPlayed?: boolean | null
+}): 'FINISHED' | 'PLAYING' | 'NOT_STARTED' {
+	if (pick.isGwFinished) return 'FINISHED'
+	const minutes = pick.minutes ?? 0
+	if (
+		pick.isGwStarted &&
+		(pick.isPlayed || minutes > 0 || pick.starts === true)
+	) {
+		return 'PLAYING'
+	}
+	if (minutes > 0 || pick.starts) return 'PLAYING'
 	return 'NOT_STARTED'
 }
 
 function PlayedDot({ status }: { status: 'FINISHED' | 'PLAYING' | 'NOT_STARTED' }) {
 	const color =
 		status === 'FINISHED'
-			? 'bg-green-500'
+			? 'bg-success'
 			: status === 'PLAYING'
-				? 'bg-yellow-400'
+				? 'bg-warning'
 				: 'bg-muted-foreground/30'
-	return <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${color}`} />
+	return (
+		<span
+			className={`inline-block size-2 shrink-0 rounded-full ${color}`}
+		/>
+	)
 }
 
 function elementTypeLabel(elementType: number, position: number): string {
@@ -47,18 +64,47 @@ function elementTypeLabel(elementType: number, position: number): string {
 	}
 }
 
-function ChipBadges({ chips }: { chips: { bench: boolean; triple: boolean; wildcard: boolean } }) {
-	if (!chips.bench && !chips.triple && !chips.wildcard) return <span className="text-muted-foreground">—</span>
+function ChipBadges({
+	chips,
+}: {
+	chips: { bench: boolean; triple: boolean; wildcard: boolean; freeHit?: boolean }
+}) {
+	if (!chips.bench && !chips.triple && !chips.wildcard && !chips.freeHit) {
+		return <span className="text-muted-foreground">—</span>
+	}
 	return (
-		<span className="flex gap-1 justify-center flex-wrap">
+		<span className="flex flex-wrap justify-center gap-1">
 			{chips.bench && (
-				<Badge variant="outline" className="text-[10px] h-4 px-1 bg-blue-500/10 text-blue-600 border-blue-200">BB</Badge>
+				<Badge
+					variant="outline"
+					className="h-4 border-info/30 bg-info/10 px-1 text-[10px] text-info"
+				>
+					BB
+				</Badge>
 			)}
 			{chips.triple && (
-				<Badge variant="outline" className="text-[10px] h-4 px-1 bg-emerald-500/10 text-emerald-600 border-emerald-200">TC</Badge>
+				<Badge
+					variant="outline"
+					className="h-4 border-success/30 bg-success/10 px-1 text-[10px] text-success"
+				>
+					TC
+				</Badge>
 			)}
 			{chips.wildcard && (
-				<Badge variant="outline" className="text-[10px] h-4 px-1 bg-purple-500/10 text-purple-600 border-purple-200">WC</Badge>
+				<Badge
+					variant="outline"
+					className="h-4 border-primary/30 bg-primary/10 px-1 text-[10px] text-primary-ink"
+				>
+					WC
+				</Badge>
+			)}
+			{chips.freeHit && (
+				<Badge
+					variant="outline"
+					className="h-4 border-warning/30 bg-warning/10 px-1 text-[10px] text-warning"
+				>
+					FH
+				</Badge>
 			)}
 		</span>
 	)
@@ -87,16 +133,36 @@ function OverviewRow({ label, leftValue, rightValue, leftWins, rightWins }: Over
 }
 
 interface PlayerCompareRowProps {
-	leftPick: { webName: string; totalPoints: number; minutes: number; starts: boolean; isCaptain: boolean } | null
-	rightPick: { webName: string; totalPoints: number; minutes: number; starts: boolean; isCaptain: boolean } | null
+	leftPick: {
+		webName: string
+		totalPoints: number
+		minutes: number
+		starts: boolean
+		isCaptain: boolean
+		isViceCaptain?: boolean
+		isGwFinished?: boolean | null
+		isGwStarted?: boolean | null
+		isPlayed?: boolean | null
+	} | null
+	rightPick: {
+		webName: string
+		totalPoints: number
+		minutes: number
+		starts: boolean
+		isCaptain: boolean
+		isViceCaptain?: boolean
+		isGwFinished?: boolean | null
+		isGwStarted?: boolean | null
+		isPlayed?: boolean | null
+	} | null
 	posLabel: string
 	isBench: boolean
 }
 
 function PlayerCompareRow({ leftPick, rightPick, posLabel, isBench }: PlayerCompareRowProps) {
 	const bg = isBench ? 'bg-accent/20' : ''
-	const leftStatus = leftPick ? getPlayedStatus(leftPick.minutes, leftPick.starts) : 'NOT_STARTED'
-	const rightStatus = rightPick ? getPlayedStatus(rightPick.minutes, rightPick.starts) : 'NOT_STARTED'
+	const leftStatus = leftPick ? getPlayedStatus(leftPick) : 'NOT_STARTED'
+	const rightStatus = rightPick ? getPlayedStatus(rightPick) : 'NOT_STARTED'
 	const leftPts = leftPick?.totalPoints ?? 0
 	const rightPts = rightPick?.totalPoints ?? 0
 	const leftWins = leftPts > rightPts
@@ -108,8 +174,15 @@ function PlayerCompareRow({ leftPick, rightPick, posLabel, isBench }: PlayerComp
 			<div className="flex items-center gap-1.5 justify-end">
 				{leftPick ? (
 					<>
-						<span className={`text-xs text-right truncate max-w-[90px] ${leftPick.isCaptain ? 'font-bold' : ''}`}>
-							{leftPick.webName}{leftPick.isCaptain ? ' (C)' : ''}
+						<span
+							className={`max-w-[90px] truncate text-right text-xs ${leftPick.isCaptain || leftPick.isViceCaptain ? 'font-bold' : ''}`}
+						>
+							{leftPick.webName}
+							{leftPick.isCaptain
+								? ' (C)'
+								: leftPick.isViceCaptain
+									? ' (V)'
+									: ''}
 						</span>
 						<PlayedDot status={leftStatus} />
 						<span className={`text-xs font-mono w-6 text-right flex-shrink-0 ${leftWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}>
@@ -132,8 +205,15 @@ function PlayerCompareRow({ leftPick, rightPick, posLabel, isBench }: PlayerComp
 							{rightPts}
 						</span>
 						<PlayedDot status={rightStatus} />
-						<span className={`text-xs truncate max-w-[90px] ${rightPick.isCaptain ? 'font-bold' : ''}`}>
-							{rightPick.isCaptain ? '(C) ' : ''}{rightPick.webName}
+						<span
+							className={`max-w-[90px] truncate text-xs ${rightPick.isCaptain || rightPick.isViceCaptain ? 'font-bold' : ''}`}
+						>
+							{rightPick.isCaptain
+								? '(C) '
+								: rightPick.isViceCaptain
+									? '(V) '
+									: ''}
+							{rightPick.webName}
 						</span>
 					</>
 				) : (
@@ -150,8 +230,12 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 	const [liveData, setLiveData] = useState<[LiveCalcData | null, LiveCalcData | null]>([null, null])
 	const [isLoading, setIsLoading] = useState(false)
 
+	const entryIdA = entries[0]?.id
+	const entryIdB = entries[1]?.id
+
+	// Depend on stable entry ids — parent often passes a new `entries` array each render.
 	useEffect(() => {
-		if (!open) return
+		if (!open || !entryIdA || !entryIdB) return
 
 		let cancelled = false
 		void Promise.resolve().then(async () => {
@@ -161,25 +245,29 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 
 			const [resA, resB] = await Promise.allSettled([
 				executeQuery<LiveCalcDataResponse>(GET_LIVE_POINTS, {
-					entryId: Number(entries[0].id),
-					eventId: gameweek
+					entryId: Number(entryIdA),
+					eventId: gameweek,
 				}),
 				executeQuery<LiveCalcDataResponse>(GET_LIVE_POINTS, {
-					entryId: Number(entries[1].id),
-					eventId: gameweek
-				})
+					entryId: Number(entryIdB),
+					eventId: gameweek,
+				}),
 			])
 
 			if (cancelled) return
 
-			const a = resA.status === 'fulfilled' ? resA.value.calcLivePointsByEntry : null
-			const b = resB.status === 'fulfilled' ? resB.value.calcLivePointsByEntry : null
+			const a =
+				resA.status === 'fulfilled' ? resA.value.calcLivePointsByEntry : null
+			const b =
+				resB.status === 'fulfilled' ? resB.value.calcLivePointsByEntry : null
 			setLiveData([a, b])
 			setIsLoading(false)
 		})
 
-		return () => { cancelled = true }
-	}, [open, entries, gameweek])
+		return () => {
+			cancelled = true
+		}
+	}, [open, entryIdA, entryIdB, gameweek])
 
 	const [entryA, entryB] = entries
 	const [liveA, liveB] = liveData

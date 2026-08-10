@@ -1,5 +1,9 @@
 import { getAuthorizationSession } from '@/lib/auth'
 import { buildGraphQLUserContextHeaders } from '@/lib/graphql-envelope'
+import {
+	isSuccessfulGraphQLResponseBody,
+	resolveGraphQLProxyCacheControl,
+} from '@/lib/graphql-proxy-cache'
 import { readForwardableMiniProgramAuthorization } from '@/lib/graphql-proxy-security'
 import {
 	buildIngressContextHeaders,
@@ -130,12 +134,23 @@ export async function POST(request: NextRequest) {
 		request.signal.removeEventListener('abort', abortUpstream)
 	}
 
-	const safeHeaders = new Headers({ 'Cache-Control': 'no-store' })
+	const responseBody = await response.arrayBuffer()
+	const responseBodyOk = isSuccessfulGraphQLResponseBody(
+		new TextDecoder().decode(responseBody),
+	)
+	const cacheControl = resolveGraphQLProxyCacheControl({
+		body,
+		hasSessionUser: Boolean(session?.user),
+		hasAuthorization: Boolean(authorization.value),
+		responseOk: response.ok,
+		responseBodyOk,
+	})
+	const safeHeaders = new Headers({ 'Cache-Control': cacheControl })
 	for (const name of ['content-type', 'content-language', 'retry-after']) {
 		const value = response.headers.get(name)
 		if (value) safeHeaders.set(name, value)
 	}
-	return new NextResponse(await response.arrayBuffer(), {
+	return new NextResponse(responseBody, {
 		status: response.status,
 		headers: safeHeaders,
 	})

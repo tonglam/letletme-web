@@ -1,10 +1,11 @@
 'use client'
 
 import PageShell from '@/components/layout/PageShell'
+import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
-import { ArrowLeft, TriangleAlert, Trophy } from 'lucide-react'
+import { ArrowLeft, TriangleAlert } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { TournamentDangerZone } from './_components/TournamentDangerZone'
@@ -21,20 +22,20 @@ export default function ManageTournamentClient({ tournament }: { tournament: Ent
 		<PageShell>
 			<div className="container mx-auto max-w-4xl space-y-6 px-4 py-8">
 				<Button variant="ghost" className="-ml-3" asChild>
-					<Link href={`/live/tournament/${tournament.id}`}>
+					<Link href={`/live/tournaments/${tournament.id}`}>
 						<ArrowLeft aria-hidden="true" /> {t('back')}
 					</Link>
 				</Button>
 
-				<header className="flex items-start gap-3">
-					<div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary-ink">
-						<Trophy className="size-6" aria-hidden="true" />
-					</div>
-					<div className="min-w-0">
-						<p className="text-sm font-medium text-muted-foreground">{t('tournamentNumber', { id: tournament.id })}</p>
-						<h1 className="break-words text-3xl font-bold tracking-tight">{t('manageTitle', { name: management.currentName })}</h1>
-					</div>
-				</header>
+				<StatsPageHeader
+					eyebrow={t('eyebrow')}
+					title={t('manageTitle', { name: management.currentName })}
+					badge={
+						<span className="inline-flex w-fit items-center rounded-md border border-border/70 bg-muted/40 px-2.5 py-1 font-mono text-xs font-semibold tabular-nums text-muted-foreground">
+							{t('tournamentNumber', { id: tournament.id })}
+						</span>
+					}
+				/>
 
 				{management.mutationState.kind === 'error' ? (
 					<Alert variant="destructive">
@@ -43,16 +44,16 @@ export default function ManageTournamentClient({ tournament }: { tournament: Ent
 					</Alert>
 				) : null}
 
+				<TournamentOperationsCard
+					tournament={management.currentTournament}
+					pendingAction={management.pendingAction}
+					onAction={management.runAction}
+				/>
 				<TournamentSettingsCard
 					currentName={management.currentName}
 					isSaving={management.isSaving}
 					mutationState={management.mutationState}
 					onSubmit={management.renameTournament}
-				/>
-				<TournamentOperationsCard
-					tournament={management.currentTournament}
-					pendingAction={management.pendingAction}
-					onAction={management.runAction}
 				/>
 				<TournamentInformationCard tournament={management.currentTournament} />
 				<TournamentDangerZone

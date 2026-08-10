@@ -5,16 +5,23 @@ import {
 } from '@/components/home/GameweekStatsSection'
 import { MatchesSection } from '@/components/home/MatchesSection'
 import { MarketTeaser, MarketTeaserFallback } from '@/components/home/MarketTeaser'
+import {
+	PersonalDesk,
+	PersonalDeskBindPrompt,
+} from '@/components/home/PersonalDesk'
 import { StatsSection } from '@/components/home/StatsSection'
 import {
 	TeamOfTheWeekSection,
 	TeamOfTheWeekSectionFallback,
 } from '@/components/home/TeamOfTheWeekSection'
 import PageShell from '@/components/layout/PageShell'
+import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
 import { getPageLocale, type LocaleParams } from '@/i18n/page'
+import type { Session } from '@/lib/auth'
+import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
 import { getCurrentAndNextEvents } from '@/lib/events'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
@@ -24,7 +31,8 @@ import {
 	type EventOverallResultResponse,
 } from '@/lib/graphql/operations/events'
 import homeStats from '@/lib/home-stats'
-import { ArrowRight, BarChart3, Radio, Trophy } from 'lucide-react'
+import { getVerifiedEntryContext } from '@/lib/session'
+import { ArrowRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { getTranslations } from 'next-intl/server'
 import { Suspense } from 'react'
@@ -52,9 +60,7 @@ function MatchesSectionFallback({ eventId }: { eventId: number | null }) {
 				<h2 className="flex items-center gap-2 font-display text-xl font-bold uppercase tracking-wide">
 					{t('upcomingMatches')}
 					{eventId !== null && (
-						<span className="rounded-md bg-plum px-2 py-0.5 font-mono text-xs font-semibold tracking-[0.14em] text-electric">
-							GW{eventId}
-						</span>
+						<GameweekBadge gameweek={eventId} size="sm" />
 					)}
 				</h2>
 				<div className="flex items-center gap-1">
@@ -63,7 +69,7 @@ function MatchesSectionFallback({ eventId }: { eventId: number | null }) {
 				</div>
 			</div>
 			<div className="flex flex-col gap-4">
-				{[1, 2, 3].map((i) => (
+				{[1, 2, 3].map(i => (
 					<Skeleton
 						key={i}
 						className="h-20 w-full"
@@ -85,69 +91,105 @@ function DeadlineScoreboardFallback() {
 	)
 }
 
-function HomeHero() {
-	const t = useTranslations('Home')
-	const capabilities = [
-		{ icon: Radio, label: t('livePoints') },
-		{ icon: BarChart3, label: t('playerAnalysis') },
-		{ icon: Trophy, label: t('privateTournaments') },
-	] as const
+function HomePersonalStripFallback() {
+	return (
+		<div
+			className="overflow-hidden rounded-xl border border-foreground/10 bg-card p-4 sm:p-5"
+			aria-hidden="true"
+		>
+			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+				<div className="min-w-0 space-y-2 sm:max-w-[16rem]">
+					<Skeleton className="h-6 w-40" />
+					<Skeleton className="h-4 w-28" />
+				</div>
+				<div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
+					<Skeleton className="h-14" />
+					<Skeleton className="h-14" />
+					<Skeleton className="h-14" />
+				</div>
+			</div>
+		</div>
+	)
+}
+
+function HomePersonalStrip({
+	session,
+	entryId,
+}: {
+	session: Session | null
+	entryId: number | null
+}) {
+	const user = session?.user
+
+	// Guests: hide the desk entirely. Hero CTAs + navbar sign-in already cover them.
+	if (!user) {
+		return null
+	}
+
+	if (!entryId) {
+		return <PersonalDeskBindPrompt />
+	}
+
+	return <PersonalDesk entryId={entryId} session={session} />
+}
+
+async function HomeHero() {
+	const t = await getTranslations('Home')
+	// Gate the desk band so guests never see a personal-strip skeleton flash.
+	const { session, entryId } = await getVerifiedEntryContext()
+	const showPersonalDesk = Boolean(session?.user)
 
 	return (
 		<section className="pitch-markings texture-grain relative isolate overflow-hidden border-b">
-			<div className="mx-auto grid w-full max-w-6xl gap-12 px-4 py-14 lg:grid-cols-[1.12fr_0.88fr] lg:items-center lg:px-8 lg:py-20">
-				<div>
-					<p className="mb-6 flex items-center gap-2.5 font-display text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-						<span className="live-dot" aria-hidden="true" />
-						{t('matchdayBadge')}
-					</p>
-					<h1 className="max-w-3xl text-balance font-display text-5xl font-bold uppercase leading-[0.95] tracking-[-0.01em] sm:text-6xl lg:text-7xl">
-						{t.rich('headline', {
-							marker: chunks => <span className="marker">{chunks}</span>,
-						})}
-					</h1>
-					<p className="mt-6 max-w-xl text-pretty text-lg leading-8 text-muted-foreground">
-						{t('intro')}
-					</p>
-					<div className="mt-8 flex flex-col gap-3 sm:flex-row">
-						<Button
-							size="lg"
-							className="shadow-sticker font-display text-base font-semibold uppercase tracking-[0.1em] transition-transform hover:-translate-y-0.5"
-							asChild
-						>
-							<Link href="/live/points">
-								{t('openLivePoints')}
-								<ArrowRight data-icon="inline-end" />
-							</Link>
-						</Button>
-						<Button
-							size="lg"
-							variant="outline"
-							className="font-display text-base font-semibold uppercase tracking-[0.1em]"
-							asChild
-						>
-							<Link href="/live/tournament">{t('liveTournamentStandings')}</Link>
-						</Button>
+			<div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-14 lg:gap-12 lg:px-8 lg:py-20">
+				{/* Primary hero: copy + deadline only — keeps the classic two-column balance */}
+				<div className="grid gap-12 lg:grid-cols-[1.12fr_0.88fr] lg:items-center">
+					<div>
+						<p className="mb-6 flex items-center gap-2.5 font-display text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+							<span className="live-dot" aria-hidden="true" />
+							{t('matchdayBadge')}
+						</p>
+						<h1 className="max-w-3xl text-balance font-display text-5xl font-bold uppercase leading-[0.95] tracking-[-0.01em] sm:text-6xl lg:text-7xl">
+							{t.rich('headline', {
+								marker: chunks => <span className="marker">{chunks}</span>,
+							})}
+						</h1>
+						<p className="mt-6 max-w-xl text-pretty text-lg leading-8 text-muted-foreground">
+							{t('intro')}
+						</p>
+						{/* Matchday entry only. Browse/create tournaments live in HomeTournamentBand. */}
+						<div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+							<Button
+								size="lg"
+								className="shadow-sticker font-display text-base font-semibold uppercase tracking-[0.1em] transition-transform hover:-translate-y-0.5"
+								asChild
+							>
+								<Link href="/live/points">
+									{t('openLivePoints')}
+									<ArrowRight data-icon="inline-end" />
+								</Link>
+							</Button>
+							<Button
+								size="lg"
+								variant="outline"
+								className="font-display text-base font-semibold uppercase tracking-[0.1em]"
+								asChild
+							>
+								<Link href="/live/tournaments">{t('liveTournamentStandings')}</Link>
+							</Button>
+						</div>
 					</div>
 
-					<ul className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-foreground/10 pt-5">
-						{capabilities.map(({ icon: Icon, label }, index) => (
-							<li key={label} className="flex items-center gap-2.5">
-								<span className="font-mono text-xs font-semibold text-primary-ink">
-									0{index + 1}
-								</span>
-								<Icon aria-hidden="true" className="size-4 text-muted-foreground" />
-								<span className="font-display text-sm font-semibold uppercase tracking-[0.12em]">
-									{label}
-								</span>
-							</li>
-						))}
-					</ul>
+					<Suspense fallback={<DeadlineScoreboardFallback />}>
+						<HomeDeadline />
+					</Suspense>
 				</div>
 
-				<Suspense fallback={<DeadlineScoreboardFallback />}>
-					<HomeDeadline />
-				</Suspense>
+				{showPersonalDesk ? (
+					<Suspense fallback={<HomePersonalStripFallback />}>
+						<HomePersonalStrip session={session} entryId={entryId} />
+					</Suspense>
+				) : null}
 			</div>
 		</section>
 	)
@@ -165,15 +207,64 @@ async function HomeDeadline() {
 	)
 }
 
+async function HomeTournamentBand() {
+	const t = await getTranslations('Home')
+
+	return (
+		<section
+			className="border-y bg-plum text-electric"
+			aria-labelledby="home-tournament-band-title"
+		>
+			<div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:py-9">
+				<div className="max-w-xl">
+					<p className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-electric/80">
+						{t('tournamentBandEyebrow')}
+					</p>
+					<h2
+						id="home-tournament-band-title"
+						className="mt-2 font-display text-2xl font-bold uppercase tracking-wide sm:text-3xl"
+					>
+						{t('tournamentBandTitle')}
+					</h2>
+					<p className="mt-2 text-sm leading-6 text-electric/75">
+						{t('tournamentBandDescription')}
+					</p>
+				</div>
+				<div className="flex flex-wrap gap-2">
+					<Button
+						variant="outline"
+						className="min-h-11 border-electric/50 bg-transparent font-display font-semibold uppercase tracking-[0.08em] text-electric hover:bg-electric hover:text-plum"
+						asChild
+					>
+						<Link href="/tournament/browse">{t('browseTournaments')}</Link>
+					</Button>
+					<Button
+						className="min-h-11 bg-electric font-display font-semibold uppercase tracking-[0.08em] text-plum hover:bg-electric/90"
+						asChild
+					>
+						<Link href="/tournament/create">
+							{t('createTournament')}
+							<ArrowRight data-icon="inline-end" />
+						</Link>
+					</Button>
+				</div>
+			</div>
+		</section>
+	)
+}
+
 async function HomeInsights() {
 	const t = await getTranslations('Home')
 	const [eventsData, overallResultData] = await Promise.all([
 		getCurrentAndNextEvents(),
-		safeQuery<EventOverallResultResponse>(GET_EVENT_OVERALL_RESULT, undefined, {
-			cache: 'force-cache',
-			next: { revalidate: 3600 },
-			timeoutMs: 5_000,
-		}),
+		safeQuery<EventOverallResultResponse>(
+			GET_EVENT_OVERALL_RESULT,
+			undefined,
+			publicFetchOptions({
+				revalidate: RevalidateSeconds.homeInsights,
+				tags: [CacheTag.gameweekStats, CacheTag.events],
+			}),
+		),
 	])
 	const currentEventId = eventsData?.current[0]?.id ?? null
 	const nextEventId = eventsData?.next[0]?.id ?? null
@@ -199,18 +290,23 @@ async function HomeInsights() {
 
 	return (
 		<>
-			{currentEventId !== null && (
+			{currentEventId !== null ? (
 				<>
 					<section className="py-10">
 						<div className="mx-auto max-w-4xl px-4">
-							<StatsSection currentEventId={currentEventId} overallResult={overallResult} />
+							<StatsSection
+								currentEventId={currentEventId}
+								overallResult={overallResult}
+							/>
 						</div>
 					</section>
 
 					<section className="border-y bg-secondary/40 py-10">
 						<div className="mx-auto max-w-4xl px-4">
 							<div className="grid gap-8 md:grid-cols-2">
-								<Suspense fallback={<TeamOfTheWeekSectionFallback currentEventId={currentEventId} />}>
+								<Suspense
+									fallback={<TeamOfTheWeekSectionFallback currentEventId={currentEventId} />}
+								>
 									<TeamOfTheWeekSection currentEventId={currentEventId} />
 								</Suspense>
 								<Suspense fallback={<GameweekStatsSectionFallback />}>
@@ -220,6 +316,20 @@ async function HomeInsights() {
 						</div>
 					</section>
 				</>
+			) : (
+				<section className="py-10">
+					<div className="mx-auto max-w-4xl px-4">
+						<div className="rounded-xl border bg-card px-6 py-7">
+							<p className="chyron">{t('betweenGameweeksEyebrow')}</p>
+							<h2 className="mt-2 font-display text-2xl font-bold uppercase tracking-wide">
+								{t('betweenGameweeksTitle')}
+							</h2>
+							<p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+								{t('betweenGameweeksDescription')}
+							</p>
+						</div>
+					</div>
+				</section>
 			)}
 
 			<section className="py-10">
@@ -238,7 +348,10 @@ async function InitialMatchesSection({ eventId }: { eventId: number | null }) {
 		? await safeQuery<EventFixturesResponse>(
 				GET_EVENT_FIXTURES,
 				{ eventId },
-				{ cache: 'force-cache', next: { revalidate: 300 }, timeoutMs: 5_000 },
+				publicFetchOptions({
+					revalidate: RevalidateSeconds.publicStats,
+					tags: [CacheTag.fixtures, CacheTag.events],
+				}),
 			)
 		: null
 
@@ -256,6 +369,8 @@ export default async function Home({ params }: { params: LocaleParams }) {
 		<PageShell>
 			<div className="flex flex-col">
 				<HomeHero />
+
+				<HomeTournamentBand />
 
 				<Suspense fallback={<MarketTeaserFallback />}>
 					<MarketTeaser />

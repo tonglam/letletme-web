@@ -12,8 +12,9 @@ export const PUBLIC_STATIC_PATHS = [
 	'/',
 	'/live/matches',
 	'/data/player-stats',
-	'/data/price-changes',
-	'/stats/gameweek',
+	'/data/market',
+	'/data/gameweek',
+	'/data/fixtures',
 ] as const
 
 export function localizedAlternates(

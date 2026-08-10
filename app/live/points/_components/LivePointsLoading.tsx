@@ -1,6 +1,5 @@
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import { Card } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { ReactNode } from 'react'
 import { useTranslations } from 'next-intl'
@@ -33,25 +32,23 @@ export function LivePointsLoading({
 				)}
 				<p className="mt-2 text-xs text-muted-foreground">{t('loadingEntry', { entryId: activeEntryId })}</p>
 			</div>
-			<Card className="mb-8 p-6">
+			<Card className="mb-8 overflow-hidden border-border/80 p-4 shadow-sm sm:p-6">
+				<Skeleton className="mb-2 h-3 w-20" />
 				<Skeleton className="mb-2 h-8 w-48" />
-				<Skeleton className="mb-8 h-5 w-32" />
-				<div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-4">
-					{[1, 2, 3, 4].map((item) => (
-						<div key={item} className="rounded-lg bg-primary/5 p-4">
-							<Skeleton className="mb-3 h-5 w-20" />
-							<Skeleton className="h-8 w-16" />
+				<Skeleton className="mb-6 h-4 w-32" />
+				<div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-4">
+					{[1, 2, 3, 4].map(item => (
+						<div
+							key={item}
+							className="rounded-lg border border-border/70 bg-muted/40 px-3 py-3 sm:px-4 dark:bg-muted/25"
+						>
+							<Skeleton className="mb-3 h-4 w-16" />
+							<Skeleton className="h-7 w-12" />
 						</div>
 					))}
 				</div>
-				<Separator className="my-6" />
-				<Skeleton className="mb-3 h-5 w-24" />
-				<div className="flex gap-2">
-					<Skeleton className="h-6 w-16 rounded-full" />
-					<Skeleton className="h-6 w-20 rounded-full" />
-				</div>
 			</Card>
-			<Card className="mb-8 overflow-hidden">
+			<Card className="mb-8 overflow-hidden border-border/80 shadow-sm">
 				{Array.from({ length: 11 }, (_, index) => (
 					<div key={index} className="border-b p-4 last:border-b-0">
 						<div className="flex items-center justify-between">

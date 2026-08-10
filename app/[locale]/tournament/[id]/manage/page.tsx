@@ -1,3 +1,4 @@
+import ManageTournamentClient from '@/app/tournament/[id]/manage/ManageTournamentClient'
 import { PageState } from '@/components/feedback/PageState'
 import { Button } from '@/components/ui/button'
 import {
@@ -5,13 +6,12 @@ import {
 	type ManagedTournamentResponse,
 } from '@/lib/graphql/operations/tournaments'
 import { executeServerQuery } from '@/lib/graphql-server'
+import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
+import { Link } from '@/i18n/navigation'
+import { localizeHref } from '@/i18n/routing'
 import { getCurrentEntryId, getCurrentSession } from '@/lib/session'
 import { LockKeyhole } from 'lucide-react'
-import { Link } from '@/i18n/navigation'
-import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import { localizeHref } from '@/i18n/routing'
 import { redirect } from 'next/navigation'
-import ManageTournamentClient from '@/app/tournament/[id]/manage/ManageTournamentClient'
 import { getTranslations } from 'next-intl/server'
 
 export const dynamic = 'force-dynamic'
@@ -36,10 +36,19 @@ export default async function Page({ params }: PageProps) {
 	const common = await getTranslations('Common')
 	const nextPath = `/tournament/${encodeURIComponent(id)}/manage`
 	const session = await getCurrentSession()
-	if (!session) redirect(localizeHref(`/auth/login?next=${encodeURIComponent(nextPath)}`, locale))
+	if (!session)
+		redirect(
+			localizeHref(`/auth/login?next=${encodeURIComponent(nextPath)}`, locale),
+		)
 
 	const entryId = await getCurrentEntryId()
-	if (!entryId) redirect(localizeHref(`/onboarding/bind-entry?next=${encodeURIComponent(nextPath)}`, locale))
+	if (!entryId)
+		redirect(
+			localizeHref(
+				`/onboarding/bind-entry?next=${encodeURIComponent(nextPath)}`,
+				locale,
+			),
+		)
 
 	const tournamentId = /^\d+$/.test(id) ? Number(id) : Number.NaN
 	if (!Number.isSafeInteger(tournamentId) || tournamentId <= 0) {
@@ -62,8 +71,12 @@ export default async function Page({ params }: PageProps) {
 				description={t('unavailableDescription')}
 				actions={
 					<>
-						<Button asChild><Link href={nextPath}>{common('tryAgain')}</Link></Button>
-						<Button variant="outline" asChild><Link href="/tournament/list">{t('back')}</Link></Button>
+						<Button asChild>
+							<Link href={nextPath}>{common('tryAgain')}</Link>
+						</Button>
+						<Button variant="outline" asChild>
+							<Link href="/tournament/browse">{t('back')}</Link>
+						</Button>
 					</>
 				}
 			/>
@@ -93,10 +106,10 @@ async function NoManagementAccess({ id }: { id: string }) {
 			actions={
 				<>
 					<Button asChild>
-						<Link href={`/live/tournament/${id}`}>{t('view')}</Link>
+						<Link href={`/live/tournaments/${id}`}>{t('view')}</Link>
 					</Button>
 					<Button variant="outline" asChild>
-						<Link href="/tournament/list">{t('back')}</Link>
+						<Link href="/tournament/browse">{t('back')}</Link>
 					</Button>
 				</>
 			}

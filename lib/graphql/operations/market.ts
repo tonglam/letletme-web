@@ -43,6 +43,16 @@ export const GET_MARKET_PULSE = /* GraphQL */ `
         chanceOfPlayingThisRound
         chanceOfPlayingNextRound
       }
+	  availabilityHighlights {
+		player { ...MarketPlayerFields }
+		status
+		previousStatus
+		news
+		newsAdded
+		observedDate
+		chanceOfPlayingThisRound
+		chanceOfPlayingNextRound
+	  }
       newPlayers {
         player { ...MarketPlayerFields }
         firstObservedDate
@@ -143,6 +153,7 @@ export interface MarketPulse {
 	}
 	transferMovers: MarketTransferMover[]
 	availabilityUpdates: MarketAvailabilityUpdate[]
+	availabilityHighlights: MarketAvailabilityUpdate[]
 	newPlayers: MarketNewPlayer[]
 	priceChanges: MarketPriceChange[]
 }
