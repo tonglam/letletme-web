@@ -167,9 +167,9 @@ export const requestRateLimit = authSchema.table(
 		count: integer('count').notNull(),
 		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
 	},
-	table => ({
-		pk: primaryKey({
-			name: 'request_rate_limits_pk',
+		table => ({
+			pk: primaryKey({
+				name: 'request_rate_limits_pk',
 			columns: [table.scope, table.subject, table.bucketStart]
 		}),
 		expiresIdx: index('request_rate_limits_expires_idx').on(table.expiresAt),
@@ -178,10 +178,10 @@ export const requestRateLimit = authSchema.table(
 			sql`${table.windowSeconds} > 0`
 		),
 		countPositive: check(
-			'request_rate_limits_count_check',
-			sql`${table.count} > 0`
-		)
-	})
+				'request_rate_limits_count_check',
+				sql`${table.count} > 0`
+			)
+		})
 )
 
 export const fplEntryBindingChallenge = authSchema.table(
