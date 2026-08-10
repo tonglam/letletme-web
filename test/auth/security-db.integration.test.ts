@@ -73,14 +73,24 @@ test('web security constraints serialize identity, session, and rate ownership',
 				 FROM pg_policies
 				 WHERE schemaname = 'bauth'
 				   AND tablename <> '__drizzle_migrations'
-				   AND (
-					 policyname <> 'web_auth_runtime_all'
-					 OR permissive <> 'PERMISSIVE'
-					 OR roles::text[] <> ARRAY['letletme_web_auth']::text[]
-					 OR cmd <> 'ALL'
-					 OR replace(replace(coalesce(qual, ''), '(', ''), ')', '') <> 'true'
-					 OR replace(replace(coalesce(with_check, ''), '(', ''), ')', '') <> 'true'
-				   )) AS invalid_policy_count,
+				   AND NOT (
+					 (
+					   policyname = 'web_auth_runtime_all'
+					   AND permissive = 'PERMISSIVE'
+					   AND roles::text[] = ARRAY['letletme_web_auth']::text[]
+					   AND cmd = 'ALL'
+					   AND replace(replace(coalesce(qual, ''), '(', ''), ')', '') = 'true'
+					   AND replace(replace(coalesce(with_check, ''), '(', ''), ')', '') = 'true'
+					 )
+					 OR (
+					   policyname = 'graphql_auth_reader_select'
+					   AND tablename IN ('user', 'mini_program_session')
+					   AND permissive = 'PERMISSIVE'
+					   AND roles::text[] = ARRAY['letletme_graphql_reader']::text[]
+					   AND cmd = 'SELECT'
+					   AND replace(replace(coalesce(qual, ''), '(', ''), ')', '') = 'true'
+					   AND with_check IS NULL
+					 ))) AS invalid_policy_count,
 				(SELECT count(*)::int
 				 FROM pg_class relation
 				 JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
@@ -93,7 +103,7 @@ test('web security constraints serialize identity, session, and rate ownership',
 			anon_user: false,
 			anon_rate_limit: false,
 			authenticated_session: false,
-			policy_count: 10,
+			policy_count: 12,
 			invalid_policy_count: 0,
 			missing_rls: 0,
 		})

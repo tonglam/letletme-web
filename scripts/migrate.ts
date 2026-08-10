@@ -1,5 +1,8 @@
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import postgres from 'postgres'
 
 import {
@@ -11,15 +14,66 @@ import {
 	type LedgerMigration,
 } from './migration-audit'
 
-const migrationConfig = {
-	migrationsFolder: 'drizzle',
-	migrationsSchema: WEB_MIGRATIONS_SCHEMA,
-	migrationsTable: WEB_MIGRATIONS_TABLE,
+const MIGRATIONS_FOLDER = 'drizzle'
+const ACTIVATION_MIGRATION = '0008_web_auth_runtime_role'
+
+type MigrationJournal = {
+	version: string
+	dialect: string
+	entries: Array<{
+		idx: number
+		version: string
+		when: number
+		tag: string
+		breakpoints: boolean
+	}>
+}
+
+function migrationConfig(migrationsFolder = MIGRATIONS_FOLDER) {
+	return {
+		migrationsFolder,
+		migrationsSchema: WEB_MIGRATIONS_SCHEMA,
+		migrationsTable: WEB_MIGRATIONS_TABLE,
+	}
+}
+
+async function createScopedMigrationsFolder(throughTag: string): Promise<string> {
+	const journalPath = join(MIGRATIONS_FOLDER, 'meta', '_journal.json')
+	const journal = JSON.parse(await readFile(journalPath, 'utf8')) as MigrationJournal
+	const targetIndex = journal.entries.findIndex(entry => entry.tag === throughTag)
+	if (targetIndex < 0) throw new Error(`Unknown WEB_MIGRATION_THROUGH target: ${throughTag}`)
+
+	const folder = await mkdtemp(join(tmpdir(), 'letletme-web-migrations-'))
+	try {
+		const entries = journal.entries.slice(0, targetIndex + 1)
+		await mkdir(join(folder, 'meta'))
+		await writeFile(
+			join(folder, 'meta', '_journal.json'),
+			`${JSON.stringify({ ...journal, entries }, null, '\t')}\n`,
+		)
+		await Promise.all(
+			entries.map(entry =>
+				copyFile(
+					join(MIGRATIONS_FOLDER, `${entry.tag}.sql`),
+					join(folder, `${entry.tag}.sql`),
+				),
+			),
+		)
+		return folder
+	} catch (error) {
+		await rm(folder, { recursive: true, force: true })
+		throw error
+	}
 }
 
 async function main() {
 	const databaseUrl = process.env.DIRECT_DATABASE_URL
 	if (!databaseUrl) throw new Error('DIRECT_DATABASE_URL is required for migrations')
+	const throughTag = process.env.WEB_MIGRATION_THROUGH?.trim()
+	if (throughTag && throughTag !== ACTIVATION_MIGRATION) {
+		throw new Error(`WEB_MIGRATION_THROUGH may only target ${ACTIVATION_MIGRATION}`)
+	}
+	const scopedFolder = throughTag ? await createScopedMigrationsFolder(throughTag) : null
 	const client = postgres(databaseUrl, { max: 1, prepare: false })
 	const database = drizzle(client)
 	try {
@@ -90,21 +144,34 @@ async function main() {
 				false,
 			)
 
-			await migrate(database, migrationConfig)
+			await migrate(database, migrationConfig(scopedFolder ?? MIGRATIONS_FOLDER))
 
 			const afterRows = await client<{ hash: string; created_at: string }[]>`
 				SELECT hash, created_at::text FROM bauth.__drizzle_migrations ORDER BY created_at
 			`
-			assertMigrationHistory(
-				inspectMigrationHistory(local.migrations, toLedger(afterRows), local.orphans),
-				true,
+			const afterAudit = inspectMigrationHistory(
+				local.migrations,
+				toLedger(afterRows),
+				local.orphans,
 			)
+			assertMigrationHistory(afterAudit, !throughTag)
+			if (throughTag) {
+				const target = local.migrations.find(migration => migration.tag === throughTag)
+				if (!target) throw new Error(`Missing scoped migration target: ${throughTag}`)
+				const incomplete = afterAudit.pending.filter(migration => migration.when <= target.when)
+				if (incomplete.length > 0) {
+					throw new Error(
+						`Scoped migration did not apply through ${throughTag}: ${incomplete.map(row => row.tag).join(', ')}`,
+					)
+				}
+			}
 		} finally {
 			await client`SELECT pg_advisory_unlock(hashtext('letletme-web-drizzle-migrations'))`
 		}
 		console.log('Web migrations applied successfully')
 	} finally {
 		await client.end()
+		if (scopedFolder) await rm(scopedFolder, { recursive: true, force: true })
 	}
 }
 

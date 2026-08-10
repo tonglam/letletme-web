@@ -55,13 +55,24 @@ jobs:
           for (const role of ['anon', 'authenticated']) {
             await sql.unsafe(`DO $$ BEGIN CREATE ROLE ${role} NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$`)
           }
+          await sql.unsafe(`DO $$ BEGIN
+            CREATE ROLE letletme_graphql_reader
+              NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+            EXCEPTION WHEN duplicate_object THEN NULL;
+          END $$`)
           await sql.end()
           EOF
-      - name: Fresh and repeat migrations
+      - name: Apply activation-scoped migrations
         run: |
-          npm run db:migrate
-          npm run db:migrate
-          npm run db:migrate:status
+          npm run db:migrate:activation
+          set +e
+          output=$(npm run db:migrate:status 2>&1)
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          test "$status" -eq 1
+          test "$(printf '%s\n' "$output" | grep -Ec '^pending ')" -eq 1
+          printf '%s\n' "$output" | grep -Fxq 'pending 0009_graphql_auth_reader'
       - name: Stub activated Data cutover ledger
         run: |
           node --input-type=module <<'EOF'
@@ -81,6 +92,19 @@ jobs:
         run: |
           npm run db:provision-runtime-login
           npm run db:provision-runtime-login
+      - name: Verify Web startup contract before GraphQL grant
+        env:
+          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+        run: npm run db:runtime-contract
+      - name: Apply post-activation migration and verify repeatability
+        run: |
+          npm run db:migrate
+          npm run db:migrate
+          npm run db:migrate:status
+      - name: Verify Web startup contract after GraphQL grant
+        env:
+          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+        run: npm run db:runtime-contract
       - run: npm test
         env:
           RUN_DB_INTEGRATION: 'true'

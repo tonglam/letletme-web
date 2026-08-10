@@ -1,6 +1,7 @@
 import postgres from 'postgres'
 
 export const WEB_AUTH_CAPABILITY_ROLE = 'letletme_web_auth'
+export const GRAPHQL_AUTH_CAPABILITY_ROLE = 'letletme_graphql_reader'
 
 export const WEB_AUTH_RUNTIME_TABLES = [
 	'account',
@@ -15,6 +16,8 @@ export const WEB_AUTH_RUNTIME_TABLES = [
 	'verification',
 ] as const
 
+export const GRAPHQL_AUTH_RUNTIME_TABLES = ['mini_program_session', 'user'] as const
+
 const DATA_SCHEMAS = [
 	'fpl',
 	'competition',
@@ -25,6 +28,7 @@ const DATA_SCHEMAS = [
 ] as const
 
 const AUTH_RUNTIME_POLICY = 'web_auth_runtime_all'
+const GRAPHQL_AUTH_RUNTIME_POLICY = 'graphql_auth_reader_select'
 
 type RoleAttributes = {
 	role_name: string
@@ -266,22 +270,40 @@ export async function validateWebDatabaseContract(
 				AND tablename <> '__drizzle_migrations'
 			ORDER BY tablename, policyname
 		`
-		if (authPolicies.length !== WEB_AUTH_RUNTIME_TABLES.length) {
-			findings.push(`bauth runtime policy count is ${authPolicies.length}`)
-		}
+		const expectedGraphqlAuthTableNames = new Set<string>(GRAPHQL_AUTH_RUNTIME_TABLES)
+		let webRuntimePolicyCount = 0
+		let graphqlAuthPolicyCount = 0
 		for (const policy of authPolicies) {
-			if (
-				!expectedAuthTableNames.has(policy.table_name)
-				||
-				policy.policy_name !== AUTH_RUNTIME_POLICY
-				|| policy.permissive !== 'PERMISSIVE'
-				|| !compareNames(policy.roles, [WEB_AUTH_CAPABILITY_ROLE])
-				|| policy.command !== 'ALL'
-				|| !expressionIsTrue(policy.using_expression)
-				|| !expressionIsTrue(policy.check_expression)
-			) {
+			const isWebRuntimePolicy =
+				expectedAuthTableNames.has(policy.table_name)
+				&& policy.policy_name === AUTH_RUNTIME_POLICY
+				&& policy.permissive === 'PERMISSIVE'
+				&& compareNames(policy.roles, [WEB_AUTH_CAPABILITY_ROLE])
+				&& policy.command === 'ALL'
+				&& expressionIsTrue(policy.using_expression)
+				&& expressionIsTrue(policy.check_expression)
+			const isGraphqlAuthPolicy =
+				expectedGraphqlAuthTableNames.has(policy.table_name)
+				&& policy.policy_name === GRAPHQL_AUTH_RUNTIME_POLICY
+				&& policy.permissive === 'PERMISSIVE'
+				&& compareNames(policy.roles, [GRAPHQL_AUTH_CAPABILITY_ROLE])
+				&& policy.command === 'SELECT'
+				&& expressionIsTrue(policy.using_expression)
+				&& policy.check_expression === null
+			if (isWebRuntimePolicy) webRuntimePolicyCount += 1
+			if (isGraphqlAuthPolicy) graphqlAuthPolicyCount += 1
+			if (!isWebRuntimePolicy && !isGraphqlAuthPolicy) {
 				findings.push(`bauth.${policy.table_name} has an invalid runtime policy`)
 			}
+		}
+		if (webRuntimePolicyCount !== WEB_AUTH_RUNTIME_TABLES.length) {
+			findings.push(`bauth Web runtime policy count is ${webRuntimePolicyCount}`)
+		}
+		if (
+			graphqlAuthPolicyCount !== 0
+			&& graphqlAuthPolicyCount !== GRAPHQL_AUTH_RUNTIME_TABLES.length
+		) {
+			findings.push(`bauth GraphQL auth policy count is ${graphqlAuthPolicyCount}`)
 		}
 
 		const [ledgerBoundary] = await client<NamedPrivilegeBoundary[]>`

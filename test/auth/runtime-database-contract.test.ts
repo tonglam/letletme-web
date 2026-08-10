@@ -5,6 +5,8 @@ import test, { describe, it } from 'node:test'
 import postgres from 'postgres'
 
 import {
+	GRAPHQL_AUTH_CAPABILITY_ROLE,
+	GRAPHQL_AUTH_RUNTIME_TABLES,
 	validateWebDatabaseContract,
 	WEB_AUTH_RUNTIME_TABLES,
 	WebDatabaseContractError,
@@ -12,8 +14,9 @@ import {
 
 describe('Web runtime database boundary', () => {
 	it('installs an auth-only capability role and startup contract', async () => {
-		const [migration, journal, instrumentation, environment] = await Promise.all([
+		const [migration, graphqlMigration, journal, instrumentation, environment] = await Promise.all([
 			readFile('drizzle/0008_web_auth_runtime_role.sql', 'utf8'),
+			readFile('drizzle/0009_graphql_auth_reader.sql', 'utf8'),
 			readFile('drizzle/meta/_journal.json', 'utf8'),
 			readFile('instrumentation.ts', 'utf8'),
 			readFile('.env.example', 'utf8'),
@@ -47,6 +50,23 @@ describe('Web runtime database boundary', () => {
 			assert.match(migration, new RegExp(`'${schemaName}'`))
 		}
 		assert.match(journal, /"tag": "0008_web_auth_runtime_role"/)
+		assert.match(journal, /"tag": "0009_graphql_auth_reader"/)
+		assert.match(graphqlMigration, /GRANT USAGE ON SCHEMA bauth TO letletme_graphql_reader/)
+		assert.match(
+			graphqlMigration,
+			/GRANT SELECT \(id, fpl_entry_id, fpl_entry_verified_at\)\s+ON TABLE bauth\."user"\s+TO letletme_graphql_reader/,
+		)
+		assert.match(
+			graphqlMigration,
+			/GRANT SELECT \(user_id, token_hash, revoked_at, expires_at\)\s+ON TABLE bauth\.mini_program_session\s+TO letletme_graphql_reader/,
+		)
+		assert.match(graphqlMigration, /REVOKE ALL ON ALL TABLES IN SCHEMA bauth/)
+		assert.match(graphqlMigration, /FROM information_schema\.columns/)
+		assert.match(
+			graphqlMigration,
+			/REVOKE SELECT \(%I\), INSERT \(%I\), UPDATE \(%I\), REFERENCES \(%I\)/,
+		)
+		assert.match(graphqlMigration, /CREATE POLICY graphql_auth_reader_select/g)
 		assert.match(instrumentation, /await validateWebDatabaseContract\(\)/)
 		assert.match(instrumentation, /process\.exit\(1\)/)
 		assert.match(environment, /inherits only `letletme_web_auth`/)
@@ -61,6 +81,11 @@ describe('Web runtime database boundary', () => {
 			'session',
 			'user',
 			'verification',
+		])
+		assert.equal(GRAPHQL_AUTH_CAPABILITY_ROLE, 'letletme_graphql_reader')
+		assert.deepEqual([...GRAPHQL_AUTH_RUNTIME_TABLES].sort(), [
+			'mini_program_session',
+			'user',
 		])
 	})
 })
@@ -101,6 +126,60 @@ test('dedicated Web login passes the runtime contract and is confined to bauth',
 	} finally {
 		await runtime`DELETE FROM bauth."user" WHERE id = ${userId}`
 		await runtime.end()
+	}
+})
+
+test('GraphQL auth reader is confined to current Mini Program validation tables', {
+	skip: !integrationEnabled || !process.env.DIRECT_DATABASE_URL,
+}, async () => {
+	const administrator = postgres(process.env.DIRECT_DATABASE_URL!, { max: 1, prepare: false })
+	try {
+		await administrator.begin(async transaction => {
+			await transaction.unsafe('SET LOCAL ROLE letletme_graphql_reader')
+			await transaction`
+				SELECT id, fpl_entry_id, fpl_entry_verified_at
+				FROM bauth."user"
+				LIMIT 0
+			`
+			await transaction`
+				SELECT user_id, token_hash, revoked_at, expires_at
+				FROM bauth.mini_program_session
+				LIMIT 0
+			`
+		})
+
+		await assert.rejects(
+			administrator.begin(async transaction => {
+				await transaction.unsafe('SET LOCAL ROLE letletme_graphql_reader')
+				await transaction`SELECT id FROM bauth.session LIMIT 0`
+			}),
+		)
+		await assert.rejects(
+			administrator.begin(async transaction => {
+				await transaction.unsafe('SET LOCAL ROLE letletme_graphql_reader')
+				await transaction`SELECT email FROM bauth."user" LIMIT 0`
+			}),
+		)
+		await assert.rejects(
+			administrator.begin(async transaction => {
+				await transaction.unsafe('SET LOCAL ROLE letletme_graphql_reader')
+				await transaction`SELECT device_id FROM bauth.mini_program_session LIMIT 0`
+			}),
+		)
+		await assert.rejects(
+			administrator.begin(async transaction => {
+				await transaction.unsafe('SET LOCAL ROLE letletme_graphql_reader')
+				await transaction`UPDATE bauth."user" SET name = name WHERE false`
+			}),
+		)
+		await assert.rejects(
+			administrator.begin(async transaction => {
+				await transaction.unsafe('SET LOCAL ROLE letletme_graphql_reader')
+				await transaction`SELECT id FROM bauth.__drizzle_migrations LIMIT 0`
+			}),
+		)
+	} finally {
+		await administrator.end()
 	}
 })
 
