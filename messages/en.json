@@ -439,6 +439,8 @@
     "clearSearch": "Clear player search",
     "prompt": "Select a team, position, or type a name to search.",
     "loadingPlayers": "Loading players…",
+    "loadMore": "Show more players",
+    "loadingMore": "Loading more players…",
     "noPlayers": "No players match the current filters.",
     "resultCount": "{visible} of {total} players",
     "teamsFailed": "Failed to load the team directory.",

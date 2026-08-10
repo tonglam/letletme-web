@@ -78,10 +78,16 @@ describe('GraphQL request budget', () => {
 		assert.match(SEARCH_PLAYERS_FOR_PICKER, /\btotalCount\b/)
 
 		const pickerSource = await readFile(
-			new URL('../components/player/PlayerDirectoryPicker.tsx', import.meta.url),
+			new URL(
+				'../components/player/PlayerDirectoryPicker.tsx',
+				import.meta.url
+			),
 			'utf8'
 		)
 		assert.match(pickerSource, /SEARCH_PLAYERS_FOR_PICKER/)
+		assert.match(pickerSource, /setNextPlayersCursor/)
+		assert.match(pickerSource, /cursor: nextPlayersCursor/)
+		assert.match(pickerSource, /canLoadMorePlayers/)
 		assert.doesNotMatch(pickerSource, /GET_PLAYERS_FOR_PICKER/)
 	})
 

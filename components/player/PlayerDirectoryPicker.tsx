@@ -10,16 +10,16 @@ import {
 } from "@/components/ui/select";
 import { executeQuery } from "@/lib/graphql-client";
 import {
-	GET_TEAMS_FOR_PICKER,
-	SEARCH_PLAYERS_FOR_PICKER,
-	type PlayerDirectoryItem,
-	type PlayerSearchForPickerResponse,
-	type TeamsForPickerResponse,
+  GET_TEAMS_FOR_PICKER,
+  SEARCH_PLAYERS_FOR_PICKER,
+  type PlayerDirectoryItem,
+  type PlayerSearchForPickerResponse,
+  type TeamsForPickerResponse,
 } from "@/lib/graphql/operations/players";
 import { resolveTeamDisplayName } from "@/lib/team-display";
 import { type Position } from "@/types/common";
 import { Search, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
 type PositionFilter = Position | "ALL";
@@ -42,6 +42,11 @@ interface TeamDirectoryOption {
   id: number;
   shortName: string;
   name: string;
+}
+
+interface PlayerDirectoryFilter {
+  teamId?: number;
+  position?: PlayerDirectoryItem["position"];
 }
 
 interface PlayerDirectoryPickerProps {
@@ -103,12 +108,20 @@ export function PlayerDirectoryPicker({
   const [teams, setTeams] = useState<TeamDirectoryOption[]>([]);
   const [players, setPlayers] = useState<PlayerDirectoryOption[]>([]);
   const [totalPlayers, setTotalPlayers] = useState(0);
+  const [nextPlayersCursor, setNextPlayersCursor] = useState<number | null>(
+    null
+  );
+  const [visiblePlayerLimit, setVisiblePlayerLimit] = useState(
+    DEFAULT_VISIBLE_PLAYER_RESULTS
+  );
   const [isTeamsLoading, setIsTeamsLoading] = useState(false);
   const [isPlayersLoading, setIsPlayersLoading] = useState(false);
+  const [isMorePlayersLoading, setIsMorePlayersLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [positionFilter, setPositionFilter] = useState<PositionFilter>("ALL");
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("ALL");
   const [searchTerm, setSearchTerm] = useState("");
+  const playerRequestVersionRef = useRef(0);
 
   useEffect(() => {
     let isCancelled = false;
@@ -118,9 +131,8 @@ export function PlayerDirectoryPicker({
         setIsTeamsLoading(true);
         setError(null);
 
-        const result = await executeQuery<TeamsForPickerResponse>(
-          GET_TEAMS_FOR_PICKER
-        );
+        const result =
+          await executeQuery<TeamsForPickerResponse>(GET_TEAMS_FOR_PICKER);
 
         if (isCancelled) return;
 
@@ -163,12 +175,26 @@ export function PlayerDirectoryPicker({
     [teamFilter, teams]
   );
 
+  const serverPlayerFilter = useMemo<PlayerDirectoryFilter | null>(() => {
+    const filter: PlayerDirectoryFilter = {};
+
+    if (selectedTeam) {
+      filter.teamId = selectedTeam.id;
+    }
+
+    if (positionFilter !== "ALL") {
+      filter.position = shortPositionToDirectory(positionFilter);
+    }
+
+    return Object.keys(filter).length > 0 ? filter : null;
+  }, [positionFilter, selectedTeam]);
+
   useEffect(() => {
     let isCancelled = false;
+    const requestVersion = ++playerRequestVersionRef.current;
     const normalizedSearch = searchTerm.trim();
     const hasServerFilter =
-      selectedTeam !== null ||
-      positionFilter !== "ALL" ||
+      serverPlayerFilter !== null ||
       normalizedSearch.length >= MIN_SEARCH_LENGTH;
 
     if (!hasServerFilter) {
@@ -176,8 +202,11 @@ export function PlayerDirectoryPicker({
         if (isCancelled) return;
         setPlayers([]);
         setTotalPlayers(0);
+        setNextPlayersCursor(null);
+        setVisiblePlayerLimit(DEFAULT_VISIBLE_PLAYER_RESULTS);
         setError(null);
         setIsPlayersLoading(false);
+        setIsMorePlayersLoading(false);
       }, 0);
 
       return () => {
@@ -189,20 +218,8 @@ export function PlayerDirectoryPicker({
     const fetchPlayers = async () => {
       try {
         setIsPlayersLoading(true);
+        setIsMorePlayersLoading(false);
         setError(null);
-
-        const filter: {
-          teamId?: number;
-          position?: "GOALKEEPER" | "DEFENDER" | "MIDFIELDER" | "FORWARD";
-        } = {};
-
-        if (selectedTeam) {
-          filter.teamId = selectedTeam.id;
-        }
-
-        if (positionFilter !== "ALL") {
-          filter.position = shortPositionToDirectory(positionFilter);
-        }
 
         const result = await executeQuery<PlayerSearchForPickerResponse>(
           SEARCH_PLAYERS_FOR_PICKER,
@@ -211,13 +228,15 @@ export function PlayerDirectoryPicker({
               normalizedSearch.length >= MIN_SEARCH_LENGTH
                 ? normalizedSearch
                 : null,
-            filter: Object.keys(filter).length > 0 ? filter : null,
+            filter: serverPlayerFilter,
             limit: PLAYER_PICKER_PAGE_SIZE,
             cursor: null,
           }
         );
 
-        if (isCancelled) return;
+        if (isCancelled || requestVersion !== playerRequestVersionRef.current) {
+          return;
+        }
 
         setPlayers(
           result.playersForPicker.items
@@ -225,16 +244,25 @@ export function PlayerDirectoryPicker({
             .sort((a, b) => a.name.localeCompare(b.name))
         );
         setTotalPlayers(result.playersForPicker.totalCount);
+        setNextPlayersCursor(result.playersForPicker.nextCursor);
+        setVisiblePlayerLimit(DEFAULT_VISIBLE_PLAYER_RESULTS);
       } catch (fetchError) {
         console.error("Failed to fetch players directory:", fetchError);
 
-        if (!isCancelled) {
+        if (
+          !isCancelled &&
+          requestVersion === playerRequestVersionRef.current
+        ) {
           setError(t("playersFailed"));
           setPlayers([]);
           setTotalPlayers(0);
+          setNextPlayersCursor(null);
         }
       } finally {
-        if (!isCancelled) {
+        if (
+          !isCancelled &&
+          requestVersion === playerRequestVersionRef.current
+        ) {
           setIsPlayersLoading(false);
         }
       }
@@ -249,7 +277,7 @@ export function PlayerDirectoryPicker({
       isCancelled = true;
       window.clearTimeout(fetchTimer);
     };
-  }, [positionFilter, searchTerm, selectedTeam, t]);
+  }, [searchTerm, serverPlayerFilter, t]);
 
   const excludedIds = useMemo(
     () => new Set(excludedPlayerIds),
@@ -284,14 +312,84 @@ export function PlayerDirectoryPicker({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [excludedIds, players, searchTerm]);
 
+  const loadMorePlayers = async () => {
+    if (isMorePlayersLoading) return;
+
+    if (visiblePlayerLimit < filteredPlayers.length) {
+      setVisiblePlayerLimit(
+        (currentLimit) => currentLimit + DEFAULT_VISIBLE_PLAYER_RESULTS
+      );
+      return;
+    }
+
+    if (nextPlayersCursor === null) return;
+
+    const requestVersion = playerRequestVersionRef.current;
+    const normalizedSearch = searchTerm.trim();
+
+    try {
+      setIsMorePlayersLoading(true);
+      setError(null);
+
+      const result = await executeQuery<PlayerSearchForPickerResponse>(
+        SEARCH_PLAYERS_FOR_PICKER,
+        {
+          search:
+            normalizedSearch.length >= MIN_SEARCH_LENGTH
+              ? normalizedSearch
+              : null,
+          filter: serverPlayerFilter,
+          limit: PLAYER_PICKER_PAGE_SIZE,
+          cursor: nextPlayersCursor,
+        }
+      );
+
+      if (requestVersion !== playerRequestVersionRef.current) return;
+
+      setPlayers((currentPlayers) => {
+        const byId = new Map(
+          currentPlayers.map((player) => [player.id, player] as const)
+        );
+
+        for (const player of result.playersForPicker.items.map(
+          toPickerPlayer
+        )) {
+          byId.set(player.id, player);
+        }
+
+        return Array.from(byId.values()).sort((a, b) =>
+          a.name.localeCompare(b.name)
+        );
+      });
+      setTotalPlayers(result.playersForPicker.totalCount);
+      setNextPlayersCursor(result.playersForPicker.nextCursor);
+      setVisiblePlayerLimit(
+        (currentLimit) => currentLimit + DEFAULT_VISIBLE_PLAYER_RESULTS
+      );
+    } catch (fetchError) {
+      console.error("Failed to fetch more players:", fetchError);
+
+      if (requestVersion === playerRequestVersionRef.current) {
+        setError(t("playersFailed"));
+      }
+    } finally {
+      if (requestVersion === playerRequestVersionRef.current) {
+        setIsMorePlayersLoading(false);
+      }
+    }
+  };
+
   const hasActiveFilter =
     positionFilter !== "ALL" ||
     teamFilter !== "ALL" ||
     searchTerm.trim().length >= MIN_SEARCH_LENGTH;
 
   const visiblePlayers = hasActiveFilter
-    ? filteredPlayers.slice(0, DEFAULT_VISIBLE_PLAYER_RESULTS)
+    ? filteredPlayers.slice(0, visiblePlayerLimit)
     : [];
+
+  const canLoadMorePlayers =
+    visiblePlayerLimit < filteredPlayers.length || nextPlayersCursor !== null;
 
   const isLoading = isTeamsLoading || isPlayersLoading;
 
@@ -310,12 +408,18 @@ export function PlayerDirectoryPicker({
           </SelectTrigger>
           <SelectContent className="max-h-72">
             {isTeamsLoading ? (
-              <SelectItem value="loading" disabled>
+              <SelectItem
+                value="loading"
+                disabled
+              >
                 {t("loadingTeams")}
               </SelectItem>
             ) : (
               availableTeams.map((team) => (
-                <SelectItem key={team} value={team}>
+                <SelectItem
+                  key={team}
+                  value={team}
+                >
                   {team === "ALL"
                     ? t("allTeams")
                     : resolveTeamDisplayName(
@@ -369,7 +473,12 @@ export function PlayerDirectoryPicker({
       <div className="mt-3 rounded-md border">
         <div className="max-h-64 overflow-y-auto">
           {error ? (
-            <div role="status" className="p-3 text-sm text-destructive">{error}</div>
+            <div
+              role="status"
+              className="p-3 text-sm text-destructive"
+            >
+              {error}
+            </div>
           ) : !hasActiveFilter ? (
             <div className="p-3 text-sm text-muted-foreground">
               {t("prompt")}
@@ -383,32 +492,50 @@ export function PlayerDirectoryPicker({
               {t("noPlayers")}
             </div>
           ) : (
-            visiblePlayers.map((player) => (
-              <button
-                key={player.id}
-                type="button"
-                onClick={() => {
-                  onSelect(player)
-                  setSearchTerm("")
-                  setPositionFilter("ALL")
-                  setTeamFilter("ALL")
-                }}
-                className="flex w-full items-center justify-between gap-3 border-b px-3 py-3 text-left text-sm transition-colors last:border-b-0 hover:bg-accent/50"
-              >
-                <span className="truncate font-medium">{player.name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {player.position} |{" "}
-                  {resolveTeamDisplayName(player.teamShortName, player.teamName)}
-                </span>
-              </button>
-            ))
+            <>
+              {visiblePlayers.map((player) => (
+                <button
+                  key={player.id}
+                  type="button"
+                  onClick={() => {
+                    onSelect(player);
+                    setSearchTerm("");
+                    setPositionFilter("ALL");
+                    setTeamFilter("ALL");
+                  }}
+                  className="flex w-full items-center justify-between gap-3 border-b px-3 py-3 text-left text-sm transition-colors hover:bg-accent/50"
+                >
+                  <span className="truncate font-medium">{player.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {player.position} |{" "}
+                    {resolveTeamDisplayName(
+                      player.teamShortName,
+                      player.teamName
+                    )}
+                  </span>
+                </button>
+              ))}
+              {canLoadMorePlayers && (
+                <button
+                  type="button"
+                  onClick={() => void loadMorePlayers()}
+                  disabled={isMorePlayersLoading}
+                  className="w-full px-3 py-3 text-center text-sm font-medium text-primary transition-colors hover:bg-accent/50 disabled:cursor-wait disabled:text-muted-foreground"
+                >
+                  {isMorePlayersLoading ? t("loadingMore") : t("loadMore")}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
 
       {hasActiveFilter && !isLoading && !error && (
         <div className="mt-2 text-xs text-muted-foreground">
-          {t("resultCount", { visible: visiblePlayers.length, total: totalPlayers })}
+          {t("resultCount", {
+            visible: visiblePlayers.length,
+            total: totalPlayers,
+          })}
         </div>
       )}
     </div>

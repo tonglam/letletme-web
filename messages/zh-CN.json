@@ -439,6 +439,8 @@
     "clearSearch": "清除球员搜索",
     "prompt": "请选择球队、位置，或输入姓名搜索。",
     "loadingPlayers": "正在加载球员…",
+    "loadMore": "显示更多球员",
+    "loadingMore": "正在加载更多球员…",
     "noPlayers": "没有球员符合当前筛选条件。",
     "resultCount": "{visible} / {total} 名球员",
     "teamsFailed": "球队目录加载失败。",
