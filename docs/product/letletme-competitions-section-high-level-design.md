@@ -359,6 +359,8 @@ Rules:
 - Official H2H is a separate future capability and must not be inferred from custom battle/H2H support.
 - GraphQL returns a discriminated result body so Web cannot render every format as a generic standings table.
 - Current results carry the shared `LiveResultMeta`; finalized Results/History carry the shared `SettledResultMeta`. Format bodies extend those contracts without creating another readiness/status family.
+- Every finalized result exposes the settled `revision`; consumers use it for coherent cache and
+  relevant-change comparisons instead of response timestamps.
 
 ### 4.8 Required GraphQL read models
 
@@ -369,12 +371,39 @@ Add new competition-named queries while retaining current tournament queries dur
 | `myCompetitions` | Bounded identity, kind, season, lifecycle, viewer role, viewer position/matchup summary, current stage, setup attention, and available actions; no full field table |
 | `competition` | Canonical identity, source/rules, lifecycle, setup, current stage, compact latest/current result, participant count, access, and links/capabilities |
 | `competitionParticipants` | Paginated member-safe roster with membership origin/state where appropriate |
-| `competitionLive` | One selected competition/event with shared Live metadata, viewer context, and discriminated format-specific result |
-| `competitionResult` | One finalized event result with official/custom authority and format-specific body |
+| `competitionLive` | One selected competition/event with shared Live metadata, viewer context, and a bounded discriminated format-specific result connection |
+| `competitionResult` | One finalized event result with settled revision, official/custom authority, and a bounded format-specific result connection |
 | `competitionHistory` | Paginated event/stage summaries and season path without returning every detailed row at once |
 | `managedCompetition` | Organizer-only settings, setup/recovery, source sync, invitation, lock, archive, and delete capabilities |
 
 Mutation commands continue through the trusted Web-to-Data API initially. Do not add public GraphQL mutations merely to rename the product contract.
+
+`competitionLive` and `competitionResult` never return the complete field in one body, including
+when a tracked source grows beyond its admission-time count. Each format exposes a typed result
+connection:
+
+```text
+resultConnection(first: Int = 50, after: Cursor)
+  nodes: format-specific rows, matchups, or bracket entries
+  totalCount
+  pageInfo.endCursor
+  pageInfo.hasNextPage
+
+viewerResult
+resultAtRank(rank)
+searchResults(query, first <= 20)
+```
+
+Rules:
+
+- `first` is capped at 100 and cursors include competition, season, event/stage, result type, and
+  settled/live revision so they cannot continue through another snapshot.
+- Standings use stable rank then entry identity order; matchup/bracket formats use stable stage,
+  match, then participant order.
+- `viewerResult`, exact `resultAtRank`, and bounded search are separate targeted lookups and do not
+  force preceding result pages to load. They obey the same membership/privacy authorization.
+- Web server-renders the first bounded page, continues explicitly, and keeps rank/search navigation
+  available. It does not ask GraphQL for all admitted or synchronized entries.
 
 ### 4.9 Route and page ownership
 
@@ -511,7 +540,8 @@ Primary files:
 Changes:
 
 1. Add `CompetitionKind`, lifecycle, viewer role, result authority, capability, and discriminated result types.
-2. Add the read models in section 4.8 with bounded pagination/limits.
+2. Add the read models in section 4.8 with bounded pagination/limits, revision-bound result cursors,
+   viewer/rank lookups, and bounded search.
 3. Carry season and source identity through all competition/cache keys.
 4. Replace organizer checks based only on `adminEntryId` with signed Web user ID checks; retain entry membership checks for participant reads and isolate the audited `recovery_required` compatibility claim path.
 5. Keep retained organizers authorized even when an official source roster removes their FPL entry.
@@ -536,6 +566,9 @@ Tests:
 - Owner versus participant versus unrelated viewer access.
 - Season mismatch and stale entry binding rejection.
 - Cheap list query does not load full standings.
+- Live/final result bodies enforce 50-default/100-maximum pagination, continue without gaps or
+  duplicates across more than 500 synchronized entries, and reject stale-revision cursors.
+- Viewer, rank, and bounded search lookups avoid scanning/materializing preceding result pages.
 - Correct result union for official, points, battle, and knockout objects.
 - Source reuse does not collapse distinct competitions.
 - Old query compatibility during migration.
@@ -661,9 +694,11 @@ Changes:
    - season path and charts.
 3. Keep viewer-only summaries reusable by My FPL rather than duplicating the full shared page.
 4. Add distinct result renderers for official standings, points tables, battle matchups/tables, and knockout brackets.
-5. Show compact source check, prepared-through, finalization, and audit/degraded state once per result surface.
-6. Preserve direct result deep links by competition, event, and stage.
-7. Do not produce transfer recommendations or label one manager's decisions as correct/incorrect.
+5. Server-render the first bounded result page and add explicit continuation plus rank/search access;
+   never hydrate a full synchronized field by default.
+6. Show compact source check, prepared-through, finalization, revision, and audit/degraded state once per result surface.
+7. Preserve direct result deep links by competition, event, and stage.
+8. Do not produce transfer recommendations or label one manager's decisions as correct/incorrect.
 
 Primary files:
 
@@ -789,7 +824,7 @@ Do not expose invitations before roster-lock semantics exist. Do not expose a fo
 - Stable owner and entry-member permissions remain distinct.
 - Stable participant access survives active-entry rebinding and season rollover; unverified direct bindings cannot claim organizer or historical participant identity.
 - List payload stays bounded and does not perform one table calculation per competition.
-- Participant/history pagination and complexity limits.
+- Participant/history/result-body pagination, revision-bound cursors, search caps, and complexity limits.
 - Correct discriminated result type and authority for every supported format.
 - Coverage, source, finalization, and audit metadata.
 - Existing Tournament query compatibility during migration.

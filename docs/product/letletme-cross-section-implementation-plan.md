@@ -233,17 +233,25 @@ PrincipalContext
   entryId nullable
   bindingVerifiedAt nullable
   bindingAssurance: UNVERIFIED | OWNERSHIP_VERIFIED
+  bindingProofKind: DIRECT_BINDING | TEAM_NAME_CHALLENGE | OPERATOR_VERIFIED
   envelopeVersion
 ```
 
 Rules:
 
 - The Web private schema permits at most one active binding per `(userId, season)` and active uniqueness for `(season, entryId)` according to the My FPL migration.
-- Web signs the principal envelope; clients cannot supply another account or entry identity.
+- Web persists `bindingAssurance` and `bindingProofKind` on both the current binding and every
+  binding-history row, then signs both values into the principal envelope; clients cannot supply
+  another account, entry identity, or assurance level.
 - GraphQL verifies that `bindingSeason` matches Data's active season before authorizing active-season personal reads.
 - A legacy envelope without `bindingSeason` is parseable only for public or non-entry-scoped compatibility operations; it is denied on protected entry roots after the season-bearing Web signer is deployed.
 - A missing binding and a stale-season binding are distinct typed states. Stale state returns `rebind required` rather than querying another manager with the same number.
-- Raw direct binding sets `bindingAssurance=UNVERIFIED`; organizer recovery and historical participant claims require `OWNERSHIP_VERIFIED` or an audited operator action.
+- Raw direct binding sets `bindingAssurance=UNVERIFIED`,
+  `bindingProofKind=DIRECT_BINDING`, and no ownership `bindingVerifiedAt`. The migration never
+  promotes a legacy timestamp to ownership proof without a challenge/audit record. A successful
+  team-name challenge sets `OWNERSHIP_VERIFIED` plus `TEAM_NAME_CHALLENGE`; an operator override
+  uses `OPERATOR_VERIFIED` and a durable audit record. Organizer recovery and historical participant
+  claims require `OWNERSHIP_VERIFIED`.
 - Stable organizer ownership uses the account identity through the trusted Web command mapping; participation and standings continue to use `EntryRef`.
 - Logs record mismatch category and contract version without unnecessary personal labels.
 
@@ -259,7 +267,7 @@ LiveResultMeta
   state: SCHEDULED | LIVE | SETTLED
   publishedAt
   checkedAt
-  authority: OFFICIAL_FPL | LETLETME_RULES | MIXED
+  authority: OFFICIAL_FPL | LETLETME_RULES
   coverage.expected
   coverage.succeeded
   coverage.failed
@@ -268,6 +276,7 @@ LiveResultMeta
 SettledResultMeta
   season
   eventId
+  revision
   state: PREPARING | FINAL | PARTIAL | UNAVAILABLE
   authority: OFFICIAL_FPL | LETLETME_RULES
   sourceCheckedAt nullable
@@ -280,6 +289,8 @@ Rules:
 
 - Existing `LiveSnapshotMeta` remains the Live revision authority and maps additively into `LiveResultMeta`.
 - Existing `source` fields may remain compatibility aliases during migration; new consumers use `authority` so provider provenance is not confused with result-rule authority.
+- `authority` identifies the rules that produced the result and has exactly two values. Multiple
+  provider inputs remain explicit in source/evidence provenance and never create a third authority.
 - Web adds retained-row counts and freshness presentation to Live state but does not rewrite producer coverage.
 - Official entry and official-league final records use official authority. Custom results use LetLetMe rule authority after their official input and audit gates pass.
 - A custom result may cite official input evidence without changing its result authority to official.
@@ -359,6 +370,9 @@ Rules:
 - My FPL does not retain full shared Competition reports after Competition Results/History reaches parity.
 - The homepage does not become a duplicate My FPL or Explore dashboard.
 - Redirects preserve locale and meaningful object, event, view, and filter state.
+- Every event-scoped canonical URL and its server-selected route state carry the complete
+  `(season, eventId)` pair. A seasonless legacy URL may resolve only against the active season and
+  must normalize to a season-bearing canonical URL; it cannot address historical data.
 - Canonical public URLs exclude private preference state and untrusted return URLs.
 - Existing English `/data/*` routes remain stable while the visible category becomes Explore.
 
@@ -404,7 +418,8 @@ Rules:
 **Repositories:** all three product repositories plus this documentation set
 
 1. Record the nine contract IDs, initial compatible versions, owners, consumers, and removal gates.
-2. Create canonical fixtures for identity, season context, principal state, Live metadata, settled metadata, and EvidenceContext.
+2. Create canonical fixtures for identity, season context, persisted binding assurance/proof,
+   principal state, Live metadata, settled metadata (including `revision`), and EvidenceContext.
 3. Add producer and consumer tests using the same fixture versions.
 4. Add a coordinated-change checklist that records Data, GraphQL, and Web compatibility.
 5. Prevent new naked season-dependent IDs in the touched contracts through schema/type review tests where practical.
@@ -428,7 +443,8 @@ Rules:
 
 **Repository:** `letletme-web`
 
-1. Add season-aware binding history and the versioned signed principal envelope.
+1. Add season-aware binding history with durable assurance/proof fields and a versioned signed
+   principal envelope carrying the same assurance.
 2. Add typed My FPL saved-context, relevant-change, and Explore preference persistence.
 3. Dual-write current binding fields and binding history for one compatibility period.
 4. Implement missing, verified, stale-season, and rebind-required principal states.
@@ -442,7 +458,8 @@ Rules:
 **Repository:** `letletme-graphql`
 
 1. Add `SeasonContext`, season-safe reference fields, Competition identity/source associations, and metadata-family types.
-2. Accept the new principal envelope version and reject stale-season entry authorization.
+2. Accept the new principal envelope version, validate its signed assurance/proof fields, and reject
+   stale-season or insufficient-assurance entry authorization.
 3. Add bounded section read models and shared loaders without removing current operations.
 4. Map existing `LiveSnapshotMeta`, official final records, custom result audits, Market coverage, and provider metadata into their correct contract families.
 5. Add cache-key versions before stored shape changes and retain legacy adapters.

@@ -102,18 +102,27 @@ entryId
 boundAt
 verifiedAt
 unboundAt
+bindingAssurance: UNVERIFIED | OWNERSHIP_VERIFIED
+bindingProofKind: DIRECT_BINDING | TEAM_NAME_CHALLENGE | OPERATOR_VERIFIED
 teamNameSnapshot
 managerNameSnapshot
 ```
 
 Implementation rules:
 
-- Add `fplEntrySeason` to `bauth.user` for the fast current-binding path.
+- Add `fplEntrySeason`, `fplEntryBindingAssurance`, and `fplEntryBindingProofKind` to `bauth.user`
+  for the fast current-binding path.
 - Add `bauth.fpl_entry_bindings` for history and rollover audit.
 - Replace the current global verified-entry uniqueness with active uniqueness on `(season, entry_id)`.
 - Allow at most one active binding per `(user_id, season)`.
-- Keep current `fplEntryId` and name columns during migration; binding and unlink operations dual-write the current columns and history row.
-- Add active season to the signed Web → GraphQL identity envelope.
+- Keep current `fplEntryId` and name columns during migration; binding and unlink operations
+  dual-write the current columns and a history row with the exact assurance/proof kind.
+- Direct binding stores `UNVERIFIED` plus `DIRECT_BINDING` and leaves ownership `verifiedAt` null.
+  Only a successful team-name challenge stores `OWNERSHIP_VERIFIED` plus
+  `TEAM_NAME_CHALLENGE`; an audited operator action stores `OPERATOR_VERIFIED`. Do not infer
+  ownership proof from an existing timestamp during backfill.
+- Add active season, binding assurance, and proof kind to the signed Web → GraphQL identity
+  envelope. GraphQL validates the signed values and never derives assurance from `verifiedAt`.
 - GraphQL must ignore/reject an entry identity whose binding season does not equal Data's active season.
 - Web must render a rebind state instead of sending stale entry-specific queries after rollover.
 - Do not treat a previous-season entry number as current merely because the upstream endpoint returns another entry with the same ID.
@@ -300,6 +309,7 @@ Consume the shared `SettledResultMeta` shape:
 ```text
 season
 eventId
+revision
 state: PREPARING | FINAL | PARTIAL | UNAVAILABLE
 authority: OFFICIAL_FPL | LETLETME_RULES
 sourceCheckedAt
@@ -342,7 +352,9 @@ Compatibility rules:
 
 - Keep `/me/team` and its `view`/`gw` deep links.
 - Keep `/me/tournament` until Competition Home and Results/History expose every rehomed shared capability.
-- After that release gate, redirect `/me/tournament?tournamentId=…&view=…&gw=…` to the canonical competition result while preserving object and gameweek state.
+- After that release gate, redirect
+  `/me/tournament?tournamentId=…&view=…&season=…&gw=…` to the canonical competition result while
+  preserving object and complete event state.
 - A bare `/me/tournament` redirects to My Competitions.
 - Do not make the public homepage a duplicate My FPL dashboard.
 
@@ -354,18 +366,25 @@ Compatibility rules:
 
 Web changes:
 
-1. Add `fplEntrySeason` and the binding-history table migration.
+1. Add current-binding season/assurance/proof fields and the binding-history table migration with
+   the same durable assurance/proof fields.
 2. Replace the global entry uniqueness index with season-scoped active uniqueness.
-3. Dual-write direct binding, challenge binding, unlink, identity refresh, and mini-program profile paths.
+3. Dual-write direct binding, challenge binding, unlink, identity refresh, and mini-program profile
+   paths without upgrading direct bindings to ownership-verified assurance.
 4. Add active-season resolution to `getVerifiedEntryContext`; return an explicit stale-season state instead of a current entry ID.
-5. Add binding season to Better Auth server/client typing and the signed GraphQL envelope.
+5. Add binding season, assurance, and proof kind to Better Auth server/client typing and the signed
+   GraphQL envelope.
 6. Add a rebind state for homepage, My FPL, and entry-protected routes.
 
 GraphQL changes:
 
 1. Expose `seasonContext` from the existing active-season/event authority.
-2. Accept a new envelope version carrying binding season. A legacy seasonless envelope remains parseable only for public or otherwise non-entry-scoped operations during rollout.
-3. Refuse every protected entry-scoped authorization when the envelope has no binding season or when its binding season differs from the active season.
+2. Accept a new envelope version carrying binding season, assurance, and proof kind. A legacy
+   seasonless/assurance-less envelope remains parseable only for public or otherwise
+   non-entry-scoped operations during rollout.
+3. Refuse every protected entry-scoped authorization when the envelope has no binding season, when
+   its binding season differs from the active season, or when the operation requires ownership proof
+   and the signed assurance is not `OWNERSHIP_VERIFIED`.
 4. Deploy the season-bearing Web signer before enabling that protected-root requirement, then record and remove remaining legacy-envelope use at the compatibility gate.
 5. Log mismatch reason without logging unnecessary personal data.
 
@@ -389,6 +408,8 @@ Tests:
 
 - Current-season bind, rebind, unlink, and same-season uniqueness.
 - Same numeric entry ID in different seasons.
+- Direct binding persists `UNVERIFIED`; successful challenge and audited operator paths persist the
+  exact proof kind, and forged/upgraded envelope assurance is rejected.
 - Legacy seasonless envelopes are denied on protected entry roots but remain compatible with explicitly non-entry/public operations until their removal gate.
 - Rollover mismatch blocks entry-scoped GraphQL reads.
 - Legacy-envelope compatibility and removal gate.
@@ -715,7 +736,9 @@ Production deployment order for cross-service contracts is **Data → GraphQL �
 
 - Add nullable season/current-binding columns and new tables first.
 - Resolve the current Data active season through the canonical season contract.
-- Revalidate existing bound entry IDs against current-season identity before backfilling binding season/history.
+- Revalidate existing bound entry IDs against current-season identity before backfilling binding
+  season/history. Backfill legacy direct bindings as `UNVERIFIED` unless a durable challenge or
+  operator audit record proves ownership.
 - Leave unresolved rows in a recoverable `rebind required` state; do not silently discard or relabel them.
 - Dual-write old current columns and binding history during one compatibility period.
 - Switch authorization reads to season-aware binding before removing the old global uniqueness index.
@@ -730,7 +753,8 @@ Production deployment order for cross-service contracts is **Data → GraphQL �
 
 ### GraphQL
 
-- Add the new envelope version, types, fields, and queries while current public/non-entry contracts remain readable.
+- Add the new envelope version with season, assurance, and proof kind plus the related types, fields,
+  and queries while current public/non-entry contracts remain readable.
 - Deploy the season-bearing Web envelope first. Then accept old and new envelopes at parsing, but reject the old seasonless envelope on every protected entry-scoped root and authorize active-season My FPL only when season identity is proven.
 - Keep `League.tournamentId` and the old league results query until Web consumers migrate; mark them deprecated after association-list parity.
 - Version cache keys whenever a stored shape gains season or association identity.
@@ -782,7 +806,7 @@ Required evidence:
 - Overview and league lists are bounded and avoid full standings/N+1 reads.
 - One-to-many league associations are correct.
 - Viewer summaries cover supported competition result kinds.
-- Stable facts revisions and settled metadata.
+- Stable facts revisions and settled metadata, including the producer revision exposed to consumers.
 - Old queries remain compatible during migration.
 
 ### Web

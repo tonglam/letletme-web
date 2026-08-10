@@ -117,7 +117,7 @@ revision
 state: SCHEDULED | LIVE | SETTLED
 publishedAt
 checkedAt
-authority: OFFICIAL_FPL | LETLETME_RULES | MIXED
+authority: OFFICIAL_FPL | LETLETME_RULES
 coverage.expected
 coverage.succeeded
 coverage.failed
@@ -131,6 +131,9 @@ Responsibilities:
 - Web adds the retained-row count after merging a failed batch with its previous payload, then converts timestamps and coverage into `fresh`, `refreshing`, `delayed`, `partial`, `final`, or `unavailable` through one shared normalizer.
 - Freshness thresholds live in one Web configuration initially and must be derived from the actual producer cadence.
 - Existing `source` fields remain compatibility aliases while new consumers use `authority`; provider provenance remains available through the underlying facts and must not be confused with result-rule authority.
+- Authority describes the result rules only: official results use `OFFICIAL_FPL`, while custom
+  results use `LETLETME_RULES`. Multiple upstream/provider inputs are represented by source
+  provenance and never by a third authority value.
 - Existing GraphQL consumers remain compatible because the new fields are additive.
 
 ### 4.3 Required GraphQL read models
@@ -270,7 +273,7 @@ Responsibilities:
 
 - `LiveSectionShell`: shared page header, local Live navigation, controls/status slots, and width variants.
 - `LiveStatusBar`: render the normalized state, timestamp, coverage, manual refresh, and accessible announcement.
-- `LiveGameweekControl`: synchronize the selected event with `?gw=`.
+- `LiveGameweekControl`: synchronize the selected `EventRef` with `?season=&gw=`.
 - `use-live-revision-refresh`: page visibility/offline checks, 30-second snapshot probe, revision comparison, request coalescing, and full-fetch callback.
 - `live-status`: one pure normalizer from GraphQL result metadata to Web display state.
 - `live-event-context`: resolve requested event, current event, and latest finalized fallback on the server.
@@ -295,12 +298,12 @@ Tests:
 Changes:
 
 1. Replace the route-level `CurrentGameweekUnavailable` gate with `live-event-context`.
-2. Read `?gw=` on the server and seed that event.
+2. Read `?season=&gw=` on the server and seed that exact `EventRef`.
 3. Update gameweek changes through the URL while retaining client-side refresh behavior.
 4. Adopt `LiveSectionShell`, `LiveStatusBar`, and the shared revision hook.
 5. Request the complete scoreboard projection already supported by GraphQL, including played/to-play values where available.
 6. Preserve `TeamStats`, `PlayerList`, `PlayerRow`, player explanations, and entry lookup.
-7. Add `gw` to share URLs.
+7. Add both `season` and `gw` to event-scoped share URLs.
 8. Keep upstream squad state as displayed; add no separate autosub prediction or official-action control.
 
 Primary files:
@@ -351,7 +354,7 @@ Detail changes:
    - custom points/group table;
    - custom knockout/matchup.
 4. Retain the viewer row/matchup, search, relevant filters, comparison, partial-row retention, and entry-to-Live-Points links.
-5. Support `?gw=` and disable polling for historical/final results.
+5. Support `?season=&gw=` and disable polling for historical/final results.
 6. Remove detailed setup phases, full roster, rules tab, and management UI only after Competition Home exposes them.
 
 Compatibility:

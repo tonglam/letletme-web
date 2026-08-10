@@ -463,12 +463,12 @@ Initial route contract:
 
 ```text
 /data                                  Explore Overview
-/data/gameweek?gw=<event>
-/data/fixtures?from=<event>&horizon=<n>&team=<team>
+/data/gameweek?season=<season>&gw=<event>
+/data/fixtures?season=<season>&from=<event>&horizon=<n>&team=<team>
 /data/market?view=<mode>&days=<n>
-/data/selections?cohort=<typed-key>&gw=<event>
+/data/selections?cohort=<typed-key>&season=<season>&gw=<event>
 /data/player-stats?p1=<player>&p2=<player>&section=<section>
-/data/briefing?topic=<slug>&player=<code>&team=<key>&gw=<event>&source=<id>
+/data/briefing?topic=<slug>&player=<code>&team=<key>&season=<season>&gw=<event>&source=<id>
 /data/briefing/<topic-slug>
 ```
 
@@ -478,6 +478,12 @@ Rules:
 - `/zh-CN/data...` continues through the existing locale router.
 - The top-level Explore label links to `/data`; the desktop dropdown contains the six direct tools.
 - Meaningful controls update the URL through replace/push without losing locale or unrelated valid scope.
+- Every event-scoped canonical URL carries the complete `EventRef`: both `season` and `gw` (or
+  `from` for the fixture start event). Server route state parses and seeds that same pair; it never
+  resolves a historical event number against the active season implicitly.
+- Legacy event URLs without `season` remain compatibility inputs for the active season only and
+  normalize/redirect to the season-bearing canonical URL. They are never emitted as historical
+  canonical links.
 - Gameweek, cohort, player comparison, and Briefing topic links render a useful server-selected state on first load.
 - Invalid or unauthorized scope falls back visibly to a safe default; it is not silently interpreted as another private object.
 - A future `/explore/*` migration requires explicit approval and permanent redirects that preserve query/hash state. It is not part of this plan.
@@ -620,7 +626,7 @@ Rules:
 
 **Gameweek**
 
-- Make `gw` canonical URL state and server-seed the requested valid event.
+- Make `(season, gw)` canonical URL state and server-seed the requested valid `EventRef`.
 - Add the shared evidence context for official status, provisional/settled state, and live-board publication.
 - Add a bounded top-transfer board from the existing official event/player contract where available.
 - Add small canonical links to relevant Trends and Players evidence; do not embed the full cohort desk.
@@ -934,6 +940,8 @@ Flags control exposure, not schema correctness. Disabled features return an inte
 - Route tests for `/data` and every direct tool under both locales.
 - E2E: Explore Overview search → typed destination.
 - E2E: gameweek URL scope → server-selected round → player deep link.
+- E2E: the same `gw` in two seasons resolves distinct server state and every generated event link
+  retains its season; a legacy seasonless URL canonicalizes to the active season.
 - E2E: fixture unknown versus confirmed BGW.
 - E2E: Market latest-day price versus multi-day transfer window.
 - E2E: exact prepared cohort versus sampled Top-10k cohort metadata.
