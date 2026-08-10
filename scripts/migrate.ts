@@ -24,7 +24,7 @@ const MIGRATIONS_FOLDER = 'drizzle'
 const BASELINE_TAG = '0000_auth_baseline'
 const ADVISORY_LOCK_NAME = 'letletme-web-auth-migrations'
 
-type DatabaseState = {
+	type DatabaseState = {
 	hasAuthSchema: boolean
 	hasLedger: boolean
 	hasRetiredSharedSchema: boolean

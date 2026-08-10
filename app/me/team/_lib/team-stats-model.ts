@@ -426,7 +426,7 @@ export const ENTRY_EVENT_CACHE_TTL_MS = 30 * 60_000
 /** Current-GW event can drift during the matchday; still far from Live polling. */
 export const ENTRY_EVENT_CURRENT_CACHE_TTL_MS = 10 * 60_000
 const HISTORY_CACHE_TTL_MS = 20 * 60_000
-const MAX_CACHE_ENTRIES = 100
+	const MAX_CACHE_ENTRIES = 100
 
 const getFreshCacheValue = <K, T>(
 	cache: Map<K, TimedCacheValue<T>>,
