@@ -64,6 +64,13 @@
 			"when": 1786248000000,
 			"tag": "0008_web_auth_runtime_role",
 			"breakpoints": true
+		},
+		{
+			"idx": 9,
+			"version": "7",
+			"when": 1786356908000,
+			"tag": "0009_graphql_auth_reader",
+			"breakpoints": true
 		}
 	]
 }

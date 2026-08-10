@@ -57,7 +57,8 @@ describe('Web v3 production cutover workflow', () => {
 	it('trusts only protected main before installing or executing candidate code', () => {
 		const jobs = [
 			job('preflight', 'activate_database'),
-			job('activate_database', 'status'),
+			job('activate_database', 'post_activation_migrate'),
+			job('post_activation_migrate', 'status'),
 			job('status')
 		]
 
@@ -81,12 +82,12 @@ describe('Web v3 production cutover workflow', () => {
 
 		assert.equal(
 			workflow.match(/name: Require exact protected main commit/g)?.length,
-			3
+			4
 		)
 	})
 
 	it('gates the exact Web SHA before migration, provisioning, and runtime verification', () => {
-		const activation = job('activate_database', 'status')
+		const activation = job('activate_database', 'post_activation_migrate')
 		const gate = activation.indexOf('scripts/v3-release-gate.ts')
 		const migrationRecheck = activation.indexOf(
 			'V3_WEB_ACTIVATION_MIGRATIONS=0008-pending'
@@ -114,6 +115,28 @@ describe('Web v3 production cutover workflow', () => {
 			activation,
 			/V3_WEB_RELEASE_PLAN=3\.2\.5-r3-normalized-to-3\.2\.5/
 		)
+	})
+
+	it('allows only the reviewed 0009 post-activation migration', () => {
+		const migration = job('post_activation_migrate', 'status')
+		const status = migration.indexOf('npm run db:migrate:status')
+		const activationGate = migration.indexOf(
+			'test "$V3_CUTOVER_APPROVAL" = "APPROVE_V3_ACTIVATION $CUTOVER_RUN_ID"'
+		)
+		const migrate = migration.indexOf('npm run db:migrate\n')
+		const graphqlBoundary = migration.indexOf('Verify the GraphQL auth-reader boundary')
+		const webBoundary = migration.indexOf('npm run db:runtime-contract')
+
+		assert.match(migration, /operation == 'v3-migrate-database'/)
+		assert.match(migration, /pending 0009_graphql_auth_reader/)
+		assert.match(migration, /rows\[0\]\.status !== 'activated'/)
+		assert.match(migration, /graphql_auth_reader_select/)
+		assert.doesNotMatch(migration, /pending 0008_web_auth_runtime_role/)
+		assert.ok(activationGate > 0)
+		assert.ok(status > activationGate)
+		assert.ok(migrate > status)
+		assert.ok(graphqlBoundary > migrate)
+		assert.ok(webBoundary > graphqlBoundary)
 	})
 
 	it('keeps Vercel deployment and legacy cleanup outside the database operator', () => {

@@ -223,6 +223,182 @@ jobs:
       - name: Verify the live Web runtime boundary
         run: npm run db:runtime-contract
 
+  post_activation_migrate:
+    if: github.event.client_payload.operation == 'v3-migrate-database'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact Web candidate
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ github.event.client_payload.sha }}
+          persist-credentials: false
+      - name: Require exact protected main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          main_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$TARGET_SHA" = "$main_sha"
+          test "$(git rev-parse HEAD)" = "$main_sha"
+          echo "V3_WEB_MIGRATION_TRUSTED_MAIN_SHA=$main_sha"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Gate the exact post-activation migration
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.V3_MIGRATION_DATABASE_URL }}
+          CUTOVER_RUN_ID: ${{ github.event.client_payload.v3_cutover_run_id }}
+          V3_CUTOVER_APPROVAL: ${{ github.event.client_payload.v3_cutover_approval }}
+        run: |
+          set -euo pipefail
+          [[ "$CUTOVER_RUN_ID" =~ ^v3-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{7,12}$ ]]
+          test "$V3_CUTOVER_APPROVAL" = "APPROVE_V3_ACTIVATION $CUTOVER_RUN_ID"
+
+          set +e
+          output=$(npm run db:migrate:status 2>&1)
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if printf '%s\n' "$output" | grep -Eq '^(backdated|mismatch|orphan|missing) '; then
+            echo "::error::Web migration history is unsafe"
+            exit 1
+          fi
+          pending_count=$(printf '%s\n' "$output" | grep -Ec '^pending ' || true)
+          if [ "$pending_count" -eq 0 ] && [ "$status" -eq 0 ]; then
+            echo 'V3_WEB_POST_ACTIVATION_MIGRATION=already-applied'
+          elif [ "$pending_count" -eq 1 ] \
+            && printf '%s\n' "$output" | grep -Fxq 'pending 0009_graphql_auth_reader' \
+            && [ "$status" -eq 1 ]; then
+            echo 'V3_WEB_POST_ACTIVATION_MIGRATION=0009-pending'
+          else
+            echo "::error::Unexpected post-activation migration state (exit=$status pending=$pending_count)"
+            exit 1
+          fi
+
+          node --input-type=module <<'EOF'
+          import postgres from 'postgres'
+          const sql = postgres(process.env.DIRECT_DATABASE_URL, { max: 1, prepare: false })
+          const rows = await sql`
+            SELECT status
+            FROM ops.migration_runs
+            WHERE run_id = ${process.env.CUTOVER_RUN_ID}
+          `
+          if (rows.length !== 1 || rows[0].status !== 'activated') {
+            throw new Error('Data Platform v3 activation is not authoritative')
+          }
+          await sql.end()
+          EOF
+      - name: Apply and verify the exact Web migration
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.V3_MIGRATION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          npm run db:migrate
+          npm run db:migrate:status
+      - name: Verify the GraphQL auth-reader boundary
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.V3_MIGRATION_DATABASE_URL }}
+        run: |
+          node --input-type=module <<'EOF'
+          import postgres from 'postgres'
+          const sql = postgres(process.env.DIRECT_DATABASE_URL, { max: 1, prepare: false })
+          const [role] = await sql`
+            SELECT
+              rolcanlogin,
+              rolsuper,
+              rolcreatedb,
+              rolcreaterole,
+              rolinherit,
+              rolreplication,
+              rolbypassrls
+            FROM pg_roles
+            WHERE rolname = 'letletme_graphql_reader'
+          `
+          if (!role || Object.values(role).some(Boolean)) {
+            throw new Error('GraphQL auth capability role is missing or unsafe')
+          }
+
+          const [boundary] = await sql`
+            SELECT
+              has_schema_privilege('letletme_graphql_reader', 'bauth', 'USAGE') AS can_use,
+              has_schema_privilege('letletme_graphql_reader', 'bauth', 'CREATE') AS can_create,
+              has_table_privilege('letletme_graphql_reader', 'bauth."user"', 'SELECT') AS user_read,
+              has_table_privilege('letletme_graphql_reader', 'bauth.mini_program_session', 'SELECT') AS session_read
+          `
+          if (!boundary.can_use || boundary.can_create || !boundary.user_read || !boundary.session_read) {
+            throw new Error('GraphQL auth-reader allowlist is incomplete or unsafe')
+          }
+
+          const excessive = await sql`
+            SELECT format('%I.%I', namespace_row.nspname, relation.relname) AS relation_name
+            FROM pg_class relation
+            JOIN pg_namespace namespace_row ON namespace_row.oid = relation.relnamespace
+            WHERE namespace_row.nspname = 'bauth'
+              AND relation.relkind IN ('r', 'p')
+              AND (
+                has_table_privilege('letletme_graphql_reader', relation.oid, 'INSERT')
+                OR has_table_privilege('letletme_graphql_reader', relation.oid, 'UPDATE')
+                OR has_table_privilege('letletme_graphql_reader', relation.oid, 'DELETE')
+                OR has_table_privilege('letletme_graphql_reader', relation.oid, 'TRUNCATE')
+                OR has_table_privilege('letletme_graphql_reader', relation.oid, 'REFERENCES')
+                OR has_table_privilege('letletme_graphql_reader', relation.oid, 'TRIGGER')
+                OR (
+                  relation.relname NOT IN ('user', 'mini_program_session')
+                  AND has_table_privilege('letletme_graphql_reader', relation.oid, 'SELECT')
+                )
+              )
+          `
+          if (excessive.length > 0) {
+            throw new Error('GraphQL auth reader has excessive bauth privileges')
+          }
+
+          const policies = await sql`
+            SELECT tablename, roles::text[] AS roles, cmd, qual, with_check
+            FROM pg_policies
+            WHERE schemaname = 'bauth'
+              AND policyname = 'graphql_auth_reader_select'
+            ORDER BY tablename
+          `
+          const expectedTables = ['mini_program_session', 'user']
+          const validPolicies = policies.length === 2 && policies.every((policy, index) =>
+            policy.tablename === expectedTables[index]
+            && policy.cmd === 'SELECT'
+            && policy.roles.length === 1
+            && policy.roles[0] === 'letletme_graphql_reader'
+            && policy.qual?.replace(/[()\s]/g, '') === 'true'
+            && policy.with_check === null
+          )
+          if (!validPolicies) throw new Error('GraphQL auth-reader RLS policies are invalid')
+          console.log(JSON.stringify({ graphqlAuthReaderTables: expectedTables, writePrivileges: 0 }))
+          await sql.end()
+          EOF
+      - name: Build runtime URL without exposing credentials
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.V3_MIGRATION_DATABASE_URL }}
+          V3_WEB_DB_PASSWORD: ${{ secrets.V3_WEB_DB_PASSWORD }}
+        run: |
+          node --input-type=module <<'EOF'
+          import { appendFileSync } from 'node:fs'
+          const url = new URL(process.env.DIRECT_DATABASE_URL)
+          const match = /^postgres\.([a-z0-9]{8,64})$/.exec(decodeURIComponent(url.username))
+          if (!match || !/^[A-Za-z0-9_-]{64}$/.test(process.env.V3_WEB_DB_PASSWORD ?? '')) {
+            throw new Error('Migration URL or Web runtime password is invalid')
+          }
+          url.username = `letletme_web_runtime.${match[1]}`
+          url.password = process.env.V3_WEB_DB_PASSWORD
+          url.port = '6543'
+          const runtimeUrl = url.toString()
+          console.log(`::add-mask::${runtimeUrl}`)
+          appendFileSync(process.env.GITHUB_ENV, `DATABASE_URL=${runtimeUrl}\n`)
+          EOF
+      - name: Verify the live Web runtime boundary
+        run: npm run db:runtime-contract
+
   status:
     if: github.event.client_payload.operation == 'v3-status'
     runs-on: ubuntu-latest
