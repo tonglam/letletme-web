@@ -78,6 +78,18 @@ jobs:
         with:
           ref: ${{ inputs.sha }}
           persist-credentials: false
+      - name: Require exact protected main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          main_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$TARGET_SHA" = "$main_sha"
+          test "$(git rev-parse HEAD)" = "$main_sha"
+          echo "V3_WEB_TRUSTED_MAIN_SHA=$main_sha"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
@@ -155,6 +167,18 @@ jobs:
         with:
           ref: ${{ inputs.sha }}
           persist-credentials: false
+      - name: Require exact protected main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          main_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$TARGET_SHA" = "$main_sha"
+          test "$(git rev-parse HEAD)" = "$main_sha"
+          echo "V3_WEB_TRUSTED_MAIN_SHA=$main_sha"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
@@ -262,6 +286,18 @@ jobs:
         with:
           ref: ${{ inputs.sha }}
           persist-credentials: false
+      - name: Require exact protected main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          main_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$TARGET_SHA" = "$main_sha"
+          test "$(git rev-parse HEAD)" = "$main_sha"
+          echo "V3_WEB_TRUSTED_MAIN_SHA=$main_sha"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22

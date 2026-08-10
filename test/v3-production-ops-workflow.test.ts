@@ -38,7 +38,10 @@ describe('Web v3 production cutover workflow', () => {
 			'v3_release_manifest_sha256',
 			'v3_cutover_approval'
 		]) {
-			assert.match(dispatchBridge, new RegExp(`${input}: \\$\\{\\{ inputs\\.${input} \\}\\}`))
+			assert.match(
+				dispatchBridge,
+				new RegExp(`${input}: \\$\\{\\{ inputs\\.${input} \\}\\}`)
+			)
 		}
 		assert.match(dispatchBridge, /secrets: inherit/)
 	})
@@ -54,6 +57,37 @@ describe('Web v3 production cutover workflow', () => {
 		]) {
 			assert.doesNotMatch(preflight, new RegExp(mutation))
 		}
+	})
+
+	it('trusts only protected main before installing or executing candidate code', () => {
+		const jobs = [
+			job('preflight', 'activate_database'),
+			job('activate_database', 'status'),
+			job('status')
+		]
+
+		for (const contents of jobs) {
+			const checkout = contents.indexOf('actions/checkout@')
+			const trustedMain = contents.indexOf(
+				'gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main"'
+			)
+			const setupNode = contents.indexOf('actions/setup-node@')
+			const install = contents.indexOf('npm ci')
+			const productionSecret = contents.indexOf('V3_MIGRATION_DATABASE_URL')
+
+			assert.ok(checkout > 0)
+			assert.ok(trustedMain > checkout)
+			assert.ok(setupNode > trustedMain)
+			assert.ok(install > setupNode)
+			assert.ok(productionSecret > install)
+			assert.match(contents, /test "\$TARGET_SHA" = "\$main_sha"/)
+			assert.match(contents, /test "\$\(git rev-parse HEAD\)" = "\$main_sha"/)
+		}
+
+		assert.equal(
+			workflow.match(/name: Require exact protected main commit/g)?.length,
+			3
+		)
 	})
 
 	it('gates the exact Web SHA before migration, provisioning, and runtime verification', () => {
