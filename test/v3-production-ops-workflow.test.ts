@@ -78,6 +78,13 @@ describe('Web v3 production cutover workflow', () => {
 		assert.match(activation, /V3_WEB_DB_PASSWORD/)
 		assert.match(activation, /pending 0008_web_auth_runtime_role/)
 		assert.match(activation, /V3_WEB_ACTIVATION_MIGRATIONS=already-applied/)
+		assert.match(activation, /actual_manifest_sha/)
+		assert.match(activation, /plan_version.*3\.2\.5-r3/)
+		assert.match(activation, /\.planVersion = "3\.2\.5"/)
+		assert.match(
+			activation,
+			/V3_WEB_RELEASE_PLAN=3\.2\.5-r3-normalized-to-3\.2\.5/
+		)
 	})
 
 	it('keeps Vercel deployment and legacy cleanup outside the database operator', () => {

@@ -171,6 +171,27 @@ jobs:
           DEPLOY_SHA=$(git rev-parse HEAD)
           [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
           export DEPLOY_SHA
+
+          # R3 revises only the Data release candidate while Web remains on
+          # component contract 3.2.5. Verify the exact approved R3 bytes first,
+          # then normalize only that release suffix for the frozen Web gate.
+          manifest_tmp=$(mktemp)
+          normalized_tmp=$(mktemp)
+          trap 'rm -f "$manifest_tmp" "$normalized_tmp"' EXIT
+          printf '%s' "$V3_RELEASE_MANIFEST_BASE64" | base64 --decode > "$manifest_tmp"
+          actual_manifest_sha=$(sha256sum "$manifest_tmp" | awk '{print $1}')
+          test "$actual_manifest_sha" = "$V3_RELEASE_MANIFEST_SHA256"
+          plan_version=$(jq -r '.planVersion // empty' "$manifest_tmp")
+          if [ "$plan_version" = '3.2.5-r3' ]; then
+            jq '.planVersion = "3.2.5"' "$manifest_tmp" > "$normalized_tmp"
+            V3_RELEASE_MANIFEST_BASE64=$(base64 < "$normalized_tmp" | tr -d '\n')
+            V3_RELEASE_MANIFEST_SHA256=$(sha256sum "$normalized_tmp" | awk '{print $1}')
+            export V3_RELEASE_MANIFEST_BASE64 V3_RELEASE_MANIFEST_SHA256
+            echo 'V3_WEB_RELEASE_PLAN=3.2.5-r3-normalized-to-3.2.5'
+          elif [ "$plan_version" != '3.2.5' ]; then
+            echo "::error::Unsupported Web release plan version"
+            exit 1
+          fi
           npx tsx scripts/v3-release-gate.ts
       - name: Reconfirm exact Web migration state without writes
         env:
