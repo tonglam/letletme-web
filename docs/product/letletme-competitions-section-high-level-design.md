@@ -309,6 +309,14 @@ principal_lifecycle_fences
   fence_version
   requested_at
   finalized_at nullable
+
+Web account_deletion_operations
+  operation_id
+  principal_digest
+  fence_version
+  state: REQUESTED | PREFLIGHT_PASSED | AUTH_DELETE_IN_PROGRESS | AUTH_DELETED | CANCELED
+  created_at
+  updated_at
 ```
 
 `principal_digest` is a deterministic HMAC produced only by the trusted command boundary. Every
@@ -337,10 +345,16 @@ Rules:
   ownership while fenced. Web deletes the auth row only after a fresh zero-owner preflight for that
   fence version, then sends an idempotent finalize command that stores only the digest as `DELETED`,
   records the account-deletion audit event, changes archived rows to
-  `owner_deleted_archived`, and clears their management principal. A cancelled deletion explicitly
-  releases only a `DELETION_PENDING` fence before the auth row is removed; a `DELETED` fence is
-  permanent. This protocol rejects stale already-authenticated ownership commands and must never
-  leave a live competition resolved to an identifier that can no longer authenticate.
+  `owner_deleted_archived`, and clears their management principal. Web serializes cancellation and
+  auth-row deletion on its durable `account_deletion_operations` row: the deletion worker locks the
+  row, rechecks the exact operation/fence version, changes it to `AUTH_DELETE_IN_PROGRESS`, and
+  deletes the auth row in the same Web-database transaction. Cancellation takes the same lock and
+  is accepted only from `REQUESTED` or `PREFLIGHT_PASSED`; once the worker claims the operation it
+  is retry-to-finalize only and the Data fence remains closed. After Web durably records `CANCELED`,
+  its signed version-bound cancel command may release only the matching `DELETION_PENDING` fence;
+  a stale worker cannot cross the canceled operation state. A `DELETED` fence is permanent. This
+  protocol rejects stale already-authenticated ownership commands and must never leave a live
+  competition resolved to an identifier that can no longer authenticate.
 - `recovery_required` is therefore limited to audited legacy migration and explicit operator
   recovery; account deletion is not an implicit first-claim takeover path.
 - Owner transfer is atomic and requires the current owner plus an accepting target account; the
@@ -535,7 +549,9 @@ Changes:
 11. Add signed owner-transfer, principal-lifecycle-fence, version-bound account-deletion preflight,
     cancel/finalize, and archived-owner tombstone commands. Serialize every ownership-creating
     command on the same principal lock, reject a pending/deleted owner target, and reject account
-    deletion while any owned competition remains non-archived.
+    deletion while any owned competition remains non-archived. Accept cancellation only for the
+    matching still-pending operation version; Web serializes that command with auth-row deletion on
+    one durable operation row.
 
 Primary files:
 
@@ -780,7 +796,8 @@ Changes:
 9. Remove old routes/components only after redirect and query telemetry confirms migration.
 10. Integrate Web account deletion with Data's begin/preflight/finalize fence protocol. Keep the
     returned fence version through the request, require transfer-away or archive before deleting an
-    organizer identity, and expose an explicit pre-auth-deletion cancellation path.
+    organizer identity, and persist a deletion-operation state machine whose row lock serializes
+    pre-auth cancellation with the transaction that claims and deletes the auth row.
 
 Primary files:
 
@@ -905,8 +922,9 @@ Do not expose invitations before roster-lock semantics exist. Do not expose a fo
 - Archive and conditional hard-delete behavior.
 - Owner transfer plus the account-deletion fence across Web and Data, including a creation or
   transfer-to request authenticated before deletion begins, concurrent preflight, version mismatch,
-  cancellation before auth deletion, idempotent finalization, and a failed preflight causing no
-  auth-row deletion.
+  cancellation racing a worker claim, rejection of cancellation after the atomic auth-delete
+  claim, stale-worker rejection after cancellation, idempotent finalization, and a failed preflight
+  causing no auth-row deletion.
 - Mobile tables/brackets, keyboard navigation, focus restoration, dialog labeling, status announcements, and reduced-motion behavior.
 - No native confirmation/notification UI.
 

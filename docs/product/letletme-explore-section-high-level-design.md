@@ -407,6 +407,11 @@ Rules:
   character caps, plus language, total character count, and rights revision. `LINK_ONLY`,
   `METADATA`, `SUMMARY`, and `EXCERPT` modes never return transcript body segments, and no cache or
   public URL bypasses this repository-level projection.
+- Every opaque transcript cursor binds `item_id`, `source_content_hash`, `rights_revision`, and the
+  next character offset under the server signature. Each page rechecks both revisions against the
+  current transcript row before reading; correction, reingestion, or rights change returns a typed
+  restart-required result and never combines segments from different bodies. Transcript page
+  caches use the same hash/revision identity rather than only item and offset.
 - Full paywalled article bodies are not stored or rendered.
 - A model-assisted summary is labelled by `summary_method`, retains every source link, and cannot change the item's evidence class.
 - One item has one canonical source identity. Reposts may link to the original and are not counted as independent agreement.
@@ -830,8 +835,9 @@ Rules:
 - Add correction/removal reconciliation and cache invalidation events.
 - Add summary provenance and content-length enforcement by rights mode.
 - Add bounded transcript storage, retention expiry, rights-revision invalidation, and paginated
-  projection enforcement; reject `TRANSCRIPT` source enablement until all four limits are present
-  in its source policy fixture.
+  projection enforcement, including hash/revision-bound cursors that reject corrected content;
+  reject `TRANSCRIPT` source enablement until all four limits are present in its source policy
+  fixture.
 - Add bounded queues/workers with per-source concurrency, rate, retry, and circuit-breaker policy.
 - Store raw provider payloads only when the source policy explicitly permits retention; otherwise retain bounded audit metadata and normalized allowed fields.
 
@@ -859,7 +865,8 @@ Rules:
 - Enforce rights-mode field projection in the repository/service layer, not only the resolver.
 - Expose transcript metadata and bounded cursor segments only for a currently authorized
   `TRANSCRIPT` item; count segment characters toward query complexity and never place the private
-  unbounded body in a resolver/cache payload.
+  unbounded body in a resolver/cache payload. Reject a cursor when its content hash or rights
+  revision no longer matches the current row and return a typed restart-required state.
 - Return grouped evidence classes and chronological data; do not compute consensus, sentiment, or recommended-player scores.
 - Add bounded related quantitative evidence references rather than copying full Trends/Players payloads.
 - Add cache revisions that include item status, source rights revision, topic membership, and removal events.
@@ -999,8 +1006,8 @@ Flags control exposure, not schema correctness. Disabled features return an inte
 - Season rollover and method-version isolation tests.
 - Raw member non-publication and retention tests.
 - Briefing rights-mode projection tests from repository through cache payload.
-- Transcript storage/retention, stale-rights-revision denial, segment pagination/character caps,
-  and non-`TRANSCRIPT` leakage tests.
+- Transcript storage/retention, stale-rights-revision denial, content-correction cursor restart,
+  segment pagination/character caps, and non-`TRANSCRIPT` leakage tests.
 - Source URL, fingerprint, repost, deduplication, correction, removal, and source-disable tests.
 - Entity ambiguity/review gate and season-safe player/team mapping tests.
 - Queue retry, checkpoint, rate, circuit-breaker, and idempotency tests.

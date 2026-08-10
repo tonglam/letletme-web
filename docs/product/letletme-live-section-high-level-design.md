@@ -124,7 +124,7 @@ authority: OFFICIAL_FPL | LETLETME_RULES
 coverage.expected
 coverage.succeeded
 coverage.failed
-reasonCode
+reasonCode nullable
 ```
 
 Responsibilities:
@@ -138,11 +138,13 @@ Responsibilities:
   results use `LETLETME_RULES`. Multiple upstream/provider inputs are represented by source
   provenance and never by a third authority value.
 - Existing GraphQL consumers remain compatible because the new fields are additive.
-- `revision` remains the accepted official snapshot revision. `resultRevision` is monotonic within
-  the exact entry, competition, or match-result scope and advances whenever its body, coverage,
-  failure/retained-row state, or authority changes. Official projections may initially set
-  `resultRevision = revision`; custom competition calculation retries and recovery advance
-  `resultRevision` independently.
+- `revision` remains the accepted official snapshot revision. `resultRevision` comes from an
+  independent monotonic authority within the exact entry, competition, or match-result scope and
+  advances whenever its body, coverage, failure/retained-row state, or authority changes. This rule
+  applies to official and custom projections alike: an official calculation retry or recovery must
+  advance `resultRevision` even when `revision` is unchanged. Implementations must not derive
+  `resultRevision` from `revision`; equality is allowed only as an incidental initial value for a
+  projection proven to be completely and immutably determined by that snapshot.
 - The cheap refresh probe returns both revisions and Web performs a full fetch when either changes.
   Suppression is allowed only when the exact `(season, eventId, revision, resultRevision)` token is
   unchanged; a custom result can therefore recover without waiting for unrelated upstream facts.
@@ -269,7 +271,7 @@ Tests:
 - Extend entry-live batch tests for 500 and rejected 501.
 - Add `competitionLive` fixtures for official standings, points groups, and knockout results.
 - Extend snapshot tests for coverage, reason codes, composite snapshot/result revision probes, and
-  custom-result recovery without an upstream revision.
+  official/custom result recovery without an upstream revision.
 - Add same-numbered event/entry fixtures in two seasons and prove every Live repository and cache
   key selects only the requested `EventRef`.
 - Extend match-service tests for viewer-impact batching.
