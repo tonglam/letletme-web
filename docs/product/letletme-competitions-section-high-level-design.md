@@ -303,11 +303,14 @@ Rules:
 - Invitation preview exposes only sanitized competition identity, organizer display name, rules summary, schedule, participant count, capacity, and join state.
 - Joining requires a signed-in user with a verified active-season FPL entry.
 - Join validates the token, season, lifecycle, capacity, duplicate entry, existing claim, and roster policy atomically.
-- A seeded roster entry can be claimed by the user bound to the same entry without adding a duplicate participant.
+- A seeded roster entry can be claimed without adding a duplicate participant only after the user proves ownership of the same season-bound entry; a raw direct binding is not sufficient proof.
 - The organizer can revoke invitations and see aggregate/participant join states.
 - Tracked leagues do not create invitation records; their membership continues to come from source synchronization.
 - Persist a resolved `ownerUserId` as an opaque stable Web user identifier received through the trusted signed server command. Data does not need a foreign key to the Web authentication database.
-- For a migrated `recovery_required` row, permit management only when the signed principal's active-season binding matches the retained `admin_entry_id`; the recovery command atomically records `ownerUserId`, changes ownership to `resolved`, and writes an audit event.
+- For a migrated `recovery_required` row, never transfer ownership from a raw direct binding alone. The recovery command requires a signed principal whose same-season `admin_entry_id` binding carries an ownership-verified assurance from the challenge flow, or a separately audited operator-mediated recovery. It atomically records `ownerUserId`, changes ownership to `resolved`, and writes the proof kind and audit event.
+- Joining or a verified claim persists `participantUserId` so later access does not depend on whichever FPL entry is active on the account.
+- Historical competition reads authorize a stable matching `participantUserId` first. An active `EntryRef` may authorize entry membership only when its season matches the competition season.
+- A legacy member whose `participantUserId` is still null must complete an ownership-verified historical claim; when upstream historical proof is no longer possible, recovery is operator-mediated rather than accepting a seasonless or unverified binding.
 - Keep one organizer initially. Co-organizer roles are outside this plan.
 
 ### 4.6 Access and visibility
@@ -321,7 +324,7 @@ Initial visibility is private:
 - Explicit share cards: sanitized immutable result projection, added separately from full page access.
 - No anonymous competition directory and no arbitrary official-league lookup.
 
-GraphQL authorization must evaluate stable organizer identity and season-bound entry membership separately. The legacy entry-based recovery path is valid only while `ownershipState=recovery_required`; after resolution, `admin_entry_id` cannot grant management access. A user can remain the organizer even if their competitive entry is later absent from a synchronized official roster.
+GraphQL authorization must evaluate stable organizer identity, stable claimed participant identity, and season-bound entry membership separately. Historical and archived reads use `participantUserId` when present, so an account remains a participant after rebinding for a later season. The legacy entry-based recovery path is valid only while `ownershipState=recovery_required` and only with ownership-verified assurance for the competition season; after resolution, `admin_entry_id` cannot grant management access. A user can remain the organizer even if their competitive entry is later absent from a synchronized official roster.
 
 ### 4.7 Format capability and result contract
 
@@ -740,7 +743,8 @@ Do not expose invitations before roster-lock semantics exist. Do not expose a fo
 - Produce counts and exact IDs for unambiguous tracked, unambiguous custom, and ambiguous snapshot objects.
 - Resolve ambiguous source/kind/season/lifecycle rows before adding their non-null constraints; do not make `ownerUserId` non-null while any audited `recovery_required` row remains.
 - Drop global name uniqueness only after create/name-check code no longer depends on it.
-- Backfill stable owner IDs through a signed Web-owned mapping where the current admin entry has one unambiguous active account; mark unmatched owners `recovery_required`, keep `ownerUserId` null, and retain the audited compatibility claim path until each is resolved.
+- Backfill stable owner IDs through a signed Web-owned mapping only where the competition-season admin entry has one unambiguous ownership-verified account. Mark unverified or unmatched owners `recovery_required`, keep `ownerUserId` null, and retain the audited challenge/operator recovery path until each is resolved.
+- Backfill `participantUserId` for every roster row that has one unambiguous ownership-verified account in season-aware binding history. Keep unmatched rows nullable and expose the verified historical-claim path; never authorize a prior-season row by comparing it with the account's current-season entry number.
 - Map existing published competitions to locked lifecycle states.
 - Preserve all current result, audit, and setup rows.
 
@@ -783,6 +787,7 @@ Do not expose invitations before roster-lock semantics exist. Do not expose a fo
 
 - Every new root field is classified and denied without the required principal.
 - Stable owner and entry-member permissions remain distinct.
+- Stable participant access survives active-entry rebinding and season rollover; unverified direct bindings cannot claim organizer or historical participant identity.
 - List payload stays bounded and does not perform one table calculation per competition.
 - Participant/history pagination and complexity limits.
 - Correct discriminated result type and authority for every supported format.

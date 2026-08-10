@@ -364,9 +364,10 @@ Web changes:
 GraphQL changes:
 
 1. Expose `seasonContext` from the existing active-season/event authority.
-2. Accept a new envelope version carrying binding season while retaining the old version during rollout.
-3. Refuse entry authorization when envelope season and active season differ.
-4. Log mismatch reason without logging unnecessary personal data.
+2. Accept a new envelope version carrying binding season. A legacy seasonless envelope remains parseable only for public or otherwise non-entry-scoped operations during rollout.
+3. Refuse every protected entry-scoped authorization when the envelope has no binding season or when its binding season differs from the active season.
+4. Deploy the season-bearing Web signer before enabling that protected-root requirement, then record and remove remaining legacy-envelope use at the compatibility gate.
+5. Log mismatch reason without logging unnecessary personal data.
 
 Primary files:
 
@@ -388,6 +389,7 @@ Tests:
 
 - Current-season bind, rebind, unlink, and same-season uniqueness.
 - Same numeric entry ID in different seasons.
+- Legacy seasonless envelopes are denied on protected entry roots but remain compatible with explicitly non-entry/public operations until their removal gate.
 - Rollover mismatch blocks entry-scoped GraphQL reads.
 - Legacy-envelope compatibility and removal gate.
 - Web and mini-program session serialization.
@@ -728,8 +730,8 @@ Production deployment order for cross-service contracts is **Data â†’ GraphQL â†
 
 ### GraphQL
 
-- Add the new envelope version, types, fields, and queries while current contracts remain readable.
-- Accept old and new envelopes temporarily, but authorize active-season My FPL queries only when season identity is proven.
+- Add the new envelope version, types, fields, and queries while current public/non-entry contracts remain readable.
+- Deploy the season-bearing Web envelope first. Then accept old and new envelopes at parsing, but reject the old seasonless envelope on every protected entry-scoped root and authorize active-season My FPL only when season identity is proven.
 - Keep `League.tournamentId` and the old league results query until Web consumers migrate; mark them deprecated after association-list parity.
 - Version cache keys whenever a stored shape gains season or association identity.
 
@@ -776,6 +778,7 @@ bun run format:check
 Required evidence:
 
 - Season mismatch cannot authorize an entry read.
+- A seasonless legacy envelope cannot authorize an entry read, including when the same numeric ID exists in the active season.
 - Overview and league lists are bounded and avoid full standings/N+1 reads.
 - One-to-many league associations are correct.
 - Viewer summaries cover supported competition result kinds.

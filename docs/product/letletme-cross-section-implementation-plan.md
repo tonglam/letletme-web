@@ -232,6 +232,7 @@ PrincipalContext
   bindingSeason nullable
   entryId nullable
   bindingVerifiedAt nullable
+  bindingAssurance: UNVERIFIED | OWNERSHIP_VERIFIED
   envelopeVersion
 ```
 
@@ -240,7 +241,9 @@ Rules:
 - The Web private schema permits at most one active binding per `(userId, season)` and active uniqueness for `(season, entryId)` according to the My FPL migration.
 - Web signs the principal envelope; clients cannot supply another account or entry identity.
 - GraphQL verifies that `bindingSeason` matches Data's active season before authorizing active-season personal reads.
+- A legacy envelope without `bindingSeason` is parseable only for public or non-entry-scoped compatibility operations; it is denied on protected entry roots after the season-bearing Web signer is deployed.
 - A missing binding and a stale-season binding are distinct typed states. Stale state returns `rebind required` rather than querying another manager with the same number.
+- Raw direct binding sets `bindingAssurance=UNVERIFIED`; organizer recovery and historical participant claims require `OWNERSHIP_VERIFIED` or an audited operator action.
 - Stable organizer ownership uses the account identity through the trusted Web command mapping; participation and standings continue to use `EntryRef`.
 - Logs record mismatch category and contract version without unnecessary personal labels.
 
@@ -581,7 +584,7 @@ Failure of one optional gate does not block independent canonical sections. For 
 ### GraphQL
 
 - Add fields and roots; do not rename/remove current operations initially.
-- Accept old and new principal envelopes temporarily, but never authorize stale active-season identity.
+- Accept old and new principal envelopes temporarily at parsing, but never authorize a seasonless legacy envelope or stale-season identity on a protected entry-scoped root.
 - Generate Web types against the additive schema.
 - Mark legacy Tournament and singular-association fields deprecated only after zero-to-many consumers pass.
 - Remove a root only after query telemetry and route migrations show no required consumer.

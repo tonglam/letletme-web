@@ -203,6 +203,7 @@ reporting.manager_cohorts
   updated_at
 
 reporting.manager_cohort_snapshots
+  snapshot_id
   season_id
   cohort_id
   event_id
@@ -221,18 +222,14 @@ reporting.manager_cohort_snapshots
   method_version
 
 reporting.manager_cohort_members
-  season_id
-  cohort_id
-  event_id
+  snapshot_id
   entry_id
   sampled_rank
   stratum
   source_checked_at
 
 reporting.manager_cohort_player_stats
-  season_id
-  cohort_id
-  event_id
+  snapshot_id
   element_id
   pick_count
   captain_count
@@ -242,16 +239,12 @@ reporting.manager_cohort_player_stats
   denominator
 
 reporting.manager_cohort_chip_stats
-  season_id
-  cohort_id
-  event_id
+  snapshot_id
   chip
   entry_count
 
 reporting.manager_cohort_formation_stats
-  season_id
-  cohort_id
-  event_id
+  snapshot_id
   formation
   entry_count
 ```
@@ -259,7 +252,9 @@ reporting.manager_cohort_formation_stats
 Required invariants:
 
 - Cohort definition is unique by `(season_id, slug)`.
+- `snapshot_id` is the immutable primary key of one method-specific capture and every member or aggregate row references it; child rows never infer snapshot identity from season/cohort/event alone.
 - One published snapshot exists per `(season_id, cohort_id, event_id, method_version)`.
+- Child uniqueness is `(snapshot_id, entry_id)`, `(snapshot_id, element_id)`, `(snapshot_id, chip)`, or `(snapshot_id, formation)` as applicable, with a foreign key to `manager_cohort_snapshots`; rows from different method versions cannot collide or be combined.
 - Member identity is internal evidence and is not exposed through public GraphQL reads.
 - The sample positions are deterministically derived from cohort bounds, strata, event, and method version.
 - The target sample size is configuration bounded by one tested service maximum; Web cannot increase it.
@@ -558,20 +553,20 @@ Rules:
 **GraphQL**
 
 - Add shared `EvidenceContext` schema/type mapping.
-- Add evidence-class, truth-state, and coverage-state enums.
-- Map existing Market coverage, public competition Trends, and Player State provider context without breaking existing fields.
+- Add evidence-class, truth-state, coverage-state, and availability-state enums.
+- Map existing Market coverage, public competition Trends, and Player State provider context, including explicit availability reasons, without breaking existing fields.
 - Add query complexity limits for every new nested evidence context.
 
 **Web**
 
-- Add a typed evidence metadata presenter for source, scope, time, coverage, and limitations.
+- Add a typed evidence metadata presenter for source, scope, time, coverage, availability, and limitations.
 - Do not replace existing visible metadata until the new and old values have parity tests.
 
 **Exit criteria**
 
 - Migrations apply to a v3-shaped database and rollback through the documented additive path.
-- The same evidence-state fixture renders consistently across at least Market, Trends, and Players.
-- Exact/sample, unavailable/empty, and observed/captured/published semantics have contract tests.
+- The same evidence-state fixture, including `availabilityState`, renders consistently across at least Market, Trends, and Players.
+- Exact/sample, missing/collection-failed/not-yet-captured/confirmed-empty/stale, and observed/captured/published semantics have contract tests.
 
 ### WP2 — Navigation, routes, and Explore shell
 
