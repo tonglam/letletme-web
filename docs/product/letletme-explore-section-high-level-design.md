@@ -140,6 +140,7 @@ EvidenceContext
   publishedAt nullable
   truthState
   coverageState
+  availabilityState
   exact
   targetPopulation nullable
   denominator nullable
@@ -166,6 +167,7 @@ Initial truth and coverage states:
 ```text
 truthState: SCHEDULED | PROVISIONAL | SETTLED | OBSERVED | ATTRIBUTED | UNAVAILABLE
 coverageState: COMPLETE | PARTIAL | STALE | UNKNOWN | NOT_APPLICABLE
+availabilityState: AVAILABLE | MISSING | COLLECTION_FAILED | NOT_YET_CAPTURED | CONFIRMED_EMPTY | STALE
 ```
 
 Rules:
@@ -175,7 +177,8 @@ Rules:
 - `denominator` is the number used for the displayed calculation; it is not silently substituted with target population.
 - `observedAt`, `capturedAt`, and `publishedAt` retain different meanings and are not collapsed into one `updatedAt` field.
 - A derived figure supplies `methodKey` and `methodVersion`; user-facing methodology may resolve from those stable keys.
-- Missing, failed, not-yet-captured, confirmed empty, and stale remain distinct states.
+- `availabilityState` is the typed reason a payload can or cannot be used; it distinguishes missing, failed, not-yet-captured, confirmed-empty, and stale evidence even when `truthState=UNAVAILABLE` or `coverageState=UNKNOWN` would otherwise look identical.
+- `AVAILABLE` means the evidence is usable under its declared truth and coverage states; `STALE` means a retained value remains renderable but must be labelled stale.
 - Briefing attribution metadata does not make an attributed statement an official or verified fact.
 - Existing Market coverage and Player State provider revisions map into this shared context without losing their more detailed domain fields.
 

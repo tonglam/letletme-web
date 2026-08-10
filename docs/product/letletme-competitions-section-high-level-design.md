@@ -144,7 +144,8 @@ Add to `tournament_infos` without renaming the physical table during this implem
 competitionKind: tracked_official_league | custom_tournament
 season
 officialLeagueSourceId nullable
-ownerUserId
+ownerUserId nullable
+ownershipState: resolved | recovery_required
 rosterLockedAt nullable
 activatedAt nullable
 finishedAt nullable
@@ -159,7 +160,8 @@ Rules:
 - `league_event_results` must become season-safe and source-owned. Add `season` and/or the source foreign key before relying on same-numbered league/event IDs across rollovers.
 - Source roster checkpoints and source audits are stored once and fanned out to dependent reads. Tournament-specific calculations and audits remain keyed by competition ID.
 - Remove the global unique name constraint. Keep a normal search index on normalized name; numeric ID remains canonical.
-- Retain `admin_entry_id` temporarily for compatibility and participant display, but stop using it as the only management authority after owner backfill.
+- New competitions require `ownerUserId` and `ownershipState=resolved`. A migrated competition may retain `ownerUserId=null` only with `ownershipState=recovery_required` until an unambiguous account claims it.
+- Retain `admin_entry_id` temporarily for compatibility, participant display, and the bounded recovery authorization path; stop using it as management authority as soon as ownership is resolved.
 
 ### 4.2 Competition-kind and roster rules
 
@@ -185,13 +187,16 @@ Tracked official league invariants:
 
 Custom tournament invariants:
 
-- Selected roster contains between 2 and 500 entries.
+- A `DRAFT` or `ENROLLING` roster may contain 0 to 500 entries so invitations and incremental selection can populate it.
+- The roster-lock command requires 2 to 500 entries; a locked or later lifecycle state must retain that range.
 - Roster acquisition is independent of competition kind: explicit entry IDs/URLs, bounded source selection, seeded entries, and invitations are permitted.
 - A full source roster above 500 is never fetched only to filter it in Web.
 - A fixed copied roster, including all members at one moment, is a custom tournament unless it follows the tracked-league contract.
 - Official entry results are source inputs; LetLetMe rules determine the custom result.
 
-Define one shared Data constant and validate again at every trust boundary:
+Define one shared Data constant. Validate the upper bound at source admission and every
+custom-roster mutation/lock boundary; do not apply the admission cap again to later
+synchronization of an admitted tracked source:
 
 ```text
 MAX_COMPETITION_ENTRIES = 500
@@ -301,7 +306,8 @@ Rules:
 - A seeded roster entry can be claimed by the user bound to the same entry without adding a duplicate participant.
 - The organizer can revoke invitations and see aggregate/participant join states.
 - Tracked leagues do not create invitation records; their membership continues to come from source synchronization.
-- Persist `ownerUserId` as an opaque stable Web user identifier received through the trusted signed server command. Data does not need a foreign key to the Web authentication database.
+- Persist a resolved `ownerUserId` as an opaque stable Web user identifier received through the trusted signed server command. Data does not need a foreign key to the Web authentication database.
+- For a migrated `recovery_required` row, permit management only when the signed principal's active-season binding matches the retained `admin_entry_id`; the recovery command atomically records `ownerUserId`, changes ownership to `resolved`, and writes an audit event.
 - Keep one organizer initially. Co-organizer roles are outside this plan.
 
 ### 4.6 Access and visibility
@@ -310,12 +316,12 @@ Initial visibility is private:
 
 - `My Competitions`: organizer or roster member only.
 - Competition Home, Live, Results/History, and participant roster: organizer or roster member only.
-- Manage: stable organizer only.
+- Manage: resolved stable organizer, or the narrowly scoped compatibility principal while completing an audited `recovery_required` ownership claim.
 - Invite preview: possession of a valid token, sanitized projection only.
 - Explicit share cards: sanitized immutable result projection, added separately from full page access.
 - No anonymous competition directory and no arbitrary official-league lookup.
 
-GraphQL authorization must evaluate stable organizer identity and season-bound entry membership separately. A user can remain the organizer even if their competitive entry is later absent from a synchronized official roster.
+GraphQL authorization must evaluate stable organizer identity and season-bound entry membership separately. The legacy entry-based recovery path is valid only while `ownershipState=recovery_required`; after resolution, `admin_entry_id` cannot grant management access. A user can remain the organizer even if their competitive entry is later absent from a synchronized official roster.
 
 ### 4.7 Format capability and result contract
 
@@ -504,7 +510,7 @@ Changes:
 1. Add `CompetitionKind`, lifecycle, viewer role, result authority, capability, and discriminated result types.
 2. Add the read models in section 4.8 with bounded pagination/limits.
 3. Carry season and source identity through all competition/cache keys.
-4. Replace stable organizer checks based only on `adminEntryId` with signed Web user ID checks; retain entry membership checks for participant reads.
+4. Replace organizer checks based only on `adminEntryId` with signed Web user ID checks; retain entry membership checks for participant reads and isolate the audited `recovery_required` compatibility claim path.
 5. Keep retained organizers authorized even when an official source roster removes their FPL entry.
 6. Replace singular `League.tournamentId` assumptions with zero-to-many competition associations and an explicit tracked-league kind.
 7. Add bracket and battle result repositories/resolvers.
@@ -729,12 +735,12 @@ Do not expose invitations before roster-lock semantics exist. Do not expose a fo
 
 ### Database
 
-- Add nullable source/kind/season/owner/lifecycle fields first.
+- Add nullable source/kind/season/owner/lifecycle fields plus explicit ownership state first.
 - Create source records and season-safe evidence keys without merging existing competition IDs.
 - Produce counts and exact IDs for unambiguous tracked, unambiguous custom, and ambiguous snapshot objects.
-- Resolve ambiguous rows before adding non-null constraints.
+- Resolve ambiguous source/kind/season/lifecycle rows before adding their non-null constraints; do not make `ownerUserId` non-null while any audited `recovery_required` row remains.
 - Drop global name uniqueness only after create/name-check code no longer depends on it.
-- Backfill stable owner IDs through a signed Web-owned mapping where the current admin entry has one unambiguous active account; retain an explicit recovery path for unmatched owners.
+- Backfill stable owner IDs through a signed Web-owned mapping where the current admin entry has one unambiguous active account; mark unmatched owners `recovery_required`, keep `ownerUserId` null, and retain the audited compatibility claim path until each is resolved.
 - Map existing published competitions to locked lifecycle states.
 - Preserve all current result, audit, and setup rows.
 

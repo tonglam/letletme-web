@@ -218,7 +218,7 @@ Rules:
 - Several distinct Competition objects may reference that source; they are never merged by source or display name.
 - A tracked official league follows the admitted official source contract. A fixed or selected snapshot is a custom tournament.
 - Official source evidence is stored once. Competition-specific membership, rules, calculations, audits, and reports remain keyed by `competitionId`.
-- `MAX_COMPETITION_ENTRIES = 500` is one domain invariant fixture-tested at each command boundary.
+- `MAX_COMPETITION_ENTRIES = 500` is one domain invariant fixture-tested at every applicable boundary: tracked-source admission and custom-roster mutation/lock. It is not re-applied to post-admission synchronization of an already admitted tracked source.
 - The source-admission, post-admission growth, roster-freeze, invitation, lifecycle, and archive rules remain defined by the Competitions plan.
 - Live and My FPL consume this identity; neither creates a separate mirror identity or selects an arbitrary first associated Tournament.
 

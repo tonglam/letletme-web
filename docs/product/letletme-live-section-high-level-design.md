@@ -142,17 +142,20 @@ Responsibilities:
 | `competitionLive` | Return one competition identity, shared result metadata, viewer context, and a discriminated result body |
 | `liveMatches` | Retain the current match groups and optionally include one linked entry's squad-impact map |
 
-`competitionLive` must distinguish at least:
+`competitionLive` reuses the canonical result discriminants owned by the Competitions
+contract; it must not introduce Live-only aliases:
 
 ```text
 OFFICIAL_CLASSIC_STANDINGS
-OFFICIAL_H2H
 CUSTOM_POINTS_TABLE
-CUSTOM_GROUP_TABLE
-CUSTOM_KNOCKOUT
+CUSTOM_BATTLE_MATCHUPS
+CUSTOM_KNOCKOUT_BRACKET
 ```
 
-Official H2H remains disabled until its upstream contract is verified. A custom head-to-head or knockout mode must not activate the official H2H result type.
+Official H2H remains disabled until its upstream contract is verified and a canonical
+`OFFICIAL_H2H` result discriminant is added to the Competitions contract. A custom
+head-to-head or knockout mode must use the custom discriminants above and must not activate
+the future official H2H result type.
 
 ### 4.4 Official live facts adapter
 
