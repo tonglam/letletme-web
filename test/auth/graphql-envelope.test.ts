@@ -20,7 +20,7 @@ function buildEnvelope(
 	uid: string,
 	eid: number | null,
 	secret: string,
-	nowSec = Math.floor(Date.now() / 1000),
+	nowSec = Math.floor(Date.now() / 1000)
 ): { contextHeader: string; sigHeader: string; payload: string; iat: number } {
 	const envelope = { uid, eid, iat: nowSec, exp: nowSec + 60 }
 	const payload = JSON.stringify(envelope)
@@ -29,7 +29,7 @@ function buildEnvelope(
 		contextHeader: Buffer.from(payload).toString('base64url'),
 		sigHeader: sig,
 		payload,
-		iat: nowSec,
+		iat: nowSec
 	}
 }
 
@@ -37,7 +37,7 @@ function verifyEnvelope(
 	contextHeader: string,
 	sigHeader: string,
 	secret: string,
-	maxAgeSeconds = 60,
+	maxAgeSeconds = 60
 ): { valid: boolean; uid?: string; eid?: number | null; reason?: string } {
 	let payload: string
 	let parsed: { uid: string; eid: number | null; iat: number }
@@ -48,7 +48,9 @@ function verifyEnvelope(
 		return { valid: false, reason: 'malformed context header' }
 	}
 
-	const expectedSig = createHmac('sha256', secret).update(payload).digest('base64url')
+	const expectedSig = createHmac('sha256', secret)
+		.update(payload)
+		.digest('base64url')
 	if (sigHeader !== expectedSig) {
 		return { valid: false, reason: 'invalid signature' }
 	}
@@ -68,7 +70,9 @@ const SECRET = 'test-backend-proxy-secret'
 describe('HMAC envelope — building', () => {
 	it('produces a valid base64url context header', () => {
 		const { contextHeader } = buildEnvelope('user-1', 12345, SECRET)
-		const decoded = JSON.parse(Buffer.from(contextHeader, 'base64url').toString())
+		const decoded = JSON.parse(
+			Buffer.from(contextHeader, 'base64url').toString()
+		)
 		assert.equal(decoded.uid, 'user-1')
 		assert.equal(decoded.eid, 12345)
 		assert.ok(typeof decoded.iat === 'number')
@@ -78,7 +82,9 @@ describe('HMAC envelope — building', () => {
 
 	it('includes null eid when user has not bound an FPL entry', () => {
 		const { contextHeader } = buildEnvelope('user-2', null, SECRET)
-		const decoded = JSON.parse(Buffer.from(contextHeader, 'base64url').toString())
+		const decoded = JSON.parse(
+			Buffer.from(contextHeader, 'base64url').toString()
+		)
 		assert.equal(decoded.eid, null)
 	})
 
@@ -109,14 +115,25 @@ describe('HMAC envelope — verification', () => {
 	it('rejects a tampered payload even with the original signature', () => {
 		const { sigHeader } = buildEnvelope('user-1', 42, SECRET)
 		// craft a different context claiming a different uid
-		const tampered = Buffer.from(JSON.stringify({ uid: 'attacker', eid: 42, iat: Math.floor(Date.now() / 1000) })).toString('base64url')
+		const tampered = Buffer.from(
+			JSON.stringify({
+				uid: 'attacker',
+				eid: 42,
+				iat: Math.floor(Date.now() / 1000)
+			})
+		).toString('base64url')
 		const result = verifyEnvelope(tampered, sigHeader, SECRET)
 		assert.equal(result.valid, false)
 	})
 
 	it('rejects an expired envelope (iat older than maxAgeSeconds)', () => {
 		const staleIat = Math.floor(Date.now() / 1000) - 120 // 2 minutes ago
-		const { contextHeader, sigHeader } = buildEnvelope('user-1', 42, SECRET, staleIat)
+		const { contextHeader, sigHeader } = buildEnvelope(
+			'user-1',
+			42,
+			SECRET,
+			staleIat
+		)
 		const result = verifyEnvelope(contextHeader, sigHeader, SECRET, 60)
 		assert.equal(result.valid, false)
 		assert.equal(result.reason, 'envelope expired')
@@ -124,7 +141,12 @@ describe('HMAC envelope — verification', () => {
 
 	it('accepts an envelope right at the edge of the replay window', () => {
 		const edgeIat = Math.floor(Date.now() / 1000) - 59
-		const { contextHeader, sigHeader } = buildEnvelope('user-1', 42, SECRET, edgeIat)
+		const { contextHeader, sigHeader } = buildEnvelope(
+			'user-1',
+			42,
+			SECRET,
+			edgeIat
+		)
 		const result = verifyEnvelope(contextHeader, sigHeader, SECRET, 60)
 		assert.equal(result.valid, true)
 	})
@@ -137,31 +159,35 @@ describe('HMAC envelope — verification', () => {
 })
 
 describe('production GraphQL envelope contract', () => {
-	it('signs only verified FPL entry IDs into the v2 audience-bound envelope', () => {
+	it('signs only verified FPL entry IDs into the audience-bound envelope', () => {
 		const verified = buildGraphQLUserContextHeaders(
 			{
 				id: 'user-verified',
 				fplEntryId: 15702,
-				fplEntryVerifiedAt: '2026-07-18T00:00:00.000Z',
+				fplEntryVerifiedAt: '2026-07-18T00:00:00.000Z'
 			},
 			SECRET,
-			1_700_000_000,
+			1_700_000_000
 		)
 		const decoded = JSON.parse(
-			Buffer.from(verified['X-User-Context'], 'base64url').toString('utf8'),
+			Buffer.from(verified['X-User-Context'], 'base64url').toString('utf8')
 		)
-		assert.equal(decoded.v, 2)
-		assert.equal(decoded.aud, 'letletme-graphql')
-		assert.equal(decoded.eid, 15702)
-		assert.equal(decoded.exp - decoded.iat, 60)
+		assert.deepEqual(decoded, {
+			aud: 'letletme-graphql',
+			uid: 'user-verified',
+			eid: 15702,
+			evat: '2026-07-18T00:00:00.000Z',
+			iat: 1_700_000_000,
+			exp: 1_700_000_060
+		})
 
 		const unverified = buildGraphQLUserContextHeaders(
 			{ id: 'user-unverified', fplEntryId: 15702, fplEntryVerifiedAt: null },
 			SECRET,
-			1_700_000_000,
+			1_700_000_000
 		)
 		const unverifiedDecoded = JSON.parse(
-			Buffer.from(unverified['X-User-Context'], 'base64url').toString('utf8'),
+			Buffer.from(unverified['X-User-Context'], 'base64url').toString('utf8')
 		)
 		assert.equal(unverifiedDecoded.eid, null)
 		assert.equal(unverifiedDecoded.evat, null)

@@ -5,30 +5,10 @@ import { describe, it } from 'node:test'
 
 const require = createRequire(import.meta.url)
 
-describe('legacy route redirects', () => {
-	it('redirects both unprefixed English and locale-prefixed routes', async () => {
-		const config = require('../next.config.js') as {
-			redirects: () => Promise<
-				Array<{ source: string; destination: string; permanent: boolean }>
-			>
-		}
-		const redirects = await config.redirects()
-		const bySource = new Map(redirects.map(route => [route.source, route]))
-
-		assert.deepEqual(bySource.get('/stats/gameweek'), {
-			source: '/stats/gameweek',
-			destination: '/data/gameweek',
-			permanent: true
-		})
-		assert.deepEqual(bySource.get('/:locale/stats/gameweek'), {
-			source: '/:locale/stats/gameweek',
-			destination: '/:locale/data/gameweek',
-			permanent: true
-		})
-		assert.equal(
-			bySource.get('/data/price-changes')?.destination,
-			'/data/market'
-		)
+describe('route contract', () => {
+	it('does not preserve retired route redirects', () => {
+		const config = require('../next.config.js') as { redirects?: unknown }
+		assert.equal(config.redirects, undefined)
 	})
 })
 
@@ -134,7 +114,10 @@ describe('asynchronous selection safety', () => {
 	it('invalidates stale picker cursors and retries incomplete personalized stats', async () => {
 		const [pickerSource, selectionsSource, teamSource] = await Promise.all([
 			readFile(
-				new URL('../components/player/PlayerDirectoryPicker.tsx', import.meta.url),
+				new URL(
+					'../components/player/PlayerDirectoryPicker.tsx',
+					import.meta.url
+				),
 				'utf8'
 			),
 			readFile(

@@ -496,6 +496,7 @@
 		"shareCopiedShort": "Copied",
 		"shareCopied": "Live points list copied — paste into social media.",
 		"shareCopyFailed": "Could not copy. Try again or copy manually.",
+		"shareCopyUnsupported": "This browser does not support copying. Select and copy the text manually.",
 		"shareLive": "Live",
 		"shareNet": "Net",
 		"shareSeason": "Season",

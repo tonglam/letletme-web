@@ -4,6 +4,11 @@ import {
 	type LiveSnapshotStatus,
 	type MatchPlayerData
 } from '@/lib/graphql/operations/live'
+import {
+	GET_EVENT_FIXTURES,
+	type EventFixturesResponse,
+	type Fixture
+} from '@/lib/graphql/operations/events'
 import { executeQuery } from '@/lib/graphql-client'
 import { teamFullNames } from '@/types/common'
 import type { Match } from '@/types/match'
@@ -46,7 +51,7 @@ export function transformLiveMatches(
 ): Match[] {
 	const matches: Match[] = []
 
-	type LiveMatchesBucket = 'nextEvent' | 'notStarted' | 'playing' | 'finished'
+	type LiveMatchesBucket = 'notStarted' | 'playing' | 'finished'
 
 	const toMatchStatus = (
 		playStatus: string | undefined,
@@ -54,7 +59,6 @@ export function transformLiveMatches(
 	): Match['status'] => {
 		const status = (playStatus ?? '').toUpperCase()
 
-		if (bucket === 'nextEvent') return 'UPCOMING'
 		if (bucket === 'notStarted') return 'NOT_STARTED'
 		if (bucket === 'finished') return 'FT'
 		return status.includes('HALF') ? 'HT' : 'LIVE'
@@ -123,25 +127,6 @@ export function transformLiveMatches(
 		viewers: 0
 	})
 
-	data.nextEvent.forEach(m =>
-		matches.push(
-			makeMatch(
-				`next-${m.matchId}`,
-				m.homeTeamName,
-				m.homeTeamShortName,
-				0,
-				m.awayTeamName,
-				m.awayTeamShortName,
-				0,
-				toMatchStatus(m.playStatus, 'nextEvent'),
-				m.kickoffTime,
-				m.minutes ?? 0,
-				[],
-				[]
-			)
-		)
-	)
-
 	data.notStarted.forEach(m =>
 		matches.push(
 			makeMatch(
@@ -199,6 +184,10 @@ export function transformLiveMatches(
 		)
 	)
 
+	return sortMatches(matches)
+}
+
+function sortMatches(matches: Match[]): Match[] {
 	const statusPriority: Record<Match['status'], number> = {
 		LIVE: 0,
 		HT: 1,
@@ -223,27 +212,66 @@ export function transformLiveMatches(
 	return matches
 }
 
+export function transformUpcomingFixtures(
+	fixtures: readonly Fixture[]
+): Match[] {
+	return fixtures.map(fixture => ({
+		id: `next-${fixture.id}`,
+		homeTeam: {
+			name: fixture.homeTeam.name,
+			shortName:
+				fixture.homeTeam.shortName || getTeamShortName(fixture.homeTeam.name),
+			score: fixture.homeScore ?? 0,
+			possession: 0,
+			shots: 0,
+			shotsOnTarget: 0,
+			corners: 0,
+			players: []
+		},
+		awayTeam: {
+			name: fixture.awayTeam.name,
+			shortName:
+				fixture.awayTeam.shortName || getTeamShortName(fixture.awayTeam.name),
+			score: fixture.awayScore ?? 0,
+			possession: 0,
+			shots: 0,
+			shotsOnTarget: 0,
+			corners: 0,
+			players: []
+		},
+		status: 'UPCOMING',
+		minute: 0,
+		kickoff: fixture.kickoffTime,
+		viewers: 0
+	}))
+}
+
 export interface LiveMatchesSnapshot {
 	matches: Match[]
 	snapshot: LiveSnapshotStatus | null
 }
 
 export async function getLiveMatchesSnapshot(
+	nextEventId: number | null,
 	executor: QueryExecutor = executeQuery
 ): Promise<LiveMatchesSnapshot> {
-	const data = await executor<LiveMatchesResponse>(
-		GET_LIVE_MATCHES,
-		undefined,
-		{ cache: 'no-store' }
-	)
+	const [data, upcoming] = await Promise.all([
+		executor<LiveMatchesResponse>(GET_LIVE_MATCHES, undefined, {
+			cache: 'no-store'
+		}),
+		nextEventId
+			? executor<EventFixturesResponse>(
+					GET_EVENT_FIXTURES,
+					{ eventId: nextEventId },
+					{ cache: 'no-store' }
+				)
+			: Promise.resolve<EventFixturesResponse>({ eventFixtures: [] })
+	])
 	return {
-		matches: transformLiveMatches(data.liveMatches),
+		matches: sortMatches([
+			...transformLiveMatches(data.liveMatches),
+			...transformUpcomingFixtures(upcoming.eventFixtures)
+		]),
 		snapshot: data.liveSnapshot
 	}
-}
-
-export async function getLiveMatches(
-	executor: QueryExecutor = executeQuery
-): Promise<Match[]> {
-	return (await getLiveMatchesSnapshot(executor)).matches
 }

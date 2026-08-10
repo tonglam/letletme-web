@@ -50,21 +50,13 @@ function requiredEnvironment(name: string): string {
 }
 
 function requiredPassword(): string {
-	const value = requiredEnvironment('V3_WEB_DB_PASSWORD')
+	const value = requiredEnvironment('WEB_RUNTIME_DB_PASSWORD')
 	if (!/^[A-Za-z0-9_-]{64}$/.test(value)) {
 		throw new Error(
-			'V3_WEB_DB_PASSWORD must be an exact 64-character base64url secret'
+			'WEB_RUNTIME_DB_PASSWORD must be an exact 64-character base64url secret'
 		)
 	}
 	return value
-}
-
-function hasOwn(value: unknown, key: string): boolean {
-	return (
-		typeof value === 'object' &&
-		value !== null &&
-		Object.prototype.hasOwnProperty.call(value, key)
-	)
 }
 
 function roleAttributes(row: RoleRow): RoleAttributes {
@@ -280,15 +272,6 @@ async function formattedStatement(
 
 async function main(): Promise<void> {
 	const databaseUrl = requiredEnvironment('DIRECT_DATABASE_URL')
-	const runId = requiredEnvironment('CUTOVER_RUN_ID')
-	if (!/^v3-\d{8}T\d{6}Z-[0-9a-f]{7,12}$/.test(runId)) {
-		throw new Error('CUTOVER_RUN_ID is invalid')
-	}
-	if (process.env.V3_CUTOVER_APPROVAL !== `APPROVE_V3_ACTIVATION ${runId}`) {
-		throw new Error(
-			'Exact v3 activation approval is required for Web runtime provisioning'
-		)
-	}
 	const password = requiredPassword()
 	const local = await loadLocalMigrations()
 	const runtimeMigration = local.migrations.find(
@@ -300,22 +283,6 @@ async function main(): Promise<void> {
 
 	const client = postgres(databaseUrl, { max: 1, prepare: false })
 	try {
-		const runRows = await client<Array<{ status: string; metadata: unknown }>>`
-			SELECT status, metadata
-			FROM ops.migration_runs
-			WHERE run_id = ${runId}
-		`
-		const run = runRows[0]
-		if (
-			runRows.length !== 1 ||
-			run?.status !== 'activated' ||
-			hasOwn(run.metadata, 'legacyDropPhase')
-		) {
-			throw new Error(
-				'Web runtime provisioning requires the exact activated pre-cleanup run'
-			)
-		}
-
 		const migrationRows = await client<Array<{ hash: string }>>`
 			SELECT hash
 			FROM bauth.__drizzle_migrations
@@ -385,8 +352,7 @@ async function main(): Promise<void> {
 		console.log(
 			JSON.stringify(
 				{
-					operation: 'provision-v3-web-runtime-login',
-					runId,
+					operation: 'provision-web-runtime-login',
 					roles: verified.roles,
 					memberships: verified.memberships,
 					ownedObjectCount: verified.ownedObjectCount

@@ -6,17 +6,18 @@ export const GRAPHQL_AUTH_CAPABILITY_ROLE = 'letletme_graphql_reader'
 export const WEB_AUTH_RUNTIME_TABLES = [
 	'account',
 	'fpl_entry_binding_challenges',
-	'jwks',
 	'mini_program_email_code',
 	'mini_program_session',
-	'rate_limit',
 	'request_rate_limits',
 	'session',
 	'user',
-	'verification',
+	'verification'
 ] as const
 
-export const GRAPHQL_AUTH_RUNTIME_TABLES = ['mini_program_session', 'user'] as const
+export const GRAPHQL_AUTH_RUNTIME_TABLES = [
+	'mini_program_session',
+	'user'
+] as const
 
 const DATA_SCHEMAS = [
 	'fpl',
@@ -24,7 +25,7 @@ const DATA_SCHEMAS = [
 	'understat',
 	'bridge',
 	'reporting',
-	'ops',
+	'ops'
 ] as const
 
 const AUTH_RUNTIME_POLICY = 'web_auth_runtime_all'
@@ -95,7 +96,7 @@ function compareNames(actual: string[], expected: readonly string[]): boolean {
 }
 
 export async function validateWebDatabaseContract(
-	connectionString = process.env.DATABASE_URL,
+	connectionString = process.env.DATABASE_URL
 ): Promise<WebDatabaseContractResult> {
 	if (!connectionString) {
 		throw new WebDatabaseContractError(['DATABASE_URL is not configured'])
@@ -105,7 +106,7 @@ export async function validateWebDatabaseContract(
 		max: 1,
 		prepare: false,
 		connect_timeout: 10,
-		idle_timeout: 5,
+		idle_timeout: 5
 	})
 	const findings: string[] = []
 
@@ -126,16 +127,20 @@ export async function validateWebDatabaseContract(
 		if (!runtimeRole) {
 			findings.push('current PostgreSQL role is missing from pg_roles')
 		} else {
-			if (!runtimeRole.rolcanlogin) findings.push('runtime role is not a LOGIN role')
-			if (!runtimeRole.rolinherit) findings.push('runtime role does not inherit its capability role')
+			if (!runtimeRole.rolcanlogin)
+				findings.push('runtime role is not a LOGIN role')
+			if (!runtimeRole.rolinherit)
+				findings.push('runtime role does not inherit its capability role')
 			if (
-				runtimeRole.rolsuper
-				|| runtimeRole.rolcreatedb
-				|| runtimeRole.rolcreaterole
-				|| runtimeRole.rolreplication
-				|| runtimeRole.rolbypassrls
+				runtimeRole.rolsuper ||
+				runtimeRole.rolcreatedb ||
+				runtimeRole.rolcreaterole ||
+				runtimeRole.rolreplication ||
+				runtimeRole.rolbypassrls
 			) {
-				findings.push(`runtime role ${runtimeRole.role_name} has elevated PostgreSQL attributes`)
+				findings.push(
+					`runtime role ${runtimeRole.role_name} has elevated PostgreSQL attributes`
+				)
 			}
 		}
 
@@ -155,13 +160,13 @@ export async function validateWebDatabaseContract(
 		if (!capabilityRole) {
 			findings.push(`${WEB_AUTH_CAPABILITY_ROLE} does not exist`)
 		} else if (
-			capabilityRole.rolcanlogin
-			|| capabilityRole.rolsuper
-			|| capabilityRole.rolcreatedb
-			|| capabilityRole.rolcreaterole
-			|| capabilityRole.rolinherit
-			|| capabilityRole.rolreplication
-			|| capabilityRole.rolbypassrls
+			capabilityRole.rolcanlogin ||
+			capabilityRole.rolsuper ||
+			capabilityRole.rolcreatedb ||
+			capabilityRole.rolcreaterole ||
+			capabilityRole.rolinherit ||
+			capabilityRole.rolreplication ||
+			capabilityRole.rolbypassrls
 		) {
 			findings.push(`${WEB_AUTH_CAPABILITY_ROLE} has unsafe role attributes`)
 		}
@@ -183,10 +188,10 @@ export async function validateWebDatabaseContract(
 			FROM inherited_roles
 			ORDER BY role_name
 		`
-		const inheritedRoleNames = inheritedRoles.map((row) => row.role_name)
+		const inheritedRoleNames = inheritedRoles.map(row => row.role_name)
 		if (!compareNames(inheritedRoleNames, [WEB_AUTH_CAPABILITY_ROLE])) {
 			findings.push(
-				`runtime role memberships are ${inheritedRoleNames.join(', ') || 'empty'}`,
+				`runtime role memberships are ${inheritedRoleNames.join(', ') || 'empty'}`
 			)
 		}
 		if (findings.length > 0) throw new WebDatabaseContractError(findings)
@@ -194,7 +199,8 @@ export async function validateWebDatabaseContract(
 		const [databaseBoundary] = await client<Array<{ can_create: boolean }>>`
 			SELECT has_database_privilege(current_user, current_database(), 'CREATE') AS can_create
 		`
-		if (databaseBoundary?.can_create) findings.push('runtime role can create database schemas')
+		if (databaseBoundary?.can_create)
+			findings.push('runtime role can create database schemas')
 
 		const [authSchemaBoundary] = await client<
 			Array<{ can_use: boolean; can_create: boolean }>
@@ -203,8 +209,10 @@ export async function validateWebDatabaseContract(
 				has_schema_privilege(current_user, 'bauth', 'USAGE') AS can_use,
 				has_schema_privilege(current_user, 'bauth', 'CREATE') AS can_create
 		`
-		if (!authSchemaBoundary?.can_use) findings.push('runtime role cannot use bauth')
-		if (authSchemaBoundary?.can_create) findings.push('runtime role can create bauth objects')
+		if (!authSchemaBoundary?.can_use)
+			findings.push('runtime role cannot use bauth')
+		if (authSchemaBoundary?.can_create)
+			findings.push('runtime role can create bauth objects')
 		if (findings.length > 0) throw new WebDatabaseContractError(findings)
 
 		const authTables = await client<AuthTableBoundary[]>`
@@ -228,29 +236,40 @@ export async function validateWebDatabaseContract(
 		`
 		const expectedAuthTableNames = new Set<string>(WEB_AUTH_RUNTIME_TABLES)
 		const authTableNames = authTables
-			.filter((row) => expectedAuthTableNames.has(row.table_name))
-			.map((row) => row.table_name)
+			.filter(row => expectedAuthTableNames.has(row.table_name))
+			.map(row => row.table_name)
 		if (!compareNames(authTableNames, WEB_AUTH_RUNTIME_TABLES)) {
-			findings.push(`bauth runtime tables are ${authTableNames.join(', ') || 'empty'}`)
+			findings.push(
+				`bauth runtime tables are ${authTableNames.join(', ') || 'empty'}`
+			)
 		}
 		for (const table of authTables) {
 			const isRuntimeTable = expectedAuthTableNames.has(table.table_name)
 			if (table.owner_name === runtimeRole?.role_name) {
 				findings.push(`runtime role owns bauth.${table.table_name}`)
 			}
-			if (!table.rls_enabled) findings.push(`bauth.${table.table_name} is missing RLS`)
+			if (!table.rls_enabled)
+				findings.push(`bauth.${table.table_name} is missing RLS`)
 			if (
-				isRuntimeTable
-				&& (!table.can_select || !table.can_insert || !table.can_update || !table.can_delete)
+				isRuntimeTable &&
+				(!table.can_select ||
+					!table.can_insert ||
+					!table.can_update ||
+					!table.can_delete)
 			) {
-				findings.push(`bauth.${table.table_name} is missing required DML privileges`)
+				findings.push(
+					`bauth.${table.table_name} is missing required DML privileges`
+				)
 			}
 			if (
-				table.can_truncate
-				|| table.can_references
-				|| table.can_trigger
-				|| (!isRuntimeTable
-					&& (table.can_select || table.can_insert || table.can_update || table.can_delete))
+				table.can_truncate ||
+				table.can_references ||
+				table.can_trigger ||
+				(!isRuntimeTable &&
+					(table.can_select ||
+						table.can_insert ||
+						table.can_update ||
+						table.can_delete))
 			) {
 				findings.push(`bauth.${table.table_name} has excessive privileges`)
 			}
@@ -270,40 +289,48 @@ export async function validateWebDatabaseContract(
 				AND tablename <> '__drizzle_migrations'
 			ORDER BY tablename, policyname
 		`
-		const expectedGraphqlAuthTableNames = new Set<string>(GRAPHQL_AUTH_RUNTIME_TABLES)
+		const expectedGraphqlAuthTableNames = new Set<string>(
+			GRAPHQL_AUTH_RUNTIME_TABLES
+		)
 		let webRuntimePolicyCount = 0
 		let graphqlAuthPolicyCount = 0
 		for (const policy of authPolicies) {
 			const isWebRuntimePolicy =
-				expectedAuthTableNames.has(policy.table_name)
-				&& policy.policy_name === AUTH_RUNTIME_POLICY
-				&& policy.permissive === 'PERMISSIVE'
-				&& compareNames(policy.roles, [WEB_AUTH_CAPABILITY_ROLE])
-				&& policy.command === 'ALL'
-				&& expressionIsTrue(policy.using_expression)
-				&& expressionIsTrue(policy.check_expression)
+				expectedAuthTableNames.has(policy.table_name) &&
+				policy.policy_name === AUTH_RUNTIME_POLICY &&
+				policy.permissive === 'PERMISSIVE' &&
+				compareNames(policy.roles, [WEB_AUTH_CAPABILITY_ROLE]) &&
+				policy.command === 'ALL' &&
+				expressionIsTrue(policy.using_expression) &&
+				expressionIsTrue(policy.check_expression)
 			const isGraphqlAuthPolicy =
-				expectedGraphqlAuthTableNames.has(policy.table_name)
-				&& policy.policy_name === GRAPHQL_AUTH_RUNTIME_POLICY
-				&& policy.permissive === 'PERMISSIVE'
-				&& compareNames(policy.roles, [GRAPHQL_AUTH_CAPABILITY_ROLE])
-				&& policy.command === 'SELECT'
-				&& expressionIsTrue(policy.using_expression)
-				&& policy.check_expression === null
+				expectedGraphqlAuthTableNames.has(policy.table_name) &&
+				policy.policy_name === GRAPHQL_AUTH_RUNTIME_POLICY &&
+				policy.permissive === 'PERMISSIVE' &&
+				compareNames(policy.roles, [GRAPHQL_AUTH_CAPABILITY_ROLE]) &&
+				policy.command === 'SELECT' &&
+				expressionIsTrue(policy.using_expression) &&
+				policy.check_expression === null
 			if (isWebRuntimePolicy) webRuntimePolicyCount += 1
 			if (isGraphqlAuthPolicy) graphqlAuthPolicyCount += 1
 			if (!isWebRuntimePolicy && !isGraphqlAuthPolicy) {
-				findings.push(`bauth.${policy.table_name} has an invalid runtime policy`)
+				findings.push(
+					`bauth.${policy.table_name} has an invalid runtime policy`
+				)
 			}
 		}
 		if (webRuntimePolicyCount !== WEB_AUTH_RUNTIME_TABLES.length) {
-			findings.push(`bauth Web runtime policy count is ${webRuntimePolicyCount}`)
+			findings.push(
+				`bauth Web runtime policy count is ${webRuntimePolicyCount}`
+			)
 		}
 		if (
-			graphqlAuthPolicyCount !== 0
-			&& graphqlAuthPolicyCount !== GRAPHQL_AUTH_RUNTIME_TABLES.length
+			graphqlAuthPolicyCount !== 0 &&
+			graphqlAuthPolicyCount !== GRAPHQL_AUTH_RUNTIME_TABLES.length
 		) {
-			findings.push(`bauth GraphQL auth policy count is ${graphqlAuthPolicyCount}`)
+			findings.push(
+				`bauth GraphQL auth policy count is ${graphqlAuthPolicyCount}`
+			)
 		}
 
 		const [ledgerBoundary] = await client<NamedPrivilegeBoundary[]>`
@@ -334,7 +361,9 @@ export async function validateWebDatabaseContract(
 		`
 		for (const schemaRow of dataSchemas) {
 			if (schemaRow.can_use || schemaRow.can_create) {
-				findings.push(`runtime role can access Data schema ${schemaRow.schema_name}`)
+				findings.push(
+					`runtime role can access Data schema ${schemaRow.schema_name}`
+				)
 			}
 		}
 
@@ -366,7 +395,9 @@ export async function validateWebDatabaseContract(
 			ORDER BY object_name
 		`
 		for (const relation of dataRelations) {
-			findings.push(`runtime role can ${relation.can_write ? 'write' : 'read'} ${relation.object_name}`)
+			findings.push(
+				`runtime role can ${relation.can_write ? 'write' : 'read'} ${relation.object_name}`
+			)
 		}
 
 		const dataSequences = await client<Array<{ object_name: string }>>`
@@ -408,7 +439,7 @@ export async function validateWebDatabaseContract(
 		return {
 			roleName: runtimeRole?.role_name ?? 'unknown',
 			capabilityRole: WEB_AUTH_CAPABILITY_ROLE,
-			authTables: authTableNames,
+			authTables: authTableNames
 		}
 	} finally {
 		await client.end()

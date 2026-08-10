@@ -1,10 +1,10 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
-test.describe('hard-cutover maintenance mode', () => {
+test.describe('maintenance mode', () => {
 	test.skip(
 		process.env.MAINTENANCE_MODE !== 'true',
-		'Run with MAINTENANCE_MODE=true to exercise the cutover surface.'
+		'Run with MAINTENANCE_MODE=true to exercise the maintenance surface.'
 	)
 
 	test('replaces English and Chinese data pages without exposing stale content', async ({

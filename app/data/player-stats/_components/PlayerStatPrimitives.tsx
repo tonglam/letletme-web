@@ -138,20 +138,20 @@ export function IctBar({
 
 export function CompareRow({
 	label,
-	v1,
-	v2,
+	primaryValue,
+	comparisonValue,
 	higherIsBetter = true,
 	emphasizeWinner = true
 }: {
 	label: string
-	v1: string | number | null
-	v2: string | number | null
+	primaryValue: string | number | null
+	comparisonValue: string | number | null
 	higherIsBetter?: boolean
 	emphasizeWinner?: boolean
 }) {
 	const translateLabel = useTranslatedStatLabel()
-	const displayValue1 = v1 ?? '—'
-	const displayValue2 = v2 ?? '—'
+	const displayValue1 = primaryValue ?? '—'
+	const displayValue2 = comparisonValue ?? '—'
 	const value1 = Number.parseFloat(
 		String(displayValue1).replace(/[^0-9.-]/g, '')
 	)
@@ -189,22 +189,22 @@ export function CompareRow({
 
 export function DualIctBar({
 	label,
-	v1,
-	v2,
+	primaryValue,
+	comparisonValue,
 	name1,
 	name2,
 	max
 }: {
 	label: string
-	v1: number | null
-	v2: number | null
+	primaryValue: number | null
+	comparisonValue: number | null
 	name1: string
 	name2: string
 	max: number
 }) {
 	const translateLabel = useTranslatedStatLabel()
-	const value1 = v1 ?? 0
-	const value2 = v2 ?? 0
+	const value1 = primaryValue ?? 0
+	const value2 = comparisonValue ?? 0
 	const percentage1 = Math.min(100, (value1 / max) * 100)
 	const percentage2 = Math.min(100, (value2 / max) * 100)
 
@@ -223,7 +223,7 @@ export function DualIctBar({
 						style={{ width: `${percentage1}%` }}
 					/>
 				</div>
-				<span className="w-8 font-medium">{v1 ?? '—'}</span>
+				<span className="w-8 font-medium">{primaryValue ?? '—'}</span>
 			</div>
 			<div className="flex items-center gap-2 text-xs">
 				<span className="w-16 truncate text-right text-muted-foreground">
@@ -235,7 +235,7 @@ export function DualIctBar({
 						style={{ width: `${percentage2}%` }}
 					/>
 				</div>
-				<span className="w-8 font-medium">{v2 ?? '—'}</span>
+				<span className="w-8 font-medium">{comparisonValue ?? '—'}</span>
 			</div>
 		</div>
 	)

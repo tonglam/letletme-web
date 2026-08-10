@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture
 
 ### Tech Stack
+
 - **Next.js 16** (App Router), **React 19**, **TypeScript**
 - **TailwindCSS 3** + **Shadcn/UI** (Radix primitives in `components/ui/`)
 - **GraphQL** via a Next.js proxy route handler
@@ -20,9 +21,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### GraphQL Data Flow
 
-All queries are defined in `lib/graphql/queries.ts` (21 queries, ~1400 lines) alongside their TypeScript response types. Never write raw query strings outside this file.
+Queries and their response types are grouped by domain under `lib/graphql/operations/`. Add each query to its owning domain module instead of creating a shared barrel.
 
 `executeQuery<T>(query, variables?)` in `lib/graphql-client.ts` handles all fetching:
+
 - Client-side: routes through the Next.js proxy at `/api/graphql`
 - Server-side: uses `executeServerQuery` with signed `X-User-Context` headers when a session exists; public RSC reads use `executePublicServerQuery` + `lib/cache-policy.ts` (`force-cache`, revalidate, tags)
 - The proxy (`app/api/graphql/route.ts`): session / Authorization / non-allowlisted ops → `Cache-Control: no-store`; allowlisted public ops (no session, no Authorization) → `public, s-maxage=60, stale-while-revalidate=300` (see `PUBLIC_GRAPHQL_OPERATION_NAMES`)
@@ -30,6 +32,7 @@ All queries are defined in `lib/graphql/queries.ts` (21 queries, ~1400 lines) al
 ### Page Architecture Pattern
 
 Pages with live data follow a strict split:
+
 - `page.tsx` — thin server component, renders a `<Suspense>` boundary wrapping `*Client.tsx`
 - `*Client.tsx` — owns all state, data fetching via `executeQuery`, and renders the full UI
 
@@ -38,6 +41,7 @@ Example: `app/live/tournaments/page.tsx` → `TournamentClient.tsx`.
 ### Tournament Live Points Flow
 
 `/live/tournaments` is the most complex page:
+
 1. Fetches entry tournaments for the signed-in user's FPL entry (`getCurrentEntryId()` from session)
 2. Fetches `GET_TOURNAMENT_LIVE_POINTS` for the selected tournament + gameweek (in parallel with previous GW for rank deltas)
 3. Builds `TournamentEntry[]` with live rank, net points, and pick lists via `lib/tournament/liveEntries.ts`
@@ -46,6 +50,7 @@ Example: `app/live/tournaments/page.tsx` → `TournamentClient.tsx`.
 ### Filter Pattern
 
 Both `PlayerOwnershipFilter` and `TeamExposureFilter` follow the same contract:
+
 - Accept `entries` + `onMatchedEntryIdsChange: (ids: string[] | null) => void`
 - Emit `null` when inactive (no filter), or an array of matched IDs when active
 - Parent intersects all active filter sets in a single `filteredEntries` useMemo

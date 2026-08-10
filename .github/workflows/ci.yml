@@ -12,21 +12,18 @@ env:
   DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/testdb
   DIRECT_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/testdb
   WEB_RUNTIME_DATABASE_URL: postgresql://letletme_web_runtime:wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww@127.0.0.1:5432/testdb
-  CUTOVER_RUN_ID: v3-20260808T160008Z-b9eddc0
-  V3_CUTOVER_APPROVAL: APPROVE_V3_ACTIVATION v3-20260808T160008Z-b9eddc0
-  V3_WEB_DB_PASSWORD: wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+  WEB_RUNTIME_DB_PASSWORD: wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
   BETTER_AUTH_SECRET: ci-better-auth-secret-at-least-thirty-two-characters
   BETTER_AUTH_URL: http://localhost:3000
   GRAPHQL_SERVICE_TOKEN: e2e-graphql-service-token-at-least-thirty-two-bytes
   BACKEND_PROXY_SECRET: ci-backend-proxy-secret
-  MINIPROGRAM_ACCOUNT_STORAGE: 'true'
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16.9-alpine@sha256:7c688148e5e156d0e86df7ba8ae5a05a2386aaec1e2ad8e6d11bdf10504b1fb7
+        image: postgres:15@sha256:6eb0add3b77c081df18aa518ce43df58fdcc40f2e6d868a6fd08038dc7acd425
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: testdb
@@ -60,48 +57,62 @@ jobs:
               NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
             EXCEPTION WHEN duplicate_object THEN NULL;
           END $$`)
-          await sql.end()
-          EOF
-      - name: Apply activation-scoped migrations
-        run: |
-          npm run db:migrate:activation
-          set +e
-          output=$(npm run db:migrate:status 2>&1)
-          status=$?
-          set -e
-          printf '%s\n' "$output"
-          test "$status" -eq 1
-          test "$(printf '%s\n' "$output" | grep -Ec '^pending ')" -eq 1
-          printf '%s\n' "$output" | grep -Fxq 'pending 0009_graphql_auth_reader'
-      - name: Stub activated Data cutover ledger
-        run: |
-          node --input-type=module <<'EOF'
-          import postgres from 'postgres'
-          const sql = postgres(process.env.DIRECT_DATABASE_URL, { max: 1 })
-          await sql`CREATE SCHEMA ops`
-          await sql`CREATE TABLE ops.migration_runs (
-            run_id text PRIMARY KEY,
-            status text NOT NULL,
-            metadata jsonb NOT NULL
+          await sql`CREATE SCHEMA drizzle`
+          await sql`CREATE TABLE drizzle.__drizzle_migrations (
+            id serial PRIMARY KEY,
+            hash text NOT NULL,
+            created_at bigint
           )`
-          await sql`INSERT INTO ops.migration_runs (run_id, status, metadata)
-            VALUES (${process.env.CUTOVER_RUN_ID}, 'activated', '{}'::jsonb)`
+          // bauth.apikey predates this repository's Drizzle migration stream.
+          // Reproduce its production shape so the terminal cleanup migration is
+          // exercised by the fresh-chain CI path as well as production adoption.
+          await sql`CREATE SCHEMA bauth`
+          await sql`CREATE TABLE bauth.apikey (
+            id text PRIMARY KEY,
+            config_id text DEFAULT 'default' NOT NULL,
+            name text,
+            start text,
+            reference_id text NOT NULL,
+            prefix text,
+            key text NOT NULL,
+            refill_interval integer,
+            refill_amount integer,
+            last_refill_at timestamptz,
+            enabled boolean DEFAULT true,
+            rate_limit_enabled boolean DEFAULT true,
+            rate_limit_time_window integer DEFAULT 60000,
+            rate_limit_max integer DEFAULT 100,
+            request_count integer DEFAULT 0,
+            remaining integer,
+            last_request timestamptz,
+            expires_at timestamptz,
+            created_at timestamptz NOT NULL,
+            updated_at timestamptz NOT NULL,
+            permissions text,
+            metadata text
+          )`
+          await sql`CREATE INDEX apikey_configid_idx ON bauth.apikey (config_id)`
+          await sql`CREATE INDEX apikey_key_idx ON bauth.apikey (key)`
+          await sql`CREATE INDEX apikey_referenceid_idx ON bauth.apikey (reference_id)`
+          await sql`ALTER TABLE bauth.apikey ENABLE ROW LEVEL SECURITY`
+          await sql`INSERT INTO bauth.apikey (
+            id, reference_id, key, created_at, updated_at
+          ) VALUES
+            ('retired-api-key-1', 'retired-reference-1', 'retired-secret-1', now(), now()),
+            ('retired-api-key-2', 'retired-reference-2', 'retired-secret-2', now(), now()),
+            ('retired-api-key-3', 'retired-reference-3', 'retired-secret-3', now(), now())`
           await sql.end()
           EOF
-      - name: Provision and retry production-shaped Web runtime login
-        run: |
-          npm run db:provision-runtime-login
-          npm run db:provision-runtime-login
-      - name: Verify Web startup contract before GraphQL grant
-        env:
-          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
-        run: npm run db:runtime-contract
-      - name: Apply post-activation migration and verify repeatability
+      - name: Apply migrations and verify repeatability
         run: |
           npm run db:migrate
           npm run db:migrate
           npm run db:migrate:status
-      - name: Verify Web startup contract after GraphQL grant
+      - name: Provision and retry production-shaped Web runtime login
+        run: |
+          npm run db:provision-runtime-login
+          npm run db:provision-runtime-login
+      - name: Verify Web startup contract
         env:
           DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
         run: npm run db:runtime-contract
@@ -120,6 +131,13 @@ jobs:
         run: npm run test:e2e
         env:
           DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          PLAYWRIGHT_USE_EXISTING_BUILD: '1'
+      - name: Maintenance E2E
+        run: npx playwright test e2e/maintenance-mode.spec.ts
+        env:
+          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          MAINTENANCE_MODE: 'true'
+          MAINTENANCE_RETRY_AFTER_SECONDS: '420'
           PLAYWRIGHT_USE_EXISTING_BUILD: '1'
       - run: npm audit --audit-level=moderate
       - uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8

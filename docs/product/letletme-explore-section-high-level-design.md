@@ -45,41 +45,41 @@ The baseline includes the current Web work plus the in-progress GraphQL/Data pla
 
 ### Web
 
-| Area | Current implementation |
-| --- | --- |
-| Navigation | `components/layout/config.ts` exposes `Data` with Gameweek, Fixtures, Market, League Trends, and Player Stats; there is no `/data` page or Briefing item |
-| Homepage | The homepage exposes selected gameweek, market, fixture, Dream Team, and personal fragments, but it is a whole-product acquisition/continuation page rather than an Explore router |
-| Gameweek | `/data/gameweek` exposes official overall round statistics, chips, Dream Team, double-digit hauls, provisional/settled state, update time, preseason/empty states, and player links; selected gameweek is client state rather than a canonical query scope |
-| Fixtures | `/data/fixtures` provides selectable FDR horizons, easiest/hardest runs, next-fixture cards, BGW/DGW and unknown states, team matrix, linked-squad overlay, neutral candidate groups, sharing, and player links; metadata still contains hunt/avoid language |
-| Market | `/data/market` exposes observed price, ownership, transfer, availability, and player-pool changes with a 14-day coverage contract, latest-day price filtering, player lookup/history, stale states, and sharing |
-| Trends | `/data/selections` exposes exact prepared competition fields and curated public prepared competitions, gameweek selection, ownership, EO, captaincy, transfers, template core, personal exposure, and sharing; cohort type and capture metadata are not consistently visible |
-| Players | `/data/player-stats` provides bounded server-side player search, one/two-player state, availability, fixtures, recent gameweeks, season production, official expected metrics, price history, FPL percentiles, verified Understat process, coverage, My Squad context, and query-driven selection |
-| Player State | The Web renders a large deterministic state profile with dimension ratings, reasons, coverage, provider revisions, historical context, and withheld-state copy; it is requested beside the lightweight player overview rather than only when its evidence summary is opened |
-| Cross-links | Gameweek, Fixtures, Market, and Trends already link to Players, and Players links to Fixtures; there is no shared typed evidence-card contract or Explore-wide search |
-| Personal Explore state | Recent player selections use local storage. No durable source/topic follow or mute model exists |
+| Area                   | Current implementation                                                                                                                                                                                                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Navigation             | `components/layout/config.ts` exposes `Data` with Gameweek, Fixtures, Market, League Trends, and Player Stats; there is no `/data` page or Briefing item                                                                                                                                          |
+| Homepage               | The homepage exposes selected gameweek, market, fixture, Dream Team, and personal fragments, but it is a whole-product acquisition/continuation page rather than an Explore router                                                                                                                |
+| Gameweek               | `/data/gameweek` exposes official overall round statistics, chips, Dream Team, double-digit hauls, provisional/settled state, update time, preseason/empty states, and player links; selected gameweek is client state rather than a canonical query scope                                        |
+| Fixtures               | `/data/fixtures` provides selectable FDR horizons, easiest/hardest runs, next-fixture cards, BGW/DGW and unknown states, team matrix, linked-squad overlay, neutral candidate groups, sharing, and player links; metadata still contains hunt/avoid language                                      |
+| Market                 | `/data/market` exposes observed price, ownership, transfer, availability, and player-pool changes with a 14-day coverage contract, latest-day price filtering, player lookup/history, stale states, and sharing                                                                                   |
+| Trends                 | `/data/selections` exposes exact prepared competition fields and curated public prepared competitions, gameweek selection, ownership, EO, captaincy, transfers, template core, personal exposure, and sharing; cohort type and capture metadata are not consistently visible                      |
+| Players                | `/data/player-stats` provides bounded server-side player search, one/two-player state, availability, fixtures, recent gameweeks, season production, official expected metrics, price history, FPL percentiles, verified Understat process, coverage, My Squad context, and query-driven selection |
+| Player State           | The Web renders a large deterministic state profile with dimension ratings, reasons, coverage, provider revisions, historical context, and withheld-state copy; it is requested beside the lightweight player overview rather than only when its evidence summary is opened                       |
+| Cross-links            | Gameweek, Fixtures, Market, and Trends already link to Players, and Players links to Fixtures; there is no shared typed evidence-card contract or Explore-wide search                                                                                                                             |
+| Personal Explore state | Recent player selections use local storage. No durable source/topic follow or mute model exists                                                                                                                                                                                                   |
 
 ### GraphQL
 
-| Area | Current implementation |
-| --- | --- |
-| Core evidence | Events, fixtures, teams, players, player detail, player values, market pulse, live boards, entry facts, and tournament selection statistics already support the five quantitative tools |
-| Public Trends | The in-progress `publicLeagueTrends` contract exposes an allowlisted catalogue of prepared public tournament fields and exact selection aggregates |
-| Player State | The in-progress `playerStateProfile` contract composes current/historical FPL evidence, verified Understat process, fixtures, availability, peer/own baselines, provider revisions, limitations, and release-gated directional state |
-| Player search | `playersForPicker` supplies bounded server-side filtering, sorting, and cursor pagination |
-| Evidence metadata | Market and Player State have purpose-specific coverage contracts, but no common evidence context spans Gameweek, Fixtures, Trends, Players, and future Briefing items |
-| Missing contracts | No rank-cohort catalogue/snapshot, Briefing source/topic/item, Explore Overview, Explore search, or common share-card read model exists |
+| Area              | Current implementation                                                                                                                                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Core evidence     | Events, fixtures, teams, players, player detail, player values, market pulse, live boards, entry facts, and tournament selection statistics already support the five quantitative tools                                              |
+| Public Trends     | The in-progress `publicLeagueTrends` contract exposes an allowlisted catalogue of prepared public tournament fields and exact selection aggregates                                                                                   |
+| Player State      | The in-progress `playerStateProfile` contract composes current/historical FPL evidence, verified Understat process, fixtures, availability, peer/own baselines, provider revisions, limitations, and release-gated directional state |
+| Player search     | `playersForPicker` supplies bounded server-side filtering, sorting, and cursor pagination                                                                                                                                            |
+| Evidence metadata | Market and Player State have purpose-specific coverage contracts, but no common evidence context spans Gameweek, Fixtures, Trends, Players, and future Briefing items                                                                |
+| Missing contracts | No rank-cohort catalogue/snapshot, Briefing source/topic/item, Explore Overview, Explore search, or common share-card read model exists                                                                                              |
 
 ### Data
 
-| Area | Current implementation |
-| --- | --- |
-| Official FPL | Season-scoped events, fixtures, teams, players, player gameweek statistics, player season summaries, values, market snapshots, entry picks/results/transfers, and prepared competition evidence are persisted or published through bounded caches/read models |
-| Competition fields | Prepared competition membership and `reporting.tournament_selection_stats` provide exact ownership, captaincy, vice-captaincy, and transfer aggregates for bounded fields |
-| Curated public fields | The in-progress `competition.public_league_trends` catalogue marks selected prepared competitions for public Trends reads |
-| Real-match provider | Understat clients, tables, queues, workers, sync manifests, and caches remain independent from FPL; provider entity links and mapping status control cross-provider reads |
-| Player State inputs | Reporting player summaries, historical FPL gameweek facts, market snapshots, fixtures, Understat player process, and verified links support the in-progress state engine |
-| Missing rank data | No managed Top-10k/rank-band cohort definition, sample plan, sampled membership, pick capture, aggregate, publication, or coverage model exists |
-| Missing Briefing data | No public-source registry, acquisition policy, content item, topic, entity link, deduplication, correction/removal, or ingestion-run model exists |
+| Area                  | Current implementation                                                                                                                                                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Official FPL          | Season-scoped events, fixtures, teams, players, player gameweek statistics, player season summaries, values, market snapshots, entry picks/results/transfers, and prepared competition evidence are persisted or published through bounded caches/read models |
+| Competition fields    | Prepared competition membership and `reporting.tournament_selection_stats` provide exact ownership, captaincy, vice-captaincy, and transfer aggregates for bounded fields                                                                                     |
+| Curated public fields | The in-progress `competition.public_league_trends` catalogue marks selected prepared competitions for public Trends reads                                                                                                                                     |
+| Real-match provider   | Understat clients, tables, queues, workers, sync manifests, and caches remain independent from FPL; provider entity links and mapping status control cross-provider reads                                                                                     |
+| Player State inputs   | Reporting player summaries, historical FPL gameweek facts, market snapshots, fixtures, Understat player process, and verified links support the in-progress state engine                                                                                      |
+| Missing rank data     | No managed Top-10k/rank-band cohort definition, sample plan, sampled membership, pick capture, aggregate, publication, or coverage model exists                                                                                                               |
+| Missing Briefing data | No public-source registry, acquisition policy, content item, topic, entity link, deduplication, correction/removal, or ingestion-run model exists                                                                                                             |
 
 ## 3. Target technical structure
 
@@ -520,16 +520,16 @@ Use the existing session, origin, rate-limit, validation, and structured error c
 
 Add bounded additive reads:
 
-| Read model | Required shape |
-| --- | --- |
-| `exploreOverview` | Current season/event phase, bounded official/gameweek changes, bounded fixture and market changes, latest published rank-cohort references, latest Briefing topics, evidence contexts, and a facts revision |
-| `exploreSearch` | Bounded typed results for players, teams, gameweeks, public/authorized cohorts, Briefing topics, and sources with canonical route data |
-| `trendCohorts` | Cohort ID/kind/name, exact/sample flag, rank bounds where applicable, latest available event, sample/population metadata, and availability state |
-| `trendCohortSnapshot` | Evidence context; player ownership/EO/captaincy/vice-captaincy; chips; formations; template; compatible prior-snapshot change; personal exposure only when an authorized exact field and entry picks are available |
-| `briefingTopics` | Cursor-paginated topic cards with type, entities, latest item time, bounded evidence-class counts, followed state supplied separately by Web, and canonical slug |
-| `briefingTopic` | Topic identity, bounded cursor-paginated attributed items, evidence-class grouping, short timeline, source metadata, rights-aware display fields, correction/removal state, canonical related Explore evidence references |
-| `briefingSources` | Enabled public source identity, class, platform, locale, canonical URL, display mode, and latest allowed publication/capture metadata |
-| Player extension | Bounded related Briefing topic/item references plus the existing official/verified evidence contexts; no copied content inside `playerDetail` |
+| Read model            | Required shape                                                                                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `exploreOverview`     | Current season/event phase, bounded official/gameweek changes, bounded fixture and market changes, latest published rank-cohort references, latest Briefing topics, evidence contexts, and a facts revision               |
+| `exploreSearch`       | Bounded typed results for players, teams, gameweeks, public/authorized cohorts, Briefing topics, and sources with canonical route data                                                                                    |
+| `trendCohorts`        | Cohort ID/kind/name, exact/sample flag, rank bounds where applicable, latest available event, sample/population metadata, and availability state                                                                          |
+| `trendCohortSnapshot` | Evidence context; player ownership/EO/captaincy/vice-captaincy; chips; formations; template; compatible prior-snapshot change; personal exposure only when an authorized exact field and entry picks are available        |
+| `briefingTopics`      | Cursor-paginated topic cards with type, entities, latest item time, bounded evidence-class counts, followed state supplied separately by Web, and canonical slug                                                          |
+| `briefingTopic`       | Topic identity, bounded cursor-paginated attributed items, evidence-class grouping, short timeline, source metadata, rights-aware display fields, correction/removal state, canonical related Explore evidence references |
+| `briefingSources`     | Enabled public source identity, class, platform, locale, canonical URL, display mode, and latest allowed publication/capture metadata                                                                                     |
+| Player extension      | Bounded related Briefing topic/item references plus the existing official/verified evidence contexts; no copied content inside `playerDetail`                                                                             |
 
 Rules:
 
@@ -649,7 +649,7 @@ Rules:
 - Add Briefing source/item/topic/topic-slug-alias/entity/run tables or their equivalently isolated
   schema, including cross-current/alias slug collision constraints.
 - Add rights-mode, item-status, cohort-state, and source-class enums with database checks.
-- Add season/event foreign keys where the v3 platform contract supplies them; avoid references to compatibility views that cannot enforce identity.
+- Add season/event foreign keys where the canonical platform contract supplies them; avoid references to compatibility views that cannot enforce identity.
 - Add service-role writes and GraphQL-reader selects only; do not grant browser roles direct access.
 - Add history/audit ownership for source-rights revisions, corrections/removals, and cohort publication revisions.
 
@@ -667,7 +667,7 @@ Rules:
 
 **Exit criteria**
 
-- Migrations apply to a v3-shaped database and rollback through the documented additive path.
+- Migrations apply to the canonical database and rollback through the documented additive path.
 - The same evidence-state fixture, including `availabilityState`, renders consistently across at least Market, Trends, and Players.
 - Exact/sample, missing/collection-failed/not-yet-captured/confirmed-empty/stale, and observed/captured/published semantics have contract tests.
 

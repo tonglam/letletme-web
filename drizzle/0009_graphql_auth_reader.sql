@@ -1,6 +1,6 @@
 -- Web owns bauth and grants GraphQL only the two read models required to
 -- validate current Mini Program sessions. Data owns the capability role;
--- this migration fails closed if Data Platform v3 has not created it first.
+-- this migration fails closed if the Data platform has not created it first.
 
 DO $graphql_auth_reader_role$
 DECLARE
@@ -19,7 +19,7 @@ BEGIN
 	WHERE rolname = 'letletme_graphql_reader';
 
 	IF NOT FOUND THEN
-		RAISE EXCEPTION 'letletme_graphql_reader must be created by Data Platform v3 first';
+		RAISE EXCEPTION 'letletme_graphql_reader must be created by the Data platform first';
 	END IF;
 
 	IF role_row.rolcanlogin

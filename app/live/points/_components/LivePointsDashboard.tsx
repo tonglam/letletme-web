@@ -17,7 +17,7 @@ import { toast } from 'sonner'
 import { deriveLiveTeamStats } from '../_lib/live-points-model'
 import {
 	copyTextToClipboard,
-	formatLivePointsShareText,
+	formatLivePointsShareText
 } from '../_lib/live-points-share'
 import { LivePointsAutoRefreshCountdown } from './LivePointsAutoRefreshCountdown'
 
@@ -35,7 +35,7 @@ export function LivePointsDashboard({
 	benchPlayers,
 	onGameweekChange,
 	onAutoRefresh,
-	onRefresh,
+	onRefresh
 }: {
 	entrySearch?: ReactNode
 	currentGameweek: number
@@ -66,7 +66,7 @@ export function LivePointsDashboard({
 			typeof window !== 'undefined' ? window.location.origin : APP_URL.origin
 		const shareUrl = new URL(
 			localizePathname(`/live/points/${entryId}`, locale),
-			origin,
+			origin
 		).toString()
 
 		const text = formatLivePointsShareText({
@@ -89,14 +89,16 @@ export function LivePointsDashboard({
 				pts: t('pointsAbbreviation'),
 				hits: t('shareHits'),
 				// Pass {url} into next-intl — bare t('shareFooter') throws FORMATTING_ERROR
-				footer: t('shareFooter', { url: shareUrl }),
-			},
+				footer: t('shareFooter', { url: shareUrl })
+			}
 		})
-		const ok = await copyTextToClipboard(text)
-		if (ok) {
+		const copyResult = await copyTextToClipboard(text)
+		if (copyResult === 'copied') {
 			setCopied(true)
 			toast.success(t('shareCopied'))
 			window.setTimeout(() => setCopied(false), 2000)
+		} else if (copyResult === 'unsupported') {
+			toast.warning(t('shareCopyUnsupported'))
 		} else {
 			toast.error(t('shareCopyFailed'))
 		}
@@ -107,7 +109,7 @@ export function LivePointsDashboard({
 		locale,
 		selectedGameweek,
 		startingPlayers,
-		t,
+		t
 	])
 
 	return (
@@ -141,7 +143,10 @@ export function LivePointsDashboard({
 							aria-label={t('shareCopy')}
 						>
 							{copied ? (
-								<Check data-icon="inline-start" className="text-primary-ink" />
+								<Check
+									data-icon="inline-start"
+									className="text-primary-ink"
+								/>
 							) : (
 								<Copy data-icon="inline-start" />
 							)}
@@ -197,7 +202,10 @@ export function LivePointsDashboard({
 						{error}
 					</p>
 				) : !isRefreshing && !liveData ? (
-					<p className="mb-3 text-sm text-muted-foreground" role="status">
+					<p
+						className="mb-3 text-sm text-muted-foreground"
+						role="status"
+					>
 						{t('noData')}
 					</p>
 				) : null}
@@ -225,7 +233,7 @@ export function LivePointsDashboard({
 						<Card
 							className={cn(
 								'overflow-hidden border-border/80 shadow-sm',
-								isRefreshing && 'opacity-75 transition-opacity',
+								isRefreshing && 'opacity-75 transition-opacity'
 							)}
 						>
 							<PlayerList

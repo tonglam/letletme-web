@@ -1,18 +1,9 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, describe, it } from 'node:test'
 
-import {
-	countEntrySyncResults,
-	requestEntryInfoSync,
-	syncEntryAfterBind,
-} from '../lib/entry-sync'
+import { requestEntryInfoSync, syncEntryAfterBind } from '../lib/entry-sync'
 
-const ENV_KEYS = [
-	'LETLETME_DATA_URL',
-	'LETLETME_DATA_API_KEY',
-	'TOURNAMENT_API_BASE_URL',
-	'TOURNAMENT_API_KEY',
-] as const
+const ENV_KEYS = ['LETLETME_DATA_URL', 'LETLETME_DATA_API_KEY'] as const
 
 type FetchCall = { url: string; init?: RequestInit }
 
@@ -24,7 +15,9 @@ let fetchCalls: FetchCall[]
 let warnCalls: string[]
 let infoCalls: string[]
 
-const stubFetch = (impl: (url: string, init?: RequestInit) => Promise<Response>) => {
+const stubFetch = (
+	impl: (url: string, init?: RequestInit) => Promise<Response>
+) => {
 	globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
 		const url = String(input)
 		fetchCalls.push({ url, init })
@@ -41,8 +34,10 @@ beforeEach(() => {
 	fetchCalls = []
 	warnCalls = []
 	infoCalls = []
-	console.warn = (...args: unknown[]) => warnCalls.push(args.map(String).join(' '))
-	console.info = (...args: unknown[]) => infoCalls.push(args.map(String).join(' '))
+	console.warn = (...args: unknown[]) =>
+		warnCalls.push(args.map(String).join(' '))
+	console.info = (...args: unknown[]) =>
+		infoCalls.push(args.map(String).join(' '))
 })
 
 afterEach(() => {
@@ -61,14 +56,21 @@ describe('requestEntryInfoSync', () => {
 		process.env.LETLETME_DATA_API_KEY = 'k1'
 		stubFetch(
 			async () =>
-				new Response('{"success":true,"status":"queued","jobId":"entry-info-6953"}', {
-					status: 202,
-				}),
+				new Response(
+					'{"success":true,"status":"queued","jobId":"entry-info-6953"}',
+					{
+						status: 202
+					}
+				)
 		)
 
 		const result = await requestEntryInfoSync(6953)
 
-		assert.deepEqual(result, { ok: true, status: 'queued', jobId: 'entry-info-6953' })
+		assert.deepEqual(result, {
+			ok: true,
+			status: 'queued',
+			jobId: 'entry-info-6953'
+		})
 		assert.equal(fetchCalls.length, 1)
 		assert.equal(fetchCalls[0].url, 'http://data:4001/entry-info/6953/sync')
 		assert.equal(fetchCalls[0].init?.method, 'POST')
@@ -76,25 +78,36 @@ describe('requestEntryInfoSync', () => {
 		assert.equal(headers.get('x-api-key'), 'k1')
 	})
 
-	it('falls back to the tournament env vars when dedicated ones are unset', async () => {
-		process.env.TOURNAMENT_API_BASE_URL = 'http://127.0.0.1:4001'
-		process.env.TOURNAMENT_API_KEY = 't-key'
+	it('rejects a synchronous success response outside the canonical contract', async () => {
 		stubFetch(async () => new Response('{}', { status: 200 }))
 
 		const result = await requestEntryInfoSync(42)
 
-		assert.deepEqual(result, { ok: true, status: 'completed', jobId: null })
+		assert.deepEqual(result, {
+			ok: false,
+			retryable: false,
+			reason: 'entry sync contract requires HTTP 202, received 200'
+		})
 		assert.equal(fetchCalls[0].url, 'http://127.0.0.1:4001/entry-info/42/sync')
 		const headers = new Headers(fetchCalls[0].init?.headers)
-		assert.equal(headers.get('x-api-key'), 't-key')
+		assert.equal(headers.get('x-api-key'), null)
 	})
 
 	it('defaults to localhost:4001 and sends no key when nothing is configured', async () => {
-		stubFetch(async () => new Response('{}', { status: 200 }))
+		stubFetch(
+			async () =>
+				new Response('{"status":"queued","jobId":"entry-info-7"}', {
+					status: 202
+				})
+		)
 
 		const result = await requestEntryInfoSync(7)
 
-		assert.deepEqual(result, { ok: true, status: 'completed', jobId: null })
+		assert.deepEqual(result, {
+			ok: true,
+			status: 'queued',
+			jobId: 'entry-info-7'
+		})
 		assert.equal(fetchCalls[0].url, 'http://127.0.0.1:4001/entry-info/7/sync')
 		const headers = new Headers(fetchCalls[0].init?.headers)
 		assert.equal(headers.get('x-api-key'), null)
@@ -125,7 +138,10 @@ describe('requestEntryInfoSync', () => {
 	})
 
 	it('rejects a malformed queued response as retryable', async () => {
-		stubFetch(async () => new Response('{"success":true,"status":"queued"}', { status: 202 }))
+		stubFetch(
+			async () =>
+				new Response('{"success":true,"status":"queued"}', { status: 202 })
+		)
 
 		const result = await requestEntryInfoSync(6953)
 
@@ -166,27 +182,13 @@ describe('requestEntryInfoSync', () => {
 					init?.signal?.addEventListener('abort', () => {
 						reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
 					})
-				}),
+				})
 		)
 
 		const result = await requestEntryInfoSync(6953, { timeoutMs: 5 })
 
 		assert.equal(result.ok, false)
 		if (!result.ok) assert.match(result.reason, /timed out/)
-	})
-})
-
-describe('countEntrySyncResults', () => {
-	it('keeps queued work separate from completed synchronization', () => {
-		assert.deepEqual(
-			countEntrySyncResults([
-				{ ok: true, status: 'queued', jobId: 'job-1' },
-				{ ok: true, status: 'queued', jobId: 'job-2' },
-				{ ok: true, status: 'completed', jobId: null },
-				{ ok: false, retryable: true, reason: 'unavailable' },
-			]),
-			{ completed: 1, queued: 2, failed: 1 },
-		)
 	})
 })
 
@@ -206,10 +208,10 @@ describe('syncEntryAfterBind', () => {
 		let calls = 0
 		stubFetch(async () => {
 			calls += 1
-		return calls < 3
+			return calls < 3
 				? new Response('boom', { status: 500 })
 				: new Response('{"success":true,"status":"queued","jobId":"job-3"}', {
-						status: 202,
+						status: 202
 					})
 		})
 

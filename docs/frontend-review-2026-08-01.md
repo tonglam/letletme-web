@@ -53,7 +53,7 @@ No known P0 or P1 frontend issue remains from this review. The frontend and matc
 | Live points, selections, tournament standings | `no-store`; visibility- and connectivity-aware polling. |
 | Entry history and live derivations | In-memory dedupe with TTL, expiry pruning, and hard entry caps. |
 | Theme and small UI preferences | Validated enum-like `localStorage` values only. |
-| Recent player slots | Versioned, schema-validated local storage; corrupt values are discarded. |
+| Recent player slots | Canonical array with element validation; corrupt values are discarded. |
 | Tournament mutations | No browser cache; server authorization is re-evaluated for every command. |
 
 ### Design system, UI, and accessibility

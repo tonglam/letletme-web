@@ -1,7 +1,7 @@
 import { LiveMatchesClient } from '@/app/live/matches/LiveMatchesClient'
 import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGameweekUnavailable'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import { getCurrentEventId } from '@/lib/events'
+import { getCurrentAndNextEvents, pickCurrentEventId } from '@/lib/events'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import { getLiveMatchesSnapshot } from '@/lib/live-matches'
 import { getTranslations } from 'next-intl/server'
@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/live/matches',
 		titleKey: 'liveMatchesTitle',
-		descriptionKey: 'liveMatchesDescription',
+		descriptionKey: 'liveMatchesDescription'
 	})
 }
 
@@ -25,10 +25,16 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 	const t = await getTranslations('States')
 
 	// Gate first — route loading.tsx is GatedRouteLoading, not full match UI.
-	const currentEventId = await getCurrentEventId()
+	const events = await getCurrentAndNextEvents()
+	const currentEventId = pickCurrentEventId(events)
 	if (!currentEventId) {
 		return <CurrentGameweekUnavailable />
 	}
+	const nextEventCandidate = events?.next?.[0]?.id
+	const nextEventId =
+		typeof nextEventCandidate === 'number' && nextEventCandidate > 0
+			? nextEventCandidate
+			: null
 
 	let matches: Awaited<ReturnType<typeof getLiveMatchesSnapshot>>['matches'] =
 		[]
@@ -37,13 +43,16 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 	let initialError: string | null = null
 
 	try {
-		const live = await getLiveMatchesSnapshot(executePublicServerQuery)
+		const live = await getLiveMatchesSnapshot(
+			nextEventId,
+			executePublicServerQuery
+		)
 		matches = live.matches
 		snapshot = live.snapshot
 		if (snapshot?.eventId != null && snapshot.eventId !== currentEventId) {
 			console.warn(
 				'[live/matches] liveSnapshot.eventId differs from isCurrent',
-				{ snapshotEventId: snapshot.eventId, currentEventId },
+				{ snapshotEventId: snapshot.eventId, currentEventId }
 			)
 		}
 	} catch (error) {
@@ -56,6 +65,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 			initialMatches={matches}
 			initialError={initialError}
 			currentEventId={currentEventId}
+			nextEventId={nextEventId ?? undefined}
 			initialSnapshot={snapshot}
 		/>
 	)

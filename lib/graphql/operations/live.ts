@@ -273,10 +273,7 @@ export const GET_LIVE_MATCHES = `
       publishedAt
       checkedAt
     }
-    liveMatches(upcoming: true) {
-      nextEvent {
-        ...LiveMatchIdentity
-      }
+    liveMatches {
       notStarted {
         ...LiveMatchIdentity
         homeScore
@@ -406,19 +403,6 @@ export interface ManagerData {
 }
 
 // Types for live matches query
-export interface NextEventMatch {
-	matchId: number
-	minutes: number
-	homeTeamId: number
-	homeTeamName: string
-	homeTeamShortName: string
-	awayTeamId: number
-	awayTeamName: string
-	awayTeamShortName: string
-	kickoffTime: string
-	playStatus: string
-}
-
 export interface NotStartedMatch {
 	matchId: number
 	minutes: number
@@ -511,7 +495,6 @@ export interface FinishedMatch {
 }
 
 export interface LiveMatchesData {
-	nextEvent: NextEventMatch[]
 	notStarted: NotStartedMatch[]
 	playing: PlayingMatch[]
 	finished: FinishedMatch[]

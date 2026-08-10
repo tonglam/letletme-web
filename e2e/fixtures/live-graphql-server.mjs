@@ -144,10 +144,7 @@ const server = createServer((request, response) => {
 						isNext: false
 					},
 					dreamTeam: [haul(1, 'Saka', 12, true)],
-					hauls: [
-						haul(1, 'Saka', 12, true),
-						haul(2, 'Palmer', 11, false)
-					],
+					hauls: [haul(1, 'Saka', 12, true), haul(2, 'Palmer', 11, false)],
 					liveSnapshot: {
 						eventId: 33,
 						revision: 'g'.repeat(24),
@@ -181,7 +178,13 @@ const server = createServer((request, response) => {
 			const eventId = Number(variables.eventId)
 			const event = { id: eventId, name: `Gameweek ${eventId}` }
 			const team = (id, name, shortName) => ({ id, name, shortName })
-			const fixture = (id, homeTeam, awayTeam, homeDifficulty, awayDifficulty) => ({
+			const fixture = (
+				id,
+				homeTeam,
+				awayTeam,
+				homeDifficulty,
+				awayDifficulty
+			) => ({
 				id,
 				code: id,
 				event,
@@ -227,23 +230,27 @@ const server = createServer((request, response) => {
 				data: {
 					publicLeagueSelectionStats: {
 						totalEntries: 1000,
-						mostSelectedPlayers: [{
-							id: 1,
-							webName: 'Saka',
-							teamShortName: 'ARS',
-							position: 'MIDFIELDER',
-							selectedByPercent: 72,
-							eoByPercent: 84
-						}],
-						captainSelect: [{
-							id: 1,
-							webName: 'Saka',
-							teamShortName: 'ARS',
-							position: 'MIDFIELDER',
-							captainByPercent: 24,
-							selectedByPercent: 72,
-							eoByPercent: 84
-						}],
+						mostSelectedPlayers: [
+							{
+								id: 1,
+								webName: 'Saka',
+								teamShortName: 'ARS',
+								position: 'MIDFIELDER',
+								selectedByPercent: 72,
+								eoByPercent: 84
+							}
+						],
+						captainSelect: [
+							{
+								id: 1,
+								webName: 'Saka',
+								teamShortName: 'ARS',
+								position: 'MIDFIELDER',
+								captainByPercent: 24,
+								selectedByPercent: 72,
+								eoByPercent: 84
+							}
+						],
 						mostTransferIn: [],
 						mostTransferOut: []
 					}
@@ -254,15 +261,17 @@ const server = createServer((request, response) => {
 		if (query.includes('PublicLeagueTrends')) {
 			json(response, 200, {
 				data: {
-					publicLeagueTrends: [{
-						tournamentId: 777,
-						displayName: 'E2E Public League',
-						sortOrder: 1,
-						publishedAt: '2026-08-01T00:00:00.000Z',
-						updatedAt: '2026-08-04T19:00:00.000Z',
-						latestAvailableEventId: 33,
-						totalEntries: 1000
-					}]
+					publicLeagueTrends: [
+						{
+							tournamentId: 777,
+							displayName: 'E2E Public League',
+							sortOrder: 1,
+							publishedAt: '2026-08-01T00:00:00.000Z',
+							updatedAt: '2026-08-04T19:00:00.000Z',
+							latestAvailableEventId: 33,
+							totalEntries: 1000
+						}
+					]
 				}
 			})
 			return
@@ -271,11 +280,18 @@ const server = createServer((request, response) => {
 			json(response, 200, { data: { liveScores: [] } })
 			return
 		}
-		if (query.includes('GetTopTransfersIn') || query.includes('GetTopTransfersOut')) {
+		if (
+			query.includes('GetTopTransfersIn') ||
+			query.includes('GetTopTransfersOut')
+		) {
 			json(response, 200, {
 				data: {
-					...(query.includes('GetTopTransfersIn') ? { topTransfersIn: [] } : {}),
-					...(query.includes('GetTopTransfersOut') ? { topTransfersOut: [] } : {})
+					...(query.includes('GetTopTransfersIn')
+						? { topTransfersIn: [] }
+						: {}),
+					...(query.includes('GetTopTransfersOut')
+						? { topTransfersOut: [] }
+						: {})
 				}
 			})
 			return
@@ -305,7 +321,6 @@ const server = createServer((request, response) => {
 						checkedAt: '2026-08-04T18:00:30.000Z'
 					},
 					liveMatches: {
-						nextEvent: [],
 						notStarted: [scheduledMatch],
 						playing: [],
 						finished: []

@@ -11,7 +11,6 @@ import assert from 'node:assert/strict'
 import {
 	AUTH_COOKIE_PREFIX,
 	AUTH_PASSWORD_POLICY,
-	AUTH_RATE_LIMIT_POLICY,
 	AUTH_SESSION_POLICY,
 	AUTH_TRUSTED_PROVIDERS
 } from '../../lib/auth-policy'
@@ -48,13 +47,6 @@ describe('account linking — trusted providers', () => {
 			(AUTH_TRUSTED_PROVIDERS as readonly string[]).includes('wechat'),
 			false
 		)
-	})
-})
-
-describe('rate limiting', () => {
-	it('allows at most 100 requests per 60-second window', () => {
-		assert.equal(AUTH_RATE_LIMIT_POLICY.window, 60)
-		assert.equal(AUTH_RATE_LIMIT_POLICY.max, 100)
 	})
 })
 

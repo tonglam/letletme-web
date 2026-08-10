@@ -3,8 +3,9 @@ import { describe, it } from 'node:test'
 
 import {
 	buildLivePointsEntryShareUrl,
+	copyTextToClipboard,
 	formatLivePointsShareText,
-	formatShareFooter,
+	formatShareFooter
 } from '../app/live/points/_lib/live-points-share'
 import { formatChipName } from '../lib/utils'
 import type { Player } from '../types/player'
@@ -25,15 +26,15 @@ const labels = {
 	hits: 'hits',
 	footer: formatShareFooter(
 		'Live points: {url}',
-		'https://letletme.top/live/points/6953',
-	),
+		'https://letletme.top/live/points/6953'
+	)
 }
 
 function player(
 	partial: Partial<Player> &
 		Pick<Player, 'id' | 'name' | 'teamShort' | 'position' | 'playingStatus'> & {
 			points: number
-		},
+		}
 ): Player {
 	return {
 		id: partial.id,
@@ -59,8 +60,8 @@ function player(
 			yellowCards: 0,
 			redCards: 0,
 			points: partial.points,
-			bonusPoints: 0,
-		},
+			bonusPoints: 0
+		}
 	}
 }
 
@@ -68,11 +69,11 @@ describe('formatShareFooter / buildLivePointsEntryShareUrl', () => {
 	it('builds absolute entry live-points URLs', () => {
 		assert.equal(
 			buildLivePointsEntryShareUrl(6953, 'https://letletme.top'),
-			'https://letletme.top/live/points/6953',
+			'https://letletme.top/live/points/6953'
 		)
 		assert.equal(
 			buildLivePointsEntryShareUrl(42, 'https://letletme.top', '/zh-CN'),
-			'https://letletme.top/zh-CN/live/points/42',
+			'https://letletme.top/zh-CN/live/points/42'
 		)
 	})
 
@@ -80,16 +81,16 @@ describe('formatShareFooter / buildLivePointsEntryShareUrl', () => {
 		assert.equal(
 			formatShareFooter(
 				'Live points: {url}',
-				'https://letletme.top/live/points/6953',
+				'https://letletme.top/live/points/6953'
 			),
-			'Live points: https://letletme.top/live/points/6953',
+			'Live points: https://letletme.top/live/points/6953'
 		)
 		assert.equal(
 			formatShareFooter(
 				'实时积分：{url}',
-				'https://letletme.top/zh-CN/live/points/6953',
+				'https://letletme.top/zh-CN/live/points/6953'
 			),
-			'实时积分：https://letletme.top/zh-CN/live/points/6953',
+			'实时积分：https://letletme.top/zh-CN/live/points/6953'
 		)
 	})
 })
@@ -102,7 +103,7 @@ describe('formatLivePointsShareText', () => {
 			teamShort: 'ARS',
 			position: 'GKP',
 			playingStatus: 'PLAYING',
-			points: 7,
+			points: 7
 		}),
 		player({
 			id: '2',
@@ -111,8 +112,8 @@ describe('formatLivePointsShareText', () => {
 			position: 'FWD',
 			playingStatus: 'FINISHED',
 			points: 17,
-			isCaptain: true,
-		}),
+			isCaptain: true
+		})
 	]
 
 	const bench: Player[] = [
@@ -123,8 +124,8 @@ describe('formatLivePointsShareText', () => {
 			position: 'FWD',
 			playingStatus: 'NOT_STARTED',
 			points: 0,
-			isBench: true,
-		}),
+			isBench: true
+		})
 	]
 
 	it('formats header, chip, captain, XI and bench as a shareable md-ish list', () => {
@@ -139,11 +140,11 @@ describe('formatLivePointsShareText', () => {
 				liveTotalPoints: 145,
 				transferCost: 4,
 				chip: null,
-				captainName: 'Haaland',
+				captainName: 'Haaland'
 			},
 			startingPlayers: starting,
 			benchPlayers: bench,
-			labels,
+			labels
 		})
 
 		assert.match(text, /^# Tong's Team · GW1/m)
@@ -159,7 +160,7 @@ describe('formatLivePointsShareText', () => {
 		assert.match(text, /- FWD BHA João Pedro · NS · 0 pts/)
 		assert.match(
 			text,
-			/Live points: https:\/\/letletme\.top\/live\/points\/6953$/,
+			/Live points: https:\/\/letletme\.top\/live\/points\/6953$/
 		)
 	})
 
@@ -175,7 +176,7 @@ describe('formatLivePointsShareText', () => {
 				liveTotalPoints: 400,
 				transferCost: 0,
 				chip: '3xc',
-				captainName: 'Salah',
+				captainName: 'Salah'
 			},
 			startingPlayers: starting.slice(0, 1),
 			benchPlayers: [],
@@ -183,9 +184,9 @@ describe('formatLivePointsShareText', () => {
 				...labels,
 				footer: formatShareFooter(
 					'Live points: {url}',
-					'https://letletme.top/live/points/1',
-				),
-			},
+					'https://letletme.top/live/points/1'
+				)
+			}
 		})
 
 		assert.doesNotMatch(text, /hits/)
@@ -207,11 +208,11 @@ describe('formatLivePointsShareText', () => {
 				liveTotalPoints: 10,
 				transferCost: 0,
 				chip: '',
-				captainName: '',
+				captainName: ''
 			},
 			startingPlayers: [],
 			benchPlayers: [],
-			labels: { ...labels, footer: undefined },
+			labels: { ...labels, footer: undefined }
 		})
 
 		assert.match(text, /# Entry 42 · GW3/)
@@ -227,5 +228,52 @@ describe('formatChipName', () => {
 		assert.equal(formatChipName('TRIPLE_CAPTAIN'), 'Triple Captain')
 		assert.equal(formatChipName('FREE_HIT'), 'Free Hit')
 		assert.equal(formatChipName('WILDCARD'), 'Wildcard')
+	})
+})
+
+describe('copyTextToClipboard', () => {
+	it('reports unsupported without the Clipboard API', async () => {
+		const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+		Object.defineProperty(globalThis, 'navigator', {
+			configurable: true,
+			value: {}
+		})
+		try {
+			assert.equal(await copyTextToClipboard('text'), 'unsupported')
+		} finally {
+			if (descriptor) Object.defineProperty(globalThis, 'navigator', descriptor)
+			else Reflect.deleteProperty(globalThis, 'navigator')
+		}
+	})
+
+	it('distinguishes successful and failed Clipboard API writes', async () => {
+		const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+		let copied = ''
+		Object.defineProperty(globalThis, 'navigator', {
+			configurable: true,
+			value: {
+				clipboard: {
+					writeText: async (text: string) => {
+						copied = text
+					}
+				}
+			}
+		})
+		try {
+			assert.equal(await copyTextToClipboard('hello'), 'copied')
+			assert.equal(copied, 'hello')
+			Object.defineProperty(globalThis, 'navigator', {
+				configurable: true,
+				value: {
+					clipboard: {
+						writeText: async () => Promise.reject(new Error('denied'))
+					}
+				}
+			})
+			assert.equal(await copyTextToClipboard('hello'), 'failed')
+		} finally {
+			if (descriptor) Object.defineProperty(globalThis, 'navigator', descriptor)
+			else Reflect.deleteProperty(globalThis, 'navigator')
+		}
 	})
 })

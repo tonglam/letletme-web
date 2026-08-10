@@ -71,6 +71,13 @@
 			"when": 1786356908000,
 			"tag": "0009_graphql_auth_reader",
 			"breakpoints": true
+		},
+		{
+			"idx": 10,
+			"version": "7",
+			"when": 1786435200000,
+			"tag": "0010_remove_legacy_auth_objects",
+			"breakpoints": true
 		}
 	]
 }

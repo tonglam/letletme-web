@@ -23,9 +23,11 @@ describe('player stats URL contract', () => {
 		)
 	})
 
-	it('keeps legacy ICT hashes pointed at Process', () => {
-		assert.equal(playerStatsSectionFromHash('#ps-ict'), 'process')
-		assert.equal(playerStatsSectionFromHash('#ict'), 'process')
+	it('ignores non-canonical hashes', () => {
+		assert.equal(playerStatsSectionFromHash('#ps-ict'), null)
+		assert.equal(playerStatsSectionFromHash('#ict'), null)
+		assert.equal(playerStatsSectionFromHash('#recent'), null)
+		assert.equal(playerStatsSectionFromHash('#ps-overview'), null)
 		assert.equal(playerStatsSectionFromHash('#ps-recent'), 'recent')
 	})
 

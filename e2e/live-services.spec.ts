@@ -199,7 +199,6 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 				checkedAt: '2026-08-04T18:30:30.000Z'
 			},
 			liveMatches: {
-				nextEvent: [],
 				notStarted: [],
 				finished: [],
 				playing: [
@@ -242,6 +241,13 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 						}
 					}
 				}
+			})
+			return
+		}
+		if (payload.query?.includes('GetEventFixtures')) {
+			await route.fulfill({
+				status: 200,
+				json: { data: { eventFixtures: [] } }
 			})
 			return
 		}

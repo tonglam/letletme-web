@@ -496,6 +496,7 @@
 		"shareCopiedShort": "已复制",
 		"shareCopied": "已复制实时积分列表，可粘贴到社交媒体。",
 		"shareCopyFailed": "复制失败，请重试或手动复制。",
+		"shareCopyUnsupported": "当前浏览器不支持复制，请手动选择并复制文本。",
 		"shareLive": "实时",
 		"shareNet": "净分",
 		"shareSeason": "赛季",

@@ -3,14 +3,15 @@
 import PageShell from '@/components/layout/PageShell'
 import { LiveAutoRefreshCountdown } from '@/components/live/LiveAutoRefreshCountdown'
 import { MatchCard } from '@/components/live/MatchCard'
-import { StatsPageHeader, StatsTabsShell } from '@/components/stats/StatsSurfaces'
+import {
+	StatsPageHeader,
+	StatsTabsShell
+} from '@/components/stats/StatsSurfaces'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_LIVE_MATCHES,
 	GET_LIVE_SNAPSHOT,
-	type LiveMatchesResponse,
 	type LiveSnapshotResponse,
 	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
@@ -18,7 +19,7 @@ import {
 	liveSnapshotNeedsRefresh,
 	shouldPollLiveSnapshot
 } from '@/lib/live-refresh'
-import { transformLiveMatches } from '@/lib/live-matches'
+import { getLiveMatchesSnapshot } from '@/lib/live-matches'
 import { usePageActive } from '@/hooks/use-page-active'
 import type { Match } from '@/types/match'
 import { RefreshCw } from 'lucide-react'
@@ -84,11 +85,13 @@ export function LiveMatchesClient({
 	initialMatches,
 	initialError,
 	currentEventId,
+	nextEventId,
 	initialSnapshot
 }: {
 	initialMatches: Match[]
 	initialError?: string | null
 	currentEventId?: number
+	nextEventId?: number
 	initialSnapshot?: LiveSnapshotStatus | null
 }) {
 	const t = useTranslations('LiveMatches')
@@ -139,11 +142,11 @@ export function LiveMatchesClient({
 					setIsLoading(true)
 				}
 				setError(null)
-				const data = await executeQuery<LiveMatchesResponse>(GET_LIVE_MATCHES)
+				const data = await getLiveMatchesSnapshot(nextEventId ?? null)
 				if (!mountedRef.current) return
-				const mappedMatches = transformLiveMatches(data.liveMatches)
+				const mappedMatches = data.matches
 				setMatches(mappedMatches)
-				acceptSnapshot(data.liveSnapshot)
+				acceptSnapshot(data.snapshot)
 				hasLastGoodData.current = true
 
 				if (!hasSavedTabPreference.current) {
@@ -168,7 +171,7 @@ export function LiveMatchesClient({
 				}
 			}
 		},
-		[acceptSnapshot, t]
+		[acceptSnapshot, nextEventId, t]
 	)
 
 	const autoRefreshMatches = useCallback((): Promise<void> => {
@@ -293,7 +296,12 @@ export function LiveMatchesClient({
 						eyebrow={t('eyebrow')}
 						title={t('title')}
 						badge={
-							<Button variant="outline" size="icon" disabled className="shrink-0">
+							<Button
+								variant="outline"
+								size="icon"
+								disabled
+								className="shrink-0"
+							>
 								<RefreshCw className="h-4 w-4" />
 								<span className="sr-only">{t('refresh')}</span>
 							</Button>
@@ -317,10 +325,16 @@ export function LiveMatchesClient({
 						badge={headerActions}
 					/>
 					<div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-border/80 bg-card py-12 shadow-sm">
-						<p className="text-destructive" role="alert">
+						<p
+							className="text-destructive"
+							role="alert"
+						>
 							{t('error', { message: error })}
 						</p>
-						<Button onClick={() => fetchMatches(true)} variant="outline">
+						<Button
+							onClick={() => fetchMatches(true)}
+							variant="outline"
+						>
 							{t('tryAgain')}
 						</Button>
 					</div>
@@ -333,7 +347,10 @@ export function LiveMatchesClient({
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
 				{error ? (
-					<p className="mb-4 text-sm text-destructive" role="alert">
+					<p
+						className="mb-4 text-sm text-destructive"
+						role="alert"
+					>
 						{t('error', { message: error })}
 					</p>
 				) : null}
@@ -342,25 +359,44 @@ export function LiveMatchesClient({
 					title={t('title')}
 					badge={headerActions}
 				/>
-				<Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-5">
+				<Tabs
+					value={activeTab}
+					onValueChange={handleTabChange}
+					className="space-y-5"
+				>
 					<StatsTabsShell>
 						<TabsList className="grid h-auto w-full grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
-							<TabsTrigger value="live" className="w-full">
+							<TabsTrigger
+								value="live"
+								className="w-full"
+							>
 								{t('liveNow')}
 							</TabsTrigger>
-							<TabsTrigger value="finished" className="w-full">
+							<TabsTrigger
+								value="finished"
+								className="w-full"
+							>
 								{t('finished')}
 							</TabsTrigger>
-							<TabsTrigger value="not-started" className="w-full">
+							<TabsTrigger
+								value="not-started"
+								className="w-full"
+							>
 								{t('notStarted')}
 							</TabsTrigger>
-							<TabsTrigger value="upcoming" className="w-full">
+							<TabsTrigger
+								value="upcoming"
+								className="w-full"
+							>
 								{t('upcoming')}
 							</TabsTrigger>
 						</TabsList>
 					</StatsTabsShell>
 
-					<TabsContent value={activeTab} className="mt-0 space-y-5">
+					<TabsContent
+						value={activeTab}
+						className="mt-0 space-y-5"
+					>
 						{activeMatches.length > 0 ? (
 							activeMatches.map((match, i) => (
 								<MatchCard

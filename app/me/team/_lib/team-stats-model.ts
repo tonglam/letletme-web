@@ -9,7 +9,7 @@ import {
 	type EntryHistoryItem,
 	type EntryHistoryResponse,
 	type EntrySeasonHistoryItem,
-	type EntryTransferHistoryResponse,
+	type EntryTransferHistoryResponse
 } from '@/lib/graphql/operations/entries'
 
 export interface EventPickViewModel {
@@ -151,7 +151,7 @@ export type SeasonIdentity = {
  */
 export function buildSeasonOverallSnapshot(
 	identity: SeasonIdentity,
-	entryHistoryResults: EntryHistoryItem[],
+	entryHistoryResults: EntryHistoryItem[]
 ): TeamSeasonOverallSnapshot {
 	const latestHistory =
 		entryHistoryResults.length > 0
@@ -162,14 +162,12 @@ export function buildSeasonOverallSnapshot(
 		teamName: identity.teamName,
 		playerName: identity.playerName || '-',
 		region: identity.region || '-',
-		overallPoints:
-			latestHistory?.overallPoints ?? identity.overallPoints ?? 0,
+		overallPoints: latestHistory?.overallPoints ?? identity.overallPoints ?? 0,
 		overallRank: latestHistory?.overallRank ?? identity.overallRank ?? 0,
 		teamValue: latestHistory?.teamValue ?? identity.teamValue ?? null,
 		bank: latestHistory?.bank ?? identity.bank ?? null,
 		totalTransfers: identity.totalTransfers,
-		asOfGameweek:
-			latestHistory?.eventId ?? identity.asOfGameweek ?? 0,
+		asOfGameweek: latestHistory?.eventId ?? identity.asOfGameweek ?? 0
 	}
 }
 
@@ -191,12 +189,12 @@ export function identityFromEntrySummary(entry: {
 		overallPoints: entry.overallPoints ?? undefined,
 		overallRank: entry.overallRank ?? undefined,
 		teamValue: entry.teamValue ?? null,
-		bank: entry.bank ?? null,
+		bank: entry.bank ?? null
 	}
 }
 
 export function identityFromEventResult(
-	entryEventResult: EntryEventResult,
+	entryEventResult: EntryEventResult
 ): SeasonIdentity {
 	return {
 		teamName: entryEventResult.entry.entryName,
@@ -207,7 +205,7 @@ export function identityFromEventResult(
 		overallRank: entryEventResult.overallRank,
 		teamValue: entryEventResult.teamValue,
 		bank: entryEventResult.bank,
-		asOfGameweek: entryEventResult.eventId,
+		asOfGameweek: entryEventResult.eventId
 	}
 }
 
@@ -224,7 +222,7 @@ export type TeamSeasonLogs = Pick<
 export function buildSeasonLogs(
 	entryHistoryResults: EntryHistoryItem[],
 	entrySeasonHistory: EntrySeasonHistoryItem[],
-	entryTransferHistory: EntryGameweekTransfers[],
+	entryTransferHistory: EntryGameweekTransfers[]
 ): TeamSeasonLogs {
 	const transferByEvent = new Map<number, EntryGameweekTransfers>()
 	entryTransferHistory.forEach(item => {
@@ -244,18 +242,17 @@ export function buildSeasonLogs(
 				eventTransfers: item.eventTransfers,
 				eventTransfersCost: item.eventTransfersCost,
 				captainName: item.eventPlayedCaptain?.webName?.trim() || '',
-				captainTeam:
-					item.eventPlayedCaptain?.team?.shortName?.trim() || '',
+				captainTeam: item.eventPlayedCaptain?.team?.shortName?.trim() || '',
 				captainPoints: item.eventCaptainPoints ?? 0,
 				benchPoints: item.eventBenchPoints ?? 0,
 				teamValue: item.teamValue,
-				bank: item.bank,
+				bank: item.bank
 			})),
 		seasonHistoryRows: [...entrySeasonHistory].map((item, index) => ({
 			seasonOrder: String(index + 1),
 			season: item.season,
 			totalPoints: item.totalPoints,
-			overallRank: item.overallRank,
+			overallRank: item.overallRank
 		})),
 		chipUsageRows: [...entryHistoryResults]
 			.filter(item => item.eventChip !== 'NONE')
@@ -265,7 +262,7 @@ export function buildSeasonLogs(
 				chip: item.eventChip,
 				points: item.eventPoints,
 				netPoints: item.eventNetPoints,
-				rank: item.eventRank,
+				rank: item.eventRank
 			})),
 		chipCounts: Object.entries(
 			entryHistoryResults.reduce<Record<string, number>>((acc, item) => {
@@ -273,7 +270,7 @@ export function buildSeasonLogs(
 					acc[item.eventChip] = (acc[item.eventChip] ?? 0) + 1
 				}
 				return acc
-			}, {}),
+			}, {})
 		)
 			.map(([chip, count]) => ({ chip, count }))
 			.sort((a, b) => b.count - a.count),
@@ -287,7 +284,7 @@ export function buildSeasonLogs(
 					cost: item.eventTransfersCost,
 					chip: item.eventChip ?? 'NONE',
 					hasTransferDetails: Boolean(
-						transferInfo && transferInfo.transfers.length > 0,
+						transferInfo && transferInfo.transfers.length > 0
 					),
 					moves:
 						transferInfo?.transfers.map(transfer => ({
@@ -296,10 +293,10 @@ export function buildSeasonLogs(
 							inCost: transfer.elementInCost,
 							outName: transfer.elementOutWebName,
 							outTeam: transfer.elementOutTeamShortName,
-							outCost: transfer.elementOutCost,
-						})) ?? [],
+							outCost: transfer.elementOutCost
+						})) ?? []
 				}
-			}),
+			})
 	}
 }
 
@@ -309,7 +306,7 @@ export function extractSeasonLogs(stats: TeamStatsViewModel): TeamSeasonLogs {
 		seasonHistoryRows: stats.seasonHistoryRows,
 		chipUsageRows: stats.chipUsageRows,
 		chipCounts: stats.chipCounts,
-		transferRows: stats.transferRows,
+		transferRows: stats.transferRows
 	}
 }
 
@@ -322,7 +319,7 @@ export const mapApiDataToTeamStats = (
 	const seasonLogs = buildSeasonLogs(
 		entryHistoryResults,
 		entrySeasonHistory,
-		entryTransferHistory,
+		entryTransferHistory
 	)
 
 	return {
@@ -349,41 +346,39 @@ export const mapApiDataToTeamStats = (
 				GKP: 1,
 				DEF: 2,
 				MID: 3,
-				FWD: 4,
+				FWD: 4
 			}
 			return [...entryEventResult.eventPicks]
-				.map(
-					(pick): EventPickViewModel => ({
-						position: pick.position,
-						webName: pick.webName,
-						teamShortName: pick.teamShortName,
-						teamName: pick.teamName,
-						elementTypeName: pick.elementTypeName,
-						isCaptain: pick.isCaptain,
-						isViceCaptain: pick.isViceCaptain,
-						minutes: pick.minutes,
-						totalPoints: pick.totalPoints,
-						multiplier: pick.multiplier,
-						goalsScored: pick.goalsScored ?? 0,
-						assists: pick.assists ?? 0,
-						cleanSheets: pick.cleanSheets ?? 0,
-						goalsConceded: pick.goalsConceded ?? 0,
-						yellowCards: pick.yellowCards ?? 0,
-						redCards: pick.redCards ?? 0,
-						saves: pick.saves ?? 0,
-						bonus: pick.bonus ?? 0,
-						bps: pick.bps ?? 0,
-						againstShortName: pick.againstShortName ?? '',
-						wasHome: pick.wasHome ?? '',
-						score: pick.score ?? '',
-						isPlayed: pick.isPlayed ?? pick.minutes > 0,
-						autoSub: pick.autoSub ?? false,
-						expectedGoals: pick.expectedGoals ?? null,
-						expectedAssists: pick.expectedAssists ?? null,
-						expectedGoalInvolvements: pick.expectedGoalInvolvements ?? null,
-						expectedGoalsConceded: pick.expectedGoalsConceded ?? null,
-					}),
-				)
+				.map((pick): EventPickViewModel => ({
+					position: pick.position,
+					webName: pick.webName,
+					teamShortName: pick.teamShortName,
+					teamName: pick.teamName,
+					elementTypeName: pick.elementTypeName,
+					isCaptain: pick.isCaptain,
+					isViceCaptain: pick.isViceCaptain,
+					minutes: pick.minutes,
+					totalPoints: pick.totalPoints,
+					multiplier: pick.multiplier,
+					goalsScored: pick.goalsScored ?? 0,
+					assists: pick.assists ?? 0,
+					cleanSheets: pick.cleanSheets ?? 0,
+					goalsConceded: pick.goalsConceded ?? 0,
+					yellowCards: pick.yellowCards ?? 0,
+					redCards: pick.redCards ?? 0,
+					saves: pick.saves ?? 0,
+					bonus: pick.bonus ?? 0,
+					bps: pick.bps ?? 0,
+					againstShortName: pick.againstShortName ?? '',
+					wasHome: pick.wasHome ?? '',
+					score: pick.score ?? '',
+					isPlayed: pick.isPlayed ?? pick.minutes > 0,
+					autoSub: pick.autoSub ?? false,
+					expectedGoals: pick.expectedGoals ?? null,
+					expectedAssists: pick.expectedAssists ?? null,
+					expectedGoalInvolvements: pick.expectedGoalInvolvements ?? null,
+					expectedGoalsConceded: pick.expectedGoalsConceded ?? null
+				}))
 				.sort((a, b) => {
 					const aBench = a.position > 11 ? 1 : 0
 					const bBench = b.position > 11 ? 1 : 0
@@ -395,7 +390,7 @@ export const mapApiDataToTeamStats = (
 					)
 				})
 		})(),
-		...seasonLogs,
+		...seasonLogs
 	}
 }
 
@@ -432,12 +427,11 @@ export const ENTRY_EVENT_CACHE_TTL_MS = 30 * 60_000
 export const ENTRY_EVENT_CURRENT_CACHE_TTL_MS = 10 * 60_000
 const HISTORY_CACHE_TTL_MS = 20 * 60_000
 /** @deprecated Use ENTRY_EVENT_CACHE_TTL_MS */
-export const LIVE_CACHE_TTL_MS = ENTRY_EVENT_CACHE_TTL_MS
 const MAX_CACHE_ENTRIES = 100
 
 const getFreshCacheValue = <K, T>(
 	cache: Map<K, TimedCacheValue<T>>,
-	key: K,
+	key: K
 ): T | undefined => {
 	const cached = cache.get(key)
 	if (!cached) return undefined
@@ -452,7 +446,7 @@ const setCacheValue = <K, T>(
 	cache: Map<K, TimedCacheValue<T>>,
 	key: K,
 	value: T,
-	ttlMs: number,
+	ttlMs: number
 ): void => {
 	const now = Date.now()
 	cache.forEach((cachedValue, cachedKey) => {
@@ -465,7 +459,10 @@ const setCacheValue = <K, T>(
 	cache.set(key, { value, expiresAt: now + ttlMs })
 }
 
-export const entryEventCache = new Map<string, TimedCacheValue<EntryEventResult | null>>()
+export const entryEventCache = new Map<
+	string,
+	TimedCacheValue<EntryEventResult | null>
+>()
 const entryEventInFlightCache = new Map<
 	string,
 	Promise<EntryEventResult | null>
@@ -478,7 +475,10 @@ const entryHistoryInFlight = new Map<
 	number,
 	Promise<EntryHistoryResponse['entryHistory']>
 >()
-const transferHistoryCache = new Map<number, TimedCacheValue<EntryGameweekTransfers[]>>()
+const transferHistoryCache = new Map<
+	number,
+	TimedCacheValue<EntryGameweekTransfers[]>
+>()
 const transferHistoryInFlight = new Map<
 	number,
 	Promise<EntryGameweekTransfers[]>
@@ -489,18 +489,18 @@ export const entryEventCacheKey = (entryId: number, eventId: number): string =>
 
 /** Read session cache without fetching (undefined = miss / expired). */
 export const peekEntryHistory = (
-	entryId: number,
+	entryId: number
 ): EntryHistoryResponse['entryHistory'] | undefined =>
 	getFreshCacheValue(entryHistoryCache, entryId)
 
 export const peekTransferHistory = (
-	entryId: number,
+	entryId: number
 ): EntryGameweekTransfers[] | undefined =>
 	getFreshCacheValue(transferHistoryCache, entryId)
 
 export const peekEntryEventResult = (
 	entryId: number,
-	eventId: number,
+	eventId: number
 ): EntryEventResult | null | undefined =>
 	getFreshCacheValue(entryEventCache, entryEventCacheKey(entryId, eventId))
 
@@ -509,7 +509,7 @@ export const seedEntryEventCache = (
 	entryId: number,
 	eventId: number,
 	value: EntryEventResult | null,
-	opts?: { isCurrentGameweek?: boolean },
+	opts?: { isCurrentGameweek?: boolean }
 ): void => {
 	const ttl = opts?.isCurrentGameweek
 		? ENTRY_EVENT_CURRENT_CACHE_TTL_MS
@@ -518,20 +518,20 @@ export const seedEntryEventCache = (
 		entryEventCache,
 		entryEventCacheKey(entryId, eventId),
 		value,
-		ttl,
+		ttl
 	)
 }
 
 export const seedEntryHistoryCache = (
 	entryId: number,
-	value: EntryHistoryResponse['entryHistory'],
+	value: EntryHistoryResponse['entryHistory']
 ): void => {
 	setCacheValue(entryHistoryCache, entryId, value, HISTORY_CACHE_TTL_MS)
 }
 
 export const seedTransferHistoryCache = (
 	entryId: number,
-	value: EntryGameweekTransfers[],
+	value: EntryGameweekTransfers[]
 ): void => {
 	setCacheValue(transferHistoryCache, entryId, value, HISTORY_CACHE_TTL_MS)
 }
@@ -553,7 +553,7 @@ export function hydrateTeamStatsSessionCache(opts: {
 	if (transfers !== null) seedTransferHistoryCache(entryId, transfers)
 	if (event && seedGw > 0) {
 		seedEntryEventCache(entryId, seedGw, event, {
-			isCurrentGameweek: seedGw === currentGameweek,
+			isCurrentGameweek: seedGw === currentGameweek
 		})
 	}
 }
@@ -575,7 +575,7 @@ export const getEntryHistoryCached = async (
 				entryHistoryCache,
 				entryId,
 				response.entryHistory,
-				HISTORY_CACHE_TTL_MS,
+				HISTORY_CACHE_TTL_MS
 			)
 			return response.entryHistory
 		})
@@ -589,7 +589,7 @@ export const getEntryHistoryCached = async (
 export const getEntryEventResultCached = async (
 	entryId: number,
 	eventId: number,
-	opts?: { isCurrentGameweek?: boolean },
+	opts?: { isCurrentGameweek?: boolean }
 ): Promise<EntryEventResult | null> => {
 	const cacheKey = entryEventCacheKey(entryId, eventId)
 	const cached = getFreshCacheValue(entryEventCache, cacheKey)
@@ -626,7 +626,7 @@ export const getTransferHistoryCached = async (
 	const request = executeQuery<EntryTransferHistoryResponse>(
 		GET_ENTRY_TRANSFER_HISTORY,
 		{ entryId },
-		{ cache: 'no-store' },
+		{ cache: 'no-store' }
 	)
 		.then(response => {
 			const transfers = response.entryTransferHistory ?? []
@@ -634,7 +634,7 @@ export const getTransferHistoryCached = async (
 				transferHistoryCache,
 				entryId,
 				transfers,
-				HISTORY_CACHE_TTL_MS,
+				HISTORY_CACHE_TTL_MS
 			)
 			return transfers
 		})
