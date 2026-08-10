@@ -229,23 +229,29 @@ Web owns private binding history:
 ```text
 PrincipalContext
   userId
+  bindingState: NONE | ACTIVE | STALE
   bindingSeason nullable
   entryId nullable
   bindingVerifiedAt nullable
-  bindingAssurance: UNVERIFIED | OWNERSHIP_VERIFIED
-  bindingProofKind: DIRECT_BINDING | TEAM_NAME_CHALLENGE | OPERATOR_VERIFIED
+  bindingAssurance: UNVERIFIED | OWNERSHIP_VERIFIED | null
+  bindingProofKind: DIRECT_BINDING | TEAM_NAME_CHALLENGE | OPERATOR_VERIFIED | null
   envelopeVersion
 ```
 
 Rules:
 
 - The Web private schema permits at most one active binding per `(userId, season)` and active uniqueness for `(season, entryId)` according to the My FPL migration.
+- `bindingState=NONE` requires all five binding detail fields to be null. `ACTIVE` and `STALE`
+  require non-null season, entry, assurance, and proof kind; only `bindingVerifiedAt` may remain null
+  for an `UNVERIFIED` direct binding. Web signs the state and correlated fields together, and
+  GraphQL rejects impossible combinations instead of fabricating proof metadata for an unbound user.
 - Web persists `bindingAssurance` and `bindingProofKind` on both the current binding and every
   binding-history row, then signs both values into the principal envelope; clients cannot supply
   another account, entry identity, or assurance level.
 - GraphQL verifies that `bindingSeason` matches Data's active season before authorizing active-season personal reads.
 - A legacy envelope without `bindingSeason` is parseable only for public or non-entry-scoped compatibility operations; it is denied on protected entry roots after the season-bearing Web signer is deployed.
-- A missing binding and a stale-season binding are distinct typed states. Stale state returns `rebind required` rather than querying another manager with the same number.
+- A missing binding (`NONE`) and a stale-season binding (`STALE`) are distinct typed states. Stale
+  state returns `rebind required` rather than querying another manager with the same number.
 - Raw direct binding sets `bindingAssurance=UNVERIFIED`,
   `bindingProofKind=DIRECT_BINDING`, and no ownership `bindingVerifiedAt`. The migration never
   promotes a legacy timestamp to ownership proof without a challenge/audit record. A successful

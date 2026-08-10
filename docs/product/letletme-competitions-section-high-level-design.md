@@ -323,7 +323,11 @@ Rules:
   target must carry an ownership-verified same-season participant binding. Data records both signed
   command identities in the audit before the old Web account may be deleted.
 - Joining or a verified claim persists `participantUserId` so later access does not depend on whichever FPL entry is active on the account.
-- Historical competition reads authorize a stable matching `participantUserId` first. An active `EntryRef` may authorize entry membership only when its season matches the competition season.
+- Historical and private competition reads authorize a stable matching `participantUserId`; a raw
+  or unclaimed `EntryRef` never grants roster-member visibility. A user with an ownership-verified
+  binding for an unclaimed same-season roster entry may access only a sanitized claim preflight and
+  atomically persist `participantUserId`; full Competition Home, Live, Results/History, and roster
+  reads become available only after that claim succeeds.
 - A legacy member whose `participantUserId` is still null must complete an ownership-verified historical claim; when upstream historical proof is no longer possible, recovery is operator-mediated rather than accepting a seasonless or unverified binding.
 - Keep one organizer initially. Co-organizer roles are outside this plan.
 
@@ -331,14 +335,23 @@ Rules:
 
 Initial visibility is private:
 
-- `My Competitions`: organizer or roster member only.
-- Competition Home, Live, Results/History, and participant roster: organizer or roster member only.
+- `My Competitions`: organizer or stable claimed roster member only.
+- Competition Home, Live, Results/History, and participant roster: organizer or stable claimed
+  roster member only. An unclaimed entry receives only the sanitized ownership-verified claim flow.
 - Manage: resolved stable organizer, or the narrowly scoped compatibility principal while completing an audited `recovery_required` ownership claim.
 - Invite preview: possession of a valid token, sanitized projection only.
 - Explicit share cards: sanitized immutable result projection, added separately from full page access.
 - No anonymous competition directory and no arbitrary official-league lookup.
 
-GraphQL authorization must evaluate stable organizer identity, stable claimed participant identity, and season-bound entry membership separately. Historical and archived reads use `participantUserId` when present, so an account remains a participant after rebinding for a later season. The legacy entry-based recovery path is valid only while `ownershipState=recovery_required` and only with ownership-verified assurance for the competition season; after resolution, `admin_entry_id` cannot grant management access. A user can remain the organizer even if their competitive entry is later absent from a synchronized official roster.
+GraphQL authorization must evaluate stable organizer identity, stable claimed participant identity,
+and ownership-verified claim eligibility separately. Historical, archived, and all private
+competition reads require `participantUserId` when the viewer is not the organizer, so an unverified
+direct binding cannot impersonate an unclaimed roster entry. The narrowly projected claim preflight
+may compare an ownership-verified same-season `EntryRef`; after the atomic claim, authorization uses
+the persisted account identity. The legacy entry-based recovery path is valid only while
+`ownershipState=recovery_required` and only with ownership-verified assurance for the competition
+season; after resolution, `admin_entry_id` cannot grant management access. A user can remain the
+organizer even if their competitive entry is later absent from a synchronized official roster.
 
 ### 4.7 Format capability and result contract
 
@@ -843,6 +856,9 @@ Do not expose invitations before roster-lock semantics exist. Do not expose a fo
 - Every new root field is classified and denied without the required principal.
 - Stable owner and entry-member permissions remain distinct.
 - Stable participant access survives active-entry rebinding and season rollover; unverified direct bindings cannot claim organizer or historical participant identity.
+- An unverified or merely direct-bound roster entry cannot read any private competition surface;
+  the ownership-verified claim preflight exposes only sanitized identity and grants access only
+  after `participantUserId` is committed.
 - List payload stays bounded and does not perform one table calculation per competition.
 - Participant/history/result-body pagination, revision-bound cursors, search caps, and complexity limits.
 - Correct discriminated result type and authority for every supported format.

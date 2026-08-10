@@ -190,6 +190,7 @@ Add season-scoped reporting tables, provisionally named:
 reporting.manager_cohorts
   season_id
   cohort_id
+  definition_revision
   slug
   display_name
   cohort_kind: RANK_SAMPLE
@@ -206,9 +207,16 @@ reporting.manager_cohort_snapshots
   snapshot_id
   season_id
   cohort_id
+  definition_revision
+  cohort_slug
+  cohort_kind
+  lower_rank
+  upper_rank
+  sampling_method
   event_id
   rank_reference_event_id
   deadline_at
+  member_set_frozen_at nullable
   state: PENDING | CAPTURING | PUBLISHED | PARTIAL | FAILED
   target_population
   target_sample_size
@@ -252,16 +260,29 @@ reporting.manager_cohort_formation_stats
 Required invariants:
 
 - Cohort definition is unique by `(season_id, slug)`.
-- `snapshot_id` is the immutable primary key of one method-specific capture and every member or aggregate row references it; child rows never infer snapshot identity from season/cohort/event alone.
-- One published snapshot exists per `(season_id, cohort_id, event_id, method_version)`.
-- Child uniqueness is `(snapshot_id, entry_id)`, `(snapshot_id, element_id)`, `(snapshot_id, chip)`, or `(snapshot_id, formation)` as applicable, with a foreign key to `manager_cohort_snapshots`; rows from different method versions cannot collide or be combined.
+- `snapshot_id` is the immutable primary key of one definition-specific capture and every member or aggregate row references it; child rows never infer snapshot identity from season/cohort/event alone.
+- Every snapshot copies the complete published cohort definition: slug/kind, rank bounds,
+  sampling method, method version, target size, and definition revision. Historical GraphQL reads
+  use those immutable fields and never re-describe a snapshot by joining the mutable current
+  `manager_cohorts` row.
+- Any change to rank bounds, sampling method, or target size increments `definition_revision`. One
+  published snapshot exists per `(season_id, cohort_id, event_id, definition_revision)`.
+- Child uniqueness is `(snapshot_id, entry_id)`, `(snapshot_id, element_id)`, `(snapshot_id, chip)`, or `(snapshot_id, formation)` as applicable, with a foreign key to `manager_cohort_snapshots`; rows from different definition revisions cannot collide or be combined.
 - Member identity is internal evidence and is not exposed through public GraphQL reads.
-- The sample positions are deterministically derived from cohort bounds, strata, event, and method version.
+- The sample positions are deterministically derived from the snapshot-copied cohort bounds,
+  strata, event, sampling method/version, and definition revision.
 - The target sample size is configuration bounded by one tested service maximum; Web cannot increase it.
-- Rank membership comes from the latest settled rank snapshot before the target deadline.
+- Rank membership comes from the latest settled rank snapshot before the target deadline. A
+  pre-deadline planning job resolves the predetermined positions against that immutable standings
+  snapshot and persists the sampled entry IDs plus `member_set_frozen_at <= deadline_at`.
+- `PUBLISHED` and `PARTIAL` require a non-null `member_set_frozen_at` no later than the deadline;
+  planning/failure rows may remain null and can never be promoted without the frozen-member proof.
 - Gameweek 1 has no prior settled rank cohort and publishes `UNAVAILABLE`, not an invented Top-10k field.
-- The capture job begins after the deadline and freezes the accepted member set for that event.
-- Standings discovery fetches only pages required for the predetermined sample positions and stops at the configured bound.
+- The post-deadline pick-capture job consumes only the already frozen member set. If no valid
+  pre-deadline plan exists, it publishes `UNAVAILABLE`; it never maps positions against live
+  standings after the deadline.
+- Pre-deadline standings discovery fetches only pages required for the predetermined sample
+  positions from the immutable settled-rank source and stops at the configured bound.
 - Entry-pick capture uses bounded concurrency, upstream-aware retry, checkpoints, and a hard request budget.
 - Publication is atomic: readers see the prior complete snapshot until the new revision is published.
 - A partial snapshot may publish only when its coverage threshold and product label are explicit; otherwise the read is unavailable.
@@ -476,6 +497,7 @@ Initial route contract:
 /data/gameweek?season=<season>&gw=<event>
 /data/fixtures?season=<season>&from=<event>&horizon=<n>&team=<team>
 /data/market?view=<mode>&days=<n>
+/data/market?view=<mode>&season=<season>&through=<yyyy-mm-dd>&days=<n>&revision=<revision>
 /data/selections?cohort=<typed-key>&season=<season>&gw=<event>
 /data/player-stats?p1=<player>&p2=<player>&section=<section>
 /data/briefing?topic=<slug>&player=<code>&team=<key>&season=<season>&gw=<event>&source=<id>
@@ -495,6 +517,10 @@ Rules:
   normalize/redirect to the season-bearing canonical URL. They are never emitted as historical
   canonical links.
 - Gameweek, cohort, player comparison, and Briefing topic links render a useful server-selected state on first load.
+- Ordinary Market navigation may retain a relative `days` window. A Market share formatter must
+  emit the fixed form with `season`, inclusive `through` date, bounded `days`, and immutable source
+  revision. The server reconstructs exactly that retained snapshot window or returns an explicit
+  unavailable state; it never silently moves a shared link to the latest dates/revision.
 - Invalid or unauthorized scope falls back visibly to a safe default; it is not silently interpreted as another private object.
 - A future `/explore/*` migration requires explicit approval and permanent redirects that preserve query/hash state. It is not part of this plan.
 - Briefing topic slug changes use aliases/redirects so shared links remain durable.
@@ -657,6 +683,9 @@ Rules:
 - Map its existing coverage contract into shared evidence metadata without discarding requested/observed days or stale state.
 - Keep official availability evidence separate from future attributed injury/reporting content.
 - Retain player lookup, history, view modes, and current share functions.
+- Change public Market share output to the fixed season/through-date/revision URL. Keep relative
+  `days` only for ordinary navigation, and add a bounded historical snapshot read that can reproduce
+  the cited window without consulting current time.
 - Add canonical player and Briefing context links only where a source-backed topic exists.
 
 **Exit criteria**
@@ -671,9 +700,13 @@ Rules:
 **Data**
 
 - Add cohort configuration loading and a deterministic stratified rank-position generator.
-- Resolve the latest settled rank reference before the target deadline.
-- Fetch only required standings pages and map sampled positions to entry IDs.
-- Persist the frozen sample plan before pick capture so retries cannot change membership.
+- Resolve the latest settled rank reference and persist the complete cohort definition revision
+  before the target deadline.
+- In a pre-deadline planning job, fetch only required pages from that immutable settled standings
+  snapshot, map sampled positions to entry IDs, and persist the frozen member set. If the source
+  cannot provide event-scoped immutable ranks, do not publish that cohort.
+- After the deadline, capture picks only for the persisted plan so delays/retries cannot change
+  membership or fall through to live standings.
 - Add checkpointed, bounded-concurrency entry-pick capture with request budgets and typed upstream failures.
 - Validate picks, captain/vice-captain, multiplier, chip, and formation inputs before aggregation.
 - Aggregate player selection, captaincy, vice-captaincy, EO, chips, formations, template, and compatible prior-snapshot selection delta.
@@ -965,7 +998,11 @@ Flags control exposure, not schema correctness. Disabled features return an inte
   retains its season; a legacy seasonless URL canonicalizes to the active season.
 - E2E: fixture unknown versus confirmed BGW.
 - E2E: Market latest-day price versus multi-day transfer window.
+- E2E: a shared Market season/through-date/revision URL reproduces the same retained window after
+  time advances and returns explicit unavailable after retention expiry rather than showing latest.
 - E2E: exact prepared cohort versus sampled Top-10k cohort metadata.
+- E2E: a delayed post-deadline cohort retry uses the pre-deadline frozen entry IDs and historical
+  reads retain the copied rank bounds/method after the current definition changes.
 - E2E: unsupported sampled transfers remain absent rather than zero.
 - E2E: Players official overview survives optional evidence failures.
 - E2E: withheld Evidence Summary and separate FPL/Understat/Briefing presentation.

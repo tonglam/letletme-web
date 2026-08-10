@@ -387,6 +387,13 @@ Web changes:
 5. Add binding season, assurance, and proof kind to Better Auth server/client typing and the signed
    GraphQL envelope.
 6. Add a rebind state for homepage, My FPL, and entry-protected routes.
+7. Re-enable the authenticated ownership-upgrade journey using
+   `startFplEntryBindingChallenge` and `confirmFplEntryBindingChallenge`: show the required temporary
+   FPL team name, expiry, retry state, and confirmation action in onboarding/profile and when a
+   proof-gated claim/recovery/owner-transfer command requests it.
+8. Carry a validated `returnTo` continuation through challenge start/confirm so success resumes the
+   originating claim, recovery, invitation, or owner-transfer flow; expiry/failure preserves a safe
+   retry route and never upgrades assurance client-side.
 
 GraphQL changes:
 
@@ -425,6 +432,9 @@ Tests:
   exact proof kind, and forged/upgraded envelope assurance is rejected.
 - Directly bound active-season users retain ordinary My FPL and entry-scoped access while every
   ownership/claim/recovery command rejects them until assurance is `OWNERSHIP_VERIFIED`.
+- Onboarding/profile and an interrupted competition claim/recovery can start, resume, expire, and
+  complete the server-owned team-name challenge; success upgrades the exact binding and resumes only
+  the validated originating continuation.
 - Legacy seasonless envelopes are denied on protected entry roots but remain compatible with explicitly non-entry/public operations until their removal gate.
 - Rollover mismatch blocks entry-scoped GraphQL reads.
 - Legacy-envelope compatibility and removal gate.
