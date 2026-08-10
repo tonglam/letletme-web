@@ -1,0 +1,276 @@
+name: V3 Production Cutover
+
+on:
+  # repository_dispatch always resolves this workflow and GITHUB_SHA from the
+  # default branch, so an unreviewed branch cannot redefine secret-bearing jobs.
+  repository_dispatch:
+    types:
+      - v3-web-production-cutover
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v3-production-cutover
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.event.client_payload.operation == 'v3-preflight'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact Web candidate
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ github.event.client_payload.sha }}
+          persist-credentials: false
+      - name: Require exact protected main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          main_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$TARGET_SHA" = "$main_sha"
+          test "$(git rev-parse HEAD)" = "$main_sha"
+          echo "V3_WEB_TRUSTED_MAIN_SHA=$main_sha"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Inspect exact Web migration state without writes
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.V3_MIGRATION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          set +e
+          output=$(npm run db:migrate:status 2>&1)
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if printf '%s\n' "$output" | grep -Eq '^(backdated|mismatch|orphan|missing) '; then
+            echo "::error::Web migration history is unsafe"
+            exit 1
+          fi
+          pending_count=$(printf '%s\n' "$output" | grep -Ec '^pending ' || true)
+          if [ "$pending_count" -eq 0 ] && [ "$status" -eq 0 ]; then
+            echo "V3_WEB_PREFLIGHT_MIGRATIONS=already-applied"
+          elif [ "$pending_count" -eq 1 ] \
+            && printf '%s\n' "$output" | grep -Fxq 'pending 0008_web_auth_runtime_role' \
+            && [ "$status" -eq 1 ]; then
+            echo "V3_WEB_PREFLIGHT_MIGRATIONS=0008-pending"
+          else
+            echo "::error::Unexpected Web migration status (exit=$status pending=$pending_count)"
+            exit 1
+          fi
+      - name: Inspect Data activation and Web role state without writes
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.V3_MIGRATION_DATABASE_URL }}
+          CUTOVER_RUN_ID: ${{ github.event.client_payload.v3_cutover_run_id }}
+        run: |
+          node --input-type=module <<'EOF'
+          import postgres from 'postgres'
+          const sql = postgres(process.env.DIRECT_DATABASE_URL, { max: 1, prepare: false })
+          const [state] = await sql`
+            SELECT
+              current_setting('server_version_num')::integer AS server_version_num,
+              current_user::text AS migration_role,
+              to_regclass('ops.migration_runs') IS NOT NULL AS has_data_ledger,
+              EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'letletme_web_auth') AS has_capability,
+              EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'letletme_web_runtime') AS has_login
+          `
+          let runStatus = 'not-available'
+          if (state.has_data_ledger && process.env.CUTOVER_RUN_ID) {
+            const rows = await sql`
+              SELECT status, metadata ? 'legacyDropPhase' AS cleanup_started
+              FROM ops.migration_runs
+              WHERE run_id = ${process.env.CUTOVER_RUN_ID}
+            `
+            runStatus = rows.length === 1
+              ? `${rows[0].status}:${rows[0].cleanup_started ? 'cleanup' : 'pre-cleanup'}`
+              : 'missing'
+          }
+          console.log(JSON.stringify({
+            serverMajor: Math.floor(Number(state.server_version_num) / 10000),
+            migrationRolePresent: Boolean(state.migration_role),
+            hasDataLedger: state.has_data_ledger,
+            runStatus,
+            hasWebCapability: state.has_capability,
+            hasWebLogin: state.has_login,
+          }))
+          await sql.end()
+          EOF
+
+  activate_database:
+    if: github.event.client_payload.operation == 'v3-activate-database'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact Web candidate
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ github.event.client_payload.sha }}
+          persist-credentials: false
+      - name: Require exact protected main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          main_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$TARGET_SHA" = "$main_sha"
+          test "$(git rev-parse HEAD)" = "$main_sha"
+          echo "V3_WEB_TRUSTED_MAIN_SHA=$main_sha"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Resolve and gate exact Web release
+        env:
+          V3_CUTOVER_RUN_ID: ${{ github.event.client_payload.v3_cutover_run_id }}
+          V3_RELEASE_MANIFEST_BASE64: ${{ github.event.client_payload.v3_release_manifest_base64 }}
+          V3_RELEASE_MANIFEST_SHA256: ${{ github.event.client_payload.v3_release_manifest_sha256 }}
+          V3_CUTOVER_APPROVAL: ${{ github.event.client_payload.v3_cutover_approval }}
+        run: |
+          set -euo pipefail
+          DEPLOY_SHA=$(git rev-parse HEAD)
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          export DEPLOY_SHA
+
+          # R3 revises only the Data release candidate while Web remains on
+          # component contract 3.2.5. Verify the exact approved R3 bytes first,
+          # then normalize only that release suffix for the frozen Web gate.
+          manifest_tmp=$(mktemp)
+          normalized_tmp=$(mktemp)
+          trap 'rm -f "$manifest_tmp" "$normalized_tmp"' EXIT
+          printf '%s' "$V3_RELEASE_MANIFEST_BASE64" | base64 --decode > "$manifest_tmp"
+          actual_manifest_sha=$(sha256sum "$manifest_tmp" | awk '{print $1}')
+          test "$actual_manifest_sha" = "$V3_RELEASE_MANIFEST_SHA256"
+          plan_version=$(jq -r '.planVersion // empty' "$manifest_tmp")
+          if [ "$plan_version" = '3.2.5-r3' ]; then
+            jq '.planVersion = "3.2.5"' "$manifest_tmp" > "$normalized_tmp"
+            V3_RELEASE_MANIFEST_BASE64=$(base64 < "$normalized_tmp" | tr -d '\n')
+            V3_RELEASE_MANIFEST_SHA256=$(sha256sum "$normalized_tmp" | awk '{print $1}')
+            export V3_RELEASE_MANIFEST_BASE64 V3_RELEASE_MANIFEST_SHA256
+            echo 'V3_WEB_RELEASE_PLAN=3.2.5-r3-normalized-to-3.2.5'
+          elif [ "$plan_version" != '3.2.5' ]; then
+            echo "::error::Unsupported Web release plan version"
+            exit 1
+          fi
+          npx tsx scripts/v3-release-gate.ts
+      - name: Reconfirm exact Web migration state without writes
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.V3_MIGRATION_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          set +e
+          output=$(npm run db:migrate:status 2>&1)
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if printf '%s\n' "$output" | grep -Eq '^(backdated|mismatch|orphan|missing) '; then
+            echo "::error::Web migration history changed to an unsafe state"
+            exit 1
+          fi
+          pending_count=$(printf '%s\n' "$output" | grep -Ec '^pending ' || true)
+          if [ "$pending_count" -eq 0 ] && [ "$status" -eq 0 ]; then
+            echo "V3_WEB_ACTIVATION_MIGRATIONS=already-applied"
+          elif [ "$pending_count" -eq 1 ] \
+            && printf '%s\n' "$output" | grep -Fxq 'pending 0008_web_auth_runtime_role' \
+            && [ "$status" -eq 1 ]; then
+            echo "V3_WEB_ACTIVATION_MIGRATIONS=0008-pending"
+          else
+            echo "::error::Unexpected Web migration status before activation (exit=$status pending=$pending_count)"
+            exit 1
+          fi
+      - name: Apply exact Web migration and provision runtime login
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.V3_MIGRATION_DATABASE_URL }}
+          CUTOVER_RUN_ID: ${{ github.event.client_payload.v3_cutover_run_id }}
+          V3_CUTOVER_APPROVAL: ${{ github.event.client_payload.v3_cutover_approval }}
+          V3_WEB_DB_PASSWORD: ${{ secrets.V3_WEB_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [[ "$V3_WEB_DB_PASSWORD" =~ ^[A-Za-z0-9_-]{64}$ ]]
+          npm run db:migrate
+          npm run db:migrate:status
+          npm run db:provision-runtime-login
+          npm run db:provision-runtime-login
+      - name: Build runtime URL without exposing credentials
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.V3_MIGRATION_DATABASE_URL }}
+          V3_WEB_DB_PASSWORD: ${{ secrets.V3_WEB_DB_PASSWORD }}
+        run: |
+          node --input-type=module <<'EOF'
+          import { appendFileSync } from 'node:fs'
+          const url = new URL(process.env.DIRECT_DATABASE_URL)
+          const match = /^postgres\.([a-z0-9]{8,64})$/.exec(decodeURIComponent(url.username))
+          if (!match || !/^[A-Za-z0-9_-]{64}$/.test(process.env.V3_WEB_DB_PASSWORD ?? '')) {
+            throw new Error('Migration URL or Web runtime password is invalid')
+          }
+          url.username = `letletme_web_runtime.${match[1]}`
+          url.password = process.env.V3_WEB_DB_PASSWORD
+          url.port = '6543'
+          const runtimeUrl = url.toString()
+          console.log(`::add-mask::${runtimeUrl}`)
+          appendFileSync(process.env.GITHUB_ENV, `DATABASE_URL=${runtimeUrl}\n`)
+          EOF
+      - name: Verify the live Web runtime boundary
+        run: npm run db:runtime-contract
+
+  status:
+    if: github.event.client_payload.operation == 'v3-status'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact Web candidate
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ github.event.client_payload.sha }}
+          persist-credentials: false
+      - name: Require exact protected main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          main_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          [[ "$main_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$TARGET_SHA" = "$main_sha"
+          test "$(git rev-parse HEAD)" = "$main_sha"
+          echo "V3_WEB_TRUSTED_MAIN_SHA=$main_sha"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify migrations are complete
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.V3_MIGRATION_DATABASE_URL }}
+        run: npm run db:migrate:status
+      - name: Build runtime URL without exposing credentials
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.V3_MIGRATION_DATABASE_URL }}
+          V3_WEB_DB_PASSWORD: ${{ secrets.V3_WEB_DB_PASSWORD }}
+        run: |
+          node --input-type=module <<'EOF'
+          import { appendFileSync } from 'node:fs'
+          const url = new URL(process.env.DIRECT_DATABASE_URL)
+          const match = /^postgres\.([a-z0-9]{8,64})$/.exec(decodeURIComponent(url.username))
+          if (!match || !/^[A-Za-z0-9_-]{64}$/.test(process.env.V3_WEB_DB_PASSWORD ?? '')) {
+            throw new Error('Migration URL or Web runtime password is invalid')
+          }
+          url.username = `letletme_web_runtime.${match[1]}`
+          url.password = process.env.V3_WEB_DB_PASSWORD
+          url.port = '6543'
+          const runtimeUrl = url.toString()
+          console.log(`::add-mask::${runtimeUrl}`)
+          appendFileSync(process.env.GITHUB_ENV, `DATABASE_URL=${runtimeUrl}\n`)
+          EOF
+      - name: Verify the live Web runtime boundary
+        run: npm run db:runtime-contract

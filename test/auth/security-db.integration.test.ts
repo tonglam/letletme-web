@@ -57,6 +57,7 @@ test('web security constraints serialize identity, session, and rate ownership',
 			anon_rate_limit: boolean
 			authenticated_session: boolean
 			policy_count: number
+			invalid_policy_count: number
 			missing_rls: number
 		}[]>`
 			SELECT
@@ -64,7 +65,22 @@ test('web security constraints serialize identity, session, and rate ownership',
 				has_table_privilege('anon', 'bauth.user', 'SELECT') AS anon_user,
 				has_table_privilege('anon', 'bauth.rate_limit', 'SELECT') AS anon_rate_limit,
 				has_table_privilege('authenticated', 'bauth.session', 'SELECT') AS authenticated_session,
-				(SELECT count(*)::int FROM pg_policies WHERE schemaname = 'bauth') AS policy_count,
+				(SELECT count(*)::int
+				 FROM pg_policies
+				 WHERE schemaname = 'bauth'
+				   AND tablename <> '__drizzle_migrations') AS policy_count,
+				(SELECT count(*)::int
+				 FROM pg_policies
+				 WHERE schemaname = 'bauth'
+				   AND tablename <> '__drizzle_migrations'
+				   AND (
+					 policyname <> 'web_auth_runtime_all'
+					 OR permissive <> 'PERMISSIVE'
+					 OR roles::text[] <> ARRAY['letletme_web_auth']::text[]
+					 OR cmd <> 'ALL'
+					 OR replace(replace(coalesce(qual, ''), '(', ''), ')', '') <> 'true'
+					 OR replace(replace(coalesce(with_check, ''), '(', ''), ')', '') <> 'true'
+				   )) AS invalid_policy_count,
 				(SELECT count(*)::int
 				 FROM pg_class relation
 				 JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
@@ -77,7 +93,8 @@ test('web security constraints serialize identity, session, and rate ownership',
 			anon_user: false,
 			anon_rate_limit: false,
 			authenticated_session: false,
-			policy_count: 0,
+			policy_count: 10,
+			invalid_policy_count: 0,
 			missing_rls: 0,
 		})
 	} finally {

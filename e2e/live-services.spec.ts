@@ -1,4 +1,11 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Route } from '@playwright/test'
+
+const graphqlFixtureUrl = 'http://127.0.0.1:4100/graphql'
+
+async function fulfillFromGraphqlFixture(route: Route) {
+	const response = await route.fetch({ url: graphqlFixtureUrl })
+	await route.fulfill({ response })
+}
 
 test('live points enriches all fifteen picks through one bounded GraphQL root', async ({
 	page
@@ -85,7 +92,7 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 		if (payload.query?.includes('GetLiveCalcPoints')) {
 			clientLivePointsRequests += 1
 		}
-		await route.continue()
+		await fulfillFromGraphqlFixture(route)
 	})
 
 	await page.goto('/live/points/123')
@@ -144,7 +151,7 @@ test('live points keeps polling after the seed and first client load fail', asyn
 		if (payload.query?.includes('GetLiveCalcPoints')) {
 			clientLivePointsRequests += 1
 		}
-		await route.continue()
+		await fulfillFromGraphqlFixture(route)
 	})
 
 	await page.goto('/live/points/999')
@@ -158,7 +165,7 @@ test('live points keeps polling after the seed and first client load fail', asyn
 	).toBeVisible()
 	await expect(page.getByText(/Next refresh in \d+s/)).toBeVisible()
 
-	await page.clock.fastForward(30_000)
+	await page.clock.runFor(30_000)
 	await expect.poll(() => clientLivePointsRequests).toBe(2)
 	await expect(
 		page.getByRole('button', { name: /View details for Player/ })

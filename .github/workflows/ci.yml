@@ -11,6 +11,10 @@ env:
   NODE_ENV: test
   DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/testdb
   DIRECT_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/testdb
+  WEB_RUNTIME_DATABASE_URL: postgresql://letletme_web_runtime:wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww@127.0.0.1:5432/testdb
+  CUTOVER_RUN_ID: v3-20260808T160008Z-b9eddc0
+  V3_CUTOVER_APPROVAL: APPROVE_V3_ACTIVATION v3-20260808T160008Z-b9eddc0
+  V3_WEB_DB_PASSWORD: wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
   BETTER_AUTH_SECRET: ci-better-auth-secret-at-least-thirty-two-characters
   BETTER_AUTH_URL: http://localhost:3000
   GRAPHQL_SERVICE_TOKEN: e2e-graphql-service-token-at-least-thirty-two-bytes
@@ -58,6 +62,25 @@ jobs:
           npm run db:migrate
           npm run db:migrate
           npm run db:migrate:status
+      - name: Stub activated Data cutover ledger
+        run: |
+          node --input-type=module <<'EOF'
+          import postgres from 'postgres'
+          const sql = postgres(process.env.DIRECT_DATABASE_URL, { max: 1 })
+          await sql`CREATE SCHEMA ops`
+          await sql`CREATE TABLE ops.migration_runs (
+            run_id text PRIMARY KEY,
+            status text NOT NULL,
+            metadata jsonb NOT NULL
+          )`
+          await sql`INSERT INTO ops.migration_runs (run_id, status, metadata)
+            VALUES (${process.env.CUTOVER_RUN_ID}, 'activated', '{}'::jsonb)`
+          await sql.end()
+          EOF
+      - name: Provision and retry production-shaped Web runtime login
+        run: |
+          npm run db:provision-runtime-login
+          npm run db:provision-runtime-login
       - run: npm test
         env:
           RUN_DB_INTEGRATION: 'true'
@@ -72,6 +95,7 @@ jobs:
       - name: Production E2E
         run: npm run test:e2e
         env:
+          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
           PLAYWRIGHT_USE_EXISTING_BUILD: '1'
       - run: npm audit --audit-level=moderate
       - uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
