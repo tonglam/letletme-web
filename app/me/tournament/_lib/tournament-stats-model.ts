@@ -375,6 +375,30 @@ export function buildTournamentSeasonFieldFromSnapshot(
 	}
 }
 
+/** Cumulative season order across the whole tournament, independent of group rank. */
+export function compareTournamentSeasonRows(
+	a: TournamentEventResultItem,
+	b: TournamentEventResultItem,
+): number {
+	const pointsA =
+		a.overallPoints != null && Number.isFinite(a.overallPoints)
+			? a.overallPoints
+			: null
+	const pointsB =
+		b.overallPoints != null && Number.isFinite(b.overallPoints)
+			? b.overallPoints
+			: null
+	if (pointsA != null && pointsB != null && pointsA !== pointsB) {
+		return pointsB - pointsA
+	}
+	if (pointsA != null && pointsB == null) return -1
+	if (pointsA == null && pointsB != null) return 1
+	const overallRankA = a.overallRank ?? Number.MAX_SAFE_INTEGER
+	const overallRankB = b.overallRank ?? Number.MAX_SAFE_INTEGER
+	if (overallRankA !== overallRankB) return overallRankA - overallRankB
+	return a.entryId - b.entryId
+}
+
 /**
  * Fallback: build season field from full tournament event results (latest data GW).
  * Points + team-value metrics only (no cum transfers/costs without MV).
@@ -386,20 +410,14 @@ export function buildTournamentSeasonField(
 ): TournamentSeasonField | null {
 	if (rows.length === 0 || asOfGameweek < 1) return null
 
-	const ordered = [...rows].sort((a, b) => {
-		const rankA = a.eventGroupRank
-		const rankB = b.eventGroupRank
-		if (rankA != null && rankB != null) return rankA - rankB
-		if (rankA != null) return -1
-		if (rankB != null) return 1
-		const ptsA = a.overallPoints ?? -1
-		const ptsB = b.overallPoints ?? -1
-		return ptsB - ptsA
-	})
+	const ordered = [...rows].sort(compareTournamentSeasonRows)
 
 	const standings: TournamentSeasonStandingRow[] = ordered.map((row, index) => ({
 		entryId: row.entryId,
-		rank: row.eventGroupRank ?? index + 1,
+		rank:
+			row.overallPoints != null && Number.isFinite(row.overallPoints)
+				? index + 1
+				: null,
 		teamName: row.entryName?.trim() || `Entry ${row.entryId}`,
 		managerName: row.playerName?.trim() || '—',
 		totalPoints: row.overallPoints,

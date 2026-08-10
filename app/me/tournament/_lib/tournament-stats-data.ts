@@ -28,7 +28,10 @@ import {
 	setEventResultsInFlight,
 	setSeasonSnapshotInFlight,
 } from './tournament-stats-cache'
-import type { PlayerMeta } from './tournament-stats-model'
+import {
+	compareTournamentSeasonRows,
+	type PlayerMeta,
+} from './tournament-stats-model'
 
 /**
  * Resolve captain player labels via fixed operations (no runtime query strings).
@@ -187,14 +190,7 @@ function buildPathPointFromRows(
 	const mine = rows.find(r => r.entryId === entryId)
 	if (!mine) return null
 
-	const ordered = [...rows].sort((a, b) => {
-		const rankA = a.eventGroupRank
-		const rankB = b.eventGroupRank
-		if (rankA != null && rankB != null) return rankA - rankB
-		if (rankA != null) return -1
-		if (rankB != null) return 1
-		return (b.overallPoints ?? -1) - (a.overallPoints ?? -1)
-	})
+	const ordered = [...rows].sort(compareTournamentSeasonRows)
 
 	const withPoints = ordered.filter(
 		r => r.overallPoints != null && Number.isFinite(r.overallPoints),
