@@ -180,6 +180,8 @@ my_fpl_saved_comparison_players
 
 my_fpl_view_states
   user_id
+  season_scope
+  entry_id
   scope
   scope_key
   state_version
@@ -194,6 +196,10 @@ Rules:
 - Use a stable player identity where available and retain an explicit current-season mapping; do not rely on a seasonal element ID for cross-season saves.
 - Rival entry keys are season-scoped.
 - Competition keys resolve only to objects the user may read.
+- A view-state row is keyed by `(user_id, season_scope, entry_id, scope, scope_key)`. Every read and
+  acknowledgment supplies the resolved season-bound entry explicitly; rollover or a same-season
+  rebind starts a distinct baseline and monotonic revision cursor rather than reusing another
+  manager's state.
 - Enforce explicit per-type and comparison-size caps in one domain module and in mutation tests.
 - Version `baseline_json`; reject or rebuild an unsupported version rather than interpreting stale shapes.
 - Never copy browser-local history into the account silently.
@@ -320,11 +326,15 @@ eventId
 revision
 state: PREPARING | FINAL | PARTIAL | UNAVAILABLE
 authority: OFFICIAL_FPL | LETLETME_RULES
-sourceCheckedAt
-detailsReadyAt
-coverageThroughEventId
-reasonCode
+sourceCheckedAt nullable
+detailsReadyAt nullable
+coverageThroughEventId nullable
+reasonCode nullable
 ```
+
+`sourceCheckedAt` is nullable as defined by the shared contract; it is absent when no authoritative
+source check has completed. `detailsReadyAt` and `coverageThroughEventId` are likewise absent for
+legitimate preparing, partial, or unavailable states rather than being fabricated by GraphQL.
 
 Mapping:
 
@@ -450,7 +460,9 @@ Changes:
 2. Add typed repositories and validation domain modules under `lib/my-fpl/`.
 3. Add authenticated route handlers for save/remove/comparison/seen operations.
 4. Add object authorization for rival entries and competitions before persistence or resolution.
-5. Implement monotonic view-state acknowledgment and baseline versioning.
+5. Implement monotonic view-state acknowledgment and baseline versioning within the exact
+   `(user, season, entry, scope, scopeKey)` key; never compare or advance a cursor across rollover
+   or rebind.
 6. Add deletion behaviour for account deletion and explicit unlink/season rollover rules.
 7. Keep client caches as performance aids only; the database is authoritative.
 
@@ -470,6 +482,8 @@ Tests:
 - Type and cap validation.
 - Comparison ordering and deletion.
 - Monotonic seen acknowledgment under concurrent requests.
+- Same user/scope across two seasons and two same-season entry bindings remains isolated, and an old
+  facts revision cannot block the new baseline cursor.
 - Unknown baseline-version recovery.
 - Account deletion and season rollover behaviour.
 

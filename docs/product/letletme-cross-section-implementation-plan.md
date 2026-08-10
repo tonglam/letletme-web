@@ -270,6 +270,7 @@ LiveResultMeta
   season
   eventId
   revision
+  resultRevision
   state: SCHEDULED | LIVE | SETTLED
   publishedAt
   checkedAt
@@ -293,7 +294,11 @@ SettledResultMeta
 
 Rules:
 
-- Existing `LiveSnapshotMeta` remains the Live revision authority and maps additively into `LiveResultMeta`.
+- Existing `LiveSnapshotMeta` remains the official fact-snapshot revision authority and maps
+  additively into `LiveResultMeta`. `resultRevision` is a separate scope-specific monotonic revision
+  for the entry, competition, or match projection; it advances when body/coverage/failure state
+  changes even if the official snapshot `revision` does not. Live probes and cache identities use
+  the exact `(season, eventId, revision, resultRevision)` token.
 - Existing `source` fields may remain compatibility aliases during migration; new consumers use `authority` so provider provenance is not confused with result-rule authority.
 - `authority` identifies the rules that produced the result and has exactly two values. Multiple
   provider inputs remain explicit in source/evidence provenance and never create a third authority.
@@ -467,7 +472,10 @@ Rules:
 2. Accept the new principal envelope version, validate its signed assurance/proof fields, and reject
    stale-season or insufficient-assurance entry authorization.
 3. Add bounded section read models and shared loaders without removing current operations.
-4. Map existing `LiveSnapshotMeta`, official final records, custom result audits, Market coverage, and provider metadata into their correct contract families.
+4. Map existing `LiveSnapshotMeta`, scope-specific entry/custom/match result revisions, official
+   final records, custom result audits, Market coverage, and provider metadata into their correct
+   contract families. Require season-bearing `EventRef` inputs and cache keys for every Live root;
+   active-season adapters may not serve protected historical reads.
 5. Add cache-key versions before stored shape changes and retain legacy adapters.
 6. Enforce query bounds, authorization, public/private field projection, and source-rights projection.
 

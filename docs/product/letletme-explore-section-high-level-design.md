@@ -223,8 +223,8 @@ reporting.manager_cohort_snapshots
   actual_sample_size
   coverage_numerator
   coverage_denominator
-  captured_at
-  published_at
+  captured_at nullable
+  published_at nullable
   revision
   failure_code nullable
   method_version
@@ -256,6 +256,12 @@ reporting.manager_cohort_formation_stats
   formation
   entry_count
 ```
+
+Snapshot timestamp constraints are state-dependent: `PENDING` has neither timestamp;
+`CAPTURING` has no publication timestamp; `PUBLISHED` and `PARTIAL` require both timestamps with
+`published_at >= captured_at`; and `FAILED` requires `published_at` to remain null while
+`captured_at` is nullable depending on whether capture completed before publication failed. No
+planner or failure path fabricates a capture/publication time.
 
 Required invariants:
 
@@ -332,6 +338,16 @@ briefing.items
   created_at
   updated_at
 
+briefing.item_transcripts
+  item_id primary key references briefing.items
+  body
+  language
+  char_count
+  source_content_hash
+  rights_revision
+  captured_at
+  retained_until nullable
+
 briefing.topics
   topic_id
   slug
@@ -381,7 +397,16 @@ Rules:
 
 - `rights_basis` and `display_mode` are server configuration, never inferred from a successful HTTP response.
 - `LINK_ONLY` stores and returns only the allowed identity, link, timestamp, and minimal metadata.
-- Excerpts and transcripts are stored only when the configured rights mode permits them and must remain within the configured limit.
+- Excerpts and transcripts are stored only when the configured rights mode permits them and must
+  remain within source-specific storage, retention, and projection limits. `TRANSCRIPT` requires a
+  matching `item_transcripts` row whose rights revision equals the item/source policy revision;
+  otherwise the item is unavailable as a transcript rather than overloading `summary` or
+  `excerpt`.
+- Transcript bodies remain in the private Briefing repository. GraphQL exposes only a
+  rights-approved, cursor-paginated segment projection with fixed per-segment and per-request
+  character caps, plus language, total character count, and rights revision. `LINK_ONLY`,
+  `METADATA`, `SUMMARY`, and `EXCERPT` modes never return transcript body segments, and no cache or
+  public URL bypasses this repository-level projection.
 - Full paywalled article bodies are not stored or rendered.
 - A model-assisted summary is labelled by `summary_method`, retains every source link, and cannot change the item's evidence class.
 - One item has one canonical source identity. Reposts may link to the original and are not counted as independent agreement.
@@ -804,6 +829,9 @@ Rules:
   canonical slug; reject rename on any current/alias collision.
 - Add correction/removal reconciliation and cache invalidation events.
 - Add summary provenance and content-length enforcement by rights mode.
+- Add bounded transcript storage, retention expiry, rights-revision invalidation, and paginated
+  projection enforcement; reject `TRANSCRIPT` source enablement until all four limits are present
+  in its source policy fixture.
 - Add bounded queues/workers with per-source concurrency, rate, retry, and circuit-breaker policy.
 - Store raw provider payloads only when the source policy explicitly permits retention; otherwise retain bounded audit metadata and normalized allowed fields.
 
@@ -829,6 +857,9 @@ Rules:
 - Resolve aliases to the canonical topic identity while returning canonical slug metadata; alias
   lookup never produces a second cache identity for the same board.
 - Enforce rights-mode field projection in the repository/service layer, not only the resolver.
+- Expose transcript metadata and bounded cursor segments only for a currently authorized
+  `TRANSCRIPT` item; count segment characters toward query complexity and never place the private
+  unbounded body in a resolver/cache payload.
 - Return grouped evidence classes and chronological data; do not compute consensus, sentiment, or recommended-player scores.
 - Add bounded related quantitative evidence references rather than copying full Trends/Players payloads.
 - Add cache revisions that include item status, source rights revision, topic membership, and removal events.
@@ -968,6 +999,8 @@ Flags control exposure, not schema correctness. Disabled features return an inte
 - Season rollover and method-version isolation tests.
 - Raw member non-publication and retention tests.
 - Briefing rights-mode projection tests from repository through cache payload.
+- Transcript storage/retention, stale-rights-revision denial, segment pagination/character caps,
+  and non-`TRANSCRIPT` leakage tests.
 - Source URL, fingerprint, repost, deduplication, correction, removal, and source-disable tests.
 - Entity ambiguity/review gate and season-safe player/team mapping tests.
 - Queue retry, checkpoint, rate, circuit-breaker, and idempotency tests.
@@ -980,7 +1013,8 @@ Flags control exposure, not schema correctness. Disabled features return an inte
 - Cursor, maximum-limit, complexity, and malformed search/scope tests.
 - N+1 detection for Overview, search, cohort snapshot, topic board, and two-player Briefing references.
 - Evidence-context semantic tests for observed/captured/published and unavailable/empty/partial/stale.
-- Briefing rights-mode and outbound-URL allowlist tests below the resolver layer.
+- Briefing rights-mode, bounded transcript projection, and outbound-URL allowlist tests below the
+  resolver layer.
 - Briefing slug uniqueness, transactional rename, repeated-rename alias history, old-slug lookup,
   permanent redirect, and canonical cache-key tests.
 - Removal/rights/cohort revision cache-key and invalidation tests.
@@ -1006,7 +1040,8 @@ Flags control exposure, not schema correctness. Disabled features return an inte
 - E2E: unsupported sampled transfers remain absent rather than zero.
 - E2E: Players official overview survives optional evidence failures.
 - E2E: withheld Evidence Summary and separate FPL/Understat/Briefing presentation.
-- E2E: Briefing topic disagreement, link-only mode, correction/removal, outbound link, and follow/mute.
+- E2E: Briefing topic disagreement, link-only mode, a rights-permitted bounded transcript, denied
+  transcript modes, correction/removal, outbound link, and follow/mute.
 - E2E: public/private share policy and canonical deep links.
 - Accessibility: keyboard search, cohort selectors, tables/cards, timelines, external links, focus management, screen-reader evidence metadata, reduced motion, and colour-independent states.
 - Responsive testing for small mobile topic boards, player comparison, FDR matrix, Trends tables, and source metadata.

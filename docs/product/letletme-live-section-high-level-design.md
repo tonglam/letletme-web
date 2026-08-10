@@ -106,7 +106,9 @@ The Competitions implementation introduces a first-class season-scoped official-
 
 ### 4.2 Live status and coverage
 
-Keep `LiveSnapshotMeta` as the revision authority and map it additively into the shared `LiveResultMeta` contract rather than replacing existing fields.
+Keep `LiveSnapshotMeta` as the authority for the official fact snapshot and map it additively into
+the shared `LiveResultMeta` contract rather than replacing existing fields. A result projection has
+its own revision because custom calculation state can change without a new official snapshot.
 
 Required fields:
 
@@ -114,6 +116,7 @@ Required fields:
 season
 eventId
 revision
+resultRevision
 state: SCHEDULED | LIVE | SETTLED
 publishedAt
 checkedAt
@@ -135,15 +138,28 @@ Responsibilities:
   results use `LETLETME_RULES`. Multiple upstream/provider inputs are represented by source
   provenance and never by a third authority value.
 - Existing GraphQL consumers remain compatible because the new fields are additive.
+- `revision` remains the accepted official snapshot revision. `resultRevision` is monotonic within
+  the exact entry, competition, or match-result scope and advances whenever its body, coverage,
+  failure/retained-row state, or authority changes. Official projections may initially set
+  `resultRevision = revision`; custom competition calculation retries and recovery advance
+  `resultRevision` independently.
+- The cheap refresh probe returns both revisions and Web performs a full fetch when either changes.
+  Suppression is allowed only when the exact `(season, eventId, revision, resultRevision)` token is
+  unchanged; a custom result can therefore recover without waiting for unrelated upstream facts.
 
 ### 4.3 Required GraphQL read models
 
 | Read model | Implementation requirement |
 | --- | --- |
-| `calcLivePointsByEntry` | Keep the current full entry contract and add shared result metadata; request all scoreboard fields already available in `LiveCalcData` |
+| `calcLivePointsByEntry(event: EventRef!, entryId: Int!)` | Keep the current full entry contract and add shared result metadata; request all scoreboard fields already available in `LiveCalcData` |
 | `entryPreparedCompetitions` | Return metadata and cheap viewer summaries only; never calculate a full table for every object |
-| `competitionLive` | Return one competition identity, shared result metadata, viewer context, and a discriminated result body |
-| `liveMatches` | Retain the current match groups and optionally include one linked entry's squad-impact map |
+| `competitionLive(competitionId: ID!, event: EventRef!, viewerEntryId: Int)` | Return one competition identity, shared result metadata, viewer context, and a discriminated result body |
+| `liveMatches(event: EventRef!, viewerEntryId: Int)` | Retain the current match groups and optionally include one linked entry's squad-impact map |
+
+`liveSnapshot(event: EventRef!)` and every repository/cache key below these roots use the same
+season-bearing event input. During compatibility, active-season wrappers may call the new roots,
+but no protected or historical root is allowed to infer season from the current clock or from a
+numeric event/entry ID.
 
 `competitionLive` reuses the canonical result discriminants owned by the Competitions
 contract; it must not introduce Live-only aliases:
@@ -221,7 +237,9 @@ Changes:
 1. Add `CompetitionKind`, result-authority, result-type, and result-metadata types.
 2. Expose `competitionKind` and `season` on the existing tournament metadata type during migration.
 3. Add a cheap prepared-competition list projection for one entry.
-4. Add one `competitionLive` query for the selected object/event/viewer.
+4. Add one `competitionLive` query for the selected object/event/viewer and require a season-bearing
+   `EventRef` on `liveSnapshot`, entry Live, competition Live, and match roots, repositories, and
+   cache keys.
 5. Reuse shared league evidence for tracked official standings and tournament-specific repositories for custom formats.
 6. Return batch coverage and failed entry identifiers without hiding partial results; Web remains responsible for identifying rows retained from its previous payload.
 7. Extend entry Live and matches with the shared metadata contract.
@@ -250,7 +268,10 @@ Tests:
 - Extend tournament schema/repository/resolver tests for both kinds.
 - Extend entry-live batch tests for 500 and rejected 501.
 - Add `competitionLive` fixtures for official standings, points groups, and knockout results.
-- Extend snapshot tests for coverage and reason codes.
+- Extend snapshot tests for coverage, reason codes, composite snapshot/result revision probes, and
+  custom-result recovery without an upstream revision.
+- Add same-numbered event/entry fixtures in two seasons and prove every Live repository and cache
+  key selects only the requested `EventRef`.
 - Extend match-service tests for viewer-impact batching.
 
 ### WP3 — Shared Web Live infrastructure
@@ -274,7 +295,8 @@ Responsibilities:
 - `LiveSectionShell`: shared page header, local Live navigation, controls/status slots, and width variants.
 - `LiveStatusBar`: render the normalized state, timestamp, coverage, manual refresh, and accessible announcement.
 - `LiveGameweekControl`: synchronize the selected `EventRef` with `?season=&gw=`.
-- `use-live-revision-refresh`: page visibility/offline checks, 30-second snapshot probe, revision comparison, request coalescing, and full-fetch callback.
+- `use-live-revision-refresh`: page visibility/offline checks, 30-second composite
+  snapshot/result-revision probe, comparison, request coalescing, and full-fetch callback.
 - `live-status`: one pure normalizer from GraphQL result metadata to Web display state.
 - `live-event-context`: resolve requested event, current event, and latest finalized fallback on the server.
 
@@ -304,7 +326,10 @@ Changes:
 5. Request the complete scoreboard projection already supported by GraphQL, including played/to-play values where available.
 6. Preserve `TeamStats`, `PlayerList`, `PlayerRow`, player explanations, and entry lookup.
 7. Add both `season` and `gw` to event-scoped share URLs.
-8. Keep upstream squad state as displayed; add no separate autosub prediction or official-action control.
+8. Change `liveSnapshot` and `calcLivePointsByEntry` operations to pass the resolved `EventRef`,
+   including the season in GraphQL variables and cache identity; do not retain a seasonless
+   historical adapter.
+9. Keep upstream squad state as displayed; add no separate autosub prediction or official-action control.
 
 Primary files:
 
@@ -348,7 +373,8 @@ Index changes:
 Detail changes:
 
 1. Consolidate the current list-table and detail-table implementations into one full result client.
-2. Read `competitionLive(competitionId, eventId, viewerEntryId)`.
+2. Read `competitionLive(competitionId, event: EventRef, viewerEntryId)` so the selected historical
+   season is explicit through GraphQL, repositories, and caches.
 3. Render by result discriminator:
    - official standings;
    - custom points/group table;
@@ -390,6 +416,8 @@ Changes:
 5. Preserve a return link when navigation originated from Competition Live.
 6. Replace the current route-level no-current-event failure with a schedule/offseason state.
 7. Do not add a historical gameweek selector or calculate every related competition.
+8. Pass the server-resolved `EventRef` to `liveMatches`; current-event convenience UI must not
+   remove season from the operation or cache key.
 
 Primary files:
 
@@ -534,15 +562,18 @@ Required browser scenarios:
 - Legacy tournament redirects with preserved gameweek.
 - Match tabs with and without viewer-impact data.
 - English and Simplified Chinese at mobile and desktop widths.
-- Hidden/offline polling stop and revision-unchanged full-fetch suppression.
+- Hidden/offline polling stop and composite snapshot/result-revision-unchanged full-fetch
+  suppression, including custom-result-only recovery.
+- The same numeric event and entry in two seasons produces distinct GraphQL variables, repository
+  reads, cache keys, and historical page data.
 
 ## 9. Observability and rollback
 
 Add metrics/log fields for:
 
 - route and selected event;
-- snapshot revision/state/age;
-- snapshot probes versus full payload fetches;
+- snapshot revision, result revision, state, and age;
+- composite revision probes versus full payload fetches;
 - competition kind/result type and participant count;
 - full-result duration and failed/retained rows;
 - fallback use between official and calculated entry facts;
@@ -562,7 +593,8 @@ Implementation is complete when:
 
 - Data persists explicit competition kind and season and enforces the agreed limits.
 - GraphQL exposes bounded entry, competition-index, competition-detail, and match read models with one result metadata contract.
-- All three Web pages share event resolution, revision polling, retained-data handling, and status presentation.
+- All three Web pages share season-bearing event resolution, composite revision polling,
+  retained-data handling, and status presentation.
 - Historical Points and Competition Live work without a current-event gate.
 - Only one selected competition triggers a full result read.
 - Tracked official and custom result paths are technically and visibly discriminated.

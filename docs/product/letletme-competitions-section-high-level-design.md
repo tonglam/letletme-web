@@ -300,6 +300,23 @@ createdAt
 updatedAt
 ```
 
+Add a Data-owned principal lifecycle fence without retaining the raw Web user identifier:
+
+```text
+principal_lifecycle_fences
+  principal_digest
+  state: DELETION_PENDING | DELETED
+  fence_version
+  requested_at
+  finalized_at nullable
+```
+
+`principal_digest` is a deterministic HMAC produced only by the trusted command boundary. Every
+transaction that can create or receive competition ownership, and the command that starts account
+deletion, acquires the same principal-scoped transaction lock before reading or changing this
+record. This serializes an already authenticated owner write against deletion without making Data
+retain a recoverable Web account identifier.
+
 Rules:
 
 - Never store a reusable raw invitation token.
@@ -311,12 +328,19 @@ Rules:
 - Tracked leagues do not create invitation records; their membership continues to come from source synchronization.
 - Persist a resolved `ownerUserId` as an opaque stable Web user identifier received through the trusted signed server command. Data does not need a foreign key to the Web authentication database.
 - For a migrated `recovery_required` row, never transfer ownership from a raw direct binding alone. The recovery command requires a signed principal whose same-season `admin_entry_id` binding carries an ownership-verified assurance from the challenge flow, or a separately audited operator-mediated recovery. It atomically records `ownerUserId`, changes ownership to `resolved`, and writes the proof kind and audit event.
-- Web account deletion must first call a signed cross-repository ownership preflight. Deletion is
-  blocked while the account owns any non-archived competition: the organizer must transfer each one
-  through an audited owner command or archive it. After that precondition passes, Data records an
-  account-deletion audit event without retaining the deleted user identifier, changes archived rows
-  to `owner_deleted_archived`, and clears their management principal; it must never leave a live
-  competition resolved to an identifier that can no longer authenticate.
+- Web account deletion first calls a signed `beginAccountDeletion` command. Under the
+  principal-scoped lock, Data durably writes `DELETION_PENDING` and returns `fence_version`; every
+  later competition creation, ownership recovery, and owner-transfer target check acquires the same
+  lock and rejects that principal. The ownership preflight is bound to the same fence version and
+  deletion is blocked while the account owns any non-archived competition: the organizer may
+  transfer each one away through an audited owner command or archive it, but cannot receive new
+  ownership while fenced. Web deletes the auth row only after a fresh zero-owner preflight for that
+  fence version, then sends an idempotent finalize command that stores only the digest as `DELETED`,
+  records the account-deletion audit event, changes archived rows to
+  `owner_deleted_archived`, and clears their management principal. A cancelled deletion explicitly
+  releases only a `DELETION_PENDING` fence before the auth row is removed; a `DELETED` fence is
+  permanent. This protocol rejects stale already-authenticated ownership commands and must never
+  leave a live competition resolved to an identifier that can no longer authenticate.
 - `recovery_required` is therefore limited to audited legacy migration and explicit operator
   recovery; account deletion is not an implicit first-claim takeover path.
 - Owner transfer is atomic and requires the current owner plus an accepting target account; the
@@ -508,8 +532,10 @@ Changes:
 8. Make one source roster sync update source evidence and project changes to dependent tracked competition reads.
 9. Preserve custom roster immutability after lock.
 10. Add archive and pre-publication hard-delete policies.
-11. Add signed owner-transfer, account-deletion preflight, and archived-owner tombstone commands;
-    reject account deletion while any owned competition remains non-archived.
+11. Add signed owner-transfer, principal-lifecycle-fence, version-bound account-deletion preflight,
+    cancel/finalize, and archived-owner tombstone commands. Serialize every ownership-creating
+    command on the same principal lock, reject a pending/deleted owner target, and reject account
+    deletion while any owned competition remains non-archived.
 
 Primary files:
 
@@ -752,8 +778,9 @@ Changes:
 7. Remove obsolete sync-enable behavior once tracked creation cannot silently become a snapshot.
 8. Update English and Simplified Chinese copy, metadata, analytics route normalization, and terminology tests.
 9. Remove old routes/components only after redirect and query telemetry confirms migration.
-10. Integrate Web account deletion with the Data ownership preflight and require transfer or archive
-    before deleting an organizer identity.
+10. Integrate Web account deletion with Data's begin/preflight/finalize fence protocol. Keep the
+    returned fence version through the request, require transfer-away or archive before deleting an
+    organizer identity, and expose an explicit pre-auth-deletion cancellation path.
 
 Primary files:
 
@@ -876,8 +903,10 @@ Do not expose invitations before roster-lock semantics exist. Do not expose a fo
 - Competition Home across enrollment, preparing, live, settled, finished, paused, archived, failed, and partial states.
 - Format-specific Live and result rendering for every enabled capability.
 - Archive and conditional hard-delete behavior.
-- Owner transfer plus account-deletion preflight across Web and Data, including concurrent
-  ownership changes and a failed preflight causing no auth-row deletion.
+- Owner transfer plus the account-deletion fence across Web and Data, including a creation or
+  transfer-to request authenticated before deletion begins, concurrent preflight, version mismatch,
+  cancellation before auth deletion, idempotent finalization, and a failed preflight causing no
+  auth-row deletion.
 - Mobile tables/brackets, keyboard navigation, focus restoration, dialog labeling, status announcements, and reduced-motion behavior.
 - No native confirmation/notification UI.
 
