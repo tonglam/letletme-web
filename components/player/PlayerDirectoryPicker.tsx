@@ -487,7 +487,7 @@ export function PlayerDirectoryPicker({
             <div className="p-3 text-sm text-muted-foreground">
               {t("loadingPlayers")}
             </div>
-          ) : visiblePlayers.length === 0 ? (
+          ) : visiblePlayers.length === 0 && !canLoadMorePlayers ? (
             <div className="p-3 text-sm text-muted-foreground">
               {t("noPlayers")}
             </div>

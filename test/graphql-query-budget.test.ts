@@ -88,6 +88,10 @@ describe('GraphQL request budget', () => {
 		assert.match(pickerSource, /setNextPlayersCursor/)
 		assert.match(pickerSource, /cursor: nextPlayersCursor/)
 		assert.match(pickerSource, /canLoadMorePlayers/)
+		assert.match(
+			pickerSource,
+			/visiblePlayers\.length === 0 && !canLoadMorePlayers/
+		)
 		assert.doesNotMatch(pickerSource, /GET_PLAYERS_FOR_PICKER/)
 	})
 
