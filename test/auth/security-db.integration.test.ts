@@ -90,7 +90,7 @@ test('web security constraints serialize identity, session, and rate ownership',
 					   AND cmd = 'SELECT'
 					   AND replace(replace(coalesce(qual, ''), '(', ''), ')', '') = 'true'
 					   AND with_check IS NULL
-					 )) AS invalid_policy_count,
+					 ))) AS invalid_policy_count,
 				(SELECT count(*)::int
 				 FROM pg_class relation
 				 JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
