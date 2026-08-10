@@ -19,17 +19,13 @@ function job(name: string, nextName?: string): string {
 }
 
 describe('Web v3 production cutover workflow', () => {
-	it('is callable through the default-branch CI workflow without running normal CI', () => {
-		assert.match(workflow, /workflow_call:/)
-		assert.match(dispatchBridge, /workflow_dispatch:/)
-		assert.match(
-			dispatchBridge,
-			/verify:\n\s+if: github\.event_name != 'workflow_dispatch'/
-		)
-		assert.match(
-			dispatchBridge,
-			/uses: \.\/\.github\/workflows\/v3-production-cutover\.yml/
-		)
+	it('runs only from the default-branch repository-dispatch definition', () => {
+		assert.match(workflow, /repository_dispatch:/)
+		assert.match(workflow, /- v3-web-production-cutover/)
+		assert.doesNotMatch(workflow, /workflow_dispatch:|workflow_call:/)
+		assert.doesNotMatch(dispatchBridge, /workflow_dispatch:/)
+		assert.doesNotMatch(dispatchBridge, /secrets: inherit/)
+		assert.doesNotMatch(dispatchBridge, /v3_production_cutover:/)
 		for (const input of [
 			'operation',
 			'sha',
@@ -39,11 +35,10 @@ describe('Web v3 production cutover workflow', () => {
 			'v3_cutover_approval'
 		]) {
 			assert.match(
-				dispatchBridge,
-				new RegExp(`${input}: \\$\\{\\{ inputs\\.${input} \\}\\}`)
+				workflow,
+				new RegExp(`github\\.event\\.client_payload\\.${input}`)
 			)
 		}
-		assert.match(dispatchBridge, /secrets: inherit/)
 	})
 
 	it('keeps preflight read-only and accepts only 0008 as pending', () => {

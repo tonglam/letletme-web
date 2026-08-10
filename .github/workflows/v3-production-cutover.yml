@@ -1,65 +1,11 @@
 name: V3 Production Cutover
 
 on:
-  workflow_dispatch:
-    inputs:
-      operation:
-        description: One explicit Web database cutover operation.
-        required: true
-        type: choice
-        options:
-          - v3-preflight
-          - v3-activate-database
-          - v3-status
-      sha:
-        description: Exact frozen Web candidate commit SHA.
-        required: true
-        type: string
-      v3_cutover_run_id:
-        description: Exact v3 cutover run ID.
-        required: false
-        type: string
-      v3_release_manifest_base64:
-        description: Canonical base64 of the approved external v3 release manifest.
-        required: false
-        type: string
-      v3_release_manifest_sha256:
-        description: SHA-256 of the approved v3 release manifest.
-        required: false
-        type: string
-      v3_cutover_approval:
-        description: Exact APPROVE_V3_ACTIVATION phrase for the cutover run.
-        required: false
-        type: string
-  workflow_call:
-    inputs:
-      operation:
-        required: true
-        type: string
-      sha:
-        required: true
-        type: string
-      v3_cutover_run_id:
-        required: false
-        type: string
-        default: ''
-      v3_release_manifest_base64:
-        required: false
-        type: string
-        default: ''
-      v3_release_manifest_sha256:
-        required: false
-        type: string
-        default: ''
-      v3_cutover_approval:
-        required: false
-        type: string
-        default: ''
-    secrets:
-      V3_MIGRATION_DATABASE_URL:
-        required: true
-      V3_WEB_DB_PASSWORD:
-        required: true
+  # repository_dispatch always resolves this workflow and GITHUB_SHA from the
+  # default branch, so an unreviewed branch cannot redefine secret-bearing jobs.
+  repository_dispatch:
+    types:
+      - v3-web-production-cutover
 
 permissions:
   contents: read
@@ -70,18 +16,18 @@ concurrency:
 
 jobs:
   preflight:
-    if: inputs.operation == 'v3-preflight'
+    if: github.event.client_payload.operation == 'v3-preflight'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact Web candidate
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          ref: ${{ inputs.sha }}
+          ref: ${{ github.event.client_payload.sha }}
           persist-credentials: false
       - name: Require exact protected main commit
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: ${{ inputs.sha }}
+          TARGET_SHA: ${{ github.event.client_payload.sha }}
         run: |
           set -euo pipefail
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -123,7 +69,7 @@ jobs:
       - name: Inspect Data activation and Web role state without writes
         env:
           DIRECT_DATABASE_URL: ${{ secrets.V3_MIGRATION_DATABASE_URL }}
-          CUTOVER_RUN_ID: ${{ inputs.v3_cutover_run_id }}
+          CUTOVER_RUN_ID: ${{ github.event.client_payload.v3_cutover_run_id }}
         run: |
           node --input-type=module <<'EOF'
           import postgres from 'postgres'
@@ -159,18 +105,18 @@ jobs:
           EOF
 
   activate_database:
-    if: inputs.operation == 'v3-activate-database'
+    if: github.event.client_payload.operation == 'v3-activate-database'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact Web candidate
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          ref: ${{ inputs.sha }}
+          ref: ${{ github.event.client_payload.sha }}
           persist-credentials: false
       - name: Require exact protected main commit
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: ${{ inputs.sha }}
+          TARGET_SHA: ${{ github.event.client_payload.sha }}
         run: |
           set -euo pipefail
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -186,10 +132,10 @@ jobs:
       - run: npm ci
       - name: Resolve and gate exact Web release
         env:
-          V3_CUTOVER_RUN_ID: ${{ inputs.v3_cutover_run_id }}
-          V3_RELEASE_MANIFEST_BASE64: ${{ inputs.v3_release_manifest_base64 }}
-          V3_RELEASE_MANIFEST_SHA256: ${{ inputs.v3_release_manifest_sha256 }}
-          V3_CUTOVER_APPROVAL: ${{ inputs.v3_cutover_approval }}
+          V3_CUTOVER_RUN_ID: ${{ github.event.client_payload.v3_cutover_run_id }}
+          V3_RELEASE_MANIFEST_BASE64: ${{ github.event.client_payload.v3_release_manifest_base64 }}
+          V3_RELEASE_MANIFEST_SHA256: ${{ github.event.client_payload.v3_release_manifest_sha256 }}
+          V3_CUTOVER_APPROVAL: ${{ github.event.client_payload.v3_cutover_approval }}
         run: |
           set -euo pipefail
           DEPLOY_SHA=$(git rev-parse HEAD)
@@ -245,8 +191,8 @@ jobs:
       - name: Apply exact Web migration and provision runtime login
         env:
           DIRECT_DATABASE_URL: ${{ secrets.V3_MIGRATION_DATABASE_URL }}
-          CUTOVER_RUN_ID: ${{ inputs.v3_cutover_run_id }}
-          V3_CUTOVER_APPROVAL: ${{ inputs.v3_cutover_approval }}
+          CUTOVER_RUN_ID: ${{ github.event.client_payload.v3_cutover_run_id }}
+          V3_CUTOVER_APPROVAL: ${{ github.event.client_payload.v3_cutover_approval }}
           V3_WEB_DB_PASSWORD: ${{ secrets.V3_WEB_DB_PASSWORD }}
         run: |
           set -euo pipefail
@@ -278,18 +224,18 @@ jobs:
         run: npm run db:runtime-contract
 
   status:
-    if: inputs.operation == 'v3-status'
+    if: github.event.client_payload.operation == 'v3-status'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout exact Web candidate
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          ref: ${{ inputs.sha }}
+          ref: ${{ github.event.client_payload.sha }}
           persist-credentials: false
       - name: Require exact protected main commit
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: ${{ inputs.sha }}
+          TARGET_SHA: ${{ github.event.client_payload.sha }}
         run: |
           set -euo pipefail
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
