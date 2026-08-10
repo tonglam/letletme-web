@@ -322,6 +322,12 @@ briefing.topics
   created_at
   updated_at
 
+briefing.topic_slug_aliases
+  alias_slug unique
+  topic_id
+  created_at
+  retired_at nullable
+
 briefing.topic_items
   topic_id
   item_id
@@ -363,6 +369,10 @@ Rules:
 - Public text is stored/rendered as controlled plain text or sanitized allowed markup; arbitrary provider HTML and scripts are never rendered.
 - Embedded media uses an explicit provider allowlist and privacy/security policy. A normal source link remains available when embedding is disabled.
 - Observed manager behaviour remains owned by Trends. Briefing may reference a canonical Trends evidence card rather than duplicating cohort aggregates as attributed content.
+- A published topic slug changes only in one transaction that first inserts the prior slug into
+  `briefing.topic_slug_aliases`. Alias slugs can never collide with a current topic slug or another
+  alias, are never reused for another topic, and resolve to the current canonical slug with a
+  permanent redirect.
 - A source adapter is enabled only after its API, feed, permission, rate, retention, summarization, and display rules are documented and tested.
 
 ### 4.4 Entity identity and cross-source links
@@ -550,7 +560,8 @@ Rules:
 
 - Add the shared evidence-domain types used by reporting publication.
 - Add rank-cohort tables, constraints, indexes, retention ownership, and migration rollback notes.
-- Add Briefing source/item/topic/entity/run tables or their equivalently isolated schema.
+- Add Briefing source/item/topic/topic-slug-alias/entity/run tables or their equivalently isolated
+  schema, including cross-current/alias slug collision constraints.
 - Add rights-mode, item-status, cohort-state, and source-class enums with database checks.
 - Add season/event foreign keys where the v3 platform contract supplies them; avoid references to compatibility views that cannot enforce identity.
 - Add service-role writes and GraphQL-reader selects only; do not grant browser roles direct access.
@@ -756,6 +767,8 @@ Rules:
 - Deduplicate by provider identity plus canonical fingerprint and preserve original/repost relationships.
 - Add entity-link candidate generation and reviewed/verified publication gates.
 - Add topic assignment with explicit provenance; do not publish ambiguous player links.
+- Add transactional published-topic rename that persists the prior slug alias before changing the
+  canonical slug; reject rename on any current/alias collision.
 - Add correction/removal reconciliation and cache invalidation events.
 - Add summary provenance and content-length enforcement by rights mode.
 - Add bounded queues/workers with per-source concurrency, rate, retry, and circuit-breaker policy.
@@ -780,6 +793,8 @@ Rules:
 **GraphQL**
 
 - Implement source, topic-list, and topic-detail reads with cursor pagination and evidence contexts.
+- Resolve aliases to the canonical topic identity while returning canonical slug metadata; alias
+  lookup never produces a second cache identity for the same board.
 - Enforce rights-mode field projection in the repository/service layer, not only the resolver.
 - Return grouped evidence classes and chronological data; do not compute consensus, sentiment, or recommended-player scores.
 - Add bounded related quantitative evidence references rather than copying full Trends/Players payloads.
@@ -788,6 +803,8 @@ Rules:
 **Web**
 
 - Add `/data/briefing` discovery and `/data/briefing/[topic]` canonical topic boards.
+- Permanently redirect an alias route to the current canonical topic URL before rendering and
+  preserve valid locale/query/hash state.
 - Render topic summary, affected entities, evidence-class groups, short timeline, disagreement, attribution, publication time, allowed excerpt/summary, direct original links, and related quantitative evidence.
 - Use a source card treatment that distinguishes official/club, reporter/publisher, and creator/KOL.
 - Add authenticated follow/mute controls through Web endpoints; do not expose preferences in public cache keys or URLs.
@@ -801,6 +818,8 @@ Rules:
 - Link-only and richer rights modes render only their allowed fields.
 - Follow/mute is idempotent, private, capped, and reflected in Overview/Briefing without changing the canonical public board.
 - A removed item disappears from active topic evidence while its audit remains intact.
+- Renaming a published topic preserves every prior shared slug through an alias redirect, including
+  across repeated renames.
 
 ### WP10 — Cross-section reuse, sharing, localization, analytics, and cleanup
 
@@ -929,6 +948,8 @@ Flags control exposure, not schema correctness. Disabled features return an inte
 - N+1 detection for Overview, search, cohort snapshot, topic board, and two-player Briefing references.
 - Evidence-context semantic tests for observed/captured/published and unavailable/empty/partial/stale.
 - Briefing rights-mode and outbound-URL allowlist tests below the resolver layer.
+- Briefing slug uniqueness, transactional rename, repeated-rename alias history, old-slug lookup,
+  permanent redirect, and canonical cache-key tests.
 - Removal/rights/cohort revision cache-key and invalidation tests.
 - Player State release-gate regression tests proving withheld trends remain withheld.
 - Compatibility tests for existing Gameweek, Fixtures, Market, public Trends, player, and value operations.

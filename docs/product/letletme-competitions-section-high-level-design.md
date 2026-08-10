@@ -145,7 +145,7 @@ competitionKind: tracked_official_league | custom_tournament
 season
 officialLeagueSourceId nullable
 ownerUserId nullable
-ownershipState: resolved | recovery_required
+ownershipState: resolved | recovery_required | owner_deleted_archived
 rosterLockedAt nullable
 activatedAt nullable
 finishedAt nullable
@@ -160,7 +160,10 @@ Rules:
 - `league_event_results` must become season-safe and source-owned. Add `season` and/or the source foreign key before relying on same-numbered league/event IDs across rollovers.
 - Source roster checkpoints and source audits are stored once and fanned out to dependent reads. Tournament-specific calculations and audits remain keyed by competition ID.
 - Remove the global unique name constraint. Keep a normal search index on normalized name; numeric ID remains canonical.
-- New competitions require `ownerUserId` and `ownershipState=resolved`. A migrated competition may retain `ownerUserId=null` only with `ownershipState=recovery_required` until an unambiguous account claims it.
+- New competitions require `ownerUserId` and `ownershipState=resolved`. A migrated competition may
+  retain `ownerUserId=null` only with `ownershipState=recovery_required` until an unambiguous
+  account claims it. `owner_deleted_archived` requires an archived lifecycle and null owner, is
+  terminal for self-service management, and cannot appear on an active competition.
 - Retain `admin_entry_id` temporarily for compatibility, participant display, and the bounded recovery authorization path; stop using it as management authority as soon as ownership is resolved.
 
 ### 4.2 Competition-kind and roster rules
@@ -308,6 +311,17 @@ Rules:
 - Tracked leagues do not create invitation records; their membership continues to come from source synchronization.
 - Persist a resolved `ownerUserId` as an opaque stable Web user identifier received through the trusted signed server command. Data does not need a foreign key to the Web authentication database.
 - For a migrated `recovery_required` row, never transfer ownership from a raw direct binding alone. The recovery command requires a signed principal whose same-season `admin_entry_id` binding carries an ownership-verified assurance from the challenge flow, or a separately audited operator-mediated recovery. It atomically records `ownerUserId`, changes ownership to `resolved`, and writes the proof kind and audit event.
+- Web account deletion must first call a signed cross-repository ownership preflight. Deletion is
+  blocked while the account owns any non-archived competition: the organizer must transfer each one
+  through an audited owner command or archive it. After that precondition passes, Data records an
+  account-deletion audit event without retaining the deleted user identifier, changes archived rows
+  to `owner_deleted_archived`, and clears their management principal; it must never leave a live
+  competition resolved to an identifier that can no longer authenticate.
+- `recovery_required` is therefore limited to audited legacy migration and explicit operator
+  recovery; account deletion is not an implicit first-claim takeover path.
+- Owner transfer is atomic and requires the current owner plus an accepting target account; the
+  target must carry an ownership-verified same-season participant binding. Data records both signed
+  command identities in the audit before the old Web account may be deleted.
 - Joining or a verified claim persists `participantUserId` so later access does not depend on whichever FPL entry is active on the account.
 - Historical competition reads authorize a stable matching `participantUserId` first. An active `EntryRef` may authorize entry membership only when its season matches the competition season.
 - A legacy member whose `participantUserId` is still null must complete an ownership-verified historical claim; when upstream historical proof is no longer possible, recovery is operator-mediated rather than accepting a seasonless or unverified binding.
@@ -481,6 +495,8 @@ Changes:
 8. Make one source roster sync update source evidence and project changes to dependent tracked competition reads.
 9. Preserve custom roster immutability after lock.
 10. Add archive and pre-publication hard-delete policies.
+11. Add signed owner-transfer, account-deletion preflight, and archived-owner tombstone commands;
+    reject account deletion while any owned competition remains non-archived.
 
 Primary files:
 
@@ -723,6 +739,8 @@ Changes:
 7. Remove obsolete sync-enable behavior once tracked creation cannot silently become a snapshot.
 8. Update English and Simplified Chinese copy, metadata, analytics route normalization, and terminology tests.
 9. Remove old routes/components only after redirect and query telemetry confirms migration.
+10. Integrate Web account deletion with the Data ownership preflight and require transfer or archive
+    before deleting an organizer identity.
 
 Primary files:
 
@@ -816,6 +834,8 @@ Do not expose invitations before roster-lock semantics exist. Do not expose a fo
 - Post-lock rule and roster mutations rejected.
 - Invitation token hashing, expiration, revocation, capacity race, duplicate claim, and wrong-season rejection.
 - Published history survives archive; organizer deletion is rejected after publication.
+- Account deletion is blocked for a non-archived owned competition; audited transfer preserves
+  management, and archived-owner cleanup cannot create an unclaimable active competition.
 - Points, battle, and knockout result finalization/audit fixtures.
 
 ### GraphQL
@@ -840,6 +860,8 @@ Do not expose invitations before roster-lock semantics exist. Do not expose a fo
 - Competition Home across enrollment, preparing, live, settled, finished, paused, archived, failed, and partial states.
 - Format-specific Live and result rendering for every enabled capability.
 - Archive and conditional hard-delete behavior.
+- Owner transfer plus account-deletion preflight across Web and Data, including concurrent
+  ownership changes and a failed preflight causing no auth-row deletion.
 - Mobile tables/brackets, keyboard navigation, focus restoration, dialog labeling, status announcements, and reduced-motion behavior.
 - No native confirmation/notification UI.
 
