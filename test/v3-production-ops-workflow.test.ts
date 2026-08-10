@@ -41,9 +41,11 @@ describe('Web v3 production cutover workflow', () => {
 		}
 	})
 
-	it('keeps preflight read-only and accepts only 0008 as pending', () => {
+	it('keeps preflight read-only and recognizes the split 0008/0009 rollout', () => {
 		const preflight = job('preflight', 'activate_database')
 		assert.match(preflight, /pending 0008_web_auth_runtime_role/)
+		assert.match(preflight, /pending 0009_graphql_auth_reader/)
+		assert.match(preflight, /0008-pending,0009-deferred/)
 		for (const mutation of [
 			'npm run db:migrate\n',
 			'db:provision-runtime-login',
@@ -57,7 +59,8 @@ describe('Web v3 production cutover workflow', () => {
 	it('trusts only protected main before installing or executing candidate code', () => {
 		const jobs = [
 			job('preflight', 'activate_database'),
-			job('activate_database', 'status'),
+			job('activate_database', 'post_activation_migrate'),
+			job('post_activation_migrate', 'status'),
 			job('status')
 		]
 
@@ -81,17 +84,20 @@ describe('Web v3 production cutover workflow', () => {
 
 		assert.equal(
 			workflow.match(/name: Require exact protected main commit/g)?.length,
-			3
+			4
 		)
 	})
 
 	it('gates the exact Web SHA before migration, provisioning, and runtime verification', () => {
-		const activation = job('activate_database', 'status')
+		const activation = job('activate_database', 'post_activation_migrate')
 		const gate = activation.indexOf('scripts/v3-release-gate.ts')
 		const migrationRecheck = activation.indexOf(
 			'V3_WEB_ACTIVATION_MIGRATIONS=0008-pending'
 		)
-		const migrate = activation.indexOf('npm run db:migrate\n')
+		const finalMainRecheck = activation.lastIndexOf(
+			'gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main"',
+		)
+		const migrate = activation.indexOf('npm run db:migrate:activation')
 		const provision = activation.indexOf('npm run db:provision-runtime-login')
 		const runtimeUrl = activation.indexOf(
 			'url.username = `letletme_web_runtime'
@@ -99,14 +105,18 @@ describe('Web v3 production cutover workflow', () => {
 		const contract = activation.indexOf('npm run db:runtime-contract')
 		assert.ok(gate > 0)
 		assert.ok(migrationRecheck > gate)
+		assert.ok(finalMainRecheck > migrationRecheck)
 		assert.ok(migrate > migrationRecheck)
+		assert.ok(migrate > finalMainRecheck)
 		assert.ok(provision > migrate)
 		assert.ok(runtimeUrl > provision)
 		assert.ok(contract > runtimeUrl)
 		assert.match(activation, /V3_MIGRATION_DATABASE_URL/)
 		assert.match(activation, /V3_WEB_DB_PASSWORD/)
 		assert.match(activation, /pending 0008_web_auth_runtime_role/)
+		assert.match(activation, /pending 0009_graphql_auth_reader/)
 		assert.match(activation, /V3_WEB_ACTIVATION_MIGRATIONS=already-applied/)
+		assert.match(activation, /V3_WEB_ACTIVATION_RESULT=0008-applied,0009-deferred/)
 		assert.match(activation, /actual_manifest_sha/)
 		assert.match(activation, /plan_version.*3\.2\.5-r3/)
 		assert.match(activation, /\.planVersion = "3\.2\.5"/)
@@ -114,6 +124,36 @@ describe('Web v3 production cutover workflow', () => {
 			activation,
 			/V3_WEB_RELEASE_PLAN=3\.2\.5-r3-normalized-to-3\.2\.5/
 		)
+	})
+
+	it('allows only the reviewed 0009 post-activation migration', () => {
+		const migration = job('post_activation_migrate', 'status')
+		const status = migration.indexOf('npm run db:migrate:status')
+		const activationGate = migration.indexOf(
+			'test "$V3_CUTOVER_APPROVAL" = "APPROVE_V3_ACTIVATION $CUTOVER_RUN_ID"'
+		)
+		const migrate = migration.indexOf('npm run db:migrate\n')
+		const finalMainRecheck = migration.lastIndexOf(
+			'gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main"',
+		)
+		const graphqlBoundary = migration.indexOf('Verify the GraphQL auth-reader boundary')
+		const webBoundary = migration.indexOf('npm run db:runtime-contract')
+
+		assert.match(migration, /operation == 'v3-migrate-database'/)
+		assert.match(migration, /pending 0009_graphql_auth_reader/)
+		assert.match(migration, /rows\[0\]\.status !== 'activated'/)
+		assert.match(migration, /graphql_auth_reader_select/)
+		assert.doesNotMatch(migration, /pending 0008_web_auth_runtime_role/)
+		assert.ok(activationGate > 0)
+		assert.ok(status > activationGate)
+		assert.ok(finalMainRecheck > status)
+		assert.ok(migrate > status)
+		assert.ok(migrate > finalMainRecheck)
+		assert.ok(graphqlBoundary > migrate)
+		assert.ok(webBoundary > graphqlBoundary)
+		assert.match(migration, /has_column_privilege/)
+		assert.match(migration, /GraphQL auth reader has table-level bauth privileges/)
+		assert.match(migration, /expectedColumns = new Set/)
 	})
 
 	it('keeps Vercel deployment and legacy cleanup outside the database operator', () => {
