@@ -1,4 +1,5 @@
 import { getAuthorizationSession } from '@/lib/auth'
+import { extractGraphQLOperationName } from '@/lib/cache-policy'
 import { buildGraphQLUserContextHeaders } from '@/lib/graphql-envelope'
 import {
 	isSuccessfulGraphQLResponseBody,
@@ -12,6 +13,7 @@ import {
 	PayloadTooLargeError,
 	readBoundedJson,
 } from '@/lib/http-security'
+import { RequestTiming, resolveRequestId } from '@/lib/request-timing'
 import { NextRequest, NextResponse } from 'next/server'
 
 const GRAPHQL_ENDPOINT = process.env.GRAPHQL_ENDPOINT || 'http://localhost:4000/graphql'
@@ -26,9 +28,13 @@ function noStoreJson(body: unknown, status: number, headers: Record<string, stri
 }
 
 export async function POST(request: NextRequest) {
+	const requestTiming = new RequestTiming()
+	const requestId = resolveRequestId(request.headers.get('x-request-id'))
 	let body: unknown
 	try {
-		body = await readBoundedJson(request, MAX_GRAPHQL_BODY_BYTES)
+		body = await requestTiming.measure('bodyRead', () =>
+			readBoundedJson(request, MAX_GRAPHQL_BODY_BYTES)
+		)
 	} catch (error) {
 		if (error instanceof PayloadTooLargeError) {
 			return noStoreJson(
@@ -38,8 +44,11 @@ export async function POST(request: NextRequest) {
 		}
 		return noStoreJson({ errors: [{ message: 'Invalid JSON' }] }, 400)
 	}
+	const operationName = extractGraphQLOperationName(body) || 'anonymous'
 
-	const authorization = readForwardableMiniProgramAuthorization(request.headers)
+	const authorization = requestTiming.measureSync('authorizationHeader', () =>
+		readForwardableMiniProgramAuthorization(request.headers)
+	)
 	if (!authorization.ok) {
 		return noStoreJson(
 			{
@@ -58,12 +67,14 @@ export async function POST(request: NextRequest) {
 	}
 	const subject = buildOpaqueRateLimitSubject(request.headers, secret || 'development-only')
 	try {
-		const rate = await checkDatabaseRateLimit({
-			scope: 'graphql-proxy-ip',
-			subject,
-			limit: 120,
-			windowSeconds: 60,
-		})
+		const rate = await requestTiming.measure('databaseRateLimit', () =>
+			checkDatabaseRateLimit({
+				scope: 'graphql-proxy-ip',
+				subject,
+				limit: 120,
+				windowSeconds: 60,
+			})
+		)
 		if (!rate.allowed) {
 			return noStoreJson(
 				{ errors: [{ message: 'Too many requests', extensions: { code: 'RATE_LIMITED' } }] },
@@ -86,22 +97,30 @@ export async function POST(request: NextRequest) {
 
 	let session = null
 	try {
-		session = await getAuthorizationSession(request.headers)
+		session = await requestTiming.measure('sessionLookup', () =>
+			getAuthorizationSession(request.headers)
+		)
 	} catch (error) {
 		console.error('[graphql proxy] authorization session lookup failed:', error)
 		return noStoreJson({ errors: [{ message: 'Authentication unavailable' }] }, 503)
 	}
 
-	const forwardHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
-	if (authorization.value) {
-		forwardHeaders.Authorization = authorization.value
-	}
-	if (secret) {
-		Object.assign(forwardHeaders, buildIngressContextHeaders(subject, secret))
-		if (session?.user) {
-			Object.assign(forwardHeaders, buildGraphQLUserContextHeaders(session.user, secret))
+	const forwardHeaders = requestTiming.measureSync('headerBuild', () => {
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json',
+			'X-Request-Id': requestId,
 		}
-	}
+		if (authorization.value) {
+			headers.Authorization = authorization.value
+		}
+		if (secret) {
+			Object.assign(headers, buildIngressContextHeaders(subject, secret))
+			if (session?.user) {
+				Object.assign(headers, buildGraphQLUserContextHeaders(session.user, secret))
+			}
+		}
+		return headers
+	})
 
 	let response: Response
 	const upstreamController = new AbortController()
@@ -116,13 +135,15 @@ export async function POST(request: NextRequest) {
 		request.signal.addEventListener('abort', abortUpstream, { once: true })
 	}
 	try {
-		response = await fetch(GRAPHQL_ENDPOINT, {
-			method: 'POST',
-			cache: 'no-store',
-			headers: forwardHeaders,
-			body: JSON.stringify(body),
-			signal: upstreamController.signal,
-		})
+		response = await requestTiming.measure('upstreamFetch', () =>
+			fetch(GRAPHQL_ENDPOINT, {
+				method: 'POST',
+				cache: 'no-store',
+				headers: forwardHeaders,
+				body: JSON.stringify(body),
+				signal: upstreamController.signal,
+			})
+		)
 	} catch (error) {
 		if (error instanceof Error && error.name === 'AbortError') {
 			return noStoreJson({ errors: [{ message: 'Upstream timed out' }] }, 504)
@@ -134,24 +155,43 @@ export async function POST(request: NextRequest) {
 		request.signal.removeEventListener('abort', abortUpstream)
 	}
 
-	const responseBody = await response.arrayBuffer()
-	const responseBodyOk = isSuccessfulGraphQLResponseBody(
-		new TextDecoder().decode(responseBody),
-	)
-	const cacheControl = resolveGraphQLProxyCacheControl({
-		body,
-		hasSessionUser: Boolean(session?.user),
-		hasAuthorization: Boolean(authorization.value),
-		responseOk: response.ok,
-		responseBodyOk,
+	const responseBody = await requestTiming.measure('responseBody', () => response.arrayBuffer())
+	const { responseBodyOk, cacheControl } = requestTiming.measureSync('responsePolicy', () => {
+		const bodyOk = isSuccessfulGraphQLResponseBody(new TextDecoder().decode(responseBody))
+		return {
+			responseBodyOk: bodyOk,
+			cacheControl: resolveGraphQLProxyCacheControl({
+				body,
+				hasSessionUser: Boolean(session?.user),
+				hasAuthorization: Boolean(authorization.value),
+				responseOk: response.ok,
+				responseBodyOk: bodyOk,
+			}),
+		}
 	})
-	const safeHeaders = new Headers({ 'Cache-Control': cacheControl })
+	const safeHeaders = new Headers({
+		'Cache-Control': cacheControl,
+		'X-Request-Id': requestId,
+	})
 	for (const name of ['content-type', 'content-language', 'retry-after']) {
 		const value = response.headers.get(name)
 		if (value) safeHeaders.set(name, value)
 	}
-	return new NextResponse(responseBody, {
+	const proxyResponse = requestTiming.measureSync(
+		'responseBuild',
+		() => new NextResponse(responseBody, {
+			status: response.status,
+			headers: safeHeaders,
+		})
+	)
+	console.info('[graphql proxy timing]', JSON.stringify({
+		event: 'graphql_proxy_timing',
+		requestId,
+		operationName,
 		status: response.status,
-		headers: safeHeaders,
-	})
+		totalMs: Number(requestTiming.elapsedMs().toFixed(2)),
+		timings: requestTiming.snapshot(),
+		responseBodyOk,
+	}))
+	return proxyResponse
 }
