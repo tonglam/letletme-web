@@ -30,11 +30,11 @@ export const user = authSchema.table(
 			.defaultNow(),
 		fplEntryId: integer('fpl_entry_id'),
 		fplEntryBoundAt: timestamp('fpl_entry_bound_at', { withTimezone: true }),
+		/** Matches production `bauth.user.openid` (WeChat / Mini Program identifier). */
+		openid: text('openid'),
 		fplEntryVerifiedAt: timestamp('fpl_entry_verified_at', {
 			withTimezone: true
 		}),
-		/** Matches production `bauth.user.openid` (WeChat / Mini Program identifier). */
-		openid: text('openid'),
 		/** Bind-time snapshot of the FPL team/manager name — display only. */
 		fplTeamName: text('fpl_team_name'),
 		fplManagerName: text('fpl_manager_name'),

@@ -65,10 +65,6 @@ jobs:
           npm run db:migrate
           npm run db:migrate
           npm run db:migrate:status
-      - name: Verify baseline adoption rollback contracts
-        env:
-          RUN_BASELINE_ADOPTION_INTEGRATION: 'true'
-        run: npx tsx --test test/auth/baseline-adoption.integration.test.ts
       - name: Verify Drizzle declaration parity
         env:
           PGPASSWORD: postgres

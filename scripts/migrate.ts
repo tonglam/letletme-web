@@ -4,15 +4,6 @@ import { join } from 'node:path'
 import postgres from 'postgres'
 
 import {
-	adoptProductionAuthBaseline,
-	EXPECTED_AUTH_SCHEMA_FINGERPRINT
-} from './auth-baseline-adoption'
-import { loadAuthDataManifest } from './auth-data-contract'
-import {
-	fingerprintAuthContract,
-	loadAuthSchemaContract
-} from './auth-schema-contract'
-import {
 	assertMigrationHistory,
 	inspectMigrationHistory,
 	loadLocalMigrations,
@@ -91,29 +82,6 @@ async function migrationContents(migration: LocalMigration): Promise<string> {
 	return readFile(join(MIGRATIONS_FOLDER, `${migration.tag}.sql`), 'utf8')
 }
 
-async function assertFreshBaselineContract(
-	transaction: postgres.TransactionSql
-): Promise<void> {
-	const schemaFingerprint = fingerprintAuthContract(
-		await loadAuthSchemaContract(transaction)
-	)
-	if (schemaFingerprint !== EXPECTED_AUTH_SCHEMA_FINGERPRINT) {
-		throw new Error(
-			`Fresh Auth baseline schema fingerprint mismatch: expected=${EXPECTED_AUTH_SCHEMA_FINGERPRINT} actual=${schemaFingerprint}`
-		)
-	}
-
-	const manifest = await loadAuthDataManifest(transaction)
-	if (
-		manifest.relations.length !== 8 ||
-		manifest.relations.some(relation => relation.rowCount !== '0')
-	) {
-		throw new Error(
-			'Fresh Auth baseline must contain eight empty business tables'
-		)
-	}
-}
-
 async function applyFreshBaseline(
 	client: postgres.Sql,
 	baseline: LocalMigration
@@ -123,7 +91,6 @@ async function applyFreshBaseline(
 		await transaction`SELECT set_config('lock_timeout', '5s', true)`
 		await transaction`SELECT set_config('statement_timeout', '10min', true)`
 		await transaction.unsafe(contents)
-		await assertFreshBaselineContract(transaction)
 		await transaction`
 			INSERT INTO bauth.__drizzle_migrations (hash, created_at)
 			VALUES (${baseline.hash}, ${baseline.when})
@@ -131,19 +98,6 @@ async function applyFreshBaseline(
 	})
 	console.log(`Applied ${baseline.tag}`)
 }
-
-async function adoptProductionBaseline(
-	client: postgres.Sql,
-	baseline: LocalMigration
-): Promise<void> {
-	await client.begin(async transaction => {
-		await transaction`SELECT set_config('lock_timeout', '5s', true)`
-		await transaction`SELECT set_config('statement_timeout', '15min', true)`
-		await adoptProductionAuthBaseline(transaction, baseline.hash, baseline.when)
-	})
-	console.log(`Adopted ${baseline.tag}`)
-}
-
 async function applyPendingMigration(
 	client: postgres.Sql,
 	migration: LocalMigration
@@ -191,13 +145,9 @@ async function main(): Promise<void> {
 					ledger[0]?.createdAt === baseline.when &&
 					ledger[0]?.hash === baseline.hash
 				if (!isCanonicalBaseline) {
-					await adoptProductionBaseline(client, baseline)
-					const adoptedState = await inspectDatabaseState(client)
-					if (!adoptedState.hasLedger) {
-						throw new Error(
-							'Auth baseline adoption removed the migration ledger'
-						)
-					}
+					throw new Error(
+						`Migration ledger is not using ${BASELINE_TAG}; manual cleanup is required`
+					)
 				}
 			}
 

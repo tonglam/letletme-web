@@ -221,8 +221,8 @@ CREATE TABLE bauth."user" (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     fpl_entry_id integer,
     fpl_entry_bound_at timestamp with time zone,
-    fpl_entry_verified_at timestamp with time zone,
     openid text,
+    fpl_entry_verified_at timestamp with time zone,
     fpl_team_name text,
     fpl_manager_name text,
     fpl_identity_refreshed_at timestamp with time zone

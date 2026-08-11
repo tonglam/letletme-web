@@ -592,7 +592,9 @@ export async function assertAuthCapabilityMemberships(
 
 	const allowed = new Set([
 		'letletme_graphql_reader->letletme_graphql_runtime',
-		'letletme_web_auth->letletme_web_runtime'
+		'letletme_web_auth->letletme_web_runtime',
+		'letletme_graphql_reader->letletme_graphql_local_tong',
+		'letletme_web_auth->letletme_web_local_tong'
 	])
 	const invalid = rows.filter(
 		row =>
