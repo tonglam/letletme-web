@@ -24,9 +24,13 @@ export const EXPECTED_AUTH_SCHEMA_FINGERPRINT = [
 	'583c34744cff92c1'
 ].join('')
 
-// Filled from the post-activation production manifest before this adopter is merged.
-export const EXPECTED_PRODUCTION_AUTH_DATA_FINGERPRINT =
-	'PENDING_CANONICAL_ACTIVATION'
+// Frozen from the verified production backup after removing retired Auth tables.
+export const EXPECTED_PRODUCTION_AUTH_DATA_FINGERPRINT = [
+	'4229f3a55b2cb833',
+	'37548af6cfa043f0',
+	'dc3ba6a7087f565d',
+	'e97f56a47398bb86'
+].join('')
 
 type QueryClient = postgres.Sql | postgres.TransactionSql
 

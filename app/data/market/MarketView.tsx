@@ -28,6 +28,7 @@ import {
 import { positionBadgeClass } from '@/lib/position-style'
 import { cn } from '@/lib/utils'
 import { copyTextToClipboard } from '@/app/live/points/_lib/live-points-share'
+import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import {
 	buildMarketShareUrl,
 	formatPriceMovementShareText,
@@ -126,6 +127,7 @@ function PriceShareActions({
 }) {
 	const t = useTranslations('Market')
 	const [copied, setCopied] = useState(false)
+	const [manualShareText, setManualShareText] = useState<string | null>(null)
 
 	const handleCopyShare = useCallback(async () => {
 		const origin =
@@ -150,18 +152,24 @@ function PriceShareActions({
 				footer: t('shareFooter', { url: shareUrl }),
 			},
 		})
-		const ok = await copyTextToClipboard(text)
-		if (ok) {
+		const result = await copyTextToClipboard(text)
+		if (result === 'copied') {
+			setManualShareText(null)
 			setCopied(true)
 			toast.success(t('shareCopied'))
 			window.setTimeout(() => setCopied(false), 2000)
-		} else {
-			toast.error(t('shareCopyFailed'))
+		} else if (result === 'unsupported' || result === 'failed') {
+			setManualShareText(text)
+			toast.warning(
+				result === 'unsupported'
+					? t('shareCopyUnsupported')
+					: t('shareCopyFailed')
+			)
 		}
 	}, [changeDate, changes, t])
 
 	return (
-		<div className="flex shrink-0 items-center gap-1.5">
+		<div className="flex shrink-0 flex-col items-end gap-1.5">
 			<Button
 				type="button"
 				size="sm"
@@ -177,6 +185,15 @@ function PriceShareActions({
 				)}
 				{copied ? t('shareCopiedShort') : t('shareCopy')}
 			</Button>
+			{manualShareText ? (
+				<ShareTextFallback
+					text={manualShareText}
+					message={t('shareCopyUnsupported')}
+					fieldLabel={t('shareCopyManualLabel')}
+					closeLabel={t('shareCopyClose')}
+					onClose={() => setManualShareText(null)}
+				/>
+			) : null}
 		</div>
 	)
 }

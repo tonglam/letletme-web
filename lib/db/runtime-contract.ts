@@ -324,10 +324,7 @@ export async function validateWebDatabaseContract(
 				`bauth Web runtime policy count is ${webRuntimePolicyCount}`
 			)
 		}
-		if (
-			graphqlAuthPolicyCount !== 0 &&
-			graphqlAuthPolicyCount !== GRAPHQL_AUTH_RUNTIME_TABLES.length
-		) {
+		if (graphqlAuthPolicyCount !== GRAPHQL_AUTH_RUNTIME_TABLES.length) {
 			findings.push(
 				`bauth GraphQL auth policy count is ${graphqlAuthPolicyCount}`
 			)

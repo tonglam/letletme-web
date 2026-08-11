@@ -189,6 +189,25 @@ describe('live matches server snapshot', () => {
 		assert.equal(result.matches[0]?.status, 'UPCOMING')
 		assert.equal(result.snapshot?.revision, 'a'.repeat(24))
 	})
+
+	it('keeps live matches when the optional next-event request fails', async () => {
+		const response: LiveMatchesResponse = {
+			liveSnapshot: snapshot('LIVE'),
+			liveMatches: { notStarted: [], playing: [], finished: [] }
+		}
+		const result = await getLiveMatchesSnapshot(
+			34,
+			async query => {
+				if (query.includes('GetEventFixtures')) {
+					throw new Error('fixtures temporarily unavailable')
+				}
+				return response as never
+			}
+		)
+
+		assert.deepEqual(result.matches, [])
+		assert.equal(result.snapshot?.state, 'LIVE')
+	})
 })
 
 describe('partial tournament refreshes', () => {

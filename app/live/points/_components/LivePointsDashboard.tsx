@@ -3,6 +3,7 @@
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import { PlayerList } from '@/components/live/PlayerList'
 import { TeamStats } from '@/components/live/TeamStats'
+import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { APP_URL } from '@/i18n/config'
@@ -56,6 +57,7 @@ export function LivePointsDashboard({
 	const locale = useLocale() as AppLocale
 	const autoRefreshEnabled = shouldAutoRefresh && isPageActive
 	const [copied, setCopied] = useState(false)
+	const [manualShareText, setManualShareText] = useState<string | null>(null)
 
 	const handleCopyShare = useCallback(async () => {
 		if (!liveData) return
@@ -94,13 +96,17 @@ export function LivePointsDashboard({
 		})
 		const copyResult = await copyTextToClipboard(text)
 		if (copyResult === 'copied') {
+			setManualShareText(null)
 			setCopied(true)
 			toast.success(t('shareCopied'))
 			window.setTimeout(() => setCopied(false), 2000)
-		} else if (copyResult === 'unsupported') {
-			toast.warning(t('shareCopyUnsupported'))
-		} else {
-			toast.error(t('shareCopyFailed'))
+		} else if (copyResult === 'unsupported' || copyResult === 'failed') {
+			setManualShareText(text)
+			toast.warning(
+				copyResult === 'unsupported'
+					? t('shareCopyUnsupported')
+					: t('shareCopyFailed')
+			)
 		}
 	}, [
 		benchPlayers,
@@ -177,8 +183,17 @@ export function LivePointsDashboard({
 							/>
 							{t('refresh')}
 						</Button>
-					</div>
-				</div>
+			</div>
+			{manualShareText ? (
+				<ShareTextFallback
+					text={manualShareText}
+					message={t('shareCopyUnsupported')}
+					fieldLabel={t('shareCopyManualLabel')}
+					closeLabel={t('shareCopyClose')}
+					onClose={() => setManualShareText(null)}
+				/>
+			) : null}
+		</div>
 			</div>
 
 			<div

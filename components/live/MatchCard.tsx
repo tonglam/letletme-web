@@ -1,8 +1,10 @@
 'use client'
 
 import { Card } from '@/components/ui/card'
+import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import type { Match } from '@/types/match'
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { PlayerDetailModal } from './PlayerDetailModal'
 import { MatchHeader } from './match-card/MatchHeader'
 import { MatchHighlights } from './match-card/MatchHighlights'
@@ -44,6 +46,8 @@ function MatchCardComponent({
 }: MatchCardProps) {
 	const highlights = useMemo(() => buildMatchHighlights(match), [match])
 	const detail = useMatchPlayerDetail(eventId)
+	const t = useTranslations('LiveMatches')
+	const [manualShareText, setManualShareText] = useState<string | null>(null)
 
 	return (
 		<Card
@@ -51,7 +55,10 @@ function MatchCardComponent({
 			className={`relative overflow-hidden border-border/80 border-l-[3px] p-4 shadow-sm md:p-5 ${statusEdgeClass(match.status)}`}
 		>
 			<div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 sm:right-4 sm:top-4">
-				<MatchShareButton match={match} />
+				<MatchShareButton
+					match={match}
+					onManualShareTextChange={setManualShareText}
+				/>
 				<MatchNavigation
 					allMatches={allMatches}
 					currentIndex={currentIndex}
@@ -67,6 +74,15 @@ function MatchCardComponent({
 					/>
 				) : null}
 			</div>
+			{manualShareText ? (
+				<ShareTextFallback
+					text={manualShareText}
+					message={t('shareCopyUnsupported')}
+					fieldLabel={t('shareCopyManualLabel')}
+					closeLabel={t('shareCopyClose')}
+					onClose={() => setManualShareText(null)}
+				/>
+			) : null}
 			<PlayerDetailModal
 				player={detail.selectedPlayer}
 				isOpen={detail.isOpen}

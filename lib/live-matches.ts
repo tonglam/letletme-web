@@ -255,17 +255,21 @@ export async function getLiveMatchesSnapshot(
 	nextEventId: number | null,
 	executor: QueryExecutor = executeQuery
 ): Promise<LiveMatchesSnapshot> {
+	const upcomingRequest = nextEventId
+		? executor<EventFixturesResponse>(
+				GET_EVENT_FIXTURES,
+				{ eventId: nextEventId },
+				{ cache: 'no-store' }
+			).catch(error => {
+				console.warn('[live/matches] upcoming fixtures unavailable', error)
+				return { eventFixtures: [] } satisfies EventFixturesResponse
+			})
+		: Promise.resolve<EventFixturesResponse>({ eventFixtures: [] })
 	const [data, upcoming] = await Promise.all([
 		executor<LiveMatchesResponse>(GET_LIVE_MATCHES, undefined, {
 			cache: 'no-store'
 		}),
-		nextEventId
-			? executor<EventFixturesResponse>(
-					GET_EVENT_FIXTURES,
-					{ eventId: nextEventId },
-					{ cache: 'no-store' }
-				)
-			: Promise.resolve<EventFixturesResponse>({ eventFixtures: [] })
+		upcomingRequest
 	])
 	return {
 		matches: sortMatches([
