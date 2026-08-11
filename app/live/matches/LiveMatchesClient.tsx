@@ -139,7 +139,7 @@ export function LiveMatchesClient({
 	const fetchMatches = useCallback(
 		async (
 			isRefresh = false,
-			eventIds?: { currentEventId?: number; nextEventId?: number }
+			eventIds?: { currentEventId?: number; nextEventId?: number | null }
 		) => {
 			if (isFetchInFlight.current) {
 				// Coalesce concurrent manual/auto refreshes into one trailing fetch.
@@ -156,11 +156,16 @@ export function LiveMatchesClient({
 					setIsLoading(true)
 				}
 				setError(null)
-				const data = await getLiveMatchesSnapshot(
-					eventIds?.nextEventId ?? resolvedNextEventId ?? null,
-					executeQuery,
-					eventIds?.currentEventId ?? resolvedCurrentEventId ?? null
-				)
+			const resolvedNextEventIdForSnapshot =
+				eventIds && 'nextEventId' in eventIds
+					? eventIds.nextEventId ?? null
+					: resolvedNextEventId ?? null
+
+			const data = await getLiveMatchesSnapshot(
+				resolvedNextEventIdForSnapshot,
+				executeQuery,
+				eventIds?.currentEventId ?? resolvedCurrentEventId ?? null
+			)
 				if (!mountedRef.current) return
 				const mappedMatches = data.matches
 				setMatches(mappedMatches)
