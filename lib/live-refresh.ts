@@ -7,12 +7,15 @@ export function shouldPollLiveSnapshot({
 	isPageActive,
 	currentEventId,
 	selectedEventId,
-	snapshot
+	snapshot,
+	probeEventIdentity = false
 }: {
 	isPageActive: boolean
 	currentEventId?: number
 	selectedEventId?: number
 	snapshot?: LiveSnapshotStatus | null
+	/** Keep the matches page alive so it can discover the next event after settlement. */
+	probeEventIdentity?: boolean
 }): boolean {
 	if (!isPageActive || !currentEventId || selectedEventId !== currentEventId) {
 		return false
@@ -23,10 +26,7 @@ export function shouldPollLiveSnapshot({
 	// Keep current-event polling enabled so the UI can recover automatically.
 	if (!snapshot || snapshot.eventId !== selectedEventId) return true
 
-	// Keep probing event identity after a settled snapshot. The current event
-	// remains settled until the next deadline, but the page must still discover
-	// the next gameweek without requiring a manual refresh.
-	return true
+	return snapshot.state !== 'SETTLED' || probeEventIdentity
 }
 
 export function shouldRefreshLiveExplain(
