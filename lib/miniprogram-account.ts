@@ -23,15 +23,6 @@ const CODE_TTL_MS = 10 * 60 * 1000
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const MAX_ATTEMPTS = 5
 
-function assertMiniProgramPersistenceEnabled(): void {
-	if (process.env.MINIPROGRAM_ACCOUNT_STORAGE !== 'true') {
-		throw new MiniProgramAuthError(
-			'Mini Program account storage is not enabled (set MINIPROGRAM_ACCOUNT_STORAGE=true after creating bauth.mini_program_* tables)',
-			503
-		)
-	}
-}
-
 export interface MiniProgramAccountProfile {
 	id: string
 	name: string | null
@@ -117,7 +108,6 @@ export async function startMiniProgramEmailBinding(input: {
 	email: unknown
 	deviceId: unknown
 }): Promise<void> {
-	assertMiniProgramPersistenceEnabled()
 	const email = normalizeEmail(input.email)
 	const deviceId = assertValidDeviceId(input.deviceId)
 
@@ -163,7 +153,6 @@ export async function confirmMiniProgramEmailBinding(input: {
 	code: unknown
 	wechatCode: unknown
 }): Promise<MiniProgramConfirmResult> {
-	assertMiniProgramPersistenceEnabled()
 	const email = normalizeEmail(input.email)
 	const deviceId = assertValidDeviceId(input.deviceId)
 	const code = typeof input.code === 'string' ? input.code.trim() : ''
@@ -281,7 +270,6 @@ export async function signInMiniProgramWithWeChat(input: {
 	code: unknown
 	deviceId: unknown
 }): Promise<MiniProgramWeChatLoginResult> {
-	assertMiniProgramPersistenceEnabled()
 	const identity = await exchangeWeChatLoginCode(input.code)
 	const deviceId = assertValidDeviceId(input.deviceId)
 
@@ -339,7 +327,6 @@ export async function signInMiniProgramWithWeChat(input: {
 export async function getMiniProgramProfileByToken(
 	token: string
 ): Promise<MiniProgramAccountProfile> {
-	assertMiniProgramPersistenceEnabled()
 	const [session] = await db
 		.select()
 		.from(schema.miniProgramSession)
@@ -375,7 +362,6 @@ export async function getMiniProgramProfileByToken(
 }
 
 export async function revokeMiniProgramSession(token: string): Promise<void> {
-	assertMiniProgramPersistenceEnabled()
 	await db
 		.update(schema.miniProgramSession)
 		.set({ revokedAt: new Date() })

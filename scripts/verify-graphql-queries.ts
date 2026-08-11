@@ -1,5 +1,5 @@
 /**
- * Smoke-test every exported query document in lib/graphql/queries.ts
+ * Smoke-test every current query document
  * against a GraphQL HTTP endpoint (default: production `/api/graphql`).
  *
  * Usage:
@@ -18,34 +18,44 @@
  * `npx tsx scripts/validate-queries-vs-schema.ts`.
  */
 import {
-	GET_CURRENT_AND_NEXT_EVENTS,
 	GET_ENTRY_EVENT_RESULT,
 	GET_ENTRY_HISTORY,
-	GET_ENTRY_TOURNAMENTS,
-	GET_ENTRY_TRANSFER_HISTORY,
+	GET_ENTRY_TRANSFER_HISTORY
+} from '../lib/graphql/operations/entries'
+import {
+	GET_CURRENT_AND_NEXT_EVENTS,
 	GET_EVENT_FIXTURES,
-	GET_EVENT_LIVE_EXPLAIN,
 	GET_EVENT_OVERALL_RESULT,
 	GET_EVENT_STATS_BY_ID,
+	utcCalendarDateISO
+} from '../lib/graphql/operations/events'
+import {
+	GET_EVENT_LIVE_EXPLAIN,
 	GET_LIVE_MATCHES,
 	GET_LIVE_POINTS,
 	GET_LIVE_SCORES,
-	GET_MARKET_PULSE,
+	GET_PLAYER_LIVE
+} from '../lib/graphql/operations/live'
+import { GET_MARKET_PULSE } from '../lib/graphql/operations/market'
+import {
 	GET_PLAYER_DETAIL,
-	GET_PLAYER_LIVE,
-	GET_PLAYER_VALUE_HISTORY,
-	GET_PLAYER_VALUES,
 	GET_PLAYERS_FOR_PICKER,
 	SEARCH_PLAYERS_FOR_PICKER,
-	GET_TEAMS_FOR_PICKER,
+	GET_TEAMS_FOR_PICKER
+} from '../lib/graphql/operations/players'
+import {
+	GET_PLAYER_VALUE_HISTORY,
+	GET_PLAYER_VALUES,
 	GET_TOP_TRANSFERS_IN,
-	GET_TOP_TRANSFERS_OUT,
+	GET_TOP_TRANSFERS_OUT
+} from '../lib/graphql/operations/prices'
+import {
+	GET_ENTRY_TOURNAMENTS,
 	GET_TOURNAMENT_ENTRY_RANKING_SUMMARY,
 	GET_TOURNAMENT_EVENT_RESULTS,
 	GET_TOURNAMENT_LIVE_POINTS,
-	GET_TOURNAMENT_SELECTION_STATS,
-	utcCalendarDateISO
-} from '../lib/graphql/queries'
+	GET_TOURNAMENT_SELECTION_STATS
+} from '../lib/graphql/operations/tournaments'
 
 /** Keep in sync with `app/api/graphql/route.ts` `USER_CONTEXT_PATTERNS`. */
 const PROXY_USER_CONTEXT_SNIPPETS = [
@@ -308,15 +318,16 @@ async function main() {
 	for (const c of cases) {
 		const anonProxyBlocked = shouldSkipDueToAnonymousProxy(endpoint, c.query)
 		const noTournament = Boolean(c.skip)
-		const noPublishedPicks = Boolean(c.requiresPublishedPicks && !hasPublishedPicks)
+		const noPublishedPicks = Boolean(
+			c.requiresPublishedPicks && !hasPublishedPicks
+		)
 		if (anonProxyBlocked || noTournament || noPublishedPicks) {
 			results.push({
 				name: c.name,
 				status: 'skip',
-				detail:
-					noPublishedPicks
-						? 'pre-season dataset requires published picks/live data'
-						: anonProxyBlocked && noTournament
+				detail: noPublishedPicks
+					? 'pre-season dataset requires published picks/live data'
+					: anonProxyBlocked && noTournament
 						? 'anonymous /api/graphql + no tournament id'
 						: anonProxyBlocked
 							? 'anonymous /api/graphql (needs signed session)'

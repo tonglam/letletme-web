@@ -11,22 +11,20 @@ env:
   NODE_ENV: test
   DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/testdb
   DIRECT_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/testdb
+  SCHEMA_EXPORT_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/schema_export
   WEB_RUNTIME_DATABASE_URL: postgresql://letletme_web_runtime:wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww@127.0.0.1:5432/testdb
-  CUTOVER_RUN_ID: v3-20260808T160008Z-b9eddc0
-  V3_CUTOVER_APPROVAL: APPROVE_V3_ACTIVATION v3-20260808T160008Z-b9eddc0
-  V3_WEB_DB_PASSWORD: wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+  WEB_RUNTIME_DB_PASSWORD: wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
   BETTER_AUTH_SECRET: ci-better-auth-secret-at-least-thirty-two-characters
   BETTER_AUTH_URL: http://localhost:3000
   GRAPHQL_SERVICE_TOKEN: e2e-graphql-service-token-at-least-thirty-two-bytes
   BACKEND_PROXY_SECRET: ci-backend-proxy-secret
-  MINIPROGRAM_ACCOUNT_STORAGE: 'true'
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16.9-alpine@sha256:7c688148e5e156d0e86df7ba8ae5a05a2386aaec1e2ad8e6d11bdf10504b1fb7
+        image: postgres:15@sha256:6eb0add3b77c081df18aa518ce43df58fdcc40f2e6d868a6fd08038dc7acd425
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: testdb
@@ -62,46 +60,30 @@ jobs:
           END $$`)
           await sql.end()
           EOF
-      - name: Apply activation-scoped migrations
-        run: |
-          npm run db:migrate:activation
-          set +e
-          output=$(npm run db:migrate:status 2>&1)
-          status=$?
-          set -e
-          printf '%s\n' "$output"
-          test "$status" -eq 1
-          test "$(printf '%s\n' "$output" | grep -Ec '^pending ')" -eq 1
-          printf '%s\n' "$output" | grep -Fxq 'pending 0009_graphql_auth_reader'
-      - name: Stub activated Data cutover ledger
-        run: |
-          node --input-type=module <<'EOF'
-          import postgres from 'postgres'
-          const sql = postgres(process.env.DIRECT_DATABASE_URL, { max: 1 })
-          await sql`CREATE SCHEMA ops`
-          await sql`CREATE TABLE ops.migration_runs (
-            run_id text PRIMARY KEY,
-            status text NOT NULL,
-            metadata jsonb NOT NULL
-          )`
-          await sql`INSERT INTO ops.migration_runs (run_id, status, metadata)
-            VALUES (${process.env.CUTOVER_RUN_ID}, 'activated', '{}'::jsonb)`
-          await sql.end()
-          EOF
-      - name: Provision and retry production-shaped Web runtime login
-        run: |
-          npm run db:provision-runtime-login
-          npm run db:provision-runtime-login
-      - name: Verify Web startup contract before GraphQL grant
-        env:
-          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
-        run: npm run db:runtime-contract
-      - name: Apply post-activation migration and verify repeatability
+      - name: Apply migrations and verify repeatability
         run: |
           npm run db:migrate
           npm run db:migrate
           npm run db:migrate:status
-      - name: Verify Web startup contract after GraphQL grant
+      - name: Verify baseline adoption rollback contracts
+        env:
+          RUN_BASELINE_ADOPTION_INTEGRATION: 'true'
+        run: npx tsx --test test/auth/baseline-adoption.integration.test.ts
+      - name: Verify Drizzle declaration parity
+        env:
+          PGPASSWORD: postgres
+          RUN_SCHEMA_DECLARATION_PARITY: 'true'
+        run: |
+          createdb --host 127.0.0.1 --username postgres schema_export
+          psql "$SCHEMA_EXPORT_DATABASE_URL" --set ON_ERROR_STOP=1 --command 'CREATE SCHEMA bauth'
+          npx drizzle-kit export --dialect postgresql --schema ./lib/db/schema/auth.ts --sql > /tmp/auth-schema.sql
+          psql "$SCHEMA_EXPORT_DATABASE_URL" --set ON_ERROR_STOP=1 --file /tmp/auth-schema.sql
+          npx tsx --test test/auth/schema-declaration-parity.integration.test.ts
+      - name: Provision and retry production-shaped Web runtime login
+        run: |
+          npm run db:provision-runtime-login
+          npm run db:provision-runtime-login
+      - name: Verify Web startup contract
         env:
           DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
         run: npm run db:runtime-contract
@@ -120,6 +102,13 @@ jobs:
         run: npm run test:e2e
         env:
           DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          PLAYWRIGHT_USE_EXISTING_BUILD: '1'
+      - name: Maintenance E2E
+        run: npx playwright test e2e/maintenance-mode.spec.ts
+        env:
+          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          MAINTENANCE_MODE: 'true'
+          MAINTENANCE_RETRY_AFTER_SECONDS: '420'
           PLAYWRIGHT_USE_EXISTING_BUILD: '1'
       - run: npm audit --audit-level=moderate
       - uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8

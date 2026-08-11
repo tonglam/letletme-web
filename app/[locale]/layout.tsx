@@ -8,7 +8,11 @@ import { APP_URL, localizedAlternates } from '@/i18n/config'
 import { routing } from '@/i18n/routing'
 import type { Metadata } from 'next'
 import { hasLocale, NextIntlClientProvider } from 'next-intl'
-import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server'
+import {
+	getMessages,
+	getTranslations,
+	setRequestLocale
+} from 'next-intl/server'
 import { Barlow, Barlow_Condensed, IBM_Plex_Mono } from 'next/font/google'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
@@ -19,21 +23,21 @@ const barlow = Barlow({
 	subsets: ['latin'],
 	weight: ['400', '600', '700'],
 	variable: '--font-barlow',
-	display: 'swap',
+	display: 'swap'
 })
 
 const barlowCondensed = Barlow_Condensed({
 	subsets: ['latin'],
 	weight: ['600', '700'],
 	variable: '--font-display',
-	display: 'swap',
+	display: 'swap'
 })
 
 const plexMono = IBM_Plex_Mono({
 	subsets: ['latin'],
 	weight: ['500'],
 	variable: '--font-mono',
-	display: 'swap',
+	display: 'swap'
 })
 
 type LocaleLayoutProps = {
@@ -45,7 +49,9 @@ export function generateStaticParams() {
 	return routing.locales.map(locale => ({ locale }))
 }
 
-export async function generateMetadata({ params }: LocaleLayoutProps): Promise<Metadata> {
+export async function generateMetadata({
+	params
+}: LocaleLayoutProps): Promise<Metadata> {
 	const { locale } = await params
 	if (!hasLocale(routing.locales, locale)) notFound()
 
@@ -56,12 +62,11 @@ export async function generateMetadata({ params }: LocaleLayoutProps): Promise<M
 		applicationName: 'LetLetMe',
 		title: {
 			default: t('title'),
-			template: '%s | LetLetMe',
+			template: '%s | LetLetMe'
 		},
 		description: t('description'),
-		alternates: localizedAlternates('/', locale),
-		// No icons override: the file-based app/icon.svg convention supplies the
-		// matchday mark; public/favicon.ico remains as the legacy fallback.
+		alternates: localizedAlternates('/', locale)
+		// The file-based app/icon.svg convention supplies the matchday mark.
 	}
 }
 
@@ -81,14 +86,17 @@ const themeBootstrapScript = `
 })();
 `
 
-export default async function LocaleLayout({ children, params }: LocaleLayoutProps) {
+export default async function LocaleLayout({
+	children,
+	params
+}: LocaleLayoutProps) {
 	const { locale } = await params
 	if (!hasLocale(routing.locales, locale)) notFound()
 
 	setRequestLocale(locale)
 	const [messages, t] = await Promise.all([
 		getMessages(),
-		getTranslations('Common'),
+		getTranslations('Common')
 	])
 
 	return (
@@ -107,7 +115,11 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
 			</head>
 			<body className="min-h-svh bg-background font-sans text-foreground antialiased">
 				<NextIntlClientProvider messages={messages}>
-					<ThemeProvider defaultTheme="system" enableSystem disableTransitionOnChange>
+					<ThemeProvider
+						defaultTheme="system"
+						enableSystem
+						disableTransitionOnChange
+					>
 						<TooltipProvider>
 							<a
 								href="#main-content"
@@ -116,7 +128,10 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
 								{t('skipToContent')}
 							</a>
 							<Navbar />
-							<main id="main-content" tabIndex={-1}>
+							<main
+								id="main-content"
+								tabIndex={-1}
+							>
 								{children}
 							</main>
 							<Footer />

@@ -8,7 +8,7 @@ const validMetric = {
 	value: 2100.5,
 	delta: 2100.5,
 	rating: 'good',
-	metricId: 'v4-123.abc',
+	metricId: 'metric-123.abc',
 	page: '/live/tournaments/987?token=secret',
 	device: 'mobile',
 }

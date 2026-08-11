@@ -26,7 +26,6 @@ export function buildGraphQLUserContextHeaders(
 			? user.fplEntryId
 			: null
 	const envelope = {
-		v: 2,
 		aud: 'letletme-graphql',
 		uid: user.id,
 		eid: entryId,

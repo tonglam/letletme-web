@@ -186,7 +186,7 @@ my_fpl_view_states
   entry_id
   scope
   scope_key
-  state_version
+  state_revision
   facts_revision
   baseline_json
   last_seen_at
@@ -505,7 +505,7 @@ Tests:
 - Monotonic seen acknowledgment under concurrent requests.
 - Same user/scope across two seasons and two same-season entry bindings remains isolated, and an old
   facts revision cannot block the new baseline cursor.
-- Unknown baseline-version recovery.
+- Unknown baseline revision recovery.
 - Account deletion and season rollover behaviour.
 
 ### WP3 — Data settled metadata and reconciliation checkpoint

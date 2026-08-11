@@ -239,8 +239,8 @@ function ProcessSourceEvidence({
 						<CompareRow
 							key={code}
 							label={processMetricLabel(metric.code, tl)}
-							v1={first ? processMetricValue(first) : null}
-							v2={second ? processMetricValue(second) : null}
+							primaryValue={first ? processMetricValue(first) : null}
+							comparisonValue={second ? processMetricValue(second) : null}
 							higherIsBetter={
 								!metric.code.includes('XGC') && !metric.code.includes('XGA')
 							}
@@ -542,20 +542,20 @@ function MarketSummary({
 			<div className="mb-4 space-y-0.5">
 				<CompareRow
 					label={tl('currentGwIn')}
-					v1={number(player.transfersInEvent)}
-					v2={number(comparison.transfersInEvent)}
+					primaryValue={number(player.transfersInEvent)}
+					comparisonValue={number(comparison.transfersInEvent)}
 					emphasizeWinner={false}
 				/>
 				<CompareRow
 					label={tl('currentGwOut')}
-					v1={number(player.transfersOutEvent)}
-					v2={number(comparison.transfersOutEvent)}
+					primaryValue={number(player.transfersOutEvent)}
+					comparisonValue={number(comparison.transfersOutEvent)}
 					emphasizeWinner={false}
 				/>
 				<CompareRow
 					label={tl('gwNet')}
-					v1={number(net(player))}
-					v2={number(net(comparison))}
+					primaryValue={number(net(player))}
+					comparisonValue={number(net(comparison))}
 					emphasizeWinner={false}
 				/>
 			</div>
@@ -826,8 +826,8 @@ export function PlayerStatsView({
 								<CompareRow
 									key={spec.key}
 									label={spec.label}
-									v1={metricValue(player, spec.key)}
-									v2={metricValue(comparison, spec.key)}
+									primaryValue={metricValue(player, spec.key)}
+									comparisonValue={metricValue(comparison, spec.key)}
 									higherIsBetter={spec.direction !== 'lower'}
 									emphasizeWinner={samePosition && spec.direction !== 'neutral'}
 								/>
@@ -875,8 +875,8 @@ export function PlayerStatsView({
 								<CompareRow
 									key={row.label}
 									label={row.label}
-									v1={fixed(row.first)}
-									v2={fixed(row.second)}
+									primaryValue={fixed(row.first)}
+									comparisonValue={fixed(row.second)}
 									higherIsBetter={row.direction !== 'lower'}
 									emphasizeWinner={samePosition && row.direction !== 'neutral'}
 								/>

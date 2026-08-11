@@ -1,177 +1,230 @@
-import { drizzle } from 'drizzle-orm/postgres-js'
-import { migrate } from 'drizzle-orm/postgres-js/migrator'
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+
 import postgres from 'postgres'
 
+import {
+	adoptProductionAuthBaseline,
+	EXPECTED_AUTH_SCHEMA_FINGERPRINT
+} from './auth-baseline-adoption'
+import { loadAuthDataManifest } from './auth-data-contract'
+import {
+	fingerprintAuthContract,
+	loadAuthSchemaContract
+} from './auth-schema-contract'
 import {
 	assertMigrationHistory,
 	inspectMigrationHistory,
 	loadLocalMigrations,
-	WEB_MIGRATIONS_SCHEMA,
-	WEB_MIGRATIONS_TABLE,
 	type LedgerMigration,
+	type LocalMigration
 } from './migration-audit'
 
 const MIGRATIONS_FOLDER = 'drizzle'
-const ACTIVATION_MIGRATION = '0008_web_auth_runtime_role'
+const BASELINE_TAG = '0000_auth_baseline'
+const ADVISORY_LOCK_NAME = 'letletme-web-auth-migrations'
 
-type MigrationJournal = {
-	version: string
-	dialect: string
-	entries: Array<{
-		idx: number
-		version: string
-		when: number
-		tag: string
-		breakpoints: boolean
-	}>
+type DatabaseState = {
+	hasAuthSchema: boolean
+	hasLedger: boolean
+	hasRetiredSharedSchema: boolean
 }
 
-function migrationConfig(migrationsFolder = MIGRATIONS_FOLDER) {
+function requiredDatabaseUrl(): string {
+	const value = process.env.DIRECT_DATABASE_URL?.trim()
+	if (!value) throw new Error('DIRECT_DATABASE_URL is required for migrations')
+	return value
+}
+
+async function assertPostgresVersion(client: postgres.Sql): Promise<void> {
+	const [{ server_version_num: version }] = await client<
+		{ server_version_num: string }[]
+	>`
+		SELECT current_setting('server_version_num') AS server_version_num
+	`
+	if (Number(version) < 150000) {
+		throw new Error(
+			`PostgreSQL 15 or newer is required (server_version_num=${version})`
+		)
+	}
+}
+
+async function inspectDatabaseState(client: postgres.Sql): Promise<DatabaseState> {
+	const [state] = await client<
+		{
+			has_auth_schema: boolean
+			has_ledger: boolean
+			has_retired_shared_schema: boolean
+		}[]
+	>`
+		SELECT
+			to_regnamespace('bauth') IS NOT NULL AS has_auth_schema,
+			to_regclass('bauth.__drizzle_migrations') IS NOT NULL AS has_ledger,
+			to_regnamespace('drizzle') IS NOT NULL AS has_retired_shared_schema
+	`
+	if (!state) throw new Error('Failed to inspect Web migration state')
 	return {
-		migrationsFolder,
-		migrationsSchema: WEB_MIGRATIONS_SCHEMA,
-		migrationsTable: WEB_MIGRATIONS_TABLE,
+		hasAuthSchema: state.has_auth_schema,
+		hasLedger: state.has_ledger,
+		hasRetiredSharedSchema: state.has_retired_shared_schema
 	}
 }
 
-async function createScopedMigrationsFolder(throughTag: string): Promise<string> {
-	const journalPath = join(MIGRATIONS_FOLDER, 'meta', '_journal.json')
-	const journal = JSON.parse(await readFile(journalPath, 'utf8')) as MigrationJournal
-	const targetIndex = journal.entries.findIndex(entry => entry.tag === throughTag)
-	if (targetIndex < 0) throw new Error(`Unknown WEB_MIGRATION_THROUGH target: ${throughTag}`)
-
-	const folder = await mkdtemp(join(tmpdir(), 'letletme-web-migrations-'))
-	try {
-		const entries = journal.entries.slice(0, targetIndex + 1)
-		await mkdir(join(folder, 'meta'))
-		await writeFile(
-			join(folder, 'meta', '_journal.json'),
-			`${JSON.stringify({ ...journal, entries }, null, '\t')}\n`,
-		)
-		await Promise.all(
-			entries.map(entry =>
-				copyFile(
-					join(MIGRATIONS_FOLDER, `${entry.tag}.sql`),
-					join(folder, `${entry.tag}.sql`),
-				),
-			),
-		)
-		return folder
-	} catch (error) {
-		await rm(folder, { recursive: true, force: true })
-		throw error
-	}
-}
-
-async function main() {
-	const databaseUrl = process.env.DIRECT_DATABASE_URL
-	if (!databaseUrl) throw new Error('DIRECT_DATABASE_URL is required for migrations')
-	const throughTag = process.env.WEB_MIGRATION_THROUGH?.trim()
-	if (throughTag && throughTag !== ACTIVATION_MIGRATION) {
-		throw new Error(`WEB_MIGRATION_THROUGH may only target ${ACTIVATION_MIGRATION}`)
-	}
-	const scopedFolder = throughTag ? await createScopedMigrationsFolder(throughTag) : null
-	const client = postgres(databaseUrl, { max: 1, prepare: false })
-	const database = drizzle(client)
-	try {
-		const [{ server_version_num: version }] = await client<{ server_version_num: string }[]>`
-			SELECT current_setting('server_version_num') AS server_version_num
-		`
-		if (Number(version) < 150000) {
-			throw new Error(`PostgreSQL 15 or newer is required (server_version_num=${version})`)
+async function loadLedger(client: postgres.Sql): Promise<LedgerMigration[]> {
+	const rows = await client<{ hash: string; created_at: string | null }[]>`
+		SELECT hash, created_at::text
+		FROM bauth.__drizzle_migrations
+		ORDER BY created_at, id
+	`
+	return rows.map(row => {
+		const createdAt = Number(row.created_at)
+		if (row.created_at === null || !Number.isSafeInteger(createdAt)) {
+			throw new Error('Web migration ledger contains an invalid timestamp')
 		}
-		await client`CREATE SCHEMA IF NOT EXISTS bauth`
-		await client`SELECT pg_advisory_lock(hashtext('letletme-web-drizzle-migrations'))`
+		return { hash: row.hash, createdAt }
+	})
+}
+
+async function migrationContents(migration: LocalMigration): Promise<string> {
+	return readFile(join(MIGRATIONS_FOLDER, `${migration.tag}.sql`), 'utf8')
+}
+
+async function assertFreshBaselineContract(
+	transaction: postgres.TransactionSql
+): Promise<void> {
+	const schemaFingerprint = fingerprintAuthContract(
+		await loadAuthSchemaContract(transaction)
+	)
+	if (schemaFingerprint !== EXPECTED_AUTH_SCHEMA_FINGERPRINT) {
+		throw new Error(
+			`Fresh Auth baseline schema fingerprint mismatch: expected=${EXPECTED_AUTH_SCHEMA_FINGERPRINT} actual=${schemaFingerprint}`
+		)
+	}
+
+	const manifest = await loadAuthDataManifest(transaction)
+	if (
+		manifest.relations.length !== 8 ||
+		manifest.relations.some(relation => relation.rowCount !== '0')
+	) {
+		throw new Error('Fresh Auth baseline must contain eight empty business tables')
+	}
+}
+
+async function applyFreshBaseline(
+	client: postgres.Sql,
+	baseline: LocalMigration
+): Promise<void> {
+	const contents = await migrationContents(baseline)
+	await client.begin(async transaction => {
+		await transaction`SELECT set_config('lock_timeout', '5s', true)`
+		await transaction`SELECT set_config('statement_timeout', '10min', true)`
+		await transaction.unsafe(contents)
+		await assertFreshBaselineContract(transaction)
+		await transaction`
+			INSERT INTO bauth.__drizzle_migrations (hash, created_at)
+			VALUES (${baseline.hash}, ${baseline.when})
+		`
+	})
+	console.log(`Applied ${baseline.tag}`)
+}
+
+async function adoptProductionBaseline(
+	client: postgres.Sql,
+	baseline: LocalMigration
+): Promise<void> {
+	await client.begin(async transaction => {
+		await transaction`SELECT set_config('lock_timeout', '5s', true)`
+		await transaction`SELECT set_config('statement_timeout', '15min', true)`
+		await adoptProductionAuthBaseline(
+			transaction,
+			baseline.hash,
+			baseline.when
+		)
+	})
+	console.log(`Adopted ${baseline.tag}`)
+}
+
+async function applyPendingMigration(
+	client: postgres.Sql,
+	migration: LocalMigration
+): Promise<void> {
+	const contents = await migrationContents(migration)
+	await client.begin(async transaction => {
+		await transaction`SELECT set_config('lock_timeout', '5s', true)`
+		await transaction`SELECT set_config('statement_timeout', '10min', true)`
+		await transaction.unsafe(contents)
+		await transaction`
+			INSERT INTO bauth.__drizzle_migrations (hash, created_at)
+			VALUES (${migration.hash}, ${migration.when})
+		`
+	})
+	console.log(`Applied ${migration.tag}`)
+}
+
+async function main(): Promise<void> {
+	const local = await loadLocalMigrations(MIGRATIONS_FOLDER)
+	const baseline = local.migrations[0]
+	if (!baseline || baseline.tag !== BASELINE_TAG) {
+		throw new Error(`Web migration history must start with ${BASELINE_TAG}`)
+	}
+	if (local.orphans.length > 0) {
+		throw new Error(`Unjournaled SQL files: ${local.orphans.join(', ')}`)
+	}
+
+	const client = postgres(requiredDatabaseUrl(), { max: 1, prepare: false })
+	try {
+		await assertPostgresVersion(client)
+		await client`SELECT pg_advisory_lock(hashtext(${ADVISORY_LOCK_NAME}))`
 		try {
-			await client`
-				CREATE TABLE IF NOT EXISTS bauth.__drizzle_migrations (
-					id serial PRIMARY KEY,
-					hash text NOT NULL,
-					created_at bigint
-				)
-			`
-			await client`ALTER TABLE bauth.__drizzle_migrations ENABLE ROW LEVEL SECURITY`
-			await client`REVOKE ALL ON TABLE bauth.__drizzle_migrations FROM PUBLIC`
-			for (const role of ['anon', 'authenticated']) {
-				const [{ exists }] = await client<{ exists: boolean }[]>`
-					SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${role}) AS exists
-				`
-				if (exists) await client.unsafe(`REVOKE ALL ON TABLE bauth.__drizzle_migrations FROM ${role}`)
-			}
-
-			const local = await loadLocalMigrations()
-			const dedicatedRows = await client<{ hash: string; created_at: string }[]>`
-				SELECT hash, created_at::text FROM bauth.__drizzle_migrations ORDER BY created_at
-			`
-			const dedicatedTimes = new Set(dedicatedRows.map(row => Number(row.created_at)))
-			const [{ shared_exists: sharedExists }] = await client<{ shared_exists: boolean }[]>`
-				SELECT to_regclass('drizzle.__drizzle_migrations') IS NOT NULL AS shared_exists
-			`
-			if (sharedExists) {
-				const sharedRows = await client<{ hash: string; created_at: string }[]>`
-					SELECT hash, created_at::text FROM drizzle.__drizzle_migrations ORDER BY created_at
-				`
-				for (const migration of local.migrations) {
-					if (dedicatedTimes.has(migration.when)) continue
-					const matches = sharedRows.filter(row => Number(row.created_at) === migration.when)
-					if (matches.length > 1) {
-						throw new Error(`Shared migration ledger has duplicate timestamp ${migration.when}`)
-					}
-					const legacy = matches[0]
-					if (!legacy) continue
-					if (legacy.hash !== migration.hash) {
-						throw new Error(`Shared migration checksum mismatch for ${migration.tag}`)
-					}
-					await client`
-						INSERT INTO bauth.__drizzle_migrations (hash, created_at)
-						VALUES (${legacy.hash}, ${migration.when})
-					`
-					dedicatedTimes.add(migration.when)
-					console.log(`Adopted legacy Web migration ${migration.tag}`)
-				}
-			}
-
-			const beforeRows = await client<{ hash: string; created_at: string }[]>`
-				SELECT hash, created_at::text FROM bauth.__drizzle_migrations ORDER BY created_at
-			`
-			const toLedger = (rows: typeof beforeRows): LedgerMigration[] =>
-				rows.map(row => ({ hash: row.hash, createdAt: Number(row.created_at) }))
-			assertMigrationHistory(
-				inspectMigrationHistory(local.migrations, toLedger(beforeRows), local.orphans),
-				false,
-			)
-
-			await migrate(database, migrationConfig(scopedFolder ?? MIGRATIONS_FOLDER))
-
-			const afterRows = await client<{ hash: string; created_at: string }[]>`
-				SELECT hash, created_at::text FROM bauth.__drizzle_migrations ORDER BY created_at
-			`
-			const afterAudit = inspectMigrationHistory(
-				local.migrations,
-				toLedger(afterRows),
-				local.orphans,
-			)
-			assertMigrationHistory(afterAudit, !throughTag)
-			if (throughTag) {
-				const target = local.migrations.find(migration => migration.tag === throughTag)
-				if (!target) throw new Error(`Missing scoped migration target: ${throughTag}`)
-				const incomplete = afterAudit.pending.filter(migration => migration.when <= target.when)
-				if (incomplete.length > 0) {
+			const state = await inspectDatabaseState(client)
+			if (!state.hasLedger) {
+				if (state.hasAuthSchema || state.hasRetiredSharedSchema) {
 					throw new Error(
-						`Scoped migration did not apply through ${throughTag}: ${incomplete.map(row => row.tag).join(', ')}`,
+						'Refusing to install the Auth baseline over a partial or retired schema'
 					)
 				}
+				await applyFreshBaseline(client, baseline)
+			} else {
+				const ledger = await loadLedger(client)
+				const isCanonicalBaseline =
+					ledger.length > 0 &&
+					ledger[0]?.createdAt === baseline.when &&
+					ledger[0]?.hash === baseline.hash
+				if (!isCanonicalBaseline) {
+					await adoptProductionBaseline(client, baseline)
+					const adoptedState = await inspectDatabaseState(client)
+					if (!adoptedState.hasLedger) {
+						throw new Error('Auth baseline adoption removed the migration ledger')
+					}
+				}
 			}
+
+			const pendingAudit = inspectMigrationHistory(
+				local.migrations,
+				await loadLedger(client),
+				local.orphans
+			)
+			assertMigrationHistory(pendingAudit, false)
+			for (const migration of pendingAudit.pending) {
+				await applyPendingMigration(client, migration)
+			}
+
+			const finalAudit = inspectMigrationHistory(
+				local.migrations,
+				await loadLedger(client),
+				local.orphans
+			)
+			assertMigrationHistory(finalAudit, true)
 		} finally {
-			await client`SELECT pg_advisory_unlock(hashtext('letletme-web-drizzle-migrations'))`
+			await client`
+				SELECT pg_advisory_unlock(hashtext(${ADVISORY_LOCK_NAME}))
+			`.catch(error => {
+				console.error('Failed to release Web migration advisory lock', error)
+			})
 		}
 		console.log('Web migrations applied successfully')
 	} finally {
 		await client.end()
-		if (scopedFolder) await rm(scopedFolder, { recursive: true, force: true })
 	}
 }
 

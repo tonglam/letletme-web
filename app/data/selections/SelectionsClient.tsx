@@ -14,6 +14,7 @@ import {
 } from '@/app/data/selections/_lib/selections-share'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { copyTextToClipboard } from '@/app/live/points/_lib/live-points-share'
+import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import {
 	isKnownTournamentId,
 	readLastTournamentId,
@@ -188,34 +189,53 @@ function SectionTitle({
 function SectionShareActions({ getText }: { getText: () => string }) {
 	const t = useTranslations('Selections')
 	const [copied, setCopied] = useState(false)
+	const [manualShareText, setManualShareText] = useState<string | null>(null)
 
 	const handleCopy = useCallback(async () => {
-		const ok = await copyTextToClipboard(getText())
-		if (ok) {
+		const text = getText()
+		const result = await copyTextToClipboard(text)
+		if (result === 'copied') {
+			setManualShareText(null)
 			setCopied(true)
 			toast.success(t('shareCopied'))
 			window.setTimeout(() => setCopied(false), 2000)
-		} else {
-			toast.error(t('shareCopyFailed'))
+		} else if (result === 'unsupported' || result === 'failed') {
+			setManualShareText(text)
+			toast.warning(
+				result === 'unsupported'
+					? t('shareCopyUnsupported')
+					: t('shareCopyFailed')
+			)
 		}
 	}, [getText, t])
 
 	return (
-		<Button
-			type="button"
-			size="sm"
-			variant="outline"
-			className="h-8 gap-1.5 text-xs"
-			onClick={() => void handleCopy()}
-			aria-label={t('shareCopy')}
-		>
-			{copied ? (
-				<Check className="size-3.5 text-primary-ink" aria-hidden="true" />
-			) : (
-				<Copy className="size-3.5" aria-hidden="true" />
-			)}
-			{copied ? t('shareCopiedShort') : t('shareCopy')}
-		</Button>
+		<div className="flex flex-col items-end gap-1.5">
+			<Button
+				type="button"
+				size="sm"
+				variant="outline"
+				className="h-8 gap-1.5 text-xs"
+				onClick={() => void handleCopy()}
+				aria-label={t('shareCopy')}
+			>
+				{copied ? (
+					<Check className="size-3.5 text-primary-ink" aria-hidden="true" />
+				) : (
+					<Copy className="size-3.5" aria-hidden="true" />
+				)}
+				{copied ? t('shareCopiedShort') : t('shareCopy')}
+			</Button>
+			{manualShareText ? (
+				<ShareTextFallback
+					text={manualShareText}
+					message={t('shareCopyUnsupported')}
+					fieldLabel={t('shareCopyManualLabel')}
+					closeLabel={t('shareCopyClose')}
+					onClose={() => setManualShareText(null)}
+				/>
+			) : null}
+		</div>
 	)
 }
 

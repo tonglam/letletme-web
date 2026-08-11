@@ -7,45 +7,90 @@ import {
 	buildOpaqueRateLimitSubject,
 	PayloadTooLargeError,
 	readBoundedText,
-	resolveProviderClientIp,
+	resolveProviderClientIp
 } from '../../lib/http-security-core'
 
 test('ignores spoofed forwarding headers outside verified provider boundaries', () => {
 	const previousAuthUrl = process.env.BETTER_AUTH_URL
 	process.env.BETTER_AUTH_URL = 'https://www.letletme.top'
-	assert.equal(resolveProviderClientIp(new Headers({
-		host: 'evil.example', 'cf-connecting-ip': '1.2.3.4', 'cf-ray': 'spoofed',
-	})), 'unknown')
-	assert.equal(resolveProviderClientIp(new Headers({
-		host: 'www.letletme.top', 'cf-connecting-ip': '1.2.3.4', 'cf-ray': 'real-marker',
-	})), '1.2.3.4')
+	assert.equal(
+		resolveProviderClientIp(
+			new Headers({
+				host: 'evil.example',
+				'cf-connecting-ip': '1.2.3.4',
+				'cf-ray': 'spoofed'
+			})
+		),
+		'unknown'
+	)
+	assert.equal(
+		resolveProviderClientIp(
+			new Headers({
+				host: 'www.letletme.top',
+				'cf-connecting-ip': '1.2.3.4',
+				'cf-ray': 'real-marker'
+			})
+		),
+		'1.2.3.4'
+	)
 	process.env.BETTER_AUTH_URL = 'https://letletme.top'
-	assert.equal(resolveProviderClientIp(new Headers({
-		host: 'www.letletme.top', 'x-vercel-forwarded-for': '1.2.3.4', 'x-vercel-id': 'syd1::abc',
-	})), '1.2.3.4')
-	assert.equal(resolveProviderClientIp(new Headers({
-		host: 'evil.example', 'x-vercel-forwarded-for': '1.2.3.4', 'x-vercel-id': 'syd1::spoofed',
-	})), 'unknown')
-	assert.equal(resolveProviderClientIp(new Headers({
-		host: 'preview.vercel.app', 'x-vercel-forwarded-for': '1.2.3.4', 'x-vercel-id': 'iad1::abc',
-	})), '1.2.3.4')
+	assert.equal(
+		resolveProviderClientIp(
+			new Headers({
+				host: 'www.letletme.top',
+				'x-vercel-forwarded-for': '1.2.3.4',
+				'x-vercel-id': 'syd1::abc'
+			})
+		),
+		'1.2.3.4'
+	)
+	assert.equal(
+		resolveProviderClientIp(
+			new Headers({
+				host: 'evil.example',
+				'x-vercel-forwarded-for': '1.2.3.4',
+				'x-vercel-id': 'syd1::spoofed'
+			})
+		),
+		'unknown'
+	)
+	assert.equal(
+		resolveProviderClientIp(
+			new Headers({
+				host: 'preview.vercel.app',
+				'x-vercel-forwarded-for': '1.2.3.4',
+				'x-vercel-id': 'iad1::abc'
+			})
+		),
+		'1.2.3.4'
+	)
 	if (previousAuthUrl === undefined) delete process.env.BETTER_AUTH_URL
 	else process.env.BETTER_AUTH_URL = previousAuthUrl
 })
 
 test('opaque rate subjects and ingress signatures never contain raw IPs', () => {
 	const headers = new Headers({
-		host: 'preview.vercel.app', 'x-vercel-forwarded-for': '1.2.3.4', 'x-vercel-id': 'iad1::abc',
+		host: 'preview.vercel.app',
+		'x-vercel-forwarded-for': '1.2.3.4',
+		'x-vercel-id': 'iad1::abc'
 	})
 	const subject = buildOpaqueRateLimitSubject(headers, 'secret')
 	assert.match(subject, /^[a-f0-9]{64}$/)
 	assert.equal(subject.includes('1.2.3.4'), false)
 	const signed = buildIngressContextHeaders(subject, 'secret', 100)
-	const payload = Buffer.from(signed['X-Ingress-Context'], 'base64url').toString()
-	assert.equal(JSON.parse(payload).exp, 160)
+	const payload = Buffer.from(
+		signed['X-Ingress-Context'],
+		'base64url'
+	).toString()
+	assert.deepEqual(JSON.parse(payload), {
+		aud: 'letletme-graphql',
+		sub: subject,
+		iat: 100,
+		exp: 160
+	})
 	assert.equal(
 		signed['X-Ingress-Context-Sig'],
-		createHmac('sha256', 'secret').update(payload).digest('base64url'),
+		createHmac('sha256', 'secret').update(payload).digest('base64url')
 	)
 })
 
@@ -57,9 +102,9 @@ test('bounded streaming rejects chunked bodies before full buffering', async () 
 				controller.enqueue(new TextEncoder().encode('1234'))
 				controller.enqueue(new TextEncoder().encode('5678'))
 				controller.close()
-			},
+			}
 		}),
-		duplex: 'half',
+		duplex: 'half'
 	} as RequestInit & { duplex: 'half' })
 	await assert.rejects(() => readBoundedText(request, 6), PayloadTooLargeError)
 })

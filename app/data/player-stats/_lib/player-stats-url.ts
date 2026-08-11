@@ -1,7 +1,13 @@
 export const PLAYER_STATS_PATH = '/data/player-stats'
 
 export type PlayerStatsSectionId =
-	'fixtures' | 'recent' | 'season' | 'process' | 'history' | 'market' | 'coverage'
+	| 'fixtures'
+	| 'recent'
+	| 'season'
+	| 'process'
+	| 'history'
+	| 'market'
+	| 'coverage'
 
 export const PLAYER_STATS_SECTION_IDS: PlayerStatsSectionId[] = [
 	'fixtures',
@@ -23,22 +29,13 @@ export function playerStatsSectionFromHash(
 ): PlayerStatsSectionId | null {
 	const raw = (hash ?? '').replace(/^#/, '').trim()
 	if (!raw) return null
-	if (raw === 'ps-fixtures' || raw === 'fixtures') return 'fixtures'
-	if (raw === 'ps-recent' || raw === 'recent') return 'recent'
-	if (raw === 'ps-season' || raw === 'season') return 'season'
-	if (
-		raw === 'ps-process' ||
-		raw === 'process' ||
-		raw === 'ps-underlying' ||
-		raw === 'underlying' ||
-		raw === 'ps-ict' ||
-		raw === 'ict'
-	)
-		return 'process'
-	if (raw === 'ps-history' || raw === 'history') return 'history'
-	if (raw === 'ps-market' || raw === 'market') return 'market'
-	if (raw === 'ps-coverage' || raw === 'coverage') return 'coverage'
-	if (raw === 'ps-overview' || raw === 'overview') return 'fixtures'
+	if (raw === 'ps-fixtures') return 'fixtures'
+	if (raw === 'ps-recent') return 'recent'
+	if (raw === 'ps-season') return 'season'
+	if (raw === 'ps-process') return 'process'
+	if (raw === 'ps-history') return 'history'
+	if (raw === 'ps-market') return 'market'
+	if (raw === 'ps-coverage') return 'coverage'
 	return null
 }
 

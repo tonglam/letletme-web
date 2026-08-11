@@ -124,7 +124,7 @@ describe('FPL ownership challenge matching', () => {
 })
 
 describe('verified FPL entry selection', () => {
-	it('does not expose a legacy entry ID without ownership verification', () => {
+	it('does not expose an unverified entry ID', () => {
 		assert.equal(
 			getVerifiedFplEntryId({
 				fplEntryId: 15702,

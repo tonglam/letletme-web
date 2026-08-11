@@ -153,8 +153,7 @@ const LIMITATION_KEYS = {
 	FPL_SEASON_AUTHORITY_MISMATCH: 'limitation.fplSeasonAuthorityMismatch',
 	FPL_CORE_REVISION_UNAVAILABLE: 'limitation.fplCoreRevisionUnavailable',
 	TREND_WITHHELD_BACKTEST: 'limitation.trendWithheldBacktest',
-	TREND_WITHHELD_CROSS_PROVIDER_BACKTEST:
-		'limitation.crossProviderBacktest'
+	TREND_WITHHELD_CROSS_PROVIDER_BACKTEST: 'limitation.crossProviderBacktest'
 } as const
 
 function profileDimension(
@@ -188,7 +187,11 @@ function StateSection({
 	children: ReactNode
 }) {
 	return (
-		<PlayerStatsSection id={id} title={title} hint={hint}>
+		<PlayerStatsSection
+			id={id}
+			title={title}
+			hint={hint}
+		>
 			{children}
 		</PlayerStatsSection>
 	)
@@ -279,21 +282,30 @@ function CoverageCard({
 				</p>
 			</div>
 			<div className="mt-2 flex flex-wrap gap-1.5">
-				<Badge variant="outline" className="text-[10px]">
+				<Badge
+					variant="outline"
+					className="text-[10px]"
+				>
 					{t('coverage.fplCurrent', {
 						status: profile.coverage.fplCurrent
 							? t('coverage.available')
 							: t('coverage.unavailableShort')
 					})}
 				</Badge>
-				<Badge variant="outline" className="text-[10px]">
+				<Badge
+					variant="outline"
+					className="text-[10px]"
+				>
 					{t('coverage.understatCurrent', {
 						status: profile.coverage.understatCurrent
 							? t('coverage.available')
 							: t('coverage.unavailableShort')
 					})}
 				</Badge>
-				<Badge variant="secondary" className="text-[10px]">
+				<Badge
+					variant="secondary"
+					className="text-[10px]"
+				>
 					{t(MAPPING_KEYS[profile.coverage.mappingStatus])}
 				</Badge>
 			</div>
@@ -351,7 +363,9 @@ function CoverageCard({
 								? profile.coverage.fplHistorySeasons.map(seasonLabel).join(', ')
 								: '—',
 							understat: profile.coverage.understatHistorySeasons.length
-								? profile.coverage.understatHistorySeasons.map(seasonLabel).join(', ')
+								? profile.coverage.understatHistorySeasons
+										.map(seasonLabel)
+										.join(', ')
 								: '—'
 						})}
 					</p>
@@ -370,7 +384,11 @@ function CoverageCard({
 					</summary>
 					<ul className="mt-1.5 space-y-1">
 						{(compact ? limitations.slice(0, 1) : limitations).map(code => (
-							<li key={code} title={code} className="flex gap-2">
+							<li
+								key={code}
+								title={code}
+								className="flex gap-2"
+							>
 								<span aria-hidden="true">•</span>
 								<span>{limitationLabel(code, t)}</span>
 							</li>
@@ -399,7 +417,12 @@ function CoverageSummary({
 }) {
 	return (
 		<div className={cn('grid gap-2', comparison && 'sm:grid-cols-2')}>
-			<CoverageCard name={player.webName} profile={profile} compact={compact} t={t} />
+			<CoverageCard
+				name={player.webName}
+				profile={profile}
+				compact={compact}
+				t={t}
+			/>
 			{comparison ? (
 				<CoverageCard
 					name={comparison.webName}
@@ -600,8 +623,8 @@ function OutputProcess({
 							<CompareRow
 								key={code}
 								label={metricLabel(code, t)}
-								v1={formatMetricValue(first, format)}
-								v2={formatMetricValue(second, format)}
+								primaryValue={formatMetricValue(first, format)}
+								comparisonValue={formatMetricValue(second, format)}
 								emphasizeWinner={samePosition}
 							/>
 						)
@@ -690,8 +713,8 @@ function AvailabilityRole({
 						<CompareRow
 							key={code}
 							label={metricLabel(code, t)}
-							v1={formatMetricValue(firstMetric, format)}
-							v2={formatMetricValue(secondMetric, format)}
+							primaryValue={formatMetricValue(firstMetric, format)}
+							comparisonValue={formatMetricValue(secondMetric, format)}
 							emphasizeWinner={false}
 						/>
 					) : (
@@ -861,22 +884,26 @@ function Baseline({
 				<div className="space-y-0.5">
 					<CompareRow
 						label={t('metric.outputPercentile')}
-						v1={number(profile.peerBaseline.currentPercentile)}
-						v2={number(comparisonProfile.peerBaseline.currentPercentile)}
+						primaryValue={number(profile.peerBaseline.currentPercentile)}
+						comparisonValue={number(
+							comparisonProfile.peerBaseline.currentPercentile
+						)}
 						emphasizeWinner={profile.position === comparisonProfile.position}
 					/>
 					<CompareRow
 						label={t('metric.ownBaselinePercentile')}
-						v1={number(profile.ownBaseline.weightedPercentile)}
-						v2={number(comparisonProfile.ownBaseline.weightedPercentile)}
+						primaryValue={number(profile.ownBaseline.weightedPercentile)}
+						comparisonValue={number(
+							comparisonProfile.ownBaseline.weightedPercentile
+						)}
 						emphasizeWinner={profile.position === comparisonProfile.position}
 					/>
 					<CompareRow
 						label={t('reliability')}
-						v1={
+						primaryValue={
 							firstReliability ? t(RATING_KEYS[firstReliability.rating]) : null
 						}
-						v2={
+						comparisonValue={
 							secondReliability
 								? t(RATING_KEYS[secondReliability.rating])
 								: null
@@ -1083,7 +1110,11 @@ function StateReasonList({
 	return (
 		<ul className="space-y-1.5 text-sm text-muted-foreground">
 			{profile.reasons.slice(0, 3).map(reason => (
-				<li key={reason.code} className="flex gap-2" title={reason.code}>
+				<li
+					key={reason.code}
+					className="flex gap-2"
+					title={reason.code}
+				>
 					<span aria-hidden="true">•</span>
 					<span>{reasonLabel(reason.code, t)}</span>
 				</li>
@@ -1113,10 +1144,15 @@ function StateSummaryColumn({
 						confidence: t(CONFIDENCE_KEYS[profile.confidence])
 					})}
 				</span>
-				{profile.fplOnly ? <Badge variant="secondary">{t('fplOnly')}</Badge> : null}
+				{profile.fplOnly ? (
+					<Badge variant="secondary">{t('fplOnly')}</Badge>
+				) : null}
 			</div>
 			<div className="mt-3">
-				<StateReasonList profile={profile} t={t} />
+				<StateReasonList
+					profile={profile}
+					t={t}
+				/>
 			</div>
 		</div>
 	)
@@ -1138,7 +1174,10 @@ function WhyState({
 	const items = [
 		{ title: t('availabilityRoleTitle'), kind: 'AVAILABILITY_ROLE' as const },
 		{ title: t('outputProcessTitle'), kind: 'FPL_OUTPUT' as const },
-		{ title: t('outlookTitle', { horizon: profile.horizon }), kind: 'OUTLOOK' as const }
+		{
+			title: t('outlookTitle', { horizon: profile.horizon }),
+			kind: 'OUTLOOK' as const
+		}
 	]
 	return (
 		<details className="mt-3 rounded-lg border border-border/60 px-3 py-2">
@@ -1148,24 +1187,40 @@ function WhyState({
 			<div className="mt-3 grid gap-2 sm:grid-cols-3">
 				{items.map(item => {
 					const first = profileDimension(profile, item.kind)
-					const second = comparisonProfile ? profileDimension(comparisonProfile, item.kind) : null
+					const second = comparisonProfile
+						? profileDimension(comparisonProfile, item.kind)
+						: null
 					return (
-						<div key={item.kind} className="rounded-md border border-border/60 bg-muted/10 px-2.5 py-2">
+						<div
+							key={item.kind}
+							className="rounded-md border border-border/60 bg-muted/10 px-2.5 py-2"
+						>
 							<p className="font-display text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
 								{item.title}
 							</p>
 							<div className="mt-1 flex flex-wrap items-center gap-1.5">
-								<Badge variant="outline">{first ? t(RATING_KEYS[first.rating]) : '—'}</Badge>
-								{second ? <Badge variant="outline">{t(RATING_KEYS[second.rating])}</Badge> : null}
+								<Badge variant="outline">
+									{first ? t(RATING_KEYS[first.rating]) : '—'}
+								</Badge>
+								{second ? (
+									<Badge variant="outline">
+										{t(RATING_KEYS[second.rating])}
+									</Badge>
+								) : null}
 							</div>
 							<p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-								{reasonLabel(first?.reasonCodes[0] ?? 'EVIDENCE_UNAVAILABLE', t)}
+								{reasonLabel(
+									first?.reasonCodes[0] ?? 'EVIDENCE_UNAVAILABLE',
+									t
+								)}
 							</p>
 						</div>
 					)
 				})}
 			</div>
-			<p className="mt-2 text-[11px] text-muted-foreground">{t('whyStateHint')}</p>
+			<p className="mt-2 text-[11px] text-muted-foreground">
+				{t('whyStateHint')}
+			</p>
 		</details>
 	)
 }
@@ -1195,7 +1250,11 @@ export function PlayerStateProfile({
 
 	if (!seasonStatsAvailable) {
 		return (
-			<PlayerStatsSection id="ps-state" title={t('notRatedTitle')} hint={t('notRatedHint')}>
+			<PlayerStatsSection
+				id="ps-state"
+				title={t('notRatedTitle')}
+				hint={t('notRatedHint')}
+			>
 				<p className="rounded-lg border border-border/60 px-3 py-3 text-sm text-muted-foreground">
 					{t('notRatedHint')}
 				</p>
@@ -1205,7 +1264,11 @@ export function PlayerStateProfile({
 
 	if (isLoading || (comparison && isComparisonLoading)) {
 		return (
-			<PlayerStatsSection id="ps-state" title={t('title')} hint={t('hint')}>
+			<PlayerStatsSection
+				id="ps-state"
+				title={t('title')}
+				hint={t('hint')}
+			>
 				<Skeleton className="h-28 w-full rounded-lg" />
 			</PlayerStatsSection>
 		)
@@ -1213,7 +1276,11 @@ export function PlayerStateProfile({
 
 	if (!profile) {
 		return (
-			<PlayerStatsSection id="ps-state" title={t('title')} hint={t('hint')}>
+			<PlayerStatsSection
+				id="ps-state"
+				title={t('title')}
+				hint={t('hint')}
+			>
 				<p className="rounded-lg border border-border/60 px-4 py-4 text-sm text-muted-foreground">
 					{error ?? comparisonError ?? t('unavailable')}
 				</p>
@@ -1222,11 +1289,23 @@ export function PlayerStateProfile({
 	}
 
 	return (
-		<PlayerStatsSection id="ps-state" title={t('title')} hint={t('hint')}>
+		<PlayerStatsSection
+			id="ps-state"
+			title={t('title')}
+			hint={t('hint')}
+		>
 			<div className={cn('grid gap-3', comparisonProfile && 'sm:grid-cols-2')}>
-				<StateSummaryColumn name={player.webName} profile={profile} t={t} />
+				<StateSummaryColumn
+					name={player.webName}
+					profile={profile}
+					t={t}
+				/>
 				{comparison && comparisonProfile ? (
-					<StateSummaryColumn name={comparison.webName} profile={comparisonProfile} t={t} />
+					<StateSummaryColumn
+						name={comparison.webName}
+						profile={comparisonProfile}
+						t={t}
+					/>
 				) : null}
 			</div>
 			{comparison && !comparisonProfile ? (
@@ -1260,17 +1339,28 @@ export function PlayerStateContext({
 }) {
 	const t = useTranslations('PlayerStats.playerState')
 	if (!profile) {
-		return <p className="text-sm text-muted-foreground">{t('historyCoverageUnavailable')}</p>
+		return (
+			<p className="text-sm text-muted-foreground">
+				{t('historyCoverageUnavailable')}
+			</p>
+		)
 	}
 	const hasHistory = [profile, comparisonProfile]
 		.filter((item): item is PlayerStateProfileData => item !== null)
-		.some(item => item.ownBaseline.seasons.length > 0 || item.careerTrajectory.length > 0)
+		.some(
+			item =>
+				item.ownBaseline.seasons.length > 0 || item.careerTrajectory.length > 0
+		)
 	return (
 		<div className="space-y-1">
 			<div id="ps-history">
 				{hasHistory ? (
 					<>
-						<Baseline profile={profile} comparisonProfile={comparisonProfile} t={t} />
+						<Baseline
+							profile={profile}
+							comparisonProfile={comparisonProfile}
+							t={t}
+						/>
 						<CareerTrajectory
 							player={player}
 							comparison={comparison}
@@ -1287,7 +1377,10 @@ export function PlayerStateContext({
 					</PlayerStatsSection>
 				)}
 			</div>
-			<PlayerStatsSection id="ps-coverage" title={t('coverageTitle')}>
+			<PlayerStatsSection
+				id="ps-coverage"
+				title={t('coverageTitle')}
+			>
 				<CoverageSummary
 					player={player}
 					comparison={comparison}

@@ -76,7 +76,7 @@ describe('live refresh policy', () => {
 		)
 	})
 
-	it('keeps polling during a rolling rollout before metadata exists', () => {
+	it('keeps polling while refreshed metadata is not yet available', () => {
 		assert.equal(
 			shouldPollLiveSnapshot({
 				isPageActive: true,
@@ -137,22 +137,76 @@ describe('live refresh policy', () => {
 })
 
 describe('live matches server snapshot', () => {
-	it('uses no-store and returns match data with producer metadata', async () => {
-		let requestCache: RequestCache | undefined
+	it('loads live matches and next-event fixtures in parallel without caching', async () => {
+		const requests: Array<{
+			query: string
+			variables?: Record<string, unknown>
+			cache?: RequestCache
+		}> = []
 		const response: LiveMatchesResponse = {
 			liveSnapshot: snapshot('SCHEDULED'),
-			liveMatches: { nextEvent: [], notStarted: [], playing: [], finished: [] }
+			liveMatches: { notStarted: [], playing: [], finished: [] }
 		}
 		const result = await getLiveMatchesSnapshot(
-			async (_query, _variables, options) => {
-				requestCache = options?.cache
+			34,
+			async (query, variables, options) => {
+				requests.push({ query, variables, cache: options?.cache })
+				if (query.includes('GetEventFixtures')) {
+					return {
+						eventFixtures: [
+							{
+								id: 3401,
+								code: 3401,
+								event: { id: 34, name: 'Gameweek 34' },
+								kickoffTime: '2026-08-11T18:00:00.000Z',
+								finished: false,
+								started: false,
+								homeTeam: { id: 1, name: 'Arsenal', shortName: 'ARS' },
+								awayTeam: { id: 2, name: 'Chelsea', shortName: 'CHE' },
+								homeScore: null,
+								awayScore: null,
+								homeTeamDifficulty: 2,
+								awayTeamDifficulty: 4
+							}
+						]
+					} as never
+				}
 				return response as never
 			}
 		)
 
-		assert.equal(requestCache, 'no-store')
-		assert.deepEqual(result.matches, [])
+		assert.equal(requests.length, 2)
+		assert.equal(
+			requests.every(request => request.cache === 'no-store'),
+			true
+		)
+		assert.deepEqual(
+			requests.find(request => request.query.includes('GetEventFixtures'))
+				?.variables,
+			{ eventId: 34 }
+		)
+		assert.equal(result.matches.length, 1)
+		assert.equal(result.matches[0]?.status, 'UPCOMING')
 		assert.equal(result.snapshot?.revision, 'a'.repeat(24))
+	})
+
+	it('keeps live matches when the optional next-event request fails', async () => {
+		const response: LiveMatchesResponse = {
+			liveSnapshot: snapshot('LIVE'),
+			liveMatches: { notStarted: [], playing: [], finished: [] }
+		}
+		const result = await getLiveMatchesSnapshot(
+			34,
+			async query => {
+				if (query.includes('GetEventFixtures')) {
+					throw new Error('fixtures temporarily unavailable')
+				}
+				return response as never
+			}
+		)
+
+		assert.deepEqual(result.matches, [])
+		assert.equal(result.snapshot?.state, 'LIVE')
 	})
 })
 
@@ -191,7 +245,9 @@ describe('partial tournament refreshes', () => {
 			{ entry: 1, liveNetPoints: 10 },
 			{ entry: 2, liveNetPoints: 9 }
 		] as TournamentLiveCalcData[]
-		const nextRows = [{ entry: 1, liveNetPoints: 11 }] as TournamentLiveCalcData[]
+		const nextRows = [
+			{ entry: 1, liveNetPoints: 11 }
+		] as TournamentLiveCalcData[]
 
 		const merged = mergePartialTournamentRows({
 			nextRows,

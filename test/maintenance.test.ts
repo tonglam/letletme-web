@@ -6,7 +6,7 @@ import {
 } from '../lib/maintenance'
 import { renderMaintenanceDocument } from '../lib/maintenance-document'
 
-describe('hard-cutover maintenance contract', () => {
+describe('maintenance contract', () => {
 	it('enables maintenance only for the exact server-side true value', () => {
 		assert.equal(
 			readMaintenanceConfig({ MAINTENANCE_MODE: 'true' }).enabled,

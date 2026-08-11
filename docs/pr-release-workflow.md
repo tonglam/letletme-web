@@ -1,6 +1,6 @@
 # PR、Merge、Deploy 与验收流程
 
-这份流程适用于 `web-adjustments` 的 Web 改动和对应的 GraphQL 合同 PR。它把“代码通过 CI”和“当前提交已经被 Codex 审查”分成两个独立门禁。
+这份流程适用于 Web 改动和对应的 GraphQL 合同改动。它把“代码通过 CI”和“当前提交已经被 Codex 审查”分成两个独立门禁。
 
 ## 1. 提交前快照
 

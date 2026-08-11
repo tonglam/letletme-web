@@ -10,7 +10,13 @@ import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { formatMatchShareText } from './match-share'
 
-export function MatchShareButton({ match }: { match: Match }) {
+export function MatchShareButton({
+	match,
+	onManualShareTextChange
+}: {
+	match: Match
+	onManualShareTextChange: (text: string | null) => void
+}) {
 	const t = useTranslations('LiveMatches')
 	const locale = useLocale() as AppLocale
 	const [copied, setCopied] = useState(false)
@@ -42,15 +48,21 @@ export function MatchShareButton({ match }: { match: Match }) {
 			footer: t('shareFooter', { url: shareUrl }),
 		})
 
-		const ok = await copyTextToClipboard(text)
-		if (ok) {
+		const result = await copyTextToClipboard(text)
+		if (result === 'copied') {
+			onManualShareTextChange(null)
 			setCopied(true)
 			toast.success(t('shareCopied'))
 			window.setTimeout(() => setCopied(false), 2000)
-		} else {
-			toast.error(t('shareCopyFailed'))
+		} else if (result === 'unsupported' || result === 'failed') {
+			onManualShareTextChange(text)
+			toast.warning(
+				result === 'unsupported'
+					? t('shareCopyUnsupported')
+					: t('shareCopyFailed')
+			)
 		}
-	}, [locale, match, t])
+	}, [locale, match, onManualShareTextChange, t])
 
 	return (
 		<Button

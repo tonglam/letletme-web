@@ -23,15 +23,13 @@ export function TeamGameweekHistory({ stats }: { stats: TeamSeasonLogs }) {
 	const rows = useMemo(
 		() =>
 			[...stats.historyRows].sort(
-				(a, b) => Number(b.gameweek) - Number(a.gameweek),
+				(a, b) => Number(b.gameweek) - Number(a.gameweek)
 			),
-		[stats.historyRows],
+		[stats.historyRows]
 	)
 
 	const compact = (value: number | null | undefined) =>
-		value == null
-			? '—'
-			: format.number(value, { notation: 'compact' })
+		value == null ? '—' : format.number(value, { notation: 'compact' })
 
 	if (rows.length === 0) {
 		return <p className="text-sm text-muted-foreground">{t('noStats')}</p>
@@ -106,7 +104,7 @@ export function TeamGameweekHistory({ stats }: { stats: TeamSeasonLogs }) {
 										'px-2 py-2.5 text-right font-mono text-xs tabular-nums',
 										row.eventTransfersCost > 0
 											? 'font-semibold text-destructive'
-											: 'text-muted-foreground',
+											: 'text-muted-foreground'
 									)}
 								>
 									{row.eventTransfersCost > 0
@@ -126,12 +124,10 @@ export function TeamGameweekHistory({ stats }: { stats: TeamSeasonLogs }) {
 						variant="outline"
 						size="sm"
 						className="h-8 text-xs"
-						onClick={() =>
-							setVisible(n => Math.min(n + GW_PAGE, rows.length))
-						}
+						onClick={() => setVisible(n => Math.min(n + GW_PAGE, rows.length))}
 					>
 						{t('historyShowMore', {
-							count: Math.min(GW_PAGE, remaining),
+							count: Math.min(GW_PAGE, remaining)
 						})}
 					</Button>
 				</div>
@@ -166,7 +162,7 @@ type PastSeasonPoint = {
  */
 function PastSeasonsRankChart({
 	points,
-	compactRank,
+	compactRank
 }: {
 	points: PastSeasonPoint[]
 	compactRank: (n: number) => string
@@ -178,7 +174,7 @@ function PastSeasonsRankChart({
 	const data = series.map(point => ({
 		x: point.season,
 		value: point.overallRank,
-		totalPoints: point.totalPoints,
+		totalPoints: point.totalPoints
 	}))
 
 	return (
@@ -191,7 +187,13 @@ function PastSeasonsRankChart({
 			</p>
 			<SharedLineChart
 				data={data}
-				series={[{ key: 'value', label: t('historyColOverallRank'), color: 'hsl(var(--primary-ink))' }]}
+				series={[
+					{
+						key: 'value',
+						label: t('historyColOverallRank'),
+						color: 'hsl(var(--primary-ink))'
+					}
+				]}
 				invertY
 				xFormatter={value => String(value ?? '').replace(/^20/, '')}
 				yFormatter={value => compactRank(Number(value))}
@@ -202,15 +204,18 @@ function PastSeasonsRankChart({
 				}}
 			/>
 			{hover ? (
-				<p className="text-xs text-muted-foreground" aria-live="polite">
+				<p
+					className="text-xs text-muted-foreground"
+					aria-live="polite"
+				>
 					<span className="font-display font-semibold text-foreground">
-							{hover.season}
-							{hover.isCurrent ? ` · ${t('seasonCurrent')}` : ''}
+						{hover.season}
+						{hover.isCurrent ? ` · ${t('seasonCurrent')}` : ''}
 					</span>
 					{' · '}
-						{t('historyColOverallRank')}: {compactRank(hover.overallRank)}
+					{t('historyColOverallRank')}: {compactRank(hover.overallRank)}
 					{' · '}
-						{t('points')}: {hover.totalPoints.toLocaleString()}
+					{t('points')}: {hover.totalPoints.toLocaleString()}
 				</p>
 			) : null}
 		</div>
@@ -224,9 +229,7 @@ export function TeamSeasonHistory({ stats }: { stats: TeamSeasonLogs }) {
 	const t = useTranslations('TeamStats')
 	const format = useFormatter()
 	const compact = (value: number | null | undefined) =>
-		value == null
-			? '—'
-			: format.number(value, { notation: 'compact' })
+		value == null ? '—' : format.number(value, { notation: 'compact' })
 
 	const points = useMemo<PastSeasonPoint[]>(
 		() =>
@@ -236,9 +239,9 @@ export function TeamSeasonHistory({ stats }: { stats: TeamSeasonLogs }) {
 					season: row.season,
 					totalPoints: row.totalPoints,
 					overallRank: row.overallRank,
-					isCurrent: index === 0,
+					isCurrent: index === 0
 				})),
-		[stats.seasonHistoryRows],
+		[stats.seasonHistoryRows]
 	)
 
 	if (stats.seasonHistoryRows.length === 0) {
@@ -250,7 +253,10 @@ export function TeamSeasonHistory({ stats }: { stats: TeamSeasonLogs }) {
 	return (
 		<div className="space-y-5">
 			{points.length >= 2 ? (
-				<PastSeasonsRankChart points={points} compactRank={compact} />
+				<PastSeasonsRankChart
+					points={points}
+					compactRank={compact}
+				/>
 			) : null}
 
 			<div className="overflow-hidden rounded-lg border border-border/70">
@@ -269,7 +275,7 @@ export function TeamSeasonHistory({ stats }: { stats: TeamSeasonLogs }) {
 								key={row.season}
 								className={cn(
 									'flex items-center gap-3 px-3 py-3',
-									isCurrent && 'bg-plum/[0.05]',
+									isCurrent && 'bg-plum/[0.05]'
 								)}
 							>
 								<div className="min-w-0 flex-1">
@@ -293,16 +299,6 @@ export function TeamSeasonHistory({ stats }: { stats: TeamSeasonLogs }) {
 					})}
 				</ul>
 			</div>
-		</div>
-	)
-}
-
-/** @deprecated Prefer split components */
-export function TeamHistoryTab({ stats }: { stats: TeamSeasonLogs }) {
-	return (
-		<div className="space-y-6">
-			<TeamGameweekHistory stats={stats} />
-			<TeamSeasonHistory stats={stats} />
 		</div>
 	)
 }

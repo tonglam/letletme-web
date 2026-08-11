@@ -27,7 +27,6 @@ GOOGLE_CLIENT_SECRET=
 # WeChat Mini Program login
 WECHAT_MINIPROGRAM_APP_ID=
 WECHAT_MINIPROGRAM_APP_SECRET=
-MINIPROGRAM_ACCOUNT_STORAGE=true       # only after the bauth migrations are applied
 
 # Backend proxy signing key
 BACKEND_PROXY_SECRET=<openssl rand -base64 32>
@@ -35,8 +34,9 @@ BACKEND_PROXY_SECRET=<openssl rand -base64 32>
 # Independent GraphQL trusted-service credential for cached public RSC reads
 GRAPHQL_SERVICE_TOKEN=<openssl rand -base64 32>
 
-# Internal Data mutation credential (server only)
-TOURNAMENT_API_KEY=<openssl rand -base64 32>
+# Internal Data API (server only)
+LETLETME_DATA_URL=https://data.example.internal
+LETLETME_DATA_API_KEY=<openssl rand -base64 32>
 
 # Email (Resend)
 RESEND_API_KEY=
@@ -59,33 +59,27 @@ npm run db:migrate:status
 
 The runner requires `DIRECT_DATABASE_URL`, PostgreSQL 15+, creates `bauth`, and
 holds a session advisory lock. Web owns the dedicated
-`bauth.__drizzle_migrations` ledger; it safely adopts matching historical Web
-rows from the shared default Drizzle ledger, then refuses edited, missing,
-orphaned, duplicate, or backdated migration history. Fresh and repeat
-application are CI gates. A duplicate non-null `openid` aborts migration and
-must be reconciled by an operator; accounts are never merged automatically.
+`bauth.__drizzle_migrations` ledger and refuses edited, missing, orphaned,
+duplicate, or backdated migration history. The canonical baseline creates the
+complete Auth schema without seed data; fresh installation, repeatability,
+catalog parity, ACL parity, and strict production-ledger adoption are CI gates.
 
-Migration `0004_lock_down_bauth` enables RLS, drops historical broad policies,
-and revokes `bauth` schema/table/sequence/function access from `PUBLIC`, `anon`,
-and `authenticated`. Web, GraphQL Mini Program validation, and migration roles
-must use reviewed direct/service database credentials; browser JWTs never query
-`bauth`.
+Every Auth table has RLS enabled. `PUBLIC`, `anon`, and `authenticated` have no
+schema, table, sequence, or function access. Web uses the non-login
+`letletme_web_auth` capability; browser JWTs never query `bauth`.
 
-Migration `0009_graphql_auth_reader` is the only GraphQL exception to the Web-owned
-boundary. It requires Data Platform v3's non-login `letletme_graphql_reader` role,
-revokes every existing `bauth` privilege from that role, then grants read-only RLS
-access to only `user.id`, `user.fpl_entry_id`, `user.fpl_entry_verified_at`, and
-`mini_program_session.user_id`, `token_hash`, `revoked_at`, `expires_at`. Production
-activation runs only through `0008_web_auth_runtime_role`; `0009` is deferred to the
-`v3-migrate-database` repository dispatch from the exact protected `main` commit and
-the existing activation run token. The Web startup contract accepts the exact states
-before and after `0009`, while rejecting a partial or malformed GraphQL policy set.
+The only GraphQL exception to the Web-owned boundary is the Data platform's
+non-login `letletme_graphql_reader` role. It has read-only RLS access to exactly
+`user.id`, `user.fpl_entry_id`, `user.fpl_entry_verified_at`, and
+`mini_program_session.user_id`, `token_hash`, `revoked_at`, `expires_at`.
+Production database migration runs from the protected `main` commit, and the
+Web startup contract rejects partial or malformed policy sets.
 
 Authenticated server reads attach a signed ingress and user envelope. Public
 RSC reads carry only `X-GraphQL-Service-Token`, with no request-derived headers,
 so Next's shared fetch cache remains effective without creating a user identity.
 
-**Tables:** `bauth.user` · `bauth.session` · `bauth.account` · `bauth.verification` · `bauth.rate_limit` · `bauth.request_rate_limits` · `bauth.mini_program_email_code` · `bauth.mini_program_session` · `bauth.fpl_entry_binding_challenges`
+**Tables:** `bauth.user` · `bauth.session` · `bauth.account` · `bauth.verification` · `bauth.request_rate_limits` · `bauth.mini_program_email_code` · `bauth.mini_program_session` · `bauth.fpl_entry_binding_challenges` · `bauth.__drizzle_migrations`
 
 **Custom columns on `bauth.user`:**
 
@@ -203,7 +197,7 @@ rebind or revocation takes effect immediately.
 `app/api/graphql/route.ts` injects two headers when a session is present:
 
 ```
-X-User-Context:     base64url(JSON { v: 2, aud, uid, eid, evat, iat, exp })
+X-User-Context:     base64url(JSON { aud, uid, eid, evat, iat, exp })
 X-User-Context-Sig: HMAC-SHA256(payload, BACKEND_PROXY_SECRET) as base64url
 ```
 
@@ -217,7 +211,7 @@ The backend should:
 Browser-proxied requests and personalized RSC requests also send:
 
 ```
-X-Ingress-Context:     base64url(JSON { v: 1, aud, sub, iat, exp })
+X-Ingress-Context:     base64url(JSON { aud, sub, iat, exp })
 X-Ingress-Context-Sig: HMAC-SHA256(payload, BACKEND_PROXY_SECRET)
 ```
 
@@ -266,9 +260,8 @@ handler/RSC. Proxy checks never replace data-access authorization.
   120 requests/minute per opaque client subject at the Web proxy, 5/minute/IP
   for Better Auth writes, 5/minute/IP and device for Mini Program login/confirmation,
   and 5/minute/IP plus 3/hour/email for email start. Auth fails closed if the
-  limiter is unavailable. Better Auth additionally applies a database-backed
-  100/minute default, 3/10-seconds to sign-in/sign-up/password-change paths, and
-  3/minute to reset/verification mail paths. GraphQL applies a second weighted
+  limiter is unavailable. Better Auth's built-in limiter is disabled so this
+  atomic outer limiter is the single Web auth rate-limit owner. GraphQL applies a weighted
   Redis budget of 120 units/minute per signed client subject and 600 units/minute
   for the shared public-RSC subject. Both proxy and GraphQL limits fail closed,
   and every 429 response carries a standard `Retry-After` value.
@@ -277,7 +270,7 @@ handler/RSC. Proxy checks never replace data-access authorization.
 - `BACKEND_PROXY_SECRET` signs the user context envelope — rotate with a coordinated backend deploy
 - `GRAPHQL_SERVICE_TOKEN` identifies trusted public server ingress only; it must
   never be exposed to a browser or used as a user credential.
-- `TOURNAMENT_API_KEY` authenticates Web to Data. Data stores only its SHA-256
+- `LETLETME_DATA_API_KEY` authenticates Web to Data. Data stores only its SHA-256
   digest; rotate with an overlap window and never expose the plaintext to a client.
 - Tournament `adminId` and creator identity are overwritten from the verified
   server session. Browser-supplied identity fields are ignored.

@@ -487,9 +487,9 @@ Rules:
 
 1. Add the shared season/event resolver, principal resolver, metadata normalizers, route registry, and typed canonical-link builders.
 2. Build shared status/evidence primitives and section shells without moving business authority into Web.
-3. Add target routes before changing public navigation or installing redirects.
+3. Activate canonical routes and navigation together; retired paths return 404.
 4. Make server-selected first-page state useful for current, historical, preseason, partial, and unavailable cases.
-5. Keep locale and meaningful query state through internal links and redirects.
+5. Keep locale and meaningful query state through canonical internal links.
 6. Compose homepage continuation previews only after their canonical destination reads are available.
 
 **Exit criteria:** every target section can consume the same contexts and link registry, and no homepage/card implementation becomes a second canonical detail page.
@@ -508,20 +508,20 @@ This package does not duplicate the detailed section work. It enforces these cro
 - Explore Overview and existing-tool alignment require `CS-SEASON-1`, `CS-EVIDENCE-1`, and canonical link builders.
 - Sampled rank cohorts require persisted method/coverage gates; Briefing requires source-policy and rights gates.
 
-**Exit criteria:** each section release declares its consumed contract versions and passes every upstream release gate before removing a legacy responsibility.
+**Exit criteria:** each section release declares its consumed contracts and passes every upstream release gate before removing an obsolete responsibility.
 
-### XP7 — Compatibility, telemetry, and cleanup
+### XP7 — Canonical activation, telemetry, and cleanup
 
 **Repositories:** all three product repositories
 
-1. Keep old database fields, Tournament GraphQL adapters, routes, and cache readers through the documented compatibility period.
-2. Add server-controlled switches for new roots/routes and independent Explore capabilities.
-3. Shadow-compare official versus existing Live facts before changing authority.
-4. Record new/legacy query and route use, redirect failures, stale principal states, partial coverage, and contract-version mismatches.
-5. Remove legacy code only in dedicated cleanup changes after production parity and rollback observation.
+1. Ship each storage, producer, and consumer contract in one coordinated maintenance activation.
+2. Do not retain parallel fields, adapters, routes, cache readers, or generational rollout switches.
+3. Validate official Live facts against source-backed fixtures before changing authority; do not run a production shadow path.
+4. Record canonical query and route failures, stale principal states, partial coverage, and contract-shape mismatches.
+5. Remove the replaced path in the same activation after its verification gates pass.
 6. Retain audit/history data even when public capability exposure is disabled.
 
-**Exit criteria:** each retired path has measured replacement coverage, a completed removal checklist, and no unresolved producer/consumer version dependency.
+**Exit criteria:** each responsibility has one active path, one contract, measured coverage, and no unresolved producer/consumer dependency.
 
 ### XP8 — Future assistant read boundary
 

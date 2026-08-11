@@ -306,18 +306,18 @@ Add a Data-owned principal lifecycle fence without retaining the raw Web user id
 principal_lifecycle_fences
   principal_digest
   state: DELETION_PENDING | DELETED
-  fence_version
+  fence_id
   requested_at
   finalized_at nullable
 
 Web account_deletion_operations
   operation_id
   principal_digest
-  fence_version
+  fence_id
   state: REQUESTED | PREFLIGHT_PASSED | AUTH_DELETE_IN_PROGRESS | AUTH_DELETED | CANCELED
   created_at
   updated_at
-  unique(principal_digest, fence_version)
+  unique(principal_digest, fence_id)
   unique active principal where state not in (AUTH_DELETED, CANCELED)
 ```
 
@@ -339,17 +339,17 @@ Rules:
 - Persist a resolved `ownerUserId` as an opaque stable Web user identifier received through the trusted signed server command. Data does not need a foreign key to the Web authentication database.
 - For a migrated `recovery_required` row, never transfer ownership from a raw direct binding alone. The recovery command requires a signed principal whose same-season `admin_entry_id` binding carries an ownership-verified assurance from the challenge flow, or a separately audited operator-mediated recovery. It atomically records `ownerUserId`, changes ownership to `resolved`, and writes the proof kind and audit event.
 - Web account deletion first calls a signed `beginAccountDeletion` command. Under the
-  principal-scoped lock, Data durably writes `DELETION_PENDING` and returns `fence_version`; every
+  principal-scoped lock, Data durably writes `DELETION_PENDING` and returns `fence_id`; every
   later competition creation, ownership recovery, and owner-transfer target check acquires the same
-  lock and rejects that principal. The ownership preflight is bound to the same fence version and
+  lock and rejects that principal. The ownership preflight is bound to the same fence ID and
   deletion is blocked while the account owns any non-archived competition: the organizer may
   transfer each one away through an audited owner command or archive it, but cannot receive new
   ownership while fenced. Web deletes the auth row only after a fresh zero-owner preflight for that
-  fence version, then sends an idempotent finalize command that stores only the digest as `DELETED`,
+  fence ID, then sends an idempotent finalize command that stores only the digest as `DELETED`,
   records the account-deletion audit event, changes archived rows to
   `owner_deleted_archived`, and clears their management principal. Data makes repeated/concurrent
-  begin commands for one pending principal idempotently return the same fence version. Web inserts
-  or selects exactly one operation under the `(principal_digest, fence_version)` uniqueness
+  begin commands for one pending principal idempotently return the same fence ID. Web inserts
+  or selects exactly one operation under the `(principal_digest, fence_id)` uniqueness
   contract; a partial unique constraint also permits only one active operation for the principal.
   Worker and cancellation lookup and lock by that principal/fence identity rather than trusting an
   independently supplied `operation_id`. The deletion worker rechecks the exact operation/fence
@@ -357,11 +357,11 @@ Rules:
   deletes the auth row in the same Web-database transaction. Cancellation takes the same lock and
   is accepted only from `REQUESTED` or `PREFLIGHT_PASSED`; once the worker claims the operation it
   is retry-to-finalize only and the Data fence remains closed. After Web durably records `CANCELED`,
-  its signed version-bound cancel command may release only the matching `DELETION_PENDING` fence;
+  its signed fence-bound cancel command may release only the matching `DELETION_PENDING` fence;
   a stale worker cannot cross the canceled operation state. A `DELETED` fence is permanent. This
   protocol rejects stale already-authenticated ownership commands and must never leave a live
   competition resolved to an identifier that can no longer authenticate.
-- `recovery_required` is therefore limited to audited legacy migration and explicit operator
+- `recovery_required` is therefore limited to audited historical migration and explicit operator
   recovery; account deletion is not an implicit first-claim takeover path.
 - Owner transfer is atomic and requires the current owner plus an accepting target account; the
   target must carry an ownership-verified same-season participant binding. Data records both signed
@@ -372,7 +372,7 @@ Rules:
   binding for an unclaimed same-season roster entry may access only a sanitized claim preflight and
   atomically persist `participantUserId`; full Competition Home, Live, Results/History, and roster
   reads become available only after that claim succeeds.
-- A legacy member whose `participantUserId` is still null must complete an ownership-verified historical claim; when upstream historical proof is no longer possible, recovery is operator-mediated rather than accepting a seasonless or unverified binding.
+- A migrated member whose `participantUserId` is still null must complete an ownership-verified historical claim; when upstream historical proof is no longer possible, recovery is operator-mediated rather than accepting a seasonless or unverified binding.
 - Keep one organizer initially. Co-organizer roles are outside this plan.
 
 ### 4.6 Access and visibility
@@ -392,7 +392,7 @@ and ownership-verified claim eligibility separately. Historical, archived, and a
 competition reads require `participantUserId` when the viewer is not the organizer, so an unverified
 direct binding cannot impersonate an unclaimed roster entry. The narrowly projected claim preflight
 may compare an ownership-verified same-season `EntryRef`; after the atomic claim, authorization uses
-the persisted account identity. The legacy entry-based recovery path is valid only while
+the persisted account identity. The historical entry-based recovery path is valid only while
 `ownershipState=recovery_required` and only with ownership-verified assurance for the competition
 season; after resolution, `admin_entry_id` cannot grant management access. A user can remain the
 organizer even if their competitive entry is later absent from a synchronized official roster.
@@ -552,7 +552,7 @@ Changes:
 8. Make one source roster sync update source evidence and project changes to dependent tracked competition reads.
 9. Preserve custom roster immutability after lock.
 10. Add archive and pre-publication hard-delete policies.
-11. Add signed owner-transfer, principal-lifecycle-fence, version-bound account-deletion preflight,
+11. Add signed owner-transfer, principal-lifecycle-fence, fence-bound account-deletion preflight,
     cancel/finalize, and archived-owner tombstone commands. Serialize every ownership-creating
     command on the same principal lock, reject a pending/deleted owner target, and reject account
     deletion while any owned competition remains non-archived. Accept cancellation only for the
@@ -801,7 +801,7 @@ Changes:
 8. Update English and Simplified Chinese copy, metadata, analytics route normalization, and terminology tests.
 9. Remove old routes/components only after redirect and query telemetry confirms migration.
 10. Integrate Web account deletion with Data's begin/preflight/finalize fence protocol. Keep the
-    returned fence version through the request, require transfer-away or archive before deleting an
+    returned fence ID through the request, require transfer-away or archive before deleting an
     organizer identity, and persist a deletion-operation state machine whose row lock serializes
     pre-auth cancellation with the transaction that claims and deletes the auth row.
 

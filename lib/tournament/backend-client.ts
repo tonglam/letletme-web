@@ -34,11 +34,11 @@ const normalizeOrigin = (value: string) => {
 }
 
 export const getTournamentApiBaseUrl = (request?: Request): string => {
-	const configuredBaseUrl = process.env.TOURNAMENT_API_BASE_URL ?? ''
+	const configuredBaseUrl = process.env.LETLETME_DATA_URL ?? ''
 
 	if (!configuredBaseUrl) {
 		throw new TournamentApiConfigurationError(
-			'TOURNAMENT_API_BASE_URL is not configured.'
+			'LETLETME_DATA_URL is not configured.'
 		)
 	}
 
@@ -46,7 +46,7 @@ export const getTournamentApiBaseUrl = (request?: Request): string => {
 		const requestOrigin = new URL(request.url).origin
 		if (normalizeOrigin(configuredBaseUrl) === requestOrigin) {
 			throw new TournamentApiConfigurationError(
-				'TOURNAMENT_API_BASE_URL points to the web app origin. Configure it to the backend API.'
+				'LETLETME_DATA_URL points to the web app origin. Configure it to the Data API.'
 			)
 		}
 	}
@@ -63,10 +63,10 @@ export async function tournamentApiFetch(
 	const controller = new AbortController()
 	const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
 	const method = (init?.method ?? 'GET').toUpperCase()
-	const apiKey = process.env.TOURNAMENT_API_KEY?.trim()
+	const apiKey = process.env.LETLETME_DATA_API_KEY?.trim()
 	if (!SAFE_METHODS.has(method) && !apiKey) {
 		throw new TournamentApiConfigurationError(
-			'TOURNAMENT_API_KEY is required for tournament mutations.'
+			'LETLETME_DATA_API_KEY is required for tournament mutations.'
 		)
 	}
 	const requestHeaders = new Headers(init?.headers)

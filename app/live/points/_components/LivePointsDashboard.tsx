@@ -3,6 +3,7 @@
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import { PlayerList } from '@/components/live/PlayerList'
 import { TeamStats } from '@/components/live/TeamStats'
+import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { APP_URL } from '@/i18n/config'
@@ -17,7 +18,7 @@ import { toast } from 'sonner'
 import { deriveLiveTeamStats } from '../_lib/live-points-model'
 import {
 	copyTextToClipboard,
-	formatLivePointsShareText,
+	formatLivePointsShareText
 } from '../_lib/live-points-share'
 import { LivePointsAutoRefreshCountdown } from './LivePointsAutoRefreshCountdown'
 
@@ -35,7 +36,7 @@ export function LivePointsDashboard({
 	benchPlayers,
 	onGameweekChange,
 	onAutoRefresh,
-	onRefresh,
+	onRefresh
 }: {
 	entrySearch?: ReactNode
 	currentGameweek: number
@@ -56,6 +57,7 @@ export function LivePointsDashboard({
 	const locale = useLocale() as AppLocale
 	const autoRefreshEnabled = shouldAutoRefresh && isPageActive
 	const [copied, setCopied] = useState(false)
+	const [manualShareText, setManualShareText] = useState<string | null>(null)
 
 	const handleCopyShare = useCallback(async () => {
 		if (!liveData) return
@@ -66,7 +68,7 @@ export function LivePointsDashboard({
 			typeof window !== 'undefined' ? window.location.origin : APP_URL.origin
 		const shareUrl = new URL(
 			localizePathname(`/live/points/${entryId}`, locale),
-			origin,
+			origin
 		).toString()
 
 		const text = formatLivePointsShareText({
@@ -89,16 +91,22 @@ export function LivePointsDashboard({
 				pts: t('pointsAbbreviation'),
 				hits: t('shareHits'),
 				// Pass {url} into next-intl — bare t('shareFooter') throws FORMATTING_ERROR
-				footer: t('shareFooter', { url: shareUrl }),
-			},
+				footer: t('shareFooter', { url: shareUrl })
+			}
 		})
-		const ok = await copyTextToClipboard(text)
-		if (ok) {
+		const copyResult = await copyTextToClipboard(text)
+		if (copyResult === 'copied') {
+			setManualShareText(null)
 			setCopied(true)
 			toast.success(t('shareCopied'))
 			window.setTimeout(() => setCopied(false), 2000)
-		} else {
-			toast.error(t('shareCopyFailed'))
+		} else if (copyResult === 'unsupported' || copyResult === 'failed') {
+			setManualShareText(text)
+			toast.warning(
+				copyResult === 'unsupported'
+					? t('shareCopyUnsupported')
+					: t('shareCopyFailed')
+			)
 		}
 	}, [
 		benchPlayers,
@@ -107,7 +115,7 @@ export function LivePointsDashboard({
 		locale,
 		selectedGameweek,
 		startingPlayers,
-		t,
+		t
 	])
 
 	return (
@@ -141,7 +149,10 @@ export function LivePointsDashboard({
 							aria-label={t('shareCopy')}
 						>
 							{copied ? (
-								<Check data-icon="inline-start" className="text-primary-ink" />
+								<Check
+									data-icon="inline-start"
+									className="text-primary-ink"
+								/>
 							) : (
 								<Copy data-icon="inline-start" />
 							)}
@@ -172,8 +183,17 @@ export function LivePointsDashboard({
 							/>
 							{t('refresh')}
 						</Button>
-					</div>
-				</div>
+			</div>
+			{manualShareText ? (
+				<ShareTextFallback
+					text={manualShareText}
+					message={t('shareCopyUnsupported')}
+					fieldLabel={t('shareCopyManualLabel')}
+					closeLabel={t('shareCopyClose')}
+					onClose={() => setManualShareText(null)}
+				/>
+			) : null}
+		</div>
 			</div>
 
 			<div
@@ -197,7 +217,10 @@ export function LivePointsDashboard({
 						{error}
 					</p>
 				) : !isRefreshing && !liveData ? (
-					<p className="mb-3 text-sm text-muted-foreground" role="status">
+					<p
+						className="mb-3 text-sm text-muted-foreground"
+						role="status"
+					>
 						{t('noData')}
 					</p>
 				) : null}
@@ -225,7 +248,7 @@ export function LivePointsDashboard({
 						<Card
 							className={cn(
 								'overflow-hidden border-border/80 shadow-sm',
-								isRefreshing && 'opacity-75 transition-opacity',
+								isRefreshing && 'opacity-75 transition-opacity'
 							)}
 						>
 							<PlayerList

@@ -56,7 +56,7 @@ export type FormatLivePointsShareInput = {
 export function buildLivePointsEntryShareUrl(
 	entryId: number,
 	origin: string,
-	localePathPrefix: string = '',
+	localePathPrefix: string = ''
 ): string {
 	const base = origin.replace(/\/$/, '')
 	const prefix = localePathPrefix.replace(/\/$/, '')
@@ -72,7 +72,7 @@ export function formatShareFooter(template: string, url: string): string {
 
 function statusLabel(
 	status: Player['playingStatus'],
-	labels: LivePointsShareLabels,
+	labels: LivePointsShareLabels
 ): string {
 	switch (status) {
 		case 'PLAYING':
@@ -84,15 +84,20 @@ function statusLabel(
 	}
 }
 
-function formatChip(chip: string | null | undefined, labels: LivePointsShareLabels): string {
+function formatChip(
+	chip: string | null | undefined,
+	labels: LivePointsShareLabels
+): string {
 	if (!chip || chip.trim() === '') return labels.noChip
 	const formatted = formatChipName(chip)
 	return formatted === 'Unknown' ? labels.noChip : formatted
 }
 
-function formatPlayerLine(player: Player, labels: LivePointsShareLabels): string {
-	const role =
-		player.isCaptain ? ' (C)' : player.isViceCaptain ? ' (V)' : ''
+function formatPlayerLine(
+	player: Player,
+	labels: LivePointsShareLabels
+): string {
+	const role = player.isCaptain ? ' (C)' : player.isViceCaptain ? ' (V)' : ''
 	const pts = player.stats.points
 	const status = statusLabel(player.playingStatus, labels)
 	// Compact md-ish bullet: position · club · name · status · pts
@@ -108,7 +113,7 @@ export function formatLivePointsShareText({
 	liveData,
 	startingPlayers,
 	benchPlayers,
-	labels,
+	labels
 }: FormatLivePointsShareInput): string {
 	const teamName =
 		liveData.entryName?.trim() ||
@@ -116,16 +121,13 @@ export function formatLivePointsShareText({
 	const manager = liveData.playerName?.trim()
 	const chip = formatChip(liveData.chip, labels)
 	const transferCost = liveData.transferCost ?? 0
-	const hitsPart =
-		transferCost > 0
-			? ` (−${transferCost} ${labels.hits})`
-			: ''
+	const hitsPart = transferCost > 0 ? ` (−${transferCost} ${labels.hits})` : ''
 
 	const header = [
 		`# ${teamName} · GW${gameweek}`,
 		manager ? manager : null,
 		`${labels.live}: **${liveData.livePoints}**${hitsPart} · ${labels.net}: ${liveData.liveNetPoints} · ${labels.season}: ${liveData.liveTotalPoints}`,
-		`${labels.chip}: ${chip} · ${labels.captain}: ${liveData.captainName || '—'}`,
+		`${labels.chip}: ${chip} · ${labels.captain}: ${liveData.captainName || '—'}`
 	]
 		.filter(Boolean)
 		.join('\n')
@@ -133,12 +135,7 @@ export function formatLivePointsShareText({
 	const xiLines = startingPlayers.map(p => formatPlayerLine(p, labels))
 	const benchLines = benchPlayers.map(p => formatPlayerLine(p, labels))
 
-	const sections = [
-		header,
-		'',
-		`## ${labels.startingXi}`,
-		...xiLines,
-	]
+	const sections = [header, '', `## ${labels.startingXi}`, ...xiLines]
 
 	if (benchLines.length > 0) {
 		sections.push('', `## ${labels.bench}`, ...benchLines)
@@ -151,30 +148,18 @@ export function formatLivePointsShareText({
 	return sections.join('\n')
 }
 
-export async function copyTextToClipboard(text: string): Promise<boolean> {
-	if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-		try {
-			await navigator.clipboard.writeText(text)
-			return true
-		} catch {
-			// fall through to legacy path
-		}
+export type ClipboardCopyResult = 'copied' | 'unsupported' | 'failed'
+
+export async function copyTextToClipboard(
+	text: string
+): Promise<ClipboardCopyResult> {
+	if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+		return 'unsupported'
 	}
-
-	if (typeof document === 'undefined') return false
-
 	try {
-		const textarea = document.createElement('textarea')
-		textarea.value = text
-		textarea.setAttribute('readonly', '')
-		textarea.style.position = 'fixed'
-		textarea.style.left = '-9999px'
-		document.body.appendChild(textarea)
-		textarea.select()
-		const ok = document.execCommand('copy')
-		document.body.removeChild(textarea)
-		return ok
+		await navigator.clipboard.writeText(text)
+		return 'copied'
 	} catch {
-		return false
+		return 'failed'
 	}
 }

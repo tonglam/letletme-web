@@ -19,48 +19,21 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { playerDetailToDirectoryOption } from '../_lib/player-detail-option'
-
-const STORAGE_VERSION = 1
-const RECENT_PLAYERS_MAX = 5
+import {
+	parseRecentPlayers,
+	RECENT_PLAYERS_MAX,
+	serializeRecentPlayers
+} from '../_lib/recent-player-storage'
 
 export type PlayerEvidenceSection = 'fixtures' | 'recent' | 'season' | 'process'
-
-interface StoredRecentPlayers {
-	version: typeof STORAGE_VERSION
-	players: PlayerDirectoryOption[]
-}
 
 type PlayerDetailLoadResult =
 	| { status: 'loaded'; detail: PlayerDetailData }
 	| { status: 'not-found' | 'failed' | 'superseded'; detail: null }
 
-function isPlayerDirectoryOption(
-	value: unknown
-): value is PlayerDirectoryOption {
-	if (!value || typeof value !== 'object') return false
-	const player = value as Partial<PlayerDirectoryOption>
-	return (
-		typeof player.id === 'string' &&
-		typeof player.name === 'string' &&
-		typeof player.position === 'string' &&
-		typeof player.teamShortName === 'string' &&
-		typeof player.teamName === 'string'
-	)
-}
-
 function readRecentPlayers(storageKey: string): PlayerDirectoryOption[] {
 	try {
-		const raw = window.localStorage.getItem(storageKey)
-		if (!raw) return []
-		const parsed: unknown = JSON.parse(raw)
-		const candidates = Array.isArray(parsed)
-			? parsed
-			: (parsed as Partial<StoredRecentPlayers>)?.version === STORAGE_VERSION
-				? (parsed as Partial<StoredRecentPlayers>).players
-				: []
-		return Array.isArray(candidates)
-			? candidates.filter(isPlayerDirectoryOption).slice(0, RECENT_PLAYERS_MAX)
-			: []
+		return parseRecentPlayers(window.localStorage.getItem(storageKey))
 	} catch {
 		return []
 	}
@@ -71,11 +44,7 @@ function writeRecentPlayers(
 	players: PlayerDirectoryOption[]
 ) {
 	try {
-		const value: StoredRecentPlayers = {
-			version: STORAGE_VERSION,
-			players: players.slice(0, RECENT_PLAYERS_MAX)
-		}
-		window.localStorage.setItem(storageKey, JSON.stringify(value))
+		window.localStorage.setItem(storageKey, serializeRecentPlayers(players))
 	} catch {
 		// Storage is optional; comparison still works when it is unavailable.
 	}

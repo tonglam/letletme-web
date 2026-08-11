@@ -4,16 +4,13 @@ import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { after } from 'next/server'
 
-import { createBetterAuthRateLimitStorage } from '@/lib/better-auth-rate-limit-storage'
 import { db } from '@/lib/db'
 import * as authSchema from '@/lib/db/schema/auth'
-import { checkDatabaseRateLimit } from '@/lib/http-security'
 import { sendPasswordResetEmail, sendVerificationEmail } from '@/lib/mailer'
 import { getRequestLocale } from '@/i18n/request-locale'
 import {
 	AUTH_COOKIE_PREFIX,
 	AUTH_PASSWORD_POLICY,
-	AUTH_RATE_LIMIT_POLICY,
 	AUTH_SESSION_POLICY,
 	AUTH_TRUSTED_PROVIDERS
 } from '@/lib/auth-policy'
@@ -35,15 +32,6 @@ function trustedAuthOrigins(url: string): string[] {
 	return Array.from(origins)
 }
 
-const betterAuthRateLimitStorage = createBetterAuthRateLimitStorage({
-	resolveSecret: () => {
-		const secret = process.env.BACKEND_PROXY_SECRET
-		if (!secret) throw new Error('BACKEND_PROXY_SECRET is not set')
-		return secret
-	},
-	consumeDatabaseRateLimit: checkDatabaseRateLimit
-})
-
 export const authConfig = {
 	baseURL,
 	database: drizzleAdapter(db, {
@@ -52,8 +40,7 @@ export const authConfig = {
 			user: authSchema.user,
 			session: authSchema.session,
 			account: authSchema.account,
-			verification: authSchema.verification,
-			rateLimit: authSchema.betterAuthRateLimit
+			verification: authSchema.verification
 		}
 	}),
 	emailAndPassword: {
@@ -133,10 +120,7 @@ export const authConfig = {
 		backgroundTasks: { handler: promise => after(promise) }
 	},
 	rateLimit: {
-		enabled: true,
-		window: AUTH_RATE_LIMIT_POLICY.window,
-		max: AUTH_RATE_LIMIT_POLICY.max,
-		customStorage: betterAuthRateLimitStorage
+		enabled: false
 	},
 	trustedOrigins: trustedAuthOrigins(baseURL),
 	user: {

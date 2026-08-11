@@ -18,7 +18,7 @@ export function shouldPollLiveSnapshot({
 		return false
 	}
 
-	// A missing snapshot is expected briefly during a rolling backend rollout.
+	// A missing snapshot is expected briefly while a backend refresh is publishing.
 	// A stale/mismatched snapshot can also remain after a failed gameweek switch.
 	// Keep current-event polling enabled so the UI can recover automatically.
 	if (!snapshot || snapshot.eventId !== selectedEventId) return true

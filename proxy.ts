@@ -58,6 +58,27 @@ function withMaintenanceHeaders(
 	return response
 }
 
+function hasInvalidTournamentId(pathname: string) {
+	const match = pathname.match(/^\/tournament\/([^/]+)(?:\/manage)?\/?$/)
+	if (!match) return false
+	if (match[1] === 'create' || match[1] === 'browse') return false
+	return !/^[1-9]\d*$/.test(match[1]) || !Number.isSafeInteger(Number(match[1]))
+}
+
+function invalidRouteResponse(
+	req: NextRequest,
+	locale: string,
+	i18nResponse: NextResponse
+) {
+	const url = req.nextUrl.clone()
+	url.pathname = `/${locale}/__not-found`
+	url.search = ''
+	return copyCookies(
+		i18nResponse,
+		withDocumentCacheHeaders(req, NextResponse.rewrite(url, { status: 404 }))
+	)
+}
+
 function maintenanceApiResponse(retryAfterSeconds: number) {
 	return withMaintenanceHeaders(
 		NextResponse.json(
@@ -137,6 +158,9 @@ export async function proxy(req: NextRequest) {
 	)
 	const locale = getLocaleFromInternalPathname(internalUrl.pathname)
 	const pathname = stripLocaleFromPathname(internalUrl.pathname)
+	if (hasInvalidTournamentId(pathname)) {
+		return invalidRouteResponse(req, locale, i18nResponse)
+	}
 	if (maintenance.enabled) {
 		return maintenanceDocumentResponse(
 			req,

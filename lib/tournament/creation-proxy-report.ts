@@ -3,7 +3,6 @@ export type TournamentCreationProxyOutcome =
 
 export type TournamentCreationProxyReport = {
 	event: 'tournament_creation_proxy'
-	schemaVersion: 1
 	outcome: TournamentCreationProxyOutcome
 	durationMs: number
 	responseStatus: number
@@ -54,7 +53,6 @@ export function createTournamentCreationProxyReporter(
 		const creation = extractTournamentCreationResult(result)
 		emit({
 			event: 'tournament_creation_proxy',
-			schemaVersion: 1,
 			outcome,
 			durationMs: Math.max(0, Math.round(performance.now() - startedAtMs)),
 			responseStatus,

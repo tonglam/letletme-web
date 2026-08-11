@@ -8,9 +8,13 @@ export class PayloadTooLargeError extends Error {
 	}
 }
 
-export async function readBoundedText(request: Request, maxBytes: number): Promise<string> {
+export async function readBoundedText(
+	request: Request,
+	maxBytes: number
+): Promise<string> {
 	const declared = Number(request.headers.get('content-length'))
-	if (Number.isFinite(declared) && declared > maxBytes) throw new PayloadTooLargeError(maxBytes)
+	if (Number.isFinite(declared) && declared > maxBytes)
+		throw new PayloadTooLargeError(maxBytes)
 	if (!request.body) return ''
 	const reader = request.body.getReader()
 	const decoder = new TextDecoder()
@@ -29,7 +33,10 @@ export async function readBoundedText(request: Request, maxBytes: number): Promi
 	return body + decoder.decode()
 }
 
-export async function readBoundedJson(request: Request, maxBytes: number): Promise<unknown> {
+export async function readBoundedJson(
+	request: Request,
+	maxBytes: number
+): Promise<unknown> {
 	return JSON.parse(await readBoundedText(request, maxBytes))
 }
 
@@ -41,13 +48,20 @@ const validIp = (value: string | null): string | null => {
 
 function expectedProductionHosts(): Set<string> {
 	const hosts = new Set<string>()
-	for (const raw of [process.env.BETTER_AUTH_URL, process.env.NEXT_PUBLIC_APP_URL]) {
+	for (const raw of [
+		process.env.BETTER_AUTH_URL,
+		process.env.NEXT_PUBLIC_APP_URL
+	]) {
 		if (!raw) continue
 		try {
 			hosts.add(new URL(raw).host.toLowerCase())
 		} catch {}
 	}
-	if (hosts.has('letletme.top') || hosts.has('www.letletme.top') || hosts.size === 0) {
+	if (
+		hosts.has('letletme.top') ||
+		hosts.has('www.letletme.top') ||
+		hosts.size === 0
+	) {
 		hosts.add('letletme.top')
 		hosts.add('www.letletme.top')
 	}
@@ -60,13 +74,22 @@ export function resolveProviderClientIp(headers: Headers): string {
 	if (isExpectedProductionHost && headers.has('cf-ray')) {
 		return validIp(headers.get('cf-connecting-ip')) ?? 'unknown'
 	}
-	if ((isExpectedProductionHost || host.endsWith('.vercel.app')) && headers.has('x-vercel-id')) {
-		return validIp(headers.get('x-vercel-forwarded-for')?.split(',')[0] ?? null) ?? 'unknown'
+	if (
+		(isExpectedProductionHost || host.endsWith('.vercel.app')) &&
+		headers.has('x-vercel-id')
+	) {
+		return (
+			validIp(headers.get('x-vercel-forwarded-for')?.split(',')[0] ?? null) ??
+			'unknown'
+		)
 	}
 	return 'unknown'
 }
 
-export function buildOpaqueRateLimitSubject(headers: Headers, secret: string): string {
+export function buildOpaqueRateLimitSubject(
+	headers: Headers,
+	secret: string
+): string {
 	return createHmac('sha256', secret)
 		.update(`rate-limit:${resolveProviderClientIp(headers)}`)
 		.digest('hex')
@@ -75,13 +98,18 @@ export function buildOpaqueRateLimitSubject(headers: Headers, secret: string): s
 export function buildIngressContextHeaders(
 	subject: string,
 	secret: string,
-	nowSeconds = Math.floor(Date.now() / 1000),
+	nowSeconds = Math.floor(Date.now() / 1000)
 ): Record<string, string> {
 	const payload = JSON.stringify({
-		v: 1, aud: 'letletme-graphql', sub: subject, iat: nowSeconds, exp: nowSeconds + 60,
+		aud: 'letletme-graphql',
+		sub: subject,
+		iat: nowSeconds,
+		exp: nowSeconds + 60
 	})
 	return {
 		'X-Ingress-Context': Buffer.from(payload).toString('base64url'),
-		'X-Ingress-Context-Sig': createHmac('sha256', secret).update(payload).digest('base64url'),
+		'X-Ingress-Context-Sig': createHmac('sha256', secret)
+			.update(payload)
+			.digest('base64url')
 	}
 }

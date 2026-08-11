@@ -1,0 +1,37 @@
+name: Database Migrate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-database-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply pending migrations
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          npm run db:migrate
+          npm run db:migrate:status
+      - name: Provision runtime login
+        env:
+          DIRECT_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          WEB_RUNTIME_DB_PASSWORD: ${{ secrets.WEB_RUNTIME_DB_PASSWORD }}
+        run: npm run db:provision-runtime-login

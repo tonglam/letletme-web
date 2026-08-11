@@ -66,7 +66,7 @@ export type TeamFdrRow = {
 	doubleCount: number
 	unknownCount: number
 	gameweeks: TeamFixtureGameweek[]
-	/** Flattened compatibility view. Unlike the old model, it keeps every DGW fixture. */
+	/** Flattened presentation view that keeps every DGW fixture. */
 	run: TeamFixtureCell[]
 }
 

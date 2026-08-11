@@ -68,8 +68,8 @@ export const GET_PLAYER_OVERALL = `
 
 /**
  * Full evidence is a second request and is cached per selected player. The
- * UI still reveals it one tab at a time, while this preserves one compatible
- * PlayerDetail contract for the existing resolver.
+ * UI still reveals it one tab at a time while the resolver serves one bounded
+ * PlayerDetail contract.
  */
 export const GET_PLAYER_EVIDENCE = GET_PLAYER_DETAIL.replace(
 	'GetPlayerDetail',

@@ -11,9 +11,4 @@ export const AUTH_PASSWORD_POLICY = {
 	revokeSessionsOnPasswordReset: true
 } as const
 
-export const AUTH_RATE_LIMIT_POLICY = {
-	window: 60,
-	max: 100
-} as const
-
 export const AUTH_TRUSTED_PROVIDERS = ['google'] as const
