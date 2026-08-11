@@ -49,7 +49,9 @@ async function assertPostgresVersion(client: postgres.Sql): Promise<void> {
 	}
 }
 
-async function inspectDatabaseState(client: postgres.Sql): Promise<DatabaseState> {
+async function inspectDatabaseState(
+	client: postgres.Sql
+): Promise<DatabaseState> {
 	const [state] = await client<
 		{
 			has_auth_schema: boolean
@@ -106,7 +108,9 @@ async function assertFreshBaselineContract(
 		manifest.relations.length !== 8 ||
 		manifest.relations.some(relation => relation.rowCount !== '0')
 	) {
-		throw new Error('Fresh Auth baseline must contain eight empty business tables')
+		throw new Error(
+			'Fresh Auth baseline must contain eight empty business tables'
+		)
 	}
 }
 
@@ -135,11 +139,7 @@ async function adoptProductionBaseline(
 	await client.begin(async transaction => {
 		await transaction`SELECT set_config('lock_timeout', '5s', true)`
 		await transaction`SELECT set_config('statement_timeout', '15min', true)`
-		await adoptProductionAuthBaseline(
-			transaction,
-			baseline.hash,
-			baseline.when
-		)
+		await adoptProductionAuthBaseline(transaction, baseline.hash, baseline.when)
 	})
 	console.log(`Adopted ${baseline.tag}`)
 }
@@ -194,7 +194,9 @@ async function main(): Promise<void> {
 					await adoptProductionBaseline(client, baseline)
 					const adoptedState = await inspectDatabaseState(client)
 					if (!adoptedState.hasLedger) {
-						throw new Error('Auth baseline adoption removed the migration ledger')
+						throw new Error(
+							'Auth baseline adoption removed the migration ledger'
+						)
 					}
 				}
 			}

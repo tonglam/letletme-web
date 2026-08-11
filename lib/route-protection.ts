@@ -10,6 +10,15 @@ export const PROTECTED_PAGE_PREFIXES = [
 
 export const PROTECTED_API_PREFIXES = ['/api/tournaments'] as const
 
+export function hasInvalidTournamentId(pathname: string): boolean {
+	const match = pathname.match(/^\/tournament\/([^/]+)(\/manage)?\/?$/)
+	if (!match) return false
+
+	const id = match[1]
+	if (id === 'create' || id === 'browse') return Boolean(match[2])
+	return !/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id))
+}
+
 export function isProtectedPage(pathname: string): boolean {
 	if (pathname === '/live/points') return true
 	if (/^\/tournament\/[^/]+\/manage(?:\/|$)/.test(pathname)) return true

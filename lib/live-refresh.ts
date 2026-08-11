@@ -7,12 +7,15 @@ export function shouldPollLiveSnapshot({
 	isPageActive,
 	currentEventId,
 	selectedEventId,
-	snapshot
+	snapshot,
+	probeEventIdentity = false
 }: {
 	isPageActive: boolean
 	currentEventId?: number
 	selectedEventId?: number
 	snapshot?: LiveSnapshotStatus | null
+	/** Keep the matches page alive so it can discover the next event after settlement. */
+	probeEventIdentity?: boolean
 }): boolean {
 	if (!isPageActive || !currentEventId || selectedEventId !== currentEventId) {
 		return false
@@ -23,7 +26,7 @@ export function shouldPollLiveSnapshot({
 	// Keep current-event polling enabled so the UI can recover automatically.
 	if (!snapshot || snapshot.eventId !== selectedEventId) return true
 
-	return snapshot.state !== 'SETTLED'
+	return snapshot.state !== 'SETTLED' || probeEventIdentity
 }
 
 export function shouldRefreshLiveExplain(
@@ -41,5 +44,17 @@ export function liveSnapshotNeedsRefresh(
 	return (
 		accepted.eventId !== observed.eventId ||
 		accepted.revision !== observed.revision
+	)
+}
+
+export function liveRefreshEventIdentityChanged(
+	acceptedCurrentEventId: number | undefined,
+	acceptedNextEventId: number | undefined,
+	currentEventId: number | undefined,
+	nextEventId: number | undefined
+): boolean {
+	return (
+		acceptedCurrentEventId !== currentEventId ||
+		acceptedNextEventId !== nextEventId
 	)
 }

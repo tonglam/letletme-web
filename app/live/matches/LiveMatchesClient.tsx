@@ -11,11 +11,16 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
+	GET_CURRENT_AND_NEXT_EVENTS,
+	type EventsResponse
+} from '@/lib/graphql/operations/events'
+import {
 	GET_LIVE_SNAPSHOT,
 	type LiveSnapshotResponse,
 	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import {
+	liveRefreshEventIdentityChanged,
 	liveSnapshotNeedsRefresh,
 	shouldPollLiveSnapshot
 } from '@/lib/live-refresh'
@@ -97,6 +102,12 @@ export function LiveMatchesClient({
 	const t = useTranslations('LiveMatches')
 	const isPageActive = usePageActive()
 	const [matches, setMatches] = useState<Match[]>(initialMatches)
+	const [resolvedCurrentEventId, setResolvedCurrentEventId] = useState<
+		number | undefined
+	>(currentEventId)
+	const [resolvedNextEventId, setResolvedNextEventId] = useState<
+		number | undefined
+	>(nextEventId)
 	const [activeTab, setActiveTab] = useState<LiveMatchesTab>(() =>
 		getPreferredTab(initialMatches)
 	)
@@ -126,7 +137,10 @@ export function LiveMatchesClient({
 	}, [])
 
 	const fetchMatches = useCallback(
-		async (isRefresh = false) => {
+		async (
+			isRefresh = false,
+			eventIds?: { currentEventId?: number; nextEventId?: number | null }
+		) => {
 			if (isFetchInFlight.current) {
 				// Coalesce concurrent manual/auto refreshes into one trailing fetch.
 				if (isRefresh) pendingRefreshRef.current = true
@@ -142,10 +156,21 @@ export function LiveMatchesClient({
 					setIsLoading(true)
 				}
 				setError(null)
-				const data = await getLiveMatchesSnapshot(nextEventId ?? null)
+			const resolvedNextEventIdForSnapshot =
+				eventIds && 'nextEventId' in eventIds
+					? eventIds.nextEventId ?? null
+					: resolvedNextEventId ?? null
+
+			const data = await getLiveMatchesSnapshot(
+				resolvedNextEventIdForSnapshot,
+				executeQuery,
+				eventIds?.currentEventId ?? resolvedCurrentEventId ?? null
+			)
 				if (!mountedRef.current) return
 				const mappedMatches = data.matches
 				setMatches(mappedMatches)
+				setResolvedCurrentEventId(data.currentEventId ?? undefined)
+				setResolvedNextEventId(data.nextEventId ?? undefined)
 				acceptSnapshot(data.snapshot)
 				hasLastGoodData.current = true
 
@@ -171,17 +196,47 @@ export function LiveMatchesClient({
 				}
 			}
 		},
-		[acceptSnapshot, nextEventId, t]
+		[acceptSnapshot, resolvedCurrentEventId, resolvedNextEventId, t]
 	)
 
 	const autoRefreshMatches = useCallback((): Promise<void> => {
 		if (freshnessRequestRef.current) return freshnessRequestRef.current
 		// isCurrent only — do not fall back to snapshot.eventId for poll identity
-		const eventId = currentEventId
+		const eventId = resolvedCurrentEventId
 		if (!eventId) return Promise.resolve()
 
 		const request = (async () => {
 			try {
+				try {
+					const events = await executeQuery<EventsResponse>(
+						GET_CURRENT_AND_NEXT_EVENTS,
+						undefined,
+						{ cache: 'no-store' }
+					)
+					const currentEventId = events.current[0]?.id
+					const nextEventId = events.next[0]?.id
+					if (
+						currentEventId &&
+						liveRefreshEventIdentityChanged(
+							resolvedCurrentEventId,
+							resolvedNextEventId,
+							currentEventId,
+							nextEventId
+						)
+					) {
+						setResolvedCurrentEventId(currentEventId)
+						setResolvedNextEventId(nextEventId)
+						await fetchMatches(true, { currentEventId, nextEventId })
+						return
+					}
+				} catch (identityError) {
+					// Rollover detection is optional; keep probing the known event when
+					// the identity lookup is temporarily unavailable.
+					console.error(
+						'Failed to resolve current and next live events:',
+						identityError
+					)
+				}
 				const probe = await executeQuery<LiveSnapshotResponse>(
 					GET_LIVE_SNAPSHOT,
 					{ eventId },
@@ -207,7 +262,7 @@ export function LiveMatchesClient({
 			}
 		})
 		return request
-	}, [acceptSnapshot, currentEventId, fetchMatches, t])
+	}, [acceptSnapshot, fetchMatches, resolvedCurrentEventId, resolvedNextEventId, t])
 
 	const handleTabChange = (value: string) => {
 		if (!isLiveMatchesTab(value)) return
@@ -254,12 +309,13 @@ export function LiveMatchesClient({
 		} satisfies Record<LiveMatchesTab, Match[]>
 	}, [matches])
 
-	const pollingEventId = currentEventId
+	const pollingEventId = resolvedCurrentEventId
 	const autoRefreshEnabled = shouldPollLiveSnapshot({
 		isPageActive,
 		currentEventId: pollingEventId,
 		selectedEventId: pollingEventId,
-		snapshot
+		snapshot,
+		probeEventIdentity: true
 	})
 	const activeTabConfig = TAB_CONFIG.find(config => config.value === activeTab)
 	const activeMatches = matchesByTab[activeTab]
@@ -404,7 +460,7 @@ export function LiveMatchesClient({
 									match={match}
 									allMatches={activeMatches}
 									currentIndex={i}
-									eventId={currentEventId}
+									eventId={resolvedCurrentEventId}
 								/>
 							))
 						) : (

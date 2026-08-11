@@ -183,6 +183,8 @@ export function LivePointsDashboard({
 							/>
 							{t('refresh')}
 						</Button>
+					</div>
+				</div>
 			</div>
 			{manualShareText ? (
 				<ShareTextFallback
@@ -193,8 +195,6 @@ export function LivePointsDashboard({
 					onClose={() => setManualShareText(null)}
 				/>
 			) : null}
-		</div>
-			</div>
 
 			<div
 				aria-live="polite"
