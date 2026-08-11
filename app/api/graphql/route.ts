@@ -1,4 +1,3 @@
-import { getAuthorizationSession } from '@/lib/auth'
 import { extractGraphQLOperationName } from '@/lib/cache-policy'
 import { buildGraphQLUserContextHeaders } from '@/lib/graphql-envelope'
 import {
@@ -11,7 +10,7 @@ import {
 	buildOpaqueRateLimitSubject,
 	PayloadTooLargeError,
 	readBoundedJson,
-} from '@/lib/http-security'
+} from '@/lib/http-security-core'
 import { shouldResolveGraphQLProxySession } from '@/lib/graphql-proxy-session'
 import { RequestTiming, resolveRequestId } from '@/lib/request-timing'
 import { NextRequest, NextResponse } from 'next/server'
@@ -70,6 +69,7 @@ export async function POST(request: NextRequest) {
 	let session = null
 	if (shouldResolveGraphQLProxySession(request.headers)) {
 		try {
+			const { getAuthorizationSession } = await import('@/lib/auth')
 			session = await requestTiming.measure('sessionLookup', () =>
 				getAuthorizationSession(request.headers)
 			)

@@ -1,12 +1,23 @@
 import 'server-only'
 
+import { createHmac } from 'crypto'
 import type { Session } from '@/lib/auth'
 import { executeQuery, type ExecuteQueryOptions } from '@/lib/graphql-client'
-import { getGraphQLServiceTokenHeaders } from '@/lib/graphql-service-token'
-import {
-	buildServerUserContextHeaders,
-	getServerUserContextHeaders,
-} from '@/lib/server-user-context'
+import { buildIngressContextHeaders } from '@/lib/http-security-core'
+
+function getPublicServerIngressHeaders(): Record<string, string> {
+	const secret = process.env.BACKEND_PROXY_SECRET?.trim() ?? ''
+	if (!secret) {
+		if (process.env.NODE_ENV === 'production') {
+			throw new Error('BACKEND_PROXY_SECRET is required in production for GraphQL requests')
+		}
+		return {}
+	}
+	const subject = createHmac('sha256', secret)
+		.update('rate-limit:web-public-rsc')
+		.digest('hex')
+	return buildIngressContextHeaders(subject, secret)
+}
 
 // Use this instead of executeQuery in RSC pages.
 // Server-side calls bypass the /api/graphql proxy (which normally adds
@@ -17,6 +28,7 @@ export async function executeServerQuery<T>(
 	variables?: Record<string, unknown>,
 	options?: Omit<ExecuteQueryOptions, 'headers'>,
 ): Promise<T> {
+	const { getServerUserContextHeaders } = await import('@/lib/server-user-context')
 	const authHeaders = await getServerUserContextHeaders()
 	return executeQuery<T>(query, variables, { ...options, headers: authHeaders })
 }
@@ -28,6 +40,7 @@ export async function executeServerQueryWithSession<T>(
 	variables?: Record<string, unknown>,
 	options?: Omit<ExecuteQueryOptions, 'headers'>,
 ): Promise<T> {
+	const { buildServerUserContextHeaders } = await import('@/lib/server-user-context')
 	const authHeaders = await buildServerUserContextHeaders(session)
 	return executeQuery<T>(query, variables, { ...options, headers: authHeaders })
 }
@@ -40,6 +53,6 @@ export async function executePublicServerQuery<T>(
 ): Promise<T> {
 	return executeQuery<T>(query, variables, {
 		...options,
-		headers: getGraphQLServiceTokenHeaders(),
+		headers: getPublicServerIngressHeaders(),
 	})
 }

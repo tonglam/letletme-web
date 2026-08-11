@@ -1,10 +1,9 @@
 import 'server-only'
 
 import { headers } from 'next/headers'
-import { getAuthorizationSession, type Session } from '@/lib/auth'
+import type { Session } from '@/lib/auth'
 import { buildGraphQLUserContextHeaders } from '@/lib/graphql-envelope'
-import { buildIngressContextHeaders, buildOpaqueRateLimitSubject } from '@/lib/http-security'
-import { getVerifiedEntryContext } from '@/lib/session'
+import { buildIngressContextHeaders, buildOpaqueRateLimitSubject } from '@/lib/http-security-core'
 
 function requireProxySecret(): string | null {
 	const secret = process.env.BACKEND_PROXY_SECRET
@@ -35,6 +34,7 @@ export async function buildServerUserContextHeaders(
 export async function getServerUserContextHeaders(): Promise<Record<string, string>> {
 	// Prefer request-scoped verified context so list/live pages that already loaded
 	// session do not pay for another disableCookieCache getSession.
+	const { getVerifiedEntryContext } = await import('@/lib/session')
 	const { session } = await getVerifiedEntryContext()
 	return buildServerUserContextHeaders(session)
 }
