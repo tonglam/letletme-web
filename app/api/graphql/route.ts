@@ -9,10 +9,10 @@ import { readForwardableMiniProgramAuthorization } from '@/lib/graphql-proxy-sec
 import {
 	buildIngressContextHeaders,
 	buildOpaqueRateLimitSubject,
-	checkDatabaseRateLimit,
 	PayloadTooLargeError,
 	readBoundedJson,
 } from '@/lib/http-security'
+import { shouldResolveGraphQLProxySession } from '@/lib/graphql-proxy-session'
 import { RequestTiming, resolveRequestId } from '@/lib/request-timing'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -66,43 +66,17 @@ export async function POST(request: NextRequest) {
 		return noStoreJson({ errors: [{ message: 'Proxy security is unavailable' }] }, 503)
 	}
 	const subject = buildOpaqueRateLimitSubject(request.headers, secret || 'development-only')
-	try {
-		const rate = await requestTiming.measure('databaseRateLimit', () =>
-			checkDatabaseRateLimit({
-				scope: 'graphql-proxy-ip',
-				subject,
-				limit: 120,
-				windowSeconds: 60,
-			})
-		)
-		if (!rate.allowed) {
-			return noStoreJson(
-				{ errors: [{ message: 'Too many requests', extensions: { code: 'RATE_LIMITED' } }] },
-				429,
-				{ 'Retry-After': String(rate.retryAfterSeconds) },
-			)
-		}
-	} catch (error) {
-		console.error('[graphql proxy] rate-limit storage unavailable:', error)
-		return noStoreJson(
-			{
-				errors: [{
-					message: 'Request safety checks are unavailable',
-					extensions: { code: 'RATE_LIMIT_STORAGE_UNAVAILABLE' },
-				}],
-			},
-			503,
-		)
-	}
 
 	let session = null
-	try {
-		session = await requestTiming.measure('sessionLookup', () =>
-			getAuthorizationSession(request.headers)
-		)
-	} catch (error) {
-		console.error('[graphql proxy] authorization session lookup failed:', error)
-		return noStoreJson({ errors: [{ message: 'Authentication unavailable' }] }, 503)
+	if (shouldResolveGraphQLProxySession(request.headers)) {
+		try {
+			session = await requestTiming.measure('sessionLookup', () =>
+				getAuthorizationSession(request.headers)
+			)
+		} catch (error) {
+			console.error('[graphql proxy] authorization session lookup failed:', error)
+			return noStoreJson({ errors: [{ message: 'Authentication unavailable' }] }, 503)
+		}
 	}
 
 	const forwardHeaders = requestTiming.measureSync('headerBuild', () => {
