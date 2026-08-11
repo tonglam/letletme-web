@@ -223,14 +223,6 @@ export async function executeQuery<T>(
     return promise
   }
 
-	let serverHeaders: Record<string, string> = {}
-	if (process.env.BACKEND_PROXY_SECRET) {
-		const { getServerUserContextHeaders } = await import('@/lib/server-user-context')
-		serverHeaders = await getServerUserContextHeaders()
-	} else if (process.env.NODE_ENV === 'production') {
-		throw new Error('BACKEND_PROXY_SECRET is required in production for GraphQL requests')
-	}
-
 	return doFetch<T>(
 		endpoint,
 		query,
@@ -238,7 +230,7 @@ export async function executeQuery<T>(
 		cache,
 		options?.next,
 		false,
-		{ ...serverHeaders, ...options?.headers },
+		options?.headers,
 		options?.timeoutMs,
 	)
 }
