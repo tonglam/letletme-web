@@ -60,9 +60,9 @@ npm run db:migrate:status
 The runner requires `DIRECT_DATABASE_URL`, PostgreSQL 15+, creates `bauth`, and
 holds a session advisory lock. Web owns the dedicated
 `bauth.__drizzle_migrations` ledger and refuses edited, missing, orphaned,
-duplicate, or backdated migration history. The canonical baseline creates the
-complete Auth schema without seed data; fresh installation, repeatability,
-catalog parity, ACL parity, and strict production-ledger adoption are CI gates.
+duplicate, or backdated migration history. The initial migration creates the
+complete Auth schema without seed data; fresh installation, repeatability and
+catalog parity are CI checks.
 
 Every Auth table has RLS enabled. `PUBLIC`, `anon`, and `authenticated` have no
 schema, table, sequence, or function access. Web uses the non-login

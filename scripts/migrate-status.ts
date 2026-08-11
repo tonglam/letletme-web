@@ -65,7 +65,7 @@ async function main(): Promise<void> {
 			ledger[0]?.hash !== baseline.hash
 		) {
 			console.log(
-				`pending ${BASELINE_TAG} (strict production adoption required)`
+				`invalid migration ledger (expected ${BASELINE_TAG})`
 			)
 			process.exitCode = 1
 			return
