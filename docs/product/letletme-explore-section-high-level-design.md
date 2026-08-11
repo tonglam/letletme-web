@@ -202,7 +202,7 @@ reporting.manager_cohorts
   lower_rank
   upper_rank
   sampling_method
-  method_version
+  method_id
   target_sample_size
   enabled
   created_at
@@ -232,7 +232,7 @@ reporting.manager_cohort_snapshots
   published_at nullable
   revision
   failure_code nullable
-  method_version
+  method_id
 
 reporting.manager_cohort_members
   snapshot_id
@@ -983,7 +983,7 @@ Required sequencing constraints:
 8. Cross-section reuse begins only after canonical Explore metadata and URLs are stable.
 9. Compatibility query/label cleanup waits until direct-route and rollback verification completes.
 
-This is dependency order, not a product-version roadmap. Independent work may proceed concurrently after its prerequisites are satisfied.
+This is dependency order, not a product release roadmap. Independent work may proceed concurrently after its prerequisites are satisfied.
 
 ## 7. Migration and compatibility plan
 
@@ -1035,7 +1035,7 @@ Flags control exposure, not schema correctness. Disabled features return an inte
 - Required-standings-page and hard-request-budget tests.
 - Pick validation, captain/vice multiplier, EO, chip, formation, template, and selection-delta aggregation tests.
 - Partial/failed/complete coverage and atomic publication tests.
-- Season rollover and method-version isolation tests.
+- Season rollover and method-ID isolation tests.
 - Raw member non-publication and retention tests.
 - Briefing rights-mode projection tests from repository through cache payload.
 - Transcript storage/retention, stale-rights-revision denial, content-correction cursor restart,

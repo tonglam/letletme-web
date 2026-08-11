@@ -2,9 +2,6 @@ import { createHash } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
-export const WEB_MIGRATIONS_SCHEMA = 'bauth'
-export const WEB_MIGRATIONS_TABLE = '__drizzle_migrations'
-
 export type LocalMigration = {
 	tag: string
 	when: number

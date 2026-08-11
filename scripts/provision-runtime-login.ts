@@ -5,7 +5,7 @@ import { loadLocalMigrations } from './migration-audit'
 
 export const WEB_RUNTIME_LOGIN = 'letletme_web_runtime'
 export const WEB_RUNTIME_CAPABILITY = 'letletme_web_auth'
-export const WEB_RUNTIME_MIGRATION = '0008_web_auth_runtime_role'
+export const WEB_RUNTIME_BASELINE = '0000_auth_baseline'
 
 type RoleAttributes = {
 	roleName: string
@@ -274,11 +274,11 @@ async function main(): Promise<void> {
 	const databaseUrl = requiredEnvironment('DIRECT_DATABASE_URL')
 	const password = requiredPassword()
 	const local = await loadLocalMigrations()
-	const runtimeMigration = local.migrations.find(
-		migration => migration.tag === WEB_RUNTIME_MIGRATION
+	const authBaseline = local.migrations.find(
+		migration => migration.tag === WEB_RUNTIME_BASELINE
 	)
-	if (!runtimeMigration || local.orphans.length > 0) {
-		throw new Error('The exact Web runtime migration is unavailable')
+	if (!authBaseline || local.orphans.length > 0) {
+		throw new Error('The exact Web Auth baseline is unavailable')
 	}
 
 	const client = postgres(databaseUrl, { max: 1, prepare: false })
@@ -286,14 +286,14 @@ async function main(): Promise<void> {
 		const migrationRows = await client<Array<{ hash: string }>>`
 			SELECT hash
 			FROM bauth.__drizzle_migrations
-			WHERE created_at = ${runtimeMigration.when}
+			WHERE created_at = ${authBaseline.when}
 		`
 		if (
 			migrationRows.length !== 1 ||
-			migrationRows[0]?.hash !== runtimeMigration.hash
+			migrationRows[0]?.hash !== authBaseline.hash
 		) {
 			throw new Error(
-				'Web runtime migration is not applied with the frozen checksum'
+				'Web Auth baseline is not applied with the frozen checksum'
 			)
 		}
 

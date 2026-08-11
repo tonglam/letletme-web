@@ -14,16 +14,15 @@ import {
 
 describe('Web runtime database boundary', () => {
 	it('installs an auth-only capability role and startup contract', async () => {
-		const [migration, graphqlMigration, journal, instrumentation, environment] =
+		const [baseline, journal, instrumentation, environment] =
 			await Promise.all([
-				readFile('drizzle/0008_web_auth_runtime_role.sql', 'utf8'),
-				readFile('drizzle/0009_graphql_auth_reader.sql', 'utf8'),
+				readFile('drizzle/0000_auth_baseline.sql', 'utf8'),
 				readFile('drizzle/meta/_journal.json', 'utf8'),
 				readFile('instrumentation.ts', 'utf8'),
 				readFile('.env.example', 'utf8')
 			])
 
-		assert.match(migration, /CREATE ROLE letletme_web_auth/)
+		assert.match(baseline, /CREATE ROLE letletme_web_auth/)
 		for (const attribute of [
 			'NOLOGIN',
 			'NOSUPERUSER',
@@ -33,24 +32,19 @@ describe('Web runtime database boundary', () => {
 			'NOREPLICATION',
 			'NOBYPASSRLS'
 		]) {
-			assert.match(migration, new RegExp(`\\b${attribute}\\b`))
+			assert.match(baseline, new RegExp(`\\b${attribute}\\b`))
 		}
 		assert.match(
-			migration,
-			/GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE bauth\.%I TO letletme_web_auth/
+			baseline,
+			/GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE bauth\.account TO letletme_web_auth/
 		)
-		assert.match(migration, /CREATE POLICY web_auth_runtime_all/)
+		assert.match(baseline, /CREATE POLICY web_auth_runtime_all/)
 		assert.match(
-			migration,
+			baseline,
 			/TO letletme_web_auth USING \(true\) WITH CHECK \(true\)/
 		)
-		assert.match(migration, /three historical @better-auth\/api-key rows/)
 		assert.match(
-			migration,
-			/REVOKE ALL ON TABLE bauth\.%I FROM letletme_web_auth/
-		)
-		assert.match(
-			migration,
+			baseline,
 			/REVOKE ALL ON TABLE bauth\.__drizzle_migrations FROM letletme_web_auth/
 		)
 		for (const schemaName of [
@@ -61,29 +55,35 @@ describe('Web runtime database boundary', () => {
 			'reporting',
 			'ops'
 		]) {
-			assert.match(migration, new RegExp(`'${schemaName}'`))
+			assert.match(baseline, new RegExp(`'${schemaName}'`))
 		}
-		assert.match(journal, /"tag": "0008_web_auth_runtime_role"/)
-		assert.match(journal, /"tag": "0009_graphql_auth_reader"/)
+		assert.match(journal, /"tag": "0000_auth_baseline"/)
 		assert.match(
-			graphqlMigration,
+			baseline,
 			/GRANT USAGE ON SCHEMA bauth TO letletme_graphql_reader/
 		)
-		assert.match(
-			graphqlMigration,
-			/GRANT SELECT \(id, fpl_entry_id, fpl_entry_verified_at\)\s+ON TABLE bauth\."user"\s+TO letletme_graphql_reader/
-		)
-		assert.match(
-			graphqlMigration,
-			/GRANT SELECT \(user_id, token_hash, revoked_at, expires_at\)\s+ON TABLE bauth\.mini_program_session\s+TO letletme_graphql_reader/
-		)
-		assert.match(graphqlMigration, /REVOKE ALL ON ALL TABLES IN SCHEMA bauth/)
-		assert.match(graphqlMigration, /FROM information_schema\.columns/)
-		assert.match(
-			graphqlMigration,
-			/REVOKE SELECT \(%I\), INSERT \(%I\), UPDATE \(%I\), REFERENCES \(%I\)/
-		)
-		assert.match(graphqlMigration, /CREATE POLICY graphql_auth_reader_select/g)
+		for (const column of ['id', 'fpl_entry_id', 'fpl_entry_verified_at']) {
+			assert.match(
+				baseline,
+				new RegExp(
+					`GRANT SELECT\\(${column}\\) ON TABLE bauth\\."user" TO letletme_graphql_reader`
+				)
+			)
+		}
+		for (const column of [
+			'user_id',
+			'token_hash',
+			'revoked_at',
+			'expires_at'
+		]) {
+			assert.match(
+				baseline,
+				new RegExp(
+					`GRANT SELECT\\(${column}\\) ON TABLE bauth\\.mini_program_session TO letletme_graphql_reader`
+				)
+			)
+		}
+		assert.match(baseline, /CREATE POLICY graphql_auth_reader_select/g)
 		assert.match(instrumentation, /await validateWebDatabaseContract\(\)/)
 		assert.match(instrumentation, /process\.exit\(1\)/)
 		assert.match(environment, /inherits only `letletme_web_auth`/)

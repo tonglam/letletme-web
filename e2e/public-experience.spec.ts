@@ -18,7 +18,26 @@ test('homepage streams its real shell and prevents CDN script rewriting', async 
 test('retired public routes return 404 instead of redirecting', async ({
 	request
 }) => {
-	for (const path of ['/stats/gameweek', '/zh-CN/data/price-changes']) {
+	const retiredPaths = [
+		'/stats/gameweek',
+		'/stats/team',
+		'/stats/tournament',
+		'/data/price-changes',
+		'/live/tournament',
+		'/live/tournament/123',
+		'/tournament/list',
+		'/data/gameweek/gameweek',
+		'/zh-CN/stats/gameweek',
+		'/zh-CN/stats/team',
+		'/zh-CN/stats/tournament',
+		'/zh-CN/data/price-changes',
+		'/zh-CN/live/tournament',
+		'/zh-CN/live/tournament/123',
+		'/zh-CN/tournament/list',
+		'/zh-CN/data/gameweek/gameweek'
+	]
+
+	for (const path of retiredPaths) {
 		const response = await request.get(path, { maxRedirects: 0 })
 		expect(response.status(), path).toBe(404)
 	}

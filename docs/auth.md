@@ -59,26 +59,21 @@ npm run db:migrate:status
 
 The runner requires `DIRECT_DATABASE_URL`, PostgreSQL 15+, creates `bauth`, and
 holds a session advisory lock. Web owns the dedicated
-`bauth.__drizzle_migrations` ledger; it safely adopts matching historical Web
-rows from the shared default Drizzle ledger, then refuses edited, missing,
-orphaned, duplicate, or backdated migration history. Fresh and repeat
-application are CI gates. A duplicate non-null `openid` aborts migration and
-must be reconciled by an operator; accounts are never merged automatically.
+`bauth.__drizzle_migrations` ledger and refuses edited, missing, orphaned,
+duplicate, or backdated migration history. The canonical baseline creates the
+complete Auth schema without seed data; fresh installation, repeatability,
+catalog parity, ACL parity, and strict production-ledger adoption are CI gates.
 
-Migration `0004_lock_down_bauth` enables RLS, drops historical broad policies,
-and revokes `bauth` schema/table/sequence/function access from `PUBLIC`, `anon`,
-and `authenticated`. Web, GraphQL Mini Program validation, and migration roles
-must use reviewed direct/service database credentials; browser JWTs never query
-`bauth`.
+Every Auth table has RLS enabled. `PUBLIC`, `anon`, and `authenticated` have no
+schema, table, sequence, or function access. Web uses the non-login
+`letletme_web_auth` capability; browser JWTs never query `bauth`.
 
-Migration `0009_graphql_auth_reader` is the only GraphQL exception to the Web-owned
-boundary. It requires the Data platform's non-login `letletme_graphql_reader` role,
-revokes every existing `bauth` privilege from that role, then grants read-only RLS
-access to only `user.id`, `user.fpl_entry_id`, `user.fpl_entry_verified_at`, and
-`mini_program_session.user_id`, `token_hash`, `revoked_at`, `expires_at`. Production
-database migration workflow runs the complete migration set from the exact protected
-`main` commit. The Web startup contract rejects partial or malformed GraphQL policy
-sets.
+The only GraphQL exception to the Web-owned boundary is the Data platform's
+non-login `letletme_graphql_reader` role. It has read-only RLS access to exactly
+`user.id`, `user.fpl_entry_id`, `user.fpl_entry_verified_at`, and
+`mini_program_session.user_id`, `token_hash`, `revoked_at`, `expires_at`.
+Production database migration runs from the protected `main` commit, and the
+Web startup contract rejects partial or malformed policy sets.
 
 Authenticated server reads attach a signed ingress and user envelope. Public
 RSC reads carry only `X-GraphQL-Service-Token`, with no request-derived headers,

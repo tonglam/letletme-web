@@ -5,8 +5,10 @@ import {
 	timestamp,
 	integer,
 	uniqueIndex,
+	unique,
 	index,
-	primaryKey
+	primaryKey,
+	check
 } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
@@ -31,18 +33,18 @@ export const user = authSchema.table(
 		fplEntryVerifiedAt: timestamp('fpl_entry_verified_at', {
 			withTimezone: true
 		}),
+		/** Matches production `bauth.user.openid` (WeChat / Mini Program identifier). */
+		openid: text('openid'),
 		/** Bind-time snapshot of the FPL team/manager name — display only. */
 		fplTeamName: text('fpl_team_name'),
 		fplManagerName: text('fpl_manager_name'),
 		/** Last successful lazy re-sync of the name snapshot; gates the 24h refresh. */
 		fplIdentityRefreshedAt: timestamp('fpl_identity_refreshed_at', {
 			withTimezone: true
-		}),
-		/** Matches production `bauth.user.openid` (WeChat / Mini Program identifier). */
-		openid: text('openid')
+		})
 	},
 	table => ({
-		emailUnique: uniqueIndex('user_email_unique').on(table.email),
+		emailUnique: unique('user_email_unique').on(table.email),
 		openIdUnique: uniqueIndex('user_openid_unique')
 			.on(table.openid)
 			.where(sql`${table.openid} is not null`),
@@ -167,9 +169,18 @@ export const requestRateLimit = authSchema.table(
 	},
 	table => ({
 		pk: primaryKey({
+			name: 'request_rate_limits_pk',
 			columns: [table.scope, table.subject, table.bucketStart]
 		}),
-		expiresIdx: index('request_rate_limits_expires_idx').on(table.expiresAt)
+		expiresIdx: index('request_rate_limits_expires_idx').on(table.expiresAt),
+		windowSecondsPositive: check(
+			'request_rate_limits_window_seconds_check',
+			sql`${table.windowSeconds} > 0`
+		),
+		countPositive: check(
+			'request_rate_limits_count_check',
+			sql`${table.count} > 0`
+		)
 	})
 )
 
