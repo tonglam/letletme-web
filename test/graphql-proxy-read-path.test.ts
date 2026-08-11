@@ -24,7 +24,10 @@ describe('GraphQL proxy read path', () => {
 
 	it('adds trusted server context to direct RSC GraphQL requests', () => {
 		const client = readFileSync(new URL('../lib/graphql-client.ts', import.meta.url), 'utf8')
-		assert.match(client, /getServerUserContextHeaders/)
+		const server = readFileSync(new URL('../lib/graphql-server.ts', import.meta.url), 'utf8')
+		assert.doesNotMatch(client, /server-user-context|getServerUserContextHeaders/)
 		assert.doesNotMatch(client, /localhost:3000\/api\/graphql/)
+		assert.match(server, /getServerUserContextHeaders/)
+		assert.match(server, /getGraphQLServiceTokenHeaders/)
 	})
 })
