@@ -11,11 +11,16 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
+	GET_CURRENT_AND_NEXT_EVENTS,
+	type EventsResponse
+} from '@/lib/graphql/operations/events'
+import {
 	GET_LIVE_SNAPSHOT,
 	type LiveSnapshotResponse,
 	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import {
+	liveRefreshEventIdentityChanged,
 	liveSnapshotNeedsRefresh,
 	shouldPollLiveSnapshot
 } from '@/lib/live-refresh'
@@ -132,7 +137,10 @@ export function LiveMatchesClient({
 	}, [])
 
 	const fetchMatches = useCallback(
-		async (isRefresh = false) => {
+		async (
+			isRefresh = false,
+			eventIds?: { currentEventId?: number; nextEventId?: number }
+		) => {
 			if (isFetchInFlight.current) {
 				// Coalesce concurrent manual/auto refreshes into one trailing fetch.
 				if (isRefresh) pendingRefreshRef.current = true
@@ -149,9 +157,9 @@ export function LiveMatchesClient({
 				}
 				setError(null)
 				const data = await getLiveMatchesSnapshot(
-					resolvedNextEventId ?? null,
+					eventIds?.nextEventId ?? resolvedNextEventId ?? null,
 					executeQuery,
-					resolvedCurrentEventId ?? null
+					eventIds?.currentEventId ?? resolvedCurrentEventId ?? null
 				)
 				if (!mountedRef.current) return
 				const mappedMatches = data.matches
@@ -194,6 +202,27 @@ export function LiveMatchesClient({
 
 		const request = (async () => {
 			try {
+				const events = await executeQuery<EventsResponse>(
+					GET_CURRENT_AND_NEXT_EVENTS,
+					undefined,
+					{ cache: 'no-store' }
+				)
+				const currentEventId = events.current[0]?.id
+				const nextEventId = events.next[0]?.id
+				if (
+					currentEventId &&
+					liveRefreshEventIdentityChanged(
+						resolvedCurrentEventId,
+						resolvedNextEventId,
+						currentEventId,
+						nextEventId
+					)
+				) {
+					setResolvedCurrentEventId(currentEventId)
+					setResolvedNextEventId(nextEventId)
+					await fetchMatches(true, { currentEventId, nextEventId })
+					return
+				}
 				const probe = await executeQuery<LiveSnapshotResponse>(
 					GET_LIVE_SNAPSHOT,
 					{ eventId },
@@ -219,7 +248,7 @@ export function LiveMatchesClient({
 			}
 		})
 		return request
-	}, [acceptSnapshot, fetchMatches, resolvedCurrentEventId, t])
+	}, [acceptSnapshot, fetchMatches, resolvedCurrentEventId, resolvedNextEventId, t])
 
 	const handleTabChange = (value: string) => {
 		if (!isLiveMatchesTab(value)) return

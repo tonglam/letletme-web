@@ -3,6 +3,7 @@
 import { MarketLocalUpdated } from '@/components/data/MarketLocalUpdated'
 import { MarketPlayerLookup } from '@/components/data/MarketPlayerLookup'
 import { OwnershipSwingDesk } from '@/components/data/OwnershipSwingDesk'
+import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
@@ -13,17 +14,17 @@ import type {
 	MarketPlayer,
 	MarketPriceChange,
 	MarketPulse,
-	MarketTransferMover,
+	MarketTransferMover
 } from '@/lib/graphql/operations/market'
 import type { PlayerDirectoryItem } from '@/lib/graphql/operations/players'
 import {
 	availabilityBodyText,
-	marketAvailabilityStatusKey,
+	marketAvailabilityStatusKey
 } from '@/lib/market-availability'
 import {
 	getMarketCoverageMode,
 	getMarketViewMode,
-	shortMarketPosition,
+	shortMarketPosition
 } from '@/lib/market'
 import { positionBadgeClass } from '@/lib/position-style'
 import { cn } from '@/lib/utils'
@@ -31,16 +32,9 @@ import { copyTextToClipboard } from '@/app/live/points/_lib/live-points-share'
 import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import {
 	buildMarketShareUrl,
-	formatPriceMovementShareText,
+	formatPriceMovementShareText
 } from '@/app/data/market/_lib/market-price-share'
-import {
-	Check,
-	Copy,
-	HeartPulse,
-	Search,
-	Sparkles,
-	Users,
-} from 'lucide-react'
+import { Check, Copy, HeartPulse, Search, Sparkles, Users } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
@@ -55,8 +49,8 @@ function marketPlayerToDirectory(player: MarketPlayer): PlayerDirectoryItem {
 		team: {
 			id: player.teamId,
 			name: player.teamName,
-			shortName: player.teamShortName,
-		},
+			shortName: player.teamShortName
+		}
 	}
 }
 
@@ -68,7 +62,7 @@ function formatCalendarDate(value: string | null, locale: string): string {
 		day: 'numeric',
 		month: 'short',
 		year: 'numeric',
-		timeZone: CALENDAR_DATE_TIME_ZONE,
+		timeZone: CALENDAR_DATE_TIME_ZONE
 	}).format(parsed)
 }
 
@@ -88,7 +82,7 @@ function PositionBadge({ player }: { player: MarketPlayer }) {
 function SectionTitle({
 	id,
 	children,
-	action,
+	action
 }: {
 	id: string
 	children: ReactNode
@@ -119,7 +113,7 @@ function EmptyHint({ children }: { children: ReactNode }) {
 
 function PriceShareActions({
 	changes,
-	changeDate,
+	changeDate
 }: {
 	changes: MarketPriceChange[]
 	/** Calendar day for this price board (YYYY-MM-DD / ISO) */
@@ -149,8 +143,8 @@ function PriceShareActions({
 				rises: t('priceRises'),
 				falls: t('priceFalls'),
 				none: t('shareNone'),
-				footer: t('shareFooter', { url: shareUrl }),
-			},
+				footer: t('shareFooter', { url: shareUrl })
+			}
 		})
 		const result = await copyTextToClipboard(text)
 		if (result === 'copied') {
@@ -200,7 +194,7 @@ function PriceShareActions({
 
 function CoverageMeta({
 	coverage,
-	locale,
+	locale
 }: {
 	coverage: MarketPulse['coverage']
 	locale: string
@@ -215,19 +209,19 @@ function CoverageMeta({
 			break
 		case 'one-day':
 			rangeLabel = t('coverageOneDay', {
-				date: formatCalendarDate(coverage.latestDate, locale),
+				date: formatCalendarDate(coverage.latestDate, locale)
 			})
 			break
 		case 'tracking':
 			rangeLabel = t('coverageTracking', {
 				from: formatCalendarDate(coverage.firstDate, locale),
-				to: formatCalendarDate(coverage.latestDate, locale),
+				to: formatCalendarDate(coverage.latestDate, locale)
 			})
 			break
 		case 'last-14-days':
 			rangeLabel = t('coverageLast14', {
 				from: formatCalendarDate(coverage.firstDate, locale),
-				to: formatCalendarDate(coverage.latestDate, locale),
+				to: formatCalendarDate(coverage.latestDate, locale)
 			})
 			break
 	}
@@ -244,7 +238,9 @@ function CoverageMeta({
 				) : null}
 			</div>
 			{mode === 'one-day' ? (
-				<p className="text-xs text-muted-foreground">{t('movementNeedsAnotherDay')}</p>
+				<p className="text-xs text-muted-foreground">
+					{t('movementNeedsAnotherDay')}
+				</p>
 			) : null}
 			{mode === 'empty' ? (
 				<p className="text-xs text-muted-foreground">
@@ -264,7 +260,13 @@ function CoverageMeta({
  * Four equal-height metrics: primary number on one line, secondary caption always present.
  * Avoids mismatched 1-line vs 2-line cards (name + % was breaking the strip).
  */
-function GlanceStrip({ pulse, locale }: { pulse: MarketPulse; locale: string }) {
+function GlanceStrip({
+	pulse,
+	locale
+}: {
+	pulse: MarketPulse
+	locale: string
+}) {
 	const t = useTranslations('Market')
 	const rises = pulse.priceChanges.filter(c => c.direction === 'RISE').length
 	const falls = pulse.priceChanges.filter(c => c.direction === 'FALL').length
@@ -272,7 +274,7 @@ function GlanceStrip({ pulse, locale }: { pulse: MarketPulse; locale: string }) 
 	const topFall = pulse.ownershipMovers.fallers[0] ?? null
 	const fmt = new Intl.NumberFormat(locale, {
 		maximumFractionDigits: 1,
-		signDisplay: 'exceptZero',
+		signDisplay: 'exceptZero'
 	})
 
 	const cells: {
@@ -287,33 +289,29 @@ function GlanceStrip({ pulse, locale }: { pulse: MarketPulse; locale: string }) 
 			primary: String(rises),
 			secondary: t('glanceCountUnit'),
 			playerId: null,
-			tone: 'default',
+			tone: 'default'
 		},
 		{
 			label: t('glancePriceFalls'),
 			primary: String(falls),
 			secondary: t('glanceCountUnit'),
 			playerId: null,
-			tone: 'default',
+			tone: 'default'
 		},
 		{
 			label: t('glanceTopRiser'),
-			primary: topRise
-				? `${fmt.format(topRise.change)}%`
-				: '—',
+			primary: topRise ? `${fmt.format(topRise.change)}%` : '—',
 			secondary: topRise?.player.webName ?? '—',
 			playerId: topRise?.player.playerId ?? null,
-			tone: 'up',
+			tone: 'up'
 		},
 		{
 			label: t('glanceTopFaller'),
-			primary: topFall
-				? `${fmt.format(topFall.change)}%`
-				: '—',
+			primary: topFall ? `${fmt.format(topFall.change)}%` : '—',
 			secondary: topFall?.player.webName ?? '—',
 			playerId: topFall?.player.playerId ?? null,
-			tone: 'down',
-		},
+			tone: 'down'
+		}
 	]
 
 	return (
@@ -334,23 +332,23 @@ function GlanceStrip({ pulse, locale }: { pulse: MarketPulse; locale: string }) 
 							className={cn(
 								'truncate font-display text-xl font-bold tabular-nums tracking-tight leading-none sm:text-2xl',
 								cell.tone === 'up' && 'text-success',
-								cell.tone === 'down' && 'text-destructive',
+								cell.tone === 'down' && 'text-destructive'
 							)}
 						>
 							{cell.primary}
 						</p>
-					{cell.playerId != null ? (
-						<Link
-							href={playerStatsHref({ p1: String(cell.playerId) })}
-							className="mt-1 block truncate text-xs text-foreground underline decoration-primary/55 underline-offset-2 hover:decoration-primary"
-						>
-							{cell.secondary}
-						</Link>
-					) : (
-						<p className="mt-1 truncate text-xs text-muted-foreground">
-							{cell.secondary}
-						</p>
-					)}
+						{cell.playerId != null ? (
+							<Link
+								href={playerStatsHref({ p1: String(cell.playerId) })}
+								className="mt-1 block truncate text-xs text-foreground underline decoration-primary/55 underline-offset-2 hover:decoration-primary"
+							>
+								{cell.secondary}
+							</Link>
+						) : (
+							<p className="mt-1 truncate text-xs text-muted-foreground">
+								{cell.secondary}
+							</p>
+						)}
 					</div>
 				</div>
 			))}
@@ -361,7 +359,7 @@ function GlanceStrip({ pulse, locale }: { pulse: MarketPulse; locale: string }) 
 function DensePlayerRow({
 	player,
 	trailing,
-	sub,
+	sub
 }: {
 	player: MarketPlayer
 	trailing: ReactNode
@@ -392,7 +390,7 @@ function DensePlayerRow({
 
 function MostSelectedColumn({
 	players,
-	locale,
+	locale
 }: {
 	players: MarketPlayer[]
 	locale: string
@@ -423,7 +421,7 @@ function PriceColumns({
 	changes,
 	locale,
 	selectedPlayerId,
-	onSelectPlayer,
+	onSelectPlayer
 }: {
 	changes: MarketPriceChange[]
 	locale: string
@@ -450,7 +448,7 @@ function PriceColumns({
 			<p
 				className={cn(
 					'mb-2.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em]',
-					rising ? 'text-success' : 'text-destructive',
+					rising ? 'text-success' : 'text-destructive'
 				)}
 			>
 				{rising ? t('priceRises') : t('priceFalls')}
@@ -471,7 +469,7 @@ function PriceColumns({
 								<div
 									className={cn(
 										'group relative border-b border-border/40 py-2.5 last:border-b-0',
-										selected && 'bg-primary/5',
+										selected && 'bg-primary/5'
 									)}
 								>
 									<button
@@ -480,7 +478,7 @@ function PriceColumns({
 										className="absolute inset-0 z-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 										aria-pressed={selected}
 										aria-label={t('openPriceHistory', {
-											name: change.player.webName,
+											name: change.player.webName
 										})}
 									/>
 									<div className="pointer-events-none relative z-[1] flex w-full items-center gap-2.5 group-hover:bg-background/60">
@@ -488,7 +486,7 @@ function PriceColumns({
 										<span className="min-w-0 flex-1">
 											<Link
 												href={playerStatsHref({
-													p1: String(change.player.playerId),
+													p1: String(change.player.playerId)
 												})}
 												className="pointer-events-auto block truncate text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
 											>
@@ -499,19 +497,19 @@ function PriceColumns({
 											</span>
 										</span>
 										<span className="shrink-0 text-right">
-										<span
-											className={cn(
-												'block font-display text-sm font-semibold tabular-nums leading-tight',
-												rising ? 'text-success' : 'text-destructive',
-											)}
-										>
-											{rising ? '+' : '−'}£
-											{(Math.abs(change.change) / 10).toFixed(1)}m
-										</span>
-										<span className="block text-[10px] tabular-nums text-muted-foreground">
-											£{(change.oldPrice / 10).toFixed(1)}m → £
-											{(change.newPrice / 10).toFixed(1)}m
-										</span>
+											<span
+												className={cn(
+													'block font-display text-sm font-semibold tabular-nums leading-tight',
+													rising ? 'text-success' : 'text-destructive'
+												)}
+											>
+												{rising ? '+' : '−'}£
+												{(Math.abs(change.change) / 10).toFixed(1)}m
+											</span>
+											<span className="block text-[10px] tabular-nums text-muted-foreground">
+												£{(change.oldPrice / 10).toFixed(1)}m → £
+												{(change.newPrice / 10).toFixed(1)}m
+											</span>
 										</span>
 									</div>
 								</div>
@@ -533,7 +531,7 @@ function PriceColumns({
 
 function TransferHeat({
 	movers,
-	locale,
+	locale
 }: {
 	movers: MarketTransferMover[]
 	locale: string
@@ -551,13 +549,13 @@ function TransferHeat({
 					player={mover.player}
 					sub={t('transferInOut', {
 						inCount: number.format(mover.transfersIn),
-						outCount: number.format(mover.transfersOut),
+						outCount: number.format(mover.transfersOut)
 					})}
 					trailing={
 						<span
 							className={cn(
 								'font-display text-sm font-semibold tabular-nums',
-								mover.netTransfers >= 0 ? 'text-success' : 'text-destructive',
+								mover.netTransfers >= 0 ? 'text-success' : 'text-destructive'
 							)}
 						>
 							{mover.netTransfers > 0 ? '+' : ''}
@@ -572,7 +570,7 @@ function TransferHeat({
 
 function AvailabilityBlock({
 	updates,
-	locale,
+	locale
 }: {
 	updates: MarketAvailabilityUpdate[]
 	locale: string
@@ -588,13 +586,18 @@ function AvailabilityBlock({
 				const chance =
 					update.chanceOfPlayingThisRound ?? update.chanceOfPlayingNextRound
 				return (
-					<li key={update.player.playerId} className="py-2.5 first:pt-0 last:pb-0">
+					<li
+						key={update.player.playerId}
+						className="py-2.5 first:pt-0 last:pb-0"
+					>
 						<div className="flex items-start gap-2.5">
 							<PositionBadge player={update.player} />
 							<div className="min-w-0 flex-1">
 								<div className="flex flex-wrap items-center gap-2">
 									<Link
-										href={playerStatsHref({ p1: String(update.player.playerId) })}
+										href={playerStatsHref({
+											p1: String(update.player.playerId)
+										})}
 										className="text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
 									>
 										{update.player.webName}
@@ -616,7 +619,7 @@ function AvailabilityBlock({
 								</p>
 								<p className="mt-1 text-[11px] text-muted-foreground">
 									{t('observedOn', {
-										date: formatCalendarDate(update.observedDate, locale),
+										date: formatCalendarDate(update.observedDate, locale)
 									})}
 									{chance !== null
 										? ` · ${t('playingChance', { chance })}`
@@ -634,7 +637,7 @@ function AvailabilityBlock({
 function AvailabilityEvidence({
 	highlights,
 	updates,
-	locale,
+	locale
 }: {
 	highlights: MarketAvailabilityUpdate[]
 	updates: MarketAvailabilityUpdate[]
@@ -645,14 +648,20 @@ function AvailabilityEvidence({
 
 	return (
 		<div>
-			<AvailabilityBlock updates={lead} locale={locale} />
+			<AvailabilityBlock
+				updates={lead}
+				locale={locale}
+			/>
 			{highlights.length > 0 && updates.length > highlights.length ? (
 				<details className="mt-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5">
 					<summary className="cursor-pointer text-xs font-semibold text-muted-foreground">
 						{t('availabilityEvidence', { count: updates.length })}
 					</summary>
 					<div className="mt-3 border-t border-border/50 pt-3">
-						<AvailabilityBlock updates={updates} locale={locale} />
+						<AvailabilityBlock
+							updates={updates}
+							locale={locale}
+						/>
 					</div>
 				</details>
 			) : null}
@@ -662,7 +671,7 @@ function AvailabilityEvidence({
 
 function NewPlayersBlock({
 	items,
-	locale,
+	locale
 }: {
 	items: MarketPulse['newPlayers']
 	locale: string
@@ -680,15 +689,15 @@ function NewPlayersBlock({
 				>
 					<PositionBadge player={item.player} />
 					<div className="min-w-0">
-					<Link
-						href={playerStatsHref({ p1: String(item.player.playerId) })}
-						className="block truncate text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
-					>
-						{item.player.webName}
-					</Link>
+						<Link
+							href={playerStatsHref({ p1: String(item.player.playerId) })}
+							className="block truncate text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+						>
+							{item.player.webName}
+						</Link>
 						<p className="text-[11px] text-muted-foreground">
 							{t('firstSeen', {
-								date: formatCalendarDate(item.firstObservedDate, locale),
+								date: formatCalendarDate(item.firstObservedDate, locale)
 							})}
 						</p>
 					</div>
@@ -723,13 +732,15 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 	const latestPriceChanges = useMemo(
 		() =>
 			priceChangeDate
-				? pulse.priceChanges.filter(change => change.changeDate === priceChangeDate)
+				? pulse.priceChanges.filter(
+						change => change.changeDate === priceChangeDate
+					)
 				: [],
-		[priceChangeDate, pulse.priceChanges],
+		[priceChangeDate, pulse.priceChanges]
 	)
 	const viewPulse = useMemo(
 		() => ({ ...pulse, priceChanges: latestPriceChanges }),
-		[pulse, latestPriceChanges],
+		[pulse, latestPriceChanges]
 	)
 
 	const handleSelectPricePlayer = useCallback((player: MarketPlayer) => {
@@ -740,12 +751,18 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 		return (
 			<>
 				<section className="mb-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-					<CoverageMeta coverage={pulse.coverage} locale={locale} />
+					<CoverageMeta
+						coverage={pulse.coverage}
+						locale={locale}
+					/>
 				</section>
 				<div className="mb-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
 					<div className="flex items-start gap-3">
 						<span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border/60">
-							<Users aria-hidden="true" className="size-4" />
+							<Users
+								aria-hidden="true"
+								className="size-4"
+							/>
 						</span>
 						<div>
 							<h2 className="font-display text-lg font-bold tracking-tight">
@@ -797,7 +814,7 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 				{t('priceBoardMeta', {
 					rises: latestPriceChanges.filter(c => c.direction === 'RISE').length,
 					falls: latestPriceChanges.filter(c => c.direction === 'FALL').length,
-					date: formatCalendarDate(priceChangeDate, locale) || '—',
+					date: formatCalendarDate(priceChangeDate, locale) || '—'
 				})}
 			</p>
 			<PriceColumns
@@ -808,8 +825,8 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 			/>
 			<div className="mt-4 border-t border-border/60 pt-3">
 				<MarketPlayerLookup
-				key={`${seedPlayer?.id ?? 'none'}:${latestPriceChanges.length > 0 ? 'compact' : 'open'}`}
-				compact={latestPriceChanges.length > 0}
+					key={`${seedPlayer?.id ?? 'none'}:${latestPriceChanges.length > 0 ? 'compact' : 'open'}`}
+					compact={latestPriceChanges.length > 0}
 					seedPlayer={seedPlayer}
 					onClearSeed={() => setSeedPlayer(null)}
 				/>
@@ -828,7 +845,10 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 					<SectionTitle id="market-most-selected">
 						{t('mostSelectedTitle')}
 					</SectionTitle>
-					<MostSelectedColumn players={pulse.mostSelected} locale={locale} />
+					<MostSelectedColumn
+						players={pulse.mostSelected}
+						locale={locale}
+					/>
 				</div>
 				<div>
 					<SectionTitle id="market-ownership">
@@ -861,11 +881,14 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 					{pulse.coverage.firstDate && pulse.coverage.latestDate
 						? t('transferCoverage', {
 								from: formatCalendarDate(pulse.coverage.firstDate, locale),
-								to: formatCalendarDate(pulse.coverage.latestDate, locale),
+								to: formatCalendarDate(pulse.coverage.latestDate, locale)
 							})
 						: t('transferCoverageUnknown')}
 				</p>
-				<TransferHeat movers={pulse.transferMovers} locale={locale} />
+				<TransferHeat
+					movers={pulse.transferMovers}
+					locale={locale}
+				/>
 			</section>
 		) : null
 
@@ -878,7 +901,10 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 			<div>
 				<SectionTitle id="market-squad-status">
 					<span className="inline-flex items-center gap-1.5">
-						<HeartPulse className="size-3.5" aria-hidden="true" />
+						<HeartPulse
+							className="size-3.5"
+							aria-hidden="true"
+						/>
 						{t('availabilityTitle')}
 					</span>
 				</SectionTitle>
@@ -892,11 +918,17 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 				<div>
 					<SectionTitle id="market-new-players">
 						<span className="inline-flex items-center gap-1.5">
-							<Sparkles className="size-3.5" aria-hidden="true" />
+							<Sparkles
+								className="size-3.5"
+								aria-hidden="true"
+							/>
 							{t('newPlayersTitle')}
 						</span>
 					</SectionTitle>
-					<NewPlayersBlock items={pulse.newPlayers} locale={locale} />
+					<NewPlayersBlock
+						items={pulse.newPlayers}
+						locale={locale}
+					/>
 				</div>
 			) : null}
 		</section>
@@ -906,7 +938,7 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 		prices: priceSection,
 		ownership: ownershipSection,
 		transfers: transferSection,
-		availability: availabilitySection,
+		availability: availabilitySection
 	}
 	const order =
 		viewMode === 'price-led'
@@ -920,12 +952,18 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 	return (
 		<div className="space-y-8">
 			<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-				<CoverageMeta coverage={pulse.coverage} locale={locale} />
+				<CoverageMeta
+					coverage={pulse.coverage}
+					locale={locale}
+				/>
 				<p className="mt-3 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
 					{t(`viewMode.${viewMode}`)}
 				</p>
 			</section>
-			<GlanceStrip pulse={viewPulse} locale={locale} />
+			<GlanceStrip
+				pulse={viewPulse}
+				locale={locale}
+			/>
 			{order.map(id => sectionById[id])}
 		</div>
 	)
