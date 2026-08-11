@@ -40,15 +40,20 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 		[]
 	let snapshot: Awaited<ReturnType<typeof getLiveMatchesSnapshot>>['snapshot'] =
 		null
+	let renderedCurrentEventId = currentEventId
+	let renderedNextEventId = nextEventId
 	let initialError: string | null = null
 
 	try {
 		const live = await getLiveMatchesSnapshot(
 			nextEventId,
-			executePublicServerQuery
+			executePublicServerQuery,
+			currentEventId
 		)
 		matches = live.matches
 		snapshot = live.snapshot
+		renderedCurrentEventId = live.currentEventId ?? currentEventId
+		renderedNextEventId = live.nextEventId
 		if (snapshot?.eventId != null && snapshot.eventId !== currentEventId) {
 			console.warn(
 				'[live/matches] liveSnapshot.eventId differs from isCurrent',
@@ -64,8 +69,8 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 		<LiveMatchesClient
 			initialMatches={matches}
 			initialError={initialError}
-			currentEventId={currentEventId}
-			nextEventId={nextEventId ?? undefined}
+			currentEventId={renderedCurrentEventId}
+			nextEventId={renderedNextEventId ?? undefined}
 			initialSnapshot={snapshot}
 		/>
 	)

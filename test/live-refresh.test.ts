@@ -190,23 +190,96 @@ describe('live matches server snapshot', () => {
 		assert.equal(result.snapshot?.revision, 'a'.repeat(24))
 	})
 
-	it('keeps live matches when the optional next-event request fails', async () => {
+	it('keeps live results when the optional upcoming-fixtures query fails', async () => {
 		const response: LiveMatchesResponse = {
 			liveSnapshot: snapshot('LIVE'),
-			liveMatches: { notStarted: [], playing: [], finished: [] }
+			liveMatches: {
+				notStarted: [],
+				playing: [
+					{
+						matchId: 3301,
+						minutes: 12,
+						homeTeamId: 1,
+						homeTeamName: 'Arsenal',
+						homeTeamShortName: 'ARS',
+						homePosition: 1,
+						awayTeamId: 2,
+						awayTeamName: 'Chelsea',
+						awayTeamShortName: 'CHE',
+						awayPosition: 2,
+						kickoffTime: '2026-08-11T18:00:00.000Z',
+						playStatus: 'LIVE',
+						homeScore: 1,
+						awayScore: 0,
+						homeTeamDataList: [],
+						awayTeamDataList: []
+					}
+				],
+				finished: []
+			}
 		}
+		const result = await getLiveMatchesSnapshot(34, async query => {
+			if (query.includes('GetEventFixtures'))
+				throw new Error('temporary fixture failure')
+			return response as never
+		})
+
+		assert.equal(result.matches.length, 1)
+		assert.equal(result.matches[0]?.status, 'LIVE')
+	})
+
+	it('re-resolves event identities before merging after a gameweek rollover', async () => {
+		const requests: Array<{
+			query: string
+			variables?: Record<string, unknown>
+		}> = []
 		const result = await getLiveMatchesSnapshot(
 			34,
-			async query => {
-				if (query.includes('GetEventFixtures')) {
-					throw new Error('fixtures temporarily unavailable')
+			async (query, variables) => {
+				requests.push({ query, variables })
+				if (query.includes('GetCurrentAndNextEvents')) {
+					return {
+						current: [{ id: 34 }],
+						next: [{ id: 35, deadlineTime: '2026-08-12T18:00:00.000Z' }]
+					} as never
 				}
-				return response as never
-			}
+				if (query.includes('GetEventFixtures')) {
+					const eventId = (variables as { eventId: number }).eventId
+					return {
+						eventFixtures: [
+							{
+								id: eventId * 100 + 1,
+								code: eventId * 100 + 1,
+								event: { id: eventId, name: `Gameweek ${eventId}` },
+								kickoffTime: '2026-08-11T18:00:00.000Z',
+								finished: false,
+								started: false,
+								homeTeam: { id: 1, name: 'Arsenal', shortName: 'ARS' },
+								awayTeam: { id: 2, name: 'Chelsea', shortName: 'CHE' },
+								homeScore: null,
+								awayScore: null,
+								homeTeamDifficulty: 2,
+								awayTeamDifficulty: 4
+							}
+						]
+					} as never
+				}
+				return {
+					liveSnapshot: { ...snapshot('LIVE'), eventId: 34 },
+					liveMatches: { notStarted: [], playing: [], finished: [] }
+				} as never
+			},
+			33
 		)
 
-		assert.deepEqual(result.matches, [])
-		assert.equal(result.snapshot?.state, 'LIVE')
+		assert.equal(result.nextEventId, 35)
+		assert.equal(result.matches[0]?.id, 'next-3501')
+		assert.deepEqual(
+			requests
+				.filter(request => request.query.includes('GetEventFixtures'))
+				.map(request => request.variables),
+			[{ eventId: 34 }, { eventId: 35 }]
+		)
 	})
 })
 

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 
 import {
@@ -10,10 +11,25 @@ import {
 const migrations: LocalMigration[] = [
 	{ tag: '0000_first', when: 100, hash: 'first' },
 	{ tag: '0001_second', when: 200, hash: 'second' },
-	{ tag: '0002_third', when: 300, hash: 'third' },
+	{ tag: '0002_third', when: 300, hash: 'third' }
 ]
 
 describe('Web migration audit', () => {
+	it('allows legacy auth objects to be absent on a clean database', () => {
+		const migration = readFileSync(
+			'drizzle/0010_remove_legacy_auth_objects.sql',
+			'utf8'
+		)
+		assert.match(migration, /to_regclass\('bauth\.apikey'\)/)
+		assert.match(migration, /DROP TABLE IF EXISTS bauth\.apikey/)
+		assert.match(
+			migration,
+			/DROP TABLE IF EXISTS drizzle\.__drizzle_migrations/
+		)
+		assert.match(migration, /DROP SCHEMA IF EXISTS drizzle/)
+		assert.doesNotMatch(migration, /LOCK TABLE\s+\n\s*bauth\.apikey,/)
+	})
+
 	it('keeps the production-applied 0009 migration byte-for-byte frozen', async () => {
 		const { migrations: localMigrations } = await loadLocalMigrations()
 		const migration = localMigrations.find(
@@ -26,8 +42,13 @@ describe('Web migration audit', () => {
 	})
 
 	it('allows pending migrations only after the applied tail', () => {
-		const audit = inspectMigrationHistory(migrations, [{ createdAt: 100, hash: 'first' }])
-		assert.deepEqual(audit.pending.map(row => row.tag), ['0001_second', '0002_third'])
+		const audit = inspectMigrationHistory(migrations, [
+			{ createdAt: 100, hash: 'first' }
+		])
+		assert.deepEqual(
+			audit.pending.map(row => row.tag),
+			['0001_second', '0002_third']
+		)
 		assert.deepEqual(audit.backdated, [])
 	})
 
@@ -36,13 +57,22 @@ describe('Web migration audit', () => {
 			migrations,
 			[
 				{ createdAt: 200, hash: 'edited' },
-				{ createdAt: 400, hash: 'missing-locally' },
+				{ createdAt: 400, hash: 'missing-locally' }
 			],
-			['0009_orphan.sql'],
+			['0009_orphan.sql']
 		)
-		assert.deepEqual(audit.backdated.map(row => row.tag), ['0000_first', '0002_third'])
-		assert.deepEqual(audit.checksumMismatches.map(row => row.tag), ['0001_second'])
-		assert.deepEqual(audit.extraLedgerEntries.map(row => row.createdAt), [400])
+		assert.deepEqual(
+			audit.backdated.map(row => row.tag),
+			['0000_first', '0002_third']
+		)
+		assert.deepEqual(
+			audit.checksumMismatches.map(row => row.tag),
+			['0001_second']
+		)
+		assert.deepEqual(
+			audit.extraLedgerEntries.map(row => row.createdAt),
+			[400]
+		)
 		assert.deepEqual(audit.orphans, ['0009_orphan.sql'])
 	})
 })
