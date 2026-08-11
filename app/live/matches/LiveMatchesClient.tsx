@@ -300,7 +300,8 @@ export function LiveMatchesClient({
 		isPageActive,
 		currentEventId: pollingEventId,
 		selectedEventId: pollingEventId,
-		snapshot
+		snapshot,
+		probeEventIdentity: true
 	})
 	const activeTabConfig = TAB_CONFIG.find(config => config.value === activeTab)
 	const activeMatches = matchesByTab[activeTab]

@@ -1,6 +1,7 @@
 'use client'
 
 import { copyTextToClipboard } from '@/app/live/points/_lib/live-points-share'
+import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import { Button } from '@/components/ui/button'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
 import type { Match } from '@/types/match'
@@ -20,6 +21,7 @@ export function MatchShareButton({
 	const t = useTranslations('LiveMatches')
 	const locale = useLocale() as AppLocale
 	const [copied, setCopied] = useState(false)
+	const [manualShareText, setManualShareText] = useState<string | null>(null)
 
 	const handleCopy = useCallback(async () => {
 		const origin =
@@ -65,20 +67,31 @@ export function MatchShareButton({
 	}, [locale, match, onManualShareTextChange, t])
 
 	return (
-		<Button
-			type="button"
-			variant="outline"
-			size="icon"
-			className="size-8 rounded-full border-border/70 bg-card/90 shadow-sm backdrop-blur-sm hover:bg-accent"
-			onClick={() => void handleCopy()}
-			aria-label={copied ? t('shareCopiedShort') : t('shareCopy')}
-			title={copied ? t('shareCopiedShort') : t('shareCopy')}
-		>
-			{copied ? (
-				<Check className="size-3.5 text-primary-ink" aria-hidden="true" />
-			) : (
-				<Copy className="size-3.5" aria-hidden="true" />
-			)}
-		</Button>
+		<div>
+			<Button
+				type="button"
+				variant="outline"
+				size="icon"
+				className="size-8 rounded-full border-border/70 bg-card/90 shadow-sm backdrop-blur-sm hover:bg-accent"
+				onClick={() => void handleCopy()}
+				aria-label={copied ? t('shareCopiedShort') : t('shareCopy')}
+				title={copied ? t('shareCopiedShort') : t('shareCopy')}
+			>
+				{copied ? (
+					<Check className="size-3.5 text-primary-ink" aria-hidden="true" />
+				) : (
+					<Copy className="size-3.5" aria-hidden="true" />
+				)}
+			</Button>
+			{manualShareText ? (
+				<ShareTextFallback
+					text={manualShareText}
+					message={t('shareCopyUnsupported')}
+					fieldLabel={t('shareCopyManualLabel')}
+					closeLabel={t('shareCopyClose')}
+					onClose={() => setManualShareText(null)}
+				/>
+			) : null}
+		</div>
 	)
 }
