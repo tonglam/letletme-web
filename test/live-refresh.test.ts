@@ -47,7 +47,7 @@ describe('live refresh policy', () => {
 		}
 	})
 
-	it('stops background, past-event, and settled polling', () => {
+	it('stops background and past-event polling', () => {
 		assert.equal(
 			shouldPollLiveSnapshot({
 				isPageActive: false,
@@ -73,7 +73,7 @@ describe('live refresh policy', () => {
 				selectedEventId: 33,
 				snapshot: snapshot('SETTLED')
 			}),
-			false
+			true
 		)
 	})
 
@@ -316,7 +316,7 @@ describe('partial tournament refreshes', () => {
 				selectedEventId: 33,
 				snapshot: seed.snapshot
 			}),
-			false
+			true
 		)
 	})
 

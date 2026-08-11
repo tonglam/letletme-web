@@ -23,7 +23,10 @@ export function shouldPollLiveSnapshot({
 	// Keep current-event polling enabled so the UI can recover automatically.
 	if (!snapshot || snapshot.eventId !== selectedEventId) return true
 
-	return snapshot.state !== 'SETTLED'
+	// Keep probing event identity after a settled snapshot. The current event
+	// remains settled until the next deadline, but the page must still discover
+	// the next gameweek without requiring a manual refresh.
+	return true
 }
 
 export function shouldRefreshLiveExplain(
