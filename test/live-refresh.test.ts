@@ -9,6 +9,7 @@ import { getLiveMatchesSnapshot } from '../lib/live-matches'
 import {
 	LIVE_AUTO_REFRESH_SECONDS,
 	LIVE_EXPLAIN_REFRESH_INTERVAL_MS,
+	liveRefreshEventIdentityChanged,
 	liveSnapshotNeedsRefresh,
 	shouldPollLiveSnapshot,
 	shouldRefreshLiveExplain
@@ -133,6 +134,12 @@ describe('live refresh policy', () => {
 			true
 		)
 		assert.equal(liveSnapshotNeedsRefresh(null, null), true)
+	})
+
+	it('re-resolves event identities before a freshness probe', () => {
+		assert.equal(liveRefreshEventIdentityChanged(33, 34, 33, 34), false)
+		assert.equal(liveRefreshEventIdentityChanged(33, 34, 34, 35), true)
+		assert.equal(liveRefreshEventIdentityChanged(33, 34, 33, undefined), true)
 	})
 })
 

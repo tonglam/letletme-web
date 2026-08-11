@@ -43,3 +43,15 @@ export function liveSnapshotNeedsRefresh(
 		accepted.revision !== observed.revision
 	)
 }
+
+export function liveRefreshEventIdentityChanged(
+	acceptedCurrentEventId: number | undefined,
+	acceptedNextEventId: number | undefined,
+	currentEventId: number | undefined,
+	nextEventId: number | undefined
+): boolean {
+	return (
+		acceptedCurrentEventId !== currentEventId ||
+		acceptedNextEventId !== nextEventId
+	)
+}

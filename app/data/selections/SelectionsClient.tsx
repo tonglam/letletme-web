@@ -4,13 +4,13 @@ import {
 	buildLeagueTrendSummary,
 	leagueTrendKey,
 	type InitialLeagueTrendsSelection,
-	type LeagueTrendsScope,
+	type LeagueTrendsScope
 } from '@/app/data/selections/_lib/league-trends'
 import {
 	buildSelectionsShareUrl,
 	formatCaptainShareText,
 	formatOwnershipShareText,
-	formatTransferShareText,
+	formatTransferShareText
 } from '@/app/data/selections/_lib/selections-share'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { copyTextToClipboard } from '@/app/live/points/_lib/live-points-share'
@@ -18,12 +18,16 @@ import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import {
 	isKnownTournamentId,
 	readLastTournamentId,
-	writeLastTournamentId,
+	writeLastTournamentId
 } from '@/app/me/tournament/_lib/tournament-stats-preference'
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import PageShell from '@/components/layout/PageShell'
 import { GameweekBadge } from '@/components/stats/GameweekBadge'
-import { StatsMetricTile, StatsPageHeader } from '@/components/stats/StatsSurfaces'
+import { ShareTextFallback } from '@/components/share/ShareTextFallback'
+import {
+	StatsMetricTile,
+	StatsPageHeader
+} from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -33,7 +37,7 @@ import {
 	SelectItem,
 	SelectLabel,
 	SelectTrigger,
-	SelectValue,
+	SelectValue
 } from '@/components/ui/select'
 import { usePageActive } from '@/hooks/use-page-active'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
@@ -41,12 +45,12 @@ import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_ENTRY_EVENT_RESULT,
 	type EntryEventPick,
-	type EntryEventResultResponse,
+	type EntryEventResultResponse
 } from '@/lib/graphql/operations/entries'
 import {
 	GET_PUBLIC_LEAGUE_SELECTION_STATS,
 	type PublicLeagueSelectionStatsResponse,
-	type PublicLeagueTrend,
+	type PublicLeagueTrend
 } from '@/lib/graphql/operations/leagues'
 import {
 	GET_ENTRY_TOURNAMENTS,
@@ -54,12 +58,12 @@ import {
 	type EntryTournamentsResponse,
 	type TournamentSelectionStatsData,
 	type TournamentSelectionStatsResponse,
-	type TournamentStatPlayer,
+	type TournamentStatPlayer
 } from '@/lib/graphql/operations/tournaments'
 import { positionBadgeClass } from '@/lib/position-style'
 import {
 	areTournamentInsightsReady,
-	isTournamentSetupInFlight,
+	isTournamentSetupInFlight
 } from '@/lib/tournament/lifecycle'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 import { cn, normalizePosition } from '@/lib/utils'
@@ -72,7 +76,7 @@ import {
 	RefreshCw,
 	TrendingDown,
 	TrendingUp,
-	Users,
+	Users
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
@@ -82,7 +86,7 @@ import {
 	useMemo,
 	useRef,
 	useState,
-	type ReactNode,
+	type ReactNode
 } from 'react'
 import { toast } from 'sonner'
 
@@ -116,18 +120,18 @@ const EMPTY_STATS: StatsResult = {
 	selection: [],
 	captain: [],
 	transferIn: [],
-	transferOut: [],
+	transferOut: []
 }
 
 function toStatsResult(
-	stats: TournamentSelectionStatsData | null | undefined,
+	stats: TournamentSelectionStatsData | null | undefined
 ): StatsResult {
 	return {
 		totalEntries: stats?.totalEntries ?? 0,
 		selection: stats?.mostSelectedPlayers ?? [],
 		captain: stats?.captainSelect ?? [],
 		transferIn: stats?.mostTransferIn ?? [],
-		transferOut: stats?.mostTransferOut ?? [],
+		transferOut: stats?.mostTransferOut ?? []
 	}
 }
 
@@ -142,7 +146,7 @@ function isEmptyStats(stats: StatsResult): boolean {
 }
 
 function parseLeagueTrendKey(
-	value: string,
+	value: string
 ): { scope: LeagueTrendsScope; tournamentId: number } | null {
 	const [scope, rawId, ...rest] = value.split(':')
 	const tournamentId = Number(rawId)
@@ -161,7 +165,7 @@ function SectionTitle({
 	id,
 	children,
 	hint,
-	action,
+	action
 }: {
 	id: string
 	children: ReactNode
@@ -253,7 +257,7 @@ function PositionBadge({ position }: { position: string }) {
 		<Badge
 			className={cn(
 				positionBadgeClass(code),
-				'shrink-0 px-1.5 py-0 text-[10px] font-bold',
+				'shrink-0 px-1.5 py-0 text-[10px] font-bold'
 			)}
 		>
 			{code === 'UNK' ? '—' : code}
@@ -267,7 +271,11 @@ function PlayerRoles({ roles }: { roles: PlayerRole[] }) {
 	return (
 		<div className="mt-1 flex flex-wrap gap-1">
 			{roles.map(role => (
-				<Badge key={role} variant="outline" className="px-1 py-0 text-[9px]">
+				<Badge
+					key={role}
+					variant="outline"
+					className="px-1 py-0 text-[9px]"
+				>
 					{role === 'CAPTAIN'
 						? t('roleCaptain')
 						: role === 'VICE'
@@ -305,7 +313,7 @@ function PlayerRankRow({
 	rank,
 	player,
 	metric,
-	roles = [],
+	roles = []
 }: {
 	rank: number
 	player: TournamentStatPlayer
@@ -335,10 +343,10 @@ function PlayerRankRow({
 				<PositionBadge position={player.position} />
 				<div className="min-w-0 flex-1">
 					<Link
-					href={playerStatsHref({ p1: String(player.id) })}
-					className="block truncate text-sm font-medium leading-tight hover:underline"
-				>
-					{player.webName}
+						href={playerStatsHref({ p1: String(player.id) })}
+						className="block truncate text-sm font-medium leading-tight hover:underline"
+					>
+						{player.webName}
 					</Link>
 					<p className="truncate text-[11px] text-muted-foreground">
 						{player.teamShortName}
@@ -365,7 +373,7 @@ function MetricBoard({
 	emptyLabel,
 	ariaLabel,
 	getMetric,
-	rolesByPlayerId,
+	rolesByPlayerId
 }: {
 	players: TournamentStatPlayer[]
 	emptyLabel: string
@@ -410,7 +418,10 @@ function ExpandableMetricBoard({
 	const visiblePlayers = expanded ? players.slice(0, 12) : players.slice(0, 5)
 	return (
 		<div>
-			<MetricBoard players={visiblePlayers} {...props} />
+			<MetricBoard
+				players={visiblePlayers}
+				{...props}
+			/>
 			{players.length > 5 ? (
 				<Button
 					type="button"
@@ -446,7 +457,7 @@ function BoardSkeleton() {
 
 function maxOf(
 	players: TournamentStatPlayer[],
-	pick: (player: TournamentStatPlayer) => number | undefined | null,
+	pick: (player: TournamentStatPlayer) => number | undefined | null
 ): number {
 	let max = 0
 	for (const player of players) {
@@ -468,7 +479,7 @@ export default function SelectionsClient({
 	currentGameweek,
 	myLeaguesLoadFailed,
 	publicLeaguesLoadFailed,
-	initialStatsLoadFailed,
+	initialStatsLoadFailed
 }: SelectionsClientProps) {
 	const t = useTranslations('Selections')
 	const lifecycleT = useTranslations('TournamentLifecycle')
@@ -480,10 +491,10 @@ export default function SelectionsClient({
 	const [tournaments, setTournaments] = useState(initialTournaments)
 	const [selectedScope, setSelectedScope] = useState(initialSelection.scope)
 	const [selectedTournamentId, setSelectedTournamentId] = useState(
-		initialSelection.tournamentId,
+		initialSelection.tournamentId
 	)
 	const [selectedGameweek, setSelectedGameweek] = useState(
-		initialSelection.gameweek,
+		initialSelection.gameweek
 	)
 	const [stats, setStats] = useState(initialStats ?? EMPTY_STATS)
 	const [entryPicks, setEntryPicks] = useState(initialEntryPicks)
@@ -493,7 +504,7 @@ export default function SelectionsClient({
 		return initialSelection.key ? 'unavailable' : 'empty'
 	})
 	const [statsError, setStatsError] = useState(
-		initialStatsLoadFailed ? t('statsError') : '',
+		initialStatsLoadFailed ? t('statsError') : ''
 	)
 	const [ownershipExpanded, setOwnershipExpanded] = useState(false)
 	const [captainExpanded, setCaptainExpanded] = useState(false)
@@ -506,11 +517,11 @@ export default function SelectionsClient({
 				? [
 						[
 							`${initialSelection.key}:${initialSelection.gameweek}`,
-							{ stats: initialStats, entryPicks: initialEntryPicks },
-						],
+							{ stats: initialStats, entryPicks: initialEntryPicks }
+						]
 					]
-				: [],
-		),
+				: []
+		)
 	)
 
 	const selectedKey =
@@ -519,13 +530,17 @@ export default function SelectionsClient({
 			: null
 	const selectedTournament =
 		selectedScope === 'mine'
-			? tournaments.find(item => Number(item.id) === selectedTournamentId) ?? null
+			? (tournaments.find(item => Number(item.id) === selectedTournamentId) ??
+				null)
 			: null
 	const selectedPublicLeague =
 		selectedScope === 'public'
-			? publicLeagues.find(item => item.tournamentId === selectedTournamentId) ?? null
+			? (publicLeagues.find(
+					item => item.tournamentId === selectedTournamentId
+				) ?? null)
 			: null
-	const selectedName = selectedTournament?.name ?? selectedPublicLeague?.displayName ?? null
+	const selectedName =
+		selectedTournament?.name ?? selectedPublicLeague?.displayName ?? null
 	const insightsReady =
 		selectedScope === 'public'
 			? selectedPublicLeague != null
@@ -538,7 +553,7 @@ export default function SelectionsClient({
 			scope: LeagueTrendsScope,
 			tournamentId: number,
 			eventId: number,
-			force = false,
+			force = false
 		) => {
 			const requestId = ++statsRequestIdRef.current
 			const cacheKey = `${leagueTrendKey(scope, tournamentId)}:${eventId}`
@@ -563,12 +578,12 @@ export default function SelectionsClient({
 					const [statsResult, entryResult] = await Promise.allSettled([
 						executeQuery<TournamentSelectionStatsResponse>(
 							GET_TOURNAMENT_SELECTION_STATS,
-							{ tournamentId, eventId, limit: 12 },
+							{ tournamentId, eventId, limit: 12 }
 						),
 						executeQuery<EntryEventResultResponse>(GET_ENTRY_EVENT_RESULT, {
 							entryId,
-							eventId,
-						}),
+							eventId
+						})
 					])
 					if (statsResult.status === 'rejected') throw statsResult.reason
 					if (entryResult.status === 'rejected') throw entryResult.reason
@@ -576,21 +591,20 @@ export default function SelectionsClient({
 						stats: toStatsResult(statsResult.value.tournamentSelectionStats),
 						entryPicks:
 							entryResult.status === 'fulfilled'
-								? entryResult.value.entryEventResult?.eventPicks ?? []
-								: [],
+								? (entryResult.value.entryEventResult?.eventPicks ?? [])
+								: []
 					}
 				} else {
-					const response =
-						await executeQuery<
-							PublicLeagueSelectionStatsResponse<TournamentSelectionStatsData>
-						>(GET_PUBLIC_LEAGUE_SELECTION_STATS, {
-							tournamentId,
-							eventId,
-							limit: 12,
-						})
+					const response = await executeQuery<
+						PublicLeagueSelectionStatsResponse<TournamentSelectionStatsData>
+					>(GET_PUBLIC_LEAGUE_SELECTION_STATS, {
+						tournamentId,
+						eventId,
+						limit: 12
+					})
 					next = {
 						stats: toStatsResult(response.publicLeagueSelectionStats),
-						entryPicks: [],
+						entryPicks: []
 					}
 				}
 				if (requestId !== statsRequestIdRef.current) return
@@ -605,12 +619,16 @@ export default function SelectionsClient({
 				setLoadState('error')
 			}
 		},
-		[entryId, t],
+		[entryId, t]
 	)
 
 	useEffect(() => {
 		if (restoredPreferenceRef.current) return
-		if (initialSelection.urlSelectionValid || entryId <= 0 || tournaments.length === 0) {
+		if (
+			initialSelection.urlSelectionValid ||
+			entryId <= 0 ||
+			tournaments.length === 0
+		) {
 			restoredPreferenceRef.current = true
 			return
 		}
@@ -666,7 +684,14 @@ export default function SelectionsClient({
 		if (next.toString() === searchParams.toString()) return
 		const href = `${pathname}?${next.toString()}`
 		router.replace(href, { scroll: false })
-	}, [pathname, router, searchParams, selectedGameweek, selectedScope, selectedTournamentId])
+	}, [
+		pathname,
+		router,
+		searchParams,
+		selectedGameweek,
+		selectedScope,
+		selectedTournamentId
+	])
 
 	useEffect(() => {
 		if (
@@ -685,11 +710,11 @@ export default function SelectionsClient({
 			try {
 				const data = await executeQuery<EntryTournamentsResponse>(
 					GET_ENTRY_TOURNAMENTS,
-					{ entryId },
+					{ entryId }
 				)
 				if (!cancelled) {
 					setTournaments(
-						data.entryTournaments.map(mapEntryTournamentToLiveTournament),
+						data.entryTournaments.map(mapEntryTournamentToLiveTournament)
 					)
 				}
 			} catch (error) {
@@ -735,39 +760,45 @@ export default function SelectionsClient({
 		return () => {
 			cancelled = true
 		}
-	}, [fetchStats, insightsReady, selectedGameweek, selectedScope, selectedTournamentId])
+	}, [
+		fetchStats,
+		insightsReady,
+		selectedGameweek,
+		selectedScope,
+		selectedTournamentId
+	])
 
 	const sortedSelection = useMemo(
 		() =>
 			[...stats.selection].sort(
-				(a, b) => (b.selectedByPercent ?? 0) - (a.selectedByPercent ?? 0),
+				(a, b) => (b.selectedByPercent ?? 0) - (a.selectedByPercent ?? 0)
 			),
-		[stats.selection],
+		[stats.selection]
 	)
 	const sortedCaptain = useMemo(
 		() =>
 			[...stats.captain].sort(
-				(a, b) => (b.captainByPercent ?? 0) - (a.captainByPercent ?? 0),
+				(a, b) => (b.captainByPercent ?? 0) - (a.captainByPercent ?? 0)
 			),
-		[stats.captain],
+		[stats.captain]
 	)
 	const sortedTransferIn = useMemo(
 		() =>
 			[...stats.transferIn].sort(
-				(a, b) => (b.transfersEvent ?? 0) - (a.transfersEvent ?? 0),
+				(a, b) => (b.transfersEvent ?? 0) - (a.transfersEvent ?? 0)
 			),
-		[stats.transferIn],
+		[stats.transferIn]
 	)
 	const sortedTransferOut = useMemo(
 		() =>
 			[...stats.transferOut].sort(
-				(a, b) => (b.transfersEvent ?? 0) - (a.transfersEvent ?? 0),
+				(a, b) => (b.transfersEvent ?? 0) - (a.transfersEvent ?? 0)
 			),
-		[stats.transferOut],
+		[stats.transferOut]
 	)
 	const summary = useMemo(
 		() => buildLeagueTrendSummary(sortedSelection, sortedCaptain, entryPicks),
-		[entryPicks, sortedCaptain, sortedSelection],
+		[entryPicks, sortedCaptain, sortedSelection]
 	)
 
 	const maxOwned = maxOf(sortedSelection, player => player.selectedByPercent)
@@ -776,41 +807,49 @@ export default function SelectionsClient({
 	const maxTout = maxOf(sortedTransferOut, player => player.transfersEvent)
 	const topCaptain = sortedCaptain[0]
 	const isLoadingStats = loadState === 'loading'
-	const showDesk = Boolean(selectedKey && insightsReady && loadState !== 'error')
+	const showDesk = Boolean(
+		selectedKey && insightsReady && loadState !== 'error'
+	)
 	const isMine = selectedScope === 'mine'
 
 	const shareScope = useMemo(
 		() => ({
 			tournamentName: selectedName ?? '—',
 			gameweek: selectedGameweek,
-			totalEntries: stats.totalEntries,
+			totalEntries: stats.totalEntries
 		}),
-		[selectedGameweek, selectedName, stats.totalEntries],
+		[selectedGameweek, selectedName, stats.totalEntries]
 	)
 	const shareFooter = useCallback(() => {
-		const origin = typeof window === 'undefined' ? 'https://letletme.top' : window.location.origin
+		const origin =
+			typeof window === 'undefined'
+				? 'https://letletme.top'
+				: window.location.origin
 		const prefix =
-			typeof window !== 'undefined' && window.location.pathname.startsWith('/zh-CN')
+			typeof window !== 'undefined' &&
+			window.location.pathname.startsWith('/zh-CN')
 				? '/zh-CN'
 				: ''
 		const url = buildSelectionsShareUrl(origin, prefix, {
 			scope: selectedScope,
 			tournamentId: selectedTournamentId,
-			gameweek: selectedGameweek,
+			gameweek: selectedGameweek
 		})
 		return isMine ? `${url}\n${t('shareMyMembershipNote')}` : url
 	}, [isMine, selectedGameweek, selectedScope, selectedTournamentId, t])
 	const fieldLine =
-		stats.totalEntries > 0 ? t('fieldLine', { count: stats.totalEntries }) : undefined
+		stats.totalEntries > 0
+			? t('fieldLine', { count: stats.totalEntries })
+			: undefined
 	const ownershipShareText = useCallback(
 		() =>
 			formatOwnershipShareText(sortedSelection, shareScope, {
 				title: t('ownershipTitle'),
 				none: t('shareNone'),
 				fieldLine,
-				footer: shareFooter(),
+				footer: shareFooter()
 			}),
-		[fieldLine, shareFooter, shareScope, sortedSelection, t],
+		[fieldLine, shareFooter, shareScope, sortedSelection, t]
 	)
 	const captainShareText = useCallback(
 		() =>
@@ -818,9 +857,9 @@ export default function SelectionsClient({
 				title: t('captainTitle'),
 				none: t('shareNone'),
 				fieldLine,
-				footer: shareFooter(),
+				footer: shareFooter()
 			}),
-		[fieldLine, shareFooter, shareScope, sortedCaptain, t],
+		[fieldLine, shareFooter, shareScope, sortedCaptain, t]
 	)
 	const transferShareText = useCallback(
 		() =>
@@ -830,15 +869,18 @@ export default function SelectionsClient({
 				fieldLine,
 				transfersIn: t('transfersIn'),
 				transfersOut: t('transfersOut'),
-				footer: shareFooter(),
+				footer: shareFooter()
 			}),
-		[fieldLine, shareFooter, shareScope, sortedTransferIn, sortedTransferOut, t],
+		[fieldLine, shareFooter, shareScope, sortedTransferIn, sortedTransferOut, t]
 	)
 
 	const captainPickName = summary.userCaptain?.webName ?? '—'
 	const exposureDetail = (player: TournamentStatPlayer | undefined) =>
 		player ? (
-			<Link href={playerStatsHref({ p1: String(player.id) })} className="hover:underline">
+			<Link
+				href={playerStatsHref({ p1: String(player.id) })}
+				className="hover:underline"
+			>
 				{t('exposureIfReturn', { player: player.webName })}
 			</Link>
 		) : undefined
@@ -864,7 +906,10 @@ export default function SelectionsClient({
 						</p>
 						{selectedName ? (
 							<p className="truncate text-xs text-muted-foreground">
-								{t('scopeMeta', { tournament: selectedName, gw: selectedGameweek })}
+								{t('scopeMeta', {
+									tournament: selectedName,
+									gw: selectedGameweek
+								})}
 							</p>
 						) : null}
 					</div>
@@ -872,7 +917,10 @@ export default function SelectionsClient({
 					<div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
 						<div className="space-y-2">
 							{tournaments.length > 0 || publicLeagues.length > 0 ? (
-								<Select value={selectedKey ?? undefined} onValueChange={handleLeagueChange}>
+								<Select
+									value={selectedKey ?? undefined}
+									onValueChange={handleLeagueChange}
+								>
 									<SelectTrigger aria-label={t('leagueSelectorLabel')}>
 										<SelectValue placeholder={t('leagueSelectorPlaceholder')} />
 									</SelectTrigger>
@@ -883,7 +931,10 @@ export default function SelectionsClient({
 												{tournaments.map(tournament => (
 													<SelectItem
 														key={leagueTrendKey('mine', Number(tournament.id))}
-														value={leagueTrendKey('mine', Number(tournament.id))}
+														value={leagueTrendKey(
+															'mine',
+															Number(tournament.id)
+														)}
 													>
 														{tournament.name}
 													</SelectItem>
@@ -896,7 +947,10 @@ export default function SelectionsClient({
 												{publicLeagues.map(league => (
 													<SelectItem
 														key={leagueTrendKey('public', league.tournamentId)}
-														value={leagueTrendKey('public', league.tournamentId)}
+														value={leagueTrendKey(
+															'public',
+															league.tournamentId
+														)}
 													>
 														{league.displayName}
 													</SelectItem>
@@ -911,37 +965,52 @@ export default function SelectionsClient({
 							{entryId <= 0 ? (
 								<p className="text-xs text-muted-foreground">
 									{t('needEntry')}{' '}
-									<Link href="/onboarding/bind-entry" className="font-medium text-primary-ink hover:underline">
+									<Link
+										href="/onboarding/bind-entry"
+										className="font-medium text-primary-ink hover:underline"
+									>
 										{t('bindEntryCta')}
 									</Link>
 								</p>
 							) : tournaments.length === 0 && !myLeaguesLoadFailed ? (
 								<p className="text-xs text-muted-foreground">
 									{t('noTournaments')}{' '}
-									<Link href="/tournament/browse" className="font-medium text-primary-ink hover:underline">
+									<Link
+										href="/tournament/browse"
+										className="font-medium text-primary-ink hover:underline"
+									>
 										{t('browseTournaments')}
 									</Link>
 								</p>
 							) : null}
 							{myLeaguesLoadFailed ? (
-								<p className="text-xs text-destructive">{t('myLeaguesError')}</p>
+								<p className="text-xs text-destructive">
+									{t('myLeaguesError')}
+								</p>
 							) : null}
 							{publicLeaguesLoadFailed ? (
-								<p className="text-xs text-destructive">{t('publicLeaguesError')}</p>
+								<p className="text-xs text-destructive">
+									{t('publicLeaguesError')}
+								</p>
 							) : null}
 						</div>
 						<GameweekSelector
 							currentGameweek={currentGameweek}
 							selectedGameweek={selectedGameweek}
 							onGameweekChange={handleGameweekChange}
-							disabled={isLoadingStats || Boolean(selectedKey && !insightsReady)}
+							disabled={
+								isLoadingStats || Boolean(selectedKey && !insightsReady)
+							}
 							className="border-0 bg-transparent p-0 shadow-none"
 						/>
 					</div>
 				</section>
 
 				{selectedTournament && !insightsReady ? (
-					<div className="rounded-xl border border-border/80 bg-card px-5 py-8 text-center shadow-sm" aria-live="polite">
+					<div
+						className="rounded-xl border border-border/80 bg-card px-5 py-8 text-center shadow-sm"
+						aria-live="polite"
+					>
 						<p className="font-display text-sm font-semibold uppercase tracking-wide">
 							{selectedTournament.name}
 						</p>
@@ -958,16 +1027,29 @@ export default function SelectionsClient({
 				) : null}
 
 				{loadState === 'error' && selectedScope && selectedTournamentId ? (
-					<div className="rounded-xl border border-destructive/40 bg-card px-5 py-6" role="alert">
+					<div
+						className="rounded-xl border border-destructive/40 bg-card px-5 py-6"
+						role="alert"
+					>
 						<p className="text-sm font-medium">{statsError}</p>
 						<Button
 							type="button"
 							variant="outline"
 							size="sm"
 							className="mt-3 gap-1.5"
-							onClick={() => void fetchStats(selectedScope, selectedTournamentId, selectedGameweek, true)}
+							onClick={() =>
+								void fetchStats(
+									selectedScope,
+									selectedTournamentId,
+									selectedGameweek,
+									true
+								)
+							}
 						>
-							<RefreshCw className="size-3.5" aria-hidden="true" />
+							<RefreshCw
+								className="size-3.5"
+								aria-hidden="true"
+							/>
 							{t('retry')}
 						</Button>
 					</div>
@@ -975,15 +1057,34 @@ export default function SelectionsClient({
 
 				{showDesk ? (
 					<div className="space-y-8 sm:space-y-10">
-						<section aria-label={t('glanceLabel')} className="grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
+						<section
+							aria-label={t('glanceLabel')}
+							className="grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3"
+						>
 							<StatsMetricTile
-								icon={<Users className="size-3.5" aria-hidden="true" />}
+								icon={
+									<Users
+										className="size-3.5"
+										aria-hidden="true"
+									/>
+								}
 								label={t('glanceField')}
-								value={isLoadingStats ? '…' : stats.totalEntries > 0 ? String(stats.totalEntries) : '—'}
+								value={
+									isLoadingStats
+										? '…'
+										: stats.totalEntries > 0
+											? String(stats.totalEntries)
+											: '—'
+								}
 								detail={t('glanceFieldDetail')}
 							/>
 							<StatsMetricTile
-								icon={<Users className="size-3.5" aria-hidden="true" />}
+								icon={
+									<Users
+										className="size-3.5"
+										aria-hidden="true"
+									/>
+								}
 								label={t('templateCore')}
 								value={
 									isLoadingStats
@@ -996,39 +1097,99 @@ export default function SelectionsClient({
 								}
 								detail={
 									summary.templateCore.length > 0
-										? summary.templateCore.map(player => player.webName).join(', ')
+										? summary.templateCore
+												.map(player => player.webName)
+												.join(', ')
 										: undefined
 								}
 							/>
 							<StatsMetricTile
-								icon={<Crown className="size-3.5" aria-hidden="true" />}
+								icon={
+									<Crown
+										className="size-3.5"
+										aria-hidden="true"
+									/>
+								}
 								label={t('captainExposure')}
-								value={isLoadingStats ? '…' : isMine ? captainPickName : (topCaptain?.webName ?? '—')}
+								value={
+									isLoadingStats
+										? '…'
+										: isMine
+											? captainPickName
+											: (topCaptain?.webName ?? '—')
+								}
 								detail={
 									isMine
-										? t('leagueCaptainRate', { value: formatPercent(summary.captainRate) })
+										? t('leagueCaptainRate', {
+												value: formatPercent(summary.captainRate)
+											})
 										: topCaptain
 											? formatPercent(topCaptain.captainByPercent)
 											: undefined
 								}
 							/>
 							<StatsMetricTile
-								icon={<TrendingDown className="size-3.5" aria-hidden="true" />}
+								icon={
+									<TrendingDown
+										className="size-3.5"
+										aria-hidden="true"
+									/>
+								}
 								label={t('negativeExposure')}
-								value={isLoadingStats ? '…' : isMine ? formatExposure(summary.biggestNegative?.gap) : '—'}
-								detail={isMine ? exposureDetail(summary.biggestNegative?.player) : t('myLeagueOnly')}
+								value={
+									isLoadingStats
+										? '…'
+										: isMine
+											? formatExposure(summary.biggestNegative?.gap)
+											: '—'
+								}
+								detail={
+									isMine
+										? exposureDetail(summary.biggestNegative?.player)
+										: t('myLeagueOnly')
+								}
 							/>
 							<StatsMetricTile
-								icon={<TrendingUp className="size-3.5" aria-hidden="true" />}
+								icon={
+									<TrendingUp
+										className="size-3.5"
+										aria-hidden="true"
+									/>
+								}
 								label={t('positiveExposure')}
-								value={isLoadingStats ? '…' : isMine ? formatExposure(summary.biggestPositive?.gap) : '—'}
-								detail={isMine ? exposureDetail(summary.biggestPositive?.player) : t('myLeagueOnly')}
+								value={
+									isLoadingStats
+										? '…'
+										: isMine
+											? formatExposure(summary.biggestPositive?.gap)
+											: '—'
+								}
+								detail={
+									isMine
+										? exposureDetail(summary.biggestPositive?.player)
+										: t('myLeagueOnly')
+								}
 							/>
 						</section>
-						{isMine ? <p className="-mt-6 text-xs text-muted-foreground">{t('exposureCoverage')}</p> : null}
+						{isMine ? (
+							<p className="-mt-6 text-xs text-muted-foreground">
+								{t('exposureCoverage')}
+							</p>
+						) : null}
 
-						<section aria-labelledby="sel-ownership" className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-							<SectionTitle id="sel-ownership" hint={t('ownershipHint')} action={!isLoadingStats ? <SectionShareActions getText={ownershipShareText} /> : null}>
+						<section
+							aria-labelledby="sel-ownership"
+							className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+						>
+							<SectionTitle
+								id="sel-ownership"
+								hint={t('ownershipHint')}
+								action={
+									!isLoadingStats ? (
+										<SectionShareActions getText={ownershipShareText} />
+									) : null
+								}
+							>
 								{t('ownershipTitle')}
 							</SectionTitle>
 							{isLoadingStats ? (
@@ -1043,16 +1204,32 @@ export default function SelectionsClient({
 									rolesByPlayerId={summary.rolesByPlayerId}
 									getMetric={player => ({
 										primary: formatPercent(player.selectedByPercent),
-										secondary: t('eoValue', { value: formatPercent(player.eoByPercent) }),
-										magnitude: maxOwned > 0 ? (player.selectedByPercent ?? 0) / maxOwned : 0,
-										tone: 'default',
+										secondary: t('eoValue', {
+											value: formatPercent(player.eoByPercent)
+										}),
+										magnitude:
+											maxOwned > 0
+												? (player.selectedByPercent ?? 0) / maxOwned
+												: 0,
+										tone: 'default'
 									})}
 								/>
 							)}
 						</section>
 
-						<section aria-labelledby="sel-captain" className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-							<SectionTitle id="sel-captain" hint={t('captainHint')} action={!isLoadingStats ? <SectionShareActions getText={captainShareText} /> : null}>
+						<section
+							aria-labelledby="sel-captain"
+							className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+						>
+							<SectionTitle
+								id="sel-captain"
+								hint={t('captainHint')}
+								action={
+									!isLoadingStats ? (
+										<SectionShareActions getText={captainShareText} />
+									) : null
+								}
+							>
 								{t('captainTitle')}
 							</SectionTitle>
 							{isLoadingStats ? (
@@ -1067,62 +1244,117 @@ export default function SelectionsClient({
 									rolesByPlayerId={summary.rolesByPlayerId}
 									getMetric={player => ({
 										primary: formatPercent(player.captainByPercent),
-										secondary: t('eoValue', { value: formatPercent(player.eoByPercent) }),
-										magnitude: maxCaptain > 0 ? (player.captainByPercent ?? 0) / maxCaptain : 0,
-										tone: 'captain',
+										secondary: t('eoValue', {
+											value: formatPercent(player.eoByPercent)
+										}),
+										magnitude:
+											maxCaptain > 0
+												? (player.captainByPercent ?? 0) / maxCaptain
+												: 0,
+										tone: 'captain'
 									})}
 								/>
 							)}
 						</section>
 
-						<section aria-labelledby="sel-transfers" className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-							<SectionTitle id="sel-transfers" hint={t('transferHint')} action={!isLoadingStats ? <SectionShareActions getText={transferShareText} /> : null}>
+						<section
+							aria-labelledby="sel-transfers"
+							className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+						>
+							<SectionTitle
+								id="sel-transfers"
+								hint={t('transferHint')}
+								action={
+									!isLoadingStats ? (
+										<SectionShareActions getText={transferShareText} />
+									) : null
+								}
+							>
 								{t('transferTitle')}
 							</SectionTitle>
 							<div className="grid gap-4 md:grid-cols-2">
 								<div className="min-w-0">
 									<p className="mb-2 flex items-center gap-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-success">
-										<TrendingUp className="size-3.5" aria-hidden="true" />
+										<TrendingUp
+											className="size-3.5"
+											aria-hidden="true"
+										/>
 										{t('topTransferIn')}
 									</p>
-									{isLoadingStats ? <BoardSkeleton /> : (
+									{isLoadingStats ? (
+										<BoardSkeleton />
+									) : (
 										<MetricBoard
-											players={transfersExpanded ? sortedTransferIn.slice(0, 12) : sortedTransferIn.slice(0, 5)}
+											players={
+												transfersExpanded
+													? sortedTransferIn.slice(0, 12)
+													: sortedTransferIn.slice(0, 5)
+											}
 											emptyLabel={t('noTransfersIn')}
 											ariaLabel={t('transfersIn')}
 											rolesByPlayerId={summary.rolesByPlayerId}
 											getMetric={player => ({
-												primary: t('transferCount', { count: formatCount(player.transfersEvent) }),
-												secondary: t('ownedValue', { value: formatPercent(player.selectedByPercent) }),
-												magnitude: maxTin > 0 ? (player.transfersEvent ?? 0) / maxTin : 0,
-												tone: 'success',
+												primary: t('transferCount', {
+													count: formatCount(player.transfersEvent)
+												}),
+												secondary: t('ownedValue', {
+													value: formatPercent(player.selectedByPercent)
+												}),
+												magnitude:
+													maxTin > 0
+														? (player.transfersEvent ?? 0) / maxTin
+														: 0,
+												tone: 'success'
 											})}
 										/>
 									)}
 								</div>
 								<div className="min-w-0">
 									<p className="mb-2 flex items-center gap-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-destructive">
-										<TrendingDown className="size-3.5" aria-hidden="true" />
+										<TrendingDown
+											className="size-3.5"
+											aria-hidden="true"
+										/>
 										{t('topTransferOut')}
 									</p>
-									{isLoadingStats ? <BoardSkeleton /> : (
+									{isLoadingStats ? (
+										<BoardSkeleton />
+									) : (
 										<MetricBoard
-											players={transfersExpanded ? sortedTransferOut.slice(0, 12) : sortedTransferOut.slice(0, 5)}
+											players={
+												transfersExpanded
+													? sortedTransferOut.slice(0, 12)
+													: sortedTransferOut.slice(0, 5)
+											}
 											emptyLabel={t('noTransfersOut')}
 											ariaLabel={t('transfersOut')}
 											rolesByPlayerId={summary.rolesByPlayerId}
 											getMetric={player => ({
-												primary: t('transferCount', { count: formatCount(player.transfersEvent) }),
-												secondary: t('ownedValue', { value: formatPercent(player.selectedByPercent) }),
-												magnitude: maxTout > 0 ? (player.transfersEvent ?? 0) / maxTout : 0,
-												tone: 'destructive',
+												primary: t('transferCount', {
+													count: formatCount(player.transfersEvent)
+												}),
+												secondary: t('ownedValue', {
+													value: formatPercent(player.selectedByPercent)
+												}),
+												magnitude:
+													maxTout > 0
+														? (player.transfersEvent ?? 0) / maxTout
+														: 0,
+												tone: 'destructive'
 											})}
 										/>
 									)}
 								</div>
 							</div>
-							{Math.max(sortedTransferIn.length, sortedTransferOut.length) > 5 ? (
-								<Button type="button" variant="ghost" size="sm" className="mt-2 w-full text-xs" onClick={() => setTransfersExpanded(value => !value)}>
+							{Math.max(sortedTransferIn.length, sortedTransferOut.length) >
+							5 ? (
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									className="mt-2 w-full text-xs"
+									onClick={() => setTransfersExpanded(value => !value)}
+								>
 									{transfersExpanded ? t('showTopFive') : t('showTopTwelve')}
 								</Button>
 							) : null}
