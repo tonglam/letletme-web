@@ -10,6 +10,12 @@ export type AuthSchemaContractRow = {
 	definition: string
 }
 
+type AuthCapabilityMembership = {
+	grantedRole: string
+	memberRole: string
+	adminOption: boolean
+}
+
 const fullContractQuery = `
 WITH contract_rows AS (
 	SELECT
@@ -77,17 +83,6 @@ WITH contract_rows AS (
 		)::text
 	FROM pg_roles role_row
 	WHERE role_row.rolname IN ('letletme_graphql_reader', 'letletme_web_auth')
-
-	UNION ALL
-
-	SELECT
-		'capability-inheritance'::text,
-		granted_role.rolname || '->' || member_role.rolname,
-		jsonb_build_object('adminOption', membership.admin_option)::text
-	FROM pg_auth_members membership
-	JOIN pg_roles granted_role ON granted_role.oid = membership.roleid
-	JOIN pg_roles member_role ON member_role.oid = membership.member
-	WHERE member_role.rolname IN ('letletme_graphql_reader', 'letletme_web_auth')
 
 	UNION ALL
 
@@ -577,6 +572,40 @@ export async function loadAuthSchemaContract(
 	client: QueryClient
 ): Promise<AuthSchemaContractRow[]> {
 	return client.unsafe<AuthSchemaContractRow[]>(fullContractQuery)
+}
+
+export async function assertAuthCapabilityMemberships(
+	client: QueryClient
+): Promise<void> {
+	const rows = await client<AuthCapabilityMembership[]>`
+		SELECT
+			granted_role.rolname AS "grantedRole",
+			member_role.rolname AS "memberRole",
+			membership.admin_option AS "adminOption"
+		FROM pg_auth_members membership
+		JOIN pg_roles granted_role ON granted_role.oid = membership.roleid
+		JOIN pg_roles member_role ON member_role.oid = membership.member
+		WHERE granted_role.rolname IN ('letletme_graphql_reader', 'letletme_web_auth')
+			OR member_role.rolname IN ('letletme_graphql_reader', 'letletme_web_auth')
+		ORDER BY granted_role.rolname, member_role.rolname
+	`
+
+	const allowed = new Set([
+		'letletme_graphql_reader->letletme_graphql_runtime',
+		'letletme_web_auth->letletme_web_runtime'
+	])
+	const invalid = rows.filter(
+		row =>
+			!allowed.has(`${row.grantedRole}->${row.memberRole}`) ||
+			row.adminOption
+	)
+	if (invalid.length > 0) {
+		throw new Error(
+			`Auth capability memberships are unsafe: ${invalid
+				.map(row => `${row.grantedRole}->${row.memberRole}`)
+				.join(', ')}`
+		)
+	}
 }
 
 export async function loadAuthMappingContract(

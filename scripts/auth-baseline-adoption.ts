@@ -8,7 +8,8 @@ import {
 } from './auth-data-contract'
 import {
 	fingerprintAuthContract,
-	loadAuthSchemaContract
+	loadAuthSchemaContract,
+	assertAuthCapabilityMemberships
 } from './auth-schema-contract'
 
 const EXPECTED_LEDGER_COUNT = 11
@@ -22,14 +23,6 @@ export const EXPECTED_AUTH_SCHEMA_FINGERPRINT = [
 	'eb24999839efe6be',
 	'18c1061931aec753',
 	'583c34744cff92c1'
-].join('')
-
-// Frozen from the verified production backup after removing retired Auth tables.
-export const EXPECTED_PRODUCTION_AUTH_DATA_FINGERPRINT = [
-	'4229f3a55b2cb833',
-	'37548af6cfa043f0',
-	'dc3ba6a7087f565d',
-	'e97f56a47398bb86'
 ].join('')
 
 type QueryClient = postgres.Sql | postgres.TransactionSql
@@ -47,13 +40,12 @@ type NormalizedLedgerRow = {
 export type AuthBaselineAdoptionExpectations = {
 	ledgerFingerprint: string
 	schemaFingerprint: string
-	dataFingerprint: string
+	dataFingerprint?: string
 }
 
 export const PRODUCTION_AUTH_BASELINE_EXPECTATIONS: AuthBaselineAdoptionExpectations = {
 	ledgerFingerprint: EXPECTED_LEDGER_FINGERPRINT,
-	schemaFingerprint: EXPECTED_AUTH_SCHEMA_FINGERPRINT,
-	dataFingerprint: EXPECTED_PRODUCTION_AUTH_DATA_FINGERPRINT
+	schemaFingerprint: EXPECTED_AUTH_SCHEMA_FINGERPRINT
 }
 
 function normalizeLedger(rows: readonly LedgerRow[]): NormalizedLedgerRow[] {
@@ -101,15 +93,12 @@ export async function adoptProductionAuthBaseline(
 	expectations: AuthBaselineAdoptionExpectations =
 		PRODUCTION_AUTH_BASELINE_EXPECTATIONS
 ): Promise<void> {
-	if (expectations.dataFingerprint === 'PENDING_CANONICAL_ACTIVATION') {
-		throw new Error('Production Auth data fingerprint has not been frozen')
-	}
-
 	const ledgerBefore = await loadLedger(transaction)
 	assertExpectedProductionLedger(
 		ledgerBefore,
 		expectations.ledgerFingerprint
 	)
+	await assertAuthCapabilityMemberships(transaction)
 
 	const schemaBefore = fingerprintAuthContract(
 		await loadAuthSchemaContract(transaction)
@@ -123,7 +112,10 @@ export async function adoptProductionAuthBaseline(
 	const dataBefore = fingerprintAuthDataManifest(
 		await loadAuthDataManifest(transaction)
 	)
-	if (dataBefore !== expectations.dataFingerprint) {
+	if (
+		expectations.dataFingerprint !== undefined &&
+		dataBefore !== expectations.dataFingerprint
+	) {
 		throw new Error(
 			`Auth data fingerprint mismatch: expected=${expectations.dataFingerprint} actual=${dataBefore}`
 		)

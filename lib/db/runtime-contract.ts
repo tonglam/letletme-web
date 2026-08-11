@@ -235,9 +235,7 @@ export async function validateWebDatabaseContract(
 			ORDER BY relation.relname
 		`
 		const expectedAuthTableNames = new Set<string>(WEB_AUTH_RUNTIME_TABLES)
-		const authTableNames = authTables
-			.filter(row => expectedAuthTableNames.has(row.table_name))
-			.map(row => row.table_name)
+		const authTableNames = authTables.map(row => row.table_name)
 		if (!compareNames(authTableNames, WEB_AUTH_RUNTIME_TABLES)) {
 			findings.push(
 				`bauth runtime tables are ${authTableNames.join(', ') || 'empty'}`
