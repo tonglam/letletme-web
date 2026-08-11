@@ -23,7 +23,6 @@ import {
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import PageShell from '@/components/layout/PageShell'
 import { GameweekBadge } from '@/components/stats/GameweekBadge'
-import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import {
 	StatsMetricTile,
 	StatsPageHeader
@@ -224,9 +223,15 @@ function SectionShareActions({ getText }: { getText: () => string }) {
 				aria-label={t('shareCopy')}
 			>
 				{copied ? (
-					<Check className="size-3.5 text-primary-ink" aria-hidden="true" />
+					<Check
+						className="size-3.5 text-primary-ink"
+						aria-hidden="true"
+					/>
 				) : (
-					<Copy className="size-3.5" aria-hidden="true" />
+					<Copy
+						className="size-3.5"
+						aria-hidden="true"
+					/>
 				)}
 				{copied ? t('shareCopiedShort') : t('shareCopy')}
 			</Button>

@@ -43,15 +43,21 @@ export type AuthBaselineAdoptionExpectations = {
 	dataFingerprint?: string
 }
 
-export const PRODUCTION_AUTH_BASELINE_EXPECTATIONS: AuthBaselineAdoptionExpectations = {
-	ledgerFingerprint: EXPECTED_LEDGER_FINGERPRINT,
-	schemaFingerprint: EXPECTED_AUTH_SCHEMA_FINGERPRINT
-}
+export const PRODUCTION_AUTH_BASELINE_EXPECTATIONS: AuthBaselineAdoptionExpectations =
+	{
+		ledgerFingerprint: EXPECTED_LEDGER_FINGERPRINT,
+		schemaFingerprint: EXPECTED_AUTH_SCHEMA_FINGERPRINT
+	}
 
 function normalizeLedger(rows: readonly LedgerRow[]): NormalizedLedgerRow[] {
 	return rows.map(row => {
-		if (row.created_at === null || !Number.isSafeInteger(Number(row.created_at))) {
-			throw new Error('Production Web migration ledger contains an invalid timestamp')
+		if (
+			row.created_at === null ||
+			!Number.isSafeInteger(Number(row.created_at))
+		) {
+			throw new Error(
+				'Production Web migration ledger contains an invalid timestamp'
+			)
 		}
 		return { hash: row.hash, createdAt: Number(row.created_at) }
 	})
@@ -67,6 +73,53 @@ async function loadLedger(client: QueryClient): Promise<LedgerRow[]> {
 		FROM bauth.__drizzle_migrations
 		ORDER BY created_at, id
 	`
+}
+
+async function removeRetiredAuthObjects(
+	transaction: postgres.TransactionSql
+): Promise<void> {
+	const [legacy] = await transaction<
+		{
+			api_key_exists: boolean
+			jwk_exists: boolean
+			rate_limit_exists: boolean
+			shared_ledger_exists: boolean
+			shared_schema_exists: boolean
+		}[]
+	>`
+		SELECT
+			to_regclass('bauth.apikey') IS NOT NULL AS api_key_exists,
+			to_regclass('bauth.jwks') IS NOT NULL AS jwk_exists,
+			to_regclass('bauth.rate_limit') IS NOT NULL AS rate_limit_exists,
+			to_regclass('drizzle.__drizzle_migrations') IS NOT NULL AS shared_ledger_exists,
+			to_regnamespace('drizzle') IS NOT NULL AS shared_schema_exists
+	`
+	if (!legacy) throw new Error('Failed to inspect retired Auth objects')
+
+	if (legacy.api_key_exists) {
+		await transaction`LOCK TABLE bauth.apikey IN ACCESS EXCLUSIVE MODE`
+		const [{ count }] = await transaction<{ count: string }[]>`
+			SELECT count(*)::text AS count FROM bauth.apikey
+		`
+		if (count !== '0') {
+			throw new Error(
+				`Retired bauth.apikey must be empty before baseline adoption (found ${count} rows)`
+			)
+		}
+	}
+	if (legacy.jwk_exists)
+		await transaction`LOCK TABLE bauth.jwks IN ACCESS EXCLUSIVE MODE`
+	if (legacy.rate_limit_exists)
+		await transaction`LOCK TABLE bauth.rate_limit IN ACCESS EXCLUSIVE MODE`
+	if (legacy.shared_ledger_exists)
+		await transaction`LOCK TABLE drizzle.__drizzle_migrations IN ACCESS EXCLUSIVE MODE`
+
+	await transaction`DROP TABLE IF EXISTS bauth.apikey RESTRICT`
+	await transaction`DROP TABLE IF EXISTS bauth.jwks RESTRICT`
+	await transaction`DROP TABLE IF EXISTS bauth.rate_limit RESTRICT`
+	await transaction`DROP TABLE IF EXISTS drizzle.__drizzle_migrations RESTRICT`
+	if (legacy.shared_schema_exists)
+		await transaction`DROP SCHEMA drizzle RESTRICT`
 }
 
 function assertExpectedProductionLedger(
@@ -90,15 +143,12 @@ export async function adoptProductionAuthBaseline(
 	transaction: postgres.TransactionSql,
 	baselineHash: string,
 	baselineTimestamp: number,
-	expectations: AuthBaselineAdoptionExpectations =
-		PRODUCTION_AUTH_BASELINE_EXPECTATIONS
+	expectations: AuthBaselineAdoptionExpectations = PRODUCTION_AUTH_BASELINE_EXPECTATIONS
 ): Promise<void> {
 	const ledgerBefore = await loadLedger(transaction)
-	assertExpectedProductionLedger(
-		ledgerBefore,
-		expectations.ledgerFingerprint
-	)
+	assertExpectedProductionLedger(ledgerBefore, expectations.ledgerFingerprint)
 	await assertAuthCapabilityMemberships(transaction)
+	await removeRetiredAuthObjects(transaction)
 
 	const schemaBefore = fingerprintAuthContract(
 		await loadAuthSchemaContract(transaction)
@@ -139,14 +189,18 @@ export async function adoptProductionAuthBaseline(
 		ledgerAfter.hash !== baselineHash ||
 		Number(ledgerAfter.created_at) !== baselineTimestamp
 	) {
-		throw new Error('Canonical Auth baseline ledger did not converge to one row')
+		throw new Error(
+			'Canonical Auth baseline ledger did not converge to one row'
+		)
 	}
 
 	const schemaAfter = fingerprintAuthContract(
 		await loadAuthSchemaContract(transaction)
 	)
 	if (schemaAfter !== schemaBefore) {
-		throw new Error('Auth schema changed while adopting the canonical baseline ledger')
+		throw new Error(
+			'Auth schema changed while adopting the canonical baseline ledger'
+		)
 	}
 
 	const dataAfter = fingerprintAuthDataManifest(

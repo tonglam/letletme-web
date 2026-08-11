@@ -29,7 +29,6 @@ import {
 import { positionBadgeClass } from '@/lib/position-style'
 import { cn } from '@/lib/utils'
 import { copyTextToClipboard } from '@/app/live/points/_lib/live-points-share'
-import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import {
 	buildMarketShareUrl,
 	formatPriceMovementShareText
@@ -173,9 +172,15 @@ function PriceShareActions({
 				aria-label={t('shareCopy')}
 			>
 				{copied ? (
-					<Check className="size-3.5 text-primary-ink" aria-hidden="true" />
+					<Check
+						className="size-3.5 text-primary-ink"
+						aria-hidden="true"
+					/>
 				) : (
-					<Copy className="size-3.5" aria-hidden="true" />
+					<Copy
+						className="size-3.5"
+						aria-hidden="true"
+					/>
 				)}
 				{copied ? t('shareCopiedShort') : t('shareCopy')}
 			</Button>

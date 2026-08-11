@@ -50,13 +50,16 @@ async function expectCanonicalLedger(): Promise<void> {
 		FROM bauth.__drizzle_migrations
 		ORDER BY id
 	`
-	assert.deepEqual(rows.map(row => ({ ...row })), [
-		{
-			id: 1,
-			hash: baselineHash,
-			created_at: String(baselineTimestamp)
-		}
-	])
+	assert.deepEqual(
+		rows.map(row => ({ ...row })),
+		[
+			{
+				id: 1,
+				hash: baselineHash,
+				created_at: String(baselineTimestamp)
+			}
+		]
+	)
 }
 
 before(async () => {
@@ -114,13 +117,54 @@ describe('canonical Auth baseline adoption', () => {
 			>`
 				SELECT email, name FROM bauth."user" WHERE id = ${PRESERVED_USER_ID}
 			`
-			assert.deepEqual(
-				preserved,
+			assert.deepEqual(preserved, {
+				email: 'baseline-preserved@example.test',
+				name: 'Baseline preserved user'
+			})
+		}
+	)
+
+	integrationTest(
+		'removes empty retired Auth objects during the same adoption transaction',
+		async () => {
+			assert.ok(sql)
+			const dataFingerprint = await currentDataFingerprint()
+			await sql.begin(async transaction => {
+				await installProductionLedger(transaction)
+				await transaction`CREATE SCHEMA drizzle`
+				await transaction`CREATE TABLE drizzle.__drizzle_migrations (
+					id integer PRIMARY KEY,
+					hash text NOT NULL,
+					created_at bigint
+				)`
+				await transaction`CREATE TABLE bauth.apikey (id text PRIMARY KEY)`
+				await adoptProductionAuthBaseline(
+					transaction,
+					baselineHash,
+					baselineTimestamp,
+					{
+						...PRODUCTION_AUTH_BASELINE_EXPECTATIONS,
+						dataFingerprint
+					}
+				)
+			})
+
+			await expectCanonicalLedger()
+			const [objects] = await sql<
 				{
-					email: 'baseline-preserved@example.test',
-					name: 'Baseline preserved user'
-				}
-			)
+					api_key_exists: boolean
+					shared_schema_exists: boolean
+				}[]
+			>`
+				SELECT
+					to_regclass('bauth.apikey') IS NOT NULL AS api_key_exists,
+					to_regnamespace('drizzle') IS NOT NULL AS shared_schema_exists
+			`
+			assert.deepEqual(objects, {
+				api_key_exists: false,
+				shared_schema_exists: false
+			})
+			assert.equal(await currentDataFingerprint(), dataFingerprint)
 		}
 	)
 
@@ -153,50 +197,19 @@ describe('canonical Auth baseline adoption', () => {
 		}
 	)
 
-	integrationTest(
-		'rolls back on extra objects or ACL drift',
-		async () => {
-			assert.ok(sql)
-			const dataFingerprint = await currentDataFingerprint()
-			for (const drift of [
-				async (transaction: postgres.TransactionSql) =>
-					transaction`CREATE TABLE bauth.unexpected_relation (id integer PRIMARY KEY)`,
-				async (transaction: postgres.TransactionSql) =>
-					transaction`GRANT SELECT ON bauth.session TO anon`
-			]) {
-				await assert.rejects(
-					sql.begin(async transaction => {
-						await installProductionLedger(transaction)
-						await drift(transaction)
-						await adoptProductionAuthBaseline(
-							transaction,
-							baselineHash,
-							baselineTimestamp,
-							{
-								...PRODUCTION_AUTH_BASELINE_EXPECTATIONS,
-								dataFingerprint
-							}
-						)
-					}),
-					/Auth schema fingerprint mismatch/
-				)
-				await expectCanonicalLedger()
-			}
-		}
-	)
-
-	integrationTest(
-		'rolls back on Auth row drift',
-		async () => {
-			assert.ok(sql)
-			const dataFingerprint = await currentDataFingerprint()
+	integrationTest('rolls back on extra objects or ACL drift', async () => {
+		assert.ok(sql)
+		const dataFingerprint = await currentDataFingerprint()
+		for (const drift of [
+			async (transaction: postgres.TransactionSql) =>
+				transaction`CREATE TABLE bauth.unexpected_relation (id integer PRIMARY KEY)`,
+			async (transaction: postgres.TransactionSql) =>
+				transaction`GRANT SELECT ON bauth.session TO anon`
+		]) {
 			await assert.rejects(
 				sql.begin(async transaction => {
 					await installProductionLedger(transaction)
-					await transaction`
-						INSERT INTO bauth."user" (id, email)
-						VALUES ('baseline-adoption-drift', 'drift@example.test')
-					`
+					await drift(transaction)
 					await adoptProductionAuthBaseline(
 						transaction,
 						baselineHash,
@@ -207,9 +220,34 @@ describe('canonical Auth baseline adoption', () => {
 						}
 					)
 				}),
-				/Auth data fingerprint mismatch/
+				/Auth schema fingerprint mismatch/
 			)
 			await expectCanonicalLedger()
 		}
-	)
+	})
+
+	integrationTest('rolls back on Auth row drift', async () => {
+		assert.ok(sql)
+		const dataFingerprint = await currentDataFingerprint()
+		await assert.rejects(
+			sql.begin(async transaction => {
+				await installProductionLedger(transaction)
+				await transaction`
+						INSERT INTO bauth."user" (id, email)
+						VALUES ('baseline-adoption-drift', 'drift@example.test')
+					`
+				await adoptProductionAuthBaseline(
+					transaction,
+					baselineHash,
+					baselineTimestamp,
+					{
+						...PRODUCTION_AUTH_BASELINE_EXPECTATIONS,
+						dataFingerprint
+					}
+				)
+			}),
+			/Auth data fingerprint mismatch/
+		)
+		await expectCanonicalLedger()
+	})
 })

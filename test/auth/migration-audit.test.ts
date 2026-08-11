@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 
 import {
 	inspectMigrationHistory,
-	loadLocalMigrations,
 	type LocalMigration
 } from '../../scripts/migration-audit'
 
@@ -15,32 +13,6 @@ const migrations: LocalMigration[] = [
 ]
 
 describe('Web migration audit', () => {
-	it('allows legacy auth objects to be absent on a clean database', () => {
-		const migration = readFileSync(
-			'drizzle/0010_remove_legacy_auth_objects.sql',
-			'utf8'
-		)
-		assert.match(migration, /to_regclass\('bauth\.apikey'\)/)
-		assert.match(migration, /DROP TABLE IF EXISTS bauth\.apikey/)
-		assert.match(
-			migration,
-			/DROP TABLE IF EXISTS drizzle\.__drizzle_migrations/
-		)
-		assert.match(migration, /DROP SCHEMA IF EXISTS drizzle/)
-		assert.doesNotMatch(migration, /LOCK TABLE\s+\n\s*bauth\.apikey,/)
-	})
-
-	it('keeps the production-applied 0009 migration byte-for-byte frozen', async () => {
-		const { migrations: localMigrations } = await loadLocalMigrations()
-		const migration = localMigrations.find(
-			row => row.tag === '0009_graphql_auth_reader'
-		)
-		assert.equal(
-			migration?.hash,
-			'91b8cf72e8583b945d0107e3a506b2dfb70d25784e306001c52ce03c8e2fabbb'
-		)
-	})
-
 	it('allows pending migrations only after the applied tail', () => {
 		const audit = inspectMigrationHistory(migrations, [
 			{ createdAt: 100, hash: 'first' }
