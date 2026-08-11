@@ -12,7 +12,12 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { isProtectedApi, isProtectedPage, requiresVerifiedEntry } from '../../lib/route-protection'
+import {
+	hasInvalidTournamentId,
+	isProtectedApi,
+	isProtectedPage,
+	requiresVerifiedEntry
+} from '../../lib/route-protection'
 
 type MockSession = {
 	user: { fplEntryId: number | null; fplEntryVerifiedAt: string | null }
@@ -39,6 +44,19 @@ const withoutEntry: MockSession = {
 	user: { fplEntryId: 15702, fplEntryVerifiedAt: null },
 }
 const noSession: MockSession = null
+
+describe('middleware — tournament route shape', () => {
+	it('rejects special route names when followed by /manage', () => {
+		assert.equal(hasInvalidTournamentId('/tournament/create/manage'), true)
+		assert.equal(hasInvalidTournamentId('/tournament/browse/manage/'), true)
+	})
+
+	it('allows canonical special routes and numeric management routes', () => {
+		assert.equal(hasInvalidTournamentId('/tournament/create'), false)
+		assert.equal(hasInvalidTournamentId('/tournament/browse/'), false)
+		assert.equal(hasInvalidTournamentId('/tournament/42/manage'), false)
+	})
+})
 
 describe('middleware — public routes', () => {
 	const publicPaths = [

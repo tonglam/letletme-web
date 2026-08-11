@@ -11,6 +11,7 @@ import {
 	readMaintenanceConfig
 } from '@/lib/maintenance'
 import {
+	hasInvalidTournamentId,
 	isProtectedApi,
 	isProtectedPage,
 	requiresVerifiedEntry
@@ -56,13 +57,6 @@ function withMaintenanceHeaders(
 	response.headers.set('Retry-After', String(retryAfterSeconds))
 	response.headers.set('X-Robots-Tag', 'noindex, nofollow')
 	return response
-}
-
-function hasInvalidTournamentId(pathname: string) {
-	const match = pathname.match(/^\/tournament\/([^/]+)(?:\/manage)?\/?$/)
-	if (!match) return false
-	if (match[1] === 'create' || match[1] === 'browse') return false
-	return !/^[1-9]\d*$/.test(match[1]) || !Number.isSafeInteger(Number(match[1]))
 }
 
 function invalidRouteResponse(

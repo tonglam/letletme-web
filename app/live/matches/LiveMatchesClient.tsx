@@ -202,26 +202,35 @@ export function LiveMatchesClient({
 
 		const request = (async () => {
 			try {
-				const events = await executeQuery<EventsResponse>(
-					GET_CURRENT_AND_NEXT_EVENTS,
-					undefined,
-					{ cache: 'no-store' }
-				)
-				const currentEventId = events.current[0]?.id
-				const nextEventId = events.next[0]?.id
-				if (
-					currentEventId &&
-					liveRefreshEventIdentityChanged(
-						resolvedCurrentEventId,
-						resolvedNextEventId,
-						currentEventId,
-						nextEventId
+				try {
+					const events = await executeQuery<EventsResponse>(
+						GET_CURRENT_AND_NEXT_EVENTS,
+						undefined,
+						{ cache: 'no-store' }
 					)
-				) {
-					setResolvedCurrentEventId(currentEventId)
-					setResolvedNextEventId(nextEventId)
-					await fetchMatches(true, { currentEventId, nextEventId })
-					return
+					const currentEventId = events.current[0]?.id
+					const nextEventId = events.next[0]?.id
+					if (
+						currentEventId &&
+						liveRefreshEventIdentityChanged(
+							resolvedCurrentEventId,
+							resolvedNextEventId,
+							currentEventId,
+							nextEventId
+						)
+					) {
+						setResolvedCurrentEventId(currentEventId)
+						setResolvedNextEventId(nextEventId)
+						await fetchMatches(true, { currentEventId, nextEventId })
+						return
+					}
+				} catch (identityError) {
+					// Rollover detection is optional; keep probing the known event when
+					// the identity lookup is temporarily unavailable.
+					console.error(
+						'Failed to resolve current and next live events:',
+						identityError
+					)
 				}
 				const probe = await executeQuery<LiveSnapshotResponse>(
 					GET_LIVE_SNAPSHOT,
