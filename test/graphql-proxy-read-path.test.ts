@@ -19,6 +19,8 @@ describe('GraphQL proxy read path', () => {
 	it('does not use the PostgreSQL limiter in the GraphQL proxy route', () => {
 		const route = readFileSync(new URL('../app/api/graphql/route.ts', import.meta.url), 'utf8')
 		assert.doesNotMatch(route, /checkDatabaseRateLimit|databaseRateLimit|graphql-proxy-ip/)
+		assert.doesNotMatch(route, /from ['"]@\/lib\/http-security['"]/)
+		assert.match(route, /await import\(['"]@\/lib\/auth['"]\)/)
 		assert.match(route, /buildIngressContextHeaders\(subject, secret\)/)
 	})
 
@@ -28,6 +30,8 @@ describe('GraphQL proxy read path', () => {
 		assert.doesNotMatch(client, /server-user-context|getServerUserContextHeaders/)
 		assert.doesNotMatch(client, /localhost:3000\/api\/graphql/)
 		assert.match(server, /getServerUserContextHeaders/)
-		assert.match(server, /getGraphQLServiceTokenHeaders/)
+		assert.match(server, /rate-limit:web-public-rsc/)
+		assert.match(server, /buildIngressContextHeaders/)
+		assert.doesNotMatch(server, /getGraphQLServiceTokenHeaders/)
 	})
 })
