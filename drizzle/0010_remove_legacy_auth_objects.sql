@@ -1,36 +1,50 @@
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '5min';
 
-LOCK TABLE
-	bauth.apikey,
-	bauth.jwks,
-	bauth.rate_limit,
-	bauth.__drizzle_migrations,
-	drizzle.__drizzle_migrations
-IN ACCESS EXCLUSIVE MODE;
+DO $retired_auth_locks$
+BEGIN
+	IF to_regclass('bauth.apikey') IS NOT NULL THEN
+		EXECUTE 'LOCK TABLE bauth.apikey IN ACCESS EXCLUSIVE MODE';
+	END IF;
+	IF to_regclass('bauth.jwks') IS NOT NULL THEN
+		EXECUTE 'LOCK TABLE bauth.jwks IN ACCESS EXCLUSIVE MODE';
+	END IF;
+	IF to_regclass('bauth.rate_limit') IS NOT NULL THEN
+		EXECUTE 'LOCK TABLE bauth.rate_limit IN ACCESS EXCLUSIVE MODE';
+	END IF;
+	IF to_regclass('bauth.__drizzle_migrations') IS NOT NULL THEN
+		EXECUTE 'LOCK TABLE bauth.__drizzle_migrations IN ACCESS EXCLUSIVE MODE';
+	END IF;
+	IF to_regclass('drizzle.__drizzle_migrations') IS NOT NULL THEN
+		EXECUTE 'LOCK TABLE drizzle.__drizzle_migrations IN ACCESS EXCLUSIVE MODE';
+	END IF;
+END
+$retired_auth_locks$;
 --> statement-breakpoint
 
 DO $retired_api_key_contract$
 DECLARE
 	api_key_count bigint;
 BEGIN
-	SELECT count(*) INTO api_key_count FROM bauth.apikey;
-	IF api_key_count <> 0 THEN
-		RAISE EXCEPTION
-			'expected the retired API-key table to be empty before cleanup, found % rows',
-			api_key_count;
+	IF to_regclass('bauth.apikey') IS NOT NULL THEN
+		SELECT count(*) INTO api_key_count FROM bauth.apikey;
+		IF api_key_count <> 0 THEN
+			RAISE EXCEPTION
+				'expected the retired API-key table to be empty before cleanup, found % rows',
+				api_key_count;
+		END IF;
 	END IF;
 END
 $retired_api_key_contract$;
 --> statement-breakpoint
 
-DROP TABLE bauth.apikey RESTRICT;
-DROP TABLE bauth.jwks RESTRICT;
-DROP TABLE bauth.rate_limit RESTRICT;
+DROP TABLE IF EXISTS bauth.apikey RESTRICT;
+DROP TABLE IF EXISTS bauth.jwks RESTRICT;
+DROP TABLE IF EXISTS bauth.rate_limit RESTRICT;
 --> statement-breakpoint
 
-DROP TABLE drizzle.__drizzle_migrations RESTRICT;
-DROP SCHEMA drizzle RESTRICT;
+DROP TABLE IF EXISTS drizzle.__drizzle_migrations RESTRICT;
+DROP SCHEMA IF EXISTS drizzle RESTRICT;
 --> statement-breakpoint
 
 DO $canonical_auth_contract$

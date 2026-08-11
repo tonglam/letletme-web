@@ -5,8 +5,10 @@ import {
 	type MatchPlayerData
 } from '@/lib/graphql/operations/live'
 import {
+	GET_CURRENT_AND_NEXT_EVENTS,
 	GET_EVENT_FIXTURES,
 	type EventFixturesResponse,
+	type EventsResponse,
 	type Fixture
 } from '@/lib/graphql/operations/events'
 import { executeQuery } from '@/lib/graphql-client'
@@ -249,33 +251,93 @@ export function transformUpcomingFixtures(
 export interface LiveMatchesSnapshot {
 	matches: Match[]
 	snapshot: LiveSnapshotStatus | null
+	currentEventId: number | null
+	nextEventId: number | null
+}
+
+function validEventId(value: unknown): number | null {
+	return typeof value === 'number' && Number.isInteger(value) && value > 0
+		? value
+		: null
+}
+
+function resolvedEventIds(events: EventsResponse): {
+	currentEventId: number | null
+	nextEventId: number | null
+} {
+	return {
+		currentEventId: validEventId(events.current?.[0]?.id),
+		nextEventId: validEventId(events.next?.[0]?.id)
+	}
 }
 
 export async function getLiveMatchesSnapshot(
 	nextEventId: number | null,
-	executor: QueryExecutor = executeQuery
+	executor: QueryExecutor = executeQuery,
+	currentEventId: number | null = null
 ): Promise<LiveMatchesSnapshot> {
-	const upcomingRequest = nextEventId
-		? executor<EventFixturesResponse>(
-				GET_EVENT_FIXTURES,
-				{ eventId: nextEventId },
-				{ cache: 'no-store' }
-			).catch(error => {
-				console.warn('[live/matches] upcoming fixtures unavailable', error)
-				return { eventFixtures: [] } satisfies EventFixturesResponse
-			})
-		: Promise.resolve<EventFixturesResponse>({ eventFixtures: [] })
-	const [data, upcoming] = await Promise.all([
+	const [data, initialUpcoming] = await Promise.all([
 		executor<LiveMatchesResponse>(GET_LIVE_MATCHES, undefined, {
 			cache: 'no-store'
 		}),
-		upcomingRequest
+		nextEventId
+			? executor<EventFixturesResponse>(
+					GET_EVENT_FIXTURES,
+					{ eventId: nextEventId },
+					{
+						cache: 'no-store'
+					}
+				).catch(error => {
+					console.warn('[live/matches] upcoming fixtures unavailable', error)
+					return { eventFixtures: [] }
+				})
+			: Promise.resolve<EventFixturesResponse>({ eventFixtures: [] })
 	])
+	let resolvedCurrentEventId = currentEventId
+	let resolvedNextEventId = nextEventId
+	let upcoming = initialUpcoming
+	const observedEventId = validEventId(data.liveSnapshot?.eventId)
+	if (
+		observedEventId !== null &&
+		resolvedCurrentEventId !== null &&
+		observedEventId !== resolvedCurrentEventId
+	) {
+		const events = await executor<EventsResponse>(
+			GET_CURRENT_AND_NEXT_EVENTS,
+			undefined,
+			{ cache: 'no-store' }
+		)
+		const resolved = resolvedEventIds(events)
+		if (resolved.currentEventId !== observedEventId) {
+			throw new Error(
+				`Live event identity changed during refresh (snapshot=${observedEventId}, current=${String(resolved.currentEventId)})`
+			)
+		}
+		resolvedCurrentEventId = resolved.currentEventId
+		resolvedNextEventId = resolved.nextEventId
+		if (resolvedNextEventId !== nextEventId) {
+			upcoming = resolvedNextEventId
+				? await executor<EventFixturesResponse>(
+						GET_EVENT_FIXTURES,
+						{ eventId: resolvedNextEventId },
+						{ cache: 'no-store' }
+					).catch(error => {
+						console.warn(
+							'[live/matches] refreshed upcoming fixtures unavailable',
+							error
+						)
+						return { eventFixtures: [] }
+					})
+				: { eventFixtures: [] }
+		}
+	}
 	return {
 		matches: sortMatches([
 			...transformLiveMatches(data.liveMatches),
 			...transformUpcomingFixtures(upcoming.eventFixtures)
 		]),
-		snapshot: data.liveSnapshot
+		snapshot: data.liveSnapshot,
+		currentEventId: resolvedCurrentEventId,
+		nextEventId: resolvedNextEventId
 	}
 }

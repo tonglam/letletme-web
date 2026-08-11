@@ -97,6 +97,12 @@ export function LiveMatchesClient({
 	const t = useTranslations('LiveMatches')
 	const isPageActive = usePageActive()
 	const [matches, setMatches] = useState<Match[]>(initialMatches)
+	const [resolvedCurrentEventId, setResolvedCurrentEventId] = useState<
+		number | undefined
+	>(currentEventId)
+	const [resolvedNextEventId, setResolvedNextEventId] = useState<
+		number | undefined
+	>(nextEventId)
 	const [activeTab, setActiveTab] = useState<LiveMatchesTab>(() =>
 		getPreferredTab(initialMatches)
 	)
@@ -142,10 +148,16 @@ export function LiveMatchesClient({
 					setIsLoading(true)
 				}
 				setError(null)
-				const data = await getLiveMatchesSnapshot(nextEventId ?? null)
+				const data = await getLiveMatchesSnapshot(
+					resolvedNextEventId ?? null,
+					executeQuery,
+					resolvedCurrentEventId ?? null
+				)
 				if (!mountedRef.current) return
 				const mappedMatches = data.matches
 				setMatches(mappedMatches)
+				setResolvedCurrentEventId(data.currentEventId ?? undefined)
+				setResolvedNextEventId(data.nextEventId ?? undefined)
 				acceptSnapshot(data.snapshot)
 				hasLastGoodData.current = true
 
@@ -171,13 +183,13 @@ export function LiveMatchesClient({
 				}
 			}
 		},
-		[acceptSnapshot, nextEventId, t]
+		[acceptSnapshot, resolvedCurrentEventId, resolvedNextEventId, t]
 	)
 
 	const autoRefreshMatches = useCallback((): Promise<void> => {
 		if (freshnessRequestRef.current) return freshnessRequestRef.current
 		// isCurrent only — do not fall back to snapshot.eventId for poll identity
-		const eventId = currentEventId
+		const eventId = resolvedCurrentEventId
 		if (!eventId) return Promise.resolve()
 
 		const request = (async () => {
@@ -207,7 +219,7 @@ export function LiveMatchesClient({
 			}
 		})
 		return request
-	}, [acceptSnapshot, currentEventId, fetchMatches, t])
+	}, [acceptSnapshot, fetchMatches, resolvedCurrentEventId, t])
 
 	const handleTabChange = (value: string) => {
 		if (!isLiveMatchesTab(value)) return
@@ -254,7 +266,7 @@ export function LiveMatchesClient({
 		} satisfies Record<LiveMatchesTab, Match[]>
 	}, [matches])
 
-	const pollingEventId = currentEventId
+	const pollingEventId = resolvedCurrentEventId
 	const autoRefreshEnabled = shouldPollLiveSnapshot({
 		isPageActive,
 		currentEventId: pollingEventId,
@@ -404,7 +416,7 @@ export function LiveMatchesClient({
 									match={match}
 									allMatches={activeMatches}
 									currentIndex={i}
-									eventId={currentEventId}
+									eventId={resolvedCurrentEventId}
 								/>
 							))
 						) : (
