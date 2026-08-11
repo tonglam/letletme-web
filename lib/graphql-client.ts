@@ -16,6 +16,9 @@ export interface ExecuteQueryOptions {
 
 const DEFAULT_GRAPHQL_TIMEOUT_MS = 15_000
 
+const extractOperationName = (query: string): string | undefined =>
+	query.match(/\b(?:query|mutation|subscription)\s+([A-Za-z_][A-Za-z0-9_]*)/)?.[1]
+
 type GraphQLErrorLike = {
   message?: string
   path?: string[]
@@ -94,7 +97,7 @@ async function doFetch<T>(
       method: 'POST',
       cache,
       headers: { 'Content-Type': 'application/json', ...extraHeaders },
-      body: JSON.stringify({ query, variables }),
+	      body: JSON.stringify({ operationName: extractOperationName(query), query, variables }),
       signal: controller.signal,
     }
 
