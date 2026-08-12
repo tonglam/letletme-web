@@ -101,7 +101,7 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
                     {item.items.map((subItem) => (
                       <SheetClose key={subItem.labelKey} asChild>
                         <Button variant="ghost" className="w-full justify-start text-sm" asChild>
-                          <Link href={subItem.href}>{t(subItem.labelKey)}</Link>
+                          <Link href={subItem.href} prefetch={false}>{t(subItem.labelKey)}</Link>
                         </Button>
                       </SheetClose>
                     ))}
@@ -203,7 +203,7 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
             ) : (
               <SheetClose asChild>
                 <Button variant="ghost" className="w-full justify-start" asChild>
-                  <Link href="/auth/login">
+                  <Link href="/auth/login" prefetch={false}>
                     <UserCircle data-icon="inline-start" />
                     {t("login")}
                   </Link>

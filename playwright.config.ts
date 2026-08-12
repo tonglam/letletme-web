@@ -1,7 +1,9 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL
-const baseURL = externalBaseUrl ?? 'http://127.0.0.1:3100'
+// Chromium treats localhost as a trustworthy origin, so production-shaped
+// __Secure Better Auth cookies remain testable without weakening them.
+const baseURL = externalBaseUrl ?? 'http://localhost:3100'
 const graphqlFixtureURL = 'http://127.0.0.1:4100'
 const graphqlServiceToken =
 	'e2e-graphql-service-token-at-least-thirty-two-bytes'

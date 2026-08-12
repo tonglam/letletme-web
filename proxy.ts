@@ -16,6 +16,7 @@ import {
 	isProtectedPage,
 	requiresVerifiedEntry
 } from '@/lib/route-protection'
+import { hasSessionCookieHintInHeaders } from '@/lib/session-cookie-hint'
 import createMiddleware from 'next-intl/middleware'
 import { type NextRequest, NextResponse } from 'next/server'
 
@@ -166,7 +167,13 @@ export async function proxy(req: NextRequest) {
 	const protectedPage = isProtectedPage(pathname)
 
 	if (!protectedPage) {
-		return withDocumentCacheHeaders(req, i18nResponse)
+		// A public route can still stream user-specific content. The cookie remains
+		// only a presentation hint here; auth is re-verified inside the page.
+		return withDocumentCacheHeaders(
+			req,
+			i18nResponse,
+			hasSessionCookieHintInHeaders(req.headers)
+		)
 	}
 
 	// Protected routes must observe entry verification and revocation immediately,

@@ -16,12 +16,13 @@ import {
 
 describe('Web runtime database boundary', () => {
 	it('installs an auth-only capability role and startup contract', async () => {
-		const [baseline, journal, instrumentation, environment] =
+		const [baseline, journal, instrumentation, environment, runtimeContract] =
 			await Promise.all([
 				readFile('drizzle/0000_auth_baseline.sql', 'utf8'),
 				readFile('drizzle/meta/_journal.json', 'utf8'),
 				readFile('instrumentation.ts', 'utf8'),
-				readFile('.env.example', 'utf8')
+				readFile('.env.example', 'utf8'),
+				readFile('lib/db/runtime-contract.ts', 'utf8')
 			])
 
 		assert.match(baseline, /CREATE ROLE letletme_web_auth/)
@@ -86,12 +87,18 @@ describe('Web runtime database boundary', () => {
 			)
 		}
 		assert.match(baseline, /CREATE POLICY graphql_auth_reader_select/g)
-		assert.match(instrumentation, /connectTimeoutSeconds: 2/)
-		assert.match(instrumentation, /statementTimeoutMilliseconds: 1_500/)
-		assert.match(instrumentation, /auditTimeoutMilliseconds: 2_000/)
-		assert.match(instrumentation, /await auditWebDatabaseContract\(\)/)
-		assert.match(instrumentation, /isWebDatabaseContractViolation\(error\)/)
-		assert.doesNotMatch(instrumentation, /process\.exit\(1\)/)
+		assert.match(instrumentation, /validateWebRuntimeDatabaseConfiguration/)
+		assert.match(instrumentation, /DATABASE_URL must use/)
+		assert.match(
+			instrumentation,
+			/DATABASE_URL must include runtime credentials/
+		)
+		assert.doesNotMatch(instrumentation, /validateWebDatabaseContract/)
+		assert.doesNotMatch(instrumentation, /postgres\(/)
+		assert.match(
+			runtimeContract,
+			/has_database_privilege\([^\n]+current_database\(\), 'CONNECT'\)/
+		)
 		assert.match(environment, /inherits only `letletme_web_auth`/)
 		assert.deepEqual([...WEB_AUTH_RUNTIME_TABLES].sort(), [
 			'account',

@@ -1,18 +1,22 @@
 import { DeadlineSection } from '@/components/home/DeadlineSection'
+import { HomePersonalHydratedMarker } from '@/components/analytics/HomePersonalHydratedMarker'
 import {
 	GameweekStatsSection,
-	GameweekStatsSectionFallback,
+	GameweekStatsSectionFallback
 } from '@/components/home/GameweekStatsSection'
 import { MatchesSection } from '@/components/home/MatchesSection'
-import { MarketTeaser, MarketTeaserFallback } from '@/components/home/MarketTeaser'
+import {
+	MarketTeaser,
+	MarketTeaserFallback
+} from '@/components/home/MarketTeaser'
 import {
 	PersonalDesk,
-	PersonalDeskBindPrompt,
+	PersonalDeskBindPrompt
 } from '@/components/home/PersonalDesk'
 import { StatsSection } from '@/components/home/StatsSection'
 import {
 	TeamOfTheWeekSection,
-	TeamOfTheWeekSectionFallback,
+	TeamOfTheWeekSectionFallback
 } from '@/components/home/TeamOfTheWeekSection'
 import PageShell from '@/components/layout/PageShell'
 import { GameweekBadge } from '@/components/stats/GameweekBadge'
@@ -21,17 +25,21 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
 import { getPageLocale, type LocaleParams } from '@/i18n/page'
 import type { Session } from '@/lib/auth'
-import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
+import {
+	CacheTag,
+	publicFetchOptions,
+	RevalidateSeconds
+} from '@/lib/cache-policy'
 import { getCurrentAndNextEvents } from '@/lib/events'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_EVENT_FIXTURES,
 	GET_EVENT_OVERALL_RESULT,
 	type EventFixturesResponse,
-	type EventOverallResultResponse,
+	type EventOverallResultResponse
 } from '@/lib/graphql/operations/events'
 import homeStats from '@/lib/home-stats'
-import { getVerifiedEntryContext } from '@/lib/session'
+import { getVerifiedEntryContext, hasSessionCookieHint } from '@/lib/session'
 import { ArrowRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { getTranslations } from 'next-intl/server'
@@ -42,7 +50,7 @@ export const dynamic = 'force-dynamic'
 async function safeQuery<T>(
 	query: string,
 	variables?: Record<string, unknown>,
-	options?: Parameters<typeof executePublicServerQuery>[2],
+	options?: Parameters<typeof executePublicServerQuery>[2]
 ): Promise<T | null> {
 	try {
 		return await executePublicServerQuery<T>(query, variables, options)
@@ -60,7 +68,10 @@ function MatchesSectionFallback({ eventId }: { eventId: number | null }) {
 				<h2 className="flex items-center gap-2 font-display text-xl font-bold uppercase tracking-wide">
 					{t('upcomingMatches')}
 					{eventId !== null && (
-						<GameweekBadge gameweek={eventId} size="sm" />
+						<GameweekBadge
+							gameweek={eventId}
+							size="sm"
+						/>
 					)}
 				</h2>
 				<div className="flex items-center gap-1">
@@ -82,7 +93,10 @@ function MatchesSectionFallback({ eventId }: { eventId: number | null }) {
 
 function DeadlineScoreboardFallback() {
 	return (
-		<div className="scoreboard rounded-xl p-6 sm:p-7" aria-hidden="true">
+		<div
+			className="scoreboard rounded-xl p-6 sm:p-7"
+			aria-hidden="true"
+		>
 			<Skeleton className="h-4 w-32 bg-white/10" />
 			<Skeleton className="mt-3 h-9 w-44 bg-white/10" />
 			<Skeleton className="mt-5 h-20 w-full bg-white/10" />
@@ -114,7 +128,7 @@ function HomePersonalStripFallback() {
 
 function HomePersonalStrip({
 	session,
-	entryId,
+	entryId
 }: {
 	session: Session | null
 	entryId: number | null
@@ -130,14 +144,43 @@ function HomePersonalStrip({
 		return <PersonalDeskBindPrompt />
 	}
 
-	return <PersonalDesk entryId={entryId} session={session} />
+	return (
+		<PersonalDesk
+			entryId={entryId}
+			session={session}
+		/>
+	)
+}
+
+async function HomePersonalSlot({
+	hasSessionCookie
+}: {
+	hasSessionCookie: boolean
+}) {
+	// The cookie is a layout hint only. Authorization always comes from the
+	// fresh, cache-bypassing Better Auth session below.
+	if (!hasSessionCookie) return null
+	const { session, entryId } = await getVerifiedEntryContext()
+	if (!session?.user) return null
+
+	return (
+		<>
+			<HomePersonalHydratedMarker enabled />
+			<HomePersonalStrip
+				session={session}
+				entryId={entryId}
+			/>
+		</>
+	)
 }
 
 async function HomeHero() {
-	const t = await getTranslations('Home')
-	// Gate the desk band so guests never see a personal-strip skeleton flash.
-	const { session, entryId } = await getVerifiedEntryContext()
-	const showPersonalDesk = Boolean(session?.user)
+	// Reading the cookie header is local and runs alongside translation lookup;
+	// only verified sessions below are allowed to touch the database.
+	const [t, hasSessionCookie] = await Promise.all([
+		getTranslations('Home'),
+		hasSessionCookieHint()
+	])
 
 	return (
 		<section className="pitch-markings texture-grain relative isolate overflow-hidden border-b">
@@ -146,12 +189,15 @@ async function HomeHero() {
 				<div className="grid gap-12 lg:grid-cols-[1.12fr_0.88fr] lg:items-center">
 					<div>
 						<p className="mb-6 flex items-center gap-2.5 font-display text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-							<span className="live-dot" aria-hidden="true" />
+							<span
+								className="live-dot"
+								aria-hidden="true"
+							/>
 							{t('matchdayBadge')}
 						</p>
 						<h1 className="max-w-3xl text-balance font-display text-5xl font-bold uppercase leading-[0.95] tracking-[-0.01em] sm:text-6xl lg:text-7xl">
 							{t.rich('headline', {
-								marker: chunks => <span className="marker">{chunks}</span>,
+								marker: chunks => <span className="marker">{chunks}</span>
 							})}
 						</h1>
 						<p className="mt-6 max-w-xl text-pretty text-lg leading-8 text-muted-foreground">
@@ -175,7 +221,12 @@ async function HomeHero() {
 								className="font-display text-base font-semibold uppercase tracking-[0.1em]"
 								asChild
 							>
-								<Link href="/live/tournaments">{t('liveTournamentStandings')}</Link>
+								<Link
+									href="/live/tournaments"
+									prefetch={false}
+								>
+									{t('liveTournamentStandings')}
+								</Link>
 							</Button>
 						</div>
 					</div>
@@ -185,9 +236,13 @@ async function HomeHero() {
 					</Suspense>
 				</div>
 
-				{showPersonalDesk ? (
+				<span
+					hidden
+					data-home-audience-hint={hasSessionCookie ? 'session-hint' : 'public'}
+				/>
+				{hasSessionCookie ? (
 					<Suspense fallback={<HomePersonalStripFallback />}>
-						<HomePersonalStrip session={session} entryId={entryId} />
+						<HomePersonalSlot hasSessionCookie={hasSessionCookie} />
 					</Suspense>
 				) : null}
 			</div>
@@ -262,15 +317,18 @@ async function HomeInsights() {
 			undefined,
 			publicFetchOptions({
 				revalidate: RevalidateSeconds.homeInsights,
-				tags: [CacheTag.gameweekStats, CacheTag.events],
-			}),
-		),
+				tags: [CacheTag.gameweekStats, CacheTag.events]
+			})
+		)
 	])
 	const currentEventId = eventsData?.current[0]?.id ?? null
 	const nextEventId = eventsData?.next[0]?.id ?? null
 	const overallResult =
 		currentEventId && overallResultData
-			? homeStats.pickEventOverallResult(overallResultData.eventOverallResult, currentEventId)
+			? homeStats.pickEventOverallResult(
+					overallResultData.eventOverallResult,
+					currentEventId
+				)
 			: null
 
 	if (!eventsData) {
@@ -305,7 +363,11 @@ async function HomeInsights() {
 						<div className="mx-auto max-w-4xl px-4">
 							<div className="grid gap-8 md:grid-cols-2">
 								<Suspense
-									fallback={<TeamOfTheWeekSectionFallback currentEventId={currentEventId} />}
+									fallback={
+										<TeamOfTheWeekSectionFallback
+											currentEventId={currentEventId}
+										/>
+									}
 								>
 									<TeamOfTheWeekSection currentEventId={currentEventId} />
 								</Suspense>
@@ -350,8 +412,8 @@ async function InitialMatchesSection({ eventId }: { eventId: number | null }) {
 				{ eventId },
 				publicFetchOptions({
 					revalidate: RevalidateSeconds.publicStats,
-					tags: [CacheTag.fixtures, CacheTag.events],
-				}),
+					tags: [CacheTag.fixtures, CacheTag.events]
+				})
 			)
 		: null
 

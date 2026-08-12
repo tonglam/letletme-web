@@ -4,6 +4,7 @@ import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { after } from 'next/server'
 
+import { instrumentAuthDatabaseAdapter } from '@/lib/auth-database-timing'
 import { db } from '@/lib/db'
 import * as authSchema from '@/lib/db/schema/auth'
 import { sendPasswordResetEmail, sendVerificationEmail } from '@/lib/mailer'
@@ -34,15 +35,17 @@ function trustedAuthOrigins(url: string): string[] {
 
 export const authConfig = {
 	baseURL,
-	database: drizzleAdapter(db, {
-		provider: 'pg',
-		schema: {
-			user: authSchema.user,
-			session: authSchema.session,
-			account: authSchema.account,
-			verification: authSchema.verification
-		}
-	}),
+	database: instrumentAuthDatabaseAdapter(
+		drizzleAdapter(db, {
+			provider: 'pg',
+			schema: {
+				user: authSchema.user,
+				session: authSchema.session,
+				account: authSchema.account,
+				verification: authSchema.verification
+			}
+		})
+	),
 	emailAndPassword: {
 		enabled: true,
 		requireEmailVerification: true,

@@ -14,6 +14,7 @@ import {
 	AUTH_SESSION_POLICY,
 	AUTH_TRUSTED_PROVIDERS
 } from '../../lib/auth-policy'
+import { hasSessionCookieHintInHeaders } from '../../lib/session-cookie-hint'
 
 // ─── tests ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,30 @@ describe('session configuration', () => {
 
 	it('uses letletme cookie prefix to avoid collisions with other apps', () => {
 		assert.equal(AUTH_COOKIE_PREFIX, 'letletme')
+	})
+
+	it('uses the session cookie only as an anonymous display hint', () => {
+		assert.equal(hasSessionCookieHintInHeaders(new Headers()), false)
+		assert.equal(
+			hasSessionCookieHintInHeaders(
+				new Headers({ cookie: 'letletme.session_token=opaque-signed-value' })
+			),
+			true
+		)
+		assert.equal(
+			hasSessionCookieHintInHeaders(
+				new Headers({
+					cookie: '__Secure-letletme.session_token=opaque-signed-value'
+				})
+			),
+			true
+		)
+		assert.equal(
+			hasSessionCookieHintInHeaders(
+				new Headers({ cookie: 'unrelated.session_token=value' })
+			),
+			false
+		)
 	})
 })
 

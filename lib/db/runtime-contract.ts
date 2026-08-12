@@ -2,6 +2,7 @@ import postgres from 'postgres'
 
 export const WEB_AUTH_CAPABILITY_ROLE = 'letletme_web_auth'
 export const GRAPHQL_AUTH_CAPABILITY_ROLE = 'letletme_graphql_reader'
+export const WEB_RUNTIME_LOGIN = 'letletme_web_runtime'
 
 export const WEB_AUTH_RUNTIME_TABLES = [
 	'account',
@@ -40,6 +41,8 @@ type RoleAttributes = {
 	rolinherit: boolean
 	rolreplication: boolean
 	rolbypassrls: boolean
+	valid_until_ok: boolean
+	role_settings: string[]
 }
 
 type AuthTableBoundary = {
@@ -81,6 +84,12 @@ export type WebDatabaseContractOptions = {
 	connectTimeoutSeconds?: number
 	statementTimeoutMilliseconds?: number
 	auditTimeoutMilliseconds?: number
+	/**
+	 * Migration-only structural audit target. When omitted, the connected
+	 * identity is audited. The only accepted override is the dedicated Web
+	 * runtime role, so callers cannot turn this into a general role inspector.
+	 */
+	subjectRole?: typeof WEB_RUNTIME_LOGIN
 }
 
 export class WebDatabaseContractError extends Error {
@@ -177,6 +186,20 @@ export async function validateWebDatabaseContract(
 	auditTimer?.unref()
 
 	try {
+		const [connectionIdentity] = await client<Array<{ role_name: string }>>`
+			SELECT current_user AS role_name
+		`
+		const subjectRole = options.subjectRole ?? connectionIdentity?.role_name
+		if (!subjectRole) {
+			findings.push('current PostgreSQL role is unavailable')
+			throw new WebDatabaseContractError(findings)
+		}
+		if (!options.subjectRole && subjectRole !== WEB_RUNTIME_LOGIN) {
+			findings.push(
+				`runtime connection uses ${subjectRole} instead of ${WEB_RUNTIME_LOGIN}`
+			)
+		}
+
 		const [runtimeRole] = await client<RoleAttributes[]>`
 			SELECT
 				role_row.rolname AS role_name,
@@ -186,9 +209,20 @@ export async function validateWebDatabaseContract(
 				role_row.rolcreaterole,
 				role_row.rolinherit,
 				role_row.rolreplication,
-				role_row.rolbypassrls
+				role_row.rolbypassrls,
+				(role_row.rolvaliduntil IS NULL OR role_row.rolvaliduntil > CURRENT_TIMESTAMP) AS valid_until_ok,
+				COALESCE(role_row.rolconfig, ARRAY[]::text[]) || COALESCE((
+					SELECT array_agg(setting.value ORDER BY setting.value)
+					FROM pg_db_role_setting database_setting
+					CROSS JOIN LATERAL unnest(database_setting.setconfig) AS setting(value)
+					WHERE database_setting.setrole = role_row.oid
+						AND database_setting.setdatabase IN (
+							0,
+							(SELECT oid FROM pg_database WHERE datname = current_database())
+						)
+				), ARRAY[]::text[]) AS role_settings
 			FROM pg_roles role_row
-			WHERE role_row.rolname = current_user
+			WHERE role_row.rolname = ${subjectRole}
 		`
 		if (!runtimeRole) {
 			findings.push('current PostgreSQL role is missing from pg_roles')
@@ -208,6 +242,10 @@ export async function validateWebDatabaseContract(
 					`runtime role ${runtimeRole.role_name} has elevated PostgreSQL attributes`
 				)
 			}
+			if (!runtimeRole.valid_until_ok)
+				findings.push('runtime role credential is expired')
+			if (runtimeRole.role_settings.length > 0)
+				findings.push('runtime role has role or database settings')
 		}
 
 		const [capabilityRole] = await client<RoleAttributes[]>`
@@ -219,7 +257,18 @@ export async function validateWebDatabaseContract(
 				role_row.rolcreaterole,
 				role_row.rolinherit,
 				role_row.rolreplication,
-				role_row.rolbypassrls
+				role_row.rolbypassrls,
+				(role_row.rolvaliduntil IS NULL OR role_row.rolvaliduntil > CURRENT_TIMESTAMP) AS valid_until_ok,
+				COALESCE(role_row.rolconfig, ARRAY[]::text[]) || COALESCE((
+					SELECT array_agg(setting.value ORDER BY setting.value)
+					FROM pg_db_role_setting database_setting
+					CROSS JOIN LATERAL unnest(database_setting.setconfig) AS setting(value)
+					WHERE database_setting.setrole = role_row.oid
+						AND database_setting.setdatabase IN (
+							0,
+							(SELECT oid FROM pg_database WHERE datname = current_database())
+						)
+				), ARRAY[]::text[]) AS role_settings
 			FROM pg_roles role_row
 			WHERE role_row.rolname = ${WEB_AUTH_CAPABILITY_ROLE}
 		`
@@ -232,39 +281,94 @@ export async function validateWebDatabaseContract(
 			capabilityRole.rolcreaterole ||
 			capabilityRole.rolinherit ||
 			capabilityRole.rolreplication ||
-			capabilityRole.rolbypassrls
+			capabilityRole.rolbypassrls ||
+			!capabilityRole.valid_until_ok ||
+			capabilityRole.role_settings.length > 0
 		) {
 			findings.push(`${WEB_AUTH_CAPABILITY_ROLE} has unsafe role attributes`)
 		}
 
-		const inheritedRoles = await client<Array<{ role_name: string }>>`
-			WITH RECURSIVE inherited_roles(role_oid, role_name) AS (
-				SELECT granted_role.oid, granted_role.rolname
+		const inheritedRoles = await client<
+			Array<{ role_name: string; admin_option: boolean }>
+		>`
+			WITH RECURSIVE inherited_roles(role_oid, role_name, admin_option, path) AS (
+				SELECT
+					granted_role.oid,
+					granted_role.rolname,
+					membership.admin_option,
+					ARRAY[member_role.oid, granted_role.oid]
 				FROM pg_auth_members membership
 				JOIN pg_roles member_role ON member_role.oid = membership.member
 				JOIN pg_roles granted_role ON granted_role.oid = membership.roleid
-				WHERE member_role.rolname = current_user
+				WHERE member_role.rolname = ${subjectRole}
 				UNION
-				SELECT granted_role.oid, granted_role.rolname
+				SELECT
+					granted_role.oid,
+					granted_role.rolname,
+					membership.admin_option,
+					inherited_role.path || granted_role.oid
 				FROM inherited_roles inherited_role
 				JOIN pg_auth_members membership ON membership.member = inherited_role.role_oid
 				JOIN pg_roles granted_role ON granted_role.oid = membership.roleid
+				WHERE NOT granted_role.oid = ANY(inherited_role.path)
 			)
-			SELECT DISTINCT role_name
+			SELECT role_name, bool_or(admin_option) AS admin_option
 			FROM inherited_roles
+			GROUP BY role_name
 			ORDER BY role_name
 		`
 		const inheritedRoleNames = inheritedRoles.map(row => row.role_name)
-		if (!compareNames(inheritedRoleNames, [WEB_AUTH_CAPABILITY_ROLE])) {
+		if (
+			!compareNames(inheritedRoleNames, [WEB_AUTH_CAPABILITY_ROLE]) ||
+			inheritedRoles.some(role => role.admin_option)
+		) {
 			findings.push(
 				`runtime role memberships are ${inheritedRoleNames.join(', ') || 'empty'}`
 			)
 		}
 		if (findings.length > 0) throw new WebDatabaseContractError(findings)
 
-		const [databaseBoundary] = await client<Array<{ can_create: boolean }>>`
-			SELECT has_database_privilege(current_user, current_database(), 'CREATE') AS can_create
+		const [ownershipBoundary] = await client<
+			Array<{ owned_object_count: number }>
+		>`
+			WITH runtime_role AS (
+				SELECT oid FROM pg_roles WHERE rolname = ${subjectRole}
+			), owned_objects AS (
+				SELECT relation.oid
+				FROM pg_class relation, runtime_role
+				WHERE relation.relowner = runtime_role.oid
+				UNION ALL
+				SELECT namespace_row.oid
+				FROM pg_namespace namespace_row, runtime_role
+				WHERE namespace_row.nspowner = runtime_role.oid
+				UNION ALL
+				SELECT function_row.oid
+				FROM pg_proc function_row, runtime_role
+				WHERE function_row.proowner = runtime_role.oid
+				UNION ALL
+				SELECT type_row.oid
+				FROM pg_type type_row, runtime_role
+				WHERE type_row.typowner = runtime_role.oid
+				UNION ALL
+				SELECT database_row.oid
+				FROM pg_database database_row, runtime_role
+				WHERE database_row.datdba = runtime_role.oid
+			)
+			SELECT count(*)::integer AS owned_object_count FROM owned_objects
 		`
+		if ((ownershipBoundary?.owned_object_count ?? 0) !== 0) {
+			findings.push('runtime role owns database objects')
+		}
+
+		const [databaseBoundary] = await client<
+			Array<{ can_connect: boolean; can_create: boolean }>
+		>`
+			SELECT
+				has_database_privilege(${subjectRole}, current_database(), 'CONNECT') AS can_connect,
+				has_database_privilege(${subjectRole}, current_database(), 'CREATE') AS can_create
+		`
+		if (!databaseBoundary?.can_connect)
+			findings.push('runtime role cannot connect to the database')
 		if (databaseBoundary?.can_create)
 			findings.push('runtime role can create database schemas')
 
@@ -272,8 +376,8 @@ export async function validateWebDatabaseContract(
 			Array<{ can_use: boolean; can_create: boolean }>
 		>`
 			SELECT
-				has_schema_privilege(current_user, 'bauth', 'USAGE') AS can_use,
-				has_schema_privilege(current_user, 'bauth', 'CREATE') AS can_create
+				has_schema_privilege(${subjectRole}, 'bauth', 'USAGE') AS can_use,
+				has_schema_privilege(${subjectRole}, 'bauth', 'CREATE') AS can_create
 		`
 		if (!authSchemaBoundary?.can_use)
 			findings.push('runtime role cannot use bauth')
@@ -286,13 +390,13 @@ export async function validateWebDatabaseContract(
 				relation.relname AS table_name,
 				pg_get_userbyid(relation.relowner) AS owner_name,
 				relation.relrowsecurity AS rls_enabled,
-				has_table_privilege(current_user, relation.oid, 'SELECT') AS can_select,
-				has_table_privilege(current_user, relation.oid, 'INSERT') AS can_insert,
-				has_table_privilege(current_user, relation.oid, 'UPDATE') AS can_update,
-				has_table_privilege(current_user, relation.oid, 'DELETE') AS can_delete,
-				has_table_privilege(current_user, relation.oid, 'TRUNCATE') AS can_truncate,
-				has_table_privilege(current_user, relation.oid, 'REFERENCES') AS can_references,
-				has_table_privilege(current_user, relation.oid, 'TRIGGER') AS can_trigger
+				has_table_privilege(${subjectRole}, relation.oid, 'SELECT') AS can_select,
+				has_table_privilege(${subjectRole}, relation.oid, 'INSERT') AS can_insert,
+				has_table_privilege(${subjectRole}, relation.oid, 'UPDATE') AS can_update,
+				has_table_privilege(${subjectRole}, relation.oid, 'DELETE') AS can_delete,
+				has_table_privilege(${subjectRole}, relation.oid, 'TRUNCATE') AS can_truncate,
+				has_table_privilege(${subjectRole}, relation.oid, 'REFERENCES') AS can_references,
+				has_table_privilege(${subjectRole}, relation.oid, 'TRIGGER') AS can_trigger
 			FROM pg_class relation
 			JOIN pg_namespace namespace_row ON namespace_row.oid = relation.relnamespace
 			WHERE namespace_row.nspname = 'bauth'
@@ -397,12 +501,12 @@ export async function validateWebDatabaseContract(
 		const [ledgerBoundary] = await client<NamedPrivilegeBoundary[]>`
 			SELECT
 				'bauth.__drizzle_migrations' AS object_name,
-				has_table_privilege(current_user, 'bauth.__drizzle_migrations', 'SELECT') AS can_read,
+				has_table_privilege(${subjectRole}, 'bauth.__drizzle_migrations', 'SELECT') AS can_read,
 				(
-					has_table_privilege(current_user, 'bauth.__drizzle_migrations', 'INSERT')
-					OR has_table_privilege(current_user, 'bauth.__drizzle_migrations', 'UPDATE')
-					OR has_table_privilege(current_user, 'bauth.__drizzle_migrations', 'DELETE')
-					OR has_table_privilege(current_user, 'bauth.__drizzle_migrations', 'TRUNCATE')
+					has_table_privilege(${subjectRole}, 'bauth.__drizzle_migrations', 'INSERT')
+					OR has_table_privilege(${subjectRole}, 'bauth.__drizzle_migrations', 'UPDATE')
+					OR has_table_privilege(${subjectRole}, 'bauth.__drizzle_migrations', 'DELETE')
+					OR has_table_privilege(${subjectRole}, 'bauth.__drizzle_migrations', 'TRUNCATE')
 				) AS can_write
 		`
 		if (ledgerBoundary?.can_read || ledgerBoundary?.can_write) {
@@ -414,8 +518,8 @@ export async function validateWebDatabaseContract(
 		>`
 			SELECT
 				namespace_row.nspname AS schema_name,
-				has_schema_privilege(current_user, namespace_row.oid, 'USAGE') AS can_use,
-				has_schema_privilege(current_user, namespace_row.oid, 'CREATE') AS can_create
+				has_schema_privilege(${subjectRole}, namespace_row.oid, 'USAGE') AS can_use,
+				has_schema_privilege(${subjectRole}, namespace_row.oid, 'CREATE') AS can_create
 			FROM pg_namespace namespace_row
 			WHERE namespace_row.nspname IN ${client(DATA_SCHEMAS)}
 			ORDER BY namespace_row.nspname
@@ -431,27 +535,27 @@ export async function validateWebDatabaseContract(
 		const dataRelations = await client<NamedPrivilegeBoundary[]>`
 			SELECT
 				format('%I.%I', namespace_row.nspname, relation.relname) AS object_name,
-				has_table_privilege(current_user, relation.oid, 'SELECT') AS can_read,
+				has_table_privilege(${subjectRole}, relation.oid, 'SELECT') AS can_read,
 				(
-					has_table_privilege(current_user, relation.oid, 'INSERT')
-					OR has_table_privilege(current_user, relation.oid, 'UPDATE')
-					OR has_table_privilege(current_user, relation.oid, 'DELETE')
-					OR has_table_privilege(current_user, relation.oid, 'TRUNCATE')
-					OR has_table_privilege(current_user, relation.oid, 'REFERENCES')
-					OR has_table_privilege(current_user, relation.oid, 'TRIGGER')
+					has_table_privilege(${subjectRole}, relation.oid, 'INSERT')
+					OR has_table_privilege(${subjectRole}, relation.oid, 'UPDATE')
+					OR has_table_privilege(${subjectRole}, relation.oid, 'DELETE')
+					OR has_table_privilege(${subjectRole}, relation.oid, 'TRUNCATE')
+					OR has_table_privilege(${subjectRole}, relation.oid, 'REFERENCES')
+					OR has_table_privilege(${subjectRole}, relation.oid, 'TRIGGER')
 				) AS can_write
 			FROM pg_class relation
 			JOIN pg_namespace namespace_row ON namespace_row.oid = relation.relnamespace
 			WHERE namespace_row.nspname IN ${client([...DATA_SCHEMAS, 'public'])}
 				AND relation.relkind IN ('r', 'p', 'v', 'm', 'f')
 				AND (
-					has_table_privilege(current_user, relation.oid, 'SELECT')
-					OR has_table_privilege(current_user, relation.oid, 'INSERT')
-					OR has_table_privilege(current_user, relation.oid, 'UPDATE')
-					OR has_table_privilege(current_user, relation.oid, 'DELETE')
-					OR has_table_privilege(current_user, relation.oid, 'TRUNCATE')
-					OR has_table_privilege(current_user, relation.oid, 'REFERENCES')
-					OR has_table_privilege(current_user, relation.oid, 'TRIGGER')
+					has_table_privilege(${subjectRole}, relation.oid, 'SELECT')
+					OR has_table_privilege(${subjectRole}, relation.oid, 'INSERT')
+					OR has_table_privilege(${subjectRole}, relation.oid, 'UPDATE')
+					OR has_table_privilege(${subjectRole}, relation.oid, 'DELETE')
+					OR has_table_privilege(${subjectRole}, relation.oid, 'TRUNCATE')
+					OR has_table_privilege(${subjectRole}, relation.oid, 'REFERENCES')
+					OR has_table_privilege(${subjectRole}, relation.oid, 'TRIGGER')
 				)
 			ORDER BY object_name
 		`
@@ -468,9 +572,9 @@ export async function validateWebDatabaseContract(
 			WHERE namespace_row.nspname IN ${client([...DATA_SCHEMAS, 'public'])}
 				AND relation.relkind = 'S'
 				AND (
-					has_sequence_privilege(current_user, relation.oid, 'USAGE')
-					OR has_sequence_privilege(current_user, relation.oid, 'SELECT')
-					OR has_sequence_privilege(current_user, relation.oid, 'UPDATE')
+					has_sequence_privilege(${subjectRole}, relation.oid, 'USAGE')
+					OR has_sequence_privilege(${subjectRole}, relation.oid, 'SELECT')
+					OR has_sequence_privilege(${subjectRole}, relation.oid, 'UPDATE')
 				)
 			ORDER BY object_name
 		`
@@ -488,7 +592,7 @@ export async function validateWebDatabaseContract(
 			FROM pg_proc function_row
 			JOIN pg_namespace namespace_row ON namespace_row.oid = function_row.pronamespace
 			WHERE namespace_row.nspname IN ${client(DATA_SCHEMAS)}
-				AND has_function_privilege(current_user, function_row.oid, 'EXECUTE')
+				AND has_function_privilege(${subjectRole}, function_row.oid, 'EXECUTE')
 			ORDER BY object_name
 		`
 		for (const functionRow of dataFunctions) {
