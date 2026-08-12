@@ -7,8 +7,10 @@ import postgres from 'postgres'
 import {
 	GRAPHQL_AUTH_CAPABILITY_ROLE,
 	GRAPHQL_AUTH_RUNTIME_TABLES,
+	normalizeWebDatabaseContractAuditFailure,
 	validateWebDatabaseContract,
 	WEB_AUTH_RUNTIME_TABLES,
+	WebDatabaseContractAuditTimeoutError,
 	WebDatabaseContractError
 } from '../../lib/db/runtime-contract'
 
@@ -107,6 +109,30 @@ describe('Web runtime database boundary', () => {
 			'user'
 		])
 	})
+})
+
+test('known contract findings win over a later audit timeout', () => {
+	const cause = new Error('query was interrupted by audit deadline')
+	const normalized = normalizeWebDatabaseContractAuditFailure(
+		cause,
+		['runtime role can write fpl.events'],
+		true,
+		2_000
+	)
+
+	assert.ok(normalized instanceof WebDatabaseContractError)
+	assert.deepEqual(normalized.findings, ['runtime role can write fpl.events'])
+})
+
+test('audit timeout is retained when no contract finding completed first', () => {
+	const normalized = normalizeWebDatabaseContractAuditFailure(
+		new Error('query was interrupted by audit deadline'),
+		[],
+		true,
+		2_000
+	)
+
+	assert.ok(normalized instanceof WebDatabaseContractAuditTimeoutError)
 })
 
 const runtimeDatabaseUrl = process.env.WEB_RUNTIME_DATABASE_URL

@@ -103,6 +103,23 @@ export class WebDatabaseContractAuditTimeoutError extends Error {
 	}
 }
 
+export function normalizeWebDatabaseContractAuditFailure(
+	error: unknown,
+	findings: string[],
+	auditTimedOut: boolean,
+	auditTimeoutMilliseconds: number | undefined
+): unknown {
+	if (error instanceof WebDatabaseContractError) return error
+	if (findings.length > 0) return new WebDatabaseContractError(findings)
+	if (auditTimedOut && auditTimeoutMilliseconds !== undefined) {
+		return new WebDatabaseContractAuditTimeoutError(
+			auditTimeoutMilliseconds,
+			error
+		)
+	}
+	return error
+}
+
 function positiveIntegerOption(
 	name: string,
 	value: number | undefined
@@ -489,14 +506,12 @@ export async function validateWebDatabaseContract(
 			authTables: authTableNames
 		}
 	} catch (error) {
-		if (error instanceof WebDatabaseContractError) throw error
-		if (auditTimedOut && auditTimeoutMilliseconds !== undefined) {
-			throw new WebDatabaseContractAuditTimeoutError(
-				auditTimeoutMilliseconds,
-				error
-			)
-		}
-		throw error
+		throw normalizeWebDatabaseContractAuditFailure(
+			error,
+			findings,
+			auditTimedOut,
+			auditTimeoutMilliseconds
+		)
 	} finally {
 		if (auditTimer) clearTimeout(auditTimer)
 		await client.end({ timeout: 0 })
