@@ -34,6 +34,12 @@ test('database contract audit records a transient failure without rejecting star
 test('database contract audit degrades only recognized transient failures', async () => {
 	for (const error of [
 		Object.assign(new Error('connection reset'), { code: 'ECONNRESET' }),
+		Object.assign(new Error('canceling statement due to statement timeout'), {
+			code: '57014'
+		}),
+		Object.assign(new Error('terminating connection due to administrator command'), {
+			code: '57P01'
+		}),
 		Object.assign(new Error('database is starting'), { code: '57P03' }),
 		new WebDatabaseContractAuditTimeoutError(2_000)
 	]) {
