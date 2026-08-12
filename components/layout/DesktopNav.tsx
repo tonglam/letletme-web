@@ -1,6 +1,9 @@
 'use client'
 
-import { HeaderProfileCard, type NavigationUser } from '@/components/profile/HeaderProfileCard'
+import {
+	HeaderProfileCard,
+	type NavigationUser
+} from '@/components/profile/HeaderProfileCard'
 import { Button } from '@/components/ui/button'
 import {
 	DropdownMenu,
@@ -27,14 +30,25 @@ export function DesktopNav({ user }: { user: NavigationUser | null }) {
 							className="px-3 font-display text-[13px] font-semibold uppercase tracking-[0.14em] text-fascia-foreground/70 hover:bg-white/5 hover:text-fascia-foreground focus-visible:ring-electric data-[state=open]:text-fascia-foreground"
 						>
 							{t(item.labelKey)}
-							<ChevronDown data-icon="inline-end" className="opacity-60" />
+							<ChevronDown
+								data-icon="inline-end"
+								className="opacity-60"
+							/>
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent>
 						<DropdownMenuGroup>
 							{item.items.map(subItem => (
-								<DropdownMenuItem key={subItem.labelKey} asChild>
-									<Link href={subItem.href}>{t(subItem.labelKey)}</Link>
+								<DropdownMenuItem
+									key={subItem.labelKey}
+									asChild
+								>
+									<Link
+										href={subItem.href}
+										prefetch={false}
+									>
+										{t(subItem.labelKey)}
+									</Link>
 								</DropdownMenuItem>
 							))}
 						</DropdownMenuGroup>
@@ -50,7 +64,12 @@ export function DesktopNav({ user }: { user: NavigationUser | null }) {
 					className="ml-2 font-display text-[13px] font-semibold uppercase tracking-[0.14em] shadow-sticker-sm transition-transform hover:-translate-y-px"
 					asChild
 				>
-					<Link href="/auth/login">{t('login')}</Link>
+					<Link
+						href="/auth/login"
+						prefetch={false}
+					>
+						{t('login')}
+					</Link>
 				</Button>
 			)}
 		</div>

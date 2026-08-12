@@ -364,6 +364,59 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
+		if (query.includes('GetEntryLeagues')) {
+			const entryId = Number(variables.entryId)
+			if (entryId === 909090) {
+				json(response, 503, {
+					errors: [{ message: 'Temporary personal league failure' }]
+				})
+				return
+			}
+			json(response, 200, {
+				data: {
+					entryLeagues: [
+						{
+							id: 314,
+							name: 'E2E Classic',
+							type: 'CLASSIC',
+							entryRank: 12,
+							entryLastRank: 18,
+							totalTeamNum: 100,
+							startedEvent: 1,
+							tournamentId: null,
+							tournamentName: null,
+							state: 'ACTIVE'
+						}
+					]
+				}
+			})
+			return
+		}
+		if (query.includes('GetEntry')) {
+			const entryId = Number(variables.id)
+			if (entryId === 909090) {
+				json(response, 503, {
+					errors: [{ message: 'Temporary personal entry failure' }]
+				})
+				return
+			}
+			json(response, 200, {
+				data: {
+					entry: {
+						id: entryId,
+						entryName: 'E2E United',
+						playerName: 'Test Manager',
+						overallPoints: 1234,
+						overallRank: 56789,
+						teamValue: 1005,
+						bank: 10,
+						totalTransfers: 22,
+						region: 'Australia'
+					}
+				}
+			})
+			return
+		}
 		if (query.includes('EventLiveExplainBatch')) {
 			const elementIds = Array.isArray(variables.elementIds)
 				? variables.elementIds

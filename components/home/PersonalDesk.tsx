@@ -6,12 +6,12 @@ import type { Session } from '@/lib/auth'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import {
 	GET_ENTRY,
-	type EntrySummaryResponse,
+	type EntrySummaryResponse
 } from '@/lib/graphql/operations/entries'
 import {
 	GET_ENTRY_LEAGUES,
 	type EntryLeague,
-	type EntryLeaguesResponse,
+	type EntryLeaguesResponse
 } from '@/lib/graphql/operations/leagues'
 import { buildHomeLeagueRankRows } from '@/lib/home-league-ranks'
 import { formatCompactNumber, formatInteger } from '@/lib/utils'
@@ -21,7 +21,7 @@ import { Suspense, type ReactNode } from 'react'
 
 function PersonalDeskShell({
 	accent = 'default',
-	children,
+	children
 }: {
 	accent?: 'default' | 'warning'
 	children: ReactNode
@@ -32,6 +32,7 @@ function PersonalDeskShell({
 	return (
 		<article
 			className={`overflow-hidden rounded-xl border bg-card p-4 shadow-sticker-sm sm:p-5 ${ringClass}`}
+			data-home-personal-ready="true"
 		>
 			{children}
 		</article>
@@ -74,24 +75,13 @@ function PersonalDeskLeaguesFallback() {
 }
 
 async function PersonalDeskLeagues({
-	entryId,
-	session,
-	}: {
-	entryId: number
-	session: Session | null
+	leaguesPromise
+}: {
+	leaguesPromise: Promise<EntryLeaguesResponse | null>
 }) {
-	const leaguesPromise = executeServerQueryWithSession<EntryLeaguesResponse>(
-		session,
-		GET_ENTRY_LEAGUES,
-		{ entryId },
-		{ cache: 'no-store', timeoutMs: 4_000 },
-	).catch(err => {
-		console.error('[home-personal-desk] leagues fetch failed:', err)
-		return null
-	})
 	const [leaguesData, t] = await Promise.all([
 		leaguesPromise,
-		getTranslations('Home'),
+		getTranslations('Home')
 	])
 
 	if (!leaguesData) {
@@ -140,7 +130,7 @@ export async function PersonalDeskBindPrompt() {
  */
 export async function PersonalDesk({
 	entryId,
-	session,
+	session
 }: {
 	entryId: number
 	session: Session | null
@@ -155,15 +145,26 @@ export async function PersonalDesk({
 		session,
 		GET_ENTRY,
 		{ id: entryId },
-		{ cache: 'no-store', timeoutMs: 4_000 },
+		{ cache: 'no-store', timeoutMs: 4_000 }
 	).catch(err => {
 		console.error('[home-personal-desk] entry fetch failed:', err)
+		return null
+	})
+	// Start both Home operations before awaiting either one. Entry summary can
+	// stream first while league ranks remain behind their own Suspense boundary.
+	const leaguesPromise = executeServerQueryWithSession<EntryLeaguesResponse>(
+		session,
+		GET_ENTRY_LEAGUES,
+		{ entryId },
+		{ cache: 'no-store', timeoutMs: 4_000 }
+	).catch(err => {
+		console.error('[home-personal-desk] leagues fetch failed:', err)
 		return null
 	})
 
 	const [entryData, t] = await Promise.all([
 		entryPromise,
-		getTranslations('Home'),
+		getTranslations('Home')
 	])
 
 	const entry = entryData?.entry
@@ -180,16 +181,16 @@ export async function PersonalDesk({
 	const metricTiles = [
 		{
 			label: t('personalPointsLabel'),
-			value: overallPoints == null ? '—' : formatInteger(overallPoints),
+			value: overallPoints == null ? '—' : formatInteger(overallPoints)
 		},
 		{
 			label: t('personalRankLabel'),
-			value: overallRank == null ? '—' : formatCompactNumber(overallRank),
+			value: overallRank == null ? '—' : formatCompactNumber(overallRank)
 		},
 		{
 			label: t('personalTeamValueLabel'),
-			value: teamValue == null ? '—' : `£${(teamValue / 10).toFixed(1)}m`,
-		},
+			value: teamValue == null ? '—' : `£${(teamValue / 10).toFixed(1)}m`
+		}
 	] as const
 
 	return (
@@ -228,7 +229,7 @@ export async function PersonalDesk({
 			) : null}
 
 			<Suspense fallback={<PersonalDeskLeaguesFallback />}>
-				<PersonalDeskLeagues entryId={entryId} session={session} />
+				<PersonalDeskLeagues leaguesPromise={leaguesPromise} />
 			</Suspense>
 		</PersonalDeskShell>
 	)

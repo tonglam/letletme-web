@@ -13,7 +13,6 @@ env:
   DIRECT_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/testdb
   SCHEMA_EXPORT_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/schema_export
   WEB_RUNTIME_DATABASE_URL: postgresql://letletme_web_runtime:wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww@127.0.0.1:5432/testdb
-  WEB_RUNTIME_DB_PASSWORD: wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
   BETTER_AUTH_SECRET: ci-better-auth-secret-at-least-thirty-two-characters
   BETTER_AUTH_URL: http://localhost:3000
   GRAPHQL_SERVICE_TOKEN: e2e-graphql-service-token-at-least-thirty-two-bytes
@@ -75,10 +74,15 @@ jobs:
           npx drizzle-kit export --dialect postgresql --schema ./lib/db/schema/auth.ts --sql > /tmp/auth-schema.sql
           psql "$SCHEMA_EXPORT_DATABASE_URL" --set ON_ERROR_STOP=1 --file /tmp/auth-schema.sql
           npx tsx --test test/auth/schema-declaration-parity.integration.test.ts
-      - name: Provision and retry production-shaped Web runtime login
+      - name: Bootstrap and verify production-shaped Web runtime login
         run: |
-          npm run db:provision-runtime-login
-          npm run db:provision-runtime-login
+          npm run db:bootstrap-runtime-login
+          password_hash_before="$(psql "$DIRECT_DATABASE_URL" --tuples-only --no-align --command "SELECT rolpassword FROM pg_authid WHERE rolname = 'letletme_web_runtime'")"
+          npm run db:bootstrap-runtime-login
+          npm run db:verify-runtime-login
+          password_hash_after="$(psql "$DIRECT_DATABASE_URL" --tuples-only --no-align --command "SELECT rolpassword FROM pg_authid WHERE rolname = 'letletme_web_runtime'")"
+          test -n "$password_hash_before"
+          test "$password_hash_before" = "$password_hash_after"
       - name: Verify Web startup contract
         env:
           DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
@@ -91,6 +95,7 @@ jobs:
       - run: npm run build
         env:
           NODE_ENV: production
+          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
           GRAPHQL_ENDPOINT: http://127.0.0.1:4100/graphql
       - name: Install Chromium for production E2E
         run: npx playwright install --with-deps chromium

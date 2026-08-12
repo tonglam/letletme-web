@@ -1,76 +1,97 @@
-type DatabaseContractValidator = () => Promise<unknown>
-type ContractFailureWriter = (message: string) => void
+import { resolveWebDatabasePoolMax } from './lib/db/pool-config'
+import { WEB_RUNTIME_LOGIN } from './lib/db/runtime-contract'
 
-const TRANSIENT_DATABASE_ERROR_CODES = new Set([
-	'08001',
-	'08006',
-	'53300',
-	'57014',
-	'57P01',
-	'57P02',
-	'57P03',
-	'EAI_AGAIN',
-	'ECIRCUITBREAKER',
-	'ECONNABORTED',
-	'ECONNREFUSED',
-	'ECONNRESET',
-	'EHOSTDOWN',
-	'EHOSTUNREACH',
-	'ENETDOWN',
-	'ENETRESET',
-	'ENETUNREACH',
-	'EPIPE',
-	'ETIMEDOUT'
-])
-
-function isWebDatabaseContractViolation(error: unknown): boolean {
-	return (
-		error instanceof Error &&
-		error.name === 'WebDatabaseContractError' &&
-		Array.isArray((error as Error & { findings?: unknown }).findings)
-	)
+export type WebRuntimeDatabaseConfiguration = {
+	roleName: typeof WEB_RUNTIME_LOGIN
+	host: string
+	port: number
+	database: string
+	pooler: boolean
+	poolMax: number
 }
 
-function isTransientWebDatabaseAuditFailure(error: unknown): boolean {
-	if (!(error instanceof Error)) return false
-	if (error.name === 'WebDatabaseContractAuditTimeoutError') return true
-
-	const code = (error as Error & { code?: unknown }).code
-	if (typeof code === 'string' && TRANSIENT_DATABASE_ERROR_CODES.has(code)) {
-		return true
-	}
-
-	return /\b(?:CONNECT_TIMEOUT|ECIRCUITBREAKER)\b/.test(error.message)
-}
-
-export async function auditWebDatabaseContract(
-	validate: DatabaseContractValidator = async () => {
-		const { validateWebDatabaseContract } = await import('./lib/db/runtime-contract')
-		return validateWebDatabaseContract(undefined, {
-			connectTimeoutSeconds: 2,
-			statementTimeoutMilliseconds: 1_500,
-			auditTimeoutMilliseconds: 2_000,
-		})
-	},
-	writeFailure: ContractFailureWriter = message => {
-		console.error(message.trimEnd())
-	},
-): Promise<void> {
+function parseRuntimeDatabaseUrl(value: string): URL {
+	let parsed: URL
 	try {
-		await validate()
-	} catch (error) {
-		if (isWebDatabaseContractViolation(error)) throw error
-		if (!isTransientWebDatabaseAuditFailure(error)) throw error
-		const message = error instanceof Error ? error.message : 'unknown database contract error'
-		writeFailure(`[web-database-contract] transient startup audit failed: ${message}\n`)
+		parsed = new URL(value)
+	} catch {
+		throw new Error('DATABASE_URL must be a valid PostgreSQL URL')
+	}
+	if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
+		throw new Error('DATABASE_URL must use the postgres or postgresql scheme')
+	}
+	return parsed
+}
+
+/**
+ * Startup validation is intentionally static: it proves that the configured
+ * URL has the dedicated identity and safe pooler shape without opening a
+ * database connection from instrumentation.register().
+ */
+export function validateWebRuntimeDatabaseConfiguration(
+	databaseUrl = process.env.DATABASE_URL,
+	poolMaxValue = process.env.DATABASE_POOL_MAX
+): WebRuntimeDatabaseConfiguration {
+	if (!databaseUrl) throw new Error('DATABASE_URL is not set')
+	const parsed = parseRuntimeDatabaseUrl(databaseUrl)
+	let username: string
+	let password: string
+	let database: string
+	try {
+		username = decodeURIComponent(parsed.username)
+		password = decodeURIComponent(parsed.password)
+		database = decodeURIComponent(parsed.pathname.replace(/^\//, ''))
+	} catch {
+		throw new Error('DATABASE_URL contains invalid URL encoding')
+	}
+	if (
+		username !== WEB_RUNTIME_LOGIN &&
+		!username.startsWith(`${WEB_RUNTIME_LOGIN}.`)
+	) {
+		throw new Error(`DATABASE_URL must use ${WEB_RUNTIME_LOGIN}`)
+	}
+	if (!password)
+		throw new Error('DATABASE_URL must include runtime credentials')
+	if (!parsed.hostname || !database) {
+		throw new Error('DATABASE_URL must include a host and database name')
+	}
+	for (const forbiddenParameter of ['options', 'role', 'search_path']) {
+		if (parsed.searchParams.has(forbiddenParameter)) {
+			throw new Error(
+				`DATABASE_URL must not override PostgreSQL ${forbiddenParameter}`
+			)
+		}
+	}
+	const pgbouncer = parsed.searchParams.get('pgbouncer')
+	if (pgbouncer !== null && pgbouncer !== 'true') {
+		throw new Error('DATABASE_URL pgbouncer must be true when configured')
+	}
+	const port = parsed.port ? Number.parseInt(parsed.port, 10) : 5432
+	if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+		throw new Error('DATABASE_URL contains an invalid port')
+	}
+	return {
+		roleName: WEB_RUNTIME_LOGIN,
+		host: parsed.hostname.toLowerCase(),
+		port,
+		database,
+		pooler:
+			port === 6543 ||
+			parsed.hostname.toLowerCase().includes('pooler') ||
+			pgbouncer === 'true',
+		poolMax: resolveWebDatabasePoolMax(poolMaxValue)
 	}
 }
 
-export async function register() {
+export function register() {
 	if (process.env.NEXT_RUNTIME === 'nodejs') {
-		// Next keeps register() inside the managed server-start lifecycle. Real
-		// privilege findings still reject startup; the complete audit has a hard
-		// deadline so a temporary pooler delay cannot turn Home into 500.
-		await auditWebDatabaseContract()
+		const configuration = validateWebRuntimeDatabaseConfiguration()
+		console.info(
+			JSON.stringify({
+				event: 'web_database_configuration_verified',
+				credentialMutated: false,
+				...configuration
+			})
+		)
 	}
 }
