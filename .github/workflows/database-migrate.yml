@@ -30,7 +30,7 @@ jobs:
         run: |
           npm run db:migrate
           npm run db:migrate:status
-      - name: Provision runtime login
+      - name: Provision and verify runtime login
         env:
           DIRECT_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
           WEB_RUNTIME_DB_PASSWORD: ${{ secrets.WEB_RUNTIME_DB_PASSWORD }}

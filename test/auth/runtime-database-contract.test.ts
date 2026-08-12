@@ -7,8 +7,10 @@ import postgres from 'postgres'
 import {
 	GRAPHQL_AUTH_CAPABILITY_ROLE,
 	GRAPHQL_AUTH_RUNTIME_TABLES,
+	normalizeWebDatabaseContractAuditFailure,
 	validateWebDatabaseContract,
 	WEB_AUTH_RUNTIME_TABLES,
+	WebDatabaseContractAuditTimeoutError,
 	WebDatabaseContractError
 } from '../../lib/db/runtime-contract'
 
@@ -84,8 +86,12 @@ describe('Web runtime database boundary', () => {
 			)
 		}
 		assert.match(baseline, /CREATE POLICY graphql_auth_reader_select/g)
-		assert.match(instrumentation, /await validateWebDatabaseContract\(\)/)
-		assert.match(instrumentation, /process\.exit\(1\)/)
+		assert.match(instrumentation, /connectTimeoutSeconds: 2/)
+		assert.match(instrumentation, /statementTimeoutMilliseconds: 1_500/)
+		assert.match(instrumentation, /auditTimeoutMilliseconds: 2_000/)
+		assert.match(instrumentation, /await auditWebDatabaseContract\(\)/)
+		assert.match(instrumentation, /isWebDatabaseContractViolation\(error\)/)
+		assert.doesNotMatch(instrumentation, /process\.exit\(1\)/)
 		assert.match(environment, /inherits only `letletme_web_auth`/)
 		assert.deepEqual([...WEB_AUTH_RUNTIME_TABLES].sort(), [
 			'account',
@@ -103,6 +109,30 @@ describe('Web runtime database boundary', () => {
 			'user'
 		])
 	})
+})
+
+test('known contract findings win over a later audit timeout', () => {
+	const cause = new Error('query was interrupted by audit deadline')
+	const normalized = normalizeWebDatabaseContractAuditFailure(
+		cause,
+		['runtime role can write fpl.events'],
+		true,
+		2_000
+	)
+
+	assert.ok(normalized instanceof WebDatabaseContractError)
+	assert.deepEqual(normalized.findings, ['runtime role can write fpl.events'])
+})
+
+test('audit timeout is retained when no contract finding completed first', () => {
+	const normalized = normalizeWebDatabaseContractAuditFailure(
+		new Error('query was interrupted by audit deadline'),
+		[],
+		true,
+		2_000
+	)
+
+	assert.ok(normalized instanceof WebDatabaseContractAuditTimeoutError)
 })
 
 const runtimeDatabaseUrl = process.env.WEB_RUNTIME_DATABASE_URL
