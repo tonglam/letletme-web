@@ -3,6 +3,7 @@ import 'server-only'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 
+import { resolveWebDatabasePoolMax } from './pool-config'
 import * as authSchema from './schema/auth'
 
 let _db: ReturnType<typeof drizzle> | null = null
@@ -16,7 +17,11 @@ function getDb() {
 	}
 
 	const client = postgres(connectionString, {
-		max: Number(process.env.DATABASE_POOL_MAX ?? 10),
+		// Vercel instances share one bounded Supavisor runtime login. Keep each
+		// lazy pool small and release idle sessions instead of hoarding the login.
+		max: resolveWebDatabasePoolMax(),
+		idle_timeout: 20,
+		connect_timeout: 5,
 		prepare: false,
 	})
 
