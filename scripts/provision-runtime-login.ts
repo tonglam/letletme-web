@@ -1,7 +1,11 @@
 import postgres from 'postgres'
 import { pathToFileURL } from 'node:url'
 
-import { validateWebDatabaseContract } from '../lib/db/runtime-contract'
+import {
+	validateWebDatabaseContract,
+	WebDatabaseContractError,
+	type WebDatabaseContractResult
+} from '../lib/db/runtime-contract'
 import { loadLocalMigrations } from './migration-audit'
 
 export const WEB_RUNTIME_LOGIN = 'letletme_web_runtime'
@@ -45,6 +49,14 @@ type RoleRow = {
 type QueryClient = postgres.Sql | postgres.TransactionSql
 
 export type WebRuntimePasswordOperation = 'create' | 'preserve' | 'rotate'
+export type WebRuntimePasswordMode =
+	| 'create'
+	| 'preserve-existing'
+	| 'rotate-existing'
+
+const DEFAULT_RUNTIME_VERIFICATION_RETRY_DELAYS_MS = [
+	1_000, 2_000, 4_000, 8_000, 15_000, 30_000, 60_000
+] as const
 
 export function parseWebRuntimeProvisioningArgs(args: readonly string[]): {
 	rotateExistingPassword: boolean
@@ -67,6 +79,42 @@ export function webRuntimePasswordOperation(
 ): WebRuntimePasswordOperation {
 	if (!exists) return 'create'
 	return rotateExistingPassword ? 'rotate' : 'preserve'
+}
+
+export function webRuntimePasswordMode(
+	operation: WebRuntimePasswordOperation
+): WebRuntimePasswordMode {
+	if (operation === 'create') return 'create'
+	return operation === 'rotate' ? 'rotate-existing' : 'preserve-existing'
+}
+
+export async function verifyWebRuntimeContractWithRetry<T>(
+	verify: () => Promise<T>,
+	options: {
+		retryDelaysMs?: readonly number[]
+		wait?: (milliseconds: number) => Promise<void>
+	} = {}
+): Promise<T> {
+	const retryDelaysMs =
+		options.retryDelaysMs ?? DEFAULT_RUNTIME_VERIFICATION_RETRY_DELAYS_MS
+	const wait =
+		options.wait ??
+		((milliseconds: number) =>
+			new Promise(resolve => setTimeout(resolve, milliseconds)))
+
+	for (let attempt = 0; ; attempt += 1) {
+		try {
+			return await verify()
+		} catch (error) {
+			if (
+				error instanceof WebDatabaseContractError ||
+				attempt >= retryDelaysMs.length
+			) {
+				throw error
+			}
+			await wait(retryDelaysMs[attempt]!)
+		}
+	}
 }
 
 export function assertWebRuntimePasswordRotationAcknowledged(
@@ -356,7 +404,7 @@ async function main(): Promise<void> {
 			)
 		}
 
-		await client.begin(async transaction => {
+		const passwordOperation = await client.begin(async transaction => {
 			const before = await inspectRuntime(transaction)
 			const capability = before.roles.find(
 				role => role.roleName === WEB_RUNTIME_CAPABILITY
@@ -391,15 +439,15 @@ async function main(): Promise<void> {
 				)
 			}
 
-			const passwordOperation = webRuntimePasswordOperation(
+			const operation = webRuntimePasswordOperation(
 				Boolean(login),
 				rotateExistingPassword
 			)
-			if (passwordOperation !== 'preserve') {
+			if (operation !== 'preserve') {
 				await transaction.unsafe(
 					await formattedStatement(
 						transaction,
-						passwordOperation === 'create' ? 'create' : 'password',
+						operation === 'create' ? 'create' : 'password',
 						password
 					)
 				)
@@ -410,20 +458,27 @@ async function main(): Promise<void> {
 				)
 			}
 			assertWebRuntimeLoginSnapshot(await inspectRuntime(transaction))
+			return operation
 		})
 
 		const verified = await inspectRuntime(client)
 		assertWebRuntimeLoginSnapshot(verified)
-		const runtimeContract = await validateWebDatabaseContract(
-			buildWebRuntimeDatabaseUrl(databaseUrl, password)
-		)
+		const runtimeDatabaseUrl = buildWebRuntimeDatabaseUrl(databaseUrl, password)
+		const verifyRuntimeContract = (): Promise<WebDatabaseContractResult> =>
+			validateWebDatabaseContract(runtimeDatabaseUrl, {
+				connectTimeoutSeconds: 5,
+				statementTimeoutMilliseconds: 5_000,
+				auditTimeoutMilliseconds: 15_000
+			})
+		const runtimeContract =
+			passwordOperation === 'rotate'
+				? await verifyWebRuntimeContractWithRetry(verifyRuntimeContract)
+				: await verifyRuntimeContract()
 		console.log(
 			JSON.stringify(
 				{
 					operation: 'provision-web-runtime-login',
-					passwordMode: rotateExistingPassword
-						? 'rotate-existing'
-						: 'preserve-existing',
+					passwordMode: webRuntimePasswordMode(passwordOperation),
 					runtimeContract,
 					roles: verified.roles,
 					memberships: verified.memberships,

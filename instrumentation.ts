@@ -12,7 +12,11 @@ function isWebDatabaseContractViolation(error: unknown): boolean {
 export async function auditWebDatabaseContract(
 	validate: DatabaseContractValidator = async () => {
 		const { validateWebDatabaseContract } = await import('./lib/db/runtime-contract')
-		return validateWebDatabaseContract(undefined, { connectTimeoutSeconds: 2 })
+		return validateWebDatabaseContract(undefined, {
+			connectTimeoutSeconds: 2,
+			statementTimeoutMilliseconds: 1_500,
+			auditTimeoutMilliseconds: 2_000,
+		})
 	},
 	writeFailure: ContractFailureWriter = message => {
 		console.error(message.trimEnd())
@@ -30,8 +34,8 @@ export async function auditWebDatabaseContract(
 export async function register() {
 	if (process.env.NEXT_RUNTIME === 'nodejs') {
 		// Next keeps register() inside the managed server-start lifecycle. Real
-		// privilege findings still reject startup; bounded connectivity failures are
-		// logged and degraded so a temporary pooler delay cannot turn Home into 500.
+		// privilege findings still reject startup; the complete audit has a hard
+		// deadline so a temporary pooler delay cannot turn Home into 500.
 		await auditWebDatabaseContract()
 	}
 }

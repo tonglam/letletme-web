@@ -9,8 +9,11 @@ import {
 	WEB_RUNTIME_CAPABILITY,
 	WEB_RUNTIME_LOGIN,
 	webRuntimePasswordOperation,
+	webRuntimePasswordMode,
+	verifyWebRuntimeContractWithRetry,
 	type WebRuntimeLoginSnapshot
 } from '../../scripts/provision-runtime-login'
+import { WebDatabaseContractError } from '../../lib/db/runtime-contract'
 
 const capability = () => ({
 	roleName: WEB_RUNTIME_CAPABILITY,
@@ -56,6 +59,9 @@ describe('Web runtime LOGIN provisioning contract', () => {
 		assert.equal(webRuntimePasswordOperation(false, false), 'create')
 		assert.equal(webRuntimePasswordOperation(true, false), 'preserve')
 		assert.equal(webRuntimePasswordOperation(true, true), 'rotate')
+		assert.equal(webRuntimePasswordMode('create'), 'create')
+		assert.equal(webRuntimePasswordMode('preserve'), 'preserve-existing')
+		assert.equal(webRuntimePasswordMode('rotate'), 'rotate-existing')
 		assert.throws(() =>
 			assertWebRuntimePasswordRotationAcknowledged(true)
 		)
@@ -65,6 +71,40 @@ describe('Web runtime LOGIN provisioning contract', () => {
 				'all-clients-stopped'
 			)
 		)
+	})
+
+	it('retries transient post-rotation verification with fresh attempts', async () => {
+		let attempts = 0
+		const waits: number[] = []
+		const result = await verifyWebRuntimeContractWithRetry(
+			async () => {
+				attempts += 1
+				if (attempts < 3) throw new Error('cached Supavisor credential')
+				return 'verified'
+			},
+			{
+				retryDelaysMs: [1, 2, 3],
+				wait: async milliseconds => {
+					waits.push(milliseconds)
+				}
+			}
+		)
+		assert.equal(result, 'verified')
+		assert.equal(attempts, 3)
+		assert.deepEqual(waits, [1, 2])
+
+		let contractAttempts = 0
+		await assert.rejects(
+			verifyWebRuntimeContractWithRetry(
+				async () => {
+					contractAttempts += 1
+					throw new WebDatabaseContractError(['unsafe runtime role'])
+				},
+				{ retryDelaysMs: [1], wait: async () => undefined }
+			),
+			WebDatabaseContractError
+		)
+		assert.equal(contractAttempts, 1)
 	})
 
 	it('rejects unknown or duplicate provisioning arguments', () => {

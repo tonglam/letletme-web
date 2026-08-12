@@ -85,6 +85,8 @@ describe('Web runtime database boundary', () => {
 		}
 		assert.match(baseline, /CREATE POLICY graphql_auth_reader_select/g)
 		assert.match(instrumentation, /connectTimeoutSeconds: 2/)
+		assert.match(instrumentation, /statementTimeoutMilliseconds: 1_500/)
+		assert.match(instrumentation, /auditTimeoutMilliseconds: 2_000/)
 		assert.match(instrumentation, /await auditWebDatabaseContract\(\)/)
 		assert.match(instrumentation, /isWebDatabaseContractViolation\(error\)/)
 		assert.doesNotMatch(instrumentation, /process\.exit\(1\)/)

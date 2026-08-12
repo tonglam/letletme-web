@@ -79,6 +79,8 @@ export type WebDatabaseContractResult = {
 
 export type WebDatabaseContractOptions = {
 	connectTimeoutSeconds?: number
+	statementTimeoutMilliseconds?: number
+	auditTimeoutMilliseconds?: number
 }
 
 export class WebDatabaseContractError extends Error {
@@ -89,6 +91,27 @@ export class WebDatabaseContractError extends Error {
 		this.name = 'WebDatabaseContractError'
 		this.findings = findings
 	}
+}
+
+export class WebDatabaseContractAuditTimeoutError extends Error {
+	constructor(timeoutMilliseconds: number, cause?: unknown) {
+		super(
+			`Web database runtime contract audit exceeded ${timeoutMilliseconds}ms`,
+			{ cause }
+		)
+		this.name = 'WebDatabaseContractAuditTimeoutError'
+	}
+}
+
+function positiveIntegerOption(
+	name: string,
+	value: number | undefined
+): number | undefined {
+	if (value === undefined) return undefined
+	if (!Number.isInteger(value) || value <= 0) {
+		throw new TypeError(`${name} must be a positive integer`)
+	}
+	return value
 }
 
 function expressionIsTrue(expression: string | null): boolean {
@@ -106,14 +129,35 @@ export async function validateWebDatabaseContract(
 	if (!connectionString) {
 		throw new WebDatabaseContractError(['DATABASE_URL is not configured'])
 	}
+	const statementTimeoutMilliseconds = positiveIntegerOption(
+		'statementTimeoutMilliseconds',
+		options.statementTimeoutMilliseconds
+	)
+	const auditTimeoutMilliseconds = positiveIntegerOption(
+		'auditTimeoutMilliseconds',
+		options.auditTimeoutMilliseconds
+	)
 
 	const client = postgres(connectionString, {
 		max: 1,
 		prepare: false,
 		connect_timeout: options.connectTimeoutSeconds ?? 10,
-		idle_timeout: 5
+		idle_timeout: 5,
+		connection:
+			statementTimeoutMilliseconds === undefined
+				? {}
+				: { statement_timeout: statementTimeoutMilliseconds }
 	})
 	const findings: string[] = []
+	let auditTimedOut = false
+	const auditTimer =
+		auditTimeoutMilliseconds === undefined
+			? undefined
+			: setTimeout(() => {
+					auditTimedOut = true
+					void client.end({ timeout: 0 })
+				}, auditTimeoutMilliseconds)
+	auditTimer?.unref()
 
 	try {
 		const [runtimeRole] = await client<RoleAttributes[]>`
@@ -436,12 +480,25 @@ export async function validateWebDatabaseContract(
 
 		if (findings.length > 0) throw new WebDatabaseContractError(findings)
 
+		if (auditTimedOut && auditTimeoutMilliseconds !== undefined) {
+			throw new WebDatabaseContractAuditTimeoutError(auditTimeoutMilliseconds)
+		}
 		return {
 			roleName: runtimeRole?.role_name ?? 'unknown',
 			capabilityRole: WEB_AUTH_CAPABILITY_ROLE,
 			authTables: authTableNames
 		}
+	} catch (error) {
+		if (error instanceof WebDatabaseContractError) throw error
+		if (auditTimedOut && auditTimeoutMilliseconds !== undefined) {
+			throw new WebDatabaseContractAuditTimeoutError(
+				auditTimeoutMilliseconds,
+				error
+			)
+		}
+		throw error
 	} finally {
-		await client.end()
+		if (auditTimer) clearTimeout(auditTimer)
+		await client.end({ timeout: 0 })
 	}
 }
