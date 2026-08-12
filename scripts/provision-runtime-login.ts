@@ -1,6 +1,7 @@
 import postgres from 'postgres'
 import { pathToFileURL } from 'node:url'
 
+import { validateWebDatabaseContract } from '../lib/db/runtime-contract'
 import { loadLocalMigrations } from './migration-audit'
 
 export const WEB_RUNTIME_LOGIN = 'letletme_web_runtime'
@@ -42,6 +43,60 @@ type RoleRow = {
 }
 
 type QueryClient = postgres.Sql | postgres.TransactionSql
+
+export type WebRuntimePasswordOperation = 'create' | 'preserve' | 'rotate'
+
+export function parseWebRuntimeProvisioningArgs(args: readonly string[]): {
+	rotateExistingPassword: boolean
+} {
+	const supported = '--rotate-existing-password'
+	if (
+		args.some(argument => argument !== supported) ||
+		new Set(args).size !== args.length
+	) {
+		throw new Error(
+			`Web runtime LOGIN provisioning does not accept arguments: ${args.join(' ')}`
+		)
+	}
+	return { rotateExistingPassword: args.includes(supported) }
+}
+
+export function webRuntimePasswordOperation(
+	exists: boolean,
+	rotateExistingPassword: boolean
+): WebRuntimePasswordOperation {
+	if (!exists) return 'create'
+	return rotateExistingPassword ? 'rotate' : 'preserve'
+}
+
+export function assertWebRuntimePasswordRotationAcknowledged(
+	rotateExistingPassword: boolean,
+	acknowledgement = process.env.RUNTIME_LOGIN_ROTATION_ACK
+): void {
+	if (
+		rotateExistingPassword &&
+		acknowledgement !== 'all-clients-stopped'
+	) {
+		throw new Error(
+			'Password rotation requires draining Web database clients, waiting two minutes, ' +
+				'and setting RUNTIME_LOGIN_ROTATION_ACK=all-clients-stopped'
+		)
+	}
+}
+
+export function buildWebRuntimeDatabaseUrl(
+	databaseUrl: string,
+	password: string
+): string {
+	const parsed = new URL(databaseUrl)
+	const currentUsername = decodeURIComponent(parsed.username)
+	const projectSuffix = currentUsername.includes('.')
+		? currentUsername.slice(currentUsername.indexOf('.'))
+		: ''
+	parsed.username = `${WEB_RUNTIME_LOGIN}${projectSuffix}`
+	parsed.password = password
+	return parsed.toString()
+}
 
 function requiredEnvironment(name: string): string {
 	const value = process.env[name]?.trim()
@@ -271,6 +326,10 @@ async function formattedStatement(
 }
 
 async function main(): Promise<void> {
+	const { rotateExistingPassword } = parseWebRuntimeProvisioningArgs(
+		process.argv.slice(2)
+	)
+	assertWebRuntimePasswordRotationAcknowledged(rotateExistingPassword)
 	const databaseUrl = requiredEnvironment('DIRECT_DATABASE_URL')
 	const password = requiredPassword()
 	const local = await loadLocalMigrations()
@@ -332,13 +391,19 @@ async function main(): Promise<void> {
 				)
 			}
 
-			await transaction.unsafe(
-				await formattedStatement(
-					transaction,
-					login ? 'password' : 'create',
-					password
-				)
+			const passwordOperation = webRuntimePasswordOperation(
+				Boolean(login),
+				rotateExistingPassword
 			)
+			if (passwordOperation !== 'preserve') {
+				await transaction.unsafe(
+					await formattedStatement(
+						transaction,
+						passwordOperation === 'create' ? 'create' : 'password',
+						password
+					)
+				)
+			}
 			if (before.memberships.length === 0) {
 				await transaction.unsafe(
 					await formattedStatement(transaction, 'grant', '')
@@ -349,10 +414,17 @@ async function main(): Promise<void> {
 
 		const verified = await inspectRuntime(client)
 		assertWebRuntimeLoginSnapshot(verified)
+		const runtimeContract = await validateWebDatabaseContract(
+			buildWebRuntimeDatabaseUrl(databaseUrl, password)
+		)
 		console.log(
 			JSON.stringify(
 				{
 					operation: 'provision-web-runtime-login',
+					passwordMode: rotateExistingPassword
+						? 'rotate-existing'
+						: 'preserve-existing',
+					runtimeContract,
 					roles: verified.roles,
 					memberships: verified.memberships,
 					ownedObjectCount: verified.ownedObjectCount

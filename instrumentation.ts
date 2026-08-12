@@ -1,10 +1,18 @@
 type DatabaseContractValidator = () => Promise<unknown>
 type ContractFailureWriter = (message: string) => void
 
+function isWebDatabaseContractViolation(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		error.name === 'WebDatabaseContractError' &&
+		Array.isArray((error as Error & { findings?: unknown }).findings)
+	)
+}
+
 export async function auditWebDatabaseContract(
 	validate: DatabaseContractValidator = async () => {
 		const { validateWebDatabaseContract } = await import('./lib/db/runtime-contract')
-		return validateWebDatabaseContract()
+		return validateWebDatabaseContract(undefined, { connectTimeoutSeconds: 2 })
 	},
 	writeFailure: ContractFailureWriter = message => {
 		console.error(message.trimEnd())
@@ -13,16 +21,17 @@ export async function auditWebDatabaseContract(
 	try {
 		await validate()
 	} catch (error) {
+		if (isWebDatabaseContractViolation(error)) throw error
 		const message = error instanceof Error ? error.message : 'unknown database contract error'
-		writeFailure(`[web-database-contract] background audit failed: ${message}\n`)
+		writeFailure(`[web-database-contract] transient startup audit failed: ${message}\n`)
 	}
 }
 
-export function register() {
+export async function register() {
 	if (process.env.NEXT_RUNTIME === 'nodejs') {
-		// A full cross-schema privilege audit is observability, not a prerequisite
-		// for serving the public shell. Awaiting it here turns a transient database
-		// or cross-region timeout into a cold-start 500 for every route.
-		void auditWebDatabaseContract()
+		// Next keeps register() inside the managed server-start lifecycle. Real
+		// privilege findings still reject startup; bounded connectivity failures are
+		// logged and degraded so a temporary pooler delay cannot turn Home into 500.
+		await auditWebDatabaseContract()
 	}
 }

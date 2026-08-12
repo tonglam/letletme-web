@@ -84,8 +84,9 @@ describe('Web runtime database boundary', () => {
 			)
 		}
 		assert.match(baseline, /CREATE POLICY graphql_auth_reader_select/g)
-		assert.match(instrumentation, /return validateWebDatabaseContract\(\)/)
-		assert.match(instrumentation, /void auditWebDatabaseContract\(\)/)
+		assert.match(instrumentation, /connectTimeoutSeconds: 2/)
+		assert.match(instrumentation, /await auditWebDatabaseContract\(\)/)
+		assert.match(instrumentation, /isWebDatabaseContractViolation\(error\)/)
 		assert.doesNotMatch(instrumentation, /process\.exit\(1\)/)
 		assert.match(environment, /inherits only `letletme_web_auth`/)
 		assert.deepEqual([...WEB_AUTH_RUNTIME_TABLES].sort(), [

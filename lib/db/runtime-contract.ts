@@ -77,6 +77,10 @@ export type WebDatabaseContractResult = {
 	authTables: string[]
 }
 
+export type WebDatabaseContractOptions = {
+	connectTimeoutSeconds?: number
+}
+
 export class WebDatabaseContractError extends Error {
 	readonly findings: string[]
 
@@ -96,7 +100,8 @@ function compareNames(actual: string[], expected: readonly string[]): boolean {
 }
 
 export async function validateWebDatabaseContract(
-	connectionString = process.env.DATABASE_URL
+	connectionString = process.env.DATABASE_URL,
+	options: WebDatabaseContractOptions = {}
 ): Promise<WebDatabaseContractResult> {
 	if (!connectionString) {
 		throw new WebDatabaseContractError(['DATABASE_URL is not configured'])
@@ -105,7 +110,7 @@ export async function validateWebDatabaseContract(
 	const client = postgres(connectionString, {
 		max: 1,
 		prepare: false,
-		connect_timeout: 10,
+		connect_timeout: options.connectTimeoutSeconds ?? 10,
 		idle_timeout: 5
 	})
 	const findings: string[] = []

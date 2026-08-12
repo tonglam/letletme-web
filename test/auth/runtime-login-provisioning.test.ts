@@ -2,9 +2,13 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+	assertWebRuntimePasswordRotationAcknowledged,
 	assertWebRuntimeLoginSnapshot,
+	buildWebRuntimeDatabaseUrl,
+	parseWebRuntimeProvisioningArgs,
 	WEB_RUNTIME_CAPABILITY,
 	WEB_RUNTIME_LOGIN,
+	webRuntimePasswordOperation,
 	type WebRuntimeLoginSnapshot
 } from '../../scripts/provision-runtime-login'
 
@@ -45,6 +49,47 @@ const accepted = (): WebRuntimeLoginSnapshot => ({
 })
 
 describe('Web runtime LOGIN provisioning contract', () => {
+	it('preserves an existing password unless rotation is explicit and acknowledged', () => {
+		assert.deepEqual(parseWebRuntimeProvisioningArgs([]), {
+			rotateExistingPassword: false
+		})
+		assert.equal(webRuntimePasswordOperation(false, false), 'create')
+		assert.equal(webRuntimePasswordOperation(true, false), 'preserve')
+		assert.equal(webRuntimePasswordOperation(true, true), 'rotate')
+		assert.throws(() =>
+			assertWebRuntimePasswordRotationAcknowledged(true)
+		)
+		assert.doesNotThrow(() =>
+			assertWebRuntimePasswordRotationAcknowledged(
+				true,
+				'all-clients-stopped'
+			)
+		)
+	})
+
+	it('rejects unknown or duplicate provisioning arguments', () => {
+		assert.throws(() => parseWebRuntimeProvisioningArgs(['--unknown']))
+		assert.throws(() =>
+			parseWebRuntimeProvisioningArgs([
+				'--rotate-existing-password',
+				'--rotate-existing-password'
+			])
+		)
+	})
+
+	it('derives a restricted runtime URL without dropping a Supavisor project suffix', () => {
+		const runtimeUrl = new URL(
+			buildWebRuntimeDatabaseUrl(
+				'postgresql://migration.project-ref:admin@pooler.example:6543/postgres?pgbouncer=true',
+				'runtime-secret'
+			)
+		)
+		assert.equal(runtimeUrl.username, `${WEB_RUNTIME_LOGIN}.project-ref`)
+		assert.equal(runtimeUrl.password, 'runtime-secret')
+		assert.equal(runtimeUrl.host, 'pooler.example:6543')
+		assert.equal(runtimeUrl.searchParams.get('pgbouncer'), 'true')
+	})
+
 	it('accepts one objectless login inheriting one locked capability', () => {
 		assert.doesNotThrow(() => assertWebRuntimeLoginSnapshot(accepted()))
 	})
