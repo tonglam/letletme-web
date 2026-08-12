@@ -164,10 +164,13 @@ async function HomePersonalSlot({
 	if (!session?.user) return null
 
 	return (
-		<HomePersonalStrip
-			session={session}
-			entryId={entryId}
-		/>
+		<>
+			<HomePersonalHydratedMarker enabled />
+			<HomePersonalStrip
+				session={session}
+				entryId={entryId}
+			/>
+		</>
 	)
 }
 
@@ -237,7 +240,6 @@ async function HomeHero() {
 					hidden
 					data-home-audience-hint={hasSessionCookie ? 'session-hint' : 'public'}
 				/>
-				<HomePersonalHydratedMarker enabled={hasSessionCookie} />
 				{hasSessionCookie ? (
 					<Suspense fallback={<HomePersonalStripFallback />}>
 						<HomePersonalSlot hasSessionCookie={hasSessionCookie} />

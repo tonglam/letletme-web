@@ -17,7 +17,7 @@ describe('Web runtime LOGIN bootstrap boundary', () => {
 		const initialSecret = 'w'.repeat(64)
 		assert.deepEqual(
 			assertWebRuntimeDatabaseUrl(
-				`postgresql://letletme_web_runtime.project-ref:${initialSecret}@pooler.example:6543/postgres?pgbouncer=true`
+				`postgresql://letletme_web_runtime.project-ref:${initialSecret}@aws-0-region.pooler.supabase.com:6543/postgres?pgbouncer=true`
 			),
 			{ password: initialSecret }
 		)
@@ -25,6 +25,7 @@ describe('Web runtime LOGIN bootstrap boundary', () => {
 			'postgresql://migration_admin:secret@pooler.example:6543/postgres',
 			'postgresql://letletme_web_runtime@pooler.example:6543/postgres',
 			'postgresql://letletme_web_runtime:initial-secret@pooler.example:6543/postgres',
+			`postgresql://letletme_web_runtime.project-ref:${initialSecret}@attacker.example:6543/postgres`,
 			'postgresql://letletme_web_runtime:secret@pooler.example:6543/%ZZ',
 			'https://letletme_web_runtime:secret@pooler.example/postgres'
 		]) {
@@ -75,13 +76,19 @@ describe('Web runtime LOGIN bootstrap boundary', () => {
 		assert.doesNotThrow(() =>
 			assertWebRuntimeDatabaseTarget(
 				'postgresql://postgres:admin@db.project-ref.supabase.co:5432/postgres',
-				'postgresql://letletme_web_runtime.project-ref:secret@pooler.example:6543/postgres'
+				'postgresql://letletme_web_runtime.project-ref:secret@aws-0-region.pooler.supabase.com:6543/postgres'
 			)
 		)
 		assert.throws(() =>
 			assertWebRuntimeDatabaseTarget(
 				'postgresql://postgres:admin@db.first.supabase.co:5432/postgres',
-				'postgresql://letletme_web_runtime.second:secret@pooler.example:6543/postgres'
+				'postgresql://letletme_web_runtime.second:secret@aws-0-region.pooler.supabase.com:6543/postgres'
+			)
+		)
+		assert.throws(() =>
+			assertWebRuntimeDatabaseTarget(
+				'postgresql://postgres:admin@db.project-ref.supabase.co:5432/postgres',
+				'postgresql://letletme_web_runtime.project-ref:secret@attacker.example:6543/postgres'
 			)
 		)
 		assert.throws(() =>

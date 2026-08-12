@@ -26,7 +26,8 @@ describe('static Web runtime database startup contract', () => {
 			'postgresql://postgres:secret@db.example/postgres',
 			'postgresql://letletme_web_runtime@db.example/postgres',
 			'postgresql://letletme_web_runtime:secret@db.example/postgres?role=postgres',
-			'postgresql://letletme_web_runtime:secret@db.example/postgres?pgbouncer=false'
+			'postgresql://letletme_web_runtime:secret@db.example/postgres?pgbouncer=false',
+			'postgresql://letletme_web_runtime.project-ref:secret@attacker.example/postgres'
 		]) {
 			assert.throws(() => validateWebRuntimeDatabaseConfiguration(url, '1'))
 		}

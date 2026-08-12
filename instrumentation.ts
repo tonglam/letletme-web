@@ -23,6 +23,10 @@ function parseRuntimeDatabaseUrl(value: string): URL {
 	return parsed
 }
 
+function isSupabasePoolerHostname(hostname: string): boolean {
+	return /^[^.]+\.pooler\.supabase\.com$/i.test(hostname)
+}
+
 /**
  * Startup validation is intentionally static: it proves that the configured
  * URL has the dedicated identity and safe pooler shape without opening a
@@ -44,10 +48,12 @@ export function validateWebRuntimeDatabaseConfiguration(
 	} catch {
 		throw new Error('DATABASE_URL contains invalid URL encoding')
 	}
-	if (
-		username !== WEB_RUNTIME_LOGIN &&
-		!username.startsWith(`${WEB_RUNTIME_LOGIN}.`)
-	) {
+	const poolerRoleMatches =
+		isSupabasePoolerHostname(parsed.hostname) &&
+		username.startsWith(`${WEB_RUNTIME_LOGIN}.`) &&
+		username.slice(WEB_RUNTIME_LOGIN.length + 1).length > 0 &&
+		!username.slice(WEB_RUNTIME_LOGIN.length + 1).includes('.')
+	if (username !== WEB_RUNTIME_LOGIN && !poolerRoleMatches) {
 		throw new Error(`DATABASE_URL must use ${WEB_RUNTIME_LOGIN}`)
 	}
 	if (!password)

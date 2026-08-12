@@ -13,6 +13,10 @@ export { WEB_AUTH_CAPABILITY_ROLE as WEB_RUNTIME_CAPABILITY, WEB_RUNTIME_LOGIN }
 export const WEB_RUNTIME_BASELINE = '0000_auth_baseline'
 const WEB_RUNTIME_PASSWORD_PATTERN = /^[A-Za-z0-9_-]{64}$/
 
+function isSupabasePoolerHostname(hostname: string): boolean {
+	return /^[^.]+\.pooler\.supabase\.com$/i.test(hostname)
+}
+
 type QueryClient = postgres.Sql | postgres.TransactionSql
 
 type DatabaseTarget = {
@@ -66,9 +70,12 @@ export function assertWebRuntimeDatabaseUrl(
 	} catch {
 		throw new Error(`${variableName} contains invalid URL encoding`)
 	}
-	const roleMatches =
-		username === WEB_RUNTIME_LOGIN ||
-		username.startsWith(`${WEB_RUNTIME_LOGIN}.`)
+	const poolerRoleMatches =
+		isSupabasePoolerHostname(parsed.hostname) &&
+		username.startsWith(`${WEB_RUNTIME_LOGIN}.`) &&
+		username.slice(WEB_RUNTIME_LOGIN.length + 1).length > 0 &&
+		!username.slice(WEB_RUNTIME_LOGIN.length + 1).includes('.')
+	const roleMatches = username === WEB_RUNTIME_LOGIN || poolerRoleMatches
 	if (!parsed.hostname || !roleMatches || !password) {
 		throw new Error(
 			`${variableName} must include ${WEB_RUNTIME_LOGIN} and its initial password`
@@ -103,7 +110,8 @@ function parseDatabaseTarget(
 	}
 	const directProject =
 		parsed.hostname.match(/^db\.([^.]+)\.supabase\.co$/i)?.[1] ?? null
-	const usernameProject = username.includes('.')
+	const usernameProject =
+		isSupabasePoolerHostname(parsed.hostname) && username.includes('.')
 		? username.slice(username.lastIndexOf('.') + 1)
 		: null
 	return {

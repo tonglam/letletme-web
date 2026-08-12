@@ -21,6 +21,10 @@ describe('Home first-screen performance boundary', () => {
 				home.indexOf('await getVerifiedEntryContext()')
 		)
 		assert.match(home, /export const dynamic = 'force-dynamic'/)
+		assert.ok(
+			home.indexOf('<HomePersonalHydratedMarker enabled />') >
+				home.indexOf('await getVerifiedEntryContext()')
+		)
 	})
 
 	it('starts entry and league queries before awaiting the entry response', () => {

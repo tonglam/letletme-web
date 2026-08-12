@@ -35,14 +35,14 @@ export async function GET(request: Request) {
 			})
 		)
 	)
-	const handlerMs = timing.elapsedMs()
 	const output = withPrivateNoStore(response)
 	if (isGetSessionRequest(request.url)) {
 		const sessionMs = timing.snapshot().session ?? 0
+		const totalMs = timing.elapsedMs()
 		const durations = {
-			handlerMs,
+			handlerMs: Math.max(0, totalMs - sessionMs),
 			sessionMs,
-			totalMs: timing.elapsedMs()
+			totalMs
 		}
 		output.headers.set('Server-Timing', formatAuthServerTiming(durations))
 		console.info(
