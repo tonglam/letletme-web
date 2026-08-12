@@ -198,5 +198,6 @@ test('get-session exposes privacy-safe stage timings', async ({ request }) => {
 	const serverTiming = response.headers()['server-timing'] ?? ''
 	expect(serverTiming).toContain('auth_handler;dur=')
 	expect(serverTiming).toContain('auth_session;dur=')
+	expect(serverTiming).toContain('auth_database;dur=')
 	expect(serverTiming).toContain('auth_total;dur=')
 })

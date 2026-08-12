@@ -42,14 +42,8 @@ describe('Home first-screen performance boundary', () => {
 			home,
 			/<Link\s+href="\/live\/tournaments"\s+prefetch=\{false\}/
 		)
-		assert.match(
-			desktopNav,
-			/href=\{subItem\.href\}\s+prefetch=\{false\}/
-		)
-		assert.match(
-			desktopNav,
-			/href="\/auth\/login"\s+prefetch=\{false\}/
-		)
+		assert.match(desktopNav, /href=\{subItem\.href\}\s+prefetch=\{false\}/)
+		assert.match(desktopNav, /href="\/auth\/login"\s+prefetch=\{false\}/)
 		assert.match(mobileNav, /href=\{subItem\.href\} prefetch=\{false\}/)
 		assert.match(mobileNav, /href="\/auth\/login" prefetch=\{false\}/)
 	})
@@ -57,5 +51,13 @@ describe('Home first-screen performance boundary', () => {
 	it('keeps public HTML cacheable only when no session cookie is hinted', () => {
 		assert.match(proxy, /hasSessionCookieHintInHeaders\(req\.headers\)/)
 		assert.match(proxy, /private, no-store, no-transform/)
+	})
+
+	it('measures concurrent Home completion after consuming every response stream', () => {
+		const measurement = readFileSync(
+			'scripts/measure-home-performance.mjs',
+			'utf8'
+		)
+		assert.match(measurement, /await response\.arrayBuffer\(\)/)
 	})
 })

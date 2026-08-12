@@ -360,9 +360,15 @@ export async function validateWebDatabaseContract(
 			findings.push('runtime role owns database objects')
 		}
 
-		const [databaseBoundary] = await client<Array<{ can_create: boolean }>>`
-			SELECT has_database_privilege(${subjectRole}, current_database(), 'CREATE') AS can_create
+		const [databaseBoundary] = await client<
+			Array<{ can_connect: boolean; can_create: boolean }>
+		>`
+			SELECT
+				has_database_privilege(${subjectRole}, current_database(), 'CONNECT') AS can_connect,
+				has_database_privilege(${subjectRole}, current_database(), 'CREATE') AS can_create
 		`
+		if (!databaseBoundary?.can_connect)
+			findings.push('runtime role cannot connect to the database')
 		if (databaseBoundary?.can_create)
 			findings.push('runtime role can create database schemas')
 

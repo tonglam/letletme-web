@@ -1,6 +1,7 @@
 export type AuthRequestDurations = {
 	handlerMs: number
 	sessionMs: number
+	databaseMs: number
 	totalMs: number
 }
 
@@ -14,6 +15,7 @@ export function formatAuthServerTiming(
 	return [
 		`auth_handler;dur=${boundedDuration(durations.handlerMs)}`,
 		`auth_session;dur=${boundedDuration(durations.sessionMs)}`,
+		`auth_database;dur=${boundedDuration(durations.databaseMs)}`,
 		`auth_total;dur=${boundedDuration(durations.totalMs)}`
 	].join(', ')
 }

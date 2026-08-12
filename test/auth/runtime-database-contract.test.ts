@@ -16,14 +16,14 @@ import {
 
 describe('Web runtime database boundary', () => {
 	it('installs an auth-only capability role and startup contract', async () => {
-		const [baseline, journal, instrumentation, environment] = await Promise.all(
-			[
+		const [baseline, journal, instrumentation, environment, runtimeContract] =
+			await Promise.all([
 				readFile('drizzle/0000_auth_baseline.sql', 'utf8'),
 				readFile('drizzle/meta/_journal.json', 'utf8'),
 				readFile('instrumentation.ts', 'utf8'),
-				readFile('.env.example', 'utf8')
-			]
-		)
+				readFile('.env.example', 'utf8'),
+				readFile('lib/db/runtime-contract.ts', 'utf8')
+			])
 
 		assert.match(baseline, /CREATE ROLE letletme_web_auth/)
 		for (const attribute of [
@@ -95,6 +95,10 @@ describe('Web runtime database boundary', () => {
 		)
 		assert.doesNotMatch(instrumentation, /validateWebDatabaseContract/)
 		assert.doesNotMatch(instrumentation, /postgres\(/)
+		assert.match(
+			runtimeContract,
+			/has_database_privilege\([^\n]+current_database\(\), 'CONNECT'\)/
+		)
 		assert.match(environment, /inherits only `letletme_web_auth`/)
 		assert.deepEqual([...WEB_AUTH_RUNTIME_TABLES].sort(), [
 			'account',

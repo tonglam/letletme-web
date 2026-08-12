@@ -102,13 +102,16 @@ try {
 }
 
 const concurrentStartedAt = performance.now()
+
 const concurrentResponses = await Promise.all(
-	Array.from({ length: concurrency }, (_, index) =>
-		fetch(
+	Array.from({ length: concurrency }, async (_, index) => {
+		const response = await fetch(
 			`${baseUrl}${baseUrl.includes('?') ? '&' : '?'}concurrency=${index}`,
 			{ headers: { Accept: 'text/html' }, cache: 'no-store' }
 		)
-	)
+		await response.arrayBuffer()
+		return response
+	})
 )
 
 console.log(
