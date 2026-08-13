@@ -29,8 +29,8 @@ export async function generateMetadata({ params }: PageProps) {
 	return getPageMetadata({
 		locale,
 		pathname: `/live/competitions/${encodeURIComponent(id)}`,
-		titleKey: 'tournamentStandingsTitle',
-		descriptionKey: 'tournamentStandingsDescription',
+		titleKey: 'competitionStandingsTitle',
+		descriptionKey: 'competitionStandingsDescription',
 	})
 }
 

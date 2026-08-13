@@ -18,8 +18,8 @@ The fixed inputs are:
 - `/live/points` remains the default Live destination; there is no Live Overview.
 - Points and Competition Live support current and historical gameweeks.
 - Live Competitions reads prepared objects only; it never starts an arbitrary official-league calculation.
-- A tracked official league and a custom tournament are different persisted object kinds.
-- The creation limit is 500 entries for a tracked league and 500 selected entries for a custom tournament.
+- A tracked official league and a custom competition are different persisted object kinds.
+- The creation limit is 500 entries for a tracked league and 500 selected entries for a custom competition.
 - Official finalized entry and official-league results are authoritative.
 - Custom tournament results remain LetLetMe calculations over official entry facts.
 - Setup, rules, roster management, and full history move to Competition Home.
@@ -31,7 +31,7 @@ The fixed inputs are:
 
 | Area | Current implementation |
 | --- | --- |
-| Navigation | `components/layout/config.ts` exposes Live Points, Live Tournaments, and Live Matches |
+| Navigation | `components/layout/config.ts` exposes Live Points, Live Competitions, and Live Matches |
 | Live Points | Server seed plus `useLivePoints`, 30-second revision probe, gameweek switching, player explanations, sharing |
 | Live competitions | `/live/competitions` combines object selection and a full live table; `/live/competitions/[id]` independently implements a full detail/table plus setup, rules, roster, and management UI |
 | Live Matches | Server seed, match-state tabs, revision probe, retained last-good payload |
@@ -459,7 +459,7 @@ Primary files:
 
 Changes:
 
-1. Rename the public label from Live Tournaments to Live Competitions.
+1. Keep the public label as Live Competitions.
 2. Update navigation configuration, metadata, links, breadcrumbs, share URLs, and analytics identifiers.
 3. Update English and Simplified Chinese messages in the same change.
 4. Preserve existing English URLs through redirects and retain localized routes.

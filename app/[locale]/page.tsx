@@ -203,7 +203,7 @@ async function HomeHero() {
 						<p className="mt-6 max-w-xl text-pretty text-lg leading-8 text-muted-foreground">
 							{t('intro')}
 						</p>
-						{/* Matchday entry only. Browse/create tournaments live in HomeTournamentBand. */}
+						{/* Matchday entry only. Browse/create competitions live in HomeTournamentBand. */}
 						<div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
 							<Button
 								size="lg"
@@ -225,7 +225,7 @@ async function HomeHero() {
 									href="/live/competitions"
 									prefetch={false}
 								>
-									{t('liveTournamentStandings')}
+									{t('liveCompetitionStandings')}
 								</Link>
 							</Button>
 						</div>
@@ -273,16 +273,16 @@ async function HomeTournamentBand() {
 			<div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:py-9">
 				<div className="max-w-xl">
 					<p className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-electric/80">
-						{t('tournamentBandEyebrow')}
+						{t('competitionBandEyebrow')}
 					</p>
 					<h2
 						id="home-tournament-band-title"
 						className="mt-2 font-display text-2xl font-bold uppercase tracking-wide sm:text-3xl"
 					>
-						{t('tournamentBandTitle')}
+						{t('competitionBandTitle')}
 					</h2>
 					<p className="mt-2 text-sm leading-6 text-electric/75">
-						{t('tournamentBandDescription')}
+						{t('competitionBandDescription')}
 					</p>
 				</div>
 				<div className="flex flex-wrap gap-2">
@@ -292,7 +292,7 @@ async function HomeTournamentBand() {
 						asChild
 					>
 						<Link href="/competitions/browse" prefetch={false}>
-							{t('browseTournaments')}
+							{t('browseCompetitions')}
 						</Link>
 					</Button>
 					<Button
@@ -300,7 +300,7 @@ async function HomeTournamentBand() {
 						asChild
 					>
 						<Link href="/competitions/create" prefetch={false}>
-							{t('createTournament')}
+							{t('createCompetition')}
 							<ArrowRight data-icon="inline-end" />
 						</Link>
 					</Button>

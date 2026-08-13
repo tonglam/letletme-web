@@ -24,8 +24,8 @@ export async function generateMetadata({ params }: PageProps) {
 	return getPageMetadata({
 		locale,
 		pathname: '/live/competitions',
-		titleKey: 'liveTournamentsTitle',
-		descriptionKey: 'liveTournamentsDescription',
+		titleKey: 'liveCompetitionsTitle',
+		descriptionKey: 'liveCompetitionsDescription',
 	})
 }
 
@@ -43,7 +43,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	const currentEventId = await getCurrentEventId()
 	if (!currentEventId) {
 		return (
-			<CurrentGameweekUnavailable titleKey="liveTournamentUnavailableTitle" />
+			<CurrentGameweekUnavailable titleKey="liveCompetitionUnavailableTitle" />
 		)
 	}
 

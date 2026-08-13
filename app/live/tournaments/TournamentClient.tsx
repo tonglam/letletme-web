@@ -597,7 +597,7 @@ export default function TournamentClient({
 
 				{unknownTournamentFromUrl && (
 					<Card className="mb-6 space-y-3 border-border/80 p-4 text-sm shadow-sm">
-						<p className="text-muted-foreground">{t('tournamentNotInList')}</p>
+						<p className="text-muted-foreground">{t('competitionNotInList')}</p>
 						<div className="flex flex-wrap gap-2">
 							<Button
 								type="button"
@@ -608,7 +608,7 @@ export default function TournamentClient({
 								{t('clear')}
 							</Button>
 							<Button type="button" size="sm" variant="secondary" asChild>
-								<Link href="/competitions/browse">{t('errorCtaMyTournaments')}</Link>
+								<Link href="/competitions/browse">{t('errorCtaMyCompetitions')}</Link>
 							</Button>
 						</div>
 					</Card>
@@ -674,7 +674,7 @@ export default function TournamentClient({
 
 				{isLoadingTournaments && (
 					<Card className="border-border/80 p-6 text-sm text-muted-foreground shadow-sm">
-						{t('loadingTournaments')}
+						{t('loadingCompetitions')}
 					</Card>
 				)}
 
@@ -682,7 +682,7 @@ export default function TournamentClient({
 					!selectedTournament &&
 					!unknownTournamentFromUrl && (
 					<Card className="border-border/80 p-6 text-sm text-muted-foreground shadow-sm">
-						{t('noTournaments')}
+						{t('noCompetitions')}
 					</Card>
 				)}
 

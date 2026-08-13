@@ -8,8 +8,8 @@ export async function generateMetadata({ params }: PageProps) {
 	return getPageMetadata({
 		locale,
 		pathname: '/competitions/create',
-		titleKey: 'createTournamentTitle',
-		descriptionKey: 'createTournamentDescription',
+		titleKey: 'createCompetitionTitle',
+		descriptionKey: 'createCompetitionDescription',
 	})
 }
 

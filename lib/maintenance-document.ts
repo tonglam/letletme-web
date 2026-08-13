@@ -16,7 +16,7 @@ const ENGLISH_COPY: MaintenanceCopy = {
 	lang: 'en',
 	title: 'The data room is between seasons.',
 	description:
-		'We have paused live, player, market and tournament data while the new platform is activated. This prevents an old-season snapshot from being shown as current.',
+		'We have paused live, player, market and competition data while the new platform is activated. This prevents an old-season snapshot from being shown as current.',
 	eyebrow: 'Data platform changeover',
 	status: 'Temporarily paused',
 	accountTitle: 'Your account stays intact',
@@ -33,7 +33,7 @@ const CHINESE_COPY: MaintenanceCopy = {
 	lang: 'zh-CN',
 	title: '新赛季数据正在就位。',
 	description:
-		'新数据平台启用期间，实时数据、球员、市场和锦标赛功能暂时停用，以免把旧赛季快照显示成当前数据。',
+		'新数据平台启用期间，实时数据、球员、市场和赛事功能暂时停用，以免把旧赛季快照显示成当前数据。',
 	eyebrow: '数据平台切换',
 	status: '暂时停用',
 	accountTitle: '账户数据保持不变',
