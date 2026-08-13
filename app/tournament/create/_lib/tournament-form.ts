@@ -6,7 +6,7 @@ import {
 	type LeagueType,
 } from '@/lib/tournament/league-url'
 
-export type TournamentCreationMode = 'classic' | 'custom'
+export type TournamentCreationMode = 'classic' | 'h2h' | 'custom'
 
 export const PARTICIPANT_SOURCES = [
 	{ value: 'official', label: 'Official' },
@@ -259,13 +259,15 @@ export interface LeagueUrlMessages {
 	pathInvalid: string
 	incomplete: string
 	classicOnly: string
+	h2hOnly: string
 }
 
 const DEFAULT_LEAGUE_URL_MESSAGES: LeagueUrlMessages = {
 	domainInvalid: 'Only secure URLs from fantasy.premierleague.com are allowed.',
 	pathInvalid: 'Use a league standings, admin, or join URL.',
 	incomplete: 'Enter a complete URL beginning with https://.',
-	classicOnly: 'Use an FPL Classic standings URL. Head-to-head import is coming later.',
+	classicOnly: 'Use an FPL Classic standings URL.',
+	h2hOnly: 'Use an FPL Head-to-Head standings or new entries URL.',
 }
 
 export interface LeagueUrlValidation {
@@ -279,7 +281,7 @@ export interface LeagueUrlValidation {
 export function validateLeagueUrl(
 	value: string,
 	messages: LeagueUrlMessages = DEFAULT_LEAGUE_URL_MESSAGES,
-	options: { classicOnly?: boolean } = {},
+	options: { classicOnly?: boolean; h2hOnly?: boolean } = {},
 ): LeagueUrlValidation {
 	if (!value.trim()) {
 		return { valid: false, domainValid: true, message: null, leagueId: null, leagueType: null }
@@ -291,6 +293,19 @@ export function validateLeagueUrl(
 				valid: false,
 				domainValid: true,
 				message: messages.classicOnly,
+				leagueId: parsed.leagueId,
+				leagueType: parsed.leagueType,
+			}
+		}
+		if (
+			options.h2hOnly &&
+			(parsed.leagueType !== 'h2h' ||
+				!['standings', 'new-entries'].includes(parsed.surface))
+		) {
+			return {
+				valid: false,
+				domainValid: true,
+				message: messages.h2hOnly,
 				leagueId: parsed.leagueId,
 				leagueType: parsed.leagueType,
 			}

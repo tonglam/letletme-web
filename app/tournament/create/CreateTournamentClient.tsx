@@ -51,9 +51,10 @@ export default function CreateTournamentClient() {
 							onModeChange={state.changeCreationMode}
 						/>
 
-						{state.creationMode === 'classic' ? (
+						{state.creationMode !== 'custom' ? (
 							<>
 								<ClassicLeagueImportCard
+									mode={state.creationMode}
 									fetchParticipants={state.fetchParticipants}
 									isLoading={state.isLoadingParticipants}
 									leagueUrl={state.leagueUrl}

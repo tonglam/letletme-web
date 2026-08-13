@@ -59,18 +59,44 @@ describe('tournament command identity', () => {
 		})
 	})
 
-	it('keeps head-to-head import reserved for a later mode', () => {
-		assert.throws(
-			() => buildAuthoritativeTournamentPayload(
-				{
-					creationMode: 'classic',
-					tournamentName: 'H2H League',
-					leagueUrl: 'https://fantasy.premierleague.com/en/leagues/99/standings/h',
-				},
-				{ fplEntryId: 15702, name: 'Tong' },
-			),
-			InvalidTournamentPayloadError,
+	it('turns Head-to-Head import into an authoritative official mirror', () => {
+		const payload = buildAuthoritativeTournamentPayload(
+			{
+				creationMode: 'h2h',
+				tournamentName: 'H2H League',
+				leagueUrl: 'https://fantasy.premierleague.com/en/leagues/34879/new-entries/h',
+				participantSource: 'custom',
+				groupFormat: 'none',
+				knockoutFormat: 'double',
+			},
+			{ fplEntryId: 15702, name: 'Tong' },
 		)
+
+		assert.deepEqual(payload, {
+			tournamentName: 'H2H League',
+			participantSource: 'official',
+			tournamentType: 'standard',
+			leagueUrl: 'https://fantasy.premierleague.com/en/leagues/34879/new-entries/h',
+			groupFormat: 'points',
+			startGameweek: 'GW1',
+			endGameweek: 'GW38',
+			groupNum: '1',
+			qualifiersPerGroup: '',
+			knockoutFormat: 'none',
+			adminId: '15702',
+			creator: 'Tong',
+		})
+	})
+
+	it('does not allow an H2H URL through the Classic mirror path', () => {
+		assert.throws(() => buildAuthoritativeTournamentPayload(
+			{
+				creationMode: 'classic',
+				tournamentName: 'H2H League',
+				leagueUrl: 'https://fantasy.premierleague.com/en/leagues/99/standings/h',
+			},
+			{ fplEntryId: 15702, name: 'Tong' },
+		), InvalidTournamentPayloadError)
 	})
 
 	it('rejects arrays and invalid verified entry IDs', () => {

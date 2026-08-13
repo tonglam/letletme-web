@@ -10,10 +10,12 @@ import { useFormContext } from 'react-hook-form'
 import type {
 	LeaguePreview,
 	LeagueUrlValidation,
+	TournamentCreationMode,
 	TournamentFormData,
 } from '../_lib/tournament-form'
 
 export function ClassicLeagueImportCard({
+	mode,
 	fetchParticipants,
 	isLoading,
 	leagueUrl,
@@ -22,6 +24,7 @@ export function ClassicLeagueImportCard({
 	participantCount,
 	participantError,
 }: {
+	mode: Extract<TournamentCreationMode, 'classic' | 'h2h'>
 	fetchParticipants: () => void
 	isLoading: boolean
 	leagueUrl: string
@@ -33,28 +36,33 @@ export function ClassicLeagueImportCard({
 	const t = useTranslations('TournamentCreate')
 	const { formState: { errors }, register } = useFormContext<TournamentFormData>()
 	const validationMessage = errors.leagueUrl?.message ?? participantError ?? (leagueUrl ? leagueUrlState.message : null)
+	const isH2H = mode === 'h2h'
 
 	return (
 		<Card className="mb-8 overflow-hidden p-0">
 			<div className="border-b bg-primary/5 px-6 py-5">
 				<div className="flex flex-wrap items-center gap-2">
-					<h2 className="text-xl font-semibold">{t('copyClassicTitle')}</h2>
-					<Badge variant="outline">{t('classic')}</Badge>
+					<h2 className="text-xl font-semibold">
+						{t(isH2H ? 'copyH2HTitle' : 'copyClassicTitle')}
+					</h2>
+					<Badge variant="outline">{t(isH2H ? 'h2h' : 'classic')}</Badge>
 				</div>
-				<p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">{t('copyClassicHelp')}</p>
+				<p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+					{t(isH2H ? 'copyH2HHelp' : 'copyClassicHelp')}
+				</p>
 			</div>
 
 			<div className="space-y-6 p-6">
-				<section aria-labelledby="classic-link-steps-title" className="rounded-xl border bg-accent/20 p-4">
-					<h3 id="classic-link-steps-title" className="flex items-center gap-2 text-sm font-semibold">
+				<section aria-labelledby="official-link-steps-title" className="rounded-xl border bg-accent/20 p-4">
+					<h3 id="official-link-steps-title" className="flex items-center gap-2 text-sm font-semibold">
 						<ListChecks aria-hidden="true" className="size-4 text-primary-ink" />
 						{t('classicLinkStepsTitle')}
 					</h3>
 					<ol className="mt-3 grid gap-3 text-sm leading-5 text-muted-foreground sm:grid-cols-3">
 						{[
 							t('classicLinkStepOpen'),
-							t('classicLinkStepLeague'),
-							t('classicLinkStepCopy'),
+							t(isH2H ? 'h2hLinkStepLeague' : 'classicLinkStepLeague'),
+							t(isH2H ? 'h2hLinkStepCopy' : 'classicLinkStepCopy'),
 						].map((step, index) => (
 							<li key={step} className="flex items-start gap-2">
 								<span aria-hidden="true" className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
@@ -67,22 +75,27 @@ export function ClassicLeagueImportCard({
 				</section>
 
 				<div className="grid gap-3">
-					<Label htmlFor="league-url">{t('classicLeagueUrl')} <span aria-hidden="true" className="text-destructive">*</span></Label>
+					<Label htmlFor="league-url">
+						{t(isH2H ? 'h2hLeagueUrl' : 'classicLeagueUrl')}{' '}
+						<span aria-hidden="true" className="text-destructive">*</span>
+					</Label>
 					<div className="flex flex-col gap-2 sm:flex-row sm:items-start">
 						<div className="min-w-0 flex-1">
 							<Input
 								id="league-url"
 								{...register('leagueUrl')}
-								placeholder="https://fantasy.premierleague.com/en/leagues/123456/standings/c"
+								placeholder={isH2H
+									? 'https://fantasy.premierleague.com/en/leagues/34879/new-entries/h'
+									: 'https://fantasy.premierleague.com/en/leagues/123456/standings/c'}
 								autoComplete="url"
 								aria-invalid={Boolean(validationMessage)}
-								aria-describedby="classic-league-url-help classic-league-url-error"
+								aria-describedby="official-league-url-help official-league-url-error"
 							/>
-							<p id="classic-league-url-help" className="mt-1 text-xs leading-5 text-muted-foreground">
-								{t('classicLeagueUrlHelp')}
+							<p id="official-league-url-help" className="mt-1 text-xs leading-5 text-muted-foreground">
+								{t(isH2H ? 'h2hLeagueUrlHelp' : 'classicLeagueUrlHelp')}
 							</p>
 							{validationMessage ? (
-								<p id="classic-league-url-error" role="alert" className="mt-1 text-sm text-destructive">
+								<p id="official-league-url-error" role="alert" className="mt-1 text-sm text-destructive">
 									{validationMessage}
 								</p>
 							) : null}
@@ -103,7 +116,9 @@ export function ClassicLeagueImportCard({
 					<div className="space-y-4" aria-live="polite">
 						<Alert variant="success">
 							<Check aria-hidden="true" />
-							<AlertDescription>{t('classicReady', { name: loadedLeague.leagueName })}</AlertDescription>
+							<AlertDescription>
+								{t(isH2H ? 'h2hReady' : 'classicReady', { name: loadedLeague.leagueName })}
+							</AlertDescription>
 						</Alert>
 
 						<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -130,7 +145,7 @@ export function ClassicLeagueImportCard({
 
 						<div className="flex items-start gap-3 rounded-lg bg-accent/30 px-4 py-3 text-sm leading-6 text-muted-foreground">
 							<RefreshCw aria-hidden="true" className="mt-1 size-4 shrink-0 text-primary-ink" />
-							<p>{t('classicUpdateContract')}</p>
+							<p>{t(isH2H ? 'h2hUpdateContract' : 'classicUpdateContract')}</p>
 						</div>
 					</div>
 				) : null}

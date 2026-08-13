@@ -52,6 +52,8 @@ export function TournamentCreateActions({ canSubmit, creationMode, createdTourna
 								? t('creating')
 								: creationMode === 'classic'
 									? t('copyClassic')
+									: creationMode === 'h2h'
+										? t('copyH2H')
 									: t('create')}{' '}
 							<Check data-icon="inline-end" aria-hidden="true" />
 						</Button>

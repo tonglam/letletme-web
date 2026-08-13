@@ -5,6 +5,7 @@ import PageShell from '@/components/layout/PageShell'
 import { LiveAutoRefreshCountdown } from '@/components/live/LiveAutoRefreshCountdown'
 import { TournamentHeader } from '@/components/tournament/TournamentHeader'
 import { TournamentLifecycleBadge } from '@/components/tournament/TournamentLifecycleBadge'
+import { OfficialH2HCompetitionView } from '@/components/tournament/OfficialH2HCompetitionView'
 import { SearchHeader } from '@/components/tournament/SearchHeader'
 import { TournamentTable } from '@/components/tournament/TournamentTable'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -22,6 +23,7 @@ import {
 import {
 	GET_TOURNAMENT_LIVE_POINTS,
 	type EntryTournament,
+	type TournamentOfficialH2H,
 	type TournamentLiveCalcData,
 	type TournamentLivePointsResponse,
 	type TournamentParticipant,
@@ -238,17 +240,21 @@ export default function TournamentDetailClient({
 	canManage,
 	tournament,
 	currentGameweek,
+	activeGameweek,
 	entryId,
 	initialRows,
 	loadError,
 	softError,
 	initialSnapshot,
+	initialOfficialH2H,
 	initialParticipants,
 	justCreated,
 }: {
 	canManage: boolean
 	tournament: EntryTournament | null
 	currentGameweek?: number
+	/** Actual current FPL event; the selected H2H event may be historical. */
+	activeGameweek?: number
 	/** Viewer FPL entry — pin + highlight on live standings */
 	entryId?: number | null
 	initialRows: TournamentLiveCalcData[]
@@ -257,6 +263,7 @@ export default function TournamentDetailClient({
 	/** Soft banner while tournament is still shown (e.g. partial calc) */
 	softError: string | null
 	initialSnapshot?: LiveSnapshotStatus | null
+	initialOfficialH2H: TournamentOfficialH2H | null
 	initialParticipants: TournamentParticipant[]
 	justCreated: boolean
 }) {
@@ -400,9 +407,14 @@ export default function TournamentDetailClient({
 	])
 
 	const standingsReady = Boolean(currentTournament?.standingsReadyAt)
+	const isOfficialH2H = Boolean(
+		currentTournament?.leagueType === 'H2H' &&
+		currentTournament.rosterMode === 'OFFICIAL_SYNC' &&
+		currentTournament.groupMode === 'BATTLE_RACES',
+	)
 
 	const refreshStandings = useCallback((): Promise<void> => {
-		if (!currentTournament || !currentGameweek || !standingsReady) {
+		if (!currentTournament || !currentGameweek || !standingsReady || isOfficialH2H) {
 			return Promise.resolve()
 		}
 		if (refreshInFlightRef.current) return refreshInFlightRef.current
@@ -469,10 +481,10 @@ export default function TournamentDetailClient({
 				refreshInFlightRef.current = null
 		})
 		return request
-	}, [acceptSnapshot, currentGameweek, currentTournament, standingsReady, t])
+	}, [acceptSnapshot, currentGameweek, currentTournament, isOfficialH2H, standingsReady, t])
 
 	const autoRefreshStandings = useCallback((): Promise<void> => {
-		if (!currentTournament || !currentGameweek || !standingsReady) {
+		if (!currentTournament || !currentGameweek || !standingsReady || isOfficialH2H) {
 			return Promise.resolve()
 		}
 		if (freshnessRequestRef.current) return freshnessRequestRef.current
@@ -511,6 +523,7 @@ export default function TournamentDetailClient({
 		acceptSnapshot,
 		currentGameweek,
 		currentTournament,
+		isOfficialH2H,
 		refreshStandings,
 		standingsReady,
 		t
@@ -528,7 +541,7 @@ export default function TournamentDetailClient({
 		? areTournamentInsightsReady(currentTournament)
 		: false
 	const tournamentHeaderData = useMemo(() => {
-		if (!currentTournament || !standingsReady) return null
+		if (!currentTournament || !standingsReady || isOfficialH2H) return null
 		return {
 			name: currentTournament.name,
 			averagePoints: standingsStats.averagePoints,
@@ -536,7 +549,7 @@ export default function TournamentDetailClient({
 			totalEntries:
 				standingsStats.totalEntries || currentTournament.totalTeamNum
 		}
-	}, [currentTournament, standingsReady, standingsStats])
+	}, [currentTournament, isOfficialH2H, standingsReady, standingsStats])
 
 	const retrySetup = async () => {
 		if (!currentTournament || retrying) return
@@ -578,6 +591,8 @@ export default function TournamentDetailClient({
 			? t('singleElimination')
 			: knockoutMode === 'DOUBLE_ELIMINATION'
 				? t('homeAway')
+				: knockoutMode === 'HEAD_TO_HEAD'
+					? t('officialH2HKnockout')
 				: t('noKnockout')
 	const leagueType =
 		currentTournament?.leagueType === 'H2H'
@@ -586,7 +601,7 @@ export default function TournamentDetailClient({
 				? t('classic')
 				: currentTournament?.leagueType
 	const autoRefreshEnabled = shouldPollLiveSnapshot({
-		isPageActive,
+		isPageActive: isPageActive && !isOfficialH2H,
 		currentEventId: currentGameweek,
 		selectedEventId: currentGameweek,
 		snapshot,
@@ -768,7 +783,7 @@ export default function TournamentDetailClient({
 							</Card>
 						)}
 
-						{standingsReady ? (
+						{standingsReady && !isOfficialH2H ? (
 							<div className="mb-4 flex items-center justify-end gap-3">
 								<LiveAutoRefreshCountdown
 									enabled={autoRefreshEnabled}
@@ -954,6 +969,14 @@ export default function TournamentDetailClient({
 											{lifecycleT('standingsPreparingDescription')}
 										</p>
 									</Card>
+								) : isOfficialH2H && currentGameweek ? (
+									<OfficialH2HCompetitionView
+										activeEventId={activeGameweek}
+										eventId={currentGameweek}
+										initialSnapshot={initialOfficialH2H}
+										tournamentId={currentTournament.id}
+										viewerEntryId={entryId ?? undefined}
+									/>
 								) : currentGameweek && entries.length > 0 ? (
 									<>
 										<SearchHeader

@@ -31,6 +31,9 @@ export const TOURNAMENT_INFO_FIELDS = `
     rosterMode
     rosterSyncStatus
     rosterLastSyncedAt
+    officialScheduleHash
+    officialScheduleSyncedAt
+    officialScheduleLockedAt
     setupStatus
     setupPhase
     setupCompletedUnits
@@ -125,6 +128,9 @@ export interface EntryTournament {
 	rosterMode: TournamentRosterMode
 	rosterSyncStatus: TournamentSetupStatus | null
 	rosterLastSyncedAt: string | null
+	officialScheduleHash: string | null
+	officialScheduleSyncedAt: string | null
+	officialScheduleLockedAt: string | null
 	setupStatus: TournamentSetupStatus
 	setupPhase: TournamentSetupPhase
 	setupCompletedUnits: number
@@ -583,6 +589,149 @@ export interface TournamentLivePointsResponse {
 		errors: BatchCalcError[]
 		meta: BatchCalcMeta
 	}
+}
+
+const OFFICIAL_H2H_MATCH_FIELDS = `
+  fragment OfficialH2HMatchFields on OfficialH2HMatch {
+    officialMatchId
+    eventId
+    sourceOrder
+    phase
+    knockoutName
+    isBye
+    winnerEntryId
+    tiebreak
+    sourceCheckedAt
+    home {
+      entryId
+      entryName
+      playerName
+      isAverage
+      points
+      matchPoints
+    }
+    away {
+      entryId
+      entryName
+      playerName
+      isAverage
+      points
+      matchPoints
+    }
+  }
+`
+
+export const GET_TOURNAMENT_OFFICIAL_H2H = `${OFFICIAL_H2H_MATCH_FIELDS}
+  query GetTournamentOfficialH2H($tournamentId: Int!, $eventId: Int!) {
+    tournamentOfficialH2H(tournamentId: $tournamentId, eventId: $eventId) {
+      eventId
+      awaitingSchedule
+      standings {
+        entryId
+        entryName
+        playerName
+        rank
+        matchPoints
+        played
+        won
+        drawn
+        lost
+        pointsFor
+      }
+      matches {
+        ...OfficialH2HMatchFields
+      }
+    }
+  }
+`
+
+export const GET_ENTRY_OFFICIAL_H2H_DESK = `${OFFICIAL_H2H_MATCH_FIELDS}
+  query GetEntryOfficialH2HDesk($entryId: Int!) {
+    entryOfficialH2HDesk(entryId: $entryId) {
+      tournamentId
+      tournamentName
+      totalTeams
+      eventId
+      awaitingSchedule
+      isLive
+      isFinal
+      rank
+      lastRank
+      matchPoints
+      match {
+        ...OfficialH2HMatchFields
+      }
+      matches {
+        ...OfficialH2HMatchFields
+      }
+    }
+  }
+`
+
+export interface OfficialH2HStanding {
+	entryId: number
+	entryName: string | null
+	playerName: string | null
+	rank: number | null
+	matchPoints: number
+	played: number
+	won: number
+	drawn: number
+	lost: number
+	pointsFor: number
+}
+
+export interface OfficialH2HMatchSide {
+	entryId: number | null
+	entryName: string
+	playerName: string | null
+	isAverage: boolean
+	points: number | null
+	matchPoints: number | null
+}
+
+export interface OfficialH2HMatch {
+	officialMatchId: number
+	eventId: number
+	sourceOrder: number
+	phase: 'REGULAR' | 'KNOCKOUT'
+	knockoutName: string | null
+	isBye: boolean
+	winnerEntryId: number | null
+	tiebreak: string | null
+	sourceCheckedAt: string | null
+	home: OfficialH2HMatchSide
+	away: OfficialH2HMatchSide
+}
+
+export interface TournamentOfficialH2H {
+	eventId: number
+	awaitingSchedule: boolean
+	standings: OfficialH2HStanding[]
+	matches: OfficialH2HMatch[]
+}
+
+export interface TournamentOfficialH2HResponse {
+	tournamentOfficialH2H: TournamentOfficialH2H
+}
+
+export interface EntryOfficialH2HDeskItem {
+	tournamentId: number
+	tournamentName: string
+	totalTeams: number
+	eventId: number
+	awaitingSchedule: boolean
+	isLive: boolean
+	isFinal: boolean
+	rank: number | null
+	lastRank: number | null
+	matchPoints: number
+	match: OfficialH2HMatch | null
+	matches?: OfficialH2HMatch[]
+}
+
+export interface EntryOfficialH2HDeskResponse {
+	entryOfficialH2HDesk: EntryOfficialH2HDeskItem[]
 }
 
 // Query to fetch entry result for a specific event

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import type { EntryLeague } from '../lib/graphql/operations/leagues'
+import type { EntryOfficialH2HDeskItem } from '../lib/graphql/operations/tournaments'
 import {
 	buildHomeLeagueRankRows,
 	rankMovement,
@@ -68,5 +69,42 @@ describe('sortEntryLeagues / buildHomeLeagueRankRows', () => {
 		assert.equal(rows.length, 8)
 		assert.equal(rows[0]?.movement.kind, 'up')
 		assert.equal(rows[0]?.tournamentId, 99)
+	})
+
+	it('pins a live official H2H mirror and keeps its official matchup on the league row', () => {
+		const desk: EntryOfficialH2HDeskItem = {
+			tournamentId: 99,
+			tournamentName: '碰撞大奖赛',
+			totalTeams: 11,
+			eventId: 1,
+			awaitingSchedule: false,
+			isLive: true,
+			isFinal: false,
+			rank: 3,
+			lastRank: null,
+			matchPoints: 7,
+			match: {
+				officialMatchId: 9001,
+				eventId: 1,
+				sourceOrder: 4,
+				phase: 'REGULAR',
+				knockoutName: null,
+				isBye: false,
+				winnerEntryId: null,
+				tiebreak: null,
+				sourceCheckedAt: null,
+				home: { entryId: 7, entryName: 'Mine', playerName: null, isAverage: false, points: 42, matchPoints: 3 },
+				away: { entryId: null, entryName: 'Average Team', playerName: null, isAverage: true, points: 38, matchPoints: 0 },
+			},
+		}
+		const rows = buildHomeLeagueRankRows([
+			league({ id: 1, name: 'Classic leader', entryRank: 1 }),
+			league({ id: 2, name: '碰撞大奖赛', entryRank: 8, entryLastRank: 4, tournamentId: 99, type: 'H2H' }),
+		], [desk])
+
+		assert.equal(rows[0]?.tournamentId, 99)
+		assert.equal(rows[0]?.entryRank, 3)
+		assert.deepEqual(rows[0]?.movement, { kind: 'up', places: 1 })
+		assert.equal(rows[0]?.officialH2H?.match?.sourceOrder, 4)
 	})
 })
