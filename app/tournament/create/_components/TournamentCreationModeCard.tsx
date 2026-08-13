@@ -26,7 +26,7 @@ export function TournamentCreationModeCard({
 				<RadioGroup
 					value={mode}
 					onValueChange={(value) => onModeChange(value as TournamentCreationMode)}
-					className="grid gap-3 md:grid-cols-2"
+					className="grid gap-3 md:grid-cols-3"
 					aria-label={t('choosePath')}
 				>
 					<div>
@@ -54,6 +54,27 @@ export function TournamentCreationModeCard({
 					</div>
 
 					<div>
+						<RadioGroupItem value="h2h" id="creation-mode-h2h" className="peer sr-only" />
+						<Label
+							htmlFor="creation-mode-h2h"
+							className={cn(
+								'flex h-full cursor-pointer items-start gap-4 rounded-xl border p-4 transition-colors hover:border-primary/50 hover:bg-accent/30',
+								mode === 'h2h' && 'border-primary bg-primary/5 ring-1 ring-primary',
+							)}
+						>
+							<span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-pink text-white">
+								<Swords aria-hidden="true" className="size-5" />
+							</span>
+							<span>
+								<span className="font-semibold">{t('h2hPath')}</span>
+								<span className="mt-1 block text-sm font-normal leading-6 text-muted-foreground">
+									{t('h2hPathHelp')}
+								</span>
+							</span>
+						</Label>
+					</div>
+
+					<div>
 						<RadioGroupItem value="custom" id="creation-mode-custom" className="peer sr-only" />
 						<Label
 							htmlFor="creation-mode-custom"
@@ -74,12 +95,6 @@ export function TournamentCreationModeCard({
 						</Label>
 					</div>
 				</RadioGroup>
-
-				<div className="mt-4 flex items-center gap-3 rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
-					<Swords aria-hidden="true" className="size-4 shrink-0" />
-					<span>{t('h2hReserved')}</span>
-					<Badge variant="outline" className="ml-auto shrink-0">{t('comingLater')}</Badge>
-				</div>
 			</div>
 		</Card>
 	)

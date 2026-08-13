@@ -1,7 +1,7 @@
 export const FPL_HOSTNAME = 'fantasy.premierleague.com'
 
 export type LeagueType = 'classic' | 'h2h'
-export type LeagueUrlSurface = 'standings' | 'admin' | 'join'
+export type LeagueUrlSurface = 'standings' | 'new-entries' | 'admin' | 'join'
 export type LeagueUrlErrorCode = 'incomplete' | 'domain' | 'path' | 'id' | 'type'
 
 export class LeagueUrlError extends Error {
@@ -21,7 +21,12 @@ export interface ParsedLeagueUrl {
 }
 
 const LOCALE_SEGMENT = /^[a-z]{2}(?:-[a-z]{2})?$/i
-const SUPPORTED_SURFACES = new Set<LeagueUrlSurface>(['standings', 'admin', 'join'])
+const SUPPORTED_SURFACES = new Set<LeagueUrlSurface>([
+	'standings',
+	'new-entries',
+	'admin',
+	'join',
+])
 
 export function parseLeagueUrl(rawUrl: string): ParsedLeagueUrl {
 	let parsedUrl: URL
@@ -63,7 +68,7 @@ export function parseLeagueUrl(rawUrl: string): ParsedLeagueUrl {
 		throw new LeagueUrlError('path', 'Unsupported league URL format.')
 	}
 
-	const suffix = surface === 'standings'
+	const suffix = surface === 'standings' || surface === 'new-entries'
 		? segments[leaguesIndex + 3]?.toLowerCase()
 		: undefined
 	if (suffix && !['c', 'classic', 'h', 'h2h'].includes(suffix)) {

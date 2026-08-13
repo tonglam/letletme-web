@@ -5,11 +5,14 @@ import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import {
 	GET_TOURNAMENT_LIVE_POINTS,
 	GET_TOURNAMENT_METADATA,
+	GET_TOURNAMENT_OFFICIAL_H2H,
 	GET_TOURNAMENT_PARTICIPANTS,
 	type EntryTournament,
 	type TournamentLiveCalcData,
 	type TournamentLivePointsResponse,
 	type TournamentMetadataResponse,
+	type TournamentOfficialH2H,
+	type TournamentOfficialH2HResponse,
 	type TournamentParticipant,
 	type TournamentParticipantsResponse,
 } from '@/lib/graphql/operations/tournaments'
@@ -53,8 +56,18 @@ export default async function Page({ params, searchParams }: PageProps) {
 	let softError: string | null = null
 	let loadError: TournamentDetailLoadError | null = null
 	let initialSnapshot: LiveSnapshotStatus | null = null
+	let initialOfficialH2H: TournamentOfficialH2H | null = null
 	const query = await searchParams
 	const justCreated = query.created === '1'
+	const requestedGameweekValue = typeof query.gw === 'string' ? Number(query.gw) : null
+	const requestedGameweek =
+		typeof requestedGameweekValue === 'number' &&
+		Number.isInteger(requestedGameweekValue) &&
+		requestedGameweekValue >= 1 &&
+		requestedGameweekValue <= 38
+			? requestedGameweekValue
+			: null
+	const officialGameweek = requestedGameweek ?? currentEventId ?? 1
 
 	if (!entryId) {
 		loadError = 'bind_entry'
@@ -72,6 +85,10 @@ export default async function Page({ params, searchParams }: PageProps) {
 			if (!tournament) {
 				loadError = 'no_access'
 			} else {
+				const isOfficialH2H =
+					tournament.leagueType === 'H2H' &&
+					tournament.rosterMode === 'OFFICIAL_SYNC' &&
+					tournament.groupMode === 'BATTLE_RACES'
 				const participantsRequest =
 					executeServerQuery<TournamentParticipantsResponse>(
 						GET_TOURNAMENT_PARTICIPANTS,
@@ -87,7 +104,22 @@ export default async function Page({ params, searchParams }: PageProps) {
 							return []
 						})
 
-				if (tournament.standingsReadyAt && currentEventId) {
+				if (tournament.standingsReadyAt && isOfficialH2H) {
+					const [loadedParticipants, officialSnapshot] = await Promise.all([
+						participantsRequest,
+						executeServerQuery<TournamentOfficialH2HResponse>(
+							GET_TOURNAMENT_OFFICIAL_H2H,
+							{ tournamentId, eventId: officialGameweek },
+							{ cache: 'no-store' },
+						).catch(error => {
+							console.warn('[tournament detail] Official H2H mirror unavailable:', error)
+							return null
+						}),
+					])
+					participants = loadedParticipants
+					initialOfficialH2H = officialSnapshot?.tournamentOfficialH2H ?? null
+					if (!initialOfficialH2H) softError = liveT('officialH2HUnavailable')
+				} else if (tournament.standingsReadyAt && currentEventId) {
 					const [loadedParticipants, standings] = await Promise.all([
 						participantsRequest,
 						executeServerQuery<TournamentLivePointsResponse>(
@@ -127,17 +159,23 @@ export default async function Page({ params, searchParams }: PageProps) {
 
 	return (
 		<TournamentDetailClient
-			key={`${tournament?.updatedAt ?? 'missing'}:${tournament?.setupProgressUpdatedAt ?? ''}`}
+			key={`${tournament?.updatedAt ?? 'missing'}:${tournament?.setupProgressUpdatedAt ?? ''}:${officialGameweek}`}
 			canManage={Boolean(
 				tournament && entryId && tournament.adminEntryId === entryId,
 			)}
 			tournament={tournament}
-			currentGameweek={currentEventId ?? undefined}
+			currentGameweek={
+				tournament?.leagueType === 'H2H' && tournament.rosterMode === 'OFFICIAL_SYNC'
+					? officialGameweek
+					: currentEventId ?? undefined
+			}
+			activeGameweek={currentEventId ?? undefined}
 			entryId={entryId}
 			initialRows={initialRows}
 			loadError={loadError}
 			softError={softError}
 			initialSnapshot={initialSnapshot}
+			initialOfficialH2H={initialOfficialH2H}
 			initialParticipants={participants}
 			justCreated={justCreated}
 		/>
