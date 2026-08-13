@@ -18,7 +18,6 @@ import {
 	parse,
 	validate
 } from 'graphql'
-import { buildFixtureWindowQuery } from '../lib/fixture-window'
 import {
 	GET_ENTRY_EVENT_RESULT,
 	GET_ENTRY_HISTORY,
@@ -39,10 +38,7 @@ import {
 	GET_LIVE_SNAPSHOT,
 	GET_PLAYER_LIVE
 } from '../lib/graphql/operations/live'
-import {
-	GET_FIXTURE_PLANNING_SIGNALS,
-	GET_MARKET_PULSE
-} from '../lib/graphql/operations/market'
+import { GET_MARKET_PULSE } from '../lib/graphql/operations/market'
 import {
 	GET_PLAYER_DETAIL,
 	GET_PLAYER_STATE_PROFILE,
@@ -116,7 +112,6 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 	['GET_PLAYER_STATE_PROFILE', GET_PLAYER_STATE_PROFILE],
 	['GET_PLAYER_VALUES', GET_PLAYER_VALUES],
 	['GET_MARKET_PULSE', GET_MARKET_PULSE],
-	['GET_FIXTURE_PLANNING_SIGNALS', GET_FIXTURE_PLANNING_SIGNALS],
 	['GET_PLAYERS_FOR_PICKER', GET_PLAYERS_FOR_PICKER],
 	['SEARCH_PLAYERS_FOR_PICKER', SEARCH_PLAYERS_FOR_PICKER],
 	['GET_TEAMS_FOR_PICKER', GET_TEAMS_FOR_PICKER],
@@ -127,7 +122,6 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 	['GET_TOP_TRANSFERS_IN', GET_TOP_TRANSFERS_IN],
 	['GET_TOP_TRANSFERS_OUT', GET_TOP_TRANSFERS_OUT],
 	['GET_EVENT_FIXTURES', GET_EVENT_FIXTURES],
-	['GET_FIXTURE_WINDOW_5', buildFixtureWindowQuery(5)],
 	['GET_LIVE_POINTS', GET_LIVE_POINTS],
 	['GET_TOURNAMENT_LIVE_POINTS', GET_TOURNAMENT_LIVE_POINTS],
 	['GET_ENTRY_EVENT_RESULT', GET_ENTRY_EVENT_RESULT],

@@ -36,10 +36,7 @@ import {
 	GET_LIVE_SCORES,
 	GET_PLAYER_LIVE
 } from '../lib/graphql/operations/live'
-import {
-	GET_FIXTURE_PLANNING_SIGNALS,
-	GET_MARKET_PULSE
-} from '../lib/graphql/operations/market'
+import { GET_MARKET_PULSE } from '../lib/graphql/operations/market'
 import {
 	GET_PLAYER_DETAIL,
 	GET_PLAYERS_FOR_PICKER,
@@ -237,11 +234,6 @@ async function main() {
 		{
 			name: 'GET_MARKET_PULSE',
 			query: GET_MARKET_PULSE,
-			variables: { days: 14 }
-		},
-		{
-			name: 'GET_FIXTURE_PLANNING_SIGNALS',
-			query: GET_FIXTURE_PLANNING_SIGNALS,
 			variables: { days: 14 }
 		},
 		{

@@ -6,10 +6,7 @@ import {
 	GET_EVENT_LIVE_EXPLAINS,
 	GET_LIVE_MATCHES
 } from '../lib/graphql/operations/live'
-import {
-	GET_FIXTURE_PLANNING_SIGNALS,
-	GET_MARKET_PULSE
-} from '../lib/graphql/operations/market'
+import { GET_MARKET_PULSE } from '../lib/graphql/operations/market'
 import {
 	GET_PLAYER_STATE_PROFILE,
 	SEARCH_PLAYERS_FOR_PICKER
@@ -51,29 +48,6 @@ describe('GraphQL request budget', () => {
 		visit(document, { enter: () => void (astNodes += 1) })
 
 		assert.ok(astNodes < 200, `GET_MARKET_PULSE has ${astNodes} AST nodes`)
-	})
-
-	it('keeps fixture market signals to one compact root field', () => {
-		const document = parse(GET_FIXTURE_PLANNING_SIGNALS)
-		let astNodes = 0
-		visit(document, { enter: () => void (astNodes += 1) })
-		const operation = document.definitions.find(
-			definition => definition.kind === 'OperationDefinition'
-		)
-		assert.ok(operation?.kind === 'OperationDefinition')
-		assert.equal(operation.selectionSet.selections.length, 1)
-		assert.ok(
-			astNodes < 100,
-			`GET_FIXTURE_PLANNING_SIGNALS has ${astNodes} AST nodes`
-		)
-		for (const unusedField of [
-			'coverage',
-			'availabilityUpdates',
-			'newPlayers',
-			'priceChanges'
-		]) {
-			assert.doesNotMatch(GET_FIXTURE_PLANNING_SIGNALS, new RegExp(`\\b${unusedField}\\b`))
-		}
 	})
 
 	it('keeps the player-state profile bounded to one root field', () => {
