@@ -81,6 +81,25 @@ describe('privacy-safe web vitals', () => {
 		)
 	})
 
+	it('accepts route-ready milestones without entity identifiers', () => {
+		for (const name of [
+			'MARKET_CONTENT_READY',
+			'PLAYER_DIRECTORY_READY',
+			'PLAYER_DETAIL_READY',
+			'SESSION_STATE_READY'
+		]) {
+			assert.equal(
+				parseWebVitalPayload({
+					...validMetric,
+					name,
+					metricId: `ready-${name.toLowerCase()}`,
+					page: '/data/player-stats?p1=42'
+				})?.page,
+				'/data/player-stats'
+			)
+		}
+	})
+
 	it('maps older clients without the hint to unknown during rollout', () => {
 		const { audienceHint: _audienceHint, ...legacyMetric } = validMetric
 		assert.equal(parseWebVitalPayload(legacyMetric)?.audienceHint, 'unknown')

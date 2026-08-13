@@ -9,7 +9,7 @@ import {
 	SelectTrigger,
 	SelectValue
 } from '@/components/ui/select'
-import { executeQuery } from '@/lib/graphql-client'
+import { executeQuery, GraphQLRequestError } from '@/lib/graphql-client'
 import {
 	GET_TEAMS_FOR_PICKER,
 	SEARCH_PLAYERS_FOR_PICKER,
@@ -28,6 +28,10 @@ import {
 	type OwnBand,
 	type PlayerDirectorySort
 } from '@/lib/player-directory-filters'
+import {
+	buildPlayerDirectoryQueryKey,
+	type PlayerDirectorySeed
+} from '@/lib/player-directory-seed'
 import { resolveTeamDisplayName } from '@/lib/team-display'
 import { type Position } from '@/types/common'
 import { RotateCcw, Search, X } from 'lucide-react'
@@ -46,7 +50,7 @@ interface BrowseFilterSnapshot {
 }
 
 const PLAYER_PICKER_PAGE_SIZE = 20
-const PLAYER_PICKER_DEBOUNCE_MS = 200
+const PLAYER_PICKER_DEBOUNCE_MS = 300
 // A non-empty name fragment is a valid FPL search. The backend safely
 // normalizes short fragments, so do not silently turn a one-character query
 // into an unfiltered roster request.
@@ -82,6 +86,7 @@ interface PlayerDirectoryPickerProps {
 	className?: string
 	defaultPosition?: Position | null
 	statsAvailable?: boolean
+	seed?: PlayerDirectorySeed
 }
 
 const directoryPositionToShort = (
@@ -169,6 +174,24 @@ const toPickerPlayer = (
 	form: player.form
 })
 
+const toTeamOptions = (
+	teams: PlayerDirectorySeed['teams']
+): TeamDirectoryOption[] =>
+	teams
+		.map(team => ({
+			id: team.id,
+			name: team.name,
+			shortName: team.shortName
+		}))
+		.sort((a, b) =>
+			resolveTeamDisplayName(a.shortName, a.name).localeCompare(
+				resolveTeamDisplayName(b.shortName, b.name)
+			)
+		)
+
+const isCancelledRequest = (error: unknown) =>
+	error instanceof GraphQLRequestError && error.code === 'REQUEST_CANCELLED'
+
 const OWN_BAND_LABEL_KEYS: Record<
 	OwnBand,
 	'ownBandAny' | 'ownBandLe5' | 'ownBand5_15' | 'ownBand15_40' | 'ownBandGe40'
@@ -185,23 +208,29 @@ export function PlayerDirectoryPicker({
 	excludedPlayerIds = [],
 	className = '',
 	defaultPosition = null,
-	statsAvailable = true
+	statsAvailable = true,
+	seed
 }: PlayerDirectoryPickerProps) {
 	const t = useTranslations('PlayerDirectory')
-	const [teams, setTeams] = useState<TeamDirectoryOption[]>([])
-	const [players, setPlayers] = useState<PlayerDirectoryOption[]>([])
-	const [totalPlayers, setTotalPlayers] = useState(0)
+	const [teams, setTeams] = useState<TeamDirectoryOption[]>(() =>
+		seed ? toTeamOptions(seed.teams) : []
+	)
+	const [players, setPlayers] = useState<PlayerDirectoryOption[]>(() =>
+		seed ? seed.players.map(toPickerPlayer) : []
+	)
+	const [totalPlayers, setTotalPlayers] = useState(seed?.totalCount ?? 0)
 	const [nextPlayersCursor, setNextPlayersCursor] = useState<number | null>(
-		null
+		seed?.nextCursor ?? null
 	)
 	const [nextPlayersQueryKey, setNextPlayersQueryKey] = useState<string | null>(
-		null
+		seed?.queryKey ?? null
 	)
 	const [isTeamsLoading, setIsTeamsLoading] = useState(false)
 	const [isPlayersLoading, setIsPlayersLoading] = useState(false)
 	const [isMorePlayersLoading, setIsMorePlayersLoading] = useState(false)
 	const [morePlayersError, setMorePlayersError] = useState<string | null>(null)
 	const [error, setError] = useState<string | null>(null)
+	const [rateLimitSeconds, setRateLimitSeconds] = useState(0)
 	const [positionFilter, setPositionFilter] = useState<PositionFilter>(
 		defaultPosition ?? 'ALL'
 	)
@@ -215,34 +244,28 @@ export function PlayerDirectoryPicker({
 	)
 	const browseFiltersBeforeSearchRef = useRef<BrowseFilterSnapshot | null>(null)
 	const playerRequestVersionRef = useRef(0)
-	const nextPlayersQueryKeyRef = useRef<string | null>(null)
+	const nextPlayersQueryKeyRef = useRef<string | null>(seed?.queryKey ?? null)
+	const initialSeedQueryKeyRef = useRef<string | null>(seed?.queryKey ?? null)
 
 	useEffect(() => {
+		if (seed) return
 		let isCancelled = false
+		const controller = new AbortController()
 
 		const fetchTeams = async () => {
 			try {
 				setIsTeamsLoading(true)
 				setError(null)
 				const result =
-					await executeQuery<TeamsForPickerResponse>(GET_TEAMS_FOR_PICKER)
+					await executeQuery<TeamsForPickerResponse>(GET_TEAMS_FOR_PICKER, undefined, {
+						signal: controller.signal
+					})
 
 				if (isCancelled) return
 
-				setTeams(
-					result.teams
-						.map(team => ({
-							id: team.id,
-							name: team.name,
-							shortName: team.shortName
-						}))
-						.sort((a, b) =>
-							resolveTeamDisplayName(a.shortName, a.name).localeCompare(
-								resolveTeamDisplayName(b.shortName, b.name)
-							)
-						)
-				)
+				setTeams(toTeamOptions(result.teams))
 			} catch (fetchError) {
+				if (isCancelledRequest(fetchError)) return
 				console.error('Failed to fetch teams directory:', fetchError)
 
 				if (!isCancelled) {
@@ -260,8 +283,18 @@ export function PlayerDirectoryPicker({
 
 		return () => {
 			isCancelled = true
+			controller.abort()
 		}
-	}, [t])
+	}, [seed, t])
+
+	useEffect(() => {
+		if (rateLimitSeconds <= 0) return
+		const countdown = window.setInterval(
+			() => setRateLimitSeconds(current => Math.max(0, current - 1)),
+			1_000
+		)
+		return () => window.clearInterval(countdown)
+	}, [rateLimitSeconds])
 
 	const normalizedSearch = searchTerm.trim()
 	const isNameSearchActive = normalizedSearch.length >= MIN_SEARCH_LENGTH
@@ -280,7 +313,7 @@ export function PlayerDirectoryPicker({
 	}, [maxPrice, positionFilter, selectedTeam])
 	const playerQueryKey = useMemo(
 		() =>
-			JSON.stringify({
+			buildPlayerDirectoryQueryKey({
 				search: isNameSearchActive ? normalizedSearch : null,
 				teamId: serverPlayerFilter?.teamId ?? null,
 				position: serverPlayerFilter?.position ?? null,
@@ -298,7 +331,13 @@ export function PlayerDirectoryPicker({
 	)
 
 	useEffect(() => {
+		if (initialSeedQueryKeyRef.current === playerQueryKey) {
+			initialSeedQueryKeyRef.current = null
+			nextPlayersQueryKeyRef.current = playerQueryKey
+			return
+		}
 		let isCancelled = false
+		const controller = new AbortController()
 		const requestVersion = ++playerRequestVersionRef.current
 		nextPlayersQueryKeyRef.current = null
 		setNextPlayersQueryKey(null)
@@ -319,7 +358,8 @@ export function PlayerDirectoryPicker({
 						ownershipBand: ownBandToGraphql(ownBand),
 						limit: PLAYER_PICKER_PAGE_SIZE,
 						cursor: null
-					}
+					},
+					{ signal: controller.signal }
 				)
 
 				if (isCancelled || requestVersion !== playerRequestVersionRef.current) {
@@ -328,22 +368,32 @@ export function PlayerDirectoryPicker({
 
 				setPlayers(result.playersForPicker.items.map(toPickerPlayer))
 				setTotalPlayers(result.playersForPicker.totalCount)
+				setRateLimitSeconds(0)
 				nextPlayersQueryKeyRef.current = playerQueryKey
 				setNextPlayersQueryKey(playerQueryKey)
 				setNextPlayersCursor(result.playersForPicker.nextCursor)
 			} catch (fetchError) {
+				if (isCancelledRequest(fetchError)) return
 				console.error('Failed to fetch players directory:', fetchError)
 
 				if (
 					!isCancelled &&
 					requestVersion === playerRequestVersionRef.current
 				) {
-					setError(t('playersFailed'))
-					setPlayers([])
-					setTotalPlayers(0)
-					nextPlayersQueryKeyRef.current = null
-					setNextPlayersQueryKey(null)
-					setNextPlayersCursor(null)
+					if (
+						fetchError instanceof GraphQLRequestError &&
+						fetchError.status === 429
+					) {
+						setError(null)
+						setRateLimitSeconds(fetchError.retryAfterSeconds ?? 60)
+					} else {
+						setError(t('playersFailed'))
+						setPlayers([])
+						setTotalPlayers(0)
+						nextPlayersQueryKeyRef.current = null
+						setNextPlayersQueryKey(null)
+						setNextPlayersCursor(null)
+					}
 				}
 			} finally {
 				if (
@@ -363,6 +413,7 @@ export function PlayerDirectoryPicker({
 		return () => {
 			isCancelled = true
 			window.clearTimeout(fetchTimer)
+			controller.abort()
 		}
 	}, [
 		isNameSearchActive,
@@ -461,7 +512,14 @@ export function PlayerDirectoryPicker({
 		} catch (fetchError) {
 			console.error('Failed to fetch more players:', fetchError)
 			if (requestVersion === playerRequestVersionRef.current) {
-				setMorePlayersError(t('loadMoreFailed'))
+				if (
+					fetchError instanceof GraphQLRequestError &&
+					fetchError.status === 429
+				) {
+					setRateLimitSeconds(fetchError.retryAfterSeconds ?? 60)
+				} else {
+					setMorePlayersError(t('loadMoreFailed'))
+				}
 			}
 		} finally {
 			if (requestVersion === playerRequestVersionRef.current) {
@@ -702,16 +760,25 @@ export function PlayerDirectoryPicker({
 				</Button>
 			</div>
 
-			<div className="mt-3 rounded-md border">
+			{rateLimitSeconds > 0 ? (
+				<p
+					className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground"
+					role="status"
+				>
+					{t('rateLimited', { seconds: rateLimitSeconds })}
+				</p>
+			) : null}
+
+			<div className="mt-3 rounded-md border" aria-busy={isLoading}>
 				<div className="max-h-64 overflow-y-auto">
 					{error ? (
 						<div
-							role="status"
+							role="alert"
 							className="p-3 text-sm text-destructive"
 						>
 							{error}
 						</div>
-					) : isLoading ? (
+					) : isLoading && visiblePlayers.length === 0 ? (
 						<div className="p-3 text-sm text-muted-foreground">
 							{t('loadingPlayers')}
 						</div>

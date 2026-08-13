@@ -20,6 +20,7 @@ import { AvatarUpload } from '@/app/profile/AvatarUpload'
 import RebindEntryForm from '@/app/profile/RebindEntryForm'
 import SignOutButton from '@/app/profile/SignOutButton'
 import { getTranslations } from 'next-intl/server'
+import { RouteLoaderTiming } from '@/lib/route-loader-timing'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,21 +38,30 @@ export async function generateMetadata({ params }: PageProps) {
 }
 
 export default async function ProfilePage({ params }: PageProps) {
-	const { locale } = await getPageLocale(params)
-	const t = await getTranslations('Profile')
-	const session = await getAuthorizationSession(await headers())
+	const timing = new RouteLoaderTiming('/profile')
+	const [pageLocale, t, session] = await Promise.all([
+		getPageLocale(params),
+		getTranslations('Profile'),
+		timing.measure('session', async () =>
+			getAuthorizationSession(await headers())
+		)
+	])
+	const { locale } = pageLocale
 
 	if (!session) {
+		timing.finish('redirect-login')
 		redirect(localizeHref('/auth/login?next=/profile', locale))
 	}
 
 	const { user } = session
 
-	const [dbUser] = await db
-		.select()
-		.from(schema.user)
-		.where(eq(schema.user.id, user.id))
-		.limit(1)
+	const [dbUser] = await timing.measure('profile', () =>
+		db
+			.select()
+			.from(schema.user)
+			.where(eq(schema.user.id, user.id))
+			.limit(1)
+	)
 
 	const profile = dbUser ?? user
 	const verifiedEntryId = getVerifiedFplEntryId(profile)
@@ -62,13 +72,15 @@ export default async function ProfilePage({ params }: PageProps) {
 	// picks a single winner across concurrent tabs/instances.
 	if (
 		verifiedEntryId !== null &&
-		isFplIdentitySnapshotStale(dbUser?.fplIdentityRefreshedAt) &&
-		(await claimFplIdentityRefresh(user.id, verifiedEntryId))
+		isFplIdentitySnapshotStale(dbUser?.fplIdentityRefreshedAt)
 	) {
 		after(async () => {
-			await refreshFplIdentitySnapshot(user.id, verifiedEntryId)
+			if (await claimFplIdentityRefresh(user.id, verifiedEntryId)) {
+				await refreshFplIdentitySnapshot(user.id, verifiedEntryId)
+			}
 		})
 	}
+	timing.finish('ready')
 
 	return (
 		<PageShell>

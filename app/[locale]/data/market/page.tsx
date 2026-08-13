@@ -1,4 +1,5 @@
 import { MarketView } from '@/app/data/market/MarketView'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import { MarketPlayerLookup } from '@/components/data/MarketPlayerLookup'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
@@ -28,6 +29,61 @@ export async function generateMetadata({ params }: PageProps) {
 	})
 }
 
+async function MarketContent() {
+	await connection()
+	const t = await getTranslations('Market')
+	let pulse: MarketPulse | null = null
+
+	try {
+		const response = await executePublicServerQuery<MarketPulseResponse>(
+			GET_MARKET_PULSE,
+			{ days: 14 },
+			publicFetchOptions({
+				revalidate: RevalidateSeconds.market,
+				tags: [CacheTag.market]
+			})
+		)
+		pulse = response.marketPulse
+	} catch (error) {
+		unstable_rethrow(error)
+		console.error('[market] RSC fetch failed:', error)
+	}
+
+	if (!pulse) {
+		return (
+			<>
+				<RouteReadyMarker
+					name="MARKET_CONTENT_READY"
+					audienceHint="public"
+					goodMs={3_000}
+					poorMs={4_500}
+				/>
+				<Alert variant="destructive" className="mb-6" role="alert">
+					<AlertTitle>{t('dataUnavailable')}</AlertTitle>
+					<AlertDescription>
+						{t('dataUnavailableDescription')}
+					</AlertDescription>
+				</Alert>
+				<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+					<MarketPlayerLookup />
+				</section>
+			</>
+		)
+	}
+
+	return (
+		<>
+			<RouteReadyMarker
+				name="MARKET_CONTENT_READY"
+				audienceHint="public"
+				goodMs={3_000}
+				poorMs={4_500}
+			/>
+			<MarketView pulse={pulse} />
+		</>
+	)
+}
+
 function MarketViewFallback() {
 	return (
 		<div className="space-y-4">
@@ -43,27 +99,8 @@ function MarketViewFallback() {
 }
 
 export default async function MarketPage({ params }: PageProps) {
-	await connection()
 	await getPageLocale(params)
 	const t = await getTranslations('Market')
-	let pulse: MarketPulse | null = null
-	let loadFailed = false
-
-	try {
-		const response = await executePublicServerQuery<MarketPulseResponse>(
-			GET_MARKET_PULSE,
-			{ days: 14 },
-			publicFetchOptions({
-				revalidate: RevalidateSeconds.market,
-				tags: [CacheTag.market],
-			}),
-		)
-		pulse = response.marketPulse
-	} catch (error) {
-		unstable_rethrow(error)
-		console.error('[market] RSC fetch failed:', error)
-		loadFailed = true
-	}
 
 	return (
 		<PageShell>
@@ -73,24 +110,9 @@ export default async function MarketPage({ params }: PageProps) {
 					{t('pageIntro')}
 				</p>
 
-				{loadFailed ? (
-					<Alert variant="destructive" className="mb-6">
-						<AlertTitle>{t('dataUnavailable')}</AlertTitle>
-						<AlertDescription>
-							{t('dataUnavailableDescription')}
-						</AlertDescription>
-					</Alert>
-				) : null}
-
-				{pulse ? (
-					<Suspense fallback={<MarketViewFallback />}>
-						<MarketView pulse={pulse} />
-					</Suspense>
-				) : loadFailed ? (
-					<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-						<MarketPlayerLookup />
-					</section>
-				) : null}
+				<Suspense fallback={<MarketViewFallback />}>
+					<MarketContent />
+				</Suspense>
 			</div>
 		</PageShell>
 	)

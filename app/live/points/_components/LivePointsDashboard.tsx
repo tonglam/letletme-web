@@ -136,7 +136,7 @@ export function LivePointsDashboard({
 								? t('autoHidden')
 								: t('autoPast')}
 					</p>
-					<div className="flex items-center gap-2 sm:gap-3">
+					<div className="flex flex-wrap items-center gap-2 sm:gap-3">
 						<LivePointsAutoRefreshCountdown
 							enabled={autoRefreshEnabled}
 							onRefresh={onAutoRefresh}

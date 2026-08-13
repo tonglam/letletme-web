@@ -7,7 +7,11 @@ const WEB_VITAL_NAMES = new Set([
 	'INP',
 	'LCP',
 	'TTFB',
-	'HOME_PERSONAL_HYDRATED'
+	'HOME_PERSONAL_HYDRATED',
+	'MARKET_CONTENT_READY',
+	'PLAYER_DIRECTORY_READY',
+	'PLAYER_DETAIL_READY',
+	'SESSION_STATE_READY'
 ])
 const WEB_VITAL_RATINGS = new Set(['good', 'needs-improvement', 'poor'])
 const DEVICE_GROUPS = new Set(['mobile', 'tablet', 'desktop'])

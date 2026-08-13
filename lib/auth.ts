@@ -110,6 +110,7 @@ export const authConfig = {
 	session: {
 		expiresIn: AUTH_SESSION_POLICY.expiresIn,
 		updateAge: AUTH_SESSION_POLICY.updateAge,
+		freshAge: AUTH_SESSION_POLICY.freshAge,
 		cookieCache: {
 			enabled: true,
 			maxAge: AUTH_SESSION_POLICY.cookieCacheMaxAge

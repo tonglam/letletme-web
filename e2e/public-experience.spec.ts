@@ -194,9 +194,7 @@ test('signed-out League Trends exposes only curated public aggregates on mobile'
 	).toBeVisible()
 	await expect(page.getByText('E2E Public League').first()).toBeVisible()
 	await expect(
-		page.getByText(
-			'Link an FPL entry to add My Leagues. Public Leagues remain available.'
-		)
+		page.getByText('Link an FPL entry to add My Leagues.')
 	).toBeVisible()
 	await expect(
 		page.getByRole('link', { name: 'Saka' }).first()
@@ -283,7 +281,11 @@ test('malformed player history does not break the comparison screen', async ({
 			JSON.stringify({ players: [{ id: 1 }] })
 		)
 	})
-	await page.route('**/api/graphql', route => route.abort('connectionfailed'))
+	let clientDirectoryRequests = 0
+	await page.route('**/api/graphql', route => {
+		clientDirectoryRequests += 1
+		return route.abort('connectionfailed')
+	})
 	await page.goto('/data/player-stats')
 
 	await expect(
@@ -292,12 +294,8 @@ test('malformed player history does not break the comparison screen', async ({
 	await expect(page.getByRole('button', { name: 'Clear recent' })).toHaveCount(
 		0
 	)
-	await expect(
-		page
-			.getByRole('status')
-			.filter({ hasText: 'Failed to load the player directory.' })
-			.first()
-	).toBeVisible()
+	await expect(page.getByRole('button', { name: /Saka/ }).first()).toBeVisible()
+	expect(clientDirectoryRequests).toBe(0)
 })
 
 test('protected tournament creation returns an unauthenticated user to sign-in safely', async ({

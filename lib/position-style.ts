@@ -12,7 +12,7 @@ export function positionBadgeClass(position: string): string {
 		case 'DEF':
 			return 'border-transparent bg-electric text-plum'
 		case 'MID':
-			return 'border-transparent bg-pink text-pink-950'
+			return 'border-transparent bg-pink text-plum'
 		case 'FWD':
 			return 'border-transparent bg-plum text-electric'
 		default:

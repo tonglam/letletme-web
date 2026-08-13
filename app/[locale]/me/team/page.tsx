@@ -31,6 +31,7 @@ import { localizeHref } from '@/i18n/routing'
 import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { Suspense } from 'react'
+import { RouteLoaderTiming } from '@/lib/route-loader-timing'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,18 +69,27 @@ function TeamStatsFallback() {
  * Gameweek deep link: also entryEventResult(seedGw)
  */
 export default async function TeamStatsPage({ params, searchParams }: PageProps) {
-	const { locale } = await getPageLocale(params)
-	const t = await getTranslations('States')
-	const sp = await searchParams
+	const timing = new RouteLoaderTiming('/me/team')
+	const [pageLocale, t, sp, context, events] = await Promise.all([
+		getPageLocale(params),
+		getTranslations('States'),
+		searchParams,
+		timing.measure('session', () => getVerifiedEntryContext()),
+		timing.measure('events', () => getCurrentAndNextEvents())
+	])
+	const { locale } = pageLocale
 	const initialView = parseTeamStatsView(sp.view)
 	const needsGameweekSeed = initialView === 'gameweek'
 
-	const [{ session, entryId }, events] = await Promise.all([
-		getVerifiedEntryContext(),
-		getCurrentAndNextEvents(),
-	])
-	if (!session) redirect(localizeHref('/auth/login?next=/me/team', locale))
-	if (!entryId) redirect(localizeHref('/onboarding/bind-entry', locale))
+	const { session, entryId } = context
+	if (!session) {
+		timing.finish('redirect-login')
+		redirect(localizeHref('/auth/login?next=/me/team', locale))
+	}
+	if (!entryId) {
+		timing.finish('redirect-bind')
+		redirect(localizeHref('/onboarding/bind-entry', locale))
+	}
 
 	const eventsAnchor = resolveReviewGameweekAnchor(events)
 
@@ -96,18 +106,22 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 	try {
 		// History + identity first so we can refine anchor without isCurrent
 		const [historyResult, entryResult] = await Promise.allSettled([
-			executeServerQueryWithSession<EntryHistoryResponse>(
+			timing.measure('history', () =>
+				executeServerQueryWithSession<EntryHistoryResponse>(
 					session,
 					GET_ENTRY_HISTORY,
 					{ entryId },
 					{ cache: 'no-store' },
-				),
-			executeServerQueryWithSession<EntrySummaryResponse>(
+				)
+			),
+			timing.measure('entry', () =>
+				executeServerQueryWithSession<EntrySummaryResponse>(
 					session,
 					GET_ENTRY,
 					{ id: entryId },
 					{ cache: 'no-store' },
-				),
+				)
+			),
 		])
 
 		const historyResponse = historyResult.status === 'fulfilled' ? historyResult.value : null
@@ -135,11 +149,13 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 
 		if (needsGameweekSeed && seedGw > 0) {
 			try {
-				const eventResponse = await executeServerQueryWithSession<EntryEventResultResponse>(
-					session,
-					GET_ENTRY_EVENT_RESULT,
-					{ eventId: seedGw, entryId },
-					{ cache: 'no-store' },
+				const eventResponse = await timing.measure('gameweek', () =>
+					executeServerQueryWithSession<EntryEventResultResponse>(
+						session,
+						GET_ENTRY_EVENT_RESULT,
+						{ eventId: seedGw, entryId },
+						{ cache: 'no-store' }
+					)
 				)
 				initialEntryEventResult = eventResponse.entryEventResult ?? null
 			} catch (error) {
@@ -153,7 +169,6 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 		initialRequestComplete = true
 
 		console.info('[team stats] ssr seed', {
-			entryId,
 			seedGw,
 			view: initialView,
 			currentGw: refined.currentGw,
@@ -172,6 +187,7 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 		console.error('[team stats] Failed to seed page data:', error)
 		initialError = t('teamStatsUnavailable')
 	}
+	timing.finish(initialError ? 'unavailable' : 'ready')
 
 	const seedGwForClient =
 		reviewMaxGw > 0

@@ -14,6 +14,7 @@ export async function Navbar() {
 			<div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3 lg:px-8">
 				<Link
 					href="/"
+					prefetch={false}
 					className="flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric focus-visible:ring-offset-2 focus-visible:ring-offset-fascia"
 				>
 					<LogoMark className="text-electric" />

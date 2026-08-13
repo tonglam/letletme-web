@@ -1,7 +1,20 @@
 import PlayerStatsClient from '@/app/data/player-stats/PlayerStatsClient'
+import {
+	PlayerStatsPersonalSeedCommit,
+	PlayerStatsPersonalSeedProvider
+} from '@/app/data/player-stats/PlayerStatsPersonalSeedContext'
 import { parsePlayerStatsPlayerId } from '@/app/data/player-stats/_lib/player-stats-url'
+import PageShell from '@/components/layout/PageShell'
+import { GameweekBadge } from '@/components/stats/GameweekBadge'
+import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import { loadPlayerStatsPersonalSeed } from '@/lib/player-stats-seed'
+import {
+	loadPlayerDirectorySeed,
+	loadPlayerStatsPersonalSeed,
+	type PlayerStatsPersonalSeed
+} from '@/lib/player-stats-seed'
+import { getTranslations } from 'next-intl/server'
+import { Suspense } from 'react'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +33,14 @@ export async function generateMetadata({ params }: PageProps) {
 	})
 }
 
+async function PersonalSeedStream({
+	seedPromise
+}: {
+	seedPromise: Promise<PlayerStatsPersonalSeed | null>
+}) {
+	return <PlayerStatsPersonalSeedCommit seed={await seedPromise} />
+}
+
 export default async function PlayerStatsPage({
 	params,
 	searchParams
@@ -33,30 +54,46 @@ export default async function PlayerStatsPage({
 			? parsedP2
 			: null
 
-	const seed = await loadPlayerStatsPersonalSeed().catch(error => {
+	const personalSeedPromise = loadPlayerStatsPersonalSeed().catch(error => {
 		console.error('[player-stats] personal seed failed:', error)
 		return null
 	})
-
-	// Picker and player detail remain useful when optional personal seed data is
-	// unavailable (for example during preseason or a transient market outage).
-	// The client will show empty squad/market context instead of blocking the
-	// public Player Stats page.
-	const safeSeed = seed ?? {
-		anchorGw: 1,
-		anchorSource: 'none' as const,
-		mySquadPicks: [],
-		marketCompareCandidates: [],
-		seasonStatsAvailable: false
-	}
+	const [directorySeed, t] = await Promise.all([
+		loadPlayerDirectorySeed(),
+		getTranslations('PlayerStats')
+	])
+	const initialPlayerIds = { p1: initialP1, p2: initialP2 }
 
 	return (
-		<PlayerStatsClient
-			anchorGw={safeSeed.anchorGw}
-			initialPlayerIds={{ p1: initialP1, p2: initialP2 }}
-			mySquadPicks={safeSeed.mySquadPicks}
-			marketCompareCandidates={safeSeed.marketCompareCandidates}
-			seasonStatsAvailable={safeSeed.seasonStatsAvailable}
-		/>
+		<PageShell>
+			<div className="container mx-auto max-w-6xl px-4 py-8">
+				<StatsPageHeader
+					title={t('title')}
+					badge={
+						<GameweekBadge
+							gameweek={directorySeed.anchorGw}
+							label={
+								directorySeed.seasonStatsAvailable
+									? undefined
+									: t('preseasonLabel')
+							}
+						/>
+					}
+				/>
+				<p className="-mt-4 mb-6 max-w-2xl text-sm leading-6 text-muted-foreground">
+					{t('pageIntro')}
+				</p>
+
+				<PlayerStatsPersonalSeedProvider>
+					<PlayerStatsClient
+						directorySeed={directorySeed}
+						initialPlayerIds={initialPlayerIds}
+					/>
+					<Suspense fallback={null}>
+						<PersonalSeedStream seedPromise={personalSeedPromise} />
+					</Suspense>
+				</PlayerStatsPersonalSeedProvider>
+			</div>
+		</PageShell>
 	)
 }

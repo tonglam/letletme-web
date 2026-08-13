@@ -3,6 +3,12 @@ import type { EventsResponse } from '@/lib/graphql/operations/events'
 import { squadMatchKey } from '@/lib/fixtures-fdr'
 import { resolveReviewGameweekAnchor } from '@/lib/review-gameweek'
 
+export type SquadLoadState =
+	| 'ready'
+	| 'not-published'
+	| 'unbound'
+	| 'unavailable'
+
 export type SquadPickSeed = {
 	elementId: number | null
 	webName: string

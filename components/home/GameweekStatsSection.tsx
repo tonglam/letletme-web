@@ -66,6 +66,7 @@ function GameweekStatsCard({
 				</div>
 				<Link
 					href="/data/selections"
+					prefetch={false}
 					className="inline-flex min-h-9 shrink-0 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
 				>
 					{t('viewSelections')}

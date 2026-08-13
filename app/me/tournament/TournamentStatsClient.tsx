@@ -203,7 +203,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 				<StatsPageHeader title={t('title')} />
 
 				{error ? (
-					<Alert variant="destructive" className="mb-6">
+					<Alert variant="destructive" className="mb-6" role="alert">
 						<AlertCircle aria-hidden="true" />
 						<AlertDescription>{error}</AlertDescription>
 					</Alert>
@@ -218,7 +218,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 				/>
 
 				{!selectedTournament ? (
-					<Card className="border-border/80 p-6 shadow-sm">
+					<Card className="border-border/80 p-6 shadow-sm" role="status">
 						<p className="text-sm text-muted-foreground">{t('noLinked')}</p>
 					</Card>
 				) : !insightsReady ? (

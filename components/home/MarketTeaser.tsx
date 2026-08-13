@@ -215,7 +215,7 @@ export async function MarketTeaser() {
 								asChild
 								className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-[0.08em]"
 							>
-								<Link href="/data/market">
+								<Link href="/data/market" prefetch={false}>
 									{t('openMarket')} <ArrowRight aria-hidden="true" />
 								</Link>
 							</Button>

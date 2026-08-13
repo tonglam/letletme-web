@@ -281,6 +281,7 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 			<div className="flex flex-wrap items-center gap-2">
 				<Link
 					href="/live/matches"
+					prefetch={false}
 					className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
 				>
 					{t('viewLiveMatches')}

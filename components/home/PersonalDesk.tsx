@@ -115,7 +115,7 @@ export async function PersonalDeskBindPrompt() {
 					className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-[0.1em]"
 					asChild
 				>
-					<Link href="/onboarding/bind-entry">
+					<Link href="/onboarding/bind-entry" prefetch={false}>
 						{t('bindEntryCta')}
 						<ArrowRight data-icon="inline-end" />
 					</Link>

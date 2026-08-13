@@ -13,7 +13,7 @@ import {
 	type Fixture,
 } from '@/lib/graphql/operations/events'
 import type { MarketPulse } from '@/lib/graphql/operations/market'
-import type { SquadPickSeed } from '@/lib/squad-picks'
+import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
 import { buildSquadTeamExposure } from '@/lib/squad-picks'
 import {
 	buildFdrDeskModel,
@@ -389,6 +389,7 @@ export default function FixturesClient({
 	mySquadKeys = [],
 	mySquadPicks = [],
 	hasLinkedEntry = false,
+	squadState = hasLinkedEntry ? 'not-published' : 'unbound',
 }: {
 	fromGw: number
 	initialHorizon?: FdrHorizon
@@ -399,6 +400,7 @@ export default function FixturesClient({
 	mySquadKeys?: string[]
 	mySquadPicks?: SquadPickSeed[]
 	hasLinkedEntry?: boolean
+	squadState?: SquadLoadState
 }) {
 	const t = useTranslations('Fixtures')
 
@@ -749,6 +751,7 @@ export default function FixturesClient({
 						fromGw={fromGw}
 						horizon={horizon}
 						hasLinkedEntry={hasLinkedEntry}
+						squadState={squadState}
 					/>
 				</section>
 
@@ -839,8 +842,10 @@ export default function FixturesClient({
 						<p className="max-w-sm text-[11px] leading-4 text-muted-foreground">
 							{squadKeySet.size > 0 ? (
 								t('actionsMySquadNote', { gw: fromGw })
-							) : hasLinkedEntry ? (
+							) : squadState === 'unavailable' ? (
 								t('actionsMySquadLoadFailed')
+							) : squadState === 'not-published' ? (
+								t('mySquadNotPublished')
 							) : (
 								<>
 									{t('actionsMySquadEmpty')}{' '}

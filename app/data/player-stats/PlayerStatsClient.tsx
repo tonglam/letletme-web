@@ -1,16 +1,15 @@
 'use client'
 
-import PageShell from '@/components/layout/PageShell'
-import { GameweekBadge } from '@/components/stats/GameweekBadge'
-import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
-import type { MarketCompareCandidate } from '@/lib/market-compare'
-import type { SquadPickSeed } from '@/lib/squad-picks'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
+import type { PlayerDirectorySeed } from '@/lib/player-directory-seed'
 import { positionCodeFromElementTypeName } from '@/lib/squad-picks'
+import { cn } from '@/lib/utils'
+import dynamic from 'next/dynamic'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MySquadRail } from './_components/MySquadRail'
 import { PlayerSelectionPanel } from './_components/PlayerSelectionPanel'
-import { PlayerStatsView } from './_components/PlayerStatsView'
+import { usePlayerStatsPersonalSeed } from './PlayerStatsPersonalSeedContext'
 import { usePlayerDetailSlot } from './_hooks/usePlayerDetailSlot'
 import {
 	buildPlayerStatsQueryString,
@@ -20,20 +19,33 @@ import {
 const RECENT_PLAYERS_KEY_1 = 'player-stats-recent-1'
 const RECENT_PLAYERS_KEY_2 = 'player-stats-recent-2'
 
+const PlayerStatsView = dynamic(
+	() =>
+		import('./_components/PlayerStatsView').then(module => module.PlayerStatsView),
+	{
+		loading: () => (
+			<div
+				className="min-h-72 animate-pulse rounded-xl border border-border/70 bg-muted/20"
+				role="status"
+				aria-label="Loading player details"
+			/>
+		)
+	}
+)
+
 export default function PlayerStatsClient({
-	anchorGw,
 	initialPlayerIds,
-	mySquadPicks = [],
-	marketCompareCandidates = [],
-	seasonStatsAvailable
+	directorySeed
 }: {
-	anchorGw: number
 	initialPlayerIds: { p1: number | null; p2: number | null }
-	mySquadPicks?: SquadPickSeed[]
-	marketCompareCandidates?: MarketCompareCandidate[]
-	seasonStatsAvailable: boolean
+	directorySeed: PlayerDirectorySeed
 }) {
 	const t = useTranslations('PlayerStats')
+	const { seed: personalSeed, resolved: personalSeedResolved } =
+		usePlayerStatsPersonalSeed()
+	const { anchorGw, seasonStatsAvailable } = directorySeed
+	const mySquadPicks = personalSeed?.mySquadPicks ?? []
+	const marketCompareCandidates = personalSeed?.marketCompareCandidates
 	const firstPlayer = usePlayerDetailSlot({
 		storageKey: RECENT_PLAYERS_KEY_1,
 		eventId: anchorGw
@@ -158,7 +170,7 @@ export default function PlayerStatsClient({
 	const marketSuggestions = useMemo(() => {
 		if (!playerOnePositionCode) return []
 		const excludeId = firstSelectedPlayerId
-		return marketCompareCandidates
+		return (marketCompareCandidates ?? [])
 			.filter(c => c.positionCode === playerOnePositionCode)
 			.filter(c => excludeId == null || String(c.playerId) !== excludeId)
 			.slice(0, 8)
@@ -187,28 +199,59 @@ export default function PlayerStatsClient({
 	const pickerStatsAvailable =
 		firstPlayer.playerDetail?.statsContext.scope === 'CURRENT_SEASON' ||
 		(firstPlayer.playerDetail == null && seasonStatsAvailable)
+	const personalSeedReady =
+		personalSeedResolved && personalSeed?.squadState === 'ready'
+	const personalStatus = !personalSeedResolved
+		? null
+		: personalSeed?.squadState === 'not-published'
+			? t('squadNotPublished')
+			: personalSeed?.squadState === 'unbound'
+				? t('squadUnbound')
+				: t('personalContextUnavailable')
 
 	return (
-		<PageShell>
-			<div className="container mx-auto max-w-6xl px-4 py-8">
-				<StatsPageHeader
-					title={t('title')}
-					badge={
-						<GameweekBadge
-							gameweek={anchorGw}
-							label={seasonStatsAvailable ? undefined : t('preseasonLabel')}
-						/>
+		<>
+				<RouteReadyMarker
+					name="PLAYER_DIRECTORY_READY"
+					audienceHint="public"
+					goodMs={3_000}
+					poorMs={4_500}
+				/>
+				<RouteReadyMarker
+					name="PLAYER_DETAIL_READY"
+					ready={Boolean(firstPlayer.playerDetail)}
+					audienceHint="public"
+					goodMs={3_500}
+					poorMs={5_000}
+				/>
+				<div
+					className={cn(
+						'mb-4 h-44 overflow-y-auto rounded-lg border border-border/60 px-3 py-3 sm:h-36',
+						personalSeedReady
+							? 'bg-muted/10'
+							: 'flex items-center text-sm text-muted-foreground',
+						!personalSeedResolved && 'animate-pulse bg-muted/20'
+					)}
+					aria-busy={!personalSeedResolved}
+					role={
+						personalSeedReady
+							? undefined
+							: personalSeed?.squadState === 'unavailable'
+								? 'alert'
+								: 'status'
 					}
-				/>
-				<p className="-mt-4 mb-6 max-w-2xl text-sm leading-6 text-muted-foreground">
-					{t('pageIntro')}
-				</p>
-
-				<MySquadRail
-					picks={mySquadPicks}
-					selectedPlayerId={firstPlayer.selectedPlayer?.id}
-					onSelect={handleSquadSelect}
-				/>
+					aria-label={
+						personalSeedResolved ? undefined : t('personalContextLoading')
+					}
+				>
+					{personalSeedReady ? (
+						<MySquadRail
+							picks={mySquadPicks}
+							selectedPlayerId={firstPlayer.selectedPlayer?.id}
+							onSelect={handleSquadSelect}
+						/>
+					) : personalStatus}
+				</div>
 
 				<PlayerSelectionPanel
 					first={{
@@ -222,6 +265,7 @@ export default function PlayerStatsClient({
 					onAddCompare={() => setCompareOpen(true)}
 					canCompare={Boolean(firstPlayer.playerDetail)}
 					statsAvailable={pickerStatsAvailable}
+					directorySeed={directorySeed}
 					marketSuggestions={compareOpen ? marketSuggestions : undefined}
 					onSelectMarketSuggestion={handleMarketSuggestionSelect}
 					second={
@@ -241,6 +285,10 @@ export default function PlayerStatsClient({
 					}
 				/>
 
+				{initialPlayerIds.p1 != null ||
+				firstPlayer.selectedPlayer ||
+				firstPlayer.isLoading ||
+				firstPlayer.error ? (
 				<PlayerStatsView
 					selectedPlayer={firstPlayer.selectedPlayer}
 					selectedComparison={secondPlayer.selectedPlayer}
@@ -271,7 +319,7 @@ export default function PlayerStatsClient({
 					anchorGw={anchorGw}
 					seasonStatsAvailable={seasonStatsAvailable}
 				/>
-			</div>
-		</PageShell>
+				) : null}
+		</>
 	)
 }

@@ -18,6 +18,12 @@ import {
 	type Fixture
 } from '@/lib/graphql/operations/events'
 import {
+	GET_TEAMS_FOR_PICKER,
+	SEARCH_PLAYERS_FOR_PICKER,
+	type PlayerSearchForPickerResponse,
+	type TeamsForPickerResponse
+} from '@/lib/graphql/operations/players'
+import {
 	GET_MARKET_PULSE,
 	type MarketPulseResponse
 } from '@/lib/graphql/operations/market'
@@ -32,13 +38,91 @@ import {
 } from '@/lib/review-gameweek'
 import type { SquadPickSeed } from '@/lib/squad-picks'
 import { getVerifiedEntryContext } from '@/lib/session'
+import {
+	buildPlayerDirectoryQueryKey,
+	type PlayerDirectorySeed,
+	type PlayerDirectorySeasonState
+} from '@/lib/player-directory-seed'
 
 export type PlayerStatsPersonalSeed = {
 	anchorGw: number
 	anchorSource: ReviewGameweekAnchorSource
 	mySquadPicks: SquadPickSeed[]
+	squadState: 'ready' | 'not-published' | 'unbound' | 'unavailable'
 	marketCompareCandidates: MarketCompareCandidate[]
 	seasonStatsAvailable: boolean
+}
+
+const PLAYER_DIRECTORY_SEED_SIZE = 20
+
+function seasonContext(events: Awaited<ReturnType<typeof getCurrentAndNextEvents>>) {
+	const review = resolveReviewGameweekAnchor(events)
+	const anchorGw = review.anchorGw ?? 1
+	const seasonStatsAvailable =
+		review.currentGw != null ||
+		(review.source === 'next-derived' && anchorGw > 1) ||
+		review.source === 'history'
+	const seasonState: PlayerDirectorySeasonState = seasonStatsAvailable
+		? 'active'
+		: events?.next?.length
+			? 'preseason'
+			: 'unavailable'
+	return { anchorGw, seasonStatsAvailable, seasonState }
+}
+
+export async function loadPlayerDirectorySeed(): Promise<PlayerDirectorySeed> {
+	const eventsPromise = getCurrentAndNextEvents()
+	const teamsPromise = executePublicServerQuery<TeamsForPickerResponse>(
+		GET_TEAMS_FOR_PICKER,
+		undefined,
+		publicFetchOptions({
+			revalidate: RevalidateSeconds.publicStats,
+			tags: [CacheTag.gameweekStats]
+		})
+	)
+	const { seasonStatsAvailable } = seasonContext(await eventsPromise)
+	const sortBy = seasonStatsAvailable ? 'total_desc' : 'own_desc'
+	const playersPromise = executePublicServerQuery<PlayerSearchForPickerResponse>(
+		SEARCH_PLAYERS_FOR_PICKER,
+		{
+			search: null,
+			filter: null,
+			sort: seasonStatsAvailable ? 'TOTAL_POINTS_DESC' : 'OWNERSHIP_DESC',
+			ownershipBand: null,
+			limit: PLAYER_DIRECTORY_SEED_SIZE,
+			cursor: null
+		},
+		publicFetchOptions({
+			revalidate: RevalidateSeconds.publicStats,
+			tags: [CacheTag.gameweekStats]
+		})
+	)
+	const [events, teams, players] = await Promise.all([
+		eventsPromise,
+		teamsPromise,
+		playersPromise
+	])
+	const context = seasonContext(events)
+
+	return {
+		teams: [...teams.teams].sort((a, b) =>
+			a.shortName.localeCompare(b.shortName)
+		),
+		players: players.playersForPicker.items,
+		totalCount: players.playersForPicker.totalCount,
+		nextCursor: players.playersForPicker.nextCursor,
+		queryKey: buildPlayerDirectoryQueryKey({
+			search: null,
+			teamId: null,
+			position: null,
+			maxPrice: null,
+			sortBy,
+			ownBand: 'ANY'
+		}),
+		seasonState: context.seasonState,
+		anchorGw: context.anchorGw,
+		seasonStatsAvailable: context.seasonStatsAvailable
+	}
 }
 
 async function fetchEventFixtures(eventId: number): Promise<Fixture[]> {
@@ -73,7 +157,7 @@ export async function loadPlayerStatsPersonalSeed(
 		(_, i) => anchorGw + i
 	).filter(id => id >= 1 && id <= 38)
 
-	const [fixtureListsResult, market, mySquadPicks] = await Promise.all([
+	const [fixtureListsResult, market, squadResult] = await Promise.all([
 		Promise.allSettled(eventIds.map(id => fetchEventFixtures(id))),
 		executePublicServerQuery<MarketPulseResponse>(
 			GET_MARKET_PULSE,
@@ -87,11 +171,24 @@ export async function loadPlayerStatsPersonalSeed(
 			return null
 		}),
 		entryId != null && session
-			? loadEntrySquadPicks(session, entryId, events).catch(err => {
-					console.error('[player-stats-seed] entry picks failed:', err)
-					return [] as SquadPickSeed[]
+			? loadEntrySquadPicks(session, entryId, events)
+					.then(picks => ({
+						picks,
+						state: (picks.length > 0
+							? 'ready'
+							: 'not-published') as PlayerStatsPersonalSeed['squadState']
+					}))
+					.catch(err => {
+						console.error('[player-stats-seed] entry picks failed:', err)
+						return {
+							picks: [] as SquadPickSeed[],
+							state: 'unavailable' as const
+						}
+					})
+			: Promise.resolve({
+					picks: [] as SquadPickSeed[],
+					state: 'unbound' as const
 				})
-			: Promise.resolve([] as SquadPickSeed[])
 	])
 
 	const fixturesByEvent = new Map<number, Fixture[]>()
@@ -113,7 +210,8 @@ export async function loadPlayerStatsPersonalSeed(
 	return {
 		anchorGw,
 		anchorSource: review.source,
-		mySquadPicks,
+		mySquadPicks: squadResult.picks,
+		squadState: squadResult.state,
 		marketCompareCandidates: buildMarketCompareCandidates(model),
 		seasonStatsAvailable
 	}

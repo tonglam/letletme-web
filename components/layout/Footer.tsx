@@ -45,6 +45,7 @@ export async function Footer() {
 									<li key={`${group.id}-${link.labelKey}`}>
 										<Link
 											href={link.href}
+											prefetch={false}
 											className="text-sm text-fascia-foreground/60 underline-offset-4 transition-colors hover:text-electric hover:underline"
 										>
 											{nav(link.labelKey)}

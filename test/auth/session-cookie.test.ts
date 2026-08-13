@@ -29,6 +29,11 @@ describe('session configuration', () => {
 		assert.ok(AUTH_SESSION_POLICY.updateAge < AUTH_SESSION_POLICY.expiresIn)
 	})
 
+	it('requires reauthentication for sensitive actions after 24 hours', () => {
+		assert.equal(AUTH_SESSION_POLICY.freshAge, 60 * 60 * 24)
+		assert.notEqual(AUTH_SESSION_POLICY.freshAge, 0)
+	})
+
 	it('cookie cache stays within the Better Auth 5-minute prompt-cache TTL', () => {
 		assert.equal(AUTH_SESSION_POLICY.cookieCacheMaxAge, 5 * 60)
 	})

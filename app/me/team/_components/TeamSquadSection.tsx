@@ -260,6 +260,15 @@ function SquadGroup({
 /** Live-points-style squad: card rows with fixture + mini stats. */
 export function TeamSquadSection({ picks }: { picks: EventPickViewModel[] }) {
 	const t = useTranslations('TeamStats')
+	if (picks.length === 0) {
+		return (
+			<StatsSectionCard icon={Users} title={t('gameweekSquad')}>
+				<p className="text-sm text-muted-foreground" role="status">
+					{t('noPicks')}
+				</p>
+			</StatsSectionCard>
+		)
+	}
 	const starters = picks.filter(isSquadStarter)
 	const bench = picks.filter(pick => !isSquadStarter(pick))
 
