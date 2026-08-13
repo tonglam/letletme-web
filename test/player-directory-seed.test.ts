@@ -58,6 +58,7 @@ describe('PlayerDirectorySeed', () => {
 		assert.match(loaderSource, /playersState:/)
 		assert.match(pickerSource, /seed\?\.playersState === 'ready'/)
 		assert.match(pickerSource, /seed\?\.teamsState === 'ready'/)
+		assert.match(pickerSource, /onReady\?\.\(\)/)
 		assert.match(pickerSource, /role="alert"/)
 	})
 })

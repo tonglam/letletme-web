@@ -98,12 +98,6 @@ export default async function FixturesPage({ params }: PageProps) {
 			}),
 			entryId != null && session
 				? loadEntrySquadPicks(session, entryId, events)
-						.then(picks => ({
-							picks,
-							state: (picks.length > 0
-								? 'ready'
-								: 'not-published') as SquadLoadState
-						}))
 						.catch(err => {
 							console.error('[fixtures] entry picks seed failed:', err)
 							return {

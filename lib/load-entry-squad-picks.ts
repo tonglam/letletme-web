@@ -11,8 +11,10 @@ import {
 } from '@/lib/graphql/operations/entries'
 import { resolveSquadPickElementIds } from '@/lib/squad-pick-resolve'
 import {
+	classifyEntrySquadPicks,
 	squadPickEventCandidates,
 	squadPicksFromEntry,
+	type EntrySquadPicksResult,
 	type SquadPickSeed,
 } from '@/lib/squad-picks'
 
@@ -20,16 +22,20 @@ export async function loadEntrySquadPicks(
 	session: Session,
 	entryId: number,
 	events: EventsResponse | null | undefined,
-): Promise<SquadPickSeed[]> {
-	const history = await executeServerQueryWithSession<EntryHistoryResponse>(
-		session,
-		GET_ENTRY_HISTORY,
-		{ entryId },
-		{ cache: 'no-store' },
-	).catch(err => {
+): Promise<EntrySquadPicksResult> {
+	let requestFailed = false
+	let history: EntryHistoryResponse | null = null
+	try {
+		history = await executeServerQueryWithSession<EntryHistoryResponse>(
+			session,
+			GET_ENTRY_HISTORY,
+			{ entryId },
+			{ cache: 'no-store' }
+		)
+	} catch (err) {
+		requestFailed = true
 		console.error('[squad-picks] entry history failed:', err)
-		return null
-	})
+	}
 
 	const historyResults = history?.entryHistory?.results ?? []
 	const historyEventIds = historyResults
@@ -38,23 +44,32 @@ export async function loadEntrySquadPicks(
 	const candidates = squadPickEventCandidates(events, historyEventIds)
 
 	for (const eventId of candidates) {
-		const result = await executeServerQueryWithSession<EntryEventResultResponse>(
-			session,
-			GET_ENTRY_EVENT_RESULT,
-			{ entryId, eventId },
-			{ cache: 'no-store' },
-		).catch(err => {
+		let result: EntryEventResultResponse
+		try {
+			result = await executeServerQueryWithSession<EntryEventResultResponse>(
+				session,
+				GET_ENTRY_EVENT_RESULT,
+				{ entryId, eventId },
+				{ cache: 'no-store' }
+			)
+		} catch (err) {
+			requestFailed = true
 			console.error(`[squad-picks] entry event ${eventId} failed:`, err)
-			return null
-		})
+			continue
+		}
 
-		const picks = result?.entryEventResult?.eventPicks ?? []
+		const picks = result.entryEventResult?.eventPicks ?? []
 		if (picks.length > 0) {
-			let seeds = squadPicksFromEntry(picks)
-			seeds = await resolveSquadPickElementIds(seeds)
-			return seeds
+			try {
+				let seeds: SquadPickSeed[] = squadPicksFromEntry(picks)
+				seeds = await resolveSquadPickElementIds(seeds)
+				return classifyEntrySquadPicks(seeds, requestFailed)
+			} catch (err) {
+				console.error('[squad-picks] player identity resolution failed:', err)
+				return classifyEntrySquadPicks([], true)
+			}
 		}
 	}
 
-	return []
+	return classifyEntrySquadPicks([], requestFailed)
 }

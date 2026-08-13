@@ -201,12 +201,6 @@ export async function loadPlayerStatsPersonalSeed(
 		}),
 		entryId != null && session
 			? loadEntrySquadPicks(session, entryId, events)
-					.then(picks => ({
-						picks,
-						state: (picks.length > 0
-							? 'ready'
-							: 'not-published') as PlayerStatsPersonalSeed['squadState']
-					}))
 					.catch(err => {
 						console.error('[player-stats-seed] entry picks failed:', err)
 						return {

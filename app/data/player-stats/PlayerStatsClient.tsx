@@ -66,6 +66,10 @@ export default function PlayerStatsClient({
 	const secondSelectedPlayerId = secondPlayer.selectedPlayer?.id
 	const [compareOpen, setCompareOpen] = useState(false)
 	const [deepLinkReady, setDeepLinkReady] = useState(false)
+	const [directoryReady, setDirectoryReady] = useState(
+		directorySeed.playersState === 'ready'
+	)
+	const handleDirectoryReady = useCallback(() => setDirectoryReady(true), [])
 	const deepLinkKey = `${initialPlayerIds.p1 ?? ''}:${initialPlayerIds.p2 ?? ''}`
 	const deepLinkKeyRef = useRef<string | null>(null)
 
@@ -215,7 +219,7 @@ export default function PlayerStatsClient({
 		<>
 			<RouteReadyMarker
 				name="PLAYER_DIRECTORY_READY"
-				ready={directorySeed.playersState === 'ready'}
+				ready={directoryReady}
 				audienceHint="public"
 				goodMs={3_000}
 				poorMs={4_500}
@@ -271,6 +275,7 @@ export default function PlayerStatsClient({
 				canCompare={Boolean(firstPlayer.playerDetail)}
 				statsAvailable={pickerStatsAvailable}
 				directorySeed={directorySeed}
+				onDirectoryReady={handleDirectoryReady}
 				marketSuggestions={compareOpen ? marketSuggestions : undefined}
 				onSelectMarketSuggestion={handleMarketSuggestionSelect}
 				second={

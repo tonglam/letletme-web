@@ -23,6 +23,7 @@ interface PlayerSlotProps {
 	onClearRecent: () => void
 	onClearSelection?: () => void
 	onCancel?: () => void
+	onDirectoryReady?: () => void
 }
 
 function RecentPlayers({
@@ -127,6 +128,7 @@ function PlayerSlot({
 	onClearRecent,
 	onClearSelection,
 	onCancel,
+	onDirectoryReady,
 	suggestions,
 	suggestionsLabel,
 	onSelectSuggestion
@@ -197,6 +199,7 @@ function PlayerSlot({
 				defaultPosition={defaultPosition}
 				statsAvailable={statsAvailable}
 				seed={directorySeed}
+				onReady={onDirectoryReady}
 			/>
 			<RecentPlayers
 				players={recentPlayers}
@@ -261,7 +264,8 @@ export function PlayerSelectionPanel({
 	onSelectMarketSuggestion,
 	canCompare,
 	statsAvailable,
-	directorySeed
+	directorySeed,
+	onDirectoryReady
 }: {
 	first: Omit<PlayerSlotProps, 'label' | 'optional'>
 	compareOpen: boolean
@@ -270,6 +274,7 @@ export function PlayerSelectionPanel({
 	canCompare: boolean
 	statsAvailable?: boolean
 	directorySeed: PlayerDirectorySeed
+	onDirectoryReady?: () => void
 	marketSuggestions?: Array<{
 		id: string
 		name: string
@@ -315,6 +320,7 @@ export function PlayerSelectionPanel({
 						statsAvailable={statsAvailable}
 						{...first}
 						directorySeed={directorySeed}
+						onDirectoryReady={onDirectoryReady}
 						onSelect={selectFirst}
 						onCancel={
 							first.selectedPlayer ? () => setEditingSlot(null) : undefined

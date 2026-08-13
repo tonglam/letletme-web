@@ -87,6 +87,7 @@ interface PlayerDirectoryPickerProps {
 	defaultPosition?: Position | null
 	statsAvailable?: boolean
 	seed?: PlayerDirectorySeed
+	onReady?: () => void
 }
 
 const directoryPositionToShort = (
@@ -207,7 +208,8 @@ export function PlayerDirectoryPicker({
 	className = '',
 	defaultPosition = null,
 	statsAvailable = true,
-	seed
+	seed,
+	onReady
 }: PlayerDirectoryPickerProps) {
 	const t = useTranslations('PlayerDirectory')
 	const [teams, setTeams] = useState<TeamDirectoryOption[]>(() =>
@@ -373,6 +375,7 @@ export function PlayerDirectoryPicker({
 				setPlayers(result.playersForPicker.items.map(toPickerPlayer))
 				setTotalPlayers(result.playersForPicker.totalCount)
 				setRateLimitSeconds(0)
+				onReady?.()
 				nextPlayersQueryKeyRef.current = playerQueryKey
 				setNextPlayersQueryKey(playerQueryKey)
 				setNextPlayersCursor(result.playersForPicker.nextCursor)
@@ -426,7 +429,8 @@ export function PlayerDirectoryPicker({
 		sortBy,
 		ownBand,
 		playerQueryKey,
-		t
+		t,
+		onReady
 	])
 
 	const excludedIds = useMemo(
