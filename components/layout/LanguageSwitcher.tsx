@@ -11,16 +11,16 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
 	isAppLocale,
-	LANGUAGE_COOKIE,
-	localizeHref,
 	stripLocaleFromHref,
 } from '@/i18n/routing'
+import { useRouter } from '@/i18n/navigation'
 import { Languages } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 export function LanguageSwitcher() {
 	const locale = useLocale()
+	const router = useRouter()
 	const t = useTranslations('Language')
 	const [isPending, setIsPending] = useState(false)
 
@@ -29,10 +29,9 @@ export function LanguageSwitcher() {
 
 		setIsPending(true)
 		const currentHref = `${window.location.pathname}${window.location.search}${window.location.hash}`
-		const destination = localizeHref(stripLocaleFromHref(currentHref), nextLocale)
-		const secure = window.location.protocol === 'https:' ? '; Secure' : ''
-		document.cookie = `${LANGUAGE_COOKIE.name}=${encodeURIComponent(nextLocale)}; Path=/; Max-Age=${LANGUAGE_COOKIE.maxAge}; SameSite=Lax${secure}`
-		window.location.replace(destination)
+		// Use next-intl's locale-aware navigation so it synchronizes NEXT_LOCALE
+		// before Next.js can reuse a cached RSC segment from the previous locale.
+		router.replace(stripLocaleFromHref(currentHref), { locale: nextLocale })
 	}
 
 	return (

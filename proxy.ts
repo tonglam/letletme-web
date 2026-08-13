@@ -147,7 +147,6 @@ export async function proxy(req: NextRequest) {
 		i18nResponse = handleI18nRouting(req)
 		if (i18nResponse.headers.has('location')) return i18nResponse
 	}
-
 	const internalUrl = new URL(
 		i18nResponse.headers.get('x-middleware-rewrite') ?? req.url
 	)
