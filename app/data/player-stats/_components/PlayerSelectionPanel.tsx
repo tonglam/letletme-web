@@ -150,7 +150,7 @@ function PlayerSlot({
 				<p className="font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
 					{label}
 					{optional ? (
-						<span className="ml-1 font-sans text-[10px] font-normal normal-case tracking-normal text-muted-foreground/80">
+						<span className="ml-1 font-sans text-[10px] font-normal normal-case tracking-normal text-muted-foreground">
 							{t('optionalSuffix')}
 						</span>
 					) : null}
@@ -232,26 +232,46 @@ function CompactPlayerSlot({
 	const t = useTranslations('PlayerStats')
 	return (
 		<div className="flex min-w-0 items-center gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-3">
-		<div className="min-w-0 flex-1">
-			<p className="font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-				{label}
-			</p>
-			<p className="truncate text-sm font-medium">
-				{player.name}{' '}
-				<span className="text-muted-foreground">· {player.teamShortName}</span>
-			</p>
-		</div>
-		<Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={onEdit}>
-			<Pencil className="size-3.5" aria-hidden="true" />
-			{t('editPlayer')}
-		</Button>
-		{onRemove ? (
-			<Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={onRemove}>
-				<X className="size-3.5" aria-hidden="true" />
-				{t('remove')}
+			<div className="min-w-0 flex-1">
+				<p className="font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+					{label}
+				</p>
+				<p className="truncate text-sm font-medium">
+					{player.name}{' '}
+					<span className="text-muted-foreground">
+						· {player.teamShortName}
+					</span>
+				</p>
+			</div>
+			<Button
+				type="button"
+				variant="outline"
+				size="sm"
+				className="h-8 gap-1.5"
+				onClick={onEdit}
+			>
+				<Pencil
+					className="size-3.5"
+					aria-hidden="true"
+				/>
+				{t('editPlayer')}
 			</Button>
-		) : null}
-	</div>
+			{onRemove ? (
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					className="h-8 px-2"
+					onClick={onRemove}
+				>
+					<X
+						className="size-3.5"
+						aria-hidden="true"
+					/>
+					{t('remove')}
+				</Button>
+			) : null}
+		</div>
 	)
 }
 
@@ -289,7 +309,9 @@ export function PlayerSelectionPanel({
 	)
 	const firstExpanded = !first.selectedPlayer || editingSlot === 'first'
 	const secondExpanded = Boolean(
-		compareOpen && second && (!second.selectedPlayer || editingSlot === 'second')
+		compareOpen &&
+		second &&
+		(!second.selectedPlayer || editingSlot === 'second')
 	)
 	const selectFirst = (player: PlayerDirectoryOption) => {
 		first.onSelect(player)

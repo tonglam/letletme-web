@@ -5,44 +5,38 @@ import {
 	publicFetchOptions,
 	RevalidateSeconds
 } from '@/lib/cache-policy'
+import { CORE_AUTHORITY_FETCH_OPTIONS } from '@/lib/core-authority-cache-policy'
 import {
 	buildFdrDeskModel,
 	DEFAULT_FDR_HORIZON,
 	type FdrHorizon
 } from '@/lib/fixtures-fdr'
-import { getCurrentAndNextEvents } from '@/lib/events'
+import { loadFixtureWindow } from '@/lib/fixture-window-server'
 import { executePublicServerQuery } from '@/lib/graphql-server'
+import type { EventsResponse } from '@/lib/graphql/operations/events'
 import {
-	GET_EVENT_FIXTURES,
-	type EventFixturesResponse,
-	type Fixture
-} from '@/lib/graphql/operations/events'
-import {
-	GET_TEAMS_FOR_PICKER,
-	SEARCH_PLAYERS_FOR_PICKER,
-	type PlayerSearchForPickerResponse,
-	type TeamsForPickerResponse
-} from '@/lib/graphql/operations/players'
-import {
-	GET_MARKET_PULSE,
-	type MarketPulseResponse
+	GET_FIXTURE_PLANNING_SIGNALS,
+	type FixturePlanningSignalsResponse
 } from '@/lib/graphql/operations/market'
+import {
+	GET_PLAYER_STATS_BOOTSTRAP,
+	type CoreEventContextData,
+	type PlayerStatsBootstrapResponse
+} from '@/lib/graphql/operations/players'
 import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
 import {
 	buildMarketCompareCandidates,
 	type MarketCompareCandidate
 } from '@/lib/market-compare'
 import {
-	resolveReviewGameweekAnchor,
-	type ReviewGameweekAnchorSource
-} from '@/lib/review-gameweek'
-import type { SquadPickSeed } from '@/lib/squad-picks'
-import { getVerifiedEntryContext } from '@/lib/session'
-import {
 	buildPlayerDirectoryQueryKey,
 	type PlayerDirectorySeed,
 	type PlayerDirectorySeasonState
 } from '@/lib/player-directory-seed'
+import type { RequestTiming } from '@/lib/request-timing'
+import type { ReviewGameweekAnchorSource } from '@/lib/review-gameweek'
+import type { SquadPickSeed } from '@/lib/squad-picks'
+import { getVerifiedEntryContext } from '@/lib/session'
 
 export type PlayerStatsPersonalSeed = {
 	anchorGw: number
@@ -53,192 +47,209 @@ export type PlayerStatsPersonalSeed = {
 	seasonStatsAvailable: boolean
 }
 
+export type PlayerStatsBootstrapSeed = {
+	context: CoreEventContextData
+	directorySeed: PlayerDirectorySeed
+	events: EventsResponse
+}
+
 const PLAYER_DIRECTORY_SEED_SIZE = 20
 
-const settleDirectoryRequest = <T>(promise: Promise<T>) =>
-	promise.then(
-		value => ({ status: 'fulfilled' as const, value }),
-		reason => ({ status: 'rejected' as const, reason })
-	)
+function measure<T>(
+	timing: RequestTiming | undefined,
+	stage: string,
+	task: () => Promise<T>
+): Promise<T> {
+	return timing ? timing.measure(stage, task) : task()
+}
 
-function seasonContext(
-	events: Awaited<ReturnType<typeof getCurrentAndNextEvents>>
-) {
-	const review = resolveReviewGameweekAnchor(events)
+function reviewContext(context: CoreEventContextData): {
+	anchorGw: number | null
+	anchorSource: ReviewGameweekAnchorSource
+	seasonStatsAvailable: boolean
+	seasonState: PlayerDirectorySeasonState
+} {
+	if (context.currentEventId != null) {
+		return {
+			anchorGw: context.currentEventId,
+			anchorSource: 'current',
+			seasonStatsAvailable: true,
+			seasonState: 'active'
+		}
+	}
+	if (context.nextEventId != null) {
+		const anchorGw = context.nextEventId > 1 ? context.nextEventId - 1 : 1
+		const seasonStatsAvailable = anchorGw > 1
+		return {
+			anchorGw,
+			anchorSource: 'next-derived',
+			seasonStatsAvailable,
+			seasonState: seasonStatsAvailable ? 'active' : 'preseason'
+		}
+	}
+	if (context.latestFinishedEventId != null) {
+		return {
+			anchorGw: context.latestFinishedEventId,
+			anchorSource: 'history',
+			seasonStatsAvailable: true,
+			seasonState: 'active'
+		}
+	}
+	return {
+		anchorGw: null,
+		anchorSource: 'none',
+		seasonStatsAvailable: false,
+		seasonState: 'unavailable'
+	}
+}
+
+function eventsFromContext(context: CoreEventContextData): EventsResponse {
+	return {
+		current:
+			context.currentEventId == null ? [] : [{ id: context.currentEventId }],
+		next:
+			context.nextEventId == null
+				? []
+				: [
+						{
+							id: context.nextEventId,
+							deadlineTime: context.nextDeadlineTime ?? ''
+						}
+					]
+	}
+}
+
+export async function loadPlayerStatsBootstrap(
+	timing?: RequestTiming
+): Promise<PlayerStatsBootstrapSeed> {
+	const response = await measure(timing, 'bootstrap', () =>
+		executePublicServerQuery<PlayerStatsBootstrapResponse>(
+			GET_PLAYER_STATS_BOOTSTRAP,
+			{ limit: PLAYER_DIRECTORY_SEED_SIZE },
+			CORE_AUTHORITY_FETCH_OPTIONS
+		)
+	)
+	const bootstrap = response.playerStatsBootstrap
+	const review = reviewContext(bootstrap.context)
 	const anchorGw = review.anchorGw ?? 1
-	const seasonStatsAvailable =
-		review.currentGw != null ||
-		(review.source === 'next-derived' && anchorGw > 1) ||
-		review.source === 'history'
-	const seasonState: PlayerDirectorySeasonState = seasonStatsAvailable
-		? 'active'
-		: events?.next?.length
-			? 'preseason'
-			: 'unavailable'
-	return { anchorGw, seasonStatsAvailable, seasonState }
+	const sortBy = review.seasonStatsAvailable ? 'total_desc' : 'own_desc'
+	return {
+		context: bootstrap.context,
+		events: eventsFromContext(bootstrap.context),
+		directorySeed: {
+			teams: [...bootstrap.teams].sort((left, right) =>
+				left.shortName.localeCompare(right.shortName)
+			),
+			teamsState: 'ready',
+			players: bootstrap.directory.items,
+			playersState: 'ready',
+			totalCount: bootstrap.directory.totalCount,
+			nextCursor: bootstrap.directory.nextCursor,
+			queryKey: buildPlayerDirectoryQueryKey({
+				search: null,
+				teamId: null,
+				position: null,
+				maxPrice: null,
+				sortBy,
+				ownBand: 'ANY'
+			}),
+			seasonState: review.seasonState,
+			anchorGw,
+			seasonStatsAvailable: review.seasonStatsAvailable
+		}
+	}
 }
 
 export async function loadPlayerDirectorySeed(): Promise<PlayerDirectorySeed> {
-	const eventsPromise = getCurrentAndNextEvents()
-	const teamsPromise = executePublicServerQuery<TeamsForPickerResponse>(
-		GET_TEAMS_FOR_PICKER,
-		undefined,
-		publicFetchOptions({
-			revalidate: RevalidateSeconds.publicStats,
-			tags: [CacheTag.gameweekStats]
-		})
-	)
-	const teamsResultPromise = settleDirectoryRequest(teamsPromise)
-	const events = await eventsPromise
-	const { seasonStatsAvailable } = seasonContext(events)
-	const sortBy = seasonStatsAvailable ? 'total_desc' : 'own_desc'
-	const playersPromise =
-		executePublicServerQuery<PlayerSearchForPickerResponse>(
-			SEARCH_PLAYERS_FOR_PICKER,
-			{
-				search: null,
-				filter: null,
-				sort: seasonStatsAvailable ? 'TOTAL_POINTS_DESC' : 'OWNERSHIP_DESC',
-				ownershipBand: null,
-				limit: PLAYER_DIRECTORY_SEED_SIZE,
-				cursor: null
-			},
-			publicFetchOptions({
-				revalidate: RevalidateSeconds.publicStats,
-				tags: [CacheTag.gameweekStats]
-			})
-		)
-	const [teamsResult, playersResult] = await Promise.all([
-		teamsResultPromise,
-		settleDirectoryRequest(playersPromise)
-	])
-	const context = seasonContext(events)
-	if (teamsResult.status === 'rejected') {
-		console.error(
-			'[player-stats-seed] public team directory failed:',
-			teamsResult.reason
-		)
-	}
-	if (playersResult.status === 'rejected') {
-		console.error(
-			'[player-stats-seed] public player directory failed:',
-			playersResult.reason
-		)
-	}
-	const teams =
-		teamsResult.status === 'fulfilled' ? teamsResult.value.teams : []
-	const players =
-		playersResult.status === 'fulfilled'
-			? playersResult.value.playersForPicker
-			: { items: [], totalCount: 0, nextCursor: null }
-
-	return {
-		teams: [...teams].sort((a, b) => a.shortName.localeCompare(b.shortName)),
-		teamsState: teamsResult.status === 'fulfilled' ? 'ready' : 'unavailable',
-		players: players.items,
-		playersState:
-			playersResult.status === 'fulfilled' ? 'ready' : 'unavailable',
-		totalCount: players.totalCount,
-		nextCursor: players.nextCursor,
-		queryKey: buildPlayerDirectoryQueryKey({
-			search: null,
-			teamId: null,
-			position: null,
-			maxPrice: null,
-			sortBy,
-			ownBand: 'ANY'
-		}),
-		seasonState: context.seasonState,
-		anchorGw: context.anchorGw,
-		seasonStatsAvailable: context.seasonStatsAvailable
-	}
+	return (await loadPlayerStatsBootstrap()).directorySeed
 }
 
-async function fetchEventFixtures(eventId: number): Promise<Fixture[]> {
-	const response = await executePublicServerQuery<EventFixturesResponse>(
-		GET_EVENT_FIXTURES,
-		{ eventId },
-		publicFetchOptions({
-			revalidate: RevalidateSeconds.publicStats,
-			tags: [CacheTag.fixtures, CacheTag.events]
-		})
-	)
-	return response.eventFixtures ?? []
+async function loadFixtureWindows(anchorGw: number, horizon: FdrHorizon) {
+	const finalGw = Math.min(38, anchorGw + horizon - 1)
+	const requests: Array<
+		Promise<Awaited<ReturnType<typeof loadFixtureWindow>>>
+	> = []
+	for (let fromGw = anchorGw; fromGw <= finalGw; fromGw += 5) {
+		requests.push(loadFixtureWindow(fromGw, Math.min(5, finalGw - fromGw + 1)))
+	}
+	return Promise.all(requests)
 }
 
 export async function loadPlayerStatsPersonalSeed(
-	horizon: FdrHorizon = DEFAULT_FDR_HORIZON
+	bootstrapPromise: Promise<PlayerStatsBootstrapSeed> = loadPlayerStatsBootstrap(),
+	horizon: FdrHorizon = DEFAULT_FDR_HORIZON,
+	timing?: RequestTiming
 ): Promise<PlayerStatsPersonalSeed | null> {
-	const [events, { session, entryId }] = await Promise.all([
-		getCurrentAndNextEvents(),
-		getVerifiedEntryContext()
-	])
-	const review = resolveReviewGameweekAnchor(events)
-	const anchorGw = review.anchorGw
-	if (anchorGw == null || anchorGw <= 0) return null
-	const seasonStatsAvailable =
-		review.currentGw != null ||
-		(review.source === 'next-derived' && anchorGw > 1) ||
-		review.source === 'history'
-
-	const eventIds = Array.from(
-		{ length: horizon },
-		(_, i) => anchorGw + i
-	).filter(id => id >= 1 && id <= 38)
-
-	const [fixtureListsResult, market, squadResult] = await Promise.all([
-		Promise.allSettled(eventIds.map(id => fetchEventFixtures(id))),
-		executePublicServerQuery<MarketPulseResponse>(
-			GET_MARKET_PULSE,
+	const sessionPromise = measure(timing, 'session', getVerifiedEntryContext)
+	// Keep the speculative authorization lookup from becoming an unhandled
+	// rejection if bootstrap fails or has no usable gameweek.
+	void sessionPromise.catch(() => undefined)
+	const marketPromise = measure(timing, 'market', () =>
+		executePublicServerQuery<FixturePlanningSignalsResponse>(
+			GET_FIXTURE_PLANNING_SIGNALS,
 			{ days: 14 },
 			publicFetchOptions({
 				revalidate: RevalidateSeconds.market,
 				tags: [CacheTag.market]
 			})
-		).catch(err => {
-			console.error('[player-stats-seed] market pulse failed:', err)
+		).catch(error => {
+			console.error('[player-stats-seed] market signals failed:', error)
 			return null
-		}),
-		entryId != null && session
-			? loadEntrySquadPicks(session, entryId, events)
-					.catch(err => {
-						console.error('[player-stats-seed] entry picks failed:', err)
-						return {
-							picks: [] as SquadPickSeed[],
-							state: 'unavailable' as const
-						}
-					})
-			: Promise.resolve({
-					picks: [] as SquadPickSeed[],
-					state: 'unbound' as const
-				})
-	])
+		})
+	)
+	const bootstrap = await bootstrapPromise
+	const review = reviewContext(bootstrap.context)
+	if (review.anchorGw == null || review.anchorGw <= 0) return null
 
-	const fixturesByEvent = new Map<number, Fixture[]>()
-	eventIds.forEach((id, i) => {
-		const result = fixtureListsResult[i]
-		fixturesByEvent.set(id, result?.status === 'fulfilled' ? result.value : [])
-		if (result?.status === 'rejected') {
-			console.error(
-				`[player-stats-seed] fixtures for GW${id} failed:`,
-				result.reason
-			)
+	const fixturePromise = measure(timing, 'fixture', () =>
+		loadFixtureWindows(review.anchorGw!, horizon)
+	)
+	const squadPromise = (async () => {
+		const { session, entryId } = await sessionPromise
+		if (entryId == null || !session) {
+			return { picks: [] as SquadPickSeed[], state: 'unbound' as const }
 		}
-	})
+		return measure(timing, 'squad', () =>
+			loadEntrySquadPicks(session, entryId, bootstrap.events).catch(error => {
+				console.error('[player-stats-seed] entry picks failed:', error)
+				return {
+					picks: [] as SquadPickSeed[],
+					state: 'unavailable' as const
+				}
+			})
+		)
+	})()
 
-	const marketPulse = market?.marketPulse ?? null
+	const [windows, market, squadResult] = await Promise.all([
+		fixturePromise,
+		marketPromise,
+		squadPromise
+	])
+	const fixturesByEvent = new Map<
+		number,
+		Array<(typeof windows)[number]['fixturesByEvent'][string][number]>
+	>()
+	const unknownEvents = new Set<number>()
+	for (const window of windows) {
+		for (const [eventId, fixtures] of Object.entries(window.fixturesByEvent)) {
+			fixturesByEvent.set(Number(eventId), fixtures)
+		}
+		for (const eventId of window.unknownEventIds) unknownEvents.add(eventId)
+	}
 	const model = buildFdrDeskModel(fixturesByEvent, {
-		fromGw: anchorGw,
+		fromGw: review.anchorGw,
 		horizon,
-		marketPulse
+		marketPulse: market?.marketPulse ?? null,
+		knownTeams: bootstrap.directorySeed.teams,
+		unknownEvents
 	})
 
 	return {
-		anchorGw,
-		anchorSource: review.source,
+		anchorGw: review.anchorGw,
+		anchorSource: review.anchorSource,
 		mySquadPicks: squadResult.picks,
 		squadState: squadResult.state,
 		marketCompareCandidates: buildMarketCompareCandidates(model),
-		seasonStatsAvailable
+		seasonStatsAvailable: review.seasonStatsAvailable
 	}
 }

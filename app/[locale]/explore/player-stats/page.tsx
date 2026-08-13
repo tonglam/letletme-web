@@ -9,10 +9,13 @@ import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import {
-	loadPlayerDirectorySeed,
+	loadPlayerStatsBootstrap,
 	loadPlayerStatsPersonalSeed,
 	type PlayerStatsPersonalSeed
 } from '@/lib/player-stats-seed'
+import { playerStatsDeskResponseFromResult } from '@/lib/player-stats-desk'
+import { loadPlayerStatsDesk } from '@/lib/player-stats-desk-server'
+import { RequestTiming } from '@/lib/request-timing'
 import { getTranslations } from 'next-intl/server'
 import { Suspense } from 'react'
 
@@ -45,8 +48,25 @@ export default async function PlayerStatsPage({
 	params,
 	searchParams
 }: PageProps) {
-	await getPageLocale(params)
-	const sp = await searchParams
+	const { locale } = await getPageLocale(params)
+	const timing = new RequestTiming()
+	const bootstrapPromise = loadPlayerStatsBootstrap(timing)
+	const translationPromise = timing.measure('translation', () =>
+		getTranslations('PlayerStats')
+	)
+	const personalSeedPromise = loadPlayerStatsPersonalSeed(
+		bootstrapPromise,
+		undefined,
+		timing
+	).catch(error => {
+		console.error('[player-stats] personal seed failed:', error)
+		return null
+	})
+	const [sp, bootstrap, t] = await Promise.all([
+		searchParams,
+		bootstrapPromise,
+		translationPromise
+	])
 	const initialP1 = parsePlayerStatsPlayerId(sp.p1)
 	const parsedP2 = parsePlayerStatsPlayerId(sp.p2)
 	const initialP2 =
@@ -54,15 +74,45 @@ export default async function PlayerStatsPage({
 			? parsedP2
 			: null
 
-	const personalSeedPromise = loadPlayerStatsPersonalSeed().catch(error => {
-		console.error('[player-stats] personal seed failed:', error)
-		return null
-	})
-	const [directorySeed, t] = await Promise.all([
-		loadPlayerDirectorySeed(),
-		getTranslations('PlayerStats')
-	])
+	const directorySeed = bootstrap.directorySeed
 	const initialPlayerIds = { p1: initialP1, p2: initialP2 }
+	const initialDeskSeed =
+		initialP1 == null
+			? null
+			: await timing
+					.measure('desk', () =>
+						loadPlayerStatsDesk(
+							[initialP1, ...(initialP2 == null ? [] : [initialP2])],
+							directorySeed.anchorGw,
+							5,
+							'overview'
+						)
+					)
+					.then(result =>
+						result.outcome === 'failed'
+							? null
+							: playerStatsDeskResponseFromResult(result)
+					)
+					.catch(error => {
+						console.error('[player-stats] initial desk failed:', error)
+						return null
+					})
+	console.info('[player-stats-loader]', {
+		locale,
+		phase: 'public-ready',
+		eventRevision: bootstrap.context.revision,
+		durationMs: Number(timing.elapsedMs().toFixed(2)),
+		stages: timing.snapshot()
+	})
+	void personalSeedPromise.then(() => {
+		console.info('[player-stats-loader]', {
+			locale,
+			phase: 'stream-ready',
+			eventRevision: bootstrap.context.revision,
+			durationMs: Number(timing.elapsedMs().toFixed(2)),
+			stages: timing.snapshot()
+		})
+	})
 
 	return (
 		<PageShell>
@@ -88,6 +138,7 @@ export default async function PlayerStatsPage({
 					<PlayerStatsClient
 						directorySeed={directorySeed}
 						initialPlayerIds={initialPlayerIds}
+						initialDeskSeed={initialDeskSeed}
 					/>
 					<Suspense fallback={null}>
 						<PersonalSeedStream seedPromise={personalSeedPromise} />

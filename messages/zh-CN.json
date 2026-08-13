@@ -989,6 +989,8 @@
 		"loading": "加载中",
 		"loadingPage": "正在加载页面",
 		"unknownError": "出了点问题，请重试。",
+		"pageLoadErrorTitle": "无法加载此页面",
+		"pageLoadErrorDescription": "LetLetMe 的其他功能仍可使用。请重试，或返回首页。",
 		"notAvailable": "暂无数据",
 		"search": "搜索",
 		"clear": "清除",

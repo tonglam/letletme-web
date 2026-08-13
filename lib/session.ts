@@ -18,7 +18,11 @@ export const getVerifiedEntryContext = cache(
 		session: Session | null
 		entryId: number | null
 	}> => {
-		const session = await getAuthorizationSession(await headers())
+		const requestHeaders = await headers()
+		if (!hasSessionCookieHintInHeaders(requestHeaders)) {
+			return { session: null, entryId: null }
+		}
+		const session = await getAuthorizationSession(requestHeaders)
 		if (!session) {
 			return { session: null, entryId: null }
 		}

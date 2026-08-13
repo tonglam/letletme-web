@@ -81,6 +81,38 @@ export const GET_MARKET_PULSE = /* GraphQL */ `
   }
 `
 
+/** Compact market projection used by the fixture-planning page. */
+export const GET_FIXTURE_PLANNING_SIGNALS = /* GraphQL */ `
+  query GetFixturePlanningSignals($days: Int = 14) {
+    marketPulse(days: $days) {
+      mostSelected {
+        ...FixtureSignalPlayerFields
+      }
+      ownershipMovers {
+        risers {
+          player { ...FixtureSignalPlayerFields }
+        }
+        fallers {
+          player { ...FixtureSignalPlayerFields }
+        }
+      }
+      transferMovers {
+        player { ...FixtureSignalPlayerFields }
+      }
+    }
+  }
+
+  fragment FixtureSignalPlayerFields on MarketPlayer {
+    playerId
+    webName
+    teamId
+    teamShortName
+    position
+    price
+    selectedByPercent
+  }
+`
+
 export type MarketPosition = 'GOALKEEPER' | 'DEFENDER' | 'MIDFIELDER' | 'FORWARD'
 
 export interface MarketPlayer {
@@ -160,4 +192,28 @@ export interface MarketPulse {
 
 export interface MarketPulseResponse {
 	marketPulse: MarketPulse
+}
+
+export type FixtureSignalPlayer = Pick<
+	MarketPlayer,
+	| 'playerId'
+	| 'webName'
+	| 'teamId'
+	| 'teamShortName'
+	| 'position'
+	| 'price'
+	| 'selectedByPercent'
+>
+
+export interface FixturePlanningMarketPulse {
+	mostSelected: FixtureSignalPlayer[]
+	ownershipMovers: {
+		risers: Array<{ player: FixtureSignalPlayer }>
+		fallers: Array<{ player: FixtureSignalPlayer }>
+	}
+	transferMovers: Array<{ player: FixtureSignalPlayer }>
+}
+
+export interface FixturePlanningSignalsResponse {
+	marketPulse: FixturePlanningMarketPulse | null
 }
