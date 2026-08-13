@@ -14,7 +14,12 @@ import {
 	FALLBACK_OVERALL_STATS,
 	type OverallGameweekStats
 } from '@/lib/gameweek-overall-stats'
-import { isGameweekDeskData, type GameweekDeskData } from '@/lib/gameweek-desk'
+import {
+	GAMEWEEK_DESK_MAX_EVENT_ID,
+	isGameweekDeskData,
+	type GameweekDeskData
+} from '@/lib/gameweek-desk'
+import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import {
 	type GameweekBoardPlayer,
 	type GameweekDisplayState
@@ -107,6 +112,17 @@ function mapOverallStats(desk: GameweekDeskData): OverallGameweekStats {
 	}
 }
 
+function createDeskCache(initialDesk: GameweekDeskData) {
+	const cache = new Map<number, GameweekDeskData>()
+	if (
+		initialDesk.overviewState !== 'UNAVAILABLE' &&
+		initialDesk.boardsState !== 'UNAVAILABLE'
+	) {
+		cache.set(initialDesk.eventId, initialDesk)
+	}
+	return cache
+}
+
 export default function GameweekStatsClient({
 	initialDesk
 }: GameweekStatsClientProps) {
@@ -117,7 +133,7 @@ export default function GameweekStatsClient({
 	const [isLoading, setIsLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const deskCacheRef = useRef<Map<number, GameweekDeskData>>(
-		new Map([[initialDesk.eventId, initialDesk]])
+		createDeskCache(initialDesk)
 	)
 	const requestRef = useRef<{
 		generation: number
@@ -128,6 +144,8 @@ export default function GameweekStatsClient({
 	})
 	const selectedGameweekRef = useRef(selectedGameweek)
 	const selectGameweek = useCallback((gameweek: number) => {
+		if (gameweek === selectedGameweekRef.current) return
+		markRouteReadyStart(window.location.pathname)
 		selectedGameweekRef.current = gameweek
 		setSelectedGameweek(gameweek)
 	}, [])
@@ -174,7 +192,12 @@ export default function GameweekStatsClient({
 				) {
 					return
 				}
-				deskCacheRef.current.set(data.eventId, data)
+				if (
+					data.overviewState !== 'UNAVAILABLE' &&
+					data.boardsState !== 'UNAVAILABLE'
+				) {
+					deskCacheRef.current.set(data.eventId, data)
+				}
 				setError(null)
 				startTransition(() => setCommittedDesk(data))
 			})
@@ -205,11 +228,19 @@ export default function GameweekStatsClient({
 	const dreamTeam = mapBoardPlayers(committedDesk.dreamTeam)
 	const haulPlayers = mapBoardPlayers(committedDesk.hauls)
 	const displayState = toDisplayState(committedDesk.lifecycle)
-	const isPreseasonSelection =
-		committedDesk.isPreseason || committedDesk.lifecycle === 'SCHEDULED'
+	const isPreseasonSelection = committedDesk.isPreseason
+	const isScheduledSelection = committedDesk.lifecycle === 'SCHEDULED'
 	const visibleGameweek = committedDesk.eventId
-	const maxGameweek = committedDesk.currentEventId ?? committedDesk.eventId
-	const currentGameweek = committedDesk.currentEventId ?? committedDesk.eventId
+	const maxGameweek = Math.min(
+		GAMEWEEK_DESK_MAX_EVENT_ID,
+		Math.max(
+			committedDesk.anchorEventId,
+			committedDesk.currentEventId ?? 0,
+			committedDesk.eventId
+		)
+	)
+	const currentGameweek =
+		committedDesk.currentEventId ?? committedDesk.anchorEventId
 	const isOverviewUnavailable = committedDesk.overviewState === 'UNAVAILABLE'
 	const isBoardsUnavailable = committedDesk.boardsState === 'UNAVAILABLE'
 
@@ -319,6 +350,14 @@ export default function GameweekStatsClient({
 								</span>
 							) : null}
 						</div>
+						{isOverviewUnavailable ? (
+							<Alert
+								variant="destructive"
+								className="mx-4 mt-4 sm:mx-5"
+							>
+								<AlertDescription>{t('loadFailed')}</AlertDescription>
+							</Alert>
+						) : null}
 
 						{isPreseasonSelection ? (
 							<div className="px-4 py-6 sm:px-5">
@@ -328,6 +367,10 @@ export default function GameweekStatsClient({
 								<p className="mt-1 text-sm text-white/65">
 									{t('preseasonDescription')}
 								</p>
+							</div>
+						) : isScheduledSelection ? (
+							<div className="px-4 py-6 sm:px-5">
+								<p className="text-sm text-white/65">{t('pendingOfficial')}</p>
 							</div>
 						) : (
 							<>
@@ -472,7 +515,11 @@ export default function GameweekStatsClient({
 								icon={Trophy}
 								title={t('dreamTeamTitle', { gameweek: visibleGameweek })}
 							>
-								{isBoardsUnavailable ? (
+								{isScheduledSelection ? (
+									<p className="text-sm text-muted-foreground">
+										{t('pendingOfficial')}
+									</p>
+								) : isBoardsUnavailable ? (
 									<p className="text-sm text-muted-foreground">
 										{t('loadFailed')}
 									</p>
@@ -495,7 +542,11 @@ export default function GameweekStatsClient({
 								title={t('doubleDigitHauls')}
 								description={t('haulDescription')}
 							>
-								{isBoardsUnavailable ? (
+								{isScheduledSelection ? (
+									<p className="text-sm text-muted-foreground">
+										{t('pendingOfficial')}
+									</p>
+								) : isBoardsUnavailable ? (
 									<p className="text-sm text-muted-foreground">
 										{t('loadFailed')}
 									</p>

@@ -59,6 +59,12 @@ describe('asynchronous selection safety', () => {
 		assert.ok(
 			gameweekSource.includes('selectedGameweekRef.current !== data.eventId')
 		)
+		assert.ok(
+			gameweekSource.includes('markRouteReadyStart(window.location.pathname)')
+		)
+		assert.ok(gameweekSource.includes('committedDesk.isPreseason'))
+		assert.ok(gameweekSource.includes('GAMEWEEK_DESK_MAX_EVENT_ID'))
+		assert.ok(gameweekSource.includes("data.overviewState !== 'UNAVAILABLE'"))
 
 		const staleGuard = playerSource.indexOf(
 			"if (result.status === 'superseded') return null"
