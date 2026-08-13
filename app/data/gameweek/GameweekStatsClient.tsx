@@ -115,8 +115,8 @@ function mapOverallStats(desk: GameweekDeskData): OverallGameweekStats {
 function createDeskCache(initialDesk: GameweekDeskData) {
 	const cache = new Map<number, GameweekDeskData>()
 	if (
-		initialDesk.overviewState !== 'UNAVAILABLE' &&
-		initialDesk.boardsState !== 'UNAVAILABLE'
+		initialDesk.overviewState === 'AVAILABLE' &&
+		initialDesk.boardsState === 'AVAILABLE'
 	) {
 		cache.set(initialDesk.eventId, initialDesk)
 	}
@@ -193,8 +193,8 @@ export default function GameweekStatsClient({
 					return
 				}
 				if (
-					data.overviewState !== 'UNAVAILABLE' &&
-					data.boardsState !== 'UNAVAILABLE'
+					data.overviewState === 'AVAILABLE' &&
+					data.boardsState === 'AVAILABLE'
 				) {
 					deskCacheRef.current.set(data.eventId, data)
 				}
@@ -242,6 +242,7 @@ export default function GameweekStatsClient({
 	const currentGameweek = committedDesk.currentEventId
 	const isOverviewUnavailable = committedDesk.overviewState === 'UNAVAILABLE'
 	const isBoardsUnavailable = committedDesk.boardsState === 'UNAVAILABLE'
+	const isBoardsPending = committedDesk.boardsState === 'PENDING'
 
 	const formatStat = (
 		value: number | null,
@@ -367,7 +368,7 @@ export default function GameweekStatsClient({
 									{t('preseasonDescription')}
 								</p>
 							</div>
-						) : isScheduledSelection ? (
+						) : isScheduledSelection || isBoardsPending ? (
 							<div className="px-4 py-6 sm:px-5">
 								<p className="text-sm text-white/65">{t('pendingOfficial')}</p>
 							</div>
@@ -518,7 +519,7 @@ export default function GameweekStatsClient({
 									<p className="text-sm text-muted-foreground">
 										{t('loadFailed')}
 									</p>
-								) : isScheduledSelection ? (
+								) : isScheduledSelection || isBoardsPending ? (
 									<p className="text-sm text-muted-foreground">
 										{t('pendingOfficial')}
 									</p>

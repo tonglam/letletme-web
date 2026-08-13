@@ -58,6 +58,7 @@ function summarize(runs) {
 		deskSwitchReadyMs: distribution(runs, 'deskSwitchReadyMs'),
 		firstDeskRequestCounts: runs.map(run => run.firstDeskRequestCount),
 		cachedDeskRequestCounts: runs.map(run => run.cachedDeskRequestCount),
+		skippedDeskProbeStatuses: runs.map(run => run.skippedDeskProbeStatus),
 		interactionSkipped: runs.filter(run => run.interactionSkipped).length,
 		horizontalOverflow: runs.some(run => run.horizontalOverflow),
 		keptCommittedDuringLoad: runs.every(run => run.keptCommittedDuringLoad)
@@ -164,6 +165,7 @@ async function measureRun(browser, profile, index) {
 	let keptCommittedDuringLoad = true
 	let interactionSkipped = false
 	let deskSwitchReadyMs = null
+	let skippedDeskProbeStatus = null
 	if (canSelect) {
 		const originalHeading = await page
 			.locator('#gw-overview-title')
@@ -173,17 +175,20 @@ async function measureRun(browser, profile, index) {
 		await input.fill(String(targetEvent))
 		await input.press('Enter')
 		await page.waitForTimeout(25)
+		const isBusy = (await input.getAttribute('aria-busy')) === 'true'
 		keptCommittedDuringLoad =
+			!isBusy ||
 			(await page.locator('#gw-overview-title').textContent()) ===
-			originalHeading
+				originalHeading
 		await waitForGameweekHeading(page, targetEvent)
 		deskSwitchReadyMs = performance.now() - startedAt
 	} else {
 		interactionSkipped = true
-		await page.evaluate(async eventId => {
-			await fetch(`/api/gameweek/desk?eventId=${eventId}`, {
+		skippedDeskProbeStatus = await page.evaluate(async eventId => {
+			const response = await fetch(`/api/gameweek/desk?eventId=${eventId}`, {
 				headers: { Accept: 'application/json' }
 			})
+			return response.status
 		}, targetEvent)
 	}
 	const firstDeskRequestCount = deskRequestCount - beforeFirst
@@ -230,6 +235,7 @@ async function measureRun(browser, profile, index) {
 		firstDeskRequestCount,
 		cachedDeskRequestCount,
 		interactionSkipped,
+		skippedDeskProbeStatus,
 		keptCommittedDuringLoad
 	}
 }
@@ -283,6 +289,9 @@ console.log(
 				firstDeskRequest:
 					selectableRuns.length === 0 ||
 					selectableRuns.every(run => run.firstDeskRequestCount === 1),
+				skippedDeskProbe: allRuns
+					.filter(run => run.interactionSkipped)
+					.every(run => run.skippedDeskProbeStatus === 200),
 				cachedDesk:
 					selectableRuns.length === 0 ||
 					selectableRuns.every(run => run.cachedDeskRequestCount === 0),
