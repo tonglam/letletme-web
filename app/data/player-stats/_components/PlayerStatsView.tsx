@@ -999,7 +999,7 @@ export function PlayerStatsView({
 				<div className="mt-1 flex justify-end">
 					<Link
 						href="/explore/fixtures#my-squad"
-						className="text-xs font-medium text-primary-ink underline-offset-2 hover:underline"
+						className="text-xs font-medium text-foreground underline-offset-2 hover:underline"
 					>
 						{t('fixturesSquadLink')}
 					</Link>

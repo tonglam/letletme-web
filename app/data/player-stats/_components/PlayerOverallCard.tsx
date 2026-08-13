@@ -259,7 +259,7 @@ function OverallCardBody({
 						<span
 							className={cn(
 								'ml-1 text-xs',
-								priceDiff.startsWith('+') ? 'text-success' : 'text-destructive'
+								priceDiff.startsWith('+') ? 'text-foreground' : 'text-destructive'
 							)}
 						>
 							{priceDiff}
@@ -425,7 +425,7 @@ export function StickyPlayerIdentity({
 					<span
 						className={cn(
 							'ml-1 text-xs',
-							priceDiff.startsWith('+') ? 'text-success' : 'text-destructive'
+								priceDiff.startsWith('+') ? 'text-foreground' : 'text-destructive'
 						)}
 					>
 						{priceDiff}

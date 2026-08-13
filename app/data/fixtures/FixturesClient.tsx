@@ -6,15 +6,14 @@ import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
-import { executeQuery } from '@/lib/graphql-client'
-import {
-	GET_EVENT_FIXTURES,
-	type EventFixturesResponse,
-	type Fixture,
-} from '@/lib/graphql/operations/events'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import type { MarketPulse } from '@/lib/graphql/operations/market'
 import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
 import { buildSquadTeamExposure } from '@/lib/squad-picks'
+import {
+	isFixtureWindowResponse,
+	type FixturePlanningFixture,
+} from '@/lib/fixture-window'
 import {
 	buildFdrDeskModel,
 	DEFAULT_FDR_HORIZON,
@@ -42,6 +41,7 @@ import {
 	useMemo,
 	useRef,
 	useState,
+	startTransition,
 	type ReactNode,
 } from 'react'
 import { toast } from 'sonner'
@@ -393,7 +393,7 @@ export default function FixturesClient({
 }: {
 	fromGw: number
 	initialHorizon?: FdrHorizon
-	initialFixturesByEvent: Record<number, Fixture[]>
+	initialFixturesByEvent: Record<number, FixturePlanningFixture[]>
 	initialUnknownEventIds?: number[]
 	marketPulse: MarketPulse | null
 	knownTeams: FdrTeamIdentity[]
@@ -405,6 +405,7 @@ export default function FixturesClient({
 	const t = useTranslations('Fixtures')
 
 	const [horizon, setHorizon] = useState<FdrHorizon>(initialHorizon)
+	const [pendingHorizon, setPendingHorizon] = useState<FdrHorizon | null>(null)
 	const [sort, setSort] = useState<'easiest' | 'hardest'>('easiest')
 	const [posFilter, setPosFilter] = useState<PosFilter>('ALL')
 	const [loading, setLoading] = useState(false)
@@ -417,78 +418,85 @@ export default function FixturesClient({
 	)
 
 	const cacheRef = useRef(
-		new Map<number, Fixture[]>(
+		new Map<number, FixturePlanningFixture[]>(
 			Object.entries(initialFixturesByEvent).map(([k, v]) => [Number(k), v]),
 		),
 	)
 	const [fixturesByEvent, setFixturesByEvent] = useState(
 		() =>
-			new Map<number, Fixture[]>(
+			new Map<number, FixturePlanningFixture[]>(
 				Object.entries(initialFixturesByEvent).map(([k, v]) => [Number(k), v]),
 		),
 	)
 	const [unknownEventIds, setUnknownEventIds] = useState(initialUnknownEventIds)
 	const unknownEvents = useMemo(() => new Set(unknownEventIds), [unknownEventIds])
+	const requestRef = useRef<AbortController | null>(null)
+	const requestGenerationRef = useRef(0)
+	const [windowError, setWindowError] = useState(false)
 
-	// Ensure all GWs in horizon are loaded
-	useEffect(() => {
-		let cancelled = false
-		const needed: number[] = []
-		for (let i = 0; i < horizon; i++) {
-			const gw = fromGw + i
-			if (gw > 38) break
-			if (!cacheRef.current.has(gw)) needed.push(gw)
-		}
-		if (needed.length === 0) {
-			setFixturesByEvent(new Map(cacheRef.current))
-			return
-		}
-
-		setLoading(true)
-		void (async () => {
-			try {
-				const results = await Promise.allSettled(
-					needed.map(async eventId => {
-						const data = await executeQuery<EventFixturesResponse>(
-							GET_EVENT_FIXTURES,
-							{ eventId },
-						)
-						return [eventId, data.eventFixtures ?? []] as const
-					}),
-				)
-				if (cancelled) return
-				const resolvedIds: number[] = []
-				const failedIds: number[] = []
-				for (let index = 0; index < results.length; index += 1) {
-					const result = results[index]
-					const eventId = needed[index]
-					if (result.status === 'fulfilled') {
-						const [id, list] = result.value
-						resolvedIds.push(id)
-						cacheRef.current.set(id, list)
-					} else if (eventId != null) {
-						failedIds.push(eventId)
-					}
-				}
-				setUnknownEventIds(previous => [
-					...Array.from(new Set([
-						...previous.filter(id => !resolvedIds.includes(id)),
-						...failedIds,
-					])),
-				])
-				setFixturesByEvent(new Map(cacheRef.current))
-			} catch (err) {
-				console.error('[fixtures] horizon fetch failed:', err)
-				toast.error(t('loadFailed'))
-			} finally {
-				if (!cancelled) setLoading(false)
+	const selectHorizon = useCallback(
+		(next: FdrHorizon) => {
+			if (next === horizon || next === pendingHorizon) return
+			requestGenerationRef.current += 1
+			requestRef.current?.abort()
+			setWindowError(false)
+			if (next < horizon) {
+				setPendingHorizon(null)
+				setLoading(false)
+				startTransition(() => setHorizon(next))
+				return
 			}
-		})()
-
-		return () => {
-			cancelled = true
-		}
-	}, [fromGw, horizon, t])
+			const targetEnd = Math.min(38, fromGw + next - 1)
+			const missing = Array.from({ length: targetEnd - fromGw + 1 }, (_, index) => fromGw + index)
+				.filter(eventId => !cacheRef.current.has(eventId) && !unknownEventIds.includes(eventId))
+			if (missing.length === 0) {
+				setPendingHorizon(null)
+				startTransition(() => setHorizon(next))
+				return
+			}
+			const first = missing[0]!
+			const count = Math.min(5, missing.length)
+			const generation = requestGenerationRef.current
+			const controller = new AbortController()
+			requestRef.current = controller
+			setPendingHorizon(next)
+			setLoading(true)
+			void fetch(`/api/fixtures/window?fromGw=${first}&count=${count}`, {
+				signal: controller.signal,
+				headers: { accept: 'application/json' },
+			})
+				.then(async response => {
+					const payload: unknown = await response.json().catch(() => null)
+					if (!response.ok || !isFixtureWindowResponse(payload)) throw new Error('fixture window unavailable')
+					if (generation !== requestGenerationRef.current) return
+					for (const [rawEventId, fixtures] of Object.entries(payload.fixturesByEvent)) {
+						cacheRef.current.set(Number(rawEventId), fixtures)
+					}
+					setUnknownEventIds(previous => Array.from(new Set([
+						...previous.filter(id => !payload.unknownEventIds.includes(id)),
+						...payload.unknownEventIds,
+					])))
+					setFixturesByEvent(new Map(cacheRef.current))
+					setWindowError(false)
+					setPendingHorizon(null)
+					startTransition(() => setHorizon(next))
+				})
+				.catch(error => {
+					if (controller.signal.aborted || generation !== requestGenerationRef.current) return
+					console.error('[fixtures] horizon fetch failed:', error)
+					setWindowError(true)
+					setPendingHorizon(null)
+					toast.error(t('loadFailed'))
+				})
+				.finally(() => {
+					if (generation === requestGenerationRef.current) {
+						setLoading(false)
+						requestRef.current = null
+					}
+				})
+		},
+		[fromGw, horizon, pendingHorizon, t, unknownEventIds],
+	)
 
 	const model = useMemo(
 		() =>
@@ -565,7 +573,16 @@ export default function FixturesClient({
 	}, [focusedTeamId, sort])
 
 	return (
-		<PageShell>
+		<>
+			<RouteReadyMarker
+				name="FIXTURES_WINDOW_READY"
+				ready={!loading && pendingHorizon == null}
+				readyKey={String(horizon)}
+				audienceHint="public"
+				goodMs={1_000}
+				poorMs={1_500}
+			/>
+			<PageShell>
 			<div className="container mx-auto max-w-6xl px-4 py-8">
 				<StatsPageHeader title={t('title')} />
 				<p className="-mt-4 mb-6 max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -596,16 +613,17 @@ export default function FixturesClient({
 							<div className="flex flex-wrap gap-1.5">
 								{FDR_HORIZONS.map(h => (
 									<button
-										key={h}
-										type="button"
-										onClick={() => setHorizon(h)}
+									key={h}
+									type="button"
+									onClick={() => selectHorizon(h)}
 										className={cn(
 											'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
 											horizon === h
 												? 'border-success bg-success text-success-foreground'
 												: 'border-border/70 bg-background text-muted-foreground hover:text-foreground',
 										)}
-										aria-pressed={horizon === h}
+									aria-pressed={horizon === h}
+									aria-busy={pendingHorizon === h}
 									>
 										{t('horizonN', { n: h })}
 									</button>
@@ -643,6 +661,9 @@ export default function FixturesClient({
 					</div>
 					{loading ? (
 						<p className="mt-3 text-xs text-muted-foreground">{t('loading')}</p>
+					) : null}
+					{windowError ? (
+						<p className="mt-3 text-xs text-destructive">{t('loadFailed')}</p>
 					) : null}
 				</section>
 
@@ -900,6 +921,7 @@ export default function FixturesClient({
 					</div>
 				</section>
 			</div>
-		</PageShell>
+			</PageShell>
+		</>
 	)
 }
