@@ -21,7 +21,9 @@ const RECENT_PLAYERS_KEY_2 = 'player-stats-recent-2'
 
 const PlayerStatsView = dynamic(
 	() =>
-		import('./_components/PlayerStatsView').then(module => module.PlayerStatsView),
+		import('./_components/PlayerStatsView').then(
+			module => module.PlayerStatsView
+		),
 	{
 		loading: () => (
 			<div
@@ -211,84 +213,87 @@ export default function PlayerStatsClient({
 
 	return (
 		<>
-				<RouteReadyMarker
-					name="PLAYER_DIRECTORY_READY"
-					audienceHint="public"
-					goodMs={3_000}
-					poorMs={4_500}
-				/>
-				<RouteReadyMarker
-					name="PLAYER_DETAIL_READY"
-					ready={Boolean(firstPlayer.playerDetail)}
-					audienceHint="public"
-					goodMs={3_500}
-					poorMs={5_000}
-				/>
-				<div
-					className={cn(
-						'mb-4 h-44 overflow-y-auto rounded-lg border border-border/60 px-3 py-3 sm:h-36',
-						personalSeedReady
-							? 'bg-muted/10'
-							: 'flex items-center text-sm text-muted-foreground',
-						!personalSeedResolved && 'animate-pulse bg-muted/20'
-					)}
-					aria-busy={!personalSeedResolved}
-					role={
-						personalSeedReady
-							? undefined
-							: personalSeed?.squadState === 'unavailable'
-								? 'alert'
-								: 'status'
-					}
-					aria-label={
-						personalSeedResolved ? undefined : t('personalContextLoading')
-					}
-				>
-					{personalSeedReady ? (
-						<MySquadRail
-							picks={mySquadPicks}
-							selectedPlayerId={firstPlayer.selectedPlayer?.id}
-							onSelect={handleSquadSelect}
-						/>
-					) : personalStatus}
-				</div>
+			<RouteReadyMarker
+				name="PLAYER_DIRECTORY_READY"
+				ready={directorySeed.playersState === 'ready'}
+				audienceHint="public"
+				goodMs={3_000}
+				poorMs={4_500}
+			/>
+			<RouteReadyMarker
+				name="PLAYER_DETAIL_READY"
+				ready={Boolean(firstPlayer.playerDetail)}
+				audienceHint="public"
+				goodMs={3_500}
+				poorMs={5_000}
+			/>
+			<div
+				className={cn(
+					'mb-4 h-44 overflow-y-auto rounded-lg border border-border/60 px-3 py-3 sm:h-36',
+					personalSeedReady
+						? 'bg-muted/10'
+						: 'flex items-center text-sm text-muted-foreground',
+					!personalSeedResolved && 'animate-pulse bg-muted/20'
+				)}
+				aria-busy={!personalSeedResolved}
+				role={
+					personalSeedReady
+						? undefined
+						: personalSeed?.squadState === 'unavailable'
+							? 'alert'
+							: 'status'
+				}
+				aria-label={
+					personalSeedResolved ? undefined : t('personalContextLoading')
+				}
+			>
+				{personalSeedReady ? (
+					<MySquadRail
+						picks={mySquadPicks}
+						selectedPlayerId={firstPlayer.selectedPlayer?.id}
+						onSelect={handleSquadSelect}
+					/>
+				) : (
+					personalStatus
+				)}
+			</div>
 
-				<PlayerSelectionPanel
-					first={{
-						selectedPlayer: firstPlayer.selectedPlayer,
-						recentPlayers: firstPlayer.recentPlayers,
-						excludedPlayerId: secondPlayer.selectedPlayer?.id,
-						onSelect: handleFirstSelect,
-						onClearRecent: firstPlayer.clearRecent
-					}}
-					compareOpen={compareOpen}
-					onAddCompare={() => setCompareOpen(true)}
-					canCompare={Boolean(firstPlayer.playerDetail)}
-					statsAvailable={pickerStatsAvailable}
-					directorySeed={directorySeed}
-					marketSuggestions={compareOpen ? marketSuggestions : undefined}
-					onSelectMarketSuggestion={handleMarketSuggestionSelect}
-					second={
-						compareOpen
-							? {
-									selectedPlayer: secondPlayer.selectedPlayer,
-									recentPlayers: secondPlayer.recentPlayers,
-									excludedPlayerId: firstPlayer.selectedPlayer?.id,
-									onSelect: handleSecondSelect,
-									onClearRecent: secondPlayer.clearRecent,
-									onClearSelection: () => {
-										secondPlayer.clearSelection()
-										setCompareOpen(false)
-									}
+			<PlayerSelectionPanel
+				first={{
+					selectedPlayer: firstPlayer.selectedPlayer,
+					recentPlayers: firstPlayer.recentPlayers,
+					excludedPlayerId: secondPlayer.selectedPlayer?.id,
+					onSelect: handleFirstSelect,
+					onClearRecent: firstPlayer.clearRecent
+				}}
+				compareOpen={compareOpen}
+				onAddCompare={() => setCompareOpen(true)}
+				canCompare={Boolean(firstPlayer.playerDetail)}
+				statsAvailable={pickerStatsAvailable}
+				directorySeed={directorySeed}
+				marketSuggestions={compareOpen ? marketSuggestions : undefined}
+				onSelectMarketSuggestion={handleMarketSuggestionSelect}
+				second={
+					compareOpen
+						? {
+								selectedPlayer: secondPlayer.selectedPlayer,
+								recentPlayers: secondPlayer.recentPlayers,
+								excludedPlayerId: firstPlayer.selectedPlayer?.id,
+								onSelect: handleSecondSelect,
+								onClearRecent: secondPlayer.clearRecent,
+								onClearSelection: () => {
+									secondPlayer.clearSelection()
+									setCompareOpen(false)
 								}
-							: null
-					}
-				/>
+							}
+						: null
+				}
+			/>
 
-				{initialPlayerIds.p1 != null ||
-				firstPlayer.selectedPlayer ||
-				firstPlayer.isLoading ||
-				firstPlayer.error ? (
+			{initialPlayerIds.p1 != null ||
+			firstPlayer.selectedPlayer ||
+			firstPlayer.isLoading ||
+			firstPlayer.error ? (
 				<PlayerStatsView
 					selectedPlayer={firstPlayer.selectedPlayer}
 					selectedComparison={secondPlayer.selectedPlayer}
@@ -319,7 +324,7 @@ export default function PlayerStatsClient({
 					anchorGw={anchorGw}
 					seasonStatsAvailable={seasonStatsAvailable}
 				/>
-				) : null}
+			) : null}
 		</>
 	)
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { reportBrowserPerformanceMetric } from '@/lib/analytics/client-vitals'
+import { measureRouteReadyDuration } from '@/lib/analytics/route-navigation'
 import {
 	normalizeMetricPage,
 	type AudienceHint
@@ -33,7 +34,7 @@ export function RouteReadyMarker({
 	useEffect(() => {
 		if (!ready || reported.current) return
 		reported.current = true
-		const value = performance.now()
+		const value = measureRouteReadyDuration(pathname)
 		reportBrowserPerformanceMetric(
 			{
 				name,

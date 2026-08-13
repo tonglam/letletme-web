@@ -55,7 +55,15 @@ export type PlayerStatsPersonalSeed = {
 
 const PLAYER_DIRECTORY_SEED_SIZE = 20
 
-function seasonContext(events: Awaited<ReturnType<typeof getCurrentAndNextEvents>>) {
+const settleDirectoryRequest = <T>(promise: Promise<T>) =>
+	promise.then(
+		value => ({ status: 'fulfilled' as const, value }),
+		reason => ({ status: 'rejected' as const, reason })
+	)
+
+function seasonContext(
+	events: Awaited<ReturnType<typeof getCurrentAndNextEvents>>
+) {
 	const review = resolveReviewGameweekAnchor(events)
 	const anchorGw = review.anchorGw ?? 1
 	const seasonStatsAvailable =
@@ -80,37 +88,58 @@ export async function loadPlayerDirectorySeed(): Promise<PlayerDirectorySeed> {
 			tags: [CacheTag.gameweekStats]
 		})
 	)
-	const { seasonStatsAvailable } = seasonContext(await eventsPromise)
+	const teamsResultPromise = settleDirectoryRequest(teamsPromise)
+	const events = await eventsPromise
+	const { seasonStatsAvailable } = seasonContext(events)
 	const sortBy = seasonStatsAvailable ? 'total_desc' : 'own_desc'
-	const playersPromise = executePublicServerQuery<PlayerSearchForPickerResponse>(
-		SEARCH_PLAYERS_FOR_PICKER,
-		{
-			search: null,
-			filter: null,
-			sort: seasonStatsAvailable ? 'TOTAL_POINTS_DESC' : 'OWNERSHIP_DESC',
-			ownershipBand: null,
-			limit: PLAYER_DIRECTORY_SEED_SIZE,
-			cursor: null
-		},
-		publicFetchOptions({
-			revalidate: RevalidateSeconds.publicStats,
-			tags: [CacheTag.gameweekStats]
-		})
-	)
-	const [events, teams, players] = await Promise.all([
-		eventsPromise,
-		teamsPromise,
-		playersPromise
+	const playersPromise =
+		executePublicServerQuery<PlayerSearchForPickerResponse>(
+			SEARCH_PLAYERS_FOR_PICKER,
+			{
+				search: null,
+				filter: null,
+				sort: seasonStatsAvailable ? 'TOTAL_POINTS_DESC' : 'OWNERSHIP_DESC',
+				ownershipBand: null,
+				limit: PLAYER_DIRECTORY_SEED_SIZE,
+				cursor: null
+			},
+			publicFetchOptions({
+				revalidate: RevalidateSeconds.publicStats,
+				tags: [CacheTag.gameweekStats]
+			})
+		)
+	const [teamsResult, playersResult] = await Promise.all([
+		teamsResultPromise,
+		settleDirectoryRequest(playersPromise)
 	])
 	const context = seasonContext(events)
+	if (teamsResult.status === 'rejected') {
+		console.error(
+			'[player-stats-seed] public team directory failed:',
+			teamsResult.reason
+		)
+	}
+	if (playersResult.status === 'rejected') {
+		console.error(
+			'[player-stats-seed] public player directory failed:',
+			playersResult.reason
+		)
+	}
+	const teams =
+		teamsResult.status === 'fulfilled' ? teamsResult.value.teams : []
+	const players =
+		playersResult.status === 'fulfilled'
+			? playersResult.value.playersForPicker
+			: { items: [], totalCount: 0, nextCursor: null }
 
 	return {
-		teams: [...teams.teams].sort((a, b) =>
-			a.shortName.localeCompare(b.shortName)
-		),
-		players: players.playersForPicker.items,
-		totalCount: players.playersForPicker.totalCount,
-		nextCursor: players.playersForPicker.nextCursor,
+		teams: [...teams].sort((a, b) => a.shortName.localeCompare(b.shortName)),
+		teamsState: teamsResult.status === 'fulfilled' ? 'ready' : 'unavailable',
+		players: players.items,
+		playersState:
+			playersResult.status === 'fulfilled' ? 'ready' : 'unavailable',
+		totalCount: players.totalCount,
+		nextCursor: players.nextCursor,
 		queryKey: buildPlayerDirectoryQueryKey({
 			search: null,
 			teamId: null,
@@ -196,7 +225,10 @@ export async function loadPlayerStatsPersonalSeed(
 		const result = fixtureListsResult[i]
 		fixturesByEvent.set(id, result?.status === 'fulfilled' ? result.value : [])
 		if (result?.status === 'rejected') {
-			console.error(`[player-stats-seed] fixtures for GW${id} failed:`, result.reason)
+			console.error(
+				`[player-stats-seed] fixtures for GW${id} failed:`,
+				result.reason
+			)
 		}
 	})
 

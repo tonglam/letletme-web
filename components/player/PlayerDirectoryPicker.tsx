@@ -142,9 +142,7 @@ const pickerSortToGraphql = (sort: PlayerDirectorySort) => {
 	}
 }
 
-const ownBandToGraphql = (
-	band: OwnBand
-): PlayerPickerOwnershipBand | null => {
+const ownBandToGraphql = (band: OwnBand): PlayerPickerOwnershipBand | null => {
 	switch (band) {
 		case 'LE5':
 			return 'LE5'
@@ -220,16 +218,21 @@ export function PlayerDirectoryPicker({
 	)
 	const [totalPlayers, setTotalPlayers] = useState(seed?.totalCount ?? 0)
 	const [nextPlayersCursor, setNextPlayersCursor] = useState<number | null>(
-		seed?.nextCursor ?? null
+		seed?.playersState === 'ready' ? seed.nextCursor : null
 	)
 	const [nextPlayersQueryKey, setNextPlayersQueryKey] = useState<string | null>(
-		seed?.queryKey ?? null
+		seed?.playersState === 'ready' ? seed.queryKey : null
 	)
 	const [isTeamsLoading, setIsTeamsLoading] = useState(false)
 	const [isPlayersLoading, setIsPlayersLoading] = useState(false)
 	const [isMorePlayersLoading, setIsMorePlayersLoading] = useState(false)
 	const [morePlayersError, setMorePlayersError] = useState<string | null>(null)
-	const [error, setError] = useState<string | null>(null)
+	const [teamsError, setTeamsError] = useState<string | null>(() =>
+		seed?.teamsState === 'unavailable' ? t('teamsFailed') : null
+	)
+	const [error, setError] = useState<string | null>(() =>
+		seed?.playersState === 'unavailable' ? t('playersFailed') : null
+	)
 	const [rateLimitSeconds, setRateLimitSeconds] = useState(0)
 	const [positionFilter, setPositionFilter] = useState<PositionFilter>(
 		defaultPosition ?? 'ALL'
@@ -244,22 +247,29 @@ export function PlayerDirectoryPicker({
 	)
 	const browseFiltersBeforeSearchRef = useRef<BrowseFilterSnapshot | null>(null)
 	const playerRequestVersionRef = useRef(0)
-	const nextPlayersQueryKeyRef = useRef<string | null>(seed?.queryKey ?? null)
-	const initialSeedQueryKeyRef = useRef<string | null>(seed?.queryKey ?? null)
+	const nextPlayersQueryKeyRef = useRef<string | null>(
+		seed?.playersState === 'ready' ? seed.queryKey : null
+	)
+	const initialSeedQueryKeyRef = useRef<string | null>(
+		seed?.playersState === 'ready' ? seed.queryKey : null
+	)
 
 	useEffect(() => {
-		if (seed) return
+		if (seed?.teamsState === 'ready') return
 		let isCancelled = false
 		const controller = new AbortController()
 
 		const fetchTeams = async () => {
 			try {
 				setIsTeamsLoading(true)
-				setError(null)
-				const result =
-					await executeQuery<TeamsForPickerResponse>(GET_TEAMS_FOR_PICKER, undefined, {
+				setTeamsError(null)
+				const result = await executeQuery<TeamsForPickerResponse>(
+					GET_TEAMS_FOR_PICKER,
+					undefined,
+					{
 						signal: controller.signal
-					})
+					}
+				)
 
 				if (isCancelled) return
 
@@ -269,7 +279,7 @@ export function PlayerDirectoryPicker({
 				console.error('Failed to fetch teams directory:', fetchError)
 
 				if (!isCancelled) {
-					setError(t('teamsFailed'))
+					setTeamsError(t('teamsFailed'))
 					setTeams([])
 				}
 			} finally {
@@ -321,13 +331,7 @@ export function PlayerDirectoryPicker({
 				sortBy,
 				ownBand
 			}),
-		[
-			isNameSearchActive,
-			normalizedSearch,
-			serverPlayerFilter,
-			sortBy,
-			ownBand
-		]
+		[isNameSearchActive, normalizedSearch, serverPlayerFilter, sortBy, ownBand]
 	)
 
 	useEffect(() => {
@@ -530,8 +534,7 @@ export function PlayerDirectoryPicker({
 
 	const visiblePlayers = filteredPlayers
 	const canLoadMorePlayers =
-		nextPlayersCursor !== null &&
-		nextPlayersQueryKey === playerQueryKey
+		nextPlayersCursor !== null && nextPlayersQueryKey === playerQueryKey
 
 	const isLoading = isTeamsLoading || isPlayersLoading
 
@@ -768,8 +771,19 @@ export function PlayerDirectoryPicker({
 					{t('rateLimited', { seconds: rateLimitSeconds })}
 				</p>
 			) : null}
+			{teamsError ? (
+				<p
+					className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+					role="alert"
+				>
+					{teamsError}
+				</p>
+			) : null}
 
-			<div className="mt-3 rounded-md border" aria-busy={isLoading}>
+			<div
+				className="mt-3 rounded-md border"
+				aria-busy={isLoading}
+			>
 				<div className="max-h-64 overflow-y-auto">
 					{error ? (
 						<div

@@ -7,10 +7,7 @@ import type {
 	PlayerDirectorySort
 } from '@/lib/player-directory-filters'
 
-export type PlayerDirectorySeasonState =
-	| 'active'
-	| 'preseason'
-	| 'unavailable'
+export type PlayerDirectorySeasonState = 'active' | 'preseason' | 'unavailable'
 
 export type PlayerDirectoryQueryKeyInput = {
 	search: string | null
@@ -29,7 +26,9 @@ export function buildPlayerDirectoryQueryKey(
 
 export type PlayerDirectorySeed = {
 	teams: TeamForPickerItem[]
+	teamsState: 'ready' | 'unavailable'
 	players: PlayerDirectoryItem[]
+	playersState: 'ready' | 'unavailable'
 	totalCount: number
 	nextCursor: number | null
 	queryKey: string
