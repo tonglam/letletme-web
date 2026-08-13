@@ -26,6 +26,7 @@ import { resolveFixturePlanningGameweek } from '@/lib/review-gameweek'
 import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
 import {
 	squadPickKeys,
+	type SquadLoadState,
 	type SquadPickSeed,
 } from '@/lib/squad-picks'
 import { getVerifiedEntryContext } from '@/lib/session'
@@ -77,11 +78,12 @@ export default async function FixturesPage({ params }: PageProps) {
 	let marketPulse: MarketPulse | null = null
 	let mySquadKeys: string[] = []
 	let mySquadPicks: SquadPickSeed[] = []
+	let squadState: SquadLoadState = entryId != null ? 'not-published' : 'unbound'
 	let knownTeams: TeamForPickerItem[] = []
 	let unknownEventIds: number[] = []
 
 	try {
-		const [fixtureResults, market, squadPicks, teamsResponse] = await Promise.all([
+		const [fixtureResults, market, squadResult, teamsResponse] = await Promise.all([
 			Promise.allSettled(eventIds.map(id => fetchEventFixtures(id))),
 			executePublicServerQuery<MarketPulseResponse>(
 				GET_MARKET_PULSE,
@@ -95,11 +97,18 @@ export default async function FixturesPage({ params }: PageProps) {
 				return null
 			}),
 			entryId != null && session
-				? loadEntrySquadPicks(session, entryId, events).catch(err => {
-						console.error('[fixtures] entry picks seed failed:', err)
-						return [] as SquadPickSeed[]
-					})
-				: Promise.resolve([] as SquadPickSeed[]),
+				? loadEntrySquadPicks(session, entryId, events)
+						.catch(err => {
+							console.error('[fixtures] entry picks seed failed:', err)
+							return {
+								picks: [] as SquadPickSeed[],
+								state: 'unavailable' as const
+							}
+						})
+				: Promise.resolve({
+						picks: [] as SquadPickSeed[],
+						state: 'unbound' as const
+					}),
 			executePublicServerQuery<TeamsForPickerResponse>(
 				GET_TEAMS_FOR_PICKER,
 				{},
@@ -119,7 +128,8 @@ export default async function FixturesPage({ params }: PageProps) {
 			else unknownEventIds.push(id)
 		})
 		marketPulse = market?.marketPulse ?? null
-		mySquadPicks = squadPicks
+		mySquadPicks = squadResult.picks
+		squadState = squadResult.state
 		knownTeams = teamsResponse.teams ?? []
 	} catch (error) {
 		unstable_rethrow(error)
@@ -139,6 +149,7 @@ export default async function FixturesPage({ params }: PageProps) {
 			mySquadKeys={mySquadKeys}
 			mySquadPicks={mySquadPicks}
 			hasLinkedEntry={entryId != null || mySquadPicks.length > 0}
+			squadState={squadState}
 		/>
 	)
 }

@@ -8,12 +8,14 @@ import { Button } from '@/components/ui/button'
 import { Pencil, Plus, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
+import type { PlayerDirectorySeed } from '@/lib/player-directory-seed'
 
 interface PlayerSlotProps {
 	label: string
 	optional?: boolean
 	defaultPosition?: PlayerDirectoryOption['position'] | null
 	statsAvailable?: boolean
+	directorySeed?: PlayerDirectorySeed
 	selectedPlayer: PlayerDirectoryOption | null
 	recentPlayers: PlayerDirectoryOption[]
 	excludedPlayerId?: string
@@ -21,6 +23,7 @@ interface PlayerSlotProps {
 	onClearRecent: () => void
 	onClearSelection?: () => void
 	onCancel?: () => void
+	onDirectoryReady?: () => void
 }
 
 function RecentPlayers({
@@ -117,6 +120,7 @@ function PlayerSlot({
 	optional = false,
 	defaultPosition,
 	statsAvailable,
+	directorySeed,
 	selectedPlayer,
 	recentPlayers,
 	excludedPlayerId,
@@ -124,6 +128,7 @@ function PlayerSlot({
 	onClearRecent,
 	onClearSelection,
 	onCancel,
+	onDirectoryReady,
 	suggestions,
 	suggestionsLabel,
 	onSelectSuggestion
@@ -193,6 +198,8 @@ function PlayerSlot({
 				excludedPlayerIds={excludedPlayerId ? [excludedPlayerId] : []}
 				defaultPosition={defaultPosition}
 				statsAvailable={statsAvailable}
+				seed={directorySeed}
+				onReady={onDirectoryReady}
 			/>
 			<RecentPlayers
 				players={recentPlayers}
@@ -256,7 +263,9 @@ export function PlayerSelectionPanel({
 	marketSuggestions,
 	onSelectMarketSuggestion,
 	canCompare,
-	statsAvailable
+	statsAvailable,
+	directorySeed,
+	onDirectoryReady
 }: {
 	first: Omit<PlayerSlotProps, 'label' | 'optional'>
 	compareOpen: boolean
@@ -264,6 +273,8 @@ export function PlayerSelectionPanel({
 	second: Omit<PlayerSlotProps, 'label' | 'optional'> | null
 	canCompare: boolean
 	statsAvailable?: boolean
+	directorySeed: PlayerDirectorySeed
+	onDirectoryReady?: () => void
 	marketSuggestions?: Array<{
 		id: string
 		name: string
@@ -308,6 +319,8 @@ export function PlayerSelectionPanel({
 						label={t('playerOne')}
 						statsAvailable={statsAvailable}
 						{...first}
+						directorySeed={directorySeed}
+						onDirectoryReady={onDirectoryReady}
 						onSelect={selectFirst}
 						onCancel={
 							first.selectedPlayer ? () => setEditingSlot(null) : undefined
@@ -327,6 +340,7 @@ export function PlayerSelectionPanel({
 							optional
 							statsAvailable={statsAvailable}
 							{...second}
+							directorySeed={directorySeed}
 							onSelect={selectSecond}
 							onCancel={() => {
 								if (second.selectedPlayer) {

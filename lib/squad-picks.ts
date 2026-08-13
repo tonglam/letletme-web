@@ -3,6 +3,17 @@ import type { EventsResponse } from '@/lib/graphql/operations/events'
 import { squadMatchKey } from '@/lib/fixtures-fdr'
 import { resolveReviewGameweekAnchor } from '@/lib/review-gameweek'
 
+export type SquadLoadState =
+	| 'ready'
+	| 'not-published'
+	| 'unbound'
+	| 'unavailable'
+
+export type EntrySquadPicksResult = {
+	picks: SquadPickSeed[]
+	state: Exclude<SquadLoadState, 'unbound'>
+}
+
 export type SquadPickSeed = {
 	elementId: number | null
 	webName: string
@@ -12,6 +23,17 @@ export type SquadPickSeed = {
 	multiplier: number
 	isCaptain: boolean
 	isViceCaptain: boolean
+}
+
+export function classifyEntrySquadPicks(
+	picks: SquadPickSeed[],
+	requestFailed: boolean
+): EntrySquadPicksResult {
+	if (picks.length > 0) return { picks, state: 'ready' }
+	return {
+		picks: [],
+		state: requestFailed ? 'unavailable' : 'not-published'
+	}
 }
 
 export type SquadPickSeedInput = Pick<

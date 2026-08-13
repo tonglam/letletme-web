@@ -104,7 +104,10 @@ function SectionTitle({
 
 function EmptyHint({ children }: { children: ReactNode }) {
 	return (
-		<p className="rounded-md border border-dashed border-border/70 px-3 py-5 text-center text-xs text-muted-foreground">
+		<p
+			className="rounded-md border border-dashed border-border/70 px-3 py-5 text-center text-xs text-muted-foreground"
+			role="status"
+		>
 			{children}
 		</p>
 	)

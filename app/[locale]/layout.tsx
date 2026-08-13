@@ -18,26 +18,28 @@ import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import '../globals.css'
 
-// Trimmed weights for faster first paint; 500 falls back to 600 visually.
+// Keep one real face per family in the critical path. The browser synthesizes
+// adjacent weights, avoiding six competing font downloads before first paint.
 const barlow = Barlow({
 	subsets: ['latin'],
-	weight: ['400', '600', '700'],
+	weight: ['400'],
 	variable: '--font-barlow',
-	display: 'swap'
+	display: 'optional'
 })
 
 const barlowCondensed = Barlow_Condensed({
 	subsets: ['latin'],
-	weight: ['600', '700'],
+	weight: ['700'],
 	variable: '--font-display',
-	display: 'swap'
+	display: 'optional'
 })
 
 const plexMono = IBM_Plex_Mono({
 	subsets: ['latin'],
 	weight: ['500'],
 	variable: '--font-mono',
-	display: 'swap'
+	display: 'optional',
+	preload: false
 })
 
 type LocaleLayoutProps = {

@@ -14,6 +14,7 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 		Boolean(process.env.PLAYWRIGHT_BASE_URL),
 		'Uses the deterministic local GraphQL fixture'
 	)
+	await page.setViewportSize({ width: 390, height: 844 })
 	await page.clock.install()
 
 	let batchPayload:
@@ -104,6 +105,11 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 		page.getByRole('button', { name: /View details for Player/ })
 	).toHaveCount(15)
 	await expect(page.getByText('ARS', { exact: true })).toHaveCount(15)
+	expect(
+		await page.evaluate(
+			() => document.documentElement.scrollWidth <= window.innerWidth
+		)
+	).toBe(true)
 	await expect
 		.poll(() => batchPayload?.variables?.elementIds?.length ?? 0)
 		.toBe(15)

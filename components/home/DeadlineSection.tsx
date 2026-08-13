@@ -5,7 +5,7 @@ import { CalendarClock } from 'lucide-react'
 import { usePageActive } from '@/hooks/use-page-active'
 import { useRouter } from '@/i18n/navigation'
 import { useLocale, useTranslations } from 'next-intl'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 interface TimeLeft {
 	days: number
@@ -36,15 +36,20 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 	const t = useTranslations('Home')
 	const deadline = useMemo(() => (deadlineTime ? new Date(deadlineTime) : null), [deadlineTime])
 	const [timeLeft, setTimeLeft] = useState<TimeLeft>({ days: 0, hours: 0, minutes: 0, seconds: 0 })
-	const [formattedDeadline, setFormattedDeadline] = useState('')
+	const [formattedDeadlineDate, setFormattedDeadlineDate] = useState('')
 	const [deadlinePassed, setDeadlinePassed] = useState(false)
 	const router = useRouter()
+	const routerRef = useRef(router)
 	const isPageActive = usePageActive()
+
+	useEffect(() => {
+		routerRef.current = router
+	}, [router])
 
 	useEffect(() => {
 		if (!deadline) {
 			const resetTimer = window.setTimeout(() => {
-				setFormattedDeadline('')
+				setFormattedDeadlineDate('')
 				setDeadlinePassed(false)
 			}, 0)
 			return () => window.clearTimeout(resetTimer)
@@ -65,7 +70,7 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 				hour: '2-digit',
 				minute: '2-digit',
 			}).format(deadline)
-			setFormattedDeadline(t('deadline', { date: formatted }))
+			setFormattedDeadlineDate(formatted)
 			updateTimeLeft()
 		}, 0)
 		const tickTimer = isPageActive ? setInterval(updateTimeLeft, 1000) : undefined
@@ -77,8 +82,11 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 		let refreshTimer: ReturnType<typeof setInterval> | undefined
 
 		const startRefreshing = () => {
-			router.refresh()
-			refreshTimer = setInterval(() => router.refresh(), 30_000)
+			routerRef.current.refresh()
+			refreshTimer = setInterval(
+				() => routerRef.current.refresh(),
+				30_000
+			)
 		}
 
 		const msUntilDeadline = deadline.getTime() - Date.now()
@@ -96,7 +104,7 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 			if (expireTimer !== undefined) window.clearTimeout(expireTimer)
 			if (refreshTimer !== undefined) clearInterval(refreshTimer)
 		}
-	}, [deadline, isPageActive, locale, router, t])
+	}, [deadline, isPageActive, locale])
 
 	if (!nextEventId || !deadlineTime) {
 		return (
@@ -158,7 +166,9 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 					</div>
 					<p className="mt-4 flex items-center gap-2 text-xs text-fascia-foreground/60">
 						<CalendarClock aria-hidden="true" className="size-3.5 shrink-0 text-electric" />
-						{formattedDeadline}
+						{formattedDeadlineDate
+							? t('deadline', { date: formattedDeadlineDate })
+							: null}
 					</p>
 				</>
 			)}

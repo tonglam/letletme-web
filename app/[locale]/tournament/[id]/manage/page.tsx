@@ -5,11 +5,13 @@ import {
 	GET_MANAGED_TOURNAMENT,
 	type ManagedTournamentResponse,
 } from '@/lib/graphql/operations/tournaments'
-import { executeServerQuery } from '@/lib/graphql-server'
+import { GraphQLRequestError } from '@/lib/graphql-client'
+import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { Link } from '@/i18n/navigation'
 import { localizeHref } from '@/i18n/routing'
-import { getCurrentEntryId, getCurrentSession } from '@/lib/session'
+import { RouteLoaderTiming } from '@/lib/route-loader-timing'
+import { getVerifiedEntryContext } from '@/lib/session'
 import { LockKeyhole } from 'lucide-react'
 import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
@@ -31,41 +33,60 @@ type PageProps = {
 }
 
 export default async function Page({ params }: PageProps) {
+	const timing = new RouteLoaderTiming('/tournament/:tournamentId/manage')
 	const { id, locale } = await getPageLocale(params)
-	const t = await getTranslations('TournamentManagePage')
-	const common = await getTranslations('Common')
+	const [t, common, context] = await Promise.all([
+		getTranslations('TournamentManagePage'),
+		getTranslations('Common'),
+		timing.measure('session', () => getVerifiedEntryContext())
+	])
 	const nextPath = `/tournament/${encodeURIComponent(id)}/manage`
-	const session = await getCurrentSession()
-	if (!session)
+	const { session, entryId } = context
+	if (!session) {
+		timing.finish('redirect-login')
 		redirect(
 			localizeHref(`/auth/login?next=${encodeURIComponent(nextPath)}`, locale),
 		)
-
-	const entryId = await getCurrentEntryId()
-	if (!entryId)
+	}
+	if (!entryId) {
+		timing.finish('redirect-bind')
 		redirect(
 			localizeHref(
 				`/onboarding/bind-entry?next=${encodeURIComponent(nextPath)}`,
 				locale,
 			),
 		)
+	}
 
 	const tournamentId = /^\d+$/.test(id) ? Number(id) : Number.NaN
 	if (!Number.isSafeInteger(tournamentId) || tournamentId <= 0) {
+		timing.finish('forbidden')
 		return <NoManagementAccess id={id} />
 	}
 
 	let response: ManagedTournamentResponse
 	try {
-		response = await executeServerQuery<ManagedTournamentResponse>(
-			GET_MANAGED_TOURNAMENT,
-			{ tournamentId, entryId },
-			{ cache: 'no-store' },
+		response = await timing.measure('managedTournament', () =>
+			executeServerQueryWithSession<ManagedTournamentResponse>(
+				session,
+				GET_MANAGED_TOURNAMENT,
+				{ tournamentId, entryId },
+				{ cache: 'no-store' }
+			)
 		)
 	} catch (error) {
+		if (
+			error instanceof GraphQLRequestError &&
+			(error.status === 403 || error.code === 'FORBIDDEN')
+		) {
+			timing.finish('forbidden')
+			return <NoManagementAccess id={id} />
+		}
 		console.error('[tournament management] Failed to load:', error)
+		timing.finish('unavailable')
 		return (
 			<PageState
+				role="alert"
 				icon={LockKeyhole}
 				title={t('unavailableTitle')}
 				description={t('unavailableDescription')}
@@ -85,8 +106,10 @@ export default async function Page({ params }: PageProps) {
 
 	const tournament = response.managedTournament
 	if (!tournament) {
+		timing.finish('forbidden')
 		return <NoManagementAccess id={id} />
 	}
+	timing.finish('ready')
 
 	return (
 		<ManageTournamentClient
@@ -100,6 +123,7 @@ async function NoManagementAccess({ id }: { id: string }) {
 	const t = await getTranslations('TournamentManagePage')
 	return (
 		<PageState
+			role="status"
 			icon={LockKeyhole}
 			title={t('accessTitle')}
 			description={t('accessDescription')}

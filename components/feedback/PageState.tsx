@@ -16,6 +16,7 @@ interface PageStateProps {
 	description: string
 	actions?: ReactNode
 	className?: string
+	role?: 'status' | 'alert'
 }
 
 export function PageState({
@@ -24,9 +25,13 @@ export function PageState({
 	description,
 	actions,
 	className,
+	role,
 }: PageStateProps) {
 	return (
-		<div className={cn('mx-auto flex min-h-[55svh] w-full max-w-4xl items-center px-4 py-12', className)}>
+		<div
+			className={cn('mx-auto flex min-h-[55svh] w-full max-w-4xl items-center px-4 py-12', className)}
+			role={role}
+		>
 			<Card className="mx-auto w-full max-w-xl overflow-hidden">
 				<CardHeader className="items-center pb-3 text-center">
 					<div className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary-ink">

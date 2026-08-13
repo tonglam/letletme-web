@@ -9,37 +9,36 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { useHydrated } from '@/hooks/use-hydrated'
 import { Link, useRouter } from '@/i18n/navigation'
-import {
-	getSafeInternalHref,
-	localizeHref,
-	type AppLocale
-} from '@/i18n/routing'
+import { localizeHref, type AppLocale } from '@/i18n/routing'
 import { getAuthErrorKey } from '@/lib/auth-error'
 import { signIn } from '@/lib/auth-client'
-import {
-	absoluteAuthUrl,
-	hasOAuthCallbackError,
-	onboardingRedirectPath
-} from '@/lib/auth-redirects'
+import { absoluteAuthUrl, onboardingRedirectPath } from '@/lib/auth-redirects'
 import { useLocale, useTranslations } from 'next-intl'
-import { useSearchParams } from 'next/navigation'
-import { Suspense, useState } from 'react'
+import { useState } from 'react'
 
-function LoginForm() {
+type LoginReason = 'reauth' | null
+
+export default function LoginClient({
+	next,
+	oauthError,
+	reason
+}: {
+	next: string
+	oauthError: boolean
+	reason: LoginReason
+}) {
 	const router = useRouter()
 	const locale = useLocale() as AppLocale
 	const t = useTranslations('Auth')
 	const hydrated = useHydrated()
-	const searchParams = useSearchParams()
-	const next = getSafeInternalHref(searchParams.get('next') ?? '/')
+	const destination =
+		reason === 'reauth' ? next : onboardingRedirectPath(next)
 
 	const [email, setEmail] = useState('')
 	const [password, setPassword] = useState('')
 	const [pending, setPending] = useState(false)
 	const [error, setError] = useState<string | null>(() =>
-		hasOAuthCallbackError(searchParams)
-			? t('errors.socialLoginFailed')
-			: null
+		oauthError ? t('errors.socialLoginFailed') : null
 	)
 
 	const handleEmailLogin = async (e: React.FormEvent) => {
@@ -52,7 +51,7 @@ function LoginForm() {
 				setError(t(`errors.${getAuthErrorKey(err, 'loginFailed')}`))
 				return
 			}
-			router.push(onboardingRedirectPath(next))
+			router.push(destination)
 		} catch (cause) {
 			setError(
 				t(
@@ -71,17 +70,18 @@ function LoginForm() {
 		setPending(true)
 		setError(null)
 		try {
-			const onboardingUrl = absoluteAuthUrl(
-				localizeHref(onboardingRedirectPath(next), locale),
+			const callbackUrl = absoluteAuthUrl(
+				localizeHref(destination, locale),
 				window.location.origin
 			)
+			const errorReason = reason === 'reauth' ? '&reason=reauth' : ''
 			const { error: err } = await signIn.social({
 				provider,
-				callbackURL: onboardingUrl,
-				newUserCallbackURL: onboardingUrl,
+				callbackURL: callbackUrl,
+				newUserCallbackURL: callbackUrl,
 				errorCallbackURL: absoluteAuthUrl(
 					localizeHref(
-						`/auth/login?oauthError=1&next=${encodeURIComponent(next)}`,
+						`/auth/login?oauthError=1&next=${encodeURIComponent(next)}${errorReason}`,
 						locale
 					),
 					window.location.origin
@@ -114,8 +114,14 @@ function LoginForm() {
 
 			<Card className="w-full max-w-md border-border/80 p-6 shadow-sm">
 				<div className="mb-6 text-center">
-					<h2 className="font-display text-2xl font-bold tracking-tight">{t('signIn')}</h2>
-					<p className="text-sm text-muted-foreground">{t('chooseMethod')}</p>
+					<h2 className="font-display text-2xl font-bold tracking-tight">
+						{reason === 'reauth' ? t('reauthTitle') : t('signIn')}
+					</h2>
+					<p className="text-sm text-muted-foreground">
+						{reason === 'reauth'
+							? t('reauthDescription')
+							: t('chooseMethod')}
+					</p>
 				</div>
 
 				{error && (
@@ -149,6 +155,7 @@ function LoginForm() {
 							<Label htmlFor="password">{t('password')}</Label>
 							<Link
 								href="/auth/forgot-password"
+								prefetch={false}
 								className="text-xs text-primary-ink underline underline-offset-4 hover:no-underline"
 							>
 								{t('forgotPassword')}
@@ -216,6 +223,7 @@ function LoginForm() {
 					{t('noAccount')}{' '}
 					<Link
 						href="/auth/signup"
+						prefetch={false}
 						className="text-primary-ink underline underline-offset-4 hover:no-underline"
 					>
 						{t('signUp')}
@@ -223,13 +231,5 @@ function LoginForm() {
 				</p>
 			</Card>
 		</div>
-	)
-}
-
-export default function LoginClient() {
-	return (
-		<Suspense>
-			<LoginForm />
-		</Suspense>
 	)
 }

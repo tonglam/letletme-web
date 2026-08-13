@@ -24,7 +24,7 @@ export function MySquadRail({
 	const sorted = [...picks].sort((a, b) => a.position - b.position)
 
 	return (
-		<div className="mb-4 rounded-lg border border-border/60 bg-muted/10 px-3 py-3">
+		<>
 			<p className="mb-2 font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
 				{t('mySquadRailTitle')}
 			</p>
@@ -59,6 +59,6 @@ export function MySquadRail({
 					)
 				})}
 			</div>
-		</div>
+		</>
 	)
 }

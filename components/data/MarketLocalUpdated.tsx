@@ -35,13 +35,23 @@ export function MarketLocalUpdated({
 	}, [capturedAt, format])
 
 	if (!label) {
-		// Placeholder until mount (same structure, no wrong fixed zone)
 		return (
-			<span suppressHydrationWarning>
+			<time
+				dateTime={capturedAt}
+				className="inline-block min-h-5 min-w-56 whitespace-nowrap tabular-nums"
+				suppressHydrationWarning
+			>
 				{t('lastUpdated', { date: '…' })}
-			</span>
+			</time>
 		)
 	}
 
-	return <span>{t('lastUpdated', { date: label })}</span>
+	return (
+		<time
+			dateTime={capturedAt}
+			className="inline-block min-h-5 min-w-56 whitespace-nowrap tabular-nums"
+		>
+			{t('lastUpdated', { date: label })}
+		</time>
+	)
 }

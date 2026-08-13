@@ -106,6 +106,7 @@ function LeagueRow({ row }: { row: HomeLeagueRankRow }) {
 			<li>
 				<Link
 					href={`${TOURNAMENT_STATS_PATH}?${qs}`}
+					prefetch={false}
 					className={rowClass}
 				>
 					{body}

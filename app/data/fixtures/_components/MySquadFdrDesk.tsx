@@ -9,7 +9,7 @@ import {
 import { Link } from '@/i18n/navigation'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { positionBadgeClass } from '@/lib/position-style'
-import type { SquadPickSeed } from '@/lib/squad-picks'
+import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { useMemo } from 'react'
@@ -59,12 +59,14 @@ export function MySquadFdrDesk({
 	fromGw,
 	horizon,
 	hasLinkedEntry = false,
+	squadState = hasLinkedEntry ? 'not-published' : 'unbound',
 }: {
 	picks: SquadPickSeed[]
 	teams: TeamFdrRow[]
 	fromGw: number
 	horizon: number
 	hasLinkedEntry?: boolean
+	squadState?: SquadLoadState
 }) {
 	const t = useTranslations('Fixtures')
 
@@ -95,9 +97,14 @@ export function MySquadFdrDesk({
 
 	if (picks.length === 0) {
 		return (
-			<p className="rounded-lg border border-dashed border-border/70 px-4 py-6 text-center text-sm text-muted-foreground">
-				{hasLinkedEntry ? (
+			<p
+				className="rounded-lg border border-dashed border-border/70 px-4 py-6 text-center text-sm text-muted-foreground"
+				role={squadState === 'unavailable' ? 'alert' : 'status'}
+			>
+				{squadState === 'unavailable' ? (
 					t('mySquadLoadFailed')
+				) : squadState === 'not-published' ? (
+					t('mySquadNotPublished')
 				) : (
 					<>
 						{t('actionsMySquadEmpty')}{' '}

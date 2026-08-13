@@ -39,6 +39,7 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 					</div>
 					<Link
 						href="/data/gameweek"
+						prefetch={false}
 						className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
 					>
 						{t('viewGameweekStats')}
@@ -102,6 +103,7 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 				</div>
 				<Link
 					href="/data/gameweek"
+					prefetch={false}
 					className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
 				>
 					{t('viewGameweekStats')}

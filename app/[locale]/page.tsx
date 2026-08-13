@@ -210,7 +210,7 @@ async function HomeHero() {
 								className="shadow-sticker font-display text-base font-semibold uppercase tracking-[0.1em] transition-transform hover:-translate-y-0.5"
 								asChild
 							>
-								<Link href="/live/points">
+								<Link href="/live/points" prefetch={false}>
 									{t('openLivePoints')}
 									<ArrowRight data-icon="inline-end" />
 								</Link>
@@ -291,13 +291,15 @@ async function HomeTournamentBand() {
 						className="min-h-11 border-electric/50 bg-transparent font-display font-semibold uppercase tracking-[0.08em] text-electric hover:bg-electric hover:text-plum"
 						asChild
 					>
-						<Link href="/tournament/browse">{t('browseTournaments')}</Link>
+						<Link href="/tournament/browse" prefetch={false}>
+							{t('browseTournaments')}
+						</Link>
 					</Button>
 					<Button
 						className="min-h-11 bg-electric font-display font-semibold uppercase tracking-[0.08em] text-plum hover:bg-electric/90"
 						asChild
 					>
-						<Link href="/tournament/create">
+						<Link href="/tournament/create" prefetch={false}>
 							{t('createTournament')}
 							<ArrowRight data-icon="inline-end" />
 						</Link>

@@ -225,6 +225,135 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
+		if (query.includes('SearchPlayersForPicker')) {
+			const search =
+				typeof variables.search === 'string'
+					? variables.search.trim().toLowerCase()
+					: ''
+			const directory = [
+				{
+					id: 1,
+					webName: 'Saka',
+					position: 'MIDFIELDER',
+					price: 100,
+					selectedByPercent: 32.5,
+					totalPoints: 181,
+					form: 6.2,
+					team: { id: 1, name: 'Arsenal', shortName: 'ARS' }
+				},
+				{
+					id: 2,
+					webName: 'Palmer',
+					position: 'MIDFIELDER',
+					price: 105,
+					selectedByPercent: 41.2,
+					totalPoints: 195,
+					form: 7.1,
+					team: { id: 2, name: 'Chelsea', shortName: 'CHE' }
+				}
+			]
+			const items = search
+				? directory.filter(player =>
+						player.webName.toLowerCase().includes(search)
+					)
+				: directory
+			json(response, 200, {
+				data: {
+					playersForPicker: {
+						items,
+						totalCount: items.length,
+						nextCursor: null
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('GetPlayerStateProfile')) {
+			json(response, 200, { data: { playerStateProfile: null } })
+			return
+		}
+		if (query.includes('GetPlayerEvidence')) {
+			json(response, 200, {
+				data: {
+					playerDetail: {
+						id: Number(variables.playerId) || 1,
+						webName: 'Saka',
+						teamShortName: 'ARS',
+						elementType: 3,
+						elementTypeName: 'MIDFIELDER',
+						statsContext: {
+							scope: 'CURRENT_SEASON',
+							season: '2026-27',
+							asOfEventId: 33
+						},
+						fixtures: [],
+						recentGameweeks: [],
+						totalPoints: 181,
+						selectedByPercent: 32.5,
+						form: 6.2,
+						minutes: 900,
+						starts: 10,
+						goalsScored: 8,
+						assists: 7,
+						cleanSheets: 5,
+						goalsConceded: 9,
+						ownGoals: 0,
+						penaltiesSaved: 0,
+						yellowCards: 1,
+						redCards: 0,
+						saves: 0,
+						bonus: 16,
+						bps: 240,
+						expectedGoals: 7.2,
+						expectedAssists: 5.8,
+						expectedGoalInvolvements: 13,
+						expectedGoalsConceded: 0,
+						influence: 420,
+						creativity: 510,
+						threat: 600,
+						ictIndex: 153
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('GetPlayerOverall')) {
+			json(response, 200, {
+				data: {
+					playerDetail: {
+						id: Number(variables.playerId) || 1,
+						webName: 'Saka',
+						teamShortName: 'ARS',
+						elementType: 3,
+						elementTypeName: 'MIDFIELDER',
+						price: 100,
+						startPrice: 95,
+						statsContext: {
+							scope: 'CURRENT_SEASON',
+							season: '2026-27',
+							asOfEventId: 33
+						},
+						availability: {
+							status: 'AVAILABLE',
+							news: '',
+							newsAdded: null,
+							observedDate: '2026-08-13',
+							capturedAt: '2026-08-13T09:40:00.000Z',
+							chanceOfPlayingThisRound: 100,
+							chanceOfPlayingNextRound: 100,
+							stale: false
+						},
+						totalPoints: 181,
+						selectedByPercent: 32.5,
+						form: 6.2,
+						transfersInEvent: 12000,
+						transfersOutEvent: 3000,
+						fixtures: []
+					}
+				}
+			})
+			return
+		}
 		if (query.includes('PublicLeagueSelectionStats')) {
 			json(response, 200, {
 				data: {

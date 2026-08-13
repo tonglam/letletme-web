@@ -31,6 +31,7 @@ import { localizeHref } from '@/i18n/routing'
 import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { Suspense } from 'react'
+import { RouteLoaderTiming } from '@/lib/route-loader-timing'
 
 export const dynamic = 'force-dynamic'
 
@@ -113,21 +114,25 @@ export default async function TournamentStatsPage({
 	params,
 	searchParams,
 }: PageProps) {
-	const { locale } = await getPageLocale(params)
-	const t = await getTranslations('States')
-	const sp = await searchParams
+	const timing = new RouteLoaderTiming('/me/tournament')
+	const [pageLocale, t, sp, context, events] = await Promise.all([
+		getPageLocale(params),
+		getTranslations('States'),
+		searchParams,
+		timing.measure('session', () => getVerifiedEntryContext()),
+		timing.measure('events', () => getCurrentAndNextEvents())
+	])
+	const { locale } = pageLocale
 	const initialView = parseTournamentStatsView(sp.view)
 	const needsGameweekSeed = initialView === 'gameweek'
 
-	const [{ session, entryId }, events] = await Promise.all([
-		getVerifiedEntryContext(),
-		getCurrentAndNextEvents(),
-	])
-
+	const { session, entryId } = context
 	if (!session) {
+		timing.finish('redirect-login')
 		redirect(localizeHref('/auth/login?next=/me/tournament', locale))
 	}
 	if (!entryId) {
+		timing.finish('redirect-bind')
 		redirect(localizeHref('/onboarding/bind-entry', locale))
 	}
 
@@ -156,13 +161,14 @@ export default async function TournamentStatsPage({
 	let usedFallbackGameweek = false
 
 	try {
-		const tournamentsData =
-			await executeServerQueryWithSession<EntryTournamentsResponse>(
+		const tournamentsData = await timing.measure('tournaments', () =>
+			executeServerQueryWithSession<EntryTournamentsResponse>(
 				session,
 				GET_ENTRY_TOURNAMENTS,
 				{ entryId },
 				{ cache: 'no-store' },
 			)
+		)
 		initialTournaments = tournamentsData.entryTournaments
 
 		const requestedTournamentId =
@@ -186,10 +192,8 @@ export default async function TournamentStatsPage({
 			areTournamentInsightsReady(selectedTournament) &&
 			anchorForProbe > 0
 		) {
-			const resolved = await resolveLatestResults(
-				session,
-				tournamentId,
-				anchorForProbe,
+			const resolved = await timing.measure('standingsProbe', () =>
+				resolveLatestResults(session, tournamentId, anchorForProbe)
 			)
 			const latestGw = resolved.latestGw
 			const probeRows = resolved.rows
@@ -202,7 +206,8 @@ export default async function TournamentStatsPage({
 
 			const rankingPromise =
 				probeRows.length > 0
-					? executeServerQueryWithSession<TournamentEntryRankingSummaryResponse>(
+					? timing.measure('ranking', () =>
+						executeServerQueryWithSession<TournamentEntryRankingSummaryResponse>(
 							session,
 							GET_TOURNAMENT_ENTRY_RANKING_SUMMARY,
 							{
@@ -211,7 +216,8 @@ export default async function TournamentStatsPage({
 								entryId,
 							},
 							{ cache: 'no-store' },
-						).catch(err => {
+						)
+					).catch(err => {
 							console.warn('[tournament stats] ranking seed failed:', err)
 							return null
 						})
@@ -219,12 +225,14 @@ export default async function TournamentStatsPage({
 
 			const snapshotPromise =
 				probeRows.length > 0
-					? executeServerQueryWithSession<TournamentSeasonSnapshotResponse>(
+					? timing.measure('seasonSnapshot', () =>
+						executeServerQueryWithSession<TournamentSeasonSnapshotResponse>(
 							session,
 							GET_TOURNAMENT_SEASON_SNAPSHOT,
 							{ tournamentId, eventId: latestGw },
 							{ cache: 'no-store' },
-						).catch(err => {
+						)
+					).catch(err => {
 							console.warn(
 								'[tournament stats] season snapshot seed failed:',
 								err,
@@ -236,10 +244,12 @@ export default async function TournamentStatsPage({
 			if (needsGameweekSeed && latestGw > 0) {
 				const targetGw =
 					seedGw > 0 ? Math.min(seedGw, latestGw) : latestGw
-				const currentRows =
+			const currentRows =
 					targetGw === latestGw
 						? probeRows
-						: await fetchResults(session, tournamentId, targetGw)
+						: await timing.measure('gameweek', () =>
+								fetchResults(session, tournamentId, targetGw)
+							)
 				initialCurrentRows = currentRows
 				initialSliceGameweek = targetGw
 
@@ -283,8 +293,6 @@ export default async function TournamentStatsPage({
 			}
 
 			console.info('[tournament stats] ssr seed', {
-				entryId,
-				tournamentId,
 				view: initialView,
 				currentGw: review.currentGw,
 				anchorGw: review.anchorGw,
@@ -298,8 +306,6 @@ export default async function TournamentStatsPage({
 			})
 		} else {
 			console.info('[tournament stats] ssr seed (list only)', {
-				entryId,
-				tournamentId,
 				anchorGw: review.anchorGw,
 				insightsReady: selectedTournament
 					? areTournamentInsightsReady(selectedTournament)
@@ -311,6 +317,7 @@ export default async function TournamentStatsPage({
 		// Soft fail — still render shell with tournaments list if we got any
 		initialError = t('tournamentStatsFailed')
 	}
+	timing.finish(initialError ? 'unavailable' : 'ready')
 
 	return (
 		<Suspense fallback={<TournamentStatsFallback />}>

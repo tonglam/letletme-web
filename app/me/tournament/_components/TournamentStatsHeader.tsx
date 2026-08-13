@@ -161,9 +161,7 @@ export function TournamentStatsHeader({
 							))}
 						</ul>
 					) : null
-				) : (
-					<p className="text-sm text-muted-foreground">{t('noLinked')}</p>
-				)}
+				) : null}
 			</div>
 		</Card>
 	)
