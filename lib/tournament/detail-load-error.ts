@@ -1,5 +1,5 @@
 /**
- * Classifies GraphQL / access failures for /live/tournaments/[id]
+ * Classifies GraphQL / access failures for /live/competitions/[id]
  * so the UI can show specific, actionable copy.
  */
 export type TournamentDetailLoadError =

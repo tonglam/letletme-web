@@ -47,14 +47,14 @@ const noSession: MockSession = null
 
 describe('middleware — tournament route shape', () => {
 	it('rejects special route names when followed by /manage', () => {
-		assert.equal(hasInvalidTournamentId('/tournament/create/manage'), true)
-		assert.equal(hasInvalidTournamentId('/tournament/browse/manage/'), true)
+		assert.equal(hasInvalidTournamentId('/competitions/create/manage'), true)
+		assert.equal(hasInvalidTournamentId('/competitions/browse/manage/'), true)
 	})
 
 	it('allows canonical special routes and numeric management routes', () => {
-		assert.equal(hasInvalidTournamentId('/tournament/create'), false)
-		assert.equal(hasInvalidTournamentId('/tournament/browse/'), false)
-		assert.equal(hasInvalidTournamentId('/tournament/42/manage'), false)
+		assert.equal(hasInvalidTournamentId('/competitions/create'), false)
+		assert.equal(hasInvalidTournamentId('/competitions/browse/'), false)
+		assert.equal(hasInvalidTournamentId('/competitions/42/manage'), false)
 	})
 })
 
@@ -63,11 +63,11 @@ describe('middleware — public routes', () => {
 		'/',
 		'/live/matches',
 		'/live/points/123',       // public id-suffixed variant
-		'/data/player-stats',
-		'/data/market',
-		'/data/gameweek',
-		'/data/selections',
-		'/tournament/abc',        // public read-only tournament page
+		'/explore/player-stats',
+		'/explore/market',
+		'/explore/gameweek',
+		'/explore/selections',
+		'/competitions/abc',        // public read-only tournament page
 		'/auth/login',
 		'/auth/signup',
 		'/api/auth/session',
@@ -83,7 +83,7 @@ describe('middleware — public routes', () => {
 describe('middleware — session gate', () => {
 	const sessionGatedPaths = [
 		'/profile',
-		'/tournament/create',
+		'/competitions/create',
 		'/onboarding/bind-entry',
 		'/api/tournaments',
 	]
@@ -104,11 +104,11 @@ describe('middleware — session gate', () => {
 describe('middleware — fplEntryId gate', () => {
 	const entryGatedPaths = [
 		'/live/points',
-		'/live/tournaments',
-		'/me/team',
-		'/me/tournament',
-		'/tournament/create',
-		'/tournament/browse',
+		'/live/competitions',
+		'/my-fpl/team',
+		'/my-fpl/competitions',
+		'/competitions/create',
+		'/competitions/browse',
 	]
 
 	for (const path of entryGatedPaths) {
@@ -131,8 +131,8 @@ describe('middleware — fplEntryId gate', () => {
 
 describe('middleware — login redirect encodes next param', () => {
 	it('preserves the original path in the next query param', () => {
-		const result = resolveMiddlewareOutcome('/me/team', noSession)
+		const result = resolveMiddlewareOutcome('/my-fpl/team', noSession)
 		assert.ok(typeof result === 'object')
-		assert.ok(result.redirect.includes('next=%2Fme%2Fteam'))
+		assert.ok(result.redirect.includes('next=%2Fmy-fpl%2Fteam'))
 	})
 })

@@ -37,8 +37,8 @@ export default function TeamPointsClient({
 		initialSnapshot
 	})
 	const backHref = tournamentId
-		? `/live/tournaments/${tournamentId}`
-		: '/live/tournaments'
+		? `/live/competitions/${tournamentId}`
+		: '/live/competitions'
 
 	let content
 	if (livePoints.isLoading && !livePoints.liveData) {

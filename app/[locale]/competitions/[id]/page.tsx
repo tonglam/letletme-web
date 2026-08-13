@@ -16,5 +16,5 @@ export default async function Page({ params, searchParams }: PageProps) {
 	}
 	const query = await searchParams
 	const created = query.created === '1' ? '?created=1' : ''
-	redirect(localizeHref(`/live/tournaments/${id}${created}`, locale))
+	redirect(localizeHref(`/live/competitions/${id}${created}`, locale))
 }

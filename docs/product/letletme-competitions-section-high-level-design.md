@@ -41,13 +41,13 @@ The fixed inputs are:
 | Area | Current implementation |
 | --- | --- |
 | Navigation | `components/layout/config.ts` exposes a singular Tournament category with New Tournament and Browse Tournaments; Live and My FPL also use Tournament wording |
-| Membership list | `/tournament/browse` loads every tournament for the bound entry, then provides useful client-side search, Classic/H2H and status filters, organizer filtering, sorting, progressive rows, and Live/Manage actions |
-| Creation | `/tournament/create` offers a recommended copied-Classic path and a custom builder; both fetch the complete official source roster before submission |
+| Membership list | `/competitions/browse` loads every tournament for the bound entry, then provides useful client-side search, Classic/H2H and status filters, organizer filtering, sorting, progressive rows, and Live/Manage actions |
+| Creation | `/competitions/create` offers a recommended copied-Classic path and a custom builder; both fetch the complete official source roster before submission |
 | Create model | `creationMode`, `participantSource`, league type, roster mode, and format fields overlap; they do not express one durable competition kind |
 | Custom formats | The form exposes points groups plus single- or double-elimination configuration and validates schedules and power-of-two brackets |
-| Canonical object | `/tournament/[id]` redirects directly to `/live/tournaments/[id]`; no permanent non-Live Competition Home exists |
+| Canonical object | `/competitions/[id]` redirects directly to `/live/competitions/[id]`; no permanent non-Live Competition Home exists |
 | Live | The current detail contains identity, roster, rules, setup, recovery, management links, comparison, filters, and a generic live-points table |
-| Settled results | Rich shared points-race and field analysis currently lives inside `/me/tournament`, mixed with viewer-specific summaries |
+| Settled results | Rich shared points-race and field analysis currently lives inside `/my-fpl/competitions`, mixed with viewer-specific summaries |
 | Invitations | No invitation, join, claim, enrollment, or roster-lock route exists |
 | Management | The organizer can rename, pause/resume, retry setup, retry or enable official roster sync, and permanently delete after exact-name confirmation |
 | Identity | Management authority is based on the current bound `adminEntryId`; the stable signed-in Web user ID is not persisted on the competition |
@@ -501,7 +501,7 @@ Responsibilities:
 - `/competitions/[id]/manage`: organizer operations.
 - `/live/competitions*`: current or selected-gameweek detailed Live result only.
 
-Preserve locale and meaningful query state when redirecting the existing `/tournament/*` and `/live/tournaments/*` URLs.
+Preserve locale and meaningful query state when redirecting the existing `/competitions/*` and `/live/competitions/*` URLs.
 
 ## 5. Implementation work packages
 
@@ -658,7 +658,7 @@ Changes:
 
 1. Rename public navigation and copy from Tournament to Competitions.
 2. Add the target `/competitions*` route namespace and compatibility redirects.
-3. Replace `/tournament/browse?mine=true` with `/competitions` as My Competitions.
+3. Replace `/competitions/browse?mine=true` with `/competitions` as My Competitions.
 4. Retain useful search, sort, progressive rows, status, and organizer filters.
 5. Default to active/relevant objects across both kinds rather than Classic-only filtering.
 6. Add kind, viewer role, current stage, compact viewer result, setup attention, and contextual Home/Live/Manage actions.
@@ -668,7 +668,7 @@ Changes:
 Primary files:
 
 - `components/layout/config.ts`
-- `app/[locale]/tournament/browse/page.tsx`
+- `app/[locale]/competitions/browse/page.tsx`
 - `app/tournament/browse/TournamentListClient.tsx`
 - new `app/[locale]/competitions/**` and feature components
 - `messages/en.json`
@@ -730,7 +730,7 @@ Do not embed the full Live table or entire season history on Home. Rehome rules,
 
 Primary files:
 
-- replace `app/[locale]/tournament/[id]/page.tsx`
+- replace `app/[locale]/competitions/[id]/page.tsx`
 - new `app/[locale]/competitions/[id]/page.tsx`
 - reusable modules extracted from `app/live/tournaments/[id]/TournamentDetailClient.tsx`
 - new competition shell and local-navigation components
@@ -763,7 +763,7 @@ Primary files:
 Changes:
 
 1. Add `/competitions/[id]/results` with event/stage selection and finalized authority metadata.
-2. Rehome shared field-wide components from `/me/tournament`:
+2. Rehome shared field-wide components from `/my-fpl/competitions`:
    - final table;
    - leaders and averages;
    - captain/chip/bench/hit/transfer context;
@@ -779,7 +779,7 @@ Changes:
 
 Primary files:
 
-- `app/[locale]/me/tournament/page.tsx`
+- `app/[locale]/my-fpl/competitions/page.tsx`
 - `app/me/tournament/**`
 - new `app/[locale]/competitions/[id]/results/**`
 - new format-specific result components
@@ -807,7 +807,7 @@ Changes:
 
 Primary files:
 
-- `app/[locale]/tournament/[id]/manage/page.tsx`
+- `app/[locale]/competitions/[id]/manage/page.tsx`
 - `app/tournament/[id]/manage/**`
 - `app/api/tournaments/[id]/route.ts`
 - `lib/tournament/management-security.ts`
@@ -875,9 +875,9 @@ Do not expose invitations before roster-lock semantics exist. Do not expose a fo
 ### Web routes
 
 - Add `/competitions*` pages first.
-- Redirect `/tournament/browse`, `/tournament/create`, `/tournament/[id]`, and `/tournament/[id]/manage` while preserving `mine`, `created`, invitation, event, and locale state where relevant.
-- Coordinate `/live/tournaments*` redirects with the Live implementation plan.
-- Keep `/me/tournament` until its viewer components and shared reports have both moved.
+- Redirect `/competitions/browse`, `/competitions/create`, `/competitions/[id]`, and `/competitions/[id]/manage` while preserving `mine`, `created`, invitation, event, and locale state where relevant.
+- Coordinate `/live/competitions*` redirects with the Live implementation plan.
+- Keep `/my-fpl/competitions` until its viewer components and shared reports have both moved.
 - Remove obsolete route code only after analytics shows no meaningful unresolved traffic.
 
 ## 8. Verification plan

@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	return getPageMetadata({
 		locale,
-		pathname: '/tournament/browse',
+		pathname: '/competitions/browse',
 		titleKey: 'tournamentListTitle',
 		descriptionKey: 'tournamentListDescription',
 	})
@@ -37,7 +37,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	const { session, entryId } = await getVerifiedEntryContext()
 
 	if (!session) {
-		redirect(localizeHref('/auth/login?next=/tournament/browse', locale))
+		redirect(localizeHref('/auth/login?next=/competitions/browse', locale))
 	}
 	if (!entryId) {
 		redirect(localizeHref('/onboarding/bind-entry', locale))

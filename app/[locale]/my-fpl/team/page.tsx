@@ -44,7 +44,7 @@ export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	return getPageMetadata({
 		locale,
-		pathname: '/me/team',
+		pathname: '/my-fpl/team',
 		titleKey: 'teamStatsTitle',
 		descriptionKey: 'teamStatsDescription',
 	})
@@ -69,7 +69,7 @@ function TeamStatsFallback() {
  * Gameweek deep link: also entryEventResult(seedGw)
  */
 export default async function TeamStatsPage({ params, searchParams }: PageProps) {
-	const timing = new RouteLoaderTiming('/me/team')
+	const timing = new RouteLoaderTiming('/my-fpl/team')
 	const [pageLocale, t, sp, context, events] = await Promise.all([
 		getPageLocale(params),
 		getTranslations('States'),
@@ -84,7 +84,7 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 	const { session, entryId } = context
 	if (!session) {
 		timing.finish('redirect-login')
-		redirect(localizeHref('/auth/login?next=/me/team', locale))
+		redirect(localizeHref('/auth/login?next=/my-fpl/team', locale))
 	}
 	if (!entryId) {
 		timing.finish('redirect-bind')

@@ -565,7 +565,7 @@ export default function TournamentClient({
 					<Card className="border-border/80 p-6 text-sm text-muted-foreground shadow-sm">
 						{t('signInPrompt')}{' '}
 						<Link
-							href="/auth/login?next=/live/tournaments"
+							href="/auth/login?next=/live/competitions"
 							className="text-primary-ink underline"
 						>
 							{t('signIn')}
@@ -603,12 +603,12 @@ export default function TournamentClient({
 								type="button"
 								size="sm"
 								variant="outline"
-								onClick={() => router.replace('/live/tournaments')}
+								onClick={() => router.replace('/live/competitions')}
 							>
 								{t('clear')}
 							</Button>
 							<Button type="button" size="sm" variant="secondary" asChild>
-								<Link href="/tournament/browse">{t('errorCtaMyTournaments')}</Link>
+								<Link href="/competitions/browse">{t('errorCtaMyTournaments')}</Link>
 							</Button>
 						</div>
 					</Card>
@@ -631,7 +631,7 @@ export default function TournamentClient({
 						}
 						onTournamentChange={id => {
 							if (selectedTournament && id === selectedTournament.id) return
-							router.replace(`/live/tournaments?tournamentId=${id}`)
+							router.replace(`/live/competitions?tournamentId=${id}`)
 						}}
 					/>
 				)}

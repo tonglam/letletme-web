@@ -88,7 +88,7 @@ BACKEND_PROXY_SECRET
 BETTER_AUTH_URL
 ```
 
-生产 smoke test 覆盖：英文/中文首页、Gameweek、Fixtures（20 队、DGW、BGW、FDR）、Market、Public League Trends、Player Stats（搜索、Overall、State、Radar、比较、季前降级）、Live 页面，以及登录后的 `/me/team`、`/me/tournament` 和未绑定引导。
+生产 smoke test 覆盖：英文/中文首页、Gameweek、Fixtures（20 队、DGW、BGW、FDR）、Market、Public League Trends、Player Stats（搜索、Overall、State、Radar、比较、季前降级）、Live 页面，以及登录后的 `/my-fpl/team`、`/my-fpl/competitions` 和未绑定引导。
 
 浏览器 Network 只能看到真实 API；不能有 mock endpoint、deterministic fixture 日志、hydration/React console error、GraphQL 5xx 或 timeout。保存固定球员、GW、DGW、BGW、Public League 和 My Team 的请求/响应证据。
 

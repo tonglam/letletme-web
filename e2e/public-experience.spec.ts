@@ -22,19 +22,19 @@ test('retired public routes return 404 instead of redirecting', async ({
 		'/stats/gameweek',
 		'/stats/team',
 		'/stats/tournament',
-		'/data/price-changes',
+		'/explore/price-changes',
 		'/live/tournament',
-		'/live/tournament/123',
-		'/tournament/list',
-		'/data/gameweek/gameweek',
+		'/live/competitions/123',
+		'/competitions/list',
+		'/explore/gameweek/gameweek',
 		'/zh-CN/stats/gameweek',
 		'/zh-CN/stats/team',
 		'/zh-CN/stats/tournament',
-		'/zh-CN/data/price-changes',
+		'/zh-CN/explore/price-changes',
 		'/zh-CN/live/tournament',
-		'/zh-CN/live/tournament/123',
-		'/zh-CN/tournament/list',
-		'/zh-CN/data/gameweek/gameweek'
+		'/zh-CN/live/competitions/123',
+		'/zh-CN/competitions/list',
+		'/zh-CN/explore/gameweek/gameweek'
 	]
 
 	for (const path of retiredPaths) {
@@ -156,7 +156,7 @@ test('Market stays accessible and usable on a 390px Simplified Chinese screen', 
 		})
 	})
 	await page.setViewportSize({ width: 390, height: 844 })
-	await page.goto('/zh-CN/data/market')
+	await page.goto('/zh-CN/explore/market')
 
 	await expect(
 		page.getByRole('heading', { level: 1, name: '市场' })
@@ -187,7 +187,7 @@ test('signed-out League Trends exposes only curated public aggregates on mobile'
 	page
 }) => {
 	await page.setViewportSize({ width: 390, height: 844 })
-	await page.goto('/data/selections?scope=public&tournament=777&gw=33')
+	await page.goto('/explore/selections?scope=public&tournament=777&gw=33')
 
 	await expect(
 		page.getByRole('heading', { level: 1, name: 'League Trends' })
@@ -198,7 +198,7 @@ test('signed-out League Trends exposes only curated public aggregates on mobile'
 	).toBeVisible()
 	await expect(
 		page.getByRole('link', { name: 'Saka' }).first()
-	).toHaveAttribute('href', '/data/player-stats?p1=1')
+	).toHaveAttribute('href', '/explore/player-stats?p1=1')
 	expect(
 		await page.evaluate(
 			() => document.documentElement.scrollWidth <= window.innerWidth
@@ -209,7 +209,7 @@ test('signed-out League Trends exposes only curated public aggregates on mobile'
 test('Gameweek keeps Dream Team and every 10+ haul independent during live play', async ({
 	page
 }) => {
-	await page.goto('/data/gameweek')
+	await page.goto('/explore/gameweek')
 
 	await expect(page.getByText('Provisional')).toBeVisible()
 	await expect(
@@ -220,7 +220,7 @@ test('Gameweek keeps Dream Team and every 10+ haul independent during live play'
 	).toBeVisible()
 	await expect(page.getByRole('link', { name: 'Palmer' })).toHaveAttribute(
 		'href',
-		'/data/player-stats?p1=2'
+		'/explore/player-stats?p1=2'
 	)
 })
 
@@ -228,7 +228,7 @@ test('Fixtures renders every DGW match and explicit BGWs without horizontal over
 	page
 }) => {
 	await page.setViewportSize({ width: 390, height: 844 })
-	await page.goto('/data/fixtures')
+	await page.goto('/explore/fixtures')
 
 	await expect(
 		page.getByRole('heading', { level: 1, name: 'Fixtures' })
@@ -288,7 +288,7 @@ test('malformed player history does not break the comparison screen', async ({
 		clientDirectoryRequests += 1
 		return route.abort('connectionfailed')
 	})
-	await page.goto('/data/player-stats')
+	await page.goto('/explore/player-stats')
 
 	await expect(
 		page.getByRole('heading', { name: 'Player Stats' })
@@ -305,7 +305,7 @@ test('malformed player history does not break the comparison screen', async ({
 test('protected tournament creation returns an unauthenticated user to sign-in safely', async ({
 	page
 }) => {
-	await page.goto('/tournament/create')
+	await page.goto('/competitions/create')
 	await expect(page).toHaveURL(/\/auth\/login\?next=%2Ftournament%2Fcreate$/)
 	await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
 })

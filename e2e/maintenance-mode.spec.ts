@@ -10,7 +10,7 @@ test.describe('maintenance mode', () => {
 	test('replaces English and Chinese data pages without exposing stale content', async ({
 		page
 	}) => {
-		const englishResponse = await page.goto('/data/player-stats')
+		const englishResponse = await page.goto('/explore/player-stats')
 		expect(englishResponse?.status()).toBe(503)
 		expect(englishResponse?.headers()['cache-control']).toContain('no-store')
 		expect(englishResponse?.headers()['retry-after']).toBe('420')

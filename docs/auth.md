@@ -232,15 +232,15 @@ request.
 | ------------------------- | -------------------------------------------------------------------------------- |
 | `/profile`                | session                                                                          |
 | `/onboarding/bind-entry`  | session                                                                          |
-| `/tournament/create`      | session                                                                          |
-| `/tournament/[id]/manage` | session                                                                          |
+| `/competitions/create`      | session                                                                          |
+| `/competitions/[id]/manage` | session                                                                          |
 | `/api/tournaments/*`      | session; mutations/previews also require verified `fplEntryId` in their handlers |
 | `/live/points`            | session + verified `fplEntryId`                                                  |
-| `/live/tournament`        | session + verified `fplEntryId`                                                  |
-| `/data/selections`        | session + verified `fplEntryId`                                                  |
-| `/stats/team`             | session + verified `fplEntryId`                                                  |
-| `/stats/tournament`       | session + verified `fplEntryId`                                                  |
-| `/tournament/list`        | session + verified `fplEntryId`                                                  |
+| `/live/competitions`        | session + verified `fplEntryId`                                                  |
+| `/explore/selections`        | session + verified `fplEntryId`                                                  |
+| `/my-fpl/team`             | session + verified `fplEntryId`                                                  |
+| `/my-fpl/competitions`       | session + verified `fplEntryId`                                                  |
+| `/competitions/browse`        | session + verified `fplEntryId`                                                  |
 | everything else           | public                                                                           |
 
 `/live/points/[id]` (with an ID segment) is **public** — anyone can view another team. Only the root `/live/points` (your own team) is gated.

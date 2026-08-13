@@ -442,7 +442,7 @@ The four sections should cooperate without forcing users through a prescribed fu
 | No public-source aggregation | Explore → Briefing | Build |
 | No Data category landing page | Explore Overview at `/data` | Build as a router and deterministic search surface; keep the six direct tools |
 
-Route names may remain temporarily while public labels change. Any later route migration must preserve existing English URLs where required, support the Simplified Chinese locale path, and provide redirects that retain meaningful query state.
+This implementation cuts over the public section names and routes together. Legacy roots are not retained or redirected; the Simplified Chinese locale path and meaningful query state remain supported on the new routes.
 
 ## 9. Product work summary
 
@@ -495,16 +495,16 @@ Route names may remain temporarily while public labels change. Any later route m
 - Current navigation: components/layout/config.ts
 - Homepage and personal desk: app/[locale]/page.tsx, components/home/PersonalDesk.tsx
 - Live team: app/[locale]/live/points/page.tsx, app/live/points
-- Live custom competitions: app/[locale]/live/tournaments, app/live/tournaments
+- Live custom competitions: app/[locale]/live/competitions, app/live/tournaments
 - Live matches: app/[locale]/live/matches/page.tsx, app/live/matches
-- My Team: app/[locale]/me/team/page.tsx, app/me/team
-- Current My Tournament review: app/[locale]/me/tournament/page.tsx, app/me/tournament
+- My Team: app/[locale]/my-fpl/team/page.tsx, app/me/team
+- Current My Tournament review: app/[locale]/my-fpl/competitions/page.tsx, app/me/tournament
 - Competition browse/create/manage: app/[locale]/tournament, app/tournament
-- Gameweek: app/[locale]/data/gameweek/page.tsx, app/data/gameweek
-- Fixtures: app/[locale]/data/fixtures/page.tsx, app/data/fixtures
-- Market: app/[locale]/data/market/page.tsx, app/data/market
-- League Trends: app/[locale]/data/selections/page.tsx, app/data/selections
-- Player Stats: app/[locale]/data/player-stats/page.tsx, app/data/player-stats
+- Gameweek: app/[locale]/explore/gameweek/page.tsx, app/data/gameweek
+- Fixtures: app/[locale]/explore/fixtures/page.tsx, app/data/fixtures
+- Market: app/[locale]/explore/market/page.tsx, app/data/market
+- League Trends: app/[locale]/explore/selections/page.tsx, app/data/selections
+- Player Stats: app/[locale]/explore/player-stats/page.tsx, app/data/player-stats
 - English product and metadata copy: messages/en.json
 - Official league GraphQL foundation: ../letletme-graphql/src/domains/leagues
 - Custom competition GraphQL model: ../letletme-graphql/src/domains/tournaments

@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: PageProps) {
 	const { id, locale } = await getPageLocale(params)
 	return getPageMetadata({
 		locale,
-		pathname: `/tournament/${encodeURIComponent(id)}/manage`,
+		pathname: `/competitions/${encodeURIComponent(id)}/manage`,
 		titleKey: 'manageTournamentTitle',
 		noIndex: true,
 	})
@@ -33,14 +33,14 @@ type PageProps = {
 }
 
 export default async function Page({ params }: PageProps) {
-	const timing = new RouteLoaderTiming('/tournament/:tournamentId/manage')
+	const timing = new RouteLoaderTiming('/competitions/:tournamentId/manage')
 	const { id, locale } = await getPageLocale(params)
 	const [t, common, context] = await Promise.all([
 		getTranslations('TournamentManagePage'),
 		getTranslations('Common'),
 		timing.measure('session', () => getVerifiedEntryContext())
 	])
-	const nextPath = `/tournament/${encodeURIComponent(id)}/manage`
+	const nextPath = `/competitions/${encodeURIComponent(id)}/manage`
 	const { session, entryId } = context
 	if (!session) {
 		timing.finish('redirect-login')
@@ -96,7 +96,7 @@ export default async function Page({ params }: PageProps) {
 							<Link href={nextPath}>{common('tryAgain')}</Link>
 						</Button>
 						<Button variant="outline" asChild>
-							<Link href="/tournament/browse">{t('back')}</Link>
+							<Link href="/competitions/browse">{t('back')}</Link>
 						</Button>
 					</>
 				}
@@ -130,10 +130,10 @@ async function NoManagementAccess({ id }: { id: string }) {
 			actions={
 				<>
 					<Button asChild>
-						<Link href={`/live/tournaments/${id}`}>{t('view')}</Link>
+						<Link href={`/live/competitions/${id}`}>{t('view')}</Link>
 					</Button>
 					<Button variant="outline" asChild>
-						<Link href="/tournament/browse">{t('back')}</Link>
+						<Link href="/competitions/browse">{t('back')}</Link>
 					</Button>
 				</>
 			}

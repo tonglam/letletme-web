@@ -13,22 +13,22 @@ afterEach(() => resetRouteNavigationStartForTests())
 describe('route ready navigation clock', () => {
 	it('uses the current App Router transition rather than the age of the tab', () => {
 		markRouteNavigationStart(
-			'/data/market?source=nav',
+			'/explore/market?source=nav',
 			5_000,
 			'https://letletme.top/'
 		)
-		assert.equal(measureRouteReadyDuration('/data/market', 5_640, 0), 640)
+		assert.equal(measureRouteReadyDuration('/explore/market', 5_640, 0), 640)
 	})
 
 	it('uses document navigation start for a hard load', () => {
 		assert.equal(
-			measureRouteReadyDuration('/data/player-stats', 1_250, 0),
+			measureRouteReadyDuration('/explore/player-stats', 1_250, 0),
 			1_250
 		)
 	})
 
 	it('does not reuse a transition timestamp for a different route', () => {
-		markRouteNavigationStart('/data/market', 5_000, 'https://letletme.top/')
+		markRouteNavigationStart('/explore/market', 5_000, 'https://letletme.top/')
 		assert.equal(
 			measureRouteReadyDuration('/profile/sessions', 7_000, 100),
 			6_900
@@ -36,7 +36,7 @@ describe('route ready navigation clock', () => {
 	})
 
 	it('starts a fresh clock for an in-page content interaction', () => {
-		markRouteReadyStart('/data/player-stats', 900)
-		assert.equal(measureRouteReadyDuration('/data/player-stats', 1_140, 0), 240)
+		markRouteReadyStart('/explore/player-stats', 900)
+		assert.equal(measureRouteReadyDuration('/explore/player-stats', 1_140, 0), 240)
 	})
 })

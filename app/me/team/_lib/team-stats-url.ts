@@ -1,5 +1,5 @@
 /**
- * URL contract for /me/team
+ * URL contract for /my-fpl/team
  *
  *   (default)                 → Season view
  *   ?view=season
@@ -11,7 +11,7 @@
 
 export type TeamStatsPageView = 'gameweek' | 'season'
 
-export const TEAM_STATS_PATH = '/me/team'
+export const TEAM_STATS_PATH = '/my-fpl/team'
 
 export function parseTeamStatsView(
 	value: string | null | undefined,

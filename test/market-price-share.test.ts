@@ -65,7 +65,7 @@ describe('formatPriceMovementShareText', () => {
 				rises: 'Rises',
 				falls: 'Falls',
 				none: 'None',
-				footer: 'https://letletme.top/data/market',
+				footer: 'https://letletme.top/explore/market',
 			},
 		})
 		assert.match(text, /^Price changes · 05\/03\/2026/)
@@ -75,7 +75,7 @@ describe('formatPriceMovementShareText', () => {
 		assert.doesNotMatch(text, /\(\+£|\(-£/)
 		assert.match(text, /Falls \(1\)/)
 		assert.match(text, /^- Watkins FWD AVL · £9\.0m → £8\.9m$/m)
-		assert.match(text, /\nhttps:\/\/letletme\.top\/data\/market$/)
+		assert.match(text, /\nhttps:\/\/letletme\.top\/explore\/market$/)
 	})
 
 	it('handles empty columns', () => {
@@ -99,11 +99,11 @@ describe('buildMarketShareUrl', () => {
 	it('builds locale-aware market URL', () => {
 		assert.equal(
 			buildMarketShareUrl('https://letletme.top', ''),
-			'https://letletme.top/data/market',
+			'https://letletme.top/explore/market',
 		)
 		assert.equal(
 			buildMarketShareUrl('https://letletme.top/', '/zh-CN'),
-			'https://letletme.top/zh-CN/data/market',
+			'https://letletme.top/zh-CN/explore/market',
 		)
 	})
 })

@@ -120,7 +120,7 @@ This is not merely a fallback for live-calculation gaps. It is the canonical pos
 
 ### Data: the original evidence area becomes Explore
 
-The five current tools—Gameweek, Fixtures, Market, League Trends, and Player Stats—support preparation, explanation, and deeper inspection. They are useful, but `Data` is too technical and too narrow once source-backed reporting, video, social media, forums, and named creator views are included. The public category should become **Explore**, while the underlying `/data/*` routes remain stable initially. The Explore label opens a lightweight `/data` Overview; its compact submenu keeps Gameweek, Fixtures, Market, Trends, Players, and Briefing.
+The five current tools—Gameweek, Fixtures, Market, League Trends, and Player Stats—support preparation, explanation, and deeper inspection. They are useful, but `Data` is too technical and too narrow once source-backed reporting, video, social media, forums, and named creator views are included. The public category should become **Explore**, while the underlying `/explore/*` routes remain stable initially. The Explore label opens a lightweight `/data` Overview; its compact submenu keeps Gameweek, Fixtures, Market, Trends, Players, and Briefing.
 
 ```text
 Between gameweeks          During matches             After finalization

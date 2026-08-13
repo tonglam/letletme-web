@@ -1,5 +1,5 @@
 /**
- * URL for /me/tournament
+ * URL for /my-fpl/competitions
  *
  *   ?tournamentId=1001
  *   ?tournamentId=1001&view=season
@@ -8,7 +8,7 @@
 
 export type TournamentStatsPageView = 'gameweek' | 'season'
 
-export const TOURNAMENT_STATS_PATH = '/me/tournament'
+export const TOURNAMENT_STATS_PATH = '/my-fpl/competitions'
 
 export function parseTournamentStatsView(
 	value: string | null | undefined,

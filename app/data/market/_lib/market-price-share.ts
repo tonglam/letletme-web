@@ -100,6 +100,6 @@ export function buildMarketShareUrl(
 ): string {
 	const base = origin.replace(/\/$/, '')
 	const prefix = localePathPrefix.replace(/\/$/, '')
-	const path = `${prefix}/data/market`
+	const path = `${prefix}/explore/market`
 	return `${base}${path.startsWith('/') ? path : `/${path}`}`
 }

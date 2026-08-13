@@ -46,7 +46,7 @@ The section plans identify strong existing capabilities, but the current impleme
 | Evidence | Market, selection, Player State, official FPL, and verified match evidence expose different source/coverage metadata | Reused cards can lose scope, freshness, method, or limitations |
 | Private context | The Web account database stores the current binding, while most saved/view state is local or absent | Homepage, My FPL, and Explore cannot provide reliable cross-device continuity |
 | GraphQL composition | Existing queries are capability-specific and some pages compose several independent reads | A naive shared dashboard can introduce unbounded fan-out, N+1 reads, and mixed authorization |
-| Routes | Current names include `/live/tournaments`, `/tournament/*`, `/me/tournament`, and direct `/data/*` tools | Public naming can change before canonical target pages or compatible redirects exist |
+| Routes | Current names include `/live/competitions`, `/competitions/*`, `/my-fpl/competitions`, and direct `/explore/*` tools | Public naming can change before canonical target pages or compatible redirects exist |
 | Shared UI | Refresh, status, gameweek controls, evidence labels, and object links are implemented per page | Equivalent facts can look or behave differently across sections |
 
 ## 3. Target technical structure
@@ -366,12 +366,12 @@ Commands:
 | Current personal points | Live | `/live/points` |
 | Current prepared Competition result | Live | `/live/competitions/[id]` |
 | Current matches and squad impact | Live | `/live/matches` |
-| Personal season/gameweek record | My FPL | `/me` and `/me/team` |
-| Personal official-league summaries | My FPL | `/me/leagues` |
+| Personal season/gameweek record | My FPL | `/me` and `/my-fpl/team` |
+| Personal official-league summaries | My FPL | `/my-fpl/leagues` |
 | Competition identity/setup/rules | Competitions | `/competitions/[id]` |
 | Competition settled shared record | Competitions | `/competitions/[id]/results` |
 | Competition joining/management | Competitions | `/competitions/[id]/join` and `/manage` |
-| Player, fixture, market, cohort, or attributed evidence | Explore | Stable `/data/*` routes |
+| Player, fixture, market, cohort, or attributed evidence | Explore | Stable `/explore/*` routes |
 | Acquisition and continuation | Homepage | `/`; bounded previews only |
 
 Rules:
@@ -385,7 +385,7 @@ Rules:
   `(season, eventId)` pair. A seasonless legacy URL may resolve only against the active season and
   must normalize to a season-bearing canonical URL; it cannot address historical data.
 - Canonical public URLs exclude private preference state and untrusted return URLs.
-- Existing English `/data/*` routes remain stable while the visible category becomes Explore.
+- Existing English `/explore/*` routes remain stable while the visible category becomes Explore.
 
 ### 4.11 Shared Web primitives
 
@@ -593,7 +593,7 @@ Within a cross-service vertical slice, production deployment order is **Data →
 | `RG-PRINCIPAL` | Active-season My FPL and protected personal reads | Binding backfill audit; stale-season denial; rebind E2E |
 | `RG-LIVE-AUTHORITY` | Retiring a local official-score/bonus calculation path | Live-gameweek shadow comparison for completeness, timing, totals, bonus, squad, and failure recovery |
 | `RG-COMPETITION-HOME` | Removing setup/rules/roster/manage UI from Live | Canonical Competition Home parity and authorized links |
-| `RG-COMPETITION-RESULTS` | Removing `/me/tournament` shared reports | Results/History format parity plus My FPL personal-summary parity |
+| `RG-COMPETITION-RESULTS` | Removing `/my-fpl/competitions` shared reports | Results/History format parity plus My FPL personal-summary parity |
 | `RG-COHORT` | Publishing sampled rank evidence | Persisted cohort method, deterministic sample, coverage threshold, privacy, atomic revision, load test |
 | `RG-BRIEFING-RIGHTS` | Enabling a source adapter or public display mode | Source policy fixture, acquisition basis, allowed fields, removal/correction and emergency-disable tests |
 | `RG-ROUTES` | Navigation cutover or legacy route removal | Locale/deep-link redirects, canonical metadata, analytics and rollback verification |
@@ -630,9 +630,9 @@ Failure of one optional gate does not block independent canonical sections. For 
 ### Web routes and private schema
 
 - Add target routes before redirects and navigation changes.
-- Preserve existing English URLs where the product decision keeps them, including `/data/*`.
+- Preserve existing English URLs where the product decision keeps them, including `/explore/*`.
 - Preserve `/zh-CN` locale routing and meaningful `gw`, object, view, filter, topic, and comparison state.
-- Keep `/me/tournament`, `/tournament/*`, and `/live/tournaments/*` until their documented release gates pass.
+- Keep `/my-fpl/competitions`, `/competitions/*`, and `/live/competitions/*` until their documented release gates pass.
 - Never turn an unauthorized or invalid private scope into a different public object silently.
 
 ### Cleanup

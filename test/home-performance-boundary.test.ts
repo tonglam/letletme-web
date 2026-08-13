@@ -40,7 +40,7 @@ describe('Home first-screen performance boundary', () => {
 	it('disables speculative prefetch for hidden and secondary routes', () => {
 		assert.match(
 			home,
-			/<Link\s+href="\/live\/tournaments"\s+prefetch=\{false\}/
+			/<Link\s+href="\/live\/competitions"\s+prefetch=\{false\}/
 		)
 		assert.match(desktopNav, /href=\{subItem\.href\}\s+prefetch=\{false\}/)
 		assert.match(desktopNav, /href="\/auth\/login"\s+prefetch=\{false\}/)

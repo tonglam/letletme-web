@@ -11,10 +11,10 @@ export const APP_URL = new URL(
 export const PUBLIC_STATIC_PATHS = [
 	'/',
 	'/live/matches',
-	'/data/player-stats',
-	'/data/market',
-	'/data/gameweek',
-	'/data/fixtures',
+	'/explore/player-stats',
+	'/explore/market',
+	'/explore/gameweek',
+	'/explore/fixtures',
 ] as const
 
 export function localizedAlternates(

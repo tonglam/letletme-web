@@ -32,9 +32,9 @@ export type WebVitalPayload = {
 
 const routePatterns: Array<[RegExp, string]> = [
 	[/^\/live\/points\/[^/]+$/, '/live/points/:entryId'],
-	[/^\/live\/tournaments\/[^/]+$/, '/live/tournaments/:tournamentId'],
-	[/^\/tournament\/[^/]+\/manage$/, '/tournament/:tournamentId/manage'],
-	[/^\/tournament\/[^/]+$/, '/tournament/:tournamentId']
+	[/^\/live\/competitions\/[^/]+$/, '/live/competitions/:tournamentId'],
+	[/^\/competitions\/[^/]+\/manage$/, '/competitions/:tournamentId/manage'],
+	[/^\/competitions\/[^/]+$/, '/competitions/:tournamentId']
 ]
 
 export const normalizeMetricPage = (pathname: string) => {

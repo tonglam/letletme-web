@@ -39,12 +39,12 @@ describe('formatOwnershipShareText', () => {
 			title: 'Squad ownership',
 			none: 'None',
 			fieldLine: 'Field: 12 managers',
-			footer: 'https://letletme.top/data/selections',
+			footer: 'https://letletme.top/explore/selections',
 		})
 		assert.match(text, /^Squad ownership · Office Classic · GW28/)
 		assert.match(text, /Field: 12 managers/)
 		assert.match(text, /^- Salah MID LIV · 92\.4% · EO 118\.2%$/m)
-		assert.match(text, /https:\/\/letletme\.top\/data\/selections$/)
+		assert.match(text, /https:\/\/letletme\.top\/explore\/selections$/)
 	})
 })
 
@@ -76,11 +76,11 @@ describe('buildSelectionsShareUrl', () => {
 	it('builds locale-aware path', () => {
 		assert.equal(
 			buildSelectionsShareUrl('https://letletme.top', ''),
-			'https://letletme.top/data/selections',
+			'https://letletme.top/explore/selections',
 		)
 		assert.equal(
 			buildSelectionsShareUrl('https://letletme.top/', '/zh-CN'),
-			'https://letletme.top/zh-CN/data/selections',
+			'https://letletme.top/zh-CN/explore/selections',
 		)
 	})
 
@@ -91,7 +91,7 @@ describe('buildSelectionsShareUrl', () => {
 				tournamentId: 42,
 				gameweek: 6,
 			}),
-			'https://letletme.top/data/selections?scope=public&tournament=42&gw=6',
+			'https://letletme.top/explore/selections?scope=public&tournament=42&gw=6',
 		)
 	})
 })

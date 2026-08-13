@@ -109,11 +109,11 @@ describe('formatFixturesShareText', () => {
 			labels: {
 				title: 'Fixtures',
 				none: 'None',
-				footer: 'https://letletme.top/data/fixtures',
+				footer: 'https://letletme.top/explore/fixtures',
 			},
 		})
 		assert.match(text, /^Fixtures · GW28/)
 		assert.match(text, /ARS vs CHE · 2–1/)
-		assert.match(text, /https:\/\/letletme\.top\/data\/fixtures$/)
+		assert.match(text, /https:\/\/letletme\.top\/explore\/fixtures$/)
 	})
 })

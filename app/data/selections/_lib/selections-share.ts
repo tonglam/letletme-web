@@ -147,7 +147,7 @@ export function buildSelectionsShareUrl(
 ): string {
 	const base = origin.replace(/\/$/, '')
 	const prefix = localePathPrefix.replace(/\/$/, '')
-	const path = `${prefix}/data/selections`
+	const path = `${prefix}/explore/selections`
 	const absolutePath = `${base}${path.startsWith('/') ? path : `/${path}`}`
 	if (
 		!selection?.scope ||

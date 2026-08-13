@@ -35,10 +35,10 @@ The fixed inputs are:
 
 | Area | Current implementation |
 | --- | --- |
-| Navigation | `components/layout/config.ts` exposes `Me` with My Team and My Tournament; there is no `/me` overview or `/me/leagues` |
+| Navigation | `components/layout/config.ts` exposes `Me` with My Team and My Tournament; there is no `/me` overview or `/my-fpl/leagues` |
 | Homepage | `PersonalDesk` shows linked team identity, points, overall rank, team value, and official-league rank rows on the public homepage |
-| Team | `/me/team` provides substantial settled season/gameweek review, but uses a multi-gameweek tab workspace and has few direct player-evidence links |
-| Tournament review | `/me/tournament` combines viewer-specific summaries with full standings, field metrics, captain/chip distributions, risers/fallers, and season reports |
+| Team | `/my-fpl/team` provides substantial settled season/gameweek review, but uses a multi-gameweek tab workspace and has few direct player-evidence links |
+| Tournament review | `/my-fpl/competitions` combines viewer-specific summaries with full standings, field metrics, captain/chip distributions, risers/fallers, and season reports |
 | Binding | `bauth.user` stores one `fplEntryId` plus binding/verification timestamps and identity-name snapshots, without an active-season field or binding history |
 | Personal persistence | No durable saved-object, comparison, followed-rival, pinned-competition, or last-seen model exists; selected tournament and similar conveniences are local-device state |
 | Private reads | My Team and My Tournament already require an authenticated session and a bound entry and use private `no-store` reads |
@@ -372,8 +372,8 @@ Target Web routes:
 
 ```text
 /me
-/me/team
-/me/leagues
+/my-fpl/team
+/my-fpl/leagues
 ```
 
 Public labels are:
@@ -389,12 +389,12 @@ Supporting routes for saved objects or comparisons may be contextual and are not
 
 Compatibility rules:
 
-- Keep `/me/team` and its `view`/`gw` deep links.
-- Keep `/me/tournament` until Competition Home and Results/History expose every rehomed shared capability.
+- Keep `/my-fpl/team` and its `view`/`gw` deep links.
+- Keep `/my-fpl/competitions` until Competition Home and Results/History expose every rehomed shared capability.
 - After that release gate, redirect
-  `/me/tournament?tournamentId=…&view=…&season=…&gw=…` to the canonical competition result while
+  `/my-fpl/competitions?tournamentId=…&view=…&season=…&gw=…` to the canonical competition result while
   preserving object and complete event state.
-- A bare `/me/tournament` redirects to My Competitions.
+- A bare `/my-fpl/competitions` redirects to My Competitions.
 - Do not make the public homepage a duplicate My FPL dashboard.
 
 ## 5. Implementation work packages
@@ -592,8 +592,8 @@ Tests:
 Create:
 
 ```text
-app/[locale]/me/page.tsx
-app/[locale]/me/layout.tsx
+app/[locale]/my-fpl/page.tsx
+app/[locale]/my-fpl/layout.tsx
 app/me/MyFplOverviewClient.tsx
 components/my-fpl/MyFplSectionNav.tsx
 components/my-fpl/MyFplStatus.tsx
@@ -620,7 +620,7 @@ Changes:
 5. Acknowledge seen state only after successful client hydration/render.
 6. Render bounded league and competition summaries; never fetch their full tables from Overview.
 7. Add save/remove controls through authenticated mutation endpoints.
-8. Refactor homepage `PersonalDesk` into a compact linked-manager preview and `Open My FPL` action; move the expandable full league list to `/me/leagues`.
+8. Refactor homepage `PersonalDesk` into a compact linked-manager preview and `Open My FPL` action; move the expandable full league list to `/my-fpl/leagues`.
 9. Preserve guest and signed-in-unbound homepage states.
 10. Use one page-level settled/coverage status.
 
@@ -656,7 +656,7 @@ Changes:
 
 Primary files:
 
-- `app/[locale]/me/team/page.tsx`
+- `app/[locale]/my-fpl/team/page.tsx`
 - `app/me/team/TeamStatsClient.tsx`
 - `app/me/team/_hooks/useTeamStats.ts`
 - `app/me/team/_lib/team-gameweek-workspace.tsx`
@@ -680,7 +680,7 @@ Tests:
 Create:
 
 ```text
-app/[locale]/me/leagues/page.tsx
+app/[locale]/my-fpl/leagues/page.tsx
 app/me/leagues/LeaguesClient.tsx
 components/my-fpl/OfficialLeagueRow.tsx
 components/my-fpl/LeagueCoverageBadge.tsx
@@ -734,7 +734,7 @@ Changes:
 
 Primary files:
 
-- `app/[locale]/me/tournament/page.tsx`
+- `app/[locale]/my-fpl/competitions/page.tsx`
 - `app/me/tournament/**`
 - target Competition Results/History files from the Section 3 plan
 - `components/layout/config.ts`
@@ -823,9 +823,9 @@ Production deployment order for cross-service contracts is **Data → GraphQL �
 
 ### Web routes
 
-- Add `/me` and `/me/leagues` before changing navigation.
-- Preserve `/me/team` URLs and query state.
-- Keep `/me/tournament` until the Competition release gate passes.
+- Add `/me` and `/my-fpl/leagues` before changing navigation.
+- Preserve `/my-fpl/team` URLs and query state.
+- Keep `/my-fpl/competitions` until the Competition release gate passes.
 - Preserve English URLs and Simplified Chinese locale prefixes through every redirect.
 
 ## 8. Verification plan
@@ -913,7 +913,7 @@ Rollback rules:
 - Keep current user binding columns and old GraphQL envelope support through the observation period.
 - Navigation may return to the existing Me routes while `/me` remains unused.
 - Team may temporarily retain the existing workspace client until the simplified control passes parity tests.
-- `/me/tournament` remains available until both replacement destinations are stable.
+- `/my-fpl/competitions` remains available until both replacement destinations are stable.
 - Reconciliation can be disabled independently while checkpoint collection continues in shadow mode.
 
 ## 10. Completion criteria

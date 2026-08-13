@@ -33,7 +33,7 @@ The fixed inputs are:
 | --- | --- |
 | Navigation | `components/layout/config.ts` exposes Live Points, Live Tournaments, and Live Matches |
 | Live Points | Server seed plus `useLivePoints`, 30-second revision probe, gameweek switching, player explanations, sharing |
-| Live competitions | `/live/tournaments` combines object selection and a full live table; `/live/tournaments/[id]` independently implements a full detail/table plus setup, rules, roster, and management UI |
+| Live competitions | `/live/competitions` combines object selection and a full live table; `/live/competitions/[id]` independently implements a full detail/table plus setup, rules, roster, and management UI |
 | Live Matches | Server seed, match-state tabs, revision probe, retained last-good payload |
 | Shared refresh | `lib/live-refresh.ts` contains snapshot polling rules, but each page still owns most refresh/error presentation and request orchestration |
 | Event resolution | Points, tournaments, and matches are gated by `getCurrentEventId()` at route level |
@@ -407,9 +407,9 @@ Detail changes:
 
 Compatibility:
 
-- Keep `/live/tournaments` and `/live/tournaments/[id]` as redirects preserving IDs and query parameters.
+- Keep `/live/competitions` and `/live/competitions/[id]` as redirects preserving IDs and query parameters.
 - Keep old internal clients until the new routes pass parity tests, then remove them.
-- Do not redirect `/tournament/[id]` to Live after Competition Home is available.
+- Do not redirect `/competitions/[id]` to Live after Competition Home is available.
 
 Completion dependency:
 
@@ -417,10 +417,10 @@ Completion dependency:
 
 Primary files:
 
-- `app/[locale]/live/tournaments/**`
+- `app/[locale]/live/competitions/**`
 - `app/live/tournaments/**`
-- `components/tournament/TournamentTable.tsx`
-- `components/tournament/TournamentHeader.tsx`
+- `components/competitions/TournamentTable.tsx`
+- `components/competitions/TournamentHeader.tsx`
 - `lib/graphql/operations/tournaments.ts`
 - `lib/tournament/liveEntries.ts`
 - `lib/tournament/lifecycle.ts`
@@ -470,7 +470,7 @@ Primary files:
 - `components/layout/config.ts`
 - `messages/en.json`
 - `messages/zh-CN.json`
-- homepage and Competition/My FPL links that still point to `/live/tournaments`
+- homepage and Competition/My FPL links that still point to `/live/competitions`
 
 ## 6. Dependency and delivery order
 

@@ -48,7 +48,7 @@ export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	return getPageMetadata({
 		locale,
-		pathname: '/me/tournament',
+		pathname: '/my-fpl/competitions',
 		titleKey: 'tournamentStatsTitle',
 		descriptionKey: 'tournamentStatsDescription',
 	})
@@ -114,7 +114,7 @@ export default async function TournamentStatsPage({
 	params,
 	searchParams,
 }: PageProps) {
-	const timing = new RouteLoaderTiming('/me/tournament')
+	const timing = new RouteLoaderTiming('/my-fpl/competitions')
 	const [pageLocale, t, sp, context, events] = await Promise.all([
 		getPageLocale(params),
 		getTranslations('States'),
@@ -129,7 +129,7 @@ export default async function TournamentStatsPage({
 	const { session, entryId } = context
 	if (!session) {
 		timing.finish('redirect-login')
-		redirect(localizeHref('/auth/login?next=/me/tournament', locale))
+		redirect(localizeHref('/auth/login?next=/my-fpl/competitions', locale))
 	}
 	if (!entryId) {
 		timing.finish('redirect-bind')
