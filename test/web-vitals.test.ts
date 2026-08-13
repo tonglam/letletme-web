@@ -116,6 +116,10 @@ describe('privacy-safe web vitals', () => {
 		assert.match(markerSource, /reportedIdentity\.current === readyIdentity/)
 		assert.match(playerStatsSource, /readyKey=\{playerDetailReadyKey\}/)
 		assert.match(playerStatsSource, /Boolean\(secondPlayer\.playerDetail\)/)
+		assert.match(
+			playerStatsSource,
+			/markRouteReadyStart\(window\.location\.pathname\)/
+		)
 	})
 
 	it('maps older clients without the hint to unknown during rollout', () => {

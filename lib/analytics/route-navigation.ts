@@ -10,6 +10,17 @@ const normalizePathname = (pathname: string): string => {
 	return normalized || '/'
 }
 
+/** Starts a content-ready clock for an in-page interaction without a router navigation. */
+export function markRouteReadyStart(
+	pathname: string,
+	startedAt = performance.now()
+): void {
+	currentRouteNavigation = {
+		pathname: normalizePathname(pathname),
+		startedAt
+	}
+}
+
 /** Called by Next's pre-hydration client instrumentation when a route starts. */
 export function markRouteNavigationStart(
 	url: string,
@@ -17,10 +28,7 @@ export function markRouteNavigationStart(
 	baseHref = window.location.href
 ): void {
 	try {
-		currentRouteNavigation = {
-			pathname: normalizePathname(new URL(url, baseHref).pathname),
-			startedAt
-		}
+		markRouteReadyStart(new URL(url, baseHref).pathname, startedAt)
 	} catch {
 		// Instrumentation must never interfere with navigation.
 		currentRouteNavigation = null

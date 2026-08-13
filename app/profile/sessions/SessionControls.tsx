@@ -129,6 +129,17 @@ export default function SessionControls() {
 	const [state, setState] = useState<SessionLoadState>({ status: 'loading' })
 	const [action, setAction] = useState<string | null>(null)
 	const [actionError, setActionError] = useState<string | null>(null)
+	const handleActionFailure = useCallback(
+		(error: unknown, fallbackMessage: string) => {
+			if (authErrorCode(error) === 'SESSION_NOT_FRESH') {
+				setActionError(null)
+				setState({ status: 'reauth-required' })
+				return
+			}
+			setActionError(fallbackMessage)
+		},
+		[]
+	)
 
 	const loadSessions = useCallback(async () => {
 		setActionError(null)
@@ -217,8 +228,8 @@ export default function SessionControls() {
 			}
 			toast.success(t('sessionSignedOut'))
 			await loadSessions()
-		} catch {
-			setActionError(t('signOutFailed'))
+		} catch (error) {
+			handleActionFailure(error, t('signOutFailed'))
 		} finally {
 			setAction(null)
 		}
@@ -232,8 +243,8 @@ export default function SessionControls() {
 			if (error) throw error
 			toast.success(t('otherSessionsSignedOut'))
 			await loadSessions()
-		} catch {
-			setActionError(t('signOutOthersFailed'))
+		} catch (error) {
+			handleActionFailure(error, t('signOutOthersFailed'))
 		} finally {
 			setAction(null)
 		}
@@ -247,8 +258,9 @@ export default function SessionControls() {
 			if (error) throw error
 			clearAuthClientState()
 			window.location.assign(localizeHref('/auth/login', locale))
-		} catch {
-			setActionError(t('signOutAllFailed'))
+		} catch (error) {
+			handleActionFailure(error, t('signOutAllFailed'))
+		} finally {
 			setAction(null)
 		}
 	}

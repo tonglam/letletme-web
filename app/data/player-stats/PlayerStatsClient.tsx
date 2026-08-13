@@ -1,6 +1,7 @@
 'use client'
 
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
+import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import type { PlayerDirectorySeed } from '@/lib/player-directory-seed'
 import { positionCodeFromElementTypeName } from '@/lib/squad-picks'
 import { cn } from '@/lib/utils'
@@ -72,6 +73,9 @@ export default function PlayerStatsClient({
 	const handleDirectoryReady = useCallback(() => setDirectoryReady(true), [])
 	const deepLinkKey = `${initialPlayerIds.p1 ?? ''}:${initialPlayerIds.p2 ?? ''}`
 	const deepLinkKeyRef = useRef<string | null>(null)
+	const beginLocalPlayerDetailLoad = useCallback(() => {
+		markRouteReadyStart(window.location.pathname)
+	}, [])
 
 	const syncUrl = useCallback(() => {
 		if (typeof window === 'undefined') return
@@ -145,32 +149,45 @@ export default function PlayerStatsClient({
 
 	const handleSquadSelect = useCallback(
 		(playerId: number) => {
+			beginLocalPlayerDetailLoad()
 			if (secondSelectedPlayerId === String(playerId)) {
 				secondClearSelection()
 				setCompareOpen(false)
 			}
 			void firstSelectPlayerById(playerId)
 		},
-		[firstSelectPlayerById, secondClearSelection, secondSelectedPlayerId]
+		[
+			beginLocalPlayerDetailLoad,
+			firstSelectPlayerById,
+			secondClearSelection,
+			secondSelectedPlayerId
+		]
 	)
 
 	const handleFirstSelect = useCallback(
 		(player: Parameters<typeof firstSelectPlayer>[0]) => {
+			beginLocalPlayerDetailLoad()
 			if (secondSelectedPlayerId === player.id) {
 				secondClearSelection()
 				setCompareOpen(false)
 			}
 			firstSelectPlayer(player)
 		},
-		[firstSelectPlayer, secondClearSelection, secondSelectedPlayerId]
+		[
+			beginLocalPlayerDetailLoad,
+			firstSelectPlayer,
+			secondClearSelection,
+			secondSelectedPlayerId
+		]
 	)
 
 	const handleSecondSelect = useCallback(
 		(player: Parameters<typeof secondSelectPlayer>[0]) => {
 			if (player.id === firstSelectedPlayerId) return
+			beginLocalPlayerDetailLoad()
 			secondSelectPlayer(player)
 		},
-		[firstSelectedPlayerId, secondSelectPlayer]
+		[beginLocalPlayerDetailLoad, firstSelectedPlayerId, secondSelectPlayer]
 	)
 
 	const marketSuggestions = useMemo(() => {
@@ -196,10 +213,15 @@ export default function PlayerStatsClient({
 			const id = Number(playerId)
 			if (!Number.isFinite(id)) return
 			if (firstSelectedPlayerId === playerId) return
+			beginLocalPlayerDetailLoad()
 			setCompareOpen(true)
 			void secondSelectPlayerById(id)
 		},
-		[firstSelectedPlayerId, secondSelectPlayerById]
+		[
+			beginLocalPlayerDetailLoad,
+			firstSelectedPlayerId,
+			secondSelectPlayerById
+		]
 	)
 
 	const pickerStatsAvailable =
@@ -290,9 +312,10 @@ export default function PlayerStatsClient({
 								recentPlayers: secondPlayer.recentPlayers,
 								excludedPlayerId: firstPlayer.selectedPlayer?.id,
 								onSelect: handleSecondSelect,
-								onClearRecent: secondPlayer.clearRecent,
-								onClearSelection: () => {
-									secondPlayer.clearSelection()
+									onClearRecent: secondPlayer.clearRecent,
+									onClearSelection: () => {
+										beginLocalPlayerDetailLoad()
+										secondPlayer.clearSelection()
 									setCompareOpen(false)
 								}
 							}

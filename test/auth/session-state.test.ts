@@ -12,6 +12,13 @@ describe('active-session state semantics', () => {
 		assert.match(source, /'ready'/)
 		assert.match(source, /'reauth-required'/)
 		assert.match(source, /SESSION_NOT_FRESH/)
+		const actionFailure = source.slice(
+			source.indexOf('const handleActionFailure'),
+			source.indexOf('const loadSessions')
+		)
+		assert.match(actionFailure, /authErrorCode\(error\)/)
+		assert.match(actionFailure, /setState\(\{ status: 'reauth-required' \}\)/)
+		assert.match(source, /catch \(error\) \{\s*handleActionFailure/g)
 		assert.match(
 			source,
 			/\/auth\/login\?next=\/profile\/sessions&reason=reauth/
