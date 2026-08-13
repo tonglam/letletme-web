@@ -43,21 +43,21 @@ export function TeamGameweekOverall({ stats }: { stats: TeamStatsViewModel }) {
 			className="scoreboard-lifted mb-5 rounded-xl sm:mb-6"
 			aria-labelledby="team-gw-scoreboard-title"
 		>
-			<div className="border-b border-white/10 px-4 py-3 sm:px-5">
+			<div className="border-b border-fascia-foreground/10 px-4 py-3 sm:px-5">
 				<p
 					id="team-gw-scoreboard-title"
-					className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-electric/90"
+					className="eyebrow text-electric/90"
 				>
 					{t('gameweekOverall')}
-					<span className="ml-1.5 text-white/55">
+					<span className="ml-1.5 text-fascia-foreground/55">
 						{t('eventScoreboard', { gameweek: stats.eventId })}
 					</span>
 				</p>
 			</div>
 
-			<div className="grid grid-cols-2 divide-x divide-white/10 border-b border-white/10">
+			<div className="grid grid-cols-2 divide-x divide-fascia-foreground/10 border-b border-fascia-foreground/10">
 				<div className="px-4 py-4 sm:px-5 sm:py-5">
-					<p className="font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+					<p className="eyebrow text-fascia-foreground/55">
 						{t('netPoints')}
 					</p>
 					<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-electric sm:text-4xl">
@@ -65,16 +65,16 @@ export function TeamGameweekOverall({ stats }: { stats: TeamStatsViewModel }) {
 					</p>
 				</div>
 				<div className="px-4 py-4 sm:px-5 sm:py-5">
-					<p className="font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+					<p className="eyebrow text-fascia-foreground/55">
 						{t('gameweekPoints')}
 					</p>
-					<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-white sm:text-4xl">
+					<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-fascia-foreground sm:text-4xl">
 						{stats.eventPoints}
 					</p>
 				</div>
 			</div>
 
-			<div className="grid grid-cols-2 gap-px bg-white/10 sm:grid-cols-4">
+			<div className="grid grid-cols-2 gap-px bg-fascia-foreground/10 sm:grid-cols-4">
 				{(
 					[
 						{
@@ -101,16 +101,16 @@ export function TeamGameweekOverall({ stats }: { stats: TeamStatsViewModel }) {
 				).map(item => (
 					<div
 						key={item.label}
-						className="bg-[hsl(288_40%_20%)] px-3 py-3 sm:px-4 sm:py-3.5"
+						className="bg-scoreboard-cell px-3 py-3 sm:px-4 sm:py-3.5"
 					>
-						<p className="font-display text-[9px] font-semibold uppercase tracking-[0.14em] text-white/50 sm:text-[10px]">
+						<p className="eyebrow text-fascia-foreground/50">
 							{item.label}
 						</p>
 						<p
 							className={`mt-1 truncate font-display text-sm font-semibold tracking-tight sm:text-base ${
 								'destructive' in item && item.destructive
 									? 'text-pink'
-									: 'text-white'
+									: 'text-fascia-foreground'
 							}`}
 						>
 							{item.value}
@@ -119,12 +119,12 @@ export function TeamGameweekOverall({ stats }: { stats: TeamStatsViewModel }) {
 				))}
 			</div>
 
-			<div className="border-t border-white/10 px-3 py-3 sm:px-4">
+			<div className="border-t border-fascia-foreground/10 px-3 py-3 sm:px-4">
 				<div className="flex flex-wrap items-center gap-2">
-					<span className="font-display text-[9px] font-semibold uppercase tracking-[0.16em] text-white/50">
+					<span className="eyebrow text-fascia-foreground/50">
 						{t('gameweekChip')}
 					</span>
-					<span className="rounded-md border border-white/12 bg-white/8 px-2.5 py-1 font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-electric">
+					<span className="rounded-md border border-fascia-foreground/12 bg-fascia-foreground/8 px-2.5 py-1 font-display text-caption font-semibold uppercase tracking-[0.1em] text-electric">
 						{eventChip}
 					</span>
 				</div>

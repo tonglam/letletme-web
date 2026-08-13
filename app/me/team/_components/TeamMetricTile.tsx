@@ -32,11 +32,11 @@ export function TeamMetricTile({
 			)}
 		>
 			{/* Header / label — electric, unchanged */}
-			<p className="truncate font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-electric/75">
+			<p className="truncate eyebrow text-electric/75">
 				{label}
 			</p>
 			{/* Body — always white */}
-			<p className="mt-1 truncate font-display text-xl font-bold tabular-nums tracking-tight text-white">
+			<p className="mt-1 truncate font-display text-xl font-bold tabular-nums tracking-tight text-fascia-foreground">
 				{value}
 			</p>
 		</div>
@@ -79,7 +79,7 @@ export function TeamMetricChip({
 	return (
 		<span
 			className={cn(
-				'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs text-white',
+				'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs text-fascia-foreground',
 				'bg-fascia',
 				'shadow-[1px_1px_0_0_hsl(var(--sticker)/var(--sticker-alpha))]',
 				className,

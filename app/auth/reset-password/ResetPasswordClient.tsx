@@ -1,9 +1,8 @@
 'use client'
 
-import { LogoMark, LogoWordmark } from '@/components/layout/Logo'
+import { AuthCard, AuthShell } from '@/components/layout/AuthShell'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useHydrated } from '@/hooks/use-hydrated'
@@ -52,19 +51,19 @@ function ResetPasswordForm() {
 
 	if (!token) {
 		return (
-			<Card className="w-full max-w-md border-border/80 p-6 text-center shadow-sm">
+			<AuthCard className="text-center">
 				<p className="text-sm text-muted-foreground">
 					{t('invalidResetLink')}{' '}
 					<Link href="/auth/forgot-password" className="text-primary-ink underline underline-offset-4 hover:no-underline">
 						{t('requestNewLink')}
 					</Link>
 				</p>
-			</Card>
+			</AuthCard>
 		)
 	}
 
 	return (
-		<Card className="w-full max-w-md border-border/80 p-6 shadow-sm">
+		<AuthCard>
 			<div className="mb-6 text-center">
 				<h2 className="font-display text-2xl font-bold tracking-tight">{t('newPassword')}</h2>
 				<p className="text-sm text-muted-foreground">
@@ -111,22 +110,16 @@ function ResetPasswordForm() {
 					{pending ? t('saving') : t('setNewPassword')}
 				</Button>
 			</form>
-		</Card>
+		</AuthCard>
 	)
 }
 
 export default function ResetPasswordClient() {
 	return (
-		<div className="flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center bg-muted/30 p-4">
-			<div className="mb-6 flex items-center gap-2">
-				<LogoMark className="size-10 text-plum dark:text-electric" />
-				<h1>
-					<LogoWordmark className="text-2xl" />
-				</h1>
-			</div>
+		<AuthShell>
 			<Suspense>
 				<ResetPasswordForm />
 			</Suspense>
-		</div>
+		</AuthShell>
 	)
 }

@@ -562,7 +562,7 @@ export default function TournamentClient({
 						eyebrow={t('liveStandings')}
 						title={t('liveStandings')}
 					/>
-					<Card className="border-border/80 p-6 text-sm text-muted-foreground shadow-sm">
+					<Card className="p-6 text-sm text-muted-foreground shadow-sm">
 						{t('signInPrompt')}{' '}
 						<Link
 							href="/auth/login?next=/live/competitions"
@@ -596,7 +596,7 @@ export default function TournamentClient({
 				)}
 
 				{unknownTournamentFromUrl && (
-					<Card className="mb-6 space-y-3 border-border/80 p-4 text-sm shadow-sm">
+					<Card className="mb-6 space-y-3 p-4 text-sm shadow-sm">
 						<p className="text-muted-foreground">{t('tournamentNotInList')}</p>
 						<div className="flex flex-wrap gap-2">
 							<Button
@@ -673,7 +673,7 @@ export default function TournamentClient({
 				</Card>
 
 				{isLoadingTournaments && (
-					<Card className="border-border/80 p-6 text-sm text-muted-foreground shadow-sm">
+					<Card className="p-6 text-sm text-muted-foreground shadow-sm">
 						{t('loadingTournaments')}
 					</Card>
 				)}
@@ -681,13 +681,13 @@ export default function TournamentClient({
 				{!isLoadingTournaments &&
 					!selectedTournament &&
 					!unknownTournamentFromUrl && (
-					<Card className="border-border/80 p-6 text-sm text-muted-foreground shadow-sm">
+					<Card className="p-6 text-sm text-muted-foreground shadow-sm">
 						{t('noTournaments')}
 					</Card>
 				)}
 
 				{selectedTournament && !standingsReady && (
-					<Card className="border-border/80 p-8 text-center shadow-sm">
+					<Card className="p-8 text-center shadow-sm">
 						<p className="font-display text-lg font-semibold tracking-tight">
 							{selectedTournament.setupStatus === 'FAILED'
 								? lifecycleT('memberFailure')

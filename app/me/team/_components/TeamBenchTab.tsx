@@ -120,7 +120,7 @@ export function TeamBenchTab({ logs }: { logs: TeamSeasonLogs }) {
 
 			{highWeeks.length > 0 ? (
 				<div>
-					<p className="mb-2 font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+					<p className="mb-2 eyebrow">
 						{t('benchHighListTitle', { threshold: BENCH_HIGH_THRESHOLD })}
 					</p>
 					<ul className="space-y-1.5">
@@ -141,7 +141,7 @@ export function TeamBenchTab({ logs }: { logs: TeamSeasonLogs }) {
 								<span className="min-w-0 flex-1 text-sm text-muted-foreground">
 									{p.bb ? (
 										<span className="inline-flex items-center gap-1.5">
-											<span className="rounded bg-plum px-1.5 py-px font-display text-[10px] font-bold text-electric">
+											<span className="rounded bg-plum px-1.5 py-px font-display text-label font-bold text-electric">
 												BB
 											</span>
 											<span>{t('benchBoostActive')}</span>
@@ -157,7 +157,7 @@ export function TeamBenchTab({ logs }: { logs: TeamSeasonLogs }) {
 						))}
 					</ul>
 					{summary.weekCount > summary.highCount ? (
-						<p className="mt-2 text-[11px] text-muted-foreground">
+						<p className="mt-2 text-caption text-muted-foreground">
 							{t('benchOtherWeeksNote', {
 								count: summary.weekCount - summary.highCount,
 								threshold: BENCH_HIGH_THRESHOLD,

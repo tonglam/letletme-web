@@ -26,7 +26,7 @@ export function TeamBand({
 			<header className="mb-4 border-b border-border/60 pb-3 sm:mb-5">
 				<p
 					id={id ? `${id}-label` : undefined}
-					className="font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-plum dark:text-electric/90"
+					className="eyebrow text-plum dark:text-electric/90"
 				>
 					{label}
 				</p>

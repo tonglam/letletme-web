@@ -143,7 +143,7 @@ export function TeamChipsTab({ stats }: { stats: TeamSeasonLogs }) {
 		<div className="space-y-6">
 			{/* Half-season inventory */}
 			<div>
-				<p className="mb-1 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+				<p className="mb-1 eyebrow">
 					{t('chipBalance')}
 				</p>
 				<p className="mb-3 text-xs leading-relaxed text-muted-foreground">
@@ -230,7 +230,7 @@ export function TeamChipsTab({ stats }: { stats: TeamSeasonLogs }) {
 
 			{/* When used + that gameweek outcome */}
 			<div>
-				<p className="mb-2 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+				<p className="mb-2 eyebrow">
 					{t('chipPlayLog')}
 				</p>
 				{stats.chipUsageRows.length === 0 ? (
@@ -270,7 +270,7 @@ export function TeamChipsTab({ stats }: { stats: TeamSeasonLogs }) {
 												{row.gameweek}
 											</TeamGameweekLink>
 										</DataTd>
-										<DataTd className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+										<DataTd className="font-mono text-label uppercase tracking-wide text-muted-foreground">
 											{half === 'first'
 												? t('chipHalfFirstShort')
 												: half === 'second'

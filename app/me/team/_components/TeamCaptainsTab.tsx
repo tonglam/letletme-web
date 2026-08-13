@@ -125,13 +125,13 @@ export function TeamCaptainsTab({ logs }: { logs: TeamSeasonLogs }) {
 					{summary.topThree.map(c => (
 						<li key={`${c.name}-${c.team}`}>
 							<TeamMetricChip>
-								<span className="font-medium text-white">{c.name}</span>
+								<span className="font-medium text-fascia-foreground">{c.name}</span>
 								{c.team ? (
-									<span className="font-mono text-[10px] text-white/70">
+									<span className="font-mono text-label text-fascia-foreground/70">
 										{c.team}
 									</span>
 								) : null}
-								<span className="font-mono text-[10px] tabular-nums text-white/70">
+								<span className="font-mono text-label tabular-nums text-fascia-foreground/70">
 									×{c.weeks}
 								</span>
 							</TeamMetricChip>
@@ -141,7 +141,7 @@ export function TeamCaptainsTab({ logs }: { logs: TeamSeasonLogs }) {
 			) : null}
 
 			<div className="overflow-hidden rounded-lg border border-border/70">
-				<div className="flex items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5 font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+				<div className="flex items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-1.5 eyebrow">
 					<span className="w-9 shrink-0">{t('gameweekShort')}</span>
 					<span className="min-w-0 flex-1">{t('captain')}</span>
 					<span className="w-10 shrink-0 text-right">{t('captainPtsShort')}</span>
@@ -238,12 +238,12 @@ function CaptainWeekRow({
 							{row.captainName}
 						</span>
 						{row.captainTeam ? (
-							<span className="shrink-0 font-mono text-[10px] uppercase text-muted-foreground">
+							<span className="shrink-0 font-mono text-label uppercase text-muted-foreground">
 								{row.captainTeam}
 							</span>
 						) : null}
 						{tc ? (
-							<span className="shrink-0 rounded bg-plum px-1.5 py-px font-display text-[10px] font-bold uppercase tracking-wide text-electric">
+							<span className="shrink-0 rounded bg-plum px-1.5 py-px font-display text-label font-bold uppercase tracking-wide text-electric">
 								3C
 							</span>
 						) : null}

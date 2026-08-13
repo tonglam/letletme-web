@@ -115,14 +115,14 @@ function SquadPickRow({ pick }: { pick: Pick }) {
 			>
 				<Badge
 					className={cn(
-						'h-5 shrink-0 px-1.5 font-display text-[10px] font-bold tracking-wide',
+						'h-5 shrink-0 px-1.5 font-display text-label font-bold tracking-wide',
 						positionBadgeClass(pos),
 					)}
 				>
 					{pos}
 				</Badge>
 
-				<span className="w-8 shrink-0 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+				<span className="w-8 shrink-0 font-mono text-caption font-semibold uppercase tracking-wide text-muted-foreground">
 					{pick.teamShortName || '—'}
 				</span>
 
@@ -132,28 +132,28 @@ function SquadPickRow({ pick }: { pick: Pick }) {
 							{pick.webName}
 						</span>
 						{pick.isCaptain ? (
-							<span className="shrink-0 rounded-sm bg-plum px-1 py-px font-mono text-[10px] font-bold text-electric">
+							<span className="shrink-0 rounded-sm bg-plum px-1 py-px font-mono text-label font-bold text-electric">
 								C
 							</span>
 						) : null}
 						{pick.isViceCaptain ? (
-							<span className="shrink-0 rounded-sm border border-plum/30 bg-plum/10 px-1 py-px font-mono text-[10px] font-bold text-plum">
+							<span className="shrink-0 rounded-sm border border-plum/30 bg-plum/10 px-1 py-px font-mono text-label font-bold text-plum">
 								V
 							</span>
 						) : null}
 						{pick.autoSub ? (
-							<span className="shrink-0 rounded-sm border border-border px-1 py-px font-mono text-[9px] font-semibold uppercase text-muted-foreground">
+							<span className="shrink-0 rounded-sm border border-border px-1 py-px font-mono text-micro font-semibold uppercase text-muted-foreground">
 								{t('autoSubShort')}
 							</span>
 						) : null}
 						{pick.multiplier > 1 ? (
-							<span className="shrink-0 font-mono text-[10px] font-bold text-muted-foreground">
+							<span className="shrink-0 font-mono text-label font-bold text-muted-foreground">
 								×{pick.multiplier}
 							</span>
 						) : null}
 					</div>
 					{fixture ? (
-						<span className="truncate font-mono text-[10px] tabular-nums text-muted-foreground">
+						<span className="truncate font-mono text-label tabular-nums text-muted-foreground">
 							{fixture}
 						</span>
 					) : null}
@@ -168,12 +168,12 @@ function SquadPickRow({ pick }: { pick: Pick }) {
 				>
 					{stats.map(stat => (
 						<div key={stat.label} className="min-w-0 px-0.5 text-center">
-							<div className="truncate font-display text-[8px] font-semibold uppercase tracking-wider text-muted-foreground sm:text-[9px]">
+							<div className="truncate font-display text-micro font-semibold uppercase tracking-wider text-muted-foreground sm:text-micro">
 								{stat.label}
 							</div>
 							<div
 								className={cn(
-									'truncate font-mono text-xs tabular-nums sm:text-[13px]',
+									'truncate font-mono text-xs tabular-nums',
 									stat.emphasize
 										? 'font-semibold text-foreground'
 										: 'text-muted-foreground',
@@ -187,7 +187,7 @@ function SquadPickRow({ pick }: { pick: Pick }) {
 
 				{/* Points */}
 				<div className="min-w-[2.75rem] text-right">
-					<div className="font-display text-[8px] font-semibold uppercase tracking-wider text-muted-foreground sm:text-[9px]">
+					<div className="font-display text-micro font-semibold uppercase tracking-wider text-muted-foreground sm:text-micro">
 						{t('pointsShort')}
 					</div>
 					<div
@@ -206,7 +206,7 @@ function SquadPickRow({ pick }: { pick: Pick }) {
 			{/* Mobile stats strip */}
 			<div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 border-t border-border/50 pt-2 sm:hidden">
 				{stats.map(stat => (
-					<span key={stat.label} className="font-mono text-[11px] tabular-nums">
+					<span key={stat.label} className="font-mono text-caption tabular-nums">
 						<span className="text-muted-foreground">{stat.label} </span>
 						<span
 							className={
@@ -237,7 +237,7 @@ function SquadGroup({
 		<section aria-labelledby={titleId}>
 			<h3
 				id={titleId}
-				className="mb-2.5 px-0.5 font-display text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground"
+				className="mb-2.5 px-0.5 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground"
 			>
 				{title}
 			</h3>

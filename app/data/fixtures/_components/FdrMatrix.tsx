@@ -68,19 +68,19 @@ export function FdrMatrix({
 					<tr className="border-b border-border/60 bg-muted/20">
 						<th
 							scope="col"
-							className="px-2 py-2 text-center font-mono text-[10px] font-semibold tabular-nums text-muted-foreground"
+							className="px-2 py-2 text-center font-mono text-label font-semibold tabular-nums text-muted-foreground"
 						>
 							{t('colRank')}
 						</th>
 						<th
 							scope="col"
-							className="sticky left-0 z-10 bg-muted/30 px-3 py-2 font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground backdrop-blur-sm"
+							className="sticky left-0 z-10 bg-muted/30 px-3 py-2 font-display text-label font-semibold uppercase tracking-caps text-muted-foreground backdrop-blur-sm"
 						>
 							{t('colTeam')}
 						</th>
 						<th
 							scope="col"
-							className="px-2 py-2 text-center font-mono text-[10px] font-semibold tabular-nums text-muted-foreground"
+							className="px-2 py-2 text-center font-mono text-label font-semibold tabular-nums text-muted-foreground"
 						>
 							{t('colAvg')}
 						</th>
@@ -88,14 +88,14 @@ export function FdrMatrix({
 							<th
 								key={gw}
 								scope="col"
-								className="min-w-[5.25rem] px-1.5 py-2 text-center font-mono text-[10px] font-semibold tabular-nums text-muted-foreground"
+								className="min-w-[5.25rem] px-1.5 py-2 text-center font-mono text-label font-semibold tabular-nums text-muted-foreground"
 							>
 								GW{gw}
 							</th>
 						))}
 						<th
 							scope="col"
-							className="px-2 py-2 text-center font-mono text-[10px] font-semibold tabular-nums text-muted-foreground"
+							className="px-2 py-2 text-center font-mono text-label font-semibold tabular-nums text-muted-foreground"
 						>
 							{t('colEasyHard')}
 						</th>
@@ -125,7 +125,7 @@ export function FdrMatrix({
 										'bg-primary/10 ring-2 ring-inset ring-primary/40',
 								)}
 							>
-								<td className="px-2 py-1.5 text-center font-mono text-[11px] tabular-nums text-muted-foreground">
+								<td className="px-2 py-1.5 text-center font-mono text-caption tabular-nums text-muted-foreground">
 									{i + 1}
 								</td>
 								<th
@@ -140,8 +140,8 @@ export function FdrMatrix({
 										<span className="inline-flex items-center gap-1.5">
 											{row.teamShortName}
 											{exposureLabel ? (
-												<span
-													className="rounded border border-primary/35 bg-primary/15 px-1 py-px font-mono text-[9px] font-semibold tabular-nums tracking-wide text-primary-ink"
+													<span
+													className="rounded border border-primary/35 bg-primary/15 px-1 py-px font-mono text-micro font-semibold tabular-nums tracking-wide text-primary-ink"
 													title={t('matrixMyTeamDetail', {
 														count: exposure!.count,
 														detail: exposureLabel,
@@ -153,7 +153,7 @@ export function FdrMatrix({
 										</span>
 									</span>
 								</th>
-								<td className="px-2 py-1.5 text-center font-mono text-[11px] font-semibold tabular-nums text-primary-ink">
+								<td className="px-2 py-1.5 text-center font-mono text-caption font-semibold tabular-nums text-primary-ink">
 									{formatAvgFdr(row.avgFdr)}
 								</td>
 								{eventIds.map(gw => {
@@ -161,7 +161,7 @@ export function FdrMatrix({
 					if (gameweek?.unknown) {
 						return (
 							<td key={gw} className="px-1.5 py-1.5 text-center">
-								<span className="inline-flex rounded border border-warning/40 bg-warning/10 px-1.5 py-1 font-mono text-[9px] font-semibold text-muted-foreground">
+								<span className="inline-flex rounded border border-warning/40 bg-warning/10 px-1.5 py-1 font-mono text-micro font-semibold text-muted-foreground">
 									{t('fixtureUnavailable')}
 								</span>
 							</td>
@@ -173,7 +173,7 @@ export function FdrMatrix({
 												key={gw}
 												className="px-1.5 py-1.5 text-center"
 											>
-												<span className="inline-flex rounded border border-border/60 bg-muted/25 px-1.5 py-1 font-mono text-[9px] font-semibold text-muted-foreground">
+												<span className="inline-flex rounded border border-border/60 bg-muted/25 px-1.5 py-1 font-mono text-micro font-semibold text-muted-foreground">
 													{t('bgw')}
 												</span>
 											</td>
@@ -183,7 +183,7 @@ export function FdrMatrix({
 										<td key={gw} className="px-1.5 py-1.5">
 											<div className="flex flex-col gap-1">
 												{gameweek.dgw ? (
-													<span className="text-center font-mono text-[8px] font-semibold uppercase tracking-wide text-muted-foreground">
+													<span className="text-center font-mono text-micro font-semibold uppercase tracking-wide text-muted-foreground">
 														{t('dgw')}
 													</span>
 												) : null}
@@ -199,10 +199,10 @@ export function FdrMatrix({
 															)}
 															title={`GW${gw} · ${cell.opponentShortName} (${ha}) · FDR ${cell.difficulty}`}
 														>
-															<span className="font-display text-[11px] font-semibold leading-none tracking-wide">
+															<span className="font-display text-caption font-semibold leading-none tracking-wide">
 																{cell.opponentShortName}
 															</span>
-															<span className="font-mono text-[9px] tabular-nums text-muted-foreground">
+															<span className="font-mono text-micro tabular-nums text-muted-foreground">
 																{ha} · {cell.difficulty}
 															</span>
 														</div>
@@ -212,7 +212,7 @@ export function FdrMatrix({
 										</td>
 									)
 								})}
-								<td className="px-2 py-1.5 text-center text-[11px] tabular-nums text-muted-foreground">
+								<td className="px-2 py-1.5 text-center text-caption tabular-nums text-muted-foreground">
 									<span className="font-medium text-success">
 										{row.easyCount}
 									</span>
