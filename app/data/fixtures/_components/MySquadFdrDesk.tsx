@@ -129,7 +129,12 @@ export function MySquadFdrDesk({
 	}
 
 	return (
-		<div className="overflow-x-auto overscroll-x-contain rounded-lg border border-border/60">
+		<div
+			className="overflow-x-auto overscroll-x-contain rounded-lg border border-border/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+			role="group"
+			aria-label={t('mySquadTitle')}
+			tabIndex={0}
+		>
 			<table className="w-full border-collapse text-left text-xs">
 				<thead>
 					<tr className="border-b border-border/60 bg-muted/20">

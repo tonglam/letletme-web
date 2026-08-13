@@ -240,6 +240,8 @@ test('Fixtures renders every DGW match and explicit BGWs without horizontal over
 			() => document.documentElement.scrollWidth <= window.innerWidth
 		)
 	).toBe(true)
+	const fixtureAccessibility = await new AxeBuilder({ page }).analyze()
+	expect(fixtureAccessibility.violations).toEqual([])
 })
 
 test('theme choice persists across a reload', async ({ page }) => {
@@ -296,6 +298,8 @@ test('malformed player history does not break the comparison screen', async ({
 	)
 	await expect(page.getByRole('button', { name: /Saka/ }).first()).toBeVisible()
 	expect(clientDirectoryRequests).toBe(0)
+	const playerStatsAccessibility = await new AxeBuilder({ page }).analyze()
+	expect(playerStatsAccessibility.violations).toEqual([])
 })
 
 test('protected tournament creation returns an unauthenticated user to sign-in safely', async ({
