@@ -97,12 +97,13 @@ export function mergeHomeOfficialH2HDesk(
 		if (!desk) return row
 		matchedTournamentIds.add(desk.tournamentId)
 		const entryRank = isPositiveRank(desk.rank) ? desk.rank : row.entryRank
+		const previousRank = isPositiveRank(desk.lastRank) ? desk.lastRank : row.entryLastRank
 		return {
 			...row,
 			type: 'H2H',
 			entryRank,
 			totalTeamNum: desk.totalTeams > 0 ? desk.totalTeams : row.totalTeamNum,
-			movement: rankMovement(entryRank, desk.lastRank),
+			movement: rankMovement(entryRank, previousRank),
 			officialH2H: desk,
 		}
 	})
