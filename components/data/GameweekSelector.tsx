@@ -25,7 +25,7 @@ interface GameweekSelectorProps {
 	onGameweekChange: (gameweek: number) => void
 	className?: string
 	/** Marks the “current” option in the list (and default max when maxGameweek omitted). */
-	currentGameweek: number
+	currentGameweek: number | null
 	/** Upper bound for the selector; defaults to currentGameweek. */
 	maxGameweek?: number
 	selectedGameweek?: number

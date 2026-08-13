@@ -96,8 +96,20 @@ describe('gameweek desk contract', () => {
 			'failed'
 		)
 		assert.match(
-			gameweekDeskCacheControl(desk({ lifecycle: 'SETTLED' })),
+			gameweekDeskCacheControl(
+				desk({
+					lifecycle: 'SETTLED',
+					overviewState: 'AVAILABLE',
+					boardsState: 'AVAILABLE'
+				})
+			),
 			/3600/
+		)
+		assert.match(
+			gameweekDeskCacheControl(
+				desk({ lifecycle: 'SETTLED', overviewState: 'PENDING' })
+			),
+			/s-maxage=30/
 		)
 	})
 })

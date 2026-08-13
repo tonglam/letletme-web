@@ -239,8 +239,7 @@ export default function GameweekStatsClient({
 			committedDesk.eventId
 		)
 	)
-	const currentGameweek =
-		committedDesk.currentEventId ?? committedDesk.anchorEventId
+	const currentGameweek = committedDesk.currentEventId
 	const isOverviewUnavailable = committedDesk.overviewState === 'UNAVAILABLE'
 	const isBoardsUnavailable = committedDesk.boardsState === 'UNAVAILABLE'
 
@@ -515,13 +514,13 @@ export default function GameweekStatsClient({
 								icon={Trophy}
 								title={t('dreamTeamTitle', { gameweek: visibleGameweek })}
 							>
-								{isScheduledSelection ? (
-									<p className="text-sm text-muted-foreground">
-										{t('pendingOfficial')}
-									</p>
-								) : isBoardsUnavailable ? (
+								{isBoardsUnavailable ? (
 									<p className="text-sm text-muted-foreground">
 										{t('loadFailed')}
+									</p>
+								) : isScheduledSelection ? (
+									<p className="text-sm text-muted-foreground">
+										{t('pendingOfficial')}
 									</p>
 								) : dreamTeam.length === 0 ? (
 									<p className="text-sm text-muted-foreground">
@@ -542,13 +541,13 @@ export default function GameweekStatsClient({
 								title={t('doubleDigitHauls')}
 								description={t('haulDescription')}
 							>
-								{isScheduledSelection ? (
-									<p className="text-sm text-muted-foreground">
-										{t('pendingOfficial')}
-									</p>
-								) : isBoardsUnavailable ? (
+								{isBoardsUnavailable ? (
 									<p className="text-sm text-muted-foreground">
 										{t('loadFailed')}
+									</p>
+								) : isScheduledSelection ? (
+									<p className="text-sm text-muted-foreground">
+										{t('pendingOfficial')}
 									</p>
 								) : haulPlayers.length === 0 ? (
 									<p className="text-sm text-muted-foreground">

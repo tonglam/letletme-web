@@ -182,6 +182,9 @@ export function gameweekDeskCacheControl(
 	data: GameweekDeskData,
 	now = Date.now()
 ): string {
+	if (data.overviewState === 'PENDING' || data.boardsState === 'PENDING') {
+		return 'public, s-maxage=30, stale-while-revalidate=30, no-transform'
+	}
 	if (data.lifecycle === 'SETTLED') {
 		return 'public, s-maxage=3600, stale-while-revalidate=86400, no-transform'
 	}

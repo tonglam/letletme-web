@@ -149,12 +149,18 @@ async function measureRun(browser, profile, index) {
 	while (readyMetric == null && Date.now() < telemetryDeadline)
 		await page.waitForTimeout(50)
 	await page.waitForTimeout(250)
+	const initialReadyMetric = readyMetric
 
 	const beforeFirst = deskRequestCount
 	const maxGameweek = await page
 		.locator('#gameweek-jump-input')
 		.getAttribute('max')
-	const canSelect = Number(maxGameweek) >= targetEvent
+	const selectedGameweek = await page
+		.locator('#gameweek-jump-input')
+		.inputValue()
+	const canSelect =
+		Number(maxGameweek) >= targetEvent &&
+		Number(selectedGameweek) !== targetEvent
 	let keptCommittedDuringLoad = true
 	let interactionSkipped = false
 	let deskSwitchReadyMs = null
@@ -219,7 +225,7 @@ async function measureRun(browser, profile, index) {
 		status: response?.status() ?? 0,
 		...values,
 		documentBytes,
-		initialContentReadyMs: readyMetric ?? 0,
+		initialContentReadyMs: initialReadyMetric ?? 0,
 		deskSwitchReadyMs,
 		firstDeskRequestCount,
 		cachedDeskRequestCount,

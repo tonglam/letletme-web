@@ -5,39 +5,46 @@ import {
 	buildGameweekValuesDesc,
 	canStepGameweek,
 	parseGameweekJump,
-	resolveSelectedGameweek,
+	resolveSelectedGameweek
 } from '../lib/gameweek-selector'
 
 describe('resolveSelectedGameweek', () => {
+	it('keeps a nullable current marker separate from the selectable upper bound', () => {
+		assert.deepEqual(resolveSelectedGameweek(null, 3), {
+			maxGameweek: 1,
+			selected: 1
+		})
+	})
+
 	it('defaults to current when no selection', () => {
 		assert.deepEqual(resolveSelectedGameweek(12), {
 			maxGameweek: 12,
-			selected: 12,
+			selected: 12
 		})
 	})
 
 	it('keeps a valid past selection', () => {
 		assert.deepEqual(resolveSelectedGameweek(38, 5), {
 			maxGameweek: 38,
-			selected: 5,
+			selected: 5
 		})
 	})
 
 	it('clamps selection above current down to current max', () => {
 		assert.deepEqual(resolveSelectedGameweek(10, 20), {
 			maxGameweek: 10,
-			selected: 10,
+			selected: 10
 		})
 	})
 
 	it('clamps non-positive selection up to 1', () => {
 		assert.deepEqual(resolveSelectedGameweek(12, 0), {
 			maxGameweek: 12,
-			selected: 1,
+			selected: 1
 		})
 		assert.deepEqual(resolveSelectedGameweek(12, -3), {
 			maxGameweek: 12,
-			selected: 1,
+			selected: 1
 		})
 	})
 })
@@ -78,22 +85,22 @@ describe('canStepGameweek', () => {
 	it('disables prev on GW1 and next on max', () => {
 		assert.deepEqual(canStepGameweek(1, 38, false), {
 			prev: false,
-			next: true,
+			next: true
 		})
 		assert.deepEqual(canStepGameweek(38, 38, false), {
 			prev: true,
-			next: false,
+			next: false
 		})
 		assert.deepEqual(canStepGameweek(20, 38, false), {
 			prev: true,
-			next: true,
+			next: true
 		})
 	})
 
 	it('disables both when the control is disabled', () => {
 		assert.deepEqual(canStepGameweek(20, 38, true), {
 			prev: false,
-			next: false,
+			next: false
 		})
 	})
 })
