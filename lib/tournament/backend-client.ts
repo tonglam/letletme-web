@@ -1,5 +1,10 @@
 import 'server-only'
 
+import {
+	getConfiguredTournamentApiBaseUrl,
+	getConfiguredTournamentApiKey
+} from './backend-config'
+
 const DEFAULT_TIMEOUT_MS = 15_000
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
@@ -34,11 +39,14 @@ const normalizeOrigin = (value: string) => {
 }
 
 export const getTournamentApiBaseUrl = (request?: Request): string => {
-	const configuredBaseUrl = process.env.LETLETME_DATA_URL ?? ''
+	// Keep the legacy names as a compatibility fallback. Existing production
+	// deployments may still have the original tournament API variables while
+	// the canonical names are being rolled out.
+	const configuredBaseUrl = getConfiguredTournamentApiBaseUrl()
 
 	if (!configuredBaseUrl) {
 		throw new TournamentApiConfigurationError(
-			'LETLETME_DATA_URL is not configured.'
+			'LETLETME_DATA_URL or TOURNAMENT_API_BASE_URL is not configured.'
 		)
 	}
 
@@ -46,7 +54,7 @@ export const getTournamentApiBaseUrl = (request?: Request): string => {
 		const requestOrigin = new URL(request.url).origin
 		if (normalizeOrigin(configuredBaseUrl) === requestOrigin) {
 			throw new TournamentApiConfigurationError(
-				'LETLETME_DATA_URL points to the web app origin. Configure it to the Data API.'
+				'Configured tournament API URL points to the web app origin. Configure it to the Data API.'
 			)
 		}
 	}
@@ -63,10 +71,10 @@ export async function tournamentApiFetch(
 	const controller = new AbortController()
 	const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
 	const method = (init?.method ?? 'GET').toUpperCase()
-	const apiKey = process.env.LETLETME_DATA_API_KEY?.trim()
+	const apiKey = getConfiguredTournamentApiKey()
 	if (!SAFE_METHODS.has(method) && !apiKey) {
 		throw new TournamentApiConfigurationError(
-			'LETLETME_DATA_API_KEY is required for tournament mutations.'
+			'LETLETME_DATA_API_KEY or TOURNAMENT_API_KEY is required for tournament mutations.'
 		)
 	}
 	const requestHeaders = new Headers(init?.headers)
