@@ -102,7 +102,7 @@ export function mergeHomeOfficialH2HDesk(
 			type: 'H2H',
 			entryRank,
 			totalTeamNum: desk.totalTeams > 0 ? desk.totalTeams : row.totalTeamNum,
-			movement: rankMovement(entryRank, row.entryLastRank),
+			movement: rankMovement(entryRank, desk.lastRank),
 			officialH2H: desk,
 		}
 	})

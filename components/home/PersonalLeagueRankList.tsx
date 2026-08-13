@@ -205,12 +205,15 @@ export function PersonalLeagueRankList({
 	const isPageActive = usePageActive()
 	const [rows, setRows] = useState(initialRows)
 	const [visibleCount, setVisibleCount] = useState(HOME_LEAGUE_RANK_LIMIT)
-	const hasLiveH2H = rows.some(row => row.officialH2H?.isLive)
+	const hasRefreshableH2H = rows.some(row => {
+		const desk = row.officialH2H
+		return Boolean(desk && !desk.isFinal && !desk.awaitingSchedule)
+	})
 
 	useEffect(() => setRows(initialRows), [initialRows])
 
 	useEffect(() => {
-		if (!hasLiveH2H || !isPageActive) return
+		if (!hasRefreshableH2H || !isPageActive) return
 		const refresh = async () => {
 			try {
 				const response = await executeQuery<EntryOfficialH2HDeskResponse>(
@@ -228,7 +231,7 @@ export function PersonalLeagueRankList({
 		}
 		const timer = window.setInterval(() => void refresh(), 60_000)
 		return () => window.clearInterval(timer)
-	}, [entryId, hasLiveH2H, isPageActive])
+	}, [entryId, hasRefreshableH2H, isPageActive])
 
 	const visible = useMemo(
 		() => rows.slice(0, visibleCount),

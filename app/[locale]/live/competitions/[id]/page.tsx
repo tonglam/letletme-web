@@ -165,7 +165,9 @@ export default async function Page({ params, searchParams }: PageProps) {
 			)}
 			tournament={tournament}
 			currentGameweek={
-				tournament?.leagueType === 'H2H' && tournament.rosterMode === 'OFFICIAL_SYNC'
+				tournament?.leagueType === 'H2H' &&
+				tournament.rosterMode === 'OFFICIAL_SYNC' &&
+				tournament.groupMode === 'BATTLE_RACES'
 					? officialGameweek
 					: currentEventId ?? undefined
 			}

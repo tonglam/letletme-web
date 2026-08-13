@@ -661,6 +661,9 @@ export const GET_ENTRY_OFFICIAL_H2H_DESK = `${OFFICIAL_H2H_MATCH_FIELDS}
       match {
         ...OfficialH2HMatchFields
       }
+      matches {
+        ...OfficialH2HMatchFields
+      }
     }
   }
 `
@@ -724,6 +727,7 @@ export interface EntryOfficialH2HDeskItem {
 	lastRank: number | null
 	matchPoints: number
 	match: OfficialH2HMatch | null
+	matches: OfficialH2HMatch[]
 }
 
 export interface EntryOfficialH2HDeskResponse {
