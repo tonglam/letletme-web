@@ -989,6 +989,8 @@
 		"loading": "Loading",
 		"loadingPage": "Loading page",
 		"unknownError": "Something went wrong. Please try again.",
+		"pageLoadErrorTitle": "This page could not be loaded",
+		"pageLoadErrorDescription": "The rest of LetLetMe is still available. Try this request again, or return to the dashboard.",
 		"notAvailable": "Not available",
 		"search": "Search",
 		"clear": "Clear",

@@ -1,23 +1,24 @@
 'use client'
 
 import type { PlayerDirectoryOption } from '@/components/player/PlayerDirectoryPicker'
-import { executeQuery } from '@/lib/graphql-client'
-import {
-	GET_PLAYER_EVIDENCE_FIXTURES,
-	GET_PLAYER_EVIDENCE_PROCESS,
-	GET_PLAYER_EVIDENCE_PRODUCTION,
-	GET_PLAYER_EVIDENCE_RECENT,
-	GET_PLAYER_OVERALL,
-	GET_PLAYER_STATE_CONTEXT,
-	GET_PLAYER_STATE_PROFILE,
-	type PlayerDetailData,
-	type PlayerDetailResponse,
-	type PlayerStateContextResponse,
-	type PlayerStateProfileData,
-	type PlayerStateProfileResponse
+import { requestPlayerStatsDesk } from '@/lib/player-stats-desk-client'
+import type {
+	PlayerDetailData,
+	PlayerStateContextData,
+	PlayerStateOverviewData,
+	PlayerStateProcessData,
+	PlayerStateProfileData,
+	PlayerStatsDeskEntryData,
+	PlayerStatsDeskSection
 } from '@/lib/graphql/operations/players'
-import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
+import {
+	startTransition,
+	useCallback,
+	useEffect,
+	useRef,
+	useState
+} from 'react'
 import { playerDetailToDirectoryOption } from '../_lib/player-detail-option'
 import {
 	parseRecentPlayers,
@@ -51,35 +52,111 @@ function writeRecentPlayers(
 }
 
 function withEmptyStateContext(
-	core: NonNullable<PlayerStateProfileResponse['playerStateProfile']>
+	core: PlayerStateOverviewData
 ): PlayerStateProfileData {
 	return {
 		...core,
+		reasons: core.reasons.map(reason => ({ code: reason.code })),
+		profileRadar: core.profileRadar
+			? {
+					source: 'FPL',
+					...core.profileRadar,
+					sampleMinutes: 0,
+					smallSample: false,
+					axes: core.profileRadar.axes.map(axis => ({
+						...axis,
+						direction: 'NEUTRAL',
+						sampleMinutes: null,
+						capability: true,
+						reasonCode: null
+					}))
+				}
+			: null,
+		dimensions: core.dimensions.map(dimension => ({
+			...dimension,
+			metrics: []
+		})),
 		ownBaseline: { weightedPercentile: null, seasons: [] },
 		peerBaseline: { minimumMinutes: 0, currentPercentile: null },
 		careerTrajectory: [],
-		coverage: { ...core.coverage, providers: [] }
+		outlook: { rating: 'UNAVAILABLE', gameweeks: [] },
+		coverage: {
+			fplCurrent: false,
+			understatCurrent: false,
+			fplHistorySeasons: [],
+			understatHistorySeasons: [],
+			mappingStatus: 'UNAVAILABLE',
+			metricCoverage: [],
+			limitations: [],
+			providers: []
+		}
 	}
+}
+
+function isCoreState(
+	state: PlayerStatsDeskEntryData['state']
+): state is PlayerStateOverviewData {
+	return state != null && 'trend' in state && 'dimensions' in state
+}
+
+function isStateContext(
+	state: PlayerStatsDeskEntryData['state']
+): state is PlayerStateContextData {
+	return state != null && 'ownBaseline' in state && 'careerTrajectory' in state
+}
+
+function isProcessState(
+	state: PlayerStatsDeskEntryData['state']
+): state is PlayerStateProcessData {
+	return (
+		state != null &&
+		'dimensions' in state &&
+		'coverage' in state &&
+		!('trend' in state)
+	)
+}
+
+function canonicalBatch(playerId: number, batchPlayerIds?: number[]): number[] {
+	return Array.from(new Set([playerId, ...(batchPlayerIds ?? [])]))
+		.filter(id => Number.isInteger(id) && id > 0)
+		.slice(0, 2)
+}
+
+const evidenceSectionToDeskSection: Record<
+	Exclude<PlayerEvidenceSection, 'fixtures'>,
+	PlayerStatsDeskSection
+> = {
+	recent: 'recent',
+	season: 'production',
+	process: 'process'
 }
 
 export function usePlayerDetailSlot({
 	storageKey,
-	eventId
+	eventId,
+	initialEntry = null
 }: {
 	storageKey: string
 	eventId?: number
+	initialEntry?: PlayerStatsDeskEntryData | null
 }) {
 	const t = useTranslations('PlayerStats')
+	const initialDetail = initialEntry?.overview ?? null
+	const initialState = isCoreState(initialEntry?.state)
+		? withEmptyStateContext(initialEntry.state)
+		: null
 	const [selectedPlayer, setSelectedPlayer] =
-		useState<PlayerDirectoryOption | null>(null)
+		useState<PlayerDirectoryOption | null>(() =>
+			initialDetail ? playerDetailToDirectoryOption(initialDetail) : null
+		)
 	const [recentPlayers, setRecentPlayers] = useState<PlayerDirectoryOption[]>(
 		[]
 	)
 	const [playerDetail, setPlayerDetail] = useState<PlayerDetailData | null>(
-		null
+		initialDetail
 	)
 	const [playerStateProfile, setPlayerStateProfile] =
-		useState<PlayerStateProfileData | null>(null)
+		useState<PlayerStateProfileData | null>(initialState)
 	const [isLoading, setIsLoading] = useState(false)
 	const [isStateLoading, setIsStateLoading] = useState(false)
 	const [isStateContextLoading, setIsStateContextLoading] = useState(false)
@@ -90,15 +167,30 @@ export function usePlayerDetailSlot({
 	)
 	const [isEvidenceLoading, setIsEvidenceLoading] = useState(false)
 	const [evidenceError, setEvidenceError] = useState<string | null>(null)
-	const evidenceLoadedRef = useRef<Set<PlayerEvidenceSection>>(new Set())
+	const evidenceLoadedRef = useRef<Set<PlayerEvidenceSection>>(
+		new Set<PlayerEvidenceSection>(initialDetail?.fixtures ? ['fixtures'] : [])
+	)
 	const stateContextLoadedRef = useRef(false)
+	const requestIdRef = useRef(0)
+	const overviewControllerRef = useRef<AbortController | null>(null)
+	const evidenceControllerRef = useRef<AbortController | null>(null)
+	const contextControllerRef = useRef<AbortController | null>(null)
+
 	const evidenceLoaded = useCallback(() => {
 		if (!(evidenceLoadedRef.current instanceof Set)) {
 			evidenceLoadedRef.current = new Set<PlayerEvidenceSection>()
 		}
 		return evidenceLoadedRef.current
 	}, [])
-	const requestIdRef = useRef(0)
+
+	const abortRequests = useCallback(() => {
+		overviewControllerRef.current?.abort()
+		evidenceControllerRef.current?.abort()
+		contextControllerRef.current?.abort()
+		overviewControllerRef.current = null
+		evidenceControllerRef.current = null
+		contextControllerRef.current = null
+	}, [])
 
 	useEffect(() => {
 		let cancelled = false
@@ -111,14 +203,22 @@ export function usePlayerDetailSlot({
 		}
 	}, [storageKey])
 
+	useEffect(() => abortRequests, [abortRequests])
+
 	const loadPlayerDetail = useCallback(
-		async (player: PlayerDirectoryOption): Promise<PlayerDetailLoadResult> => {
+		async (
+			player: PlayerDirectoryOption,
+			batchPlayerIds?: number[]
+		): Promise<PlayerDetailLoadResult> => {
 			if (!eventId) {
 				setError(t('currentGameweekUnavailable'))
 				return { status: 'failed', detail: null }
 			}
+			abortRequests()
 			const requestId = requestIdRef.current + 1
 			requestIdRef.current = requestId
+			const controller = new AbortController()
+			overviewControllerRef.current = controller
 			setIsLoading(true)
 			setIsStateLoading(true)
 			setIsStateContextLoading(false)
@@ -130,134 +230,183 @@ export function usePlayerDetailSlot({
 			evidenceLoaded().clear()
 			stateContextLoadedRef.current = false
 
-			void executeQuery<PlayerStateProfileResponse>(GET_PLAYER_STATE_PROFILE, {
-				playerId: Number(player.id),
-				horizon: 5
-			})
-				.then(response => {
-					if (requestId !== requestIdRef.current) return
-					setPlayerStateProfile(
-						response.playerStateProfile
-							? withEmptyStateContext(response.playerStateProfile)
-							: null
-					)
-				})
-				.catch(() => {
-					if (requestId !== requestIdRef.current) return
-					setPlayerStateProfile(null)
-					setStateError(t('stateLoadFailed'))
-				})
-				.finally(() => {
-					if (requestId === requestIdRef.current) setIsStateLoading(false)
-				})
-
 			try {
-				const response = await executeQuery<PlayerDetailResponse>(
-					GET_PLAYER_OVERALL,
+				const playerId = Number(player.id)
+				const response = await requestPlayerStatsDesk(
 					{
-						playerId: Number(player.id),
-						eventId
-					}
+						playerIds: canonicalBatch(playerId, batchPlayerIds),
+						eventId,
+						section: 'overview'
+					},
+					{ signal: controller.signal }
 				)
-				if (requestId !== requestIdRef.current) {
+				if (requestId !== requestIdRef.current || controller.signal.aborted) {
 					return { status: 'superseded', detail: null }
 				}
-				setPlayerDetail(response.playerDetail)
-				return response.playerDetail
-					? { status: 'loaded', detail: response.playerDetail }
+				const entry = response.entries.find(
+					candidate => candidate.playerId === playerId
+				)
+				const detail = entry?.overview ?? null
+				if (detail) {
+					startTransition(() => {
+						setPlayerDetail(detail)
+						setSelectedPlayer(playerDetailToDirectoryOption(detail))
+						if (isCoreState(entry?.state)) {
+							setPlayerStateProfile(withEmptyStateContext(entry.state))
+						} else {
+							setPlayerStateProfile(null)
+							setStateError(t('stateLoadFailed'))
+						}
+					})
+				}
+				if (detail?.fixtures) evidenceLoaded().add('fixtures')
+				return detail
+					? { status: 'loaded', detail }
 					: { status: 'not-found', detail: null }
 			} catch {
-				if (requestId !== requestIdRef.current) {
+				if (requestId !== requestIdRef.current || controller.signal.aborted) {
 					return { status: 'superseded', detail: null }
 				}
-				setPlayerDetail(null)
 				setError(t('loadFailed'))
+				setStateError(t('stateLoadFailed'))
 				return { status: 'failed', detail: null }
 			} finally {
-				if (requestId === requestIdRef.current) setIsLoading(false)
+				if (requestId === requestIdRef.current) {
+					setIsLoading(false)
+					setIsStateLoading(false)
+				}
 			}
 		},
-		[eventId, evidenceLoaded, t]
+		[abortRequests, eventId, evidenceLoaded, t]
 	)
 
-	const loadStateContext = useCallback(async () => {
-		if (
-			!selectedPlayer ||
-			!playerStateProfile ||
-			stateContextLoadedRef.current ||
-			isStateContextLoading
-		) {
-			return
-		}
-		const requestId = requestIdRef.current
-		setIsStateContextLoading(true)
-		setStateContextError(null)
-		try {
-			const response = await executeQuery<PlayerStateContextResponse>(
-				GET_PLAYER_STATE_CONTEXT,
-				{ playerId: Number(selectedPlayer.id), horizon: 5 }
-			)
-			if (requestId !== requestIdRef.current) return
-			const context = response.playerStateProfile
-			if (!context) throw new Error('Player state context unavailable')
-			if (playerStateProfile.playerId !== context.playerId) return
-			setPlayerStateProfile(previous =>
-				previous && previous.playerId === context.playerId
-					? {
-							...previous,
-							ownBaseline: context.ownBaseline,
-							peerBaseline: context.peerBaseline,
-							careerTrajectory: context.careerTrajectory,
-							coverage: {
-								...previous.coverage,
-								providers: context.coverage.providers
-							}
-						}
-					: previous
-			)
-			stateContextLoadedRef.current = true
-		} catch {
-			if (requestId === requestIdRef.current) {
-				setStateContextError(t('evidenceLoadFailed'))
+	const loadStateContext = useCallback(
+		async (batchPlayerIds?: number[]) => {
+			if (
+				!eventId ||
+				!selectedPlayer ||
+				!playerStateProfile ||
+				stateContextLoadedRef.current ||
+				isStateContextLoading
+			) {
+				return
 			}
-		} finally {
-			if (requestId === requestIdRef.current) {
-				setIsStateContextLoading(false)
+			contextControllerRef.current?.abort()
+			const controller = new AbortController()
+			contextControllerRef.current = controller
+			const requestId = requestIdRef.current
+			const playerId = Number(selectedPlayer.id)
+			setIsStateContextLoading(true)
+			setStateContextError(null)
+			try {
+				const response = await requestPlayerStatsDesk(
+					{
+						playerIds: canonicalBatch(playerId, batchPlayerIds),
+						eventId,
+						section: 'context'
+					},
+					{ signal: controller.signal }
+				)
+				if (requestId !== requestIdRef.current || controller.signal.aborted)
+					return
+				const context = response.entries.find(
+					entry => entry.playerId === playerId
+				)?.state
+				if (!isStateContext(context))
+					throw new Error('Player state context unavailable')
+				startTransition(() => {
+					setPlayerStateProfile(previous =>
+						previous && previous.playerId === context.playerId
+							? {
+									...previous,
+									ownBaseline: context.ownBaseline,
+									peerBaseline: context.peerBaseline,
+									careerTrajectory: context.careerTrajectory,
+									coverage: {
+										...previous.coverage,
+										...context.coverage
+									}
+								}
+							: previous
+					)
+				})
+				stateContextLoadedRef.current = true
+			} catch {
+				if (requestId === requestIdRef.current && !controller.signal.aborted) {
+					setStateContextError(t('evidenceLoadFailed'))
+				}
+			} finally {
+				if (requestId === requestIdRef.current) setIsStateContextLoading(false)
 			}
-		}
-	}, [isStateContextLoading, playerStateProfile, selectedPlayer, t])
+		},
+		[eventId, isStateContextLoading, playerStateProfile, selectedPlayer, t]
+	)
 
 	const loadEvidence = useCallback(
-		async (section: PlayerEvidenceSection) => {
+		async (section: PlayerEvidenceSection, batchPlayerIds?: number[]) => {
 			if (!eventId || !selectedPlayer || evidenceLoaded().has(section)) return
+			if (section === 'fixtures') {
+				evidenceLoaded().add('fixtures')
+				return
+			}
+			evidenceControllerRef.current?.abort()
+			const controller = new AbortController()
+			evidenceControllerRef.current = controller
 			const requestId = requestIdRef.current
+			const playerId = Number(selectedPlayer.id)
 			setIsEvidenceLoading(true)
 			setEvidenceError(null)
-			const queryBySection: Record<PlayerEvidenceSection, string> = {
-				fixtures: GET_PLAYER_EVIDENCE_FIXTURES,
-				recent: GET_PLAYER_EVIDENCE_RECENT,
-				season: GET_PLAYER_EVIDENCE_PRODUCTION,
-				process: GET_PLAYER_EVIDENCE_PROCESS
-			}
 			try {
-				const response = await executeQuery<{
-					playerDetail: Partial<PlayerDetailData> | null
-				}>(queryBySection[section], {
-					playerId: Number(selectedPlayer.id),
-					eventId
-				})
-				if (requestId !== requestIdRef.current) return
-				if (response.playerDetail) {
+				const response = await requestPlayerStatsDesk(
+					{
+						playerIds: canonicalBatch(playerId, batchPlayerIds),
+						eventId,
+						section: evidenceSectionToDeskSection[section]
+					},
+					{ signal: controller.signal }
+				)
+				if (requestId !== requestIdRef.current || controller.signal.aborted)
+					return
+				const entry = response.entries.find(
+					candidate => candidate.playerId === playerId
+				)
+				const evidence = entry?.evidence
+				if (!evidence) throw new Error('Player evidence unavailable')
+				const processState = entry?.state
+				startTransition(() => {
 					setPlayerDetail(previous =>
 						previous
-							? { ...previous, ...response.playerDetail }
-							: (response.playerDetail as PlayerDetailData)
+							? { ...previous, ...evidence }
+							: (evidence as PlayerDetailData)
 					)
-					evidenceLoaded().add(section)
-				}
+					if (section === 'process' && isProcessState(processState)) {
+						setPlayerStateProfile(previous => {
+							if (!previous || previous.playerId !== processState.playerId)
+								return previous
+							const processByKind = new Map(
+								processState.dimensions.map(dimension => [
+									dimension.kind,
+									dimension
+								])
+							)
+							return {
+								...previous,
+								dimensions: previous.dimensions.map(
+									dimension => processByKind.get(dimension.kind) ?? dimension
+								),
+								coverage: {
+									...previous.coverage,
+									...processState.coverage
+								}
+							}
+						})
+					}
+				})
+				evidenceLoaded().add(section)
 			} catch {
-				if (requestId === requestIdRef.current)
+				if (requestId === requestIdRef.current && !controller.signal.aborted) {
 					setEvidenceError(t('evidenceLoadFailed'))
+				}
 			} finally {
 				if (requestId === requestIdRef.current) setIsEvidenceLoading(false)
 			}
@@ -265,86 +414,75 @@ export function usePlayerDetailSlot({
 		[eventId, evidenceLoaded, selectedPlayer, t]
 	)
 
-	const selectPlayer = useCallback(
+	const rememberPlayer = useCallback(
 		(player: PlayerDirectoryOption) => {
-			setSelectedPlayer(player)
-			setPlayerDetail(null)
-			setPlayerStateProfile(null)
+			setRecentPlayers(previous => {
+				const next = [
+					player,
+					...previous.filter(item => item.id !== player.id)
+				].slice(0, RECENT_PLAYERS_MAX)
+				writeRecentPlayers(storageKey, next)
+				return next
+			})
+		},
+		[storageKey]
+	)
+
+	const selectPlayer = useCallback(
+		(player: PlayerDirectoryOption, batchPlayerIds?: number[]) => {
 			setError(null)
 			setStateError(null)
 			setStateContextError(null)
 			setEvidenceError(null)
 			evidenceLoaded().clear()
 			stateContextLoadedRef.current = false
-			void loadPlayerDetail(player)
-			setRecentPlayers(previous => {
-				const next = [
-					player,
-					...previous.filter(item => item.id !== player.id)
-				].slice(0, RECENT_PLAYERS_MAX)
-				writeRecentPlayers(storageKey, next)
-				return next
+			void loadPlayerDetail(player, batchPlayerIds).then(result => {
+				if (result.status === 'loaded') {
+					rememberPlayer(playerDetailToDirectoryOption(result.detail))
+				} else if (result.status === 'not-found') {
+					setError(t('playerNotFound'))
+				}
 			})
 		},
-		[evidenceLoaded, loadPlayerDetail, storageKey]
+		[evidenceLoaded, loadPlayerDetail, rememberPlayer, t]
 	)
 
 	const selectPlayerById = useCallback(
-		async (playerId: number, opts?: { silentNotFound?: boolean }) => {
+		async (
+			playerId: number,
+			opts?: { silentNotFound?: boolean; batchPlayerIds?: number[] }
+		) => {
 			if (!eventId) {
 				setError(t('currentGameweekUnavailable'))
 				return null
 			}
 			if (!Number.isInteger(playerId) || playerId <= 0) return null
-			setIsLoading(true)
-			setError(null)
-			setStateError(null)
-			setStateContextError(null)
-			setPlayerDetail(null)
-			setPlayerStateProfile(null)
-			setSelectedPlayer({
+			if (playerDetail?.id === playerId) return playerDetail
+			const placeholder: PlayerDirectoryOption = {
 				id: String(playerId),
 				name: '',
 				position: 'MID',
 				teamShortName: '',
 				teamName: ''
-			})
-
-			const result = await loadPlayerDetail({
-				id: String(playerId),
-				name: '',
-				position: 'MID',
-				teamShortName: '',
-				teamName: ''
-			})
-
+			}
+			const result = await loadPlayerDetail(placeholder, opts?.batchPlayerIds)
 			if (result.status === 'superseded') return null
-
 			if (result.status !== 'loaded') {
-				setSelectedPlayer(null)
 				if (result.status === 'not-found' && !opts?.silentNotFound) {
 					setError(t('playerNotFound'))
 				}
 				return null
 			}
-
 			const player = playerDetailToDirectoryOption(result.detail)
-			setSelectedPlayer(player)
-			setRecentPlayers(previous => {
-				const next = [
-					player,
-					...previous.filter(item => item.id !== player.id)
-				].slice(0, RECENT_PLAYERS_MAX)
-				writeRecentPlayers(storageKey, next)
-				return next
-			})
+			rememberPlayer(player)
 			return result.detail
 		},
-		[eventId, loadPlayerDetail, storageKey, t]
+		[eventId, loadPlayerDetail, playerDetail, rememberPlayer, t]
 	)
 
 	const clearSelection = useCallback(() => {
 		requestIdRef.current += 1
+		abortRequests()
 		setSelectedPlayer(null)
 		setPlayerDetail(null)
 		setPlayerStateProfile(null)
@@ -358,7 +496,7 @@ export function usePlayerDetailSlot({
 		setEvidenceError(null)
 		stateContextLoadedRef.current = false
 		evidenceLoaded().clear()
-	}, [evidenceLoaded])
+	}, [abortRequests, evidenceLoaded])
 
 	const clearRecent = useCallback(() => {
 		try {

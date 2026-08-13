@@ -19,6 +19,34 @@ export const GET_CURRENT_AND_NEXT_EVENTS = `
   }
 `
 
+export const GET_CORE_EVENT_CONTEXT = `
+  query GetCoreEventContext {
+    coreEventContext {
+      season
+      revision
+      sourceCheckedAt
+      currentEventId
+      nextEventId
+      nextDeadlineTime
+      latestFinishedEventId
+    }
+  }
+`
+
+export type CoreEventContextData = {
+	season: string
+	revision: string
+	sourceCheckedAt: string
+	currentEventId: number | null
+	nextEventId: number | null
+	nextDeadlineTime: string | null
+	latestFinishedEventId: number | null
+}
+
+export interface CoreEventContextResponse {
+	coreEventContext: CoreEventContextData
+}
+
 // Type for current event (only need ID)
 export interface CurrentEvent {
 	id: number

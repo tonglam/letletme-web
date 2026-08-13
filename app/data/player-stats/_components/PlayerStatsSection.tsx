@@ -34,7 +34,7 @@ export function PlayerStatsSection({
 					{title}
 				</h2>
 				{hint ? (
-					<p className="mt-0.5 text-[11px] text-muted-foreground/80">{hint}</p>
+					<p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
 				) : null}
 			</div>
 			{children}

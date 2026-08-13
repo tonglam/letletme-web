@@ -71,7 +71,7 @@ function KpiCell({
 				{value ?? '—'}
 			</p>
 			{hint ? (
-				<p className="truncate text-[10px] text-muted-foreground/80">{hint}</p>
+				<p className="truncate text-[10px] text-muted-foreground">{hint}</p>
 			) : null}
 		</div>
 	)
@@ -371,7 +371,7 @@ export function PlayerOverallCard({
 			{seasonStatsAvailable &&
 			player.statsContext.scope === 'CURRENT_SEASON' &&
 			player.statsContext.asOfEventId != null ? (
-				<p className="-mt-1 mb-2 text-[11px] text-muted-foreground/80">
+				<p className="-mt-1 mb-2 text-[11px] text-muted-foreground">
 					{t('anchorLabel', { gw: player.statsContext.asOfEventId })}
 				</p>
 			) : null}

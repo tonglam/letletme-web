@@ -6,6 +6,8 @@ import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { APP_URL, localizedAlternates } from '@/i18n/config'
 import { routing } from '@/i18n/routing'
+import { GLOBAL_CLIENT_NAMESPACES } from '@/i18n/client-namespaces'
+import { selectMessages } from '@/i18n/message-selection'
 import type { Metadata } from 'next'
 import { hasLocale, NextIntlClientProvider } from 'next-intl'
 import {
@@ -96,10 +98,14 @@ export default async function LocaleLayout({
 	if (!hasLocale(routing.locales, locale)) notFound()
 
 	setRequestLocale(locale)
-	const [messages, t] = await Promise.all([
+	const [allMessages, t] = await Promise.all([
 		getMessages(),
 		getTranslations('Common')
 	])
+	const messages = selectMessages(
+		allMessages as IntlMessages,
+		GLOBAL_CLIENT_NAMESPACES
+	)
 
 	return (
 		<html
@@ -116,7 +122,7 @@ export default async function LocaleLayout({
 				/>
 			</head>
 			<body className="min-h-svh bg-background font-sans text-foreground antialiased">
-				<NextIntlClientProvider messages={messages}>
+				<NextIntlClientProvider messages={messages as IntlMessages}>
 					<ThemeProvider
 						defaultTheme="system"
 						enableSystem
