@@ -116,6 +116,21 @@ test('home keeps the four-section vocabulary and competition entry links aligned
 	).toHaveAttribute('href', '/zh-CN/competitions/create')
 })
 
+test('language switch persists through the next client navigation', async ({ page }) => {
+	await page.goto('/zh-CN')
+
+	await page.getByRole('button', { name: '切换语言' }).click()
+	await page.getByRole('menuitemradio', { name: 'English', exact: true }).click()
+	await expect(page).toHaveURL(/\/(?:en)?$/)
+	await expect(page.getByRole('heading', { level: 1 })).toContainText('Every point')
+
+	await page.getByRole('button', { name: 'Explore', exact: true }).click()
+	await page.getByRole('menuitem', { name: 'Market', exact: true }).click()
+
+	await expect(page).toHaveURL(/\/explore\/market$/)
+	await expect(page.getByRole('heading', { name: 'Market', exact: true })).toBeVisible()
+})
+
 test('public home has a keyboard skip path and no detectable accessibility violations', async ({
 	page
 }) => {
