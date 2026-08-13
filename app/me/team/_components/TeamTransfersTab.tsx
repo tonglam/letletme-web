@@ -93,7 +93,7 @@ function MoveSwapDual({
 			style={{ gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)' }}
 			aria-label={`${outLabel}: ${move.outName}; ${inLabel}: ${move.inName}`}
 		>
-			<div className="min-w-0 rounded-md bg-muted/40 px-2.5 py-2 dark:bg-muted/25">
+			<div className="min-w-0 rounded-md surface-inset px-2.5 py-2">
 				<p className="truncate text-sm font-semibold tracking-tight text-foreground">
 					{move.outName}
 				</p>
@@ -188,7 +188,7 @@ function TransferWeekSummary({
 				</span>
 			) : null}
 			{chipName ? (
-				<span className="rounded border border-border/80 bg-muted/40 px-1.5 py-0.5 font-display text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+				<span className="rounded border border-border/80 bg-muted/40 px-1.5 py-0.5 font-display text-label font-semibold uppercase tracking-wide text-muted-foreground">
 					{chipName}
 				</span>
 			) : null}

@@ -1,19 +1,18 @@
 'use client'
 
+import {
+	DataTable,
+	DataTd,
+	DataTh,
+	DataThead,
+	DataTr,
+} from '@/components/data/DataTable'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from '@/components/ui/table'
 import {
 	Tooltip,
 	TooltipContent,
@@ -255,31 +254,28 @@ export function TournamentParticipantsCard(props: TournamentParticipantsCardProp
 						) : null}
 
 						<div className="overflow-hidden rounded-md border">
-							<div className="overflow-x-auto">
-								<Table>
-									<TableHeader>
-										<TableRow>
-											<TableHead className="w-14">
+							<DataTable className="mx-0 px-0">
+								<DataThead>
+											<DataTh className="w-14">
 												<span className="sr-only">{t('include')}</span>
-											</TableHead>
-											<TableHead>{t('team')}</TableHead>
-											<TableHead>{t('manager')}</TableHead>
-										</TableRow>
-									</TableHeader>
-									<TableBody>
+											</DataTh>
+											<DataTh>{t('team')}</DataTh>
+											<DataTh>{t('manager')}</DataTh>
+								</DataThead>
+									<tbody>
 										{displayRows.length === 0 ? (
-											<TableRow>
-												<TableCell
+											<DataTr>
+												<DataTd
 													colSpan={3}
 													className="py-8 text-center text-sm text-muted-foreground"
 												>
 													{t('noMatchingParticipants')}
-												</TableCell>
-											</TableRow>
+												</DataTd>
+											</DataTr>
 										) : (
 											displayRows.map(participant => (
-												<TableRow key={participant.id}>
-													<TableCell>
+												<DataTr key={participant.id}>
+													<DataTd>
 														<input
 															type="checkbox"
 															checked={props.selectedParticipantIds.includes(
@@ -297,17 +293,16 @@ export function TournamentParticipantsCard(props: TournamentParticipantsCardProp
 															}
 															className="size-4 rounded border-input accent-primary disabled:cursor-not-allowed disabled:opacity-50"
 														/>
-													</TableCell>
-													<TableCell className="font-medium">
+													</DataTd>
+													<DataTd className="font-medium">
 														{participant.team}
-													</TableCell>
-													<TableCell>{participant.manager}</TableCell>
-												</TableRow>
+													</DataTd>
+													<DataTd>{participant.manager}</DataTd>
+												</DataTr>
 											))
 										)}
-									</TableBody>
-								</Table>
-							</div>
+									</tbody>
+							</DataTable>
 							<div className="flex flex-col gap-3 border-t bg-accent/20 p-3 sm:flex-row sm:items-center sm:justify-between">
 								{props.participantSource === 'custom' ? (
 									<Button

@@ -103,13 +103,16 @@ export function DataTd({
 	children,
 	className,
 	align = 'left',
+	colSpan,
 }: {
 	children: ReactNode
 	className?: string
 	align?: 'left' | 'center' | 'right'
+	colSpan?: number
 }) {
 	return (
 		<td
+			colSpan={colSpan}
 			className={cn(
 				'px-1.5 py-2',
 				align === 'center' && 'text-center',

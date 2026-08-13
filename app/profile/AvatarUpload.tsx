@@ -80,9 +80,9 @@ export function AvatarUpload({
 				</Avatar>
 				<div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity flex items-center justify-center">
 					{uploading ? (
-						<div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+						<div className="h-5 w-5 border-2 border-fascia-foreground border-t-transparent rounded-full animate-spin" />
 					) : (
-						<Camera className="h-5 w-5 text-white" />
+						<Camera className="h-5 w-5 text-fascia-foreground" />
 					)}
 				</div>
 			</button>

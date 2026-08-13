@@ -50,7 +50,7 @@ export function TournamentCaptainsTab({ rows }: { rows: CaptainRow[] }) {
 								<p className="font-display text-base font-bold tabular-nums">
 									{stat.averagePoints}
 								</p>
-								<p className="text-[10px] text-muted-foreground">
+								<p className="text-label text-muted-foreground">
 									{t('averageCaptainPoints')}
 								</p>
 							</div>

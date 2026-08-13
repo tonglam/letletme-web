@@ -81,7 +81,7 @@ export function TeamSeasonOverall({
 			aria-labelledby="team-season-overall-title"
 		>
 			<div className="px-4 pb-4 pt-4 sm:px-5 sm:pb-5 sm:pt-5">
-				<p className="font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+				<p className="eyebrow">
 					{t('season')}
 				</p>
 				<h2
@@ -101,16 +101,16 @@ export function TeamSeasonOverall({
 				</p>
 
 				<div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4">
-					<div className="rounded-lg bg-muted/40 px-3 py-3 dark:bg-muted/25 sm:px-4 sm:py-3.5">
-						<p className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+					<div className="rounded-lg surface-inset px-3 py-3 sm:px-4 sm:py-3.5">
+						<p className="eyebrow">
 							{t('overallPoints')}
 						</p>
 						<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-foreground sm:text-4xl">
 							{format.number(snapshot.overallPoints)}
 						</p>
 					</div>
-					<div className="rounded-lg bg-muted/40 px-3 py-3 dark:bg-muted/25 sm:px-4 sm:py-3.5">
-						<p className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+					<div className="rounded-lg surface-inset px-3 py-3 sm:px-4 sm:py-3.5">
+						<p className="eyebrow">
 							{t('overallRank')}
 						</p>
 						<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-primary-ink sm:text-4xl">

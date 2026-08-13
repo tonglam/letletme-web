@@ -47,7 +47,7 @@ export function TournamentChipsTab({ rows }: { rows: ChipRow[] }) {
 								<p className="font-display text-base font-bold tabular-nums">
 									{chip.averagePoints}
 								</p>
-								<p className="text-[10px] text-muted-foreground">
+								<p className="text-label text-muted-foreground">
 									{t('averageNetPoints')}
 								</p>
 							</div>

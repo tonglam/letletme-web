@@ -14,7 +14,7 @@ function HeroMetric({
 }) {
 	return (
 		<div className="rounded-lg border border-border/70 px-3 py-3 sm:px-4 sm:py-3.5">
-			<p className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+			<p className="eyebrow">
 				{label}
 			</p>
 			<p
@@ -40,11 +40,11 @@ function SecondaryMetric({
 }) {
 	return (
 		<div className="rounded-lg border border-border/60 bg-card px-3 py-2.5 sm:px-3.5 sm:py-3">
-			<p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+			<p className="text-caption font-medium text-muted-foreground">{label}</p>
 			<p className="mt-0.5 font-display text-lg font-bold tabular-nums tracking-tight text-foreground sm:text-xl">
 				{value}
 			</p>
-			<p className="mt-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+			<p className="mt-0.5 font-mono text-caption tabular-nums text-muted-foreground">
 				{rankLabel}
 			</p>
 		</div>
@@ -74,7 +74,7 @@ export function TournamentRanking({
 			<div className="px-4 pb-4 pt-4 sm:px-5 sm:pb-5 sm:pt-5">
 				<p
 					id="tournament-ranking-title"
-					className="font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground"
+					className="eyebrow"
 				>
 					{t('myTournamentRanking')}
 				</p>

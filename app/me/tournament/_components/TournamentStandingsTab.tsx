@@ -2,6 +2,14 @@
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DeltaBadge } from '@/components/data/DeltaBadge'
+import {
+	DataTable,
+	DataTd,
+	DataTh,
+	DataThead,
+	DataTr,
+} from '@/components/data/DataTable'
 import { cn, formatCompactNumber } from '@/lib/utils'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { useFormatter, useTranslations } from 'next-intl'
@@ -98,19 +106,12 @@ function SortHeader({
 }) {
 	const Icon = !active ? ArrowUpDown : dir === 'asc' ? ArrowUp : ArrowDown
 	return (
-		<th
-			className={cn(
-				'px-2 py-2.5 font-display sm:px-3',
-				align === 'right' && 'text-right',
-				align === 'center' && 'text-center',
-				className,
-			)}
-		>
+		<DataTh align={align} className={className}>
 			<button
 				type="button"
 				onClick={onClick}
 				className={cn(
-					'inline-flex items-center gap-1 rounded-sm text-[11px] font-medium uppercase tracking-wide',
+					'inline-flex items-center gap-1 rounded-sm text-caption font-medium uppercase tracking-wide',
 					'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
 					align === 'right' && 'ml-auto flex-row-reverse',
 					align === 'center' && 'mx-auto',
@@ -129,7 +130,7 @@ function SortHeader({
 					aria-hidden="true"
 				/>
 			</button>
-		</th>
+		</DataTh>
 	)
 }
 
@@ -149,20 +150,20 @@ function RankCell({ row }: { row: StandingRow }) {
 				{rank}
 			</span>
 			{movement > 0 ? (
-				<span
-					className="inline-flex items-center gap-0.5 text-[10px] font-medium text-success"
-					aria-label={t('upPlaces', { count: movement })}
-				>
-					<ArrowUp className="size-3" aria-hidden="true" />
-					{movement}
+				<span aria-label={t('upPlaces', { count: movement })}>
+					<DeltaBadge
+						value={movement}
+						size="sm"
+						format={v => Math.abs(v)}
+					/>
 				</span>
 			) : movement < 0 ? (
-				<span
-					className="inline-flex items-center gap-0.5 text-[10px] font-medium text-destructive"
-					aria-label={t('downPlaces', { count: Math.abs(movement) })}
-				>
-					<ArrowDown className="size-3" aria-hidden="true" />
-					{Math.abs(movement)}
+				<span aria-label={t('downPlaces', { count: Math.abs(movement) })}>
+					<DeltaBadge
+						value={movement}
+						size="sm"
+						format={v => Math.abs(v)}
+					/>
 				</span>
 			) : null}
 		</div>
@@ -243,124 +244,132 @@ export function TournamentStandingsTab({
 				/>
 			</div>
 
-			<div className="overflow-x-auto overscroll-x-contain rounded-lg border border-border/70">
-				<table className="w-full min-w-[22rem] text-sm">
-					<thead>
-						<tr className="border-b border-border/60 bg-muted/25">
-							<SortHeader
-								label={t('rank')}
-								active={sortKey === 'rank'}
-								dir={sortDir}
-								align="center"
-								className="w-12 sm:w-14"
-								onClick={() => handleSort('rank')}
-							/>
-							<SortHeader
-								label={t('team')}
-								active={sortKey === 'teamName'}
-								dir={sortDir}
-								className="min-w-[7.5rem]"
-								onClick={() => handleSort('teamName')}
-							/>
-							<SortHeader
-								label={t('gameweekPoints')}
-								active={sortKey === 'gameweekPoints'}
-								dir={sortDir}
-								align="right"
-								onClick={() => handleSort('gameweekPoints')}
-							/>
-							<SortHeader
-								label={t('totalPoints')}
-								active={sortKey === 'totalPoints'}
-								dir={sortDir}
-								align="right"
-								onClick={() => handleSort('totalPoints')}
-							/>
-							<SortHeader
-								label={t('overallRankShort')}
-								active={sortKey === 'overallRank'}
-								dir={sortDir}
-								align="right"
-								className="hidden sm:table-cell"
-								onClick={() => handleSort('overallRank')}
-							/>
-							<SortHeader
-								label={t('value')}
-								active={sortKey === 'teamValue'}
-								dir={sortDir}
-								align="right"
-								className="hidden md:table-cell"
-								onClick={() => handleSort('teamValue')}
-							/>
-						</tr>
-					</thead>
-					<tbody>
-						{displayRows.length === 0 ? (
-							<tr>
-								<td
-									colSpan={6}
-									className="px-3 py-8 text-center text-sm text-muted-foreground"
+			<DataTable
+				minWidthClass="min-w-[22rem]"
+				className="mx-0 rounded-lg border border-border/70 px-0"
+			>
+				<DataThead>
+					<SortHeader
+						label={t('rank')}
+						active={sortKey === 'rank'}
+						dir={sortDir}
+						align="center"
+						className="w-12 sm:w-14"
+						onClick={() => handleSort('rank')}
+					/>
+					<SortHeader
+						label={t('team')}
+						active={sortKey === 'teamName'}
+						dir={sortDir}
+						className="min-w-[7.5rem]"
+						onClick={() => handleSort('teamName')}
+					/>
+					<SortHeader
+						label={t('gameweekPoints')}
+						active={sortKey === 'gameweekPoints'}
+						dir={sortDir}
+						align="right"
+						onClick={() => handleSort('gameweekPoints')}
+					/>
+					<SortHeader
+						label={t('totalPoints')}
+						active={sortKey === 'totalPoints'}
+						dir={sortDir}
+						align="right"
+						onClick={() => handleSort('totalPoints')}
+					/>
+					<SortHeader
+						label={t('overallRankShort')}
+						active={sortKey === 'overallRank'}
+						dir={sortDir}
+						align="right"
+						className="hidden sm:table-cell"
+						onClick={() => handleSort('overallRank')}
+					/>
+					<SortHeader
+						label={t('value')}
+						active={sortKey === 'teamValue'}
+						dir={sortDir}
+						align="right"
+						className="hidden md:table-cell"
+						onClick={() => handleSort('teamValue')}
+					/>
+				</DataThead>
+				<tbody>
+					{displayRows.length === 0 ? (
+						<DataTr>
+							<DataTd
+								colSpan={6}
+								className="px-3 py-8 text-center text-sm text-muted-foreground"
+							>
+								{t('noData')}
+							</DataTd>
+						</DataTr>
+					) : (
+						displayRows.map(row => (
+							<DataTr
+								key={row.entryId}
+								className={cn(row.isMe && 'row-self')}
+							>
+								<DataTd>
+									<RankCell row={row} />
+								</DataTd>
+								<DataTd className="min-w-0">
+									<p
+										className={cn(
+											'truncate font-medium text-foreground',
+											row.isMe && 'text-primary-ink',
+										)}
+									>
+										{row.teamName}
+										{row.isMe ? (
+											<span className="ml-1.5 text-caption font-semibold text-primary-ink">
+												{t('youBadge')}
+											</span>
+										) : null}
+									</p>
+									<p className="truncate text-xs text-muted-foreground">
+										{row.managerName}
+										{row.overallRank > 0 ? (
+											<span className="sm:hidden">
+												{' · '}
+												{t('overallRankShort')}{' '}
+												{formatCompactNumber(row.overallRank)}
+											</span>
+										) : null}
+									</p>
+								</DataTd>
+								<DataTd
+									align="right"
+									className="font-display font-semibold tabular-nums"
 								>
-									{t('noData')}
-								</td>
-							</tr>
-						) : (
-							displayRows.map(row => (
-								<tr
-									key={row.entryId}
-									className={cn(
-										'border-t border-border/50',
-										row.isMe && 'bg-primary/5 dark:bg-primary/10',
-									)}
+									{format.number(row.gameweekPoints)}
+								</DataTd>
+								<DataTd
+									align="right"
+									className="font-display font-bold tabular-nums"
 								>
-									<td className="px-2 py-2.5 sm:px-3">
-										<RankCell row={row} />
-									</td>
-									<td className="min-w-0 px-2 py-2.5 sm:px-3">
-										<p
-											className={cn(
-												'truncate font-medium text-foreground',
-												row.isMe && 'text-primary-ink',
-											)}
-										>
-											{row.teamName}
-											{row.isMe ? (
-												<span className="ml-1.5 text-[11px] font-semibold text-primary-ink">
-													{t('youBadge')}
-												</span>
-											) : null}
-										</p>
-										<p className="truncate text-xs text-muted-foreground">
-											{row.managerName}
-											{row.overallRank > 0 ? (
-												<span className="sm:hidden">
-													{' · '}
-													{t('overallRankShort')}{' '}
-													{formatCompactNumber(row.overallRank)}
-												</span>
-											) : null}
-										</p>
-									</td>
-									<td className="px-2 py-2.5 text-right font-display font-semibold tabular-nums sm:px-3">
-										{format.number(row.gameweekPoints)}
-									</td>
-									<td className="px-2 py-2.5 text-right font-display font-bold tabular-nums sm:px-3">
-										{format.number(row.totalPoints)}
-									</td>
-									<td className="hidden px-2 py-2.5 text-right font-mono text-xs tabular-nums text-muted-foreground sm:table-cell sm:px-3">
-										{row.overallRank > 0
-											? formatCompactNumber(row.overallRank)
-											: '—'}
-									</td>
-									<td className="hidden px-2 py-2.5 text-right font-mono text-xs tabular-nums text-muted-foreground md:table-cell md:px-3">
-										{formatMoneyValue(row.teamValue)}
-									</td>
-								</tr>
-							))
-						)}
-					</tbody>
-				</table>
-			</div>
+									{format.number(row.totalPoints)}
+								</DataTd>
+								<DataTd
+									align="right"
+									className="hidden font-mono text-xs tabular-nums text-muted-foreground sm:table-cell"
+								>
+									{row.overallRank > 0
+										? formatCompactNumber(row.overallRank)
+										: '—'}
+								</DataTd>
+								<DataTd
+									align="right"
+									className="hidden font-mono text-xs tabular-nums text-muted-foreground md:table-cell"
+								>
+									{formatMoneyValue(row.teamValue)}
+								</DataTd>
+							</DataTr>
+						))
+					)}
+				</tbody>
+			</DataTable>
 
 			{hasMore || canCollapse ? (
 				<div className="flex flex-wrap items-center justify-center gap-2">

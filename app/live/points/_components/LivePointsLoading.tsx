@@ -40,7 +40,7 @@ export function LivePointsLoading({
 					{[1, 2, 3, 4].map(item => (
 						<div
 							key={item}
-							className="rounded-lg border border-border/70 bg-muted/40 px-3 py-3 sm:px-4 dark:bg-muted/25"
+							className="surface-inset rounded-lg border px-3 py-3 sm:px-4"
 						>
 							<Skeleton className="mb-3 h-4 w-16" />
 							<Skeleton className="h-7 w-12" />

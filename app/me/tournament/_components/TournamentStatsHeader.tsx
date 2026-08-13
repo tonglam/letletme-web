@@ -24,7 +24,7 @@ function MetaChip({ children }: { children: ReactNode }) {
 		<span
 			className={cn(
 				'inline-flex items-center rounded-md border border-border/70',
-				'bg-muted/35 px-2 py-0.5 text-[11px] font-medium text-muted-foreground',
+				'bg-muted/35 px-2 py-0.5 text-caption font-medium text-muted-foreground',
 				'dark:bg-muted/20',
 			)}
 		>
@@ -109,13 +109,13 @@ export function TournamentStatsHeader({
 	}
 
 	return (
-		<Card className="mb-5 overflow-hidden border-border/80 shadow-sm sm:mb-6">
+		<Card className="mb-5 overflow-hidden shadow-sm sm:mb-6">
 			<div className="space-y-3 p-4 sm:space-y-3.5 sm:p-5">
 				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div className="min-w-0 flex-1 space-y-2">
 						<label
 							htmlFor="tournament-stats-select"
-							className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+							className="eyebrow"
 						>
 							{t('selectTournament')}
 						</label>

@@ -2,6 +2,13 @@
 
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
+import {
+	DataTable,
+	DataTd,
+	DataTh,
+	DataThead,
+	DataTr,
+} from '@/components/data/DataTable'
 import { TournamentLifecycleBadge } from '@/components/tournament/TournamentLifecycleBadge'
 import type { EntryTournamentListItem } from '@/lib/graphql/operations/tournaments'
 import { mapTournamentGroupFormat } from '@/lib/tournament/liveTournament'
@@ -17,14 +24,6 @@ import {
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow
-} from '@/components/ui/table'
 import {
 	ArrowUpDown,
 	Calendar,
@@ -374,44 +373,41 @@ export default function TournamentListClient({
 						</div>
 					</div>
 
-					<div className="overflow-x-auto">
-						<Table>
-							<TableHeader>
-								<TableRow>
-									<TableHead>{t('tournament')}</TableHead>
-									<TableHead>{t('participants')}</TableHead>
-									<TableHead>{t('creator')}</TableHead>
-									<TableHead>{t('type')}</TableHead>
-									<TableHead>{t('format')}</TableHead>
-									<TableHead>{t('gameweeks')}</TableHead>
-									<TableHead>{t('status')}</TableHead>
-									<TableHead>{t('actions')}</TableHead>
-								</TableRow>
-							</TableHeader>
-							<TableBody>
+					<DataTable minWidthClass="min-w-[40rem]">
+						<DataThead>
+									<DataTh>{t('tournament')}</DataTh>
+									<DataTh>{t('participants')}</DataTh>
+									<DataTh>{t('creator')}</DataTh>
+									<DataTh>{t('type')}</DataTh>
+									<DataTh>{t('format')}</DataTh>
+									<DataTh>{t('gameweeks')}</DataTh>
+									<DataTh>{t('status')}</DataTh>
+									<DataTh>{t('actions')}</DataTh>
+							</DataThead>
+							<tbody>
 								{filteredTournaments.length === 0 && (
-									<TableRow>
-										<TableCell
+									<DataTr>
+										<DataTd
 											colSpan={8}
 											className="text-center text-muted-foreground"
 										>
 											{initialError
 												? t('unable')
 												: t('noMatches')}
-										</TableCell>
-									</TableRow>
+										</DataTd>
+									</DataTr>
 								)}
 								{visibleTournaments.map(tournament => (
-									<TableRow key={tournament.id}>
-										<TableCell>
+									<DataTr key={tournament.id}>
+										<DataTd>
 											<div className="font-medium">{tournament.name}</div>
-										</TableCell>
-										<TableCell>{tournament.participantCount}</TableCell>
-										<TableCell>{tournament.creatorName}</TableCell>
-										<TableCell>
+										</DataTd>
+										<DataTd>{tournament.participantCount}</DataTd>
+										<DataTd>{tournament.creatorName}</DataTd>
+										<DataTd>
 											<Badge variant="outline">{getLeagueType(tournament.leagueType)}</Badge>
-										</TableCell>
-										<TableCell>
+										</DataTd>
+										<DataTd>
 											<div className="text-sm leading-5">
 												<div>
 													{tournament.groupFormat === 'none'
@@ -428,19 +424,19 @@ export default function TournamentListClient({
 												: t('homeAway')}
 												</div>
 											</div>
-										</TableCell>
-										<TableCell>
+										</DataTd>
+										<DataTd>
 											<div className="flex items-center gap-2">
 												<Calendar className="h-4 w-4 text-muted-foreground" />
 												<span>
 												{tournament.startGameweek ? t('gameweek', { gameweek: tournament.startGameweek }) : '—'} – {tournament.endGameweek ? t('gameweek', { gameweek: tournament.endGameweek }) : '—'}
 												</span>
 											</div>
-										</TableCell>
-										<TableCell>
+										</DataTd>
+										<DataTd>
 											<TournamentLifecycleBadge tournament={tournament.tournament} />
-										</TableCell>
-										<TableCell>
+										</DataTd>
+										<DataTd>
 											<DropdownMenu>
 												<DropdownMenuTrigger asChild>
 													<Button
@@ -474,12 +470,11 @@ export default function TournamentListClient({
 													) : null}
 												</DropdownMenuContent>
 											</DropdownMenu>
-										</TableCell>
-									</TableRow>
+										</DataTd>
+									</DataTr>
 								))}
-							</TableBody>
-						</Table>
-					</div>
+							</tbody>
+					</DataTable>
 
 					{hasMore || canCollapse ? (
 						<div className="mt-4 flex flex-wrap items-center justify-center gap-2">

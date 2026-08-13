@@ -127,7 +127,7 @@ export default async function ProfilePage({ params }: PageProps) {
 					</h2>
 
 					<div className="space-y-4">
-						<div className="rounded-lg border border-border/70 bg-muted/40 p-4 dark:bg-muted/25">
+						<div className="surface-inset rounded-lg border p-4">
 							<h3 className="mb-2 font-medium">{t('email')}</h3>
 							<div className="flex justify-between items-center">
 								<p className="text-sm">{profile.email}</p>
@@ -149,7 +149,7 @@ export default async function ProfilePage({ params }: PageProps) {
 							</div>
 						</div>
 
-						<div className="rounded-lg border border-border/70 bg-muted/40 p-4 dark:bg-muted/25">
+						<div className="surface-inset rounded-lg border p-4">
 							<h3 className="mb-3 font-medium">{t('fplTeam')}</h3>
 							<RebindEntryForm
 								currentEntryId={verifiedEntryId}
@@ -162,7 +162,7 @@ export default async function ProfilePage({ params }: PageProps) {
 							/>
 						</div>
 
-						<div className="rounded-lg border border-border/70 bg-muted/40 p-4 dark:bg-muted/25">
+						<div className="surface-inset rounded-lg border p-4">
 							<h3 className="mb-3 flex items-center gap-2 font-medium">
 								<Users className="size-4" aria-hidden="true" />
 								{t('security')}

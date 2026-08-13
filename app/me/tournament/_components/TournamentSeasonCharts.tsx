@@ -78,7 +78,7 @@ export function TournamentSeasonCharts({
 			) : (
 				<div className="space-y-4">
 					<div>
-						<p className="mb-2 text-[11px] font-medium text-muted-foreground">{t('formRecent', { count: form.length })}</p>
+						<p className="mb-2 text-caption font-medium text-muted-foreground">{t('formRecent', { count: form.length })}</p>
 						<ol className="flex flex-wrap gap-1.5">
 							{form.map(point => {
 								const rank = point.tournamentRank
@@ -98,7 +98,7 @@ export function TournamentSeasonCharts({
 											onClick={() => onOpenGameweek?.(point.gameweek)}
 											aria-label={t('formChipAria', { gameweek: point.gameweek, rank: rank ?? '—' })}
 										>
-											<span className="text-[10px] text-muted-foreground">{point.gameweek}</span>
+											<span className="text-label text-muted-foreground">{point.gameweek}</span>
 											<span className="font-display text-sm font-bold">{rank == null ? '—' : rank}</span>
 										</button>
 									</li>
@@ -109,14 +109,14 @@ export function TournamentSeasonCharts({
 
 					<div className="space-y-2 border-t border-border/60 pt-3">
 						<div className="flex flex-wrap items-center justify-between gap-2">
-							<p className="text-[11px] font-medium text-muted-foreground">{t('seasonPathDetail')}</p>
+							<p className="text-caption font-medium text-muted-foreground">{t('seasonPathDetail')}</p>
 							<div className="flex flex-wrap gap-1">
-								{modes.map(item => <Button key={item.id} type="button" size="sm" variant={mode === item.id ? 'default' : 'ghost'} className="h-7 px-2 text-[11px]" aria-pressed={mode === item.id} onClick={() => { setMode(item.id); setHover(null) }}>{item.label}</Button>)}
+								{modes.map(item => <Button key={item.id} type="button" size="sm" variant={mode === item.id ? 'default' : 'ghost'} className="h-7 px-2 text-caption" aria-pressed={mode === item.id} onClick={() => { setMode(item.id); setHover(null) }}>{item.label}</Button>)}
 							</div>
 						</div>
 
 						{mode !== 'tournamentRank' ? (
-							<ul className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+							<ul className="flex flex-wrap gap-3 text-caption text-muted-foreground">
 								<li className="inline-flex items-center gap-1.5"><span className="inline-block h-0.5 w-4 rounded-full bg-primary-ink" aria-hidden="true" />{t('chartSeriesYou')}</li>
 								<li className="inline-flex items-center gap-1.5"><span className="inline-block h-0.5 w-4 rounded-full bg-muted-foreground opacity-70" aria-hidden="true" />{mode === 'gapToLeader' ? t('chartSeriesLeader') : t('chartSeriesAverage')}</li>
 							</ul>
@@ -145,10 +145,10 @@ export function TournamentSeasonCharts({
 						{hover ? (
 							<p className="text-xs text-muted-foreground" aria-live="polite"><span className="font-display font-semibold text-foreground">GW{hover.gameweek}</span>{' · '}{formatHover(hover)}</p>
 						) : (
-							<p className="text-[11px] text-muted-foreground">{mode === 'tournamentRank' ? t('chartTournamentRankHint') : mode === 'gapToLeader' ? t('chartGapToLeaderHint') : t('chartPointsVsAverageHint')}</p>
+							<p className="text-caption text-muted-foreground">{mode === 'tournamentRank' ? t('chartTournamentRankHint') : mode === 'gapToLeader' ? t('chartGapToLeaderHint') : t('chartPointsVsAverageHint')}</p>
 						)}
 					</div>
-					{loading ? <p className="text-[11px] text-muted-foreground">{t('seasonPathLoading')}</p> : null}
+					{loading ? <p className="text-caption text-muted-foreground">{t('seasonPathLoading')}</p> : null}
 				</div>
 			)}
 		</StatsSectionCard>

@@ -1,6 +1,13 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
+import {
+	DataTable,
+	DataTd,
+	DataTh,
+	DataThead,
+	DataTr,
+} from '@/components/data/DataTable'
 import { cn, formatCompactNumber } from '@/lib/utils'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { useFormatter, useTranslations } from 'next-intl'
@@ -81,18 +88,12 @@ function SortHeader({
 }) {
 	const Icon = !active ? ArrowUpDown : dir === 'asc' ? ArrowUp : ArrowDown
 	return (
-		<th
-			className={cn(
-				'px-2 py-2.5 font-display sm:px-3',
-				align === 'right' && 'text-right',
-				className,
-			)}
-		>
+		<DataTh align={align} className={className}>
 			<button
 				type="button"
 				onClick={onClick}
 				className={cn(
-					'inline-flex items-center gap-1 rounded-sm text-[11px] font-medium uppercase tracking-wide',
+					'inline-flex items-center gap-1 rounded-sm text-caption font-medium uppercase tracking-wide',
 					'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
 					align === 'right' && 'ml-auto flex-row-reverse',
 					active ? 'text-foreground' : 'text-muted-foreground',
@@ -110,7 +111,7 @@ function SortHeader({
 					aria-hidden="true"
 				/>
 			</button>
-		</th>
+		</DataTh>
 	)
 }
 
@@ -152,7 +153,7 @@ export function TournamentSeasonField({
 		return (
 			<section className="mb-5 overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm sm:mb-6">
 				<div className="px-4 py-5 sm:px-5">
-					<p className="font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+					<p className="eyebrow">
 						{t('tournamentField')}
 					</p>
 					<p className="mt-3 text-sm text-muted-foreground">
@@ -177,7 +178,7 @@ export function TournamentSeasonField({
 			<div className="px-4 pb-4 pt-4 sm:px-5 sm:pb-5 sm:pt-5">
 				<p
 					id="tournament-field-title"
-					className="font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground"
+					className="eyebrow"
 				>
 					{t('tournamentField')}
 				</p>
@@ -187,7 +188,7 @@ export function TournamentSeasonField({
 
 				<div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
 					<div className="rounded-lg border border-border/70 px-3 py-2.5">
-						<p className="text-[11px] font-medium text-muted-foreground">
+						<p className="text-caption font-medium text-muted-foreground">
 							{t('fieldTeams')}
 						</p>
 						<p className="mt-0.5 font-display text-xl font-bold tabular-nums">
@@ -195,7 +196,7 @@ export function TournamentSeasonField({
 						</p>
 					</div>
 					<div className="rounded-lg border border-border/70 px-3 py-2.5">
-						<p className="text-[11px] font-medium text-muted-foreground">
+						<p className="text-caption font-medium text-muted-foreground">
 							{t('fieldLeaderPoints')}
 						</p>
 						<p className="mt-0.5 font-display text-xl font-bold tabular-nums text-primary-ink">
@@ -205,7 +206,7 @@ export function TournamentSeasonField({
 						</p>
 					</div>
 					<div className="rounded-lg border border-border/70 px-3 py-2.5">
-						<p className="text-[11px] font-medium text-muted-foreground">
+						<p className="text-caption font-medium text-muted-foreground">
 							{t('fieldAveragePoints')}
 						</p>
 						<p className="mt-0.5 font-display text-xl font-bold tabular-nums">
@@ -215,7 +216,7 @@ export function TournamentSeasonField({
 						</p>
 					</div>
 					<div className="rounded-lg border border-border/70 px-3 py-2.5">
-						<p className="text-[11px] font-medium text-muted-foreground">
+						<p className="text-caption font-medium text-muted-foreground">
 							{t('fieldGapFirstSecond')}
 						</p>
 						<p className="mt-0.5 font-display text-xl font-bold tabular-nums">
@@ -228,7 +229,7 @@ export function TournamentSeasonField({
 
 				{field.metrics.length > 0 ? (
 					<div className="mt-4">
-						<p className="mb-2 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+						<p className="mb-2 eyebrow">
 							{t('fieldLeaders')}
 						</p>
 						<div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -237,7 +238,7 @@ export function TournamentSeasonField({
 									key={metric.key}
 									className="rounded-lg border border-border/60 px-3 py-2.5"
 								>
-									<p className="text-[11px] font-medium text-muted-foreground">
+									<p className="text-caption font-medium text-muted-foreground">
 										{t(metric.labelKey as 'metricOverallPoints')}
 									</p>
 									<p className="mt-0.5 truncate font-display text-sm font-bold text-foreground">
@@ -252,11 +253,11 @@ export function TournamentSeasonField({
 										) : null}
 									</p>
 									{metric.leaderManagerName ? (
-										<p className="truncate text-[11px] text-muted-foreground">
+										<p className="truncate text-caption text-muted-foreground">
 											{metric.leaderManagerName}
 										</p>
 									) : null}
-									<p className="mt-1 font-mono text-[11px] tabular-nums text-muted-foreground">
+									<p className="mt-1 font-mono text-caption tabular-nums text-muted-foreground">
 										{t('fieldMetricAverage', {
 											value: metric.averageDisplay,
 										})}
@@ -267,101 +268,106 @@ export function TournamentSeasonField({
 					</div>
 				) : null}
 
-				<div className="mt-4 overflow-x-auto overscroll-x-contain rounded-lg border border-border/70">
-					<table className="w-full min-w-[20rem] text-sm">
-						<thead>
-							<tr className="border-b border-border/60 bg-muted/25">
-								<SortHeader
-									label={t('rank')}
-									active={sortKey === 'rank'}
-									dir={sortDir}
-									className="w-10 sm:w-12"
-									onClick={() => handleSort('rank')}
-								/>
-								<th className="min-w-[7rem] px-2 py-2.5 text-left font-display text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:px-3">
-									{t('team')}
-								</th>
-								<SortHeader
-									label={t('totalPoints')}
-									active={sortKey === 'totalPoints'}
-									dir={sortDir}
+				<DataTable
+					minWidthClass="min-w-[20rem]"
+					className="mx-0 mt-4 rounded-lg border border-border/70 px-0"
+				>
+					<DataThead>
+						<SortHeader
+							label={t('rank')}
+							active={sortKey === 'rank'}
+							dir={sortDir}
+							className="w-10 sm:w-12"
+							onClick={() => handleSort('rank')}
+						/>
+						<DataTh className="min-w-[7rem]">
+							{t('team')}
+						</DataTh>
+						<SortHeader
+							label={t('totalPoints')}
+							active={sortKey === 'totalPoints'}
+							dir={sortDir}
+							align="right"
+							onClick={() => handleSort('totalPoints')}
+						/>
+						<SortHeader
+							label={t('overallRankShort')}
+							active={sortKey === 'overallRank'}
+							dir={sortDir}
+							align="right"
+							className="hidden sm:table-cell"
+							onClick={() => handleSort('overallRank')}
+						/>
+						<SortHeader
+							label={t('value')}
+							active={sortKey === 'teamValue'}
+							dir={sortDir}
+							align="right"
+							onClick={() => handleSort('teamValue')}
+						/>
+					</DataThead>
+					<tbody>
+						{rows.map(row => (
+							<DataTr
+								key={row.entryId}
+								className={cn(row.isMe && 'row-self')}
+							>
+								<DataTd className="font-mono tabular-nums text-muted-foreground">
+									{row.rank == null ? '—' : format.number(row.rank)}
+								</DataTd>
+								<DataTd className="min-w-0">
+									<p
+										className={cn(
+											'truncate font-medium',
+											row.isMe && 'text-primary-ink',
+										)}
+									>
+										{row.teamName}
+										{row.isMe ? (
+											<span className="ml-1.5 text-caption font-semibold text-primary-ink">
+												{t('youBadge')}
+											</span>
+										) : null}
+									</p>
+									<p className="truncate text-xs text-muted-foreground">
+										{row.managerName}
+										{row.overallRank != null ? (
+											<span className="sm:hidden">
+												{' · '}
+												{t('overallRankShort')}{' '}
+												{formatCompactNumber(row.overallRank)}
+											</span>
+										) : null}
+									</p>
+								</DataTd>
+								<DataTd
 									align="right"
-									onClick={() => handleSort('totalPoints')}
-								/>
-								<SortHeader
-									label={t('overallRankShort')}
-									active={sortKey === 'overallRank'}
-									dir={sortDir}
-									align="right"
-									className="hidden sm:table-cell"
-									onClick={() => handleSort('overallRank')}
-								/>
-								<SortHeader
-									label={t('value')}
-									active={sortKey === 'teamValue'}
-									dir={sortDir}
-									align="right"
-									onClick={() => handleSort('teamValue')}
-								/>
-							</tr>
-						</thead>
-						<tbody>
-							{rows.map(row => (
-								<tr
-									key={row.entryId}
-									className={cn(
-										'border-t border-border/50',
-										row.isMe && 'bg-primary/5 dark:bg-primary/10',
-									)}
+									className="font-display font-semibold tabular-nums"
 								>
-									<td className="px-2 py-2.5 font-mono tabular-nums text-muted-foreground sm:px-3">
-										{row.rank == null ? '—' : format.number(row.rank)}
-									</td>
-									<td className="min-w-0 px-2 py-2.5 sm:px-3">
-										<p
-											className={cn(
-												'truncate font-medium',
-												row.isMe && 'text-primary-ink',
-											)}
-										>
-											{row.teamName}
-											{row.isMe ? (
-												<span className="ml-1.5 text-[11px] font-semibold text-primary-ink">
-													{t('youBadge')}
-												</span>
-											) : null}
-										</p>
-										<p className="truncate text-xs text-muted-foreground">
-											{row.managerName}
-											{row.overallRank != null ? (
-												<span className="sm:hidden">
-													{' · '}
-													{t('overallRankShort')}{' '}
-													{formatCompactNumber(row.overallRank)}
-												</span>
-											) : null}
-										</p>
-									</td>
-									<td className="px-2 py-2.5 text-right font-display font-semibold tabular-nums sm:px-3">
-										{row.totalPoints == null
-											? '—'
-											: format.number(row.totalPoints)}
-									</td>
-									<td className="hidden px-2 py-2.5 text-right font-mono text-xs tabular-nums text-muted-foreground sm:table-cell sm:px-3">
-										{row.overallRank == null
-											? '—'
-											: formatCompactNumber(row.overallRank)}
-									</td>
-									<td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums text-muted-foreground sm:px-3">
-										{row.teamValue == null
-											? '—'
-											: `£${(row.teamValue / 10).toFixed(1)}m`}
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
+									{row.totalPoints == null
+										? '—'
+										: format.number(row.totalPoints)}
+								</DataTd>
+								<DataTd
+									align="right"
+									className="hidden font-mono text-xs tabular-nums text-muted-foreground sm:table-cell"
+								>
+									{row.overallRank == null
+										? '—'
+										: formatCompactNumber(row.overallRank)}
+								</DataTd>
+								<DataTd
+									align="right"
+									className="font-mono text-xs tabular-nums text-muted-foreground"
+								>
+									{row.teamValue == null
+										? '—'
+										: `£${(row.teamValue / 10).toFixed(1)}m`}
+								</DataTd>
+							</DataTr>
+						))}
+					</tbody>
+				</DataTable>
 
 				{hasMore || canCollapse ? (
 					<div className="mt-3 flex flex-wrap items-center justify-center gap-2">

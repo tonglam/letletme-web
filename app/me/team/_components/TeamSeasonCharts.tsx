@@ -217,7 +217,7 @@ export function TeamSeasonCharts({ logs }: { logs: TeamSeasonLogs }) {
 							<span>{t('benchPoints')} <span className="text-foreground">{hover.benchPoints}</span></span>
 							<span>{t('transferSummaryMoves')} <span className="text-foreground">{hover.transfers}</span></span>
 							{hover.transferCost > 0 ? <span className="text-destructive">{t('historyColTransferHit')} −{hover.transferCost}</span> : null}
-							{hover.isChip && chipShortLabel(hover.chip) ? <span className="rounded border border-border/70 px-1 py-px font-display text-[10px] font-semibold text-plum">{chipShortLabel(hover.chip)}</span> : null}
+							{hover.isChip && chipShortLabel(hover.chip) ? <span className="rounded border border-border/70 px-1 py-px font-display text-label font-semibold text-plum">{chipShortLabel(hover.chip)}</span> : null}
 						</div>
 					) : <span>{t('chartHoverHint')}</span>}
 				</div>
@@ -245,11 +245,11 @@ export function TeamSeasonCharts({ logs }: { logs: TeamSeasonLogs }) {
 						onActivePointChange={updateHover}
 					/>
 				)}
-				<p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{modeHint}</p>
+				<p className="mt-2 text-caption leading-relaxed text-muted-foreground">{modeHint}</p>
 				{mode === 'captain' && captainSummary.top.length > 0 ? (
 					<ul className="mt-3 flex flex-wrap gap-1.5">
-						<li><TeamMetricChip><span className="text-white/70">{t('captainTotalPts')}</span><span className="font-semibold text-white">{captainSummary.totalPoints}</span></TeamMetricChip></li>
-						{captainSummary.top.map(item => <li key={`${item.name}-${item.team}`}><TeamMetricChip><span className="font-medium text-white">{item.name}</span>{item.team ? <span className="font-mono text-[10px] text-white/70">{item.team}</span> : null}<span className="font-mono text-[10px] tabular-nums text-white/70">×{item.weeks}</span></TeamMetricChip></li>)}
+						<li><TeamMetricChip><span className="text-fascia-foreground/70">{t('captainTotalPts')}</span><span className="font-semibold text-fascia-foreground">{captainSummary.totalPoints}</span></TeamMetricChip></li>
+						{captainSummary.top.map(item => <li key={`${item.name}-${item.team}`}><TeamMetricChip><span className="font-medium text-fascia-foreground">{item.name}</span>{item.team ? <span className="font-mono text-label text-fascia-foreground/70">{item.team}</span> : null}<span className="font-mono text-label tabular-nums text-fascia-foreground/70">×{item.weeks}</span></TeamMetricChip></li>)}
 					</ul>
 				) : null}
 			</StatsSectionCard>

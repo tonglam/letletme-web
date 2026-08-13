@@ -1,10 +1,9 @@
 'use client'
 
 import { StatsMetricTile, StatsSectionCard } from '@/components/stats/StatsSurfaces'
+import { DeltaBadge } from '@/components/data/DeltaBadge'
 import { cn } from '@/lib/utils'
 import {
-	ArrowDown,
-	ArrowUp,
 	Flame,
 	TrendingDown,
 	TrendingUp,
@@ -21,26 +20,30 @@ function RankMovement({ stats }: { stats: TournamentStatsViewModel }) {
 	}
 	if (stats.myPreviousRank > stats.myRank) {
 		return (
-			<span className="inline-flex items-center gap-1 text-success">
-				<ArrowUp className="size-3.5" aria-hidden="true" />{' '}
-				{t('up', {
-					count: format.number(stats.myPreviousRank - stats.myRank, {
-						notation: 'compact',
-					}),
-				})}
-			</span>
+			<DeltaBadge
+				value={stats.myPreviousRank - stats.myRank}
+				format={v =>
+					t('up', {
+						count: format.number(v, {
+							notation: 'compact',
+						}),
+					})
+				}
+			/>
 		)
 	}
 	if (stats.myPreviousRank < stats.myRank) {
 		return (
-			<span className="inline-flex items-center gap-1 text-destructive">
-				<ArrowDown className="size-3.5" aria-hidden="true" />{' '}
-				{t('down', {
-					count: format.number(stats.myRank - stats.myPreviousRank, {
-						notation: 'compact',
-					}),
-				})}
-			</span>
+			<DeltaBadge
+				value={stats.myPreviousRank - stats.myRank}
+				format={v =>
+					t('down', {
+						count: format.number(-v, {
+							notation: 'compact',
+						}),
+					})
+				}
+			/>
 		)
 	}
 	return <span className="text-muted-foreground">{t('noChange')}</span>
@@ -95,7 +98,7 @@ function BoardColumn({
 		<div className="flex min-h-0 flex-col">
 			<h3
 				className={cn(
-					'mb-2 flex items-center gap-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em]',
+					'mb-2 flex items-center gap-1.5 eyebrow',
 					tone === 'success' && 'text-success',
 					tone === 'danger' && 'text-destructive',
 					(!tone || tone === 'default') && 'text-muted-foreground',
@@ -252,10 +255,12 @@ export function TournamentPerformance({
 									to: row.rank,
 								})}
 								trailing={
-									<span className="inline-flex items-center gap-0.5 font-display text-sm font-bold tabular-nums text-success">
-										<ArrowUp className="size-3.5" aria-hidden="true" />
-										{t('placesGained', { count: row.placesGained })}
-									</span>
+									<DeltaBadge
+										value={row.placesGained}
+										format={() =>
+											t('placesGained', { count: row.placesGained })
+										}
+									/>
 								}
 							/>
 						))}
@@ -277,10 +282,12 @@ export function TournamentPerformance({
 									to: row.rank,
 								})}
 								trailing={
-									<span className="inline-flex items-center gap-0.5 font-display text-sm font-bold tabular-nums text-destructive">
-										<ArrowDown className="size-3.5" aria-hidden="true" />
-										{t('placesLost', { count: row.placesLost })}
-									</span>
+									<DeltaBadge
+										value={-row.placesLost}
+										format={() =>
+											t('placesLost', { count: row.placesLost })
+										}
+									/>
 								}
 							/>
 						))}
