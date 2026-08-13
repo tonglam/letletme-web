@@ -1,5 +1,6 @@
 'use client'
 
+import { StatsMetricTile } from '@/components/stats/StatsSurfaces'
 import { cn } from '@/lib/utils'
 import { Crown, Repeat, Trophy, Zap } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -23,39 +24,6 @@ interface TeamStatsProps {
 	}
 }
 
-function MetricTile({
-	icon,
-	label,
-	value,
-	valueClassName,
-}: {
-	icon: ReactNode
-	label: string
-	value: ReactNode
-	valueClassName?: string
-}) {
-	return (
-		<div className="rounded-lg border border-border/70 bg-muted/40 px-3 py-3 sm:px-4 sm:py-3.5 dark:bg-muted/25">
-			<div className="mb-2 flex items-center gap-2">
-				<span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border/60 sm:size-8">
-					{icon}
-				</span>
-				<span className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-[11px]">
-					{label}
-				</span>
-			</div>
-			<div
-				className={cn(
-					'truncate font-display text-xl font-bold tabular-nums tracking-wide text-foreground sm:text-2xl',
-					valueClassName,
-				)}
-			>
-				{value}
-			</div>
-		</div>
-	)
-}
-
 function MetaItem({
 	label,
 	value,
@@ -67,7 +35,7 @@ function MetaItem({
 }) {
 	return (
 		<div className="flex min-w-0 items-baseline gap-2">
-			<span className="shrink-0 font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+			<span className="eyebrow shrink-0">
 				{label}
 			</span>
 			<span
@@ -128,13 +96,15 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
 
 				{/* Core score metrics only — roomy 4-up grid */}
 				<div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-4">
-					<MetricTile
+					<StatsMetricTile
+						className="surface-inset"
 						icon={<Zap className="size-3.5 sm:size-4" aria-hidden="true" />}
 						label={t('livePoints')}
 						value={stats.livePoints}
 						valueClassName="text-primary-ink"
 					/>
-					<MetricTile
+					<StatsMetricTile
+						className="surface-inset"
 						icon={<Repeat className="size-3.5 sm:size-4" aria-hidden="true" />}
 						label={t('transferCost')}
 						value={
@@ -145,13 +115,15 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
 							)
 						}
 					/>
-					<MetricTile
+					<StatsMetricTile
+						className="surface-inset"
 						icon={<Crown className="size-3.5 sm:size-4" aria-hidden="true" />}
 						label={t('captain')}
 						value={stats.captainName || '—'}
 						valueClassName="text-lg sm:text-xl"
 					/>
-					<MetricTile
+					<StatsMetricTile
+						className="surface-inset"
 						icon={<Trophy className="size-3.5 sm:size-4" aria-hidden="true" />}
 						label={t('liveTotal')}
 						value={stats.liveTotalPoints}
