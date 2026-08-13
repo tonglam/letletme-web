@@ -34,7 +34,7 @@ export function StatsMetricTile({
 						{icon}
 					</span>
 				) : null}
-				<span className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground sm:text-[11px]">
+				<span className="eyebrow sm:text-caption">
 					{label}
 				</span>
 			</div>
