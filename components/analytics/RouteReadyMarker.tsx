@@ -11,6 +11,7 @@ import { useEffect, useRef } from 'react'
 
 type ReadyMetricName =
 	| 'FIXTURES_WINDOW_READY'
+	| 'GAMEWEEK_CONTENT_READY'
 	| 'MARKET_CONTENT_READY'
 	| 'PLAYER_DIRECTORY_READY'
 	| 'PLAYER_DETAIL_READY'

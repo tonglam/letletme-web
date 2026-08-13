@@ -30,7 +30,7 @@ describe('pre-paint theme bootstrap', () => {
 })
 
 describe('asynchronous selection safety', () => {
-	it('clears failed gameweek sections and ignores superseded player lookups', async () => {
+	it('keeps the committed gameweek during desk loads and ignores superseded requests', async () => {
 		const [gameweekSource, playerSource] = await Promise.all([
 			readFile(
 				new URL(
@@ -48,19 +48,26 @@ describe('asynchronous selection safety', () => {
 			)
 		])
 
-		const overallFailure = gameweekSource.indexOf(
-			"overallResult.status === 'rejected'"
+		assert.ok(gameweekSource.includes('requestRef.current.controller?.abort()'))
+		assert.ok(
+			gameweekSource.includes('startTransition(() => setCommittedDesk(data))')
 		)
-		const overallReset = gameweekSource.indexOf(
-			'setOverallStats(FALLBACK_OVERALL_STATS)',
-			overallFailure
+		assert.ok(gameweekSource.includes('selectGameweek(committedDesk.eventId)'))
+		assert.ok(
+			gameweekSource.includes('requestRef.current.generation !== generation')
 		)
-		const boardFailure = gameweekSource.indexOf(
-			"boardsResult.status === 'rejected'"
+		assert.ok(
+			gameweekSource.includes('selectedGameweekRef.current !== data.eventId')
 		)
-		const boardReset = gameweekSource.indexOf('setDreamTeam([])', boardFailure)
-		assert.ok(overallFailure >= 0 && overallReset > overallFailure)
-		assert.ok(boardFailure >= 0 && boardReset > boardFailure)
+		assert.ok(
+			gameweekSource.includes('markRouteReadyStart(window.location.pathname)')
+		)
+		assert.ok(gameweekSource.includes('committedDesk.isPreseason'))
+		assert.ok(gameweekSource.includes('GAMEWEEK_DESK_MAX_EVENT_ID'))
+		assert.ok(gameweekSource.includes("data.overviewState === 'AVAILABLE'"))
+		assert.ok(
+			gameweekSource.includes('isScheduledSelection || isBoardsPending')
+		)
 
 		const staleGuard = playerSource.indexOf(
 			"if (result.status === 'superseded') return null"

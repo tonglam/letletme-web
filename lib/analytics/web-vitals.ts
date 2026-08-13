@@ -5,6 +5,7 @@ const WEB_VITAL_NAMES = new Set([
 	'FCP',
 	'FID',
 	'FIXTURES_WINDOW_READY',
+	'GAMEWEEK_CONTENT_READY',
 	'INP',
 	'LCP',
 	'TTFB',

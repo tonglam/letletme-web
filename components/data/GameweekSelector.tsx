@@ -8,13 +8,13 @@ import {
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
-	SelectValue,
+	SelectValue
 } from '@/components/ui/select'
 import {
 	buildGameweekValuesDesc,
 	canStepGameweek,
 	parseGameweekJump,
-	resolveSelectedGameweek,
+	resolveSelectedGameweek
 } from '@/lib/gameweek-selector'
 import { cn } from '@/lib/utils'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
@@ -25,11 +25,12 @@ interface GameweekSelectorProps {
 	onGameweekChange: (gameweek: number) => void
 	className?: string
 	/** Marks the “current” option in the list (and default max when maxGameweek omitted). */
-	currentGameweek: number
+	currentGameweek: number | null
 	/** Upper bound for the selector; defaults to currentGameweek. */
 	maxGameweek?: number
 	selectedGameweek?: number
 	disabled?: boolean
+	ariaBusy?: boolean
 }
 
 export function GameweekSelector({
@@ -39,12 +40,13 @@ export function GameweekSelector({
 	maxGameweek: maxGameweekProp,
 	selectedGameweek,
 	disabled = false,
+	ariaBusy = false
 }: GameweekSelectorProps) {
 	const t = useTranslations('Common')
 	const { maxGameweek, selected: effectiveSelectedGameweek } =
 		resolveSelectedGameweek(
 			maxGameweekProp ?? currentGameweek,
-			selectedGameweek,
+			selectedGameweek
 		)
 
 	// Newest first — current GW sits at the top of a long 1–38 list.
@@ -54,7 +56,7 @@ export function GameweekSelector({
 			label:
 				i === currentGameweek
 					? t('gameweekCurrentOption', { gameweek: i })
-					: t('gameweekOption', { gameweek: i }),
+					: t('gameweekOption', { gameweek: i })
 		}))
 	}, [currentGameweek, maxGameweek, t])
 
@@ -67,7 +69,7 @@ export function GameweekSelector({
 	const { prev: canGoPrev, next: canGoNext } = canStepGameweek(
 		effectiveSelectedGameweek,
 		maxGameweek,
-		disabled,
+		disabled
 	)
 
 	const commitJump = () => {
@@ -84,7 +86,9 @@ export function GameweekSelector({
 
 	return (
 		<Card className={cn('p-4', className)}>
-			<p className="mb-2 text-sm text-muted-foreground">{t('selectGameweek')}</p>
+			<p className="mb-2 text-sm text-muted-foreground">
+				{t('selectGameweek')}
+			</p>
 
 			<div className="flex flex-col gap-2 sm:flex-row sm:items-center">
 				{/* Step + select: browse nearby or open the list (newest on top) */}
@@ -97,24 +101,34 @@ export function GameweekSelector({
 						disabled={!canGoPrev}
 						onClick={() => onGameweekChange(effectiveSelectedGameweek - 1)}
 						aria-label={t('previousGameweek')}
+						aria-busy={ariaBusy}
 					>
-						<ChevronLeft className="size-4" aria-hidden="true" />
+						<ChevronLeft
+							className="size-4"
+							aria-hidden="true"
+						/>
 					</Button>
 
 					<Select
 						value={effectiveSelectedGameweek.toString()}
-						onValueChange={value => onGameweekChange(Number.parseInt(value, 10))}
+						onValueChange={value =>
+							onGameweekChange(Number.parseInt(value, 10))
+						}
 						disabled={disabled}
 					>
 						<SelectTrigger
 							className="min-w-0 flex-1"
 							aria-label={t('selectGameweek')}
+							aria-busy={ariaBusy}
 						>
 							<SelectValue placeholder={t('selectGameweek')} />
 						</SelectTrigger>
 						<SelectContent className="max-h-72">
 							{gameweeks.map(gw => (
-								<SelectItem key={gw.value} value={gw.value.toString()}>
+								<SelectItem
+									key={gw.value}
+									value={gw.value.toString()}
+								>
 									{gw.label}
 								</SelectItem>
 							))}
@@ -129,8 +143,12 @@ export function GameweekSelector({
 						disabled={!canGoNext}
 						onClick={() => onGameweekChange(effectiveSelectedGameweek + 1)}
 						aria-label={t('nextGameweek')}
+						aria-busy={ariaBusy}
 					>
-						<ChevronRight className="size-4" aria-hidden="true" />
+						<ChevronRight
+							className="size-4"
+							aria-hidden="true"
+						/>
 					</Button>
 				</div>
 
@@ -142,7 +160,10 @@ export function GameweekSelector({
 						commitJump()
 					}}
 				>
-					<label className="sr-only" htmlFor="gameweek-jump-input">
+					<label
+						className="sr-only"
+						htmlFor="gameweek-jump-input"
+					>
 						{t('jumpToGameweek')}
 					</label>
 					<Input
@@ -156,6 +177,7 @@ export function GameweekSelector({
 						value={jumpDraft}
 						placeholder={t('gameweekNumberPlaceholder')}
 						aria-label={t('jumpToGameweek')}
+						aria-busy={ariaBusy}
 						className="h-10 w-full tabular-nums sm:w-[5.5rem]"
 						onChange={event => setJumpDraft(event.target.value)}
 						onBlur={commitJump}
@@ -167,6 +189,7 @@ export function GameweekSelector({
 						className="h-10 shrink-0 px-3"
 						disabled={disabled}
 						aria-label={t('jumpToGameweek')}
+						aria-busy={ariaBusy}
 					>
 						{t('jumpToGameweekAction')}
 					</Button>
