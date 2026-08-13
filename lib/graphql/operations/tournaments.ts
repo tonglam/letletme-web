@@ -708,7 +708,7 @@ export interface TournamentOfficialH2H {
 	eventId: number
 	awaitingSchedule: boolean
 	standings: OfficialH2HStanding[]
-	matches?: OfficialH2HMatch[]
+	matches: OfficialH2HMatch[]
 }
 
 export interface TournamentOfficialH2HResponse {
@@ -727,7 +727,7 @@ export interface EntryOfficialH2HDeskItem {
 	lastRank: number | null
 	matchPoints: number
 	match: OfficialH2HMatch | null
-	matches: OfficialH2HMatch[]
+	matches?: OfficialH2HMatch[]
 }
 
 export interface EntryOfficialH2HDeskResponse {
