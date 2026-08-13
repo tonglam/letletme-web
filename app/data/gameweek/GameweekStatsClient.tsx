@@ -204,6 +204,7 @@ export default function GameweekStatsClient({
 			.catch(reason => {
 				if (
 					requestRef.current.generation !== generation ||
+					selectedGameweekRef.current !== selectedGameweek ||
 					(reason instanceof DOMException && reason.name === 'AbortError')
 				) {
 					return
@@ -241,6 +242,7 @@ export default function GameweekStatsClient({
 	)
 	const currentGameweek = committedDesk.currentEventId
 	const isOverviewUnavailable = committedDesk.overviewState === 'UNAVAILABLE'
+	const isOverviewPending = committedDesk.overviewState === 'PENDING'
 	const isBoardsUnavailable = committedDesk.boardsState === 'UNAVAILABLE'
 	const isBoardsPending = committedDesk.boardsState === 'PENDING'
 
@@ -368,7 +370,7 @@ export default function GameweekStatsClient({
 									{t('preseasonDescription')}
 								</p>
 							</div>
-						) : isScheduledSelection || isBoardsPending ? (
+						) : isScheduledSelection || isOverviewPending ? (
 							<div className="px-4 py-6 sm:px-5">
 								<p className="text-sm text-white/65">{t('pendingOfficial')}</p>
 							</div>
@@ -546,7 +548,7 @@ export default function GameweekStatsClient({
 									<p className="text-sm text-muted-foreground">
 										{t('loadFailed')}
 									</p>
-								) : isScheduledSelection ? (
+								) : isScheduledSelection || isBoardsPending ? (
 									<p className="text-sm text-muted-foreground">
 										{t('pendingOfficial')}
 									</p>
