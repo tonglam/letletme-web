@@ -121,7 +121,7 @@ test('language switch persists through the next client navigation', async ({ pag
 
 	await page.getByRole('button', { name: '切换语言' }).click()
 	await page.getByRole('menuitemradio', { name: 'English', exact: true }).click()
-	await expect(page).toHaveURL(/\/$/)
+	await expect(page).toHaveURL(/\/(?:en)?$/)
 	await expect(page.getByRole('heading', { level: 1 })).toContainText('Every point')
 
 	await page.getByRole('button', { name: 'Explore', exact: true }).click()

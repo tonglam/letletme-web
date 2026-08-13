@@ -1,4 +1,4 @@
-import { LANGUAGE_COOKIE, routing } from '@/i18n/routing'
+import { routing } from '@/i18n/routing'
 import {
 	getLocaleFromInternalPathname,
 	localizePathname,
@@ -58,27 +58,6 @@ function withMaintenanceHeaders(
 	response.headers.set('Retry-After', String(retryAfterSeconds))
 	response.headers.set('X-Robots-Tag', 'noindex, nofollow')
 	return response
-}
-
-function canonicalDefaultLocaleResponse(
-	req: NextRequest,
-	i18nResponse: NextResponse
-) {
-	const url = req.nextUrl.clone()
-	const canonicalPathname = url.pathname.slice(DEFAULT_LOCALE_PREFIX.length)
-	url.pathname = canonicalPathname || '/'
-
-	const response = NextResponse.redirect(url)
-	response.cookies.set(LANGUAGE_COOKIE.name, routing.defaultLocale, {
-		path: '/',
-		maxAge: LANGUAGE_COOKIE.maxAge,
-		sameSite: LANGUAGE_COOKIE.sameSite,
-		secure: LANGUAGE_COOKIE.secure
-	})
-	return copyCookies(
-		i18nResponse,
-		withDocumentCacheHeaders(req, response)
-	)
 }
 
 function invalidRouteResponse(
@@ -168,10 +147,6 @@ export async function proxy(req: NextRequest) {
 		i18nResponse = handleI18nRouting(req)
 		if (i18nResponse.headers.has('location')) return i18nResponse
 	}
-	if (isDefaultLocalePath) {
-		return canonicalDefaultLocaleResponse(req, i18nResponse)
-	}
-
 	const internalUrl = new URL(
 		i18nResponse.headers.get('x-middleware-rewrite') ?? req.url
 	)
