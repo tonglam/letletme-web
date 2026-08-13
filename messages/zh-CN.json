@@ -551,7 +551,7 @@
 		"loadMoreFailed": "无法加载更多球员，请重试。",
 		"teamsFailed": "球队目录加载失败。",
 		"playersFailed": "球员目录加载失败。",
-		"rateLimited": "搜索过于频繁，已保留上次结果；请在 {seconds} 秒后重试。",
+		"rateLimited": "搜索过于频繁，已保留上次结果；将在 {seconds} 秒后自动重试。",
 		"noPlayersAvailable": "暂无球员",
 		"priceBandLabel": "价格",
 		"priceBandAny": "全部",

@@ -35,7 +35,7 @@ import {
 import { resolveTeamDisplayName } from '@/lib/team-display'
 import { type Position } from '@/types/common'
 import { RotateCcw, Search, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 
 type PositionFilter = Position | 'ALL'
@@ -236,6 +236,7 @@ export function PlayerDirectoryPicker({
 		seed?.playersState === 'unavailable' ? t('playersFailed') : null
 	)
 	const [rateLimitSeconds, setRateLimitSeconds] = useState(0)
+	const [playerRetryNonce, setPlayerRetryNonce] = useState(0)
 	const [positionFilter, setPositionFilter] = useState<PositionFilter>(
 		defaultPosition ?? 'ALL'
 	)
@@ -255,6 +256,11 @@ export function PlayerDirectoryPicker({
 	const initialSeedQueryKeyRef = useRef<string | null>(
 		seed?.playersState === 'ready' ? seed.queryKey : null
 	)
+	const rateLimitedPlayerQueryKeyRef = useRef<string | null>(null)
+	const rateLimitedLoadMoreRef = useRef<{
+		queryKey: string
+		cursor: number
+	} | null>(null)
 
 	useEffect(() => {
 		if (seed?.teamsState === 'ready') return
@@ -301,11 +307,11 @@ export function PlayerDirectoryPicker({
 
 	useEffect(() => {
 		if (rateLimitSeconds <= 0) return
-		const countdown = window.setInterval(
+		const countdown = window.setTimeout(
 			() => setRateLimitSeconds(current => Math.max(0, current - 1)),
 			1_000
 		)
-		return () => window.clearInterval(countdown)
+		return () => window.clearTimeout(countdown)
 	}, [rateLimitSeconds])
 
 	const normalizedSearch = searchTerm.trim()
@@ -345,6 +351,14 @@ export function PlayerDirectoryPicker({
 		let isCancelled = false
 		const controller = new AbortController()
 		const requestVersion = ++playerRequestVersionRef.current
+		if (
+			rateLimitedPlayerQueryKeyRef.current !== null &&
+			rateLimitedPlayerQueryKeyRef.current !== playerQueryKey
+		) {
+			rateLimitedPlayerQueryKeyRef.current = null
+			setRateLimitSeconds(0)
+		}
+		rateLimitedLoadMoreRef.current = null
 		nextPlayersQueryKeyRef.current = null
 		setNextPlayersQueryKey(null)
 		setNextPlayersCursor(null)
@@ -374,6 +388,8 @@ export function PlayerDirectoryPicker({
 
 				setPlayers(result.playersForPicker.items.map(toPickerPlayer))
 				setTotalPlayers(result.playersForPicker.totalCount)
+				rateLimitedPlayerQueryKeyRef.current = null
+				rateLimitedLoadMoreRef.current = null
 				setRateLimitSeconds(0)
 				onReady?.()
 				nextPlayersQueryKeyRef.current = playerQueryKey
@@ -392,8 +408,14 @@ export function PlayerDirectoryPicker({
 						fetchError.status === 429
 					) {
 						setError(null)
-						setRateLimitSeconds(fetchError.retryAfterSeconds ?? 60)
+						rateLimitedPlayerQueryKeyRef.current = playerQueryKey
+						rateLimitedLoadMoreRef.current = null
+						setRateLimitSeconds(
+							Math.max(1, fetchError.retryAfterSeconds ?? 60)
+						)
 					} else {
+						rateLimitedPlayerQueryKeyRef.current = null
+						rateLimitedLoadMoreRef.current = null
 						setError(t('playersFailed'))
 						setPlayers([])
 						setTotalPlayers(0)
@@ -429,6 +451,7 @@ export function PlayerDirectoryPicker({
 		sortBy,
 		ownBand,
 		playerQueryKey,
+		playerRetryNonce,
 		t,
 		onReady
 	])
@@ -469,7 +492,7 @@ export function PlayerDirectoryPicker({
 		sortBy
 	])
 
-	const loadMorePlayers = async () => {
+	const loadMorePlayers = useCallback(async () => {
 		if (
 			isMorePlayersLoading ||
 			nextPlayersCursor === null ||
@@ -479,6 +502,7 @@ export function PlayerDirectoryPicker({
 		}
 		const requestVersion = playerRequestVersionRef.current
 		const requestQueryKey = playerQueryKey
+		const requestCursor = nextPlayersCursor
 		setMorePlayersError(null)
 
 		try {
@@ -491,7 +515,7 @@ export function PlayerDirectoryPicker({
 					sort: pickerSortToGraphql(sortBy),
 					ownershipBand: ownBandToGraphql(ownBand),
 					limit: PLAYER_PICKER_PAGE_SIZE,
-					cursor: nextPlayersCursor
+					cursor: requestCursor
 				}
 			)
 
@@ -514,6 +538,8 @@ export function PlayerDirectoryPicker({
 				return Array.from(byId.values())
 			})
 			setTotalPlayers(result.playersForPicker.totalCount)
+			rateLimitedLoadMoreRef.current = null
+			setRateLimitSeconds(0)
 			nextPlayersQueryKeyRef.current = requestQueryKey
 			setNextPlayersQueryKey(requestQueryKey)
 			setNextPlayersCursor(result.playersForPicker.nextCursor)
@@ -524,8 +550,16 @@ export function PlayerDirectoryPicker({
 					fetchError instanceof GraphQLRequestError &&
 					fetchError.status === 429
 				) {
-					setRateLimitSeconds(fetchError.retryAfterSeconds ?? 60)
+					rateLimitedPlayerQueryKeyRef.current = null
+					rateLimitedLoadMoreRef.current = {
+						queryKey: requestQueryKey,
+						cursor: requestCursor
+					}
+					setRateLimitSeconds(
+						Math.max(1, fetchError.retryAfterSeconds ?? 60)
+					)
 				} else {
+					rateLimitedLoadMoreRef.current = null
 					setMorePlayersError(t('loadMoreFailed'))
 				}
 			}
@@ -534,7 +568,41 @@ export function PlayerDirectoryPicker({
 				setIsMorePlayersLoading(false)
 			}
 		}
-	}
+	}, [
+		isMorePlayersLoading,
+		nextPlayersCursor,
+		playerQueryKey,
+		isNameSearchActive,
+		normalizedSearch,
+		serverPlayerFilter,
+		sortBy,
+		ownBand,
+		t
+	])
+
+	useEffect(() => {
+		if (rateLimitSeconds !== 0) return
+		if (rateLimitedPlayerQueryKeyRef.current === playerQueryKey) {
+			rateLimitedPlayerQueryKeyRef.current = null
+			setPlayerRetryNonce(current => current + 1)
+			return
+		}
+
+		const loadMoreRetry = rateLimitedLoadMoreRef.current
+		if (
+			loadMoreRetry?.queryKey !== playerQueryKey ||
+			loadMoreRetry.cursor !== nextPlayersCursor
+		) {
+			return
+		}
+		rateLimitedLoadMoreRef.current = null
+		void loadMorePlayers()
+	}, [
+		loadMorePlayers,
+		nextPlayersCursor,
+		playerQueryKey,
+		rateLimitSeconds
+	])
 
 	const visiblePlayers = filteredPlayers
 	const canLoadMorePlayers =
@@ -889,7 +957,7 @@ export function PlayerDirectoryPicker({
 							variant="ghost"
 							size="sm"
 							className="w-full"
-							disabled={isMorePlayersLoading}
+							disabled={isMorePlayersLoading || rateLimitSeconds > 0}
 							onClick={() => void loadMorePlayers()}
 						>
 							{t(isMorePlayersLoading ? 'loadingMore' : 'loadMore')}

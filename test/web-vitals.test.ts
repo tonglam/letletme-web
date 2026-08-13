@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { describe, it } from 'node:test'
 
 import {
@@ -98,6 +99,23 @@ describe('privacy-safe web vitals', () => {
 				'/data/player-stats'
 			)
 		}
+	})
+
+	it('keys detail readiness by the selected comparison across same-route transitions', async () => {
+		const [markerSource, playerStatsSource] = await Promise.all([
+			readFile(
+				new URL('../components/analytics/RouteReadyMarker.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL('../app/data/player-stats/PlayerStatsClient.tsx', import.meta.url),
+				'utf8'
+			)
+		])
+
+		assert.match(markerSource, /reportedIdentity\.current === readyIdentity/)
+		assert.match(playerStatsSource, /readyKey=\{playerDetailReadyKey\}/)
+		assert.match(playerStatsSource, /Boolean\(secondPlayer\.playerDetail\)/)
 	})
 
 	it('maps older clients without the hint to unknown during rollout', () => {

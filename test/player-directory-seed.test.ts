@@ -39,6 +39,11 @@ describe('PlayerDirectorySeed', () => {
 		assert.match(source, /controller\.abort\(\)/)
 		assert.match(source, /fetchError\.status === 429/)
 		assert.match(source, /setRateLimitSeconds/)
+		assert.match(
+			source,
+			/rateLimitedPlayerQueryKeyRef\.current = playerQueryKey/
+		)
+		assert.match(source, /setPlayerRetryNonce\(current => current \+ 1\)/)
 	})
 
 	it('keeps directory failures scoped and retries only unavailable seed parts', async () => {

@@ -207,6 +207,10 @@ export default function PlayerStatsClient({
 		(firstPlayer.playerDetail == null && seasonStatsAvailable)
 	const personalSeedReady =
 		personalSeedResolved && personalSeed?.squadState === 'ready'
+	const playerDetailReady =
+		Boolean(firstPlayer.playerDetail) &&
+		(secondSelectedPlayerId == null || Boolean(secondPlayer.playerDetail))
+	const playerDetailReadyKey = `${firstSelectedPlayerId ?? ''}:${secondSelectedPlayerId ?? ''}`
 	const personalStatus = !personalSeedResolved
 		? null
 		: personalSeed?.squadState === 'not-published'
@@ -226,7 +230,8 @@ export default function PlayerStatsClient({
 			/>
 			<RouteReadyMarker
 				name="PLAYER_DETAIL_READY"
-				ready={Boolean(firstPlayer.playerDetail)}
+				ready={playerDetailReady}
+				readyKey={playerDetailReadyKey}
 				audienceHint="public"
 				goodMs={3_500}
 				poorMs={5_000}

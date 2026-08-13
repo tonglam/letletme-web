@@ -18,22 +18,25 @@ type ReadyMetricName =
 export function RouteReadyMarker({
 	name,
 	ready = true,
+	readyKey,
 	audienceHint,
 	goodMs = 2_500,
 	poorMs = 4_000
 }: {
 	name: ReadyMetricName
 	ready?: boolean
+	readyKey?: string
 	audienceHint: AudienceHint
 	goodMs?: number
 	poorMs?: number
 }) {
 	const pathname = usePathname()
-	const reported = useRef(false)
+	const reportedIdentity = useRef<string | null>(null)
+	const readyIdentity = `${pathname}\u0000${readyKey ?? ''}`
 
 	useEffect(() => {
-		if (!ready || reported.current) return
-		reported.current = true
+		if (!ready || reportedIdentity.current === readyIdentity) return
+		reportedIdentity.current = readyIdentity
 		const value = measureRouteReadyDuration(pathname)
 		reportBrowserPerformanceMetric(
 			{
@@ -52,7 +55,15 @@ export function RouteReadyMarker({
 			},
 			{ always: true }
 		)
-	}, [audienceHint, goodMs, name, pathname, poorMs, ready])
+	}, [
+		audienceHint,
+		goodMs,
+		name,
+		pathname,
+		poorMs,
+		ready,
+		readyIdentity
+	])
 
 	return null
 }

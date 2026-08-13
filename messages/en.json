@@ -551,7 +551,7 @@
 		"loadMoreFailed": "Could not load more players. Try again.",
 		"teamsFailed": "Failed to load the team directory.",
 		"playersFailed": "Failed to load the player directory.",
-		"rateLimited": "Too many searches. Keeping the previous results; try again in {seconds}s.",
+		"rateLimited": "Too many searches. Keeping the previous results; retrying automatically in {seconds}s.",
 		"noPlayersAvailable": "No players available",
 		"priceBandLabel": "Price",
 		"priceBandAny": "Any",
