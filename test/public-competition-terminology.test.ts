@@ -44,6 +44,7 @@ test('public competition copy is complete and contains no accidental legacy term
 			navigation: {
 				live: 'Live',
 				myFpl: 'My FPL',
+				myFplOverview: 'Overview',
 				competitions: 'Competitions',
 				explore: 'Explore',
 				myCompetitions: 'My Competitions',
@@ -64,6 +65,7 @@ test('public competition copy is complete and contains no accidental legacy term
 			navigation: {
 				live: '实时',
 				myFpl: '我的 FPL',
+				myFplOverview: '概览',
 				competitions: '赛事',
 				explore: '探索',
 				myCompetitions: '我的赛事',
@@ -106,6 +108,7 @@ test('competition navigation and homepage entry routes remain aligned', () => {
 	const home = fs.readFileSync(path.join(process.cwd(), 'app/[locale]/page.tsx'), 'utf8')
 
 	for (const href of [
+		"href: '/'",
 		"href: '/live/competitions'",
 		"href: '/competitions/browse?mine=true'",
 		"href: '/competitions/create'",

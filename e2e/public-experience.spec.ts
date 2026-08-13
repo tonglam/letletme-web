@@ -69,6 +69,10 @@ test('home keeps the four-section vocabulary and competition entry links aligned
 	for (const label of ['Live', 'My FPL', 'Competitions', 'Explore']) {
 		await expect(header.getByRole('button', { name: new RegExp(`^${label}`) })).toBeVisible()
 	}
+	await header.getByRole('button', { name: /^My FPL/ }).click()
+	await expect(
+		header.getByRole('link', { name: 'Overview', exact: true })
+	).toHaveAttribute('href', '/')
 
 	await expect(
 		page.getByRole('link', { name: 'Live competition standings', exact: true })
