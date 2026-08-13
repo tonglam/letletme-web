@@ -181,6 +181,9 @@ export async function loadPlayerStatsPersonalSeed(
 	timing?: RequestTiming
 ): Promise<PlayerStatsPersonalSeed | null> {
 	const sessionPromise = measure(timing, 'session', getVerifiedEntryContext)
+	// Keep the speculative authorization lookup from becoming an unhandled
+	// rejection if bootstrap fails or has no usable gameweek.
+	void sessionPromise.catch(() => undefined)
 	const marketPromise = measure(timing, 'market', () =>
 		executePublicServerQuery<FixturePlanningSignalsResponse>(
 			GET_FIXTURE_PLANNING_SIGNALS,

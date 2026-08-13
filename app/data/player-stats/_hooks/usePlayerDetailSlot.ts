@@ -172,6 +172,7 @@ export function usePlayerDetailSlot({
 	)
 	const stateContextLoadedRef = useRef(false)
 	const requestIdRef = useRef(0)
+	const evidenceRequestIdRef = useRef(0)
 	const overviewControllerRef = useRef<AbortController | null>(null)
 	const evidenceControllerRef = useRef<AbortController | null>(null)
 	const contextControllerRef = useRef<AbortController | null>(null)
@@ -190,6 +191,7 @@ export function usePlayerDetailSlot({
 		overviewControllerRef.current = null
 		evidenceControllerRef.current = null
 		contextControllerRef.current = null
+		evidenceRequestIdRef.current += 1
 	}, [])
 
 	useEffect(() => {
@@ -350,6 +352,8 @@ export function usePlayerDetailSlot({
 				return
 			}
 			evidenceControllerRef.current?.abort()
+			const evidenceRequestId = evidenceRequestIdRef.current + 1
+			evidenceRequestIdRef.current = evidenceRequestId
 			const controller = new AbortController()
 			evidenceControllerRef.current = controller
 			const requestId = requestIdRef.current
@@ -408,7 +412,11 @@ export function usePlayerDetailSlot({
 					setEvidenceError(t('evidenceLoadFailed'))
 				}
 			} finally {
-				if (requestId === requestIdRef.current) setIsEvidenceLoading(false)
+				if (
+					evidenceRequestId === evidenceRequestIdRef.current &&
+					evidenceControllerRef.current === controller
+				)
+					setIsEvidenceLoading(false)
 			}
 		},
 		[eventId, evidenceLoaded, selectedPlayer, t]
