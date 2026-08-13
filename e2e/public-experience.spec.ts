@@ -22,19 +22,19 @@ test('retired public routes return 404 instead of redirecting', async ({
 		'/stats/gameweek',
 		'/stats/team',
 		'/stats/tournament',
-		'/explore/price-changes',
+		'/data/price-changes',
 		'/live/tournament',
-		'/live/competitions/123',
-		'/competitions/list',
-		'/explore/gameweek/gameweek',
+		'/live/tournaments/123',
+		'/tournament/list',
+		'/data/gameweek/gameweek',
 		'/zh-CN/stats/gameweek',
 		'/zh-CN/stats/team',
 		'/zh-CN/stats/tournament',
-		'/zh-CN/explore/price-changes',
+		'/zh-CN/data/price-changes',
 		'/zh-CN/live/tournament',
-		'/zh-CN/live/competitions/123',
-		'/zh-CN/competitions/list',
-		'/zh-CN/explore/gameweek/gameweek'
+		'/zh-CN/live/tournaments/123',
+		'/zh-CN/tournament/list',
+		'/zh-CN/data/gameweek/gameweek'
 	]
 
 	for (const path of retiredPaths) {
@@ -86,12 +86,12 @@ test('mobile navigation expands a group and closes after navigation', async ({
 	const dialog = page.getByRole('dialog')
 	await expect(dialog).toBeVisible()
 
-	const dataGroup = dialog.getByRole('button', { name: 'Data' })
-	await dataGroup.click()
-	await expect(dataGroup).toHaveAttribute('aria-expanded', 'true')
+	const exploreGroup = dialog.getByRole('button', { name: 'Explore' })
+	await exploreGroup.click()
+	await expect(exploreGroup).toHaveAttribute('aria-expanded', 'true')
 	await dialog.getByRole('link', { name: 'Market' }).click()
 
-	await expect(page).toHaveURL(/\/data\/market$/)
+	await expect(page).toHaveURL(/\/explore\/market$/)
 	await expect(dialog).toBeHidden()
 	expect(
 		await page.evaluate(
@@ -306,7 +306,7 @@ test('protected tournament creation returns an unauthenticated user to sign-in s
 	page
 }) => {
 	await page.goto('/competitions/create')
-	await expect(page).toHaveURL(/\/auth\/login\?next=%2Ftournament%2Fcreate$/)
+	await expect(page).toHaveURL(/\/auth\/login\?next=%2Fcompetitions%2Fcreate$/)
 	await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
 })
 

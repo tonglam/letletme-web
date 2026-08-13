@@ -14,7 +14,7 @@ test.describe('maintenance mode', () => {
 		expect(englishResponse?.status()).toBe(503)
 		expect(englishResponse?.headers()['cache-control']).toContain('no-store')
 		expect(englishResponse?.headers()['retry-after']).toBe('420')
-		expect(page.url()).toMatch(/\/data\/player-stats$/)
+		expect(page.url()).toMatch(/\/explore\/player-stats$/)
 		await expect(
 			page.getByRole('heading', { name: 'The data room is between seasons.' })
 		).toBeVisible()
