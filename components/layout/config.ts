@@ -17,6 +17,7 @@ interface MenuItem {
 			| 'liveMatches'
 			| 'myFplOverview'
 			| 'myFplTeam'
+			| 'myTournament'
 			| 'myCompetitions'
 			| 'createCompetition'
 			| 'gameweek'
@@ -53,6 +54,7 @@ export const menuItems: MenuItem[] = [
 		items: [
 			{ labelKey: 'myFplOverview', href: '/' },
 			{ labelKey: 'myFplTeam', href: '/my-fpl/team' },
+			{ labelKey: 'myTournament', href: '/my-fpl/competitions' },
 		],
 	},
 	{
