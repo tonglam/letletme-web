@@ -18,12 +18,12 @@ The fixed inputs are:
 - A competition has one explicit persisted kind: `tracked_official_league` or `custom_tournament`.
 - Every competition and official source is scoped to one FPL season.
 - A tracked official league follows its official roster between gameweeks, freezes the gameweek cohort during active play, and uses official standings and finalized results.
-- A fixed snapshot or selected subset from an official league is a custom tournament, not a tracked official league.
+- A fixed snapshot or selected subset from an official league is a custom competition, not a tracked official league.
 - A tracked official league is admitted only when its initial official roster contains at most 500 entries. Once admitted, it remains maintained through that season even if it later grows.
 - A custom tournament roster contains at most 500 selected entries throughout its supported lifecycle.
 - A source league above 500 may seed a custom tournament only through bounded entry selection; the system must not crawl the complete source to build the selection UI.
 - Official source evidence is shared by season, league type, and league ID. Distinct competition objects are not deduplicated.
-- Custom tournaments have a draft/enrollment period, a roster lock, preparation, active play, a finalized result, and an archived state.
+- Custom competitions have a draft/enrollment period, a roster lock, preparation, active play, a finalized result, and an archived state.
 - Structural custom rules and membership are editable before roster lock and immutable after lock for the initial implementation.
 - Custom tournaments support invitations and self-joining; tracked leagues derive membership from official FPL and do not use invitations.
 - The organizer is owned by a stable LetLetMe user identity. Competitive participation remains tied to a season-specific FPL entry.
@@ -40,7 +40,7 @@ The fixed inputs are:
 
 | Area | Current implementation |
 | --- | --- |
-| Navigation | `components/layout/config.ts` exposes a singular Tournament category with New Tournament and Browse Tournaments; Live and My FPL also use Tournament wording |
+| Navigation | `components/layout/config.ts` exposes Competitions with Create Competition and My Competitions; Live and My FPL use the same public vocabulary |
 | Membership list | `/competitions/browse` loads every tournament for the bound entry, then provides useful client-side search, Classic/H2H and status filters, organizer filtering, sorting, progressive rows, and Live/Manage actions |
 | Creation | `/competitions/create` offers a recommended copied-Classic path and a custom builder; both fetch the complete official source roster before submission |
 | Create model | `creationMode`, `participantSource`, league type, roster mode, and format fields overlap; they do not express one durable competition kind |
@@ -62,7 +62,7 @@ The fixed inputs are:
 | Results | Points-race event results, season snapshots, selection stats, battle-group results, and viewer H2H results are readable through separate queries |
 | Knockout | GraphQL exposes knockout metadata but no complete bracket/result read model for the Web journey |
 | Source association | Official leagues are enriched through a singular `tournamentId`, although one source may be associated with several competition objects |
-| Vocabulary | The public contract uses Tournament names throughout and provides no format capability/readiness contract |
+| Vocabulary | The public contract now uses Competition names throughout; format capability/readiness is still not expressed |
 
 ### Data
 

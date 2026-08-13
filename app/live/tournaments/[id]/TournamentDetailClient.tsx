@@ -641,7 +641,7 @@ export default function TournamentDetailClient({
 							{kind !== 'bind_entry' ? (
 								<Button asChild>
 									<Link href="/competitions/browse?mine=true">
-										{t('errorCtaMyTournaments')}
+										{t('errorCtaMyCompetitions')}
 									</Link>
 								</Button>
 							) : null}
@@ -677,7 +677,7 @@ export default function TournamentDetailClient({
 					>
 						<Link href="/live/competitions">
 							<ArrowLeft aria-hidden="true" />
-							<span>{t('backToTournaments')}</span>
+								<span>{t('backToCompetitions')}</span>
 						</Link>
 					</Button>
 					{canManage ? (
@@ -1014,7 +1014,7 @@ export default function TournamentDetailClient({
 								<div className="grid gap-6 md:grid-cols-2">
 									<Card className="border-border/80 p-4 shadow-sm sm:p-6">
 										<h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
-											{t('tournamentRules')}
+										{t('competitionRules')}
 										</h2>
 										<ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
 											<li>

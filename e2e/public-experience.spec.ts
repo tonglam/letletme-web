@@ -60,6 +60,57 @@ test('client-only navigation controls stay unavailable until hydration', async (
 	await page.close()
 })
 
+test('home keeps the four-section vocabulary and competition entry links aligned', async ({
+	page
+}) => {
+	await page.goto('/')
+
+	const header = page.getByRole('navigation', { name: 'Primary' })
+	for (const label of ['Live', 'My FPL', 'Competitions', 'Explore']) {
+		await expect(header.getByRole('button', { name: new RegExp(`^${label}`) })).toBeVisible()
+	}
+
+	await expect(
+		page.getByRole('link', { name: 'Live competition standings', exact: true })
+	).toHaveAttribute('href', '/live/competitions')
+	await expect(
+		page.locator('section[aria-labelledby="home-tournament-band-title"]').getByRole('link', {
+			name: 'Browse competitions',
+			exact: true
+		})
+	).toHaveAttribute('href', '/competitions/browse')
+	await expect(
+		page.locator('section[aria-labelledby="home-tournament-band-title"]').getByRole('link', {
+			name: 'Create competition',
+			exact: true
+		})
+	).toHaveAttribute('href', '/competitions/create')
+
+	await page.goto('/zh-CN')
+	const chineseHeader = page.getByRole('navigation', { name: '主导航' })
+	for (const label of ['实时', '我的 FPL', '赛事', '探索']) {
+		await expect(
+			chineseHeader.getByRole('button', { name: new RegExp(`^${label}`) })
+		).toBeVisible()
+	}
+
+	await expect(
+		page.getByRole('link', { name: '赛事实时积分榜', exact: true })
+	).toHaveAttribute('href', '/zh-CN/live/competitions')
+	await expect(
+		page.locator('section[aria-labelledby="home-tournament-band-title"]').getByRole('link', {
+			name: '浏览赛事',
+			exact: true
+		})
+	).toHaveAttribute('href', '/zh-CN/competitions/browse')
+	await expect(
+		page.locator('section[aria-labelledby="home-tournament-band-title"]').getByRole('link', {
+			name: '创建赛事',
+			exact: true
+		})
+	).toHaveAttribute('href', '/zh-CN/competitions/create')
+})
+
 test('public home has a keyboard skip path and no detectable accessibility violations', async ({
 	page
 }) => {
@@ -85,6 +136,18 @@ test('mobile navigation expands a group and closes after navigation', async ({
 	await page.getByRole('button', { name: 'Open navigation menu' }).click()
 	const dialog = page.getByRole('dialog')
 	await expect(dialog).toBeVisible()
+	for (const label of ['Live', 'My FPL', 'Competitions', 'Explore']) {
+		await expect(dialog.getByRole('button', { name: label, exact: true })).toBeVisible()
+	}
+
+	const competitionsGroup = dialog.getByRole('button', { name: 'Competitions' })
+	await competitionsGroup.click()
+	await expect(
+		dialog.getByRole('link', { name: 'My Competitions', exact: true })
+	).toHaveAttribute('href', '/competitions/browse?mine=true')
+	await expect(
+		dialog.getByRole('link', { name: 'Create Competition', exact: true })
+	).toHaveAttribute('href', '/competitions/create')
 
 	const exploreGroup = dialog.getByRole('button', { name: 'Explore' })
 	await exploreGroup.click()
@@ -98,6 +161,28 @@ test('mobile navigation expands a group and closes after navigation', async ({
 			() => document.documentElement.scrollWidth <= window.innerWidth
 		)
 	).toBe(true)
+})
+
+test('Simplified Chinese mobile navigation uses the same competition vocabulary', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 })
+	await page.goto('/zh-CN')
+
+	await page.getByRole('button', { name: '打开导航菜单' }).click()
+	const dialog = page.getByRole('dialog')
+	await expect(dialog).toBeVisible()
+	for (const label of ['实时', '我的 FPL', '赛事', '探索']) {
+		await expect(dialog.getByRole('button', { name: label, exact: true })).toBeVisible()
+	}
+
+	await dialog.getByRole('button', { name: '赛事', exact: true }).click()
+	await expect(
+		dialog.getByRole('link', { name: '我的赛事', exact: true })
+	).toHaveAttribute('href', '/zh-CN/competitions/browse?mine=true')
+	await expect(
+		dialog.getByRole('link', { name: '创建赛事', exact: true })
+	).toHaveAttribute('href', '/zh-CN/competitions/create')
 })
 
 test('Market stays accessible and usable on a 390px Simplified Chinese screen', async ({

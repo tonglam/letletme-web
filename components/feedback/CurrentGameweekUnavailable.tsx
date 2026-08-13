@@ -6,7 +6,7 @@ import { getTranslations } from 'next-intl/server'
 type StatesKey =
 	| 'gameweekUnavailableTitle'
 	| 'gameweekUnavailableDescription'
-	| 'liveTournamentUnavailableTitle'
+	| 'liveCompetitionUnavailableTitle'
 	| 'selectionUnavailableTitle'
 	| 'fixturesUnavailableTitle'
 	| 'teamStatsUnavailableTitle'
