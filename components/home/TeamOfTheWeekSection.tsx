@@ -40,7 +40,7 @@ function TeamOfTheWeekCard({
 	return (
 		<Card className="rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8">
 			<div className="mb-6">
-				<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+				<p className="eyebrow">
 					{t('thisGameweek')}
 				</p>
 				<h2 className="mt-1 flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">

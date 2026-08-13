@@ -268,7 +268,7 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 	const header = (
 		<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 			<div>
-				<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+				<p className="eyebrow">
 					{t('nextGameweekLabel')}
 				</p>
 				<h2 className="mt-1 flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
@@ -381,7 +381,7 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 						key={matchDay.dateKey}
 						className="max-w-4xl mx-auto"
 					>
-						<h3 className="mb-6 mt-8 text-center font-display text-lg font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+						<h3 className="mb-6 mt-8 text-center font-display text-lg font-semibold uppercase tracking-caps text-muted-foreground">
 							{matchDay.date}
 						</h3>
 						<MatchList matches={matchDay.matches} />

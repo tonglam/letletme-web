@@ -28,9 +28,10 @@ const TONES: Record<MatchHighlightKind, string> = {
 	defensive: 'text-info',
 	bps: 'text-primary-ink',
 	saves: 'text-info',
-	// Classic football card colours (not theme warning/destructive)
-	yellow: 'text-yellow-500',
-	red: 'text-red-600',
+	// Card text tones use theme warning/destructive; the literal card
+	// colours live on CardGlyph's fills only.
+	yellow: 'text-warning',
+	red: 'text-destructive',
 }
 
 const ICON_BG: Record<MatchHighlightKind, string> = {
@@ -40,8 +41,8 @@ const ICON_BG: Record<MatchHighlightKind, string> = {
 	defensive: 'bg-info/15',
 	bps: 'bg-primary/10',
 	saves: 'bg-info/15',
-	yellow: 'bg-yellow-500/20',
-	red: 'bg-red-600/20',
+	yellow: 'bg-warning/15',
+	red: 'bg-destructive/15',
 }
 
 const EDGE: Record<MatchHighlightKind, string> = {
@@ -51,8 +52,8 @@ const EDGE: Record<MatchHighlightKind, string> = {
 	defensive: 'border-l-info',
 	bps: 'border-l-primary',
 	saves: 'border-l-info',
-	yellow: 'border-l-yellow-500',
-	red: 'border-l-red-600',
+	yellow: 'border-l-warning',
+	red: 'border-l-destructive',
 }
 
 /** Solid yellow / red card glyph (matches real card colours). */

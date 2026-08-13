@@ -30,7 +30,7 @@ function PlayerListComponent({ players, startingPlayers, benchPlayers }: PlayerL
 			<section aria-labelledby="live-xi-heading">
 				<h3
 					id="live-xi-heading"
-					className="mb-2.5 px-0.5 font-display text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground"
+					className="mb-2.5 px-0.5 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground"
 				>
 					{t('startingEleven')}
 				</h3>
@@ -45,7 +45,7 @@ function PlayerListComponent({ players, startingPlayers, benchPlayers }: PlayerL
 				<section aria-labelledby="live-bench-heading">
 					<h3
 						id="live-bench-heading"
-						className="mb-2.5 mt-1 border-t border-border/70 px-0.5 pt-4 font-display text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground"
+						className="mb-2.5 mt-1 border-t border-border/70 px-0.5 pt-4 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground"
 					>
 						{benchBoostActive ? t('substitutesBenchBoost') : t('substitutes')}
 					</h3>

@@ -46,11 +46,11 @@ async function LeagueRankSection({ leagues }: { leagues: EntryLeague[] }) {
 	return (
 		<div className="mt-4 border-t border-border/50 pt-3">
 			<div className="mb-2 flex items-center justify-between gap-2">
-				<p className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+				<p className="eyebrow">
 					{t('personalLeaguesTitle')}
 				</p>
 				{rows.length > 0 ? (
-					<p className="text-[11px] tabular-nums text-muted-foreground">
+					<p className="text-caption tabular-nums text-muted-foreground">
 						{t('personalLeaguesCount', { count: rows.length })}
 					</p>
 				) : null}
@@ -112,7 +112,7 @@ export async function PersonalDeskBindPrompt() {
 					</p>
 				</div>
 				<Button
-					className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-[0.1em]"
+					className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-caps"
 					asChild
 				>
 					<Link href="/onboarding/bind-entry" prefetch={false}>
@@ -215,7 +215,7 @@ export async function PersonalDesk({
 							<p className="font-mono text-base font-semibold tabular-nums tracking-tight text-primary-ink sm:text-lg">
 								{tile.value}
 							</p>
-							<p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+							<p className="mt-0.5 eyebrow">
 								{tile.label}
 							</p>
 						</div>

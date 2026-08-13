@@ -264,14 +264,14 @@ export function PlayerDetailModal({
 											: t('pointsTotalOnly', { points: player.points })
 									}
 								>
-									<span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+									<span className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
 										{t('pointsAbbreviation')}
 									</span>
 									<span className="font-mono text-base font-bold tabular-nums text-primary-ink">
 										{player.points}
 									</span>
 									{player.bonusPoints > 0 ? (
-										<span className="font-mono text-xs font-semibold tabular-nums text-yellow-700 dark:text-yellow-400">
+										<span className="font-mono text-xs font-semibold tabular-nums text-warning">
 											+{player.bonusPoints}
 										</span>
 									) : null}
@@ -283,7 +283,7 @@ export function PlayerDetailModal({
 											getBpsBgColor(player.bps),
 										)}
 									>
-										<span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+										<span className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
 											BPS
 										</span>
 										<span
@@ -306,7 +306,7 @@ export function PlayerDetailModal({
 					<div>
 						<div className="mb-3 flex items-center gap-2">
 							<Zap className="size-4 text-primary-ink" aria-hidden="true" />
-							<h3 className="font-display text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
+							<h3 className="font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
 								{t('matchStats')}
 							</h3>
 						</div>
@@ -316,7 +316,7 @@ export function PlayerDetailModal({
 									key={row.label}
 									className="rounded-lg border border-border/70 bg-card/60 px-2.5 py-2"
 								>
-									<div className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+									<div className="truncate text-label font-semibold uppercase tracking-wide text-muted-foreground">
 										{row.label}
 									</div>
 									<div
@@ -335,11 +335,11 @@ export function PlayerDetailModal({
 					{/* Point breakdown — no second total strip */}
 					<div>
 						<div className="mb-2 flex items-end justify-between gap-2">
-							<h3 className="font-display text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
+							<h3 className="font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
 								{t('pointBreakdown')}
 							</h3>
 							{player.breakdownSource === 'provisional' ? (
-								<span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+								<span className="text-label font-medium uppercase tracking-wide text-muted-foreground">
 									{t('breakdownProvisional')}
 								</span>
 							) : null}
