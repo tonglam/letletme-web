@@ -438,23 +438,20 @@ const server = createServer((request, response) => {
 						}
 					: {
 							current: [{ id: 33 }],
-							next: [
-								{ id: 34, deadlineTime: '2026-08-11T17:30:00.000Z' }
-							]
+							next: [{ id: 34, deadlineTime: '2026-08-11T17:30:00.000Z' }]
 						}
 			})
 			return
 		}
-		if (query.includes('GetGameweekBoards')) {
-			const haul = (id, webName, totalPoints, inDreamTeam) => ({
-				player: {
-					id,
-					webName,
-					position: 'MIDFIELDER',
-					price: 100,
-					team: { name: 'Arsenal', shortName: 'ARS' }
-				},
-				inDreamTeam,
+		if (query.includes('GetGameweekDesk')) {
+			const eventId = Number(variables.eventId) || 33
+			const scheduled = eventId > 33
+			const boardPlayer = (id, webName, totalPoints) => ({
+				id,
+				webName,
+				position: 'MIDFIELDER',
+				teamShortName: 'ARS',
+				price: 100,
 				minutes: 90,
 				goalsScored: totalPoints >= 12 ? 2 : 1,
 				assists: 0,
@@ -464,21 +461,56 @@ const server = createServer((request, response) => {
 			})
 			json(response, 200, {
 				data: {
-					event: {
-						id: 33,
+					gameweekDesk: {
+						season: '2627',
+						coreRevision: '7',
+						liveRevision: scheduled ? null : '8',
+						anchorEventId: 33,
+						eventId,
+						currentEventId: 33,
+						nextEventId: 34,
+						isPreseason: false,
+						lifecycle: scheduled ? 'SCHEDULED' : 'PROVISIONAL',
 						deadlineTime: '2026-08-04T17:30:00.000Z',
-						finished: false,
-						isCurrent: true,
-						isNext: false
-					},
-					dreamTeam: [haul(1, 'Saka', 12, true)],
-					hauls: [haul(1, 'Saka', 12, true), haul(2, 'Palmer', 11, false)],
-					liveSnapshot: {
-						eventId: 33,
-						revision: 'g'.repeat(24),
-						state: 'LIVE',
-						publishedAt: '2026-08-04T19:00:00.000Z',
-						checkedAt: '2026-08-04T19:00:30.000Z'
+						publishedAt: scheduled ? null : '2026-08-04T19:00:00.000Z',
+						overviewState: scheduled ? 'PENDING' : 'AVAILABLE',
+						boardsState: scheduled ? 'PENDING' : 'AVAILABLE',
+						overview: scheduled
+							? null
+							: {
+									averagePoints: 52,
+									highestPoints: 101,
+									mostCaptained: {
+										id: 1,
+										webName: 'Saka',
+										teamShortName: 'ARS'
+									},
+									mostViceCaptained: {
+										id: 2,
+										webName: 'Palmer',
+										teamShortName: 'CHE'
+									},
+									mostSelected: {
+										id: 1,
+										webName: 'Saka',
+										teamShortName: 'ARS'
+									},
+									mostTransferredIn: {
+										id: 2,
+										webName: 'Palmer',
+										teamShortName: 'CHE'
+									},
+									chipsPlayed: {
+										benchBoost: 2,
+										tripleCaptain: 1,
+										wildcard: 5,
+										freeHit: 1
+									}
+								},
+						dreamTeam: scheduled ? [] : [boardPlayer(1, 'Saka', 12)],
+						hauls: scheduled
+							? []
+							: [boardPlayer(1, 'Saka', 12), boardPlayer(2, 'Palmer', 11)]
 					}
 				}
 			})
