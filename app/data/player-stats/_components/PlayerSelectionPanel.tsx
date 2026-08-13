@@ -309,7 +309,7 @@ export function PlayerSelectionPanel({
 				<p className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
 					{t('scopeLabel')}
 				</p>
-				<p className="mt-0.5 text-[11px] text-muted-foreground/80">
+				<p className="mt-0.5 text-[11px] text-muted-foreground">
 					{t('scopeHint')}
 				</p>
 			</div>

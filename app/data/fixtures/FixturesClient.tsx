@@ -86,7 +86,7 @@ function SectionHead({
 					{title}
 				</h2>
 				{hint ? (
-					<p className="mt-0.5 text-[11px] text-muted-foreground/80">{hint}</p>
+					<p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
 				) : null}
 			</div>
 			{action}
@@ -135,7 +135,7 @@ function GlanceRunCard({
 				<span
 					className={cn(
 						'font-display text-[10px] font-semibold uppercase tracking-[0.14em]',
-						isEasy ? 'text-success' : 'text-destructive',
+						'text-foreground',
 					)}
 				>
 					{label}
@@ -144,8 +144,8 @@ function GlanceRunCard({
 					className={cn(
 						'rounded-md border px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums',
 						isEasy
-							? 'border-success/35 bg-success/15 text-success'
-							: 'border-destructive/35 bg-destructive/15 text-destructive',
+							? 'border-success/35 bg-success/15 text-foreground'
+							: 'border-destructive/35 bg-destructive/15 text-foreground',
 					)}
 				>
 					{avgLabel}
@@ -217,7 +217,7 @@ function GlanceNextCard({
 			<span
 				className={cn(
 					'font-display text-[10px] font-semibold uppercase tracking-[0.14em]',
-					isEasy ? 'text-success' : 'text-destructive',
+					'text-foreground',
 				)}
 			>
 				{label}
@@ -581,7 +581,7 @@ export default function FixturesClient({
 						<p className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
 							{t('controlsLabel')}
 						</p>
-						<p className="mt-0.5 text-[11px] text-muted-foreground/80">
+						<p className="mt-0.5 text-[11px] text-muted-foreground">
 							{t('controlsHint', {
 								from: fromGw,
 								to: Math.min(38, fromGw + horizon - 1),
@@ -602,7 +602,7 @@ export default function FixturesClient({
 										className={cn(
 											'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
 											horizon === h
-												? 'border-primary/40 bg-primary/10 text-primary-ink'
+												? 'border-success bg-success text-success-foreground'
 												: 'border-border/70 bg-background text-muted-foreground hover:text-foreground',
 										)}
 										aria-pressed={horizon === h}
@@ -630,7 +630,7 @@ export default function FixturesClient({
 										className={cn(
 											'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
 											sort === id
-												? 'border-primary/40 bg-primary/10 text-primary-ink'
+												? 'border-success bg-success text-success-foreground'
 												: 'border-border/70 bg-background text-muted-foreground hover:text-foreground',
 										)}
 										aria-pressed={sort === id}
@@ -829,7 +829,7 @@ export default function FixturesClient({
 										className={cn(
 											'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
 											posFilter === id
-												? 'border-primary/40 bg-primary/10 text-primary-ink'
+												? 'border-success bg-success text-success-foreground'
 												: 'border-border/70 bg-background text-muted-foreground hover:text-foreground',
 										)}
 										aria-pressed={posFilter === id}
