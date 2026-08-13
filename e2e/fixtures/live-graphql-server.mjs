@@ -419,12 +419,29 @@ const server = createServer((request, response) => {
 			return
 		}
 
-		if (query.includes('GetCurrentAndNextEvents')) {
+		if (
+			query.includes('GetCurrentAndNextEvents') ||
+			query.includes('GetCoreEventContext')
+		) {
 			json(response, 200, {
-				data: {
-					current: [{ id: 33 }],
-					next: [{ id: 34, deadlineTime: '2026-08-11T17:30:00.000Z' }]
-				}
+				data: query.includes('GetCoreEventContext')
+					? {
+							coreEventContext: {
+								season: '2627',
+								revision: '7',
+								sourceCheckedAt: '2026-08-13T09:40:00.000Z',
+								currentEventId: 33,
+								nextEventId: 34,
+								nextDeadlineTime: '2026-08-11T17:30:00.000Z',
+								latestFinishedEventId: 32
+							}
+						}
+					: {
+							current: [{ id: 33 }],
+							next: [
+								{ id: 34, deadlineTime: '2026-08-11T17:30:00.000Z' }
+							]
+						}
 			})
 			return
 		}
