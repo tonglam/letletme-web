@@ -984,7 +984,7 @@ export default function SelectionsClient({
 								<p className="text-xs text-muted-foreground">
 									{t('noTournaments')}{' '}
 									<Link
-										href="/tournament/browse"
+										href="/competitions/browse"
 										className="font-medium text-primary-ink hover:underline"
 									>
 										{t('browseTournaments')}

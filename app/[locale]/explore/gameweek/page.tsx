@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	return getPageMetadata({
 		locale,
-		pathname: '/data/gameweek',
+		pathname: '/explore/gameweek',
 		titleKey: 'gameweekStatsTitle',
 		descriptionKey: 'gameweekStatsDescription',
 	})

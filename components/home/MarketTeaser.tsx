@@ -28,7 +28,7 @@ import { getTranslations } from 'next-intl/server'
 import { unstable_rethrow } from 'next/navigation'
 import { connection } from 'next/server'
 
-/** Home teaser keeps a short list; full desks live on /data/market. */
+/** Home teaser keeps a short list; full desks live on /explore/market. */
 const HOME_TEASER_LIMIT = 5
 const HOME_AVAILABILITY_LIMIT = 5
 /** Prefer publicly significant ownership; fill below this if the list is short. */
@@ -215,7 +215,7 @@ export async function MarketTeaser() {
 								asChild
 								className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-[0.08em]"
 							>
-								<Link href="/data/market" prefetch={false}>
+								<Link href="/explore/market" prefetch={false}>
 									{t('openMarket')} <ArrowRight aria-hidden="true" />
 								</Link>
 							</Button>

@@ -137,7 +137,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [searchParams, maxGw])
 
-	// Restore last tournament when URL has no tournamentId (bare /me/tournament)
+	// Restore last tournament when URL has no tournamentId (bare /my-fpl/competitions)
 	useEffect(() => {
 		if (restoredPreferenceRef.current) return
 		if (tournaments.length === 0) return

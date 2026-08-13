@@ -1,17 +1,17 @@
 export const PROTECTED_PAGE_PREFIXES = [
 	'/profile',
 	'/onboarding',
-	'/tournament/create',
-	'/tournament/browse',
-	'/live/tournaments',
-	'/me/team',
-	'/me/tournament',
+	'/competitions/create',
+	'/competitions/browse',
+	'/live/competitions',
+	'/my-fpl/team',
+	'/my-fpl/competitions',
 ] as const
 
 export const PROTECTED_API_PREFIXES = ['/api/tournaments'] as const
 
 export function hasInvalidTournamentId(pathname: string): boolean {
-	const match = pathname.match(/^\/tournament\/([^/]+)(\/manage)?\/?$/)
+	const match = pathname.match(/^\/competitions\/([^/]+)(\/manage)?\/?$/)
 	if (!match) return false
 
 	const id = match[1]
@@ -21,7 +21,7 @@ export function hasInvalidTournamentId(pathname: string): boolean {
 
 export function isProtectedPage(pathname: string): boolean {
 	if (pathname === '/live/points') return true
-	if (/^\/tournament\/[^/]+\/manage(?:\/|$)/.test(pathname)) return true
+	if (/^\/competitions\/[^/]+\/manage(?:\/|$)/.test(pathname)) return true
 	return PROTECTED_PAGE_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
 }
 
@@ -32,10 +32,10 @@ export function isProtectedApi(pathname: string): boolean {
 export function requiresVerifiedEntry(pathname: string): boolean {
 	return (
 		pathname === '/live/points' ||
-		pathname.startsWith('/tournament/create') ||
-		pathname.startsWith('/live/tournaments') ||
-		pathname.startsWith('/me/team') ||
-		pathname.startsWith('/me/tournament') ||
-		pathname.startsWith('/tournament/browse')
+		pathname.startsWith('/competitions/create') ||
+		pathname.startsWith('/live/competitions') ||
+		pathname.startsWith('/my-fpl/team') ||
+		pathname.startsWith('/my-fpl/competitions') ||
+		pathname.startsWith('/competitions/browse')
 	)
 }

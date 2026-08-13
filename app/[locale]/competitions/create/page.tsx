@@ -7,7 +7,7 @@ export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	return getPageMetadata({
 		locale,
-		pathname: '/tournament/create',
+		pathname: '/competitions/create',
 		titleKey: 'createTournamentTitle',
 		descriptionKey: 'createTournamentDescription',
 	})

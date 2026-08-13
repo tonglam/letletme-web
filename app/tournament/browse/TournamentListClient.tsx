@@ -258,7 +258,7 @@ export default function TournamentListClient({
 					title={t('title')}
 					badge={
 						<Button className="gap-2 shadow-sm" asChild>
-							<Link href="/tournament/create">
+							<Link href="/competitions/create">
 								<Plus className="size-4" aria-hidden="true" />
 								{t('create')}
 							</Link>
@@ -454,7 +454,7 @@ export default function TournamentListClient({
 												<DropdownMenuContent align="end">
 													<DropdownMenuItem asChild>
 														<Link
-															href={`/live/tournaments/${tournament.id}`}
+															href={`/live/competitions/${tournament.id}`}
 															className="flex items-center gap-2"
 														>
 															<ExternalLink className="h-4 w-4" />
@@ -464,7 +464,7 @@ export default function TournamentListClient({
 													{tournament.adminEntryId === currentEntryId ? (
 														<DropdownMenuItem asChild>
 															<Link
-																href={`/tournament/${tournament.id}/manage`}
+																href={`/competitions/${tournament.id}/manage`}
 																className="flex items-center gap-2"
 															>
 																<Settings className="h-4 w-4" />

@@ -1,6 +1,6 @@
 /**
  * Remember last My Tournament selection per FPL entry (client-only).
- * URL ?tournamentId= still wins when present; this fills bare /me/tournament visits.
+ * URL ?tournamentId= still wins when present; this fills bare /my-fpl/competitions visits.
  */
 
 const STORAGE_PREFIX = 'stats-tournament:lastId:'

@@ -13,7 +13,7 @@ const validMetric = {
 	delta: 2100.5,
 	rating: 'good',
 	metricId: 'metric-123.abc',
-	page: '/live/tournaments/987?token=secret',
+	page: '/live/competitions/987?token=secret',
 	device: 'mobile',
 	audienceHint: 'public'
 }
@@ -21,27 +21,27 @@ const validMetric = {
 describe('privacy-safe web vitals', () => {
 	it('removes query strings and dynamic identifiers from page groups', () => {
 		assert.equal(
-			normalizeMetricPage('/live/tournaments/987?token=secret'),
-			'/live/tournaments/:tournamentId'
+			normalizeMetricPage('/live/competitions/987?token=secret'),
+			'/live/competitions/:tournamentId'
 		)
 		assert.equal(
-			normalizeMetricPage('/tournament/54/manage'),
-			'/tournament/:tournamentId/manage'
+			normalizeMetricPage('/competitions/54/manage'),
+			'/competitions/:tournamentId/manage'
 		)
 		assert.equal(
 			normalizeMetricPage('/zh-CN/live/points/123456'),
 			'/live/points/:entryId'
 		)
 		assert.equal(
-			normalizeMetricPage('/en/tournament/54/manage'),
-			'/tournament/:tournamentId/manage'
+			normalizeMetricPage('/en/competitions/54/manage'),
+			'/competitions/:tournamentId/manage'
 		)
 	})
 
 	it('accepts a bounded core web vital without adding user identity', () => {
 		assert.deepEqual(parseWebVitalPayload(validMetric), {
 			...validMetric,
-			page: '/live/tournaments/:tournamentId'
+			page: '/live/competitions/:tournamentId'
 		})
 	})
 
@@ -76,7 +76,7 @@ describe('privacy-safe web vitals', () => {
 				...validMetric,
 				name: 'HOME_PERSONAL_HYDRATED',
 				metricId: 'home-personal-123',
-				page: '/live/tournaments/:tournamentId',
+				page: '/live/competitions/:tournamentId',
 				audienceHint: 'session-hint'
 			}
 		)
@@ -94,9 +94,9 @@ describe('privacy-safe web vitals', () => {
 					...validMetric,
 					name,
 					metricId: `ready-${name.toLowerCase()}`,
-					page: '/data/player-stats?p1=42'
+					page: '/explore/player-stats?p1=42'
 				})?.page,
-				'/data/player-stats'
+				'/explore/player-stats'
 			)
 		}
 	})

@@ -32,18 +32,18 @@ describe('auth redirect policy', () => {
 
 	it('carries the safe destination through onboarding', () => {
 		assert.equal(
-			onboardingRedirectPath('/tournament/42/manage?tab=members'),
-			'/onboarding/bind-entry?next=%2Ftournament%2F42%2Fmanage%3Ftab%3Dmembers'
+			onboardingRedirectPath('/competitions/42/manage?tab=members'),
+			'/onboarding/bind-entry?next=%2Fcompetitions%2F42%2Fmanage%3Ftab%3Dmembers'
 		)
 	})
 
 	it('sends an already verified returning user directly to the safe destination', () => {
 		assert.equal(
-			verifiedUserDestination('/tournament/list?mine=true', {
+			verifiedUserDestination('/competitions/list?mine=true', {
 				fplEntryId: 123456,
 				fplEntryVerifiedAt: '2026-08-09T00:00:00.000Z'
 			}),
-			'/tournament/list?mine=true'
+			'/competitions/list?mine=true'
 		)
 		assert.equal(
 			verifiedUserDestination('https://attacker.example', {

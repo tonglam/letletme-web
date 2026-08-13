@@ -198,6 +198,6 @@ export function buildFixturesShareUrl(
 ): string {
 	const base = origin.replace(/\/$/, '')
 	const prefix = localePathPrefix.replace(/\/$/, '')
-	const path = `${prefix}/data/fixtures`
+	const path = `${prefix}/explore/fixtures`
 	return `${base}${path.startsWith('/') ? path : `/${path}`}`
 }

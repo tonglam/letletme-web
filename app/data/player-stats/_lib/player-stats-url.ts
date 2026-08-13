@@ -1,4 +1,4 @@
-export const PLAYER_STATS_PATH = '/data/player-stats'
+export const PLAYER_STATS_PATH = '/explore/player-stats'
 
 export type PlayerStatsSectionId =
 	| 'fixtures'

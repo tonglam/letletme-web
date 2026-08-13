@@ -49,7 +49,7 @@ export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	return getPageMetadata({
 		locale,
-		pathname: '/data/selections',
+		pathname: '/explore/selections',
 		titleKey: 'selectionsTitle',
 		descriptionKey: 'selectionsDescription',
 	})

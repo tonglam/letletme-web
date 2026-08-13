@@ -14,7 +14,7 @@ The cross-section plan governs shared identity references, season context, resul
 
 The fixed inputs are:
 
-- The public category is **Explore**. Existing `/data/*` paths remain stable during this implementation.
+- The public category is **Explore**. Existing `/explore/*` paths remain stable during this implementation.
 - The Explore label opens a lightweight Overview at `/data`; its compact submenu remains Gameweek, Fixtures, Market, Trends, Players, and Briefing.
 - Explore is an evidence layer. It does not produce buy/sell/avoid/essential/best-captain verdicts, optimized teams, expected-points models, expected-minutes models, or price-change predictions.
 - Explore Overview is a bounded router and deterministic search surface, not a duplicate homepage, infinite feed, or question-and-answer interface.
@@ -49,11 +49,11 @@ The baseline includes the current Web work plus the in-progress GraphQL/Data pla
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Navigation             | `components/layout/config.ts` exposes `Data` with Gameweek, Fixtures, Market, League Trends, and Player Stats; there is no `/data` page or Briefing item                                                                                                                                          |
 | Homepage               | The homepage exposes selected gameweek, market, fixture, Dream Team, and personal fragments, but it is a whole-product acquisition/continuation page rather than an Explore router                                                                                                                |
-| Gameweek               | `/data/gameweek` exposes official overall round statistics, chips, Dream Team, double-digit hauls, provisional/settled state, update time, preseason/empty states, and player links; selected gameweek is client state rather than a canonical query scope                                        |
-| Fixtures               | `/data/fixtures` provides selectable FDR horizons, easiest/hardest runs, next-fixture cards, BGW/DGW and unknown states, team matrix, linked-squad overlay, neutral candidate groups, sharing, and player links; metadata still contains hunt/avoid language                                      |
-| Market                 | `/data/market` exposes observed price, ownership, transfer, availability, and player-pool changes with a 14-day coverage contract, latest-day price filtering, player lookup/history, stale states, and sharing                                                                                   |
-| Trends                 | `/data/selections` exposes exact prepared competition fields and curated public prepared competitions, gameweek selection, ownership, EO, captaincy, transfers, template core, personal exposure, and sharing; cohort type and capture metadata are not consistently visible                      |
-| Players                | `/data/player-stats` provides bounded server-side player search, one/two-player state, availability, fixtures, recent gameweeks, season production, official expected metrics, price history, FPL percentiles, verified Understat process, coverage, My Squad context, and query-driven selection |
+| Gameweek               | `/explore/gameweek` exposes official overall round statistics, chips, Dream Team, double-digit hauls, provisional/settled state, update time, preseason/empty states, and player links; selected gameweek is client state rather than a canonical query scope                                        |
+| Fixtures               | `/explore/fixtures` provides selectable FDR horizons, easiest/hardest runs, next-fixture cards, BGW/DGW and unknown states, team matrix, linked-squad overlay, neutral candidate groups, sharing, and player links; metadata still contains hunt/avoid language                                      |
+| Market                 | `/explore/market` exposes observed price, ownership, transfer, availability, and player-pool changes with a 14-day coverage contract, latest-day price filtering, player lookup/history, stale states, and sharing                                                                                   |
+| Trends                 | `/explore/selections` exposes exact prepared competition fields and curated public prepared competitions, gameweek selection, ownership, EO, captaincy, transfers, template core, personal exposure, and sharing; cohort type and capture metadata are not consistently visible                      |
+| Players                | `/explore/player-stats` provides bounded server-side player search, one/two-player state, availability, fixtures, recent gameweeks, season production, official expected metrics, price history, FPL percentiles, verified Understat process, coverage, My Squad context, and query-driven selection |
 | Player State           | The Web renders a large deterministic state profile with dimension ratings, reasons, coverage, provider revisions, historical context, and withheld-state copy; it is requested beside the lightweight player overview rather than only when its evidence summary is opened                       |
 | Cross-links            | Gameweek, Fixtures, Market, and Trends already link to Players, and Players links to Fixtures; there is no shared typed evidence-card contract or Explore-wide search                                                                                                                             |
 | Personal Explore state | Recent player selections use local storage. No durable source/topic follow or mute model exists                                                                                                                                                                                                   |
@@ -550,14 +550,14 @@ Initial route contract:
 
 ```text
 /data                                  Explore Overview
-/data/gameweek?season=<season>&gw=<event>
-/data/fixtures?season=<season>&from=<event>&horizon=<n>&team=<team>
-/data/market?view=<mode>&days=<n>
-/data/market?view=<mode>&season=<season>&through=<yyyy-mm-dd>&days=<n>&revision=<revision>
-/data/selections?cohort=<typed-key>&season=<season>&gw=<event>&definitionRevision=<revision>
-/data/player-stats?p1=<player>&p2=<player>&section=<section>
-/data/briefing?topic=<slug>&player=<code>&team=<key>&season=<season>&gw=<event>&source=<id>
-/data/briefing/<topic-slug>
+/explore/gameweek?season=<season>&gw=<event>
+/explore/fixtures?season=<season>&from=<event>&horizon=<n>&team=<team>
+/explore/market?view=<mode>&days=<n>
+/explore/market?view=<mode>&season=<season>&through=<yyyy-mm-dd>&days=<n>&revision=<revision>
+/explore/selections?cohort=<typed-key>&season=<season>&gw=<event>&definitionRevision=<revision>
+/explore/player-stats?p1=<player>&p2=<player>&section=<section>
+/explore/briefing?topic=<slug>&player=<code>&team=<key>&season=<season>&gw=<event>&source=<id>
+/explore/briefing/<topic-slug>
 ```
 
 Rules:
@@ -675,19 +675,19 @@ Rules:
 
 **Web**
 
-- Add `/data/page.tsx` and its locale loading/error states.
+- Add `/explore/page.tsx` and its locale loading/error states.
 - Rename the public category from Data to Explore.
 - Rename League Trends to Trends and Player Stats to Players in navigation, headings, metadata, breadcrumbs, analytics names, and both locales.
 - Add Briefing to the Explore submenu.
 - Make the Explore category label link to `/data`; expose Overview explicitly in mobile navigation if required by the component interaction.
-- Keep all current `/data/*` paths and query compatibility.
+- Keep all current `/explore/*` paths and query compatibility.
 - Add a shared Explore shell only for common category navigation/search/metadata; do not wrap every detailed page in a blocking Overview request.
 - Add typed builders/parsers for gameweek, fixtures, market, cohort, player, and Briefing URL state.
 
 **Exit criteria**
 
 - All seven Explore destinations are keyboard and mobile reachable.
-- Existing shared `/data/*` URLs continue to open the same meaningful state.
+- Existing shared `/explore/*` URLs continue to open the same meaningful state.
 - English and Simplified Chinese navigation/metadata keys remain in parity.
 
 ### WP3 — Explore Overview and deterministic search
@@ -803,7 +803,7 @@ Rules:
 
 **Web**
 
-- Rename `/data/selections` UI from League Trends to Trends.
+- Rename `/explore/selections` UI from League Trends to Trends.
 - Replace `mine/public` ontology with typed cohort groups and labels.
 - Keep the current prepared-competition selector and personal exposure behaviour through its adapter.
 - Add sampled cohort metadata above every Top-10k/rank-band result.
@@ -831,7 +831,7 @@ Rules:
 
 **Web**
 
-- Rename the public page to Players while keeping `/data/player-stats`.
+- Rename the public page to Players while keeping `/explore/player-stats`.
 - Keep the official player overview independently renderable when personal seed, market context, fixtures, Understat, Evidence Summary, or Briefing fails.
 - Load each supporting evidence section only when opened or intentionally prefetched under a measured budget.
 - Rename/reframe the deterministic synthesis as Evidence Summary.
@@ -905,7 +905,7 @@ Rules:
 
 **Web**
 
-- Add `/data/briefing` discovery and `/data/briefing/[topic]` canonical topic boards.
+- Add `/explore/briefing` discovery and `/explore/briefing/[topic]` canonical topic boards.
 - Permanently redirect an alias route to the current canonical topic URL before rendering and
   preserve valid locale/query/hash state.
 - Render topic summary, affected entities, evidence-class groups, short timeline, disagreement, attribution, publication time, allowed excerpt/summary, direct original links, and related quantitative evidence.
@@ -999,15 +999,15 @@ This is dependency order, not a product release roadmap. Independent work may pr
 ### GraphQL
 
 - Add new types/queries and evidence fields; do not rename/remove current operations in the first migration.
-- Keep `publicLeagueTrends` and tournament selection-stat reads while `/data/selections` migrates to the unified cohort adapter.
+- Keep `publicLeagueTrends` and tournament selection-stat reads while `/explore/selections` migrates to the unified cohort adapter.
 - Keep `playerDetail` and `playerStateProfile` independently callable.
 - Version caches by evidence method/source rights revision where required.
 - Remove legacy public-operation allowlist entries only after Web and E2E prove no use.
 
 ### Web routes
 
-- Add `/data` and `/data/briefing` routes.
-- Keep `/data/gameweek`, `/data/fixtures`, `/data/market`, `/data/selections`, and `/data/player-stats` unchanged.
+- Add `/data` and `/explore/briefing` routes.
+- Keep `/explore/gameweek`, `/explore/fixtures`, `/explore/market`, `/explore/selections`, and `/explore/player-stats` unchanged.
 - Change visible labels independently of paths.
 - Preserve locale, query, and hash state in internal navigation.
 - Add redirects only for genuinely replaced legacy paths already known to exist; do not create an `/explore` migration inside this plan.
@@ -1163,7 +1163,7 @@ Do not emit raw queries, private entry/competition IDs, source content, excerpts
 
 - Disable rank-cohort exposure while retaining the last published rows for audit; Trends continues with prepared exact fields.
 - Disable one Briefing source or all Briefing exposure independently; direct quantitative tools continue.
-- Disable Explore Overview; direct `/data/*` routes remain available.
+- Disable Explore Overview; direct `/explore/*` routes remain available.
 - Roll back public labels without changing route/data identity if navigation regression requires it.
 - Restore prior Web queries while additive GraphQL fields/tables remain inert.
 - Do not destructively delete cohort samples, source policies, correction/removal audit, or content provenance as a rollback mechanism.

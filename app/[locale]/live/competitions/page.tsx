@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	return getPageMetadata({
 		locale,
-		pathname: '/live/tournaments',
+		pathname: '/live/competitions',
 		titleKey: 'liveTournamentsTitle',
 		descriptionKey: 'liveTournamentsDescription',
 	})

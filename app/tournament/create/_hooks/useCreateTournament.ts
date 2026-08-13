@@ -385,7 +385,7 @@ export function useCreateTournament() {
 						? t('createdReady', { count: participantCount })
 						: t('createdProcessing', { count: participantCount }),
 			)
-			router.push(`/tournament/${tournamentId}?created=1`)
+			router.push(`/competitions/${tournamentId}?created=1`)
 		} catch {
 			setSubmitError(t('createFailed'))
 		} finally {

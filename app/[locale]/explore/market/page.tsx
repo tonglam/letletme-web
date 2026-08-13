@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	return getPageMetadata({
 		locale,
-		pathname: '/data/market',
+		pathname: '/explore/market',
 		titleKey: 'priceChangesTitle',
 		descriptionKey: 'priceChangesDescription',
 	})

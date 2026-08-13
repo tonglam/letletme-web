@@ -22,7 +22,7 @@ export default function ManageTournamentClient({ tournament }: { tournament: Ent
 		<PageShell>
 			<div className="container mx-auto max-w-4xl space-y-6 px-4 py-8">
 				<Button variant="ghost" className="-ml-3" asChild>
-					<Link href={`/live/tournaments/${tournament.id}`}>
+					<Link href={`/live/competitions/${tournament.id}`}>
 						<ArrowLeft aria-hidden="true" /> {t('back')}
 					</Link>
 				</Button>

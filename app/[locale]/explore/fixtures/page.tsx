@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	return getPageMetadata({
 		locale,
-		pathname: '/data/fixtures',
+		pathname: '/explore/fixtures',
 		titleKey: 'fixturesTitle',
 		descriptionKey: 'fixturesDescription',
 	})

@@ -36,11 +36,11 @@ Pages with live data follow a strict split:
 - `page.tsx` — thin server component, renders a `<Suspense>` boundary wrapping `*Client.tsx`
 - `*Client.tsx` — owns all state, data fetching via `executeQuery`, and renders the full UI
 
-Example: `app/live/tournaments/page.tsx` → `TournamentClient.tsx`.
+Example: `app/live/competitions/page.tsx` → `TournamentClient.tsx`.
 
 ### Tournament Live Points Flow
 
-`/live/tournaments` is the most complex page:
+`/live/competitions` is the most complex page:
 
 1. Fetches entry tournaments for the signed-in user's FPL entry (`getCurrentEntryId()` from session)
 2. Fetches `GET_TOURNAMENT_LIVE_POINTS` for the selected tournament + gameweek (in parallel with previous GW for rank deltas)
@@ -66,7 +66,7 @@ Both `PlayerOwnershipFilter` and `TeamExposureFilter` follow the same contract:
 - **Do not** fall back to `next[0].id` or `liveSnapshot.eventId` as the **live-calc** / this-GW seed event.
 - **Do not** wrap already-seeded client trees in useless Suspense that only flashes a second loading shell.
 
-**Me review** (`/me/team`, `/me/tournament`) must **not** hard-fail when `isCurrent` is empty. Use `resolveReviewGameweekAnchor()` from `lib/review-gameweek.ts` (current → next-derived → history max). Season history / tournament field still open; only Live keeps the hard gate.
+**My FPL review** (`/my-fpl/team`, `/my-fpl/competitions`) must **not** hard-fail when `isCurrent` is empty. Use `resolveReviewGameweekAnchor()` from `lib/review-gameweek.ts` (current → next-derived → history max). Season history / competition field still open; only Live keeps the hard gate.
 
 - **Out of scope for the Live gate:** home deadline (`next`), market, tournament CRUD, Me review anchors, user switching to a non-current GW after a valid seed.
 

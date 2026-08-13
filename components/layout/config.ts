@@ -1,5 +1,5 @@
 import {
-	BarChart2,
+	Compass,
 	DivideIcon as LucideIcon,
 	Medal,
 	Timer,
@@ -8,35 +8,33 @@ import {
 
 interface MenuItem {
 	id: string
-	labelKey: 'live' | 'me' | 'tournament' | 'data'
+	labelKey: 'live' | 'myFpl' | 'competitions' | 'explore'
 	icon: typeof LucideIcon
 	items: {
 		labelKey:
 			| 'livePoints'
-			| 'liveTournaments'
+			| 'liveCompetitions'
 			| 'liveMatches'
-			| 'myTournaments'
-			| 'createTournaments'
-			| 'gameweekStats'
+			| 'myFplOverview'
+			| 'myFplTeam'
+			| 'myTournament'
+			| 'myCompetitions'
+			| 'createCompetition'
+			| 'gameweek'
 			| 'fixtures'
-			| 'teamStats'
-			| 'tournamentStats'
-			| 'priceChanges'
-			| 'selections'
-			| 'playerStats'
+			| 'market'
+			| 'trends'
+			| 'players'
 		href: string
 	}[]
 }
 
 /**
- * Primary IA — menu labels stay noun phrases (not bare verbs):
- *   Live — Live Points / Live Tournaments / Live Matches
- *   Me — My Team / My Tournament  (personal “My …” review)
- *   Tournament — New tournament / Browse tournaments  (ops pair)
- *   Data — Gameweek / Fixtures / Market / League Trends / Player Stats
+ * The public information architecture has four sections:
+ *   Live / My FPL / Competitions / Explore.
  *
- * Me “My Tournament” (form) ≠ Tournament “Browse tournaments” (list).
- * Paths align with menu groups: /live/*, /me/*, /tournament/*, /data/*.
+ * These names are the only public navigation vocabulary. Internal component
+ * names may continue to describe the underlying data model.
  */
 export const menuItems: MenuItem[] = [
 	{
@@ -45,40 +43,39 @@ export const menuItems: MenuItem[] = [
 		icon: Timer,
 		items: [
 			{ labelKey: 'livePoints', href: '/live/points' },
-			{ labelKey: 'liveTournaments', href: '/live/tournaments' },
+			{ labelKey: 'liveCompetitions', href: '/live/competitions' },
 			{ labelKey: 'liveMatches', href: '/live/matches' },
 		],
 	},
 	{
-		id: 'me',
-		labelKey: 'me',
+		id: 'myFpl',
+		labelKey: 'myFpl',
 		icon: UserRound,
 		items: [
-			{ labelKey: 'teamStats', href: '/me/team' },
-			// Personal review — same “My …” voice as My Team
-			{ labelKey: 'tournamentStats', href: '/me/tournament' },
+			{ labelKey: 'myFplOverview', href: '/' },
+			{ labelKey: 'myFplTeam', href: '/my-fpl/team' },
+			{ labelKey: 'myTournament', href: '/my-fpl/competitions' },
 		],
 	},
 	{
-		id: 'tournament',
-		labelKey: 'tournament',
+		id: 'competitions',
+		labelKey: 'competitions',
 		icon: Medal,
 		items: [
-			// Ops pair: create vs browse (matches homepage “Browse tournaments”)
-			{ labelKey: 'createTournaments', href: '/tournament/create' },
-			{ labelKey: 'myTournaments', href: '/tournament/browse?mine=true' },
+			{ labelKey: 'myCompetitions', href: '/competitions/browse?mine=true' },
+			{ labelKey: 'createCompetition', href: '/competitions/create' },
 		],
 	},
 	{
-		id: 'data',
-		labelKey: 'data',
-		icon: BarChart2,
+		id: 'explore',
+		labelKey: 'explore',
+		icon: Compass,
 		items: [
-			{ labelKey: 'gameweekStats', href: '/data/gameweek' },
-			{ labelKey: 'fixtures', href: '/data/fixtures' },
-			{ labelKey: 'priceChanges', href: '/data/market' },
-			{ labelKey: 'selections', href: '/data/selections' },
-			{ labelKey: 'playerStats', href: '/data/player-stats' },
+			{ labelKey: 'gameweek', href: '/explore/gameweek' },
+			{ labelKey: 'fixtures', href: '/explore/fixtures' },
+			{ labelKey: 'market', href: '/explore/market' },
+			{ labelKey: 'trends', href: '/explore/selections' },
+			{ labelKey: 'players', href: '/explore/player-stats' },
 		],
 	},
 ]
