@@ -18,7 +18,7 @@ interface StatsSectionProps {
 const tileIconStyles = [
 	'bg-plum text-electric',
 	'bg-electric text-plum',
-	'bg-pink text-white',
+	'bg-pink text-fascia-foreground',
 	'bg-secondary text-foreground',
 ] as const
 

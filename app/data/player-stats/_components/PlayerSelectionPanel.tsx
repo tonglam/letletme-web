@@ -5,6 +5,7 @@ import {
 	type PlayerDirectoryOption
 } from '@/components/player/PlayerDirectoryPicker'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Pencil, Plus, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
@@ -43,7 +44,7 @@ function RecentPlayers({
 
 	return (
 		<div className="mt-2 flex flex-wrap items-center gap-1.5">
-			<span className="shrink-0 text-[11px] text-muted-foreground">
+			<span className="shrink-0 text-caption text-muted-foreground">
 				{t('recent')}
 			</span>
 			{players.map(player => (
@@ -56,7 +57,7 @@ function RecentPlayers({
 					className="h-7 gap-1 rounded-full px-2.5 text-xs"
 				>
 					{player.name}
-					<span className="text-[10px] opacity-70">{player.teamShortName}</span>
+					<span className="text-label opacity-70">{player.teamShortName}</span>
 				</Button>
 			))}
 			<Button
@@ -90,7 +91,7 @@ function SuggestionChips({
 
 	return (
 		<div className="mt-2 flex flex-wrap items-center gap-1.5">
-			<span className="shrink-0 text-[11px] text-muted-foreground">
+			<span className="shrink-0 text-caption text-muted-foreground">
 				{label}
 			</span>
 			{players.map(player => (
@@ -103,9 +104,9 @@ function SuggestionChips({
 					className="h-7 gap-1 rounded-full px-2.5 text-xs"
 				>
 					{player.name}
-					<span className="text-[10px] opacity-70">{player.teamShortName}</span>
+					<span className="text-label opacity-70">{player.teamShortName}</span>
 					{player.badge ? (
-						<span className="text-[9px] uppercase opacity-60">
+						<span className="text-micro uppercase opacity-60">
 							{player.badge}
 						</span>
 					) : null}
@@ -147,10 +148,10 @@ function PlayerSlot({
 	return (
 		<div className="min-w-0 rounded-lg border border-border/60 bg-muted/10 px-3 py-3">
 			<div className="mb-2 flex items-center justify-between gap-2">
-				<p className="font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+				<p className="eyebrow sm:text-caption">
 					{label}
 					{optional ? (
-						<span className="ml-1 font-sans text-[10px] font-normal normal-case tracking-normal text-muted-foreground/80">
+						<span className="ml-1 font-sans text-label font-normal normal-case tracking-normal text-muted-foreground/80">
 							{t('optionalSuffix')}
 						</span>
 					) : null}
@@ -233,7 +234,7 @@ function CompactPlayerSlot({
 	return (
 		<div className="flex min-w-0 items-center gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-3">
 		<div className="min-w-0 flex-1">
-			<p className="font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+			<p className="eyebrow">
 				{label}
 			</p>
 			<p className="truncate text-sm font-medium">
@@ -301,15 +302,16 @@ export function PlayerSelectionPanel({
 	}
 
 	return (
-		<section
+		<Card
+			role="region"
 			aria-label={t('scopeLabel')}
-			className="mb-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+			className="mb-8 p-4 sm:p-5"
 		>
 			<div className="mb-3 border-b border-border/50 pb-2">
-				<p className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+				<p className="eyebrow sm:text-caption">
 					{t('scopeLabel')}
 				</p>
-				<p className="mt-0.5 text-[11px] text-muted-foreground">
+				<p className="mt-0.5 text-caption text-muted-foreground">
 					{t('scopeHint')}
 				</p>
 			</div>
@@ -387,6 +389,6 @@ export function PlayerSelectionPanel({
 					</div>
 				)}
 			</div>
-		</section>
+		</Card>
 	)
 }

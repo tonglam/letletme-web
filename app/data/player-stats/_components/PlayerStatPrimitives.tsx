@@ -91,8 +91,8 @@ export function StatCell({
 	const translateLabel = useTranslatedStatLabel()
 
 	return (
-		<div className="rounded-lg border border-border/70 bg-muted/40 p-3 text-center dark:bg-muted/25">
-			<p className="mb-1 font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+		<div className="rounded-lg border surface-inset p-3 text-center">
+			<p className="eyebrow mb-1">
 				{translateLabel(label)}
 			</p>
 			<p className="font-display text-xl font-bold tabular-nums tracking-wide text-foreground">

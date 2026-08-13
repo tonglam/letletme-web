@@ -29,12 +29,12 @@ export function PlayerStatsSection({
 			<div className="mb-3">
 				<h2
 					id={id ? `${id}-heading` : undefined}
-					className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+					className="eyebrow sm:text-caption"
 				>
 					{title}
 				</h2>
 				{hint ? (
-					<p className="mt-0.5 text-[11px] text-muted-foreground/80">{hint}</p>
+					<p className="mt-0.5 text-caption text-muted-foreground/80">{hint}</p>
 				) : null}
 			</div>
 			{children}

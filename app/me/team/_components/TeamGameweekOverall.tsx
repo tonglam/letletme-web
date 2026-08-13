@@ -124,7 +124,7 @@ export function TeamGameweekOverall({ stats }: { stats: TeamStatsViewModel }) {
 					<span className="eyebrow text-fascia-foreground/50">
 						{t('gameweekChip')}
 					</span>
-					<span className="rounded-md border border-fascia-foreground/12 bg-fascia-foreground/8 px-2.5 py-1 font-display text-caption font-semibold uppercase tracking-[0.1em] text-electric">
+					<span className="rounded-md border border-fascia-foreground/12 bg-fascia-foreground/8 px-2.5 py-1 font-display text-caption font-semibold uppercase tracking-widest text-electric">
 						{eventChip}
 					</span>
 				</div>

@@ -25,7 +25,7 @@ export function GameweekBadge({
 	return (
 		<span
 			className={cn(
-				'scoreboard-lifted inline-flex w-fit shrink-0 items-center font-mono font-semibold tracking-[0.14em] text-electric',
+				'scoreboard-lifted inline-flex w-fit shrink-0 items-center font-mono font-semibold tracking-caps text-electric',
 				size === 'sm' && 'rounded-md px-2 py-1 text-xs',
 				size === 'default' &&
 					'rounded-md px-2.5 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm',

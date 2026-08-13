@@ -655,7 +655,7 @@ export function PlayerDirectoryPicker({
 
 	return (
 		<div className={className}>
-			<p className="mb-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+			<p className="mb-1.5 eyebrow sm:text-caption">
 				{t('findPlayer')}
 			</p>
 			<div className="relative">
@@ -913,7 +913,7 @@ export function PlayerDirectoryPicker({
 								<span className="min-w-0 flex-1 truncate font-medium">
 									{player.name}
 								</span>
-								<span className="shrink-0 text-[10px] text-muted-foreground">
+								<span className="shrink-0 text-label text-muted-foreground">
 									{player.position}
 								</span>
 								<span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">

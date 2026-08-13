@@ -119,7 +119,7 @@ function MetricGrid({ items }: { items: DisplayMetric[] }) {
 		<div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
 			{items.map(item => (
 				<div key={item.label}>
-					<p className="font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+					<p className="eyebrow">
 						{item.label}
 					</p>
 					<p className="mt-0.5 font-display text-xl font-bold tabular-nums tracking-tight">
@@ -570,7 +570,7 @@ function MarketSummary({
 				{ label: tl('gwNet'), value: number(net(player)) }
 			].map(item => (
 				<div key={item.label}>
-					<p className="font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+					<p className="eyebrow">
 						{item.label}
 					</p>
 					<p className="mt-0.5 font-semibold tabular-nums">
@@ -962,7 +962,7 @@ export function PlayerStatsView({
 			/>
 
 			<div className="sticky top-0 z-20 -mx-1 border-b border-border/60 bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-				<p className="font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+				<p className="eyebrow">
 					{t('detailedTitle')}
 				</p>
 				<StickyPlayerIdentity
@@ -992,7 +992,7 @@ export function PlayerStatsView({
 						type="button"
 						variant="outline"
 						size="sm"
-						className="w-full justify-between rounded-lg border-border/70 px-4 text-left font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+						className="eyebrow w-full justify-between rounded-lg border-border/70 px-4 text-left sm:text-caption"
 						onClick={() => setContextOpen(open => !open)}
 						aria-expanded={contextOpen}
 						aria-controls="ps-context-panel"

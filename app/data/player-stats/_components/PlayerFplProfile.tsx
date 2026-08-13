@@ -128,7 +128,7 @@ function RadarLegend({
 					<div key={axis.code} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-sm">
 						<div className="min-w-0">
 							<p className="truncate text-muted-foreground">{axisLabel(axis.code, t)}</p>
-							<p className="text-[11px] text-muted-foreground/70">
+							<p className="text-caption text-muted-foreground/70">
 								{axis.available && axis.percentile !== null ? t('positionPercentile', { value: percentileValue(axis.percentile) }) : t('notAvailable')}
 							</p>
 						</div>
@@ -275,7 +275,7 @@ export function PlayerFplProfile({
 					<RadarLegend players={second ? [first, second] : [first]} t={t} />
 				</div>
 			)}
-			<p className="mt-3 text-[11px] text-muted-foreground">{t('percentileHint')}</p>
+			<p className="mt-3 text-caption text-muted-foreground">{t('percentileHint')}</p>
 		</PlayerStatsSection>
 	)
 }

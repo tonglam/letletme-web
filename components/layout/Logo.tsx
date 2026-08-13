@@ -35,7 +35,7 @@ export function LogoWordmark({ className }: { className?: string }) {
 	return (
 		<span
 			className={cn(
-				'font-display text-xl font-bold uppercase leading-none tracking-[0.06em]',
+				'font-display text-xl font-bold uppercase leading-none tracking-wider',
 				className,
 			)}
 		>

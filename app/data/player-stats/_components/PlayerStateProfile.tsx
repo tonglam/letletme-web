@@ -1,6 +1,13 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
+import {
+	DataTable,
+	DataTd,
+	DataTh,
+	DataThead,
+	DataTr
+} from '@/components/data/DataTable'
 import { Skeleton } from '@/components/ui/skeleton'
 import type {
 	PlayerDetailData,
@@ -270,7 +277,7 @@ function CoverageCard({
 		<div className="rounded-lg border border-border/60 px-3 py-3">
 			<div className="flex flex-wrap items-center justify-between gap-2">
 				<p className="truncate text-xs font-semibold">{name}</p>
-				<p className="text-[11px] text-muted-foreground">
+				<p className="text-caption text-muted-foreground">
 					{profile.asOfEventId != null
 						? t('coverage.asOfEvent', {
 								season: seasonLabel(profile.season),
@@ -284,7 +291,7 @@ function CoverageCard({
 			<div className="mt-2 flex flex-wrap gap-1.5">
 				<Badge
 					variant="outline"
-					className="text-[10px]"
+					className="text-label"
 				>
 					{t('coverage.fplCurrent', {
 						status: profile.coverage.fplCurrent
@@ -294,7 +301,7 @@ function CoverageCard({
 				</Badge>
 				<Badge
 					variant="outline"
-					className="text-[10px]"
+					className="text-label"
 				>
 					{t('coverage.understatCurrent', {
 						status: profile.coverage.understatCurrent
@@ -304,13 +311,13 @@ function CoverageCard({
 				</Badge>
 				<Badge
 					variant="secondary"
-					className="text-[10px]"
+					className="text-label"
 				>
 					{t(MAPPING_KEYS[profile.coverage.mappingStatus])}
 				</Badge>
 			</div>
 
-			<p className="mt-2 text-[11px] text-muted-foreground">
+			<p className="mt-2 text-caption text-muted-foreground">
 				{t('coverage.summary', {
 					fplHistory: profile.coverage.fplHistorySeasons.length,
 					understatHistory: profile.coverage.understatHistorySeasons.length,
@@ -339,7 +346,7 @@ function CoverageCard({
 						return (
 							<p
 								key={`${provider.provider}-${provider.scope}-${provider.season}`}
-								className="text-[11px] text-muted-foreground"
+								className="text-caption text-muted-foreground"
 							>
 								{t('coverage.providerRevision', {
 									provider: provider.provider,
@@ -357,7 +364,7 @@ function CoverageCard({
 							</p>
 						)
 					})}
-					<p className="text-[11px] text-muted-foreground">
+					<p className="text-caption text-muted-foreground">
 						{t('coverage.historySeasons', {
 							fpl: profile.coverage.fplHistorySeasons.length
 								? profile.coverage.fplHistorySeasons.map(seasonLabel).join(', ')
@@ -369,7 +376,7 @@ function CoverageCard({
 								: '—'
 						})}
 					</p>
-					<p className="text-[11px] text-muted-foreground">
+					<p className="text-caption text-muted-foreground">
 						{t('coverage.metrics', {
 							metrics: profile.coverage.metricCoverage.join(', ') || '—'
 						})}
@@ -505,7 +512,7 @@ function SignalCard({
 }) {
 	return (
 		<div className="rounded-lg border border-border/60 bg-muted/10 px-3 py-3">
-			<p className="font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+			<p className="eyebrow">
 				{title}
 			</p>
 			<div className="mt-2">
@@ -639,7 +646,7 @@ function OutputProcess({
 								key={code}
 								className="rounded-md border border-border/60 px-2.5 py-2"
 							>
-								<p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+								<p className="eyebrow">
 									{metricLabel(code, t)}
 								</p>
 								<p className="mt-0.5 font-display text-lg font-bold tabular-nums">
@@ -763,7 +770,7 @@ function OutlookStrip({
 						key={gameweek.eventId}
 						className="min-w-0 rounded-md border border-border/60 px-1.5 py-2 text-center"
 					>
-						<p className="font-display text-[10px] font-semibold text-muted-foreground">
+						<p className="font-display text-label font-semibold text-muted-foreground">
 							GW{gameweek.eventId}
 						</p>
 						{gameweek.bgw ? (
@@ -780,7 +787,7 @@ function OutlookStrip({
 										</span>
 										<span
 											className={cn(
-												'inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-[9px] font-bold text-white',
+												'inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-micro font-bold text-fascia-foreground',
 												DIFFICULTY_COLORS[fixture.difficulty] ?? 'bg-muted'
 											)}
 										>
@@ -791,7 +798,7 @@ function OutlookStrip({
 							</div>
 						)}
 						{gameweek.dgw ? (
-							<p className="mt-1 text-[9px] font-semibold text-muted-foreground">
+							<p className="mt-1 text-micro font-semibold text-muted-foreground">
 								DGW
 							</p>
 						) : null}
@@ -933,7 +940,7 @@ function Baseline({
 							key={item.label}
 							className="rounded-lg border border-border/60 px-3 py-3"
 						>
-							<p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+							<p className="eyebrow">
 								{item.label}
 							</p>
 							<p className="mt-1 font-display text-lg font-bold tabular-nums">
@@ -1039,57 +1046,71 @@ function CareerTrajectory({
 						: t('careerEmpty')}
 				</p>
 			) : (
-				<div className="overflow-x-auto rounded-lg border border-border/60">
-					<table className="w-full min-w-[34rem] text-sm">
-						<thead className="bg-muted/30 text-left text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-							<tr>
-								<th className="px-3 py-2 font-semibold">{t('season')}</th>
-								<th className="px-3 py-2 text-right font-semibold">
-									{player.webName} · {t('fplPercentile')}
-								</th>
-								{comparisonProfile ? (
-									<th className="px-3 py-2 text-right font-semibold">
-										{comparison?.webName} · {t('fplPercentile')}
-									</th>
-								) : null}
-								{hasProcess ? (
-									<th className="px-3 py-2 text-right font-semibold">
-										{t('processPercentile')}
-									</th>
-								) : null}
-							</tr>
-						</thead>
-						<tbody>
-							{seasons.map(season => {
-								const first = firstBySeason.get(season)
-								const second = secondBySeason.get(season)
-								return (
-									<tr
-										key={season}
-										className="border-t border-border/60"
+				<DataTable
+					minWidthClass="min-w-[34rem]"
+					className="rounded-lg border border-border/60"
+				>
+					<DataThead>
+						<DataTh className="px-3">{t('season')}</DataTh>
+						<DataTh
+							align="right"
+							className="px-3"
+						>
+							{player.webName} · {t('fplPercentile')}
+						</DataTh>
+						{comparisonProfile ? (
+							<DataTh
+								align="right"
+								className="px-3"
+							>
+								{comparison?.webName} · {t('fplPercentile')}
+							</DataTh>
+						) : null}
+						{hasProcess ? (
+							<DataTh
+								align="right"
+								className="px-3"
+							>
+								{t('processPercentile')}
+							</DataTh>
+						) : null}
+					</DataThead>
+					<tbody>
+						{seasons.map(season => {
+							const first = firstBySeason.get(season)
+							const second = secondBySeason.get(season)
+							return (
+								<DataTr key={season}>
+									<DataTd className="px-3 py-2.5 font-medium">
+										{seasonLabel(season)}
+									</DataTd>
+									<DataTd
+										align="right"
+										className="px-3 py-2.5 tabular-nums"
 									>
-										<td className="px-3 py-2.5 font-medium">
-											{seasonLabel(season)}
-										</td>
-										<td className="px-3 py-2.5 text-right tabular-nums">
-											{number(first?.fplPositionPercentile ?? null)}
-										</td>
-										{comparisonProfile ? (
-											<td className="px-3 py-2.5 text-right tabular-nums">
-												{number(second?.fplPositionPercentile ?? null)}
-											</td>
-										) : null}
-										{hasProcess ? (
-											<td className="px-3 py-2.5 text-right tabular-nums">
-												{number(first?.understatProcessPercentile ?? null)}
-											</td>
-										) : null}
-									</tr>
-								)
-							})}
-						</tbody>
-					</table>
-				</div>
+										{number(first?.fplPositionPercentile ?? null)}
+									</DataTd>
+									{comparisonProfile ? (
+										<DataTd
+											align="right"
+											className="px-3 py-2.5 tabular-nums"
+										>
+											{number(second?.fplPositionPercentile ?? null)}
+										</DataTd>
+									) : null}
+									{hasProcess ? (
+										<DataTd
+											align="right"
+											className="px-3 py-2.5 tabular-nums"
+										>
+											{number(first?.understatProcessPercentile ?? null)}
+										</DataTd>
+									) : null}
+								</DataTr>
+							)
+						})}
+					</tbody>
+				</DataTable>
 			)}
 			{!hasProcess ? (
 				<p className="mt-2 text-xs text-muted-foreground">
@@ -1195,7 +1216,7 @@ function WhyState({
 							key={item.kind}
 							className="rounded-md border border-border/60 bg-muted/10 px-2.5 py-2"
 						>
-							<p className="font-display text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+							<p className="eyebrow">
 								{item.title}
 							</p>
 							<div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -1218,7 +1239,7 @@ function WhyState({
 					)
 				})}
 			</div>
-			<p className="mt-2 text-[11px] text-muted-foreground">
+			<p className="mt-2 text-caption text-muted-foreground">
 				{t('whyStateHint')}
 			</p>
 		</details>

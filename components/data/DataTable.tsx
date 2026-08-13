@@ -38,13 +38,17 @@ export function DataTh({
 	children,
 	className,
 	align = 'left',
+	title,
 }: {
 	children: ReactNode
 	className?: string
 	align?: 'left' | 'center' | 'right'
+	/** Native tooltip, e.g. expanding a terse column abbreviation. */
+	title?: string
 }) {
 	return (
 		<th
+			title={title}
 			className={cn(
 				'eyebrow px-1.5 py-2',
 				align === 'center' && 'text-center',

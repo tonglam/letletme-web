@@ -25,7 +25,7 @@ export function MySquadRail({
 
 	return (
 		<>
-			<p className="mb-2 font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+			<p className="eyebrow mb-2 sm:text-caption">
 				{t('mySquadRailTitle')}
 			</p>
 			<div className="flex flex-wrap gap-1.5">
@@ -49,7 +49,7 @@ export function MySquadRail({
 							<Badge
 								className={cn(
 									positionBadgeClass(code),
-									'px-1 py-0 text-[9px] font-bold',
+									'px-1 py-0 text-micro font-bold',
 								)}
 							>
 								{code}

@@ -140,7 +140,7 @@ export function FdrMatrix({
 										<span className="inline-flex items-center gap-1.5">
 											{row.teamShortName}
 											{exposureLabel ? (
-													<span
+												<span
 													className="rounded border border-primary/35 bg-primary/15 px-1 py-px font-mono text-micro font-semibold tabular-nums tracking-wide text-primary-ink"
 													title={t('matrixMyTeamDetail', {
 														count: exposure!.count,

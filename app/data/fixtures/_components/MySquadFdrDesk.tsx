@@ -140,13 +140,13 @@ export function MySquadFdrDesk({
 					<tr className="border-b border-border/60 bg-muted/20">
 						<th
 							scope="col"
-							className="sticky left-0 z-10 w-0 whitespace-nowrap bg-muted/30 px-3 py-2 font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground backdrop-blur-sm"
+							className="sticky left-0 z-10 w-0 whitespace-nowrap bg-muted/30 px-3 py-2 font-display text-label font-semibold uppercase tracking-caps text-muted-foreground backdrop-blur-sm"
 						>
 							{t('mySquadColTeamPlayers')}
 						</th>
 						<th
 							scope="col"
-							className="w-0 whitespace-nowrap px-3 py-2 text-center font-mono text-[10px] font-semibold tabular-nums text-muted-foreground"
+							className="w-0 whitespace-nowrap px-3 py-2 text-center font-mono text-label font-semibold tabular-nums text-muted-foreground"
 						>
 							{t('colAvg')}
 						</th>
@@ -154,7 +154,7 @@ export function MySquadFdrDesk({
 							<th
 								key={gw}
 								scope="col"
-								className="px-1.5 py-2 text-center font-mono text-[10px] font-semibold tabular-nums text-muted-foreground"
+								className="px-1.5 py-2 text-center font-mono text-label font-semibold tabular-nums text-muted-foreground"
 							>
 								GW{gw}
 							</th>
@@ -172,7 +172,7 @@ export function MySquadFdrDesk({
 									<span className="font-display text-sm font-bold tracking-wide">
 										{team.teamShortName}
 									</span>
-									<span className="rounded border border-border/60 bg-muted/30 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+									<span className="rounded border border-border/60 bg-muted/30 px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide text-muted-foreground">
 										{t(`fixtureBand.${team.fixtureBand}`)}
 									</span>
 								</div>
@@ -185,7 +185,7 @@ export function MySquadFdrDesk({
 											<Badge
 												className={cn(
 													positionBadgeClass(player.positionCode),
-													'shrink-0 px-1.5 py-0 text-[10px] font-bold',
+													'shrink-0 px-1.5 py-0 text-label font-bold',
 												)}
 											>
 												{player.positionCode}
@@ -210,7 +210,7 @@ export function MySquadFdrDesk({
 											key={gw}
 											className="px-1.5 py-2.5 text-center text-muted-foreground"
 										>
-											<span className="inline-flex rounded border border-border/60 bg-muted/25 px-1.5 py-1 font-mono text-[9px] font-semibold text-muted-foreground">
+											<span className="inline-flex rounded border border-border/60 bg-muted/25 px-1.5 py-1 font-mono text-micro font-semibold text-muted-foreground">
 												{t('bgw')}
 											</span>
 										</td>
@@ -220,7 +220,7 @@ export function MySquadFdrDesk({
 									<td key={gw} className="px-1.5 py-2.5 text-center">
 										<div className="flex flex-col items-center gap-1">
 											{gameweek.dgw ? (
-												<span className="font-mono text-[8px] font-semibold uppercase tracking-wide text-muted-foreground">
+												<span className="font-mono text-micro font-semibold uppercase tracking-wide text-muted-foreground">
 													{t('dgw')}
 												</span>
 											) : null}
@@ -228,12 +228,12 @@ export function MySquadFdrDesk({
 												<span
 													key={cell.fixtureId}
 													className={cn(
-														'inline-flex min-w-[2.75rem] flex-col items-center rounded border px-1.5 py-1 font-mono text-[10px] font-semibold leading-tight',
+														'inline-flex min-w-[2.75rem] flex-col items-center rounded border px-1.5 py-1 font-mono text-label font-semibold leading-tight',
 														FDR_CELL[cell.difficulty],
 													)}
 												>
 													<span>{cell.opponentShortName}</span>
-													<span className="text-[9px] opacity-80">
+													<span className="text-micro opacity-80">
 														{cell.wasHome ? 'H' : 'A'}
 													</span>
 												</span>

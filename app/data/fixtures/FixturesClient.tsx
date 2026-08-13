@@ -6,6 +6,7 @@ import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_EVENT_FIXTURES,
@@ -81,12 +82,12 @@ function SectionHead({
 			<div className="min-w-0">
 				<h2
 					id={id}
-					className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+					className="eyebrow sm:text-caption"
 				>
 					{title}
 				</h2>
 				{hint ? (
-					<p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
+					<p className="mt-0.5 text-caption text-muted-foreground">{hint}</p>
 				) : null}
 			</div>
 			{action}
@@ -134,7 +135,7 @@ function GlanceRunCard({
 			<div className="flex items-center justify-between gap-2">
 				<span
 					className={cn(
-						'font-display text-[10px] font-semibold uppercase tracking-[0.14em]',
+						'eyebrow',
 						'text-foreground',
 					)}
 				>
@@ -142,7 +143,7 @@ function GlanceRunCard({
 				</span>
 				<span
 					className={cn(
-						'rounded-md border px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums',
+						'rounded-md border px-1.5 py-0.5 font-mono text-caption font-semibold tabular-nums',
 						isEasy
 							? 'border-success/35 bg-success/15 text-foreground'
 							: 'border-destructive/35 bg-destructive/15 text-foreground',
@@ -173,7 +174,7 @@ function GlanceRunCard({
 					))}
 				</div>
 			</div>
-			<p className="text-[11px] tabular-nums text-muted-foreground">
+			<p className="text-caption tabular-nums text-muted-foreground">
 				<span className="font-medium text-success">{easyCount}</span>
 				<span className="mx-1 text-border">/</span>
 				<span className="font-medium text-destructive">{hardCount}</span>
@@ -216,7 +217,7 @@ function GlanceNextCard({
 		>
 			<span
 				className={cn(
-					'font-display text-[10px] font-semibold uppercase tracking-[0.14em]',
+					'eyebrow',
 					'text-foreground',
 				)}
 			>
@@ -240,7 +241,7 @@ function GlanceNextCard({
 					{fdr}
 				</span>
 			</div>
-			<p className="truncate text-[11px] text-muted-foreground">{detail}</p>
+			<p className="truncate text-caption text-muted-foreground">{detail}</p>
 		</button>
 	)
 }
@@ -270,7 +271,7 @@ function ActionPlayerRow({
 			<Badge
 				className={cn(
 					positionBadgeClass(pos),
-					'shrink-0 px-1.5 py-0 text-[10px] font-bold',
+					'shrink-0 px-1.5 py-0 text-label font-bold',
 				)}
 			>
 				{pos === 'UNK' ? '—' : pos}
@@ -290,12 +291,12 @@ function ActionPlayerRow({
 						<span className="truncate">{player.webName}</span>
 					)}
 					{inSquad ? (
-						<span className="shrink-0 rounded border border-primary/35 bg-primary/15 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-primary-ink">
+						<span className="shrink-0 rounded border border-primary/35 bg-primary/15 px-1 py-px text-micro font-semibold uppercase tracking-wide text-primary-ink">
 							{t('badgeInSquad')}
 						</span>
 					) : null}
 				</p>
-				<p className="truncate text-[11px] text-muted-foreground">
+				<p className="truncate text-caption text-muted-foreground">
 					{player.teamShortNameResolved} · £{(player.price / 10).toFixed(1)}m ·{' '}
 					{t('nextOpp', { opp: next })}
 				</p>
@@ -304,7 +305,7 @@ function ActionPlayerRow({
 				<p className="font-mono text-sm font-semibold tabular-nums">
 					{player.selectedByPercent.toFixed(1)}%
 				</p>
-				<p className="text-[11px] tabular-nums text-muted-foreground">
+				<p className="text-caption tabular-nums text-muted-foreground">
 					FDR {formatAvgFdr(player.avgFdr)}
 				</p>
 			</div>
@@ -343,7 +344,7 @@ function ActionColumn({
 			<div className="border-b border-border/50 px-3 py-2.5">
 				<p
 					className={cn(
-						'mb-0.5 flex items-center gap-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em]',
+						'mb-0.5 flex items-center gap-1.5 eyebrow sm:text-caption',
 						toneClass,
 					)}
 				>
@@ -353,7 +354,7 @@ function ActionColumn({
 						({players.length})
 					</span>
 				</p>
-				<p className="text-[11px] text-muted-foreground">{hint}</p>
+				<p className="text-caption text-muted-foreground">{hint}</p>
 			</div>
 			{players.length === 0 ? (
 				<p className="px-3 py-5 text-center text-xs text-muted-foreground">
@@ -573,15 +574,16 @@ export default function FixturesClient({
 				</p>
 
 				{/* Controls */}
-				<section
+				<Card
+					role="region"
 					aria-label={t('controlsLabel')}
-					className="mb-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+					className="mb-8 p-4 sm:p-5"
 				>
 					<div className="mb-3 border-b border-border/50 pb-2">
-						<p className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+						<p className="eyebrow sm:text-caption">
 							{t('controlsLabel')}
 						</p>
-						<p className="mt-0.5 text-[11px] text-muted-foreground">
+						<p className="mt-0.5 text-caption text-muted-foreground">
 							{t('controlsHint', {
 								from: fromGw,
 								to: Math.min(38, fromGw + horizon - 1),
@@ -590,7 +592,7 @@ export default function FixturesClient({
 					</div>
 					<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 						<div>
-							<p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+							<p className="mb-1.5 text-caption font-medium text-muted-foreground">
 								{t('horizonLabel')}
 							</p>
 							<div className="flex flex-wrap gap-1.5">
@@ -613,7 +615,7 @@ export default function FixturesClient({
 							</div>
 						</div>
 						<div>
-							<p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+							<p className="mb-1.5 text-caption font-medium text-muted-foreground">
 								{t('sortLabel')}
 							</p>
 							<div className="flex flex-wrap gap-1.5">
@@ -644,7 +646,7 @@ export default function FixturesClient({
 					{loading ? (
 						<p className="mt-3 text-xs text-muted-foreground">{t('loading')}</p>
 					) : null}
-				</section>
+				</Card>
 
 				{/* Glance */}
 				<section
@@ -736,10 +738,11 @@ export default function FixturesClient({
 				</section>
 
 				{/* My squad FDR */}
-				<section
+				<Card
 					id="my-squad"
+					role="region"
 					aria-labelledby="my-squad-heading"
-					className="mb-8 scroll-mt-36 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+					className="mb-8 scroll-mt-36 p-4 sm:p-5"
 				>
 					<SectionHead
 						id="my-squad-heading"
@@ -753,18 +756,18 @@ export default function FixturesClient({
 						hasLinkedEntry={hasLinkedEntry}
 						squadState={squadState}
 					/>
-				</section>
+				</Card>
 
 				{/* FDR legend */}
-				<p className="mb-4 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-					<span className="font-display font-semibold uppercase tracking-[0.12em]">
+				<p className="mb-4 flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
+					<span className="font-display font-semibold uppercase tracking-caps">
 						{t('fdrLegend')}
 					</span>
 					{[1, 2, 3, 4, 5].map(d => (
 						<span
 							key={d}
 							className={cn(
-								'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-semibold',
+								'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-label font-semibold',
 								FDR_CELL[d],
 							)}
 						>
@@ -778,9 +781,10 @@ export default function FixturesClient({
 				</p>
 
 				{/* Team FDR matrix */}
-				<section
+				<Card
+					role="region"
 					aria-labelledby="fdr-teams"
-					className="mb-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+					className="mb-8 p-4 sm:p-5"
 				>
 					<SectionHead
 						id="fdr-teams"
@@ -794,12 +798,13 @@ export default function FixturesClient({
 						mySquadExposure={mySquadExposure}
 						focusedTeamId={focusedTeamId}
 					/>
-				</section>
+				</Card>
 
 				{/* Neutral fixture review candidates */}
-				<section
+				<Card
+					role="region"
 					aria-labelledby="fdr-actions"
-					className="mb-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+					className="mb-8 p-4 sm:p-5"
 				>
 					<SectionHead
 						id="fdr-actions"
@@ -809,7 +814,7 @@ export default function FixturesClient({
 
 							<div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 						<div>
-							<p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+							<p className="mb-1.5 text-caption font-medium text-muted-foreground">
 								{t('actionsPosLabel')}
 							</p>
 							<div className="flex flex-wrap gap-1.5">
@@ -839,7 +844,7 @@ export default function FixturesClient({
 								))}
 							</div>
 						</div>
-						<p className="max-w-sm text-[11px] leading-4 text-muted-foreground">
+						<p className="max-w-sm text-caption leading-4 text-muted-foreground">
 							{squadKeySet.size > 0 ? (
 								t('actionsMySquadNote', { gw: fromGw })
 							) : squadState === 'unavailable' ? (
@@ -898,7 +903,7 @@ export default function FixturesClient({
 							squadKeys={squadKeySet}
 						/>
 					</div>
-				</section>
+				</Card>
 			</div>
 		</PageShell>
 	)
