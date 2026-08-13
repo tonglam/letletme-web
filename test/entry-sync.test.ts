@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, it } from 'node:test'
 
 import { requestEntryInfoSync, syncEntryAfterBind } from '../lib/entry-sync'
 
-const ENV_KEYS = ['LETLETME_DATA_URL', 'LETLETME_DATA_API_KEY'] as const
+const ENV_KEYS = [
+	'LETLETME_DATA_URL',
+	'LETLETME_DATA_API_KEY',
+	'TOURNAMENT_API_BASE_URL',
+	'TOURNAMENT_API_KEY'
+] as const
 
 type FetchCall = { url: string; init?: RequestInit }
 
@@ -76,6 +81,27 @@ describe('requestEntryInfoSync', () => {
 		assert.equal(fetchCalls[0].init?.method, 'POST')
 		const headers = new Headers(fetchCalls[0].init?.headers)
 		assert.equal(headers.get('x-api-key'), 'k1')
+	})
+
+	it('uses the legacy tournament settings during migration', async () => {
+		process.env.TOURNAMENT_API_BASE_URL = 'http://legacy-data:4001/'
+		process.env.TOURNAMENT_API_KEY = 'legacy-key'
+		stubFetch(
+			async () =>
+				new Response(
+					'{"success":true,"status":"queued","jobId":"entry-info-6953"}',
+					{ status: 202 }
+				)
+		)
+
+		const result = await requestEntryInfoSync(6953)
+
+		assert.equal(result.ok, true)
+		assert.equal(fetchCalls[0].url, 'http://legacy-data:4001/entry-info/6953/sync')
+		assert.equal(
+			new Headers(fetchCalls[0].init?.headers).get('x-api-key'),
+			'legacy-key'
+		)
 	})
 
 	it('rejects a synchronous success response outside the canonical contract', async () => {

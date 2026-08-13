@@ -1,6 +1,11 @@
 // NOTE: deliberately no 'server-only' import because the plain Node test suite
 // imports this module. It is server-side by usage through fpl-entry-binding.
 
+import {
+	getConfiguredTournamentApiBaseUrl,
+	getConfiguredTournamentApiKey
+} from './tournament/backend-config'
+
 const ENTRY_SYNC_TIMEOUT_MS = 10_000
 
 export type EntrySyncResult =
@@ -11,10 +16,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const getEntrySyncBaseUrl = (): string =>
-	(process.env.LETLETME_DATA_URL || 'http://127.0.0.1:4001').replace(/\/+$/, '')
+	(getConfiguredTournamentApiBaseUrl() || 'http://127.0.0.1:4001').replace(
+		/\/+$/,
+		''
+	)
 
 const getEntrySyncApiKey = (): string =>
-	(process.env.LETLETME_DATA_API_KEY || '').trim()
+	getConfiguredTournamentApiKey()
 
 /**
  * Ask letletme_data to pull an entry from the FPL API into entry_infos and the
@@ -70,7 +78,7 @@ export async function requestEntryInfoSync(
 			return {
 				ok: false,
 				retryable: false,
-				reason: `auth rejected (${res.status}) — check LETLETME_DATA_API_KEY against Data's DATA_API_KEY_HASHES`
+				reason: `auth rejected (${res.status}) — check LETLETME_DATA_API_KEY or TOURNAMENT_API_KEY against Data's DATA_API_KEY_HASHES`
 			}
 		}
 		const snippet = (await res.text().catch(() => '')).slice(0, 120)
