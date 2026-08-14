@@ -15,6 +15,8 @@ release_sha=$2
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 release_root=/opt/letletme/releases
 release_dir=$release_root/$release_sha
+static_root=/opt/letletme/static-releases
+static_release_dir=$static_root/$release_sha
 build_root=/opt/letletme/builds
 build_dir=$build_root/$release_sha
 current_link=/opt/letletme/current
@@ -30,6 +32,8 @@ fi
 activation_started=0
 deployment_succeeded=0
 rollback_in_progress=0
+cache_dir=""
+cache_dir_created=0
 
 if ! git -C "$source_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 	echo "source directory is not a Git worktree: $source_dir" >&2
@@ -81,6 +85,23 @@ if [[ -e $build_dir ]]; then
 	echo "build directory already exists: $build_dir" >&2
 	exit 1
 fi
+if [[ -e $static_release_dir ]]; then
+	echo "static release already exists: $static_release_dir" >&2
+	exit 1
+fi
+
+if [[ -L /opt/letletme || ! -d /opt/letletme ]]; then
+	echo "Web root must be a real directory: /opt/letletme" >&2
+	exit 1
+fi
+if [[ -L $static_root || ! -d $static_root ]]; then
+	echo "static root must be a real directory: $static_root" >&2
+	exit 1
+fi
+chown root:letletme /opt/letletme
+chmod 0751 /opt/letletme
+chown root:www-data "$static_root"
+chmod 0751 "$static_root"
 
 install -d -o root -g letletme -m 0750 "$build_dir"
 git -C "$source_dir" archive --format=tar "$release_sha" | \
@@ -132,6 +153,12 @@ cleanup_build() {
 	if [[ $stage_dir == "$release_root/.staging-$release_sha."* && -d $stage_dir ]]; then
 		rm -rf -- "$stage_dir"
 	fi
+	if [[ $cache_dir_created == 1 && $deployment_succeeded != 1 && $cache_dir == "$cache_parent/"* && -d $cache_dir && ! -L $cache_dir ]]; then
+		rm -rf -- "$cache_dir"
+	fi
+	if [[ $deployment_succeeded != 1 && $static_release_dir == "$static_root/"* && -d $static_release_dir && ! -L $static_release_dir ]]; then
+		rm -rf -- "$static_release_dir"
+	fi
 }
 trap cleanup_build EXIT
 
@@ -168,18 +195,22 @@ if [[ -L $cache_dir ]]; then
 	echo "cache directory must not be a symlink: $cache_dir" >&2
 	exit 1
 fi
+if [[ -e $cache_dir ]]; then
+	echo "cache directory already exists: $cache_dir" >&2
+	exit 1
+fi
 install -d -o letletme -g letletme -m 0750 "$cache_dir"
+cache_dir_created=1
 rm -rf -- "$stage_dir/.next/cache"
 ln -s "$cache_dir" "$stage_dir/.next/cache"
 chown -R root:letletme "$stage_dir"
 chmod -R u=rwX,g=rX,o= "$stage_dir"
 mv -- "$stage_dir" "$release_dir"
 
-# Keep old hashed assets, but overwrite colliding Next metadata with the latest
-# release so a reused BUILD_ID cannot preserve a stale route manifest.
-rsync -a "$release_dir/.next/static/" /opt/letletme/static/
-chown -R root:www-data /opt/letletme/static
-chmod -R u=rwX,g=rX,o= /opt/letletme/static
+install -d -o root -g www-data -m 0750 "$static_release_dir"
+rsync -a "$release_dir/.next/static/" "$static_release_dir/"
+chown -R root:www-data "$static_release_dir"
+chmod -R u=rwX,g=rX,o= "$static_release_dir"
 
 next_link=$current_link.next
 ln -s "$release_dir" "$next_link"

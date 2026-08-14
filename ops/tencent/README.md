@@ -44,9 +44,10 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
    output under `/opt/letletme/releases/<sha>`, switches
    `/opt/letletme/current` atomically, and rolls back on a failed health check.
    It never runs a database migration.
-5. Keep the previous release directory until the new release has been stable
-   for at least 24 hours. Hashed static assets accumulate under
-   `/opt/letletme/static` so old browser documents remain loadable.
+5. Keep the previous release directory and its matching
+   `/opt/letletme/static-releases/<sha>` directory until the new release has
+   been stable for at least 24 hours. Static assets are release-scoped so a
+   rollback restores the matching route and chunk metadata atomically.
 
 Next.js 16 intentionally uses an internal constant `.next/BUILD_ID` whenever
 `deploymentId` is enabled. The release gate therefore checks the configured

@@ -38,10 +38,10 @@ fi
 
 install -d -o root -g letletme -m 0750 /etc/letletme
 install -d -o root -g root -m 0700 /etc/letletme/tls
-install -d -o root -g letletme -m 0750 /opt/letletme
+install -d -o root -g letletme -m 0751 /opt/letletme
 install -d -o root -g letletme -m 0750 /opt/letletme/releases
 install -d -o root -g letletme -m 0750 /opt/letletme/builds
-install -d -o root -g www-data -m 0750 /opt/letletme/static
+install -d -o root -g www-data -m 0751 /opt/letletme/static-releases
 install -d -o root -g root -m 0755 /var/cache/letletme-next
 printf '%s\n' 'LETLETME_RELEASE_SHA=development' | install -o root -g root -m 0644 \
 	/dev/stdin /etc/letletme/release.env

@@ -13,6 +13,11 @@ fi
 release_sha=$1
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 template=$(cd -- "$script_dir/../nginx" && pwd)/letletme-origin-auth.conf.template
+static_dir=/opt/letletme/static-releases/$release_sha
+if [[ -L $static_dir || ! -d $static_dir ]]; then
+	echo "missing static release directory: $static_dir" >&2
+	exit 1
+fi
 origin_token=$(< /etc/letletme/origin-token)
 proxy_secret=$(< /etc/letletme/local-proxy-secret)
 
@@ -29,6 +34,7 @@ rendered=$(< "$template")
 rendered=${rendered//__ORIGIN_TOKEN__/$origin_token}
 rendered=${rendered//__LOCAL_PROXY_SECRET__/$proxy_secret}
 rendered=${rendered//__RELEASE_SHA__/$release_sha}
+rendered=${rendered//__STATIC_RELEASE_SHA__/$release_sha}
 printf '%s\n' "$rendered" | install -o root -g www-data -m 0640 /dev/stdin \
 	/etc/nginx/conf.d/letletme-origin-auth.conf
 
