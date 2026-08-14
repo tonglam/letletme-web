@@ -1,7 +1,5 @@
-import {
-	MarketPlayerLookupLauncher,
-	MarketView
-} from '@/app/data/market/MarketView'
+import { MarketPlayerLookupLauncher } from '@/app/data/market/MarketPriceExplorer'
+import { MarketDashboard } from '@/app/data/market/MarketDashboard'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
@@ -30,7 +28,7 @@ export async function generateMetadata({ params }: PageProps) {
 	})
 }
 
-async function MarketContent() {
+async function MarketContent({ locale }: { locale: string }) {
 	await connection()
 	const translationPromise = getTranslations('Market')
 	const dataPromise = executePublicServerQuery<MarketPulseSummaryResponse>(
@@ -83,9 +81,10 @@ async function MarketContent() {
 				goodMs={1_000}
 				poorMs={1_500}
 			/>
-			<MarketView
+			<MarketDashboard
 				pulse={pulse}
 				revision={revision}
+				locale={locale}
 			/>
 		</>
 	)
@@ -109,7 +108,7 @@ function MarketViewFallback() {
 }
 
 export default async function MarketPage({ params }: PageProps) {
-	await getPageLocale(params)
+	const { locale } = await getPageLocale(params)
 	const t = await getTranslations('Market')
 
 	return (
@@ -121,7 +120,7 @@ export default async function MarketPage({ params }: PageProps) {
 				</p>
 
 				<Suspense fallback={<MarketViewFallback />}>
-					<MarketContent />
+					<MarketContent locale={locale} />
 				</Suspense>
 			</div>
 		</PageShell>
