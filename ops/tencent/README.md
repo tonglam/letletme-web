@@ -30,11 +30,17 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
 
 ## Host and release flow
 
-1. Run `ops/tencent/scripts/install-host.sh` once as root.
+1. Run `ops/tencent/scripts/install-host.sh` once as root. This installs Git
+   and OpenSSL because the release gate validates the checkout and generates a
+   per-run Redis restore password.
 2. Install the host-only files above.
-3. Copy a clean checkout at the exact release SHA to the host.
-4. Run `deploy-release.sh <checkout> <full-sha>` as root. It performs `npm ci`
-   and `next build`, verifies the SHA-backed deployment ID, assembles standalone
+3. Copy a clean checkout, including usable Git metadata, at the exact release
+   SHA to the host. A linked local worktree `.git` file is not portable; use a
+   normal clone or transfer a self-contained bundle and clone it on the host.
+4. Run `deploy-release.sh <checkout> <full-sha>` as root. It rejects a dirty
+   worktree or a HEAD that does not exactly match the requested SHA, then
+   archives that Git commit before building. It performs `npm ci` and
+   `next build`, verifies the SHA-backed deployment ID, assembles standalone
    output under `/opt/letletme/releases/<sha>`, switches
    `/opt/letletme/current` atomically, and rolls back on a failed health check.
    It never runs a database migration.

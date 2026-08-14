@@ -24,10 +24,13 @@ install -d -o root -g redis -m 0750 "$restore_root"
 restore_dir=$(mktemp -d "$restore_root/check.XXXXXX")
 chown redis:redis "$restore_dir"
 port=16379
+restore_password=$(openssl rand -hex 32)
+export REDISCLI_AUTH=$restore_password
+restore_cli=(redis-cli -h 127.0.0.1 -p "$port" --no-auth-warning)
 started=0
 cleanup() {
 	if [[ $started == 1 ]]; then
-		redis-cli -h 127.0.0.1 -p "$port" shutdown nosave >/dev/null 2>&1 || true
+		"${restore_cli[@]}" shutdown nosave >/dev/null 2>&1 || true
 	fi
 	if [[ $restore_dir == "$restore_root/"check.* && -d $restore_dir ]]; then
 		rm -rf -- "$restore_dir"
@@ -46,6 +49,7 @@ config=$restore_dir/redis.conf
 	printf 'bind 127.0.0.1\n'
 	printf 'protected-mode yes\n'
 	printf 'port %s\n' "$port"
+	printf 'requirepass %s\n' "$restore_password"
 	printf 'daemonize yes\n'
 	printf 'dir %s\n' "$restore_dir"
 	printf 'dbfilename dump.rdb\n'
@@ -58,11 +62,11 @@ config=$restore_dir/redis.conf
 runuser -u redis -- redis-server "$config"
 started=1
 for _ in $(seq 1 30); do
-	redis-cli -h 127.0.0.1 -p "$port" PING >/dev/null 2>&1 && break
+	"${restore_cli[@]}" PING >/dev/null 2>&1 && break
 	sleep 1
 done
-redis-cli -h 127.0.0.1 -p "$port" PING | grep -qx PONG
-db0=$(redis-cli -h 127.0.0.1 -p "$port" -n 0 DBSIZE)
-db1=$(redis-cli -h 127.0.0.1 -p "$port" -n 1 DBSIZE)
+"${restore_cli[@]}" PING | grep -qx PONG
+db0=$("${restore_cli[@]}" -n 0 DBSIZE)
+db1=$("${restore_cli[@]}" -n 1 DBSIZE)
 [[ $db0 =~ ^[0-9]+$ && $db1 =~ ^[0-9]+$ ]]
 echo "Redis restore check passed: backup=$(basename "$backup") db0=$db0 db1=$db1"

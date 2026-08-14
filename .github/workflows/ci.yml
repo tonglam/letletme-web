@@ -94,6 +94,8 @@ jobs:
       - run: npm run worker:dry-run
       - run: npm run lint
       - run: npx tsc --noEmit
+      - name: Verify operational shell scripts
+        run: bash -n ops/tencent/scripts/*.sh ops/redis/scripts/*.sh
       - run: npm run build
         env:
           NODE_ENV: production

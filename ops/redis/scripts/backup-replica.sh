@@ -17,6 +17,40 @@ install -d -o root -g root -m 0700 "$daily_dir" "$weekly_dir"
 export REDISCLI_AUTH=$(< "$secret_file")
 
 redis_cli=(redis-cli -h 127.0.0.1 -p 6379 --no-auth-warning)
+field() {
+	local name=$1 input=$2
+	sed -n "s/^${name}://p" <<<"$input" | tr -d '\r'
+}
+
+replica_is_healthy() {
+	local input=$1
+	local role link last_io read_only syncing
+	role=$(field role "$input")
+	link=$(field master_link_status "$input")
+	last_io=$(field master_last_io_seconds_ago "$input")
+	read_only=$(field slave_read_only "$input")
+	syncing=$(field master_sync_in_progress "$input")
+	[[ $role == slave ]]
+	[[ $link == up ]]
+	[[ $last_io =~ ^[0-9]+$ && $last_io -le 30 ]]
+	[[ $read_only == 1 ]]
+	[[ $syncing == 0 ]]
+}
+
+replication_before=$("${redis_cli[@]}" INFO replication)
+if ! replica_is_healthy "$replication_before"; then
+	echo "Redis replica is stale or disconnected; refusing backup" >&2
+	exit 1
+fi
+
+tmp=''
+cleanup_tmp() {
+	if [[ -n $tmp && -f $tmp ]]; then
+		rm -f -- "$tmp"
+	fi
+}
+trap cleanup_tmp EXIT
+
 "${redis_cli[@]}" BGSAVE >/dev/null
 for _ in $(seq 1 120); do
 	info=$("${redis_cli[@]}" INFO persistence)
@@ -29,6 +63,12 @@ for _ in $(seq 1 120); do
 done
 [[ $in_progress == 0 && $status == ok ]]
 
+replication_after=$("${redis_cli[@]}" INFO replication)
+if ! replica_is_healthy "$replication_after"; then
+	echo "Redis replica became stale or disconnected; refusing backup" >&2
+	exit 1
+fi
+
 redis_dir=$("${redis_cli[@]}" CONFIG GET dir | tail -n 1)
 dbfilename=$("${redis_cli[@]}" CONFIG GET dbfilename | tail -n 1)
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -36,7 +76,15 @@ target=$daily_dir/redis-$timestamp.rdb
 tmp=$(mktemp "$daily_dir/.redis-$timestamp.XXXXXX")
 install -o root -g root -m 0600 "$redis_dir/$dbfilename" "$tmp"
 redis-check-rdb "$tmp" >/dev/null
+
+replication_after_copy=$("${redis_cli[@]}" INFO replication)
+if ! replica_is_healthy "$replication_after_copy"; then
+	echo "Redis replica became stale or disconnected; refusing backup" >&2
+	exit 1
+fi
+
 mv -- "$tmp" "$target"
+tmp=''
 (cd "$daily_dir" && sha256sum "$(basename "$target")" > "$(basename "$target").sha256")
 chmod 0600 "$target.sha256"
 

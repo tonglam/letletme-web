@@ -20,6 +20,25 @@ build_dir=$build_root/$release_sha
 current_link=/opt/letletme/current
 previous_release=$(readlink -f "$current_link" 2>/dev/null || true)
 
+if ! git -C "$source_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+	echo "source directory is not a Git worktree: $source_dir" >&2
+	exit 1
+fi
+repo_root=$(realpath "$(git -C "$source_dir" rev-parse --show-toplevel)")
+if [[ $repo_root != "$source_dir" ]]; then
+	echo "source directory must be the Git worktree root: $repo_root" >&2
+	exit 1
+fi
+checkout_sha=$(git -C "$source_dir" rev-parse HEAD)
+if [[ $checkout_sha != "$release_sha" ]]; then
+	echo "checkout HEAD $checkout_sha does not match release SHA $release_sha" >&2
+	exit 1
+fi
+if [[ -n $(git -C "$source_dir" status --porcelain=v1 --untracked-files=all) ]]; then
+	echo "source checkout is dirty: $source_dir" >&2
+	exit 1
+fi
+
 for required in package.json package-lock.json next.config.js; do
 	if [[ ! -f $source_dir/$required ]]; then
 		echo "missing $source_dir/$required" >&2
@@ -41,20 +60,24 @@ if [[ -e $release_dir ]]; then
 	echo "release already exists: $release_dir" >&2
 	exit 1
 fi
+if [[ -e $build_dir ]]; then
+	echo "build directory already exists: $build_dir" >&2
+	exit 1
+fi
 
 install -d -o root -g letletme -m 0750 "$build_dir"
-rsync -a --delete \
-	--exclude .git \
-	--exclude .next \
-	--exclude node_modules \
-	--exclude '.env*.local' \
-	"$source_dir/" "$build_dir/"
+git -C "$source_dir" archive --format=tar "$release_sha" | \
+	tar -xf - -C "$build_dir"
 install -o root -g root -m 0600 /etc/letletme/web.env \
 	"$build_dir/.env.production.local"
 
+stage_dir=''
 cleanup_build() {
 	if [[ $build_dir == "$build_root/"* && -d $build_dir ]]; then
 		rm -rf -- "$build_dir"
+	fi
+	if [[ $stage_dir == "$release_root/.staging-$release_sha."* && -d $stage_dir ]]; then
+		rm -rf -- "$stage_dir"
 	fi
 }
 trap cleanup_build EXIT

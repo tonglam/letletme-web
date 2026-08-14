@@ -11,7 +11,7 @@ ops_dir=$(cd -- "$script_dir/.." && pwd)
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y ca-certificates curl gnupg nginx rsync
+apt-get install -y ca-certificates curl git gnupg nginx openssl rsync
 
 install -d -m 0755 /etc/apt/keyrings
 key_tmp=$(mktemp)

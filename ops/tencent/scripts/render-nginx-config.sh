@@ -33,4 +33,4 @@ printf '%s\n' "$rendered" | install -o root -g www-data -m 0640 /dev/stdin \
 	/etc/nginx/conf.d/letletme-origin-auth.conf
 
 nginx -t
-systemctl reload nginx
+systemctl reload-or-restart nginx.service
