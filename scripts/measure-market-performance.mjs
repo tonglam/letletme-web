@@ -86,6 +86,7 @@ async function measureRun(browser, profile, index) {
 	const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
 	await page.waitForTimeout(500)
 	const responseBody = response ? await response.body() : Buffer.alloc(0)
+	const rawDocumentBytes = responseBody.byteLength
 	const documentBytes =
 		response?.headers()['content-encoding'] != null
 			? encodedDocumentBytes || responseBody.byteLength
@@ -166,6 +167,7 @@ async function measureRun(browser, profile, index) {
 		...cold,
 		...final,
 		cls: cold.cls,
+		rawDocumentBytes,
 		documentBytes,
 		marketRequestCount,
 		playerStatsPrefetchCount,
@@ -202,6 +204,7 @@ const measurements = Object.fromEntries(
 			interactionCls: distribution(runs, 'interactionCls'),
 			ttfbMs: distribution(runs, 'ttfbMs'),
 			htmlResponseMs: distribution(runs, 'htmlResponseMs'),
+			rawDocumentBytes: distribution(runs, 'rawDocumentBytes'),
 			documentBytes: distribution(runs, 'documentBytes'),
 			marketRequestCounts: runs.map(run => run.marketRequestCount),
 			searchRequestCounts: runs.map(run => run.searchRequestCount),
@@ -232,6 +235,9 @@ console.log(
 						95
 					) <= 2000,
 				documentBytes: allRuns.every(run => run.documentBytes <= 135 * 1024),
+				rawDocumentBytes: allRuns.every(
+					run => run.rawDocumentBytes <= 135 * 1024
+				),
 				initialRequests: allRuns.every(run => run.marketRequestCount <= 30),
 				noPlayerStatsPrefetch: allRuns.every(
 					run => run.playerStatsPrefetchCount === 0
@@ -239,7 +245,7 @@ console.log(
 				cachedSearch: allRuns.every(run => run.cachedSearchRequestCount === 0),
 				layout: allRuns.every(run => !run.horizontalOverflow)
 			},
-			note: 'Run against a deployed or production-like server. This script reports encoded HTML transfer (Brotli-equivalent for an uncompressed local response); compare its JSON output with the pre-change baseline.'
+			note: 'rawDocumentBytes is the uncompressed response body. documentBytes is encoded transfer size (Brotli-equivalent for an uncompressed local response). The rawDocumentBytes gate is the strict HTML budget; compare both with the pre-change baseline.'
 		},
 		null,
 		2
