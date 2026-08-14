@@ -4,6 +4,7 @@ import { Link } from '@/i18n/navigation'
 import { ChevronDown, Menu, UserCircle } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 import { LanguageSwitcher } from './LanguageSwitcher'
+import { NavigationMenuLink } from './NavigationMenuLink'
 import { menuItems } from './config'
 
 /**
@@ -17,7 +18,11 @@ export async function GuestNavigationActions() {
 		<>
 			<div className="ml-6 hidden items-center gap-0.5 md:flex">
 				{menuItems.map(item => (
-					<details key={item.id} className="group relative">
+					<details
+						key={item.id}
+						data-navigation-group={item.id}
+						className="group relative"
+					>
 						<summary className="flex min-h-9 cursor-pointer list-none items-center gap-1 rounded-md px-3 font-display text-xs font-semibold uppercase tracking-caps text-fascia-foreground/70 hover:bg-fascia-foreground/5 hover:text-fascia-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric [&::-webkit-details-marker]:hidden">
 							{t(item.labelKey)}
 							<ChevronDown
@@ -53,7 +58,7 @@ export async function GuestNavigationActions() {
 			<LanguageSwitcher />
 			<ThemeToggle />
 
-			<details className="group relative md:hidden">
+			<details data-navigation-mobile className="group relative md:hidden">
 				<summary className="flex size-9 cursor-pointer list-none items-center justify-center rounded-md text-fascia-foreground hover:bg-fascia-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric [&::-webkit-details-marker]:hidden">
 					<Menu aria-hidden="true" className="size-5" />
 					<span className="sr-only">{t('openMenu')}</span>
@@ -65,14 +70,14 @@ export async function GuestNavigationActions() {
 								{t(item.labelKey)}
 							</p>
 							{item.items.map(subItem => (
-								<Link
+								<NavigationMenuLink
 									key={subItem.labelKey}
 									href={subItem.href}
 									prefetch={false}
 									className="block rounded-md px-2 py-2 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 								>
 									{t(subItem.labelKey)}
-								</Link>
+								</NavigationMenuLink>
 							))}
 						</section>
 					))}

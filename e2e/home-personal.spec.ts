@@ -17,7 +17,15 @@ async function createSession(
 	const userId = `home-e2e-user-${suffix}`
 	const sessionId = `home-e2e-session-${suffix}`
 	const token = `home-e2e-token-${suffix}`
-	const verifiedAt = options.entryId ? new Date() : null
+	const entryId =
+		options.entryId === 909090
+			? options.entryId
+			: options.entryId
+				? 1_000_000 +
+					(Number.parseInt(suffix.replaceAll('-', '').slice(0, 8), 16) %
+						1_000_000_000)
+				: null
+	const verifiedAt = entryId ? new Date() : null
 
 	await sql`
 		INSERT INTO bauth."user" (
@@ -35,10 +43,10 @@ async function createSession(
 			'E2E Manager',
 			${`${suffix}@home.e2e.test`},
 			true,
-			${options.entryId ?? null},
+			${entryId},
 			${verifiedAt},
-			${options.entryId ? 'E2E United' : null},
-			${options.entryId ? 'Test Manager' : null}
+			${entryId ? 'E2E United' : null},
+			${entryId ? 'Test Manager' : null}
 		)
 	`
 	await sql`
