@@ -73,6 +73,7 @@ export function MarketPlayerLookup({
 	const [historyReadyKey, setHistoryReadyKey] = useState<string | null>(null)
 	const normalizedSearch = searchTerm.trim()
 	const searchGeneration = useRef(0)
+	const searchDebounceStartedAt = useRef<number | null>(null)
 	const historyGeneration = useRef(0)
 	const revisionParam = marketRevisionParam(revision)
 
@@ -80,6 +81,7 @@ export function MarketPlayerLookup({
 		const generation = ++searchGeneration.current
 		const controller = new AbortController()
 		if (!searchOpen || normalizedSearch.length < MIN_SEARCH_LENGTH) {
+			searchDebounceStartedAt.current = null
 			const resetTimer = window.setTimeout(() => {
 				if (generation !== searchGeneration.current) return
 				setPlayers([])
@@ -94,7 +96,15 @@ export function MarketPlayerLookup({
 			}
 		}
 
+		const debounceStartedAt = searchDebounceStartedAt.current
+		const debounceDelay =
+			debounceStartedAt === null
+				? 250
+				: Math.max(0, 250 - (performance.now() - debounceStartedAt))
 		const timer = window.setTimeout(() => {
+			if (searchDebounceStartedAt.current === debounceStartedAt) {
+				searchDebounceStartedAt.current = null
+			}
 			void Promise.resolve().then(async () => {
 				try {
 					markRouteReadyStart(
@@ -129,7 +139,7 @@ export function MarketPlayerLookup({
 					if (generation === searchGeneration.current) setIsSearching(false)
 				}
 			})
-		}, 250)
+		}, debounceDelay)
 
 		return () => {
 			controller.abort()
@@ -287,7 +297,10 @@ export function MarketPlayerLookup({
 								id="market-player-search"
 								role="combobox"
 								value={searchTerm}
-								onChange={event => setSearchTerm(event.target.value)}
+								onChange={event => {
+									searchDebounceStartedAt.current = performance.now()
+									setSearchTerm(event.target.value)
+								}}
 								placeholder={t('searchPlaceholder')}
 								maxLength={50}
 								className="h-11 pl-9 pr-11"

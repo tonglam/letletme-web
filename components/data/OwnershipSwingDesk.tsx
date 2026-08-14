@@ -1,5 +1,3 @@
-'use client'
-
 import { Badge } from '@/components/ui/badge'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { Link } from '@/i18n/navigation'
@@ -8,17 +6,22 @@ import { shortMarketPosition } from '@/lib/market'
 import { positionBadgeClass } from '@/lib/position-style'
 import { cn } from '@/lib/utils'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
-import { useFormatter, useTranslations } from 'next-intl'
+import type { getFormatter, getTranslations } from 'next-intl/server'
+
+type MarketTranslator = Awaited<ReturnType<typeof getTranslations>>
+type MarketFormatter = Awaited<ReturnType<typeof getFormatter>>
 
 function MoverList({
 	movers,
-	direction
+	direction,
+	t,
+	formatter
 }: {
 	movers: MarketOwnershipMover[]
 	direction: 'rise' | 'fall'
+	t: MarketTranslator
+	formatter: MarketFormatter
 }) {
-	const t = useTranslations('Market')
-	const formatter = useFormatter()
 	const largestMove = Math.max(
 		...movers.map(mover => Math.abs(mover.change)),
 		0
@@ -115,13 +118,15 @@ function MoverList({
 /** Rising | Falling side-by-side — no nested tabs. */
 export function OwnershipSwingDesk({
 	risers,
-	fallers
+	fallers,
+	t,
+	formatter
 }: {
 	risers: MarketOwnershipMover[]
 	fallers: MarketOwnershipMover[]
+	t: MarketTranslator
+	formatter: MarketFormatter
 }) {
-	const t = useTranslations('Market')
-
 	return (
 		<div className="grid gap-6 sm:grid-cols-2 sm:gap-8">
 			<section aria-labelledby="ownership-risers-heading">
@@ -141,6 +146,8 @@ export function OwnershipSwingDesk({
 				<MoverList
 					movers={risers}
 					direction="rise"
+					t={t}
+					formatter={formatter}
 				/>
 			</section>
 			<section aria-labelledby="ownership-fallers-heading">
@@ -160,6 +167,8 @@ export function OwnershipSwingDesk({
 				<MoverList
 					movers={fallers}
 					direction="fall"
+					t={t}
+					formatter={formatter}
 				/>
 			</section>
 		</div>
