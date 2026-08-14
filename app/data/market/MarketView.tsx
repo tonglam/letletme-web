@@ -6,6 +6,7 @@ import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { Link } from '@/i18n/navigation'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
@@ -89,25 +90,53 @@ const LazyMarketPlayerLookup = dynamic(
 function MarketPlayerLookupLauncher({
 	revision,
 	seedPlayer,
+	compact = true,
 	initialOpen = false,
 	onClearSeed
 }: {
 	revision?: string | null
 	seedPlayer?: PlayerDirectoryItem | null
+	compact?: boolean
 	initialOpen?: boolean
 	onClearSeed?: () => void
 }) {
 	const t = useTranslations('Market')
 	const [open, setOpen] = useState(initialOpen || seedPlayer != null)
+	const [searchTerm, setSearchTerm] = useState('')
 	const shouldOpen = open || seedPlayer != null
 
 	if (shouldOpen) {
 		return (
 			<LazyMarketPlayerLookup
+				initialSearchTerm={searchTerm}
 				seedPlayer={seedPlayer}
 				onClearSeed={onClearSeed}
 				revision={revision}
 			/>
+		)
+	}
+	if (!compact) {
+		return (
+			<>
+				<label htmlFor="market-player-search" className="mb-2 block text-sm font-semibold">
+					{t('searchPlayers')}
+				</label>
+				<Input
+					id="market-player-search"
+					role="combobox"
+					value={searchTerm}
+					onChange={event => {
+						const value = event.target.value
+						setSearchTerm(value)
+						if (value.trim().length >= 2) setOpen(true)
+					}}
+					placeholder={t('searchPlaceholder')}
+					maxLength={50}
+					className="h-11"
+					aria-controls="market-player-results"
+					aria-autocomplete="list"
+				/>
+			</>
 		)
 	}
 
@@ -991,6 +1020,7 @@ export function MarketView({
 			<div className="mt-4 border-t border-border/60 pt-3">
 				<MarketPlayerLookupLauncher
 					key={`${seedPlayer?.id ?? 'none'}:${latestPriceChanges.length > 0 ? 'compact' : 'open'}`}
+					compact={latestPriceChanges.length > 0}
 					seedPlayer={seedPlayer}
 					onClearSeed={() => setSeedPlayer(null)}
 					revision={revision}

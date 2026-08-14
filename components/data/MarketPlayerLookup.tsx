@@ -39,6 +39,7 @@ export type MarketPlayerLookupProps = {
 	 * When `id` changes, history reloads for that player.
 	 */
 	seedPlayer?: PlayerDirectoryItem | null
+	initialSearchTerm?: string
 	/**
 	 * Drill-down mode: hide search until user opens it.
 	 * Standalone full mode shows search by default.
@@ -49,13 +50,14 @@ export type MarketPlayerLookupProps = {
 
 export function MarketPlayerLookup({
 	seedPlayer = null,
+	initialSearchTerm = '',
 	compact = false,
 	onClearSeed,
 	revision = null
 }: MarketPlayerLookupProps = {}) {
 	const t = useTranslations('Market')
 	const formatter = useFormatter()
-	const [searchTerm, setSearchTerm] = useState('')
+	const [searchTerm, setSearchTerm] = useState(initialSearchTerm)
 	const [players, setPlayers] = useState<PlayerDirectoryItem[]>([])
 	const [selectedPlayer, setSelectedPlayer] =
 		useState<PlayerDirectoryItem | null>(seedPlayer)
