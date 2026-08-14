@@ -99,7 +99,7 @@ jobs:
           NODE_ENV: production
           DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
           GRAPHQL_ENDPOINT: http://127.0.0.1:4100/graphql
-          LETLETME_ORIGIN: vercel
+          LETLETME_ORIGIN: tencent
           LETLETME_RELEASE_SHA: ${{ github.sha }}
           NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       - name: Verify standalone server
