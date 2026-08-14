@@ -84,9 +84,11 @@ describe('privacy-safe web vitals', () => {
 
 	it('accepts route-ready milestones without entity identifiers', () => {
 		for (const name of [
+			'FIXTURES_WINDOW_READY',
 			'MARKET_CONTENT_READY',
 			'PLAYER_DIRECTORY_READY',
 			'PLAYER_DETAIL_READY',
+			'PLAYER_COMPARE_READY',
 			'SESSION_STATE_READY'
 		]) {
 			assert.equal(
@@ -101,20 +103,31 @@ describe('privacy-safe web vitals', () => {
 		}
 	})
 
-	it('keys detail readiness by the selected comparison across same-route transitions', async () => {
+	it('keys primary and comparison readiness independently across same-route transitions', async () => {
 		const [markerSource, playerStatsSource] = await Promise.all([
 			readFile(
-				new URL('../components/analytics/RouteReadyMarker.tsx', import.meta.url),
+				new URL(
+					'../components/analytics/RouteReadyMarker.tsx',
+					import.meta.url
+				),
 				'utf8'
 			),
 			readFile(
-				new URL('../app/data/player-stats/PlayerStatsClient.tsx', import.meta.url),
+				new URL(
+					'../app/data/player-stats/PlayerStatsClient.tsx',
+					import.meta.url
+				),
 				'utf8'
 			)
 		])
 
 		assert.match(markerSource, /reportedIdentity\.current === readyIdentity/)
 		assert.match(playerStatsSource, /readyKey=\{playerDetailReadyKey\}/)
+		assert.match(playerStatsSource, /readyKey=\{playerCompareReadyKey\}/)
+		assert.match(
+			playerStatsSource,
+			/const playerDetailReadyKey = firstSelectedPlayerId \?\? ''/
+		)
 		assert.match(playerStatsSource, /Boolean\(secondPlayer\.playerDetail\)/)
 		assert.match(
 			playerStatsSource,

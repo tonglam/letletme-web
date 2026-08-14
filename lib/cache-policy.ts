@@ -65,6 +65,8 @@ export const PUBLIC_GRAPHQL_OPERATION_NAMES = new Set([
 	'GetPlayerValueHistory',
 	'PublicLeagueTrends',
 	'PublicLeagueSelectionStats',
+	'TrendCohorts',
+	'TrendCohortSnapshot',
 ])
 
 /** CDN edge cache for allowlisted public proxy responses */

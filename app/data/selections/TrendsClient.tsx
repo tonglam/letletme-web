@@ -1,0 +1,217 @@
+'use client'
+
+import { useTranslations } from 'next-intl'
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
+import { reportBrowserPerformanceMetric, resolveAudienceHint } from '@/lib/analytics/client-vitals'
+import type { TrendAccess, TrendCohort, TrendDesk } from '@/lib/graphql/operations/trends'
+
+type Props = {
+	publicCohorts: TrendCohort[]
+	myCohorts: TrendCohort[]
+	canLoadMine: boolean
+	initialDesk: TrendDesk | null
+	initialAccess: TrendAccess
+	initialCohortId: string | null
+	initialEventId: number
+}
+
+const labels: Record<string, string> = {
+	OWNERSHIP: 'Ownership',
+	EFFECTIVE_OWNERSHIP: 'Effective ownership',
+	CAPTAINCY: 'Captaincy',
+	VICE_CAPTAINCY: 'Vice-captaincy',
+	TRANSFERS: 'Transfers',
+	PERSONAL_EXPOSURE: 'My exposure'
+}
+
+export default function TrendsClient({
+	publicCohorts,
+	myCohorts,
+	canLoadMine,
+	initialDesk,
+	initialAccess,
+	initialCohortId,
+	initialEventId
+}: Props) {
+	const t = useTranslations('Selections')
+	const [access, setAccess] = useState<TrendAccess>(initialAccess)
+	const [mineCohortState, setMineCohortState] = useState(myCohorts)
+	const [cohortId, setCohortId] = useState(initialCohortId ?? '')
+	const [eventId, setEventId] = useState(initialEventId)
+	const [committed, setCommitted] = useState<TrendDesk | null>(initialDesk)
+	const [pending, setPending] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+	const [shareState, setShareState] = useState<'idle' | 'copied'>('idle')
+	const cache = useRef(new Map<string, TrendDesk>())
+	const inFlight = useRef(new Map<string, { controller: AbortController; generation: number }>())
+	const generation = useRef(0)
+	const switchStartedAt = useRef<number | null>(null)
+
+	useEffect(() => {
+		if (initialDesk) cache.current.set(`${initialAccess}:${initialDesk.cohort.id}:${initialDesk.eventId}:${initialDesk.cohort.revision ?? ''}`, initialDesk)
+	}, [initialAccess, initialDesk])
+
+	const cohorts = useMemo(() => access === 'MINE' ? mineCohortState : publicCohorts, [access, mineCohortState, publicCohorts])
+	const selected = cohorts.find(item => item.id === cohortId) ?? cohorts[0] ?? null
+	const audienceHint = typeof document === 'undefined' ? 'unknown' as const : resolveAudienceHint()
+
+	function updateUrl(nextAccess: TrendAccess, nextCohort: string, nextEvent: number) {
+		const url = new URL(window.location.href)
+		url.searchParams.set('cohort', nextCohort)
+		url.searchParams.set('gw', String(nextEvent))
+		url.searchParams.delete('scope')
+		url.searchParams.delete('tournament')
+		window.history.pushState({ access: nextAccess, cohort: nextCohort, gw: nextEvent }, '', `${url.pathname}?${url.searchParams.toString()}`)
+	}
+
+	async function select(nextAccess: TrendAccess, nextCohort: string, nextEvent: number) {
+		const knownCohort = (nextAccess === 'MINE' ? mineCohortState : publicCohorts).find(item => item.id === nextCohort)
+		const key = `${nextAccess}:${nextCohort}:${nextEvent}:${knownCohort?.revision ?? ''}`
+		setAccess(nextAccess)
+		setCohortId(nextCohort)
+		setEventId(nextEvent)
+		setError(null)
+		updateUrl(nextAccess, nextCohort, nextEvent)
+		const cached = cache.current.get(key)
+		if (cached) {
+			startTransition(() => setCommitted(cached))
+			return
+		}
+		if (inFlight.current.has(key)) return
+		inFlight.current.forEach(request => request.controller.abort())
+		const requestGeneration = ++generation.current
+		const controller = new AbortController()
+		inFlight.current.set(key, { controller, generation: requestGeneration })
+		setPending(true)
+		switchStartedAt.current = performance.now()
+		try {
+			const endpoint = nextAccess === 'MINE' ? '/api/trends/my-desk' : '/api/trends/public-desk'
+			const response = await fetch(`${endpoint}?cohortId=${encodeURIComponent(nextCohort)}&eventId=${nextEvent}&limit=12`, { signal: controller.signal, cache: 'no-store' })
+			if (!response.ok) throw new Error(`HTTP ${response.status}`)
+			const payload = await response.json() as { trendCohortSnapshot?: TrendDesk } | TrendDesk
+			const desk: TrendDesk | null = 'trendCohortSnapshot' in payload
+				? (payload as { trendCohortSnapshot?: TrendDesk }).trendCohortSnapshot ?? null
+				: payload as TrendDesk
+			if (!desk || requestGeneration !== generation.current) return
+			cache.current.set(key, desk)
+			startTransition(() => setCommitted(desk))
+			const switchMs = performance.now() - (switchStartedAt.current ?? performance.now())
+			reportBrowserPerformanceMetric({ name: 'TRENDS_SWITCH_READY', value: switchMs, delta: switchMs, rating: switchMs <= 1000 ? 'good' : switchMs <= 1500 ? 'needs-improvement' : 'poor', metricId: `trends-switch-${Date.now()}`, page: window.location.pathname, audienceHint: resolveAudienceHint() }, { always: true })
+		} catch (requestError) {
+			if (requestError instanceof DOMException && requestError.name === 'AbortError') return
+			if (requestGeneration === generation.current) setError(t('statsError'))
+		} finally {
+			inFlight.current.delete(key)
+			if (requestGeneration === generation.current) setPending(false)
+		}
+	}
+
+	async function shareCurrentDesk() {
+		if (!committed) return
+		const text = `${committed.cohort.displayName} · GW${committed.eventId} Trends\n${window.location.href}`
+		try {
+			if (navigator.share) {
+				await navigator.share({ title: 'Trends', text })
+				return
+			}
+			const { copyTextToClipboard } = await import('@/app/live/points/_lib/live-points-share')
+			const result = await copyTextToClipboard(text)
+			if (result === 'copied') {
+				setShareState('copied')
+				window.setTimeout(() => setShareState('idle'), 2000)
+			}
+		} catch {
+			setError('Share was cancelled or unavailable')
+		}
+	}
+
+	useEffect(() => {
+		const onPopState = (historyEvent: PopStateEvent) => {
+			const params = new URLSearchParams(window.location.search)
+			const nextCohort = params.get('cohort') ?? params.get('tournament') ?? cohortId
+			const nextEvent = Number(params.get('gw') ?? eventId)
+			const historyAccess = historyEvent.state?.access
+			const nextAccess: TrendAccess = historyAccess === 'MINE' || params.get('scope') === 'mine' ? 'MINE' : 'PUBLIC'
+			if (nextCohort && Number.isInteger(nextEvent)) void select(nextAccess, nextCohort.startsWith('competition:') ? nextCohort : `competition:${nextCohort}`, nextEvent)
+		}
+		window.addEventListener('popstate', onPopState)
+		return () => window.removeEventListener('popstate', onPopState)
+		// This handler intentionally observes the initial browser history only.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [])
+
+	return (
+		<>
+		<RouteReadyMarker name="TRENDS_CATALOG_READY" ready={cohorts.length > 0} readyKey={`${access}:${cohorts.length}`} audienceHint={audienceHint} goodMs={1000} poorMs={1500} />
+		<RouteReadyMarker name="TRENDS_DESK_READY" ready={committed != null} readyKey={`${access}:${committed?.cohort.id ?? ''}:${committed?.eventId ?? ''}`} audienceHint={audienceHint} goodMs={1000} poorMs={1500} />
+		<section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8" aria-labelledby="trends-title">
+			<div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+				<div>
+					<p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Explore</p>
+					<h1 id="trends-title" className="font-display text-4xl font-bold tracking-tight">{t('title')}</h1>
+					<p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t('pageIntro')}</p>
+				</div>
+				<div className="flex items-center gap-2" aria-live="polite">
+					{pending && <span className="text-xs text-muted-foreground">{t('loading')}</span>}
+					{error && <span role="status" className="text-xs text-destructive">{error}</span>}
+				</div>
+			</div>
+
+			<div className="grid gap-3 rounded-xl border bg-card p-4 shadow-sm sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-end">
+				<label className="flex flex-col gap-1 text-sm font-medium">
+					<span>{t('scopeLabel')}</span>
+					<select value={access} onChange={event => {
+						const nextAccess = event.target.value as TrendAccess
+						if (nextAccess === 'MINE' && mineCohortState.length === 0 && canLoadMine) {
+							void fetch('/api/trends/my-cohorts', { cache: 'no-store' }).then(async response => {
+								if (!response.ok) throw new Error(`HTTP ${response.status}`)
+								const payload = await response.json() as { cohorts?: TrendCohort[] }
+								const loaded = payload.cohorts ?? []
+								setMineCohortState(loaded)
+								const next = loaded[0]
+								if (next) await select(nextAccess, next.id, eventId)
+							}).catch(() => setError(t('myLeaguesError')))
+							return
+						}
+						const next = (nextAccess === 'MINE' ? mineCohortState : publicCohorts)[0]
+						if (next) void select(nextAccess, next.id, eventId)
+					}} className="h-10 rounded-md border bg-background px-3" aria-busy={pending}>
+						<option value="PUBLIC">Public</option>
+						<option value="MINE" disabled={!canLoadMine && mineCohortState.length === 0}>My competitions</option>
+					</select>
+				</label>
+				<label className="flex min-w-0 flex-col gap-1 text-sm font-medium">
+					<span>{t('leagueSelectorLabel')}</span>
+					<select value={selected?.id ?? ''} onChange={event => void select(access, event.target.value, eventId)} className="h-10 min-w-0 rounded-md border bg-background px-3" aria-busy={pending}>
+						{cohorts.length === 0 && <option value="">{t('noLeagueOptions')}</option>}
+						{cohorts.map(item => <option key={item.id} value={item.id}>{item.displayName}</option>)}
+					</select>
+				</label>
+				<label className="flex flex-col gap-1 text-sm font-medium">
+					<span>Gameweek</span>
+					<select value={eventId} onChange={event => selected && void select(access, selected.id, Number(event.target.value))} className="h-10 rounded-md border bg-background px-3" aria-busy={pending}>
+						{Array.from({ length: 38 }, (_, index) => index + 1).map(value => <option key={value} value={value}>GW{value}</option>)}
+					</select>
+				</label>
+			</div>
+
+			<div className="mt-6 min-h-[480px]" aria-busy={pending}>
+				{!committed && <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">{t('noLeagueOptions')}</div>}
+				{committed && <>
+					<div className="mb-4 flex items-center justify-between">
+						<div><h2 className="font-display text-2xl font-bold">{committed.cohort.displayName}</h2><p className="text-sm text-muted-foreground">GW{committed.eventId} · {committed.cohort.availability}</p></div>
+						<div className="flex items-center gap-2"><span className="rounded-full bg-muted px-3 py-1 text-xs">{committed.cohort.exact ? 'Exact competition' : 'Sample'}</span><button type="button" onClick={() => void shareCurrentDesk()} className="rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted">{shareState === 'copied' ? 'Copied' : 'Share'}</button></div>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						{committed.sections.map(section => <article key={section.capability} className="rounded-xl border bg-card p-4 shadow-sm">
+							<div className="mb-3 flex items-center justify-between"><h3 className="font-semibold">{labels[section.capability] ?? section.capability}</h3><span className="text-xs text-muted-foreground">{section.state}</span></div>
+							{section.rows === null ? <p className="text-sm text-muted-foreground">Unavailable for this gameweek.</p> : section.rows.length === 0 ? <p className="text-sm text-muted-foreground">{t('noData')}</p> : <ol className="space-y-2">{section.rows.slice(0, 12).map(row => <li key={row.elementId} className="flex items-center justify-between gap-3 text-sm"><span className="min-w-0 truncate"><strong>{row.playerName}</strong><span className="ml-2 text-muted-foreground">{row.teamShortName}</span></span><span className="shrink-0 tabular-nums">{row.percentage == null ? row.count : `${row.percentage.toFixed(1)}%`}</span></li>)}</ol>}
+						</article>)}
+					</div>
+				</>}
+			</div>
+		</section>
+		</>
+	)
+}

@@ -18,7 +18,7 @@
 		"playerStatsDescription": "对比 FPL 球员的表现、状态、赛程和市场数据。",
 		"priceChangesTitle": "市场",
 		"priceChangesDescription": "每日持有率、转会、伤停与身价。",
-		"selectionsTitle": "联赛趋势",
+		"selectionsTitle": "趋势",
 		"selectionsDescription": "对比我的联赛与精选公共联赛的持有、队长、转会和个人风险暴露。",
 		"liveMatchesTitle": "实时比赛",
 		"liveMatchesDescription": "按比赛状态查看 FPL 赛程、实时比分和球员事件。",
@@ -1316,7 +1316,7 @@
 		"shareFooter": "{url}"
 	},
 	"Selections": {
-		"title": "联赛趋势",
+		"title": "趋势",
 		"pageIntro": "查看不同联赛在持有、队长和转会上的选择，并理解这些球员取得回报时你的阵容暴露。",
 		"scopeLabel": "范围",
 		"scopeMeta": "{tournament} · 第 {gw} 轮",

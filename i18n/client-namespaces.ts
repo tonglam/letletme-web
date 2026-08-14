@@ -18,7 +18,7 @@ export const ROUTE_CLIENT_NAMESPACES = {
 		'Market',
 		'Common'
 	],
-	selections: ['Selections', 'TournamentLifecycle', 'Filters'],
+	selections: ['Selections'],
 	competitions: [
 		'TournamentList',
 		'TournamentCreate',

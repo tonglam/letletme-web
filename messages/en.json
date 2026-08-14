@@ -18,7 +18,7 @@
 		"playerStatsDescription": "Compare FPL player performance, form, fixtures, and market data.",
 		"priceChangesTitle": "Market",
 		"priceChangesDescription": "Daily ownership, transfers, news, and price moves.",
-		"selectionsTitle": "League Trends",
+		"selectionsTitle": "Trends",
 		"selectionsDescription": "Compare ownership, captaincy, transfers, and personal exposure across your leagues and curated public leagues.",
 		"liveMatchesTitle": "Live Matches",
 		"liveMatchesDescription": "Follow FPL fixtures, live scores, and player events by match status.",
@@ -1316,7 +1316,7 @@
 		"shareFooter": "{url}"
 	},
 	"Selections": {
-		"title": "League Trends",
+		"title": "Trends",
 		"pageIntro": "See who different league fields own, captain, and transfer — and where your team is exposed if those players return.",
 		"scopeLabel": "Scope",
 		"scopeMeta": "{tournament} · GW{gw}",
