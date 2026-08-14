@@ -38,6 +38,7 @@ fi
 
 install -d -o root -g letletme -m 0750 /etc/letletme
 install -d -o root -g root -m 0700 /etc/letletme/tls
+install -d -o root -g root -m 0755 /etc/nginx/snippets
 install -d -o root -g letletme -m 0751 /opt/letletme
 chmod 0751 /opt/letletme
 install -d -o root -g letletme -m 0750 /opt/letletme/releases
@@ -55,7 +56,7 @@ install -o root -g root -m 0644 \
 	"$ops_dir/nginx/letletme.conf" \
 	/etc/nginx/sites-available/letletme
 install -o root -g www-data -m 0640 /dev/null \
-	/etc/nginx/conf.d/letletme-static-try-files.conf
+	/etc/nginx/snippets/letletme-static-try-files.conf
 ln -sfn /etc/nginx/sites-available/letletme /etc/nginx/sites-enabled/letletme
 rm -f /etc/nginx/sites-enabled/default
 systemctl daemon-reload

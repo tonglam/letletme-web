@@ -39,7 +39,11 @@ static_try_files+=$'\t=404;'
 install -o root -g root -m 0644 "$site_template" \
 	/etc/nginx/sites-available/letletme
 printf '%s\n' "$static_try_files" | install -o root -g www-data -m 0640 \
-	/dev/stdin /etc/nginx/conf.d/letletme-static-try-files.conf
+	/dev/stdin /etc/nginx/snippets/letletme-static-try-files.conf
+# Older candidate installs briefly placed this location-only include in the
+# automatically loaded conf.d directory. Keep that path harmless and empty.
+install -o root -g root -m 0644 /dev/null \
+	/etc/nginx/conf.d/letletme-static-try-files.conf
 origin_token=$(< /etc/letletme/origin-token)
 proxy_secret=$(< /etc/letletme/local-proxy-secret)
 
