@@ -79,7 +79,8 @@ export function MarketAvailabilityList({
 									<a
 										href={playerStatsHref({
 											p1: String(update.player.playerId),
-											localePathPrefix: `/${locale}`
+											localePathPrefix:
+												locale === 'en' ? '' : `/${locale}`
 										})}
 										className="text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
 									>

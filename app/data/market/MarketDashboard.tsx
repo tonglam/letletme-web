@@ -96,7 +96,7 @@ function PlayerStatsAnchor({
 		<a
 			href={playerStatsHref({
 				p1: String(playerId),
-				localePathPrefix: `/${locale}`
+				localePathPrefix: locale === 'en' ? '' : `/${locale}`
 			})}
 			className={className}
 		>
