@@ -153,7 +153,7 @@ async function measureRun(browser, profile, index) {
 	}
 
 	const final = await page.evaluate(() => ({
-		cls: window.__marketPerformance?.cls ?? 0,
+		interactionCls: window.__marketPerformance?.cls ?? 0,
 		tbtMs: window.__marketPerformance?.tbt ?? 0,
 		horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth
 	}))
@@ -162,6 +162,7 @@ async function measureRun(browser, profile, index) {
 		status: response?.status() ?? 0,
 		...cold,
 		...final,
+		cls: cold.cls,
 		documentBytes,
 		marketRequestCount,
 		playerStatsPrefetchCount,
@@ -195,6 +196,7 @@ const measurements = Object.fromEntries(
 			lcpMs: distribution(runs, 'lcpMs'),
 			tbtMs: distribution(runs, 'tbtMs'),
 			cls: distribution(runs, 'cls'),
+			interactionCls: distribution(runs, 'interactionCls'),
 			ttfbMs: distribution(runs, 'ttfbMs'),
 			htmlResponseMs: distribution(runs, 'htmlResponseMs'),
 			documentBytes: distribution(runs, 'documentBytes'),
