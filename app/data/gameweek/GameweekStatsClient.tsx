@@ -347,7 +347,7 @@ export default function GameweekStatsClient({
 								{t('overview', { gameweek: visibleGameweek })}
 							</h2>
 							{isLoading ? (
-								<span className="font-mono text-label uppercase tracking-wide text-fascia-foreground/50">
+								<span className="font-mono text-label uppercase tracking-wide text-fascia-foreground/60">
 									{t('loadingOverview')}
 								</span>
 							) : null}
@@ -445,7 +445,7 @@ export default function GameweekStatsClient({
 											key={item.label}
 											className="bg-scoreboard-cell px-3 py-3 sm:px-4 sm:py-3.5"
 										>
-											<p className="eyebrow text-fascia-foreground/50">
+											<p className="eyebrow text-fascia-foreground/60">
 												{item.label}
 											</p>
 											<p className="mt-1 truncate font-display text-sm font-semibold tracking-tight text-fascia-foreground sm:text-base">
@@ -456,7 +456,7 @@ export default function GameweekStatsClient({
 								</div>
 
 								<div className="border-t border-fascia-foreground/10 px-3 py-3 sm:px-4">
-									<p className="eyebrow mb-2 text-fascia-foreground/50">
+									<p className="eyebrow mb-2 text-fascia-foreground/60">
 										{t('chipsPlayed')}
 									</p>
 									<div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">

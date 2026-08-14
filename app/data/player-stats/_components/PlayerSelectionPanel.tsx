@@ -151,7 +151,7 @@ function PlayerSlot({
 				<p className="eyebrow sm:text-caption">
 					{label}
 					{optional ? (
-						<span className="ml-1 font-sans text-label font-normal normal-case tracking-normal text-muted-foreground/80">
+						<span className="ml-1 font-sans text-label font-normal normal-case tracking-normal text-muted-foreground">
 							{t('optionalSuffix')}
 						</span>
 					) : null}

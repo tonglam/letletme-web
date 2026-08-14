@@ -3,15 +3,16 @@ import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 const TONE_CLASS = {
-	positive: 'text-success',
+	positive: 'text-foreground',
 	negative: 'text-destructive',
 	neutral: 'text-muted-foreground',
 } as const
 
 /**
  * Signed change indicator — arrow + tabular number in the shared
- * success/destructive tone language. Used for price moves, ownership
- * swings and rank movement so pages stop re-deciding tone inline.
+ * positive/destructive tone language. Used for price moves, ownership
+ * swings and rank movement so pages stop re-deciding tone inline while
+ * keeping the positive state readable on both theme surfaces.
  */
 export function DeltaBadge({
 	value,

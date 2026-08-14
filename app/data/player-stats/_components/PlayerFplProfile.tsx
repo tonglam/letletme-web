@@ -146,7 +146,7 @@ function RadarLegend({
 							<p className="truncate text-muted-foreground">
 								{axisLabel(axis.code, t)}
 							</p>
-							<p className="text-caption text-muted-foreground/70">
+							<p className="text-caption text-muted-foreground">
 								{axis.available && axis.percentile !== null
 									? t('positionPercentile', {
 											value: percentileValue(axis.percentile)
