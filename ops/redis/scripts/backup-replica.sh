@@ -98,8 +98,8 @@ tmp=''
 
 if [[ $(date -u +%u) == 7 ]]; then
 	weekly=$weekly_dir/$(basename "$target")
-	ln "$target" "$weekly"
 	cp --preserve=mode,timestamps "$target.sha256" "$weekly.sha256"
+	ln "$target" "$weekly"
 fi
 
 mapfile -t daily_backups < <(find "$daily_dir" -maxdepth 1 -type f -name 'redis-*.rdb' -printf '%p\n' | sort -r)

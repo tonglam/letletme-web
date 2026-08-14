@@ -156,7 +156,18 @@ if [[ -d $build_dir/public ]]; then
 fi
 find "$stage_dir" -maxdepth 1 -type f -name '.env*' -delete
 
-cache_dir=/var/cache/letletme-next/$release_sha
+cache_parent=/var/cache/letletme-next
+if [[ -L $cache_parent || ! -d $cache_parent ]]; then
+	echo "cache parent must be a real directory: $cache_parent" >&2
+	exit 1
+fi
+chown root:root "$cache_parent"
+chmod 0755 "$cache_parent"
+cache_dir=$cache_parent/$release_sha
+if [[ -L $cache_dir ]]; then
+	echo "cache directory must not be a symlink: $cache_dir" >&2
+	exit 1
+fi
 install -d -o letletme -g letletme -m 0750 "$cache_dir"
 rm -rf -- "$stage_dir/.next/cache"
 ln -s "$cache_dir" "$stage_dir/.next/cache"
@@ -164,7 +175,9 @@ chown -R root:letletme "$stage_dir"
 chmod -R u=rwX,g=rX,o= "$stage_dir"
 mv -- "$stage_dir" "$release_dir"
 
-rsync -a --ignore-existing "$release_dir/.next/static/" /opt/letletme/static/
+# Keep old hashed assets, but overwrite colliding Next metadata with the latest
+# release so a reused BUILD_ID cannot preserve a stale route manifest.
+rsync -a "$release_dir/.next/static/" /opt/letletme/static/
 chown -R root:www-data /opt/letletme/static
 chmod -R u=rwX,g=rX,o= /opt/letletme/static
 
