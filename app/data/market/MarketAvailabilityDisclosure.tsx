@@ -9,6 +9,16 @@ import { MARKET_AVAILABILITY_HIGHLIGHT_LIMIT } from '@/lib/market'
 import { useLocale, useTranslations } from 'next-intl'
 import { useCallback, useState } from 'react'
 
+type LoadedSnapshot = {
+	key: string
+	items: MarketAvailabilityUpdate[]
+}
+
+type ReadySnapshot = {
+	key: string
+	readyKey: string
+}
+
 export function MarketAvailabilityDisclosure({
 	days,
 	revision,
@@ -20,18 +30,26 @@ export function MarketAvailabilityDisclosure({
 }) {
 	const t = useTranslations('Market')
 	const locale = useLocale()
-	const [loadedUpdates, setLoadedUpdates] = useState<MarketAvailabilityUpdate[]>([])
-	const [isLoaded, setIsLoaded] = useState(false)
-	const [loading, setLoading] = useState(false)
-	const [error, setError] = useState(false)
-	const [availabilityReadyKey, setAvailabilityReadyKey] = useState<string | null>(null)
+	const snapshotKey = `${revision ?? 'none'}:${days}`
+	const [loadedSnapshot, setLoadedSnapshot] = useState<LoadedSnapshot | null>(null)
+	const [loadingKey, setLoadingKey] = useState<string | null>(null)
+	const [errorKey, setErrorKey] = useState<string | null>(null)
+	const [readySnapshot, setReadySnapshot] = useState<ReadySnapshot | null>(null)
+	const loadedUpdates =
+		loadedSnapshot?.key === snapshotKey ? loadedSnapshot.items : []
+	const isLoaded = loadedSnapshot?.key === snapshotKey
+	const loading = loadingKey === snapshotKey
+	const error = errorKey === snapshotKey
+	const availabilityReadyKey =
+		readySnapshot?.key === snapshotKey ? readySnapshot.readyKey : null
 
 	const loadUpdates = useCallback(async () => {
 		if (isLoaded || loading || !revision) return
-		setLoading(true)
-		setError(false)
+		const requestKey = snapshotKey
+		setLoadingKey(requestKey)
+		setErrorKey(null)
 		try {
-			const readyKey = `${revision}:${days}`
+			const readyKey = requestKey
 			markRouteReadyStart(
 				window.location.pathname,
 				performance.now(),
@@ -41,16 +59,15 @@ export function MarketAvailabilityDisclosure({
 				days: String(days),
 				revision: marketRevisionParam(revision)
 			})
-			setLoadedUpdates(data.items ?? [])
-			setIsLoaded(true)
-			setAvailabilityReadyKey(readyKey)
+			setLoadedSnapshot({ key: requestKey, items: data.items ?? [] })
+			setReadySnapshot({ key: requestKey, readyKey })
 		} catch {
-			setError(true)
-			setAvailabilityReadyKey(null)
+			setErrorKey(requestKey)
+			setReadySnapshot(null)
 		} finally {
-			setLoading(false)
+			setLoadingKey(current => (current === requestKey ? null : current))
 		}
-	}, [days, isLoaded, loading, revision])
+	}, [days, isLoaded, loading, revision, snapshotKey])
 
 	return (
 		<>

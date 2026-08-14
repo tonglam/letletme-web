@@ -316,7 +316,7 @@ export async function MarketDashboard({
 	) : null
 	const availabilitySection = hasAvailabilityEvidence ? (
 		<section aria-labelledby="market-squad-status" className="grid gap-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5 lg:grid-cols-2 lg:gap-8">
-			<div><SectionTitle id="market-squad-status"><span className="inline-flex items-center gap-1.5"><HeartPulse className="size-3.5" aria-hidden="true" />{t('availabilityTitle')}</span></SectionTitle>{pulse.availabilityHighlights.length > 0 ? <MarketAvailabilityList updates={pulse.availabilityHighlights} locale={locale} t={t} /> : null}<MarketAvailabilityDisclosure days={pulse.coverage.requestedDays} revision={revision} count={pulse.availabilityUpdateCount ?? pulse.availabilityUpdates.length} /></div>
+			<div><SectionTitle id="market-squad-status"><span className="inline-flex items-center gap-1.5"><HeartPulse className="size-3.5" aria-hidden="true" />{t('availabilityTitle')}</span></SectionTitle><MarketAvailabilityList updates={pulse.availabilityHighlights} locale={locale} t={t} /><MarketAvailabilityDisclosure days={pulse.coverage.requestedDays} revision={revision} count={pulse.availabilityUpdateCount ?? pulse.availabilityUpdates.length} /></div>
 			{pulse.newPlayers.length > 0 ? <div><SectionTitle id="market-new-players"><span className="inline-flex items-center gap-1.5"><Sparkles className="size-3.5" aria-hidden="true" />{t('newPlayersTitle')}</span></SectionTitle><NewPlayersBlock items={pulse.newPlayers} locale={locale} t={t} /></div> : null}
 		</section>
 	) : null
