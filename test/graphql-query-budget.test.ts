@@ -15,6 +15,12 @@ import {
 	SEARCH_PLAYERS_FOR_PICKER
 } from '../lib/graphql/operations/players'
 import {
+	GET_HOME_GAMEWEEK,
+	GET_HOME_MARKET_PULSE,
+	GET_HOME_PERSONAL_DESK,
+	GET_HOME_PUBLIC_BOOTSTRAP
+} from '../lib/graphql/operations/home'
+import {
 	GET_ENTRY_OFFICIAL_H2H_DESK,
 	GET_TOURNAMENT_METADATA,
 	GET_TOURNAMENT_OFFICIAL_H2H,
@@ -51,6 +57,25 @@ describe('GraphQL request budget', () => {
 		visit(document, { enter: () => void (astNodes += 1) })
 
 		assert.ok(astNodes < 200, `GET_MARKET_PULSE has ${astNodes} AST nodes`)
+	})
+
+	it('keeps each Home document within the production query budget', () => {
+		for (const [name, query, expectedRoots] of [
+			['GET_HOME_PUBLIC_BOOTSTRAP', GET_HOME_PUBLIC_BOOTSTRAP, 1],
+			['GET_HOME_PERSONAL_DESK', GET_HOME_PERSONAL_DESK, 1],
+			['GET_HOME_MARKET_PULSE', GET_HOME_MARKET_PULSE, 1],
+			['GET_HOME_GAMEWEEK', GET_HOME_GAMEWEEK, 3]
+		] as const) {
+			const document = parse(query)
+			let astNodes = 0
+			visit(document, { enter: () => void (astNodes += 1) })
+			const operation = document.definitions.find(
+				definition => definition.kind === 'OperationDefinition'
+			)
+			assert.ok(operation?.kind === 'OperationDefinition')
+			assert.equal(operation.selectionSet.selections.length, expectedRoots)
+			assert.ok(astNodes < 200, `${name} has ${astNodes} AST nodes`)
+		}
 	})
 
 	it('keeps fixture market signals to one compact root field', () => {

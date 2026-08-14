@@ -85,6 +85,8 @@ describe('privacy-safe web vitals', () => {
 	it('accepts route-ready milestones without entity identifiers', () => {
 		for (const name of [
 			'FIXTURES_WINDOW_READY',
+			'HOME_TEAM_DESK_READY',
+			'HOME_LEAGUE_RANKS_READY',
 			'MARKET_CONTENT_READY',
 			'PLAYER_DIRECTORY_READY',
 			'PLAYER_DETAIL_READY',

@@ -2,13 +2,8 @@ import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
-import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
-import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
-	GET_TOP_TRANSFERS_IN,
-	GET_TOP_TRANSFERS_OUT,
 	type TopTransfer,
-	type TopTransfersResponse,
 } from '@/lib/graphql/operations/prices'
 import { ArrowRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -25,6 +20,9 @@ interface Transfer {
 
 interface GameweekStatsSectionProps {
 	currentEventId: number | null
+	transfersIn?: TopTransfer[]
+	transfersOut?: TopTransfer[]
+	hasError?: boolean
 }
 
 export function GameweekStatsSectionFallback() {
@@ -121,58 +119,16 @@ const toTransfer = (item: TopTransfer, direction: 'in' | 'out'): Transfer => ({
 	points: item.player.totalPoints ?? null,
 })
 
-export async function GameweekStatsSection({ currentEventId }: GameweekStatsSectionProps) {
-	if (!currentEventId) {
-		return (
-			<GameweekStatsCard
-				transfersIn={[]}
-				transfersOut={[]}
-				currentEventId={currentEventId}
-			/>
-		)
-	}
-
-	let transfersIn: Transfer[] = []
-	let transfersOut: Transfer[] = []
-	let hasError = false
-
-	try {
-		const [inData, outData] = await Promise.all([
-			executePublicServerQuery<TopTransfersResponse>(
-				GET_TOP_TRANSFERS_IN,
-				{
-					eventId: currentEventId,
-					limit: 5,
-				},
-				publicFetchOptions({
-					revalidate: RevalidateSeconds.publicStats,
-					tags: [CacheTag.transfers, CacheTag.gameweekStats],
-				}),
-			),
-			executePublicServerQuery<TopTransfersResponse>(
-				GET_TOP_TRANSFERS_OUT,
-				{
-					eventId: currentEventId,
-					limit: 5,
-				},
-				publicFetchOptions({
-					revalidate: RevalidateSeconds.publicStats,
-					tags: [CacheTag.transfers, CacheTag.gameweekStats],
-				}),
-			),
-		])
-
-		transfersIn = (inData.topTransfersIn ?? []).map(i => toTransfer(i, 'in'))
-		transfersOut = (outData.topTransfersOut ?? []).map(i => toTransfer(i, 'out'))
-	} catch (err) {
-		console.error('Failed to fetch transfers:', err)
-		hasError = true
-	}
-
+export function GameweekStatsSection({
+	currentEventId,
+	transfersIn = [],
+	transfersOut = [],
+	hasError = false
+}: GameweekStatsSectionProps) {
 	return (
 		<GameweekStatsCard
-			transfersIn={transfersIn}
-			transfersOut={transfersOut}
+			transfersIn={transfersIn.map(item => toTransfer(item, 'in'))}
+			transfersOut={transfersOut.map(item => toTransfer(item, 'out'))}
 			hasError={hasError}
 			currentEventId={currentEventId}
 		/>

@@ -16,6 +16,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
 	Tooltip,
 	TooltipContent,
+	TooltipProvider,
 	TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { AlertTriangle, Check, Info, Link as LinkIcon, WandSparkles } from 'lucide-react'
@@ -143,6 +144,7 @@ export function TournamentParticipantsCard(props: TournamentParticipantsCardProp
 								*
 							</span>
 						</Label>
+						<TooltipProvider>
 						<Tooltip>
 							<TooltipTrigger asChild>
 								<button
@@ -157,6 +159,7 @@ export function TournamentParticipantsCard(props: TournamentParticipantsCardProp
 								<p>{t('leagueUrlTooltip')}</p>
 							</TooltipContent>
 						</Tooltip>
+						</TooltipProvider>
 					</div>
 					<div className="flex flex-col gap-2 sm:flex-row sm:items-start">
 						<div className="flex-1">
@@ -221,6 +224,7 @@ export function TournamentParticipantsCard(props: TournamentParticipantsCardProp
 								<span className="inline-flex items-center gap-1 text-sm text-success">
 									<Check aria-hidden="true" /> {t('leagueLoaded')}
 								</span>
+								<TooltipProvider>
 								<Tooltip>
 									<TooltipTrigger asChild>
 										<Button
@@ -237,6 +241,7 @@ export function TournamentParticipantsCard(props: TournamentParticipantsCardProp
 										<p>{t('autoSetupHelp')}</p>
 									</TooltipContent>
 								</Tooltip>
+								</TooltipProvider>
 							</div>
 						</div>
 

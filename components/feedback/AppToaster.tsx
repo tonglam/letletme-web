@@ -1,11 +1,10 @@
 'use client'
 
-import dynamic from 'next/dynamic'
 import { usePathname } from '@/i18n/navigation'
+import { lazy, Suspense } from 'react'
 
-const Toaster = dynamic(
-	() => import('sonner').then(module => module.Toaster),
-	{ ssr: false },
+const Toaster = lazy(() =>
+	import('sonner').then(module => ({ default: module.Toaster }))
 )
 
 const TOAST_ROUTES = ['/explore/fixtures', '/onboarding', '/profile'] as const
@@ -16,5 +15,9 @@ export function AppToaster() {
 
 	if (!enabled) return null
 
-	return <Toaster richColors position="top-center" />
+	return (
+		<Suspense fallback={null}>
+			<Toaster richColors position="top-center" />
+		</Suspense>
+	)
 }

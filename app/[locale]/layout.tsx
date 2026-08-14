@@ -1,9 +1,7 @@
 import { WebVitalsReporter } from '@/components/analytics/WebVitalsReporter'
-import { AppToaster } from '@/components/feedback/AppToaster'
 import { Footer } from '@/components/layout/Footer'
 import { Navbar } from '@/components/layout/Navbar'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
-import { TooltipProvider } from '@/components/ui/tooltip'
 import { APP_URL, localizedAlternates } from '@/i18n/config'
 import { routing } from '@/i18n/routing'
 import { GLOBAL_CLIENT_NAMESPACES } from '@/i18n/client-namespaces'
@@ -128,7 +126,7 @@ export default async function LocaleLayout({
 						enableSystem
 						disableTransitionOnChange
 					>
-						<TooltipProvider>
+					<>
 							<a
 								href="#main-content"
 								className="fixed left-4 top-4 z-[100] -translate-y-24 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg transition-transform focus:translate-y-0"
@@ -144,10 +142,9 @@ export default async function LocaleLayout({
 							</main>
 							<Footer />
 							<Suspense>
-								<AppToaster />
 								<WebVitalsReporter />
 							</Suspense>
-						</TooltipProvider>
+					</>
 					</ThemeProvider>
 				</NextIntlClientProvider>
 			</body>

@@ -1,4 +1,5 @@
 import { RouteIntlProvider } from '@/components/i18n/RouteIntlProvider'
+import { AppToaster } from '@/components/feedback/AppToaster'
 import { ROUTE_CLIENT_NAMESPACES } from '@/i18n/client-namespaces'
 import type { ReactNode } from 'react'
 
@@ -10,6 +11,7 @@ export default function OnboardingLayout({
 	return (
 		<RouteIntlProvider namespaces={ROUTE_CLIENT_NAMESPACES.onboarding}>
 			{children}
+			<AppToaster />
 		</RouteIntlProvider>
 	)
 }
