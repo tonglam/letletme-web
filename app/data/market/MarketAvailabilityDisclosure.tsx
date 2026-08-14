@@ -7,7 +7,7 @@ import { fetchMarketJson, marketRevisionParam } from '@/lib/market-client'
 import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import { MARKET_AVAILABILITY_HIGHLIGHT_LIMIT } from '@/lib/market'
 import { useLocale, useTranslations } from 'next-intl'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 type LoadedSnapshot = {
 	key: string
@@ -35,6 +35,8 @@ export function MarketAvailabilityDisclosure({
 	const [loadingKey, setLoadingKey] = useState<string | null>(null)
 	const [errorKey, setErrorKey] = useState<string | null>(null)
 	const [readySnapshot, setReadySnapshot] = useState<ReadySnapshot | null>(null)
+	const detailsRef = useRef<HTMLDetailsElement | null>(null)
+	const latestSnapshotKey = useRef(snapshotKey)
 	const loadedUpdates =
 		loadedSnapshot?.key === snapshotKey ? loadedSnapshot.items : []
 	const isLoaded = loadedSnapshot?.key === snapshotKey
@@ -59,15 +61,25 @@ export function MarketAvailabilityDisclosure({
 				days: String(days),
 				revision: marketRevisionParam(revision)
 			})
+			if (latestSnapshotKey.current !== requestKey) return
 			setLoadedSnapshot({ key: requestKey, items: data.items ?? [] })
 			setReadySnapshot({ key: requestKey, readyKey })
 		} catch {
+			if (latestSnapshotKey.current !== requestKey) return
 			setErrorKey(requestKey)
 			setReadySnapshot(null)
 		} finally {
 			setLoadingKey(current => (current === requestKey ? null : current))
 		}
 	}, [days, isLoaded, loading, revision, snapshotKey])
+
+	useEffect(() => {
+		latestSnapshotKey.current = snapshotKey
+	}, [snapshotKey])
+
+	useEffect(() => {
+		if (detailsRef.current?.open) void loadUpdates()
+	}, [loadUpdates])
 
 	return (
 		<>
@@ -82,6 +94,7 @@ export function MarketAvailabilityDisclosure({
 			<div>
 				{count > MARKET_AVAILABILITY_HIGHLIGHT_LIMIT ? (
 					<details
+						ref={detailsRef}
 						data-testid="market-availability-disclosure"
 						className="mt-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5"
 						onToggle={event => {
