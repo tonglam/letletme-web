@@ -27,6 +27,8 @@ import {
 import { getVerifiedEntryContext } from '@/lib/session'
 import { unstable_rethrow } from 'next/navigation'
 
+export const dynamic = 'force-dynamic'
+
 type PageProps = { params: LocaleParams }
 
 export async function generateMetadata({ params }: PageProps) {
