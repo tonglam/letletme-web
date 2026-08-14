@@ -134,6 +134,76 @@
 }
 
 @layer components {
+  /* Compact repeated Market rows. These preserve the generic Badge/link
+     treatment while keeping the HTML and Flight payload small. */
+  .market-position-badge,
+  .market-status-badge {
+    @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+  }
+  .market-position-badge {
+    @apply shrink-0;
+  }
+  .market-position-badge--gkp {
+    @apply border-transparent bg-amber-300 text-amber-950;
+  }
+  .market-position-badge--def {
+    @apply border-transparent bg-electric text-plum;
+  }
+  .market-position-badge--mid {
+    @apply border-transparent bg-pink text-plum;
+  }
+  .market-position-badge--fwd {
+    @apply border-transparent bg-plum text-electric;
+  }
+  .market-position-badge--unknown {
+    @apply bg-secondary text-secondary-foreground;
+  }
+  .market-status-badge--available {
+    @apply border-transparent bg-secondary text-secondary-foreground;
+  }
+  .market-status-badge--outline {
+    @apply text-foreground;
+  }
+  .market-player-link {
+    @apply block truncate text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
+  }
+  .market-player-link--compact {
+    @apply block truncate text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
+  }
+  .market-player-subtext {
+    @apply truncate text-[11px] text-muted-foreground;
+  }
+  .market-dense-row {
+    @apply flex items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0;
+  }
+  .market-mover-row {
+    @apply relative overflow-hidden border-b border-border/50 py-2 last:border-b-0;
+  }
+  .market-mover-bar {
+    @apply absolute inset-y-0 left-0 opacity-[0.07];
+  }
+  .market-mover-content {
+    @apply relative flex items-center gap-2.5;
+  }
+  .market-availability-row {
+    @apply py-2.5 first:pt-0 last:pb-0;
+  }
+  .market-availability-content {
+    @apply flex items-start gap-2.5;
+  }
+  .market-availability-link {
+    @apply text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
+  }
+  .market-availability-meta {
+    @apply mt-0.5 text-[11px] text-muted-foreground;
+  }
+  .market-availability-body {
+    @apply mt-1.5 text-sm leading-snug text-foreground;
+  }
+  .market-availability-date {
+    @apply mt-1 text-[11px] text-muted-foreground;
+  }
+
   /* Broadcast chyron label — green tick + condensed caps */
   .chyron {
     @apply inline-flex items-center gap-2.5 font-display text-xs font-semibold uppercase tracking-caps-wide text-muted-foreground;

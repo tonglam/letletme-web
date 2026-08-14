@@ -1,12 +1,12 @@
 import { MarketAvailabilityDisclosure } from './MarketAvailabilityDisclosure'
 import { MarketAvailabilityList } from '@/components/data/MarketAvailabilityList'
+import { MarketPositionBadge } from '@/components/data/MarketMarkup'
 import {
 	MarketPlayerLookupLauncher,
 	MarketPriceExplorer
 } from './MarketPriceExplorer'
 import { MarketLocalUpdated } from '@/components/data/MarketLocalUpdated'
 import { OwnershipSwingDesk } from '@/components/data/OwnershipSwingDesk'
-import { Badge } from '@/components/ui/badge'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
 import type {
@@ -15,8 +15,7 @@ import type {
 	MarketPulse,
 	MarketTransferMover
 } from '@/lib/graphql/operations/market'
-import { getMarketCoverageMode, getMarketViewMode, shortMarketPosition } from '@/lib/market'
-import { positionBadgeClass } from '@/lib/position-style'
+import { getMarketCoverageMode, getMarketViewMode } from '@/lib/market'
 import { cn } from '@/lib/utils'
 import { getTranslations } from 'next-intl/server'
 import { HeartPulse, Sparkles, Users } from 'lucide-react'
@@ -41,12 +40,7 @@ function formatOwnership(value: number, locale: string): string {
 }
 
 function PositionBadge({ player }: { player: MarketPlayer }) {
-	const position = shortMarketPosition(player.position)
-	return (
-		<Badge className={cn(positionBadgeClass(position), 'shrink-0 text-[10px]')}>
-			{position}
-		</Badge>
-	)
+	return <MarketPositionBadge position={player.position} />
 }
 
 function SectionTitle({
@@ -117,20 +111,20 @@ function DensePlayerRow({
 	sub?: ReactNode
 }) {
 	return (
-		<li className="flex items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0">
+		<li className="market-dense-row">
 			<PositionBadge player={player} />
 			<div className="min-w-0 flex-1">
 				<PlayerStatsAnchor
 					playerId={player.playerId}
 					locale={locale}
-					className="block truncate text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+					className="market-player-link"
 				>
 					{player.webName}
 				</PlayerStatsAnchor>
 				{sub ? (
-					<p className="truncate text-[11px] text-muted-foreground">{sub}</p>
+					<p className="market-player-subtext">{sub}</p>
 				) : (
-					<p className="truncate text-[11px] text-muted-foreground">{player.teamShortName}</p>
+					<p className="market-player-subtext">{player.teamShortName}</p>
 				)}
 			</div>
 			<div className="shrink-0 text-right">{trailing}</div>
@@ -283,8 +277,8 @@ function NewPlayersBlock({ items, locale, t }: { items: MarketPulse['newPlayers'
 				<li key={item.player.playerId} className="flex items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0">
 					<PositionBadge player={item.player} />
 					<div className="min-w-0">
-						<PlayerStatsAnchor playerId={item.player.playerId} locale={locale} className="block truncate text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary">{item.player.webName}</PlayerStatsAnchor>
-						<p className="text-[11px] text-muted-foreground">{t('firstSeen', { date: formatCalendarDate(item.firstObservedDate, locale) })}</p>
+						<PlayerStatsAnchor playerId={item.player.playerId} locale={locale} className="market-player-link--compact">{item.player.webName}</PlayerStatsAnchor>
+						<p className="market-player-subtext">{t('firstSeen', { date: formatCalendarDate(item.firstObservedDate, locale) })}</p>
 					</div>
 				</li>
 			))}

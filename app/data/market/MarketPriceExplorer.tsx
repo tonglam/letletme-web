@@ -1,6 +1,6 @@
 'use client'
 
-import { Badge } from '@/components/ui/badge'
+import { MarketPositionBadge } from '@/components/data/MarketMarkup'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
@@ -31,8 +31,6 @@ import {
 } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { positionBadgeClass } from '@/lib/position-style'
-import { shortMarketPosition } from '@/lib/market'
 
 const LazyMarketPlayerLookup = lazy(() =>
 	import('@/components/data/MarketPlayerLookup').then(module => ({
@@ -68,12 +66,7 @@ function marketPlayerToDirectory(player: MarketPlayer): PlayerDirectoryItem {
 }
 
 function PositionBadge({ player }: { player: MarketPlayer }) {
-	const position = shortMarketPosition(player.position)
-	return (
-		<Badge className={cn(positionBadgeClass(position), 'shrink-0 text-[10px]')}>
-			{position}
-		</Badge>
-	)
+	return <MarketPositionBadge position={player.position} />
 }
 
 function SectionTitle({
