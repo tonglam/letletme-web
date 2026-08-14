@@ -100,6 +100,9 @@ async function measureRun(browser, profile, index) {
 			htmlResponseMs: navigation?.responseEnd ?? 0
 		}
 	})
+	await page.evaluate(() => {
+		if (window.__marketPerformance) window.__marketPerformance.cls = 0
+	})
 
 	const searchInput = page.locator('#market-player-search')
 	const lookupToggle = page.locator('[data-testid="market-open-player-search"]')
