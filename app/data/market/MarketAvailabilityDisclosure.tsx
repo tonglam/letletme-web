@@ -37,6 +37,7 @@ export function MarketAvailabilityDisclosure({
 	const [readySnapshot, setReadySnapshot] = useState<ReadySnapshot | null>(null)
 	const detailsRef = useRef<HTMLDetailsElement | null>(null)
 	const latestSnapshotKey = useRef(snapshotKey)
+	const loadUpdatesRef = useRef<() => Promise<void>>(async () => {})
 	const loadedUpdates =
 		loadedSnapshot?.key === snapshotKey ? loadedSnapshot.items : []
 	const isLoaded = loadedSnapshot?.key === snapshotKey
@@ -57,11 +58,19 @@ export function MarketAvailabilityDisclosure({
 				performance.now(),
 				readyKey
 			)
-			const data = await fetchMarketJson<{ items?: MarketAvailabilityUpdate[] }>('availability', {
+			const data = await fetchMarketJson<{
+				revision?: string
+				items?: MarketAvailabilityUpdate[]
+			}>('availability', {
 				days: String(days),
 				revision: marketRevisionParam(revision)
 			})
 			if (latestSnapshotKey.current !== requestKey) return
+			if (
+				marketRevisionParam(data.revision) !== marketRevisionParam(revision)
+			) {
+				throw new Error('market availability revision changed')
+			}
 			setLoadedSnapshot({ key: requestKey, items: data.items ?? [] })
 			setReadySnapshot({ key: requestKey, readyKey })
 		} catch {
@@ -78,8 +87,12 @@ export function MarketAvailabilityDisclosure({
 	}, [snapshotKey])
 
 	useEffect(() => {
-		if (detailsRef.current?.open) void loadUpdates()
+		loadUpdatesRef.current = loadUpdates
 	}, [loadUpdates])
+
+	useEffect(() => {
+		if (detailsRef.current?.open) void loadUpdatesRef.current()
+	}, [snapshotKey])
 
 	return (
 		<>
