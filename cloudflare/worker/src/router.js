@@ -142,7 +142,12 @@ export async function routeRequest(request, env = {}, options = {}) {
 		})
 		return response
 	}
-	if (!env.ORIGIN_TOKEN || !env.TENCENT_ORIGIN_HOST) {
+	if (
+		!env.ORIGIN_TOKEN ||
+		!env.TENCENT_ORIGIN_HOST ||
+		!env.EXPECTED_RELEASE_SHA ||
+		env.EXPECTED_RELEASE_SHA === 'unknown'
+	) {
 		const response = await fetchVercel(request, context)
 		logRoute(context, {
 			country,
@@ -159,6 +164,12 @@ export async function routeRequest(request, env = {}, options = {}) {
 		tencentResponse = await fetchTencent(request, context)
 		if (tencentResponse.status >= 500 && tencentResponse.status <= 599) {
 			fallbackReason = `tencent-${tencentResponse.status}`
+			await tencentResponse.body?.cancel()
+		} else if (
+			tencentResponse.headers.get('X-Letletme-Release') !==
+			env.EXPECTED_RELEASE_SHA
+		) {
+			fallbackReason = 'tencent-release-mismatch'
 			await tencentResponse.body?.cancel()
 		}
 	} catch (error) {

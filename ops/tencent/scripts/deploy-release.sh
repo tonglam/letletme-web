@@ -19,6 +19,9 @@ build_root=/opt/letletme/builds
 build_dir=$build_root/$release_sha
 current_link=/opt/letletme/current
 previous_release=$(readlink -f "$current_link" 2>/dev/null || true)
+activation_started=0
+deployment_succeeded=0
+rollback_in_progress=0
 
 if ! git -C "$source_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 	echo "source directory is not a Git worktree: $source_dir" >&2
@@ -72,7 +75,37 @@ install -o root -g root -m 0600 /etc/letletme/web.env \
 	"$build_dir/.env.production.local"
 
 stage_dir=''
+rollback_activation() {
+	if [[ $activation_started != 1 || $deployment_succeeded == 1 || $rollback_in_progress == 1 ]]; then
+		return 0
+	fi
+	rollback_in_progress=1
+	echo "activation failed; rolling back release" >&2
+	current_target=$(readlink -f "$current_link" 2>/dev/null || true)
+	if [[ -n $previous_release && -d $previous_release ]]; then
+		if [[ $current_target == "$release_dir" ]]; then
+			rollback_link=$current_link.rollback
+			rm -f -- "$rollback_link"
+			ln -s "$previous_release" "$rollback_link" || true
+			mv -Tf "$rollback_link" "$current_link" || true
+		fi
+		printf 'LETLETME_RELEASE_SHA=%s\n' "$(basename "$previous_release")" | \
+			install -o root -g root -m 0644 /dev/stdin /etc/letletme/release.env || true
+		systemctl restart letletme-web.service || true
+		"$script_dir/render-nginx-config.sh" "$(basename "$previous_release")" || true
+	else
+		if [[ $current_target == "$release_dir" ]]; then
+			rm -f -- "$current_link"
+		fi
+		printf '%s\n' 'LETLETME_RELEASE_SHA=development' | \
+			install -o root -g root -m 0644 /dev/stdin /etc/letletme/release.env || true
+		systemctl stop letletme-web.service || true
+		rm -f -- /etc/nginx/conf.d/letletme-origin-auth.conf
+	fi
+}
+
 cleanup_build() {
+	rollback_activation
 	if [[ $build_dir == "$build_root/"* && -d $build_dir ]]; then
 		rm -rf -- "$build_dir"
 	fi
@@ -118,6 +151,7 @@ chmod -R u=rwX,g=rX,o= /opt/letletme/static
 next_link=$current_link.next
 ln -s "$release_dir" "$next_link"
 mv -Tf "$next_link" "$current_link"
+activation_started=1
 printf 'LETLETME_RELEASE_SHA=%s\n' "$release_sha" | install -o root -g root -m 0644 \
 	/dev/stdin /etc/letletme/release.env
 systemctl restart letletme-web.service
@@ -135,19 +169,12 @@ for _ in $(seq 1 45); do
 done
 
 if [[ $healthy -ne 1 ]]; then
-	echo "new release failed health verification; rolling back" >&2
-	if [[ -n $previous_release && -d $previous_release ]]; then
-		ln -s "$previous_release" "$next_link"
-		mv -Tf "$next_link" "$current_link"
-		printf 'LETLETME_RELEASE_SHA=%s\n' "$(basename "$previous_release")" | \
-			install -o root -g root -m 0644 /dev/stdin /etc/letletme/release.env
-		systemctl restart letletme-web.service
-		"$script_dir/render-nginx-config.sh" "$(basename "$previous_release")"
-	fi
+	echo "new release failed health verification" >&2
 	exit 1
 fi
 
 "$script_dir/render-nginx-config.sh" "$release_sha"
+deployment_succeeded=1
 echo "deployed release $release_sha"
 if [[ -n $previous_release ]]; then
 	echo "rollback release retained at $previous_release"

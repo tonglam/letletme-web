@@ -87,7 +87,10 @@ test('streams Tencent response bodies without waiting for completion', async () 
 		new Request('https://letletme.top/en/explore'),
 		baseEnv,
 		quietOptions({
-			fetchImpl: async () => new Response(body)
+			fetchImpl: async () =>
+				new Response(body, {
+					headers: { 'X-Letletme-Release': 'abc1234' }
+				})
 		})
 	)
 	const reader = response.body.getReader()
@@ -167,13 +170,44 @@ test('does not fall back on 4xx or 429', async () => {
 			quietOptions({
 				fetchImpl: async () => {
 					calls += 1
-					return new Response('client response', { status })
+					return new Response('client response', {
+						status,
+						headers: { 'X-Letletme-Release': 'abc1234' }
+					})
 				}
 			})
 		)
 		assert.equal(calls, 1)
 		assert.equal(response.status, status)
 		assert.equal(response.headers.get('x-letletme-origin'), 'tencent')
+	}
+})
+
+test('falls back when Tencent serves a missing or mismatched release', async () => {
+	for (const releaseHeader of [undefined, 'old-release']) {
+		let calls = 0
+		const response = await routeRequest(
+			new Request('https://letletme.top/en/explore'),
+			baseEnv,
+			quietOptions({
+				fetchImpl: async () => {
+					calls += 1
+					return calls === 1
+						? new Response('wrong Tencent release', {
+								status: 200,
+								headers: releaseHeader
+									? { 'X-Letletme-Release': releaseHeader }
+									: undefined
+							})
+						: new Response('vercel', {
+							headers: { 'X-Letletme-Release': 'abc1234' }
+						})
+				}
+			})
+		)
+		assert.equal(calls, 2)
+		assert.equal(response.headers.get('x-letletme-origin'), 'vercel-fallback')
+		assert.equal(await response.text(), 'vercel')
 	}
 })
 
