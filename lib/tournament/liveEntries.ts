@@ -2,6 +2,7 @@ import {
 	type TournamentLiveCalcData,
 	type TournamentLivePointsResponse,
 } from '@/lib/graphql/operations/tournaments'
+import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import { type TournamentEntry } from '@/types/tournament'
 
 export type LiveTournamentStats = {
@@ -18,10 +19,18 @@ export type LiveTournamentStats = {
 export const getTournamentLiveBatchSeed = (
 	response: TournamentLivePointsResponse,
 ) => ({
-	rows: response.calcLivePointsForTournament.results ?? [],
-	snapshot: response.liveSnapshot,
-	failedCount: response.calcLivePointsForTournament.meta.failedCount,
-	totalEntries: response.calcLivePointsForTournament.meta.totalEntries,
+	rows: response.entryLiveCompetitionsDesk.board ?? [],
+	snapshot: response.entryLiveCompetitionsDesk.revision
+		? {
+				eventId: response.entryLiveCompetitionsDesk.eventId,
+				revision: response.entryLiveCompetitionsDesk.revision,
+				state: response.entryLiveCompetitionsDesk.state as LiveSnapshotStatus['state'],
+				publishedAt: new Date().toISOString(),
+				checkedAt: new Date().toISOString(),
+			}
+		: null,
+	failedCount: response.entryLiveCompetitionsDesk.failedEntryIds.length,
+	totalEntries: response.entryLiveCompetitionsDesk.totalEntries,
 })
 
 const mapEventChipToFlags = (eventChip: string | null) => ({

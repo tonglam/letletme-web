@@ -981,34 +981,49 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
-		if (query.includes('GetLiveSnapshot')) {
+		if (query.includes('GetLiveContext')) {
 			json(response, 200, {
 				data: {
-					liveSnapshot: {
+					liveContext: {
+						season: '2627',
+						coreRevision: 'e2e-core-v1',
 						eventId: 33,
+						nextEventId: 34,
 						revision: 'a'.repeat(24),
 						state: 'SCHEDULED',
-						publishedAt: '2026-08-04T18:00:00.000Z',
-						checkedAt: '2026-08-04T18:00:30.000Z'
+						checkedAt: '2026-08-04T18:00:30.000Z',
+						publishedAt: '2026-08-04T18:00:00.000Z'
 					}
 				}
 			})
 			return
 		}
-		if (query.includes('GetLiveMatches')) {
+		if (query.includes('GetLiveMatchdayDesk')) {
 			json(response, 200, {
 				data: {
-					liveSnapshot: {
+					liveMatchdayDesk: {
+						season: '2627',
 						eventId: 33,
 						revision: 'a'.repeat(24),
 						state: 'SCHEDULED',
 						publishedAt: '2026-08-04T18:00:00.000Z',
-						checkedAt: '2026-08-04T18:00:30.000Z'
-					},
-					liveMatches: {
-						notStarted: [scheduledMatch],
-						playing: [],
-						finished: []
+						matches: [],
+						nextFixtures: [
+							{
+								fixtureId: scheduledMatch.matchId,
+								eventId: 33,
+								homeTeamId: scheduledMatch.homeTeamId,
+								homeTeamName: scheduledMatch.homeTeamName,
+								awayTeamId: scheduledMatch.awayTeamId,
+								awayTeamName: scheduledMatch.awayTeamName,
+								homeScore: scheduledMatch.homeScore,
+								awayScore: scheduledMatch.awayScore,
+								kickoffTime: scheduledMatch.kickoffTime,
+								started: false,
+								finished: false
+							}
+						],
+						highlights: []
 					}
 				}
 			})

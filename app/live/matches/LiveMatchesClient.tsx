@@ -1,6 +1,7 @@
 'use client'
 
 import PageShell from '@/components/layout/PageShell'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import { LiveAutoRefreshCountdown } from '@/components/live/LiveAutoRefreshCountdown'
 import { MatchCard } from '@/components/live/MatchCard'
 import {
@@ -11,16 +12,13 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_CURRENT_AND_NEXT_EVENTS,
-	type EventsResponse
-} from '@/lib/graphql/operations/events'
-import {
-	GET_LIVE_SNAPSHOT,
-	type LiveSnapshotResponse,
+	GET_LIVE_CONTEXT,
+	type LiveContextResponse,
 	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import {
 	liveRefreshEventIdentityChanged,
+	liveContextToSnapshot,
 	liveSnapshotNeedsRefresh,
 	shouldPollLiveSnapshot
 } from '@/lib/live-refresh'
@@ -139,7 +137,11 @@ export function LiveMatchesClient({
 	const fetchMatches = useCallback(
 		async (
 			isRefresh = false,
-			eventIds?: { currentEventId?: number; nextEventId?: number | null }
+			eventIds?: {
+				currentEventId?: number
+				nextEventId?: number | null
+				revision?: string | null
+			}
 		) => {
 			if (isFetchInFlight.current) {
 				// Coalesce concurrent manual/auto refreshes into one trailing fetch.
@@ -156,16 +158,21 @@ export function LiveMatchesClient({
 					setIsLoading(true)
 				}
 				setError(null)
-			const resolvedNextEventIdForSnapshot =
-				eventIds && 'nextEventId' in eventIds
-					? eventIds.nextEventId ?? null
-					: resolvedNextEventId ?? null
+				const resolvedNextEventIdForSnapshot =
+					eventIds && 'nextEventId' in eventIds
+						? (eventIds.nextEventId ?? null)
+						: (resolvedNextEventId ?? null)
 
-			const data = await getLiveMatchesSnapshot(
-				resolvedNextEventIdForSnapshot,
-				executeQuery,
-				eventIds?.currentEventId ?? resolvedCurrentEventId ?? null
-			)
+				const data = await getLiveMatchesSnapshot(
+					resolvedNextEventIdForSnapshot,
+					executeQuery,
+					eventIds?.currentEventId ?? resolvedCurrentEventId ?? null,
+					{
+						preferHttp: true,
+						revision:
+							eventIds?.revision ?? snapshotRef.current?.revision ?? null
+					}
+				)
 				if (!mountedRef.current) return
 				const mappedMatches = data.matches
 				setMatches(mappedMatches)
@@ -207,49 +214,41 @@ export function LiveMatchesClient({
 
 		const request = (async () => {
 			try {
-				try {
-					const events = await executeQuery<EventsResponse>(
-						GET_CURRENT_AND_NEXT_EVENTS,
-						undefined,
-						{ cache: 'no-store' }
-					)
-					const currentEventId = events.current[0]?.id
-					const nextEventId = events.next[0]?.id
-					if (
-						currentEventId &&
-						liveRefreshEventIdentityChanged(
-							resolvedCurrentEventId,
-							resolvedNextEventId,
-							currentEventId,
-							nextEventId
-						)
-					) {
-						setResolvedCurrentEventId(currentEventId)
-						setResolvedNextEventId(nextEventId)
-						await fetchMatches(true, { currentEventId, nextEventId })
-						return
-					}
-				} catch (identityError) {
-					// Rollover detection is optional; keep probing the known event when
-					// the identity lookup is temporarily unavailable.
-					console.error(
-						'Failed to resolve current and next live events:',
-						identityError
-					)
-				}
-				const probe = await executeQuery<LiveSnapshotResponse>(
-					GET_LIVE_SNAPSHOT,
-					{ eventId },
+				const probe = await executeQuery<LiveContextResponse>(
+					GET_LIVE_CONTEXT,
+					undefined,
 					{ cache: 'no-store' }
 				)
+				const context = probe.liveContext
+				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
+				const observedCurrentEventId = context?.eventId ?? undefined
+				const observedNextEventId = context?.nextEventId ?? undefined
 				if (
-					!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)
+					observedCurrentEventId &&
+					liveRefreshEventIdentityChanged(
+						resolvedCurrentEventId,
+						resolvedNextEventId,
+						observedCurrentEventId,
+						observedNextEventId
+					)
 				) {
-					acceptSnapshot(probe.liveSnapshot)
+					setResolvedCurrentEventId(observedCurrentEventId)
+					setResolvedNextEventId(observedNextEventId)
+					await fetchMatches(true, {
+						currentEventId: observedCurrentEventId,
+						nextEventId: observedNextEventId,
+						revision: observedSnapshot?.revision ?? null
+					})
+					return
+				}
+				if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
+					acceptSnapshot(observedSnapshot)
 					setError(null)
 					return
 				}
-				await fetchMatches(true)
+				await fetchMatches(true, {
+					revision: observedSnapshot?.revision ?? null
+				})
 			} catch (probeError) {
 				console.error('Failed to check live match freshness:', probeError)
 				setError(t('refreshFailed'))
@@ -262,7 +261,13 @@ export function LiveMatchesClient({
 			}
 		})
 		return request
-	}, [acceptSnapshot, fetchMatches, resolvedCurrentEventId, resolvedNextEventId, t])
+	}, [
+		acceptSnapshot,
+		fetchMatches,
+		resolvedCurrentEventId,
+		resolvedNextEventId,
+		t
+	])
 
 	const handleTabChange = (value: string) => {
 		if (!isLiveMatchesTab(value)) return
@@ -402,6 +407,13 @@ export function LiveMatchesClient({
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
+				<RouteReadyMarker
+					name="LIVE_MATCHDAY_READY"
+					ready={!isLoading}
+					audienceHint="public"
+					goodMs={1000}
+					poorMs={1500}
+				/>
 				{error ? (
 					<p
 						className="mb-4 text-sm text-destructive"

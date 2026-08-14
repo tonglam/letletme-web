@@ -5,7 +5,8 @@ import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_EVENT_LIVE_EXPLAINS,
 	GET_LIVE_POINTS,
-	GET_LIVE_SNAPSHOT,
+	GET_LIVE_CONTEXT,
+	type LiveContextResponse,
 	type EventLiveExplainsResponse,
 	type LiveCalcData,
 	type LiveCalcDataResponse,
@@ -15,6 +16,7 @@ import {
 import {
 	LIVE_EXPLAIN_REFRESH_INTERVAL_MS,
 	liveSnapshotNeedsRefresh,
+	liveContextToSnapshot,
 	shouldPollLiveSnapshot,
 	shouldRefreshLiveExplain
 } from '@/lib/live-refresh'
@@ -293,14 +295,15 @@ export function useLivePoints({
 		if (selectedGameweek === undefined) return
 		const requestId = requestIdRef.current
 		try {
-			const probe = await executeQuery<LiveSnapshotResponse>(
-				GET_LIVE_SNAPSHOT,
-				{ eventId: selectedGameweek },
+			const probe = await executeQuery<LiveContextResponse>(
+				GET_LIVE_CONTEXT,
+				undefined,
 				{ cache: 'no-store' },
 			)
 			if (requestId !== requestIdRef.current) return
-			if (!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)) {
-				acceptSnapshot(probe.liveSnapshot)
+			const observedSnapshot = liveContextToSnapshot(probe.liveContext)
+			if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
+				acceptSnapshot(observedSnapshot)
 				setError(undefined)
 				const latestLive = latestLiveDataRef.current
 				if (

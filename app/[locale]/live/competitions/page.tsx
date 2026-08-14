@@ -1,17 +1,22 @@
 import TournamentClient from '@/app/live/tournaments/TournamentClient'
 import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGameweekUnavailable'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import { getCurrentEventId } from '@/lib/events'
-import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import {
-	GET_ENTRY_TOURNAMENTS,
-	GET_TOURNAMENT_LIVE_POINTS,
-	type EntryTournamentsResponse,
+	GET_LIVE_CONTEXT,
+	type LiveContextResponse,
+	type LiveSnapshotStatus
+} from '@/lib/graphql/operations/live'
+import {
+	GET_TOURNAMENT_LIVE_DESK,
 	type TournamentLiveCalcData,
-	type TournamentLivePointsResponse,
+	type TournamentLivePointsResponse
 } from '@/lib/graphql/operations/tournaments'
-import { executeServerQuery } from '@/lib/graphql-server'
+import {
+	executePublicServerQuery,
+	executeServerQuery
+} from '@/lib/graphql-server'
 import { getCurrentEntryId } from '@/lib/session'
+import { getCurrentSeasonKey } from '@/lib/season'
 import { getTournamentLiveBatchSeed } from '@/lib/tournament/liveEntries'
 import { areTournamentStandingsReady } from '@/lib/tournament/lifecycle'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
@@ -25,7 +30,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/live/competitions',
 		titleKey: 'liveCompetitionsTitle',
-		descriptionKey: 'liveCompetitionsDescription',
+		descriptionKey: 'liveCompetitionsDescription'
 	})
 }
 
@@ -39,15 +44,22 @@ export default async function Page({ params, searchParams }: PageProps) {
 	const liveT = await getTranslations('LiveTournament')
 	const resolvedSearchParams = await searchParams
 
-	// Gate isCurrent first — do not wait on entry/session.
-	const currentEventId = await getCurrentEventId()
+	// Public lifecycle context and the fresh entry authorization hint are
+	// independent. Resolve them together so the desk is the only personalized
+	// live query on the initial render.
+	const [liveContextData, entryId] = await Promise.all([
+		executePublicServerQuery<LiveContextResponse>(GET_LIVE_CONTEXT, undefined, {
+			cache: 'no-store'
+		}),
+		getCurrentEntryId()
+	])
+	const currentEventId = liveContextData.liveContext?.eventId ?? null
 	if (!currentEventId) {
 		return (
 			<CurrentGameweekUnavailable titleKey="liveCompetitionUnavailableTitle" />
 		)
 	}
 
-	const entryId = await getCurrentEntryId()
 	let initialTournaments: ReturnType<
 		typeof mapEntryTournamentToLiveTournament
 	>[] = []
@@ -59,53 +71,59 @@ export default async function Page({ params, searchParams }: PageProps) {
 
 	if (entryId) {
 		try {
-			const tournamentsData =
-				await executeServerQuery<EntryTournamentsResponse>(
-					GET_ENTRY_TOURNAMENTS,
-					{ entryId },
-					{ cache: 'no-store' },
-				)
-			initialTournaments = tournamentsData.entryTournaments.map(
-				mapEntryTournamentToLiveTournament,
-			)
 			const requestedTournamentId =
 				typeof resolvedSearchParams.tournamentId === 'string'
 					? resolvedSearchParams.tournamentId
 					: ''
+			const requestedTournamentIdNumber = Number(requestedTournamentId)
+			const context = liveContextData.liveContext
+			const ref =
+				context?.revision && context.eventId
+					? {
+							season: context.season || String(getCurrentSeasonKey()),
+							eventId: context.eventId,
+							revision: context.revision
+						}
+					: null
+			const desk = await executeServerQuery<TournamentLivePointsResponse>(
+				GET_TOURNAMENT_LIVE_DESK,
+				{
+					entryId,
+					selectedTournamentId:
+						requestedTournamentId &&
+						Number.isSafeInteger(requestedTournamentIdNumber) &&
+						requestedTournamentIdNumber > 0
+							? requestedTournamentIdNumber
+							: null,
+					ref
+				},
+				{ cache: 'no-store' }
+			)
+			initialTournaments = desk.entryLiveCompetitionsDesk.tournaments.map(
+				mapEntryTournamentToLiveTournament
+			)
 			initialSelectedTournamentId =
-				initialTournaments.find(
-					tournament => tournament.id === requestedTournamentId,
-				)?.id ??
+				desk.entryLiveCompetitionsDesk.selectedTournamentId?.toString() ??
 				initialTournaments[0]?.id ??
 				''
-
-			const tournamentId = Number(initialSelectedTournamentId)
 			const selectedTournament = initialTournaments.find(
-				tournament => tournament.id === initialSelectedTournamentId,
+				tournament => tournament.id === initialSelectedTournamentId
 			)
 			if (
-				tournamentId > 0 &&
-				currentEventId &&
 				selectedTournament &&
 				areTournamentStandingsReady(selectedTournament)
 			) {
-				const currentResponse =
-					await executeServerQuery<TournamentLivePointsResponse>(
-						GET_TOURNAMENT_LIVE_POINTS,
-						{ tournamentId, eventId: currentEventId },
-						{ cache: 'no-store' },
-					)
-				const seed = getTournamentLiveBatchSeed(currentResponse)
+				const seed = getTournamentLiveBatchSeed(desk)
 				initialCurrentRows = seed.rows
 				initialSnapshot = seed.snapshot
 				if (seed.failedCount > 0) {
 					initialResultsError = liveT('partialResults', {
 						failed: seed.failedCount,
-						total: seed.totalEntries,
+						total: seed.totalEntries
 					})
 				}
-				initialResultsLoaded = true
 			}
+			initialResultsLoaded = true
 		} catch (err) {
 			console.error('Failed to seed live tournament page:', err)
 		}

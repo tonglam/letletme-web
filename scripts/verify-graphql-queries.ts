@@ -31,7 +31,7 @@ import {
 } from '../lib/graphql/operations/events'
 import {
 	GET_EVENT_LIVE_EXPLAIN,
-	GET_LIVE_MATCHES,
+	GET_LIVE_MATCHDAY_DESK,
 	GET_LIVE_POINTS,
 	GET_LIVE_SCORES,
 	GET_PLAYER_LIVE
@@ -56,7 +56,7 @@ import {
 	GET_ENTRY_TOURNAMENTS,
 	GET_TOURNAMENT_ENTRY_RANKING_SUMMARY,
 	GET_TOURNAMENT_EVENT_RESULTS,
-	GET_TOURNAMENT_LIVE_POINTS,
+	GET_TOURNAMENT_LIVE_DESK,
 	GET_TOURNAMENT_SELECTION_STATS
 } from '../lib/graphql/operations/tournaments'
 
@@ -288,8 +288,8 @@ async function main() {
 			requiresPublishedPicks: true
 		},
 		{
-			name: 'GET_TOURNAMENT_LIVE_POINTS',
-			query: GET_TOURNAMENT_LIVE_POINTS,
+			name: 'GET_TOURNAMENT_LIVE_DESK',
+			query: GET_TOURNAMENT_LIVE_DESK,
 			variables: { eventId, tournamentId },
 			skip: tournamentId === null,
 			requiresPublishedPicks: true
@@ -310,7 +310,7 @@ async function main() {
 			query: GET_ENTRY_TRANSFER_HISTORY,
 			variables: { entryId }
 		},
-		{ name: 'GET_LIVE_MATCHES', query: GET_LIVE_MATCHES },
+		{ name: 'GET_LIVE_MATCHDAY_DESK', query: GET_LIVE_MATCHDAY_DESK },
 		{
 			name: 'GET_EVENT_LIVE_EXPLAIN',
 			query: GET_EVENT_LIVE_EXPLAIN,
