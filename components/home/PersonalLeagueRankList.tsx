@@ -46,15 +46,20 @@ function MovementBadge({
 
 function LeagueRow({
 	row,
-	ariaLabel
+	ariaLabel,
+	elementTiming
 }: {
 	row: HomeLeagueRank
 	ariaLabel: string
+	elementTiming?: string
 }) {
 	const rankDisplay = row.rank == null ? '—' : formatInteger(row.rank)
 	const body = (
 		<>
-			<span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
+			<span
+				className="min-w-0 flex-1 truncate text-sm font-medium leading-tight"
+				{...(elementTiming ? { elementtiming: elementTiming } : {})}
+			>
 				{row.name}
 			</span>
 			<span
@@ -110,7 +115,7 @@ export async function PersonalLeagueRankList({
 	const t = await getTranslations('Home')
 	const initialRows = rows.slice(0, HOME_LEAGUE_RANK_LIMIT)
 	const remainingRows = rows.slice(HOME_LEAGUE_RANK_LIMIT)
-	const renderRow = (row: HomeLeagueRank) => {
+	const renderRow = (row: HomeLeagueRank, elementTiming?: string) => {
 		const rankDisplay = row.rank == null ? '—' : formatInteger(row.rank)
 		const ariaMove =
 			row.movement.direction === 'UP'
@@ -125,23 +130,26 @@ export async function PersonalLeagueRankList({
 				key={row.key}
 				row={row}
 				ariaLabel={`${t('personalLeagueRank', { rank: rankDisplay })}, ${ariaMove}`}
+				elementTiming={elementTiming}
 			/>
 		)
 	}
 
 	return (
-		<div
-			data-home-league-ranks-ready="true"
-			{...{ elementtiming: 'home-league-ranks' }}
-		>
+		<div data-home-league-ranks-ready="true">
 			{rows.length === 0 ? (
-				<p className="min-h-11 rounded-md border border-dashed border-border/70 px-3 py-3 text-center text-xs text-muted-foreground">
+				<p
+					className="min-h-11 rounded-md border border-dashed border-border/70 px-3 py-3 text-center text-xs text-muted-foreground"
+					{...{ elementtiming: 'home-league-ranks' }}
+				>
 					{t('personalLeaguesEmpty')}
 				</p>
 			) : (
 				<>
 					<ul className="rounded-lg border surface-inset-soft px-3">
-						{initialRows.map(renderRow)}
+						{initialRows.map((row, index) =>
+							renderRow(row, index === 0 ? 'home-league-ranks' : undefined)
+						)}
 					</ul>
 					{remainingRows.length > 0 ? (
 						<details className="group mt-2.5">
@@ -160,7 +168,7 @@ export async function PersonalLeagueRankList({
 								</span>
 							</summary>
 							<ul className="mt-2 rounded-lg border surface-inset-soft px-3">
-								{remainingRows.map(renderRow)}
+								{remainingRows.map(row => renderRow(row))}
 							</ul>
 						</details>
 					) : null}

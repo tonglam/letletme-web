@@ -3,6 +3,7 @@
 import { reportBrowserPerformanceMetric } from '@/lib/analytics/client-vitals'
 import {
 	measureRouteReadyDuration,
+	nextPaintOpportunityTime,
 	observeElementPaintTime,
 	routeReadyStartTime
 } from '@/lib/analytics/route-navigation'
@@ -67,9 +68,13 @@ export function RouteReadyMarker({
 				? await observeElementPaintTime(elementTiming, routeStartedAt)
 				: null
 			if (cancelled) return
+			const readyAt =
+				paintedAt ??
+				(elementTiming ? await nextPaintOpportunityTime() : effectAt)
+			if (cancelled) return
 			const value = measureRouteReadyDuration(
 				pathname,
-				paintedAt ?? effectAt,
+				readyAt,
 				undefined,
 				readyKey
 			)
