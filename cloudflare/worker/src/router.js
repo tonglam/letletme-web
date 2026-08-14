@@ -37,8 +37,26 @@ function sanitizedHeaders(request) {
 	return headers
 }
 
-function originRequest(request, headers) {
-	return new Request(request, { headers, redirect: 'manual' })
+function originRequest(request, headers, originHost) {
+	if (!originHost) {
+		return new Request(request, { headers, redirect: 'manual' })
+	}
+	const url = new URL(request.url)
+	url.protocol = 'https:'
+	url.hostname = originHost
+	url.port = ''
+	const originalHost = request.headers.get('host')
+	if (originalHost) headers.set('host', originalHost)
+	const init = {
+		method: request.method,
+		headers,
+		redirect: 'manual'
+	}
+	if (request.method !== 'GET' && request.method !== 'HEAD') {
+		init.body = request.body
+		init.duplex = 'half'
+	}
+	return new Request(url, init)
 }
 
 function annotateResponse(request, response, origin, env) {
@@ -46,6 +64,18 @@ function annotateResponse(request, response, origin, env) {
 		return response
 	}
 	const headers = new Headers(response.headers)
+	if (origin.startsWith('vercel') && env.VERCEL_ORIGIN_HOST) {
+		const publicOrigin = new URL(request.url).origin
+		for (const header of ['location', 'link']) {
+			const value = headers.get(header)
+			if (value) {
+				headers.set(
+					header,
+					value.replaceAll(`https://${env.VERCEL_ORIGIN_HOST}`, publicOrigin)
+				)
+			}
+		}
+	}
 	headers.set('X-Letletme-Origin', origin)
 	if (!headers.has('X-Letletme-Release')) {
 		headers.set(
@@ -74,7 +104,11 @@ function logRoute(context, details) {
 
 async function fetchVercel(request, context, origin = 'vercel') {
 	const response = await context.fetchImpl(
-		originRequest(request, sanitizedHeaders(request)),
+		originRequest(
+			request,
+			sanitizedHeaders(request),
+			context.env.VERCEL_ORIGIN_HOST
+		),
 		{ cf: { cacheEverything: false } }
 	)
 	return annotateResponse(request, response, origin, context.env)
@@ -116,7 +150,7 @@ async function fetchTencent(request, context) {
 export async function routeRequest(request, env = {}, options = {}) {
 	const context = {
 		env,
-		fetchImpl: options.fetchImpl ?? fetch,
+		fetchImpl: options.fetchImpl ?? ((...args) => fetch(...args)),
 		logger: options.logger
 	}
 	const country = Object.hasOwn(options, 'country')

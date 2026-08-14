@@ -11,6 +11,7 @@ const baseEnv = {
 	ORIGIN_TOKEN: 'origin-token',
 	TENCENT_ORIGIN_HOST: 'tencent-origin.letletme.top',
 	TENCENT_TIMEOUT_MS: '20',
+	VERCEL_ORIGIN_HOST: 'letletme-web.vercel.app',
 	ROUTER_VERSION: 'test',
 	EXPECTED_RELEASE_SHA: 'abc1234'
 }
@@ -66,6 +67,10 @@ test('passes request bodies through to Vercel without reading or retaining inter
 		baseEnv,
 		quietOptions({
 			fetchImpl: async request => {
+				assert.equal(
+					new URL(request.url).hostname,
+					'letletme-web.vercel.app'
+				)
 				assert.equal(request.headers.has('x-letletme-origin-token'), false)
 				assert.equal(request.headers.has('x-letletme-proxy-secret'), false)
 				forwardedBody = await request.text()
@@ -252,6 +257,28 @@ test('pass-through mode and non-China requests use only Vercel', async () => {
 		assert.equal(calls, 1)
 		assert.equal(response.headers.get('x-letletme-origin'), 'vercel')
 	}
+})
+
+test('restores the public origin in Vercel response headers', async () => {
+	const response = await routeRequest(
+		new Request('https://letletme.top/en/explore'),
+		{ ...baseEnv, ROUTER_MODE: 'pass-through' },
+		quietOptions({
+			fetchImpl: async () =>
+				new Response('redirect', {
+					status: 302,
+					headers: {
+						Location: 'https://letletme-web.vercel.app/login',
+						Link: '<https://letletme-web.vercel.app/>; rel="canonical"'
+					}
+				})
+		})
+	)
+	assert.equal(response.headers.get('location'), 'https://letletme.top/login')
+	assert.equal(
+		response.headers.get('link'),
+		'<https://letletme.top/>; rel="canonical"'
+	)
 })
 
 test('does not trust a client-supplied CF-IPCountry header when cf data is absent', async () => {

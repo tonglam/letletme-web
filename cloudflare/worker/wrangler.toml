@@ -14,5 +14,6 @@ head_sampling_rate = 1
 ROUTER_MODE = "pass-through"
 TENCENT_ORIGIN_HOST = "tencent-origin.letletme.top"
 TENCENT_TIMEOUT_MS = "4000"
+VERCEL_ORIGIN_HOST = "letletme-web.vercel.app"
 ROUTER_VERSION = "unreleased"
 EXPECTED_RELEASE_SHA = "unknown"
