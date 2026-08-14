@@ -1,4 +1,4 @@
-import { Badge } from '@/components/ui/badge'
+import { MarketPositionBadge, MarketStatusBadge } from '@/components/data/MarketMarkup'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import type {
 	MarketAvailabilityUpdate,
@@ -6,9 +6,6 @@ import type {
 } from '@/lib/graphql/operations/market'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
 import { availabilityBodyText, marketAvailabilityStatusKey } from '@/lib/market-availability'
-import { shortMarketPosition } from '@/lib/market'
-import { positionBadgeClass } from '@/lib/position-style'
-import { cn } from '@/lib/utils'
 import type { ReactNode } from 'react'
 
 export type MarketAvailabilityTranslator = (
@@ -33,12 +30,7 @@ function formatOwnership(value: number, locale: string): string {
 }
 
 function PositionBadge({ player }: { player: MarketPlayer }) {
-	const position = shortMarketPosition(player.position)
-	return (
-		<Badge className={cn(positionBadgeClass(position), 'shrink-0 text-[10px]')}>
-			{position}
-		</Badge>
-	)
+	return <MarketPositionBadge position={player.position} />
 }
 
 function EmptyHint({ children }: { children: ReactNode }) {
@@ -71,8 +63,8 @@ export function MarketAvailabilityList({
 				const chance =
 					update.chanceOfPlayingThisRound ?? update.chanceOfPlayingNextRound
 				return (
-					<li key={update.player.playerId} className="py-2.5 first:pt-0 last:pb-0">
-						<div className="flex items-start gap-2.5">
+					<li key={update.player.playerId} className="market-availability-row">
+						<div className="market-availability-content">
 							<PositionBadge player={update.player} />
 							<div className="min-w-0 flex-1">
 								<div className="flex flex-wrap items-center gap-2">
@@ -82,24 +74,21 @@ export function MarketAvailabilityList({
 											localePathPrefix:
 												locale === 'en' ? '' : `/${locale}`
 										})}
-										className="text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+										className="market-availability-link"
 									>
 										{update.player.webName}
 									</a>
-									<Badge
-										variant={key === 'available' ? 'secondary' : 'outline'}
-										className="text-[10px]"
-									>
+									<MarketStatusBadge available={key === 'available'}>
 										{t(`status.${key}`)}
-									</Badge>
+									</MarketStatusBadge>
 								</div>
-								<p className="mt-0.5 text-[11px] text-muted-foreground">
+								<p className="market-availability-meta">
 									{update.player.teamShortName} · {formatOwnership(update.player.selectedByPercent, locale)} {t('owned')}
 								</p>
-								<p className="mt-1.5 text-sm leading-snug text-foreground">
+								<p className="market-availability-body">
 									{availabilityBodyText(update, messageKey => t(messageKey))}
 								</p>
-								<p className="mt-1 text-[11px] text-muted-foreground">
+								<p className="market-availability-date">
 									{t('observedOn', { date: formatCalendarDate(update.observedDate, locale) })}
 									{chance !== null ? ` · ${t('playingChance', { chance })}` : ''}
 								</p>

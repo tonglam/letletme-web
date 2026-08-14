@@ -1,10 +1,8 @@
 'use client'
 
-import { Badge } from '@/components/ui/badge'
+import { MarketPositionBadge } from '@/components/data/MarketMarkup'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import type { MarketOwnershipMover } from '@/lib/graphql/operations/market'
-import { shortMarketPosition } from '@/lib/market'
-import { positionBadgeClass } from '@/lib/position-style'
 import { cn } from '@/lib/utils'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { useFormatter, useLocale, useTranslations } from 'next-intl'
@@ -58,34 +56,25 @@ function MoverList({
 				return (
 					<li
 						key={mover.player.playerId}
-						className="relative overflow-hidden border-b border-border/50 py-2 last:border-b-0"
+						className="market-mover-row"
 					>
 						<span
 							aria-hidden="true"
 							className={cn(
-								'absolute inset-y-0 left-0 opacity-[0.07]',
+								'market-mover-bar',
 								direction === 'rise' ? 'bg-success' : 'bg-destructive'
 							)}
 							style={{ width: `${Math.max(magnitude * 100, 4)}%` }}
 						/>
-						<div className="relative flex items-center gap-2.5">
-							<Badge
-								className={cn(
-									positionBadgeClass(
-										shortMarketPosition(mover.player.position)
-									),
-									'shrink-0 text-[10px]'
-								)}
-							>
-								{shortMarketPosition(mover.player.position)}
-							</Badge>
+						<div className="market-mover-content">
+							<MarketPositionBadge position={mover.player.position} />
 							<div className="min-w-0 flex-1">
 								<a
 									href={playerStatsHref({
 										p1: String(mover.player.playerId),
 										localePathPrefix: locale === 'en' ? '' : `/${locale}`
 									})}
-									className="truncate text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+									className="market-player-link"
 								>
 									{mover.player.webName}
 								</a>
