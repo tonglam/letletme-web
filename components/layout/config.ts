@@ -15,7 +15,6 @@ interface MenuItem {
 			| 'livePoints'
 			| 'liveCompetitions'
 			| 'liveMatches'
-			| 'myFplOverview'
 			| 'myFplTeam'
 			| 'myTournament'
 			| 'myCompetitions'
@@ -52,7 +51,6 @@ export const menuItems: MenuItem[] = [
 		labelKey: 'myFpl',
 		icon: UserRound,
 		items: [
-			{ labelKey: 'myFplOverview', href: '/' },
 			{ labelKey: 'myFplTeam', href: '/my-fpl/team' },
 			{ labelKey: 'myTournament', href: '/my-fpl/competitions' },
 		],
