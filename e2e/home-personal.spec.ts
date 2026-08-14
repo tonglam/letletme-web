@@ -206,6 +206,34 @@ test('the server-rendered signed navigation logs out through a same-origin POST'
 	}
 })
 
+test('the no-JavaScript sign-out fallback preserves the Chinese locale', async ({
+	browser
+}, testInfo) => {
+	const session = await createSession({ entryId: 15702 })
+	const context = await browser.newContext({
+		baseURL: testInfo.project.use.baseURL,
+		javaScriptEnabled: false
+	})
+	const page = await context.newPage()
+	try {
+		await useCookie(page, session.cookie)
+		await page.goto('/zh-CN')
+		const navigation = page.getByRole('navigation')
+		await navigation.getByText('E2E Manager', { exact: true }).first().click()
+		await navigation.getByRole('button', { name: '退出登录' }).click()
+
+		await expect(page).toHaveURL(url => url.pathname === '/zh-CN')
+		expect(
+			(await context.cookies()).some(
+				cookie => cookie.name === '__Secure-letletme.session_token'
+			)
+		).toBe(false)
+	} finally {
+		await context.close()
+		await session.cleanup()
+	}
+})
+
 test('the signed account disclosure closes on profile navigation', async ({ page }) => {
 	const session = await createSession({ entryId: 15702 })
 	try {

@@ -360,7 +360,10 @@ async function HomeInsights() {
 											? gameweek.gameweekDesk.dreamTeam
 											: []
 									}
-									hasError={gameweek === null}
+									hasError={
+										gameweek === null ||
+										gameweek.gameweekDesk.boardsState === 'UNAVAILABLE'
+									}
 								/>
 								<GameweekStatsSection
 									currentEventId={currentEventId}

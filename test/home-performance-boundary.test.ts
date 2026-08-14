@@ -115,6 +115,10 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(homeGraphql, /transfersState/)
 		assert.doesNotMatch(homeGraphql, /^\s+gameweekDesk\(eventId:/m)
 		assert.doesNotMatch(homeGraphql, /^\s+topTransfersIn\(eventId:/m)
+		assert.match(
+			home,
+			/gameweek\.gameweekDesk\.boardsState === 'UNAVAILABLE'/
+		)
 	})
 
 	it('renders the guest navigation without Better Auth client code', () => {

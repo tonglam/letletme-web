@@ -1,3 +1,5 @@
+import { safeRedirectPath } from './auth-redirects'
+
 type SignOutRequest = (headers: Headers) => Promise<Response>
 
 function isSameOriginMutation(request: Request): boolean {
@@ -12,6 +14,16 @@ function isSameOriginMutation(request: Request): boolean {
 function copySetCookies(source: Headers, target: Headers): void {
 	const values = source.getSetCookie()
 	for (const value of values) target.append('set-cookie', value)
+}
+
+async function fallbackRedirectPath(request: Request): Promise<string> {
+	try {
+		const form = await request.formData()
+		const value = form.get('redirectHref')
+		return safeRedirectPath(typeof value === 'string' ? value : null)
+	} catch {
+		return '/'
+	}
 }
 
 export function createLogoutRouteHandler(
@@ -40,12 +52,13 @@ export function createLogoutRouteHandler(
 				.get('accept')
 				?.toLowerCase()
 				.includes('application/json')
+			const redirectPath = wantsJson ? '/' : await fallbackRedirectPath(request)
 			const response = new Response(null, {
 				status: wantsJson ? 204 : 303,
 				headers: {
 					...(wantsJson
 						? {}
-						: { Location: new URL('/', request.url).toString() }),
+						: { Location: new URL(redirectPath, request.url).toString() }),
 					'Cache-Control': 'private, no-store, no-transform'
 				}
 			})

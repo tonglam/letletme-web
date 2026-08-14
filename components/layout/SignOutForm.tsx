@@ -38,6 +38,7 @@ export function SignOutForm({
 				}
 			}}
 		>
+			<input type="hidden" name="redirectHref" value={redirectHref} />
 			<button
 				type="submit"
 				disabled={pending}
