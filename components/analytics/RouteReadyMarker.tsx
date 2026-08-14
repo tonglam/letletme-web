@@ -13,6 +13,9 @@ type ReadyMetricName =
 	| 'FIXTURES_WINDOW_READY'
 	| 'GAMEWEEK_CONTENT_READY'
 	| 'MARKET_CONTENT_READY'
+	| 'MARKET_SEARCH_READY'
+	| 'MARKET_HISTORY_READY'
+	| 'MARKET_AVAILABILITY_READY'
 	| 'PLAYER_DIRECTORY_READY'
 	| 'PLAYER_DETAIL_READY'
 	| 'PLAYER_COMPARE_READY'
@@ -40,7 +43,12 @@ export function RouteReadyMarker({
 	useEffect(() => {
 		if (!ready || reportedIdentity.current === readyIdentity) return
 		reportedIdentity.current = readyIdentity
-		const value = measureRouteReadyDuration(pathname)
+		const value = measureRouteReadyDuration(
+			pathname,
+			performance.now(),
+			undefined,
+			readyKey
+		)
 		reportBrowserPerformanceMetric(
 			{
 				name,

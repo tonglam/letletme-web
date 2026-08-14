@@ -81,6 +81,87 @@ export const GET_MARKET_PULSE = /* GraphQL */ `
   }
 `
 
+/** Initial Market projection. Availability rows are loaded only when expanded. */
+export const GET_MARKET_PULSE_SUMMARY = /* GraphQL */ `
+  query GetMarketPulseSummary($days: Int = 14) {
+    marketSnapshotContext {
+      season
+      revision
+      source
+      snapshotDate
+      capturedAt
+      rowCount
+    }
+    marketPulse(days: $days) {
+      coverage {
+        requestedDays
+        observedDays
+        firstDate
+        latestDate
+        capturedAt
+        complete
+        stale
+      }
+      mostSelected { ...MarketPlayerFields }
+      ownershipMovers {
+        risers {
+          player { ...MarketPlayerFields }
+          previousSelectedByPercent
+          selectedByPercent
+          change
+        }
+        fallers {
+          player { ...MarketPlayerFields }
+          previousSelectedByPercent
+          selectedByPercent
+          change
+        }
+      }
+      transferMovers {
+        player { ...MarketPlayerFields }
+        transfersIn
+        transfersOut
+        netTransfers
+      }
+      availabilityUpdateCount
+      availabilityHighlights {
+        player { ...MarketPlayerFields }
+        status
+        previousStatus
+        news
+        newsAdded
+        observedDate
+        chanceOfPlayingThisRound
+        chanceOfPlayingNextRound
+      }
+      newPlayers {
+        player { ...MarketPlayerFields }
+        firstObservedDate
+      }
+      priceChanges {
+        player { ...MarketPlayerFields }
+        changeDate
+        oldPrice
+        newPrice
+        change
+        direction
+      }
+    }
+  }
+
+  fragment MarketPlayerFields on MarketPlayer {
+    playerId
+    playerCode
+    webName
+    teamId
+    teamName
+    teamShortName
+    position
+    price
+    selectedByPercent
+  }
+`
+
 /** Compact market projection used by the fixture-planning page. */
 export const GET_FIXTURE_PLANNING_SIGNALS = /* GraphQL */ `
   query GetFixturePlanningSignals($days: Int = 14) {
@@ -186,12 +267,135 @@ export interface MarketPulse {
 	transferMovers: MarketTransferMover[]
 	availabilityUpdates: MarketAvailabilityUpdate[]
 	availabilityHighlights: MarketAvailabilityUpdate[]
+	availabilityUpdateCount?: number
 	newPlayers: MarketNewPlayer[]
 	priceChanges: MarketPriceChange[]
 }
 
 export interface MarketPulseResponse {
 	marketPulse: MarketPulse
+}
+
+export interface MarketSnapshotContext {
+	season: string
+	revision: string
+	source: 'DATA_PUBLICATION' | 'POSTGRES_FALLBACK'
+	snapshotDate: string | null
+	capturedAt: string | null
+	rowCount: number
+}
+
+export type MarketPulseSummary = Omit<MarketPulse, 'availabilityUpdates'> & {
+	availabilityUpdates: MarketAvailabilityUpdate[]
+	availabilityUpdateCount: number
+}
+
+export interface MarketPulseSummaryResponse {
+	marketSnapshotContext: MarketSnapshotContext
+	marketPulse: MarketPulseSummary
+}
+
+export const GET_MARKET_PLAYERS = /* GraphQL */ `
+  query MarketPlayers($search: String!, $limit: Int = 20) {
+    marketSnapshotContext { revision source snapshotDate capturedAt rowCount }
+    playersForPicker(search: $search, sort: NAME_ASC, limit: $limit, cursor: null) {
+      items {
+        id
+        webName
+        position
+        price
+        selectedByPercent
+        totalPoints
+        form
+        team { id name shortName }
+      }
+      totalCount
+      nextCursor
+    }
+  }
+`
+
+export const GET_MARKET_PRICE_HISTORY = /* GraphQL */ `
+  query MarketPriceHistory($playerId: Int!) {
+    marketSnapshotContext { revision source snapshotDate capturedAt rowCount }
+    playerValueHistory(playerId: $playerId) {
+      playerId
+      changeDate
+      oldValue
+      newValue
+      changeType
+      transfersIn
+      transfersOut
+    }
+  }
+`
+
+export const GET_MARKET_AVAILABILITY = /* GraphQL */ `
+  query MarketAvailability($days: Int = 14) {
+    marketSnapshotContext { revision source snapshotDate capturedAt rowCount }
+    marketPulse(days: $days) {
+      availabilityUpdates {
+        player { ...MarketPlayerFields }
+        status
+        previousStatus
+        news
+        newsAdded
+        observedDate
+        chanceOfPlayingThisRound
+        chanceOfPlayingNextRound
+      }
+    }
+  }
+
+  fragment MarketPlayerFields on MarketPlayer {
+    playerId
+    playerCode
+    webName
+    teamId
+    teamName
+    teamShortName
+    position
+    price
+    selectedByPercent
+  }
+`
+
+export interface PlayerDirectoryItemLike {
+	id: number
+	webName: string
+	position: MarketPosition
+	price: number
+	selectedByPercent?: number | null
+	totalPoints?: number | null
+	form?: number | null
+	team: { id: number; name: string; shortName: string }
+}
+
+export interface MarketPlayersResponse {
+	marketSnapshotContext: MarketSnapshotContext
+	playersForPicker: {
+		items: PlayerDirectoryItemLike[]
+		totalCount: number
+		nextCursor: number | null
+	}
+}
+
+export interface MarketHistoryResponse {
+	marketSnapshotContext: MarketSnapshotContext
+	playerValueHistory: Array<{
+		playerId: number
+		changeDate: string
+		oldValue: number
+		newValue: number
+		changeType: 'RISE' | 'FALL' | 'UNCHANGED'
+		transfersIn?: number | null
+		transfersOut?: number | null
+	}>
+}
+
+export interface MarketAvailabilityResponse {
+	marketSnapshotContext: MarketSnapshotContext
+	marketPulse: { availabilityUpdates: MarketAvailabilityUpdate[] }
 }
 
 export type FixtureSignalPlayer = Pick<

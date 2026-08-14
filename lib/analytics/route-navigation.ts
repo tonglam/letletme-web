@@ -4,6 +4,7 @@ type RouteNavigationStart = {
 }
 
 let currentRouteNavigation: RouteNavigationStart | null = null
+const readyInteractionStarts = new Map<string, number>()
 
 const normalizePathname = (pathname: string): string => {
 	const normalized = pathname.replace(/\/{2,}/g, '/').replace(/\/$/, '')
@@ -13,12 +14,15 @@ const normalizePathname = (pathname: string): string => {
 /** Starts a content-ready clock for an in-page interaction without a router navigation. */
 export function markRouteReadyStart(
 	pathname: string,
-	startedAt = performance.now()
+	startedAt = performance.now(),
+	readyKey?: string
 ): void {
-	currentRouteNavigation = {
-		pathname: normalizePathname(pathname),
-		startedAt
+	const normalizedPathname = normalizePathname(pathname)
+	if (readyKey) {
+		readyInteractionStarts.set(`${normalizedPathname}\u0000${readyKey}`, startedAt)
+		return
 	}
+	currentRouteNavigation = { pathname: normalizedPathname, startedAt }
 }
 
 /** Called by Next's pre-hydration client instrumentation when a route starts. */
@@ -45,8 +49,16 @@ function documentNavigationStart(): number {
 export function measureRouteReadyDuration(
 	pathname: string,
 	now = performance.now(),
-	documentStart = documentNavigationStart()
+	documentStart = documentNavigationStart(),
+	readyKey?: string
 ): number {
+	if (readyKey) {
+		const interactionKey = `${normalizePathname(pathname)}\u0000${readyKey}`
+		const interactionStart = readyInteractionStarts.get(interactionKey)
+		if (interactionStart !== undefined) {
+			return Math.max(0, now - interactionStart)
+		}
+	}
 	const routeStart =
 		currentRouteNavigation?.pathname === normalizePathname(pathname)
 			? currentRouteNavigation.startedAt
@@ -56,4 +68,5 @@ export function measureRouteReadyDuration(
 
 export function resetRouteNavigationStartForTests(): void {
 	currentRouteNavigation = null
+	readyInteractionStarts.clear()
 }
