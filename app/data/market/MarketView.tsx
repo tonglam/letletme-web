@@ -672,6 +672,9 @@ function AvailabilityEvidence({
 }) {
 	const t = useTranslations('Market')
 	const [loadedUpdates, setLoadedUpdates] = useState(updates)
+	const [isLoaded, setIsLoaded] = useState(
+		updates.length > highlights.length
+	)
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState(false)
 	const [availabilityReadyKey, setAvailabilityReadyKey] = useState<
@@ -683,8 +686,6 @@ function AvailabilityEvidence({
 			: loadedUpdates.length > 0
 				? loadedUpdates
 				: updates
-	const allUpdates =
-		loadedUpdates.length > highlights.length ? loadedUpdates : lead
 	const loadUpdates = useCallback(async () => {
 		if (loadedUpdates.length > highlights.length || loading || !revision) return
 		setLoading(true)
@@ -702,6 +703,7 @@ function AvailabilityEvidence({
 				revision: marketRevisionParam(revision)
 			})
 			setLoadedUpdates(data.items ?? [])
+			setIsLoaded(true)
 			setAvailabilityReadyKey(`${revision}:${days}`)
 		} catch {
 			setError(true)
@@ -711,7 +713,10 @@ function AvailabilityEvidence({
 		}
 	}, [days, highlights.length, loadedUpdates.length, loading, revision])
 
-	useEffect(() => setLoadedUpdates(updates), [updates])
+	useEffect(() => {
+		setLoadedUpdates(updates)
+		setIsLoaded(updates.length > highlights.length)
+	}, [highlights.length, updates])
 
 	return (
 		<>
@@ -730,6 +735,7 @@ function AvailabilityEvidence({
 				/>
 				{count > highlights.length ? (
 					<details
+						data-testid="market-availability-disclosure"
 						className="mt-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2.5"
 						onToggle={event => {
 							if (event.currentTarget.open) void loadUpdates()
@@ -749,9 +755,9 @@ function AvailabilityEvidence({
 									{t('dataUnavailable')}
 								</p>
 							) : null}
-							{!loading && !error ? (
+							{isLoaded && !loading && !error ? (
 								<AvailabilityBlock
-									updates={allUpdates}
+									updates={loadedUpdates}
 									locale={locale}
 								/>
 							) : null}
