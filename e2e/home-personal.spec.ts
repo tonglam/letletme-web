@@ -192,7 +192,7 @@ test('the server-rendered signed navigation logs out through a same-origin POST'
 		)
 		await navigation.getByRole('button', { name: 'Sign out' }).click()
 		const logoutResponse = await logoutResponsePromise
-		expect(logoutResponse.status()).toBe(303)
+		expect(logoutResponse.status()).toBe(204)
 		await expect(page).toHaveURL(url => url.pathname === '/')
 		expect(
 			(await page.context().cookies()).some(
@@ -201,6 +201,38 @@ test('the server-rendered signed navigation logs out through a same-origin POST'
 		).toBe(false)
 		await expect(navigation.getByRole('link', { name: 'Login' }).first()).toBeVisible()
 		await expect(page.locator('[data-home-personal-ready]')).toHaveCount(0)
+	} finally {
+		await session.cleanup()
+	}
+})
+
+test('a failed navbar sign-out stays in the app with a visible error', async ({
+	page
+}) => {
+	const session = await createSession({ entryId: 15702 })
+	try {
+		await useCookie(page, session.cookie)
+		await page.route('**/api/session/logout', route =>
+			route.fulfill({
+				status: 502,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: 'Sign out failed' })
+			})
+		)
+		await page.goto('/')
+		const navigation = page.getByRole('navigation')
+		await navigation.getByText('E2E Manager', { exact: true }).first().click()
+		await navigation.getByRole('button', { name: 'Sign out' }).click()
+
+		await expect(page).toHaveURL(url => url.pathname === '/')
+		await expect(
+			navigation.getByRole('alert').filter({ hasText: 'Could not sign out' })
+		).toBeVisible()
+		expect(
+			(await page.context().cookies()).some(
+				cookie => cookie.name === '__Secure-letletme.session_token'
+			)
+		).toBe(true)
 	} finally {
 		await session.cleanup()
 	}

@@ -48,6 +48,30 @@ describe('Navbar logout route', () => {
 		assert.equal(calls, 0)
 	})
 
+	it('returns a non-redirecting success to the in-app sign-out control', async () => {
+		const handler = createLogoutRouteHandler(async () =>
+			new Response(null, {
+				headers: {
+					'Set-Cookie':
+						'__Secure-letletme.session_token=; Path=/; Max-Age=0; HttpOnly; Secure'
+				}
+			})
+		)
+		const response = await handler(
+			new Request('https://letletme.top/api/session/logout', {
+				method: 'POST',
+				headers: {
+					Accept: 'application/json',
+					Origin: 'https://letletme.top',
+					'Sec-Fetch-Site': 'same-origin'
+				}
+			})
+		)
+		assert.equal(response.status, 204)
+		assert.equal(response.headers.get('location'), null)
+		assert.match(response.headers.get('set-cookie') ?? '', /Max-Age=0/)
+	})
+
 	it('does not redirect when Auth rejects the sign-out', async () => {
 		const handler = createLogoutRouteHandler(async () =>
 			Response.json({ error: 'origin mismatch' }, { status: 403 })

@@ -36,10 +36,16 @@ export function createLogoutRouteHandler(
 					{ status: 502, headers: { 'Cache-Control': 'no-store' } }
 				)
 			}
+			const wantsJson = request.headers
+				.get('accept')
+				?.toLowerCase()
+				.includes('application/json')
 			const response = new Response(null, {
-				status: 303,
+				status: wantsJson ? 204 : 303,
 				headers: {
-					Location: new URL('/', request.url).toString(),
+					...(wantsJson
+						? {}
+						: { Location: new URL('/', request.url).toString() }),
 					'Cache-Control': 'private, no-store, no-transform'
 				}
 			})

@@ -51,6 +51,9 @@ export default function LoginClient({
 				return
 			}
 			router.push(destination)
+			// The navbar is resolved in the persistent server layout. Refresh the
+			// destination tree so it observes the new session cookie immediately.
+			router.refresh()
 		} catch (cause) {
 			setError(
 				t(

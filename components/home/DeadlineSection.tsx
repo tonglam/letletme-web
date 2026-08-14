@@ -4,7 +4,11 @@ import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { CalendarClock } from 'lucide-react'
 import { usePageActive } from '@/hooks/use-page-active'
 import { useRouter } from '@/i18n/navigation'
-import { computeTimeLeft, type TimeLeft } from '@/lib/home-deadline'
+import {
+	computeTimeLeft,
+	homeDeadlineRefreshDelayMs,
+	type TimeLeft
+} from '@/lib/home-deadline'
 import { useLocale, useTranslations } from 'next-intl'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -68,20 +72,20 @@ export function DeadlineSection({
 		}, 0)
 		const tickTimer = isPageActive ? setInterval(updateTimeLeft, 1000) : undefined
 
-		// When deadline has passed, the backend's event cache will eventually expire and
-		// return the next GW. Poll via router.refresh() so the UI updates without a manual
-		// reload. 30 s interval is short enough to feel responsive without hammering the server.
+		// The revision publisher can advance after the nominal deadline. Keep checking
+		// while the page is active, with an interval capped at five minutes, so a slow
+		// publication cannot leave the page permanently pinned to the expired event.
 		let expireTimer: number | undefined
 		let refreshTimer: number | undefined
 
 		const startRefreshing = () => {
 			const refresh = () => {
-				if (refreshCount.current >= 4) return
 				refreshCount.current += 1
 				routerRef.current.refresh()
-				if (refreshCount.current < 4) {
-					refreshTimer = window.setTimeout(refresh, 30_000)
-				}
+				refreshTimer = window.setTimeout(
+					refresh,
+					homeDeadlineRefreshDelayMs(refreshCount.current)
+				)
 			}
 			refresh()
 		}

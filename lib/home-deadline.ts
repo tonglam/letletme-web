@@ -5,6 +5,21 @@ export interface TimeLeft {
 	seconds: number
 }
 
+const DEADLINE_REFRESH_BASE_MS = 30_000
+const DEADLINE_REFRESH_MAX_MS = 300_000
+
+/** Exponential post-deadline retry with a five-minute ceiling. */
+export function homeDeadlineRefreshDelayMs(completedAttempts: number): number {
+	const safeAttempts = Number.isFinite(completedAttempts)
+		? Math.max(1, Math.trunc(completedAttempts))
+		: 1
+	const exponent = Math.min(Math.floor((safeAttempts - 1) / 2), 4)
+	return Math.min(
+		DEADLINE_REFRESH_BASE_MS * 2 ** exponent,
+		DEADLINE_REFRESH_MAX_MS
+	)
+}
+
 export function computeTimeLeft(
 	deadlineMs: number | null,
 	nowMs: number = Date.now()

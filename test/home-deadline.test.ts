@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { computeTimeLeft } from '../lib/home-deadline'
+import {
+	computeTimeLeft,
+	homeDeadlineRefreshDelayMs
+} from '../lib/home-deadline'
 
 describe('Home deadline initial state', () => {
 	it('computes the server-rendered countdown from explicit timestamps', () => {
@@ -26,5 +29,12 @@ describe('Home deadline initial state', () => {
 			minutes: 0,
 			seconds: 0
 		})
+	})
+
+	it('keeps post-deadline retries alive with a bounded backoff', () => {
+		assert.deepEqual(
+			[1, 2, 3, 5, 9, 20].map(homeDeadlineRefreshDelayMs),
+			[30_000, 30_000, 60_000, 120_000, 300_000, 300_000]
+		)
 	})
 })

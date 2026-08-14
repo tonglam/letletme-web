@@ -1,16 +1,12 @@
 import type { NavigationUser } from '@/components/profile/HeaderProfileCard'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { Link } from '@/i18n/navigation'
-import {
-	ChevronDown,
-	LogOut,
-	Menu,
-	Settings,
-	Shirt
-} from 'lucide-react'
-import { getTranslations } from 'next-intl/server'
+import { localizePathname, type AppLocale } from '@/i18n/routing'
+import { ChevronDown, Menu, Settings, Shirt } from 'lucide-react'
+import { getLocale, getTranslations } from 'next-intl/server'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { NavigationMenuLink } from './NavigationMenuLink'
+import { SignOutForm } from './SignOutForm'
 import { menuItems } from './config'
 
 function AccountSummary({
@@ -34,7 +30,13 @@ function AccountSummary({
 	)
 }
 
-async function AccountPanel({ user }: { user: NavigationUser }) {
+async function AccountPanel({
+	user,
+	homeHref
+}: {
+	user: NavigationUser
+	homeHref: string
+}) {
 	const t = await getTranslations('Navigation')
 	const verifiedEntryId =
 		typeof user.fplEntryId === 'number' &&
@@ -85,21 +87,22 @@ async function AccountPanel({ user }: { user: NavigationUser }) {
 				<Settings aria-hidden="true" className="size-4" />
 				{t('profileSettings')}
 			</Link>
-			<form action="/api/session/logout" method="post">
-				<button
-					type="submit"
-					className="flex min-h-10 w-full items-center gap-2 rounded-md px-2 text-sm font-medium text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-				>
-					<LogOut aria-hidden="true" className="size-4" />
-					{t('signOut')}
-				</button>
-			</form>
+			<SignOutForm
+				label={t('signOut')}
+				pendingLabel={t('signingOut')}
+				errorLabel={t('signOutFailed')}
+				redirectHref={homeHref}
+			/>
 		</div>
 	)
 }
 
 export async function NavigationActions({ user }: { user: NavigationUser }) {
-	const t = await getTranslations('Navigation')
+	const [t, locale] = await Promise.all([
+		getTranslations('Navigation'),
+		getLocale()
+	])
+	const homeHref = localizePathname('/', locale as AppLocale)
 
 	return (
 		<>
@@ -134,7 +137,7 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 						<ChevronDown aria-hidden="true" className="size-4 opacity-60 transition-transform group-open:rotate-180" />
 					</summary>
 					<div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg">
-						<AccountPanel user={user} />
+						<AccountPanel user={user} homeHref={homeHref} />
 					</div>
 				</details>
 			</div>
@@ -172,7 +175,7 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 						</section>
 					))}
 					<div className="mt-3 border-t pt-3">
-						<AccountPanel user={user} />
+						<AccountPanel user={user} homeHref={homeHref} />
 					</div>
 				</div>
 			</details>
