@@ -87,7 +87,7 @@ const LazyMarketPlayerLookup = dynamic(
 	{ ssr: false, loading: () => <div className="min-h-11" aria-hidden="true" /> }
 )
 
-function MarketPlayerLookupLauncher({
+export function MarketPlayerLookupLauncher({
 	revision,
 	seedPlayer,
 	compact = true,

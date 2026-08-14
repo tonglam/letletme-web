@@ -1,6 +1,8 @@
-import { MarketView } from '@/app/data/market/MarketView'
+import {
+	MarketPlayerLookupLauncher,
+	MarketView
+} from '@/app/data/market/MarketView'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
-import { MarketPlayerLookup } from '@/components/data/MarketPlayerLookup'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -67,7 +69,7 @@ async function MarketContent() {
 					<AlertDescription>{t('dataUnavailableDescription')}</AlertDescription>
 				</Alert>
 				<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-					<MarketPlayerLookup />
+					<MarketPlayerLookupLauncher initialOpen />
 				</section>
 			</>
 		)
