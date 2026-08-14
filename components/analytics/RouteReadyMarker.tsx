@@ -66,7 +66,7 @@ export function RouteReadyMarker({
 			},
 			{ always: true }
 		)
-	}, [audienceHint, goodMs, name, pathname, poorMs, ready, readyIdentity])
+	}, [audienceHint, goodMs, name, pathname, poorMs, ready, readyIdentity, readyKey])
 
 	return null
 }
