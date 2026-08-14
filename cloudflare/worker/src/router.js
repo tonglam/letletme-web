@@ -83,10 +83,7 @@ function annotateResponse(request, response, origin, env) {
 	}
 	headers.set('X-Letletme-Origin', origin)
 	if (!headers.has('X-Letletme-Release')) {
-		headers.set(
-			'X-Letletme-Release',
-			env.EXPECTED_RELEASE_SHA || 'unknown'
-		)
+		headers.set('X-Letletme-Release', 'unknown')
 	}
 	return new Response(request.method === 'HEAD' ? null : response.body, {
 		status: response.status,

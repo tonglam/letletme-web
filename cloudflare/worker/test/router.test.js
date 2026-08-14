@@ -312,6 +312,7 @@ test('restores the public origin in Vercel response headers', async () => {
 		response.headers.get('link'),
 		'<https://letletme.top/>; rel="canonical"'
 	)
+	assert.equal(response.headers.get('x-letletme-release'), 'unknown')
 })
 
 test('does not trust a client-supplied CF-IPCountry header when cf data is absent', async () => {
