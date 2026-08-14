@@ -91,7 +91,7 @@ function LazyMarketPlayerLookupBoundary(
 	props: ComponentProps<typeof LazyMarketPlayerLookup>
 ) {
 	return (
-		<Suspense fallback={<div className="min-h-11" aria-hidden="true" />}>
+		<Suspense fallback={<div className="min-h-32" aria-hidden="true" />}>
 			<LazyMarketPlayerLookup {...props} />
 		</Suspense>
 	)
