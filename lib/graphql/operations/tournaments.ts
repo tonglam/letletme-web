@@ -473,18 +473,20 @@ export interface TournamentSelectionStatsResponse {
 	tournamentSelectionStats: TournamentSelectionStatsData | null
 }
 
-export const GET_TOURNAMENT_LIVE_POINTS = `
-  query GetTournamentLivePoints($eventId: Int!, $tournamentId: Int!) {
-    liveSnapshot(eventId: $eventId) {
+export const GET_TOURNAMENT_LIVE_DESK = `${TOURNAMENT_INFO_FIELDS}
+  query GetEntryLiveCompetitionsDesk($entryId: Int!, $selectedTournamentId: Int, $ref: LiveRevisionRefInput) {
+    entryLiveCompetitionsDesk(entryId: $entryId, selectedTournamentId: $selectedTournamentId, ref: $ref) {
       eventId
       revision
       state
-      publishedAt
-      checkedAt
-    }
-    calcLivePointsForTournament(eventId: $eventId, tournamentId: $tournamentId) {
-      results {
+      tournaments { ...TournamentInfoFields }
+      selectedTournamentId
+      partial
+      failedEntryIds
+      totalEntries
+      board {
         entry
+        provisional
         entryName
         playerName
         overallRank
@@ -517,16 +519,6 @@ export const GET_TOURNAMENT_LIVE_POINTS = `
           totalPoints
         }
       }
-      errors {
-        entryId
-        message
-      }
-      meta {
-        eventId
-        totalEntries
-        succeededCount
-        failedCount
-      }
     }
   }
 `
@@ -545,6 +537,7 @@ export interface BatchCalcMeta {
 
 export interface TournamentLiveCalcData {
 	entry: number
+	provisional?: boolean
 	entryName: string
 	playerName: string
 	overallRank: number
@@ -583,13 +576,42 @@ export interface TournamentLiveCalcData {
 }
 
 export interface TournamentLivePointsResponse {
-	liveSnapshot: LiveSnapshotStatus | null
-	calcLivePointsForTournament: {
-		results: TournamentLiveCalcData[]
-		errors: BatchCalcError[]
-		meta: BatchCalcMeta
+	entryLiveCompetitionsDesk: {
+		eventId: number
+		revision: string | null
+		state: string
+		tournaments: EntryTournament[]
+		selectedTournamentId: number | null
+		partial: boolean
+		failedEntryIds: number[]
+		totalEntries: number
+		board: TournamentLiveCalcData[]
 	}
 }
+
+export const GET_TOURNAMENT_SELECTION_INDEX = `
+  query GetTournamentSelectionIndex($entryId: Int!, $tournamentId: Int!, $ref: LiveRevisionRefInput!) {
+    tournamentSelectionIndex(entryId: $entryId, tournamentId: $tournamentId, ref: $ref) {
+      tournamentId eventId revision
+      rows { playerId count percentage }
+    }
+  }
+`
+
+export const GET_TOURNAMENT_ENTRY_SQUADS = `
+  query GetTournamentEntrySquads($entryId: Int!, $tournamentId: Int!, $comparedEntryIds: [Int!]!, $ref: LiveRevisionRefInput!) {
+    tournamentEntrySquads(entryId: $entryId, tournamentId: $tournamentId, comparedEntryIds: $comparedEntryIds, ref: $ref) {
+      tournamentId eventId revision
+      entries { entry entryName playerName livePoints liveNetPoints liveTotalPoints transferCost pickList { element webName elementTypeName position isCaptain isViceCaptain teamShortName teamName totalPoints } }
+    }
+  }
+`
+
+export const GET_TOURNAMENT_LIVE_PARTICIPANTS = `
+  query GetTournamentLiveParticipants($entryId: Int!, $tournamentId: Int!) {
+    tournamentLiveParticipants(entryId: $entryId, tournamentId: $tournamentId) { entryId entryName playerName }
+  }
+`
 
 const OFFICIAL_H2H_MATCH_FIELDS = `
   fragment OfficialH2HMatchFields on OfficialH2HMatch {

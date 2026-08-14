@@ -197,85 +197,40 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 
 	const liveResponse = (score: number, revision: string) => ({
 		data: {
-			liveSnapshot: {
+			liveMatchdayDesk: {
+				season: '2627',
 				eventId: 33,
 				revision,
 				state: 'LIVE',
 				publishedAt: '2026-08-04T18:30:00.000Z',
-				checkedAt: '2026-08-04T18:30:30.000Z'
-			},
-			liveMatches: {
-				notStarted: [],
-				finished: [],
-				playing: [
+				matches: [
 					{
-						matchId: 101,
-						minutes: 12,
+						fixtureId: 101,
+						eventId: 33,
 						homeTeamId: 1,
 						homeTeamName: 'Arsenal',
-						homeTeamShortName: 'ARS',
 						homeScore: score,
-						homeTeamDataList: [],
 						awayTeamId: 2,
 						awayTeamName: 'Chelsea',
-						awayTeamShortName: 'CHE',
 						awayScore: 0,
-						awayTeamDataList: [],
 						kickoffTime: '2026-08-04T19:00:00.000Z',
-						playStatus: 'PLAYING'
+						started: true,
+						finished: false
 					}
-				]
+				],
+				nextFixtures: [],
+				highlights: []
 			}
 		}
 	})
 
-	await page.route('**/api/graphql', async route => {
-		const payload = route.request().postDataJSON() as { query?: string }
-		if (payload.query?.includes('GetLiveSnapshot')) {
-			probeCount += 1
-			const revision = probeCount === 1 ? 'b'.repeat(24) : 'c'.repeat(24)
-			await route.fulfill({
-				status: 200,
-				json: {
-					data: {
-						liveSnapshot: {
-							eventId: 33,
-							revision,
-							state: 'LIVE',
-							publishedAt: '2026-08-04T18:30:00.000Z',
-							checkedAt: '2026-08-04T18:30:30.000Z'
-						}
-					}
-				}
-			})
-			return
-		}
-		if (payload.query?.includes('GetCurrentAndNextEvents')) {
-			await route.fulfill({
-				status: 200,
-				json: {
-					data: {
-						current: [{ id: 33 }],
-						next: [{ id: 34, deadlineTime: '2026-08-11T17:30:00.000Z' }]
-					}
-				}
-			})
-			return
-		}
-		if (payload.query?.includes('GetEventFixtures')) {
-			await route.fulfill({
-				status: 200,
-				json: { data: { eventFixtures: [] } }
-			})
-			return
-		}
-
+	await page.route('**/api/live/matches**', async route => {
 		heavyRequestCount += 1
 		if (heavyRequestCount === 1) {
 			await firstResponseGate
 			await route.fulfill({
 				status: 200,
-				json: liveResponse(1, 'b'.repeat(24))
+				json: liveResponse(1, 'b'.repeat(24)).data
 			})
 			return
 		}
@@ -286,14 +241,48 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 			})
 			return
 		}
-		await route.fulfill({ status: 200, json: liveResponse(2, 'c'.repeat(24)) })
+		await route.fulfill({
+			status: 200,
+			json: liveResponse(2, 'c'.repeat(24)).data
+		})
+	})
+
+	await page.route('**/api/graphql', async route => {
+		const payload = route.request().postDataJSON() as { query?: string }
+		if (payload.query?.includes('GetLiveContext')) {
+			probeCount += 1
+			const revision = probeCount === 1 ? 'b'.repeat(24) : 'c'.repeat(24)
+			await route.fulfill({
+				status: 200,
+				json: {
+					data: {
+						liveContext: {
+							season: '2627',
+							coreRevision: 'e2e-core-v1',
+							eventId: 33,
+							nextEventId: 34,
+							revision,
+							state: 'LIVE_ACTIVE',
+							checkedAt: '2026-08-04T18:30:30.000Z',
+							publishedAt: '2026-08-04T18:30:00.000Z'
+						}
+					}
+				}
+			})
+			return
+		}
+		if (payload.query?.includes('GetLiveMatchdayDesk')) {
+			// The desk is the only heavy request after a changed context revision.
+		}
+
+		await fulfillFromGraphqlFixture(route)
 	})
 
 	await page.goto('/live/matches')
 	await expect(
 		page.getByRole('heading', { name: 'Live Matches' })
 	).toBeVisible()
-	await expect(page.getByRole('tab', { name: 'Not Started' })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: 'Upcoming' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	)

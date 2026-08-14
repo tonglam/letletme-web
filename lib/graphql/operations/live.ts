@@ -123,18 +123,6 @@ export interface GameweekBoardsResponse {
 	liveSnapshot: LiveSnapshotStatus | null
 }
 
-export const GET_LIVE_SNAPSHOT = `
-  query GetLiveSnapshot($eventId: Int) {
-    liveSnapshot(eventId: $eventId) {
-      eventId
-      revision
-      state
-      publishedAt
-      checkedAt
-    }
-  }
-`
-
 // Query to fetch top transfers in
 export const GET_LIVE_POINTS = `
   query GetLiveCalcPoints($eventId: Int!, $entryId: Int!) {
@@ -249,7 +237,19 @@ export interface LiveCalcDataResponse {
 	calcLivePointsByEntry: LiveCalcData
 }
 
-export type LiveSnapshotState = 'SCHEDULED' | 'LIVE' | 'SETTLED'
+export type LiveSnapshotState =
+	| 'SCHEDULED'
+	| 'LIVE'
+	| 'SETTLED'
+	| 'PRE_DEADLINE'
+	| 'PICKS_WAIT'
+	| 'PICKS_PROBE'
+	| 'PICKS_SYNC'
+	| 'LIVE_ACTIVE'
+	| 'BETWEEN_FIXTURES'
+	| 'DAY_SETTLING'
+	| 'GW_REVIEW'
+	| 'FINALIZED'
 
 export interface LiveSnapshotStatus {
 	eventId: number
@@ -263,101 +263,41 @@ export interface LiveSnapshotResponse {
 	liveSnapshot: LiveSnapshotStatus | null
 }
 
-// Query to fetch live points for all entries in a tournament
-export const GET_LIVE_MATCHES = `
-  query GetLiveMatches {
-    liveSnapshot {
+export const GET_LIVE_MATCHDAY_DESK = `
+  query GetLiveMatchdayDesk($ref: LiveRevisionRefInput) {
+    liveMatchdayDesk(ref: $ref) {
+      season
       eventId
       revision
       state
       publishedAt
-      checkedAt
+		matches {
+        fixtureId
+        eventId
+        homeTeamId
+        homeTeamName
+        awayTeamId
+        awayTeamName
+        homeScore
+        awayScore
+        kickoffTime
+        started
+			finished
+		}
+		nextFixtures {
+			fixtureId
+			eventId
+			homeTeamId
+			homeTeamName
+			awayTeamId
+			awayTeamName
+			homeScore
+			awayScore
+			kickoffTime
+			started
+			finished
+		}
     }
-    liveMatches {
-      notStarted {
-        ...LiveMatchIdentity
-        homeScore
-        awayScore
-      }
-      playing {
-        ...LiveMatchIdentity
-        homeScore
-        homeTeamDataList {
-          ...LivePlayingPlayer
-        }
-        awayScore
-        awayTeamDataList {
-          ...LivePlayingPlayer
-        }
-      }
-      finished {
-        ...LiveMatchIdentity
-        homePosition
-        homeScore
-        homeTeamDataList {
-          ...LiveFinishedPlayer
-        }
-        awayPosition
-        awayScore
-        awayTeamDataList {
-          ...LiveFinishedPlayer
-        }
-      }
-    }
-  }
-
-  fragment LiveMatchIdentity on LiveMatchData {
-    matchId
-    minutes
-    homeTeamId
-    homeTeamName
-    homeTeamShortName
-    awayTeamId
-    awayTeamName
-    awayTeamShortName
-    kickoffTime
-    playStatus
-  }
-
-  fragment LivePlayingPlayer on ElementEventResultData {
-    element
-    webName
-    elementType
-    minutes
-    goalsScored
-    assists
-    cleanSheets
-    goalsConceded
-    ownGoals
-    penaltiesSaved
-    penaltiesMissed
-    yellowCards
-    redCards
-    saves
-    defensiveContribution
-    bonus
-    bps
-    totalPoints
-  }
-
-  fragment LiveFinishedPlayer on ElementEventResultData {
-    element
-    webName
-    elementType
-    minutes
-    goalsScored
-    assists
-    cleanSheets
-    goalsConceded
-    ownGoals
-    yellowCards
-    redCards
-    saves
-    defensiveContribution
-    bonus
-    bps
-    totalPoints
-    inDreamTeam
   }
 `
 
@@ -500,10 +440,76 @@ export interface LiveMatchesData {
 	finished: FinishedMatch[]
 }
 
-export interface LiveMatchesResponse {
-	liveSnapshot: LiveSnapshotStatus | null
-	liveMatches: LiveMatchesData
+export interface LiveMatchdayDeskRow {
+	fixtureId: number
+	eventId: number
+	homeTeamId: number
+	homeTeamName: string
+	awayTeamId: number
+	awayTeamName: string
+	homeScore: number | null
+	awayScore: number | null
+	kickoffTime: string | null
+	started: boolean
+	finished: boolean
 }
+
+export interface LiveMatchdayDesk {
+	season: string
+	eventId: number
+	revision: string
+	state: LiveSnapshotState
+	publishedAt: string
+	matches: LiveMatchdayDeskRow[]
+	nextFixtures: LiveMatchdayDeskRow[]
+}
+
+export interface LiveMatchdayDeskResponse {
+	liveMatchdayDesk: LiveMatchdayDesk
+}
+
+export const GET_LIVE_CONTEXT = `
+	query GetLiveContext {
+		liveContext {
+			season
+      eventId: currentEventId
+      nextEventId
+      revision: liveRevision
+      state
+      publishedAt
+      checkedAt: sourceCheckedAt
+    }
+  }
+`
+
+export interface LiveContextResponse {
+	liveContext: {
+		season: string
+		eventId: number | null
+		nextEventId: number | null
+		revision: string | null
+		state: LiveSnapshotState
+		publishedAt: string | null
+		checkedAt: string | null
+	} | null
+}
+
+export const GET_LIVE_FIXTURE_PLAYERS = `
+  query GetLiveFixturePlayers($ref: LiveRevisionRefInput!, $fixtureId: Int!) {
+    liveFixturePlayers(ref: $ref, fixtureId: $fixtureId) {
+      season
+      eventId
+      revision
+      fixtureId
+      players {
+        player { id webName position team { id name shortName } }
+        minutes goalsScored assists cleanSheets goalsConceded ownGoals
+        penaltiesSaved penaltiesMissed yellowCards redCards saves bonus bps
+        defensiveContribution totalPoints starts inDreamTeam
+      }
+    }
+  }
+`
 
 export const GET_EVENT_LIVE_EXPLAIN = `
   query EventLiveExplainPlayer($eventId: Int!, $elementId: Int!) {

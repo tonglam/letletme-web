@@ -1,6 +1,7 @@
 'use client'
 
 import { PageState } from '@/components/feedback/PageState'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import PageShell from '@/components/layout/PageShell'
 import { LiveAutoRefreshCountdown } from '@/components/live/LiveAutoRefreshCountdown'
 import { TournamentHeader } from '@/components/tournament/TournamentHeader'
@@ -16,33 +17,35 @@ import { cn } from '@/lib/utils'
 import { usePageActive } from '@/hooks/use-page-active'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_LIVE_SNAPSHOT,
+	GET_LIVE_CONTEXT,
+	type LiveContextResponse,
 	type LiveSnapshotResponse,
-	type LiveSnapshotStatus,
+	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import {
-	GET_TOURNAMENT_LIVE_POINTS,
+	GET_TOURNAMENT_LIVE_DESK,
 	type EntryTournament,
 	type TournamentOfficialH2H,
 	type TournamentLiveCalcData,
 	type TournamentLivePointsResponse,
-	type TournamentParticipant,
+	type TournamentParticipant
 } from '@/lib/graphql/operations/tournaments'
 import {
 	liveSnapshotNeedsRefresh,
-	shouldPollLiveSnapshot,
+	liveContextToSnapshot,
+	shouldPollLiveSnapshot
 } from '@/lib/live-refresh'
 import type { TournamentDetailLoadError } from '@/lib/tournament/detail-load-error'
 import {
 	areTournamentInsightsReady,
 	normalizeTournamentSetupStatus,
-	shouldPollTournamentSetup,
+	shouldPollTournamentSetup
 } from '@/lib/tournament/lifecycle'
 import {
 	buildTournamentEntries,
 	buildTournamentStats,
 	getRetainedFailedEntryIds,
-	mergePartialTournamentRows,
+	mergePartialTournamentRows
 } from '@/lib/tournament/liveEntries'
 import { Link, useRouter } from '@/i18n/navigation'
 import {
@@ -57,7 +60,7 @@ import {
 	RefreshCw,
 	ServerCrash,
 	Settings,
-	Users,
+	Users
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -81,7 +84,7 @@ const phaseIndex = (phase: EntryTournament['setupPhase']) => {
 
 function TournamentRosterList({
 	participants,
-	viewerEntryId,
+	viewerEntryId
 }: {
 	participants: TournamentParticipant[]
 	viewerEntryId?: number
@@ -97,7 +100,9 @@ function TournamentRosterList({
 		return participants.filter(p => {
 			const name = (p.entryName ?? '').toLowerCase()
 			const manager = (p.playerName ?? '').toLowerCase()
-			return name.includes(q) || manager.includes(q) || String(p.entryId).includes(q)
+			return (
+				name.includes(q) || manager.includes(q) || String(p.entryId).includes(q)
+			)
 		})
 	}, [participants, query])
 
@@ -156,18 +161,13 @@ function TournamentRosterList({
 								key={participant.entryId}
 								className={cn(
 									'rounded-md border px-3 py-2 text-sm',
-									isMe && 'border-primary/40 row-self',
+									isMe && 'border-primary/40 row-self'
 								)}
 							>
-								<span
-									className={cn(
-										'font-medium',
-										isMe && 'text-primary-ink',
-									)}
-								>
+								<span className={cn('font-medium', isMe && 'text-primary-ink')}>
 									{participant.entryName ??
 										lifecycleT('entryFallback', {
-											id: participant.entryId,
+											id: participant.entryId
 										})}
 									{isMe ? (
 										<span className="ml-1.5 text-caption font-semibold text-primary-ink">
@@ -191,7 +191,7 @@ function TournamentRosterList({
 						<p className="w-full text-center text-xs text-muted-foreground">
 							{t('showingEntries', {
 								shown: Math.min(visibleCount, total),
-								total,
+								total
 							})}
 						</p>
 					) : null}
@@ -248,7 +248,7 @@ export default function TournamentDetailClient({
 	initialSnapshot,
 	initialOfficialH2H,
 	initialParticipants,
-	justCreated,
+	justCreated
 }: {
 	canManage: boolean
 	tournament: EntryTournament | null
@@ -275,11 +275,11 @@ export default function TournamentDetailClient({
 	const [currentTournament, setCurrentTournament] = useState(tournament)
 	const [rows, setRows] = useState(initialRows)
 	const [staleEntryIds, setStaleEntryIds] = useState<ReadonlySet<number>>(
-		() => new Set(),
+		() => new Set()
 	)
 	const [error, setError] = useState(softError)
 	const [snapshot, setSnapshot] = useState<LiveSnapshotStatus | null>(
-		initialSnapshot ?? null,
+		initialSnapshot ?? null
 	)
 	const snapshotRef = useRef<LiveSnapshotStatus | null>(initialSnapshot ?? null)
 	const [isRefreshing, setIsRefreshing] = useState(false)
@@ -410,81 +410,132 @@ export default function TournamentDetailClient({
 	const isOfficialH2H = Boolean(
 		currentTournament?.leagueType === 'H2H' &&
 		currentTournament.rosterMode === 'OFFICIAL_SYNC' &&
-		currentTournament.groupMode === 'BATTLE_RACES',
+		currentTournament.groupMode === 'BATTLE_RACES'
 	)
 
-	const refreshStandings = useCallback((): Promise<void> => {
-		if (!currentTournament || !currentGameweek || !standingsReady || isOfficialH2H) {
-			return Promise.resolve()
-		}
-		if (refreshInFlightRef.current) return refreshInFlightRef.current
-		refreshGenerationRef.current += 1
-
-		const request = (async () => {
-			try {
-				setIsRefreshing(true)
-				setError(null)
-				const response = await executeQuery<TournamentLivePointsResponse>(
-					GET_TOURNAMENT_LIVE_POINTS,
-					{
-						tournamentId: currentTournament.id,
-						eventId: currentGameweek,
-					},
-					{ cache: 'no-store' },
-				)
-				const batch = response.calcLivePointsForTournament
-				failedEntryCountRef.current = batch.meta.failedCount
-				const failedIds = batch.errors.map(batchError => batchError.entryId)
-				const nextRows = batch.results ?? []
-				setRows(previousRows => {
-					const retainedIds = getRetainedFailedEntryIds({
-						nextRows,
-						previousRows,
-						failedEntryIds: failedIds,
-						preserveFailed: true,
-					})
-					const merged = mergePartialTournamentRows({
-						nextRows,
-						previousRows,
-						failedEntryIds: failedIds,
-						preserveFailed: true,
-					})
-					queueMicrotask(() => {
-						setStaleEntryIds(
-							retainedIds.length > 0 ? new Set(retainedIds) : new Set(),
-						)
-					})
-					return merged
-				})
-				acceptSnapshot(response.liveSnapshot)
-				if (batch.meta.failedCount > 0) {
-					setError(
-						t('partialResults', {
-							failed: batch.meta.failedCount,
-							total: batch.meta.totalEntries,
-						}),
-					)
-				}
-			} catch (refreshError) {
-				console.error(
-					'Failed to refresh live tournament standings:',
-					refreshError,
-				)
-				setError(t('standingsFailed'))
-			} finally {
-				setIsRefreshing(false)
+	const refreshStandings = useCallback(
+		(revision?: string | null): Promise<void> => {
+			if (
+				!currentTournament ||
+				!currentGameweek ||
+				!standingsReady ||
+				isOfficialH2H
+			) {
+				return Promise.resolve()
 			}
-		})()
-		refreshInFlightRef.current = request
-		void request.finally(() => {
-			if (refreshInFlightRef.current === request)
-				refreshInFlightRef.current = null
-		})
-		return request
-	}, [acceptSnapshot, currentGameweek, currentTournament, isOfficialH2H, standingsReady, t])
+			if (refreshInFlightRef.current) return refreshInFlightRef.current
+			refreshGenerationRef.current += 1
+
+			const request = (async () => {
+				try {
+					setIsRefreshing(true)
+					setError(null)
+					const requestedRevision =
+						revision ?? snapshotRef.current?.revision ?? null
+					let response: TournamentLivePointsResponse
+					if (requestedRevision) {
+						const params = new URLSearchParams({
+							eventId: String(currentGameweek),
+							revision: requestedRevision
+						})
+						const httpResponse = await fetch(
+							`/api/live/competitions/${currentTournament.id}/board?${params.toString()}`,
+							{ cache: 'no-store' }
+						)
+						if (!httpResponse.ok)
+							throw new Error(
+								`Live competition request failed (${httpResponse.status})`
+							)
+						response =
+							(await httpResponse.json()) as TournamentLivePointsResponse
+					} else {
+						response = await executeQuery<TournamentLivePointsResponse>(
+							GET_TOURNAMENT_LIVE_DESK,
+							{
+								entryId,
+								selectedTournamentId: currentTournament.id,
+								ref: null
+							},
+							{ cache: 'no-store' }
+						)
+					}
+					const batch = response.entryLiveCompetitionsDesk
+					failedEntryCountRef.current = batch.failedEntryIds.length
+					const failedIds = batch.failedEntryIds
+					const nextRows = batch.board ?? []
+					setRows(previousRows => {
+						const retainedIds = getRetainedFailedEntryIds({
+							nextRows,
+							previousRows,
+							failedEntryIds: failedIds,
+							preserveFailed: true
+						})
+						const merged = mergePartialTournamentRows({
+							nextRows,
+							previousRows,
+							failedEntryIds: failedIds,
+							preserveFailed: true
+						})
+						queueMicrotask(() => {
+							setStaleEntryIds(
+								retainedIds.length > 0 ? new Set(retainedIds) : new Set()
+							)
+						})
+						return merged
+					})
+					acceptSnapshot(
+						batch.revision
+							? {
+									eventId: batch.eventId,
+									revision: batch.revision,
+									state: 'LIVE' as const,
+									publishedAt: new Date().toISOString(),
+									checkedAt: new Date().toISOString()
+								}
+							: null
+					)
+					if (batch.partial) {
+						setError(
+							t('partialResults', {
+								failed: batch.failedEntryIds.length,
+								total: batch.totalEntries
+							})
+						)
+					}
+				} catch (refreshError) {
+					console.error(
+						'Failed to refresh live tournament standings:',
+						refreshError
+					)
+					setError(t('standingsFailed'))
+				} finally {
+					setIsRefreshing(false)
+				}
+			})()
+			refreshInFlightRef.current = request
+			void request.finally(() => {
+				if (refreshInFlightRef.current === request)
+					refreshInFlightRef.current = null
+			})
+			return request
+		},
+		[
+			acceptSnapshot,
+			currentGameweek,
+			currentTournament,
+			isOfficialH2H,
+			standingsReady,
+			t
+		]
+	)
 
 	const autoRefreshStandings = useCallback((): Promise<void> => {
-		if (!currentTournament || !currentGameweek || !standingsReady || isOfficialH2H) {
+		if (
+			!currentTournament ||
+			!currentGameweek ||
+			!standingsReady ||
+			isOfficialH2H
+		) {
 			return Promise.resolve()
 		}
 		if (freshnessRequestRef.current) return freshnessRequestRef.current
@@ -492,20 +543,19 @@ export default function TournamentDetailClient({
 		const generation = refreshGenerationRef.current
 		const request = (async () => {
 			try {
-				const probe = await executeQuery<LiveSnapshotResponse>(
-					GET_LIVE_SNAPSHOT,
-					{ eventId: currentGameweek },
-					{ cache: 'no-store' },
+				const probe = await executeQuery<LiveContextResponse>(
+					GET_LIVE_CONTEXT,
+					undefined,
+					{ cache: 'no-store' }
 				)
 				if (generation !== refreshGenerationRef.current) return
-				if (
-					!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)
-				) {
-					acceptSnapshot(probe.liveSnapshot)
+				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
+				if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
+					acceptSnapshot(observedSnapshot)
 					if (failedEntryCountRef.current === 0) setError(null)
 					return
 				}
-				await refreshStandings()
+				await refreshStandings(observedSnapshot?.revision ?? null)
 			} catch (probeError) {
 				if (generation !== refreshGenerationRef.current) return
 				console.error('Failed to check live tournament freshness:', probeError)
@@ -532,9 +582,9 @@ export default function TournamentDetailClient({
 	const entries = useMemo(
 		() =>
 			buildTournamentEntries(rows, {
-				staleEntryIds: staleEntryIds.size > 0 ? staleEntryIds : undefined,
+				staleEntryIds: staleEntryIds.size > 0 ? staleEntryIds : undefined
 			}),
-		[rows, staleEntryIds],
+		[rows, staleEntryIds]
 	)
 	const standingsStats = useMemo(() => buildTournamentStats(entries), [entries])
 	const insightsReady = currentTournament
@@ -593,7 +643,7 @@ export default function TournamentDetailClient({
 				? t('homeAway')
 				: knockoutMode === 'HEAD_TO_HEAD'
 					? t('officialH2HKnockout')
-				: t('noKnockout')
+					: t('noKnockout')
 	const leagueType =
 		currentTournament?.leagueType === 'H2H'
 			? t('headToHead')
@@ -604,7 +654,7 @@ export default function TournamentDetailClient({
 		isPageActive: isPageActive && !isOfficialH2H,
 		currentEventId: currentGameweek,
 		selectedEventId: currentGameweek,
-		snapshot,
+		snapshot
 	})
 
 	// Full-page empty state for access / link / bind failures
@@ -645,11 +695,16 @@ export default function TournamentDetailClient({
 						<>
 							{kind === 'bind_entry' ? (
 								<Button asChild>
-									<Link href="/onboarding/bind-entry">{t('errorCtaBindEntry')}</Link>
+									<Link href="/onboarding/bind-entry">
+										{t('errorCtaBindEntry')}
+									</Link>
 								</Button>
 							) : null}
 							{kind === 'bind_entry' ? (
-								<Button variant="outline" asChild>
+								<Button
+									variant="outline"
+									asChild
+								>
 									<Link href="/auth/login">{t('signIn')}</Link>
 								</Button>
 							) : null}
@@ -661,7 +716,10 @@ export default function TournamentDetailClient({
 								</Button>
 							) : null}
 							{kind === 'no_access' || kind === 'unavailable' ? (
-								<Button variant="outline" asChild>
+								<Button
+									variant="outline"
+									asChild
+								>
 									<Link href="/live/competitions">{t('errorCtaLiveList')}</Link>
 								</Button>
 							) : null}
@@ -684,6 +742,14 @@ export default function TournamentDetailClient({
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
+				<RouteReadyMarker
+					name="LIVE_COMPETITION_BOARD_READY"
+					ready={Boolean(currentTournament && !retrying && !isRefreshing)}
+					audienceHint="session-hint"
+					goodMs={1000}
+					poorMs={1500}
+					readyKey={String(currentTournament?.id ?? 'none')}
+				/>
 				<div className="mb-4 flex flex-wrap items-center justify-between gap-2">
 					<Button
 						variant="ghost"
@@ -692,7 +758,7 @@ export default function TournamentDetailClient({
 					>
 						<Link href="/live/competitions">
 							<ArrowLeft aria-hidden="true" />
-								<span>{t('backToCompetitions')}</span>
+							<span>{t('backToCompetitions')}</span>
 						</Link>
 					</Button>
 					{canManage ? (
@@ -750,7 +816,7 @@ export default function TournamentDetailClient({
 										<p className="chyron">
 											{currentTournament.sourceLeagueName ??
 												t('sourceLeagueFallback', {
-													id: currentTournament.leagueId,
+													id: currentTournament.leagueId
 												})}
 										</p>
 										<h1 className="mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl">
@@ -942,7 +1008,10 @@ export default function TournamentDetailClient({
 										<TabsTrigger value="standings">
 											{t('standings')}
 										</TabsTrigger>
-										<TabsTrigger value="stats" disabled={!insightsReady}>
+										<TabsTrigger
+											value="stats"
+											disabled={!insightsReady}
+										>
 											{t('tournamentStats')}
 										</TabsTrigger>
 										<TabsTrigger value="rules">{t('rules')}</TabsTrigger>
@@ -1006,25 +1075,19 @@ export default function TournamentDetailClient({
 									</h2>
 									<div className="grid grid-cols-1 gap-3 md:grid-cols-2 sm:gap-4">
 										<div className="space-y-1 rounded-lg border surface-inset p-4">
-											<div className="eyebrow">
-												{t('creator')}
-											</div>
+											<div className="eyebrow">{t('creator')}</div>
 											<div className="font-display text-base font-semibold">
 												{currentTournament.creator}
 											</div>
 										</div>
 										<div className="space-y-1 rounded-lg border surface-inset p-4">
-											<div className="eyebrow">
-												{t('leagueType')}
-											</div>
+											<div className="eyebrow">{t('leagueType')}</div>
 											<div className="font-display text-base font-semibold">
 												{leagueType}
 											</div>
 										</div>
 										<div className="space-y-1 rounded-lg border surface-inset p-4">
-											<div className="eyebrow">
-												{t('participantCount')}
-											</div>
+											<div className="eyebrow">{t('participantCount')}</div>
 											<div className="font-display text-2xl font-bold tabular-nums">
 												{currentTournament.totalTeamNum}
 											</div>
@@ -1037,7 +1100,7 @@ export default function TournamentDetailClient({
 								<div className="grid gap-6 md:grid-cols-2">
 									<Card className="p-4 shadow-sm sm:p-6">
 										<h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
-										{t('competitionRules')}
+											{t('competitionRules')}
 										</h2>
 										<ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
 											<li>

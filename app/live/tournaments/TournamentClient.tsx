@@ -1,6 +1,7 @@
 'use client'
 
 import { GameweekSelector } from '@/components/data/GameweekSelector'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import PageShell from '@/components/layout/PageShell'
 import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
@@ -16,20 +17,22 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_LIVE_SNAPSHOT,
+	GET_LIVE_CONTEXT,
+	type LiveContextResponse,
 	type LiveSnapshotResponse,
-	type LiveSnapshotStatus,
+	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import {
 	GET_ENTRY_TOURNAMENTS,
-	GET_TOURNAMENT_LIVE_POINTS,
+	GET_TOURNAMENT_LIVE_DESK,
 	type EntryTournamentsResponse,
 	type TournamentLiveCalcData,
-	type TournamentLivePointsResponse,
+	type TournamentLivePointsResponse
 } from '@/lib/graphql/operations/tournaments'
 import { usePageActive } from '@/hooks/use-page-active'
 import {
 	liveSnapshotNeedsRefresh,
+	liveContextToSnapshot,
 	shouldPollLiveSnapshot
 } from '@/lib/live-refresh'
 import {
@@ -37,7 +40,7 @@ import {
 	buildTournamentStats,
 	getRetainedFailedEntryIds,
 	mergePartialTournamentRows,
-	type LiveTournamentStats,
+	type LiveTournamentStats
 } from '@/lib/tournament/liveEntries'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 import {
@@ -52,8 +55,10 @@ import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const fetchLivePoints = async (
+	entryId: number,
 	tournamentId: number,
 	eventId: number,
+	revision?: string | null
 ): Promise<{
 	rows: TournamentLiveCalcData[]
 	failedCount: number
@@ -61,17 +66,42 @@ const fetchLivePoints = async (
 	totalEntries: number
 	snapshot: LiveSnapshotStatus | null
 }> => {
-	const response = await executeQuery<TournamentLivePointsResponse>(
-		GET_TOURNAMENT_LIVE_POINTS,
-		{ tournamentId, eventId },
-	)
-	const batch = response.calcLivePointsForTournament
+	let response: TournamentLivePointsResponse
+	if (revision) {
+		const params = new URLSearchParams({
+			eventId: String(eventId),
+			revision
+		})
+		const httpResponse = await fetch(
+			`/api/live/competitions/${tournamentId}/board?${params.toString()}`,
+			{ cache: 'no-store' }
+		)
+		if (!httpResponse.ok)
+			throw new Error(
+				`Live competition request failed (${httpResponse.status})`
+			)
+		response = (await httpResponse.json()) as TournamentLivePointsResponse
+	} else {
+		response = await executeQuery<TournamentLivePointsResponse>(
+			GET_TOURNAMENT_LIVE_DESK,
+			{ entryId, selectedTournamentId: tournamentId, ref: null }
+		)
+	}
+	const batch = response.entryLiveCompetitionsDesk
 	return {
-		rows: batch.results ?? [],
-		failedCount: batch.meta.failedCount,
-		failedEntryIds: batch.errors.map(error => error.entryId),
-		totalEntries: batch.meta.totalEntries,
-		snapshot: response.liveSnapshot,
+		rows: batch.board ?? [],
+		failedCount: batch.failedEntryIds.length,
+		failedEntryIds: batch.failedEntryIds,
+		totalEntries: batch.totalEntries,
+		snapshot: batch.revision
+			? {
+					eventId: batch.eventId,
+					revision: batch.revision,
+					state: 'LIVE' as const,
+					publishedAt: new Date().toISOString(),
+					checkedAt: new Date().toISOString()
+				}
+			: null
 	}
 }
 
@@ -125,15 +155,14 @@ export default function TournamentClient({
 	const [selectedRows, setSelectedRows] =
 		useState<TournamentLiveCalcData[]>(initialCurrentRows)
 	const [staleEntryIds, setStaleEntryIds] = useState<ReadonlySet<number>>(
-		() => new Set(),
+		() => new Set()
 	)
 	const selectedEntries = useMemo(
 		() =>
 			buildTournamentEntries(selectedRows, {
-				staleEntryIds:
-					staleEntryIds.size > 0 ? staleEntryIds : undefined,
+				staleEntryIds: staleEntryIds.size > 0 ? staleEntryIds : undefined
 			}),
-		[selectedRows, staleEntryIds],
+		[selectedRows, staleEntryIds]
 	)
 	const [ownershipMatchedEntryIds, setOwnershipMatchedEntryIds] = useState<
 		string[] | null
@@ -175,8 +204,8 @@ export default function TournamentClient({
 	/** URL asked for a tournament that is not in this entry's membership list. */
 	const unknownTournamentFromUrl = Boolean(
 		tournamentIdFromUrl &&
-			tournaments.length > 0 &&
-			!tournaments.some(t => t.id === tournamentIdFromUrl),
+		tournaments.length > 0 &&
+		!tournaments.some(t => t.id === tournamentIdFromUrl)
 	)
 	const standingsReady = selectedTournament
 		? areTournamentStandingsReady(selectedTournament)
@@ -186,7 +215,7 @@ export default function TournamentClient({
 		(
 			tournamentId: number,
 			eventId: number,
-			options: { preserveOnError: boolean }
+			options: { preserveOnError: boolean; revision?: string | null }
 		): Promise<void> => {
 			const requestKey = `${tournamentId}:${eventId}`
 			if (resultsInFlightRef.current?.key === requestKey) {
@@ -199,7 +228,12 @@ export default function TournamentClient({
 				try {
 					if (!options.preserveOnError) setIsLoadingResults(true)
 					setResultsError(null)
-					const currentBatch = await fetchLivePoints(tournamentId, eventId)
+					const currentBatch = await fetchLivePoints(
+						entryId,
+						tournamentId,
+						eventId,
+						options.revision ?? snapshotRef.current?.revision ?? null
+					)
 					if (requestId !== resultsRequestIdRef.current) return
 
 					if (currentBatch.failedCount > 0) {
@@ -221,19 +255,19 @@ export default function TournamentClient({
 							nextRows,
 							previousRows,
 							failedEntryIds: currentBatch.failedEntryIds,
-							preserveFailed: options.preserveOnError,
+							preserveFailed: options.preserveOnError
 						})
 						const merged = mergePartialTournamentRows({
 							nextRows,
 							previousRows,
 							failedEntryIds: currentBatch.failedEntryIds,
-							preserveFailed: options.preserveOnError,
+							preserveFailed: options.preserveOnError
 						})
 						// Schedule after this updater commits — not inside the updater body.
 						queueMicrotask(() => {
 							if (requestId !== resultsRequestIdRef.current) return
 							setStaleEntryIds(
-								retainedIds.length > 0 ? new Set(retainedIds) : new Set(),
+								retainedIds.length > 0 ? new Set(retainedIds) : new Set()
 							)
 						})
 						return merged
@@ -280,8 +314,8 @@ export default function TournamentClient({
 				const data = await executeQuery<EntryTournamentsResponse>(
 					GET_ENTRY_TOURNAMENTS,
 					{
-						entryId: entryId,
-					},
+						entryId: entryId
+					}
 				)
 
 				if (isCancelled) {
@@ -289,7 +323,7 @@ export default function TournamentClient({
 				}
 
 				const mappedTournaments = data.entryTournaments.map(entryTournament =>
-					mapEntryTournamentToLiveTournament(entryTournament),
+					mapEntryTournamentToLiveTournament(entryTournament)
 				)
 				setTournaments(mappedTournaments)
 			} catch {
@@ -387,15 +421,15 @@ export default function TournamentClient({
 			Number(selectedTournament.id),
 			selectedGameweek,
 			{
-				preserveOnError: false,
-			},
+				preserveOnError: false
+			}
 		)
 	}, [
 		acceptSnapshot,
 		loadTournamentResults,
 		selectedGameweek,
 		selectedTournament,
-		standingsReady,
+		standingsReady
 	])
 
 	useEffect(() => {
@@ -419,16 +453,20 @@ export default function TournamentClient({
 			selectedEventId: selectedGameweek,
 			snapshot
 		})
-	const refreshTournamentResults = useCallback(async () => {
-		if (!selectedTournament) return
-		await loadTournamentResults(
-			Number(selectedTournament.id),
-			selectedGameweek,
-			{
-				preserveOnError: true
-			}
-		)
-	}, [loadTournamentResults, selectedGameweek, selectedTournament])
+	const refreshTournamentResults = useCallback(
+		async (revision?: string | null) => {
+			if (!selectedTournament) return
+			await loadTournamentResults(
+				Number(selectedTournament.id),
+				selectedGameweek,
+				{
+					preserveOnError: true,
+					revision: revision ?? snapshotRef.current?.revision ?? null
+				}
+			)
+		},
+		[loadTournamentResults, selectedGameweek, selectedTournament]
+	)
 	const autoRefreshTournamentResults = useCallback((): Promise<void> => {
 		if (!selectedTournament || !standingsReady) return Promise.resolve()
 		if (freshnessRequestRef.current) return freshnessRequestRef.current
@@ -436,20 +474,19 @@ export default function TournamentClient({
 		const requestId = resultsRequestIdRef.current
 		const request = (async () => {
 			try {
-				const probe = await executeQuery<LiveSnapshotResponse>(
-					GET_LIVE_SNAPSHOT,
-					{ eventId: selectedGameweek },
-					{ cache: 'no-store' },
+				const probe = await executeQuery<LiveContextResponse>(
+					GET_LIVE_CONTEXT,
+					undefined,
+					{ cache: 'no-store' }
 				)
 				if (requestId !== resultsRequestIdRef.current) return
-				if (
-					!liveSnapshotNeedsRefresh(snapshotRef.current, probe.liveSnapshot)
-				) {
-					acceptSnapshot(probe.liveSnapshot)
+				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
+				if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
+					acceptSnapshot(observedSnapshot)
 					if (failedEntryCountRef.current === 0) setResultsError(null)
 					return
 				}
-				await refreshTournamentResults()
+				await refreshTournamentResults(observedSnapshot?.revision ?? null)
 			} catch (probeError) {
 				if (requestId !== resultsRequestIdRef.current) return
 				console.error('Failed to check live tournament freshness:', probeError)
@@ -579,6 +616,16 @@ export default function TournamentClient({
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
+				<RouteReadyMarker
+					name="LIVE_COMPETITION_BOARD_READY"
+					ready={Boolean(
+						selectedTournament && standingsReady && !isLoadingResults
+					)}
+					audienceHint="session-hint"
+					goodMs={1000}
+					poorMs={1500}
+					readyKey={`${selectedTournament?.id ?? 'none'}:${selectedGameweek ?? 'none'}`}
+				/>
 				<StatsPageHeader
 					eyebrow={t('liveStandings')}
 					title={t('liveStandings')}
@@ -607,8 +654,15 @@ export default function TournamentClient({
 							>
 								{t('clear')}
 							</Button>
-							<Button type="button" size="sm" variant="secondary" asChild>
-								<Link href="/competitions/browse">{t('errorCtaMyCompetitions')}</Link>
+							<Button
+								type="button"
+								size="sm"
+								variant="secondary"
+								asChild
+							>
+								<Link href="/competitions/browse">
+									{t('errorCtaMyCompetitions')}
+								</Link>
 							</Button>
 						</div>
 					</Card>
@@ -681,10 +735,10 @@ export default function TournamentClient({
 				{!isLoadingTournaments &&
 					!selectedTournament &&
 					!unknownTournamentFromUrl && (
-					<Card className="border-border/80 p-6 text-sm text-muted-foreground shadow-sm">
-						{t('noCompetitions')}
-					</Card>
-				)}
+						<Card className="border-border/80 p-6 text-sm text-muted-foreground shadow-sm">
+							{t('noCompetitions')}
+						</Card>
+					)}
 
 				{selectedTournament && !standingsReady && (
 					<Card className="p-8 text-center shadow-sm">
@@ -714,7 +768,11 @@ export default function TournamentClient({
 						/>
 
 						{isLoadingResults ? (
-							<div className="space-y-4" aria-busy="true" aria-live="polite">
+							<div
+								className="space-y-4"
+								aria-busy="true"
+								aria-live="polite"
+							>
 								<Card className="p-6 text-sm text-muted-foreground">
 									{t('loadingStandings')}
 								</Card>

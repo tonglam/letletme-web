@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import type {
-	LiveMatchesResponse,
+	LiveMatchdayDeskResponse,
 	LiveSnapshotStatus
 } from '../lib/graphql/operations/live'
 import { getLiveMatchesSnapshot } from '../lib/live-matches'
@@ -32,8 +32,8 @@ const snapshot = (state: LiveSnapshotStatus['state']): LiveSnapshotStatus => ({
 })
 
 describe('live refresh policy', () => {
-	it('polls scheduled and live current events every 30 seconds', () => {
-		assert.equal(LIVE_AUTO_REFRESH_SECONDS, 30)
+	it('polls scheduled and live current events every 15 seconds', () => {
+		assert.equal(LIVE_AUTO_REFRESH_SECONDS, 15)
 		for (const state of ['SCHEDULED', 'LIVE'] as const) {
 			assert.equal(
 				shouldPollLiveSnapshot({
@@ -154,53 +154,49 @@ describe('live refresh policy', () => {
 })
 
 describe('live matches server snapshot', () => {
-	it('loads live matches and next-event fixtures in parallel without caching', async () => {
+	it('loads one compact desk containing live matches and next fixtures', async () => {
 		const requests: Array<{
 			query: string
 			variables?: Record<string, unknown>
 			cache?: RequestCache
 		}> = []
-		const response: LiveMatchesResponse = {
-			liveSnapshot: snapshot('SCHEDULED'),
-			liveMatches: { notStarted: [], playing: [], finished: [] }
+		const response: LiveMatchdayDeskResponse = {
+			liveMatchdayDesk: {
+				season: '2026',
+				eventId: 33,
+				revision: 'a'.repeat(24),
+				state: 'SCHEDULED',
+				publishedAt: new Date().toISOString(),
+				matches: [],
+				nextFixtures: [
+					{
+						fixtureId: 3401,
+						eventId: 34,
+						homeTeamId: 1,
+						homeTeamName: 'Arsenal',
+						awayTeamId: 2,
+						awayTeamName: 'Chelsea',
+						homeScore: null,
+						awayScore: null,
+						kickoffTime: '2026-08-11T18:00:00.000Z',
+						started: false,
+						finished: false
+					}
+				]
+			}
 		}
 		const result = await getLiveMatchesSnapshot(
 			34,
 			async (query, variables, options) => {
 				requests.push({ query, variables, cache: options?.cache })
-				if (query.includes('GetEventFixtures')) {
-					return {
-						eventFixtures: [
-							{
-								id: 3401,
-								code: 3401,
-								event: { id: 34, name: 'Gameweek 34' },
-								kickoffTime: '2026-08-11T18:00:00.000Z',
-								finished: false,
-								started: false,
-								homeTeam: { id: 1, name: 'Arsenal', shortName: 'ARS' },
-								awayTeam: { id: 2, name: 'Chelsea', shortName: 'CHE' },
-								homeScore: null,
-								awayScore: null,
-								homeTeamDifficulty: 2,
-								awayTeamDifficulty: 4
-							}
-						]
-					} as never
-				}
 				return response as never
 			}
 		)
 
-		assert.equal(requests.length, 2)
+		assert.equal(requests.length, 1)
 		assert.equal(
 			requests.every(request => request.cache === 'no-store'),
 			true
-		)
-		assert.deepEqual(
-			requests.find(request => request.query.includes('GetEventFixtures'))
-				?.variables,
-			{ eventId: 34 }
 		)
 		assert.equal(result.matches.length, 1)
 		assert.equal(result.matches[0]?.status, 'UPCOMING')
@@ -208,44 +204,41 @@ describe('live matches server snapshot', () => {
 	})
 
 	it('keeps live results when the optional upcoming-fixtures query fails', async () => {
-		const response: LiveMatchesResponse = {
-			liveSnapshot: snapshot('LIVE'),
-			liveMatches: {
-				notStarted: [],
-				playing: [
+		const response: LiveMatchdayDeskResponse = {
+			liveMatchdayDesk: {
+				season: '2026',
+				eventId: 33,
+				revision: 'b'.repeat(24),
+				state: 'LIVE',
+				publishedAt: new Date().toISOString(),
+				matches: [
 					{
-						matchId: 3301,
-						minutes: 12,
+						fixtureId: 3301,
+						eventId: 33,
 						homeTeamId: 1,
 						homeTeamName: 'Arsenal',
-						homeTeamShortName: 'ARS',
-						homePosition: 1,
 						awayTeamId: 2,
 						awayTeamName: 'Chelsea',
-						awayTeamShortName: 'CHE',
-						awayPosition: 2,
-						kickoffTime: '2026-08-11T18:00:00.000Z',
-						playStatus: 'LIVE',
 						homeScore: 1,
 						awayScore: 0,
-						homeTeamDataList: [],
-						awayTeamDataList: []
+						kickoffTime: '2026-08-11T18:00:00.000Z',
+						started: true,
+						finished: false
 					}
 				],
-				finished: []
+				nextFixtures: []
 			}
 		}
-		const result = await getLiveMatchesSnapshot(34, async query => {
-			if (query.includes('GetEventFixtures'))
-				throw new Error('temporary fixture failure')
-			return response as never
-		})
+		const result = await getLiveMatchesSnapshot(
+			34,
+			async () => response as never
+		)
 
 		assert.equal(result.matches.length, 1)
 		assert.equal(result.matches[0]?.status, 'LIVE')
 	})
 
-	it('re-resolves event identities before merging after a gameweek rollover', async () => {
+	it('keeps the caller-provided event identity while merging the desk', async () => {
 		const requests: Array<{
 			query: string
 			variables?: Record<string, unknown>
@@ -254,49 +247,37 @@ describe('live matches server snapshot', () => {
 			34,
 			async (query, variables) => {
 				requests.push({ query, variables })
-				if (query.includes('GetCurrentAndNextEvents')) {
-					return {
-						current: [{ id: 34 }],
-						next: [{ id: 35, deadlineTime: '2026-08-12T18:00:00.000Z' }]
-					} as never
-				}
-				if (query.includes('GetEventFixtures')) {
-					const eventId = (variables as { eventId: number }).eventId
-					return {
-						eventFixtures: [
+				return {
+					liveMatchdayDesk: {
+						eventId: 34,
+						revision: 'rev-34',
+						state: 'LIVE',
+						publishedAt: new Date().toISOString(),
+						matches: [],
+						nextFixtures: [
 							{
-								id: eventId * 100 + 1,
-								code: eventId * 100 + 1,
-								event: { id: eventId, name: `Gameweek ${eventId}` },
-								kickoffTime: '2026-08-11T18:00:00.000Z',
-								finished: false,
-								started: false,
-								homeTeam: { id: 1, name: 'Arsenal', shortName: 'ARS' },
-								awayTeam: { id: 2, name: 'Chelsea', shortName: 'CHE' },
+								fixtureId: 3401,
+								eventId: 34,
+								homeTeamId: 1,
+								homeTeamName: 'Arsenal',
+								awayTeamId: 2,
+								awayTeamName: 'Chelsea',
 								homeScore: null,
 								awayScore: null,
-								homeTeamDifficulty: 2,
-								awayTeamDifficulty: 4
+								kickoffTime: '2026-08-11T18:00:00.000Z',
+								started: false,
+								finished: false
 							}
 						]
-					} as never
-				}
-				return {
-					liveSnapshot: { ...snapshot('LIVE'), eventId: 34 },
-					liveMatches: { notStarted: [], playing: [], finished: [] }
+					}
 				} as never
 			},
 			33
 		)
 
-		assert.equal(result.nextEventId, 35)
-		assert.equal(result.matches[0]?.id, 'next-3501')
-		assert.deepEqual(
-			requests
-				.filter(request => request.query.includes('GetEventFixtures'))
-				.map(request => request.variables),
-			[{ eventId: 34 }, { eventId: 35 }]
-		)
+		assert.equal(result.nextEventId, 34)
+		assert.equal(result.matches[0]?.id, 'next-3401')
+		assert.equal(requests.length, 1)
 	})
 })
 
@@ -304,20 +285,20 @@ describe('partial tournament refreshes', () => {
 	it('preserves a settled producer snapshot beside partial row errors', () => {
 		const settled = snapshot('SETTLED')
 		const seed = getTournamentLiveBatchSeed({
-			liveSnapshot: settled,
-			calcLivePointsForTournament: {
-				results: [{ entry: 1 }] as TournamentLiveCalcData[],
-				errors: [{ entryId: 2, message: 'temporary failure' }],
-				meta: {
-					eventId: 33,
-					totalEntries: 2,
-					succeededCount: 1,
-					failedCount: 1
-				}
+			entryLiveCompetitionsDesk: {
+				eventId: 33,
+				revision: settled.revision,
+				state: 'SETTLED',
+				tournaments: [],
+				selectedTournamentId: null,
+				partial: true,
+				board: [{ entry: 1 }] as TournamentLiveCalcData[],
+				failedEntryIds: [2],
+				totalEntries: 2
 			}
 		} satisfies TournamentLivePointsResponse)
 
-		assert.equal(seed.snapshot, settled)
+		assert.equal(seed.snapshot?.eventId, settled.eventId)
 		assert.equal(seed.failedCount, 1)
 		assert.equal(
 			shouldPollLiveSnapshot({
