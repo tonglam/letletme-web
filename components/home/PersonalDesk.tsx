@@ -67,9 +67,13 @@ function PersonalDeskUnavailable({ message }: { message: string }) {
 			<div
 				className="flex min-h-[21rem] flex-col items-center justify-center gap-4 text-center"
 				data-home-personal-ready="unavailable"
-				{...{ elementtiming: 'home-team-desk' }}
 			>
-				<p className="max-w-md text-sm text-muted-foreground">{message}</p>
+				<p
+					className="max-w-md text-sm text-muted-foreground"
+					{...{ elementtiming: 'home-team-desk' }}
+				>
+					{message}
+				</p>
 				<PersonalDeskRetry />
 			</div>
 			<RouteReadyMarker
@@ -130,11 +134,13 @@ export async function PersonalDesk({ session }: { session: Session | null }) {
 			<div
 				data-home-personal-ready="true"
 				data-home-personal-state={desk.state}
-				{...{ elementtiming: 'home-team-desk' }}
 			>
 				<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
 					<div className="min-w-0 sm:max-w-[16rem] sm:shrink-0">
-						<p className="truncate font-display text-xl font-bold uppercase leading-tight tracking-wide">
+						<p
+							className="truncate font-display text-xl font-bold uppercase leading-tight tracking-wide"
+							{...{ elementtiming: 'home-team-desk' }}
+						>
 							{desk.entryName?.trim() || t('teamNameFallback')}
 						</p>
 						<p className="mt-1 truncate text-sm text-muted-foreground">

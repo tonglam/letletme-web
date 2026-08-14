@@ -119,6 +119,29 @@ export function observeElementPaintTime(
 	})
 }
 
+/**
+ * Resolves after the browser has had a paint opportunity for a hydrated marker.
+ * Element Timing only reports elements that enter the viewport, so streamed RSC
+ * content below the fold needs a conservative, bounded fallback.
+ */
+export function nextPaintOpportunityTime(timeoutMs = 250): Promise<number> {
+	if (typeof requestAnimationFrame !== 'function') {
+		return Promise.resolve(performance.now())
+	}
+
+	return new Promise(resolve => {
+		let settled = false
+		const finish = () => {
+			if (settled) return
+			settled = true
+			clearTimeout(timer)
+			resolve(performance.now())
+		}
+		const timer = setTimeout(finish, timeoutMs)
+		requestAnimationFrame(() => requestAnimationFrame(finish))
+	})
+}
+
 /** Elapsed time for this route, not for the lifetime of the browser tab. */
 export function routeReadyStartTime(
 	pathname: string,
