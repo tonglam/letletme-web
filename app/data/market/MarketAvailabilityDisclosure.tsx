@@ -1,7 +1,7 @@
 'use client'
 
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
-import { MarketAvailabilityList } from '@/components/data/MarketAvailabilityList'
+import { MarketAvailabilityClientList } from '@/components/data/MarketAvailabilityClientList'
 import type { MarketAvailabilityUpdate } from '@/lib/graphql/operations/market'
 import { fetchMarketJson, marketRevisionParam } from '@/lib/market-client'
 import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
@@ -121,7 +121,7 @@ export function MarketAvailabilityDisclosure({
 							{loading ? <p className="text-xs text-muted-foreground">{t('searchingPlayers')}</p> : null}
 							{error ? <p className="text-xs text-destructive">{t('dataUnavailable')}</p> : null}
 							{isLoaded && !loading && !error ? (
-								<MarketAvailabilityList updates={loadedUpdates} locale={locale} t={t} />
+								<MarketAvailabilityClientList updates={loadedUpdates} locale={locale} t={t} />
 							) : null}
 						</div>
 					</details>
