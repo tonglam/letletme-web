@@ -3,7 +3,8 @@
 import { reportBrowserPerformanceMetric } from '@/lib/analytics/client-vitals'
 import {
 	measureRouteReadyDuration,
-	observeElementPaintTime
+	observeElementPaintTime,
+	routeReadyStartTime
 } from '@/lib/analytics/route-navigation'
 import {
 	normalizeMetricPage,
@@ -55,9 +56,10 @@ export function RouteReadyMarker({
 		reportedIdentity.current = readyIdentity
 		let cancelled = false
 		const effectAt = performance.now()
+		const routeStartedAt = routeReadyStartTime(pathname, undefined, readyKey)
 		void (async () => {
 			const paintedAt = elementTiming
-				? await observeElementPaintTime(elementTiming)
+				? await observeElementPaintTime(elementTiming, routeStartedAt)
 				: null
 			if (cancelled) return
 			const value = measureRouteReadyDuration(

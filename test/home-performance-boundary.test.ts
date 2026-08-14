@@ -87,8 +87,14 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(leagueList, /HOME_LEAGUE_RANKS_READY/)
 		assert.match(leagueList, /elementtiming: 'home-league-ranks'/)
 		assert.match(routeReadyMarker, /observeElementPaintTime/)
+		assert.match(routeReadyMarker, /routeReadyStartTime/)
+		assert.match(
+			routeReadyMarker,
+			/observeElementPaintTime\(elementTiming, routeStartedAt\)/
+		)
 		assert.match(routeNavigation, /PerformanceObserver/)
 		assert.match(routeNavigation, /buffered: true/)
+		assert.match(routeNavigation, /paintedAt >= notBefore/)
 		assert.match(leagueList, /<details/)
 		assert.doesNotMatch(leagueList, /'use client'/)
 		assert.doesNotMatch(leagueList, /useState|useEffect|useMemo/)

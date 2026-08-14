@@ -57,7 +57,8 @@ function documentNavigationStart(): number {
 /** Returns the latest browser-recorded paint time for one annotated RSC element. */
 export function findElementPaintTime(
 	identifier: string,
-	entries: readonly ElementPaintEntry[]
+	entries: readonly ElementPaintEntry[],
+	notBefore = 0
 ): number | null {
 	let latestPaint: number | null = null
 	for (const entry of entries) {
@@ -65,7 +66,7 @@ export function findElementPaintTime(
 		const paintedAt = entry.renderTime || entry.startTime
 		if (
 			Number.isFinite(paintedAt) &&
-			paintedAt >= 0 &&
+			paintedAt >= notBefore &&
 			(latestPaint === null || paintedAt > latestPaint)
 		) {
 			latestPaint = paintedAt
@@ -80,6 +81,7 @@ export function findElementPaintTime(
  */
 export function observeElementPaintTime(
 	identifier: string,
+	notBefore = 0,
 	timeoutMs = 100
 ): Promise<number | null> {
 	if (
@@ -95,7 +97,8 @@ export function observeElementPaintTime(
 		const observer = new PerformanceObserver(list => {
 			const paintedAt = findElementPaintTime(
 				identifier,
-				list.getEntries() as ElementPaintEntry[]
+				list.getEntries() as ElementPaintEntry[],
+				notBefore
 			)
 			if (paintedAt !== null) finish(paintedAt)
 		})
@@ -117,24 +120,31 @@ export function observeElementPaintTime(
 }
 
 /** Elapsed time for this route, not for the lifetime of the browser tab. */
-export function measureRouteReadyDuration(
+export function routeReadyStartTime(
 	pathname: string,
-	now = performance.now(),
 	documentStart = documentNavigationStart(),
 	readyKey?: string
 ): number {
 	if (readyKey) {
 		const interactionKey = `${normalizePathname(pathname)}\u0000${readyKey}`
 		const interactionStart = readyInteractionStarts.get(interactionKey)
-		if (interactionStart !== undefined) {
-			return Math.max(0, now - interactionStart)
-		}
+		if (interactionStart !== undefined) return interactionStart
 	}
-	const routeStart =
-		currentRouteNavigation?.pathname === normalizePathname(pathname)
-			? currentRouteNavigation.startedAt
-			: documentStart
-	return Math.max(0, now - routeStart)
+	return currentRouteNavigation?.pathname === normalizePathname(pathname)
+		? currentRouteNavigation.startedAt
+		: documentStart
+}
+
+export function measureRouteReadyDuration(
+	pathname: string,
+	now = performance.now(),
+	documentStart = documentNavigationStart(),
+	readyKey?: string
+): number {
+	return Math.max(
+		0,
+		now - routeReadyStartTime(pathname, documentStart, readyKey)
+	)
 }
 
 export function resetRouteNavigationStartForTests(): void {
