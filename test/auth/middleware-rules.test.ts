@@ -71,6 +71,9 @@ describe('middleware — public routes', () => {
 		'/auth/login',
 		'/auth/signup',
 		'/api/auth/session',
+		'/api/market/players',
+		'/api/market/price-history',
+		'/api/market/availability',
 	]
 
 	for (const path of publicPaths) {

@@ -4,15 +4,13 @@ import { MarketPlayerLookup } from '@/components/data/MarketPlayerLookup'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Card } from '@/components/ui/card'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
-import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
-	GET_MARKET_PULSE,
+	GET_MARKET_PULSE_SUMMARY,
 	type MarketPulse,
-	type MarketPulseResponse,
+	type MarketPulseSummaryResponse
 } from '@/lib/graphql/operations/market'
+import { executePublicServerQuery } from '@/lib/graphql-server'
 import { getTranslations } from 'next-intl/server'
 import { unstable_rethrow } from 'next/navigation'
 import { connection } from 'next/server'
@@ -26,25 +24,26 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/explore/market',
 		titleKey: 'priceChangesTitle',
-		descriptionKey: 'priceChangesDescription',
+		descriptionKey: 'priceChangesDescription'
 	})
 }
 
 async function MarketContent() {
 	await connection()
-	const t = await getTranslations('Market')
+	const translationPromise = getTranslations('Market')
+	const dataPromise = executePublicServerQuery<MarketPulseSummaryResponse>(
+		GET_MARKET_PULSE_SUMMARY,
+		{ days: 14 },
+		{ cache: 'no-store', timeoutMs: 2_000 }
+	)
+	const t = await translationPromise
 	let pulse: MarketPulse | null = null
+	let revision: string | null = null
 
 	try {
-		const response = await executePublicServerQuery<MarketPulseResponse>(
-			GET_MARKET_PULSE,
-			{ days: 14 },
-			publicFetchOptions({
-				revalidate: RevalidateSeconds.market,
-				tags: [CacheTag.market]
-			})
-		)
-		pulse = response.marketPulse
+		const response = await dataPromise
+		pulse = { ...response.marketPulse, availabilityUpdates: [] }
+		revision = response.marketSnapshotContext.revision
 	} catch (error) {
 		unstable_rethrow(error)
 		console.error('[market] RSC fetch failed:', error)
@@ -56,18 +55,20 @@ async function MarketContent() {
 				<RouteReadyMarker
 					name="MARKET_CONTENT_READY"
 					audienceHint="public"
-					goodMs={3_000}
-					poorMs={4_500}
+					goodMs={1_000}
+					poorMs={1_500}
 				/>
-				<Alert variant="destructive" className="mb-6" role="alert">
+				<Alert
+					variant="destructive"
+					className="mb-6"
+					role="alert"
+				>
 					<AlertTitle>{t('dataUnavailable')}</AlertTitle>
-					<AlertDescription>
-						{t('dataUnavailableDescription')}
-					</AlertDescription>
+					<AlertDescription>{t('dataUnavailableDescription')}</AlertDescription>
 				</Alert>
-				<Card className="p-4 sm:p-5">
+				<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
 					<MarketPlayerLookup />
-				</Card>
+				</section>
 			</>
 		)
 	}
@@ -77,10 +78,13 @@ async function MarketContent() {
 			<RouteReadyMarker
 				name="MARKET_CONTENT_READY"
 				audienceHint="public"
-				goodMs={3_000}
-				poorMs={4_500}
+				goodMs={1_000}
+				poorMs={1_500}
 			/>
-			<MarketView pulse={pulse} />
+			<MarketView
+				pulse={pulse}
+				revision={revision}
+			/>
 		</>
 	)
 }
@@ -91,7 +95,10 @@ function MarketViewFallback() {
 			<div className="h-4 w-56 animate-pulse rounded bg-muted/50" />
 			<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
 				{[1, 2, 3, 4].map(i => (
-					<div key={i} className="h-16 animate-pulse rounded-lg bg-muted/40" />
+					<div
+						key={i}
+						className="h-16 animate-pulse rounded-lg bg-muted/40"
+					/>
 				))}
 			</div>
 			<div className="h-48 w-full animate-pulse rounded-lg bg-muted/40" />
