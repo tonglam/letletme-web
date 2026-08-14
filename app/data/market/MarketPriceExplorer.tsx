@@ -4,7 +4,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
-import { Link } from '@/i18n/navigation'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
 import type {
 	MarketPlayer,
@@ -289,10 +288,12 @@ function PriceShareActions({
 
 function PriceColumns({
 	changes,
+	locale,
 	selectedPlayerId,
 	onSelectPlayer
 }: {
 	changes: MarketPriceChange[]
+	locale: string
 	selectedPlayerId: number | null
 	onSelectPlayer: (player: MarketPlayer) => void
 }) {
@@ -346,13 +347,15 @@ function PriceColumns({
 									<div className="pointer-events-none relative z-[1] flex w-full items-center gap-2.5 group-hover:bg-background/60">
 										<PositionBadge player={change.player} />
 										<span className="min-w-0 flex-1">
-											<Link
-												prefetch={false}
-												href={playerStatsHref({ p1: String(change.player.playerId) })}
+											<a
+												href={playerStatsHref({
+													p1: String(change.player.playerId),
+													localePathPrefix: locale === 'en' ? '' : `/${locale}`
+												})}
 												className="pointer-events-auto block truncate text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
 											>
 												{change.player.webName}
-											</Link>
+											</a>
 											<span className="block truncate text-[11px] text-muted-foreground">
 												{change.player.teamShortName}
 											</span>
@@ -443,6 +446,7 @@ export function MarketPriceExplorer({
 			</p>
 			<PriceColumns
 				changes={latestPriceChanges}
+				locale={locale}
 				selectedPlayerId={seedPlayer?.id ?? null}
 				onSelectPlayer={handleSelectPricePlayer}
 			/>

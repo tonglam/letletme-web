@@ -2,20 +2,21 @@
 
 import { Badge } from '@/components/ui/badge'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
-import { Link } from '@/i18n/navigation'
 import type { MarketOwnershipMover } from '@/lib/graphql/operations/market'
 import { shortMarketPosition } from '@/lib/market'
 import { positionBadgeClass } from '@/lib/position-style'
 import { cn } from '@/lib/utils'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
-import { useFormatter, useTranslations } from 'next-intl'
+import { useFormatter, useLocale, useTranslations } from 'next-intl'
 
 function MoverList({
 	movers,
-	direction
+	direction,
+	locale
 }: {
 	movers: MarketOwnershipMover[]
 	direction: 'rise' | 'fall'
+	locale: string
 }) {
 	const t = useTranslations('Market')
 	const formatter = useFormatter()
@@ -79,13 +80,15 @@ function MoverList({
 								{shortMarketPosition(mover.player.position)}
 							</Badge>
 							<div className="min-w-0 flex-1">
-								<Link
-									prefetch={false}
-									href={playerStatsHref({ p1: String(mover.player.playerId) })}
+								<a
+									href={playerStatsHref({
+										p1: String(mover.player.playerId),
+										localePathPrefix: locale === 'en' ? '' : `/${locale}`
+									})}
 									className="truncate text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
 								>
 									{mover.player.webName}
-								</Link>
+								</a>
 								<p className="truncate text-[11px] text-muted-foreground">
 									{mover.player.teamShortName} ·{' '}
 									{t('ownershipFromTo', { from, to })}
@@ -121,6 +124,7 @@ export function OwnershipSwingDesk({
 	fallers: MarketOwnershipMover[]
 }) {
 	const t = useTranslations('Market')
+	const locale = useLocale()
 	return (
 		<div className="grid gap-6 sm:grid-cols-2 sm:gap-8">
 			<section aria-labelledby="ownership-risers-heading">
@@ -140,6 +144,7 @@ export function OwnershipSwingDesk({
 				<MoverList
 					movers={risers}
 					direction="rise"
+					locale={locale}
 				/>
 			</section>
 			<section aria-labelledby="ownership-fallers-heading">
@@ -159,6 +164,7 @@ export function OwnershipSwingDesk({
 				<MoverList
 					movers={fallers}
 					direction="fall"
+					locale={locale}
 				/>
 			</section>
 		</div>
