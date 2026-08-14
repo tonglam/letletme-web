@@ -10,6 +10,9 @@ export type MarketTeaserMode = 'price' | 'ownership' | 'selected' | 'empty'
 export type MarketViewMode =
 	'price-led' | 'availability-led' | 'ownership-led' | 'baseline'
 
+/** GraphQL sends this many availability rows in the initial highlights. */
+export const MARKET_AVAILABILITY_HIGHLIGHT_LIMIT = 5
+
 export function getMarketCoverageMode(coverage: MarketCoverage): MarketCoverageMode {
 	if (coverage.observedDays <= 0 || !coverage.latestDate) return 'empty'
 	if (coverage.observedDays === 1) return 'one-day'
