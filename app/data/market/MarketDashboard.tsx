@@ -18,7 +18,7 @@ import type {
 import { getMarketCoverageMode, getMarketViewMode, shortMarketPosition } from '@/lib/market'
 import { positionBadgeClass } from '@/lib/position-style'
 import { cn } from '@/lib/utils'
-import { getFormatter, getTranslations } from 'next-intl/server'
+import { getTranslations } from 'next-intl/server'
 import { HeartPulse, Sparkles, Users } from 'lucide-react'
 import type { ReactNode } from 'react'
 
@@ -273,10 +273,7 @@ export async function MarketDashboard({
 	revision?: string | null
 	locale: string
 }) {
-	const [t, formatter] = await Promise.all([
-		getTranslations('Market'),
-		getFormatter()
-	])
+	const t: MarketT = await getTranslations('Market')
 	const hasPulseData = pulse.coverage.observedDays > 0
 	const priceChangeDate = pulse.priceChanges.map(c => c.changeDate).sort().at(-1) ?? pulse.coverage.latestDate ?? null
 	const latestPriceChanges = priceChangeDate ? pulse.priceChanges.filter(change => change.changeDate === priceChangeDate) : []
@@ -309,7 +306,7 @@ export async function MarketDashboard({
 		<section aria-labelledby="market-ownership" className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
 			<div className="space-y-6">
 				<div><SectionTitle id="market-most-selected">{t('mostSelectedTitle')}</SectionTitle><MostSelectedColumn players={pulse.mostSelected} locale={locale} t={t} /></div>
-				<div><SectionTitle id="market-ownership">{t('ownershipSwing')}</SectionTitle>{pulse.coverage.observedDays < 2 ? <EmptyHint>{t('movementNeedsAnotherDay')}</EmptyHint> : !hasMovers ? <EmptyHint>{t('noOwnershipMovement')}</EmptyHint> : <OwnershipSwingDesk risers={pulse.ownershipMovers.risers} fallers={pulse.ownershipMovers.fallers} t={t} formatter={formatter} />}</div>
+				<div><SectionTitle id="market-ownership">{t('ownershipSwing')}</SectionTitle>{pulse.coverage.observedDays < 2 ? <EmptyHint>{t('movementNeedsAnotherDay')}</EmptyHint> : !hasMovers ? <EmptyHint>{t('noOwnershipMovement')}</EmptyHint> : <OwnershipSwingDesk risers={pulse.ownershipMovers.risers} fallers={pulse.ownershipMovers.fallers} />}</div>
 			</div>
 		</section>
 	)
