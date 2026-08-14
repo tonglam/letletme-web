@@ -16,6 +16,15 @@ import { NextResponse } from 'next/server'
 export const MARKET_PUBLIC_CACHE_CONTROL =
 	'public, s-maxage=300, stale-while-revalidate=300, no-transform'
 export const MARKET_UNCACHEABLE_CONTROL = 'no-store'
+// Keep the application policy in Cache-Control while also giving the
+// upstream CDN layers an explicit policy. Some proxies normalize
+// Cache-Control before forwarding it to the browser, but still honor their
+// dedicated CDN control headers for the shared response cache.
+export const MARKET_PUBLIC_CACHE_HEADERS = {
+	'Cache-Control': MARKET_PUBLIC_CACHE_CONTROL,
+	'CDN-Cache-Control': MARKET_PUBLIC_CACHE_CONTROL,
+	'Vercel-CDN-Cache-Control': MARKET_PUBLIC_CACHE_CONTROL
+} as const
 
 function logMarketRoute(
 	route: 'players' | 'history' | 'availability',
@@ -226,12 +235,10 @@ export async function handleMarketPlayers(
 			},
 			{
 				status: 200,
-				headers: {
-					'Cache-Control':
-						data.marketSnapshotContext.source === 'DATA_PUBLICATION'
-							? MARKET_PUBLIC_CACHE_CONTROL
-							: MARKET_UNCACHEABLE_CONTROL
-				}
+				headers:
+					data.marketSnapshotContext.source === 'DATA_PUBLICATION'
+						? MARKET_PUBLIC_CACHE_HEADERS
+						: { 'Cache-Control': MARKET_UNCACHEABLE_CONTROL }
 			}
 		)
 	} catch (error) {
@@ -285,12 +292,10 @@ export async function handleMarketHistory(
 			},
 			{
 				status: 200,
-				headers: {
-					'Cache-Control':
-						data.marketSnapshotContext.source === 'DATA_PUBLICATION'
-							? MARKET_PUBLIC_CACHE_CONTROL
-							: MARKET_UNCACHEABLE_CONTROL
-				}
+				headers:
+					data.marketSnapshotContext.source === 'DATA_PUBLICATION'
+						? MARKET_PUBLIC_CACHE_HEADERS
+						: { 'Cache-Control': MARKET_UNCACHEABLE_CONTROL }
 			}
 		)
 	} catch (error) {
@@ -346,12 +351,10 @@ export async function handleMarketAvailability(
 			},
 			{
 				status: 200,
-				headers: {
-					'Cache-Control':
-						data.marketSnapshotContext.source === 'DATA_PUBLICATION'
-							? MARKET_PUBLIC_CACHE_CONTROL
-							: MARKET_UNCACHEABLE_CONTROL
-				}
+				headers:
+					data.marketSnapshotContext.source === 'DATA_PUBLICATION'
+						? MARKET_PUBLIC_CACHE_HEADERS
+						: { 'Cache-Control': MARKET_UNCACHEABLE_CONTROL }
 			}
 		)
 	} catch (error) {
