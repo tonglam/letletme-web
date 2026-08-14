@@ -28,7 +28,9 @@ export const ROUTE_CLIENT_NAMESPACES = {
 		'LiveTournament',
 		'Filters'
 	],
-	live: ['LiveMatches', 'LivePoints', 'LiveTournament', 'TournamentLifecycle'],
+	liveMatches: ['LiveMatches'],
+	livePoints: ['LivePoints'],
+	liveCompetitions: ['LiveTournament', 'TournamentLifecycle'],
 	myFpl: ['TeamStats', 'TournamentStats', 'TournamentLifecycle', 'Filters'],
 	onboarding: ['Onboarding'],
 	profile: ['Profile', 'Sessions']
