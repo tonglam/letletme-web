@@ -1,7 +1,6 @@
 'use client'
 
 import { MarketLocalUpdated } from '@/components/data/MarketLocalUpdated'
-import { MarketPlayerLookup } from '@/components/data/MarketPlayerLookup'
 import { OwnershipSwingDesk } from '@/components/data/OwnershipSwingDesk'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import { ShareTextFallback } from '@/components/share/ShareTextFallback'
@@ -38,6 +37,7 @@ import {
 } from '@/app/data/market/_lib/market-price-share'
 import { Check, Copy, HeartPulse, Search, Sparkles, Users } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
+import dynamic from 'next/dynamic'
 import {
 	useCallback,
 	useEffect,
@@ -76,6 +76,59 @@ function formatCalendarDate(value: string | null, locale: string): string {
 
 function formatOwnership(value: number, locale: string): string {
 	return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)}%`
+}
+
+const LazyMarketPlayerLookup = dynamic(
+	() =>
+		import('@/components/data/MarketPlayerLookup').then(
+			module => module.MarketPlayerLookup
+		),
+	{ ssr: false, loading: () => <div className="min-h-11" aria-hidden="true" /> }
+)
+
+function MarketPlayerLookupLauncher({
+	revision,
+	seedPlayer,
+	initialOpen = false,
+	onClearSeed
+}: {
+	revision?: string | null
+	seedPlayer?: PlayerDirectoryItem | null
+	initialOpen?: boolean
+	onClearSeed?: () => void
+}) {
+	const t = useTranslations('Market')
+	const [open, setOpen] = useState(initialOpen || seedPlayer != null)
+	const shouldOpen = open || seedPlayer != null
+
+	if (shouldOpen) {
+		return (
+			<LazyMarketPlayerLookup
+				seedPlayer={seedPlayer}
+				onClearSeed={onClearSeed}
+				revision={revision}
+			/>
+		)
+	}
+
+	return (
+		<div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+			<p className="min-w-0 flex-1 text-xs text-muted-foreground">
+				{t('historyClickHint')}
+			</p>
+			<Button
+				type="button"
+				data-testid="market-open-player-search"
+				variant="ghost"
+				size="sm"
+				className="h-7 shrink-0 px-2 text-xs"
+				onClick={() => setOpen(true)}
+			>
+				<Search className="size-3.5" aria-hidden="true" />
+				{t('lookupAnotherPlayer')}
+			</Button>
+		</div>
+	)
 }
 
 function PositionBadge({ player }: { player: MarketPlayer }) {
@@ -885,7 +938,10 @@ export function MarketView({
 					<SectionTitle id="market-player-lookup">
 						{t('lookupTitle')}
 					</SectionTitle>
-					<MarketPlayerLookup revision={revision} />
+					<MarketPlayerLookupLauncher
+						revision={revision}
+						initialOpen
+					/>
 				</section>
 			</>
 		)
@@ -933,9 +989,8 @@ export function MarketView({
 				onSelectPlayer={handleSelectPricePlayer}
 			/>
 			<div className="mt-4 border-t border-border/60 pt-3">
-				<MarketPlayerLookup
+				<MarketPlayerLookupLauncher
 					key={`${seedPlayer?.id ?? 'none'}:${latestPriceChanges.length > 0 ? 'compact' : 'open'}`}
-					compact={latestPriceChanges.length > 0}
 					seedPlayer={seedPlayer}
 					onClearSeed={() => setSeedPlayer(null)}
 					revision={revision}
