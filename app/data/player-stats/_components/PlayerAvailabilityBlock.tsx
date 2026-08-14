@@ -29,10 +29,10 @@ export function PlayerAvailabilityBlock({
 	return (
 		<div className="rounded-lg border border-border/60 bg-muted/10 px-3 py-3">
 			<div className="mb-2 flex flex-wrap items-center gap-2">
-				<p className="font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+				<p className="eyebrow">
 					{tPs('availabilityTitle')}
 				</p>
-				<Badge variant="outline" className="text-[10px]">
+				<Badge variant="outline" className="text-label">
 					{t(`status.${statusKey}`)}
 				</Badge>
 				{chance != null ? (

@@ -34,7 +34,7 @@ function MatchStatus({ match }: { match: Match }) {
 	if (match.status === 'FT') {
 		return (
 			<span
-				className="inline-flex items-center rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-semibold text-fascia-foreground/70"
+				className="inline-flex items-center rounded-full bg-fascia-foreground/10 px-2.5 py-0.5 text-xs font-semibold text-fascia-foreground/70"
 				role="status"
 			>
 				{t('fullTime')}

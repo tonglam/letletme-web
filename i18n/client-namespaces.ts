@@ -10,7 +10,7 @@ export const ROUTE_CLIENT_NAMESPACES = {
 	auth: ['Auth'],
 	fixtures: ['Fixtures'],
 	gameweek: ['GameweekStats', 'PlayerDirectory'],
-	market: ['Market', 'PlayerDirectory', 'Filters', 'PriceChangeList'],
+	market: ['Market', 'PlayerDirectory', 'Filters'],
 	playerStats: [
 		'PlayerStats',
 		'PlayerDirectory',

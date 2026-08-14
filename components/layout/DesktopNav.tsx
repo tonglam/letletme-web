@@ -27,7 +27,7 @@ export function DesktopNav({ user }: { user: NavigationUser | null }) {
 					<DropdownMenuTrigger asChild>
 						<Button
 							variant="ghost"
-							className="px-3 font-display text-[13px] font-semibold uppercase tracking-[0.14em] text-fascia-foreground/70 hover:bg-white/5 hover:text-fascia-foreground focus-visible:ring-electric data-[state=open]:text-fascia-foreground"
+							className="px-3 font-display text-xs font-semibold uppercase tracking-caps text-fascia-foreground/70 hover:bg-fascia-foreground/5 hover:text-fascia-foreground focus-visible:ring-electric data-[state=open]:text-fascia-foreground"
 						>
 							{t(item.labelKey)}
 							<ChevronDown
@@ -61,7 +61,7 @@ export function DesktopNav({ user }: { user: NavigationUser | null }) {
 			) : (
 				<Button
 					size="sm"
-					className="ml-2 font-display text-[13px] font-semibold uppercase tracking-[0.14em] shadow-sticker-sm transition-transform hover:-translate-y-px"
+					className="ml-2 font-display text-xs font-semibold uppercase tracking-caps shadow-sticker-sm transition-transform hover:-translate-y-px"
 					asChild
 				>
 					<Link

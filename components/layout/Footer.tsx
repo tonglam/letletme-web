@@ -33,11 +33,11 @@ export async function Footer() {
 				{/* Same groups/order/links as header menu (menuItems) */}
 				<nav
 					aria-label={t('navigation')}
-					className="grid grid-cols-2 gap-8 border-t border-white/10 pt-8 sm:grid-cols-4"
+					className="grid grid-cols-2 gap-8 border-t border-fascia-foreground/10 pt-8 sm:grid-cols-4"
 				>
 					{menuItems.map(group => (
 						<div key={group.id}>
-							<p className="chyron mb-4 !text-fascia-foreground/70">
+							<p className="chyron mb-4 text-fascia-foreground/70">
 								{nav(group.labelKey)}
 							</p>
 							<ul className="flex flex-col gap-2.5">
@@ -57,9 +57,9 @@ export async function Footer() {
 					))}
 				</nav>
 
-				<div className="mt-10 flex flex-col gap-2 border-t border-white/10 pt-6 text-sm text-fascia-foreground/50 sm:flex-row sm:items-center sm:justify-between">
+				<div className="mt-10 flex flex-col gap-2 border-t border-fascia-foreground/10 pt-6 text-sm text-fascia-foreground/50 sm:flex-row sm:items-center sm:justify-between">
 					<p>{t('rights', { year: currentYear })}</p>
-					<p className="font-display text-xs font-semibold uppercase tracking-[0.18em]">
+					<p className="font-display text-xs font-semibold uppercase tracking-caps">
 						{t('builtFor')}
 					</p>
 				</div>

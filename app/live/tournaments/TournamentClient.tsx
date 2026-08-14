@@ -562,7 +562,7 @@ export default function TournamentClient({
 						eyebrow={t('liveStandings')}
 						title={t('liveStandings')}
 					/>
-					<Card className="border-border/80 p-6 text-sm text-muted-foreground shadow-sm">
+					<Card className="p-6 text-sm text-muted-foreground shadow-sm">
 						{t('signInPrompt')}{' '}
 						<Link
 							href="/auth/login?next=/live/competitions"
@@ -687,7 +687,7 @@ export default function TournamentClient({
 				)}
 
 				{selectedTournament && !standingsReady && (
-					<Card className="border-border/80 p-8 text-center shadow-sm">
+					<Card className="p-8 text-center shadow-sm">
 						<p className="font-display text-lg font-semibold tracking-tight">
 							{selectedTournament.setupStatus === 'FAILED'
 								? lifecycleT('memberFailure')

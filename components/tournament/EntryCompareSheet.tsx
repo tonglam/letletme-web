@@ -77,7 +77,7 @@ function ChipBadges({
 			{chips.bench && (
 				<Badge
 					variant="outline"
-					className="h-4 border-info/30 bg-info/10 px-1 text-[10px] text-info"
+					className="h-4 border-info/30 bg-info/10 px-1 text-label text-info"
 				>
 					BB
 				</Badge>
@@ -85,7 +85,7 @@ function ChipBadges({
 			{chips.triple && (
 				<Badge
 					variant="outline"
-					className="h-4 border-success/30 bg-success/10 px-1 text-[10px] text-success"
+					className="h-4 border-success/30 bg-success/10 px-1 text-label text-success"
 				>
 					TC
 				</Badge>
@@ -93,7 +93,7 @@ function ChipBadges({
 			{chips.wildcard && (
 				<Badge
 					variant="outline"
-					className="h-4 border-primary/30 bg-primary/10 px-1 text-[10px] text-primary-ink"
+					className="h-4 border-primary/30 bg-primary/10 px-1 text-label text-primary-ink"
 				>
 					WC
 				</Badge>
@@ -101,7 +101,7 @@ function ChipBadges({
 			{chips.freeHit && (
 				<Badge
 					variant="outline"
-					className="h-4 border-warning/30 bg-warning/10 px-1 text-[10px] text-warning"
+					className="h-4 border-warning/30 bg-warning/10 px-1 text-label text-warning"
 				>
 					FH
 				</Badge>
@@ -195,7 +195,7 @@ function PlayerCompareRow({ leftPick, rightPick, posLabel, isBench }: PlayerComp
 			</div>
 
 			{/* Center position label */}
-			<div className="text-[10px] text-muted-foreground text-center min-w-[36px] px-1 font-mono">{posLabel}</div>
+			<div className="text-label text-muted-foreground text-center min-w-[36px] px-1 font-mono">{posLabel}</div>
 
 			{/* Right entry player */}
 			<div className="flex items-center gap-1.5 justify-start">
@@ -309,7 +309,7 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 				<div className="flex-1 overflow-y-auto">
 					{/* Overview section */}
 					<div className="px-3 pt-3 pb-1">
-						<p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1 px-1">{t('overview')}</p>
+						<p className="eyebrow mb-1 px-1">{t('overview')}</p>
 						<div className="border rounded-lg overflow-hidden">
 							{/* Entry headers */}
 							<div className="grid grid-cols-[1fr_auto_1fr] bg-muted/30 px-3 py-2">
@@ -370,7 +370,7 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 
 					{/* Squad comparison section */}
 					<div className="px-3 pt-4 pb-4">
-						<p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1 px-1">{t('squadComparison')}</p>
+						<p className="eyebrow mb-1 px-1">{t('squadComparison')}</p>
 
 						{isLoading ? (
 							<div className="border rounded-lg overflow-hidden">
@@ -386,14 +386,14 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 							<div className="border rounded-lg overflow-hidden">
 								{/* Column headers */}
 								<div className="grid grid-cols-[1fr_auto_1fr] bg-muted/30 px-3 py-1.5">
-									<div className="text-right text-[10px] text-muted-foreground pr-3">{entryA.teamName}</div>
+									<div className="text-right text-label text-muted-foreground pr-3">{entryA.teamName}</div>
 									<div className="min-w-[36px]" />
-									<div className="text-left text-[10px] text-muted-foreground pl-3">{entryB.teamName}</div>
+									<div className="text-left text-label text-muted-foreground pl-3">{entryB.teamName}</div>
 								</div>
 
 								{/* Starting XI label */}
 								<div className="px-3 py-1 bg-muted/10 border-b">
-									<span className="text-[10px] text-muted-foreground font-medium">{t('startingEleven')}</span>
+									<span className="text-label text-muted-foreground font-medium">{t('startingEleven')}</span>
 								</div>
 
 								{Array.from({ length: Math.min(11, maxPicks) }).map((_, i) => {
@@ -445,7 +445,7 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 								{/* Bench label */}
 								{maxPicks > 11 && (
 									<div className="px-3 py-1 bg-accent/30 border-b border-t">
-										<span className="text-[10px] text-muted-foreground font-medium">{t('substitutes')}</span>
+										<span className="text-label text-muted-foreground font-medium">{t('substitutes')}</span>
 									</div>
 								)}
 

@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui/badge'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { Button } from '@/components/ui/button'
+import { DeltaBadge } from '@/components/data/DeltaBadge'
 import { Input } from '@/components/ui/input'
 import { Link } from '@/i18n/navigation'
 import { executeQuery } from '@/lib/graphql-client'
@@ -414,13 +415,14 @@ export function MarketPlayerLookup({
 												{(item.newValue / 10).toFixed(1)}m
 											</p>
 										</div>
-										<span
-											className={`font-display text-sm font-semibold tabular-nums ${
-												change > 0 ? 'text-success' : 'text-destructive'
-											}`}
-										>
-											{change > 0 ? '+' : ''}£{(change / 10).toFixed(1)}m
-										</span>
+										<DeltaBadge
+											value={change}
+											size="md"
+											showArrow={false}
+											format={value =>
+												`${value > 0 ? '+' : ''}£${(value / 10).toFixed(1)}m`
+											}
+										/>
 										{(item.transfersIn !== null &&
 											item.transfersIn !== undefined) ||
 										(item.transfersOut !== null &&

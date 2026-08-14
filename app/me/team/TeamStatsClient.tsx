@@ -179,7 +179,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 					</TeamGameweekWorkspaceProvider>
 				) : (
 					<Card
-						className="border-border/80 p-6 shadow-sm"
+						className="p-6 shadow-sm"
 						aria-live="polite"
 						aria-busy={isLoading}
 					>
@@ -343,7 +343,7 @@ function TeamStatsViews({
 
 					{seasonLogs ? (
 						<div>
-							<p className="mb-4 font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+							<p className="mb-4 eyebrow">
 								{t('seasonLogs')}
 							</p>
 							<TeamStatsDeepDive
@@ -352,7 +352,7 @@ function TeamStatsViews({
 							/>
 						</div>
 					) : !seasonOverall && !hasAnyContent ? (
-						<Card className="border-border/80 p-6 shadow-sm">
+						<Card className="p-6 shadow-sm">
 							<p className="text-sm text-muted-foreground">
 								{isLoading ? t('loading') : t('noStats')}
 							</p>
@@ -394,7 +394,7 @@ function TeamStatsViews({
 						</>
 					) : (
 						<Card
-							className="border-border/80 p-6 shadow-sm"
+							className="p-6 shadow-sm"
 							aria-live="polite"
 							aria-busy={isLoading}
 						>

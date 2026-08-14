@@ -339,15 +339,15 @@ export default function GameweekStatsClient({
 						className="scoreboard-lifted mb-6 rounded-xl sm:mb-8"
 						aria-labelledby="gw-overview-title"
 					>
-						<div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3 sm:px-5">
+					<div className="flex flex-wrap items-center justify-between gap-2 border-b border-fascia-foreground/10 px-4 py-3 sm:px-5">
 							<h2
 								id="gw-overview-title"
-								className="font-display text-lg font-bold tracking-wide text-white sm:text-xl"
+							className="font-display text-lg font-bold tracking-wide text-fascia-foreground sm:text-xl"
 							>
 								{t('overview', { gameweek: visibleGameweek })}
 							</h2>
 							{isLoading ? (
-								<span className="font-mono text-[10px] uppercase tracking-wide text-white/50">
+								<span className="font-mono text-label uppercase tracking-wide text-fascia-foreground/60">
 									{t('loadingOverview')}
 								</span>
 							) : null}
@@ -363,22 +363,22 @@ export default function GameweekStatsClient({
 
 						{isPreseasonSelection ? (
 							<div className="px-4 py-6 sm:px-5">
-								<p className="font-display text-lg font-bold text-white">
+								<p className="font-display text-lg font-bold text-fascia-foreground">
 									{t('preseasonTitle')}
 								</p>
-								<p className="mt-1 text-sm text-white/65">
+								<p className="mt-1 text-sm text-fascia-foreground/65">
 									{t('preseasonDescription')}
 								</p>
 							</div>
 						) : isScheduledSelection || isOverviewPending ? (
 							<div className="px-4 py-6 sm:px-5">
-								<p className="text-sm text-white/65">{t('pendingOfficial')}</p>
+								<p className="text-sm text-fascia-foreground/65">{t('pendingOfficial')}</p>
 							</div>
 						) : (
 							<>
-								<div className="grid grid-cols-2 divide-x divide-white/10 border-b border-white/10">
+								<div className="grid grid-cols-2 divide-x divide-fascia-foreground/10 border-b border-fascia-foreground/10">
 									<div className="px-4 py-4 sm:px-5 sm:py-5">
-										<p className="font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+										<p className="eyebrow text-fascia-foreground/55">
 											{t('averagePoints')}
 										</p>
 										<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-electric sm:text-4xl">
@@ -391,10 +391,10 @@ export default function GameweekStatsClient({
 										</p>
 									</div>
 									<div className="px-4 py-4 sm:px-5 sm:py-5">
-										<p className="font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+										<p className="eyebrow text-fascia-foreground/55">
 											{t('highestPoints')}
 										</p>
-										<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-white sm:text-4xl">
+										<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-fascia-foreground sm:text-4xl">
 											{formatStat(
 												isOverviewUnavailable
 													? null
@@ -404,7 +404,7 @@ export default function GameweekStatsClient({
 									</div>
 								</div>
 
-								<div className="grid grid-cols-2 gap-px bg-white/10 sm:grid-cols-4">
+								<div className="grid grid-cols-2 gap-px bg-fascia-foreground/10 sm:grid-cols-4">
 									{(
 										[
 											{
@@ -443,20 +443,20 @@ export default function GameweekStatsClient({
 									).map(item => (
 										<div
 											key={item.label}
-											className="bg-[hsl(288_40%_20%)] px-3 py-3 sm:px-4 sm:py-3.5"
+											className="bg-scoreboard-cell px-3 py-3 sm:px-4 sm:py-3.5"
 										>
-											<p className="font-display text-[9px] font-semibold uppercase tracking-[0.14em] text-white/50 sm:text-[10px]">
+											<p className="eyebrow text-fascia-foreground/60">
 												{item.label}
 											</p>
-											<p className="mt-1 truncate font-display text-sm font-semibold tracking-tight text-white sm:text-base">
+											<p className="mt-1 truncate font-display text-sm font-semibold tracking-tight text-fascia-foreground sm:text-base">
 												{item.value}
 											</p>
 										</div>
 									))}
 								</div>
 
-								<div className="border-t border-white/10 px-3 py-3 sm:px-4">
-									<p className="mb-2 font-display text-[9px] font-semibold uppercase tracking-[0.16em] text-white/50">
+								<div className="border-t border-fascia-foreground/10 px-3 py-3 sm:px-4">
+									<p className="eyebrow mb-2 text-fascia-foreground/60">
 										{t('chipsPlayed')}
 									</p>
 									<div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
@@ -490,12 +490,12 @@ export default function GameweekStatsClient({
 										).map(([key, value]) => (
 											<div
 												key={key}
-												className="rounded-md border border-white/12 bg-white/8 px-2 py-2 text-center"
+													className="rounded-md border border-fascia-foreground/12 bg-fascia-foreground/8 px-2 py-2 text-center"
 											>
-												<p className="font-display text-[9px] font-semibold uppercase leading-tight tracking-[0.1em] text-electric sm:text-[10px]">
+													<p className="eyebrow leading-tight text-electric">
 													{t(key)}
 												</p>
-												<p className="mt-1 font-display text-sm font-bold tabular-nums text-white sm:text-base">
+													<p className="mt-1 font-display text-sm font-bold tabular-nums text-fascia-foreground sm:text-base">
 													{formatCount(value ?? null, '—')}
 												</p>
 											</div>

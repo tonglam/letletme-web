@@ -4,6 +4,7 @@ import {
 	buildTournamentStatsQueryString,
 	TOURNAMENT_STATS_PATH,
 } from '@/app/me/tournament/_lib/tournament-stats-url'
+import { DeltaBadge } from '@/components/data/DeltaBadge'
 import { Button } from '@/components/ui/button'
 import { usePageActive } from '@/hooks/use-page-active'
 import { Link } from '@/i18n/navigation'
@@ -19,7 +20,7 @@ import {
 	type RankMovement,
 } from '@/lib/home-league-ranks'
 import { cn, formatInteger } from '@/lib/utils'
-import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Minus } from 'lucide-react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -28,29 +29,15 @@ const EXPAND_STEP = 10
 
 function MovementBadge({ movement }: { movement: RankMovement }) {
 	if (movement.kind === 'up') {
-		return (
-			<span className="inline-flex items-center gap-0.5 font-mono text-[11px] font-semibold tabular-nums text-success">
-				<ArrowUp className="size-3 shrink-0" aria-hidden="true" />
-				{movement.places}
-			</span>
-		)
+		return <DeltaBadge value={movement.places} size="sm" />
 	}
 	if (movement.kind === 'down') {
-		return (
-			<span className="inline-flex items-center gap-0.5 font-mono text-[11px] font-semibold tabular-nums text-destructive">
-				<ArrowDown className="size-3 shrink-0" aria-hidden="true" />
-				{movement.places}
-			</span>
-		)
+		return <DeltaBadge value={-movement.places} size="sm" />
 	}
 	if (movement.kind === 'flat') {
-		return (
-			<span className="inline-flex items-center text-muted-foreground">
-				<Minus className="size-3" aria-hidden="true" />
-			</span>
-		)
+		return <DeltaBadge value={0} size="sm" format={() => null} />
 	}
-	return <span className="text-[11px] text-muted-foreground/50">·</span>
+	return <span className="text-caption text-muted-foreground/50">·</span>
 }
 
 function LeagueRow({ entryId, row }: { entryId: number; row: HomeLeagueRankRow }) {
@@ -145,7 +132,7 @@ function LeagueRow({ entryId, row }: { entryId: number; row: HomeLeagueRankRow }
 				<span className="block truncate text-sm font-medium leading-tight">
 					{row.name}
 				</span>
-				<span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+				<span className="mt-0.5 block truncate text-caption text-muted-foreground">
 					{metaParts.join(' · ')}
 				</span>
 			</span>
@@ -251,7 +238,7 @@ export function PersonalLeagueRankList({
 
 	return (
 		<div>
-			<ul className="rounded-lg border border-border/60 bg-muted/15 px-3 dark:bg-muted/10">
+			<ul className="rounded-lg border surface-inset-soft px-3">
 				{visible.map(row => (
 					<LeagueRow entryId={entryId} key={`${row.id}:${row.tournamentId ?? ''}`} row={row} />
 				))}

@@ -37,7 +37,7 @@ export function TeamStatsDeepDive({
 		<div className="space-y-8 sm:space-y-10">
 			{/* Decisions */}
 			<div className="space-y-4 sm:space-y-5">
-				<p className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+				<p className="eyebrow">
 					{t('ledgerDecisions')}
 				</p>
 				<div className="space-y-4 sm:space-y-5">
@@ -76,7 +76,7 @@ export function TeamStatsDeepDive({
 
 			{/* Record */}
 			<div className="space-y-4 sm:space-y-5">
-				<p className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+				<p className="eyebrow">
 					{t('ledgerRecord')}
 				</p>
 				<div className="space-y-4 sm:space-y-5">

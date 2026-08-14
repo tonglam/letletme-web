@@ -1,9 +1,8 @@
 'use client'
 
-import { LogoMark, LogoWordmark } from '@/components/layout/Logo'
+import { AuthCard, AuthShell } from '@/components/layout/AuthShell'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useHydrated } from '@/hooks/use-hydrated'
@@ -77,15 +76,8 @@ export default function SignupClient() {
 	}
 
 	return (
-		<div className="flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center bg-muted/30 p-4">
-			<div className="mb-6 flex items-center gap-2">
-				<LogoMark className="size-10 text-plum dark:text-electric" />
-				<h1>
-					<LogoWordmark className="text-2xl" />
-				</h1>
-			</div>
-
-			<Card className="w-full max-w-md border-border/80 p-6 shadow-sm">
+		<AuthShell>
+			<AuthCard>
 				{sent ? (
 					<div className="text-center space-y-2">
 						<h2 className="text-xl font-bold">{t('checkEmail')}</h2>
@@ -196,7 +188,7 @@ export default function SignupClient() {
 						</p>
 					</>
 				)}
-			</Card>
-		</div>
+			</AuthCard>
+		</AuthShell>
 	)
 }

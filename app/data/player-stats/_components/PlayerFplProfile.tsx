@@ -146,7 +146,7 @@ function RadarLegend({
 							<p className="truncate text-muted-foreground">
 								{axisLabel(axis.code, t)}
 							</p>
-							<p className="text-[11px] text-muted-foreground">
+							<p className="text-caption text-muted-foreground">
 								{axis.available && axis.percentile !== null
 									? t('positionPercentile', {
 											value: percentileValue(axis.percentile)
@@ -375,9 +375,7 @@ export function PlayerFplProfile({
 					/>
 				</div>
 			)}
-			<p className="mt-3 text-[11px] text-muted-foreground">
-				{t('percentileHint')}
-			</p>
+			<p className="mt-3 text-caption text-muted-foreground">{t('percentileHint')}</p>
 		</PlayerStatsSection>
 	)
 }

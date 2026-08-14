@@ -1,14 +1,18 @@
 import { cn } from '@/lib/utils'
 import type { ReactNode } from 'react'
 
-/** Shared dense table shell — same language as TeamSquadSection. */
-export function TeamDataTable({
+/**
+ * Shared dense table shell — the site standard for stat tables.
+ * (Promoted from me/team TeamDataTable; same API, generic names.)
+ */
+export function DataTable({
 	children,
 	className,
 	minWidthClass = 'min-w-[18rem]',
 }: {
 	children: ReactNode
 	className?: string
+	/** Per-table minimum width for horizontal scroll (e.g. 'min-w-[28rem]'). */
 	minWidthClass?: string
 }) {
 	return (
@@ -30,19 +34,23 @@ export function TeamDataTable({
 	)
 }
 
-export function TeamDataTh({
+export function DataTh({
 	children,
 	className,
 	align = 'left',
+	title,
 }: {
 	children: ReactNode
 	className?: string
 	align?: 'left' | 'center' | 'right'
+	/** Native tooltip, e.g. expanding a terse column abbreviation. */
+	title?: string
 }) {
 	return (
 		<th
+			title={title}
 			className={cn(
-				'px-1.5 py-2 font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground',
+				'eyebrow px-1.5 py-2',
 				align === 'center' && 'text-center',
 				align === 'right' && 'text-right',
 				align === 'left' && 'text-left',
@@ -54,7 +62,7 @@ export function TeamDataTh({
 	)
 }
 
-export function TeamDataThead({
+export function DataThead({
 	children,
 	sticky = false,
 }: {
@@ -66,7 +74,7 @@ export function TeamDataThead({
 		<thead>
 			<tr
 				className={cn(
-					'border-b border-border/70 bg-muted/40 text-left dark:bg-muted/20',
+					'surface-inset border-b text-left',
 					sticky && 'sticky top-0 z-10 shadow-sm backdrop-blur-sm',
 				)}
 			>
@@ -76,7 +84,7 @@ export function TeamDataThead({
 	)
 }
 
-export function TeamDataTr({
+export function DataTr({
 	children,
 	className,
 }: {
@@ -95,17 +103,20 @@ export function TeamDataTr({
 	)
 }
 
-export function TeamDataTd({
+export function DataTd({
 	children,
 	className,
 	align = 'left',
+	colSpan,
 }: {
 	children: ReactNode
 	className?: string
 	align?: 'left' | 'center' | 'right'
+	colSpan?: number
 }) {
 	return (
 		<td
+			colSpan={colSpan}
 			className={cn(
 				'px-1.5 py-2',
 				align === 'center' && 'text-center',

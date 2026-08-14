@@ -39,7 +39,7 @@ export function TransferList({ title, transfers, type }: TransferListProps) {
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 mb-4">
         {icon}
-        <h3 className="font-display text-lg font-bold uppercase tracking-[0.1em]">{title}</h3>
+        <h3 className="font-display text-lg font-bold uppercase tracking-caps">{title}</h3>
         {transfers.length > 0 && (
           <Badge variant="secondary" className="ml-auto">
             {transfers.length}

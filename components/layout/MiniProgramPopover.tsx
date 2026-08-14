@@ -44,7 +44,7 @@ export function MiniProgramPopover({ label, scanText }: MiniProgramPopoverProps)
 							setPinned(true)
 							setOpen(true)
 						}}
-						className="inline-flex items-center gap-2 rounded-md border border-electric/40 bg-white/5 px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.18em] text-fascia-foreground/80 transition-colors hover:border-electric hover:text-electric focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-electric"
+						className="inline-flex items-center gap-2 rounded-md border border-electric/40 bg-fascia-foreground/5 px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-caps text-fascia-foreground/80 transition-colors hover:border-electric hover:text-electric focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-electric"
 					>
 						<QrCode aria-hidden="true" className="size-4 text-electric" />
 						{label}

@@ -116,7 +116,7 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
             {user ? (
               <div className="flex flex-col gap-3">
                 <div className="rounded-lg border px-3 py-2.5">
-                  <p className="mb-2 flex items-center gap-1.5 font-display text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                  <p className="mb-2 flex items-center gap-1.5 eyebrow">
                     <UserRound aria-hidden="true" className="size-3" />
                     {t("accountLabel")}
                   </p>
@@ -140,13 +140,13 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
 
                 <div className="rounded-lg border bg-muted/40 px-3 py-2.5">
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="flex items-center gap-1.5 font-display text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                    <p className="flex items-center gap-1.5 eyebrow">
                       <Shirt aria-hidden="true" className="size-3" />
                       {t("fplTeamLabel")}
                     </p>
                     <span
                       className={cn(
-                        "rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide",
+                        "rounded-sm px-1.5 py-0.5 font-mono text-label font-semibold uppercase tracking-wide",
                         verifiedEntryId !== null
                           ? "bg-success/15 text-success"
                           : "bg-muted text-muted-foreground"

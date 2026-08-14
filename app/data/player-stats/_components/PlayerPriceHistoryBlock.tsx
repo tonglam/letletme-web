@@ -1,5 +1,6 @@
 'use client'
 
+import { DeltaBadge } from '@/components/data/DeltaBadge'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_PLAYER_VALUE_HISTORY,
@@ -79,7 +80,7 @@ export function PlayerPriceHistoryBlock({
 
 	return (
 		<div>
-			<p className="mb-2 font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+			<p className="eyebrow mb-2">
 				{playerName
 					? t('priceHistoryFor', { player: playerName })
 					: t('priceHistoryTitle')}
@@ -104,17 +105,13 @@ export function PlayerPriceHistoryBlock({
 						>
 							<span className="text-muted-foreground">{dateLabel}</span>
 							<span className="font-medium tabular-nums">{priceLabel}</span>
-							<span
-								className={
-									delta > 0
-										? 'text-xs tabular-nums text-success'
-										: delta < 0
-											? 'text-xs tabular-nums text-destructive'
-											: 'text-xs text-muted-foreground'
-								}
-							>
-								{deltaLabel ?? '—'}
-							</span>
+							<DeltaBadge
+								value={delta}
+								showArrow={false}
+								format={() => deltaLabel ?? '—'}
+								size="sm"
+								className="text-xs"
+							/>
 						</li>
 					)
 				})}

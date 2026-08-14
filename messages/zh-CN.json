@@ -1176,10 +1176,6 @@
 		"homeEmptyDescription": "下一次 {time} 采集后，将记录首份完整球员快照。",
 		"availabilityWatch": "出场状态观察"
 	},
-	"PriceChangeList": {
-		"transfersIn": "转入 {count} 次",
-		"transfersOut": "转出 {count} 次"
-	},
 	"PriceChanges": {
 		"title": "身价变化",
 		"dataUnavailable": "身价数据暂时不可用",

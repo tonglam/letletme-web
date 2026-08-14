@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { DeltaBadge } from '@/components/data/DeltaBadge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
 import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
@@ -74,21 +75,16 @@ function OwnershipMoverRow({
 	detailLabel: string
 	fromToLabel: string
 }) {
-	const rising = mover.change > 0
-	const Icon = rising ? ArrowUpRight : ArrowDownRight
-	const delta = `${rising ? '+' : ''}${mover.change.toFixed(1)}%`
-
 	return (
 		<li className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2">
 			<TeaserPlayer player={mover.player} />
 			<div className="shrink-0 text-right" title={detailLabel}>
-				<span
-					className={`flex items-center justify-end gap-0.5 font-mono text-sm font-bold ${rising ? 'text-success' : 'text-destructive'}`}
-				>
-					<Icon aria-hidden="true" className="size-4" />
-					{delta}
-				</span>
-				<p className="mt-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+				<DeltaBadge
+					value={mover.change}
+					size="md"
+					format={value => `${value > 0 ? '+' : ''}${value.toFixed(1)}%`}
+				/>
+				<p className="mt-0.5 font-mono text-caption tabular-nums text-muted-foreground">
 					{fromToLabel}
 				</p>
 			</div>
@@ -125,7 +121,7 @@ function AvailabilityTeaserList({
 							<div className="min-w-0 flex-1">
 								<div className="flex flex-wrap items-center gap-2">
 									<p className="truncate text-sm font-semibold">{update.player.webName}</p>
-									<Badge variant={key === 'available' ? 'secondary' : 'outline'} className="shrink-0 text-[10px]">
+									<Badge variant={key === 'available' ? 'secondary' : 'outline'} className="shrink-0 text-label">
 										{labels.status(key)}
 									</Badge>
 								</div>
@@ -213,7 +209,7 @@ export async function MarketTeaser() {
 							</div>
 							<Button
 								asChild
-								className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-[0.08em]"
+								className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-caps"
 							>
 								<Link href="/explore/market" prefetch={false}>
 									{t('openMarket')} <ArrowRight aria-hidden="true" />
@@ -227,7 +223,7 @@ export async function MarketTeaser() {
 							{/* Split board: who managers are buying into vs selling away */}
 							<div className="grid gap-6 md:grid-cols-2">
 								<div>
-									<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-[0.12em] text-success">
+									<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-success">
 										<ArrowUpRight aria-hidden="true" className="size-4" />
 										{t('homeOwnershipRising')}
 									</h3>
@@ -254,7 +250,7 @@ export async function MarketTeaser() {
 									)}
 								</div>
 								<div>
-									<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-[0.12em] text-destructive">
+									<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-destructive">
 										<ArrowDownRight aria-hidden="true" className="size-4" />
 										{t('homeOwnershipFalling')}
 									</h3>
@@ -283,7 +279,7 @@ export async function MarketTeaser() {
 							</div>
 
 							<div>
-								<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
+								<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
 									<HeartPulse aria-hidden="true" className="size-4 text-pink" />
 									{t('availabilityWatch')}
 								</h3>
@@ -293,7 +289,7 @@ export async function MarketTeaser() {
 					) : (
 						<CardContent className="grid gap-6 pt-6 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
 							<div>
-								<h3 className="mb-3 font-display text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
+								<h3 className="mb-3 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
 									{teaserMode === 'price'
 										? t('latestPriceMoves')
 										: teaserMode === 'selected'
@@ -309,19 +305,19 @@ export async function MarketTeaser() {
 										{teaserMode === 'price' &&
 											pulse.priceChanges.slice(0, HOME_TEASER_LIMIT).map((change, index) => {
 												const rising = change.direction === 'RISE'
-												const Icon = rising ? ArrowUpRight : ArrowDownRight
 												return (
 													<li
 														key={`${change.player.playerId}-${index}`}
 														className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2"
 													>
 														<TeaserPlayer player={change.player} />
-														<span
-															className={`flex items-center gap-1 font-mono text-sm font-bold ${rising ? 'text-success' : 'text-destructive'}`}
-														>
-															<Icon aria-hidden="true" className="size-4" />
-															{rising ? '+' : '-'}£{(Math.abs(change.change) / 10).toFixed(1)}m
-														</span>
+														<DeltaBadge
+															value={rising ? Math.abs(change.change) : -Math.abs(change.change)}
+															size="md"
+															format={value =>
+																`${value > 0 ? '+' : '-'}£${(Math.abs(value) / 10).toFixed(1)}m`
+															}
+														/>
 													</li>
 												)
 											})}
@@ -342,7 +338,7 @@ export async function MarketTeaser() {
 							</div>
 
 							<div>
-								<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">
+								<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
 									<HeartPulse aria-hidden="true" className="size-4 text-pink" /> {t('availabilityWatch')}
 								</h3>
 								<AvailabilityTeaserList updates={availability} labels={availabilityLabels} />

@@ -1,6 +1,5 @@
-import { LogoMark, LogoWordmark } from '@/components/layout/Logo'
+import { AuthCard, AuthShell } from '@/components/layout/AuthShell'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getSafeInternalHref, localizeHref } from '@/i18n/routing'
 import { verifiedUserDestination } from '@/lib/auth-redirects'
@@ -49,15 +48,8 @@ export default async function BindEntryPage({
 	}
 
 	return (
-		<div className="flex min-h-[calc(100svh-4rem)] flex-col items-center justify-center bg-muted/30 p-4">
-			<div className="mb-6 flex items-center gap-2">
-				<LogoMark className="size-10 text-plum dark:text-electric" />
-				<h1>
-					<LogoWordmark className="text-2xl" />
-				</h1>
-			</div>
-
-			<Card className="w-full max-w-md border-border/80 p-6 shadow-sm">
+		<AuthShell>
+			<AuthCard>
 				<div className="mb-6 text-center">
 					<div className="flex justify-center mb-3">
 						<Hash className="h-10 w-10 text-primary-ink" />
@@ -68,7 +60,7 @@ export default async function BindEntryPage({
 					</p>
 				</div>
 
-				<div className="rounded-lg border border-border/70 bg-muted/40 p-3 dark:bg-muted/25 text-xs text-muted-foreground mb-6">
+				<div className="rounded-lg border surface-inset p-3 text-xs text-muted-foreground mb-6">
 					<p className="font-medium mb-1">{t('findEntryId')}</p>
 					<ol className="list-decimal list-inside space-y-1">
 						<li>
@@ -125,7 +117,7 @@ export default async function BindEntryPage({
 				</div>
 
 				<BindEntryForm next={next} />
-			</Card>
-		</div>
+			</AuthCard>
+		</AuthShell>
 	)
 }

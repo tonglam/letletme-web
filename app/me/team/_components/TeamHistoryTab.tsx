@@ -2,6 +2,13 @@
 
 import { Button } from '@/components/ui/button'
 import { LineChart as SharedLineChart } from '@/components/charts/ChartPrimitives'
+import {
+	DataTable,
+	DataTd,
+	DataTh,
+	DataThead,
+	DataTr,
+} from '@/components/data/DataTable'
 import { cn } from '@/lib/utils'
 import { useMemo, useState } from 'react'
 import { useFormatter, useTranslations } from 'next-intl'
@@ -40,82 +47,73 @@ export function TeamGameweekHistory({ stats }: { stats: TeamSeasonLogs }) {
 
 	return (
 		<div className="space-y-3">
-			<div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 sm:mx-0 sm:px-0">
-				<table className="w-full min-w-[28rem] border-collapse text-sm">
-					<thead>
-						<tr className="border-b border-border/70 text-left">
-							<th className="px-2 py-2.5 font-display text-[11px] font-semibold tracking-tight text-muted-foreground">
-								{t('historyColGameweek')}
-							</th>
-							<th className="px-2 py-2.5 text-right font-display text-[11px] font-semibold tracking-tight text-muted-foreground">
-								{t('historyColTotalPoints')}
-							</th>
-							<th className="px-2 py-2.5 text-right font-display text-[11px] font-semibold tracking-tight text-muted-foreground">
-								{t('historyColOverallRank')}
-							</th>
-							<th className="px-2 py-2.5 font-display text-[11px] font-semibold tracking-tight text-muted-foreground">
-								{t('historyColCaptain')}
-							</th>
-							<th className="px-2 py-2.5 text-right font-display text-[11px] font-semibold tracking-tight text-muted-foreground">
-								{t('historyColCaptainPoints')}
-							</th>
-							<th className="px-2 py-2.5 text-right font-display text-[11px] font-semibold tracking-tight text-muted-foreground">
-								{t('historyColTransferHit')}
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						{shown.map(row => (
-							<tr
-								key={row.gameweek}
-								className="border-b border-border/40 last:border-b-0 hover:bg-muted/25"
+			<DataTable minWidthClass="min-w-[28rem]">
+				<DataThead>
+					<DataTh>{t('historyColGameweek')}</DataTh>
+					<DataTh align="right">{t('historyColTotalPoints')}</DataTh>
+					<DataTh align="right">{t('historyColOverallRank')}</DataTh>
+					<DataTh>{t('historyColCaptain')}</DataTh>
+					<DataTh align="right">{t('historyColCaptainPoints')}</DataTh>
+					<DataTh align="right">{t('historyColTransferHit')}</DataTh>
+				</DataThead>
+				<tbody>
+					{shown.map(row => (
+						<DataTr key={row.gameweek}>
+							<DataTd className="text-xs font-semibold">
+								<TeamGameweekLink
+									gameweek={row.gameweek}
+									className="font-semibold text-muted-foreground hover:text-primary-ink"
+								/>
+							</DataTd>
+							<DataTd
+								align="right"
+								className="font-display text-base font-bold tabular-nums text-primary-ink"
 							>
-								<td className="px-2 py-2.5 text-xs font-semibold">
-									<TeamGameweekLink
-										gameweek={row.gameweek}
-										className="font-semibold text-muted-foreground hover:text-primary-ink"
-									/>
-								</td>
-								<td className="px-2 py-2.5 text-right font-display text-base font-bold tabular-nums text-primary-ink">
-									{row.overallPoints}
-								</td>
-								<td className="px-2 py-2.5 text-right font-mono text-xs tabular-nums">
-									{compact(row.overallRank)}
-								</td>
-								<td className="max-w-[9rem] px-2 py-2.5">
-									{row.captainName ? (
-										<span className="block truncate text-sm font-medium">
-											{row.captainName}
-											{row.captainTeam ? (
-												<span className="ml-1 font-mono text-[10px] text-muted-foreground">
-													{row.captainTeam}
-												</span>
-											) : null}
-										</span>
-									) : (
-										<span className="text-sm text-muted-foreground">—</span>
-									)}
-								</td>
-								<td className="px-2 py-2.5 text-right font-mono text-xs font-semibold tabular-nums">
-									{row.captainName ? row.captainPoints : '—'}
-								</td>
-								<td
-									className={cn(
-										'px-2 py-2.5 text-right font-mono text-xs tabular-nums',
-										row.eventTransfersCost > 0
-											? 'font-semibold text-destructive'
-											: 'text-muted-foreground'
-									)}
-								>
-									{row.eventTransfersCost > 0
-										? `−${row.eventTransfersCost}`
-										: 0}
-								</td>
-							</tr>
-						))}
-					</tbody>
-				</table>
-			</div>
+								{row.overallPoints}
+							</DataTd>
+							<DataTd
+								align="right"
+								className="font-mono text-xs tabular-nums"
+							>
+								{compact(row.overallRank)}
+							</DataTd>
+							<DataTd className="max-w-[9rem]">
+								{row.captainName ? (
+									<span className="block truncate text-sm font-medium">
+										{row.captainName}
+										{row.captainTeam ? (
+											<span className="ml-1 font-mono text-label text-muted-foreground">
+												{row.captainTeam}
+											</span>
+										) : null}
+									</span>
+								) : (
+									<span className="text-sm text-muted-foreground">—</span>
+								)}
+							</DataTd>
+							<DataTd
+								align="right"
+								className="font-mono text-xs font-semibold tabular-nums"
+							>
+								{row.captainName ? row.captainPoints : '—'}
+							</DataTd>
+							<DataTd
+								align="right"
+								className={cn(
+									'font-mono text-xs tabular-nums',
+									row.eventTransfersCost > 0
+										? 'font-semibold text-destructive'
+										: 'text-muted-foreground'
+								)}
+							>
+								{row.eventTransfersCost > 0
+									? `−${row.eventTransfersCost}`
+									: 0}
+							</DataTd>
+						</DataTr>
+					))}
+				</tbody>
+			</DataTable>
 
 			{remaining > 0 ? (
 				<div className="flex justify-center">
@@ -179,10 +177,10 @@ function PastSeasonsRankChart({
 
 	return (
 		<div className="space-y-2">
-			<p className="font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+			<p className="eyebrow">
 				{t('pastSeasonsRankTrend')}
 			</p>
-			<p className="text-[11px] leading-relaxed text-muted-foreground">
+			<p className="text-caption leading-relaxed text-muted-foreground">
 				{t('pastSeasonsRankTrendHint')}
 			</p>
 			<SharedLineChart
@@ -260,7 +258,7 @@ export function TeamSeasonHistory({ stats }: { stats: TeamSeasonLogs }) {
 			) : null}
 
 			<div className="overflow-hidden rounded-lg border border-border/70">
-				<div className="flex items-center gap-3 border-b border-border/60 bg-muted/30 px-3 py-1.5 font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+				<div className="flex items-center gap-3 border-b border-border/60 bg-muted/30 px-3 py-1.5 eyebrow">
 					<span className="min-w-0 flex-1">{t('season')}</span>
 					<span className="w-16 shrink-0 text-right">{t('points')}</span>
 					<span className="w-16 shrink-0 text-right">
@@ -282,7 +280,7 @@ export function TeamSeasonHistory({ stats }: { stats: TeamSeasonLogs }) {
 									<p className="font-display text-sm font-bold tracking-tight">
 										{row.season}
 										{isCurrent ? (
-											<span className="ml-2 font-display text-[10px] font-semibold uppercase tracking-wide text-plum">
+											<span className="ml-2 font-display text-label font-semibold uppercase tracking-wide text-plum">
 												{t('seasonCurrent')}
 											</span>
 										) : null}

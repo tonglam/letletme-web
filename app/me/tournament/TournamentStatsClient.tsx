@@ -218,12 +218,12 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 				/>
 
 				{!selectedTournament ? (
-					<Card className="border-border/80 p-6 shadow-sm" role="status">
+					<Card className="p-6 shadow-sm" role="status">
 						<p className="text-sm text-muted-foreground">{t('noLinked')}</p>
 					</Card>
 				) : !insightsReady ? (
 					<Card
-						className="border-border/80 p-6 shadow-sm"
+						className="p-6 shadow-sm"
 						aria-live="polite"
 						aria-busy={isLoading}
 					>
@@ -480,7 +480,7 @@ function TournamentViews({
 						</>
 					) : (
 						<Card
-							className="border-border/80 p-6 shadow-sm"
+							className="p-6 shadow-sm"
 							aria-live="polite"
 							aria-busy={isLoading}
 						>

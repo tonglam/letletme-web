@@ -46,7 +46,7 @@ function MetricTiles({ count = 4 }: { count?: number }) {
 			{Array.from({ length: count }, (_, i) => (
 				<div
 					key={i}
-					className="rounded-lg border border-border/70 bg-muted/40 p-3 sm:p-4 dark:bg-muted/25"
+					className="rounded-lg border surface-inset p-3 sm:p-4"
 				>
 					<Skeleton className="mb-3 h-3 w-16" />
 					<Skeleton className="h-7 w-12 sm:h-8" />
@@ -78,12 +78,12 @@ function RowList({ rows = 6 }: { rows?: number }) {
 function DashboardSkeleton() {
 	return (
 		<>
-			<Card className="mb-6 border-border/80 p-4 shadow-sm sm:p-6">
+			<Card className="mb-6 p-4 shadow-sm sm:p-6">
 				<Skeleton className="mb-3 h-5 w-40" />
 				<Skeleton className="mb-6 h-4 w-28" />
 				<MetricTiles />
 			</Card>
-			<Card className="mb-6 border-border/80 p-4 shadow-sm">
+			<Card className="mb-6 p-4 shadow-sm">
 				<div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-4">
 					<Skeleton className="h-10 w-full rounded-md" />
 					<Skeleton className="h-10 w-full rounded-md" />
@@ -97,7 +97,7 @@ function DashboardSkeleton() {
 function ListSkeleton() {
 	return (
 		<>
-			<Card className="mb-6 border-border/80 p-4 shadow-sm">
+			<Card className="mb-6 p-4 shadow-sm">
 				<div className="flex flex-col gap-3 sm:flex-row">
 					<Skeleton className="h-10 flex-1 rounded-md" />
 					<Skeleton className="h-10 w-full rounded-md sm:w-32" />
@@ -112,14 +112,14 @@ function StatsSkeleton() {
 	return (
 		<>
 			<MetricTiles count={4} />
-			<Card className="mb-6 border-border/80 p-2 shadow-sm sm:p-3">
+			<Card className="mb-6 p-2 shadow-sm sm:p-3">
 				<div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
 					{Array.from({ length: 4 }, (_, i) => (
 						<Skeleton key={i} className="h-9 w-full rounded-md" />
 					))}
 				</div>
 			</Card>
-			<Card className="overflow-hidden border-border/80 shadow-sm">
+			<Card className="overflow-hidden shadow-sm">
 				<div className="border-b border-border/50 p-4">
 					<Skeleton className="h-5 w-36" />
 				</div>
@@ -140,7 +140,7 @@ function FormSkeleton() {
 	return (
 		<div className="space-y-4">
 			{Array.from({ length: 3 }, (_, i) => (
-				<Card key={i} className="border-border/80 p-4 shadow-sm sm:p-6">
+				<Card key={i} className="p-4 shadow-sm sm:p-6">
 					<Skeleton className="mb-4 h-6 w-40" />
 					<div className="space-y-3">
 						<Skeleton className="h-10 w-full rounded-md" />

@@ -284,7 +284,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 					{/* Position */}
 					<Badge
 						className={cn(
-							'h-5 shrink-0 px-1.5 font-display text-[10px] font-bold tracking-wide',
+							'h-5 shrink-0 px-1.5 font-display text-label font-bold tracking-wide',
 							positionBadgeClass(player.position),
 						)}
 					>
@@ -292,7 +292,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 					</Badge>
 
 					{/* Team */}
-					<span className="w-8 shrink-0 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+					<span className="w-8 shrink-0 font-mono text-caption font-semibold uppercase tracking-wide text-muted-foreground">
 						{player.teamShort}
 					</span>
 
@@ -302,12 +302,12 @@ export function PlayerRow({ player }: PlayerRowProps) {
 							{player.name}
 						</span>
 						{player.isCaptain ? (
-							<span className="shrink-0 rounded-sm bg-plum px-1 py-px font-mono text-[10px] font-bold text-electric">
+							<span className="shrink-0 rounded-sm bg-plum px-1 py-px font-mono text-label font-bold text-electric">
 								C
 							</span>
 						) : null}
 						{player.isViceCaptain ? (
-							<span className="shrink-0 rounded-sm border border-plum/30 bg-plum/10 px-1 py-px font-mono text-[10px] font-bold text-plum">
+							<span className="shrink-0 rounded-sm border border-plum/30 bg-plum/10 px-1 py-px font-mono text-label font-bold text-plum">
 								V
 							</span>
 						) : null}
@@ -343,7 +343,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 													value,
 												})}
 											>
-												<div className="truncate font-display text-[8px] font-semibold uppercase tracking-wider text-muted-foreground sm:text-[9px]">
+												<div className="truncate font-display text-micro font-semibold uppercase tracking-wider text-muted-foreground">
 													{stat.label}
 												</div>
 												<div
@@ -386,7 +386,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 							{player.stats.points}
 						</span>
 						{player.stats.bonusPoints > 0 ? (
-							<span className="mt-0.5 font-mono text-[9px] font-semibold leading-none text-yellow-700 dark:text-yellow-400">
+							<span className="mt-0.5 font-mono text-micro font-semibold leading-none text-warning">
 								+{player.stats.bonusPoints}
 							</span>
 						) : null}

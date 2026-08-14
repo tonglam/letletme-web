@@ -1,3 +1,10 @@
+import {
+	DataTable,
+	DataTd,
+	DataTh,
+	DataThead,
+	DataTr
+} from '@/components/data/DataTable'
 import { Badge } from '@/components/ui/badge'
 import type {
 	PlayerDetailData,
@@ -132,158 +139,144 @@ export function PlayerRecentGameweeks({
 	if (comparison) {
 		const samePosition = player.elementType === comparison.elementType
 		return (
-			<div className="overflow-x-auto">
-				<table className="w-full min-w-[32rem] border-collapse text-sm">
-					<thead>
-						<tr className="border-b border-border/60 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-							<th className="py-2 pr-3 font-display">{t('fixturesColGw')}</th>
-							<th className="py-2 pr-3 font-display">{player.webName}</th>
-							<th className="py-2 font-display">{comparison.webName}</th>
-						</tr>
-					</thead>
-					<tbody>
-						{events.map(eventId => {
-							const first = firstByEvent.get(eventId) ?? null
-							const second = secondByEvent.get(eventId) ?? null
-							const provisional = Boolean(
-								first?.provisional || second?.provisional
-							)
-							const firstPointsWin = Boolean(
-								samePosition &&
-								first &&
-								second &&
-								first.totalPoints > second.totalPoints
-							)
-							const secondPointsWin = Boolean(
-								samePosition &&
-								first &&
-								second &&
-								second.totalPoints > first.totalPoints
-							)
-							const firstBonusWin = Boolean(
-								samePosition &&
-								first?.bonus != null &&
-								second?.bonus != null &&
-								first.bonus > second.bonus
-							)
-							const secondBonusWin = Boolean(
-								samePosition &&
-								first?.bonus != null &&
-								second?.bonus != null &&
-								second.bonus > first.bonus
-							)
-							return (
-								<tr
-									key={eventId}
-									className="border-b border-border/40 last:border-0"
-								>
-									<td className="whitespace-nowrap py-2.5 pr-3 align-top tabular-nums text-muted-foreground">
-										<span className="inline-flex items-center gap-1.5">
-											{t('gameweekShort', { gameweek: eventId })}
-											{provisional ? (
-												<Badge
-													variant="secondary"
-													className="h-3.5 px-1 text-[9px] leading-none"
-												>
-													{t('provisional')}
-												</Badge>
-											) : null}
-										</span>
-									</td>
-									<td className="py-2.5 pr-3 align-top">
-										<RecentCompareCell
-											row={first}
-											elementType={player.elementType}
-											includePositionDetails={samePosition}
-											pointsWin={firstPointsWin}
-											bonusWin={firstBonusWin}
-										/>
-									</td>
-									<td className="py-2.5 align-top">
-										<RecentCompareCell
-											row={second}
-											elementType={comparison.elementType}
-											includePositionDetails={samePosition}
-											pointsWin={secondPointsWin}
-											bonusWin={secondBonusWin}
-										/>
-									</td>
-								</tr>
-							)
-						})}
-					</tbody>
-				</table>
-			</div>
-		)
-	}
-
-	return (
-		<div className="overflow-x-auto">
-			<table className="w-full min-w-[42rem] border-collapse text-sm">
-				<thead>
-					<tr className="border-b border-border/60 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-						<th className="py-2 pr-3 font-display">{t('fixturesColGw')}</th>
-						<th className="py-2 pr-3 font-display">
-							{t('fixturesColOpponent')}
-						</th>
-						<th className="py-2 pr-3 font-display">{tl('points')}</th>
-						<th className="py-2 pr-3 font-display">{tl('minutes')}</th>
-						<th className="py-2 pr-3 font-display">{tl('starts')}</th>
-						<th className="py-2 pr-3 font-display">{tl('bonus')}</th>
-						<th className="py-2 font-display">{t('positionOutput')}</th>
-					</tr>
-				</thead>
+			<DataTable minWidthClass="min-w-[32rem]">
+				<DataThead>
+					<DataTh className="pr-3">{t('fixturesColGw')}</DataTh>
+					<DataTh className="pr-3">{player.webName}</DataTh>
+					<DataTh>{comparison.webName}</DataTh>
+				</DataThead>
 				<tbody>
 					{events.map(eventId => {
-						const row = firstByEvent.get(eventId)
-						if (!row) return null
-						const details = positionDetails(row, player.elementType, {
-							goals: tl('goals'),
-							assists: tl('assists'),
-							cleanSheets: tl('cleanSheets'),
-							saves: tl('saves')
-						})
+						const first = firstByEvent.get(eventId) ?? null
+						const second = secondByEvent.get(eventId) ?? null
+						const provisional = Boolean(
+							first?.provisional || second?.provisional
+						)
+						const firstPointsWin = Boolean(
+							samePosition &&
+							first &&
+							second &&
+							first.totalPoints > second.totalPoints
+						)
+						const secondPointsWin = Boolean(
+							samePosition &&
+							first &&
+							second &&
+							second.totalPoints > first.totalPoints
+						)
+						const firstBonusWin = Boolean(
+							samePosition &&
+							first?.bonus != null &&
+							second?.bonus != null &&
+							first.bonus > second.bonus
+						)
+						const secondBonusWin = Boolean(
+							samePosition &&
+							first?.bonus != null &&
+							second?.bonus != null &&
+							second.bonus > first.bonus
+						)
 						return (
-							<tr
-								key={eventId}
-								className="border-b border-border/40 last:border-0"
-							>
-								<td className="whitespace-nowrap py-2.5 pr-3 tabular-nums text-muted-foreground">
+							<DataTr key={eventId}>
+								<DataTd className="whitespace-nowrap py-2.5 pr-3 align-top tabular-nums text-muted-foreground">
 									<span className="inline-flex items-center gap-1.5">
 										{t('gameweekShort', { gameweek: eventId })}
-										{row.provisional ? (
+										{provisional ? (
 											<Badge
 												variant="secondary"
-												className="h-3.5 px-1 text-[9px] leading-none"
+												className="h-3.5 px-1 text-micro leading-none"
 											>
 												{t('provisional')}
 											</Badge>
 										) : null}
 									</span>
-								</td>
-								<td className="py-2.5 pr-3 font-medium">
-									{opponentLabel(row, t('homeShort'), t('awayShort'))}
-								</td>
-								<td className="py-2.5 pr-3 tabular-nums">{row.totalPoints}</td>
-								<td className="py-2.5 pr-3 tabular-nums">
-									{row.minutes ?? '—'}
-								</td>
-								<td className="py-2.5 pr-3">
-									{row.started == null
-										? '—'
-										: row.started
-											? t('started')
-											: t('bench')}
-								</td>
-								<td className="py-2.5 pr-3 tabular-nums">{row.bonus ?? '—'}</td>
-								<td className="py-2.5 text-xs text-muted-foreground">
-									{details.join(' · ')}
-								</td>
-							</tr>
+								</DataTd>
+								<DataTd className="py-2.5 pr-3 align-top">
+									<RecentCompareCell
+										row={first}
+										elementType={player.elementType}
+										includePositionDetails={samePosition}
+										pointsWin={firstPointsWin}
+										bonusWin={firstBonusWin}
+									/>
+								</DataTd>
+								<DataTd className="py-2.5 align-top">
+									<RecentCompareCell
+										row={second}
+										elementType={comparison.elementType}
+										includePositionDetails={samePosition}
+										pointsWin={secondPointsWin}
+										bonusWin={secondBonusWin}
+									/>
+								</DataTd>
+							</DataTr>
 						)
 					})}
 				</tbody>
-			</table>
-		</div>
+			</DataTable>
+		)
+	}
+
+	return (
+		<DataTable minWidthClass="min-w-[42rem]">
+			<DataThead>
+				<DataTh className="pr-3">{t('fixturesColGw')}</DataTh>
+				<DataTh className="pr-3">
+					{t('fixturesColOpponent')}
+				</DataTh>
+				<DataTh className="pr-3">{tl('points')}</DataTh>
+				<DataTh className="pr-3">{tl('minutes')}</DataTh>
+				<DataTh className="pr-3">{tl('starts')}</DataTh>
+				<DataTh className="pr-3">{tl('bonus')}</DataTh>
+				<DataTh>{t('positionOutput')}</DataTh>
+			</DataThead>
+			<tbody>
+				{events.map(eventId => {
+					const row = firstByEvent.get(eventId)
+					if (!row) return null
+					const details = positionDetails(row, player.elementType, {
+						goals: tl('goals'),
+						assists: tl('assists'),
+						cleanSheets: tl('cleanSheets'),
+						saves: tl('saves')
+					})
+					return (
+						<DataTr key={eventId}>
+							<DataTd className="whitespace-nowrap py-2.5 pr-3 tabular-nums text-muted-foreground">
+								<span className="inline-flex items-center gap-1.5">
+									{t('gameweekShort', { gameweek: eventId })}
+									{row.provisional ? (
+										<Badge
+											variant="secondary"
+											className="h-3.5 px-1 text-micro leading-none"
+										>
+											{t('provisional')}
+										</Badge>
+									) : null}
+								</span>
+							</DataTd>
+							<DataTd className="py-2.5 pr-3 font-medium">
+								{opponentLabel(row, t('homeShort'), t('awayShort'))}
+							</DataTd>
+							<DataTd className="py-2.5 pr-3 tabular-nums">{row.totalPoints}</DataTd>
+							<DataTd className="py-2.5 pr-3 tabular-nums">
+								{row.minutes ?? '—'}
+							</DataTd>
+							<DataTd className="py-2.5 pr-3">
+								{row.started == null
+									? '—'
+									: row.started
+										? t('started')
+										: t('bench')}
+							</DataTd>
+							<DataTd className="py-2.5 pr-3 tabular-nums">{row.bonus ?? '—'}</DataTd>
+							<DataTd className="py-2.5 text-xs text-muted-foreground">
+								{details.join(' · ')}
+							</DataTd>
+						</DataTr>
+					)
+				})}
+			</tbody>
+		</DataTable>
 	)
 }

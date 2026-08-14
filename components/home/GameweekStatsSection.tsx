@@ -56,7 +56,7 @@ function GameweekStatsCard({
 		<Card className="rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8">
 			<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div>
-					<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+					<p className="eyebrow">
 						{t('thisGameweek')}
 					</p>
 					<h2 className="mt-1 flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">

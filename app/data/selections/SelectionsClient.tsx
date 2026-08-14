@@ -176,12 +176,12 @@ function SectionTitle({
 			<div className="min-w-0">
 				<h2
 					id={id}
-					className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+					className="eyebrow sm:text-caption"
 				>
 					{children}
 				</h2>
 				{hint ? (
-					<p className="mt-0.5 text-[11px] text-muted-foreground/80">{hint}</p>
+					<p className="mt-0.5 text-caption text-muted-foreground/80">{hint}</p>
 				) : null}
 			</div>
 			{action ? <div className="shrink-0">{action}</div> : null}
@@ -265,7 +265,7 @@ function PositionBadge({ position }: { position: string }) {
 		<Badge
 			className={cn(
 				positionBadgeClass(code),
-				'shrink-0 px-1.5 py-0 text-[10px] font-bold'
+				'shrink-0 px-1.5 py-0 text-label font-bold'
 			)}
 		>
 			{code === 'UNK' ? '—' : code}
@@ -282,7 +282,7 @@ function PlayerRoles({ roles }: { roles: PlayerRole[] }) {
 				<Badge
 					key={role}
 					variant="outline"
-					className="px-1 py-0 text-[9px]"
+					className="px-1 py-0 text-micro"
 				>
 					{role === 'CAPTAIN'
 						? t('roleCaptain')
@@ -345,7 +345,7 @@ function PlayerRankRow({
 				style={{ width: `${Math.max(metric.magnitude * 100, 3)}%` }}
 			/>
 			<div className="relative flex items-center gap-2.5 px-3 py-2.5">
-				<span className="w-5 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
+				<span className="w-5 shrink-0 text-right font-mono text-caption tabular-nums text-muted-foreground">
 					{rank}
 				</span>
 				<PositionBadge position={player.position} />
@@ -356,7 +356,7 @@ function PlayerRankRow({
 					>
 						{player.webName}
 					</Link>
-					<p className="truncate text-[11px] text-muted-foreground">
+					<p className="truncate text-caption text-muted-foreground">
 						{player.teamShortName}
 					</p>
 					<PlayerRoles roles={roles} />
@@ -366,7 +366,7 @@ function PlayerRankRow({
 						{metric.primary}
 					</p>
 					{metric.secondary ? (
-						<p className="text-[11px] tabular-nums text-muted-foreground">
+						<p className="text-caption tabular-nums text-muted-foreground">
 							{metric.secondary}
 						</p>
 					) : null}
@@ -392,7 +392,7 @@ function MetricBoard({
 	if (players.length === 0) return <EmptyHint>{emptyLabel}</EmptyHint>
 	return (
 		<ul
-			className="overflow-hidden rounded-lg border border-border/60 bg-muted/15 dark:bg-muted/10"
+			className="overflow-hidden rounded-lg border surface-inset-soft"
 			aria-label={ariaLabel}
 		>
 			{players.map((player, i) => (
@@ -909,7 +909,7 @@ export default function SelectionsClient({
 					className="mb-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
 				>
 					<div className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-border/50 pb-2">
-						<p className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+						<p className="eyebrow sm:text-caption">
 							{t('scopeLabel')}
 						</p>
 						{selectedName ? (
@@ -1282,7 +1282,7 @@ export default function SelectionsClient({
 							</SectionTitle>
 							<div className="grid gap-4 md:grid-cols-2">
 								<div className="min-w-0">
-									<p className="mb-2 flex items-center gap-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-success">
+									<p className="mb-2 flex items-center gap-1.5 eyebrow sm:text-caption text-success">
 										<TrendingUp
 											className="size-3.5"
 											aria-hidden="true"
@@ -1318,7 +1318,7 @@ export default function SelectionsClient({
 									)}
 								</div>
 								<div className="min-w-0">
-									<p className="mb-2 flex items-center gap-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-destructive">
+									<p className="mb-2 flex items-center gap-1.5 eyebrow sm:text-caption text-destructive">
 										<TrendingDown
 											className="size-3.5"
 											aria-hidden="true"

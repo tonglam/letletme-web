@@ -109,7 +109,7 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 	if (!nextEventId || !deadlineTime) {
 		return (
 			<div className="scoreboard texture-grain rounded-xl p-6 sm:p-7">
-				<p className="chyron !text-electric">{t('nextDeadline')}</p>
+				<p className="chyron text-electric">{t('nextDeadline')}</p>
 				<h2 className="mt-3 font-display text-2xl font-bold uppercase tracking-wide">
 					{t('scheduleUnavailable')}
 				</h2>
@@ -123,7 +123,7 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 	return (
 		<div className="scoreboard texture-grain rounded-xl p-6 sm:p-7">
 			<div className="flex items-center justify-between gap-3">
-				<p className="chyron !text-electric">{t('nextDeadline')}</p>
+				<p className="chyron text-electric">{t('nextDeadline')}</p>
 				<span className="inline-flex items-center gap-2">
 					<span className="live-dot" aria-hidden="true" />
 					<GameweekBadge gameweek={nextEventId} size="sm" />
@@ -136,7 +136,7 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 
 			{deadlinePassed ? (
 				<div className="mt-6 flex items-center gap-3 rounded-lg border border-pink/40 bg-pink/10 px-4 py-4">
-					<span className="rounded-sm bg-pink px-2 py-0.5 font-mono text-xs font-bold uppercase tracking-[0.2em] text-pink-950">
+					<span className="rounded-sm bg-pink px-2 py-0.5 font-mono text-xs font-bold uppercase tracking-caps-wide text-pink-950">
 						{t('liveTag')}
 					</span>
 					<p className="font-display text-lg font-semibold uppercase tracking-wide">
@@ -145,7 +145,7 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 				</div>
 			) : (
 				<>
-					<div className="mt-6 grid grid-cols-4 divide-x divide-white/10 overflow-hidden rounded-lg border border-white/10 bg-black/25">
+					<div className="mt-6 grid grid-cols-4 divide-x divide-fascia-foreground/10 overflow-hidden rounded-lg border border-fascia-foreground/10 bg-plum/30">
 						{(
 							[
 								{ value: timeLeft.days, label: t('days') },
@@ -155,10 +155,10 @@ export function DeadlineSection({ nextEventId, deadlineTime }: DeadlineSectionPr
 							] as const
 						).map(({ value, label }) => (
 							<div key={label} className="px-1 py-3 text-center sm:py-4">
-								<div className="font-mono text-3xl font-semibold tabular-nums text-electric [text-shadow:0_0_18px_hsl(var(--electric)/0.45)] sm:text-4xl">
+								<div className="font-mono text-3xl font-semibold tabular-nums text-electric text-glow-electric sm:text-4xl">
 									{String(value).padStart(2, '0')}
 								</div>
-								<div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-fascia-foreground/50">
+								<div className="mt-1 eyebrow text-fascia-foreground/50">
 									{label}
 								</div>
 							</div>

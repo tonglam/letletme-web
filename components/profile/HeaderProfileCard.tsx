@@ -59,7 +59,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 			<DropdownMenuTrigger asChild>
 				<Button
 					variant="ghost"
-					className="h-9 gap-2 px-2 text-fascia-foreground/85 hover:bg-white/5 hover:text-fascia-foreground"
+					className="h-9 gap-2 px-2 text-fascia-foreground/85 hover:bg-fascia-foreground/5 hover:text-fascia-foreground"
 					aria-label={t('openAccountMenu', { name: accountName || user.email })}
 				>
 					<Avatar className="h-6 w-6">
@@ -84,7 +84,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 			>
 				{/* LetLetMe account — platform identity */}
 				<section className="border-b border-border/80 p-3">
-					<p className="mb-2 flex items-center gap-1.5 font-display text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+					<p className="mb-2 flex items-center gap-1.5 eyebrow">
 						<UserRound aria-hidden="true" className="size-3" />
 						{t('accountLabel')}
 					</p>
@@ -114,16 +114,16 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 				{/* FPL squad — separate domain from account name */}
 				<section className="border-b border-border/80 bg-muted/35 p-3">
 					<div className="mb-2 flex items-center justify-between gap-2">
-						<p className="flex items-center gap-1.5 font-display text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+						<p className="flex items-center gap-1.5 eyebrow">
 							<Shirt aria-hidden="true" className="size-3" />
 							{t('fplTeamLabel')}
 						</p>
 						{verifiedEntryId !== null ? (
-							<span className="rounded-sm bg-success/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-success">
+							<span className="rounded-sm bg-success/15 px-1.5 py-0.5 font-mono text-label font-semibold uppercase tracking-wide text-success">
 								{t('fplLinked')}
 							</span>
 						) : (
-							<span className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+							<span className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-label font-semibold uppercase tracking-wide text-muted-foreground">
 								{t('fplNotLinked')}
 							</span>
 						)}
@@ -136,7 +136,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 							</p>
 							<dl className="mt-2 space-y-1">
 								<div className="flex items-baseline justify-between gap-3">
-									<dt className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+									<dt className="eyebrow shrink-0">
 										{t('fplManagerLabel')}
 									</dt>
 									<dd className="min-w-0 truncate text-right text-xs font-medium">
@@ -144,7 +144,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 									</dd>
 								</div>
 								<div className="flex items-baseline justify-between gap-3">
-									<dt className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+									<dt className="eyebrow shrink-0">
 										{t('fplEntryLabel')}
 									</dt>
 									<dd className="font-mono text-xs tabular-nums text-muted-foreground">

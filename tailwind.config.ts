@@ -45,10 +45,22 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      fontSize: {
+        /* Micro type scale — replaces text-[8px]/[9px]/[10px]/[11px] drift */
+        micro: ['9px', '1.3'],
+        label: ['10px', '1.3'],
+        caption: ['11px', '1.35'],
+      },
+      letterSpacing: {
+        /* Caps tracking — replaces tracking-[0.08em..0.24em] drift */
+        caps: '0.14em',
+        'caps-wide': '0.24em',
+      },
       colors: {
         plum: 'hsl(var(--plum))',
         electric: 'hsl(var(--electric))',
         pink: 'hsl(var(--pink))',
+        'scoreboard-cell': 'hsl(var(--scoreboard-cell))',
         fascia: {
           DEFAULT: 'hsl(var(--fascia))',
           foreground: 'hsl(var(--fascia-foreground))',

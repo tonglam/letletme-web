@@ -99,10 +99,10 @@ function DeadlineScoreboardFallback() {
 			className="scoreboard rounded-xl p-6 sm:p-7"
 			aria-hidden="true"
 		>
-			<Skeleton className="h-4 w-32 bg-white/10" />
-			<Skeleton className="mt-3 h-9 w-44 bg-white/10" />
-			<Skeleton className="mt-5 h-20 w-full bg-white/10" />
-			<Skeleton className="mt-4 h-4 w-56 max-w-full bg-white/10" />
+			<Skeleton className="h-4 w-32 bg-fascia-foreground/10" />
+			<Skeleton className="mt-3 h-9 w-44 bg-fascia-foreground/10" />
+			<Skeleton className="mt-5 h-20 w-full bg-fascia-foreground/10" />
+			<Skeleton className="mt-4 h-4 w-56 max-w-full bg-fascia-foreground/10" />
 		</div>
 	)
 }
@@ -190,7 +190,7 @@ async function HomeHero() {
 				{/* Primary hero: copy + deadline only — keeps the classic two-column balance */}
 				<div className="grid gap-12 lg:grid-cols-[1.12fr_0.88fr] lg:items-center">
 					<div>
-						<p className="mb-6 flex items-center gap-2.5 font-display text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+						<p className="mb-6 flex items-center gap-2.5 font-display text-xs font-semibold uppercase tracking-caps-wide text-muted-foreground">
 							<span
 								className="live-dot"
 								aria-hidden="true"
@@ -209,7 +209,7 @@ async function HomeHero() {
 						<div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
 							<Button
 								size="lg"
-								className="shadow-sticker font-display text-base font-semibold uppercase tracking-[0.1em] transition-transform hover:-translate-y-0.5"
+								className="shadow-sticker font-display text-base font-semibold uppercase tracking-caps transition-transform hover:-translate-y-0.5"
 								asChild
 							>
 								<Link
@@ -223,7 +223,7 @@ async function HomeHero() {
 							<Button
 								size="lg"
 								variant="outline"
-								className="font-display text-base font-semibold uppercase tracking-[0.1em]"
+								className="font-display text-base font-semibold uppercase tracking-caps"
 								asChild
 							>
 								<Link
@@ -272,12 +272,12 @@ async function HomeTournamentBand() {
 
 	return (
 		<section
-			className="border-y bg-plum text-electric"
+			className="fascia border-y"
 			aria-labelledby="home-tournament-band-title"
 		>
 			<div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:py-9">
 				<div className="max-w-xl">
-					<p className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-electric/80">
+					<p className="font-display text-xs font-semibold uppercase tracking-caps-wide text-electric/80">
 						{t('competitionBandEyebrow')}
 					</p>
 					<h2
@@ -293,7 +293,7 @@ async function HomeTournamentBand() {
 				<div className="flex flex-wrap gap-2">
 					<Button
 						variant="outline"
-						className="min-h-11 border-electric/50 bg-transparent font-display font-semibold uppercase tracking-[0.08em] text-electric hover:bg-electric hover:text-plum"
+						className="min-h-11 border-electric/50 bg-transparent font-display font-semibold uppercase tracking-caps text-electric hover:bg-electric hover:text-plum"
 						asChild
 					>
 						<Link
@@ -304,7 +304,7 @@ async function HomeTournamentBand() {
 						</Link>
 					</Button>
 					<Button
-						className="min-h-11 bg-electric font-display font-semibold uppercase tracking-[0.08em] text-plum hover:bg-electric/90"
+						className="min-h-11 bg-electric font-display font-semibold uppercase tracking-caps text-plum hover:bg-electric/90"
 						asChild
 					>
 						<Link

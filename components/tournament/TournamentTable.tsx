@@ -302,7 +302,7 @@ export function TournamentTable({
 
 				{/* Desktop column headers */}
 				<div
-					className="hidden border-b border-border/50 bg-muted/20 px-4 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground lg:grid lg:items-center lg:gap-2"
+					className="eyebrow hidden border-b border-border/50 bg-muted/20 px-4 py-2 lg:grid lg:items-center lg:gap-2"
 					style={{ gridTemplateColumns: desktopCols }}
 				>
 					{compareMode ? <span /> : null}
@@ -341,7 +341,7 @@ export function TournamentTable({
 										'px-4 py-2.5 transition-colors',
 										'hover:bg-muted/30',
 										isChecked && 'bg-primary/[0.04]',
-										isMe && !isChecked && 'bg-primary/5 dark:bg-primary/10',
+										isMe && !isChecked && 'row-self',
 										entry.stale && 'opacity-60',
 									)}
 									title={entry.stale ? t('staleRowHint') : undefined}
@@ -380,7 +380,7 @@ export function TournamentTable({
 											>
 												{entry.teamName}
 												{isMe ? (
-													<span className="ml-1.5 text-[11px] font-semibold text-primary-ink">
+													<span className="ml-1.5 text-caption font-semibold text-primary-ink">
 														{t('youBadge')}
 													</span>
 												) : null}
@@ -394,7 +394,7 @@ export function TournamentTable({
 												{gwPts}
 											</div>
 											{hits > 0 ? (
-												<div className="font-mono text-[10px] text-destructive/90">
+												<div className="font-mono text-label text-destructive/90">
 													{t('netLabel')} {net}
 												</div>
 											) : null}
@@ -402,7 +402,7 @@ export function TournamentTable({
 									</div>
 
 									{/* Mobile secondary strip — captain/chip/metrics freed from under team name */}
-									<div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-border/40 pt-2 text-[11px] text-muted-foreground lg:hidden">
+									<div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 border-t border-border/40 pt-2 text-caption text-muted-foreground lg:hidden">
 										<span>
 											<span className="text-muted-foreground/80">C </span>
 											<span className="font-medium text-foreground">
@@ -484,7 +484,7 @@ export function TournamentTable({
 											>
 												{entry.teamName}
 												{isMe ? (
-													<span className="ml-1.5 text-[11px] font-semibold text-primary-ink">
+													<span className="ml-1.5 text-caption font-semibold text-primary-ink">
 														{t('youBadge')}
 													</span>
 												) : null}
@@ -500,14 +500,14 @@ export function TournamentTable({
 												{captainLabel}
 											</p>
 											{entry.captainPoints > 0 ? (
-												<p className="font-mono text-[10px] tabular-nums text-muted-foreground">
+												<p className="font-mono text-label tabular-nums text-muted-foreground">
 													{entry.captainPoints} {t('ptsShort')}
 												</p>
 											) : null}
 										</div>
 
 										{/* Chip column */}
-										<span className="justify-self-center font-mono text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+										<span className="justify-self-center font-mono text-label font-medium uppercase tracking-wide text-muted-foreground">
 											{chips ?? '—'}
 										</span>
 
@@ -531,7 +531,7 @@ export function TournamentTable({
 												{gwPts}
 											</div>
 											{hits > 0 ? (
-												<div className="font-mono text-[10px] tabular-nums text-destructive/90">
+												<div className="font-mono text-label tabular-nums text-destructive/90">
 													{t('netLabel')} {net}
 												</div>
 											) : null}

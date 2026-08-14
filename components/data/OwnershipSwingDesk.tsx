@@ -1,6 +1,7 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
+import { DeltaBadge } from '@/components/data/DeltaBadge'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { Link } from '@/i18n/navigation'
 import type { MarketOwnershipMover } from '@/lib/graphql/operations/market'
@@ -20,7 +21,6 @@ function MoverList({
 	const t = useTranslations('Market')
 	const formatter = useFormatter()
 	const largestMove = Math.max(...movers.map(mover => Math.abs(mover.change)), 0)
-	const Icon = direction === 'rise' ? ArrowUpRight : ArrowDownRight
 
 	if (movers.length === 0) {
 		return (
@@ -65,7 +65,7 @@ function MoverList({
 									positionBadgeClass(
 										shortMarketPosition(mover.player.position),
 									),
-									'shrink-0 text-[10px]',
+									'shrink-0 text-label',
 								)}
 							>
 								{shortMarketPosition(mover.player.position)}
@@ -77,20 +77,20 @@ function MoverList({
 								>
 									{mover.player.webName}
 								</Link>
-								<p className="truncate text-[11px] text-muted-foreground">
+								<p className="truncate text-caption text-muted-foreground">
 									{mover.player.teamShortName} ·{' '}
 									{t('ownershipFromTo', { from, to })}
 								</p>
 							</div>
 							<div
-								className={cn(
-									'flex shrink-0 items-center gap-0.5 font-display text-sm font-semibold tabular-nums',
-									direction === 'rise' ? 'text-success' : 'text-destructive',
-								)}
+								className="shrink-0"
 								title={t('ownershipChangeDetail', { from, to, delta })}
 							>
-								<Icon aria-hidden="true" className="size-3.5" />
-								{delta}
+								<DeltaBadge
+									value={mover.change}
+									size="md"
+									format={() => delta}
+								/>
 							</div>
 						</div>
 					</li>
@@ -115,7 +115,7 @@ export function OwnershipSwingDesk({
 			<section aria-labelledby="ownership-risers-heading">
 				<p
 					id="ownership-risers-heading"
-					className="mb-2 flex items-center gap-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground"
+					className="mb-2 flex items-center gap-1.5 eyebrow text-foreground"
 				>
 					<ArrowUpRight className="size-3.5 text-success" aria-hidden="true" />
 					{t('ownershipRisers')}
@@ -126,7 +126,7 @@ export function OwnershipSwingDesk({
 			<section aria-labelledby="ownership-fallers-heading">
 				<p
 					id="ownership-fallers-heading"
-					className="mb-2 flex items-center gap-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em] text-destructive"
+					className="mb-2 flex items-center gap-1.5 eyebrow text-destructive"
 				>
 					<ArrowDownRight className="size-3.5" aria-hidden="true" />
 					{t('ownershipFallers')}

@@ -51,14 +51,14 @@ function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player
 					{(player.bonus_points ?? 0) > 0 ? (
 						<Badge
 							variant="outline"
-							className="h-5 border-warning/30 px-1.5 text-[11px] tabular-nums text-warning"
+							className="h-5 border-warning/30 px-1.5 text-caption tabular-nums text-warning"
 						>
 							+{player.bonus_points}
 						</Badge>
 					) : null}
 					<Badge
 						variant="outline"
-						className="h-5 border-primary/20 bg-primary/10 px-1.5 text-[11px] tabular-nums text-primary-ink"
+						className="h-5 border-primary/20 bg-primary/10 px-1.5 text-caption tabular-nums text-primary-ink"
 					>
 						{t('pointsBadge', { points: player.totalPoints ?? 0 })}
 					</Badge>
@@ -76,7 +76,7 @@ function PlayerRow({ player, onSelect }: { player: PlayerStat; onSelect: (player
 						return (
 							<span
 								key={metric.label}
-								className={`flex items-center justify-between gap-2 rounded px-1.5 py-0.5 text-[11px] ${toneClass}`}
+								className={`flex items-center justify-between gap-2 rounded px-1.5 py-0.5 text-caption ${toneClass}`}
 							>
 								<span className="font-semibold">
 									{metricLabels[metric.label] ?? metric.label}

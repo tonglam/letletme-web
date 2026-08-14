@@ -3,9 +3,11 @@
 import { MarketLocalUpdated } from '@/components/data/MarketLocalUpdated'
 import { MarketPlayerLookup } from '@/components/data/MarketPlayerLookup'
 import { OwnershipSwingDesk } from '@/components/data/OwnershipSwingDesk'
+import { DeltaBadge } from '@/components/data/DeltaBadge'
 import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { Link } from '@/i18n/navigation'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
@@ -72,7 +74,7 @@ function formatOwnership(value: number, locale: string): string {
 function PositionBadge({ player }: { player: MarketPlayer }) {
 	const position = shortMarketPosition(player.position)
 	return (
-		<Badge className={cn(positionBadgeClass(position), 'shrink-0 text-[10px]')}>
+		<Badge className={cn(positionBadgeClass(position), 'shrink-0 text-label')}>
 			{position}
 		</Badge>
 	)
@@ -92,7 +94,7 @@ function SectionTitle({
 			<div className="min-w-0">
 				<h2
 					id={id}
-					className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+					className="eyebrow sm:text-caption"
 				>
 					{children}
 				</h2>
@@ -332,7 +334,7 @@ function GlanceStrip({
 					key={cell.label}
 					className="flex min-h-[4.75rem] flex-col justify-between rounded-lg border border-border/70 px-3 py-2.5"
 				>
-					<p className="font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+					<p className="eyebrow">
 						{cell.label}
 					</p>
 					<div className="mt-2 min-w-0">
@@ -384,9 +386,9 @@ function DensePlayerRow({
 					{player.webName}
 				</Link>
 				{sub ? (
-					<p className="truncate text-[11px] text-muted-foreground">{sub}</p>
+					<p className="truncate text-caption text-muted-foreground">{sub}</p>
 				) : (
-					<p className="truncate text-[11px] text-muted-foreground">
+					<p className="truncate text-caption text-muted-foreground">
 						{player.teamShortName}
 					</p>
 				)}
@@ -452,10 +454,10 @@ function PriceColumns({
 	}
 
 	const col = (items: MarketPriceChange[], rising: boolean) => (
-		<div className="min-w-0 rounded-lg border border-border/60 bg-muted/15 px-3 py-3 dark:bg-muted/10">
+		<div className="min-w-0 rounded-lg border surface-inset-soft px-3 py-3">
 			<p
 				className={cn(
-					'mb-2.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em]',
+					'mb-2.5 eyebrow sm:text-caption',
 					rising ? 'text-success' : 'text-destructive'
 				)}
 			>
@@ -500,21 +502,24 @@ function PriceColumns({
 											>
 												{change.player.webName}
 											</Link>
-											<span className="block truncate text-[11px] text-muted-foreground">
+											<span className="block truncate text-caption text-muted-foreground">
 												{change.player.teamShortName}
 											</span>
 										</span>
 										<span className="shrink-0 text-right">
-											<span
-												className={cn(
-													'block font-display text-sm font-semibold tabular-nums leading-tight',
-													rising ? 'text-success' : 'text-destructive'
-												)}
-											>
-												{rising ? '+' : '−'}£
-												{(Math.abs(change.change) / 10).toFixed(1)}m
-											</span>
-											<span className="block text-[10px] tabular-nums text-muted-foreground">
+											<DeltaBadge
+												value={
+													rising
+														? Math.abs(change.change)
+														: -Math.abs(change.change)
+												}
+												showArrow={false}
+												format={() =>
+													`${rising ? '+' : '−'}£${(Math.abs(change.change) / 10).toFixed(1)}m`
+												}
+												className="block font-display leading-tight"
+											/>
+											<span className="block text-label tabular-nums text-muted-foreground">
 												£{(change.oldPrice / 10).toFixed(1)}m → £
 												{(change.newPrice / 10).toFixed(1)}m
 											</span>
@@ -560,15 +565,14 @@ function TransferHeat({
 						outCount: number.format(mover.transfersOut)
 					})}
 					trailing={
-						<span
-							className={cn(
-								'font-display text-sm font-semibold tabular-nums',
-								mover.netTransfers >= 0 ? 'text-success' : 'text-destructive'
-							)}
-						>
-							{mover.netTransfers > 0 ? '+' : ''}
-							{number.format(mover.netTransfers)}
-						</span>
+						<DeltaBadge
+							value={mover.netTransfers}
+							showArrow={false}
+							format={value =>
+								`${value > 0 ? '+' : ''}${number.format(value)}`
+							}
+							className="font-display"
+						/>
 					}
 				/>
 			))}
@@ -612,12 +616,12 @@ function AvailabilityBlock({
 									</Link>
 									<Badge
 										variant={key === 'available' ? 'secondary' : 'outline'}
-										className="text-[10px]"
+										className="text-label"
 									>
 										{t(`status.${key}`)}
 									</Badge>
 								</div>
-								<p className="mt-0.5 text-[11px] text-muted-foreground">
+								<p className="mt-0.5 text-caption text-muted-foreground">
 									{update.player.teamShortName} ·{' '}
 									{formatOwnership(update.player.selectedByPercent, locale)}{' '}
 									{t('owned')}
@@ -625,7 +629,7 @@ function AvailabilityBlock({
 								<p className="mt-1.5 text-sm leading-snug text-foreground">
 									{availabilityBodyText(update, k => t(k))}
 								</p>
-								<p className="mt-1 text-[11px] text-muted-foreground">
+								<p className="mt-1 text-caption text-muted-foreground">
 									{t('observedOn', {
 										date: formatCalendarDate(update.observedDate, locale)
 									})}
@@ -703,7 +707,7 @@ function NewPlayersBlock({
 						>
 							{item.player.webName}
 						</Link>
-						<p className="text-[11px] text-muted-foreground">
+						<p className="text-caption text-muted-foreground">
 							{t('firstSeen', {
 								date: formatCalendarDate(item.firstObservedDate, locale)
 							})}
@@ -758,13 +762,13 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 	if (!hasPulseData) {
 		return (
 			<>
-				<section className="mb-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+				<Card className="mb-8 p-4 sm:p-5">
 					<CoverageMeta
 						coverage={pulse.coverage}
 						locale={locale}
 					/>
-				</section>
-				<div className="mb-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+				</Card>
+				<Card className="mb-8 p-4 sm:p-5">
 					<div className="flex items-start gap-3">
 						<span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border/60">
 							<Users
@@ -781,13 +785,13 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 							</p>
 						</div>
 					</div>
-				</div>
-				<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+				</Card>
+				<Card className="p-4 sm:p-5">
 					<SectionTitle id="market-player-lookup">
 						{t('lookupTitle')}
 					</SectionTitle>
 					<MarketPlayerLookup />
-				</section>
+				</Card>
 			</>
 		)
 	}
@@ -800,10 +804,11 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 		pulse.availabilityUpdates.length > 0 || pulse.newPlayers.length > 0
 
 	const priceSection = (
-		<section
+		<Card
 			key="prices"
+			role="region"
 			aria-labelledby="market-prices"
-			className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+			className="p-4 sm:p-5"
 		>
 			<SectionTitle
 				id="market-prices"
@@ -818,7 +823,7 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 			>
 				{t('priceTitle')}
 			</SectionTitle>
-			<p className="mb-4 text-[11px] text-muted-foreground">
+			<p className="mb-4 text-caption text-muted-foreground">
 				{t('priceBoardMeta', {
 					rises: latestPriceChanges.filter(c => c.direction === 'RISE').length,
 					falls: latestPriceChanges.filter(c => c.direction === 'FALL').length,
@@ -839,14 +844,15 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 					onClearSeed={() => setSeedPlayer(null)}
 				/>
 			</div>
-		</section>
+		</Card>
 	)
 
 	const ownershipSection = (
-		<section
+		<Card
 			key="ownership"
+			role="region"
 			aria-labelledby="market-ownership"
-			className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+			className="p-4 sm:p-5"
 		>
 			<div className="space-y-6">
 				<div>
@@ -874,18 +880,19 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 					)}
 				</div>
 			</div>
-		</section>
+		</Card>
 	)
 
 	const transferSection =
 		pulse.transferMovers.length > 0 ? (
-			<section
+			<Card
 				key="transfers"
+				role="region"
 				aria-labelledby="market-transfers"
-				className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+				className="p-4 sm:p-5"
 			>
 				<SectionTitle id="market-transfers">{t('transferTitle')}</SectionTitle>
-				<p className="mb-3 text-[11px] text-muted-foreground">
+				<p className="mb-3 text-caption text-muted-foreground">
 					{pulse.coverage.firstDate && pulse.coverage.latestDate
 						? t('transferCoverage', {
 								from: formatCalendarDate(pulse.coverage.firstDate, locale),
@@ -897,14 +904,15 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 					movers={pulse.transferMovers}
 					locale={locale}
 				/>
-			</section>
+			</Card>
 		) : null
 
 	const availabilitySection = hasAvailabilityEvidence ? (
-		<section
+		<Card
 			key="availability"
+			role="region"
 			aria-labelledby="market-squad-status"
-			className="grid gap-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5 lg:grid-cols-2 lg:gap-8"
+			className="grid gap-8 p-4 sm:p-5 lg:grid-cols-2 lg:gap-8"
 		>
 			<div>
 				<SectionTitle id="market-squad-status">
@@ -939,7 +947,7 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 					/>
 				</div>
 			) : null}
-		</section>
+		</Card>
 	) : null
 
 	const sectionById = {
@@ -959,15 +967,15 @@ export function MarketView({ pulse }: { pulse: MarketPulse }) {
 
 	return (
 		<div className="space-y-8">
-			<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+			<Card className="p-4 sm:p-5">
 				<CoverageMeta
 					coverage={pulse.coverage}
 					locale={locale}
 				/>
-				<p className="mt-3 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
+				<p className="mt-3 border-t border-border/50 pt-3 text-caption text-muted-foreground">
 					{t(`viewMode.${viewMode}`)}
 				</p>
-			</section>
+			</Card>
 			<GlanceStrip
 				pulse={viewPulse}
 				locale={locale}

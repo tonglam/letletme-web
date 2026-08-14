@@ -52,7 +52,7 @@ function MatchCardComponent({
 	return (
 		<Card
 			data-match-id={match.id}
-			className={`relative overflow-hidden border-border/80 border-l-[3px] p-4 shadow-sm md:p-5 ${statusEdgeClass(match.status)}`}
+			className={`relative overflow-hidden border-l-[3px] p-4 shadow-sm md:p-5 ${statusEdgeClass(match.status)}`}
 		>
 			<div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 sm:right-4 sm:top-4">
 				<MatchShareButton

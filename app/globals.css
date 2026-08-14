@@ -47,6 +47,15 @@
     --radius: 0.5rem;
     --pitch-line: 152 65% 28%;
     --pitch-alpha: 0.14;
+
+    /* Scoreboard scale — always dark in both themes, like --fascia */
+    --scoreboard-1: 288 60% 6%;
+    --scoreboard-2: 288 52% 10%;
+    --scoreboard-3: 288 48% 16%;
+    --scoreboard-4: 288 42% 22%;
+    --scoreboard-cell: 288 40% 20%;
+    --scoreboard-glow: 288 45% 28%;
+    --scoreboard-deep: 288 80% 4%;
   }
   .dark {
     --sticker: 152 100% 50%;
@@ -127,12 +136,19 @@
 @layer components {
   /* Broadcast chyron label — green tick + condensed caps */
   .chyron {
-    @apply inline-flex items-center gap-2.5 font-display text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground;
+    @apply inline-flex items-center gap-2.5 font-display text-xs font-semibold uppercase tracking-caps-wide text-muted-foreground;
   }
   .chyron::before {
     content: '';
     @apply h-3.5 w-1 shrink-0 bg-primary;
     box-shadow: 0 0 10px hsl(var(--electric) / 0.55);
+  }
+
+  /* Eyebrow — a chyron without the tick: the site's micro caps label
+     for stat labels, table headers, section kickers. Color is
+     muted-foreground by default; override with a plain text-* utility. */
+  .eyebrow {
+    @apply font-display text-label font-semibold uppercase tracking-caps text-muted-foreground;
   }
 
   /* Stadium fascia — the always-dark plum band used by header and footer */
@@ -143,6 +159,23 @@
     color: hsl(var(--fascia-foreground));
   }
 
+  /* Inset panel — recessed fill for stat tiles, hint boxes, table headers.
+     Single source for hand-paired bg-muted/40 dark:bg-muted/25 (+border-border/70).
+     Sets border-color only; call sites keep `rounded-lg border` composition. */
+  .surface-inset {
+    @apply border-border/70 bg-muted/40 dark:bg-muted/25;
+  }
+
+  /* Fainter inset — subtle tinted strips (was bg-muted/15 dark:bg-muted/10) */
+  .surface-inset-soft {
+    @apply border-border/60 bg-muted/15 dark:bg-muted/10;
+  }
+
+  /* "This row is you" highlight (was bg-primary/5 dark:bg-primary/10) */
+  .row-self {
+    @apply bg-primary/5 dark:bg-primary/10;
+  }
+
   /* Scoreboard panel — dark board with a green glass edge, works in both themes */
   .scoreboard {
     position: relative;
@@ -150,12 +183,12 @@
     border: 1px solid hsl(var(--electric) / 0.28);
     background:
       radial-gradient(ellipse 120% 90% at 50% -30%, hsl(var(--plum) / 0.65), transparent 60%),
-      linear-gradient(180deg, hsl(288 52% 10%), hsl(288 60% 6%));
+      linear-gradient(180deg, hsl(var(--scoreboard-2)), hsl(var(--scoreboard-1)));
     color: hsl(var(--fascia-foreground));
     box-shadow:
       inset 0 1px 0 hsl(var(--electric) / 0.22),
-      inset 0 0 32px hsl(288 80% 4% / 0.55),
-      0 24px 48px -24px hsl(288 90% 4% / 0.65);
+      inset 0 0 32px hsl(var(--scoreboard-deep) / 0.55),
+      0 24px 48px -24px hsl(var(--scoreboard-deep) / 0.65);
   }
 
   /*
@@ -168,12 +201,12 @@
     border: 1px solid hsl(var(--electric) / 0.3);
     background:
       radial-gradient(ellipse 110% 90% at 50% -35%, hsl(var(--electric) / 0.12), transparent 55%),
-      radial-gradient(ellipse 100% 80% at 80% 100%, hsl(288 45% 28% / 0.45), transparent 60%),
-      linear-gradient(180deg, hsl(288 42% 22%), hsl(288 48% 16%));
+      radial-gradient(ellipse 100% 80% at 80% 100%, hsl(var(--scoreboard-glow) / 0.45), transparent 60%),
+      linear-gradient(180deg, hsl(var(--scoreboard-4)), hsl(var(--scoreboard-3)));
     color: hsl(var(--fascia-foreground));
     box-shadow:
       inset 0 1px 0 hsl(var(--electric) / 0.2),
-      0 18px 36px -22px hsl(288 60% 10% / 0.45);
+      0 18px 36px -22px hsl(var(--scoreboard-deep) / 0.45);
   }
 
   /* Green marker swipe behind a headline keyword */
@@ -256,6 +289,11 @@
   }
   .shadow-sticker-sm {
     box-shadow: 2.5px 2.5px 0 0 hsl(var(--sticker) / var(--sticker-alpha));
+  }
+
+  /* Electric text glow — deadline urgency accents */
+  .text-glow-electric {
+    text-shadow: 0 0 18px hsl(var(--electric) / 0.45);
   }
 }
 

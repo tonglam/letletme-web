@@ -18,7 +18,7 @@ interface StatsSectionProps {
 const tileIconStyles = [
 	'bg-plum text-electric',
 	'bg-electric text-plum',
-	'bg-pink text-white',
+	'bg-pink text-fascia-foreground',
 	'bg-secondary text-foreground',
 ] as const
 
@@ -29,7 +29,7 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 			<Card className="p-4 sm:p-6 lg:p-8">
 				<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div>
-						<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+						<p className="eyebrow">
 							{t('thisGameweek')}
 						</p>
 						<h2 className="mt-1 flex items-center gap-2 font-display text-xl font-bold uppercase tracking-wide">
@@ -93,7 +93,7 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 		<Card className="p-4 sm:p-6 lg:p-8">
 			<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<div>
-					<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+					<p className="eyebrow">
 						{t('thisGameweek')}
 					</p>
 					<h2 className="mt-1 flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
@@ -120,7 +120,7 @@ export function StatsSection({ currentEventId, overallResult }: StatsSectionProp
 							{stat.icon}
 						</div>
 						<div className="space-y-1">
-							<p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+							<p className="eyebrow">
 								{stat.label}
 							</p>
 							<p className="truncate font-display text-2xl font-bold text-foreground">

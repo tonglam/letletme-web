@@ -1,3 +1,10 @@
+import {
+	DataTable,
+	DataTd,
+	DataTh,
+	DataThead,
+	DataTr
+} from '@/components/data/DataTable'
 import { Badge } from '@/components/ui/badge'
 import type {
 	PlayerDetailData,
@@ -112,103 +119,96 @@ function UpcomingRun({
 	}
 
 	return (
-		<div className="overflow-x-auto">
-			<table className="w-full min-w-[20rem] border-collapse text-sm">
-				<thead>
-					<tr className="border-b border-border/60 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-						<th className="py-2 pr-3 font-display">{t('fixturesColGw')}</th>
-						<th className="py-2 pr-3 font-display">
-							{comparison ? player.webName : t('fixturesColOpponent')}
-						</th>
-						{comparison ? (
-							<th className="py-2 font-display">{comparison.webName}</th>
-						) : null}
-					</tr>
-				</thead>
-				<tbody>
-					{gameweeks.map(gameweek => {
-						const first = firstByGw.get(gameweek) ?? []
-						const second = secondByGw?.get(gameweek) ?? []
-						const isDouble = first.length > 1 || second.length > 1
-						const isCurrent = gameweek === currentGameweek
-						const firstFdr = averageFdr(first)
-						const secondFdr = averageFdr(second)
-						const firstFdrWins = Boolean(
-							comparison?.elementType === player.elementType &&
-							firstFdr != null &&
-							secondFdr != null &&
-							firstFdr < secondFdr
-						)
-						const secondFdrWins = Boolean(
-							comparison?.elementType === player.elementType &&
-							firstFdr != null &&
-							secondFdr != null &&
-							secondFdr < firstFdr
-						)
+		<DataTable minWidthClass="min-w-[20rem]">
+			<DataThead>
+				<DataTh className="pr-3">{t('fixturesColGw')}</DataTh>
+				<DataTh className="pr-3">
+					{comparison ? player.webName : t('fixturesColOpponent')}
+				</DataTh>
+				{comparison ? (
+					<DataTh>{comparison.webName}</DataTh>
+				) : null}
+			</DataThead>
+			<tbody>
+				{gameweeks.map(gameweek => {
+					const first = firstByGw.get(gameweek) ?? []
+					const second = secondByGw?.get(gameweek) ?? []
+					const isDouble = first.length > 1 || second.length > 1
+					const isCurrent = gameweek === currentGameweek
+					const firstFdr = averageFdr(first)
+					const secondFdr = averageFdr(second)
+					const firstFdrWins = Boolean(
+						comparison?.elementType === player.elementType &&
+						firstFdr != null &&
+						secondFdr != null &&
+						firstFdr < secondFdr
+					)
+					const secondFdrWins = Boolean(
+						comparison?.elementType === player.elementType &&
+						firstFdr != null &&
+						secondFdr != null &&
+						secondFdr < firstFdr
+					)
 
-						return (
-							<tr
-								key={gameweek}
-								className={cn(
-									'border-b border-border/40 last:border-0',
-									isCurrent && 'bg-muted/40'
-								)}
-							>
-								<td className="whitespace-nowrap py-2.5 pr-3 align-top tabular-nums text-muted-foreground">
-									<span className="inline-flex items-center gap-1.5">
-										{t('gameweekShort', { gameweek })}
-										{isDouble ? (
-											<Badge
-												variant="secondary"
-												className="h-3.5 px-1 text-[9px] leading-none"
-											>
-												DGW
-											</Badge>
-										) : null}
-									</span>
-								</td>
-								<td className="py-2.5 pr-3 align-top">
+					return (
+						<DataTr
+							key={gameweek}
+							className={cn(isCurrent && 'bg-muted/40')}
+						>
+							<DataTd className="whitespace-nowrap py-2.5 pr-3 align-top tabular-nums text-muted-foreground">
+								<span className="inline-flex items-center gap-1.5">
+									{t('gameweekShort', { gameweek })}
+									{isDouble ? (
+										<Badge
+											variant="secondary"
+											className="h-3.5 px-1 text-micro leading-none"
+										>
+											DGW
+										</Badge>
+									) : null}
+								</span>
+							</DataTd>
+							<DataTd className="py-2.5 pr-3 align-top">
+								<div className="flex flex-col gap-1">
+									{first.length === 0 ? (
+										<span className="text-xs font-medium text-warning">
+											BGW
+										</span>
+									) : (
+										first.map((fixture, index) => (
+											<FixtureChip
+												key={fixture.id || `${fixture.event}-${index}`}
+												fixture={fixture}
+												emphasized={firstFdrWins}
+											/>
+										))
+									)}
+								</div>
+							</DataTd>
+							{comparison ? (
+								<DataTd className="py-2.5 align-top">
 									<div className="flex flex-col gap-1">
-										{first.length === 0 ? (
+										{second.length === 0 ? (
 											<span className="text-xs font-medium text-warning">
 												BGW
 											</span>
 										) : (
-											first.map((fixture, index) => (
+											second.map((fixture, index) => (
 												<FixtureChip
 													key={fixture.id || `${fixture.event}-${index}`}
 													fixture={fixture}
-													emphasized={firstFdrWins}
+													emphasized={secondFdrWins}
 												/>
 											))
 										)}
 									</div>
-								</td>
-								{comparison ? (
-									<td className="py-2.5 align-top">
-										<div className="flex flex-col gap-1">
-											{second.length === 0 ? (
-												<span className="text-xs font-medium text-warning">
-													BGW
-												</span>
-											) : (
-												second.map((fixture, index) => (
-													<FixtureChip
-														key={fixture.id || `${fixture.event}-${index}`}
-														fixture={fixture}
-														emphasized={secondFdrWins}
-													/>
-												))
-											)}
-										</div>
-									</td>
-								) : null}
-							</tr>
-						)
-					})}
-				</tbody>
-			</table>
-		</div>
+								</DataTd>
+							) : null}
+						</DataTr>
+					)
+				})}
+			</tbody>
+		</DataTable>
 	)
 }
 

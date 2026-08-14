@@ -2,12 +2,12 @@ import { useMemo } from 'react'
 import { useFormatter, useTranslations } from 'next-intl'
 import type { TeamSeasonLogs } from '../_lib/team-stats-model'
 import {
-	TeamDataTable,
-	TeamDataTd,
-	TeamDataTh,
-	TeamDataThead,
-	TeamDataTr,
-} from './TeamDataTable'
+	DataTable,
+	DataTd,
+	DataTh,
+	DataThead,
+	DataTr,
+} from '@/components/data/DataTable'
 import { TeamGameweekLink } from './TeamGameweekLink'
 import { TeamMetricGrid, TeamMetricTile } from './TeamMetricTile'
 
@@ -143,7 +143,7 @@ export function TeamChipsTab({ stats }: { stats: TeamSeasonLogs }) {
 		<div className="space-y-6">
 			{/* Half-season inventory */}
 			<div>
-				<p className="mb-1 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+				<p className="mb-1 eyebrow">
 					{t('chipBalance')}
 				</p>
 				<p className="mb-3 text-xs leading-relaxed text-muted-foreground">
@@ -172,31 +172,31 @@ export function TeamChipsTab({ stats }: { stats: TeamSeasonLogs }) {
 					/>
 				</TeamMetricGrid>
 
-				<TeamDataTable minWidthClass="min-w-[26rem]">
-					<TeamDataThead>
-						<TeamDataTh>{t('chip')}</TeamDataTh>
-						<TeamDataTh align="center" className="w-20">
+				<DataTable minWidthClass="min-w-[26rem]">
+					<DataThead>
+						<DataTh>{t('chip')}</DataTh>
+						<DataTh align="center" className="w-20">
 							{t('chipHalfFirstShort')}
 							<br />
 							<span className="font-normal normal-case tracking-normal text-muted-foreground/80">
 								{t('chipsUsed')}/{t('chipsRemaining')}
 							</span>
-						</TeamDataTh>
-						<TeamDataTh align="center" className="w-20">
+						</DataTh>
+						<DataTh align="center" className="w-20">
 							{t('chipHalfSecondShort')}
 							<br />
 							<span className="font-normal normal-case tracking-normal text-muted-foreground/80">
 								{t('chipsUsed')}/{t('chipsRemaining')}
 							</span>
-						</TeamDataTh>
-					</TeamDataThead>
+						</DataTh>
+					</DataThead>
 					<tbody>
 						{inventory.map(row => (
-							<TeamDataTr key={row.family}>
-								<TeamDataTd className="text-sm font-medium">
+							<DataTr key={row.family}>
+								<DataTd className="text-sm font-medium">
 									{row.label}
-								</TeamDataTd>
-								<TeamDataTd align="center" className="font-mono text-xs tabular-nums">
+								</DataTd>
+								<DataTd align="center" className="font-mono text-xs tabular-nums">
 									<span className="font-semibold">{row.first.used}</span>
 									<span className="text-muted-foreground"> / </span>
 									<span
@@ -208,8 +208,8 @@ export function TeamChipsTab({ stats }: { stats: TeamSeasonLogs }) {
 									>
 										{row.first.remaining}
 									</span>
-								</TeamDataTd>
-								<TeamDataTd align="center" className="font-mono text-xs tabular-nums">
+								</DataTd>
+								<DataTd align="center" className="font-mono text-xs tabular-nums">
 									<span className="font-semibold">{row.second.used}</span>
 									<span className="text-muted-foreground"> / </span>
 									<span
@@ -221,38 +221,38 @@ export function TeamChipsTab({ stats }: { stats: TeamSeasonLogs }) {
 									>
 										{row.second.remaining}
 									</span>
-								</TeamDataTd>
-							</TeamDataTr>
+								</DataTd>
+							</DataTr>
 						))}
 					</tbody>
-				</TeamDataTable>
+				</DataTable>
 			</div>
 
 			{/* When used + that gameweek outcome */}
 			<div>
-				<p className="mb-2 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+				<p className="mb-2 eyebrow">
 					{t('chipPlayLog')}
 				</p>
 				{stats.chipUsageRows.length === 0 ? (
 					<p className="text-sm text-muted-foreground">{t('noChipsPlayed')}</p>
 				) : (
-					<TeamDataTable minWidthClass="min-w-[24rem]">
-						<TeamDataThead>
-							<TeamDataTh align="center" className="w-12">
+					<DataTable minWidthClass="min-w-[24rem]">
+						<DataThead>
+							<DataTh align="center" className="w-12">
 								{t('gameweekShort')}
-							</TeamDataTh>
-							<TeamDataTh className="w-16">{t('chipHalf')}</TeamDataTh>
-							<TeamDataTh>{t('chip')}</TeamDataTh>
-							<TeamDataTh align="center" className="w-12">
+							</DataTh>
+							<DataTh className="w-16">{t('chipHalf')}</DataTh>
+							<DataTh>{t('chip')}</DataTh>
+							<DataTh align="center" className="w-12">
 								{t('pointsShort')}
-							</TeamDataTh>
-							<TeamDataTh align="center" className="w-12">
+							</DataTh>
+							<DataTh align="center" className="w-12">
 								{t('netShort')}
-							</TeamDataTh>
-							<TeamDataTh align="right" className="w-14">
+							</DataTh>
+							<DataTh align="right" className="w-14">
 								{t('gameweekRank')}
-							</TeamDataTh>
-						</TeamDataThead>
+							</DataTh>
+						</DataThead>
 						<tbody>
 							{stats.chipUsageRows.map(row => {
 								const gw = Number(row.gameweek)
@@ -261,41 +261,41 @@ export function TeamChipsTab({ stats }: { stats: TeamSeasonLogs }) {
 										? halfForGameweek(gw)
 										: null
 								return (
-									<TeamDataTr key={`${row.gameweek}-${row.chip}`}>
-										<TeamDataTd align="center" className="text-xs">
+									<DataTr key={`${row.gameweek}-${row.chip}`}>
+										<DataTd align="center" className="text-xs">
 											<TeamGameweekLink
 												gameweek={row.gameweek}
 												className="text-muted-foreground hover:text-primary-ink"
 											>
 												{row.gameweek}
 											</TeamGameweekLink>
-										</TeamDataTd>
-										<TeamDataTd className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+										</DataTd>
+										<DataTd className="font-mono text-label uppercase tracking-wide text-muted-foreground">
 											{half === 'first'
 												? t('chipHalfFirstShort')
 												: half === 'second'
 													? t('chipHalfSecondShort')
 													: '—'}
-										</TeamDataTd>
-										<TeamDataTd className="text-sm font-medium">
+										</DataTd>
+										<DataTd className="text-sm font-medium">
 											{familyLabel(
 												normalizeChipFamily(row.chip) ?? 'WILDCARD',
 												t,
 											)}
-										</TeamDataTd>
-										<TeamDataTd
+										</DataTd>
+										<DataTd
 											align="center"
 											className="font-display text-sm font-bold tabular-nums"
 										>
 											{row.points}
-										</TeamDataTd>
-										<TeamDataTd
+										</DataTd>
+										<DataTd
 											align="center"
 											className="font-display text-sm font-bold tabular-nums text-primary-ink"
 										>
 											{row.netPoints}
-										</TeamDataTd>
-										<TeamDataTd
+										</DataTd>
+										<DataTd
 											align="right"
 											className="font-mono text-xs tabular-nums text-muted-foreground"
 										>
@@ -304,12 +304,12 @@ export function TeamChipsTab({ stats }: { stats: TeamSeasonLogs }) {
 												: format.number(row.rank, {
 														notation: 'compact',
 													})}
-										</TeamDataTd>
-									</TeamDataTr>
+										</DataTd>
+									</DataTr>
 								)
 							})}
 						</tbody>
-					</TeamDataTable>
+					</DataTable>
 				)}
 			</div>
 		</div>

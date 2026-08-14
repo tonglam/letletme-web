@@ -1,5 +1,6 @@
 'use client'
 
+import { DeltaBadge } from '@/components/data/DeltaBadge'
 import { Badge } from '@/components/ui/badge'
 import { marketAvailabilityStatusKey } from '@/lib/market-availability'
 import type {
@@ -59,7 +60,7 @@ function KpiCell({
 }) {
 	return (
 		<div className="flex min-h-14 flex-col justify-center rounded-md border border-border/60 bg-muted/10 px-2.5 py-1.5">
-			<p className="truncate font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+			<p className="truncate eyebrow">
 				{label}
 			</p>
 			<p
@@ -71,7 +72,7 @@ function KpiCell({
 				{value ?? '—'}
 			</p>
 			{hint ? (
-				<p className="truncate text-[10px] text-muted-foreground">{hint}</p>
+				<p className="truncate text-label text-muted-foreground">{hint}</p>
 			) : null}
 		</div>
 	)
@@ -117,7 +118,7 @@ function NextFixturesStrip({
 				return (
 					<span
 						key={gameweek}
-						className="inline-flex min-h-7 items-center gap-1 rounded-md border border-border/60 bg-muted/20 px-2 text-[11px] tabular-nums"
+						className="inline-flex min-h-7 items-center gap-1 rounded-md border border-border/60 bg-muted/20 px-2 text-caption tabular-nums"
 					>
 						<span className="font-medium text-muted-foreground">
 							{t('gameweekShort', { gameweek })}
@@ -187,7 +188,7 @@ function AvailabilityPulse({
 			<div className="flex flex-wrap items-center gap-2">
 				<Badge
 					variant="outline"
-					className="text-[10px]"
+					className="text-label"
 				>
 					{tMarket(`status.${statusKey}`)}
 				</Badge>
@@ -242,7 +243,7 @@ function OverallCardBody({
 				<Badge
 					className={cn(
 						positionBadgeClass(code),
-						'shrink-0 px-1.5 py-0 text-[10px] font-bold'
+						'shrink-0 px-1.5 py-0 text-label font-bold'
 					)}
 				>
 					{code === 'UNK' ? '—' : code}
@@ -256,14 +257,13 @@ function OverallCardBody({
 				<span className="text-sm font-medium tabular-nums">
 					{formatPrice(player.price)}
 					{priceDiff ? (
-						<span
-							className={cn(
-								'ml-1 text-xs',
-								priceDiff.startsWith('+') ? 'text-foreground' : 'text-destructive'
-							)}
-						>
-							{priceDiff}
-						</span>
+						<DeltaBadge
+							value={player.price - player.startPrice}
+							showArrow={false}
+							format={() => priceDiff}
+							size="sm"
+							className="ml-1 text-xs"
+						/>
 					) : null}
 				</span>
 			</div>
@@ -302,14 +302,14 @@ function OverallCardBody({
 			</div>
 
 			<div className="mt-3 border-t border-border/50 pt-3">
-				<p className="mb-1 font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+				<p className="eyebrow mb-1">
 					{t('availabilityTitle')}
 				</p>
 				<AvailabilityPulse availability={player.availability} />
 			</div>
 
 			<div className="mt-3 border-t border-border/50 pt-3">
-				<p className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+				<p className="eyebrow mb-1.5">
 					{t('nextFixturesLabel')}
 				</p>
 				<NextFixturesStrip
@@ -365,13 +365,13 @@ export function PlayerOverallCard({
 			aria-label={t('overallTitle')}
 			className="scroll-mt-36"
 		>
-			<h2 className="mb-2 font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+			<h2 className="eyebrow mb-2 sm:text-caption">
 				{t('overallTitle')}
 			</h2>
 			{seasonStatsAvailable &&
 			player.statsContext.scope === 'CURRENT_SEASON' &&
 			player.statsContext.asOfEventId != null ? (
-				<p className="-mt-1 mb-2 text-[11px] text-muted-foreground">
+				<p className="-mt-1 mb-2 text-caption text-muted-foreground">
 					{t('anchorLabel', { gw: player.statsContext.asOfEventId })}
 				</p>
 			) : null}
@@ -422,14 +422,13 @@ export function StickyPlayerIdentity({
 			<span className="tabular-nums font-medium">
 				{formatPrice(player.price)}
 				{priceDiff ? (
-					<span
-						className={cn(
-							'ml-1 text-xs',
-								priceDiff.startsWith('+') ? 'text-foreground' : 'text-destructive'
-						)}
-					>
-						{priceDiff}
-					</span>
+					<DeltaBadge
+						value={player.price - player.startPrice}
+						showArrow={false}
+						format={() => priceDiff}
+						size="sm"
+						className="ml-1 text-xs"
+					/>
 				) : null}
 			</span>
 			{comparison ? (

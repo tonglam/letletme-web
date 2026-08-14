@@ -35,7 +35,7 @@ export function TournamentGameweekDetails({
 		<div className="space-y-5 sm:space-y-6">
 			{/* Field intel: who was captained / which chips fired */}
 			<section aria-label={t('fieldIntel')}>
-				<p className="mb-3 font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+				<p className="mb-3 eyebrow">
 					{t('fieldIntel')}
 				</p>
 				<div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-5">

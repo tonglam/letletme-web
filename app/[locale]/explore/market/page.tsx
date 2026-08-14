@@ -4,6 +4,7 @@ import { MarketPlayerLookup } from '@/components/data/MarketPlayerLookup'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Card } from '@/components/ui/card'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
 import { executePublicServerQuery } from '@/lib/graphql-server'
@@ -64,9 +65,9 @@ async function MarketContent() {
 						{t('dataUnavailableDescription')}
 					</AlertDescription>
 				</Alert>
-				<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+				<Card className="p-4 sm:p-5">
 					<MarketPlayerLookup />
-				</section>
+				</Card>
 			</>
 		)
 	}

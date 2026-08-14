@@ -49,7 +49,7 @@ export function TournamentHeader({
 			<dl className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-2 border-t border-border/60 pt-3">
 				{stats.map(stat => (
 					<div key={stat.label} className="flex items-baseline gap-2">
-						<dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+						<dt className="eyebrow">
 							{stat.label}
 						</dt>
 						<dd className="font-mono text-sm font-semibold tabular-nums text-foreground">
