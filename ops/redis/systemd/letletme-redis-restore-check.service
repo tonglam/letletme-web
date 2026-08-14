@@ -1,0 +1,12 @@
+[Unit]
+Description=Restore and validate the latest LetLetMe Redis backup
+After=redis-server.service
+Requires=redis-server.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/letletme-redis-restore-check
+Nice=15
+IOSchedulingClass=idle
+PrivateTmp=true
+ProtectHome=true

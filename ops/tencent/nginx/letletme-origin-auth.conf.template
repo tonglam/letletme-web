@@ -1,0 +1,14 @@
+map_hash_bucket_size 256;
+
+map $http_x_letletme_origin_token $letletme_origin_authorized {
+	default 0;
+	"__ORIGIN_TOKEN__" 1;
+}
+
+map "" $letletme_local_proxy_secret {
+	default "__LOCAL_PROXY_SECRET__";
+}
+
+map "" $letletme_release {
+	default "__RELEASE_SHA__";
+}

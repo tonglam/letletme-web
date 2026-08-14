@@ -90,6 +90,8 @@ jobs:
       - run: npm test
         env:
           RUN_DB_INTEGRATION: 'true'
+      - run: npm run test:worker
+      - run: npm run worker:dry-run
       - run: npm run lint
       - run: npx tsc --noEmit
       - run: npm run build
@@ -97,6 +99,36 @@ jobs:
           NODE_ENV: production
           DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
           GRAPHQL_ENDPOINT: http://127.0.0.1:4100/graphql
+          LETLETME_ORIGIN: vercel
+          LETLETME_RELEASE_SHA: ${{ github.sha }}
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      - name: Verify standalone server
+        env:
+          NODE_ENV: production
+          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          GRAPHQL_ENDPOINT: http://127.0.0.1:4100/graphql
+          LETLETME_ORIGIN: tencent
+          LETLETME_RELEASE_SHA: ${{ github.sha }}
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          PORT: '3100'
+          HOSTNAME: 127.0.0.1
+        run: |
+          cp -R public .next/standalone/public
+          mkdir -p .next/standalone/.next
+          cp -R .next/static .next/standalone/.next/static
+          node .next/standalone/server.js >/tmp/letletme-standalone.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3100/healthz >/tmp/letletme-healthz.json; then
+              break
+            fi
+            sleep 1
+          done
+          grep -q '"status":"ok"' /tmp/letletme-healthz.json
+          node -e "const f=require('./.next/required-server-files.json'); if(f.config.deploymentId !== process.env.GITHUB_SHA.slice(0, 32)) process.exit(1)"
+          curl --fail --silent --head http://127.0.0.1:3100/healthz | grep -qi '^X-Letletme-Origin: tencent'
+          curl --fail --silent --head http://127.0.0.1:3100/healthz | grep -qi "^X-Letletme-Release: $GITHUB_SHA"
       - name: Install Chromium for production E2E
         run: npx playwright install --with-deps chromium
       - name: Production E2E

@@ -121,6 +121,7 @@ function maintenanceDocumentResponse(
 export async function proxy(req: NextRequest) {
 	const requestedPathname = req.nextUrl.pathname
 	const maintenance = readMaintenanceConfig()
+	if (requestedPathname === '/healthz') return NextResponse.next()
 
 	// APIs and machine-facing integrations stay unprefixed and outside locale routing.
 	if (requestedPathname.startsWith('/api/')) {

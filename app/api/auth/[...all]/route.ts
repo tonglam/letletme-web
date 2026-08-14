@@ -22,6 +22,14 @@ function sanitizedAuthHeaders(request: Request): Headers {
 	const headers = new Headers(request.headers)
 	const clientIp = resolveProviderClientIp(request.headers)
 	headers.delete('x-forwarded-for')
+	for (const internalHeader of [
+		'x-letletme-client-ip',
+		'x-letletme-origin-token',
+		'x-letletme-proxy-client-ip',
+		'x-letletme-proxy-secret'
+	]) {
+		headers.delete(internalHeader)
+	}
 	if (clientIp !== 'unknown') headers.set('x-forwarded-for', clientIp)
 	return headers
 }
