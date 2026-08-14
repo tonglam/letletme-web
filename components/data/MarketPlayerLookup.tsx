@@ -40,6 +40,8 @@ export type MarketPlayerLookupProps = {
 	 */
 	seedPlayer?: PlayerDirectoryItem | null
 	initialSearchTerm?: string
+	/** Timestamp of the input event that opened the lazy search shell. */
+	initialSearchStartedAt?: number | null
 	/**
 	 * Drill-down mode: hide search until user opens it.
 	 * Standalone full mode shows search by default.
@@ -52,6 +54,7 @@ export type MarketPlayerLookupProps = {
 export function MarketPlayerLookup({
 	seedPlayer = null,
 	initialSearchTerm = '',
+	initialSearchStartedAt = null,
 	compact = false,
 	autoFocus = compact,
 	onClearSeed,
@@ -73,7 +76,7 @@ export function MarketPlayerLookup({
 	const [historyReadyKey, setHistoryReadyKey] = useState<string | null>(null)
 	const normalizedSearch = searchTerm.trim()
 	const searchGeneration = useRef(0)
-	const searchDebounceStartedAt = useRef<number | null>(null)
+	const searchDebounceStartedAt = useRef<number | null>(initialSearchStartedAt)
 	const historyGeneration = useRef(0)
 	const revisionParam = marketRevisionParam(revision)
 

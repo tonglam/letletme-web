@@ -138,6 +138,7 @@ export function MarketPlayerLookupLauncher({
 	const t = useTranslations('Market')
 	const [open, setOpen] = useState(initialOpen || seedPlayer != null)
 	const [searchTerm, setSearchTerm] = useState('')
+	const [searchStartedAt, setSearchStartedAt] = useState<number | null>(null)
 	const [openedByUser, setOpenedByUser] = useState(false)
 	const shouldOpen = open || seedPlayer != null
 
@@ -145,6 +146,7 @@ export function MarketPlayerLookupLauncher({
 		return (
 			<LazyMarketPlayerLookupBoundary
 				initialSearchTerm={searchTerm}
+				initialSearchStartedAt={searchStartedAt}
 				compact={compact && seedPlayer != null}
 				autoFocus={openedByUser || searchTerm.trim().length >= 2}
 				seedPlayer={seedPlayer}
@@ -167,6 +169,7 @@ export function MarketPlayerLookupLauncher({
 						const value = event.target.value
 						setSearchTerm(value)
 						if (value.trim().length >= 2) {
+							setSearchStartedAt(performance.now())
 							setOpenedByUser(true)
 							setOpen(true)
 						}
