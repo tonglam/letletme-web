@@ -2,9 +2,7 @@ import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
-import {
-	type TopTransfer,
-} from '@/lib/graphql/operations/prices'
+import { type TopTransfer } from '@/lib/graphql/operations/prices'
 import { ArrowRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { TransferList } from './TransferList'
@@ -41,7 +39,7 @@ function GameweekStatsCard({
 	transfersOut,
 	isLoading = false,
 	hasError,
-	currentEventId = null,
+	currentEventId = null
 }: {
 	transfersIn: Transfer[]
 	transfersOut: Transfer[]
@@ -54,11 +52,13 @@ function GameweekStatsCard({
 		<Card className="rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8">
 			<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div>
-					<p className="eyebrow">
-						{t('thisGameweek')}
-					</p>
+					<p className="eyebrow">{t('thisGameweek')}</p>
 					<h2 className="mt-1 flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
-						<GameweekBadge gameweek={currentEventId} size="sm" />
+						<GameweekBadge
+							gameweek={currentEventId}
+							size="sm"
+							fontFamily="display"
+						/>
 						<span>{t('transferDesk')}</span>
 					</h2>
 				</div>
@@ -68,7 +68,10 @@ function GameweekStatsCard({
 					className="inline-flex min-h-9 shrink-0 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
 				>
 					{t('viewSelections')}
-					<ArrowRight aria-hidden="true" className="size-4" />
+					<ArrowRight
+						aria-hidden="true"
+						className="size-4"
+					/>
 				</Link>
 			</div>
 			{hasError && (
@@ -114,9 +117,10 @@ const toTransfer = (item: TopTransfer, direction: 'in' | 'out'): Transfer => ({
 	position: item.player.position ?? 'UNK',
 	player: item.player.webName,
 	club: item.player.team?.shortName ?? item.player.team?.name ?? '',
-	transfers: direction === 'in' ? item.transfersInEvent : item.transfersOutEvent,
+	transfers:
+		direction === 'in' ? item.transfersInEvent : item.transfersOutEvent,
 	selectedByPercent: item.player.selectedByPercent ?? null,
-	points: item.player.totalPoints ?? null,
+	points: item.player.totalPoints ?? null
 })
 
 export function GameweekStatsSection({

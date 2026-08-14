@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 const TONE_CLASS = {
 	positive: 'text-foreground',
 	negative: 'text-destructive',
-	neutral: 'text-muted-foreground',
+	neutral: 'text-muted-foreground'
 } as const
 
 /**
@@ -20,7 +20,8 @@ export function DeltaBadge({
 	format,
 	showArrow = true,
 	size = 'md',
-	className,
+	fontFamily = 'mono',
+	className
 }: {
 	value: number
 	/** Flip tone semantics (e.g. rank: a falling number means climbing). */
@@ -29,20 +30,21 @@ export function DeltaBadge({
 	format?: (value: number) => ReactNode
 	showArrow?: boolean
 	size?: 'sm' | 'md'
+	fontFamily?: 'mono' | 'display'
 	className?: string
 }) {
 	const tone =
 		value === 0 ? 'neutral' : value > 0 !== invert ? 'positive' : 'negative'
-	const Icon =
-		value === 0 ? Minus : value > 0 ? ArrowUpRight : ArrowDownRight
+	const Icon = value === 0 ? Minus : value > 0 ? ArrowUpRight : ArrowDownRight
 
 	return (
 		<span
 			className={cn(
-				'inline-flex items-center gap-0.5 font-mono tabular-nums',
+				'inline-flex items-center gap-0.5 tabular-nums',
+				fontFamily === 'mono' ? 'font-mono' : 'font-display',
 				size === 'sm' ? 'text-caption font-semibold' : 'text-sm font-bold',
 				TONE_CLASS[tone],
-				className,
+				className
 			)}
 		>
 			{showArrow ? (

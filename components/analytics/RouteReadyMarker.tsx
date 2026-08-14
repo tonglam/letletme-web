@@ -1,7 +1,10 @@
 'use client'
 
 import { reportBrowserPerformanceMetric } from '@/lib/analytics/client-vitals'
-import { measureRouteReadyDuration } from '@/lib/analytics/route-navigation'
+import {
+	findElementPaintTime,
+	measureRouteReadyDuration
+} from '@/lib/analytics/route-navigation'
 import {
 	normalizeMetricPage,
 	type AudienceHint
@@ -30,6 +33,7 @@ export function RouteReadyMarker({
 	name,
 	ready = true,
 	readyKey,
+	elementTiming,
 	audienceHint,
 	goodMs = 2_500,
 	poorMs = 4_000
@@ -37,6 +41,7 @@ export function RouteReadyMarker({
 	name: ReadyMetricName
 	ready?: boolean
 	readyKey?: string
+	elementTiming?: string
 	audienceHint: AudienceHint
 	goodMs?: number
 	poorMs?: number
@@ -48,9 +53,10 @@ export function RouteReadyMarker({
 	useEffect(() => {
 		if (!ready || reportedIdentity.current === readyIdentity) return
 		reportedIdentity.current = readyIdentity
+		const paintedAt = elementTiming ? findElementPaintTime(elementTiming) : null
 		const value = measureRouteReadyDuration(
 			pathname,
-			performance.now(),
+			paintedAt ?? performance.now(),
 			undefined,
 			readyKey
 		)
@@ -71,7 +77,17 @@ export function RouteReadyMarker({
 			},
 			{ always: true }
 		)
-	}, [audienceHint, goodMs, name, pathname, poorMs, ready, readyIdentity, readyKey])
+	}, [
+		audienceHint,
+		elementTiming,
+		goodMs,
+		name,
+		pathname,
+		poorMs,
+		ready,
+		readyIdentity,
+		readyKey
+	])
 
 	return null
 }

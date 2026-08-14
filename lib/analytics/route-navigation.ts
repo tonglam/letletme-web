@@ -6,6 +6,12 @@ type RouteNavigationStart = {
 let currentRouteNavigation: RouteNavigationStart | null = null
 const readyInteractionStarts = new Map<string, number>()
 
+type ElementPaintEntry = {
+	identifier?: string
+	startTime: number
+	renderTime?: number
+}
+
 const normalizePathname = (pathname: string): string => {
 	const normalized = pathname.replace(/\/{2,}/g, '/').replace(/\/$/, '')
 	return normalized || '/'
@@ -19,7 +25,10 @@ export function markRouteReadyStart(
 ): void {
 	const normalizedPathname = normalizePathname(pathname)
 	if (readyKey) {
-		readyInteractionStarts.set(`${normalizedPathname}\u0000${readyKey}`, startedAt)
+		readyInteractionStarts.set(
+			`${normalizedPathname}\u0000${readyKey}`,
+			startedAt
+		)
 		return
 	}
 	currentRouteNavigation = { pathname: normalizedPathname, startedAt }
@@ -43,6 +52,19 @@ function documentNavigationStart(): number {
 	const entry = performance.getEntriesByType('navigation')[0] as
 		PerformanceNavigationTiming | undefined
 	return entry?.startTime ?? 0
+}
+
+/** Returns the browser-recorded paint time for one annotated RSC element. */
+export function findElementPaintTime(
+	identifier: string,
+	entries: readonly ElementPaintEntry[] = performance.getEntriesByType(
+		'element'
+	)
+): number | null {
+	const entry = entries.find(candidate => candidate.identifier === identifier)
+	if (!entry) return null
+	const paintedAt = entry.renderTime || entry.startTime
+	return Number.isFinite(paintedAt) && paintedAt >= 0 ? paintedAt : null
 }
 
 /** Elapsed time for this route, not for the lifetime of the browser tab. */

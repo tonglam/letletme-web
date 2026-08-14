@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
 
 import {
+	findElementPaintTime,
 	markRouteNavigationStart,
 	markRouteReadyStart,
 	measureRouteReadyDuration,
@@ -11,6 +12,26 @@ import {
 afterEach(() => resetRouteNavigationStartForTests())
 
 describe('route ready navigation clock', () => {
+	it('uses a buffered element render time for streamed RSC paint readiness', () => {
+		assert.equal(
+			findElementPaintTime('home-league-ranks', [
+				{
+					identifier: 'home-league-ranks',
+					startTime: 820,
+					renderTime: 790
+				}
+			]),
+			790
+		)
+		assert.equal(
+			findElementPaintTime('home-team-desk', [
+				{ identifier: 'home-team-desk', startTime: 810 }
+			]),
+			810
+		)
+		assert.equal(findElementPaintTime('missing', []), null)
+	})
+
 	it('uses the current App Router transition rather than the age of the tab', () => {
 		markRouteNavigationStart(
 			'/explore/market?source=nav',
@@ -37,7 +58,10 @@ describe('route ready navigation clock', () => {
 
 	it('starts a fresh clock for an in-page content interaction', () => {
 		markRouteReadyStart('/explore/player-stats', 900)
-		assert.equal(measureRouteReadyDuration('/explore/player-stats', 1_140, 0), 240)
+		assert.equal(
+			measureRouteReadyDuration('/explore/player-stats', 1_140, 0),
+			240
+		)
 	})
 
 	it('keeps overlapping in-page interaction clocks independent', () => {

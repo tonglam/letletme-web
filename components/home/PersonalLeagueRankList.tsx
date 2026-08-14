@@ -1,24 +1,17 @@
-'use client'
-
 import {
 	buildTournamentStatsQueryString,
 	TOURNAMENT_STATS_PATH
 } from '@/app/me/tournament/_lib/tournament-stats-url'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
-import { DeltaBadge } from '@/components/data/DeltaBadge'
-import { Button } from '@/components/ui/button'
 import { Link } from '@/i18n/navigation'
 import type {
 	HomeLeagueRank,
 	HomeRankDirection
 } from '@/lib/graphql/operations/home'
 import { cn, formatInteger } from '@/lib/utils'
-import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useTranslations } from 'next-intl'
-import { useMemo, useState } from 'react'
+import { getTranslations } from 'next-intl/server'
 
 const HOME_LEAGUE_RANK_LIMIT = 6
-const EXPAND_STEP = 10
 
 function MovementBadge({
 	direction,
@@ -28,28 +21,37 @@ function MovementBadge({
 	places: number | null
 }) {
 	if (direction === 'UP') {
-		return <DeltaBadge value={places ?? 0} size="sm" />
+		return (
+			<span className="font-display text-caption font-semibold tabular-nums text-foreground">
+				↑+{places ?? 0}
+			</span>
+		)
 	}
 	if (direction === 'DOWN') {
-		return <DeltaBadge value={-(places ?? 0)} size="sm" />
+		return (
+			<span className="font-display text-caption font-semibold tabular-nums text-destructive">
+				↓-{places ?? 0}
+			</span>
+		)
 	}
 	if (direction === 'FLAT') {
-		return <DeltaBadge value={0} size="sm" format={() => null} />
+		return (
+			<span className="font-display text-caption font-semibold text-muted-foreground">
+				—
+			</span>
+		)
 	}
 	return <span className="text-caption text-muted-foreground/50">·</span>
 }
 
-function LeagueRow({ row }: { row: HomeLeagueRank }) {
-	const t = useTranslations('Home')
+function LeagueRow({
+	row,
+	ariaLabel
+}: {
+	row: HomeLeagueRank
+	ariaLabel: string
+}) {
 	const rankDisplay = row.rank == null ? '—' : formatInteger(row.rank)
-	const ariaMove =
-		row.movement.direction === 'UP'
-			? t('personalLeagueUp', { count: row.movement.places ?? 0 })
-			: row.movement.direction === 'DOWN'
-				? t('personalLeagueDown', { count: row.movement.places ?? 0 })
-				: row.movement.direction === 'FLAT'
-					? t('personalLeagueFlat')
-					: t('personalLeagueNoChange')
 	const body = (
 		<>
 			<span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
@@ -57,9 +59,9 @@ function LeagueRow({ row }: { row: HomeLeagueRank }) {
 			</span>
 			<span
 				className="flex shrink-0 items-center gap-2 pl-2"
-				aria-label={`${t('personalLeagueRank', { rank: rankDisplay })}, ${ariaMove}`}
+				aria-label={ariaLabel}
 			>
-				<span className="font-mono text-sm font-semibold tabular-nums tracking-tight text-primary-ink">
+				<span className="font-display text-sm font-semibold tabular-nums tracking-tight text-primary-ink">
 					<span className="text-muted-foreground">#</span>
 					{rankDisplay}
 				</span>
@@ -98,70 +100,76 @@ function LeagueRow({ row }: { row: HomeLeagueRank }) {
 	)
 }
 
-export function PersonalLeagueRankList({
+export async function PersonalLeagueRankList({
 	rows,
 	readyKey
 }: {
 	rows: HomeLeagueRank[]
 	readyKey: string
 }) {
-	const t = useTranslations('Home')
-	const [visibleCount, setVisibleCount] = useState(HOME_LEAGUE_RANK_LIMIT)
-	const visible = useMemo(
-		() => rows.slice(0, visibleCount),
-		[rows, visibleCount]
-	)
-	const remaining = Math.max(0, rows.length - visible.length)
-	const isExpanded = visibleCount > HOME_LEAGUE_RANK_LIMIT
-	const canShowMore = remaining > 0
+	const t = await getTranslations('Home')
+	const initialRows = rows.slice(0, HOME_LEAGUE_RANK_LIMIT)
+	const remainingRows = rows.slice(HOME_LEAGUE_RANK_LIMIT)
+	const renderRow = (row: HomeLeagueRank) => {
+		const rankDisplay = row.rank == null ? '—' : formatInteger(row.rank)
+		const ariaMove =
+			row.movement.direction === 'UP'
+				? t('personalLeagueUp', { count: row.movement.places ?? 0 })
+				: row.movement.direction === 'DOWN'
+					? t('personalLeagueDown', { count: row.movement.places ?? 0 })
+					: row.movement.direction === 'FLAT'
+						? t('personalLeagueFlat')
+						: t('personalLeagueNoChange')
+		return (
+			<LeagueRow
+				key={row.key}
+				row={row}
+				ariaLabel={`${t('personalLeagueRank', { rank: rankDisplay })}, ${ariaMove}`}
+			/>
+		)
+	}
 
 	return (
-		<div data-home-league-ranks-ready="true">
+		<div
+			data-home-league-ranks-ready="true"
+			{...{ elementtiming: 'home-league-ranks' }}
+		>
 			{rows.length === 0 ? (
 				<p className="min-h-11 rounded-md border border-dashed border-border/70 px-3 py-3 text-center text-xs text-muted-foreground">
 					{t('personalLeaguesEmpty')}
 				</p>
 			) : (
-				<ul className="rounded-lg border surface-inset-soft px-3">
-					{visible.map(row => (
-						<LeagueRow key={row.key} row={row} />
-					))}
-				</ul>
-			)}
-
-			{(canShowMore || isExpanded) && (
-				<div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
-					{canShowMore ? (
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							className="h-9 w-full gap-1.5 border-border/80 bg-background text-xs font-semibold shadow-sm"
-							onClick={() =>
-								setVisibleCount(count =>
-									Math.min(rows.length, count + EXPAND_STEP)
-								)
-							}
-						>
-							{t('personalLeaguesShowMore')}
-							<ChevronDown className="size-3.5" aria-hidden="true" />
-						</Button>
+				<>
+					<ul className="rounded-lg border surface-inset-soft px-3">
+						{initialRows.map(renderRow)}
+					</ul>
+					{remainingRows.length > 0 ? (
+						<details className="group mt-2.5">
+							<summary className="flex h-9 w-full cursor-pointer list-none items-center justify-center gap-1.5 rounded-md border border-border/80 bg-background px-3 text-xs font-semibold shadow-sm transition-colors hover:bg-accent [&::-webkit-details-marker]:hidden">
+								<span className="group-open:hidden">
+									{t('personalLeaguesShowMore')}
+								</span>
+								<span className="hidden group-open:inline">
+									{t('personalLeaguesShowLess')}
+								</span>
+								<span
+									className="transition-transform group-open:rotate-180"
+									aria-hidden="true"
+								>
+									⌄
+								</span>
+							</summary>
+							<ul className="mt-2 rounded-lg border surface-inset-soft px-3">
+								{remainingRows.map(renderRow)}
+							</ul>
+						</details>
 					) : null}
-					{isExpanded ? (
-						<button
-							type="button"
-							className="inline-flex h-8 items-center gap-1 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-							onClick={() => setVisibleCount(HOME_LEAGUE_RANK_LIMIT)}
-						>
-							{t('personalLeaguesShowLess')}
-							<ChevronUp className="size-3.5" aria-hidden="true" />
-						</button>
-					) : null}
-				</div>
+				</>
 			)}
 			<RouteReadyMarker
 				name="HOME_LEAGUE_RANKS_READY"
 				readyKey={readyKey}
+				elementTiming="home-league-ranks"
 				audienceHint="session-hint"
 				goodMs={500}
 				poorMs={1_000}

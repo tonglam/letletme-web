@@ -29,7 +29,11 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 			<div>
 				<p className="eyebrow">{t('thisGameweek')}</p>
 				<h2 className="mt-1 flex items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
-					<GameweekBadge gameweek={currentEventId} size="sm" />
+					<GameweekBadge
+						gameweek={currentEventId}
+						size="sm"
+						fontFamily="display"
+					/>
 					<span>{t('gameweekStats')}</span>
 				</h2>
 			</div>
@@ -39,7 +43,10 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 				className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
 			>
 				{t('viewGameweekStats')}
-				<ArrowRight aria-hidden="true" className="size-4" />
+				<ArrowRight
+					aria-hidden="true"
+					className="size-4"
+				/>
 			</Link>
 		</div>
 	)
@@ -65,26 +72,46 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 		{
 			label: t('highestScore'),
 			value: overview.highestPoints?.toString() ?? '0',
-			icon: <Trophy aria-hidden="true" className="size-5" />
+			icon: (
+				<Trophy
+					aria-hidden="true"
+					className="size-5"
+				/>
+			)
 		},
 		{
 			label: t('topScorer'),
 			value: overview.topScorer
 				? `${overview.topScorer.webName} (${overview.topScorer.points})`
 				: 'N/A',
-			icon: <Zap aria-hidden="true" className="size-5" />
+			icon: (
+				<Zap
+					aria-hidden="true"
+					className="size-5"
+				/>
+			)
 		},
 		{
 			label: t('mostSelectedCaptain'),
 			value: overview.mostCaptained?.webName ?? 'N/A',
-			icon: <Crown aria-hidden="true" className="size-5" />
+			icon: (
+				<Crown
+					aria-hidden="true"
+					className="size-5"
+				/>
+			)
 		},
 		{
 			label: t('topChipPlayed'),
 			value: overview.mostPlayedChip
 				? `${chipLabels[overview.mostPlayedChip.name] ?? overview.mostPlayedChip.name} (${formatCompactNumber(overview.mostPlayedChip.numberPlayed)})`
 				: t('unknownChip'),
-			icon: <ArrowRightCircle aria-hidden="true" className="size-5" />
+			icon: (
+				<ArrowRightCircle
+					aria-hidden="true"
+					className="size-5"
+				/>
+			)
 		}
 	] as const
 

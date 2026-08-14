@@ -125,7 +125,10 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 	return (
 		<div className="space-y-4 md:space-y-6">
 			{matches.map((match, index) => (
-				<div key={match.id} className="mx-auto max-w-3xl">
+				<div
+					key={match.id}
+					className="mx-auto max-w-3xl"
+				>
 					<div className="flex flex-col rounded-lg bg-accent/50 p-4 transition-colors hover:bg-accent/70 md:flex-row md:items-center">
 						<div className="grid flex-1 grid-cols-3 items-center gap-4">
 							<div className="flex items-center justify-end gap-3">
@@ -143,7 +146,7 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 								/>
 							</div>
 
-							<div className="mx-auto rounded-md border border-electric/25 bg-plum px-4 py-2 text-center font-mono text-sm font-semibold text-electric md:text-base">
+							<div className="mx-auto rounded-md border border-electric/25 bg-plum px-4 py-2 text-center font-display text-sm font-semibold text-electric md:text-base">
 								{match.finished &&
 								match.homeScore !== null &&
 								match.awayScore !== null ? (
@@ -271,7 +274,7 @@ export function MatchesSection({
 			const cacheKey = revision.current
 				? `${revision.current}:${eventId}`
 				: null
-		const cached = cacheKey ? cache.get(cacheKey) : null
+			const cached = cacheKey ? cache.get(cacheKey) : null
 			if (cached) {
 				generation.current += 1
 				for (const request of Array.from(inFlight.current.values())) {
@@ -307,7 +310,8 @@ export function MatchesSection({
 				headers: { Accept: 'application/json' },
 				signal: controller.signal
 			}).then(async response => {
-				if (!response.ok) throw new Error(`Fixtures request failed: ${response.status}`)
+				if (!response.ok)
+					throw new Error(`Fixtures request failed: ${response.status}`)
 				return (await response.json()) as HomeFixturesResponse
 			})
 			inFlight.current.set(eventId, {
@@ -359,7 +363,10 @@ export function MatchesSection({
 		loadEvent(target)
 	}
 
-	const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+	const onTabKeyDown = (
+		event: KeyboardEvent<HTMLButtonElement>,
+		index: number
+	) => {
 		let nextIndex: number | null = null
 		if (event.key === 'ArrowRight') nextIndex = (index + 1) % matchDays.length
 		if (event.key === 'ArrowLeft') {
@@ -412,7 +419,11 @@ export function MatchesSection({
 					<p className="eyebrow">{t('nextGameweekLabel')}</p>
 					<h2 className="mt-1 flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
 						{t('upcomingMatches')}
-						<GameweekBadge gameweek={committedEventId} size="sm" />
+						<GameweekBadge
+							gameweek={committedEventId}
+							size="sm"
+							fontFamily="display"
+						/>
 					</h2>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">
@@ -422,9 +433,15 @@ export function MatchesSection({
 						className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
 					>
 						{t('viewLiveMatches')}
-						<ArrowRight aria-hidden="true" className="size-4" />
+						<ArrowRight
+							aria-hidden="true"
+							className="size-4"
+						/>
 					</Link>
-					<div className="flex items-center gap-1" aria-busy={pendingEventId !== null}>
+					<div
+						className="flex items-center gap-1"
+						aria-busy={pendingEventId !== null}
+					>
 						<button
 							type="button"
 							onClick={() => navigate(-1)}
@@ -432,7 +449,10 @@ export function MatchesSection({
 							aria-label={t('previousGameweek')}
 							className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
 						>
-							<ChevronLeft aria-hidden="true" className="size-5" />
+							<ChevronLeft
+								aria-hidden="true"
+								className="size-5"
+							/>
 						</button>
 						<button
 							type="button"
@@ -441,13 +461,20 @@ export function MatchesSection({
 							aria-label={t('nextGameweek')}
 							className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
 						>
-							<ChevronRight aria-hidden="true" className="size-5" />
+							<ChevronRight
+								aria-hidden="true"
+								className="size-5"
+							/>
 						</button>
 					</div>
 				</div>
 			</div>
 
-			<p className="sr-only" role="status" aria-live="polite">
+			<p
+				className="sr-only"
+				role="status"
+				aria-live="polite"
+			>
 				{pendingEventId === null
 					? ''
 					: t('fixturesLoading', { gameweek: pendingEventId })}

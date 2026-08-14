@@ -42,7 +42,11 @@ function TeamOfTheWeekCard({
 			<div className="mb-6">
 				<p className="eyebrow">{t('thisGameweek')}</p>
 				<h2 className="mt-1 flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
-					<GameweekBadge gameweek={currentEventId} size="sm" />
+					<GameweekBadge
+						gameweek={currentEventId}
+						size="sm"
+						fontFamily="display"
+					/>
 					<span>{t('teamOfWeek')}</span>
 					{teamOfTheWeek.length > 0 && !isLoading ? (
 						<Badge variant="secondary">
@@ -61,48 +65,49 @@ function TeamOfTheWeekCard({
 			{isLoading ? (
 				<div className="space-y-2">
 					{Array.from({ length: 11 }).map((_, index) => (
-						<Skeleton key={index} className="h-14 w-full rounded-lg" />
+						<Skeleton
+							key={index}
+							className="h-14 w-full rounded-lg"
+						/>
 					))}
 				</div>
+			) : teamOfTheWeek.length === 0 ? (
+				<p className="py-8 text-center text-sm text-muted-foreground">
+					{t('noTeamOfWeek')}
+				</p>
 			) : (
-				teamOfTheWeek.length === 0 ? (
-					<p className="py-8 text-center text-sm text-muted-foreground">
-						{t('noTeamOfWeek')}
-					</p>
-				) : (
-					<ol className="divide-y rounded-lg border surface-inset-soft px-3">
-						{teamOfTheWeek.map((player, index) => {
-							const position = normalizePosition(player.position)
-							return (
-								<li
-									key={player.id}
-									className="grid min-h-12 grid-cols-[2rem_3rem_minmax(0,1fr)_auto] items-center gap-2 py-2"
+				<ol className="divide-y rounded-lg border surface-inset-soft px-3">
+					{teamOfTheWeek.map((player, index) => {
+						const position = normalizePosition(player.position)
+						return (
+							<li
+								key={player.id}
+								className="grid min-h-12 grid-cols-[2rem_3rem_minmax(0,1fr)_auto] items-center gap-2 py-2"
+							>
+								<span className="font-display text-xs tabular-nums text-muted-foreground">
+									{index + 1}
+								</span>
+								<Badge
+									variant="secondary"
+									className={positionBadgeClass(position)}
 								>
-									<span className="font-mono text-xs tabular-nums text-muted-foreground">
-										{index + 1}
+									{position}
+								</Badge>
+								<span className="min-w-0">
+									<span className="block truncate text-sm font-semibold">
+										{player.webName}
 									</span>
-									<Badge
-										variant="secondary"
-										className={positionBadgeClass(position)}
-									>
-										{position}
-									</Badge>
-									<span className="min-w-0">
-										<span className="block truncate text-sm font-semibold">
-											{player.webName}
-										</span>
-										<span className="block text-caption text-muted-foreground">
-											{player.teamShortName}
-										</span>
+									<span className="block text-caption text-muted-foreground">
+										{player.teamShortName}
 									</span>
-									<span className="font-mono text-sm font-bold tabular-nums text-primary-ink">
-										{player.totalPoints}
-									</span>
-								</li>
-							)
-						})}
-					</ol>
-				)
+								</span>
+								<span className="font-display text-sm font-bold tabular-nums text-primary-ink">
+									{player.totalPoints}
+								</span>
+							</li>
+						)
+					})}
+				</ol>
 			)}
 		</Card>
 	)
