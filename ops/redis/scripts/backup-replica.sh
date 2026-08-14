@@ -30,11 +30,12 @@ replica_is_healthy() {
 	last_io=$(field master_last_io_seconds_ago "$input")
 	read_only=$(field slave_read_only "$input")
 	syncing=$(field master_sync_in_progress "$input")
-	[[ $role == slave ]]
-	[[ $link == up ]]
-	[[ $last_io =~ ^[0-9]+$ && $last_io -le 30 ]]
-	[[ $read_only == 1 ]]
-	[[ $syncing == 0 ]]
+	[[ $role == slave &&
+		$link == up &&
+		$last_io =~ ^[0-9]+$ &&
+		$last_io -le 30 &&
+		$read_only == 1 &&
+		$syncing == 0 ]]
 }
 
 replication_before=$("${redis_cli[@]}" INFO replication)

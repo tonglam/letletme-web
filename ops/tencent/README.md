@@ -49,11 +49,16 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
    `next build`, verifies the SHA-backed deployment ID, assembles standalone
    output under `/opt/letletme/releases/<sha>`, switches
    `/opt/letletme/current` atomically, and rolls back on a failed health check.
-   It never runs a database migration.
+   The dependency install and Next.js build run as the unprivileged `letletme`
+   user; root is used only for artifact installation and activation. It never
+   runs a database migration.
 5. Keep the previous release directory and its matching
    `/opt/letletme/static-releases/<sha>` directory until the new release has
-   been stable for at least 24 hours. Static assets are release-scoped so a
-   rollback restores the matching route and chunk metadata atomically.
+   been stable for at least 24 hours. After that rollback window, each
+   successful deployment prunes older release, static, and Next cache
+   directories while retaining the active and immediate rollback releases.
+   Static assets are release-scoped so a rollback restores the matching route
+   and chunk metadata atomically.
 
 Next.js 16 intentionally uses an internal constant `.next/BUILD_ID` whenever
 `deploymentId` is enabled. The release gate therefore checks the configured

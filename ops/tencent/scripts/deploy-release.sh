@@ -34,6 +34,8 @@ deployment_succeeded=0
 rollback_in_progress=0
 cache_dir=""
 cache_dir_created=0
+cache_parent=/var/cache/letletme-next
+release_retention_seconds=$((24 * 60 * 60))
 
 if ! git -C "$source_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 	echo "source directory is not a Git worktree: $source_dir" >&2
@@ -104,11 +106,10 @@ chmod 0751 /opt/letletme
 chown root:www-data "$static_root"
 chmod 0751 "$static_root"
 
-install -d -o root -g letletme -m 0750 "$build_dir"
+install -d -o letletme -g letletme -m 0700 "$build_dir"
 git -C "$source_dir" archive --format=tar "$release_sha" | \
 	tar -xf - -C "$build_dir"
-install -o root -g root -m 0600 /etc/letletme/web.env \
-	"$build_dir/.env.production.local"
+chown -R letletme:letletme "$build_dir"
 
 stage_dir=''
 rollback_activation() {
@@ -164,14 +165,26 @@ cleanup_build() {
 trap cleanup_build EXIT
 
 (
-	cd "$build_dir"
+	set -a
+	# This is a root-owned, mode-0600 host configuration file.
+	# shellcheck disable=SC1091
+	source /etc/letletme/web.env
+	set +a
 	export NODE_ENV=production
 	export LETLETME_ORIGIN=tencent
 	export LETLETME_RELEASE_SHA=$release_sha
 	export NEXT_DEPLOYMENT_ID=${release_sha:0:32}
 	export NODE_OPTIONS=--max-old-space-size=1536
-	npm ci --include=dev
-	npm run build
+	export LETLETME_BUILD_DIR=$build_dir
+	export HOME=$build_dir/.home
+	export npm_config_cache=$build_dir/.npm-cache
+	install -d -o letletme -g letletme -m 0700 "$HOME" "$npm_config_cache"
+	cd -- "$build_dir"
+	runuser --user letletme --preserve-environment -- /bin/bash -c '
+		cd -- "$LETLETME_BUILD_DIR"
+		npm ci --include=dev
+		npm run build
+	'
 	node -e 'const f=require("./.next/required-server-files.json"); if(f.config.deploymentId !== process.env.LETLETME_RELEASE_SHA.slice(0, 32)) process.exit(1)'
 )
 
@@ -184,7 +197,6 @@ if [[ -d $build_dir/public ]]; then
 fi
 find "$stage_dir" -maxdepth 1 -type f -name '.env*' -delete
 
-cache_parent=/var/cache/letletme-next
 if [[ -L $cache_parent || ! -d $cache_parent ]]; then
 	echo "cache parent must be a real directory: $cache_parent" >&2
 	exit 1
@@ -244,4 +256,37 @@ deployment_succeeded=1
 echo "deployed release $release_sha"
 if [[ -n $previous_release ]]; then
 	echo "rollback release retained at $previous_release"
+fi
+
+prune_expired_releases() {
+	local now candidate candidate_sha candidate_mtime
+	now=$(date +%s)
+	for candidate in "$release_root"/*; do
+		if [[ ! -d $candidate || -L $candidate ]]; then
+			continue
+		fi
+		candidate_sha=$(basename "$candidate")
+		if [[ ! $candidate_sha =~ ^[a-f0-9]{40}$ ]]; then
+			continue
+		fi
+		if [[ $candidate == "$release_dir" || $candidate == "$previous_release" ]]; then
+			continue
+		fi
+		candidate_mtime=$(stat -c '%Y' "$candidate")
+		if (( now < candidate_mtime + release_retention_seconds )); then
+			continue
+		fi
+		echo "pruning expired release $candidate"
+		rm -rf -- "$candidate" || return 1
+		if [[ -d $static_root/$candidate_sha && ! -L $static_root/$candidate_sha ]]; then
+			rm -rf -- "$static_root/$candidate_sha" || return 1
+		fi
+		if [[ -d $cache_parent/$candidate_sha && ! -L $cache_parent/$candidate_sha ]]; then
+			rm -rf -- "$cache_parent/$candidate_sha" || return 1
+		fi
+	done
+}
+
+if ! prune_expired_releases; then
+	echo "warning: release retention cleanup failed; active release remains deployed" >&2
 fi
