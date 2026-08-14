@@ -119,12 +119,16 @@ async function measureRun(browser, profile, index) {
 		.waitFor({ state: 'visible', timeout: 3_000 })
 	searchRequestCount = marketRequestCount - beforeSearch
 	await searchInput.fill('')
+	await page
+		.locator('#market-player-results')
+		.waitFor({ state: 'hidden', timeout: 1_000 })
+	const beforeCachedSearch = marketRequestCount
 	await searchInput.fill('sal')
 	await page
 		.locator('#market-player-results')
 		.waitFor({ state: 'visible', timeout: 1_000 })
 	cachedSearchRequestCount =
-		marketRequestCount - beforeSearch - searchRequestCount
+		marketRequestCount - beforeCachedSearch
 
 	let historyRequestCount = 0
 	const firstHistoryButton = page
