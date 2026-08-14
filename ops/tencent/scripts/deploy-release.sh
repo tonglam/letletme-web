@@ -165,11 +165,9 @@ cleanup_build() {
 trap cleanup_build EXIT
 
 (
-	set -a
 	# This is a root-owned, mode-0600 host configuration file.
 	# shellcheck disable=SC1091
 	source /etc/letletme/web.env
-	set +a
 	export NODE_ENV=production
 	export LETLETME_ORIGIN=tencent
 	export LETLETME_RELEASE_SHA=$release_sha
@@ -179,8 +177,29 @@ trap cleanup_build EXIT
 	export HOME=$build_dir/.home
 	export npm_config_cache=$build_dir/.npm-cache
 	install -d -o letletme -g letletme -m 0700 "$HOME" "$npm_config_cache"
+	build_env=(
+		"PATH=${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+		"HOME=$HOME"
+		"npm_config_cache=$npm_config_cache"
+		"NODE_ENV=$NODE_ENV"
+		"NODE_OPTIONS=$NODE_OPTIONS"
+		"LETLETME_ORIGIN=$LETLETME_ORIGIN"
+		"LETLETME_RELEASE_SHA=$LETLETME_RELEASE_SHA"
+		"NEXT_DEPLOYMENT_ID=$NEXT_DEPLOYMENT_ID"
+		"LETLETME_BUILD_DIR=$LETLETME_BUILD_DIR"
+	)
+	for build_key in \
+		NEXT_PUBLIC_APP_URL \
+		NEXT_PUBLIC_SUPABASE_URL \
+		NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE \
+		BETTER_AUTH_URL \
+		NEXT_SERVER_ACTIONS_ENCRYPTION_KEY; do
+		if [[ -n ${!build_key-} ]]; then
+			build_env+=("$build_key=${!build_key}")
+		fi
+	done
 	cd -- "$build_dir"
-	runuser --user letletme --preserve-environment -- /bin/bash -c '
+	runuser --user letletme -- /usr/bin/env -i "${build_env[@]}" /bin/bash -c '
 		cd -- "$LETLETME_BUILD_DIR"
 		npm ci --include=dev
 		npm run build
