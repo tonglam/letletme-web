@@ -24,10 +24,14 @@ if [[ ! -f $site_template ]]; then
 	exit 1
 fi
 static_try_files=$'try_files\n'
-static_try_files+=$'\t'"$static_dir"'/\$letletme_static_suffix\n'
+static_try_files+=$'\t'"$static_dir"'/'
+static_try_files+='$letletme_static_suffix'
+static_try_files+=$'\n'
 while IFS= read -r candidate; do
 	if [[ -d $candidate && ! -L $candidate ]]; then
-		static_try_files+=$'\t'"$candidate"'/\$letletme_static_suffix\n'
+		static_try_files+=$'\t'"$candidate"'/'
+		static_try_files+='$letletme_static_suffix'
+		static_try_files+=$'\n'
 	fi
 done < <(
 	find /opt/letletme/static-releases -mindepth 1 -maxdepth 1 \
