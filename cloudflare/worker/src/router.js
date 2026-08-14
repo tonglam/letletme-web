@@ -37,7 +37,7 @@ function sanitizedHeaders(request) {
 	return headers
 }
 
-function originRequest(request, headers, originHost) {
+function originRequest(request, headers, originHost, proxySecret) {
 	if (!originHost) {
 		return new Request(request, { headers, redirect: 'manual' })
 	}
@@ -47,6 +47,11 @@ function originRequest(request, headers, originHost) {
 	url.port = ''
 	const originalHost = request.headers.get('host')
 	if (originalHost) headers.set('host', originalHost)
+	const clientIp = request.headers.get('cf-connecting-ip')
+	if (proxySecret && isSingleIp(clientIp)) {
+		headers.set('X-Letletme-Proxy-Client-IP', clientIp)
+		headers.set('X-Letletme-Proxy-Secret', proxySecret)
+	}
 	const init = {
 		method: request.method,
 		headers,
@@ -107,7 +112,8 @@ async function fetchVercel(request, context, origin = 'vercel') {
 		originRequest(
 			request,
 			sanitizedHeaders(request),
-			context.env.VERCEL_ORIGIN_HOST
+			context.env.VERCEL_ORIGIN_HOST,
+			context.env.VERCEL_PROXY_SECRET
 		),
 		{ cf: { cacheEverything: false } }
 	)

@@ -12,6 +12,7 @@ const baseEnv = {
 	TENCENT_ORIGIN_HOST: 'tencent-origin.letletme.top',
 	TENCENT_TIMEOUT_MS: '20',
 	VERCEL_ORIGIN_HOST: 'letletme-web.vercel.app',
+	VERCEL_PROXY_SECRET: 'vercel-proxy-secret',
 	ROUTER_VERSION: 'test',
 	EXPECTED_RELEASE_SHA: 'abc1234'
 }
@@ -73,6 +74,7 @@ test('passes request bodies through to Vercel without reading or retaining inter
 				)
 				assert.equal(request.headers.has('x-letletme-origin-token'), false)
 				assert.equal(request.headers.has('x-letletme-proxy-secret'), false)
+				assert.equal(request.headers.has('x-letletme-proxy-client-ip'), false)
 				forwardedBody = await request.text()
 				return new Response('vercel')
 			}
@@ -80,6 +82,37 @@ test('passes request bodies through to Vercel without reading or retaining inter
 	)
 	assert.equal(forwardedBody, JSON.stringify({ query: '{ __typename }' }))
 	assert.equal(response.headers.get('x-letletme-origin'), 'vercel')
+})
+
+test('authenticates the original client IP on the cross-zone Vercel hop', async () => {
+	const response = await routeRequest(
+		new Request('https://letletme.top/en/explore', {
+			headers: {
+				'cf-connecting-ip': '203.0.113.7',
+				'x-letletme-proxy-client-ip': 'spoofed',
+				'x-letletme-proxy-secret': 'spoofed'
+			}
+		}),
+		{ ...baseEnv, ROUTER_MODE: 'pass-through' },
+		quietOptions({
+			fetchImpl: async request => {
+				assert.equal(
+					new URL(request.url).hostname,
+					'letletme-web.vercel.app'
+				)
+				assert.equal(
+					request.headers.get('x-letletme-proxy-client-ip'),
+					'203.0.113.7'
+				)
+				assert.equal(
+					request.headers.get('x-letletme-proxy-secret'),
+					'vercel-proxy-secret'
+				)
+				return new Response('vercel')
+			}
+		})
+	)
+	assert.equal(await response.text(), 'vercel')
 })
 
 test('streams Tencent response bodies without waiting for completion', async () => {

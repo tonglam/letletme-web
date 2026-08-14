@@ -200,8 +200,9 @@ if [[ -e $cache_dir ]]; then
 	echo "cache directory already exists: $cache_dir" >&2
 	exit 1
 fi
-install -d -o letletme -g letletme -m 0750 "$cache_dir"
+# Mark it before creation so a partially-created directory is removed too.
 cache_dir_created=1
+install -d -o letletme -g letletme -m 0750 "$cache_dir"
 rm -rf -- "$stage_dir/.next/cache"
 ln -s "$cache_dir" "$stage_dir/.next/cache"
 chown -R root:letletme "$stage_dir"

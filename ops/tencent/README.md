@@ -20,6 +20,12 @@ Create these without committing them:
 `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` must be the same 32-byte base64 value at
 Vercel build time and Tencent build time. Do not put it in Git.
 
+The value in `/etc/letletme/local-proxy-secret` must also be configured as the
+sensitive Vercel Production variable `LETLETME_LOCAL_PROXY_SECRET`. The Worker
+uses a separate Cloudflare secret named `VERCEL_PROXY_SECRET` with this same
+value when it forwards requests to Vercel, allowing the Web app to preserve
+the authenticated client-IP rate-limit subject across the cross-zone hop.
+
 The Tencent origin may use its own active, allow-listed Data API credential;
 it does not need to copy a legacy Vercel Data key. All other shared credentials
 must be fingerprint-verified against production before the first build.
@@ -82,7 +88,7 @@ npx wrangler versions upload --config cloudflare/worker/wrangler.toml \
 ```
 
 Supply the remaining non-secret vars from `wrangler.toml` on both uploads and
-set `ORIGIN_TOKEN` with `wrangler secret put`. The initial `wrangler deploy`
+set `ORIGIN_TOKEN` and `VERCEL_PROXY_SECRET` as Worker secrets. The initial `wrangler deploy`
 must be pass-through, so merely attaching the route cannot move traffic to
 Tencent.
 Configure the `letletme.top/*` route as fail-open. Promote pass-through first,

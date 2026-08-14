@@ -44,6 +44,14 @@ if ss -lnt "sport = :$port" | grep -q LISTEN; then
 fi
 
 install -o redis -g redis -m 0600 "$backup" "$restore_dir/dump.rdb"
+backup_bytes=$(stat -c '%s' "$backup")
+# Allow a bounded amount of time proportional to the RDB size. Redis returns
+# LOADING until the snapshot is usable, so a fixed 30-second window is unsafe
+# for a production-sized backup.
+load_timeout_seconds=$((60 + (backup_bytes + 67108863) / 67108864 * 10))
+if (( load_timeout_seconds > 900 )); then
+	load_timeout_seconds=900
+fi
 config=$restore_dir/redis.conf
 {
 	printf 'bind 127.0.0.1\n'
@@ -61,11 +69,22 @@ config=$restore_dir/redis.conf
 
 runuser -u redis -- redis-server "$config"
 started=1
-for _ in $(seq 1 30); do
-	"${restore_cli[@]}" PING >/dev/null 2>&1 && break
+ready=0
+for ((elapsed = 0; elapsed < load_timeout_seconds; elapsed++)); do
+	if "${restore_cli[@]}" PING 2>/dev/null | grep -qx PONG; then
+		ready=1
+		break
+	fi
+	if [[ -f $restore_dir/redis.pid ]] && ! kill -0 "$(< "$restore_dir/redis.pid")" 2>/dev/null; then
+		echo "Redis restore process exited before becoming ready" >&2
+		exit 1
+	fi
 	sleep 1
 done
-"${restore_cli[@]}" PING | grep -qx PONG
+if [[ $ready != 1 ]]; then
+	echo "Redis restore did not become ready within ${load_timeout_seconds}s (RDB bytes=${backup_bytes})" >&2
+	exit 1
+fi
 db0=$("${restore_cli[@]}" -n 0 DBSIZE)
 db1=$("${restore_cli[@]}" -n 1 DBSIZE)
 [[ $db0 =~ ^[0-9]+$ && $db1 =~ ^[0-9]+$ ]]
