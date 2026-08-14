@@ -2,8 +2,8 @@
 
 import { reportBrowserPerformanceMetric } from '@/lib/analytics/client-vitals'
 import {
-	findElementPaintTime,
-	measureRouteReadyDuration
+	measureRouteReadyDuration,
+	observeElementPaintTime
 } from '@/lib/analytics/route-navigation'
 import {
 	normalizeMetricPage,
@@ -53,30 +53,40 @@ export function RouteReadyMarker({
 	useEffect(() => {
 		if (!ready || reportedIdentity.current === readyIdentity) return
 		reportedIdentity.current = readyIdentity
-		const paintedAt = elementTiming ? findElementPaintTime(elementTiming) : null
-		const value = measureRouteReadyDuration(
-			pathname,
-			paintedAt ?? performance.now(),
-			undefined,
-			readyKey
-		)
-		reportBrowserPerformanceMetric(
-			{
-				name,
-				value,
-				delta: value,
-				rating:
-					value <= goodMs
-						? 'good'
-						: value <= poorMs
-							? 'needs-improvement'
-							: 'poor',
-				metricId: `${name.toLowerCase()}-${crypto.randomUUID()}`,
-				page: normalizeMetricPage(pathname),
-				audienceHint
-			},
-			{ always: true }
-		)
+		let cancelled = false
+		const effectAt = performance.now()
+		void (async () => {
+			const paintedAt = elementTiming
+				? await observeElementPaintTime(elementTiming)
+				: null
+			if (cancelled) return
+			const value = measureRouteReadyDuration(
+				pathname,
+				paintedAt ?? effectAt,
+				undefined,
+				readyKey
+			)
+			reportBrowserPerformanceMetric(
+				{
+					name,
+					value,
+					delta: value,
+					rating:
+						value <= goodMs
+							? 'good'
+							: value <= poorMs
+								? 'needs-improvement'
+								: 'poor',
+					metricId: `${name.toLowerCase()}-${crypto.randomUUID()}`,
+					page: normalizeMetricPage(pathname),
+					audienceHint
+				},
+				{ always: true }
+			)
+		})()
+		return () => {
+			cancelled = true
+		}
 	}, [
 		audienceHint,
 		elementTiming,

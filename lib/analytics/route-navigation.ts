@@ -54,17 +54,66 @@ function documentNavigationStart(): number {
 	return entry?.startTime ?? 0
 }
 
-/** Returns the browser-recorded paint time for one annotated RSC element. */
+/** Returns the latest browser-recorded paint time for one annotated RSC element. */
 export function findElementPaintTime(
 	identifier: string,
-	entries: readonly ElementPaintEntry[] = performance.getEntriesByType(
-		'element'
-	)
+	entries: readonly ElementPaintEntry[]
 ): number | null {
-	const entry = entries.find(candidate => candidate.identifier === identifier)
-	if (!entry) return null
-	const paintedAt = entry.renderTime || entry.startTime
-	return Number.isFinite(paintedAt) && paintedAt >= 0 ? paintedAt : null
+	let latestPaint: number | null = null
+	for (const entry of entries) {
+		if (entry.identifier !== identifier) continue
+		const paintedAt = entry.renderTime || entry.startTime
+		if (
+			Number.isFinite(paintedAt) &&
+			paintedAt >= 0 &&
+			(latestPaint === null || paintedAt > latestPaint)
+		) {
+			latestPaint = paintedAt
+		}
+	}
+	return latestPaint
+}
+
+/**
+ * Chromium exposes Element Timing entries only through PerformanceObserver.
+ * Buffered observation also covers a streamed RSC element painted before hydration.
+ */
+export function observeElementPaintTime(
+	identifier: string,
+	timeoutMs = 100
+): Promise<number | null> {
+	if (
+		typeof PerformanceObserver === 'undefined' ||
+		!PerformanceObserver.supportedEntryTypes?.includes('element')
+	) {
+		return Promise.resolve(null)
+	}
+
+	return new Promise(resolve => {
+		let settled = false
+		let timer: ReturnType<typeof setTimeout> | undefined
+		const observer = new PerformanceObserver(list => {
+			const paintedAt = findElementPaintTime(
+				identifier,
+				list.getEntries() as ElementPaintEntry[]
+			)
+			if (paintedAt !== null) finish(paintedAt)
+		})
+		const finish = (paintedAt: number | null) => {
+			if (settled) return
+			settled = true
+			observer.disconnect()
+			if (timer) clearTimeout(timer)
+			resolve(paintedAt)
+		}
+
+		try {
+			observer.observe({ type: 'element', buffered: true })
+			timer = setTimeout(() => finish(null), timeoutMs)
+		} catch {
+			finish(null)
+		}
+	})
 }
 
 /** Elapsed time for this route, not for the lifetime of the browser tab. */

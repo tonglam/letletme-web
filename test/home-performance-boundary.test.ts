@@ -12,6 +12,14 @@ const leagueList = readFileSync(
 const matches = readFileSync('components/home/MatchesSection.tsx', 'utf8')
 const deadline = readFileSync('components/home/DeadlineSection.tsx', 'utf8')
 const homeGraphql = readFileSync('lib/graphql/operations/home.ts', 'utf8')
+const routeReadyMarker = readFileSync(
+	'components/analytics/RouteReadyMarker.tsx',
+	'utf8'
+)
+const routeNavigation = readFileSync(
+	'lib/analytics/route-navigation.ts',
+	'utf8'
+)
 const guestNavigation = readFileSync(
 	'components/layout/GuestNavigationActions.tsx',
 	'utf8'
@@ -78,6 +86,9 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(leagueList, /row\.movement\.direction/)
 		assert.match(leagueList, /HOME_LEAGUE_RANKS_READY/)
 		assert.match(leagueList, /elementtiming: 'home-league-ranks'/)
+		assert.match(routeReadyMarker, /observeElementPaintTime/)
+		assert.match(routeNavigation, /PerformanceObserver/)
+		assert.match(routeNavigation, /buffered: true/)
 		assert.match(leagueList, /<details/)
 		assert.doesNotMatch(leagueList, /'use client'/)
 		assert.doesNotMatch(leagueList, /useState|useEffect|useMemo/)

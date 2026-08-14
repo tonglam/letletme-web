@@ -30,6 +30,13 @@ describe('route ready navigation clock', () => {
 			810
 		)
 		assert.equal(findElementPaintTime('missing', []), null)
+		assert.equal(
+			findElementPaintTime('home-team-desk', [
+				{ identifier: 'home-team-desk', startTime: 500 },
+				{ identifier: 'home-team-desk', startTime: 900 }
+			]),
+			900
+		)
 	})
 
 	it('uses the current App Router transition rather than the age of the tab', () => {
