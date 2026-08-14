@@ -1176,10 +1176,6 @@
 		"homeEmptyDescription": "The first complete player snapshot will be recorded after the next {time} capture.",
 		"availabilityWatch": "Availability watch"
 	},
-	"PriceChangeList": {
-		"transfersIn": "{count} transfers in",
-		"transfersOut": "{count} transfers out"
-	},
 	"PriceChanges": {
 		"title": "Price Changes",
 		"dataUnavailable": "Price data unavailable",
