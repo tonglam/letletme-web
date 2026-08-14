@@ -13,6 +13,7 @@ if (!/^[1-9]\d*$/.test(tournamentId ?? '')) {
 	)
 }
 const storageState = process.env.COMPETITIONS_PERF_STORAGE_STATE
+// Authenticated competition routes must never silently measure the login page.
 if (!storageState) {
 	throw new Error(
 		'COMPETITIONS_PERF_STORAGE_STATE is required for authenticated measurements'
