@@ -3,6 +3,16 @@ import { shortMarketPosition } from '@/lib/market'
 import type { MarketPosition } from '@/lib/graphql/operations/market'
 import type { ReactNode } from 'react'
 
+const positionBadgeVariant: Record<
+	'GKP' | 'DEF' | 'MID' | 'FWD',
+	string
+> = {
+	GKP: 'market-position-badge--gkp',
+	DEF: 'market-position-badge--def',
+	MID: 'market-position-badge--mid',
+	FWD: 'market-position-badge--fwd'
+}
+
 /** Compact semantic classes for the repeated rows on the Market page. */
 export function MarketPositionBadge({ position }: { position: string }) {
 	const shortPosition = shortMarketPosition(position as MarketPosition)
@@ -10,7 +20,7 @@ export function MarketPositionBadge({ position }: { position: string }) {
 		<span
 			className={cn(
 				'market-position-badge',
-				`market-position-badge--${shortPosition.toLowerCase()}`
+				positionBadgeVariant[shortPosition]
 			)}
 		>
 			{shortPosition}
