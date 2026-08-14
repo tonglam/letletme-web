@@ -1,5 +1,8 @@
 import { MarketAvailabilityDisclosure } from './MarketAvailabilityDisclosure'
-import { MarketPriceExplorer } from './MarketPriceExplorer'
+import {
+	MarketPlayerLookupLauncher,
+	MarketPriceExplorer
+} from './MarketPriceExplorer'
 import { MarketLocalUpdated } from '@/components/data/MarketLocalUpdated'
 import { OwnershipSwingDesk } from '@/components/data/OwnershipSwingDesk'
 import { Badge } from '@/components/ui/badge'
@@ -283,7 +286,13 @@ export async function MarketDashboard({
 				<div className="mb-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
 					<div className="flex items-start gap-3"><span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border/60"><Users aria-hidden="true" className="size-4" /></span><div><h2 className="font-display text-lg font-bold tracking-tight">{t('trackingStartsTitle')}</h2><p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">{t('trackingStartsDescription', { time: '09:40 UTC+8' })}</p></div></div>
 				</div>
-				<MarketPriceExplorer changes={[]} changeDate={null} locale={locale} revision={revision} initialOpen />
+				<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+					<SectionTitle id="market-player-lookup">{t('lookupTitle')}</SectionTitle>
+					<MarketPlayerLookupLauncher
+						revision={revision}
+						initialOpen
+					/>
+				</section>
 			</>
 		)
 	}
@@ -305,7 +314,7 @@ export async function MarketDashboard({
 		<section aria-labelledby="market-transfers" className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"><SectionTitle id="market-transfers">{t('transferTitle')}</SectionTitle><p className="mb-3 text-[11px] text-muted-foreground">{pulse.coverage.firstDate && pulse.coverage.latestDate ? t('transferCoverage', { from: formatCalendarDate(pulse.coverage.firstDate, locale), to: formatCalendarDate(pulse.coverage.latestDate, locale) }) : t('transferCoverageUnknown')}</p><TransferHeat movers={pulse.transferMovers} locale={locale} t={t} /></section>
 	) : null
 	const availabilitySection = hasAvailabilityEvidence ? (
-		<section aria-labelledby="market-squad-status" className="grid gap-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:grid-cols-2 sm:p-5 lg:gap-8">
+		<section aria-labelledby="market-squad-status" className="grid gap-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5 lg:grid-cols-2 lg:gap-8">
 			<div><SectionTitle id="market-squad-status"><span className="inline-flex items-center gap-1.5"><HeartPulse className="size-3.5" aria-hidden="true" />{t('availabilityTitle')}</span></SectionTitle><MarketAvailabilityDisclosure highlights={pulse.availabilityHighlights} updates={pulse.availabilityUpdates} locale={locale} days={pulse.coverage.requestedDays} revision={revision} count={pulse.availabilityUpdateCount ?? pulse.availabilityUpdates.length} /></div>
 			{pulse.newPlayers.length > 0 ? <div><SectionTitle id="market-new-players"><span className="inline-flex items-center gap-1.5"><Sparkles className="size-3.5" aria-hidden="true" />{t('newPlayersTitle')}</span></SectionTitle><NewPlayersBlock items={pulse.newPlayers} locale={locale} t={t} /></div> : null}
 		</section>

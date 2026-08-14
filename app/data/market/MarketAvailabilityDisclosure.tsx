@@ -140,11 +140,11 @@ export function MarketAvailabilityDisclosure({
 		setLoading(true)
 		setError(false)
 		try {
-			const startedAt = performance.now()
+			const readyKey = `${revision}:${days}`
 			markRouteReadyStart(
 				window.location.pathname,
-				startedAt,
-				`${revision}:${days}`
+				performance.now(),
+				readyKey
 			)
 			const data = await fetchMarketJson<{ items?: MarketAvailabilityUpdate[] }>('availability', {
 				days: String(days),
@@ -152,7 +152,7 @@ export function MarketAvailabilityDisclosure({
 			})
 			setLoadedUpdates(data.items ?? [])
 			setIsLoaded(true)
-			setAvailabilityReadyKey(`${revision}:${days}:${startedAt}`)
+			setAvailabilityReadyKey(readyKey)
 		} catch {
 			setError(true)
 			setAvailabilityReadyKey(null)
