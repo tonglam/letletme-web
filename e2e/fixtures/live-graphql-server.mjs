@@ -974,6 +974,14 @@ const server = createServer((request, response) => {
 		) {
 			json(response, 200, {
 				data: {
+					marketSnapshotContext: {
+						season: '2627',
+						revision: 'market-7',
+						source: 'DATA_PUBLICATION',
+						snapshotDate: '2026-08-03',
+						capturedAt: '2026-08-03T09:40:00.000Z',
+						rowCount: 2
+					},
 					marketPulse: {
 						coverage: {
 							requestedDays: 14,
@@ -997,11 +1005,81 @@ const server = createServer((request, response) => {
 							fallers: []
 						},
 						transferMovers: [],
+						availabilityUpdateCount: 0,
 						availabilityUpdates: [],
 						availabilityHighlights: [],
 						newPlayers: [],
 						priceChanges: []
 					}
+				}
+			})
+			return
+		}
+		if (query.includes('MarketPlayers')) {
+			const search =
+				typeof variables.search === 'string'
+					? variables.search.trim().toLowerCase()
+					: ''
+			const items = pickerPlayers.filter(player =>
+				!search || player.webName.toLowerCase().includes(search)
+			)
+			json(response, 200, {
+				data: {
+					marketSnapshotContext: {
+						season: '2627',
+						revision: 'market-7',
+						source: 'DATA_PUBLICATION',
+						snapshotDate: '2026-08-03',
+						capturedAt: '2026-08-03T09:40:00.000Z',
+						rowCount: 2
+					},
+					playersForPicker: {
+						items,
+						totalCount: items.length,
+						nextCursor: null
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('MarketPriceHistory')) {
+			json(response, 200, {
+				data: {
+					marketSnapshotContext: {
+						season: '2627',
+						revision: 'market-7',
+						source: 'DATA_PUBLICATION',
+						snapshotDate: '2026-08-03',
+						capturedAt: '2026-08-03T09:40:00.000Z',
+						rowCount: 2
+					},
+					playerValueHistory: [
+						{
+							playerId: Number(variables.playerId) || 1,
+							changeDate: '2026-08-03',
+							oldValue: 99,
+							newValue: 100,
+							changeType: 'RISE',
+							transfersIn: null,
+							transfersOut: null
+						}
+					]
+				}
+			})
+			return
+		}
+		if (query.includes('MarketAvailability')) {
+			json(response, 200, {
+				data: {
+					marketSnapshotContext: {
+						season: '2627',
+						revision: 'market-7',
+						source: 'DATA_PUBLICATION',
+						snapshotDate: '2026-08-03',
+						capturedAt: '2026-08-03T09:40:00.000Z',
+						rowCount: 2
+					},
+					marketPulse: { availabilityUpdates: [] }
 				}
 			})
 			return
