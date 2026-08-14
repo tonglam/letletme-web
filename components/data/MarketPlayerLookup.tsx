@@ -45,6 +45,7 @@ export type MarketPlayerLookupProps = {
 	 * Standalone full mode shows search by default.
 	 */
 	compact?: boolean
+	autoFocus?: boolean
 	onClearSeed?: () => void
 }
 
@@ -52,6 +53,7 @@ export function MarketPlayerLookup({
 	seedPlayer = null,
 	initialSearchTerm = '',
 	compact = false,
+	autoFocus = compact,
 	onClearSeed,
 	revision = null
 }: MarketPlayerLookupProps = {}) {
@@ -293,7 +295,7 @@ export function MarketPlayerLookup({
 								aria-describedby="market-player-search-status"
 								aria-expanded={normalizedSearch.length >= MIN_SEARCH_LENGTH}
 								aria-autocomplete="list"
-								autoFocus={compact}
+								autoFocus={autoFocus}
 							/>
 							{searchTerm ? (
 								<button

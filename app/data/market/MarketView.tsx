@@ -103,12 +103,15 @@ function MarketPlayerLookupLauncher({
 	const t = useTranslations('Market')
 	const [open, setOpen] = useState(initialOpen || seedPlayer != null)
 	const [searchTerm, setSearchTerm] = useState('')
+	const [openedByUser, setOpenedByUser] = useState(false)
 	const shouldOpen = open || seedPlayer != null
 
 	if (shouldOpen) {
 		return (
 			<LazyMarketPlayerLookup
 				initialSearchTerm={searchTerm}
+				compact={compact && seedPlayer != null}
+				autoFocus={openedByUser || searchTerm.trim().length >= 2}
 				seedPlayer={seedPlayer}
 				onClearSeed={onClearSeed}
 				revision={revision}
@@ -128,7 +131,10 @@ function MarketPlayerLookupLauncher({
 					onChange={event => {
 						const value = event.target.value
 						setSearchTerm(value)
-						if (value.trim().length >= 2) setOpen(true)
+						if (value.trim().length >= 2) {
+							setOpenedByUser(true)
+							setOpen(true)
+						}
 					}}
 					placeholder={t('searchPlaceholder')}
 					maxLength={50}
@@ -151,7 +157,10 @@ function MarketPlayerLookupLauncher({
 				variant="ghost"
 				size="sm"
 				className="h-7 shrink-0 px-2 text-xs"
-				onClick={() => setOpen(true)}
+				onClick={() => {
+					setOpenedByUser(true)
+					setOpen(true)
+				}}
 			>
 				<Search className="size-3.5" aria-hidden="true" />
 				{t('lookupAnotherPlayer')}
@@ -932,9 +941,17 @@ export function MarketView({
 		[pulse, latestPriceChanges]
 	)
 
-	const handleSelectPricePlayer = useCallback((player: MarketPlayer) => {
-		setSeedPlayer(marketPlayerToDirectory(player))
-	}, [])
+	const handleSelectPricePlayer = useCallback(
+		(player: MarketPlayer) => {
+			markRouteReadyStart(
+				window.location.pathname,
+				performance.now(),
+				`${player.playerId}:${marketRevisionParam(revision)}`
+			)
+			setSeedPlayer(marketPlayerToDirectory(player))
+		},
+		[revision]
+	)
 
 	if (!hasPulseData) {
 		return (
