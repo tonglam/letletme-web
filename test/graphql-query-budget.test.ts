@@ -64,7 +64,7 @@ describe('GraphQL request budget', () => {
 			['GET_HOME_PUBLIC_BOOTSTRAP', GET_HOME_PUBLIC_BOOTSTRAP, 1],
 			['GET_HOME_PERSONAL_DESK', GET_HOME_PERSONAL_DESK, 1],
 			['GET_HOME_MARKET_PULSE', GET_HOME_MARKET_PULSE, 1],
-			['GET_HOME_GAMEWEEK', GET_HOME_GAMEWEEK, 3]
+			['GET_HOME_GAMEWEEK', GET_HOME_GAMEWEEK, 1]
 		] as const) {
 			const document = parse(query)
 			let astNodes = 0

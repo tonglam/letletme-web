@@ -5,7 +5,7 @@ import type { ComponentProps } from 'react'
 
 type NavigationMenuLinkProps = ComponentProps<typeof Link>
 
-/** Close the native mobile disclosure before a normal client navigation. */
+/** Close the containing native disclosure before a normal client navigation. */
 export function NavigationMenuLink({
 	onClick,
 	...props
@@ -26,7 +26,7 @@ export function NavigationMenuLink({
 					return
 				}
 				const disclosure = event.currentTarget.closest(
-					'details[data-navigation-mobile]'
+					'details[data-navigation-disclosure]'
 				) as HTMLDetailsElement | null
 				disclosure?.removeAttribute('open')
 			}}

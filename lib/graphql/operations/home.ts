@@ -48,37 +48,40 @@ export const GET_HOME_EVENT_FIXTURES = /* GraphQL */ `
 
 export const GET_HOME_GAMEWEEK = /* GraphQL */ `
   query GetHomeGameweek($eventId: Int!) {
-    gameweekDesk(eventId: $eventId) {
-      season
-      coreRevision
-      liveRevision
-      eventId
-      lifecycle
-      overviewState
-      boardsState
-      overview {
-        highestPoints
-        mostCaptained { id webName teamShortName }
-        topScorer { id webName teamShortName points }
-        mostPlayedChip { name numberPlayed }
+    homeGameweek(eventId: $eventId) {
+      transfersState
+      gameweekDesk {
+        season
+        coreRevision
+        liveRevision
+        eventId
+        lifecycle
+        overviewState
+        boardsState
+        overview {
+          highestPoints
+          mostCaptained { id webName teamShortName }
+          topScorer { id webName teamShortName points }
+          mostPlayedChip { name numberPlayed }
+        }
+        dreamTeam {
+          id
+          webName
+          position
+          teamShortName
+          totalPoints
+        }
       }
-      dreamTeam {
-        id
-        webName
-        position
-        teamShortName
-        totalPoints
+      topTransfersIn {
+        ...HomeTransferFields
       }
-    }
-    topTransfersIn(eventId: $eventId, limit: 5) {
-      ...HomeTransferFields
-    }
-    topTransfersOut(eventId: $eventId, limit: 5) {
-      ...HomeTransferFields
+      topTransfersOut {
+        ...HomeTransferFields
+      }
     }
   }
 
-  fragment HomeTransferFields on PlayerTransferStats {
+  fragment HomeTransferFields on HomeTransferSignal {
     player {
       id
       webName
@@ -211,7 +214,7 @@ export type HomeGameweekPlayer = {
 	totalPoints: number
 }
 
-export type HomeGameweekResponse = {
+export type HomeGameweek = {
 	gameweekDesk: {
 		season: string
 		coreRevision: string
@@ -239,6 +242,11 @@ export type HomeGameweekResponse = {
 	}
 	topTransfersIn: TopTransfer[]
 	topTransfersOut: TopTransfer[]
+	transfersState: 'AVAILABLE' | 'UNAVAILABLE'
+}
+
+export type HomeGameweekResponse = {
+	homeGameweek: HomeGameweek
 }
 
 export type HomeRankDirection = 'UP' | 'DOWN' | 'FLAT' | 'UNKNOWN'

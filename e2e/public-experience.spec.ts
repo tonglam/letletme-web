@@ -137,6 +137,7 @@ test('language switch persists through the next client navigation', async ({ pag
 	await explore.getByRole('link', { name: 'Market', exact: true }).click()
 
 	await expect(page).toHaveURL(/\/explore\/market$/)
+	await expect(explore).not.toHaveAttribute('open', '')
 	await expect(page.getByRole('heading', { name: 'Market', exact: true })).toBeVisible()
 })
 
@@ -188,6 +189,24 @@ test('server-rendered mobile navigation opens and closes after navigation', asyn
 			() => document.documentElement.scrollWidth <= window.innerWidth
 		)
 	).toBe(true)
+})
+
+test('guest mobile login closes its native disclosure before navigation', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 })
+	await page.goto('/')
+
+	const mobileMenu = page.locator('details[data-navigation-mobile]')
+	await mobileMenu.locator(':scope > summary').click()
+	await expect(mobileMenu).toHaveAttribute('open', '')
+	await mobileMenu.getByRole('link', { name: 'Login', exact: true }).click()
+
+	await expect(page).toHaveURL(/\/auth\/login$/)
+	await expect(page.locator('details[data-navigation-mobile]')).not.toHaveAttribute(
+		'open',
+		''
+	)
 })
 
 test('Simplified Chinese mobile navigation uses the same competition vocabulary', async ({

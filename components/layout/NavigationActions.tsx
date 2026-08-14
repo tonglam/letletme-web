@@ -1,6 +1,5 @@
 import type { NavigationUser } from '@/components/profile/HeaderProfileCard'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
-import { Link } from '@/i18n/navigation'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
 import { ChevronDown, Menu, Settings, Shirt } from 'lucide-react'
 import { getLocale, getTranslations } from 'next-intl/server'
@@ -61,13 +60,13 @@ async function AccountPanel({
 					{t('fplTeamLabel')}
 				</p>
 				{verifiedEntryId === null ? (
-					<Link
+					<NavigationMenuLink
 						href="/onboarding/bind-entry"
 						prefetch={false}
 						className="mt-2 block text-xs font-semibold text-primary-ink underline-offset-4 hover:underline"
 					>
 						{t('linkFplTeam')}
-					</Link>
+					</NavigationMenuLink>
 				) : (
 					<>
 						<p className="mt-2 truncate font-display text-sm font-bold uppercase tracking-wide">
@@ -79,14 +78,14 @@ async function AccountPanel({
 					</>
 				)}
 			</div>
-			<Link
+			<NavigationMenuLink
 				href="/profile"
 				prefetch={false}
 				className="flex min-h-10 items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 			>
 				<Settings aria-hidden="true" className="size-4" />
 				{t('profileSettings')}
-			</Link>
+			</NavigationMenuLink>
 			<SignOutForm
 				label={t('signOut')}
 				pendingLabel={t('signingOut')}
@@ -111,6 +110,7 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 					<details
 						key={item.id}
 						data-navigation-group={item.id}
+						data-navigation-disclosure
 						className="group relative"
 					>
 						<summary className="flex min-h-9 cursor-pointer list-none items-center gap-1 rounded-md px-3 font-display text-xs font-semibold uppercase tracking-caps text-fascia-foreground/70 hover:bg-fascia-foreground/5 hover:text-fascia-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric [&::-webkit-details-marker]:hidden">
@@ -119,19 +119,22 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 						</summary>
 						<div className="absolute right-0 top-full z-50 mt-2 min-w-52 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
 							{item.items.map(subItem => (
-								<Link
+								<NavigationMenuLink
 									key={subItem.labelKey}
 									href={subItem.href}
 									prefetch={false}
 									className="block rounded-sm px-2 py-2 text-sm outline-none hover:bg-accent focus-visible:bg-accent"
 								>
 									{t(subItem.labelKey)}
-								</Link>
+								</NavigationMenuLink>
 							))}
 						</div>
 					</details>
 				))}
-				<details className="group relative ml-2">
+				<details
+					data-navigation-disclosure
+					className="group relative ml-2"
+				>
 					<summary className="flex min-h-9 cursor-pointer list-none items-center gap-1 rounded-md px-2 text-fascia-foreground/85 hover:bg-fascia-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric [&::-webkit-details-marker]:hidden">
 						<AccountSummary user={user} />
 						<ChevronDown aria-hidden="true" className="size-4 opacity-60 transition-transform group-open:rotate-180" />
@@ -145,7 +148,11 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 			<LanguageSwitcher />
 			<ThemeToggle />
 
-			<details data-navigation-mobile className="group relative md:hidden">
+			<details
+				data-navigation-mobile
+				data-navigation-disclosure
+				className="group relative md:hidden"
+			>
 				<summary className="flex size-9 cursor-pointer list-none items-center justify-center rounded-md text-fascia-foreground hover:bg-fascia-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric [&::-webkit-details-marker]:hidden">
 					<Menu aria-hidden="true" className="size-5" />
 					<span className="sr-only">{t('openMenu')}</span>

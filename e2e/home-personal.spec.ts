@@ -206,6 +206,29 @@ test('the server-rendered signed navigation logs out through a same-origin POST'
 	}
 })
 
+test('the signed account disclosure closes on profile navigation', async ({ page }) => {
+	const session = await createSession({ entryId: 15702 })
+	try {
+		await useCookie(page, session.cookie)
+		await page.goto('/')
+		const navigation = page.getByRole('navigation')
+		const accountDisclosure = navigation
+			.locator('details[data-navigation-disclosure]')
+			.filter({ hasText: 'E2E Manager' })
+			.first()
+		await accountDisclosure.locator(':scope > summary').click()
+		await expect(accountDisclosure).toHaveAttribute('open', '')
+		await accountDisclosure
+			.getByRole('link', { name: 'Profile settings', exact: true })
+			.click()
+
+		await expect(page).toHaveURL(/\/profile$/)
+		await expect(accountDisclosure).not.toHaveAttribute('open', '')
+	} finally {
+		await session.cleanup()
+	}
+})
+
 test('a failed navbar sign-out stays in the app with a visible error', async ({
 	page
 }) => {

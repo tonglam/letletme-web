@@ -1,13 +1,13 @@
 import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { Card } from '@/components/ui/card'
 import { Link } from '@/i18n/navigation'
-import type { HomeGameweekResponse } from '@/lib/graphql/operations/home'
+import type { HomeGameweek } from '@/lib/graphql/operations/home'
 import { formatCompactNumber } from '@/lib/utils'
 import { ArrowRight, ArrowRightCircle, Crown, Trophy, Zap } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 type HomeGameweekOverview = NonNullable<
-	HomeGameweekResponse['gameweekDesk']['overview']
+	HomeGameweek['gameweekDesk']['overview']
 >
 
 interface StatsSectionProps {

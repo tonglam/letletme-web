@@ -10,6 +10,8 @@ const leagueList = readFileSync(
 	'utf8'
 )
 const matches = readFileSync('components/home/MatchesSection.tsx', 'utf8')
+const deadline = readFileSync('components/home/DeadlineSection.tsx', 'utf8')
+const homeGraphql = readFileSync('lib/graphql/operations/home.ts', 'utf8')
 const guestNavigation = readFileSync(
 	'components/layout/GuestNavigationActions.tsx',
 	'utf8'
@@ -86,6 +88,30 @@ describe('Home first-screen performance boundary', () => {
 		assert.doesNotMatch(matches, /from 'sonner'/)
 	})
 
+	it('resets the fixture controller when the RSC seed revision advances', () => {
+		assert.match(home, /key=\{fixturesSeedKey\}/)
+		assert.match(
+			home,
+			/initialFixtures\.season[\s\S]*initialFixtures\.revision[\s\S]*initialFixtures\.eventId/
+		)
+	})
+
+	it('retains the last valid deadline only for transient bootstrap failures', () => {
+		assert.match(home, /bootstrapFailed: true/)
+		assert.match(
+			deadline,
+			/incomingSchedule \?\? \(bootstrapFailed \? lastValidSchedule : null\)/
+		)
+		assert.match(deadline, /else if \(!bootstrapFailed\)/)
+	})
+
+	it('uses one failure-isolated Home gameweek GraphQL root', () => {
+		assert.match(homeGraphql, /homeGameweek\(eventId: \$eventId\)/)
+		assert.match(homeGraphql, /transfersState/)
+		assert.doesNotMatch(homeGraphql, /^\s+gameweekDesk\(eventId:/m)
+		assert.doesNotMatch(homeGraphql, /^\s+topTransfersIn\(eventId:/m)
+	})
+
 	it('renders the guest navigation without Better Auth client code', () => {
 		assert.doesNotMatch(guestNavigation, /auth-client|useSession|signOut/)
 		assert.match(guestNavigation, /<details/)
@@ -103,5 +129,7 @@ describe('Home first-screen performance boundary', () => {
 			'utf8'
 		)
 		assert.match(measurement, /await response\.arrayBuffer\(\)/)
+		assert.match(measurement, /Cookie: sessionCookie/)
+		assert.match(measurement, /reason: 'navigation-unavailable'/)
 	})
 })

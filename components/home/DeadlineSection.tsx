@@ -16,32 +16,69 @@ interface DeadlineSectionProps {
 	nextEventId: number | null
 	deadlineTime: string | null
 	initialTimeLeft: TimeLeft
+	bootstrapFailed: boolean
+}
+
+type DeadlineSchedule = {
+	nextEventId: number
+	deadlineTime: string
+	initialTimeLeft: TimeLeft
 }
 
 export function DeadlineSection({
 	nextEventId,
 	deadlineTime,
-	initialTimeLeft
+	initialTimeLeft,
+	bootstrapFailed
 }: DeadlineSectionProps) {
 	const locale = useLocale()
 	const t = useTranslations('Home')
-	const deadline = useMemo(() => (deadlineTime ? new Date(deadlineTime) : null), [deadlineTime])
-	const [timeLeft, setTimeLeft] = useState<TimeLeft>(initialTimeLeft)
+	const incomingSchedule = useMemo<DeadlineSchedule | null>(
+		() =>
+			nextEventId && deadlineTime
+				? { nextEventId, deadlineTime, initialTimeLeft }
+				: null,
+		[deadlineTime, initialTimeLeft, nextEventId]
+	)
+	const [lastValidSchedule, setLastValidSchedule] =
+		useState<DeadlineSchedule | null>(incomingSchedule)
+	const effectiveSchedule =
+		incomingSchedule ?? (bootstrapFailed ? lastValidSchedule : null)
+	const effectiveDeadlineTime = effectiveSchedule?.deadlineTime ?? null
+	const effectiveNextEventId = effectiveSchedule?.nextEventId ?? null
+	const deadline = useMemo(
+		() =>
+			effectiveDeadlineTime ? new Date(effectiveDeadlineTime) : null,
+		[effectiveDeadlineTime]
+	)
+	const [timeLeft, setTimeLeft] = useState<TimeLeft>(
+		effectiveSchedule?.initialTimeLeft ?? initialTimeLeft
+	)
 	const [formattedDeadlineDate, setFormattedDeadlineDate] = useState('')
 	const [deadlinePassed, setDeadlinePassed] = useState(false)
 	const router = useRouter()
 	const routerRef = useRef(router)
 	const refreshCount = useRef(0)
-	const refreshDeadline = useRef<string | null>(deadlineTime)
+	const refreshDeadline = useRef<string | null>(effectiveDeadlineTime)
 	const isPageActive = usePageActive()
+
+	useEffect(() => {
+		if (incomingSchedule) {
+			setLastValidSchedule(current =>
+				current === incomingSchedule ? current : incomingSchedule
+			)
+		} else if (!bootstrapFailed) {
+			setLastValidSchedule(null)
+		}
+	}, [bootstrapFailed, incomingSchedule])
 
 	useEffect(() => {
 		routerRef.current = router
 	}, [router])
 
 	useEffect(() => {
-		if (refreshDeadline.current !== deadlineTime) {
-			refreshDeadline.current = deadlineTime
+		if (refreshDeadline.current !== effectiveDeadlineTime) {
+			refreshDeadline.current = effectiveDeadlineTime
 			refreshCount.current = 0
 		}
 		if (!deadline) {
@@ -105,9 +142,9 @@ export function DeadlineSection({
 			if (expireTimer !== undefined) window.clearTimeout(expireTimer)
 			if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
 		}
-	}, [deadline, deadlineTime, isPageActive, locale])
+	}, [deadline, effectiveDeadlineTime, isPageActive, locale])
 
-	if (!nextEventId || !deadlineTime) {
+	if (!effectiveNextEventId || !effectiveDeadlineTime) {
 		return (
 			<div className="scoreboard texture-grain rounded-xl p-6 sm:p-7">
 				<p className="chyron text-electric">{t('nextDeadline')}</p>
@@ -127,12 +164,12 @@ export function DeadlineSection({
 				<p className="chyron text-electric">{t('nextDeadline')}</p>
 				<span className="inline-flex items-center gap-2">
 					<span className="live-dot" aria-hidden="true" />
-					<GameweekBadge gameweek={nextEventId} size="sm" />
+					<GameweekBadge gameweek={effectiveNextEventId} size="sm" />
 				</span>
 			</div>
 
 			<h2 className="mt-4 font-display text-3xl font-bold uppercase leading-none tracking-wide sm:text-4xl">
-				{t('gameweek', { number: nextEventId })}
+				{t('gameweek', { number: effectiveNextEventId })}
 			</h2>
 
 			{deadlinePassed ? (

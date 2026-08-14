@@ -232,39 +232,52 @@ async function measureColdLoad(browser, profile, index) {
 
 async function measureFixtureSwitch(browser, profile) {
 	const context = await browser.newContext({ viewport: profile.viewport })
-	await applySessionCookie(context)
-	const page = await context.newPage()
-	if (profile.slow4g) await throttleMobile(page)
-	let fixtureRequests = 0
-	page.on('request', request => {
-		if (request.url().includes('/api/home/fixtures?')) fixtureRequests += 1
-	})
-	await page.goto(baseUrl, { waitUntil: 'networkidle' })
-	const next = page.getByRole('button', { name: /next gameweek|下一轮/i }).last()
-	const previous = page
-		.getByRole('button', { name: /previous gameweek|上一轮/i })
-		.last()
-	const startedAt = performance.now()
-	const firstResponse = page.waitForResponse(response =>
-		response.url().includes('/api/home/fixtures?') && response.ok()
-	)
-	await next.click()
-	await firstResponse
-	await page.waitForTimeout(50)
-	const firstSwitchMs = performance.now() - startedAt
-	const requestsAfterFirst = fixtureRequests
-	const cachedStartedAt = performance.now()
-	await previous.click()
-	await page.waitForTimeout(100)
-	const cachedSwitchMs = performance.now() - cachedStartedAt
-	const result = {
-		firstSwitchMs: Number(firstSwitchMs.toFixed(2)),
-		firstSwitchRequests: requestsAfterFirst,
-		cachedSwitchMs: Number(cachedSwitchMs.toFixed(2)),
-		cachedSwitchRequests: fixtureRequests - requestsAfterFirst
+	try {
+		await applySessionCookie(context)
+		const page = await context.newPage()
+		if (profile.slow4g) await throttleMobile(page)
+		let fixtureRequests = 0
+		page.on('request', request => {
+			if (request.url().includes('/api/home/fixtures?')) fixtureRequests += 1
+		})
+		await page.goto(baseUrl, { waitUntil: 'networkidle' })
+		const next = page.getByRole('button', { name: /next gameweek|下一轮/i }).last()
+		if ((await next.count()) === 0 || (await next.isDisabled())) {
+			return {
+				available: false,
+				reason: 'navigation-unavailable',
+				firstSwitchMs: null,
+				firstSwitchRequests: 0,
+				cachedSwitchMs: null,
+				cachedSwitchRequests: 0
+			}
+		}
+		const previous = page
+			.getByRole('button', { name: /previous gameweek|上一轮/i })
+			.last()
+		const startedAt = performance.now()
+		const firstResponse = page.waitForResponse(response =>
+			response.url().includes('/api/home/fixtures?') && response.ok()
+		)
+		await next.click()
+		await firstResponse
+		await page.waitForTimeout(50)
+		const firstSwitchMs = performance.now() - startedAt
+		const requestsAfterFirst = fixtureRequests
+		const cachedStartedAt = performance.now()
+		await previous.click()
+		await page.waitForTimeout(100)
+		const cachedSwitchMs = performance.now() - cachedStartedAt
+		return {
+			available: true,
+			firstSwitchMs: Number(firstSwitchMs.toFixed(2)),
+			firstSwitchRequests: requestsAfterFirst,
+			cachedSwitchMs: Number(cachedSwitchMs.toFixed(2)),
+			cachedSwitchRequests: fixtureRequests - requestsAfterFirst
+		}
+	} finally {
+		await context.close()
 	}
-	await context.close()
-	return result
 }
 
 const browser = await chromium.launch({ headless: true })
@@ -288,7 +301,13 @@ const concurrentResponses = await Promise.all(
 	Array.from({ length: concurrency }, async (_, index) => {
 		const response = await fetch(
 			`${baseUrl}${baseUrl.includes('?') ? '&' : '?'}concurrency=${index}`,
-			{ headers: { Accept: 'text/html' }, cache: 'no-store' }
+			{
+				headers: {
+					Accept: 'text/html',
+					...(sessionCookie ? { Cookie: sessionCookie } : {})
+				},
+				cache: 'no-store'
+			}
 		)
 		await response.arrayBuffer()
 		return response

@@ -207,12 +207,14 @@ async function HomeHero() {
 }
 
 async function HomeDeadline() {
-	const bootstrap = await getHomePublicBootstrap().catch(error => {
-		console.error('[home-deadline] bootstrap failed', {
-			error: error instanceof Error ? error.name : 'UnknownError'
+	const { bootstrap, bootstrapFailed } = await getHomePublicBootstrap()
+		.then(bootstrap => ({ bootstrap, bootstrapFailed: false }))
+		.catch(error => {
+			console.error('[home-deadline] bootstrap failed', {
+				error: error instanceof Error ? error.name : 'UnknownError'
+			})
+			return { bootstrap: null, bootstrapFailed: true }
 		})
-		return null
-	})
 	const nextEventId = bootstrap?.context.nextEventId ?? null
 	const deadlineTime = bootstrap?.context.nextDeadlineTime ?? null
 	const deadlineMs = deadlineTime ? Date.parse(deadlineTime) : Number.NaN
@@ -224,6 +226,7 @@ async function HomeDeadline() {
 			initialTimeLeft={computeTimeLeft(
 				Number.isFinite(deadlineMs) ? deadlineMs : null
 			)}
+			bootstrapFailed={bootstrapFailed}
 		/>
 	)
 }
@@ -311,6 +314,9 @@ async function HomeInsights() {
 					fixtures: bootstrap.fixtures
 				}
 			: null
+	const fixturesSeedKey = initialFixtures
+		? `${initialFixtures.season}:${initialFixtures.revision}:${initialFixtures.eventId}`
+		: `${bootstrap?.context.season ?? 'unknown'}:${bootstrap?.context.revision ?? 'unknown'}:none`
 
 	if (!bootstrap) {
 		return (
@@ -360,7 +366,10 @@ async function HomeInsights() {
 									currentEventId={currentEventId}
 									transfersIn={gameweek?.topTransfersIn ?? []}
 									transfersOut={gameweek?.topTransfersOut ?? []}
-									hasError={gameweek === null}
+									hasError={
+										gameweek === null ||
+										gameweek.transfersState === 'UNAVAILABLE'
+									}
 								/>
 							</div>
 						</div>
@@ -384,7 +393,10 @@ async function HomeInsights() {
 
 			<section className="py-10">
 				<div className="mx-auto max-w-4xl px-4">
-					<MatchesSection initialFixtures={initialFixtures} />
+					<MatchesSection
+						key={fixturesSeedKey}
+						initialFixtures={initialFixtures}
+					/>
 				</div>
 			</section>
 		</>

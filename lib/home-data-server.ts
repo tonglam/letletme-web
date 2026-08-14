@@ -13,6 +13,7 @@ import {
 	type HomeEventFixturesGraphQLResponse,
 	type HomeFixture,
 	type HomeFixturesResponse,
+	type HomeGameweek,
 	type HomeGameweekResponse,
 	type HomePublicBootstrap,
 	type HomePublicBootstrapGraphQLResponse,
@@ -56,7 +57,7 @@ export const getHomePublicBootstrap = cache(
 
 export async function getHomeGameweek(
 	eventId: number,
-): Promise<HomeGameweekResponse> {
+): Promise<HomeGameweek> {
 	const startedAt = performance.now()
 	const response = await executePublicServerQuery<HomeGameweekResponse>(
 		GET_HOME_GAMEWEEK,
@@ -66,14 +67,16 @@ export async function getHomeGameweek(
 			tags: [CacheTag.gameweekStats, CacheTag.liveScores, CacheTag.transfers],
 		}),
 	)
+	const gameweek = response.homeGameweek
 	console.info('[home-gameweek]', {
-		lifecycle: response.gameweekDesk.lifecycle,
-		dreamTeamRows: response.gameweekDesk.dreamTeam.length,
+		lifecycle: gameweek.gameweekDesk.lifecycle,
+		dreamTeamRows: gameweek.gameweekDesk.dreamTeam.length,
+		transfersState: gameweek.transfersState,
 		transferRows:
-			response.topTransfersIn.length + response.topTransfersOut.length,
+			gameweek.topTransfersIn.length + gameweek.topTransfersOut.length,
 		durationMs: Number((performance.now() - startedAt).toFixed(2)),
 	})
-	return response
+	return gameweek
 }
 
 export async function loadHomeFixtures(

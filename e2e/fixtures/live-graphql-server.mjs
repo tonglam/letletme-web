@@ -392,7 +392,9 @@ const server = createServer((request, response) => {
 			const eventId = Number(variables.eventId) || 33
 			json(response, 200, {
 				data: {
-					gameweekDesk: {
+					homeGameweek: {
+						transfersState: 'AVAILABLE',
+						gameweekDesk: {
 						season: '2627',
 						coreRevision: '7',
 						liveRevision: '8',
@@ -415,7 +417,7 @@ const server = createServer((request, response) => {
 							},
 							mostPlayedChip: { name: 'wildcard', numberPlayed: 5 }
 						},
-						dreamTeam: [
+							dreamTeam: [
 							{
 								id: 1,
 								webName: 'Saka',
@@ -423,10 +425,11 @@ const server = createServer((request, response) => {
 								teamShortName: 'ARS',
 								totalPoints: 12
 							}
-						]
-					},
-					topTransfersIn: [],
-					topTransfersOut: []
+							]
+						},
+						topTransfersIn: [],
+						topTransfersOut: []
+					}
 				}
 			})
 			return
