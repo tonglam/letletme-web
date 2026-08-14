@@ -54,6 +54,8 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
 	"$ops_dir/nginx/letletme.conf" \
 	/etc/nginx/sites-available/letletme
+install -o root -g www-data -m 0640 /dev/null \
+	/etc/nginx/conf.d/letletme-static-try-files.conf
 ln -sfn /etc/nginx/sites-available/letletme /etc/nginx/sites-enabled/letletme
 rm -f /etc/nginx/sites-enabled/default
 systemctl daemon-reload
