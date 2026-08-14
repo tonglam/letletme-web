@@ -1,6 +1,5 @@
 import { Badge } from '@/components/ui/badge'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
-import { Link } from '@/i18n/navigation'
 import type {
 	MarketAvailabilityUpdate,
 	MarketPlayer
@@ -77,13 +76,16 @@ export function MarketAvailabilityList({
 							<PositionBadge player={update.player} />
 							<div className="min-w-0 flex-1">
 								<div className="flex flex-wrap items-center gap-2">
-									<Link
-										prefetch={false}
-										href={playerStatsHref({ p1: String(update.player.playerId) })}
+									<a
+										href={playerStatsHref({
+											p1: String(update.player.playerId),
+											localePathPrefix:
+												locale === 'en' ? '' : `/${locale}`
+										})}
 										className="text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
 									>
 										{update.player.webName}
-									</Link>
+									</a>
 									<Badge
 										variant={key === 'available' ? 'secondary' : 'outline'}
 										className="text-[10px]"

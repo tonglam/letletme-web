@@ -8,7 +8,6 @@ import { MarketLocalUpdated } from '@/components/data/MarketLocalUpdated'
 import { OwnershipSwingDesk } from '@/components/data/OwnershipSwingDesk'
 import { Badge } from '@/components/ui/badge'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
-import { Link } from '@/i18n/navigation'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
 import type {
 	MarketAvailabilityUpdate,
@@ -82,12 +81,38 @@ function EmptyHint({ children }: { children: ReactNode }) {
 	)
 }
 
+function PlayerStatsAnchor({
+	playerId,
+	locale,
+	className,
+	children
+}: {
+	playerId: number
+	locale: string
+	className?: string
+	children: ReactNode
+}) {
+	return (
+		<a
+			href={playerStatsHref({
+				p1: String(playerId),
+				localePathPrefix: locale === 'en' ? '' : `/${locale}`
+			})}
+			className={className}
+		>
+			{children}
+		</a>
+	)
+}
+
 function DensePlayerRow({
 	player,
+	locale,
 	trailing,
 	sub
 }: {
 	player: MarketPlayer
+	locale: string
 	trailing: ReactNode
 	sub?: ReactNode
 }) {
@@ -95,13 +120,13 @@ function DensePlayerRow({
 		<li className="flex items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0">
 			<PositionBadge player={player} />
 			<div className="min-w-0 flex-1">
-				<Link
-					prefetch={false}
-					href={playerStatsHref({ p1: String(player.playerId) })}
+				<PlayerStatsAnchor
+					playerId={player.playerId}
+					locale={locale}
 					className="block truncate text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
 				>
 					{player.webName}
-				</Link>
+				</PlayerStatsAnchor>
 				{sub ? (
 					<p className="truncate text-[11px] text-muted-foreground">{sub}</p>
 				) : (
@@ -202,9 +227,9 @@ function GlanceStrip({
 							{cell.primary}
 						</p>
 						{cell.playerId != null ? (
-							<Link prefetch={false} href={playerStatsHref({ p1: String(cell.playerId) })} className="mt-1 block truncate text-xs text-foreground underline decoration-primary/55 underline-offset-2 hover:decoration-primary">
+							<PlayerStatsAnchor playerId={cell.playerId} locale={locale} className="mt-1 block truncate text-xs text-foreground underline decoration-primary/55 underline-offset-2 hover:decoration-primary">
 								{cell.secondary}
-							</Link>
+							</PlayerStatsAnchor>
 						) : (
 							<p className="mt-1 truncate text-xs text-muted-foreground">{cell.secondary}</p>
 						)}
@@ -223,6 +248,7 @@ function MostSelectedColumn({ players, locale, t }: { players: MarketPlayer[]; l
 				<DensePlayerRow
 					key={player.playerId}
 					player={player}
+					locale={locale}
 					sub={`${player.teamShortName} · £${(player.price / 10).toFixed(1)}m`}
 					trailing={<span className="font-display text-sm font-semibold tabular-nums">{formatOwnership(player.selectedByPercent, locale)}</span>}
 				/>
@@ -240,6 +266,7 @@ function TransferHeat({ movers, locale, t }: { movers: MarketTransferMover[]; lo
 				<DensePlayerRow
 					key={mover.player.playerId}
 					player={mover.player}
+					locale={locale}
 					sub={t('transferInOut', { inCount: number.format(mover.transfersIn), outCount: number.format(mover.transfersOut) })}
 					trailing={<span className={cn('font-display text-sm font-semibold tabular-nums', mover.netTransfers >= 0 ? 'text-success' : 'text-destructive')}>{mover.netTransfers > 0 ? '+' : ''}{number.format(mover.netTransfers)}</span>}
 				/>
@@ -256,7 +283,7 @@ function NewPlayersBlock({ items, locale, t }: { items: MarketPulse['newPlayers'
 				<li key={item.player.playerId} className="flex items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0">
 					<PositionBadge player={item.player} />
 					<div className="min-w-0">
-						<Link prefetch={false} href={playerStatsHref({ p1: String(item.player.playerId) })} className="block truncate text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary">{item.player.webName}</Link>
+						<PlayerStatsAnchor playerId={item.player.playerId} locale={locale} className="block truncate text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary">{item.player.webName}</PlayerStatsAnchor>
 						<p className="text-[11px] text-muted-foreground">{t('firstSeen', { date: formatCalendarDate(item.firstObservedDate, locale) })}</p>
 					</div>
 				</li>
