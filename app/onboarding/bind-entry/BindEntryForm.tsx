@@ -30,6 +30,9 @@ export default function BindEntryForm({ next }: { next: string }) {
 			// in its error state), so navigation always proceeds.
 			await refetchSession({ query: { disableCookieCache: true } })
 			router.push(next)
+			// The navbar is a Server Component in the persistent locale layout.
+			// Refresh the destination tree so it observes the new FPL binding too.
+			router.refresh()
 		})()
 	}, [state, router, next, t, refetchSession])
 

@@ -17,6 +17,10 @@ const guestNavigation = readFileSync(
 	'utf8'
 )
 const proxy = readFileSync('proxy.ts', 'utf8')
+const bindEntry = readFileSync(
+	'app/onboarding/bind-entry/BindEntryForm.tsx',
+	'utf8'
+)
 
 describe('Home first-screen performance boundary', () => {
 	it('starts the revision-pinned public bootstrap before child rendering', () => {
@@ -86,6 +90,7 @@ describe('Home first-screen performance boundary', () => {
 		assert.doesNotMatch(matches, /graphql-client|GET_EVENT_FIXTURES|@\/components\/ui\/tabs/)
 		assert.doesNotMatch(matches, /unoptimized/)
 		assert.doesNotMatch(matches, /from 'sonner'/)
+		assert.match(matches, /data-home-fixtures-event=\{committedEventId\}/)
 	})
 
 	it('resets the fixture controller when the RSC seed revision advances', () => {
@@ -118,6 +123,13 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(guestNavigation, /prefetch=\{false\}/)
 	})
 
+	it('refreshes the persistent server navbar after entry binding', () => {
+		assert.match(
+			bindEntry,
+			/await refetchSession[\s\S]*router\.push\(next\)[\s\S]*router\.refresh\(\)/
+		)
+	})
+
 	it('keeps personalized HTML private when a session cookie is hinted', () => {
 		assert.match(proxy, /hasSessionCookieHintInHeaders\(req\.headers\)/)
 		assert.match(proxy, /private, no-store, no-transform/)
@@ -133,5 +145,8 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(measurement, /reason: 'navigation-unavailable'/)
 		assert.match(measurement, /GetEventFixtures/)
 		assert.match(measurement, /firstSwitchTransports/)
+		assert.match(measurement, /waitForCommittedFixtureEvent/)
+		assert.match(measurement, /observed: values\.length/)
+		assert.match(measurement, /waitForReadyMetric/)
 	})
 })

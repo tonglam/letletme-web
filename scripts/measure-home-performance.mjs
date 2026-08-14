@@ -34,12 +34,18 @@ function distribution(runs, field) {
 	const values = runs
 		.map(run => run[field])
 		.filter(value => typeof value === 'number' && Number.isFinite(value))
-	return { p50: percentile(values, 50), p95: percentile(values, 95) }
+	return {
+		p50: percentile(values, 50),
+		p95: percentile(values, 95),
+		observed: values.length,
+		missing: runs.length - values.length
+	}
 }
 
 function summarize(runs) {
 	return {
 		runs: runs.length,
+		readinessExpected: Boolean(sessionCookie),
 		status200: runs.every(run => run.status === 200),
 		lcpMs: distribution(runs, 'lcpMs'),
 		tbtMs: distribution(runs, 'tbtMs'),
@@ -101,6 +107,48 @@ function fixtureRequestTransport(request) {
 		return 'GRAPHQL_POST'
 	}
 	return null
+}
+
+async function waitForReadyMetric(page, requestMetrics, name, timeoutMs = 5_000) {
+	const startedAt = performance.now()
+	while (performance.now() - startedAt < timeoutMs) {
+		const browserValue = await page.evaluate(metricName => {
+			const value = window.__homePerformance?.ready?.[metricName]
+			return typeof value === 'number' ? value : null
+		}, name)
+		if (browserValue !== null) return browserValue
+		const requestValue = requestMetrics.get(name)
+		if (typeof requestValue === 'number') return requestValue
+		await page.waitForTimeout(50)
+	}
+	return null
+}
+
+async function readCommittedFixtureEvent(page) {
+	const matches = page.locator('[data-home-matches]').last()
+	if ((await matches.count()) > 0) {
+		const value = Number.parseInt(
+			(await matches.getAttribute('data-home-fixtures-event')) ?? '',
+			10
+		)
+		if (Number.isInteger(value)) return value
+	}
+	const badge = page.getByText(/^GW\d+$/).last()
+	const value = Number.parseInt((await badge.textContent())?.replace(/^GW/, '') ?? '', 10)
+	return Number.isInteger(value) ? value : null
+}
+
+async function waitForCommittedFixtureEvent(page, eventId, hasEventMarker) {
+	if (hasEventMarker) {
+		await page
+			.locator(`[data-home-matches][data-home-fixtures-event="${eventId}"]`)
+			.waitFor({ state: 'visible', timeout: 30_000 })
+		return
+	}
+	await page
+		.getByText(`GW${eventId}`, { exact: true })
+		.last()
+		.waitFor({ state: 'visible', timeout: 30_000 })
 }
 
 async function measureColdLoad(browser, profile, index) {
@@ -174,11 +222,25 @@ async function measureColdLoad(browser, profile, index) {
 			}
 		}).observe({ type: 'longtask', buffered: true })
 	})
+	const navigationStartedAt = performance.now()
 	const response = await page.goto(
 		`${baseUrl}${baseUrl.includes('?') ? '&' : '?'}cold=${profile.name}-${index}`,
 		{ waitUntil: 'load' }
 	)
-	await page.waitForTimeout(1_000)
+	const readySamples = new Map()
+	if (sessionCookie) {
+		const names = ['HOME_TEAM_DESK_READY', 'HOME_LEAGUE_RANKS_READY']
+		const values = await Promise.all(
+			names.map(name => waitForReadyMetric(page, routeReady, name))
+		)
+		for (let index = 0; index < names.length; index += 1) {
+			readySamples.set(names[index], values[index])
+		}
+	}
+	const elapsedAfterLoad = performance.now() - navigationStartedAt
+	if (elapsedAfterLoad < 1_000) {
+		await page.waitForTimeout(1_000 - elapsedAfterLoad)
+	}
 	const browserMetrics = await page.evaluate(() => {
 		const navigation = performance.getEntriesByType('navigation')[0]
 		const resources = performance.getEntriesByType('resource')
@@ -232,10 +294,12 @@ async function measureColdLoad(browser, profile, index) {
 		requestCount,
 		...browserMetrics,
 		teamDeskReadyMs:
+			readySamples.get('HOME_TEAM_DESK_READY') ??
 			browserMetrics.teamDeskReadyMs ??
 			routeReady.get('HOME_TEAM_DESK_READY') ??
 			null,
 		leagueRanksReadyMs:
+			readySamples.get('HOME_LEAGUE_RANKS_READY') ??
 			browserMetrics.leagueRanksReadyMs ??
 			routeReady.get('HOME_LEAGUE_RANKS_READY') ??
 			null
@@ -273,18 +337,37 @@ async function measureFixtureSwitch(browser, profile) {
 		const previous = page
 			.getByRole('button', { name: /previous gameweek|上一轮/i })
 			.last()
+		const initialEventId = await readCommittedFixtureEvent(page)
+		if (initialEventId === null) {
+			return {
+				available: false,
+				reason: 'event-marker-unavailable',
+				firstSwitchMs: null,
+				firstSwitchRequests: 0,
+				firstSwitchStatus: null,
+				firstSwitchTransports: [],
+				cachedSwitchMs: null,
+				cachedSwitchRequests: 0
+			}
+		}
+		const targetEventId = initialEventId + 1
+		const hasEventMarker =
+			(await page
+				.locator('[data-home-matches]')
+				.last()
+				.getAttribute('data-home-fixtures-event')) !== null
 		const startedAt = performance.now()
 		const firstResponse = page.waitForResponse(response =>
 			Boolean(fixtureRequestTransport(response.request()))
 		)
 		await next.click()
 		const fixtureResponse = await firstResponse
-		await page.waitForTimeout(50)
+		await waitForCommittedFixtureEvent(page, targetEventId, hasEventMarker)
 		const firstSwitchMs = performance.now() - startedAt
 		const requestsAfterFirst = fixtureRequests
 		const cachedStartedAt = performance.now()
 		await previous.click()
-		await page.waitForTimeout(100)
+		await waitForCommittedFixtureEvent(page, initialEventId, hasEventMarker)
 		const cachedSwitchMs = performance.now() - cachedStartedAt
 		return {
 			available: true,

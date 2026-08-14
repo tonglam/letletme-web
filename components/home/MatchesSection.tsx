@@ -394,7 +394,11 @@ export function MatchesSection({
 	const canGoNext = intentEventId !== null && intentEventId < MAX_GAMEWEEK
 
 	return (
-		<Card data-home-matches className="min-h-[29rem] p-4 md:p-6">
+		<Card
+			data-home-matches
+			data-home-fixtures-event={committedEventId}
+			className="min-h-[29rem] p-4 md:p-6"
+		>
 			{fixtureError ? (
 				<div
 					role="alert"
