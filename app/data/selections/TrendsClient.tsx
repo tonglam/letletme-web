@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
@@ -195,6 +196,7 @@ export default function TrendsClient({
 					</select>
 				</label>
 			</div>
+			{!canLoadMine && <p className="mt-3 text-xs text-muted-foreground">{t('needEntry')}</p>}
 
 			<div className="mt-6 min-h-[480px]" aria-busy={pending}>
 				{!committed && <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">{t('noLeagueOptions')}</div>}
@@ -206,7 +208,7 @@ export default function TrendsClient({
 					<div className="grid gap-4 md:grid-cols-2">
 						{committed.sections.map(section => <article key={section.capability} className="rounded-xl border bg-card p-4 shadow-sm">
 							<div className="mb-3 flex items-center justify-between"><h3 className="font-semibold">{labels[section.capability] ?? section.capability}</h3><span className="text-xs text-muted-foreground">{section.state}</span></div>
-							{section.rows === null ? <p className="text-sm text-muted-foreground">Unavailable for this gameweek.</p> : section.rows.length === 0 ? <p className="text-sm text-muted-foreground">{t('noData')}</p> : <ol className="space-y-2">{section.rows.slice(0, 12).map(row => <li key={row.elementId} className="flex items-center justify-between gap-3 text-sm"><span className="min-w-0 truncate"><strong>{row.playerName}</strong><span className="ml-2 text-muted-foreground">{row.teamShortName}</span></span><span className="shrink-0 tabular-nums">{row.percentage == null ? row.count : `${row.percentage.toFixed(1)}%`}</span></li>)}</ol>}
+							{section.rows === null ? <p className="text-sm text-muted-foreground">Unavailable for this gameweek.</p> : section.rows.length === 0 ? <p className="text-sm text-muted-foreground">{t('noData')}</p> : <ol className="space-y-2">{section.rows.slice(0, 12).map(row => <li key={row.elementId} className="flex items-center justify-between gap-3 text-sm"><span className="min-w-0 truncate"><Link href={`/explore/player-stats?p1=${row.elementId}`} prefetch={false} className="font-semibold hover:underline">{row.playerName}</Link><span className="ml-2 text-muted-foreground">{row.teamShortName}</span></span><span className="shrink-0 tabular-nums">{row.percentage == null ? row.count : `${row.percentage.toFixed(1)}%`}</span></li>)}</ol>}
 						</article>)}
 					</div>
 				</>}

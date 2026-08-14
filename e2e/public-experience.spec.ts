@@ -288,16 +288,18 @@ test('Market stays accessible and usable on a 390px Simplified Chinese screen', 
 	expect(accessibility.violations).toEqual([])
 })
 
-test('signed-out League Trends exposes only curated public aggregates on mobile', async ({
+test('signed-out Trends exposes only curated public aggregates on mobile', async ({
 	page
 }) => {
 	await page.setViewportSize({ width: 390, height: 844 })
 	await page.goto('/explore/selections?scope=public&tournament=777&gw=33')
 
 	await expect(
-		page.getByRole('heading', { level: 1, name: 'League Trends' })
+		page.getByRole('heading', { level: 1, name: 'Trends' })
 	).toBeVisible()
-	await expect(page.getByText('E2E Public League').first()).toBeVisible()
+	await expect(
+		page.getByRole('heading', { level: 2, name: 'E2E Public League' })
+	).toBeVisible()
 	await expect(
 		page.getByText('Link an FPL entry to add My Leagues.')
 	).toBeVisible()
