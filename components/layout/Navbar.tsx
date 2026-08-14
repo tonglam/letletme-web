@@ -1,10 +1,23 @@
 import { Link } from '@/i18n/navigation'
 import { getTranslations } from 'next-intl/server'
+import { getCurrentSession, hasSessionCookieHint } from '@/lib/session'
+import { GuestNavigationActions } from './GuestNavigationActions'
 import { LogoMark, LogoWordmark } from './Logo'
 import { NavigationActions } from './NavigationActions'
 
 export async function Navbar() {
-	const t = await getTranslations('Navigation')
+	const [t, hasSessionCookie] = await Promise.all([
+		getTranslations('Navigation'),
+		hasSessionCookieHint()
+	])
+	const displaySession = hasSessionCookie
+		? await getCurrentSession().catch(error => {
+				console.warn('[navbar-session] display session unavailable', {
+					error: error instanceof Error ? error.name : 'UnknownError'
+				})
+				return null
+			})
+		: null
 
 	return (
 		<nav
@@ -22,7 +35,11 @@ export async function Navbar() {
 				</Link>
 
 				<div className="flex items-center gap-1.5">
-					<NavigationActions />
+					{displaySession?.user ? (
+						<NavigationActions user={displaySession.user} />
+					) : (
+						<GuestNavigationActions />
+					)}
 				</div>
 			</div>
 		</nav>

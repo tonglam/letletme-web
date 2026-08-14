@@ -43,16 +43,19 @@ test('retired public routes return 404 instead of redirecting', async ({
 	}
 })
 
-test('client-only navigation controls stay unavailable until hydration', async ({
+test('server navigation stays usable without hydration while client controls wait', async ({
 	browser
 }) => {
 	const page = await browser.newPage({ javaScriptEnabled: false })
 	await page.setViewportSize({ width: 390, height: 844 })
 	await page.goto('/')
 
+	const mobileMenu = page.locator('details[data-navigation-mobile]')
+	await mobileMenu.locator(':scope > summary').click()
+	await expect(mobileMenu).toHaveAttribute('open', '')
 	await expect(
-		page.getByRole('button', { name: 'Open navigation menu' })
-	).toBeDisabled()
+		mobileMenu.getByRole('link', { name: 'Market', exact: true })
+	).toBeVisible()
 	await expect(
 		page.getByRole('button', { name: 'Change color theme' })
 	).toBeDisabled()
@@ -66,14 +69,17 @@ test('home keeps the four-section vocabulary and competition entry links aligned
 	await page.goto('/')
 
 	const header = page.getByRole('navigation', { name: 'Primary' })
-	for (const label of ['Live', 'My FPL', 'Competitions', 'Explore']) {
-		await expect(header.getByRole('button', { name: new RegExp(`^${label}`) })).toBeVisible()
+	for (const id of ['live', 'myFpl', 'competitions', 'explore']) {
+		await expect(
+			header.locator(`details[data-navigation-group="${id}"] > summary`)
+		).toBeVisible()
 	}
-	await header.getByRole('button', { name: /^My FPL/ }).click()
+	await header
+		.locator('details[data-navigation-group="myFpl"] > summary')
+		.click()
 	await expect(
-		page.getByRole('menuitem', { name: 'Overview', exact: true })
+		header.getByRole('link', { name: 'Overview', exact: true })
 	).toHaveCount(0)
-	await page.keyboard.press('Escape')
 
 	await expect(
 		page.getByRole('link', { name: 'Live competition standings', exact: true })
@@ -93,9 +99,11 @@ test('home keeps the four-section vocabulary and competition entry links aligned
 
 	await page.goto('/zh-CN')
 	const chineseHeader = page.getByRole('navigation', { name: '主导航' })
-	for (const label of ['实时', '我的 FPL', '赛事', '探索']) {
+	for (const id of ['live', 'myFpl', 'competitions', 'explore']) {
 		await expect(
-			chineseHeader.getByRole('button', { name: new RegExp(`^${label}`) })
+			chineseHeader.locator(
+				`details[data-navigation-group="${id}"] > summary`
+			)
 		).toBeVisible()
 	}
 
@@ -124,10 +132,12 @@ test('language switch persists through the next client navigation', async ({ pag
 	await expect(page).toHaveURL(/\/(?:en)?$/)
 	await expect(page.getByRole('heading', { level: 1 })).toContainText('Every point')
 
-	await page.getByRole('button', { name: 'Explore', exact: true }).click()
-	await page.getByRole('menuitem', { name: 'Market', exact: true }).click()
+	const explore = page.locator('details[data-navigation-group="explore"]')
+	await explore.locator(':scope > summary').click()
+	await explore.getByRole('link', { name: 'Market', exact: true }).click()
 
 	await expect(page).toHaveURL(/\/explore\/market$/)
+	await expect(explore).not.toHaveAttribute('open', '')
 	await expect(page.getByRole('heading', { name: 'Market', exact: true })).toBeVisible()
 })
 
@@ -147,40 +157,56 @@ test('public home has a keyboard skip path and no detectable accessibility viola
 	expect(accessibility.violations).toEqual([])
 })
 
-test('mobile navigation expands a group and closes after navigation', async ({
+test('server-rendered mobile navigation opens and closes after navigation', async ({
 	page
 }) => {
 	await page.setViewportSize({ width: 390, height: 844 })
 	await page.goto('/')
 
-	await page.getByRole('button', { name: 'Open navigation menu' }).click()
-	const dialog = page.getByRole('dialog')
-	await expect(dialog).toBeVisible()
+	const mobileMenu = page.locator('details[data-navigation-mobile]')
+	await mobileMenu.locator(':scope > summary').click()
+	await expect(mobileMenu).toHaveAttribute('open', '')
 	for (const label of ['Live', 'My FPL', 'Competitions', 'Explore']) {
-		await expect(dialog.getByRole('button', { name: label, exact: true })).toBeVisible()
+		await expect(mobileMenu.getByText(label, { exact: true })).toBeVisible()
 	}
 
-	const competitionsGroup = dialog.getByRole('button', { name: 'Competitions' })
-	await competitionsGroup.click()
 	await expect(
-		dialog.getByRole('link', { name: 'My Competitions', exact: true })
+		mobileMenu.getByRole('link', { name: 'My Competitions', exact: true })
 	).toHaveAttribute('href', '/competitions/browse?mine=true')
 	await expect(
-		dialog.getByRole('link', { name: 'Create Competition', exact: true })
+		mobileMenu.getByRole('link', { name: 'Create Competition', exact: true })
 	).toHaveAttribute('href', '/competitions/create')
 
-	const exploreGroup = dialog.getByRole('button', { name: 'Explore' })
-	await exploreGroup.click()
-	await expect(exploreGroup).toHaveAttribute('aria-expanded', 'true')
-	await dialog.getByRole('link', { name: 'Market' }).click()
+	await mobileMenu.getByRole('link', { name: 'Market' }).click()
 
 	await expect(page).toHaveURL(/\/explore\/market$/)
-	await expect(dialog).toBeHidden()
+	await expect(page.locator('details[data-navigation-mobile]')).not.toHaveAttribute(
+		'open',
+		''
+	)
 	expect(
 		await page.evaluate(
 			() => document.documentElement.scrollWidth <= window.innerWidth
 		)
 	).toBe(true)
+})
+
+test('guest mobile login closes its native disclosure before navigation', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 })
+	await page.goto('/')
+
+	const mobileMenu = page.locator('details[data-navigation-mobile]')
+	await mobileMenu.locator(':scope > summary').click()
+	await expect(mobileMenu).toHaveAttribute('open', '')
+	await mobileMenu.getByRole('link', { name: 'Login', exact: true }).click()
+
+	await expect(page).toHaveURL(/\/auth\/login$/)
+	await expect(page.locator('details[data-navigation-mobile]')).not.toHaveAttribute(
+		'open',
+		''
+	)
 })
 
 test('Simplified Chinese mobile navigation uses the same competition vocabulary', async ({
@@ -189,19 +215,18 @@ test('Simplified Chinese mobile navigation uses the same competition vocabulary'
 	await page.setViewportSize({ width: 390, height: 844 })
 	await page.goto('/zh-CN')
 
-	await page.getByRole('button', { name: '打开导航菜单' }).click()
-	const dialog = page.getByRole('dialog')
-	await expect(dialog).toBeVisible()
+	const mobileMenu = page.locator('details[data-navigation-mobile]')
+	await mobileMenu.locator(':scope > summary').click()
+	await expect(mobileMenu).toHaveAttribute('open', '')
 	for (const label of ['实时', '我的 FPL', '赛事', '探索']) {
-		await expect(dialog.getByRole('button', { name: label, exact: true })).toBeVisible()
+		await expect(mobileMenu.getByText(label, { exact: true })).toBeVisible()
 	}
 
-	await dialog.getByRole('button', { name: '赛事', exact: true }).click()
 	await expect(
-		dialog.getByRole('link', { name: '我的赛事', exact: true })
+		mobileMenu.getByRole('link', { name: '我的赛事', exact: true })
 	).toHaveAttribute('href', '/zh-CN/competitions/browse?mine=true')
 	await expect(
-		dialog.getByRole('link', { name: '创建赛事', exact: true })
+		mobileMenu.getByRole('link', { name: '创建赛事', exact: true })
 	).toHaveAttribute('href', '/zh-CN/competitions/create')
 })
 

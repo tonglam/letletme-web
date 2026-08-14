@@ -359,6 +359,122 @@ const server = createServer((request, response) => {
 			return
 		}
 
+		if (query.includes('GetHomePublicBootstrap')) {
+			json(response, 200, {
+				data: {
+					homePublicBootstrap: {
+						context: {
+							season: '2627',
+							revision: '7',
+							sourceCheckedAt: '2026-08-13T09:40:00.000Z',
+							currentEventId: 33,
+							nextEventId: 34,
+							nextDeadlineTime: '2026-08-21T17:30:00.000Z',
+							latestFinishedEventId: 32
+						},
+						fixtures: planningFixturesForEvent(34)
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('GetHomeEventFixtures')) {
+			const eventId = Number(variables.eventId)
+			json(response, 200, {
+				data: {
+					coreEventContext: { season: '2627', revision: '7' },
+					eventFixtures: planningFixturesForEvent(eventId)
+				}
+			})
+			return
+		}
+		if (query.includes('GetHomeGameweek')) {
+			const eventId = Number(variables.eventId) || 33
+			json(response, 200, {
+				data: {
+					homeGameweek: {
+						transfersState: 'AVAILABLE',
+						gameweekDesk: {
+						season: '2627',
+						coreRevision: '7',
+						liveRevision: '8',
+						eventId,
+						lifecycle: 'PROVISIONAL',
+						overviewState: 'AVAILABLE',
+						boardsState: 'AVAILABLE',
+						overview: {
+							highestPoints: 101,
+							mostCaptained: {
+								id: 1,
+								webName: 'Saka',
+								teamShortName: 'ARS'
+							},
+							topScorer: {
+								id: 1,
+								webName: 'Saka',
+								teamShortName: 'ARS',
+								points: 12
+							},
+							mostPlayedChip: { name: 'wildcard', numberPlayed: 5 }
+						},
+							dreamTeam: [
+							{
+								id: 1,
+								webName: 'Saka',
+								position: 'MIDFIELDER',
+								teamShortName: 'ARS',
+								totalPoints: 12
+							}
+							]
+						},
+						topTransfersIn: [],
+						topTransfersOut: []
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('GetHomePersonalDesk')) {
+			let entryId = null
+			try {
+				const encoded = request.headers['x-user-context']
+				const envelope = JSON.parse(
+					Buffer.from(String(encoded), 'base64url').toString('utf8')
+				)
+				entryId = Number(envelope.eid)
+			} catch {}
+			if (entryId === 909090) {
+				json(response, 503, {
+					errors: [{ message: 'Temporary Home personal desk failure' }]
+				})
+				return
+			}
+			json(response, 200, {
+				data: {
+					homePersonalDesk: {
+						state: 'READY',
+						entryName: 'E2E United',
+						playerName: 'Test Manager',
+						overallPoints: 1234,
+						overallRank: 56789,
+						teamValue: 1005,
+						leagueRanks: Array.from({ length: 8 }, (_, index) => ({
+							key: `classic:${314 + index}`,
+							name: index === 0 ? 'E2E Classic' : `E2E League ${index + 1}`,
+							rank: 12 + index,
+							movement:
+								index === 0
+									? { direction: 'UP', places: 6 }
+									: { direction: 'FLAT', places: 0 },
+							tournamentId: index === 1 ? 77 : null
+						})),
+						sourceCheckedAt: '2026-08-14T00:00:00.000Z'
+					}
+				}
+			})
+			return
+		}
+
 		if (query.includes('GetPlayerStatsBootstrap')) {
 			json(response, 200, {
 				data: {
@@ -1038,6 +1154,7 @@ const server = createServer((request, response) => {
 		}
 		if (
 			query.includes('GetMarketPulse') ||
+			query.includes('GetHomeMarketPulse') ||
 			query.includes('GetFixturePlanningSignals')
 		) {
 			json(response, 200, {
@@ -1050,7 +1167,31 @@ const server = createServer((request, response) => {
 						capturedAt: '2026-08-03T09:40:00.000Z',
 						rowCount: 2
 					},
-					marketPulse: {
+					...(query.includes('GetHomeMarketPulse')
+						? { homeMarketPulse: {
+						coverage: {
+							requestedDays: 14,
+							observedDays: 2,
+							firstDate: '2026-08-02',
+							latestDate: '2026-08-03',
+							capturedAt: '2026-08-03T09:40:00.000Z',
+							complete: false,
+							stale: false
+						},
+						mostSelected: [],
+						ownershipMovers: {
+							risers: [{
+								player: marketPlayer,
+								previousSelectedByPercent: 31.5,
+								selectedByPercent: 32.5,
+								change: 1
+							}],
+							fallers: []
+						},
+						availabilityUpdates: [],
+						priceChanges: []
+					} }
+						: { marketPulse: {
 						coverage: {
 							requestedDays: 14,
 							observedDays: 2,
@@ -1078,7 +1219,7 @@ const server = createServer((request, response) => {
 						availabilityHighlights: [],
 						newPlayers: [],
 						priceChanges: []
-					}
+					} })
 				}
 			})
 			return

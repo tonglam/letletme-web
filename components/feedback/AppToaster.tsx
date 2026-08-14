@@ -1,20 +1,38 @@
 'use client'
 
-import dynamic from 'next/dynamic'
 import { usePathname } from '@/i18n/navigation'
+import { lazy, Suspense, useEffect, useState } from 'react'
 
-const Toaster = dynamic(
-	() => import('sonner').then(module => module.Toaster),
-	{ ssr: false },
+const Toaster = lazy(() =>
+	import('sonner').then(module => ({ default: module.Toaster }))
 )
 
-const TOAST_ROUTES = ['/explore/fixtures', '/onboarding', '/profile'] as const
+const TOAST_ROUTES = [
+	'/explore/fixtures',
+	'/explore/market',
+	'/explore/selections',
+	'/live',
+	'/onboarding',
+	'/profile'
+] as const
 
 export function AppToaster() {
 	const pathname = usePathname()
-	const enabled = TOAST_ROUTES.some(route => pathname.startsWith(route))
+	const routeEmitsToasts = TOAST_ROUTES.some(route => pathname.startsWith(route))
+	const [activated, setActivated] = useState(routeEmitsToasts)
 
-	if (!enabled) return null
+	useEffect(() => {
+		if (routeEmitsToasts) setActivated(true)
+	}, [routeEmitsToasts])
 
-	return <Toaster richColors position="top-center" />
+	// Keep an activated toaster mounted across App Router navigation so a toast
+	// emitted immediately before leaving a route is not truncated. A cold Home
+	// load stays inactive and does not request the Sonner chunk.
+	if (!activated) return null
+
+	return (
+		<Suspense fallback={null}>
+			<Toaster richColors position="top-center" />
+		</Suspense>
+	)
 }

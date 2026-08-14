@@ -20,7 +20,9 @@ export function getMarketCoverageMode(coverage: MarketCoverage): MarketCoverageM
 	return 'last-14-days'
 }
 
-export function getMarketTeaserMode(pulse: MarketPulse): MarketTeaserMode {
+export function getMarketTeaserMode(
+	pulse: Pick<MarketPulse, 'priceChanges' | 'ownershipMovers' | 'mostSelected'>
+): MarketTeaserMode {
 	if (pulse.priceChanges.length > 0) return 'price'
 	if (
 		pulse.ownershipMovers.risers.length > 0 ||

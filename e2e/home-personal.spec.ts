@@ -17,7 +17,15 @@ async function createSession(
 	const userId = `home-e2e-user-${suffix}`
 	const sessionId = `home-e2e-session-${suffix}`
 	const token = `home-e2e-token-${suffix}`
-	const verifiedAt = options.entryId ? new Date() : null
+	const entryId =
+		options.entryId === 909090
+			? options.entryId
+			: options.entryId
+				? 1_000_000 +
+					(Number.parseInt(suffix.replaceAll('-', '').slice(0, 8), 16) %
+						1_000_000_000)
+				: null
+	const verifiedAt = entryId ? new Date() : null
 
 	await sql`
 		INSERT INTO bauth."user" (
@@ -35,10 +43,10 @@ async function createSession(
 			'E2E Manager',
 			${`${suffix}@home.e2e.test`},
 			true,
-			${options.entryId ?? null},
+			${entryId},
 			${verifiedAt},
-			${options.entryId ? 'E2E United' : null},
-			${options.entryId ? 'Test Manager' : null}
+			${entryId ? 'E2E United' : null},
+			${entryId ? 'Test Manager' : null}
 		)
 	`
 	await sql`
@@ -81,6 +89,12 @@ async function useCookie(page: Page, cookie: string): Promise<void> {
 test('guest Home renders without reserving or hydrating personal content', async ({
 	page
 }) => {
+	const browserSessionRequests: string[] = []
+	page.on('request', request => {
+		if (request.url().includes('/api/auth/get-session')) {
+			browserSessionRequests.push(request.url())
+		}
+	})
 	const response = await page.goto('/')
 	expect(response?.headers()['cache-control']).toContain('public')
 	await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
@@ -88,6 +102,7 @@ test('guest Home renders without reserving or hydrating personal content', async
 		1
 	)
 	await expect(page.locator('[data-home-personal-ready]')).toHaveCount(0)
+	expect(browserSessionRequests).toEqual([])
 })
 
 test('an invalid session cookie degrades to the public Home instead of 500', async ({
@@ -116,15 +131,13 @@ test('a verified session without an FPL binding gets the existing bind prompt', 
 				.locator('#main-content')
 				.getByText('Link your FPL team', { exact: true })
 		).toBeVisible()
-		await expect(
-			page.locator('#main-content [data-home-personal-ready]')
-		).toBeVisible()
+		await expect(page.locator('#main-content [data-home-personal-ready]')).toHaveCount(0)
 	} finally {
 		await session.cleanup()
 	}
 })
 
-test('a bound user sees the team before independently streamed league ranks', async ({
+test('a bound user receives the complete compact Team Desk in one commit', async ({
 	page
 }) => {
 	const session = await createSession({ entryId: 15702 })
@@ -136,6 +149,141 @@ test('a bound user sees the team before independently streamed league ranks', as
 		await expect(main.getByText('1,234')).toBeVisible()
 		await expect(main.getByText('E2E Classic')).toBeVisible()
 		await expect(main.locator('[data-home-personal-ready]')).toBeVisible()
+		await expect(main.locator('[data-home-league-ranks-ready]')).toBeVisible()
+		await expect(main.getByText('#12')).toBeVisible()
+		await expect(main.getByText('Classic', { exact: true })).toHaveCount(0)
+		await expect(main.getByText(/teams?$/i)).toHaveCount(0)
+		await expect(main.getByText(/^\d+ leagues?$/i)).toHaveCount(0)
+		await expect(main.getByText('E2E League 7', { exact: true })).toHaveCount(0)
+		await expect(
+			main.getByRole('link', { name: /E2E League 2/ })
+		).toHaveAttribute('href', '/my-fpl/competitions?tournamentId=77')
+
+		const expansionRequests: string[] = []
+		page.on('request', request => {
+			if (
+				request.method() === 'GET' &&
+				(request.url().includes('/api/') || request.url().includes('/_next/data/'))
+			) {
+				expansionRequests.push(request.url())
+			}
+		})
+		await main.getByRole('button', { name: 'Show more' }).click()
+		await expect(main.getByText('E2E League 7', { exact: true })).toBeVisible()
+		expect(expansionRequests).toEqual([])
+	} finally {
+		await session.cleanup()
+	}
+})
+
+test('the server-rendered signed navigation logs out through a same-origin POST', async ({
+	page
+}) => {
+	const session = await createSession({ entryId: 15702 })
+	try {
+		await useCookie(page, session.cookie)
+		await page.goto('/')
+		const navigation = page.getByRole('navigation')
+		await navigation.getByText('E2E Manager', { exact: true }).first().click()
+		const logoutResponsePromise = page.waitForResponse(
+			response =>
+				response.url().endsWith('/api/session/logout') &&
+				response.request().method() === 'POST'
+		)
+		await navigation.getByRole('button', { name: 'Sign out' }).click()
+		const logoutResponse = await logoutResponsePromise
+		expect(logoutResponse.status()).toBe(204)
+		await expect(page).toHaveURL(url => url.pathname === '/')
+		expect(
+			(await page.context().cookies()).some(
+				cookie => cookie.name === '__Secure-letletme.session_token'
+			)
+		).toBe(false)
+		await expect(navigation.getByRole('link', { name: 'Login' }).first()).toBeVisible()
+		await expect(page.locator('[data-home-personal-ready]')).toHaveCount(0)
+	} finally {
+		await session.cleanup()
+	}
+})
+
+test('the no-JavaScript sign-out fallback preserves the Chinese locale', async ({
+	browser
+}, testInfo) => {
+	const session = await createSession({ entryId: 15702 })
+	const context = await browser.newContext({
+		baseURL: testInfo.project.use.baseURL,
+		javaScriptEnabled: false
+	})
+	const page = await context.newPage()
+	try {
+		await useCookie(page, session.cookie)
+		await page.goto('/zh-CN')
+		const navigation = page.getByRole('navigation')
+		await navigation.getByText('E2E Manager', { exact: true }).first().click()
+		await navigation.getByRole('button', { name: '退出登录' }).click()
+
+		await expect(page).toHaveURL(url => url.pathname === '/zh-CN')
+		expect(
+			(await context.cookies()).some(
+				cookie => cookie.name === '__Secure-letletme.session_token'
+			)
+		).toBe(false)
+	} finally {
+		await context.close()
+		await session.cleanup()
+	}
+})
+
+test('the signed account disclosure closes on profile navigation', async ({ page }) => {
+	const session = await createSession({ entryId: 15702 })
+	try {
+		await useCookie(page, session.cookie)
+		await page.goto('/')
+		const navigation = page.getByRole('navigation')
+		const accountDisclosure = navigation
+			.locator('details[data-navigation-disclosure]')
+			.filter({ hasText: 'E2E Manager' })
+			.first()
+		await accountDisclosure.locator(':scope > summary').click()
+		await expect(accountDisclosure).toHaveAttribute('open', '')
+		await accountDisclosure
+			.getByRole('link', { name: 'Profile settings', exact: true })
+			.click()
+
+		await expect(page).toHaveURL(/\/profile$/)
+		await expect(accountDisclosure).not.toHaveAttribute('open', '')
+	} finally {
+		await session.cleanup()
+	}
+})
+
+test('a failed navbar sign-out stays in the app with a visible error', async ({
+	page
+}) => {
+	const session = await createSession({ entryId: 15702 })
+	try {
+		await useCookie(page, session.cookie)
+		await page.route('**/api/session/logout', route =>
+			route.fulfill({
+				status: 502,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: 'Sign out failed' })
+			})
+		)
+		await page.goto('/')
+		const navigation = page.getByRole('navigation')
+		await navigation.getByText('E2E Manager', { exact: true }).first().click()
+		await navigation.getByRole('button', { name: 'Sign out' }).click()
+
+		await expect(page).toHaveURL(url => url.pathname === '/')
+		await expect(
+			navigation.getByRole('alert').filter({ hasText: 'Could not sign out' })
+		).toBeVisible()
+		expect(
+			(await page.context().cookies()).some(
+				cookie => cookie.name === '__Secure-letletme.session_token'
+			)
+		).toBe(true)
 	} finally {
 		await session.cleanup()
 	}
@@ -153,12 +301,62 @@ test('personal GraphQL failures preserve the Home shell and unavailable states',
 		await expect(
 			main.getByText('Team data is temporarily unavailable.')
 		).toBeVisible()
-		await expect(
-			main.getByText('League ranks are temporarily unavailable.')
-		).toBeVisible()
+		await expect(main.getByRole('button', { name: 'Try again' })).toBeVisible()
 	} finally {
 		await session.cleanup()
 	}
+})
+
+test('Home league ranks never start an H2H polling request', async ({ page }) => {
+	const session = await createSession({ entryId: 15702 })
+	const clientGraphqlOperations: string[] = []
+	page.on('request', request => {
+		if (!request.url().includes('/api/graphql')) return
+		clientGraphqlOperations.push(request.postData() ?? '')
+	})
+	try {
+		await page.clock.install()
+		await useCookie(page, session.cookie)
+		await page.goto('/')
+		await expect(page.locator('[data-home-league-ranks-ready]')).toBeVisible()
+		await page.clock.fastForward(61_000)
+		expect(
+			clientGraphqlOperations.some(operation =>
+				operation.includes('entryOfficialH2HDesk')
+			)
+		).toBe(false)
+	} finally {
+		await session.cleanup()
+	}
+})
+
+test('Home fixture switching uses one GET and returns to the RSC seed from memory', async ({
+	page
+}) => {
+	await page.goto('/')
+	const fixtureRequests: string[] = []
+	page.on('request', request => {
+		if (request.url().includes('/api/home/fixtures?')) {
+			fixtureRequests.push(request.url())
+		}
+	})
+	const matches = page.locator('[data-home-matches]')
+	await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+	await expect(matches.getByText('GW34', { exact: true })).toBeVisible()
+	const nextResponse = page.waitForResponse(response =>
+		response.url().includes('/api/home/fixtures?eventId=35')
+	)
+	await matches.getByRole('button', { name: 'Next gameweek' }).click()
+	expect((await nextResponse).status()).toBe(200)
+	await expect(matches).toHaveAttribute('data-home-fixtures-event', '35')
+	await expect(matches.getByText('GW35', { exact: true })).toBeVisible()
+	await expect(matches.getByText('No matches scheduled for GW 35.')).toBeVisible()
+
+	await matches.getByRole('button', { name: 'Previous gameweek' }).click()
+	await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
+	await expect(matches.getByText('GW34', { exact: true })).toBeVisible()
+	await page.waitForTimeout(100)
+	expect(fixtureRequests).toHaveLength(1)
 })
 
 test('English and Chinese Home stay accessible without mobile overflow', async ({

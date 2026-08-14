@@ -1,27 +1,17 @@
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
+import { PersonalDeskRetry } from '@/components/home/PersonalDeskRetry'
 import { PersonalLeagueRankList } from '@/components/home/PersonalLeagueRankList'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
 import type { Session } from '@/lib/auth'
-import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import {
-	GET_ENTRY,
-	type EntrySummaryResponse
-} from '@/lib/graphql/operations/entries'
-import {
-	GET_ENTRY_OFFICIAL_H2H_DESK,
-	type EntryOfficialH2HDeskResponse,
-} from '@/lib/graphql/operations/tournaments'
-import {
-	GET_ENTRY_LEAGUES,
-	type EntryLeague,
-	type EntryLeaguesResponse
-} from '@/lib/graphql/operations/leagues'
-import { buildHomeLeagueRankRows } from '@/lib/home-league-ranks'
+	type HomePersonalDesk,
+} from '@/lib/graphql/operations/home'
+import { loadHomePersonalDesk } from '@/lib/home-data-server'
 import { formatCompactNumber, formatInteger } from '@/lib/utils'
 import { ArrowRight } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
-import { Suspense, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 
 function PersonalDeskShell({
 	accent = 'default',
@@ -35,88 +25,10 @@ function PersonalDeskShell({
 
 	return (
 		<article
-			className={`overflow-hidden rounded-xl border bg-card p-4 shadow-sticker-sm sm:p-5 ${ringClass}`}
-			data-home-personal-ready="true"
+			className={`min-h-[25rem] overflow-hidden rounded-xl border bg-card p-4 shadow-sticker-sm sm:p-5 ${ringClass}`}
 		>
 			{children}
 		</article>
-	)
-}
-
-async function LeagueRankSection({
-	desk,
-	entryId,
-	leagues,
-}: {
-	desk: EntryOfficialH2HDeskResponse['entryOfficialH2HDesk']
-	entryId: number
-	leagues: EntryLeague[]
-}) {
-	const t = await getTranslations('Home')
-	const rows = buildHomeLeagueRankRows(leagues, desk)
-
-	return (
-		<div className="mt-4 border-t border-border/50 pt-3">
-			<div className="mb-2 flex items-center justify-between gap-2">
-				<p className="eyebrow">
-					{t('personalLeaguesTitle')}
-				</p>
-				{rows.length > 0 ? (
-					<p className="text-caption tabular-nums text-muted-foreground">
-						{t('personalLeaguesCount', { count: rows.length })}
-					</p>
-				) : null}
-			</div>
-			<PersonalLeagueRankList entryId={entryId} rows={rows} />
-		</div>
-	)
-}
-
-function PersonalDeskLeaguesFallback() {
-	return (
-		<div
-			className="mt-4 space-y-2 border-t border-border/50 pt-3"
-			aria-hidden="true"
-		>
-			<Skeleton className="h-3 w-20" />
-			<Skeleton className="h-11 w-full" />
-			<Skeleton className="h-11 w-full" />
-			<Skeleton className="h-11 w-full" />
-		</div>
-	)
-}
-
-async function PersonalDeskLeagues({
-	deskPromise,
-	entryId,
-	leaguesPromise
-}: {
-	deskPromise: Promise<EntryOfficialH2HDeskResponse | null>
-	entryId: number
-	leaguesPromise: Promise<EntryLeaguesResponse | null>
-}) {
-	const [leaguesData, deskData, t] = await Promise.all([
-		leaguesPromise,
-		deskPromise,
-		getTranslations('Home')
-	])
-
-	if (!leaguesData) {
-		return (
-			<div className="mt-4 border-t border-border/50 pt-3">
-				<p className="text-xs text-muted-foreground">
-					{t('personalLeaguesUnavailable')}
-				</p>
-			</div>
-		)
-	}
-
-	return (
-		<LeagueRankSection
-			desk={deskData?.entryOfficialH2HDesk ?? []}
-			entryId={entryId}
-			leagues={leaguesData.entryLeagues ?? []}
-		/>
 	)
 }
 
@@ -125,7 +37,7 @@ export async function PersonalDeskBindPrompt() {
 
 	return (
 		<PersonalDeskShell accent="warning">
-			<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+			<div className="flex min-h-[21rem] flex-col justify-center gap-4 lg:flex-row lg:items-center lg:justify-between">
 				<div className="min-w-0 max-w-xl">
 					<p className="font-display text-lg font-bold uppercase tracking-wide sm:text-xl">
 						{t('bindEntryTitle')}
@@ -148,125 +60,115 @@ export async function PersonalDeskBindPrompt() {
 	)
 }
 
-/**
- * Bound-entry personal desk: metrics + FPL league ranks (vs last week).
- */
-export async function PersonalDesk({
-	entryId,
-	session
-}: {
-	entryId: number
-	session: Session | null
-}) {
-	let teamName: string | null = null
-	let managerName: string | null = null
-	let overallPoints: number | null = null
-	let overallRank: number | null = null
-	let teamValue: number | null = null
+function PersonalDeskUnavailable({ message }: { message: string }) {
+	return (
+		<PersonalDeskShell>
+			<div
+				className="flex min-h-[21rem] flex-col items-center justify-center gap-4 text-center"
+				data-home-personal-ready="unavailable"
+			>
+				<p className="max-w-md text-sm text-muted-foreground">{message}</p>
+				<PersonalDeskRetry />
+			</div>
+			<RouteReadyMarker
+				name="HOME_TEAM_DESK_READY"
+				audienceHint="session-hint"
+				goodMs={500}
+				poorMs={1_000}
+			/>
+		</PersonalDeskShell>
+	)
+}
 
-	const entryPromise = executeServerQueryWithSession<EntrySummaryResponse>(
-		session,
-		GET_ENTRY,
-		{ id: entryId },
-		{ cache: 'no-store', timeoutMs: 4_000 }
-	).catch(err => {
-		console.error('[home-personal-desk] entry fetch failed:', err)
-		return null
-	})
-	// Start both Home operations before awaiting either one. Entry summary can
-	// stream first while league ranks remain behind their own Suspense boundary.
-	const leaguesPromise = executeServerQueryWithSession<EntryLeaguesResponse>(
-		session,
-		GET_ENTRY_LEAGUES,
-		{ entryId },
-		{ cache: 'no-store', timeoutMs: 4_000 }
-	).catch(err => {
-		console.error('[home-personal-desk] leagues fetch failed:', err)
-		return null
-	})
-	const deskPromise = executeServerQueryWithSession<EntryOfficialH2HDeskResponse>(
-		session,
-		GET_ENTRY_OFFICIAL_H2H_DESK,
-		{ entryId },
-		{ cache: 'no-store', timeoutMs: 4_000 },
-	).catch(err => {
-		console.error('[home-personal-desk] official H2H desk fetch failed:', err)
-		return null
-	})
+function metricTiles(
+	desk: HomePersonalDesk,
+	labels: { points: string; rank: string; value: string }
+) {
+	return [
+		{
+			label: labels.points,
+			value:
+				desk.overallPoints == null ? '—' : formatInteger(desk.overallPoints)
+		},
+		{
+			label: labels.rank,
+			value:
+				desk.overallRank == null ? '—' : formatCompactNumber(desk.overallRank)
+		},
+		{
+			label: labels.value,
+			value:
+				desk.teamValue == null ? '—' : `£${(desk.teamValue / 10).toFixed(1)}m`
+		}
+	] as const
+}
 
-	const [entryData, t] = await Promise.all([
-		entryPromise,
+/** Bound-entry summary and compact league ranks, committed as one RSC result. */
+export async function PersonalDesk({ session }: { session: Session | null }) {
+	const [result, t] = await Promise.all([
+		loadHomePersonalDesk(session),
 		getTranslations('Home')
 	])
 
-	const entry = entryData?.entry
-	if (entry) {
-		teamName = entry.entryName?.trim() || null
-		managerName = entry.playerName?.trim() || null
-		overallPoints =
-			typeof entry.overallPoints === 'number' ? entry.overallPoints : null
-		overallRank =
-			typeof entry.overallRank === 'number' ? entry.overallRank : null
-		teamValue = typeof entry.teamValue === 'number' ? entry.teamValue : null
+	const desk = result?.homePersonalDesk ?? null
+	if (!desk || desk.state === 'UNAVAILABLE') {
+		return <PersonalDeskUnavailable message={t('personalDataUnavailable')} />
 	}
 
-	const metricTiles = [
-		{
-			label: t('personalPointsLabel'),
-			value: overallPoints == null ? '—' : formatInteger(overallPoints)
-		},
-		{
-			label: t('personalRankLabel'),
-			value: overallRank == null ? '—' : formatCompactNumber(overallRank)
-		},
-		{
-			label: t('personalTeamValueLabel'),
-			value: teamValue == null ? '—' : `£${(teamValue / 10).toFixed(1)}m`
-		}
-	] as const
+	const tiles = metricTiles(desk, {
+		points: t('personalPointsLabel'),
+		rank: t('personalRankLabel'),
+		value: t('personalTeamValueLabel')
+	})
+	const readyKey = `${desk.sourceCheckedAt ?? 'unknown'}:${desk.state}`
 
 	return (
 		<PersonalDeskShell>
-			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
-				<div className="min-w-0 sm:max-w-[16rem] sm:shrink-0">
-					<p className="truncate font-display text-xl font-bold uppercase leading-tight tracking-wide">
-						{teamName || t('teamNameFallback')}
-					</p>
-					<p className="mt-1 truncate text-sm text-muted-foreground">
-						<span className="sr-only">{t('personalManagerLabel')}: </span>
-						{managerName || '—'}
-					</p>
+			<div data-home-personal-ready="true" data-home-personal-state={desk.state}>
+				<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+					<div className="min-w-0 sm:max-w-[16rem] sm:shrink-0">
+						<p className="truncate font-display text-xl font-bold uppercase leading-tight tracking-wide">
+							{desk.entryName?.trim() || t('teamNameFallback')}
+						</p>
+						<p className="mt-1 truncate text-sm text-muted-foreground">
+							<span className="sr-only">{t('personalManagerLabel')}: </span>
+							{desk.playerName?.trim() || '—'}
+						</p>
+					</div>
+
+					<div className="grid min-w-0 flex-1 grid-cols-3 gap-px overflow-hidden rounded-lg border border-foreground/10 bg-foreground/10">
+						{tiles.map(tile => (
+							<div
+								key={tile.label}
+								className="bg-background px-2 py-2.5 text-center sm:px-3 sm:py-3"
+							>
+								<p className="font-mono text-base font-semibold tabular-nums tracking-tight text-primary-ink sm:text-lg">
+									{tile.value}
+								</p>
+								<p className="mt-0.5 eyebrow">{tile.label}</p>
+							</div>
+						))}
+					</div>
 				</div>
 
-				<div className="grid min-w-0 flex-1 grid-cols-3 gap-px overflow-hidden rounded-lg border border-foreground/10 bg-foreground/10">
-					{metricTiles.map(tile => (
-						<div
-							key={tile.label}
-							className="bg-background px-2 py-2.5 text-center sm:px-3 sm:py-3"
-						>
-							<p className="font-mono text-base font-semibold tabular-nums tracking-tight text-primary-ink sm:text-lg">
-								{tile.value}
-							</p>
-							<p className="mt-0.5 eyebrow">
-								{tile.label}
-							</p>
-						</div>
-					))}
+				{desk.state === 'STALE' ? (
+					<p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-muted-foreground">
+						{t('personalDataStale')}
+					</p>
+				) : null}
+
+				<div className="mt-4 border-t border-border/50 pt-3">
+					<p className="mb-2 eyebrow">{t('personalLeaguesTitle')}</p>
+					<PersonalLeagueRankList rows={desk.leagueRanks} readyKey={readyKey} />
 				</div>
 			</div>
-			{!entryData?.entry ? (
-				<p className="mt-3 text-xs text-muted-foreground">
-					{t('personalDataUnavailable')}
-				</p>
-			) : null}
-
-			<Suspense fallback={<PersonalDeskLeaguesFallback />}>
-				<PersonalDeskLeagues
-					deskPromise={deskPromise}
-					entryId={entryId}
-					leaguesPromise={leaguesPromise}
-				/>
-			</Suspense>
+			<RouteReadyMarker
+				name="HOME_TEAM_DESK_READY"
+				readyKey={readyKey}
+				audienceHint="session-hint"
+				goodMs={500}
+				poorMs={1_000}
+			/>
 		</PersonalDeskShell>
 	)
 }

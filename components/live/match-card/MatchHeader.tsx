@@ -1,4 +1,9 @@
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { teamCrestSrc } from '@/lib/team-crest'
 import type { Match } from '@/types/match'
 import { Activity, Clock, Eye, User } from 'lucide-react'
@@ -74,6 +79,7 @@ function ManagerSummary({
 			className={`flex items-center gap-1 text-xs text-muted-foreground ${align === 'right' ? 'justify-end' : ''}`}
 		>
 			<User className="size-3.5 shrink-0" aria-hidden="true" />
+			<TooltipProvider>
 			<Tooltip>
 				<TooltipTrigger asChild>
 					<button
@@ -91,6 +97,7 @@ function ManagerSummary({
 					<p>{manager.name}</p>
 				</TooltipContent>
 			</Tooltip>
+			</TooltipProvider>
 			<span className="shrink-0 font-medium tabular-nums text-primary-ink">
 				{t('pointsShort', { points: manager.points })}
 			</span>

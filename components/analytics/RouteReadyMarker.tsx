@@ -22,6 +22,8 @@ type ReadyMetricName =
 	| 'TRENDS_CATALOG_READY'
 	| 'TRENDS_DESK_READY'
 	| 'TRENDS_SWITCH_READY'
+	| 'HOME_TEAM_DESK_READY'
+	| 'HOME_LEAGUE_RANKS_READY'
 	| 'SESSION_STATE_READY'
 
 export function RouteReadyMarker({

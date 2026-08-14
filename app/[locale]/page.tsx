@@ -19,27 +19,19 @@ import {
 	TeamOfTheWeekSectionFallback
 } from '@/components/home/TeamOfTheWeekSection'
 import PageShell from '@/components/layout/PageShell'
-import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
 import { getPageLocale, type LocaleParams } from '@/i18n/page'
 import type { Session } from '@/lib/auth'
+import { computeTimeLeft } from '@/lib/home-deadline'
 import {
-	CacheTag,
-	publicFetchOptions,
-	RevalidateSeconds
-} from '@/lib/cache-policy'
-import { getCurrentAndNextEvents } from '@/lib/events'
-import { executePublicServerQuery } from '@/lib/graphql-server'
-import {
-	GET_EVENT_FIXTURES,
-	GET_EVENT_OVERALL_RESULT,
-	type EventFixturesResponse,
-	type EventOverallResultResponse
-} from '@/lib/graphql/operations/events'
-import homeStats from '@/lib/home-stats'
-import { getVerifiedEntryContext, hasSessionCookieHint } from '@/lib/session'
+	getHomeGameweek,
+	getHomePublicBootstrap,
+	getHomeVerifiedEntryContext
+} from '@/lib/home-data-server'
+import type { HomeFixturesResponse } from '@/lib/graphql/operations/home'
+import { hasSessionCookieHint } from '@/lib/session'
 import { ArrowRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { getTranslations } from 'next-intl/server'
@@ -48,50 +40,6 @@ import { RouteIntlProvider } from '@/components/i18n/RouteIntlProvider'
 import { ROUTE_CLIENT_NAMESPACES } from '@/i18n/client-namespaces'
 
 export const dynamic = 'force-dynamic'
-
-async function safeQuery<T>(
-	query: string,
-	variables?: Record<string, unknown>,
-	options?: Parameters<typeof executePublicServerQuery>[2]
-): Promise<T | null> {
-	try {
-		return await executePublicServerQuery<T>(query, variables, options)
-	} catch (err) {
-		console.error('[page] RSC fetch failed:', err)
-		return null
-	}
-}
-
-function MatchesSectionFallback({ eventId }: { eventId: number | null }) {
-	const t = useTranslations('Home')
-	return (
-		<div className="rounded-xl border bg-card p-4 md:p-6">
-			<div className="mb-6 flex items-center justify-between">
-				<h2 className="flex items-center gap-2 font-display text-xl font-bold uppercase tracking-wide">
-					{t('upcomingMatches')}
-					{eventId !== null && (
-						<GameweekBadge
-							gameweek={eventId}
-							size="sm"
-						/>
-					)}
-				</h2>
-				<div className="flex items-center gap-1">
-					<Skeleton className="h-8 w-8" />
-					<Skeleton className="h-8 w-8" />
-				</div>
-			</div>
-			<div className="flex flex-col gap-4">
-				{[1, 2, 3].map(i => (
-					<Skeleton
-						key={i}
-						className="h-20 w-full"
-					/>
-				))}
-			</div>
-		</div>
-	)
-}
 
 function DeadlineScoreboardFallback() {
 	return (
@@ -110,7 +58,7 @@ function DeadlineScoreboardFallback() {
 function HomePersonalStripFallback() {
 	return (
 		<div
-			className="overflow-hidden rounded-xl border border-foreground/10 bg-card p-4 sm:p-5"
+			className="min-h-[25rem] overflow-hidden rounded-xl border border-foreground/10 bg-card p-4 sm:p-5"
 			aria-hidden="true"
 		>
 			<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
@@ -123,6 +71,12 @@ function HomePersonalStripFallback() {
 					<Skeleton className="h-14" />
 					<Skeleton className="h-14" />
 				</div>
+			</div>
+			<div className="mt-4 space-y-2 border-t border-border/50 pt-3">
+				<Skeleton className="h-3 w-24" />
+				{Array.from({ length: 6 }).map((_, index) => (
+					<Skeleton key={index} className="h-11 w-full" />
+				))}
 			</div>
 		</div>
 	)
@@ -147,10 +101,7 @@ function HomePersonalStrip({
 	}
 
 	return (
-		<PersonalDesk
-			entryId={entryId}
-			session={session}
-		/>
+		<PersonalDesk session={session} />
 	)
 }
 
@@ -162,7 +113,7 @@ async function HomePersonalSlot({
 	// The cookie is a layout hint only. Authorization always comes from the
 	// fresh, cache-bypassing Better Auth session below.
 	if (!hasSessionCookie) return null
-	const { session, entryId } = await getVerifiedEntryContext()
+	const { session, entryId } = await getHomeVerifiedEntryContext()
 	if (!session?.user) return null
 
 	return (
@@ -256,13 +207,26 @@ async function HomeHero() {
 }
 
 async function HomeDeadline() {
-	const eventsData = await getCurrentAndNextEvents()
-	const nextEvent = eventsData?.next[0] ?? null
+	const { bootstrap, bootstrapFailed } = await getHomePublicBootstrap()
+		.then(bootstrap => ({ bootstrap, bootstrapFailed: false }))
+		.catch(error => {
+			console.error('[home-deadline] bootstrap failed', {
+				error: error instanceof Error ? error.name : 'UnknownError'
+			})
+			return { bootstrap: null, bootstrapFailed: true }
+		})
+	const nextEventId = bootstrap?.context.nextEventId ?? null
+	const deadlineTime = bootstrap?.context.nextDeadlineTime ?? null
+	const deadlineMs = deadlineTime ? Date.parse(deadlineTime) : Number.NaN
 
 	return (
 		<DeadlineSection
-			nextEventId={nextEvent?.id ?? null}
-			deadlineTime={nextEvent?.deadlineTime ?? null}
+			nextEventId={nextEventId}
+			deadlineTime={deadlineTime}
+			initialTimeLeft={computeTimeLeft(
+				Number.isFinite(deadlineMs) ? deadlineMs : null
+			)}
+			bootstrapFailed={bootstrapFailed}
 		/>
 	)
 }
@@ -322,29 +286,39 @@ async function HomeTournamentBand() {
 }
 
 async function HomeInsights() {
-	const t = await getTranslations('Home')
-	const [eventsData, overallResultData] = await Promise.all([
-		getCurrentAndNextEvents(),
-		safeQuery<EventOverallResultResponse>(
-			GET_EVENT_OVERALL_RESULT,
-			undefined,
-			publicFetchOptions({
-				revalidate: RevalidateSeconds.homeInsights,
-				tags: [CacheTag.gameweekStats, CacheTag.events]
+	const [t, bootstrap] = await Promise.all([
+		getTranslations('Home'),
+		getHomePublicBootstrap().catch(error => {
+			console.error('[home-insights] bootstrap failed', {
+				error: error instanceof Error ? error.name : 'UnknownError'
 			})
-		)
+			return null
+		})
 	])
-	const currentEventId = eventsData?.current[0]?.id ?? null
-	const nextEventId = eventsData?.next[0]?.id ?? null
-	const overallResult =
-		currentEventId && overallResultData
-			? homeStats.pickEventOverallResult(
-					overallResultData.eventOverallResult,
-					currentEventId
-				)
+	const currentEventId = bootstrap?.context.currentEventId ?? null
+	const nextEventId = bootstrap?.context.nextEventId ?? null
+	const gameweek = currentEventId
+		? await getHomeGameweek(currentEventId).catch(error => {
+				console.error('[home-insights] gameweek failed', {
+					error: error instanceof Error ? error.name : 'UnknownError'
+				})
+				return null
+			})
+		: null
+	const initialFixtures: HomeFixturesResponse | null =
+		bootstrap && nextEventId !== null
+			? {
+					season: bootstrap.context.season,
+					revision: bootstrap.context.revision,
+					eventId: nextEventId,
+					fixtures: bootstrap.fixtures
+				}
 			: null
+	const fixturesSeedKey = initialFixtures
+		? `${initialFixtures.season}:${initialFixtures.revision}:${initialFixtures.eventId}`
+		: `${bootstrap?.context.season ?? 'unknown'}:${bootstrap?.context.revision ?? 'unknown'}:none`
 
-	if (!eventsData) {
+	if (!bootstrap) {
 		return (
 			<section className="py-10">
 				<div className="mx-auto max-w-4xl px-4">
@@ -367,7 +341,11 @@ async function HomeInsights() {
 						<div className="mx-auto max-w-4xl px-4">
 							<StatsSection
 								currentEventId={currentEventId}
-								overallResult={overallResult}
+								overview={
+									gameweek?.gameweekDesk.overviewState === 'AVAILABLE'
+										? gameweek.gameweekDesk.overview
+										: null
+								}
 							/>
 						</div>
 					</section>
@@ -375,18 +353,27 @@ async function HomeInsights() {
 					<section className="border-y bg-secondary/40 py-10">
 						<div className="mx-auto max-w-4xl px-4">
 							<div className="grid gap-8 md:grid-cols-2">
-								<Suspense
-									fallback={
-										<TeamOfTheWeekSectionFallback
-											currentEventId={currentEventId}
-										/>
+								<TeamOfTheWeekSection
+									currentEventId={currentEventId}
+									dreamTeam={
+										gameweek?.gameweekDesk.boardsState === 'AVAILABLE'
+											? gameweek.gameweekDesk.dreamTeam
+											: []
 									}
-								>
-									<TeamOfTheWeekSection currentEventId={currentEventId} />
-								</Suspense>
-								<Suspense fallback={<GameweekStatsSectionFallback />}>
-									<GameweekStatsSection currentEventId={currentEventId} />
-								</Suspense>
+									hasError={
+										gameweek === null ||
+										gameweek.gameweekDesk.boardsState === 'UNAVAILABLE'
+									}
+								/>
+								<GameweekStatsSection
+									currentEventId={currentEventId}
+									transfersIn={gameweek?.topTransfersIn ?? []}
+									transfersOut={gameweek?.topTransfersOut ?? []}
+									hasError={
+										gameweek === null ||
+										gameweek.transfersState === 'UNAVAILABLE'
+									}
+								/>
 							</div>
 						</div>
 					</section>
@@ -409,37 +396,19 @@ async function HomeInsights() {
 
 			<section className="py-10">
 				<div className="mx-auto max-w-4xl px-4">
-					<Suspense fallback={<MatchesSectionFallback eventId={nextEventId} />}>
-						<InitialMatchesSection eventId={nextEventId} />
-					</Suspense>
+					<MatchesSection
+						key={fixturesSeedKey}
+						initialFixtures={initialFixtures}
+					/>
 				</div>
 			</section>
 		</>
 	)
 }
 
-async function InitialMatchesSection({ eventId }: { eventId: number | null }) {
-	const initialFixtures = eventId
-		? await safeQuery<EventFixturesResponse>(
-				GET_EVENT_FIXTURES,
-				{ eventId },
-				publicFetchOptions({
-					revalidate: RevalidateSeconds.publicStats,
-					tags: [CacheTag.fixtures, CacheTag.events]
-				})
-			)
-		: null
-
-	return (
-		<MatchesSection
-			initialEventId={eventId}
-			initialFixtures={initialFixtures}
-		/>
-	)
-}
-
 export default async function Home({ params }: { params: LocaleParams }) {
 	await getPageLocale(params)
+	void getHomePublicBootstrap()
 	return (
 		<RouteIntlProvider namespaces={ROUTE_CLIENT_NAMESPACES.home}>
 			<PageShell>

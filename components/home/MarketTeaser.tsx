@@ -7,12 +7,14 @@ import { Link } from '@/i18n/navigation'
 import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
-	GET_MARKET_PULSE,
 	type MarketAvailabilityUpdate,
 	type MarketOwnershipMover,
-	type MarketPlayer,
-	type MarketPulseResponse,
+	type MarketPlayer
 } from '@/lib/graphql/operations/market'
+import {
+	GET_HOME_MARKET_PULSE,
+	type HomeMarketPulseResponse
+} from '@/lib/graphql/operations/home'
 import {
 	availabilityBodyText,
 	marketAvailabilityStatusKey,
@@ -27,7 +29,6 @@ import { positionBadgeClass } from '@/lib/position-style'
 import { ArrowDownRight, ArrowRight, ArrowUpRight, HeartPulse } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 import { unstable_rethrow } from 'next/navigation'
-import { connection } from 'next/server'
 
 /** Home teaser keeps a short list; full desks live on /explore/market. */
 const HOME_TEASER_LIMIT = 5
@@ -141,13 +142,12 @@ function AvailabilityTeaserList({
 }
 
 export async function MarketTeaser() {
-	await connection()
 	const t = await getTranslations('Market')
-	let response: MarketPulseResponse
+	let response: HomeMarketPulseResponse
 
 	try {
-		response = await executePublicServerQuery<MarketPulseResponse>(
-			GET_MARKET_PULSE,
+		response = await executePublicServerQuery<HomeMarketPulseResponse>(
+			GET_HOME_MARKET_PULSE,
 			{ days: 14 },
 			publicFetchOptions({
 				revalidate: RevalidateSeconds.market,
@@ -160,7 +160,7 @@ export async function MarketTeaser() {
 		return null
 	}
 
-	const pulse = response.marketPulse
+	const pulse = response.homeMarketPulse
 	const teaserMode = getMarketTeaserMode(pulse)
 	const coverageMode = getMarketCoverageMode(pulse.coverage)
 	// Keep rise / fall separate so the desk reads like a transfer board, not a mixed top-3.

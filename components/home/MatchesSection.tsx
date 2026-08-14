@@ -3,29 +3,33 @@
 import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { Card } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { executeQuery } from '@/lib/graphql-client'
-import {
-	GET_EVENT_FIXTURES,
-	type EventFixturesResponse,
-	type Fixture,
-} from '@/lib/graphql/operations/events'
 import { Link } from '@/i18n/navigation'
+import type {
+	HomeFixture,
+	HomeFixturesResponse
+} from '@/lib/graphql/operations/home'
 import { teamCrestSrc } from '@/lib/team-crest'
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import Image from 'next/image'
 import { useLocale, useTranslations } from 'next-intl'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+	startTransition,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type KeyboardEvent
+} from 'react'
 
 const MAX_GAMEWEEK = 38
 
 interface MatchDay {
-	/** Stable YYYY-MM-DD key for tabs (survives timezone/label reformatting). */
 	dateKey: string
 	date: string
 	tabLabel: string
-	matches: {
+	matches: Array<{
+		id: number
 		homeTeam: string
 		homeTeamShort: string
 		awayTeam: string
@@ -34,8 +38,7 @@ interface MatchDay {
 		homeScore: number | null
 		awayScore: number | null
 		finished: boolean
-		started: boolean
-	}[]
+	}>
 }
 
 function pad2(value: number): string {
@@ -49,60 +52,95 @@ function getDateKey(date: Date, useLocalTime: boolean): string {
 	return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`
 }
 
-function formatFixtureDate(date: Date, useLocalTime: boolean, locale: string): string {
+function fixtureDateFormatter(
+	locale: string,
+	useLocalTime: boolean,
+	options: Intl.DateTimeFormatOptions
+) {
 	return new Intl.DateTimeFormat(locale, {
-		weekday: 'long',
-		day: '2-digit',
-		month: 'long',
-		year: 'numeric',
-		...(useLocalTime ? {} : { timeZone: 'UTC' }),
-	}).format(date)
+		...options,
+		...(useLocalTime ? {} : { timeZone: 'UTC' })
+	})
 }
 
-function formatFixtureTab(date: Date, useLocalTime: boolean, locale: string): string {
-	return new Intl.DateTimeFormat(locale, {
-		weekday: 'short',
-		day: '2-digit',
-		month: '2-digit',
-		...(useLocalTime ? {} : { timeZone: 'UTC' }),
-	}).format(date)
-}
+export function parseHomeFixturesToMatchDays(
+	fixtures: HomeFixture[],
+	useLocalTime: boolean,
+	locale: string
+): MatchDay[] {
+	const byDate = new Map<string, HomeFixture[]>()
+	for (const fixture of fixtures) {
+		if (!fixture.kickoffTime) continue
+		const kickoff = new Date(fixture.kickoffTime)
+		if (!Number.isFinite(kickoff.getTime())) continue
+		const dateKey = getDateKey(kickoff, useLocalTime)
+		const dayFixtures = byDate.get(dateKey) ?? []
+		dayFixtures.push(fixture)
+		byDate.set(dateKey, dayFixtures)
+	}
 
-function formatFixtureTime(date: Date, useLocalTime: boolean, locale: string): string {
-	return new Intl.DateTimeFormat(locale, {
-		hour: '2-digit',
-		minute: '2-digit',
-		hourCycle: 'h23',
-		...(useLocalTime ? {} : { timeZone: 'UTC' }),
-	}).format(date)
+	return Array.from(byDate.entries())
+		.sort(([left], [right]) => left.localeCompare(right))
+		.map(([dateKey, dayFixtures]) => {
+			const sorted = [...dayFixtures].sort(
+				(left, right) =>
+					Date.parse(left.kickoffTime ?? '') -
+					Date.parse(right.kickoffTime ?? '')
+			)
+			const firstKickoff = new Date(sorted[0].kickoffTime ?? '')
+			return {
+				dateKey,
+				date: fixtureDateFormatter(locale, useLocalTime, {
+					weekday: 'long',
+					day: '2-digit',
+					month: 'long',
+					year: 'numeric'
+				}).format(firstKickoff),
+				tabLabel: fixtureDateFormatter(locale, useLocalTime, {
+					weekday: 'short',
+					day: '2-digit',
+					month: '2-digit'
+				}).format(firstKickoff),
+				matches: sorted.map(fixture => ({
+					id: fixture.id,
+					homeTeam: fixture.homeTeam.name,
+					homeTeamShort: fixture.homeTeam.shortName,
+					awayTeam: fixture.awayTeam.name,
+					awayTeamShort: fixture.awayTeam.shortName,
+					time: fixtureDateFormatter(locale, useLocalTime, {
+						hour: '2-digit',
+						minute: '2-digit',
+						hourCycle: 'h23'
+					}).format(new Date(fixture.kickoffTime ?? '')),
+					homeScore: fixture.finished ? fixture.homeScore : null,
+					awayScore: fixture.finished ? fixture.awayScore : null,
+					finished: fixture.finished
+				}))
+			}
+		})
 }
 
 function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 	const t = useTranslations('Home')
 	return (
 		<div className="space-y-4 md:space-y-6">
-			{matches.map((match, matchIndex) => (
-				<div
-					key={matchIndex}
-					className="max-w-3xl mx-auto"
-				>
-					<div className="flex flex-col md:flex-row md:items-center bg-accent/50 rounded-lg p-4 hover:bg-accent/70 transition-colors">
-						<div className="grid grid-cols-3 items-center flex-1 gap-4">
-							<div className="flex items-center justify-end space-x-3">
-								<span className="font-semibold text-sm md:text-base text-right">
+			{matches.map((match, index) => (
+				<div key={match.id} className="mx-auto max-w-3xl">
+					<div className="flex flex-col rounded-lg bg-accent/50 p-4 transition-colors hover:bg-accent/70 md:flex-row md:items-center">
+						<div className="grid flex-1 grid-cols-3 items-center gap-4">
+							<div className="flex items-center justify-end gap-3">
+								<span className="text-right text-sm font-semibold md:text-base">
 									<span className="hidden md:inline">{match.homeTeam}</span>
 									<span className="md:hidden">{match.homeTeamShort}</span>
 								</span>
-								<div className="relative w-8 h-8 md:w-10 md:h-10">
-									<Image
-										alt={t('teamLogo', { team: match.homeTeam })}
-										src={teamCrestSrc(match.homeTeamShort)}
-										width={40}
-										height={40}
-										unoptimized
-										className="w-full h-full object-contain"
-									/>
-								</div>
+								<Image
+									alt={t('teamLogo', { team: match.homeTeam })}
+									src={teamCrestSrc(match.homeTeamShort)}
+									width={40}
+									height={40}
+									sizes="(min-width: 768px) 40px, 32px"
+									className="size-8 shrink-0 object-contain md:size-10"
+								/>
 							</div>
 
 							<div className="mx-auto rounded-md border border-electric/25 bg-plum px-4 py-2 text-center font-mono text-sm font-semibold text-electric md:text-base">
@@ -117,202 +155,230 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 								)}
 							</div>
 
-							<div className="flex items-center justify-start space-x-3">
-								<div className="relative w-8 h-8 md:w-10 md:h-10">
-									<Image
-										alt={t('teamLogo', { team: match.awayTeam })}
-										src={teamCrestSrc(match.awayTeamShort)}
-										width={40}
-										height={40}
-										unoptimized
-										className="w-full h-full object-contain"
-									/>
-								</div>
-								<span className="font-semibold text-sm md:text-base">
+							<div className="flex items-center justify-start gap-3">
+								<Image
+									alt={t('teamLogo', { team: match.awayTeam })}
+									src={teamCrestSrc(match.awayTeamShort)}
+									width={40}
+									height={40}
+									sizes="(min-width: 768px) 40px, 32px"
+									className="size-8 shrink-0 object-contain md:size-10"
+								/>
+								<span className="text-sm font-semibold md:text-base">
 									<span className="hidden md:inline">{match.awayTeam}</span>
 									<span className="md:hidden">{match.awayTeamShort}</span>
 								</span>
 							</div>
 						</div>
 					</div>
-					{matchIndex < matches.length - 1 && <Separator className="my-4 md:my-6" />}
+					{index < matches.length - 1 ? (
+						<Separator className="my-4 md:my-6" />
+					) : null}
 				</div>
 			))}
 		</div>
 	)
 }
 
-function parseFixturesToMatchDays(fixtures: Fixture[], useLocalTime: boolean, locale: string): MatchDay[] {
-	const byDate = new Map<string, Fixture[]>()
-	for (const fixture of fixtures) {
-		const dateKey = getDateKey(new Date(fixture.kickoffTime), useLocalTime)
-		if (!byDate.has(dateKey)) byDate.set(dateKey, [])
-		byDate.get(dateKey)!.push(fixture)
-	}
-
-	return Array.from(byDate.entries())
-		.sort(([a], [b]) => a.localeCompare(b))
-		.map(([, dayFixtures]) => {
-			const sorted = dayFixtures.sort(
-				(a, b) =>
-					new Date(a.kickoffTime).getTime() - new Date(b.kickoffTime).getTime(),
-			)
-			const firstKickoff = new Date(sorted[0].kickoffTime)
-			return {
-				dateKey: getDateKey(firstKickoff, useLocalTime),
-				date: formatFixtureDate(firstKickoff, useLocalTime, locale),
-				tabLabel: formatFixtureTab(firstKickoff, useLocalTime, locale),
-				matches: sorted.map((f) => ({
-					homeTeam: f.homeTeam.name,
-					homeTeamShort: f.homeTeam.shortName,
-					awayTeam: f.awayTeam.name,
-					awayTeamShort: f.awayTeam.shortName,
-					time: formatFixtureTime(new Date(f.kickoffTime), useLocalTime, locale),
-					homeScore: f.finished ? (f.homeScore ?? null) : null,
-					awayScore: f.finished ? (f.awayScore ?? null) : null,
-					finished: f.finished,
-					started: f.started,
-				})),
-			}
-		})
+type InFlightRequest = {
+	generation: number
+	controller: AbortController
+	promise: Promise<HomeFixturesResponse>
 }
 
-interface MatchesSectionProps {
-	initialEventId: number | null
-	initialFixtures: EventFixturesResponse | null
-}
-
-export function MatchesSection({ initialEventId, initialFixtures }: MatchesSectionProps) {
+export function MatchesSection({
+	initialFixtures
+}: {
+	initialFixtures: HomeFixturesResponse | null
+}) {
 	const locale = useLocale()
 	const t = useTranslations('Home')
-	// nextEventId acts as the lower navigation boundary (can't go below the current next GW)
-	const [nextEventId] = useState<number | null>(initialEventId)
-	const [selectedEventId, setSelectedEventId] = useState<number | null>(initialEventId)
+	const initialEventId = initialFixtures?.eventId ?? null
+	const [minimumEventId] = useState(initialEventId)
+	const [committed, setCommitted] = useState(initialFixtures)
+	const [pendingEventId, setPendingEventId] = useState<number | null>(null)
+	const [fixtureError, setFixtureError] = useState<string | null>(null)
 	const [useLocalTimezone, setUseLocalTimezone] = useState(false)
-	const [isLoadingFixtures, setIsLoadingFixtures] = useState(false)
-	const [error, setError] = useState<string | null>(null)
 	const [activeDayKey, setActiveDayKey] = useState<string | null>(null)
-
-	// Pre-populate the fixture cache with server-fetched initial data.
-	const cache = useRef<Map<number, Fixture[]>>(
-		initialEventId !== null && initialFixtures
-			? new Map([[initialEventId, initialFixtures.eventFixtures]])
-			: new Map(),
+	const generation = useRef(0)
+	const inFlight = useRef(new Map<number, InFlightRequest>())
+	const revision = useRef(initialFixtures?.revision ?? null)
+	const [cache] = useState(
+		() =>
+			new Map<string, HomeFixturesResponse>(
+				initialFixtures
+					? [
+							[
+								`${initialFixtures.revision}:${initialFixtures.eventId}`,
+								initialFixtures
+							]
+						]
+					: []
+			)
 	)
-
-	const [matchDays, setMatchDays] = useState<MatchDay[]>(() => {
-		if (!initialFixtures || initialEventId === null) return []
-		return parseFixturesToMatchDays(initialFixtures.eventFixtures, false, locale)
-	})
-
-	const fetchFixtures = useCallback(async (eventId: number) => {
-		if (cache.current.has(eventId)) {
-			setMatchDays(parseFixturesToMatchDays(cache.current.get(eventId)!, useLocalTimezone, locale))
-			return
-		}
-		setIsLoadingFixtures(true)
-		setError(null)
-		try {
-			const data = await executeQuery<EventFixturesResponse>(GET_EVENT_FIXTURES, { eventId })
-			cache.current.set(eventId, data.eventFixtures)
-			setMatchDays(parseFixturesToMatchDays(data.eventFixtures, useLocalTimezone, locale))
-		} catch {
-			setError(t('fixturesFailed'))
-		} finally {
-			setIsLoadingFixtures(false)
-		}
-	}, [locale, t, useLocalTimezone])
+	const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+	const errorTimer = useRef<number | null>(null)
 
 	useEffect(() => {
-		const timer = window.setTimeout(() => {
-			setUseLocalTimezone(true)
-			if (selectedEventId !== null && cache.current.has(selectedEventId)) {
-				setMatchDays(parseFixturesToMatchDays(cache.current.get(selectedEventId)!, true, locale))
+		const requests = inFlight.current
+		setUseLocalTimezone(true)
+		return () => {
+			if (errorTimer.current !== null) window.clearTimeout(errorTimer.current)
+			for (const request of Array.from(requests.values())) {
+				request.controller.abort()
 			}
-		}, 0)
-		return () => window.clearTimeout(timer)
-	}, [locale, selectedEventId])
+			requests.clear()
+		}
+	}, [])
 
-	// RSC seed can fail (e.g. Next stream/cache TransformStream glitch) while eventId is known.
-	// Recover by fetching through the browser proxy instead of staying on an empty desk.
-	useEffect(() => {
-		if (selectedEventId === null) return
-		if (cache.current.has(selectedEventId)) return
-		void fetchFixtures(selectedEventId)
-	}, [fetchFixtures, selectedEventId])
+	const clearFixtureError = useCallback(() => {
+		if (errorTimer.current !== null) {
+			window.clearTimeout(errorTimer.current)
+			errorTimer.current = null
+		}
+		setFixtureError(null)
+	}, [])
 
-	const handlePrev = () => {
-		if (selectedEventId === null || nextEventId === null) return
-		if (selectedEventId <= nextEventId) return
-		const prev = selectedEventId - 1
-		setSelectedEventId(prev)
-		void fetchFixtures(prev)
-	}
+	const showFixtureError = useCallback(() => {
+		if (errorTimer.current !== null) window.clearTimeout(errorTimer.current)
+		setFixtureError(t('fixturesFailed'))
+		errorTimer.current = window.setTimeout(() => {
+			setFixtureError(null)
+			errorTimer.current = null
+		}, 5_000)
+	}, [t])
 
-	const handleNext = () => {
-		if (selectedEventId === null) return
-		if (selectedEventId >= MAX_GAMEWEEK) return
-		const next = selectedEventId + 1
-		setSelectedEventId(next)
-		void fetchFixtures(next)
-	}
-
-	const canGoPrev =
-		selectedEventId !== null && nextEventId !== null && selectedEventId > nextEventId
-	const canGoNext = selectedEventId !== null && selectedEventId < MAX_GAMEWEEK
-
-	// Keep the mobile day tab in sync when timezone/locale rebuilds matchDays.
+	const matchDays = useMemo(
+		() =>
+			committed
+				? parseHomeFixturesToMatchDays(
+						committed.fixtures,
+						useLocalTimezone,
+						locale
+					)
+				: [],
+		[committed, locale, useLocalTimezone]
+	)
 	const activeDay =
-		matchDays.find(day => day.dateKey === activeDayKey)?.dateKey ?? matchDays[0]?.dateKey ?? ''
+		matchDays.find(day => day.dateKey === activeDayKey)?.dateKey ??
+		matchDays[0]?.dateKey ??
+		''
+	const intentEventId = pendingEventId ?? committed?.eventId ?? initialEventId
 
-	const header = (
-		<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-			<div>
-				<p className="eyebrow">
-					{t('nextGameweekLabel')}
-				</p>
-				<h2 className="mt-1 flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
-					{t('upcomingMatches')}
-					{selectedEventId !== null && (
-						<GameweekBadge gameweek={selectedEventId} size="sm" />
-					)}
-				</h2>
-			</div>
-			<div className="flex flex-wrap items-center gap-2">
-				<Link
-					href="/live/matches"
-					prefetch={false}
-					className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
-				>
-					{t('viewLiveMatches')}
-					<ArrowRight aria-hidden="true" className="size-4" />
-				</Link>
-				<div className="flex items-center gap-1">
-					<button
-						onClick={handlePrev}
-						disabled={!canGoPrev || isLoadingFixtures}
-						aria-label={t('previousGameweek')}
-						className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
-					>
-						<ChevronLeft className="h-5 w-5" />
-					</button>
-					<button
-						onClick={handleNext}
-						disabled={!canGoNext || isLoadingFixtures}
-						aria-label={t('nextGameweek')}
-						className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
-					>
-						<ChevronRight className="h-5 w-5" />
-					</button>
-				</div>
-			</div>
-		</div>
+	const loadEvent = useCallback(
+		(eventId: number) => {
+			clearFixtureError()
+			const cacheKey = revision.current
+				? `${revision.current}:${eventId}`
+				: null
+		const cached = cacheKey ? cache.get(cacheKey) : null
+			if (cached) {
+				generation.current += 1
+				for (const request of Array.from(inFlight.current.values())) {
+					request.controller.abort()
+				}
+				inFlight.current.clear()
+				setPendingEventId(null)
+				setActiveDayKey(null)
+				startTransition(() => setCommitted(cached))
+				return
+			}
+
+			const existing = inFlight.current.get(eventId)
+			if (existing) {
+				setPendingEventId(eventId)
+				return
+			}
+
+			for (const [requestedEventId, request] of Array.from(
+				inFlight.current.entries()
+			)) {
+				if (requestedEventId !== eventId) {
+					request.controller.abort()
+					inFlight.current.delete(requestedEventId)
+				}
+			}
+
+			const requestGeneration = ++generation.current
+			const controller = new AbortController()
+			setPendingEventId(eventId)
+			const promise = fetch(`/api/home/fixtures?eventId=${eventId}`, {
+				method: 'GET',
+				headers: { Accept: 'application/json' },
+				signal: controller.signal
+			}).then(async response => {
+				if (!response.ok) throw new Error(`Fixtures request failed: ${response.status}`)
+				return (await response.json()) as HomeFixturesResponse
+			})
+			inFlight.current.set(eventId, {
+				generation: requestGeneration,
+				controller,
+				promise
+			})
+
+			void promise
+				.then(next => {
+					if (
+						controller.signal.aborted ||
+						requestGeneration !== generation.current
+					) {
+						return
+					}
+					if (revision.current !== next.revision) {
+						cache.clear()
+						revision.current = next.revision
+					}
+					cache.set(`${next.revision}:${eventId}`, next)
+					setActiveDayKey(null)
+					startTransition(() => setCommitted(next))
+				})
+				.catch(error => {
+					if (controller.signal.aborted) return
+					console.error('[home-fixtures] client switch failed', {
+						error: error instanceof Error ? error.name : 'UnknownError'
+					})
+					showFixtureError()
+				})
+				.finally(() => {
+					const request = inFlight.current.get(eventId)
+					if (request?.generation === requestGeneration) {
+						inFlight.current.delete(eventId)
+					}
+					if (requestGeneration === generation.current) {
+						setPendingEventId(null)
+					}
+				})
+		},
+		[cache, clearFixtureError, showFixtureError]
 	)
 
-	if (!initialEventId) {
+	const navigate = (direction: -1 | 1) => {
+		if (intentEventId === null) return
+		const target = intentEventId + direction
+		if (target < (minimumEventId ?? 1) || target > MAX_GAMEWEEK) return
+		loadEvent(target)
+	}
+
+	const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+		let nextIndex: number | null = null
+		if (event.key === 'ArrowRight') nextIndex = (index + 1) % matchDays.length
+		if (event.key === 'ArrowLeft') {
+			nextIndex = (index - 1 + matchDays.length) % matchDays.length
+		}
+		if (event.key === 'Home') nextIndex = 0
+		if (event.key === 'End') nextIndex = matchDays.length - 1
+		if (nextIndex === null) return
+		event.preventDefault()
+		setActiveDayKey(matchDays[nextIndex]?.dateKey ?? null)
+		tabRefs.current[nextIndex]?.focus()
+	}
+
+	if (initialEventId === null) {
 		return (
 			<Card className="p-4 md:p-6">
-				<h2 className="mb-6 font-display text-xl font-bold uppercase tracking-wide">{t('upcomingMatches')}</h2>
+				<h2 className="mb-6 font-display text-xl font-bold uppercase tracking-wide">
+					{t('upcomingMatches')}
+				</h2>
 				<p className="py-8 text-center text-sm text-muted-foreground">
 					{t('fixturesUnavailable')}
 				</p>
@@ -320,86 +386,133 @@ export function MatchesSection({ initialEventId, initialFixtures }: MatchesSecti
 		)
 	}
 
-	if (error) {
-		return (
-			<Card className="p-4 md:p-6">
-				{header}
-				<p className="py-8 text-center text-sm text-destructive">{error}</p>
-			</Card>
-		)
-	}
-
-	const fixturesContent = isLoadingFixtures ? (
-		<div className="space-y-4">
-			{[1, 2, 3].map((i) => (
-				<Skeleton
-					key={i}
-					className="h-20 w-full"
-				/>
-			))}
-		</div>
-	) : matchDays.length === 0 ? (
-		<p className="text-sm text-muted-foreground text-center py-8">
-			{t('noMatches', { gameweek: selectedEventId ?? '—' })}
-		</p>
-	) : (
-		<>
-			<div className="md:hidden">
-				<Tabs
-					value={activeDay}
-					onValueChange={setActiveDayKey}
-					className="w-full"
-				>
-					<TabsList
-						className="grid mb-4"
-						style={{ gridTemplateColumns: `repeat(${matchDays.length}, 1fr)` }}
-					>
-						{matchDays.map(matchDay => (
-							<TabsTrigger
-								key={matchDay.dateKey}
-								value={matchDay.dateKey}
-								className="text-xs"
-							>
-								{matchDay.tabLabel}
-							</TabsTrigger>
-						))}
-					</TabsList>
-					{matchDays.map(matchDay => (
-						<TabsContent
-							key={matchDay.dateKey}
-							value={matchDay.dateKey}
-						>
-							<MatchList matches={matchDay.matches} />
-						</TabsContent>
-					))}
-				</Tabs>
-			</div>
-
-			<div className="hidden md:block">
-				{matchDays.map((matchDay, dayIndex) => (
-					<div
-						key={matchDay.dateKey}
-						className="max-w-4xl mx-auto"
-					>
-						<h3 className="mb-6 mt-8 text-center font-display text-lg font-semibold uppercase tracking-caps text-muted-foreground">
-							{matchDay.date}
-						</h3>
-						<MatchList matches={matchDay.matches} />
-						{dayIndex < matchDays.length - 1 && <Separator className="mt-8" />}
-					</div>
-				))}
-			</div>
-
-			<div className="mt-6 pt-4 border-t text-center max-w-4xl mx-auto">
-				<p className="text-sm text-muted-foreground">{t('localTimezone')}</p>
-			</div>
-		</>
-	)
+	const committedEventId = committed?.eventId ?? initialEventId
+	const canGoPrev =
+		intentEventId !== null &&
+		minimumEventId !== null &&
+		intentEventId > minimumEventId
+	const canGoNext = intentEventId !== null && intentEventId < MAX_GAMEWEEK
 
 	return (
-		<Card className="p-4 md:p-6">
-			{header}
-			{fixturesContent}
+		<Card
+			data-home-matches
+			data-home-fixtures-event={committedEventId}
+			className="min-h-[29rem] p-4 md:p-6"
+		>
+			{fixtureError ? (
+				<div
+					role="alert"
+					className="fixed inset-x-4 top-20 z-[60] mx-auto max-w-md rounded-lg border border-destructive/35 bg-background px-4 py-3 text-center text-sm font-medium text-destructive shadow-lg"
+				>
+					{fixtureError}
+				</div>
+			) : null}
+			<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+				<div>
+					<p className="eyebrow">{t('nextGameweekLabel')}</p>
+					<h2 className="mt-1 flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
+						{t('upcomingMatches')}
+						<GameweekBadge gameweek={committedEventId} size="sm" />
+					</h2>
+				</div>
+				<div className="flex flex-wrap items-center gap-2">
+					<Link
+						href="/live/matches"
+						prefetch={false}
+						className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
+					>
+						{t('viewLiveMatches')}
+						<ArrowRight aria-hidden="true" className="size-4" />
+					</Link>
+					<div className="flex items-center gap-1" aria-busy={pendingEventId !== null}>
+						<button
+							type="button"
+							onClick={() => navigate(-1)}
+							disabled={!canGoPrev}
+							aria-label={t('previousGameweek')}
+							className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+						>
+							<ChevronLeft aria-hidden="true" className="size-5" />
+						</button>
+						<button
+							type="button"
+							onClick={() => navigate(1)}
+							disabled={!canGoNext}
+							aria-label={t('nextGameweek')}
+							className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+						>
+							<ChevronRight aria-hidden="true" className="size-5" />
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<p className="sr-only" role="status" aria-live="polite">
+				{pendingEventId === null
+					? ''
+					: t('fixturesLoading', { gameweek: pendingEventId })}
+			</p>
+
+			{matchDays.length === 0 ? (
+				<p className="py-8 text-center text-sm text-muted-foreground">
+					{t('noMatches', { gameweek: committedEventId })}
+				</p>
+			) : (
+				<>
+					<div
+						role="tablist"
+						aria-label={t('fixtureDays')}
+						className="mb-5 flex max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1"
+					>
+						{matchDays.map((matchDay, index) => {
+							const selected = matchDay.dateKey === activeDay
+							return (
+								<button
+									key={matchDay.dateKey}
+									ref={node => {
+										tabRefs.current[index] = node
+									}}
+									type="button"
+									role="tab"
+									id={`home-fixture-tab-${matchDay.dateKey}`}
+									aria-controls={`home-fixture-panel-${matchDay.dateKey}`}
+									aria-selected={selected}
+									tabIndex={selected ? 0 : -1}
+									onClick={() => setActiveDayKey(matchDay.dateKey)}
+									onKeyDown={event => onTabKeyDown(event, index)}
+									className={
+										selected
+											? 'min-h-9 shrink-0 rounded-md bg-background px-3 text-xs font-semibold text-foreground shadow-sm'
+											: 'min-h-9 shrink-0 rounded-md px-3 text-xs font-medium text-muted-foreground hover:text-foreground'
+									}
+								>
+									{matchDay.tabLabel}
+								</button>
+							)
+						})}
+					</div>
+					{matchDays.map(matchDay =>
+						matchDay.dateKey === activeDay ? (
+							<div
+								key={matchDay.dateKey}
+								role="tabpanel"
+								id={`home-fixture-panel-${matchDay.dateKey}`}
+								aria-labelledby={`home-fixture-tab-${matchDay.dateKey}`}
+							>
+								<h3 className="mb-5 text-center font-display text-lg font-semibold uppercase tracking-caps text-muted-foreground">
+									{matchDay.date}
+								</h3>
+								<MatchList matches={matchDay.matches} />
+							</div>
+						) : null
+					)}
+					<div className="mx-auto mt-6 max-w-4xl border-t pt-4 text-center">
+						<p className="text-sm text-muted-foreground">
+							{t('localTimezone')}
+						</p>
+					</div>
+				</>
+			)}
 		</Card>
 	)
 }

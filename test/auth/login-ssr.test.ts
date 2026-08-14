@@ -15,5 +15,6 @@ describe('login SSR boundary', () => {
 		assert.match(client, /<form/)
 		assert.match(client, /type="email"/)
 		assert.match(client, /type="password"/)
+		assert.match(client, /router\.push\(destination\)[\s\S]*router\.refresh\(\)/)
 	})
 })
