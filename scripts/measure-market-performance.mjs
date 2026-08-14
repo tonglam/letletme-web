@@ -134,10 +134,9 @@ async function measureRun(browser, profile, index) {
 	}
 
 	let availabilityRequestCount = 0
-	const availabilityDisclosure = page
-		.locator('details')
-		.filter({ hasText: /availability|可用|伤停/i })
-		.first()
+	const availabilityDisclosure = page.locator(
+		'[data-testid="market-availability-disclosure"]'
+	)
 	if (await availabilityDisclosure.count()) {
 		const beforeAvailability = marketRequestCount
 		await availabilityDisclosure.locator('summary').click()
