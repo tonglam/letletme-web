@@ -18,7 +18,10 @@ release_dir=$release_root/$release_sha
 build_root=/opt/letletme/builds
 build_dir=$build_root/$release_sha
 current_link=/opt/letletme/current
-previous_release=$(readlink -f "$current_link" 2>/dev/null || true)
+previous_release=''
+if [[ -L $current_link ]]; then
+	previous_release=$(readlink -e "$current_link" 2>/dev/null || true)
+fi
 activation_started=0
 deployment_succeeded=0
 rollback_in_progress=0
