@@ -4,9 +4,7 @@ import { PersonalLeagueRankList } from '@/components/home/PersonalLeagueRankList
 import { Button } from '@/components/ui/button'
 import { Link } from '@/i18n/navigation'
 import type { Session } from '@/lib/auth'
-import {
-	type HomePersonalDesk,
-} from '@/lib/graphql/operations/home'
+import { type HomePersonalDesk } from '@/lib/graphql/operations/home'
 import { loadHomePersonalDesk } from '@/lib/home-data-server'
 import { formatCompactNumber, formatInteger } from '@/lib/utils'
 import { ArrowRight } from 'lucide-react'
@@ -50,7 +48,10 @@ export async function PersonalDeskBindPrompt() {
 					className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-caps"
 					asChild
 				>
-					<Link href="/onboarding/bind-entry" prefetch={false}>
+					<Link
+						href="/onboarding/bind-entry"
+						prefetch={false}
+					>
 						{t('bindEntryCta')}
 						<ArrowRight data-icon="inline-end" />
 					</Link>
@@ -66,12 +67,14 @@ function PersonalDeskUnavailable({ message }: { message: string }) {
 			<div
 				className="flex min-h-[21rem] flex-col items-center justify-center gap-4 text-center"
 				data-home-personal-ready="unavailable"
+				{...{ elementtiming: 'home-team-desk' }}
 			>
 				<p className="max-w-md text-sm text-muted-foreground">{message}</p>
 				<PersonalDeskRetry />
 			</div>
 			<RouteReadyMarker
 				name="HOME_TEAM_DESK_READY"
+				elementTiming="home-team-desk"
 				audienceHint="session-hint"
 				goodMs={500}
 				poorMs={1_000}
@@ -124,7 +127,11 @@ export async function PersonalDesk({ session }: { session: Session | null }) {
 
 	return (
 		<PersonalDeskShell>
-			<div data-home-personal-ready="true" data-home-personal-state={desk.state}>
+			<div
+				data-home-personal-ready="true"
+				data-home-personal-state={desk.state}
+				{...{ elementtiming: 'home-team-desk' }}
+			>
 				<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
 					<div className="min-w-0 sm:max-w-[16rem] sm:shrink-0">
 						<p className="truncate font-display text-xl font-bold uppercase leading-tight tracking-wide">
@@ -142,7 +149,7 @@ export async function PersonalDesk({ session }: { session: Session | null }) {
 								key={tile.label}
 								className="bg-background px-2 py-2.5 text-center sm:px-3 sm:py-3"
 							>
-								<p className="font-mono text-base font-semibold tabular-nums tracking-tight text-primary-ink sm:text-lg">
+								<p className="font-display text-base font-semibold tabular-nums tracking-tight text-primary-ink sm:text-lg">
 									{tile.value}
 								</p>
 								<p className="mt-0.5 eyebrow">{tile.label}</p>
@@ -159,12 +166,16 @@ export async function PersonalDesk({ session }: { session: Session | null }) {
 
 				<div className="mt-4 border-t border-border/50 pt-3">
 					<p className="mb-2 eyebrow">{t('personalLeaguesTitle')}</p>
-					<PersonalLeagueRankList rows={desk.leagueRanks} readyKey={readyKey} />
+					<PersonalLeagueRankList
+						rows={desk.leagueRanks}
+						readyKey={readyKey}
+					/>
 				</div>
 			</div>
 			<RouteReadyMarker
 				name="HOME_TEAM_DESK_READY"
 				readyKey={readyKey}
+				elementTiming="home-team-desk"
 				audienceHint="session-hint"
 				goodMs={500}
 				poorMs={1_000}

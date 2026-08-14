@@ -4,7 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DeltaBadge } from '@/components/data/DeltaBadge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
-import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
+import {
+	CacheTag,
+	publicFetchOptions,
+	RevalidateSeconds
+} from '@/lib/cache-policy'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	type MarketAvailabilityUpdate,
@@ -18,15 +22,20 @@ import {
 import {
 	availabilityBodyText,
 	marketAvailabilityStatusKey,
-	selectHomeAvailabilityUpdates,
+	selectHomeAvailabilityUpdates
 } from '@/lib/market-availability'
 import {
 	getMarketCoverageMode,
 	getMarketTeaserMode,
-	shortMarketPosition,
+	shortMarketPosition
 } from '@/lib/market'
 import { positionBadgeClass } from '@/lib/position-style'
-import { ArrowDownRight, ArrowRight, ArrowUpRight, HeartPulse } from 'lucide-react'
+import {
+	ArrowDownRight,
+	ArrowRight,
+	ArrowUpRight,
+	HeartPulse
+} from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 import { unstable_rethrow } from 'next/navigation'
 
@@ -38,14 +47,20 @@ const HOME_AVAILABILITY_MIN_OWNED = 1
 
 export function MarketTeaserFallback() {
 	return (
-		<section className="py-10" aria-hidden="true">
+		<section
+			className="py-10"
+			aria-hidden="true"
+		>
 			<div className="mx-auto max-w-4xl px-4">
 				<Card className="rounded-none p-5 sm:rounded-xl sm:p-6">
 					<Skeleton className="mb-3 h-4 w-28" />
 					<Skeleton className="mb-6 h-8 w-52" />
 					<div className="grid gap-3 sm:grid-cols-2">
 						{[1, 2, 3, 4].map(item => (
-							<Skeleton key={item} className="h-16" />
+							<Skeleton
+								key={item}
+								className="h-16"
+							/>
 						))}
 					</div>
 				</Card>
@@ -70,7 +85,7 @@ function TeaserPlayer({ player }: { player: MarketPlayer }) {
 function OwnershipMoverRow({
 	mover,
 	detailLabel,
-	fromToLabel,
+	fromToLabel
 }: {
 	mover: MarketOwnershipMover
 	detailLabel: string
@@ -79,13 +94,17 @@ function OwnershipMoverRow({
 	return (
 		<li className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2">
 			<TeaserPlayer player={mover.player} />
-			<div className="shrink-0 text-right" title={detailLabel}>
+			<div
+				className="shrink-0 text-right"
+				title={detailLabel}
+			>
 				<DeltaBadge
 					value={mover.change}
 					size="md"
+					fontFamily="display"
 					format={value => `${value > 0 ? '+' : ''}${value.toFixed(1)}%`}
 				/>
-				<p className="mt-0.5 font-mono text-caption tabular-nums text-muted-foreground">
+				<p className="mt-0.5 font-display text-caption tabular-nums text-muted-foreground">
 					{fromToLabel}
 				</p>
 			</div>
@@ -95,7 +114,7 @@ function OwnershipMoverRow({
 
 function AvailabilityTeaserList({
 	updates,
-	labels,
+	labels
 }: {
 	updates: MarketAvailabilityUpdate[]
 	labels: {
@@ -117,17 +136,26 @@ function AvailabilityTeaserList({
 			{updates.map(update => {
 				const key = marketAvailabilityStatusKey(update.status)
 				return (
-					<li key={update.player.playerId} className="min-h-14 rounded-lg border px-3 py-2">
+					<li
+						key={update.player.playerId}
+						className="min-h-14 rounded-lg border px-3 py-2"
+					>
 						<div className="flex items-center justify-between gap-3">
 							<div className="min-w-0 flex-1">
 								<div className="flex flex-wrap items-center gap-2">
-									<p className="truncate text-sm font-semibold">{update.player.webName}</p>
-									<Badge variant={key === 'available' ? 'secondary' : 'outline'} className="shrink-0 text-label">
+									<p className="truncate text-sm font-semibold">
+										{update.player.webName}
+									</p>
+									<Badge
+										variant={key === 'available' ? 'secondary' : 'outline'}
+										className="shrink-0 text-label"
+									>
 										{labels.status(key)}
 									</Badge>
 								</div>
 								<p className="mt-0.5 text-xs text-muted-foreground">
-									{update.player.teamShortName} · {update.player.selectedByPercent.toFixed(1)}%
+									{update.player.teamShortName} ·{' '}
+									{update.player.selectedByPercent.toFixed(1)}%
 								</p>
 							</div>
 						</div>
@@ -151,8 +179,8 @@ export async function MarketTeaser() {
 			{ days: 14 },
 			publicFetchOptions({
 				revalidate: RevalidateSeconds.market,
-				tags: [CacheTag.market],
-			}),
+				tags: [CacheTag.market]
+			})
 		)
 	} catch (error) {
 		unstable_rethrow(error)
@@ -173,7 +201,7 @@ export async function MarketTeaser() {
 	const availability = selectHomeAvailabilityUpdates(
 		pulse.availabilityUpdates,
 		HOME_AVAILABILITY_LIMIT,
-		HOME_AVAILABILITY_MIN_OWNED,
+		HOME_AVAILABILITY_MIN_OWNED
 	)
 
 	const coverageCopy =
@@ -184,13 +212,17 @@ export async function MarketTeaser() {
 				: t('homeSinceTracking')
 	const availabilityLabels = {
 		empty: t('noAvailabilityUpdates'),
-		status: (key: ReturnType<typeof marketAvailabilityStatusKey>) => t(`status.${key}`),
+		status: (key: ReturnType<typeof marketAvailabilityStatusKey>) =>
+			t(`status.${key}`),
 		body: (update: MarketAvailabilityUpdate) =>
-			availabilityBodyText(update, key => t(key)),
+			availabilityBodyText(update, key => t(key))
 	}
 
 	return (
-		<section className="py-10" aria-labelledby="home-market-title">
+		<section
+			className="py-10"
+			aria-labelledby="home-market-title"
+		>
 			<div className="mx-auto max-w-4xl px-4">
 				<Card className="overflow-hidden rounded-none border-electric/20 sm:rounded-xl">
 					<CardHeader className="border-b bg-muted/30 pb-5">
@@ -205,13 +237,18 @@ export async function MarketTeaser() {
 										{t('homeTitle')}
 									</h2>
 								</CardTitle>
-								<p className="mt-2 text-sm text-muted-foreground">{coverageCopy}</p>
+								<p className="mt-2 text-sm text-muted-foreground">
+									{coverageCopy}
+								</p>
 							</div>
 							<Button
 								asChild
 								className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-caps"
 							>
-								<Link href="/explore/market" prefetch={false}>
+								<Link
+									href="/explore/market"
+									prefetch={false}
+								>
 									{t('openMarket')} <ArrowRight aria-hidden="true" />
 								</Link>
 							</Button>
@@ -224,11 +261,17 @@ export async function MarketTeaser() {
 							<div className="grid gap-6 md:grid-cols-2">
 								<div>
 									<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-success">
-										<ArrowUpRight aria-hidden="true" className="size-4" />
+										<ArrowUpRight
+											aria-hidden="true"
+											className="size-4"
+										/>
 										{t('homeOwnershipRising')}
 									</h3>
 									{ownershipRisers.length > 0 ? (
-										<ol className="space-y-2" aria-label={t('homeOwnershipRising')}>
+										<ol
+											className="space-y-2"
+											aria-label={t('homeOwnershipRising')}
+										>
 											{ownershipRisers.map(mover => {
 												const from = mover.previousSelectedByPercent.toFixed(1)
 												const to = mover.selectedByPercent.toFixed(1)
@@ -237,7 +280,11 @@ export async function MarketTeaser() {
 													<OwnershipMoverRow
 														key={mover.player.playerId}
 														mover={mover}
-														detailLabel={t('ownershipChangeDetail', { from, to, delta })}
+														detailLabel={t('ownershipChangeDetail', {
+															from,
+															to,
+															delta
+														})}
 														fromToLabel={t('ownershipFromTo', { from, to })}
 													/>
 												)
@@ -251,11 +298,17 @@ export async function MarketTeaser() {
 								</div>
 								<div>
 									<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-destructive">
-										<ArrowDownRight aria-hidden="true" className="size-4" />
+										<ArrowDownRight
+											aria-hidden="true"
+											className="size-4"
+										/>
 										{t('homeOwnershipFalling')}
 									</h3>
 									{ownershipFallers.length > 0 ? (
-										<ol className="space-y-2" aria-label={t('homeOwnershipFalling')}>
+										<ol
+											className="space-y-2"
+											aria-label={t('homeOwnershipFalling')}
+										>
 											{ownershipFallers.map(mover => {
 												const from = mover.previousSelectedByPercent.toFixed(1)
 												const to = mover.selectedByPercent.toFixed(1)
@@ -264,7 +317,11 @@ export async function MarketTeaser() {
 													<OwnershipMoverRow
 														key={mover.player.playerId}
 														mover={mover}
-														detailLabel={t('ownershipChangeDetail', { from, to, delta })}
+														detailLabel={t('ownershipChangeDetail', {
+															from,
+															to,
+															delta
+														})}
 														fromToLabel={t('ownershipFromTo', { from, to })}
 													/>
 												)
@@ -280,10 +337,16 @@ export async function MarketTeaser() {
 
 							<div>
 								<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
-									<HeartPulse aria-hidden="true" className="size-4 text-pink" />
+									<HeartPulse
+										aria-hidden="true"
+										className="size-4 text-pink"
+									/>
 									{t('availabilityWatch')}
 								</h3>
-								<AvailabilityTeaserList updates={availability} labels={availabilityLabels} />
+								<AvailabilityTeaserList
+									updates={availability}
+									labels={availabilityLabels}
+								/>
 							</div>
 						</CardContent>
 					) : (
@@ -303,45 +366,61 @@ export async function MarketTeaser() {
 								) : (
 									<ol className="space-y-2">
 										{teaserMode === 'price' &&
-											pulse.priceChanges.slice(0, HOME_TEASER_LIMIT).map((change, index) => {
-												const rising = change.direction === 'RISE'
-												return (
+											pulse.priceChanges
+												.slice(0, HOME_TEASER_LIMIT)
+												.map((change, index) => {
+													const rising = change.direction === 'RISE'
+													return (
+														<li
+															key={`${change.player.playerId}-${index}`}
+															className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2"
+														>
+															<TeaserPlayer player={change.player} />
+															<DeltaBadge
+																value={
+																	rising
+																		? Math.abs(change.change)
+																		: -Math.abs(change.change)
+																}
+																size="md"
+																fontFamily="display"
+																format={value =>
+																	`${value > 0 ? '+' : '-'}£${(Math.abs(value) / 10).toFixed(1)}m`
+																}
+															/>
+														</li>
+													)
+												})}
+										{teaserMode === 'selected' &&
+											pulse.mostSelected
+												.slice(0, HOME_TEASER_LIMIT)
+												.map(player => (
 													<li
-														key={`${change.player.playerId}-${index}`}
+														key={player.playerId}
 														className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2"
 													>
-														<TeaserPlayer player={change.player} />
-														<DeltaBadge
-															value={rising ? Math.abs(change.change) : -Math.abs(change.change)}
-															size="md"
-															format={value =>
-																`${value > 0 ? '+' : '-'}£${(Math.abs(value) / 10).toFixed(1)}m`
-															}
-														/>
+														<TeaserPlayer player={player} />
+														<span className="font-display text-sm font-bold text-primary-ink">
+															{player.selectedByPercent.toFixed(1)}%
+														</span>
 													</li>
-												)
-											})}
-										{teaserMode === 'selected' &&
-											pulse.mostSelected.slice(0, HOME_TEASER_LIMIT).map(player => (
-												<li
-													key={player.playerId}
-													className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2"
-												>
-													<TeaserPlayer player={player} />
-													<span className="font-mono text-sm font-bold text-primary-ink">
-														{player.selectedByPercent.toFixed(1)}%
-													</span>
-												</li>
-											))}
+												))}
 									</ol>
 								)}
 							</div>
 
 							<div>
 								<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
-									<HeartPulse aria-hidden="true" className="size-4 text-pink" /> {t('availabilityWatch')}
+									<HeartPulse
+										aria-hidden="true"
+										className="size-4 text-pink"
+									/>{' '}
+									{t('availabilityWatch')}
 								</h3>
-								<AvailabilityTeaserList updates={availability} labels={availabilityLabels} />
+								<AvailabilityTeaserList
+									updates={availability}
+									labels={availabilityLabels}
+								/>
 							</div>
 						</CardContent>
 					)}

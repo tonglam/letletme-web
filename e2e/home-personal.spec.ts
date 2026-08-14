@@ -131,7 +131,9 @@ test('a verified session without an FPL binding gets the existing bind prompt', 
 				.locator('#main-content')
 				.getByText('Link your FPL team', { exact: true })
 		).toBeVisible()
-		await expect(page.locator('#main-content [data-home-personal-ready]')).toHaveCount(0)
+		await expect(
+			page.locator('#main-content [data-home-personal-ready]')
+		).toHaveCount(0)
 	} finally {
 		await session.cleanup()
 	}
@@ -154,7 +156,9 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 		await expect(main.getByText('Classic', { exact: true })).toHaveCount(0)
 		await expect(main.getByText(/teams?$/i)).toHaveCount(0)
 		await expect(main.getByText(/^\d+ leagues?$/i)).toHaveCount(0)
-		await expect(main.getByText('E2E League 7', { exact: true })).toHaveCount(0)
+		await expect(
+			main.getByText('E2E League 7', { exact: true })
+		).not.toBeVisible()
 		await expect(
 			main.getByRole('link', { name: /E2E League 2/ })
 		).toHaveAttribute('href', '/my-fpl/competitions?tournamentId=77')
@@ -163,12 +167,16 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 		page.on('request', request => {
 			if (
 				request.method() === 'GET' &&
-				(request.url().includes('/api/') || request.url().includes('/_next/data/'))
+				(request.url().includes('/api/') ||
+					request.url().includes('/_next/data/'))
 			) {
 				expansionRequests.push(request.url())
 			}
 		})
-		await main.getByRole('button', { name: 'Show more' }).click()
+		await main
+			.locator('summary')
+			.filter({ hasText: 'Show more' })
+			.click()
 		await expect(main.getByText('E2E League 7', { exact: true })).toBeVisible()
 		expect(expansionRequests).toEqual([])
 	} finally {
@@ -199,7 +207,9 @@ test('the server-rendered signed navigation logs out through a same-origin POST'
 				cookie => cookie.name === '__Secure-letletme.session_token'
 			)
 		).toBe(false)
-		await expect(navigation.getByRole('link', { name: 'Login' }).first()).toBeVisible()
+		await expect(
+			navigation.getByRole('link', { name: 'Login' }).first()
+		).toBeVisible()
 		await expect(page.locator('[data-home-personal-ready]')).toHaveCount(0)
 	} finally {
 		await session.cleanup()
@@ -234,7 +244,9 @@ test('the no-JavaScript sign-out fallback preserves the Chinese locale', async (
 	}
 })
 
-test('the signed account disclosure closes on profile navigation', async ({ page }) => {
+test('the signed account disclosure closes on profile navigation', async ({
+	page
+}) => {
 	const session = await createSession({ entryId: 15702 })
 	try {
 		await useCookie(page, session.cookie)
@@ -307,7 +319,9 @@ test('personal GraphQL failures preserve the Home shell and unavailable states',
 	}
 })
 
-test('Home league ranks never start an H2H polling request', async ({ page }) => {
+test('Home league ranks never start an H2H polling request', async ({
+	page
+}) => {
 	const session = await createSession({ entryId: 15702 })
 	const clientGraphqlOperations: string[] = []
 	page.on('request', request => {
@@ -350,7 +364,9 @@ test('Home fixture switching uses one GET and returns to the RSC seed from memor
 	expect((await nextResponse).status()).toBe(200)
 	await expect(matches).toHaveAttribute('data-home-fixtures-event', '35')
 	await expect(matches.getByText('GW35', { exact: true })).toBeVisible()
-	await expect(matches.getByText('No matches scheduled for GW 35.')).toBeVisible()
+	await expect(
+		matches.getByText('No matches scheduled for GW 35.')
+	).toBeVisible()
 
 	await matches.getByRole('button', { name: 'Previous gameweek' }).click()
 	await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')

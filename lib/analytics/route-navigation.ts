@@ -6,6 +6,12 @@ type RouteNavigationStart = {
 let currentRouteNavigation: RouteNavigationStart | null = null
 const readyInteractionStarts = new Map<string, number>()
 
+type ElementPaintEntry = {
+	identifier?: string
+	startTime: number
+	renderTime?: number
+}
+
 const normalizePathname = (pathname: string): string => {
 	const normalized = pathname.replace(/\/{2,}/g, '/').replace(/\/$/, '')
 	return normalized || '/'
@@ -19,7 +25,10 @@ export function markRouteReadyStart(
 ): void {
 	const normalizedPathname = normalizePathname(pathname)
 	if (readyKey) {
-		readyInteractionStarts.set(`${normalizedPathname}\u0000${readyKey}`, startedAt)
+		readyInteractionStarts.set(
+			`${normalizedPathname}\u0000${readyKey}`,
+			startedAt
+		)
 		return
 	}
 	currentRouteNavigation = { pathname: normalizedPathname, startedAt }
@@ -45,25 +54,97 @@ function documentNavigationStart(): number {
 	return entry?.startTime ?? 0
 }
 
+/** Returns the latest browser-recorded paint time for one annotated RSC element. */
+export function findElementPaintTime(
+	identifier: string,
+	entries: readonly ElementPaintEntry[],
+	notBefore = 0
+): number | null {
+	let latestPaint: number | null = null
+	for (const entry of entries) {
+		if (entry.identifier !== identifier) continue
+		const paintedAt = entry.renderTime || entry.startTime
+		if (
+			Number.isFinite(paintedAt) &&
+			paintedAt >= notBefore &&
+			(latestPaint === null || paintedAt > latestPaint)
+		) {
+			latestPaint = paintedAt
+		}
+	}
+	return latestPaint
+}
+
+/**
+ * Chromium exposes Element Timing entries only through PerformanceObserver.
+ * Buffered observation also covers a streamed RSC element painted before hydration.
+ */
+export function observeElementPaintTime(
+	identifier: string,
+	notBefore = 0,
+	timeoutMs = 100
+): Promise<number | null> {
+	if (
+		typeof PerformanceObserver === 'undefined' ||
+		!PerformanceObserver.supportedEntryTypes?.includes('element')
+	) {
+		return Promise.resolve(null)
+	}
+
+	return new Promise(resolve => {
+		let settled = false
+		let timer: ReturnType<typeof setTimeout> | undefined
+		const observer = new PerformanceObserver(list => {
+			const paintedAt = findElementPaintTime(
+				identifier,
+				list.getEntries() as ElementPaintEntry[],
+				notBefore
+			)
+			if (paintedAt !== null) finish(paintedAt)
+		})
+		const finish = (paintedAt: number | null) => {
+			if (settled) return
+			settled = true
+			observer.disconnect()
+			if (timer) clearTimeout(timer)
+			resolve(paintedAt)
+		}
+
+		try {
+			observer.observe({ type: 'element', buffered: true })
+			timer = setTimeout(() => finish(null), timeoutMs)
+		} catch {
+			finish(null)
+		}
+	})
+}
+
 /** Elapsed time for this route, not for the lifetime of the browser tab. */
-export function measureRouteReadyDuration(
+export function routeReadyStartTime(
 	pathname: string,
-	now = performance.now(),
 	documentStart = documentNavigationStart(),
 	readyKey?: string
 ): number {
 	if (readyKey) {
 		const interactionKey = `${normalizePathname(pathname)}\u0000${readyKey}`
 		const interactionStart = readyInteractionStarts.get(interactionKey)
-		if (interactionStart !== undefined) {
-			return Math.max(0, now - interactionStart)
-		}
+		if (interactionStart !== undefined) return interactionStart
 	}
-	const routeStart =
-		currentRouteNavigation?.pathname === normalizePathname(pathname)
-			? currentRouteNavigation.startedAt
-			: documentStart
-	return Math.max(0, now - routeStart)
+	return currentRouteNavigation?.pathname === normalizePathname(pathname)
+		? currentRouteNavigation.startedAt
+		: documentStart
+}
+
+export function measureRouteReadyDuration(
+	pathname: string,
+	now = performance.now(),
+	documentStart = documentNavigationStart(),
+	readyKey?: string
+): number {
+	return Math.max(
+		0,
+		now - routeReadyStartTime(pathname, documentStart, readyKey)
+	)
 }
 
 export function resetRouteNavigationStartForTests(): void {

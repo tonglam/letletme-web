@@ -47,8 +47,7 @@ export function DeadlineSection({
 	const effectiveDeadlineTime = effectiveSchedule?.deadlineTime ?? null
 	const effectiveNextEventId = effectiveSchedule?.nextEventId ?? null
 	const deadline = useMemo(
-		() =>
-			effectiveDeadlineTime ? new Date(effectiveDeadlineTime) : null,
+		() => (effectiveDeadlineTime ? new Date(effectiveDeadlineTime) : null),
 		[effectiveDeadlineTime]
 	)
 	const [timeLeft, setTimeLeft] = useState<TimeLeft>(
@@ -102,12 +101,14 @@ export function DeadlineSection({
 				month: 'short',
 				year: 'numeric',
 				hour: '2-digit',
-				minute: '2-digit',
+				minute: '2-digit'
 			}).format(deadline)
 			setFormattedDeadlineDate(formatted)
 			updateTimeLeft()
 		}, 0)
-		const tickTimer = isPageActive ? setInterval(updateTimeLeft, 1000) : undefined
+		const tickTimer = isPageActive
+			? setInterval(updateTimeLeft, 1000)
+			: undefined
 
 		// The revision publisher can advance after the nominal deadline. Keep checking
 		// while the page is active, with an interval capped at five minutes, so a slow
@@ -163,8 +164,15 @@ export function DeadlineSection({
 			<div className="flex items-center justify-between gap-3">
 				<p className="chyron text-electric">{t('nextDeadline')}</p>
 				<span className="inline-flex items-center gap-2">
-					<span className="live-dot" aria-hidden="true" />
-					<GameweekBadge gameweek={effectiveNextEventId} size="sm" />
+					<span
+						className="live-dot"
+						aria-hidden="true"
+					/>
+					<GameweekBadge
+						gameweek={effectiveNextEventId}
+						size="sm"
+						fontFamily="display"
+					/>
 				</span>
 			</div>
 
@@ -174,7 +182,7 @@ export function DeadlineSection({
 
 			{deadlinePassed ? (
 				<div className="mt-6 flex items-center gap-3 rounded-lg border border-pink/40 bg-pink/10 px-4 py-4">
-					<span className="rounded-sm bg-pink px-2 py-0.5 font-mono text-xs font-bold uppercase tracking-caps-wide text-pink-950">
+					<span className="rounded-sm bg-pink px-2 py-0.5 font-display text-xs font-bold uppercase tracking-caps-wide text-pink-950">
 						{t('liveTag')}
 					</span>
 					<p className="font-display text-lg font-semibold uppercase tracking-wide">
@@ -189,11 +197,14 @@ export function DeadlineSection({
 								{ value: timeLeft.days, label: t('days') },
 								{ value: timeLeft.hours, label: t('hours') },
 								{ value: timeLeft.minutes, label: t('minutes') },
-								{ value: timeLeft.seconds, label: t('seconds') },
+								{ value: timeLeft.seconds, label: t('seconds') }
 							] as const
 						).map(({ value, label }) => (
-							<div key={label} className="px-1 py-3 text-center sm:py-4">
-								<div className="font-mono text-3xl font-semibold tabular-nums text-electric text-glow-electric sm:text-4xl">
+							<div
+								key={label}
+								className="px-1 py-3 text-center sm:py-4"
+							>
+								<div className="font-display text-3xl font-semibold tabular-nums text-electric text-glow-electric sm:text-4xl">
 									{String(value).padStart(2, '0')}
 								</div>
 								<div className="mt-1 eyebrow text-fascia-foreground/50">
@@ -203,7 +214,10 @@ export function DeadlineSection({
 						))}
 					</div>
 					<p className="mt-4 flex items-center gap-2 text-xs text-fascia-foreground/60">
-						<CalendarClock aria-hidden="true" className="size-3.5 shrink-0 text-electric" />
+						<CalendarClock
+							aria-hidden="true"
+							className="size-3.5 shrink-0 text-electric"
+						/>
 						{formattedDeadlineDate
 							? t('deadline', { date: formattedDeadlineDate })
 							: null}

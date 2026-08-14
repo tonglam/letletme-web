@@ -12,6 +12,14 @@ const leagueList = readFileSync(
 const matches = readFileSync('components/home/MatchesSection.tsx', 'utf8')
 const deadline = readFileSync('components/home/DeadlineSection.tsx', 'utf8')
 const homeGraphql = readFileSync('lib/graphql/operations/home.ts', 'utf8')
+const routeReadyMarker = readFileSync(
+	'components/analytics/RouteReadyMarker.tsx',
+	'utf8'
+)
+const routeNavigation = readFileSync(
+	'lib/analytics/route-navigation.ts',
+	'utf8'
+)
 const guestNavigation = readFileSync(
 	'components/layout/GuestNavigationActions.tsx',
 	'utf8'
@@ -77,17 +85,36 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(leagueList, /row\.rank/)
 		assert.match(leagueList, /row\.movement\.direction/)
 		assert.match(leagueList, /HOME_LEAGUE_RANKS_READY/)
+		assert.match(leagueList, /elementtiming: 'home-league-ranks'/)
+		assert.match(routeReadyMarker, /observeElementPaintTime/)
+		assert.match(routeReadyMarker, /routeReadyStartTime/)
+		assert.match(
+			routeReadyMarker,
+			/observeElementPaintTime\(elementTiming, routeStartedAt\)/
+		)
+		assert.match(routeNavigation, /PerformanceObserver/)
+		assert.match(routeNavigation, /buffered: true/)
+		assert.match(routeNavigation, /paintedAt >= notBefore/)
+		assert.match(leagueList, /<details/)
+		assert.doesNotMatch(leagueList, /'use client'/)
+		assert.doesNotMatch(leagueList, /useState|useEffect|useMemo/)
 		assert.doesNotMatch(personalDesk, /personalLeaguesCount/)
 		assert.doesNotMatch(leagueList, /visible\.length\}\/\{rows\.length/)
 	})
 
 	it('switches fixtures through one GET route without shipping GraphQL or Radix tabs', () => {
-		assert.match(matches, /fetch\(`\/api\/home\/fixtures\?eventId=\$\{eventId\}`/)
+		assert.match(
+			matches,
+			/fetch\(`\/api\/home\/fixtures\?eventId=\$\{eventId\}`/
+		)
 		assert.match(matches, /new AbortController\(\)/)
 		assert.match(matches, /requestGeneration !== generation\.current/)
 		assert.match(matches, /startTransition\(\(\) => setCommitted/)
 		assert.match(matches, /role="tablist"/)
-		assert.doesNotMatch(matches, /graphql-client|GET_EVENT_FIXTURES|@\/components\/ui\/tabs/)
+		assert.doesNotMatch(
+			matches,
+			/graphql-client|GET_EVENT_FIXTURES|@\/components\/ui\/tabs/
+		)
 		assert.doesNotMatch(matches, /unoptimized/)
 		assert.doesNotMatch(matches, /from 'sonner'/)
 		assert.match(matches, /data-home-fixtures-event=\{committedEventId\}/)
@@ -115,10 +142,7 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(homeGraphql, /transfersState/)
 		assert.doesNotMatch(homeGraphql, /^\s+gameweekDesk\(eventId:/m)
 		assert.doesNotMatch(homeGraphql, /^\s+topTransfersIn\(eventId:/m)
-		assert.match(
-			home,
-			/gameweek\.gameweekDesk\.boardsState === 'UNAVAILABLE'/
-		)
+		assert.match(home, /gameweek\.gameweekDesk\.boardsState === 'UNAVAILABLE'/)
 	})
 
 	it('renders the guest navigation without Better Auth client code', () => {

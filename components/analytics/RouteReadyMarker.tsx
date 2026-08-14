@@ -1,7 +1,11 @@
 'use client'
 
 import { reportBrowserPerformanceMetric } from '@/lib/analytics/client-vitals'
-import { measureRouteReadyDuration } from '@/lib/analytics/route-navigation'
+import {
+	measureRouteReadyDuration,
+	observeElementPaintTime,
+	routeReadyStartTime
+} from '@/lib/analytics/route-navigation'
 import {
 	normalizeMetricPage,
 	type AudienceHint
@@ -35,6 +39,7 @@ export function RouteReadyMarker({
 	name,
 	ready = true,
 	readyKey,
+	elementTiming,
 	audienceHint,
 	goodMs = 2_500,
 	poorMs = 4_000
@@ -42,6 +47,7 @@ export function RouteReadyMarker({
 	name: ReadyMetricName
 	ready?: boolean
 	readyKey?: string
+	elementTiming?: string
 	audienceHint: AudienceHint
 	goodMs?: number
 	poorMs?: number
@@ -53,30 +59,52 @@ export function RouteReadyMarker({
 	useEffect(() => {
 		if (!ready || reportedIdentity.current === readyIdentity) return
 		reportedIdentity.current = readyIdentity
-		const value = measureRouteReadyDuration(
-			pathname,
-			performance.now(),
-			undefined,
-			readyKey
-		)
-		reportBrowserPerformanceMetric(
-			{
-				name,
-				value,
-				delta: value,
-				rating:
-					value <= goodMs
-						? 'good'
-						: value <= poorMs
-							? 'needs-improvement'
-							: 'poor',
-				metricId: `${name.toLowerCase()}-${crypto.randomUUID()}`,
-				page: normalizeMetricPage(pathname),
-				audienceHint
-			},
-			{ always: true }
-		)
-	}, [audienceHint, goodMs, name, pathname, poorMs, ready, readyIdentity, readyKey])
+		let cancelled = false
+		const effectAt = performance.now()
+		const routeStartedAt = routeReadyStartTime(pathname, undefined, readyKey)
+		void (async () => {
+			const paintedAt = elementTiming
+				? await observeElementPaintTime(elementTiming, routeStartedAt)
+				: null
+			if (cancelled) return
+			const value = measureRouteReadyDuration(
+				pathname,
+				paintedAt ?? effectAt,
+				undefined,
+				readyKey
+			)
+			reportBrowserPerformanceMetric(
+				{
+					name,
+					value,
+					delta: value,
+					rating:
+						value <= goodMs
+							? 'good'
+							: value <= poorMs
+								? 'needs-improvement'
+								: 'poor',
+					metricId: `${name.toLowerCase()}-${crypto.randomUUID()}`,
+					page: normalizeMetricPage(pathname),
+					audienceHint
+				},
+				{ always: true }
+			)
+		})()
+		return () => {
+			cancelled = true
+		}
+	}, [
+		audienceHint,
+		elementTiming,
+		goodMs,
+		name,
+		pathname,
+		poorMs,
+		ready,
+		readyIdentity,
+		readyKey
+	])
 
 	return null
 }
