@@ -72,7 +72,7 @@ test('home keeps the four-section vocabulary and competition entry links aligned
 	await header.getByRole('button', { name: /^My FPL/ }).click()
 	await expect(
 		page.getByRole('menuitem', { name: 'Overview', exact: true })
-	).toHaveAttribute('href', '/')
+	).toHaveCount(0)
 	await page.keyboard.press('Escape')
 
 	await expect(
