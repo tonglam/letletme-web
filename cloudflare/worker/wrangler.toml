@@ -1,6 +1,6 @@
 name = "letletme-router"
 main = "src/router.js"
-compatibility_date = "2026-08-15"
+compatibility_date = "2026-08-14"
 workers_dev = false
 routes = [
   { pattern = "letletme.top/*", zone_name = "letletme.top" }
