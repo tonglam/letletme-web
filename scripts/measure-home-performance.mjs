@@ -91,6 +91,18 @@ async function throttleMobile(page) {
 	})
 }
 
+function fixtureRequestTransport(request) {
+	if (request.url().includes('/api/home/fixtures?')) return 'GET_ROUTE'
+	if (
+		request.method() === 'POST' &&
+		request.url().includes('/api/graphql') &&
+		(request.postData() ?? '').includes('GetEventFixtures')
+	) {
+		return 'GRAPHQL_POST'
+	}
+	return null
+}
+
 async function measureColdLoad(browser, profile, index) {
 	const context = await browser.newContext({ viewport: profile.viewport })
 	await applySessionCookie(context)
@@ -237,8 +249,12 @@ async function measureFixtureSwitch(browser, profile) {
 		const page = await context.newPage()
 		if (profile.slow4g) await throttleMobile(page)
 		let fixtureRequests = 0
+		const fixtureTransports = new Set()
 		page.on('request', request => {
-			if (request.url().includes('/api/home/fixtures?')) fixtureRequests += 1
+			const transport = fixtureRequestTransport(request)
+			if (!transport) return
+			fixtureRequests += 1
+			fixtureTransports.add(transport)
 		})
 		await page.goto(baseUrl, { waitUntil: 'networkidle' })
 		const next = page.getByRole('button', { name: /next gameweek|下一轮/i }).last()
@@ -248,6 +264,8 @@ async function measureFixtureSwitch(browser, profile) {
 				reason: 'navigation-unavailable',
 				firstSwitchMs: null,
 				firstSwitchRequests: 0,
+				firstSwitchStatus: null,
+				firstSwitchTransports: [],
 				cachedSwitchMs: null,
 				cachedSwitchRequests: 0
 			}
@@ -257,10 +275,10 @@ async function measureFixtureSwitch(browser, profile) {
 			.last()
 		const startedAt = performance.now()
 		const firstResponse = page.waitForResponse(response =>
-			response.url().includes('/api/home/fixtures?') && response.ok()
+			Boolean(fixtureRequestTransport(response.request()))
 		)
 		await next.click()
-		await firstResponse
+		const fixtureResponse = await firstResponse
 		await page.waitForTimeout(50)
 		const firstSwitchMs = performance.now() - startedAt
 		const requestsAfterFirst = fixtureRequests
@@ -272,6 +290,8 @@ async function measureFixtureSwitch(browser, profile) {
 			available: true,
 			firstSwitchMs: Number(firstSwitchMs.toFixed(2)),
 			firstSwitchRequests: requestsAfterFirst,
+			firstSwitchStatus: fixtureResponse.status(),
+			firstSwitchTransports: Array.from(fixtureTransports),
 			cachedSwitchMs: Number(cachedSwitchMs.toFixed(2)),
 			cachedSwitchRequests: fixtureRequests - requestsAfterFirst
 		}

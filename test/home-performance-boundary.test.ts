@@ -131,5 +131,7 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(measurement, /await response\.arrayBuffer\(\)/)
 		assert.match(measurement, /Cookie: sessionCookie/)
 		assert.match(measurement, /reason: 'navigation-unavailable'/)
+		assert.match(measurement, /GetEventFixtures/)
+		assert.match(measurement, /firstSwitchTransports/)
 	})
 })
