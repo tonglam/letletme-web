@@ -1,0 +1,19 @@
+name = "letletme-router"
+main = "src/router.js"
+compatibility_date = "2026-08-14"
+workers_dev = false
+routes = [
+  { pattern = "letletme.top/*", zone_name = "letletme.top" }
+]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[vars]
+ROUTER_MODE = "pass-through"
+TENCENT_ORIGIN_HOST = "tencent-origin.letletme.top"
+TENCENT_TIMEOUT_MS = "4000"
+VERCEL_ORIGIN_HOST = "letletme-web.vercel.app"
+ROUTER_VERSION = "unreleased"
+EXPECTED_RELEASE_SHA = "unknown"

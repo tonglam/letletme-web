@@ -1,0 +1,10 @@
+[Unit]
+Description=Check LetLetMe Redis replica health
+After=redis-server.service
+Requires=redis-server.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/letletme-redis-monitor
+PrivateTmp=true
+ProtectHome=true

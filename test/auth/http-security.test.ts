@@ -68,6 +68,90 @@ test('ignores spoofed forwarding headers outside verified provider boundaries', 
 	else process.env.BETTER_AUTH_URL = previousAuthUrl
 })
 
+test('trusts one valid Nginx-injected IP only with the local proxy secret', () => {
+	const previousAuthUrl = process.env.BETTER_AUTH_URL
+	const previousProxySecret = process.env.LETLETME_LOCAL_PROXY_SECRET
+	process.env.BETTER_AUTH_URL = 'https://letletme.top'
+	process.env.LETLETME_LOCAL_PROXY_SECRET = 'local-proxy-secret'
+	try {
+		assert.equal(
+			resolveProviderClientIp(
+				new Headers({
+					host: 'letletme.top',
+					'x-letletme-proxy-client-ip': '203.0.113.7',
+					'x-letletme-proxy-secret': 'local-proxy-secret'
+				})
+			),
+			'203.0.113.7'
+		)
+		assert.equal(
+			resolveProviderClientIp(
+				new Headers({
+					host: 'letletme.top',
+					'x-letletme-proxy-client-ip': '203.0.113.7',
+					'x-letletme-proxy-secret': 'wrong-secret'
+				})
+			),
+			'unknown'
+		)
+		assert.equal(
+			resolveProviderClientIp(
+				new Headers({
+					host: 'letletme.top',
+					'x-letletme-proxy-client-ip': '203.0.113.7, 198.51.100.2',
+					'x-letletme-proxy-secret': 'local-proxy-secret'
+				})
+			),
+			'unknown'
+		)
+		assert.equal(
+			resolveProviderClientIp(
+				new Headers({
+					host: 'evil.example',
+					'x-letletme-proxy-client-ip': '203.0.113.7',
+					'x-letletme-proxy-secret': 'local-proxy-secret'
+				})
+			),
+			'unknown'
+		)
+	} finally {
+		if (previousAuthUrl === undefined) delete process.env.BETTER_AUTH_URL
+		else process.env.BETTER_AUTH_URL = previousAuthUrl
+		if (previousProxySecret === undefined) {
+			delete process.env.LETLETME_LOCAL_PROXY_SECRET
+		} else {
+			process.env.LETLETME_LOCAL_PROXY_SECRET = previousProxySecret
+		}
+	}
+})
+
+test('keeps rate-limit subjects distinct for clients behind the Tencent proxy', () => {
+	const previousAuthUrl = process.env.BETTER_AUTH_URL
+	const previousProxySecret = process.env.LETLETME_LOCAL_PROXY_SECRET
+	process.env.BETTER_AUTH_URL = 'https://letletme.top'
+	process.env.LETLETME_LOCAL_PROXY_SECRET = 'local-proxy-secret'
+	try {
+		const headersFor = (ip: string) =>
+			new Headers({
+				host: 'letletme.top',
+				'x-letletme-proxy-client-ip': ip,
+				'x-letletme-proxy-secret': 'local-proxy-secret'
+			})
+		assert.notEqual(
+			buildOpaqueRateLimitSubject(headersFor('203.0.113.7'), 'rate-secret'),
+			buildOpaqueRateLimitSubject(headersFor('198.51.100.2'), 'rate-secret')
+		)
+	} finally {
+		if (previousAuthUrl === undefined) delete process.env.BETTER_AUTH_URL
+		else process.env.BETTER_AUTH_URL = previousAuthUrl
+		if (previousProxySecret === undefined) {
+			delete process.env.LETLETME_LOCAL_PROXY_SECRET
+		} else {
+			process.env.LETLETME_LOCAL_PROXY_SECRET = previousProxySecret
+		}
+	}
+})
+
 test('opaque rate subjects and ingress signatures never contain raw IPs', () => {
 	const headers = new Headers({
 		host: 'preview.vercel.app',

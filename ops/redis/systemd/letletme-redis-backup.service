@@ -1,0 +1,13 @@
+[Unit]
+Description=Create and validate a LetLetMe Redis replica backup
+After=redis-server.service
+Requires=redis-server.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/letletme-redis-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+ProtectHome=true

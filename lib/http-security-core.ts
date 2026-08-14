@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto'
+import { createHmac, timingSafeEqual } from 'crypto'
 import { isIP } from 'net'
 
 export class PayloadTooLargeError extends Error {
@@ -46,6 +46,16 @@ const validIp = (value: string | null): string | null => {
 	return isIP(candidate) ? candidate : null
 }
 
+function secretsEqual(provided: string | null, expected: string): boolean {
+	if (!provided) return false
+	const providedBytes = Buffer.from(provided)
+	const expectedBytes = Buffer.from(expected)
+	return (
+		providedBytes.length === expectedBytes.length &&
+		timingSafeEqual(providedBytes, expectedBytes)
+	)
+}
+
 function expectedProductionHosts(): Set<string> {
 	const hosts = new Set<string>()
 	for (const raw of [
@@ -71,6 +81,19 @@ function expectedProductionHosts(): Set<string> {
 export function resolveProviderClientIp(headers: Headers): string {
 	const host = (headers.get('host') ?? '').toLowerCase()
 	const isExpectedProductionHost = expectedProductionHosts().has(host)
+	const localProxySecret = process.env.LETLETME_LOCAL_PROXY_SECRET
+	if (
+		isExpectedProductionHost &&
+		localProxySecret &&
+		secretsEqual(
+			headers.get('x-letletme-proxy-secret'),
+			localProxySecret
+		)
+	) {
+		return (
+			validIp(headers.get('x-letletme-proxy-client-ip')) ?? 'unknown'
+		)
+	}
 	if (isExpectedProductionHost && headers.has('cf-ray')) {
 		return validIp(headers.get('cf-connecting-ip')) ?? 'unknown'
 	}
