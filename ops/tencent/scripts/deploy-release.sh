@@ -122,7 +122,7 @@ trap cleanup_build EXIT
 	export LETLETME_RELEASE_SHA=$release_sha
 	export NEXT_DEPLOYMENT_ID=${release_sha:0:32}
 	export NODE_OPTIONS=--max-old-space-size=1536
-	npm ci
+	npm ci --include=dev
 	npm run build
 	node -e 'const f=require("./.next/required-server-files.json"); if(f.config.deploymentId !== process.env.LETLETME_RELEASE_SHA.slice(0, 32)) process.exit(1)'
 )
