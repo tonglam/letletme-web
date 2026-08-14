@@ -1,4 +1,4 @@
-import { LiveMatchesClient } from '@/app/live/matches/LiveMatchesClient'
+import { LiveMatchesEntry } from '@/app/live/matches/LiveMatchesEntry'
 import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGameweekUnavailable'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { executePublicServerQuery } from '@/lib/graphql-server'
@@ -70,7 +70,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 	}
 
 	return (
-		<LiveMatchesClient
+		<LiveMatchesEntry
 			initialMatches={matches}
 			initialError={initialError}
 			currentEventId={renderedCurrentEventId}
