@@ -38,12 +38,14 @@ import {
 } from '@/app/data/market/_lib/market-price-share'
 import { Check, Copy, HeartPulse, Search, Sparkles, Users } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
-import dynamic from 'next/dynamic'
 import {
+	lazy,
+	Suspense,
 	useCallback,
 	useEffect,
 	useMemo,
 	useState,
+	type ComponentProps,
 	type ReactNode
 } from 'react'
 import { toast } from 'sonner'
@@ -79,13 +81,21 @@ function formatOwnership(value: number, locale: string): string {
 	return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)}%`
 }
 
-const LazyMarketPlayerLookup = dynamic(
-	() =>
-		import('@/components/data/MarketPlayerLookup').then(
-			module => module.MarketPlayerLookup
-		),
-	{ ssr: false, loading: () => <div className="min-h-11" aria-hidden="true" /> }
+const LazyMarketPlayerLookup = lazy(() =>
+	import('@/components/data/MarketPlayerLookup').then(module => ({
+		default: module.MarketPlayerLookup
+	}))
 )
+
+function LazyMarketPlayerLookupBoundary(
+	props: ComponentProps<typeof LazyMarketPlayerLookup>
+) {
+	return (
+		<Suspense fallback={<div className="min-h-11" aria-hidden="true" />}>
+			<LazyMarketPlayerLookup {...props} />
+		</Suspense>
+	)
+}
 
 export function MarketPlayerLookupLauncher({
 	revision,
@@ -108,7 +118,7 @@ export function MarketPlayerLookupLauncher({
 
 	if (shouldOpen) {
 		return (
-			<LazyMarketPlayerLookup
+			<LazyMarketPlayerLookupBoundary
 				initialSearchTerm={searchTerm}
 				compact={compact && seedPlayer != null}
 				autoFocus={openedByUser || searchTerm.trim().length >= 2}
