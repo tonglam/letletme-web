@@ -39,4 +39,17 @@ describe('route ready navigation clock', () => {
 		markRouteReadyStart('/explore/player-stats', 900)
 		assert.equal(measureRouteReadyDuration('/explore/player-stats', 1_140, 0), 240)
 	})
+
+	it('keeps overlapping in-page interaction clocks independent', () => {
+		markRouteReadyStart('/explore/market', 1_000, 'search:sal')
+		markRouteReadyStart('/explore/market', 1_100, 'history:13')
+		assert.equal(
+			measureRouteReadyDuration('/explore/market', 1_350, 0, 'search:sal'),
+			350
+		)
+		assert.equal(
+			measureRouteReadyDuration('/explore/market', 1_350, 0, 'history:13'),
+			250
+		)
+	})
 })

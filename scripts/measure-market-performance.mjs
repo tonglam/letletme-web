@@ -102,19 +102,25 @@ async function measureRun(browser, profile, index) {
 	})
 
 	const searchInput = page.locator('#market-player-search')
+	const lookupToggle = page.locator('[data-testid="market-open-player-search"]')
+	if (await lookupToggle.count()) {
+		await lookupToggle.first().click()
+		await page.waitForTimeout(50)
+	}
+	if (!(await searchInput.count())) {
+		throw new Error('Market player lookup did not open for measurement')
+	}
 	let searchRequestCount = 0
 	let cachedSearchRequestCount = 0
-	if (await searchInput.count()) {
-		const beforeSearch = marketRequestCount
-		await searchInput.fill('sal')
-		await page.waitForTimeout(900)
-		searchRequestCount = marketRequestCount - beforeSearch
-		await searchInput.fill('')
-		await searchInput.fill('sal')
-		await page.waitForTimeout(500)
-		cachedSearchRequestCount =
-			marketRequestCount - beforeSearch - searchRequestCount
-	}
+	const beforeSearch = marketRequestCount
+	await searchInput.fill('sal')
+	await page.waitForTimeout(900)
+	searchRequestCount = marketRequestCount - beforeSearch
+	await searchInput.fill('')
+	await searchInput.fill('sal')
+	await page.waitForTimeout(500)
+	cachedSearchRequestCount =
+		marketRequestCount - beforeSearch - searchRequestCount
 
 	let historyRequestCount = 0
 	const firstHistoryButton = page

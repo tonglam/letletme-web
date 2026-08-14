@@ -93,7 +93,11 @@ export function MarketPlayerLookup({
 		const timer = window.setTimeout(() => {
 			void Promise.resolve().then(async () => {
 				try {
-					markRouteReadyStart(window.location.pathname)
+					markRouteReadyStart(
+						window.location.pathname,
+						performance.now(),
+						normalizedSearch
+					)
 					setIsSearching(true)
 					setSearchError(null)
 					const data = await fetchMarketJson<{ items?: PlayerDirectoryItem[] }>(
@@ -150,7 +154,11 @@ export function MarketPlayerLookup({
 
 		void Promise.resolve().then(async () => {
 			try {
-				markRouteReadyStart(window.location.pathname)
+				markRouteReadyStart(
+					window.location.pathname,
+					performance.now(),
+					`${selectedPlayer.id}:${revisionParam}`
+				)
 				setIsHistoryLoading(true)
 				setHistoryError(null)
 				const data = await fetchMarketJson<{
@@ -243,6 +251,7 @@ export function MarketPlayerLookup({
 						</p>
 						<Button
 							type="button"
+							data-testid="market-open-player-search"
 							variant="ghost"
 							size="sm"
 							className="h-7 shrink-0 px-2 text-xs"
@@ -467,9 +476,13 @@ export function MarketPlayerLookup({
 												</p>
 											</div>
 											<span
-												className={`font-display text-sm font-semibold tabular-nums ${
-													change > 0 ? 'text-success' : 'text-destructive'
-												}`}
+									className={`font-display text-sm font-semibold tabular-nums ${
+															change > 0
+																? 'text-success'
+																: change < 0
+																	? 'text-destructive'
+																	: 'text-muted-foreground'
+															}`}
 											>
 												{change > 0 ? '+' : ''}£{(change / 10).toFixed(1)}m
 											</span>

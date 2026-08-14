@@ -1,6 +1,8 @@
-import { createHash, createHmac } from 'node:crypto'
 import { executeQuery, GraphQLRequestError } from '@/lib/graphql-client'
-import { buildIngressContextHeaders } from '@/lib/http-security-core'
+import {
+	buildIngressContextHeaders,
+	buildOpaqueRateLimitSubject
+} from '@/lib/http-security-core'
 import {
 	GET_MARKET_AVAILABILITY,
 	GET_MARKET_PLAYERS,
@@ -131,14 +133,7 @@ export function parseMarketAvailabilityParams(
 const ingressHeaders = (request: Request): Record<string, string> => {
 	const secret = process.env.BACKEND_PROXY_SECRET?.trim() ?? ''
 	if (!secret) return {}
-	const opaque = createHash('sha256')
-		.update(
-			`${request.headers.get('x-vercel-id') ?? ''}:${request.headers.get('sec-ch-ua') ?? ''}`
-		)
-		.digest('hex')
-	const subject = createHmac('sha256', secret)
-		.update(`rate-limit:web-market-route:${opaque}`)
-		.digest('hex')
+	const subject = buildOpaqueRateLimitSubject(request.headers, secret)
 	return buildIngressContextHeaders(subject, secret)
 }
 

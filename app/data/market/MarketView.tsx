@@ -690,7 +690,11 @@ function AvailabilityEvidence({
 		setLoading(true)
 		setError(false)
 		try {
-			markRouteReadyStart(window.location.pathname)
+			markRouteReadyStart(
+				window.location.pathname,
+				performance.now(),
+				`${revision}:${days}`
+			)
 			const data = await fetchMarketJson<{
 				items?: MarketAvailabilityUpdate[]
 			}>('availability', {
@@ -875,7 +879,7 @@ export function MarketView({
 					<SectionTitle id="market-player-lookup">
 						{t('lookupTitle')}
 					</SectionTitle>
-					<MarketPlayerLookup />
+					<MarketPlayerLookup revision={revision} />
 				</section>
 			</>
 		)

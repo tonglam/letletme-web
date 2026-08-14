@@ -43,7 +43,12 @@ export function RouteReadyMarker({
 	useEffect(() => {
 		if (!ready || reportedIdentity.current === readyIdentity) return
 		reportedIdentity.current = readyIdentity
-		const value = measureRouteReadyDuration(pathname)
+		const value = measureRouteReadyDuration(
+			pathname,
+			performance.now(),
+			undefined,
+			readyKey
+		)
 		reportBrowserPerformanceMetric(
 			{
 				name,
