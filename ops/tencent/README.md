@@ -69,14 +69,14 @@ Keep two deployable versions of `letletme-router` from the same source:
 ```bash
 release_sha=<full-40-character-git-sha>
 npx wrangler versions upload --config cloudflare/worker/wrangler.toml \
-  --var "ROUTER_MODE=pass-through" \
-  --var "ROUTER_VERSION=pass-through-${release_sha}" \
-  --var "EXPECTED_RELEASE_SHA=${release_sha}" \
+  --var "ROUTER_MODE:pass-through" \
+  --var "ROUTER_VERSION:pass-through-${release_sha}" \
+  --var "EXPECTED_RELEASE_SHA:${release_sha}" \
   --tag "pass-through-${release_sha}"
 npx wrangler versions upload --config cloudflare/worker/wrangler.toml \
-  --var "ROUTER_MODE=cn-router" \
-  --var "ROUTER_VERSION=cn-router-${release_sha}" \
-  --var "EXPECTED_RELEASE_SHA=${release_sha}" \
+  --var "ROUTER_MODE:cn-router" \
+  --var "ROUTER_VERSION:cn-router-${release_sha}" \
+  --var "EXPECTED_RELEASE_SHA:${release_sha}" \
   --tag "cn-router-${release_sha}"
 ```
 

@@ -6,9 +6,6 @@ routes = [
   { pattern = "letletme.top/*", zone_name = "letletme.top" }
 ]
 
-[limits]
-cpu_ms = 10
-
 [observability]
 enabled = true
 head_sampling_rate = 1
