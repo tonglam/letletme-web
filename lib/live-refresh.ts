@@ -1,7 +1,34 @@
-import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
+import type {
+	LiveContextResponse,
+	LiveSnapshotStatus
+} from '@/lib/graphql/operations/live'
 
-export const LIVE_AUTO_REFRESH_SECONDS = 30
+// Context is a cheap ETag probe. Keep it more frequent than the Data live
+// publication poll so a newly published revision is noticed promptly without
+// causing another upstream FPL request.
+export const LIVE_AUTO_REFRESH_SECONDS = 15
 export const LIVE_EXPLAIN_REFRESH_INTERVAL_MS = 10 * 60 * 1000
+
+export function liveContextToSnapshot(
+	context: LiveContextResponse['liveContext']
+): LiveSnapshotStatus | null {
+	if (
+		!context ||
+		context.eventId == null ||
+		!context.revision ||
+		!context.publishedAt ||
+		!context.checkedAt
+	) {
+		return null
+	}
+	return {
+		eventId: context.eventId,
+		revision: context.revision,
+		state: context.state,
+		publishedAt: context.publishedAt,
+		checkedAt: context.checkedAt
+	}
+}
 
 export function shouldPollLiveSnapshot({
 	isPageActive,

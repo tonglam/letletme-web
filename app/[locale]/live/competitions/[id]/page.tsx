@@ -3,7 +3,7 @@ import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getCurrentEventId } from '@/lib/events'
 import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import {
-	GET_TOURNAMENT_LIVE_POINTS,
+	GET_TOURNAMENT_LIVE_DESK,
 	GET_TOURNAMENT_METADATA,
 	GET_TOURNAMENT_OFFICIAL_H2H,
 	GET_TOURNAMENT_PARTICIPANTS,
@@ -123,8 +123,8 @@ export default async function Page({ params, searchParams }: PageProps) {
 					const [loadedParticipants, standings] = await Promise.all([
 						participantsRequest,
 						executeServerQuery<TournamentLivePointsResponse>(
-							GET_TOURNAMENT_LIVE_POINTS,
-							{ tournamentId, eventId: currentEventId },
+							GET_TOURNAMENT_LIVE_DESK,
+							{ entryId, selectedTournamentId: tournamentId, ref: null },
 							{ cache: 'no-store' },
 						),
 					])
