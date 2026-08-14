@@ -67,15 +67,23 @@ before upload.
 Keep two deployable versions of `letletme-router` from the same source:
 
 ```bash
+release_sha=<full-40-character-git-sha>
 npx wrangler versions upload --config cloudflare/worker/wrangler.toml \
-  --var ROUTER_MODE:pass-through --tag pass-through-<sha>
+  --var "ROUTER_MODE=pass-through" \
+  --var "ROUTER_VERSION=pass-through-${release_sha}" \
+  --var "EXPECTED_RELEASE_SHA=${release_sha}" \
+  --tag "pass-through-${release_sha}"
 npx wrangler versions upload --config cloudflare/worker/wrangler.toml \
-  --var ROUTER_MODE:cn-router --tag cn-router-<sha>
+  --var "ROUTER_MODE=cn-router" \
+  --var "ROUTER_VERSION=cn-router-${release_sha}" \
+  --var "EXPECTED_RELEASE_SHA=${release_sha}" \
+  --tag "cn-router-${release_sha}"
 ```
 
-Supply the non-secret vars from `wrangler.toml` on both uploads and set
-`ORIGIN_TOKEN` with `wrangler secret put`. The initial `wrangler deploy` must be
-pass-through, so merely attaching the route cannot move traffic to Tencent.
+Supply the remaining non-secret vars from `wrangler.toml` on both uploads and
+set `ORIGIN_TOKEN` with `wrangler secret put`. The initial `wrangler deploy`
+must be pass-through, so merely attaching the route cannot move traffic to
+Tencent.
 Configure the `letletme.top/*` route as fail-open. Promote pass-through first,
 then split 90/10, 50/50 and 0/100 by version ID. A rollback is a 100%
 deployment of the pass-through version.

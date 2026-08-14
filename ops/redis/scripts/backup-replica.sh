@@ -44,9 +44,13 @@ if ! replica_is_healthy "$replication_before"; then
 fi
 
 tmp=''
+checksum_tmp=''
 cleanup_tmp() {
 	if [[ -n $tmp && -f $tmp ]]; then
 		rm -f -- "$tmp"
+	fi
+	if [[ -n $checksum_tmp && -f $checksum_tmp ]]; then
+		rm -f -- "$checksum_tmp"
 	fi
 }
 trap cleanup_tmp EXIT
@@ -74,6 +78,7 @@ dbfilename=$("${redis_cli[@]}" CONFIG GET dbfilename | tail -n 1)
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 target=$daily_dir/redis-$timestamp.rdb
 tmp=$(mktemp "$daily_dir/.redis-$timestamp.XXXXXX")
+checksum_tmp=$(mktemp "$daily_dir/.redis-$timestamp.XXXXXX.sha256")
 install -o root -g root -m 0600 "$redis_dir/$dbfilename" "$tmp"
 redis-check-rdb "$tmp" >/dev/null
 
@@ -83,10 +88,13 @@ if ! replica_is_healthy "$replication_after_copy"; then
 	exit 1
 fi
 
+checksum=$(sha256sum "$tmp" | awk '{print $1}')
+printf '%s  %s\n' "$checksum" "$(basename "$target")" > "$checksum_tmp"
+chmod 0600 "$checksum_tmp"
+mv -- "$checksum_tmp" "$target.sha256"
+checksum_tmp=''
 mv -- "$tmp" "$target"
 tmp=''
-(cd "$daily_dir" && sha256sum "$(basename "$target")" > "$(basename "$target").sha256")
-chmod 0600 "$target.sha256"
 
 if [[ $(date -u +%u) == 7 ]]; then
 	weekly=$weekly_dir/$(basename "$target")

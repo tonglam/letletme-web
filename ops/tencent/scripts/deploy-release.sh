@@ -18,6 +18,11 @@ release_dir=$release_root/$release_sha
 build_root=/opt/letletme/builds
 build_dir=$build_root/$release_sha
 current_link=/opt/letletme/current
+exec 9>/run/lock/letletme-web-deploy.lock
+if ! flock -n 9; then
+	echo "another Web release is already being deployed" >&2
+	exit 1
+fi
 previous_release=''
 if [[ -L $current_link ]]; then
 	previous_release=$(readlink -e "$current_link" 2>/dev/null || true)
@@ -62,6 +67,12 @@ for required in \
 		exit 1
 	fi
 done
+local_proxy_secret=$(< /etc/letletme/local-proxy-secret)
+configured_proxy_secret=$(sed -n 's/^LETLETME_LOCAL_PROXY_SECRET=//p' /etc/letletme/web.env)
+if [[ -z $local_proxy_secret || $configured_proxy_secret != "$local_proxy_secret" ]]; then
+	echo "web.env local proxy secret does not match /etc/letletme/local-proxy-secret" >&2
+	exit 1
+fi
 if [[ -e $release_dir ]]; then
 	echo "release already exists: $release_dir" >&2
 	exit 1
@@ -109,6 +120,12 @@ rollback_activation() {
 
 cleanup_build() {
 	rollback_activation
+	if [[ $deployment_succeeded != 1 && $release_dir == "$release_root/"* && -d $release_dir && ! -L $release_dir ]]; then
+		current_target_after_rollback=$(readlink -e "$current_link" 2>/dev/null || true)
+		if [[ $current_target_after_rollback != "$release_dir" ]]; then
+			rm -rf -- "$release_dir"
+		fi
+	fi
 	if [[ $build_dir == "$build_root/"* && -d $build_dir ]]; then
 		rm -rf -- "$build_dir"
 	fi
