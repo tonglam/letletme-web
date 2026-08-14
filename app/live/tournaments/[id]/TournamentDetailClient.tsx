@@ -523,6 +523,7 @@ export default function TournamentDetailClient({
 			acceptSnapshot,
 			currentGameweek,
 			currentTournament,
+			entryId,
 			isOfficialH2H,
 			standingsReady,
 			t
@@ -766,7 +767,7 @@ export default function TournamentDetailClient({
 							variant="outline"
 							asChild
 						>
-							<Link href={`/competitions/${currentTournament.id}/manage`}>
+						<Link href={`/competitions/${currentTournament.id}/manage`} prefetch={false}>
 								<Settings aria-hidden="true" /> {t('manage')}
 							</Link>
 						</Button>

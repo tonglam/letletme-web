@@ -1,5 +1,3 @@
-import { RouteIntlProvider } from '@/components/i18n/RouteIntlProvider'
-import { ROUTE_CLIENT_NAMESPACES } from '@/i18n/client-namespaces'
 import type { ReactNode } from 'react'
 
 export default function CompetitionsLayout({
@@ -7,9 +5,5 @@ export default function CompetitionsLayout({
 }: {
 	children: ReactNode
 }) {
-	return (
-		<RouteIntlProvider namespaces={ROUTE_CLIENT_NAMESPACES.competitions}>
-			{children}
-		</RouteIntlProvider>
-	)
+	return children
 }

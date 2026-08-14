@@ -8,11 +8,14 @@ import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import { ArrowLeft, TriangleAlert } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
-import { TournamentDangerZone } from './_components/TournamentDangerZone'
 import { TournamentInformationCard } from './_components/TournamentInformationCard'
 import { TournamentOperationsCard } from './_components/TournamentOperationsCard'
 import { TournamentSettingsCard } from './_components/TournamentSettingsCard'
 import { useTournamentManagement } from './_hooks/useTournamentManagement'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
+import dynamic from 'next/dynamic'
+
+const TournamentDangerZone = dynamic(() => import('./_components/TournamentDangerZone').then(mod => mod.TournamentDangerZone))
 
 export default function ManageTournamentClient({ tournament }: { tournament: EntryTournament }) {
 	const t = useTranslations('TournamentManage')
@@ -20,9 +23,10 @@ export default function ManageTournamentClient({ tournament }: { tournament: Ent
 
 	return (
 		<PageShell>
+			<RouteReadyMarker name="COMPETITIONS_MANAGE_READY" audienceHint="session-hint" goodMs={1000} poorMs={1500} />
 			<div className="container mx-auto max-w-4xl space-y-6 px-4 py-8">
 				<Button variant="ghost" className="-ml-3" asChild>
-					<Link href={`/live/competitions/${tournament.id}`}>
+					<Link href={`/live/competitions/${tournament.id}`} prefetch={false}>
 						<ArrowLeft aria-hidden="true" /> {t('back')}
 					</Link>
 				</Button>

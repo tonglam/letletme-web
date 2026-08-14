@@ -1,4 +1,6 @@
 import ManageTournamentClient from '@/app/tournament/[id]/manage/ManageTournamentClient'
+import { RouteIntlProvider } from '@/components/i18n/RouteIntlProvider'
+import { ROUTE_CLIENT_NAMESPACES } from '@/i18n/client-namespaces'
 import { PageState } from '@/components/feedback/PageState'
 import { Button } from '@/components/ui/button'
 import {
@@ -111,12 +113,9 @@ export default async function Page({ params }: PageProps) {
 	}
 	timing.finish('ready')
 
-	return (
-		<ManageTournamentClient
-			key={`${tournament.updatedAt}:${tournament.rosterSyncStatus ?? 'none'}`}
-			tournament={tournament}
-		/>
-	)
+	return <RouteIntlProvider namespaces={ROUTE_CLIENT_NAMESPACES.competitionsManage}>
+		<ManageTournamentClient key={`${tournament.updatedAt}:${tournament.rosterSyncStatus ?? 'none'}`} tournament={tournament} />
+	</RouteIntlProvider>
 }
 
 async function NoManagementAccess({ id }: { id: string }) {
@@ -130,7 +129,7 @@ async function NoManagementAccess({ id }: { id: string }) {
 			actions={
 				<>
 					<Button asChild>
-						<Link href={`/live/competitions/${id}`}>{t('view')}</Link>
+						<Link href={`/live/competitions/${id}`} prefetch={false}>{t('view')}</Link>
 					</Button>
 					<Button variant="outline" asChild>
 						<Link href="/competitions/browse">{t('back')}</Link>

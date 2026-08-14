@@ -1,4 +1,4 @@
-import { type Session, getAuthorizationSession } from '@/lib/auth'
+import type { Session } from '@/lib/auth'
 import {
 	TournamentApiConfigurationError,
 	TournamentApiTimeoutError,
@@ -11,6 +11,7 @@ import {
 	InvalidTournamentPayloadError
 } from '@/lib/tournament/security'
 import { createTournamentCreationProxyReporter } from '@/lib/tournament/creation-proxy-report'
+import { getVerifiedEntryContext } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
 	const report = createTournamentCreationProxyReporter()
 	let session: Session | null
 	try {
-		session = await getAuthorizationSession(request.headers)
+		session = (await getVerifiedEntryContext()).session
 	} catch {
 		report('unavailable', 503)
 		return NextResponse.json(

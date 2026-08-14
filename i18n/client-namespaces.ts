@@ -28,6 +28,10 @@ export const ROUTE_CLIENT_NAMESPACES = {
 		'LiveTournament',
 		'Filters'
 	],
+	competitionsBrowse: ['TournamentList', 'TournamentLifecycle'],
+	competitionsCreate: ['TournamentCreate', 'TournamentHelp'],
+	competitionsManage: ['TournamentManage', 'TournamentLifecycle'],
+	competitionsDetail: ['LiveTournament', 'TournamentLifecycle'],
 	liveMatches: ['LiveMatches'],
 	livePoints: ['LivePoints'],
 	liveCompetitions: ['LiveTournament', 'TournamentLifecycle'],

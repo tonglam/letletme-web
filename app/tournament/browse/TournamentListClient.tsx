@@ -10,6 +10,7 @@ import {
 	DataTr,
 } from '@/components/data/DataTable'
 import { TournamentLifecycleBadge } from '@/components/tournament/TournamentLifecycleBadge'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import type { EntryTournamentListItem } from '@/lib/graphql/operations/tournaments'
 import { mapTournamentGroupFormat } from '@/lib/tournament/liveTournament'
 import { Badge } from '@/components/ui/badge'
@@ -133,7 +134,11 @@ export default function TournamentListClient({
 	 * Default Classic — most LetLetMe tournaments are copied official Classic leagues.
 	 * Users can switch to All / H2H.
 	 */
-	const [typeFilter, setTypeFilter] = useState<TypeFilter>('CLASSIC')
+	const [typeFilter, setTypeFilter] = useState<TypeFilter>(() =>
+		initialTournaments.some(tournament => tournament.leagueType === 'CLASSIC')
+			? 'CLASSIC'
+			: 'all'
+	)
 	/** Exclusive status chip: all | active | finished | paused */
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 	/** Show only tournaments this entry administers */
@@ -251,6 +256,7 @@ export default function TournamentListClient({
 
 	return (
 		<PageShell>
+			<RouteReadyMarker name="COMPETITIONS_BROWSE_READY" audienceHint="session-hint" goodMs={1000} poorMs={1500} />
 			<div className="container mx-auto max-w-6xl px-4 py-8">
 				<StatsPageHeader
 					eyebrow={t('eyebrow')}
@@ -449,8 +455,9 @@ export default function TournamentListClient({
 												</DropdownMenuTrigger>
 												<DropdownMenuContent align="end">
 													<DropdownMenuItem asChild>
-														<Link
-															href={`/live/competitions/${tournament.id}`}
+																								<Link
+																									href={`/live/competitions/${tournament.id}`}
+																									prefetch={false}
 															className="flex items-center gap-2"
 														>
 															<ExternalLink className="h-4 w-4" />
@@ -459,8 +466,9 @@ export default function TournamentListClient({
 													</DropdownMenuItem>
 													{tournament.adminEntryId === currentEntryId ? (
 														<DropdownMenuItem asChild>
-															<Link
-																href={`/competitions/${tournament.id}/manage`}
+																									<Link
+																										href={`/competitions/${tournament.id}/manage`}
+																										prefetch={false}
 																className="flex items-center gap-2"
 															>
 																<Settings className="h-4 w-4" />

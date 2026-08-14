@@ -10,6 +10,9 @@ const WEB_VITAL_NAMES = new Set([
 	'LIVE_COMPETITIONS_LIST_READY',
 	'LIVE_COMPETITION_BOARD_READY',
 	'LIVE_COMPETITION_SWITCH_READY',
+	'COMPETITIONS_BROWSE_READY',
+	'COMPETITIONS_CREATE_READY',
+	'COMPETITIONS_MANAGE_READY',
 	'GAMEWEEK_CONTENT_READY',
 	'INP',
 	'LCP',
@@ -47,8 +50,11 @@ export type WebVitalPayload = {
 }
 
 const routePatterns: Array<[RegExp, string]> = [
+	[/^\/competitions\/browse$/, '/competitions/browse'],
+	[/^\/competitions\/create$/, '/competitions/create'],
+	[/^\/competitions\/[1-9]\d*\/manage$/, '/competitions/:tournamentId/manage'],
+	[/^\/live\/competitions\/[1-9]\d*$/, '/live/competitions/:tournamentId'],
 	[/^\/live\/points\/[^/]+$/, '/live/points/:entryId'],
-	[/^\/live\/competitions\/[^/]+$/, '/live/competitions/:tournamentId'],
 	[/^\/competitions\/[^/]+\/manage$/, '/competitions/:tournamentId/manage'],
 	[/^\/competitions\/[^/]+$/, '/competitions/:tournamentId']
 ]
