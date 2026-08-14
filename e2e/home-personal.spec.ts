@@ -173,7 +173,10 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 				expansionRequests.push(request.url())
 			}
 		})
-		await main.getByRole('button', { name: 'Show more' }).click()
+		await main
+			.locator('summary')
+			.filter({ hasText: 'Show more' })
+			.click()
 		await expect(main.getByText('E2E League 7', { exact: true })).toBeVisible()
 		expect(expansionRequests).toEqual([])
 	} finally {
