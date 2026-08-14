@@ -457,6 +457,54 @@ export type PlayerStateProfileCoreData = Omit<
 	coverage: Omit<PlayerStateProfileData['coverage'], 'providers'>
 }
 
+/**
+ * The first desk response contains only the fields rendered above the
+ * supporting-data disclosures. The hook expands this into the stable client
+ * shape with explicit empty values, then merges lazy sections as they arrive.
+ */
+export type PlayerStateOverviewData = Pick<
+	PlayerStateProfileData,
+	| 'playerId'
+	| 'teamId'
+	| 'position'
+	| 'season'
+	| 'horizon'
+	| 'asOfEventId'
+	| 'asOf'
+	| 'trend'
+	| 'confidence'
+	| 'fplOnly'
+> & {
+	reasons: Array<Pick<PlayerStateReason, 'code'>>
+	profileRadar:
+		| (Pick<PlayerRadarProfile, 'position' | 'season' | 'asOfEventId'> & {
+				axes: Array<
+					Pick<
+						PlayerRadarAxis,
+						'code' | 'value' | 'percentile' | 'unit' | 'available'
+					>
+				>
+		  })
+		| null
+	dimensions: Array<
+		Pick<
+			PlayerStateDimension,
+			'kind' | 'rating' | 'direction' | 'confidence' | 'reasonCodes'
+		>
+	>
+}
+
+export type PlayerStateProcessData = Pick<
+	PlayerStateProfileData,
+	'playerId'
+> & {
+	dimensions: PlayerStateDimension[]
+	coverage: Pick<
+		PlayerStateProfileData['coverage'],
+		'understatCurrent' | 'mappingStatus' | 'metricCoverage' | 'limitations'
+	>
+}
+
 export type PlayerStateContextData = Pick<
 	PlayerStateProfileData,
 	'playerId' | 'ownBaseline' | 'peerBaseline' | 'careerTrajectory'
@@ -471,6 +519,178 @@ export interface PlayerStateProfileResponse {
 export interface PlayerStateContextResponse {
 	playerStateProfile: PlayerStateContextData | null
 }
+
+export type PlayerStatsDeskSection =
+	'overview' | 'context' | 'recent' | 'production' | 'process'
+
+export type PlayerStatsDeskEntryData = {
+	playerId: number
+	overview?: PlayerDetailData | null
+	state?:
+		| PlayerStateOverviewData
+		| PlayerStateProfileCoreData
+		| PlayerStateContextData
+		| PlayerStateProcessData
+		| null
+	evidence?: Partial<PlayerDetailData> | null
+}
+
+export type PlayerStatsDeskPayloadData = {
+	eventId: number
+	horizon: number
+	entries: PlayerStatsDeskEntryData[]
+}
+
+export interface PlayerStatsDeskGraphQLResponse {
+	playerStatsDesk: PlayerStatsDeskPayloadData
+}
+
+const PLAYER_STATS_DESK_VARIABLES = `
+  ($playerIds: [Int!]!, $eventId: Int!, $horizon: Int = 5)
+`
+
+const PLAYER_STATS_DESK_ARGUMENTS = `
+  (playerIds: $playerIds, eventId: $eventId, horizon: $horizon)
+`
+
+export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
+  query GetPlayerStatsDeskOverview ${PLAYER_STATS_DESK_VARIABLES} {
+    playerStatsDesk ${PLAYER_STATS_DESK_ARGUMENTS} {
+      eventId horizon
+      entries {
+        playerId
+        overview {
+          id webName teamShortName elementType elementTypeName
+          price startPrice
+          statsContext { scope season asOfEventId }
+          availability {
+            status news newsAdded observedDate capturedAt
+            chanceOfPlayingThisRound chanceOfPlayingNextRound stale
+          }
+          totalPoints selectedByPercent form transfersInEvent transfersOutEvent
+          fixtures { id event againstTeamShortName wasHome finished kickoffTime score difficulty bgw }
+        }
+        state {
+          playerId teamId position season horizon asOfEventId asOf
+          trend confidence fplOnly
+          reasons { code }
+          profileRadar {
+            position season asOfEventId
+            axes { code value percentile unit available }
+          }
+          dimensions {
+            kind rating direction confidence reasonCodes
+          }
+        }
+      }
+    }
+  }
+`
+
+export const GET_PLAYER_STATS_DESK_CONTEXT = /* GraphQL */ `
+  query GetPlayerStatsDeskContext ${PLAYER_STATS_DESK_VARIABLES} {
+    playerStatsDesk ${PLAYER_STATS_DESK_ARGUMENTS} {
+      eventId horizon
+      entries {
+        playerId
+        state {
+          playerId
+          ownBaseline {
+            weightedPercentile
+            seasons { season positionPercentile weight }
+          }
+          peerBaseline { position minimumMinutes cohortSize currentPercentile }
+          careerTrajectory {
+            season position minutes fplPositionPercentile understatProcessPercentile expectedMetricsAvailable
+          }
+          coverage {
+            fplCurrent understatCurrent
+            fplHistorySeasons understatHistorySeasons
+            mappingStatus metricCoverage limitations
+            providers {
+              provider scope season revision asOf freshnessSeconds stale available
+            }
+          }
+        }
+      }
+    }
+  }
+`
+
+function playerStatsDeskEvidenceQuery(
+	operationName: string,
+	fields: string
+): string {
+	return `
+  query ${operationName} ${PLAYER_STATS_DESK_VARIABLES} {
+    playerStatsDesk ${PLAYER_STATS_DESK_ARGUMENTS} {
+      eventId horizon
+      entries {
+        playerId
+        evidence {
+          id webName teamShortName elementType elementTypeName
+          statsContext { scope season asOfEventId }
+          ${fields}
+        }
+      }
+    }
+  }
+`
+}
+
+export const GET_PLAYER_STATS_DESK_RECENT = playerStatsDeskEvidenceQuery(
+	'GetPlayerStatsDeskRecent',
+	`recentGameweeks {
+    eventId provisional totalPoints minutes started
+    goalsScored assists cleanSheets saves bonus bps
+    opponents { teamShortName wasHome }
+  }`
+)
+
+export const GET_PLAYER_STATS_DESK_PRODUCTION = playerStatsDeskEvidenceQuery(
+	'GetPlayerStatsDeskProduction',
+	`totalPoints selectedByPercent form minutes starts goalsScored assists cleanSheets goalsConceded
+  ownGoals penaltiesSaved yellowCards redCards saves bonus bps`
+)
+
+export const GET_PLAYER_STATS_DESK_PROCESS = /* GraphQL */ `
+  query GetPlayerStatsDeskProcess ${PLAYER_STATS_DESK_VARIABLES} {
+    playerStatsDesk ${PLAYER_STATS_DESK_ARGUMENTS} {
+      eventId horizon
+      entries {
+        playerId
+        evidence {
+          id webName teamShortName elementType elementTypeName
+          statsContext { scope season asOfEventId }
+          expectedGoals expectedAssists expectedGoalInvolvements expectedGoalsConceded
+          influence creativity threat ictIndex
+        }
+        state {
+          playerId
+          dimensions {
+            kind rating direction confidence reasonCodes
+            metrics {
+              code source value baseline percentile unit season
+              sampleMinutes sampleSize smallSample capability
+            }
+          }
+          coverage {
+            understatCurrent mappingStatus metricCoverage limitations
+          }
+        }
+      }
+    }
+  }
+`
+
+export const PLAYER_STATS_DESK_QUERIES: Record<PlayerStatsDeskSection, string> =
+	{
+		overview: GET_PLAYER_STATS_DESK_OVERVIEW,
+		context: GET_PLAYER_STATS_DESK_CONTEXT,
+		recent: GET_PLAYER_STATS_DESK_RECENT,
+		production: GET_PLAYER_STATS_DESK_PRODUCTION,
+		process: GET_PLAYER_STATS_DESK_PROCESS
+	}
 
 // Query to fetch player values
 export const GET_PLAYERS_FOR_PICKER = `
@@ -526,6 +746,65 @@ export const GET_TEAMS_FOR_PICKER = `
   }
 `
 
+export const GET_PLAYER_STATS_BOOTSTRAP = /* GraphQL */ `
+	query GetPlayerStatsBootstrap($limit: Int = 20) {
+		playerStatsBootstrap(limit: $limit) {
+			context {
+				season
+				revision
+				sourceCheckedAt
+				currentEventId
+				nextEventId
+				nextDeadlineTime
+				latestFinishedEventId
+			}
+			teams {
+				id
+				name
+				shortName
+			}
+			directory {
+				items {
+					id
+					webName
+					position
+					price
+					selectedByPercent
+					totalPoints
+					form
+					team {
+						id
+						name
+						shortName
+					}
+				}
+				totalCount
+				nextCursor
+			}
+		}
+	}
+`
+
+export type CoreEventContextData = {
+	season: string
+	revision: string
+	sourceCheckedAt: string
+	currentEventId: number | null
+	nextEventId: number | null
+	nextDeadlineTime: string | null
+	latestFinishedEventId: number | null
+}
+
+export type PlayerStatsBootstrapData = {
+	context: CoreEventContextData
+	teams: TeamForPickerItem[]
+	directory: PlayerSearchForPickerResponse['playersForPicker']
+}
+
+export interface PlayerStatsBootstrapResponse {
+	playerStatsBootstrap: PlayerStatsBootstrapData
+}
+
 export type PlayerDirectoryPosition =
 	'GOALKEEPER' | 'DEFENDER' | 'MIDFIELDER' | 'FORWARD'
 
@@ -557,10 +836,7 @@ export interface PlayerSearchForPickerResponse {
 }
 
 export type PlayerPickerOwnershipBand =
-	| 'LE5'
-	| 'GT5_LE15'
-	| 'GT15_LE40'
-	| 'GT40'
+	'LE5' | 'GT5_LE15' | 'GT15_LE40' | 'GT40'
 
 export interface TeamForPickerItem {
 	id: number

@@ -40,6 +40,257 @@ const marketPlayer = {
 	selectedByPercent: 32.5
 }
 
+const pickerTeams = [
+	{ id: 1, name: 'Arsenal', shortName: 'ARS' },
+	{ id: 2, name: 'Chelsea', shortName: 'CHE' },
+	{ id: 3, name: 'Everton', shortName: 'EVE' }
+]
+
+const pickerPlayers = [
+	{
+		id: 1,
+		webName: 'Saka',
+		position: 'MIDFIELDER',
+		price: 100,
+		selectedByPercent: 32.5,
+		totalPoints: 181,
+		form: 6.2,
+		team: pickerTeams[0]
+	},
+	{
+		id: 2,
+		webName: 'Palmer',
+		position: 'MIDFIELDER',
+		price: 105,
+		selectedByPercent: 41.2,
+		totalPoints: 195,
+		form: 7.1,
+		team: pickerTeams[1]
+	}
+]
+
+const playerDetail = playerId => {
+	const player =
+		pickerPlayers.find(candidate => candidate.id === playerId) ??
+		pickerPlayers[0]
+	return {
+		id: player.id,
+		webName: player.webName,
+		teamShortName: player.team.shortName,
+		elementType: 3,
+		elementTypeName: 'MIDFIELDER',
+		price: player.price,
+		startPrice: player.price - 5,
+		statsContext: {
+			scope: 'CURRENT_SEASON',
+			season: '2627',
+			asOfEventId: 33
+		},
+		availability: {
+			status: 'a',
+			news: '',
+			newsAdded: null,
+			observedDate: '2026-08-13',
+			capturedAt: '2026-08-13T09:40:00.000Z',
+			chanceOfPlayingThisRound: 100,
+			chanceOfPlayingNextRound: 100,
+			stale: false
+		},
+		totalPoints: player.totalPoints,
+		selectedByPercent: player.selectedByPercent,
+		form: player.form,
+		seasonTransfersIn: 100000,
+		seasonTransfersOut: 20000,
+		transfersInEvent: 12000,
+		transfersOutEvent: 3000,
+		eventPoints: 8,
+		minutes: 900,
+		starts: 10,
+		goalsScored: player.id === 1 ? 8 : 10,
+		assists: 7,
+		cleanSheets: 5,
+		goalsConceded: 9,
+		ownGoals: 0,
+		penaltiesSaved: 0,
+		yellowCards: 1,
+		redCards: 0,
+		saves: 0,
+		bonus: 16,
+		bps: 240,
+		expectedGoals: 7.2,
+		expectedAssists: 5.8,
+		expectedGoalInvolvements: 13,
+		expectedGoalsConceded: 0,
+		influence: 420,
+		creativity: 510,
+		threat: 600,
+		ictIndex: 153,
+		recentGameweeks: [
+			{
+				eventId: 33,
+				provisional: false,
+				totalPoints: 8,
+				minutes: 90,
+				started: true,
+				goalsScored: 1,
+				assists: 0,
+				cleanSheets: 1,
+				saves: 0,
+				bonus: 2,
+				bps: 31,
+				opponents: [{ teamShortName: 'EVE', wasHome: true }]
+			}
+		],
+		fixtures: [
+			{
+				id: 3401 + player.id,
+				event: 34,
+				againstTeamShortName: player.id === 1 ? 'CHE' : 'ARS',
+				wasHome: player.id === 1,
+				finished: false,
+				kickoffTime: '2026-08-11T19:00:00.000Z',
+				score: null,
+				difficulty: 3,
+				bgw: false
+			}
+		]
+	}
+}
+
+const overviewState = (playerId, horizon) => ({
+	playerId,
+	teamId: playerId,
+	position: 3,
+	season: '2627',
+	horizon,
+	asOfEventId: 33,
+	asOf: '2026-08-13T09:40:00.000Z',
+	trend: 'STABLE',
+	confidence: 'HIGH',
+	fplOnly: false,
+	reasons: [{ code: 'STATE_STABLE' }],
+	profileRadar: null,
+	dimensions: [
+		{
+			kind: 'AVAILABILITY_ROLE',
+			rating: 'SECURE',
+			direction: 'STABLE',
+			confidence: 'HIGH',
+			reasonCodes: ['ROLE_SECURE']
+		},
+		{
+			kind: 'FPL_OUTPUT',
+			rating: 'STRONG',
+			direction: 'STABLE',
+			confidence: 'HIGH',
+			reasonCodes: ['OUTPUT_STRONG']
+		},
+		{
+			kind: 'REAL_WORLD_PROCESS',
+			rating: 'TYPICAL',
+			direction: 'STABLE',
+			confidence: 'HIGH',
+			reasonCodes: ['PROCESS_TYPICAL']
+		},
+		{
+			kind: 'HISTORICAL_RELIABILITY',
+			rating: 'PROVEN',
+			direction: 'STABLE',
+			confidence: 'HIGH',
+			reasonCodes: ['RELIABILITY_PROVEN']
+		},
+		{
+			kind: 'OUTLOOK',
+			rating: 'NEUTRAL',
+			direction: 'STABLE',
+			confidence: 'HIGH',
+			reasonCodes: ['OUTLOOK_NEUTRAL']
+		}
+	]
+})
+
+const contextState = playerId => ({
+	playerId,
+	ownBaseline: { weightedPercentile: 70, seasons: [] },
+	peerBaseline: {
+		position: 3,
+		minimumMinutes: 900,
+		cohortSize: 20,
+		currentPercentile: 72
+	},
+	careerTrajectory: [],
+	coverage: { providers: [] }
+})
+
+const processState = playerId => ({
+	playerId,
+	dimensions: [
+		{
+			kind: 'REAL_WORLD_PROCESS',
+			rating: 'TYPICAL',
+			direction: 'STABLE',
+			confidence: 'HIGH',
+			reasonCodes: ['PROCESS_TYPICAL'],
+			metrics: [
+				{
+					code: 'UNDERSTAT_NPXG_PER_90',
+					source: 'UNDERSTAT_CURRENT',
+					value: 0.31,
+					baseline: 0.3,
+					percentile: 62,
+					unit: 'per90',
+					season: '2627',
+					sampleMinutes: 900,
+					sampleSize: 20,
+					smallSample: false,
+					capability: true
+				}
+			]
+		}
+	],
+	coverage: {
+		understatCurrent: true,
+		mappingStatus: 'VERIFIED',
+		metricCoverage: ['UNDERSTAT_NPXG_PER_90'],
+		limitations: []
+	}
+})
+
+const planningFixturesForEvent = eventId => {
+	const event = { id: eventId, name: `Gameweek ${eventId}` }
+	const arsenal = { id: 1, name: 'Arsenal', shortName: 'ARS' }
+	const chelsea = { id: 2, name: 'Chelsea', shortName: 'CHE' }
+	const everton = { id: 3, name: 'Everton', shortName: 'EVE' }
+	const fixture = (
+		id,
+		homeTeam,
+		awayTeam,
+		homeTeamDifficulty,
+		awayTeamDifficulty
+	) => ({
+		id,
+		code: id,
+		event,
+		kickoffTime: '2026-08-09T15:00:00.000Z',
+		finished: false,
+		started: false,
+		homeTeam,
+		awayTeam,
+		homeScore: null,
+		awayScore: null,
+		homeTeamDifficulty,
+		awayTeamDifficulty
+	})
+	if (eventId === 33) {
+		return [
+			fixture(3301, arsenal, chelsea, 2, 4),
+			fixture(3302, everton, arsenal, 4, 2)
+		]
+	}
+	if (eventId === 34) return [fixture(3401, chelsea, everton, 2, 3)]
+	return []
+}
+
 const livePicks = Array.from({ length: 15 }, (_, index) => {
 	const element = index + 1
 	return {
@@ -108,25 +359,99 @@ const server = createServer((request, response) => {
 			return
 		}
 
-		if (query.includes('GetCurrentAndNextEvents')) {
+		if (query.includes('GetPlayerStatsBootstrap')) {
 			json(response, 200, {
 				data: {
-					current: [{ id: 33 }],
-					next: [{ id: 34, deadlineTime: '2026-08-11T17:30:00.000Z' }]
+					playerStatsBootstrap: {
+						context: {
+							season: '2627',
+							revision: '7',
+							sourceCheckedAt: '2026-08-13T09:40:00.000Z',
+							currentEventId: 33,
+							nextEventId: 34,
+							nextDeadlineTime: '2026-08-11T17:30:00.000Z',
+							latestFinishedEventId: 32
+						},
+						teams: pickerTeams,
+						directory: {
+							items: pickerPlayers,
+							totalCount: pickerPlayers.length,
+							nextCursor: null
+						}
+					}
 				}
 			})
 			return
 		}
-		if (query.includes('GetGameweekBoards')) {
-			const haul = (id, webName, totalPoints, inDreamTeam) => ({
-				player: {
-					id,
-					webName,
-					position: 'MIDFIELDER',
-					price: 100,
-					team: { name: 'Arsenal', shortName: 'ARS' }
-				},
-				inDreamTeam,
+		if (query.includes('GetPlayerStatsDesk')) {
+			const playerIds = Array.isArray(variables.playerIds)
+				? variables.playerIds
+						.filter(id => Number.isInteger(id) && id > 0)
+						.slice(0, 2)
+				: []
+			const eventId = Number(variables.eventId) || 33
+			const horizon = Number(variables.horizon) || 5
+			const entries = playerIds.map(playerId => {
+				if (query.includes('GetPlayerStatsDeskOverview')) {
+					return {
+						playerId,
+						overview: playerDetail(playerId),
+						state: overviewState(playerId, horizon)
+					}
+				}
+				if (query.includes('GetPlayerStatsDeskContext')) {
+					return { playerId, state: contextState(playerId) }
+				}
+				if (query.includes('GetPlayerStatsDeskProcess')) {
+					return {
+						playerId,
+						evidence: playerDetail(playerId),
+						state: processState(playerId)
+					}
+				}
+				return { playerId, evidence: playerDetail(playerId) }
+			})
+			json(response, 200, {
+				data: {
+					playerStatsDesk: { eventId, horizon, entries }
+				}
+			})
+			return
+		}
+
+		if (
+			query.includes('GetCurrentAndNextEvents') ||
+			query.includes('GetCoreEventContext')
+		) {
+			json(response, 200, {
+				data: query.includes('GetCoreEventContext')
+					? {
+							coreEventContext: {
+								season: '2627',
+								revision: '7',
+								sourceCheckedAt: '2026-08-13T09:40:00.000Z',
+								currentEventId: 33,
+								nextEventId: 34,
+								nextDeadlineTime: '2026-08-11T17:30:00.000Z',
+								latestFinishedEventId: 32
+							}
+						}
+					: {
+							current: [{ id: 33 }],
+							next: [{ id: 34, deadlineTime: '2026-08-11T17:30:00.000Z' }]
+						}
+			})
+			return
+		}
+		if (query.includes('GetGameweekDesk')) {
+			const eventId = Number(variables.eventId) || 33
+			const scheduled = eventId > 33
+			const boardPlayer = (id, webName, totalPoints) => ({
+				id,
+				webName,
+				position: 'MIDFIELDER',
+				teamShortName: 'ARS',
+				price: 100,
 				minutes: 90,
 				goalsScored: totalPoints >= 12 ? 2 : 1,
 				assists: 0,
@@ -136,21 +461,56 @@ const server = createServer((request, response) => {
 			})
 			json(response, 200, {
 				data: {
-					event: {
-						id: 33,
+					gameweekDesk: {
+						season: '2627',
+						coreRevision: '7',
+						liveRevision: scheduled ? null : '8',
+						anchorEventId: 33,
+						eventId,
+						currentEventId: 33,
+						nextEventId: 34,
+						isPreseason: false,
+						lifecycle: scheduled ? 'SCHEDULED' : 'PROVISIONAL',
 						deadlineTime: '2026-08-04T17:30:00.000Z',
-						finished: false,
-						isCurrent: true,
-						isNext: false
-					},
-					dreamTeam: [haul(1, 'Saka', 12, true)],
-					hauls: [haul(1, 'Saka', 12, true), haul(2, 'Palmer', 11, false)],
-					liveSnapshot: {
-						eventId: 33,
-						revision: 'g'.repeat(24),
-						state: 'LIVE',
-						publishedAt: '2026-08-04T19:00:00.000Z',
-						checkedAt: '2026-08-04T19:00:30.000Z'
+						publishedAt: scheduled ? null : '2026-08-04T19:00:00.000Z',
+						overviewState: scheduled ? 'PENDING' : 'AVAILABLE',
+						boardsState: scheduled ? 'PENDING' : 'AVAILABLE',
+						overview: scheduled
+							? null
+							: {
+									averagePoints: 52,
+									highestPoints: 101,
+									mostCaptained: {
+										id: 1,
+										webName: 'Saka',
+										teamShortName: 'ARS'
+									},
+									mostViceCaptained: {
+										id: 2,
+										webName: 'Palmer',
+										teamShortName: 'CHE'
+									},
+									mostSelected: {
+										id: 1,
+										webName: 'Saka',
+										teamShortName: 'ARS'
+									},
+									mostTransferredIn: {
+										id: 2,
+										webName: 'Palmer',
+										teamShortName: 'CHE'
+									},
+									chipsPlayed: {
+										benchBoost: 2,
+										tripleCaptain: 1,
+										wildcard: 5,
+										freeHit: 1
+									}
+								},
+						dreamTeam: scheduled ? [] : [boardPlayer(1, 'Saka', 12)],
+						hauls: scheduled
+							? []
+							: [boardPlayer(1, 'Saka', 12), boardPlayer(2, 'Palmer', 11)]
 					}
 				}
 			})
@@ -172,6 +532,18 @@ const server = createServer((request, response) => {
 					}
 				}
 			})
+			return
+		}
+		if (query.includes('GetFixtureWindow')) {
+			const data = Object.fromEntries(
+				Object.entries(variables)
+					.filter(([key]) => /^event\d+$/.test(key))
+					.map(([key, eventId]) => [
+						key,
+						planningFixturesForEvent(Number(eventId))
+					])
+			)
+			json(response, 200, { data })
 			return
 		}
 		if (query.includes('GetEventFixtures')) {
@@ -596,7 +968,10 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
-		if (query.includes('GetMarketPulse')) {
+		if (
+			query.includes('GetMarketPulse') ||
+			query.includes('GetFixturePlanningSignals')
+		) {
 			json(response, 200, {
 				data: {
 					marketPulse: {

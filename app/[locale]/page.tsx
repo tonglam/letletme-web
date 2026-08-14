@@ -44,6 +44,8 @@ import { ArrowRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { getTranslations } from 'next-intl/server'
 import { Suspense } from 'react'
+import { RouteIntlProvider } from '@/components/i18n/RouteIntlProvider'
+import { ROUTE_CLIENT_NAMESPACES } from '@/i18n/client-namespaces'
 
 export const dynamic = 'force-dynamic'
 
@@ -203,14 +205,17 @@ async function HomeHero() {
 						<p className="mt-6 max-w-xl text-pretty text-lg leading-8 text-muted-foreground">
 							{t('intro')}
 						</p>
-						{/* Matchday entry only. Browse/create tournaments live in HomeTournamentBand. */}
+						{/* Matchday entry only. Browse/create competitions live in HomeTournamentBand. */}
 						<div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
 							<Button
 								size="lg"
 								className="shadow-sticker font-display text-base font-semibold uppercase tracking-caps transition-transform hover:-translate-y-0.5"
 								asChild
 							>
-								<Link href="/live/points" prefetch={false}>
+								<Link
+									href="/live/points"
+									prefetch={false}
+								>
 									{t('openLivePoints')}
 									<ArrowRight data-icon="inline-end" />
 								</Link>
@@ -225,7 +230,7 @@ async function HomeHero() {
 									href="/live/competitions"
 									prefetch={false}
 								>
-									{t('liveTournamentStandings')}
+									{t('liveCompetitionStandings')}
 								</Link>
 							</Button>
 						</div>
@@ -273,16 +278,16 @@ async function HomeTournamentBand() {
 			<div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:py-9">
 				<div className="max-w-xl">
 					<p className="font-display text-xs font-semibold uppercase tracking-caps-wide text-electric/80">
-						{t('tournamentBandEyebrow')}
+						{t('competitionBandEyebrow')}
 					</p>
 					<h2
 						id="home-tournament-band-title"
 						className="mt-2 font-display text-2xl font-bold uppercase tracking-wide sm:text-3xl"
 					>
-						{t('tournamentBandTitle')}
+						{t('competitionBandTitle')}
 					</h2>
 					<p className="mt-2 text-sm leading-6 text-electric/75">
-						{t('tournamentBandDescription')}
+						{t('competitionBandDescription')}
 					</p>
 				</div>
 				<div className="flex flex-wrap gap-2">
@@ -291,16 +296,22 @@ async function HomeTournamentBand() {
 						className="min-h-11 border-electric/50 bg-transparent font-display font-semibold uppercase tracking-caps text-electric hover:bg-electric hover:text-plum"
 						asChild
 					>
-						<Link href="/competitions/browse" prefetch={false}>
-							{t('browseTournaments')}
+						<Link
+							href="/competitions/browse"
+							prefetch={false}
+						>
+							{t('browseCompetitions')}
 						</Link>
 					</Button>
 					<Button
 						className="min-h-11 bg-electric font-display font-semibold uppercase tracking-caps text-plum hover:bg-electric/90"
 						asChild
 					>
-						<Link href="/competitions/create" prefetch={false}>
-							{t('createTournament')}
+						<Link
+							href="/competitions/create"
+							prefetch={false}
+						>
+							{t('createCompetition')}
 							<ArrowRight data-icon="inline-end" />
 						</Link>
 					</Button>
@@ -430,21 +441,23 @@ async function InitialMatchesSection({ eventId }: { eventId: number | null }) {
 export default async function Home({ params }: { params: LocaleParams }) {
 	await getPageLocale(params)
 	return (
-		<PageShell>
-			<div className="flex flex-col">
-				<HomeHero />
+		<RouteIntlProvider namespaces={ROUTE_CLIENT_NAMESPACES.home}>
+			<PageShell>
+				<div className="flex flex-col">
+					<HomeHero />
 
-				<HomeTournamentBand />
+					<HomeTournamentBand />
 
-				<Suspense fallback={<MarketTeaserFallback />}>
-					<MarketTeaser />
-				</Suspense>
+					<Suspense fallback={<MarketTeaserFallback />}>
+						<MarketTeaser />
+					</Suspense>
 
-				<Suspense fallback={<PageInsightsFallback />}>
-					<HomeInsights />
-				</Suspense>
-			</div>
-		</PageShell>
+					<Suspense fallback={<PageInsightsFallback />}>
+						<HomeInsights />
+					</Suspense>
+				</div>
+			</PageShell>
+		</RouteIntlProvider>
 	)
 }
 

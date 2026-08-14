@@ -10,9 +10,12 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useRef } from 'react'
 
 type ReadyMetricName =
+	| 'FIXTURES_WINDOW_READY'
+	| 'GAMEWEEK_CONTENT_READY'
 	| 'MARKET_CONTENT_READY'
 	| 'PLAYER_DIRECTORY_READY'
 	| 'PLAYER_DETAIL_READY'
+	| 'PLAYER_COMPARE_READY'
 	| 'SESSION_STATE_READY'
 
 export function RouteReadyMarker({
@@ -55,15 +58,7 @@ export function RouteReadyMarker({
 			},
 			{ always: true }
 		)
-	}, [
-		audienceHint,
-		goodMs,
-		name,
-		pathname,
-		poorMs,
-		ready,
-		readyIdentity
-	])
+	}, [audienceHint, goodMs, name, pathname, poorMs, ready, readyIdentity])
 
 	return null
 }

@@ -252,7 +252,7 @@ function CompactPlayerSlot({
 				{t('remove')}
 			</Button>
 		) : null}
-	</div>
+		</div>
 	)
 }
 
@@ -290,7 +290,9 @@ export function PlayerSelectionPanel({
 	)
 	const firstExpanded = !first.selectedPlayer || editingSlot === 'first'
 	const secondExpanded = Boolean(
-		compareOpen && second && (!second.selectedPlayer || editingSlot === 'second')
+		compareOpen &&
+		second &&
+		(!second.selectedPlayer || editingSlot === 'second')
 	)
 	const selectFirst = (player: PlayerDirectoryOption) => {
 		first.onSelect(player)

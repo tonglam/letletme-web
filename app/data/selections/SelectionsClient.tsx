@@ -982,12 +982,12 @@ export default function SelectionsClient({
 								</p>
 							) : tournaments.length === 0 && !myLeaguesLoadFailed ? (
 								<p className="text-xs text-muted-foreground">
-									{t('noTournaments')}{' '}
+									{t('noCompetitions')}{' '}
 									<Link
 										href="/competitions/browse"
 										className="font-medium text-primary-ink hover:underline"
 									>
-										{t('browseTournaments')}
+										{t('browseCompetitions')}
 									</Link>
 								</p>
 							) : null}

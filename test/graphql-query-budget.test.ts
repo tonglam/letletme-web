@@ -12,7 +12,9 @@ import {
 	SEARCH_PLAYERS_FOR_PICKER
 } from '../lib/graphql/operations/players'
 import {
+	GET_ENTRY_OFFICIAL_H2H_DESK,
 	GET_TOURNAMENT_METADATA,
+	GET_TOURNAMENT_OFFICIAL_H2H,
 	GET_TOURNAMENT_PARTICIPANTS
 } from '../lib/graphql/operations/tournaments'
 
@@ -110,5 +112,17 @@ describe('GraphQL request budget', () => {
 	it('keeps tournament authorization and participant details in separate operations', () => {
 		assert.doesNotMatch(GET_TOURNAMENT_METADATA, /tournamentParticipants/)
 		assert.doesNotMatch(GET_TOURNAMENT_PARTICIPANTS, /\btournament\s*\(/)
+	})
+
+	it('keeps official H2H detail and Team Desk queries below the production guard', () => {
+		for (const [name, query] of [
+			['GET_TOURNAMENT_OFFICIAL_H2H', GET_TOURNAMENT_OFFICIAL_H2H],
+			['GET_ENTRY_OFFICIAL_H2H_DESK', GET_ENTRY_OFFICIAL_H2H_DESK],
+		] as const) {
+			const document = parse(query)
+			let astNodes = 0
+			visit(document, { enter: () => void (astNodes += 1) })
+			assert.ok(astNodes < 200, `${name} has ${astNodes} AST nodes`)
+		}
 	})
 })

@@ -723,17 +723,25 @@ export function PlayerStatsView({
 		)
 	}
 
-	if (isLoading || (selectedComparison && isComparisonLoading)) {
+	const requestPending = isLoading || isComparisonLoading
+	const requestError = error ?? comparisonError
+	const primaryMissing = !player
+	const comparisonMissing = Boolean(selectedComparison && !comparison)
+
+	if (
+		(isLoading && primaryMissing) ||
+		(selectedComparison && isComparisonLoading && comparisonMissing)
+	) {
 		return <PlayerDetailSkeleton />
 	}
 
-	if (error || comparisonError) {
+	if (requestError && (primaryMissing || comparisonMissing)) {
 		return (
 			<div
 				className="rounded-xl border border-border/80 bg-card px-6 py-8 text-center shadow-sm"
 				role="alert"
 			>
-				<p className="text-sm text-destructive">{error ?? comparisonError}</p>
+				<p className="text-sm text-destructive">{requestError}</p>
 			</div>
 		)
 	}
@@ -931,7 +939,26 @@ export function PlayerStatsView({
 	}
 
 	return (
-		<div className="space-y-1">
+		<div
+			className="space-y-1"
+			aria-busy={requestPending}
+		>
+			{requestPending ? (
+				<p
+					className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
+					role="status"
+				>
+					{t('loadingStats')}
+				</p>
+			) : null}
+			{requestError ? (
+				<p
+					className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+					role="alert"
+				>
+					{requestError}
+				</p>
+			) : null}
 			<PlayerOverallCard
 				player={player}
 				comparison={comparison}
@@ -972,7 +999,7 @@ export function PlayerStatsView({
 				<div className="mt-1 flex justify-end">
 					<Link
 						href="/explore/fixtures#my-squad"
-						className="text-xs font-medium text-primary-ink underline-offset-2 hover:underline"
+						className="text-xs font-medium text-foreground underline-offset-2 hover:underline"
 					>
 						{t('fixturesSquadLink')}
 					</Link>

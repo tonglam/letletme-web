@@ -1,9 +1,9 @@
 /** Resolve the effective selected gameweek within [1, maxGameweek]. */
 export function resolveSelectedGameweek(
-	currentGameweek: number,
-	selectedGameweek?: number,
+	currentGameweek: number | null,
+	selectedGameweek?: number
 ): { maxGameweek: number; selected: number } {
-	const maxGameweek = Math.max(1, currentGameweek)
+	const maxGameweek = Math.max(1, currentGameweek ?? 1)
 	const selected =
 		selectedGameweek !== undefined
 			? Math.min(maxGameweek, Math.max(1, selectedGameweek))
@@ -25,7 +25,7 @@ export function buildGameweekValuesDesc(maxGameweek: number): number[] {
  */
 export function parseGameweekJump(
 	draft: string,
-	maxGameweek: number,
+	maxGameweek: number
 ): number | null {
 	const parsed = Number.parseInt(draft, 10)
 	if (!Number.isInteger(parsed)) return null
@@ -36,12 +36,12 @@ export function parseGameweekJump(
 export function canStepGameweek(
 	selected: number,
 	maxGameweek: number,
-	disabled: boolean,
+	disabled: boolean
 ): { prev: boolean; next: boolean } {
 	if (disabled) return { prev: false, next: false }
 	const max = Math.max(1, maxGameweek)
 	return {
 		prev: selected > 1,
-		next: selected < max,
+		next: selected < max
 	}
 }

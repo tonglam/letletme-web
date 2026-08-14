@@ -4,14 +4,9 @@ import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
 import { DEFAULT_FDR_HORIZON } from '@/lib/fixtures-fdr'
 import { getCurrentAndNextEvents } from '@/lib/events'
-import {
-	executePublicServerQuery,
-} from '@/lib/graphql-server'
-import {
-	GET_EVENT_FIXTURES,
-	type EventFixturesResponse,
-	type Fixture,
-} from '@/lib/graphql/operations/events'
+import { loadFixtureWindow } from '@/lib/fixture-window-server'
+import type { FixturePlanningFixture } from '@/lib/fixture-window'
+import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_MARKET_PULSE,
 	type MarketPulse,
@@ -44,18 +39,6 @@ export async function generateMetadata({ params }: PageProps) {
 	})
 }
 
-async function fetchEventFixtures(eventId: number): Promise<Fixture[]> {
-	const response = await executePublicServerQuery<EventFixturesResponse>(
-		GET_EVENT_FIXTURES,
-		{ eventId },
-		publicFetchOptions({
-			revalidate: RevalidateSeconds.publicStats,
-			tags: [CacheTag.fixtures, CacheTag.events],
-		}),
-	)
-	return response.eventFixtures ?? []
-}
-
 export default async function FixturesPage({ params }: PageProps) {
 	await getPageLocale(params)
 
@@ -70,11 +53,8 @@ export default async function FixturesPage({ params }: PageProps) {
 	}
 
 	const horizon = DEFAULT_FDR_HORIZON
-	const eventIds = Array.from({ length: horizon }, (_, i) => fromGw + i).filter(
-		id => id >= 1 && id <= 38,
-	)
 
-	const fixturesByEvent: Record<number, Fixture[]> = {}
+	const fixturesByEvent: Record<number, FixturePlanningFixture[]> = {}
 	let marketPulse: MarketPulse | null = null
 	let mySquadKeys: string[] = []
 	let mySquadPicks: SquadPickSeed[] = []
@@ -83,8 +63,8 @@ export default async function FixturesPage({ params }: PageProps) {
 	let unknownEventIds: number[] = []
 
 	try {
-		const [fixtureResults, market, squadResult, teamsResponse] = await Promise.all([
-			Promise.allSettled(eventIds.map(id => fetchEventFixtures(id))),
+		const [fixtureWindow, market, squadResult, teamsResponse] = await Promise.all([
+			loadFixtureWindow(fromGw, horizon),
 			executePublicServerQuery<MarketPulseResponse>(
 				GET_MARKET_PULSE,
 				{ days: 14 },
@@ -122,11 +102,10 @@ export default async function FixturesPage({ params }: PageProps) {
 			}),
 		])
 
-		eventIds.forEach((id, i) => {
-			const result = fixtureResults[i]
-			if (result?.status === 'fulfilled') fixturesByEvent[id] = result.value
-			else unknownEventIds.push(id)
+		Object.entries(fixtureWindow.fixturesByEvent).forEach(([id, fixtures]) => {
+			fixturesByEvent[Number(id)] = fixtures
 		})
+		unknownEventIds = fixtureWindow.unknownEventIds
 		marketPulse = market?.marketPulse ?? null
 		mySquadPicks = squadResult.picks
 		squadState = squadResult.state

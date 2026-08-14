@@ -88,11 +88,15 @@ export function useCreateTournament() {
 		pathInvalid: t('leagueUrlPathInvalid'),
 		incomplete: t('leagueUrlIncomplete'),
 		classicOnly: t('classicOnly'),
-	}, { classicOnly: creationMode === 'classic' }), [creationMode, leagueUrl, t])
+		h2hOnly: t('h2hOnly'),
+	}, {
+		classicOnly: creationMode === 'classic',
+		h2hOnly: creationMode === 'h2h',
+	}), [creationMode, leagueUrl, t])
 	const participantsAreCurrent =
 		participantsLoaded &&
 		fetchedLeagueUrl === normalizedLeagueUrl &&
-		(creationMode !== 'classic' || loadedLeague?.leagueType === 'classic')
+		(creationMode === 'custom' || loadedLeague?.leagueType === creationMode)
 	const effectiveSelectedParticipantIds = participantSource === 'official' && participantsAreCurrent
 		? participants.map((participant) => participant.id)
 		: selectedParticipantIds
@@ -171,7 +175,7 @@ export function useCreateTournament() {
 		setCreatedTournamentName('')
 	}
 
-	const applyClassicMode = (startEvent = loadedLeague?.startEvent ?? 1) => {
+	const applyOfficialMirrorMode = (startEvent = loadedLeague?.startEvent ?? 1) => {
 		setValue('participantSource', 'official', { shouldValidate: true })
 		setValue('groupFormat', 'points', { shouldValidate: true })
 		setValue('startGameweek', `GW${startEvent}` as TournamentFormData['startGameweek'], { shouldValidate: true })
@@ -188,7 +192,7 @@ export function useCreateTournament() {
 		participantAbortControllerRef.current = null
 		setIsLoadingParticipants(false)
 		setCreationMode(mode)
-		if (mode === 'classic') applyClassicMode()
+		if (mode === 'classic' || mode === 'h2h') applyOfficialMirrorMode()
 		clearFeedback()
 	}
 
@@ -259,8 +263,8 @@ export function useCreateTournament() {
 				? result.startEvent
 				: 1
 			if (!leagueId || !leagueType) throw new Error(t('participantsLoadFailed'))
-			if (creationMode === 'classic' && leagueType !== 'classic') {
-				throw new Error(t('classicOnly'))
+			if (creationMode !== 'custom' && leagueType !== creationMode) {
+				throw new Error(t(creationMode === 'h2h' ? 'h2hOnly' : 'classicOnly'))
 			}
 			const rawParticipants = Array.isArray(result.participants) ? result.participants : []
 			const fetchedParticipants = rawParticipants.filter((item): item is ParticipantApiItem => {
@@ -287,8 +291,8 @@ export function useCreateTournament() {
 			setParticipantsLoaded(true)
 			setFetchedLeagueUrl(requestedLeagueUrl)
 			setLoadedLeague(leaguePreview)
-			if (creationMode === 'classic') {
-				applyClassicMode(startEvent)
+			if (creationMode === 'classic' || creationMode === 'h2h') {
+				applyOfficialMirrorMode(startEvent)
 				setValue('tournamentName', getImportedTournamentName(leaguePreview.leagueName, leagueId), {
 					shouldDirty: true,
 					shouldValidate: true,
@@ -317,8 +321,8 @@ export function useCreateTournament() {
 			setSubmitError(t('fetchBeforeCreate'))
 			return
 		}
-		if (creationMode === 'classic' && loadedLeague?.leagueType !== 'classic') {
-			setSubmitError(t('classicOnly'))
+		if (creationMode !== 'custom' && loadedLeague?.leagueType !== creationMode) {
+			setSubmitError(t(creationMode === 'h2h' ? 'h2hOnly' : 'classicOnly'))
 			return
 		}
 		const participantIds = data.participantSource === 'official'
@@ -343,7 +347,7 @@ export function useCreateTournament() {
 
 		setIsSubmitting(true)
 		try {
-			const payload = creationMode === 'classic'
+			const payload = creationMode === 'classic' || creationMode === 'h2h'
 				? {
 					...data,
 					creationMode,

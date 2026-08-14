@@ -22,22 +22,41 @@ export function buildAuthoritativeTournamentPayload(
   const record = body as Record<string, unknown>;
   const { creationMode, ...browserPayload } = record;
 
-  if (creationMode !== undefined && creationMode !== 'classic' && creationMode !== 'custom') {
+  if (
+    creationMode !== undefined &&
+    creationMode !== 'classic' &&
+    creationMode !== 'h2h' &&
+    creationMode !== 'custom'
+  ) {
     throw new InvalidTournamentPayloadError('Unsupported tournament creation mode.');
   }
 
-  if (creationMode === 'classic') {
+  if (creationMode === 'classic' || creationMode === 'h2h') {
+    const isH2H = creationMode === 'h2h';
     if (typeof browserPayload.leagueUrl !== 'string') {
-      throw new InvalidTournamentPayloadError('A classic league URL is required.');
+      throw new InvalidTournamentPayloadError(
+        isH2H ? 'A head-to-head league URL is required.' : 'A classic league URL is required.',
+      );
     }
     let parsedLeague;
     try {
       parsedLeague = parseLeagueUrl(browserPayload.leagueUrl);
     } catch {
-      throw new InvalidTournamentPayloadError('A valid classic league URL is required.');
+      throw new InvalidTournamentPayloadError(
+        isH2H
+          ? 'A valid head-to-head league URL is required.'
+          : 'A valid classic league URL is required.',
+      );
     }
-    if (parsedLeague.leagueType !== 'classic' || parsedLeague.surface !== 'standings') {
-      throw new InvalidTournamentPayloadError('Head-to-head league import is not available yet.');
+    const validSurface = isH2H
+      ? parsedLeague.surface === 'standings' || parsedLeague.surface === 'new-entries'
+      : parsedLeague.surface === 'standings';
+    if (parsedLeague.leagueType !== creationMode || !validSurface) {
+      throw new InvalidTournamentPayloadError(
+        isH2H
+          ? 'Use an FPL Head-to-Head standings or new entries URL.'
+          : 'Use an FPL Classic standings URL.',
+      );
     }
     if (
       typeof browserPayload.tournamentName !== 'string' ||

@@ -45,16 +45,30 @@ describe('tournament creation model', () => {
 		)
 	})
 
-	it('keeps head-to-head import reserved without removing custom URL support', () => {
+	it('validates Head-to-Head mirrors independently from Classic mirrors', () => {
 		const url = 'https://fantasy.premierleague.com/en/leagues/99/standings/h'
 		assert.equal(validateLeagueUrl(url).valid, true)
 		assert.deepEqual(validateLeagueUrl(url, undefined, { classicOnly: true }), {
 			valid: false,
 			domainValid: true,
-			message: 'Use an FPL Classic standings URL. Head-to-head import is coming later.',
+			message: 'Use an FPL Classic standings URL.',
 			leagueId: 99,
 			leagueType: 'h2h',
 		})
+		assert.deepEqual(
+			validateLeagueUrl(
+				'https://fantasy.premierleague.com/en/leagues/34879/new-entries/h',
+				undefined,
+				{ h2hOnly: true },
+			),
+			{
+				valid: true,
+				domainValid: true,
+				message: null,
+				leagueId: 34879,
+				leagueType: 'h2h',
+			},
+		)
 	})
 
 	it('uses the official league name without making it a required input', () => {

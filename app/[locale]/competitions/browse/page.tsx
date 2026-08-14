@@ -23,8 +23,8 @@ export async function generateMetadata({ params }: PageProps) {
 	return getPageMetadata({
 		locale,
 		pathname: '/competitions/browse',
-		titleKey: 'tournamentListTitle',
-		descriptionKey: 'tournamentListDescription',
+		titleKey: 'competitionListTitle',
+		descriptionKey: 'competitionListDescription',
 	})
 }
 
@@ -59,7 +59,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 		initialTournaments = response.entryTournaments
 	} catch (error) {
 		console.error('[tournament list] Failed to load:', error)
-		initialError = t('tournamentsUnavailable')
+		initialError = t('competitionsUnavailable')
 	}
 
 	return (

@@ -4,6 +4,8 @@ const WEB_VITAL_NAMES = new Set([
 	'CLS',
 	'FCP',
 	'FID',
+	'FIXTURES_WINDOW_READY',
+	'GAMEWEEK_CONTENT_READY',
 	'INP',
 	'LCP',
 	'TTFB',
@@ -11,6 +13,7 @@ const WEB_VITAL_NAMES = new Set([
 	'MARKET_CONTENT_READY',
 	'PLAYER_DIRECTORY_READY',
 	'PLAYER_DETAIL_READY',
+	'PLAYER_COMPARE_READY',
 	'SESSION_STATE_READY'
 ])
 const WEB_VITAL_RATINGS = new Set(['good', 'needs-improvement', 'poor'])

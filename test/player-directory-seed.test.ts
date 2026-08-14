@@ -46,7 +46,7 @@ describe('PlayerDirectorySeed', () => {
 		assert.match(source, /setPlayerRetryNonce\(current => current \+ 1\)/)
 	})
 
-	it('keeps directory failures scoped and retries only unavailable seed parts', async () => {
+	it('uses the bootstrap directory and preserves scoped picker states', async () => {
 		const [loaderSource, pickerSource] = await Promise.all([
 			readFile(new URL('../lib/player-stats-seed.ts', import.meta.url), 'utf8'),
 			readFile(
@@ -58,8 +58,8 @@ describe('PlayerDirectorySeed', () => {
 			)
 		])
 
-		assert.match(loaderSource, /settleDirectoryRequest\(teamsPromise\)/)
-		assert.match(loaderSource, /settleDirectoryRequest\(playersPromise\)/)
+		assert.match(loaderSource, /loadPlayerStatsBootstrap/)
+		assert.match(loaderSource, /directorySeed:/)
 		assert.match(loaderSource, /playersState:/)
 		assert.match(pickerSource, /seed\?\.playersState === 'ready'/)
 		assert.match(pickerSource, /seed\?\.teamsState === 'ready'/)

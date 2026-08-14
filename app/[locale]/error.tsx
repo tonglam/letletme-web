@@ -9,12 +9,11 @@ import { useEffect } from 'react'
 
 export default function ErrorPage({
 	error,
-	reset,
+	reset
 }: {
 	error: Error & { digest?: string }
 	reset: () => void
 }) {
-	const t = useTranslations('ErrorPage')
 	const common = useTranslations('Common')
 
 	useEffect(() => {
@@ -24,15 +23,18 @@ export default function ErrorPage({
 	return (
 		<PageState
 			icon={AlertTriangle}
-			title={t('title')}
-			description={t('description')}
+			title={common('pageLoadErrorTitle')}
+			description={common('pageLoadErrorDescription')}
 			actions={
 				<>
 					<Button onClick={reset}>
 						<RotateCcw data-icon="inline-start" />
 						{common('tryAgain')}
 					</Button>
-					<Button variant="outline" asChild>
+					<Button
+						variant="outline"
+						asChild
+					>
 						<Link href="/">{common('dashboard')}</Link>
 					</Button>
 				</>

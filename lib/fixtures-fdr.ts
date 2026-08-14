@@ -1,5 +1,7 @@
-import type { Fixture } from '@/lib/graphql/operations/events'
-import type { MarketPlayer, MarketPulse } from '@/lib/graphql/operations/market'
+import type {
+	FixturePlanningMarketPulse,
+	FixtureSignalPlayer,
+} from '@/lib/graphql/operations/market'
 
 export type FdrHorizon = 3 | 5 | 8
 
@@ -50,6 +52,15 @@ export type FdrTeamIdentity = {
 	id: number
 	name: string
 	shortName: string
+}
+
+export type FdrPlanningFixture = {
+	id: number
+	finished: boolean
+	homeTeam: FdrTeamIdentity
+	awayTeam: FdrTeamIdentity
+	homeTeamDifficulty: number
+	awayTeamDifficulty: number
 }
 
 export type TeamFdrRow = {
@@ -116,7 +127,7 @@ function clampDifficulty(value: number): number {
 
 /** Collect every per-team fixture in an exact gameweek window. */
 export function buildTeamFdrRows(
-	fixturesByEvent: Map<number, Fixture[]>,
+	fixturesByEvent: Map<number, FdrPlanningFixture[]>,
 	fromGw: number,
 	horizon: number,
 	knownTeams: FdrTeamIdentity[] = [],
@@ -239,11 +250,16 @@ export function buildTeamFdrRows(
 	})
 }
 
-export function collectMarketSignals(pulse: MarketPulse | null): FdrPlayerSignal[] {
+export function collectMarketSignals(
+	pulse: FixturePlanningMarketPulse | null,
+): FdrPlayerSignal[] {
 	if (!pulse) return []
 	const map = new Map<number, FdrPlayerSignal>()
 
-	const add = (player: MarketPlayer, source: FdrPlayerSignal['source']) => {
+	const add = (
+		player: FixtureSignalPlayer,
+		source: FdrPlayerSignal['source'],
+	) => {
 		const existing = map.get(player.playerId)
 		if (existing) {
 			// Prefer most-selected label; keep higher ownership snapshot
@@ -381,11 +397,12 @@ export function buildFdrReviewBuckets(
 }
 
 export function buildFdrDeskModel(
-	fixturesByEvent: Map<number, Fixture[]>,
+	fixturesByEvent: Map<number, FdrPlanningFixture[]>,
 	opts: {
 		fromGw: number
 		horizon: FdrHorizon
-		marketPulse?: MarketPulse | null
+		marketPulse?: FixturePlanningMarketPulse | null
+		marketSignals?: FdrPlayerSignal[]
 		knownTeams?: FdrTeamIdentity[]
 		unknownEvents?: ReadonlySet<number>
 	},
@@ -404,7 +421,8 @@ export function buildFdrDeskModel(
 	const hardest = [...eligibleTeams]
 		.sort((a, b) => (b.avgFdr ?? -1) - (a.avgFdr ?? -1))
 		.slice(0, 5)
-	const signals = collectMarketSignals(opts.marketPulse ?? null)
+	const signals =
+		opts.marketSignals ?? collectMarketSignals(opts.marketPulse ?? null)
 	const candidates = buildFdrReviewBuckets(teams, signals)
 
 	return {

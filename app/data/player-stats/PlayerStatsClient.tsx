@@ -3,6 +3,8 @@
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import type { PlayerDirectorySeed } from '@/lib/player-directory-seed'
+import type { PlayerStatsDeskResponse } from '@/lib/player-stats-desk'
+import { primePlayerStatsDeskCache } from '@/lib/player-stats-desk-client'
 import { positionCodeFromElementTypeName } from '@/lib/squad-picks'
 import { cn } from '@/lib/utils'
 import dynamic from 'next/dynamic'
@@ -38,10 +40,12 @@ const PlayerStatsView = dynamic(
 
 export default function PlayerStatsClient({
 	initialPlayerIds,
-	directorySeed
+	directorySeed,
+	initialDeskSeed = null
 }: {
 	initialPlayerIds: { p1: number | null; p2: number | null }
 	directorySeed: PlayerDirectorySeed
+	initialDeskSeed?: PlayerStatsDeskResponse | null
 }) {
 	const t = useTranslations('PlayerStats')
 	const { seed: personalSeed, resolved: personalSeedResolved } =
@@ -49,13 +53,21 @@ export default function PlayerStatsClient({
 	const { anchorGw, seasonStatsAvailable } = directorySeed
 	const mySquadPicks = personalSeed?.mySquadPicks ?? []
 	const marketCompareCandidates = personalSeed?.marketCompareCandidates
+	const initialFirstEntry = initialDeskSeed?.entries.find(
+		entry => entry.playerId === initialPlayerIds.p1
+	)
+	const initialSecondEntry = initialDeskSeed?.entries.find(
+		entry => entry.playerId === initialPlayerIds.p2
+	)
 	const firstPlayer = usePlayerDetailSlot({
 		storageKey: RECENT_PLAYERS_KEY_1,
-		eventId: anchorGw
+		eventId: anchorGw,
+		initialEntry: initialFirstEntry
 	})
 	const secondPlayer = usePlayerDetailSlot({
 		storageKey: RECENT_PLAYERS_KEY_2,
-		eventId: anchorGw
+		eventId: anchorGw,
+		initialEntry: initialSecondEntry
 	})
 	const firstSelectPlayer = firstPlayer.selectPlayer
 	const firstSelectPlayerById = firstPlayer.selectPlayerById
@@ -76,6 +88,19 @@ export default function PlayerStatsClient({
 	const beginLocalPlayerDetailLoad = useCallback(() => {
 		markRouteReadyStart(window.location.pathname)
 	}, [])
+
+	useEffect(() => {
+		if (!initialDeskSeed || initialDeskSeed.section !== 'overview') return
+		primePlayerStatsDeskCache(
+			{
+				playerIds: initialDeskSeed.entries.map(entry => entry.playerId),
+				eventId: initialDeskSeed.eventId,
+				horizon: initialDeskSeed.horizon,
+				section: 'overview'
+			},
+			initialDeskSeed
+		)
+	}, [initialDeskSeed])
 
 	const syncUrl = useCallback(() => {
 		if (typeof window === 'undefined') return
@@ -107,12 +132,34 @@ export default function PlayerStatsClient({
 				setDeepLinkReady(true)
 				return
 			}
+			const initialSeedReady =
+				firstPlayer.playerDetail?.id === initialPlayerIds.p1 &&
+				(initialPlayerIds.p2 == null ||
+					secondPlayer.playerDetail?.id === initialPlayerIds.p2)
+			if (initialSeedReady) {
+				setCompareOpen(initialPlayerIds.p2 != null)
+				setDeepLinkReady(true)
+				const section = playerStatsSectionFromHash(window.location.hash)
+				if (section) {
+					window.requestAnimationFrame(() => {
+						document
+							.getElementById(`ps-${section}`)
+							?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+					})
+				}
+				return
+			}
+			const batchPlayerIds = [initialPlayerIds.p1, initialPlayerIds.p2].filter(
+				(value): value is number => value != null
+			)
 			const firstDetail = await firstSelectPlayerById(initialPlayerIds.p1, {
-				silentNotFound: true
+				silentNotFound: true,
+				batchPlayerIds
 			})
 			if (firstDetail && initialPlayerIds.p2 != null) {
 				const secondDetail = await secondSelectPlayerById(initialPlayerIds.p2, {
-					silentNotFound: true
+					silentNotFound: true,
+					batchPlayerIds
 				})
 				setCompareOpen(Boolean(secondDetail))
 			} else {
@@ -137,7 +184,9 @@ export default function PlayerStatsClient({
 		firstClearSelection,
 		firstSelectPlayerById,
 		secondSelectPlayerById,
-		secondClearSelection
+		secondClearSelection,
+		firstPlayer.playerDetail?.id,
+		secondPlayer.playerDetail?.id
 	])
 
 	const playerOnePositionCode = useMemo(() => {
@@ -154,7 +203,11 @@ export default function PlayerStatsClient({
 				secondClearSelection()
 				setCompareOpen(false)
 			}
-			void firstSelectPlayerById(playerId)
+			void firstSelectPlayerById(playerId, {
+				batchPlayerIds: [playerId, Number(secondSelectedPlayerId)].filter(
+					value => Number.isInteger(value) && value > 0
+				)
+			})
 		},
 		[
 			beginLocalPlayerDetailLoad,
@@ -171,7 +224,12 @@ export default function PlayerStatsClient({
 				secondClearSelection()
 				setCompareOpen(false)
 			}
-			firstSelectPlayer(player)
+			firstSelectPlayer(
+				player,
+				[player.id, secondSelectedPlayerId]
+					.map(Number)
+					.filter(value => Number.isInteger(value) && value > 0)
+			)
 		},
 		[
 			beginLocalPlayerDetailLoad,
@@ -185,7 +243,12 @@ export default function PlayerStatsClient({
 		(player: Parameters<typeof secondSelectPlayer>[0]) => {
 			if (player.id === firstSelectedPlayerId) return
 			beginLocalPlayerDetailLoad()
-			secondSelectPlayer(player)
+			secondSelectPlayer(
+				player,
+				[player.id, firstSelectedPlayerId]
+					.map(Number)
+					.filter(value => Number.isInteger(value) && value > 0)
+			)
 		},
 		[beginLocalPlayerDetailLoad, firstSelectedPlayerId, secondSelectPlayer]
 	)
@@ -215,13 +278,13 @@ export default function PlayerStatsClient({
 			if (firstSelectedPlayerId === playerId) return
 			beginLocalPlayerDetailLoad()
 			setCompareOpen(true)
-			void secondSelectPlayerById(id)
+			void secondSelectPlayerById(id, {
+				batchPlayerIds: [id, Number(firstSelectedPlayerId)].filter(
+					value => Number.isInteger(value) && value > 0
+				)
+			})
 		},
-		[
-			beginLocalPlayerDetailLoad,
-			firstSelectedPlayerId,
-			secondSelectPlayerById
-		]
+		[beginLocalPlayerDetailLoad, firstSelectedPlayerId, secondSelectPlayerById]
 	)
 
 	const pickerStatsAvailable =
@@ -229,10 +292,13 @@ export default function PlayerStatsClient({
 		(firstPlayer.playerDetail == null && seasonStatsAvailable)
 	const personalSeedReady =
 		personalSeedResolved && personalSeed?.squadState === 'ready'
-	const playerDetailReady =
+	const playerDetailReady = Boolean(firstPlayer.playerDetail)
+	const playerCompareReady =
+		secondSelectedPlayerId != null &&
 		Boolean(firstPlayer.playerDetail) &&
-		(secondSelectedPlayerId == null || Boolean(secondPlayer.playerDetail))
-	const playerDetailReadyKey = `${firstSelectedPlayerId ?? ''}:${secondSelectedPlayerId ?? ''}`
+		Boolean(secondPlayer.playerDetail)
+	const playerDetailReadyKey = firstSelectedPlayerId ?? ''
+	const playerCompareReadyKey = `${firstSelectedPlayerId ?? ''}:${secondSelectedPlayerId ?? ''}`
 	const personalStatus = !personalSeedResolved
 		? null
 		: personalSeed?.squadState === 'not-published'
@@ -247,16 +313,24 @@ export default function PlayerStatsClient({
 				name="PLAYER_DIRECTORY_READY"
 				ready={directoryReady}
 				audienceHint="public"
-				goodMs={3_000}
-				poorMs={4_500}
+				goodMs={1_000}
+				poorMs={1_500}
 			/>
 			<RouteReadyMarker
 				name="PLAYER_DETAIL_READY"
 				ready={playerDetailReady}
 				readyKey={playerDetailReadyKey}
 				audienceHint="public"
-				goodMs={3_500}
-				poorMs={5_000}
+				goodMs={1_000}
+				poorMs={1_500}
+			/>
+			<RouteReadyMarker
+				name="PLAYER_COMPARE_READY"
+				ready={playerCompareReady}
+				readyKey={playerCompareReadyKey}
+				audienceHint="public"
+				goodMs={1_000}
+				poorMs={1_500}
 			/>
 			<div
 				className={cn(
@@ -312,10 +386,10 @@ export default function PlayerStatsClient({
 								recentPlayers: secondPlayer.recentPlayers,
 								excludedPlayerId: firstPlayer.selectedPlayer?.id,
 								onSelect: handleSecondSelect,
-									onClearRecent: secondPlayer.clearRecent,
-									onClearSelection: () => {
-										beginLocalPlayerDetailLoad()
-										secondPlayer.clearSelection()
+								onClearRecent: secondPlayer.clearRecent,
+								onClearSelection: () => {
+									beginLocalPlayerDetailLoad()
+									secondPlayer.clearSelection()
 									setCompareOpen(false)
 								}
 							}
@@ -342,10 +416,36 @@ export default function PlayerStatsClient({
 					comparisonError={secondPlayer.error}
 					stateError={firstPlayer.stateError}
 					comparisonStateError={secondPlayer.stateError}
-					loadEvidence={firstPlayer.loadEvidence}
-					loadComparisonEvidence={secondPlayer.loadEvidence}
-					loadStateContext={firstPlayer.loadStateContext}
-					loadComparisonStateContext={secondPlayer.loadStateContext}
+					loadEvidence={section =>
+						firstPlayer.loadEvidence(
+							section,
+							[firstSelectedPlayerId, secondSelectedPlayerId]
+								.map(Number)
+								.filter(value => Number.isInteger(value) && value > 0)
+						)
+					}
+					loadComparisonEvidence={section =>
+						secondPlayer.loadEvidence(
+							section,
+							[firstSelectedPlayerId, secondSelectedPlayerId]
+								.map(Number)
+								.filter(value => Number.isInteger(value) && value > 0)
+						)
+					}
+					loadStateContext={() =>
+						firstPlayer.loadStateContext(
+							[firstSelectedPlayerId, secondSelectedPlayerId]
+								.map(Number)
+								.filter(value => Number.isInteger(value) && value > 0)
+						)
+					}
+					loadComparisonStateContext={() =>
+						secondPlayer.loadStateContext(
+							[firstSelectedPlayerId, secondSelectedPlayerId]
+								.map(Number)
+								.filter(value => Number.isInteger(value) && value > 0)
+						)
+					}
 					isEvidenceLoading={firstPlayer.isEvidenceLoading}
 					isComparisonEvidenceLoading={secondPlayer.isEvidenceLoading}
 					isStateContextLoading={firstPlayer.isStateContextLoading}

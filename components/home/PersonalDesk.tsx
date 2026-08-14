@@ -9,6 +9,10 @@ import {
 	type EntrySummaryResponse
 } from '@/lib/graphql/operations/entries'
 import {
+	GET_ENTRY_OFFICIAL_H2H_DESK,
+	type EntryOfficialH2HDeskResponse,
+} from '@/lib/graphql/operations/tournaments'
+import {
 	GET_ENTRY_LEAGUES,
 	type EntryLeague,
 	type EntryLeaguesResponse
@@ -39,9 +43,17 @@ function PersonalDeskShell({
 	)
 }
 
-async function LeagueRankSection({ leagues }: { leagues: EntryLeague[] }) {
+async function LeagueRankSection({
+	desk,
+	entryId,
+	leagues,
+}: {
+	desk: EntryOfficialH2HDeskResponse['entryOfficialH2HDesk']
+	entryId: number
+	leagues: EntryLeague[]
+}) {
 	const t = await getTranslations('Home')
-	const rows = buildHomeLeagueRankRows(leagues)
+	const rows = buildHomeLeagueRankRows(leagues, desk)
 
 	return (
 		<div className="mt-4 border-t border-border/50 pt-3">
@@ -55,7 +67,7 @@ async function LeagueRankSection({ leagues }: { leagues: EntryLeague[] }) {
 					</p>
 				) : null}
 			</div>
-			<PersonalLeagueRankList rows={rows} />
+			<PersonalLeagueRankList entryId={entryId} rows={rows} />
 		</div>
 	)
 }
@@ -75,12 +87,17 @@ function PersonalDeskLeaguesFallback() {
 }
 
 async function PersonalDeskLeagues({
+	deskPromise,
+	entryId,
 	leaguesPromise
 }: {
+	deskPromise: Promise<EntryOfficialH2HDeskResponse | null>
+	entryId: number
 	leaguesPromise: Promise<EntryLeaguesResponse | null>
 }) {
-	const [leaguesData, t] = await Promise.all([
+	const [leaguesData, deskData, t] = await Promise.all([
 		leaguesPromise,
+		deskPromise,
 		getTranslations('Home')
 	])
 
@@ -94,7 +111,13 @@ async function PersonalDeskLeagues({
 		)
 	}
 
-	return <LeagueRankSection leagues={leaguesData.entryLeagues ?? []} />
+	return (
+		<LeagueRankSection
+			desk={deskData?.entryOfficialH2HDesk ?? []}
+			entryId={entryId}
+			leagues={leaguesData.entryLeagues ?? []}
+		/>
+	)
 }
 
 export async function PersonalDeskBindPrompt() {
@@ -159,6 +182,15 @@ export async function PersonalDesk({
 		{ cache: 'no-store', timeoutMs: 4_000 }
 	).catch(err => {
 		console.error('[home-personal-desk] leagues fetch failed:', err)
+		return null
+	})
+	const deskPromise = executeServerQueryWithSession<EntryOfficialH2HDeskResponse>(
+		session,
+		GET_ENTRY_OFFICIAL_H2H_DESK,
+		{ entryId },
+		{ cache: 'no-store', timeoutMs: 4_000 },
+	).catch(err => {
+		console.error('[home-personal-desk] official H2H desk fetch failed:', err)
 		return null
 	})
 
@@ -229,7 +261,11 @@ export async function PersonalDesk({
 			) : null}
 
 			<Suspense fallback={<PersonalDeskLeaguesFallback />}>
-				<PersonalDeskLeagues leaguesPromise={leaguesPromise} />
+				<PersonalDeskLeagues
+					deskPromise={deskPromise}
+					entryId={entryId}
+					leaguesPromise={leaguesPromise}
+				/>
 			</Suspense>
 		</PersonalDeskShell>
 	)

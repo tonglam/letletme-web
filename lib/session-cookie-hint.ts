@@ -3,9 +3,10 @@ import { getSessionCookie } from 'better-auth/cookies'
 import { AUTH_COOKIE_PREFIX } from '@/lib/auth-policy'
 
 /**
- * Presentation hint only. The signed cookie is never decoded here and this
- * result must never authorize access; it only decides whether Home reserves a
- * personal-area skeleton while the fresh session check runs.
+ * The signed cookie is never decoded here and this result must never authorize
+ * access. Absence proves an RSC browser request is a guest and avoids a
+ * pointless Auth database read; presence only permits the fresh authorization
+ * lookup and is also used for presentation hints.
  */
 export function hasSessionCookieHintInHeaders(
 	requestHeaders: Headers
