@@ -311,79 +311,83 @@ export function MarketPlayerLookup({
 								</button>
 							) : null}
 						</div>
-						<p
-							id="market-player-search-status"
-							role="status"
-							aria-live="polite"
-							className={`mt-2 text-xs ${searchError ? 'text-destructive' : 'text-muted-foreground'}`}
-						>
-							{searchStatus}
-						</p>
+						<div className="relative mt-2">
+							<div className="flex items-center justify-between gap-2">
+								<p
+									id="market-player-search-status"
+									role="status"
+									aria-live="polite"
+									className={`min-w-0 flex-1 text-xs ${searchError ? 'text-destructive' : 'text-muted-foreground'}`}
+								>
+									{searchStatus}
+								</p>
 
-						{normalizedSearch.length >= MIN_SEARCH_LENGTH &&
-						players.length > 0 ? (
-							<ul
-								id="market-player-results"
-								className="mt-3 max-h-72 overflow-y-auto rounded-lg border border-border/80 bg-card shadow-sm"
-								aria-label={t('playerResults')}
-							>
-								{players.map(player => (
-									<li
-										key={player.id}
-										className="border-b border-border/60 last:border-b-0"
+								{compact ? (
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										className="h-8 shrink-0 px-2 text-xs"
+										onClick={() => {
+											setSearchOpen(false)
+											setSearchTerm('')
+										}}
 									>
-										<div className="flex min-h-11 w-full items-center gap-3 px-3 py-2">
-											<Badge
-												className={positionBadgeClass(
-													positionShort(player.position)
-												)}
-											>
-												{positionShort(player.position)}
-											</Badge>
-											<Link
-												prefetch={false}
-												href={playerStatsHref({ p1: String(player.id) })}
-												className="min-w-0 flex-1 truncate text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
-											>
-												{player.webName}
-											</Link>
-											<span className="shrink-0 text-xs text-muted-foreground">
-												{player.team.shortName}
-											</span>
-											<Button
-												type="button"
-												variant="ghost"
-												size="sm"
-												className="h-8 shrink-0 px-2 text-xs"
-												onClick={() => {
-													setSelectedPlayer(player)
-													setSearchTerm('')
-													if (compact) setSearchOpen(false)
-													onClearSeed?.()
-												}}
-											>
-												{t('priceHistoryShort')}
-											</Button>
-										</div>
-									</li>
-								))}
-							</ul>
-						) : null}
+										{t('hideSearch')}
+									</Button>
+								) : null}
+							</div>
 
-						{compact ? (
-							<Button
-								type="button"
-								variant="ghost"
-								size="sm"
-								className="mt-2 h-8 text-xs"
-								onClick={() => {
-									setSearchOpen(false)
-									setSearchTerm('')
-								}}
-							>
-								{t('hideSearch')}
-							</Button>
-						) : null}
+							{normalizedSearch.length >= MIN_SEARCH_LENGTH &&
+							players.length > 0 ? (
+								<ul
+									id="market-player-results"
+									className="absolute inset-x-0 top-full z-30 mt-3 max-h-72 overflow-y-auto rounded-lg border border-border/80 bg-card shadow-lg"
+									aria-label={t('playerResults')}
+								>
+									{players.map(player => (
+										<li
+											key={player.id}
+											className="border-b border-border/60 last:border-b-0"
+										>
+											<div className="flex min-h-11 w-full items-center gap-3 px-3 py-2">
+												<Badge
+													className={positionBadgeClass(
+														positionShort(player.position)
+													)}
+												>
+													{positionShort(player.position)}
+												</Badge>
+												<Link
+													prefetch={false}
+													href={playerStatsHref({ p1: String(player.id) })}
+													className="min-w-0 flex-1 truncate text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+												>
+													{player.webName}
+												</Link>
+												<span className="shrink-0 text-xs text-muted-foreground">
+													{player.team.shortName}
+												</span>
+												<Button
+													type="button"
+													variant="ghost"
+													size="sm"
+													className="h-8 shrink-0 px-2 text-xs"
+													onClick={() => {
+														setSelectedPlayer(player)
+														setSearchTerm('')
+														if (compact) setSearchOpen(false)
+														onClearSeed?.()
+													}}
+												>
+													{t('priceHistoryShort')}
+												</Button>
+											</div>
+										</li>
+									))}
+								</ul>
+							) : null}
+						</div>
 					</>
 				) : null}
 
