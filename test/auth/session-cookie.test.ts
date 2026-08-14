@@ -8,6 +8,7 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import {
 	AUTH_COOKIE_PREFIX,
 	AUTH_PASSWORD_POLICY,
@@ -19,6 +20,19 @@ import { hasSessionCookieHintInHeaders } from '../../lib/session-cookie-hint'
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 describe('session configuration', () => {
+	it('short-circuits guest RSC authorization before the fresh Auth lookup', async () => {
+		const source = await readFile(
+			new URL('../../lib/session.ts', import.meta.url),
+			'utf8'
+		)
+		const hint = source.indexOf(
+			'if (!hasSessionCookieHintInHeaders(requestHeaders))'
+		)
+		const lookup = source.indexOf('getAuthorizationSession(requestHeaders)')
+		assert.ok(hint >= 0)
+		assert.ok(lookup > hint)
+	})
+
 	it('session expires in 7 days', () => {
 		assert.equal(AUTH_SESSION_POLICY.expiresIn, 60 * 60 * 24 * 7)
 	})
@@ -42,7 +56,7 @@ describe('session configuration', () => {
 		assert.equal(AUTH_COOKIE_PREFIX, 'letletme')
 	})
 
-	it('uses the session cookie only as an anonymous display hint', () => {
+	it('treats the session cookie only as a hint, never authorization', () => {
 		assert.equal(hasSessionCookieHintInHeaders(new Headers()), false)
 		assert.equal(
 			hasSessionCookieHintInHeaders(

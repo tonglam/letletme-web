@@ -1,38 +1,10 @@
-import SelectionsClient, {
-	type StatsResult,
-} from '@/app/data/selections/SelectionsClient'
-import { resolveInitialLeagueTrendsSelection } from '@/app/data/selections/_lib/league-trends'
+import TrendsClient from '@/app/data/selections/TrendsClient'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
 import { getCurrentAndNextEvents } from '@/lib/events'
-import {
-	executePublicServerQuery,
-	executeServerQueryWithSession,
-} from '@/lib/graphql-server'
-import {
-	GET_ENTRY_EVENT_RESULT,
-	type EntryEventPick,
-	type EntryEventResultResponse,
-} from '@/lib/graphql/operations/entries'
-import {
-	GET_PUBLIC_LEAGUE_SELECTION_STATS,
-	GET_PUBLIC_LEAGUE_TRENDS,
-	type PublicLeagueSelectionStatsResponse,
-	type PublicLeagueTrend,
-	type PublicLeagueTrendsResponse,
-} from '@/lib/graphql/operations/leagues'
-import {
-	GET_ENTRY_TOURNAMENTS,
-	GET_TOURNAMENT_SELECTION_STATS,
-	type EntryTournamentsResponse,
-	type TournamentSelectionStatsData,
-	type TournamentSelectionStatsResponse,
-} from '@/lib/graphql/operations/tournaments'
-import { resolveReviewGameweekAnchor } from '@/lib/review-gameweek'
 import { getVerifiedEntryContext } from '@/lib/session'
-import { areTournamentInsightsReady } from '@/lib/tournament/lifecycle'
-import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
-import type { Tournament } from '@/types/tournament'
+import { loadTrendCohorts, loadTrendDesk } from '@/lib/trends-server'
+import type { TrendAccess, TrendCohort } from '@/lib/graphql/operations/trends'
+import { resolveReviewGameweekAnchor } from '@/lib/review-gameweek'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,6 +12,7 @@ type PageProps = {
 	params: LocaleParams
 	searchParams: Promise<{
 		scope?: string
+		cohort?: string
 		tournament?: string
 		gw?: string
 	}>
@@ -51,161 +24,106 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/explore/selections',
 		titleKey: 'selectionsTitle',
-		descriptionKey: 'selectionsDescription',
+		descriptionKey: 'selectionsDescription'
 	})
 }
 
-function toStatsResult(
-	stats: TournamentSelectionStatsData | null | undefined,
-): StatsResult {
-	return {
-		totalEntries: stats?.totalEntries ?? 0,
-		selection: stats?.mostSelectedPlayers ?? [],
-		captain: stats?.captainSelect ?? [],
-		transferIn: stats?.mostTransferIn ?? [],
-		transferOut: stats?.mostTransferOut ?? [],
-	}
+function requestedCohort(query: Awaited<PageProps['searchParams']>) {
+	const raw = query.cohort ?? query.tournament
+	if (!raw) return null
+	if (
+		/^(?:competition|custom):[1-9][0-9]*$|^rank-sample:[a-z0-9][a-z0-9._-]{0,63}$/i.test(
+			raw
+		)
+	)
+		return raw
+	return /^[1-9][0-9]*$/.test(raw) ? `competition:${raw}` : null
 }
 
-export default async function SelectionsPage({ params, searchParams }: PageProps) {
+function findCohort(cohorts: TrendCohort[], id: string | null) {
+	return id ? (cohorts.find(cohort => cohort.id === id) ?? null) : null
+}
+
+export default async function SelectionsPage({
+	params,
+	searchParams
+}: PageProps) {
 	await getPageLocale(params)
 	const query = await searchParams
-
-	const [events, { session, entryId }] = await Promise.all([
+	const [events, sessionContext, publicCatalog] = await Promise.all([
 		getCurrentAndNextEvents(),
 		getVerifiedEntryContext(),
+		loadTrendCohorts('PUBLIC').catch(error => {
+			console.error('[trends] public catalog failed:', error)
+			return { season: '', revision: '', cohorts: [] as TrendCohort[] }
+		})
 	])
+
 	const review = resolveReviewGameweekAnchor(events)
 	const defaultGameweek = review.anchorGw ?? 1
-
-	let initialTournaments: Tournament[] = []
-	let publicLeagues: PublicLeagueTrend[] = []
-	let myLeaguesLoadFailed = false
-	let publicLeaguesLoadFailed = false
-
-	const [myLeaguesResult, publicLeaguesResult] = await Promise.allSettled([
-		entryId != null && session
-			? executeServerQueryWithSession<EntryTournamentsResponse>(
-					session,
-					GET_ENTRY_TOURNAMENTS,
-					{ entryId },
-					{ cache: 'no-store' },
-				)
-			: Promise.resolve({ entryTournaments: [] } as EntryTournamentsResponse),
-		executePublicServerQuery<PublicLeagueTrendsResponse>(
-			GET_PUBLIC_LEAGUE_TRENDS,
-			{},
-			publicFetchOptions({
-				revalidate: RevalidateSeconds.publicStats,
-				tags: [CacheTag.events],
-			}),
-		),
-	])
-
-	if (myLeaguesResult.status === 'fulfilled') {
-		initialTournaments = myLeaguesResult.value.entryTournaments.map(
-			mapEntryTournamentToLiveTournament,
-		)
-	} else {
-		myLeaguesLoadFailed = true
-		console.error('[league-trends] My Leagues seed failed:', myLeaguesResult.reason)
-	}
-	if (publicLeaguesResult.status === 'fulfilled') {
-		publicLeagues = publicLeaguesResult.value.publicLeagueTrends
-	} else {
-		publicLeaguesLoadFailed = true
-		console.error(
-			'[league-trends] Public Leagues seed failed:',
-			publicLeaguesResult.reason,
-		)
-	}
-
-	const initialSelection = resolveInitialLeagueTrendsSelection({
-		scopeParam: query.scope,
-		tournamentParam: query.tournament,
-		gwParam: query.gw,
-		mineTournamentIds: initialTournaments.map(tournament => Number(tournament.id)),
-		publicLeagues,
-		defaultGameweek,
-	})
-
-	let initialStats: StatsResult | null = null
-	let initialEntryPicks: EntryEventPick[] = []
-	let initialStatsLoadFailed = false
-	const selectedTournamentId = initialSelection.tournamentId
-
-	if (selectedTournamentId != null && initialSelection.scope === 'mine') {
-		const tournament = initialTournaments.find(
-			item => Number(item.id) === selectedTournamentId,
-		)
-		if (tournament && areTournamentInsightsReady(tournament) && session && entryId) {
-			const [statsResult, entryResult] = await Promise.allSettled([
-				executeServerQueryWithSession<TournamentSelectionStatsResponse>(
-					session,
-					GET_TOURNAMENT_SELECTION_STATS,
-					{
-						tournamentId: selectedTournamentId,
-						eventId: initialSelection.gameweek,
-						limit: 12,
-					},
-					{ cache: 'no-store' },
-				),
-				executeServerQueryWithSession<EntryEventResultResponse>(
-					session,
-					GET_ENTRY_EVENT_RESULT,
-					{ entryId, eventId: initialSelection.gameweek },
-					{ cache: 'no-store' },
-				),
-			])
-			if (statsResult.status === 'fulfilled') {
-				initialStats = toStatsResult(statsResult.value.tournamentSelectionStats)
-			} else {
-				initialStatsLoadFailed = true
-				console.error('[league-trends] initial My League stats failed:', statsResult.reason)
-			}
-			if (entryResult.status === 'fulfilled') {
-				initialEntryPicks = entryResult.value.entryEventResult?.eventPicks ?? []
-			} else {
-				initialStatsLoadFailed = true
-				console.error('[league-trends] initial entry picks failed:', entryResult.reason)
-			}
-		}
-	} else if (selectedTournamentId != null && initialSelection.scope === 'public') {
+	const requested = requestedCohort(query)
+	const requestedAccess: TrendAccess | null =
+		query.scope === 'mine' ? 'MINE' : query.scope === 'public' ? 'PUBLIC' : null
+	let myCohorts: TrendCohort[] = []
+	const shouldLoadMine =
+		requestedAccess === 'MINE' ||
+		(!requestedAccess && !findCohort(publicCatalog.cohorts, requested))
+	if (shouldLoadMine && sessionContext.session && sessionContext.entryId) {
 		try {
-			const response =
-				await executePublicServerQuery<
-					PublicLeagueSelectionStatsResponse<TournamentSelectionStatsData>
-				>(
-					GET_PUBLIC_LEAGUE_SELECTION_STATS,
-					{
-						tournamentId: selectedTournamentId,
-						eventId: initialSelection.gameweek,
-						limit: 12,
-					},
-					publicFetchOptions({
-						revalidate: RevalidateSeconds.publicStats,
-						tags: [CacheTag.events],
-					}),
-				)
-			initialStats = toStatsResult(response.publicLeagueSelectionStats)
+			myCohorts = (await loadTrendCohorts('MINE', sessionContext.session))
+				.cohorts
 		} catch (error) {
-			initialStatsLoadFailed = true
-			console.error('[league-trends] initial Public League stats failed:', error)
+			console.error('[trends] private catalog failed:', error)
+		}
+	}
+
+	const selectedMine = findCohort(myCohorts, requested)
+	const fallbackMine = !requested ? (myCohorts[0] ?? null) : null
+	const selectedMineOrFallback = selectedMine ?? fallbackMine
+	const selectedPublic = findCohort(publicCatalog.cohorts, requested)
+	const initialAccess: TrendAccess =
+		requestedAccess === 'MINE' ||
+		(!requestedAccess &&
+			publicCatalog.cohorts.length === 0 &&
+			Boolean(selectedMineOrFallback))
+			? 'MINE'
+			: 'PUBLIC'
+	const activeCohorts =
+		initialAccess === 'MINE' ? myCohorts : publicCatalog.cohorts
+	const selected =
+		initialAccess === 'MINE'
+			? (selectedMineOrFallback ?? activeCohorts[0] ?? null)
+			: (selectedPublic ?? activeCohorts[0] ?? null)
+	const initialEventId =
+		Number(query.gw) >= 1 && Number(query.gw) <= 38
+			? Number(query.gw)
+			: (selected?.latestEventId ?? defaultGameweek)
+	let initialDesk = null
+	let initialDeskError = false
+	if (selected) {
+		try {
+			initialDesk = await loadTrendDesk(
+				selected.id,
+				initialEventId,
+				initialAccess,
+				sessionContext.session
+			)
+		} catch (error) {
+			console.error('[trends] initial desk failed:', error)
+			initialDeskError = true
 		}
 	}
 
 	return (
-		<SelectionsClient
-			entryId={entryId ?? 0}
-			initialTournaments={initialTournaments}
-			publicLeagues={publicLeagues}
-			initialSelection={initialSelection}
-			initialStats={initialStats}
-			initialEntryPicks={initialEntryPicks}
-			currentGameweek={defaultGameweek}
-			myLeaguesLoadFailed={myLeaguesLoadFailed}
-			publicLeaguesLoadFailed={publicLeaguesLoadFailed}
-			initialStatsLoadFailed={initialStatsLoadFailed}
+		<TrendsClient
+			publicCohorts={publicCatalog.cohorts}
+			myCohorts={myCohorts}
+			canLoadMine={Boolean(sessionContext.session && sessionContext.entryId)}
+			initialDesk={initialDesk}
+			initialAccess={initialAccess}
+			initialCohortId={selected?.id ?? null}
+			initialEventId={initialEventId}
+			initialDeskError={initialDeskError}
 		/>
 	)
 }

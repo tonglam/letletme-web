@@ -8,7 +8,7 @@ const Toaster = dynamic(
 	{ ssr: false },
 )
 
-const TOAST_ROUTES = ['/onboarding', '/profile'] as const
+const TOAST_ROUTES = ['/explore/fixtures', '/onboarding', '/profile'] as const
 
 export function AppToaster() {
 	const pathname = usePathname()

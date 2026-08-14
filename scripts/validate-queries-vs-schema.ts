@@ -10,20 +10,25 @@
  * Usage: `npx tsx scripts/validate-queries-vs-schema.ts`
  */
 import { existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import path from 'node:path'
 import {
 	buildClientSchema,
+	buildSchema,
 	getIntrospectionQuery,
 	GraphQLSchema,
 	parse,
 	validate
 } from 'graphql'
+import { buildFixtureWindowQuery } from '../lib/fixture-window'
 import {
 	GET_ENTRY_EVENT_RESULT,
 	GET_ENTRY_HISTORY,
 	GET_ENTRY_TRANSFER_HISTORY
 } from '../lib/graphql/operations/entries'
 import {
+	GET_CORE_EVENT_CONTEXT,
 	GET_CURRENT_AND_NEXT_EVENTS,
 	GET_EVENT_FIXTURES,
 	GET_EVENT_OVERALL_RESULT,
@@ -38,9 +43,18 @@ import {
 	GET_LIVE_SNAPSHOT,
 	GET_PLAYER_LIVE
 } from '../lib/graphql/operations/live'
-import { GET_MARKET_PULSE } from '../lib/graphql/operations/market'
+import {
+	GET_FIXTURE_PLANNING_SIGNALS,
+	GET_MARKET_PULSE
+} from '../lib/graphql/operations/market'
 import {
 	GET_PLAYER_DETAIL,
+	GET_PLAYER_STATS_BOOTSTRAP,
+	GET_PLAYER_STATS_DESK_CONTEXT,
+	GET_PLAYER_STATS_DESK_OVERVIEW,
+	GET_PLAYER_STATS_DESK_PROCESS,
+	GET_PLAYER_STATS_DESK_PRODUCTION,
+	GET_PLAYER_STATS_DESK_RECENT,
 	GET_PLAYER_STATE_PROFILE,
 	GET_PLAYERS_FOR_PICKER,
 	SEARCH_PLAYERS_FOR_PICKER,
@@ -74,7 +88,12 @@ function hydrateGraphQlEnvFromLocalFile(): void {
 		if (line.startsWith('#') || !line.includes('=')) continue
 		const ix = line.indexOf('=')
 		const key = line.slice(0, ix).trim()
-		if (key !== 'GRAPHQL_VERIFY_URL' && key !== 'GRAPHQL_ENDPOINT') continue
+		if (
+			key !== 'GRAPHQL_VERIFY_URL' &&
+			key !== 'GRAPHQL_ENDPOINT' &&
+			key !== 'GRAPHQL_SERVICE_TOKEN'
+		)
+			continue
 		let value = line.slice(ix + 1).trim()
 		if (
 			(value.startsWith('"') && value.endsWith('"')) ||
@@ -95,6 +114,13 @@ const endpoint =
 
 const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 	['GET_CURRENT_AND_NEXT_EVENTS', GET_CURRENT_AND_NEXT_EVENTS],
+	['GET_CORE_EVENT_CONTEXT', GET_CORE_EVENT_CONTEXT],
+	['GET_PLAYER_STATS_BOOTSTRAP', GET_PLAYER_STATS_BOOTSTRAP],
+	['GET_PLAYER_STATS_DESK_OVERVIEW', GET_PLAYER_STATS_DESK_OVERVIEW],
+	['GET_PLAYER_STATS_DESK_CONTEXT', GET_PLAYER_STATS_DESK_CONTEXT],
+	['GET_PLAYER_STATS_DESK_RECENT', GET_PLAYER_STATS_DESK_RECENT],
+	['GET_PLAYER_STATS_DESK_PRODUCTION', GET_PLAYER_STATS_DESK_PRODUCTION],
+	['GET_PLAYER_STATS_DESK_PROCESS', GET_PLAYER_STATS_DESK_PROCESS],
 	['GET_ENTRY_TOURNAMENTS', GET_ENTRY_TOURNAMENTS],
 	['GET_ENTRY_OFFICIAL_H2H_DESK', GET_ENTRY_OFFICIAL_H2H_DESK],
 	['GET_TOURNAMENT_EVENT_RESULTS', GET_TOURNAMENT_EVENT_RESULTS],
@@ -112,6 +138,7 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 	['GET_PLAYER_STATE_PROFILE', GET_PLAYER_STATE_PROFILE],
 	['GET_PLAYER_VALUES', GET_PLAYER_VALUES],
 	['GET_MARKET_PULSE', GET_MARKET_PULSE],
+	['GET_FIXTURE_PLANNING_SIGNALS', GET_FIXTURE_PLANNING_SIGNALS],
 	['GET_PLAYERS_FOR_PICKER', GET_PLAYERS_FOR_PICKER],
 	['SEARCH_PLAYERS_FOR_PICKER', SEARCH_PLAYERS_FOR_PICKER],
 	['GET_TEAMS_FOR_PICKER', GET_TEAMS_FOR_PICKER],
@@ -122,6 +149,7 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 	['GET_TOP_TRANSFERS_IN', GET_TOP_TRANSFERS_IN],
 	['GET_TOP_TRANSFERS_OUT', GET_TOP_TRANSFERS_OUT],
 	['GET_EVENT_FIXTURES', GET_EVENT_FIXTURES],
+	['GET_FIXTURE_WINDOW_5', buildFixtureWindowQuery(5)],
 	['GET_LIVE_POINTS', GET_LIVE_POINTS],
 	['GET_TOURNAMENT_LIVE_POINTS', GET_TOURNAMENT_LIVE_POINTS],
 	['GET_ENTRY_EVENT_RESULT', GET_ENTRY_EVENT_RESULT],
@@ -136,7 +164,12 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 async function fetchSchema(endpointUrl: string): Promise<GraphQLSchema> {
 	const res = await fetch(endpointUrl, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		headers: {
+			'Content-Type': 'application/json',
+			...(process.env.GRAPHQL_SERVICE_TOKEN
+				? { 'X-GraphQL-Service-Token': process.env.GRAPHQL_SERVICE_TOKEN }
+				: {})
+		},
 		body: JSON.stringify({ query: getIntrospectionQuery() }),
 		cache: 'no-store'
 	})
@@ -172,12 +205,42 @@ async function fetchSchema(endpointUrl: string): Promise<GraphQLSchema> {
 	return buildClientSchema(body.data as never, { assumeValid: false })
 }
 
+async function loadSchema(): Promise<GraphQLSchema> {
+	const modulePath = process.env.GRAPHQL_SCHEMA_MODULE?.trim()
+	if (!modulePath) return fetchSchema(endpoint)
+	const imported = (await import(
+		pathToFileURL(path.resolve(modulePath)).href
+	)) as { schema?: unknown }
+	if (
+		!imported.schema ||
+		typeof (imported.schema as { getTypeMap?: unknown }).getTypeMap !==
+			'function'
+	) {
+		throw new Error(
+			`GRAPHQL_SCHEMA_MODULE did not export a GraphQLSchema: ${modulePath}`
+		)
+	}
+	// A sibling repository can own a separate `graphql` module instance. Print
+	// with that instance and rebuild locally before calling local validation.
+	const requireFromSchema = createRequire(
+		pathToFileURL(path.resolve(modulePath))
+	)
+	const schemaGraphql = requireFromSchema('graphql') as {
+		printSchema: (schema: unknown) => string
+	}
+	return buildSchema(schemaGraphql.printSchema(imported.schema))
+}
+
 async function main(): Promise<void> {
-	console.log(`Introspecting schema from ${endpoint}\n`)
+	console.log(
+		process.env.GRAPHQL_SCHEMA_MODULE
+			? `Loading schema from ${process.env.GRAPHQL_SCHEMA_MODULE}\n`
+			: `Introspecting schema from ${endpoint}\n`
+	)
 
 	let schema: GraphQLSchema
 	try {
-		schema = await fetchSchema(endpoint)
+		schema = await loadSchema()
 	} catch (e) {
 		console.error(e)
 		process.exit(1)

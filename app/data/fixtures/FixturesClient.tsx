@@ -433,14 +433,12 @@ export default function FixturesClient({
 	const unknownEvents = useMemo(() => new Set(unknownEventIds), [unknownEventIds])
 	const requestRef = useRef<AbortController | null>(null)
 	const requestGenerationRef = useRef(0)
-	const [windowError, setWindowError] = useState(false)
 
 	const selectHorizon = useCallback(
 		(next: FdrHorizon) => {
 			if (next === horizon || next === pendingHorizon) return
 			requestGenerationRef.current += 1
 			requestRef.current?.abort()
-			setWindowError(false)
 			if (next < horizon) {
 				setPendingHorizon(null)
 				setLoading(false)
@@ -478,14 +476,12 @@ export default function FixturesClient({
 						...payload.unknownEventIds,
 					])))
 					setFixturesByEvent(new Map(cacheRef.current))
-					setWindowError(false)
 					setPendingHorizon(null)
 					startTransition(() => setHorizon(next))
 				})
 				.catch(error => {
 					if (controller.signal.aborted || generation !== requestGenerationRef.current) return
 					console.error('[fixtures] horizon fetch failed:', error)
-					setWindowError(true)
 					setPendingHorizon(null)
 					toast.error(t('loadFailed'))
 				})
@@ -663,9 +659,6 @@ export default function FixturesClient({
 					</div>
 					{loading ? (
 						<p className="mt-3 text-xs text-muted-foreground">{t('loading')}</p>
-					) : null}
-					{windowError ? (
-						<p className="mt-3 text-xs text-destructive">{t('loadFailed')}</p>
 					) : null}
 				</Card>
 

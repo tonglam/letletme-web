@@ -13,6 +13,7 @@
 		"measure:gameweek": "node scripts/measure-gameweek-performance.mjs",
 		"measure:market": "node scripts/measure-market-performance.mjs",
 		"measure:player-stats": "node scripts/measure-player-stats-performance.mjs",
+		"measure:trends": "node scripts/measure-trends-performance.mjs",
 		"measure:home": "node scripts/measure-home-performance.mjs",
 		"lint": "eslint .",
 		"db:generate": "drizzle-kit generate",

@@ -759,6 +759,74 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
+		if (query.includes('TrendCohorts')) {
+			json(response, 200, {
+				data: {
+					trendCohorts: {
+						season: '2627',
+						revision: 'e2e-trends-catalog-v1',
+						cohorts: [{
+							id: 'competition:777',
+							kind: 'TRACKED_OFFICIAL_COMPETITION',
+							access: 'PUBLIC',
+							displayName: 'E2E Public League',
+							exact: true,
+							latestEventId: 33,
+							revision: 'e2e-trends-publication-v1',
+							availability: 'READY',
+							capabilities: [
+								{ capability: 'OWNERSHIP', state: 'READY' },
+								{ capability: 'EFFECTIVE_OWNERSHIP', state: 'READY' },
+								{ capability: 'CAPTAINCY', state: 'READY' },
+								{ capability: 'VICE_CAPTAINCY', state: 'READY' },
+								{ capability: 'TRANSFERS', state: 'READY' }
+							]
+						}]
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('TrendCohortSnapshot')) {
+			const eventId = Number(variables.eventId) || 33
+			const cohort = {
+				id: String(variables.cohortId || 'competition:777'),
+				kind: 'TRACKED_OFFICIAL_COMPETITION',
+				access: 'PUBLIC',
+				displayName: 'E2E Public League',
+				exact: true,
+				latestEventId: 33,
+				revision: 'e2e-trends-publication-v1',
+				availability: 'READY',
+				capabilities: [
+					{ capability: 'OWNERSHIP', state: 'READY' },
+					{ capability: 'EFFECTIVE_OWNERSHIP', state: 'READY' },
+					{ capability: 'CAPTAINCY', state: 'READY' },
+					{ capability: 'VICE_CAPTAINCY', state: 'READY' },
+					{ capability: 'TRANSFERS', state: 'READY' }
+				]
+			}
+			const row = { elementId: 1, playerName: 'Saka', playerPosition: 3, teamShortName: 'ARS', count: 720, percentage: 72 }
+			json(response, 200, {
+				data: {
+					trendCohortSnapshot: {
+						eventId,
+						cohort,
+						sections: cohort.capabilities.map(({ capability, state }) => ({
+							capability,
+							state,
+							evidenceContext: {
+								availabilityState: 'READY', coverageState: 'COMPLETE', exact: true,
+								denominator: 1000, sampleSize: 1000, methodKey: 'exact_prepared_competition',
+								methodVersion: '1', limitations: []
+							},
+							rows: [row]
+						}))
+					}
+				}
+			})
+			return
+		}
 		if (query.includes('PublicLeagueTrends')) {
 			json(response, 200, {
 				data: {
