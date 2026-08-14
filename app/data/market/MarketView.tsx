@@ -1,12 +1,12 @@
 'use client'
 
 import { MarketLocalUpdated } from '@/components/data/MarketLocalUpdated'
-import { MarketPlayerLookup } from '@/components/data/MarketPlayerLookup'
 import { OwnershipSwingDesk } from '@/components/data/OwnershipSwingDesk'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { Link } from '@/i18n/navigation'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
@@ -38,6 +38,7 @@ import {
 } from '@/app/data/market/_lib/market-price-share'
 import { Check, Copy, HeartPulse, Search, Sparkles, Users } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
+import dynamic from 'next/dynamic'
 import {
 	useCallback,
 	useEffect,
@@ -76,6 +77,96 @@ function formatCalendarDate(value: string | null, locale: string): string {
 
 function formatOwnership(value: number, locale: string): string {
 	return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)}%`
+}
+
+const LazyMarketPlayerLookup = dynamic(
+	() =>
+		import('@/components/data/MarketPlayerLookup').then(
+			module => module.MarketPlayerLookup
+		),
+	{ ssr: false, loading: () => <div className="min-h-11" aria-hidden="true" /> }
+)
+
+function MarketPlayerLookupLauncher({
+	revision,
+	seedPlayer,
+	compact = true,
+	initialOpen = false,
+	onClearSeed
+}: {
+	revision?: string | null
+	seedPlayer?: PlayerDirectoryItem | null
+	compact?: boolean
+	initialOpen?: boolean
+	onClearSeed?: () => void
+}) {
+	const t = useTranslations('Market')
+	const [open, setOpen] = useState(initialOpen || seedPlayer != null)
+	const [searchTerm, setSearchTerm] = useState('')
+	const [openedByUser, setOpenedByUser] = useState(false)
+	const shouldOpen = open || seedPlayer != null
+
+	if (shouldOpen) {
+		return (
+			<LazyMarketPlayerLookup
+				initialSearchTerm={searchTerm}
+				compact={compact && seedPlayer != null}
+				autoFocus={openedByUser || searchTerm.trim().length >= 2}
+				seedPlayer={seedPlayer}
+				onClearSeed={onClearSeed}
+				revision={revision}
+			/>
+		)
+	}
+	if (!compact) {
+		return (
+			<>
+				<label htmlFor="market-player-search" className="mb-2 block text-sm font-semibold">
+					{t('searchPlayers')}
+				</label>
+				<Input
+					id="market-player-search"
+					role="combobox"
+					value={searchTerm}
+					onChange={event => {
+						const value = event.target.value
+						setSearchTerm(value)
+						if (value.trim().length >= 2) {
+							setOpenedByUser(true)
+							setOpen(true)
+						}
+					}}
+					placeholder={t('searchPlaceholder')}
+					maxLength={50}
+					className="h-11"
+					aria-controls="market-player-results"
+					aria-autocomplete="list"
+				/>
+			</>
+		)
+	}
+
+	return (
+		<div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+			<p className="min-w-0 flex-1 text-xs text-muted-foreground">
+				{t('historyClickHint')}
+			</p>
+			<Button
+				type="button"
+				data-testid="market-open-player-search"
+				variant="ghost"
+				size="sm"
+				className="h-7 shrink-0 px-2 text-xs"
+				onClick={() => {
+					setOpenedByUser(true)
+					setOpen(true)
+				}}
+			>
+				<Search className="size-3.5" aria-hidden="true" />
+				{t('lookupAnotherPlayer')}
+			</Button>
+		</div>
+	)
 }
 
 function PositionBadge({ player }: { player: MarketPlayer }) {
@@ -850,9 +941,17 @@ export function MarketView({
 		[pulse, latestPriceChanges]
 	)
 
-	const handleSelectPricePlayer = useCallback((player: MarketPlayer) => {
-		setSeedPlayer(marketPlayerToDirectory(player))
-	}, [])
+	const handleSelectPricePlayer = useCallback(
+		(player: MarketPlayer) => {
+			markRouteReadyStart(
+				window.location.pathname,
+				performance.now(),
+				`${player.playerId}:${marketRevisionParam(revision)}`
+			)
+			setSeedPlayer(marketPlayerToDirectory(player))
+		},
+		[revision]
+	)
 
 	if (!hasPulseData) {
 		return (
@@ -885,7 +984,10 @@ export function MarketView({
 					<SectionTitle id="market-player-lookup">
 						{t('lookupTitle')}
 					</SectionTitle>
-					<MarketPlayerLookup revision={revision} />
+					<MarketPlayerLookupLauncher
+						revision={revision}
+						initialOpen
+					/>
 				</section>
 			</>
 		)
@@ -933,7 +1035,7 @@ export function MarketView({
 				onSelectPlayer={handleSelectPricePlayer}
 			/>
 			<div className="mt-4 border-t border-border/60 pt-3">
-				<MarketPlayerLookup
+				<MarketPlayerLookupLauncher
 					key={`${seedPlayer?.id ?? 'none'}:${latestPriceChanges.length > 0 ? 'compact' : 'open'}`}
 					compact={latestPriceChanges.length > 0}
 					seedPlayer={seedPlayer}

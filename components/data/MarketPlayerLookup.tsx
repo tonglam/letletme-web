@@ -39,23 +39,27 @@ export type MarketPlayerLookupProps = {
 	 * When `id` changes, history reloads for that player.
 	 */
 	seedPlayer?: PlayerDirectoryItem | null
+	initialSearchTerm?: string
 	/**
 	 * Drill-down mode: hide search until user opens it.
 	 * Standalone full mode shows search by default.
 	 */
 	compact?: boolean
+	autoFocus?: boolean
 	onClearSeed?: () => void
 }
 
 export function MarketPlayerLookup({
 	seedPlayer = null,
+	initialSearchTerm = '',
 	compact = false,
+	autoFocus = compact,
 	onClearSeed,
 	revision = null
 }: MarketPlayerLookupProps = {}) {
 	const t = useTranslations('Market')
 	const formatter = useFormatter()
-	const [searchTerm, setSearchTerm] = useState('')
+	const [searchTerm, setSearchTerm] = useState(initialSearchTerm)
 	const [players, setPlayers] = useState<PlayerDirectoryItem[]>([])
 	const [selectedPlayer, setSelectedPlayer] =
 		useState<PlayerDirectoryItem | null>(seedPlayer)
@@ -291,7 +295,7 @@ export function MarketPlayerLookup({
 								aria-describedby="market-player-search-status"
 								aria-expanded={normalizedSearch.length >= MIN_SEARCH_LENGTH}
 								aria-autocomplete="list"
-								autoFocus={compact}
+								autoFocus={autoFocus}
 							/>
 							{searchTerm ? (
 								<button
