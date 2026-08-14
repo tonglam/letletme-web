@@ -94,10 +94,11 @@ if [[ -L /opt/letletme || ! -d /opt/letletme ]]; then
 	echo "Web root must be a real directory: /opt/letletme" >&2
 	exit 1
 fi
-if [[ -L $static_root || ! -d $static_root ]]; then
-	echo "static root must be a real directory: $static_root" >&2
+if [[ -L $static_root ]]; then
+	echo "static root must not be a symlink: $static_root" >&2
 	exit 1
 fi
+install -d -o root -g www-data -m 0751 "$static_root"
 chown root:letletme /opt/letletme
 chmod 0751 /opt/letletme
 chown root:www-data "$static_root"
