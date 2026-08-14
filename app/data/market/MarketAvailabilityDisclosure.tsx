@@ -7,6 +7,7 @@ import { Link } from '@/i18n/navigation'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
 import type { MarketAvailabilityUpdate, MarketPlayer } from '@/lib/graphql/operations/market'
 import { fetchMarketJson, marketRevisionParam } from '@/lib/market-client'
+import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import { availabilityBodyText, marketAvailabilityStatusKey } from '@/lib/market-availability'
 import { shortMarketPosition } from '@/lib/market'
 import { positionBadgeClass } from '@/lib/position-style'
@@ -140,6 +141,11 @@ export function MarketAvailabilityDisclosure({
 		setError(false)
 		try {
 			const startedAt = performance.now()
+			markRouteReadyStart(
+				window.location.pathname,
+				startedAt,
+				`${revision}:${days}`
+			)
 			const data = await fetchMarketJson<{ items?: MarketAvailabilityUpdate[] }>('availability', {
 				days: String(days),
 				revision: marketRevisionParam(revision)
