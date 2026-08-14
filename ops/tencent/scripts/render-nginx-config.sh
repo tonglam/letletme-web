@@ -18,6 +18,19 @@ if [[ -L $static_dir || ! -d $static_dir ]]; then
 	echo "missing static release directory: $static_dir" >&2
 	exit 1
 fi
+static_try_files=$'try_files\n'
+static_try_files+=$'\t'"$static_dir"'/\$letletme_static_suffix\n'
+while IFS= read -r candidate; do
+	if [[ -d $candidate && ! -L $candidate ]]; then
+		static_try_files+=$'\t'"$candidate"'/\$letletme_static_suffix\n'
+	fi
+done < <(
+	find /opt/letletme/static-releases -mindepth 1 -maxdepth 1 \
+		-regextype posix-extended -type d -regex '.*/[a-f0-9]{40}' \
+		! -path "$static_dir" -printf '%T@ %p\n' |
+		sort -nr | cut -d' ' -f2-
+)
+static_try_files+=$'\t=404;'
 origin_token=$(< /etc/letletme/origin-token)
 proxy_secret=$(< /etc/letletme/local-proxy-secret)
 
@@ -34,7 +47,7 @@ rendered=$(< "$template")
 rendered=${rendered//__ORIGIN_TOKEN__/$origin_token}
 rendered=${rendered//__LOCAL_PROXY_SECRET__/$proxy_secret}
 rendered=${rendered//__RELEASE_SHA__/$release_sha}
-rendered=${rendered//__STATIC_RELEASE_SHA__/$release_sha}
+rendered=${rendered//__STATIC_TRY_FILES__/$static_try_files}
 printf '%s\n' "$rendered" | install -o root -g www-data -m 0640 /dev/stdin \
 	/etc/nginx/conf.d/letletme-origin-auth.conf
 

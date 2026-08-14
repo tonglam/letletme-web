@@ -13,6 +13,7 @@ map "" $letletme_release {
 	default "__RELEASE_SHA__";
 }
 
-map "" $letletme_static_root {
-	default "/opt/letletme/static-releases/__STATIC_RELEASE_SHA__/";
+map $uri $letletme_static_suffix {
+	default "/__missing_static_asset";
+	~^/_next/static/(.*)$ /$1;
 }

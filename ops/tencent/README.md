@@ -57,8 +57,9 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
    been stable for at least 24 hours. After that rollback window, each
    successful deployment prunes older release, static, and Next cache
    directories while retaining the active and immediate rollback releases.
-   Static assets are release-scoped so a rollback restores the matching route
-   and chunk metadata atomically.
+   Static assets are release-scoped; Nginx checks the active release first and
+   then retained releases so in-flight browser requests for an older chunk do
+   not 404 during a rollout or rollback.
 
 Next.js 16 intentionally uses an internal constant `.next/BUILD_ID` whenever
 `deploymentId` is enabled. The release gate therefore checks the configured
