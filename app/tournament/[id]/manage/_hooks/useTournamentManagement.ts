@@ -122,6 +122,10 @@ export function useTournamentManagement(tournament: EntryTournament) {
 					...current,
 					currentTournament: {
 						...current.currentTournament,
+						state:
+							typeof status.state === 'string'
+								? (status.state as EntryTournament['state'])
+								: current.currentTournament.state,
 						updatedAt:
 							typeof status.updatedAt === 'string'
 								? status.updatedAt

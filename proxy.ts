@@ -6,10 +6,7 @@ import {
 } from '@/i18n/routing'
 import { getAuthorizationSession } from '@/lib/auth'
 import { renderMaintenanceDocument } from '@/lib/maintenance-document'
-import {
-	isMaintenanceDataApi,
-	readMaintenanceConfig
-} from '@/lib/maintenance'
+import { isMaintenanceDataApi, readMaintenanceConfig } from '@/lib/maintenance'
 import {
 	hasInvalidTournamentId,
 	isProtectedApi,
@@ -139,7 +136,11 @@ export async function proxy(req: NextRequest) {
 		if (!session) {
 			return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 		}
-		if (requestedPathname.startsWith('/api/tournaments') || requestedPathname.startsWith('/api/live/competitions') || requestedPathname.startsWith('/api/competitions')) {
+		if (
+			requestedPathname.startsWith('/api/tournaments') ||
+			requestedPathname.startsWith('/api/live/competitions') ||
+			requestedPathname.startsWith('/api/competitions')
+		) {
 			const requestHeaders = new Headers(req.headers)
 			requestHeaders.delete(COMPETITION_SESSION_HANDOFF_HEADER)
 			requestHeaders.delete(COMPETITION_SESSION_PATH_HEADER)
@@ -148,7 +149,8 @@ export async function proxy(req: NextRequest) {
 				requestedPathname,
 				req.headers.get('cookie')
 			)
-			if (handoff) requestHeaders.set(COMPETITION_SESSION_HANDOFF_HEADER, handoff)
+			if (handoff)
+				requestHeaders.set(COMPETITION_SESSION_HANDOFF_HEADER, handoff)
 			requestHeaders.set(COMPETITION_SESSION_PATH_HEADER, requestedPathname)
 			return NextResponse.next({ request: { headers: requestHeaders } })
 		}
@@ -158,7 +160,9 @@ export async function proxy(req: NextRequest) {
 	}
 
 	// The old id-only alias is a redirect boundary, not a second rendered page.
-	const legacyMatch = requestedPathname.match(/^\/((?:[a-z]{2}(?:-[A-Z]{2})?)\/)?competitions\/([1-9]\d*)\/?$/)
+	const legacyMatch = requestedPathname.match(
+		/^\/((?:[a-z]{2}(?:-[A-Z]{2})?)\/)?competitions\/([1-9]\d*)\/?$/
+	)
 	if (legacyMatch) {
 		const locale = legacyMatch[1]?.replace(/\/$/, '') || routing.defaultLocale
 		const url = req.nextUrl.clone()
@@ -228,7 +232,10 @@ export async function proxy(req: NextRequest) {
 	const requestHeaders = new Headers(req.headers)
 	requestHeaders.delete(COMPETITION_SESSION_HANDOFF_HEADER)
 	requestHeaders.delete(COMPETITION_SESSION_PATH_HEADER)
-	if (pathname.startsWith('/competitions') || pathname.startsWith('/live/competitions')) {
+	if (
+		pathname.startsWith('/competitions') ||
+		pathname.startsWith('/live/competitions')
+	) {
 		const handoff = createCompetitionSessionHandoff(
 			session,
 			pathname,
@@ -236,12 +243,21 @@ export async function proxy(req: NextRequest) {
 		)
 		if (handoff) requestHeaders.set(COMPETITION_SESSION_HANDOFF_HEADER, handoff)
 		requestHeaders.set(COMPETITION_SESSION_PATH_HEADER, pathname)
-		const handedOff = NextResponse.next({ request: { headers: requestHeaders } })
+		// The i18n middleware's locale is carried as a request override. Rebuild
+		// that override on the handoff response so localized protected routes do
+		// not fall back to the default locale after the session lookup.
+		requestHeaders.set('x-next-intl-locale', locale)
+		const handedOff = NextResponse.next({
+			request: { headers: requestHeaders }
+		})
 		for (const header of ['x-middleware-rewrite', 'x-next-intl-locale']) {
 			const value = i18nResponse.headers.get(header)
 			if (value) handedOff.headers.set(header, value)
 		}
-		return copyCookies(i18nResponse, withDocumentCacheHeaders(req, handedOff, true))
+		return copyCookies(
+			i18nResponse,
+			withDocumentCacheHeaders(req, handedOff, true)
+		)
 	}
 
 	return withDocumentCacheHeaders(req, i18nResponse, true)
