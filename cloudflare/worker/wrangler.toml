@@ -2,6 +2,10 @@ name = "letletme-router"
 main = "src/router.js"
 compatibility_date = "2026-08-14"
 workers_dev = false
+
+[placement]
+mode = "smart"
+
 routes = [
   { pattern = "letletme.top/*", zone_name = "letletme.top" }
 ]

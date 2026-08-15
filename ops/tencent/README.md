@@ -104,4 +104,6 @@ must be pass-through, so merely attaching the route cannot move traffic to
 Tencent.
 Configure the `letletme.top/*` route as fail-open. Promote pass-through first,
 then split 90/10, 50/50 and 0/100 by version ID. A rollback is a 100%
-deployment of the pass-through version.
+deployment of the pass-through version. The Worker enables Cloudflare Smart
+Placement so fetch-handler execution can move closer to the Tencent backend;
+allow its analysis window to complete before judging the CN latency gate.
