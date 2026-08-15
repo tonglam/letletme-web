@@ -133,11 +133,22 @@ creating a CNAME, Cloudflare assigns a new record ID. The safe sequence is:
 3. Delete the existing apex A record using the exported record ID, then
    confirm the apex has no conflicting A/AAAA/CNAME record.
 4. Create the apex EdgeOne CNAME as DNS-only.
-5. Immediately query Cloudflare DNS and capture the new CNAME record ID;
+5. If CNAME creation or its record verification fails after step 3, stop
+   immediately and recreate the exported proxied A record with the exact
+   saved name, content, TTL, and `proxied=true`; GET it back and verify it is
+   the fallback record. Failure to restore the A record is a hard stop for
+   manual Cloudflare recovery; never enable the watchdog in this state.
+6. Immediately query Cloudflare DNS and capture the new CNAME record ID;
    verify the exact apex name, EdgeOne target, and `proxied=false`.
-6. Update or redeploy the watchdog with that new CNAME ID, still with
-   `WATCHDOG_ENABLED=false`, then run its health/dry-run checks.
-7. Enable the watchdog only after the direct Vercel health probe and the
+7. Update or redeploy the watchdog with that new CNAME ID, still with
+   `WATCHDOG_ENABLED=false`. Verify that value in the deployed Worker
+   configuration, then run only non-mutating checks: `npm run watchdog:dry-run`
+   validates the bundle, `curl -fsS https://letletme-web.vercel.app/healthz`
+   validates direct Vercel, `curl -fsS https://letletme.top/healthz` validates
+   the current apex, and a request to the Worker URL returning 404 confirms
+   there is no public control endpoint. The 404 is not evidence that the cron
+   ran; the deployed `WATCHDOG_ENABLED=false` value is the disablement check.
+8. Enable the watchdog only after the direct Vercel health probe and the
    exact EdgeOne-record check both pass.
 
 If an in-place Cloudflare update preserves the record ID, still GET the record
