@@ -20,7 +20,13 @@ export function parseState(raw) {
 			fallbackActive: parsed.fallbackActive === true,
 			lastFailureAt: parsed.lastFailureAt ?? null,
 			lastAction: parsed.lastAction ?? null,
-			lastAlertKey: parsed.lastAlertKey ?? null
+			lastAlertKey: parsed.lastAlertKey ?? null,
+			pendingAlert:
+				parsed.pendingAlert &&
+				typeof parsed.pendingAlert.key === 'string' &&
+				typeof parsed.pendingAlert.message === 'string'
+					? parsed.pendingAlert
+					: null
 		}
 	} catch {
 		return {
@@ -28,7 +34,8 @@ export function parseState(raw) {
 			fallbackActive: false,
 			lastFailureAt: null,
 			lastAction: null,
-			lastAlertKey: null
+			lastAlertKey: null,
+			pendingAlert: null
 		}
 	}
 }
@@ -126,35 +133,99 @@ async function sendAlert(env, message, fetchImpl) {
 	return { sent: true }
 }
 
+async function saveState(env, rawState, state) {
+	const serialized = JSON.stringify(state)
+	if (serialized !== (rawState ?? '')) {
+		await env.FAILOVER_STATE.put(STATE_KEY, serialized)
+	}
+	return serialized
+}
+
+async function applyAlert(env, state, key, message, fetchImpl) {
+	if (state.lastAlertKey === key && !state.pendingAlert) return state
+	try {
+		const result = await sendAlert(env, message, fetchImpl)
+		if (result.sent || result.reason === 'telegram-not-configured') {
+			return { ...state, lastAlertKey: key, pendingAlert: null }
+		}
+	} catch (error) {
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_alert_error',
+			key,
+			error: error instanceof Error ? error.message : String(error)
+		}))
+	}
+	return { ...state, lastAlertKey: null, pendingAlert: { key, message } }
+}
+
+async function alreadyFallbackState(env, rawState, state, record, fetchImpl) {
+	let next = {
+		...state,
+		failureCount: 0,
+		fallbackActive: true,
+		lastAction: 'already-fallback'
+	}
+	if (next.pendingAlert) {
+		next = await applyAlert(
+			env,
+			next,
+			next.pendingAlert.key,
+			next.pendingAlert.message,
+			fetchImpl
+		)
+	}
+	const persistedState = await saveState(env, rawState, next)
+	return { action: 'already-fallback', state: next, record, persistedState }
+}
+
+async function manualDnsState(env, rawState, state, record, fetchImpl) {
+	const alertKey = `manual:${record?.type || 'unknown'}:${record?.content || 'unknown'}:${record?.proxied}`
+	const message = `letletme watchdog 未改 DNS：apex 不是预期 EdgeOne 记录（当前 ${record?.type || 'unknown'} ${record?.content || 'unknown'}）。`
+	let next = {
+		...state,
+		failureCount: 0,
+		fallbackActive: false,
+		lastAction: 'manual-dns-state'
+	}
+	if (state.lastAlertKey !== alertKey || state.pendingAlert?.key === alertKey) {
+		next = await applyAlert(env, next, alertKey, message, fetchImpl)
+	}
+	await saveState(env, rawState, next)
+	return { action: 'manual-dns-state', state: next, record }
+}
+
+async function bothUnhealthyState(env, rawState, state, record, edge, vercel, fetchImpl) {
+	const alertKey = `both-unhealthy:${edge.reason}:${vercel.reason}`
+	const message = `letletme watchdog 暂不回退：EdgeOne 与 Vercel 同时异常。EdgeOne=${edge.reason} Vercel=${vercel.reason}`
+	let next = {
+		...state,
+		failureCount: 0,
+		fallbackActive: false,
+		lastAction: 'both-unhealthy'
+	}
+	if (state.lastAlertKey !== alertKey || state.pendingAlert?.key === alertKey) {
+		next = await applyAlert(env, next, alertKey, message, fetchImpl)
+	}
+	await saveState(env, rawState, next)
+	return { action: 'both-unhealthy', state: next, edge, vercel, record }
+}
+
 export async function runCheck(env, options = {}) {
 	const fetchImpl = options.fetchImpl || fetch
 	const now = options.now || new Date().toISOString()
 	const timeoutMs = Number(env.PROBE_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS
-	const state = parseState(await env.FAILOVER_STATE.get(STATE_KEY))
+	const rawState = await env.FAILOVER_STATE.get(STATE_KEY)
+	const state = parseState(rawState)
 	if (!bool(env.WATCHDOG_ENABLED)) {
 		return { action: 'disabled', state }
 	}
 
 	const record = await apiRequest(env, fetchImpl, 'GET')
 	if (isFallbackRecord(record, env)) {
-		const next = { ...state, failureCount: 0, fallbackActive: true, lastAction: 'already-fallback' }
-		await env.FAILOVER_STATE.put(STATE_KEY, JSON.stringify(next))
-		return { action: 'already-fallback', state: next, record }
+		return alreadyFallbackState(env, rawState, state, record, fetchImpl)
 	}
 	if (!isEdgeOneRecord(record, env)) {
-		const alertKey = `manual:${record?.type || 'unknown'}:${record?.content || 'unknown'}:${record?.proxied}`
-		const next = {
-			...state,
-			failureCount: 0,
-			fallbackActive: false,
-			lastAction: 'manual-dns-state',
-			lastAlertKey: alertKey
-		}
-		await env.FAILOVER_STATE.put(STATE_KEY, JSON.stringify(next))
-		if (state.lastAlertKey !== alertKey) {
-			await sendAlert(env, `letletme watchdog 未改 DNS：apex 不是预期 EdgeOne 记录（当前 ${record?.type || 'unknown'} ${record?.content || 'unknown'}）。`, fetchImpl)
-		}
-		return { action: 'manual-dns-state', state: next, record }
+		return manualDnsState(env, rawState, state, record, fetchImpl)
 	}
 
 	const [edge, vercel] = await Promise.all([
@@ -162,22 +233,44 @@ export async function runCheck(env, options = {}) {
 		probe(env.VERCEL_HEALTH_URL, fetchImpl, timeoutMs, false)
 	])
 	if (edge.ok) {
-		const next = { ...state, failureCount: 0, fallbackActive: false, lastAction: 'healthy', lastAlertKey: null }
-		await env.FAILOVER_STATE.put(STATE_KEY, JSON.stringify(next))
+		const next = {
+			...state,
+			failureCount: 0,
+			fallbackActive: false,
+			lastAction: 'healthy',
+			lastAlertKey: null,
+			pendingAlert: null
+		}
+		await saveState(env, rawState, next)
 		return { action: 'healthy', state: next, edge, vercel, record }
 	}
 	if (!vercel.ok) {
-		const next = { ...state, failureCount: 0, fallbackActive: false, lastAction: 'both-unhealthy' }
-		await env.FAILOVER_STATE.put(STATE_KEY, JSON.stringify(next))
-		await sendAlert(env, `letletme watchdog 暂不回退：EdgeOne 与 Vercel 同时异常。EdgeOne=${edge.reason} Vercel=${vercel.reason}`, fetchImpl)
-		return { action: 'both-unhealthy', state: next, edge, vercel, record }
+		return bothUnhealthyState(env, rawState, state, record, edge, vercel, fetchImpl)
 	}
 
 	const failureCount = state.failureCount + 1
 	if (failureCount < FAILURE_THRESHOLD) {
-		const next = { ...state, failureCount, fallbackActive: false, lastFailureAt: now, lastAction: 'edge-failure-counted' }
-		await env.FAILOVER_STATE.put(STATE_KEY, JSON.stringify(next))
+		const next = {
+			...state,
+			failureCount,
+			fallbackActive: false,
+			lastFailureAt: now,
+			lastAction: 'edge-failure-counted',
+			lastAlertKey: null,
+			pendingAlert: null
+		}
+		await saveState(env, rawState, next)
 		return { action: 'counted-failure', state: next, edge, vercel, record }
+	}
+
+	// Health probes can take several seconds. Re-read the record immediately
+	// before the mutation so an operator's DNS change wins the race.
+	const latestRecord = await apiRequest(env, fetchImpl, 'GET')
+	if (isFallbackRecord(latestRecord, env)) {
+		return alreadyFallbackState(env, rawState, state, latestRecord, fetchImpl)
+	}
+	if (!isEdgeOneRecord(latestRecord, env)) {
+		return manualDnsState(env, rawState, state, latestRecord, fetchImpl)
 	}
 
 	const fallback = {
@@ -189,9 +282,20 @@ export async function runCheck(env, options = {}) {
 	}
 	const updated = await apiRequest(env, fetchImpl, 'PUT', '', fallback)
 	if (!isFallbackRecord(updated, env)) throw new Error('fallback-record-verification-failed')
-	const next = { ...state, failureCount, fallbackActive: true, lastFailureAt: now, lastAction: 'fallback-applied' }
-	await env.FAILOVER_STATE.put(STATE_KEY, JSON.stringify(next))
-	await sendAlert(env, `letletme watchdog 已回退 Cloudflare → Vercel：EdgeOne 连续 ${failureCount} 次异常，Vercel 健康。`, fetchImpl)
+	const alertKey = `fallback:${env.VERCEL_FALLBACK_A}`
+	const message = `letletme watchdog 已回退 Cloudflare → Vercel：EdgeOne 连续 ${failureCount} 次异常，Vercel 健康。`
+	let next = {
+		...state,
+		failureCount,
+		fallbackActive: true,
+		lastFailureAt: now,
+		lastAction: 'fallback-applied',
+		lastAlertKey: null,
+		pendingAlert: { key: alertKey, message }
+	}
+	const persistedState = await saveState(env, rawState, next)
+	next = await applyAlert(env, next, alertKey, message, fetchImpl)
+	await saveState(env, persistedState, next)
 	return { action: 'fallback-applied', state: next, edge, vercel, record, updated }
 }
 

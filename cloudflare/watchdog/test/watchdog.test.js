@@ -41,8 +41,15 @@ function health(edge) {
 	})
 }
 
-function fakeFetchFactory({ record, edgeResponses = [], vercelResponse = health(false) }) {
+function fakeFetchFactory({
+	record,
+	records,
+	edgeResponses = [],
+	vercelResponse = health(false),
+	telegramResponses = []
+}) {
 	const calls = []
+	const dnsRecords = records ? [...records] : [record]
 	return {
 		calls,
 		fetch: async (input, init = {}) => {
@@ -53,7 +60,10 @@ function fakeFetchFactory({ record, edgeResponses = [], vercelResponse = health(
 					const body = JSON.parse(init.body)
 					return Response.json({ success: true, result: { ...body, id: 'record' } })
 				}
-				return Response.json({ success: true, result: record })
+				return Response.json({ success: true, result: dnsRecords.length > 1 ? dnsRecords.shift() : dnsRecords[0] })
+			}
+			if (url.startsWith('https://api.telegram.org/')) {
+				return telegramResponses.shift() || new Response('', { status: 200 })
 			}
 			if (url === 'https://letletme.top/healthz') {
 				return edgeResponses.shift() || health(false)
@@ -132,6 +142,81 @@ test('invalid persisted state is safely reset', () => {
 		fallbackActive: false,
 		lastFailureAt: null,
 		lastAction: null,
-		lastAlertKey: null
+		lastAlertKey: null,
+		pendingAlert: null
 	})
+})
+
+test('does not write unchanged healthy state on every cron tick', async () => {
+	const firstEnv = makeEnv()
+	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false }
+	const firstFetch = fakeFetchFactory({ record: edgeRecord, edgeResponses: [health(true)] })
+	await runCheck(firstEnv, { fetchImpl: firstFetch.fetch })
+	assert.equal(firstEnv.writes.length, 1)
+
+	const secondEnv = makeEnv(JSON.stringify(firstEnv.writes[0]))
+	const secondFetch = fakeFetchFactory({ record: edgeRecord, edgeResponses: [health(true)] })
+	const second = await runCheck(secondEnv, { fetchImpl: secondFetch.fetch })
+	assert.equal(second.action, 'healthy')
+	assert.equal(secondEnv.writes.length, 0)
+})
+
+test('revalidates the DNS record immediately before failover', async () => {
+	const env = makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }))
+	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false }
+	const manualRecord = { type: 'CNAME', name: 'letletme.top', content: 'operator.example.com', proxied: false }
+	const { fetch, calls } = fakeFetchFactory({
+		records: [edgeRecord, manualRecord],
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	const result = await runCheck(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'manual-dns-state')
+	assert.equal(calls.filter(call => call.init.method === 'PUT').length, 0)
+	assert.equal(calls.filter(call => call.url.includes('/dns_records/')).length, 2)
+})
+
+test('deduplicates a sustained dual-outage alert', async () => {
+	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false }
+	const firstEnv = { ...makeEnv(), TELEGRAM_BOT_TOKEN: 'bot', TELEGRAM_CHAT_ID: 'chat' }
+	const firstFetch = fakeFetchFactory({
+		record: edgeRecord,
+		edgeResponses: [new Response('', { status: 503 })],
+		vercelResponse: new Response('', { status: 503 }),
+		telegramResponses: [new Response('', { status: 200 })]
+	})
+	await runCheck(firstEnv, { fetchImpl: firstFetch.fetch })
+	const saved = JSON.stringify(firstEnv.writes.at(-1))
+
+	const secondEnv = { ...makeEnv(saved), TELEGRAM_BOT_TOKEN: 'bot', TELEGRAM_CHAT_ID: 'chat' }
+	const secondFetch = fakeFetchFactory({
+		record: edgeRecord,
+		edgeResponses: [new Response('', { status: 503 })],
+		vercelResponse: new Response('', { status: 503 }),
+		telegramResponses: [new Response('', { status: 200 })]
+	})
+	await runCheck(secondEnv, { fetchImpl: secondFetch.fetch })
+	assert.equal(secondFetch.calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 0)
+})
+
+test('retries a failover alert after DNS already changed', async () => {
+	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false }
+	const firstEnv = { ...makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false })), TELEGRAM_BOT_TOKEN: 'bot', TELEGRAM_CHAT_ID: 'chat' }
+	const firstFetch = fakeFetchFactory({
+		record: edgeRecord,
+		edgeResponses: [new Response('', { status: 503 })],
+		telegramResponses: [new Response('', { status: 500 })]
+	})
+	const first = await runCheck(firstEnv, { fetchImpl: firstFetch.fetch })
+	assert.equal(first.action, 'fallback-applied')
+	assert.equal(first.state.pendingAlert?.key, 'fallback:76.76.21.21')
+
+	const secondEnv = { ...makeEnv(JSON.stringify(firstEnv.writes.at(-1))), TELEGRAM_BOT_TOKEN: 'bot', TELEGRAM_CHAT_ID: 'chat' }
+	const secondFetch = fakeFetchFactory({
+		record: { type: 'A', name: 'letletme.top', content: '76.76.21.21', proxied: true },
+		telegramResponses: [new Response('', { status: 200 })]
+	})
+	const second = await runCheck(secondEnv, { fetchImpl: secondFetch.fetch })
+	assert.equal(second.action, 'already-fallback')
+	assert.equal(second.state.pendingAlert, null)
+	assert.equal(secondFetch.calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 1)
 })
