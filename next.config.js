@@ -5,11 +5,19 @@ const createNextIntlPlugin = require('next-intl/plugin')
 const withNextIntl = createNextIntlPlugin('./i18n/request.ts')
 
 function resolveReleaseSha() {
-	for (const candidate of [
-		process.env.LETLETME_RELEASE_SHA,
-		process.env.VERCEL_GIT_COMMIT_SHA,
-		process.env.GITHUB_SHA
-	]) {
+	const candidates =
+		process.env.VERCEL === '1'
+			? [
+					process.env.VERCEL_GIT_COMMIT_SHA,
+					process.env.LETLETME_RELEASE_SHA,
+					process.env.GITHUB_SHA
+			  ]
+			: [
+					process.env.LETLETME_RELEASE_SHA,
+					process.env.VERCEL_GIT_COMMIT_SHA,
+					process.env.GITHUB_SHA
+			  ]
+	for (const candidate of candidates) {
 		if (/^[a-f0-9]{7,64}$/i.test(candidate ?? '')) {
 			return candidate.toLowerCase()
 		}
