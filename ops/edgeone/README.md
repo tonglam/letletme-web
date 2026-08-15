@@ -35,9 +35,12 @@ advertised as a user URL.
 
 ## Watchdog deployment values
 
-Create the KV namespace, then replace the placeholder in
-`cloudflare/watchdog/wrangler.toml`. Store the following as Worker secrets or
-vars before enabling the schedule:
+Create the KV namespace, then deploy the SQLite-backed Durable Object declared
+in `cloudflare/watchdog/wrangler.toml`. The Durable Object serializes the
+three-failure counter; the KV namespace stores only alert and audit state.
+This remains within the Workers Free daily request allowance for a one-minute
+cron. Store the following as Worker secrets or vars before enabling the
+schedule:
 
 - `ZONE_ID`, `DNS_RECORD_ID`
 - `EDGEONE_CNAME_TARGET`

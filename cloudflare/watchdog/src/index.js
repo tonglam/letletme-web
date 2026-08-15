@@ -1,6 +1,8 @@
 const STATE_KEY = 'watchdog-state-v1'
 const FAILURE_THRESHOLD = 3
 const DEFAULT_TIMEOUT_MS = 8_000
+const CLAIM_TTL_MS = 2 * 60 * 1_000
+const COORDINATOR_NAME = 'letletme-top'
 
 function bool(value) {
 	return value === true || value === 'true'
@@ -141,6 +143,25 @@ async function saveState(env, rawState, state) {
 	return serialized
 }
 
+function coordinatorClient(env, options) {
+	if (options.coordinator) return options.coordinator
+	if (!env.FAILOVER_COORDINATOR) throw new Error('coordinator-binding-missing')
+	const id = env.FAILOVER_COORDINATOR.idFromName(COORDINATOR_NAME)
+	const stub = env.FAILOVER_COORDINATOR.get(id)
+	const command = async operation => {
+		const response = await stub.fetch(`https://watchdog-coordinator/${operation}`, { method: 'POST' })
+		const payload = await response.json().catch(() => null)
+		if (!response.ok || payload?.ok !== true) throw new Error(`coordinator-${response.status}`)
+		return payload
+	}
+	return {
+		recordFailure: () => command('record-failure'),
+		reset: () => command('reset'),
+		release: () => command('release'),
+		confirm: () => command('confirm')
+	}
+}
+
 async function applyAlert(env, state, key, message, fetchImpl) {
 	if (state.lastAlertKey === key && !state.pendingAlert) return state
 	try {
@@ -158,10 +179,11 @@ async function applyAlert(env, state, key, message, fetchImpl) {
 	return { ...state, lastAlertKey: null, pendingAlert: { key, message } }
 }
 
-async function alreadyFallbackState(env, rawState, state, record, fetchImpl) {
+async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coordinator) {
+	const coordination = await coordinator.confirm()
 	let next = {
 		...state,
-		failureCount: 0,
+		failureCount: coordination.failureCount,
 		fallbackActive: true,
 		lastAction: 'already-fallback'
 	}
@@ -178,12 +200,13 @@ async function alreadyFallbackState(env, rawState, state, record, fetchImpl) {
 	return { action: 'already-fallback', state: next, record, persistedState }
 }
 
-async function manualDnsState(env, rawState, state, record, fetchImpl) {
+async function manualDnsState(env, rawState, state, record, fetchImpl, coordinator) {
+	const coordination = await coordinator.reset()
 	const alertKey = `manual:${record?.type || 'unknown'}:${record?.content || 'unknown'}:${record?.proxied}`
 	const message = `letletme watchdog 未改 DNS：apex 不是预期 EdgeOne 记录（当前 ${record?.type || 'unknown'} ${record?.content || 'unknown'}）。`
 	let next = {
 		...state,
-		failureCount: 0,
+		failureCount: coordination.failureCount,
 		fallbackActive: false,
 		lastAction: 'manual-dns-state'
 	}
@@ -194,12 +217,13 @@ async function manualDnsState(env, rawState, state, record, fetchImpl) {
 	return { action: 'manual-dns-state', state: next, record }
 }
 
-async function bothUnhealthyState(env, rawState, state, record, edge, vercel, fetchImpl) {
+async function bothUnhealthyState(env, rawState, state, record, edge, vercel, fetchImpl, coordinator) {
+	const coordination = await coordinator.reset()
 	const alertKey = `both-unhealthy:${edge.reason}:${vercel.reason}`
 	const message = `letletme watchdog 暂不回退：EdgeOne 与 Vercel 同时异常。EdgeOne=${edge.reason} Vercel=${vercel.reason}`
 	let next = {
 		...state,
-		failureCount: 0,
+		failureCount: coordination.failureCount,
 		fallbackActive: false,
 		lastAction: 'both-unhealthy'
 	}
@@ -219,13 +243,14 @@ export async function runCheck(env, options = {}) {
 	if (!bool(env.WATCHDOG_ENABLED)) {
 		return { action: 'disabled', state }
 	}
+	const coordinator = coordinatorClient(env, options)
 
 	const record = await apiRequest(env, fetchImpl, 'GET')
 	if (isFallbackRecord(record, env)) {
-		return alreadyFallbackState(env, rawState, state, record, fetchImpl)
+		return alreadyFallbackState(env, rawState, state, record, fetchImpl, coordinator)
 	}
 	if (!isEdgeOneRecord(record, env)) {
-		return manualDnsState(env, rawState, state, record, fetchImpl)
+		return manualDnsState(env, rawState, state, record, fetchImpl, coordinator)
 	}
 
 	const [edge, vercel] = await Promise.all([
@@ -233,9 +258,10 @@ export async function runCheck(env, options = {}) {
 		probe(env.VERCEL_HEALTH_URL, fetchImpl, timeoutMs, false)
 	])
 	if (edge.ok) {
+		const coordination = await coordinator.reset()
 		const next = {
 			...state,
-			failureCount: 0,
+			failureCount: coordination.failureCount,
 			fallbackActive: false,
 			lastAction: 'healthy',
 			lastAlertKey: null,
@@ -245,32 +271,39 @@ export async function runCheck(env, options = {}) {
 		return { action: 'healthy', state: next, edge, vercel, record }
 	}
 	if (!vercel.ok) {
-		return bothUnhealthyState(env, rawState, state, record, edge, vercel, fetchImpl)
+		return bothUnhealthyState(env, rawState, state, record, edge, vercel, fetchImpl, coordinator)
 	}
 
-	const failureCount = state.failureCount + 1
-	if (failureCount < FAILURE_THRESHOLD) {
+	const coordination = await coordinator.recordFailure()
+	const failureCount = coordination.failureCount
+	if (!coordination.shouldFailover) {
 		const next = {
 			...state,
 			failureCount,
 			fallbackActive: false,
 			lastFailureAt: now,
-			lastAction: 'edge-failure-counted',
+			lastAction: coordination.claimHeld ? 'fallback-claim-held' : 'edge-failure-counted',
 			lastAlertKey: null,
 			pendingAlert: null
 		}
 		await saveState(env, rawState, next)
-		return { action: 'counted-failure', state: next, edge, vercel, record }
+		return {
+			action: coordination.claimHeld ? 'fallback-claim-held' : 'counted-failure',
+			state: next,
+			edge,
+			vercel,
+			record
+		}
 	}
 
 	// Health probes can take several seconds. Re-read the record immediately
 	// before the mutation so an operator's DNS change wins the race.
 	const latestRecord = await apiRequest(env, fetchImpl, 'GET')
 	if (isFallbackRecord(latestRecord, env)) {
-		return alreadyFallbackState(env, rawState, state, latestRecord, fetchImpl)
+		return alreadyFallbackState(env, rawState, state, latestRecord, fetchImpl, coordinator)
 	}
 	if (!isEdgeOneRecord(latestRecord, env)) {
-		return manualDnsState(env, rawState, state, latestRecord, fetchImpl)
+		return manualDnsState(env, rawState, state, latestRecord, fetchImpl, coordinator)
 	}
 
 	const fallback = {
@@ -280,8 +313,15 @@ export async function runCheck(env, options = {}) {
 		ttl: Number(env.VERCEL_FALLBACK_TTL) || 1,
 		proxied: true
 	}
-	const updated = await apiRequest(env, fetchImpl, 'PUT', '', fallback)
-	if (!isFallbackRecord(updated, env)) throw new Error('fallback-record-verification-failed')
+	let updated
+	try {
+		updated = await apiRequest(env, fetchImpl, 'PUT', '', fallback)
+		if (!isFallbackRecord(updated, env)) throw new Error('fallback-record-verification-failed')
+	} catch (error) {
+		await coordinator.release()
+		throw error
+	}
+	await coordinator.confirm()
 	const alertKey = `fallback:${env.VERCEL_FALLBACK_A}`
 	const message = `letletme watchdog 已回退 Cloudflare → Vercel：EdgeOne 连续 ${failureCount} 次异常，Vercel 健康。`
 	let next = {
@@ -293,10 +333,64 @@ export async function runCheck(env, options = {}) {
 		lastAlertKey: null,
 		pendingAlert: { key: alertKey, message }
 	}
-	const persistedState = await saveState(env, rawState, next)
+	try {
+		await saveState(env, rawState, next)
+	} catch (error) {
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_state_prewrite_error',
+			error: error instanceof Error ? error.message : String(error)
+		}))
+	}
 	next = await applyAlert(env, next, alertKey, message, fetchImpl)
-	await saveState(env, persistedState, next)
+	try {
+		await saveState(env, rawState, next)
+	} catch (error) {
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_state_write_error',
+			error: error instanceof Error ? error.message : String(error)
+		}))
+	}
 	return { action: 'fallback-applied', state: next, edge, vercel, record, updated }
+}
+
+export class FailoverCoordinator {
+	constructor(ctx) {
+		this.ctx = ctx
+	}
+
+	async readState() {
+		return (await this.ctx.storage.get('state')) || { failureCount: 0, claimAt: 0 }
+	}
+
+	async writeState(state) {
+		await this.ctx.storage.put('state', state)
+		return state
+	}
+
+	async fetch(request) {
+		const operation = new URL(request.url).pathname.replace(/^\/+/, '')
+		const state = await this.readState()
+		const now = Date.now()
+		if (operation === 'record-failure') {
+			const claimFresh = state.claimAt > 0 && now - state.claimAt < CLAIM_TTL_MS
+			if (claimFresh) {
+				return Response.json({ ok: true, failureCount: state.failureCount, shouldFailover: false, claimHeld: true })
+			}
+			const failureCount = Math.min(FAILURE_THRESHOLD, state.failureCount + 1)
+			const shouldFailover = failureCount >= FAILURE_THRESHOLD
+			await this.writeState({ failureCount, claimAt: shouldFailover ? now : 0 })
+			return Response.json({ ok: true, failureCount, shouldFailover, claimHeld: false })
+		}
+		if (operation === 'reset' || operation === 'confirm') {
+			await this.writeState({ failureCount: 0, claimAt: 0 })
+			return Response.json({ ok: true, failureCount: 0 })
+		}
+		if (operation === 'release') {
+			await this.writeState({ ...state, claimAt: 0 })
+			return Response.json({ ok: true, failureCount: state.failureCount })
+		}
+		return new Response('not-found', { status: 404 })
+	}
 }
 
 const worker = {

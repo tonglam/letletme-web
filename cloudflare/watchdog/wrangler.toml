@@ -10,6 +10,14 @@ crons = ["* * * * *"]
 binding = "FAILOVER_STATE"
 id = "a13f5523944d4e719c8e64efb1aa5593"
 
+[[durable_objects.bindings]]
+name = "FAILOVER_COORDINATOR"
+class_name = "FailoverCoordinator"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = [ "FailoverCoordinator" ]
+
 [vars]
 WATCHDOG_ENABLED = "false"
 APEX_NAME = "letletme.top"
