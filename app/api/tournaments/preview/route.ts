@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import {
 	buildOpaqueRateLimitSubject,
 	checkDatabaseRateLimit,
+	PayloadTooLargeError,
 	readBoundedJson
 } from '@/lib/http-security'
 import { getVerifiedEntryContext } from '@/lib/session'
@@ -99,6 +100,12 @@ export async function POST(request: Request) {
 			{ headers: { 'Cache-Control': 'private, no-store, no-transform' } }
 		)
 	} catch (error) {
+		if (error instanceof PayloadTooLargeError) {
+			return NextResponse.json({ error: 'Payload too large.' }, { status: 413 })
+		}
+		if (error instanceof SyntaxError) {
+			return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
+		}
 		console.error(
 			'[tournament preview] request failed:',
 			error instanceof Error ? error.name : 'UnknownError'

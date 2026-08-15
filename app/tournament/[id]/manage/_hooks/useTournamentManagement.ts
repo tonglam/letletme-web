@@ -150,6 +150,12 @@ export function useTournamentManagement(tournament: EntryTournament) {
 							typeof status.setupTotalUnits === 'number'
 								? status.setupTotalUnits
 								: current.currentTournament.setupTotalUnits,
+						standingsReadyAt:
+							typeof status.standingsReadyAt === 'string'
+								? status.standingsReadyAt
+								: status.standingsReadyAt === null
+									? null
+									: current.currentTournament.standingsReadyAt,
 						setupHasWarnings: status.setupHasWarnings === true
 					}
 				}))

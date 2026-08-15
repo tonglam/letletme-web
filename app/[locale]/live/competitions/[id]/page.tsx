@@ -42,6 +42,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	)
 	let currentEventId: number | null = null
 	let tournament: EntryTournament | null = null
+	let canManage = false
 	let initialRows: TournamentLiveCalcData[] = []
 	let participants: TournamentParticipant[] = []
 	let softError: string | null = null
@@ -79,6 +80,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 				loadError = 'no_access'
 			} else {
 				tournament = detail.tournament
+				canManage = detail.canManage
 				participants = detail.participants
 				currentEventId = detail.context.activeEventId
 				officialGameweek = requestedGameweek ?? currentEventId ?? 1
@@ -124,9 +126,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	return (
 		<TournamentDetailClient
 			key={`${tournament?.updatedAt ?? 'missing'}:${tournament?.setupProgressUpdatedAt ?? ''}:${officialGameweek}`}
-			canManage={Boolean(
-				tournament && entryId && tournament.adminEntryId === entryId
-			)}
+			canManage={canManage}
 			tournament={tournament}
 			currentGameweek={
 				tournament?.leagueType === 'H2H' &&

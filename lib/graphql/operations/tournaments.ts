@@ -291,7 +291,7 @@ export interface ManagedTournamentResponse {
 export const GET_MANAGED_TOURNAMENT_STATUS = `
   query GetManagedTournamentStatus($tournamentId: Int!, $entryId: Int!) {
     managedTournamentStatus(tournamentId: $tournamentId, entryId: $entryId) {
-      revision state setupStatus setupPhase rosterSyncStatus setupCompletedUnits setupTotalUnits setupHasWarnings updatedAt
+      revision state setupStatus setupPhase rosterSyncStatus setupCompletedUnits setupTotalUnits standingsReadyAt setupHasWarnings updatedAt
     }
   }
 `
@@ -305,6 +305,7 @@ export interface ManagedTournamentStatusResponse {
 		rosterSyncStatus: TournamentSetupStatus | null
 		setupCompletedUnits: number
 		setupTotalUnits: number
+		standingsReadyAt: string | null
 		setupHasWarnings: boolean
 		updatedAt: string
 	} | null
