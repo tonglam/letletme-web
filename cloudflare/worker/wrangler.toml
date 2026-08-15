@@ -1,13 +1,7 @@
 name = "letletme-router"
 main = "src/router.js"
-compatibility_date = "2026-08-14"
+compatibility_date = "2026-08-15"
 workers_dev = false
-
-[placement]
-# The Tencent origin is a single-homed VM. Cloudflare's automatic placement
-# kept the CN path in AMS, so use the dedicated raw-TCP probe to triangulate
-# the origin instead. This endpoint never serves the application.
-host = "106.52.109.82:8443"
 
 routes = [
   { pattern = "letletme.top/*", zone_name = "letletme.top" }
@@ -19,8 +13,5 @@ head_sampling_rate = 1
 
 [vars]
 ROUTER_MODE = "pass-through"
-TENCENT_ORIGIN_HOST = "tencent-origin.letletme.top"
-TENCENT_TIMEOUT_MS = "4000"
 VERCEL_ORIGIN_HOST = "letletme-web.vercel.app"
-ROUTER_VERSION = "unreleased"
-EXPECTED_RELEASE_SHA = "unknown"
+EDGE_MARKER = "cloudflare-fallback"

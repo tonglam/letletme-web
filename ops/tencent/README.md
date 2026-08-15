@@ -73,66 +73,22 @@ manifest. Vercel caps `deploymentId` at 32 characters, so the deployment ID is
 the deterministic first 32 characters of the same full Git SHA. The gate does
 not mistake the internal BUILD_ID file for the release SHA.
 
-Before every later Web release, put the Worker at pass-through 100%, deploy and
-verify the same SHA on Tencent and Vercel, and only then restore the CN split.
 For a Vercel CLI production build, pass the full commit SHA explicitly as both
 build-time and runtime `LETLETME_RELEASE_SHA`; a Vercel Git deployment obtains
 the same value from `VERCEL_GIT_COMMIT_SHA`. Builds without either value fail
 before upload.
 
-## Cloudflare Worker versions
+## Public Web routing is retired
 
-Keep two deployable versions of `letletme-router` from the same source:
+This host is not a public Web origin in the EdgeOne architecture. The public
+path is Cloudflare DNS-only → EdgeOne free plan → Vercel. Cloudflare is used
+only as the fail-open fallback: its `letletme-router` Worker is a Vercel-only
+pass-through, and `cloudflare/watchdog` can restore the exact Cloudflare
+Proxied Vercel record after three consecutive EdgeOne failures.
 
-```bash
-release_sha=<full-40-character-git-sha>
-npx wrangler versions upload --config cloudflare/worker/wrangler.toml \
-  --var "ROUTER_MODE:pass-through" \
-  --var "ROUTER_VERSION:pass-through-${release_sha}" \
-  --var "EXPECTED_RELEASE_SHA:${release_sha}" \
-  --tag "pass-through-${release_sha}"
-npx wrangler versions upload --config cloudflare/worker/wrangler.toml \
-  --var "ROUTER_MODE:cn-router" \
-  --var "ROUTER_VERSION:cn-router-${release_sha}" \
-  --var "EXPECTED_RELEASE_SHA:${release_sha}" \
-  --tag "cn-router-${release_sha}"
-```
-
-Supply the remaining non-secret vars from `wrangler.toml` on both uploads and
-set `ORIGIN_TOKEN` and `VERCEL_PROXY_SECRET` as Worker secrets. The initial `wrangler deploy`
-must be pass-through, so merely attaching the route cannot move traffic to
-Tencent.
-Configure the `letletme.top/*` route as fail-open. Promote pass-through first,
-then split 90/10, 50/50 and 0/100 by version ID. A rollback is a 100%
-deployment of the pass-through version.
-
-### Explicit Tencent placement probe
-
-Automatic Smart Placement left real CN requests running in AMS and did not
-pass the latency gate. The Worker therefore uses Cloudflare's experimental
-host-based Placement Hint against `106.52.109.82:8443`, a dedicated raw-TCP
-probe on the single-homed Tencent VM.
-
-Enable the probe before uploading a hinted Worker version:
-
-```bash
-sudo ops/tencent/scripts/manage-placement-probe.sh enable
-```
-
-The script installs Ubuntu's dynamic Nginx stream module, exposes only TCP
-8443, and returns a constant marker immediately after connect. It does not
-parse HTTP, terminate TLS, read files, expose secrets, or proxy to Node. The
-business origin on 443 remains restricted to Cloudflare IP ranges. Cloudflare
-sends placement probes from public, non-Cloudflare IP ranges, so this isolated
-port cannot use the origin's Cloudflare-only allowlist.
-
-Keep production at pass-through 100% until the hinted versions are uploaded
-and the probe is externally reachable. During a canary, require `cf-placement`
-to show a remote location materially closer to Tencent and repeat the complete
-error, fallback and latency gates. `local-AMS` or a failed performance gate is
-an immediate rollback. If the experiment is abandoned, remove the listener
-and firewall rule with:
-
-```bash
-sudo ops/tencent/scripts/manage-placement-probe.sh disable
-```
+Do not upload a `cn-router` version, configure a Tencent route split, enable
+Cloudflare placement hints, or enable the `106.52.109.82:8443` placement probe.
+The old placement-probe script and historical Worker versions may remain in
+Git for audit history, but they are not part of production operations. Any
+future Web release must preserve the EdgeOne → Vercel path and validate the
+Cloudflare fallback Worker separately.

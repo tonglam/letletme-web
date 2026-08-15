@@ -90,8 +90,9 @@ jobs:
       - run: npm test
         env:
           RUN_DB_INTEGRATION: 'true'
-      - run: npm run test:worker
+      - run: npm run test:edge
       - run: npm run worker:dry-run
+      - run: npm run watchdog:dry-run
       - run: npm run lint
       - run: npx tsc --noEmit
       - name: Verify operational shell scripts
