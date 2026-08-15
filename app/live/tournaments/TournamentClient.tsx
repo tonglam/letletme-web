@@ -660,7 +660,7 @@ export default function TournamentClient({
 								variant="secondary"
 								asChild
 							>
-								<Link href="/competitions/browse">
+								<Link href="/competitions/browse" prefetch={false}>
 									{t('errorCtaMyCompetitions')}
 								</Link>
 							</Button>

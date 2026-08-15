@@ -711,7 +711,7 @@ export default function TournamentDetailClient({
 							) : null}
 							{kind !== 'bind_entry' ? (
 								<Button asChild>
-									<Link href="/competitions/browse?mine=true">
+									<Link href="/competitions/browse?mine=true" prefetch={false}>
 										{t('errorCtaMyCompetitions')}
 									</Link>
 								</Button>
@@ -721,7 +721,7 @@ export default function TournamentDetailClient({
 									variant="outline"
 									asChild
 								>
-									<Link href="/live/competitions">{t('errorCtaLiveList')}</Link>
+									<Link href="/live/competitions" prefetch={false}>{t('errorCtaLiveList')}</Link>
 								</Button>
 							) : null}
 							{kind === 'unavailable' ? (
@@ -761,7 +761,7 @@ export default function TournamentDetailClient({
 						className="-ml-3 text-primary-ink hover:text-primary-ink/80"
 						asChild
 					>
-						<Link href="/live/competitions">
+						<Link href="/live/competitions" prefetch={false}>
 							<ArrowLeft aria-hidden="true" />
 							<span>{t('backToCompetitions')}</span>
 						</Link>

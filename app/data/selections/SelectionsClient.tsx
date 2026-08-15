@@ -985,6 +985,7 @@ export default function SelectionsClient({
 									{t('noCompetitions')}{' '}
 									<Link
 										href="/competitions/browse"
+										prefetch={false}
 										className="font-medium text-primary-ink hover:underline"
 									>
 										{t('browseCompetitions')}
