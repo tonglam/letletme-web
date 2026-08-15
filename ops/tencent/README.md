@@ -91,9 +91,10 @@ The EdgeOne free-plan site is configured only as a DNS-only canary; the apex
 has not changed and no watchdog is enabled. The canary origin is Vercel, not
 this Tencent host.
 
-Do not upload a `cn-router` version, configure a Tencent route split, enable
-Cloudflare placement hints, or enable the `106.52.109.82:8443` placement probe.
-The old placement-probe script and historical Worker versions may remain in
-Git for audit history, but they are not part of production operations. Any
-future Web release must preserve the Cloudflare Transform Rules path and
-validate any new edge candidate separately before changing DNS.
+Do not upload a `cn-router` version or configure a Tencent route split. The
+existing `106.52.109.82:8443` placement probe is a TCP-only probe, not a Web
+origin; it currently returns its fixed probe banner and must not carry
+application traffic. Remove it only during an approved hardening window after
+confirming no placement-hint consumer remains. Any future Web release must
+preserve the Cloudflare Transform Rules path and validate any new edge
+candidate separately before changing DNS.

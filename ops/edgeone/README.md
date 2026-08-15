@@ -44,20 +44,18 @@ Do not change the apex or enable the watchdog until the complete mainland and
 overseas review produces passing evidence. The canary is not a user URL and
 must not be added to Auth trusted origins.
 
-This directory describes the production configuration that must be created in
-the Tencent Cloud console. The application remains on Vercel; Tencent's
-`106.52.109.82` is not a public Web origin in this architecture.
+This directory records the free EdgeOne canary and the conditions for a future
+public cutover. The application remains on Vercel; Tencent's `106.52.109.82`
+is not a public Web origin in this architecture.
 
-## Gates before site creation
+## Gates before public cutover
 
-Do not enable any paid feature, add-on, automatic renewal, public DNS record,
-or production watchdog until these pre-creation gates have current console
-evidence:
+Do not enable any paid feature, add-on, automatic renewal, apex DNS change, or
+production watchdog until these cutover gates have current console evidence:
 
-1. The Tencent console must confirm that `letletme.top` is eligible for the
-   selected free global area. The domain's existing personal ICP filing under
-   account A is not treated as verified for account B merely from a local
-   record; save the actual EdgeOne eligibility result.
+1. The Tencent console currently shows `letletme.top` enabled in CNAME mode,
+   global area, and the base `免费版`. The console accepted the domain; the
+   public apex is still not pointed at it.
 2. If the origin is ever changed to Tencent Lighthouse `106.52.109.82`,
    Tencent access filing must be completed first. The approved zero-cost
    architecture keeps the origin on Vercel, so the Tencent Lighthouse access
@@ -66,12 +64,11 @@ evidence:
    Acceleration, HTTP/3/QUIC, media processing, SLA, or automatic paid
    renewal. The free plan's unlimited traffic/request line does not authorize
    paid feature switches.
-Creating a non-public EdgeOne site for ownership and configuration validation
-is allowed after these pre-creation checks, but it is not a production
-cutover: do not point user DNS at it or enable the watchdog. Any site creation
-in the attended Tencent console still requires explicit user authorization.
+The site and free package are already provisioned. Do not point user DNS at
+the EdgeOne site or enable the watchdog unless every post-canary gate below
+passes and a new cutover is explicitly approved.
 
-## Gates after site creation, before cutover
+## Gates after canary configuration, before cutover
 
 After the site exists, configure and test the required origin, TLS, client IP,
 WebSocket, header, and cache controls below. A feature that is merely
@@ -104,19 +101,21 @@ filing requirement. `/api/*`, all non-`GET`/`HEAD` requests, WebSocket
 upgrades, ACME paths, HTML/RSC, cookies, and Authorization requests must not
 be EdgeOne-cached or routed to Tencent.
 
-Cloudflare remains authoritative and DNS-only during EdgeOne service. Apex
-CNAME flattening is required; do not switch NS to EdgeOne or DNSPod. If
-EdgeOne fails, the watchdog restores the exact pre-cutover Cloudflare
-Proxied Vercel record and the free Transform Rules serve Vercel. It never
-automatically switches back to EdgeOne.
+If a future EdgeOne cutover is approved, Cloudflare remains authoritative and
+the apex becomes DNS-only with CNAME flattening; do not switch NS to EdgeOne
+or DNSPod. If EdgeOne fails, the watchdog restores the exact pre-cutover
+Cloudflare Proxied Vercel record and the free Transform Rules serve Vercel. It
+never automatically switches back to EdgeOne. The watchdog is disabled while
+the current apex remains on the fallback path.
 
-## Required free configuration
+## Required free configuration for a future cutover
 
-1. Add `letletme.top` as a CNAME-mode EdgeOne site in the global area.
-2. Complete the Cloudflare TXT ownership challenge.
-3. Use the EdgeOne-generated CNAME target as `EDGEONE_CNAME_TARGET` in the
-   watchdog. Keep the Cloudflare apex DNS record DNS-only while EdgeOne is in
-   use, with TTL 60 seconds.
+1. Reuse the existing `letletme.top` CNAME-mode EdgeOne site in the global
+   area; do not create a second site.
+2. Keep the existing EdgeOne-generated CNAME target on
+   `eo-canary.letletme.top` until a public cutover is approved.
+3. Use that target as `EDGEONE_CNAME_TARGET` only when preparing the watchdog.
+   Keep `WATCHDOG_ENABLED=false` while the apex remains on the fallback path.
 4. Configure the origin as `letletme-web.vercel.app`, HTTPS port 443, origin
    Host `letletme.top`, and TLS SNI `letletme.top`.
 5. Configure the client-IP feature to write the custom header
@@ -144,9 +143,9 @@ WebSocket, and authentication as explicit acceptance tests. The origin Host
 and TLS SNI must both remain `letletme.top`; Vercel's ACME challenge paths
 must remain reachable during certificate renewal.
 
-The temporary `eo-canary.letletme.top` record, if used, is only for
-`curl --resolve`/canary tests. It must not be added to Auth trusted origins or
-advertised as a user URL.
+The existing `eo-canary.letletme.top` record is only for `curl --resolve` and
+canary tests. It must not be added to Auth trusted origins or advertised as a
+user URL.
 
 ## Watchdog deployment values
 
