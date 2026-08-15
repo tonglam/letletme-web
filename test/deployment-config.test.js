@@ -36,6 +36,36 @@ test('uses one Git SHA for the build and its Vercel-safe prefix for skew protect
 	}
 })
 
+test('prefers the Vercel Git SHA over a stale explicit release override', async () => {
+	const names = ['LETLETME_RELEASE_SHA', 'VERCEL_GIT_COMMIT_SHA', 'VERCEL']
+	const previous = Object.fromEntries(
+		names.map(name => [name, process.env[name]])
+	)
+	try {
+		process.env.LETLETME_RELEASE_SHA =
+			'28941010a5b6806c60c404d25938c7e816ef85b4'
+		process.env.VERCEL_GIT_COMMIT_SHA =
+			'37973bbabbcafbe84714500c629d00935925eee6'
+		process.env.VERCEL = '1'
+		delete require.cache[require.resolve('../next.config.js')]
+		const config = require('../next.config.js')
+		assert.equal(
+			await config.generateBuildId(),
+			'37973bbabbcafbe84714500c629d00935925eee6'
+		)
+		assert.equal(
+			config.deploymentId,
+			'37973bbabbcafbe84714500c629d0093'
+		)
+	} finally {
+		for (const name of names) {
+			if (previous[name] === undefined) delete process.env[name]
+			else process.env[name] = previous[name]
+		}
+		delete require.cache[require.resolve('../next.config.js')]
+	}
+})
+
 test('rejects a Vercel build that has no immutable release SHA', () => {
 	const names = [
 		'LETLETME_RELEASE_SHA',
