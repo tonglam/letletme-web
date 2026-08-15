@@ -225,3 +225,9 @@ release. The current production path must return
 The latest live-state refresh is recorded in
 `evidence/2026-08-15-current-state.md`. It confirms that the production zone
 has no Workers Route and that the free canary remains below the cutover gate.
+
+The mainland probe is recorded in `evidence/2026-08-15-mainland-probe.md`.
+From a Tencent mainland source, the EdgeOne canary timed out on all three
+bounded `/healthz` attempts while the current Cloudflare fallback returned
+HTTP 200. This is a functional blocker for the free-plan cutover, independent
+of the separate overseas performance failure.
