@@ -165,7 +165,7 @@ export async function proxy(req: NextRequest) {
 	const legacyMatch = requestedPathname.match(
 		/^\/((?:[a-z]{2}(?:-[A-Z]{2})?)\/)?competitions\/([1-9]\d*)\/?$/
 	)
-	if (legacyMatch) {
+	if (legacyMatch && Number.isSafeInteger(Number(legacyMatch[2]))) {
 		const cookieLocale = req.cookies.get(LANGUAGE_COOKIE.name)?.value
 		const locale =
 			legacyMatch[1]?.replace(/\/$/, '') ||

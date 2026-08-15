@@ -2,10 +2,16 @@ import { chromium } from '@playwright/test'
 
 const origin = process.env.COMPETITIONS_PERF_ORIGIN ?? 'https://letletme.top'
 const locale = process.env.COMPETITIONS_PERF_LOCALE ?? 'zh-CN'
-const runs = Math.max(
-	1,
-	Math.min(20, Number.parseInt(process.env.COMPETITIONS_PERF_RUNS ?? '3', 10))
-)
+const runsInput = process.env.COMPETITIONS_PERF_RUNS ?? '3'
+const parsedRuns = Number(runsInput)
+if (
+	!/^[1-9]\d*$/.test(runsInput) ||
+	!Number.isSafeInteger(parsedRuns) ||
+	parsedRuns < 1
+) {
+	throw new Error('COMPETITIONS_PERF_RUNS must be a positive integer')
+}
+const runs = Math.min(20, parsedRuns)
 const tournamentId = process.env.COMPETITIONS_PERF_TOURNAMENT_ID
 if (!/^[1-9]\d*$/.test(tournamentId ?? '')) {
 	throw new Error(
