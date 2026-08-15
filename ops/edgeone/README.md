@@ -4,10 +4,11 @@ This directory describes the production configuration that must be created in
 the Tencent Cloud console. The application remains on Vercel; Tencent's
 `106.52.109.82` is not a public Web origin in this architecture.
 
-## Hard gates before creating the site
+## Gates before site creation
 
-Do not create the site, accept EdgeOne service terms, add a CNAME, or enable
-the watchdog until all of these gates have current console evidence:
+Do not enable any paid feature, add-on, automatic renewal, public DNS record,
+or production watchdog until these pre-creation gates have current console
+evidence:
 
 1. The Tencent console must confirm that `letletme.top` is eligible for the
    selected free global area. The domain's existing personal ICP filing under
@@ -21,13 +22,22 @@ the watchdog until all of these gates have current console evidence:
    Acceleration, HTTP/3/QUIC, media processing, SLA, or automatic paid
    renewal. The free plan's unlimited traffic/request line does not authorize
    paid feature switches.
-4. The EdgeOne console must expose and pass the required origin, TLS, client
-   IP, WebSocket, header, and cache checks below. A feature that is merely
-   documented but unavailable in this account is a failed gate.
+Creating a non-public EdgeOne site for ownership and configuration validation
+is allowed after these pre-creation checks, but it is not a production
+cutover: do not point user DNS at it or enable the watchdog. Any site creation
+in the attended Tencent console still requires explicit user authorization.
+
+## Gates after site creation, before cutover
+
+After the site exists, configure and test the required origin, TLS, client IP,
+WebSocket, header, and cache controls below. A feature that is merely
+documented but unavailable in this account is a failed gate. Do not switch
+DNS or set `WATCHDOG_ENABLED=true` until every post-creation check passes.
 
 As of the latest review, the account's ICP console had no filing record and no
-site had been created. This is a cutover blocker; production must remain on
-Cloudflare pass-through → Vercel until the gates are re-verified.
+site had been created. This blocks a public cutover, not the safe
+pre-production creation step; production must remain on Cloudflare
+pass-through → Vercel until the gates are re-verified.
 
 ## Routing contract
 
@@ -99,7 +109,7 @@ This remains within the Workers Free daily request allowance for a one-minute
 cron. Store the following as Worker secrets or vars before enabling the
 schedule:
 
-- `ZONE_ID`, `DNS_RECORD_ID`
+- `ZONE_ID`, `DNS_RECORD_ID` (the active post-cutover EdgeOne CNAME record)
 - `EDGEONE_CNAME_TARGET`
 - `VERCEL_FALLBACK_A` and, if needed, `VERCEL_FALLBACK_TTL`
 - `CLOUDFLARE_API_TOKEN` (only Zone DNS Edit for `letletme.top`)
@@ -107,9 +117,28 @@ schedule:
 
 `VERCEL_FALLBACK_A` is not the current rotating address returned by
 `letletme-web.vercel.app`. It must be the exact proxied apex A record exported
-immediately before cutover, and `DNS_RECORD_ID` must identify that exact
-record. The archived pre-routing baseline used `76.76.21.21`; re-read and
-export the live Cloudflare record before every future cutover.
+immediately before cutover. `DNS_RECORD_ID` is a separate value: it must
+identify the active post-cutover EdgeOne CNAME record. The archived
+pre-routing baseline used `76.76.21.21`; re-read and export the live
+Cloudflare record before every future cutover.
+
+If the cutover changes the record type by deleting the old A record and
+creating a CNAME, Cloudflare assigns a new record ID. The safe sequence is:
+
+1. Export the old proxied A record, its ID, and `VERCEL_FALLBACK_A` for
+   rollback evidence.
+2. Create the apex EdgeOne CNAME as DNS-only.
+3. Immediately query Cloudflare DNS and capture the new CNAME record ID;
+   verify the exact apex name, EdgeOne target, and `proxied=false`.
+4. Update or redeploy the watchdog with that new CNAME ID while
+   `WATCHDOG_ENABLED=false`, then run its health/dry-run checks.
+5. Enable the watchdog only after the direct Vercel health probe and the
+   exact EdgeOne-record check both pass.
+
+If an in-place Cloudflare update preserves the record ID, still GET the record
+and verify that it is the active EdgeOne CNAME before enabling the watchdog.
+Never leave `DNS_RECORD_ID` set to the archived Vercel A-record ID:
+`VERCEL_FALLBACK_A` is rollback content, not the watchdog's live record ID.
 
 Set `WATCHDOG_ENABLED=true` only after the apex is the exact EdgeOne CNAME and
 the direct Vercel health probe succeeds. The watchdog never returns to
