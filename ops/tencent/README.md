@@ -21,10 +21,12 @@ Create these without committing them:
 Vercel build time and Tencent build time. Do not put it in Git.
 
 The value in `/etc/letletme/local-proxy-secret` must also be configured as the
-sensitive Vercel Production variable `LETLETME_LOCAL_PROXY_SECRET`. The Worker
-uses a separate Cloudflare secret named `VERCEL_PROXY_SECRET` with this same
-value when it forwards requests to Vercel, allowing the Web app to preserve
-the authenticated client-IP rate-limit subject across the cross-zone hop.
+sensitive Vercel Production variable `LETLETME_LOCAL_PROXY_SECRET`. The active
+public fallback uses the Cloudflare Request Transform Rule
+`cf-fallback-canary-set-proxy-secret` to overwrite
+`X-Letletme-Proxy-Secret` with this same value. Rotate the Vercel variable and
+the active Transform Rule together; the historical Worker secret is not on the
+request path.
 
 The Tencent origin may use its own active, allow-listed Data API credential;
 it does not need to copy a legacy Vercel Data key. All other shared credentials

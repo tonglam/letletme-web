@@ -94,8 +94,8 @@ Cloudflare authoritative DNS (DNS-only apex CNAME)
     → Vercel Production (`letletme-web.vercel.app`)
 ```
 
-The active public path is the Cloudflare Proxied apex and pass-through Worker
-shown in **Current decision** above.
+The active public path is the Cloudflare Proxied apex followed by the free
+Request/Response Transform Rules shown in **Current decision** above.
 
 All paths and methods, including mainland reads, remain on the same Vercel
 origin. Do not add a mainland-to-Tencent split: it introduces a second
