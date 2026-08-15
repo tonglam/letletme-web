@@ -1,5 +1,43 @@
 # EdgeOne zero-cost edge for `letletme.top`
 
+## Current decision
+
+The site and free-plan canary are now configured, but production has not been
+cut over. The canary is `eo-canary.letletme.top` →
+`eo-canary.letletme.top.eo.dnse1.com` (DNS-only), using EdgeOne site
+`zone-3tt53u82mu1u` and Vercel origin `letletme-web.vercel.app`. Live
+`/healthz` and GraphQL POST checks returned 200 with the current Vercel
+release and `X-Letletme-Edge: edgeone`; `/_next/static/*` returned MISS then
+HIT. The apex remains unchanged while mainland and overseas performance and
+feature gates are collected.
+
+The first completed overseas sample (20 requests per path) does not pass the
+cutover gate. From Perth, healthz TTFB p50/p95 was Vercel `335/638 ms` versus
+EdgeOne `530/1,523 ms`; homepage was Vercel `394/530 ms` versus EdgeOne
+`556/1,528 ms`. From the Singapore production host, healthz was Vercel
+`88/334 ms` versus EdgeOne `239/1,242 ms`; homepage was Vercel `118/168 ms`
+versus EdgeOne `263/1,274 ms`. Static content improved only in Singapore and
+regressed in Perth, so the static-only fallback is not yet justified either.
+These results keep the apex on the current Cloudflare path.
+
+The console also displayed the free-plan Force HTTPS setting as enabled with a
+302 redirect, but a repeated HTTP request to the live canary still returned
+200 without a `Location` header. Until that discrepancy is resolved, HTTPS
+redirect behavior is a separate canary blocker and is not acceptable for an
+apex cutover.
+
+Current production remains:
+
+```text
+Cloudflare authoritative DNS (Proxied apex)
+  → `letletme-router` pass-through Worker
+    → Vercel Production
+```
+
+Do not change the apex or enable the watchdog until the complete mainland and
+overseas review produces passing evidence. The canary is not a user URL and
+must not be added to Auth trusted origins.
+
 This directory describes the production configuration that must be created in
 the Tencent Cloud console. The application remains on Vercel; Tencent's
 `106.52.109.82` is not a public Web origin in this architecture.
@@ -34,20 +72,24 @@ WebSocket, header, and cache controls below. A feature that is merely
 documented but unavailable in this account is a failed gate. Do not switch
 DNS or set `WATCHDOG_ENABLED=true` until every post-creation check passes.
 
-As of the latest review, the account's ICP console had no filing record and no
-site had been created. This blocks a public cutover, not the safe
-pre-production creation step; production must remain on Cloudflare
-pass-through → Vercel until the gates are re-verified.
+The account's local ICP page is not the source of truth for the existing
+public filing under account A. EdgeOne's live domain validation accepted
+`letletme.top`, and the configured origin is Vercel rather than Tencent
+Lighthouse, so the Tencent Lighthouse access-filing branch is not activated.
+The public cutover remains gated on the final console and network checks.
 
 ## Routing contract
 
-The only approved public Web path is:
+The proposed public Web path, currently inactive, is:
 
 ```text
 Cloudflare authoritative DNS (DNS-only apex CNAME)
   → EdgeOne free global site
     → Vercel Production (`letletme-web.vercel.app`)
 ```
+
+The active public path is the Cloudflare Proxied apex and pass-through Worker
+shown in **Current decision** above.
 
 All paths and methods, including mainland reads, remain on the same Vercel
 origin. Do not add a mainland-to-Tencent split: it introduces a second
@@ -71,12 +113,12 @@ automatically switches back to EdgeOne.
    use, with TTL 60 seconds.
 4. Configure the origin as `letletme-web.vercel.app`, HTTPS port 443, origin
    Host `letletme.top`, and TLS SNI `letletme.top`.
-5. Configure the client-IP feature to overwrite the custom header
-   `X-Letletme-Proxy-Client-IP`. Add an origin-request header rule that first
-   removes client-provided `X-Letletme-Origin-Token`,
-   `X-Letletme-Client-IP`, `X-Letletme-Proxy-Client-IP`, and
-   `X-Letletme-Proxy-Secret`, then injects `X-Letletme-Proxy-Secret` with the
-   same value as the Vercel `LETLETME_LOCAL_PROXY_SECRET`.
+5. Configure the client-IP feature to write the custom header
+   `X-Letletme-Proxy-Client-IP`. Add an origin-request header rule that removes
+   client-provided `X-Letletme-Origin-Token` and `X-Letletme-Client-IP`, then
+   injects `X-Letletme-Proxy-Secret` with the same value as the Vercel
+   `LETLETME_LOCAL_PROXY_SECRET`. Do not delete the EdgeOne-generated client-IP
+   header after enabling the client-IP feature.
 6. Do not enable Edge Functions, Smart Acceleration, HTTP/3/QUIC, paid
    intelligent acceleration, add-on packages, or automatic paid upgrades.
 7. Enable HTTP/2 and Brotli/Gzip. Allow WebSocket pass-through.
@@ -170,6 +212,7 @@ curl -sS -D - -X POST https://letletme.top/api/vitals \
   -H 'content-type: application/json' -d '{}'
 ```
 
-The public path must return `X-Letletme-Edge: edgeone`,
-`X-Letletme-Origin: vercel`, and the current Vercel release. The Cloudflare
-fallback path returns `X-Letletme-Edge: cloudflare-fallback`.
+For a future EdgeOne re-evaluation, the canary/public path must return
+`X-Letletme-Edge: edgeone`, `X-Letletme-Origin: vercel`, and the current Vercel
+release. The current production path must return
+`X-Letletme-Edge: cloudflare-fallback` and remains the acceptance baseline.
