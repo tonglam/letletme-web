@@ -30,6 +30,7 @@ test('uses one Git SHA for the build and its Vercel-safe prefix for skew protect
 		)
 		assert.ok(config.deploymentId.length <= 32)
 		assert.equal(config.output, 'standalone')
+		assert.equal(config.experimental.runtimeServerDeploymentId, false)
 		const rules = await config.headers()
 		assert.deepEqual(rules[0].headers, [
 			{ key: 'X-Letletme-Origin', value: 'tencent' },
