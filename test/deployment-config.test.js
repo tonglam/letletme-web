@@ -31,6 +31,9 @@ test('uses one Git SHA for the build and its Vercel-safe prefix for skew protect
 		assert.ok(config.deploymentId.length <= 32)
 		assert.equal(config.output, 'standalone')
 		assert.equal(config.experimental.runtimeServerDeploymentId, false)
+		assert.deepEqual(config.env, {
+			LETLETME_RELEASE_SHA: '0123456789abcdef0123456789abcdef01234567'
+		})
 		const rules = await config.headers()
 		assert.deepEqual(rules[0].headers, [
 			{ key: 'X-Letletme-Origin', value: 'tencent' },
@@ -68,6 +71,10 @@ test('prefers the Vercel Git SHA over a stale explicit release override', async 
 		assert.equal(
 			config.deploymentId,
 			'37973bbabbcafbe84714500c629d0093'
+		)
+		assert.equal(
+			config.env.LETLETME_RELEASE_SHA,
+			'37973bbabbcafbe84714500c629d00935925eee6'
 		)
 	} finally {
 		for (const name of names) {

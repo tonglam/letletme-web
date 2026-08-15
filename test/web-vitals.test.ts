@@ -6,6 +6,7 @@ import {
 	normalizeMetricPage,
 	parseWebVitalPayload
 } from '../lib/analytics/web-vitals'
+import { isTrustedSameSiteRequest } from '../lib/request-origin'
 
 const validMetric = {
 	name: 'LCP',
@@ -19,6 +20,59 @@ const validMetric = {
 }
 
 describe('privacy-safe web vitals', () => {
+	it('accepts public custom-domain beacons behind the Vercel origin', () => {
+		assert.equal(
+			isTrustedSameSiteRequest(
+				new Request('https://letletme-web.vercel.app/api/vitals', {
+					headers: {
+						Origin: 'https://letletme.top',
+						Referer: 'https://letletme.top/zh-CN/explore/fixtures',
+						'Sec-Fetch-Site': 'cross-site'
+					}
+				})
+			),
+			true
+		)
+		assert.equal(
+			isTrustedSameSiteRequest(
+				new Request('https://letletme-web.vercel.app/api/vitals', {
+					headers: {
+						Origin: 'null',
+						Referer: 'https://letletme.top/explore/fixtures'
+					}
+				})
+			),
+			true
+		)
+	})
+
+	it('rejects malformed and untrusted browser origins', () => {
+		const untrustedHeaders: Array<Record<string, string>> = [
+			{ Origin: 'https://evil.example' },
+			{ Origin: 'not-an-origin' },
+			{
+				Origin: 'https://letletme.top',
+				Referer: 'https://evil.example/fixtures'
+			},
+			{
+				Origin: 'https://letletme.top',
+				Referer: 'not-a-referer'
+			},
+			{ 'Sec-Fetch-Site': 'cross-site' },
+			{ Origin: 'null' }
+		]
+		for (const headers of untrustedHeaders) {
+			assert.equal(
+				isTrustedSameSiteRequest(
+					new Request('https://letletme-web.vercel.app/api/vitals', {
+						headers
+					})
+				),
+				false
+			)
+		}
+	})
+
 	it('removes query strings and dynamic identifiers from page groups', () => {
 		assert.equal(
 			normalizeMetricPage('/live/competitions/987?token=secret'),

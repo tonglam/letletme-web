@@ -280,6 +280,7 @@ function ActionPlayerRow({
 				<p className="flex flex-wrap items-center gap-1.5 truncate text-sm font-medium leading-tight">
 					{player.playerId > 0 ? (
 						<Link
+							prefetch={false}
 							href={playerStatsHref({ p1: String(player.playerId) })}
 							title={deskLabel}
 							aria-label={`${player.webName} — ${deskLabel}`}

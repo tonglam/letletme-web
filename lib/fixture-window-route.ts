@@ -9,6 +9,14 @@ export const FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL =
 	'public, s-maxage=300, stale-while-revalidate=300, no-transform'
 export const FIXTURE_WINDOW_UNCACHEABLE_CONTROL = 'no-store'
 
+export function fixtureWindowCacheHeaders(cacheControl: string) {
+	return {
+		'Cache-Control': cacheControl,
+		'CDN-Cache-Control': cacheControl,
+		'Vercel-CDN-Cache-Control': cacheControl,
+	}
+}
+
 type FixtureWindowLoader = (
 	fromGw: number,
 	count: number,
@@ -35,7 +43,7 @@ export function createFixtureWindowRouteHandler(
 				{ error: parsed.error },
 				{
 					status: 400,
-					headers: { 'Cache-Control': FIXTURE_WINDOW_UNCACHEABLE_CONTROL },
+					headers: fixtureWindowCacheHeaders(FIXTURE_WINDOW_UNCACHEABLE_CONTROL),
 				},
 			)
 		}
@@ -60,7 +68,7 @@ export function createFixtureWindowRouteHandler(
 					{ error: 'Fixture window is temporarily unavailable' },
 					{
 						status: 502,
-						headers: { 'Cache-Control': FIXTURE_WINDOW_UNCACHEABLE_CONTROL },
+						headers: fixtureWindowCacheHeaders(FIXTURE_WINDOW_UNCACHEABLE_CONTROL),
 					},
 				)
 			}
@@ -68,12 +76,11 @@ export function createFixtureWindowRouteHandler(
 			logger.info('[fixtures-window]', detail)
 			return NextResponse.json(fixtureWindowResponseFromResult(result), {
 				status: 200,
-				headers: {
-					'Cache-Control':
-						result.outcome === 'complete'
-							? FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL
-							: FIXTURE_WINDOW_UNCACHEABLE_CONTROL,
-				},
+				headers: fixtureWindowCacheHeaders(
+					result.outcome === 'complete'
+						? FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL
+						: FIXTURE_WINDOW_UNCACHEABLE_CONTROL,
+				),
 			})
 		} catch (error) {
 			logger.error('[fixtures-window]', {
@@ -89,7 +96,7 @@ export function createFixtureWindowRouteHandler(
 				{ error: 'Fixture window is temporarily unavailable' },
 				{
 					status: 502,
-					headers: { 'Cache-Control': FIXTURE_WINDOW_UNCACHEABLE_CONTROL },
+					headers: fixtureWindowCacheHeaders(FIXTURE_WINDOW_UNCACHEABLE_CONTROL),
 				},
 			)
 		}

@@ -40,6 +40,7 @@ function PlayerNameLink({
 
 	return (
 		<Link
+			prefetch={false}
 			href={playerStatsHref({ p1: String(elementId) })}
 			title={deskLabel}
 			aria-label={`${name} — ${deskLabel}`}

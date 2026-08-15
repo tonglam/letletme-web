@@ -16,6 +16,7 @@ import {
 	createFixtureWindowRouteHandler,
 	FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL,
 	FIXTURE_WINDOW_UNCACHEABLE_CONTROL,
+	fixtureWindowCacheHeaders,
 } from '../lib/fixture-window-route'
 
 const backendFixture = (id = 101) => ({
@@ -61,6 +62,16 @@ const result = (
 const quietLogger = {
 	info: () => undefined,
 	error: () => undefined,
+}
+
+function assertCacheHeaders(response: Response, expected: string) {
+	for (const name of [
+		'cache-control',
+		'cdn-cache-control',
+		'vercel-cdn-cache-control',
+	]) {
+		assert.equal(response.headers.get(name), expected, name)
+	}
 }
 
 describe('fixture window input and query', () => {
@@ -217,9 +228,14 @@ describe('fixture window route handler', () => {
 			new Request('https://letletme.top/api/fixtures/window?fromGw=10&count=2'),
 		)
 		assert.equal(response.status, 200)
-		assert.equal(
-			response.headers.get('cache-control'),
-			FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL,
+		assertCacheHeaders(response, FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL)
+		assert.deepEqual(
+			fixtureWindowCacheHeaders(FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL),
+			{
+				'Cache-Control': FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL,
+				'CDN-Cache-Control': FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL,
+				'Vercel-CDN-Cache-Control': FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL,
+			},
 		)
 		assert.deepEqual(await response.json(), {
 			fromGw: 10,
@@ -247,10 +263,7 @@ describe('fixture window route handler', () => {
 			new Request('https://letletme.top/api/fixtures/window?fromGw=10&count=2'),
 		)
 		assert.equal(response.status, 200)
-		assert.equal(
-			response.headers.get('cache-control'),
-			FIXTURE_WINDOW_UNCACHEABLE_CONTROL,
-		)
+		assertCacheHeaders(response, FIXTURE_WINDOW_UNCACHEABLE_CONTROL)
 	})
 
 	it('returns 400 before loading invalid parameters', async () => {
@@ -267,10 +280,7 @@ describe('fixture window route handler', () => {
 		)
 		assert.equal(response.status, 400)
 		assert.equal(called, false)
-		assert.equal(
-			response.headers.get('cache-control'),
-			FIXTURE_WINDOW_UNCACHEABLE_CONTROL,
-		)
+		assertCacheHeaders(response, FIXTURE_WINDOW_UNCACHEABLE_CONTROL)
 	})
 
 	it('returns an uncacheable 502 when every event fails', async () => {
@@ -288,9 +298,6 @@ describe('fixture window route handler', () => {
 			new Request('https://letletme.top/api/fixtures/window?fromGw=10&count=2'),
 		)
 		assert.equal(response.status, 502)
-		assert.equal(
-			response.headers.get('cache-control'),
-			FIXTURE_WINDOW_UNCACHEABLE_CONTROL,
-		)
+		assertCacheHeaders(response, FIXTURE_WINDOW_UNCACHEABLE_CONTROL)
 	})
 })

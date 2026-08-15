@@ -15,6 +15,29 @@ test('homepage streams its real shell and prevents CDN script rewriting', async 
 	expect(html).not.toContain('aria-label="Loading page"')
 })
 
+test('web-vitals ingestion accepts the public proxy origin and rejects others', async ({
+	request
+}) => {
+	const acceptedOrigin = await request.post('/api/vitals', {
+		headers: {
+			Origin: 'https://letletme.top',
+			Referer: 'https://letletme.top/explore/fixtures',
+			'Sec-Fetch-Site': 'cross-site'
+		},
+		data: {}
+	})
+	// The empty body is invalid, but the trusted proxy origin must pass the
+	// cross-site guard and reach payload validation.
+	expect(acceptedOrigin.status()).toBe(400)
+
+	const rejectedOrigin = await request.post('/api/vitals', {
+		headers: { Origin: 'https://evil.example' },
+		data: {}
+	})
+	expect(rejectedOrigin.status()).toBe(403)
+	expect(rejectedOrigin.headers()['cache-control']).toBe('no-store')
+})
+
 test('retired public routes return 404 instead of redirecting', async ({
 	request
 }) => {
