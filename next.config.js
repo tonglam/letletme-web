@@ -76,7 +76,14 @@ const nextConfig = {
 			}
 		]
 	},
-	experimental: {}
+	// Vercel's Next 16 runtime auto-enables this for dynamic routes, but the
+	// serverless renderer does not provide NEXT_DEPLOYMENT_ID to the Turbopack
+	// preinit path. That produces ?dpl=undefined chunk URLs alongside the
+	// correctly versioned scripts. Keep our deterministic deploymentId and use
+	// the normal server-side asset token instead.
+	experimental: {
+		runtimeServerDeploymentId: false
+	}
 }
 
 module.exports = withNextIntl(nextConfig)
