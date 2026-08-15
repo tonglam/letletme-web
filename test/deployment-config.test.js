@@ -2,11 +2,22 @@ const assert = require('node:assert/strict')
 const test = require('node:test')
 
 test('uses one Git SHA for the build and its Vercel-safe prefix for skew protection', async () => {
-	const previousSha = process.env.LETLETME_RELEASE_SHA
-	const previousOrigin = process.env.LETLETME_ORIGIN
+	const names = [
+		'LETLETME_RELEASE_SHA',
+		'VERCEL_GIT_COMMIT_SHA',
+		'GITHUB_SHA',
+		'VERCEL',
+		'LETLETME_ORIGIN'
+	]
+	const previous = Object.fromEntries(
+		names.map(name => [name, process.env[name]])
+	)
 	process.env.LETLETME_RELEASE_SHA = '0123456789abcdef0123456789abcdef01234567'
 	process.env.LETLETME_ORIGIN = 'tencent'
 	try {
+		delete process.env.VERCEL_GIT_COMMIT_SHA
+		delete process.env.GITHUB_SHA
+		delete process.env.VERCEL
 		delete require.cache[require.resolve('../next.config.js')]
 		const config = require('../next.config.js')
 		assert.equal(
@@ -28,10 +39,10 @@ test('uses one Git SHA for the build and its Vercel-safe prefix for skew protect
 			}
 		])
 	} finally {
-		if (previousSha === undefined) delete process.env.LETLETME_RELEASE_SHA
-		else process.env.LETLETME_RELEASE_SHA = previousSha
-		if (previousOrigin === undefined) delete process.env.LETLETME_ORIGIN
-		else process.env.LETLETME_ORIGIN = previousOrigin
+		for (const name of names) {
+			if (previous[name] === undefined) delete process.env[name]
+			else process.env[name] = previous[name]
+		}
 		delete require.cache[require.resolve('../next.config.js')]
 	}
 })

@@ -10,12 +10,19 @@ function currentOrigin(): 'tencent' | 'vercel' | 'unknown' {
 }
 
 function currentRelease(): string {
-	return (
-		process.env.LETLETME_RELEASE_SHA ??
-		process.env.VERCEL_GIT_COMMIT_SHA ??
-		process.env.NEXT_DEPLOYMENT_ID ??
-		'unknown'
-	)
+	const candidates =
+		process.env.VERCEL === '1'
+			? [
+					process.env.VERCEL_GIT_COMMIT_SHA,
+					process.env.LETLETME_RELEASE_SHA,
+					process.env.NEXT_DEPLOYMENT_ID
+			  ]
+			: [
+					process.env.LETLETME_RELEASE_SHA,
+					process.env.VERCEL_GIT_COMMIT_SHA,
+					process.env.NEXT_DEPLOYMENT_ID
+			  ]
+	return candidates.find(Boolean) ?? 'unknown'
 }
 
 export async function GET() {
