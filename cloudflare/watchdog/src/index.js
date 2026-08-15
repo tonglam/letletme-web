@@ -23,6 +23,7 @@ export function parseState(raw) {
 			lastFailureAt: parsed.lastFailureAt ?? null,
 			lastAction: parsed.lastAction ?? null,
 			lastAlertKey: parsed.lastAlertKey ?? null,
+			coordinatorResetPending: parsed.coordinatorResetPending === true,
 			pendingAlert:
 				parsed.pendingAlert &&
 				typeof parsed.pendingAlert.key === 'string' &&
@@ -37,6 +38,7 @@ export function parseState(raw) {
 			lastFailureAt: null,
 			lastAction: null,
 			lastAlertKey: null,
+			coordinatorResetPending: false,
 			pendingAlert: null
 		}
 	}
@@ -180,13 +182,15 @@ async function applyAlert(env, state, key, message, fetchImpl) {
 }
 
 async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coordinator) {
-	const coordination = await coordinator.confirm()
 	let next = {
 		...state,
-		failureCount: coordination.failureCount,
+		failureCount: 0,
 		fallbackActive: true,
-		lastAction: 'already-fallback'
+		lastAction: 'already-fallback',
+		coordinatorResetPending: false
 	}
+	const alertKey = `fallback:${env.VERCEL_FALLBACK_A}`
+	const alertMessage = `letletme watchdog 已回退 Cloudflare → Vercel：EdgeOne 连续失败，Vercel 健康。`
 	if (next.pendingAlert) {
 		next = await applyAlert(
 			env,
@@ -195,6 +199,17 @@ async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coo
 			next.pendingAlert.message,
 			fetchImpl
 		)
+	} else if (next.lastAlertKey !== alertKey) {
+		next = await applyAlert(env, next, alertKey, alertMessage, fetchImpl)
+	}
+	try {
+		const coordination = await coordinator.confirm()
+		next = { ...next, failureCount: coordination.failureCount }
+	} catch (error) {
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_coordinator_confirm_error',
+			error: error instanceof Error ? error.message : String(error)
+		}))
 	}
 	const persistedState = await saveState(env, rawState, next)
 	return { action: 'already-fallback', state: next, record, persistedState }
@@ -208,7 +223,8 @@ async function manualDnsState(env, rawState, state, record, fetchImpl, coordinat
 		...state,
 		failureCount: coordination.failureCount,
 		fallbackActive: false,
-		lastAction: 'manual-dns-state'
+		lastAction: 'manual-dns-state',
+		coordinatorResetPending: false
 	}
 	if (state.lastAlertKey !== alertKey || state.pendingAlert?.key === alertKey) {
 		next = await applyAlert(env, next, alertKey, message, fetchImpl)
@@ -225,7 +241,8 @@ async function bothUnhealthyState(env, rawState, state, record, edge, vercel, fe
 		...state,
 		failureCount: coordination.failureCount,
 		fallbackActive: false,
-		lastAction: 'both-unhealthy'
+		lastAction: 'both-unhealthy',
+		coordinatorResetPending: false
 	}
 	if (state.lastAlertKey !== alertKey || state.pendingAlert?.key === alertKey) {
 		next = await applyAlert(env, next, alertKey, message, fetchImpl)
@@ -239,7 +256,7 @@ export async function runCheck(env, options = {}) {
 	const now = options.now || new Date().toISOString()
 	const timeoutMs = Number(env.PROBE_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS
 	const rawState = await env.FAILOVER_STATE.get(STATE_KEY)
-	const state = parseState(rawState)
+	let state = parseState(rawState)
 	if (!bool(env.WATCHDOG_ENABLED)) {
 		return { action: 'disabled', state }
 	}
@@ -258,10 +275,23 @@ export async function runCheck(env, options = {}) {
 		probe(env.VERCEL_HEALTH_URL, fetchImpl, timeoutMs, false)
 	])
 	if (edge.ok) {
-		const coordination = await coordinator.reset()
+		let coordination
+		try {
+			coordination = await coordinator.reset()
+		} catch (error) {
+			const next = {
+				...state,
+				failureCount: 0,
+				coordinatorResetPending: true,
+				lastAction: 'healthy-coordinator-reset-pending'
+			}
+			await saveState(env, rawState, next)
+			return { action: 'healthy-coordinator-reset-pending', state: next, edge, vercel, record }
+		}
 		const next = {
 			...state,
 			failureCount: coordination.failureCount,
+			coordinatorResetPending: false,
 			fallbackActive: false,
 			lastAction: 'healthy',
 			lastAlertKey: null,
@@ -274,6 +304,18 @@ export async function runCheck(env, options = {}) {
 		return bothUnhealthyState(env, rawState, state, record, edge, vercel, fetchImpl, coordinator)
 	}
 
+	if (state.coordinatorResetPending) {
+		try {
+			const reset = await coordinator.reset()
+			state = { ...state, failureCount: reset.failureCount, coordinatorResetPending: false }
+			await saveState(env, rawState, state)
+		} catch (error) {
+			const next = { ...state, failureCount: 0, lastAction: 'coordinator-reset-pending' }
+			await saveState(env, rawState, next)
+			return { action: 'coordinator-reset-pending', state: next, edge, vercel, record }
+		}
+	}
+
 	const coordination = await coordinator.recordFailure()
 	const failureCount = coordination.failureCount
 	if (!coordination.shouldFailover) {
@@ -281,6 +323,7 @@ export async function runCheck(env, options = {}) {
 			...state,
 			failureCount,
 			fallbackActive: false,
+			coordinatorResetPending: false,
 			lastFailureAt: now,
 			lastAction: coordination.claimHeld ? 'fallback-claim-held' : 'edge-failure-counted',
 			lastAlertKey: null,
@@ -321,7 +364,6 @@ export async function runCheck(env, options = {}) {
 		await coordinator.release()
 		throw error
 	}
-	await coordinator.confirm()
 	const alertKey = `fallback:${env.VERCEL_FALLBACK_A}`
 	const message = `letletme watchdog 已回退 Cloudflare → Vercel：EdgeOne 连续 ${failureCount} 次异常，Vercel 健康。`
 	let next = {
@@ -330,6 +372,7 @@ export async function runCheck(env, options = {}) {
 		fallbackActive: true,
 		lastFailureAt: now,
 		lastAction: 'fallback-applied',
+		coordinatorResetPending: false,
 		lastAlertKey: null,
 		pendingAlert: { key: alertKey, message }
 	}
@@ -347,6 +390,14 @@ export async function runCheck(env, options = {}) {
 	} catch (error) {
 		console.error(JSON.stringify({
 			event: 'edgeone_watchdog_state_write_error',
+			error: error instanceof Error ? error.message : String(error)
+		}))
+	}
+	try {
+		await coordinator.confirm()
+	} catch (error) {
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_coordinator_confirm_error',
 			error: error instanceof Error ? error.message : String(error)
 		}))
 	}

@@ -166,6 +166,7 @@ test('invalid persisted state is safely reset', () => {
 		lastFailureAt: null,
 		lastAction: null,
 		lastAlertKey: null,
+		coordinatorResetPending: false,
 		pendingAlert: null
 	})
 })
@@ -272,6 +273,41 @@ test('attempts the failover alert even when the state prewrite fails', async () 
 	assert.equal(result.action, 'fallback-applied')
 	assert.equal(calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 1)
 	assert.equal(writes.at(-1).lastAlertKey, 'fallback:76.76.21.21')
+})
+
+test('reconstructs a fallback alert when coordinator confirmation fails', async () => {
+	const coordinator = makeCoordinator()
+	coordinator.confirm = async () => { throw new Error('coordinator-unavailable') }
+	const env = {
+		...makeEnv(null, coordinator),
+		TELEGRAM_BOT_TOKEN: 'bot',
+		TELEGRAM_CHAT_ID: 'chat'
+	}
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'A', name: 'letletme.top', content: '76.76.21.21', proxied: true },
+		telegramResponses: [new Response('', { status: 200 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'already-fallback')
+	assert.equal(calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 1)
+	assert.equal(result.state.lastAlertKey, 'fallback:76.76.21.21')
+})
+
+test('does not reuse a broken streak while a healthy reset is pending', async () => {
+	const coordinator = makeCoordinator(2)
+	coordinator.reset = async () => { throw new Error('coordinator-unavailable') }
+	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false }
+	const firstEnv = makeEnv(null, coordinator)
+	const firstFetch = fakeFetchFactory({ record: edgeRecord, edgeResponses: [health(true)] })
+	const first = await runCheckWithTestCoordinator(firstEnv, { fetchImpl: firstFetch.fetch })
+	assert.equal(first.action, 'healthy-coordinator-reset-pending')
+	assert.equal(first.state.coordinatorResetPending, true)
+
+	const secondEnv = makeEnv(JSON.stringify(first.state), coordinator)
+	const secondFetch = fakeFetchFactory({ record: edgeRecord, edgeResponses: [new Response('', { status: 503 })] })
+	const second = await runCheckWithTestCoordinator(secondEnv, { fetchImpl: secondFetch.fetch })
+	assert.equal(second.action, 'coordinator-reset-pending')
+	assert.equal(secondFetch.calls.filter(call => call.init.method === 'PUT').length, 0)
 })
 
 test('serializes the threshold claim in the Durable Object coordinator', async () => {
