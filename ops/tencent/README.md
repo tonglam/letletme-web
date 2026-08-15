@@ -21,10 +21,12 @@ Create these without committing them:
 Vercel build time and Tencent build time. Do not put it in Git.
 
 The value in `/etc/letletme/local-proxy-secret` must also be configured as the
-sensitive Vercel Production variable `LETLETME_LOCAL_PROXY_SECRET`. The Worker
-uses a separate Cloudflare secret named `VERCEL_PROXY_SECRET` with this same
-value when it forwards requests to Vercel, allowing the Web app to preserve
-the authenticated client-IP rate-limit subject across the cross-zone hop.
+sensitive Vercel Production variable `LETLETME_LOCAL_PROXY_SECRET`. The active
+public fallback uses the Cloudflare Request Transform Rule
+`cf-fallback-canary-set-proxy-secret` to overwrite
+`X-Letletme-Proxy-Secret` with this same value. Rotate the Vercel variable and
+the active Transform Rule together; the historical Worker secret is not on the
+request path.
 
 The Tencent origin may use its own active, allow-listed Data API credential;
 it does not need to copy a legacy Vercel Data key. All other shared credentials
@@ -84,7 +86,7 @@ before upload.
 ## Current public Web routing
 
 This host is not a public Web origin. The current production path is
-Cloudflare Proxied apex → `letletme-router` pass-through Worker → Vercel.
+Cloudflare Proxied apex → Cloudflare Free Transform Rules → Vercel.
 The EdgeOne free-plan site is configured only as a DNS-only canary; the apex
 has not changed and no watchdog is enabled. The canary origin is Vercel, not
 this Tencent host.
@@ -93,5 +95,5 @@ Do not upload a `cn-router` version, configure a Tencent route split, enable
 Cloudflare placement hints, or enable the `106.52.109.82:8443` placement probe.
 The old placement-probe script and historical Worker versions may remain in
 Git for audit history, but they are not part of production operations. Any
-future Web release must preserve the Cloudflare pass-through path and validate
-any new edge candidate separately before changing DNS.
+future Web release must preserve the Cloudflare Transform Rules path and
+validate any new edge candidate separately before changing DNS.
