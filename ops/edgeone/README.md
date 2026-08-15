@@ -130,12 +130,14 @@ creating a CNAME, Cloudflare assigns a new record ID. The safe sequence is:
 2. Before changing DNS, redeploy the currently deployed watchdog with
    `WATCHDOG_ENABLED=false`; verify the deployed configuration has taken
    effect so no scheduled run can write the rollback record during cutover.
-3. Create the apex EdgeOne CNAME as DNS-only.
-4. Immediately query Cloudflare DNS and capture the new CNAME record ID;
+3. Delete the existing apex A record using the exported record ID, then
+   confirm the apex has no conflicting A/AAAA/CNAME record.
+4. Create the apex EdgeOne CNAME as DNS-only.
+5. Immediately query Cloudflare DNS and capture the new CNAME record ID;
    verify the exact apex name, EdgeOne target, and `proxied=false`.
-5. Update or redeploy the watchdog with that new CNAME ID, still with
+6. Update or redeploy the watchdog with that new CNAME ID, still with
    `WATCHDOG_ENABLED=false`, then run its health/dry-run checks.
-6. Enable the watchdog only after the direct Vercel health probe and the
+7. Enable the watchdog only after the direct Vercel health probe and the
    exact EdgeOne-record check both pass.
 
 If an in-place Cloudflare update preserves the record ID, still GET the record
