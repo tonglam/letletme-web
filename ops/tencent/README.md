@@ -104,6 +104,35 @@ must be pass-through, so merely attaching the route cannot move traffic to
 Tencent.
 Configure the `letletme.top/*` route as fail-open. Promote pass-through first,
 then split 90/10, 50/50 and 0/100 by version ID. A rollback is a 100%
-deployment of the pass-through version. The Worker enables Cloudflare Smart
-Placement so fetch-handler execution can move closer to the Tencent backend;
-allow its analysis window to complete before judging the CN latency gate.
+deployment of the pass-through version.
+
+### Explicit Tencent placement probe
+
+Automatic Smart Placement left real CN requests running in AMS and did not
+pass the latency gate. The Worker therefore uses Cloudflare's experimental
+host-based Placement Hint against `106.52.109.82:8443`, a dedicated raw-TCP
+probe on the single-homed Tencent VM.
+
+Enable the probe before uploading a hinted Worker version:
+
+```bash
+sudo ops/tencent/scripts/manage-placement-probe.sh enable
+```
+
+The script installs Ubuntu's dynamic Nginx stream module, exposes only TCP
+8443, and returns a constant marker immediately after connect. It does not
+parse HTTP, terminate TLS, read files, expose secrets, or proxy to Node. The
+business origin on 443 remains restricted to Cloudflare IP ranges. Cloudflare
+sends placement probes from public, non-Cloudflare IP ranges, so this isolated
+port cannot use the origin's Cloudflare-only allowlist.
+
+Keep production at pass-through 100% until the hinted versions are uploaded
+and the probe is externally reachable. During a canary, require `cf-placement`
+to show a remote location materially closer to Tencent and repeat the complete
+error, fallback and latency gates. `local-AMS` or a failed performance gate is
+an immediate rollback. If the experiment is abandoned, remove the listener
+and firewall rule with:
+
+```bash
+sudo ops/tencent/scripts/manage-placement-probe.sh disable
+```
