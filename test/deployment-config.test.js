@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict')
 const test = require('node:test')
 
-test('uses one Git SHA for the build and its Vercel-safe prefix for skew protection', async () => {
+test('uses one Git SHA for the self-hosted build and its Vercel-safe prefix for skew protection', async () => {
 	const names = [
 		'LETLETME_RELEASE_SHA',
 		'VERCEL_GIT_COMMIT_SHA',
@@ -51,7 +51,42 @@ test('uses one Git SHA for the build and its Vercel-safe prefix for skew protect
 	}
 })
 
-test('prefers the Vercel Git SHA over a stale explicit release override', async () => {
+test('lets Vercel Git deployments assign unique deployment IDs', async () => {
+	const names = [
+		'LETLETME_RELEASE_SHA',
+		'VERCEL_GIT_COMMIT_SHA',
+		'GITHUB_SHA',
+		'VERCEL',
+		'LETLETME_ORIGIN'
+	]
+	const previous = Object.fromEntries(
+		names.map(name => [name, process.env[name]])
+	)
+	const releaseSha = 'c5affcf4b0a15238895dd2b3a135eea45e61dd98'
+	try {
+		delete process.env.LETLETME_RELEASE_SHA
+		process.env.VERCEL_GIT_COMMIT_SHA = releaseSha
+		delete process.env.GITHUB_SHA
+		process.env.VERCEL = '1'
+		delete process.env.LETLETME_ORIGIN
+		delete require.cache[require.resolve('../next.config.js')]
+		const config = require('../next.config.js')
+
+		assert.equal(await config.generateBuildId(), releaseSha)
+		assert.equal(config.deploymentId, undefined)
+		assert.deepEqual(config.env, {
+			LETLETME_RELEASE_SHA: releaseSha
+		})
+	} finally {
+		for (const name of names) {
+			if (previous[name] === undefined) delete process.env[name]
+			else process.env[name] = previous[name]
+		}
+		delete require.cache[require.resolve('../next.config.js')]
+	}
+})
+
+test('prefers the Vercel Git SHA for the build over a stale explicit release override', async () => {
 	const names = ['LETLETME_RELEASE_SHA', 'VERCEL_GIT_COMMIT_SHA', 'VERCEL']
 	const previous = Object.fromEntries(
 		names.map(name => [name, process.env[name]])
@@ -68,10 +103,7 @@ test('prefers the Vercel Git SHA over a stale explicit release override', async 
 			await config.generateBuildId(),
 			'37973bbabbcafbe84714500c629d00935925eee6'
 		)
-		assert.equal(
-			config.deploymentId,
-			'37973bbabbcafbe84714500c629d0093'
-		)
+		assert.equal(config.deploymentId, undefined)
 		assert.equal(
 			config.env.LETLETME_RELEASE_SHA,
 			'37973bbabbcafbe84714500c629d00935925eee6'
