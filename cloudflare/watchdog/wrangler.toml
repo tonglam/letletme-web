@@ -1,0 +1,20 @@
+name = "edgeone-watchdog"
+main = "src/index.js"
+compatibility_date = "2026-08-15"
+workers_dev = true
+
+[triggers]
+crons = ["* * * * *"]
+
+[[kv_namespaces]]
+binding = "FAILOVER_STATE"
+id = "REPLACE_AFTER_CREATE"
+
+[vars]
+WATCHDOG_ENABLED = "false"
+APEX_NAME = "letletme.top"
+VERCEL_HEALTH_URL = "https://letletme-web.vercel.app/healthz"
+EDGEONE_HEALTH_URL = "https://letletme.top/healthz"
+VERCEL_FALLBACK_TTL = "1"
+PROBE_TIMEOUT_MS = "8000"
+DNS_API_BASE = "https://api.cloudflare.com/client/v4"
