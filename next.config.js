@@ -46,15 +46,18 @@ function resolveDeploymentOrigin() {
 }
 
 const releaseSha = resolveReleaseSha()
-// Vercel limits custom skew-protection deployment IDs to 32 characters.
-// Keep the complete commit SHA everywhere else and use its deterministic
-// 32-character prefix only for deploymentId.
+// Tencent's rolling self-hosted deployment needs a deterministic ID so that
+// assets remain scoped to the release SHA. Vercel Git deployments already
+// receive a unique platform deployment ID; supplying the same commit-derived
+// custom ID on a redeploy makes Vercel reject the build as a duplicate.
 const deploymentId = releaseSha.slice(0, 32)
+const deploymentConfig =
+	process.env.VERCEL === '1' ? {} : { deploymentId }
 const deploymentOrigin = resolveDeploymentOrigin()
 
 const nextConfig = {
 	output: 'standalone',
-	deploymentId,
+	...deploymentConfig,
 	generateBuildId: async () => releaseSha,
 	env: {
 		// Keep release attribution available inside server route handlers in
