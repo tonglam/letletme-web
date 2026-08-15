@@ -5,15 +5,17 @@ import {
 	PayloadTooLargeError,
 	readBoundedJson,
 } from '@/lib/http-security'
+import { isTrustedSameSiteRequest } from '@/lib/request-origin'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
-	const origin = request.headers.get('origin')
-	const fetchSite = request.headers.get('sec-fetch-site')
-	if ((origin && origin !== new URL(request.url).origin) || fetchSite === 'cross-site') {
-		return NextResponse.json({ error: 'Cross-site request rejected' }, { status: 403 })
+	if (!isTrustedSameSiteRequest(request)) {
+		return NextResponse.json(
+			{ error: 'Cross-site request rejected' },
+			{ status: 403, headers: { 'Cache-Control': 'no-store' } },
+		)
 	}
 
 	const secret = process.env.BACKEND_PROXY_SECRET
@@ -53,7 +55,10 @@ export async function POST(request: Request) {
 		console.info(JSON.stringify({
 			event: 'web_vital',
 			...metric,
-			release: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? 'local',
+			release:
+				process.env.LETLETME_RELEASE_SHA?.trim().slice(0, 12) ||
+				process.env.VERCEL_GIT_COMMIT_SHA?.trim().slice(0, 12) ||
+				'local',
 			recordedAt: new Date().toISOString(),
 		}))
 		return new NextResponse(null, { status: 204 })

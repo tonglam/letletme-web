@@ -56,6 +56,11 @@ const nextConfig = {
 	output: 'standalone',
 	deploymentId,
 	generateBuildId: async () => releaseSha,
+	env: {
+		// Keep release attribution available inside server route handlers in
+		// prebuilt Vercel deployments where Git system envs can be empty.
+		LETLETME_RELEASE_SHA: releaseSha
+	},
 	async headers() {
 		return [
 			{
