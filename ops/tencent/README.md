@@ -78,17 +78,18 @@ build-time and runtime `LETLETME_RELEASE_SHA`; a Vercel Git deployment obtains
 the same value from `VERCEL_GIT_COMMIT_SHA`. Builds without either value fail
 before upload.
 
-## Public Web routing is retired
+## Current public Web routing
 
-This host is not a public Web origin in the EdgeOne architecture. The public
-path is Cloudflare DNS-only → EdgeOne free plan → Vercel. Cloudflare is used
-only as the fail-open fallback: its `letletme-router` Worker is a Vercel-only
-pass-through, and `cloudflare/watchdog` can restore the exact Cloudflare
-Proxied Vercel record after three consecutive EdgeOne failures.
+This host is not a public Web origin. The current production path is
+Cloudflare Proxied apex → `letletme-router` pass-through Worker → Vercel.
+The EdgeOne free-plan candidate was tested but failed the overseas performance
+gate, so its temporary canary DNS record was removed and the apex was not
+changed. Cloudflare remains the active production edge and no watchdog is
+enabled.
 
 Do not upload a `cn-router` version, configure a Tencent route split, enable
 Cloudflare placement hints, or enable the `106.52.109.82:8443` placement probe.
 The old placement-probe script and historical Worker versions may remain in
 Git for audit history, but they are not part of production operations. Any
-future Web release must preserve the EdgeOne → Vercel path and validate the
-Cloudflare fallback Worker separately.
+future Web release must preserve the Cloudflare pass-through path and validate
+any new edge candidate separately before changing DNS.

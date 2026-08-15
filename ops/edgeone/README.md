@@ -1,5 +1,27 @@
 # EdgeOne zero-cost edge for `letletme.top`
 
+## Current decision
+
+EdgeOne was validated as a non-production candidate, but it was not accepted
+for the public route. The real Perth comparison used 20 samples per path:
+direct Vercel measured p50/p95 `292/550 ms`, while EdgeOne measured
+`523/1,509 ms`; the p95 regression exceeded the agreed 10% limit. The
+temporary `eo-canary.letletme.top` DNS record was removed after this gate
+failed.
+
+Current production remains:
+
+```text
+Cloudflare authoritative DNS (Proxied apex)
+  → `letletme-router` pass-through Worker
+    → Vercel Production
+```
+
+Do not create a production EdgeOne CNAME or enable the watchdog unless a new
+review produces passing mainland and overseas evidence. This document keeps
+the candidate configuration and rollback procedure for a future re-evaluation;
+it does not assert that EdgeOne is currently serving users.
+
 This directory describes the production configuration that must be created in
 the Tencent Cloud console. The application remains on Vercel; Tencent's
 `106.52.109.82` is not a public Web origin in this architecture.
@@ -41,13 +63,16 @@ pass-through → Vercel until the gates are re-verified.
 
 ## Routing contract
 
-The only approved public Web path is:
+The proposed public Web path, currently inactive, is:
 
 ```text
 Cloudflare authoritative DNS (DNS-only apex CNAME)
   → EdgeOne free global site
     → Vercel Production (`letletme-web.vercel.app`)
 ```
+
+The active public path is the Cloudflare Proxied apex and pass-through Worker
+shown in **Current decision** above.
 
 All paths and methods, including mainland reads, remain on the same Vercel
 origin. Do not add a mainland-to-Tencent split: it introduces a second
@@ -170,6 +195,7 @@ curl -sS -D - -X POST https://letletme.top/api/vitals \
   -H 'content-type: application/json' -d '{}'
 ```
 
-The public path must return `X-Letletme-Edge: edgeone`,
-`X-Letletme-Origin: vercel`, and the current Vercel release. The Cloudflare
-fallback path returns `X-Letletme-Edge: cloudflare-fallback`.
+For a future EdgeOne re-evaluation, the canary/public path must return
+`X-Letletme-Edge: edgeone`, `X-Letletme-Origin: vercel`, and the current Vercel
+release. The current production path must return
+`X-Letletme-Edge: cloudflare-fallback` and remains the acceptance baseline.
