@@ -8,7 +8,7 @@ crons = ["* * * * *"]
 
 [[kv_namespaces]]
 binding = "FAILOVER_STATE"
-id = "REPLACE_AFTER_CREATE"
+id = "a13f5523944d4e719c8e64efb1aa5593"
 
 [vars]
 WATCHDOG_ENABLED = "false"
