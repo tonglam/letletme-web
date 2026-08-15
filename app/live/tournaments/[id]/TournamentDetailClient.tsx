@@ -742,7 +742,11 @@ export default function TournamentDetailClient({
 
 	return (
 		<PageShell>
-			<div className="container mx-auto max-w-4xl px-4 py-8">
+			<div
+				className="container mx-auto max-w-4xl px-4 py-8"
+				data-competition-perf-ready="detail"
+				data-competition-tournament-id={String(currentTournament.id)}
+			>
 				<RouteReadyMarker
 					name="LIVE_COMPETITION_BOARD_READY"
 					ready={Boolean(currentTournament && !retrying && !isRefreshing)}
@@ -767,7 +771,10 @@ export default function TournamentDetailClient({
 							variant="outline"
 							asChild
 						>
-						<Link href={`/competitions/${currentTournament.id}/manage`} prefetch={false}>
+							<Link
+								href={`/competitions/${currentTournament.id}/manage`}
+								prefetch={false}
+							>
 								<Settings aria-hidden="true" /> {t('manage')}
 							</Link>
 						</Button>

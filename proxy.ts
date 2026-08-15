@@ -1,6 +1,8 @@
 import { routing } from '@/i18n/routing'
 import {
 	getLocaleFromInternalPathname,
+	isAppLocale,
+	LANGUAGE_COOKIE,
 	localizePathname,
 	stripLocaleFromPathname
 } from '@/i18n/routing'
@@ -164,7 +166,10 @@ export async function proxy(req: NextRequest) {
 		/^\/((?:[a-z]{2}(?:-[A-Z]{2})?)\/)?competitions\/([1-9]\d*)\/?$/
 	)
 	if (legacyMatch) {
-		const locale = legacyMatch[1]?.replace(/\/$/, '') || routing.defaultLocale
+		const cookieLocale = req.cookies.get(LANGUAGE_COOKIE.name)?.value
+		const locale =
+			legacyMatch[1]?.replace(/\/$/, '') ||
+			(isAppLocale(cookieLocale) ? cookieLocale : routing.defaultLocale)
 		const url = req.nextUrl.clone()
 		url.pathname = `/${locale}/live/competitions/${legacyMatch[2]}`
 		return NextResponse.redirect(url, 308)

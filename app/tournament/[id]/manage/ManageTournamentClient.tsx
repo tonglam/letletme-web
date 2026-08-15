@@ -15,18 +15,42 @@ import { useTournamentManagement } from './_hooks/useTournamentManagement'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import dynamic from 'next/dynamic'
 
-const TournamentDangerZone = dynamic(() => import('./_components/TournamentDangerZone').then(mod => mod.TournamentDangerZone))
+const TournamentDangerZone = dynamic(() =>
+	import('./_components/TournamentDangerZone').then(
+		mod => mod.TournamentDangerZone
+	)
+)
 
-export default function ManageTournamentClient({ tournament }: { tournament: EntryTournament }) {
+export default function ManageTournamentClient({
+	tournament
+}: {
+	tournament: EntryTournament
+}) {
 	const t = useTranslations('TournamentManage')
 	const management = useTournamentManagement(tournament)
 
 	return (
 		<PageShell>
-			<RouteReadyMarker name="COMPETITIONS_MANAGE_READY" audienceHint="session-hint" goodMs={1000} poorMs={1500} />
-			<div className="container mx-auto max-w-4xl space-y-6 px-4 py-8">
-				<Button variant="ghost" className="-ml-3" asChild>
-					<Link href={`/live/competitions/${tournament.id}`} prefetch={false}>
+			<RouteReadyMarker
+				name="COMPETITIONS_MANAGE_READY"
+				audienceHint="session-hint"
+				goodMs={1000}
+				poorMs={1500}
+			/>
+			<div
+				className="container mx-auto max-w-4xl space-y-6 px-4 py-8"
+				data-competition-perf-ready="manage"
+				data-competition-tournament-id={String(tournament.id)}
+			>
+				<Button
+					variant="ghost"
+					className="-ml-3"
+					asChild
+				>
+					<Link
+						href={`/live/competitions/${tournament.id}`}
+						prefetch={false}
+					>
 						<ArrowLeft aria-hidden="true" /> {t('back')}
 					</Link>
 				</Button>
@@ -44,7 +68,9 @@ export default function ManageTournamentClient({ tournament }: { tournament: Ent
 				{management.mutationState.kind === 'error' ? (
 					<Alert variant="destructive">
 						<TriangleAlert aria-hidden="true" />
-						<AlertDescription>{management.mutationState.message}</AlertDescription>
+						<AlertDescription>
+							{management.mutationState.message}
+						</AlertDescription>
 					</Alert>
 				) : null}
 

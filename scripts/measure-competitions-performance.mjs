@@ -26,6 +26,16 @@ const paths = [
 	`/live/competitions/${tournamentId}`
 ]
 
+function readySelector(path) {
+	if (path === '/competitions/browse')
+		return '[data-competition-perf-ready="browse"]'
+	if (path === '/competitions/create')
+		return '[data-competition-perf-ready="create"]'
+	if (path.endsWith('/manage'))
+		return `[data-competition-perf-ready="manage"][data-competition-tournament-id="${tournamentId}"]`
+	return `[data-competition-perf-ready="detail"][data-competition-tournament-id="${tournamentId}"]`
+}
+
 function percentile(values, p) {
 	const sorted = [...values].sort((a, b) => a - b)
 	return sorted[
@@ -74,6 +84,12 @@ async function measure(browser, path, index) {
 	if (!page.url().includes(`${origin}/${locale}${path}`)) {
 		throw new Error(
 			`Authenticated measurement was redirected away from ${path}: ${page.url()}`
+		)
+	}
+	const ready = page.locator(readySelector(path))
+	if ((await ready.count()) !== 1) {
+		throw new Error(
+			`Authenticated measurement did not load the expected competition state for ${path}`
 		)
 	}
 	await page.waitForTimeout(500)

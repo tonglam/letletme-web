@@ -14,9 +14,21 @@ import { useCreateTournament } from './_hooks/useCreateTournament'
 import { useTranslations } from 'next-intl'
 import dynamic from 'next/dynamic'
 
-const TournamentParticipantsCard = dynamic(() => import('./_components/TournamentParticipantsCard').then(mod => mod.TournamentParticipantsCard))
-const TournamentGroupPhaseCard = dynamic(() => import('./_components/TournamentGroupPhaseCard').then(mod => mod.TournamentGroupPhaseCard))
-const TournamentKnockoutPhaseCard = dynamic(() => import('./_components/TournamentKnockoutPhaseCard').then(mod => mod.TournamentKnockoutPhaseCard))
+const TournamentParticipantsCard = dynamic(() =>
+	import('./_components/TournamentParticipantsCard').then(
+		mod => mod.TournamentParticipantsCard
+	)
+)
+const TournamentGroupPhaseCard = dynamic(() =>
+	import('./_components/TournamentGroupPhaseCard').then(
+		mod => mod.TournamentGroupPhaseCard
+	)
+)
+const TournamentKnockoutPhaseCard = dynamic(() =>
+	import('./_components/TournamentKnockoutPhaseCard').then(
+		mod => mod.TournamentKnockoutPhaseCard
+	)
+)
 
 export default function CreateTournamentClient() {
 	const t = useTranslations('TournamentCreate')
@@ -32,8 +44,16 @@ export default function CreateTournamentClient() {
 
 	return (
 		<PageShell>
-			<RouteReadyMarker name="COMPETITIONS_CREATE_READY" audienceHint="session-hint" goodMs={1000} poorMs={1500} />
-			<div className="container mx-auto max-w-4xl px-4 py-8">
+			<RouteReadyMarker
+				name="COMPETITIONS_CREATE_READY"
+				audienceHint="session-hint"
+				goodMs={1000}
+				poorMs={1500}
+			/>
+			<div
+				className="container mx-auto max-w-4xl px-4 py-8"
+				data-competition-perf-ready="create"
+			>
 				<StatsPageHeader
 					eyebrow={t('eyebrow')}
 					title={t('title')}
@@ -77,7 +97,11 @@ export default function CreateTournamentClient() {
 							</>
 						) : (
 							<>
-								<TournamentInformationCard isCheckingName={state.isCheckingName} isNameAvailable={state.isNameAvailable} nameCheckMessage={state.nameCheckMessage} />
+								<TournamentInformationCard
+									isCheckingName={state.isCheckingName}
+									isNameAvailable={state.isNameAvailable}
+									nameCheckMessage={state.nameCheckMessage}
+								/>
 								<TournamentParticipantsCard
 									applyAutoMode={state.applyAutoMode}
 									fetchParticipants={state.fetchParticipants}
@@ -93,9 +117,18 @@ export default function CreateTournamentClient() {
 									toggleParticipant={state.toggleParticipant}
 								/>
 								{state.participantsLoaded ? (
-									<TournamentGroupPhaseCard groupFormat={state.groupFormat} knockoutFormat={state.knockoutFormat} plan={state.plan} />
+									<TournamentGroupPhaseCard
+										groupFormat={state.groupFormat}
+										knockoutFormat={state.knockoutFormat}
+										plan={state.plan}
+									/>
 								) : null}
-								{state.plan.groupReady ? <TournamentKnockoutPhaseCard knockoutFormat={state.knockoutFormat} plan={state.plan} /> : null}
+								{state.plan.groupReady ? (
+									<TournamentKnockoutPhaseCard
+										knockoutFormat={state.knockoutFormat}
+										plan={state.plan}
+									/>
+								) : null}
 							</>
 						)}
 						<TournamentCreateActions
