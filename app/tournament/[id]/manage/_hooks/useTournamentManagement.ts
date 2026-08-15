@@ -3,7 +3,7 @@
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import {
 	isTournamentRosterSyncInFlight,
-	isTournamentSetupInFlight,
+	isTournamentSetupInFlight
 } from '@/lib/tournament/lifecycle'
 import { useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
@@ -11,11 +11,7 @@ import { useEffect, useState } from 'react'
 import type { TournamentNameForm } from '../_lib/tournament-management'
 
 export type TournamentManagementAction =
-	| 'retry_setup'
-	| 'retry_roster'
-	| 'pause'
-	| 'resume'
-	| 'enable_official_sync'
+	'retry_setup' | 'retry_roster' | 'pause' | 'resume' | 'enable_official_sync'
 
 type MutationState =
 	| { kind: 'idle'; message: null }
@@ -35,7 +31,7 @@ function serverRevision(t: EntryTournament): string {
 		t.standingsReadyAt,
 		t.rosterSyncStatus,
 		t.rosterLastSyncedAt,
-		t.setupHasWarnings,
+		t.setupHasWarnings
 	].join('|')
 }
 
@@ -44,9 +40,10 @@ export function useTournamentManagement(tournament: EntryTournament) {
 	const router = useRouter()
 	const [tournamentState, setTournamentState] = useState(() => ({
 		serverTournament: tournament,
-		currentTournament: tournament,
+		currentTournament: tournament
 	}))
-	// Sync server props outside render (setup poll calls router.refresh often).
+	// Sync server props outside render. Lifecycle status is polled as a compact
+	// JSON resource below; the full RSC tree refreshes only once at termination.
 	// Only replace local state when the logical server revision changes — not on
 	// every new object reference — so optimistic renames survive polling.
 	useEffect(() => {
@@ -59,16 +56,17 @@ export function useTournamentManagement(tournament: EntryTournament) {
 			}
 			return {
 				serverTournament: tournament,
-				currentTournament: tournament,
+				currentTournament: tournament
 			}
 		})
 	}, [tournament])
 	const currentTournament =
-		serverRevision(tournamentState.serverTournament) === serverRevision(tournament)
+		serverRevision(tournamentState.serverTournament) ===
+		serverRevision(tournament)
 			? tournamentState.currentTournament
 			: tournament
 	const updateCurrentTournament = (
-		update: (current: EntryTournament) => EntryTournament,
+		update: (current: EntryTournament) => EntryTournament
 	) => {
 		setTournamentState(current => {
 			const base =
@@ -77,7 +75,7 @@ export function useTournamentManagement(tournament: EntryTournament) {
 					: tournament
 			return {
 				serverTournament: tournament,
-				currentTournament: update(base),
+				currentTournament: update(base)
 			}
 		})
 	}
@@ -87,23 +85,104 @@ export function useTournamentManagement(tournament: EntryTournament) {
 		useState<TournamentManagementAction | null>(null)
 	const [mutationState, setMutationState] = useState<MutationState>({
 		kind: 'idle',
-		message: null,
+		message: null
 	})
 	const rosterSyncInFlight = isTournamentRosterSyncInFlight(
-		currentTournament.rosterSyncStatus,
+		currentTournament.rosterSyncStatus
 	)
 	const setupInFlight = isTournamentSetupInFlight(currentTournament.setupStatus)
 	const lifecycleWorkInFlight = rosterSyncInFlight || setupInFlight
 
 	useEffect(() => {
 		if (!lifecycleWorkInFlight) return
-		const timer = window.setInterval(() => {
-			if (document.visibilityState === 'visible' && navigator.onLine) {
-				router.refresh()
+		let cancelled = false
+		let terminalRefreshed = false
+		let revision = tournament.updatedAt
+		const poll = async () => {
+			if (
+				cancelled ||
+				document.visibilityState !== 'visible' ||
+				!navigator.onLine
+			)
+				return
+			try {
+				let response: Response | null = null
+				let status: Record<string, unknown> = {}
+				for (let attempt = 0; attempt < 2; attempt += 1) {
+					response = await fetch(
+						`/api/tournaments/${tournament.id}/status?revision=${encodeURIComponent(revision)}`,
+						{ cache: 'no-store' }
+					)
+					status = (await response.json()) as Record<string, unknown>
+					if (typeof status.revision === 'string') revision = status.revision
+					if (response.status !== 409 || attempt === 1 || cancelled) break
+				}
+				if (!response || !response.ok || cancelled) return
+				setTournamentState(current => ({
+					...current,
+					currentTournament: {
+						...current.currentTournament,
+						state:
+							typeof status.state === 'string'
+								? (status.state as EntryTournament['state'])
+								: current.currentTournament.state,
+						updatedAt:
+							typeof status.updatedAt === 'string'
+								? status.updatedAt
+								: current.currentTournament.updatedAt,
+						setupStatus:
+							typeof status.setupStatus === 'string'
+								? (status.setupStatus as EntryTournament['setupStatus'])
+								: current.currentTournament.setupStatus,
+						setupPhase:
+							typeof status.setupPhase === 'string'
+								? (status.setupPhase as EntryTournament['setupPhase'])
+								: current.currentTournament.setupPhase,
+						rosterSyncStatus:
+							typeof status.rosterSyncStatus === 'string'
+								? (status.rosterSyncStatus as EntryTournament['rosterSyncStatus'])
+								: current.currentTournament.rosterSyncStatus,
+						setupCompletedUnits:
+							typeof status.setupCompletedUnits === 'number'
+								? status.setupCompletedUnits
+								: current.currentTournament.setupCompletedUnits,
+						setupTotalUnits:
+							typeof status.setupTotalUnits === 'number'
+								? status.setupTotalUnits
+								: current.currentTournament.setupTotalUnits,
+						standingsReadyAt:
+							typeof status.standingsReadyAt === 'string'
+								? status.standingsReadyAt
+								: status.standingsReadyAt === null
+									? null
+									: current.currentTournament.standingsReadyAt,
+						setupHasWarnings: status.setupHasWarnings === true
+					}
+				}))
+				const setupStatus = status.setupStatus
+				const rosterStatus = status.rosterSyncStatus
+				const setupTerminal =
+					setupStatus === 'READY' || setupStatus === 'FAILED'
+				const rosterTerminal =
+					rosterStatus == null ||
+					rosterStatus === 'READY' ||
+					rosterStatus === 'FAILED'
+				const terminal = setupTerminal && rosterTerminal
+				if (terminal && !terminalRefreshed) {
+					terminalRefreshed = true
+					router.refresh()
+				}
+			} catch {
+				// Keep the last committed board; the next interval retries.
 			}
-		}, 5_000)
-		return () => window.clearInterval(timer)
-	}, [lifecycleWorkInFlight, router])
+		}
+		void poll()
+		const timer = window.setInterval(() => void poll(), 5_000)
+		return () => {
+			cancelled = true
+			window.clearInterval(timer)
+		}
+	}, [lifecycleWorkInFlight, router, tournament.id, tournament.updatedAt])
 
 	const renameTournament = async ({ name }: TournamentNameForm) => {
 		const normalizedName = name.trim()
@@ -118,13 +197,13 @@ export function useTournamentManagement(tournament: EntryTournament) {
 			const response = await fetch(`/api/tournaments/${tournament.id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name: normalizedName }),
+				body: JSON.stringify({ name: normalizedName })
 			})
 			if (!response.ok) throw new Error(t('nameUpdateFailed'))
 
 			updateCurrentTournament(current => ({
 				...current,
-				name: normalizedName,
+				name: normalizedName
 			}))
 			setMutationState({ kind: 'success', message: t('nameUpdated') })
 			router.refresh()
@@ -151,7 +230,7 @@ export function useTournamentManagement(tournament: EntryTournament) {
 			const response = await fetch(`/api/tournaments/${tournament.id}`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ action }),
+				body: JSON.stringify({ action })
 			})
 			if (!response.ok) throw new Error('action failed')
 
@@ -165,7 +244,7 @@ export function useTournamentManagement(tournament: EntryTournament) {
 						...current,
 						setupStatus: 'PENDING',
 						setupPhase: 'QUEUED',
-						setupHasWarnings: false,
+						setupHasWarnings: false
 					}
 				}
 				if (action === 'retry_roster') {
@@ -174,12 +253,12 @@ export function useTournamentManagement(tournament: EntryTournament) {
 				return {
 					...current,
 					rosterMode: 'OFFICIAL_SYNC',
-					rosterSyncStatus: 'PROCESSING',
+					rosterSyncStatus: 'PROCESSING'
 				}
 			})
 			setMutationState({
 				kind: 'success',
-				message: t(`actionSuccess.${action}`),
+				message: t(`actionSuccess.${action}`)
 			})
 			router.refresh()
 			return true
@@ -196,7 +275,7 @@ export function useTournamentManagement(tournament: EntryTournament) {
 		setMutationState({ kind: 'idle', message: null })
 		try {
 			const response = await fetch(`/api/tournaments/${tournament.id}`, {
-				method: 'DELETE',
+				method: 'DELETE'
 			})
 			if (!response.ok) throw new Error(t('deleteFailed'))
 
@@ -220,6 +299,6 @@ export function useTournamentManagement(tournament: EntryTournament) {
 		mutationState,
 		pendingAction,
 		renameTournament,
-		runAction,
+		runAction
 	}
 }

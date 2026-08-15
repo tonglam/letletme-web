@@ -1,4 +1,4 @@
-import { getAuthorizationSession, type Session } from '@/lib/auth'
+import type { Session } from '@/lib/auth'
 import { PayloadTooLargeError, readBoundedJson } from '@/lib/http-security'
 import {
 	TournamentApiConfigurationError,
@@ -12,6 +12,7 @@ import {
 	isTrustedTournamentMutationRequest,
 } from '@/lib/tournament/management-security'
 import { NextResponse } from 'next/server'
+import { getVerifiedEntryContext } from '@/lib/session'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,7 +47,7 @@ const getMutationSession = async (request: Request): Promise<VerifiedSession | N
 
 	let session: Session | null
 	try {
-		session = await getAuthorizationSession(request.headers)
+		session = (await getVerifiedEntryContext()).session
 	} catch {
 		return errorResponse('Authentication unavailable', 503)
 	}

@@ -11,16 +11,18 @@ import type { ReactNode } from 'react'
 
 export async function RouteIntlProvider({
 	children,
-	namespaces
+	namespaces,
+	includeGlobal = true
 }: {
 	children: ReactNode
 	namespaces: readonly ClientMessageNamespace[]
+	includeGlobal?: boolean
 }) {
 	const messages = (await getMessages()) as IntlMessages
 	// next-intl treats messages as an atomic provider prop. A nested provider
 	// therefore has to carry the root namespaces forward explicitly.
 	const selected = selectMessages(messages, [
-		...GLOBAL_CLIENT_NAMESPACES,
+		...(includeGlobal ? GLOBAL_CLIENT_NAMESPACES : []),
 		...namespaces
 	])
 	return (

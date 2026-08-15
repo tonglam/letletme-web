@@ -39,7 +39,7 @@ export function TournamentCreateActions({ canSubmit, creationMode, createdTourna
 					</span>
 					{createdTournamentId ? (
 						<Button asChild size="lg" className="min-h-11 w-full sm:w-auto">
-							<Link href={`/competitions/${createdTournamentId}`}>{t('viewTournament')}</Link>
+							<Link href={`/live/competitions/${createdTournamentId}`} prefetch={false}>{t('viewTournament')}</Link>
 						</Button>
 					) : (
 						<Button

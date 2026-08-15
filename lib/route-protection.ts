@@ -8,7 +8,11 @@ export const PROTECTED_PAGE_PREFIXES = [
 	'/my-fpl/competitions',
 ] as const
 
-export const PROTECTED_API_PREFIXES = ['/api/tournaments'] as const
+export const PROTECTED_API_PREFIXES = [
+	'/api/tournaments',
+	'/api/live/competitions',
+	'/api/competitions'
+] as const
 
 export function hasInvalidTournamentId(pathname: string): boolean {
 	const match = pathname.match(/^\/competitions\/([^/]+)(\/manage)?\/?$/)

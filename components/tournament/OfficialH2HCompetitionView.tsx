@@ -188,7 +188,7 @@ export function OfficialH2HCompetitionView({
 						{previousEvent == null ? (
 							<span><ArrowLeft aria-hidden="true" /> {t('previous')}</span>
 						) : (
-							<Link href={`/live/competitions/${tournamentId}?gw=${previousEvent}`}>
+							<Link href={`/live/competitions/${tournamentId}?gw=${previousEvent}`} prefetch={false}>
 								<ArrowLeft aria-hidden="true" /> {t('previous')}
 							</Link>
 						)}
@@ -197,7 +197,7 @@ export function OfficialH2HCompetitionView({
 						{nextEvent == null ? (
 							<span>{t('next')} <ArrowRight aria-hidden="true" /></span>
 						) : (
-							<Link href={`/live/competitions/${tournamentId}?gw=${nextEvent}`}>
+							<Link href={`/live/competitions/${tournamentId}?gw=${nextEvent}`} prefetch={false}>
 								{t('next')} <ArrowRight aria-hidden="true" />
 							</Link>
 						)}

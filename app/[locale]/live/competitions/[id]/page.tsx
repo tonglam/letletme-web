@@ -1,28 +1,19 @@
 import TournamentDetailClient from '@/app/live/tournaments/[id]/TournamentDetailClient'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import { getCurrentEventId } from '@/lib/events'
 import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import {
-	GET_TOURNAMENT_LIVE_DESK,
-	GET_TOURNAMENT_METADATA,
-	GET_TOURNAMENT_OFFICIAL_H2H,
-	GET_TOURNAMENT_PARTICIPANTS,
+	GET_TOURNAMENT_DETAIL_DESK,
 	type EntryTournament,
+	type TournamentDetailDeskResponse,
 	type TournamentLiveCalcData,
-	type TournamentLivePointsResponse,
-	type TournamentMetadataResponse,
 	type TournamentOfficialH2H,
-	type TournamentOfficialH2HResponse,
-	type TournamentParticipant,
-	type TournamentParticipantsResponse,
+	type TournamentParticipant
 } from '@/lib/graphql/operations/tournaments'
-import { executeServerQuery } from '@/lib/graphql-server'
-import { getCurrentEntryId } from '@/lib/session'
+import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import {
 	classifyTournamentDetailError,
-	type TournamentDetailLoadError,
+	type TournamentDetailLoadError
 } from '@/lib/tournament/detail-load-error'
-import { getTournamentLiveBatchSeed } from '@/lib/tournament/liveEntries'
 import { getTranslations } from 'next-intl/server'
 
 export const dynamic = 'force-dynamic'
@@ -33,7 +24,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: `/live/competitions/${encodeURIComponent(id)}`,
 		titleKey: 'competitionStandingsTitle',
-		descriptionKey: 'competitionStandingsDescription',
+		descriptionKey: 'competitionStandingsDescription'
 	})
 }
 
@@ -46,11 +37,12 @@ export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await getPageLocale(params)
 	const liveT = await getTranslations('LiveTournament')
 	const tournamentId = Number(id)
-	const [entryId, currentEventId] = await Promise.all([
-		getCurrentEntryId(),
-		getCurrentEventId(),
-	])
+	const { entryId, session } = await import('@/lib/session').then(
+		({ getVerifiedEntryContext }) => getVerifiedEntryContext()
+	)
+	let currentEventId: number | null = null
 	let tournament: EntryTournament | null = null
+	let canManage = false
 	let initialRows: TournamentLiveCalcData[] = []
 	let participants: TournamentParticipant[] = []
 	let softError: string | null = null
@@ -59,7 +51,8 @@ export default async function Page({ params, searchParams }: PageProps) {
 	let initialOfficialH2H: TournamentOfficialH2H | null = null
 	const query = await searchParams
 	const justCreated = query.created === '1'
-	const requestedGameweekValue = typeof query.gw === 'string' ? Number(query.gw) : null
+	const requestedGameweekValue =
+		typeof query.gw === 'string' ? Number(query.gw) : null
 	const requestedGameweek =
 		typeof requestedGameweekValue === 'number' &&
 		Number.isInteger(requestedGameweekValue) &&
@@ -67,7 +60,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 		requestedGameweekValue <= 38
 			? requestedGameweekValue
 			: null
-	const officialGameweek = requestedGameweek ?? currentEventId ?? 1
+	let officialGameweek = requestedGameweek ?? 1
 
 	if (!entryId) {
 		loadError = 'bind_entry'
@@ -75,71 +68,44 @@ export default async function Page({ params, searchParams }: PageProps) {
 		loadError = 'invalid_link'
 	} else {
 		try {
-			const metadata = await executeServerQuery<TournamentMetadataResponse>(
-				GET_TOURNAMENT_METADATA,
-				{ tournamentId, entryId },
-				{ cache: 'no-store' },
-			)
-			tournament = metadata.tournament
-
-			if (!tournament) {
+			const desk =
+				await executeServerQueryWithSession<TournamentDetailDeskResponse>(
+					session,
+					GET_TOURNAMENT_DETAIL_DESK,
+					{ tournamentId, entryId, eventId: requestedGameweek },
+					{ cache: 'no-store' }
+				)
+			const detail = desk.tournamentDetailDesk
+			if (!detail) {
 				loadError = 'no_access'
 			} else {
-				const isOfficialH2H =
-					tournament.leagueType === 'H2H' &&
-					tournament.rosterMode === 'OFFICIAL_SYNC' &&
-					tournament.groupMode === 'BATTLE_RACES'
-				const participantsRequest =
-					executeServerQuery<TournamentParticipantsResponse>(
-						GET_TOURNAMENT_PARTICIPANTS,
-						{ tournamentId },
-						{ cache: 'no-store' },
-					)
-						.then(data => data.tournamentParticipants)
-						.catch(error => {
-							console.warn(
-								'[tournament detail] Participant roster unavailable:',
-								error,
-							)
-							return []
-						})
-
-				if (tournament.standingsReadyAt && isOfficialH2H) {
-					const [loadedParticipants, officialSnapshot] = await Promise.all([
-						participantsRequest,
-						executeServerQuery<TournamentOfficialH2HResponse>(
-							GET_TOURNAMENT_OFFICIAL_H2H,
-							{ tournamentId, eventId: officialGameweek },
-							{ cache: 'no-store' },
-						).catch(error => {
-							console.warn('[tournament detail] Official H2H mirror unavailable:', error)
-							return null
-						}),
-					])
-					participants = loadedParticipants
-					initialOfficialH2H = officialSnapshot?.tournamentOfficialH2H ?? null
-					if (!initialOfficialH2H) softError = liveT('officialH2HUnavailable')
-				} else if (tournament.standingsReadyAt && currentEventId) {
-					const [loadedParticipants, standings] = await Promise.all([
-						participantsRequest,
-						executeServerQuery<TournamentLivePointsResponse>(
-							GET_TOURNAMENT_LIVE_DESK,
-							{ entryId, selectedTournamentId: tournamentId, ref: null },
-							{ cache: 'no-store' },
-						),
-					])
-					participants = loadedParticipants
-					const seed = getTournamentLiveBatchSeed(standings)
-					initialRows = seed.rows
-					initialSnapshot = seed.snapshot
-					if (seed.failedCount > 0) {
+				tournament = detail.tournament
+				canManage = detail.canManage
+				participants = detail.participants
+				currentEventId = detail.context.activeEventId
+				officialGameweek = requestedGameweek ?? currentEventId ?? 1
+				initialOfficialH2H = detail.officialH2H
+				if (detail.unavailableSections.length > 0) {
+					softError = liveT('participantsUnavailable')
+				}
+				if (detail.kind === 'OFFICIAL_H2H' && !initialOfficialH2H) {
+					softError = liveT('officialH2HUnavailable')
+				}
+				if (detail.kind === 'LIVE_POINTS' && detail.live) {
+					initialRows = detail.live.rows
+					initialSnapshot = {
+						eventId: detail.live.eventId,
+						revision: detail.live.revision,
+						state: detail.live.state as LiveSnapshotStatus['state'],
+						publishedAt: new Date().toISOString(),
+						checkedAt: new Date().toISOString()
+					}
+					if (detail.live.partial) {
 						softError = liveT('partialResults', {
-							failed: seed.failedCount,
-							total: seed.totalEntries,
+							failed: detail.live.failedEntryIds.length,
+							total: detail.live.totalEntries
 						})
 					}
-				} else {
-					participants = await participantsRequest
 				}
 			}
 		} catch (error) {
@@ -147,7 +113,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			if (kind === 'no_access') {
 				console.warn(
 					'[tournament detail] No access:',
-					error instanceof Error ? error.message : error,
+					error instanceof Error ? error.message : error
 				)
 			} else {
 				console.error('[tournament detail] Failed to load:', error)
@@ -160,16 +126,14 @@ export default async function Page({ params, searchParams }: PageProps) {
 	return (
 		<TournamentDetailClient
 			key={`${tournament?.updatedAt ?? 'missing'}:${tournament?.setupProgressUpdatedAt ?? ''}:${officialGameweek}`}
-			canManage={Boolean(
-				tournament && entryId && tournament.adminEntryId === entryId,
-			)}
+			canManage={canManage}
 			tournament={tournament}
 			currentGameweek={
 				tournament?.leagueType === 'H2H' &&
 				tournament.rosterMode === 'OFFICIAL_SYNC' &&
 				tournament.groupMode === 'BATTLE_RACES'
 					? officialGameweek
-					: currentEventId ?? undefined
+					: (currentEventId ?? undefined)
 			}
 			activeGameweek={currentEventId ?? undefined}
 			entryId={entryId}

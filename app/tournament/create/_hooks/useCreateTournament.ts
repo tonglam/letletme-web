@@ -14,7 +14,7 @@ import {
 	type Participant,
 	type ParticipantApiItem,
 	type TournamentCreationMode,
-	type TournamentFormData,
+	type TournamentFormData
 } from '../_lib/tournament-form'
 import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
@@ -23,7 +23,7 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 	try {
 		const payload: unknown = await response.json()
 		return payload && typeof payload === 'object' && !Array.isArray(payload)
-			? payload as Record<string, unknown>
+			? (payload as Record<string, unknown>)
 			: {}
 	} catch {
 		return {}
@@ -33,21 +33,25 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 export function useCreateTournament() {
 	const t = useTranslations('TournamentCreate')
 	const router = useRouter()
-	const schema = useMemo(() => createTournamentFormSchema({
-		nameTooShort: t('errors.nameTooShort'),
-		nameTooLong: t('errors.nameTooLong'),
-		validGameweek: t('errors.validGameweek'),
-		validLeagueUrl: t('errors.validLeagueUrl'),
-		gameweekOrder: t('errors.gameweekOrder'),
-		groupPositive: t('errors.groupPositive'),
-		groupInvalid: t('errors.groupInvalid'),
-		qualifierPositive: t('errors.qualifierPositive'),
-		qualifierInvalid: t('errors.qualifierInvalid'),
-	}), [t])
+	const schema = useMemo(
+		() =>
+			createTournamentFormSchema({
+				nameTooShort: t('errors.nameTooShort'),
+				nameTooLong: t('errors.nameTooLong'),
+				validGameweek: t('errors.validGameweek'),
+				validLeagueUrl: t('errors.validLeagueUrl'),
+				gameweekOrder: t('errors.gameweekOrder'),
+				groupPositive: t('errors.groupPositive'),
+				groupInvalid: t('errors.groupInvalid'),
+				qualifierPositive: t('errors.qualifierPositive'),
+				qualifierInvalid: t('errors.qualifierInvalid')
+			}),
+		[t]
+	)
 	const form = useForm<TournamentFormData>({
 		resolver: zodResolver(schema),
 		defaultValues: DEFAULT_TOURNAMENT_FORM,
-		mode: 'onChange',
+		mode: 'onChange'
 	})
 	const { control, getValues, setValue } = form
 	const participantSource = useWatch({ control, name: 'participantSource' })
@@ -62,9 +66,12 @@ export function useCreateTournament() {
 	const normalizedTournamentName = tournamentName?.trim() ?? ''
 	const normalizedLeagueUrl = leagueUrl?.trim() ?? ''
 
-	const [creationMode, setCreationMode] = useState<TournamentCreationMode>('classic')
+	const [creationMode, setCreationMode] =
+		useState<TournamentCreationMode>('classic')
 	const [participants, setParticipants] = useState<Participant[]>([])
-	const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([])
+	const [selectedParticipantIds, setSelectedParticipantIds] = useState<
+		string[]
+	>([])
 	const [participantsLoaded, setParticipantsLoaded] = useState(false)
 	const [fetchedLeagueUrl, setFetchedLeagueUrl] = useState<string | null>(null)
 	const [isLoadingParticipants, setIsLoadingParticipants] = useState(false)
@@ -76,58 +83,101 @@ export function useCreateTournament() {
 	const [participantError, setParticipantError] = useState<string | null>(null)
 	const [submitError, setSubmitError] = useState<string | null>(null)
 	const [submitSuccess, setSubmitSuccess] = useState<string | null>(null)
-	const [createdTournamentId, setCreatedTournamentId] = useState<number | null>(null)
+	const [createdTournamentId, setCreatedTournamentId] = useState<number | null>(
+		null
+	)
 	const [createdTournamentName, setCreatedTournamentName] = useState('')
 	const [loadedLeague, setLoadedLeague] = useState<LeaguePreview | null>(null)
+	const [previewToken, setPreviewToken] = useState<string | null>(null)
+	const [previewExpiresAt, setPreviewExpiresAt] = useState<string | null>(null)
+	const [previewExpired, setPreviewExpired] = useState(false)
 	const creationModeRef = useRef<TournamentCreationMode>('classic')
 	const participantRequestIdRef = useRef(0)
 	const participantAbortControllerRef = useRef<AbortController | null>(null)
 
-	const leagueUrlState = useMemo(() => validateLeagueUrl(leagueUrl ?? '', {
-		domainInvalid: t('domainInvalid'),
-		pathInvalid: t('leagueUrlPathInvalid'),
-		incomplete: t('leagueUrlIncomplete'),
-		classicOnly: t('classicOnly'),
-		h2hOnly: t('h2hOnly'),
-	}, {
-		classicOnly: creationMode === 'classic',
-		h2hOnly: creationMode === 'h2h',
-	}), [creationMode, leagueUrl, t])
+	const leagueUrlState = useMemo(
+		() =>
+			validateLeagueUrl(
+				leagueUrl ?? '',
+				{
+					domainInvalid: t('domainInvalid'),
+					pathInvalid: t('leagueUrlPathInvalid'),
+					incomplete: t('leagueUrlIncomplete'),
+					classicOnly: t('classicOnly'),
+					h2hOnly: t('h2hOnly')
+				},
+				{
+					classicOnly: creationMode === 'classic',
+					h2hOnly: creationMode === 'h2h'
+				}
+			),
+		[creationMode, leagueUrl, t]
+	)
 	const participantsAreCurrent =
 		participantsLoaded &&
 		fetchedLeagueUrl === normalizedLeagueUrl &&
+		previewToken !== null &&
+		previewExpiresAt !== null &&
+		!previewExpired &&
 		(creationMode === 'custom' || loadedLeague?.leagueType === creationMode)
-	const effectiveSelectedParticipantIds = participantSource === 'official' && participantsAreCurrent
-		? participants.map((participant) => participant.id)
-		: selectedParticipantIds
+	const effectiveSelectedParticipantIds =
+		participantSource === 'official' && participantsAreCurrent
+			? participants.map(participant => participant.id)
+			: selectedParticipantIds
 	const totalEntries = participantsAreCurrent
-		? participantSource === 'official' ? participants.length : selectedParticipantIds.length
+		? participantSource === 'official'
+			? participants.length
+			: selectedParticipantIds.length
 		: 0
 	const plan = useMemo(
-		() => computeTournamentPlan(
-			{ groupFormat, startGameweek, endGameweek, groupNum, qualifiersPerGroup, knockoutFormat },
-			totalEntries,
+		() =>
+			computeTournamentPlan(
+				{
+					groupFormat,
+					startGameweek,
+					endGameweek,
+					groupNum,
+					qualifiersPerGroup,
+					knockoutFormat
+				},
+				totalEntries,
+				participantsAreCurrent
+			),
+		[
+			endGameweek,
+			groupFormat,
+			groupNum,
+			knockoutFormat,
 			participantsAreCurrent,
-		),
-		[endGameweek, groupFormat, groupNum, knockoutFormat, participantsAreCurrent, qualifiersPerGroup, startGameweek, totalEntries],
+			qualifiersPerGroup,
+			startGameweek,
+			totalEntries
+		]
 	)
 	const activeNameCheck = checkedTournamentName === normalizedTournamentName
-	const hasValidNameLength = normalizedTournamentName.length >= 3 && normalizedTournamentName.length <= 80
-	const currentIsCheckingName = hasValidNameLength && (!activeNameCheck || isCheckingName)
-	const currentIsNameAvailable = !hasValidNameLength || !activeNameCheck
-		? null
-		: isNameAvailable
-	const currentNameCheckMessage = normalizedTournamentName.length === 0
-		? null
-		: normalizedTournamentName.length < 3
-			? t('errors.nameTooShort')
-			: normalizedTournamentName.length > 80
-				? t('errors.nameTooLong')
-			: activeNameCheck
-				? nameCheckMessage
-				: t('checkingName')
-	const currentSubmitSuccess = createdTournamentName === normalizedTournamentName ? submitSuccess : null
-	const currentCreatedTournamentId = createdTournamentName === normalizedTournamentName ? createdTournamentId : null
+	const hasValidNameLength =
+		normalizedTournamentName.length >= 3 &&
+		normalizedTournamentName.length <= 80
+	const currentIsCheckingName =
+		hasValidNameLength && (!activeNameCheck || isCheckingName)
+	const currentIsNameAvailable =
+		!hasValidNameLength || !activeNameCheck ? null : isNameAvailable
+	const currentNameCheckMessage =
+		normalizedTournamentName.length === 0
+			? null
+			: normalizedTournamentName.length < 3
+				? t('errors.nameTooShort')
+				: normalizedTournamentName.length > 80
+					? t('errors.nameTooLong')
+					: activeNameCheck
+						? nameCheckMessage
+						: t('checkingName')
+	const currentSubmitSuccess =
+		createdTournamentName === normalizedTournamentName ? submitSuccess : null
+	const currentCreatedTournamentId =
+		createdTournamentName === normalizedTournamentName
+			? createdTournamentId
+			: null
 
 	useEffect(() => {
 		if (!hasValidNameLength) return
@@ -140,15 +190,22 @@ export function useCreateTournament() {
 			setIsNameAvailable(null)
 			setNameCheckMessage(t('checkingName'))
 			try {
-				const response = await fetch(`/api/tournaments/check-name?name=${encodeURIComponent(normalizedTournamentName)}`, {
-					signal: controller.signal,
-				})
+				const response = await fetch(
+					`/api/tournaments/check-name?name=${encodeURIComponent(normalizedTournamentName)}`,
+					{
+						signal: controller.signal
+					}
+				)
 				const result = await readJson(response)
 				if (cancelled) return
 				setIsNameAvailable(response.ok && result.available === true)
-				setNameCheckMessage(response.ok
-					? result.available === true ? t('nameAvailable') : t('nameUnavailable')
-					: t('nameCheckFailed'))
+				setNameCheckMessage(
+					response.ok
+						? result.available === true
+							? t('nameAvailable')
+							: t('nameUnavailable')
+						: t('nameCheckFailed')
+				)
 			} catch (error) {
 				if (error instanceof Error && error.name === 'AbortError') return
 				if (!cancelled) {
@@ -167,6 +224,19 @@ export function useCreateTournament() {
 		}
 	}, [hasValidNameLength, normalizedTournamentName, t])
 
+	useEffect(() => {
+		if (!previewExpiresAt) return
+		const delay = Math.max(0, Date.parse(previewExpiresAt) - Date.now())
+		const timer = window.setTimeout(() => {
+			setPreviewToken(null)
+			setPreviewExpiresAt(null)
+			setPreviewExpired(true)
+			setParticipantsLoaded(false)
+			setLoadedLeague(null)
+		}, delay)
+		return () => window.clearTimeout(timer)
+	}, [previewExpiresAt])
+
 	const clearFeedback = () => {
 		setParticipantError(null)
 		setSubmitError(null)
@@ -175,10 +245,16 @@ export function useCreateTournament() {
 		setCreatedTournamentName('')
 	}
 
-	const applyOfficialMirrorMode = (startEvent = loadedLeague?.startEvent ?? 1) => {
+	const applyOfficialMirrorMode = (
+		startEvent = loadedLeague?.startEvent ?? 1
+	) => {
 		setValue('participantSource', 'official', { shouldValidate: true })
 		setValue('groupFormat', 'points', { shouldValidate: true })
-		setValue('startGameweek', `GW${startEvent}` as TournamentFormData['startGameweek'], { shouldValidate: true })
+		setValue(
+			'startGameweek',
+			`GW${startEvent}` as TournamentFormData['startGameweek'],
+			{ shouldValidate: true }
+		)
 		setValue('endGameweek', 'GW38', { shouldValidate: true })
 		setValue('groupNum', '1', { shouldValidate: true })
 		setValue('knockoutFormat', 'none', { shouldValidate: true })
@@ -199,7 +275,10 @@ export function useCreateTournament() {
 	const applyAutoMode = () => {
 		setValue('participantSource', 'official')
 		setValue('groupFormat', 'points')
-		setValue('startGameweek', `GW${loadedLeague?.startEvent ?? 1}` as TournamentFormData['startGameweek'])
+		setValue(
+			'startGameweek',
+			`GW${loadedLeague?.startEvent ?? 1}` as TournamentFormData['startGameweek']
+		)
 		setValue('endGameweek', 'GW38')
 		setValue('groupNum', '1')
 		setValue('knockoutFormat', 'none')
@@ -209,15 +288,19 @@ export function useCreateTournament() {
 
 	const toggleParticipant = (participantId: string, selected: boolean) => {
 		if (participantSource === 'official') return
-		setSelectedParticipantIds((current) => selected
-			? Array.from(new Set([...current, participantId]))
-			: current.filter((id) => id !== participantId))
+		setSelectedParticipantIds(current =>
+			selected
+				? Array.from(new Set([...current, participantId]))
+				: current.filter(id => id !== participantId)
+		)
 	}
 
 	const toggleAllParticipants = () => {
 		if (participantSource === 'official') return
-		setSelectedParticipantIds((current) =>
-			current.length === participants.length ? [] : participants.map((participant) => participant.id),
+		setSelectedParticipantIds(current =>
+			current.length === participants.length
+				? []
+				: participants.map(participant => participant.id)
 		)
 	}
 
@@ -233,80 +316,130 @@ export function useCreateTournament() {
 		const requestedLeagueUrl = normalizedLeagueUrl
 		participantRequestIdRef.current = requestId
 		participantAbortControllerRef.current = controller
-		const isCurrentRequest = () => isCurrentLeaguePreviewRequest({
-			requestId,
-			currentRequestId: participantRequestIdRef.current,
-			requestMode,
-			currentMode: creationModeRef.current,
-			requestedLeagueUrl,
-			currentLeagueUrl: getValues('leagueUrl'),
-		})
+		const isCurrentRequest = () =>
+			isCurrentLeaguePreviewRequest({
+				requestId,
+				currentRequestId: participantRequestIdRef.current,
+				requestMode,
+				currentMode: creationModeRef.current,
+				requestedLeagueUrl,
+				currentLeagueUrl: getValues('leagueUrl')
+			})
 		setIsLoadingParticipants(true)
 		setParticipantsLoaded(false)
 		setLoadedLeague(null)
+		setPreviewToken(null)
+		setPreviewExpiresAt(null)
+		setPreviewExpired(false)
 		clearFeedback()
 		try {
-			const response = await fetch(`/api/tournaments/participants?leagueUrl=${encodeURIComponent(requestedLeagueUrl)}`, {
-				signal: controller.signal,
+			const response = await fetch('/api/tournaments/preview', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ leagueUrl: requestedLeagueUrl }),
+				signal: controller.signal
 			})
 			const result = await readJson(response)
 			if (!isCurrentRequest()) return
 			if (!response.ok) throw new Error(t('participantsLoadFailed'))
-			const leagueId = typeof result.leagueId === 'number' && Number.isSafeInteger(result.leagueId)
-				? result.leagueId
-				: null
-			const leagueType = result.leagueType === 'classic' || result.leagueType === 'h2h'
-				? result.leagueType
-				: null
-			const leagueName = typeof result.leagueName === 'string' ? result.leagueName.trim() : ''
-			const startEvent = typeof result.startEvent === 'number' && Number.isInteger(result.startEvent) && result.startEvent >= 1 && result.startEvent <= 38
-				? result.startEvent
-				: 1
+			const nextPreviewToken =
+				typeof result.previewToken === 'string' ? result.previewToken : null
+			if (!nextPreviewToken) throw new Error(t('participantsLoadFailed'))
+			setPreviewToken(nextPreviewToken)
+			setPreviewExpired(false)
+			setPreviewExpiresAt(
+				typeof result.expiresAt === 'string' &&
+					Number.isFinite(Date.parse(result.expiresAt))
+					? result.expiresAt
+					: null
+			)
+			const leagueId =
+				typeof result.leagueId === 'number' &&
+				Number.isSafeInteger(result.leagueId)
+					? result.leagueId
+					: null
+			const leagueType =
+				result.leagueType === 'classic' || result.leagueType === 'h2h'
+					? result.leagueType
+					: null
+			const leagueName =
+				typeof result.leagueName === 'string' ? result.leagueName.trim() : ''
+			const startEvent =
+				typeof result.startEvent === 'number' &&
+				Number.isInteger(result.startEvent) &&
+				result.startEvent >= 1 &&
+				result.startEvent <= 38
+					? result.startEvent
+					: 1
 			if (!leagueId || !leagueType) throw new Error(t('participantsLoadFailed'))
 			if (creationMode !== 'custom' && leagueType !== creationMode) {
 				throw new Error(t(creationMode === 'h2h' ? 'h2hOnly' : 'classicOnly'))
 			}
-			const rawParticipants = Array.isArray(result.participants) ? result.participants : []
-			const fetchedParticipants = rawParticipants.filter((item): item is ParticipantApiItem => {
-				if (!item || typeof item !== 'object') return false
-				const participant = item as Partial<ParticipantApiItem>
-				return /^\d+$/.test(participant.id ?? '') &&
-					typeof participant.team === 'string' &&
-					typeof participant.manager === 'string' &&
-					typeof participant.overallRank === 'number' &&
-					Number.isFinite(participant.overallRank) &&
-					participant.overallRank >= 0 &&
-					typeof participant.totalPoints === 'number' &&
-					Number.isFinite(participant.totalPoints) &&
-					participant.totalPoints >= 0
-			})
+			const rawParticipants = Array.isArray(result.participants)
+				? result.participants
+				: []
+			const fetchedParticipants = rawParticipants.filter(
+				(item): item is ParticipantApiItem => {
+					if (!item || typeof item !== 'object') return false
+					const participant = item as Partial<ParticipantApiItem>
+					return (
+						/^\d+$/.test(participant.id ?? '') &&
+						typeof participant.team === 'string' &&
+						typeof participant.manager === 'string' &&
+						typeof participant.overallRank === 'number' &&
+						Number.isFinite(participant.overallRank) &&
+						participant.overallRank >= 0 &&
+						typeof participant.totalPoints === 'number' &&
+						Number.isFinite(participant.totalPoints) &&
+						participant.totalPoints >= 0
+					)
+				}
+			)
 			const leaguePreview: LeaguePreview = {
 				leagueId,
 				leagueName: leagueName || `FPL League ${leagueId}`,
 				leagueType,
-				startEvent,
+				startEvent
 			}
 			setParticipants(fetchedParticipants)
-			setSelectedParticipantIds(participantSource === 'official' ? fetchedParticipants.map((participant) => participant.id) : [])
+			setSelectedParticipantIds(
+				participantSource === 'official'
+					? fetchedParticipants.map(participant => participant.id)
+					: []
+			)
 			setParticipantsLoaded(true)
 			setFetchedLeagueUrl(requestedLeagueUrl)
 			setLoadedLeague(leaguePreview)
 			if (creationMode === 'classic' || creationMode === 'h2h') {
 				applyOfficialMirrorMode(startEvent)
-				setValue('tournamentName', getImportedTournamentName(leaguePreview.leagueName, leagueId), {
-					shouldDirty: true,
-					shouldValidate: true,
-				})
+				setValue(
+					'tournamentName',
+					getImportedTournamentName(leaguePreview.leagueName, leagueId),
+					{
+						shouldDirty: true,
+						shouldValidate: true
+					}
+				)
 			}
-			if (fetchedParticipants.length < 2) setParticipantError(t('leagueNeedsTwo'))
+			if (fetchedParticipants.length < 2)
+				setParticipantError(t('leagueNeedsTwo'))
 		} catch (error) {
-			if (!isCurrentRequest() || (error instanceof Error && error.name === 'AbortError')) return
-			setParticipantError(error instanceof Error ? error.message : t('participantsLoadFailed'))
+			if (
+				!isCurrentRequest() ||
+				(error instanceof Error && error.name === 'AbortError')
+			)
+				return
+			setParticipantError(
+				error instanceof Error ? error.message : t('participantsLoadFailed')
+			)
 			setParticipants([])
 			setSelectedParticipantIds([])
 			setParticipantsLoaded(false)
 			setFetchedLeagueUrl(null)
 			setLoadedLeague(null)
+			setPreviewToken(null)
+			setPreviewExpiresAt(null)
+			setPreviewExpired(false)
 		} finally {
 			if (requestId === participantRequestIdRef.current) {
 				participantAbortControllerRef.current = null
@@ -321,13 +454,17 @@ export function useCreateTournament() {
 			setSubmitError(t('fetchBeforeCreate'))
 			return
 		}
-		if (creationMode !== 'custom' && loadedLeague?.leagueType !== creationMode) {
+		if (
+			creationMode !== 'custom' &&
+			loadedLeague?.leagueType !== creationMode
+		) {
 			setSubmitError(t(creationMode === 'h2h' ? 'h2hOnly' : 'classicOnly'))
 			return
 		}
-		const participantIds = data.participantSource === 'official'
-			? participants.map((participant) => participant.id)
-			: selectedParticipantIds
+		const participantIds =
+			data.participantSource === 'official'
+				? participants.map(participant => participant.id)
+				: selectedParticipantIds
 		if (participantIds.length < 2) {
 			setSubmitError(t('requiresTwo'))
 			return
@@ -347,37 +484,50 @@ export function useCreateTournament() {
 
 		setIsSubmitting(true)
 		try {
-			const payload = creationMode === 'classic' || creationMode === 'h2h'
-				? {
-					...data,
-					creationMode,
-					participantSource: 'official' as const,
-					tournamentType: 'standard',
-					leagueUrl: normalizedLeagueUrl,
-					groupFormat: 'points' as const,
-					startGameweek: `GW${loadedLeague?.startEvent ?? 1}`,
-					endGameweek: 'GW38',
-					groupNum: '1',
-					qualifiersPerGroup: '',
-					knockoutFormat: 'none' as const,
-					selectedParticipantIds: participantIds,
-				}
-				: { ...data, creationMode, tournamentType: 'standard', selectedParticipantIds: participantIds }
+			const payload =
+				creationMode === 'classic' || creationMode === 'h2h'
+					? {
+							...data,
+							creationMode,
+							participantSource: 'official' as const,
+							tournamentType: 'standard',
+							leagueUrl: normalizedLeagueUrl,
+							groupFormat: 'points' as const,
+							startGameweek: `GW${loadedLeague?.startEvent ?? 1}`,
+							endGameweek: 'GW38',
+							groupNum: '1',
+							qualifiersPerGroup: '',
+							knockoutFormat: 'none' as const,
+							selectedParticipantIds: participantIds,
+							previewToken
+						}
+					: {
+							...data,
+							creationMode,
+							tournamentType: 'standard',
+							selectedParticipantIds: participantIds,
+							previewToken
+						}
 			const response = await fetch('/api/tournaments', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload),
+				body: JSON.stringify(payload)
 			})
 			const result = await readJson(response)
 			if (!response.ok) throw new Error(t('createFailed'))
-			const tournament = result.tournament && typeof result.tournament === 'object'
-				? result.tournament as Record<string, unknown>
-				: {}
-			const tournamentId = typeof tournament.id === 'number' && Number.isSafeInteger(tournament.id)
-				? tournament.id
-				: null
+			const tournament =
+				result.tournament && typeof result.tournament === 'object'
+					? (result.tournament as Record<string, unknown>)
+					: {}
+			const tournamentId =
+				typeof tournament.id === 'number' && Number.isSafeInteger(tournament.id)
+					? tournament.id
+					: null
 			if (!tournamentId) throw new Error(t('createFailed'))
-			const participantCount = typeof tournament.participantCount === 'number' ? tournament.participantCount : participantIds.length
+			const participantCount =
+				typeof tournament.participantCount === 'number'
+					? tournament.participantCount
+					: participantIds.length
 			const setupStatus = result.setupStatus
 			setCreatedTournamentId(tournamentId)
 			setCreatedTournamentName(data.tournamentName.trim())
@@ -387,9 +537,9 @@ export function useCreateTournament() {
 					? t('createdFailedSetup', { count: participantCount })
 					: setupStatus === 'ready'
 						? t('createdReady', { count: participantCount })
-						: t('createdProcessing', { count: participantCount }),
+						: t('createdProcessing', { count: participantCount })
 			)
-			router.push(`/competitions/${tournamentId}?created=1`)
+			router.push(`/live/competitions/${tournamentId}?created=1`)
 		} catch {
 			setSubmitError(t('createFailed'))
 		} finally {
@@ -413,6 +563,7 @@ export function useCreateTournament() {
 		leagueUrl,
 		leagueUrlState,
 		loadedLeague: participantsAreCurrent ? loadedLeague : null,
+		previewToken: participantsAreCurrent ? previewToken : null,
 		nameCheckMessage: currentNameCheckMessage,
 		onSubmit,
 		participantError,
@@ -424,6 +575,6 @@ export function useCreateTournament() {
 		submitError,
 		submitSuccess: currentSubmitSuccess,
 		toggleAllParticipants,
-		toggleParticipant,
+		toggleParticipant
 	}
 }

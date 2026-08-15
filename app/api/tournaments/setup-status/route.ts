@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 
-import { getAuthorizationSession } from '@/lib/auth';
+import type { Session } from '@/lib/auth';
 import { tournamentApiFetch } from '@/lib/tournament/backend-client';
-import { executeServerQuery } from '@/lib/graphql-server';
+import { executeServerQueryWithSession } from '@/lib/graphql-server';
+import { getVerifiedEntryContext } from '@/lib/session';
 import {
   GET_TOURNAMENT_METADATA,
   type TournamentMetadataResponse,
@@ -11,9 +12,9 @@ import {
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  let session;
-  try {
-    session = await getAuthorizationSession(request.headers);
+	let session: Session | null;
+	try {
+		session = (await getVerifiedEntryContext()).session;
   } catch {
     return NextResponse.json({ success: false, error: 'Authentication unavailable.' }, { status: 503 });
   }
@@ -39,8 +40,9 @@ export async function GET(request: Request) {
     }
 
     const tournamentId = Number(id);
-    const access = await executeServerQuery<TournamentMetadataResponse>(
-      GET_TOURNAMENT_METADATA,
+	const access = await executeServerQueryWithSession<TournamentMetadataResponse>(
+	      session,
+	      GET_TOURNAMENT_METADATA,
       { tournamentId, entryId: session.user.fplEntryId },
       { cache: 'no-store' },
     );

@@ -1,4 +1,6 @@
 import TournamentListClient from '@/app/tournament/browse/TournamentListClient'
+import { RouteIntlProvider } from '@/components/i18n/RouteIntlProvider'
+import { ROUTE_CLIENT_NAMESPACES } from '@/i18n/client-namespaces'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
 import {
@@ -62,12 +64,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 		initialError = t('competitionsUnavailable')
 	}
 
-	return (
-		<TournamentListClient
-			currentEntryId={entryId}
-			initialTournaments={initialTournaments}
-			initialError={initialError}
-			initialAdminOnly={initialAdminOnly}
-		/>
-	)
+	return <RouteIntlProvider namespaces={ROUTE_CLIENT_NAMESPACES.competitionsBrowse}>
+		<TournamentListClient currentEntryId={entryId} initialTournaments={initialTournaments} initialError={initialError} initialAdminOnly={initialAdminOnly} />
+	</RouteIntlProvider>
 }

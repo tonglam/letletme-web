@@ -1796,6 +1796,7 @@
 		"previous": "Previous",
 		"next": "Next",
 		"officialH2HUnavailable": "The official Head-to-Head mirror is temporarily unavailable. The saved competition remains available.",
+		"participantsUnavailable": "The participant roster is temporarily unavailable. The saved competition remains available.",
 		"officialH2HRefreshFallback": "Refresh failed. The last saved official standings and fixtures are still shown.",
 		"officialH2HMirror": "Official FPL Head-to-Head mirror",
 		"officialH2HGameweek": "GW{event} table and fixtures",

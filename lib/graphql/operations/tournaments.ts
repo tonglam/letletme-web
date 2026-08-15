@@ -194,6 +194,76 @@ export interface TournamentParticipantsResponse {
 	tournamentParticipants: TournamentParticipant[]
 }
 
+export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_INFO_FIELDS}
+  query GetTournamentDetailDesk($tournamentId: Int!, $entryId: Int!, $eventId: Int) {
+    tournamentDetailDesk(tournamentId: $tournamentId, entryId: $entryId, eventId: $eventId) {
+      revision
+      kind
+      context { season coreRevision activeEventId requestedEventId }
+      viewerEntryId
+      canManage
+      tournament { ...TournamentInfoFields }
+      unavailableSections
+      participants { entryId entryName playerName }
+      setup { status phase completedUnits totalUnits hasWarnings }
+      officialH2H {
+        eventId
+        awaitingSchedule
+        standings { entryId entryName playerName rank matchPoints played won drawn lost pointsFor }
+        matches {
+          officialMatchId eventId sourceOrder phase knockoutName isBye winnerEntryId tiebreak sourceCheckedAt
+          home { entryId entryName playerName isAverage points matchPoints }
+          away { entryId entryName playerName isAverage points matchPoints }
+        }
+      }
+      live {
+        eventId revision state partial failedEntryIds totalEntries
+        rows {
+          entry provisional entryName playerName overallRank lastOverallRank overallPoints teamValue bank value
+          chip livePoints transferCost liveNetPoints liveTotalPoints played toPlay captainName
+          activeCaptain { name points }
+          pickList { element webName elementTypeName position isCaptain isViceCaptain teamShortName teamName totalPoints }
+        }
+      }
+    }
+  }
+`
+
+export interface TournamentDetailDeskResponse {
+	tournamentDetailDesk: {
+		revision: string
+		kind: 'SETUP' | 'OFFICIAL_H2H' | 'LIVE_POINTS'
+		context: {
+			season: string
+			coreRevision: string
+			activeEventId: number | null
+			requestedEventId: number
+		}
+		viewerEntryId: number
+		canManage: boolean
+		tournament: EntryTournament
+		unavailableSections: Array<'PARTICIPANTS'>
+		participants: TournamentParticipant[]
+		setup: {
+			status: TournamentSetupStatus
+			phase: TournamentSetupPhase
+			completedUnits: number
+			totalUnits: number
+			hasWarnings: boolean
+		} | null
+		officialH2H: TournamentOfficialH2H | null
+		live: {
+			eventId: number
+			revision: string
+			state: string
+			partial: boolean
+			failedEntryIds: number[]
+			totalEntries: number
+			rows: TournamentLiveCalcData[]
+		} | null
+	} | null
+}
+
 export const GET_TOURNAMENT_METADATA = `${TOURNAMENT_INFO_FIELDS}
   query GetTournamentMetadata($tournamentId: Int!, $entryId: Int!) {
     tournament(tournamentId: $tournamentId, entryId: $entryId) {
@@ -216,6 +286,29 @@ export const GET_MANAGED_TOURNAMENT = `${TOURNAMENT_INFO_FIELDS}
 
 export interface ManagedTournamentResponse {
 	managedTournament: EntryTournament | null
+}
+
+export const GET_MANAGED_TOURNAMENT_STATUS = `
+  query GetManagedTournamentStatus($tournamentId: Int!, $entryId: Int!) {
+    managedTournamentStatus(tournamentId: $tournamentId, entryId: $entryId) {
+      revision state setupStatus setupPhase rosterSyncStatus setupCompletedUnits setupTotalUnits standingsReadyAt setupHasWarnings updatedAt
+    }
+  }
+`
+
+export interface ManagedTournamentStatusResponse {
+	managedTournamentStatus: {
+		revision: string
+		state: EntryTournamentState
+		setupStatus: TournamentSetupStatus
+		setupPhase: TournamentSetupPhase
+		rosterSyncStatus: TournamentSetupStatus | null
+		setupCompletedUnits: number
+		setupTotalUnits: number
+		standingsReadyAt: string | null
+		setupHasWarnings: boolean
+		updatedAt: string
+	} | null
 }
 
 /**

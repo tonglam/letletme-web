@@ -1,15 +1,14 @@
 import { routing } from '@/i18n/routing'
 import {
 	getLocaleFromInternalPathname,
+	isAppLocale,
+	LANGUAGE_COOKIE,
 	localizePathname,
 	stripLocaleFromPathname
 } from '@/i18n/routing'
 import { getAuthorizationSession } from '@/lib/auth'
 import { renderMaintenanceDocument } from '@/lib/maintenance-document'
-import {
-	isMaintenanceDataApi,
-	readMaintenanceConfig
-} from '@/lib/maintenance'
+import { isMaintenanceDataApi, readMaintenanceConfig } from '@/lib/maintenance'
 import {
 	hasInvalidTournamentId,
 	isProtectedApi,
@@ -17,6 +16,11 @@ import {
 	requiresVerifiedEntry
 } from '@/lib/route-protection'
 import { hasSessionCookieHintInHeaders } from '@/lib/session-cookie-hint'
+import {
+	COMPETITION_SESSION_HANDOFF_HEADER,
+	COMPETITION_SESSION_PATH_HEADER,
+	createCompetitionSessionHandoff
+} from '@/lib/competition-session-handoff'
 import createMiddleware from 'next-intl/middleware'
 import { type NextRequest, NextResponse } from 'next/server'
 
@@ -131,9 +135,44 @@ export async function proxy(req: NextRequest) {
 		if (!isProtectedApi(requestedPathname)) return NextResponse.next()
 
 		const session = await getAuthorizationSession(req.headers)
+		if (!session) {
+			return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+		}
+		if (
+			requestedPathname.startsWith('/api/tournaments') ||
+			requestedPathname.startsWith('/api/live/competitions') ||
+			requestedPathname.startsWith('/api/competitions')
+		) {
+			const requestHeaders = new Headers(req.headers)
+			requestHeaders.delete(COMPETITION_SESSION_HANDOFF_HEADER)
+			requestHeaders.delete(COMPETITION_SESSION_PATH_HEADER)
+			const handoff = createCompetitionSessionHandoff(
+				session,
+				requestedPathname,
+				req.headers.get('cookie')
+			)
+			if (handoff)
+				requestHeaders.set(COMPETITION_SESSION_HANDOFF_HEADER, handoff)
+			requestHeaders.set(COMPETITION_SESSION_PATH_HEADER, requestedPathname)
+			return NextResponse.next({ request: { headers: requestHeaders } })
+		}
 		return session
 			? NextResponse.next()
 			: NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+	}
+
+	// The old id-only alias is a redirect boundary, not a second rendered page.
+	const legacyMatch = requestedPathname.match(
+		/^\/((?:[a-z]{2}(?:-[A-Z]{2})?)\/)?competitions\/([1-9]\d*)\/?$/
+	)
+	if (legacyMatch && Number.isSafeInteger(Number(legacyMatch[2]))) {
+		const cookieLocale = req.cookies.get(LANGUAGE_COOKIE.name)?.value
+		const locale =
+			legacyMatch[1]?.replace(/\/$/, '') ||
+			(isAppLocale(cookieLocale) ? cookieLocale : routing.defaultLocale)
+		const url = req.nextUrl.clone()
+		url.pathname = `/${locale}/live/competitions/${legacyMatch[2]}`
+		return NextResponse.redirect(url, 308)
 	}
 
 	const isDefaultLocalePath =
@@ -193,6 +232,37 @@ export async function proxy(req: NextRequest) {
 		url.search = ''
 		url.searchParams.set('next', `${requestedPathname}${req.nextUrl.search}`)
 		return copyCookies(i18nResponse, NextResponse.redirect(url))
+	}
+
+	const requestHeaders = new Headers(req.headers)
+	requestHeaders.delete(COMPETITION_SESSION_HANDOFF_HEADER)
+	requestHeaders.delete(COMPETITION_SESSION_PATH_HEADER)
+	if (
+		pathname.startsWith('/competitions') ||
+		pathname.startsWith('/live/competitions')
+	) {
+		const handoff = createCompetitionSessionHandoff(
+			session,
+			pathname,
+			req.headers.get('cookie')
+		)
+		if (handoff) requestHeaders.set(COMPETITION_SESSION_HANDOFF_HEADER, handoff)
+		requestHeaders.set(COMPETITION_SESSION_PATH_HEADER, pathname)
+		// The i18n middleware's locale is carried as a request override. Rebuild
+		// that override on the handoff response so localized protected routes do
+		// not fall back to the default locale after the session lookup.
+		requestHeaders.set('x-next-intl-locale', locale)
+		const handedOff = NextResponse.next({
+			request: { headers: requestHeaders }
+		})
+		for (const header of ['x-middleware-rewrite', 'x-next-intl-locale']) {
+			const value = i18nResponse.headers.get(header)
+			if (value) handedOff.headers.set(header, value)
+		}
+		return copyCookies(
+			i18nResponse,
+			withDocumentCacheHeaders(req, handedOff, true)
+		)
 	}
 
 	return withDocumentCacheHeaders(req, i18nResponse, true)

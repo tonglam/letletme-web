@@ -7,9 +7,10 @@ import {
 	DataTd,
 	DataTh,
 	DataThead,
-	DataTr,
+	DataTr
 } from '@/components/data/DataTable'
 import { TournamentLifecycleBadge } from '@/components/tournament/TournamentLifecycleBadge'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import type { EntryTournamentListItem } from '@/lib/graphql/operations/tournaments'
 import { mapTournamentGroupFormat } from '@/lib/tournament/liveTournament'
 import { Badge } from '@/components/ui/badge'
@@ -31,7 +32,7 @@ import {
 	MoreHorizontal,
 	Plus,
 	Search,
-	Settings,
+	Settings
 } from 'lucide-react'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
@@ -60,11 +61,7 @@ type TournamentRow = {
 }
 
 type SortOption =
-	| 'updatedDesc'
-	| 'updatedAsc'
-	| 'nameAsc'
-	| 'nameDesc'
-	| 'participantsDesc'
+	'updatedDesc' | 'updatedAsc' | 'nameAsc' | 'nameDesc' | 'participantsDesc'
 
 /**
  * League type — Classic (copy official FPL league) is the common path.
@@ -81,10 +78,12 @@ const STATUS_FILTERS: ReadonlyArray<StatusFilter> = [
 	'all',
 	'ACTIVE',
 	'FINISHED',
-	'INACTIVE',
+	'INACTIVE'
 ]
 
-const mapKnockoutFormat = (knockoutMode: string): TournamentRow['knockoutFormat'] => {
+const mapKnockoutFormat = (
+	knockoutMode: string
+): TournamentRow['knockoutFormat'] => {
 	if (knockoutMode === 'SINGLE_ELIMINATION') {
 		return 'single'
 	}
@@ -94,7 +93,9 @@ const mapKnockoutFormat = (knockoutMode: string): TournamentRow['knockoutFormat'
 	return 'none'
 }
 
-const mapTournamentToRow = (tournament: EntryTournamentListItem): TournamentRow => {
+const mapTournamentToRow = (
+	tournament: EntryTournamentListItem
+): TournamentRow => {
 	return {
 		tournament,
 		id: String(tournament.id),
@@ -109,7 +110,7 @@ const mapTournamentToRow = (tournament: EntryTournamentListItem): TournamentRow 
 		knockoutFormat: mapKnockoutFormat(tournament.knockoutMode),
 		startGameweek: tournament.groupStartedEventId,
 		endGameweek: tournament.groupEndedEventId,
-		updatedAt: tournament.updatedAt,
+		updatedAt: tournament.updatedAt
 	}
 }
 
@@ -117,7 +118,7 @@ export default function TournamentListClient({
 	currentEntryId,
 	initialTournaments,
 	initialError,
-	initialAdminOnly = false,
+	initialAdminOnly = false
 }: {
 	currentEntryId: number
 	initialTournaments: EntryTournamentListItem[]
@@ -133,21 +134,25 @@ export default function TournamentListClient({
 	 * Default Classic — most LetLetMe tournaments are copied official Classic leagues.
 	 * Users can switch to All / H2H.
 	 */
-	const [typeFilter, setTypeFilter] = useState<TypeFilter>('CLASSIC')
+	const [typeFilter, setTypeFilter] = useState<TypeFilter>(() =>
+		initialTournaments.some(tournament => tournament.leagueType === 'CLASSIC')
+			? 'CLASSIC'
+			: 'all'
+	)
 	/** Exclusive status chip: all | active | finished | paused */
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 	/** Show only tournaments this entry administers */
 	const [adminOnly, setAdminOnly] = useState(initialAdminOnly)
 	const tournaments = useMemo(
 		() => initialTournaments.map(mapTournamentToRow),
-		[initialTournaments],
+		[initialTournaments]
 	)
 
 	const setAdminOnlyAndUrl = useCallback(
 		(next: boolean) => {
 			setAdminOnly(next)
 			const params = new URLSearchParams(
-				typeof window !== 'undefined' ? window.location.search : '',
+				typeof window !== 'undefined' ? window.location.search : ''
 			)
 			if (next) {
 				params.set('mine', 'true')
@@ -157,10 +162,11 @@ export default function TournamentListClient({
 			const qs = params.toString()
 			router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
 		},
-		[pathname, router],
+		[pathname, router]
 	)
 	const [sortOption, setSortOption] = useState<SortOption>('updatedDesc')
-	const getLeagueType = (type: string) => type === 'H2H' ? t('headToHead') : type === 'CLASSIC' ? t('classic') : type
+	const getLeagueType = (type: string) =>
+		type === 'H2H' ? t('headToHead') : type === 'CLASSIC' ? t('classic') : type
 
 	const typeFilterLabel = (filter: TypeFilter): string => {
 		switch (filter) {
@@ -234,31 +240,54 @@ export default function TournamentListClient({
 		sortOption,
 		statusFilter,
 		tournaments,
-		typeFilter,
+		typeFilter
 	])
 
 	const [visibleCount, setVisibleCount] = useState(PREVIEW_ROWS)
 	useEffect(() => {
 		setVisibleCount(PREVIEW_ROWS)
-	}, [adminOnly, searchQuery, sortOption, statusFilter, typeFilter, tournaments])
+	}, [
+		adminOnly,
+		searchQuery,
+		sortOption,
+		statusFilter,
+		typeFilter,
+		tournaments
+	])
 
 	const totalFiltered = filteredTournaments.length
 	const visibleTournaments = filteredTournaments.slice(0, visibleCount)
 	const hasMore = totalFiltered > visibleCount
 	const remaining = Math.max(0, totalFiltered - visibleCount)
-	const canCollapse = visibleCount > PREVIEW_ROWS && totalFiltered > PREVIEW_ROWS
+	const canCollapse =
+		visibleCount > PREVIEW_ROWS && totalFiltered > PREVIEW_ROWS
 	const nextStep = Math.min(ROW_STEP, remaining)
 
 	return (
 		<PageShell>
-			<div className="container mx-auto max-w-6xl px-4 py-8">
+			<RouteReadyMarker
+				name="COMPETITIONS_BROWSE_READY"
+				audienceHint="session-hint"
+				goodMs={1000}
+				poorMs={1500}
+			/>
+			<div
+				className="container mx-auto max-w-6xl px-4 py-8"
+				data-competition-perf-ready="browse"
+			>
 				<StatsPageHeader
 					eyebrow={t('eyebrow')}
 					title={t('title')}
 					badge={
-						<Button className="gap-2 shadow-sm" asChild>
+						<Button
+							className="gap-2 shadow-sm"
+							asChild
+						>
 							<Link href="/competitions/create">
-								<Plus className="size-4" aria-hidden="true" />
+								<Plus
+									className="size-4"
+									aria-hidden="true"
+								/>
 								{t('create')}
 							</Link>
 						</Button>
@@ -314,9 +343,7 @@ export default function TournamentListClient({
 								{STATUS_FILTERS.map(filter => (
 									<Button
 										key={filter}
-										variant={
-											statusFilter === filter ? 'default' : 'outline'
-										}
+										variant={statusFilter === filter ? 'default' : 'outline'}
 										size="sm"
 										onClick={() => setStatusFilter(filter)}
 										aria-pressed={statusFilter === filter}
@@ -351,7 +378,9 @@ export default function TournamentListClient({
 								>
 									<DropdownMenuLabel>{t('sortOptions')}</DropdownMenuLabel>
 									<DropdownMenuSeparator />
-									<DropdownMenuItem onClick={() => setSortOption('updatedDesc')}>
+									<DropdownMenuItem
+										onClick={() => setSortOption('updatedDesc')}
+									>
 										{t('updatedNewest')}
 									</DropdownMenuItem>
 									<DropdownMenuItem onClick={() => setSortOption('updatedAsc')}>
@@ -375,105 +404,119 @@ export default function TournamentListClient({
 
 					<DataTable minWidthClass="min-w-[40rem]">
 						<DataThead>
-									<DataTh>{t('tournament')}</DataTh>
-									<DataTh>{t('participants')}</DataTh>
-									<DataTh>{t('creator')}</DataTh>
-									<DataTh>{t('type')}</DataTh>
-									<DataTh>{t('format')}</DataTh>
-									<DataTh>{t('gameweeks')}</DataTh>
-									<DataTh>{t('status')}</DataTh>
-									<DataTh>{t('actions')}</DataTh>
-							</DataThead>
-							<tbody>
-								{filteredTournaments.length === 0 && (
-									<DataTr>
-										<DataTd
-											colSpan={8}
-											className="text-center text-muted-foreground"
-										>
-											{initialError
-												? t('unable')
-												: t('noMatches')}
-										</DataTd>
-									</DataTr>
-								)}
-								{visibleTournaments.map(tournament => (
-									<DataTr key={tournament.id}>
-										<DataTd>
-											<div className="font-medium">{tournament.name}</div>
-										</DataTd>
-										<DataTd>{tournament.participantCount}</DataTd>
-										<DataTd>{tournament.creatorName}</DataTd>
-										<DataTd>
-											<Badge variant="outline">{getLeagueType(tournament.leagueType)}</Badge>
-										</DataTd>
-										<DataTd>
-											<div className="text-sm leading-5">
-												<div>
-													{tournament.groupFormat === 'none'
-												? t('noGroups')
-														: tournament.groupFormat === 'points'
-												? t('pointsBased')
-												: t('headToHead')}
-												</div>
-												<div className="text-muted-foreground">
-													{tournament.knockoutFormat === 'none'
-												? t('noKnockout')
-														: tournament.knockoutFormat === 'single'
-												? t('singleElimination')
-												: t('homeAway')}
-												</div>
+							<DataTh>{t('tournament')}</DataTh>
+							<DataTh>{t('participants')}</DataTh>
+							<DataTh>{t('creator')}</DataTh>
+							<DataTh>{t('type')}</DataTh>
+							<DataTh>{t('format')}</DataTh>
+							<DataTh>{t('gameweeks')}</DataTh>
+							<DataTh>{t('status')}</DataTh>
+							<DataTh>{t('actions')}</DataTh>
+						</DataThead>
+						<tbody>
+							{filteredTournaments.length === 0 && (
+								<DataTr>
+									<DataTd
+										colSpan={8}
+										className="text-center text-muted-foreground"
+									>
+										{initialError ? t('unable') : t('noMatches')}
+									</DataTd>
+								</DataTr>
+							)}
+							{visibleTournaments.map(tournament => (
+								<DataTr key={tournament.id}>
+									<DataTd>
+										<div className="font-medium">{tournament.name}</div>
+									</DataTd>
+									<DataTd>{tournament.participantCount}</DataTd>
+									<DataTd>{tournament.creatorName}</DataTd>
+									<DataTd>
+										<Badge variant="outline">
+											{getLeagueType(tournament.leagueType)}
+										</Badge>
+									</DataTd>
+									<DataTd>
+										<div className="text-sm leading-5">
+											<div>
+												{tournament.groupFormat === 'none'
+													? t('noGroups')
+													: tournament.groupFormat === 'points'
+														? t('pointsBased')
+														: t('headToHead')}
 											</div>
-										</DataTd>
-										<DataTd>
-											<div className="flex items-center gap-2">
-												<Calendar className="h-4 w-4 text-muted-foreground" />
-												<span>
-												{tournament.startGameweek ? t('gameweek', { gameweek: tournament.startGameweek }) : '—'} – {tournament.endGameweek ? t('gameweek', { gameweek: tournament.endGameweek }) : '—'}
-												</span>
+											<div className="text-muted-foreground">
+												{tournament.knockoutFormat === 'none'
+													? t('noKnockout')
+													: tournament.knockoutFormat === 'single'
+														? t('singleElimination')
+														: t('homeAway')}
 											</div>
-										</DataTd>
-										<DataTd>
-											<TournamentLifecycleBadge tournament={tournament.tournament} />
-										</DataTd>
-										<DataTd>
-											<DropdownMenu>
-												<DropdownMenuTrigger asChild>
-													<Button
-														variant="ghost"
-														size="icon"
-														aria-label={t('actionsFor', { name: tournament.name })}
+										</div>
+									</DataTd>
+									<DataTd>
+										<div className="flex items-center gap-2">
+											<Calendar className="h-4 w-4 text-muted-foreground" />
+											<span>
+												{tournament.startGameweek
+													? t('gameweek', {
+															gameweek: tournament.startGameweek
+														})
+													: '—'}{' '}
+												–{' '}
+												{tournament.endGameweek
+													? t('gameweek', { gameweek: tournament.endGameweek })
+													: '—'}
+											</span>
+										</div>
+									</DataTd>
+									<DataTd>
+										<TournamentLifecycleBadge
+											tournament={tournament.tournament}
+										/>
+									</DataTd>
+									<DataTd>
+										<DropdownMenu>
+											<DropdownMenuTrigger asChild>
+												<Button
+													variant="ghost"
+													size="icon"
+													aria-label={t('actionsFor', {
+														name: tournament.name
+													})}
+												>
+													<MoreHorizontal className="h-4 w-4" />
+												</Button>
+											</DropdownMenuTrigger>
+											<DropdownMenuContent align="end">
+												<DropdownMenuItem asChild>
+													<Link
+														href={`/live/competitions/${tournament.id}`}
+														prefetch={false}
+														className="flex items-center gap-2"
 													>
-														<MoreHorizontal className="h-4 w-4" />
-													</Button>
-												</DropdownMenuTrigger>
-												<DropdownMenuContent align="end">
+														<ExternalLink className="h-4 w-4" />
+														{t('viewLive')}
+													</Link>
+												</DropdownMenuItem>
+												{tournament.adminEntryId === currentEntryId ? (
 													<DropdownMenuItem asChild>
 														<Link
-															href={`/live/competitions/${tournament.id}`}
+															href={`/competitions/${tournament.id}/manage`}
+															prefetch={false}
 															className="flex items-center gap-2"
 														>
-															<ExternalLink className="h-4 w-4" />
-															{t('viewLive')}
+															<Settings className="h-4 w-4" />
+															{t('manage')}
 														</Link>
 													</DropdownMenuItem>
-													{tournament.adminEntryId === currentEntryId ? (
-														<DropdownMenuItem asChild>
-															<Link
-																href={`/competitions/${tournament.id}/manage`}
-																className="flex items-center gap-2"
-															>
-																<Settings className="h-4 w-4" />
-																{t('manage')}
-															</Link>
-														</DropdownMenuItem>
-													) : null}
-												</DropdownMenuContent>
-											</DropdownMenu>
-										</DataTd>
-									</DataTr>
-								))}
-							</tbody>
+												) : null}
+											</DropdownMenuContent>
+										</DropdownMenu>
+									</DataTd>
+								</DataTr>
+							))}
+						</tbody>
 					</DataTable>
 
 					{hasMore || canCollapse ? (
@@ -482,7 +525,7 @@ export default function TournamentListClient({
 								<p className="w-full text-center text-xs text-muted-foreground">
 									{t('showingTournaments', {
 										shown: Math.min(visibleCount, totalFiltered),
-										total: totalFiltered,
+										total: totalFiltered
 									})}
 								</p>
 							) : null}
@@ -495,7 +538,7 @@ export default function TournamentListClient({
 										className="text-xs"
 										onClick={() =>
 											setVisibleCount(c =>
-												Math.min(c + ROW_STEP, totalFiltered),
+												Math.min(c + ROW_STEP, totalFiltered)
 											)
 										}
 									>

@@ -1796,6 +1796,7 @@
 		"previous": "上一轮",
 		"next": "下一轮",
 		"officialH2HUnavailable": "官方对战镜像暂时无法获取；已保存的赛事仍可使用。",
+		"participantsUnavailable": "参赛成员暂时无法获取；已保存的赛事仍可使用。",
 		"officialH2HRefreshFallback": "刷新失败，当前继续显示上一次保存的官方积分榜和对阵。",
 		"officialH2HMirror": "FPL 官方对战镜像",
 		"officialH2HGameweek": "GW{event} 积分榜与对阵",

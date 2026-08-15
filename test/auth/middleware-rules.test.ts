@@ -56,6 +56,17 @@ describe('middleware — tournament route shape', () => {
 		assert.equal(hasInvalidTournamentId('/competitions/browse/'), false)
 		assert.equal(hasInvalidTournamentId('/competitions/42/manage'), false)
 	})
+
+	it('rejects tournament ids outside the JavaScript safe integer range', () => {
+		assert.equal(
+			hasInvalidTournamentId('/competitions/9007199254740992'),
+			true
+		)
+		assert.equal(
+			hasInvalidTournamentId('/competitions/9007199254740992/manage'),
+			true
+		)
+	})
 })
 
 describe('middleware — public routes', () => {

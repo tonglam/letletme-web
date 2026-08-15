@@ -4,6 +4,11 @@ import { cache } from 'react'
 import { headers } from 'next/headers'
 import { getAuth, getAuthorizationSession, type Session } from '@/lib/auth'
 import { hasSessionCookieHintInHeaders } from '@/lib/session-cookie-hint'
+import {
+	COMPETITION_SESSION_HANDOFF_HEADER,
+	COMPETITION_SESSION_PATH_HEADER,
+	readCompetitionSessionHandoff
+} from '@/lib/competition-session-handoff'
 
 export const getCurrentSession = cache(async () => {
 	return getAuth().api.getSession({ headers: await headers() })
@@ -19,6 +24,22 @@ export const getVerifiedEntryContext = cache(
 		entryId: number | null
 	}> => {
 		const requestHeaders = await headers()
+		const handoff = readCompetitionSessionHandoff(
+			requestHeaders.get(COMPETITION_SESSION_HANDOFF_HEADER),
+			requestHeaders.get(COMPETITION_SESSION_PATH_HEADER) ?? '',
+			requestHeaders.get('cookie')
+		)
+		if (handoff) {
+			const syntheticSession = {
+				user: {
+					id: handoff.uid,
+					name: handoff.name,
+					fplEntryId: handoff.eid,
+					fplEntryVerifiedAt: handoff.evat
+				}
+			} as unknown as Session
+			return { session: syntheticSession, entryId: handoff.eid }
+		}
 		if (!hasSessionCookieHintInHeaders(requestHeaders)) {
 			return { session: null, entryId: null }
 		}
