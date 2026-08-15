@@ -84,7 +84,7 @@ before upload.
 ## Current public Web routing
 
 This host is not a public Web origin. The current production path is
-Cloudflare Proxied apex → `letletme-router` pass-through Worker → Vercel.
+Cloudflare Proxied apex → Cloudflare Free Transform Rules → Vercel.
 The EdgeOne free-plan site is configured only as a DNS-only canary; the apex
 has not changed and no watchdog is enabled. The canary origin is Vercel, not
 this Tencent host.
@@ -93,5 +93,5 @@ Do not upload a `cn-router` version, configure a Tencent route split, enable
 Cloudflare placement hints, or enable the `106.52.109.82:8443` placement probe.
 The old placement-probe script and historical Worker versions may remain in
 Git for audit history, but they are not part of production operations. Any
-future Web release must preserve the Cloudflare pass-through path and validate
-any new edge candidate separately before changing DNS.
+future Web release must preserve the Cloudflare Transform Rules path and
+validate any new edge candidate separately before changing DNS.

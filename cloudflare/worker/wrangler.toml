@@ -3,10 +3,6 @@ main = "src/router.js"
 compatibility_date = "2026-08-15"
 workers_dev = false
 
-routes = [
-  { pattern = "letletme.top/*", zone_name = "letletme.top" }
-]
-
 [observability]
 enabled = true
 head_sampling_rate = 1

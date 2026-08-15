@@ -30,9 +30,15 @@ Current production remains:
 
 ```text
 Cloudflare authoritative DNS (Proxied apex)
-  → `letletme-router` pass-through Worker
+  → Cloudflare Free Request/Response Transform Rules
     → Vercel Production
 ```
+
+Cloudflare Workers Routes currently has no route for `letletme.top`; the
+pass-through Worker is retained only as historical, tested rollback code and
+is not on the request path. The live apex returns the fallback marker from the
+Response Transform Rule and the request Transform Rules provide the trusted
+client-IP and proxy-secret headers.
 
 Do not change the apex or enable the watchdog until the complete mainland and
 overseas review produces passing evidence. The canary is not a user URL and
@@ -101,7 +107,7 @@ be EdgeOne-cached or routed to Tencent.
 Cloudflare remains authoritative and DNS-only during EdgeOne service. Apex
 CNAME flattening is required; do not switch NS to EdgeOne or DNSPod. If
 EdgeOne fails, the watchdog restores the exact pre-cutover Cloudflare
-Proxied Vercel record and the pass-through Worker serves Vercel. It never
+Proxied Vercel record and the free Transform Rules serve Vercel. It never
 automatically switches back to EdgeOne.
 
 ## Required free configuration
