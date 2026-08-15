@@ -4,7 +4,10 @@ compatibility_date = "2026-08-14"
 workers_dev = false
 
 [placement]
-mode = "smart"
+# The Tencent origin is a single-homed VM. Cloudflare's automatic placement
+# kept the CN path in AMS, so use the dedicated raw-TCP probe to triangulate
+# the origin instead. This endpoint never serves the application.
+host = "106.52.109.82:8443"
 
 routes = [
   { pattern = "letletme.top/*", zone_name = "letletme.top" }
