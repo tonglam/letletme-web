@@ -52,6 +52,11 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
    The dependency install and Next.js build run as the unprivileged `letletme`
    user; root is used only for artifact installation and activation. It never
    runs a database migration.
+   The Nginx-to-Node hop deliberately sends `X-Forwarded-Proto: http`: Nginx
+   is the TLS terminator, while the loopback Node listener is cleartext. This
+   avoids Next self-hosted Proxy/middleware attempting an HTTPS internal fetch
+   to the plain listener. The public request remains HTTPS, the Host is pinned
+   to `letletme.top`, and Cloudflare Origin CA still protects the external hop.
 5. Keep the previous release directory and its matching
    `/opt/letletme/static-releases/<sha>` directory until the new release has
    been stable for at least 24 hours. After that rollback window, each
