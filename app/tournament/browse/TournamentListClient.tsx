@@ -283,7 +283,7 @@ export default function TournamentListClient({
 							className="gap-2 shadow-sm"
 							asChild
 						>
-							<Link href="/competitions/create">
+							<Link href="/competitions/create" prefetch={false}>
 								<Plus
 									className="size-4"
 									aria-hidden="true"

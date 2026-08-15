@@ -95,10 +95,10 @@ export default async function Page({ params }: PageProps) {
 				actions={
 					<>
 						<Button asChild>
-							<Link href={nextPath}>{common('tryAgain')}</Link>
+							<Link href={nextPath} prefetch={false}>{common('tryAgain')}</Link>
 						</Button>
 						<Button variant="outline" asChild>
-							<Link href="/competitions/browse">{t('back')}</Link>
+							<Link href="/competitions/browse" prefetch={false}>{t('back')}</Link>
 						</Button>
 					</>
 				}
@@ -132,7 +132,7 @@ async function NoManagementAccess({ id }: { id: string }) {
 						<Link href={`/live/competitions/${id}`} prefetch={false}>{t('view')}</Link>
 					</Button>
 					<Button variant="outline" asChild>
-						<Link href="/competitions/browse">{t('back')}</Link>
+						<Link href="/competitions/browse" prefetch={false}>{t('back')}</Link>
 					</Button>
 				</>
 			}
