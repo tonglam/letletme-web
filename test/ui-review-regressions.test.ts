@@ -13,17 +13,17 @@ describe('route contract', () => {
 })
 
 describe('pre-paint theme bootstrap', () => {
-	it('executes the inline bootstrap in head before body content', async () => {
+	it('uses a beforeInteractive Next Script before body content', async () => {
 		const source = await readFile(
 			new URL('../app/[locale]/layout.tsx', import.meta.url),
 			'utf8'
 		)
-		const head = source.indexOf('<head>')
 		const bootstrap = source.indexOf('id="theme-bootstrap"')
 		const body = source.indexOf('<body')
 
-		assert.ok(head >= 0)
-		assert.ok(bootstrap > head)
+		assert.ok(source.includes('<Script'))
+		assert.ok(source.includes('strategy="beforeInteractive"'))
+		assert.ok(bootstrap >= 0)
 		assert.ok(body > bootstrap)
 		assert.equal(source.includes('strategy="afterInteractive"'), false)
 	})

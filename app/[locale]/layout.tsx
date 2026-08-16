@@ -16,6 +16,7 @@ import {
 } from 'next-intl/server'
 import { Barlow, Barlow_Condensed, IBM_Plex_Mono } from 'next/font/google'
 import { notFound } from 'next/navigation'
+import Script from 'next/script'
 import { Suspense } from 'react'
 import '../globals.css'
 
@@ -115,8 +116,9 @@ export default async function LocaleLayout({
 			suppressHydrationWarning
 		>
 			<head>
-				<script
+				<Script
 					id="theme-bootstrap"
+					strategy="beforeInteractive"
 					dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
 				/>
 			</head>
