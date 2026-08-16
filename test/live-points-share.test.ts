@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 
 import {
 	buildLivePointsEntryShareUrl,
+	copyElementImageToClipboard,
 	copyTextToClipboard,
 	formatLivePointsShareText,
 	formatShareFooter
@@ -274,6 +275,28 @@ describe('copyTextToClipboard', () => {
 		} finally {
 			if (descriptor) Object.defineProperty(globalThis, 'navigator', descriptor)
 			else Reflect.deleteProperty(globalThis, 'navigator')
+		}
+	})
+})
+
+describe('copyElementImageToClipboard', () => {
+	it('reports unsupported without image clipboard APIs', async () => {
+		const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+		const clipboardItemDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem')
+		Object.defineProperty(globalThis, 'navigator', {
+			configurable: true,
+			value: { clipboard: {} }
+		})
+		try {
+			assert.equal(
+				await copyElementImageToClipboard({} as HTMLElement),
+				'unsupported'
+			)
+		} finally {
+			if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+			else Reflect.deleteProperty(globalThis, 'navigator')
+			if (clipboardItemDescriptor) Object.defineProperty(globalThis, 'ClipboardItem', clipboardItemDescriptor)
+			else Reflect.deleteProperty(globalThis, 'ClipboardItem')
 		}
 	})
 })

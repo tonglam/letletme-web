@@ -1,5 +1,5 @@
 import Image from 'next/image'
-import type { CSSProperties } from 'react'
+import { forwardRef, type CSSProperties } from 'react'
 
 export type SquadPosition = 'GKP' | 'DEF' | 'MID' | 'FWD'
 
@@ -151,18 +151,22 @@ function PositionRow({
 	)
 }
 
-export function SquadPitch({
-	players,
-	title = 'LetLetMe XI',
-	managerName,
-	eyebrow = 'Gameweek squad',
-	headerStats,
-	className = '',
-}: SquadPitchProps) {
+export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(function SquadPitch(
+	{
+		players,
+		title = 'LetLetMe XI',
+		managerName,
+		eyebrow = 'Gameweek squad',
+		headerStats,
+		className = '',
+	},
+	ref
+) {
 	const totalScore = players.reduce((total, player) => total + player.score, 0)
 
 	return (
 		<section
+			ref={ref}
 			aria-label={`${title} formation`}
 			className={`relative isolate aspect-[1304/1244] w-full overflow-hidden rounded-xl border border-[#00ff85]/35 bg-[#210025] shadow-[0_30px_80px_-34px_rgba(21,0,25,0.78)] [container-type:inline-size] sm:rounded-2xl ${className}`}
 		>
@@ -236,4 +240,4 @@ export function SquadPitch({
 			))}
 		</section>
 	)
-}
+})

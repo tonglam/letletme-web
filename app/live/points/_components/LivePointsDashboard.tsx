@@ -15,12 +15,13 @@ import { cn } from '@/lib/utils'
 import type { Player } from '@/types/player'
 import { Check, Copy, ImageIcon, Loader2, RefreshCw } from 'lucide-react'
 import { useFormatter, useLocale, useTranslations } from 'next-intl'
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import type { NumberFormatOptions } from 'use-intl'
 import { deriveLiveTeamStats } from '../_lib/live-points-model'
 import { mapPlayersToSquadPitch } from '../_lib/live-points-squad-pitch'
 import {
+	copyElementImageToClipboard,
 	copyTextToClipboard,
 	formatLivePointsShareText
 } from '../_lib/live-points-share'
@@ -104,7 +105,9 @@ export function LivePointsDashboard({
 			}
 		: undefined
 	const [copied, setCopied] = useState(false)
+	const [imageCopied, setImageCopied] = useState(false)
 	const [manualShareText, setManualShareText] = useState<string | null>(null)
+	const squadPitchRef = useRef<HTMLElement | null>(null)
 
 	const handleCopyShare = useCallback(async () => {
 		if (!liveData) return
@@ -165,6 +168,24 @@ export function LivePointsDashboard({
 		t
 	])
 
+	const handleCopyImage = useCallback(async () => {
+		const element = squadPitchRef.current
+		if (!element) return
+
+		const copyResult = await copyElementImageToClipboard(element)
+		if (copyResult === 'copied') {
+			setImageCopied(true)
+			toast.success(t('shareImageCopied'))
+			window.setTimeout(() => setImageCopied(false), 2000)
+		} else {
+			toast.warning(
+				copyResult === 'unsupported'
+					? t('shareImageCopyUnsupported')
+					: t('shareImageCopyFailed')
+			)
+		}
+	}, [t])
+
 	return (
 		<>
 			<div className="mb-6">
@@ -205,16 +226,19 @@ export function LivePointsDashboard({
 							)}
 							{copied ? t('shareCopiedShort') : t('shareCopy')}
 						</Button>
-						{/* TODO: design + implement share-as-image export */}
 						<Button
 							size="sm"
 							variant="outline"
-							onClick={() => toast.message(t('shareImageComingSoon'))}
+							onClick={() => void handleCopyImage()}
 							disabled={!liveData || isLoading}
 							aria-label={t('shareCopyImage')}
 						>
-							<ImageIcon data-icon="inline-start" />
-							{t('shareCopyImage')}
+							{imageCopied ? (
+								<Check data-icon="inline-start" className="text-primary-ink" />
+							) : (
+								<ImageIcon data-icon="inline-start" />
+							)}
+							{imageCopied ? t('shareCopiedShort') : t('shareCopyImage')}
 						</Button>
 						<Button
 							size="sm"
@@ -283,6 +307,7 @@ export function LivePointsDashboard({
 
 					<div className="mb-8">
 						<SquadPitch
+							ref={squadPitchRef}
 							players={squadPitchPlayers}
 							title={liveData.entryName ?? `Entry ${liveData.entry}`}
 							managerName={liveData.playerName ?? undefined}

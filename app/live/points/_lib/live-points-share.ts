@@ -163,3 +163,36 @@ export async function copyTextToClipboard(
 		return 'failed'
 	}
 }
+
+/**
+ * Render a squad pitch element to a PNG and copy it to the system clipboard.
+ * The dynamic import keeps the DOM renderer out of the server bundle.
+ */
+export async function copyElementImageToClipboard(
+	element: HTMLElement
+): Promise<ClipboardCopyResult> {
+	if (
+		typeof navigator === 'undefined' ||
+		!navigator.clipboard?.write ||
+		typeof ClipboardItem === 'undefined'
+	) {
+		return 'unsupported'
+	}
+
+	try {
+		const { toBlob } = await import('html-to-image')
+		const blob = await toBlob(element, {
+			backgroundColor: '#210025',
+			cacheBust: true,
+			pixelRatio: 2,
+		})
+		if (!blob) return 'failed'
+
+		await navigator.clipboard.write([
+			new ClipboardItem({ 'image/png': blob }),
+		])
+		return 'copied'
+	} catch {
+		return 'failed'
+	}
+}
