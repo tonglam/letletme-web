@@ -218,10 +218,7 @@ function BenchPlayerCard({
 }) {
 	return (
 		<li className="min-w-0 list-none">
-			<p className="mb-[clamp(0.12rem,0.35cqi,0.24rem)] text-center font-display text-[clamp(0.42rem,1.15cqi,0.7rem)] font-bold tracking-wide text-[#38003c] underline decoration-dotted underline-offset-2">
-				{label}
-			</p>
-			<div className="flex min-w-0 items-center gap-[clamp(0.2rem,0.8cqi,0.5rem)] rounded-[clamp(0.2rem,0.7cqi,0.4rem)] border border-white/60 bg-[#d7e8d6]/90 px-[clamp(0.2rem,0.8cqi,0.5rem)] py-[clamp(0.18rem,0.6cqi,0.38rem)] shadow-[0_5px_12px_rgba(0,37,23,0.2)]">
+			<div className="flex min-w-0 items-center gap-[clamp(0.2rem,0.8cqi,0.5rem)] rounded-[clamp(0.2rem,0.7cqi,0.4rem)] border border-white/80 bg-[#f8f6ef]/95 px-[clamp(0.2rem,0.8cqi,0.5rem)] py-[clamp(0.18rem,0.6cqi,0.38rem)] shadow-[0_5px_12px_rgba(0,37,23,0.2)]">
 				<Image
 					src={`/images/squad-pitch/kits/${player.teamCode}.svg`}
 					alt=""
@@ -232,6 +229,9 @@ function BenchPlayerCard({
 					unoptimized
 				/>
 				<div className="min-w-0 text-left">
+					<p className="truncate font-mono text-[clamp(0.34rem,0.82cqi,0.52rem)] font-bold uppercase leading-tight tracking-[0.08em] text-[#38003c]/55">
+						{label}
+					</p>
 					<p className="truncate font-display text-[clamp(0.42rem,1.2cqi,0.7rem)] font-bold uppercase leading-tight text-[#38003c]">
 						{player.webName}
 					</p>
