@@ -179,8 +179,8 @@ export function SquadPitch({
 
 			<div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,transparent_30%,rgba(0,31,20,0.13)_100%)]" />
 
-			<header className="absolute inset-x-[5.2%] top-[2.2%] z-20 flex min-h-[clamp(2.25rem,8.5cqi,4rem)] items-start justify-between gap-4 text-[#f8f6ef]">
-				<div className="min-w-0">
+			<header className="absolute inset-x-[5.2%] top-[1.93%] z-20 flex h-[10.13%] items-center justify-between gap-[clamp(0.75rem,3cqi,2rem)] text-[#f8f6ef]">
+				<div className="flex min-w-0 flex-col justify-center">
 					<p className="truncate font-mono text-[clamp(0.42rem,1.15cqi,0.66rem)] font-medium uppercase leading-none tracking-[0.18em] text-[#00ff85]">
 						{headerStats?.eyebrow ?? eyebrow}
 					</p>
@@ -194,20 +194,20 @@ export function SquadPitch({
 					) : null}
 				</div>
 				{headerStats ? (
-					<div className="min-w-[clamp(5.75rem,16cqi,8.25rem)] shrink-0 border-l border-white/20 pl-[clamp(0.6rem,1.9cqi,1.1rem)] font-mono text-[clamp(0.52rem,1.25cqi,0.74rem)] tabular-nums">
+					<div className="flex min-w-[clamp(6.5rem,18cqi,9.25rem)] self-stretch shrink-0 flex-col justify-center border-l border-white/25 pl-[clamp(0.5rem,1.9cqi,1.1rem)] font-mono tabular-nums">
 						{headerStats.details.map(detail => (
 							<p
 								key={detail.label}
-								className="flex items-baseline justify-end gap-[clamp(0.3rem,0.8cqi,0.55rem)] whitespace-nowrap leading-[1.45]"
+								className="flex min-h-[clamp(0.95rem,2.65cqi,1.3rem)] items-center justify-end gap-[clamp(0.3rem,0.85cqi,0.6rem)] whitespace-nowrap leading-none"
 							>
-								<span className="uppercase tracking-[0.08em] text-white/55">
+								<span className="text-[clamp(0.58rem,1.35cqi,0.78rem)] uppercase tracking-[0.08em] text-white/55">
 									{detail.label}
 								</span>
 								<span
 									className={
 										detail.accent
-											? 'font-display text-[clamp(0.72rem,1.75cqi,1.05rem)] font-bold leading-none text-[#00ff85]'
-											: 'font-semibold text-white/90'
+											? 'font-display text-[clamp(0.82rem,2cqi,1.15rem)] font-bold leading-none text-[#00ff85]'
+											: 'font-display text-[clamp(0.82rem,2cqi,1.15rem)] font-bold leading-none text-white/90'
 									}
 								>
 									{detail.value}

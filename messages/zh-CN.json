@@ -482,6 +482,8 @@
 		"teamValue": "球队价值",
 		"bank": "余额",
 		"totalTransfers": "总转会数",
+		"pitchTotalPoints": "总积分",
+		"pitchOverallRank": "总排名",
 		"pitchGameweekPoints": "得分",
 		"pitchChip": "道具卡",
 		"pitchBenchBoost": "板凳加成",

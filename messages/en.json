@@ -482,6 +482,8 @@
 		"teamValue": "Team Value",
 		"bank": "Bank",
 		"totalTransfers": "Total Transfers",
+		"pitchTotalPoints": "TOTAL PTS",
+		"pitchOverallRank": "OR",
 		"pitchGameweekPoints": "GW PTS",
 		"pitchChip": "CHIP",
 		"pitchBenchBoost": "BB",

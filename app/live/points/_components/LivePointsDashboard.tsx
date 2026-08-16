@@ -89,7 +89,7 @@ export function LivePointsDashboard({
 	}
 	const pitchHeaderStats = overall && liveData
 		? {
-				eyebrow: `${t('overallPoints')} ${formatOverallNumber(overall.overallPoints)} · ${t('overallRank')} ${formatOverallNumber(overall.overallRank, { notation: 'compact' })}`,
+				eyebrow: `${t('pitchTotalPoints')} ${formatOverallNumber(overall.overallPoints)} · ${t('pitchOverallRank')} ${formatOverallNumber(overall.overallRank, { notation: 'compact' })}`,
 				details: [
 					{
 						label: t('pitchGameweekPoints'),
