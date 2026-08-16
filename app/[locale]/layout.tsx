@@ -115,13 +115,12 @@ export default async function LocaleLayout({
 			data-scroll-behavior="smooth"
 			suppressHydrationWarning
 		>
-			<head>
-				<Script
-					id="theme-bootstrap"
-					strategy="afterInteractive"
-					dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
-				/>
-			</head>
+			<head />
+			<Script
+				id="theme-bootstrap"
+				strategy="afterInteractive"
+				dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
+			/>
 			<body className="min-h-svh bg-background font-sans text-foreground antialiased">
 				<NextIntlClientProvider messages={messages as IntlMessages}>
 					<ThemeProvider
