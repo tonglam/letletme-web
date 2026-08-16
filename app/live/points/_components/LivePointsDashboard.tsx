@@ -74,16 +74,16 @@ export function LivePointsDashboard({
 		const normalized = chip?.toLowerCase() ?? ''
 		if (!normalized) return t('noActiveChips')
 		if (normalized.includes('bench') || normalized === 'bb' || normalized === 'bboost') {
-			return t('benchBoost')
+			return t('pitchBenchBoost')
 		}
 		if (normalized.includes('3x') || normalized.includes('triple') || normalized === 'tc') {
-			return t('tripleCaptain')
+			return t('pitchTripleCaptain')
 		}
 		if (normalized.includes('wildcard') || normalized === 'wc') {
-			return t('wildcard')
+			return t('pitchWildcard')
 		}
 		if (normalized.includes('free') || normalized === 'fh' || normalized === 'free_hit') {
-			return t('freeHit')
+			return t('pitchFreeHit')
 		}
 		return chip ?? t('noActiveChips')
 	}

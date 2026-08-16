@@ -65,8 +65,8 @@ const POSITION_LABELS: Record<SquadPosition, string> = {
 }
 
 const POSITION_ROW_CLASS: Record<SquadPosition, string> = {
-	GKP: 'top-[11.2%]',
-	DEF: 'top-[31.7%]',
+	GKP: 'top-[13.1%]',
+	DEF: 'top-[32.5%]',
 	MID: 'top-[52.2%]',
 	FWD: 'top-[72.8%]',
 }
@@ -181,24 +181,35 @@ export function SquadPitch({
 
 			<header className="absolute inset-x-[5.2%] top-[2.2%] z-20 flex min-h-[clamp(2.25rem,8.5cqi,4rem)] items-start justify-between gap-4 text-[#f8f6ef]">
 				<div className="min-w-0">
-					<p className="truncate font-mono text-[clamp(0.42rem,1.15cqi,0.66rem)] font-medium uppercase tracking-[0.18em] text-[#00ff85]">
+					<p className="truncate font-mono text-[clamp(0.42rem,1.15cqi,0.66rem)] font-medium uppercase leading-none tracking-[0.18em] text-[#00ff85]">
 						{headerStats?.eyebrow ?? eyebrow}
 					</p>
 					<h2 className="truncate font-display text-[clamp(0.78rem,2.55cqi,1.55rem)] font-bold uppercase leading-none tracking-[0.04em]">
 						{title}
 					</h2>
 					{managerName ? (
-						<p className="mt-[clamp(0.08rem,0.35cqi,0.2rem)] truncate font-mono text-[clamp(0.58rem,1.35cqi,0.82rem)] text-white/70">
+						<p className="mt-[clamp(0.08rem,0.35cqi,0.2rem)] truncate font-mono text-[clamp(0.68rem,1.55cqi,0.95rem)] leading-none text-white/70">
 							{managerName}
 						</p>
 					) : null}
 				</div>
 				{headerStats ? (
-					<div className="shrink-0 border-l border-white/20 pl-[clamp(0.6rem,1.9cqi,1.1rem)] text-right font-mono text-[clamp(0.52rem,1.25cqi,0.74rem)] leading-[1.5] tabular-nums text-white/65">
+					<div className="min-w-[clamp(5.75rem,16cqi,8.25rem)] shrink-0 border-l border-white/20 pl-[clamp(0.6rem,1.9cqi,1.1rem)] font-mono text-[clamp(0.52rem,1.25cqi,0.74rem)] tabular-nums">
 						{headerStats.details.map(detail => (
-							<p key={detail.label}>
-								<span>{detail.label}</span>{' '}
-								<span className={detail.accent ? 'text-[#00ff85]' : 'text-white/85'}>
+							<p
+								key={detail.label}
+								className="flex items-baseline justify-end gap-[clamp(0.3rem,0.8cqi,0.55rem)] whitespace-nowrap leading-[1.45]"
+							>
+								<span className="uppercase tracking-[0.08em] text-white/55">
+									{detail.label}
+								</span>
+								<span
+									className={
+										detail.accent
+											? 'font-display text-[clamp(0.72rem,1.75cqi,1.05rem)] font-bold leading-none text-[#00ff85]'
+											: 'font-semibold text-white/90'
+									}
+								>
 									{detail.value}
 								</span>
 							</p>
