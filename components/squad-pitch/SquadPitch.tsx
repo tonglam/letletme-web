@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import { LogoMark, LogoWordmark } from '@/components/layout/Logo'
 import { forwardRef, type CSSProperties } from 'react'
 
 export type SquadPosition = 'GKP' | 'DEF' | 'MID' | 'FWD'
@@ -234,13 +235,19 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(function Squa
 			<div
 				aria-hidden="true"
 				data-watermark="letletme"
-				className="pointer-events-none absolute inset-x-0 bottom-[2.2%] z-20 flex items-center justify-center gap-[clamp(0.35rem,1.5cqi,0.9rem)] select-none text-[#f8f6ef]/35"
+				className="pointer-events-none absolute inset-x-[-18%] top-[49%] z-[1] flex -translate-y-1/2 -rotate-[9deg] items-center justify-center whitespace-nowrap select-none opacity-[0.2]"
 			>
-				<span className="h-px w-[clamp(1.1rem,7cqi,3.5rem)] bg-gradient-to-r from-transparent via-[#00ff85]/35 to-transparent" />
-				<span className="font-mono text-[clamp(0.42rem,1.05cqi,0.68rem)] font-semibold uppercase tracking-[0.28em] [text-shadow:0_1px_4px_rgba(0,0,0,0.35)]">
-					LETLETME
-				</span>
-				<span className="h-px w-[clamp(1.1rem,7cqi,3.5rem)] bg-gradient-to-r from-[#00ff85]/35 via-[#f8f6ef]/20 to-transparent" />
+				<div className="flex items-center gap-[clamp(0.45rem,2.2cqi,1.4rem)] text-[#f8f6ef] [text-shadow:0_2px_10px_rgba(0,0,0,0.22)]">
+					<LogoMark
+						className="size-[clamp(1.8rem,7cqi,4.4rem)] text-electric"
+					/>
+					<div className="flex flex-col gap-[clamp(0.16rem,0.6cqi,0.35rem)]">
+						<LogoWordmark className="text-[clamp(1.35rem,6cqi,4rem)] tracking-[0.16em]" />
+						<span className="font-mono text-[clamp(0.42rem,1.25cqi,0.78rem)] font-semibold uppercase tracking-[0.28em] text-[#00ff85]">
+							letletme.top
+						</span>
+					</div>
+				</div>
 			</div>
 
 			{POSITION_ORDER.map(position => (
