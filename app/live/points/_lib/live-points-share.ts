@@ -1,4 +1,12 @@
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
+export {
+	copyElementImageToClipboard,
+	copyTextToClipboard,
+	shareElementImage,
+	shareText,
+	type ClipboardCopyResult,
+	type ShareResult
+} from '@/lib/share/clipboard'
 import { formatChipName } from '@/lib/utils'
 import type { Player } from '@/types/player'
 
@@ -146,53 +154,4 @@ export function formatLivePointsShareText({
 	}
 
 	return sections.join('\n')
-}
-
-export type ClipboardCopyResult = 'copied' | 'unsupported' | 'failed'
-
-export async function copyTextToClipboard(
-	text: string
-): Promise<ClipboardCopyResult> {
-	if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
-		return 'unsupported'
-	}
-	try {
-		await navigator.clipboard.writeText(text)
-		return 'copied'
-	} catch {
-		return 'failed'
-	}
-}
-
-/**
- * Render a squad pitch element to a PNG and copy it to the system clipboard.
- * The dynamic import keeps the DOM renderer out of the server bundle.
- */
-export async function copyElementImageToClipboard(
-	element: HTMLElement
-): Promise<ClipboardCopyResult> {
-	if (
-		typeof navigator === 'undefined' ||
-		!navigator.clipboard?.write ||
-		typeof ClipboardItem === 'undefined'
-	) {
-		return 'unsupported'
-	}
-
-	try {
-		const { toBlob } = await import('html-to-image')
-		const blob = await toBlob(element, {
-			backgroundColor: '#210025',
-			cacheBust: true,
-			pixelRatio: 2,
-		})
-		if (!blob) return 'failed'
-
-		await navigator.clipboard.write([
-			new ClipboardItem({ 'image/png': blob }),
-		])
-		return 'copied'
-	} catch {
-		return 'failed'
-	}
 }

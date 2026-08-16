@@ -3,6 +3,7 @@
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
+import { ShareActions } from '@/components/share/ShareActions'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -17,7 +18,7 @@ import {
 	useEffect,
 	useMemo,
 	useRef,
-	useState,
+	useState
 } from 'react'
 import { TournamentPerformance } from './_components/TournamentPerformance'
 import { TournamentSeasonCharts } from './_components/TournamentSeasonCharts'
@@ -27,22 +28,22 @@ import { TournamentStatsHeader } from './_components/TournamentStatsHeader'
 import { TournamentGameweekDetails } from './_components/TournamentGameweekDetails'
 import {
 	useTournamentStats,
-	type TournamentStatsClientProps,
+	type TournamentStatsClientProps
 } from './_hooks/useTournamentStats'
 import {
 	TournamentGameweekWorkspaceProvider,
-	useTournamentGameweekWorkspace,
+	useTournamentGameweekWorkspace
 } from './_lib/tournament-gameweek-workspace'
 import {
 	isKnownTournamentId,
 	readLastTournamentId,
-	writeLastTournamentId,
+	writeLastTournamentId
 } from './_lib/tournament-stats-preference'
 import {
 	buildTournamentStatsQueryString,
 	parseTournamentStatsGw,
 	parseTournamentStatsView,
-	type TournamentStatsPageView,
+	type TournamentStatsPageView
 } from './_lib/tournament-stats-url'
 
 function TournamentStatsBody(props: TournamentStatsClientProps) {
@@ -55,7 +56,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 
 	const view = useMemo(
 		() => parseTournamentStatsView(searchParams.get('view')),
-		[searchParams],
+		[searchParams]
 	)
 
 	const {
@@ -78,12 +79,43 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 		tournamentStats,
 		tournaments,
 		usedFallbackGameweek,
-		currentGameweek,
+		currentGameweek
 	} = useTournamentStats({
 		...props,
 		loadGameweekData: view === 'gameweek',
-		loadSeasonPath: view === 'season',
+		loadSeasonPath: view === 'season'
 	})
+	const shareRef = useRef<HTMLDivElement | null>(null)
+	const shareText = useMemo(() => {
+		const name = selectedTournament?.name ?? t('title')
+		const lines = [`# ${name} · GW${selectedGameweek || currentGameweek}`]
+		if (tournamentStats) {
+			lines.push(`${t('myRank')}: ${tournamentStats.myRank ?? '—'}`)
+			lines.push(
+				`${t('topScore')}: ${tournamentStats.topPerformers[0]?.points ?? '—'}`
+			)
+		}
+		lines.push('', t('standings'))
+		for (const row of filteredStandings.slice(0, 12)) {
+			lines.push(
+				`- ${row.displayRank ?? '—'} ${row.teamName} · ${row.gameweekPoints} GW · ${row.totalPoints} total`
+			)
+		}
+		lines.push(
+			'',
+			typeof window !== 'undefined'
+				? window.location.href
+				: 'https://letletme.top/my-fpl/competitions'
+		)
+		return lines.join('\n')
+	}, [
+		currentGameweek,
+		filteredStandings,
+		selectedGameweek,
+		selectedTournament,
+		t,
+		tournamentStats
+	])
 
 	const maxGw =
 		dataGameweek && dataGameweek > 0
@@ -95,7 +127,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 			? props.initialSliceGameweek
 			: props.initialDataGameweek && props.initialDataGameweek > 0
 				? props.initialDataGameweek
-			: currentGameweek
+				: currentGameweek
 
 	const replaceQuery = useCallback(
 		(next: {
@@ -106,12 +138,12 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 			const qs = buildTournamentStatsQueryString({
 				tournamentId: next.tournamentId ?? selectedTournamentId,
 				view: next.view,
-				gw: next.gw != null && next.gw > 0 ? next.gw : null,
+				gw: next.gw != null && next.gw > 0 ? next.gw : null
 			})
 			const href = qs ? `${pathname}?${qs}` : pathname
 			router.replace(href, { scroll: false })
 		},
-		[pathname, router, selectedTournamentId],
+		[pathname, router, selectedTournamentId]
 	)
 
 	const handleActiveGameweekChange = useCallback(
@@ -121,10 +153,10 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 			replaceQuery({
 				view:
 					enterGameweekView || viewNow === 'gameweek' ? 'gameweek' : 'season',
-				gw,
+				gw
 			})
 		},
-		[replaceQuery, searchParams, setSelectedGameweek],
+		[replaceQuery, searchParams, setSelectedGameweek]
 	)
 
 	// URL gw → selected gameweek
@@ -157,7 +189,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 				replaceQuery({
 					tournamentId: lastId,
 					view,
-					gw: selectedGameweek > 0 ? selectedGameweek : seedGw,
+					gw: selectedGameweek > 0 ? selectedGameweek : seedGw
 				})
 			} else {
 				// Already on stored id (SSR happened to match) — still pin URL
@@ -166,7 +198,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 					replaceQuery({
 						tournamentId: lastId,
 						view,
-						gw: selectedGameweek > 0 ? selectedGameweek : seedGw,
+						gw: selectedGameweek > 0 ? selectedGameweek : seedGw
 					})
 				}
 			}
@@ -193,86 +225,101 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 		replaceQuery({
 			tournamentId: id,
 			view,
-			gw: selectedGameweek > 0 ? selectedGameweek : seedGw,
+			gw: selectedGameweek > 0 ? selectedGameweek : seedGw
 		})
 	}
 
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
-				<StatsPageHeader title={t('title')} />
-
-				{error ? (
-					<Alert variant="destructive" className="mb-6" role="alert">
-						<AlertCircle aria-hidden="true" />
-						<AlertDescription>{error}</AlertDescription>
-					</Alert>
-				) : null}
-
-				{/* Frame: tournament picker always on */}
-				<TournamentStatsHeader
-					onTournamentChange={handleTournamentChange}
-					selectedTournament={selectedTournament}
-					selectedTournamentId={selectedTournamentId}
-					tournaments={tournaments}
-				/>
-
-				{!selectedTournament ? (
-					<Card className="p-6 shadow-sm" role="status">
-						<p className="text-sm text-muted-foreground">{t('noLinked')}</p>
-					</Card>
-				) : !insightsReady ? (
-					<Card
-						className="p-6 shadow-sm"
-						aria-live="polite"
-						aria-busy={isLoading}
-					>
-						<p className="text-sm text-muted-foreground">
-							{isLoading
-								? t('loading')
-								: selectedTournament.setupStatus === 'FAILED'
-									? lifecycleT('memberFailure')
-									: selectedTournament.setupHasWarnings
-										? lifecycleT('warningSummary')
-										: selectedTournament.standingsReadyAt
-											? lifecycleT('enrichingMessage')
-											: lifecycleT('leavePageMessage')}
-						</p>
-					</Card>
-				) : (
-					<TournamentGameweekWorkspaceProvider
-						maxGw={maxGw > 0 ? maxGw : seedGw}
-						initialGameweek={
-							selectedGameweek > 0 ? selectedGameweek : seedGw
-						}
-						onActiveGameweekChange={handleActiveGameweekChange}
-					>
-						<TournamentViews
-							view={view}
-							onNavigateSeason={() =>
-								replaceQuery({
-									view: 'season',
-									gw: selectedGameweek > 0 ? selectedGameweek : null,
-								})
-							}
-							currentGameweek={currentGameweek}
-							maxGw={maxGw > 0 ? maxGw : seedGw}
-							selectedGameweek={selectedGameweek}
-							dataGameweek={dataGameweek}
-							usedFallbackGameweek={usedFallbackGameweek}
-							isLoading={isLoading}
-							tournamentStats={tournamentStats}
-							seasonField={seasonField}
-							seasonMe={seasonMe}
-							seasonPath={seasonPath}
-							seasonPathLoading={seasonPathLoading}
-							filteredStandings={filteredStandings}
-							standingsSearch={standingsSearch}
-							setStandingsSearch={setStandingsSearch}
-							searchParamsGw={searchParams.get('gw')}
+				<StatsPageHeader
+					title={t('title')}
+					badge={
+						<ShareActions
+							text={shareText}
+							imageRef={shareRef}
+							title={selectedTournament?.name ?? t('title')}
 						/>
-					</TournamentGameweekWorkspaceProvider>
-				)}
+					}
+				/>
+				<div ref={shareRef}>
+					{error ? (
+						<Alert
+							variant="destructive"
+							className="mb-6"
+							role="alert"
+						>
+							<AlertCircle aria-hidden="true" />
+							<AlertDescription>{error}</AlertDescription>
+						</Alert>
+					) : null}
+
+					{/* Frame: tournament picker always on */}
+					<TournamentStatsHeader
+						onTournamentChange={handleTournamentChange}
+						selectedTournament={selectedTournament}
+						selectedTournamentId={selectedTournamentId}
+						tournaments={tournaments}
+					/>
+
+					{!selectedTournament ? (
+						<Card
+							className="p-6 shadow-sm"
+							role="status"
+						>
+							<p className="text-sm text-muted-foreground">{t('noLinked')}</p>
+						</Card>
+					) : !insightsReady ? (
+						<Card
+							className="p-6 shadow-sm"
+							aria-live="polite"
+							aria-busy={isLoading}
+						>
+							<p className="text-sm text-muted-foreground">
+								{isLoading
+									? t('loading')
+									: selectedTournament.setupStatus === 'FAILED'
+										? lifecycleT('memberFailure')
+										: selectedTournament.setupHasWarnings
+											? lifecycleT('warningSummary')
+											: selectedTournament.standingsReadyAt
+												? lifecycleT('enrichingMessage')
+												: lifecycleT('leavePageMessage')}
+							</p>
+						</Card>
+					) : (
+						<TournamentGameweekWorkspaceProvider
+							maxGw={maxGw > 0 ? maxGw : seedGw}
+							initialGameweek={selectedGameweek > 0 ? selectedGameweek : seedGw}
+							onActiveGameweekChange={handleActiveGameweekChange}
+						>
+							<TournamentViews
+								view={view}
+								onNavigateSeason={() =>
+									replaceQuery({
+										view: 'season',
+										gw: selectedGameweek > 0 ? selectedGameweek : null
+									})
+								}
+								currentGameweek={currentGameweek}
+								maxGw={maxGw > 0 ? maxGw : seedGw}
+								selectedGameweek={selectedGameweek}
+								dataGameweek={dataGameweek}
+								usedFallbackGameweek={usedFallbackGameweek}
+								isLoading={isLoading}
+								tournamentStats={tournamentStats}
+								seasonField={seasonField}
+								seasonMe={seasonMe}
+								seasonPath={seasonPath}
+								seasonPathLoading={seasonPathLoading}
+								filteredStandings={filteredStandings}
+								standingsSearch={standingsSearch}
+								setStandingsSearch={setStandingsSearch}
+								searchParamsGw={searchParams.get('gw')}
+							/>
+						</TournamentGameweekWorkspaceProvider>
+					)}
+				</div>
 			</div>
 		</PageShell>
 	)
@@ -295,7 +342,7 @@ function TournamentViews({
 	filteredStandings,
 	standingsSearch,
 	setStandingsSearch,
-	searchParamsGw,
+	searchParamsGw
 }: {
 	view: TournamentStatsPageView
 	onNavigateSeason: () => void
@@ -327,7 +374,7 @@ function TournamentViews({
 		const urlGw = parseTournamentStatsGw(
 			searchParamsGw,
 			maxGw,
-			workspace.activeGameweek > 0 ? workspace.activeGameweek : maxGw,
+			workspace.activeGameweek > 0 ? workspace.activeGameweek : maxGw
 		)
 		if (urlGw < 1) return
 		if (
@@ -347,7 +394,7 @@ function TournamentViews({
 			'relative inline-flex h-11 items-center gap-0.5 rounded-none border-b-2 bg-transparent px-3 pb-3 pt-2 text-sm font-semibold sm:px-4',
 			active
 				? 'border-primary-ink text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground',
+				: 'border-transparent text-muted-foreground hover:text-foreground'
 		)
 
 	const handleSelectorChange = (gw: number) => {
@@ -389,7 +436,7 @@ function TournamentViews({
 									aria-selected={active}
 									className={cn(
 										tabTriggerClass(active),
-										closable ? 'pr-1 sm:pr-1.5' : undefined,
+										closable ? 'pr-1 sm:pr-1.5' : undefined
 									)}
 									onClick={() => workspace.openGameweek(gw)}
 								>
@@ -401,7 +448,7 @@ function TournamentViews({
 										className={cn(
 											'-ml-0.5 mb-px inline-flex items-center self-center rounded-sm p-1 text-muted-foreground',
 											'hover:bg-muted/60 hover:text-foreground',
-											'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+											'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 										)}
 										aria-label={t('closeGameweekTab', { gameweek: gw })}
 										onClick={e => {
@@ -409,7 +456,10 @@ function TournamentViews({
 											workspace.closeGameweek(gw)
 										}}
 									>
-										<X className="size-3.5" aria-hidden="true" />
+										<X
+											className="size-3.5"
+											aria-hidden="true"
+										/>
 									</button>
 								) : null}
 							</div>
@@ -496,7 +546,7 @@ function TournamentViews({
 }
 
 export default function TournamentStatsClient(
-	props: TournamentStatsClientProps,
+	props: TournamentStatsClientProps
 ) {
 	return (
 		<Suspense

@@ -4,6 +4,7 @@ import PageShell from '@/components/layout/PageShell'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import { LiveAutoRefreshCountdown } from '@/components/live/LiveAutoRefreshCountdown'
 import { MatchCard } from '@/components/live/MatchCard'
+import { ShareActions } from '@/components/share/ShareActions'
 import {
 	StatsPageHeader,
 	StatsTabsShell
@@ -25,6 +26,7 @@ import {
 import { getLiveMatchesSnapshot } from '@/lib/live-matches'
 import { usePageActive } from '@/hooks/use-page-active'
 import type { Match } from '@/types/match'
+import { formatMatchShareText } from '@/components/live/match-card/match-share'
 import { RefreshCw } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -121,6 +123,7 @@ export function LiveMatchesClient({
 	const pendingRefreshRef = useRef(false)
 	const mountedRef = useRef(true)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
+	const shareRef = useRef<HTMLDivElement | null>(null)
 	const hasLastGoodData = useRef(initialMatches.length > 0)
 	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
 		snapshotRef.current = next
@@ -324,28 +327,64 @@ export function LiveMatchesClient({
 	})
 	const activeTabConfig = TAB_CONFIG.find(config => config.value === activeTab)
 	const activeMatches = matchesByTab[activeTab]
+	const shareText = useMemo(() => {
+		const origin =
+			typeof window !== 'undefined'
+				? window.location.origin
+				: 'https://letletme.top'
+		const shareUrl = `${origin}${typeof window !== 'undefined' ? window.location.pathname : '/live/matches'}`
+		const labels = {
+			liveMinute: (minute: number) => t('liveMinute', { minute }),
+			halfTime: t('halfTime'),
+			fullTime: t('fullTime'),
+			notStarted: t('notStarted'),
+			upcoming: t('upcoming'),
+			goals: t('goals'),
+			assists: t('assists'),
+			bonusPoints: t('bonusPoints'),
+			bps: t('bps'),
+			defensiveContribution: t('defensiveContribution'),
+			saves: t('saves'),
+			yellowCards: t('yellowCards'),
+			redCards: t('redCards'),
+			footer: t('shareFooter', { url: shareUrl })
+		}
+		return activeMatches
+			.map(match => formatMatchShareText(match, labels))
+			.join('\n\n')
+	}, [activeMatches, t])
 
 	const headerActions = (
-		<div className="flex flex-col items-end gap-1">
-			<Button
-				variant="outline"
-				size="icon"
-				onClick={() => fetchMatches(true)}
-				disabled={isRefreshing || isLoading}
-				className="shrink-0"
-			>
-				<RefreshCw
-					className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
-				/>
-				<span className="sr-only">{t('refresh')}</span>
-			</Button>
-			{!isLoading || isRefreshing ? (
-				<LiveAutoRefreshCountdown
-					enabled={autoRefreshEnabled}
-					onRefresh={autoRefreshMatches}
-					renderLabel={seconds => t('autoRefresh', { seconds })}
+		<div className="flex flex-wrap items-center justify-end gap-2">
+			{activeMatches.length > 0 ? (
+				<ShareActions
+					text={shareText}
+					imageRef={shareRef}
+					title={t('title')}
+					compact
 				/>
 			) : null}
+			<div className="flex flex-col items-end gap-1">
+				<Button
+					variant="outline"
+					size="icon"
+					onClick={() => fetchMatches(true)}
+					disabled={isRefreshing || isLoading}
+					className="shrink-0"
+				>
+					<RefreshCw
+						className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
+					/>
+					<span className="sr-only">{t('refresh')}</span>
+				</Button>
+				{!isLoading || isRefreshing ? (
+					<LiveAutoRefreshCountdown
+						enabled={autoRefreshEnabled}
+						onRefresh={autoRefreshMatches}
+						renderLabel={seconds => t('autoRefresh', { seconds })}
+					/>
+				) : null}
+			</div>
 		</div>
 	)
 
@@ -427,61 +466,63 @@ export function LiveMatchesClient({
 					title={t('title')}
 					badge={headerActions}
 				/>
-				<Tabs
-					value={activeTab}
-					onValueChange={handleTabChange}
-					className="space-y-5"
-				>
-					<StatsTabsShell>
-						<TabsList className="grid h-auto w-full grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
-							<TabsTrigger
-								value="live"
-								className="w-full"
-							>
-								{t('liveNow')}
-							</TabsTrigger>
-							<TabsTrigger
-								value="finished"
-								className="w-full"
-							>
-								{t('finished')}
-							</TabsTrigger>
-							<TabsTrigger
-								value="not-started"
-								className="w-full"
-							>
-								{t('notStarted')}
-							</TabsTrigger>
-							<TabsTrigger
-								value="upcoming"
-								className="w-full"
-							>
-								{t('upcoming')}
-							</TabsTrigger>
-						</TabsList>
-					</StatsTabsShell>
-
-					<TabsContent
+				<div ref={shareRef}>
+					<Tabs
 						value={activeTab}
-						className="mt-0 space-y-5"
+						onValueChange={handleTabChange}
+						className="space-y-5"
 					>
-						{activeMatches.length > 0 ? (
-							activeMatches.map((match, i) => (
-								<MatchCard
-									key={match.id}
-									match={match}
-									allMatches={activeMatches}
-									currentIndex={i}
-									eventId={resolvedCurrentEventId}
-								/>
-							))
-						) : (
-							<p className="rounded-lg border border-border/80 bg-card py-8 text-center text-muted-foreground shadow-sm">
-								{activeTabConfig ? t(activeTabConfig.labelKey) : t('none')}
-							</p>
-						)}
-					</TabsContent>
-				</Tabs>
+						<StatsTabsShell>
+							<TabsList className="grid h-auto w-full grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
+								<TabsTrigger
+									value="live"
+									className="w-full"
+								>
+									{t('liveNow')}
+								</TabsTrigger>
+								<TabsTrigger
+									value="finished"
+									className="w-full"
+								>
+									{t('finished')}
+								</TabsTrigger>
+								<TabsTrigger
+									value="not-started"
+									className="w-full"
+								>
+									{t('notStarted')}
+								</TabsTrigger>
+								<TabsTrigger
+									value="upcoming"
+									className="w-full"
+								>
+									{t('upcoming')}
+								</TabsTrigger>
+							</TabsList>
+						</StatsTabsShell>
+
+						<TabsContent
+							value={activeTab}
+							className="mt-0 space-y-5"
+						>
+							{activeMatches.length > 0 ? (
+								activeMatches.map((match, i) => (
+									<MatchCard
+										key={match.id}
+										match={match}
+										allMatches={activeMatches}
+										currentIndex={i}
+										eventId={resolvedCurrentEventId}
+									/>
+								))
+							) : (
+								<p className="rounded-lg border border-border/80 bg-card py-8 text-center text-muted-foreground shadow-sm">
+									{activeTabConfig ? t(activeTabConfig.labelKey) : t('none')}
+								</p>
+							)}
+						</TabsContent>
+					</Tabs>
+				</div>
 			</div>
 		</PageShell>
 	)

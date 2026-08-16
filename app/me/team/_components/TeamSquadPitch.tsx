@@ -5,10 +5,12 @@ import {
 	type SquadPitchPlayer,
 	type SquadTeamCode
 } from '@/components/squad-pitch/SquadPitch'
+import { ShareActions } from '@/components/share/ShareActions'
+import { localizePathname, type AppLocale } from '@/i18n/routing'
 import { isSquadStarter } from '@/lib/squad-picks'
 import type { TeamStatsViewModel } from '../_lib/team-stats-model'
-import { useFormatter, useTranslations } from 'next-intl'
-import { useMemo } from 'react'
+import { useFormatter, useLocale, useTranslations } from 'next-intl'
+import { useMemo, useRef } from 'react'
 
 const TEAM_CODES: readonly SquadTeamCode[] = [
 	'ARS',
@@ -114,7 +116,9 @@ function benchFixtureLine(
 
 export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 	const format = useFormatter()
+	const locale = useLocale() as AppLocale
 	const t = useTranslations('TeamStats')
+	const shareRef = useRef<HTMLDivElement | null>(null)
 
 	const players = useMemo(
 		() =>
@@ -170,6 +174,44 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 			}),
 		[benchPicks]
 	)
+	const shareText = useMemo(() => {
+		const origin =
+			typeof window !== 'undefined'
+				? window.location.origin
+				: 'https://letletme.top'
+		const shareUrl = new URL(
+			localizePathname('/my-fpl/team', locale),
+			origin
+		).toString()
+		const starters = players.map(player => {
+			const role = player.isCaptain
+				? ' (C)'
+				: player.isViceCaptain
+					? ' (V)'
+					: ''
+			return `- ${player.position} ${player.webName}${role} · ${player.score} pts`
+		})
+		const bench = benchPlayers.map(
+			player =>
+				`- ${player.position} ${player.webName} · ${player.score} pts${player.fixture ? ` · ${player.fixture}` : ''}`
+		)
+		return [
+			`# ${stats.teamName} · GW${stats.eventId}`,
+			stats.playerName,
+			`${t('pitchTotalPoints')}: ${format.number(stats.overallPoints)} · ${t('pitchOverallRank')}: ${format.number(stats.overallRank, { notation: 'compact' })}`,
+			`${t('pitchGameweekPoints')}: ${format.number(stats.eventPoints)} · ${t('pitchChip')}: ${formatChip(stats.eventChip, t)}`,
+			'',
+			t('startingEleven'),
+			...starters,
+			'',
+			t('substitutes'),
+			...bench,
+			'',
+			shareUrl
+		]
+			.filter(line => line != null)
+			.join('\n')
+	}, [benchPlayers, format, locale, players, stats, t])
 
 	if (players.length === 0) return null
 
@@ -189,30 +231,39 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 					GW{stats.eventId}
 				</span>
 			</div>
-			<SquadPitch
-				players={players}
-				benchPlayers={benchPlayers}
-				benchTitle={t('substitutes')}
-				benchBoost={isBenchBoostChip(stats.eventChip)}
-				benchBoostLabel={t('benchBoostShort')}
-				benchPointsLabel={t('pointsShort')}
-				title={stats.teamName}
-				managerName={stats.playerName}
-				headerStats={{
-					eyebrow: `${t('pitchTotalPoints')} ${format.number(stats.overallPoints)} · ${t('pitchOverallRank')} ${format.number(stats.overallRank, { notation: 'compact' })}`,
-					details: [
-						{
-							label: t('pitchGameweekPoints'),
-							value: format.number(stats.eventPoints),
-							accent: true
-						},
-						{
-							label: t('pitchChip'),
-							value: formatChip(stats.eventChip, t)
-						}
-					]
-				}}
-			/>
+			<div className="mb-3 flex justify-end">
+				<ShareActions
+					text={shareText}
+					imageRef={shareRef}
+					title={stats.teamName}
+				/>
+			</div>
+			<div ref={shareRef}>
+				<SquadPitch
+					players={players}
+					benchPlayers={benchPlayers}
+					benchTitle={t('substitutes')}
+					benchBoost={isBenchBoostChip(stats.eventChip)}
+					benchBoostLabel={t('benchBoostShort')}
+					benchPointsLabel={t('pointsShort')}
+					title={stats.teamName}
+					managerName={stats.playerName}
+					headerStats={{
+						eyebrow: `${t('pitchTotalPoints')} ${format.number(stats.overallPoints)} · ${t('pitchOverallRank')} ${format.number(stats.overallRank, { notation: 'compact' })}`,
+						details: [
+							{
+								label: t('pitchGameweekPoints'),
+								value: format.number(stats.eventPoints),
+								accent: true
+							},
+							{
+								label: t('pitchChip'),
+								value: formatChip(stats.eventChip, t)
+							}
+						]
+					}}
+				/>
+			</div>
 		</section>
 	)
 }

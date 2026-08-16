@@ -11,25 +11,25 @@ import type {
 } from '@/lib/graphql/operations/market'
 import type { PlayerDirectoryItem } from '@/lib/graphql/operations/players'
 import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
-import { copyTextToClipboard } from '@/app/live/points/_lib/live-points-share'
-import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import {
 	buildMarketShareUrl,
 	formatPriceMovementShareText
 } from '@/app/data/market/_lib/market-price-share'
 import { marketRevisionParam } from '@/lib/market-client'
-import { Check, Copy, Search } from 'lucide-react'
+import { ShareActions } from '@/components/share/ShareActions'
+import { Search } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import {
 	lazy,
 	Suspense,
 	useCallback,
 	useMemo,
+	useRef,
 	useState,
 	type ComponentProps,
-	type ReactNode
+	type ReactNode,
+	type RefObject
 } from 'react'
-import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
 const LazyMarketPlayerLookup = lazy(() =>
@@ -108,7 +108,14 @@ function LazyMarketPlayerLookupBoundary(
 	props: ComponentProps<typeof LazyMarketPlayerLookup>
 ) {
 	return (
-		<Suspense fallback={<div className="min-h-32" aria-hidden="true" />}>
+		<Suspense
+			fallback={
+				<div
+					className="min-h-32"
+					aria-hidden="true"
+				/>
+			}
+		>
 			<LazyMarketPlayerLookup {...props} />
 		</Suspense>
 	)
@@ -150,7 +157,10 @@ export function MarketPlayerLookupLauncher({
 	if (!compact) {
 		return (
 			<>
-				<label htmlFor="market-player-search" className="mb-2 block text-sm font-semibold">
+				<label
+					htmlFor="market-player-search"
+					className="mb-2 block text-sm font-semibold"
+				>
 					{t('searchPlayers')}
 				</label>
 				<Input
@@ -192,7 +202,10 @@ export function MarketPlayerLookupLauncher({
 					setOpen(true)
 				}}
 			>
-				<Search className="size-3.5" aria-hidden="true" />
+				<Search
+					className="size-3.5"
+					aria-hidden="true"
+				/>
 				{t('lookupAnotherPlayer')}
 			</Button>
 		</div>
@@ -201,16 +214,15 @@ export function MarketPlayerLookupLauncher({
 
 function PriceShareActions({
 	changes,
-	changeDate
+	changeDate,
+	imageRef
 }: {
 	changes: MarketPriceChange[]
 	changeDate: string | null
+	imageRef: RefObject<HTMLElement | null>
 }) {
 	const t = useTranslations('Market')
-	const [copied, setCopied] = useState(false)
-	const [manualShareText, setManualShareText] = useState<string | null>(null)
-
-	const handleCopyShare = useCallback(async () => {
+	const shareText = useCallback(() => {
 		const origin =
 			typeof window !== 'undefined'
 				? window.location.origin
@@ -222,7 +234,7 @@ function PriceShareActions({
 					: ''
 				: ''
 		const shareUrl = buildMarketShareUrl(origin, pathPrefix)
-		const text = formatPriceMovementShareText({
+		return formatPriceMovementShareText({
 			changes,
 			changeDate,
 			labels: {
@@ -233,49 +245,14 @@ function PriceShareActions({
 				footer: t('shareFooter', { url: shareUrl })
 			}
 		})
-		const result = await copyTextToClipboard(text)
-		if (result === 'copied') {
-			setManualShareText(null)
-			setCopied(true)
-			toast.success(t('shareCopied'))
-			window.setTimeout(() => setCopied(false), 2000)
-		} else if (result === 'unsupported' || result === 'failed') {
-			setManualShareText(text)
-			toast.warning(
-				result === 'unsupported'
-					? t('shareCopyUnsupported')
-					: t('shareCopyFailed')
-			)
-		}
 	}, [changeDate, changes, t])
 
 	return (
-		<div className="flex shrink-0 flex-col items-end gap-1.5">
-			<Button
-				type="button"
-				size="sm"
-				variant="outline"
-				className="h-8 gap-1.5 text-xs"
-				onClick={() => void handleCopyShare()}
-				aria-label={t('shareCopy')}
-			>
-				{copied ? (
-					<Check className="size-3.5 text-primary-ink" aria-hidden="true" />
-				) : (
-					<Copy className="size-3.5" aria-hidden="true" />
-				)}
-				{copied ? t('shareCopiedShort') : t('shareCopy')}
-			</Button>
-			{manualShareText ? (
-				<ShareTextFallback
-					text={manualShareText}
-					message={t('shareCopyUnsupported')}
-					fieldLabel={t('shareCopyManualLabel')}
-					closeLabel={t('shareCopyClose')}
-					onClose={() => setManualShareText(null)}
-				/>
-			) : null}
-		</div>
+		<ShareActions
+			text={shareText}
+			imageRef={imageRef}
+			title={t('priceTitle')}
+		/>
 	)
 }
 
@@ -314,7 +291,9 @@ function PriceColumns({
 				)}
 			>
 				{rising ? t('priceRises') : t('priceFalls')}
-				<span className="ml-1.5 font-mono text-muted-foreground">({items.length})</span>
+				<span className="ml-1.5 font-mono text-muted-foreground">
+					({items.length})
+				</span>
 			</p>
 			{items.length === 0 ? (
 				<EmptyHint>{t('noData')}</EmptyHint>
@@ -323,7 +302,9 @@ function PriceColumns({
 					{items.map((change, index) => {
 						const selected = change.player.playerId === selectedPlayerId
 						return (
-							<li key={`${change.player.playerId}-${change.changeDate}-${index}`}>
+							<li
+								key={`${change.player.playerId}-${change.changeDate}-${index}`}
+							>
 								<div
 									className={cn(
 										'group relative border-b border-border/40 py-2.5 last:border-b-0',
@@ -335,7 +316,9 @@ function PriceColumns({
 										onClick={() => onSelectPlayer(change.player)}
 										className="absolute inset-0 z-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 										aria-pressed={selected}
-										aria-label={t('openPriceHistory', { name: change.player.webName })}
+										aria-label={t('openPriceHistory', {
+											name: change.player.webName
+										})}
 									/>
 									<div className="pointer-events-none relative z-[1] flex w-full items-center gap-2.5 group-hover:bg-background/60">
 										<PositionBadge player={change.player} />
@@ -360,10 +343,12 @@ function PriceColumns({
 													rising ? 'text-success' : 'text-destructive'
 												)}
 											>
-												{rising ? '+' : '−'}£{(Math.abs(change.change) / 10).toFixed(1)}m
+												{rising ? '+' : '−'}£
+												{(Math.abs(change.change) / 10).toFixed(1)}m
 											</span>
 											<span className="block text-[10px] tabular-nums text-muted-foreground">
-												£{(change.oldPrice / 10).toFixed(1)}m → £{(change.newPrice / 10).toFixed(1)}m
+												£{(change.oldPrice / 10).toFixed(1)}m → £
+												{(change.newPrice / 10).toFixed(1)}m
 											</span>
 										</span>
 									</div>
@@ -399,6 +384,7 @@ export function MarketPriceExplorer({
 }) {
 	const t = useTranslations('Market')
 	const [seedPlayer, setSeedPlayer] = useState<PlayerDirectoryItem | null>(null)
+	const shareRef = useRef<HTMLElement | null>(null)
 	const latestPriceChanges = useMemo(() => changes, [changes])
 	const handleSelectPricePlayer = useCallback(
 		(player: MarketPlayer) => {
@@ -416,6 +402,7 @@ export function MarketPriceExplorer({
 		<section
 			aria-labelledby="market-prices"
 			className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+			ref={shareRef}
 		>
 			<SectionTitle
 				id="market-prices"
@@ -424,6 +411,7 @@ export function MarketPriceExplorer({
 						<PriceShareActions
 							changes={latestPriceChanges}
 							changeDate={changeDate}
+							imageRef={shareRef}
 						/>
 					) : null
 				}

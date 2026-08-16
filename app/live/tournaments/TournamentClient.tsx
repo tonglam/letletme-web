@@ -13,6 +13,7 @@ import { SearchHeader } from '@/components/tournament/SearchHeader'
 import { TournamentHeader } from '@/components/tournament/TournamentHeader'
 import { TournamentSelector } from '@/components/tournament/TournamentSelector'
 import { TournamentTable } from '@/components/tournament/TournamentTable'
+import { ShareActions } from '@/components/share/ShareActions'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { executeQuery } from '@/lib/graphql-client'
@@ -185,6 +186,7 @@ export default function TournamentClient({
 		promise: Promise<void>
 	} | null>(null)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
+	const shareRef = useRef<HTMLDivElement | null>(null)
 	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
 		snapshotRef.current = next
 		setSnapshot(next)
@@ -590,6 +592,27 @@ export default function TournamentClient({
 		searchQuery,
 		selectedEntries
 	])
+	const shareText = useMemo(() => {
+		const name = selectedTournament?.name ?? t('liveStandings')
+		const lines = [
+			`# ${name} · GW${displayGameweek}`,
+			`${t('averageScore')}: ${selectedStats.averagePoints} · ${t('highestScore')}: ${selectedStats.highestPoints}`,
+			'',
+			t('standings')
+		]
+		for (const entry of filteredEntries.slice(0, 20)) {
+			lines.push(
+				`- ${entry.rank || '—'} ${entry.teamName} · ${entry.gwPoints} GW · ${entry.totalPoints} total`
+			)
+		}
+		lines.push(
+			'',
+			typeof window !== 'undefined'
+				? window.location.href
+				: 'https://letletme.top/live/competitions'
+		)
+		return lines.join('\n')
+	}, [displayGameweek, filteredEntries, selectedStats, selectedTournament, t])
 
 	if (entryId <= 0) {
 		return (
@@ -630,9 +653,18 @@ export default function TournamentClient({
 					eyebrow={t('liveStandings')}
 					title={t('liveStandings')}
 					badge={
-						selectedGameweek ? (
-							<GameweekBadge gameweek={selectedGameweek} />
-						) : null
+						<div className="flex items-center gap-2">
+							{selectedTournament && standingsReady ? (
+								<ShareActions
+									text={shareText}
+									imageRef={shareRef}
+									title={selectedTournament.name}
+								/>
+							) : null}
+							{selectedGameweek ? (
+								<GameweekBadge gameweek={selectedGameweek} />
+							) : null}
+						</div>
 					}
 				/>
 
@@ -660,7 +692,10 @@ export default function TournamentClient({
 								variant="secondary"
 								asChild
 							>
-								<Link href="/competitions/browse" prefetch={false}>
+								<Link
+									href="/competitions/browse"
+									prefetch={false}
+								>
 									{t('errorCtaMyCompetitions')}
 								</Link>
 							</Button>
@@ -756,7 +791,7 @@ export default function TournamentClient({
 				)}
 
 				{selectedTournament && standingsReady && (
-					<>
+					<div ref={shareRef}>
 						<TournamentHeader
 							name={selectedTournament.name}
 							averagePoints={selectedStats.averagePoints}
@@ -837,7 +872,7 @@ export default function TournamentClient({
 								/>
 							</>
 						)}
-					</>
+					</div>
 				)}
 			</div>
 		</PageShell>
