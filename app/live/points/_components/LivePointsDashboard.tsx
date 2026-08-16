@@ -4,6 +4,7 @@ import { GameweekSelector } from '@/components/data/GameweekSelector'
 import { PlayerList } from '@/components/live/PlayerList'
 import { TeamStats } from '@/components/live/TeamStats'
 import { ShareTextFallback } from '@/components/share/ShareTextFallback'
+import { SquadPitch } from '@/components/squad-pitch/SquadPitch'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { APP_URL } from '@/i18n/config'
@@ -16,6 +17,7 @@ import { useLocale, useTranslations } from 'next-intl'
 import { useCallback, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { deriveLiveTeamStats } from '../_lib/live-points-model'
+import { mapPlayersToSquadPitch } from '../_lib/live-points-squad-pitch'
 import {
 	copyTextToClipboard,
 	formatLivePointsShareText
@@ -31,6 +33,7 @@ export function LivePointsDashboard({
 	error,
 	isPageActive,
 	shouldAutoRefresh,
+	isMock = false,
 	liveData,
 	startingPlayers,
 	benchPlayers,
@@ -46,6 +49,7 @@ export function LivePointsDashboard({
 	error?: string
 	isPageActive: boolean
 	shouldAutoRefresh: boolean
+	isMock?: boolean
 	liveData?: LiveCalcData
 	startingPlayers: Player[]
 	benchPlayers: Player[]
@@ -56,6 +60,7 @@ export function LivePointsDashboard({
 	const t = useTranslations('LivePoints')
 	const locale = useLocale() as AppLocale
 	const autoRefreshEnabled = shouldAutoRefresh && isPageActive
+	const squadPitchPlayers = mapPlayersToSquadPitch(startingPlayers)
 	const [copied, setCopied] = useState(false)
 	const [manualShareText, setManualShareText] = useState<string | null>(null)
 
@@ -126,7 +131,7 @@ export function LivePointsDashboard({
 					onGameweekChange={onGameweekChange}
 					currentGameweek={currentGameweek}
 					selectedGameweek={selectedGameweek}
-					disabled={isLoading || isRefreshing}
+					disabled={isLoading || isRefreshing || isMock}
 				/>
 				<div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 					<p className="text-xs text-muted-foreground">
@@ -230,6 +235,22 @@ export function LivePointsDashboard({
 				<>
 					<div className={cn(isRefreshing && 'opacity-75 transition-opacity')}>
 						<TeamStats stats={deriveLiveTeamStats(liveData)} />
+					</div>
+
+					<div className="mb-8">
+						<SquadPitch
+							players={squadPitchPlayers}
+							title={liveData.entryName ?? `Entry ${liveData.entry}`}
+							eyebrow={
+								isMock
+									? `Mock live lineup · GW ${selectedGameweek ?? liveData.event}`
+									: `${t('livePoints')} · GW ${selectedGameweek ?? liveData.event}`
+							}
+							className={cn(
+								'mx-auto max-w-3xl',
+								isRefreshing && 'opacity-75 transition-opacity'
+							)}
+						/>
 					</div>
 
 					<section aria-labelledby="live-squad-heading">

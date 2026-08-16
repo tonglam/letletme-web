@@ -89,6 +89,7 @@ function PlayerCard({ player }: { player: SquadPitchPlayer }) {
 					width={240}
 					height={220}
 					sizes="(max-width: 480px) 48px, (max-width: 900px) 10vw, 104px"
+					loading={player.position === 'GKP' ? 'eager' : 'lazy'}
 					className="h-auto w-full select-none"
 					unoptimized
 				/>

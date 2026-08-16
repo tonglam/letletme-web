@@ -3,6 +3,10 @@ import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGamewee
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getCurrentEventId } from '@/lib/events'
 import {
+	createMockLiveData,
+	MOCK_LIVE_SNAPSHOT,
+} from '@/app/live/points/_lib/live-points-mock'
+import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
 	type LiveCalcDataResponse,
@@ -29,19 +33,25 @@ type PageProps = {
 
 export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await getPageLocale(params)
-	const { tournamentId } = await searchParams
+	const { mock, tournamentId } = await searchParams
 	const entryId = Number(id)
+	const isMock = mock === '1'
+	const mockLiveData = isMock
+		? createMockLiveData(Number.isInteger(entryId) && entryId > 0 ? entryId : 24001)
+		: undefined
 
 	// Gate first — no Suspense shell around seeded client work.
-	const currentEventId = await getCurrentEventId()
+	const currentEventId = isMock ? mockLiveData?.event ?? 22 : await getCurrentEventId()
 	if (!currentEventId) {
 		return <CurrentGameweekUnavailable />
 	}
 
-	let initialLiveData: LiveCalcData | undefined
-	let initialSnapshot: LiveSnapshotStatus | null = null
+	let initialLiveData: LiveCalcData | undefined = mockLiveData
+	let initialSnapshot: LiveSnapshotStatus | null = isMock
+		? MOCK_LIVE_SNAPSHOT
+		: null
 
-	if (Number.isInteger(entryId) && entryId > 0) {
+	if (!isMock && Number.isInteger(entryId) && entryId > 0) {
 		try {
 			const liveResponse = await executeServerQuery<LiveCalcDataResponse>(
 				GET_LIVE_POINTS,
@@ -62,6 +72,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			initialEventId={currentEventId}
 			initialLiveData={initialLiveData}
 			initialSnapshot={initialSnapshot}
+			isMock={isMock}
 		/>
 	)
 }

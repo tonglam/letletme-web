@@ -20,6 +20,7 @@ interface TeamPointsClientProps {
 	initialEventId: number
 	initialLiveData?: LiveCalcData
 	initialSnapshot?: LiveSnapshotStatus | null
+	isMock?: boolean
 }
 
 export default function TeamPointsClient({
@@ -27,14 +28,16 @@ export default function TeamPointsClient({
 	tournamentId,
 	initialEventId,
 	initialLiveData,
-	initialSnapshot
+	initialSnapshot,
+	isMock = false
 }: TeamPointsClientProps) {
 	const t = useTranslations('LivePoints')
 	const livePoints = useLivePoints({
 		initialEntryId: entryId,
 		initialEventId,
 		initialLiveData,
-		initialSnapshot
+		initialSnapshot,
+		isMock
 	})
 	const backHref = tournamentId
 		? `/live/competitions/${tournamentId}`
@@ -59,6 +62,7 @@ export default function TeamPointsClient({
 				error={livePoints.error}
 				isPageActive={livePoints.isPageActive}
 				shouldAutoRefresh={livePoints.shouldAutoRefresh}
+				isMock={isMock}
 				liveData={livePoints.liveData}
 				startingPlayers={livePoints.startingPlayers}
 				benchPlayers={livePoints.benchPlayers}
