@@ -207,7 +207,7 @@ export function SquadPitch({
 									className={
 										detail.accent
 											? 'font-display text-[clamp(0.82rem,2cqi,1.15rem)] font-bold leading-none text-[#00ff85]'
-											: 'font-display text-[clamp(0.82rem,2cqi,1.15rem)] font-bold leading-none text-white/90'
+											: 'font-mono text-[clamp(0.68rem,1.6cqi,0.92rem)] font-semibold leading-none text-white/85'
 									}
 								>
 									{detail.value}
