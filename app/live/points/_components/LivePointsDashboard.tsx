@@ -2,20 +2,22 @@
 
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import { PlayerList } from '@/components/live/PlayerList'
-import { TeamStats, type LiveTeamOverall } from '@/components/live/TeamStats'
+import { TeamStats } from '@/components/live/TeamStats'
 import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import { SquadPitch } from '@/components/squad-pitch/SquadPitch'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { APP_URL } from '@/i18n/config'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
+import type { EntryOverallSnapshot } from '@/lib/graphql/operations/entries'
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
 import { cn } from '@/lib/utils'
 import type { Player } from '@/types/player'
 import { Check, Copy, ImageIcon, Loader2, RefreshCw } from 'lucide-react'
-import { useLocale, useTranslations } from 'next-intl'
+import { useFormatter, useLocale, useTranslations } from 'next-intl'
 import { useCallback, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
+import type { NumberFormatOptions } from 'use-intl'
 import { deriveLiveTeamStats } from '../_lib/live-points-model'
 import { mapPlayersToSquadPitch } from '../_lib/live-points-squad-pitch'
 import {
@@ -52,7 +54,7 @@ export function LivePointsDashboard({
 	shouldAutoRefresh: boolean
 	isMock?: boolean
 	liveData?: LiveCalcData
-	overall?: LiveTeamOverall
+	overall?: EntryOverallSnapshot
 	startingPlayers: Player[]
 	benchPlayers: Player[]
 	onGameweekChange: (gameweek: number) => void
@@ -60,9 +62,26 @@ export function LivePointsDashboard({
 	onRefresh: () => Promise<void>
 }) {
 	const t = useTranslations('LivePoints')
+	const format = useFormatter()
 	const locale = useLocale() as AppLocale
 	const autoRefreshEnabled = shouldAutoRefresh && isPageActive
 	const squadPitchPlayers = mapPlayersToSquadPitch(startingPlayers)
+	const formatOverallNumber = (
+		value: number | null,
+		options?: NumberFormatOptions,
+	) => (value == null || value <= 0 ? '—' : format.number(value, options))
+	const formatMoney = (value: number | null) =>
+		value == null ? '—' : `£${(value / 10).toFixed(1)}m`
+	const pitchHeaderStats = overall
+		? {
+				eyebrow: `${t('overallPoints')} ${formatOverallNumber(overall.overallPoints)} · ${t('overallRank')} ${formatOverallNumber(overall.overallRank, { notation: 'compact' })}`,
+				details: [
+					`${t('teamValue')} ${formatMoney(overall.teamValue)}`,
+					`${t('bank')} ${formatMoney(overall.bank)}`,
+					`${t('totalTransfers')} ${formatOverallNumber(overall.totalTransfers)}`,
+				],
+			}
+		: undefined
 	const [copied, setCopied] = useState(false)
 	const [manualShareText, setManualShareText] = useState<string | null>(null)
 
@@ -237,7 +256,6 @@ export function LivePointsDashboard({
 				<>
 					<div className={cn(isRefreshing && 'opacity-75 transition-opacity')}>
 						<TeamStats
-							overall={overall}
 							stats={deriveLiveTeamStats(liveData)}
 						/>
 					</div>
@@ -246,6 +264,7 @@ export function LivePointsDashboard({
 						<SquadPitch
 							players={squadPitchPlayers}
 							title={liveData.entryName ?? `Entry ${liveData.entry}`}
+							headerStats={pitchHeaderStats}
 							eyebrow={
 								isMock
 									? `Mock live lineup · GW ${selectedGameweek ?? liveData.event}`

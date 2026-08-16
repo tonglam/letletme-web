@@ -1,6 +1,5 @@
 import TeamPointsClient from '@/app/live/points/[id]/TeamPointsClient'
 import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGameweekUnavailable'
-import type { LiveTeamOverall } from '@/components/live/TeamStats'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getCurrentEventId } from '@/lib/events'
 import {
@@ -10,6 +9,7 @@ import {
 } from '@/app/live/points/_lib/live-points-mock'
 import {
 	GET_ENTRY,
+	type EntryOverallSnapshot,
 	type EntrySummaryResponse,
 } from '@/lib/graphql/operations/entries'
 import {
@@ -56,7 +56,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	let initialSnapshot: LiveSnapshotStatus | null = isMock
 		? MOCK_LIVE_SNAPSHOT
 		: null
-	let initialOverall: LiveTeamOverall | undefined = isMock
+	let initialOverall: EntryOverallSnapshot | undefined = isMock
 		? MOCK_LIVE_OVERALL
 		: undefined
 

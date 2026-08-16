@@ -39,7 +39,13 @@ interface SquadPitchProps {
 	players: readonly SquadPitchPlayer[]
 	title?: string
 	eyebrow?: string
+	headerStats?: SquadPitchHeaderStats
 	className?: string
+}
+
+export interface SquadPitchHeaderStats {
+	eyebrow: string
+	details: readonly string[]
 }
 
 const POSITION_ORDER: readonly SquadPosition[] = ['GKP', 'DEF', 'MID', 'FWD']
@@ -142,6 +148,7 @@ export function SquadPitch({
 	players,
 	title = 'LetLetMe XI',
 	eyebrow = 'Gameweek squad',
+	headerStats,
 	className = '',
 }: SquadPitchProps) {
 	const totalScore = players.reduce((total, player) => total + player.score, 0)
@@ -167,20 +174,28 @@ export function SquadPitch({
 			<header className="absolute inset-x-[5.2%] top-[2.45%] z-20 flex items-center justify-between gap-3 text-[#f8f6ef]">
 				<div className="min-w-0">
 					<p className="truncate font-mono text-[clamp(0.42rem,1.15cqi,0.66rem)] font-medium uppercase tracking-[0.18em] text-[#00ff85]">
-						{eyebrow}
+						{headerStats?.eyebrow ?? eyebrow}
 					</p>
 					<h2 className="truncate font-display text-[clamp(0.78rem,2.55cqi,1.55rem)] font-bold uppercase leading-none tracking-[0.04em]">
 						{title}
 					</h2>
 				</div>
-				<div className="shrink-0 border-l border-white/20 pl-[clamp(0.5rem,1.7cqi,1rem)] text-right">
-					<p className="font-mono text-[clamp(0.4rem,1cqi,0.6rem)] uppercase tracking-[0.16em] text-white/60">
-						Total
-					</p>
-					<p className="font-display text-[clamp(0.8rem,2.4cqi,1.45rem)] font-bold leading-none tabular-nums text-[#00ff85]">
-						{totalScore}
-					</p>
-				</div>
+				{headerStats ? (
+					<div className="shrink-0 border-l border-white/20 pl-[clamp(0.5rem,1.7cqi,1rem)] text-right font-mono text-[clamp(0.38rem,0.95cqi,0.58rem)] leading-[1.35] tabular-nums text-white/75">
+						{headerStats.details.map(detail => (
+							<p key={detail}>{detail}</p>
+						))}
+					</div>
+				) : (
+					<div className="shrink-0 border-l border-white/20 pl-[clamp(0.5rem,1.7cqi,1rem)] text-right">
+						<p className="font-mono text-[clamp(0.4rem,1cqi,0.6rem)] uppercase tracking-[0.16em] text-white/60">
+							Total
+						</p>
+						<p className="font-display text-[clamp(0.8rem,2.4cqi,1.45rem)] font-bold leading-none tabular-nums text-[#00ff85]">
+							{totalScore}
+						</p>
+					</div>
+				)}
 			</header>
 
 			{POSITION_ORDER.map(position => (

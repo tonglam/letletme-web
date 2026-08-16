@@ -30,6 +30,11 @@ export interface EntrySummaryResponse {
 	entry: EntrySummary | null
 }
 
+export type EntryOverallSnapshot = Pick<
+	EntrySummary,
+	'overallPoints' | 'overallRank' | 'teamValue' | 'bank' | 'totalTransfers'
+>
+
 export const GET_ENTRY_EVENT_RESULT = `
   query GetEntryEventResult($entryId: Int!, $eventId: Int!) {
     entryEventResult(entryId: $entryId, eventId: $eventId) {

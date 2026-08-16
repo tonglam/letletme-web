@@ -1,9 +1,9 @@
 'use client'
 
 import PageShell from '@/components/layout/PageShell'
-import type { LiveTeamOverall } from '@/components/live/TeamStats'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Button } from '@/components/ui/button'
+import type { EntryOverallSnapshot } from '@/lib/graphql/operations/entries'
 import type {
 	LiveCalcData,
 	LiveSnapshotStatus
@@ -21,7 +21,7 @@ interface TeamPointsClientProps {
 	initialEventId: number
 	initialLiveData?: LiveCalcData
 	initialSnapshot?: LiveSnapshotStatus | null
-	initialOverall?: LiveTeamOverall
+	initialOverall?: EntryOverallSnapshot
 	isMock?: boolean
 }
 

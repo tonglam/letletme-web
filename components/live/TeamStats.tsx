@@ -1,20 +1,12 @@
 'use client'
 
 import { StatsMetricTile } from '@/components/stats/StatsSurfaces'
-import type { EntrySummary } from '@/lib/graphql/operations/entries'
 import { cn } from '@/lib/utils'
 import { Crown, Repeat, Trophy, Zap } from 'lucide-react'
-import { useFormatter, useTranslations } from 'next-intl'
+import { useTranslations } from 'next-intl'
 import { memo, type ReactNode } from 'react'
-import type { NumberFormatOptions } from 'use-intl'
-
-export type LiveTeamOverall = Pick<
-	EntrySummary,
-	'overallPoints' | 'overallRank' | 'teamValue' | 'bank' | 'totalTransfers'
->
 
 interface TeamStatsProps {
-	overall?: LiveTeamOverall
 	stats: {
 		teamName: string
 		playerName: string
@@ -58,9 +50,8 @@ function MetaItem({
 	)
 }
 
-function TeamStatsComponent({ overall, stats }: TeamStatsProps) {
+function TeamStatsComponent({ stats }: TeamStatsProps) {
 	const t = useTranslations('LivePoints')
-	const format = useFormatter()
 	const chipLabels: Record<string, string> = {
 		bench: t('benchBoost'),
 		triple: t('tripleCaptain'),
@@ -72,12 +63,6 @@ function TeamStatsComponent({ overall, stats }: TeamStatsProps) {
 		.map(([chip]) => chipLabels[chip] ?? chip)
 	const chipActive = activeChipNames.length > 0
 	const chipDisplay = chipActive ? activeChipNames.join(' · ') : t('noActiveChips')
-	const formatMetric = (
-		value: number | null,
-		options?: NumberFormatOptions,
-	) => (value == null || value <= 0 ? '—' : format.number(value, options))
-	const formatMoney = (value: number | null) =>
-		value == null ? '—' : `£${(value / 10).toFixed(1)}m`
 
 	return (
 		<div className="mb-8 overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
@@ -106,32 +91,6 @@ function TeamStatsComponent({ overall, stats }: TeamStatsProps) {
 						/>
 					</div>
 				</div>
-
-				{overall ? (
-					<div className="mb-5 flex flex-wrap gap-x-5 gap-y-2 border-y border-border/60 bg-muted/20 px-3 py-3 font-mono text-xs tabular-nums sm:mb-6 sm:px-4">
-						<MetaItem
-							label={t('overallPoints')}
-							value={formatMetric(overall.overallPoints)}
-						/>
-						<MetaItem
-							label={t('overallRank')}
-							value={formatMetric(overall.overallRank, { notation: 'compact' })}
-							valueClassName="text-primary-ink"
-						/>
-						<MetaItem
-							label={t('teamValue')}
-							value={formatMoney(overall.teamValue)}
-						/>
-						<MetaItem
-							label={t('bank')}
-							value={formatMoney(overall.bank)}
-						/>
-						<MetaItem
-							label={t('totalTransfers')}
-							value={formatMetric(overall.totalTransfers)}
-						/>
-					</div>
-				) : null}
 
 				{/* Core score metrics only — roomy 4-up grid */}
 				<div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-4">
