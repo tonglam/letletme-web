@@ -38,6 +38,7 @@ export interface SquadPitchPlayer {
 interface SquadPitchProps {
 	players: readonly SquadPitchPlayer[]
 	title?: string
+	managerName?: string
 	eyebrow?: string
 	headerStats?: SquadPitchHeaderStats
 	className?: string
@@ -147,6 +148,7 @@ function PositionRow({
 export function SquadPitch({
 	players,
 	title = 'LetLetMe XI',
+	managerName,
 	eyebrow = 'Gameweek squad',
 	headerStats,
 	className = '',
@@ -179,9 +181,14 @@ export function SquadPitch({
 					<h2 className="truncate font-display text-[clamp(0.78rem,2.55cqi,1.55rem)] font-bold uppercase leading-none tracking-[0.04em]">
 						{title}
 					</h2>
+					{managerName ? (
+						<p className="mt-[clamp(0.08rem,0.35cqi,0.2rem)] truncate font-mono text-[clamp(0.5rem,1.2cqi,0.72rem)] text-white/70">
+							{managerName}
+						</p>
+					) : null}
 				</div>
 				{headerStats ? (
-					<div className="shrink-0 border-l border-white/20 pl-[clamp(0.5rem,1.7cqi,1rem)] text-right font-mono text-[clamp(0.38rem,0.95cqi,0.58rem)] leading-[1.35] tabular-nums text-white/75">
+					<div className="shrink-0 border-l border-white/20 pl-[clamp(0.5rem,1.7cqi,1rem)] text-right font-mono text-[clamp(0.48rem,1.15cqi,0.68rem)] leading-[1.35] tabular-nums text-white/75">
 						{headerStats.details.map(detail => (
 							<p key={detail}>{detail}</p>
 						))}

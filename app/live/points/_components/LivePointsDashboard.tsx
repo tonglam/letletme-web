@@ -70,15 +70,29 @@ export function LivePointsDashboard({
 		value: number | null,
 		options?: NumberFormatOptions,
 	) => (value == null || value <= 0 ? '—' : format.number(value, options))
-	const formatMoney = (value: number | null) =>
-		value == null ? '—' : `£${(value / 10).toFixed(1)}m`
-	const pitchHeaderStats = overall
+	const formatPitchChip = (chip: string | null | undefined) => {
+		const normalized = chip?.toLowerCase() ?? ''
+		if (!normalized) return t('noActiveChips')
+		if (normalized.includes('bench') || normalized === 'bb' || normalized === 'bboost') {
+			return t('benchBoost')
+		}
+		if (normalized.includes('3x') || normalized.includes('triple') || normalized === 'tc') {
+			return t('tripleCaptain')
+		}
+		if (normalized.includes('wildcard') || normalized === 'wc') {
+			return t('wildcard')
+		}
+		if (normalized.includes('free') || normalized === 'fh' || normalized === 'free_hit') {
+			return t('freeHit')
+		}
+		return chip
+	}
+	const pitchHeaderStats = overall && liveData
 		? {
 				eyebrow: `${t('overallPoints')} ${formatOverallNumber(overall.overallPoints)} · ${t('overallRank')} ${formatOverallNumber(overall.overallRank, { notation: 'compact' })}`,
 				details: [
-					`${t('teamValue')} ${formatMoney(overall.teamValue)}`,
-					`${t('bank')} ${formatMoney(overall.bank)}`,
-					`${t('totalTransfers')} ${formatOverallNumber(overall.totalTransfers)}`,
+					`GW PTS ${formatOverallNumber(liveData.livePoints)}`,
+					`CHIP ${formatPitchChip(liveData.chip)}`,
 				],
 			}
 		: undefined
@@ -264,6 +278,7 @@ export function LivePointsDashboard({
 						<SquadPitch
 							players={squadPitchPlayers}
 							title={liveData.entryName ?? `Entry ${liveData.entry}`}
+							managerName={liveData.playerName ?? undefined}
 							headerStats={pitchHeaderStats}
 							eyebrow={
 								isMock
