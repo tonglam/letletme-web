@@ -1,6 +1,7 @@
 'use client'
 
 import PageShell from '@/components/layout/PageShell'
+import type { LiveTeamOverall } from '@/components/live/TeamStats'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Button } from '@/components/ui/button'
 import type {
@@ -20,6 +21,7 @@ interface TeamPointsClientProps {
 	initialEventId: number
 	initialLiveData?: LiveCalcData
 	initialSnapshot?: LiveSnapshotStatus | null
+	initialOverall?: LiveTeamOverall
 	isMock?: boolean
 }
 
@@ -29,6 +31,7 @@ export default function TeamPointsClient({
 	initialEventId,
 	initialLiveData,
 	initialSnapshot,
+	initialOverall,
 	isMock = false
 }: TeamPointsClientProps) {
 	const t = useTranslations('LivePoints')
@@ -64,6 +67,7 @@ export default function TeamPointsClient({
 				shouldAutoRefresh={livePoints.shouldAutoRefresh}
 				isMock={isMock}
 				liveData={livePoints.liveData}
+				overall={initialOverall}
 				startingPlayers={livePoints.startingPlayers}
 				benchPlayers={livePoints.benchPlayers}
 				onGameweekChange={livePoints.changeGameweek}

@@ -1,11 +1,17 @@
 import TeamPointsClient from '@/app/live/points/[id]/TeamPointsClient'
 import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGameweekUnavailable'
+import type { LiveTeamOverall } from '@/components/live/TeamStats'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getCurrentEventId } from '@/lib/events'
 import {
 	createMockLiveData,
+	MOCK_LIVE_OVERALL,
 	MOCK_LIVE_SNAPSHOT,
 } from '@/app/live/points/_lib/live-points-mock'
+import {
+	GET_ENTRY,
+	type EntrySummaryResponse,
+} from '@/lib/graphql/operations/entries'
 import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
@@ -50,18 +56,42 @@ export default async function Page({ params, searchParams }: PageProps) {
 	let initialSnapshot: LiveSnapshotStatus | null = isMock
 		? MOCK_LIVE_SNAPSHOT
 		: null
+	let initialOverall: LiveTeamOverall | undefined = isMock
+		? MOCK_LIVE_OVERALL
+		: undefined
 
 	if (!isMock && Number.isInteger(entryId) && entryId > 0) {
-		try {
-			const liveResponse = await executeServerQuery<LiveCalcDataResponse>(
+		const [liveResult, overallResult] = await Promise.allSettled([
+			executeServerQuery<LiveCalcDataResponse>(
 				GET_LIVE_POINTS,
 				{ eventId: currentEventId, entryId },
 				{ cache: 'no-store' },
-			)
-			initialLiveData = liveResponse.calcLivePointsByEntry
-			initialSnapshot = liveResponse.liveSnapshot
-		} catch (err) {
-			console.error('Failed to seed live points page:', err)
+			),
+			executeServerQuery<EntrySummaryResponse>(
+				GET_ENTRY,
+				{ id: entryId },
+				{ cache: 'no-store' },
+			),
+		])
+
+		if (liveResult.status === 'fulfilled') {
+			initialLiveData = liveResult.value.calcLivePointsByEntry
+			initialSnapshot = liveResult.value.liveSnapshot
+		} else {
+			console.error('Failed to seed live points page:', liveResult.reason)
+		}
+
+		if (overallResult.status === 'fulfilled' && overallResult.value.entry) {
+			const entry = overallResult.value.entry
+			initialOverall = {
+				overallPoints: entry.overallPoints,
+				overallRank: entry.overallRank,
+				teamValue: entry.teamValue,
+				bank: entry.bank,
+				totalTransfers: entry.totalTransfers,
+			}
+		} else if (overallResult.status === 'rejected') {
+			console.error('Failed to seed team overall snapshot:', overallResult.reason)
 		}
 	}
 
@@ -72,6 +102,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			initialEventId={currentEventId}
 			initialLiveData={initialLiveData}
 			initialSnapshot={initialSnapshot}
+			initialOverall={initialOverall}
 			isMock={isMock}
 		/>
 	)

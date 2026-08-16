@@ -231,6 +231,14 @@ export const MOCK_LIVE_SNAPSHOT: LiveSnapshotStatus = {
 	checkedAt: '2026-08-16T00:00:00.000Z',
 }
 
+export const MOCK_LIVE_OVERALL = {
+	overallPoints: 1420,
+	overallRank: 234567,
+	teamValue: 1013,
+	bank: 7,
+	totalTransfers: 18,
+} as const
+
 export function createMockLiveData(entryId: number): LiveCalcData {
 	return {
 		...MOCK_LIVE_DATA,

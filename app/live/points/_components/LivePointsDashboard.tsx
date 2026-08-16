@@ -2,7 +2,7 @@
 
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import { PlayerList } from '@/components/live/PlayerList'
-import { TeamStats } from '@/components/live/TeamStats'
+import { TeamStats, type LiveTeamOverall } from '@/components/live/TeamStats'
 import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import { SquadPitch } from '@/components/squad-pitch/SquadPitch'
 import { Button } from '@/components/ui/button'
@@ -35,6 +35,7 @@ export function LivePointsDashboard({
 	shouldAutoRefresh,
 	isMock = false,
 	liveData,
+	overall,
 	startingPlayers,
 	benchPlayers,
 	onGameweekChange,
@@ -51,6 +52,7 @@ export function LivePointsDashboard({
 	shouldAutoRefresh: boolean
 	isMock?: boolean
 	liveData?: LiveCalcData
+	overall?: LiveTeamOverall
 	startingPlayers: Player[]
 	benchPlayers: Player[]
 	onGameweekChange: (gameweek: number) => void
@@ -234,7 +236,10 @@ export function LivePointsDashboard({
 			{liveData ? (
 				<>
 					<div className={cn(isRefreshing && 'opacity-75 transition-opacity')}>
-						<TeamStats stats={deriveLiveTeamStats(liveData)} />
+						<TeamStats
+							overall={overall}
+							stats={deriveLiveTeamStats(liveData)}
+						/>
 					</div>
 
 					<div className="mb-8">
