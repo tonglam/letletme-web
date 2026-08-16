@@ -17,10 +17,31 @@ function positionCode(value: string): PosCode {
 	if (n === 'MIDFIELDER' || n === 'MID') return 'MID'
 	if (n === 'FORWARD' || n === 'FWD') return 'FWD'
 	const normalized = normalizePosition(value).toUpperCase()
-	if (normalized === 'GKP' || normalized === 'DEF' || normalized === 'MID' || normalized === 'FWD') {
+	if (
+		normalized === 'GKP' ||
+		normalized === 'DEF' ||
+		normalized === 'MID' ||
+		normalized === 'FWD'
+	) {
 		return normalized
 	}
 	return 'MID'
+}
+
+const POSITION_ORDER: Record<PosCode, number> = {
+	GKP: 0,
+	DEF: 1,
+	MID: 2,
+	FWD: 3
+}
+
+function isBenchBoostChip(chip: string | null | undefined): boolean {
+	const normalized = chip?.toUpperCase().replace(/[\s-]+/g, '_') ?? ''
+	return (
+		normalized === 'BB' ||
+		normalized === 'BBOOST' ||
+		normalized === 'BENCH_BOOST'
+	)
 }
 
 function formatXg(value: number | null | undefined): string {
@@ -46,44 +67,67 @@ function fixtureLine(pick: Pick): string {
 }
 
 /** Position-aware mini stats — same language as live points rows. */
-function miniStats(pick: Pick, pos: PosCode): Array<{ label: string; value: string; emphasize?: boolean }> {
+function miniStats(
+	pick: Pick,
+	pos: PosCode
+): Array<{ label: string; value: string; emphasize?: boolean }> {
 	const min = String(pick.minutes)
 	if (pos === 'GKP') {
 		return [
 			{ label: 'MIN', value: min, emphasize: pick.minutes > 0 },
 			{ label: 'SV', value: String(pick.saves), emphasize: pick.saves > 0 },
-			{ label: 'CS', value: String(pick.cleanSheets), emphasize: pick.cleanSheets > 0 },
+			{
+				label: 'CS',
+				value: String(pick.cleanSheets),
+				emphasize: pick.cleanSheets > 0
+			},
 			{ label: 'BPS', value: String(pick.bps) },
-			{ label: 'B', value: String(pick.bonus), emphasize: pick.bonus > 0 },
+			{ label: 'B', value: String(pick.bonus), emphasize: pick.bonus > 0 }
 		]
 	}
 	if (pos === 'DEF') {
 		return [
 			{ label: 'MIN', value: min, emphasize: pick.minutes > 0 },
-			{ label: 'CS', value: String(pick.cleanSheets), emphasize: pick.cleanSheets > 0 },
-			{ label: 'G', value: String(pick.goalsScored), emphasize: pick.goalsScored > 0 },
+			{
+				label: 'CS',
+				value: String(pick.cleanSheets),
+				emphasize: pick.cleanSheets > 0
+			},
+			{
+				label: 'G',
+				value: String(pick.goalsScored),
+				emphasize: pick.goalsScored > 0
+			},
 			{ label: 'A', value: String(pick.assists), emphasize: pick.assists > 0 },
-			{ label: 'B', value: String(pick.bonus), emphasize: pick.bonus > 0 },
+			{ label: 'B', value: String(pick.bonus), emphasize: pick.bonus > 0 }
 		]
 	}
 	if (pos === 'MID') {
 		return [
 			{ label: 'MIN', value: min, emphasize: pick.minutes > 0 },
-			{ label: 'G', value: String(pick.goalsScored), emphasize: pick.goalsScored > 0 },
+			{
+				label: 'G',
+				value: String(pick.goalsScored),
+				emphasize: pick.goalsScored > 0
+			},
 			{ label: 'A', value: String(pick.assists), emphasize: pick.assists > 0 },
 			{
 				label: 'xGI',
-				value: formatXg(pick.expectedGoalInvolvements),
+				value: formatXg(pick.expectedGoalInvolvements)
 			},
-			{ label: 'B', value: String(pick.bonus), emphasize: pick.bonus > 0 },
+			{ label: 'B', value: String(pick.bonus), emphasize: pick.bonus > 0 }
 		]
 	}
 	return [
 		{ label: 'MIN', value: min, emphasize: pick.minutes > 0 },
-		{ label: 'G', value: String(pick.goalsScored), emphasize: pick.goalsScored > 0 },
+		{
+			label: 'G',
+			value: String(pick.goalsScored),
+			emphasize: pick.goalsScored > 0
+		},
 		{ label: 'A', value: String(pick.assists), emphasize: pick.assists > 0 },
 		{ label: 'xG', value: formatXg(pick.expectedGoals) },
-		{ label: 'B', value: String(pick.bonus), emphasize: pick.bonus > 0 },
+		{ label: 'B', value: String(pick.bonus), emphasize: pick.bonus > 0 }
 	]
 }
 
@@ -99,7 +143,7 @@ function SquadPickRow({ pick }: { pick: Pick }) {
 			className={cn(
 				'rounded-lg border bg-card px-2.5 py-2 sm:px-3 sm:py-2.5',
 				isBench && 'border-dashed bg-muted/25',
-				!isBench && 'border-border/70',
+				!isBench && 'border-border/70'
 			)}
 		>
 			{/*
@@ -110,13 +154,13 @@ function SquadPickRow({ pick }: { pick: Pick }) {
 				className="grid w-full items-center gap-x-2 sm:gap-x-3"
 				style={{
 					gridTemplateColumns:
-						'auto auto minmax(4.5rem, 9rem) minmax(0, 1fr) auto',
+						'auto auto minmax(4.5rem, 9rem) minmax(0, 1fr) auto'
 				}}
 			>
 				<Badge
 					className={cn(
 						'h-5 shrink-0 px-1.5 font-display text-label font-bold tracking-wide',
-						positionBadgeClass(pos),
+						positionBadgeClass(pos)
 					)}
 				>
 					{pos}
@@ -163,11 +207,14 @@ function SquadPickRow({ pick }: { pick: Pick }) {
 				<div
 					className="hidden min-w-0 sm:grid"
 					style={{
-						gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))`,
+						gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))`
 					}}
 				>
 					{stats.map(stat => (
-						<div key={stat.label} className="min-w-0 px-0.5 text-center">
+						<div
+							key={stat.label}
+							className="min-w-0 px-0.5 text-center"
+						>
 							<div className="truncate font-display text-micro font-semibold uppercase tracking-wider text-muted-foreground sm:text-micro">
 								{stat.label}
 							</div>
@@ -176,7 +223,7 @@ function SquadPickRow({ pick }: { pick: Pick }) {
 									'truncate font-mono text-xs tabular-nums',
 									stat.emphasize
 										? 'font-semibold text-foreground'
-										: 'text-muted-foreground',
+										: 'text-muted-foreground'
 								)}
 							>
 								{stat.value}
@@ -195,7 +242,7 @@ function SquadPickRow({ pick }: { pick: Pick }) {
 							'font-display text-lg font-bold tabular-nums tracking-tight sm:text-xl',
 							pick.totalPoints > 0
 								? 'text-primary-ink'
-								: 'text-muted-foreground',
+								: 'text-muted-foreground'
 						)}
 					>
 						{pick.totalPoints}
@@ -206,11 +253,16 @@ function SquadPickRow({ pick }: { pick: Pick }) {
 			{/* Mobile stats strip */}
 			<div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 border-t border-border/50 pt-2 sm:hidden">
 				{stats.map(stat => (
-					<span key={stat.label} className="font-mono text-caption tabular-nums">
+					<span
+						key={stat.label}
+						className="font-mono text-caption tabular-nums"
+					>
 						<span className="text-muted-foreground">{stat.label} </span>
 						<span
 							className={
-								stat.emphasize ? 'font-semibold text-foreground' : 'text-muted-foreground'
+								stat.emphasize
+									? 'font-semibold text-foreground'
+									: 'text-muted-foreground'
 							}
 						>
 							{stat.value}
@@ -226,7 +278,7 @@ function SquadGroup({
 	title,
 	titleId,
 	picks,
-	emptyLabel,
+	emptyLabel
 }: {
 	title: string
 	titleId: string
@@ -258,23 +310,41 @@ function SquadGroup({
 }
 
 /** Live-points-style squad: card rows with fixture + mini stats. */
-export function TeamSquadSection({ picks }: { picks: EventPickViewModel[] }) {
+export function TeamSquadSection({
+	picks,
+	eventChip
+}: {
+	picks: EventPickViewModel[]
+	eventChip?: string | null
+}) {
 	const t = useTranslations('TeamStats')
 	if (picks.length === 0) {
 		return (
-			<StatsSectionCard icon={Users} title={t('gameweekSquad')}>
-				<p className="text-sm text-muted-foreground" role="status">
+			<StatsSectionCard
+				icon={Users}
+				title={t('gameweekSquad')}
+			>
+				<p
+					className="text-sm text-muted-foreground"
+					role="status"
+				>
 					{t('noPicks')}
 				</p>
 			</StatsSectionCard>
 		)
 	}
-	const starters = picks.filter(isSquadStarter)
-	const bench = picks.filter(pick => !isSquadStarter(pick))
+	const sortByPosition = (a: Pick, b: Pick) =>
+		POSITION_ORDER[positionCode(a.elementTypeName)] -
+			POSITION_ORDER[positionCode(b.elementTypeName)] || a.position - b.position
+	const starters = picks.filter(isSquadStarter).sort(sortByPosition)
+	const bench = picks.filter(pick => !isSquadStarter(pick)).sort(sortByPosition)
 
 	return (
 		<div className="mb-0">
-			<StatsSectionCard icon={Users} title={t('gameweekSquad')}>
+			<StatsSectionCard
+				icon={Users}
+				title={t('gameweekSquad')}
+			>
 				<div className="space-y-5">
 					<SquadGroup
 						title={t('startingEleven')}
@@ -284,7 +354,11 @@ export function TeamSquadSection({ picks }: { picks: EventPickViewModel[] }) {
 					/>
 					<div className="border-t border-border/70 pt-4">
 						<SquadGroup
-							title={t('substitutes')}
+							title={
+								isBenchBoostChip(eventChip)
+									? t('substitutesBenchBoost')
+									: t('substitutes')
+							}
 							titleId="team-bench-heading"
 							picks={bench}
 							emptyLabel={t('noBench')}
