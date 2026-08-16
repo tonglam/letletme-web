@@ -1540,7 +1540,7 @@
 		"squad": "Squad",
 		"startingEleven": "Starting XI",
 		"substitutes": "Substitutes",
-		"substitutesBenchBoost": "Substitutes (Bench Boost active)",
+		"substitutesBenchBoost": "Substitutes",
 		"noPicks": "The squad has not been published for this gameweek yet.",
 		"noBench": "No bench listed.",
 		"autoSubShort": "AS",

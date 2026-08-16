@@ -399,10 +399,7 @@ function TeamStatsViews({
 						<>
 							<TeamSquadPitch stats={teamStats} />
 							<TeamGameweekOverall stats={teamStats} />
-							<TeamSquadSection
-								picks={teamStats.eventPicks}
-								eventChip={teamStats.eventChip}
-							/>
+							<TeamSquadSection picks={teamStats.eventPicks} />
 						</>
 					) : (
 						<Card

@@ -192,11 +192,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 			<SquadPitch
 				players={players}
 				benchPlayers={benchPlayers}
-				benchTitle={
-					isBenchBoostChip(stats.eventChip)
-						? t('substitutesBenchBoost')
-						: t('substitutes')
-				}
+				benchTitle={t('substitutes')}
 				benchBoost={isBenchBoostChip(stats.eventChip)}
 				benchBoostLabel={t('benchBoostShort')}
 				benchPointsLabel={t('pointsShort')}

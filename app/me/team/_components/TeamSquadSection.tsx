@@ -35,15 +35,6 @@ const POSITION_ORDER: Record<PosCode, number> = {
 	FWD: 3
 }
 
-function isBenchBoostChip(chip: string | null | undefined): boolean {
-	const normalized = chip?.toUpperCase().replace(/[\s-]+/g, '_') ?? ''
-	return (
-		normalized === 'BB' ||
-		normalized === 'BBOOST' ||
-		normalized === 'BENCH_BOOST'
-	)
-}
-
 function formatXg(value: number | null | undefined): string {
 	if (value == null || Number.isNaN(value)) return '—'
 	return value.toFixed(1)
@@ -310,13 +301,7 @@ function SquadGroup({
 }
 
 /** Live-points-style squad: card rows with fixture + mini stats. */
-export function TeamSquadSection({
-	picks,
-	eventChip
-}: {
-	picks: EventPickViewModel[]
-	eventChip?: string | null
-}) {
+export function TeamSquadSection({ picks }: { picks: EventPickViewModel[] }) {
 	const t = useTranslations('TeamStats')
 	if (picks.length === 0) {
 		return (
@@ -354,11 +339,7 @@ export function TeamSquadSection({
 					/>
 					<div className="border-t border-border/70 pt-4">
 						<SquadGroup
-							title={
-								isBenchBoostChip(eventChip)
-									? t('substitutesBenchBoost')
-									: t('substitutes')
-							}
+							title={t('substitutes')}
 							titleId="team-bench-heading"
 							picks={bench}
 							emptyLabel={t('noBench')}

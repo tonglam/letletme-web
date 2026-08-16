@@ -292,14 +292,14 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 
 				<header className="absolute inset-x-[5.2%] top-[1.93%] z-20 flex h-[10.13%] items-center justify-between gap-[clamp(0.75rem,3cqi,2rem)] text-[#f8f6ef]">
 					<div className="flex min-w-0 flex-col justify-center">
-						<p className="truncate font-mono text-[clamp(0.42rem,1.15cqi,0.66rem)] font-medium uppercase leading-none tracking-[0.18em] text-[#00ff85]">
+						<p className="truncate py-[0.08em] font-mono text-[clamp(0.42rem,1.15cqi,0.66rem)] font-medium uppercase leading-[1.2] tracking-[0.18em] text-[#00ff85]">
 							{headerStats?.eyebrow ?? eyebrow}
 						</p>
-						<h2 className="truncate font-display text-[clamp(0.78rem,2.55cqi,1.55rem)] font-bold uppercase leading-none tracking-[0.04em]">
+						<h2 className="truncate py-[0.04em] font-display text-[clamp(0.78rem,2.55cqi,1.55rem)] font-bold uppercase leading-[1.1] tracking-[0.04em]">
 							{title}
 						</h2>
 						{managerName ? (
-							<p className="mt-[clamp(0.08rem,0.35cqi,0.2rem)] truncate font-mono text-[clamp(0.68rem,1.55cqi,0.95rem)] leading-none text-white/70">
+							<p className="mt-[clamp(0.08rem,0.35cqi,0.2rem)] truncate py-[0.08em] font-mono text-[clamp(0.68rem,1.55cqi,0.95rem)] leading-[1.15] text-white/70">
 								{managerName}
 							</p>
 						) : null}
