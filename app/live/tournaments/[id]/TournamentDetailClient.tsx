@@ -84,10 +84,14 @@ const phaseIndex = (phase: EntryTournament['setupPhase']) => {
 
 function TournamentRosterList({
 	participants,
-	viewerEntryId
+	viewerEntryId,
+	tournamentId,
+	gameweek
 }: {
 	participants: TournamentParticipant[]
 	viewerEntryId?: number
+	tournamentId: number
+	gameweek?: number
 }) {
 	const t = useTranslations('LiveTournament')
 	const lifecycleT = useTranslations('TournamentLifecycle')
@@ -126,6 +130,11 @@ function TournamentRosterList({
 	const remaining = Math.max(0, total - visibleCount)
 	const canCollapse = visibleCount > ROSTER_PREVIEW && total > ROSTER_PREVIEW
 	const nextStep = Math.min(ROSTER_STEP, remaining)
+	const teamHref = (entryId: number) => {
+		const params = new URLSearchParams({ tournamentId: String(tournamentId) })
+		if (gameweek && gameweek > 0) params.set('gw', String(gameweek))
+		return `/live/points/${entryId}?${params.toString()}`
+	}
 
 	return (
 		<Card className="p-4 shadow-sm sm:p-6">
@@ -164,22 +173,28 @@ function TournamentRosterList({
 									isMe && 'border-primary/40 row-self'
 								)}
 							>
-								<span className={cn('font-medium', isMe && 'text-primary-ink')}>
-									{participant.entryName ??
-										lifecycleT('entryFallback', {
-											id: participant.entryId
-										})}
-									{isMe ? (
-										<span className="ml-1.5 text-caption font-semibold text-primary-ink">
-											{t('youBadge')}
+									<Link
+										href={teamHref(participant.entryId)}
+										prefetch={false}
+										className="block min-w-0 hover:text-primary-ink hover:underline underline-offset-2"
+									>
+										<span className={cn('font-medium', isMe && 'text-primary-ink')}>
+											{participant.entryName ??
+												lifecycleT('entryFallback', {
+													id: participant.entryId
+												})}
+											{isMe ? (
+												<span className="ml-1.5 text-caption font-semibold text-primary-ink">
+													{t('youBadge')}
+												</span>
+											) : null}
 										</span>
-									) : null}
-								</span>
-								{participant.playerName ? (
-									<span className="ml-2 text-muted-foreground">
-										{participant.playerName}
-									</span>
-								) : null}
+										{participant.playerName ? (
+											<span className="mt-0.5 block truncate text-xs text-muted-foreground">
+												{participant.playerName}
+											</span>
+										) : null}
+									</Link>
 							</li>
 						)
 					})
@@ -1179,6 +1194,8 @@ export default function TournamentDetailClient({
 									<TournamentRosterList
 										participants={initialParticipants}
 										viewerEntryId={entryId ?? undefined}
+										tournamentId={currentTournament.id}
+										gameweek={currentGameweek}
 									/>
 								</div>
 							</TabsContent>

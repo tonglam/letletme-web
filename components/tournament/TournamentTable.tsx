@@ -206,6 +206,16 @@ export function TournamentTable({
 		return chips.length ? chips.join(' · ') : null
 	}
 
+	const teamHref = (entryId: string) => {
+		const params = new URLSearchParams()
+		if (tournamentId) params.set('tournamentId', tournamentId)
+		if (Number.isInteger(gameweek) && gameweek > 0) {
+			params.set('gw', String(gameweek))
+		}
+		const query = params.toString()
+		return `/live/points/${encodeURIComponent(entryId)}${query ? `?${query}` : ''}`
+	}
+
 	// optional checkbox | # | team | captain | chip | played | TV | OR | total | GW
 	const desktopCols = compareMode
 		? '1.25rem 2.25rem minmax(0,1.2fr) minmax(4.5rem,0.7fr) 2.5rem 3rem 3.5rem 3rem 3rem 3.5rem'
@@ -372,22 +382,25 @@ export function TournamentTable({
 										</span>
 										<div className="min-w-0 flex-1">
 											<Link
-												href={`/live/points/${entry.id}${tournamentId ? `?tournamentId=${tournamentId}` : ''}`}
+												href={teamHref(entry.id)}
+												prefetch={false}
 												className={cn(
-													'block truncate text-sm font-semibold tracking-tight hover:text-primary-ink hover:underline',
+													'block min-w-0 tracking-tight hover:text-primary-ink hover:underline underline-offset-2',
 													isMe && 'text-primary-ink',
 												)}
 											>
-												{entry.teamName}
-												{isMe ? (
-													<span className="ml-1.5 text-caption font-semibold text-primary-ink">
-														{t('youBadge')}
+													<span className="block truncate text-sm font-semibold">
+														{entry.teamName}
+														{isMe ? (
+															<span className="ml-1.5 text-caption font-semibold text-primary-ink">
+																{t('youBadge')}
+															</span>
+														) : null}
 													</span>
-												) : null}
+													<span className="mt-0.5 block truncate text-xs text-muted-foreground">
+														{entry.managerName}
+													</span>
 											</Link>
-											<p className="mt-0.5 truncate text-xs text-muted-foreground">
-												{entry.managerName}
-											</p>
 										</div>
 										<div className="shrink-0 text-right">
 											<div className="font-mono text-base font-semibold tabular-nums text-primary-ink">
@@ -476,22 +489,25 @@ export function TournamentTable({
 										{/* Team: name + manager only */}
 										<div className="min-w-0">
 											<Link
-												href={`/live/points/${entry.id}${tournamentId ? `?tournamentId=${tournamentId}` : ''}`}
+												href={teamHref(entry.id)}
+												prefetch={false}
 												className={cn(
-													'block truncate text-sm font-semibold tracking-tight hover:text-primary-ink hover:underline',
+													'block min-w-0 tracking-tight hover:text-primary-ink hover:underline underline-offset-2',
 													isMe && 'text-primary-ink',
 												)}
 											>
-												{entry.teamName}
-												{isMe ? (
-													<span className="ml-1.5 text-caption font-semibold text-primary-ink">
-														{t('youBadge')}
+													<span className="block truncate text-sm font-semibold">
+														{entry.teamName}
+														{isMe ? (
+															<span className="ml-1.5 text-caption font-semibold text-primary-ink">
+																{t('youBadge')}
+															</span>
+														) : null}
 													</span>
-												) : null}
+													<span className="mt-0.5 block truncate text-xs text-muted-foreground">
+														{entry.managerName}
+													</span>
 											</Link>
-											<p className="mt-0.5 truncate text-xs text-muted-foreground">
-												{entry.managerName}
-											</p>
 										</div>
 
 										{/* Captain column */}

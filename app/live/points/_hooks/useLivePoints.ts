@@ -37,6 +37,7 @@ import {
 interface UseLivePointsOptions {
 	initialEntryId: number
 	initialEventId: number
+	initialSelectedGameweek?: number
 	initialLiveData?: LiveCalcData
 	initialSnapshot?: LiveSnapshotStatus | null
 	isMock?: boolean
@@ -45,6 +46,7 @@ interface UseLivePointsOptions {
 export function useLivePoints({
 	initialEntryId,
 	initialEventId,
+	initialSelectedGameweek,
 	initialLiveData,
 	initialSnapshot,
 	isMock = false
@@ -53,7 +55,7 @@ export function useLivePoints({
 	const isPageActive = usePageActive()
 	const seededEventId = initialLiveData?.event ?? initialEventId
 	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(
-		seededEventId
+		initialSelectedGameweek ?? seededEventId
 	)
 	const [isLoading, setIsLoading] = useState(
 		initialEntryId > 0 && !initialLiveData

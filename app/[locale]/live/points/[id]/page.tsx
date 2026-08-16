@@ -39,7 +39,7 @@ type PageProps = {
 
 export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await getPageLocale(params)
-	const { mock, tournamentId } = await searchParams
+	const { gw, mock, tournamentId } = await searchParams
 	const entryId = Number(id)
 	const isMock = mock === '1'
 	const mockLiveData = isMock
@@ -51,6 +51,16 @@ export default async function Page({ params, searchParams }: PageProps) {
 	if (!currentEventId) {
 		return <CurrentGameweekUnavailable />
 	}
+	const requestedGameweekValue = typeof gw === 'string' ? Number(gw) : null
+	const requestedGameweek =
+		!isMock &&
+		requestedGameweekValue !== null &&
+		Number.isInteger(requestedGameweekValue) &&
+		requestedGameweekValue >= 1 &&
+		requestedGameweekValue <= 38
+			? requestedGameweekValue
+			: null
+	const initialEventId = requestedGameweek ?? currentEventId
 
 	let initialLiveData: LiveCalcData | undefined = mockLiveData
 	let initialSnapshot: LiveSnapshotStatus | null = isMock
@@ -64,7 +74,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 		const [liveResult, overallResult] = await Promise.allSettled([
 			executeServerQuery<LiveCalcDataResponse>(
 				GET_LIVE_POINTS,
-				{ eventId: currentEventId, entryId },
+				{ eventId: initialEventId, entryId },
 				{ cache: 'no-store' },
 			),
 			executeServerQuery<EntrySummaryResponse>(
@@ -100,6 +110,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			entryId={entryId}
 			tournamentId={typeof tournamentId === 'string' ? tournamentId : undefined}
 			initialEventId={currentEventId}
+			initialSelectedGameweek={requestedGameweek ?? undefined}
 			initialLiveData={initialLiveData}
 			initialSnapshot={initialSnapshot}
 			initialOverall={initialOverall}

@@ -19,6 +19,7 @@ interface TeamPointsClientProps {
 	entryId: number
 	tournamentId?: string
 	initialEventId: number
+	initialSelectedGameweek?: number
 	initialLiveData?: LiveCalcData
 	initialSnapshot?: LiveSnapshotStatus | null
 	initialOverall?: EntryOverallSnapshot
@@ -29,6 +30,7 @@ export default function TeamPointsClient({
 	entryId,
 	tournamentId,
 	initialEventId,
+	initialSelectedGameweek,
 	initialLiveData,
 	initialSnapshot,
 	initialOverall,
@@ -38,12 +40,16 @@ export default function TeamPointsClient({
 	const livePoints = useLivePoints({
 		initialEntryId: entryId,
 		initialEventId,
+		initialSelectedGameweek,
 		initialLiveData,
 		initialSnapshot,
 		isMock
 	})
+	const backQuery = initialSelectedGameweek
+		? `?gw=${initialSelectedGameweek}`
+		: ''
 	const backHref = tournamentId
-		? `/live/competitions/${tournamentId}`
+		? `/live/competitions/${tournamentId}${backQuery}`
 		: '/live/competitions'
 
 	let content
