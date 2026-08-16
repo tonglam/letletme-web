@@ -85,14 +85,21 @@ export function LivePointsDashboard({
 		if (normalized.includes('free') || normalized === 'fh' || normalized === 'free_hit') {
 			return t('freeHit')
 		}
-		return chip
+		return chip ?? t('noActiveChips')
 	}
 	const pitchHeaderStats = overall && liveData
 		? {
 				eyebrow: `${t('overallPoints')} ${formatOverallNumber(overall.overallPoints)} · ${t('overallRank')} ${formatOverallNumber(overall.overallRank, { notation: 'compact' })}`,
 				details: [
-					`GW PTS ${formatOverallNumber(liveData.livePoints)}`,
-					`CHIP ${formatPitchChip(liveData.chip)}`,
+					{
+						label: t('pitchGameweekPoints'),
+						value: formatOverallNumber(liveData.livePoints),
+						accent: true,
+					},
+					{
+						label: t('pitchChip'),
+						value: formatPitchChip(liveData.chip),
+					},
 				],
 			}
 		: undefined

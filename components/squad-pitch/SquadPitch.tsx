@@ -46,7 +46,13 @@ interface SquadPitchProps {
 
 export interface SquadPitchHeaderStats {
 	eyebrow: string
-	details: readonly string[]
+	details: readonly SquadPitchHeaderDetail[]
+}
+
+export interface SquadPitchHeaderDetail {
+	label: string
+	value: string
+	accent?: boolean
 }
 
 const POSITION_ORDER: readonly SquadPosition[] = ['GKP', 'DEF', 'MID', 'FWD']
@@ -173,7 +179,7 @@ export function SquadPitch({
 
 			<div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,transparent_30%,rgba(0,31,20,0.13)_100%)]" />
 
-			<header className="absolute inset-x-[5.2%] top-[2.45%] z-20 flex items-center justify-between gap-3 text-[#f8f6ef]">
+			<header className="absolute inset-x-[5.2%] top-[2.2%] z-20 flex min-h-[clamp(2.25rem,8.5cqi,4rem)] items-start justify-between gap-4 text-[#f8f6ef]">
 				<div className="min-w-0">
 					<p className="truncate font-mono text-[clamp(0.42rem,1.15cqi,0.66rem)] font-medium uppercase tracking-[0.18em] text-[#00ff85]">
 						{headerStats?.eyebrow ?? eyebrow}
@@ -182,15 +188,20 @@ export function SquadPitch({
 						{title}
 					</h2>
 					{managerName ? (
-						<p className="mt-[clamp(0.08rem,0.35cqi,0.2rem)] truncate font-mono text-[clamp(0.5rem,1.2cqi,0.72rem)] text-white/70">
+						<p className="mt-[clamp(0.08rem,0.35cqi,0.2rem)] truncate font-mono text-[clamp(0.58rem,1.35cqi,0.82rem)] text-white/70">
 							{managerName}
 						</p>
 					) : null}
 				</div>
 				{headerStats ? (
-					<div className="shrink-0 border-l border-white/20 pl-[clamp(0.5rem,1.7cqi,1rem)] text-right font-mono text-[clamp(0.48rem,1.15cqi,0.68rem)] leading-[1.35] tabular-nums text-white/75">
+					<div className="shrink-0 border-l border-white/20 pl-[clamp(0.6rem,1.9cqi,1.1rem)] text-right font-mono text-[clamp(0.52rem,1.25cqi,0.74rem)] leading-[1.5] tabular-nums text-white/65">
 						{headerStats.details.map(detail => (
-							<p key={detail}>{detail}</p>
+							<p key={detail.label}>
+								<span>{detail.label}</span>{' '}
+								<span className={detail.accent ? 'text-[#00ff85]' : 'text-white/85'}>
+									{detail.value}
+								</span>
+							</p>
 						))}
 					</div>
 				) : (
