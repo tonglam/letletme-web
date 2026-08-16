@@ -214,7 +214,7 @@ export const MOCK_LIVE_DATA: LiveCalcData = {
 	event: MOCK_EVENT_ID,
 	entryName: 'Wildcard Atelier',
 	playerName: 'Preview Manager',
-	chip: null,
+	chip: 'wildcard',
 	livePoints: 117,
 	transferCost: 0,
 	liveNetPoints: 117,
