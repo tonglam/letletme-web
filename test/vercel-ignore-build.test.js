@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict')
 const { spawnSync } = require('node:child_process')
+const { readFileSync } = require('node:fs')
 const path = require('node:path')
 const test = require('node:test')
 
@@ -19,6 +20,21 @@ function productionEnv(overrides = {}) {
 		...overrides
 	}
 }
+
+test('Vercel disables every non-main Git branch including names with slashes', () => {
+	const config = JSON.parse(
+		readFileSync(path.resolve(__dirname, '../vercel.json'), 'utf8')
+	)
+
+	assert.deepEqual(config.git.deploymentEnabled, {
+		'**': false,
+		main: true
+	})
+	assert.equal(
+		config.ignoreCommand,
+		'node scripts/vercel-ignore-build.mjs'
+	)
+})
 
 test('recognizes only the explicit documentation allowlist', async () => {
 	const { isDocumentationPath } = await loadModule()
