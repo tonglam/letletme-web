@@ -231,6 +231,18 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(function Squa
 				)}
 			</header>
 
+			<div
+				aria-hidden="true"
+				data-watermark="letletme"
+				className="pointer-events-none absolute inset-x-0 bottom-[2.2%] z-20 flex items-center justify-center gap-[clamp(0.35rem,1.5cqi,0.9rem)] select-none text-[#f8f6ef]/35"
+			>
+				<span className="h-px w-[clamp(1.1rem,7cqi,3.5rem)] bg-gradient-to-r from-transparent via-[#00ff85]/35 to-transparent" />
+				<span className="font-mono text-[clamp(0.42rem,1.05cqi,0.68rem)] font-semibold uppercase tracking-[0.28em] [text-shadow:0_1px_4px_rgba(0,0,0,0.35)]">
+					LETLETME
+				</span>
+				<span className="h-px w-[clamp(1.1rem,7cqi,3.5rem)] bg-gradient-to-r from-[#00ff85]/35 via-[#f8f6ef]/20 to-transparent" />
+			</div>
+
 			{POSITION_ORDER.map(position => (
 				<PositionRow
 					key={position}
