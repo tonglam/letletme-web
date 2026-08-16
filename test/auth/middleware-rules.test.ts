@@ -14,6 +14,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
 	hasInvalidTournamentId,
+	isDevelopmentTeamMockRequest,
 	isProtectedApi,
 	isProtectedPage,
 	requiresVerifiedEntry
@@ -44,6 +45,34 @@ const withoutEntry: MockSession = {
 	user: { fplEntryId: 15702, fplEntryVerifiedAt: null },
 }
 const noSession: MockSession = null
+
+describe('development-only My Team mock', () => {
+	it('allows only the exact mock query on the My Team route outside production', () => {
+		const env = process.env as Record<string, string | undefined>
+		const previousNodeEnv = env.NODE_ENV
+		env.NODE_ENV = 'development'
+		try {
+			assert.equal(isDevelopmentTeamMockRequest('/my-fpl/team', '?mock=1'), true)
+			assert.equal(isDevelopmentTeamMockRequest('/my-fpl/team', '?mock=0'), false)
+			assert.equal(isDevelopmentTeamMockRequest('/my-fpl/competitions', '?mock=1'), false)
+		} finally {
+			if (previousNodeEnv === undefined) delete env.NODE_ENV
+			else env.NODE_ENV = previousNodeEnv
+		}
+	})
+
+	it('never allows the mock in production', () => {
+		const env = process.env as Record<string, string | undefined>
+		const previousNodeEnv = env.NODE_ENV
+		env.NODE_ENV = 'production'
+		try {
+			assert.equal(isDevelopmentTeamMockRequest('/my-fpl/team', '?mock=1'), false)
+		} finally {
+			if (previousNodeEnv === undefined) delete env.NODE_ENV
+			else env.NODE_ENV = previousNodeEnv
+		}
+	})
+})
 
 describe('middleware — tournament route shape', () => {
 	it('rejects special route names when followed by /manage', () => {

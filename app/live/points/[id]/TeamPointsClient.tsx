@@ -23,7 +23,6 @@ interface TeamPointsClientProps {
 	initialLiveData?: LiveCalcData
 	initialSnapshot?: LiveSnapshotStatus | null
 	initialOverall?: EntryOverallSnapshot
-	isMock?: boolean
 }
 
 export default function TeamPointsClient({
@@ -34,7 +33,6 @@ export default function TeamPointsClient({
 	initialLiveData,
 	initialSnapshot,
 	initialOverall,
-	isMock = false
 }: TeamPointsClientProps) {
 	const t = useTranslations('LivePoints')
 	const livePoints = useLivePoints({
@@ -42,8 +40,7 @@ export default function TeamPointsClient({
 		initialEventId,
 		initialSelectedGameweek,
 		initialLiveData,
-		initialSnapshot,
-		isMock
+		initialSnapshot
 	})
 	const backQuery = initialSelectedGameweek
 		? `?gw=${initialSelectedGameweek}`
@@ -71,7 +68,6 @@ export default function TeamPointsClient({
 				error={livePoints.error}
 				isPageActive={livePoints.isPageActive}
 				shouldAutoRefresh={livePoints.shouldAutoRefresh}
-				isMock={isMock}
 				liveData={livePoints.liveData}
 				overall={initialOverall}
 				startingPlayers={livePoints.startingPlayers}

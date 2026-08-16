@@ -3,11 +3,6 @@ import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGamewee
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getCurrentEventId } from '@/lib/events'
 import {
-	createMockLiveData,
-	MOCK_LIVE_OVERALL,
-	MOCK_LIVE_SNAPSHOT,
-} from '@/app/live/points/_lib/live-points-mock'
-import {
 	GET_ENTRY,
 	type EntryOverallSnapshot,
 	type EntrySummaryResponse,
@@ -39,21 +34,16 @@ type PageProps = {
 
 export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await getPageLocale(params)
-	const { gw, mock, tournamentId } = await searchParams
+	const { gw, tournamentId } = await searchParams
 	const entryId = Number(id)
-	const isMock = mock === '1'
-	const mockLiveData = isMock
-		? createMockLiveData(Number.isInteger(entryId) && entryId > 0 ? entryId : 24001)
-		: undefined
 
 	// Gate first — no Suspense shell around seeded client work.
-	const currentEventId = isMock ? mockLiveData?.event ?? 22 : await getCurrentEventId()
+	const currentEventId = await getCurrentEventId()
 	if (!currentEventId) {
 		return <CurrentGameweekUnavailable />
 	}
 	const requestedGameweekValue = typeof gw === 'string' ? Number(gw) : null
 	const requestedGameweek =
-		!isMock &&
 		requestedGameweekValue !== null &&
 		Number.isInteger(requestedGameweekValue) &&
 		requestedGameweekValue >= 1 &&
@@ -62,15 +52,11 @@ export default async function Page({ params, searchParams }: PageProps) {
 			: null
 	const initialEventId = requestedGameweek ?? currentEventId
 
-	let initialLiveData: LiveCalcData | undefined = mockLiveData
-	let initialSnapshot: LiveSnapshotStatus | null = isMock
-		? MOCK_LIVE_SNAPSHOT
-		: null
-	let initialOverall: EntryOverallSnapshot | undefined = isMock
-		? MOCK_LIVE_OVERALL
-		: undefined
+	let initialLiveData: LiveCalcData | undefined
+	let initialSnapshot: LiveSnapshotStatus | null = null
+	let initialOverall: EntryOverallSnapshot | undefined
 
-	if (!isMock && Number.isInteger(entryId) && entryId > 0) {
+	if (Number.isInteger(entryId) && entryId > 0) {
 		const [liveResult, overallResult] = await Promise.allSettled([
 			executeServerQuery<LiveCalcDataResponse>(
 				GET_LIVE_POINTS,
@@ -114,7 +100,6 @@ export default async function Page({ params, searchParams }: PageProps) {
 			initialLiveData={initialLiveData}
 			initialSnapshot={initialSnapshot}
 			initialOverall={initialOverall}
-			isMock={isMock}
 		/>
 	)
 }

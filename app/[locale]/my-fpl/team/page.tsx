@@ -8,6 +8,13 @@ import {
 	parseTeamStatsGw,
 	parseTeamStatsView,
 } from '@/app/me/team/_lib/team-stats-url'
+import {
+	MOCK_TEAM_ENTRY_ID,
+	MOCK_TEAM_EVENT_ID,
+	MOCK_TEAM_EVENT_RESULT,
+	MOCK_TEAM_HISTORY,
+	MOCK_TEAM_IDENTITY,
+} from '@/app/me/team/_lib/team-stats-mock'
 import { getCurrentAndNextEvents } from '@/lib/events'
 import {
 	maxEventIdFromHistory,
@@ -37,7 +44,7 @@ export const dynamic = 'force-dynamic'
 
 type PageProps = {
 	params: LocaleParams
-	searchParams: Promise<{ view?: string; gw?: string }>
+	searchParams: Promise<{ view?: string; gw?: string; mock?: string }>
 }
 
 export async function generateMetadata({ params }: PageProps) {
@@ -69,15 +76,40 @@ function TeamStatsFallback() {
  * Gameweek deep link: also entryEventResult(seedGw)
  */
 export default async function TeamStatsPage({ params, searchParams }: PageProps) {
-	const timing = new RouteLoaderTiming('/my-fpl/team')
-	const [pageLocale, t, sp, context, events] = await Promise.all([
+	const [pageLocale, t, sp] = await Promise.all([
 		getPageLocale(params),
 		getTranslations('States'),
 		searchParams,
-		timing.measure('session', () => getVerifiedEntryContext()),
-		timing.measure('events', () => getCurrentAndNextEvents())
 	])
 	const { locale } = pageLocale
+	if (sp.mock === '1' && process.env.NODE_ENV !== 'production') {
+		const mockSelectedGameweek = parseTeamStatsGw(
+			sp.gw,
+			MOCK_TEAM_EVENT_ID,
+			MOCK_TEAM_EVENT_ID,
+		)
+		return (
+			<Suspense fallback={<TeamStatsFallback />}>
+				<TeamStatsClient
+					entryId={MOCK_TEAM_ENTRY_ID}
+					currentGameweek={MOCK_TEAM_EVENT_ID}
+					initialSelectedGameweek={mockSelectedGameweek}
+					initialEntryEventResult={MOCK_TEAM_EVENT_RESULT}
+					initialEntryHistory={MOCK_TEAM_HISTORY}
+					initialEntryIdentity={MOCK_TEAM_IDENTITY}
+					initialEntryTransfers={[]}
+					initialError={null}
+					initialRequestComplete
+				/>
+			</Suspense>
+		)
+	}
+
+	const timing = new RouteLoaderTiming('/my-fpl/team')
+	const [context, events] = await Promise.all([
+		timing.measure('session', () => getVerifiedEntryContext()),
+		timing.measure('events', () => getCurrentAndNextEvents()),
+	])
 	const initialView = parseTeamStatsView(sp.view)
 	const needsGameweekSeed = initialView === 'gameweek'
 

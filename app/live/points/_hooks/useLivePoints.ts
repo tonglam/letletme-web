@@ -40,7 +40,6 @@ interface UseLivePointsOptions {
 	initialSelectedGameweek?: number
 	initialLiveData?: LiveCalcData
 	initialSnapshot?: LiveSnapshotStatus | null
-	isMock?: boolean
 }
 
 export function useLivePoints({
@@ -49,7 +48,6 @@ export function useLivePoints({
 	initialSelectedGameweek,
 	initialLiveData,
 	initialSnapshot,
-	isMock = false
 }: UseLivePointsOptions) {
 	const t = useTranslations('LivePoints')
 	const isPageActive = usePageActive()
@@ -119,8 +117,6 @@ export function useLivePoints({
 			live: LiveCalcData,
 			requestKey: string
 		) => {
-			if (isMock) return
-
 			const now = Date.now()
 			if (!shouldRefreshLiveExplain(lastExplainAttemptAtRef.current, now))
 				return
@@ -173,12 +169,11 @@ export function useLivePoints({
 				console.warn('Failed to fetch explain stats batch:', explainError)
 			}
 		},
-		[isMock]
+		[]
 	)
 
 	const fetchLivePointsForGameweek = useCallback(
 		(eventId: number): Promise<void> => {
-			if (isMock) return Promise.resolve()
 			if (!activeEntryId) return Promise.resolve()
 			const requestKey = `${activeEntryId}:${eventId}`
 			if (inFlightRequestRef.current?.key === requestKey) {
@@ -258,7 +253,7 @@ export function useLivePoints({
 			})
 			return request
 		},
-		[acceptSnapshot, activeEntryId, enrichLivePointBreakdowns, isMock, t]
+			[acceptSnapshot, activeEntryId, enrichLivePointBreakdowns, t]
 	)
 
 	const submitEntry = useCallback(() => {
@@ -299,7 +294,6 @@ export function useLivePoints({
 	}, [fetchLivePointsForGameweek, selectedGameweek])
 
 	const autoRefresh = useCallback(async () => {
-		if (isMock) return
 		if (selectedGameweek === undefined) return
 		const requestId = requestIdRef.current
 		try {
@@ -337,7 +331,6 @@ export function useLivePoints({
 		acceptSnapshot,
 		enrichLivePointBreakdowns,
 		fetchLivePointsForGameweek,
-		isMock,
 		selectedGameweek,
 		t
 	])
@@ -423,7 +416,7 @@ export function useLivePoints({
 	])
 
 	const shouldAutoRefresh = shouldPollLiveSnapshot({
-		isPageActive: !isMock,
+		isPageActive,
 		currentEventId: initialEventId,
 		selectedEventId: selectedGameweek,
 		snapshot

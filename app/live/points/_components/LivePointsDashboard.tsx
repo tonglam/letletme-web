@@ -39,7 +39,6 @@ export function LivePointsDashboard({
 	error,
 	isPageActive,
 	shouldAutoRefresh,
-	isMock = false,
 	liveData,
 	overall,
 	startingPlayers,
@@ -56,7 +55,6 @@ export function LivePointsDashboard({
 	error?: string
 	isPageActive: boolean
 	shouldAutoRefresh: boolean
-	isMock?: boolean
 	liveData?: LiveCalcData
 	overall?: EntryOverallSnapshot
 	startingPlayers: Player[]
@@ -208,7 +206,7 @@ export function LivePointsDashboard({
 					onGameweekChange={onGameweekChange}
 					currentGameweek={currentGameweek}
 					selectedGameweek={selectedGameweek}
-					disabled={isLoading || isRefreshing || isMock}
+					disabled={isLoading || isRefreshing}
 				/>
 				<div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 					<p className="text-xs text-muted-foreground">
@@ -327,11 +325,9 @@ export function LivePointsDashboard({
 							title={liveData.entryName ?? `Entry ${liveData.entry}`}
 							managerName={liveData.playerName ?? undefined}
 							headerStats={pitchHeaderStats}
-							eyebrow={
-								isMock
-									? `Mock live lineup · GW ${selectedGameweek ?? liveData.event}`
-									: `${t('livePoints')} · GW ${selectedGameweek ?? liveData.event}`
-							}
+								eyebrow={
+									`${t('livePoints')} · GW ${selectedGameweek ?? liveData.event}`
+								}
 							className={cn(
 								'mx-auto max-w-3xl',
 								isRefreshing && 'opacity-75 transition-opacity'
