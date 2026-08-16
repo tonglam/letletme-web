@@ -1,6 +1,6 @@
 import Image from 'next/image'
 import { LogoMark, LogoWordmark } from '@/components/layout/Logo'
-import { forwardRef, type CSSProperties } from 'react'
+import { forwardRef, type CSSProperties, type KeyboardEvent } from 'react'
 
 export type SquadPosition = 'GKP' | 'DEF' | 'MID' | 'FWD'
 
@@ -38,6 +38,7 @@ export interface SquadPitchPlayer {
 
 interface SquadPitchProps {
 	players: readonly SquadPitchPlayer[]
+	onPlayerClick?: (playerId: string) => void
 	title?: string
 	managerName?: string
 	eyebrow?: string
@@ -89,11 +90,29 @@ function PlayerMarker({ player }: { player: SquadPitchPlayer }) {
 	)
 }
 
-function PlayerCard({ player }: { player: SquadPitchPlayer }) {
+function PlayerCard({
+	player,
+	onPlayerClick,
+}: {
+	player: SquadPitchPlayer
+	onPlayerClick?: (playerId: string) => void
+}) {
+	const isInteractive = Boolean(onPlayerClick)
+	const openPlayerDetail = () => onPlayerClick?.(player.id)
+	const handleKeyDown = (event: KeyboardEvent<HTMLLIElement>) => {
+		if (!isInteractive || (event.key !== 'Enter' && event.key !== ' ')) return
+		event.preventDefault()
+		openPlayerDetail()
+	}
+
 	return (
 		<li
-			aria-label={`${player.webName}, ${player.score} points`}
-			className="relative flex w-[clamp(3.25rem,14cqi,7.2rem)] list-none flex-col items-center transition-transform duration-200 hover:-translate-y-1 motion-reduce:transition-none"
+			aria-label={isInteractive ? `${player.webName}, ${player.score} points` : undefined}
+			className={`relative flex w-[clamp(3.25rem,14cqi,7.2rem)] list-none flex-col items-center transition-transform duration-200 motion-reduce:transition-none ${isInteractive ? 'cursor-pointer hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]' : ''}`}
+			onClick={isInteractive ? openPlayerDetail : undefined}
+			onKeyDown={isInteractive ? handleKeyDown : undefined}
+			role={isInteractive ? 'button' : undefined}
+			tabIndex={isInteractive ? 0 : undefined}
 		>
 			<div className="relative z-10 -mb-[clamp(0.25rem,0.8cqi,0.45rem)] w-[90%] drop-shadow-[0_9px_8px_rgba(0,24,16,0.28)]">
 				<Image
@@ -129,9 +148,11 @@ function PlayerCard({ player }: { player: SquadPitchPlayer }) {
 function PositionRow({
 	position,
 	players,
+	onPlayerClick,
 }: {
 	position: SquadPosition
 	players: readonly SquadPitchPlayer[]
+	onPlayerClick?: (playerId: string) => void
 }) {
 	if (players.length === 0) return null
 
@@ -146,7 +167,11 @@ function PositionRow({
 			}
 		>
 			{players.map(player => (
-				<PlayerCard key={player.id} player={player} />
+				<PlayerCard
+					key={player.id}
+					player={player}
+					onPlayerClick={onPlayerClick}
+				/>
 			))}
 		</ol>
 	)
@@ -155,6 +180,7 @@ function PositionRow({
 export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(function SquadPitch(
 	{
 		players,
+		onPlayerClick,
 		title = 'LetLetMe XI',
 		managerName,
 		eyebrow = 'Gameweek squad',
@@ -255,6 +281,7 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(function Squa
 					key={position}
 					position={position}
 					players={players.filter(player => player.position === position)}
+					onPlayerClick={onPlayerClick}
 				/>
 			))}
 		</section>

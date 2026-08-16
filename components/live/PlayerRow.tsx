@@ -1,7 +1,5 @@
 'use client'
 
-import { resolvePointsBreakdown } from '@/app/live/points/_lib/live-points-breakdown'
-import { liveExplanationMatchesCurrentStats } from '@/app/live/points/_lib/live-points-model'
 import { Badge } from '@/components/ui/badge'
 import {
 	Tooltip,
@@ -12,11 +10,11 @@ import {
 import { positionBadgeClass } from '@/lib/position-style'
 import { cn } from '@/lib/utils'
 import type { Player } from '@/types/player'
-import type { PlayerDetail } from '@/types/player-detail'
 import { CheckCircle2, Clock } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useMemo, useState } from 'react'
 import { PlayerDetailModal } from './PlayerDetailModal'
+import { buildLivePlayerDetail } from './player-detail-model'
 
 interface PlayerRowProps {
 	player: Player
@@ -27,42 +25,6 @@ interface StatConfig {
 	key: keyof Player['stats']
 	description: string
 }
-
-const breakdownLabelMap: Record<string, string> = {
-	minutes: 'Appearance',
-	goals_scored: 'Goals',
-	assists: 'Assists',
-	clean_sheets: 'Clean Sheet',
-	saves: 'Saves',
-	penalties_saved: 'Penalty Saved',
-	penalties_missed: 'Penalty Missed',
-	yellow_cards: 'Yellow Card',
-	red_cards: 'Red Card',
-	own_goals: 'Own Goal',
-	goals_conceded: 'Goals Conceded',
-	defensive_contribution: 'Defensive Contribution',
-	bonus: 'Bonus Points',
-	total: 'Total Points',
-	total_points: 'Total Points',
-}
-
-const breakdownOrder = [
-	'minutes',
-	'goals_scored',
-	'assists',
-	'clean_sheets',
-	'saves',
-	'penalties_saved',
-	'penalties_missed',
-	'yellow_cards',
-	'red_cards',
-	'own_goals',
-	'goals_conceded',
-	'defensive_contribution',
-	'bonus',
-	'total',
-	'total_points',
-] as const
 
 /** Full position stats — MIN / xG / scoring events. */
 const positionStats: Record<Player['position'], StatConfig[]> = {
@@ -131,95 +93,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 		'Expected Assists': t('expectedAssists'),
 	}
 
-	const breakdownFromExplain = useMemo(() => {
-		if (!player.breakdownStats || player.breakdownStats.length === 0) {
-			return []
-		}
-
-		const totals = player.breakdownStats.reduce<
-			Map<string, { points: number; value: number }>
-		>((acc, stat) => {
-			const current = acc.get(stat.identifier) ?? { points: 0, value: 0 }
-			acc.set(stat.identifier, {
-				points: current.points + stat.points,
-				value: current.value + (stat.value ?? 0),
-			})
-			return acc
-		}, new Map())
-
-		const orderedKeys = new Set<string>(breakdownOrder)
-
-		const orderedBreakdown = breakdownOrder
-			.map(identifier => {
-				const entry = totals.get(identifier)
-				if (!entry || entry.points === 0) {
-					return null
-				}
-				return {
-					category: breakdownLabelMap[identifier] ?? identifier,
-					points: entry.points,
-					value: entry.value || undefined,
-				}
-			})
-			.filter(Boolean) as { category: string; points: number; value?: number }[]
-
-		const remaining = Array.from(totals.entries())
-			.filter(([identifier, entry]) => !orderedKeys.has(identifier) && entry.points !== 0)
-			.map(([identifier, entry]) => ({
-				category: breakdownLabelMap[identifier] ?? identifier,
-				points: entry.points,
-				value: entry.value || undefined,
-			}))
-
-		return [...orderedBreakdown, ...remaining]
-	}, [player.breakdownStats])
-
-	const playerDetail: PlayerDetail = useMemo(() => {
-		const hasExplanation =
-			player.breakdownStats !== undefined && player.breakdownStats.length > 0
-		const explanationMatchesCurrentStats = liveExplanationMatchesCurrentStats(player)
-		const officialSum = breakdownFromExplain.reduce((sum, item) => sum + item.points, 0)
-		const officialMatchesTotal =
-			hasExplanation &&
-			explanationMatchesCurrentStats &&
-			officialSum === player.stats.points
-
-		const resolved = resolvePointsBreakdown({
-			official: breakdownFromExplain,
-			officialMatchesTotal,
-			player,
-		})
-
-		return {
-			id: player.id,
-			name: player.name,
-			team: player.team,
-			teamShort: player.teamShort,
-			position: player.position,
-			points: player.stats.points,
-			ownershipPercentage: null,
-			bps: typeof player.bps === 'number' ? player.bps : null,
-			bonusPoints: player.stats.bonusPoints,
-			playingStatus: player.playingStatus,
-			breakdownPending: resolved.pending,
-			breakdownSource: resolved.source,
-			stats: {
-				minutes: player.stats.minutes,
-				goals: player.stats.goals,
-				assists: player.stats.assists,
-				cleanSheets: player.stats.cleanSheets,
-				saves: player.stats.saves,
-				penaltiesSaved: player.stats.savePenalty,
-				yellowCards: player.stats.yellowCards,
-				redCards: player.stats.redCards,
-				goalsConceded: player.stats.goalsConceded,
-				defensiveContribution: player.stats.defensiveContribution,
-				ownGoals: player.stats.ownGoals,
-				penaltiesMissed: player.stats.penaltiesMissed,
-			},
-			pointsBreakdown: resolved.lines,
-		}
-	}, [player, breakdownFromExplain])
+	const playerDetail = useMemo(() => buildLivePlayerDetail(player), [player])
 
 	const statusIcon =
 		player.playingStatus === 'FINISHED' ? (

@@ -2,6 +2,8 @@
 
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import { PlayerList } from '@/components/live/PlayerList'
+import { PlayerDetailModal } from '@/components/live/PlayerDetailModal'
+import { buildLivePlayerDetail } from '@/components/live/player-detail-model'
 import { TeamStats } from '@/components/live/TeamStats'
 import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import { SquadPitch } from '@/components/squad-pitch/SquadPitch'
@@ -13,6 +15,7 @@ import type { EntryOverallSnapshot } from '@/lib/graphql/operations/entries'
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
 import { cn } from '@/lib/utils'
 import type { Player } from '@/types/player'
+import type { PlayerDetail } from '@/types/player-detail'
 import { Check, Copy, ImageIcon, Loader2, RefreshCw } from 'lucide-react'
 import { useFormatter, useLocale, useTranslations } from 'next-intl'
 import { useCallback, useRef, useState, type ReactNode } from 'react'
@@ -107,7 +110,18 @@ export function LivePointsDashboard({
 	const [copied, setCopied] = useState(false)
 	const [imageCopied, setImageCopied] = useState(false)
 	const [manualShareText, setManualShareText] = useState<string | null>(null)
+	const [selectedPitchPlayer, setSelectedPitchPlayer] = useState<PlayerDetail | null>(null)
 	const squadPitchRef = useRef<HTMLElement | null>(null)
+
+	const handlePitchPlayerClick = useCallback(
+		(playerId: string) => {
+			const player = [...startingPlayers, ...benchPlayers].find(
+				candidate => candidate.id === playerId
+			)
+			if (player) setSelectedPitchPlayer(buildLivePlayerDetail(player))
+		},
+		[benchPlayers, startingPlayers]
+	)
 
 	const handleCopyShare = useCallback(async () => {
 		if (!liveData) return
@@ -308,6 +322,7 @@ export function LivePointsDashboard({
 					<div className="mb-8">
 						<SquadPitch
 							ref={squadPitchRef}
+							onPlayerClick={handlePitchPlayerClick}
 							players={squadPitchPlayers}
 							title={liveData.entryName ?? `Entry ${liveData.entry}`}
 							managerName={liveData.playerName ?? undefined}
@@ -323,6 +338,12 @@ export function LivePointsDashboard({
 							)}
 						/>
 					</div>
+
+					<PlayerDetailModal
+						player={selectedPitchPlayer}
+						isOpen={selectedPitchPlayer !== null}
+						onClose={() => setSelectedPitchPlayer(null)}
+					/>
 
 					<section aria-labelledby="live-squad-heading">
 						<div className="mb-3">
