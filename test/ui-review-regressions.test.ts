@@ -12,20 +12,17 @@ describe('route contract', () => {
 	})
 })
 
-describe('pre-paint theme bootstrap', () => {
-	it('uses a beforeInteractive Next Script before body content', async () => {
+describe('theme bootstrap', () => {
+	it('uses a client-safe Next Script strategy in the locale layout', async () => {
 		const source = await readFile(
 			new URL('../app/[locale]/layout.tsx', import.meta.url),
 			'utf8'
 		)
-		const bootstrap = source.indexOf('id="theme-bootstrap"')
-		const body = source.indexOf('<body')
 
 		assert.ok(source.includes('<Script'))
-		assert.ok(source.includes('strategy="beforeInteractive"'))
-		assert.ok(bootstrap >= 0)
-		assert.ok(body > bootstrap)
-		assert.equal(source.includes('strategy="afterInteractive"'), false)
+		assert.ok(source.includes('strategy="afterInteractive"'))
+		assert.ok(source.includes('id="theme-bootstrap"'))
+		assert.equal(source.includes('strategy="beforeInteractive"'), false)
 	})
 })
 

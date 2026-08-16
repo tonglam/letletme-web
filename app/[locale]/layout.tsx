@@ -49,6 +49,22 @@ type LocaleLayoutProps = {
 	params: Promise<{ locale: string }>
 }
 
+const themeBootstrapScript = `
+(() => {
+	try {
+		const storedTheme = window.localStorage.getItem('theme');
+		const theme = storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system'
+			? storedTheme
+			: 'system';
+		const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+		const resolvedTheme = theme === 'system' ? systemTheme : theme;
+		document.documentElement.classList.remove('light', 'dark');
+		document.documentElement.classList.add(resolvedTheme);
+		document.documentElement.style.colorScheme = resolvedTheme;
+	} catch {}
+})();
+`
+
 export function generateStaticParams() {
 	return routing.locales.map(locale => ({ locale }))
 }
@@ -73,22 +89,6 @@ export async function generateMetadata({
 		// The file-based app/icon.svg convention supplies the matchday mark.
 	}
 }
-
-const themeBootstrapScript = `
-(() => {
-	try {
-		const storedTheme = window.localStorage.getItem('theme');
-		const theme = storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system'
-			? storedTheme
-			: 'system';
-		const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-		const resolvedTheme = theme === 'system' ? systemTheme : theme;
-		document.documentElement.classList.remove('light', 'dark');
-		document.documentElement.classList.add(resolvedTheme);
-		document.documentElement.style.colorScheme = resolvedTheme;
-	} catch {}
-})();
-`
 
 export default async function LocaleLayout({
 	children,
@@ -118,7 +118,7 @@ export default async function LocaleLayout({
 			<head>
 				<Script
 					id="theme-bootstrap"
-					strategy="beforeInteractive"
+					strategy="afterInteractive"
 					dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
 				/>
 			</head>
