@@ -282,6 +282,8 @@
 		"unavailableDescription": "当前无法确认官方赛季状态，请稍后重试。",
 		"viewFixtures": "查看赛程",
 		"viewMarket": "查看市场",
+		"viewFixturesForGameweek": "查看 GW{gameweek} 赛程",
+		"viewPreseasonMarket": "查看季前市场",
 		"retry": "重试",
 		"retrying": "正在重试…",
 		"notPublished": "尚未提供"
@@ -1514,7 +1516,7 @@
 		"noStats": "暂无球队数据。",
 		"noStatsForGameweek": "第 {gameweek} 轮暂无数据。",
 		"loadFailed": "我的球队加载失败。",
-		"seasonPreseasonHint": "GW1 尚未开始，官方发布后会显示赛季积分和排名。",
+		"seasonPreseasonHint": "GW1 尚未开始，赛季积分和排名会在官方发布后显示。",
 		"notSynced": "阵容信息尚未同步。",
 		"transferDetailsUnavailable": "球队已加载，但转会明细暂不可用。",
 		"transferDetailsLoading": "正在加载转会明细…",
