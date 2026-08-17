@@ -282,6 +282,8 @@
 		"unavailableDescription": "The official season state could not be confirmed. Please try again shortly.",
 		"viewFixtures": "View fixtures",
 		"viewMarket": "View market",
+		"viewFixturesForGameweek": "View GW{gameweek} fixtures",
+		"viewPreseasonMarket": "View pre-season market",
 		"retry": "Retry",
 		"retrying": "Retrying…",
 		"notPublished": "not available"

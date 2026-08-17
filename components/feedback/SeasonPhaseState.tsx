@@ -111,6 +111,14 @@ export async function SeasonPhaseState({
 		gameweek,
 		deadline: deadlineLabel ?? t('notPublished'),
 	})
+	const fixtureAction =
+		presentation.phase === 'PRESEASON'
+			? t('viewFixturesForGameweek', { gameweek })
+			: t('viewFixtures')
+	const marketAction =
+		presentation.phase === 'PRESEASON'
+			? t('viewPreseasonMarket')
+			: t('viewMarket')
 
 	return (
 		<PageState
@@ -125,10 +133,10 @@ export async function SeasonPhaseState({
 			actions={
 				<>
 					<Link className="underline underline-offset-4" href="/explore/fixtures">
-						{t('viewFixtures')}
+						{fixtureAction}
 					</Link>
 					<Link className="underline underline-offset-4" href="/explore/market">
-						{t('viewMarket')}
+						{marketAction}
 					</Link>
 				</>
 			}
