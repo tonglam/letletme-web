@@ -46,6 +46,19 @@ Briefing 升级为第二个顶级导航，不再藏在 Explore 中：
 10. 不购买 X API。生产使用已有 Grok 订阅、Grok Build 的原生 X 搜索能力和版本化 skill。
 11. V1 不做开放式“全网发现”。采集入口是一份人工维护、可审计的来源名单。
 
+### 1.4 四菜单执行合同
+
+以下是 companion 设计收敛后的 V1 默认值；它们是数据库可配置 policy，不硬编码为永久产品限制：
+
+| Surface | Skill profile | Publication scope | GraphQL | 活跃集合/分页 | 公共缓存初值 |
+| --- | --- | --- | --- | --- | --- |
+| Week | `week` | `SURFACE:week` | `briefingWeek` | 当前 target event 的 sectioned edition；不做 feed cursor | 约 30 秒，deadline 附近 clamp |
+| News | `news` | `SURFACE:news` | `briefingNews` | developing + 最近 14 天；cap 200；20/页 | 30–60 秒 |
+| Views | `views` | `SURFACE:views` | `briefingViews` | target/validity 未过期；cap 120；20/页 | 30–60 秒 |
+| Features | `features` | `SURFACE:features` | `briefingFeatures` | 最近 30 天 + reviewAt 有效 evergreen；cap 80；20/页 | 5 分钟 |
+
+四个 surface 各自只有一个全站 active revision，均引用独立 `STORY:<story_id>` publication。News/Views/Features 使用相同 bounded connection/cursor 机制，但保留各自明确的 GraphQL field、filter enum 和 card projection；这不是四套不同的读取基础设施。
+
 ## 2. 全链路
 
 ```mermaid
@@ -109,6 +122,9 @@ LLM 可以辅助 Evidence → Editorial，但不能替代真实 receipt；Web �
 - `TEAM_NEWS`
 - `LINEUP_SOURCE`
 - `FPL_KOL`
+- `ANALYST`
+- `PUBLICATION`
+- `SHOW`
 - `PODCAST`
 - `YOUTUBE`
 - `AGGREGATOR`
@@ -197,6 +213,7 @@ Data worker 为每个 run 生成只读、短期的 JSON 输入文件，放在受
   "schemaVersion": 1,
   "runId": "uuid",
   "mode": "poll",
+  "profile": "week",
   "windowStart": "2026-08-18T08:00:00.000Z",
   "windowEnd": "2026-08-18T08:30:00.000Z",
   "sourceSnapshot": {
@@ -215,7 +232,7 @@ Data worker 为每个 run 生成只读、短期的 JSON 输入文件，放在受
 }
 ```
 
-Source snapshot 必须带稳定 ID、平台 user ID、当前 handle、来源类型、reporting family、topics 和允许的查询用途。Skill 不连接数据库，也不自行扩充名单。
+`profile` 取 `week/news/views/features`，决定稳定 taxonomy、materiality 和 output extension；不能改变来源名单、窗口、预算或基础 envelope。`targetEvent` 只对需要 event scope 的 profile 必填。Source snapshot 必须带稳定 ID、平台 user ID、当前 handle、来源类型、reporting family、topics 和允许的查询用途。Skill 不连接数据库，也不自行扩充名单。
 
 现有 CLI 调用方式可作为基础：
 
@@ -232,7 +249,7 @@ grok --disable-web-search --output-format streaming-json \
 | --- | --- | --- | --- | --- |
 | `poll` | 来源组、精确窗口 | 分组运行 Latest 查询，返回真实帖子和轻量候选聚类 | 默认最多 2 次 | receipts、coverage、candidate hints、suggested sources |
 | `enrich` | 已持久化候选和缺口 | 找 origin、首方说明、独立 corroboration、矛盾和 thread context | 默认最多 4 次 | enriched claim graph、contradictions、review flags |
-| `compose` | 已验证 receipts/claims、目标 locale | 生成中立的 Story 草稿、FPL relevance、建议 expiry | 0 次 X tool | 双语 draft，不新增事实 |
+| `compose` | profile-specific 已验证 receipts/claims/artifacts/chunk notes、locale pair | 生成中立、可追溯的双语 Story 草稿和建议 expiry | 0 次 X tool | 双语 draft + citation IDs，不新增事实 |
 
 普通 poll 不跑 Top、semantic 或 thread。只有候选通过确定性过滤并达到 material gate 后才进入 enrich；只有编辑准备采用的候选才进入 compose。
 
@@ -250,7 +267,7 @@ Poll 对 source snapshot 做确定性分区，生成类似以下 Latest lane：
 
 ```text
 run
-  runId, mode, schemaVersion, generatedAt
+  runId, mode, profile, schemaVersion, generatedAt
   windowStart, windowEnd, sourceSnapshotRevision
   executedQueries[], xCallsUsed, coverage[], gaps[]
 
@@ -418,8 +435,13 @@ GraphQL 不抓来源、不运行 LLM、不创建 Story；Web 不直接修改 Dat
 | `content.source_group_members` | 来源与组的多对多关系；唯一 membership |
 | `content.poll_policies` | phase cadence、overlap、safety lag、call budget、backfill cap |
 | `content.source_policy_versions` | rights/acquisition/display/retention 的 append-only 版本 |
+| `content.source_access_profiles` | adapter/access mode、status、policy、不可逆 secret reference；不保存 credential |
 | `content.source_checkpoints` | 每个 group/partition 的 durable checkpoint |
 | `content.suggested_sources` | 待人工审核的新来源候选，不自动启用 |
+| `content.attribution_subjects` | 跨平台 person/show/publication/account 的稳定归因身份 |
+| `content.attribution_subject_aliases` | 历史名字、speaker label 和 display aliases |
+| `content.attribution_subject_sources` | attribution subject 与 X/YouTube/podcast/web source 的可审计映射 |
+| `content.content_budget_policies` | Grok/ASR/LLM 的 daily/monthly/per-job cap 和 circuit breaker |
 
 #### Evidence 与运行层
 
@@ -429,9 +451,13 @@ GraphQL 不抓来源、不运行 LLM、不创建 Story；Web 不直接修改 Dat
 | `content.acquisition_run_partitions` | 每个来源分区的 query、coverage、tool calls 和 checkpoint 结果 |
 | `content.source_items` | 通用外部内容身份；`UNIQUE(source_id, external_id)`；URL、发布时间、状态、hash |
 | `content.x_posts` | X 专属扩展；post ID 全部为 text；reply/quote/repost 引用 |
-| `content.source_item_bodies` | 权利允许时保存的私有正文/转写；hash、policy revision、retained_until |
+| `content.source_item_bodies` | append-only 私有正文/转写版本；body ID、hash、storage reference、policy、retention/status |
+| `content.source_item_chunks` | 文章 body 的 heading/paragraph chunks、ordinal、hash 和 private slice reference |
+| `content.source_item_segments` | media body 的 time range、speaker/verification、hash 和 retention |
 | `content.source_item_relations` | original、repost、quote、reply、same-report 等关系 |
 | `content.acquisition_run_items` | run 与 receipt 的多对多关系，保留重复观测和覆盖审计 |
+| `content.transcription_jobs` | provider/model/language/minutes、estimate/actual cost、policy、status 和 idempotency |
+| `content.content_cost_ledger` | Grok/ASR/LLM/fetch 的 run/job/source 成本审计；不保存 private body |
 
 #### 编辑层
 
@@ -446,6 +472,17 @@ GraphQL 不抓来源、不运行 LLM、不创建 Story；Web 不直接修改 Dat
 | `content.story_versions` | append-only 双语正文；`version_group_id + locale` 唯一；编辑者、模型/提示版本、source hash |
 | `content.story_entities` | 球员、俱乐部、event、topic 关联及人工审核状态 |
 | `content.story_changes` | material update、correction、removal、expiry 的可审计事件 |
+
+#### Menu-specific typed extensions
+
+| Surface/Story | 主要 relation | 权威细节 |
+| --- | --- | --- |
+| Week | 通用 Story + `editions/edition_items` 的 target event、section、placement | 本文第 9 节 |
+| News | `news_story_profiles`、`transfer_claims`、`availability_claims` | [News companion](letletme-briefing-news-architecture.md) |
+| Views | `opinion_story_profiles`、`opinion_claims`、`opinion_artifacts/items` | [Views companion](letletme-briefing-views-architecture.md) |
+| Features | `feature_story_profiles`、source dependencies、typed sections/localizations/citations | [Features companion](letletme-briefing-features-architecture.md) |
+
+所有 Story-kind extension 使用 constant kind + composite FK（或等价 database constraint trigger），不能只靠 TypeScript 保证 `NEWS/OPINION/FEATURE` 类型。结构化 claim/artifact/section 不能成为无约束 JSON bag；公共 JSON 只是经过 schema/checksum 验证的不可变 publication projection。
 
 #### Edition 与发布层
 
@@ -708,7 +745,7 @@ Slug alias lookup 返回 canonical slug metadata，而不是创建第二套 cach
 
 Story result state 使用 `READY | CORRECTED | REMOVED | UNAVAILABLE`。Removal 发布只含稳定身份、归因允许字段和公开说明的 tombstone revision，同时使旧正文 payload 不可服务；不能只删除数据库行后让 CDN 继续显示旧正文。
 
-未来 News/Views/Features 使用共享的 bounded collection query 和 cursor，不为每个平台建立一套 feed query。
+News/Views/Features 分别暴露 `briefingNews`、`briefingViews`、`briefingFeatures`，但底层复用同一 bounded collection loader、connection/pageInfo、revision-bound signed cursor 和 PostgreSQL fallback；差异只在 filter/card projection，不为每个来源平台建立 feed query。
 
 ### 11.3 Story 公共字段
 
@@ -968,7 +1005,7 @@ Story result state 使用 `READY | CORRECTED | REMOVED | UNAVAILABLE`。Removal 
 | **哪些付费文章/私人账号允许做变换性摘要？** | 技术可访问不代表允许存储或再发布 | 未完成 source-specific policy 的来源一律 `LINK_ONLY/METADATA` | 只阻塞该来源的 richer mode |
 | **未来是否允许极少数官方事实自动发布？** | 影响时效、误报和编辑工作量 | V1 不允许；积累真实误报/更正数据后另行决策 | 不阻塞 V1 |
 | **后台使用现有哪一套管理员角色？** | 当前文档未确认 Web auth 中可复用的 admin/permission contract | 复用现有 auth identity，新增最小 `content_editor/content_publisher` server-side 权限 | 阻塞 admin 实现 |
-| **News/Views/Features 的首发顺序和每页容量是多少？** | 基础模型已覆盖，但公共 rollout 和运营负担不同 | Week 验收后依次 News → Views → Features；容量由真实内容密度决定，不先造无限 feed | 不阻塞 Week |
+| **News/Views/Features 的首发顺序和默认容量是否接受？** | Companion 已给出可执行初值，但公共 rollout 和运营负担仍需产品确认 | Week 验收后依次 News → Views → Features；News 200、Views 120、Features 80，均 20/页并按真实密度调整 | 不阻塞基础设施；阻塞各 surface 正式 rollout |
 | **转写 provider 与月度预算是多少？** | 影响媒体 worker、retention 和 cost circuit breaker | 在 metadata-only 阶段先测 adoption；未设预算前不自动转写 | 不阻塞 X/Week |
 
 这些问题之外，顶级导航、无个性化、无用户订阅、无 LetLetMe 主动推荐、无 X API、名单驱动、Grok + skill、PostgreSQL 权威和 Data → GraphQL → Web 的职责边界视为已经确定。

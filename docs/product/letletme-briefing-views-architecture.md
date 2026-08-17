@@ -413,7 +413,7 @@ PostgreSQL 使用与 News 相同的 constant-kind composite FK，不能只靠 Ty
 | 字段 | 用途 |
 | --- | --- |
 | `segment_id` | 稳定 ID |
-| `source_item_id/body_version_id` | 绑定具体 media/transcript 版本 |
+| `source_item_id/body_id` | 绑定具体 immutable media/transcript body row |
 | `start_ms/end_ms` | 有时间轴时必填且合法 |
 | `speaker_label` | 原始 transcript/diarization label |
 | `speaker_identity_id` | 可空；人工/官方验证后填写 |
