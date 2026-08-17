@@ -1,7 +1,7 @@
 import TeamPointsClient from '@/app/live/points/[id]/TeamPointsClient'
-import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGameweekUnavailable'
+import { SeasonPhaseState } from '@/components/feedback/SeasonPhaseState'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import { getCurrentEventId } from '@/lib/events'
+import { getLivePageContext } from '@/lib/live-context-server'
 import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
@@ -32,10 +32,19 @@ export default async function Page({ params, searchParams }: PageProps) {
 	const { tournamentId } = await searchParams
 	const entryId = Number(id)
 
-	// Gate first — no Suspense shell around seeded client work.
-	const currentEventId = await getCurrentEventId()
+	const { presentation } = await getLivePageContext()
+	if (
+		presentation.phase === 'PRESEASON' ||
+		presentation.phase === 'BETWEEN_GAMEWEEKS' ||
+		presentation.phase === 'OFFSEASON' ||
+		presentation.phase === 'UNAVAILABLE'
+	) {
+		return <SeasonPhaseState feature="points" presentation={presentation} />
+	}
+
+	const currentEventId = presentation.currentEventId
 	if (!currentEventId) {
-		return <CurrentGameweekUnavailable />
+		return <SeasonPhaseState feature="points" presentation={presentation} />
 	}
 
 	let initialLiveData: LiveCalcData | undefined

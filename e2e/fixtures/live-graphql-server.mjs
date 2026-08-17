@@ -984,6 +984,15 @@ const server = createServer((request, response) => {
 		if (query.includes('GetLiveContext')) {
 			json(response, 200, {
 				data: {
+					coreEventContext: {
+						season: '2627',
+						revision: 'e2e-core-v1',
+						sourceCheckedAt: '2026-08-04T18:00:30.000Z',
+						currentEventId: 33,
+						nextEventId: 34,
+						nextDeadlineTime: '2026-08-11T17:30:00.000Z',
+						latestFinishedEventId: 32
+					},
 					liveContext: {
 						season: '2627',
 						coreRevision: 'e2e-core-v1',

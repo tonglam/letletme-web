@@ -7,8 +7,9 @@ import type { Session } from '@/lib/auth'
 import { type HomePersonalDesk } from '@/lib/graphql/operations/home'
 import { loadHomePersonalDesk } from '@/lib/home-data-server'
 import { formatCompactNumber, formatInteger } from '@/lib/utils'
+import type { SeasonPresentation } from '@/lib/season-presentation'
 import { ArrowRight } from 'lucide-react'
-import { getTranslations } from 'next-intl/server'
+import { getFormatter, getTranslations } from 'next-intl/server'
 import type { ReactNode } from 'react'
 
 function PersonalDeskShell({
@@ -89,18 +90,23 @@ function PersonalDeskUnavailable({ message }: { message: string }) {
 
 function metricTiles(
 	desk: HomePersonalDesk,
-	labels: { points: string; rank: string; value: string }
+	labels: { points: string; rank: string; value: string },
+	options?: { hideSeasonMetrics?: boolean }
 ) {
 	return [
 		{
 			label: labels.points,
 			value:
-				desk.overallPoints == null ? '—' : formatInteger(desk.overallPoints)
+				options?.hideSeasonMetrics || desk.overallPoints == null
+					? '—'
+					: formatInteger(desk.overallPoints)
 		},
 		{
 			label: labels.rank,
 			value:
-				desk.overallRank == null ? '—' : formatCompactNumber(desk.overallRank)
+				options?.hideSeasonMetrics || desk.overallRank == null
+					? '—'
+					: formatCompactNumber(desk.overallRank)
 		},
 		{
 			label: labels.value,
@@ -111,10 +117,17 @@ function metricTiles(
 }
 
 /** Bound-entry summary and compact league ranks, committed as one RSC result. */
-export async function PersonalDesk({ session }: { session: Session | null }) {
-	const [result, t] = await Promise.all([
+export async function PersonalDesk({
+	session,
+	presentation
+}: {
+	session: Session | null
+	presentation: SeasonPresentation
+}) {
+	const [result, t, format] = await Promise.all([
 		loadHomePersonalDesk(session),
-		getTranslations('Home')
+		getTranslations('Home'),
+		getFormatter()
 	])
 
 	const desk = result?.homePersonalDesk ?? null
@@ -126,8 +139,17 @@ export async function PersonalDesk({ session }: { session: Session | null }) {
 		points: t('personalPointsLabel'),
 		rank: t('personalRankLabel'),
 		value: t('personalTeamValueLabel')
+	}, {
+		hideSeasonMetrics:
+			desk.state === 'EMPTY' && presentation.phase === 'PRESEASON'
 	})
 	const readyKey = `${desk.sourceCheckedAt ?? 'unknown'}:${desk.state}`
+	const staleDate = desk.sourceCheckedAt
+		? new Date(desk.sourceCheckedAt)
+		: null
+	const staleDateLabel = staleDate && !Number.isNaN(staleDate.getTime())
+		? format.dateTime(staleDate, { dateStyle: 'medium', timeStyle: 'short' })
+		: t('personalDataLastSyncUnknown')
 
 	return (
 		<PersonalDeskShell>
@@ -166,7 +188,15 @@ export async function PersonalDesk({ session }: { session: Session | null }) {
 
 				{desk.state === 'STALE' ? (
 					<p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-muted-foreground">
-						{t('personalDataStale')}
+						{t('personalDataStale', { date: staleDateLabel })}
+					</p>
+				) : null}
+
+				{desk.state === 'EMPTY' ? (
+					<p className="mt-3 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+						{presentation.phase === 'PRESEASON'
+							? t('personalDataPreseason')
+							: t('personalDataEmpty')}
 					</p>
 				) : null}
 

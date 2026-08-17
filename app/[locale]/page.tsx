@@ -32,9 +32,13 @@ import {
 } from '@/lib/home-data-server'
 import type { HomeFixturesResponse } from '@/lib/graphql/operations/home'
 import { hasSessionCookieHint } from '@/lib/session'
+import {
+	resolveSeasonPresentation,
+	type SeasonPresentation
+} from '@/lib/season-presentation'
 import { ArrowRight } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { getTranslations } from 'next-intl/server'
+import { getFormatter, getTranslations } from 'next-intl/server'
 import { Suspense } from 'react'
 import { RouteIntlProvider } from '@/components/i18n/RouteIntlProvider'
 import { ROUTE_CLIENT_NAMESPACES } from '@/i18n/client-namespaces'
@@ -84,10 +88,12 @@ function HomePersonalStripFallback() {
 
 function HomePersonalStrip({
 	session,
-	entryId
+	entryId,
+	presentation
 }: {
 	session: Session | null
 	entryId: number | null
+	presentation: SeasonPresentation
 }) {
 	const user = session?.user
 
@@ -101,7 +107,7 @@ function HomePersonalStrip({
 	}
 
 	return (
-		<PersonalDesk session={session} />
+		<PersonalDesk session={session} presentation={presentation} />
 	)
 }
 
@@ -113,8 +119,16 @@ async function HomePersonalSlot({
 	// The cookie is a layout hint only. Authorization always comes from the
 	// fresh, cache-bypassing Better Auth session below.
 	if (!hasSessionCookie) return null
+	const bootstrapPromise = getHomePublicBootstrap().catch(error => {
+		console.error('[home-personal] bootstrap failed', {
+			error: error instanceof Error ? error.name : 'UnknownError'
+		})
+		return null
+	})
 	const { session, entryId } = await getHomeVerifiedEntryContext()
+	const bootstrap = await bootstrapPromise
 	if (!session?.user) return null
+	const presentation = resolveSeasonPresentation(bootstrap?.context)
 
 	return (
 		<>
@@ -122,6 +136,7 @@ async function HomePersonalSlot({
 			<HomePersonalStrip
 				session={session}
 				entryId={entryId}
+				presentation={presentation}
 			/>
 		</>
 	)
@@ -286,8 +301,9 @@ async function HomeTournamentBand() {
 }
 
 async function HomeInsights() {
-	const [t, bootstrap] = await Promise.all([
+	const [t, format, bootstrap] = await Promise.all([
 		getTranslations('Home'),
+		getFormatter(),
 		getHomePublicBootstrap().catch(error => {
 			console.error('[home-insights] bootstrap failed', {
 				error: error instanceof Error ? error.name : 'UnknownError'
@@ -305,6 +321,19 @@ async function HomeInsights() {
 				return null
 			})
 		: null
+	const presentation = resolveSeasonPresentation(
+		bootstrap?.context,
+		gameweek?.gameweekDesk.lifecycle ?? null
+	)
+	const deadlineMs = presentation.nextDeadlineTime
+		? Date.parse(presentation.nextDeadlineTime)
+		: Number.NaN
+	const deadlineLabel = Number.isFinite(deadlineMs)
+		? format.dateTime(new Date(deadlineMs), {
+				dateStyle: 'medium',
+				timeStyle: 'short'
+			})
+		: t('deadlineNotPublished')
 	const initialFixtures: HomeFixturesResponse | null =
 		bootstrap && nextEventId !== null
 			? {
@@ -317,25 +346,100 @@ async function HomeInsights() {
 	const fixturesSeedKey = initialFixtures
 		? `${initialFixtures.season}:${initialFixtures.revision}:${initialFixtures.eventId}`
 		: `${bootstrap?.context.season ?? 'unknown'}:${bootstrap?.context.revision ?? 'unknown'}:none`
+	const homePhaseNotice = (() => {
+		switch (presentation.phase) {
+			case 'PRESEASON':
+				return {
+					eyebrow: t('preseasonHomeEyebrow'),
+					title: t('preseasonHomeTitle', {
+						gameweek: presentation.nextEventId ?? 1
+					}),
+					description: t('preseasonHomeDescription', {
+						gameweek: presentation.nextEventId ?? 1,
+						deadline: deadlineLabel
+					})
+				}
+			case 'PRE_DEADLINE':
+				return {
+					eyebrow: t('preDeadlineHomeEyebrow'),
+					title: t('preDeadlineHomeTitle', {
+						gameweek: presentation.currentEventId ?? presentation.nextEventId ?? 1
+					}),
+					description: t('preDeadlineHomeDescription', {
+						gameweek: presentation.currentEventId ?? presentation.nextEventId ?? 1,
+						deadline: deadlineLabel
+					})
+				}
+			case 'BETWEEN_GAMEWEEKS':
+				return {
+					eyebrow: t('betweenGameweeksEyebrow'),
+					title: t('betweenGameweeksTitle'),
+					description: t('betweenGameweeksDescription')
+				}
+			case 'OFFSEASON':
+				return {
+					eyebrow: t('offseasonHomeEyebrow'),
+					title: t('offseasonHomeTitle'),
+					description: t('offseasonHomeDescription')
+				}
+			case 'UNAVAILABLE':
+				return {
+					eyebrow: t('gameweekStats'),
+					title: t('insightsUnavailable'),
+					description: t('insightsUnavailableDescription')
+				}
+			default:
+				return null
+		}
+	})()
 
-	if (!bootstrap) {
+	if (!bootstrap || homePhaseNotice) {
 		return (
-			<section className="py-10">
-				<div className="mx-auto max-w-4xl px-4">
-					<div className="rounded-xl border border-dashed px-6 py-5 text-center">
-						<p className="chyron justify-center">{t('gameweekStats')}</p>
-						<p className="mt-2 text-sm font-medium text-muted-foreground">
-							{t('insightsUnavailable')} — {t('insightsUnavailableDescription')}
-						</p>
+			<>
+				<section className="py-10">
+					<div className="mx-auto max-w-4xl px-4">
+						<div className="rounded-xl border bg-card px-6 py-7">
+							<p className="chyron">{homePhaseNotice?.eyebrow}</p>
+							<h2 className="mt-2 font-display text-2xl font-bold uppercase tracking-wide">
+								{homePhaseNotice?.title}
+							</h2>
+							<p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+								{homePhaseNotice?.description}
+							</p>
+							{presentation.phase === 'PRESEASON' ||
+							presentation.phase === 'PRE_DEADLINE' ||
+							presentation.phase === 'BETWEEN_GAMEWEEKS' ||
+							presentation.phase === 'OFFSEASON' ? (
+								<div className="mt-4 flex flex-wrap gap-4 text-sm font-semibold">
+									<Link className="underline underline-offset-4" href="/explore/fixtures">
+										{t('viewFixtures')}
+									</Link>
+									<Link className="underline underline-offset-4" href="/explore/market">
+										{t('exploreMarket')}
+									</Link>
+								</div>
+							) : null}
+						</div>
 					</div>
-				</div>
-			</section>
+				</section>
+
+				<section className="py-10">
+					<div className="mx-auto max-w-4xl px-4">
+						<MatchesSection
+							key={fixturesSeedKey}
+							initialFixtures={initialFixtures}
+						/>
+					</div>
+				</section>
+			</>
 		)
 	}
 
 	return (
 		<>
-			{currentEventId !== null ? (
+			{presentation.phase === 'LIVE' ||
+			presentation.phase === 'SETTLING' ||
+			presentation.phase === 'SETTLED' ? (
 				<>
 					<section className="py-10">
 						<div className="mx-auto max-w-4xl px-4">
@@ -378,21 +482,7 @@ async function HomeInsights() {
 						</div>
 					</section>
 				</>
-			) : (
-				<section className="py-10">
-					<div className="mx-auto max-w-4xl px-4">
-						<div className="rounded-xl border bg-card px-6 py-7">
-							<p className="chyron">{t('betweenGameweeksEyebrow')}</p>
-							<h2 className="mt-2 font-display text-2xl font-bold uppercase tracking-wide">
-								{t('betweenGameweeksTitle')}
-							</h2>
-							<p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-								{t('betweenGameweeksDescription')}
-							</p>
-						</div>
-					</div>
-				</section>
-			)}
+			) : null}
 
 			<section className="py-10">
 				<div className="mx-auto max-w-4xl px-4">
