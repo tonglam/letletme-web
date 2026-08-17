@@ -1,11 +1,7 @@
 import TournamentClient from '@/app/live/tournaments/TournamentClient'
-import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGameweekUnavailable'
+import { SeasonPhaseState } from '@/components/feedback/SeasonPhaseState'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import {
-	GET_LIVE_CONTEXT,
-	type LiveContextResponse,
-	type LiveSnapshotStatus
-} from '@/lib/graphql/operations/live'
+import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import {
 	GET_TOURNAMENT_LIVE_DESK,
 	type TournamentLiveCalcData,
@@ -15,6 +11,7 @@ import {
 	executePublicServerQuery,
 	executeServerQuery
 } from '@/lib/graphql-server'
+import { getLivePageContext } from '@/lib/live-context-server'
 import { getCurrentEntryId } from '@/lib/session'
 import { getCurrentSeasonKey } from '@/lib/season'
 import { getTournamentLiveBatchSeed } from '@/lib/tournament/liveEntries'
@@ -47,17 +44,22 @@ export default async function Page({ params, searchParams }: PageProps) {
 	// Public lifecycle context and the fresh entry authorization hint are
 	// independent. Resolve them together so the desk is the only personalized
 	// live query on the initial render.
-	const [liveContextData, entryId] = await Promise.all([
-		executePublicServerQuery<LiveContextResponse>(GET_LIVE_CONTEXT, undefined, {
-			cache: 'no-store'
-		}),
+	const [{ presentation, liveContext }, entryId] = await Promise.all([
+		getLivePageContext(),
 		getCurrentEntryId()
 	])
-	const currentEventId = liveContextData.liveContext?.eventId ?? null
+	if (
+		presentation.phase === 'PRESEASON' ||
+		presentation.phase === 'BETWEEN_GAMEWEEKS' ||
+		presentation.phase === 'OFFSEASON' ||
+		presentation.phase === 'UNAVAILABLE'
+	) {
+		return <SeasonPhaseState feature="competition" presentation={presentation} />
+	}
+
+	const currentEventId = presentation.currentEventId
 	if (!currentEventId) {
-		return (
-			<CurrentGameweekUnavailable titleKey="liveCompetitionUnavailableTitle" />
-		)
+		return <SeasonPhaseState feature="competition" presentation={presentation} />
 	}
 
 	let initialTournaments: ReturnType<
@@ -76,7 +78,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 					? resolvedSearchParams.tournamentId
 					: ''
 			const requestedTournamentIdNumber = Number(requestedTournamentId)
-			const context = liveContextData.liveContext
+			const context = liveContext
 			const ref =
 				context?.revision && context.eventId
 					? {

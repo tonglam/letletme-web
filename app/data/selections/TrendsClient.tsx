@@ -9,6 +9,11 @@ import {
 	resolveAudienceHint
 } from '@/lib/analytics/client-vitals'
 import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
+import {
+	resolveTrendAvailabilityState,
+	trendAvailabilityLabelKey,
+	trendAvailabilityMessageKey
+} from './_lib/trend-availability'
 import type {
 	TrendAccess,
 	TrendCohort,
@@ -86,6 +91,12 @@ export default function TrendsClient({
 	)
 	const selected =
 		cohorts.find(item => item.id === cohortId) ?? cohorts[0] ?? null
+	const committedAvailability = committed
+		? resolveTrendAvailabilityState({
+				state: committed.cohort.availability,
+				rows: null
+			})
+		: null
 	const audienceHint =
 		typeof document === 'undefined'
 			? ('unknown' as const)
@@ -434,7 +445,12 @@ export default function TrendsClient({
 										{committed.cohort.displayName}
 									</h2>
 									<p className="text-sm text-muted-foreground">
-										GW{committed.eventId} · {committed.cohort.availability}
+										GW{committed.eventId} ·{' '}
+										{t(
+											trendAvailabilityLabelKey(
+												committedAvailability ?? 'UNAVAILABLE'
+											)
+										)}
 									</p>
 								</div>
 								<div className="flex items-center gap-2">
@@ -449,39 +465,71 @@ export default function TrendsClient({
 														)?.evidenceContext.sampleSize ?? '?'
 												})}
 									</span>
-									<button
+													<button
 										type="button"
 										onClick={() => void shareCurrentDesk()}
 										className="rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted"
 									>
-										{shareState === 'copied' ? 'Copied' : 'Share'}
+											{shareState === 'copied'
+												? t('shareCopiedShort')
+												: t('shareCopy')}
 									</button>
 								</div>
 							</div>
 							<div className="grid gap-4 md:grid-cols-2">
-								{committed.sections.map(section => (
-									<article
-										key={section.capability}
+									{committed.sections.map(section => {
+										const availability = resolveTrendAvailabilityState(section)
+										return (
+										<article
+											key={section.capability}
 										className="rounded-xl border bg-card p-4 shadow-sm"
 									>
 										<div className="mb-3 flex items-center justify-between">
-											<h3 className="font-semibold">
-												{labelKeys[section.capability]
-													? t(labelKeys[section.capability])
-													: section.capability}
-											</h3>
-											<span className="text-xs text-muted-foreground">
-												{section.state}
-											</span>
-										</div>
-										{section.rows === null ? (
-											<p className="text-sm text-muted-foreground">
-												Unavailable for this gameweek.
-											</p>
-										) : section.rows.length === 0 ? (
-											<p className="text-sm text-muted-foreground">
-												{t('noData')}
-											</p>
+												<h3 className="font-semibold">
+													{labelKeys[section.capability]
+														? t(labelKeys[section.capability])
+														: t('unknownCapability')}
+												</h3>
+												<span className="text-xs text-muted-foreground">
+														{t(trendAvailabilityLabelKey(availability))}
+												</span>
+											</div>
+											{section.rows === null ? (
+													<div className="space-y-3">
+														<p className="text-sm text-muted-foreground">
+															{t(trendAvailabilityMessageKey(availability), {
+																gameweek: committed.eventId
+															})}
+														</p>
+														{availability === 'UNAVAILABLE' ? (
+															<button
+																type="button"
+																className="rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted"
+																onClick={() =>
+																void select(
+																	access,
+																	committed.cohort.id,
+																	committed.eventId,
+																	false
+																)
+															}
+															>
+																{t('retry')}
+															</button>
+														) : null}
+													</div>
+											) : section.rows.length === 0 ? (
+													<p className="text-sm text-muted-foreground">
+														{t(
+															availability === 'CONFIRMED_EMPTY'
+																? 'confirmedEmpty'
+																: availability === 'STALE'
+																	? 'staleData'
+																	: availability === 'PARTIAL'
+																		? 'partialData'
+																		: 'noData'
+																	)}
+													</p>
 										) : (
 											<ol className="space-y-2">
 												{section.rows.slice(0, 12).map(row => (
@@ -510,8 +558,9 @@ export default function TrendsClient({
 												))}
 											</ol>
 										)}
-									</article>
-								))}
+											</article>
+										)
+									})}
 							</div>
 						</>
 					)}

@@ -8,7 +8,7 @@ import {
 	parseTeamStatsGw,
 	parseTeamStatsView,
 } from '@/app/me/team/_lib/team-stats-url'
-import { getCurrentAndNextEvents } from '@/lib/events'
+import { getCoreEventContext, getCurrentAndNextEvents } from '@/lib/events'
 import {
 	maxEventIdFromHistory,
 	resolveReviewGameweekAnchor,
@@ -26,6 +26,7 @@ import {
 	type EntrySummaryResponse,
 } from '@/lib/graphql/operations/entries'
 import { getVerifiedEntryContext } from '@/lib/session'
+import { resolveSeasonPresentation } from '@/lib/season-presentation'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
 import { redirect } from 'next/navigation'
@@ -70,11 +71,17 @@ function TeamStatsFallback() {
  */
 export default async function TeamStatsPage({ params, searchParams }: PageProps) {
 	const timing = new RouteLoaderTiming('/my-fpl/team')
-	const [pageLocale, t, sp, context, events] = await Promise.all([
+	const [pageLocale, t, sp, context, coreEventContext, events] = await Promise.all([
 		getPageLocale(params),
 		getTranslations('States'),
 		searchParams,
 		timing.measure('session', () => getVerifiedEntryContext()),
+		timing.measure('event-context', () =>
+			getCoreEventContext().catch(error => {
+				console.warn('[team stats] event context failed:', error)
+				return null
+			})
+		),
 		timing.measure('events', () => getCurrentAndNextEvents())
 	])
 	const { locale } = pageLocale
@@ -92,6 +99,7 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 	}
 
 	const eventsAnchor = resolveReviewGameweekAnchor(events)
+	const seasonPresentation = resolveSeasonPresentation(coreEventContext)
 
 	let initialEntryEventResult: EntryEventResult | null = null
 	let initialEntryHistory: EntryHistoryResponse['entryHistory'] | null = null
@@ -206,6 +214,7 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 				initialEntryTransfers={null}
 				initialError={initialError}
 				initialRequestComplete={initialRequestComplete}
+				initialSeasonPhase={seasonPresentation.phase}
 			/>
 		</Suspense>
 	)
