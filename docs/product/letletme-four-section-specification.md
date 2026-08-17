@@ -11,6 +11,13 @@
 - **Scope:** The four public website sections: Live, My FPL, Competitions, and Explore
 - **Assumption:** Current in-progress Web, GraphQL, and Data work is completed and available.
 
+> **Briefing supersession notice (18 August 2026):** The title and four-section model in this
+> document predate the decision to promote Briefing to the second top-level navigation position.
+> All Briefing-specific placement, follow/mute, personalization, acquisition, and implementation
+> clauses are superseded by
+> [LetLetMe Briefing — Full-Chain Architecture and Delivery Plan](letletme-briefing-content-architecture.md).
+> The remaining Live, My FPL, Competitions, and Explore specifications continue to apply.
+
 ## 1. Purpose of this document
 
 The product-conclusions document defines what LetLetMe is and where it should invest. This companion document turns that direction into a section-level website specification.
