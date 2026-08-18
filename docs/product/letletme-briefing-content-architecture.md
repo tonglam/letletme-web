@@ -4,7 +4,7 @@
 - **记录日期：** 2026-08-18
 - **范围：** X/Grok 采集、来源治理、编辑生产、Data、PostgreSQL、Redis、GraphQL、Web、后台运营、缓存、纠错与未来通知
 - **首个纵向切片：** `Briefing → 本周`
-- **次级菜单详细设计：** [新闻 / News](letletme-briefing-news-architecture.md)、[观点 / Views](letletme-briefing-views-architecture.md)、[深度 / Features](letletme-briefing-features-architecture.md)
+- **次级菜单详细设计：** [本周 / Week 跨仓实施方案](letletme-briefing-week-cross-repo-implementation-plan.md)、[新闻 / News](letletme-briefing-news-architecture.md)、[观点 / Views](letletme-briefing-views-architecture.md)、[深度 / Features](letletme-briefing-features-architecture.md)
 - **关联仓库：** `letletme_data`、`letletme-graphql`、`letletme-web`
 - **替代关系：** 本文替代既有产品文档中所有关于 Briefing 的导航位置、个性化、follow/mute、采集方式和跨仓实现结论；其他非 Briefing 结论继续有效
 
@@ -25,7 +25,7 @@ Briefing 升级为第二个顶级导航，不再藏在 Explore 中：
 
 | 菜单 | 用户要解决的问题 | 主要内容 | 公开组织单位 | 更新特点 |
 | --- | --- | --- | --- | --- |
-| **本周 / Week** | 截止日前，本轮真正发生了什么、哪些信息值得我自己判断？ | 发布会、伤停、训练与阵容消息、首发传闻、具名 KOL 本周观点与模板、值得读/听/看的内容 | 一份全站统一的 Week edition，引用已发布 Story | 高时效；越接近 deadline 越频繁 |
+| **[本周 / Week](letletme-briefing-week-cross-repo-implementation-plan.md)** | 截止日前，本轮真正发生了什么、哪些信息值得我自己判断？ | 发布会、伤停、训练与阵容消息、首发传闻、具名 KOL 本周观点与模板、值得读/听/看的内容 | 一份全站统一的 Week edition，引用已发布 Story | 高时效；越接近 deadline 越频繁 |
 | **[新闻 / News](letletme-briefing-news-architecture.md)** | 俱乐部和球员最近发生了什么？ | 转会、俱乐部公告、记者消息、球队动态、伤停和赛前信息 | `NEWS` Story 的编辑集合 | 日内持续更新；更正优先于新增 |
 | **[观点 / Views](letletme-briefing-views-architecture.md)** | 可信的记者、分析者和 KOL 在怎么判断？ | X、YouTube、播客中的具名观点、模板、差异和反对意见 | `OPINION` Story 的编辑集合 | 强归因；不生成“社区共识” |
 | **[深度 / Features](letletme-briefing-features-architecture.md)** | 哪些长文章、节目或分析值得花时间？ | 球队分析文章、专题、播客/视频的许可摘要和编辑重组 | `FEATURE` Story 的编辑集合 | 低频、长生命周期、权利审查更严格 |
