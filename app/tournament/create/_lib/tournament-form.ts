@@ -165,7 +165,8 @@ export interface TournamentPlan {
 	knockoutRounds: number
 	knockoutStart: number
 	knockoutEnd: number
-	knockoutTeamCountIsPowerOfTwo: boolean
+	knockoutBracketSize: number
+	knockoutByeCount: number
 	knockoutReady: boolean
 }
 
@@ -186,8 +187,9 @@ export function parseGameweek(value?: string): number {
 	return Number.isInteger(parsed) ? parsed : 0
 }
 
-export function isPowerOfTwo(value: number): boolean {
-	return value >= 2 && (value & (value - 1)) === 0
+export function nextPowerOfTwo(value: number): number {
+	if (!Number.isFinite(value) || value <= 0) return 0
+	return 2 ** Math.ceil(Math.log2(value))
 }
 
 export function computeTournamentPlan(
@@ -218,17 +220,20 @@ export function computeTournamentPlan(
 		: values.groupFormat === 'points'
 			? groupCount * qualifiersPerGroup
 			: totalEntries
-	const knockoutTeamCountIsPowerOfTwo = values.knockoutFormat === 'none' || isPowerOfTwo(knockoutTeamCount)
-	const knockoutEventCount = knockoutTeamCount >= 2 ? Math.ceil(Math.log2(knockoutTeamCount)) : 0
+	const knockoutBracketSize = knockoutTeamCount >= 2 ? nextPowerOfTwo(knockoutTeamCount) : 0
+	const knockoutEventCount = knockoutBracketSize >= 2 ? Math.log2(knockoutBracketSize) : 0
 	const knockoutRounds = values.knockoutFormat === 'double' ? knockoutEventCount * 2 : knockoutEventCount
-	const knockoutStart = groupEnd > 0 ? groupEnd + 1 : 0
+	const knockoutStart = values.groupFormat === 'none'
+		? groupStart
+		: groupEnd > 0
+			? groupEnd + 1
+			: 0
 	const knockoutEnd = knockoutStart > 0 ? knockoutStart + Math.max(knockoutRounds - 1, 0) : 0
 	const knockoutReady = groupReady && (
 		values.knockoutFormat === 'none' ||
 		((values.groupFormat === 'none' || qualifiersPerGroup >= 1) &&
 			!qualifyTotalExceedsEntries &&
 			knockoutTeamCount >= 2 &&
-			knockoutTeamCountIsPowerOfTwo &&
 			knockoutStart > 0 &&
 			knockoutEnd <= 38)
 	)
@@ -249,7 +254,8 @@ export function computeTournamentPlan(
 		knockoutRounds,
 		knockoutStart,
 		knockoutEnd,
-		knockoutTeamCountIsPowerOfTwo,
+		knockoutBracketSize,
+		knockoutByeCount: knockoutBracketSize > 0 ? knockoutBracketSize - knockoutTeamCount : 0,
 		knockoutReady,
 	}
 }
