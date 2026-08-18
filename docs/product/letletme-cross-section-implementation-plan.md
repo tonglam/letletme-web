@@ -16,8 +16,14 @@ The precedence rule is:
 - The Competitions plan is authoritative for official-source, Competition, membership, lifecycle, and format persistence.
 - The Live plan is authoritative for live refresh, current-result presentation, retained coverage, and live-page behaviour.
 - The My FPL plan is authoritative for personal persistence, relevant-change baselines, team review, and provisional-to-final reconciliation.
-- The Explore plan is authoritative for `EvidenceContext`, sampled-cohort semantics, Briefing rights, and evidence presentation.
+- The Explore plan is authoritative for `EvidenceContext`, sampled-cohort semantics, and quantitative evidence presentation.
 - A local section example must use the shared contract rather than create a competing version. Section-specific fields may extend the shared type additively.
+
+> **Briefing supersession notice (18 August 2026):** Briefing is no longer owned by Explore. Its
+> navigation, non-personalized product contract, X/Grok acquisition, content publication, GraphQL,
+> Web, and operational design are now governed by
+> [LetLetMe Briefing — Full-Chain Architecture and Delivery Plan](letletme-briefing-content-architecture.md).
+> This cross-section plan remains authoritative for its non-Briefing shared contracts.
 
 The fixed implementation decisions are:
 

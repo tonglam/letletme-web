@@ -10,12 +10,19 @@
 
 This document does not redefine Explore. It translates the approved Section 4 decisions into cross-repository implementation work.
 
-The cross-section plan governs shared identity references, season context, result-metadata separation, principal verification, canonical links, compatibility, and delivery gates. This plan is authoritative for `EvidenceContext`, rank-cohort semantics, Briefing acquisition/rights, and evidence-specific presentation.
+The cross-section plan governs shared identity references, season context, result-metadata separation, principal verification, canonical links, compatibility, and delivery gates. This plan is authoritative for `EvidenceContext`, rank-cohort semantics, and quantitative evidence-specific presentation.
+
+> **Briefing supersession notice (18 August 2026):** Briefing has been promoted out of Explore into
+> the second top-level navigation position. All Briefing-specific routes, source acquisition,
+> follow/mute preferences, schemas, publications, GraphQL reads, Web surfaces, work packages, and
+> acceptance criteria below are superseded by
+> [LetLetMe Briefing — Full-Chain Architecture and Delivery Plan](letletme-briefing-content-architecture.md).
+> The quantitative Explore and shared evidence-context design in this document remains valid.
 
 The fixed inputs are:
 
 - The public category is **Explore**. Existing `/explore/*` paths remain stable during this implementation.
-- The Explore label opens a lightweight Overview at `/data`; its compact submenu remains Gameweek, Fixtures, Market, Trends, Players, and Briefing.
+- The Explore label opens a lightweight Overview at `/data`; its compact submenu remains Gameweek, Fixtures, Market, Trends, and Players.
 - Explore is an evidence layer. It does not produce buy/sell/avoid/essential/best-captain verdicts, optimized teams, expected-points models, expected-minutes models, or price-change predictions.
 - Explore Overview is a bounded router and deterministic search surface, not a duplicate homepage, infinite feed, or question-and-answer interface.
 - Gameweek remains the concise official round-level view.
