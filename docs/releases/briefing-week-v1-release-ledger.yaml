@@ -12,6 +12,7 @@ worktrees:
 
 branches:
   data: codex/briefing-content-foundation
+  data_pipeline_ref: codex/briefing-week-pipeline
   graphql: codex/briefing-week-read
   web: codex/briefing-week-web
 
