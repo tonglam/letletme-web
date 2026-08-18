@@ -1,0 +1,74 @@
+version: 1
+surface: briefing-week-v1
+status: implementation
+updated_at: 2026-08-18T06:51:38Z
+github_issue: https://github.com/tonglam/letletme-web/issues/111
+
+worktrees:
+  root: /Users/tong/.codex/worktrees/briefing-week-v1
+  data: /Users/tong/.codex/worktrees/briefing-week-v1/data
+  graphql: /Users/tong/.codex/worktrees/briefing-week-v1/graphql
+  web: /Users/tong/.codex/worktrees/briefing-week-v1/web
+
+branches:
+  data: codex/briefing-content-foundation
+  graphql: codex/briefing-week-read
+  web: codex/briefing-week-web
+
+base_sha:
+  data: 65e14dd5bbc8ee5f7d8144ad03624dfe5bf0a3cb
+  graphql: ae7bffb548b3f7051c167810eade4d4409c1fb15
+  web: 9d2d6a7b175f5665d4c483cb7365d41fbe42b410
+
+head_sha:
+  data: pending-local-commit
+  graphql: pending-local-commit
+  web: pending-local-commit
+
+contract:
+  schema: week-publication-v1
+  schema_version: 1
+  fixture_sha256: 8870d420a7cb01b037905b378a3186ed087608dc03892fee9b356fde05fc75cc
+  grok_skill: monitor-fpl-x-sources
+  grok_skill_sha256: b23dc3dcf7ab79c7d13fd40a2a08d298ad4740940f71aa44988954b5690d3519
+  redis_active_pointer: llm:content:briefing:week:active
+
+runtime_flags:
+  CONTENT_PIPELINE_ENABLED: false
+  CONTENT_REAL_GROK_ENABLED: false
+  CONTENT_PUBLICATION_ENABLED: false
+  BRIEFING_PUBLIC_ENABLED: false
+
+publication:
+  active_publication_id: pending
+  active_revision: pending
+  source_snapshot_revision: pending
+
+verification:
+  data_typecheck: passed
+  data_content_unit_tests: passed
+  data_content_lint: passed
+  data_build: passed
+  graphql_typecheck: passed
+  graphql_briefing_tests: passed
+  graphql_lint: passed_with_existing_warnings
+  graphql_build: passed
+  web_typecheck: passed
+  web_briefing_lint: passed
+  web_build: passed
+  web_route_smoke: passed (EN/zh-CN, GraphQL absence renders UNAVAILABLE)
+  production_smoke: pending
+  exact_head_review: pending
+
+release_gates:
+  - D1 additive migration deployed and least-privilege grants verified
+  - D2 shadow acquisition run records a real Grok/X trace for every non-empty result
+  - G1 verifies Redis pointer, payload checksum, and same-revision PostgreSQL fallback
+  - W1 verifies anonymous and authenticated users receive identical IDs/order in both locales
+  - Human editor and publisher credentials, source rights owners, and public source list recorded
+  - Canary publication verified end-to-end before BRIEFING_PUBLIC_ENABLED is enabled
+
+rollback:
+  first_action: Set BRIEFING_PUBLIC_ENABLED=false
+  content_action: Keep additive content schema; publish correction or tombstone revision
+  cache_action: Ignore or delete only the affected immutable Redis revision after PG state is durable

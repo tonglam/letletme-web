@@ -107,6 +107,16 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 		<>
 			<div className="ml-6 hidden items-center gap-0.5 md:flex">
 				{menuItems.map(item => (
+					item.directHref ? (
+						<NavigationMenuLink
+							key={item.id}
+							href={item.directHref}
+							prefetch={false}
+							className="block rounded-md px-3 py-2 font-display text-xs font-semibold uppercase tracking-caps text-fascia-foreground/70 hover:bg-fascia-foreground/5 hover:text-fascia-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric"
+						>
+							{t(item.labelKey)}
+						</NavigationMenuLink>
+					) : (
 					<details
 						key={item.id}
 						data-navigation-group={item.id}
@@ -130,6 +140,7 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 							))}
 						</div>
 					</details>
+					)
 				))}
 				<details
 					data-navigation-disclosure
@@ -165,6 +176,16 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 						</p>
 					</div>
 					{menuItems.map(item => (
+						item.directHref ? (
+							<NavigationMenuLink
+								key={item.id}
+								href={item.directHref}
+								prefetch={false}
+								className="block rounded-md px-2 py-3 text-sm font-semibold hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							>
+								{t(item.labelKey)}
+							</NavigationMenuLink>
+						) : (
 						<section key={item.id} className="border-b py-2 last:border-0">
 							<p className="px-2 py-1 font-display text-xs font-bold uppercase tracking-caps text-muted-foreground">
 								{t(item.labelKey)}
@@ -180,6 +201,7 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 								</NavigationMenuLink>
 							))}
 						</section>
+						)
 					))}
 					<div className="mt-3 border-t pt-3">
 						<AccountPanel user={user} homeHref={homeHref} />
