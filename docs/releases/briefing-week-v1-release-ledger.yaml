@@ -21,9 +21,9 @@ base_sha:
   web: 9d2d6a7b175f5665d4c483cb7365d41fbe42b410
 
 head_sha:
-  data: pending-local-commit
-  graphql: pending-local-commit
-  web: pending-local-commit
+  data: 2fbae5c33ce7c22d3492b150c0992c77b52ab330
+  graphql: b71d52547825bb928d1ac8d7f627830b4d396b39
+  web: 6f31ac42bbe748ae7e3a84aa67956560cbf9dfa0
 
 contract:
   schema: week-publication-v1
