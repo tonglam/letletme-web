@@ -4,6 +4,8 @@ export const GET_ENTRY_LEAGUES = `
       id
       name
       type
+      officialKind
+      shortName
       entryRank
       entryLastRank
       totalTeamNum
@@ -16,11 +18,14 @@ export const GET_ENTRY_LEAGUES = `
 `
 
 export type LeagueType = 'CLASSIC' | 'H2H'
+export type OfficialLeagueKind = 'SYSTEM' | 'INVITATIONAL' | 'PUBLIC'
 
 export interface EntryLeague {
 	id: number
 	name: string
 	type: LeagueType | string
+	officialKind: OfficialLeagueKind | null
+	shortName: string | null
 	entryRank: number | null
 	entryLastRank: number | null
 	totalTeamNum: number | null
