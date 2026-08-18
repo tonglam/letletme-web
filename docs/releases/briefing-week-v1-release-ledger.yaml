@@ -22,7 +22,7 @@ base_sha:
   web: 9d2d6a7b175f5665d4c483cb7365d41fbe42b410
 
 head_sha:
-  data: 2fbae5c33ce7c22d3492b150c0992c77b52ab330
+  data: 59a9cabdbfab11c9279a692c7b4efe6119072451
   graphql: b71d52547825bb928d1ac8d7f627830b4d396b39
   web: 6f31ac42bbe748ae7e3a84aa67956560cbf9dfa0
 
@@ -48,8 +48,10 @@ publication:
 verification:
   data_typecheck: passed
   data_content_unit_tests: passed
+  data_full_unit_tests: passed (751 tests)
   data_content_lint: passed
   data_build: passed
+  data_editorial_workflow: passed (typecheck, lint, migration contract)
   graphql_typecheck: passed
   graphql_briefing_tests: passed
   graphql_lint: passed_with_existing_warnings
@@ -58,6 +60,7 @@ verification:
   web_briefing_lint: passed
   web_build: passed
   web_route_smoke: passed (EN/zh-CN, GraphQL absence renders UNAVAILABLE)
+  web_admin_route: passed (role-gated, server action only)
   production_smoke: pending
   exact_head_review: pending
 
