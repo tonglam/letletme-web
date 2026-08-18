@@ -24,7 +24,7 @@ base_sha:
 head_sha:
   data: 59a9cabdbfab11c9279a692c7b4efe6119072451
   graphql: b71d52547825bb928d1ac8d7f627830b4d396b39
-  web: 6f31ac42bbe748ae7e3a84aa67956560cbf9dfa0
+  web: d2707b7176922f94ec3915278a07b28dc5575e79
 
 contract:
   schema: week-publication-v1
