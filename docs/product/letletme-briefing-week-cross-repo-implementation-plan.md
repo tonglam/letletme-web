@@ -117,12 +117,14 @@ D1 合并后，Data worktree 才结束第一个分支并进入 D2：
 git -C /Users/tong/.codex/worktrees/briefing-week-v1/data status --porcelain
 git -C /Users/tong/.codex/worktrees/briefing-week-v1/data fetch origin --prune
 git -C /Users/tong/.codex/worktrees/briefing-week-v1/data switch --detach origin/main
-git -C /Users/tong/.codex/worktrees/briefing-week-v1/data branch -d codex/briefing-content-foundation
 git -C /Users/tong/.codex/worktrees/briefing-week-v1/data \
   switch -c codex/briefing-week-pipeline origin/main
 ```
 
 只有 D1 已远程确认 merged、该 worktree 干净、`origin/main` 已包含 D1 时，才允许执行上述转换。若使用 squash merge，不能只凭 ancestry 判断；必须结合 PR merged 状态、tree/patch 对比和 `git cherry`。
+转换时先保留 D1 local ref，不让 `git branch -d` 因 squash tip 非 main ancestor 阻断 D2。最终清理时，
+只有 PR merged、patch/tree equivalence 和 clean worktree 都已确认，才可对这个精确分支使用
+`git branch -D codex/briefing-content-foundation`；证据不足就继续保留。
 
 ### 2.4 Release ledger
 
@@ -343,7 +345,10 @@ D1 一次引入完整关系模型，但按以下顺序执行，避免 circular F
 关键唯一约束：
 
 - `(source_id, external_id)` 唯一；X post ID 使用 text。
-- `(group_id, partition_key, mode, window_start, window_end)` 唯一 run scope。
+- `poll` 使用 `(group_id, partition_key, mode, window_start, window_end)` 唯一 run scope；`enrich`
+  使用 `(candidate_cluster_id, canonical_input_hash, policy_version)`；`compose` 使用
+  `(story_id/version_group_id, canonical_input_hash, locale_pair, prompt_version)`。不同 candidate 不能因
+  共享 source partition/window 而复用错误的 enrich run。
 - `(version_group_id, locale)` 唯一 Story localization。
 - `(edition_id, story_id)` 唯一。
 - `(publication_id, locale)` 唯一 payload。
@@ -474,9 +479,11 @@ receipt
 2. 创建 target event 对应 Week edition，保存 section/placement/order。
 3. 编译 `en` 和 `zh-CN` payload，验证 rights projection、集合、顺序、bytes 和 checksum。
 4. stage Redis immutable payload 并读回验证。
-5. PostgreSQL 短事务激活 publication、retire 旧 revision、写 outbox。
-6. Redis Lua/CAS 切 active pointer；失败由 publication worker repair。
-7. deadline 后立即使旧 event Week pointer 不可作为当前 target 命中。
+5. PostgreSQL 短事务激活 publication、retire 旧 revision、写 active/servable metadata 和 outbox。
+6. GraphQL 从此只接受与 PostgreSQL active metadata 完全匹配的 Redis pointer/payload；旧 pointer 即使
+   尚未切换也不能继续服务。
+7. Redis Lua/CAS 切 active pointer；失败由 publication worker repair。
+8. deadline 后立即使旧 event Week pointer 不可作为当前 target 命中。
 
 Redis namespace：
 
@@ -489,7 +496,11 @@ llm:content:briefing:story:<story-id>:<revision>:en
 llm:content:briefing:story:<story-id>:<revision>:zh-CN
 ```
 
-PostgreSQL activation 成功即为 durable publish；Redis 是可重建加速层。Redis repair 只能由 Data 写入者执行，GraphQL 不自修缓存。
+PostgreSQL activation 成功即为 durable publish；Redis 是可重建 payload 加速层。Redis repair 只能由
+Data 写入者执行，GraphQL 不自修缓存。Correction、removal 和 rights revoke 必须先 stage 安全
+revision/tombstone，再在一个 PostgreSQL 事务中激活安全 revision 并把旧 revision 标记为不可服务；
+GraphQL metadata guard 立即拒绝旧 Redis pointer。安全 projection 失败则 scope 返回
+`UNAVAILABLE`，不能等待异步 repair 时继续显示旧正文。
 
 ### 6.6 后台 command API
 
@@ -538,13 +549,15 @@ tests/infra/content-publication.test.ts
 
 每次 query：
 
-1. 读取 `week:active` pointer 并 exact-field validate。
-2. 校验 schema version、scope、target event、`validUntil` 和 locale manifest。
-3. 读取该 pointer 固定的 immutable payload。
-4. 校验 byte count、SHA-256、publication ID 和 revision。
-5. 成功后将该 revision pin 到本次 resolver request。
-6. 任一 Redis 校验失败，从 PostgreSQL 读取同一 active compiled publication。
-7. PostgreSQL 也失败时返回 `UNAVAILABLE`，不能从 raw editorial 表临时拼页面。
+1. 从 PostgreSQL 窄 active-publication view 读取 scope 的 authoritative revision、publication ID、
+   state、`servable` 和 locale manifest。
+2. metadata 不可读或 `servable=false` 时返回 `UNAVAILABLE/REMOVED`，不相信残留 Redis pointer。
+3. 读取 `week:active` pointer，并要求它与 PostgreSQL metadata exact match。
+4. 校验 schema version、scope、target event、`validUntil` 和 locale manifest。
+5. 读取该 revision 的 immutable payload，校验 byte count、SHA-256、publication ID 和 revision。
+6. 成功后将该 PostgreSQL revision pin 到本次 resolver request。
+7. Redis 缺失或不匹配时，从 PostgreSQL 读取同一 active compiled payload。
+8. PostgreSQL metadata/payload 失败时返回 `UNAVAILABLE`，不能从 raw editorial 表或旧 Redis 临时拼页面。
 
 Slug alias 只返回 canonical redirect metadata；Story detail 读取 `STORY:<id>` active revision。Removal 返回 tombstone，不回退旧正文。
 
@@ -619,6 +632,7 @@ app/[locale]/briefing/week/page.tsx
 app/[locale]/briefing/story/[slug]/page.tsx
 app/[locale]/briefing/loading.tsx
 app/[locale]/briefing/error.tsx
+app/api/internal/briefing/revalidate/route.ts
 components/briefing/
 lib/graphql/operations/briefing.ts
 lib/briefing/
@@ -652,21 +666,28 @@ UI 不出现 LetLetMe 的买入、卖出、队长或“最佳阵容”结论。�
 
 ### 8.4 公共缓存
 
-新增明确的 cache tag 和 operation allowlist：
+新增明确的 cache tag，但 V1 不把 Briefing operation 加入 Web GraphQL proxy/browser public
+allowlist：
 
 ```text
-BriefingWeek
-BriefingStory
+briefing:week
+briefing:story:<story-id>
+briefing:story-slug:<slug>
 ```
 
 规则：
 
-- RSC 使用 `executePublicServerQuery`，不加载 session。
-- Web proxy 只有无 Authorization、无 session、operation 在 allowlist 且 GraphQL envelope 无 error 时才可 public cache。
-- Week 初始 `s-maxage` 约 30 秒；deadline 临近时 route/RSC revalidate clamp，不能跨 `validUntil`。
-- Story detail 可按 revision 使用更长的短期 SWR，但 correction/removal 必须触发 tag invalidation 或 revision miss。
+- RSC 使用不加载 session 的 public server request，但 Week/Story 初始都设为 `no-store`。
+- `BriefingWeek`/`BriefingStory` 的 GraphQL proxy response 和 browser memory cache 在 V1 保持
+  `no-store`；GraphQL Redis immutable payload 已提供主要加速。
+- Data publication outbox 向 `app/api/internal/briefing/revalidate/route.ts` 发送带 timestamp、nonce、
+  event ID 和 idempotency key 的签名事件；Web 验签后失效 Week、Story ID、canonical/alias slug tags。
+- 只有 publish/correction/removal/rights revoke、重复事件和 webhook failure/retry E2E 全部通过后，
+  才可由独立 flag 为 Week RSC 开启约 30 秒的 tagged cache；deadline 临近时 clamp，不能跨
+  `validUntil`。
+- Story detail 在 V1 始终 `no-store`，不能依赖 URL/variables 不包含的 active revision 产生 cache miss。
 - `STALE/OFFSEASON/UNAVAILABLE` 不得被缓存成 `EMPTY`。
-- browser memory cache 如果加入 Briefing，也必须把 locale、slug/revision 纳入 key，并服从 removal；V1 可先不加入。
+- Webhook 不可用时保持 `no-store`，不能用短 TTL 代替 fail-closed correction/removal。
 
 ### 8.5 编辑后台
 
@@ -699,7 +720,8 @@ Publish UI 必须显示 target event、deadline、Story revision、rights warnin
 - 登录与匿名用户拿到相同 revision/order；
 - en/zh-CN route、canonical/alias redirect 和外链安全通过；
 - 五种 public state 视觉和语义不同；
-- correction/removal 不继续显示旧正文；
+- correction/removal/rights revoke 经签名 webhook 后不继续显示旧正文；webhook 失败会重试并保持
+  Briefing `no-store`；
 - public GraphQL allowlist 不意外缓存任何私有 operation；
 - admin 未登录、普通用户、editor、publisher 权限矩阵通过；
 - `npm run lint`、`npm test`、`npx tsc --noEmit`、`npm run build` 和目标 Playwright 通过。
@@ -1014,6 +1036,7 @@ Week V1 只有同时满足以下条件才算完成：
 - fixture 和真实 Grok shadow 均验证，成本/coverage 有实测数据；
 - 当前 target 的人工 Week publication 在 PostgreSQL/Redis 一致；
 - GraphQL Redis hit、PG fallback 和 fail-closed 均生产 smoke；
+- PostgreSQL active metadata guard 会拒绝旧 Redis pointer，签名 Web invalidation 已演练；
 - Web 顶级第二导航、Week、Story、两个 locale、Desktop/Mobile 均真实浏览器验收；
 - 匿名/登录用户看到相同 Story 集合和顺序；
 - deadline 切换、correction、removal、rights revoke 和 rollback 至少演练一次；
@@ -1039,6 +1062,10 @@ git -C <repository> worktree remove <exact-worktree-path>
 git -C <repository> branch -d <exact-local-branch>
 git -C <repository> worktree prune
 ```
+
+`branch -d` 只适用于 tip 已成为 `main` ancestor 的 merge/rebase。若 GitHub 使用 squash merge，必须先用
+PR merged 状态、merge commit、`git cherry` 和 patch/tree equivalence 确认内容已进入 `main`，再对
+精确分支执行 `branch -D`；不能把 `-d` 失败误判成 D2 或清理流程失败，也不能未经证据强删。
 
 远端 feature branch 是否删除单独确认；不要把删除本地资源扩大成删除远端历史。最后三个主 checkout 分别 `git fetch origin --prune`，在不覆盖现有 dirty work 的前提下确认 `main` 能 fast-forward 到 `origin/main`。
 

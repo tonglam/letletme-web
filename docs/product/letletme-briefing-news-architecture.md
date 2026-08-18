@@ -522,7 +522,8 @@ PostgreSQL active News publication
   → immutable ordered en payload
   → immutable ordered zh-CN payload
   → Redis stage + checksum read-back
-  → PostgreSQL activate/retire + outbox
+  → PostgreSQL activate/retire + active/servable metadata + outbox
+  → GraphQL PostgreSQL metadata guard
   → Redis active pointer CAS
 ```
 
@@ -553,10 +554,11 @@ llm:content:briefing:news:<revision>:zh-CN
 
 ### 6.4 Web/GraphQL 短缓存
 
-- Web 公共 GraphQL proxy/CDN key 包含 operation、locale、filter、first、after。
-- READY 响应初始 TTL 30–60 秒；具体值以 publication 时效监控调整。
-- `UNAVAILABLE` 不长缓存；`EMPTY` 和 `STALE` 使用更短且不同的 TTL。
-- outbox 后续可触发精确 revalidation，但短 TTL 是 webhook 失效时的安全上限。
+- GraphQL 每次先读取 PostgreSQL active/servable metadata，再接受完全匹配的 Redis payload。
+- Web GraphQL proxy、RSC 和 browser 对 News 初始 `no-store`；短 TTL 不能代替撤稿/撤权失效。
+- 签名 outbox → Web revalidation webhook 通过 correction/removal/rights revoke E2E 后，才可用 flag
+  开启 READY 30–60 秒 tagged RSC cache；具体值以 publication 时效监控调整。
+- `UNAVAILABLE` 不缓存；`EMPTY` 和 `STALE` 即使未来启用 cache 也使用更短且不同的 TTL。
 - correction/removal 必须先使受影响旧 payload fail closed，再重编译；不能继续从 PostgreSQL fallback 泄漏旧正文。
 
 ## 7. GraphQL 公共合同
@@ -655,12 +657,13 @@ News card 在共享 `BriefingStoryCard` 上增加 News 投影：
 
 GraphQL：
 
-1. 首次请求读取 active pointer 并 pin revision；
-2. 校验 scope、revision、locale、bytes、checksum 和 exact payload shape；
-3. Redis 不可用时读取 PostgreSQL 同一 compiled publication；
-4. 验证 filter 后进行稳定 slice；
-5. 生成绑定 revision/filter/locale 的签名 cursor；
-6. detail 继续通过 `briefingStory(slug, locale)` 获取独立 active Story publication。
+1. 首次请求从 PostgreSQL 窄 view 读取 active/servable metadata 并 pin revision；
+2. 只接受 publication ID/revision/state/locale manifest 完全匹配的 Redis pointer/payload；
+3. 校验 scope、revision、locale、bytes、checksum 和 exact payload shape；
+4. Redis 不可用或不匹配时读取 PostgreSQL 同一 active compiled publication；
+5. 验证 filter 后进行稳定 slice；
+6. 生成绑定 revision/filter/locale 的签名 cursor；
+7. detail 继续通过 `briefingStory(slug, locale)` 获取独立 active Story publication。
 
 GraphQL 不从 candidate、claim、receipt 表现场重建 News，不把数据库错误变成 `EMPTY`，也不因登录用户不同返回不同顺序。
 
@@ -836,7 +839,7 @@ LLM 不自动启用新来源，不自动提升 source tier，也不因为一个�
 
 - `briefingNews`、shared connection/card types、filter 和 explicit states。
 - exact payload validation、PostgreSQL fallback 和 signed cursor。
-- public allowlist/cache key；证明 cookie/session 不改变结果。
+- PostgreSQL active metadata guard；Briefing proxy 保持 `no-store`，并证明 cookie/session 不改变结果。
 
 ### Phase N4 — Web public + admin
 

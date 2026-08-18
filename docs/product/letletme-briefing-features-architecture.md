@@ -526,9 +526,11 @@ llm:content:briefing:features:<revision>:zh-CN
 - 有界 immutable collection + active pointer；
 - retired revision 初始 TTL 30 分钟，cursor max age 30 分钟；
 - cursor 绑定 revision/offset/filterHash/locale/issuedAt 并签名；
+- GraphQL 先从 PostgreSQL 窄 view pin active/servable metadata，只接受完全匹配的 Redis pointer；
 - Redis 缺失/损坏回退 PostgreSQL 同 compiled revision；
 - active pointer/payload 不依赖 TTL；
-- READY Web proxy/CDN TTL 可比 Week/News 更长，初始 5 分钟；correction/rights outbox 可精确 revalidate。
+- Web/GraphQL proxy 对 Features 初始 `no-store`；签名 correction/rights outbox → Web revalidation
+  经过撤稿/撤权 E2E 后，才可用 flag 开启约 5 分钟 tagged RSC cache。
 
 只有实际 payload 指标超过阈值后再做 shards，不在 V1 提前分片。
 

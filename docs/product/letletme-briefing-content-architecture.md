@@ -52,10 +52,10 @@ Briefing 升级为第二个顶级导航，不再藏在 Explore 中：
 
 | Surface | Skill profile | Publication scope | GraphQL | 活跃集合/分页 | 公共缓存初值 |
 | --- | --- | --- | --- | --- | --- |
-| Week | `week` | `SURFACE:week` | `briefingWeek` | 当前 target event 的 sectioned edition；不做 feed cursor | 约 30 秒，deadline 附近 clamp |
-| News | `news` | `SURFACE:news` | `briefingNews` | developing + 最近 14 天；cap 200；20/页 | 30–60 秒 |
-| Views | `views` | `SURFACE:views` | `briefingViews` | target/validity 未过期；cap 120；20/页 | 30–60 秒 |
-| Features | `features` | `SURFACE:features` | `briefingFeatures` | 最近 30 天 + reviewAt 有效 evergreen；cap 80；20/页 | 5 分钟 |
+| Week | `week` | `SURFACE:week` | `briefingWeek` | 当前 target event 的 sectioned edition；不做 feed cursor | V1 `no-store`；签名失效 E2E 后可 flag 开约 30 秒 tagged RSC cache |
+| News | `news` | `SURFACE:news` | `briefingNews` | developing + 最近 14 天；cap 200；20/页 | 失效链路验收前 `no-store`；之后 30–60 秒 |
+| Views | `views` | `SURFACE:views` | `briefingViews` | target/validity 未过期；cap 120；20/页 | 失效链路验收前 `no-store`；之后 30–60 秒 |
+| Features | `features` | `SURFACE:features` | `briefingFeatures` | 最近 30 天 + reviewAt 有效 evergreen；cap 80；20/页 | 失效链路验收前 `no-store`；之后约 5 分钟 |
 
 四个 surface 各自只有一个全站 active revision，均引用独立 `STORY:<story_id>` publication。News/Views/Features 使用相同 bounded connection/cursor 机制，但保留各自明确的 GraphQL field、filter enum 和 card projection；这不是四套不同的读取基础设施。
 
@@ -222,7 +222,7 @@ Data worker 为每个 run 生成只读、短期的 JSON 输入文件，放在受
     "sources": []
   },
   "targetEvent": {
-    "seasonCode": "2026",
+    "seasonCode": "2627",
     "eventId": 1,
     "deadlineTime": "2026-08-21T17:30:00.000Z"
   },
@@ -231,6 +231,10 @@ Data worker 为每个 run 生成只读、短期的 JSON 输入文件，放在受
   }
 }
 ```
+
+`seasonCode` 统一使用 Data `fpl.seasons.season_code` 的四字符赛季代码，例如
+`2026/27 → "2627"`；它不是数值型 `season_id = 2026`，也不是赛季起始年字符串。
+Skill input、数据库 identity、publication、GraphQL 和所有 fixture 必须使用同一表示。
 
 `profile` 取 `week/news/views/features`，决定稳定 taxonomy、materiality 和 output extension；不能改变来源名单、窗口、预算或基础 envelope。`targetEvent` 只对需要 event scope 的 profile 必填。Source snapshot 必须带稳定 ID、平台 user ID、当前 handle、来源类型、reporting family、topics 和允许的查询用途。Skill 不连接数据库，也不自行扩充名单。
 
@@ -356,7 +360,10 @@ scanStart = lastSuccessfulEnd - configuredOverlap
 - `safetyLag` 和 `overlap` 属于 poll policy；重叠用于抵抗 X 索引延迟。
 - 查询可以使用日期级 `since:`，但 Data 必须用 tool 返回的真实时间做精确过滤。
 - `(source_id, external_id)` 唯一键消化重叠窗口的重复结果。
-- `(group_id, partition_key, mode, window_start, window_end)` 使用唯一 run scope 和确定性 BullMQ job ID；scheduler 重试或人工重复点击复用已有 run，不能重复消耗 Grok session。
+- `poll` 使用 `(group_id, partition_key, mode, window_start, window_end)` 唯一 scope；
+  `enrich` 改用 `(candidate_cluster_id, canonical_input_hash, policy_version)`；`compose`
+  使用 `(story_id/version_group_id, canonical_input_hash, locale_pair, prompt_version)`。BullMQ job
+  ID 对 mode-specific scope 做稳定 hash；不能让同一窗口内两个不同 candidate 的 enrich 相互碰撞。
 - 只有 receipts 和 run audit 已在同一事务中持久化后，才推进 checkpoint。
 - `FAILED` 不推进；`PARTIAL` 只推进已完整覆盖的 partition。
 - 长时间失败后从旧 checkpoint 补扫，但受最大 backfill window 和成本预算限制，不能无限扩窗。
@@ -641,6 +648,8 @@ Story 先发布，Surface 后引用。Story 离开当前 Week 后 canonical deta
 - Manifest/pointer 使用 exact fields、byte count 和 SHA-256 校验。
 - 先 stage 完整 payload，再切 active pointer。
 - Reader 在一次请求内 pin 一个 revision，不能混用新旧 item。
+- GraphQL 每次先从 PostgreSQL 的窄 active-publication view 读取 authoritative revision 和
+  `servable` 状态，再接受完全匹配的 Redis pointer/payload；旧 Redis pointer 不能单独证明仍可服务。
 - Redis 缺失、损坏或不一致时，GraphQL 从 PostgreSQL 读取同一 compiled payload，而不是临时拼原始表。
 
 ### 10.2 Redis key
@@ -669,11 +678,21 @@ llm:content:briefing:story:<story-id>:<revision>:zh-CN
 1. 在 PostgreSQL 为目标 `STORY` 或 `SURFACE` scope 创建 staging publication 和两个 locale 的 immutable payload；Surface 必须固定引用已发布的 Story revision。
 2. 校验 Story 集合、顺序、locale 完整性、rights projection、byte count 和 checksum。
 3. Stage 两个 Redis payload key 并读回校验。
-4. PostgreSQL 短事务中激活新 publication、retire 旧 publication、写 outbox。
-5. Redis Lua/CAS 原子切换 active pointer；失败则由 outbox repair job 重试。
-6. GraphQL 在 pointer 缺失、损坏、过期或 revision 不完整时读取 PostgreSQL active compiled payload。
+4. PostgreSQL 短事务中激活新 publication、retire 旧 publication、写 active/servable metadata 和 outbox。
+5. GraphQL 先读取 PostgreSQL active metadata；只有 Redis pointer 的 publication ID、revision、
+   state、locale manifest 与该 metadata 完全一致时才读取 Redis payload，否则读取 PostgreSQL 中同一
+   active compiled payload。
+6. Redis Lua/CAS 原子切换 active pointer；失败则由 outbox repair job 重试。由于第 5 步的 guard，
+   旧 pointer 在切换窗口内不会被当成当前 revision 服务。
 
-步骤 4 成功后即代表发布成立；Redis 是加速层。步骤 4 与 5 之间旧 Redis revision 可以在其 `validUntil` 之前短暂继续服务，但不能跨 deadline 冒充下一轮。
+步骤 4 成功后即代表发布成立；Redis 是 payload 加速层，不能绕过 PostgreSQL active/servable
+metadata guard。PostgreSQL guard 不可读时返回 `UNAVAILABLE`，即使 Redis 仍有旧 payload 也不能继续服务。
+
+Correction、removal 和 rights revoke 使用更严格的 unsafe-revision 流程：先 stage 安全新 revision
+或 tombstone，再在同一个 PostgreSQL 事务中激活它并把旧 revision 标记为不可服务。事务提交后，
+GraphQL 的 metadata guard 立即拒绝旧 Redis pointer；outbox 随后清除旧 payload、切换 pointer 并触发
+Web 失效。如果安全 projection 无法编译，则事务把受影响 scope 标为不可服务并返回
+`UNAVAILABLE`，不能保留已撤权正文等 repair。
 
 ### 10.4 公开状态
 
@@ -683,7 +702,7 @@ llm:content:briefing:story:<story-id>:<revision>:zh-CN
 | `EMPTY` | 当前 target 的采集/编辑结果确认没有可公开内容；不是系统错误 |
 | `STALE` | 当前 target 缺少 fresh edition 或已有 edition 超过 freshness 门槛；target 不匹配时不得返回旧 Story |
 | `OFFSEASON` | 当前赛季没有未来 deadline |
-| `UNAVAILABLE` | Redis 和 PostgreSQL 的一致读取均失败，或 publication 无法验证 |
+| `UNAVAILABLE` | PostgreSQL active/servable metadata 不可读、scope 被阻断，或 active compiled payload 无法验证读取 |
 
 失败不能降级成 `EMPTY`；旧 event 不能用新 event 标题展示。
 
@@ -693,7 +712,8 @@ llm:content:briefing:story:<story-id>:<revision>:zh-CN
 
 GraphQL 负责：
 
-- 校验 active pointer、payload exact shape、checksum 和 revision。
+- 从 PostgreSQL 窄 view 读取 authoritative active revision/servable metadata，再校验 Redis pointer、
+  payload exact shape、checksum 和 revision。
 - 一次 request pin 一个 publication revision。
 - Redis 失败时读取 PostgreSQL 的同一 scope/revision compiled payload。
 - 把内部 payload 映射为稳定的公共 schema。
@@ -763,7 +783,15 @@ News/Views/Features 分别暴露 `briefingNews`、`briefingViews`、`briefingFea
 
 ### 11.4 缓存
 
-`BriefingWeek` 和公开 `BriefingStory` 可加入 Web GraphQL proxy 的公共 allowlist，因为结果不依赖 session。GraphQL/Redis 内部 payload key 必须包含 publication revision；Web proxy key 使用 operation、locale、slug 和其他 variables，并依靠短 TTL 获取新的 active revision。任何带用户身份或 Authorization 的请求继续 `no-store`。
+GraphQL/Redis 内部 payload key 必须包含 publication revision。Week V1 的 Web GraphQL proxy、
+Story detail 和 browser memory cache 对 `BriefingWeek`/`BriefingStory` 一律 `no-store`；公共结果不依赖
+session 并不等于可以安全缓存 correction/removal。性能首先由 GraphQL 的 Redis immutable payload 提供。
+
+W1 同时实现 Data publication outbox → Web 的签名 revalidation webhook，使用 timestamp、nonce、
+event ID 和 idempotency key 校验，并对 Week/Story/canonical alias 触发精确 tag invalidation。只有该链路
+经过 publish、correction、removal、rights revoke 和 webhook failure E2E 后，才允许通过独立 flag 为
+Week RSC 开启约 30 秒的 tagged cache；Story detail 在 V1 始终 `no-store`。任何带用户身份或
+Authorization 的请求继续 `no-store`。
 
 ## 12. Web：导航、页面和后台
 
@@ -793,8 +821,10 @@ News/Views/Features 分别暴露 `briefingNews`、`briefingViews`、`briefingFea
 
 ### 12.3 公共缓存和状态
 
-- 成功页面使用短公共 CDN/SWR 缓存，初始约 30 秒，并在 deadline 附近 clamp，不能跨 deadline 长时间缓存旧 Week。
-- Publication outbox 可在后续接 Web revalidation webhook；没有 webhook 时短 TTL 仍保证有界陈旧。
+- V1 初始对 Week/Story 使用 `no-store`，由 GraphQL Redis payload 承担加速；不能用“短 TTL”接受
+  correction、removal 或 rights revoke 后继续展示旧正文。
+- W1 必须交付签名 Web revalidation webhook。完成失败重试与端到端撤稿验证后，Week RSC 才可通过
+  flag 开启约 30 秒的 tagged cache，并在 deadline 附近 clamp；Story detail V1 继续 `no-store`。
 - `EMPTY`、`STALE`、`OFFSEASON`、`UNAVAILABLE` 使用不同 UI，不把请求错误显示为“本周没有消息”。
 - Story removed 后 detail 返回明确 removed/corrected 状态，不继续展示缓存正文。
 - 外链显示来源身份并使用安全 external link 属性；不在客户端渲染任意 provider HTML。
@@ -835,9 +865,15 @@ News/Views/Features 分别暴露 `briefingNews`、`briefingViews`、`briefingFea
 4. Story append 新 version；旧 version 不覆盖删除。
 5. `story_changes` 写 material event。
 6. 引用该 Story 的 active edition 重新编译并产生新 publication revision。
-7. Redis pointer、GraphQL 和 Web cache 失效。
+7. PostgreSQL active/servable metadata 先使旧 Redis revision 不可被 GraphQL 接受。
+8. Publication outbox 清除/切换 Redis，并向 Web 签名 revalidation endpoint 投递 Story、alias 和
+   surface tags；失败持续重试并告警。
 
-来源删除、X post 删除或 rights policy 收紧时，默认 fail closed：通过 `publication_dependencies` 找到所有受影响 scope，先将旧 payload 标记为不可服务并清除对应 Redis revision，再发布安全投影。若安全重编译失败，该 scope 返回 `UNAVAILABLE`，不能回退到已撤权正文。Publication 的 ID、checksum 和操作审计可保留；正文 payload 按 policy 删除。
+来源删除、X post 删除或 rights policy 收紧时，默认 fail closed：通过
+`publication_dependencies` 找到所有受影响 scope，stage 安全投影/tombstone，并在 PostgreSQL
+事务中先把旧 publication 标记为不可服务、激活安全 revision，再清除对应 Redis revision 和 Web
+cache。若安全重编译失败，该 scope 直接标为不可服务并返回 `UNAVAILABLE`，不能回退到已撤权正文。
+Publication 的 ID、checksum 和操作审计可保留；正文 payload 按 policy 删除。
 
 ### 13.2 通知后置但不返工
 

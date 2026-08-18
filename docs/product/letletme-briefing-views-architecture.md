@@ -194,7 +194,7 @@ Views profile 不调用 News profile，也不串行调用旧 `whathappened`。�
     "sources": []
   },
   "targetEvent": {
-    "seasonCode": "2026",
+    "seasonCode": "2627",
     "eventId": 1,
     "deadlineTime": "2026-08-21T17:30:00.000Z"
   },
@@ -202,7 +202,9 @@ Views profile 不调用 News profile，也不串行调用旧 `whathappened`。�
 }
 ```
 
-Data 传入 event/deadline；skill 不根据模型记忆判断当前轮。X query 仍按 handle partition + Latest 执行，最终按真实 `postedAt` 精确过滤并验证 tool trace。
+Data 传入 event/deadline；`seasonCode` 使用 `fpl.seasons.season_code` 的四字符值（例如
+`2026/27 → "2627"`），不是 `season_id` 或起始年。Skill 不根据模型记忆判断当前轮。X query 仍按
+handle partition + Latest 执行，最终按真实 `postedAt` 精确过滤并验证 tool trace。
 
 ### 3.4 Poll material gate
 
@@ -387,8 +389,9 @@ PostgreSQL 使用与 News 相同的 constant-kind composite FK，不能只靠 Ty
 
 | Relation | 关键字段与约束 |
 | --- | --- |
-| `content.opinion_artifacts` | `artifact_id`、`story_id`、`story_version_id`、`artifact_kind`、target、source item/segment、rights projection |
+| `content.opinion_artifacts` | `artifact_id`、`story_id`、`version_group_id`、`artifact_kind`、target、source item/segment、rights projection；绑定双语 version group，不绑定某一个 locale row |
 | `content.opinion_artifact_items` | artifact FK、subject identity、ordinal、action、squad role、captain role、tier label、claim FK |
+| `content.opinion_artifact_localizations` | `(artifact_id, locale)` 唯一；只保存允许本地化的 label/note，不复制 artifact identity、items 或顺序 |
 
 `artifact_kind` 初始为：
 
@@ -400,6 +403,8 @@ PostgreSQL 使用与 News 相同的 constant-kind composite FK，不能只靠 Ty
 约束：
 
 - ordinal 在 artifact 内唯一；
+- 同一 `version_group_id` 的 `en`/`zh-CN` publication 共享 artifact ID、item ID 和 ordinal；只有
+  localization child 可以改变文案；
 - item exactly-one subject；
 - captain/vice 只能用于 player item；
 - `SQUAD_TEMPLATE` 只有 policy 允许 `STRUCTURED_SQUAD` 时公开完整结构；否则 publication 只投影摘要和原链接；
@@ -516,8 +521,11 @@ llm:content:briefing:views:<revision>:zh-CN
 - active pointer/payload 不依赖 TTL；retired revision 初始保留 15 分钟；
 - cursor 绑定 publication revision、offset、filter hash、locale、issuedAt 并签名；
 - max cursor age 初始 15 分钟；不可读时 `RESTART_REQUIRED`；
+- GraphQL 先从 PostgreSQL 窄 view pin active/servable metadata，只接受完全匹配的 Redis pointer；
 - PostgreSQL 保存同一 compiled publication，Redis 损坏时严格同 revision fallback；
 - active payload 超过真实 byte/latency threshold 后才考虑 page shards，不提前增加一致性复杂度。
+- Web/GraphQL proxy 对 Views 初始 `no-store`；签名 outbox → Web revalidation 经撤稿/撤权 E2E 后，
+  才可用 flag 开启短 tagged RSC cache。
 
 ## 7. GraphQL 公共合同
 
@@ -773,7 +781,7 @@ Views 复用 Briefing shell；只有 read contract、target/expiry 和状态 UI 
 
 - rolling edition、source cap、target expiry、immutable payload/pointer。
 - `briefingViews`、filters、artifact projection、explicit states、signed cursor。
-- Redis/PostgreSQL same-revision fallback 和 public cache allowlist。
+- PostgreSQL active metadata guard、Redis same-revision payload/fallback；Briefing proxy 初始 `no-store`。
 
 ### Phase V4 — Web public + admin
 
