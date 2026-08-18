@@ -44,7 +44,7 @@ The fixed inputs are:
 | Membership list | `/competitions/browse` loads every tournament for the bound entry, then provides useful client-side search, Classic/H2H and status filters, organizer filtering, sorting, progressive rows, and Live/Manage actions |
 | Creation | `/competitions/create` offers a recommended copied-Classic path and a custom builder; both fetch the complete official source roster before submission |
 | Create model | `creationMode`, `participantSource`, league type, roster mode, and format fields overlap; they do not express one durable competition kind |
-| Custom formats | The form exposes points groups plus single- or double-elimination configuration and validates schedules and power-of-two brackets |
+| Custom formats | The form exposes points groups plus single- or double-elimination configuration, validates schedules, and fills non-power-of-two brackets with first-round byes |
 | Canonical object | `/competitions/[id]` redirects directly to `/live/competitions/[id]`; no permanent non-Live Competition Home exists |
 | Live | The current detail contains identity, roster, rules, setup, recovery, management links, comparison, filters, and a generic live-points table |
 | Settled results | Rich shared points-race and field analysis currently lives inside `/my-fpl/competitions`, mixed with viewer-specific summaries |
