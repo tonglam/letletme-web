@@ -12,7 +12,8 @@ import type {
 	MarketPulse,
 	MarketTransferMover,
 	MarketOwnershipDay,
-	MarketOwnershipOverview
+	MarketOwnershipOverview,
+	MarketOwnershipPeriod
 } from '@/lib/graphql/operations/market'
 import { getMarketViewMode } from '@/lib/market'
 import { Link } from '@/i18n/navigation'
@@ -190,10 +191,10 @@ function OwnershipPeriodNav({
 	period,
 	t
 }: {
-	period: OwnershipResult['period']
+	period: MarketOwnershipPeriod
 	t: MarketT
 }) {
-	const items: OwnershipResult['period'][] = ['DAILY', 'GAMEWEEK', 'ROLLING_7D']
+	const items: MarketOwnershipPeriod[] = ['DAILY', 'GAMEWEEK', 'ROLLING_7D']
 	return (
 		<nav
 			aria-label={t('ownershipPeriodLabel')}
@@ -542,12 +543,14 @@ function NewPlayersBlock({
 export async function MarketDashboard({
 	pulse,
 	ownership,
+	requestedPeriod,
 	dailyDates,
 	revision = null,
 	locale
 }: {
 	pulse: MarketPulse
 	ownership: OwnershipResult | null
+	requestedPeriod: MarketOwnershipPeriod
 	dailyDates: string[]
 	revision?: string | null
 	locale: string
@@ -588,35 +591,37 @@ export async function MarketDashboard({
 			className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
 		>
 			<div className="space-y-6">
-				{ownership ? (
-					<div>
-						<SectionTitle id="market-ownership">
-							{t('ownershipSwing')}
-						</SectionTitle>
-						<div className="mb-4 space-y-3">
-							<OwnershipPeriodNav
-								period={ownership.period}
+				<div>
+					<SectionTitle id="market-ownership">
+						{t('ownershipSwing')}
+					</SectionTitle>
+					<div className="mb-4 space-y-3">
+						<OwnershipPeriodNav
+							period={ownership?.period ?? requestedPeriod}
+							t={t}
+						/>
+						{ownership?.period === 'DAILY' ? (
+							<OwnershipDateNav
+								dates={dailyDates}
+								selectedDate={
+									'date' in ownership
+										? ownership.date
+										: ownership.coverage.toDate
+								}
+								locale={locale}
 								t={t}
 							/>
-							{ownership.period === 'DAILY' ? (
-								<OwnershipDateNav
-									dates={dailyDates}
-									selectedDate={
-										'date' in ownership
-											? ownership.date
-											: ownership.coverage.toDate
-									}
-									locale={locale}
-									t={t}
-								/>
-							) : null}
+						) : null}
+						{ownership ? (
 							<OwnershipCoverageMeta
 								ownership={ownership}
 								locale={locale}
 								t={t}
 							/>
-						</div>
-						{!['READY', 'PARTIAL'].includes(ownership.coverage.status) ? (
+						) : null}
+					</div>
+					{ownership ? (
+						!['READY', 'PARTIAL'].includes(ownership.coverage.status) ? (
 							<EmptyHint>
 								{t('ownershipStatus.' + ownership.coverage.status)}
 							</EmptyHint>
@@ -627,16 +632,11 @@ export async function MarketDashboard({
 								risers={ownership.risers}
 								fallers={ownership.fallers}
 							/>
-						)}
-					</div>
-				) : (
-					<div>
-						<SectionTitle id="market-ownership">
-							{t('ownershipSwing')}
-						</SectionTitle>
+						)
+					) : (
 						<EmptyHint>{t('ownershipDataUnavailable')}</EmptyHint>
-					</div>
-				)}
+					)}
+				</div>
 				<div>
 					<SectionTitle id="market-most-selected">
 						{t('mostSelectedTitle')}

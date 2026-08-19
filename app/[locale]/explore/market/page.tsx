@@ -40,13 +40,25 @@ function requestedDate(
 		: null
 }
 
-function recentCalendarDates(latestDate: string | null): string[] {
-	if (!latestDate) return []
-	const parsed = new Date(latestDate + 'T00:00:00.000Z')
+function recentCalendarDates(input: {
+	firstDate: string | null
+	latestDate: string | null
+	missingDates: string[]
+}): string[] {
+	if (!input.latestDate) return []
+	const parsed = new Date(input.latestDate + 'T00:00:00.000Z')
+	const earliestDate = input.firstDate
+		? new Date(input.firstDate + 'T00:00:00.000Z')
+		: null
 	return Array.from({ length: 7 }, (_, index) => {
 		const date = new Date(parsed)
 		date.setUTCDate(parsed.getUTCDate() - (6 - index))
 		return date.toISOString().slice(0, 10)
+	}).filter(date => {
+		if (earliestDate && date < earliestDate.toISOString().slice(0, 10)) {
+			return false
+		}
+		return !input.missingDates.includes(date)
 	})
 }
 
@@ -154,7 +166,12 @@ async function MarketContent({
 			<MarketDashboard
 				pulse={pulse}
 				ownership={ownership}
-				dailyDates={recentCalendarDates(latestDate)}
+				requestedPeriod={period}
+				dailyDates={recentCalendarDates({
+					firstDate: ownership?.coverage.firstDate ?? null,
+					latestDate: ownership?.coverage.latestDate ?? latestDate,
+					missingDates: ownership?.coverage.missingDates ?? []
+				})}
 				revision={revision}
 				locale={locale}
 			/>
