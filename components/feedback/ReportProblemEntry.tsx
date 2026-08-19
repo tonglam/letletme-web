@@ -25,6 +25,23 @@ const ALLOWED_SCREENSHOT_TYPES = new Set([
 	'image/gif',
 ])
 
+function readFileAsBase64(file: File): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader()
+		reader.onload = () => {
+			const result = reader.result
+			if (typeof result !== 'string') {
+				reject(new Error('failed'))
+				return
+			}
+			const comma = result.indexOf(',')
+			resolve(comma >= 0 ? result.slice(comma + 1) : result)
+		}
+		reader.onerror = () => reject(reader.error ?? new Error('failed'))
+		reader.readAsDataURL(file)
+	})
+}
+
 export function ReportProblemEntry({
 	children,
 	className,
@@ -71,11 +88,7 @@ export function ReportProblemEntry({
 			let screenshotBase64: string | null = null
 			let screenshotMime: string | null = null
 			if (file) {
-				const buffer = await file.arrayBuffer()
-				const bytes = new Uint8Array(buffer)
-				let binary = ''
-				for (const byte of bytes) binary += String.fromCharCode(byte)
-				screenshotBase64 = btoa(binary)
+				screenshotBase64 = await readFileAsBase64(file)
 				screenshotMime = file.type || 'image/jpeg'
 			}
 
