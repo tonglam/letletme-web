@@ -1,3 +1,4 @@
+import { ReportProblemEntry } from '@/components/feedback/ReportProblemEntry'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { Button } from '@/components/ui/button'
 import { Link } from '@/i18n/navigation'
@@ -56,6 +57,7 @@ export async function GuestNavigationActions() {
 					</details>
 					)
 				))}
+				<ReportProblemEntry triggerClassName="px-3 text-sm text-fascia-foreground/70 hover:text-fascia-foreground" />
 				<Button
 					size="sm"
 					className="ml-2 font-display text-xs font-semibold uppercase tracking-caps shadow-sticker-sm transition-transform hover:-translate-y-px"
@@ -108,6 +110,7 @@ export async function GuestNavigationActions() {
 						</section>
 						)
 					))}
+					<ReportProblemEntry triggerClassName="mt-2 flex min-h-11 items-center rounded-md px-2 text-sm font-medium hover:bg-accent" />
 					<NavigationMenuLink
 						href="/auth/login"
 						prefetch={false}

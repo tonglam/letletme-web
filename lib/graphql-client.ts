@@ -33,6 +33,8 @@ export class GraphQLRequestError extends Error {
 	}
 }
 
+import { recordBugReportDiagnostic } from '@/lib/bug-report-diagnostics'
+
 const DEFAULT_GRAPHQL_TIMEOUT_MS = 15_000
 const PUBLIC_BROWSER_CACHE_TTL_MS = 60_000
 const PUBLIC_BROWSER_CACHE_MAX_ENTRIES = 50
@@ -150,6 +152,7 @@ async function doFetch<T>(
 	if (externalSignal?.aborted) controller.abort()
 	else externalSignal?.addEventListener('abort', abortFromCaller, { once: true })
 
+	let requestId: string | undefined
 	try {
 		const fetchOptions: RequestInit & { next?: ExecuteQueryOptions['next'] } = {
 			method: 'POST',
@@ -167,6 +170,7 @@ async function doFetch<T>(
 		if (next) fetchOptions.next = next
 
 		const response = await fetch(endpoint, fetchOptions)
+		requestId = response.headers.get('x-request-id') ?? undefined
 		const result = await response.json().catch(() => null)
 		const normalizedErrors = normalizeGraphQLErrors(result?.errors)
 		const meaningfulErrors = normalizedErrors.filter(isMeaningfulGraphQLError)
@@ -239,6 +243,13 @@ async function doFetch<T>(
 			)
 		}
 
+		if (typeof window !== 'undefined') {
+			recordBugReportDiagnostic({
+				at: new Date().toISOString(),
+				operation: extractOperationName(query) || undefined,
+				requestId,
+			})
+		}
 		return result.data as T
 	} catch (error) {
 		let normalizedError: unknown = error
@@ -276,6 +287,17 @@ async function doFetch<T>(
 						: String(normalizedError)
 				}`
 			)
+			if (typeof window !== 'undefined') {
+				recordBugReportDiagnostic({
+					at: new Date().toISOString(),
+					operation: extractOperationName(query) || undefined,
+					requestId,
+					message:
+						normalizedError instanceof Error
+							? normalizedError.message
+							: String(normalizedError),
+				})
+			}
 		}
 		throw normalizedError
 	} finally {

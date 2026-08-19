@@ -2399,6 +2399,7 @@
 		"players": "Players",
 		"login": "Login",
 		"profileSettings": "Profile settings",
+		"reportProblem": "Something not working?",
 		"signOut": "Sign out",
 		"signingOut": "Signing out…",
 		"signOutFailed": "Could not sign out. Please try again.",
@@ -2425,6 +2426,21 @@
 		"light": "Light",
 		"dark": "Dark",
 		"system": "System"
+	},
+	"ReportProblem": {
+		"entry": "Something not working?",
+		"title": "Something not working?",
+		"description": "Describe it in your own words. A screenshot is optional.",
+		"label": "What happened",
+		"placeholder": "For example: “the home page keeps spinning”",
+		"screenshotLabel": "Add a picture if you have one (optional)",
+		"submit": "Send to us",
+		"sending": "Sending…",
+		"tooShort": "A few more words will help.",
+		"screenshotTooLarge": "That picture is too large. Skip it or pick a smaller one.",
+		"screenshotUnsupported": "That picture type is not supported. Skip it or pick a photo.",
+		"received": "Got it. Reference {id}",
+		"failed": "That did not send. Please try again in a moment."
 	},
 	"Footer": {
 		"tagline": "Sharper FPL decisions, without the noise.",

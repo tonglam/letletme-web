@@ -2399,6 +2399,7 @@
 		"players": "球员",
 		"login": "登录",
 		"profileSettings": "个人资料",
+		"reportProblem": "遇到问题了？",
 		"signOut": "退出登录",
 		"signingOut": "正在退出…",
 		"signOutFailed": "无法退出登录，请重试。",
@@ -2425,6 +2426,21 @@
 		"light": "浅色",
 		"dark": "深色",
 		"system": "跟随系统"
+	},
+	"ReportProblem": {
+		"entry": "遇到问题了？",
+		"title": "遇到问题了？",
+		"description": "用自己的话说就行。截图可以加上，没有图也能发给我们。",
+		"label": "出了什么事",
+		"placeholder": "比如「首页一直转圈」或「实时积分对不上」",
+		"screenshotLabel": "有图可以加上（不用也行）",
+		"submit": "发给我们",
+		"sending": "正在发送…",
+		"tooShort": "再写几个字就行",
+		"screenshotTooLarge": "这张图有点大，可不加图，或换一张小一点的。",
+		"screenshotUnsupported": "这张图用不了，可不加图，或换一张普通照片。",
+		"received": "收到了，编号 {id}",
+		"failed": "这次没发出去，请稍后再试。"
 	},
 	"Footer": {
 		"tagline": "FPL 决策更犀利，远离噪音。",
