@@ -2,154 +2,259 @@ import type { TopTransfer } from '@/lib/graphql/operations/prices'
 import type {
 	MarketAvailabilityUpdate,
 	MarketCoverage,
-	MarketOwnershipMover,
+	MarketOwnershipDay,
 	MarketPlayer,
 	MarketPriceChange
 } from '@/lib/graphql/operations/market'
 
 const HOME_FIXTURE_FIELDS = /* GraphQL */ `
-  fragment HomeFixtureFields on Fixture {
-    id
-    finished
-    started
-    kickoffTime
-    homeTeam { id name shortName }
-    awayTeam { id name shortName }
-    homeScore
-    awayScore
-  }
+	fragment HomeFixtureFields on Fixture {
+		id
+		finished
+		started
+		kickoffTime
+		homeTeam {
+			id
+			name
+			shortName
+		}
+		awayTeam {
+			id
+			name
+			shortName
+		}
+		homeScore
+		awayScore
+	}
 `
 
 export const GET_HOME_PUBLIC_BOOTSTRAP = /* GraphQL */ `
-  query GetHomePublicBootstrap {
-    homePublicBootstrap {
-      context {
-        season
-        revision
-        sourceCheckedAt
-        currentEventId
-        nextEventId
-        nextDeadlineTime
-        latestFinishedEventId
-      }
-      fixtures { ...HomeFixtureFields }
-    }
-  }
-  ${HOME_FIXTURE_FIELDS}
+	query GetHomePublicBootstrap {
+		homePublicBootstrap {
+			context {
+				season
+				revision
+				sourceCheckedAt
+				currentEventId
+				nextEventId
+				nextDeadlineTime
+				latestFinishedEventId
+			}
+			fixtures {
+				...HomeFixtureFields
+			}
+		}
+	}
+	${HOME_FIXTURE_FIELDS}
 `
 
 export const GET_HOME_EVENT_FIXTURES = /* GraphQL */ `
-  query GetHomeEventFixtures($eventId: Int!) {
-    coreEventContext { season revision }
-    eventFixtures(eventId: $eventId) { ...HomeFixtureFields }
-  }
-  ${HOME_FIXTURE_FIELDS}
+	query GetHomeEventFixtures($eventId: Int!) {
+		coreEventContext {
+			season
+			revision
+		}
+		eventFixtures(eventId: $eventId) {
+			...HomeFixtureFields
+		}
+	}
+	${HOME_FIXTURE_FIELDS}
 `
 
 export const GET_HOME_GAMEWEEK = /* GraphQL */ `
-  query GetHomeGameweek($eventId: Int!) {
-    homeGameweek(eventId: $eventId) {
-      transfersState
-      gameweekDesk {
-        season
-        coreRevision
-        liveRevision
-        eventId
-        lifecycle
-        overviewState
-        boardsState
-        overview {
-          highestPoints
-          mostCaptained { id webName teamShortName }
-          topScorer { id webName teamShortName points }
-          mostPlayedChip { name numberPlayed }
-        }
-        dreamTeam {
-          id
-          webName
-          position
-          teamShortName
-          totalPoints
-        }
-      }
-      topTransfersIn {
-        ...HomeTransferFields
-      }
-      topTransfersOut {
-        ...HomeTransferFields
-      }
-    }
-  }
+	query GetHomeGameweek($eventId: Int!) {
+		homeGameweek(eventId: $eventId) {
+			transfersState
+			gameweekDesk {
+				season
+				coreRevision
+				liveRevision
+				eventId
+				lifecycle
+				overviewState
+				boardsState
+				overview {
+					highestPoints
+					mostCaptained {
+						id
+						webName
+						teamShortName
+					}
+					topScorer {
+						id
+						webName
+						teamShortName
+						points
+					}
+					mostPlayedChip {
+						name
+						numberPlayed
+					}
+				}
+				dreamTeam {
+					id
+					webName
+					position
+					teamShortName
+					totalPoints
+				}
+			}
+			topTransfersIn {
+				...HomeTransferFields
+			}
+			topTransfersOut {
+				...HomeTransferFields
+			}
+		}
+	}
 
-  fragment HomeTransferFields on HomeTransferSignal {
-    player {
-      id
-      webName
-      position
-      selectedByPercent
-      totalPoints
-      team { name shortName }
-    }
-    eventId
-    transfersInEvent
-    transfersOutEvent
-  }
+	fragment HomeTransferFields on HomeTransferSignal {
+		player {
+			id
+			webName
+			position
+			selectedByPercent
+			totalPoints
+			team {
+				name
+				shortName
+			}
+		}
+		eventId
+		transfersInEvent
+		transfersOutEvent
+	}
 `
 
 export const GET_HOME_PERSONAL_DESK = /* GraphQL */ `
-  query GetHomePersonalDesk {
-    homePersonalDesk {
-      state
-      entryName
-      playerName
-      overallPoints
-      overallRank
-      teamValue
-      leagueRanks {
-        key
-        name
-        rank
-        movement { direction places }
-        tournamentId
-      }
-      sourceCheckedAt
-    }
-  }
+	query GetHomePersonalDesk {
+		homePersonalDesk {
+			state
+			entryName
+			playerName
+			overallPoints
+			overallRank
+			teamValue
+			leagueRanks {
+				key
+				name
+				rank
+				movement {
+					direction
+					places
+				}
+				tournamentId
+			}
+			sourceCheckedAt
+		}
+	}
 `
 
 export const GET_HOME_MARKET_PULSE = /* GraphQL */ `
-  query GetHomeMarketPulse($days: Int = 14) {
-    homeMarketPulse(days: $days) {
-      coverage {
-        requestedDays observedDays firstDate latestDate capturedAt complete stale
-      }
-      mostSelected { ...HomeMarketPlayerFields }
-      ownershipMovers {
-        risers {
-          player { ...HomeMarketPlayerFields }
-          previousSelectedByPercent selectedByPercent change
-        }
-        fallers {
-          player { ...HomeMarketPlayerFields }
-          previousSelectedByPercent selectedByPercent change
-        }
-      }
-      availabilityUpdates {
-        player { ...HomeMarketPlayerFields }
-        status previousStatus news newsAdded observedDate
-        chanceOfPlayingThisRound chanceOfPlayingNextRound
-      }
-      priceChanges {
-        player { ...HomeMarketPlayerFields }
-        changeDate oldPrice newPrice change direction
-      }
-    }
-  }
+	query GetHomeMarketPulse($days: Int = 7) {
+		homeMarketPulse(days: $days) {
+			coverage {
+				requestedDays
+				observedDays
+				firstDate
+				latestDate
+				capturedAt
+				complete
+				stale
+			}
+			mostSelected {
+				...HomeMarketPlayerFields
+			}
+			availabilityUpdates {
+				player {
+					...HomeMarketPlayerFields
+				}
+				status
+				previousStatus
+				news
+				newsAdded
+				observedDate
+				chanceOfPlayingThisRound
+				chanceOfPlayingNextRound
+			}
+			priceChanges {
+				player {
+					...HomeMarketPlayerFields
+				}
+				changeDate
+				oldPrice
+				newPrice
+				change
+				direction
+			}
+		}
+	}
 
-  fragment HomeMarketPlayerFields on MarketPlayer {
-    playerId playerCode webName teamId teamName teamShortName
-    position price selectedByPercent
-  }
+	fragment HomeMarketPlayerFields on MarketPlayer {
+		playerId
+		playerCode
+		webName
+		teamId
+		teamName
+		teamShortName
+		position
+		price
+		selectedByPercent
+	}
+`
+
+export const GET_HOME_MARKET_OWNERSHIP = /* GraphQL */ `
+	query GetHomeMarketOwnership {
+		marketOwnershipDay(limit: 5) {
+			period
+			date
+			coverage {
+				status
+				requestedDays
+				observedDays
+				firstDate
+				latestDate
+				fromDate
+				toDate
+				missingDates
+				capturedAt
+				complete
+				stale
+			}
+			risers {
+				player {
+					...HomeMarketPlayerFields
+				}
+				fromSelectedByPercent
+				toSelectedByPercent
+				changePercentagePoints
+				fromDate
+				toDate
+			}
+			fallers {
+				player {
+					...HomeMarketPlayerFields
+				}
+				fromSelectedByPercent
+				toSelectedByPercent
+				changePercentagePoints
+				fromDate
+				toDate
+			}
+		}
+	}
+
+	fragment HomeMarketPlayerFields on MarketPlayer {
+		playerId
+		playerCode
+		webName
+		teamId
+		teamName
+		teamShortName
+		position
+		price
+		selectedByPercent
+	}
 `
 
 export type HomeCoreEventContext = {
@@ -277,14 +382,14 @@ export type HomePersonalDeskResponse = {
 export type HomeMarketPulse = {
 	coverage: MarketCoverage
 	mostSelected: MarketPlayer[]
-	ownershipMovers: {
-		risers: MarketOwnershipMover[]
-		fallers: MarketOwnershipMover[]
-	}
 	availabilityUpdates: MarketAvailabilityUpdate[]
 	priceChanges: MarketPriceChange[]
 }
 
 export type HomeMarketPulseResponse = {
 	homeMarketPulse: HomeMarketPulse
+}
+
+export type HomeMarketOwnershipResponse = {
+	marketOwnershipDay: MarketOwnershipDay
 }

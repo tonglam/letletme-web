@@ -38,8 +38,16 @@ import {
 } from '../lib/graphql/operations/live'
 import {
 	GET_FIXTURE_PLANNING_SIGNALS,
-	GET_MARKET_PULSE
+	GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK,
+	GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
+	GET_MARKET_PULSE,
+	GET_MARKET_OWNERSHIP_DAY,
+	GET_MARKET_OWNERSHIP_OVERVIEW
 } from '../lib/graphql/operations/market'
+import {
+	GET_HOME_MARKET_OWNERSHIP,
+	GET_HOME_MARKET_PULSE
+} from '../lib/graphql/operations/home'
 import {
 	GET_PLAYER_DETAIL,
 	GET_PLAYERS_FOR_PICKER,
@@ -237,12 +245,39 @@ async function main() {
 		{
 			name: 'GET_MARKET_PULSE',
 			query: GET_MARKET_PULSE,
-			variables: { days: 14 }
+			variables: { days: 7 }
+		},
+		{
+			name: 'GET_HOME_MARKET_PULSE',
+			query: GET_HOME_MARKET_PULSE,
+			variables: { days: 7 }
+		},
+		{
+			name: 'GET_HOME_MARKET_OWNERSHIP',
+			query: GET_HOME_MARKET_OWNERSHIP
+		},
+		{
+			name: 'GET_MARKET_OWNERSHIP_OVERVIEW',
+			query: GET_MARKET_OWNERSHIP_OVERVIEW,
+			variables: { period: 'GAMEWEEK', limit: 10 }
+		},
+		{
+			name: 'GET_MARKET_OWNERSHIP_DAY',
+			query: GET_MARKET_OWNERSHIP_DAY,
+			variables: { date: null, limit: 10 }
 		},
 		{
 			name: 'GET_FIXTURE_PLANNING_SIGNALS',
 			query: GET_FIXTURE_PLANNING_SIGNALS,
-			variables: { days: 14 }
+			variables: { days: 7 }
+		},
+		{
+			name: 'GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK',
+			query: GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK
+		},
+		{
+			name: 'GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D',
+			query: GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D
 		},
 		{
 			name: 'GET_PLAYERS_FOR_PICKER',

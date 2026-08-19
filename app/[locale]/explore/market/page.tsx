@@ -7,8 +7,13 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import {
 	GET_MARKET_PULSE_SUMMARY,
+	GET_MARKET_OWNERSHIP_OVERVIEW,
+	GET_MARKET_OWNERSHIP_DAY,
 	type MarketPulse,
-	type MarketPulseSummaryResponse
+	type MarketPulseSummaryResponse,
+	type MarketOwnershipDayResponse,
+	type MarketOwnershipOverviewResponse,
+	type MarketOwnershipPeriod
 } from '@/lib/graphql/operations/market'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import { getTranslations } from 'next-intl/server'
@@ -16,7 +21,46 @@ import { unstable_rethrow } from 'next/navigation'
 import { connection } from 'next/server'
 import { Suspense } from 'react'
 
-type PageProps = { params: LocaleParams }
+type PageProps = {
+	params: LocaleParams
+	searchParams: Promise<{ period?: string; date?: string }>
+}
+
+function requestedPeriod(value: string | undefined): MarketOwnershipPeriod {
+	if (value === 'GAMEWEEK' || value === 'ROLLING_7D') return value
+	return 'DAILY'
+}
+
+function requestedDate(
+	value: string | undefined,
+	period: MarketOwnershipPeriod
+): string | null {
+	return period === 'DAILY' && value && /^\d{4}-\d{2}-\d{2}$/.test(value)
+		? value
+		: null
+}
+
+function recentCalendarDates(input: {
+	firstDate: string | null
+	latestDate: string | null
+	missingDates: string[]
+}): string[] {
+	if (!input.latestDate) return []
+	const parsed = new Date(input.latestDate + 'T00:00:00.000Z')
+	const earliestDate = input.firstDate
+		? new Date(input.firstDate + 'T00:00:00.000Z')
+		: null
+	return Array.from({ length: 7 }, (_, index) => {
+		const date = new Date(parsed)
+		date.setUTCDate(parsed.getUTCDate() - (6 - index))
+		return date.toISOString().slice(0, 10)
+	}).filter(date => {
+		if (earliestDate && date < earliestDate.toISOString().slice(0, 10)) {
+			return false
+		}
+		return !input.missingDates.includes(date)
+	})
+}
 
 export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
@@ -28,50 +72,86 @@ export async function generateMetadata({ params }: PageProps) {
 	})
 }
 
-async function MarketContent({ locale }: { locale: string }) {
+async function MarketContent({
+	locale,
+	period,
+	date
+}: {
+	locale: string
+	period: MarketOwnershipPeriod
+	date: string | null
+}) {
 	await connection()
 	const translationPromise = getTranslations('Market')
 	const dataPromise = executePublicServerQuery<MarketPulseSummaryResponse>(
 		GET_MARKET_PULSE_SUMMARY,
-		{ days: 14 },
+		{ days: 7 },
 		{ cache: 'no-store', timeoutMs: 2_000 }
 	)
+	const ownershipPromise = date
+		? executePublicServerQuery<MarketOwnershipDayResponse>(
+				GET_MARKET_OWNERSHIP_DAY,
+				{ date, limit: 10 },
+				{ cache: 'no-store', timeoutMs: 2_000 }
+			)
+		: executePublicServerQuery<MarketOwnershipOverviewResponse>(
+				GET_MARKET_OWNERSHIP_OVERVIEW,
+				{ period, limit: 10 },
+				{ cache: 'no-store', timeoutMs: 2_000 }
+			)
+	const dailyOverviewPromise = date
+		? executePublicServerQuery<MarketOwnershipOverviewResponse>(
+				GET_MARKET_OWNERSHIP_OVERVIEW,
+				{ period: 'DAILY', limit: 10 },
+				{ cache: 'no-store', timeoutMs: 2_000 }
+			)
+		: null
 	const t = await translationPromise
 	let pulse: MarketPulse | null = null
 	let revision: string | null = null
+	let ownership:
+		| MarketOwnershipOverviewResponse['marketOwnershipOverview']
+		| MarketOwnershipDayResponse['marketOwnershipDay']
+		| null = null
+	let dailyOverview:
+		MarketOwnershipOverviewResponse['marketOwnershipOverview'] | null = null
 
-	try {
-		const response = await dataPromise
-		pulse = { ...response.marketPulse, availabilityUpdates: [] }
-		revision = response.marketSnapshotContext.revision
-	} catch (error) {
-		unstable_rethrow(error)
-		console.error('[market] RSC fetch failed:', error)
+	const [dataResult, ownershipResult, dailyOverviewResult] =
+		await Promise.allSettled([
+			dataPromise,
+			ownershipPromise,
+			dailyOverviewPromise ?? Promise.resolve(null)
+		])
+	if (dataResult.status === 'fulfilled') {
+		pulse = { ...dataResult.value.marketPulse, availabilityUpdates: [] }
+		revision = dataResult.value.marketSnapshotContext.revision
+	} else {
+		unstable_rethrow(dataResult.reason)
+		console.error('[market] pulse fetch failed:', dataResult.reason)
 	}
-
-	if (!pulse) {
-		return (
-			<>
-				<RouteReadyMarker
-					name="MARKET_CONTENT_READY"
-					audienceHint="public"
-					goodMs={1_000}
-					poorMs={1_500}
-				/>
-				<Alert
-					variant="destructive"
-					className="mb-6"
-					role="alert"
-				>
-					<AlertTitle>{t('dataUnavailable')}</AlertTitle>
-					<AlertDescription>{t('dataUnavailableDescription')}</AlertDescription>
-				</Alert>
-				<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-					<MarketPlayerLookupLauncher initialOpen />
-				</section>
-			</>
+	if (ownershipResult.status === 'fulfilled') {
+		ownership = date
+			? (ownershipResult.value as MarketOwnershipDayResponse).marketOwnershipDay
+			: (ownershipResult.value as MarketOwnershipOverviewResponse)
+					.marketOwnershipOverview
+	} else {
+		unstable_rethrow(ownershipResult.reason)
+		console.error('[market] ownership fetch failed:', ownershipResult.reason)
+	}
+	if (dailyOverviewResult.status === 'fulfilled') {
+		if (dailyOverviewResult.value) {
+			dailyOverview = dailyOverviewResult.value.marketOwnershipOverview
+		}
+	} else {
+		unstable_rethrow(dailyOverviewResult.reason)
+		console.error(
+			'[market] daily coverage fetch failed:',
+			dailyOverviewResult.reason
 		)
 	}
+	const dailyCoverage =
+		dailyOverview?.coverage ??
+		(!date && ownership?.period === 'DAILY' ? ownership.coverage : null)
 
 	return (
 		<>
@@ -81,11 +161,34 @@ async function MarketContent({ locale }: { locale: string }) {
 				goodMs={1_000}
 				poorMs={1_500}
 			/>
+			{!pulse ? (
+				<Alert
+					variant="destructive"
+					className="mb-6"
+					role="alert"
+				>
+					<AlertTitle>{t('dataUnavailable')}</AlertTitle>
+					<AlertDescription>{t('dataUnavailableDescription')}</AlertDescription>
+				</Alert>
+			) : null}
 			<MarketDashboard
 				pulse={pulse}
+				ownership={ownership}
+				requestedPeriod={period}
+				requestedDate={date}
+				dailyDates={recentCalendarDates({
+					firstDate: dailyCoverage?.firstDate ?? null,
+					latestDate: dailyCoverage?.latestDate ?? null,
+					missingDates: dailyCoverage?.missingDates ?? []
+				})}
 				revision={revision}
 				locale={locale}
 			/>
+			{!pulse ? (
+				<section className="mt-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+					<MarketPlayerLookupLauncher initialOpen />
+				</section>
+			) : null}
 		</>
 	)
 }
@@ -107,8 +210,11 @@ function MarketViewFallback() {
 	)
 }
 
-export default async function MarketPage({ params }: PageProps) {
+export default async function MarketPage({ params, searchParams }: PageProps) {
 	const { locale } = await getPageLocale(params)
+	const query = await searchParams
+	const period = requestedPeriod(query.period)
+	const date = requestedDate(query.date, period)
 	const t = await getTranslations('Market')
 
 	return (
@@ -120,7 +226,11 @@ export default async function MarketPage({ params }: PageProps) {
 				</p>
 
 				<Suspense fallback={<MarketViewFallback />}>
-					<MarketContent locale={locale} />
+					<MarketContent
+						locale={locale}
+						period={period}
+						date={date}
+					/>
 				</Suspense>
 			</div>
 		</PageShell>

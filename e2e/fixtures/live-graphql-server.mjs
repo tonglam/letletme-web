@@ -11,6 +11,12 @@ const json = (response, status, body) => {
 	response.end(JSON.stringify(body))
 }
 
+const shiftIsoDate = (date, days) => {
+	const value = new Date(`${date}T00:00:00.000Z`)
+	value.setUTCDate(value.getUTCDate() + days)
+	return value.toISOString().slice(0, 10)
+}
+
 const scheduledMatch = {
 	matchId: 101,
 	minutes: 0,
@@ -395,36 +401,36 @@ const server = createServer((request, response) => {
 					homeGameweek: {
 						transfersState: 'AVAILABLE',
 						gameweekDesk: {
-						season: '2627',
-						coreRevision: '7',
-						liveRevision: '8',
-						eventId,
-						lifecycle: 'PROVISIONAL',
-						overviewState: 'AVAILABLE',
-						boardsState: 'AVAILABLE',
-						overview: {
-							highestPoints: 101,
-							mostCaptained: {
-								id: 1,
-								webName: 'Saka',
-								teamShortName: 'ARS'
+							season: '2627',
+							coreRevision: '7',
+							liveRevision: '8',
+							eventId,
+							lifecycle: 'PROVISIONAL',
+							overviewState: 'AVAILABLE',
+							boardsState: 'AVAILABLE',
+							overview: {
+								highestPoints: 101,
+								mostCaptained: {
+									id: 1,
+									webName: 'Saka',
+									teamShortName: 'ARS'
+								},
+								topScorer: {
+									id: 1,
+									webName: 'Saka',
+									teamShortName: 'ARS',
+									points: 12
+								},
+								mostPlayedChip: { name: 'wildcard', numberPlayed: 5 }
 							},
-							topScorer: {
-								id: 1,
-								webName: 'Saka',
-								teamShortName: 'ARS',
-								points: 12
-							},
-							mostPlayedChip: { name: 'wildcard', numberPlayed: 5 }
-						},
 							dreamTeam: [
-							{
-								id: 1,
-								webName: 'Saka',
-								position: 'MIDFIELDER',
-								teamShortName: 'ARS',
-								totalPoints: 12
-							}
+								{
+									id: 1,
+									webName: 'Saka',
+									position: 'MIDFIELDER',
+									teamShortName: 'ARS',
+									totalPoints: 12
+								}
 							]
 						},
 						topTransfersIn: [],
@@ -881,23 +887,25 @@ const server = createServer((request, response) => {
 					trendCohorts: {
 						season: '2627',
 						revision: 'e2e-trends-catalog-v1',
-						cohorts: [{
-							id: 'competition:777',
-							kind: 'TRACKED_OFFICIAL_COMPETITION',
-							access: 'PUBLIC',
-							displayName: 'E2E Public League',
-							exact: true,
-							latestEventId: 33,
-							revision: 'e2e-trends-publication-v1',
-							availability: 'READY',
-							capabilities: [
-								{ capability: 'OWNERSHIP', state: 'READY' },
-								{ capability: 'EFFECTIVE_OWNERSHIP', state: 'READY' },
-								{ capability: 'CAPTAINCY', state: 'READY' },
-								{ capability: 'VICE_CAPTAINCY', state: 'READY' },
-								{ capability: 'TRANSFERS', state: 'READY' }
-							]
-						}]
+						cohorts: [
+							{
+								id: 'competition:777',
+								kind: 'TRACKED_OFFICIAL_COMPETITION',
+								access: 'PUBLIC',
+								displayName: 'E2E Public League',
+								exact: true,
+								latestEventId: 33,
+								revision: 'e2e-trends-publication-v1',
+								availability: 'READY',
+								capabilities: [
+									{ capability: 'OWNERSHIP', state: 'READY' },
+									{ capability: 'EFFECTIVE_OWNERSHIP', state: 'READY' },
+									{ capability: 'CAPTAINCY', state: 'READY' },
+									{ capability: 'VICE_CAPTAINCY', state: 'READY' },
+									{ capability: 'TRANSFERS', state: 'READY' }
+								]
+							}
+						]
 					}
 				}
 			})
@@ -922,7 +930,14 @@ const server = createServer((request, response) => {
 					{ capability: 'TRANSFERS', state: 'READY' }
 				]
 			}
-			const row = { elementId: 1, playerName: 'Saka', playerPosition: 3, teamShortName: 'ARS', count: 720, percentage: 72 }
+			const row = {
+				elementId: 1,
+				playerName: 'Saka',
+				playerPosition: 3,
+				teamShortName: 'ARS',
+				count: 720,
+				percentage: 72
+			}
 			json(response, 200, {
 				data: {
 					trendCohortSnapshot: {
@@ -932,9 +947,14 @@ const server = createServer((request, response) => {
 							capability,
 							state,
 							evidenceContext: {
-								availabilityState: 'READY', coverageState: 'COMPLETE', exact: true,
-								denominator: 1000, sampleSize: 1000, methodKey: 'exact_prepared_competition',
-								methodVersion: '1', limitations: []
+								availabilityState: 'READY',
+								coverageState: 'COMPLETE',
+								exact: true,
+								denominator: 1000,
+								sampleSize: 1000,
+								methodKey: 'exact_prepared_competition',
+								methodVersion: '1',
+								limitations: []
 							},
 							rows: [row]
 						}))
@@ -1179,8 +1199,120 @@ const server = createServer((request, response) => {
 		if (
 			query.includes('GetMarketPulse') ||
 			query.includes('GetHomeMarketPulse') ||
-			query.includes('GetFixturePlanningSignals')
+			query.includes('GetHomeMarketOwnership') ||
+			query.includes('GetFixturePlanningSignals') ||
+			query.includes('GetFixturePlanningOwnershipGameweek') ||
+			query.includes('GetFixturePlanningOwnershipRolling7d') ||
+			query.includes('GetMarketOwnershipOverview') ||
+			query.includes('GetMarketOwnershipDay')
 		) {
+			const coverage = {
+				status: 'READY',
+				requestedDays: 2,
+				observedDays: 2,
+				firstDate: '2026-08-02',
+				latestDate: '2026-08-03',
+				fromDate: '2026-08-02',
+				toDate: '2026-08-03',
+				missingDates: [],
+				capturedAt: '2026-08-03T09:40:00.000Z',
+				complete: true,
+				stale: false
+			}
+			const selectedDate =
+				typeof variables.date === 'string' ? variables.date : '2026-08-03'
+			const previousDate = shiftIsoDate(selectedDate, -1)
+			const dayCoverage = {
+				status: 'READY',
+				requestedDays: 2,
+				observedDays: 2,
+				firstDate: previousDate,
+				latestDate: selectedDate,
+				fromDate: previousDate,
+				toDate: selectedDate,
+				missingDates: [],
+				capturedAt: `${selectedDate}T09:40:00.000Z`,
+				complete: true,
+				stale: false
+			}
+			const ownershipChange = {
+				player: marketPlayer,
+				fromSelectedByPercent: 31.5,
+				toSelectedByPercent: 32.5,
+				changePercentagePoints: 1,
+				fromDate: previousDate,
+				toDate: selectedDate
+			}
+			const marketOwnershipDay = {
+				period: 'DAILY',
+				date: selectedDate,
+				coverage: dayCoverage,
+				risers: [ownershipChange],
+				fallers: []
+			}
+			const marketOwnershipGameweek = {
+				period: 'GAMEWEEK',
+				gameweek: {
+					id: 2,
+					name: 'GW2',
+					deadlineTime: '2026-08-08T10:00:00.000Z'
+				},
+				coverage,
+				risers: [ownershipChange],
+				fallers: []
+			}
+			const marketOwnershipDailyOverview = {
+				period: 'DAILY',
+				gameweek: null,
+				coverage,
+				risers: [ownershipChange],
+				fallers: []
+			}
+			const marketOwnershipRolling7d = {
+				period: 'ROLLING_7D',
+				gameweek: null,
+				coverage,
+				risers: [ownershipChange],
+				fallers: []
+			}
+			const pulse = {
+				coverage: {
+					requestedDays: 7,
+					observedDays: 2,
+					firstDate: '2026-08-02',
+					latestDate: '2026-08-03',
+					capturedAt: '2026-08-03T09:40:00.000Z',
+					complete: false,
+					stale: false
+				},
+				mostSelected: [],
+				transferMovers: [],
+				availabilityUpdateCount: 0,
+				availabilityUpdates: [],
+				availabilityHighlights: [],
+				newPlayers: [],
+				priceChanges: []
+			}
+			const data =
+				query.includes('GetMarketOwnershipDay') ||
+				query.includes('GetHomeMarketOwnership')
+					? { marketOwnershipDay }
+					: query.includes('GetMarketOwnershipOverview')
+						? {
+								marketOwnershipOverview:
+									variables.period === 'GAMEWEEK'
+										? marketOwnershipGameweek
+										: variables.period === 'DAILY'
+											? marketOwnershipDailyOverview
+											: marketOwnershipRolling7d
+							}
+						: query.includes('GetHomeMarketPulse')
+							? { homeMarketPulse: pulse }
+							: query.includes('GetFixturePlanningOwnershipGameweek')
+								? { marketOwnershipOverview: marketOwnershipGameweek }
+								: query.includes('GetFixturePlanningOwnershipRolling7d')
+									? { marketOwnershipOverview: marketOwnershipRolling7d }
+									: { marketPulse: pulse }
 			json(response, 200, {
 				data: {
 					marketSnapshotContext: {
@@ -1191,59 +1323,7 @@ const server = createServer((request, response) => {
 						capturedAt: '2026-08-03T09:40:00.000Z',
 						rowCount: 2
 					},
-					...(query.includes('GetHomeMarketPulse')
-						? { homeMarketPulse: {
-						coverage: {
-							requestedDays: 14,
-							observedDays: 2,
-							firstDate: '2026-08-02',
-							latestDate: '2026-08-03',
-							capturedAt: '2026-08-03T09:40:00.000Z',
-							complete: false,
-							stale: false
-						},
-						mostSelected: [],
-						ownershipMovers: {
-							risers: [{
-								player: marketPlayer,
-								previousSelectedByPercent: 31.5,
-								selectedByPercent: 32.5,
-								change: 1
-							}],
-							fallers: []
-						},
-						availabilityUpdates: [],
-						priceChanges: []
-					} }
-						: { marketPulse: {
-						coverage: {
-							requestedDays: 14,
-							observedDays: 2,
-							firstDate: '2026-08-02',
-							latestDate: '2026-08-03',
-							capturedAt: '2026-08-03T09:40:00.000Z',
-							complete: false,
-							stale: false
-						},
-						mostSelected: [],
-						ownershipMovers: {
-							risers: [
-								{
-									player: marketPlayer,
-									previousSelectedByPercent: 31.5,
-									selectedByPercent: 32.5,
-									change: 1
-								}
-							],
-							fallers: []
-						},
-						transferMovers: [],
-						availabilityUpdateCount: 0,
-						availabilityUpdates: [],
-						availabilityHighlights: [],
-						newPlayers: [],
-						priceChanges: []
-					} })
+					...data
 				}
 			})
 			return
@@ -1253,8 +1333,8 @@ const server = createServer((request, response) => {
 				typeof variables.search === 'string'
 					? variables.search.trim().toLowerCase()
 					: ''
-			const items = pickerPlayers.filter(player =>
-				!search || player.webName.toLowerCase().includes(search)
+			const items = pickerPlayers.filter(
+				player => !search || player.webName.toLowerCase().includes(search)
 			)
 			json(response, 200, {
 				data: {

@@ -2,7 +2,7 @@
 
 import { MarketPositionBadge } from '@/components/data/MarketMarkup'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
-import type { MarketOwnershipMover } from '@/lib/graphql/operations/market'
+import type { MarketOwnershipChange } from '@/lib/graphql/operations/market'
 import { cn } from '@/lib/utils'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { useFormatter, useLocale, useTranslations } from 'next-intl'
@@ -12,14 +12,14 @@ function MoverList({
 	direction,
 	locale
 }: {
-	movers: MarketOwnershipMover[]
+	movers: MarketOwnershipChange[]
 	direction: 'rise' | 'fall'
 	locale: string
 }) {
 	const t = useTranslations('Market')
 	const formatter = useFormatter()
 	const largestMove = Math.max(
-		...movers.map(mover => Math.abs(mover.change)),
+		...movers.map(mover => Math.abs(mover.changePercentagePoints)),
 		0
 	)
 	const Icon = direction === 'rise' ? ArrowUpRight : ArrowDownRight
@@ -40,19 +40,22 @@ function MoverList({
 		>
 			{movers.map(mover => {
 				const magnitude =
-					largestMove > 0 ? Math.abs(mover.change) / largestMove : 0
-				const from = formatter.number(mover.previousSelectedByPercent, {
+					largestMove > 0
+						? Math.abs(mover.changePercentagePoints) / largestMove
+						: 0
+				const from = formatter.number(mover.fromSelectedByPercent, {
 					maximumFractionDigits: 1
 				})
-				const to = formatter.number(mover.selectedByPercent, {
+				const to = formatter.number(mover.toSelectedByPercent, {
 					maximumFractionDigits: 1
 				})
-				const delta = `${mover.change > 0 ? '+' : ''}${formatter.number(
-					mover.change,
+				const deltaValue = `${mover.changePercentagePoints > 0 ? '+' : ''}${formatter.number(
+					mover.changePercentagePoints,
 					{
 						maximumFractionDigits: 2
 					}
-				)}%`
+				)}`
+				const delta = t('ownershipPercentagePoints', { value: deltaValue })
 				return (
 					<li
 						key={mover.player.playerId}
@@ -109,8 +112,8 @@ export function OwnershipSwingDesk({
 	risers,
 	fallers
 }: {
-	risers: MarketOwnershipMover[]
-	fallers: MarketOwnershipMover[]
+	risers: MarketOwnershipChange[]
+	fallers: MarketOwnershipChange[]
 }) {
 	const t = useTranslations('Market')
 	const locale = useLocale()
