@@ -34,7 +34,7 @@ export function ShareActions({
 	compact?: boolean
 	disabled?: boolean
 }) {
-	const t = useTranslations('Common')
+	const t = useTranslations('Share')
 	const [textShared, setTextShared] = useState(false)
 	const [imageShared, setImageShared] = useState(false)
 	const [manualShareText, setManualShareText] = useState<string | null>(null)

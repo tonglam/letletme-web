@@ -33,6 +33,7 @@ import {
 	startTransition,
 	useCallback,
 	useEffect,
+	useMemo,
 	useRef,
 	useState
 } from 'react'
@@ -288,27 +289,45 @@ export default function GameweekStatsClient({
 		[]
 	)
 	const shareRef = useRef<HTMLDivElement | null>(null)
-	const shareText = [
-		`# ${t('overview', { gameweek: visibleGameweek })}`,
-		`${t('averagePoints')}: ${formatStat(isOverviewUnavailable ? null : overallStats.averagePoints)}`,
-		`${t('highestPoints')}: ${formatStat(isOverviewUnavailable ? null : overallStats.highestPoints)}`,
-		`${t('mostCaptained')}: ${displayName(isOverviewUnavailable ? 'N/A' : overallStats.mostCaptained.name)}`,
-		`${t('mostSelected')}: ${displayName(isOverviewUnavailable ? 'N/A' : overallStats.mostSelectedPlayer.name)}`,
-		'',
-		t('dreamTeamTitle', { gameweek: visibleGameweek }),
-		...dreamTeam.map(
-			player => `- ${player.name} ${player.team} · ${player.points} pts`
-		),
-		'',
-		t('doubleDigitHauls'),
-		...haulPlayers.map(
-			player => `- ${player.name} ${player.team} · ${player.points} pts`
-		),
-		'',
-		typeof window !== 'undefined'
-			? window.location.href
-			: 'https://letletme.top/explore/gameweek'
-	].join('\n')
+	const shareReady =
+		!isLoading &&
+		!isScheduledSelection &&
+		!isOverviewPending &&
+		!isBoardsPending &&
+		!isBoardsUnavailable
+	const shareText = useMemo(() => {
+		if (!shareReady) return ''
+
+		return [
+			`# ${t('overview', { gameweek: visibleGameweek })}`,
+			`${t('averagePoints')}: ${formatStat(isOverviewUnavailable ? null : overallStats.averagePoints)}`,
+			`${t('highestPoints')}: ${formatStat(isOverviewUnavailable ? null : overallStats.highestPoints)}`,
+			`${t('mostCaptained')}: ${displayName(isOverviewUnavailable ? 'N/A' : overallStats.mostCaptained.name)}`,
+			`${t('mostSelected')}: ${displayName(isOverviewUnavailable ? 'N/A' : overallStats.mostSelectedPlayer.name)}`,
+			'',
+			t('dreamTeamTitle', { gameweek: visibleGameweek }),
+			...dreamTeam.map(
+				player => `- ${player.name} ${player.team} · ${player.points} pts`
+			),
+			'',
+			t('doubleDigitHauls'),
+			...haulPlayers.map(
+				player => `- ${player.name} ${player.team} · ${player.points} pts`
+			),
+			'',
+			typeof window !== 'undefined'
+				? window.location.href
+				: 'https://letletme.top/explore/gameweek'
+		].join('\n')
+	}, [
+		dreamTeam,
+		haulPlayers,
+		isOverviewUnavailable,
+		overallStats,
+		shareReady,
+		t,
+		visibleGameweek,
+	])
 
 	return (
 		<>
@@ -330,6 +349,7 @@ export default function GameweekStatsClient({
 									text={shareText}
 									imageRef={shareRef}
 									title={t('title')}
+									disabled={!shareReady}
 								/>
 								<GameweekBadge gameweek={visibleGameweek} />
 							</div>

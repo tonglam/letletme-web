@@ -1114,15 +1114,17 @@
 		"nextGameweek": "Next gameweek",
 		"jumpToGameweek": "Jump to gameweek",
 		"gameweekNumberPlaceholder": "GW#",
-		"jumpToGameweekAction": "Go",
-		"shareText": "Share text",
-		"shareImage": "Share image",
-		"shareDone": "Shared",
-		"shareTextCopied": "Text ready to share.",
-		"shareImageCopied": "Image ready to share.",
-		"shareFailed": "Could not share. Try again or copy manually.",
-		"shareUnsupported": "This browser cannot share automatically. Select and copy the text manually.",
-		"shareManualLabel": "Share text",
+		"jumpToGameweekAction": "Go"
+	},
+	"Share": {
+		"shareText": "Text",
+		"shareImage": "Image",
+		"shareDone": "Done",
+		"shareTextCopied": "Text copied",
+		"shareImageCopied": "Image copied",
+		"shareFailed": "Share failed",
+		"shareUnsupported": "Copy manually",
+		"shareManualLabel": "Text",
 		"shareClose": "Close"
 	},
 	"Filters": {

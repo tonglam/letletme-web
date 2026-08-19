@@ -1114,15 +1114,17 @@
 		"nextGameweek": "下一轮",
 		"jumpToGameweek": "跳转到指定轮次",
 		"gameweekNumberPlaceholder": "轮次",
-		"jumpToGameweekAction": "跳转",
-		"shareText": "分享文字",
-		"shareImage": "分享图片",
+		"jumpToGameweekAction": "跳转"
+	},
+	"Share": {
+		"shareText": "文字",
+		"shareImage": "图片",
 		"shareDone": "已分享",
-		"shareTextCopied": "文字已准备好分享。",
-		"shareImageCopied": "图片已准备好分享。",
-		"shareFailed": "分享失败，请重试或手动复制。",
-		"shareUnsupported": "当前浏览器不支持自动分享，请手动选择并复制文字。",
-		"shareManualLabel": "分享文字",
+		"shareTextCopied": "文字已复制",
+		"shareImageCopied": "图片已复制",
+		"shareFailed": "分享失败",
+		"shareUnsupported": "请手动复制",
+		"shareManualLabel": "文字",
 		"shareClose": "关闭"
 	},
 	"Filters": {

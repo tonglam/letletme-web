@@ -514,6 +514,14 @@ export default function FixturesClient({
 		[fixturesByEvent, fromGw, horizon, knownTeams, marketPulse, unknownEvents]
 	)
 	const shareText = useMemo(() => {
+		const orderedTeams =
+			sort === 'easiest'
+				? model.teams
+				: [...model.teams].sort((a, b) => {
+						if (a.avgFdr == null && b.avgFdr != null) return 1
+						if (a.avgFdr != null && b.avgFdr == null) return -1
+						return (b.avgFdr ?? 0) - (a.avgFdr ?? 0)
+					})
 		const origin =
 			typeof window !== 'undefined'
 				? window.location.origin
@@ -525,14 +533,14 @@ export default function FixturesClient({
 		return formatTeamTickerShareText({
 			fromGw,
 			horizon,
-			teams: model.teams,
+			teams: orderedTeams,
 			labels: {
 				title: t('teamsTitle'),
 				none: t('emptyTeams'),
 				footer: shareUrl
 			}
 		})
-	}, [fromGw, horizon, locale, model.teams, t])
+	}, [fromGw, horizon, locale, model.teams, sort, t])
 
 	const filterByPos = useCallback(
 		(list: FdrReviewCandidate[]) => {
