@@ -13,6 +13,7 @@ import {
 } from '@/lib/graphql/operations/entries'
 
 export interface EventPickViewModel {
+	element: number | null
 	position: number
 	webName: string
 	teamShortName: string
@@ -361,6 +362,7 @@ export const mapApiDataToTeamStats = (
 			}
 			return [...entryEventResult.eventPicks]
 				.map((pick): EventPickViewModel => ({
+					element: pick.element ?? null,
 					position: pick.position,
 					webName: pick.webName,
 					teamShortName: pick.teamShortName,

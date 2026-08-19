@@ -119,9 +119,13 @@ function benchFixtureLine(
 	return venue ? `${opponent} (${venue})` : opponent
 }
 
+function pickElementId(pick: EventPickViewModel): string {
+	return String(pick.element ?? pick.position)
+}
+
 function buildPlayerDetail(pick: EventPickViewModel): PlayerDetail {
 	return {
-		id: String(pick.position),
+		id: pickElementId(pick),
 		name: pick.webName,
 		team: pick.teamName,
 		teamShort: pick.teamShortName,
@@ -167,7 +171,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 				if (!code || !position) return []
 				return [
 					{
-						id: String(pick.position),
+						id: pickElementId(pick),
 						webName: pick.webName,
 						score: pick.totalPoints,
 						teamCode: code,
@@ -201,7 +205,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 				if (!code || !position) return []
 				return [
 					{
-						id: `bench-${pick.position}`,
+						id: `bench-${pickElementId(pick)}`,
 						webName: pick.webName,
 						score: pick.totalPoints,
 						teamCode: code,
@@ -213,8 +217,10 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 		[benchPicks]
 	)
 	const handlePitchPlayerClick = (playerId: string) => {
-		const position = playerId.replace(/^bench-/, '')
-		const pick = stats.eventPicks.find(item => String(item.position) === position)
+		const elementId = playerId.replace(/^bench-/, '')
+		const pick = stats.eventPicks.find(
+			item => pickElementId(item) === elementId
+		)
 		if (pick) setSelectedPlayer(buildPlayerDetail(pick))
 	}
 	const shareText = useMemo(() => {

@@ -9,8 +9,14 @@ import type {
 	LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import { Link } from '@/i18n/navigation'
+import { executeQuery } from '@/lib/graphql-client'
+import {
+	GET_ENTRY,
+	type EntrySummaryResponse
+} from '@/lib/graphql/operations/entries'
 import { ArrowLeft } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { useEffect, useState } from 'react'
 import { LivePointsDashboard } from '../_components/LivePointsDashboard'
 import { LivePointsLoading } from '../_components/LivePointsLoading'
 import { useLivePoints } from '../_hooks/useLivePoints'
@@ -42,8 +48,47 @@ export default function TeamPointsClient({
 		initialLiveData,
 		initialSnapshot
 	})
-	const backQuery = initialSelectedGameweek
-		? `?gw=${initialSelectedGameweek}`
+	const [overall, setOverall] = useState(initialOverall)
+
+	useEffect(() => {
+		setOverall(initialOverall)
+	}, [initialOverall])
+
+	useEffect(() => {
+		const selectedGw =
+			livePoints.selectedGameweek ?? livePoints.currentGameweek
+		if (entryId <= 0 || selectedGw !== livePoints.currentGameweek) {
+			setOverall(undefined)
+			return
+		}
+
+		let cancelled = false
+		void executeQuery<EntrySummaryResponse>(
+			GET_ENTRY,
+			{ id: entryId },
+			{ cache: 'no-store' }
+		)
+			.then(response => {
+				if (cancelled || !response.entry) return
+				setOverall({
+					overallPoints: response.entry.overallPoints,
+					overallRank: response.entry.overallRank,
+					teamValue: response.entry.teamValue,
+					bank: response.entry.bank,
+					totalTransfers: response.entry.totalTransfers
+				})
+			})
+			.catch(error => {
+				console.warn('[live points] overall snapshot fetch failed:', error)
+			})
+
+		return () => {
+			cancelled = true
+		}
+	}, [entryId, livePoints.currentGameweek, livePoints.selectedGameweek])
+
+	const backQuery = livePoints.selectedGameweek
+		? `?gw=${livePoints.selectedGameweek}`
 		: ''
 	const backHref = tournamentId
 		? `/live/competitions/${tournamentId}${backQuery}`
@@ -69,7 +114,7 @@ export default function TeamPointsClient({
 				isPageActive={livePoints.isPageActive}
 				shouldAutoRefresh={livePoints.shouldAutoRefresh}
 				liveData={livePoints.liveData}
-				overall={initialOverall}
+				overall={overall}
 				startingPlayers={livePoints.startingPlayers}
 				benchPlayers={livePoints.benchPlayers}
 				onGameweekChange={livePoints.changeGameweek}
