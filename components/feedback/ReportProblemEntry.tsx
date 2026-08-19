@@ -18,6 +18,12 @@ import { toast } from 'sonner'
 
 const BODY_MIN = 8
 const SCREENSHOT_MAX_BYTES = 2 * 1024 * 1024
+const ALLOWED_SCREENSHOT_TYPES = new Set([
+	'image/jpeg',
+	'image/png',
+	'image/webp',
+	'image/gif',
+])
 
 export function ReportProblemEntry({
 	children,
@@ -41,6 +47,10 @@ export function ReportProblemEntry({
 		}
 		if (file && file.size > SCREENSHOT_MAX_BYTES) {
 			toast.error(t('screenshotTooLarge'))
+			return
+		}
+		if (file && file.type && !ALLOWED_SCREENSHOT_TYPES.has(file.type)) {
+			toast.error(t('screenshotUnsupported'))
 			return
 		}
 		setSubmitting(true)
@@ -119,7 +129,7 @@ export function ReportProblemEntry({
 						<input
 							id="bug-report-shot"
 							type="file"
-							accept="image/*"
+							accept="image/jpeg,image/png,image/webp,image/gif"
 							onChange={event => setFile(event.target.files?.[0] ?? null)}
 							className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium"
 						/>

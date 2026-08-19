@@ -2399,6 +2399,7 @@
 		"sending": "正在发送…",
 		"tooShort": "再写几个字就行",
 		"screenshotTooLarge": "这张图有点大，可不加图，或换一张小一点的。",
+		"screenshotUnsupported": "这张图用不了，可不加图，或换一张普通照片。",
 		"received": "收到了，编号 {id}",
 		"failed": "这次没发出去，请稍后再试。"
 	},

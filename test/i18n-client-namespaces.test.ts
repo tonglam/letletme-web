@@ -86,7 +86,7 @@ describe('client translation namespace lifecycle', () => {
 				)
 			)
 			assert.ok(
-				globalBytes <= 3_000,
+				globalBytes <= 3_100,
 				`global messages are ${globalBytes} bytes`
 			)
 			assert.ok(

@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { randomUUID } from 'crypto'
+
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 let _supabaseAdmin: SupabaseClient | undefined
@@ -46,23 +48,24 @@ export async function uploadAvatar(
 	return `${data.publicUrl}?t=${Date.now()}`
 }
 
+function extensionForContentType(contentType: string): string {
+	if (contentType === 'image/png') return 'png'
+	if (contentType === 'image/webp') return 'webp'
+	if (contentType === 'image/gif') return 'gif'
+	return 'jpg'
+}
+
 export async function uploadBugReportScreenshot(
-	publicId: string,
 	file: Buffer,
 	contentType: string
-): Promise<string | null> {
-	try {
-		const supabaseAdmin = getSupabaseAdmin()
-		const extension = contentType.includes('png') ? 'png' : 'jpg'
-		const path = `bug-reports/${publicId}.${extension}`
-		const { error } = await supabaseAdmin.storage.from(AVATAR_BUCKET).upload(path, file, {
-			contentType,
-			upsert: true,
-		})
-		if (error) return null
-		const { data } = supabaseAdmin.storage.from(AVATAR_BUCKET).getPublicUrl(path)
-		return data.publicUrl
-	} catch {
-		return null
-	}
+): Promise<string> {
+	const supabaseAdmin = getSupabaseAdmin()
+	const path = `bug-reports/${randomUUID()}.${extensionForContentType(contentType)}`
+	const { error } = await supabaseAdmin.storage.from(AVATAR_BUCKET).upload(path, file, {
+		contentType,
+		upsert: false,
+	})
+	if (error) throw new Error(`Storage upload failed: ${error.message}`)
+	const { data } = supabaseAdmin.storage.from(AVATAR_BUCKET).getPublicUrl(path)
+	return data.publicUrl
 }

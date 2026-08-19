@@ -44,19 +44,53 @@ export function normalizeBugReportBody(body: unknown): string {
 	return typeof body === 'string' ? body.trim() : ''
 }
 
+function looksLikeSvgOrXml(bytes: Buffer): boolean {
+	const head = bytes.subarray(0, 256).toString('utf8').trimStart()
+	return head.startsWith('<')
+}
+
+function sniffImageContentType(bytes: Buffer): string | null {
+	if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+		return 'image/jpeg'
+	}
+	if (
+		bytes.length >= 8 &&
+		bytes[0] === 0x89 &&
+		bytes[1] === 0x50 &&
+		bytes[2] === 0x4e &&
+		bytes[3] === 0x47
+	) {
+		return 'image/png'
+	}
+	if (bytes.length >= 6 && bytes.subarray(0, 3).toString('ascii') === 'GIF') {
+		return 'image/gif'
+	}
+	if (
+		bytes.length >= 12 &&
+		bytes.subarray(0, 4).toString('ascii') === 'RIFF' &&
+		bytes.subarray(8, 12).toString('ascii') === 'WEBP'
+	) {
+		return 'image/webp'
+	}
+	return null
+}
+
 export function decodeOptionalScreenshot(
 	base64: unknown,
-	mime: unknown
+	_mime: unknown
 ): { bytes: Buffer; contentType: string } | null {
 	if (typeof base64 !== 'string' || base64.trim().length === 0) return null
-	const contentType =
-		typeof mime === 'string' && mime.startsWith('image/')
-			? mime
-			: 'image/jpeg'
 	const bytes = Buffer.from(base64.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, ''), 'base64')
 	if (bytes.length === 0) return null
 	if (bytes.length > BUG_REPORT_SCREENSHOT_MAX_BYTES) {
 		throw new Error('SCREENSHOT_TOO_LARGE')
+	}
+	if (looksLikeSvgOrXml(bytes)) {
+		throw new Error('SCREENSHOT_UNSUPPORTED')
+	}
+	const contentType = sniffImageContentType(bytes)
+	if (!contentType) {
+		throw new Error('SCREENSHOT_UNSUPPORTED')
 	}
 	return { bytes, contentType }
 }

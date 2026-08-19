@@ -38,6 +38,19 @@ describe('bug report client meta', () => {
 				),
 			/SCREENSHOT_TOO_LARGE/
 		)
+		assert.throws(
+			() =>
+				decodeOptionalScreenshot(
+					Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>').toString('base64'),
+					'image/svg+xml'
+				),
+			/SCREENSHOT_UNSUPPORTED/
+		)
+		assert.equal(
+			decodeOptionalScreenshot(Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64'), 'image/png')
+				?.contentType,
+			'image/jpeg'
+		)
 	})
 
 	it('keeps the last three GraphQL diagnostics', () => {

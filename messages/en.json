@@ -2399,6 +2399,7 @@
 		"sending": "Sending…",
 		"tooShort": "A few more words will help.",
 		"screenshotTooLarge": "That picture is too large. Skip it or pick a smaller one.",
+		"screenshotUnsupported": "That picture type is not supported. Skip it or pick a photo.",
 		"received": "Got it. Reference {id}",
 		"failed": "That did not send. Please try again in a moment."
 	},

@@ -27,13 +27,14 @@ export async function POST(request: Request) {
 				userId = profile.id
 				entryId = getVerifiedFplEntryId(profile)
 			} catch (error) {
-				if (!(error instanceof MiniProgramAuthError && error.status === 401)) {
-					throw error
+				if (error instanceof MiniProgramAuthError && error.status === 401) {
+					throw new MiniProgramAuthError('登录过期了，请先打开「我」再发', 401)
 				}
+				throw error
 			}
 		}
 
-		await enforceBugReportRateLimit(request, userId ?? 'anonymous-miniprogram')
+		await enforceBugReportRateLimit(request, userId)
 
 		const bounded = await readBoundedJson(request, MAX_BODY_BYTES)
 		if (!bounded || typeof bounded !== 'object' || Array.isArray(bounded)) {

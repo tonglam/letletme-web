@@ -27,20 +27,26 @@ export class BugReportSubmitError extends Error {
 
 export async function enforceBugReportRateLimit(
 	request: Request,
-	identityKey: string
+	identityKey: string | null
 ): Promise<void> {
 	const secret = process.env.BACKEND_PROXY_SECRET
 	if (!secret) {
 		throw new BugReportSubmitError('Request safety checks are unavailable', 503)
 	}
 	const ipSubject = buildOpaqueRateLimitSubject(request.headers, secret)
-	const identitySubject = createHmac('sha256', secret)
-		.update(`bug-report:${identityKey}`)
-		.digest('hex')
-	for (const check of [
+	const checks: Array<{ subject: string; limit: number; windowSeconds: number }> = [
 		{ subject: ipSubject, limit: 8, windowSeconds: 60 * 60 },
-		{ subject: identitySubject, limit: 5, windowSeconds: 60 * 60 },
-	]) {
+	]
+	if (identityKey) {
+		checks.push({
+			subject: createHmac('sha256', secret)
+				.update(`bug-report:${identityKey}`)
+				.digest('hex'),
+			limit: 5,
+			windowSeconds: 60 * 60,
+		})
+	}
+	for (const check of checks) {
 		const result = await checkDatabaseRateLimit({
 			scope: 'bug-report',
 			subject: check.subject,
@@ -87,18 +93,30 @@ export async function submitBugReportToData({
 	let screenshot
 	try {
 		screenshot = decodeOptionalScreenshot(screenshotBase64, screenshotMime)
-	} catch {
+	} catch (error) {
+		const code = error instanceof Error ? error.message : ''
+		if (code === 'SCREENSHOT_UNSUPPORTED') {
+			throw new BugReportSubmitError(
+				'That picture type is not supported. Skip it or pick a photo.',
+				400
+			)
+		}
 		throw new BugReportSubmitError('That picture is too large. Skip it or pick a smaller one.', 413)
 	}
 
 	let screenshotUrl: string | null = null
 	if (screenshot) {
-		const placeholderId = `tmp-${Date.now()}`
-		screenshotUrl = await uploadBugReportScreenshot(
-			placeholderId,
-			screenshot.bytes,
-			screenshot.contentType
-		)
+		try {
+			screenshotUrl = await uploadBugReportScreenshot(
+				screenshot.bytes,
+				screenshot.contentType
+			)
+		} catch {
+			throw new BugReportSubmitError(
+				'That picture did not attach. Skip it or try again.',
+				502
+			)
+		}
 	}
 
 	const response = await tournamentApiFetch(

@@ -15,8 +15,7 @@ const MAX_BODY_BYTES = 3 * 1024 * 1024
 export async function POST(request: Request) {
 	try {
 		const { session, entryId } = await getVerifiedEntryContext()
-		const identityKey = session?.user.id ?? 'anonymous-web'
-		await enforceBugReportRateLimit(request, identityKey)
+		await enforceBugReportRateLimit(request, session?.user.id ?? null)
 
 		const payload = await readBoundedJson(request, MAX_BODY_BYTES)
 		if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
