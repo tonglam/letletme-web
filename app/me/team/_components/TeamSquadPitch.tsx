@@ -154,6 +154,8 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 	const t = useTranslations('TeamStats')
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDetail | null>(null)
+	const formatOverallRank = (value: number) =>
+		value <= 0 ? '—' : format.number(value, { notation: 'compact' })
 
 	const players = useMemo(
 		() =>
@@ -220,7 +222,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 		return [
 			`# ${stats.teamName} · GW${stats.eventId}`,
 			stats.playerName,
-			`${t('pitchTotalPoints')}: ${format.number(stats.overallPoints)} · ${t('pitchOverallRank')}: ${format.number(stats.overallRank, { notation: 'compact' })}`,
+			`${t('pitchTotalPoints')}: ${format.number(stats.overallPoints)} · ${t('pitchOverallRank')}: ${formatOverallRank(stats.overallRank)}`,
 			`${t('pitchGameweekPoints')}: ${format.number(stats.eventPoints)} · ${t('pitchChip')}: ${formatChip(stats.eventChip, t)}`,
 			'',
 			t('startingEleven'),
@@ -272,7 +274,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 					title={stats.teamName}
 					managerName={stats.playerName}
 					headerStats={{
-						eyebrow: `${t('pitchTotalPoints')} ${format.number(stats.overallPoints)} · ${t('pitchOverallRank')} ${format.number(stats.overallRank, { notation: 'compact' })}`,
+						eyebrow: `${t('pitchTotalPoints')} ${format.number(stats.overallPoints)} · ${t('pitchOverallRank')} ${formatOverallRank(stats.overallRank)}`,
 						details: [
 							{
 								label: t('pitchGameweekPoints'),
