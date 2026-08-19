@@ -29,22 +29,27 @@ export function ReportProblemEntry({
 	children,
 	className,
 	triggerClassName,
+	open: controlledOpen,
 	onOpenChange,
 }: {
 	children?: ReactNode
 	className?: string
 	triggerClassName?: string
+	open?: boolean
 	onOpenChange?: (open: boolean) => void
 }) {
 	const t = useTranslations('ReportProblem')
-	const [open, setOpen] = useState(false)
+	const [internalOpen, setInternalOpen] = useState(false)
 	const [body, setBody] = useState('')
 	const [file, setFile] = useState<File | null>(null)
 	const [submitting, setSubmitting] = useState(false)
 	const fileInputRef = useRef<HTMLInputElement>(null)
+	const open = controlledOpen ?? internalOpen
 
 	const handleOpenChange = (nextOpen: boolean) => {
-		setOpen(nextOpen)
+		if (controlledOpen === undefined) {
+			setInternalOpen(nextOpen)
+		}
 		onOpenChange?.(nextOpen)
 	}
 
@@ -108,13 +113,15 @@ export function ReportProblemEntry({
 
 	return (
 		<Sheet open={open} onOpenChange={handleOpenChange}>
-			<SheetTrigger asChild>
-				{children ?? (
+			{children ? (
+				<SheetTrigger asChild>{children}</SheetTrigger>
+			) : controlledOpen === undefined ? (
+				<SheetTrigger asChild>
 					<button type="button" className={cn(triggerClassName)}>
 						{t('entry')}
 					</button>
-				)}
-			</SheetTrigger>
+				</SheetTrigger>
+			) : null}
 			<SheetContent side="right" className={cn('z-[60] sm:max-w-md', className)}>
 				<SheetHeader>
 					<SheetTitle>{t('title')}</SheetTitle>

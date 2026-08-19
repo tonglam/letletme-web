@@ -12,6 +12,7 @@ import { PayloadTooLargeError, readBoundedJson } from '@/lib/http-security'
 import {
 	BugReportSubmitError,
 	enforceBugReportIngressLimit,
+	enforceBugReportIpLimit,
 	enforceBugReportReporterLimit,
 	submitBugReportToData,
 } from '@/lib/bug-report-submit'
@@ -32,6 +33,8 @@ function optionalDeviceId(value: unknown): string | null {
 
 export async function POST(request: Request) {
 	try {
+		await enforceBugReportIpLimit(request)
+
 		const token = getBearerToken(request.headers.get('authorization'))
 		let userId: string | null = null
 		let entryId: number | null = null

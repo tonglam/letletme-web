@@ -33,6 +33,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 	const t = useTranslations('Navigation')
 	const [signingOut, setSigningOut] = useState(false)
 	const [menuOpen, setMenuOpen] = useState(false)
+	const [reportOpen, setReportOpen] = useState(false)
 	const initials = (user.name ?? user.email).charAt(0).toUpperCase()
 	const verifiedEntryId = getVerifiedFplEntryId(user)
 	const accountName = user.name?.trim() || ''
@@ -57,6 +58,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 	}
 
 	return (
+		<>
 		<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 			<DropdownMenuTrigger asChild>
 				<Button
@@ -180,15 +182,17 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 							{t('profileSettings')}
 						</Link>
 					</DropdownMenuItem>
-					<ReportProblemEntry onOpenChange={open => { if (open) setMenuOpen(false) }}>
-						<DropdownMenuItem
-							className="cursor-pointer"
-							onSelect={event => event.preventDefault()}
-						>
-							<MessageCircleWarning className="mr-2 h-4 w-4" />
-							{t('reportProblem')}
-						</DropdownMenuItem>
-					</ReportProblemEntry>
+					<DropdownMenuItem
+						className="cursor-pointer"
+						onSelect={event => {
+							event.preventDefault()
+							setMenuOpen(false)
+							setReportOpen(true)
+						}}
+					>
+						<MessageCircleWarning className="mr-2 h-4 w-4" />
+						{t('reportProblem')}
+					</DropdownMenuItem>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem
 						onClick={handleSignOut}
@@ -201,5 +205,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 				</div>
 			</DropdownMenuContent>
 		</DropdownMenu>
+		<ReportProblemEntry open={reportOpen} onOpenChange={setReportOpen} />
+		</>
 	)
 }

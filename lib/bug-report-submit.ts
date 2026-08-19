@@ -74,14 +74,15 @@ function bugReportPrincipal(identity: {
 			: null
 }
 
-function buildBugReportIngressSubject(
+function buildKnownIpIngressSubject(request: Request, secret: string): string {
+	return buildOpaqueRateLimitSubject(request.headers, secret)
+}
+
+function buildUnknownIpIngressSubject(
 	request: Request,
 	secret: string,
 	identity: { userId: string | null; anonymousId: string | null }
 ): string {
-	if (resolveProviderClientIp(request.headers) !== 'unknown') {
-		return buildOpaqueRateLimitSubject(request.headers, secret)
-	}
 	const principal = bugReportPrincipal(identity)
 	if (!principal) {
 		throw new BugReportSubmitError(
@@ -90,6 +91,22 @@ function buildBugReportIngressSubject(
 		)
 	}
 	return createHmac('sha256', secret).update(`rate-limit:${principal}`).digest('hex')
+}
+
+async function consumeIngressLimit(request: Request, secret: string, subject: string): Promise<void> {
+	const result = await checkDatabaseRateLimit({
+		scope: 'bug-report-ip',
+		subject,
+		limit: IP_REPORTS_PER_HOUR,
+		windowSeconds: RATE_WINDOW_SECONDS,
+	})
+	if (!result.allowed) {
+		throw new BugReportSubmitError(
+			'Too many reports just now. Please try again later.',
+			429,
+			result.retryAfterSeconds
+		)
+	}
 }
 
 async function consumeRateLimit(
@@ -113,27 +130,29 @@ async function consumeRateLimit(
 	}
 }
 
-export async function enforceBugReportIngressLimit(
-	request: Request,
-	identity: { userId: string | null; anonymousId: string | null }
-): Promise<void> {
+export async function enforceBugReportIpLimit(request: Request): Promise<void> {
+	if (resolveProviderClientIp(request.headers) === 'unknown') return
 	const secret = process.env.BACKEND_PROXY_SECRET
 	if (!secret) {
 		throw new BugReportSubmitError('Request safety checks are unavailable', 503)
 	}
-	const result = await checkDatabaseRateLimit({
-		scope: 'bug-report-ip',
-		subject: buildBugReportIngressSubject(request, secret, identity),
-		limit: IP_REPORTS_PER_HOUR,
-		windowSeconds: RATE_WINDOW_SECONDS,
-	})
-	if (!result.allowed) {
-		throw new BugReportSubmitError(
-			'Too many reports just now. Please try again later.',
-			429,
-			result.retryAfterSeconds
-		)
+	await consumeIngressLimit(request, secret, buildKnownIpIngressSubject(request, secret))
+}
+
+export async function enforceBugReportIngressLimit(
+	request: Request,
+	identity: { userId: string | null; anonymousId: string | null }
+): Promise<void> {
+	if (resolveProviderClientIp(request.headers) !== 'unknown') return
+	const secret = process.env.BACKEND_PROXY_SECRET
+	if (!secret) {
+		throw new BugReportSubmitError('Request safety checks are unavailable', 503)
 	}
+	await consumeIngressLimit(
+		request,
+		secret,
+		buildUnknownIpIngressSubject(request, secret, identity)
+	)
 }
 
 export async function enforceBugReportReporterLimit(identity: {
@@ -158,6 +177,7 @@ export async function enforceBugReportRateLimit(
 	request: Request,
 	identity: { userId: string | null; anonymousId: string | null }
 ): Promise<void> {
+	await enforceBugReportIpLimit(request)
 	await enforceBugReportIngressLimit(request, identity)
 	await enforceBugReportReporterLimit(identity)
 }
