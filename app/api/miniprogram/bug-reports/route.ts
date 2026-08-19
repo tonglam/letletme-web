@@ -1,5 +1,9 @@
 import { getMiniProgramProfileByToken } from '@/lib/miniprogram-account'
-import { getBearerToken, MiniProgramAuthError } from '@/lib/miniprogram-account-core'
+import {
+	assertValidDeviceId,
+	getBearerToken,
+	MiniProgramAuthError,
+} from '@/lib/miniprogram-account-core'
 import {
 	miniProgramErrorResponse,
 	miniProgramSuccessResponse,
@@ -7,7 +11,8 @@ import {
 import { PayloadTooLargeError, readBoundedJson } from '@/lib/http-security'
 import {
 	BugReportSubmitError,
-	enforceBugReportRateLimit,
+	enforceBugReportIngressLimit,
+	enforceBugReportReporterLimit,
 	submitBugReportToData,
 } from '@/lib/bug-report-submit'
 import { getVerifiedFplEntryId } from '@/lib/fpl-binding-core'
@@ -16,8 +21,19 @@ export const dynamic = 'force-dynamic'
 
 const MAX_BODY_BYTES = 3 * 1024 * 1024
 
+function optionalDeviceId(value: unknown): string | null {
+	if (typeof value !== 'string') return null
+	try {
+		return assertValidDeviceId(value)
+	} catch {
+		return null
+	}
+}
+
 export async function POST(request: Request) {
 	try {
+		await enforceBugReportIngressLimit(request)
+
 		const token = getBearerToken(request.headers.get('authorization'))
 		let userId: string | null = null
 		let entryId: number | null = null
@@ -34,13 +50,15 @@ export async function POST(request: Request) {
 			}
 		}
 
-		await enforceBugReportRateLimit(request, userId)
-
 		const bounded = await readBoundedJson(request, MAX_BODY_BYTES)
 		if (!bounded || typeof bounded !== 'object' || Array.isArray(bounded)) {
 			throw new MiniProgramAuthError('Invalid JSON body', 400)
 		}
 		const payload = bounded as Record<string, unknown>
+		await enforceBugReportReporterLimit({
+			userId,
+			anonymousId: userId ? null : optionalDeviceId(payload.deviceId),
+		})
 
 		const result = await submitBugReportToData({
 			request,

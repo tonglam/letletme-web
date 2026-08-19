@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { createHmac } from 'crypto'
+import { createHmac, randomBytes } from 'crypto'
 
 import { tournamentApiFetch } from '@/lib/tournament/backend-client'
 import {
@@ -25,42 +25,114 @@ export class BugReportSubmitError extends Error {
 	}
 }
 
-export async function enforceBugReportRateLimit(
-	request: Request,
-	identityKey: string | null
+const ANONYMOUS_COOKIE = 'll_report_aid'
+const ANONYMOUS_COOKIE_PATTERN = /^[a-f0-9]{32}$/
+const IP_REPORTS_PER_HOUR = 30
+const REPORTER_REPORTS_PER_HOUR = 5
+const RATE_WINDOW_SECONDS = 60 * 60
+
+function parseCookieValue(cookieHeader: string | null, name: string): string | null {
+	if (!cookieHeader) return null
+	for (const part of cookieHeader.split(';')) {
+		const trimmed = part.trim()
+		const separator = trimmed.indexOf('=')
+		if (separator <= 0) continue
+		if (trimmed.slice(0, separator) !== name) continue
+		return trimmed.slice(separator + 1)
+	}
+	return null
+}
+
+export function takeAnonymousReportId(request: Request): {
+	id: string
+	setCookie: string | null
+} {
+	const existing = parseCookieValue(request.headers.get('cookie'), ANONYMOUS_COOKIE)
+	if (existing && ANONYMOUS_COOKIE_PATTERN.test(existing)) {
+		return { id: existing, setCookie: null }
+	}
+	const id = randomBytes(16).toString('hex')
+	const parts = [
+		`${ANONYMOUS_COOKIE}=${id}`,
+		'Path=/api/bug-reports',
+		'HttpOnly',
+		'SameSite=Lax',
+		'Max-Age=31536000',
+	]
+	if (process.env.NODE_ENV === 'production') parts.push('Secure')
+	return { id, setCookie: parts.join('; ') }
+}
+
+async function consumeRateLimit(
+	secret: string,
+	scope: string,
+	subjectSeed: string,
+	limit: number
 ): Promise<void> {
+	const result = await checkDatabaseRateLimit({
+		scope,
+		subject: createHmac('sha256', secret).update(subjectSeed).digest('hex'),
+		limit,
+		windowSeconds: RATE_WINDOW_SECONDS,
+	})
+	if (!result.allowed) {
+		throw new BugReportSubmitError(
+			'Too many reports just now. Please try again later.',
+			429,
+			result.retryAfterSeconds
+		)
+	}
+}
+
+export async function enforceBugReportIngressLimit(request: Request): Promise<void> {
 	const secret = process.env.BACKEND_PROXY_SECRET
 	if (!secret) {
 		throw new BugReportSubmitError('Request safety checks are unavailable', 503)
 	}
 	const ipSubject = buildOpaqueRateLimitSubject(request.headers, secret)
-	const checks: Array<{ subject: string; limit: number; windowSeconds: number }> = [
-		{ subject: ipSubject, limit: 8, windowSeconds: 60 * 60 },
-	]
-	if (identityKey) {
-		checks.push({
-			subject: createHmac('sha256', secret)
-				.update(`bug-report:${identityKey}`)
-				.digest('hex'),
-			limit: 5,
-			windowSeconds: 60 * 60,
-		})
+	const result = await checkDatabaseRateLimit({
+		scope: 'bug-report-ip',
+		subject: ipSubject,
+		limit: IP_REPORTS_PER_HOUR,
+		windowSeconds: RATE_WINDOW_SECONDS,
+	})
+	if (!result.allowed) {
+		throw new BugReportSubmitError(
+			'Too many reports just now. Please try again later.',
+			429,
+			result.retryAfterSeconds
+		)
 	}
-	for (const check of checks) {
-		const result = await checkDatabaseRateLimit({
-			scope: 'bug-report',
-			subject: check.subject,
-			limit: check.limit,
-			windowSeconds: check.windowSeconds,
-		})
-		if (!result.allowed) {
-			throw new BugReportSubmitError(
-				'Too many reports just now. Please try again later.',
-				429,
-				result.retryAfterSeconds
-			)
-		}
+}
+
+export async function enforceBugReportReporterLimit(identity: {
+	userId: string | null
+	anonymousId: string | null
+}): Promise<void> {
+	const secret = process.env.BACKEND_PROXY_SECRET
+	if (!secret) {
+		throw new BugReportSubmitError('Request safety checks are unavailable', 503)
 	}
+	const principal = identity.userId
+		? `user:${identity.userId}`
+		: identity.anonymousId
+			? `anon:${identity.anonymousId}`
+			: null
+	if (!principal) return
+	await consumeRateLimit(
+		secret,
+		'bug-report-reporter',
+		`bug-report:${principal}`,
+		REPORTER_REPORTS_PER_HOUR
+	)
+}
+
+export async function enforceBugReportRateLimit(
+	request: Request,
+	identity: { userId: string | null; anonymousId: string | null }
+): Promise<void> {
+	await enforceBugReportIngressLimit(request)
+	await enforceBugReportReporterLimit(identity)
 }
 
 export async function submitBugReportToData({
