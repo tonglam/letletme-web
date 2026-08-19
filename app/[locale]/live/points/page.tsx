@@ -1,7 +1,7 @@
 import LivePointsClient from '@/app/live/points/LivePointsClient'
-import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGameweekUnavailable'
+import { SeasonPhaseState } from '@/components/feedback/SeasonPhaseState'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import { getCurrentEventId } from '@/lib/events'
+import { getLivePageContext } from '@/lib/live-context-server'
 import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
@@ -28,13 +28,22 @@ export async function generateMetadata({ params }: PageProps) {
 export default async function LivePointsPage({ params }: PageProps) {
 	await getPageLocale(params)
 
-	// 1) Gate on isCurrent alone — do not wait on session/entry first.
-	const currentEventId = await getCurrentEventId()
-	if (!currentEventId) {
-		return <CurrentGameweekUnavailable />
+	const { presentation } = await getLivePageContext()
+	if (
+		presentation.phase === 'PRESEASON' ||
+		presentation.phase === 'BETWEEN_GAMEWEEKS' ||
+		presentation.phase === 'OFFSEASON' ||
+		presentation.phase === 'UNAVAILABLE'
+	) {
+		return <SeasonPhaseState feature="points" presentation={presentation} />
 	}
 
-	// 2) Only then session-scoped seed.
+	const currentEventId = presentation.currentEventId
+	if (!currentEventId) {
+		return <SeasonPhaseState feature="points" presentation={presentation} />
+	}
+
+	// Only then session-scoped seed.
 	const entryId = await getCurrentEntryId()
 	let initialLiveData: LiveCalcData | undefined
 	let initialSnapshot: LiveSnapshotStatus | null = null

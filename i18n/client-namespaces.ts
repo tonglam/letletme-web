@@ -32,9 +32,9 @@ export const ROUTE_CLIENT_NAMESPACES = {
 	competitionsCreate: ['TournamentCreate', 'TournamentHelp'],
 	competitionsManage: ['TournamentManage', 'TournamentLifecycle'],
 	competitionsDetail: ['LiveTournament', 'TournamentLifecycle'],
-	liveMatches: ['LiveMatches'],
-	livePoints: ['LivePoints'],
-	liveCompetitions: ['LiveTournament', 'TournamentLifecycle'],
+	liveMatches: ['LiveMatches', 'SeasonState'],
+	livePoints: ['LivePoints', 'SeasonState'],
+	liveCompetitions: ['LiveTournament', 'TournamentLifecycle', 'SeasonState'],
 	myFpl: ['TeamStats', 'TournamentStats', 'TournamentLifecycle', 'Filters'],
 	onboarding: ['Onboarding'],
 	profile: ['Profile', 'Sessions']

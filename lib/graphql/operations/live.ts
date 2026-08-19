@@ -1,3 +1,5 @@
+import type { CoreEventContextData } from '@/lib/graphql/operations/events'
+
 export const GET_LIVE_SCORES = `
   query GetLiveScores($eventId: Int!) {
     liveScores(eventId: $eventId, filter: { inDreamTeam: true }) {
@@ -470,6 +472,15 @@ export interface LiveMatchdayDeskResponse {
 
 export const GET_LIVE_CONTEXT = `
 	query GetLiveContext {
+		coreEventContext {
+			season
+			revision
+			sourceCheckedAt
+			currentEventId
+			nextEventId
+			nextDeadlineTime
+			latestFinishedEventId
+		}
 		liveContext {
 			season
       eventId: currentEventId
@@ -483,6 +494,7 @@ export const GET_LIVE_CONTEXT = `
 `
 
 export interface LiveContextResponse {
+	coreEventContext: CoreEventContextData
 	liveContext: {
 		season: string
 		eventId: number | null

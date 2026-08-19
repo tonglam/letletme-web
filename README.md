@@ -11,13 +11,14 @@ LetLetMe helps FPL managers follow their teams, tracked official leagues, and cu
 The target public information architecture is:
 
 - **Live:** Follow every point, rank, and competition change as it happens.
+- **Briefing:** Catch up on globally edited real-world Week, News, Views, and Features without personalized ranking or LetLetMe recommendations.
 - **My FPL:** Return to a linked team, season history, official leagues, and remembered context.
 - **Competitions:** Track bounded official leagues and run LetLetMe competitions that go beyond official FPL formats.
-- **Explore:** Inspect players, fixtures, the market, field trends, comparisons, and attributed public-source briefings.
+- **Explore:** Inspect players, fixtures, the market, field trends, and comparisons.
 
 LetLetMe does not operate a manager's official FPL team, build its own points forecasts, or issue `buy`, `sell`, or optimized-team recommendations. Official team actions remain on the official FPL website.
 
-See [LetLetMe Product Conclusions](docs/product/letletme-product-conclusions.md) for the full product definition, information architecture, resource priorities, assistant concept, retention model, and homepage direction. The companion [Four-Section Product Specification](docs/product/letletme-four-section-specification.md) defines the purpose, sub-pages, existing implementation, gaps, and next product work for Live, My FPL, Competitions, and Explore. The [Cross-Section Implementation Plan](docs/product/letletme-cross-section-implementation-plan.md) governs shared identities, contracts, dependency gates, migration boundaries, and delivery order across their section-specific plans.
+See [LetLetMe Product Conclusions](docs/product/letletme-product-conclusions.md) for the full product definition, information architecture, resource priorities, assistant concept, retention model, and homepage direction. The historical [Four-Section Product Specification](docs/product/letletme-four-section-specification.md) continues to define Live, My FPL, Competitions, and Explore; its Briefing clauses are superseded. The [Briefing Full-Chain Architecture](docs/product/letletme-briefing-content-architecture.md) defines the current X/Grok acquisition, editorial, Data, GraphQL, Web, cache, and operations contract; the [Week Cross-Repository Implementation Plan](docs/product/letletme-briefing-week-cross-repo-implementation-plan.md) starts the first menu at branch/worktree creation and carries it through release, rollback, and cleanup, while the detailed [News](docs/product/letletme-briefing-news-architecture.md), [Views](docs/product/letletme-briefing-views-architecture.md), and [Features](docs/product/letletme-briefing-features-architecture.md) architectures provide the remaining executable menu contracts. The [Cross-Section Implementation Plan](docs/product/letletme-cross-section-implementation-plan.md) governs the remaining shared identities, contracts, dependency gates, migration boundaries, and delivery order.
 
 This repository is the UI and identity authority in a four-repository system:
 
@@ -37,6 +38,7 @@ caches, and browser state are derived and replaceable.
 - **Live results:** Real-time team points, player contributions, matches, bonus state, and prepared tracked-official-league or custom-competition standings with provisional-state handling.
 - **My FPL review:** Settled team and competition results, season history, rank movement, captaincy, bench, hits, chips, transfers, and comparative league context.
 - **Prepared competitions:** Resource-bounded tracked official leagues with scheduled collection, plus custom membership, gameweek configuration, points races, groups, knockouts, live standings, completed results, and management tools.
+- **Briefing (planned):** One globally edited Week publication plus News, Views, and Features sourced from attributed real-world information.
 - **Explore tools:** Gameweek statistics, fixtures and difficulty, market movement, league trends and exposure, player profiles, and multi-player comparison.
 - **Personal context:** Verified FPL-team binding, authenticated private views, and the foundation for remembered teams, leagues, competitions, and followed interests.
 - **Trustworthy data states:** Official FPL facts, transparent LetLetMe calculations, separate verified match evidence, freshness, and graceful degraded states.

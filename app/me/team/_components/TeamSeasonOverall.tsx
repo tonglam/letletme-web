@@ -10,9 +10,11 @@ import { useFormatter, useTranslations } from 'next-intl'
 export function TeamSeasonOverall({
 	snapshot,
 	variant = 'full',
+	preseason = false,
 }: {
 	snapshot: TeamSeasonOverallSnapshot
 	variant?: 'compact' | 'full'
+	preseason?: boolean
 }) {
 	const t = useTranslations('TeamStats')
 	const format = useFormatter()
@@ -41,13 +43,17 @@ export function TeamSeasonOverall({
 					<span>
 						<span className="text-muted-foreground">{t('overallPoints')} </span>
 						<span className="font-display text-base font-bold text-foreground">
-							{format.number(snapshot.overallPoints)}
+							{snapshot.overallPoints == null
+								? '—'
+								: format.number(snapshot.overallPoints)}
 						</span>
 					</span>
 					<span>
 						<span className="text-muted-foreground">{t('overallRank')} </span>
 						<span className="font-display text-base font-bold text-primary-ink">
-							{format.number(snapshot.overallRank, { notation: 'compact' })}
+							{snapshot.overallRank == null
+								? '—'
+								: format.number(snapshot.overallRank, { notation: 'compact' })}
 						</span>
 					</span>
 				</div>
@@ -58,11 +64,15 @@ export function TeamSeasonOverall({
 	const secondary = [
 		{
 			label: t('teamValue'),
-			value: formatMoney(snapshot.teamValue),
+			value:
+				snapshot.teamValue == null
+					? t('notSynced')
+					: formatMoney(snapshot.teamValue),
 		},
 		{
 			label: t('bank'),
-			value: formatMoney(snapshot.bank),
+			value:
+				snapshot.bank == null ? t('notSynced') : formatMoney(snapshot.bank),
 		},
 		{
 			label: t('totalTransfers'),
@@ -106,7 +116,9 @@ export function TeamSeasonOverall({
 							{t('overallPoints')}
 						</p>
 						<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-foreground sm:text-4xl">
-							{format.number(snapshot.overallPoints)}
+							{snapshot.overallPoints == null
+								? '—'
+								: format.number(snapshot.overallPoints)}
 						</p>
 					</div>
 					<div className="rounded-lg surface-inset px-3 py-3 sm:px-4 sm:py-3.5">
@@ -114,11 +126,18 @@ export function TeamSeasonOverall({
 							{t('overallRank')}
 						</p>
 						<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-primary-ink sm:text-4xl">
-							{format.number(snapshot.overallRank, { notation: 'compact' })}
+							{snapshot.overallRank == null
+								? '—'
+								: format.number(snapshot.overallRank, { notation: 'compact' })}
 						</p>
 					</div>
 				</div>
 			</div>
+			{preseason ? (
+				<p className="border-t border-dashed px-4 py-3 text-sm text-muted-foreground sm:px-5">
+					{t('seasonPreseasonHint')}
+				</p>
+			) : null}
 
 			<div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-border/60 bg-muted/20 px-4 py-3 font-mono text-xs tabular-nums text-muted-foreground sm:px-5">
 				{secondary.map(item => (

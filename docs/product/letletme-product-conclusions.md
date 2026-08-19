@@ -2,9 +2,17 @@
 
 - **Status:** Agreed product-direction decision record
 - **Recorded:** 9 August 2026
-- **Last revised:** 10 August 2026
+- **Last revised:** 18 August 2026
 - **Scope:** LetLetMe website and its information assistant
 - **Assumption:** Current in-progress web, GraphQL, and data refactors are complete and available.
+
+> **Briefing supersession notice (18 August 2026):** All Briefing-specific navigation,
+> personalization, follow/mute, acquisition, publication, and cross-repository decisions in this
+> document are superseded by
+> [LetLetMe Briefing — Full-Chain Architecture and Delivery Plan](letletme-briefing-content-architecture.md).
+> Briefing is now a top-level section in the second navigation position, with no personal content
+> state or source/topic subscriptions in V1. Non-Briefing conclusions in this document remain in
+> force.
 
 Detailed purpose, sub-page, current-implementation, and gap definitions for the four public sections are recorded in [LetLetMe Four-Section Product Specification](letletme-four-section-specification.md).
 
@@ -18,6 +26,8 @@ The cross-repository Competitions delivery plan is recorded in [LetLetMe Competi
 
 The cross-repository Explore delivery plan is recorded in [LetLetMe Explore Section — High-Level Implementation Plan](letletme-explore-section-high-level-design.md).
 
+The current cross-repository Briefing plan is recorded in [LetLetMe Briefing — Full-Chain Architecture and Delivery Plan](letletme-briefing-content-architecture.md).
+
 ## Executive Summary
 
 - **LetLetMe should remain live-first.** Reliable real-time visibility into a manager's team, tracked official leagues, and custom competitions is the primary product job and the reason Live remains the first destination.
@@ -25,7 +35,7 @@ The cross-repository Explore delivery plan is recorded in [LetLetMe Explore Sect
 - **Official leagues and custom competitions are different report scopes, not mutually exclusive sources.** One official league may supply evidence and participants to many tournaments. Official entry and league facts should be collected once and reused; every tournament keeps its own membership, rules, calculated outputs, and audit.
 - **Tracked official leagues remain a resource-control product, while custom competitions remain the strongest durable differentiator.** Explicit preparation prevents arbitrary public league IDs from triggering expensive live calculation and weekly storage. Custom formats, custom membership, live competition views, and social play provide additional differentiated value.
 - **Finalized review is a core trust and retention layer.** It reconciles My Team and tracked official leagues to settled official truth, finalizes custom competitions from those settled inputs, and adds personal or competition intelligence that the result alone does not provide.
-- **The public information architecture should be `Live · My FPL · Competitions · Explore`.** Public-source Briefing belongs inside Explore and appears contextually elsewhere; the information assistant connects these surfaces rather than becoming a fifth section or an adviser.
+- **The public information architecture should be `Live · Briefing · My FPL · Competitions · Explore`.** Briefing is deliberately second to win attention for timely real-world information; it remains globally edited, non-personalized, and non-advisory.
 
 LetLetMe is therefore a **live-first, persistent, competition-centered, evidence-led FPL companion**. Live is its strongest entry point; accumulated personal context, custom competitions, trustworthy history, and relevant change are the reasons to return throughout the season.
 
@@ -33,7 +43,7 @@ The product promise is:
 
 > **The whole gameweek. Your call.**
 
-The first position of **Live** in the website navigation is intentional: it expresses the product's primary use occasion, not a legacy arrangement. Official FPL may become the upstream authority for more live facts, but LetLetMe should continue to own the live experience across a user's team and prepared competitions. **My FPL** owns remembered personal context, **Competitions** owns tracked official leagues and custom play, and **Explore** makes quantitative and public-source evidence approachable.
+The first position of **Live** in the website navigation is intentional: it expresses the product's primary use occasion, not a legacy arrangement. Official FPL may become the upstream authority for more live facts, but LetLetMe should continue to own the live experience across a user's team and prepared competitions. **Briefing** owns globally edited real-world information, **My FPL** owns remembered personal context, **Competitions** owns tracked official leagues and custom play, and **Explore** makes quantitative evidence approachable.
 
 LetLetMe is not an optimizer, prediction authority, official-game replacement, or autonomous FPL manager.
 
@@ -139,21 +149,22 @@ The following is the corrected high-level website picture, grouped by the produc
 | Live | Reliable real-time team and prepared-competition results, live squads, point breakdowns, player contributions, matches, BPS/bonus, standings/rank movement, revision-aware refresh, and retained/degraded states | Primary product surface. Keep Live Points, prepared Competition Live, and Live Matches; do not add arbitrary unprepared official-league lookup. |
 | Competitions | Prepared official-league tracking machinery with roster synchronization and weekly collection, plus custom membership, gameweek windows, points races, single/double knockouts, live standings, completed results, and selection metrics; additional race models exist in the backend | Present publicly as **Competitions** with tracked official leagues and custom competitions. Share entry/league evidence across every competition sourced from the same league while preserving each competition's own result and audit. |
 | Review | My Team and My Tournament across gameweeks/seasons: official points, ranks, value, squads, transfers, hits, chips, captaincy, bench, standings, metric ranks, leader/average gaps, form, risers, and fallers | Core trust and retention surface. Use official finalized results as authority and differentiate through explanation and comparative competition intelligence. |
-| Data | Gameweek Stats, Fixtures, Market, League Trends, and Player Stats, including player comparison, FDR/BGW/DGW, price/ownership/transfer movement, EO/exposure, official expected metrics, and verified real-match evidence | Present this publicly as **Explore** and extend it with an attributed Briefing. Improve selectively when it connects to My FPL, a field, a competition, Live, or settled review; avoid a generic feature race or passive social feed. |
+| Data | Gameweek Stats, Fixtures, Market, League Trends, and Player Stats, including player comparison, FDR/BGW/DGW, price/ownership/transfer movement, EO/exposure, official expected metrics, and verified real-match evidence | Present this publicly as **Explore**. Improve selectively when it connects to My FPL, a field, a competition, Live, or settled review; avoid a generic feature race. |
 | Foundation | Official FPL event/player/entry/league/live/market/history data, independent real-match provider data, prepared league/tournament picks, persistence, caching, queues, lineage, and GraphQL read models | Preserve the shared scheduled pipeline and the separate entry-, league-, and tournament-level records. Make the source, roster behaviour, rules, provisional/final status, provenance, coverage, and freshness visible. |
 
 ### Target public information architecture
 
 The public navigation is:
 
-> **Live · My FPL · Competitions · Explore**
+> **Live · Briefing · My FPL · Competitions · Explore**
 
 | Public section | Definition and contents | Boundary | Short user-facing description |
 | --- | --- | --- | --- |
 | **Live** | Live Points, prepared Competition Live for tracked official leagues and custom formats, Live Matches, bonus, rank/standing movement, freshness, and selected change explanations | Owns fast current-gameweek presentation and compact past-gameweek score lookup; it does not create or prepare competitions | **Follow every point, rank and competition change as it happens.** |
+| **Briefing** | Week, News, Views, and Features compiled from attributed real-world public sources | Owns one globally edited publication for all users; it does not personalize, ask users to follow sources, or issue LetLetMe recommendations | **Catch up on the real-world information shaping this gameweek.** |
 | **My FPL** | The manager's linked team, personal homepage, official leagues, remembered/followed context, completed-gameweek review, and season history | Owns persistent personal context and settled personal interpretation; it never performs official FPL actions | **Your team, your season and everything LetLetMe remembers for you.** |
 | **Competitions** | Prepare, manage, and preserve tracked official leagues and LetLetMe custom competitions, including roster/membership, setup, rules where applicable, groups, races, knockouts, auditing, and history | Whole-league Live and reports require prior preparation; arbitrary public league lookup does not begin in Live | **Track your leagues and run competitions your way.** |
-| **Explore** | Gameweek, Fixtures, Market, Trends, Players, comparison, and Briefing across quantitative evidence and attributed public sources | Helps the manager inspect evidence; it does not issue forecasts, recommendations, or official actions | **See what is changing across players, fixtures, the market and the FPL conversation.** |
+| **Explore** | Gameweek, Fixtures, Market, Trends, Players, and comparison across quantitative evidence | Helps the manager inspect evidence; it does not issue forecasts, recommendations, or official actions | **See what is changing across players, fixtures and the market.** |
 
 `Me` is too vague, singular `Tournament` incorrectly suggests one event and preserves the old mixed model, and `Data` is too technical for a gaming product and too narrow for public-source information. `Research` was considered and rejected because it sounds effortful and is unlikely to invite a common gaming user to click. `Explore` is lighter, user-driven, and broad without implying an algorithmic recommendation feed.
 
@@ -161,7 +172,7 @@ Use singular **competition** for an individual object or action (`Create a compe
 
 ### Public-source information and Briefing
 
-Do not create a fifth `News`, `Social`, `Community`, or `KOL` section. The canonical browse home for reporting, YouTube, social media, forums, publishers, and named creator views is **Explore → Briefing**. Relevant source cards may also appear inside My FPL, player pages, comparisons, Live explanations, and settled review.
+Briefing is the fifth top-level section and the canonical browse home for reporting, YouTube, social media, publishers, and named creator views. Its submenu is **Week · News · Views · Features**. Relevant source cards may later appear contextually elsewhere, but Briefing V1 itself remains one globally edited publication with no personal follow/mute state.
 
 Organize public-source material by user relevance, player/team/topic, evidence class, source, and publication time—not primarily by platform. Keep these evidence classes visibly separate:
 

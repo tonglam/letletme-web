@@ -12,6 +12,7 @@ import type {
 	EntryGameweekTransfers
 } from '@/lib/graphql/operations/entries'
 import type { SeasonIdentity } from './_lib/team-stats-model'
+import type { SeasonPresentationPhase } from '@/lib/season-presentation'
 import { cn } from '@/lib/utils'
 import { AlertCircle, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -46,6 +47,7 @@ interface TeamStatsClientProps {
 	initialEntryTransfers?: EntryGameweekTransfers[] | null
 	initialError: string | null
 	initialRequestComplete: boolean
+	initialSeasonPhase: SeasonPresentationPhase
 }
 
 /**
@@ -83,6 +85,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 	} = useTeamStats({
 		...props,
 		initialSelectedGameweek,
+		preseason: props.initialSeasonPhase === 'PRESEASON',
 		loadGameweekData: view === 'gameweek'
 	})
 
@@ -171,10 +174,11 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 							selectedGameweek={selectedGameweek}
 							currentGameweek={currentGameweek}
 							maxGw={maxGw}
-							isLoading={isLoading}
-							isTransfersLoading={isTransfersLoading}
-							teamStats={teamStats}
-							seasonOverall={seasonOverall}
+								isLoading={isLoading}
+								isTransfersLoading={isTransfersLoading}
+								teamStats={teamStats}
+								seasonOverall={seasonOverall}
+								preseason={props.initialSeasonPhase === 'PRESEASON'}
 							seasonLogs={seasonLogs}
 							emptyStateMessage={emptyStateMessage}
 							hasAnyContent={hasAnyContent}
@@ -207,6 +211,7 @@ interface TeamStatsViewsProps {
 	isTransfersLoading: boolean
 	teamStats: ReturnType<typeof useTeamStats>['teamStats']
 	seasonOverall: ReturnType<typeof useTeamStats>['seasonOverall']
+	preseason: boolean
 	seasonLogs: ReturnType<typeof useTeamStats>['seasonLogs']
 	emptyStateMessage: string | null
 	hasAnyContent: boolean
@@ -223,6 +228,7 @@ function TeamStatsViews({
 	isTransfersLoading,
 	teamStats,
 	seasonOverall,
+	preseason,
 	seasonLogs,
 	emptyStateMessage,
 	hasAnyContent,
@@ -346,6 +352,7 @@ function TeamStatsViews({
 						<TeamSeasonOverall
 							snapshot={seasonOverall}
 							variant="full"
+							preseason={preseason}
 						/>
 					) : null}
 

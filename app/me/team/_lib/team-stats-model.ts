@@ -48,8 +48,8 @@ export interface TeamSeasonOverallSnapshot {
 	teamName: string
 	playerName: string
 	region: string
-	overallPoints: number
-	overallRank: number
+	overallPoints: number | null
+	overallRank: number | null
 	teamValue: number | null
 	bank: number | null
 	totalTransfers: number | null
@@ -151,19 +151,30 @@ export type SeasonIdentity = {
  */
 export function buildSeasonOverallSnapshot(
 	identity: SeasonIdentity,
-	entryHistoryResults: EntryHistoryItem[]
+	entryHistoryResults: EntryHistoryItem[],
+	options?: { preseason?: boolean }
 ): TeamSeasonOverallSnapshot {
 	const latestHistory =
 		entryHistoryResults.length > 0
 			? [...entryHistoryResults].sort((a, b) => b.eventId - a.eventId)[0]
 			: null
 
+	const hasHistory = latestHistory !== null
+	const normalizePreseasonPlaceholder = (value: number | undefined) => {
+		if (value === undefined) return null
+		return options?.preseason && !hasHistory && value === 0 ? null : value
+	}
+
 	return {
 		teamName: identity.teamName,
 		playerName: identity.playerName || '-',
 		region: identity.region || '-',
-		overallPoints: latestHistory?.overallPoints ?? identity.overallPoints ?? 0,
-		overallRank: latestHistory?.overallRank ?? identity.overallRank ?? 0,
+		overallPoints:
+			latestHistory?.overallPoints ??
+			normalizePreseasonPlaceholder(identity.overallPoints),
+		overallRank:
+			latestHistory?.overallRank ??
+			normalizePreseasonPlaceholder(identity.overallRank),
 		teamValue: latestHistory?.teamValue ?? identity.teamValue ?? null,
 		bank: latestHistory?.bank ?? identity.bank ?? null,
 		totalTransfers: identity.totalTransfers,

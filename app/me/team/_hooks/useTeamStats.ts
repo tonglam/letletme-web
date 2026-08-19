@@ -47,6 +47,7 @@ interface UseTeamStatsOptions {
 	initialEntryTransfers?: EntryGameweekTransfers[] | null
 	initialError: string | null
 	initialRequestComplete: boolean
+	preseason: boolean
 }
 
 /**
@@ -69,6 +70,7 @@ export function useTeamStats({
 	initialEntryTransfers = null,
 	initialError,
 	initialRequestComplete,
+	preseason,
 }: UseTeamStatsOptions) {
 	const t = useTranslations('TeamStats')
 	const [currentGameweek, setCurrentGameweek] = useState(initialCurrentGameweek)
@@ -110,7 +112,7 @@ export function useTeamStats({
 	const [seasonOverall, setSeasonOverall] =
 		useState<TeamSeasonOverallSnapshot | null>(() =>
 			identity0
-				? buildSeasonOverallSnapshot(identity0, historyResults0)
+				? buildSeasonOverallSnapshot(identity0, historyResults0, { preseason })
 				: null,
 		)
 	const [seasonLogs, setSeasonLogs] = useState<TeamSeasonLogs | null>(() => {
@@ -189,6 +191,7 @@ export function useTeamStats({
 						buildSeasonOverallSnapshot(
 							identityRef.current,
 							history.results,
+							{ preseason },
 						),
 					)
 				}
@@ -200,7 +203,7 @@ export function useTeamStats({
 		return () => {
 			cancelled = true
 		}
-	}, [entryId, t])
+	}, [entryId, preseason, t])
 
 	// Deferred transfers — once per entry unless already in session cache
 	useEffect(() => {
@@ -309,7 +312,9 @@ export function useTeamStats({
 			const seasonHistory = history?.history ?? []
 			const transfers = peekTransferHistory(entryId) ?? []
 
-			setSeasonOverall(buildSeasonOverallSnapshot(identity, historyResults))
+			setSeasonOverall(
+				buildSeasonOverallSnapshot(identity, historyResults, { preseason }),
+			)
 			const mapped = mapApiDataToTeamStats(
 				entryEventResult,
 				historyResults,
@@ -328,7 +333,7 @@ export function useTeamStats({
 			}
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- intentional GW gate
-	}, [entryId, selectedGameweek, loadGameweekData, currentGameweek, t])
+	}, [entryId, selectedGameweek, loadGameweekData, currentGameweek, preseason, t])
 
 	return {
 		currentGameweek,

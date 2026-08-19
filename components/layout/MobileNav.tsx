@@ -78,36 +78,45 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
 
           <div className="flex-1 overflow-y-auto">
             <div className="mt-6 mb-4 flex flex-col gap-2">
-              {menuItems.map((item) => (
-                <Collapsible
-                  key={item.id}
-                  open={openCollapsible === item.id}
-                  onOpenChange={(open) => setOpenCollapsible(open ? item.id : null)}
-                >
-                  <CollapsibleTrigger asChild>
-                    <Button variant="ghost" className="w-full justify-between" size="lg">
-						<div className="flex items-center gap-2">
+              {menuItems.map((item) =>
+                item.directHref ? (
+                  <SheetClose key={item.id} asChild>
+                    <Button variant="ghost" className="w-full justify-start" size="lg" asChild>
+                      <Link href={item.directHref} prefetch={false}>
                         <item.icon data-icon="inline-start" />
                         {t(item.labelKey)}
-                      </div>
-                      <ChevronDown
-						className={cn("transition-transform",
-                          openCollapsible === item.id ? "rotate-180" : ""
-                        )}
-                      />
+                      </Link>
                     </Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="flex flex-col gap-2 px-4 py-2">
-                    {item.items.map((subItem) => (
-                      <SheetClose key={subItem.labelKey} asChild>
-                        <Button variant="ghost" className="w-full justify-start text-sm" asChild>
-                          <Link href={subItem.href} prefetch={false}>{t(subItem.labelKey)}</Link>
-                        </Button>
-                      </SheetClose>
-                    ))}
-                  </CollapsibleContent>
-                </Collapsible>
-              ))}
+                  </SheetClose>
+                ) : (
+                  <Collapsible
+                    key={item.id}
+                    open={openCollapsible === item.id}
+                    onOpenChange={(open) => setOpenCollapsible(open ? item.id : null)}
+                  >
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" className="w-full justify-between" size="lg">
+                        <div className="flex items-center gap-2">
+                          <item.icon data-icon="inline-start" />
+                          {t(item.labelKey)}
+                        </div>
+                        <ChevronDown
+                          className={cn("transition-transform", openCollapsible === item.id ? "rotate-180" : "")}
+                        />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="flex flex-col gap-2 px-4 py-2">
+                      {item.items.map((subItem) => (
+                        <SheetClose key={subItem.labelKey} asChild>
+                          <Button variant="ghost" className="w-full justify-start text-sm" asChild>
+                            <Link href={subItem.href} prefetch={false}>{t(subItem.labelKey)}</Link>
+                          </Button>
+                        </SheetClose>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                ),
+              )}
             </div>
           </div>
 

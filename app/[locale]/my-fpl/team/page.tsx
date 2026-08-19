@@ -5,17 +5,17 @@ import {
 	type SeasonIdentity
 } from '@/app/me/team/_lib/team-stats-model'
 import {
-	parseTeamStatsGw,
-	parseTeamStatsView
-} from '@/app/me/team/_lib/team-stats-url'
-import {
 	MOCK_TEAM_ENTRY_ID,
 	MOCK_TEAM_EVENT_ID,
 	MOCK_TEAM_EVENT_RESULT,
 	MOCK_TEAM_HISTORY,
 	MOCK_TEAM_IDENTITY
 } from '@/app/me/team/_lib/team-stats-mock'
-import { getCurrentAndNextEvents } from '@/lib/events'
+import {
+	parseTeamStatsGw,
+	parseTeamStatsView
+} from '@/app/me/team/_lib/team-stats-url'
+import { getCoreEventContext, getCurrentAndNextEvents } from '@/lib/events'
 import {
 	maxEventIdFromHistory,
 	resolveReviewGameweekAnchor
@@ -31,6 +31,7 @@ import {
 	type EntrySummaryResponse
 } from '@/lib/graphql/operations/entries'
 import { getVerifiedEntryContext } from '@/lib/session'
+import { resolveSeasonPresentation } from '@/lib/season-presentation'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
 import { redirect } from 'next/navigation'
@@ -83,16 +84,14 @@ function TeamStatsFallback() {
  *   gate once + events + history + entry identity
  * Gameweek deep link: also entryEventResult(seedGw)
  */
-export default async function TeamStatsPage({
-	params,
-	searchParams
-}: PageProps) {
+export default async function TeamStatsPage({ params, searchParams }: PageProps) {
 	const [pageLocale, t, sp] = await Promise.all([
 		getPageLocale(params),
 		getTranslations('States'),
 		searchParams
 	])
 	const { locale } = pageLocale
+
 	if (sp.mock === '1' && process.env.NODE_ENV !== 'production') {
 		const showBenchBoost = sp.chip?.toLowerCase() === 'bb'
 		const mockEventResult = showBenchBoost
@@ -125,14 +124,21 @@ export default async function TeamStatsPage({
 					initialEntryTransfers={[]}
 					initialError={null}
 					initialRequestComplete
+					initialSeasonPhase="IN_SEASON"
 				/>
 			</Suspense>
 		)
 	}
 
 	const timing = new RouteLoaderTiming('/my-fpl/team')
-	const [context, events] = await Promise.all([
+	const [context, coreEventContext, events] = await Promise.all([
 		timing.measure('session', () => getVerifiedEntryContext()),
+		timing.measure('event-context', () =>
+			getCoreEventContext().catch(error => {
+				console.warn('[team stats] event context failed:', error)
+				return null
+			})
+		),
 		timing.measure('events', () => getCurrentAndNextEvents())
 	])
 	const initialView = parseTeamStatsView(sp.view)
@@ -149,6 +155,7 @@ export default async function TeamStatsPage({
 	}
 
 	const eventsAnchor = resolveReviewGameweekAnchor(events)
+	const seasonPresentation = resolveSeasonPresentation(coreEventContext)
 
 	let initialEntryEventResult: EntryEventResult | null = null
 	let initialEntryHistory: EntryHistoryResponse['entryHistory'] | null = null
@@ -156,12 +163,10 @@ export default async function TeamStatsPage({
 	let initialError: string | null = null
 	let initialRequestComplete = false
 
-	// Provisional max before history (refined after history loads)
 	let reviewMaxGw = eventsAnchor.anchorGw ?? 0
 	let currentGameweek = eventsAnchor.currentGw ?? reviewMaxGw
 
 	try {
-		// History + identity first so we can refine anchor without isCurrent
 		const [historyResult, entryResult] = await Promise.allSettled([
 			timing.measure('history', () =>
 				executeServerQueryWithSession<EntryHistoryResponse>(
@@ -200,7 +205,6 @@ export default async function TeamStatsPage({
 			historyMaxEventId: historyMax
 		})
 		reviewMaxGw = refined.anchorGw ?? historyMax ?? 0
-		// For workspace max: prefer real current when set, else review anchor
 		currentGameweek = refined.currentGw ?? reviewMaxGw
 
 		const seedGw =
@@ -265,6 +269,7 @@ export default async function TeamStatsPage({
 				initialEntryTransfers={null}
 				initialError={initialError}
 				initialRequestComplete={initialRequestComplete}
+				initialSeasonPhase={seasonPresentation.phase}
 			/>
 		</Suspense>
 	)

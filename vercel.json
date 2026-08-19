@@ -1,4 +1,11 @@
 {
 	"$schema": "https://openapi.vercel.sh/vercel.json",
+	"git": {
+		"deploymentEnabled": {
+			"**": false,
+			"main": true
+		}
+	},
+	"ignoreCommand": "node scripts/vercel-ignore-build.mjs",
 	"regions": ["sin1"]
 }
