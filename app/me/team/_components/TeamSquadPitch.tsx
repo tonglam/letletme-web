@@ -2,13 +2,13 @@
 
 import {
 	SquadPitch,
-	type SquadPitchPlayer,
-	type SquadTeamCode
+	type SquadPitchPlayer
 } from '@/components/squad-pitch/SquadPitch'
 import { PlayerDetailModal } from '@/components/live/PlayerDetailModal'
 import { ShareActions } from '@/components/share/ShareActions'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
 import { isSquadStarter } from '@/lib/squad-picks'
+import { resolveSquadTeamCode } from '@/lib/squad-pitch-team-codes'
 import type {
 	EventPickViewModel,
 	TeamStatsViewModel
@@ -17,41 +17,11 @@ import type { PlayerDetail } from '@/types/player-detail'
 import { useFormatter, useLocale, useTranslations } from 'next-intl'
 import { useMemo, useRef, useState } from 'react'
 
-const TEAM_CODES: readonly SquadTeamCode[] = [
-	'ARS',
-	'AVL',
-	'BOU',
-	'BRE',
-	'BHA',
-	'CHE',
-	'COV',
-	'CRY',
-	'EVE',
-	'FUL',
-	'HUL',
-	'IPS',
-	'LEE',
-	'LIV',
-	'MCI',
-	'MUN',
-	'NEW',
-	'NFO',
-	'SUN',
-	'TOT'
-]
-
 const POSITION_ORDER: Record<SquadPitchPlayer['position'], number> = {
 	GKP: 0,
 	DEF: 1,
 	MID: 2,
 	FWD: 3
-}
-
-function teamCode(value: string): SquadTeamCode | null {
-	const normalized = value.trim().toUpperCase()
-	return TEAM_CODES.includes(normalized as SquadTeamCode)
-		? (normalized as SquadTeamCode)
-		: null
 }
 
 function positionCode(value: string): SquadPitchPlayer['position'] | null {
@@ -123,6 +93,28 @@ function pickElementId(pick: EventPickViewModel): string {
 	return String(pick.element ?? pick.position)
 }
 
+function buildPitchPlayer(
+	pick: EventPickViewModel,
+	options?: { bench?: boolean; fixture?: string }
+): SquadPitchPlayer | null {
+	const position = positionCode(pick.elementTypeName)
+	if (!position) return null
+
+	const teamCode = resolveSquadTeamCode(pick.teamShortName, pick.teamName)
+	const teamBadgeLabel = pick.teamShortName.trim().toUpperCase()
+
+	return {
+		id: options?.bench ? `bench-${pickElementId(pick)}` : pickElementId(pick),
+		webName: pick.webName,
+		score: pick.totalPoints,
+		...(teamCode ? { teamCode } : { teamBadgeLabel }),
+		position,
+		fixture: options?.fixture,
+		isCaptain: pick.isCaptain,
+		isViceCaptain: pick.isViceCaptain,
+	}
+}
+
 function buildPlayerDetail(pick: EventPickViewModel): PlayerDetail {
 	return {
 		id: pickElementId(pick),
@@ -166,20 +158,8 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 		() =>
 			stats.eventPicks.flatMap(pick => {
 				if (!isSquadStarter(pick)) return []
-				const code = teamCode(pick.teamShortName)
-				const position = positionCode(pick.elementTypeName)
-				if (!code || !position) return []
-				return [
-					{
-						id: pickElementId(pick),
-						webName: pick.webName,
-						score: pick.totalPoints,
-						teamCode: code,
-						position,
-						isCaptain: pick.isCaptain,
-						isViceCaptain: pick.isViceCaptain
-					} satisfies SquadPitchPlayer
-				]
+				const player = buildPitchPlayer(pick)
+				return player ? [player] : []
 			}),
 		[stats.eventPicks]
 	)
@@ -200,19 +180,11 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 	const benchPlayers = useMemo(
 		() =>
 			benchPicks.flatMap(pick => {
-				const code = teamCode(pick.teamShortName)
-				const position = positionCode(pick.elementTypeName)
-				if (!code || !position) return []
-				return [
-					{
-						id: `bench-${pickElementId(pick)}`,
-						webName: pick.webName,
-						score: pick.totalPoints,
-						teamCode: code,
-						position,
-						fixture: benchFixtureLine(pick)
-					} satisfies SquadPitchPlayer
-				]
+				const player = buildPitchPlayer(pick, {
+					bench: true,
+					fixture: benchFixtureLine(pick),
+				})
+				return player ? [player] : []
 			}),
 		[benchPicks]
 	)

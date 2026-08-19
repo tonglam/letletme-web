@@ -30,7 +30,8 @@ export interface SquadPitchPlayer {
 	id: string
 	webName: string
 	score: number
-	teamCode: SquadTeamCode
+	teamCode?: SquadTeamCode
+	teamBadgeLabel?: string
 	position: SquadPosition
 	fixture?: string
 	isCaptain?: boolean
@@ -103,6 +104,39 @@ function PlayerMarker({ player }: { player: SquadPitchPlayer }) {
 	)
 }
 
+function TeamKitBadge({
+	player,
+	className
+}: {
+	player: SquadPitchPlayer
+	className: string
+}) {
+	if (player.teamCode) {
+		return (
+			<Image
+				src={`/images/squad-pitch/kits/${player.teamCode}.svg`}
+				alt=""
+				aria-hidden="true"
+				width={240}
+				height={220}
+				sizes="(max-width: 480px) 48px, (max-width: 900px) 10vw, 104px"
+				loading={player.position === 'GKP' ? 'eager' : 'lazy'}
+				className={className}
+				unoptimized
+			/>
+		)
+	}
+
+	return (
+		<div
+			aria-hidden="true"
+			className={`grid place-items-center rounded-[0.45rem] border border-white/35 bg-[#38003c] font-display font-bold uppercase tracking-[0.08em] text-[#f8f6ef] ${className}`}
+		>
+			{player.teamBadgeLabel ?? '—'}
+		</div>
+	)
+}
+
 function PlayerCard({
 	player,
 	compact = false,
@@ -134,16 +168,9 @@ function PlayerCard({
 			<div
 				className={`relative z-10 transition-[filter,transform] duration-200 ${compact ? '-mb-[clamp(0.2rem,0.65cqi,0.36rem)] w-[86%]' : '-mb-[clamp(0.25rem,0.8cqi,0.45rem)] w-[90%]'} drop-shadow-[0_9px_8px_rgba(0,24,16,0.28)] ${isInteractive ? 'group-hover:-translate-y-0.5 group-hover:drop-shadow-[0_13px_11px_rgba(0,24,16,0.4)]' : ''}`}
 			>
-				<Image
-					src={`/images/squad-pitch/kits/${player.teamCode}.svg`}
-					alt=""
-					aria-hidden="true"
-					width={240}
-					height={220}
-					sizes="(max-width: 480px) 48px, (max-width: 900px) 10vw, 104px"
-					loading={player.position === 'GKP' ? 'eager' : 'lazy'}
+				<TeamKitBadge
+					player={player}
 					className="h-auto w-full select-none"
-					unoptimized
 				/>
 				<PlayerMarker player={player} />
 			</div>
@@ -236,14 +263,9 @@ function BenchPlayerCard({
 			tabIndex={isInteractive ? 0 : undefined}
 		>
 			<div className="flex min-w-0 items-center gap-[clamp(0.2rem,0.8cqi,0.5rem)] rounded-[clamp(0.2rem,0.7cqi,0.4rem)] border border-white/80 bg-[#f8f6ef]/95 px-[clamp(0.2rem,0.8cqi,0.5rem)] py-[clamp(0.18rem,0.6cqi,0.38rem)] shadow-[0_5px_12px_rgba(0,37,23,0.2)]">
-				<Image
-					src={`/images/squad-pitch/kits/${player.teamCode}.svg`}
-					alt=""
-					aria-hidden="true"
-					width={100}
-					height={80}
-					className="h-[clamp(1.55rem,5.8cqi,3.4rem)] w-[clamp(1.8rem,7cqi,4.2rem)] shrink-0 object-contain"
-					unoptimized
+				<TeamKitBadge
+					player={player}
+					className="h-[clamp(1.55rem,5.8cqi,3.4rem)] w-[clamp(1.8rem,7cqi,4.2rem)] shrink-0 object-contain text-[clamp(0.42rem,1.1cqi,0.62rem)]"
 				/>
 				<div className="min-w-0 text-left">
 					<p className="truncate font-mono text-[clamp(0.34rem,0.82cqi,0.52rem)] font-bold uppercase leading-tight tracking-[0.08em] text-[#38003c]/55">
@@ -253,7 +275,7 @@ function BenchPlayerCard({
 						{player.webName}
 					</p>
 					<p className="truncate font-mono text-[clamp(0.36rem,0.9cqi,0.56rem)] tabular-nums leading-tight text-[#38003c]/75">
-						{player.fixture ?? player.teamCode}
+						{player.fixture ?? player.teamCode ?? player.teamBadgeLabel}
 						<span className="text-[#38003c]/55">
 							{' '}
 							· {player.score} {pointsLabel}
