@@ -13,16 +13,16 @@ describe('route contract', () => {
 })
 
 describe('theme bootstrap', () => {
-	it('uses a client-safe Next Script strategy in the locale layout', async () => {
+	it('inlines the theme bootstrap script in the locale layout head', async () => {
 		const source = await readFile(
 			new URL('../app/[locale]/layout.tsx', import.meta.url),
 			'utf8'
 		)
 
-		assert.ok(source.includes('<Script'))
-		assert.ok(source.includes('strategy="afterInteractive"'))
 		assert.ok(source.includes('id="theme-bootstrap"'))
-		assert.equal(source.includes('strategy="beforeInteractive"'), false)
+		assert.ok(source.includes('dangerouslySetInnerHTML'))
+		assert.ok(source.includes("localStorage.getItem('theme')"))
+		assert.equal(source.includes('strategy="afterInteractive"'), false)
 	})
 })
 
