@@ -55,9 +55,13 @@ export async function POST(request: Request) {
 			throw new MiniProgramAuthError('Invalid JSON body', 400)
 		}
 		const payload = bounded as Record<string, unknown>
+		const anonymousId = userId ? null : optionalDeviceId(payload.deviceId)
+		if (!userId && !anonymousId) {
+			throw new MiniProgramAuthError('这次没法发，请重试', 400)
+		}
 		await enforceBugReportReporterLimit({
 			userId,
-			anonymousId: userId ? null : optionalDeviceId(payload.deviceId),
+			anonymousId,
 		})
 
 		const result = await submitBugReportToData({

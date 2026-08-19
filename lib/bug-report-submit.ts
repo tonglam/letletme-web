@@ -11,7 +11,7 @@ import {
 	sanitizeBugReportClientMeta,
 	type BugReportSource,
 } from '@/lib/bug-report-meta'
-import { checkDatabaseRateLimit, buildOpaqueRateLimitSubject } from '@/lib/http-security'
+import { checkDatabaseRateLimit, buildOpaqueRateLimitSubject, resolveProviderClientIp } from '@/lib/http-security'
 import { uploadBugReportScreenshot } from '@/lib/supabase-storage'
 
 export class BugReportSubmitError extends Error {
@@ -89,10 +89,10 @@ export async function enforceBugReportIngressLimit(request: Request): Promise<vo
 	if (!secret) {
 		throw new BugReportSubmitError('Request safety checks are unavailable', 503)
 	}
-	const ipSubject = buildOpaqueRateLimitSubject(request.headers, secret)
+	if (resolveProviderClientIp(request.headers) === 'unknown') return
 	const result = await checkDatabaseRateLimit({
 		scope: 'bug-report-ip',
-		subject: ipSubject,
+		subject: buildOpaqueRateLimitSubject(request.headers, secret),
 		limit: IP_REPORTS_PER_HOUR,
 		windowSeconds: RATE_WINDOW_SECONDS,
 	})
