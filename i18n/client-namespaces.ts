@@ -37,8 +37,8 @@ export const ROUTE_CLIENT_NAMESPACES = {
 	livePoints: ['LivePoints', 'SeasonState'],
 	liveCompetitions: ['LiveTournament', 'TournamentLifecycle', 'SeasonState'],
 	myFpl: ['TeamStats', 'TournamentStats', 'TournamentLifecycle', 'Filters'],
-	onboarding: ['Onboarding'],
-	profile: ['Profile', 'Sessions', 'ReportProblem']
+	onboarding: ['Onboarding', 'FplEntryLookup'],
+	profile: ['Profile', 'Sessions', 'ReportProblem', 'FplEntryLookup']
 } as const satisfies Record<string, readonly (keyof IntlMessages)[]>
 
 export type ClientMessageNamespace = keyof IntlMessages

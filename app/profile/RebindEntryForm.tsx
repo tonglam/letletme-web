@@ -15,12 +15,15 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import EntrySearchHits from '@/components/fpl/EntrySearchHits'
+import { useEntryNameSearch } from '@/components/fpl/useEntryNameSearch'
 import { useRouter } from '@/i18n/navigation'
 import { useSession } from '@/lib/auth-client'
+import { classifyEntryLookupInput } from '@/lib/fpl-binding-core'
 import { clearPendingClientQueries } from '@/lib/graphql-client'
 import { ClipboardPaste, ExternalLink, Link2Off, MousePointerClick, Pencil, Trophy, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useActionState, useEffect, useRef, useState, useTransition } from 'react'
+import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { unlinkFplEntry, updateFplEntry } from './actions'
 
@@ -34,10 +37,13 @@ export default function RebindEntryForm({
 	fplInfo: { teamName: string; managerName: string } | null
 }) {
 	const t = useTranslations('Profile')
+	const lookup = useTranslations('FplEntryLookup')
 	const [editing, setEditing] = useState(!currentEntryId || !verified)
 	const [cleared, setCleared] = useState(false)
 	const [state, formAction, isPending] = useActionState(updateFplEntry, null)
 	const prevStateRef = useRef(state)
+	const inputRef = useRef<HTMLInputElement>(null)
+	const { hits, errorKey, searching, search, clear } = useEntryNameSearch()
 	const [unlinking, startUnlink] = useTransition()
 	const router = useRouter()
 	const { refetch: refetchSession } = useSession()
@@ -165,8 +171,24 @@ export default function RebindEntryForm({
 	}
 
 	return (
-		<form action={formAction} className="space-y-3">
+		<form
+			action={formAction}
+			onSubmit={async (event: FormEvent<HTMLFormElement>) => {
+				const raw = inputRef.current?.value ?? ''
+				if (classifyEntryLookupInput(raw).kind === 'id') {
+					clear()
+					return
+				}
+				event.preventDefault()
+				const result = await search(raw)
+				if (result.mode === 'searched' && result.hits.length === 1 && inputRef.current) {
+					inputRef.current.value = String(result.hits[0].id)
+				}
+			}}
+			className="space-y-3"
+		>
 			{state?.errorCode && <p className="text-sm text-destructive">{t(`errors.${state.errorCode}`)}</p>}
+			{errorKey && <p className="text-sm text-destructive">{lookup(`errors.${errorKey}`)}</p>}
 
 			{isLinked && linkedEntryId && (
 				<p className="text-xs text-muted-foreground">
@@ -180,6 +202,7 @@ export default function RebindEntryForm({
 						{t('newEntryId')}
 					</Label>
 					<Input
+						ref={inputRef}
 						id="entryId"
 						name="entryId"
 						type="text"
@@ -190,11 +213,12 @@ export default function RebindEntryForm({
 						onChange={e => {
 							const match = e.target.value.match(/\/entry\/(\d+)/)
 							if (match) e.target.value = match[1]
+							clear()
 						}}
 					/>
 				</div>
-				<Button type="submit" size="sm" className="h-8" disabled={isPending}>
-					{isPending ? t('linking') : t('linkTeam')}
+				<Button type="submit" size="sm" className="h-8" disabled={isPending || searching}>
+					{searching ? lookup('searching') : isPending ? t('linking') : t('linkTeam')}
 				</Button>
 				{isLinked && (
 					<Button
@@ -208,6 +232,14 @@ export default function RebindEntryForm({
 					</Button>
 				)}
 			</div>
+
+			<EntrySearchHits
+				hits={hits}
+				onSelect={hit => {
+					if (inputRef.current) inputRef.current.value = String(hit.id)
+					clear()
+				}}
+			/>
 
 			<div className="rounded-md bg-muted/50 p-2.5 text-xs text-muted-foreground space-y-1.5">
 				<p>
@@ -226,6 +258,7 @@ export default function RebindEntryForm({
 						),
 					})}
 				</p>
+				<p>{lookup('coverageHint')}</p>
 				<Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" asChild>
 					<a
 						href="https://fantasy.premierleague.com/en/my-team"

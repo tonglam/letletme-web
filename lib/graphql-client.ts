@@ -46,7 +46,8 @@ const PUBLIC_BROWSER_OPERATION_ALLOWLIST = new Set([
 	'GetPlayerStateProfile',
 	'GetPlayersForPicker',
 	'GetTeamsForPicker',
-	'SearchPlayersForPicker'
+	'SearchPlayersForPicker',
+	'SearchEntries'
 ])
 
 const extractOperationName = (query: string): string | undefined =>
