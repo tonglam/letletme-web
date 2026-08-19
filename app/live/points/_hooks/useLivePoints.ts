@@ -105,6 +105,7 @@ export function useLivePoints({
 		key: string
 		promise: Promise<void>
 	} | null>(null)
+	const lastSeedKeyRef = useRef<string | null>(null)
 	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
 		snapshotRef.current = next
 		setSnapshot(next)
@@ -336,19 +337,84 @@ export function useLivePoints({
 	])
 
 	useEffect(() => {
+		const seedKey = [
+			initialEntryId,
+			initialEventId,
+			initialSelectedGameweek ?? '',
+			initialLiveData?.event ?? '',
+			initialLiveData?.livePoints ?? '',
+			initialSnapshot?.revision ?? '',
+		].join(':')
+
+		if (lastSeedKeyRef.current === seedKey) return
+		lastSeedKeyRef.current = seedKey
+
+		const seededEventId = initialLiveData?.event ?? initialEventId
+		const nextSelectedGameweek =
+			initialSelectedGameweek ?? seededEventId
+
+		setActiveEntryId(initialEntryId)
+		setEntryIdInput(initialEntryId ? String(initialEntryId) : '')
+		setSelectedGameweek(nextSelectedGameweek)
+
+		if (initialLiveData && initialEntryId > 0) {
+			const requestKey = `${initialEntryId}:${initialLiveData.event}`
+			skipInitialFetchRef.current = true
+			hasLoadedLiveDataRef.current = true
+			currentRequestKeyRef.current = requestKey
+			latestLiveDataRef.current = { requestKey, live: initialLiveData }
+			setLiveData(initialLiveData)
+			acceptSnapshot(initialSnapshot ?? null)
+			const allPlayers = mapLiveDataToPlayers(
+				initialLiveData,
+				breakdownLookupForRequest(breakdownCacheRef.current, requestKey)
+			)
+			setStartingPlayers(allPlayers.filter(player => !player.isBench))
+			setBenchPlayers(allPlayers.filter(player => player.isBench))
+			setIsLoading(false)
+			setIsRefreshing(false)
+			setError(undefined)
+
+			const requestId = requestIdRef.current + 1
+			requestIdRef.current = requestId
+			void enrichLivePointBreakdowns(
+				requestId,
+				initialLiveData.event,
+				initialLiveData,
+				requestKey
+			)
+			return
+		}
+
+		if (initialEntryId > 0) {
+			skipInitialFetchRef.current = true
+			hasLoadedLiveDataRef.current = false
+			latestLiveDataRef.current = null
+			currentRequestKeyRef.current = null
+			breakdownCacheRef.current = null
+			setLiveData(undefined)
+			setStartingPlayers([])
+			setBenchPlayers([])
+			acceptSnapshot(initialSnapshot ?? null)
+			setIsLoading(true)
+			setError(undefined)
+			void fetchLivePointsForGameweek(nextSelectedGameweek)
+		}
+	}, [
+		acceptSnapshot,
+		enrichLivePointBreakdowns,
+		fetchLivePointsForGameweek,
+		initialEntryId,
+		initialEventId,
+		initialLiveData,
+		initialSelectedGameweek,
+		initialSnapshot?.revision,
+	])
+
+	useEffect(() => {
 		if (!activeEntryId) return
 		if (skipInitialFetchRef.current) {
 			skipInitialFetchRef.current = false
-			if (initialLiveData) {
-				const requestId = requestIdRef.current + 1
-				requestIdRef.current = requestId
-				void enrichLivePointBreakdowns(
-					requestId,
-					initialLiveData.event,
-					initialLiveData,
-					`${activeEntryId}:${initialLiveData.event}`
-				)
-			}
 			return
 		}
 
