@@ -175,6 +175,7 @@ async function MarketContent({
 				pulse={pulse}
 				ownership={ownership}
 				requestedPeriod={period}
+				requestedDate={date}
 				dailyDates={recentCalendarDates({
 					firstDate: dailyCoverage?.firstDate ?? null,
 					latestDate: dailyCoverage?.latestDate ?? null,

@@ -544,6 +544,7 @@ export async function MarketDashboard({
 	pulse,
 	ownership,
 	requestedPeriod,
+	requestedDate,
 	dailyDates,
 	revision = null,
 	locale
@@ -551,6 +552,7 @@ export async function MarketDashboard({
 	pulse: MarketPulse | null
 	ownership: OwnershipResult | null
 	requestedPeriod: MarketOwnershipPeriod
+	requestedDate: string | null
 	dailyDates: string[]
 	revision?: string | null
 	locale: string
@@ -582,6 +584,12 @@ export async function MarketDashboard({
 		(pulse.availabilityHighlights.length > 0 ||
 			(pulse.availabilityUpdateCount ?? pulse.availabilityUpdates.length) > 0 ||
 			pulse.newPlayers.length > 0)
+	const dailySelectedDate =
+		ownership?.period === 'DAILY'
+			? 'date' in ownership
+				? ownership.date
+				: ownership.coverage.toDate
+			: (requestedDate ?? dailyDates.at(-1) ?? null)
 
 	const priceSection = pulse ? (
 		<MarketPriceExplorer
@@ -606,14 +614,10 @@ export async function MarketDashboard({
 							period={ownership?.period ?? requestedPeriod}
 							t={t}
 						/>
-						{ownership?.period === 'DAILY' ? (
+						{requestedPeriod === 'DAILY' && dailyDates.length > 0 ? (
 							<OwnershipDateNav
 								dates={dailyDates}
-								selectedDate={
-									'date' in ownership
-										? ownership.date
-										: ownership.coverage.toDate
-								}
+								selectedDate={dailySelectedDate}
 								locale={locale}
 								t={t}
 							/>
