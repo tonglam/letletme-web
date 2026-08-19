@@ -45,3 +45,24 @@ export async function uploadAvatar(
 	// Bust the CDN cache so the new image shows immediately.
 	return `${data.publicUrl}?t=${Date.now()}`
 }
+
+export async function uploadBugReportScreenshot(
+	publicId: string,
+	file: Buffer,
+	contentType: string
+): Promise<string | null> {
+	try {
+		const supabaseAdmin = getSupabaseAdmin()
+		const extension = contentType.includes('png') ? 'png' : 'jpg'
+		const path = `bug-reports/${publicId}.${extension}`
+		const { error } = await supabaseAdmin.storage.from(AVATAR_BUCKET).upload(path, file, {
+			contentType,
+			upsert: true,
+		})
+		if (error) return null
+		const { data } = supabaseAdmin.storage.from(AVATAR_BUCKET).getPublicUrl(path)
+		return data.publicUrl
+	} catch {
+		return null
+	}
+}

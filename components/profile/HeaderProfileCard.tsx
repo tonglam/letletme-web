@@ -1,5 +1,6 @@
 'use client'
 
+import { ReportProblemEntry } from '@/components/feedback/ReportProblemEntry'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,7 +13,7 @@ import {
 import { Link, useRouter } from '@/i18n/navigation'
 import { signOut } from '@/lib/auth-client'
 import { getVerifiedFplEntryId } from '@/lib/fpl-binding-core'
-import { LogOut, Settings, Shirt, UserRound } from 'lucide-react'
+import { LogOut, MessageCircleWarning, Settings, Shirt, UserRound } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -178,6 +179,15 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 							{t('profileSettings')}
 						</Link>
 					</DropdownMenuItem>
+					<ReportProblemEntry>
+						<DropdownMenuItem
+							className="cursor-pointer"
+							onSelect={event => event.preventDefault()}
+						>
+							<MessageCircleWarning className="mr-2 h-4 w-4" />
+							{t('reportProblem')}
+						</DropdownMenuItem>
+					</ReportProblemEntry>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem
 						onClick={handleSignOut}
