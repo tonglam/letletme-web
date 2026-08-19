@@ -96,25 +96,30 @@ async function MarketContent({
 		| null = null
 	let latestDate: string | null = null
 
-	try {
-		const [response, ownershipResponse] = await Promise.all([
-			dataPromise,
-			ownershipPromise
-		])
-		pulse = { ...response.marketPulse, availabilityUpdates: [] }
-		revision = response.marketSnapshotContext.revision
-		ownership = date
-			? (ownershipResponse as MarketOwnershipDayResponse).marketOwnershipDay
-			: (ownershipResponse as MarketOwnershipOverviewResponse)
-					.marketOwnershipOverview
-		latestDate =
-			response.marketPulse.coverage.latestDate ?? ownership.coverage.latestDate ?? null
-	} catch (error) {
-		unstable_rethrow(error)
-		console.error('[market] RSC fetch failed:', error)
+	const [dataResult, ownershipResult] = await Promise.allSettled([
+		dataPromise,
+		ownershipPromise
+	])
+	if (dataResult.status === 'fulfilled') {
+		pulse = { ...dataResult.value.marketPulse, availabilityUpdates: [] }
+		revision = dataResult.value.marketSnapshotContext.revision
+	} else {
+		unstable_rethrow(dataResult.reason)
+		console.error('[market] pulse fetch failed:', dataResult.reason)
 	}
+	if (ownershipResult.status === 'fulfilled') {
+		ownership = date
+			? (ownershipResult.value as MarketOwnershipDayResponse).marketOwnershipDay
+			: (ownershipResult.value as MarketOwnershipOverviewResponse)
+					.marketOwnershipOverview
+	} else {
+		unstable_rethrow(ownershipResult.reason)
+		console.error('[market] ownership fetch failed:', ownershipResult.reason)
+	}
+	latestDate =
+		pulse?.coverage.latestDate ?? ownership?.coverage.latestDate ?? null
 
-	if (!pulse || !ownership) {
+	if (!pulse) {
 		return (
 			<>
 				<RouteReadyMarker

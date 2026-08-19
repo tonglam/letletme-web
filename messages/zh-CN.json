@@ -1266,6 +1266,8 @@
 		"mostSelectedNow": "持有率最高",
 		"trackingStartsSoon": "即将开始追踪",
 		"homeEmptyDescription": "下一次 {time} 采集后，将记录首份完整球员快照。",
+		"homeOwnershipBaselineMissingDescription": "已有 {date} 快照，但缺少前一个自然日快照，因此不计算每日变化。",
+		"ownershipDataUnavailable": "持有率周期数据暂时不可用，其他市场模块仍可查看。",
 		"availabilityWatch": "出场状态观察"
 	},
 	"PriceChanges": {

@@ -82,11 +82,13 @@ function TeaserPlayer({ player }: { player: MarketPlayer }) {
 function OwnershipMoverRow({
 	mover,
 	detailLabel,
-	fromToLabel
+	fromToLabel,
+	formatDelta
 }: {
 	mover: MarketOwnershipChange
 	detailLabel: string
 	fromToLabel: string
+	formatDelta: (value: number) => string
 }) {
 	return (
 		<li className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2">
@@ -99,9 +101,7 @@ function OwnershipMoverRow({
 					value={mover.changePercentagePoints}
 					size="md"
 					fontFamily="display"
-					format={value =>
-						`${value > 0 ? '+' : ''}${value.toFixed(1)} 个百分点`
-					}
+					format={formatDelta}
 				/>
 				<p className="mt-0.5 font-display text-caption tabular-nums text-muted-foreground">
 					{fromToLabel}
@@ -200,6 +200,10 @@ export async function MarketTeaser() {
 	const ownershipFallers = [...ownership.fallers]
 		.sort((a, b) => a.changePercentagePoints - b.changePercentagePoints)
 		.slice(0, HOME_TEASER_LIMIT)
+	const formatDelta = (value: number) =>
+		t('ownershipPercentagePoints', {
+			value: `${value > 0 ? '+' : ''}${value.toFixed(1)}`
+		})
 	const availability = selectHomeAvailabilityUpdates(
 		pulse.availabilityUpdates,
 		HOME_AVAILABILITY_LIMIT,
@@ -284,7 +288,7 @@ export async function MarketTeaser() {
 											{ownershipRisers.map(mover => {
 												const from = mover.fromSelectedByPercent.toFixed(1)
 												const to = mover.toSelectedByPercent.toFixed(1)
-												const delta = `+${mover.changePercentagePoints.toFixed(1)} 个百分点`
+												const delta = formatDelta(mover.changePercentagePoints)
 												return (
 													<OwnershipMoverRow
 														key={mover.player.playerId}
@@ -295,6 +299,7 @@ export async function MarketTeaser() {
 															delta
 														})}
 														fromToLabel={t('ownershipFromTo', { from, to })}
+														formatDelta={formatDelta}
 													/>
 												)
 											})}
@@ -321,7 +326,7 @@ export async function MarketTeaser() {
 											{ownershipFallers.map(mover => {
 												const from = mover.fromSelectedByPercent.toFixed(1)
 												const to = mover.toSelectedByPercent.toFixed(1)
-												const delta = `${mover.changePercentagePoints.toFixed(1)} 个百分点`
+												const delta = formatDelta(mover.changePercentagePoints)
 												return (
 													<OwnershipMoverRow
 														key={mover.player.playerId}
@@ -332,6 +337,7 @@ export async function MarketTeaser() {
 															delta
 														})}
 														fromToLabel={t('ownershipFromTo', { from, to })}
+														formatDelta={formatDelta}
 													/>
 												)
 											})}
@@ -362,10 +368,14 @@ export async function MarketTeaser() {
 						<CardContent className="grid gap-6 pt-6 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
 							<div>
 								<h3 className="mb-3 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
-									{t('trackingStartsSoon')}
+									{ownershipStatusCopy[ownership.coverage.status]}
 								</h3>
 								<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-									{t('homeEmptyDescription', { time: '09:25–09:35 UTC+8' })}
+									{ownership.coverage.status === 'BASELINE_MISSING'
+										? t('homeOwnershipBaselineMissingDescription', {
+												date: ownership.date ?? ownership.coverage.toDate ?? '—'
+											})
+										: t('homeEmptyDescription', { time: '09:25–09:35 UTC+8' })}
 								</p>
 							</div>
 							<div>

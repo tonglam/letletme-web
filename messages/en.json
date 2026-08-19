@@ -1266,6 +1266,8 @@
 		"mostSelectedNow": "Most selected",
 		"trackingStartsSoon": "Tracking starts soon",
 		"homeEmptyDescription": "The first complete player snapshot will be recorded after the next {time} capture.",
+		"homeOwnershipBaselineMissingDescription": "The {date} snapshot is available, but the previous natural-day snapshot is missing, so no daily change is calculated.",
+		"ownershipDataUnavailable": "Ownership period data is temporarily unavailable. Other market sections remain available.",
 		"availabilityWatch": "Availability watch"
 	},
 	"PriceChanges": {

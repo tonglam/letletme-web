@@ -339,14 +339,14 @@ function GlanceStrip({
 	t
 }: {
 	pulse: MarketPulse
-	ownership: OwnershipResult
+	ownership: OwnershipResult | null
 	locale: string
 	t: MarketT
 }) {
 	const rises = pulse.priceChanges.filter(c => c.direction === 'RISE').length
 	const falls = pulse.priceChanges.filter(c => c.direction === 'FALL').length
-	const topRise = ownership.risers[0] ?? null
-	const topFall = ownership.fallers[0] ?? null
+	const topRise = ownership?.risers[0] ?? null
+	const topFall = ownership?.fallers[0] ?? null
 	const fmt = new Intl.NumberFormat(locale, {
 		maximumFractionDigits: 1,
 		signDisplay: 'exceptZero'
@@ -547,7 +547,7 @@ export async function MarketDashboard({
 	locale
 }: {
 	pulse: MarketPulse
-	ownership: OwnershipResult
+	ownership: OwnershipResult | null
 	dailyDates: string[]
 	revision?: string | null
 	locale: string
@@ -565,7 +565,9 @@ export async function MarketDashboard({
 		: []
 	const viewPulse = { ...pulse, priceChanges: latestPriceChanges }
 
-	const hasMovers = ownership.risers.length > 0 || ownership.fallers.length > 0
+	const hasMovers =
+		ownership !== null &&
+		(ownership.risers.length > 0 || ownership.fallers.length > 0)
 	const viewMode = getMarketViewMode(viewPulse, hasMovers)
 	const hasAvailabilityEvidence =
 		pulse.availabilityHighlights.length > 0 ||
@@ -586,46 +588,55 @@ export async function MarketDashboard({
 			className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
 		>
 			<div className="space-y-6">
-				<div>
-					<SectionTitle id="market-ownership">
-						{t('ownershipSwing')}
-					</SectionTitle>
-					<div className="mb-4 space-y-3">
-						<OwnershipPeriodNav
-							period={ownership.period}
-							t={t}
-						/>
-						{ownership.period === 'DAILY' ? (
-							<OwnershipDateNav
-								dates={dailyDates}
-								selectedDate={
-									'date' in ownership
-										? ownership.date
-										: ownership.coverage.toDate
-								}
+				{ownership ? (
+					<div>
+						<SectionTitle id="market-ownership">
+							{t('ownershipSwing')}
+						</SectionTitle>
+						<div className="mb-4 space-y-3">
+							<OwnershipPeriodNav
+								period={ownership.period}
+								t={t}
+							/>
+							{ownership.period === 'DAILY' ? (
+								<OwnershipDateNav
+									dates={dailyDates}
+									selectedDate={
+										'date' in ownership
+											? ownership.date
+											: ownership.coverage.toDate
+									}
+									locale={locale}
+									t={t}
+								/>
+							) : null}
+							<OwnershipCoverageMeta
+								ownership={ownership}
 								locale={locale}
 								t={t}
 							/>
-						) : null}
-						<OwnershipCoverageMeta
-							ownership={ownership}
-							locale={locale}
-							t={t}
-						/>
+						</div>
+						{!['READY', 'PARTIAL'].includes(ownership.coverage.status) ? (
+							<EmptyHint>
+								{t('ownershipStatus.' + ownership.coverage.status)}
+							</EmptyHint>
+						) : !hasMovers ? (
+							<EmptyHint>{t('noOwnershipMovement')}</EmptyHint>
+						) : (
+							<OwnershipSwingDesk
+								risers={ownership.risers}
+								fallers={ownership.fallers}
+							/>
+						)}
 					</div>
-					{!['READY', 'PARTIAL'].includes(ownership.coverage.status) ? (
-						<EmptyHint>
-							{t('ownershipStatus.' + ownership.coverage.status)}
-						</EmptyHint>
-					) : !hasMovers ? (
-						<EmptyHint>{t('noOwnershipMovement')}</EmptyHint>
-					) : (
-						<OwnershipSwingDesk
-							risers={ownership.risers}
-							fallers={ownership.fallers}
-						/>
-					)}
-				</div>
+				) : (
+					<div>
+						<SectionTitle id="market-ownership">
+							{t('ownershipSwing')}
+						</SectionTitle>
+						<EmptyHint>{t('ownershipDataUnavailable')}</EmptyHint>
+					</div>
+				)}
 				<div>
 					<SectionTitle id="market-most-selected">
 						{t('mostSelectedTitle')}
