@@ -2,16 +2,20 @@ import {
 	Compass,
 	DivideIcon as LucideIcon,
 	Medal,
+	Newspaper,
 	Timer,
 	UserRound,
 } from 'lucide-react'
+import { isBriefingPublicEnabled } from '@/lib/briefing-public'
 
 interface MenuItem {
 	id: string
-	labelKey: 'live' | 'myFpl' | 'competitions' | 'explore'
+	labelKey: 'live' | 'briefing' | 'myFpl' | 'competitions' | 'explore'
 	icon: typeof LucideIcon
+	directHref?: string
 	items: {
 		labelKey:
+			| 'briefingWeek'
 			| 'livePoints'
 			| 'liveCompetitions'
 			| 'liveMatches'
@@ -29,13 +33,13 @@ interface MenuItem {
 }
 
 /**
- * The public information architecture has four sections:
- *   Live / My FPL / Competitions / Explore.
+ * The public information architecture has five sections:
+ *   Live / Briefing / My FPL / Competitions / Explore.
  *
  * These names are the only public navigation vocabulary. Internal component
  * names may continue to describe the underlying data model.
  */
-export const menuItems: MenuItem[] = [
+const allMenuItems: MenuItem[] = [
 	{
 		id: 'live',
 		labelKey: 'live',
@@ -45,6 +49,13 @@ export const menuItems: MenuItem[] = [
 			{ labelKey: 'liveCompetitions', href: '/live/competitions' },
 			{ labelKey: 'liveMatches', href: '/live/matches' },
 		],
+	},
+	{
+		id: 'briefing',
+		labelKey: 'briefing',
+		icon: Newspaper,
+		directHref: '/briefing/week',
+		items: [{ labelKey: 'briefingWeek', href: '/briefing/week' }],
 	},
 	{
 		id: 'myFpl',
@@ -77,3 +88,7 @@ export const menuItems: MenuItem[] = [
 		],
 	},
 ]
+
+export const menuItems: MenuItem[] = isBriefingPublicEnabled()
+	? allMenuItems
+	: allMenuItems.filter(item => item.id !== 'briefing')
