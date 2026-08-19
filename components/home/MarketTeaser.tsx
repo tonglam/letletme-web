@@ -12,7 +12,8 @@ import {
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	type MarketAvailabilityUpdate,
-	type MarketOwnershipMover,
+	type MarketOwnershipChange,
+	type MarketOwnershipCoverageStatus,
 	type MarketPlayer
 } from '@/lib/graphql/operations/market'
 import {
@@ -24,11 +25,7 @@ import {
 	marketAvailabilityStatusKey,
 	selectHomeAvailabilityUpdates
 } from '@/lib/market-availability'
-import {
-	getMarketCoverageMode,
-	getMarketTeaserMode,
-	shortMarketPosition
-} from '@/lib/market'
+import { shortMarketPosition } from '@/lib/market'
 import { positionBadgeClass } from '@/lib/position-style'
 import {
 	ArrowDownRight,
@@ -87,7 +84,7 @@ function OwnershipMoverRow({
 	detailLabel,
 	fromToLabel
 }: {
-	mover: MarketOwnershipMover
+	mover: MarketOwnershipChange
 	detailLabel: string
 	fromToLabel: string
 }) {
@@ -99,10 +96,12 @@ function OwnershipMoverRow({
 				title={detailLabel}
 			>
 				<DeltaBadge
-					value={mover.change}
+					value={mover.changePercentagePoints}
 					size="md"
 					fontFamily="display"
-					format={value => `${value > 0 ? '+' : ''}${value.toFixed(1)}%`}
+					format={value =>
+						`${value > 0 ? '+' : ''}${value.toFixed(1)} 个百分点`
+					}
 				/>
 				<p className="mt-0.5 font-display text-caption tabular-nums text-muted-foreground">
 					{fromToLabel}
@@ -176,7 +175,7 @@ export async function MarketTeaser() {
 	try {
 		response = await executePublicServerQuery<HomeMarketPulseResponse>(
 			GET_HOME_MARKET_PULSE,
-			{ days: 14 },
+			{ days: 7 },
 			publicFetchOptions({
 				revalidate: RevalidateSeconds.market,
 				tags: [CacheTag.market]
@@ -189,14 +188,17 @@ export async function MarketTeaser() {
 	}
 
 	const pulse = response.homeMarketPulse
-	const teaserMode = getMarketTeaserMode(pulse)
-	const coverageMode = getMarketCoverageMode(pulse.coverage)
+	const ownership = response.marketOwnershipDay
+	const ownershipReady = ownership.coverage.status === 'READY'
+	const ownershipCanRender =
+		ownershipReady || ownership.coverage.status === 'PARTIAL'
+	const teaserMode = ownershipCanRender ? 'ownership' : 'empty'
 	// Keep rise / fall separate so the desk reads like a transfer board, not a mixed top-3.
-	const ownershipRisers = [...pulse.ownershipMovers.risers]
-		.sort((a, b) => b.change - a.change)
+	const ownershipRisers = [...ownership.risers]
+		.sort((a, b) => b.changePercentagePoints - a.changePercentagePoints)
 		.slice(0, HOME_TEASER_LIMIT)
-	const ownershipFallers = [...pulse.ownershipMovers.fallers]
-		.sort((a, b) => a.change - b.change)
+	const ownershipFallers = [...ownership.fallers]
+		.sort((a, b) => a.changePercentagePoints - b.changePercentagePoints)
 		.slice(0, HOME_TEASER_LIMIT)
 	const availability = selectHomeAvailabilityUpdates(
 		pulse.availabilityUpdates,
@@ -204,12 +206,19 @@ export async function MarketTeaser() {
 		HOME_AVAILABILITY_MIN_OWNED
 	)
 
-	const coverageCopy =
-		coverageMode === 'last-14-days'
-			? t('homeLast14')
-			: coverageMode === 'empty'
-				? t('homeAwaitingCapture')
-				: t('homeSinceTracking')
+	const ownershipStatusCopy: Record<MarketOwnershipCoverageStatus, string> = {
+		READY: t('ownershipStatus.READY'),
+		PARTIAL: t('ownershipStatus.PARTIAL'),
+		NO_DATA: t('ownershipStatus.NO_DATA'),
+		BASELINE_MISSING: t('ownershipStatus.BASELINE_MISSING'),
+		NO_PREVIOUS_GAMEWEEK: t('ownershipStatus.NO_PREVIOUS_GAMEWEEK'),
+		NO_UPCOMING_GAMEWEEK: t('ownershipStatus.NO_UPCOMING_GAMEWEEK')
+	}
+	const coverageCopy = ownershipReady
+		? t('homeDailyCoverage', {
+				date: ownership.coverage.toDate ?? ownership.date ?? '—'
+			})
+		: ownershipStatusCopy[ownership.coverage.status]
 	const availabilityLabels = {
 		empty: t('noAvailabilityUpdates'),
 		status: (key: ReturnType<typeof marketAvailabilityStatusKey>) =>
@@ -273,9 +282,9 @@ export async function MarketTeaser() {
 											aria-label={t('homeOwnershipRising')}
 										>
 											{ownershipRisers.map(mover => {
-												const from = mover.previousSelectedByPercent.toFixed(1)
-												const to = mover.selectedByPercent.toFixed(1)
-												const delta = `+${mover.change.toFixed(1)}%`
+												const from = mover.fromSelectedByPercent.toFixed(1)
+												const to = mover.toSelectedByPercent.toFixed(1)
+												const delta = `+${mover.changePercentagePoints.toFixed(1)} 个百分点`
 												return (
 													<OwnershipMoverRow
 														key={mover.player.playerId}
@@ -310,9 +319,9 @@ export async function MarketTeaser() {
 											aria-label={t('homeOwnershipFalling')}
 										>
 											{ownershipFallers.map(mover => {
-												const from = mover.previousSelectedByPercent.toFixed(1)
-												const to = mover.selectedByPercent.toFixed(1)
-												const delta = `${mover.change.toFixed(1)}%`
+												const from = mover.fromSelectedByPercent.toFixed(1)
+												const to = mover.toSelectedByPercent.toFixed(1)
+												const delta = `${mover.changePercentagePoints.toFixed(1)} 个百分点`
 												return (
 													<OwnershipMoverRow
 														key={mover.player.playerId}
@@ -353,68 +362,18 @@ export async function MarketTeaser() {
 						<CardContent className="grid gap-6 pt-6 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
 							<div>
 								<h3 className="mb-3 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
-									{teaserMode === 'price'
-										? t('latestPriceMoves')
-										: teaserMode === 'selected'
-											? t('mostSelectedNow')
-											: t('trackingStartsSoon')}
+									{t('trackingStartsSoon')}
 								</h3>
-								{teaserMode === 'empty' ? (
-									<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-										{t('homeEmptyDescription', { time: '09:40 UTC+8' })}
-									</p>
-								) : (
-									<ol className="space-y-2">
-										{teaserMode === 'price' &&
-											pulse.priceChanges
-												.slice(0, HOME_TEASER_LIMIT)
-												.map((change, index) => {
-													const rising = change.direction === 'RISE'
-													return (
-														<li
-															key={`${change.player.playerId}-${index}`}
-															className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2"
-														>
-															<TeaserPlayer player={change.player} />
-															<DeltaBadge
-																value={
-																	rising
-																		? Math.abs(change.change)
-																		: -Math.abs(change.change)
-																}
-																size="md"
-																fontFamily="display"
-																format={value =>
-																	`${value > 0 ? '+' : '-'}£${(Math.abs(value) / 10).toFixed(1)}m`
-																}
-															/>
-														</li>
-													)
-												})}
-										{teaserMode === 'selected' &&
-											pulse.mostSelected
-												.slice(0, HOME_TEASER_LIMIT)
-												.map(player => (
-													<li
-														key={player.playerId}
-														className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2"
-													>
-														<TeaserPlayer player={player} />
-														<span className="font-display text-sm font-bold text-primary-ink">
-															{player.selectedByPercent.toFixed(1)}%
-														</span>
-													</li>
-												))}
-									</ol>
-								)}
+								<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+									{t('homeEmptyDescription', { time: '09:25–09:35 UTC+8' })}
+								</p>
 							</div>
-
 							<div>
 								<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
 									<HeartPulse
 										aria-hidden="true"
 										className="size-4 text-pink"
-									/>{' '}
+									/>
 									{t('availabilityWatch')}
 								</h3>
 								<AvailabilityTeaserList

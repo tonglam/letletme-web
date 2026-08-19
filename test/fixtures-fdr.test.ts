@@ -9,11 +9,16 @@ import {
 	FDR_ACTION_THRESHOLDS,
 	getTeamTierIds,
 	sortSquadForPlanning,
-	squadMatchKey,
+	squadMatchKey
 } from '../lib/fixtures-fdr'
 import { buildMarketCompareCandidates } from '../lib/market-compare'
 import type { Fixture } from '../lib/graphql/operations/events'
-import type { MarketPlayer, MarketPulse } from '../lib/graphql/operations/market'
+import type {
+	FixturePlanningMarketSignals,
+	MarketOwnershipChange,
+	MarketOwnershipOverview,
+	MarketPlayer
+} from '../lib/graphql/operations/market'
 
 function fx(partial: {
 	eventId: number
@@ -36,17 +41,17 @@ function fx(partial: {
 		homeTeam: {
 			id: partial.homeId,
 			name: partial.home,
-			shortName: partial.home,
+			shortName: partial.home
 		},
 		awayTeam: {
 			id: partial.awayId,
 			name: partial.away,
-			shortName: partial.away,
+			shortName: partial.away
 		},
 		homeScore: null,
 		awayScore: null,
 		homeTeamDifficulty: partial.hFdr,
-		awayTeamDifficulty: partial.aFdr,
+		awayTeamDifficulty: partial.aFdr
 	}
 }
 
@@ -55,7 +60,7 @@ function mp(
 		playerId: number
 		teamId: number
 		webName: string
-	},
+	}
 ): MarketPlayer {
 	return {
 		playerCode: partial.playerId,
@@ -64,7 +69,46 @@ function mp(
 		position: 'MIDFIELDER',
 		price: 70,
 		selectedByPercent: 10,
-		...partial,
+		...partial
+	}
+}
+
+function ownershipOverview(
+	period: 'GAMEWEEK' | 'ROLLING_7D',
+	risers: MarketOwnershipChange[] = [],
+	fallers: MarketOwnershipChange[] = []
+): MarketOwnershipOverview {
+	return {
+		period,
+		gameweek: null,
+		coverage: {
+			status: 'READY',
+			requestedDays: period === 'ROLLING_7D' ? 7 : 2,
+			observedDays: period === 'ROLLING_7D' ? 7 : 2,
+			firstDate: '2026-08-01',
+			latestDate: '2026-08-08',
+			fromDate: '2026-08-01',
+			toDate: '2026-08-08',
+			missingDates: [],
+			capturedAt: '2026-08-08T12:00:00.000Z',
+			complete: true,
+			stale: false
+		},
+		risers,
+		fallers
+	}
+}
+
+function marketSignals(
+	mostSelected: FixturePlanningMarketSignals['mostSelected'] = [],
+	risers: MarketOwnershipChange[] = [],
+	fallers: MarketOwnershipChange[] = []
+): FixturePlanningMarketSignals {
+	return {
+		mostSelected,
+		transferMovers: [],
+		gameweekOwnership: ownershipOverview('GAMEWEEK', risers, fallers),
+		rollingOwnership: ownershipOverview('ROLLING_7D')
 	}
 }
 
@@ -80,7 +124,7 @@ describe('buildTeamFdrRows', () => {
 				awayId: 2,
 				away: 'CHE',
 				hFdr: 2,
-				aFdr: 4,
+				aFdr: 4
 			}),
 			fx({
 				eventId: 28,
@@ -89,8 +133,8 @@ describe('buildTeamFdrRows', () => {
 				awayId: 4,
 				away: 'EVE',
 				hFdr: 5,
-				aFdr: 1,
-			}),
+				aFdr: 1
+			})
 		])
 		// GW29: ARS away fdr2, CHE home fdr3, etc.
 		map.set(29, [
@@ -101,7 +145,7 @@ describe('buildTeamFdrRows', () => {
 				awayId: 1,
 				away: 'ARS',
 				hFdr: 3,
-				aFdr: 2,
+				aFdr: 2
 			}),
 			fx({
 				eventId: 29,
@@ -110,8 +154,8 @@ describe('buildTeamFdrRows', () => {
 				awayId: 3,
 				away: 'LIV',
 				hFdr: 2,
-				aFdr: 4,
-			}),
+				aFdr: 4
+			})
 		])
 
 		const rows = buildTeamFdrRows(map, 28, 2)
@@ -141,7 +185,7 @@ describe('buildTeamFdrRows', () => {
 						awayId: 2,
 						away: 'CHE',
 						hFdr: 2,
-						aFdr: 4,
+						aFdr: 4
 					}),
 					fx({
 						fixtureId: 2802,
@@ -151,16 +195,16 @@ describe('buildTeamFdrRows', () => {
 						awayId: 1,
 						away: 'ARS',
 						hFdr: 3,
-						aFdr: 4,
-					}),
-				],
+						aFdr: 4
+					})
+				]
 			],
-			[29, []],
+			[29, []]
 		])
 		const rows = buildTeamFdrRows(map, 28, 2, [
 			{ id: 1, name: 'Arsenal', shortName: 'ARS' },
 			{ id: 2, name: 'Chelsea', shortName: 'CHE' },
-			{ id: 3, name: 'Liverpool', shortName: 'LIV' },
+			{ id: 3, name: 'Liverpool', shortName: 'LIV' }
 		])
 		const arsenal = rows.find(row => row.teamId === 1)
 		assert.ok(arsenal)
@@ -176,12 +220,12 @@ describe('buildTeamFdrRows', () => {
 		const rows = buildTeamFdrRows(
 			new Map<number, Fixture[]>([
 				[28, []],
-				[29, []],
+				[29, []]
 			]),
 			28,
 			2,
 			[{ id: 1, name: 'Arsenal', shortName: 'ARS' }],
-			new Set([29]),
+			new Set([29])
 		)
 		const arsenal = rows.find(row => row.teamId === 1)
 		assert.ok(arsenal)
@@ -208,7 +252,7 @@ describe('buildFdrReviewBuckets', () => {
 			{ id: 9, s: 'T9', fdr: 5 },
 			{ id: 10, s: 'T10', fdr: 5 },
 			{ id: 11, s: 'T11', fdr: 5 },
-			{ id: 12, s: 'T12', fdr: 5 },
+			{ id: 12, s: 'T12', fdr: 5 }
 		]
 		// Pair 1-2, 3-4, ... so each has one fixture with matching home fdr
 		const fixtures: Fixture[] = []
@@ -223,8 +267,8 @@ describe('buildFdrReviewBuckets', () => {
 					awayId: a.id,
 					away: a.s,
 					hFdr: h.fdr,
-					aFdr: a.fdr,
-				}),
+					aFdr: a.fdr
+				})
 			)
 		}
 		map.set(28, fixtures)
@@ -240,7 +284,7 @@ describe('buildFdrReviewBuckets', () => {
 				position: 'MIDFIELDER',
 				price: 55,
 				selectedByPercent: 5,
-				source: 'riser' as const,
+				source: 'riser' as const
 			},
 			// easy team T1, high owned → popular favourable
 			{
@@ -251,7 +295,7 @@ describe('buildFdrReviewBuckets', () => {
 				position: 'FORWARD',
 				price: 90,
 				selectedByPercent: 40,
-				source: 'most-selected' as const,
+				source: 'most-selected' as const
 			},
 			// hard team T8, premium → popular difficult
 			{
@@ -262,24 +306,18 @@ describe('buildFdrReviewBuckets', () => {
 				position: 'MIDFIELDER',
 				price: FDR_ACTION_THRESHOLDS.premiumPriceTenths + 10,
 				selectedByPercent: 12,
-				source: 'most-selected' as const,
-			},
+				source: 'most-selected' as const
+			}
 		]
 
 		const buckets = buildFdrReviewBuckets(rows, signals)
-		assert.ok(
-			buckets.differentialFavourable.some(p => p.webName === 'DiffBoy'),
-		)
-		assert.ok(
-			buckets.popularFavourable.some(p => p.webName === 'Template'),
-		)
-		assert.ok(
-			buckets.popularDifficult.some(p => p.webName === 'Premium'),
-		)
+		assert.ok(buckets.differentialFavourable.some(p => p.webName === 'DiffBoy'))
+		assert.ok(buckets.popularFavourable.some(p => p.webName === 'Template'))
+		assert.ok(buckets.popularDifficult.some(p => p.webName === 'Premium'))
 		const allIds = [
 			...buckets.differentialFavourable,
 			...buckets.popularFavourable,
-			...buckets.popularDifficult,
+			...buckets.popularDifficult
 		].map(player => player.playerId)
 		assert.equal(new Set(allIds).size, allIds.length)
 	})
@@ -287,27 +325,28 @@ describe('buildFdrReviewBuckets', () => {
 
 describe('collectMarketSignals', () => {
 	it('dedupes by player id', () => {
-		const pulse = {
-			mostSelected: [mp({ playerId: 1, teamId: 1, webName: 'A', selectedByPercent: 50 })],
-			ownershipMovers: {
-				risers: [
+		const selected = mp({
+			playerId: 1,
+			teamId: 1,
+			webName: 'A',
+			selectedByPercent: 50
+		})
+		const signals = collectMarketSignals(
+			marketSignals(
+				[selected],
+				[
 					{
-						player: mp({
-							playerId: 1,
-							teamId: 1,
-							webName: 'A',
-							selectedByPercent: 48,
-						}),
-						previousSelectedByPercent: 40,
-						selectedByPercent: 48,
-						change: 8,
-					},
+						player: selected,
+						fromSelectedByPercent: 40,
+						toSelectedByPercent: 48,
+						changePercentagePoints: 8,
+						fromDate: '2026-08-07',
+						toDate: '2026-08-08'
+					}
 				],
-				fallers: [],
-			},
-			transferMovers: [],
-		} as unknown as MarketPulse
-		const signals = collectMarketSignals(pulse)
+				[]
+			)
+		)
 		assert.equal(signals.length, 1)
 		assert.equal(signals[0]!.selectedByPercent, 50)
 	})
@@ -316,10 +355,7 @@ describe('collectMarketSignals', () => {
 describe('squadMatchKey', () => {
 	it('normalizes case and whitespace for entry ↔ market matching', () => {
 		assert.equal(squadMatchKey(' Salah ', 'LIV'), 'salah|liv')
-		assert.equal(
-			squadMatchKey('Salah', 'LIV'),
-			squadMatchKey('salah', 'liv'),
-		)
+		assert.equal(squadMatchKey('Salah', 'LIV'), squadMatchKey('salah', 'liv'))
 	})
 })
 
@@ -334,7 +370,7 @@ describe('buildSquadFdrRows', () => {
 				awayId: 2,
 				away: 'CHE',
 				hFdr: 2,
-				aFdr: 4,
+				aFdr: 4
 			}),
 			fx({
 				eventId: 28,
@@ -343,8 +379,8 @@ describe('buildSquadFdrRows', () => {
 				awayId: 4,
 				away: 'EVE',
 				hFdr: 5,
-				aFdr: 1,
-			}),
+				aFdr: 1
+			})
 		])
 		const teams = buildTeamFdrRows(map, 28, 1)
 		const rows = buildSquadFdrRows(
@@ -357,7 +393,7 @@ describe('buildSquadFdrRows', () => {
 					position: 8,
 					multiplier: 2,
 					isCaptain: true,
-					isViceCaptain: false,
+					isViceCaptain: false
 				},
 				{
 					elementId: 11,
@@ -367,10 +403,10 @@ describe('buildSquadFdrRows', () => {
 					position: 12,
 					multiplier: 0,
 					isCaptain: false,
-					isViceCaptain: false,
-				},
+					isViceCaptain: false
+				}
 			],
-			teams,
+			teams
 		)
 		assert.equal(rows.length, 2)
 		const salah = rows.find(r => r.webName === 'Salah')
@@ -404,7 +440,7 @@ describe('buildSquadFdrRows', () => {
 				nextHome: true,
 				gameweeks: [],
 				run: [],
-				fixtureBand: 'mixed',
+				fixtureBand: 'mixed'
 			},
 			{
 				elementId: 2,
@@ -426,8 +462,8 @@ describe('buildSquadFdrRows', () => {
 				nextHome: false,
 				gameweeks: [],
 				run: [],
-				fixtureBand: 'difficult',
-			},
+				fixtureBand: 'difficult'
+			}
 		])
 		assert.equal(rows[0]!.webName, 'B')
 		assert.equal(rows[0]!.position, 3)
@@ -449,24 +485,24 @@ describe('classifySquadFixtureBand', () => {
 						awayId: 2,
 						away: 'LIV',
 						hFdr: 2,
-						aFdr: 5,
-					}),
-				],
-			],
+						aFdr: 5
+					})
+				]
+			]
 		])
 		const teams = buildTeamFdrRows(map, 28, 1)
 		const tiers = getTeamTierIds(teams)
 		assert.equal(
 			classifySquadFixtureBand({ teamId: 1, blankCount: 0 }, tiers),
-			'favourable',
+			'favourable'
 		)
 		assert.equal(
 			classifySquadFixtureBand({ teamId: 2, blankCount: 0 }, tiers),
-			'difficult',
+			'difficult'
 		)
 		assert.equal(
 			classifySquadFixtureBand({ teamId: 1, blankCount: 1 }, tiers),
-			'blank',
+			'blank'
 		)
 	})
 })
@@ -482,34 +518,22 @@ describe('buildMarketCompareCandidates', () => {
 				awayId: 2,
 				away: 'CHE',
 				hFdr: 1,
-				aFdr: 5,
-			}),
+				aFdr: 5
+			})
 		])
 		const teams = buildTeamFdrRows(map, 28, 1)
-		const signals = collectMarketSignals({
-			coverage: {
-				requestedDays: 14,
-				observedDays: 14,
-				firstDate: null,
-				lastDate: null,
-			},
-			mostSelected: [
+		const signals = collectMarketSignals(
+			marketSignals([
 				mp({
 					playerId: 99,
 					teamId: 1,
 					webName: 'Saka',
 					teamShortName: 'ARS',
 					position: 'MIDFIELDER',
-					selectedByPercent: 30,
-				}),
-			],
-			ownershipMovers: { risers: [], fallers: [] },
-			transferMovers: [],
-			availabilityUpdates: [],
-			availabilityHighlights: [],
-			newPlayers: [],
-			priceChanges: [],
-		} as unknown as MarketPulse)
+					selectedByPercent: 30
+				})
+			])
+		)
 		const buckets = buildFdrReviewBuckets(teams, signals)
 		const candidates = buildMarketCompareCandidates({
 			fromGw: 28,
@@ -517,8 +541,10 @@ describe('buildMarketCompareCandidates', () => {
 			teams,
 			easiest: teams,
 			hardest: teams,
-			candidates: buckets,
+			candidates: buckets
 		})
-		assert.ok(candidates.some(c => c.playerId === 99 && c.positionCode === 'MID'))
+		assert.ok(
+			candidates.some(c => c.playerId === 99 && c.positionCode === 'MID')
+		)
 	})
 })

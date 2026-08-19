@@ -1,6 +1,6 @@
 import type {
-	FixturePlanningMarketPulse,
-	FixtureSignalPlayer,
+	FixturePlanningMarketSignals,
+	FixtureSignalPlayer
 } from '@/lib/graphql/operations/market'
 
 export type FdrHorizon = 3 | 5 | 8
@@ -24,7 +24,7 @@ export const FDR_ACTION_THRESHOLDS = {
 	/** Popular difficult ownership floor. */
 	trapOwnedPercent: 20,
 	/** Premium price in tenths (£8.0m = 80). */
-	premiumPriceTenths: 80,
+	premiumPriceTenths: 80
 } as const
 
 export type TeamFixtureCell = {
@@ -131,10 +131,10 @@ export function buildTeamFdrRows(
 	fromGw: number,
 	horizon: number,
 	knownTeams: FdrTeamIdentity[] = [],
-	unknownEvents: ReadonlySet<number> = new Set(),
+	unknownEvents: ReadonlySet<number> = new Set()
 ): TeamFdrRow[] {
 	const eventIds = Array.from({ length: horizon }, (_, i) => fromGw + i).filter(
-		id => id >= 1 && id <= 38,
+		id => id >= 1 && id <= 38
 	)
 
 	type Acc = {
@@ -148,7 +148,7 @@ export function buildTeamFdrRows(
 	const ensure = (
 		teamId: number,
 		teamName: string,
-		teamShortName: string,
+		teamShortName: string
 	): Acc => {
 		let row = byTeam.get(teamId)
 		if (!row) {
@@ -182,7 +182,7 @@ export function buildTeamFdrRows(
 				opponentShortName: away.shortName,
 				wasHome: true,
 				difficulty: clampDifficulty(f.homeTeamDifficulty),
-				finished: f.finished,
+				finished: f.finished
 			})
 
 			const awayAcc = ensure(away.id, away.name, away.shortName)
@@ -192,7 +192,7 @@ export function buildTeamFdrRows(
 				opponentShortName: home.shortName,
 				wasHome: false,
 				difficulty: clampDifficulty(f.awayTeamDifficulty),
-				finished: f.finished,
+				finished: f.finished
 			})
 		}
 	}
@@ -201,7 +201,7 @@ export function buildTeamFdrRows(
 	for (const acc of Array.from(byTeam.values())) {
 		const gameweeks = eventIds.map(eventId => {
 			const fixtures = [...(acc.cellsByEvent.get(eventId) ?? [])].sort(
-				(a, b) => a.fixtureId - b.fixtureId,
+				(a, b) => a.fixtureId - b.fixtureId
 			)
 			return {
 				eventId,
@@ -213,7 +213,7 @@ export function buildTeamFdrRows(
 					fixtures.length > 0
 						? fixtures.reduce((sum, cell) => sum + cell.difficulty, 0) /
 							fixtures.length
-						: null,
+						: null
 			} satisfies TeamFixtureGameweek
 		})
 		const run = gameweeks.flatMap(gameweek => gameweek.fixtures)
@@ -236,7 +236,7 @@ export function buildTeamFdrRows(
 			doubleCount: gameweeks.filter(gameweek => gameweek.dgw).length,
 			unknownCount: gameweeks.filter(gameweek => gameweek.unknown).length,
 			gameweeks,
-			run,
+			run
 		})
 	}
 
@@ -251,14 +251,14 @@ export function buildTeamFdrRows(
 }
 
 export function collectMarketSignals(
-	pulse: FixturePlanningMarketPulse | null,
+	pulse: FixturePlanningMarketSignals | null
 ): FdrPlayerSignal[] {
 	if (!pulse) return []
 	const map = new Map<number, FdrPlayerSignal>()
 
 	const add = (
 		player: FixtureSignalPlayer,
-		source: FdrPlayerSignal['source'],
+		source: FdrPlayerSignal['source']
 	) => {
 		const existing = map.get(player.playerId)
 		if (existing) {
@@ -278,7 +278,7 @@ export function collectMarketSignals(
 					source:
 						source === 'most-selected' || existing.source === 'most-selected'
 							? 'most-selected'
-							: source,
+							: source
 				})
 			}
 			return
@@ -291,13 +291,22 @@ export function collectMarketSignals(
 			position: player.position,
 			price: player.price,
 			selectedByPercent: player.selectedByPercent,
-			source,
+			source
 		})
 	}
 
 	for (const p of pulse.mostSelected ?? []) add(p, 'most-selected')
-	for (const m of pulse.ownershipMovers?.risers ?? []) add(m.player, 'riser')
-	for (const m of pulse.ownershipMovers?.fallers ?? []) add(m.player, 'faller')
+	const gameweekOwnership = pulse.gameweekOwnership
+	const rollingOwnership = pulse.rollingOwnership
+	const ownership =
+		(gameweekOwnership.coverage.status === 'READY' ||
+			gameweekOwnership.coverage.status === 'PARTIAL') &&
+		(gameweekOwnership.risers.length > 0 ||
+			gameweekOwnership.fallers.length > 0)
+			? gameweekOwnership
+			: rollingOwnership
+	for (const m of ownership.risers ?? []) add(m.player, 'riser')
+	for (const m of ownership.fallers ?? []) add(m.player, 'faller')
 	for (const m of pulse.transferMovers ?? []) add(m.player, 'transfer')
 
 	return Array.from(map.values())
@@ -305,7 +314,7 @@ export function collectMarketSignals(
 
 function enrichPlayer(
 	signal: FdrPlayerSignal,
-	teamById: Map<number, TeamFdrRow>,
+	teamById: Map<number, TeamFdrRow>
 ): FdrReviewCandidate | null {
 	const team = teamById.get(signal.teamId)
 	if (!team) return null
@@ -316,13 +325,14 @@ function enrichPlayer(
 		nextOpponent: next?.opponentShortName ?? null,
 		nextHome: next?.wasHome ?? null,
 		nextFdr: next?.difficulty ?? null,
-		teamShortNameResolved: team.teamShortName,
+		teamShortNameResolved: team.teamShortName
 	}
 }
 
 function rankableTeams(teams: TeamFdrRow[]): TeamFdrRow[] {
 	return teams.filter(
-		team => team.blankCount === 0 && team.unknownCount === 0 && team.avgFdr != null,
+		team =>
+			team.blankCount === 0 && team.unknownCount === 0 && team.avgFdr != null
 	)
 }
 
@@ -332,24 +342,24 @@ function rankableTeams(teams: TeamFdrRow[]): TeamFdrRow[] {
  */
 export function buildFdrReviewBuckets(
 	teams: TeamFdrRow[],
-	signals: FdrPlayerSignal[],
+	signals: FdrPlayerSignal[]
 ): FdrReviewBuckets {
 	const eligibleTeams = rankableTeams(teams)
 	const tierSize = Math.min(
 		FDR_TEAM_TIER_SIZE,
-		Math.max(1, Math.floor(eligibleTeams.length / 2)),
+		Math.max(1, Math.floor(eligibleTeams.length / 2))
 	)
 	const easiestIds = new Set(
 		[...eligibleTeams]
 			.sort((a, b) => (a.avgFdr ?? 99) - (b.avgFdr ?? 99))
 			.slice(0, tierSize)
-			.map(t => t.teamId),
+			.map(t => t.teamId)
 	)
 	const hardestIds = new Set(
 		[...eligibleTeams]
 			.sort((a, b) => (b.avgFdr ?? -1) - (a.avgFdr ?? -1))
 			.slice(0, tierSize)
-			.map(t => t.teamId),
+			.map(t => t.teamId)
 	)
 	for (const teamId of Array.from(easiestIds)) hardestIds.delete(teamId)
 
@@ -362,7 +372,7 @@ export function buildFdrReviewBuckets(
 		highOwnedPercent,
 		diffOwnedMaxPercent,
 		trapOwnedPercent,
-		premiumPriceTenths,
+		premiumPriceTenths
 	} = FDR_ACTION_THRESHOLDS
 
 	for (const signal of signals) {
@@ -389,10 +399,8 @@ export function buildFdrReviewBuckets(
 
 	return {
 		popularFavourable: popularFavourable.sort(byOwnedDesc).slice(0, 8),
-		differentialFavourable: differentialFavourable
-			.sort(byOwnedAsc)
-			.slice(0, 8),
-		popularDifficult: popularDifficult.sort(byOwnedDesc).slice(0, 8),
+		differentialFavourable: differentialFavourable.sort(byOwnedAsc).slice(0, 8),
+		popularDifficult: popularDifficult.sort(byOwnedDesc).slice(0, 8)
 	}
 }
 
@@ -401,18 +409,18 @@ export function buildFdrDeskModel(
 	opts: {
 		fromGw: number
 		horizon: FdrHorizon
-		marketPulse?: FixturePlanningMarketPulse | null
-		marketSignals?: FdrPlayerSignal[]
+		marketSignals?: FixturePlanningMarketSignals | null
+		marketSignalRows?: FdrPlayerSignal[]
 		knownTeams?: FdrTeamIdentity[]
 		unknownEvents?: ReadonlySet<number>
-	},
+	}
 ): FdrDeskModel {
 	const teams = buildTeamFdrRows(
 		fixturesByEvent,
 		opts.fromGw,
 		opts.horizon,
 		opts.knownTeams,
-		opts.unknownEvents,
+		opts.unknownEvents
 	)
 	const eligibleTeams = rankableTeams(teams)
 	const easiest = [...eligibleTeams]
@@ -422,7 +430,7 @@ export function buildFdrDeskModel(
 		.sort((a, b) => (b.avgFdr ?? -1) - (a.avgFdr ?? -1))
 		.slice(0, 5)
 	const signals =
-		opts.marketSignals ?? collectMarketSignals(opts.marketPulse ?? null)
+		opts.marketSignalRows ?? collectMarketSignals(opts.marketSignals ?? null)
 	const candidates = buildFdrReviewBuckets(teams, signals)
 
 	return {
@@ -431,7 +439,7 @@ export function buildFdrDeskModel(
 		teams,
 		easiest,
 		hardest,
-		candidates,
+		candidates
 	}
 }
 
@@ -449,8 +457,7 @@ export function squadMatchKey(webName: string, teamShortName: string): string {
 	return `${webName.trim().toLowerCase()}|${teamShortName.trim().toLowerCase()}`
 }
 
-export type SquadFixtureBand =
-	'favourable' | 'mixed' | 'difficult' | 'blank'
+export type SquadFixtureBand = 'favourable' | 'mixed' | 'difficult' | 'blank'
 
 export type SquadFdrRow = {
 	elementId: number | null
@@ -505,20 +512,20 @@ export function getTeamTierIds(teams: TeamFdrRow[]): {
 	hardestIds: Set<number>
 } {
 	const sorted = rankableTeams(teams).sort(
-		(a, b) => (a.avgFdr ?? 99) - (b.avgFdr ?? 99),
+		(a, b) => (a.avgFdr ?? 99) - (b.avgFdr ?? 99)
 	)
 	const tierSize = Math.min(
 		FDR_TEAM_TIER_SIZE,
-		Math.max(1, Math.floor(sorted.length / 2)),
+		Math.max(1, Math.floor(sorted.length / 2))
 	)
 	if (sorted.length === 0) {
 		return { easiestIds: new Set(), hardestIds: new Set() }
 	}
-	const easiestIds = new Set(
-		sorted.slice(0, tierSize).map(t => t.teamId),
-	)
+	const easiestIds = new Set(sorted.slice(0, tierSize).map(t => t.teamId))
 	const hardestIds = new Set(
-		sorted.slice(Math.max(tierSize, sorted.length - tierSize)).map(t => t.teamId),
+		sorted
+			.slice(Math.max(tierSize, sorted.length - tierSize))
+			.map(t => t.teamId)
 	)
 	// Ensure hardest doesn't re-include easiest when N is tiny
 	for (const id of Array.from(easiestIds)) hardestIds.delete(id)
@@ -527,7 +534,7 @@ export function getTeamTierIds(teams: TeamFdrRow[]): {
 
 export function classifySquadFixtureBand(
 	row: Pick<SquadFdrRow, 'teamId' | 'blankCount'>,
-	tiers: { easiestIds: Set<number>; hardestIds: Set<number> },
+	tiers: { easiestIds: Set<number>; hardestIds: Set<number> }
 ): SquadFixtureBand {
 	if (row.blankCount > 0) return 'blank'
 	const easy = tiers.easiestIds.has(row.teamId)
@@ -549,7 +556,7 @@ export function buildSquadFdrRows(
 		isCaptain: boolean
 		isViceCaptain: boolean
 	}>,
-	teams: TeamFdrRow[],
+	teams: TeamFdrRow[]
 ): SquadFdrRow[] {
 	const byShort = teamByShortName(teams)
 	const tiers = getTeamTierIds(teams)
@@ -579,11 +586,11 @@ export function buildSquadFdrRows(
 			nextOpponent: team.run[0]?.opponentShortName ?? null,
 			nextHome: team.run[0]?.wasHome ?? null,
 			gameweeks: team.gameweeks,
-			run: team.run,
+			run: team.run
 		}
 		rows.push({
 			...base,
-			fixtureBand: classifySquadFixtureBand(base, tiers),
+			fixtureBand: classifySquadFixtureBand(base, tiers)
 		})
 	}
 

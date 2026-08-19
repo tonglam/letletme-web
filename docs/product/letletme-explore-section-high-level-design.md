@@ -58,7 +58,7 @@ The baseline includes the current Web work plus the in-progress GraphQL/Data pla
 | Homepage               | The homepage exposes selected gameweek, market, fixture, Dream Team, and personal fragments, but it is a whole-product acquisition/continuation page rather than an Explore router                                                                                                                |
 | Gameweek               | `/explore/gameweek` exposes official overall round statistics, chips, Dream Team, double-digit hauls, provisional/settled state, update time, preseason/empty states, and player links; selected gameweek is client state rather than a canonical query scope                                        |
 | Fixtures               | `/explore/fixtures` provides selectable FDR horizons, easiest/hardest runs, next-fixture cards, BGW/DGW and unknown states, team matrix, linked-squad overlay, neutral candidate groups, sharing, and player links; metadata still contains hunt/avoid language                                      |
-| Market                 | `/explore/market` exposes observed price, ownership, transfer, availability, and player-pool changes with a 14-day coverage contract, latest-day price filtering, player lookup/history, stale states, and sharing                                                                                   |
+| Market                 | `/explore/market` exposes observed price, ownership, transfer, availability, and player-pool changes with explicit daily, gameweek, and rolling-seven-day ownership coverage, latest-day price filtering, player lookup/history, stale states, and sharing                                                                                   |
 | Trends                 | `/explore/selections` exposes exact prepared competition fields and curated public prepared competitions, gameweek selection, ownership, EO, captaincy, transfers, template core, personal exposure, and sharing; cohort type and capture metadata are not consistently visible                      |
 | Players                | `/explore/player-stats` provides bounded server-side player search, one/two-player state, availability, fixtures, recent gameweeks, season production, official expected metrics, price history, FPL percentiles, verified Understat process, coverage, My Squad context, and query-driven selection |
 | Player State           | The Web renders a large deterministic state profile with dimension ratings, reasons, coverage, provider revisions, historical context, and withheld-state copy; it is requested beside the lightweight player overview rather than only when its evidence summary is opened                       |
@@ -746,7 +746,7 @@ Rules:
 
 **Market**
 
-- Preserve latest-day filtering for the price-change board and multi-day semantics for ownership/transfer windows.
+- Preserve latest-day filtering for the price-change board and explicit daily, gameweek, and rolling-seven-day ownership periods.
 - Map its existing coverage contract into shared evidence metadata without discarding requested/observed days or stale state.
 - Keep official availability evidence separate from future attributed injury/reporting content.
 - Retain player lookup, history, view modes, and current share functions.

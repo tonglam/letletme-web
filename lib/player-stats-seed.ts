@@ -187,7 +187,7 @@ export async function loadPlayerStatsPersonalSeed(
 	const marketPromise = measure(timing, 'market', () =>
 		executePublicServerQuery<FixturePlanningSignalsResponse>(
 			GET_FIXTURE_PLANNING_SIGNALS,
-			{ days: 14 },
+			{},
 			publicFetchOptions({
 				revalidate: RevalidateSeconds.market,
 				tags: [CacheTag.market]
@@ -239,7 +239,14 @@ export async function loadPlayerStatsPersonalSeed(
 	const model = buildFdrDeskModel(fixturesByEvent, {
 		fromGw: review.anchorGw,
 		horizon,
-		marketPulse: market?.marketPulse ?? null,
+		marketSignals: market
+			? {
+					mostSelected: market.marketPulse?.mostSelected ?? [],
+					transferMovers: market.marketPulse?.transferMovers ?? [],
+					gameweekOwnership: market.marketOwnershipGameweek,
+					rollingOwnership: market.marketOwnershipRolling7d
+				}
+			: null,
 		knownTeams: bootstrap.directorySeed.teams,
 		unknownEvents
 	})

@@ -1,10 +1,7 @@
 import { MarketAvailabilityDisclosure } from './MarketAvailabilityDisclosure'
 import { MarketAvailabilityList } from '@/components/data/MarketAvailabilityList'
 import { MarketPositionBadge } from '@/components/data/MarketMarkup'
-import {
-	MarketPlayerLookupLauncher,
-	MarketPriceExplorer
-} from './MarketPriceExplorer'
+import { MarketPriceExplorer } from './MarketPriceExplorer'
 import { MarketLocalUpdated } from '@/components/data/MarketLocalUpdated'
 import { OwnershipSwingDesk } from '@/components/data/OwnershipSwingDesk'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
@@ -13,12 +10,15 @@ import type {
 	MarketAvailabilityUpdate,
 	MarketPlayer,
 	MarketPulse,
-	MarketTransferMover
+	MarketTransferMover,
+	MarketOwnershipDay,
+	MarketOwnershipOverview
 } from '@/lib/graphql/operations/market'
-import { getMarketCoverageMode, getMarketViewMode } from '@/lib/market'
+import { getMarketViewMode } from '@/lib/market'
+import { Link } from '@/i18n/navigation'
 import { cn } from '@/lib/utils'
 import { getTranslations } from 'next-intl/server'
-import { HeartPulse, Sparkles, Users } from 'lucide-react'
+import { HeartPulse, Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 type MarketT = (key: any, values?: any) => string
@@ -43,13 +43,7 @@ function PositionBadge({ player }: { player: MarketPlayer }) {
 	return <MarketPositionBadge position={player.position} />
 }
 
-function SectionTitle({
-	id,
-	children
-}: {
-	id: string
-	children: ReactNode
-}) {
+function SectionTitle({ id, children }: { id: string; children: ReactNode }) {
 	return (
 		<div className="mb-3 flex flex-col gap-2 border-b border-border/60 pb-2 sm:flex-row sm:items-start sm:justify-between">
 			<div className="min-w-0">
@@ -141,28 +135,15 @@ function CoverageMeta({
 	locale: string
 	t: MarketT
 }) {
-	const mode = getMarketCoverageMode(coverage)
-	let rangeLabel: string
-	switch (mode) {
-		case 'empty':
-			rangeLabel = t('coverageEmpty')
-			break
-		case 'one-day':
-			rangeLabel = t('coverageOneDay', { date: formatCalendarDate(coverage.latestDate, locale) })
-			break
-		case 'tracking':
-			rangeLabel = t('coverageTracking', {
-				from: formatCalendarDate(coverage.firstDate, locale),
-				to: formatCalendarDate(coverage.latestDate, locale)
-			})
-			break
-		case 'last-14-days':
-			rangeLabel = t('coverageLast14', {
-				from: formatCalendarDate(coverage.firstDate, locale),
-				to: formatCalendarDate(coverage.latestDate, locale)
-			})
-			break
-	}
+	const rangeLabel =
+		coverage.observedDays === 0
+			? t('coverageEmpty')
+			: coverage.firstDate && coverage.latestDate
+				? t('coverageTracking', {
+						from: formatCalendarDate(coverage.firstDate, locale),
+						to: formatCalendarDate(coverage.latestDate, locale)
+					})
+				: t('coverageEmpty')
 
 	return (
 		<div className="space-y-2">
@@ -175,11 +156,15 @@ function CoverageMeta({
 					</>
 				) : null}
 			</div>
-			{mode === 'one-day' ? (
-				<p className="text-xs text-muted-foreground">{t('movementNeedsAnotherDay')}</p>
+			{coverage.observedDays === 1 ? (
+				<p className="text-xs text-muted-foreground">
+					{t('movementNeedsAnotherDay')}
+				</p>
 			) : null}
-			{mode === 'empty' ? (
-				<p className="text-xs text-muted-foreground">{t('nextCapture', { time: '09:40 UTC+8' })}</p>
+			{coverage.observedDays === 0 ? (
+				<p className="text-xs text-muted-foreground">
+					{t('nextCapture', { time: '09:25–09:35 UTC+8' })}
+				</p>
 			) : null}
 			{coverage.stale ? (
 				<p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
@@ -190,42 +175,256 @@ function CoverageMeta({
 	)
 }
 
+type OwnershipResult = MarketOwnershipOverview | MarketOwnershipDay
+
+function ownershipPeriodLabel(
+	period: OwnershipResult['period'],
+	t: MarketT
+): string {
+	if (period === 'GAMEWEEK') return t('ownershipPeriodGameweek')
+	if (period === 'ROLLING_7D') return t('ownershipPeriodRolling7d')
+	return t('ownershipPeriodDaily')
+}
+
+function OwnershipPeriodNav({
+	period,
+	t
+}: {
+	period: OwnershipResult['period']
+	t: MarketT
+}) {
+	const items: OwnershipResult['period'][] = ['DAILY', 'GAMEWEEK', 'ROLLING_7D']
+	return (
+		<nav
+			aria-label={t('ownershipPeriodLabel')}
+			className="flex flex-wrap gap-2"
+		>
+			{items.map(item => (
+				<Link
+					key={item}
+					href={{ pathname: '/explore/market', query: { period: item } }}
+					className={cn(
+						'rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
+						item === period
+							? 'border-primary bg-primary text-primary-foreground'
+							: 'border-border/70 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+					)}
+					aria-current={item === period ? 'page' : undefined}
+				>
+					{ownershipPeriodLabel(item, t)}
+				</Link>
+			))}
+		</nav>
+	)
+}
+
+function OwnershipCoverageMeta({
+	ownership,
+	locale,
+	t
+}: {
+	ownership: OwnershipResult
+	locale: string
+	t: MarketT
+}) {
+	const coverage = ownership.coverage
+	const gameweek = 'gameweek' in ownership ? ownership.gameweek : null
+	const range =
+		coverage.fromDate && coverage.toDate
+			? t('ownershipComparisonRange', {
+					from: formatCalendarDate(coverage.fromDate, locale),
+					to: formatCalendarDate(coverage.toDate, locale)
+				})
+			: t('ownershipStatus.' + coverage.status)
+	const missing =
+		coverage.missingDates.length > 0
+			? t('ownershipMissingDates', {
+					dates: coverage.missingDates
+						.map(date => formatCalendarDate(date, locale))
+						.join(', ')
+				})
+			: null
+	const deadline = gameweek?.deadlineTime
+		? new Intl.DateTimeFormat(locale, {
+				dateStyle: 'medium',
+				timeStyle: 'short',
+				timeZone: 'Australia/Perth'
+			}).format(new Date(gameweek.deadlineTime))
+		: null
+	return (
+		<div className="space-y-2">
+			<div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
+				<span>{range}</span>
+				<span aria-hidden="true">·</span>
+				<span>
+					{t('ownershipObservedDays', {
+						observed: coverage.observedDays,
+						requested: coverage.requestedDays
+					})}
+				</span>
+				{coverage.capturedAt ? (
+					<>
+						<span aria-hidden="true">·</span>
+						<MarketLocalUpdated capturedAt={coverage.capturedAt} />
+					</>
+				) : null}
+			</div>
+			{gameweek ? (
+				<p className="text-xs text-muted-foreground">
+					{t('ownershipGameweekMeta', { gameweek: gameweek.name, deadline })}
+				</p>
+			) : null}
+			{missing ? (
+				<p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
+					{missing}
+				</p>
+			) : null}
+			{coverage.status !== 'READY' && !missing ? (
+				<p className="text-xs text-muted-foreground">
+					{t('ownershipStatus.' + coverage.status)}
+				</p>
+			) : null}
+			{coverage.stale ? (
+				<p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
+					{t('staleWarning')}
+				</p>
+			) : null}
+		</div>
+	)
+}
+
+function OwnershipDateNav({
+	dates,
+	selectedDate,
+	locale,
+	t
+}: {
+	dates: string[]
+	selectedDate: string | null
+	locale: string
+	t: MarketT
+}) {
+	if (dates.length === 0) return null
+	return (
+		<div
+			className="flex flex-wrap gap-2"
+			aria-label={t('ownershipDates')}
+		>
+			{dates.map(date => (
+				<Link
+					key={date}
+					href={{
+						pathname: '/explore/market',
+						query: { period: 'DAILY', date }
+					}}
+					className={cn(
+						'rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors',
+						date === selectedDate
+							? 'border-primary/70 bg-primary/10 text-foreground'
+							: 'border-border/70 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+					)}
+					aria-current={date === selectedDate ? 'date' : undefined}
+				>
+					{formatCalendarDate(date, locale)}
+				</Link>
+			))}
+		</div>
+	)
+}
+
 function GlanceStrip({
 	pulse,
+	ownership,
 	locale,
 	t
 }: {
 	pulse: MarketPulse
+	ownership: OwnershipResult
 	locale: string
 	t: MarketT
 }) {
 	const rises = pulse.priceChanges.filter(c => c.direction === 'RISE').length
 	const falls = pulse.priceChanges.filter(c => c.direction === 'FALL').length
-	const topRise = pulse.ownershipMovers.risers[0] ?? null
-	const topFall = pulse.ownershipMovers.fallers[0] ?? null
-	const fmt = new Intl.NumberFormat(locale, { maximumFractionDigits: 1, signDisplay: 'exceptZero' })
+	const topRise = ownership.risers[0] ?? null
+	const topFall = ownership.fallers[0] ?? null
+	const fmt = new Intl.NumberFormat(locale, {
+		maximumFractionDigits: 1,
+		signDisplay: 'exceptZero'
+	})
 	const cells = [
-		{ label: t('glancePriceRises'), primary: String(rises), secondary: t('glanceCountUnit'), playerId: null, tone: 'default' },
-		{ label: t('glancePriceFalls'), primary: String(falls), secondary: t('glanceCountUnit'), playerId: null, tone: 'default' },
-		{ label: t('glanceTopRiser'), primary: topRise ? `${fmt.format(topRise.change)}%` : '—', secondary: topRise?.player.webName ?? '—', playerId: topRise?.player.playerId ?? null, tone: 'up' },
-		{ label: t('glanceTopFaller'), primary: topFall ? `${fmt.format(topFall.change)}%` : '—', secondary: topFall?.player.webName ?? '—', playerId: topFall?.player.playerId ?? null, tone: 'down' }
+		{
+			label: t('glancePriceRises'),
+			primary: String(rises),
+			secondary: t('glanceCountUnit'),
+			playerId: null,
+			tone: 'default'
+		},
+		{
+			label: t('glancePriceFalls'),
+			primary: String(falls),
+			secondary: t('glanceCountUnit'),
+			playerId: null,
+			tone: 'default'
+		},
+		{
+			label: t('glanceTopRiser'),
+			primary: topRise
+				? t('ownershipPercentagePoints', {
+						value: fmt.format(topRise.changePercentagePoints)
+					})
+				: '—',
+			secondary: topRise?.player.webName ?? '—',
+			playerId: topRise?.player.playerId ?? null,
+			tone: 'up'
+		},
+		{
+			label: t('glanceTopFaller'),
+			primary: topFall
+				? t('ownershipPercentagePoints', {
+						value: fmt.format(topFall.changePercentagePoints)
+					})
+				: '—',
+			secondary: topFall?.player.webName ?? '—',
+			playerId: topFall?.player.playerId ?? null,
+			tone: 'down'
+		}
 	] as const
 
 	return (
-		<section aria-label={t('glanceTitle')} className="mb-8 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-2.5">
+		<section
+			aria-label={t('glanceTitle')}
+			className="mb-8 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-2.5"
+		>
 			{cells.map(cell => (
-				<div key={cell.label} className="flex min-h-[4.75rem] flex-col justify-between rounded-lg border border-border/70 px-3 py-2.5">
-					<p className="font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{cell.label}</p>
+				<div
+					key={cell.label}
+					className="flex min-h-[4.75rem] flex-col justify-between rounded-lg border border-border/70 px-3 py-2.5"
+				>
+					<p className="font-display text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+						{cell.label}
+					</p>
 					<div className="mt-2 min-w-0">
-						<p className={cn('truncate font-display text-xl font-bold tabular-nums tracking-tight leading-none sm:text-2xl', cell.tone === 'up' && 'text-success', cell.tone === 'down' && 'text-destructive')}>
+						<p
+							className={cn(
+								'truncate font-display text-xl font-bold tabular-nums tracking-tight leading-none sm:text-2xl',
+								cell.tone === 'up' && 'text-success',
+								cell.tone === 'down' && 'text-destructive'
+							)}
+						>
 							{cell.primary}
 						</p>
 						{cell.playerId != null ? (
-							<PlayerStatsAnchor playerId={cell.playerId} locale={locale} className="mt-1 block truncate text-xs text-foreground underline decoration-primary/55 underline-offset-2 hover:decoration-primary">
+							<PlayerStatsAnchor
+								playerId={cell.playerId}
+								locale={locale}
+								className="mt-1 block truncate text-xs text-foreground underline decoration-primary/55 underline-offset-2 hover:decoration-primary"
+							>
 								{cell.secondary}
 							</PlayerStatsAnchor>
 						) : (
-							<p className="mt-1 truncate text-xs text-muted-foreground">{cell.secondary}</p>
+							<p className="mt-1 truncate text-xs text-muted-foreground">
+								{cell.secondary}
+							</p>
 						)}
 					</div>
 				</div>
@@ -234,7 +433,15 @@ function GlanceStrip({
 	)
 }
 
-function MostSelectedColumn({ players, locale, t }: { players: MarketPlayer[]; locale: string; t: MarketT }) {
+function MostSelectedColumn({
+	players,
+	locale,
+	t
+}: {
+	players: MarketPlayer[]
+	locale: string
+	t: MarketT
+}) {
 	if (players.length === 0) return <EmptyHint>{t('noData')}</EmptyHint>
 	return (
 		<ul className="grid gap-x-6 sm:grid-cols-2">
@@ -244,14 +451,26 @@ function MostSelectedColumn({ players, locale, t }: { players: MarketPlayer[]; l
 					player={player}
 					locale={locale}
 					sub={`${player.teamShortName} · £${(player.price / 10).toFixed(1)}m`}
-					trailing={<span className="font-display text-sm font-semibold tabular-nums">{formatOwnership(player.selectedByPercent, locale)}</span>}
+					trailing={
+						<span className="font-display text-sm font-semibold tabular-nums">
+							{formatOwnership(player.selectedByPercent, locale)}
+						</span>
+					}
 				/>
 			))}
 		</ul>
 	)
 }
 
-function TransferHeat({ movers, locale, t }: { movers: MarketTransferMover[]; locale: string; t: MarketT }) {
+function TransferHeat({
+	movers,
+	locale,
+	t
+}: {
+	movers: MarketTransferMover[]
+	locale: string
+	t: MarketT
+}) {
 	const number = new Intl.NumberFormat(locale, { notation: 'compact' })
 	if (movers.length === 0) return <EmptyHint>{t('noTransferMovers')}</EmptyHint>
 	return (
@@ -261,24 +480,58 @@ function TransferHeat({ movers, locale, t }: { movers: MarketTransferMover[]; lo
 					key={mover.player.playerId}
 					player={mover.player}
 					locale={locale}
-					sub={t('transferInOut', { inCount: number.format(mover.transfersIn), outCount: number.format(mover.transfersOut) })}
-					trailing={<span className={cn('font-display text-sm font-semibold tabular-nums', mover.netTransfers >= 0 ? 'text-success' : 'text-destructive')}>{mover.netTransfers > 0 ? '+' : ''}{number.format(mover.netTransfers)}</span>}
+					sub={t('transferInOut', {
+						inCount: number.format(mover.transfersIn),
+						outCount: number.format(mover.transfersOut)
+					})}
+					trailing={
+						<span
+							className={cn(
+								'font-display text-sm font-semibold tabular-nums',
+								mover.netTransfers >= 0 ? 'text-success' : 'text-destructive'
+							)}
+						>
+							{mover.netTransfers > 0 ? '+' : ''}
+							{number.format(mover.netTransfers)}
+						</span>
+					}
 				/>
 			))}
 		</ul>
 	)
 }
 
-function NewPlayersBlock({ items, locale, t }: { items: MarketPulse['newPlayers']; locale: string; t: MarketT }) {
+function NewPlayersBlock({
+	items,
+	locale,
+	t
+}: {
+	items: MarketPulse['newPlayers']
+	locale: string
+	t: MarketT
+}) {
 	if (items.length === 0) return <EmptyHint>{t('noNewPlayers')}</EmptyHint>
 	return (
 		<ul>
 			{items.map(item => (
-				<li key={item.player.playerId} className="flex items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0">
+				<li
+					key={item.player.playerId}
+					className="flex items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0"
+				>
 					<PositionBadge player={item.player} />
 					<div className="min-w-0">
-						<PlayerStatsAnchor playerId={item.player.playerId} locale={locale} className="market-player-link--compact">{item.player.webName}</PlayerStatsAnchor>
-						<p className="market-player-subtext">{t('firstSeen', { date: formatCalendarDate(item.firstObservedDate, locale) })}</p>
+						<PlayerStatsAnchor
+							playerId={item.player.playerId}
+							locale={locale}
+							className="market-player-link--compact"
+						>
+							{item.player.webName}
+						</PlayerStatsAnchor>
+						<p className="market-player-subtext">
+							{t('firstSeen', {
+								date: formatCalendarDate(item.firstObservedDate, locale)
+							})}
+						</p>
 					</div>
 				</li>
 			))}
@@ -288,68 +541,211 @@ function NewPlayersBlock({ items, locale, t }: { items: MarketPulse['newPlayers'
 
 export async function MarketDashboard({
 	pulse,
+	ownership,
+	dailyDates,
 	revision = null,
 	locale
 }: {
 	pulse: MarketPulse
+	ownership: OwnershipResult
+	dailyDates: string[]
 	revision?: string | null
 	locale: string
 }) {
 	const t: MarketT = await getTranslations('Market')
-	const hasPulseData = pulse.coverage.observedDays > 0
-	const priceChangeDate = pulse.priceChanges.map(c => c.changeDate).sort().at(-1) ?? pulse.coverage.latestDate ?? null
-	const latestPriceChanges = priceChangeDate ? pulse.priceChanges.filter(change => change.changeDate === priceChangeDate) : []
+	const priceChangeDate =
+		pulse.priceChanges
+			.map(c => c.changeDate)
+			.sort()
+			.at(-1) ??
+		pulse.coverage.latestDate ??
+		null
+	const latestPriceChanges = priceChangeDate
+		? pulse.priceChanges.filter(change => change.changeDate === priceChangeDate)
+		: []
 	const viewPulse = { ...pulse, priceChanges: latestPriceChanges }
 
-	if (!hasPulseData) {
-		return (
-			<>
-				<section className="mb-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"><CoverageMeta coverage={pulse.coverage} locale={locale} t={t} /></section>
-				<div className="mb-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-					<div className="flex items-start gap-3"><span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-border/60"><Users aria-hidden="true" className="size-4" /></span><div><h2 className="font-display text-lg font-bold tracking-tight">{t('trackingStartsTitle')}</h2><p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">{t('trackingStartsDescription', { time: '09:40 UTC+8' })}</p></div></div>
-				</div>
-				<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-					<SectionTitle id="market-player-lookup">{t('lookupTitle')}</SectionTitle>
-					<MarketPlayerLookupLauncher
-						revision={revision}
-						initialOpen
-					/>
-				</section>
-			</>
-		)
-	}
+	const hasMovers = ownership.risers.length > 0 || ownership.fallers.length > 0
+	const viewMode = getMarketViewMode(viewPulse, hasMovers)
+	const hasAvailabilityEvidence =
+		pulse.availabilityHighlights.length > 0 ||
+		(pulse.availabilityUpdateCount ?? pulse.availabilityUpdates.length) > 0 ||
+		pulse.newPlayers.length > 0
 
-	const hasMovers = pulse.ownershipMovers.risers.length > 0 || pulse.ownershipMovers.fallers.length > 0
-	const viewMode = getMarketViewMode(viewPulse)
-	const hasAvailabilityEvidence = pulse.availabilityHighlights.length > 0 || (pulse.availabilityUpdateCount ?? pulse.availabilityUpdates.length) > 0 || pulse.newPlayers.length > 0
-
-	const priceSection = <MarketPriceExplorer changes={latestPriceChanges} changeDate={priceChangeDate} locale={locale} revision={revision} />
+	const priceSection = (
+		<MarketPriceExplorer
+			changes={latestPriceChanges}
+			changeDate={priceChangeDate}
+			locale={locale}
+			revision={revision}
+		/>
+	)
 	const ownershipSection = (
-		<section aria-labelledby="market-ownership" className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+		<section
+			aria-labelledby="market-ownership"
+			className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+		>
 			<div className="space-y-6">
-				<div><SectionTitle id="market-most-selected">{t('mostSelectedTitle')}</SectionTitle><MostSelectedColumn players={pulse.mostSelected} locale={locale} t={t} /></div>
-				<div><SectionTitle id="market-ownership">{t('ownershipSwing')}</SectionTitle>{pulse.coverage.observedDays < 2 ? <EmptyHint>{t('movementNeedsAnotherDay')}</EmptyHint> : !hasMovers ? <EmptyHint>{t('noOwnershipMovement')}</EmptyHint> : <OwnershipSwingDesk risers={pulse.ownershipMovers.risers} fallers={pulse.ownershipMovers.fallers} />}</div>
+				<div>
+					<SectionTitle id="market-ownership">
+						{t('ownershipSwing')}
+					</SectionTitle>
+					<div className="mb-4 space-y-3">
+						<OwnershipPeriodNav
+							period={ownership.period}
+							t={t}
+						/>
+						{ownership.period === 'DAILY' ? (
+							<OwnershipDateNav
+								dates={dailyDates}
+								selectedDate={
+									'date' in ownership
+										? ownership.date
+										: ownership.coverage.toDate
+								}
+								locale={locale}
+								t={t}
+							/>
+						) : null}
+						<OwnershipCoverageMeta
+							ownership={ownership}
+							locale={locale}
+							t={t}
+						/>
+					</div>
+					{!['READY', 'PARTIAL'].includes(ownership.coverage.status) ? (
+						<EmptyHint>
+							{t('ownershipStatus.' + ownership.coverage.status)}
+						</EmptyHint>
+					) : !hasMovers ? (
+						<EmptyHint>{t('noOwnershipMovement')}</EmptyHint>
+					) : (
+						<OwnershipSwingDesk
+							risers={ownership.risers}
+							fallers={ownership.fallers}
+						/>
+					)}
+				</div>
+				<div>
+					<SectionTitle id="market-most-selected">
+						{t('mostSelectedTitle')}
+					</SectionTitle>
+					<MostSelectedColumn
+						players={pulse.mostSelected}
+						locale={locale}
+						t={t}
+					/>
+				</div>
 			</div>
 		</section>
 	)
-	const transferSection = pulse.transferMovers.length > 0 ? (
-		<section aria-labelledby="market-transfers" className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"><SectionTitle id="market-transfers">{t('transferTitle')}</SectionTitle><p className="mb-3 text-[11px] text-muted-foreground">{pulse.coverage.firstDate && pulse.coverage.latestDate ? t('transferCoverage', { from: formatCalendarDate(pulse.coverage.firstDate, locale), to: formatCalendarDate(pulse.coverage.latestDate, locale) }) : t('transferCoverageUnknown')}</p><TransferHeat movers={pulse.transferMovers} locale={locale} t={t} /></section>
-	) : null
+	const transferSection =
+		pulse.transferMovers.length > 0 ? (
+			<section
+				aria-labelledby="market-transfers"
+				className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+			>
+				<SectionTitle id="market-transfers">{t('transferTitle')}</SectionTitle>
+				<p className="mb-3 text-[11px] text-muted-foreground">
+					{pulse.coverage.firstDate && pulse.coverage.latestDate
+						? t('transferCoverage', {
+								from: formatCalendarDate(pulse.coverage.firstDate, locale),
+								to: formatCalendarDate(pulse.coverage.latestDate, locale)
+							})
+						: t('transferCoverageUnknown')}
+				</p>
+				<TransferHeat
+					movers={pulse.transferMovers}
+					locale={locale}
+					t={t}
+				/>
+			</section>
+		) : null
 	const availabilitySection = hasAvailabilityEvidence ? (
-		<section aria-labelledby="market-squad-status" className="grid gap-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5 lg:grid-cols-2 lg:gap-8">
-			<div><SectionTitle id="market-squad-status"><span className="inline-flex items-center gap-1.5"><HeartPulse className="size-3.5" aria-hidden="true" />{t('availabilityTitle')}</span></SectionTitle><MarketAvailabilityList updates={pulse.availabilityHighlights} locale={locale} t={t} /><MarketAvailabilityDisclosure days={pulse.coverage.requestedDays} revision={revision} count={pulse.availabilityUpdateCount ?? pulse.availabilityUpdates.length} /></div>
-			{pulse.newPlayers.length > 0 ? <div><SectionTitle id="market-new-players"><span className="inline-flex items-center gap-1.5"><Sparkles className="size-3.5" aria-hidden="true" />{t('newPlayersTitle')}</span></SectionTitle><NewPlayersBlock items={pulse.newPlayers} locale={locale} t={t} /></div> : null}
+		<section
+			aria-labelledby="market-squad-status"
+			className="grid gap-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5 lg:grid-cols-2 lg:gap-8"
+		>
+			<div>
+				<SectionTitle id="market-squad-status">
+					<span className="inline-flex items-center gap-1.5">
+						<HeartPulse
+							className="size-3.5"
+							aria-hidden="true"
+						/>
+						{t('availabilityTitle')}
+					</span>
+				</SectionTitle>
+				<MarketAvailabilityList
+					updates={pulse.availabilityHighlights}
+					locale={locale}
+					t={t}
+				/>
+				<MarketAvailabilityDisclosure
+					days={pulse.coverage.requestedDays}
+					revision={revision}
+					count={
+						pulse.availabilityUpdateCount ?? pulse.availabilityUpdates.length
+					}
+				/>
+			</div>
+			{pulse.newPlayers.length > 0 ? (
+				<div>
+					<SectionTitle id="market-new-players">
+						<span className="inline-flex items-center gap-1.5">
+							<Sparkles
+								className="size-3.5"
+								aria-hidden="true"
+							/>
+							{t('newPlayersTitle')}
+						</span>
+					</SectionTitle>
+					<NewPlayersBlock
+						items={pulse.newPlayers}
+						locale={locale}
+						t={t}
+					/>
+				</div>
+			) : null}
 		</section>
 	) : null
 
-	const sectionById = { prices: priceSection, ownership: ownershipSection, transfers: transferSection, availability: availabilitySection }
-	const order = viewMode === 'price-led' ? (['prices', 'ownership', 'transfers', 'availability'] as const) : viewMode === 'availability-led' ? (['availability', 'prices', 'ownership', 'transfers'] as const) : viewMode === 'ownership-led' ? (['ownership', 'prices', 'transfers', 'availability'] as const) : (['ownership', 'prices', 'availability', 'transfers'] as const)
+	const sectionById = {
+		prices: priceSection,
+		ownership: ownershipSection,
+		transfers: transferSection,
+		availability: availabilitySection
+	}
+	const order =
+		viewMode === 'price-led'
+			? (['prices', 'ownership', 'transfers', 'availability'] as const)
+			: viewMode === 'availability-led'
+				? (['availability', 'prices', 'ownership', 'transfers'] as const)
+				: viewMode === 'ownership-led'
+					? (['ownership', 'prices', 'transfers', 'availability'] as const)
+					: (['ownership', 'prices', 'availability', 'transfers'] as const)
 
 	return (
 		<div className="space-y-8">
-			<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"><CoverageMeta coverage={pulse.coverage} locale={locale} t={t} /><p className="mt-3 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">{t(`viewMode.${viewMode}`)}</p></section>
-			<GlanceStrip pulse={viewPulse} locale={locale} t={t} />
-			{order.map(id => <div key={id}>{sectionById[id]}</div>)}
+			<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+				<CoverageMeta
+					coverage={pulse.coverage}
+					locale={locale}
+					t={t}
+				/>
+				<p className="mt-3 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
+					{t(`viewMode.${viewMode}`)}
+				</p>
+			</section>
+			<GlanceStrip
+				pulse={viewPulse}
+				ownership={ownership}
+				locale={locale}
+				t={t}
+			/>
+			{order.map(id => (
+				<div key={id}>{sectionById[id]}</div>
+			))}
 		</div>
 	)
 }

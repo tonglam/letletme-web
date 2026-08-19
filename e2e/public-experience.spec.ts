@@ -108,25 +108,27 @@ test('home keeps the four-section vocabulary and competition entry links aligned
 		page.getByRole('link', { name: 'Live competition standings', exact: true })
 	).toHaveAttribute('href', '/live/competitions')
 	await expect(
-		page.locator('section[aria-labelledby="home-tournament-band-title"]').getByRole('link', {
-			name: 'Browse competitions',
-			exact: true
-		})
+		page
+			.locator('section[aria-labelledby="home-tournament-band-title"]')
+			.getByRole('link', {
+				name: 'Browse competitions',
+				exact: true
+			})
 	).toHaveAttribute('href', '/competitions/browse')
 	await expect(
-		page.locator('section[aria-labelledby="home-tournament-band-title"]').getByRole('link', {
-			name: 'Create competition',
-			exact: true
-		})
+		page
+			.locator('section[aria-labelledby="home-tournament-band-title"]')
+			.getByRole('link', {
+				name: 'Create competition',
+				exact: true
+			})
 	).toHaveAttribute('href', '/competitions/create')
 
 	await page.goto('/zh-CN')
 	const chineseHeader = page.getByRole('navigation', { name: '主导航' })
 	for (const id of ['live', 'myFpl', 'competitions', 'explore']) {
 		await expect(
-			chineseHeader.locator(
-				`details[data-navigation-group="${id}"] > summary`
-			)
+			chineseHeader.locator(`details[data-navigation-group="${id}"] > summary`)
 		).toBeVisible()
 	}
 
@@ -134,26 +136,36 @@ test('home keeps the four-section vocabulary and competition entry links aligned
 		page.getByRole('link', { name: '赛事实时积分榜', exact: true })
 	).toHaveAttribute('href', '/zh-CN/live/competitions')
 	await expect(
-		page.locator('section[aria-labelledby="home-tournament-band-title"]').getByRole('link', {
-			name: '浏览赛事',
-			exact: true
-		})
+		page
+			.locator('section[aria-labelledby="home-tournament-band-title"]')
+			.getByRole('link', {
+				name: '浏览赛事',
+				exact: true
+			})
 	).toHaveAttribute('href', '/zh-CN/competitions/browse')
 	await expect(
-		page.locator('section[aria-labelledby="home-tournament-band-title"]').getByRole('link', {
-			name: '创建赛事',
-			exact: true
-		})
+		page
+			.locator('section[aria-labelledby="home-tournament-band-title"]')
+			.getByRole('link', {
+				name: '创建赛事',
+				exact: true
+			})
 	).toHaveAttribute('href', '/zh-CN/competitions/create')
 })
 
-test('language switch persists through the next client navigation', async ({ page }) => {
+test('language switch persists through the next client navigation', async ({
+	page
+}) => {
 	await page.goto('/zh-CN')
 
 	await page.getByRole('button', { name: '切换语言' }).click()
-	await page.getByRole('menuitemradio', { name: 'English', exact: true }).click()
+	await page
+		.getByRole('menuitemradio', { name: 'English', exact: true })
+		.click()
 	await expect(page).toHaveURL(/\/(?:en)?$/)
-	await expect(page.getByRole('heading', { level: 1 })).toContainText('Every point')
+	await expect(page.getByRole('heading', { level: 1 })).toContainText(
+		'Every point'
+	)
 
 	const explore = page.locator('details[data-navigation-group="explore"]')
 	await explore.locator(':scope > summary').click()
@@ -161,7 +173,9 @@ test('language switch persists through the next client navigation', async ({ pag
 
 	await expect(page).toHaveURL(/\/explore\/market$/)
 	await expect(explore).not.toHaveAttribute('open', '')
-	await expect(page.getByRole('heading', { name: 'Market', exact: true })).toBeVisible()
+	await expect(
+		page.getByRole('heading', { name: 'Market', exact: true })
+	).toBeVisible()
 })
 
 test('public home has a keyboard skip path and no detectable accessibility violations', async ({
@@ -203,10 +217,9 @@ test('server-rendered mobile navigation opens and closes after navigation', asyn
 	await mobileMenu.getByRole('link', { name: 'Market' }).click()
 
 	await expect(page).toHaveURL(/\/explore\/market$/)
-	await expect(page.locator('details[data-navigation-mobile]')).not.toHaveAttribute(
-		'open',
-		''
-	)
+	await expect(
+		page.locator('details[data-navigation-mobile]')
+	).not.toHaveAttribute('open', '')
 	expect(
 		await page.evaluate(
 			() => document.documentElement.scrollWidth <= window.innerWidth
@@ -226,10 +239,9 @@ test('guest mobile login closes its native disclosure before navigation', async 
 	await mobileMenu.getByRole('link', { name: 'Login', exact: true }).click()
 
 	await expect(page).toHaveURL(/\/auth\/login$/)
-	await expect(page.locator('details[data-navigation-mobile]')).not.toHaveAttribute(
-		'open',
-		''
-	)
+	await expect(
+		page.locator('details[data-navigation-mobile]')
+	).not.toHaveAttribute('open', '')
 })
 
 test('Simplified Chinese mobile navigation uses the same competition vocabulary', async ({
@@ -314,10 +326,23 @@ test('Market stays accessible and usable on a 390px Simplified Chinese screen', 
 	await expect(
 		page.getByRole('heading', { level: 1, name: '市场' })
 	).toBeVisible()
-	await expect(page.getByText(/自开始追踪以来/).first()).toBeVisible()
+	await expect(page.getByText(/比较区间/).first()).toBeVisible()
 
-	await expect(page.getByRole('region', { name: '上升 (1)' })).toBeVisible()
-	await expect(page.getByText('+1%').first()).toBeVisible()
+	await expect(page.getByRole('list', { name: '上升' })).toBeVisible()
+	await expect(page.getByText('+1 个百分点').first()).toBeVisible()
+
+	await page.getByRole('link', { name: 'GW 比较' }).click()
+	await expect(page).toHaveURL(/period=GAMEWEEK/)
+	await expect(page.getByText('GW2 · 截止').first()).toBeVisible()
+
+	await page.getByRole('link', { name: '近 7 日' }).click()
+	await expect(page).toHaveURL(/period=ROLLING_7D/)
+	await expect(page.getByText(/比较区间/).first()).toBeVisible()
+
+	await page.getByRole('link', { name: '每日' }).click()
+	await page.locator('a[href*="date=2026-08-02"]').click()
+	await expect(page).toHaveURL(/period=DAILY.*date=2026-08-02/)
+	await expect(page.getByText('2026年8月2日').first()).toBeVisible()
 
 	await page.getByRole('combobox', { name: '按姓名搜索球员' }).fill('Sa')
 	const searchResult = page
@@ -327,11 +352,14 @@ test('Market stays accessible and usable on a 390px Simplified Chinese screen', 
 	await searchResult.getByRole('button', { name: '历史' }).click()
 	await expect(page.getByText('£9.9m → £10.0m')).toBeVisible()
 
-	expect(
-		await page.evaluate(
-			() => document.documentElement.scrollWidth <= window.innerWidth
-		)
-	).toBe(true)
+	for (const width of [320, 375, 390, 430, 1280]) {
+		await page.setViewportSize({ width, height: 844 })
+		expect(
+			await page.evaluate(
+				() => document.documentElement.scrollWidth <= window.innerWidth
+			)
+		).toBe(true)
+	}
 	const accessibility = await new AxeBuilder({ page }).analyze()
 	expect(accessibility.violations).toEqual([])
 })
