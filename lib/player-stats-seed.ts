@@ -16,6 +16,9 @@ import { executePublicServerQuery } from '@/lib/graphql-server'
 import type { EventsResponse } from '@/lib/graphql/operations/events'
 import {
 	GET_FIXTURE_PLANNING_SIGNALS,
+	GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK,
+	GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
+	type FixturePlanningOwnershipResponse,
 	type FixturePlanningSignalsResponse
 } from '@/lib/graphql/operations/market'
 import {
@@ -197,6 +200,32 @@ export async function loadPlayerStatsPersonalSeed(
 			return null
 		})
 	)
+	const gameweekOwnershipPromise = measure(timing, 'market-gameweek', () =>
+		executePublicServerQuery<FixturePlanningOwnershipResponse>(
+			GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK,
+			{},
+			publicFetchOptions({
+				revalidate: RevalidateSeconds.market,
+				tags: [CacheTag.market]
+			})
+		).catch(error => {
+			console.error('[player-stats-seed] gameweek ownership failed:', error)
+			return null
+		})
+	)
+	const rollingOwnershipPromise = measure(timing, 'market-rolling-7d', () =>
+		executePublicServerQuery<FixturePlanningOwnershipResponse>(
+			GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
+			{},
+			publicFetchOptions({
+				revalidate: RevalidateSeconds.market,
+				tags: [CacheTag.market]
+			})
+		).catch(error => {
+			console.error('[player-stats-seed] rolling ownership failed:', error)
+			return null
+		})
+	)
 	const bootstrap = await bootstrapPromise
 	const review = reviewContext(bootstrap.context)
 	if (review.anchorGw == null || review.anchorGw <= 0) return null
@@ -220,11 +249,14 @@ export async function loadPlayerStatsPersonalSeed(
 		)
 	})()
 
-	const [windows, market, squadResult] = await Promise.all([
-		fixturePromise,
-		marketPromise,
-		squadPromise
-	])
+	const [windows, market, gameweekOwnership, rollingOwnership, squadResult] =
+		await Promise.all([
+			fixturePromise,
+			marketPromise,
+			gameweekOwnershipPromise,
+			rollingOwnershipPromise,
+			squadPromise
+		])
 	const fixturesByEvent = new Map<
 		number,
 		Array<(typeof windows)[number]['fixturesByEvent'][string][number]>
@@ -243,10 +275,18 @@ export async function loadPlayerStatsPersonalSeed(
 			? {
 					mostSelected: market.marketPulse?.mostSelected ?? [],
 					transferMovers: market.marketPulse?.transferMovers ?? [],
-					gameweekOwnership: market.marketOwnershipGameweek,
-					rollingOwnership: market.marketOwnershipRolling7d
+					gameweekOwnership: gameweekOwnership?.marketOwnershipOverview ?? null,
+					rollingOwnership: rollingOwnership?.marketOwnershipOverview ?? null
 				}
-			: null,
+			: gameweekOwnership || rollingOwnership
+				? {
+						mostSelected: [],
+						transferMovers: [],
+						gameweekOwnership:
+							gameweekOwnership?.marketOwnershipOverview ?? null,
+						rollingOwnership: rollingOwnership?.marketOwnershipOverview ?? null
+					}
+				: null,
 		knownTeams: bootstrap.directorySeed.teams,
 		unknownEvents
 	})

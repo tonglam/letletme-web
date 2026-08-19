@@ -13,7 +13,10 @@ import type { FixturePlanningFixture } from '@/lib/fixture-window'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	GET_FIXTURE_PLANNING_SIGNALS,
+	GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK,
+	GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
 	type FixturePlanningMarketSignals,
+	type FixturePlanningOwnershipResponse,
 	type FixturePlanningSignalsResponse
 } from '@/lib/graphql/operations/market'
 import {
@@ -69,55 +72,85 @@ export default async function FixturesPage({ params }: PageProps) {
 	let unknownEventIds: number[] = []
 
 	try {
-		const [fixtureWindow, market, squadResult, teamsResponse] =
-			await Promise.all([
-				loadFixtureWindow(fromGw, horizon),
-				executePublicServerQuery<FixturePlanningSignalsResponse>(
-					GET_FIXTURE_PLANNING_SIGNALS,
-					{},
-					publicFetchOptions({
-						revalidate: RevalidateSeconds.market,
-						tags: [CacheTag.market]
-					})
-				).catch(err => {
-					console.error('[fixtures] market pulse seed failed:', err)
-					return null
-				}),
-				entryId != null && session
-					? loadEntrySquadPicks(session, entryId, events).catch(err => {
-							console.error('[fixtures] entry picks seed failed:', err)
-							return {
-								picks: [] as SquadPickSeed[],
-								state: 'unavailable' as const
-							}
-						})
-					: Promise.resolve({
-							picks: [] as SquadPickSeed[],
-							state: 'unbound' as const
-						}),
-				executePublicServerQuery<TeamsForPickerResponse>(
-					GET_TEAMS_FOR_PICKER,
-					{},
-					publicFetchOptions({
-						revalidate: RevalidateSeconds.publicStats,
-						tags: [CacheTag.fixtures]
-					})
-				).catch(err => {
-					console.error('[fixtures] team directory seed failed:', err)
-					return { teams: [] }
+		const [
+			fixtureWindow,
+			market,
+			gameweekOwnership,
+			rollingOwnership,
+			squadResult,
+			teamsResponse
+		] = await Promise.all([
+			loadFixtureWindow(fromGw, horizon),
+			executePublicServerQuery<FixturePlanningSignalsResponse>(
+				GET_FIXTURE_PLANNING_SIGNALS,
+				{},
+				publicFetchOptions({
+					revalidate: RevalidateSeconds.market,
+					tags: [CacheTag.market]
 				})
-			])
+			).catch(err => {
+				console.error('[fixtures] market pulse seed failed:', err)
+				return null
+			}),
+			executePublicServerQuery<FixturePlanningOwnershipResponse>(
+				GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK,
+				{},
+				publicFetchOptions({
+					revalidate: RevalidateSeconds.market,
+					tags: [CacheTag.market]
+				})
+			).catch(err => {
+				console.error('[fixtures] gameweek ownership seed failed:', err)
+				return null
+			}),
+			executePublicServerQuery<FixturePlanningOwnershipResponse>(
+				GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
+				{},
+				publicFetchOptions({
+					revalidate: RevalidateSeconds.market,
+					tags: [CacheTag.market]
+				})
+			).catch(err => {
+				console.error('[fixtures] rolling ownership seed failed:', err)
+				return null
+			}),
+			entryId != null && session
+				? loadEntrySquadPicks(session, entryId, events).catch(err => {
+						console.error('[fixtures] entry picks seed failed:', err)
+						return {
+							picks: [] as SquadPickSeed[],
+							state: 'unavailable' as const
+						}
+					})
+				: Promise.resolve({
+						picks: [] as SquadPickSeed[],
+						state: 'unbound' as const
+					}),
+			executePublicServerQuery<TeamsForPickerResponse>(
+				GET_TEAMS_FOR_PICKER,
+				{},
+				publicFetchOptions({
+					revalidate: RevalidateSeconds.publicStats,
+					tags: [CacheTag.fixtures]
+				})
+			).catch(err => {
+				console.error('[fixtures] team directory seed failed:', err)
+				return { teams: [] }
+			})
+		])
 
 		Object.entries(fixtureWindow.fixturesByEvent).forEach(([id, fixtures]) => {
 			fixturesByEvent[Number(id)] = fixtures
 		})
 		unknownEventIds = fixtureWindow.unknownEventIds
-		marketSignals = market
+		const hasMarketSignals =
+			market != null || gameweekOwnership != null || rollingOwnership != null
+		marketSignals = hasMarketSignals
 			? {
-					mostSelected: market.marketPulse?.mostSelected ?? [],
-					transferMovers: market.marketPulse?.transferMovers ?? [],
-					gameweekOwnership: market.marketOwnershipGameweek,
-					rollingOwnership: market.marketOwnershipRolling7d
+					mostSelected: market?.marketPulse?.mostSelected ?? [],
+					transferMovers: market?.marketPulse?.transferMovers ?? [],
+					gameweekOwnership: gameweekOwnership?.marketOwnershipOverview ?? null,
+					rollingOwnership: rollingOwnership?.marketOwnershipOverview ?? null
 				}
 			: null
 		mySquadPicks = squadResult.picks

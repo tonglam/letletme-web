@@ -7,6 +7,8 @@ import {
 	GET_LIVE_MATCHDAY_DESK
 } from '../lib/graphql/operations/live'
 import {
+	GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK,
+	GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
 	GET_FIXTURE_PLANNING_SIGNALS,
 	GET_MARKET_PULSE
 } from '../lib/graphql/operations/market'
@@ -67,8 +69,8 @@ describe('GraphQL request budget', () => {
 		for (const [name, query, expectedRoots] of [
 			['GET_HOME_PUBLIC_BOOTSTRAP', GET_HOME_PUBLIC_BOOTSTRAP, 1],
 			['GET_HOME_PERSONAL_DESK', GET_HOME_PERSONAL_DESK, 1],
-				['GET_HOME_MARKET_PULSE', GET_HOME_MARKET_PULSE, 1],
-				['GET_HOME_MARKET_OWNERSHIP', GET_HOME_MARKET_OWNERSHIP, 1],
+			['GET_HOME_MARKET_PULSE', GET_HOME_MARKET_PULSE, 1],
+			['GET_HOME_MARKET_OWNERSHIP', GET_HOME_MARKET_OWNERSHIP, 1],
 			['GET_HOME_GAMEWEEK', GET_HOME_GAMEWEEK, 1]
 		] as const) {
 			const document = parse(query)
@@ -83,19 +85,28 @@ describe('GraphQL request budget', () => {
 		}
 	})
 
-	it('keeps fixture market signals to three compact root fields', () => {
-		const document = parse(GET_FIXTURE_PLANNING_SIGNALS)
-		let astNodes = 0
-		visit(document, { enter: () => void (astNodes += 1) })
-		const operation = document.definitions.find(
-			definition => definition.kind === 'OperationDefinition'
-		)
-		assert.ok(operation?.kind === 'OperationDefinition')
-		assert.equal(operation.selectionSet.selections.length, 3)
-		assert.ok(
-			astNodes < 200,
-			`GET_FIXTURE_PLANNING_SIGNALS has ${astNodes} AST nodes`
-		)
+	it('keeps fixture market signals and ownership periods isolated', () => {
+		for (const [name, query] of [
+			['GET_FIXTURE_PLANNING_SIGNALS', GET_FIXTURE_PLANNING_SIGNALS],
+			[
+				'GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK',
+				GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK
+			],
+			[
+				'GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D',
+				GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D
+			]
+		] as const) {
+			const document = parse(query)
+			let astNodes = 0
+			visit(document, { enter: () => void (astNodes += 1) })
+			const operation = document.definitions.find(
+				definition => definition.kind === 'OperationDefinition'
+			)
+			assert.ok(operation?.kind === 'OperationDefinition')
+			assert.equal(operation.selectionSet.selections.length, 1)
+			assert.ok(astNodes < 200, `${name} has ${astNodes} AST nodes`)
+		}
 		for (const unusedField of [
 			'availabilityUpdates',
 			'newPlayers',
@@ -106,13 +117,10 @@ describe('GraphQL request budget', () => {
 				new RegExp(`\\b${unusedField}\\b`)
 			)
 		}
+		assert.match(GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK, /period:\s*GAMEWEEK/)
 		assert.match(
-			GET_FIXTURE_PLANNING_SIGNALS,
-			/marketOwnershipGameweek:\s*marketOwnershipOverview/
-		)
-		assert.match(
-			GET_FIXTURE_PLANNING_SIGNALS,
-			/marketOwnershipRolling7d:\s*marketOwnershipOverview/
+			GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
+			/period:\s*ROLLING_7D/
 		)
 	})
 

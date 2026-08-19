@@ -11,6 +11,12 @@ const json = (response, status, body) => {
 	response.end(JSON.stringify(body))
 }
 
+const shiftIsoDate = (date, days) => {
+	const value = new Date(`${date}T00:00:00.000Z`)
+	value.setUTCDate(value.getUTCDate() + days)
+	return value.toISOString().slice(0, 10)
+}
+
 const scheduledMatch = {
 	matchId: 101,
 	minutes: 0,
@@ -1193,7 +1199,10 @@ const server = createServer((request, response) => {
 		if (
 			query.includes('GetMarketPulse') ||
 			query.includes('GetHomeMarketPulse') ||
+			query.includes('GetHomeMarketOwnership') ||
 			query.includes('GetFixturePlanningSignals') ||
+			query.includes('GetFixturePlanningOwnershipGameweek') ||
+			query.includes('GetFixturePlanningOwnershipRolling7d') ||
 			query.includes('GetMarketOwnershipOverview') ||
 			query.includes('GetMarketOwnershipDay')
 		) {
@@ -1210,18 +1219,34 @@ const server = createServer((request, response) => {
 				complete: true,
 				stale: false
 			}
+			const selectedDate =
+				typeof variables.date === 'string' ? variables.date : '2026-08-03'
+			const previousDate = shiftIsoDate(selectedDate, -1)
+			const dayCoverage = {
+				status: 'READY',
+				requestedDays: 2,
+				observedDays: 2,
+				firstDate: previousDate,
+				latestDate: selectedDate,
+				fromDate: previousDate,
+				toDate: selectedDate,
+				missingDates: [],
+				capturedAt: `${selectedDate}T09:40:00.000Z`,
+				complete: true,
+				stale: false
+			}
 			const ownershipChange = {
 				player: marketPlayer,
 				fromSelectedByPercent: 31.5,
 				toSelectedByPercent: 32.5,
 				changePercentagePoints: 1,
-				fromDate: '2026-08-02',
-				toDate: '2026-08-03'
+				fromDate: previousDate,
+				toDate: selectedDate
 			}
 			const marketOwnershipDay = {
 				period: 'DAILY',
-				date: '2026-08-03',
-				coverage,
+				date: selectedDate,
+				coverage: dayCoverage,
 				risers: [ownershipChange],
 				fallers: []
 			}
@@ -1268,26 +1293,26 @@ const server = createServer((request, response) => {
 				newPlayers: [],
 				priceChanges: []
 			}
-			const data = query.includes('GetMarketOwnershipDay')
-				? { marketOwnershipDay }
-				: query.includes('GetMarketOwnershipOverview')
-					? {
-							marketOwnershipOverview:
-								variables.period === 'GAMEWEEK'
-									? marketOwnershipGameweek
-									: variables.period === 'DAILY'
-										? marketOwnershipDailyOverview
-										: marketOwnershipRolling7d
-						}
-					: query.includes('GetHomeMarketPulse')
-						? { homeMarketPulse: pulse, marketOwnershipDay }
-						: query.includes('GetFixturePlanningSignals')
-							? {
-									marketPulse: pulse,
-									marketOwnershipGameweek,
-									marketOwnershipRolling7d
-								}
-							: { marketPulse: pulse }
+			const data =
+				query.includes('GetMarketOwnershipDay') ||
+				query.includes('GetHomeMarketOwnership')
+					? { marketOwnershipDay }
+					: query.includes('GetMarketOwnershipOverview')
+						? {
+								marketOwnershipOverview:
+									variables.period === 'GAMEWEEK'
+										? marketOwnershipGameweek
+										: variables.period === 'DAILY'
+											? marketOwnershipDailyOverview
+											: marketOwnershipRolling7d
+							}
+						: query.includes('GetHomeMarketPulse')
+							? { homeMarketPulse: pulse }
+							: query.includes('GetFixturePlanningOwnershipGameweek')
+								? { marketOwnershipOverview: marketOwnershipGameweek }
+								: query.includes('GetFixturePlanningOwnershipRolling7d')
+									? { marketOwnershipOverview: marketOwnershipRolling7d }
+									: { marketPulse: pulse }
 			json(response, 200, {
 				data: {
 					marketSnapshotContext: {

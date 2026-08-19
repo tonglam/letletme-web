@@ -299,14 +299,15 @@ export function collectMarketSignals(
 	const gameweekOwnership = pulse.gameweekOwnership
 	const rollingOwnership = pulse.rollingOwnership
 	const ownership =
+		gameweekOwnership &&
 		(gameweekOwnership.coverage.status === 'READY' ||
 			gameweekOwnership.coverage.status === 'PARTIAL') &&
 		(gameweekOwnership.risers.length > 0 ||
 			gameweekOwnership.fallers.length > 0)
 			? gameweekOwnership
 			: rollingOwnership
-	for (const m of ownership.risers ?? []) add(m.player, 'riser')
-	for (const m of ownership.fallers ?? []) add(m.player, 'faller')
+	for (const m of ownership?.risers ?? []) add(m.player, 'riser')
+	for (const m of ownership?.fallers ?? []) add(m.player, 'faller')
 	for (const m of pulse.transferMovers ?? []) add(m.player, 'transfer')
 
 	return Array.from(map.values())

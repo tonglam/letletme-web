@@ -154,7 +154,7 @@ export const GET_MARKET_PULSE_SUMMARY = /* GraphQL */ `
 	}
 `
 
-/** Compact market projection used by the fixture-planning page. */
+/** Compact market pulse projection used by the fixture-planning page. */
 export const GET_FIXTURE_PLANNING_SIGNALS = /* GraphQL */ `
 	query GetFixturePlanningSignals {
 		marketPulse {
@@ -167,76 +167,80 @@ export const GET_FIXTURE_PLANNING_SIGNALS = /* GraphQL */ `
 				}
 			}
 		}
-		marketOwnershipGameweek: marketOwnershipOverview(
-			period: GAMEWEEK
-			limit: 10
-		) {
-			period
-			gameweek {
-				id
-				name
-				deadlineTime
-			}
-			coverage {
-				status
-				requestedDays
-				observedDays
-				firstDate
-				latestDate
-				fromDate
-				toDate
-				missingDates
-				capturedAt
-				complete
-				stale
-			}
-			risers {
-				player {
-					...FixtureSignalPlayerFields
-				}
-				changePercentagePoints
-			}
-			fallers {
-				player {
-					...FixtureSignalPlayerFields
-				}
-				changePercentagePoints
-			}
-		}
-		marketOwnershipRolling7d: marketOwnershipOverview(
-			period: ROLLING_7D
-			limit: 10
-		) {
-			period
-			coverage {
-				status
-				requestedDays
-				observedDays
-				firstDate
-				latestDate
-				fromDate
-				toDate
-				missingDates
-				capturedAt
-				complete
-				stale
-			}
-			risers {
-				player {
-					...FixtureSignalPlayerFields
-				}
-				changePercentagePoints
-			}
-			fallers {
-				player {
-					...FixtureSignalPlayerFields
-				}
-				changePercentagePoints
-			}
-		}
 	}
 
 	fragment FixtureSignalPlayerFields on MarketPlayer {
+		playerId
+		webName
+		teamId
+		teamShortName
+		position
+		price
+		selectedByPercent
+	}
+`
+
+const FIXTURE_PLANNING_OWNERSHIP_FIELDS = /* GraphQL */ `
+	period
+	gameweek {
+		id
+		name
+		deadlineTime
+	}
+	coverage {
+		status
+		requestedDays
+		observedDays
+		firstDate
+		latestDate
+		fromDate
+		toDate
+		missingDates
+		capturedAt
+		complete
+		stale
+	}
+	risers {
+		player {
+			...FixtureOwnershipPlayerFields
+		}
+		changePercentagePoints
+	}
+	fallers {
+		player {
+			...FixtureOwnershipPlayerFields
+		}
+		changePercentagePoints
+	}
+`
+
+/** Ownership periods are separate requests so one unavailable period is isolated. */
+export const GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK = /* GraphQL */ `
+	query GetFixturePlanningOwnershipGameweek {
+		marketOwnershipOverview(period: GAMEWEEK, limit: 10) {
+			${FIXTURE_PLANNING_OWNERSHIP_FIELDS}
+		}
+	}
+
+	fragment FixtureOwnershipPlayerFields on MarketPlayer {
+		playerId
+		webName
+		teamId
+		teamShortName
+		position
+		price
+		selectedByPercent
+	}
+`
+
+export const GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D = /* GraphQL */ `
+	query GetFixturePlanningOwnershipRolling7d {
+		marketOwnershipOverview(period: ROLLING_7D, limit: 10) {
+			${FIXTURE_PLANNING_OWNERSHIP_FIELDS}
+		}
+	}
+
+	fragment FixtureOwnershipPlayerFields on MarketPlayer {
 		playerId
 		webName
 		teamId
@@ -608,8 +612,8 @@ export type FixtureSignalPlayer = Pick<
 export interface FixturePlanningMarketSignals {
 	mostSelected: FixtureSignalPlayer[]
 	transferMovers: Array<{ player: FixtureSignalPlayer }>
-	gameweekOwnership: MarketOwnershipOverview
-	rollingOwnership: MarketOwnershipOverview
+	gameweekOwnership: MarketOwnershipOverview | null
+	rollingOwnership: MarketOwnershipOverview | null
 }
 
 export interface FixturePlanningSignalsResponse {
@@ -617,6 +621,8 @@ export interface FixturePlanningSignalsResponse {
 		mostSelected: FixtureSignalPlayer[]
 		transferMovers: Array<{ player: FixtureSignalPlayer }>
 	} | null
-	marketOwnershipGameweek: MarketOwnershipOverview
-	marketOwnershipRolling7d: MarketOwnershipOverview
+}
+
+export interface FixturePlanningOwnershipResponse {
+	marketOwnershipOverview: MarketOwnershipOverview
 }

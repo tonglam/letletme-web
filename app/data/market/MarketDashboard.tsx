@@ -307,7 +307,7 @@ function OwnershipDateNav({
 }) {
 	if (dates.length === 0) return null
 	return (
-		<div
+		<nav
 			className="flex flex-wrap gap-2"
 			aria-label={t('ownershipDates')}
 		>
@@ -329,7 +329,7 @@ function OwnershipDateNav({
 					{formatCalendarDate(date, locale)}
 				</Link>
 			))}
-		</div>
+		</nav>
 	)
 }
 
