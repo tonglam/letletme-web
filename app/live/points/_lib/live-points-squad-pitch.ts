@@ -1,6 +1,33 @@
 import type { Player } from '@/types/player'
 import type { SquadPitchPlayer, SquadTeamCode } from '@/components/squad-pitch/SquadPitch'
 
+const SQUAD_TEAM_CODES: readonly SquadTeamCode[] = [
+	'ARS',
+	'AVL',
+	'BOU',
+	'BRE',
+	'BHA',
+	'CHE',
+	'COV',
+	'CRY',
+	'EVE',
+	'FUL',
+	'HUL',
+	'IPS',
+	'LEE',
+	'LIV',
+	'MCI',
+	'MUN',
+	'NEW',
+	'NFO',
+	'SUN',
+	'TOT',
+]
+
+function isSquadTeamCode(value: string): value is SquadTeamCode {
+	return (SQUAD_TEAM_CODES as readonly string[]).includes(value)
+}
+
 const TEAM_CODE_BY_ALIAS: Record<string, SquadTeamCode> = {
 	ARS: 'ARS',
 	ARSENAL: 'ARS',
@@ -54,8 +81,9 @@ function resolveTeamCode(player: Player): SquadTeamCode | null {
 		.filter(Boolean)
 
 	for (const alias of aliases) {
-		const teamCode = TEAM_CODE_BY_ALIAS[alias]
-		if (teamCode) return teamCode
+		const mapped = TEAM_CODE_BY_ALIAS[alias]
+		if (mapped) return mapped
+		if (isSquadTeamCode(alias)) return alias
 	}
 
 	return null
@@ -64,18 +92,20 @@ function resolveTeamCode(player: Player): SquadTeamCode | null {
 export function mapPlayersToSquadPitch(
 	players: readonly Player[]
 ): SquadPitchPlayer[] {
-	return players.flatMap(player => {
+	return players.map(player => {
 		const teamCode = resolveTeamCode(player)
-		if (!teamCode) return []
+		const teamLabel =
+			player.teamShort.trim().toUpperCase() || player.team.trim()
 
-		return [{
+		return {
 			id: player.id,
 			webName: player.name,
 			score: player.stats.points,
-			teamCode,
+			teamCode: teamCode ?? 'SUN',
+			fixture: teamCode ? undefined : teamLabel,
 			position: player.position,
 			isCaptain: player.isCaptain,
 			isViceCaptain: player.isViceCaptain,
-		}]
+		}
 	})
 }

@@ -63,7 +63,11 @@ export function LivePointsDashboard({
 	const locale = useLocale() as AppLocale
 	const autoRefreshEnabled = shouldAutoRefresh && isPageActive
 	const squadPitchPlayers = mapPlayersToSquadPitch(startingPlayers)
-	const formatOverallNumber = (
+	const formatOverallPoints = (
+		value: number | null,
+		options?: NumberFormatOptions
+	) => (value == null ? '—' : format.number(value, options))
+	const formatOverallRank = (
 		value: number | null,
 		options?: NumberFormatOptions
 	) => (value == null || value <= 0 ? '—' : format.number(value, options))
@@ -102,12 +106,12 @@ export function LivePointsDashboard({
 	const pitchHeaderStats = liveData
 		? {
 				eyebrow: showLiveOverallRank
-					? `${t('pitchTotalPoints')} ${formatOverallNumber(liveData.liveTotalPoints)} · ${t('pitchOverallRank')} ${formatOverallNumber(overall.overallRank, { notation: 'compact' })}`
-					: `${t('pitchTotalPoints')} ${formatOverallNumber(liveData.liveTotalPoints)}`,
+					? `${t('pitchTotalPoints')} ${formatOverallPoints(liveData.liveTotalPoints)} · ${t('pitchOverallRank')} ${formatOverallRank(overall.overallRank, { notation: 'compact' })}`
+					: `${t('pitchTotalPoints')} ${formatOverallPoints(liveData.liveTotalPoints)}`,
 				details: [
 					{
 						label: t('pitchGameweekPoints'),
-						value: formatOverallNumber(liveData.livePoints),
+						value: formatOverallPoints(liveData.livePoints),
 						accent: true
 					},
 					{
