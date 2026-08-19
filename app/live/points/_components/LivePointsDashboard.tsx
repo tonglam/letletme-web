@@ -96,23 +96,27 @@ export function LivePointsDashboard({
 		}
 		return chip ?? t('noActiveChips')
 	}
-	const pitchHeaderStats =
-		overall && liveData
-			? {
-					eyebrow: `${t('pitchTotalPoints')} ${formatOverallNumber(overall.overallPoints)} · ${t('pitchOverallRank')} ${formatOverallNumber(overall.overallRank, { notation: 'compact' })}`,
-					details: [
-						{
-							label: t('pitchGameweekPoints'),
-							value: formatOverallNumber(liveData.livePoints),
-							accent: true
-						},
-						{
-							label: t('pitchChip'),
-							value: formatPitchChip(liveData.chip)
-						}
-					]
-				}
-			: undefined
+	const gameweek = selectedGameweek ?? liveData.event ?? currentGameweek
+	const showLiveOverallRank =
+		overall != null && gameweek === currentGameweek
+	const pitchHeaderStats = liveData
+		? {
+				eyebrow: showLiveOverallRank
+					? `${t('pitchTotalPoints')} ${formatOverallNumber(liveData.liveTotalPoints)} · ${t('pitchOverallRank')} ${formatOverallNumber(overall.overallRank, { notation: 'compact' })}`
+					: `${t('pitchTotalPoints')} ${formatOverallNumber(liveData.liveTotalPoints)}`,
+				details: [
+					{
+						label: t('pitchGameweekPoints'),
+						value: formatOverallNumber(liveData.livePoints),
+						accent: true
+					},
+					{
+						label: t('pitchChip'),
+						value: formatPitchChip(liveData.chip)
+					}
+				]
+			}
+		: undefined
 	const [selectedPitchPlayer, setSelectedPitchPlayer] =
 		useState<PlayerDetail | null>(null)
 	const squadPitchRef = useRef<HTMLElement | null>(null)

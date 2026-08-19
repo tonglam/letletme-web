@@ -56,10 +56,11 @@ export default async function Page({ params, searchParams }: PageProps) {
 		requestedGameweekValue !== null &&
 		Number.isInteger(requestedGameweekValue) &&
 		requestedGameweekValue >= 1 &&
-		requestedGameweekValue <= 38
+		requestedGameweekValue <= currentEventId
 			? requestedGameweekValue
 			: null
 	const initialEventId = requestedGameweek ?? currentEventId
+	const seedCurrentOverall = initialEventId === currentEventId
 
 	let initialLiveData: LiveCalcData | undefined
 	let initialSnapshot: LiveSnapshotStatus | null = null
@@ -72,11 +73,13 @@ export default async function Page({ params, searchParams }: PageProps) {
 				{ eventId: initialEventId, entryId },
 				{ cache: 'no-store' },
 			),
-			executeServerQuery<EntrySummaryResponse>(
-				GET_ENTRY,
-				{ id: entryId },
-				{ cache: 'no-store' },
-			),
+			seedCurrentOverall
+				? executeServerQuery<EntrySummaryResponse>(
+						GET_ENTRY,
+						{ id: entryId },
+						{ cache: 'no-store' },
+					)
+				: Promise.resolve(null),
 		])
 
 		if (liveResult.status === 'fulfilled') {
@@ -86,7 +89,10 @@ export default async function Page({ params, searchParams }: PageProps) {
 			console.error('Failed to seed live points page:', liveResult.reason)
 		}
 
-		if (overallResult.status === 'fulfilled' && overallResult.value.entry) {
+		if (
+			overallResult.status === 'fulfilled' &&
+			overallResult.value?.entry
+		) {
 			const entry = overallResult.value.entry
 			initialOverall = {
 				overallPoints: entry.overallPoints,
