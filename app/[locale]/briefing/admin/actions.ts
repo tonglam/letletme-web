@@ -1,8 +1,7 @@
 'use server'
 
-import { randomUUID } from 'node:crypto'
-
 import { publishBriefingWeekEdition } from '@/lib/briefing-admin-server'
+import { briefingPublishIdempotencyKey } from '@/lib/briefing-revalidate'
 import { getCurrentSession } from '@/lib/session'
 
 type AdminRole = 'editor' | 'publisher'
@@ -43,6 +42,7 @@ export async function publishBriefingWeekEditionAction(formData: FormData) {
 	const revision = Number(required(formData, 'revision'))
 	if (!Number.isSafeInteger(revision) || revision <= 0)
 		throw new Error('revision is invalid')
+	const validUntilValue = formData.get('validUntil')
 	await publishBriefingWeekEdition(
 		editionId,
 		{
@@ -50,11 +50,15 @@ export async function publishBriefingWeekEditionAction(formData: FormData) {
 			publicationId: required(formData, 'publicationId'),
 			sourceCheckedAt: required(formData, 'sourceCheckedAt'),
 			publishedAt: required(formData, 'publishedAt'),
-			validUntil: (formData.get('validUntil') as string | null)?.trim() || null
+			validUntil:
+				typeof validUntilValue === 'string'
+					? validUntilValue.trim() || null
+					: null,
+			reason: required(formData, 'reason')
 		},
 		{
 			actorId,
-			idempotencyKey: `web:briefing:publish:${editionId}:${revision}:${randomUUID()}`
+			idempotencyKey: briefingPublishIdempotencyKey(editionId, revision)
 		}
 	)
 }

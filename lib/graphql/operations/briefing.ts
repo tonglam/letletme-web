@@ -64,13 +64,38 @@ export const GET_BRIEFING_STORY = `
 `
 
 export type BriefingLocaleVariable = 'EN' | 'ZH_CN'
-export type BriefingState =
+export type BriefingWeekState =
 	| 'READY'
 	| 'EMPTY'
 	| 'STALE'
 	| 'OFFSEASON'
 	| 'UNAVAILABLE'
+export type BriefingStoryState =
+	| 'READY'
+	| 'CORRECTED'
 	| 'REMOVED'
+	| 'UNAVAILABLE'
+export type BriefingState = BriefingWeekState | BriefingStoryState
+
+const BRIEFING_STATES = new Set<BriefingState>([
+	'READY',
+	'EMPTY',
+	'STALE',
+	'OFFSEASON',
+	'UNAVAILABLE',
+	'CORRECTED',
+	'REMOVED',
+])
+
+export function isBriefingState(value: string): value is BriefingState {
+	return BRIEFING_STATES.has(value as BriefingState)
+}
+
+export function isRenderableBriefingStoryState(
+	state: BriefingState
+): state is 'READY' | 'CORRECTED' {
+	return state === 'READY' || state === 'CORRECTED'
+}
 
 export type BriefingStoryCard = {
 	id: string
@@ -91,7 +116,7 @@ export type BriefingSection = {
 }
 
 export type BriefingWeek = {
-	state: BriefingState
+	state: BriefingWeekState
 	revision: number | null
 	publicationId: string | null
 	publishedAt: string | null
@@ -109,7 +134,7 @@ export type BriefingWeek = {
 
 export type BriefingStoryResponse = {
 	briefingStory: {
-		state: BriefingState
+		state: BriefingStoryState
 		canonicalSlug: string | null
 		story: BriefingStoryCard | null
 	} | null

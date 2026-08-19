@@ -70,6 +70,7 @@
 		"backToWeek": "Back to this week",
 		"storyEyebrow": "Briefing story",
 		"storyContext": "This is an editorial summary of the linked source. Open the original source for the full context and latest wording.",
+		"storyCorrectedNotice": "This story has been corrected. The text below is the current published version.",
 		"readyTitle": "The desk is ready",
 		"readyDescription": "The latest briefing is available.",
 		"emptyTitle": "No briefing stories yet",
@@ -81,7 +82,9 @@
 		"unavailableTitle": "Briefing temporarily unavailable",
 		"unavailableDescription": "The publication could not be verified. Please try again later.",
 		"removedTitle": "This story was withdrawn",
-		"removedDescription": "The source or rights status changed, so the previous text is no longer shown."
+		"removedDescription": "The source or rights status changed, so the previous text is no longer shown.",
+		"correctedTitle": "This story has been corrected",
+		"correctedDescription": "The previously published wording was updated after a source or editorial correction."
 	},
 	"Auth": {
 		"checkEmail": "Check your email",

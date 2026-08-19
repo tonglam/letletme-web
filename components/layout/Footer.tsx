@@ -33,7 +33,11 @@ export async function Footer() {
 				{/* Same groups/order/links as header menu (menuItems) */}
 				<nav
 					aria-label={t('navigation')}
-					className="grid grid-cols-2 gap-8 border-t border-fascia-foreground/10 pt-8 sm:grid-cols-4"
+					className={
+						menuItems.length >= 5
+							? 'grid grid-cols-2 gap-8 border-t border-fascia-foreground/10 pt-8 sm:grid-cols-5'
+							: 'grid grid-cols-2 gap-8 border-t border-fascia-foreground/10 pt-8 sm:grid-cols-4'
+					}
 				>
 					{menuItems.map(group => (
 						<div key={group.id}>

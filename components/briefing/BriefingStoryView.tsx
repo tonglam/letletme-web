@@ -2,25 +2,18 @@ import { ArrowLeft, Clock3, ExternalLink } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 import { Link } from '@/i18n/navigation'
 import type { AppLocale } from '@/i18n/routing'
-import type { BriefingStoryCard, BriefingStoryResponse } from '@/lib/graphql/operations/briefing'
+import { formatBriefingDate } from '@/lib/briefing-format'
+import {
+	isBriefingState,
+	isRenderableBriefingStoryState,
+	type BriefingStoryCard,
+	type BriefingStoryResponse,
+} from '@/lib/graphql/operations/briefing'
 import { BriefingStatePanel } from './BriefingStatePanel'
 
-const formatDate = (value: string | null, locale: AppLocale) => {
-	if (!value) return null
-	const timestamp = Date.parse(value)
-	if (!Number.isFinite(timestamp)) return null
-	return new Intl.DateTimeFormat(locale === 'zh-CN' ? 'zh-CN' : 'en-GB', {
-		day: 'numeric',
-		month: 'short',
-		year: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit',
-	}).format(timestamp)
-}
-
 function StoryMeta({ story, locale }: { story: BriefingStoryCard; locale: AppLocale }) {
-	const checkedAt = formatDate(story.sourceCheckedAt, locale)
-	const expiresAt = formatDate(story.expiresAt, locale)
+	const checkedAt = formatBriefingDate(story.sourceCheckedAt, locale, { year: 'numeric' })
+	const expiresAt = formatBriefingDate(story.expiresAt, locale, { year: 'numeric' })
 	return (
 		<div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-y py-3 text-xs text-muted-foreground">
 			{story.sourceName ? <span className="font-semibold text-foreground/80">{story.sourceName}</span> : null}
@@ -33,9 +26,12 @@ function StoryMeta({ story, locale }: { story: BriefingStoryCard; locale: AppLoc
 
 export async function BriefingStoryView({ result, locale }: { result: BriefingStoryResponse; locale: AppLocale }) {
 	const t = await getTranslations({ locale, namespace: 'Briefing' })
-	const state = result.briefingStory?.state ?? 'UNAVAILABLE'
+	const rawState = result.briefingStory?.state ?? 'UNAVAILABLE'
+	const state = isBriefingState(rawState) ? rawState : 'UNAVAILABLE'
 	const story = result.briefingStory?.story
-	if (state !== 'READY' || !story) return <BriefingStatePanel state={state} locale={locale} />
+	if (!isRenderableBriefingStoryState(state) || !story) {
+		return <BriefingStatePanel state={state} locale={locale} />
+	}
 
 	return (
 		<article className="mx-auto max-w-4xl">
@@ -49,6 +45,11 @@ export async function BriefingStoryView({ result, locale }: { result: BriefingSt
 				<p className="mt-5 max-w-3xl text-lg leading-8 text-muted-foreground">{story.summary}</p>
 				<StoryMeta story={story} locale={locale} />
 			</div>
+			{state === 'CORRECTED' ? (
+				<div className="mt-8 rounded-xl border border-electric/30 bg-electric/10 px-5 py-4 text-sm leading-7 text-foreground">
+					{t('storyCorrectedNotice')}
+				</div>
+			) : null}
 			<div className="mt-8 rounded-xl border-l-4 border-electric bg-muted/35 px-5 py-4 text-sm leading-7 text-muted-foreground">
 				{t('storyContext')}
 			</div>

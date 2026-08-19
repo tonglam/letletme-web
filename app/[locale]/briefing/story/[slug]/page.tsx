@@ -1,6 +1,7 @@
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
+import { localizePathname } from '@/i18n/routing'
 import { executePublicServerQuery } from '@/lib/graphql-server'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { isBriefingPublicEnabled } from '@/lib/briefing-public'
 import {
 	GET_BRIEFING_STORY,
@@ -14,10 +15,10 @@ export const dynamic = 'force-dynamic'
 type PageProps = { params: LocaleParams<{ slug: string }> }
 
 export async function generateMetadata({ params }: PageProps) {
-	const { locale } = await getPageLocale(params)
+	const { locale, slug } = await getPageLocale(params)
 	return getPageMetadata({
 		locale,
-		pathname: '/briefing/story',
+		pathname: `/briefing/story/${slug}`,
 		titleKey: 'briefingStoryTitle',
 		descriptionKey: 'briefingStoryDescription',
 	})
@@ -37,6 +38,11 @@ export default async function BriefingStoryPage({ params }: PageProps) {
 		)
 	} catch (error) {
 		console.error('[briefing/story] failed to load publication:', error)
+	}
+
+	const canonicalSlug = result.briefingStory?.canonicalSlug
+	if (canonicalSlug && canonicalSlug !== slug) {
+		permanentRedirect(localizePathname(`/briefing/story/${canonicalSlug}`, locale))
 	}
 
 	return <BriefingStoryView result={result} locale={locale} />

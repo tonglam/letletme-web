@@ -70,6 +70,7 @@
 		"backToWeek": "返回本周",
 		"storyEyebrow": "资讯文章",
 		"storyContext": "这里是对原始来源的编辑摘要。完整上下文和最新措辞请以原文为准。",
+		"storyCorrectedNotice": "这篇资讯已更正。下面是当前发布版本。",
 		"readyTitle": "编辑台已就绪",
 		"readyDescription": "最新一期资讯已经发布。",
 		"emptyTitle": "本周还没有资讯",
@@ -81,7 +82,9 @@
 		"unavailableTitle": "资讯暂时不可用",
 		"unavailableDescription": "暂时无法验证当前发布内容，请稍后再试。",
 		"removedTitle": "这篇资讯已撤下",
-		"removedDescription": "来源或权利状态发生变化，之前的正文不再展示。"
+		"removedDescription": "来源或权利状态发生变化，之前的正文不再展示。",
+		"correctedTitle": "这篇资讯已更正",
+		"correctedDescription": "此前发布的措辞已根据来源或编辑更正更新。"
 	},
 	"Auth": {
 		"checkEmail": "请查收邮件",

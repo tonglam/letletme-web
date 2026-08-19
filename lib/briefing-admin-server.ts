@@ -242,6 +242,7 @@ export function publishBriefingWeekEdition(
 		sourceCheckedAt: string
 		publishedAt: string
 		validUntil?: string | null
+		reason: string
 	},
 	options?: { idempotencyKey?: string; actorId?: string }
 ) {

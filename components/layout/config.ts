@@ -6,6 +6,7 @@ import {
 	Timer,
 	UserRound,
 } from 'lucide-react'
+import { isBriefingPublicEnabled } from '@/lib/briefing-public'
 
 interface MenuItem {
 	id: string
@@ -88,10 +89,6 @@ const allMenuItems: MenuItem[] = [
 	},
 ]
 
-const briefingPublicEnabled =
-	process.env.BRIEFING_PUBLIC_ENABLED === 'true' ||
-	(process.env.BRIEFING_PUBLIC_ENABLED == null && process.env.NODE_ENV !== 'production')
-
-export const menuItems: MenuItem[] = briefingPublicEnabled
+export const menuItems: MenuItem[] = isBriefingPublicEnabled()
 	? allMenuItems
 	: allMenuItems.filter(item => item.id !== 'briefing')

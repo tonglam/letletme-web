@@ -2,6 +2,7 @@ import { ArrowUpRight, CalendarDays, Clock3, ExternalLink } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 import { Link } from '@/i18n/navigation'
 import type { AppLocale } from '@/i18n/routing'
+import { formatBriefingDate } from '@/lib/briefing-format'
 import type {
 	BriefingSection,
 	BriefingStoryCard,
@@ -9,22 +10,8 @@ import type {
 } from '@/lib/graphql/operations/briefing'
 import { BriefingStatePanel } from './BriefingStatePanel'
 
-const dateFormatter = (locale: AppLocale) =>
-	new Intl.DateTimeFormat(locale === 'zh-CN' ? 'zh-CN' : 'en-GB', {
-		day: 'numeric',
-	month: 'short',
-	 hour: '2-digit',
-		minute: '2-digit',
-	})
-
-const formatDate = (value: string | null, locale: AppLocale) => {
-	if (!value) return null
-	const timestamp = Date.parse(value)
-	return Number.isFinite(timestamp) ? dateFormatter(locale).format(timestamp) : null
-}
-
 function StorySource({ story, locale }: { story: BriefingStoryCard; locale: AppLocale }) {
-	const checkedAt = formatDate(story.sourceCheckedAt, locale)
+	const checkedAt = formatBriefingDate(story.sourceCheckedAt, locale)
 	return (
 		<div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
 			{story.sourceName ? <span className="font-semibold text-foreground/80">{story.sourceName}</span> : null}
@@ -86,10 +73,10 @@ export async function BriefingWeekView({ week, locale }: { week: BriefingWeek; l
 	const t = await getTranslations({ locale, namespace: 'Briefing' })
 	if (week.state !== 'READY') return <BriefingStatePanel state={week.state} locale={locale} />
 
-	const lead = week.featured[0] ?? week.sections.flatMap(section => section.items)[0]
+	const lead = week.featured[0]
 	const supporting = week.featured.slice(1)
-	const publishedAt = formatDate(week.publishedAt, locale)
-	const deadline = formatDate(week.event?.deadlineTime ?? null, locale)
+	const publishedAt = formatBriefingDate(week.publishedAt, locale)
+	const deadline = formatBriefingDate(week.event?.deadlineTime ?? null, locale)
 
 	if (!lead && week.sections.length === 0) return <BriefingStatePanel state="EMPTY" locale={locale} />
 
@@ -121,7 +108,7 @@ export async function BriefingWeekView({ week, locale }: { week: BriefingWeek; l
 			</section>
 
 			<div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_19rem]">
-				<main className="space-y-8">
+				<div className="space-y-8">
 					{lead ? <StoryCard story={lead} locale={locale} lead /> : null}
 					{supporting.length > 0 ? (
 						<section aria-labelledby="briefing-featured-heading">
@@ -133,7 +120,7 @@ export async function BriefingWeekView({ week, locale }: { week: BriefingWeek; l
 						</section>
 					) : null}
 					{week.sections.map(section => <Section key={section.key} section={section} locale={locale} />)}
-				</main>
+				</div>
 
 				<aside className="space-y-4 xl:pt-1">
 					<div className="rounded-xl border bg-muted/35 p-4">

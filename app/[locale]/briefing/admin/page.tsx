@@ -32,7 +32,7 @@ export default async function BriefingAdminPage({ params }: PageProps) {
 	]
 
 	return (
-		<main className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6 lg:py-12">
+		<div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6 lg:py-12">
 			<header className="fascia pitch-markings texture-grain rounded-2xl border border-fascia-foreground/10 p-6 text-fascia-foreground sm:p-8">
 				<p className="chyron text-electric">Briefing control room</p>
 				<h1 className="mt-3 font-display text-4xl font-black uppercase tracking-tight sm:text-5xl">
@@ -85,7 +85,8 @@ export default async function BriefingAdminPage({ params }: PageProps) {
 							['publicationId', 'Publication UUID'],
 							['sourceCheckedAt', 'Source checked at (ISO)'],
 							['publishedAt', 'Publish time (ISO)'],
-							['validUntil', 'Valid until (ISO, optional)']
+							['validUntil', 'Valid until (ISO, optional)'],
+							['reason', 'Publication reason']
 						].map(([name, label]) => (
 							<label
 								key={name}
@@ -114,6 +115,6 @@ export default async function BriefingAdminPage({ params }: PageProps) {
 			<p className="text-xs text-muted-foreground">
 				Locale: {locale}. Public Week pages remain no-store in V1.
 			</p>
-		</main>
+		</div>
 	)
 }
