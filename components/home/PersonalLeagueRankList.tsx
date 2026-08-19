@@ -13,6 +13,8 @@ import { getTranslations } from 'next-intl/server'
 
 const HOME_LEAGUE_RANK_LIMIT = 6
 
+/** Rows come from homePersonalDesk already filtered to invitational leagues. */
+
 function MovementBadge({
 	direction,
 	places
