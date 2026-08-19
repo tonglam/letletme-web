@@ -216,9 +216,18 @@ export default function TrendsClient({
 
 	const shareText = useMemo(() => {
 		if (!committed) return ''
+
+		const sampleSize =
+			committed.sections.find(
+				section => section.evidenceContext.sampleSize != null
+			)?.evidenceContext.sampleSize ?? '?'
+		const cohortScope = committed.cohort.exact
+			? t('exactCompetition')
+			: t('sampledCohort', { count: sampleSize })
+
 		const lines = [
 			`# ${committed.cohort.displayName} · GW${committed.eventId}`,
-			committed.cohort.availability,
+			cohortScope,
 			''
 		]
 		for (const section of committed.sections) {

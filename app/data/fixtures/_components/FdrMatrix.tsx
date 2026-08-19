@@ -2,6 +2,7 @@
 
 import {
 	formatAvgFdr,
+	orderFdrTeamsForDisplay,
 	type TeamFdrRow,
 } from '@/lib/fixtures-fdr'
 import {
@@ -35,14 +36,7 @@ export function FdrMatrix({
 	focusedTeamId: number | null
 }) {
 	const t = useTranslations('Fixtures')
-	const ordered =
-		sort === 'easiest'
-			? teams
-			: [...teams].sort((a, b) => {
-				if (a.avgFdr == null && b.avgFdr != null) return 1
-				if (a.avgFdr != null && b.avgFdr == null) return -1
-				return (b.avgFdr ?? 0) - (a.avgFdr ?? 0)
-			})
+	const ordered = orderFdrTeamsForDisplay(teams, sort)
 
 	const eventIds = Array.from({ length: horizon }, (_, i) => fromGw + i).filter(
 		id => id >= 1 && id <= 38,

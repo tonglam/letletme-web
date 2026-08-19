@@ -23,6 +23,7 @@ import {
 	FDR_HORIZONS,
 	formatAvgFdr,
 	formatAvgFdrOutOfFive,
+	orderFdrTeamsForDisplay,
 	squadMatchKey,
 	type FdrHorizon,
 	type FdrReviewCandidate,
@@ -514,14 +515,7 @@ export default function FixturesClient({
 		[fixturesByEvent, fromGw, horizon, knownTeams, marketPulse, unknownEvents]
 	)
 	const shareText = useMemo(() => {
-		const orderedTeams =
-			sort === 'easiest'
-				? model.teams
-				: [...model.teams].sort((a, b) => {
-						if (a.avgFdr == null && b.avgFdr != null) return 1
-						if (a.avgFdr != null && b.avgFdr == null) return -1
-						return (b.avgFdr ?? 0) - (a.avgFdr ?? 0)
-					})
+		const orderedTeams = orderFdrTeamsForDisplay(model.teams, sort)
 		const origin =
 			typeof window !== 'undefined'
 				? window.location.origin

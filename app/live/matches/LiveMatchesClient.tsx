@@ -333,7 +333,8 @@ export function LiveMatchesClient({
 				? window.location.origin
 				: 'https://letletme.top'
 		const shareUrl = `${origin}${typeof window !== 'undefined' ? window.location.pathname : '/live/matches'}`
-		const labels = {
+		const footer = t('shareFooter', { url: shareUrl })
+		const matchLabels = {
 			liveMinute: (minute: number) => t('liveMinute', { minute }),
 			halfTime: t('halfTime'),
 			fullTime: t('fullTime'),
@@ -347,11 +348,11 @@ export function LiveMatchesClient({
 			saves: t('saves'),
 			yellowCards: t('yellowCards'),
 			redCards: t('redCards'),
-			footer: t('shareFooter', { url: shareUrl })
 		}
-		return activeMatches
-			.map(match => formatMatchShareText(match, labels))
+		const body = activeMatches
+			.map(match => formatMatchShareText(match, matchLabels))
 			.join('\n\n')
+		return body ? `${body}\n\n${footer}` : footer
 	}, [activeMatches, t])
 
 	const headerActions = (

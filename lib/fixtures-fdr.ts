@@ -439,6 +439,25 @@ export function formatAvgFdr(value: number | null): string {
 	return value == null ? '—' : value.toFixed(1)
 }
 
+export function orderFdrTeamsForDisplay(
+	teams: readonly TeamFdrRow[],
+	sort: 'easiest' | 'hardest',
+): TeamFdrRow[] {
+	if (sort === 'easiest') {
+		return [...teams].sort((a, b) => {
+			if (a.avgFdr == null && b.avgFdr != null) return 1
+			if (a.avgFdr != null && b.avgFdr == null) return -1
+			return (a.avgFdr ?? 99) - (b.avgFdr ?? 0)
+		})
+	}
+
+	return [...teams].sort((a, b) => {
+		if (a.avgFdr == null && b.avgFdr != null) return 1
+		if (a.avgFdr != null && b.avgFdr == null) return -1
+		return (b.avgFdr ?? 0) - (a.avgFdr ?? 0)
+	})
+}
+
 /** Average FDR with scale (official per-fixture difficulty is 1–5). */
 export function formatAvgFdrOutOfFive(value: number | null): string {
 	return value == null ? '—' : `${formatAvgFdr(value)}/5`
