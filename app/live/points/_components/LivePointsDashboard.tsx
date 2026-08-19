@@ -96,7 +96,7 @@ export function LivePointsDashboard({
 		}
 		return chip ?? t('noActiveChips')
 	}
-	const gameweek = selectedGameweek ?? liveData.event ?? currentGameweek
+	const gameweek = selectedGameweek ?? liveData?.event ?? currentGameweek
 	const showLiveOverallRank =
 		overall != null && gameweek === currentGameweek
 	const pitchHeaderStats = liveData
