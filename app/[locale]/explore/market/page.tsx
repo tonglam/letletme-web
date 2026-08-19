@@ -169,7 +169,9 @@ async function MarketContent({
 				requestedPeriod={period}
 				dailyDates={recentCalendarDates({
 					firstDate: ownership?.coverage.firstDate ?? null,
-					latestDate: ownership?.coverage.latestDate ?? latestDate,
+					// Keep the picker anchored to the current snapshot window even
+					// when ownership contains a user-selected historical day.
+					latestDate,
 					missingDates: ownership?.coverage.missingDates ?? []
 				})}
 				revision={revision}
