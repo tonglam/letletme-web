@@ -25,6 +25,8 @@ export function TournamentKnockoutPhaseCard({ knockoutFormat, plan }: { knockout
 
 				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
 					<TournamentPlanMetric label={t('knockoutTeams')} value={display(plan.knockoutTeamCount)} />
+					<TournamentPlanMetric label={t('bracketSlots')} value={display(plan.knockoutBracketSize)} />
+					<TournamentPlanMetric label={t('firstRoundByes')} value={display(plan.knockoutByeCount)} />
 					<TournamentPlanMetric label={t('startGameweek')} value={display(plan.knockoutStart > 0 ? t('gameweekShort', { gameweek: plan.knockoutStart }) : '—')} />
 					<TournamentPlanMetric label={t('endGameweek')} value={display(plan.knockoutEnd > 0 ? t('gameweekShort', { gameweek: plan.knockoutEnd }) : '—')} />
 					<TournamentPlanMetric label={t('rounds')} value={display(plan.knockoutRounds)} />
@@ -33,7 +35,6 @@ export function TournamentKnockoutPhaseCard({ knockoutFormat, plan }: { knockout
 				</div>
 
 				{knockoutFormat !== 'none' && plan.knockoutTeamCount < 2 ? <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertDescription>{t('knockoutMinimum')}</AlertDescription></Alert> : null}
-				{knockoutFormat !== 'none' && !plan.knockoutTeamCountIsPowerOfTwo ? <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertDescription>{t('knockoutPowerOfTwo')}</AlertDescription></Alert> : null}
 				{knockoutFormat !== 'none' && plan.knockoutEnd > 38 ? <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertDescription>{t('knockoutOverrun')}</AlertDescription></Alert> : null}
 			</div>
 		</Card>

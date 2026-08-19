@@ -5,7 +5,7 @@ import {
 	computeTournamentPlan,
 	getImportedTournamentName,
 	isCurrentLeaguePreviewRequest,
-	isPowerOfTwo,
+	nextPowerOfTwo,
 	tournamentFormSchema,
 	validateLeagueUrl,
 } from '../app/tournament/create/_lib/tournament-form'
@@ -98,20 +98,35 @@ describe('tournament creation model', () => {
 		}), true)
 	})
 
-	it('requires a power-of-two knockout field', () => {
-		assert.equal(isPowerOfTwo(2), true)
-		assert.equal(isPowerOfTwo(8), true)
-		assert.equal(isPowerOfTwo(6), false)
+	it('rounds a non-power-of-two knockout field up with first-round byes', () => {
+		assert.equal(nextPowerOfTwo(93), 128)
+
+		const plan = computeTournamentPlan(
+			{
+				groupFormat: 'none',
+				startGameweek: 'GW1',
+				endGameweek: 'GW38',
+				groupNum: '1',
+				qualifiersPerGroup: '',
+				knockoutFormat: 'single',
+			},
+			93,
+			true,
+		)
+
+		assert.equal(plan.knockoutBracketSize, 128)
+		assert.equal(plan.knockoutByeCount, 35)
+		assert.equal(plan.knockoutReady, true)
 	})
 
 	it('prevents a knockout plan that would overrun the season', () => {
 		const plan = computeTournamentPlan(
 			{
-				groupFormat: 'none',
+				groupFormat: 'points',
 				startGameweek: 'GW35',
 				endGameweek: 'GW38',
 				groupNum: '1',
-				qualifiersPerGroup: '',
+				qualifiersPerGroup: '16',
 				knockoutFormat: 'single',
 			},
 			16,
@@ -120,6 +135,24 @@ describe('tournament creation model', () => {
 		assert.equal(plan.groupReady, true)
 		assert.equal(plan.knockoutEnd > 38, true)
 		assert.equal(plan.knockoutReady, false)
+	})
+
+	it('starts a knockout-only tournament in its configured start gameweek', () => {
+		const plan = computeTournamentPlan(
+			{
+				groupFormat: 'none',
+				startGameweek: 'GW1',
+				endGameweek: 'GW5',
+				groupNum: '1',
+				qualifiersPerGroup: '',
+				knockoutFormat: 'single',
+			},
+			4,
+			true,
+		)
+
+		assert.equal(plan.knockoutStart, 1)
+		assert.equal(plan.knockoutEnd, 2)
 	})
 
 	it('accepts a valid no-knockout points race', () => {
