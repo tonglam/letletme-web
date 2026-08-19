@@ -63,6 +63,35 @@ export function takeAnonymousReportId(request: Request): {
 	return { id, setCookie: parts.join('; ') }
 }
 
+function bugReportPrincipal(identity: {
+	userId: string | null
+	anonymousId: string | null
+}): string | null {
+	return identity.userId
+		? `user:${identity.userId}`
+		: identity.anonymousId
+			? `anon:${identity.anonymousId}`
+			: null
+}
+
+function buildBugReportIngressSubject(
+	request: Request,
+	secret: string,
+	identity: { userId: string | null; anonymousId: string | null }
+): string {
+	if (resolveProviderClientIp(request.headers) !== 'unknown') {
+		return buildOpaqueRateLimitSubject(request.headers, secret)
+	}
+	const principal = bugReportPrincipal(identity)
+	if (!principal) {
+		throw new BugReportSubmitError(
+			'Too many reports just now. Please try again later.',
+			429
+		)
+	}
+	return createHmac('sha256', secret).update(`rate-limit:${principal}`).digest('hex')
+}
+
 async function consumeRateLimit(
 	secret: string,
 	scope: string,
@@ -84,15 +113,17 @@ async function consumeRateLimit(
 	}
 }
 
-export async function enforceBugReportIngressLimit(request: Request): Promise<void> {
+export async function enforceBugReportIngressLimit(
+	request: Request,
+	identity: { userId: string | null; anonymousId: string | null }
+): Promise<void> {
 	const secret = process.env.BACKEND_PROXY_SECRET
 	if (!secret) {
 		throw new BugReportSubmitError('Request safety checks are unavailable', 503)
 	}
-	if (resolveProviderClientIp(request.headers) === 'unknown') return
 	const result = await checkDatabaseRateLimit({
 		scope: 'bug-report-ip',
-		subject: buildOpaqueRateLimitSubject(request.headers, secret),
+		subject: buildBugReportIngressSubject(request, secret, identity),
 		limit: IP_REPORTS_PER_HOUR,
 		windowSeconds: RATE_WINDOW_SECONDS,
 	})
@@ -113,11 +144,7 @@ export async function enforceBugReportReporterLimit(identity: {
 	if (!secret) {
 		throw new BugReportSubmitError('Request safety checks are unavailable', 503)
 	}
-	const principal = identity.userId
-		? `user:${identity.userId}`
-		: identity.anonymousId
-			? `anon:${identity.anonymousId}`
-			: null
+	const principal = bugReportPrincipal(identity)
 	if (!principal) return
 	await consumeRateLimit(
 		secret,
@@ -131,7 +158,7 @@ export async function enforceBugReportRateLimit(
 	request: Request,
 	identity: { userId: string | null; anonymousId: string | null }
 ): Promise<void> {
-	await enforceBugReportIngressLimit(request)
+	await enforceBugReportIngressLimit(request, identity)
 	await enforceBugReportReporterLimit(identity)
 }
 

@@ -32,8 +32,6 @@ function optionalDeviceId(value: unknown): string | null {
 
 export async function POST(request: Request) {
 	try {
-		await enforceBugReportIngressLimit(request)
-
 		const token = getBearerToken(request.headers.get('authorization'))
 		let userId: string | null = null
 		let entryId: number | null = null
@@ -59,10 +57,9 @@ export async function POST(request: Request) {
 		if (!userId && !anonymousId) {
 			throw new MiniProgramAuthError('这次没法发，请重试', 400)
 		}
-		await enforceBugReportReporterLimit({
-			userId,
-			anonymousId,
-		})
+		const identity = { userId, anonymousId }
+		await enforceBugReportIngressLimit(request, identity)
+		await enforceBugReportReporterLimit(identity)
 
 		const result = await submitBugReportToData({
 			request,

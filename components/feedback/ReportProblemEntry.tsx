@@ -13,7 +13,7 @@ import {
 import { collectBrowserBugReportMeta } from '@/lib/bug-report-diagnostics'
 import { cn } from '@/lib/utils'
 import { useTranslations } from 'next-intl'
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 
 const BODY_MIN = 8
@@ -29,16 +29,24 @@ export function ReportProblemEntry({
 	children,
 	className,
 	triggerClassName,
+	onOpenChange,
 }: {
 	children?: ReactNode
 	className?: string
 	triggerClassName?: string
+	onOpenChange?: (open: boolean) => void
 }) {
 	const t = useTranslations('ReportProblem')
 	const [open, setOpen] = useState(false)
 	const [body, setBody] = useState('')
 	const [file, setFile] = useState<File | null>(null)
 	const [submitting, setSubmitting] = useState(false)
+	const fileInputRef = useRef<HTMLInputElement>(null)
+
+	const handleOpenChange = (nextOpen: boolean) => {
+		setOpen(nextOpen)
+		onOpenChange?.(nextOpen)
+	}
 
 	const handleSubmit = async () => {
 		if (body.trim().length < BODY_MIN) {
@@ -89,7 +97,8 @@ export function ReportProblemEntry({
 			toast.success(t('received', { id: result.publicId }))
 			setBody('')
 			setFile(null)
-			setOpen(false)
+			if (fileInputRef.current) fileInputRef.current.value = ''
+			handleOpenChange(false)
 		} catch {
 			toast.error(t('failed'))
 		} finally {
@@ -98,7 +107,7 @@ export function ReportProblemEntry({
 	}
 
 	return (
-		<Sheet open={open} onOpenChange={setOpen}>
+		<Sheet open={open} onOpenChange={handleOpenChange}>
 			<SheetTrigger asChild>
 				{children ?? (
 					<button type="button" className={cn(triggerClassName)}>
@@ -127,6 +136,7 @@ export function ReportProblemEntry({
 					<div className="space-y-2">
 						<Label htmlFor="bug-report-shot">{t('screenshotLabel')}</Label>
 						<input
+							ref={fileInputRef}
 							id="bug-report-shot"
 							type="file"
 							accept="image/jpeg,image/png,image/webp,image/gif"

@@ -32,6 +32,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 	const router = useRouter()
 	const t = useTranslations('Navigation')
 	const [signingOut, setSigningOut] = useState(false)
+	const [menuOpen, setMenuOpen] = useState(false)
 	const initials = (user.name ?? user.email).charAt(0).toUpperCase()
 	const verifiedEntryId = getVerifiedFplEntryId(user)
 	const accountName = user.name?.trim() || ''
@@ -56,7 +57,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 	}
 
 	return (
-		<DropdownMenu>
+		<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 			<DropdownMenuTrigger asChild>
 				<Button
 					variant="ghost"
@@ -179,7 +180,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 							{t('profileSettings')}
 						</Link>
 					</DropdownMenuItem>
-					<ReportProblemEntry>
+					<ReportProblemEntry onOpenChange={open => { if (open) setMenuOpen(false) }}>
 						<DropdownMenuItem
 							className="cursor-pointer"
 							onSelect={event => event.preventDefault()}
