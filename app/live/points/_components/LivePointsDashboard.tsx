@@ -145,7 +145,8 @@ export function LivePointsDashboard({
 		const shareUrl = new URL(
 			localizePathname(`/live/points/${entryId}`, locale),
 			origin
-		).toString()
+		)
+		shareUrl.searchParams.set('gw', String(gameweek))
 
 		return formatLivePointsShareText({
 			gameweek,
@@ -167,7 +168,7 @@ export function LivePointsDashboard({
 				pts: t('pointsAbbreviation'),
 				hits: t('shareHits'),
 				// Pass {url} into next-intl — bare t('shareFooter') throws FORMATTING_ERROR
-				footer: t('shareFooter', { url: shareUrl })
+				footer: t('shareFooter', { url: shareUrl.toString() })
 			}
 		})
 	}, [

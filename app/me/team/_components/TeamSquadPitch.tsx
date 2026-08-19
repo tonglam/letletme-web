@@ -9,6 +9,7 @@ import { ShareActions } from '@/components/share/ShareActions'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
 import { isSquadStarter } from '@/lib/squad-picks'
 import { resolveSquadTeamCode } from '@/lib/squad-pitch-team-codes'
+import { teamStatsGameweekHref } from '../_lib/team-stats-url'
 import type {
 	EventPickViewModel,
 	TeamStatsViewModel
@@ -201,7 +202,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 				? window.location.origin
 				: 'https://letletme.top'
 		const shareUrl = new URL(
-			localizePathname('/my-fpl/team', locale),
+			localizePathname(teamStatsGameweekHref(stats.eventId), locale),
 			origin
 		).toString()
 		const starters = players.map(player => {
