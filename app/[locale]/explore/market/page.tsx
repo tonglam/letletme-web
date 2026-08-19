@@ -99,6 +99,13 @@ async function MarketContent({
 				{ period, limit: 10 },
 				{ cache: 'no-store', timeoutMs: 2_000 }
 			)
+	const dailyOverviewPromise = date
+		? executePublicServerQuery<MarketOwnershipOverviewResponse>(
+				GET_MARKET_OWNERSHIP_OVERVIEW,
+				{ period: 'DAILY', limit: 10 },
+				{ cache: 'no-store', timeoutMs: 2_000 }
+			)
+		: null
 	const t = await translationPromise
 	let pulse: MarketPulse | null = null
 	let revision: string | null = null
@@ -106,12 +113,15 @@ async function MarketContent({
 		| MarketOwnershipOverviewResponse['marketOwnershipOverview']
 		| MarketOwnershipDayResponse['marketOwnershipDay']
 		| null = null
-	let latestDate: string | null = null
+	let dailyOverview:
+		MarketOwnershipOverviewResponse['marketOwnershipOverview'] | null = null
 
-	const [dataResult, ownershipResult] = await Promise.allSettled([
-		dataPromise,
-		ownershipPromise
-	])
+	const [dataResult, ownershipResult, dailyOverviewResult] =
+		await Promise.allSettled([
+			dataPromise,
+			ownershipPromise,
+			dailyOverviewPromise ?? Promise.resolve(null)
+		])
 	if (dataResult.status === 'fulfilled') {
 		pulse = { ...dataResult.value.marketPulse, availabilityUpdates: [] }
 		revision = dataResult.value.marketSnapshotContext.revision
@@ -128,32 +138,20 @@ async function MarketContent({
 		unstable_rethrow(ownershipResult.reason)
 		console.error('[market] ownership fetch failed:', ownershipResult.reason)
 	}
-	latestDate =
-		pulse?.coverage.latestDate ?? ownership?.coverage.latestDate ?? null
-
-	if (!pulse) {
-		return (
-			<>
-				<RouteReadyMarker
-					name="MARKET_CONTENT_READY"
-					audienceHint="public"
-					goodMs={1_000}
-					poorMs={1_500}
-				/>
-				<Alert
-					variant="destructive"
-					className="mb-6"
-					role="alert"
-				>
-					<AlertTitle>{t('dataUnavailable')}</AlertTitle>
-					<AlertDescription>{t('dataUnavailableDescription')}</AlertDescription>
-				</Alert>
-				<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-					<MarketPlayerLookupLauncher initialOpen />
-				</section>
-			</>
+	if (dailyOverviewResult.status === 'fulfilled') {
+		if (dailyOverviewResult.value) {
+			dailyOverview = dailyOverviewResult.value.marketOwnershipOverview
+		}
+	} else {
+		unstable_rethrow(dailyOverviewResult.reason)
+		console.error(
+			'[market] daily coverage fetch failed:',
+			dailyOverviewResult.reason
 		)
 	}
+	const dailyCoverage =
+		dailyOverview?.coverage ??
+		(!date && ownership?.period === 'DAILY' ? ownership.coverage : null)
 
 	return (
 		<>
@@ -163,20 +161,33 @@ async function MarketContent({
 				goodMs={1_000}
 				poorMs={1_500}
 			/>
+			{!pulse ? (
+				<Alert
+					variant="destructive"
+					className="mb-6"
+					role="alert"
+				>
+					<AlertTitle>{t('dataUnavailable')}</AlertTitle>
+					<AlertDescription>{t('dataUnavailableDescription')}</AlertDescription>
+				</Alert>
+			) : null}
 			<MarketDashboard
 				pulse={pulse}
 				ownership={ownership}
 				requestedPeriod={period}
 				dailyDates={recentCalendarDates({
-					firstDate: ownership?.coverage.firstDate ?? null,
-					// Keep the picker anchored to the current snapshot window even
-					// when ownership contains a user-selected historical day.
-					latestDate,
-					missingDates: ownership?.coverage.missingDates ?? []
+					firstDate: dailyCoverage?.firstDate ?? null,
+					latestDate: dailyCoverage?.latestDate ?? null,
+					missingDates: dailyCoverage?.missingDates ?? []
 				})}
 				revision={revision}
 				locale={locale}
 			/>
+			{!pulse ? (
+				<section className="mt-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+					<MarketPlayerLookupLauncher initialOpen />
+				</section>
+			) : null}
 		</>
 	)
 }

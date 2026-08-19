@@ -548,7 +548,7 @@ export async function MarketDashboard({
 	revision = null,
 	locale
 }: {
-	pulse: MarketPulse
+	pulse: MarketPulse | null
 	ownership: OwnershipResult | null
 	requestedPeriod: MarketOwnershipPeriod
 	dailyDates: string[]
@@ -556,35 +556,41 @@ export async function MarketDashboard({
 	locale: string
 }) {
 	const t: MarketT = await getTranslations('Market')
-	const priceChangeDate =
-		pulse.priceChanges
-			.map(c => c.changeDate)
-			.sort()
-			.at(-1) ??
-		pulse.coverage.latestDate ??
-		null
+	const priceChangeDate = pulse
+		? (pulse.priceChanges
+				.map(c => c.changeDate)
+				.sort()
+				.at(-1) ??
+			pulse.coverage.latestDate ??
+			null)
+		: null
 	const latestPriceChanges = priceChangeDate
-		? pulse.priceChanges.filter(change => change.changeDate === priceChangeDate)
+		? (pulse?.priceChanges ?? []).filter(
+				change => change.changeDate === priceChangeDate
+			)
 		: []
-	const viewPulse = { ...pulse, priceChanges: latestPriceChanges }
+	const viewPulse = pulse
+		? { ...pulse, priceChanges: latestPriceChanges }
+		: null
 
 	const hasMovers =
 		ownership !== null &&
 		(ownership.risers.length > 0 || ownership.fallers.length > 0)
-	const viewMode = getMarketViewMode(viewPulse, hasMovers)
+	const viewMode = pulse ? getMarketViewMode(pulse, hasMovers) : 'ownership-led'
 	const hasAvailabilityEvidence =
-		pulse.availabilityHighlights.length > 0 ||
-		(pulse.availabilityUpdateCount ?? pulse.availabilityUpdates.length) > 0 ||
-		pulse.newPlayers.length > 0
+		pulse !== null &&
+		(pulse.availabilityHighlights.length > 0 ||
+			(pulse.availabilityUpdateCount ?? pulse.availabilityUpdates.length) > 0 ||
+			pulse.newPlayers.length > 0)
 
-	const priceSection = (
+	const priceSection = pulse ? (
 		<MarketPriceExplorer
 			changes={latestPriceChanges}
 			changeDate={priceChangeDate}
 			locale={locale}
 			revision={revision}
 		/>
-	)
+	) : null
 	const ownershipSection = (
 		<section
 			aria-labelledby="market-ownership"
@@ -642,7 +648,7 @@ export async function MarketDashboard({
 						{t('mostSelectedTitle')}
 					</SectionTitle>
 					<MostSelectedColumn
-						players={pulse.mostSelected}
+						players={pulse?.mostSelected ?? []}
 						locale={locale}
 						t={t}
 					/>
@@ -651,7 +657,7 @@ export async function MarketDashboard({
 		</section>
 	)
 	const transferSection =
-		pulse.transferMovers.length > 0 ? (
+		pulse && pulse.transferMovers.length > 0 ? (
 			<section
 				aria-labelledby="market-transfers"
 				className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
@@ -688,19 +694,21 @@ export async function MarketDashboard({
 					</span>
 				</SectionTitle>
 				<MarketAvailabilityList
-					updates={pulse.availabilityHighlights}
+					updates={pulse?.availabilityHighlights ?? []}
 					locale={locale}
 					t={t}
 				/>
 				<MarketAvailabilityDisclosure
-					days={pulse.coverage.requestedDays}
+					days={pulse?.coverage.requestedDays ?? 0}
 					revision={revision}
 					count={
-						pulse.availabilityUpdateCount ?? pulse.availabilityUpdates.length
+						pulse?.availabilityUpdateCount ??
+						pulse?.availabilityUpdates.length ??
+						0
 					}
 				/>
 			</div>
-			{pulse.newPlayers.length > 0 ? (
+			{(pulse?.newPlayers.length ?? 0) > 0 ? (
 				<div>
 					<SectionTitle id="market-new-players">
 						<span className="inline-flex items-center gap-1.5">
@@ -721,12 +729,6 @@ export async function MarketDashboard({
 		</section>
 	) : null
 
-	const sectionById = {
-		prices: priceSection,
-		ownership: ownershipSection,
-		transfers: transferSection,
-		availability: availabilitySection
-	}
 	const order =
 		viewMode === 'price-led'
 			? (['prices', 'ownership', 'transfers', 'availability'] as const)
@@ -735,27 +737,37 @@ export async function MarketDashboard({
 				: viewMode === 'ownership-led'
 					? (['ownership', 'prices', 'transfers', 'availability'] as const)
 					: (['ownership', 'prices', 'availability', 'transfers'] as const)
+	const sectionById: Record<(typeof order)[number], ReactNode | null> = {
+		prices: priceSection,
+		ownership: ownershipSection,
+		transfers: transferSection,
+		availability: availabilitySection
+	}
 
 	return (
 		<div className="space-y-8">
-			<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-				<CoverageMeta
-					coverage={pulse.coverage}
-					locale={locale}
-					t={t}
-				/>
-				<p className="mt-3 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
-					{t(`viewMode.${viewMode}`)}
-				</p>
-			</section>
-			<GlanceStrip
-				pulse={viewPulse}
-				ownership={ownership}
-				locale={locale}
-				t={t}
-			/>
+			{pulse ? (
+				<>
+					<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+						<CoverageMeta
+							coverage={pulse.coverage}
+							locale={locale}
+							t={t}
+						/>
+						<p className="mt-3 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
+							{t(`viewMode.${viewMode}`)}
+						</p>
+					</section>
+					<GlanceStrip
+						pulse={viewPulse!}
+						ownership={ownership}
+						locale={locale}
+						t={t}
+					/>
+				</>
+			) : null}
 			{order.map(id => (
-				<div key={id}>{sectionById[id]}</div>
+				<section key={id}>{sectionById[id]}</section>
 			))}
 		</div>
 	)
