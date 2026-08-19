@@ -19,6 +19,16 @@ export async function GuestNavigationActions() {
 		<>
 			<div className="ml-6 hidden items-center gap-0.5 md:flex">
 				{menuItems.map(item => (
+					item.directHref ? (
+						<NavigationMenuLink
+							key={item.id}
+							href={item.directHref}
+							prefetch={false}
+							className="block rounded-md px-3 py-2 font-display text-xs font-semibold uppercase tracking-caps text-fascia-foreground/70 hover:bg-fascia-foreground/5 hover:text-fascia-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric"
+						>
+							{t(item.labelKey)}
+						</NavigationMenuLink>
+					) : (
 					<details
 						key={item.id}
 						data-navigation-group={item.id}
@@ -45,6 +55,7 @@ export async function GuestNavigationActions() {
 							))}
 						</div>
 					</details>
+					)
 				))}
 				<ReportProblemEntry triggerClassName="px-3 text-sm text-fascia-foreground/70 hover:text-fascia-foreground" />
 				<Button
@@ -72,6 +83,16 @@ export async function GuestNavigationActions() {
 				</summary>
 				<div className="absolute right-0 top-full z-50 mt-2 max-h-[calc(100svh-5rem)] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg">
 					{menuItems.map(item => (
+						item.directHref ? (
+							<NavigationMenuLink
+								key={item.id}
+								href={item.directHref}
+								prefetch={false}
+								className="block rounded-md px-2 py-3 text-sm font-semibold hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							>
+								{t(item.labelKey)}
+							</NavigationMenuLink>
+						) : (
 						<section key={item.id} className="border-b py-2 last:border-0">
 							<p className="px-2 py-1 font-display text-xs font-bold uppercase tracking-caps text-muted-foreground">
 								{t(item.labelKey)}
@@ -87,6 +108,7 @@ export async function GuestNavigationActions() {
 								</NavigationMenuLink>
 							))}
 						</section>
+						)
 					))}
 					<ReportProblemEntry triggerClassName="mt-2 flex min-h-11 items-center rounded-md px-2 text-sm font-medium hover:bg-accent" />
 					<NavigationMenuLink

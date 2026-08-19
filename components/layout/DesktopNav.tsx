@@ -24,6 +24,18 @@ export function DesktopNav({ user }: { user: NavigationUser | null }) {
 	return (
 		<div className="ml-6 hidden items-center gap-0.5 md:flex">
 			{menuItems.map(item => (
+				item.directHref ? (
+					<Button
+						key={item.id}
+						variant="ghost"
+						className="px-3 font-display text-xs font-semibold uppercase tracking-caps text-fascia-foreground/70 hover:bg-fascia-foreground/5 hover:text-fascia-foreground focus-visible:ring-electric"
+						asChild
+					>
+						<Link href={item.directHref} prefetch={false}>
+							{t(item.labelKey)}
+						</Link>
+					</Button>
+				) : (
 				<DropdownMenu key={item.id}>
 					<DropdownMenuTrigger asChild>
 						<Button
@@ -55,6 +67,7 @@ export function DesktopNav({ user }: { user: NavigationUser | null }) {
 						</DropdownMenuGroup>
 					</DropdownMenuContent>
 				</DropdownMenu>
+				)
 			))}
 
 			{user ? (
