@@ -6,6 +6,11 @@
 - **Product inputs:** [LetLetMe Product Conclusions](letletme-product-conclusions.md) and [LetLetMe Four-Section Product Specification](letletme-four-section-specification.md)
 - **Shared implementation contract:** [LetLetMe Cross-Section — High-Level Implementation Plan](letletme-cross-section-implementation-plan.md)
 
+> **Authentication decision update (19 August 2026):** This document's
+> season-bearing v2 authentication proposal is deferred. Runtime Web and
+> GraphQL authentication remain on the existing v1 binding fields and signed
+> envelope until a separate rollout is approved.
+
 ## 1. Scope
 
 This document does not redefine the Competitions product. It translates the approved Section 3 decisions into cross-repository implementation work.
