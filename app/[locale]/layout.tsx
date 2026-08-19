@@ -16,7 +16,6 @@ import {
 } from 'next-intl/server'
 import { Barlow, Barlow_Condensed, IBM_Plex_Mono } from 'next/font/google'
 import { notFound } from 'next/navigation'
-import Script from 'next/script'
 import { Suspense } from 'react'
 import '../globals.css'
 
@@ -115,12 +114,12 @@ export default async function LocaleLayout({
 			data-scroll-behavior="smooth"
 			suppressHydrationWarning
 		>
-			<head />
-			<Script
-				id="theme-bootstrap"
-				strategy="afterInteractive"
-				dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
-			/>
+			<head>
+				<script
+					id="theme-bootstrap"
+					dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
+				/>
+			</head>
 			<body className="min-h-svh bg-background font-sans text-foreground antialiased">
 				<NextIntlClientProvider messages={messages as IntlMessages}>
 					<ThemeProvider
