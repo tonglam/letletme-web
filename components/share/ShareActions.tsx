@@ -24,13 +24,15 @@ export function ShareActions({
 	imageRef,
 	title,
 	className,
-	compact = false
+	compact = false,
+	disabled = false
 }: {
 	text: ShareTextValue
 	imageRef?: RefObject<HTMLElement | null>
 	title?: string
 	className?: string
 	compact?: boolean
+	disabled?: boolean
 }) {
 	const t = useTranslations('Common')
 	const [textShared, setTextShared] = useState(false)
@@ -94,6 +96,7 @@ export function ShareActions({
 				size={compact ? 'icon' : 'sm'}
 				className={compact ? 'size-8' : 'gap-1.5'}
 				onClick={() => void handleTextShare()}
+				disabled={disabled}
 				aria-label={t('shareText')}
 				title={compact ? t('shareText') : undefined}
 			>
@@ -120,6 +123,7 @@ export function ShareActions({
 					size={compact ? 'icon' : 'sm'}
 					className={compact ? 'size-8' : 'gap-1.5'}
 					onClick={() => void handleImageShare()}
+					disabled={disabled}
 					aria-label={t('shareImage')}
 					title={compact ? t('shareImage') : undefined}
 				>

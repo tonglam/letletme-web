@@ -204,6 +204,7 @@ export function LivePointsDashboard({
 							imageRef={squadPitchRef}
 							title={liveData?.entryName ?? t('teamTitle')}
 							className="flex flex-wrap items-center gap-2 sm:gap-3"
+							disabled={!liveData || isLoading}
 						/>
 						<Button
 							size="sm"
