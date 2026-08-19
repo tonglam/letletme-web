@@ -1,3 +1,4 @@
+import { ReportProblemEntry } from '@/components/feedback/ReportProblemEntry'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
@@ -39,9 +40,10 @@ export async function generateMetadata({ params }: PageProps) {
 
 export default async function ProfilePage({ params }: PageProps) {
 	const timing = new RouteLoaderTiming('/profile')
-	const [pageLocale, t, session] = await Promise.all([
+	const [pageLocale, t, tReport, session] = await Promise.all([
 		getPageLocale(params),
 		getTranslations('Profile'),
+		getTranslations('ReportProblem'),
 		timing.measure('session', async () =>
 			getAuthorizationSession(await headers())
 		)
@@ -187,6 +189,18 @@ export default async function ProfilePage({ params }: PageProps) {
 									</Button>
 								</div>
 							</div>
+						</div>
+
+						<div className="surface-inset rounded-lg border p-4">
+							<h3 className="mb-3 font-medium">{tReport('title')}</h3>
+							<p className="mb-3 text-sm text-muted-foreground">
+								{tReport('description')}
+							</p>
+							<ReportProblemEntry>
+								<Button type="button" variant="outline" className="w-full">
+									{tReport('entry')}
+								</Button>
+							</ReportProblemEntry>
 						</div>
 					</div>
 				</Card>

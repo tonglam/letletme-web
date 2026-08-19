@@ -1,3 +1,4 @@
+import { ReportProblemEntry } from '@/components/feedback/ReportProblemEntry'
 import { Link } from '@/i18n/navigation'
 import { getTranslations } from 'next-intl/server'
 import { menuItems } from './config'
@@ -63,6 +64,7 @@ export async function Footer() {
 
 				<div className="mt-10 flex flex-col gap-2 border-t border-fascia-foreground/10 pt-6 text-sm text-fascia-foreground/50 sm:flex-row sm:items-center sm:justify-between">
 					<p>{t('rights', { year: currentYear })}</p>
+					<ReportProblemEntry triggerClassName="text-left text-sm text-fascia-foreground/60 underline-offset-4 hover:text-electric hover:underline" />
 					<p className="font-display text-xs font-semibold uppercase tracking-caps">
 						{t('builtFor')}
 					</p>

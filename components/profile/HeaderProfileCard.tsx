@@ -1,5 +1,6 @@
 'use client'
 
+import { ReportProblemEntry } from '@/components/feedback/ReportProblemEntry'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,7 +13,7 @@ import {
 import { Link, useRouter } from '@/i18n/navigation'
 import { signOut } from '@/lib/auth-client'
 import { getVerifiedFplEntryId } from '@/lib/fpl-binding-core'
-import { LogOut, Settings, Shirt, UserRound } from 'lucide-react'
+import { LogOut, MessageCircleWarning, Settings, Shirt, UserRound } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -31,6 +32,8 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 	const router = useRouter()
 	const t = useTranslations('Navigation')
 	const [signingOut, setSigningOut] = useState(false)
+	const [menuOpen, setMenuOpen] = useState(false)
+	const [reportOpen, setReportOpen] = useState(false)
 	const initials = (user.name ?? user.email).charAt(0).toUpperCase()
 	const verifiedEntryId = getVerifiedFplEntryId(user)
 	const accountName = user.name?.trim() || ''
@@ -55,7 +58,8 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 	}
 
 	return (
-		<DropdownMenu>
+		<>
+		<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 			<DropdownMenuTrigger asChild>
 				<Button
 					variant="ghost"
@@ -178,6 +182,17 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 							{t('profileSettings')}
 						</Link>
 					</DropdownMenuItem>
+					<DropdownMenuItem
+						className="cursor-pointer"
+						onSelect={event => {
+							event.preventDefault()
+							setMenuOpen(false)
+							setReportOpen(true)
+						}}
+					>
+						<MessageCircleWarning className="mr-2 h-4 w-4" />
+						{t('reportProblem')}
+					</DropdownMenuItem>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem
 						onClick={handleSignOut}
@@ -190,5 +205,7 @@ export function HeaderProfileCard({ user }: { user: NavigationUser }) {
 				</div>
 			</DropdownMenuContent>
 		</DropdownMenu>
+		<ReportProblemEntry open={reportOpen} onOpenChange={setReportOpen} />
+		</>
 	)
 }
