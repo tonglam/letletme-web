@@ -124,7 +124,7 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 					initialEntryTransfers={[]}
 					initialError={null}
 					initialRequestComplete
-					initialSeasonPhase="IN_SEASON"
+					initialSeasonPhase="SETTLED"
 				/>
 			</Suspense>
 		)

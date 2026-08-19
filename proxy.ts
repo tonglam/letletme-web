@@ -11,7 +11,6 @@ import { renderMaintenanceDocument } from '@/lib/maintenance-document'
 import { isMaintenanceDataApi, readMaintenanceConfig } from '@/lib/maintenance'
 import {
 	hasInvalidTournamentId,
-	isDevelopmentTeamMockRequest,
 	isProtectedApi,
 	isProtectedPage,
 	requiresVerifiedEntry
@@ -204,9 +203,7 @@ export async function proxy(req: NextRequest) {
 			maintenance.retryAfterSeconds
 		)
 	}
-	const protectedPage =
-		isProtectedPage(pathname) &&
-		!isDevelopmentTeamMockRequest(pathname, req.nextUrl.search)
+	const protectedPage = isProtectedPage(pathname)
 
 	if (!protectedPage) {
 		// A public route can still stream user-specific content. The cookie remains

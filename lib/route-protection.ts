@@ -29,17 +29,6 @@ export function isProtectedPage(pathname: string): boolean {
 	return PROTECTED_PAGE_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
 }
 
-/** Development-only visual preview for the protected My FPL Team surface. */
-export function isDevelopmentTeamMockRequest(
-	pathname: string,
-	search: string,
-): boolean {
-	if (process.env.NODE_ENV === 'production' || pathname !== '/my-fpl/team') {
-		return false
-	}
-	return new URLSearchParams(search).get('mock') === '1'
-}
-
 export function isProtectedApi(pathname: string): boolean {
 	return PROTECTED_API_PREFIXES.some(prefix => pathname.startsWith(prefix))
 }

@@ -125,14 +125,14 @@ function PlayerCard({
 			aria-label={
 				isInteractive ? `${player.webName}, ${player.score} points` : undefined
 			}
-			className={`relative flex ${compact ? 'w-[clamp(2.8rem,11.5cqi,6rem)]' : 'w-[clamp(3.25rem,14cqi,7.2rem)]'} list-none flex-col items-center transition-transform duration-200 motion-reduce:transition-none ${isInteractive ? 'cursor-pointer hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]' : ''}`}
+			className={`group relative flex ${compact ? 'w-[clamp(2.8rem,11.5cqi,6rem)]' : 'w-[clamp(3.25rem,14cqi,7.2rem)]'} list-none flex-col items-center transition-transform duration-200 motion-reduce:transition-none ${isInteractive ? 'cursor-pointer hover:-translate-y-1 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]' : ''}`}
 			onClick={isInteractive ? openPlayerDetail : undefined}
 			onKeyDown={isInteractive ? handleKeyDown : undefined}
 			role={isInteractive ? 'button' : undefined}
 			tabIndex={isInteractive ? 0 : undefined}
 		>
 			<div
-				className={`relative z-10 ${compact ? '-mb-[clamp(0.2rem,0.65cqi,0.36rem)] w-[86%]' : '-mb-[clamp(0.25rem,0.8cqi,0.45rem)] w-[90%]'} drop-shadow-[0_9px_8px_rgba(0,24,16,0.28)]`}
+				className={`relative z-10 transition-[filter,transform] duration-200 ${compact ? '-mb-[clamp(0.2rem,0.65cqi,0.36rem)] w-[86%]' : '-mb-[clamp(0.25rem,0.8cqi,0.45rem)] w-[90%]'} drop-shadow-[0_9px_8px_rgba(0,24,16,0.28)] ${isInteractive ? 'group-hover:-translate-y-0.5 group-hover:drop-shadow-[0_13px_11px_rgba(0,24,16,0.4)]' : ''}`}
 			>
 				<Image
 					src={`/images/squad-pitch/kits/${player.teamCode}.svg`}
@@ -210,14 +210,31 @@ function PositionRow({
 function BenchPlayerCard({
 	player,
 	label,
-	pointsLabel
+	pointsLabel,
+	onPlayerClick
 }: {
 	player: SquadPitchPlayer
 	label: string
 	pointsLabel: string
+	onPlayerClick?: (playerId: string) => void
 }) {
+	const isInteractive = Boolean(onPlayerClick)
+	const openPlayerDetail = () => onPlayerClick?.(player.id)
+	const handleKeyDown = (event: KeyboardEvent<HTMLLIElement>) => {
+		if (!isInteractive || (event.key !== 'Enter' && event.key !== ' ')) return
+		event.preventDefault()
+		openPlayerDetail()
+	}
+
 	return (
-		<li className="min-w-0 list-none">
+		<li
+			aria-label={isInteractive ? `${player.webName}, ${player.score} points` : undefined}
+			className={`min-w-0 list-none ${isInteractive ? 'cursor-pointer transition-transform duration-200 hover:-translate-y-0.5 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]' : ''}`}
+			onClick={isInteractive ? openPlayerDetail : undefined}
+			onKeyDown={isInteractive ? handleKeyDown : undefined}
+			role={isInteractive ? 'button' : undefined}
+			tabIndex={isInteractive ? 0 : undefined}
+		>
 			<div className="flex min-w-0 items-center gap-[clamp(0.2rem,0.8cqi,0.5rem)] rounded-[clamp(0.2rem,0.7cqi,0.4rem)] border border-white/80 bg-[#f8f6ef]/95 px-[clamp(0.2rem,0.8cqi,0.5rem)] py-[clamp(0.18rem,0.6cqi,0.38rem)] shadow-[0_5px_12px_rgba(0,37,23,0.2)]">
 				<Image
 					src={`/images/squad-pitch/kits/${player.teamCode}.svg`}
@@ -392,6 +409,7 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 										player={player}
 										label={label}
 										pointsLabel={benchPointsLabel}
+										onPlayerClick={onPlayerClick}
 									/>
 								)
 							})}

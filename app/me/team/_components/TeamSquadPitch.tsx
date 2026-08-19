@@ -5,12 +5,17 @@ import {
 	type SquadPitchPlayer,
 	type SquadTeamCode
 } from '@/components/squad-pitch/SquadPitch'
+import { PlayerDetailModal } from '@/components/live/PlayerDetailModal'
 import { ShareActions } from '@/components/share/ShareActions'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
 import { isSquadStarter } from '@/lib/squad-picks'
-import type { TeamStatsViewModel } from '../_lib/team-stats-model'
+import type {
+	EventPickViewModel,
+	TeamStatsViewModel
+} from '../_lib/team-stats-model'
+import type { PlayerDetail } from '@/types/player-detail'
 import { useFormatter, useLocale, useTranslations } from 'next-intl'
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 const TEAM_CODES: readonly SquadTeamCode[] = [
 	'ARS',
@@ -114,11 +119,44 @@ function benchFixtureLine(
 	return venue ? `${opponent} (${venue})` : opponent
 }
 
+function buildPlayerDetail(pick: EventPickViewModel): PlayerDetail {
+	return {
+		id: String(pick.position),
+		name: pick.webName,
+		team: pick.teamName,
+		teamShort: pick.teamShortName,
+		position: positionCode(pick.elementTypeName) ?? 'MID',
+		points: pick.totalPoints,
+		ownershipPercentage: null,
+		bps: pick.bps,
+		bonusPoints: pick.bonus,
+		playingStatus: pick.isPlayed ? 'FINISHED' : 'NOT_STARTED',
+		breakdownSource: 'provisional',
+		stats: {
+			minutes: pick.minutes,
+			goals: pick.goalsScored,
+			assists: pick.assists,
+			cleanSheets: pick.cleanSheets,
+			saves: pick.saves,
+			goalsConceded: pick.goalsConceded,
+			yellowCards: pick.yellowCards,
+			redCards: pick.redCards
+		},
+		pointsBreakdown: [
+			{
+				category: 'Total Points',
+				points: pick.totalPoints
+			}
+		]
+	}
+}
+
 export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 	const format = useFormatter()
 	const locale = useLocale() as AppLocale
 	const t = useTranslations('TeamStats')
 	const shareRef = useRef<HTMLDivElement | null>(null)
+	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDetail | null>(null)
 
 	const players = useMemo(
 		() =>
@@ -174,6 +212,11 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 			}),
 		[benchPicks]
 	)
+	const handlePitchPlayerClick = (playerId: string) => {
+		const position = playerId.replace(/^bench-/, '')
+		const pick = stats.eventPicks.find(item => String(item.position) === position)
+		if (pick) setSelectedPlayer(buildPlayerDetail(pick))
+	}
 	const shareText = useMemo(() => {
 		const origin =
 			typeof window !== 'undefined'
@@ -227,7 +270,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 				>
 					{t('startingEleven')}
 				</h2>
-				<span className="font-mono text-caption tabular-nums text-muted-foreground">
+				<span className="inline-flex items-center rounded-full border border-[#f8f6ef]/20 bg-[#38003c] px-2 py-1 font-mono text-[0.65rem] font-semibold uppercase tracking-[0.12em] tabular-nums text-[#f8f6ef] shadow-sm">
 					GW{stats.eventId}
 				</span>
 			</div>
@@ -240,6 +283,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 			</div>
 			<div ref={shareRef}>
 				<SquadPitch
+					onPlayerClick={handlePitchPlayerClick}
 					players={players}
 					benchPlayers={benchPlayers}
 					benchTitle={t('substitutes')}
@@ -264,6 +308,11 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 					}}
 				/>
 			</div>
+			<PlayerDetailModal
+				player={selectedPlayer}
+				isOpen={selectedPlayer !== null}
+				onClose={() => setSelectedPlayer(null)}
+			/>
 		</section>
 	)
 }

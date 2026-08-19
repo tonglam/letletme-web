@@ -9,7 +9,7 @@ import {
 } from '@/lib/share/clipboard'
 import { Check, ImageIcon, Share2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useCallback, useState, type RefObject } from 'react'
+import { useCallback, useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
 import { ShareTextFallback } from './ShareTextFallback'
 
@@ -36,6 +36,7 @@ export function ShareActions({
 	const [textShared, setTextShared] = useState(false)
 	const [imageShared, setImageShared] = useState(false)
 	const [manualShareText, setManualShareText] = useState<string | null>(null)
+	const imageShareInFlight = useRef(false)
 
 	const resolveText = useCallback(
 		() => (typeof text === 'function' ? text() : text),
@@ -68,16 +69,21 @@ export function ShareActions({
 
 	const handleImageShare = useCallback(async () => {
 		const element = imageRef?.current
-		if (!element) return
-		const value = resolveText()
-		const result = await shareElementImage(element, { title, text: value })
-		if (successResult(result)) {
-			setImageShared(true)
-			toast.success(t('shareImageCopied'))
-			window.setTimeout(() => setImageShared(false), 2000)
-			return
+		if (!element || imageShareInFlight.current) return
+		imageShareInFlight.current = true
+		try {
+			const value = resolveText()
+			const result = await shareElementImage(element, { title, text: value })
+			if (successResult(result)) {
+				setImageShared(true)
+				toast.success(t('shareImageCopied'))
+				window.setTimeout(() => setImageShared(false), 2000)
+				return
+			}
+			if (result === 'unsupported' || result === 'failed') reportFailure(result)
+		} finally {
+			imageShareInFlight.current = false
 		}
-		if (result === 'unsupported' || result === 'failed') reportFailure(result)
 	}, [imageRef, reportFailure, resolveText, t, title])
 
 	return (
