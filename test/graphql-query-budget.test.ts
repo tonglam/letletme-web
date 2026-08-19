@@ -16,6 +16,7 @@ import {
 } from '../lib/graphql/operations/players'
 import {
 	GET_HOME_GAMEWEEK,
+	GET_HOME_MARKET_OWNERSHIP,
 	GET_HOME_MARKET_PULSE,
 	GET_HOME_PERSONAL_DESK,
 	GET_HOME_PUBLIC_BOOTSTRAP
@@ -66,7 +67,8 @@ describe('GraphQL request budget', () => {
 		for (const [name, query, expectedRoots] of [
 			['GET_HOME_PUBLIC_BOOTSTRAP', GET_HOME_PUBLIC_BOOTSTRAP, 1],
 			['GET_HOME_PERSONAL_DESK', GET_HOME_PERSONAL_DESK, 1],
-			['GET_HOME_MARKET_PULSE', GET_HOME_MARKET_PULSE, 2],
+				['GET_HOME_MARKET_PULSE', GET_HOME_MARKET_PULSE, 1],
+				['GET_HOME_MARKET_OWNERSHIP', GET_HOME_MARKET_OWNERSHIP, 1],
 			['GET_HOME_GAMEWEEK', GET_HOME_GAMEWEEK, 1]
 		] as const) {
 			const document = parse(query)

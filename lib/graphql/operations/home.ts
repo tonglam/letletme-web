@@ -188,6 +188,23 @@ export const GET_HOME_MARKET_PULSE = /* GraphQL */ `
 				direction
 			}
 		}
+	}
+
+	fragment HomeMarketPlayerFields on MarketPlayer {
+		playerId
+		playerCode
+		webName
+		teamId
+		teamName
+		teamShortName
+		position
+		price
+		selectedByPercent
+	}
+`
+
+export const GET_HOME_MARKET_OWNERSHIP = /* GraphQL */ `
+	query GetHomeMarketOwnership {
 		marketOwnershipDay(limit: 5) {
 			period
 			date
@@ -371,5 +388,8 @@ export type HomeMarketPulse = {
 
 export type HomeMarketPulseResponse = {
 	homeMarketPulse: HomeMarketPulse
+}
+
+export type HomeMarketOwnershipResponse = {
 	marketOwnershipDay: MarketOwnershipDay
 }

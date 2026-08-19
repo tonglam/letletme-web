@@ -43,6 +43,10 @@ import {
 	GET_MARKET_OWNERSHIP_OVERVIEW
 } from '../lib/graphql/operations/market'
 import {
+	GET_HOME_MARKET_OWNERSHIP,
+	GET_HOME_MARKET_PULSE
+} from '../lib/graphql/operations/home'
+import {
 	GET_PLAYER_DETAIL,
 	GET_PLAYERS_FOR_PICKER,
 	SEARCH_PLAYERS_FOR_PICKER,
@@ -240,6 +244,15 @@ async function main() {
 			name: 'GET_MARKET_PULSE',
 			query: GET_MARKET_PULSE,
 			variables: { days: 7 }
+		},
+		{
+			name: 'GET_HOME_MARKET_PULSE',
+			query: GET_HOME_MARKET_PULSE,
+			variables: { days: 7 }
+		},
+		{
+			name: 'GET_HOME_MARKET_OWNERSHIP',
+			query: GET_HOME_MARKET_OWNERSHIP
 		},
 		{
 			name: 'GET_MARKET_OWNERSHIP_OVERVIEW',

@@ -13,11 +13,14 @@ import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	type MarketAvailabilityUpdate,
 	type MarketOwnershipChange,
+	type MarketOwnershipDay,
 	type MarketOwnershipCoverageStatus,
 	type MarketPlayer
 } from '@/lib/graphql/operations/market'
 import {
 	GET_HOME_MARKET_PULSE,
+	GET_HOME_MARKET_OWNERSHIP,
+	type HomeMarketOwnershipResponse,
 	type HomeMarketPulseResponse
 } from '@/lib/graphql/operations/home'
 import {
@@ -170,34 +173,54 @@ function AvailabilityTeaserList({
 
 export async function MarketTeaser() {
 	const t = await getTranslations('Market')
-	let response: HomeMarketPulseResponse
-
-	try {
-		response = await executePublicServerQuery<HomeMarketPulseResponse>(
+	const [pulseResult, ownershipResult] = await Promise.allSettled([
+		executePublicServerQuery<HomeMarketPulseResponse>(
 			GET_HOME_MARKET_PULSE,
 			{ days: 7 },
 			publicFetchOptions({
 				revalidate: RevalidateSeconds.market,
 				tags: [CacheTag.market]
 			})
+		),
+		executePublicServerQuery<HomeMarketOwnershipResponse>(
+			GET_HOME_MARKET_OWNERSHIP,
+			{},
+			publicFetchOptions({
+				revalidate: RevalidateSeconds.market,
+				tags: [CacheTag.market]
+			})
 		)
-	} catch (error) {
-		unstable_rethrow(error)
-		console.error('[market-teaser] RSC fetch failed:', error)
+	])
+
+	if (pulseResult.status === 'rejected') {
+		unstable_rethrow(pulseResult.reason)
+		console.error('[market-teaser] pulse fetch failed:', pulseResult.reason)
 		return null
 	}
 
-	const pulse = response.homeMarketPulse
-	const ownership = response.marketOwnershipDay
-	const ownershipReady = ownership.coverage.status === 'READY'
+	const pulse = pulseResult.value.homeMarketPulse
+	const ownership: MarketOwnershipDay | null =
+		ownershipResult.status === 'fulfilled'
+			? ownershipResult.value.marketOwnershipDay
+			: null
+	if (ownershipResult.status === 'rejected') {
+		unstable_rethrow(ownershipResult.reason)
+		console.error(
+			'[market-teaser] ownership fetch failed:',
+			ownershipResult.reason
+		)
+	}
+
+	const ownershipReady = ownership?.coverage.status === 'READY'
 	const ownershipCanRender =
-		ownershipReady || ownership.coverage.status === 'PARTIAL'
+		ownership !== null &&
+		(ownershipReady || ownership.coverage.status === 'PARTIAL')
 	const teaserMode = ownershipCanRender ? 'ownership' : 'empty'
 	// Keep rise / fall separate so the desk reads like a transfer board, not a mixed top-3.
-	const ownershipRisers = [...ownership.risers]
+	const ownershipRisers = [...(ownership?.risers ?? [])]
 		.sort((a, b) => b.changePercentagePoints - a.changePercentagePoints)
 		.slice(0, HOME_TEASER_LIMIT)
-	const ownershipFallers = [...ownership.fallers]
+	const ownershipFallers = [...(ownership?.fallers ?? [])]
 		.sort((a, b) => a.changePercentagePoints - b.changePercentagePoints)
 		.slice(0, HOME_TEASER_LIMIT)
 	const formatDelta = (value: number) =>
@@ -218,11 +241,13 @@ export async function MarketTeaser() {
 		NO_PREVIOUS_GAMEWEEK: t('ownershipStatus.NO_PREVIOUS_GAMEWEEK'),
 		NO_UPCOMING_GAMEWEEK: t('ownershipStatus.NO_UPCOMING_GAMEWEEK')
 	}
-	const coverageCopy = ownershipReady
-		? t('homeDailyCoverage', {
-				date: ownership.coverage.toDate ?? ownership.date ?? '—'
-			})
-		: ownershipStatusCopy[ownership.coverage.status]
+	const coverageCopy = ownership
+		? ownershipReady
+			? t('homeDailyCoverage', {
+					date: ownership.coverage.toDate ?? ownership.date ?? '—'
+				})
+			: ownershipStatusCopy[ownership.coverage.status]
+		: t('ownershipDataUnavailable')
 	const availabilityLabels = {
 		empty: t('noAvailabilityUpdates'),
 		status: (key: ReturnType<typeof marketAvailabilityStatusKey>) =>
@@ -368,14 +393,19 @@ export async function MarketTeaser() {
 						<CardContent className="grid gap-6 pt-6 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
 							<div>
 								<h3 className="mb-3 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
-									{ownershipStatusCopy[ownership.coverage.status]}
+									{ownership
+										? ownershipStatusCopy[ownership.coverage.status]
+										: t('ownershipDataUnavailable')}
 								</h3>
 								<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-									{ownership.coverage.status === 'BASELINE_MISSING'
-										? t('homeOwnershipBaselineMissingDescription', {
-												date: ownership.date ?? ownership.coverage.toDate ?? '—'
-											})
-										: t('homeEmptyDescription', { time: '09:25–09:35 UTC+8' })}
+									{ownership
+										? ownership.coverage.status === 'BASELINE_MISSING'
+											? t('homeOwnershipBaselineMissingDescription', {
+													date:
+														ownership.date ?? ownership.coverage.toDate ?? '—'
+												})
+											: t('homeEmptyDescription', { time: '09:25–09:35 UTC+8' })
+										: t('ownershipDataUnavailable')}
 								</p>
 							</div>
 							<div>
