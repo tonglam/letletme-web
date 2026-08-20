@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { bugReportStorageNonce } from '@/lib/db/schema/auth'
 
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
+const NONCE_RETENTION_MS = MAX_CLOCK_SKEW_MS * 2
 
 /** Reserve a verified nonce in the shared database for cross-instance replay protection. */
 export async function consumeBugReportStorageNonce(
@@ -18,9 +19,9 @@ export async function consumeBugReportStorageNonce(
 		.where(lte(bugReportStorageNonce.expiresAt, now))
 	const [inserted] = await db
 		.insert(bugReportStorageNonce)
-		.values({
+	.values({
 			nonce,
-			expiresAt: new Date(now.getTime() + MAX_CLOCK_SKEW_MS)
+			expiresAt: new Date(now.getTime() + NONCE_RETENTION_MS)
 		})
 		.onConflictDoNothing({ target: bugReportStorageNonce.nonce })
 		.returning({ nonce: bugReportStorageNonce.nonce })

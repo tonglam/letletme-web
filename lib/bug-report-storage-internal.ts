@@ -117,6 +117,8 @@ export async function deleteBugReportScreenshot(
 // newer fixed /delete and /migrate endpoints.
 export { consumeBugReportStorageNonce, verifyBugReportStorageSignature }
 
+export const BUG_REPORT_STORAGE_BODY_MAX_BYTES = 8 * 1024
+
 export async function deleteBugReportStorage(locator: string): Promise<void> {
 	await deleteBugReportScreenshot(locator)
 }

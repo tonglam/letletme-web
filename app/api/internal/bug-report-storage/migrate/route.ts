@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 
+import { PayloadTooLargeError, readBoundedText } from '@/lib/http-security-core'
 import {
+	BUG_REPORT_STORAGE_BODY_MAX_BYTES,
 	consumeBugReportStorageNonce,
 	migrateBugReportStorage,
 	verifyBugReportStorageSignature
@@ -9,7 +11,15 @@ import {
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
-	const body = await request.text()
+	let body: string
+	try {
+		body = await readBoundedText(request, BUG_REPORT_STORAGE_BODY_MAX_BYTES)
+	} catch (error) {
+		return NextResponse.json(
+			{ success: false, error: error instanceof PayloadTooLargeError ? 'Payload too large' : 'Invalid body' },
+			{ status: error instanceof PayloadTooLargeError ? 413 : 400 }
+		)
+	}
 	if (!verifyBugReportStorageSignature(request, body)) {
 		return NextResponse.json(
 			{ success: false, error: 'Unauthorized' },

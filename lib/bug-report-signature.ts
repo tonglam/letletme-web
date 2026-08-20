@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'crypto'
 
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
+const NONCE_RETENTION_MS = MAX_CLOCK_SKEW_MS * 2
 const nonceExpiry = new Map<string, number>()
 
 function rememberNonce(nonce: string, now: number): boolean {
@@ -8,7 +9,7 @@ function rememberNonce(nonce: string, now: number): boolean {
 		if (expires <= now) nonceExpiry.delete(key)
 	})
 	if (!nonce || nonce.length > 128 || nonceExpiry.has(nonce)) return false
-	nonceExpiry.set(nonce, now + MAX_CLOCK_SKEW_MS)
+	nonceExpiry.set(nonce, now + NONCE_RETENTION_MS)
 	return true
 }
 
@@ -38,7 +39,9 @@ export function verifyBugReportStorageSignature(
 	const expectedBodyHash = createHash('sha256').update(body).digest('hex')
 	if (!constantTimeHexEqual(bodyHash, expectedBodyHash)) return false
 	const expected = createHmac('sha256', secret)
-		.update(`${timestamp}.${nonce}.${bodyHash}`)
+		.update(
+			`${request.method.toUpperCase()}.${new URL(request.url).pathname}.${timestamp}.${nonce}.${bodyHash}`
+		)
 		.digest('hex')
 	if (!constantTimeHexEqual(provided, expected)) return false
 	return rememberNonce(nonce, now)

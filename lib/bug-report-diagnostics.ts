@@ -28,14 +28,35 @@ export function resetBugReportDiagnosticsForTests(): void {
 
 export function collectBrowserBugReportMeta(): Record<string, unknown> {
 	if (typeof window === 'undefined') return {}
+	const userAgent = navigator.userAgent
+	const platform = /android/i.test(userAgent)
+		? 'android'
+		: /iphone|ipad|ipod/i.test(userAgent)
+			? 'ios'
+			: /macintosh|mac os x/i.test(userAgent)
+				? 'macos'
+				: /windows/i.test(userAgent)
+					? 'windows'
+					: /linux/i.test(userAgent)
+						? 'linux'
+						: 'other'
+		const osMajorMatch = userAgent.match(
+			/(?:Android |OS |Windows NT |Mac OS X )([0-9]+)/i
+		)
+		const viewportBucket = (value: number): string =>
+			value < 480 ? 'small' : value < 1024 ? 'medium' : 'large'
 	return {
-		pathname: window.location.pathname,
-		hrefHost: window.location.host,
-		locale: document.documentElement.lang || null,
-		userAgent: navigator.userAgent,
-		timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+		route: window.location.pathname,
+		envVersion: 'web',
 		clientTime: new Date().toISOString(),
-		viewport: { width: window.innerWidth, height: window.innerHeight },
-		recentRequests: readBugReportDiagnostics(),
+		platform,
+		...(osMajorMatch ? { osMajor: Number(osMajorMatch[1]) } : {}),
+		language: (document.documentElement.lang || navigator.language || '').slice(0, 32),
+		viewportBucket: `${viewportBucket(window.innerWidth)}x${viewportBucket(window.innerHeight)}`,
+		operations: readBugReportDiagnostics().map(({ requestId, message, operation }) => ({
+			...(operation ? { operation } : {}),
+			...(requestId ? { requestId } : {}),
+			...(message ? { message } : {})
+		})),
 	}
 }

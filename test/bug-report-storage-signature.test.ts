@@ -18,11 +18,14 @@ describe('bug report storage signatures', () => {
 			const nonce = randomUUID()
 			const bodyHash = createHash('sha256').update(body).digest('hex')
 			const signature = createHmac('sha256', 'test-secret')
-				.update(`${timestamp}.${nonce}.${bodyHash}`)
+				.update(
+					`POST./api/internal/bug-report-storage/delete.${timestamp}.${nonce}.${bodyHash}`
+				)
 				.digest('hex')
 			const request = new Request(
 				'https://example.test/api/internal/bug-report-storage/delete',
 				{
+					method: 'POST',
 					headers: {
 						'x-bug-report-timestamp': timestamp,
 						'x-bug-report-nonce': nonce,
@@ -34,6 +37,25 @@ describe('bug report storage signatures', () => {
 			assert.equal(verifyBugReportStorageSignature(request, body), true)
 			assert.equal(verifyBugReportStorageSignature(request, body), false)
 			assert.equal(verifyBugReportStorageSignature(request, `${body} `), false)
+
+			const crossRouteNonce = randomUUID()
+			const crossRouteSignature = createHmac('sha256', 'test-secret')
+				.update(
+					`POST./api/internal/bug-report-storage/delete.${timestamp}.${crossRouteNonce}.${bodyHash}`
+				)
+				.digest('hex')
+			const crossRouteRequest = new Request(
+				'https://example.test/api/internal/bug-report-storage/migrate',
+				{
+					headers: {
+						'x-bug-report-timestamp': timestamp,
+						'x-bug-report-nonce': crossRouteNonce,
+						'x-bug-report-body-sha256': bodyHash,
+						'x-bug-report-signature': crossRouteSignature
+					}
+				}
+			)
+			assert.equal(verifyBugReportStorageSignature(crossRouteRequest, body), false)
 		} finally {
 			if (previous === undefined) delete process.env.BUG_REPORT_CLEANUP_SECRET
 			else process.env.BUG_REPORT_CLEANUP_SECRET = previous
