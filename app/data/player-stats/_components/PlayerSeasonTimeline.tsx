@@ -32,6 +32,15 @@ const SIGNAL_LABEL_KEYS: Record<PlayerSeasonSignalCode, string> = {
 	OFFICIAL_SAVES_PER_90: 'timeline.signal.savesPer90'
 }
 
+function timelineGridClass(isCompare: boolean): string {
+	return cn(
+		'grid',
+		isCompare
+			? 'grid-cols-[minmax(4.75rem,0.72fr)_repeat(2,minmax(0,1fr))]'
+			: 'grid-cols-[minmax(5.25rem,0.8fr)_minmax(0,1fr)]'
+	)
+}
+
 function positionCode(player: PlayerDetailData): string {
 	const fromName = normalizePosition(player.elementTypeName)
 	return fromName !== 'UNK'
@@ -452,32 +461,45 @@ export function PlayerSeasonTimeline({
 			</div>
 			<div className="overflow-hidden rounded-xl border border-border/70 bg-card/40">
 				<div
-					className={cn(
-						'grid',
-						isCompare
-							? 'grid-cols-[minmax(4.75rem,0.72fr)_repeat(2,minmax(0,1fr))]'
-							: 'grid-cols-[minmax(5.25rem,0.8fr)_minmax(0,1fr)]'
-					)}
+					role="table"
+					aria-label={t('timelineTitle')}
 				>
-					<div className="border-b border-border/60 bg-muted/20 px-2 py-3 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground sm:px-3">
-						{t('season')}
-					</div>
-					<div className="border-b border-l border-border/60">
-						<PlayerHeader
-							player={player}
-							profile={profile}
-							anchorGw={anchorGw}
-						/>
-					</div>
-					{comparison ? (
-						<div className="border-b border-l border-border/60">
+					<div
+						role="row"
+						className={timelineGridClass(isCompare)}
+					>
+						<div
+							role="columnheader"
+							id="ps-history-season-header"
+							className="border-b border-border/60 bg-muted/20 px-2 py-3 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground sm:px-3"
+						>
+							{t('season')}
+						</div>
+						<div
+							role="columnheader"
+							id={`ps-history-player-${player.id}`}
+							className="border-b border-l border-border/60"
+						>
 							<PlayerHeader
-								player={comparison}
-								profile={comparisonProfile}
+								player={player}
+								profile={profile}
 								anchorGw={anchorGw}
 							/>
 						</div>
-					) : null}
+						{comparison ? (
+							<div
+								role="columnheader"
+								id={`ps-history-player-${comparison.id}`}
+								className="border-b border-l border-border/60"
+							>
+								<PlayerHeader
+									player={comparison}
+									profile={comparisonProfile}
+									anchorGw={anchorGw}
+								/>
+							</div>
+						) : null}
+					</div>
 
 					{seasons.map(season => {
 						const first = pointForSeason(profile, season)
@@ -496,6 +518,11 @@ export function PlayerSeasonTimeline({
 								first={first}
 								second={second}
 								maxPoints={maxPoints}
+								isCompare={isCompare}
+								playerColumnId={`ps-history-player-${player.id}`}
+								comparisonColumnId={
+									comparison ? `ps-history-player-${comparison.id}` : null
+								}
 							/>
 						)
 					})}
@@ -515,7 +542,10 @@ function FragmentRow({
 	comparisonProfile,
 	first,
 	second,
-	maxPoints
+	maxPoints,
+	isCompare,
+	playerColumnId,
+	comparisonColumnId
 }: {
 	season: string
 	phase: PlayerSeasonTimelinePoint['phase']
@@ -527,11 +557,22 @@ function FragmentRow({
 	first: PlayerSeasonTimelinePoint | null
 	second: PlayerSeasonTimelinePoint | null
 	maxPoints: number
+	isCompare: boolean
+	playerColumnId: string
+	comparisonColumnId: string | null
 }) {
 	const t = useTranslations('PlayerStats')
+	const seasonId = `ps-history-season-${season}`
 	return (
-		<>
-			<div className="border-t border-border/60 bg-muted/10 px-2 py-3 sm:px-3">
+		<div
+			role="row"
+			className={timelineGridClass(isCompare)}
+		>
+			<div
+				role="rowheader"
+				id={seasonId}
+				className="border-t border-border/60 bg-muted/10 px-2 py-3 sm:px-3"
+			>
 				<div className="font-display text-xs font-bold tabular-nums">
 					{seasonLabel(season)}
 				</div>
@@ -543,7 +584,11 @@ function FragmentRow({
 							: t('timeline.activeSeason')}
 				</div>
 			</div>
-			<div className="border-l border-t border-border/60">
+			<div
+				role="cell"
+				aria-labelledby={`${seasonId} ${playerColumnId}`}
+				className="border-l border-t border-border/60"
+			>
 				<TimelineCell
 					profile={profile}
 					point={first}
@@ -554,7 +599,11 @@ function FragmentRow({
 				/>
 			</div>
 			{comparison ? (
-				<div className="border-l border-t border-border/60">
+				<div
+					role="cell"
+					aria-labelledby={`${seasonId} ${comparisonColumnId ?? ''}`.trim()}
+					className="border-l border-t border-border/60"
+				>
 					<TimelineCell
 						profile={comparisonProfile}
 						point={second}
@@ -565,6 +614,6 @@ function FragmentRow({
 					/>
 				</div>
 			) : null}
-		</>
+		</div>
 	)
 }
