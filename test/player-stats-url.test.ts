@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
 	buildPlayerStatsQueryString,
+	isPlayerStatsSupportingSection,
 	parsePlayerStatsPlayerId,
 	playerStatsSectionFromHash
 } from '../app/data/player-stats/_lib/player-stats-url'
@@ -38,5 +39,12 @@ describe('player stats URL contract', () => {
 		assert.equal(playerStatsSectionFromHash('#ps-history'), 'history')
 		assert.equal(playerStatsSectionFromHash('#ps-market'), 'market')
 		assert.equal(playerStatsSectionFromHash('#ps-coverage'), 'coverage')
+	})
+
+	it('keeps supporting-data sections reachable during preseason', () => {
+		assert.equal(isPlayerStatsSupportingSection('history'), true)
+		assert.equal(isPlayerStatsSupportingSection('market'), true)
+		assert.equal(isPlayerStatsSupportingSection('coverage'), true)
+		assert.equal(isPlayerStatsSupportingSection('process'), false)
 	})
 })
