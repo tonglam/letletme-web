@@ -70,10 +70,9 @@ describe('player stats desk contract', () => {
 			const document = parse(query)
 			let nodes = 0
 			visit(document, { enter: () => void (nodes += 1) })
-			const limit = section === 'overview' ? 240 : 200
 			assert.ok(
-				nodes <= limit,
-				`${section} desk query has ${nodes} AST nodes (limit ${limit})`
+				nodes < 200,
+				`${section} desk query has ${nodes} AST nodes (production limit 200)`
 			)
 		}
 	})

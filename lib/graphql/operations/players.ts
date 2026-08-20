@@ -124,18 +124,18 @@ export type PlayerStatsScope =
 export interface PlayerStatsContext {
 	scope: PlayerStatsScope
 	season: string
-	asOfEventId: number | null
+	asOfEventId?: number | null
 }
 
 export interface PlayerAvailability {
 	status: string
 	news: string
-	newsAdded: string | null
+	newsAdded?: string | null
 	observedDate: string
-	capturedAt: string
+	capturedAt?: string | null
 	chanceOfPlayingThisRound: number | null
 	chanceOfPlayingNextRound: number | null
-	stale: boolean
+	stale?: boolean
 }
 
 export interface PlayerRecentOpponent {
@@ -164,8 +164,8 @@ export interface PlayerDetailFixture {
 	againstTeamShortName: string
 	wasHome: boolean
 	finished: boolean
-	kickoffTime: string | null
-	score: string | null
+	kickoffTime?: string | null
+	score?: string | null
 	difficulty: number
 	bgw: boolean
 }
@@ -177,12 +177,12 @@ export interface PlayerDetailData {
 	elementType: number
 	elementTypeName: string
 	price: number
-	startPrice: number
+	startPrice?: number | null
 	statsContext: PlayerStatsContext
 	availability: PlayerAvailability | null
-	totalPoints: number | null
+	totalPoints?: number | null
 	selectedByPercent?: number | null
-	form: number | null
+	form?: number | null
 	seasonTransfersIn: number | null
 	seasonTransfersOut: number | null
 	transfersInEvent: number | null
@@ -607,16 +607,16 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
         playerId
         overview {
           status
-          value {
-            id webName teamShortName elementType elementTypeName
-            price startPrice
-            statsContext { scope season asOfEventId }
-            availability {
-              status news newsAdded observedDate capturedAt
-              chanceOfPlayingThisRound chanceOfPlayingNextRound stale
-            }
-            totalPoints selectedByPercent form transfersInEvent transfersOutEvent
-            fixtures { id event againstTeamShortName wasHome finished kickoffTime score difficulty bgw }
+		value {
+			id webName teamShortName elementType elementTypeName
+			price
+			statsContext { scope season }
+			availability {
+				status news observedDate
+				chanceOfPlayingThisRound chanceOfPlayingNextRound
+			}
+			selectedByPercent transfersInEvent transfersOutEvent
+			fixtures { id event againstTeamShortName wasHome finished difficulty bgw }
           }
         }
         state {
@@ -626,11 +626,10 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
             trend confidence providerMode
             reasons { code }
             profileRadar {
-              position season asOfEventId
               axes { code value percentile unit available }
             }
             dimensions {
-              kind rating direction confidence reasonCodes
+              kind rating direction reasonCodes
             }
             seasonTimeline {
               season phase position fplTotalPoints

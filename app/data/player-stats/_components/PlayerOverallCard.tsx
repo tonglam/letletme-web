@@ -41,7 +41,10 @@ export function StickyPlayerIdentity({
 	comparison: PlayerDetailData | null
 }) {
 	const t = useTranslations('PlayerStats')
-	const priceDiff = formatPriceDiff(player.price, player.startPrice)
+	const priceDiff =
+		player.startPrice == null
+			? null
+			: formatPriceDiff(player.price, player.startPrice)
 
 	return (
 		<div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
@@ -53,7 +56,7 @@ export function StickyPlayerIdentity({
 				{formatPrice(player.price)}
 				{priceDiff ? (
 					<DeltaBadge
-						value={player.price - player.startPrice}
+						value={player.price - (player.startPrice ?? player.price)}
 						showArrow={false}
 						format={() => priceDiff}
 						size="sm"

@@ -651,14 +651,19 @@ export function PlayerStatsView({
 	const applyHashSection = useCallback(() => {
 		if (!player) return
 		const requestedSection = playerStatsSectionFromHash(window.location.hash)
+		// History is a scroll anchor for the Overall ledger, not an evidence
+		// tab. Keep a supported evidence tab selected while the hash still
+		// lands on #ps-history.
+		const requestedEvidenceSection =
+			requestedSection === 'history' ? 'fixtures' : requestedSection
 		const shouldFallbackToFixtures =
 			!hasSeasonStats &&
-			requestedSection != null &&
-			requestedSection !== 'fixtures' &&
-			!isPlayerStatsSupportingSection(requestedSection)
+			requestedEvidenceSection != null &&
+			requestedEvidenceSection !== 'fixtures' &&
+			!isPlayerStatsSupportingSection(requestedEvidenceSection)
 		const section = shouldFallbackToFixtures
 			? 'fixtures'
-			: (requestedSection ?? 'fixtures')
+			: (requestedEvidenceSection ?? 'fixtures')
 		startTransition(() => {
 			setActiveSection(section)
 			setContextOpen(section === 'market' || section === 'coverage')
@@ -705,8 +710,9 @@ export function PlayerStatsView({
 	])
 
 	const handleSectionJump = useCallback((section: PlayerStatsSectionId) => {
-		setActiveSection(section)
-		if (section === 'market' || section === 'coverage') {
+		const evidenceSection = section === 'history' ? 'fixtures' : section
+		setActiveSection(evidenceSection)
+		if (evidenceSection === 'market' || evidenceSection === 'coverage') {
 			setContextOpen(true)
 		}
 		scrollToPlayerStatsSection(section)

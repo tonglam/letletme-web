@@ -145,6 +145,7 @@ function PlayerHeader({
 		observed && !Number.isNaN(observed.getTime())
 			? format.dateTime(observed, { dateStyle: 'medium', timeZone: 'UTC' })
 			: availability?.observedDate
+	const availabilityNews = availability?.news?.trim() ?? ''
 	const providerMode = profile?.providerMode
 
 	return (
@@ -189,6 +190,20 @@ function PlayerHeader({
 						{t('availabilityObserved', { date: observedLabel })}
 					</span>
 				) : null}
+				{availability?.chanceOfPlayingThisRound != null ? (
+					<span className="text-muted-foreground tabular-nums">
+						{t('availabilityChanceThisRound', {
+							percent: availability.chanceOfPlayingThisRound
+						})}
+					</span>
+				) : null}
+				{availability?.chanceOfPlayingNextRound != null ? (
+					<span className="text-muted-foreground tabular-nums">
+						{t('availabilityChanceNextRound', {
+							percent: availability.chanceOfPlayingNextRound
+						})}
+					</span>
+				) : null}
 				{providerMode === 'FPL_WITH_UNDERSTAT_HISTORY' ? (
 					<Badge
 						variant="secondary"
@@ -198,6 +213,14 @@ function PlayerHeader({
 					</Badge>
 				) : null}
 			</div>
+			{availabilityNews ? (
+				<p className="mt-1.5 max-w-prose text-[0.68rem] leading-relaxed text-muted-foreground">
+					<span className="font-medium text-foreground">
+						{t('availabilityNewsLabel')}:
+					</span>{' '}
+					{availabilityNews}
+				</p>
+			) : null}
 			<div className="mt-2">
 				<p className="eyebrow mb-1">{t('nextFixturesLabel')}</p>
 				<FixtureStrip
