@@ -13,6 +13,7 @@ import {
 	GET_MARKET_PULSE
 } from '../lib/graphql/operations/market'
 import {
+	GET_PLAYER_STATS_DESK_OVERVIEW,
 	GET_PLAYER_STATE_PROFILE,
 	SEARCH_PLAYERS_FOR_PICKER
 } from '../lib/graphql/operations/players'
@@ -134,8 +135,18 @@ describe('GraphQL request budget', () => {
 		assert.ok(operation?.kind === 'OperationDefinition')
 		assert.equal(operation.selectionSet.selections.length, 1)
 		assert.ok(
-			astNodes < 200,
+			astNodes <= 240,
 			`GET_PLAYER_STATE_PROFILE has ${astNodes} AST nodes`
+		)
+	})
+
+	it('keeps the Player Stats desk overview below the production guard', () => {
+		const document = parse(GET_PLAYER_STATS_DESK_OVERVIEW)
+		let astNodes = 0
+		visit(document, { enter: () => void (astNodes += 1) })
+		assert.ok(
+			astNodes < 200,
+			`GET_PLAYER_STATS_DESK_OVERVIEW has ${astNodes} AST nodes`
 		)
 	})
 

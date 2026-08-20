@@ -52,10 +52,19 @@ function writeRecentPlayers(
 }
 
 function withEmptyStateContext(
-	core: PlayerStateOverviewData
+	core: PlayerStateOverviewData,
+	eventId?: number
 ): PlayerStateProfileData {
+	const seasonTimeline = Array.isArray(core.seasonTimeline)
+		? core.seasonTimeline
+		: null
+	const currentPoint = seasonTimeline?.find(
+		point => point.season === core.season
+	)
 	return {
 		...core,
+		position: core.profileRadar?.position ?? currentPoint?.position ?? 0,
+		asOfEventId: core.profileRadar?.asOfEventId ?? eventId ?? null,
 		reasons: core.reasons.map(reason => ({ code: reason.code })),
 		profileRadar: core.profileRadar
 			? {
@@ -72,6 +81,19 @@ function withEmptyStateContext(
 					}))
 				}
 			: null,
+		seasonTimeline:
+			seasonTimeline === null
+				? null
+				: seasonTimeline.map(point => ({
+						...point,
+						signals: point.signals.map(signal => ({
+							...signal,
+							provider: signal.code.startsWith('UNDERSTAT_')
+								? 'UNDERSTAT'
+								: 'FPL',
+							sampleMinutes: null
+						}))
+					})),
 		dimensions: core.dimensions.map(dimension => ({
 			...dimension,
 			metrics: []
@@ -97,7 +119,12 @@ function isCoreState(
 function isStateContext(
 	state: PlayerStatsDeskNormalizedEntry['state']
 ): state is PlayerStateContextData {
-	return state != null && 'ownBaseline' in state && 'careerTrajectory' in state
+	return (
+		state != null &&
+		'playerId' in state &&
+		'coverage' in state &&
+		!('trend' in state)
+	)
 }
 
 function isProcessState(
@@ -138,7 +165,7 @@ export function usePlayerDetailSlot({
 	const t = useTranslations('PlayerStats')
 	const initialDetail = initialEntry?.overview ?? null
 	const initialState = isCoreState(initialEntry?.state)
-		? withEmptyStateContext(initialEntry.state)
+		? withEmptyStateContext(initialEntry.state, eventId)
 		: null
 	const [selectedPlayer, setSelectedPlayer] =
 		useState<PlayerDirectoryOption | null>(() =>
@@ -249,7 +276,7 @@ export function usePlayerDetailSlot({
 						setPlayerDetail(detail)
 						setSelectedPlayer(playerDetailToDirectoryOption(detail))
 						if (isCoreState(entry?.state)) {
-							setPlayerStateProfile(withEmptyStateContext(entry.state))
+							setPlayerStateProfile(withEmptyStateContext(entry.state, eventId))
 						} else {
 							setPlayerStateProfile(null)
 							setStateError(t('stateLoadFailed'))
@@ -320,9 +347,6 @@ export function usePlayerDetailSlot({
 						previous && previous.playerId === context.playerId
 							? {
 									...previous,
-									ownBaseline: context.ownBaseline,
-									peerBaseline: context.peerBaseline,
-									careerTrajectory: context.careerTrajectory,
 									coverage: {
 										...previous.coverage,
 										...context.coverage
