@@ -6,6 +6,7 @@ import {
 	assertFplEntryId,
 	isFplIdentitySnapshotStale,
 	parseFplEntryId,
+	classifyEntryLookupInput,
 } from '../lib/fpl-binding-core'
 
 describe('parseFplEntryId', () => {
@@ -52,6 +53,26 @@ describe('parseFplEntryId', () => {
 		assert.equal(parseFplEntryId('-5'), null)
 		assert.equal(parseFplEntryId('1.5'), null)
 		assert.equal(parseFplEntryId(Number.MAX_SAFE_INTEGER + 1), null)
+	})
+})
+
+describe('classifyEntryLookupInput', () => {
+	it('treats numeric IDs and FPL URLs as direct binds', () => {
+		assert.deepEqual(classifyEntryLookupInput('6953'), { kind: 'id', entryId: 6953 })
+		assert.deepEqual(
+			classifyEntryLookupInput('https://fantasy.premierleague.com/en/entry/6953/history'),
+			{ kind: 'id', entryId: 6953 }
+		)
+	})
+
+	it('treats trimmed names as searchable queries', () => {
+		assert.deepEqual(classifyEntryLookupInput('  Who  '), { kind: 'name', query: 'Who' })
+	})
+
+	it('rejects empty, short, and oversized name queries', () => {
+		assert.deepEqual(classifyEntryLookupInput(''), { kind: 'invalid', reason: 'empty' })
+		assert.deepEqual(classifyEntryLookupInput('x'), { kind: 'invalid', reason: 'too-short' })
+		assert.deepEqual(classifyEntryLookupInput('x'.repeat(51)), { kind: 'invalid', reason: 'too-long' })
 	})
 })
 

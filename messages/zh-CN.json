@@ -327,15 +327,20 @@
 	},
 	"Onboarding": {
 		"title": "关联你的 FPL 球队",
-		"description": "输入你的 FPL 参赛 ID，即可查看我的球队、赛事和实时积分。",
+		"description": "输入参赛 ID，或用球队名 / 经理名查找。",
 		"findEntryId": "如何查找参赛 ID",
 		"stepOne": "在 <fpl>fantasy.premierleague.com</fpl> 登录",
 		"stepTwo": "打开你的球队页面，点击 <gh>Gameweek History</gh>",
 		"stepThree": "复制该页面的网址，<paste>粘贴到下方</paste>——我们会自动提取参赛 ID",
 		"example": "网址长这样：",
+		"findByName": "如何用名字搜索",
+		"nameStepOne": "输入球队名或经理名，至少 2 个字符，不必写全",
+		"nameStepTwo": "提交后先搜索；多条结果时点选一支，再关联",
+		"nameStepThree": "名字只搜本赛季已在本站出现过的球队：网页绑过、用 ID 查过、或进过 LetLetMe 赛事",
+		"nameStepFour": "本站没出现过的球队请用参赛 ID，可查任意有效 FPL 球队",
 		"openFplPage": "打开我的 FPL 球队页面",
-		"entryId": "FPL 参赛 ID",
-		"entryPlaceholder": "例如 123456，或直接粘贴网址",
+		"entryId": "FPL 参赛 ID / 球队名 / 经理名",
+		"entryPlaceholder": "例如 123456、球队名或经理名",
 		"linking": "正在关联…",
 		"linkTeam": "关联我的 FPL 球队",
 		"verified": "{teamName}（{managerName}）关联成功。",
@@ -370,8 +375,8 @@
 		"findEntryHint": "不知道参赛 ID？打开你的 FPL 球队页面，点击 <gh>Gameweek History</gh>，<paste>把页面网址粘贴到这里</paste>——我们会自动提取 ID。",
 		"openFpl": "打开我的 FPL 球队页面",
 		"currentlyLinked": "当前关联：{entryId}",
-		"newEntryId": "新的 FPL 参赛 ID",
-		"entryPlaceholder": "例如 123456，或直接粘贴网址",
+		"newEntryId": "FPL 参赛 ID / 球队名 / 经理名",
+		"entryPlaceholder": "例如 123456、球队名或经理名",
 		"linking": "正在关联…",
 		"linkTeam": "关联球队",
 		"entryVerified": "已关联 {teamName}（{managerName}）。",
@@ -399,6 +404,19 @@
 			"alreadyBound": "该 FPL 参赛 ID 已被其他账户验证。",
 			"verificationFailed": "无法验证 FPL 参赛 ID，请重试。",
 			"signOutFailed": "无法退出登录，请重试。"
+		}
+	},
+	"FplEntryLookup": {
+		"results": "匹配结果",
+		"selectThis": "选这个",
+		"searching": "查找中…",
+		"coverageHint": "名字只搜本赛季已在本站出现过的球队：网页绑过、用 ID 查过、或进过 LetLetMe 赛事。本站没出现过的球队请用参赛 ID。",
+		"errors": {
+			"empty": "请输入参赛 ID，或至少 2 个字符的球队名 / 经理名。",
+			"too-short": "用名字搜索至少需要 2 个字符。",
+			"too-long": "名字搜索请控制在 50 个字符以内。",
+			"none": "本站没有匹配的球队。请改用参赛 ID，可查任意有效 FPL 球队。",
+			"failed": "名字搜索失败，请重试或改用参赛 ID。"
 		}
 	},
 	"Sessions": {

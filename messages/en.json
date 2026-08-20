@@ -327,15 +327,20 @@
 	},
 	"Onboarding": {
 		"title": "Link your FPL team",
-		"description": "Enter your FPL entry ID so we can track My Team, competitions, and live points.",
+		"description": "Enter your FPL entry ID, or search by team or manager name.",
 		"findEntryId": "How to find your entry ID",
 		"stepOne": "Sign in at <fpl>fantasy.premierleague.com</fpl>",
 		"stepTwo": "Open your team page and click <gh>Gameweek History</gh>",
 		"stepThree": "Copy the page URL and <paste>paste it below</paste> — we'll grab your team ID",
 		"example": "The URL looks like:",
+		"findByName": "How to search by name",
+		"nameStepOne": "Enter a team or manager name, at least 2 characters — it does not have to be complete",
+		"nameStepTwo": "Submit to search. If several teams match, pick one, then link",
+		"nameStepThree": "Name search only covers this season's teams already on LetLetMe: linked on the website, looked up by ID, or in a LetLetMe competition",
+		"nameStepFour": "Teams that have never appeared here need an entry ID. IDs look up any valid FPL team",
 		"openFplPage": "Open my FPL team page",
-		"entryId": "FPL Entry ID",
-		"entryPlaceholder": "e.g. 123456 or paste the page URL",
+		"entryId": "FPL entry ID / team or manager name",
+		"entryPlaceholder": "e.g. 123456, a team name, or a manager name",
 		"linking": "Linking…",
 		"linkTeam": "Link my FPL team",
 		"verified": "{teamName} ({managerName}) linked successfully.",
@@ -370,8 +375,8 @@
 		"findEntryHint": "Don't know your ID? Open your FPL team page, click <gh>Gameweek History</gh>, and <paste>paste the page URL here</paste> — we'll grab the ID.",
 		"openFpl": "Open my FPL team page",
 		"currentlyLinked": "Currently linked to {entryId}",
-		"newEntryId": "New FPL Entry ID",
-		"entryPlaceholder": "e.g. 123456 or paste the page URL",
+		"newEntryId": "FPL entry ID / team or manager name",
+		"entryPlaceholder": "e.g. 123456, a team name, or a manager name",
 		"linking": "Linking…",
 		"linkTeam": "Link team",
 		"entryVerified": "Linked {teamName} ({managerName}).",
@@ -399,6 +404,19 @@
 			"alreadyBound": "This FPL entry is already verified by another account.",
 			"verificationFailed": "Unable to verify the FPL entry. Please try again.",
 			"signOutFailed": "Could not sign out. Please try again."
+		}
+	},
+	"FplEntryLookup": {
+		"results": "Matches",
+		"selectThis": "Use this",
+		"searching": "Searching…",
+		"coverageHint": "Name search only covers this season's teams already on LetLetMe — linked on the website, looked up by ID, or in a LetLetMe competition. Other teams need an entry ID.",
+		"errors": {
+			"empty": "Enter an entry ID, or at least 2 characters of a team or manager name.",
+			"too-short": "Name search needs at least 2 characters.",
+			"too-long": "Keep the name search to 50 characters or fewer.",
+			"none": "No matching team on LetLetMe. Try an entry ID — that looks up any valid FPL team.",
+			"failed": "Name search failed. Try again, or use an entry ID."
 		}
 	},
 	"Sessions": {

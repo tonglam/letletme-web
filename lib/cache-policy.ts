@@ -61,6 +61,7 @@ export const PUBLIC_GRAPHQL_OPERATION_NAMES = new Set([
 	'GetTeamsForPicker',
 	'GetPlayersForPicker',
 	'SearchPlayersForPicker',
+	'SearchEntries',
 	'GetPlayerDetail',
 	'GetPlayerValueHistory',
 	'PublicLeagueTrends',

@@ -30,6 +30,30 @@ export interface EntrySummaryResponse {
 	entry: EntrySummary | null
 }
 
+export const SEARCH_ENTRIES = `
+  query SearchEntries($query: String!, $limit: Int) {
+    searchEntries(query: $query, limit: $limit) {
+      id
+      entryName
+      playerName
+      overallPoints
+      overallRank
+    }
+  }
+`
+
+export interface EntryNameSearchHit {
+	id: number
+	entryName: string
+	playerName: string
+	overallPoints: number | null
+	overallRank: number | null
+}
+
+export interface SearchEntriesResponse {
+	searchEntries: EntryNameSearchHit[]
+}
+
 export const GET_ENTRY_EVENT_RESULT = `
   query GetEntryEventResult($entryId: Int!, $eventId: Int!) {
     entryEventResult(entryId: $entryId, eventId: $eventId) {
