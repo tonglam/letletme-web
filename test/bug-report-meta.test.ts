@@ -23,8 +23,7 @@ describe('bug report client meta', () => {
 			}),
 			{ route: '/home' }
 		)
-		const huge = { note: 'x'.repeat(20_000) }
-		assert.deepEqual(sanitizeBugReportClientMeta(huge), { truncated: true })
+		assert.deepEqual(sanitizeBugReportClientMeta({ note: 'x'.repeat(20_000) }), {})
 	})
 
 	it('normalizes the description and rejects oversized screenshots', () => {
@@ -50,6 +49,23 @@ describe('bug report client meta', () => {
 			decodeOptionalScreenshot(Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64'), 'image/png')
 				?.contentType,
 			'image/jpeg'
+		)
+		assert.equal(
+			decodeOptionalScreenshot(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64'), 'image/jpeg')
+				?.contentType,
+			'image/png'
+		)
+		assert.equal(
+			decodeOptionalScreenshot(Buffer.from('GIF89a').toString('base64'), 'image/png')?.contentType,
+			'image/gif'
+		)
+		assert.equal(
+			decodeOptionalScreenshot(Buffer.from('RIFFxxxxWEBP').toString('base64'), 'image/jpeg')?.contentType,
+			'image/webp'
+		)
+		assert.throws(
+			() => decodeOptionalScreenshot(Buffer.from('not-an-image').toString('base64'), 'image/png'),
+			/SCREENSHOT_UNSUPPORTED/
 		)
 	})
 
