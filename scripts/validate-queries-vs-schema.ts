@@ -87,6 +87,7 @@ import {
 	GET_TOURNAMENT_PARTICIPANTS,
 	GET_TOURNAMENT_SELECTION_STATS
 } from '../lib/graphql/operations/tournaments'
+import { AGENT_GRAPHQL_DOCUMENTS } from '../lib/agent-tools/documents'
 
 function hydrateGraphQlEnvFromLocalFile(): void {
 	const p = path.join(process.cwd(), '.env.local')
@@ -180,7 +181,10 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 	['GET_LIVE_MATCHDAY_DESK', GET_LIVE_MATCHDAY_DESK],
 	['GET_EVENT_LIVE_EXPLAIN', GET_EVENT_LIVE_EXPLAIN],
 	['GET_EVENT_LIVE_EXPLAINS', GET_EVENT_LIVE_EXPLAINS],
-	['GET_PLAYER_LIVE', GET_PLAYER_LIVE]
+	['GET_PLAYER_LIVE', GET_PLAYER_LIVE],
+	...Object.entries(AGENT_GRAPHQL_DOCUMENTS).map(
+		([name, document]) => [`AGENT_${name}`, document] as const
+	)
 ]
 
 async function fetchSchema(endpointUrl: string): Promise<GraphQLSchema> {

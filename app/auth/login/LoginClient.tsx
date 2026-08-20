@@ -20,11 +20,13 @@ type LoginReason = 'reauth' | null
 export default function LoginClient({
 	next,
 	oauthError,
-	reason
+	reason,
+	deskAgent
 }: {
 	next: string
 	oauthError: boolean
 	reason: LoginReason
+	deskAgent: boolean
 }) {
 	const router = useRouter()
 	const locale = useLocale() as AppLocale
@@ -83,7 +85,7 @@ export default function LoginClient({
 				newUserCallbackURL: callbackUrl,
 				errorCallbackURL: absoluteAuthUrl(
 					localizeHref(
-						`/auth/login?oauthError=1&next=${encodeURIComponent(next)}${errorReason}`,
+						`/auth/login?oauthError=1&next=${encodeURIComponent(next)}${errorReason}${deskAgent ? '&client=desk-agent' : ''}`,
 						locale
 					),
 					window.location.origin
@@ -118,6 +120,15 @@ export default function LoginClient({
 							: t('chooseMethod')}
 					</p>
 				</div>
+
+				{deskAgent && (
+					<Alert className="mb-4">
+						<AlertDescription>
+							<strong className="mb-1 block">{t('deskAgentDisclosureTitle')}</strong>
+							{t('deskAgentDisclosure')}
+						</AlertDescription>
+					</Alert>
+				)}
 
 				{error && (
 					<Alert

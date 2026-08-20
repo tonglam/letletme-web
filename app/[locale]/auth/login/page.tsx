@@ -30,12 +30,14 @@ export default async function LoginPage({ params, searchParams }: PageProps) {
 	const next = getSafeInternalHref(firstValue(query.next) ?? '/')
 	const reason = firstValue(query.reason) === 'reauth' ? 'reauth' : null
 	const oauthError = 'oauthError' in query || 'error' in query
+	const deskAgent = firstValue(query.client) === 'desk-agent'
 
 	return (
 		<LoginClient
 			next={next}
 			oauthError={oauthError}
 			reason={reason}
+			deskAgent={deskAgent}
 		/>
 	)
 }
