@@ -155,4 +155,26 @@ describe('GraphQL ingress v2', () => {
 		)
 		assert.equal(graphQLWorkloadForDocument({ query: 'not graphql' }), 'public-other')
 	})
+
+	it('keeps equivalent public live roots in the gameweek workload', () => {
+		for (const field of [
+			'liveContext',
+			'liveMatchdayDesk',
+			'liveFixturePlayers',
+			'liveScores'
+		]) {
+			assert.equal(
+				graphQLWorkloadForDocument({
+					query: `query PublicLive { ${field} { __typename } }`
+				}),
+				'gameweek'
+			)
+		}
+		assert.equal(
+			graphQLWorkloadForDocument({
+				query: 'query PersonalLive { myFplLivePoints { __typename } }'
+			}),
+			'interactive'
+		)
+	})
 })

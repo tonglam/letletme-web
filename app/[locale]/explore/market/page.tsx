@@ -19,6 +19,10 @@ import {
 	loadMarketOwnershipOverview,
 	loadMarketPulseSummary
 } from '@/lib/market-overview-server'
+import {
+	isPublishedMarketOwnershipDate,
+	normalizeMarketOwnershipDate
+} from '@/lib/market-ownership-date'
 import { getTranslations } from 'next-intl/server'
 import { redirect, unstable_rethrow } from 'next/navigation'
 import { connection } from 'next/server'
@@ -38,9 +42,7 @@ function requestedDate(
 	value: string | undefined,
 	period: MarketOwnershipPeriod
 ): string | null {
-	return period === 'DAILY' && value && /^\d{4}-\d{2}-\d{2}$/.test(value)
-		? value
-		: null
+	return period === 'DAILY' ? normalizeMarketOwnershipDate(value) : null
 }
 
 function recentCalendarDates(input: {
@@ -89,12 +91,7 @@ async function renderMarketContent({
 	await connection()
 	const translationPromise = getTranslations('Market')
 	const dataPromise = loadMarketPulseSummary(7)
-	const ownershipPromise = date
-		? loadMarketOwnershipDay(date)
-		: loadMarketOwnershipOverview(period)
-	const dailyOverviewPromise = date
-		? loadMarketOwnershipOverview('DAILY')
-		: null
+	const overviewPromise = loadMarketOwnershipOverview(period)
 	const t = await translationPromise
 	let pulse: MarketPulse | null = null
 	let revision: string | null = null
@@ -104,13 +101,12 @@ async function renderMarketContent({
 		| null = null
 	let dailyOverview:
 		MarketOwnershipOverviewResponse['marketOwnershipOverview'] | null = null
+	let publishedDate: string | null = null
 
-	const [dataResult, ownershipResult, dailyOverviewResult] =
-		await Promise.allSettled([
-			dataPromise,
-			ownershipPromise,
-			dailyOverviewPromise ?? Promise.resolve(null)
-		])
+	const [dataResult, overviewResult] = await Promise.allSettled([
+		dataPromise,
+		overviewPromise
+	])
 	if (dataResult.status === 'fulfilled') {
 		pulse = { ...dataResult.value.marketPulse, availabilityUpdates: [] }
 		revision = dataResult.value.marketSnapshotContext.revision
@@ -118,25 +114,37 @@ async function renderMarketContent({
 		unstable_rethrow(dataResult.reason)
 		console.error('[market] pulse fetch failed:', dataResult.reason)
 	}
-	if (ownershipResult.status === 'fulfilled') {
-		ownership = date
-			? (ownershipResult.value as MarketOwnershipDayResponse).marketOwnershipDay
-			: (ownershipResult.value as MarketOwnershipOverviewResponse)
-					.marketOwnershipOverview
-	} else {
-		unstable_rethrow(ownershipResult.reason)
-		console.error('[market] ownership fetch failed:', ownershipResult.reason)
-	}
-	if (dailyOverviewResult.status === 'fulfilled') {
-		if (dailyOverviewResult.value) {
-			dailyOverview = dailyOverviewResult.value.marketOwnershipOverview
+	if (overviewResult.status === 'fulfilled') {
+		dailyOverview =
+			period === 'DAILY'
+				? overviewResult.value.marketOwnershipOverview
+				: null
+		publishedDate =
+			date &&
+			isPublishedMarketOwnershipDate(
+				date,
+				overviewResult.value.marketOwnershipOverview.coverage
+			)
+				? date
+				: null
+		if (!publishedDate) {
+			ownership = overviewResult.value.marketOwnershipOverview
 		}
 	} else {
-		unstable_rethrow(dailyOverviewResult.reason)
-		console.error(
-			'[market] daily coverage fetch failed:',
-			dailyOverviewResult.reason
-		)
+		unstable_rethrow(overviewResult.reason)
+		console.error('[market] ownership coverage fetch failed:', overviewResult.reason)
+	}
+	if (publishedDate) {
+		const [dayResult] = await Promise.allSettled([
+			loadMarketOwnershipDay(publishedDate)
+		])
+		if (dayResult.status === 'fulfilled') {
+			ownership = (dayResult.value as MarketOwnershipDayResponse)
+				.marketOwnershipDay
+		} else {
+			unstable_rethrow(dayResult.reason)
+			console.error('[market] ownership day fetch failed:', dayResult.reason)
+		}
 	}
 	const dailyCoverage =
 		dailyOverview?.coverage ??
@@ -164,7 +172,7 @@ async function renderMarketContent({
 				pulse={pulse}
 				ownership={ownership}
 				requestedPeriod={period}
-				requestedDate={date}
+				requestedDate={publishedDate}
 				dailyDates={recentCalendarDates({
 					firstDate: dailyCoverage?.firstDate ?? null,
 					latestDate: dailyCoverage?.latestDate ?? null,

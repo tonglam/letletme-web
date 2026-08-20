@@ -42,6 +42,13 @@ export type GraphQLProxyIngress =
 	| { ok: false; message: string }
 
 function workloadForRootField(field: string): GraphQLWorkload {
+	if (
+		/^(liveContext|liveMatchdayDesk|liveFixturePlayers|liveScores)$/i.test(
+			field
+		)
+	) {
+		return 'gameweek'
+	}
 	if (/fixture/i.test(field)) return 'fixtures'
 	if (/market|ownership|transfer|price|playervalue|availability/i.test(field)) {
 		return 'market'

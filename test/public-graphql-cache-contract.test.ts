@@ -92,6 +92,10 @@ describe('public GraphQL cache contract', () => {
 			market,
 			/async function MarketContent[\s\S]*withCapacityRunForRequest\(\(\) => renderMarketContent/
 		)
+		assert.match(
+			market,
+			/isPublishedMarketOwnershipDate\([\s\S]*loadMarketOwnershipDay\(publishedDate\)/
+		)
 		assert.match(serverContext, /capacityRequestIdForHeaders/)
 		assert.match(publicServer, /capacityRequestIdForCurrentRun/)
 		assert.doesNotMatch(publicServer, /from 'next\/headers'/)
