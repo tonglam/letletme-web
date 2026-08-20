@@ -1,10 +1,13 @@
 import { expect, test, type Route } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 
 const graphqlFixtureUrl = 'http://127.0.0.1:4100/graphql'
 
-async function fulfillFromGraphqlFixture(route: Route) {
-	const response = await route.fetch({ url: graphqlFixtureUrl })
-	await route.fulfill({ response })
+// Let the browser continue to the deterministic fixture server.  Keeping the
+// response on the normal browser network path avoids coupling Playwright's
+// fake clock to a route handler that buffers a second request with route.fetch.
+async function continueToGraphqlFixture(route: Route) {
+	await route.continue({ url: graphqlFixtureUrl })
 }
 
 test('live points enriches all fifteen picks through one bounded GraphQL root', async ({
@@ -24,6 +27,7 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 		  }
 		| undefined
 	let clientLivePointsRequests = 0
+	let entryOverallRequests = 0
 	let explainBatchRequests = 0
 	let releaseExplain!: () => void
 	const explainGate = new Promise<void>(resolve => {
@@ -39,9 +43,7 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 			batchPayload = payload
 			const elementIds = payload.variables?.elementIds ?? []
 			await explainGate
-			await route.fulfill({
-				status: 200,
-				json: {
+			const recoveryResponse = {
 					data: {
 						eventLiveExplains: elementIds.map(elementId => ({
 							elementId,
@@ -87,13 +89,18 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 						}))
 					}
 				}
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify(recoveryResponse)
 			})
 			return
 		}
 		if (payload.query?.includes('GetLiveCalcPoints')) {
 			clientLivePointsRequests += 1
 		}
-		await fulfillFromGraphqlFixture(route)
+		if (payload.query?.includes('GetEntry')) entryOverallRequests += 1
+		await continueToGraphqlFixture(route)
 	})
 
 	await page.goto('/live/points/123')
@@ -101,10 +108,15 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 	await expect(
 		page.getByRole('heading', { level: 1, name: 'Team live points' })
 	).toBeVisible()
+	const pitch = page.getByRole('region', { name: /formation/ })
 	await expect(
-		page.getByRole('button', { name: /View details for Player/ })
+		pitch.getByRole('button', { name: /View details for Player/ })
 	).toHaveCount(15)
-	await expect(page.getByText('ARS', { exact: true })).toHaveCount(15)
+	const accessibility = await new AxeBuilder({ page })
+		.include('section[aria-label$=" formation"]')
+		.analyze()
+	expect(accessibility.violations).toEqual([])
+	expect(entryOverallRequests).toBe(0)
 	expect(
 		await page.evaluate(
 			() => document.documentElement.scrollWidth <= window.innerWidth
@@ -127,7 +139,7 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 	releaseExplain()
 
 	await page
-		.getByRole('button', { name: 'View details for Player 1', exact: true })
+		pitch.getByRole('button', { name: 'View details for Player 1', exact: true })
 		.click()
 	const detail = page.getByRole('dialog')
 	await expect(
@@ -156,8 +168,108 @@ test('live points keeps polling after the seed and first client load fail', asyn
 		const payload = route.request().postDataJSON() as { query?: string }
 		if (payload.query?.includes('GetLiveCalcPoints')) {
 			clientLivePointsRequests += 1
+			if (clientLivePointsRequests === 1) {
+				await route.fulfill({
+					status: 200,
+					json: { errors: [{ message: 'Temporary live points failure' }] }
+				})
+				return
+			}
+			const pickList = Array.from({ length: 15 }, (_, index) => ({
+				element: index + 1,
+				elementType:
+					index < 2 ? 1 : index < 7 ? 2 : index < 12 ? 3 : 4,
+				position: index + 1,
+				webName: `Player ${index + 1}`,
+				teamName: 'Arsenal',
+				teamShortName: 'ARS',
+				minutes: 45,
+				goalsScored: index === 0 ? 1 : 0,
+				assists: 0,
+				cleanSheets: 0,
+				goalsConceded: index === 0 ? 2 : 0,
+				defensiveContribution: 0,
+				ownGoals: 0,
+				penaltiesSaved: 0,
+				penaltiesMissed: 0,
+				yellowCards: 0,
+				redCards: 0,
+				saves: 0,
+				bonus: 0,
+				bps: 10,
+				totalPoints: index === 0 ? 6 : 1,
+				starts: index < 11,
+				isGwStarted: true,
+				isGwFinished: false,
+				isPlayed: true,
+				isCaptain: index === 0,
+				isViceCaptain: index === 1,
+				expectedGoals: null,
+				expectedAssists: null,
+				expectedGoalInvolvements: null,
+				expectedGoalsConceded: null,
+				inDreamTeam: false
+			}))
+			const recoveryResponse = {
+					data: {
+						liveSnapshot: {
+							eventId: 33,
+							revision: 'recovery-revision',
+							state: 'LIVE',
+							publishedAt: '2026-08-04T18:00:00.000Z',
+							checkedAt: '2026-08-04T18:00:30.000Z'
+						},
+						calcLivePointsByEntry: {
+							entry: 999,
+							event: 33,
+							entryName: 'E2E United',
+							playerName: 'Test Manager',
+							chip: null,
+							livePoints: 22,
+							transferCost: 0,
+							liveNetPoints: 22,
+							liveTotalPoints: 1234,
+							captainName: 'Player 1',
+							pickList
+						}
+					}
+				}
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify(recoveryResponse)
+			})
+			return
 		}
-		await fulfillFromGraphqlFixture(route)
+		if (payload.query?.includes('GetLiveContext')) {
+			await route.fulfill({
+				status: 200,
+				json: {
+					data: {
+						coreEventContext: {
+							season: '2627',
+							revision: 'e2e-core-v1',
+							sourceCheckedAt: '2026-08-04T18:00:30.000Z',
+							currentEventId: 33,
+							nextEventId: 34,
+							nextDeadlineTime: '2026-08-11T17:30:00.000Z',
+							latestFinishedEventId: 32
+						},
+						liveContext: {
+							season: '2627',
+							eventId: 33,
+							nextEventId: 34,
+							revision: 'a'.repeat(24),
+							state: 'SCHEDULED',
+							publishedAt: '2026-08-04T18:00:00.000Z',
+							checkedAt: '2026-08-04T18:00:30.000Z'
+						}
+					}
+				}
+			})
+			return
+		}
+		await continueToGraphqlFixture(route)
 	})
 
 	await page.goto('/live/points/999')
@@ -171,10 +283,20 @@ test('live points keeps polling after the seed and first client load fail', asyn
 	).toBeVisible()
 	await expect(page.getByText(/Next refresh in \d+s/)).toBeVisible()
 
-	await page.clock.runFor(30_000)
+	// The first retry is scheduled at the 15-second poll boundary.  Stop at
+	// that boundary so the request's own 15-second timeout cannot fire while
+	// Playwright is still flushing the deterministic response.
+	await page.clock.runFor(15_000)
 	await expect.poll(() => clientLivePointsRequests).toBe(2)
+	// Flush the React update queued by the second network response while the
+	// browser fake clock is installed.
+	await page.clock.runFor(1)
+	const pitch = page.getByRole('region', { name: /formation/ })
 	await expect(
-		page.getByRole('button', { name: /View details for Player/ })
+		pitch.getByRole('heading', { level: 2, name: 'E2E United' })
+	).toBeVisible()
+	await expect(
+		pitch.getByRole('button', { name: /View details for Player/ })
 	).toHaveCount(15)
 })
 
@@ -284,7 +406,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 			// The desk is the only heavy request after a changed context revision.
 		}
 
-		await fulfillFromGraphqlFixture(route)
+		await continueToGraphqlFixture(route)
 	})
 
 	await page.goto('/live/matches')

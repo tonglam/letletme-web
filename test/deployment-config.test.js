@@ -35,13 +35,22 @@ test('uses one Git SHA for the self-hosted build and its Vercel-safe prefix for 
 			LETLETME_RELEASE_SHA: '0123456789abcdef0123456789abcdef01234567'
 		})
 		const rules = await config.headers()
-		assert.deepEqual(rules[0].headers, [
+		assert.deepEqual(rules[0].headers.slice(0, 2), [
 			{ key: 'X-Letletme-Origin', value: 'tencent' },
 			{
 				key: 'X-Letletme-Release',
 				value: '0123456789abcdef0123456789abcdef01234567'
 			}
 		])
+		assert.equal(config.poweredByHeader, false)
+		assert.equal(
+			rules[0].headers.find(header => header.key === 'X-Content-Type-Options').value,
+			'nosniff'
+		)
+		assert.equal(
+			rules[0].headers.find(header => header.key === 'Content-Security-Policy').value.includes("object-src 'none'"),
+			true
+		)
 	} finally {
 		for (const name of names) {
 			if (previous[name] === undefined) delete process.env[name]

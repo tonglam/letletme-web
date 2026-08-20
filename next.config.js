@@ -54,9 +54,27 @@ const deploymentId = releaseSha.slice(0, 32)
 const deploymentConfig =
 	process.env.VERCEL === '1' ? {} : { deploymentId }
 const deploymentOrigin = resolveDeploymentOrigin()
+const isProduction = process.env.NODE_ENV === 'production'
+const contentSecurityPolicy = [
+	"default-src 'self'",
+	"base-uri 'self'",
+	"form-action 'self'",
+	"frame-ancestors 'none'",
+	"frame-src 'none'",
+	"object-src 'none'",
+	"script-src 'self' 'unsafe-inline'",
+	"style-src 'self' 'unsafe-inline'",
+	"img-src 'self' data: blob: https://*.supabase.co https://*.googleusercontent.com",
+	"font-src 'self' data:",
+	"connect-src 'self' https://*.supabase.co",
+	"worker-src 'self' blob:",
+	"manifest-src 'self'",
+	...(isProduction ? ['upgrade-insecure-requests'] : [])
+].join('; ')
 
 const nextConfig = {
 	output: 'standalone',
+	poweredByHeader: false,
 	...deploymentConfig,
 	generateBuildId: async () => releaseSha,
 	env: {
@@ -70,7 +88,23 @@ const nextConfig = {
 				source: '/:path*',
 				headers: [
 					{ key: 'X-Letletme-Origin', value: deploymentOrigin },
-					{ key: 'X-Letletme-Release', value: releaseSha }
+					{ key: 'X-Letletme-Release', value: releaseSha },
+					...(isProduction
+						? [
+								{
+									key: 'Strict-Transport-Security',
+									value: 'max-age=31536000; includeSubDomains'
+								}
+							]
+						: []),
+					{ key: 'X-Content-Type-Options', value: 'nosniff' },
+					{ key: 'X-Frame-Options', value: 'DENY' },
+					{ key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+					{
+						key: 'Permissions-Policy',
+						value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
+					},
+					{ key: 'Content-Security-Policy', value: contentSecurityPolicy }
 				]
 			}
 		]

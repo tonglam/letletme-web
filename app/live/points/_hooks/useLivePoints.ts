@@ -337,13 +337,22 @@ export function useLivePoints({
 	])
 
 	useEffect(() => {
+		const initialSnapshotKey = initialSnapshot
+			? [
+					initialSnapshot.eventId,
+					initialSnapshot.revision,
+					initialSnapshot.state,
+					initialSnapshot.publishedAt,
+					initialSnapshot.checkedAt
+				].join(':')
+			: ''
 		const seedKey = [
 			initialEntryId,
 			initialEventId,
 			initialSelectedGameweek ?? '',
 			initialLiveData?.event ?? '',
 			initialLiveData?.livePoints ?? '',
-			initialSnapshot?.revision ?? '',
+			initialSnapshotKey,
 		].join(':')
 
 		if (lastSeedKeyRef.current === seedKey) return
@@ -408,7 +417,7 @@ export function useLivePoints({
 		initialEventId,
 		initialLiveData,
 		initialSelectedGameweek,
-		initialSnapshot?.revision,
+		initialSnapshot,
 	])
 
 	useEffect(() => {
