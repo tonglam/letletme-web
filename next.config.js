@@ -118,6 +118,17 @@ const nextConfig = {
 			}
 		]
 	},
+	// Keep the native image runtime outside the Turbopack bundle and trace the
+	// Linux binaries that Vercel's Node.js function needs at runtime. Without
+	// these explicit hints, a route that imports sharp can fail during module
+	// initialization even before its auth guard runs.
+	serverExternalPackages: ['sharp'],
+	outputFileTracingIncludes: {
+		'/api/profile/avatar': [
+			'node_modules/@img/sharp-linux-x64/**/*',
+			'node_modules/@img/sharp-libvips-linux-x64/**/*'
+		]
+	},
 	// Vercel's Next 16 runtime auto-enables this for dynamic routes, but the
 	// serverless renderer does not provide NEXT_DEPLOYMENT_ID to the Turbopack
 	// preinit path. That produces ?dpl=undefined chunk URLs alongside the
