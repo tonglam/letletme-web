@@ -298,7 +298,7 @@ export function MarketPlayerLookup({
 							/>
 							<Input
 								id="market-player-search"
-								role="combobox"
+								type="search"
 								value={searchTerm}
 								onChange={event => {
 									searchDebounceStartedAt.current = performance.now()
@@ -307,10 +307,7 @@ export function MarketPlayerLookup({
 								placeholder={t('searchPlaceholder')}
 								maxLength={50}
 								className="h-11 pl-9 pr-11"
-								aria-controls="market-player-results"
 								aria-describedby="market-player-search-status"
-								aria-expanded={normalizedSearch.length >= MIN_SEARCH_LENGTH}
-								aria-autocomplete="list"
 								autoFocus={autoFocus}
 							/>
 							{searchTerm ? (

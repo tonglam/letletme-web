@@ -201,6 +201,20 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 		)
 		if (pick) setSelectedPlayer(buildPlayerDetail(pick))
 	}
+	const squadPitchLabels = {
+		formation: t('squadFormation', { title: stats.teamName }),
+		positions: {
+			GKP: t('squadGoalkeeper'),
+			DEF: t('squadDefenders'),
+			MID: t('squadMidfielders'),
+			FWD: t('squadForwards')
+		},
+		captain: t('captain'),
+		viceCaptain: t('viceCaptain'),
+		total: t('pitchTotalPoints'),
+		playerDetails: (player: { webName: string }) =>
+			t('viewPlayer', { player: player.webName })
+	}
 	const shareText = useMemo(() => {
 		const origin =
 			typeof window !== 'undefined'
@@ -269,6 +283,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 				<SquadPitch
 					onPlayerClick={handlePitchPlayerClick}
 					players={players}
+					labels={squadPitchLabels}
 					benchPlayers={benchPlayers}
 					benchTitle={t('substitutes')}
 					benchBoost={isBenchBoostChip(stats.eventChip)}

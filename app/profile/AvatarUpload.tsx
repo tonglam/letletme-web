@@ -5,7 +5,6 @@ import { Camera } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { updateAvatar } from './avatar-actions'
 
 export function AvatarUpload({
 	name,
@@ -37,10 +36,37 @@ export function AvatarUpload({
 		try {
 			const formData = new FormData()
 			formData.set('avatar', file)
-			const { errorCode, imageUrl } = await updateAvatar(formData)
+			const response = await fetch('/api/profile/avatar', {
+				method: 'POST',
+				body: formData,
+				credentials: 'include'
+			})
+			const result = (await response.json().catch(() => null)) as {
+				success?: boolean
+				errorCode?: string
+				imageUrl?: string
+			} | null
+			const errorCode = response.ok && result?.success
+				? undefined
+				: result?.errorCode ?? 'uploadFailed'
+			const imageUrl = result?.imageUrl
 
 			if (errorCode) {
-				toast.error(t(`errors.${errorCode}`))
+				const message =
+					errorCode === 'notAuthenticated'
+						? t('errors.notAuthenticated')
+						: errorCode === 'forbidden'
+							? t('errors.forbidden')
+							: errorCode === 'noFile'
+								? t('errors.noFile')
+								: errorCode === 'fileTooLarge'
+									? t('errors.fileTooLarge')
+									: errorCode === 'invalidFile'
+									? t('errors.invalidFile')
+									: errorCode === 'rateLimited'
+									? t('errors.rateLimited')
+									: t('errors.uploadFailed')
+				toast.error(message)
 				setPreview(null)
 			} else {
 				toast.success(t('avatarUpdated'))
@@ -60,7 +86,7 @@ export function AvatarUpload({
 			<input
 				ref={fileInputRef}
 				type="file"
-				accept="image/*"
+				accept="image/jpeg,image/png,image/webp"
 				className="hidden"
 				onChange={handleChange}
 			/>
