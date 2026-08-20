@@ -52,7 +52,7 @@ describe('tournament management boundary', () => {
 	it('accepts same-origin requests and rejects cross-site mutations', () => {
 		assert.equal(
 			isTrustedTournamentMutationRequest(
-				'https://letletme.top/api/tournaments/1',
+				'http://127.0.0.1:3000/api/tournaments/1',
 				new Headers({ origin: 'https://letletme.top', 'sec-fetch-site': 'same-origin' }),
 			),
 			true,

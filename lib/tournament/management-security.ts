@@ -1,3 +1,5 @@
+import { isTrustedSameSiteRequest } from '@/lib/request-origin'
+
 export class InvalidTournamentManagementPayloadError extends Error {
 	constructor(message: string) {
 		super(message)
@@ -13,10 +15,7 @@ const getVerifiedEntryId = (entryId: number) => {
 }
 
 export const isTrustedTournamentMutationRequest = (requestUrl: string, headers: Headers) => {
-	const origin = headers.get('origin')
-	const requestOrigin = new URL(requestUrl).origin
-	const fetchSite = headers.get('sec-fetch-site')
-	return (!origin || origin === requestOrigin) && fetchSite !== 'cross-site'
+	return isTrustedSameSiteRequest(new Request(requestUrl, { headers }))
 }
 
 export const buildAuthoritativeTournamentRename = (body: unknown, entryId: number) => {
