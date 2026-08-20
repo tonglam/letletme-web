@@ -419,6 +419,18 @@ export interface PlayerSeasonSignal {
 	reasonCodes: string[]
 }
 
+/** The overview request keeps the first paint below the GraphQL node guard.
+ * Provider and sample-size metadata remain available in the full profile
+ * document; the ledger only needs the display/status fields below. */
+type PlayerStateOverviewSignal = Omit<PlayerSeasonSignal, 'provider' | 'sampleMinutes'>
+
+type PlayerStateOverviewTimelinePoint = Omit<
+	PlayerSeasonTimelinePoint,
+	'signals'
+> & {
+	signals: PlayerStateOverviewSignal[]
+}
+
 export interface PlayerSeasonTimelinePoint {
 	season: string
 	phase: PlayerSeasonPhase
@@ -503,15 +515,12 @@ export type PlayerStateOverviewData = Pick<
 	PlayerStateProfileData,
 	| 'playerId'
 	| 'teamId'
-	| 'position'
 	| 'season'
 	| 'horizon'
-	| 'asOfEventId'
 	| 'asOf'
 	| 'trend'
 	| 'confidence'
 	| 'providerMode'
-	| 'seasonTimeline'
 > & {
 	reasons: Array<Pick<PlayerStateReason, 'code'>>
 	profileRadar:
@@ -530,6 +539,7 @@ export type PlayerStateOverviewData = Pick<
 			'kind' | 'rating' | 'direction' | 'confidence' | 'reasonCodes'
 		>
 	>
+	seasonTimeline: PlayerStateOverviewTimelinePoint[]
 }
 
 export type PlayerStateProcessData = Pick<
@@ -615,17 +625,18 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
 				status news observedDate
 				chanceOfPlayingThisRound chanceOfPlayingNextRound
 			}
-			selectedByPercent transfersInEvent transfersOutEvent
+			totalPoints selectedByPercent transfersInEvent transfersOutEvent
 			fixtures { id event againstTeamShortName wasHome finished difficulty bgw }
           }
         }
         state {
           status
           value {
-            playerId teamId position season horizon asOfEventId asOf
+            playerId teamId season horizon asOf
             trend confidence providerMode
             reasons { code }
             profileRadar {
+              position season asOfEventId
               axes { code value percentile unit available }
             }
             dimensions {
@@ -633,7 +644,7 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
             }
             seasonTimeline {
               season phase position fplTotalPoints
-              signals { code provider value unit sampleMinutes analysisStatus reasonCodes }
+              signals { code value unit analysisStatus reasonCodes }
             }
           }
         }

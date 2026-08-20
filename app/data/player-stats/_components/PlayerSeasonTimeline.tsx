@@ -112,6 +112,9 @@ function FixtureStrip({
 										{fixture.wasHome ? t('homeShort') : t('awayShort')}{' '}
 										{fixture.againstTeamShortName}
 									</span>
+									<span className="text-muted-foreground tabular-nums">
+										{t('difficultyShort', { difficulty: fixture.difficulty })}
+									</span>
 								</span>
 							))
 					)}

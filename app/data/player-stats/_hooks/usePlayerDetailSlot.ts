@@ -54,8 +54,13 @@ function writeRecentPlayers(
 function withEmptyStateContext(
 	core: PlayerStateOverviewData
 ): PlayerStateProfileData {
+	const currentPoint = core.seasonTimeline.find(
+		point => point.season === core.season
+	)
 	return {
 		...core,
+		position: core.profileRadar?.position ?? currentPoint?.position ?? 0,
+		asOfEventId: core.profileRadar?.asOfEventId ?? null,
 		reasons: core.reasons.map(reason => ({ code: reason.code })),
 		profileRadar: core.profileRadar
 			? {
@@ -72,6 +77,14 @@ function withEmptyStateContext(
 					}))
 				}
 			: null,
+		seasonTimeline: core.seasonTimeline.map(point => ({
+			...point,
+			signals: point.signals.map(signal => ({
+				...signal,
+				provider: signal.code.startsWith('UNDERSTAT_') ? 'UNDERSTAT' : 'FPL',
+				sampleMinutes: null
+			}))
+		})),
 		dimensions: core.dimensions.map(dimension => ({
 			...dimension,
 			metrics: []
