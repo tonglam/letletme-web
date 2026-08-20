@@ -98,6 +98,8 @@
 		"sendResetLink": "Send reset link",
 		"signIn": "Sign in",
 		"chooseMethod": "Choose a method to continue",
+		"deskAgentDisclosureTitle": "LetLetMe Desk data tools",
+		"deskAgentDisclosure": "When you use these tools, published, personal, or competition-authorized results may be sent to the model provider you selected in LetLetMe Desk. The Desk app keeps this website session in a separate cookie partition.",
 		"reauthTitle": "Confirm it’s you",
 		"reauthDescription": "Sign in again to review and manage your active sessions.",
 		"password": "Password",
