@@ -97,7 +97,7 @@ const sortCatalogPlayers = (
 
 export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 	const input = options.input
-	const catalogMode = Boolean(input.playerIds || input.status)
+	const catalogMode = Boolean(input.playerIds || input.status || input.eventId !== undefined)
 	if (!catalogMode) {
 		const key = playerFilterKey(input)
 		const upstreamCursor = decodeCursor(input.cursor, {
@@ -144,7 +144,6 @@ export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 	}
 
 	const eventId = input.eventId ?? coreEventId(await loadCoreContext(options))
-	const key = playerFilterKey(input, eventId)
 	const result = await executeDocument<{
 		teamSelectionDesk: {
 			season: string
@@ -157,6 +156,11 @@ export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 		}
 	}>(options, PLAYER_CATALOG_DOCUMENT, { eventId })
 	const desk = result.teamSelectionDesk
+	const key = fingerprint({
+		filter: playerFilterKey(input, eventId),
+		coreRevision: desk.coreRevision,
+		marketRevision: desk.marketRevision
+	})
 	const ids = input.playerIds ? new Set(input.playerIds) : null
 	const query = input.query?.toLocaleLowerCase('en-US')
 	const filtered = sortCatalogPlayers(

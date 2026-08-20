@@ -41,6 +41,9 @@ describe('maintenance contract', () => {
 	it('blocks Data and GraphQL APIs without taking ownership of identity APIs', () => {
 		for (const pathname of [
 			'/api/graphql',
+			'/api/agent',
+			'/api/agent/v1/capabilities',
+			'/api/agent/v1/tools/letletme_context',
 			'/api/tournaments',
 			'/api/tournaments/42',
 			'/api/tournaments/setup-status'

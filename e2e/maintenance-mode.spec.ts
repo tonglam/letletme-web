@@ -43,7 +43,12 @@ test.describe('maintenance mode', () => {
 	test('returns a bounded machine-readable 503 only for Data-dependent APIs', async ({
 		request
 	}) => {
-		for (const pathname of ['/api/graphql', '/api/tournaments']) {
+		for (const pathname of [
+			'/api/graphql',
+			'/api/tournaments',
+			'/api/agent/v1/capabilities',
+			'/api/agent/v1/tools/letletme_context'
+		]) {
 			const response = await request.post(pathname, {
 				data: { query: 'query MaintenanceProbe { __typename }' }
 			})

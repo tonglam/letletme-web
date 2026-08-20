@@ -8,6 +8,10 @@ const REQUEST_INTERVAL_MS = 1_000
 const sleep = milliseconds =>
 	new Promise(resolve => globalThis.setTimeout(resolve, Math.max(0, milliseconds)))
 
+export function nextRequestDelayMs(finishedAt, endsAt, intervalMs = REQUEST_INTERVAL_MS) {
+	return finishedAt + intervalMs >= endsAt ? null : intervalMs
+}
+
 export function parsePositiveInteger(value, fallback, name) {
 	if (value === undefined || value === '') return fallback
 	const parsed = Number(value)
@@ -146,12 +150,11 @@ export async function runLoadTest({
 	await Promise.all(
 		Array.from({ length: clients }, async (_, clientIndex) => {
 			const cookie = cookies[clientIndex % cookies.length]
-			let nextRequestAt = performance.now()
 			while (performance.now() < endsAt) {
 				samples.push(await requestContext(endpoint, cookie, clientIndex, fetcher))
-				nextRequestAt += REQUEST_INTERVAL_MS
-				if (nextRequestAt >= endsAt) break
-				await sleep(nextRequestAt - performance.now())
+				const delayMs = nextRequestDelayMs(performance.now(), endsAt)
+				if (delayMs === null) break
+				await sleep(delayMs)
 			}
 		})
 	)

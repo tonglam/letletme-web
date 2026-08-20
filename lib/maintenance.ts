@@ -29,6 +29,8 @@ export function readMaintenanceConfig(
 export function isMaintenanceDataApi(pathname: string): boolean {
 	return (
 		pathname === '/api/graphql' ||
+		pathname === '/api/agent' ||
+		pathname.startsWith('/api/agent/') ||
 		pathname === '/api/tournaments' ||
 		pathname.startsWith('/api/tournaments/')
 	)

@@ -94,7 +94,8 @@ export const decodeCursor = (
 			parsed.kind !== expected.kind ||
 			parsed.key !== expected.key ||
 			(expected.mode !== undefined && parsed.mode !== expected.mode) ||
-			!Number.isSafeInteger(parsed.value)
+			!Number.isSafeInteger(parsed.value) ||
+			(parsed.value as number) < 0
 		) {
 			throw new Error('cursor mismatch')
 		}

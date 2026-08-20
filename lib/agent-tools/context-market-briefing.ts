@@ -1,5 +1,9 @@
 import type { AgentWarning } from '@/lib/agent-tools/contracts'
 import {
+	isBriefingState,
+	isRenderableBriefingStoryState
+} from '@/lib/graphql/operations/briefing'
+import {
 	BRIEFING_STORY_DOCUMENT,
 	BRIEFING_WEEK_DOCUMENT,
 	CONTEXT_DOCUMENT,
@@ -159,7 +163,10 @@ export async function runBriefing(options: ToolRunOptions<'letletme_briefing'>) 
 			slug: options.input.slug,
 			locale: options.input.locale
 		})
-		const publishable = result.briefingStory?.state === 'READY'
+		const storyState = result.briefingStory?.state
+		const publishable = Boolean(
+			storyState && isBriefingState(storyState) && isRenderableBriefingStoryState(storyState)
+		)
 		const warnings = publishable
 			? []
 			: [

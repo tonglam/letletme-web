@@ -6,7 +6,12 @@ import {
 	LETLETME_TOOL_NAMES,
 	type AgentSession
 } from '@/lib/agent-tools/contracts'
-import { AGENT_GRAPHQL_DOCUMENTS, PLAYERS_DOCUMENT } from '@/lib/agent-tools/documents'
+import {
+	AGENT_GRAPHQL_DOCUMENTS,
+	BRIEFING_STORY_DOCUMENT,
+	PLAYER_CATALOG_DOCUMENT,
+	PLAYERS_DOCUMENT
+} from '@/lib/agent-tools/documents'
 import {
 	AGENT_MAX_INPUT_BYTES,
 	handleAgentCapabilitiesRequest,
@@ -15,6 +20,7 @@ import {
 	type AgentGatewayLog
 } from '@/lib/agent-tools/route-handler'
 import { GraphQLRequestError } from '@/lib/graphql-client'
+import { decodeCursor, encodeCursor } from '@/lib/agent-tools/runtime'
 import { parse } from 'graphql'
 
 const authenticated: AgentSession = { user: { id: 'user-1' } }
@@ -216,6 +222,96 @@ test('player search remains a GraphQL variable and cannot replace the fixed docu
 	assert.equal(capturedDocument, PLAYERS_DOCUMENT)
 	assert.equal(capturedVariables.search, 'query Evil { __schema { types { name } } }')
 	assert.doesNotMatch(capturedDocument, /query Evil/)
+})
+
+test('an explicit event selects the revision-bound player catalog', async () => {
+	const catalog = (coreRevision: string) => ({
+		teamSelectionDesk: {
+			season: '2627',
+			coreRevision,
+			marketRevision: 'market-4',
+			checkedAt: '2026-08-20T00:01:00.000Z',
+			eventId: 5,
+			playerPool: { state: 'READY', checkedAt: null, message: null },
+			players: [
+				{
+					id: 1,
+					webName: 'Alpha',
+					team: { id: 1, name: 'Team', shortName: 'T' },
+					position: 'MIDFIELDER',
+					price: 50,
+					totalPoints: 10,
+					form: 1,
+					status: 'a'
+				},
+				{
+					id: 2,
+					webName: 'Beta',
+					team: { id: 2, name: 'Other', shortName: 'O' },
+					position: 'FORWARD',
+					price: 60,
+					totalPoints: 9,
+					form: 1,
+					status: 'a'
+				}
+			]
+		}
+	})
+	const first = await handleAgentToolRequest(
+		request({ eventId: 5, limit: 1 }),
+		'letletme_players',
+		dependencies(authenticated, async (document, variables) => {
+			assert.equal(document, PLAYER_CATALOG_DOCUMENT)
+			assert.equal(variables.eventId, 5)
+			return catalog('core-7')
+		})
+	)
+	assert.equal(first.status, 200)
+	const firstBody = await first.json()
+	assert.equal(firstBody.data.mode, 'published-catalog')
+	assert.ok(firstBody.page.nextCursor)
+
+	const stale = await handleAgentToolRequest(
+		request({ eventId: 5, limit: 1, cursor: firstBody.page.nextCursor }),
+		'letletme_players',
+		dependencies(authenticated, async () => catalog('core-8'))
+	)
+	assert.equal(stale.status, 400)
+	assert.equal((await stale.json()).code, 'INVALID_INPUT')
+})
+
+test('pagination cursors reject negative offsets', () => {
+	const cursor = encodeCursor({ kind: 'players', mode: 'catalog', key: 'filters', value: -1 })
+	assert.throws(
+		() => decodeCursor(cursor, { kind: 'players', mode: 'catalog', key: 'filters' }),
+		(error: unknown) =>
+			error instanceof Error &&
+			'code' in error &&
+			(error as { code: string }).code === 'INVALID_INPUT'
+	)
+})
+
+test('corrected Briefing stories remain published Agent data', async () => {
+	const response = await handleAgentToolRequest(
+		request({ slug: 'corrected-story', locale: 'EN' }),
+		'letletme_briefing',
+		dependencies(authenticated, async document => {
+			assert.equal(document, BRIEFING_STORY_DOCUMENT)
+			return {
+				coreEventContext: contextResult.coreEventContext,
+				briefingWeek: contextResult.briefingWeek,
+				briefingStory: {
+					state: 'CORRECTED',
+					canonicalSlug: 'corrected-story',
+					story: { id: 'story-1', slug: 'corrected-story', storyRevision: 2 }
+				}
+			}
+		})
+	)
+	assert.equal(response.status, 200)
+	const body = await response.json()
+	assert.equal(body.data.story.state, 'CORRECTED')
+	assert.deepEqual(body.warnings, [])
 })
 
 test('all saved GraphQL operations are queries and never use the side-effectful entry field', () => {

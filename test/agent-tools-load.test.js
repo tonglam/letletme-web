@@ -26,11 +26,13 @@ test('agent load settings require explicit safe targets and private cookie input
 })
 
 test('agent load helpers validate numbers and report expected 429s separately', () => {
-	const { parsePositiveInteger, percentile, summarize } = helpers
+	const { nextRequestDelayMs, parsePositiveInteger, percentile, summarize } = helpers
 	assert.equal(parsePositiveInteger(undefined, 20, 'clients'), 20)
 	assert.equal(parsePositiveInteger('3', 20, 'clients'), 3)
 	assert.throws(() => parsePositiveInteger('0', 20, 'clients'), /positive integer/)
 	assert.equal(percentile([30, 10, 20], 0.5), 20)
+	assert.equal(nextRequestDelayMs(5_000, 7_001), 1_000)
+	assert.equal(nextRequestDelayMs(6_001, 7_001), null)
 
 	const summary = summarize(
 		[
