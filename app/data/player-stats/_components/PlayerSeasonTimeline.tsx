@@ -332,17 +332,21 @@ function TimelineCell({
 					<span className="text-xs text-muted-foreground">
 						{t('timeline.preseasonPerformance')}
 					</span>
+				) : point.fplTotalPoints == null ? (
+					<span className="text-xs text-muted-foreground">
+						{t('timeline.pointsUnavailable')}
+					</span>
 				) : point.phase === 'ACTIVE' ? (
 					<span className="font-display text-sm font-bold tabular-nums">
 						{t('timeline.activePoints', {
 							gw: profile?.asOfEventId ?? '—',
-							points: point.fplTotalPoints ?? 0
+							points: point.fplTotalPoints
 						})}
 					</span>
 				) : (
 					<span className="font-display text-sm font-bold tabular-nums">
 						{t('timeline.completedPoints', {
-							points: point.fplTotalPoints ?? 0
+							points: point.fplTotalPoints
 						})}
 					</span>
 				)}

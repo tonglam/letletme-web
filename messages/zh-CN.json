@@ -758,6 +758,7 @@
 			"activeSeason": "赛季进行中",
 			"completedSeason": "最终数据",
 			"preseasonPerformance": "赛季表现尚未开始",
+			"pointsUnavailable": "赛季总分暂时不可用",
 			"activePoints": "截至 GW{gw} · {points} 分",
 			"completedPoints": "{points} 分",
 			"notInFplPool": "未进入 FPL 球员池",

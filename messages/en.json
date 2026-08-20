@@ -758,6 +758,7 @@
 			"activeSeason": "In progress",
 			"completedSeason": "Final",
 			"preseasonPerformance": "Season performance has not started",
+			"pointsUnavailable": "Season total temporarily unavailable",
 			"activePoints": "Through GW{gw} · {points} pts",
 			"completedPoints": "{points} pts",
 			"notInFplPool": "Not in the FPL player pool",
