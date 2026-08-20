@@ -447,7 +447,7 @@ export function PlayerSeasonTimeline({
 	return (
 		<section
 			id="ps-history"
-			aria-label={t('timelineTitle')}
+			aria-label={t('overallTitle')}
 			className="scroll-mt-36"
 		>
 			<div className="mb-2 flex flex-wrap items-end justify-between gap-2">
