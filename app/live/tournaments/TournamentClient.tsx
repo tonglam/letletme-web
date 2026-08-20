@@ -46,7 +46,7 @@ import {
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 import {
 	areTournamentStandingsReady,
-	isTournamentSetupInFlight
+	isTournamentSetupPollingPending
 } from '@/lib/tournament/lifecycle'
 import { Tournament, type TournamentEntry } from '@/types/tournament'
 import { Link, useRouter } from '@/i18n/navigation'
@@ -356,8 +356,10 @@ export default function TournamentClient({
 		if (
 			!isPageActive ||
 			!selectedTournament ||
-			standingsReady ||
-			!isTournamentSetupInFlight(selectedTournament.setupStatus)
+			!isTournamentSetupPollingPending(
+				selectedTournament.setupStatus,
+				selectedTournament.insightsReadyAt
+			)
 		) {
 			return
 		}
@@ -388,7 +390,7 @@ export default function TournamentClient({
 			cancelled = true
 			if (timer !== undefined) window.clearTimeout(timer)
 		}
-	}, [entryId, isPageActive, selectedTournament, standingsReady])
+	}, [entryId, isPageActive, selectedTournament])
 
 	useEffect(() => {
 		if (

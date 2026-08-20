@@ -61,7 +61,7 @@ import {
 import { positionBadgeClass } from '@/lib/position-style'
 import {
 	areTournamentInsightsReady,
-	isTournamentSetupInFlight
+	isTournamentSetupPollingPending
 } from '@/lib/tournament/lifecycle'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 import { cn, normalizePosition } from '@/lib/utils'
@@ -667,7 +667,10 @@ export default function SelectionsClient({
 			selectedScope !== 'mine' ||
 			!selectedTournament ||
 			insightsReady ||
-			!isTournamentSetupInFlight(selectedTournament.setupStatus)
+			!isTournamentSetupPollingPending(
+				selectedTournament.setupStatus,
+				selectedTournament.insightsReadyAt
+			)
 		) {
 			return
 		}
@@ -984,9 +987,12 @@ export default function SelectionsClient({
 						<p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
 							{selectedTournament.setupStatus === 'FAILED'
 								? lifecycleT('memberFailure')
-								: selectedTournament.standingsReadyAt
-									? lifecycleT('enrichingMessage')
-									: lifecycleT('leavePageMessage')}
+								: selectedTournament.warningSummaries?.length ||
+									  selectedTournament.setupHasWarnings
+									? lifecycleT('warningSummary')
+									: selectedTournament.standingsReadyAt
+										? lifecycleT('enrichingMessage')
+										: lifecycleT('leavePageMessage')}
 						</p>
 					</div>
 				) : null}

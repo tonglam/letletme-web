@@ -98,20 +98,30 @@ export const areTournamentStandingsReady = (
 
 export const shouldPollTournamentSetup = ({
 	setupStatus,
+	insightsReadyAt,
 	visible,
 	online
 }: {
 	setupStatus: TournamentSetupStatus
+	insightsReadyAt: string | null | undefined
 	visible: boolean
 	online: boolean
 }): boolean =>
 	visible &&
 	online &&
-	(setupStatus === 'PENDING' || setupStatus === 'PROCESSING')
+	(isTournamentSetupInFlight(setupStatus) ||
+		(setupStatus === 'READY' && !insightsReadyAt))
 
 export const isTournamentSetupInFlight = (
 	status: TournamentSetupStatus
 ): boolean => status === 'PENDING' || status === 'PROCESSING'
+
+export const isTournamentSetupPollingPending = (
+	setupStatus: TournamentSetupStatus,
+	insightsReadyAt: string | null | undefined
+): boolean =>
+	isTournamentSetupInFlight(setupStatus) ||
+	(setupStatus === 'READY' && !insightsReadyAt)
 
 export const isTournamentRosterSyncInFlight = (
 	status: TournamentSetupStatus | null

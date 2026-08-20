@@ -40,6 +40,7 @@ import {
 import type { TournamentDetailLoadError } from '@/lib/tournament/detail-load-error'
 import {
 	areTournamentInsightsReady,
+	isTournamentSetupPollingPending,
 	normalizeTournamentSetupStatus,
 	shouldPollTournamentSetup
 } from '@/lib/tournament/lifecycle'
@@ -335,6 +336,7 @@ export default function TournamentDetailClient({
 
 	const polledTournamentId = currentTournament?.id
 	const polledSetupStatus = currentTournament?.setupStatus
+	const polledInsightsReadyAt = currentTournament?.insightsReadyAt
 
 	useEffect(() => {
 		if (
@@ -342,6 +344,7 @@ export default function TournamentDetailClient({
 			!polledSetupStatus ||
 			!shouldPollTournamentSetup({
 				setupStatus: polledSetupStatus,
+				insightsReadyAt: polledInsightsReadyAt,
 				visible,
 				online
 			})
@@ -404,8 +407,10 @@ export default function TournamentDetailClient({
 				}
 
 				if (
-					status.setupStatus === 'PENDING' ||
-					status.setupStatus === 'PROCESSING'
+					isTournamentSetupPollingPending(
+						status.setupStatus,
+						status.insightsReadyAt
+					)
 				) {
 					timer = setTimeout(poll, 5_000)
 				} else {
@@ -426,6 +431,7 @@ export default function TournamentDetailClient({
 	}, [
 		lifecycleT,
 		online,
+		polledInsightsReadyAt,
 		polledSetupStatus,
 		polledTournamentId,
 		router,

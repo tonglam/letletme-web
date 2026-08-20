@@ -5,6 +5,7 @@ import {
 	getTournamentLifecycleBadge,
 	isTournamentRosterSyncInFlight,
 	isTournamentSetupInFlight,
+	isTournamentSetupPollingPending,
 	normalizeTournamentSetupStatus,
 	shouldPollTournamentSetup
 } from '@/lib/tournament/lifecycle'
@@ -71,6 +72,7 @@ describe('tournament lifecycle presentation', () => {
 		assert.equal(
 			shouldPollTournamentSetup({
 				setupStatus: 'PROCESSING',
+				insightsReadyAt: null,
 				visible: true,
 				online: true
 			}),
@@ -79,6 +81,7 @@ describe('tournament lifecycle presentation', () => {
 		assert.equal(
 			shouldPollTournamentSetup({
 				setupStatus: 'READY',
+				insightsReadyAt: '2026-08-04T00:00:00.000Z',
 				visible: true,
 				online: true
 			}),
@@ -86,7 +89,17 @@ describe('tournament lifecycle presentation', () => {
 		)
 		assert.equal(
 			shouldPollTournamentSetup({
+				setupStatus: 'READY',
+				insightsReadyAt: null,
+				visible: true,
+				online: true
+			}),
+			true
+		)
+		assert.equal(
+			shouldPollTournamentSetup({
 				setupStatus: 'PROCESSING',
+				insightsReadyAt: null,
 				visible: false,
 				online: true
 			}),
@@ -95,6 +108,7 @@ describe('tournament lifecycle presentation', () => {
 		assert.equal(
 			shouldPollTournamentSetup({
 				setupStatus: 'PROCESSING',
+				insightsReadyAt: null,
 				visible: true,
 				online: false
 			}),
@@ -115,6 +129,11 @@ describe('tournament lifecycle presentation', () => {
 		assert.equal(isTournamentSetupInFlight('PROCESSING'), true)
 		assert.equal(isTournamentSetupInFlight('READY'), false)
 		assert.equal(isTournamentSetupInFlight('FAILED'), false)
+		assert.equal(isTournamentSetupPollingPending('READY', null), true)
+		assert.equal(
+			isTournamentSetupPollingPending('READY', '2026-08-04T00:00:00.000Z'),
+			false
+		)
 	})
 
 	it('preserves readiness in the shared tournament view', () => {

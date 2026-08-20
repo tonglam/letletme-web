@@ -24,7 +24,9 @@ export const mapEntryTournamentToLiveTournament = (
 		entries: [],
 		setupStatus: tournament.setupStatus,
 		standingsReadyAt: tournament.standingsReadyAt,
-		setupHasWarnings: tournament.setupHasWarnings
+		insightsReadyAt: tournament.insightsReadyAt ?? null,
+		setupHasWarnings: tournament.setupHasWarnings,
+		warningSummaries: tournament.warningSummaries ?? []
 	}
 }
 
