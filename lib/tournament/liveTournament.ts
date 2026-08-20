@@ -1,5 +1,6 @@
 import { type EntryTournament } from '@/lib/graphql/operations/tournaments'
 import { type Tournament } from '@/types/tournament'
+import { isTournamentInsightsRepairExhausted } from './lifecycle'
 
 export type TournamentGroupFormat = 'none' | 'points' | 'headToHead'
 
@@ -24,7 +25,12 @@ export const mapEntryTournamentToLiveTournament = (
 		entries: [],
 		setupStatus: tournament.setupStatus,
 		standingsReadyAt: tournament.standingsReadyAt,
-		setupHasWarnings: tournament.setupHasWarnings
+		insightsReadyAt: tournament.insightsReadyAt ?? null,
+		setupHasWarnings: tournament.setupHasWarnings,
+		warningSummaries: tournament.warningSummaries ?? [],
+		setupRepairExhausted: isTournamentInsightsRepairExhausted(
+			tournament.warningSummaries
+		)
 	}
 }
 

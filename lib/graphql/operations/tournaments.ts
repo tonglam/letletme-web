@@ -39,8 +39,15 @@ export const TOURNAMENT_INFO_FIELDS = `
     setupCompletedUnits
     setupTotalUnits
     setupProgressUpdatedAt
+    setupProgressMode
+    setupAttempt
+    setupMaxAttempts
+    nextRetryAt
     standingsReadyAt
+    profilesReadyAt
+    insightsReadyAt
     setupHasWarnings
+    warningSummaries { category affectedCount repairExhausted }
     setupStartedAt
     setupFinishedAt
     createdAt
@@ -77,8 +84,15 @@ export const GET_ENTRY_TOURNAMENTS_LIST = `
       state
       rosterSyncStatus
       setupStatus
+      setupProgressMode
+      setupAttempt
+      setupMaxAttempts
+      nextRetryAt
       standingsReadyAt
+      profilesReadyAt
+      insightsReadyAt
       setupHasWarnings
+      warningSummaries { category affectedCount repairExhausted }
       updatedAt
     }
   }
@@ -97,6 +111,14 @@ export type TournamentSetupPhase =
 	| 'READY'
 	| 'FAILED'
 export type TournamentRosterMode = 'SNAPSHOT' | 'OFFICIAL_SYNC'
+export type TournamentSetupProgressMode = 'DETERMINATE' | 'INDETERMINATE'
+export type TournamentSetupWarningCategory = 'PROFILES' | 'INSIGHTS' | 'RESULTS'
+
+export interface TournamentSetupWarningSummary {
+	category: TournamentSetupWarningCategory
+	affectedCount: number
+	repairExhausted?: boolean
+}
 
 export interface EntryTournament {
 	id: number
@@ -136,8 +158,15 @@ export interface EntryTournament {
 	setupCompletedUnits: number
 	setupTotalUnits: number
 	setupProgressUpdatedAt: string | null
+	setupProgressMode?: TournamentSetupProgressMode
+	setupAttempt?: number
+	setupMaxAttempts?: number
+	nextRetryAt?: string | null
 	standingsReadyAt: string | null
+	profilesReadyAt?: string | null
+	insightsReadyAt?: string | null
 	setupHasWarnings: boolean
+	warningSummaries?: TournamentSetupWarningSummary[]
 	setupStartedAt: string | null
 	setupFinishedAt: string | null
 	createdAt: string
@@ -165,8 +194,15 @@ export type EntryTournamentListItem = Pick<
 	| 'state'
 	| 'rosterSyncStatus'
 	| 'setupStatus'
+	| 'setupProgressMode'
+	| 'setupAttempt'
+	| 'setupMaxAttempts'
+	| 'nextRetryAt'
 	| 'standingsReadyAt'
+	| 'profilesReadyAt'
+	| 'insightsReadyAt'
 	| 'setupHasWarnings'
+	| 'warningSummaries'
 	| 'updatedAt'
 >
 
@@ -205,7 +241,7 @@ export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_INFO_FIELDS}
       tournament { ...TournamentInfoFields }
       unavailableSections
       participants { entryId entryName playerName }
-      setup { status phase completedUnits totalUnits hasWarnings }
+		setup { status phase completedUnits totalUnits hasWarnings progressMode attempt maxAttempts nextRetryAt warningSummaries { category affectedCount repairExhausted } }
       officialH2H {
         eventId
         awaitingSchedule
@@ -250,6 +286,11 @@ export interface TournamentDetailDeskResponse {
 			completedUnits: number
 			totalUnits: number
 			hasWarnings: boolean
+			progressMode?: TournamentSetupProgressMode
+			attempt?: number
+			maxAttempts?: number
+			nextRetryAt?: string | null
+			warningSummaries?: TournamentSetupWarningSummary[]
 		} | null
 		officialH2H: TournamentOfficialH2H | null
 		live: {
@@ -291,7 +332,7 @@ export interface ManagedTournamentResponse {
 export const GET_MANAGED_TOURNAMENT_STATUS = `
   query GetManagedTournamentStatus($tournamentId: Int!, $entryId: Int!) {
     managedTournamentStatus(tournamentId: $tournamentId, entryId: $entryId) {
-      revision state setupStatus setupPhase rosterSyncStatus setupCompletedUnits setupTotalUnits standingsReadyAt setupHasWarnings updatedAt
+	      revision state setupStatus setupPhase rosterSyncStatus setupCompletedUnits setupTotalUnits setupProgressMode setupAttempt setupMaxAttempts nextRetryAt standingsReadyAt profilesReadyAt insightsReadyAt setupHasWarnings warningSummaries { category affectedCount repairExhausted } issues { issueKey code diagnosticCode category severity eventId affectedEntryIds affectedCount repairAttempts nextRepairAt repairExhausted } updatedAt
     }
   }
 `
@@ -305,10 +346,32 @@ export interface ManagedTournamentStatusResponse {
 		rosterSyncStatus: TournamentSetupStatus | null
 		setupCompletedUnits: number
 		setupTotalUnits: number
+		setupProgressMode: TournamentSetupProgressMode
+		setupAttempt: number
+		setupMaxAttempts: number
+		nextRetryAt: string | null
 		standingsReadyAt: string | null
+		profilesReadyAt: string | null
+		insightsReadyAt: string | null
 		setupHasWarnings: boolean
+		warningSummaries: TournamentSetupWarningSummary[]
+		issues: TournamentSetupIssueDiagnostic[]
 		updatedAt: string
 	} | null
+}
+
+export interface TournamentSetupIssueDiagnostic {
+	issueKey: string
+	code: string
+	diagnosticCode: string | null
+	category: TournamentSetupWarningCategory
+	severity: 'WARNING' | 'BLOCKING'
+	eventId: number | null
+	affectedEntryIds: number[]
+	affectedCount: number
+	repairAttempts: number
+	nextRepairAt: string | null
+	repairExhausted: boolean
 }
 
 /**

@@ -3,14 +3,16 @@ import { describe, it } from 'node:test'
 import {
 	areTournamentStandingsReady,
 	getTournamentLifecycleBadge,
+	isTournamentInsightsRepairExhausted,
 	isTournamentRosterSyncInFlight,
 	isTournamentSetupInFlight,
+	isTournamentSetupPollingPending,
 	normalizeTournamentSetupStatus,
 	shouldPollTournamentSetup
 } from '@/lib/tournament/lifecycle'
 import {
 	mapEntryTournamentToLiveTournament,
-	mapTournamentGroupFormat,
+	mapTournamentGroupFormat
 } from '@/lib/tournament/liveTournament'
 import { resolveTournamentStatsLoadState } from '@/app/me/tournament/_lib/tournament-stats-model'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
@@ -22,6 +24,7 @@ const lifecycle = (
 	rosterSyncStatus: 'READY',
 	setupStatus: 'READY',
 	standingsReadyAt: '2026-08-04T00:00:00.000Z',
+	insightsReadyAt: '2026-08-04T00:00:00.000Z',
 	setupHasWarnings: false,
 	...overrides
 })
@@ -43,9 +46,7 @@ describe('tournament lifecycle presentation', () => {
 			'needsAttention'
 		)
 		assert.equal(
-			getTournamentLifecycleBadge(
-				lifecycle({ setupStatus: 'FAILED' })
-			),
+			getTournamentLifecycleBadge(lifecycle({ setupStatus: 'FAILED' })),
 			'needsAttention'
 		)
 	})
@@ -64,6 +65,10 @@ describe('tournament lifecycle presentation', () => {
 			'readyWithWarnings'
 		)
 		assert.equal(
+			getTournamentLifecycleBadge(lifecycle({ insightsReadyAt: null })),
+			'standingsReady'
+		)
+		assert.equal(
 			getTournamentLifecycleBadge(lifecycle({ state: 'INACTIVE' })),
 			'paused'
 		)
@@ -73,6 +78,7 @@ describe('tournament lifecycle presentation', () => {
 		assert.equal(
 			shouldPollTournamentSetup({
 				setupStatus: 'PROCESSING',
+				insightsReadyAt: null,
 				visible: true,
 				online: true
 			}),
@@ -81,6 +87,26 @@ describe('tournament lifecycle presentation', () => {
 		assert.equal(
 			shouldPollTournamentSetup({
 				setupStatus: 'READY',
+				insightsReadyAt: '2026-08-04T00:00:00.000Z',
+				visible: true,
+				online: true
+			}),
+			false
+		)
+		assert.equal(
+			shouldPollTournamentSetup({
+				setupStatus: 'READY',
+				insightsReadyAt: null,
+				visible: true,
+				online: true
+			}),
+			true
+		)
+		assert.equal(
+			shouldPollTournamentSetup({
+				setupStatus: 'READY',
+				insightsReadyAt: null,
+				repairExhausted: true,
 				visible: true,
 				online: true
 			}),
@@ -89,6 +115,7 @@ describe('tournament lifecycle presentation', () => {
 		assert.equal(
 			shouldPollTournamentSetup({
 				setupStatus: 'PROCESSING',
+				insightsReadyAt: null,
 				visible: false,
 				online: true
 			}),
@@ -97,6 +124,7 @@ describe('tournament lifecycle presentation', () => {
 		assert.equal(
 			shouldPollTournamentSetup({
 				setupStatus: 'PROCESSING',
+				insightsReadyAt: null,
 				visible: true,
 				online: false
 			}),
@@ -117,6 +145,35 @@ describe('tournament lifecycle presentation', () => {
 		assert.equal(isTournamentSetupInFlight('PROCESSING'), true)
 		assert.equal(isTournamentSetupInFlight('READY'), false)
 		assert.equal(isTournamentSetupInFlight('FAILED'), false)
+		assert.equal(isTournamentSetupPollingPending('READY', null), true)
+		assert.equal(isTournamentSetupPollingPending('READY', null, true), false)
+		assert.equal(
+			isTournamentSetupPollingPending('READY', '2026-08-04T00:00:00.000Z'),
+			false
+		)
+	})
+
+	it('only treats insight and result repairs as terminal for insight polling', () => {
+		assert.equal(
+			isTournamentInsightsRepairExhausted([
+				{ category: 'PROFILES', affectedCount: 2, repairExhausted: true }
+			]),
+			false
+		)
+		assert.equal(
+			isTournamentInsightsRepairExhausted([
+				{ category: 'PROFILES', affectedCount: 2, repairExhausted: true },
+				{ category: 'INSIGHTS', affectedCount: 1, repairExhausted: false }
+			]),
+			false
+		)
+		assert.equal(
+			isTournamentInsightsRepairExhausted([
+				{ category: 'INSIGHTS', affectedCount: 1, repairExhausted: true },
+				{ category: 'RESULTS', affectedCount: 1, repairExhausted: true }
+			]),
+			true
+		)
 	})
 
 	it('preserves readiness in the shared tournament view', () => {
@@ -126,7 +183,7 @@ describe('tournament lifecycle presentation', () => {
 			totalTeamNum: 75,
 			setupStatus: 'PROCESSING',
 			standingsReadyAt: null,
-			setupHasWarnings: false,
+			setupHasWarnings: false
 		} as EntryTournament)
 
 		assert.equal(mapped.setupStatus, 'PROCESSING')
@@ -146,17 +203,17 @@ describe('tournament lifecycle presentation', () => {
 			resolveTournamentStatsLoadState({
 				isBootstrapping: false,
 				hasSelectedTournament: true,
-				insightsReady: false,
+				insightsReady: false
 			}),
-			'reset',
+			'reset'
 		)
 		assert.equal(
 			resolveTournamentStatsLoadState({
 				isBootstrapping: false,
 				hasSelectedTournament: true,
-				insightsReady: true,
+				insightsReady: true
 			}),
-			'load',
+			'load'
 		)
 	})
 
@@ -169,8 +226,15 @@ describe('tournament lifecycle presentation', () => {
 				setupCompletedUnits: 42,
 				setupTotalUnits: 75,
 				setupProgressUpdatedAt: null,
+				setupProgressMode: 'DETERMINATE',
+				setupAttempt: 0,
+				setupMaxAttempts: 3,
+				nextRetryAt: null,
 				standingsReadyAt: null,
+				profilesReadyAt: null,
+				insightsReadyAt: null,
 				setupHasWarnings: false,
+				warningSummaries: [],
 				setupStartedAt: null,
 				setupFinishedAt: null
 			}),
@@ -180,9 +244,16 @@ describe('tournament lifecycle presentation', () => {
 				setupPhase: 'SYNCING_ENTRIES',
 				setupCompletedUnits: 42,
 				setupTotalUnits: 75,
+				setupProgressMode: 'DETERMINATE',
+				setupAttempt: 0,
+				setupMaxAttempts: 3,
+				nextRetryAt: null,
 				setupProgressUpdatedAt: null,
 				standingsReadyAt: null,
+				profilesReadyAt: null,
+				insightsReadyAt: null,
 				setupHasWarnings: false,
+				warningSummaries: [],
 				setupStartedAt: null,
 				setupFinishedAt: null
 			}

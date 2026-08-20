@@ -40,6 +40,8 @@ import {
 import type { TournamentDetailLoadError } from '@/lib/tournament/detail-load-error'
 import {
 	areTournamentInsightsReady,
+	isTournamentInsightsRepairExhausted,
+	isTournamentSetupPollingPending,
 	normalizeTournamentSetupStatus,
 	shouldPollTournamentSetup
 } from '@/lib/tournament/lifecycle'
@@ -175,28 +177,30 @@ function TournamentRosterList({
 									isMe && 'border-primary/40 row-self'
 								)}
 							>
-									<Link
-										href={teamHref(participant.entryId)}
-										prefetch={false}
-										className="block min-w-0 hover:text-primary-ink hover:underline underline-offset-2"
+								<Link
+									href={teamHref(participant.entryId)}
+									prefetch={false}
+									className="block min-w-0 hover:text-primary-ink hover:underline underline-offset-2"
+								>
+									<span
+										className={cn('font-medium', isMe && 'text-primary-ink')}
 									>
-										<span className={cn('font-medium', isMe && 'text-primary-ink')}>
-											{participant.entryName ??
-												lifecycleT('entryFallback', {
-													id: participant.entryId
-												})}
-											{isMe ? (
-												<span className="ml-1.5 text-caption font-semibold text-primary-ink">
-													{t('youBadge')}
-												</span>
-											) : null}
-										</span>
-										{participant.playerName ? (
-											<span className="mt-0.5 block truncate text-xs text-muted-foreground">
-												{participant.playerName}
+										{participant.entryName ??
+											lifecycleT('entryFallback', {
+												id: participant.entryId
+											})}
+										{isMe ? (
+											<span className="ml-1.5 text-caption font-semibold text-primary-ink">
+												{t('youBadge')}
 											</span>
 										) : null}
-									</Link>
+									</span>
+									{participant.playerName ? (
+										<span className="mt-0.5 block truncate text-xs text-muted-foreground">
+											{participant.playerName}
+										</span>
+									) : null}
+								</Link>
 							</li>
 						)
 					})
@@ -333,6 +337,10 @@ export default function TournamentDetailClient({
 
 	const polledTournamentId = currentTournament?.id
 	const polledSetupStatus = currentTournament?.setupStatus
+	const polledInsightsReadyAt = currentTournament?.insightsReadyAt
+	const polledRepairExhausted = isTournamentInsightsRepairExhausted(
+		currentTournament?.warningSummaries
+	)
 
 	useEffect(() => {
 		if (
@@ -340,6 +348,8 @@ export default function TournamentDetailClient({
 			!polledSetupStatus ||
 			!shouldPollTournamentSetup({
 				setupStatus: polledSetupStatus,
+				insightsReadyAt: polledInsightsReadyAt,
+				repairExhausted: polledRepairExhausted,
 				visible,
 				online
 			})
@@ -379,9 +389,16 @@ export default function TournamentDetailClient({
 								setupPhase: status.setupPhase,
 								setupCompletedUnits: status.setupCompletedUnits,
 								setupTotalUnits: status.setupTotalUnits,
+								setupProgressMode: status.setupProgressMode,
+								setupAttempt: status.setupAttempt,
+								setupMaxAttempts: status.setupMaxAttempts,
+								nextRetryAt: status.nextRetryAt,
 								setupProgressUpdatedAt: status.setupProgressUpdatedAt,
 								standingsReadyAt: status.standingsReadyAt,
+								profilesReadyAt: status.profilesReadyAt,
+								insightsReadyAt: status.insightsReadyAt,
 								setupHasWarnings: status.setupHasWarnings,
+								warningSummaries: status.warningSummaries,
 								setupStartedAt: status.setupStartedAt,
 								setupFinishedAt: status.setupFinishedAt
 							}
@@ -395,8 +412,11 @@ export default function TournamentDetailClient({
 				}
 
 				if (
-					status.setupStatus === 'PENDING' ||
-					status.setupStatus === 'PROCESSING'
+					isTournamentSetupPollingPending(
+						status.setupStatus,
+						status.insightsReadyAt,
+						isTournamentInsightsRepairExhausted(status.warningSummaries)
+					)
 				) {
 					timer = setTimeout(poll, 5_000)
 				} else {
@@ -417,6 +437,8 @@ export default function TournamentDetailClient({
 	}, [
 		lifecycleT,
 		online,
+		polledInsightsReadyAt,
+		polledRepairExhausted,
 		polledSetupStatus,
 		polledTournamentId,
 		router,
@@ -618,16 +640,35 @@ export default function TournamentDetailClient({
 	const insightsReady = currentTournament
 		? areTournamentInsightsReady(currentTournament)
 		: false
+	const warningSummaries = currentTournament?.warningSummaries ?? []
+	const hasSetupWarnings =
+		Boolean(currentTournament?.setupHasWarnings) || warningSummaries.length > 0
+	const profileWarningCount = warningSummaries
+		.filter(summary => summary.category === 'PROFILES')
+		.reduce((total, summary) => total + summary.affectedCount, 0)
+	const insightsWarningCount = warningSummaries
+		.filter(
+			summary =>
+				summary.category === 'INSIGHTS' || summary.category === 'RESULTS'
+		)
+		.reduce((total, summary) => total + summary.affectedCount, 0)
 	const tournamentHeaderData = useMemo(() => {
 		if (!currentTournament || !standingsReady || isOfficialH2H) return null
 		return {
 			name: currentTournament.name,
 			averagePoints: standingsStats.averagePoints,
 			highestPoints: standingsStats.highestPoints,
+			scoresAvailable: Boolean(currentGameweek),
 			totalEntries:
 				standingsStats.totalEntries || currentTournament.totalTeamNum
 		}
-	}, [currentTournament, isOfficialH2H, standingsReady, standingsStats])
+	}, [
+		currentGameweek,
+		currentTournament,
+		isOfficialH2H,
+		standingsReady,
+		standingsStats
+	])
 
 	const retrySetup = async () => {
 		if (!currentTournament || retrying) return
@@ -646,7 +687,10 @@ export default function TournamentDetailClient({
 							...current,
 							setupStatus: 'PENDING',
 							setupPhase: 'QUEUED',
-							setupHasWarnings: false
+							setupHasWarnings: false,
+							warningSummaries: [],
+							profilesReadyAt: null,
+							insightsReadyAt: null
 						}
 					: current
 			)
@@ -738,7 +782,10 @@ export default function TournamentDetailClient({
 							) : null}
 							{kind !== 'bind_entry' ? (
 								<Button asChild>
-									<Link href="/competitions/browse?mine=true" prefetch={false}>
+									<Link
+										href="/competitions/browse?mine=true"
+										prefetch={false}
+									>
 										{t('errorCtaMyCompetitions')}
 									</Link>
 								</Button>
@@ -748,7 +795,12 @@ export default function TournamentDetailClient({
 									variant="outline"
 									asChild
 								>
-									<Link href="/live/competitions" prefetch={false}>{t('errorCtaLiveList')}</Link>
+									<Link
+										href="/live/competitions"
+										prefetch={false}
+									>
+										{t('errorCtaLiveList')}
+									</Link>
 								</Button>
 							) : null}
 							{kind === 'unavailable' ? (
@@ -788,7 +840,10 @@ export default function TournamentDetailClient({
 						className="-ml-3 text-primary-ink hover:text-primary-ink/80"
 						asChild
 					>
-						<Link href="/live/competitions" prefetch={false}>
+						<Link
+							href="/live/competitions"
+							prefetch={false}
+						>
 							<ArrowLeft aria-hidden="true" />
 							<span>{t('backToCompetitions')}</span>
 						</Link>
@@ -884,6 +939,23 @@ export default function TournamentDetailClient({
 							</Card>
 						)}
 
+						{standingsReady && !isOfficialH2H && !currentGameweek ? (
+							<Alert
+								variant="warning"
+								className="mb-6"
+							>
+								<Calendar aria-hidden="true" />
+								<AlertDescription>
+									<span className="font-medium">
+										{t('currentRoundPendingTitle')}
+									</span>
+									<span className="mt-1 block">
+										{t('currentRoundPendingDescription')}
+									</span>
+								</AlertDescription>
+							</Alert>
+						) : null}
+
 						{standingsReady && !isOfficialH2H ? (
 							<div className="mb-4 flex items-center justify-end gap-3">
 								<LiveAutoRefreshCountdown
@@ -906,8 +978,7 @@ export default function TournamentDetailClient({
 							</div>
 						) : null}
 
-						{currentTournament.setupStatus !== 'READY' ||
-						currentTournament.setupHasWarnings ? (
+						{currentTournament.setupStatus !== 'READY' || hasSetupWarnings ? (
 							<Card className="mb-6 p-4 shadow-sm sm:p-5">
 								<div className="flex flex-wrap items-start justify-between gap-3">
 									<div>
@@ -915,8 +986,14 @@ export default function TournamentDetailClient({
 											{lifecycleT('setupTitle')}
 										</h2>
 										<p className="mt-1 text-sm text-muted-foreground">
-											{currentTournament.setupHasWarnings
-												? lifecycleT('warningSummary')
+											{hasSetupWarnings
+												? profileWarningCount > 0
+													? lifecycleT('profileWarning', {
+															count: profileWarningCount
+														})
+													: insightsWarningCount > 0
+														? lifecycleT('insightsWarning')
+														: lifecycleT('warningSummary')
 												: standingsReady
 													? lifecycleT('enrichingMessage')
 													: lifecycleT('leavePageMessage')}
@@ -947,36 +1024,17 @@ export default function TournamentDetailClient({
 												) : (
 													<RefreshCw aria-hidden="true" />
 												)}
-												{lifecycleT('retrySetup')}
+												{lifecycleT('recoverSetup')}
 											</Button>
 										) : null}
 									</div>
-								) : currentTournament.setupHasWarnings ? (
-									<div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm">
+								) : hasSetupWarnings ? (
+									<div className="mt-4 rounded-lg border border-border/80 bg-muted/30 p-4 text-sm">
 										<p>
 											{canManage
 												? lifecycleT('warningOwner')
 												: lifecycleT('warningMember')}
 										</p>
-										{canManage ? (
-											<Button
-												className="mt-3"
-												size="sm"
-												variant="outline"
-												onClick={retrySetup}
-												disabled={retrying}
-											>
-												{retrying ? (
-													<LoaderCircle
-														className="animate-spin"
-														aria-hidden="true"
-													/>
-												) : (
-													<RefreshCw aria-hidden="true" />
-												)}
-												{lifecycleT('retrySetup')}
-											</Button>
-										) : null}
 									</div>
 								) : (
 									<ol className="mt-5 space-y-3">
@@ -1018,9 +1076,16 @@ export default function TournamentDetailClient({
 														}
 													>
 														{lifecycleT(`phase.${phase}`)}
-														{active && currentTournament.setupTotalUnits > 0
+														{active &&
+														currentTournament.setupProgressMode !==
+															'INDETERMINATE' &&
+														currentTournament.setupTotalUnits > 0
 															? ` ${currentTournament.setupCompletedUnits}/${currentTournament.setupTotalUnits}`
-															: ''}
+															: active &&
+																  currentTournament.setupProgressMode ===
+																		'INDETERMINATE'
+																? ` · ${lifecycleT('indeterminateProgress')}`
+																: ''}
 													</span>
 												</li>
 											)
