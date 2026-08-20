@@ -16,7 +16,7 @@ import type {
 } from '../_lib/team-stats-model'
 import type { PlayerDetail } from '@/types/player-detail'
 import { useFormatter, useLocale, useTranslations } from 'next-intl'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 
 const POSITION_ORDER: Record<SquadPitchPlayer['position'], number> = {
 	GKP: 0,
@@ -154,8 +154,11 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 	const t = useTranslations('TeamStats')
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDetail | null>(null)
-	const formatOverallRank = (value: number) =>
-		value <= 0 ? '—' : format.number(value, { notation: 'compact' })
+	const formatOverallRank = useCallback(
+		(value: number) =>
+			value <= 0 ? '—' : format.number(value, { notation: 'compact' }),
+		[format]
+	)
 
 	const players = useMemo(
 		() =>
@@ -235,7 +238,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 		]
 			.filter(line => line != null)
 			.join('\n')
-	}, [benchPlayers, format, locale, players, stats, t])
+	}, [benchPlayers, format, formatOverallRank, locale, players, stats, t])
 
 	if (players.length === 0) return null
 
