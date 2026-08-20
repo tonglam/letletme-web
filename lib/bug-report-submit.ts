@@ -259,6 +259,7 @@ export async function submitBugReportToData({
 		}
 	}
 
+	let cleanupOnDataRejection = false
 	try {
 		let lastStatus = 502
 		let lastMessage = 'Could not send the report.'
@@ -280,6 +281,12 @@ export async function submitBugReportToData({
 					},
 					request
 				)
+				// A 4xx response is a definitive rejection: the Data handler did not
+				// persist this submission, so an uploaded attachment can be removed.
+				// 5xx responses, malformed bodies, and transport errors are ambiguous;
+				// Data may have committed before the response was lost. Leave those
+				// objects for the private-bucket retention/orphan sweep.
+				cleanupOnDataRejection = response.status >= 400 && response.status < 500
 				const result = (await response.json()) as {
 					success?: boolean
 					publicId?: string
@@ -297,7 +304,7 @@ export async function submitBugReportToData({
 		}
 		throw new BugReportSubmitError(lastMessage, lastStatus)
 	} catch (error) {
-		if (screenshotObjectKey) {
+		if (screenshotObjectKey && cleanupOnDataRejection) {
 			try {
 				await removeStorageObject(BUG_REPORT_SCREENSHOT_BUCKET, screenshotObjectKey)
 			} catch (cleanupError) {
