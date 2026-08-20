@@ -33,8 +33,9 @@ class TransientHomeGameweekError extends Error {
 function isHomeGameweekDurablyCacheable(gameweek: HomeGameweek): boolean {
 	return (
 		gameweek.gameweekDesk.lifecycle !== 'PROVISIONAL' &&
-		gameweek.gameweekDesk.overviewState !== 'PENDING' &&
-		gameweek.gameweekDesk.boardsState !== 'PENDING'
+		gameweek.gameweekDesk.overviewState === 'AVAILABLE' &&
+		gameweek.gameweekDesk.boardsState === 'AVAILABLE' &&
+		gameweek.transfersState === 'AVAILABLE'
 	)
 }
 

@@ -3,9 +3,12 @@ import { describe, it } from 'node:test'
 import {
 	CAPACITY_RUN_HEADER,
 	CAPACITY_RUN_SIGNATURE_HEADER,
+	CAPACITY_SESSION_AUTHENTICATED,
+	CAPACITY_SESSION_RESPONSE_HEADER,
 	capacityRunRequestIdPrefix,
 	capacityRequestIdForCurrentRun,
 	capacityRequestIdForHeaders,
+	markAuthenticatedCapacitySession,
 	signCapacityRun,
 	verifyCapacityRunHeaders,
 	withCapacityRun
@@ -62,5 +65,30 @@ describe('capacity run correlation', () => {
 		assert.match(left ?? '', /^cr13_capacity_left_[a-f0-9]{16}$/)
 		assert.match(right ?? '', /^cr14_capacity_right_[a-f0-9]{16}$/)
 		assert.equal(capacityRequestIdForCurrentRun(), null)
+	})
+
+	it('marks authenticated capacity responses only for signed run headers', () => {
+		const authenticatedResponse = new Headers()
+		assert.equal(
+			markAuthenticatedCapacitySession(
+				signedHeaders('capacity_300'),
+				authenticatedResponse,
+				secret
+			),
+			true
+		)
+		assert.equal(
+			authenticatedResponse.get(CAPACITY_SESSION_RESPONSE_HEADER),
+			CAPACITY_SESSION_AUTHENTICATED
+		)
+
+		const forged = signedHeaders('capacity_300')
+		forged.set(CAPACITY_RUN_SIGNATURE_HEADER, 'a'.repeat(43))
+		const forgedResponse = new Headers()
+		assert.equal(
+			markAuthenticatedCapacitySession(forged, forgedResponse, secret),
+			false
+		)
+		assert.equal(forgedResponse.has(CAPACITY_SESSION_RESPONSE_HEADER), false)
 	})
 })

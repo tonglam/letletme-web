@@ -181,6 +181,12 @@ describe('GraphQL ingress v2', () => {
 	it('maps schema event and team roots to their canonical workloads', () => {
 		assert.equal(
 			graphQLWorkloadForDocument({
+				query: 'query GetHomePersonalDesk { homePersonalDesk { state } }'
+			}),
+			'interactive'
+		)
+		assert.equal(
+			graphQLWorkloadForDocument({
 				query: 'query GetCurrentAndNextEvents { events { id } }'
 			}),
 			'home'

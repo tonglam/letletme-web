@@ -42,6 +42,7 @@ export type GraphQLProxyIngress =
 	| { ok: false; message: string }
 
 function workloadForRootField(field: string): GraphQLWorkload {
+	if (/^homePersonalDesk$/i.test(field)) return 'interactive'
 	if (
 		/^(liveContext|liveMatchdayDesk|liveFixturePlayers|liveScores)$/i.test(
 			field

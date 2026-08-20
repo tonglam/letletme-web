@@ -7,8 +7,11 @@ const CAPACITY_RUN_PURPOSE = 'capacity-run:'
 
 export const CAPACITY_RUN_HEADER = 'x-letletme-capacity-run'
 export const CAPACITY_RUN_SIGNATURE_HEADER = 'x-letletme-capacity-sig'
+export const CAPACITY_SESSION_RESPONSE_HEADER = 'x-letletme-capacity-session'
+export const CAPACITY_SESSION_AUTHENTICATED = 'authenticated'
 
 type ReadableHeaders = Pick<Headers, 'get'>
+type WritableHeaders = Pick<Headers, 'set'>
 
 const currentCapacityRun = new AsyncLocalStorage<string>()
 
@@ -37,6 +40,20 @@ export function verifyCapacityRunHeaders(
 	return expected.length === actual.length && timingSafeEqual(expected, actual)
 		? runId
 		: null
+}
+
+/** Emit an authenticated marker only after the protected-page gate has passed. */
+export function markAuthenticatedCapacitySession(
+	requestHeaders: ReadableHeaders,
+	responseHeaders: WritableHeaders,
+	secret: string
+): boolean {
+	if (!verifyCapacityRunHeaders(requestHeaders, secret)) return false
+	responseHeaders.set(
+		CAPACITY_SESSION_RESPONSE_HEADER,
+		CAPACITY_SESSION_AUTHENTICATED
+	)
+	return true
 }
 
 export function withCapacityRun<T>(

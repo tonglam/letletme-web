@@ -71,9 +71,26 @@ describe('public GraphQL cache contract', () => {
 		assert.match(fixturesLoader, /coalescePublicSeed/)
 		assert.doesNotMatch(fixturesLoader, /unstable_cache/)
 		assert.match(home, /gameweek\.gameweekDesk\.lifecycle !== 'PROVISIONAL'/)
-		assert.match(home, /overviewState !== 'PENDING'/)
-		assert.match(home, /boardsState !== 'PENDING'/)
+		assert.match(home, /overviewState === 'AVAILABLE'/)
+		assert.match(home, /boardsState === 'AVAILABLE'/)
+		assert.match(home, /transfersState === 'AVAILABLE'/)
 		assert.match(home, /TransientHomeGameweekError/)
+	})
+
+	it('keeps the fixture API CDN cache separate from the RSC Data Cache', async () => {
+		const [fixtureLoader, fixtureRoute] = await Promise.all([
+			read('lib/fixture-window-server.ts'),
+			read('app/api/fixtures/window/route.ts')
+		])
+		assert.match(
+			fixtureLoader,
+			/loadFixtureWindowForPublicRoute[\s\S]*loadCompleteFixtureWindowFromOrigin/
+		)
+		assert.match(fixtureRoute, /loadFixtureWindowForPublicRoute/)
+		assert.doesNotMatch(
+			fixtureRoute,
+			/createFixtureWindowRouteHandler\(loadFixtureWindow\)/
+		)
 	})
 
 	it('keeps public Trends classification aligned and Player Stats route caching single-layered', async () => {
