@@ -124,18 +124,18 @@ export type PlayerStatsScope =
 export interface PlayerStatsContext {
 	scope: PlayerStatsScope
 	season: string
-	asOfEventId: number | null
+	asOfEventId?: number | null
 }
 
 export interface PlayerAvailability {
 	status: string
 	news: string
-	newsAdded: string | null
+	newsAdded?: string | null
 	observedDate: string
-	capturedAt: string
+	capturedAt?: string | null
 	chanceOfPlayingThisRound: number | null
 	chanceOfPlayingNextRound: number | null
-	stale: boolean
+	stale?: boolean
 }
 
 export interface PlayerRecentOpponent {
@@ -164,8 +164,8 @@ export interface PlayerDetailFixture {
 	againstTeamShortName: string
 	wasHome: boolean
 	finished: boolean
-	kickoffTime: string | null
-	score: string | null
+	kickoffTime?: string | null
+	score?: string | null
 	difficulty: number
 	bgw: boolean
 }
@@ -177,12 +177,12 @@ export interface PlayerDetailData {
 	elementType: number
 	elementTypeName: string
 	price: number
-	startPrice: number
+	startPrice?: number | null
 	statsContext: PlayerStatsContext
 	availability: PlayerAvailability | null
-	totalPoints: number | null
+	totalPoints?: number | null
 	selectedByPercent?: number | null
-	form: number | null
+	form?: number | null
 	seasonTransfersIn: number | null
 	seasonTransfersOut: number | null
 	transfersInEvent: number | null
@@ -248,6 +248,10 @@ export const GET_PLAYER_STATE_PROFILE = `
 	        }
 	        metricCoverage limitations
 	      }
+	      seasonTimeline {
+	        season phase position fplTotalPoints
+	        signals { code provider value unit sampleMinutes analysisStatus reasonCodes }
+	      }
 	    }
 	  }
 `
@@ -261,20 +265,12 @@ export const GET_PLAYER_STATE_CONTEXT = `
   query GetPlayerStateContext($playerId: Int!, $horizon: Int = 5) {
     playerStateProfile(playerId: $playerId, horizon: $horizon) {
       playerId
-      ownBaseline {
-        weightedPercentile
-        seasons { season positionPercentile weight }
-      }
-      peerBaseline { position minimumMinutes cohortSize currentPercentile }
-      careerTrajectory {
-        season position minutes fplPositionPercentile understatProcessPercentile expectedMetricsAvailable
-      }
-	      coverage {
-	        sources {
-	          provider scope seasons dataStatus analysisStatus mappingStatus
-	          reasonCodes revision asOf freshnessSeconds stale
-	        }
-	      }
+	  coverage {
+	    sources {
+	      provider scope seasons dataStatus analysisStatus mappingStatus
+	      reasonCodes revision asOf freshnessSeconds stale
+	    }
+	  }
     }
   }
 `
@@ -404,6 +400,45 @@ export type PlayerStateAnalysisStatus =
 export type PlayerStateProviderMode =
 	'FPL_ONLY' | 'FPL_WITH_UNDERSTAT_HISTORY' | 'FPL_WITH_UNDERSTAT_CURRENT'
 
+export type PlayerSeasonPhase = 'PRESEASON' | 'ACTIVE' | 'COMPLETED'
+export type PlayerSeasonSignalCode =
+	| 'UNDERSTAT_NPXG_PER_90'
+	| 'UNDERSTAT_XA_PER_90'
+	| 'UNDERSTAT_NPXG_XA_PER_90'
+	| 'UNDERSTAT_KEY_PASSES_PER_90'
+	| 'OFFICIAL_CLEAN_SHEET_RATE'
+	| 'OFFICIAL_SAVES_PER_90'
+
+export interface PlayerSeasonSignal {
+	code: PlayerSeasonSignalCode
+	provider: PlayerStateProvider
+	value: number | null
+	unit: string
+	sampleMinutes: number | null
+	analysisStatus: PlayerStateAnalysisStatus
+	reasonCodes: string[]
+}
+
+/** The overview request keeps the first paint below the GraphQL node guard.
+ * Provider and sample-size metadata remain available in the full profile
+ * document; the ledger only needs the display/status fields below. */
+type PlayerStateOverviewSignal = Omit<PlayerSeasonSignal, 'provider' | 'sampleMinutes'>
+
+type PlayerStateOverviewTimelinePoint = Omit<
+	PlayerSeasonTimelinePoint,
+	'signals'
+> & {
+	signals: PlayerStateOverviewSignal[]
+}
+
+export interface PlayerSeasonTimelinePoint {
+	season: string
+	phase: PlayerSeasonPhase
+	position: number
+	fplTotalPoints: number | null
+	signals: PlayerSeasonSignal[]
+}
+
 export interface PlayerStateSourceCoverage {
 	provider: PlayerStateProvider
 	scope: PlayerStateProviderScope
@@ -461,6 +496,7 @@ export interface PlayerStateProfileData {
 		metricCoverage: string[]
 		limitations: string[]
 	}
+	seasonTimeline: PlayerSeasonTimelinePoint[] | null
 }
 
 export type PlayerStateProfileCoreData = Omit<
@@ -479,10 +515,8 @@ export type PlayerStateOverviewData = Pick<
 	PlayerStateProfileData,
 	| 'playerId'
 	| 'teamId'
-	| 'position'
 	| 'season'
 	| 'horizon'
-	| 'asOfEventId'
 	| 'asOf'
 	| 'trend'
 	| 'confidence'
@@ -505,6 +539,7 @@ export type PlayerStateOverviewData = Pick<
 			'kind' | 'rating' | 'direction' | 'confidence' | 'reasonCodes'
 		>
 	>
+	seasonTimeline?: PlayerStateOverviewTimelinePoint[] | null
 }
 
 export type PlayerStateProcessData = Pick<
@@ -520,7 +555,7 @@ export type PlayerStateProcessData = Pick<
 
 export type PlayerStateContextData = Pick<
 	PlayerStateProfileData,
-	'playerId' | 'ownBaseline' | 'peerBaseline' | 'careerTrajectory'
+	'playerId'
 > & {
 	coverage: Pick<PlayerStateProfileData['coverage'], 'sources'>
 }
@@ -582,22 +617,22 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
         playerId
         overview {
           status
-          value {
-            id webName teamShortName elementType elementTypeName
-            price startPrice
-            statsContext { scope season asOfEventId }
-            availability {
-              status news newsAdded observedDate capturedAt
-              chanceOfPlayingThisRound chanceOfPlayingNextRound stale
-            }
-            totalPoints selectedByPercent form transfersInEvent transfersOutEvent
-            fixtures { id event againstTeamShortName wasHome finished kickoffTime score difficulty bgw }
+		value {
+			id webName teamShortName elementType elementTypeName
+			price
+			statsContext { scope season }
+			availability {
+				status news observedDate
+				chanceOfPlayingThisRound chanceOfPlayingNextRound
+			}
+			totalPoints selectedByPercent transfersInEvent transfersOutEvent
+			fixtures { id event againstTeamShortName wasHome finished difficulty bgw }
           }
         }
         state {
           status
           value {
-            playerId teamId position season horizon asOfEventId asOf
+            playerId teamId season horizon asOf
             trend confidence providerMode
             reasons { code }
             profileRadar {
@@ -605,7 +640,11 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
               axes { code value percentile unit available }
             }
             dimensions {
-              kind rating direction confidence reasonCodes
+              kind rating direction reasonCodes
+            }
+            seasonTimeline {
+              season phase position fplTotalPoints
+              signals { code value unit analysisStatus reasonCodes }
             }
           }
         }
@@ -624,14 +663,6 @@ export const GET_PLAYER_STATS_DESK_CONTEXT = /* GraphQL */ `
           status
           value {
             playerId
-            ownBaseline {
-              weightedPercentile
-              seasons { season positionPercentile weight }
-            }
-            peerBaseline { position minimumMinutes cohortSize currentPercentile }
-            careerTrajectory {
-              season position minutes fplPositionPercentile understatProcessPercentile expectedMetricsAvailable
-            }
             coverage {
               sources {
                 provider scope seasons dataStatus analysisStatus mappingStatus
