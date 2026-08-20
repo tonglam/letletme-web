@@ -403,7 +403,12 @@ test('corrected Briefing stories remain published Agent data', async () => {
 				briefingStory: {
 					state: 'CORRECTED',
 					canonicalSlug: 'corrected-story',
-					story: { id: 'story-1', slug: 'corrected-story', storyRevision: 2 }
+					story: {
+						id: 'story-1',
+						slug: 'corrected-story',
+						storyRevision: 2,
+						sourceCheckedAt: '2026-08-20T00:04:00.000Z'
+					}
 				}
 			}
 		})
@@ -411,6 +416,8 @@ test('corrected Briefing stories remain published Agent data', async () => {
 	assert.equal(response.status, 200)
 	const body = await response.json()
 	assert.equal(body.data.story.state, 'CORRECTED')
+	assert.equal(body.revisions.briefing, '2')
+	assert.equal(body.asOf, '2026-08-20T00:04:00.000Z')
 	assert.deepEqual(body.warnings, [])
 })
 
@@ -735,6 +742,36 @@ test('one deadline bounds the complete tool execution and aborts its shared sign
 	assert.equal((await response.json()).code, 'UPSTREAM_TIMEOUT')
 	assert.equal(aborted, true)
 	assert.ok(performance.now() - startedAt < 500)
+})
+
+test('an aggregate tool failure aborts sibling GraphQL requests', async () => {
+	let calls = 0
+	let siblingAborts = 0
+	const response = await handleAgentToolRequest(
+		request({}),
+		'letletme_market',
+		dependencies(authenticated, async (_document, _variables, _requestId, signal) => {
+			calls += 1
+			if (calls === 1) {
+				throw new GraphQLRequestError('Upstream failed', { status: 502 })
+			}
+			return new Promise((_resolve, reject) => {
+				const onAbort = () => {
+					siblingAborts += 1
+					reject(
+						new GraphQLRequestError('Cancelled', {
+							code: 'REQUEST_CANCELLED'
+						})
+					)
+				}
+				if (signal?.aborted) onAbort()
+				else signal?.addEventListener('abort', onAbort, { once: true })
+			})
+		})
+	)
+	assert.equal(response.status, 502)
+	assert.equal(calls, 5)
+	assert.equal(siblingAborts, 4)
 })
 
 test('encoded results over 64 KiB return an error instead of truncated JSON', async () => {

@@ -8,7 +8,13 @@ import {
 } from '@/i18n/routing'
 import { getAuthorizationSession } from '@/lib/auth'
 import { renderMaintenanceDocument } from '@/lib/maintenance-document'
-import { isMaintenanceDataApi, readMaintenanceConfig } from '@/lib/maintenance'
+import {
+	agentMaintenanceError,
+	isMaintenanceAgentApi,
+	isMaintenanceDataApi,
+	MAINTENANCE_MESSAGE,
+	readMaintenanceConfig
+} from '@/lib/maintenance'
 import {
 	hasInvalidTournamentId,
 	isProtectedApi,
@@ -23,12 +29,10 @@ import {
 } from '@/lib/competition-session-handoff'
 import createMiddleware from 'next-intl/middleware'
 import { type NextRequest, NextResponse } from 'next/server'
+import { resolveRequestId } from '@/lib/request-timing'
 
 const handleI18nRouting = createMiddleware(routing)
 const DEFAULT_LOCALE_PREFIX = `/${routing.defaultLocale}`
-const MAINTENANCE_MESSAGE =
-	'LetLetMe data services are temporarily unavailable during scheduled maintenance.'
-
 function copyCookies(from: NextResponse, to: NextResponse) {
 	for (const cookie of from.cookies.getAll()) {
 		to.cookies.set(cookie)
@@ -98,6 +102,19 @@ function maintenanceApiResponse(retryAfterSeconds: number) {
 	)
 }
 
+function maintenanceAgentApiResponse(
+	req: NextRequest,
+	retryAfterSeconds: number
+) {
+	const requestId = resolveRequestId(req.headers.get('x-request-id'))
+	const response = NextResponse.json(agentMaintenanceError(requestId), {
+		status: 503
+	})
+	response.headers.set('X-Content-Type-Options', 'nosniff')
+	response.headers.set('X-Request-Id', requestId)
+	return withMaintenanceHeaders(response, retryAfterSeconds)
+}
+
 function maintenanceDocumentResponse(
 	req: NextRequest,
 	locale: string,
@@ -130,6 +147,9 @@ export async function proxy(req: NextRequest) {
 	// APIs and machine-facing integrations stay unprefixed and outside locale routing.
 	if (requestedPathname.startsWith('/api/')) {
 		if (maintenance.enabled && isMaintenanceDataApi(requestedPathname)) {
+			if (isMaintenanceAgentApi(requestedPathname)) {
+				return maintenanceAgentApiResponse(req, maintenance.retryAfterSeconds)
+			}
 			return maintenanceApiResponse(maintenance.retryAfterSeconds)
 		}
 		if (!isProtectedApi(requestedPathname)) return NextResponse.next()

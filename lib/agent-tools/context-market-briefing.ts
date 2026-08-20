@@ -255,7 +255,11 @@ export async function runBriefing(
 			briefingStory: {
 				state: string
 				canonicalSlug: string | null
-				story: unknown | null
+				story: {
+					storyRevision: number
+					sourceCheckedAt?: string | null
+					[key: string]: unknown
+				} | null
 			} | null
 		}>(options, BRIEFING_STORY_DOCUMENT, {
 			slug: options.input.slug,
@@ -285,13 +289,20 @@ export async function runBriefing(
 			},
 			{
 				...coreRevisions(result.coreEventContext),
-				...(result.briefingWeek.revision === null
-					? {}
-					: { briefing: String(result.briefingWeek.revision) })
+				...(publishable
+					? {
+							briefing: String(
+								result.briefingStory!.story!.storyRevision
+							)
+						}
+					: result.briefingWeek.revision === null
+						? {}
+						: { briefing: String(result.briefingWeek.revision) })
 			},
 			warnings,
 			undefined,
-			result.briefingWeek.sourceCheckedAt ??
+			result.briefingStory?.story?.sourceCheckedAt ??
+				result.briefingWeek.sourceCheckedAt ??
 				result.coreEventContext.sourceCheckedAt
 		)
 	}

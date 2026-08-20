@@ -65,6 +65,7 @@ const withUpstreamDeadline = async <T>(
 	else requestSignal.addEventListener('abort', abortFromRequest, { once: true })
 
 	let timeoutId: ReturnType<typeof globalThis.setTimeout> | undefined
+	let succeeded = false
 	const timeout = new Promise<never>((_resolve, reject) => {
 		timeoutId = globalThis.setTimeout(() => {
 			reject(
@@ -80,8 +81,13 @@ const withUpstreamDeadline = async <T>(
 	})
 
 	try {
-		return await Promise.race([task(controller.signal), timeout])
+		const result = await Promise.race([task(controller.signal), timeout])
+		succeeded = true
+		return result
 	} finally {
+		if (!succeeded && !controller.signal.aborted) {
+			controller.abort(new Error('Agent tool execution failed'))
+		}
 		if (timeoutId !== undefined) globalThis.clearTimeout(timeoutId)
 		requestSignal.removeEventListener('abort', abortFromRequest)
 	}

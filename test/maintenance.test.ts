@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
+	agentMaintenanceError,
+	isMaintenanceAgentApi,
 	isMaintenanceDataApi,
 	readMaintenanceConfig
 } from '../lib/maintenance'
@@ -59,6 +61,18 @@ describe('maintenance contract', () => {
 		]) {
 			assert.equal(isMaintenanceDataApi(pathname), false, pathname)
 		}
+	})
+
+	it('keeps Agent maintenance failures in the gateway error contract', () => {
+		assert.equal(isMaintenanceAgentApi('/api/agent/v1/capabilities'), true)
+		assert.equal(isMaintenanceAgentApi('/api/graphql'), false)
+		assert.deepEqual(agentMaintenanceError('agent-request-123'), {
+			code: 'UPSTREAM_UNAVAILABLE',
+			message:
+				'LetLetMe data services are temporarily unavailable during scheduled maintenance.',
+			retryable: true,
+			requestId: 'agent-request-123'
+		})
 	})
 
 	it('renders localized standalone maintenance documents', () => {
