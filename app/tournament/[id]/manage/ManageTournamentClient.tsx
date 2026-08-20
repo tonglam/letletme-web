@@ -58,11 +58,6 @@ export default function ManageTournamentClient({
 				<StatsPageHeader
 					eyebrow={t('eyebrow')}
 					title={t('manageTitle', { name: management.currentName })}
-					badge={
-						<span className="inline-flex w-fit items-center rounded-md border border-border/70 bg-muted/40 px-2.5 py-1 font-mono text-xs font-semibold tabular-nums text-muted-foreground">
-							{t('tournamentNumber', { id: tournament.id })}
-						</span>
-					}
 				/>
 
 				{management.mutationState.kind === 'error' ? (

@@ -2358,7 +2358,6 @@
 	"TournamentManage": {
 		"back": "Back to competition",
 		"eyebrow": "Admin",
-		"tournamentNumber": "Competition #{id}",
 		"manageTitle": "Manage {name}",
 		"settings": "Competition settings",
 		"settingsDescription": "Rename this competition. Its administrator and competition structure stay fixed.",
