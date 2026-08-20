@@ -49,8 +49,10 @@ test.describe('maintenance mode', () => {
 			'/api/agent/v1/capabilities',
 			'/api/agent/v1/tools/letletme_context'
 		]) {
+			const isAgent = pathname.startsWith('/api/agent/')
 			const response = await request.post(pathname, {
-				data: { query: 'query MaintenanceProbe { __typename }' }
+				data: { query: 'query MaintenanceProbe { __typename }' },
+				headers: isAgent ? { 'X-Request-Id': 'agent-maintenance-test' } : {}
 			})
 			expect(response.status(), pathname).toBe(503)
 			expect(response.headers()['cache-control'], pathname).toContain(
@@ -58,8 +60,21 @@ test.describe('maintenance mode', () => {
 			)
 			expect(response.headers()['retry-after'], pathname).toBe('420')
 			const payload = await response.json()
-			expect(payload.code, pathname).toBe('MAINTENANCE_MODE')
-			expect(payload.retryAfterSeconds, pathname).toBe(420)
+			if (isAgent) {
+				expect(payload, pathname).toEqual({
+					code: 'UPSTREAM_UNAVAILABLE',
+					message:
+						'LetLetMe data services are temporarily unavailable during scheduled maintenance.',
+					retryable: true,
+					requestId: 'agent-maintenance-test'
+				})
+				expect(response.headers()['x-request-id'], pathname).toBe(
+					'agent-maintenance-test'
+				)
+			} else {
+				expect(payload.code, pathname).toBe('MAINTENANCE_MODE')
+				expect(payload.retryAfterSeconds, pathname).toBe(420)
+			}
 		}
 
 		const authResponse = await request.get('/api/auth/session')
