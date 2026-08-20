@@ -40,6 +40,7 @@ import {
 import type { TournamentDetailLoadError } from '@/lib/tournament/detail-load-error'
 import {
 	areTournamentInsightsReady,
+	isTournamentInsightsRepairExhausted,
 	isTournamentSetupPollingPending,
 	normalizeTournamentSetupStatus,
 	shouldPollTournamentSetup
@@ -337,8 +338,8 @@ export default function TournamentDetailClient({
 	const polledTournamentId = currentTournament?.id
 	const polledSetupStatus = currentTournament?.setupStatus
 	const polledInsightsReadyAt = currentTournament?.insightsReadyAt
-	const polledRepairExhausted = currentTournament?.warningSummaries?.some(
-		summary => summary.repairExhausted === true
+	const polledRepairExhausted = isTournamentInsightsRepairExhausted(
+		currentTournament?.warningSummaries
 	)
 
 	useEffect(() => {
@@ -414,9 +415,7 @@ export default function TournamentDetailClient({
 					isTournamentSetupPollingPending(
 						status.setupStatus,
 						status.insightsReadyAt,
-						status.warningSummaries.some(
-							summary => summary.repairExhausted === true
-						)
+						isTournamentInsightsRepairExhausted(status.warningSummaries)
 					)
 				) {
 					timer = setTimeout(poll, 5_000)

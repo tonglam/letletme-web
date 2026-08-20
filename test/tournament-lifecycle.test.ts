@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import {
 	areTournamentStandingsReady,
 	getTournamentLifecycleBadge,
+	isTournamentInsightsRepairExhausted,
 	isTournamentRosterSyncInFlight,
 	isTournamentSetupInFlight,
 	isTournamentSetupPollingPending,
@@ -149,6 +150,29 @@ describe('tournament lifecycle presentation', () => {
 		assert.equal(
 			isTournamentSetupPollingPending('READY', '2026-08-04T00:00:00.000Z'),
 			false
+		)
+	})
+
+	it('only treats insight and result repairs as terminal for insight polling', () => {
+		assert.equal(
+			isTournamentInsightsRepairExhausted([
+				{ category: 'PROFILES', affectedCount: 2, repairExhausted: true }
+			]),
+			false
+		)
+		assert.equal(
+			isTournamentInsightsRepairExhausted([
+				{ category: 'PROFILES', affectedCount: 2, repairExhausted: true },
+				{ category: 'INSIGHTS', affectedCount: 1, repairExhausted: false }
+			]),
+			false
+		)
+		assert.equal(
+			isTournamentInsightsRepairExhausted([
+				{ category: 'INSIGHTS', affectedCount: 1, repairExhausted: true },
+				{ category: 'RESULTS', affectedCount: 1, repairExhausted: true }
+			]),
+			true
 		)
 	})
 

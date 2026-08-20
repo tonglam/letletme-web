@@ -2465,6 +2465,7 @@
 		"completeInsightsDescription": "Add missing historical insights without changing published standings or the participant roster.",
 		"completeInsights": "Complete historical insights",
 		"backgroundRepairDescription": "The published standings remain available. The background repair service will complete missing insights automatically.",
+		"repairExhaustedDescription": "The published standings remain available. Automatic repair has reached its limit; the next scheduled maintenance scan will reassess the missing insights.",
 		"syncRosterTitle": "Official roster",
 		"syncRosterDescription": "Reconcile the complete source roster at a safe pre-gameweek boundary.",
 		"syncRoster": "Sync roster",

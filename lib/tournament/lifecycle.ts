@@ -98,6 +98,23 @@ export const areTournamentStandingsReady = (
 	tournament: Pick<EntryTournament, 'standingsReadyAt'>
 ): boolean => Boolean(tournament.standingsReadyAt)
 
+/**
+ * Profiles can be exhausted without making the insights capability terminal.
+ * Only stop waiting when every warning category that can block insights has
+ * exhausted its bounded repair budget.
+ */
+export const isTournamentInsightsRepairExhausted = (
+	warningSummaries: readonly TournamentSetupWarningSummary[] | null | undefined
+): boolean => {
+	const relevantSummaries = (warningSummaries ?? []).filter(
+		summary => summary.category === 'INSIGHTS' || summary.category === 'RESULTS'
+	)
+	return (
+		relevantSummaries.length > 0 &&
+		relevantSummaries.every(summary => summary.repairExhausted === true)
+	)
+}
+
 export const shouldPollTournamentSetup = ({
 	setupStatus,
 	insightsReadyAt,

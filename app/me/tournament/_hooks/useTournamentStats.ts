@@ -14,6 +14,7 @@ import {
 import { usePageActive } from '@/hooks/use-page-active'
 import {
 	areTournamentInsightsReady,
+	isTournamentInsightsRepairExhausted,
 	isTournamentSetupPollingPending
 } from '@/lib/tournament/lifecycle'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -288,9 +289,7 @@ export function useTournamentStats({
 			!isTournamentSetupPollingPending(
 				selectedTournament.setupStatus,
 				selectedTournament.insightsReadyAt,
-				selectedTournament.warningSummaries?.some(
-					summary => summary.repairExhausted === true
-				)
+				isTournamentInsightsRepairExhausted(selectedTournament.warningSummaries)
 			)
 		) {
 			return

@@ -61,6 +61,7 @@ import {
 import { positionBadgeClass } from '@/lib/position-style'
 import {
 	areTournamentInsightsReady,
+	isTournamentInsightsRepairExhausted,
 	isTournamentSetupPollingPending
 } from '@/lib/tournament/lifecycle'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
@@ -670,9 +671,7 @@ export default function SelectionsClient({
 			!isTournamentSetupPollingPending(
 				selectedTournament.setupStatus,
 				selectedTournament.insightsReadyAt,
-				selectedTournament.warningSummaries?.some(
-					summary => summary.repairExhausted === true
-				)
+				isTournamentInsightsRepairExhausted(selectedTournament.warningSummaries)
 			)
 		) {
 			return

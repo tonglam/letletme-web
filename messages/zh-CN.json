@@ -2465,6 +2465,7 @@
 		"completeInsightsDescription": "补充历史分析，不影响已发布的积分榜和参赛名单。",
 		"completeInsights": "补全历史分析",
 		"backgroundRepairDescription": "已发布的积分榜仍可使用，后台修复服务会自动补全缺失的分析。",
+		"repairExhaustedDescription": "已发布的积分榜仍可使用，自动修复次数已用尽；后续维护扫描会重新评估缺失的分析。",
 		"syncRosterTitle": "官方名单",
 		"syncRosterDescription": "在安全的轮次边界核对完整的来源联赛名单。",
 		"syncRoster": "同步名单",

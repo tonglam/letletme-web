@@ -22,6 +22,7 @@ import {
 import { TournamentLifecycleBadge } from '@/components/tournament/TournamentLifecycleBadge'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import {
+	isTournamentInsightsRepairExhausted,
 	isTournamentRosterSyncInFlight,
 	isTournamentSetupInFlight
 } from '@/lib/tournament/lifecycle'
@@ -51,6 +52,9 @@ export function TournamentOperationsCard({
 	)
 	const setupInFlight = isTournamentSetupInFlight(tournament.setupStatus)
 	const setupFailed = tournament.setupStatus === 'FAILED'
+	const setupRepairExhausted = isTournamentInsightsRepairExhausted(
+		tournament.warningSummaries
+	)
 	const setupNeedsFollowUp =
 		setupFailed ||
 		tournament.setupHasWarnings ||
@@ -128,7 +132,9 @@ export function TournamentOperationsCard({
 								{t(
 									setupFailed
 										? 'recoverSetupDescription'
-										: 'backgroundRepairDescription'
+										: setupRepairExhausted
+											? 'repairExhaustedDescription'
+											: 'backgroundRepairDescription'
 								)}
 							</p>
 						</div>

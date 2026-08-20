@@ -4,7 +4,8 @@ import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import {
 	isTournamentRosterSyncInFlight,
 	isTournamentSetupInFlight,
-	isTournamentSetupPollingPending
+	isTournamentSetupPollingPending,
+	isTournamentInsightsRepairExhausted
 } from '@/lib/tournament/lifecycle'
 import { useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
@@ -104,9 +105,7 @@ export function useTournamentManagement(tournament: EntryTournament) {
 		isTournamentSetupPollingPending(
 			currentTournament.setupStatus,
 			currentTournament.insightsReadyAt,
-			currentTournament.warningSummaries?.some(
-				summary => summary.repairExhausted === true
-			)
+			isTournamentInsightsRepairExhausted(currentTournament.warningSummaries)
 		)
 
 	useEffect(() => {
