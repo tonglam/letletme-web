@@ -1,5 +1,6 @@
 import { AgentToolError, type AgentWarning } from '@/lib/agent-tools/contracts'
 import {
+	COMPETITION_AVAILABILITY_DOCUMENT,
 	COMPETITION_CONTEXT_DOCUMENT,
 	COMPETITION_DOCUMENT,
 	ENTRY_SEARCH_DOCUMENT,
@@ -13,7 +14,6 @@ import {
 	encodeCursor,
 	executeDocument,
 	fingerprint,
-	loadCoreContext,
 	requireVerifiedEntryId,
 	type CoreContext,
 	toolResponse,
@@ -170,21 +170,120 @@ type CompetitionLiveSnapshot = {
 
 type CompetitionContext = {
 	coreEventContext: CoreContext
-	liveSnapshot: CompetitionLiveSnapshot
+	liveSnapshot?: CompetitionLiveSnapshot
 	tournament: CompetitionTournament | null
+}
+
+type CompetitionLiveContext = {
+	season: string
+	coreRevision: string
+	currentEventId: number | null
+	liveRevision: string | null
+	sourceCheckedAt: string | null
+}
+
+type CompetitionAvailability = {
+	coreEventContext: CoreContext
+	liveContext: CompetitionLiveContext | null
+}
+
+const hasPublishedLiveEvent = (
+	core: CoreContext,
+	live: CompetitionLiveContext | null,
+	eventId: number
+): boolean => {
+	if (
+		core.latestFinishedEventId !== null &&
+		eventId <= core.latestFinishedEventId
+	) {
+		return true
+	}
+	return (
+		core.currentEventId === eventId &&
+		live?.currentEventId === eventId &&
+		live.liveRevision !== null
+	)
+}
+
+const assertCoreRevision = (
+	expected: CoreContext,
+	actual: CoreContext
+): void => {
+	if (
+		expected.season !== actual.season ||
+		expected.revision !== actual.revision
+	) {
+		throw new AgentToolError(
+			'UPSTREAM_UNAVAILABLE',
+			'The published LetLetMe revision changed during this request. Retry the tool.',
+			502,
+			true
+		)
+	}
+}
+
+const assertLiveContextRevision = (
+	core: CoreContext,
+	live: CompetitionLiveContext | null
+): void => {
+	if (!live) return
+	if (live.season !== core.season || live.coreRevision !== core.revision) {
+		throw new AgentToolError(
+			'UPSTREAM_UNAVAILABLE',
+			'The published LetLetMe revision changed during this request. Retry the tool.',
+			502,
+			true
+		)
+	}
+}
+
+const assertCurrentLiveRevision = (
+	availability: CompetitionAvailability,
+	eventId: number,
+	liveSnapshot: CompetitionLiveSnapshot | undefined
+): void => {
+	const expected = availability.liveContext?.liveRevision ?? null
+	if (
+		availability.coreEventContext.currentEventId === eventId &&
+		expected !== null &&
+		liveSnapshot?.revision !== expected
+	) {
+		throw new AgentToolError(
+			'UPSTREAM_UNAVAILABLE',
+			'The published competition revision changed during this request. Retry the tool.',
+			502,
+			true
+		)
+	}
 }
 
 export async function runCompetition(
 	options: ToolRunOptions<'letletme_competition'>
 ) {
 	const entryId = requireVerifiedEntryId(options.session)
-	const eventId =
-		options.input.eventId ?? coreEventId(await loadCoreContext(options))
+	const availability = await executeDocument<CompetitionAvailability>(
+		options,
+		COMPETITION_AVAILABILITY_DOCUMENT
+	)
+	const core = availability.coreEventContext
+	assertLiveContextRevision(core, availability.liveContext)
+	const eventId = options.input.eventId ?? coreEventId(core)
+	const includeLive = hasPublishedLiveEvent(
+		core,
+		availability.liveContext,
+		eventId
+	)
 	const context = await executeDocument<CompetitionContext>(
 		options,
 		COMPETITION_CONTEXT_DOCUMENT,
-		{ competitionId: options.input.competitionId, entryId, eventId }
+		{
+			competitionId: options.input.competitionId,
+			entryId,
+			eventId,
+			includeLive
+		}
 	)
+	assertCoreRevision(core, context.coreEventContext)
 	if (!context.tournament) {
 		throw new AgentToolError(
 			'FORBIDDEN',
@@ -193,16 +292,39 @@ export async function runCompetition(
 			false
 		)
 	}
+	assertCurrentLiveRevision(availability, eventId, context.liveSnapshot)
 	const key = competitionKey(
 		options.input.competitionId,
 		eventId,
 		entryId,
 		context.coreEventContext,
 		context.tournament,
-		context.liveSnapshot
+		context.liveSnapshot ?? null
 	)
 	const offset =
 		decodeCursor(options.input.cursor, { kind: 'competition', key }) ?? 0
+	if (!includeLive) {
+		return toolResponse(
+			options,
+			{
+				accessScope:
+					context.tournament.adminEntryId === entryId ? 'admin' : 'member',
+				eventId,
+				competition: context.tournament,
+				results: []
+			},
+			coreRevisions(context.coreEventContext),
+			[
+				{
+					code: 'COMPETITION_RESULTS_NOT_PUBLISHED',
+					message:
+						'No published live competition results are available for this event.'
+				}
+			],
+			{ nextCursor: null },
+			context.coreEventContext.sourceCheckedAt
+		)
+	}
 	const result = await executeDocument<
 		CompetitionContext & {
 			tournamentEventResults: unknown[]
@@ -212,8 +334,11 @@ export async function runCompetition(
 		entryId,
 		eventId,
 		limit: options.input.limit + 1,
-		offset
+		offset,
+		includeLive
 	})
+	assertCoreRevision(core, result.coreEventContext)
+	assertCurrentLiveRevision(availability, eventId, result.liveSnapshot)
 	if (!result.tournament) {
 		throw new AgentToolError(
 			'FORBIDDEN',
@@ -228,7 +353,7 @@ export async function runCompetition(
 		entryId,
 		result.coreEventContext,
 		result.tournament,
-		result.liveSnapshot
+		result.liveSnapshot ?? null
 	)
 	if (resultKey !== key) {
 		throw new AgentToolError(

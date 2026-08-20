@@ -239,10 +239,28 @@ export const OWN_ENTRY_DOCUMENT = `
   }
 `
 
+export const COMPETITION_AVAILABILITY_DOCUMENT = `
+  query AgentCompetitionAvailability {
+    coreEventContext {
+      season revision sourceCheckedAt currentEventId nextEventId nextDeadlineTime latestFinishedEventId
+    }
+    liveContext {
+      season coreRevision currentEventId liveRevision sourceCheckedAt
+    }
+  }
+`
+
 export const COMPETITION_CONTEXT_DOCUMENT = `
-  query AgentCompetitionContext($competitionId: Int!, $entryId: Int!, $eventId: Int!) {
+  query AgentCompetitionContext(
+    $competitionId: Int!
+    $entryId: Int!
+    $eventId: Int!
+    $includeLive: Boolean!
+  ) {
     coreEventContext { season revision sourceCheckedAt }
-    liveSnapshot(eventId: $eventId) { season eventId revision state publishedAt checkedAt }
+    liveSnapshot(eventId: $eventId) @include(if: $includeLive) {
+      season eventId revision state publishedAt checkedAt
+    }
     tournament(tournamentId: $competitionId, entryId: $entryId) {
       id name creator adminEntryId leagueId leagueType sourceLeagueName rosterMode rosterSyncStatus
       rosterLastSyncedAt totalTeamNum tournamentMode groupMode groupTeamNum groupNum
@@ -261,9 +279,12 @@ export const COMPETITION_DOCUMENT = `
     $eventId: Int!
     $limit: Int!
     $offset: Int!
+    $includeLive: Boolean!
   ) {
     coreEventContext { season revision sourceCheckedAt }
-    liveSnapshot(eventId: $eventId) { season eventId revision state publishedAt checkedAt }
+    liveSnapshot(eventId: $eventId) @include(if: $includeLive) {
+      season eventId revision state publishedAt checkedAt
+    }
     tournament(tournamentId: $competitionId, entryId: $entryId) {
       id adminEntryId standingsReadyAt updatedAt
     }
@@ -321,6 +342,7 @@ export const AGENT_GRAPHQL_DOCUMENTS = Object.freeze({
 	ENTRY_SNAPSHOT_DOCUMENT,
 	ENTRY_SEARCH_DOCUMENT,
 	OWN_ENTRY_DOCUMENT,
+	COMPETITION_AVAILABILITY_DOCUMENT,
 	COMPETITION_CONTEXT_DOCUMENT,
 	COMPETITION_DOCUMENT,
 	BRIEFING_WEEK_DOCUMENT,

@@ -9,6 +9,7 @@ import {
 import {
 	AGENT_GRAPHQL_DOCUMENTS,
 	BRIEFING_STORY_DOCUMENT,
+	COMPETITION_AVAILABILITY_DOCUMENT,
 	COMPETITION_CONTEXT_DOCUMENT,
 	COMPETITION_DOCUMENT,
 	CONTEXT_DOCUMENT,
@@ -784,12 +785,26 @@ test('competition cursors expire when the live standings publication changes', a
 		},
 		tournament
 	})
+	const availability = (revision: string | null) => ({
+		coreEventContext: contextResult.coreEventContext,
+		liveContext: {
+			season: '2627',
+			coreRevision: 'core-7',
+			currentEventId: 1,
+			liveRevision: revision,
+			sourceCheckedAt: '2026-08-20T00:03:00.000Z'
+		}
+	})
 	const first = await handleAgentToolRequest(
 		request({ competitionId: 9, eventId: 1, limit: 1 }),
 		'letletme_competition',
-		dependencies(verified, async document => {
+		dependencies(verified, async (document, variables) => {
+			if (document === COMPETITION_AVAILABILITY_DOCUMENT) {
+				return availability('11')
+			}
 			if (document === COMPETITION_CONTEXT_DOCUMENT) return envelope('11')
 			assert.equal(document, COMPETITION_DOCUMENT)
+			assert.equal(variables.includeLive, true)
 			return {
 				...envelope('11'),
 				tournamentEventResults: [{ entryId: 123 }, { entryId: 456 }]
@@ -811,6 +826,9 @@ test('competition cursors expire when the live standings publication changes', a
 		}),
 		'letletme_competition',
 		dependencies(verified, async document => {
+			if (document === COMPETITION_AVAILABILITY_DOCUMENT) {
+				return availability('12')
+			}
 			calls += 1
 			assert.equal(document, COMPETITION_CONTEXT_DOCUMENT)
 			return envelope('12')
@@ -819,6 +837,108 @@ test('competition cursors expire when the live standings publication changes', a
 	assert.equal(stale.status, 400)
 	assert.equal((await stale.json()).code, 'INVALID_INPUT')
 	assert.equal(calls, 1)
+})
+
+test('preseason competitions return authorized metadata without unpublished results', async () => {
+	const preseasonCore = {
+		...contextResult.coreEventContext,
+		currentEventId: null,
+		nextEventId: 1,
+		latestFinishedEventId: null
+	}
+	const tournament = {
+		id: 9,
+		adminEntryId: 123,
+		updatedAt: '2026-08-20T00:00:00.000Z',
+		standingsReadyAt: null
+	}
+	const seen: string[] = []
+	const response = await handleAgentToolRequest(
+		request({ competitionId: 9, limit: 25 }),
+		'letletme_competition',
+		dependencies(verified, async (document, variables) => {
+			seen.push(document)
+			if (document === COMPETITION_AVAILABILITY_DOCUMENT) {
+				return {
+					coreEventContext: preseasonCore,
+					liveContext: {
+						season: '2627',
+						coreRevision: 'core-7',
+						currentEventId: null,
+						liveRevision: null,
+						sourceCheckedAt: null
+					}
+				}
+			}
+			assert.equal(document, COMPETITION_CONTEXT_DOCUMENT)
+			assert.equal(variables.includeLive, false)
+			return {
+				coreEventContext: preseasonCore,
+				tournament
+			}
+		})
+	)
+	assert.equal(response.status, 200)
+	const body = await response.json()
+	assert.deepEqual(body.data.results, [])
+	assert.equal(body.page.nextCursor, null)
+	assert.deepEqual(
+		body.warnings.map((warning: { code: string }) => warning.code),
+		['COMPETITION_RESULTS_NOT_PUBLISHED']
+	)
+	assert.deepEqual(seen, [
+		COMPETITION_AVAILABILITY_DOCUMENT,
+		COMPETITION_CONTEXT_DOCUMENT
+	])
+})
+
+test('current competitions wait for the actual live publication revision', async () => {
+	const tournament = {
+		id: 9,
+		adminEntryId: 123,
+		updatedAt: '2026-08-20T00:00:00.000Z',
+		standingsReadyAt: null
+	}
+	const liveContexts = [
+		null,
+		{
+			season: '2627',
+			coreRevision: 'core-7',
+			currentEventId: 1,
+			liveRevision: null,
+			sourceCheckedAt: null
+		}
+	]
+	for (const liveContext of liveContexts) {
+		const seen: string[] = []
+		const response = await handleAgentToolRequest(
+			request({ competitionId: 9, limit: 25 }),
+			'letletme_competition',
+			dependencies(verified, async (document, variables) => {
+				seen.push(document)
+				if (document === COMPETITION_AVAILABILITY_DOCUMENT) {
+					return {
+						coreEventContext: contextResult.coreEventContext,
+						liveContext
+					}
+				}
+				assert.equal(document, COMPETITION_CONTEXT_DOCUMENT)
+				assert.equal(variables.includeLive, false)
+				return {
+					coreEventContext: contextResult.coreEventContext,
+					tournament
+				}
+			})
+		)
+		assert.equal(response.status, 200)
+		const body = await response.json()
+		assert.deepEqual(body.data.results, [])
+		assert.equal(body.warnings[0]?.code, 'COMPETITION_RESULTS_NOT_PUBLISHED')
+		assert.deepEqual(seen, [
+			COMPETITION_AVAILABILITY_DOCUMENT,
+			COMPETITION_CONTEXT_DOCUMENT
+		])
+	}
 })
 
 test('unverified accounts cannot request self or competition extensions', async () => {
@@ -870,10 +990,27 @@ test('missing competition membership is denied without revealing existence', asy
 		request({ competitionId: 9, eventId: 1 }),
 		'letletme_competition',
 		dependencies(verified, async document => {
+			if (document === COMPETITION_AVAILABILITY_DOCUMENT) {
+				return {
+					coreEventContext: contextResult.coreEventContext,
+					liveContext: {
+						season: '2627',
+						coreRevision: 'core-7',
+						currentEventId: 1,
+						liveRevision: '11',
+						sourceCheckedAt: '2026-08-20T00:03:00.000Z'
+					}
+				}
+			}
 			assert.equal(document, COMPETITION_CONTEXT_DOCUMENT)
 			return {
 				coreEventContext: contextResult.coreEventContext,
-				liveSnapshot: null,
+				liveSnapshot: {
+					season: '2627',
+					eventId: 1,
+					revision: '11',
+					checkedAt: '2026-08-20T00:03:00.000Z'
+				},
 				tournament: null
 			}
 		})
