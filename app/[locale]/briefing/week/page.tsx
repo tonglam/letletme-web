@@ -41,6 +41,7 @@ export default async function BriefingWeekPage({ params }: PageProps) {
 
 	try {
 		const response = await executePublicServerQuery<BriefingWeekResponse>(
+			'public-other',
 			GET_BRIEFING_WEEK,
 			{ locale: graphqlLocale },
 			{ cache: 'no-store' },

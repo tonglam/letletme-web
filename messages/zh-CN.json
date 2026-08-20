@@ -1207,7 +1207,7 @@
 	},
 	"Market": {
 		"title": "市场",
-		"pageIntro": "按每日、GW 和近 7 日周期查看身价、持有率、出场状态与转会信号，并明确展示比较日期。",
+		"pageIntro": "按每日和 GW 查看身价、持有率、出场状态与转会信号，并明确展示比较日期。",
 		"viewMode": {
 			"price-led": "价格主线 — 真实价格变化是当前首要信号。",
 			"availability-led": "可用性主线 — 官方球员状态变化是当前首要信号。",
@@ -1225,7 +1225,6 @@
 		"ownershipDates": "每日快照日期",
 		"ownershipPeriodDaily": "每日",
 		"ownershipPeriodGameweek": "GW 比较",
-		"ownershipPeriodRolling7d": "近 7 日",
 		"ownershipPercentagePoints": "{value} 个百分点",
 		"ownershipComparisonRange": "比较区间 · {from} → {to}",
 		"ownershipObservedDays": "应有 {requested} 个日期，已观测 {observed} 个",

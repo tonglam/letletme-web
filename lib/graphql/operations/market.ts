@@ -233,24 +233,6 @@ export const GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK = /* GraphQL */ `
 	}
 `
 
-export const GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D = /* GraphQL */ `
-	query GetFixturePlanningOwnershipRolling7d {
-		marketOwnershipOverview(period: ROLLING_7D, limit: 10) {
-			${FIXTURE_PLANNING_OWNERSHIP_FIELDS}
-		}
-	}
-
-	fragment FixtureOwnershipPlayerFields on MarketPlayer {
-		playerId
-		webName
-		teamId
-		teamShortName
-		position
-		price
-		selectedByPercent
-	}
-`
-
 export type MarketPosition =
 	'GOALKEEPER' | 'DEFENDER' | 'MIDFIELDER' | 'FORWARD'
 
@@ -276,7 +258,7 @@ export interface MarketCoverage {
 	stale: boolean
 }
 
-export type MarketOwnershipPeriod = 'DAILY' | 'GAMEWEEK' | 'ROLLING_7D'
+export type MarketOwnershipPeriod = 'DAILY' | 'GAMEWEEK'
 export type MarketOwnershipCoverageStatus =
 	| 'READY'
 	| 'PARTIAL'
@@ -613,7 +595,7 @@ export interface FixturePlanningMarketSignals {
 	mostSelected: FixtureSignalPlayer[]
 	transferMovers: Array<{ player: FixtureSignalPlayer }>
 	gameweekOwnership: MarketOwnershipOverview | null
-	rollingOwnership: MarketOwnershipOverview | null
+	rollingOwnership: null
 }
 
 export interface FixturePlanningSignalsResponse {

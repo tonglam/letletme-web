@@ -1,6 +1,6 @@
 import { executeQuery, GraphQLRequestError } from '@/lib/graphql-client'
 import {
-	buildIngressContextHeaders,
+	buildIngressContextHeadersV2,
 	buildOpaqueRateLimitSubject
 } from '@/lib/http-security-core'
 import {
@@ -143,7 +143,15 @@ const ingressHeaders = (request: Request): Record<string, string> => {
 	const secret = process.env.BACKEND_PROXY_SECRET?.trim() ?? ''
 	if (!secret) return {}
 	const subject = buildOpaqueRateLimitSubject(request.headers, secret)
-	return buildIngressContextHeaders(subject, secret)
+	return buildIngressContextHeadersV2(
+		{
+			trafficClass: 'web_browser',
+			subject,
+			abuseSubject: null,
+			workload: 'market'
+		},
+		secret
+	)
 }
 
 function invalid(error: string): NextResponse {

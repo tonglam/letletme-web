@@ -15,3 +15,30 @@ export function readForwardableMiniProgramAuthorization(
 	if (!match?.[1]) return { ok: false }
 	return { ok: true, value: `Bearer ${match[1]}` }
 }
+
+const SAFE_UPSTREAM_RESPONSE_HEADERS = [
+	'content-type',
+	'content-language'
+] as const
+
+const REQUEST_RATE_LIMIT_RESPONSE_HEADERS = [
+	'retry-after',
+	'x-ratelimit-policy',
+	'x-ratelimit-scope',
+	'x-ratelimit-shadow-outcome',
+	'x-ratelimit-shadow-scope'
+] as const
+
+export function copySafeGraphQLUpstreamHeaders(
+	upstream: Headers,
+	target: Headers,
+	options: { includeRateLimitMetadata?: boolean } = {}
+): void {
+	const names = options.includeRateLimitMetadata === false
+		? SAFE_UPSTREAM_RESPONSE_HEADERS
+		: [...SAFE_UPSTREAM_RESPONSE_HEADERS, ...REQUEST_RATE_LIMIT_RESPONSE_HEADERS]
+	for (const name of names) {
+		const value = upstream.get(name)
+		if (value) target.set(name, value)
+	}
+}

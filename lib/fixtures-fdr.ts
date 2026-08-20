@@ -297,7 +297,6 @@ export function collectMarketSignals(
 
 	for (const p of pulse.mostSelected ?? []) add(p, 'most-selected')
 	const gameweekOwnership = pulse.gameweekOwnership
-	const rollingOwnership = pulse.rollingOwnership
 	const ownership =
 		gameweekOwnership &&
 		(gameweekOwnership.coverage.status === 'READY' ||
@@ -305,7 +304,7 @@ export function collectMarketSignals(
 		(gameweekOwnership.risers.length > 0 ||
 			gameweekOwnership.fallers.length > 0)
 			? gameweekOwnership
-			: rollingOwnership
+			: null
 	for (const m of ownership?.risers ?? []) add(m.player, 'riser')
 	for (const m of ownership?.fallers ?? []) add(m.player, 'faller')
 	for (const m of pulse.transferMovers ?? []) add(m.player, 'transfer')

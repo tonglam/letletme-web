@@ -30,6 +30,7 @@ import {
 import createMiddleware from 'next-intl/middleware'
 import { type NextRequest, NextResponse } from 'next/server'
 import { resolveRequestId } from '@/lib/request-timing'
+import { markAuthenticatedCapacitySession } from '@/lib/capacity-run'
 
 const handleI18nRouting = createMiddleware(routing)
 const DEFAULT_LOCALE_PREFIX = `/${routing.defaultLocale}`
@@ -65,6 +66,17 @@ function withMaintenanceHeaders(
 	response.headers.set('Cache-Control', 'private, no-store, no-transform')
 	response.headers.set('Retry-After', String(retryAfterSeconds))
 	response.headers.set('X-Robots-Tag', 'noindex, nofollow')
+	return response
+}
+
+function withAuthenticatedCapacityMarker(
+	req: NextRequest,
+	response: NextResponse
+) {
+	const secret = process.env.BACKEND_PROXY_SECRET?.trim()
+	if (secret) {
+		markAuthenticatedCapacitySession(req.headers, response.headers, secret)
+	}
 	return response
 }
 
@@ -279,13 +291,19 @@ export async function proxy(req: NextRequest) {
 			const value = i18nResponse.headers.get(header)
 			if (value) handedOff.headers.set(header, value)
 		}
-		return copyCookies(
-			i18nResponse,
-			withDocumentCacheHeaders(req, handedOff, true)
+		return withAuthenticatedCapacityMarker(
+			req,
+			copyCookies(
+				i18nResponse,
+				withDocumentCacheHeaders(req, handedOff, true)
+			)
 		)
 	}
 
-	return withDocumentCacheHeaders(req, i18nResponse, true)
+	return withAuthenticatedCapacityMarker(
+		req,
+		withDocumentCacheHeaders(req, i18nResponse, true)
+	)
 }
 
 export const config = {

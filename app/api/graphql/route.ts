@@ -4,10 +4,15 @@ import {
 	isSuccessfulGraphQLResponseBody,
 	resolveGraphQLProxyCacheControl
 } from '@/lib/graphql-proxy-cache'
-import { readForwardableMiniProgramAuthorization } from '@/lib/graphql-proxy-security'
 import {
-	buildIngressContextHeaders,
-	buildOpaqueRateLimitSubject,
+	copySafeGraphQLUpstreamHeaders,
+	readForwardableMiniProgramAuthorization
+} from '@/lib/graphql-proxy-security'
+import {
+	buildGraphQLProxyIngress,
+	graphQLWorkloadForDocument
+} from '@/lib/graphql-ingress'
+import {
 	PayloadTooLargeError,
 	readBoundedJson
 } from '@/lib/http-security-core'
@@ -60,6 +65,7 @@ export async function POST(request: NextRequest) {
 		return noStoreJson({ errors: [{ message: 'Invalid JSON' }] }, 400)
 	}
 	const operationName = extractGraphQLOperationName(body) || 'anonymous'
+	const workload = graphQLWorkloadForDocument(body)
 
 	const authorization = requestTiming.measureSync('authorizationHeader', () =>
 		readForwardableMiniProgramAuthorization(request.headers)
@@ -85,10 +91,27 @@ export async function POST(request: NextRequest) {
 			503
 		)
 	}
-	const subject = buildOpaqueRateLimitSubject(
-		request.headers,
-		secret || 'development-only'
-	)
+	const ingress = secret
+		? buildGraphQLProxyIngress({
+				headers: request.headers,
+				secret,
+				workload
+			})
+		: null
+	const effectiveWorkload = ingress?.ok ? ingress.workload : workload
+	if (ingress && !ingress.ok) {
+		return noStoreJson(
+			{
+				errors: [
+					{
+						message: ingress.message,
+						extensions: { code: 'INVALID_CLIENT_IDENTITY' }
+					}
+				]
+			},
+			400
+		)
+	}
 
 	let session = null
 	if (shouldResolveGraphQLProxySession(request.headers)) {
@@ -117,8 +140,8 @@ export async function POST(request: NextRequest) {
 		if (authorization.value) {
 			headers.Authorization = authorization.value
 		}
-		if (secret) {
-			Object.assign(headers, buildIngressContextHeaders(subject, secret))
+		if (secret && ingress?.ok) {
+			Object.assign(headers, ingress.headers)
 			if (session?.user) {
 				Object.assign(
 					headers,
@@ -203,14 +226,11 @@ export async function POST(request: NextRequest) {
 			}
 		}
 	)
-	const safeHeaders = new Headers({
-		'Cache-Control': cacheControl,
-		'X-Request-Id': requestId
+	const safeHeaders = new Headers({ 'Cache-Control': cacheControl })
+	if (cacheControl === 'no-store') safeHeaders.set('X-Request-Id', requestId)
+	copySafeGraphQLUpstreamHeaders(response.headers, safeHeaders, {
+		includeRateLimitMetadata: cacheControl === 'no-store'
 	})
-	for (const name of ['content-type', 'content-language', 'retry-after']) {
-		const value = response.headers.get(name)
-		if (value) safeHeaders.set(name, value)
-	}
 	const proxyResponse = requestTiming.measureSync(
 		'responseBuild',
 		() =>
@@ -225,10 +245,13 @@ export async function POST(request: NextRequest) {
 			event: 'graphql_proxy_timing',
 			requestId,
 			operationName,
+			trafficClass: ingress?.ok ? ingress.trafficClass : 'development',
+			workload: effectiveWorkload,
 			status: response.status,
 			totalMs: Number(requestTiming.elapsedMs().toFixed(2)),
 			timings: requestTiming.snapshot(),
-			responseBodyOk
+			responseBodyOk,
+			cacheResult: cacheControl === 'no-store' ? 'bypass' : 'eligible'
 		})
 	)
 	return proxyResponse

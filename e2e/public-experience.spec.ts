@@ -337,9 +337,9 @@ test('Market stays accessible and usable on a 390px Simplified Chinese screen', 
 	await expect(page).toHaveURL(/period=GAMEWEEK/)
 	await expect(page.getByText('GW2 · 截止').first()).toBeVisible()
 
-	await page.getByRole('link', { name: '近 7 日' }).click()
-	await expect(page).toHaveURL(/period=ROLLING_7D/)
-	await expect(page.getByText(/比较区间/).first()).toBeVisible()
+	await page.goto('/zh-CN/explore/market?period=ROLLING_7D')
+	await expect(page).toHaveURL(/\/zh-CN\/explore\/market$/)
+	await expect(page.getByRole('link', { name: '近 7 日' })).toHaveCount(0)
 
 	await page.getByRole('link', { name: '每日' }).click()
 	const dailyDateLink = page.getByRole('link', {
