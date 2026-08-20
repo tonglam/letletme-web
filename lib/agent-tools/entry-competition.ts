@@ -179,9 +179,9 @@ export async function runCompetition(
 	)
 	if (!context.tournament) {
 		throw new AgentToolError(
-			'NOT_FOUND',
-			'Competition not found or no longer available.',
-			404,
+			'FORBIDDEN',
+			'You are not authorized to access this competition.',
+			403,
 			false
 		)
 	}
@@ -208,9 +208,9 @@ export async function runCompetition(
 	})
 	if (!result.tournament) {
 		throw new AgentToolError(
-			'NOT_FOUND',
-			'Competition not found or no longer available.',
-			404,
+			'FORBIDDEN',
+			'You are not authorized to access this competition.',
+			403,
 			false
 		)
 	}

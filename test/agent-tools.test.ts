@@ -603,6 +603,23 @@ test('an explicit entry ID is always a public snapshot and cannot select an even
 	assert.equal((await invalid.json()).code, 'INVALID_INPUT')
 })
 
+test('missing competition membership is denied without revealing existence', async () => {
+	const response = await handleAgentToolRequest(
+		request({ competitionId: 9, eventId: 1 }),
+		'letletme_competition',
+		dependencies(verified, async document => {
+			assert.equal(document, COMPETITION_CONTEXT_DOCUMENT)
+			return {
+				coreEventContext: contextResult.coreEventContext,
+				liveSnapshot: null,
+				tournament: null
+			}
+		})
+	)
+	assert.equal(response.status, 403)
+	assert.equal((await response.json()).code, 'FORBIDDEN')
+})
+
 test('competition authorization failures, rate limits and timeouts are normalized', async () => {
 	for (const [upstream, expectedStatus, expectedCode] of [
 		[
