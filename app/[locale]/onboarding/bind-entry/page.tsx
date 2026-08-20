@@ -116,6 +116,16 @@ export default async function BindEntryPage({
 					</Button>
 				</div>
 
+				<div className="rounded-lg border surface-inset p-3 text-xs text-muted-foreground mb-6">
+					<p className="font-medium mb-1">{t('findByName')}</p>
+					<ol className="list-decimal list-inside space-y-1">
+						<li>{t('nameStepOne')}</li>
+						<li>{t('nameStepTwo')}</li>
+						<li>{t('nameStepThree')}</li>
+						<li>{t('nameStepFour')}</li>
+					</ol>
+				</div>
+
 				<BindEntryForm next={next} />
 			</AuthCard>
 		</AuthShell>

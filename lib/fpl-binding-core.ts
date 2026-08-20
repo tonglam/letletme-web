@@ -78,6 +78,32 @@ export function parseFplEntryId(value: unknown): number | null {
 	return null
 }
 
+export const ENTRY_NAME_QUERY_MIN_LENGTH = 2
+export const ENTRY_NAME_QUERY_MAX_LENGTH = 50
+
+export type EntryLookupKind =
+	| { kind: 'id'; entryId: number }
+	| { kind: 'name'; query: string }
+	| { kind: 'invalid'; reason: 'empty' | 'too-short' | 'too-long' }
+
+/** Numeric IDs and FPL URLs bind directly; other text is a name search. */
+export function classifyEntryLookupInput(value: unknown): EntryLookupKind {
+	const entryId = parseFplEntryId(value)
+	if (entryId !== null) {
+		return { kind: 'id', entryId }
+	}
+
+	const query = String(value ?? '').trim()
+	if (!query) return { kind: 'invalid', reason: 'empty' }
+	if (query.length < ENTRY_NAME_QUERY_MIN_LENGTH) {
+		return { kind: 'invalid', reason: 'too-short' }
+	}
+	if (query.length > ENTRY_NAME_QUERY_MAX_LENGTH) {
+		return { kind: 'invalid', reason: 'too-long' }
+	}
+	return { kind: 'name', query }
+}
+
 export function assertFplEntryId(value: unknown): number {
 	const entryId = parseFplEntryId(value)
 	if (entryId === null) {

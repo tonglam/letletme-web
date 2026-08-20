@@ -58,6 +58,17 @@ describe('GraphQL proxy public cache policy', () => {
 			}),
 			false,
 		)
+		assert.equal(
+			isPublicCacheableGraphQLRequest({
+				body: {
+					operationName: 'SearchEntries',
+					query: 'query SearchEntries($query: String!) { searchEntries(query: $query) { id } }',
+				},
+				hasSessionUser: false,
+				hasAuthorization: false,
+			}),
+			true,
+		)
 	})
 
 	it('sets Cache-Control on successful public responses only', () => {

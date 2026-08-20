@@ -38,27 +38,37 @@ export default async function Page({ params, searchParams }: PageProps) {
 	const entryId = Number(id)
 
 	const { presentation } = await getLivePageContext()
+	const requestedGameweekValue = typeof gw === 'string' ? Number(gw) : null
+	const historicalMaxGameweek =
+		presentation.currentEventId ?? presentation.latestFinishedEventId
+	const requestedGameweek =
+		requestedGameweekValue !== null &&
+		Number.isInteger(requestedGameweekValue) &&
+		requestedGameweekValue >= 1 &&
+		historicalMaxGameweek !== null &&
+		requestedGameweekValue <= historicalMaxGameweek
+			? requestedGameweekValue
+			: null
+	const allowHistoricalBetweenGameweeks =
+		presentation.phase === 'BETWEEN_GAMEWEEKS' && requestedGameweek !== null
 	if (
 		presentation.phase === 'PRESEASON' ||
-		presentation.phase === 'BETWEEN_GAMEWEEKS' ||
+		(presentation.phase === 'BETWEEN_GAMEWEEKS' &&
+			!allowHistoricalBetweenGameweeks) ||
 		presentation.phase === 'OFFSEASON' ||
 		presentation.phase === 'UNAVAILABLE'
 	) {
 		return <SeasonPhaseState feature="points" presentation={presentation} />
 	}
 
-	const currentEventId = presentation.currentEventId
+	const currentEventId =
+		presentation.currentEventId ??
+		(allowHistoricalBetweenGameweeks
+			? presentation.latestFinishedEventId
+			: null)
 	if (!currentEventId) {
 		return <SeasonPhaseState feature="points" presentation={presentation} />
 	}
-	const requestedGameweekValue = typeof gw === 'string' ? Number(gw) : null
-	const requestedGameweek =
-		requestedGameweekValue !== null &&
-		Number.isInteger(requestedGameweekValue) &&
-		requestedGameweekValue >= 1 &&
-		requestedGameweekValue <= currentEventId
-			? requestedGameweekValue
-			: null
 	const initialEventId = requestedGameweek ?? currentEventId
 	const seedCurrentOverall = initialEventId === currentEventId
 

@@ -12,11 +12,15 @@ import {
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
 	type MarketAvailabilityUpdate,
-	type MarketOwnershipMover,
+	type MarketOwnershipChange,
+	type MarketOwnershipDay,
+	type MarketOwnershipCoverageStatus,
 	type MarketPlayer
 } from '@/lib/graphql/operations/market'
 import {
 	GET_HOME_MARKET_PULSE,
+	GET_HOME_MARKET_OWNERSHIP,
+	type HomeMarketOwnershipResponse,
 	type HomeMarketPulseResponse
 } from '@/lib/graphql/operations/home'
 import {
@@ -24,11 +28,7 @@ import {
 	marketAvailabilityStatusKey,
 	selectHomeAvailabilityUpdates
 } from '@/lib/market-availability'
-import {
-	getMarketCoverageMode,
-	getMarketTeaserMode,
-	shortMarketPosition
-} from '@/lib/market'
+import { shortMarketPosition } from '@/lib/market'
 import { positionBadgeClass } from '@/lib/position-style'
 import {
 	ArrowDownRight,
@@ -85,11 +85,13 @@ function TeaserPlayer({ player }: { player: MarketPlayer }) {
 function OwnershipMoverRow({
 	mover,
 	detailLabel,
-	fromToLabel
+	fromToLabel,
+	formatDelta
 }: {
-	mover: MarketOwnershipMover
+	mover: MarketOwnershipChange
 	detailLabel: string
 	fromToLabel: string
+	formatDelta: (value: number) => string
 }) {
 	return (
 		<li className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2">
@@ -99,10 +101,10 @@ function OwnershipMoverRow({
 				title={detailLabel}
 			>
 				<DeltaBadge
-					value={mover.change}
+					value={mover.changePercentagePoints}
 					size="md"
 					fontFamily="display"
-					format={value => `${value > 0 ? '+' : ''}${value.toFixed(1)}%`}
+					format={formatDelta}
 				/>
 				<p className="mt-0.5 font-display text-caption tabular-nums text-muted-foreground">
 					{fromToLabel}
@@ -171,45 +173,81 @@ function AvailabilityTeaserList({
 
 export async function MarketTeaser() {
 	const t = await getTranslations('Market')
-	let response: HomeMarketPulseResponse
-
-	try {
-		response = await executePublicServerQuery<HomeMarketPulseResponse>(
+	const [pulseResult, ownershipResult] = await Promise.allSettled([
+		executePublicServerQuery<HomeMarketPulseResponse>(
 			GET_HOME_MARKET_PULSE,
-			{ days: 14 },
+			{ days: 7 },
+			publicFetchOptions({
+				revalidate: RevalidateSeconds.market,
+				tags: [CacheTag.market]
+			})
+		),
+		executePublicServerQuery<HomeMarketOwnershipResponse>(
+			GET_HOME_MARKET_OWNERSHIP,
+			{},
 			publicFetchOptions({
 				revalidate: RevalidateSeconds.market,
 				tags: [CacheTag.market]
 			})
 		)
-	} catch (error) {
-		unstable_rethrow(error)
-		console.error('[market-teaser] RSC fetch failed:', error)
+	])
+
+	if (pulseResult.status === 'rejected') {
+		unstable_rethrow(pulseResult.reason)
+		console.error('[market-teaser] pulse fetch failed:', pulseResult.reason)
 		return null
 	}
 
-	const pulse = response.homeMarketPulse
-	const teaserMode = getMarketTeaserMode(pulse)
-	const coverageMode = getMarketCoverageMode(pulse.coverage)
+	const pulse = pulseResult.value.homeMarketPulse
+	const ownership: MarketOwnershipDay | null =
+		ownershipResult.status === 'fulfilled'
+			? ownershipResult.value.marketOwnershipDay
+			: null
+	if (ownershipResult.status === 'rejected') {
+		unstable_rethrow(ownershipResult.reason)
+		console.error(
+			'[market-teaser] ownership fetch failed:',
+			ownershipResult.reason
+		)
+	}
+
+	const ownershipReady = ownership?.coverage.status === 'READY'
+	const ownershipCanRender =
+		ownership !== null &&
+		(ownershipReady || ownership.coverage.status === 'PARTIAL')
+	const teaserMode = ownershipCanRender ? 'ownership' : 'empty'
 	// Keep rise / fall separate so the desk reads like a transfer board, not a mixed top-3.
-	const ownershipRisers = [...pulse.ownershipMovers.risers]
-		.sort((a, b) => b.change - a.change)
+	const ownershipRisers = [...(ownership?.risers ?? [])]
+		.sort((a, b) => b.changePercentagePoints - a.changePercentagePoints)
 		.slice(0, HOME_TEASER_LIMIT)
-	const ownershipFallers = [...pulse.ownershipMovers.fallers]
-		.sort((a, b) => a.change - b.change)
+	const ownershipFallers = [...(ownership?.fallers ?? [])]
+		.sort((a, b) => a.changePercentagePoints - b.changePercentagePoints)
 		.slice(0, HOME_TEASER_LIMIT)
+	const formatDelta = (value: number) =>
+		t('ownershipPercentagePoints', {
+			value: `${value > 0 ? '+' : ''}${value.toFixed(1)}`
+		})
 	const availability = selectHomeAvailabilityUpdates(
 		pulse.availabilityUpdates,
 		HOME_AVAILABILITY_LIMIT,
 		HOME_AVAILABILITY_MIN_OWNED
 	)
 
-	const coverageCopy =
-		coverageMode === 'last-14-days'
-			? t('homeLast14')
-			: coverageMode === 'empty'
-				? t('homeAwaitingCapture')
-				: t('homeSinceTracking')
+	const ownershipStatusCopy: Record<MarketOwnershipCoverageStatus, string> = {
+		READY: t('ownershipStatus.READY'),
+		PARTIAL: t('ownershipStatus.PARTIAL'),
+		NO_DATA: t('ownershipStatus.NO_DATA'),
+		BASELINE_MISSING: t('ownershipStatus.BASELINE_MISSING'),
+		NO_PREVIOUS_GAMEWEEK: t('ownershipStatus.NO_PREVIOUS_GAMEWEEK'),
+		NO_UPCOMING_GAMEWEEK: t('ownershipStatus.NO_UPCOMING_GAMEWEEK')
+	}
+	const coverageCopy = ownership
+		? ownershipReady
+			? t('homeDailyCoverage', {
+					date: ownership.coverage.toDate ?? ownership.date ?? '—'
+				})
+			: ownershipStatusCopy[ownership.coverage.status]
+		: t('ownershipDataUnavailable')
 	const availabilityLabels = {
 		empty: t('noAvailabilityUpdates'),
 		status: (key: ReturnType<typeof marketAvailabilityStatusKey>) =>
@@ -273,9 +311,9 @@ export async function MarketTeaser() {
 											aria-label={t('homeOwnershipRising')}
 										>
 											{ownershipRisers.map(mover => {
-												const from = mover.previousSelectedByPercent.toFixed(1)
-												const to = mover.selectedByPercent.toFixed(1)
-												const delta = `+${mover.change.toFixed(1)}%`
+												const from = mover.fromSelectedByPercent.toFixed(1)
+												const to = mover.toSelectedByPercent.toFixed(1)
+												const delta = formatDelta(mover.changePercentagePoints)
 												return (
 													<OwnershipMoverRow
 														key={mover.player.playerId}
@@ -286,6 +324,7 @@ export async function MarketTeaser() {
 															delta
 														})}
 														fromToLabel={t('ownershipFromTo', { from, to })}
+														formatDelta={formatDelta}
 													/>
 												)
 											})}
@@ -310,9 +349,9 @@ export async function MarketTeaser() {
 											aria-label={t('homeOwnershipFalling')}
 										>
 											{ownershipFallers.map(mover => {
-												const from = mover.previousSelectedByPercent.toFixed(1)
-												const to = mover.selectedByPercent.toFixed(1)
-												const delta = `${mover.change.toFixed(1)}%`
+												const from = mover.fromSelectedByPercent.toFixed(1)
+												const to = mover.toSelectedByPercent.toFixed(1)
+												const delta = formatDelta(mover.changePercentagePoints)
 												return (
 													<OwnershipMoverRow
 														key={mover.player.playerId}
@@ -323,6 +362,7 @@ export async function MarketTeaser() {
 															delta
 														})}
 														fromToLabel={t('ownershipFromTo', { from, to })}
+														formatDelta={formatDelta}
 													/>
 												)
 											})}
@@ -353,68 +393,27 @@ export async function MarketTeaser() {
 						<CardContent className="grid gap-6 pt-6 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
 							<div>
 								<h3 className="mb-3 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
-									{teaserMode === 'price'
-										? t('latestPriceMoves')
-										: teaserMode === 'selected'
-											? t('mostSelectedNow')
-											: t('trackingStartsSoon')}
+									{ownership
+										? ownershipStatusCopy[ownership.coverage.status]
+										: t('ownershipDataUnavailable')}
 								</h3>
-								{teaserMode === 'empty' ? (
-									<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-										{t('homeEmptyDescription', { time: '09:40 UTC+8' })}
-									</p>
-								) : (
-									<ol className="space-y-2">
-										{teaserMode === 'price' &&
-											pulse.priceChanges
-												.slice(0, HOME_TEASER_LIMIT)
-												.map((change, index) => {
-													const rising = change.direction === 'RISE'
-													return (
-														<li
-															key={`${change.player.playerId}-${index}`}
-															className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2"
-														>
-															<TeaserPlayer player={change.player} />
-															<DeltaBadge
-																value={
-																	rising
-																		? Math.abs(change.change)
-																		: -Math.abs(change.change)
-																}
-																size="md"
-																fontFamily="display"
-																format={value =>
-																	`${value > 0 ? '+' : '-'}£${(Math.abs(value) / 10).toFixed(1)}m`
-																}
-															/>
-														</li>
-													)
-												})}
-										{teaserMode === 'selected' &&
-											pulse.mostSelected
-												.slice(0, HOME_TEASER_LIMIT)
-												.map(player => (
-													<li
-														key={player.playerId}
-														className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2"
-													>
-														<TeaserPlayer player={player} />
-														<span className="font-display text-sm font-bold text-primary-ink">
-															{player.selectedByPercent.toFixed(1)}%
-														</span>
-													</li>
-												))}
-									</ol>
-								)}
+								<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+									{ownership
+										? ownership.coverage.status === 'BASELINE_MISSING'
+											? t('homeOwnershipBaselineMissingDescription', {
+													date:
+														ownership.date ?? ownership.coverage.toDate ?? '—'
+												})
+											: t('homeEmptyDescription', { time: '09:25–09:35 UTC+8' })
+										: t('ownershipDataUnavailable')}
+								</p>
 							</div>
-
 							<div>
 								<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
 									<HeartPulse
 										aria-hidden="true"
 										className="size-4 text-pink"
-									/>{' '}
+									/>
 									{t('availabilityWatch')}
 								</h3>
 								<AvailabilityTeaserList

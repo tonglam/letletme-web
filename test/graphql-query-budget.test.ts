@@ -7,6 +7,8 @@ import {
 	GET_LIVE_MATCHDAY_DESK
 } from '../lib/graphql/operations/live'
 import {
+	GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK,
+	GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
 	GET_FIXTURE_PLANNING_SIGNALS,
 	GET_MARKET_PULSE
 } from '../lib/graphql/operations/market'
@@ -16,6 +18,7 @@ import {
 } from '../lib/graphql/operations/players'
 import {
 	GET_HOME_GAMEWEEK,
+	GET_HOME_MARKET_OWNERSHIP,
 	GET_HOME_MARKET_PULSE,
 	GET_HOME_PERSONAL_DESK,
 	GET_HOME_PUBLIC_BOOTSTRAP
@@ -48,7 +51,10 @@ describe('GraphQL request budget', () => {
 		let astNodes = 0
 		visit(document, { enter: () => void (astNodes += 1) })
 
-		assert.ok(astNodes < 200, `GET_LIVE_MATCHDAY_DESK has ${astNodes} AST nodes`)
+		assert.ok(
+			astNodes < 200,
+			`GET_LIVE_MATCHDAY_DESK has ${astNodes} AST nodes`
+		)
 	})
 
 	it('keeps GET_MARKET_PULSE below the production 200-node guard', () => {
@@ -64,6 +70,7 @@ describe('GraphQL request budget', () => {
 			['GET_HOME_PUBLIC_BOOTSTRAP', GET_HOME_PUBLIC_BOOTSTRAP, 1],
 			['GET_HOME_PERSONAL_DESK', GET_HOME_PERSONAL_DESK, 1],
 			['GET_HOME_MARKET_PULSE', GET_HOME_MARKET_PULSE, 1],
+			['GET_HOME_MARKET_OWNERSHIP', GET_HOME_MARKET_OWNERSHIP, 1],
 			['GET_HOME_GAMEWEEK', GET_HOME_GAMEWEEK, 1]
 		] as const) {
 			const document = parse(query)
@@ -78,27 +85,43 @@ describe('GraphQL request budget', () => {
 		}
 	})
 
-	it('keeps fixture market signals to one compact root field', () => {
-		const document = parse(GET_FIXTURE_PLANNING_SIGNALS)
-		let astNodes = 0
-		visit(document, { enter: () => void (astNodes += 1) })
-		const operation = document.definitions.find(
-			definition => definition.kind === 'OperationDefinition'
-		)
-		assert.ok(operation?.kind === 'OperationDefinition')
-		assert.equal(operation.selectionSet.selections.length, 1)
-		assert.ok(
-			astNodes < 100,
-			`GET_FIXTURE_PLANNING_SIGNALS has ${astNodes} AST nodes`
-		)
+	it('keeps fixture market signals and ownership periods isolated', () => {
+		for (const [name, query] of [
+			['GET_FIXTURE_PLANNING_SIGNALS', GET_FIXTURE_PLANNING_SIGNALS],
+			[
+				'GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK',
+				GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK
+			],
+			[
+				'GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D',
+				GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D
+			]
+		] as const) {
+			const document = parse(query)
+			let astNodes = 0
+			visit(document, { enter: () => void (astNodes += 1) })
+			const operation = document.definitions.find(
+				definition => definition.kind === 'OperationDefinition'
+			)
+			assert.ok(operation?.kind === 'OperationDefinition')
+			assert.equal(operation.selectionSet.selections.length, 1)
+			assert.ok(astNodes < 200, `${name} has ${astNodes} AST nodes`)
+		}
 		for (const unusedField of [
-			'coverage',
 			'availabilityUpdates',
 			'newPlayers',
 			'priceChanges'
 		]) {
-			assert.doesNotMatch(GET_FIXTURE_PLANNING_SIGNALS, new RegExp(`\\b${unusedField}\\b`))
+			assert.doesNotMatch(
+				GET_FIXTURE_PLANNING_SIGNALS,
+				new RegExp(`\\b${unusedField}\\b`)
+			)
 		}
+		assert.match(GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK, /period:\s*GAMEWEEK/)
+		assert.match(
+			GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
+			/period:\s*ROLLING_7D/
+		)
 	})
 
 	it('keeps the player-state profile bounded to one root field', () => {
@@ -168,7 +191,7 @@ describe('GraphQL request budget', () => {
 	it('keeps official H2H detail and Team Desk queries below the production guard', () => {
 		for (const [name, query] of [
 			['GET_TOURNAMENT_OFFICIAL_H2H', GET_TOURNAMENT_OFFICIAL_H2H],
-			['GET_ENTRY_OFFICIAL_H2H_DESK', GET_ENTRY_OFFICIAL_H2H_DESK],
+			['GET_ENTRY_OFFICIAL_H2H_DESK', GET_ENTRY_OFFICIAL_H2H_DESK]
 		] as const) {
 			const document = parse(query)
 			let astNodes = 0

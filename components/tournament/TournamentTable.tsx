@@ -38,6 +38,8 @@ interface TournamentTableProps {
 	gameweek: number
 	/** Signed-in viewer’s FPL entry — pin + highlight when off-screen */
 	viewerEntryId?: number
+	/** Reports the rows in the same order currently visible in the table. */
+	onVisibleEntriesChange?: (entries: TournamentEntry[]) => void
 }
 
 /** FPL money fields are tenths of £m (1005 → £100.5m). */
@@ -74,6 +76,7 @@ export function TournamentTable({
 	tournamentId,
 	gameweek,
 	viewerEntryId,
+	onVisibleEntriesChange,
 }: TournamentTableProps) {
 	const t = useTranslations('LiveTournament')
 	const format = useFormatter()
@@ -179,6 +182,9 @@ export function TournamentTable({
 		() => takeVisibleWithPinMe(sortedEntries, visibleCount, viewerEntryId),
 		[sortedEntries, visibleCount, viewerEntryId],
 	)
+	useEffect(() => {
+		onVisibleEntriesChange?.(visibleEntries)
+	}, [onVisibleEntriesChange, visibleEntries])
 	const total = sortedEntries.length
 	const hasMoreRows = total > visibleCount
 	const remaining = Math.max(0, total - visibleCount)

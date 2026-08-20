@@ -48,7 +48,7 @@ import {
 	areTournamentStandingsReady,
 	isTournamentSetupInFlight
 } from '@/lib/tournament/lifecycle'
-import { Tournament } from '@/types/tournament'
+import { Tournament, type TournamentEntry } from '@/types/tournament'
 import { Link, useRouter } from '@/i18n/navigation'
 import { RefreshCw } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
@@ -155,6 +155,9 @@ export default function TournamentClient({
 		useState<number>(initialEventId)
 	const [selectedRows, setSelectedRows] =
 		useState<TournamentLiveCalcData[]>(initialCurrentRows)
+	const [tableEntriesForShare, setTableEntriesForShare] = useState<
+		TournamentEntry[]
+	>([])
 	const [staleEntryIds, setStaleEntryIds] = useState<ReadonlySet<number>>(
 		() => new Set()
 	)
@@ -296,7 +299,7 @@ export default function TournamentClient({
 			})
 			return request
 		},
-		[acceptSnapshot, t]
+		[acceptSnapshot, entryId, t]
 	)
 
 	useEffect(() => {
@@ -436,6 +439,7 @@ export default function TournamentClient({
 
 	useEffect(() => {
 		// Reset filters as soon as the tournament or GW changes (not after fetch).
+		setTableEntriesForShare([])
 		const resetTimer = window.setTimeout(() => {
 			setSearchQuery('')
 			setChipFilter('all')
@@ -505,7 +509,6 @@ export default function TournamentClient({
 	}, [
 		acceptSnapshot,
 		refreshTournamentResults,
-		selectedGameweek,
 		selectedTournament,
 		standingsReady,
 		t
@@ -532,6 +535,13 @@ export default function TournamentClient({
 	const handleTeamExposureMatchedEntryIdsChange = useCallback(
 		(entryIds: string[] | null) => {
 			setTeamExposureMatchedEntryIds(entryIds)
+		},
+		[]
+	)
+
+	const handleTableEntriesForShareChange = useCallback(
+		(entries: TournamentEntry[]) => {
+			setTableEntriesForShare(entries)
 		},
 		[]
 	)
@@ -600,7 +610,11 @@ export default function TournamentClient({
 			'',
 			t('standings')
 		]
-		for (const entry of filteredEntries.slice(0, 20)) {
+		const entriesInTableOrder =
+			tableEntriesForShare.length > 0
+				? tableEntriesForShare
+				: filteredEntries.slice(0, 20)
+		for (const entry of entriesInTableOrder.slice(0, 20)) {
 			lines.push(
 				`- ${entry.rank || '—'} ${entry.teamName} · ${entry.gwPoints} GW · ${entry.totalPoints} total`
 			)
@@ -612,7 +626,14 @@ export default function TournamentClient({
 				: 'https://letletme.top/live/competitions'
 		)
 		return lines.join('\n')
-	}, [displayGameweek, filteredEntries, selectedStats, selectedTournament, t])
+	}, [
+		displayGameweek,
+		filteredEntries,
+		selectedStats,
+		selectedTournament,
+		t,
+		tableEntriesForShare
+	])
 
 	if (entryId <= 0) {
 		return (
@@ -869,6 +890,7 @@ export default function TournamentClient({
 									tournamentId={selectedTournament.id}
 									gameweek={displayGameweek}
 									viewerEntryId={entryId}
+									onVisibleEntriesChange={handleTableEntriesForShareChange}
 								/>
 							</>
 						)}

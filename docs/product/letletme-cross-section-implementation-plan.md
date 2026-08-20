@@ -6,6 +6,12 @@
 - **Product inputs:** [LetLetMe Product Conclusions](letletme-product-conclusions.md) and [LetLetMe Four-Section Product Specification](letletme-four-section-specification.md)
 - **Section plans:** [Live](letletme-live-section-high-level-design.md), [My FPL](letletme-my-fpl-section-high-level-design.md), [Competitions](letletme-competitions-section-high-level-design.md), and [Explore](letletme-explore-section-high-level-design.md)
 
+> **Authentication decision update (19 August 2026):** The season-bearing v2
+> authentication rollout described in this plan is deferred. The canonical
+> runtime contract remains the existing v1 Web-signed envelope with
+> `aud`, `uid`, `eid`, `evat`, `iat`, and `exp`; the v2 binding fields,
+> history schema, and season-gated protected-root rules are not active.
+
 ## 1. Scope and precedence
 
 This document coordinates implementation shared by the four website sections. It does not redefine their product purposes or replace their section-specific work packages.

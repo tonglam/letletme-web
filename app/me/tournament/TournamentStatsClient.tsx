@@ -88,18 +88,56 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const shareText = useMemo(() => {
 		const name = selectedTournament?.name ?? t('title')
-		const lines = [`# ${name} · GW${selectedGameweek || currentGameweek}`]
-		if (tournamentStats) {
-			lines.push(`${t('myRank')}: ${tournamentStats.myRank ?? '—'}`)
-			lines.push(
-				`${t('topScore')}: ${tournamentStats.topPerformers[0]?.points ?? '—'}`
-			)
-		}
-		lines.push('', t('standings'))
-		for (const row of filteredStandings.slice(0, 12)) {
-			lines.push(
-				`- ${row.displayRank ?? '—'} ${row.teamName} · ${row.gameweekPoints} GW · ${row.totalPoints} total`
-			)
+		const lines =
+			view === 'season'
+				? [`# ${name} · ${t('viewSeason')}`]
+				: [`# ${name} · GW${selectedGameweek || currentGameweek}`]
+
+		if (view === 'season') {
+			if (seasonMe) {
+				const gapToLeader =
+					seasonMe.gapToLeader == null
+						? '—'
+						: seasonMe.gapToLeader === 0
+							? t('leading')
+							: String(seasonMe.gapToLeader)
+				lines.push(
+					`${t('tournamentRank')}: ${seasonMe.tournamentRank ?? '—'}`,
+					`${t('totalPoints')}: ${seasonMe.totalPoints ?? '—'}`,
+					`${t('gapToLeader')}: ${gapToLeader}`
+				)
+			}
+			if (seasonField) {
+				lines.push(
+					'',
+					t('tournamentFieldAsOf', { gameweek: seasonField.asOfGameweek }),
+					`${t('fieldTeams')}: ${seasonField.entryCount}`,
+					`${t('fieldLeaderPoints')}: ${seasonField.leaderPoints ?? '—'}`,
+					`${t('fieldAveragePoints')}: ${seasonField.averagePoints ?? '—'}`,
+					'',
+					t('standings')
+				)
+				for (const row of seasonField.standings.slice(0, 12)) {
+					lines.push(
+						`- ${row.rank ?? '—'} ${row.teamName} · ${row.totalPoints ?? '—'} total`
+					)
+				}
+			} else {
+				lines.push('', t('tournamentFieldEmpty'))
+			}
+		} else {
+			if (tournamentStats) {
+				lines.push(`${t('myRank')}: ${tournamentStats.myRank ?? '—'}`)
+				lines.push(
+					`${t('topScore')}: ${tournamentStats.topPerformers[0]?.points ?? '—'}`
+				)
+			}
+			lines.push('', t('standings'))
+			for (const row of filteredStandings.slice(0, 12)) {
+				lines.push(
+					`- ${row.displayRank ?? '—'} ${row.teamName} · ${row.gameweekPoints} GW · ${row.totalPoints} total`
+				)
+			}
 		}
 		lines.push(
 			'',
@@ -111,10 +149,13 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 	}, [
 		currentGameweek,
 		filteredStandings,
+		seasonField,
+		seasonMe,
 		selectedGameweek,
 		selectedTournament,
 		t,
-		tournamentStats
+		tournamentStats,
+		view
 	])
 
 	const maxGw =

@@ -10,7 +10,7 @@ import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
-import type { MarketPulse } from '@/lib/graphql/operations/market'
+import type { FixturePlanningMarketSignals } from '@/lib/graphql/operations/market'
 import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
 import { buildSquadTeamExposure } from '@/lib/squad-picks'
 import {
@@ -372,7 +372,7 @@ export default function FixturesClient({
 	initialHorizon = DEFAULT_FDR_HORIZON,
 	initialFixturesByEvent,
 	initialUnknownEventIds = [],
-	marketPulse,
+	marketSignals,
 	knownTeams,
 	mySquadKeys = [],
 	mySquadPicks = [],
@@ -383,7 +383,7 @@ export default function FixturesClient({
 	initialHorizon?: FdrHorizon
 	initialFixturesByEvent: Record<number, FixturePlanningFixture[]>
 	initialUnknownEventIds?: number[]
-	marketPulse: MarketPulse | null
+	marketSignals: FixturePlanningMarketSignals | null
 	knownTeams: FdrTeamIdentity[]
 	mySquadKeys?: string[]
 	mySquadPicks?: SquadPickSeed[]
@@ -508,11 +508,11 @@ export default function FixturesClient({
 			buildFdrDeskModel(fixturesByEvent, {
 				fromGw,
 				horizon,
-				marketPulse,
+				marketSignals,
 				knownTeams,
 				unknownEvents
 			}),
-		[fixturesByEvent, fromGw, horizon, knownTeams, marketPulse, unknownEvents]
+		[fixturesByEvent, fromGw, horizon, knownTeams, marketSignals, unknownEvents]
 	)
 	const shareText = useMemo(() => {
 		const orderedTeams = orderFdrTeamsForDisplay(model.teams, sort)
@@ -725,6 +725,7 @@ export default function FixturesClient({
 								})}
 								easyHardLabel={t('glanceEasyHard')}
 							/>
+
 						) : (
 							<div className="rounded-lg border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">
 								—

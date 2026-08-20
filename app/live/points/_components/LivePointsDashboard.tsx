@@ -63,6 +63,7 @@ export function LivePointsDashboard({
 	const locale = useLocale() as AppLocale
 	const autoRefreshEnabled = shouldAutoRefresh && isPageActive
 	const squadPitchPlayers = mapPlayersToSquadPitch(startingPlayers)
+	const squadPitchBenchPlayers = mapPlayersToSquadPitch(benchPlayers)
 	const formatOverallPoints = (
 		value: number | null,
 		options?: NumberFormatOptions
@@ -100,6 +101,14 @@ export function LivePointsDashboard({
 		}
 		return chip ?? t('noActiveChips')
 	}
+	const benchBoostActive = (() => {
+		const normalized = liveData?.chip?.toLowerCase() ?? ''
+		return (
+			normalized.includes('bench') ||
+			normalized === 'bb' ||
+			normalized === 'bboost'
+		)
+	})()
 	const gameweek = selectedGameweek ?? liveData?.event ?? currentGameweek
 	const showLiveOverallRank =
 		overall != null && gameweek === currentGameweek
@@ -269,6 +278,11 @@ export function LivePointsDashboard({
 							ref={squadPitchRef}
 							onPlayerClick={handlePitchPlayerClick}
 							players={squadPitchPlayers}
+							benchPlayers={squadPitchBenchPlayers}
+							benchTitle={t('substitutes')}
+							benchBoost={benchBoostActive}
+							benchBoostLabel={t('pitchBenchBoost')}
+							benchPointsLabel={t('pointsAbbreviation')}
 							title={liveData.entryName ?? `Entry ${liveData.entry}`}
 							managerName={liveData.playerName ?? undefined}
 							headerStats={pitchHeaderStats}

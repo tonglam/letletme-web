@@ -248,16 +248,19 @@ export default function GameweekStatsClient({
 	const isBoardsUnavailable = committedDesk.boardsState === 'UNAVAILABLE'
 	const isBoardsPending = committedDesk.boardsState === 'PENDING'
 
-	const formatStat = (
-		value: number | null,
-		fallbackTip = t('pendingOfficial')
-	) => (typeof value === 'number' ? String(value) : fallbackTip)
+	const formatStat = useCallback(
+		(value: number | null, fallbackTip = t('pendingOfficial')) =>
+			(typeof value === 'number' ? String(value) : fallbackTip),
+		[t]
+	)
 	const formatCount = (value: number | null, fallbackTip = t('notProvided')) =>
 		typeof value === 'number'
 			? formatter.number(value, { notation: 'compact' })
 			: fallbackTip
-	const displayName = (name: string) =>
-		name === 'N/A' ? t('notAvailable') : name
+	const displayName = useCallback(
+		(name: string) => (name === 'N/A' ? t('notAvailable') : name),
+		[t]
+	)
 	const statusLabel =
 		displayState === 'provisional'
 			? t('status.provisional')
@@ -316,11 +319,17 @@ export default function GameweekStatsClient({
 			),
 			'',
 			typeof window !== 'undefined'
-				? window.location.href
-				: 'https://letletme.top/explore/gameweek'
+				? (() => {
+						const shareUrl = new URL(window.location.href)
+						shareUrl.searchParams.set('gw', String(visibleGameweek))
+						return shareUrl.toString()
+					})()
+				: `https://letletme.top/explore/gameweek?gw=${visibleGameweek}`
 		].join('\n')
 	}, [
 		dreamTeam,
+		displayName,
+		formatStat,
 		haulPlayers,
 		isOverviewUnavailable,
 		overallStats,
