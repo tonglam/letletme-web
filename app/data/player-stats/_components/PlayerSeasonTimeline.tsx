@@ -232,7 +232,10 @@ function pointForSeason(
 	profile: PlayerStateProfileData | null,
 	season: string
 ): PlayerSeasonTimelinePoint | null {
-	return profile?.seasonTimeline.find(point => point.season === season) ?? null
+	return (
+		(profile?.seasonTimeline ?? []).find(point => point.season === season) ??
+		null
+	)
 }
 
 function comparableWinner(
@@ -400,8 +403,8 @@ export function PlayerSeasonTimeline({
 	const seasons = Array.from(
 		new Set([
 			currentSeason,
-			...(profile?.seasonTimeline.map(point => point.season) ?? []),
-			...(comparisonProfile?.seasonTimeline.map(point => point.season) ?? [])
+			...(profile?.seasonTimeline ?? []).map(point => point.season),
+			...(comparisonProfile?.seasonTimeline ?? []).map(point => point.season)
 		])
 	).sort((left, right) => right.localeCompare(left))
 	const completedPoints = [profile, comparisonProfile]
