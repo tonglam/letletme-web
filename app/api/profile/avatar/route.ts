@@ -5,20 +5,24 @@ import {
 	AVATAR_CONTENT_TYPES,
 	AVATAR_INPUT_MAX_BYTES,
 	InvalidAvatarError,
-	normalizeAvatar,
+	normalizeAvatar
 } from '@/lib/avatar-processing'
 import { checkDatabaseRateLimit } from '@/lib/http-security'
-import { PayloadTooLargeError, readBoundedBytes } from '@/lib/http-security-core'
+import {
+	PayloadTooLargeError,
+	readBoundedBytes
+} from '@/lib/http-security-core'
 import {
 	AVATAR_BUCKET,
 	extractManagedAvatarPath,
 	removeStorageObject,
-	uploadAvatar,
+	uploadAvatar
 } from '@/lib/supabase-storage'
 import { isTrustedSameSiteRequest } from '@/lib/request-origin'
 import { db, schema } from '@/lib/db'
 import { and, eq, isNull } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
+import { markPrivateNoStore } from '@/lib/private-no-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,7 +40,9 @@ type AvatarErrorCode =
 	| 'uploadFailed'
 
 function errorResponse(errorCode: AvatarErrorCode, status: number) {
-	return NextResponse.json({ success: false, errorCode }, { status })
+	return markPrivateNoStore(
+		NextResponse.json({ success: false, errorCode }, { status })
+	)
 }
 
 export async function POST(request: Request) {
@@ -63,7 +69,7 @@ export async function POST(request: Request) {
 			scope: 'avatar-upload-user',
 			subject: rateSubject,
 			limit: AVATAR_RATE_LIMIT,
-			windowSeconds: AVATAR_RATE_WINDOW_SECONDS,
+			windowSeconds: AVATAR_RATE_WINDOW_SECONDS
 		})
 	} catch {
 		return errorResponse('uploadFailed', 502)
@@ -89,7 +95,7 @@ export async function POST(request: Request) {
 		form = await new Request(request.url, {
 			method: 'POST',
 			headers: request.headers,
-			body: body as unknown as BodyInit,
+			body: body as unknown as BodyInit
 		}).formData()
 	} catch {
 		return errorResponse('invalidFile', 400)
@@ -113,7 +119,8 @@ export async function POST(request: Request) {
 			file.type
 		)
 	} catch (error) {
-		if (error instanceof InvalidAvatarError) return errorResponse('invalidFile', 415)
+		if (error instanceof InvalidAvatarError)
+			return errorResponse('invalidFile', 415)
 		return errorResponse('uploadFailed', 502)
 	}
 
@@ -126,15 +133,16 @@ export async function POST(request: Request) {
 			.limit(1)
 	} catch (error) {
 		console.error('[avatar] previous image lookup failed', {
-			error: error instanceof Error ? error.name : 'UnknownError',
+			error: error instanceof Error ? error.name : 'UnknownError'
 		})
 		return errorResponse('uploadFailed', 502)
 	}
 	const previousImage = previous[0]?.image ?? null
 	const previousPath = extractManagedAvatarPath(previousImage, session.user.id)
-	const previousImagePredicate = previousImage === null
-		? isNull(schema.user.image)
-		: eq(schema.user.image, previousImage)
+	const previousImagePredicate =
+		previousImage === null
+			? isNull(schema.user.image)
+			: eq(schema.user.image, previousImage)
 
 	let uploaded: { imageUrl: string; path: string } | null = null
 	try {
@@ -155,12 +163,13 @@ export async function POST(request: Request) {
 				await removeStorageObject(AVATAR_BUCKET, uploaded.path)
 			} catch (cleanupError) {
 				console.error('[avatar] failed to remove uncommitted object', {
-					error: cleanupError instanceof Error ? cleanupError.name : 'UnknownError',
+					error:
+						cleanupError instanceof Error ? cleanupError.name : 'UnknownError'
 				})
 			}
 		}
 		console.error('[avatar] upload failed', {
-			error: error instanceof Error ? error.name : 'UnknownError',
+			error: error instanceof Error ? error.name : 'UnknownError'
 		})
 		return errorResponse('uploadFailed', 502)
 	}
@@ -172,10 +181,12 @@ export async function POST(request: Request) {
 			await removeStorageObject(AVATAR_BUCKET, previousPath)
 		} catch (error) {
 			console.warn('[avatar] previous object cleanup failed', {
-				error: error instanceof Error ? error.name : 'UnknownError',
+				error: error instanceof Error ? error.name : 'UnknownError'
 			})
 		}
 	}
 
-	return NextResponse.json({ success: true, imageUrl: uploaded.imageUrl })
+	return markPrivateNoStore(
+		NextResponse.json({ success: true, imageUrl: uploaded.imageUrl })
+	)
 }
