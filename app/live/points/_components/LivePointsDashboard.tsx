@@ -2,24 +2,27 @@
 
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import { PlayerList } from '@/components/live/PlayerList'
+import { PlayerDetailModal } from '@/components/live/PlayerDetailModal'
+import { buildLivePlayerDetail } from '@/components/live/player-detail-model'
 import { TeamStats } from '@/components/live/TeamStats'
-import { ShareTextFallback } from '@/components/share/ShareTextFallback'
+import { ShareActions } from '@/components/share/ShareActions'
+import { SquadPitch } from '@/components/squad-pitch/SquadPitch'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { APP_URL } from '@/i18n/config'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
+import type { EntryOverallSnapshot } from '@/lib/graphql/operations/entries'
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
 import { cn } from '@/lib/utils'
 import type { Player } from '@/types/player'
-import { Check, Copy, ImageIcon, Loader2, RefreshCw } from 'lucide-react'
-import { useLocale, useTranslations } from 'next-intl'
-import { useCallback, useState, type ReactNode } from 'react'
-import { toast } from 'sonner'
+import type { PlayerDetail } from '@/types/player-detail'
+import { Loader2, RefreshCw } from 'lucide-react'
+import { useFormatter, useLocale, useTranslations } from 'next-intl'
+import { useCallback, useRef, useState, type ReactNode } from 'react'
+import type { NumberFormatOptions } from 'use-intl'
 import { deriveLiveTeamStats } from '../_lib/live-points-model'
-import {
-	copyTextToClipboard,
-	formatLivePointsShareText
-} from '../_lib/live-points-share'
+import { mapPlayersToSquadPitch } from '../_lib/live-points-squad-pitch'
+import { formatLivePointsShareText } from '../_lib/live-points-share'
 import { LivePointsAutoRefreshCountdown } from './LivePointsAutoRefreshCountdown'
 
 export function LivePointsDashboard({
@@ -32,6 +35,7 @@ export function LivePointsDashboard({
 	isPageActive,
 	shouldAutoRefresh,
 	liveData,
+	overall,
 	startingPlayers,
 	benchPlayers,
 	onGameweekChange,
@@ -47,6 +51,7 @@ export function LivePointsDashboard({
 	isPageActive: boolean
 	shouldAutoRefresh: boolean
 	liveData?: LiveCalcData
+	overall?: EntryOverallSnapshot
 	startingPlayers: Player[]
 	benchPlayers: Player[]
 	onGameweekChange: (gameweek: number) => void
@@ -54,13 +59,93 @@ export function LivePointsDashboard({
 	onRefresh: () => Promise<void>
 }) {
 	const t = useTranslations('LivePoints')
+	const format = useFormatter()
 	const locale = useLocale() as AppLocale
 	const autoRefreshEnabled = shouldAutoRefresh && isPageActive
-	const [copied, setCopied] = useState(false)
-	const [manualShareText, setManualShareText] = useState<string | null>(null)
+	const squadPitchPlayers = mapPlayersToSquadPitch(startingPlayers)
+	const squadPitchBenchPlayers = mapPlayersToSquadPitch(benchPlayers)
+	const formatOverallPoints = (
+		value: number | null,
+		options?: NumberFormatOptions
+	) => (value == null ? '—' : format.number(value, options))
+	const formatOverallRank = (
+		value: number | null,
+		options?: NumberFormatOptions
+	) => (value == null || value <= 0 ? '—' : format.number(value, options))
+	const formatPitchChip = (chip: string | null | undefined) => {
+		const normalized = chip?.toLowerCase() ?? ''
+		if (!normalized) return t('noActiveChips')
+		if (
+			normalized.includes('bench') ||
+			normalized === 'bb' ||
+			normalized === 'bboost'
+		) {
+			return t('pitchBenchBoost')
+		}
+		if (
+			normalized.includes('3x') ||
+			normalized.includes('triple') ||
+			normalized === 'tc'
+		) {
+			return t('pitchTripleCaptain')
+		}
+		if (normalized.includes('wildcard') || normalized === 'wc') {
+			return t('pitchWildcard')
+		}
+		if (
+			normalized.includes('free') ||
+			normalized === 'fh' ||
+			normalized === 'free_hit'
+		) {
+			return t('pitchFreeHit')
+		}
+		return chip ?? t('noActiveChips')
+	}
+	const benchBoostActive = (() => {
+		const normalized = liveData?.chip?.toLowerCase() ?? ''
+		return (
+			normalized.includes('bench') ||
+			normalized === 'bb' ||
+			normalized === 'bboost'
+		)
+	})()
+	const gameweek = selectedGameweek ?? liveData?.event ?? currentGameweek
+	const showLiveOverallRank =
+		overall != null && gameweek === currentGameweek
+	const pitchHeaderStats = liveData
+		? {
+				eyebrow: showLiveOverallRank
+					? `${t('pitchTotalPoints')} ${formatOverallPoints(liveData.liveTotalPoints)} · ${t('pitchOverallRank')} ${formatOverallRank(overall.overallRank, { notation: 'compact' })}`
+					: `${t('pitchTotalPoints')} ${formatOverallPoints(liveData.liveTotalPoints)}`,
+				details: [
+					{
+						label: t('pitchGameweekPoints'),
+						value: formatOverallPoints(liveData.livePoints),
+						accent: true
+					},
+					{
+						label: t('pitchChip'),
+						value: formatPitchChip(liveData.chip)
+					}
+				]
+			}
+		: undefined
+	const [selectedPitchPlayer, setSelectedPitchPlayer] =
+		useState<PlayerDetail | null>(null)
+	const squadPitchRef = useRef<HTMLElement | null>(null)
 
-	const handleCopyShare = useCallback(async () => {
-		if (!liveData) return
+	const handlePitchPlayerClick = useCallback(
+		(playerId: string) => {
+			const player = [...startingPlayers, ...benchPlayers].find(
+				candidate => candidate.id === playerId
+			)
+			if (player) setSelectedPitchPlayer(buildLivePlayerDetail(player))
+		},
+		[benchPlayers, startingPlayers]
+	)
+
+	const shareText = useCallback(() => {
+		if (!liveData) return ''
 		const gameweek = selectedGameweek ?? liveData.event ?? currentGameweek
 		const entryId = liveData.entry
 		// Prefer browser origin so local/dev shares still open; fall back to prod base.
@@ -69,9 +154,10 @@ export function LivePointsDashboard({
 		const shareUrl = new URL(
 			localizePathname(`/live/points/${entryId}`, locale),
 			origin
-		).toString()
+		)
+		shareUrl.searchParams.set('gw', String(gameweek))
 
-		const text = formatLivePointsShareText({
+		return formatLivePointsShareText({
 			gameweek,
 			liveData,
 			startingPlayers,
@@ -91,23 +177,9 @@ export function LivePointsDashboard({
 				pts: t('pointsAbbreviation'),
 				hits: t('shareHits'),
 				// Pass {url} into next-intl — bare t('shareFooter') throws FORMATTING_ERROR
-				footer: t('shareFooter', { url: shareUrl })
+				footer: t('shareFooter', { url: shareUrl.toString() })
 			}
 		})
-		const copyResult = await copyTextToClipboard(text)
-		if (copyResult === 'copied') {
-			setManualShareText(null)
-			setCopied(true)
-			toast.success(t('shareCopied'))
-			window.setTimeout(() => setCopied(false), 2000)
-		} else if (copyResult === 'unsupported' || copyResult === 'failed') {
-			setManualShareText(text)
-			toast.warning(
-				copyResult === 'unsupported'
-					? t('shareCopyUnsupported')
-					: t('shareCopyFailed')
-			)
-		}
 	}, [
 		benchPlayers,
 		currentGameweek,
@@ -141,34 +213,13 @@ export function LivePointsDashboard({
 							enabled={autoRefreshEnabled}
 							onRefresh={onAutoRefresh}
 						/>
-						<Button
-							size="sm"
-							variant="outline"
-							onClick={() => void handleCopyShare()}
+						<ShareActions
+							text={shareText}
+							imageRef={squadPitchRef}
+							title={liveData?.entryName ?? t('teamTitle')}
+							className="flex flex-wrap items-center gap-2 sm:gap-3"
 							disabled={!liveData || isLoading}
-							aria-label={t('shareCopy')}
-						>
-							{copied ? (
-								<Check
-									data-icon="inline-start"
-									className="text-primary-ink"
-								/>
-							) : (
-								<Copy data-icon="inline-start" />
-							)}
-							{copied ? t('shareCopiedShort') : t('shareCopy')}
-						</Button>
-						{/* TODO: design + implement share-as-image export */}
-						<Button
-							size="sm"
-							variant="outline"
-							onClick={() => toast.message(t('shareImageComingSoon'))}
-							disabled={!liveData || isLoading}
-							aria-label={t('shareCopyImage')}
-						>
-							<ImageIcon data-icon="inline-start" />
-							{t('shareCopyImage')}
-						</Button>
+						/>
 						<Button
 							size="sm"
 							variant="outline"
@@ -186,16 +237,6 @@ export function LivePointsDashboard({
 					</div>
 				</div>
 			</div>
-			{manualShareText ? (
-				<ShareTextFallback
-					text={manualShareText}
-					message={t('shareCopyUnsupported')}
-					fieldLabel={t('shareCopyManualLabel')}
-					closeLabel={t('shareCopyClose')}
-					onClose={() => setManualShareText(null)}
-				/>
-			) : null}
-
 			<div
 				aria-live="polite"
 				className="min-h-5"
@@ -231,6 +272,33 @@ export function LivePointsDashboard({
 					<div className={cn(isRefreshing && 'opacity-75 transition-opacity')}>
 						<TeamStats stats={deriveLiveTeamStats(liveData)} />
 					</div>
+
+					<div className="mb-8">
+						<SquadPitch
+							ref={squadPitchRef}
+							onPlayerClick={handlePitchPlayerClick}
+							players={squadPitchPlayers}
+							benchPlayers={squadPitchBenchPlayers}
+							benchTitle={t('substitutes')}
+							benchBoost={benchBoostActive}
+							benchBoostLabel={t('pitchBenchBoost')}
+							benchPointsLabel={t('pointsAbbreviation')}
+							title={liveData.entryName ?? `Entry ${liveData.entry}`}
+							managerName={liveData.playerName ?? undefined}
+							headerStats={pitchHeaderStats}
+							eyebrow={`${t('livePoints')} · GW ${selectedGameweek ?? liveData.event}`}
+							className={cn(
+								'mx-auto max-w-3xl',
+								isRefreshing && 'opacity-75 transition-opacity'
+							)}
+						/>
+					</div>
+
+					<PlayerDetailModal
+						player={selectedPitchPlayer}
+						isOpen={selectedPitchPlayer !== null}
+						onClose={() => setSelectedPitchPlayer(null)}
+					/>
 
 					<section aria-labelledby="live-squad-heading">
 						<div className="mb-3">

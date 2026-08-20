@@ -2,20 +2,25 @@ import TeamStatsClient from '@/app/me/team/TeamStatsClient'
 import {
 	identityFromEntrySummary,
 	identityFromEventResult,
-	type SeasonIdentity,
+	type SeasonIdentity
 } from '@/app/me/team/_lib/team-stats-model'
 import {
+	MOCK_TEAM_ENTRY_ID,
+	MOCK_TEAM_EVENT_ID,
+	MOCK_TEAM_EVENT_RESULT,
+	MOCK_TEAM_HISTORY,
+	MOCK_TEAM_IDENTITY
+} from '@/app/me/team/_lib/team-stats-mock'
+import {
 	parseTeamStatsGw,
-	parseTeamStatsView,
+	parseTeamStatsView
 } from '@/app/me/team/_lib/team-stats-url'
 import { getCoreEventContext, getCurrentAndNextEvents } from '@/lib/events'
 import {
 	maxEventIdFromHistory,
-	resolveReviewGameweekAnchor,
+	resolveReviewGameweekAnchor
 } from '@/lib/review-gameweek'
-import {
-	executeServerQueryWithSession,
-} from '@/lib/graphql-server'
+import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import {
 	GET_ENTRY,
 	GET_ENTRY_EVENT_RESULT,
@@ -23,7 +28,7 @@ import {
 	type EntryEventResult,
 	type EntryEventResultResponse,
 	type EntryHistoryResponse,
-	type EntrySummaryResponse,
+	type EntrySummaryResponse
 } from '@/lib/graphql/operations/entries'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { resolveSeasonPresentation } from '@/lib/season-presentation'
@@ -36,9 +41,19 @@ import { RouteLoaderTiming } from '@/lib/route-loader-timing'
 
 export const dynamic = 'force-dynamic'
 
+const MOCK_TEAM_BENCH_POINTS = MOCK_TEAM_EVENT_RESULT.eventPicks.reduce(
+	(total, pick) => (pick.position > 11 ? total + pick.totalPoints : total),
+	0
+)
+
 type PageProps = {
 	params: LocaleParams
-	searchParams: Promise<{ view?: string; gw?: string }>
+	searchParams: Promise<{
+		view?: string
+		gw?: string
+		mock?: string
+		chip?: string
+	}>
 }
 
 export async function generateMetadata({ params }: PageProps) {
@@ -47,7 +62,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/my-fpl/team',
 		titleKey: 'teamStatsTitle',
-		descriptionKey: 'teamStatsDescription',
+		descriptionKey: 'teamStatsDescription'
 	})
 }
 
@@ -70,11 +85,53 @@ function TeamStatsFallback() {
  * Gameweek deep link: also entryEventResult(seedGw)
  */
 export default async function TeamStatsPage({ params, searchParams }: PageProps) {
-	const timing = new RouteLoaderTiming('/my-fpl/team')
-	const [pageLocale, t, sp, context, coreEventContext, events] = await Promise.all([
+	const [pageLocale, t, sp] = await Promise.all([
 		getPageLocale(params),
 		getTranslations('States'),
-		searchParams,
+		searchParams
+	])
+	const { locale } = pageLocale
+
+	if (sp.mock === '1' && process.env.NODE_ENV !== 'production') {
+		const showBenchBoost = sp.chip?.toLowerCase() === 'bb'
+		const mockEventResult = showBenchBoost
+			? {
+					...MOCK_TEAM_EVENT_RESULT,
+					eventPoints:
+						MOCK_TEAM_EVENT_RESULT.eventPoints + MOCK_TEAM_BENCH_POINTS,
+					eventNetPoints:
+						MOCK_TEAM_EVENT_RESULT.eventNetPoints + MOCK_TEAM_BENCH_POINTS,
+					overallPoints:
+						MOCK_TEAM_EVENT_RESULT.overallPoints + MOCK_TEAM_BENCH_POINTS,
+					eventBenchPoints: MOCK_TEAM_BENCH_POINTS,
+					eventChip: 'BENCH_BOOST'
+				}
+			: MOCK_TEAM_EVENT_RESULT
+		const mockSelectedGameweek = parseTeamStatsGw(
+			sp.gw,
+			MOCK_TEAM_EVENT_ID,
+			MOCK_TEAM_EVENT_ID
+		)
+		return (
+			<Suspense fallback={<TeamStatsFallback />}>
+				<TeamStatsClient
+					entryId={MOCK_TEAM_ENTRY_ID}
+					currentGameweek={MOCK_TEAM_EVENT_ID}
+					initialSelectedGameweek={mockSelectedGameweek}
+					initialEntryEventResult={mockEventResult}
+					initialEntryHistory={MOCK_TEAM_HISTORY}
+					initialEntryIdentity={MOCK_TEAM_IDENTITY}
+					initialEntryTransfers={[]}
+					initialError={null}
+					initialRequestComplete
+					initialSeasonPhase="SETTLED"
+				/>
+			</Suspense>
+		)
+	}
+
+	const timing = new RouteLoaderTiming('/my-fpl/team')
+	const [context, coreEventContext, events] = await Promise.all([
 		timing.measure('session', () => getVerifiedEntryContext()),
 		timing.measure('event-context', () =>
 			getCoreEventContext().catch(error => {
@@ -84,7 +141,6 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 		),
 		timing.measure('events', () => getCurrentAndNextEvents())
 	])
-	const { locale } = pageLocale
 	const initialView = parseTeamStatsView(sp.view)
 	const needsGameweekSeed = initialView === 'gameweek'
 
@@ -107,19 +163,17 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 	let initialError: string | null = null
 	let initialRequestComplete = false
 
-	// Provisional max before history (refined after history loads)
 	let reviewMaxGw = eventsAnchor.anchorGw ?? 0
 	let currentGameweek = eventsAnchor.currentGw ?? reviewMaxGw
 
 	try {
-		// History + identity first so we can refine anchor without isCurrent
 		const [historyResult, entryResult] = await Promise.allSettled([
 			timing.measure('history', () =>
 				executeServerQueryWithSession<EntryHistoryResponse>(
 					session,
 					GET_ENTRY_HISTORY,
 					{ entryId },
-					{ cache: 'no-store' },
+					{ cache: 'no-store' }
 				)
 			),
 			timing.measure('entry', () =>
@@ -127,15 +181,19 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 					session,
 					GET_ENTRY,
 					{ id: entryId },
-					{ cache: 'no-store' },
+					{ cache: 'no-store' }
 				)
-			),
+			)
 		])
 
-		const historyResponse = historyResult.status === 'fulfilled' ? historyResult.value : null
-		const entryResponse = entryResult.status === 'fulfilled' ? entryResult.value : null
-		if (historyResult.status === 'rejected') console.warn('[team stats] history seed failed:', historyResult.reason)
-		if (entryResult.status === 'rejected') console.warn('[team stats] entry seed failed:', entryResult.reason)
+		const historyResponse =
+			historyResult.status === 'fulfilled' ? historyResult.value : null
+		const entryResponse =
+			entryResult.status === 'fulfilled' ? entryResult.value : null
+		if (historyResult.status === 'rejected')
+			console.warn('[team stats] history seed failed:', historyResult.reason)
+		if (entryResult.status === 'rejected')
+			console.warn('[team stats] entry seed failed:', entryResult.reason)
 
 		initialEntryHistory = historyResponse?.entryHistory ?? null
 		if (entryResponse?.entry) {
@@ -144,16 +202,13 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 
 		const historyMax = maxEventIdFromHistory(initialEntryHistory?.results)
 		const refined = resolveReviewGameweekAnchor(events, {
-			historyMaxEventId: historyMax,
+			historyMaxEventId: historyMax
 		})
 		reviewMaxGw = refined.anchorGw ?? historyMax ?? 0
-		// For workspace max: prefer real current when set, else review anchor
 		currentGameweek = refined.currentGw ?? reviewMaxGw
 
 		const seedGw =
-			reviewMaxGw > 0
-				? parseTeamStatsGw(sp.gw, reviewMaxGw, reviewMaxGw)
-				: 0
+			reviewMaxGw > 0 ? parseTeamStatsGw(sp.gw, reviewMaxGw, reviewMaxGw) : 0
 
 		if (needsGameweekSeed && seedGw > 0) {
 			try {
@@ -185,7 +240,7 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 			hasHistory: Boolean(initialEntryHistory?.results?.length),
 			historyRows: initialEntryHistory?.results?.length ?? 0,
 			hasIdentity: Boolean(initialEntryIdentity),
-			hasEvent: Boolean(initialEntryEventResult),
+			hasEvent: Boolean(initialEntryEventResult)
 		})
 
 		if (!initialEntryHistory && !initialEntryIdentity) {
@@ -198,16 +253,16 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 	timing.finish(initialError ? 'unavailable' : 'ready')
 
 	const seedGwForClient =
-		reviewMaxGw > 0
-			? parseTeamStatsGw(sp.gw, reviewMaxGw, reviewMaxGw)
-			: 0
+		reviewMaxGw > 0 ? parseTeamStatsGw(sp.gw, reviewMaxGw, reviewMaxGw) : 0
 
 	return (
 		<Suspense fallback={<TeamStatsFallback />}>
 			<TeamStatsClient
 				entryId={entryId}
 				currentGameweek={currentGameweek > 0 ? currentGameweek : 0}
-				initialSelectedGameweek={seedGwForClient > 0 ? seedGwForClient : undefined}
+				initialSelectedGameweek={
+					seedGwForClient > 0 ? seedGwForClient : undefined
+				}
 				initialEntryEventResult={initialEntryEventResult}
 				initialEntryHistory={initialEntryHistory}
 				initialEntryIdentity={initialEntryIdentity}

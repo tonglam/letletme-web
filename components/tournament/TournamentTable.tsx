@@ -38,6 +38,8 @@ interface TournamentTableProps {
 	gameweek: number
 	/** Signed-in viewer’s FPL entry — pin + highlight when off-screen */
 	viewerEntryId?: number
+	/** Reports the rows in the same order currently visible in the table. */
+	onVisibleEntriesChange?: (entries: TournamentEntry[]) => void
 }
 
 /** FPL money fields are tenths of £m (1005 → £100.5m). */
@@ -74,6 +76,7 @@ export function TournamentTable({
 	tournamentId,
 	gameweek,
 	viewerEntryId,
+	onVisibleEntriesChange,
 }: TournamentTableProps) {
 	const t = useTranslations('LiveTournament')
 	const format = useFormatter()
@@ -179,6 +182,9 @@ export function TournamentTable({
 		() => takeVisibleWithPinMe(sortedEntries, visibleCount, viewerEntryId),
 		[sortedEntries, visibleCount, viewerEntryId],
 	)
+	useEffect(() => {
+		onVisibleEntriesChange?.(visibleEntries)
+	}, [onVisibleEntriesChange, visibleEntries])
 	const total = sortedEntries.length
 	const hasMoreRows = total > visibleCount
 	const remaining = Math.max(0, total - visibleCount)
@@ -204,6 +210,16 @@ export function TournamentTable({
 		if (entry.chips.wildcard) chips.push('WC')
 		if (entry.chips.freeHit) chips.push('FH')
 		return chips.length ? chips.join(' · ') : null
+	}
+
+	const teamHref = (entryId: string) => {
+		const params = new URLSearchParams()
+		if (tournamentId) params.set('tournamentId', tournamentId)
+		if (Number.isInteger(gameweek) && gameweek > 0) {
+			params.set('gw', String(gameweek))
+		}
+		const query = params.toString()
+		return `/live/points/${encodeURIComponent(entryId)}${query ? `?${query}` : ''}`
 	}
 
 	// optional checkbox | # | team | captain | chip | played | TV | OR | total | GW
@@ -372,22 +388,25 @@ export function TournamentTable({
 										</span>
 										<div className="min-w-0 flex-1">
 											<Link
-												href={`/live/points/${entry.id}${tournamentId ? `?tournamentId=${tournamentId}` : ''}`}
+												href={teamHref(entry.id)}
+												prefetch={false}
 												className={cn(
-													'block truncate text-sm font-semibold tracking-tight hover:text-primary-ink hover:underline',
+													'block min-w-0 tracking-tight hover:text-primary-ink hover:underline underline-offset-2',
 													isMe && 'text-primary-ink',
 												)}
 											>
-												{entry.teamName}
-												{isMe ? (
-													<span className="ml-1.5 text-caption font-semibold text-primary-ink">
-														{t('youBadge')}
+													<span className="block truncate text-sm font-semibold">
+														{entry.teamName}
+														{isMe ? (
+															<span className="ml-1.5 text-caption font-semibold text-primary-ink">
+																{t('youBadge')}
+															</span>
+														) : null}
 													</span>
-												) : null}
+													<span className="mt-0.5 block truncate text-xs text-muted-foreground">
+														{entry.managerName}
+													</span>
 											</Link>
-											<p className="mt-0.5 truncate text-xs text-muted-foreground">
-												{entry.managerName}
-											</p>
 										</div>
 										<div className="shrink-0 text-right">
 											<div className="font-mono text-base font-semibold tabular-nums text-primary-ink">
@@ -476,22 +495,25 @@ export function TournamentTable({
 										{/* Team: name + manager only */}
 										<div className="min-w-0">
 											<Link
-												href={`/live/points/${entry.id}${tournamentId ? `?tournamentId=${tournamentId}` : ''}`}
+												href={teamHref(entry.id)}
+												prefetch={false}
 												className={cn(
-													'block truncate text-sm font-semibold tracking-tight hover:text-primary-ink hover:underline',
+													'block min-w-0 tracking-tight hover:text-primary-ink hover:underline underline-offset-2',
 													isMe && 'text-primary-ink',
 												)}
 											>
-												{entry.teamName}
-												{isMe ? (
-													<span className="ml-1.5 text-caption font-semibold text-primary-ink">
-														{t('youBadge')}
+													<span className="block truncate text-sm font-semibold">
+														{entry.teamName}
+														{isMe ? (
+															<span className="ml-1.5 text-caption font-semibold text-primary-ink">
+																{t('youBadge')}
+															</span>
+														) : null}
 													</span>
-												) : null}
+													<span className="mt-0.5 block truncate text-xs text-muted-foreground">
+														{entry.managerName}
+													</span>
 											</Link>
-											<p className="mt-0.5 truncate text-xs text-muted-foreground">
-												{entry.managerName}
-											</p>
 										</div>
 
 										{/* Captain column */}

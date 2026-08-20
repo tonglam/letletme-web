@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
+import { ShareActions } from '@/components/share/ShareActions'
 import {
 	reportBrowserPerformanceMetric,
 	resolveAudienceHint
@@ -68,7 +69,7 @@ export default function TrendsClient({
 	const [error, setError] = useState<string | null>(
 		initialDeskError ? t('statsError') : null
 	)
-	const [shareState, setShareState] = useState<'idle' | 'copied'>('idle')
+	const shareRef = useRef<HTMLDivElement | null>(null)
 	const cache = useRef(new Map<string, TrendDesk>())
 	const inFlight = useRef(
 		new Map<string, { controller: AbortController; generation: number }>()
@@ -213,25 +214,42 @@ export default function TrendsClient({
 		)
 	}, [access, committed])
 
-	async function shareCurrentDesk() {
-		if (!committed) return
-		const text = `${committed.cohort.displayName} · GW${committed.eventId} Trends\n${window.location.href}`
-		try {
-			if (navigator.share) {
-				await navigator.share({ title: 'Trends', text })
-				return
+	const shareText = useMemo(() => {
+		if (!committed) return ''
+
+		const sampleSize =
+			committed.sections.find(
+				section => section.evidenceContext.sampleSize != null
+			)?.evidenceContext.sampleSize ?? '?'
+		const cohortScope = committed.cohort.exact
+			? t('exactCompetition')
+			: t('sampledCohort', { count: sampleSize })
+
+		const lines = [
+			`# ${committed.cohort.displayName} · GW${committed.eventId}`,
+			cohortScope,
+			''
+		]
+		for (const section of committed.sections) {
+			lines.push(t(labelKeys[section.capability] ?? 'title'))
+			if (!section.rows || section.rows.length === 0) {
+				lines.push(t('noData'))
+			} else {
+				for (const row of section.rows.slice(0, 12)) {
+					lines.push(
+						`- ${row.playerName} ${row.teamShortName} · ${row.percentage == null ? '—' : `${row.percentage.toFixed(1)}%`} · ${row.count}`
+					)
+				}
 			}
-			const { copyTextToClipboard } =
-				await import('@/app/live/points/_lib/live-points-share')
-			const result = await copyTextToClipboard(text)
-			if (result === 'copied') {
-				setShareState('copied')
-				window.setTimeout(() => setShareState('idle'), 2000)
-			}
-		} catch {
-			setError('Share was cancelled or unavailable')
+			lines.push('')
 		}
-	}
+		lines.push(
+			typeof window !== 'undefined'
+				? window.location.href
+				: 'https://letletme.top/explore/selections'
+		)
+		return lines.join('\n')
+	}, [committed, t])
 
 	useEffect(() => {
 		const onPopState = (historyEvent: PopStateEvent) => {
@@ -465,36 +483,35 @@ export default function TrendsClient({
 														)?.evidenceContext.sampleSize ?? '?'
 												})}
 									</span>
-													<button
-										type="button"
-										onClick={() => void shareCurrentDesk()}
-										className="rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted"
-									>
-											{shareState === 'copied'
-												? t('shareCopiedShort')
-												: t('shareCopy')}
-									</button>
+									<ShareActions
+										text={shareText}
+										imageRef={shareRef}
+										title={committed.cohort.displayName}
+										compact
+									/>
 								</div>
 							</div>
-							<div className="grid gap-4 md:grid-cols-2">
+							<div ref={shareRef}>
+								<div className="grid gap-4 md:grid-cols-2">
 									{committed.sections.map(section => {
-										const availability = resolveTrendAvailabilityState(section)
+										const availability =
+											resolveTrendAvailabilityState(section)
 										return (
-										<article
-											key={section.capability}
-										className="rounded-xl border bg-card p-4 shadow-sm"
-									>
-										<div className="mb-3 flex items-center justify-between">
-												<h3 className="font-semibold">
-													{labelKeys[section.capability]
-														? t(labelKeys[section.capability])
-														: t('unknownCapability')}
-												</h3>
-												<span className="text-xs text-muted-foreground">
+											<article
+												key={section.capability}
+												className="rounded-xl border bg-card p-4 shadow-sm"
+											>
+												<div className="mb-3 flex items-center justify-between">
+													<h3 className="font-semibold">
+														{labelKeys[section.capability]
+															? t(labelKeys[section.capability])
+															: t('unknownCapability')}
+													</h3>
+													<span className="text-xs text-muted-foreground">
 														{t(trendAvailabilityLabelKey(availability))}
-												</span>
-											</div>
-											{section.rows === null ? (
+													</span>
+												</div>
+												{section.rows === null ? (
 													<div className="space-y-3">
 														<p className="text-sm text-muted-foreground">
 															{t(trendAvailabilityMessageKey(availability), {
@@ -506,19 +523,19 @@ export default function TrendsClient({
 																type="button"
 																className="rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted"
 																onClick={() =>
-																void select(
-																	access,
-																	committed.cohort.id,
-																	committed.eventId,
-																	false
-																)
-															}
+																	void select(
+																		access,
+																		committed.cohort.id,
+																		committed.eventId,
+																		false
+																	)
+																}
 															>
 																{t('retry')}
 															</button>
 														) : null}
 													</div>
-											) : section.rows.length === 0 ? (
+												) : section.rows.length === 0 ? (
 													<p className="text-sm text-muted-foreground">
 														{t(
 															availability === 'CONFIRMED_EMPTY'
@@ -528,39 +545,40 @@ export default function TrendsClient({
 																	: availability === 'PARTIAL'
 																		? 'partialData'
 																		: 'noData'
-																	)}
+														)}
 													</p>
-										) : (
-											<ol className="space-y-2">
-												{section.rows.slice(0, 12).map(row => (
-													<li
-														key={row.elementId}
-														className="flex items-center justify-between gap-3 text-sm"
-													>
-														<span className="min-w-0 truncate">
-															<Link
-																href={`/explore/player-stats?p1=${row.elementId}`}
-																prefetch={false}
-																className="font-semibold hover:underline"
+												) : (
+													<ol className="space-y-2">
+														{section.rows.slice(0, 12).map(row => (
+															<li
+																key={row.elementId}
+																className="flex items-center justify-between gap-3 text-sm"
 															>
-																{row.playerName}
-															</Link>
-															<span className="ml-2 text-muted-foreground">
-																{row.teamShortName}
-															</span>
-														</span>
-														<span className="shrink-0 tabular-nums">
-															{row.percentage == null
-																? row.count
-																: `${row.percentage.toFixed(1)}%`}
-														</span>
-													</li>
-												))}
-											</ol>
-										)}
+																<span className="min-w-0 truncate">
+																	<Link
+																		href={`/explore/player-stats?p1=${row.elementId}`}
+																		prefetch={false}
+																		className="font-semibold hover:underline"
+																	>
+																		{row.playerName}
+																	</Link>
+																	<span className="ml-2 text-muted-foreground">
+																		{row.teamShortName}
+																	</span>
+																</span>
+																<span className="shrink-0 tabular-nums">
+																	{row.percentage == null
+																		? row.count
+																		: `${row.percentage.toFixed(1)}%`}
+																</span>
+															</li>
+														))}
+													</ol>
+												)}
 											</article>
 										)
 									})}
+								</div>
 							</div>
 						</>
 					)}

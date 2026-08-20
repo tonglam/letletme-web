@@ -266,8 +266,20 @@ export function OfficialH2HCompetitionView({
 										{standing.rank ?? '—'}
 									</td>
 									<td className="px-3 py-3">
-										<p className="font-medium">{standing.entryName ?? `Entry ${standing.entryId}`}</p>
-										{standing.playerName ? <p className="text-xs text-muted-foreground">{standing.playerName}</p> : null}
+										<Link
+											href={`/live/points/${standing.entryId}?tournamentId=${tournamentId}&gw=${eventId}`}
+											prefetch={false}
+													className="block min-w-0 hover:text-primary-ink hover:underline underline-offset-2"
+										>
+											<p className="truncate font-medium">
+												{standing.entryName ?? `Entry ${standing.entryId}`}
+											</p>
+											{standing.playerName ? (
+												<p className="truncate text-xs text-muted-foreground">
+													{standing.playerName}
+												</p>
+											) : null}
+										</Link>
 									</td>
 									{[standing.played, standing.won, standing.drawn, standing.lost].map((value, index) => (
 										<td key={index} className="px-2 py-3 text-center font-mono tabular-nums">{value}</td>

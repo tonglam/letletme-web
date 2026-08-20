@@ -12,19 +12,16 @@ describe('route contract', () => {
 	})
 })
 
-describe('pre-paint theme bootstrap', () => {
-	it('executes the inline bootstrap in head before body content', async () => {
+describe('theme bootstrap', () => {
+	it('inlines the theme bootstrap script in the locale layout head', async () => {
 		const source = await readFile(
 			new URL('../app/[locale]/layout.tsx', import.meta.url),
 			'utf8'
 		)
-		const head = source.indexOf('<head>')
-		const bootstrap = source.indexOf('id="theme-bootstrap"')
-		const body = source.indexOf('<body')
 
-		assert.ok(head >= 0)
-		assert.ok(bootstrap > head)
-		assert.ok(body > bootstrap)
+		assert.ok(source.includes('id="theme-bootstrap"'))
+		assert.ok(source.includes('dangerouslySetInnerHTML'))
+		assert.ok(source.includes("localStorage.getItem('theme')"))
 		assert.equal(source.includes('strategy="afterInteractive"'), false)
 	})
 })

@@ -30,7 +30,12 @@ export interface EntrySummaryResponse {
 	entry: EntrySummary | null
 }
 
-export const SEARCH_ENTRIES = `
+	export type EntryOverallSnapshot = Pick<
+		EntrySummary,
+		'overallPoints' | 'overallRank' | 'teamValue' | 'bank' | 'totalTransfers'
+	>
+
+	export const SEARCH_ENTRIES = `
   query SearchEntries($query: String!, $limit: Int) {
     searchEntries(query: $query, limit: $limit) {
       id
@@ -50,9 +55,9 @@ export interface EntryNameSearchHit {
 	overallRank: number | null
 }
 
-export interface SearchEntriesResponse {
+	export interface SearchEntriesResponse {
 	searchEntries: EntryNameSearchHit[]
-}
+	}
 
 export const GET_ENTRY_EVENT_RESULT = `
   query GetEntryEventResult($entryId: Int!, $eventId: Int!) {

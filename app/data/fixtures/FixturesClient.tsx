@@ -2,8 +2,10 @@
 
 import { FdrMatrix } from '@/app/data/fixtures/_components/FdrMatrix'
 import { MySquadFdrDesk } from '@/app/data/fixtures/_components/MySquadFdrDesk'
+import { formatTeamTickerShareText } from '@/app/data/fixtures/_lib/fixtures-share'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import PageShell from '@/components/layout/PageShell'
+import { ShareActions } from '@/components/share/ShareActions'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -21,6 +23,7 @@ import {
 	FDR_HORIZONS,
 	formatAvgFdr,
 	formatAvgFdrOutOfFive,
+	orderFdrTeamsForDisplay,
 	squadMatchKey,
 	type FdrHorizon,
 	type FdrReviewCandidate,
@@ -31,7 +34,8 @@ import { positionBadgeClass } from '@/lib/position-style'
 import { cn, normalizePosition, type PositionCode } from '@/lib/utils'
 import { TrendingDown, TrendingUp, Users } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
-import { useTranslations } from 'next-intl'
+import { localizePathname, type AppLocale } from '@/i18n/routing'
+import { useLocale, useTranslations } from 'next-intl'
 import {
 	useCallback,
 	useEffect,
@@ -387,6 +391,8 @@ export default function FixturesClient({
 	squadState?: SquadLoadState
 }) {
 	const t = useTranslations('Fixtures')
+	const locale = useLocale() as AppLocale
+	const shareRef = useRef<HTMLDivElement | null>(null)
 
 	const [horizon, setHorizon] = useState<FdrHorizon>(initialHorizon)
 	const [pendingHorizon, setPendingHorizon] = useState<FdrHorizon | null>(null)
@@ -508,6 +514,27 @@ export default function FixturesClient({
 			}),
 		[fixturesByEvent, fromGw, horizon, knownTeams, marketSignals, unknownEvents]
 	)
+	const shareText = useMemo(() => {
+		const orderedTeams = orderFdrTeamsForDisplay(model.teams, sort)
+		const origin =
+			typeof window !== 'undefined'
+				? window.location.origin
+				: 'https://letletme.top'
+		const shareUrl = new URL(
+			localizePathname('/explore/fixtures', locale),
+			origin
+		).toString()
+		return formatTeamTickerShareText({
+			fromGw,
+			horizon,
+			teams: orderedTeams,
+			labels: {
+				title: t('teamsTitle'),
+				none: t('emptyTeams'),
+				footer: shareUrl
+			}
+		})
+	}, [fromGw, horizon, locale, model.teams, sort, t])
 
 	const filterByPos = useCallback(
 		(list: FdrReviewCandidate[]) => {
@@ -588,7 +615,16 @@ export default function FixturesClient({
 			/>
 			<PageShell>
 				<div className="container mx-auto max-w-6xl px-4 py-8">
-					<StatsPageHeader title={t('title')} />
+					<StatsPageHeader
+						title={t('title')}
+						badge={
+							<ShareActions
+								text={shareText}
+								imageRef={shareRef}
+								title={t('title')}
+							/>
+						}
+					/>
 					<p className="-mt-4 mb-6 max-w-2xl text-sm leading-6 text-muted-foreground">
 						{t('pageIntro')}
 					</p>
@@ -689,6 +725,7 @@ export default function FixturesClient({
 								})}
 								easyHardLabel={t('glanceEasyHard')}
 							/>
+
 						) : (
 							<div className="rounded-lg border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">
 								—
@@ -802,6 +839,7 @@ export default function FixturesClient({
 						role="region"
 						aria-labelledby="fdr-teams"
 						className="mb-8 p-4 sm:p-5"
+						ref={shareRef}
 					>
 						<SectionHead
 							id="fdr-teams"

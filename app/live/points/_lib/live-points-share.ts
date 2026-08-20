@@ -1,4 +1,12 @@
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
+export {
+	copyElementImageToClipboard,
+	copyTextToClipboard,
+	shareElementImage,
+	shareText,
+	type ClipboardCopyResult,
+	type ShareResult
+} from '@/lib/share/clipboard'
 import { formatChipName } from '@/lib/utils'
 import type { Player } from '@/types/player'
 
@@ -146,20 +154,4 @@ export function formatLivePointsShareText({
 	}
 
 	return sections.join('\n')
-}
-
-export type ClipboardCopyResult = 'copied' | 'unsupported' | 'failed'
-
-export async function copyTextToClipboard(
-	text: string
-): Promise<ClipboardCopyResult> {
-	if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
-		return 'unsupported'
-	}
-	try {
-		await navigator.clipboard.writeText(text)
-		return 'copied'
-	} catch {
-		return 'failed'
-	}
 }

@@ -1,0 +1,530 @@
+{
+  "schemaVersion": 3,
+  "season": "2026-27",
+  "kitScope": "home-only",
+  "generatedFrom": "Stable high-level design descriptions plus live FPL home-shirt palette verification on 2026-08-16.",
+  "artwork": "Original abstract LetLetMe artwork. References inform only broad colours and layout characteristics.",
+  "notices": [
+    "No Premier League or FPL branding is included.",
+    "No club crests, sponsor marks, manufacturer marks, player likenesses, or official kit artwork are included.",
+    "Official FPL thumbnails were used only to verify primary colours and are not embedded in public assets."
+  ],
+  "pitch": "/images/squad-pitch/pitch-background.svg",
+  "fplVerification": {
+    "sourcePage": "https://fantasy.premierleague.com/en/transfers",
+    "checkedAt": "2026-08-16",
+    "method": "Live Chrome inspection plus dominant-colour sampling of the current FPL home-shirt thumbnails."
+  },
+  "captainMarkers": {
+    "rendering": "css-circle",
+    "captain": {
+      "text": "C",
+      "background": "#111315",
+      "foreground": "#f5f1e8",
+      "border": "#00ff85"
+    },
+    "viceCaptain": {
+      "text": "V",
+      "background": "#111315",
+      "foreground": "#f5f1e8",
+      "border": "#f5f1e8"
+    }
+  },
+  "teams": {
+    "ARS": {
+      "name": "Arsenal",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/ARS.svg",
+        "palette": {
+          "primary": "#d81830",
+          "secondary": "#f6f1e8",
+          "accent": "#741129",
+          "detail": "#163b70"
+        },
+        "designReference": {
+          "description": "Rich red body, crisp white sleeves, and darker red architectural trim.",
+          "source": "https://www.fourfourtwo.com/products-kit/arsenal-home-kit-2026-27",
+          "status": "reported"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_3-220.webp",
+          "sampledColours": [
+            "#d81830",
+            "#f0f0f0"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "AVL": {
+      "name": "Aston Villa",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/AVL.svg",
+        "palette": {
+          "primary": "#581733",
+          "secondary": "#401025",
+          "accent": "#9fd3eb",
+          "detail": "#f4d35e"
+        },
+        "designReference": {
+          "description": "A clean all-claret look with restrained sky-blue edge details.",
+          "source": "https://www.avfc.co.uk/news/2026/may/26/news-aston-villa-and-adidas-unveil-2026-27-home-kit/",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_7-220.webp",
+          "sampledColours": [
+            "#481830",
+            "#c0d8f0"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "BOU": {
+      "name": "Bournemouth",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/BOU.svg",
+        "palette": {
+          "primary": "#d7192d",
+          "secondary": "#111315",
+          "accent": "#e8b84a",
+          "detail": "#f5f1e9"
+        },
+        "designReference": {
+          "description": "Wide red-and-black vertical stripes with a faint heritage texture.",
+          "source": "https://superstore.afcb.co.uk/products/mens-home-shirt-26-27-red-black",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_91-220.webp",
+          "sampledColours": [
+            "#303030",
+            "#d81830"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "BRE": {
+      "name": "Brentford",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/BRE.svg",
+        "palette": {
+          "primary": "#df1b2f",
+          "secondary": "#f5f2e9",
+          "accent": "#f0b82c",
+          "detail": "#17191d"
+        },
+        "designReference": {
+          "description": "Red-and-white stripes with honey-yellow collar and cuff details.",
+          "source": "https://www.brentfordfc.com/en/news/article/club-news-always-twogether-brentford-launches-2026-28-home-kit",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_94-220.webp",
+          "sampledColours": [
+            "#f0f0f0",
+            "#d81830"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "BHA": {
+      "name": "Brighton",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/BHA.svg",
+        "palette": {
+          "primary": "#125eb5",
+          "secondary": "#f4f1e9",
+          "accent": "#f4f1e9",
+          "detail": "#f3cf3f"
+        },
+        "designReference": {
+          "description": "Royal blue with crisp white pinstripes and a white neckline.",
+          "source": "https://www.brightonandhovealbion.com/media-article/a-nod-to-1983-for-2026-27",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_36-220.webp",
+          "sampledColours": [
+            "#1860c0",
+            "#f0f0f0"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "CHE": {
+      "name": "Chelsea",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/CHE.svg",
+        "palette": {
+          "primary": "#1649a8",
+          "secondary": "#0d337d",
+          "accent": "#c8a250",
+          "detail": "#f5f1e8"
+        },
+        "designReference": {
+          "description": "Two-tone bright blue woven geometry with restrained gold accents.",
+          "source": "https://www.chelseafc.com/en/news/article/lion-takes-pride-of-place-as-new-chelsea-home-kit-set-loose",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_8-220.webp",
+          "sampledColours": [
+            "#184890"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "COV": {
+      "name": "Coventry City",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/COV.svg",
+        "palette": {
+          "primary": "#2d86bf",
+          "secondary": "#f1f8fb",
+          "accent": "#17385d",
+          "detail": "#69b5dc"
+        },
+        "designReference": {
+          "description": "Bold sky-blue and white stripes with fine navy pinstripe details.",
+          "source": "https://www.ccfcstore.com/kit/home-kit/mens/4370_coventry-city-adult-2627-ss-home-shirt.html",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_9-220.webp",
+          "sampledColours": [
+            "#ffffff",
+            "#1860a8"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "CRY": {
+      "name": "Crystal Palace",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/CRY.svg",
+        "palette": {
+          "primary": "#f5f2e9",
+          "secondary": "#d0273d",
+          "accent": "#1e438d",
+          "detail": "#f1cb3f"
+        },
+        "designReference": {
+          "description": "White with a red-and-blue sash descending from viewer-right to viewer-left.",
+          "source": "https://about.macron.com/en/news/kit-launches/crystal-palace-eagle-sash-kit-2026-27/",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_31-220.webp",
+          "sampledColours": [
+            "#f0f0f0",
+            "#184878",
+            "#d81830"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "EVE": {
+      "name": "Everton",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/EVE.svg",
+        "palette": {
+          "primary": "#17479d",
+          "secondary": "#103678",
+          "accent": "#f5f2ea",
+          "detail": "#f0c948"
+        },
+        "designReference": {
+          "description": "Royal blue with clean white collar and subtle yellow highlights.",
+          "source": "https://www.footballkitarchive.com/everton-fc-2026-27-home-kit-491885/",
+          "status": "reported"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_11-220.webp",
+          "sampledColours": [
+            "#184890"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "FUL": {
+      "name": "Fulham",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/FUL.svg",
+        "palette": {
+          "primary": "#f5f2ea",
+          "secondary": "#17191b",
+          "accent": "#c81d35",
+          "detail": "#d9d6cf"
+        },
+        "designReference": {
+          "description": "Clean white body with its red-trimmed collar retained and no chest graphic.",
+          "source": "https://www.fulhamfc.com/news/2026/july/23/26-27-home-kit-revealed/",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_54-220.webp",
+          "sampledColours": [
+            "#f0f0f0",
+            "#000000"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "HUL": {
+      "name": "Hull City",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/HUL.svg",
+        "palette": {
+          "primary": "#ef9d22",
+          "secondary": "#151719",
+          "accent": "#f4f1e8",
+          "detail": "#ef9d22"
+        },
+        "designReference": {
+          "description": "Wide amber-and-black stripes with a bright fold-over collar.",
+          "source": "https://www.footballshirtculture.com/new-kits/hull-city-jersey-26-27-home-oxen.html?ml=1",
+          "status": "reported"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_88-220.webp",
+          "sampledColours": [
+            "#f09000",
+            "#181818"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "IPS": {
+      "name": "Ipswich Town",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/IPS.svg",
+        "palette": {
+          "primary": "#194b91",
+          "secondary": "#12366f",
+          "accent": "#f3f0e8",
+          "detail": "#dd3443"
+        },
+        "designReference": {
+          "description": "Royal blue with restrained tonal geometry and no chest chevron.",
+          "source": "https://shop.itfc.co.uk/products/2627-adult-home-shirt-ss-blue",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_40-220.webp",
+          "sampledColours": [
+            "#183078",
+            "#184890"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "LEE": {
+      "name": "Leeds United",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/LEE.svg",
+        "palette": {
+          "primary": "#f5f2e9",
+          "secondary": "#184a9b",
+          "accent": "#f0cf38",
+          "detail": "#184a9b"
+        },
+        "designReference": {
+          "description": "White with understated blue-and-yellow horizontal pinstripes.",
+          "source": "https://shop.leedsunited.com/en/x-9595",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_2-220.webp",
+          "sampledColours": [
+            "#ffffff"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "LIV": {
+      "name": "Liverpool",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/LIV.svg",
+        "palette": {
+          "primary": "#aa1d35",
+          "secondary": "#81152a",
+          "accent": "#f4eee3",
+          "detail": "#c94c60"
+        },
+        "designReference": {
+          "description": "Simplified deep-red body with light collar trim and no chest graphic.",
+          "source": "https://www.liverpoolfc.com/news/lfc-and-adidas-unveil-2026-27-home-kit-inspired-iconic-title-winning-season?amp=1",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_14-220.webp",
+          "sampledColours": [
+            "#a81830"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "MCI": {
+      "name": "Manchester City",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/MCI.svg",
+        "palette": {
+          "primary": "#72c5e8",
+          "secondary": "#3e8fb7",
+          "accent": "#e7edf0",
+          "detail": "#6c2d4d"
+        },
+        "designReference": {
+          "description": "A full sky-blue gradient, darker at the shoulders and lighter below.",
+          "source": "https://www.mancity.com/news/club/manchester-city-202627-home-kit-launched-63914816",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_43-220.webp",
+          "sampledColours": [
+            "#78c0d8",
+            "#d8f0f0"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "MUN": {
+      "name": "Manchester United",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/MUN.svg",
+        "palette": {
+          "primary": "#c91a2c",
+          "secondary": "#a71323",
+          "accent": "#151719",
+          "detail": "#f4f1e9"
+        },
+        "designReference": {
+          "description": "Classic red with bold black-and-white collar and cuff bands.",
+          "source": "https://footykitsbattle.com/manchester-united-kit-2026-27/",
+          "status": "reported"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_1-220.webp",
+          "sampledColours": [
+            "#c00030"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "NEW": {
+      "name": "Newcastle United",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/NEW.svg",
+        "palette": {
+          "primary": "#151719",
+          "secondary": "#f4f1e8",
+          "accent": "#52b9d8",
+          "detail": "#151719"
+        },
+        "designReference": {
+          "description": "Black-and-white stripes broken into offset blocks with blue energy trim.",
+          "source": "https://www.newcastleunited.com/en/news/newcastle-united-and-adidas-unveil-2026-27-home-kit",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_4-220.webp",
+          "sampledColours": [
+            "#181818",
+            "#ffffff"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "NFO": {
+      "name": "Nottingham Forest",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/NFO.svg",
+        "palette": {
+          "primary": "#c82d36",
+          "secondary": "#8f2029",
+          "accent": "#f3efe6",
+          "detail": "#df5961"
+        },
+        "designReference": {
+          "description": "Layered shades of red with a soft mist-like tonal graphic.",
+          "source": "https://shop.nottinghamforest.co.uk/products/nffc-26-27-home-shirt",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_17-220.webp",
+          "sampledColours": [
+            "#c03030",
+            "#a83030"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "SUN": {
+      "name": "Sunderland",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/SUN.svg",
+        "palette": {
+          "primary": "#d8222c",
+          "secondary": "#f4f0e8",
+          "accent": "#d8222c",
+          "detail": "#151719"
+        },
+        "designReference": {
+          "description": "Red-and-white stripes with a faint heritage jacquard and red shoulders.",
+          "source": "https://www.safcstore.com/en/x-9581",
+          "status": "official"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_56-220.webp",
+          "sampledColours": [
+            "#d81818",
+            "#ffffff"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    },
+    "TOT": {
+      "name": "Tottenham Hotspur",
+      "homeKit": {
+        "asset": "/images/squad-pitch/kits/TOT.svg",
+        "palette": {
+          "primary": "#f6f3eb",
+          "secondary": "#16213e",
+          "accent": "#16213e",
+          "detail": "#68c7e9"
+        },
+        "designReference": {
+          "description": "Simplified lilywhite body with its navy collar retained and no chest graphic.",
+          "source": "https://www.footyheadlines.com/2025/08/tottenham-26-27-home-kit.html",
+          "status": "reported"
+        },
+        "fplReference": {
+          "asset": "https://fantasy.premierleague.com/dist/img/shirts/standard/shirt_6-220.webp",
+          "sampledColours": [
+            "#f0f0f0"
+          ],
+          "paletteStatus": "aligned"
+        }
+      }
+    }
+  }
+}

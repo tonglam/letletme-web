@@ -9,17 +9,18 @@ export const GLOBAL_CLIENT_NAMESPACES = [
 export const ROUTE_CLIENT_NAMESPACES = {
 	home: ['Home'],
 	auth: ['Auth'],
-	fixtures: ['Fixtures'],
-	gameweek: ['GameweekStats', 'PlayerDirectory'],
-	market: ['Market'],
+	fixtures: ['Fixtures', 'Share'],
+	gameweek: ['GameweekStats', 'PlayerDirectory', 'Share'],
+	market: ['Market', 'Share'],
 	playerStats: [
 		'PlayerStats',
 		'PlayerDirectory',
 		'Filters',
 		'Market',
-		'Common'
+		'Common',
+		'Share'
 	],
-	selections: ['Selections'],
+	selections: ['Selections', 'Share'],
 	competitions: [
 		'TournamentList',
 		'TournamentCreate',
@@ -32,11 +33,11 @@ export const ROUTE_CLIENT_NAMESPACES = {
 	competitionsBrowse: ['TournamentList', 'TournamentLifecycle'],
 	competitionsCreate: ['TournamentCreate', 'TournamentHelp'],
 	competitionsManage: ['TournamentManage', 'TournamentLifecycle'],
-	competitionsDetail: ['LiveTournament', 'TournamentLifecycle'],
-	liveMatches: ['LiveMatches', 'SeasonState'],
-	livePoints: ['LivePoints', 'SeasonState'],
-	liveCompetitions: ['LiveTournament', 'TournamentLifecycle', 'SeasonState'],
-	myFpl: ['TeamStats', 'TournamentStats', 'TournamentLifecycle', 'Filters'],
+	competitionsDetail: ['LiveTournament', 'TournamentLifecycle', 'Share'],
+	liveMatches: ['LiveMatches', 'SeasonState', 'Share'],
+	livePoints: ['LivePoints', 'SeasonState', 'Share'],
+	liveCompetitions: ['LiveTournament', 'TournamentLifecycle', 'SeasonState', 'Share'],
+	myFpl: ['TeamStats', 'TournamentStats', 'TournamentLifecycle', 'Filters', 'Share'],
 	onboarding: ['Onboarding', 'FplEntryLookup'],
 	profile: ['Profile', 'Sessions', 'ReportProblem', 'FplEntryLookup']
 } as const satisfies Record<string, readonly (keyof IntlMessages)[]>

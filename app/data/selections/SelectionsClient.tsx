@@ -13,8 +13,7 @@ import {
 	formatTransferShareText
 } from '@/app/data/selections/_lib/selections-share'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
-import { copyTextToClipboard } from '@/app/live/points/_lib/live-points-share'
-import { ShareTextFallback } from '@/components/share/ShareTextFallback'
+import { ShareActions } from '@/components/share/ShareActions'
 import {
 	isKnownTournamentId,
 	readLastTournamentId,
@@ -69,8 +68,6 @@ import { cn, normalizePosition } from '@/lib/utils'
 import type { Tournament } from '@/types/tournament'
 import {
 	ArrowRight,
-	Check,
-	Copy,
 	Crown,
 	RefreshCw,
 	TrendingDown,
@@ -85,7 +82,8 @@ import {
 	useMemo,
 	useRef,
 	useState,
-	type ReactNode
+	type ReactNode,
+	type RefObject
 } from 'react'
 import { toast } from 'sonner'
 
@@ -189,62 +187,21 @@ function SectionTitle({
 	)
 }
 
-function SectionShareActions({ getText }: { getText: () => string }) {
-	const t = useTranslations('Selections')
-	const [copied, setCopied] = useState(false)
-	const [manualShareText, setManualShareText] = useState<string | null>(null)
-
-	const handleCopy = useCallback(async () => {
-		const text = getText()
-		const result = await copyTextToClipboard(text)
-		if (result === 'copied') {
-			setManualShareText(null)
-			setCopied(true)
-			toast.success(t('shareCopied'))
-			window.setTimeout(() => setCopied(false), 2000)
-		} else if (result === 'unsupported' || result === 'failed') {
-			setManualShareText(text)
-			toast.warning(
-				result === 'unsupported'
-					? t('shareCopyUnsupported')
-					: t('shareCopyFailed')
-			)
-		}
-	}, [getText, t])
-
+function SectionShareActions({
+	getText,
+	imageRef,
+	title
+}: {
+	getText: () => string
+	imageRef: RefObject<HTMLElement | null>
+	title: string
+}) {
 	return (
-		<div className="flex flex-col items-end gap-1.5">
-			<Button
-				type="button"
-				size="sm"
-				variant="outline"
-				className="h-8 gap-1.5 text-xs"
-				onClick={() => void handleCopy()}
-				aria-label={t('shareCopy')}
-			>
-				{copied ? (
-					<Check
-						className="size-3.5 text-primary-ink"
-						aria-hidden="true"
-					/>
-				) : (
-					<Copy
-						className="size-3.5"
-						aria-hidden="true"
-					/>
-				)}
-				{copied ? t('shareCopiedShort') : t('shareCopy')}
-			</Button>
-			{manualShareText ? (
-				<ShareTextFallback
-					text={manualShareText}
-					message={t('shareCopyUnsupported')}
-					fieldLabel={t('shareCopyManualLabel')}
-					closeLabel={t('shareCopyClose')}
-					onClose={() => setManualShareText(null)}
-				/>
-			) : null}
-		</div>
+		<ShareActions
+			text={getText}
+			imageRef={imageRef}
+			title={title}
+		/>
 	)
 }
 
@@ -517,6 +474,9 @@ export default function SelectionsClient({
 	const [ownershipExpanded, setOwnershipExpanded] = useState(false)
 	const [captainExpanded, setCaptainExpanded] = useState(false)
 	const [transfersExpanded, setTransfersExpanded] = useState(false)
+	const ownershipShareRef = useRef<HTMLElement | null>(null)
+	const captainShareRef = useRef<HTMLElement | null>(null)
+	const transfersShareRef = useRef<HTMLElement | null>(null)
 	const restoredPreferenceRef = useRef(false)
 	const statsRequestIdRef = useRef(0)
 	const statsCache = useRef(
@@ -909,9 +869,7 @@ export default function SelectionsClient({
 					className="mb-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
 				>
 					<div className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-border/50 pb-2">
-						<p className="eyebrow sm:text-caption">
-							{t('scopeLabel')}
-						</p>
+						<p className="eyebrow sm:text-caption">{t('scopeLabel')}</p>
 						{selectedName ? (
 							<p className="truncate text-xs text-muted-foreground">
 								{t('scopeMeta', {
@@ -1189,13 +1147,18 @@ export default function SelectionsClient({
 						<section
 							aria-labelledby="sel-ownership"
 							className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+							ref={ownershipShareRef}
 						>
 							<SectionTitle
 								id="sel-ownership"
 								hint={t('ownershipHint')}
 								action={
 									!isLoadingStats ? (
-										<SectionShareActions getText={ownershipShareText} />
+										<SectionShareActions
+											getText={ownershipShareText}
+											imageRef={ownershipShareRef}
+											title={t('ownershipTitle')}
+										/>
 									) : null
 								}
 							>
@@ -1229,13 +1192,18 @@ export default function SelectionsClient({
 						<section
 							aria-labelledby="sel-captain"
 							className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+							ref={captainShareRef}
 						>
 							<SectionTitle
 								id="sel-captain"
 								hint={t('captainHint')}
 								action={
 									!isLoadingStats ? (
-										<SectionShareActions getText={captainShareText} />
+										<SectionShareActions
+											getText={captainShareText}
+											imageRef={captainShareRef}
+											title={t('captainTitle')}
+										/>
 									) : null
 								}
 							>
@@ -1269,13 +1237,18 @@ export default function SelectionsClient({
 						<section
 							aria-labelledby="sel-transfers"
 							className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+							ref={transfersShareRef}
 						>
 							<SectionTitle
 								id="sel-transfers"
 								hint={t('transferHint')}
 								action={
 									!isLoadingStats ? (
-										<SectionShareActions getText={transferShareText} />
+										<SectionShareActions
+											getText={transferShareText}
+											imageRef={transfersShareRef}
+											title={t('transferTitle')}
+										/>
 									) : null
 								}
 							>

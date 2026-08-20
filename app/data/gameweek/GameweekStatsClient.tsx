@@ -3,6 +3,7 @@
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import PageShell from '@/components/layout/PageShell'
+import { ShareActions } from '@/components/share/ShareActions'
 import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import {
 	StatsPageHeader,
@@ -32,6 +33,7 @@ import {
 	startTransition,
 	useCallback,
 	useEffect,
+	useMemo,
 	useRef,
 	useState
 } from 'react'
@@ -246,16 +248,19 @@ export default function GameweekStatsClient({
 	const isBoardsUnavailable = committedDesk.boardsState === 'UNAVAILABLE'
 	const isBoardsPending = committedDesk.boardsState === 'PENDING'
 
-	const formatStat = (
-		value: number | null,
-		fallbackTip = t('pendingOfficial')
-	) => (typeof value === 'number' ? String(value) : fallbackTip)
+	const formatStat = useCallback(
+		(value: number | null, fallbackTip = t('pendingOfficial')) =>
+			(typeof value === 'number' ? String(value) : fallbackTip),
+		[t]
+	)
 	const formatCount = (value: number | null, fallbackTip = t('notProvided')) =>
 		typeof value === 'number'
 			? formatter.number(value, { notation: 'compact' })
 			: fallbackTip
-	const displayName = (name: string) =>
-		name === 'N/A' ? t('notAvailable') : name
+	const displayName = useCallback(
+		(name: string) => (name === 'N/A' ? t('notAvailable') : name),
+		[t]
+	)
 	const statusLabel =
 		displayState === 'provisional'
 			? t('status.provisional')
@@ -286,6 +291,52 @@ export default function GameweekStatsClient({
 		(player: { id: number }) => playerStatsHref({ p1: String(player.id) }),
 		[]
 	)
+	const shareRef = useRef<HTMLDivElement | null>(null)
+	const shareReady =
+		!isLoading &&
+		!isScheduledSelection &&
+		!isOverviewPending &&
+		!isBoardsPending &&
+		!isBoardsUnavailable
+	const shareText = useMemo(() => {
+		if (!shareReady) return ''
+
+		return [
+			`# ${t('overview', { gameweek: visibleGameweek })}`,
+			`${t('averagePoints')}: ${formatStat(isOverviewUnavailable ? null : overallStats.averagePoints)}`,
+			`${t('highestPoints')}: ${formatStat(isOverviewUnavailable ? null : overallStats.highestPoints)}`,
+			`${t('mostCaptained')}: ${displayName(isOverviewUnavailable ? 'N/A' : overallStats.mostCaptained.name)}`,
+			`${t('mostSelected')}: ${displayName(isOverviewUnavailable ? 'N/A' : overallStats.mostSelectedPlayer.name)}`,
+			'',
+			t('dreamTeamTitle', { gameweek: visibleGameweek }),
+			...dreamTeam.map(
+				player => `- ${player.name} ${player.team} · ${player.points} pts`
+			),
+			'',
+			t('doubleDigitHauls'),
+			...haulPlayers.map(
+				player => `- ${player.name} ${player.team} · ${player.points} pts`
+			),
+			'',
+			typeof window !== 'undefined'
+				? (() => {
+						const shareUrl = new URL(window.location.href)
+						shareUrl.searchParams.set('gw', String(visibleGameweek))
+						return shareUrl.toString()
+					})()
+				: `https://letletme.top/explore/gameweek?gw=${visibleGameweek}`
+		].join('\n')
+	}, [
+		dreamTeam,
+		displayName,
+		formatStat,
+		haulPlayers,
+		isOverviewUnavailable,
+		overallStats,
+		shareReady,
+		t,
+		visibleGameweek,
+	])
 
 	return (
 		<>
@@ -301,269 +352,285 @@ export default function GameweekStatsClient({
 				<div className="container mx-auto max-w-4xl px-4 py-8">
 					<StatsPageHeader
 						title={t('title')}
-						badge={<GameweekBadge gameweek={visibleGameweek} />}
+						badge={
+							<div className="flex items-center gap-2">
+								<ShareActions
+									text={shareText}
+									imageRef={shareRef}
+									title={t('title')}
+									disabled={!shareReady}
+								/>
+								<GameweekBadge gameweek={visibleGameweek} />
+							</div>
+						}
 					/>
-					<div className="-mt-4 mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-						{statusLabel ? (
-							<Badge variant="secondary">{statusLabel}</Badge>
-						) : null}
-						{deadlineLabel ? (
-							<span>{t('deadline', { value: deadlineLabel })}</span>
-						) : null}
-						{updatedLabel ? (
-							<span>{t('updated', { value: updatedLabel })}</span>
-						) : null}
-					</div>
-
-					<div className="mb-6">
-						<GameweekSelector
-							onGameweekChange={selectGameweek}
-							currentGameweek={currentGameweek}
-							maxGameweek={maxGameweek}
-							selectedGameweek={selectedGameweek}
-							ariaBusy={isLoading}
-						/>
-					</div>
-
-					{error ? (
-						<Alert
-							variant="destructive"
-							className="mb-6"
-						>
-							<AlertDescription>{error}</AlertDescription>
-						</Alert>
-					) : null}
-
-					{/* Overview — same scoreboard structure, lighter mid-plum bg */}
-					<section
-						className="scoreboard-lifted mb-6 rounded-xl sm:mb-8"
-						aria-labelledby="gw-overview-title"
-					>
-					<div className="flex flex-wrap items-center justify-between gap-2 border-b border-fascia-foreground/10 px-4 py-3 sm:px-5">
-							<h2
-								id="gw-overview-title"
-							className="font-display text-lg font-bold tracking-wide text-fascia-foreground sm:text-xl"
-							>
-								{t('overview', { gameweek: visibleGameweek })}
-							</h2>
-							{isLoading ? (
-								<span className="font-mono text-label uppercase tracking-wide text-fascia-foreground/60">
-									{t('loadingOverview')}
-								</span>
+					<div ref={shareRef}>
+						<div className="-mt-4 mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+							{statusLabel ? (
+								<Badge variant="secondary">{statusLabel}</Badge>
+							) : null}
+							{deadlineLabel ? (
+								<span>{t('deadline', { value: deadlineLabel })}</span>
+							) : null}
+							{updatedLabel ? (
+								<span>{t('updated', { value: updatedLabel })}</span>
 							) : null}
 						</div>
-						{isOverviewUnavailable ? (
+
+						<div className="mb-6">
+							<GameweekSelector
+								onGameweekChange={selectGameweek}
+								currentGameweek={currentGameweek}
+								maxGameweek={maxGameweek}
+								selectedGameweek={selectedGameweek}
+								ariaBusy={isLoading}
+							/>
+						</div>
+
+						{error ? (
 							<Alert
 								variant="destructive"
-								className="mx-4 mt-4 sm:mx-5"
+								className="mb-6"
 							>
-								<AlertDescription>{t('loadFailed')}</AlertDescription>
+								<AlertDescription>{error}</AlertDescription>
 							</Alert>
 						) : null}
 
-						{isPreseasonSelection ? (
-							<div className="px-4 py-6 sm:px-5">
-								<p className="font-display text-lg font-bold text-fascia-foreground">
-									{t('preseasonTitle')}
-								</p>
-								<p className="mt-1 text-sm text-fascia-foreground/65">
-									{t('preseasonDescription')}
-								</p>
+						{/* Overview — same scoreboard structure, lighter mid-plum bg */}
+						<section
+							className="scoreboard-lifted mb-6 rounded-xl sm:mb-8"
+							aria-labelledby="gw-overview-title"
+						>
+							<div className="flex flex-wrap items-center justify-between gap-2 border-b border-fascia-foreground/10 px-4 py-3 sm:px-5">
+								<h2
+									id="gw-overview-title"
+									className="font-display text-lg font-bold tracking-wide text-fascia-foreground sm:text-xl"
+								>
+									{t('overview', { gameweek: visibleGameweek })}
+								</h2>
+								{isLoading ? (
+									<span className="font-mono text-label uppercase tracking-wide text-fascia-foreground/60">
+										{t('loadingOverview')}
+									</span>
+								) : null}
 							</div>
-						) : isScheduledSelection || isOverviewPending ? (
-							<div className="px-4 py-6 sm:px-5">
-								<p className="text-sm text-fascia-foreground/65">{t('pendingOfficial')}</p>
-							</div>
-						) : (
-							<>
-								<div className="grid grid-cols-2 divide-x divide-fascia-foreground/10 border-b border-fascia-foreground/10">
-									<div className="px-4 py-4 sm:px-5 sm:py-5">
-										<p className="eyebrow text-fascia-foreground/55">
-											{t('averagePoints')}
-										</p>
-										<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-electric sm:text-4xl">
-											{formatStat(
-												isOverviewUnavailable
-													? null
-													: overallStats.averagePoints,
-												t('awaitingAggregation')
-											)}
-										</p>
-									</div>
-									<div className="px-4 py-4 sm:px-5 sm:py-5">
-										<p className="eyebrow text-fascia-foreground/55">
-											{t('highestPoints')}
-										</p>
-										<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-fascia-foreground sm:text-4xl">
-											{formatStat(
-												isOverviewUnavailable
-													? null
-													: overallStats.highestPoints
-											)}
-										</p>
-									</div>
-								</div>
+							{isOverviewUnavailable ? (
+								<Alert
+									variant="destructive"
+									className="mx-4 mt-4 sm:mx-5"
+								>
+									<AlertDescription>{t('loadFailed')}</AlertDescription>
+								</Alert>
+							) : null}
 
-								<div className="grid grid-cols-2 gap-px bg-fascia-foreground/10 sm:grid-cols-4">
-									{(
-										[
-											{
-												label: t('mostCaptained'),
-												value: displayName(
-													isOverviewUnavailable
-														? 'N/A'
-														: overallStats.mostCaptained.name
-												)
-											},
-											{
-												label: t('mostViceCaptained'),
-												value: displayName(
-													isOverviewUnavailable
-														? 'N/A'
-														: overallStats.mostViceCaptained.name
-												)
-											},
-											{
-												label: t('mostSelected'),
-												value: displayName(
-													isOverviewUnavailable
-														? 'N/A'
-														: overallStats.mostSelectedPlayer.name
-												)
-											},
-											{
-												label: t('mostTransferredIn'),
-												value: displayName(
-													isOverviewUnavailable
-														? 'N/A'
-														: overallStats.mostTransferInPlayer.name
-												)
-											}
-										] as const
-									).map(item => (
-										<div
-											key={item.label}
-											className="bg-scoreboard-cell px-3 py-3 sm:px-4 sm:py-3.5"
-										>
-											<p className="eyebrow text-fascia-foreground/60">
-												{item.label}
+							{isPreseasonSelection ? (
+								<div className="px-4 py-6 sm:px-5">
+									<p className="font-display text-lg font-bold text-fascia-foreground">
+										{t('preseasonTitle')}
+									</p>
+									<p className="mt-1 text-sm text-fascia-foreground/65">
+										{t('preseasonDescription')}
+									</p>
+								</div>
+							) : isScheduledSelection || isOverviewPending ? (
+								<div className="px-4 py-6 sm:px-5">
+									<p className="text-sm text-fascia-foreground/65">
+										{t('pendingOfficial')}
+									</p>
+								</div>
+							) : (
+								<>
+									<div className="grid grid-cols-2 divide-x divide-fascia-foreground/10 border-b border-fascia-foreground/10">
+										<div className="px-4 py-4 sm:px-5 sm:py-5">
+											<p className="eyebrow text-fascia-foreground/55">
+												{t('averagePoints')}
 											</p>
-											<p className="mt-1 truncate font-display text-sm font-semibold tracking-tight text-fascia-foreground sm:text-base">
-												{item.value}
+											<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-electric sm:text-4xl">
+												{formatStat(
+													isOverviewUnavailable
+														? null
+														: overallStats.averagePoints,
+													t('awaitingAggregation')
+												)}
 											</p>
 										</div>
-									))}
-								</div>
+										<div className="px-4 py-4 sm:px-5 sm:py-5">
+											<p className="eyebrow text-fascia-foreground/55">
+												{t('highestPoints')}
+											</p>
+											<p className="mt-1 font-display text-3xl font-bold tabular-nums tracking-tight text-fascia-foreground sm:text-4xl">
+												{formatStat(
+													isOverviewUnavailable
+														? null
+														: overallStats.highestPoints
+												)}
+											</p>
+										</div>
+									</div>
 
-								<div className="border-t border-fascia-foreground/10 px-3 py-3 sm:px-4">
-									<p className="eyebrow mb-2 text-fascia-foreground/60">
-										{t('chipsPlayed')}
-									</p>
-									<div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
+									<div className="grid grid-cols-2 gap-px bg-fascia-foreground/10 sm:grid-cols-4">
 										{(
 											[
-												[
-													'benchBoost',
-													isOverviewUnavailable
-														? null
-														: overallStats.chipsPlayed?.benchBoost
-												],
-												[
-													'tripleCaptain',
-													isOverviewUnavailable
-														? null
-														: overallStats.chipsPlayed?.tripleCaptain
-												],
-												[
-													'wildcard',
-													isOverviewUnavailable
-														? null
-														: overallStats.chipsPlayed?.wildcard
-												],
-												[
-													'freeHit',
-													isOverviewUnavailable
-														? null
-														: overallStats.chipsPlayed?.freeHit
-												]
+												{
+													label: t('mostCaptained'),
+													value: displayName(
+														isOverviewUnavailable
+															? 'N/A'
+															: overallStats.mostCaptained.name
+													)
+												},
+												{
+													label: t('mostViceCaptained'),
+													value: displayName(
+														isOverviewUnavailable
+															? 'N/A'
+															: overallStats.mostViceCaptained.name
+													)
+												},
+												{
+													label: t('mostSelected'),
+													value: displayName(
+														isOverviewUnavailable
+															? 'N/A'
+															: overallStats.mostSelectedPlayer.name
+													)
+												},
+												{
+													label: t('mostTransferredIn'),
+													value: displayName(
+														isOverviewUnavailable
+															? 'N/A'
+															: overallStats.mostTransferInPlayer.name
+													)
+												}
 											] as const
-										).map(([key, value]) => (
+										).map(item => (
 											<div
-												key={key}
-													className="rounded-md border border-fascia-foreground/12 bg-fascia-foreground/8 px-2 py-2 text-center"
+												key={item.label}
+												className="bg-scoreboard-cell px-3 py-3 sm:px-4 sm:py-3.5"
 											>
-													<p className="eyebrow leading-tight text-electric">
-													{t(key)}
+												<p className="eyebrow text-fascia-foreground/60">
+													{item.label}
 												</p>
-													<p className="mt-1 font-display text-sm font-bold tabular-nums text-fascia-foreground sm:text-base">
-													{formatCount(value ?? null, '—')}
+												<p className="mt-1 truncate font-display text-sm font-semibold tracking-tight text-fascia-foreground sm:text-base">
+													{item.value}
 												</p>
 											</div>
 										))}
 									</div>
-								</div>
-							</>
-						)}
-					</section>
 
-					{/* Vertical report: dream team → all hauls (no tabs) */}
-					<div className="space-y-5 sm:space-y-6">
-						{isLoading ? (
-							<p className="text-xs text-muted-foreground">{t('refreshing')}</p>
-						) : null}
+									<div className="border-t border-fascia-foreground/10 px-3 py-3 sm:px-4">
+										<p className="eyebrow mb-2 text-fascia-foreground/60">
+											{t('chipsPlayed')}
+										</p>
+										<div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
+											{(
+												[
+													[
+														'benchBoost',
+														isOverviewUnavailable
+															? null
+															: overallStats.chipsPlayed?.benchBoost
+													],
+													[
+														'tripleCaptain',
+														isOverviewUnavailable
+															? null
+															: overallStats.chipsPlayed?.tripleCaptain
+													],
+													[
+														'wildcard',
+														isOverviewUnavailable
+															? null
+															: overallStats.chipsPlayed?.wildcard
+													],
+													[
+														'freeHit',
+														isOverviewUnavailable
+															? null
+															: overallStats.chipsPlayed?.freeHit
+													]
+												] as const
+											).map(([key, value]) => (
+												<div
+													key={key}
+													className="rounded-md border border-fascia-foreground/12 bg-fascia-foreground/8 px-2 py-2 text-center"
+												>
+													<p className="eyebrow leading-tight text-electric">
+														{t(key)}
+													</p>
+													<p className="mt-1 font-display text-sm font-bold tabular-nums text-fascia-foreground sm:text-base">
+														{formatCount(value ?? null, '—')}
+													</p>
+												</div>
+											))}
+										</div>
+									</div>
+								</>
+							)}
+						</section>
 
-						{!isPreseasonSelection ? (
-							<StatsSectionCard
-								icon={Trophy}
-								title={t('dreamTeamTitle', { gameweek: visibleGameweek })}
-							>
-								{isBoardsUnavailable ? (
-									<p className="text-sm text-muted-foreground">
-										{t('loadFailed')}
-									</p>
-								) : isScheduledSelection || isBoardsPending ? (
-									<p className="text-sm text-muted-foreground">
-										{t('pendingOfficial')}
-									</p>
-								) : dreamTeam.length === 0 ? (
-									<p className="text-sm text-muted-foreground">
-										{t('noDreamTeam')}
-									</p>
-								) : (
-									<PlayerList
-										players={dreamTeam}
-										playerHref={playerHref}
-									/>
-								)}
-							</StatsSectionCard>
-						) : null}
+						{/* Vertical report: dream team → all hauls (no tabs) */}
+						<div className="space-y-5 sm:space-y-6">
+							{isLoading ? (
+								<p className="text-xs text-muted-foreground">
+									{t('refreshing')}
+								</p>
+							) : null}
 
-						{!isPreseasonSelection ? (
-							<StatsSectionCard
-								icon={Star}
-								title={t('doubleDigitHauls')}
-								description={t('haulDescription')}
-							>
-								{isBoardsUnavailable ? (
-									<p className="text-sm text-muted-foreground">
-										{t('loadFailed')}
-									</p>
-								) : isScheduledSelection || isBoardsPending ? (
-									<p className="text-sm text-muted-foreground">
-										{t('pendingOfficial')}
-									</p>
-								) : haulPlayers.length === 0 ? (
-									<p className="text-sm text-muted-foreground">
-										{t('noHauls')}
-									</p>
-								) : (
-									<PlayerList
-										players={haulPlayers}
-										playerHref={playerHref}
-									/>
-								)}
-							</StatsSectionCard>
-						) : null}
+							{!isPreseasonSelection ? (
+								<StatsSectionCard
+									icon={Trophy}
+									title={t('dreamTeamTitle', { gameweek: visibleGameweek })}
+								>
+									{isBoardsUnavailable ? (
+										<p className="text-sm text-muted-foreground">
+											{t('loadFailed')}
+										</p>
+									) : isScheduledSelection || isBoardsPending ? (
+										<p className="text-sm text-muted-foreground">
+											{t('pendingOfficial')}
+										</p>
+									) : dreamTeam.length === 0 ? (
+										<p className="text-sm text-muted-foreground">
+											{t('noDreamTeam')}
+										</p>
+									) : (
+										<PlayerList
+											players={dreamTeam}
+											playerHref={playerHref}
+										/>
+									)}
+								</StatsSectionCard>
+							) : null}
+
+							{!isPreseasonSelection ? (
+								<StatsSectionCard
+									icon={Star}
+									title={t('doubleDigitHauls')}
+									description={t('haulDescription')}
+								>
+									{isBoardsUnavailable ? (
+										<p className="text-sm text-muted-foreground">
+											{t('loadFailed')}
+										</p>
+									) : isScheduledSelection || isBoardsPending ? (
+										<p className="text-sm text-muted-foreground">
+											{t('pendingOfficial')}
+										</p>
+									) : haulPlayers.length === 0 ? (
+										<p className="text-sm text-muted-foreground">
+											{t('noHauls')}
+										</p>
+									) : (
+										<PlayerList
+											players={haulPlayers}
+											playerHref={playerHref}
+										/>
+									)}
+								</StatsSectionCard>
+							) : null}
+						</div>
 					</div>
 				</div>
 			</PageShell>

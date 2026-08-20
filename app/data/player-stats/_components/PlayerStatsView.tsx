@@ -5,6 +5,7 @@ import {
 	type PlayerStatsSectionId
 } from '@/app/data/player-stats/_lib/player-stats-url'
 import type { PlayerDirectoryOption } from '@/components/player/PlayerDirectoryPicker'
+import { ShareActions } from '@/components/share/ShareActions'
 import { Link } from '@/i18n/navigation'
 import type {
 	PlayerDetailData,
@@ -19,6 +20,7 @@ import {
 	useCallback,
 	useEffect,
 	useMemo,
+	useRef,
 	useState,
 	type ReactNode
 } from 'react'
@@ -119,9 +121,7 @@ function MetricGrid({ items }: { items: DisplayMetric[] }) {
 		<div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
 			{items.map(item => (
 				<div key={item.label}>
-					<p className="eyebrow">
-						{item.label}
-					</p>
+					<p className="eyebrow">{item.label}</p>
 					<p className="mt-0.5 font-display text-xl font-bold tabular-nums tracking-tight">
 						{item.value ?? '—'}
 					</p>
@@ -570,9 +570,7 @@ function MarketSummary({
 				{ label: tl('gwNet'), value: number(net(player)) }
 			].map(item => (
 				<div key={item.label}>
-					<p className="eyebrow">
-						{item.label}
-					</p>
+					<p className="eyebrow">{item.label}</p>
 					<p className="mt-0.5 font-semibold tabular-nums">
 						{item.value ?? '—'}
 					</p>
@@ -620,6 +618,7 @@ export function PlayerStatsView({
 	const [activeSection, setActiveSection] =
 		useState<PlayerStatsSectionId>('fixtures')
 	const [contextOpen, setContextOpen] = useState(false)
+	const shareRef = useRef<HTMLDivElement | null>(null)
 
 	const isCompare = Boolean(comparison)
 	const samePosition = Boolean(
@@ -749,6 +748,22 @@ export function PlayerStatsView({
 	if (!player) return null
 
 	const currentAsOf = player.statsContext.asOfEventId ?? anchorGw
+	const shareText = [
+		`# ${player.webName} · ${player.teamShortName}`,
+		comparison
+			? `${t('versus')} ${comparison.webName} · ${comparison.teamShortName}`
+			: null,
+		`${tl('totalPoints')}: ${player.totalPoints ?? '—'} pts · £${(player.price / 10).toFixed(1)}m`,
+		`${tl('gameweek', { gameweek: currentAsOf })}: ${player.eventPoints ?? '—'} pts · ${tl('selected')}: ${player.selectedByPercent == null ? '—' : `${player.selectedByPercent.toFixed(1)}%`}`,
+		`${tl('goals')}: ${player.goalsScored ?? '—'} · ${tl('assists')}: ${player.assists ?? '—'} · ${tl('cleanSheets')}: ${player.cleanSheets ?? '—'}`,
+		'',
+		typeof window !== 'undefined'
+			? window.location.href
+			: 'https://letletme.top/explore/player-stats'
+	]
+		.filter(line => line != null)
+		.join('\n')
+
 	const seasonMetricSpecs =
 		isCompare && !samePosition
 			? commonSeasonSpecs(tl)
@@ -943,161 +958,168 @@ export function PlayerStatsView({
 			className="space-y-1"
 			aria-busy={requestPending}
 		>
-			{requestPending ? (
-				<p
-					className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
-					role="status"
-				>
-					{t('loadingStats')}
-				</p>
-			) : null}
-			{requestError ? (
-				<p
-					className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
-					role="alert"
-				>
-					{requestError}
-				</p>
-			) : null}
-			<PlayerOverallCard
-				player={player}
-				comparison={comparison}
-				anchorGw={anchorGw}
-				seasonStatsAvailable={seasonStatsAvailable}
-			/>
-
-			<PlayerFplProfile
-				player={player}
-				comparison={comparison}
-				profile={playerState}
-				comparisonProfile={comparisonState}
-				seasonStatsAvailable={seasonStatsAvailable}
-				isLoading={isStateLoading}
-				isComparisonLoading={isComparisonStateLoading}
-			/>
-
-			<PlayerStateProfile
-				player={player}
-				comparison={comparison}
-				profile={playerState}
-				comparisonProfile={comparisonState}
-				seasonStatsAvailable={seasonStatsAvailable}
-				isLoading={isStateLoading}
-				isComparisonLoading={isComparisonStateLoading}
-				error={stateError}
-				comparisonError={comparisonStateError}
-			/>
-
-			<div className="sticky top-0 z-20 -mx-1 border-b border-border/60 bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-				<p className="eyebrow">
-					{t('detailedTitle')}
-				</p>
-				<StickyPlayerIdentity
-					player={player}
-					comparison={comparison}
-				/>
-				<div className="mt-1 flex justify-end">
-					<Link
-						href="/explore/fixtures#my-squad"
-						className="text-xs font-medium text-foreground underline-offset-2 hover:underline"
-					>
-						{t('fixturesSquadLink')}
-					</Link>
-				</div>
-				<PlayerSectionNav
-					activeSection={activeSection}
-					onJump={handleSectionJump}
-					sections={navSections}
+			<div className="flex justify-end">
+				<ShareActions
+					text={shareText}
+					imageRef={shareRef}
+					title={player.webName}
 				/>
 			</div>
-
-			{renderEvidenceContent()}
-
-			{hasSeasonStats ? (
-				<div className="border-t border-border/60 pt-4">
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						className="eyebrow w-full justify-between rounded-lg border-border/70 px-4 text-left sm:text-caption"
-						onClick={() => setContextOpen(open => !open)}
-						aria-expanded={contextOpen}
-						aria-controls="ps-context-panel"
+			<div ref={shareRef}>
+				{requestPending ? (
+					<p
+						className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"
+						role="status"
 					>
-						<span>
-							{t(contextOpen ? 'closeSupportingData' : 'openSupportingData')}
-						</span>
-						<ChevronDown
-							className={
-								contextOpen
-									? 'rotate-180 transition-transform'
-									: 'transition-transform'
-							}
-							aria-hidden="true"
-						/>
-					</Button>
-					<div
-						id="ps-context-panel"
-						hidden={!contextOpen}
-						className="mt-3 space-y-3"
+						{t('loadingStats')}
+					</p>
+				) : null}
+				{requestError ? (
+					<p
+						className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+						role="alert"
 					>
-						{contextOpen ? (
-							<>
-								{isStateContextLoading ||
-								(comparison && isComparisonStateContextLoading) ? (
-									<PlayerStatsSection title={t('detailedTitle')}>
-										<p className="text-sm text-muted-foreground">
-											{t('loadingStats')}
-										</p>
-									</PlayerStatsSection>
-								) : stateContextError || comparisonStateContextError ? (
-									<PlayerStatsSection title={t('detailedTitle')}>
-										<p
-											role="alert"
-											className="text-sm text-destructive"
-										>
-											{stateContextError ?? comparisonStateContextError}
-										</p>
-									</PlayerStatsSection>
-								) : (
-									<PlayerStateContext
-										player={player}
-										comparison={comparison}
-										profile={playerState}
-										comparisonProfile={comparisonState}
-									/>
-								)}
-								<div id="ps-market">
-									<DeskSection
-										id="ps-market-section"
-										title={t('marketTitle')}
-										hint={t('marketHint')}
-									>
-										<MarketSummary
+						{requestError}
+					</p>
+				) : null}
+				<PlayerOverallCard
+					player={player}
+					comparison={comparison}
+					anchorGw={anchorGw}
+					seasonStatsAvailable={seasonStatsAvailable}
+				/>
+
+				<PlayerFplProfile
+					player={player}
+					comparison={comparison}
+					profile={playerState}
+					comparisonProfile={comparisonState}
+					seasonStatsAvailable={seasonStatsAvailable}
+					isLoading={isStateLoading}
+					isComparisonLoading={isComparisonStateLoading}
+				/>
+
+				<PlayerStateProfile
+					player={player}
+					comparison={comparison}
+					profile={playerState}
+					comparisonProfile={comparisonState}
+					seasonStatsAvailable={seasonStatsAvailable}
+					isLoading={isStateLoading}
+					isComparisonLoading={isComparisonStateLoading}
+					error={stateError}
+					comparisonError={comparisonStateError}
+				/>
+
+				<div className="sticky top-0 z-20 -mx-1 border-b border-border/60 bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+					<p className="eyebrow">{t('detailedTitle')}</p>
+					<StickyPlayerIdentity
+						player={player}
+						comparison={comparison}
+					/>
+					<div className="mt-1 flex justify-end">
+						<Link
+							href="/explore/fixtures#my-squad"
+							className="text-xs font-medium text-foreground underline-offset-2 hover:underline"
+						>
+							{t('fixturesSquadLink')}
+						</Link>
+					</div>
+					<PlayerSectionNav
+						activeSection={activeSection}
+						onJump={handleSectionJump}
+						sections={navSections}
+					/>
+				</div>
+
+				{renderEvidenceContent()}
+
+				{hasSeasonStats ? (
+					<div className="border-t border-border/60 pt-4">
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							className="eyebrow w-full justify-between rounded-lg border-border/70 px-4 text-left sm:text-caption"
+							onClick={() => setContextOpen(open => !open)}
+							aria-expanded={contextOpen}
+							aria-controls="ps-context-panel"
+						>
+							<span>
+								{t(contextOpen ? 'closeSupportingData' : 'openSupportingData')}
+							</span>
+							<ChevronDown
+								className={
+									contextOpen
+										? 'rotate-180 transition-transform'
+										: 'transition-transform'
+								}
+								aria-hidden="true"
+							/>
+						</Button>
+						<div
+							id="ps-context-panel"
+							hidden={!contextOpen}
+							className="mt-3 space-y-3"
+						>
+							{contextOpen ? (
+								<>
+									{isStateContextLoading ||
+									(comparison && isComparisonStateContextLoading) ? (
+										<PlayerStatsSection title={t('detailedTitle')}>
+											<p className="text-sm text-muted-foreground">
+												{t('loadingStats')}
+											</p>
+										</PlayerStatsSection>
+									) : stateContextError || comparisonStateContextError ? (
+										<PlayerStatsSection title={t('detailedTitle')}>
+											<p
+												role="alert"
+												className="text-sm text-destructive"
+											>
+												{stateContextError ?? comparisonStateContextError}
+											</p>
+										</PlayerStatsSection>
+									) : (
+										<PlayerStateContext
 											player={player}
 											comparison={comparison}
+											profile={playerState}
+											comparisonProfile={comparisonState}
 										/>
-										{comparison ? (
-											<div className="grid gap-4 sm:grid-cols-2">
-												<PlayerPriceHistoryBlock
-													playerId={player.id}
-													playerName={player.webName}
-												/>
-												<PlayerPriceHistoryBlock
-													playerId={comparison.id}
-													playerName={comparison.webName}
-												/>
-											</div>
-										) : (
-											<PlayerPriceHistoryBlock playerId={player.id} />
-										)}
-									</DeskSection>
-								</div>
-							</>
-						) : null}
+									)}
+									<div id="ps-market">
+										<DeskSection
+											id="ps-market-section"
+											title={t('marketTitle')}
+											hint={t('marketHint')}
+										>
+											<MarketSummary
+												player={player}
+												comparison={comparison}
+											/>
+											{comparison ? (
+												<div className="grid gap-4 sm:grid-cols-2">
+													<PlayerPriceHistoryBlock
+														playerId={player.id}
+														playerName={player.webName}
+													/>
+													<PlayerPriceHistoryBlock
+														playerId={comparison.id}
+														playerName={comparison.webName}
+													/>
+												</div>
+											) : (
+												<PlayerPriceHistoryBlock playerId={player.id} />
+											)}
+										</DeskSection>
+									</div>
+								</>
+							) : null}
+						</div>
 					</div>
-				</div>
-			) : null}
+				) : null}
+			</div>
 		</div>
 	)
 }

@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { usePathname, useRouter } from '@/i18n/navigation'
 import type {
 	EntryEventResult,
-	EntryGameweekTransfers,
+	EntryGameweekTransfers
 } from '@/lib/graphql/operations/entries'
 import type { SeasonIdentity } from './_lib/team-stats-model'
 import type { SeasonPresentationPhase } from '@/lib/season-presentation'
@@ -22,17 +22,18 @@ import { TeamGameweekOverall } from './_components/TeamGameweekOverall'
 import { TeamSeasonCharts } from './_components/TeamSeasonCharts'
 import { TeamSeasonOverall } from './_components/TeamSeasonOverall'
 import { TeamSquadSection } from './_components/TeamSquadSection'
+import { TeamSquadPitch } from './_components/TeamSquadPitch'
 import { TeamStatsDeepDive } from './_components/TeamStatsDeepDive'
 import { useTeamStats, type InitialEntryHistory } from './_hooks/useTeamStats'
 import {
 	TeamGameweekWorkspaceProvider,
-	useTeamGameweekWorkspace,
+	useTeamGameweekWorkspace
 } from './_lib/team-gameweek-workspace'
 import {
 	buildTeamStatsQueryString,
 	parseTeamStatsGw,
 	parseTeamStatsView,
-	type TeamStatsPageView,
+	type TeamStatsPageView
 } from './_lib/team-stats-url'
 
 interface TeamStatsClientProps {
@@ -67,7 +68,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 
 	const view = useMemo(
 		() => parseTeamStatsView(searchParams.get('view')),
-		[searchParams],
+		[searchParams]
 	)
 
 	const {
@@ -80,12 +81,12 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 		seasonOverall,
 		selectedGameweek,
 		setSelectedGameweek,
-		teamStats,
+		teamStats
 	} = useTeamStats({
 		...props,
 		initialSelectedGameweek,
 		preseason: props.initialSeasonPhase === 'PRESEASON',
-		loadGameweekData: view === 'gameweek',
+		loadGameweekData: view === 'gameweek'
 	})
 
 	// Prefer live current; fall back to selected seed / history-driven max
@@ -102,12 +103,12 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 		(next: { view: TeamStatsPageView; gw: number | null }) => {
 			const qs = buildTeamStatsQueryString({
 				view: next.view,
-				gw: next.gw != null && next.gw > 0 ? next.gw : null,
+				gw: next.gw != null && next.gw > 0 ? next.gw : null
 			})
 			const href = qs ? `${pathname}?${qs}` : pathname
 			router.replace(href, { scroll: false })
 		},
-		[pathname, router],
+		[pathname, router]
 	)
 
 	const handleActiveGameweekChange = useCallback(
@@ -118,10 +119,10 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 			replaceQuery({
 				view:
 					enterGameweekView || viewNow === 'gameweek' ? 'gameweek' : 'season',
-				gw,
+				gw
 			})
 		},
-		[replaceQuery, searchParams, setSelectedGameweek],
+		[replaceQuery, searchParams, setSelectedGameweek]
 	)
 
 	useEffect(() => {
@@ -147,7 +148,10 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 				<StatsPageHeader title={t('title')} />
 
 				{error ? (
-					<Alert variant="destructive" className="mb-6">
+					<Alert
+						variant="destructive"
+						className="mb-6"
+					>
 						<AlertCircle aria-hidden="true" />
 						<AlertDescription>{error}</AlertDescription>
 					</Alert>
@@ -164,7 +168,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 							onNavigateSeason={() =>
 								replaceQuery({
 									view: 'season',
-									gw: selectedGameweek > 0 ? selectedGameweek : null,
+									gw: selectedGameweek > 0 ? selectedGameweek : null
 								})
 							}
 							selectedGameweek={selectedGameweek}
@@ -228,7 +232,7 @@ function TeamStatsViews({
 	seasonLogs,
 	emptyStateMessage,
 	hasAnyContent,
-	searchParamsGw,
+	searchParamsGw
 }: TeamStatsViewsProps) {
 	const t = useTranslations('TeamStats')
 	const workspace = useTeamGameweekWorkspace()
@@ -242,7 +246,7 @@ function TeamStatsViews({
 		const urlGw = parseTeamStatsGw(
 			searchParamsGw,
 			maxGw,
-			workspace.activeGameweek > 0 ? workspace.activeGameweek : maxGw,
+			workspace.activeGameweek > 0 ? workspace.activeGameweek : maxGw
 		)
 		if (urlGw < 1) return
 		if (
@@ -270,7 +274,7 @@ function TeamStatsViews({
 			'relative inline-flex h-11 items-center gap-0.5 rounded-none border-b-2 bg-transparent px-3 pb-3 pt-2 text-sm font-semibold sm:px-4',
 			active
 				? 'border-primary-ink text-foreground'
-				: 'border-transparent text-muted-foreground hover:text-foreground',
+				: 'border-transparent text-muted-foreground hover:text-foreground'
 		)
 
 	return (
@@ -301,7 +305,7 @@ function TeamStatsViews({
 								role="presentation"
 								className={cn(
 									'inline-flex items-stretch',
-									active && 'text-foreground',
+									active && 'text-foreground'
 								)}
 							>
 								<button
@@ -310,7 +314,7 @@ function TeamStatsViews({
 									aria-selected={active}
 									className={cn(
 										tabTriggerClass(active),
-										closable ? 'pr-1 sm:pr-1.5' : undefined,
+										closable ? 'pr-1 sm:pr-1.5' : undefined
 									)}
 									onClick={() => workspace.openGameweek(gw)}
 								>
@@ -322,7 +326,7 @@ function TeamStatsViews({
 										className={cn(
 											'-ml-0.5 mb-px inline-flex items-center self-center rounded-sm p-1 text-muted-foreground',
 											'hover:bg-muted/60 hover:text-foreground',
-											'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+											'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 										)}
 										aria-label={t('closeGameweekTab', { gameweek: gw })}
 										onClick={e => {
@@ -330,7 +334,10 @@ function TeamStatsViews({
 											workspace.closeGameweek(gw)
 										}}
 									>
-										<X className="size-3.5" aria-hidden="true" />
+										<X
+											className="size-3.5"
+											aria-hidden="true"
+										/>
 									</button>
 								) : null}
 							</div>
@@ -353,9 +360,7 @@ function TeamStatsViews({
 
 					{seasonLogs ? (
 						<div>
-							<p className="mb-4 eyebrow">
-								{t('seasonLogs')}
-							</p>
+							<p className="mb-4 eyebrow">{t('seasonLogs')}</p>
 							<TeamStatsDeepDive
 								logs={seasonLogs}
 								transfersLoading={isTransfersLoading}
@@ -399,6 +404,7 @@ function TeamStatsViews({
 
 					{teamStats ? (
 						<>
+							<TeamSquadPitch stats={teamStats} />
 							<TeamGameweekOverall stats={teamStats} />
 							<TeamSquadSection picks={teamStats.eventPicks} />
 						</>
@@ -409,9 +415,7 @@ function TeamStatsViews({
 							aria-busy={isLoading}
 						>
 							<p className="text-sm text-muted-foreground">
-								{isLoading
-									? t('loading')
-									: (emptyStateMessage ?? t('noStats'))}
+								{isLoading ? t('loading') : (emptyStateMessage ?? t('noStats'))}
 							</p>
 						</Card>
 					)}

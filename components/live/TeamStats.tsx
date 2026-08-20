@@ -82,8 +82,6 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
 					</div>
 
 					<div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-t border-border/60 pt-3 sm:border-t-0 sm:pt-0">
-						<MetaItem label={t('played')} value={stats.played} />
-						<span className="hidden h-3 w-px bg-border sm:block" aria-hidden="true" />
 						<MetaItem
 							label={t('chip')}
 							value={chipDisplay}
