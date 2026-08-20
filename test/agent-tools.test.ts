@@ -11,7 +11,10 @@ import {
 	BRIEFING_STORY_DOCUMENT,
 	COMPETITION_CONTEXT_DOCUMENT,
 	COMPETITION_DOCUMENT,
+	CONTEXT_DOCUMENT,
+	CORE_CONTEXT_DOCUMENT,
 	ENTRY_SNAPSHOT_DOCUMENT,
+	MARKET_CONTEXT_DOCUMENT,
 	MARKET_LINEUP_DOCUMENT,
 	MARKET_OWNERSHIP_FALLERS_DOCUMENT,
 	MARKET_OWNERSHIP_RISERS_DOCUMENT,
@@ -19,7 +22,8 @@ import {
 	MARKET_PULSE_UPDATES_DOCUMENT,
 	OWN_ENTRY_DOCUMENT,
 	PLAYER_CATALOG_DOCUMENT,
-	PLAYERS_DOCUMENT
+	PLAYERS_DOCUMENT,
+	SELECTION_CONTEXT_DOCUMENT
 } from '@/lib/agent-tools/documents'
 import {
 	AGENT_MAX_INPUT_BYTES,
@@ -73,6 +77,15 @@ const contextResult = {
 		snapshotDate: '2026-08-20',
 		capturedAt: '2026-08-20T00:01:00.000Z',
 		rowCount: 700
+	},
+	teamSelectionDesk: {
+		season: '2627',
+		coreRevision: 'core-7',
+		marketRevision: 'market-4',
+		checkedAt: '2026-08-20T00:01:00.000Z',
+		eventId: 1,
+		phase: 'PRE_DEADLINE',
+		playerPool: { state: 'READY', checkedAt: null, message: null }
 	},
 	briefingWeek: {
 		state: 'READY',
@@ -217,6 +230,115 @@ test('a successful response carries request, time, revision and warning metadata
 	assert.deepEqual(body.warnings, [])
 })
 
+test('preseason context and market return published empty coverage without a market snapshot', async () => {
+	const preseasonSelection = {
+		...contextResult.teamSelectionDesk,
+		marketRevision: null,
+		phase: 'PRESEASON',
+		playerPool: {
+			state: 'AVAILABLE',
+			checkedAt: '2026-08-20T00:01:00.000Z',
+			message: null
+		}
+	}
+	const seen = new Set<string>()
+	const execute: AgentGatewayDependencies['execute'] = async document => {
+		seen.add(document)
+		if (document === CORE_CONTEXT_DOCUMENT) {
+			return { coreEventContext: contextResult.coreEventContext }
+		}
+		if (document === CONTEXT_DOCUMENT) {
+			return {
+				coreEventContext: contextResult.coreEventContext,
+				briefingWeek: contextResult.briefingWeek
+			}
+		}
+		if (document === SELECTION_CONTEXT_DOCUMENT) {
+			return { teamSelectionDesk: preseasonSelection }
+		}
+		throw new Error('Market documents must not run before publication')
+	}
+
+	const contextResponse = await handleAgentToolRequest(
+		request({}),
+		'letletme_context',
+		dependencies(authenticated, execute)
+	)
+	assert.equal(contextResponse.status, 200)
+	const contextBody = await contextResponse.json()
+	assert.equal(contextBody.data.coverage.market.state, 'NOT_PUBLISHED')
+	assert.equal(contextBody.data.coverage.market.rowCount, 0)
+	assert.equal(contextBody.revisions.market, undefined)
+	assert.ok(
+		contextBody.warnings.some(
+			(warning: { code: string }) => warning.code === 'MARKET_NOT_PUBLISHED'
+		)
+	)
+
+	const marketResponse = await handleAgentToolRequest(
+		request({}),
+		'letletme_market',
+		dependencies(authenticated, execute)
+	)
+	assert.equal(marketResponse.status, 200)
+	const marketBody = await marketResponse.json()
+	assert.equal(marketBody.data.snapshot, null)
+	assert.equal(marketBody.data.lineup, null)
+	assert.deepEqual(marketBody.data.ownership.risers, [])
+	assert.deepEqual(marketBody.data.pulse.transferMovers, [])
+	assert.equal(marketBody.revisions.market, undefined)
+	assert.equal(marketBody.warnings[0]?.code, 'MARKET_NOT_PUBLISHED')
+	assert.equal(seen.has(MARKET_CONTEXT_DOCUMENT), false)
+})
+
+test('preseason player pages use Desk revisions without requiring marketSnapshotContext', async () => {
+	const preseasonSelection = {
+		...contextResult.teamSelectionDesk,
+		marketRevision: null,
+		phase: 'PRESEASON'
+	}
+	const response = await handleAgentToolRequest(
+		request({ limit: 1 }),
+		'letletme_players',
+		dependencies(authenticated, async document => {
+			if (document === CORE_CONTEXT_DOCUMENT) {
+				return { coreEventContext: contextResult.coreEventContext }
+			}
+			assert.equal(document, PLAYERS_DOCUMENT)
+			assert.doesNotMatch(document, /marketSnapshotContext/)
+			return {
+				coreEventContext: contextResult.coreEventContext,
+				teamSelectionDesk: preseasonSelection,
+				playersForPicker: {
+					totalCount: 1,
+					nextCursor: null,
+					items: [
+						{
+							id: 1,
+							webName: 'Alpha',
+							team: { id: 1, name: 'Team', shortName: 'T' },
+							position: 'MIDFIELDER',
+							price: 50,
+							selectedByPercent: 5,
+							totalPoints: 0,
+							form: null
+						}
+					]
+				}
+			}
+		})
+	)
+	assert.equal(response.status, 200)
+	const body = await response.json()
+	assert.equal(body.data.items.length, 1)
+	assert.equal(body.revisions.market, undefined)
+	assert.ok(
+		body.warnings.some(
+			(warning: { code: string }) => warning.code === 'MARKET_NOT_PUBLISHED'
+		)
+	)
+})
+
 test('player search remains a GraphQL variable and cannot replace the fixed document', async () => {
 	let capturedDocument = ''
 	let capturedVariables: Record<string, unknown> = {}
@@ -224,11 +346,15 @@ test('player search remains a GraphQL variable and cannot replace the fixed docu
 		request({ query: 'query Evil { __schema { types { name } } }' }),
 		'letletme_players',
 		dependencies(authenticated, async (document, variables) => {
+			if (document === CORE_CONTEXT_DOCUMENT) {
+				return { coreEventContext: contextResult.coreEventContext }
+			}
+			assert.equal(document, PLAYERS_DOCUMENT)
 			capturedDocument = document
 			capturedVariables = variables
 			return {
 				coreEventContext: contextResult.coreEventContext,
-				marketSnapshotContext: contextResult.marketSnapshotContext,
+				teamSelectionDesk: contextResult.teamSelectionDesk,
 				playersForPicker: { totalCount: 0, nextCursor: null, items: [] }
 			}
 		})
@@ -248,6 +374,9 @@ test('a 100-player page is assembled from production-budgeted GraphQL chunks', a
 		request({ limit: 100 }),
 		'letletme_players',
 		dependencies(authenticated, async (document, variables) => {
+			if (document === CORE_CONTEXT_DOCUMENT) {
+				return { coreEventContext: contextResult.coreEventContext }
+			}
 			assert.equal(document, PLAYERS_DOCUMENT)
 			assert.equal(variables.sort, 'AUTO')
 			const limit = variables.limit as number
@@ -255,7 +384,7 @@ test('a 100-player page is assembled from production-budgeted GraphQL chunks', a
 			chunkLimits.push(limit)
 			return {
 				coreEventContext: contextResult.coreEventContext,
-				marketSnapshotContext: contextResult.marketSnapshotContext,
+				teamSelectionDesk: contextResult.teamSelectionDesk,
 				playersForPicker: {
 					totalCount: 100,
 					nextCursor: cursor + limit < 100 ? cursor + limit : null,
@@ -273,7 +402,7 @@ test('a 100-player page is assembled from production-budgeted GraphQL chunks', a
 		})
 	)
 	assert.equal(response.status, 200)
-	assert.deepEqual(chunkLimits, [38, 38, 24])
+	assert.deepEqual(chunkLimits, [36, 36, 28])
 	assert.equal((await response.json()).data.items.length, 100)
 })
 
@@ -283,7 +412,10 @@ test('picker cursors expire when the player publication changes', async () => {
 			...contextResult.coreEventContext,
 			revision: coreRevision
 		},
-		marketSnapshotContext: contextResult.marketSnapshotContext,
+		teamSelectionDesk: {
+			...contextResult.teamSelectionDesk,
+			coreRevision
+		},
 		playersForPicker: {
 			totalCount: 2,
 			nextCursor: cursor,
@@ -303,13 +435,21 @@ test('picker cursors expire when the player publication changes', async () => {
 	const first = await handleAgentToolRequest(
 		request({ limit: 1 }),
 		'letletme_players',
-		dependencies(authenticated, async () => page('core-7', 1))
+		dependencies(authenticated, async document =>
+			document === CORE_CONTEXT_DOCUMENT
+				? { coreEventContext: page('core-7', 1).coreEventContext }
+				: page('core-7', 1)
+		)
 	)
 	const cursor = (await first.json()).page.nextCursor
 	const stale = await handleAgentToolRequest(
 		request({ limit: 1, cursor }),
 		'letletme_players',
-		dependencies(authenticated, async () => page('core-8', null))
+		dependencies(authenticated, async document =>
+			document === CORE_CONTEXT_DOCUMENT
+				? { coreEventContext: page('core-8', null).coreEventContext }
+				: page('core-8', null)
+		)
 	)
 	assert.equal(stale.status, 400)
 	assert.equal((await stale.json()).code, 'INVALID_INPUT')
@@ -523,7 +663,7 @@ test('verified-entry extensions must declare the same core revision', async () =
 			}
 		})
 	)
-	assert.equal(response.status, 502)
+	assert.equal(response.status, 503)
 	assert.equal((await response.json()).code, 'UPSTREAM_UNAVAILABLE')
 })
 
@@ -549,11 +689,18 @@ test('market projections stay fixed, budgeted and revision coherent', async () =
 		request({ days: 7, ownershipPeriod: 'DAILY', limit: 5 }),
 		'letletme_market',
 		dependencies(authenticated, async document => {
-			seen.add(document)
 			const envelope = {
 				coreEventContext: contextResult.coreEventContext,
 				marketSnapshotContext: contextResult.marketSnapshotContext
 			}
+			if (document === CORE_CONTEXT_DOCUMENT) {
+				return { coreEventContext: contextResult.coreEventContext }
+			}
+			if (document === SELECTION_CONTEXT_DOCUMENT) {
+				return { teamSelectionDesk: contextResult.teamSelectionDesk }
+			}
+			if (document === MARKET_CONTEXT_DOCUMENT) return envelope
+			seen.add(document)
 			if (document === MARKET_LINEUP_DOCUMENT) {
 				return { ...envelope, marketLineup: { formation: '3-4-3', slots: [] } }
 			}
@@ -753,7 +900,7 @@ test('competition authorization failures, rate limits and timeouts are normalize
 		],
 		[
 			new GraphQLRequestError('Timed out', { code: 'REQUEST_TIMEOUT' }),
-			504,
+			503,
 			'UPSTREAM_TIMEOUT'
 		]
 	] as const) {
@@ -795,7 +942,7 @@ test('one deadline bounds the complete tool execution and aborts its shared sign
 			{ upstreamTimeoutMs: 10 }
 		)
 	)
-	assert.equal(response.status, 504)
+	assert.equal(response.status, 503)
 	assert.equal((await response.json()).code, 'UPSTREAM_TIMEOUT')
 	assert.equal(aborted, true)
 	assert.ok(performance.now() - startedAt < 500)
@@ -807,26 +954,41 @@ test('an aggregate tool failure aborts sibling GraphQL requests', async () => {
 	const response = await handleAgentToolRequest(
 		request({}),
 		'letletme_market',
-		dependencies(authenticated, async (_document, _variables, _requestId, signal) => {
-			calls += 1
-			if (calls === 1) {
-				throw new GraphQLRequestError('Upstream failed', { status: 502 })
-			}
-			return new Promise((_resolve, reject) => {
-				const onAbort = () => {
-					siblingAborts += 1
-					reject(
-						new GraphQLRequestError('Cancelled', {
-							code: 'REQUEST_CANCELLED'
-						})
-					)
+		dependencies(
+			authenticated,
+			async (document, _variables, _requestId, signal) => {
+				if (document === CORE_CONTEXT_DOCUMENT) {
+					return { coreEventContext: contextResult.coreEventContext }
 				}
-				if (signal?.aborted) onAbort()
-				else signal?.addEventListener('abort', onAbort, { once: true })
-			})
-		})
+				if (document === SELECTION_CONTEXT_DOCUMENT) {
+					return { teamSelectionDesk: contextResult.teamSelectionDesk }
+				}
+				if (document === MARKET_CONTEXT_DOCUMENT) {
+					return {
+						coreEventContext: contextResult.coreEventContext,
+						marketSnapshotContext: contextResult.marketSnapshotContext
+					}
+				}
+				calls += 1
+				if (calls === 1) {
+					throw new GraphQLRequestError('Upstream failed', { status: 502 })
+				}
+				return new Promise((_resolve, reject) => {
+					const onAbort = () => {
+						siblingAborts += 1
+						reject(
+							new GraphQLRequestError('Cancelled', {
+								code: 'REQUEST_CANCELLED'
+							})
+						)
+					}
+					if (signal?.aborted) onAbort()
+					else signal?.addEventListener('abort', onAbort, { once: true })
+				})
+			}
+		)
 	)
-	assert.equal(response.status, 502)
+	assert.equal(response.status, 503)
 	assert.equal(calls, 5)
 	assert.equal(siblingAborts, 4)
 })
@@ -836,24 +998,29 @@ test('encoded results over 64 KiB return an error instead of truncated JSON', as
 	const response = await handleAgentToolRequest(
 		request({ limit: 50 }),
 		'letletme_players',
-		dependencies(authenticated, async () => ({
-			coreEventContext: contextResult.coreEventContext,
-			marketSnapshotContext: contextResult.marketSnapshotContext,
-			playersForPicker: {
-				totalCount: 50,
-				nextCursor: null,
-				items: Array.from({ length: 50 }, (_, index) => ({
-					id: index + 1,
-					webName: hugeName,
-					position: 'MIDFIELDER',
-					price: 50,
-					selectedByPercent: 1,
-					totalPoints: 0,
-					form: 0,
-					team: { id: 1, name: 'Team', shortName: 'T' }
-				}))
+		dependencies(authenticated, async document => {
+			if (document === CORE_CONTEXT_DOCUMENT) {
+				return { coreEventContext: contextResult.coreEventContext }
 			}
-		}))
+			return {
+				coreEventContext: contextResult.coreEventContext,
+				teamSelectionDesk: contextResult.teamSelectionDesk,
+				playersForPicker: {
+					totalCount: 50,
+					nextCursor: null,
+					items: Array.from({ length: 50 }, (_, index) => ({
+						id: index + 1,
+						webName: hugeName,
+						position: 'MIDFIELDER',
+						price: 50,
+						selectedByPercent: 1,
+						totalPoints: 0,
+						form: 0,
+						team: { id: 1, name: 'Team', shortName: 'T' }
+					}))
+				}
+			}
+		})
 	)
 	assert.equal(response.status, 413)
 	assert.equal((await response.json()).code, 'RESULT_TOO_LARGE')

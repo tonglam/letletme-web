@@ -8,7 +8,11 @@ import {
 	type AgentWarning,
 	type LetLetMeToolName
 } from '@/lib/agent-tools/contracts'
-import { CORE_CONTEXT_DOCUMENT } from '@/lib/agent-tools/documents'
+import {
+	CORE_CONTEXT_DOCUMENT,
+	MARKET_CONTEXT_DOCUMENT,
+	SELECTION_CONTEXT_DOCUMENT
+} from '@/lib/agent-tools/documents'
 
 export type AgentGraphQLExecutor = (
 	document: string,
@@ -34,6 +38,20 @@ export type MarketContext = {
 	snapshotDate: string | null
 	capturedAt: string | null
 	rowCount: number
+}
+
+export type SelectionContext = {
+	season: string
+	coreRevision: string
+	marketRevision: string | null
+	checkedAt: string
+	eventId: number
+	phase: string
+	playerPool: {
+		state: string
+		checkedAt: string | null
+		message: string | null
+	}
 }
 
 export type ToolRunOptions<T extends LetLetMeToolName = LetLetMeToolName> = {
@@ -190,4 +208,40 @@ export const loadCoreContext = async (
 		CORE_CONTEXT_DOCUMENT
 	)
 	return result.coreEventContext
+}
+
+export const loadSelectionContext = async (
+	options: ToolRunOptions,
+	eventId: number
+): Promise<SelectionContext> => {
+	const result = await executeDocument<{ teamSelectionDesk: SelectionContext }>(
+		options,
+		SELECTION_CONTEXT_DOCUMENT,
+		{ eventId }
+	)
+	return result.teamSelectionDesk
+}
+
+export const loadMarketContext = async (
+	options: ToolRunOptions
+): Promise<{
+	coreEventContext: CoreContext
+	marketSnapshotContext: MarketContext
+}> => executeDocument(options, MARKET_CONTEXT_DOCUMENT)
+
+export const assertSelectionRevision = (
+	core: CoreContext,
+	selection: SelectionContext
+): void => {
+	if (
+		selection.season !== core.season ||
+		selection.coreRevision !== core.revision
+	) {
+		throw new AgentToolError(
+			'UPSTREAM_UNAVAILABLE',
+			'The published LetLetMe revision changed during this request. Retry the tool.',
+			502,
+			true
+		)
+	}
 }

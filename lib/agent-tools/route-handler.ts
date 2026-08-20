@@ -188,18 +188,25 @@ const asAgentToolError = (error: unknown): AgentToolError => {
 const toolErrorResponse = (
 	error: AgentToolError,
 	requestId: string
-): { response: Response; bytes: number } =>
-	jsonResponse(
+): { response: Response; bytes: number } => {
+	// Cloudflare replaces application-origin 502/504 bodies with its own HTML
+	// error page. Keep the machine-readable Agent contract at the public domain
+	// by publishing retryable upstream failures as 503 while preserving the
+	// specific error code in the JSON envelope.
+	const publicStatus =
+		error.status === 502 || error.status === 504 ? 503 : error.status
+	return jsonResponse(
 		{
 			code: error.code,
 			message: error.message,
 			retryable: error.retryable,
 			requestId
 		},
-		error.status,
+		publicStatus,
 		requestId,
 		error.retryAfterSeconds
 	)
+}
 
 const isEnabled = (env: AgentGatewayEnvironment): boolean =>
 	env.AGENT_TOOLS_ENABLED?.trim().toLowerCase() === 'true'
