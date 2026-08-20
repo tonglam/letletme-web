@@ -6,7 +6,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 let _supabaseAdmin: SupabaseClient | undefined
 
-function getSupabaseAdmin(): SupabaseClient {
+export function getSupabaseAdmin(): SupabaseClient {
 	if (_supabaseAdmin) return _supabaseAdmin
 
 	const url = process.env.NEXT_PUBLIC_SUPABASE_URL
