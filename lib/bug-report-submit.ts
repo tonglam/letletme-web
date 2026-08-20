@@ -18,6 +18,10 @@ import {
 	removeStorageObject,
 	uploadBugReportScreenshot,
 } from '@/lib/supabase-storage'
+import {
+	canCleanupBugReportScreenshotAfterDataAttempts,
+	type BugReportDataAttemptOutcome,
+} from '@/lib/bug-report-retry'
 
 export class BugReportSubmitError extends Error {
 	constructor(
@@ -259,15 +263,14 @@ export async function submitBugReportToData({
 		}
 	}
 
-	let cleanupOnDataRejection = false
+	const dataAttemptOutcomes: BugReportDataAttemptOutcome[] = []
 	try {
 		let lastStatus = 502
 		let lastMessage = 'Could not send the report.'
 		for (let attempt = 0; attempt < 2; attempt += 1) {
-			// Cleanup eligibility belongs to the final observed attempt. A parse
-			// failure can trigger a retry, so never carry a prior 4xx decision
-			// into an ambiguous transport outcome.
-			cleanupOnDataRejection = false
+			// Cleanup is decided from the complete attempt history. A parse failure
+			// can trigger a retry, so a later 4xx must not override an earlier
+			// ambiguous outcome.
 			try {
 				const response = await tournamentApiFetch(
 					'/bug-reports',
@@ -290,25 +293,34 @@ export async function submitBugReportToData({
 				// 5xx responses, malformed bodies, and transport errors are ambiguous;
 				// Data may have committed before the response was lost. Leave those
 				// objects for the private-bucket retention/orphan sweep.
-				cleanupOnDataRejection = response.status >= 400 && response.status < 500
 				const result = (await response.json()) as {
 					success?: boolean
 					publicId?: string
 					error?: string
 				}
 				if (response.ok && result.success && typeof result.publicId === 'string') {
+					dataAttemptOutcomes.push('success')
 					return { publicId: result.publicId }
+				}
+				if (response.status >= 400 && response.status < 500) {
+					dataAttemptOutcomes.push('definitive-rejection')
+				} else {
+					dataAttemptOutcomes.push('ambiguous')
 				}
 				lastStatus = response.status >= 400 ? response.status : 502
 				lastMessage = result.error || lastMessage
 				if (response.status < 500 || attempt === 1) break
 			} catch (error) {
+				dataAttemptOutcomes.push('ambiguous')
 				if (attempt === 1) throw error
 			}
 		}
 		throw new BugReportSubmitError(lastMessage, lastStatus)
 	} catch (error) {
-		if (screenshotObjectKey && cleanupOnDataRejection) {
+		if (
+			screenshotObjectKey &&
+			canCleanupBugReportScreenshotAfterDataAttempts(dataAttemptOutcomes)
+		) {
 			try {
 				await removeStorageObject(BUG_REPORT_SCREENSHOT_BUCKET, screenshotObjectKey)
 			} catch (cleanupError) {
