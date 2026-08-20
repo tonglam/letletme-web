@@ -1,7 +1,9 @@
 import type {
 	EntryTournament,
 	TournamentSetupPhase,
-	TournamentSetupStatus
+	TournamentSetupProgressMode,
+	TournamentSetupStatus,
+	TournamentSetupWarningSummary
 } from '@/lib/graphql/operations/tournaments'
 
 export type TournamentLifecycleBadge =
@@ -20,8 +22,15 @@ export type TournamentSetupStatusPayload = {
 	setupCompletedUnits: number
 	setupTotalUnits: number
 	setupProgressUpdatedAt: string | null
+	setupProgressMode: TournamentSetupProgressMode
+	setupAttempt: number
+	setupMaxAttempts: number
+	nextRetryAt: string | null
 	standingsReadyAt: string | null
+	profilesReadyAt: string | null
+	insightsReadyAt: string | null
 	setupHasWarnings: boolean
+	warningSummaries: TournamentSetupWarningSummary[]
 	setupStartedAt: string | null
 	setupFinishedAt: string | null
 }
@@ -50,7 +59,9 @@ export const getTournamentLifecycleBadge = (
 		| 'rosterSyncStatus'
 		| 'setupStatus'
 		| 'standingsReadyAt'
+		| 'insightsReadyAt'
 		| 'setupHasWarnings'
+		| 'warningSummaries'
 	>
 ): TournamentLifecycleBadge => {
 	if (
@@ -63,40 +74,76 @@ export const getTournamentLifecycleBadge = (
 	if (tournament.state === 'INACTIVE') return 'paused'
 	if (!tournament.standingsReadyAt) return 'settingUp'
 	if (tournament.setupStatus !== 'READY') return 'standingsReady'
-	if (tournament.setupHasWarnings) return 'readyWithWarnings'
+	if (
+		tournament.setupHasWarnings ||
+		Boolean(tournament.warningSummaries?.length)
+	) {
+		return 'readyWithWarnings'
+	}
+	if (!tournament.insightsReadyAt) return 'standingsReady'
 	return 'ready'
 }
 
 export const areTournamentInsightsReady = (
 	tournament: Pick<
 		EntryTournament,
-		'setupStatus' | 'setupHasWarnings' | 'standingsReadyAt'
+		'setupStatus' | 'insightsReadyAt' | 'standingsReadyAt'
 	>
 ): boolean =>
 	Boolean(tournament.standingsReadyAt) &&
 	tournament.setupStatus === 'READY' &&
-	!tournament.setupHasWarnings
+	Boolean(tournament.insightsReadyAt)
 
 export const areTournamentStandingsReady = (
 	tournament: Pick<EntryTournament, 'standingsReadyAt'>
 ): boolean => Boolean(tournament.standingsReadyAt)
 
+/**
+ * Profiles can be exhausted without making the insights capability terminal.
+ * Only stop waiting when every warning category that can block insights has
+ * exhausted its bounded repair budget.
+ */
+export const isTournamentInsightsRepairExhausted = (
+	warningSummaries: readonly TournamentSetupWarningSummary[] | null | undefined
+): boolean => {
+	const relevantSummaries = (warningSummaries ?? []).filter(
+		summary => summary.category === 'INSIGHTS' || summary.category === 'RESULTS'
+	)
+	return (
+		relevantSummaries.length > 0 &&
+		relevantSummaries.every(summary => summary.repairExhausted === true)
+	)
+}
+
 export const shouldPollTournamentSetup = ({
 	setupStatus,
+	insightsReadyAt,
+	repairExhausted = false,
 	visible,
 	online
 }: {
 	setupStatus: TournamentSetupStatus
+	insightsReadyAt: string | null | undefined
+	repairExhausted?: boolean
 	visible: boolean
 	online: boolean
 }): boolean =>
 	visible &&
 	online &&
-	(setupStatus === 'PENDING' || setupStatus === 'PROCESSING')
+	(isTournamentSetupInFlight(setupStatus) ||
+		(setupStatus === 'READY' && !insightsReadyAt && !repairExhausted))
 
 export const isTournamentSetupInFlight = (
 	status: TournamentSetupStatus
 ): boolean => status === 'PENDING' || status === 'PROCESSING'
+
+export const isTournamentSetupPollingPending = (
+	setupStatus: TournamentSetupStatus,
+	insightsReadyAt: string | null | undefined,
+	repairExhausted = false
+): boolean =>
+	isTournamentSetupInFlight(setupStatus) ||
+	(setupStatus === 'READY' && !insightsReadyAt && !repairExhausted)
 
 export const isTournamentRosterSyncInFlight = (
 	status: TournamentSetupStatus | null
@@ -117,6 +164,9 @@ export const normalizeTournamentSetupStatus = (
 	const setupPhase = String(
 		payload.setupPhase ?? ''
 	).toUpperCase() as TournamentSetupPhase
+	const setupProgressMode = String(
+		payload.setupProgressMode ?? payload.progressMode ?? 'DETERMINATE'
+	).toUpperCase() as TournamentSetupProgressMode
 	const completed = Number(payload.setupCompletedUnits)
 	const total = Number(payload.setupTotalUnits)
 	if (
@@ -124,6 +174,7 @@ export const normalizeTournamentSetupStatus = (
 		tournamentId <= 0 ||
 		!setupStatusValues.has(setupStatus) ||
 		!setupPhaseValues.has(setupPhase) ||
+		!['DETERMINATE', 'INDETERMINATE'].includes(setupProgressMode) ||
 		!Number.isSafeInteger(completed) ||
 		completed < 0 ||
 		!Number.isSafeInteger(total) ||
@@ -139,9 +190,41 @@ export const normalizeTournamentSetupStatus = (
 		setupPhase,
 		setupCompletedUnits: completed,
 		setupTotalUnits: total,
+		setupProgressMode,
+		setupAttempt: Number.isSafeInteger(Number(payload.setupAttempt))
+			? Number(payload.setupAttempt)
+			: 0,
+		setupMaxAttempts: Number.isSafeInteger(Number(payload.setupMaxAttempts))
+			? Number(payload.setupMaxAttempts)
+			: 3,
+		nextRetryAt: optionalString(payload.nextRetryAt),
 		setupProgressUpdatedAt: optionalString(payload.setupProgressUpdatedAt),
 		standingsReadyAt: optionalString(payload.standingsReadyAt),
+		profilesReadyAt: optionalString(payload.profilesReadyAt),
+		insightsReadyAt: optionalString(payload.insightsReadyAt),
 		setupHasWarnings: payload.setupHasWarnings === true,
+		warningSummaries: Array.isArray(payload.warningSummaries)
+			? payload.warningSummaries
+					.filter((item): item is Record<string, unknown> => {
+						if (!item || typeof item !== 'object' || Array.isArray(item))
+							return false
+						const candidate = item as Record<string, unknown>
+						return (
+							['PROFILES', 'INSIGHTS', 'RESULTS'].includes(
+								String(candidate.category).toUpperCase()
+							) &&
+							Number.isSafeInteger(Number(candidate.affectedCount)) &&
+							Number(candidate.affectedCount) >= 0
+						)
+					})
+					.map(item => ({
+						category: String(
+							item.category
+						).toUpperCase() as TournamentSetupWarningSummary['category'],
+						affectedCount: Number(item.affectedCount),
+						repairExhausted: item.repairExhausted === true
+					}))
+			: [],
 		setupStartedAt: optionalString(payload.setupStartedAt),
 		setupFinishedAt: optionalString(payload.setupFinishedAt)
 	}

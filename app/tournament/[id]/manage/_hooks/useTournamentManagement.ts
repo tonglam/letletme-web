@@ -3,7 +3,9 @@
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import {
 	isTournamentRosterSyncInFlight,
-	isTournamentSetupInFlight
+	isTournamentSetupInFlight,
+	isTournamentSetupPollingPending,
+	isTournamentInsightsRepairExhausted
 } from '@/lib/tournament/lifecycle'
 import { useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
@@ -28,10 +30,17 @@ function serverRevision(t: EntryTournament): string {
 		t.setupPhase,
 		t.setupCompletedUnits,
 		t.setupTotalUnits,
+		t.setupProgressMode,
+		t.setupAttempt,
+		t.setupMaxAttempts,
+		t.nextRetryAt,
 		t.standingsReadyAt,
+		t.profilesReadyAt,
+		t.insightsReadyAt,
 		t.rosterSyncStatus,
 		t.rosterLastSyncedAt,
-		t.setupHasWarnings
+		t.setupHasWarnings,
+		JSON.stringify(t.warningSummaries ?? [])
 	].join('|')
 }
 
@@ -91,7 +100,13 @@ export function useTournamentManagement(tournament: EntryTournament) {
 		currentTournament.rosterSyncStatus
 	)
 	const setupInFlight = isTournamentSetupInFlight(currentTournament.setupStatus)
-	const lifecycleWorkInFlight = rosterSyncInFlight || setupInFlight
+	const lifecycleWorkInFlight =
+		rosterSyncInFlight ||
+		isTournamentSetupPollingPending(
+			currentTournament.setupStatus,
+			currentTournament.insightsReadyAt,
+			isTournamentInsightsRepairExhausted(currentTournament.warningSummaries)
+		)
 
 	useEffect(() => {
 		if (!lifecycleWorkInFlight) return
@@ -150,12 +165,46 @@ export function useTournamentManagement(tournament: EntryTournament) {
 							typeof status.setupTotalUnits === 'number'
 								? status.setupTotalUnits
 								: current.currentTournament.setupTotalUnits,
+						setupProgressMode:
+							status.setupProgressMode === 'INDETERMINATE' ||
+							status.setupProgressMode === 'DETERMINATE'
+								? status.setupProgressMode
+								: current.currentTournament.setupProgressMode,
+						setupAttempt:
+							typeof status.setupAttempt === 'number'
+								? status.setupAttempt
+								: current.currentTournament.setupAttempt,
+						setupMaxAttempts:
+							typeof status.setupMaxAttempts === 'number'
+								? status.setupMaxAttempts
+								: current.currentTournament.setupMaxAttempts,
+						nextRetryAt:
+							typeof status.nextRetryAt === 'string'
+								? status.nextRetryAt
+								: status.nextRetryAt === null
+									? null
+									: current.currentTournament.nextRetryAt,
 						standingsReadyAt:
 							typeof status.standingsReadyAt === 'string'
 								? status.standingsReadyAt
 								: status.standingsReadyAt === null
 									? null
 									: current.currentTournament.standingsReadyAt,
+						profilesReadyAt:
+							typeof status.profilesReadyAt === 'string'
+								? status.profilesReadyAt
+								: status.profilesReadyAt === null
+									? null
+									: current.currentTournament.profilesReadyAt,
+						insightsReadyAt:
+							typeof status.insightsReadyAt === 'string'
+								? status.insightsReadyAt
+								: status.insightsReadyAt === null
+									? null
+									: current.currentTournament.insightsReadyAt,
+						warningSummaries: Array.isArray(status.warningSummaries)
+							? (status.warningSummaries as EntryTournament['warningSummaries'])
+							: current.currentTournament.warningSummaries,
 						setupHasWarnings: status.setupHasWarnings === true
 					}
 				}))
@@ -244,7 +293,10 @@ export function useTournamentManagement(tournament: EntryTournament) {
 						...current,
 						setupStatus: 'PENDING',
 						setupPhase: 'QUEUED',
-						setupHasWarnings: false
+						setupHasWarnings: false,
+						warningSummaries: [],
+						profilesReadyAt: null,
+						insightsReadyAt: null
 					}
 				}
 				if (action === 'retry_roster') {

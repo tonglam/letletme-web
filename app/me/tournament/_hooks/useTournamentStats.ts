@@ -9,12 +9,13 @@ import {
 	type TournamentEntryRankingSummary,
 	type TournamentEntryRankingSummaryResponse,
 	type TournamentEventResultItem,
-	type TournamentSeasonSnapshotApi,
+	type TournamentSeasonSnapshotApi
 } from '@/lib/graphql/operations/tournaments'
 import { usePageActive } from '@/hooks/use-page-active'
 import {
 	areTournamentInsightsReady,
-	isTournamentSetupInFlight,
+	isTournamentInsightsRepairExhausted,
+	isTournamentSetupPollingPending
 } from '@/lib/tournament/lifecycle'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
@@ -23,7 +24,7 @@ import {
 	fetchTournamentEventResultsCached,
 	fetchTournamentSeasonSnapshotCached,
 	loadTournamentSeasonPath,
-	type TournamentPathPoint,
+	type TournamentPathPoint
 } from '../_lib/tournament-stats-data'
 import {
 	clearRankingInFlight,
@@ -35,7 +36,7 @@ import {
 	seedRanking,
 	seedSeasonSnapshot,
 	setRankingInFlight,
-	getAllCachedPlayerMeta,
+	getAllCachedPlayerMeta
 } from '../_lib/tournament-stats-cache'
 import {
 	buildTournamentSeasonField,
@@ -46,7 +47,7 @@ import {
 	type TournamentSeasonField,
 	type TournamentSeasonMe,
 	type TournamentStatsViewModel,
-	resolveTournamentStatsLoadState,
+	resolveTournamentStatsLoadState
 } from '../_lib/tournament-stats-model'
 import { buildTournamentEventResultSeeds } from '../_lib/tournament-stats-seed'
 
@@ -77,12 +78,12 @@ export interface TournamentStatsClientProps {
 async function fetchRankingCached(
 	tournamentId: number,
 	eventId: number,
-	entryId: number,
+	entryId: number
 ): Promise<TournamentEntryRankingSummary | null> {
 	const cached = peekRanking<TournamentEntryRankingSummary>(
 		tournamentId,
 		eventId,
-		entryId,
+		entryId
 	)
 	if (cached) return cached
 	const key = rankingKey(tournamentId, eventId, entryId)
@@ -92,7 +93,7 @@ async function fetchRankingCached(
 	const request = executeQuery<TournamentEntryRankingSummaryResponse>(
 		GET_TOURNAMENT_ENTRY_RANKING_SUMMARY,
 		{ tournamentId, eventId, entryId },
-		{ cache: 'no-store' },
+		{ cache: 'no-store' }
 	)
 		.then(response => {
 			const summary = response.tournamentEntryRankingSummary
@@ -125,7 +126,7 @@ export function useTournamentStats({
 	initialUsedFallbackGameweek = false,
 	initialError,
 	loadGameweekData = false,
-	loadSeasonPath = false,
+	loadSeasonPath = false
 }: TournamentStatsClientProps) {
 	const seasonFieldSeed =
 		initialSeasonFieldRows && initialSeasonFieldRows.length > 0
@@ -146,18 +147,13 @@ export function useTournamentStats({
 				sliceGameweek: initialSliceGameweek,
 				seasonRows: seasonFieldSeed,
 				sliceRows: initialCurrentRows,
-				previousRows: initialPreviousRows,
+				previousRows: initialPreviousRows
 			}).forEach(seed => seedEventResults(tid, seed.eventId, seed.rows))
 			if (initialSeasonSnapshot) {
 				seedSeasonSnapshot(tid, initialDataGameweek, initialSeasonSnapshot)
 			}
 			if (initialRankingSummary) {
-				seedRanking(
-					tid,
-					initialDataGameweek,
-					entryId,
-					initialRankingSummary,
-				)
+				seedRanking(tid, initialDataGameweek, entryId, initialRankingSummary)
 			}
 		}
 		Object.entries(initialPlayerMeta).forEach(([id, meta]) => {
@@ -173,12 +169,12 @@ export function useTournamentStats({
 		initialSeasonSnapshot,
 		initialSelectedTournamentId,
 		initialSliceGameweek,
-		seasonFieldSeed,
+		seasonFieldSeed
 	])
 
 	const initialSelectedTournament =
 		initialTournaments.find(
-			item => String(item.id) === initialSelectedTournamentId,
+			item => String(item.id) === initialSelectedTournamentId
 		) ?? null
 	const initialStats =
 		initialSelectedTournament &&
@@ -190,19 +186,19 @@ export function useTournamentStats({
 					initialCurrentRows,
 					initialPreviousRows,
 					{ ...getAllCachedPlayerMeta(), ...initialPlayerMeta },
-					entryId,
+					entryId
 				)
 			: null
 
 	const [tournaments, setTournaments] = useState(initialTournaments)
 	const [selectedTournamentId, setSelectedTournamentIdState] = useState(
-		initialSelectedTournamentId,
+		initialSelectedTournamentId
 	)
 	const [dataGameweek, setDataGameweek] = useState<number | null>(
-		initialDataGameweek,
+		initialDataGameweek
 	)
 	const [usedFallbackGameweek, setUsedFallbackGameweek] = useState(
-		initialUsedFallbackGameweek,
+		initialUsedFallbackGameweek
 	)
 	const [tournamentStats, setTournamentStats] =
 		useState<TournamentStatsViewModel | null>(initialStats)
@@ -214,7 +210,7 @@ export function useTournamentStats({
 	>(() =>
 		initialDataGameweek != null && seasonFieldSeed.length > 0
 			? seasonFieldSeed
-			: [],
+			: []
 	)
 	/** Phase 2 server snapshot for Season dimension A (preferred) */
 	const [seasonSnapshot, setSeasonSnapshot] =
@@ -227,7 +223,7 @@ export function useTournamentStats({
 	const [selectedGameweek, setSelectedGameweek] = useState(
 		initialSliceGameweek && initialSliceGameweek > 0
 			? initialSliceGameweek
-			: initialCurrentGameweek,
+			: initialCurrentGameweek
 	)
 	const currentGameweek = initialCurrentGameweek
 
@@ -235,7 +231,7 @@ export function useTournamentStats({
 		() =>
 			tournaments.find(item => String(item.id) === selectedTournamentId) ??
 			null,
-		[selectedTournamentId, tournaments],
+		[selectedTournamentId, tournaments]
 	)
 	const insightsReady = selectedTournament
 		? areTournamentInsightsReady(selectedTournament)
@@ -243,7 +239,7 @@ export function useTournamentStats({
 	const statsLoadState = resolveTournamentStatsLoadState({
 		isBootstrapping: false,
 		hasSelectedTournament: Boolean(selectedTournament),
-		insightsReady,
+		insightsReady
 	})
 	const filteredStandings = useMemo(() => {
 		if (!tournamentStats) return []
@@ -252,14 +248,14 @@ export function useTournamentStats({
 		return tournamentStats.standings.filter(
 			row =>
 				row.teamName.toLowerCase().includes(query) ||
-				row.managerName.toLowerCase().includes(query),
+				row.managerName.toLowerCase().includes(query)
 		)
 	}, [standingsSearch, tournamentStats])
 
 	const seasonField: TournamentSeasonField | null = useMemo(() => {
 		const fromSnap = buildTournamentSeasonFieldFromSnapshot(
 			seasonSnapshot,
-			entryId,
+			entryId
 		)
 		if (fromSnap) return fromSnap
 		if (dataGameweek == null || seasonFieldRows.length === 0) return null
@@ -268,10 +264,7 @@ export function useTournamentStats({
 
 	const seasonMe: TournamentSeasonMe | null = useMemo(() => {
 		if (dataGameweek == null && !seasonSnapshot) return null
-		const asOf =
-			seasonSnapshot?.asOfEventId ??
-			dataGameweek ??
-			0
+		const asOf = seasonSnapshot?.asOfEventId ?? dataGameweek ?? 0
 		if (asOf < 1) return null
 		return buildTournamentSeasonMe(rankingSummary, seasonField, asOf)
 	}, [dataGameweek, rankingSummary, seasonField, seasonSnapshot])
@@ -293,7 +286,11 @@ export function useTournamentStats({
 			!pageActive ||
 			!selectedTournament ||
 			insightsReady ||
-			!isTournamentSetupInFlight(selectedTournament.setupStatus)
+			!isTournamentSetupPollingPending(
+				selectedTournament.setupStatus,
+				selectedTournament.insightsReadyAt,
+				isTournamentInsightsRepairExhausted(selectedTournament.warningSummaries)
+			)
 		) {
 			return
 		}
@@ -305,7 +302,7 @@ export function useTournamentStats({
 				const data = await executeQuery<EntryTournamentsResponse>(
 					GET_ENTRY_TOURNAMENTS,
 					{ entryId },
-					{ cache: 'no-store' },
+					{ cache: 'no-store' }
 				)
 				if (!cancelled) setTournaments(data.entryTournaments)
 			} catch (pollError) {
@@ -334,14 +331,14 @@ export function useTournamentStats({
 				let latestGameweek = initialCurrentGameweek
 				let currentRows = await fetchTournamentEventResultsCached(
 					tournament.id,
-					latestGameweek,
+					latestGameweek
 				)
 				let fallback = false
 				// Critical path: at most one previous GW (match SSR). Avoid 1+4 full-field probes.
 				if (currentRows.length === 0 && latestGameweek > 1) {
 					const prevRows = await fetchTournamentEventResultsCached(
 						tournament.id,
-						latestGameweek - 1,
+						latestGameweek - 1
 					)
 					if (prevRows.length > 0) {
 						latestGameweek = latestGameweek - 1
@@ -365,10 +362,7 @@ export function useTournamentStats({
 				// Phase 2: snapshot (field) + ranking (me + gaps) in parallel
 				const [ranking, snapshot] = await Promise.all([
 					fetchRankingCached(tournament.id, latestGameweek, entryId),
-					fetchTournamentSeasonSnapshotCached(
-						tournament.id,
-						latestGameweek,
-					),
+					fetchTournamentSeasonSnapshotCached(tournament.id, latestGameweek)
 				])
 				if (cancelled) return
 				setRankingSummary(ranking)
@@ -428,7 +422,7 @@ export function useTournamentStats({
 			try {
 				const currentRows = await fetchTournamentEventResultsCached(
 					tournament.id,
-					gw,
+					gw
 				)
 				if (cancelled) return
 				const captainIds = currentRows
@@ -438,7 +432,7 @@ export function useTournamentStats({
 					gw > 1
 						? fetchTournamentEventResultsCached(tournament.id, gw - 1)
 						: Promise.resolve([] as TournamentEventResultItem[]),
-					fetchPlayerMetaByIds(captainIds),
+					fetchPlayerMetaByIds(captainIds)
 				])
 				if (cancelled) return
 				setTournamentStats(
@@ -448,8 +442,8 @@ export function useTournamentStats({
 						currentRows,
 						previousRows,
 						{ ...getAllCachedPlayerMeta(), ...playerMeta },
-						entryId,
-					),
+						entryId
+					)
 				)
 			} catch (err) {
 				console.error('[tournament stats] gameweek load failed:', err)
@@ -473,7 +467,7 @@ export function useTournamentStats({
 		selectedGameweek,
 		selectedTournament,
 		statsLoadState,
-		t,
+		t
 	])
 
 	// Deferred season path — Season tab only (multi-GW fetch; keep off critical GW path)
@@ -506,7 +500,7 @@ export function useTournamentStats({
 			toGw,
 			onProgress: points => {
 				if (!cancelled) setSeasonPath(points)
-			},
+			}
 		})
 			.then(points => {
 				if (!cancelled) setSeasonPath(points)
@@ -521,13 +515,7 @@ export function useTournamentStats({
 		return () => {
 			cancelled = true
 		}
-	}, [
-		dataGameweek,
-		entryId,
-		insightsReady,
-		loadSeasonPath,
-		selectedTournament,
-	])
+	}, [dataGameweek, entryId, insightsReady, loadSeasonPath, selectedTournament])
 
 	return {
 		currentGameweek,
@@ -551,6 +539,6 @@ export function useTournamentStats({
 		standingsSearch,
 		tournamentStats,
 		tournaments,
-		usedFallbackGameweek,
+		usedFallbackGameweek
 	}
 }

@@ -65,72 +65,80 @@ export default function CreateTournamentClient() {
 
 				<FormProvider {...state.form}>
 					<form
+						id="tournament-create-form"
 						onSubmit={state.form.handleSubmit(state.onSubmit)}
 						noValidate
-						inert={!hydrated || state.isSubmitting}
 						aria-busy={!hydrated || state.isSubmitting}
 					>
-						<TournamentCreationModeCard
-							mode={state.creationMode}
-							onModeChange={state.changeCreationMode}
-						/>
+						<div
+							inert={
+								!hydrated ||
+								state.isSubmitting ||
+								Boolean(state.createdTournamentId)
+							}
+						>
+							<TournamentCreationModeCard
+								mode={state.creationMode}
+								onModeChange={state.changeCreationMode}
+							/>
 
-						{state.creationMode !== 'custom' ? (
-							<>
-								<ClassicLeagueImportCard
-									mode={state.creationMode}
-									fetchParticipants={state.fetchParticipants}
-									isLoading={state.isLoadingParticipants}
-									leagueUrl={state.leagueUrl}
-									leagueUrlState={state.leagueUrlState}
-									loadedLeague={state.loadedLeague}
-									participantCount={state.participants.length}
-									participantError={state.participantError}
-								/>
-								{state.loadedLeague ? (
+							{state.creationMode !== 'custom' ? (
+								<>
+									<ClassicLeagueImportCard
+										mode={state.creationMode}
+										fetchParticipants={state.fetchParticipants}
+										isLoading={state.isLoadingParticipants}
+										leagueUrl={state.leagueUrl}
+										leagueUrlState={state.leagueUrlState}
+										loadedLeague={state.loadedLeague}
+										participantCount={state.participants.length}
+										participantError={state.participantError}
+									/>
+									{state.loadedLeague ? (
+										<TournamentInformationCard
+											isCheckingName={state.isCheckingName}
+											isNameAvailable={state.isNameAvailable}
+											nameCheckMessage={state.nameCheckMessage}
+										/>
+									) : null}
+								</>
+							) : (
+								<>
 									<TournamentInformationCard
 										isCheckingName={state.isCheckingName}
 										isNameAvailable={state.isNameAvailable}
 										nameCheckMessage={state.nameCheckMessage}
 									/>
-								) : null}
-							</>
-						) : (
-							<>
-								<TournamentInformationCard
-									isCheckingName={state.isCheckingName}
-									isNameAvailable={state.isNameAvailable}
-									nameCheckMessage={state.nameCheckMessage}
-								/>
-								<TournamentParticipantsCard
-									applyAutoMode={state.applyAutoMode}
-									fetchParticipants={state.fetchParticipants}
-									isLoading={state.isLoadingParticipants}
-									leagueUrl={state.leagueUrl}
-									leagueUrlState={state.leagueUrlState}
-									participantError={state.participantError}
-									participants={state.participants}
-									participantsLoaded={state.participantsLoaded}
-									participantSource={state.participantSource}
-									selectedParticipantIds={state.selectedParticipantIds}
-									toggleAllParticipants={state.toggleAllParticipants}
-									toggleParticipant={state.toggleParticipant}
-								/>
-								{state.participantsLoaded ? (
-									<TournamentGroupPhaseCard
-										groupFormat={state.groupFormat}
-										knockoutFormat={state.knockoutFormat}
-										plan={state.plan}
+									<TournamentParticipantsCard
+										applyAutoMode={state.applyAutoMode}
+										fetchParticipants={state.fetchParticipants}
+										isLoading={state.isLoadingParticipants}
+										leagueUrl={state.leagueUrl}
+										leagueUrlState={state.leagueUrlState}
+										participantError={state.participantError}
+										participants={state.participants}
+										participantsLoaded={state.participantsLoaded}
+										participantSource={state.participantSource}
+										selectedParticipantIds={state.selectedParticipantIds}
+										toggleAllParticipants={state.toggleAllParticipants}
+										toggleParticipant={state.toggleParticipant}
 									/>
-								) : null}
-								{state.plan.groupReady ? (
-									<TournamentKnockoutPhaseCard
-										knockoutFormat={state.knockoutFormat}
-										plan={state.plan}
-									/>
-								) : null}
-							</>
-						)}
+									{state.participantsLoaded ? (
+										<TournamentGroupPhaseCard
+											groupFormat={state.groupFormat}
+											knockoutFormat={state.knockoutFormat}
+											plan={state.plan}
+										/>
+									) : null}
+									{state.plan.groupReady ? (
+										<TournamentKnockoutPhaseCard
+											knockoutFormat={state.knockoutFormat}
+											plan={state.plan}
+										/>
+									) : null}
+								</>
+							)}
+						</div>
 						<TournamentCreateActions
 							canSubmit={canSubmit}
 							creationMode={state.creationMode}
@@ -139,6 +147,7 @@ export default function CreateTournamentClient() {
 							participantCount={state.plan.totalEntries}
 							submitError={state.submitError}
 							submitSuccess={state.submitSuccess}
+							onContinueCreating={state.resetForNewTournament}
 						/>
 					</form>
 				</FormProvider>
