@@ -38,7 +38,10 @@ const required = (formData: FormData, key: string): string => {
 export async function publishBriefingWeekEditionAction(formData: FormData) {
 	const actorId = await requireAdmin('publisher')
 	const editionId = required(formData, 'editionId')
-	const expectedFrozenSha256 = required(formData, 'expectedFrozenSha256')
+	const expectedFrozenSha256 = required(
+		formData,
+		'expectedFrozenSha256'
+	).toLowerCase()
 	if (!/^[0-9a-f]{64}$/i.test(expectedFrozenSha256))
 		throw new Error('expectedFrozenSha256 is invalid')
 	const validUntilValue = formData.get('validUntil')

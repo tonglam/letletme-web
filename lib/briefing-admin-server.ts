@@ -231,7 +231,7 @@ export function markBriefingWeekEditionReady(
 ) {
 	return contentCommand<{
 		editionId: string
-		status: 'ready'
+		status: 'READY'
 		frozenSha256: string
 		replayed: boolean
 	}>(
