@@ -124,7 +124,7 @@ const nextConfig = {
 	// initialization even before its auth guard runs.
 	serverExternalPackages: ['sharp'],
 	outputFileTracingIncludes: {
-		'/*': [
+		'/api/profile/avatar': [
 			'node_modules/@img/sharp-linux-x64/**/*',
 			'node_modules/@img/sharp-libvips-linux-x64/**/*'
 		]
