@@ -304,17 +304,15 @@ function comparableWinner(
 function TimelineCell({
 	profile,
 	point,
-	comparisonPoint,
 	maxPoints,
 	accent,
-	comparison
+	signalWinners
 }: {
 	profile: PlayerStateProfileData | null
 	point: PlayerSeasonTimelinePoint | null
-	comparisonPoint: PlayerSeasonTimelinePoint | null
 	maxPoints: number
 	accent: 'primary' | 'compare'
-	comparison: boolean
+	signalWinners: Array<'primary' | 'comparison' | null>
 }) {
 	const t = useTranslations('PlayerStats')
 	const format = useFormatter()
@@ -339,14 +337,6 @@ function TimelineCell({
 			</div>
 		)
 	}
-	const winnerFor = (index: number) =>
-		comparison
-			? comparableWinner(
-					point.signals[index],
-					comparisonPoint?.signals[index],
-					point.position === comparisonPoint?.position
-				)
-			: null
 	const barWidth =
 		point.phase === 'COMPLETED' && point.fplTotalPoints != null
 			? Math.max(0, Math.min(100, (point.fplTotalPoints / maxPoints) * 100))
@@ -402,7 +392,10 @@ function TimelineCell({
 					<span>{t('timeline.signalsLabel')}</span>
 				</div>
 				{point.signals.map((signal, index) => {
-					const winner = winnerFor(index)
+					const winner = signalWinners[index] ?? null
+					const currentCellWins =
+						(accent === 'primary' && winner === 'primary') ||
+						(accent === 'compare' && winner === 'comparison')
 					return (
 						<div
 							key={signal.code}
@@ -414,14 +407,8 @@ function TimelineCell({
 							<span
 								className={cn(
 									'shrink-0 font-medium tabular-nums',
-									winner === 'primary' &&
-										(accent === 'primary'
-											? 'text-primary-ink'
-											: 'text-warning'),
-									winner === 'comparison' &&
-										(accent === 'primary'
-											? 'text-warning'
-											: 'text-primary-ink'),
+									currentCellWins &&
+										(accent === 'primary' ? 'text-primary-ink' : 'text-warning'),
 									signal.analysisStatus !== 'READY' &&
 										'font-normal text-muted-foreground'
 								)}
@@ -593,6 +580,12 @@ function FragmentRow({
 }) {
 	const t = useTranslations('PlayerStats')
 	const seasonId = `ps-history-season-${season}`
+	const signalWinners =
+		first && second && first.position === second.position
+			? first.signals.map((signal, index) =>
+					comparableWinner(signal, second.signals[index], true)
+			  )
+			: []
 	return (
 		<div
 			role="row"
@@ -622,10 +615,9 @@ function FragmentRow({
 				<TimelineCell
 					profile={profile}
 					point={first}
-					comparisonPoint={second}
 					maxPoints={maxPoints}
 					accent="primary"
-					comparison={comparison !== null}
+					signalWinners={signalWinners}
 				/>
 			</div>
 			{comparison ? (
@@ -637,10 +629,9 @@ function FragmentRow({
 					<TimelineCell
 						profile={comparisonProfile}
 						point={second}
-						comparisonPoint={first}
 						maxPoints={maxPoints}
 						accent="compare"
-						comparison
+						signalWinners={signalWinners}
 					/>
 				</div>
 			) : null}

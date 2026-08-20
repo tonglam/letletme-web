@@ -52,18 +52,19 @@ function writeRecentPlayers(
 }
 
 function withEmptyStateContext(
-	core: PlayerStateOverviewData
+	core: PlayerStateOverviewData,
+	eventId?: number
 ): PlayerStateProfileData {
 	const seasonTimeline = Array.isArray(core.seasonTimeline)
 		? core.seasonTimeline
-		: []
-	const currentPoint = seasonTimeline.find(
+		: null
+	const currentPoint = seasonTimeline?.find(
 		point => point.season === core.season
 	)
 	return {
 		...core,
 		position: core.profileRadar?.position ?? currentPoint?.position ?? 0,
-		asOfEventId: core.profileRadar?.asOfEventId ?? null,
+		asOfEventId: core.profileRadar?.asOfEventId ?? eventId ?? null,
 		reasons: core.reasons.map(reason => ({ code: reason.code })),
 		profileRadar: core.profileRadar
 			? {
@@ -80,14 +81,19 @@ function withEmptyStateContext(
 					}))
 				}
 			: null,
-		seasonTimeline: seasonTimeline.map(point => ({
-			...point,
-			signals: point.signals.map(signal => ({
-				...signal,
-				provider: signal.code.startsWith('UNDERSTAT_') ? 'UNDERSTAT' : 'FPL',
-				sampleMinutes: null
-			}))
-		})),
+		seasonTimeline:
+			seasonTimeline === null
+				? null
+				: seasonTimeline.map(point => ({
+						...point,
+						signals: point.signals.map(signal => ({
+							...signal,
+							provider: signal.code.startsWith('UNDERSTAT_')
+								? 'UNDERSTAT'
+								: 'FPL',
+							sampleMinutes: null
+						}))
+					})),
 		dimensions: core.dimensions.map(dimension => ({
 			...dimension,
 			metrics: []
@@ -159,7 +165,7 @@ export function usePlayerDetailSlot({
 	const t = useTranslations('PlayerStats')
 	const initialDetail = initialEntry?.overview ?? null
 	const initialState = isCoreState(initialEntry?.state)
-		? withEmptyStateContext(initialEntry.state)
+		? withEmptyStateContext(initialEntry.state, eventId)
 		: null
 	const [selectedPlayer, setSelectedPlayer] =
 		useState<PlayerDirectoryOption | null>(() =>
@@ -270,7 +276,7 @@ export function usePlayerDetailSlot({
 						setPlayerDetail(detail)
 						setSelectedPlayer(playerDetailToDirectoryOption(detail))
 						if (isCoreState(entry?.state)) {
-							setPlayerStateProfile(withEmptyStateContext(entry.state))
+							setPlayerStateProfile(withEmptyStateContext(entry.state, eventId))
 						} else {
 							setPlayerStateProfile(null)
 							setStateError(t('stateLoadFailed'))

@@ -496,7 +496,7 @@ export interface PlayerStateProfileData {
 		metricCoverage: string[]
 		limitations: string[]
 	}
-	seasonTimeline: PlayerSeasonTimelinePoint[]
+	seasonTimeline: PlayerSeasonTimelinePoint[] | null
 }
 
 export type PlayerStateProfileCoreData = Omit<
@@ -539,7 +539,7 @@ export type PlayerStateOverviewData = Pick<
 			'kind' | 'rating' | 'direction' | 'confidence' | 'reasonCodes'
 		>
 	>
-	seasonTimeline: PlayerStateOverviewTimelinePoint[]
+	seasonTimeline?: PlayerStateOverviewTimelinePoint[] | null
 }
 
 export type PlayerStateProcessData = Pick<
