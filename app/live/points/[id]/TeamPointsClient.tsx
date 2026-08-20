@@ -16,7 +16,7 @@ import {
 } from '@/lib/graphql/operations/entries'
 import { ArrowLeft } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { LivePointsDashboard } from '../_components/LivePointsDashboard'
 import { LivePointsLoading } from '../_components/LivePointsLoading'
 import { useLivePoints } from '../_hooks/useLivePoints'
@@ -49,18 +49,27 @@ export default function TeamPointsClient({
 		initialSnapshot
 	})
 	const [overall, setOverall] = useState(initialOverall)
+	const overallLoadedKeyRef = useRef<string | null>(
+		initialOverall != null ? `${entryId}:${initialEventId}` : null
+	)
 
 	useEffect(() => {
 		setOverall(initialOverall)
-	}, [initialOverall])
+		overallLoadedKeyRef.current =
+			initialOverall != null ? `${entryId}:${initialEventId}` : null
+	}, [entryId, initialEventId, initialOverall])
 
 	useEffect(() => {
 		const selectedGw =
 			livePoints.selectedGameweek ?? livePoints.currentGameweek
 		if (entryId <= 0 || selectedGw !== livePoints.currentGameweek) {
 			setOverall(undefined)
+			overallLoadedKeyRef.current = null
 			return
 		}
+		const overallKey = `${entryId}:${livePoints.currentGameweek}`
+		if (overallLoadedKeyRef.current === overallKey) return
+		overallLoadedKeyRef.current = overallKey
 
 		let cancelled = false
 		void executeQuery<EntrySummaryResponse>(
@@ -79,6 +88,7 @@ export default function TeamPointsClient({
 				})
 			})
 			.catch(error => {
+				if (!cancelled) overallLoadedKeyRef.current = null
 				console.warn('[live points] overall snapshot fetch failed:', error)
 			})
 

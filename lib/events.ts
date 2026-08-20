@@ -1,4 +1,3 @@
-import { CORE_AUTHORITY_FETCH_OPTIONS } from '@/lib/core-authority-cache-policy'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import { pickCurrentEventId } from '@/lib/events-current'
 import {
@@ -7,6 +6,9 @@ import {
 	type CoreEventContextData,
 	type EventsResponse
 } from '@/lib/graphql/operations/events'
+import { CacheTag, RevalidateSeconds } from '@/lib/cache-policy'
+import { coalescePublicSeed } from '@/lib/public-seed-singleflight'
+import { unstable_cache } from 'next/cache'
 import { cache } from 'react'
 
 export { pickCurrentEventId } from '@/lib/events-current'
@@ -34,20 +36,32 @@ const isCoreEventContext = (
 		(value.nextDeadlineTime === null || typeof value.nextDeadlineTime === 'string'),
 	)
 
-/** Read the authoritative event context without converting failures into an empty state. */
-export const getCoreEventContext = cache(
+const loadCoreEventContextFromOrigin = unstable_cache(
 	async (): Promise<CoreEventContextData> => {
-		const response = await executePublicServerQuery<CoreEventContextResponse>(
-			GET_CORE_EVENT_CONTEXT,
-			undefined,
-			CORE_AUTHORITY_FETCH_OPTIONS,
-		)
-		if (!isCoreEventContext(response.coreEventContext)) {
-			throw new TypeError('Core event context response was invalid')
-		}
-		return response.coreEventContext
+		return coalescePublicSeed('core-event-context', async () => {
+			console.info('[public graphql cache]', {
+				key: 'core-event-context',
+				workload: 'home',
+				cacheResult: 'miss-fill'
+			})
+			const response = await executePublicServerQuery<CoreEventContextResponse>(
+				'home',
+				GET_CORE_EVENT_CONTEXT,
+				undefined,
+				{ cache: 'no-store', timeoutMs: 5_000 }
+			)
+			if (!isCoreEventContext(response.coreEventContext)) {
+				throw new TypeError('Core event context response was invalid')
+			}
+			return response.coreEventContext
+		})
 	},
+	['graphql', 'core-event-context', 'v1'],
+	{ revalidate: RevalidateSeconds.events, tags: [CacheTag.events] }
 )
+
+/** Request-coalesced read backed by the cross-instance Next Data Cache. */
+export const getCoreEventContext = cache(loadCoreEventContextFromOrigin)
 
 export const getCurrentAndNextEvents = cache(
 	async (): Promise<EventsResponse | null> => {

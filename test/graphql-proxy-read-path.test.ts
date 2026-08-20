@@ -21,7 +21,39 @@ describe('GraphQL proxy read path', () => {
 		assert.doesNotMatch(route, /checkDatabaseRateLimit|databaseRateLimit|graphql-proxy-ip/)
 		assert.doesNotMatch(route, /from ['"]@\/lib\/http-security['"]/)
 		assert.match(route, /await import\(['"]@\/lib\/auth['"]\)/)
-		assert.match(route, /buildIngressContextHeaders\(subject, secret\)/)
+		assert.match(route, /buildGraphQLProxyIngress/)
+		assert.match(route, /copySafeGraphQLUpstreamHeaders/)
+		assert.match(route, /includeRateLimitMetadata: cacheControl === 'no-store'/)
+		assert.match(route, /if \(cacheControl === 'no-store'\) safeHeaders\.set\('X-Request-Id'/)
+		assert.doesNotMatch(route, /forwardHeaders\[[^\]]*Device-Id/)
+	})
+
+	it('attributes public API cache fills to the originating browser identity', () => {
+		const server = readFileSync(new URL('../lib/graphql-server.ts', import.meta.url), 'utf8')
+		assert.match(server, /new AsyncLocalStorage<PublicRouteIngressContext>/)
+		assert.match(server, /buildOpaqueRateLimitSubject\(request\.headers, secret\)/)
+		assert.match(server, /trafficClass: 'web_browser'/)
+		assert.match(server, /routeIngress \? 'web_browser' : 'web_rsc'/)
+
+		for (const path of [
+			'../app/api/live/context/route.ts',
+			'../app/api/live/matches/route.ts',
+			'../app/api/live/matches/[fixtureId]/players/route.ts',
+			'../app/api/fixtures/window/route.ts',
+			'../app/api/gameweek/desk/route.ts',
+			'../app/api/home/fixtures/route.ts',
+			'../app/api/player-stats/desk/route.ts',
+			'../app/api/trends/public-desk/route.ts'
+		]) {
+			const route = readFileSync(new URL(path, import.meta.url), 'utf8')
+			assert.match(route, /withPublicRouteGraphQLIngress\(request/)
+		}
+	})
+
+	it('logs the effective signed workload for legacy ingress', () => {
+		const route = readFileSync(new URL('../app/api/graphql/route.ts', import.meta.url), 'utf8')
+		assert.match(route, /const effectiveWorkload = ingress\?\.ok \? ingress\.workload : workload/)
+		assert.match(route, /workload: effectiveWorkload/)
 	})
 
 	it('adds trusted server context to direct RSC GraphQL requests', () => {
@@ -30,8 +62,10 @@ describe('GraphQL proxy read path', () => {
 		assert.doesNotMatch(client, /server-user-context|getServerUserContextHeaders/)
 		assert.doesNotMatch(client, /localhost:3000\/api\/graphql/)
 		assert.match(server, /getServerUserContextHeaders/)
-		assert.match(server, /rate-limit:web-public-rsc/)
-		assert.match(server, /buildIngressContextHeaders/)
+		assert.match(server, /buildOpaqueRscSubject\(workload, secret\)/)
+		assert.match(server, /buildIngressContextHeadersV2/)
+		assert.match(server, /workload: GraphQLWorkload/)
+		assert.match(server, /capacityRequestIdForCurrentRun/)
 		assert.doesNotMatch(server, /getGraphQLServiceTokenHeaders/)
 	})
 })

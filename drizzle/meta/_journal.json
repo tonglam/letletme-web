@@ -8,6 +8,13 @@
       "when": 1786400991834,
       "tag": "0000_auth_baseline",
       "breakpoints": true
-    }
-  ]
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787000000000,
+      "tag": "0001_bug_report_storage_nonces",
+			"breakpoints": true
+		}
+	]
 }

@@ -327,6 +327,8 @@ test('Market stays accessible and usable on a 390px Simplified Chinese screen', 
 		page.getByRole('heading', { level: 1, name: '市场' })
 	).toBeVisible()
 	await expect(page.getByText(/比较区间/).first()).toBeVisible()
+	const initialAccessibility = await new AxeBuilder({ page }).analyze()
+	expect(initialAccessibility.violations).toEqual([])
 
 	await expect(page.getByRole('list', { name: '上升' })).toBeVisible()
 	await expect(page.getByText('+1 个百分点').first()).toBeVisible()
@@ -335,16 +337,29 @@ test('Market stays accessible and usable on a 390px Simplified Chinese screen', 
 	await expect(page).toHaveURL(/period=GAMEWEEK/)
 	await expect(page.getByText('GW2 · 截止').first()).toBeVisible()
 
-	await page.getByRole('link', { name: '近 7 日' }).click()
-	await expect(page).toHaveURL(/period=ROLLING_7D/)
-	await expect(page.getByText(/比较区间/).first()).toBeVisible()
+	await page.goto('/zh-CN/explore/market?period=ROLLING_7D')
+	await expect(page).toHaveURL(/\/zh-CN\/explore\/market$/)
+	await expect(page.getByRole('link', { name: '近 7 日' })).toHaveCount(0)
 
 	await page.getByRole('link', { name: '每日' }).click()
-	await page.locator('a[href*="date=2026-08-02"]').click()
-	await expect(page).toHaveURL(/period=DAILY.*date=2026-08-02/)
+	const dailyDateLink = page.getByRole('link', {
+		name: '2026年8月2日',
+		exact: true
+	})
+	await expect(dailyDateLink).toBeVisible()
+	await dailyDateLink.click()
+	await expect
+		.poll(() => {
+			const url = new URL(page.url())
+			return {
+				period: url.searchParams.get('period'),
+				date: url.searchParams.get('date')
+			}
+		})
+		.toEqual({ period: 'DAILY', date: '2026-08-02' })
 	await expect(page.getByText('2026年8月2日').first()).toBeVisible()
 
-	await page.getByRole('combobox', { name: '按姓名搜索球员' }).fill('Sa')
+	await page.getByRole('searchbox', { name: '按姓名搜索球员' }).fill('Sa')
 	const searchResult = page
 		.getByRole('list', { name: '球员搜索结果' })
 		.getByRole('listitem')

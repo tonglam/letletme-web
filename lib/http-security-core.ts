@@ -8,6 +8,13 @@ export class PayloadTooLargeError extends Error {
 	}
 }
 
+export class ResponseReadAbortedError extends Error {
+	constructor() {
+		super('Response body read was aborted')
+		this.name = 'ResponseReadAbortedError'
+	}
+}
+
 export async function readBoundedText(
 	request: Request,
 	maxBytes: number
@@ -31,6 +38,91 @@ export async function readBoundedText(
 		body += decoder.decode(value, { stream: true })
 	}
 	return body + decoder.decode()
+}
+
+export async function readBoundedBytes(
+	request: Request,
+	maxBytes: number
+): Promise<Uint8Array> {
+	const declared = Number(request.headers.get('content-length'))
+	if (Number.isFinite(declared) && declared > maxBytes) {
+		throw new PayloadTooLargeError(maxBytes)
+	}
+	if (!request.body) return new Uint8Array()
+	const reader = request.body.getReader()
+	const chunks: Uint8Array[] = []
+	let bytes = 0
+	for (;;) {
+		const { done, value } = await reader.read()
+		if (done) break
+		bytes += value.byteLength
+		if (bytes > maxBytes) {
+			await reader.cancel()
+			throw new PayloadTooLargeError(maxBytes)
+		}
+		chunks.push(value)
+	}
+	const result = new Uint8Array(bytes)
+	let offset = 0
+	for (const chunk of chunks) {
+		result.set(chunk, offset)
+		offset += chunk.byteLength
+	}
+	return result
+}
+
+export async function readBoundedResponseBytes(
+	response: Response,
+	maxBytes: number,
+	signal?: AbortSignal
+): Promise<Uint8Array> {
+	if (signal?.aborted) {
+		if (response.body) await response.body.cancel()
+		throw new ResponseReadAbortedError()
+	}
+	const declared = Number(response.headers.get('content-length'))
+	if (Number.isFinite(declared) && declared > maxBytes) {
+		if (response.body) await response.body.cancel()
+		throw new PayloadTooLargeError(maxBytes)
+	}
+	if (!response.body) return new Uint8Array()
+	const reader = response.body.getReader()
+	const chunks: Uint8Array[] = []
+	let bytes = 0
+	let aborted = false
+	const abortReader = () => {
+		aborted = true
+		void reader.cancel().catch(() => undefined)
+	}
+	signal?.addEventListener('abort', abortReader, { once: true })
+	try {
+		for (;;) {
+			const { done, value } = await reader.read()
+			if (aborted) throw new ResponseReadAbortedError()
+			if (done) break
+			if (!value) continue
+			bytes += value.byteLength
+			if (bytes > maxBytes) {
+				await reader.cancel()
+				throw new PayloadTooLargeError(maxBytes)
+			}
+			chunks.push(value)
+		}
+		if (aborted) throw new ResponseReadAbortedError()
+	} catch (error) {
+		if (aborted) throw new ResponseReadAbortedError()
+		throw error
+	} finally {
+		signal?.removeEventListener('abort', abortReader)
+		reader.releaseLock()
+	}
+	const result = new Uint8Array(bytes)
+	let offset = 0
+	for (const chunk of chunks) {
+		result.set(chunk, offset)
+		offset += chunk.byteLength
+	}
+	return result
 }
 
 export async function readBoundedJson(
@@ -85,14 +177,9 @@ export function resolveProviderClientIp(headers: Headers): string {
 	if (
 		isExpectedProductionHost &&
 		localProxySecret &&
-		secretsEqual(
-			headers.get('x-letletme-proxy-secret'),
-			localProxySecret
-		)
+		secretsEqual(headers.get('x-letletme-proxy-secret'), localProxySecret)
 	) {
-		return (
-			validIp(headers.get('x-letletme-proxy-client-ip')) ?? 'unknown'
-		)
+		return validIp(headers.get('x-letletme-proxy-client-ip')) ?? 'unknown'
 	}
 	if (isExpectedProductionHost && headers.has('cf-ray')) {
 		return validIp(headers.get('cf-connecting-ip')) ?? 'unknown'
@@ -118,6 +205,66 @@ export function buildOpaqueRateLimitSubject(
 		.digest('hex')
 }
 
+export type GraphQLTrafficClass =
+	| 'mini'
+	| 'web_browser'
+	| 'web_rsc'
+	| 'service'
+	| 'legacy'
+
+export type GraphQLWorkload =
+	| 'interactive'
+	| 'home'
+	| 'fixtures'
+	| 'market'
+	| 'player-stats'
+	| 'gameweek'
+	| 'public-other'
+
+export type IngressEnvelopeV2 = {
+	v: 2
+	aud: 'letletme-graphql'
+	trafficClass: Exclude<GraphQLTrafficClass, 'legacy'>
+	subject: string
+	abuseSubject: string | null
+	workload: GraphQLWorkload
+	iat: number
+	exp: number
+}
+
+const opaqueSubject = (
+	purpose: string,
+	value: string,
+	secret: string
+): string =>
+	createHmac('sha256', secret)
+		.update(`${purpose}:${value}`)
+		.digest('hex')
+
+export function buildOpaqueMiniDeviceSubject(
+	deviceId: string,
+	secret: string
+): string {
+	return opaqueSubject('rate-limit:mini-device', deviceId, secret)
+}
+
+export function buildOpaqueAbuseSubject(
+	headers: Headers,
+	secret: string
+): string | null {
+	const ip = resolveProviderClientIp(headers)
+	return ip === 'unknown'
+		? null
+		: opaqueSubject('rate-limit:abuse-ip', ip, secret)
+}
+
+export function buildOpaqueRscSubject(
+	workload: GraphQLWorkload,
+	secret: string
+): string {
+	return opaqueSubject('rate-limit:web-rsc', workload, secret)
+}
+
 export function buildIngressContextHeaders(
 	subject: string,
 	secret: string,
@@ -129,6 +276,35 @@ export function buildIngressContextHeaders(
 		iat: nowSeconds,
 		exp: nowSeconds + 60
 	})
+	return {
+		'X-Ingress-Context': Buffer.from(payload).toString('base64url'),
+		'X-Ingress-Context-Sig': createHmac('sha256', secret)
+			.update(payload)
+			.digest('base64url')
+	}
+}
+
+export function buildIngressContextHeadersV2(
+	input: {
+		trafficClass: Exclude<GraphQLTrafficClass, 'legacy'>
+		subject: string
+		abuseSubject: string | null
+		workload: GraphQLWorkload
+	},
+	secret: string,
+	nowSeconds = Math.floor(Date.now() / 1000)
+): Record<string, string> {
+	const envelope: IngressEnvelopeV2 = {
+		v: 2,
+		aud: 'letletme-graphql',
+		trafficClass: input.trafficClass,
+		subject: input.subject,
+		abuseSubject: input.abuseSubject,
+		workload: input.workload,
+		iat: nowSeconds,
+		exp: nowSeconds + 60
+	}
+	const payload = JSON.stringify(envelope)
 	return {
 		'X-Ingress-Context': Buffer.from(payload).toString('base64url'),
 		'X-Ingress-Context-Sig': createHmac('sha256', secret)

@@ -7,9 +7,12 @@ export {
 	buildIngressContextHeaders,
 	buildOpaqueRateLimitSubject,
 	PayloadTooLargeError,
+	ResponseReadAbortedError,
+	readBoundedBytes,
+	readBoundedResponseBytes,
 	readBoundedJson,
 	readBoundedText,
-	resolveProviderClientIp,
+	resolveProviderClientIp
 } from '@/lib/http-security-core'
 
 export type DatabaseRateLimit = { allowed: boolean; retryAfterSeconds: number }
@@ -20,7 +23,7 @@ export async function checkDatabaseRateLimit({
 	limit,
 	windowSeconds,
 	cost = 1,
-	now = new Date(),
+	now = new Date()
 }: {
 	scope: string
 	subject: string
@@ -29,7 +32,8 @@ export async function checkDatabaseRateLimit({
 	cost?: number
 	now?: Date
 }): Promise<DatabaseRateLimit> {
-	if (!Number.isInteger(cost) || cost < 1) throw new Error('Rate-limit cost must be positive')
+	if (!Number.isInteger(cost) || cost < 1)
+		throw new Error('Rate-limit cost must be positive')
 	const epochSeconds = Math.floor(now.getTime() / 1000)
 	const bucketSeconds = Math.floor(epochSeconds / windowSeconds) * windowSeconds
 	const bucketStart = new Date(bucketSeconds * 1000)
@@ -58,9 +62,13 @@ export async function checkDatabaseRateLimit({
 		SELECT count FROM incremented
 	`)
 	const count = Number((rows as unknown as Array<{ count: number }>)[0]?.count)
-	if (!Number.isFinite(count)) throw new Error('Rate-limit counter returned no count')
+	if (!Number.isFinite(count))
+		throw new Error('Rate-limit counter returned no count')
 	return {
 		allowed: count <= limit,
-		retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - now.getTime()) / 1000)),
+		retryAfterSeconds: Math.max(
+			1,
+			Math.ceil((expiresAt.getTime() - now.getTime()) / 1000)
+		)
 	}
 }

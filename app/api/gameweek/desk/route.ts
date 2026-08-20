@@ -1,9 +1,10 @@
 import { createGameweekDeskRouteHandler } from '@/lib/gameweek-desk-route'
 import { loadGameweekDesk } from '@/lib/gameweek-desk-server'
+import { withPublicRouteGraphQLIngress } from '@/lib/graphql-server'
 
 export const dynamic = 'force-dynamic'
 
-export const GET = createGameweekDeskRouteHandler(async eventId => {
+const handler = createGameweekDeskRouteHandler(async eventId => {
 	const data = await loadGameweekDesk(eventId)
 	return {
 		...data,
@@ -16,3 +17,7 @@ export const GET = createGameweekDeskRouteHandler(async eventId => {
 					: 'complete'
 	}
 })
+
+export function GET(request: Request) {
+	return withPublicRouteGraphQLIngress(request, () => handler(request))
+}

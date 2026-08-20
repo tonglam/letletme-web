@@ -17,6 +17,7 @@ env:
   BETTER_AUTH_URL: http://localhost:3000
   GRAPHQL_SERVICE_TOKEN: e2e-graphql-service-token-at-least-thirty-two-bytes
   BACKEND_PROXY_SECRET: ci-backend-proxy-secret
+  BUG_REPORT_CLEANUP_SECRET: ci-bug-report-cleanup-secret-at-least-thirty-two-bytes
 
 jobs:
   verify:

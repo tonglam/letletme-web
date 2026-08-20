@@ -26,6 +26,7 @@ export async function loadTrendCohorts(
 			{ cache: 'no-store' }
 		)
 		: await executePublicServerQuery<TrendCohortsResponse>(
+			'interactive',
 			GET_TREND_COHORTS,
 			{ access },
 			{ next: { revalidate: 60, tags: ['trends-catalog'] } }
@@ -43,6 +44,6 @@ export async function loadTrendDesk(
 	const variables = { cohortId, eventId, limit, access }
 	const response = access === 'MINE'
 		? await executeServerQueryWithSession<TrendDeskResponse>(session ?? null, GET_TREND_COHORT_SNAPSHOT, variables, { cache: 'no-store' })
-		: await executePublicServerQuery<TrendDeskResponse>(GET_TREND_COHORT_SNAPSHOT, variables, { next: { revalidate: 60, tags: ['trends-publication'] } })
+		: await executePublicServerQuery<TrendDeskResponse>('interactive', GET_TREND_COHORT_SNAPSHOT, variables, { next: { revalidate: 60, tags: ['trends-publication'] } })
 	return response.trendCohortSnapshot
 }

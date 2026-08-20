@@ -5,12 +5,6 @@ import { DeltaBadge } from '@/components/data/DeltaBadge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
 import {
-	CacheTag,
-	publicFetchOptions,
-	RevalidateSeconds
-} from '@/lib/cache-policy'
-import { executePublicServerQuery } from '@/lib/graphql-server'
-import {
 	type MarketAvailabilityUpdate,
 	type MarketOwnershipChange,
 	type MarketOwnershipDay,
@@ -18,11 +12,9 @@ import {
 	type MarketPlayer
 } from '@/lib/graphql/operations/market'
 import {
-	GET_HOME_MARKET_PULSE,
-	GET_HOME_MARKET_OWNERSHIP,
-	type HomeMarketOwnershipResponse,
-	type HomeMarketPulseResponse
-} from '@/lib/graphql/operations/home'
+	loadHomeMarketOwnership,
+	loadHomeMarketPulse
+} from '@/lib/home-market-seed-server'
 import {
 	availabilityBodyText,
 	marketAvailabilityStatusKey,
@@ -174,22 +166,8 @@ function AvailabilityTeaserList({
 export async function MarketTeaser() {
 	const t = await getTranslations('Market')
 	const [pulseResult, ownershipResult] = await Promise.allSettled([
-		executePublicServerQuery<HomeMarketPulseResponse>(
-			GET_HOME_MARKET_PULSE,
-			{ days: 7 },
-			publicFetchOptions({
-				revalidate: RevalidateSeconds.market,
-				tags: [CacheTag.market]
-			})
-		),
-		executePublicServerQuery<HomeMarketOwnershipResponse>(
-			GET_HOME_MARKET_OWNERSHIP,
-			{},
-			publicFetchOptions({
-				revalidate: RevalidateSeconds.market,
-				tags: [CacheTag.market]
-			})
-		)
+		loadHomeMarketPulse(),
+		loadHomeMarketOwnership()
 	])
 
 	if (pulseResult.status === 'rejected') {

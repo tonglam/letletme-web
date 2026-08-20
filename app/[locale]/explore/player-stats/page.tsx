@@ -8,6 +8,7 @@ import PageShell from '@/components/layout/PageShell'
 import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
+import { withCapacityRunForRequest } from '@/lib/capacity-run'
 import {
 	loadPlayerStatsBootstrap,
 	loadPlayerStatsPersonalSeed,
@@ -44,7 +45,7 @@ async function PersonalSeedStream({
 	return <PlayerStatsPersonalSeedCommit seed={await seedPromise} />
 }
 
-export default async function PlayerStatsPage({
+async function renderPlayerStatsPage({
 	params,
 	searchParams
 }: PageProps) {
@@ -147,4 +148,8 @@ export default async function PlayerStatsPage({
 			</div>
 		</PageShell>
 	)
+}
+
+export default async function PlayerStatsPage(props: PageProps) {
+	return withCapacityRunForRequest(() => renderPlayerStatsPage(props))
 }

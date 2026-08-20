@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import { parse, visit } from 'graphql'
 import { PLAYER_STATS_DESK_QUERIES } from '../lib/graphql/operations/players'
 import {
+	mergePlayerStatsDeskLoadResults,
 	normalizePlayerStatsDeskResult,
 	parsePlayerStatsDeskParams,
 	type PlayerStatsDeskLoadResult
@@ -34,6 +35,26 @@ const result = (
 const quietLogger = { info: () => undefined, error: () => undefined }
 
 describe('player stats desk contract', () => {
+	it('merges per-player cache entries without creating pair cache keys', () => {
+		const merged = mergePlayerStatsDeskLoadResults(
+			[27, 13],
+			4,
+			5,
+			'overview',
+			[
+				result({
+					entries: [{ playerId: 27 }],
+					unavailablePlayerIds: [27],
+					outcome: 'not-found'
+				}),
+				result({ entries: [overviewEntry(13)] })
+			]
+		)
+		assert.deepEqual(merged.entries.map(entry => entry.playerId), [27, 13])
+		assert.deepEqual(merged.unavailablePlayerIds, [27])
+		assert.equal(merged.outcome, 'partial')
+	})
+
 	it('strictly validates one or two unique players and bounded inputs', () => {
 		assert.deepEqual(
 			parsePlayerStatsDeskParams(
@@ -70,7 +91,10 @@ describe('player stats desk contract', () => {
 			const document = parse(query)
 			let nodes = 0
 			visit(document, { enter: () => void (nodes += 1) })
-			assert.ok(nodes <= 200, `${section} desk query has ${nodes} AST nodes`)
+			assert.ok(
+				nodes < 200,
+				`${section} desk query has ${nodes} AST nodes (production limit 200)`
+			)
 		}
 	})
 

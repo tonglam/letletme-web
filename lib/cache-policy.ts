@@ -21,8 +21,8 @@ export type CacheTagName = (typeof CacheTag)[keyof typeof CacheTag]
 export const RevalidateSeconds = {
 	/** Market desk updates ~daily; short SWR for home teaser */
 	market: 60,
-	/** Events / GW identity */
-	events: 300,
+	/** Events / GW identity and public bootstrap */
+	events: 5,
 	/** Aggregated public stats, fixtures, TOTW */
 	publicStats: 300,
 	/** Rarely changing overall season summary on home */

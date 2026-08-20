@@ -1202,7 +1202,6 @@ const server = createServer((request, response) => {
 			query.includes('GetHomeMarketOwnership') ||
 			query.includes('GetFixturePlanningSignals') ||
 			query.includes('GetFixturePlanningOwnershipGameweek') ||
-			query.includes('GetFixturePlanningOwnershipRolling7d') ||
 			query.includes('GetMarketOwnershipOverview') ||
 			query.includes('GetMarketOwnershipDay')
 		) {
@@ -1268,13 +1267,6 @@ const server = createServer((request, response) => {
 				risers: [ownershipChange],
 				fallers: []
 			}
-			const marketOwnershipRolling7d = {
-				period: 'ROLLING_7D',
-				gameweek: null,
-				coverage,
-				risers: [ownershipChange],
-				fallers: []
-			}
 			const pulse = {
 				coverage: {
 					requestedDays: 7,
@@ -1302,17 +1294,13 @@ const server = createServer((request, response) => {
 								marketOwnershipOverview:
 									variables.period === 'GAMEWEEK'
 										? marketOwnershipGameweek
-										: variables.period === 'DAILY'
-											? marketOwnershipDailyOverview
-											: marketOwnershipRolling7d
+										: marketOwnershipDailyOverview
 							}
 						: query.includes('GetHomeMarketPulse')
 							? { homeMarketPulse: pulse }
 							: query.includes('GetFixturePlanningOwnershipGameweek')
 								? { marketOwnershipOverview: marketOwnershipGameweek }
-								: query.includes('GetFixturePlanningOwnershipRolling7d')
-									? { marketOwnershipOverview: marketOwnershipRolling7d }
-									: { marketPulse: pulse }
+								: { marketPulse: pulse }
 			json(response, 200, {
 				data: {
 					marketSnapshotContext: {

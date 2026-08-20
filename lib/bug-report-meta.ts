@@ -7,6 +7,18 @@ const BLOCKED_META_KEYS = new Set([
 	'otp',
 	'code',
 ])
+const ALLOWED_META_KEYS = new Set([
+	'route',
+	'currentGw',
+	'envVersion',
+	'clientTime',
+	'platform',
+	'osMajor',
+	'sdkVersion',
+	'language',
+	'viewportBucket',
+	'operations',
+])
 
 export const BUG_REPORT_BODY_MIN = 8
 export const BUG_REPORT_BODY_MAX = 500
@@ -31,8 +43,27 @@ export function sanitizeBugReportClientMeta(
 	if (!isRecord(value)) return {}
 	const cleaned: Record<string, unknown> = {}
 	for (const [key, entry] of Object.entries(value)) {
-		if (BLOCKED_META_KEYS.has(key.toLowerCase())) continue
-		cleaned[key] = entry
+		if (BLOCKED_META_KEYS.has(key.toLowerCase()) || !ALLOWED_META_KEYS.has(key)) continue
+		if (key === 'operations') {
+			if (!Array.isArray(entry)) continue
+			cleaned.operations = entry.slice(-3).flatMap((item) => {
+				if (!isRecord(item)) return []
+				const operation: Record<string, string> = {}
+				for (const field of ['operation', 'requestId', 'code', 'message']) {
+					if (typeof item[field] !== 'string') continue
+					const text = item[field]
+						.replace(/https?:\/\/[^\s]+/gi, '[url]')
+						.replace(/([A-Za-z0-9_-]+)=(?:[^\s&]+)/g, '$1=[redacted]')
+						.slice(0, 160)
+					if (text) operation[field] = text
+				}
+				return Object.keys(operation).length ? [operation] : []
+			})
+			continue
+		}
+		if (typeof entry === 'string') cleaned[key] = entry.slice(0, 160)
+		else if (typeof entry === 'number' && Number.isFinite(entry)) cleaned[key] = entry
+		else if (typeof entry === 'boolean') cleaned[key] = entry
 	}
 	if (Buffer.byteLength(JSON.stringify(cleaned), 'utf8') > CLIENT_META_MAX_BYTES) {
 		return { truncated: true }
