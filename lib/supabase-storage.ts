@@ -95,8 +95,11 @@ export async function removeStorageObject(bucket: string, path: string): Promise
 	if (error) throw new Error(`Storage delete failed: ${error.message}`)
 }
 
-export function extractManagedAvatarPath(value: string | null | undefined): string | null {
-	if (!value) return null
+export function extractManagedAvatarPath(
+	value: string | null | undefined,
+	userId: string
+): string | null {
+	if (!value || !userId || userId.includes('/')) return null
 	try {
 		const url = new URL(value)
 		const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -104,8 +107,13 @@ export function extractManagedAvatarPath(value: string | null | undefined): stri
 		const prefix = `/storage/v1/object/public/${AVATAR_BUCKET}/`
 		if (!url.pathname.startsWith(prefix)) return null
 		const path = decodeURIComponent(url.pathname.slice(prefix.length))
-		if (/^avatars\/[^/]+\/[0-9a-f-]{36}\.jpg$/i.test(path)) return path
-		if (/^[^/]+\.jpg$/i.test(path)) return path
+		if (path === `${userId}.jpg`) return path
+		if (
+			path.startsWith(`avatars/${userId}/`) &&
+			/[0-9a-f-]{36}\.jpg$/i.test(path.slice(`avatars/${userId}/`.length))
+		) {
+			return path
+		}
 		return null
 	} catch {
 		return null

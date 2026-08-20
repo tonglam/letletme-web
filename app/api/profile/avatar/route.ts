@@ -17,7 +17,7 @@ import {
 } from '@/lib/supabase-storage'
 import { isTrustedSameSiteRequest } from '@/lib/request-origin'
 import { db, schema } from '@/lib/db'
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -130,7 +130,11 @@ export async function POST(request: Request) {
 		})
 		return errorResponse('uploadFailed', 502)
 	}
-	const previousPath = extractManagedAvatarPath(previous[0]?.image)
+	const previousImage = previous[0]?.image ?? null
+	const previousPath = extractManagedAvatarPath(previousImage, session.user.id)
+	const previousImagePredicate = previousImage === null
+		? isNull(schema.user.image)
+		: eq(schema.user.image, previousImage)
 
 	let uploaded: { imageUrl: string; path: string } | null = null
 	try {
@@ -142,7 +146,7 @@ export async function POST(request: Request) {
 		const [updated] = await db
 			.update(schema.user)
 			.set({ image: uploaded.imageUrl })
-			.where(eq(schema.user.id, session.user.id))
+			.where(and(eq(schema.user.id, session.user.id), previousImagePredicate))
 			.returning({ id: schema.user.id })
 		if (!updated) throw new Error('Avatar owner was not found')
 	} catch (error) {
