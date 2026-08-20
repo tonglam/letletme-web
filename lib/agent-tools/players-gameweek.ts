@@ -212,6 +212,7 @@ export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 			marketRevision: string | null
 			checkedAt: string
 			eventId: number
+			phase: string
 			playerPool: {
 				state: string
 				checkedAt: string | null
@@ -221,8 +222,15 @@ export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 		}
 	}>(options, PLAYER_CATALOG_DOCUMENT, { eventId })
 	const desk = result.teamSelectionDesk
+	const catalogSort =
+		input.sort === 'AUTO'
+			? desk.phase === 'PRESEASON'
+				? 'OWNERSHIP_DESC'
+				: 'TOTAL_POINTS_DESC'
+			: input.sort
 	const key = fingerprint({
 		filter: playerFilterKey(input, eventId),
+		catalogSort,
 		coreRevision: desk.coreRevision,
 		marketRevision: desk.marketRevision
 	})
@@ -262,7 +270,7 @@ export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 					return ownership > 15 && ownership <= 40
 				return ownership > 40
 			}),
-		input.sort
+		catalogSort
 	)
 	const offset =
 		decodeCursor(input.cursor, { kind: 'players', mode: 'catalog', key }) ?? 0

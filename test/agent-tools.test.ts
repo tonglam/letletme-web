@@ -323,6 +323,7 @@ test('an explicit event selects the revision-bound player catalog', async () => 
 			marketRevision: 'market-4',
 			checkedAt: '2026-08-20T00:01:00.000Z',
 			eventId: 5,
+			phase: 'PRE_DEADLINE',
 			playerPool: { state: 'READY', checkedAt: null, message: null },
 			players: [
 				{
@@ -369,6 +370,61 @@ test('an explicit event selects the revision-bound player catalog', async () => 
 	)
 	assert.equal(stale.status, 400)
 	assert.equal((await stale.json()).code, 'INVALID_INPUT')
+})
+
+test('AUTO catalog sorting follows the published selection phase', async () => {
+	const catalog = (phase: string) => ({
+		teamSelectionDesk: {
+			season: '2627',
+			coreRevision: 'core-7',
+			marketRevision: 'market-4',
+			checkedAt: '2026-08-20T00:01:00.000Z',
+			eventId: 1,
+			phase,
+			playerPool: { state: 'READY', checkedAt: null, message: null },
+			players: [
+				{
+					id: 1,
+					webName: 'Points',
+					team: { id: 1, name: 'Team', shortName: 'T' },
+					position: 'MIDFIELDER',
+					price: 50,
+					ownership: 5,
+					totalPoints: 20,
+					form: 1,
+					status: 'a'
+				},
+				{
+					id: 2,
+					webName: 'Ownership',
+					team: { id: 2, name: 'Other', shortName: 'O' },
+					position: 'FORWARD',
+					price: 60,
+					ownership: 25,
+					totalPoints: 10,
+					form: 1,
+					status: 'a'
+				}
+			]
+		}
+	})
+	const idsForPhase = async (phase: string) => {
+		const response = await handleAgentToolRequest(
+			request({ eventId: 1, limit: 2 }),
+			'letletme_players',
+			dependencies(authenticated, async document => {
+				assert.equal(document, PLAYER_CATALOG_DOCUMENT)
+				return catalog(phase)
+			})
+		)
+		assert.equal(response.status, 200)
+		return (await response.json()).data.items.map(
+			(player: { id: number }) => player.id
+		)
+	}
+
+	assert.deepEqual(await idsForPhase('PRESEASON'), [2, 1])
+	assert.deepEqual(await idsForPhase('PRE_DEADLINE'), [1, 2])
 })
 
 test('pagination cursors reject negative offsets', () => {

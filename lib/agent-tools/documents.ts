@@ -53,7 +53,7 @@ export const PLAYERS_DOCUMENT = `
 export const PLAYER_CATALOG_DOCUMENT = `
   query AgentPlayerCatalog($eventId: Int!) {
     teamSelectionDesk(eventId: $eventId, horizon: 1) {
-      season coreRevision marketRevision checkedAt eventId
+      season coreRevision marketRevision checkedAt eventId phase
       playerPool { state checkedAt message }
       players {
         id webName position price ownership form totalPoints status news chanceOfPlaying
