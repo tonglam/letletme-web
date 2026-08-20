@@ -1,4 +1,8 @@
-import type { AgentToolInputMap, AgentWarning } from '@/lib/agent-tools/contracts'
+import {
+	AgentToolError,
+	type AgentToolInputMap,
+	type AgentWarning
+} from '@/lib/agent-tools/contracts'
 import {
 	GAMEWEEK_DOCUMENT,
 	PLAYER_CATALOG_DOCUMENT,
@@ -7,6 +11,7 @@ import {
 import {
 	coreEventId,
 	decodeCursor,
+	decodeCursorValue,
 	encodeCursor,
 	executeDocument,
 	fingerprint,
@@ -41,6 +46,11 @@ type PlayersPageResult = {
 		items: ToolPlayer[]
 	}
 }
+
+// The production GraphQL weighted-complexity guard accepts this projection at
+// 38 rows with headroom. Aggregate larger tool pages under the one shared
+// gateway deadline.
+const MAX_PICKER_QUERY_ROWS = 38
 
 const playerFilterKey = (
 	input: AgentToolInputMap['letletme_players'],
@@ -83,52 +93,99 @@ const sortCatalogPlayers = (
 	sort: AgentToolInputMap['letletme_players']['sort']
 ): ToolPlayer[] =>
 	players.sort((left, right) => {
-		if (sort === 'NAME_ASC') return left.webName.localeCompare(right.webName) || left.id - right.id
-		if (sort === 'PRICE_ASC') return left.price - right.price || left.id - right.id
-		if (sort === 'PRICE_DESC') return right.price - left.price || left.id - right.id
+		if (sort === 'NAME_ASC')
+			return left.webName.localeCompare(right.webName) || left.id - right.id
+		if (sort === 'PRICE_ASC')
+			return left.price - right.price || left.id - right.id
+		if (sort === 'PRICE_DESC')
+			return right.price - left.price || left.id - right.id
 		if (sort === 'FORM_DESC') {
-			return (right.form ?? -Infinity) - (left.form ?? -Infinity) || left.id - right.id
+			return (
+				(right.form ?? -Infinity) - (left.form ?? -Infinity) ||
+				left.id - right.id
+			)
 		}
 		if (sort === 'OWNERSHIP_DESC') {
-			return (right.ownership ?? -Infinity) - (left.ownership ?? -Infinity) || left.id - right.id
+			return (
+				(right.ownership ?? -Infinity) - (left.ownership ?? -Infinity) ||
+				left.id - right.id
+			)
 		}
-		return (right.totalPoints ?? -Infinity) - (left.totalPoints ?? -Infinity) || left.id - right.id
+		return (
+			(right.totalPoints ?? -Infinity) - (left.totalPoints ?? -Infinity) ||
+			left.id - right.id
+		)
 	})
 
 export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 	const input = options.input
-	const catalogMode = Boolean(input.playerIds || input.status || input.eventId !== undefined)
+	const catalogMode = Boolean(
+		input.playerIds || input.status || input.eventId !== undefined
+	)
 	if (!catalogMode) {
-		const key = playerFilterKey(input)
-		const upstreamCursor = decodeCursor(input.cursor, {
+		const filterKey = playerFilterKey(input)
+		const upstreamCursor = decodeCursorValue(input.cursor, {
 			kind: 'players',
-			mode: 'picker',
-			key
+			mode: 'picker'
 		})
-		const first = await loadPlayersPage(options, Math.min(input.limit, 50), upstreamCursor)
-		let finalPage = first.playersForPicker
-		let items = [...finalPage.items]
+		if ((upstreamCursor ?? 0) > 10_000) {
+			throw new AgentToolError(
+				'INVALID_INPUT',
+				'Invalid or stale pagination cursor.',
+				400,
+				false
+			)
+		}
+		let cursor = upstreamCursor
+		let first: PlayersPageResult | null = null
+		let finalPage: PlayersPageResult['playersForPicker'] | null = null
+		let key: string | null = null
+		const items: ToolPlayer[] = []
 		const warnings: AgentWarning[] = []
-		if (input.limit > 50 && finalPage.nextCursor !== null) {
-			const second = await loadPlayersPage(options, input.limit - 50, finalPage.nextCursor)
-			if (
-				second.coreEventContext.revision === first.coreEventContext.revision &&
-				second.marketSnapshotContext.revision === first.marketSnapshotContext.revision
+		while (items.length < input.limit) {
+			const page = await loadPlayersPage(
+				options,
+				Math.min(input.limit - items.length, MAX_PICKER_QUERY_ROWS),
+				cursor
+			)
+			if (!first) {
+				first = page
+				key = fingerprint({
+					filter: filterKey,
+					coreRevision: first.coreEventContext.revision,
+					marketRevision: first.marketSnapshotContext.revision
+				})
+				decodeCursor(input.cursor, { kind: 'players', mode: 'picker', key })
+			} else if (
+				page.coreEventContext.revision !== first.coreEventContext.revision ||
+				page.marketSnapshotContext.revision !==
+					first.marketSnapshotContext.revision
 			) {
-				items = items.concat(second.playersForPicker.items)
-				finalPage = second.playersForPicker
-			} else {
 				warnings.push({
 					code: 'REVISION_MISMATCH',
-					message: 'The publication changed while loading this page; only one pinned revision is returned.'
+					message:
+						'The publication changed while loading this page; only one pinned revision is returned.'
 				})
+				break
 			}
+			items.push(...page.playersForPicker.items)
+			finalPage = page.playersForPicker
+			cursor = finalPage.nextCursor
+			if (cursor === null || page.playersForPicker.items.length === 0) break
+		}
+		if (!first || !finalPage || !key) {
+			throw new Error('LetLetMe player page did not return a result')
 		}
 		const { coreEventContext: core, marketSnapshotContext: market } = first
 		const nextCursor =
 			finalPage.nextCursor === null
 				? null
-				: encodeCursor({ kind: 'players', mode: 'picker', key, value: finalPage.nextCursor })
+				: encodeCursor({
+						kind: 'players',
+						mode: 'picker',
+						key,
+						value: finalPage.nextCursor
+					})
 		return toolResponse(
 			options,
 			{
@@ -151,7 +208,11 @@ export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 			marketRevision: string | null
 			checkedAt: string
 			eventId: number
-			playerPool: { state: string; checkedAt: string | null; message: string | null }
+			playerPool: {
+				state: string
+				checkedAt: string | null
+				message: string | null
+			}
 			players: ToolPlayer[]
 		}
 	}>(options, PLAYER_CATALOG_DOCUMENT, { eventId })
@@ -166,40 +227,68 @@ export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 	const filtered = sortCatalogPlayers(
 		desk.players
 			.filter(player => !ids || ids.has(player.id))
-			.filter(player => !query || player.webName.toLocaleLowerCase('en-US').includes(query))
-			.filter(player => input.teamId === undefined || player.team.id === input.teamId)
-			.filter(player => input.position === undefined || player.position === input.position)
-			.filter(player => input.status === undefined || player.status === input.status)
-			.filter(player => input.minPrice === undefined || player.price >= input.minPrice)
-			.filter(player => input.maxPrice === undefined || player.price <= input.maxPrice)
+			.filter(
+				player =>
+					!query || player.webName.toLocaleLowerCase('en-US').includes(query)
+			)
+			.filter(
+				player => input.teamId === undefined || player.team.id === input.teamId
+			)
+			.filter(
+				player =>
+					input.position === undefined || player.position === input.position
+			)
+			.filter(
+				player => input.status === undefined || player.status === input.status
+			)
+			.filter(
+				player => input.minPrice === undefined || player.price >= input.minPrice
+			)
+			.filter(
+				player => input.maxPrice === undefined || player.price <= input.maxPrice
+			)
 			.filter(player => {
 				if (!input.ownershipBand) return true
 				const ownership = player.ownership
 				if (ownership === null || ownership === undefined) return false
 				if (input.ownershipBand === 'LE5') return ownership <= 5
-				if (input.ownershipBand === 'GT5_LE15') return ownership > 5 && ownership <= 15
-				if (input.ownershipBand === 'GT15_LE40') return ownership > 15 && ownership <= 40
+				if (input.ownershipBand === 'GT5_LE15')
+					return ownership > 5 && ownership <= 15
+				if (input.ownershipBand === 'GT15_LE40')
+					return ownership > 15 && ownership <= 40
 				return ownership > 40
 			}),
 		input.sort
 	)
-	const offset = decodeCursor(input.cursor, { kind: 'players', mode: 'catalog', key }) ?? 0
+	const offset =
+		decodeCursor(input.cursor, { kind: 'players', mode: 'catalog', key }) ?? 0
 	const items = filtered.slice(offset, offset + input.limit)
 	const nextOffset = offset + items.length
 	const nextCursor =
 		nextOffset < filtered.length
-			? encodeCursor({ kind: 'players', mode: 'catalog', key, value: nextOffset })
+			? encodeCursor({
+					kind: 'players',
+					mode: 'catalog',
+					key,
+					value: nextOffset
+				})
 			: null
 	const warnings: AgentWarning[] = []
 	if (desk.playerPool.state !== 'READY') {
 		warnings.push({
 			code: `PLAYER_COVERAGE_${desk.playerPool.state}`,
-			message: desk.playerPool.message ?? 'Published player coverage is not complete.'
+			message:
+				desk.playerPool.message ?? 'Published player coverage is not complete.'
 		})
 	}
 	return toolResponse(
 		options,
-		{ mode: 'published-catalog', eventId: desk.eventId, totalCount: filtered.length, items },
+		{
+			mode: 'published-catalog',
+			eventId: desk.eventId,
+			totalCount: filtered.length,
+			items
+		},
 		{
 			season: desk.season,
 			core: desk.coreRevision,
@@ -211,8 +300,11 @@ export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 	)
 }
 
-export async function runGameweek(options: ToolRunOptions<'letletme_gameweek'>) {
-	const eventId = options.input.eventId ?? coreEventId(await loadCoreContext(options))
+export async function runGameweek(
+	options: ToolRunOptions<'letletme_gameweek'>
+) {
+	const eventId =
+		options.input.eventId ?? coreEventId(await loadCoreContext(options))
 	const result = await executeDocument<{
 		teamSelectionDesk: {
 			season: string
@@ -226,9 +318,21 @@ export async function runGameweek(options: ToolRunOptions<'letletme_gameweek'>) 
 			rules: unknown
 			players: ToolPlayer[]
 			fixtures: unknown[]
-			playerPool: { state: string; checkedAt: string | null; message: string | null }
-			fixtureSection: { state: string; checkedAt: string | null; message: string | null }
-			rulesSection: { state: string; checkedAt: string | null; message: string | null }
+			playerPool: {
+				state: string
+				checkedAt: string | null
+				message: string | null
+			}
+			fixtureSection: {
+				state: string
+				checkedAt: string | null
+				message: string | null
+			}
+			rulesSection: {
+				state: string
+				checkedAt: string | null
+				message: string | null
+			}
 		}
 	}>(options, GAMEWEEK_DOCUMENT, { eventId, horizon: options.input.horizon })
 	const desk = result.teamSelectionDesk

@@ -77,22 +77,21 @@ export const requireVerifiedEntryId = (session: AgentSession): number => {
 	)
 }
 
-export const encodeCursor = (payload: Record<string, string | number>): string =>
-	Buffer.from(JSON.stringify(payload)).toString('base64url')
+export const encodeCursor = (
+	payload: Record<string, string | number>
+): string => Buffer.from(JSON.stringify(payload)).toString('base64url')
 
-export const decodeCursor = (
+export const decodeCursorValue = (
 	value: string | undefined,
-	expected: { kind: string; mode?: string; key: string }
+	expected: { kind: string; mode?: string }
 ): number | null => {
 	if (!value) return null
 	try {
-		const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as Record<
-			string,
-			unknown
-		>
+		const parsed = JSON.parse(
+			Buffer.from(value, 'base64url').toString('utf8')
+		) as Record<string, unknown>
 		if (
 			parsed.kind !== expected.kind ||
-			parsed.key !== expected.key ||
 			(expected.mode !== undefined && parsed.mode !== expected.mode) ||
 			!Number.isSafeInteger(parsed.value) ||
 			(parsed.value as number) < 0
@@ -100,6 +99,36 @@ export const decodeCursor = (
 			throw new Error('cursor mismatch')
 		}
 		return parsed.value as number
+	} catch {
+		throw new AgentToolError(
+			'INVALID_INPUT',
+			'Invalid or stale pagination cursor.',
+			400,
+			false
+		)
+	}
+}
+
+export const decodeCursor = (
+	value: string | undefined,
+	expected: { kind: string; mode?: string; key: string }
+): number | null => {
+	if (!value) return null
+	const cursorValue = decodeCursorValue(value, expected)
+	if (cursorValue === null) return null
+	try {
+		const parsed = JSON.parse(
+			Buffer.from(value, 'base64url').toString('utf8')
+		) as Record<string, unknown>
+		if (
+			parsed.kind !== expected.kind ||
+			parsed.key !== expected.key ||
+			(expected.mode !== undefined && parsed.mode !== expected.mode) ||
+			parsed.value !== cursorValue
+		) {
+			throw new Error('cursor mismatch')
+		}
+		return cursorValue
 	} catch {
 		throw new AgentToolError(
 			'INVALID_INPUT',
@@ -145,10 +174,17 @@ export const executeDocument = async <T>(
 	variables: Record<string, unknown> = {}
 ): Promise<T> =>
 	asObject(
-		await options.execute(document, variables, options.requestId, options.signal)
+		await options.execute(
+			document,
+			variables,
+			options.requestId,
+			options.signal
+		)
 	) as T
 
-export const loadCoreContext = async (options: ToolRunOptions): Promise<CoreContext> => {
+export const loadCoreContext = async (
+	options: ToolRunOptions
+): Promise<CoreContext> => {
 	const result = await executeDocument<{ coreEventContext: CoreContext }>(
 		options,
 		CORE_CONTEXT_DOCUMENT

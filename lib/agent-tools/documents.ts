@@ -88,8 +88,8 @@ export const GAMEWEEK_DOCUMENT = `
   }
 `
 
-export const MARKET_DOCUMENT = `
-  query AgentMarket($days: Int!, $period: MarketOwnershipPeriod!, $limit: Int!) {
+export const MARKET_LINEUP_DOCUMENT = `
+  query AgentMarketLineup {
     coreEventContext { season revision sourceCheckedAt }
     marketSnapshotContext { season revision source snapshotDate capturedAt rowCount }
     marketLineup {
@@ -99,6 +99,13 @@ export const MARKET_DOCUMENT = `
         player { playerId webName teamId teamName teamShortName position price selectedByPercent }
       }
     }
+  }
+`
+
+export const MARKET_OWNERSHIP_RISERS_DOCUMENT = `
+  query AgentMarketOwnershipRisers($period: MarketOwnershipPeriod!, $limit: Int!) {
+    coreEventContext { season revision sourceCheckedAt }
+    marketSnapshotContext { season revision source snapshotDate capturedAt rowCount }
     marketOwnershipOverview(period: $period, limit: $limit) {
       period
       gameweek { id name deadlineTime }
@@ -107,14 +114,31 @@ export const MARKET_DOCUMENT = `
         capturedAt complete stale
       }
       risers {
-        fromSelectedByPercent toSelectedByPercent changePercentagePoints fromDate toDate
-        player { playerId webName teamId teamName teamShortName position price selectedByPercent }
-      }
-      fallers {
-        fromSelectedByPercent toSelectedByPercent changePercentagePoints fromDate toDate
-        player { playerId webName teamId teamName teamShortName position price selectedByPercent }
+        fromSelectedByPercent toSelectedByPercent changePercentagePoints
+        player { playerId webName teamShortName position price }
       }
     }
+  }
+`
+
+export const MARKET_OWNERSHIP_FALLERS_DOCUMENT = `
+  query AgentMarketOwnershipFallers($period: MarketOwnershipPeriod!, $limit: Int!) {
+    coreEventContext { season revision sourceCheckedAt }
+    marketSnapshotContext { season revision source snapshotDate capturedAt rowCount }
+    marketOwnershipOverview(period: $period, limit: $limit) {
+      period
+      fallers {
+        fromSelectedByPercent toSelectedByPercent changePercentagePoints
+        player { playerId webName teamShortName position price }
+      }
+    }
+  }
+`
+
+export const MARKET_PULSE_MOVERS_DOCUMENT = `
+  query AgentMarketPulseMovers($days: Int!) {
+    coreEventContext { season revision sourceCheckedAt }
+    marketSnapshotContext { season revision source snapshotDate capturedAt rowCount }
     marketPulse(days: $days) {
       coverage { requestedDays observedDays firstDate latestDate capturedAt complete stale }
       mostSelected { playerId webName teamId teamName teamShortName position price selectedByPercent }
@@ -122,6 +146,15 @@ export const MARKET_DOCUMENT = `
         transfersIn transfersOut netTransfers
         player { playerId webName teamId teamName teamShortName position price selectedByPercent }
       }
+    }
+  }
+`
+
+export const MARKET_PULSE_UPDATES_DOCUMENT = `
+  query AgentMarketPulseUpdates($days: Int!) {
+    coreEventContext { season revision sourceCheckedAt }
+    marketSnapshotContext { season revision source snapshotDate capturedAt rowCount }
+    marketPulse(days: $days) {
       availabilityHighlights {
         status previousStatus news newsAdded observedDate chanceOfPlayingThisRound chanceOfPlayingNextRound
         player { playerId webName teamId teamName teamShortName position price selectedByPercent }
@@ -158,11 +191,8 @@ export const ENTRY_SEARCH_DOCUMENT = `
 `
 
 export const OWN_ENTRY_DOCUMENT = `
-  query AgentOwnEntry($id: Int!, $eventId: Int) {
+  query AgentOwnEntryDesk($eventId: Int) {
     coreEventContext { season revision sourceCheckedAt }
-    entrySnapshot(id: $id) {
-      id entryName playerName region startedEvent overallPoints overallRank bank teamValue totalTransfers
-    }
     myFplTeamDesk(eventId: $eventId) {
       state
       context { season coreRevision currentEventId nextEventId latestFinalizedEventId }
@@ -190,15 +220,10 @@ export const OWN_ENTRY_DOCUMENT = `
   }
 `
 
-export const COMPETITION_DOCUMENT = `
-  query AgentCompetition(
-    $competitionId: Int!
-    $entryId: Int!
-    $eventId: Int!
-    $limit: Int!
-    $offset: Int!
-  ) {
+export const COMPETITION_CONTEXT_DOCUMENT = `
+  query AgentCompetitionContext($competitionId: Int!, $entryId: Int!, $eventId: Int!) {
     coreEventContext { season revision sourceCheckedAt }
+    liveSnapshot(eventId: $eventId) { season eventId revision state publishedAt checkedAt }
     tournament(tournamentId: $competitionId, entryId: $entryId) {
       id name creator adminEntryId leagueId leagueType sourceLeagueName rosterMode rosterSyncStatus
       rosterLastSyncedAt totalTeamNum tournamentMode groupMode groupTeamNum groupNum
@@ -207,16 +232,30 @@ export const COMPETITION_DOCUMENT = `
       knockoutEndedEventId knockoutPlayAgainstNum state setupStatus setupPhase setupCompletedUnits
       setupTotalUnits setupProgressUpdatedAt standingsReadyAt setupHasWarnings createdAt updatedAt
     }
+  }
+`
+
+export const COMPETITION_DOCUMENT = `
+  query AgentCompetitionResults(
+    $competitionId: Int!
+    $entryId: Int!
+    $eventId: Int!
+    $limit: Int!
+    $offset: Int!
+  ) {
+    coreEventContext { season revision sourceCheckedAt }
+    liveSnapshot(eventId: $eventId) { season eventId revision state publishedAt checkedAt }
+    tournament(tournamentId: $competitionId, entryId: $entryId) {
+      id adminEntryId standingsReadyAt updatedAt
+    }
     tournamentEventResults(
       tournamentId: $competitionId
       eventId: $eventId
       limit: $limit
       offset: $offset
     ) {
-      groupId entryId entryName playerName eventGroupRank eventPoints eventCost eventNetPoints eventRank
-      overallPoints overallRank eventChip captainId captainPoints teamValue bank
-      event { id name deadlineTime finished dataChecked }
-      captain { id webName }
+      groupId entryId entryName eventGroupRank eventPoints eventCost eventNetPoints
+      overallPoints overallRank
     }
   }
 `
@@ -253,10 +292,15 @@ export const AGENT_GRAPHQL_DOCUMENTS = Object.freeze({
 	PLAYERS_DOCUMENT,
 	PLAYER_CATALOG_DOCUMENT,
 	GAMEWEEK_DOCUMENT,
-	MARKET_DOCUMENT,
+	MARKET_LINEUP_DOCUMENT,
+	MARKET_OWNERSHIP_RISERS_DOCUMENT,
+	MARKET_OWNERSHIP_FALLERS_DOCUMENT,
+	MARKET_PULSE_MOVERS_DOCUMENT,
+	MARKET_PULSE_UPDATES_DOCUMENT,
 	ENTRY_SNAPSHOT_DOCUMENT,
 	ENTRY_SEARCH_DOCUMENT,
 	OWN_ENTRY_DOCUMENT,
+	COMPETITION_CONTEXT_DOCUMENT,
 	COMPETITION_DOCUMENT,
 	BRIEFING_WEEK_DOCUMENT,
 	BRIEFING_STORY_DOCUMENT

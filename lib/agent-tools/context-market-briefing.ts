@@ -1,4 +1,4 @@
-import type { AgentWarning } from '@/lib/agent-tools/contracts'
+import { AgentToolError, type AgentWarning } from '@/lib/agent-tools/contracts'
 import {
 	isBriefingState,
 	isRenderableBriefingStoryState
@@ -7,7 +7,11 @@ import {
 	BRIEFING_STORY_DOCUMENT,
 	BRIEFING_WEEK_DOCUMENT,
 	CONTEXT_DOCUMENT,
-	MARKET_DOCUMENT
+	MARKET_LINEUP_DOCUMENT,
+	MARKET_OWNERSHIP_FALLERS_DOCUMENT,
+	MARKET_OWNERSHIP_RISERS_DOCUMENT,
+	MARKET_PULSE_MOVERS_DOCUMENT,
+	MARKET_PULSE_UPDATES_DOCUMENT
 } from '@/lib/agent-tools/documents'
 import {
 	coreRevisions,
@@ -34,10 +38,17 @@ export async function runContext(options: ToolRunOptions<'letletme_context'>) {
 			sections: Array<{ key: string; items: unknown[] }>
 		}
 	}>(options, CONTEXT_DOCUMENT, { locale: 'EN' })
-	const { coreEventContext: core, marketSnapshotContext: market, briefingWeek: briefing } = result
+	const {
+		coreEventContext: core,
+		marketSnapshotContext: market,
+		briefingWeek: briefing
+	} = result
 	const warnings: AgentWarning[] = []
 	if (market.rowCount === 0) {
-		warnings.push({ code: 'MARKET_NO_DATA', message: 'No published market rows are available.' })
+		warnings.push({
+			code: 'MARKET_NO_DATA',
+			message: 'No published market rows are available.'
+		})
 	}
 	if (!['READY', 'STALE'].includes(briefing.state)) {
 		warnings.push({
@@ -46,7 +57,9 @@ export async function runContext(options: ToolRunOptions<'letletme_context'>) {
 		})
 	}
 	const now = (options.now ?? (() => new Date()))()
-	const deadline = core.nextDeadlineTime ? new Date(core.nextDeadlineTime) : null
+	const deadline = core.nextDeadlineTime
+		? new Date(core.nextDeadlineTime)
+		: null
 	return toolResponse(
 		options,
 		{
@@ -88,7 +101,9 @@ export async function runContext(options: ToolRunOptions<'letletme_context'>) {
 			season: core.season,
 			core: core.revision,
 			market: market.revision,
-			...(briefing.revision === null ? {} : { briefing: String(briefing.revision) })
+			...(briefing.revision === null
+				? {}
+				: { briefing: String(briefing.revision) })
 		},
 		warnings,
 		undefined,
@@ -97,9 +112,87 @@ export async function runContext(options: ToolRunOptions<'letletme_context'>) {
 }
 
 export async function runMarket(options: ToolRunOptions<'letletme_market'>) {
-	const result = await executeDocument<{
+	type MarketEnvelope = {
 		coreEventContext: CoreContext
 		marketSnapshotContext: MarketContext
+	}
+	const [
+		lineupResult,
+		risersResult,
+		fallersResult,
+		moversResult,
+		updatesResult
+	] = await Promise.all([
+		executeDocument<
+			MarketEnvelope & {
+				marketLineup: unknown
+			}
+		>(options, MARKET_LINEUP_DOCUMENT),
+		executeDocument<
+			MarketEnvelope & {
+				marketOwnershipOverview: {
+					coverage: { status: string; complete: boolean; stale: boolean }
+					[key: string]: unknown
+				}
+			}
+		>(options, MARKET_OWNERSHIP_RISERS_DOCUMENT, {
+			period: options.input.ownershipPeriod,
+			limit: options.input.limit
+		}),
+		executeDocument<
+			MarketEnvelope & {
+				marketOwnershipOverview: {
+					coverage: { status: string; complete: boolean; stale: boolean }
+					[key: string]: unknown
+				}
+			}
+		>(options, MARKET_OWNERSHIP_FALLERS_DOCUMENT, {
+			period: options.input.ownershipPeriod,
+			limit: options.input.limit
+		}),
+		executeDocument<
+			MarketEnvelope & {
+				marketPulse: {
+					coverage: { complete: boolean; stale: boolean; observedDays: number }
+					[key: string]: unknown
+				}
+			}
+		>(options, MARKET_PULSE_MOVERS_DOCUMENT, { days: options.input.days }),
+		executeDocument<
+			MarketEnvelope & {
+				marketPulse: Record<string, unknown>
+			}
+		>(options, MARKET_PULSE_UPDATES_DOCUMENT, { days: options.input.days })
+	])
+	const revisionKey = (result: MarketEnvelope): string =>
+		[
+			result.coreEventContext.season,
+			result.coreEventContext.revision,
+			result.marketSnapshotContext.season,
+			result.marketSnapshotContext.revision
+		].join(':')
+	const expectedRevision = revisionKey(lineupResult)
+	if (
+		![risersResult, fallersResult, moversResult, updatesResult].every(
+			result => revisionKey(result) === expectedRevision
+		)
+	) {
+		throw new AgentToolError(
+			'UPSTREAM_UNAVAILABLE',
+			'The published market revision changed during this request. Retry the tool.',
+			502,
+			true
+		)
+	}
+	const result = {
+		...lineupResult,
+		marketOwnershipOverview: {
+			...risersResult.marketOwnershipOverview,
+			...fallersResult.marketOwnershipOverview,
+			risers: risersResult.marketOwnershipOverview.risers ?? []
+		},
+		marketPulse: { ...moversResult.marketPulse, ...updatesResult.marketPulse }
+	} satisfies MarketEnvelope & {
 		marketLineup: unknown
 		marketOwnershipOverview: {
 			coverage: { status: string; complete: boolean; stale: boolean }
@@ -109,11 +202,7 @@ export async function runMarket(options: ToolRunOptions<'letletme_market'>) {
 			coverage: { complete: boolean; stale: boolean; observedDays: number }
 			[key: string]: unknown
 		}
-	}>(options, MARKET_DOCUMENT, {
-		days: options.input.days,
-		period: options.input.ownershipPeriod,
-		limit: options.input.limit
-	})
+	}
 	const { coreEventContext: core, marketSnapshotContext: market } = result
 	const warnings: AgentWarning[] = []
 	if (!result.marketPulse.coverage.complete) {
@@ -123,7 +212,10 @@ export async function runMarket(options: ToolRunOptions<'letletme_market'>) {
 		})
 	}
 	if (result.marketPulse.coverage.stale) {
-		warnings.push({ code: 'MARKET_STALE', message: 'The published market snapshot is stale.' })
+		warnings.push({
+			code: 'MARKET_STALE',
+			message: 'The published market snapshot is stale.'
+		})
 	}
 	if (result.marketOwnershipOverview.coverage.status !== 'READY') {
 		warnings.push({
@@ -146,7 +238,9 @@ export async function runMarket(options: ToolRunOptions<'letletme_market'>) {
 	)
 }
 
-export async function runBriefing(options: ToolRunOptions<'letletme_briefing'>) {
+export async function runBriefing(
+	options: ToolRunOptions<'letletme_briefing'>
+) {
 	if (options.input.slug) {
 		const result = await executeDocument<{
 			coreEventContext: CoreContext
@@ -158,14 +252,20 @@ export async function runBriefing(options: ToolRunOptions<'letletme_briefing'>) 
 				sourceCheckedAt: string | null
 				staleAt: string | null
 			}
-			briefingStory: { state: string; canonicalSlug: string | null; story: unknown | null } | null
+			briefingStory: {
+				state: string
+				canonicalSlug: string | null
+				story: unknown | null
+			} | null
 		}>(options, BRIEFING_STORY_DOCUMENT, {
 			slug: options.input.slug,
 			locale: options.input.locale
 		})
 		const storyState = result.briefingStory?.state
 		const publishable = Boolean(
-			storyState && isBriefingState(storyState) && isRenderableBriefingStoryState(storyState)
+			storyState &&
+			isBriefingState(storyState) &&
+			isRenderableBriefingStoryState(storyState)
 		)
 		const warnings = publishable
 			? []
@@ -190,7 +290,8 @@ export async function runBriefing(options: ToolRunOptions<'letletme_briefing'>) 
 			},
 			warnings,
 			undefined,
-			result.briefingWeek.sourceCheckedAt ?? result.coreEventContext.sourceCheckedAt
+			result.briefingWeek.sourceCheckedAt ??
+				result.coreEventContext.sourceCheckedAt
 		)
 	}
 
@@ -216,7 +317,10 @@ export async function runBriefing(options: ToolRunOptions<'letletme_briefing'>) 
 		})
 	}
 	if (result.briefingWeek.state === 'STALE') {
-		warnings.push({ code: 'BRIEFING_STALE', message: 'The published Briefing is stale.' })
+		warnings.push({
+			code: 'BRIEFING_STALE',
+			message: 'The published Briefing is stale.'
+		})
 	}
 	const week = publishable
 		? result.briefingWeek
@@ -240,6 +344,7 @@ export async function runBriefing(options: ToolRunOptions<'letletme_briefing'>) 
 		},
 		warnings,
 		undefined,
-		result.briefingWeek.sourceCheckedAt ?? result.coreEventContext.sourceCheckedAt
+		result.briefingWeek.sourceCheckedAt ??
+			result.coreEventContext.sourceCheckedAt
 	)
 }

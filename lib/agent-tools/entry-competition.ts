@@ -1,5 +1,6 @@
 import { AgentToolError, type AgentWarning } from '@/lib/agent-tools/contracts'
 import {
+	COMPETITION_CONTEXT_DOCUMENT,
 	COMPETITION_DOCUMENT,
 	ENTRY_SEARCH_DOCUMENT,
 	ENTRY_SNAPSHOT_DOCUMENT,
@@ -26,10 +27,17 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 		const result = await executeDocument<{
 			coreEventContext: CoreContext
 			searchEntries: unknown[]
-		}>(options, ENTRY_SEARCH_DOCUMENT, { query: input.query, limit: input.limit })
+		}>(options, ENTRY_SEARCH_DOCUMENT, {
+			query: input.query,
+			limit: input.limit
+		})
 		return toolResponse(
 			options,
-			{ accessScope: 'public', query: input.query, entries: result.searchEntries },
+			{
+				accessScope: 'public',
+				query: input.query,
+				entries: result.searchEntries
+			},
 			coreRevisions(result.coreEventContext),
 			[],
 			undefined,
@@ -40,16 +48,21 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 	const ownId = verifiedEntryId(options.session)
 	const entryId = input.entryId ?? requireVerifiedEntryId(options.session)
 	if (ownId !== null && entryId === ownId) {
-		const result = await executeDocument<{
-			coreEventContext: CoreContext
-			entrySnapshot: unknown | null
-			myFplTeamDesk: {
-				state: string
-				history: unknown[]
-				[key: string]: unknown
-			}
-		}>(options, OWN_ENTRY_DOCUMENT, { id: entryId, eventId: input.eventId })
-		if (!result.entrySnapshot) {
+		const [snapshot, deskResult] = await Promise.all([
+			executeDocument<{
+				coreEventContext: CoreContext
+				entrySnapshot: unknown | null
+			}>(options, ENTRY_SNAPSHOT_DOCUMENT, { id: entryId }),
+			executeDocument<{
+				coreEventContext: CoreContext
+				myFplTeamDesk: {
+					state: string
+					history: unknown[]
+					[key: string]: unknown
+				}
+			}>(options, OWN_ENTRY_DOCUMENT, { eventId: input.eventId })
+		])
+		if (!snapshot.entrySnapshot) {
 			throw new AgentToolError(
 				'NOT_FOUND',
 				'The verified entry has not been persisted by LetLetMe yet.',
@@ -57,7 +70,19 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 				false
 			)
 		}
-		const desk = result.myFplTeamDesk
+		if (
+			snapshot.coreEventContext.season !== deskResult.coreEventContext.season ||
+			snapshot.coreEventContext.revision !==
+				deskResult.coreEventContext.revision
+		) {
+			throw new AgentToolError(
+				'UPSTREAM_UNAVAILABLE',
+				'The published entry revision changed during this request. Retry the tool.',
+				502,
+				true
+			)
+		}
+		const desk = deskResult.myFplTeamDesk
 		const warnings: AgentWarning[] = []
 		if (desk.state !== 'READY') {
 			warnings.push({
@@ -69,13 +94,16 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 			options,
 			{
 				accessScope: 'self',
-				entry: result.entrySnapshot,
-				extensions: { ...desk, history: desk.history.slice(-input.historyLimit) }
+				entry: snapshot.entrySnapshot,
+				extensions: {
+					...desk,
+					history: desk.history.slice(-input.historyLimit)
+				}
 			},
-			coreRevisions(result.coreEventContext),
+			coreRevisions(deskResult.coreEventContext),
 			warnings,
 			undefined,
-			result.coreEventContext.sourceCheckedAt
+			deskResult.coreEventContext.sourceCheckedAt
 		)
 	}
 
@@ -104,19 +132,76 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 const competitionKey = (
 	competitionId: number,
 	eventId: number,
-	entryId: number
-): string => fingerprint({ competitionId, eventId, entryId })
+	entryId: number,
+	core: CoreContext,
+	tournament: CompetitionTournament,
+	liveSnapshot: CompetitionLiveSnapshot
+): string =>
+	fingerprint({
+		competitionId,
+		eventId,
+		entryId,
+		season: core.season,
+		coreRevision: core.revision,
+		standingsRevision: liveSnapshot?.revision ?? null,
+		tournamentUpdatedAt: tournament.updatedAt,
+		standingsReadyAt: tournament.standingsReadyAt
+	})
 
-export async function runCompetition(options: ToolRunOptions<'letletme_competition'>) {
+type CompetitionTournament = {
+	adminEntryId: number
+	updatedAt: string
+	standingsReadyAt: string | null
+	[key: string]: unknown
+}
+
+type CompetitionLiveSnapshot = {
+	season: string
+	eventId: number
+	revision: string
+	checkedAt: string
+} | null
+
+type CompetitionContext = {
+	coreEventContext: CoreContext
+	liveSnapshot: CompetitionLiveSnapshot
+	tournament: CompetitionTournament | null
+}
+
+export async function runCompetition(
+	options: ToolRunOptions<'letletme_competition'>
+) {
 	const entryId = requireVerifiedEntryId(options.session)
-	const eventId = options.input.eventId ?? coreEventId(await loadCoreContext(options))
-	const key = competitionKey(options.input.competitionId, eventId, entryId)
-	const offset = decodeCursor(options.input.cursor, { kind: 'competition', key }) ?? 0
-	const result = await executeDocument<{
-		coreEventContext: CoreContext
-		tournament: { adminEntryId: number; [key: string]: unknown } | null
-		tournamentEventResults: unknown[]
-	}>(options, COMPETITION_DOCUMENT, {
+	const eventId =
+		options.input.eventId ?? coreEventId(await loadCoreContext(options))
+	const context = await executeDocument<CompetitionContext>(
+		options,
+		COMPETITION_CONTEXT_DOCUMENT,
+		{ competitionId: options.input.competitionId, entryId, eventId }
+	)
+	if (!context.tournament) {
+		throw new AgentToolError(
+			'NOT_FOUND',
+			'Competition not found or no longer available.',
+			404,
+			false
+		)
+	}
+	const key = competitionKey(
+		options.input.competitionId,
+		eventId,
+		entryId,
+		context.coreEventContext,
+		context.tournament,
+		context.liveSnapshot
+	)
+	const offset =
+		decodeCursor(options.input.cursor, { kind: 'competition', key }) ?? 0
+	const result = await executeDocument<
+		CompetitionContext & {
+			tournamentEventResults: unknown[]
+		}
+	>(options, COMPETITION_DOCUMENT, {
 		competitionId: options.input.competitionId,
 		entryId,
 		eventId,
@@ -131,17 +216,38 @@ export async function runCompetition(options: ToolRunOptions<'letletme_competiti
 			false
 		)
 	}
+	const resultKey = competitionKey(
+		options.input.competitionId,
+		eventId,
+		entryId,
+		result.coreEventContext,
+		result.tournament,
+		result.liveSnapshot
+	)
+	if (resultKey !== key) {
+		throw new AgentToolError(
+			'UPSTREAM_UNAVAILABLE',
+			'Competition standings changed during this request. Retry the tool.',
+			502,
+			true
+		)
+	}
 	const hasMore = result.tournamentEventResults.length > options.input.limit
 	const rows = result.tournamentEventResults.slice(0, options.input.limit)
 	const nextCursor = hasMore
-		? encodeCursor({ kind: 'competition', key, value: offset + rows.length })
+		? encodeCursor({
+				kind: 'competition',
+				key: resultKey,
+				value: offset + rows.length
+			})
 		: null
 	return toolResponse(
 		options,
 		{
-			accessScope: result.tournament.adminEntryId === entryId ? 'admin' : 'member',
+			accessScope:
+				context.tournament.adminEntryId === entryId ? 'admin' : 'member',
 			eventId,
-			competition: result.tournament,
+			competition: context.tournament,
 			results: rows
 		},
 		coreRevisions(result.coreEventContext),

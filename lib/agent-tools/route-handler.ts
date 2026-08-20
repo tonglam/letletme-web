@@ -15,6 +15,7 @@ import type { AgentGraphQLExecutor } from '@/lib/agent-tools/runtime'
 
 export const AGENT_MAX_INPUT_BYTES = 16 * 1024
 export const AGENT_MAX_OUTPUT_BYTES = 64 * 1024
+export const AGENT_UPSTREAM_TIMEOUT_MS = 15_000
 
 type AgentGatewayEnvironment = Readonly<Record<string, string | undefined>>
 
@@ -36,11 +37,55 @@ export type AgentGatewayDependencies = {
 	env?: AgentGatewayEnvironment
 	now?: () => Date
 	log?: (record: AgentGatewayLog) => void
+	upstreamTimeoutMs?: number
 }
 
 const textEncoder = new TextEncoder()
 
-const byteLength = (value: string): number => textEncoder.encode(value).byteLength
+const byteLength = (value: string): number =>
+	textEncoder.encode(value).byteLength
+
+const upstreamTimeoutMs = (dependencies: AgentGatewayDependencies): number => {
+	const configured = dependencies.upstreamTimeoutMs
+	return configured !== undefined &&
+		Number.isFinite(configured) &&
+		configured > 0
+		? configured
+		: AGENT_UPSTREAM_TIMEOUT_MS
+}
+
+const withUpstreamDeadline = async <T>(
+	requestSignal: AbortSignal,
+	timeoutMs: number,
+	task: (signal: AbortSignal) => Promise<T>
+): Promise<T> => {
+	const controller = new AbortController()
+	const abortFromRequest = () => controller.abort(requestSignal.reason)
+	if (requestSignal.aborted) abortFromRequest()
+	else requestSignal.addEventListener('abort', abortFromRequest, { once: true })
+
+	let timeoutId: ReturnType<typeof globalThis.setTimeout> | undefined
+	const timeout = new Promise<never>((_resolve, reject) => {
+		timeoutId = globalThis.setTimeout(() => {
+			reject(
+				new AgentToolError(
+					'UPSTREAM_TIMEOUT',
+					'The LetLetMe data service timed out.',
+					504,
+					true
+				)
+			)
+			controller.abort(new Error('Agent tool upstream deadline exceeded'))
+		}, timeoutMs)
+	})
+
+	try {
+		return await Promise.race([task(controller.signal), timeout])
+	} finally {
+		if (timeoutId !== undefined) globalThis.clearTimeout(timeoutId)
+		requestSignal.removeEventListener('abort', abortFromRequest)
+	}
+}
 
 const responseHeaders = (requestId: string): Headers =>
 	new Headers({
@@ -71,7 +116,12 @@ const asAgentToolError = (error: unknown): AgentToolError => {
 	if (error instanceof AgentToolError) return error
 	if (error instanceof GraphQLRequestError) {
 		if (error.code === 'UNAUTHENTICATED' || error.status === 401) {
-			return new AgentToolError('AUTH_REQUIRED', 'Authentication is required.', 401, false)
+			return new AgentToolError(
+				'AUTH_REQUIRED',
+				'Authentication is required.',
+				401,
+				false
+			)
 		}
 		if (error.code === 'FORBIDDEN' || error.status === 403) {
 			return new AgentToolError(
@@ -82,7 +132,12 @@ const asAgentToolError = (error: unknown): AgentToolError => {
 			)
 		}
 		if (error.code === 'NOT_FOUND' || error.status === 404) {
-			return new AgentToolError('NOT_FOUND', 'The requested data was not found.', 404, false)
+			return new AgentToolError(
+				'NOT_FOUND',
+				'The requested data was not found.',
+				404,
+				false
+			)
 		}
 		if (error.code === 'RATE_LIMITED' || error.status === 429) {
 			return new AgentToolError(
@@ -102,9 +157,11 @@ const asAgentToolError = (error: unknown): AgentToolError => {
 			)
 		}
 		if (
-			['BAD_USER_INPUT', 'INVALID_GRAPHQL_REQUEST', 'QUERY_TOO_COMPLEX'].includes(
-				error.code ?? ''
-			)
+			[
+				'BAD_USER_INPUT',
+				'INVALID_GRAPHQL_REQUEST',
+				'QUERY_TOO_COMPLEX'
+			].includes(error.code ?? '')
 		) {
 			return new AgentToolError(
 				'INVALID_INPUT',
@@ -183,7 +240,12 @@ const authorize = async (
 		)
 	}
 	if (!session?.user?.id) {
-		throw new AgentToolError('AUTH_REQUIRED', 'Sign in to LetLetMe to use Agent tools.', 401, false)
+		throw new AgentToolError(
+			'AUTH_REQUIRED',
+			'Sign in to LetLetMe to use Agent tools.',
+			401,
+			false
+		)
 	}
 	const allowlist = betaUserIds(env)
 	if (allowlist.size > 0 && !allowlist.has(session.user.id)) {
@@ -198,7 +260,10 @@ const authorize = async (
 }
 
 const anonymousUserHash = (userId: string, secret: string): string =>
-	createHmac('sha256', secret).update(`agent-user:${userId}`).digest('hex').slice(0, 24)
+	createHmac('sha256', secret)
+		.update(`agent-user:${userId}`)
+		.digest('hex')
+		.slice(0, 24)
 
 const defaultLog = (record: AgentGatewayLog): void => {
 	console.info('[agent-gateway]', JSON.stringify(record))
@@ -244,7 +309,7 @@ export async function handleAgentCapabilitiesRequest(
 				limits: {
 					requestBytes: AGENT_MAX_INPUT_BYTES,
 					responseBytes: AGENT_MAX_OUTPUT_BYTES,
-					upstreamTimeoutMs: 15_000
+					upstreamTimeoutMs: upstreamTimeoutMs(dependencies)
 				}
 			},
 			200,
@@ -286,7 +351,12 @@ export async function handleAgentToolRequest(
 		const { session, secret } = await authorize(request, dependencies)
 		userHash = anonymousUserHash(session.user.id, secret)
 		if (!isLetLetMeToolName(toolName)) {
-			throw new AgentToolError('NOT_FOUND', 'Unknown LetLetMe Agent tool.', 404, false)
+			throw new AgentToolError(
+				'NOT_FOUND',
+				'Unknown LetLetMe Agent tool.',
+				404,
+				false
+			)
 		}
 		const contentType = request.headers.get('content-type')?.toLowerCase() ?? ''
 		if (!contentType.startsWith('application/json')) {
@@ -316,18 +386,28 @@ export async function handleAgentToolRequest(
 		try {
 			body = JSON.parse(rawBody)
 		} catch {
-			throw new AgentToolError('INVALID_INPUT', 'Request body is not valid JSON.', 400, false)
+			throw new AgentToolError(
+				'INVALID_INPUT',
+				'Request body is not valid JSON.',
+				400,
+				false
+			)
 		}
 		const input = parseAgentToolInput(toolName, body)
-		const result = await runAgentTool({
-			tool: toolName,
-			input,
-			session,
-			requestId,
-			execute: dependencies.execute,
-			signal: request.signal,
-			now: dependencies.now
-		})
+		const result = await withUpstreamDeadline(
+			request.signal,
+			upstreamTimeoutMs(dependencies),
+			signal =>
+				runAgentTool({
+					tool: toolName,
+					input,
+					session,
+					requestId,
+					execute: dependencies.execute,
+					signal,
+					now: dependencies.now
+				})
+		)
 		const serialized = JSON.stringify(result)
 		outputBytes = byteLength(serialized)
 		if (outputBytes > AGENT_MAX_OUTPUT_BYTES) {
@@ -344,7 +424,10 @@ export async function handleAgentToolRequest(
 			)
 		)
 		status = 200
-		return new Response(serialized, { status, headers: responseHeaders(requestId) })
+		return new Response(serialized, {
+			status,
+			headers: responseHeaders(requestId)
+		})
 	} catch (error) {
 		const built = toolErrorResponse(asAgentToolError(error), requestId)
 		status = built.response.status

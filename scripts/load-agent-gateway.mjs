@@ -4,11 +4,18 @@ import { pathToFileURL } from 'node:url'
 const DEFAULT_CLIENTS = 20
 const DEFAULT_DURATION_SECONDS = 10 * 60
 const REQUEST_INTERVAL_MS = 1_000
+const DEFAULT_REQUEST_TIMEOUT_MS = 20_000
 
 const sleep = milliseconds =>
-	new Promise(resolve => globalThis.setTimeout(resolve, Math.max(0, milliseconds)))
+	new Promise(resolve =>
+		globalThis.setTimeout(resolve, Math.max(0, milliseconds))
+	)
 
-export function nextRequestDelayMs(finishedAt, endsAt, intervalMs = REQUEST_INTERVAL_MS) {
+export function nextRequestDelayMs(
+	finishedAt,
+	endsAt,
+	intervalMs = REQUEST_INTERVAL_MS
+) {
 	return finishedAt + intervalMs >= endsAt ? null : intervalMs
 }
 
@@ -24,7 +31,10 @@ export function parsePositiveInteger(value, fallback, name) {
 export function percentile(values, quantile) {
 	if (values.length === 0) return null
 	const sorted = [...values].sort((left, right) => left - right)
-	const index = Math.min(sorted.length - 1, Math.ceil(sorted.length * quantile) - 1)
+	const index = Math.min(
+		sorted.length - 1,
+		Math.ceil(sorted.length * quantile) - 1
+	)
 	return Number(sorted[Math.max(0, index)].toFixed(2))
 }
 
@@ -39,9 +49,13 @@ export function resolveLoadCookies(env) {
 		if (
 			!Array.isArray(parsed) ||
 			parsed.length === 0 ||
-			parsed.some(cookie => typeof cookie !== 'string' || cookie.trim().length === 0)
+			parsed.some(
+				cookie => typeof cookie !== 'string' || cookie.trim().length === 0
+			)
 		) {
-			throw new Error('AGENT_LOAD_COOKIES_JSON must be a non-empty array of cookie strings')
+			throw new Error(
+				'AGENT_LOAD_COOKIES_JSON must be a non-empty array of cookie strings'
+			)
 		}
 		return parsed.map(cookie => cookie.trim())
 	}
@@ -55,9 +69,13 @@ export function resolveLoadCookies(env) {
 export function resolveEndpoint(value) {
 	if (!value) throw new Error('Set AGENT_LOAD_BASE_URL explicitly')
 	const url = new URL('/api/agent/v1/tools/letletme_context', value)
-	const localHttp = url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)
+	const localHttp =
+		url.protocol === 'http:' &&
+		['localhost', '127.0.0.1'].includes(url.hostname)
 	if (url.protocol !== 'https:' && !localHttp) {
-		throw new Error('AGENT_LOAD_BASE_URL must use HTTPS (HTTP is allowed only for localhost)')
+		throw new Error(
+			'AGENT_LOAD_BASE_URL must use HTTPS (HTTP is allowed only for localhost)'
+		)
 	}
 	url.search = ''
 	url.hash = ''
@@ -92,20 +110,41 @@ export function summarize(samples, durationSeconds, clients, sessionCount) {
 		invalidBodies,
 		unexpectedStatuses,
 		unexpectedErrorRate:
-			samples.length === 0 ? 1 : Number((unexpectedErrors / samples.length).toFixed(6)),
+			samples.length === 0
+				? 1
+				: Number((unexpectedErrors / samples.length).toFixed(6)),
 		latencyMs: {
-			p50: percentile(samples.map(sample => sample.durationMs), 0.5),
-			p95: percentile(samples.map(sample => sample.durationMs), 0.95),
+			p50: percentile(
+				samples.map(sample => sample.durationMs),
+				0.5
+			),
+			p95: percentile(
+				samples.map(sample => sample.durationMs),
+				0.95
+			),
 			max:
 				samples.length === 0
 					? null
-					: Number(Math.max(...samples.map(sample => sample.durationMs)).toFixed(2))
+					: Number(
+							Math.max(...samples.map(sample => sample.durationMs)).toFixed(2)
+						)
 		}
 	}
 }
 
-async function requestContext(endpoint, cookie, clientIndex, fetcher) {
+async function requestContext(
+	endpoint,
+	cookie,
+	clientIndex,
+	fetcher,
+	requestTimeoutMs
+) {
 	const startedAt = performance.now()
+	const controller = new AbortController()
+	const timeoutId = globalThis.setTimeout(
+		() => controller.abort(),
+		requestTimeoutMs
+	)
 	try {
 		const response = await fetcher(endpoint, {
 			method: 'POST',
@@ -115,7 +154,8 @@ async function requestContext(endpoint, cookie, clientIndex, fetcher) {
 				Cookie: cookie,
 				'X-Request-Id': `agent-load-${clientIndex}-${randomUUID()}`
 			},
-			body: '{}'
+			body: '{}',
+			signal: controller.signal
 		})
 		let bodyValid = false
 		try {
@@ -134,7 +174,13 @@ async function requestContext(endpoint, cookie, clientIndex, fetcher) {
 			durationMs: performance.now() - startedAt
 		}
 	} catch {
-		return { status: null, bodyValid: true, durationMs: performance.now() - startedAt }
+		return {
+			status: null,
+			bodyValid: true,
+			durationMs: performance.now() - startedAt
+		}
+	} finally {
+		globalThis.clearTimeout(timeoutId)
 	}
 }
 
@@ -143,6 +189,7 @@ export async function runLoadTest({
 	cookies,
 	clients = DEFAULT_CLIENTS,
 	durationSeconds = DEFAULT_DURATION_SECONDS,
+	requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
 	fetcher = globalThis.fetch
 }) {
 	const samples = []
@@ -151,7 +198,15 @@ export async function runLoadTest({
 		Array.from({ length: clients }, async (_, clientIndex) => {
 			const cookie = cookies[clientIndex % cookies.length]
 			while (performance.now() < endsAt) {
-				samples.push(await requestContext(endpoint, cookie, clientIndex, fetcher))
+				samples.push(
+					await requestContext(
+						endpoint,
+						cookie,
+						clientIndex,
+						fetcher,
+						requestTimeoutMs
+					)
+				)
 				const delayMs = nextRequestDelayMs(performance.now(), endsAt)
 				if (delayMs === null) break
 				await sleep(delayMs)
@@ -174,6 +229,11 @@ async function main() {
 		DEFAULT_DURATION_SECONDS,
 		'AGENT_LOAD_DURATION_SECONDS'
 	)
+	const requestTimeoutMs = parsePositiveInteger(
+		process.env.AGENT_LOAD_REQUEST_TIMEOUT_MS,
+		DEFAULT_REQUEST_TIMEOUT_MS,
+		'AGENT_LOAD_REQUEST_TIMEOUT_MS'
+	)
 	console.info(
 		JSON.stringify({
 			event: 'agent_gateway_load_start',
@@ -181,20 +241,33 @@ async function main() {
 			clients,
 			sessionCount: cookies.length,
 			durationSeconds,
+			requestTimeoutMs,
 			requestsPerClientPerSecond: 1
 		})
 	)
-	const summary = await runLoadTest({ endpoint, cookies, clients, durationSeconds })
-	console.info(JSON.stringify({ event: 'agent_gateway_load_complete', ...summary }))
+	const summary = await runLoadTest({
+		endpoint,
+		cookies,
+		clients,
+		durationSeconds,
+		requestTimeoutMs
+	})
+	console.info(
+		JSON.stringify({ event: 'agent_gateway_load_complete', ...summary })
+	)
 	if (summary.unexpectedErrorRate >= 0.01) process.exitCode = 1
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+	process.argv[1] &&
+	import.meta.url === pathToFileURL(process.argv[1]).href
+) {
 	main().catch(error => {
 		console.error(
 			JSON.stringify({
 				event: 'agent_gateway_load_failed',
-				message: error instanceof Error ? error.message : 'Unknown load test failure'
+				message:
+					error instanceof Error ? error.message : 'Unknown load test failure'
 			})
 		)
 		process.exitCode = 1
