@@ -127,8 +127,10 @@ export { consumeBugReportStorageNonce, verifyBugReportStorageSignature }
 
 export const BUG_REPORT_STORAGE_BODY_MAX_BYTES = 8 * 1024
 
-export async function deleteBugReportStorage(locator: string): Promise<void> {
-	await deleteBugReportScreenshot(locator)
+export async function deleteBugReportStorage(
+	locator: string
+): Promise<'deleted' | 'missing'> {
+	return deleteBugReportScreenshot(locator)
 }
 
 export async function migrateBugReportStorage(locator: string): Promise<string> {
