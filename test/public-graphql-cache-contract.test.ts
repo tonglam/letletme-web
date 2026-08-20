@@ -76,6 +76,23 @@ describe('public GraphQL cache contract', () => {
 		assert.match(home, /TransientHomeGameweekError/)
 	})
 
+	it('keeps public Trends classification aligned and Player Stats route caching single-layered', async () => {
+		const [trends, playerDesk, playerDeskRoute] = await Promise.all([
+			read('lib/trends-server.ts'),
+			read('lib/player-stats-desk-server.ts'),
+			read('app/api/player-stats/desk/route.ts')
+		])
+		assert.doesNotMatch(trends, /'public-other'/)
+		assert.equal((trends.match(/'interactive'/g) ?? []).length, 2)
+		assert.match(playerDesk, /unstable_cache\(\s*loadCompletePlayerStatsDeskFromOrigin/)
+		assert.match(
+			playerDesk,
+			/loadPlayerStatsDeskForPublicRoute[\s\S]*loadCompletePlayerStatsDeskFromOrigin/
+		)
+		assert.match(playerDeskRoute, /loadPlayerStatsDeskForPublicRoute/)
+		assert.doesNotMatch(playerDeskRoute, /createPlayerStatsDeskRouteHandler\(loadPlayerStatsDesk\)/)
+	})
+
 	it('correlates signed capacity page runs without making cache keys request-derived', async () => {
 		const [playerStats, fixtures, market, serverContext, publicServer] =
 			await Promise.all([

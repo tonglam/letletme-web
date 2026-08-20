@@ -22,65 +22,96 @@ class IncompletePlayerStatsDeskError extends Error {
 	}
 }
 
-const loadCompletePlayerStatsDesk = unstable_cache(
-	async (
-		playerIds: number[],
-		eventId: number,
-		horizon: number,
-		section: PlayerStatsDeskSection
-	): Promise<PlayerStatsDeskLoadResult> => {
-		const key = [
-			'player-stats-desk',
-			section,
-			eventId,
-			horizon,
-			playerIds.join(',')
-		].join(':')
-		return coalescePublicSeed(key, async () => {
-			console.info('[public graphql cache]', {
-				key,
-				workload: 'player-stats',
-				cacheResult: 'miss-fill'
-			})
-			const response =
-				await executePublicServerQuery<PlayerStatsDeskGraphQLResponse>(
-					'player-stats',
-					PLAYER_STATS_DESK_QUERIES[section],
-					{ playerIds, eventId, horizon },
-					{ cache: 'no-store', timeoutMs: 5_000 }
-				)
-			const result = normalizePlayerStatsDeskResult(
-				response.playerStatsDesk,
-				playerIds,
-				section
-			)
-			if (result.outcome !== 'complete') {
-				throw new IncompletePlayerStatsDeskError(result)
-			}
-			return result
+const loadCompletePlayerStatsDeskFromOrigin = async (
+	playerIds: number[],
+	eventId: number,
+	horizon: number,
+	section: PlayerStatsDeskSection
+): Promise<PlayerStatsDeskLoadResult> => {
+	const key = [
+		'player-stats-desk',
+		section,
+		eventId,
+		horizon,
+		playerIds.join(',')
+	].join(':')
+	return coalescePublicSeed(key, async () => {
+		console.info('[public graphql cache]', {
+			key,
+			workload: 'player-stats',
+			cacheResult: 'miss-fill'
 		})
-	},
+		const response =
+			await executePublicServerQuery<PlayerStatsDeskGraphQLResponse>(
+				'player-stats',
+				PLAYER_STATS_DESK_QUERIES[section],
+				{ playerIds, eventId, horizon },
+				{ cache: 'no-store', timeoutMs: 5_000 }
+			)
+		const result = normalizePlayerStatsDeskResult(
+			response.playerStatsDesk,
+			playerIds,
+			section
+		)
+		if (result.outcome !== 'complete') {
+			throw new IncompletePlayerStatsDeskError(result)
+		}
+		return result
+	})
+}
+
+const loadCompletePlayerStatsDesk = unstable_cache(
+	loadCompletePlayerStatsDeskFromOrigin,
 	['graphql', 'player-stats-desk', 'v1'],
 	{ revalidate: RevalidateSeconds.publicStats, tags: [CacheTag.gameweekStats] }
 )
 
 const loadPlayerStatsDeskCached = cache(loadCompletePlayerStatsDesk)
 
-export async function loadPlayerStatsDesk(
+async function resolvePlayerStatsDesk(
+	load: typeof loadCompletePlayerStatsDeskFromOrigin,
 	playerIds: number[],
 	eventId: number,
 	horizon: number,
 	section: PlayerStatsDeskSection
 ): Promise<PlayerStatsDeskLoadResult> {
 	try {
-		return await loadPlayerStatsDeskCached(
-			playerIds,
-			eventId,
-			horizon,
-			section
-		)
+		return await load(playerIds, eventId, horizon, section)
 	} catch (error) {
 		if (error instanceof IncompletePlayerStatsDeskError) return error.result
 		throw error
 	}
+}
+
+export function loadPlayerStatsDesk(
+	playerIds: number[],
+	eventId: number,
+	horizon: number,
+	section: PlayerStatsDeskSection
+): Promise<PlayerStatsDeskLoadResult> {
+	return resolvePlayerStatsDesk(
+		loadPlayerStatsDeskCached,
+		playerIds,
+		eventId,
+		horizon,
+		section
+	)
+}
+
+// The public API response already has a shared CDN cache. Bypass the durable
+// Next Data Cache here so a CDN fill can never re-cache an almost-expired Data
+// Cache entry for another full edge-cache lifetime.
+export function loadPlayerStatsDeskForPublicRoute(
+	playerIds: number[],
+	eventId: number,
+	horizon: number,
+	section: PlayerStatsDeskSection
+): Promise<PlayerStatsDeskLoadResult> {
+	return resolvePlayerStatsDesk(
+		loadCompletePlayerStatsDeskFromOrigin,
+		playerIds,
+		eventId,
+		horizon,
+		section
+	)
 }
