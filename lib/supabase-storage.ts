@@ -35,9 +35,9 @@ export async function uploadAvatar(
 	userId: string,
 	file: Blob,
 	contentType: string,
-): Promise<string> {
+	path = `avatars/${userId}/${randomUUID()}.jpg`
+): Promise<{ imageUrl: string; path: string }> {
 	const supabaseAdmin = getSupabaseAdmin()
-	const path = `${userId}.jpg`
 
 	const { error } = await supabaseAdmin.storage
 		.from(AVATAR_BUCKET)
@@ -53,7 +53,7 @@ export async function uploadAvatar(
 		.getPublicUrl(path)
 
 	// Bust the CDN cache so the new image shows immediately.
-	return `${data.publicUrl}?t=${Date.now()}`
+	return { imageUrl: data.publicUrl, path }
 }
 
 function extensionForContentType(contentType: string): string {
@@ -93,4 +93,21 @@ export async function uploadBugReportScreenshot(
 export async function removeStorageObject(bucket: string, path: string): Promise<void> {
 	const { error } = await getSupabaseAdmin().storage.from(bucket).remove([path])
 	if (error) throw new Error(`Storage delete failed: ${error.message}`)
+}
+
+export function extractManagedAvatarPath(value: string | null | undefined): string | null {
+	if (!value) return null
+	try {
+		const url = new URL(value)
+		const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+		if (!configuredUrl || new URL(configuredUrl).origin !== url.origin) return null
+		const prefix = `/storage/v1/object/public/${AVATAR_BUCKET}/`
+		if (!url.pathname.startsWith(prefix)) return null
+		const path = decodeURIComponent(url.pathname.slice(prefix.length))
+		if (/^avatars\/[^/]+\/[0-9a-f-]{36}\.jpg$/i.test(path)) return path
+		if (/^[^/]+\.jpg$/i.test(path)) return path
+		return null
+	} catch {
+		return null
+	}
 }
