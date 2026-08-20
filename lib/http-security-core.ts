@@ -8,6 +8,13 @@ export class PayloadTooLargeError extends Error {
 	}
 }
 
+export class ResponseReadAbortedError extends Error {
+	constructor() {
+		super('Response body read was aborted')
+		this.name = 'ResponseReadAbortedError'
+	}
+}
+
 export async function readBoundedText(
 	request: Request,
 	maxBytes: number
@@ -66,8 +73,13 @@ export async function readBoundedBytes(
 
 export async function readBoundedResponseBytes(
 	response: Response,
-	maxBytes: number
+	maxBytes: number,
+	signal?: AbortSignal
 ): Promise<Uint8Array> {
+	if (signal?.aborted) {
+		if (response.body) await response.body.cancel()
+		throw new ResponseReadAbortedError()
+	}
 	const declared = Number(response.headers.get('content-length'))
 	if (Number.isFinite(declared) && declared > maxBytes) {
 		if (response.body) await response.body.cancel()
@@ -77,9 +89,16 @@ export async function readBoundedResponseBytes(
 	const reader = response.body.getReader()
 	const chunks: Uint8Array[] = []
 	let bytes = 0
+	let aborted = false
+	const abortReader = () => {
+		aborted = true
+		void reader.cancel().catch(() => undefined)
+	}
+	signal?.addEventListener('abort', abortReader, { once: true })
 	try {
 		for (;;) {
 			const { done, value } = await reader.read()
+			if (aborted) throw new ResponseReadAbortedError()
 			if (done) break
 			if (!value) continue
 			bytes += value.byteLength
@@ -89,7 +108,12 @@ export async function readBoundedResponseBytes(
 			}
 			chunks.push(value)
 		}
+		if (aborted) throw new ResponseReadAbortedError()
+	} catch (error) {
+		if (aborted) throw new ResponseReadAbortedError()
+		throw error
 	} finally {
+		signal?.removeEventListener('abort', abortReader)
 		reader.releaseLock()
 	}
 	const result = new Uint8Array(bytes)
@@ -153,14 +177,9 @@ export function resolveProviderClientIp(headers: Headers): string {
 	if (
 		isExpectedProductionHost &&
 		localProxySecret &&
-		secretsEqual(
-			headers.get('x-letletme-proxy-secret'),
-			localProxySecret
-		)
+		secretsEqual(headers.get('x-letletme-proxy-secret'), localProxySecret)
 	) {
-		return (
-			validIp(headers.get('x-letletme-proxy-client-ip')) ?? 'unknown'
-		)
+		return validIp(headers.get('x-letletme-proxy-client-ip')) ?? 'unknown'
 	}
 	if (isExpectedProductionHost && headers.has('cf-ray')) {
 		return validIp(headers.get('cf-connecting-ip')) ?? 'unknown'
