@@ -104,9 +104,17 @@ export async function deleteBugReportScreenshot(
 	locator: string
 ): Promise<'deleted' | 'missing'> {
 	const { bucket, objectPath } = parseManagedBugReportLocator(locator)
-	const { error } = await getSupabaseAdmin()
-		.storage.from(bucket)
-		.remove([objectPath])
+	const storage = getSupabaseAdmin().storage.from(bucket)
+	const lastSlash = objectPath.lastIndexOf('/')
+	const parent = lastSlash > 0 ? objectPath.slice(0, lastSlash) : ''
+	const name = objectPath.slice(lastSlash + 1)
+	const { data: matches, error: listError } = await storage.list(parent, {
+		limit: 1,
+		search: name
+	})
+	if (listError) throw listError
+	if (!matches?.some(match => match.name === name)) return 'missing'
+	const { error } = await storage.remove([objectPath])
 	if (!error) return 'deleted'
 	if (isMissingStorageError(error)) return 'missing'
 	throw error
