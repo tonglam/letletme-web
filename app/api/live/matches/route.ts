@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
-import { executePublicServerQuery } from '@/lib/graphql-server'
+import {
+	executePublicServerQuery,
+	withPublicRouteGraphQLIngress
+} from '@/lib/graphql-server'
 import { GET_LIVE_MATCHDAY_DESK, type LiveMatchdayDeskResponse } from '@/lib/graphql/operations/live'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
 	const params = new URL(request.url).searchParams
 	const season = params.get('season')
 	const eventId = Number(params.get('eventId'))
@@ -20,4 +23,8 @@ export async function GET(request: Request) {
 		const status = message.includes('LIVE_REVISION_GONE') ? 409 : 503
 		return NextResponse.json({ error: status === 409 ? 'LIVE_REVISION_GONE' : 'Live matches unavailable' }, { status, headers: { 'Cache-Control': 'no-store' } })
 	}
+}
+
+export function GET(request: Request) {
+	return withPublicRouteGraphQLIngress(request, () => handleGet(request))
 }

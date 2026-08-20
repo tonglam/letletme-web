@@ -166,11 +166,11 @@ export async function POST(request: NextRequest) {
 			}),
 		}
 	})
-	const safeHeaders = new Headers({
-		'Cache-Control': cacheControl,
-		'X-Request-Id': requestId,
+	const safeHeaders = new Headers({ 'Cache-Control': cacheControl })
+	if (cacheControl === 'no-store') safeHeaders.set('X-Request-Id', requestId)
+	copySafeGraphQLUpstreamHeaders(response.headers, safeHeaders, {
+		includeRateLimitMetadata: cacheControl === 'no-store'
 	})
-	copySafeGraphQLUpstreamHeaders(response.headers, safeHeaders)
 	const proxyResponse = requestTiming.measureSync(
 		'responseBuild',
 		() => new NextResponse(responseBody, {

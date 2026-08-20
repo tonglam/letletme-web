@@ -75,15 +75,17 @@ export async function generateMetadata({ params }: PageProps) {
 	})
 }
 
-async function MarketContent({
-	locale,
-	period,
-	date
-}: {
+type MarketContentProps = {
 	locale: string
 	period: MarketOwnershipPeriod
 	date: string | null
-}) {
+}
+
+async function renderMarketContent({
+	locale,
+	period,
+	date
+}: MarketContentProps) {
 	await connection()
 	const translationPromise = getTranslations('Market')
 	const dataPromise = loadMarketPulseSummary(7)
@@ -180,6 +182,10 @@ async function MarketContent({
 	)
 }
 
+async function MarketContent(props: MarketContentProps) {
+	return withCapacityRunForRequest(() => renderMarketContent(props))
+}
+
 function MarketViewFallback() {
 	return (
 		<div className="space-y-4">
@@ -228,5 +234,5 @@ async function renderMarketPage({ params, searchParams }: PageProps) {
 }
 
 export default async function MarketPage(props: PageProps) {
-	return withCapacityRunForRequest(() => renderMarketPage(props))
+	return renderMarketPage(props)
 }

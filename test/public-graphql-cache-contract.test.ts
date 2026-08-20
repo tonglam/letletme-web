@@ -33,11 +33,13 @@ describe('public GraphQL cache contract', () => {
 	})
 
 	it('keeps private reads no-store and removes rolling ownership operations', async () => {
-		const [server, operations, fixtures, playerStats] = await Promise.all([
+		const [server, operations, fixtures, playerStats, en, zh] = await Promise.all([
 			read('lib/graphql-server.ts'),
 			read('lib/graphql/operations/market.ts'),
 			read('app/[locale]/explore/fixtures/page.tsx'),
-			read('lib/player-stats-seed.ts')
+			read('lib/player-stats-seed.ts'),
+			read('messages/en.json'),
+			read('messages/zh-CN.json')
 		])
 		assert.match(server, /executeServerQuery/)
 		assert.match(server, /options\?: Omit<ExecuteQueryOptions/)
@@ -45,6 +47,8 @@ describe('public GraphQL cache contract', () => {
 		assert.doesNotMatch(operations, /GetFixturePlanningOwnershipRolling/)
 		assert.match(fixtures, /rollingOwnership: null/)
 		assert.match(playerStats, /rollingOwnership: null/)
+		assert.doesNotMatch(en, /rolling-seven-day market signals/)
+		assert.doesNotMatch(zh, /近 7 日周期/)
 	})
 
 	it('coalesces gameweek desk cold fills before caching only normalized success', async () => {
@@ -52,7 +56,8 @@ describe('public GraphQL cache contract', () => {
 		assert.match(source, /unstable_cache/)
 		assert.match(source, /coalescePublicSeed/)
 		assert.match(source, /CORE_AUTHORITY_ORIGIN_OPTIONS/)
-		assert.match(source, /result\.outcome === 'failed'/)
+		assert.match(source, /result\.outcome !== 'complete'/)
+		assert.match(source, /IncompleteGameweekDeskError/)
 		assert.match(source, /CORE_AUTHORITY_DATA_CACHE/)
 		assert.doesNotMatch(source, /CORE_AUTHORITY_FETCH_OPTIONS/)
 	})
@@ -69,6 +74,10 @@ describe('public GraphQL cache contract', () => {
 		for (const source of [playerStats, fixtures, market]) {
 			assert.match(source, /withCapacityRunForRequest/)
 		}
+		assert.match(
+			market,
+			/async function MarketContent[\s\S]*withCapacityRunForRequest\(\(\) => renderMarketContent/
+		)
 		assert.match(serverContext, /capacityRequestIdForHeaders/)
 		assert.match(publicServer, /capacityRequestIdForCurrentRun/)
 		assert.doesNotMatch(publicServer, /from 'next\/headers'/)

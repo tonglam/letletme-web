@@ -18,7 +18,10 @@ export function readForwardableMiniProgramAuthorization(
 
 const SAFE_UPSTREAM_RESPONSE_HEADERS = [
 	'content-type',
-	'content-language',
+	'content-language'
+] as const
+
+const REQUEST_RATE_LIMIT_RESPONSE_HEADERS = [
 	'retry-after',
 	'x-ratelimit-policy',
 	'x-ratelimit-scope',
@@ -28,9 +31,13 @@ const SAFE_UPSTREAM_RESPONSE_HEADERS = [
 
 export function copySafeGraphQLUpstreamHeaders(
 	upstream: Headers,
-	target: Headers
+	target: Headers,
+	options: { includeRateLimitMetadata?: boolean } = {}
 ): void {
-	for (const name of SAFE_UPSTREAM_RESPONSE_HEADERS) {
+	const names = options.includeRateLimitMetadata === false
+		? SAFE_UPSTREAM_RESPONSE_HEADERS
+		: [...SAFE_UPSTREAM_RESPONSE_HEADERS, ...REQUEST_RATE_LIMIT_RESPONSE_HEADERS]
+	for (const name of names) {
 		const value = upstream.get(name)
 		if (value) target.set(name, value)
 	}

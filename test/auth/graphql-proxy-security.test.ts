@@ -37,6 +37,28 @@ test('passes Retry-After and v3 policy headers without forwarding arbitrary upst
 	assert.equal(target.has('x-internal-secret'), false)
 })
 
+test('omits request-specific rate-limit metadata from shared-cache responses', () => {
+	const target = new Headers({ 'Cache-Control': 'public, s-maxage=60' })
+	copySafeGraphQLUpstreamHeaders(
+		new Headers({
+			'Content-Type': 'application/json',
+			'Retry-After': '17',
+			'X-RateLimit-Policy': 'graphql-v3',
+			'X-RateLimit-Scope': 'client',
+			'X-RateLimit-Shadow-Outcome': 'allow',
+			'X-RateLimit-Shadow-Scope': 'client'
+		}),
+		target,
+		{ includeRateLimitMetadata: false }
+	)
+	assert.equal(target.get('content-type'), 'application/json')
+	assert.equal(target.has('retry-after'), false)
+	assert.equal(target.has('x-ratelimit-policy'), false)
+	assert.equal(target.has('x-ratelimit-scope'), false)
+	assert.equal(target.has('x-ratelimit-shadow-outcome'), false)
+	assert.equal(target.has('x-ratelimit-shadow-scope'), false)
+})
+
 test('distinguishes absent credentials from malformed or oversized credentials', () => {
 	assert.deepEqual(readForwardableMiniProgramAuthorization(new Headers()), {
 		ok: true,
