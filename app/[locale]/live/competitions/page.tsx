@@ -7,10 +7,7 @@ import {
 	type TournamentLiveCalcData,
 	type TournamentLivePointsResponse
 } from '@/lib/graphql/operations/tournaments'
-import {
-	executePublicServerQuery,
-	executeServerQuery
-} from '@/lib/graphql-server'
+import { executeServerQuery } from '@/lib/graphql-server'
 import { getLivePageContext } from '@/lib/live-context-server'
 import { getCurrentEntryId } from '@/lib/session'
 import { getCurrentSeasonKey } from '@/lib/season'

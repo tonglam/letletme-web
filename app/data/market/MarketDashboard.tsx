@@ -183,7 +183,6 @@ function ownershipPeriodLabel(
 	t: MarketT
 ): string {
 	if (period === 'GAMEWEEK') return t('ownershipPeriodGameweek')
-	if (period === 'ROLLING_7D') return t('ownershipPeriodRolling7d')
 	return t('ownershipPeriodDaily')
 }
 
@@ -194,7 +193,7 @@ function OwnershipPeriodNav({
 	period: MarketOwnershipPeriod
 	t: MarketT
 }) {
-	const items: MarketOwnershipPeriod[] = ['DAILY', 'GAMEWEEK', 'ROLLING_7D']
+	const items: MarketOwnershipPeriod[] = ['DAILY', 'GAMEWEEK']
 	return (
 		<nav
 			aria-label={t('ownershipPeriodLabel')}

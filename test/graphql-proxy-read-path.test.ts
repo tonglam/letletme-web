@@ -21,7 +21,9 @@ describe('GraphQL proxy read path', () => {
 		assert.doesNotMatch(route, /checkDatabaseRateLimit|databaseRateLimit|graphql-proxy-ip/)
 		assert.doesNotMatch(route, /from ['"]@\/lib\/http-security['"]/)
 		assert.match(route, /await import\(['"]@\/lib\/auth['"]\)/)
-		assert.match(route, /buildIngressContextHeaders\(subject, secret\)/)
+		assert.match(route, /buildGraphQLProxyIngress/)
+		assert.match(route, /copySafeGraphQLUpstreamHeaders/)
+		assert.doesNotMatch(route, /forwardHeaders\[[^\]]*Device-Id/)
 	})
 
 	it('adds trusted server context to direct RSC GraphQL requests', () => {
@@ -30,8 +32,9 @@ describe('GraphQL proxy read path', () => {
 		assert.doesNotMatch(client, /server-user-context|getServerUserContextHeaders/)
 		assert.doesNotMatch(client, /localhost:3000\/api\/graphql/)
 		assert.match(server, /getServerUserContextHeaders/)
-		assert.match(server, /rate-limit:web-public-rsc/)
-		assert.match(server, /buildIngressContextHeaders/)
+		assert.match(server, /buildOpaqueRscSubject\(workload, secret\)/)
+		assert.match(server, /buildIngressContextHeadersV2/)
+		assert.match(server, /workload: GraphQLWorkload/)
 		assert.doesNotMatch(server, /getGraphQLServiceTokenHeaders/)
 	})
 })

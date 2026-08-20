@@ -1,26 +1,18 @@
 import 'server-only'
 
-import {
-	CacheTag,
-	publicFetchOptions,
-	RevalidateSeconds
-} from '@/lib/cache-policy'
-import { CORE_AUTHORITY_FETCH_OPTIONS } from '@/lib/core-authority-cache-policy'
+import { CacheTag, RevalidateSeconds } from '@/lib/cache-policy'
 import {
 	buildFdrDeskModel,
 	DEFAULT_FDR_HORIZON,
 	type FdrHorizon
 } from '@/lib/fixtures-fdr'
 import { loadFixtureWindow } from '@/lib/fixture-window-server'
+import {
+	loadFixturePlanningGameweekOwnership,
+	loadFixturePlanningSignals
+} from '@/lib/fixture-planning-seed-server'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import type { EventsResponse } from '@/lib/graphql/operations/events'
-import {
-	GET_FIXTURE_PLANNING_SIGNALS,
-	GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK,
-	GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
-	type FixturePlanningOwnershipResponse,
-	type FixturePlanningSignalsResponse
-} from '@/lib/graphql/operations/market'
 import {
 	GET_PLAYER_STATS_BOOTSTRAP,
 	type CoreEventContextData,
@@ -40,6 +32,9 @@ import type { RequestTiming } from '@/lib/request-timing'
 import type { ReviewGameweekAnchorSource } from '@/lib/review-gameweek'
 import type { SquadPickSeed } from '@/lib/squad-picks'
 import { getVerifiedEntryContext } from '@/lib/session'
+import { unstable_cache } from 'next/cache'
+import { cache } from 'react'
+import { coalescePublicSeed } from '@/lib/public-seed-singleflight'
 
 export type PlayerStatsPersonalSeed = {
 	anchorGw: number
@@ -122,45 +117,62 @@ function eventsFromContext(context: CoreEventContextData): EventsResponse {
 	}
 }
 
+const loadPlayerStatsBootstrapFromOrigin = unstable_cache(
+	async (): Promise<PlayerStatsBootstrapSeed> => {
+		return coalescePublicSeed('player-stats-bootstrap', async () => {
+			console.info('[public graphql cache]', {
+				key: 'player-stats-bootstrap',
+				workload: 'player-stats',
+				cacheResult: 'miss-fill'
+			})
+			const response =
+				await executePublicServerQuery<PlayerStatsBootstrapResponse>(
+					'player-stats',
+					GET_PLAYER_STATS_BOOTSTRAP,
+					{ limit: PLAYER_DIRECTORY_SEED_SIZE },
+					{ cache: 'no-store', timeoutMs: 5_000 }
+				)
+			const bootstrap = response.playerStatsBootstrap
+			const review = reviewContext(bootstrap.context)
+			const anchorGw = review.anchorGw ?? 1
+			const sortBy = review.seasonStatsAvailable ? 'total_desc' : 'own_desc'
+			return {
+			context: bootstrap.context,
+			events: eventsFromContext(bootstrap.context),
+			directorySeed: {
+				teams: [...bootstrap.teams].sort((left, right) =>
+					left.shortName.localeCompare(right.shortName)
+				),
+				teamsState: 'ready',
+				players: bootstrap.directory.items,
+				playersState: 'ready',
+				totalCount: bootstrap.directory.totalCount,
+				nextCursor: bootstrap.directory.nextCursor,
+				queryKey: buildPlayerDirectoryQueryKey({
+					search: null,
+					teamId: null,
+					position: null,
+					maxPrice: null,
+					sortBy,
+					ownBand: 'ANY'
+				}),
+				seasonState: review.seasonState,
+				anchorGw,
+				seasonStatsAvailable: review.seasonStatsAvailable
+			}
+			}
+		})
+	},
+	['graphql', 'player-stats-bootstrap', 'v1'],
+	{ revalidate: RevalidateSeconds.events, tags: [CacheTag.events] }
+)
+
+const loadPlayerStatsBootstrapCached = cache(loadPlayerStatsBootstrapFromOrigin)
+
 export async function loadPlayerStatsBootstrap(
 	timing?: RequestTiming
 ): Promise<PlayerStatsBootstrapSeed> {
-	const response = await measure(timing, 'bootstrap', () =>
-		executePublicServerQuery<PlayerStatsBootstrapResponse>(
-			GET_PLAYER_STATS_BOOTSTRAP,
-			{ limit: PLAYER_DIRECTORY_SEED_SIZE },
-			CORE_AUTHORITY_FETCH_OPTIONS
-		)
-	)
-	const bootstrap = response.playerStatsBootstrap
-	const review = reviewContext(bootstrap.context)
-	const anchorGw = review.anchorGw ?? 1
-	const sortBy = review.seasonStatsAvailable ? 'total_desc' : 'own_desc'
-	return {
-		context: bootstrap.context,
-		events: eventsFromContext(bootstrap.context),
-		directorySeed: {
-			teams: [...bootstrap.teams].sort((left, right) =>
-				left.shortName.localeCompare(right.shortName)
-			),
-			teamsState: 'ready',
-			players: bootstrap.directory.items,
-			playersState: 'ready',
-			totalCount: bootstrap.directory.totalCount,
-			nextCursor: bootstrap.directory.nextCursor,
-			queryKey: buildPlayerDirectoryQueryKey({
-				search: null,
-				teamId: null,
-				position: null,
-				maxPrice: null,
-				sortBy,
-				ownBand: 'ANY'
-			}),
-			seasonState: review.seasonState,
-			anchorGw,
-			seasonStatsAvailable: review.seasonStatsAvailable
-		}
-	}
+	return measure(timing, 'bootstrap', loadPlayerStatsBootstrapCached)
 }
 
 export async function loadPlayerDirectorySeed(): Promise<PlayerDirectorySeed> {
@@ -188,41 +200,14 @@ export async function loadPlayerStatsPersonalSeed(
 	// rejection if bootstrap fails or has no usable gameweek.
 	void sessionPromise.catch(() => undefined)
 	const marketPromise = measure(timing, 'market', () =>
-		executePublicServerQuery<FixturePlanningSignalsResponse>(
-			GET_FIXTURE_PLANNING_SIGNALS,
-			{},
-			publicFetchOptions({
-				revalidate: RevalidateSeconds.market,
-				tags: [CacheTag.market]
-			})
-		).catch(error => {
+		loadFixturePlanningSignals().catch(error => {
 			console.error('[player-stats-seed] market signals failed:', error)
 			return null
 		})
 	)
 	const gameweekOwnershipPromise = measure(timing, 'market-gameweek', () =>
-		executePublicServerQuery<FixturePlanningOwnershipResponse>(
-			GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK,
-			{},
-			publicFetchOptions({
-				revalidate: RevalidateSeconds.market,
-				tags: [CacheTag.market]
-			})
-		).catch(error => {
+		loadFixturePlanningGameweekOwnership().catch(error => {
 			console.error('[player-stats-seed] gameweek ownership failed:', error)
-			return null
-		})
-	)
-	const rollingOwnershipPromise = measure(timing, 'market-rolling-7d', () =>
-		executePublicServerQuery<FixturePlanningOwnershipResponse>(
-			GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
-			{},
-			publicFetchOptions({
-				revalidate: RevalidateSeconds.market,
-				tags: [CacheTag.market]
-			})
-		).catch(error => {
-			console.error('[player-stats-seed] rolling ownership failed:', error)
 			return null
 		})
 	)
@@ -249,12 +234,11 @@ export async function loadPlayerStatsPersonalSeed(
 		)
 	})()
 
-	const [windows, market, gameweekOwnership, rollingOwnership, squadResult] =
+	const [windows, market, gameweekOwnership, squadResult] =
 		await Promise.all([
 			fixturePromise,
 			marketPromise,
 			gameweekOwnershipPromise,
-			rollingOwnershipPromise,
 			squadPromise
 		])
 	const fixturesByEvent = new Map<
@@ -276,15 +260,15 @@ export async function loadPlayerStatsPersonalSeed(
 					mostSelected: market.marketPulse?.mostSelected ?? [],
 					transferMovers: market.marketPulse?.transferMovers ?? [],
 					gameweekOwnership: gameweekOwnership?.marketOwnershipOverview ?? null,
-					rollingOwnership: rollingOwnership?.marketOwnershipOverview ?? null
+					rollingOwnership: null
 				}
-			: gameweekOwnership || rollingOwnership
+			: gameweekOwnership
 				? {
 						mostSelected: [],
 						transferMovers: [],
 						gameweekOwnership:
 							gameweekOwnership?.marketOwnershipOverview ?? null,
-						rollingOwnership: rollingOwnership?.marketOwnershipOverview ?? null
+						rollingOwnership: null
 					}
 				: null,
 		knownTeams: bootstrap.directorySeed.teams,

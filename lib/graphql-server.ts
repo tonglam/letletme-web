@@ -1,11 +1,16 @@
 import 'server-only'
 
-import { createHmac } from 'crypto'
 import type { Session } from '@/lib/auth'
 import { executeQuery, type ExecuteQueryOptions } from '@/lib/graphql-client'
-import { buildIngressContextHeaders } from '@/lib/http-security-core'
+import {
+	buildIngressContextHeadersV2,
+	buildOpaqueRscSubject,
+	type GraphQLWorkload
+} from '@/lib/http-security-core'
 
-function getPublicServerIngressHeaders(): Record<string, string> {
+function getPublicServerIngressHeaders(
+	workload: GraphQLWorkload
+): Record<string, string> {
 	const secret = process.env.BACKEND_PROXY_SECRET?.trim() ?? ''
 	if (!secret) {
 		if (process.env.NODE_ENV === 'production') {
@@ -13,10 +18,15 @@ function getPublicServerIngressHeaders(): Record<string, string> {
 		}
 		return {}
 	}
-	const subject = createHmac('sha256', secret)
-		.update('rate-limit:web-public-rsc')
-		.digest('hex')
-	return buildIngressContextHeaders(subject, secret)
+	return buildIngressContextHeadersV2(
+		{
+			trafficClass: 'web_rsc',
+			subject: buildOpaqueRscSubject(workload, secret),
+			abuseSubject: null,
+			workload
+		},
+		secret
+	)
 }
 
 // Use this instead of executeQuery in RSC pages.
@@ -47,12 +57,19 @@ export async function executeServerQueryWithSession<T>(
 
 /** Public RSC reads omit request-derived headers so Next's shared fetch cache stays effective. */
 export async function executePublicServerQuery<T>(
+	workload: GraphQLWorkload,
 	query: string,
 	variables?: Record<string, unknown>,
 	options?: Omit<ExecuteQueryOptions, 'headers'>,
 ): Promise<T> {
+	const cacheResult = options?.cache === 'force-cache' ? 'eligible' : 'bypass'
+	console.info('[graphql rsc request]', {
+		trafficClass: 'web_rsc',
+		workload,
+		cacheResult
+	})
 	return executeQuery<T>(query, variables, {
 		...options,
-		headers: getPublicServerIngressHeaders(),
+		headers: getPublicServerIngressHeaders(workload),
 	})
 }

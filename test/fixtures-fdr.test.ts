@@ -74,7 +74,7 @@ function mp(
 }
 
 function ownershipOverview(
-	period: 'GAMEWEEK' | 'ROLLING_7D',
+	period: 'GAMEWEEK',
 	risers: MarketOwnershipChange[] = [],
 	fallers: MarketOwnershipChange[] = []
 ): MarketOwnershipOverview {
@@ -83,8 +83,8 @@ function ownershipOverview(
 		gameweek: null,
 		coverage: {
 			status: 'READY',
-			requestedDays: period === 'ROLLING_7D' ? 7 : 2,
-			observedDays: period === 'ROLLING_7D' ? 7 : 2,
+			requestedDays: 2,
+			observedDays: 2,
 			firstDate: '2026-08-01',
 			latestDate: '2026-08-08',
 			fromDate: '2026-08-01',
@@ -108,7 +108,7 @@ function marketSignals(
 		mostSelected,
 		transferMovers: [],
 		gameweekOwnership: ownershipOverview('GAMEWEEK', risers, fallers),
-		rollingOwnership: ownershipOverview('ROLLING_7D')
+		rollingOwnership: null
 	}
 }
 

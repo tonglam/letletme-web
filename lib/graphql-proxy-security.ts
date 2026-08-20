@@ -15,3 +15,21 @@ export function readForwardableMiniProgramAuthorization(
 	if (!match?.[1]) return { ok: false }
 	return { ok: true, value: `Bearer ${match[1]}` }
 }
+
+const SAFE_UPSTREAM_RESPONSE_HEADERS = [
+	'content-type',
+	'content-language',
+	'retry-after',
+	'x-ratelimit-policy',
+	'x-ratelimit-scope'
+] as const
+
+export function copySafeGraphQLUpstreamHeaders(
+	upstream: Headers,
+	target: Headers
+): void {
+	for (const name of SAFE_UPSTREAM_RESPONSE_HEADERS) {
+		const value = upstream.get(name)
+		if (value) target.set(name, value)
+	}
+}

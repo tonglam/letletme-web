@@ -52,7 +52,8 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 	try {
 		const live = await getLiveMatchesSnapshot(
 			nextEventId,
-			executePublicServerQuery,
+			(query, variables, options) =>
+				executePublicServerQuery('gameweek', query, variables, options),
 			currentEventId,
 			{ revision: liveContext?.revision }
 		)

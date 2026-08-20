@@ -1200,7 +1200,6 @@
 		"ownershipDates": "每日快照日期",
 		"ownershipPeriodDaily": "每日",
 		"ownershipPeriodGameweek": "GW 比较",
-		"ownershipPeriodRolling7d": "近 7 日",
 		"ownershipPercentagePoints": "{value} 个百分点",
 		"ownershipComparisonRange": "比较区间 · {from} → {to}",
 		"ownershipObservedDays": "应有 {requested} 个日期，已观测 {observed} 个",

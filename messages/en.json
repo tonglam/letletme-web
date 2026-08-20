@@ -1200,7 +1200,6 @@
 		"ownershipDates": "Daily snapshot dates",
 		"ownershipPeriodDaily": "Daily",
 		"ownershipPeriodGameweek": "GW comparison",
-		"ownershipPeriodRolling7d": "Rolling 7 days",
 		"ownershipPercentagePoints": "{value} percentage points",
 		"ownershipComparisonRange": "Comparison · {from} → {to}",
 		"ownershipObservedDays": "{observed}/{requested} expected dates observed",

@@ -1,7 +1,6 @@
 import 'server-only'
 
-import { CacheTag, publicFetchOptions, RevalidateSeconds } from '@/lib/cache-policy'
-import { CORE_AUTHORITY_FETCH_OPTIONS } from '@/lib/core-authority-cache-policy'
+import { CacheTag, RevalidateSeconds } from '@/lib/cache-policy'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import type { Session } from '@/lib/auth'
@@ -21,6 +20,8 @@ import {
 	type HomePersonalDeskResponse,
 } from '@/lib/graphql/operations/home'
 import { cache } from 'react'
+import { unstable_cache } from 'next/cache'
+import { coalescePublicSeed } from '@/lib/public-seed-singleflight'
 
 function withEventId(
 	fixtures: Array<Omit<HomeFixture, 'eventId'>>,
@@ -29,72 +30,93 @@ function withEventId(
 	return fixtures.map(fixture => ({ ...fixture, eventId }))
 }
 
-export const getHomePublicBootstrap = cache(
+const getHomePublicBootstrapFromOrigin = unstable_cache(
 	async (): Promise<HomePublicBootstrap> => {
-		const startedAt = performance.now()
-		const response =
-			await executePublicServerQuery<HomePublicBootstrapGraphQLResponse>(
-				GET_HOME_PUBLIC_BOOTSTRAP,
-				undefined,
-				CORE_AUTHORITY_FETCH_OPTIONS,
-			)
-		const { context, fixtures } = response.homePublicBootstrap
-		const result = {
-			context,
-			fixtures:
-				context.nextEventId === null
-					? []
-					: withEventId(fixtures, context.nextEventId),
-		}
-		console.info('[home-public-bootstrap]', {
-			revision: context.revision,
-			fixtureCount: result.fixtures.length,
-			durationMs: Number((performance.now() - startedAt).toFixed(2)),
+		return coalescePublicSeed('home-public-bootstrap', async () => {
+			const startedAt = performance.now()
+			const response =
+				await executePublicServerQuery<HomePublicBootstrapGraphQLResponse>(
+					'home',
+					GET_HOME_PUBLIC_BOOTSTRAP,
+					undefined,
+					{ cache: 'no-store', timeoutMs: 5_000 }
+				)
+			const { context, fixtures } = response.homePublicBootstrap
+			const result = {
+				context,
+				fixtures:
+					context.nextEventId === null
+						? []
+						: withEventId(fixtures, context.nextEventId)
+			}
+			console.info('[home-public-bootstrap]', {
+				revision: context.revision,
+				fixtureCount: result.fixtures.length,
+				durationMs: Number((performance.now() - startedAt).toFixed(2)),
+				cacheResult: 'miss-fill'
+			})
+			return result
 		})
-		return result
 	},
+	['graphql', 'home-public-bootstrap', 'v1'],
+	{ revalidate: RevalidateSeconds.events, tags: [CacheTag.events] }
 )
 
-export async function getHomeGameweek(
-	eventId: number,
-): Promise<HomeGameweek> {
-	const startedAt = performance.now()
-	const response = await executePublicServerQuery<HomeGameweekResponse>(
-		GET_HOME_GAMEWEEK,
-		{ eventId },
-		publicFetchOptions({
-			revalidate: RevalidateSeconds.publicStats,
-			tags: [CacheTag.gameweekStats, CacheTag.liveScores, CacheTag.transfers],
-		}),
-	)
-	const gameweek = response.homeGameweek
-	console.info('[home-gameweek]', {
-		lifecycle: gameweek.gameweekDesk.lifecycle,
-		dreamTeamRows: gameweek.gameweekDesk.dreamTeam.length,
-		transfersState: gameweek.transfersState,
-		transferRows:
-			gameweek.topTransfersIn.length + gameweek.topTransfersOut.length,
-		durationMs: Number((performance.now() - startedAt).toFixed(2)),
-	})
-	return gameweek
-}
+export const getHomePublicBootstrap = cache(getHomePublicBootstrapFromOrigin)
 
-export async function loadHomeFixtures(
-	eventId: number,
-): Promise<HomeFixturesResponse> {
-	const response =
-		await executePublicServerQuery<HomeEventFixturesGraphQLResponse>(
-			GET_HOME_EVENT_FIXTURES,
-			{ eventId },
-			CORE_AUTHORITY_FETCH_OPTIONS,
-		)
-	return {
-		season: response.coreEventContext.season,
-		revision: response.coreEventContext.revision,
-		eventId,
-		fixtures: withEventId(response.eventFixtures, eventId),
+const getHomeGameweekFromOrigin = unstable_cache(
+	async (eventId: number): Promise<HomeGameweek> =>
+		coalescePublicSeed(`home-gameweek:${eventId}`, async () => {
+			const startedAt = performance.now()
+			const response = await executePublicServerQuery<HomeGameweekResponse>(
+				'gameweek',
+				GET_HOME_GAMEWEEK,
+				{ eventId },
+				{ cache: 'no-store', timeoutMs: 5_000 }
+			)
+			const gameweek = response.homeGameweek
+			console.info('[home-gameweek]', {
+				lifecycle: gameweek.gameweekDesk.lifecycle,
+				dreamTeamRows: gameweek.gameweekDesk.dreamTeam.length,
+				transfersState: gameweek.transfersState,
+				transferRows:
+					gameweek.topTransfersIn.length + gameweek.topTransfersOut.length,
+				durationMs: Number((performance.now() - startedAt).toFixed(2)),
+				cacheResult: 'miss-fill'
+			})
+			return gameweek
+		}),
+	['graphql', 'home-gameweek', 'v1'],
+	{
+		revalidate: RevalidateSeconds.publicStats,
+		tags: [CacheTag.gameweekStats, CacheTag.liveScores, CacheTag.transfers]
 	}
-}
+)
+
+export const getHomeGameweek = cache(getHomeGameweekFromOrigin)
+
+const loadHomeFixturesFromOrigin = unstable_cache(
+	async (eventId: number): Promise<HomeFixturesResponse> =>
+		coalescePublicSeed(`home-fixtures:${eventId}`, async () => {
+			const response =
+				await executePublicServerQuery<HomeEventFixturesGraphQLResponse>(
+					'fixtures',
+					GET_HOME_EVENT_FIXTURES,
+					{ eventId },
+					{ cache: 'no-store', timeoutMs: 5_000 }
+				)
+			return {
+				season: response.coreEventContext.season,
+				revision: response.coreEventContext.revision,
+				eventId,
+				fixtures: withEventId(response.eventFixtures, eventId)
+			}
+		}),
+	['graphql', 'home-fixtures', 'v1'],
+	{ revalidate: RevalidateSeconds.publicStats, tags: [CacheTag.fixtures] }
+)
+
+export const loadHomeFixtures = cache(loadHomeFixturesFromOrigin)
 
 export async function getHomeVerifiedEntryContext() {
 	const startedAt = performance.now()

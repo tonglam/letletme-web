@@ -16,6 +16,7 @@ export type LivePageContext = {
 export async function getLivePageContext(): Promise<LivePageContext> {
 	try {
 		const response = await executePublicServerQuery<LiveContextResponse>(
+			'gameweek',
 			GET_LIVE_CONTEXT,
 			undefined,
 			{ cache: 'no-store' },

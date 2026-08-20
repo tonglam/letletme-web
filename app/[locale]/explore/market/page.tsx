@@ -5,19 +5,21 @@ import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
+import { localizePathname } from '@/i18n/routing'
 import {
-	GET_MARKET_PULSE_SUMMARY,
-	GET_MARKET_OWNERSHIP_OVERVIEW,
-	GET_MARKET_OWNERSHIP_DAY,
 	type MarketPulse,
 	type MarketPulseSummaryResponse,
 	type MarketOwnershipDayResponse,
 	type MarketOwnershipOverviewResponse,
 	type MarketOwnershipPeriod
 } from '@/lib/graphql/operations/market'
-import { executePublicServerQuery } from '@/lib/graphql-server'
+import {
+	loadMarketOwnershipDay,
+	loadMarketOwnershipOverview,
+	loadMarketPulseSummary
+} from '@/lib/market-overview-server'
 import { getTranslations } from 'next-intl/server'
-import { unstable_rethrow } from 'next/navigation'
+import { redirect, unstable_rethrow } from 'next/navigation'
 import { connection } from 'next/server'
 import { Suspense } from 'react'
 
@@ -27,7 +29,7 @@ type PageProps = {
 }
 
 function requestedPeriod(value: string | undefined): MarketOwnershipPeriod {
-	if (value === 'GAMEWEEK' || value === 'ROLLING_7D') return value
+	if (value === 'GAMEWEEK') return value
 	return 'DAILY'
 }
 
@@ -83,28 +85,12 @@ async function MarketContent({
 }) {
 	await connection()
 	const translationPromise = getTranslations('Market')
-	const dataPromise = executePublicServerQuery<MarketPulseSummaryResponse>(
-		GET_MARKET_PULSE_SUMMARY,
-		{ days: 7 },
-		{ cache: 'no-store', timeoutMs: 2_000 }
-	)
+	const dataPromise = loadMarketPulseSummary(7)
 	const ownershipPromise = date
-		? executePublicServerQuery<MarketOwnershipDayResponse>(
-				GET_MARKET_OWNERSHIP_DAY,
-				{ date, limit: 10 },
-				{ cache: 'no-store', timeoutMs: 2_000 }
-			)
-		: executePublicServerQuery<MarketOwnershipOverviewResponse>(
-				GET_MARKET_OWNERSHIP_OVERVIEW,
-				{ period, limit: 10 },
-				{ cache: 'no-store', timeoutMs: 2_000 }
-			)
+		? loadMarketOwnershipDay(date)
+		: loadMarketOwnershipOverview(period)
 	const dailyOverviewPromise = date
-		? executePublicServerQuery<MarketOwnershipOverviewResponse>(
-				GET_MARKET_OWNERSHIP_OVERVIEW,
-				{ period: 'DAILY', limit: 10 },
-				{ cache: 'no-store', timeoutMs: 2_000 }
-			)
+		? loadMarketOwnershipOverview('DAILY')
 		: null
 	const t = await translationPromise
 	let pulse: MarketPulse | null = null
@@ -213,6 +199,9 @@ function MarketViewFallback() {
 export default async function MarketPage({ params, searchParams }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	const query = await searchParams
+	if (query.period === 'ROLLING_7D') {
+		redirect(localizePathname('/explore/market', locale))
+	}
 	const period = requestedPeriod(query.period)
 	const date = requestedDate(query.date, period)
 	const t = await getTranslations('Market')

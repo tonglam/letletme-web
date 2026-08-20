@@ -8,7 +8,6 @@ import {
 } from '../lib/graphql/operations/live'
 import {
 	GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK,
-	GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
 	GET_FIXTURE_PLANNING_SIGNALS,
 	GET_MARKET_PULSE
 } from '../lib/graphql/operations/market'
@@ -91,10 +90,6 @@ describe('GraphQL request budget', () => {
 			[
 				'GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK',
 				GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK
-			],
-			[
-				'GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D',
-				GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D
 			]
 		] as const) {
 			const document = parse(query)
@@ -118,10 +113,6 @@ describe('GraphQL request budget', () => {
 			)
 		}
 		assert.match(GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK, /period:\s*GAMEWEEK/)
-		assert.match(
-			GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
-			/period:\s*ROLLING_7D/
-		)
 	})
 
 	it('keeps the player-state profile bounded to one root field', () => {

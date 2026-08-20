@@ -11,7 +11,7 @@ export async function GET(request: Request) {
 	const revision = params.get('revision')
 	if (!/^\d{4}$/.test(season ?? '') || !Number.isSafeInteger(eventId) || eventId <= 0 || !revision) return NextResponse.json({ error: 'Invalid live revision' }, { status: 400 })
 	try {
-		const data = await executePublicServerQuery<LiveMatchdayDeskResponse>(GET_LIVE_MATCHDAY_DESK, { ref: { season, eventId, revision } }, { cache: 'no-store' })
+		const data = await executePublicServerQuery<LiveMatchdayDeskResponse>('gameweek', GET_LIVE_MATCHDAY_DESK, { ref: { season, eventId, revision } }, { cache: 'no-store' })
 		const response = NextResponse.json(data)
 		response.headers.set('Cache-Control', 'public, max-age=300, s-maxage=21600, stale-while-revalidate=86400, no-transform')
 		return response

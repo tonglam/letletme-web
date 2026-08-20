@@ -12,7 +12,7 @@ export async function GET(request: Request, context: { params: Promise<{ fixture
 	const fixtureId = Number((await context.params).fixtureId)
 	if (!/^\d{4}$/.test(season ?? '') || !Number.isSafeInteger(eventId) || eventId <= 0 || !revision || !Number.isSafeInteger(fixtureId) || fixtureId <= 0) return NextResponse.json({ error: 'Invalid live revision' }, { status: 400 })
 	try {
-		const data = await executePublicServerQuery(GET_LIVE_FIXTURE_PLAYERS, { ref: { season, eventId, revision }, fixtureId }, { cache: 'no-store' })
+		const data = await executePublicServerQuery('gameweek', GET_LIVE_FIXTURE_PLAYERS, { ref: { season, eventId, revision }, fixtureId }, { cache: 'no-store' })
 		return NextResponse.json(data, { headers: { 'Cache-Control': 'public, max-age=300, s-maxage=21600, stale-while-revalidate=86400, no-transform' } })
 	} catch (error) {
 		const status = String(error).includes('LIVE_REVISION_GONE') ? 409 : 503

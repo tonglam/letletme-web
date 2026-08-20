@@ -32,6 +32,7 @@ export default async function BriefingStoryPage({ params }: PageProps) {
 
 	try {
 		result = await executePublicServerQuery<BriefingStoryResponse>(
+			'public-other',
 			GET_BRIEFING_STORY,
 			{ slug, locale: graphqlLocale },
 			{ cache: 'no-store' },

@@ -22,6 +22,7 @@ export async function buildPlayerIdBySquadKey(): Promise<Map<string, number>> {
 	for (let page = 0; page < PICKER_MAX_PAGES; page += 1) {
 		const offset = page * PICKER_PAGE_SIZE
 		const response = await executePublicServerQuery<PlayersForPickerResponse>(
+			'player-stats',
 			GET_PLAYERS_FOR_PICKER,
 			{ filter: {}, limit: PICKER_PAGE_SIZE, offset },
 			publicFetchOptions({

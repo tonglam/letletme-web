@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { readForwardableMiniProgramAuthorization } from '@/lib/graphql-proxy-security'
+import {
+	copySafeGraphQLUpstreamHeaders,
+	readForwardableMiniProgramAuthorization
+} from '@/lib/graphql-proxy-security'
 
 test('normalizes a bounded Web-issued Mini Program bearer token', () => {
 	const token = 'a'.repeat(43)
@@ -11,6 +14,23 @@ test('normalizes a bounded Web-issued Mini Program bearer token', () => {
 		),
 		{ ok: true, value: `Bearer ${token}` },
 	)
+})
+
+test('passes Retry-After and v3 policy headers without forwarding arbitrary upstream headers', () => {
+	const target = new Headers({ 'Cache-Control': 'no-store' })
+	copySafeGraphQLUpstreamHeaders(
+		new Headers({
+			'Retry-After': '17',
+			'X-RateLimit-Policy': 'graphql-v3',
+			'X-RateLimit-Scope': 'client',
+			'X-Internal-Secret': 'never-forward'
+		}),
+		target
+	)
+	assert.equal(target.get('retry-after'), '17')
+	assert.equal(target.get('x-ratelimit-policy'), 'graphql-v3')
+	assert.equal(target.get('x-ratelimit-scope'), 'client')
+	assert.equal(target.has('x-internal-secret'), false)
 })
 
 test('distinguishes absent credentials from malformed or oversized credentials', () => {

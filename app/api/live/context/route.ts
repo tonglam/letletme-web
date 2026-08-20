@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
 	try {
-		const data = await executePublicServerQuery<LiveContextResponse>(GET_LIVE_CONTEXT, undefined, { cache: 'no-store' })
+		const data = await executePublicServerQuery<LiveContextResponse>('gameweek', GET_LIVE_CONTEXT, undefined, { cache: 'no-store' })
 		const response = NextResponse.json(data)
 		response.headers.set('Cache-Control', 'public, s-maxage=5, stale-while-revalidate=5, no-transform')
 		if (data.liveContext?.revision) {

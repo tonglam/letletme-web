@@ -15,6 +15,7 @@ export async function loadGameweekDesk(
 		eventId,
 		(query, variables) =>
 			executePublicServerQuery<GameweekDeskGraphQLResponse>(
+				'gameweek',
 				query,
 				variables,
 				CORE_AUTHORITY_FETCH_OPTIONS
