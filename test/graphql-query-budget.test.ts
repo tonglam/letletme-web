@@ -134,7 +134,7 @@ describe('GraphQL request budget', () => {
 		assert.ok(operation?.kind === 'OperationDefinition')
 		assert.equal(operation.selectionSet.selections.length, 1)
 		assert.ok(
-			astNodes < 200,
+			astNodes <= 240,
 			`GET_PLAYER_STATE_PROFILE has ${astNodes} AST nodes`
 		)
 	})

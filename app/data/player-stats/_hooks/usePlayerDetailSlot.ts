@@ -97,7 +97,12 @@ function isCoreState(
 function isStateContext(
 	state: PlayerStatsDeskNormalizedEntry['state']
 ): state is PlayerStateContextData {
-	return state != null && 'ownBaseline' in state && 'careerTrajectory' in state
+	return (
+		state != null &&
+		'playerId' in state &&
+		'coverage' in state &&
+		!('trend' in state)
+	)
 }
 
 function isProcessState(
@@ -320,9 +325,6 @@ export function usePlayerDetailSlot({
 						previous && previous.playerId === context.playerId
 							? {
 									...previous,
-									ownBaseline: context.ownBaseline,
-									peerBaseline: context.peerBaseline,
-									careerTrajectory: context.careerTrajectory,
 									coverage: {
 										...previous.coverage,
 										...context.coverage

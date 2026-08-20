@@ -1000,8 +1000,9 @@ export function PlayerStatsView({
 				<PlayerOverallCard
 					player={player}
 					comparison={comparison}
+					profile={playerState}
+					comparisonProfile={comparisonState}
 					anchorGw={anchorGw}
-					seasonStatsAvailable={seasonStatsAvailable}
 				/>
 
 				<PlayerFplProfile

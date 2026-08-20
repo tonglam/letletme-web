@@ -1,0 +1,551 @@
+'use client'
+
+import { Badge } from '@/components/ui/badge'
+import type {
+	PlayerDetailData,
+	PlayerDetailFixture,
+	PlayerSeasonSignal,
+	PlayerSeasonSignalCode,
+	PlayerSeasonTimelinePoint,
+	PlayerStateProfileData
+} from '@/lib/graphql/operations/players'
+import { marketAvailabilityStatusKey } from '@/lib/market-availability'
+import { positionBadgeClass } from '@/lib/position-style'
+import { cn, normalizePosition } from '@/lib/utils'
+import { useFormatter, useTranslations } from 'next-intl'
+import { DIFFICULTY_COLORS, formatPrice } from './PlayerStatPrimitives'
+import { seasonLabel } from './player-state-model'
+
+const POSITION_CODES: Record<number, string> = {
+	1: 'GKP',
+	2: 'DEF',
+	3: 'MID',
+	4: 'FWD'
+}
+
+const SIGNAL_LABEL_KEYS: Record<PlayerSeasonSignalCode, string> = {
+	UNDERSTAT_NPXG_PER_90: 'timeline.signal.npxgPer90',
+	UNDERSTAT_XA_PER_90: 'timeline.signal.xaPer90',
+	UNDERSTAT_NPXG_XA_PER_90: 'timeline.signal.npxgXaPer90',
+	UNDERSTAT_KEY_PASSES_PER_90: 'timeline.signal.keyPassesPer90',
+	OFFICIAL_CLEAN_SHEET_RATE: 'timeline.signal.cleanSheetRate',
+	OFFICIAL_SAVES_PER_90: 'timeline.signal.savesPer90'
+}
+
+function positionCode(player: PlayerDetailData): string {
+	const fromName = normalizePosition(player.elementTypeName)
+	return fromName !== 'UNK'
+		? fromName
+		: (POSITION_CODES[player.elementType] ?? 'UNK')
+}
+
+function groupUpcomingFixtures(
+	fixtures: PlayerDetailFixture[],
+	anchorGw: number
+): Array<[number, PlayerDetailFixture[]]> {
+	const grouped = new Map<number, PlayerDetailFixture[]>()
+	for (const fixture of fixtures) {
+		if (fixture.event < anchorGw) continue
+		const rows = grouped.get(fixture.event) ?? []
+		rows.push(fixture)
+		grouped.set(fixture.event, rows)
+	}
+	return Array.from(grouped.entries())
+		.filter(([, rows]) => rows.some(row => row.bgw || !row.finished))
+		.sort(([left], [right]) => left - right)
+		.slice(0, 3)
+}
+
+function FixtureStrip({
+	player,
+	anchorGw
+}: {
+	player: PlayerDetailData
+	anchorGw: number
+}) {
+	const t = useTranslations('PlayerStats')
+	const upcoming = groupUpcomingFixtures(player.fixtures, anchorGw)
+	if (upcoming.length === 0) {
+		return (
+			<span className="text-[0.68rem] text-muted-foreground">
+				{t('nextFixturesEmpty')}
+			</span>
+		)
+	}
+	return (
+		<div className="flex flex-wrap gap-1">
+			{upcoming.map(([gameweek, fixtures]) => (
+				<span
+					key={gameweek}
+					className="inline-flex min-h-6 flex-wrap items-center gap-1 rounded border border-border/60 bg-muted/20 px-1.5 text-[0.68rem] tabular-nums"
+				>
+					<span className="font-medium text-muted-foreground">
+						{t('gameweekShort', { gameweek })}
+					</span>
+					{fixtures.every(fixture => fixture.bgw) ? (
+						<span className="font-medium text-warning">BGW</span>
+					) : (
+						fixtures
+							.filter(fixture => !fixture.bgw)
+							.map(fixture => (
+								<span
+									key={fixture.id}
+									className="inline-flex items-center gap-1"
+								>
+									<span
+										className={cn(
+											'size-1.5 shrink-0 rounded-full',
+											DIFFICULTY_COLORS[fixture.difficulty] ?? 'bg-muted'
+										)}
+										aria-hidden="true"
+									/>
+									<span className="font-medium">
+										{fixture.wasHome ? t('homeShort') : t('awayShort')}{' '}
+										{fixture.againstTeamShortName}
+									</span>
+								</span>
+							))
+					)}
+				</span>
+			))}
+		</div>
+	)
+}
+
+function PlayerHeader({
+	player,
+	profile,
+	anchorGw
+}: {
+	player: PlayerDetailData
+	profile: PlayerStateProfileData | null
+	anchorGw: number
+}) {
+	const t = useTranslations('PlayerStats')
+	const tMarket = useTranslations('Market')
+	const format = useFormatter()
+	const code = positionCode(player)
+	const availability = player.availability
+	const statusKey = availability
+		? marketAvailabilityStatusKey(availability.status)
+		: null
+	const observed = availability
+		? new Date(`${availability.observedDate}T00:00:00Z`)
+		: null
+	const observedLabel =
+		observed && !Number.isNaN(observed.getTime())
+			? format.dateTime(observed, { dateStyle: 'medium', timeZone: 'UTC' })
+			: availability?.observedDate
+	const providerMode = profile?.providerMode
+
+	return (
+		<div className="min-w-0 border-b border-border/60 bg-card/30 px-3 py-3 sm:px-4">
+			<div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+				<Badge
+					className={cn(
+						positionBadgeClass(code),
+						'shrink-0 px-1.5 py-0 text-[0.65rem] font-bold'
+					)}
+				>
+					{code === 'UNK' ? '—' : code}
+				</Badge>
+				<span className="truncate font-display text-sm font-bold uppercase tracking-wide sm:text-base">
+					{player.webName}
+				</span>
+				<span className="text-xs text-muted-foreground">
+					{player.teamShortName}
+				</span>
+			</div>
+			<div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.7rem]">
+				<span className="font-medium tabular-nums">
+					{formatPrice(player.price)}
+				</span>
+				<span className="text-muted-foreground">
+					{player.selectedByPercent == null
+						? '—'
+						: `${player.selectedByPercent}%`}
+				</span>
+				{statusKey ? (
+					<Badge
+						variant="outline"
+						className="h-5 px-1.5 text-[0.65rem]"
+					>
+						{tMarket(`status.${statusKey}`)}
+					</Badge>
+				) : (
+					<span className="text-muted-foreground">{t('availabilityNone')}</span>
+				)}
+				{observedLabel ? (
+					<span className="text-muted-foreground">
+						{t('availabilityObserved', { date: observedLabel })}
+					</span>
+				) : null}
+				{providerMode === 'FPL_WITH_UNDERSTAT_HISTORY' ? (
+					<Badge
+						variant="secondary"
+						className="h-5 px-1.5 text-[0.65rem]"
+					>
+						{t('timeline.providerModeHistory')}
+					</Badge>
+				) : null}
+			</div>
+			<div className="mt-2">
+				<p className="eyebrow mb-1">{t('nextFixturesLabel')}</p>
+				<FixtureStrip
+					player={player}
+					anchorGw={anchorGw}
+				/>
+			</div>
+		</div>
+	)
+}
+
+function signalDisplay(
+	signal: PlayerSeasonSignal,
+	t: ReturnType<typeof useTranslations<'PlayerStats'>>,
+	format: ReturnType<typeof useFormatter>
+): string {
+	if (signal.analysisStatus === 'PRESEASON')
+		return t('timeline.preseasonPerformance')
+	if (signal.analysisStatus === 'INSUFFICIENT')
+		return t('timeline.sampleInsufficient')
+	if (signal.reasonCodes.includes('UNDERSTAT_MAPPING_NOT_VERIFIED')) {
+		return t('timeline.realityUnverified')
+	}
+	if (signal.value == null) return t('timeline.metricUnavailable')
+	return signal.unit === 'percent'
+		? `${format.number(signal.value, { maximumFractionDigits: 1 })}%`
+		: format.number(signal.value, {
+				minimumFractionDigits: 2,
+				maximumFractionDigits: 2
+			})
+}
+
+function signalLabel(
+	signal: PlayerSeasonSignal,
+	t: ReturnType<typeof useTranslations<'PlayerStats'>>
+): string {
+	return t(SIGNAL_LABEL_KEYS[signal.code] as never)
+}
+
+function pointForSeason(
+	profile: PlayerStateProfileData | null,
+	season: string
+): PlayerSeasonTimelinePoint | null {
+	return profile?.seasonTimeline.find(point => point.season === season) ?? null
+}
+
+function comparableWinner(
+	primary: PlayerSeasonSignal | undefined,
+	comparison: PlayerSeasonSignal | undefined,
+	positionMatches: boolean
+): 'primary' | 'comparison' | null {
+	if (
+		!positionMatches ||
+		!primary ||
+		!comparison ||
+		primary.code !== comparison.code ||
+		primary.value == null ||
+		comparison.value == null ||
+		primary.analysisStatus !== 'READY' ||
+		comparison.analysisStatus !== 'READY' ||
+		primary.value === comparison.value
+	) {
+		return null
+	}
+	return primary.value > comparison.value ? 'primary' : 'comparison'
+}
+
+function TimelineCell({
+	profile,
+	point,
+	comparisonPoint,
+	maxPoints,
+	accent,
+	comparison
+}: {
+	profile: PlayerStateProfileData | null
+	point: PlayerSeasonTimelinePoint | null
+	comparisonPoint: PlayerSeasonTimelinePoint | null
+	maxPoints: number
+	accent: 'primary' | 'compare'
+	comparison: boolean
+}) {
+	const t = useTranslations('PlayerStats')
+	const format = useFormatter()
+	if (!profile) {
+		return (
+			<div className="min-w-0 px-3 py-3 text-[0.7rem] leading-snug text-muted-foreground sm:px-4">
+				{t('timeline.loading')}
+			</div>
+		)
+	}
+	if (!point) {
+		return (
+			<div className="min-w-0 px-3 py-3 text-[0.7rem] leading-snug text-muted-foreground sm:px-4">
+				{t('timeline.notInFplPool')}
+			</div>
+		)
+	}
+	const winnerFor = (index: number) =>
+		comparison
+			? comparableWinner(
+					point.signals[index],
+					comparisonPoint?.signals[index],
+					point.position === comparisonPoint?.position
+				)
+			: null
+	const barWidth =
+		point.phase === 'COMPLETED' && point.fplTotalPoints != null
+			? Math.max(0, Math.min(100, (point.fplTotalPoints / maxPoints) * 100))
+			: 0
+	return (
+		<div className="min-w-0 px-3 py-3 sm:px-4">
+			<div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+				{point.phase === 'PRESEASON' ? (
+					<span className="text-xs text-muted-foreground">
+						{t('timeline.preseasonPerformance')}
+					</span>
+				) : point.phase === 'ACTIVE' ? (
+					<span className="font-display text-sm font-bold tabular-nums">
+						{t('timeline.activePoints', {
+							gw: profile?.asOfEventId ?? '—',
+							points: point.fplTotalPoints ?? 0
+						})}
+					</span>
+				) : (
+					<span className="font-display text-sm font-bold tabular-nums">
+						{t('timeline.completedPoints', {
+							points: point.fplTotalPoints ?? 0
+						})}
+					</span>
+				)}
+			</div>
+			{barWidth > 0 ? (
+				<div
+					className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted/70"
+					aria-hidden="true"
+				>
+					<div
+						className={cn(
+							'h-full rounded-full transition-[width]',
+							accent === 'primary' ? 'bg-primary' : 'bg-warning'
+						)}
+						style={{ width: `${barWidth}%` }}
+					/>
+				</div>
+			) : null}
+			<div className="mt-2 space-y-1.5">
+				<div className="flex items-baseline gap-1.5 text-[0.67rem] text-muted-foreground">
+					<Badge
+						variant="outline"
+						className="h-5 px-1.5 text-[0.62rem]"
+					>
+						{POSITION_CODES[point.position] ?? '—'}
+					</Badge>
+					<span>{t('timeline.signalsLabel')}</span>
+				</div>
+				{point.signals.map((signal, index) => {
+					const winner = winnerFor(index)
+					return (
+						<div
+							key={signal.code}
+							className="flex min-w-0 items-baseline justify-between gap-2 text-[0.69rem]"
+						>
+							<span className="min-w-0 break-words text-muted-foreground">
+								{signalLabel(signal, t)}
+							</span>
+							<span
+								className={cn(
+									'shrink-0 font-medium tabular-nums',
+									winner === 'primary' &&
+										(accent === 'primary'
+											? 'text-primary-ink'
+											: 'text-warning'),
+									winner === 'comparison' &&
+										(accent === 'primary'
+											? 'text-warning'
+											: 'text-primary-ink'),
+									signal.analysisStatus !== 'READY' &&
+										'font-normal text-muted-foreground'
+								)}
+							>
+								{signalDisplay(signal, t, format)}
+							</span>
+						</div>
+					)
+				})}
+			</div>
+		</div>
+	)
+}
+
+export function PlayerSeasonTimeline({
+	player,
+	comparison,
+	profile,
+	comparisonProfile,
+	anchorGw
+}: {
+	player: PlayerDetailData
+	comparison: PlayerDetailData | null
+	profile: PlayerStateProfileData | null
+	comparisonProfile: PlayerStateProfileData | null
+	anchorGw: number
+}) {
+	const t = useTranslations('PlayerStats')
+	const isCompare = comparison !== null
+	const currentSeason =
+		profile?.season ?? comparisonProfile?.season ?? player.statsContext.season
+	const seasons = Array.from(
+		new Set([
+			currentSeason,
+			...(profile?.seasonTimeline.map(point => point.season) ?? []),
+			...(comparisonProfile?.seasonTimeline.map(point => point.season) ?? [])
+		])
+	).sort((left, right) => right.localeCompare(left))
+	const completedPoints = [profile, comparisonProfile]
+		.flatMap(item => item?.seasonTimeline ?? [])
+		.filter(
+			point => point.phase === 'COMPLETED' && point.fplTotalPoints != null
+		)
+		.map(point => point.fplTotalPoints ?? 0)
+	const maxPoints = Math.max(1, ...completedPoints)
+
+	return (
+		<section
+			id="ps-history"
+			aria-label={t('timelineTitle')}
+			className="scroll-mt-36"
+		>
+			<div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+				<div>
+					<h2 className="eyebrow sm:text-caption">{t('timelineTitle')}</h2>
+					<p className="mt-1 text-xs text-muted-foreground">
+						{t('timelineHint')}
+					</p>
+				</div>
+				{isCompare ? (
+					<span className="text-[0.68rem] text-muted-foreground">
+						{t('timeline.compareHint')}
+					</span>
+				) : null}
+			</div>
+			<div className="overflow-hidden rounded-xl border border-border/70 bg-card/40">
+				<div
+					className={cn(
+						'grid',
+						isCompare
+							? 'grid-cols-[minmax(4.75rem,0.72fr)_repeat(2,minmax(0,1fr))]'
+							: 'grid-cols-[minmax(5.25rem,0.8fr)_minmax(0,1fr)]'
+					)}
+				>
+					<div className="border-b border-border/60 bg-muted/20 px-2 py-3 text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground sm:px-3">
+						{t('season')}
+					</div>
+					<div className="border-b border-l border-border/60">
+						<PlayerHeader
+							player={player}
+							profile={profile}
+							anchorGw={anchorGw}
+						/>
+					</div>
+					{comparison ? (
+						<div className="border-b border-l border-border/60">
+							<PlayerHeader
+								player={comparison}
+								profile={comparisonProfile}
+								anchorGw={anchorGw}
+							/>
+						</div>
+					) : null}
+
+					{seasons.map(season => {
+						const first = pointForSeason(profile, season)
+						const second = pointForSeason(comparisonProfile, season)
+						const phase = first?.phase ?? second?.phase ?? 'COMPLETED'
+						return (
+							<FragmentRow
+								key={season}
+								season={season}
+								phase={phase}
+								currentSeason={currentSeason}
+								player={player}
+								comparison={comparison}
+								profile={profile}
+								comparisonProfile={comparisonProfile}
+								first={first}
+								second={second}
+								maxPoints={maxPoints}
+							/>
+						)
+					})}
+				</div>
+			</div>
+		</section>
+	)
+}
+
+function FragmentRow({
+	season,
+	phase,
+	currentSeason,
+	player,
+	comparison,
+	profile,
+	comparisonProfile,
+	first,
+	second,
+	maxPoints
+}: {
+	season: string
+	phase: PlayerSeasonTimelinePoint['phase']
+	currentSeason: string
+	player: PlayerDetailData
+	comparison: PlayerDetailData | null
+	profile: PlayerStateProfileData | null
+	comparisonProfile: PlayerStateProfileData | null
+	first: PlayerSeasonTimelinePoint | null
+	second: PlayerSeasonTimelinePoint | null
+	maxPoints: number
+}) {
+	const t = useTranslations('PlayerStats')
+	return (
+		<>
+			<div className="border-t border-border/60 bg-muted/10 px-2 py-3 sm:px-3">
+				<div className="font-display text-xs font-bold tabular-nums">
+					{seasonLabel(season)}
+				</div>
+				<div className="mt-1 text-[0.65rem] text-muted-foreground">
+					{season === currentSeason
+						? t('timeline.currentSeason')
+						: phase === 'COMPLETED'
+							? t('timeline.completedSeason')
+							: t('timeline.activeSeason')}
+				</div>
+			</div>
+			<div className="border-l border-t border-border/60">
+				<TimelineCell
+					profile={profile}
+					point={first}
+					comparisonPoint={second}
+					maxPoints={maxPoints}
+					accent="primary"
+					comparison={comparison !== null}
+				/>
+			</div>
+			{comparison ? (
+				<div className="border-l border-t border-border/60">
+					<TimelineCell
+						profile={comparisonProfile}
+						point={second}
+						comparisonPoint={first}
+						maxPoints={maxPoints}
+						accent="compare"
+						comparison
+					/>
+				</div>
+			) : null}
+		</>
+	)
+}

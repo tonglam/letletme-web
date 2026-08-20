@@ -248,6 +248,10 @@ export const GET_PLAYER_STATE_PROFILE = `
 	        }
 	        metricCoverage limitations
 	      }
+	      seasonTimeline {
+	        season phase position fplTotalPoints
+	        signals { code provider value unit sampleMinutes analysisStatus reasonCodes }
+	      }
 	    }
 	  }
 `
@@ -261,20 +265,12 @@ export const GET_PLAYER_STATE_CONTEXT = `
   query GetPlayerStateContext($playerId: Int!, $horizon: Int = 5) {
     playerStateProfile(playerId: $playerId, horizon: $horizon) {
       playerId
-      ownBaseline {
-        weightedPercentile
-        seasons { season positionPercentile weight }
-      }
-      peerBaseline { position minimumMinutes cohortSize currentPercentile }
-      careerTrajectory {
-        season position minutes fplPositionPercentile understatProcessPercentile expectedMetricsAvailable
-      }
-	      coverage {
-	        sources {
-	          provider scope seasons dataStatus analysisStatus mappingStatus
-	          reasonCodes revision asOf freshnessSeconds stale
-	        }
-	      }
+	  coverage {
+	    sources {
+	      provider scope seasons dataStatus analysisStatus mappingStatus
+	      reasonCodes revision asOf freshnessSeconds stale
+	    }
+	  }
     }
   }
 `
@@ -404,6 +400,33 @@ export type PlayerStateAnalysisStatus =
 export type PlayerStateProviderMode =
 	'FPL_ONLY' | 'FPL_WITH_UNDERSTAT_HISTORY' | 'FPL_WITH_UNDERSTAT_CURRENT'
 
+export type PlayerSeasonPhase = 'PRESEASON' | 'ACTIVE' | 'COMPLETED'
+export type PlayerSeasonSignalCode =
+	| 'UNDERSTAT_NPXG_PER_90'
+	| 'UNDERSTAT_XA_PER_90'
+	| 'UNDERSTAT_NPXG_XA_PER_90'
+	| 'UNDERSTAT_KEY_PASSES_PER_90'
+	| 'OFFICIAL_CLEAN_SHEET_RATE'
+	| 'OFFICIAL_SAVES_PER_90'
+
+export interface PlayerSeasonSignal {
+	code: PlayerSeasonSignalCode
+	provider: PlayerStateProvider
+	value: number | null
+	unit: string
+	sampleMinutes: number | null
+	analysisStatus: PlayerStateAnalysisStatus
+	reasonCodes: string[]
+}
+
+export interface PlayerSeasonTimelinePoint {
+	season: string
+	phase: PlayerSeasonPhase
+	position: number
+	fplTotalPoints: number | null
+	signals: PlayerSeasonSignal[]
+}
+
 export interface PlayerStateSourceCoverage {
 	provider: PlayerStateProvider
 	scope: PlayerStateProviderScope
@@ -461,6 +484,7 @@ export interface PlayerStateProfileData {
 		metricCoverage: string[]
 		limitations: string[]
 	}
+	seasonTimeline: PlayerSeasonTimelinePoint[]
 }
 
 export type PlayerStateProfileCoreData = Omit<
@@ -487,6 +511,7 @@ export type PlayerStateOverviewData = Pick<
 	| 'trend'
 	| 'confidence'
 	| 'providerMode'
+	| 'seasonTimeline'
 > & {
 	reasons: Array<Pick<PlayerStateReason, 'code'>>
 	profileRadar:
@@ -520,7 +545,7 @@ export type PlayerStateProcessData = Pick<
 
 export type PlayerStateContextData = Pick<
 	PlayerStateProfileData,
-	'playerId' | 'ownBaseline' | 'peerBaseline' | 'careerTrajectory'
+	'playerId'
 > & {
 	coverage: Pick<PlayerStateProfileData['coverage'], 'sources'>
 }
@@ -607,6 +632,10 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
             dimensions {
               kind rating direction confidence reasonCodes
             }
+            seasonTimeline {
+              season phase position fplTotalPoints
+              signals { code provider value unit sampleMinutes analysisStatus reasonCodes }
+            }
           }
         }
       }
@@ -624,14 +653,6 @@ export const GET_PLAYER_STATS_DESK_CONTEXT = /* GraphQL */ `
           status
           value {
             playerId
-            ownBaseline {
-              weightedPercentile
-              seasons { season positionPercentile weight }
-            }
-            peerBaseline { position minimumMinutes cohortSize currentPercentile }
-            careerTrajectory {
-              season position minutes fplPositionPercentile understatProcessPercentile expectedMetricsAvailable
-            }
             coverage {
               sources {
                 provider scope seasons dataStatus analysisStatus mappingStatus

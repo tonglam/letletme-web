@@ -19,8 +19,9 @@ describe('Player State Profile query', () => {
 			}
 		})
 
-		assert.ok(astNodes <= 200, `Profile query has ${astNodes} AST nodes`)
+		assert.ok(astNodes <= 240, `Profile query has ${astNodes} AST nodes`)
 		assert.doesNotMatch(GET_PLAYER_STATE_PROFILE, /ownBaseline/)
+		assert.match(GET_PLAYER_STATE_PROFILE, /seasonTimeline \{/)
 		assert.match(GET_PLAYER_STATE_PROFILE, /sources \{/)
 	})
 
@@ -33,7 +34,10 @@ describe('Player State Profile query', () => {
 		})
 
 		assert.ok(astNodes <= 200, `Context query has ${astNodes} AST nodes`)
-		assert.match(GET_PLAYER_STATE_CONTEXT, /ownBaseline/)
+		assert.doesNotMatch(
+			GET_PLAYER_STATE_CONTEXT,
+			/ownBaseline|careerTrajectory/
+		)
 		assert.match(GET_PLAYER_STATE_CONTEXT, /sources \{/)
 	})
 
