@@ -984,11 +984,9 @@ export default function SelectionsClient({
 						<p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
 							{selectedTournament.setupStatus === 'FAILED'
 								? lifecycleT('memberFailure')
-								: selectedTournament.setupHasWarnings
-									? lifecycleT('warningSummary')
-									: selectedTournament.standingsReadyAt
-										? lifecycleT('enrichingMessage')
-										: lifecycleT('leavePageMessage')}
+								: selectedTournament.standingsReadyAt
+									? lifecycleT('enrichingMessage')
+									: lifecycleT('leavePageMessage')}
 						</p>
 					</div>
 				) : null}

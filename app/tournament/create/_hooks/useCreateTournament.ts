@@ -17,7 +17,6 @@ import {
 	type TournamentFormData
 } from '../_lib/tournament-form'
 import { useTranslations } from 'next-intl'
-import { useRouter } from '@/i18n/navigation'
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
 	try {
@@ -32,7 +31,6 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 
 export function useCreateTournament() {
 	const t = useTranslations('TournamentCreate')
-	const router = useRouter()
 	const schema = useMemo(
 		() =>
 			createTournamentFormSchema({
@@ -243,6 +241,39 @@ export function useCreateTournament() {
 		setSubmitSuccess(null)
 		setCreatedTournamentId(null)
 		setCreatedTournamentName('')
+	}
+
+	const resetForNewTournament = () => {
+		participantRequestIdRef.current += 1
+		participantAbortControllerRef.current?.abort()
+		participantAbortControllerRef.current = null
+		creationModeRef.current = 'classic'
+		setCreationMode('classic')
+		setParticipants([])
+		setSelectedParticipantIds([])
+		setParticipantsLoaded(false)
+		setFetchedLeagueUrl(null)
+		setIsLoadingParticipants(false)
+		setIsCheckingName(false)
+		setIsNameAvailable(null)
+		setNameCheckMessage(null)
+		setCheckedTournamentName('')
+		setParticipantError(null)
+		setSubmitError(null)
+		setSubmitSuccess(null)
+		setCreatedTournamentId(null)
+		setCreatedTournamentName('')
+		setLoadedLeague(null)
+		setPreviewToken(null)
+		setPreviewExpiresAt(null)
+		setPreviewExpired(false)
+		form.reset(DEFAULT_TOURNAMENT_FORM)
+		window.scrollTo({ top: 0, behavior: 'smooth' })
+		window.requestAnimationFrame(() => {
+			document
+				.querySelector<HTMLInputElement>('form input:not([disabled])')
+				?.focus()
+		})
 	}
 
 	const applyOfficialMirrorMode = (
@@ -539,7 +570,6 @@ export function useCreateTournament() {
 						? t('createdReady', { count: participantCount })
 						: t('createdProcessing', { count: participantCount })
 			)
-			router.push(`/live/competitions/${tournamentId}?created=1`)
 		} catch {
 			setSubmitError(t('createFailed'))
 		} finally {
@@ -552,6 +582,7 @@ export function useCreateTournament() {
 		changeCreationMode,
 		creationMode,
 		createdTournamentId: currentCreatedTournamentId,
+		resetForNewTournament,
 		fetchParticipants,
 		form,
 		groupFormat,

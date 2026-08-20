@@ -50,6 +50,11 @@ export function TournamentOperationsCard({
 		tournament.rosterSyncStatus
 	)
 	const setupInFlight = isTournamentSetupInFlight(tournament.setupStatus)
+	const setupFailed = tournament.setupStatus === 'FAILED'
+	const setupNeedsFollowUp =
+		setupFailed ||
+		tournament.setupHasWarnings ||
+		Boolean(tournament.warningSummaries?.length)
 	const actionIcon = (action: TournamentManagementAction, icon: ReactNode) =>
 		pendingAction === action ? (
 			<LoaderCircle
@@ -113,22 +118,30 @@ export function TournamentOperationsCard({
 					)}
 				</div>
 
-				{tournament.setupStatus === 'FAILED' || tournament.setupHasWarnings ? (
+				{setupNeedsFollowUp ? (
 					<div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
 						<div>
-							<p className="font-medium">{t('retrySetupTitle')}</p>
+							<p className="font-medium">
+								{t(setupFailed ? 'recoverSetupTitle' : 'completeInsightsTitle')}
+							</p>
 							<p className="text-sm text-muted-foreground">
-								{t('retrySetupDescription')}
+								{t(
+									setupFailed
+										? 'recoverSetupDescription'
+										: 'backgroundRepairDescription'
+								)}
 							</p>
 						</div>
-						<Button
-							variant="outline"
-							disabled={busy}
-							onClick={() => void onAction('retry_setup')}
-						>
-							{actionIcon('retry_setup', <RefreshCw aria-hidden="true" />)}{' '}
-							{t('retrySetup')}
-						</Button>
+						{setupFailed ? (
+							<Button
+								variant="outline"
+								disabled={busy}
+								onClick={() => void onAction('retry_setup')}
+							>
+								{actionIcon('retry_setup', <RefreshCw aria-hidden="true" />)}{' '}
+								{t('recoverSetup')}
+							</Button>
+						) : null}
 					</div>
 				) : null}
 
@@ -143,9 +156,7 @@ export function TournamentOperationsCard({
 						<Button
 							variant="outline"
 							disabled={
-								busy ||
-								rosterSyncInFlight ||
-								tournament.state === 'FINISHED'
+								busy || rosterSyncInFlight || tournament.state === 'FINISHED'
 							}
 							onClick={() => void onAction('retry_roster')}
 						>

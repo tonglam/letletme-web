@@ -10,7 +10,7 @@ import {
 } from '@/lib/tournament/lifecycle'
 import {
 	mapEntryTournamentToLiveTournament,
-	mapTournamentGroupFormat,
+	mapTournamentGroupFormat
 } from '@/lib/tournament/liveTournament'
 import { resolveTournamentStatsLoadState } from '@/app/me/tournament/_lib/tournament-stats-model'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
@@ -43,9 +43,7 @@ describe('tournament lifecycle presentation', () => {
 			'needsAttention'
 		)
 		assert.equal(
-			getTournamentLifecycleBadge(
-				lifecycle({ setupStatus: 'FAILED' })
-			),
+			getTournamentLifecycleBadge(lifecycle({ setupStatus: 'FAILED' })),
 			'needsAttention'
 		)
 	})
@@ -126,7 +124,7 @@ describe('tournament lifecycle presentation', () => {
 			totalTeamNum: 75,
 			setupStatus: 'PROCESSING',
 			standingsReadyAt: null,
-			setupHasWarnings: false,
+			setupHasWarnings: false
 		} as EntryTournament)
 
 		assert.equal(mapped.setupStatus, 'PROCESSING')
@@ -146,17 +144,17 @@ describe('tournament lifecycle presentation', () => {
 			resolveTournamentStatsLoadState({
 				isBootstrapping: false,
 				hasSelectedTournament: true,
-				insightsReady: false,
+				insightsReady: false
 			}),
-			'reset',
+			'reset'
 		)
 		assert.equal(
 			resolveTournamentStatsLoadState({
 				isBootstrapping: false,
 				hasSelectedTournament: true,
-				insightsReady: true,
+				insightsReady: true
 			}),
-			'load',
+			'load'
 		)
 	})
 
@@ -169,8 +167,15 @@ describe('tournament lifecycle presentation', () => {
 				setupCompletedUnits: 42,
 				setupTotalUnits: 75,
 				setupProgressUpdatedAt: null,
+				setupProgressMode: 'DETERMINATE',
+				setupAttempt: 0,
+				setupMaxAttempts: 3,
+				nextRetryAt: null,
 				standingsReadyAt: null,
+				profilesReadyAt: null,
+				insightsReadyAt: null,
 				setupHasWarnings: false,
+				warningSummaries: [],
 				setupStartedAt: null,
 				setupFinishedAt: null
 			}),
@@ -180,9 +185,16 @@ describe('tournament lifecycle presentation', () => {
 				setupPhase: 'SYNCING_ENTRIES',
 				setupCompletedUnits: 42,
 				setupTotalUnits: 75,
+				setupProgressMode: 'DETERMINATE',
+				setupAttempt: 0,
+				setupMaxAttempts: 3,
+				nextRetryAt: null,
 				setupProgressUpdatedAt: null,
 				standingsReadyAt: null,
+				profilesReadyAt: null,
+				insightsReadyAt: null,
 				setupHasWarnings: false,
+				warningSummaries: [],
 				setupStartedAt: null,
 				setupFinishedAt: null
 			}
