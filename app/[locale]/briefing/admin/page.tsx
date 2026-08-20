@@ -81,10 +81,7 @@ export default async function BriefingAdminPage({ params }: PageProps) {
 					>
 						{[
 							['editionId', 'Ready edition ID'],
-							['revision', 'New revision'],
-							['publicationId', 'Publication UUID'],
-							['sourceCheckedAt', 'Source checked at (ISO)'],
-							['publishedAt', 'Publish time (ISO)'],
+							['expectedFrozenSha256', 'Frozen SHA-256'],
 							['validUntil', 'Valid until (ISO, optional)'],
 							['reason', 'Publication reason']
 						].map(([name, label]) => (

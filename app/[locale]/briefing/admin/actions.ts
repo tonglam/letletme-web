@@ -1,7 +1,6 @@
 'use server'
 
 import { publishBriefingWeekEdition } from '@/lib/briefing-admin-server'
-import { briefingPublishIdempotencyKey } from '@/lib/briefing-revalidate'
 import { getCurrentSession } from '@/lib/session'
 
 type AdminRole = 'editor' | 'publisher'
@@ -39,17 +38,14 @@ const required = (formData: FormData, key: string): string => {
 export async function publishBriefingWeekEditionAction(formData: FormData) {
 	const actorId = await requireAdmin('publisher')
 	const editionId = required(formData, 'editionId')
-	const revision = Number(required(formData, 'revision'))
-	if (!Number.isSafeInteger(revision) || revision <= 0)
-		throw new Error('revision is invalid')
+	const expectedFrozenSha256 = required(formData, 'expectedFrozenSha256')
+	if (!/^[0-9a-f]{64}$/i.test(expectedFrozenSha256))
+		throw new Error('expectedFrozenSha256 is invalid')
 	const validUntilValue = formData.get('validUntil')
 	await publishBriefingWeekEdition(
 		editionId,
 		{
-			revision,
-			publicationId: required(formData, 'publicationId'),
-			sourceCheckedAt: required(formData, 'sourceCheckedAt'),
-			publishedAt: required(formData, 'publishedAt'),
+			expectedFrozenSha256,
 			validUntil:
 				typeof validUntilValue === 'string'
 					? validUntilValue.trim() || null
@@ -58,7 +54,7 @@ export async function publishBriefingWeekEditionAction(formData: FormData) {
 		},
 		{
 			actorId,
-			idempotencyKey: briefingPublishIdempotencyKey(editionId, revision)
+			idempotencyKey: `web:briefing:publish:${editionId}:${expectedFrozenSha256}`
 		}
 	)
 }
