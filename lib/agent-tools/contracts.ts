@@ -111,7 +111,10 @@ const playersInput = z
 				message: 'minPrice must not exceed maxPrice'
 			})
 		}
-		if (value.playerIds && new Set(value.playerIds).size !== value.playerIds.length) {
+		if (
+			value.playerIds &&
+			new Set(value.playerIds).size !== value.playerIds.length
+		) {
 			context.addIssue({
 				code: z.ZodIssueCode.custom,
 				path: ['playerIds'],
@@ -158,6 +161,13 @@ const entryInput = z
 				code: z.ZodIssueCode.custom,
 				path: ['eventId'],
 				message: 'eventId is only available for a single entry'
+			})
+		}
+		if (value.entryId !== undefined && value.eventId !== undefined) {
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['eventId'],
+				message: 'eventId is only available for the verified self entry'
 			})
 		}
 	})
@@ -221,7 +231,8 @@ export const AGENT_TOOL_CAPABILITIES: ReadonlyArray<{
 	},
 	{
 		name: 'letletme_players',
-		description: 'Published player directory with bounded filters and cursor pagination.',
+		description:
+			'Published player directory with bounded filters and cursor pagination.',
 		access: 'authenticated',
 		limits: { defaultPageSize: 25, maxPageSize: 100 }
 	},
@@ -233,17 +244,20 @@ export const AGENT_TOOL_CAPABILITIES: ReadonlyArray<{
 	},
 	{
 		name: 'letletme_market',
-		description: 'Published lineup, ownership, price and market coverage snapshots.',
+		description:
+			'Published lineup, ownership, price and market coverage snapshots.',
 		access: 'authenticated'
 	},
 	{
 		name: 'letletme_entry',
-		description: 'Persisted public entry snapshots and verified self-only extensions.',
+		description:
+			'Persisted public entry snapshots and verified self-only extensions.',
 		access: 'authenticated; verified FPL entry for self extensions'
 	},
 	{
 		name: 'letletme_competition',
-		description: 'Member-authorized competition metadata and paginated results.',
+		description:
+			'Member-authorized competition metadata and paginated results.',
 		access: 'verified FPL entry and competition membership',
 		limits: { defaultPageSize: 25, maxPageSize: 50 }
 	},

@@ -11,6 +11,7 @@ import {
 	BRIEFING_STORY_DOCUMENT,
 	COMPETITION_CONTEXT_DOCUMENT,
 	COMPETITION_DOCUMENT,
+	ENTRY_SNAPSHOT_DOCUMENT,
 	MARKET_LINEUP_DOCUMENT,
 	MARKET_OWNERSHIP_FALLERS_DOCUMENT,
 	MARKET_OWNERSHIP_RISERS_DOCUMENT,
@@ -574,6 +575,32 @@ test('unverified accounts cannot request self or competition extensions', async 
 	)
 	assert.equal(competition.status, 403)
 	assert.equal((await competition.json()).code, 'FPL_VERIFICATION_REQUIRED')
+})
+
+test('an explicit entry ID is always a public snapshot and cannot select an event', async () => {
+	let capturedDocument = ''
+	const publicSnapshot = await handleAgentToolRequest(
+		request({ entryId: 123 }),
+		'letletme_entry',
+		dependencies(verified, async document => {
+			capturedDocument = document
+			return {
+				coreEventContext: contextResult.coreEventContext,
+				entrySnapshot: { id: 123, entryName: 'Persisted entry' }
+			}
+		})
+	)
+	assert.equal(publicSnapshot.status, 200)
+	assert.equal(capturedDocument, ENTRY_SNAPSHOT_DOCUMENT)
+	assert.equal((await publicSnapshot.json()).data.accessScope, 'public')
+
+	const invalid = await handleAgentToolRequest(
+		request({ entryId: 123, eventId: 1 }),
+		'letletme_entry',
+		dependencies(verified)
+	)
+	assert.equal(invalid.status, 400)
+	assert.equal((await invalid.json()).code, 'INVALID_INPUT')
 })
 
 test('competition authorization failures, rate limits and timeouts are normalized', async () => {

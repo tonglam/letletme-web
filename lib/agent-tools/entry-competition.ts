@@ -17,8 +17,7 @@ import {
 	requireVerifiedEntryId,
 	type CoreContext,
 	toolResponse,
-	type ToolRunOptions,
-	verifiedEntryId
+	type ToolRunOptions
 } from '@/lib/agent-tools/runtime'
 
 export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
@@ -45,9 +44,8 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 		)
 	}
 
-	const ownId = verifiedEntryId(options.session)
-	const entryId = input.entryId ?? requireVerifiedEntryId(options.session)
-	if (ownId !== null && entryId === ownId) {
+	if (input.entryId === undefined) {
+		const entryId = requireVerifiedEntryId(options.session)
 		const [snapshot, deskResult] = await Promise.all([
 			executeDocument<{
 				coreEventContext: CoreContext
@@ -110,7 +108,7 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 	const result = await executeDocument<{
 		coreEventContext: CoreContext
 		entrySnapshot: unknown | null
-	}>(options, ENTRY_SNAPSHOT_DOCUMENT, { id: entryId })
+	}>(options, ENTRY_SNAPSHOT_DOCUMENT, { id: input.entryId })
 	if (!result.entrySnapshot) {
 		throw new AgentToolError(
 			'NOT_FOUND',
