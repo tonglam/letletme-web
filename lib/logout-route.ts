@@ -1,15 +1,7 @@
 import { safeRedirectPath } from './auth-redirects'
+import { isTrustedSameSiteRequest } from './request-origin'
 
 type SignOutRequest = (headers: Headers) => Promise<Response>
-
-function isSameOriginMutation(request: Request): boolean {
-	const origin = request.headers.get('origin')
-	const fetchSite = request.headers.get('sec-fetch-site')
-	return (
-		(!origin || origin === new URL(request.url).origin) &&
-		fetchSite !== 'cross-site'
-	)
-}
 
 function copySetCookies(source: Headers, target: Headers): void {
 	const values = source.getSetCookie()
@@ -30,7 +22,7 @@ export function createLogoutRouteHandler(
 	signOut: SignOutRequest
 ): (request: Request) => Promise<Response> {
 	return async request => {
-		if (!isSameOriginMutation(request)) {
+		if (!isTrustedSameSiteRequest(request)) {
 			return Response.json(
 				{ error: 'Forbidden' },
 				{ status: 403, headers: { 'Cache-Control': 'no-store' } }
@@ -58,7 +50,7 @@ export function createLogoutRouteHandler(
 				headers: {
 					...(wantsJson
 						? {}
-						: { Location: new URL(redirectPath, request.url).toString() }),
+						: { Location: redirectPath }),
 					'Cache-Control': 'private, no-store, no-transform'
 				}
 			})
