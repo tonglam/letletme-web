@@ -146,7 +146,8 @@ const MAPPING_KEYS = {
 	UNVERIFIED: 'coverage.mappingUnverified',
 	AMBIGUOUS: 'coverage.mappingAmbiguous',
 	QUARANTINED: 'coverage.mappingQuarantined',
-	UNAVAILABLE: 'coverage.mappingUnavailable'
+	UNAVAILABLE: 'coverage.mappingUnavailable',
+	NOT_APPLICABLE: 'coverage.mappingNotApplicable'
 } as const
 
 const LIMITATION_KEYS = {
@@ -230,6 +231,23 @@ function CoverageCard({
 	}
 
 	const limitations = Array.from(new Set(profile.coverage.limitations))
+	const source = (
+		provider: 'FPL' | 'UNDERSTAT',
+		scope: 'CURRENT' | 'HISTORY'
+	) =>
+		profile.coverage.sources.find(
+			candidate => candidate.provider === provider && candidate.scope === scope
+		)
+	const fplCurrent = source('FPL', 'CURRENT')
+	const fplHistory = source('FPL', 'HISTORY')
+	const understatCurrent = source('UNDERSTAT', 'CURRENT')
+	const understatHistory = source('UNDERSTAT', 'HISTORY')
+	const historySeasons = (candidate: typeof fplHistory) =>
+		candidate?.seasons ?? []
+	const mappingStatus =
+		understatCurrent?.mappingStatus ??
+		understatHistory?.mappingStatus ??
+		'UNAVAILABLE'
 	const asOfDate = new Date(profile.asOf)
 	const asOfLabel = Number.isNaN(asOfDate.getTime())
 		? profile.asOf
@@ -259,9 +277,12 @@ function CoverageCard({
 					className="text-label"
 				>
 					{t('coverage.fplCurrent', {
-						status: profile.coverage.fplCurrent
-							? t('coverage.available')
-							: t('coverage.unavailableShort')
+						status:
+							fplCurrent?.analysisStatus === 'PRESEASON'
+								? t('coverage.preseason')
+								: fplCurrent?.dataStatus === 'AVAILABLE'
+									? t('coverage.available')
+									: t('coverage.unavailableShort')
 					})}
 				</Badge>
 				<Badge
@@ -269,31 +290,32 @@ function CoverageCard({
 					className="text-label"
 				>
 					{t('coverage.understatCurrent', {
-						status: profile.coverage.understatCurrent
-							? t('coverage.available')
-							: t('coverage.unavailableShort')
+						status:
+							understatCurrent?.dataStatus === 'AVAILABLE'
+								? t('coverage.available')
+								: t('coverage.currentSeasonNotPublished')
 					})}
 				</Badge>
 				<Badge
 					variant="secondary"
 					className="text-label"
 				>
-					{t(MAPPING_KEYS[profile.coverage.mappingStatus])}
+					{t(MAPPING_KEYS[mappingStatus])}
 				</Badge>
 			</div>
 
 			<p className="mt-2 text-caption text-muted-foreground">
 				{t('coverage.summary', {
-					fplHistory: profile.coverage.fplHistorySeasons.length,
-					understatHistory: profile.coverage.understatHistorySeasons.length,
+					fplHistory: historySeasons(fplHistory).length,
+					understatHistory: historySeasons(understatHistory).length,
 					metrics: profile.coverage.metricCoverage.length,
 					asOf: asOfLabel
 				})}
 			</p>
 
-			{profile.coverage.providers.length > 0 && !compact ? (
+			{profile.coverage.sources.length > 0 && !compact ? (
 				<div className="mt-2 space-y-1 border-t border-border/50 pt-2">
-					{profile.coverage.providers.map(provider => {
+					{profile.coverage.sources.map(provider => {
 						const providerDate = provider.asOf ? new Date(provider.asOf) : null
 						const providerAsOf =
 							providerDate && !Number.isNaN(providerDate.getTime())
@@ -310,34 +332,33 @@ function CoverageCard({
 									})
 						return (
 							<p
-								key={`${provider.provider}-${provider.scope}-${provider.season}`}
+								key={`${provider.provider}-${provider.scope}-${provider.seasons.join('-')}`}
 								className="text-caption text-muted-foreground"
 							>
 								{t('coverage.providerRevision', {
 									provider: provider.provider,
 									scope: provider.scope.toLowerCase(),
-									season: seasonLabel(provider.season),
+									season: provider.seasons.map(seasonLabel).join(', ') || '—',
 									revision: provider.revision ?? '—',
 									asOf: providerAsOf,
 									freshness,
-									status: provider.available
-										? provider.stale
-											? t('coverage.stale')
-											: t('coverage.fresh')
-										: t('coverage.unavailableShort')
+									status:
+										provider.dataStatus === 'AVAILABLE'
+											? provider.stale
+												? t('coverage.stale')
+												: t('coverage.fresh')
+											: t('coverage.unavailableShort')
 								})}
 							</p>
 						)
 					})}
 					<p className="text-caption text-muted-foreground">
 						{t('coverage.historySeasons', {
-							fpl: profile.coverage.fplHistorySeasons.length
-								? profile.coverage.fplHistorySeasons.map(seasonLabel).join(', ')
+							fpl: historySeasons(fplHistory).length
+								? historySeasons(fplHistory).map(seasonLabel).join(', ')
 								: '—',
-							understat: profile.coverage.understatHistorySeasons.length
-								? profile.coverage.understatHistorySeasons
-										.map(seasonLabel)
-										.join(', ')
+							understat: historySeasons(understatHistory).length
+								? historySeasons(understatHistory).map(seasonLabel).join(', ')
 								: '—'
 						})}
 					</p>
@@ -446,9 +467,13 @@ function StateColumn({
 						confidence: t(CONFIDENCE_KEYS[profile.confidence])
 					})}
 				</span>
-				{profile.fplOnly ? (
-					<Badge variant="secondary">{t('fplOnly')}</Badge>
-				) : null}
+				<Badge variant="secondary">
+					{profile.providerMode === 'FPL_WITH_UNDERSTAT_CURRENT'
+						? t('providerMode.withUnderstatCurrent')
+						: profile.providerMode === 'FPL_WITH_UNDERSTAT_HISTORY'
+							? t('providerMode.withUnderstatHistory')
+							: t('fplOnly')}
+				</Badge>
 			</div>
 			<ul className="mt-3 space-y-1.5 text-sm text-muted-foreground">
 				{profile.reasons.slice(0, 3).map(reason => (
@@ -477,9 +502,7 @@ function SignalCard({
 }) {
 	return (
 		<div className="rounded-lg border border-border/60 bg-muted/10 px-3 py-3">
-			<p className="eyebrow">
-				{title}
-			</p>
+			<p className="eyebrow">{title}</p>
 			<div className="mt-2">
 				<RatingLine
 					dimension={dimension}
@@ -611,9 +634,7 @@ function OutputProcess({
 								key={code}
 								className="rounded-md border border-border/60 px-2.5 py-2"
 							>
-								<p className="eyebrow">
-									{metricLabel(code, t)}
-								</p>
+								<p className="eyebrow">{metricLabel(code, t)}</p>
 								<p className="mt-0.5 font-display text-lg font-bold tabular-nums">
 									{formatMetricValue(item, format) ?? '—'}
 								</p>
@@ -905,9 +926,7 @@ function Baseline({
 							key={item.label}
 							className="rounded-lg border border-border/60 px-3 py-3"
 						>
-							<p className="eyebrow">
-								{item.label}
-							</p>
+							<p className="eyebrow">{item.label}</p>
 							<p className="mt-1 font-display text-lg font-bold tabular-nums">
 								{item.value ?? '—'}
 							</p>
@@ -1130,9 +1149,13 @@ function StateSummaryColumn({
 						confidence: t(CONFIDENCE_KEYS[profile.confidence])
 					})}
 				</span>
-				{profile.fplOnly ? (
-					<Badge variant="secondary">{t('fplOnly')}</Badge>
-				) : null}
+				<Badge variant="secondary">
+					{profile.providerMode === 'FPL_WITH_UNDERSTAT_CURRENT'
+						? t('providerMode.withUnderstatCurrent')
+						: profile.providerMode === 'FPL_WITH_UNDERSTAT_HISTORY'
+							? t('providerMode.withUnderstatHistory')
+							: t('fplOnly')}
+				</Badge>
 			</div>
 			<div className="mt-3">
 				<StateReasonList
@@ -1181,9 +1204,7 @@ function WhyState({
 							key={item.kind}
 							className="rounded-md border border-border/60 bg-muted/10 px-2.5 py-2"
 						>
-							<p className="eyebrow">
-								{item.title}
-							</p>
+							<p className="eyebrow">{item.title}</p>
 							<div className="mt-1 flex flex-wrap items-center gap-1.5">
 								<Badge variant="outline">
 									{first ? t(RATING_KEYS[first.rating]) : '—'}
@@ -1310,7 +1331,7 @@ export function PlayerStateContext({
 				) : (
 					<PlayerStatsSection title={t('historyCoverageTitle')}>
 						<p className="rounded-lg border border-border/60 px-3 py-3 text-sm text-muted-foreground">
-							{t('historyCoverageUnavailable')}
+							{t('careerEmpty')}
 						</p>
 					</PlayerStatsSection>
 				)}

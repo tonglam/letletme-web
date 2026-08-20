@@ -21,7 +21,7 @@ describe('Player State Profile query', () => {
 
 		assert.ok(astNodes <= 200, `Profile query has ${astNodes} AST nodes`)
 		assert.doesNotMatch(GET_PLAYER_STATE_PROFILE, /ownBaseline/)
-		assert.doesNotMatch(GET_PLAYER_STATE_PROFILE, /providers/)
+		assert.match(GET_PLAYER_STATE_PROFILE, /sources \{/)
 	})
 
 	it('loads low-frequency history and provider context through a bounded query', () => {
@@ -34,7 +34,7 @@ describe('Player State Profile query', () => {
 
 		assert.ok(astNodes <= 200, `Context query has ${astNodes} AST nodes`)
 		assert.match(GET_PLAYER_STATE_CONTEXT, /ownBaseline/)
-		assert.match(GET_PLAYER_STATE_CONTEXT, /providers/)
+		assert.match(GET_PLAYER_STATE_CONTEXT, /sources \{/)
 	})
 
 	it('keeps evidence requests separated by user-selected tab', () => {

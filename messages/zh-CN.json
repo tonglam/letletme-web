@@ -865,6 +865,10 @@
 			"whyState": "为什么是这个状态",
 			"whyStateHint": "这里展示生成状态的三个信号；原始数值保留在下方证据视图中。",
 			"coverageTitle": "数据覆盖",
+			"providerMode": {
+				"withUnderstatCurrent": "当前 FPL + 当前 Understat",
+				"withUnderstatHistory": "当前 FPL + Understat 历史"
+			},
 			"fplOnly": "仅 FPL",
 			"confidenceLabel": "{confidence}置信度",
 			"outputProcessTitle": "产出与过程",
@@ -893,6 +897,8 @@
 			"coverage": {
 				"unavailable": "当前无法取得覆盖元数据。",
 				"available": "可用",
+				"preseason": "当前球员池与赛程可用，赛季表现尚未开始",
+				"currentSeasonNotPublished": "当前赛季尚未发布",
 				"unavailableShort": "不可用",
 				"fplCurrent": "当前 FPL：{status}",
 				"understatCurrent": "当前 Understat：{status}",
@@ -900,6 +906,7 @@
 				"mappingUnverified": "映射未验证",
 				"mappingAmbiguous": "映射有歧义",
 				"mappingQuarantined": "映射已隔离",
+				"mappingNotApplicable": "不适用",
 				"mappingUnavailable": "映射不可用",
 				"asOfEvent": "{season} · 截至 GW{gameweek}",
 				"asOfSeason": "{season} · 无轮次锚点",
