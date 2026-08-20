@@ -17,6 +17,7 @@ import {
 	submitBugReportToData,
 } from '@/lib/bug-report-submit'
 import { getVerifiedFplEntryId } from '@/lib/fpl-binding-core'
+import { createHmac } from 'node:crypto'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,6 +30,12 @@ function optionalDeviceId(value: unknown): string | null {
 	} catch {
 		return null
 	}
+}
+
+function hashAnonymousDeviceId(deviceId: string): string {
+	const secret = process.env.BACKEND_PROXY_SECRET
+	if (!secret) throw new MiniProgramAuthError('这次没法发，请稍后再试', 503)
+	return createHmac('sha256', secret).update(`bug-report:${deviceId}`).digest('hex')
 }
 
 export async function POST(request: Request) {
@@ -56,10 +63,11 @@ export async function POST(request: Request) {
 			throw new MiniProgramAuthError('Invalid JSON body', 400)
 		}
 		const payload = bounded as Record<string, unknown>
-		const anonymousId = userId ? null : optionalDeviceId(payload.deviceId)
-		if (!userId && !anonymousId) {
+		const rawDeviceId = userId ? null : optionalDeviceId(payload.deviceId)
+		if (!userId && !rawDeviceId) {
 			throw new MiniProgramAuthError('这次没法发，请重试', 400)
 		}
+		const anonymousId = rawDeviceId ? hashAnonymousDeviceId(rawDeviceId) : null
 		const identity = { userId, anonymousId }
 		await enforceBugReportIngressLimit(request, identity)
 		await enforceBugReportReporterLimit(identity)

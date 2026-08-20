@@ -167,9 +167,9 @@ export const requestRateLimit = authSchema.table(
 		count: integer('count').notNull(),
 		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull()
 	},
-		table => ({
-			pk: primaryKey({
-				name: 'request_rate_limits_pk',
+	table => ({
+		pk: primaryKey({
+			name: 'request_rate_limits_pk',
 			columns: [table.scope, table.subject, table.bucketStart]
 		}),
 		expiresIdx: index('request_rate_limits_expires_idx').on(table.expiresAt),
@@ -178,10 +178,10 @@ export const requestRateLimit = authSchema.table(
 			sql`${table.windowSeconds} > 0`
 		),
 		countPositive: check(
-				'request_rate_limits_count_check',
-				sql`${table.count} > 0`
-			)
-		})
+			'request_rate_limits_count_check',
+			sql`${table.count} > 0`
+		)
+	})
 )
 
 export const fplEntryBindingChallenge = authSchema.table(
@@ -211,5 +211,32 @@ export const fplEntryBindingChallenge = authSchema.table(
 		pendingIdx: index('fpl_entry_binding_challenges_pending_idx')
 			.on(table.userId, table.expiresAt)
 			.where(sql`${table.consumedAt} is null`)
+	})
+)
+
+/**
+ * One-time replay protection for signed internal storage operations.
+ *
+ * The table lives in the Web-owned auth schema so every Next.js instance
+ * shares the same nonce ledger; an in-process cache alone would allow a
+ * captured cleanup request to be replayed on another instance.
+ */
+export const bugReportStorageNonce = authSchema.table(
+	'bug_report_storage_nonces',
+	{
+		nonce: text('nonce').primaryKey(),
+		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true })
+			.notNull()
+			.defaultNow()
+	},
+	table => ({
+		expiresIdx: index('bug_report_storage_nonces_expires_idx').on(
+			table.expiresAt
+		),
+		nonceNonempty: check(
+			'bug_report_storage_nonces_nonce_nonempty',
+			sql`btrim(nonce) <> ''`
+		)
 	})
 )

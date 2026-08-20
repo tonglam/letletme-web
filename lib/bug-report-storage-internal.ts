@@ -11,6 +11,8 @@ import {
 	parseLegacyBugReportLocator,
 	parseManagedBugReportLocator
 } from '@/lib/bug-report-storage-contract'
+import { verifyBugReportStorageSignature } from '@/lib/bug-report-signature'
+import { consumeBugReportStorageNonce } from '@/lib/bug-report-storage-nonce'
 
 export const BUG_REPORT_SCREENSHOT_MAX_BYTES = 2 * 1024 * 1024
 
@@ -108,4 +110,17 @@ export async function deleteBugReportScreenshot(
 	if (!error) return 'deleted'
 	if (isMissingStorageError(error)) return 'missing'
 	throw error
+}
+
+// Shared exports for the signed internal routes. Keep the storage object
+// implementation above as the single path for both the legacy bridge and the
+// newer fixed /delete and /migrate endpoints.
+export { consumeBugReportStorageNonce, verifyBugReportStorageSignature }
+
+export async function deleteBugReportStorage(locator: string): Promise<void> {
+	await deleteBugReportScreenshot(locator)
+}
+
+export async function migrateBugReportStorage(locator: string): Promise<string> {
+	return migrateLegacyBugReportScreenshot(locator)
 }
