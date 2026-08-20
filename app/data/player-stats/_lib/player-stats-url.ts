@@ -39,6 +39,12 @@ export function playerStatsSectionFromHash(
 	return null
 }
 
+export function isPlayerStatsSupportingSection(
+	section: PlayerStatsSectionId | null
+): boolean {
+	return section === 'history' || section === 'market' || section === 'coverage'
+}
+
 export function playerStatsSectionHash(section: PlayerStatsSectionId): string {
 	return `#ps-${section}`
 }

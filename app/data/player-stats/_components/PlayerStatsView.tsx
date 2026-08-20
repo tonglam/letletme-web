@@ -1,6 +1,7 @@
 'use client'
 
 import {
+	isPlayerStatsSupportingSection,
 	playerStatsSectionFromHash,
 	type PlayerStatsSectionId
 } from '@/app/data/player-stats/_lib/player-stats-url'
@@ -650,10 +651,14 @@ export function PlayerStatsView({
 	const applyHashSection = useCallback(() => {
 		if (!player) return
 		const requestedSection = playerStatsSectionFromHash(window.location.hash)
-		const section =
-			(!hasSeasonStats && requestedSection && requestedSection !== 'fixtures'
-				? 'fixtures'
-				: requestedSection) ?? 'fixtures'
+		const shouldFallbackToFixtures =
+			!hasSeasonStats &&
+			requestedSection != null &&
+			requestedSection !== 'fixtures' &&
+			!isPlayerStatsSupportingSection(requestedSection)
+		const section = shouldFallbackToFixtures
+			? 'fixtures'
+			: (requestedSection ?? 'fixtures')
 		startTransition(() => {
 			setActiveSection(section)
 			setContextOpen(
@@ -1044,7 +1049,7 @@ export function PlayerStatsView({
 
 				{renderEvidenceContent()}
 
-				{hasSeasonStats ? (
+				{selectedPlayer ? (
 					<div className="border-t border-border/60 pt-4">
 						<Button
 							type="button"
