@@ -2,6 +2,10 @@ import 'server-only'
 
 import { headers } from 'next/headers'
 import type { Session } from '@/lib/auth'
+import {
+	capacityRequestIdForCurrentRun,
+	capacityRequestIdForHeaders
+} from '@/lib/capacity-run'
 import { buildGraphQLUserContextHeaders } from '@/lib/graphql-envelope'
 import {
 	buildIngressContextHeadersV2,
@@ -36,6 +40,10 @@ export async function buildServerUserContextHeaders(
 		},
 		secret
 	)
+	const capacityRequestId =
+		capacityRequestIdForCurrentRun() ??
+		capacityRequestIdForHeaders(requestHeaders, secret)
+	if (capacityRequestId) result['X-Request-Id'] = capacityRequestId
 	if (session?.user) {
 		Object.assign(result, buildGraphQLUserContextHeaders(session.user, secret))
 	}

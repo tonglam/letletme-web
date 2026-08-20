@@ -6,6 +6,7 @@ import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizePathname } from '@/i18n/routing'
+import { withCapacityRunForRequest } from '@/lib/capacity-run'
 import {
 	type MarketPulse,
 	type MarketPulseSummaryResponse,
@@ -196,7 +197,7 @@ function MarketViewFallback() {
 	)
 }
 
-export default async function MarketPage({ params, searchParams }: PageProps) {
+async function renderMarketPage({ params, searchParams }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	const query = await searchParams
 	if (query.period === 'ROLLING_7D') {
@@ -224,4 +225,8 @@ export default async function MarketPage({ params, searchParams }: PageProps) {
 			</div>
 		</PageShell>
 	)
+}
+
+export default async function MarketPage(props: PageProps) {
+	return withCapacityRunForRequest(() => renderMarketPage(props))
 }

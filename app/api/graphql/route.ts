@@ -10,7 +10,7 @@ import {
 } from '@/lib/graphql-proxy-security'
 import {
 	buildGraphQLProxyIngress,
-	graphQLWorkloadForOperation
+	graphQLWorkloadForDocument
 } from '@/lib/graphql-ingress'
 import {
 	PayloadTooLargeError,
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 		return noStoreJson({ errors: [{ message: 'Invalid JSON' }] }, 400)
 	}
 	const operationName = extractGraphQLOperationName(body) || 'anonymous'
-	const workload = graphQLWorkloadForOperation(operationName)
+	const workload = graphQLWorkloadForDocument(body)
 
 	const authorization = requestTiming.measureSync('authorizationHeader', () =>
 		readForwardableMiniProgramAuthorization(request.headers)

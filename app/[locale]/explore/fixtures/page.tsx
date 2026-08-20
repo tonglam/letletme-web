@@ -1,6 +1,7 @@
 import FixturesClient from '@/app/data/fixtures/FixturesClient'
 import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGameweekUnavailable'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
+import { withCapacityRunForRequest } from '@/lib/capacity-run'
 import { DEFAULT_FDR_HORIZON } from '@/lib/fixtures-fdr'
 import { getCurrentAndNextEvents } from '@/lib/events'
 import { loadFixtureTeams } from '@/lib/fixture-team-seed-server'
@@ -40,7 +41,7 @@ export async function generateMetadata({ params }: PageProps) {
 	})
 }
 
-export default async function FixturesPage({ params }: PageProps) {
+async function renderFixturesPage({ params }: PageProps) {
 	await getPageLocale(params)
 
 	const [events, { session, entryId }] = await Promise.all([
@@ -135,4 +136,8 @@ export default async function FixturesPage({ params }: PageProps) {
 			squadState={squadState}
 		/>
 	)
+}
+
+export default async function FixturesPage(props: PageProps) {
+	return withCapacityRunForRequest(() => renderFixturesPage(props))
 }

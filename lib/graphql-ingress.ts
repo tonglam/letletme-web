@@ -6,6 +6,13 @@ import {
 	buildOpaqueRateLimitSubject,
 	type GraphQLWorkload
 } from '@/lib/http-security-core'
+import {
+	getOperationAST,
+	Kind,
+	parse,
+	type DocumentNode,
+	type SelectionSetNode
+} from 'graphql'
 
 export const MINI_PROGRAM_CLIENT_HEADER = 'X-Letletme-Client'
 export const MINI_PROGRAM_DEVICE_HEADER = 'X-Letletme-Device-Id'
@@ -22,23 +29,80 @@ export type GraphQLProxyIngress =
 	  }
 	| { ok: false; message: string }
 
-export function graphQLWorkloadForOperation(
-	operationName: string | null | undefined
-): GraphQLWorkload {
-	const name = operationName ?? ''
-	if (/fixture/i.test(name)) return 'fixtures'
-	if (/market|ownership|transfer|price/i.test(name)) return 'market'
-	if (/playerstats|playerdetail|playerstate|picker/i.test(name)) {
+function workloadForRootField(field: string): GraphQLWorkload {
+	if (/fixture/i.test(field)) return 'fixtures'
+	if (/market|ownership|transfer|price|playervalue|availability/i.test(field)) {
+		return 'market'
+	}
+	if (/playerstats|playerdetail|playerstate|picker|^player$|^players$|team/i.test(field)) {
 		return 'player-stats'
 	}
-	if (/gameweek|eventoverall|eventstats/i.test(name)) return 'gameweek'
-	if (/home|publicevents|currentandnextevents|coreeventcontext/i.test(name)) {
+	if (/gameweek|eventoverall|eventstats|dreamteam/i.test(field)) return 'gameweek'
+	if (/home|publicevents|currentandnextevents|coreeventcontext|currenteventinfo|notice/i.test(field)) {
 		return 'home'
 	}
-	if (/myfpl|entry|live|tournament|competition/i.test(name)) {
+	if (/myfpl|entry|live|tournament|competition|league|trend/i.test(field)) {
 		return 'interactive'
 	}
 	return 'public-other'
+}
+
+function rootFieldsForOperation(
+	document: DocumentNode,
+	operationName: string | undefined
+): string[] {
+	const operation = getOperationAST(document, operationName)
+	if (!operation) return []
+	const fragments = new Map(
+		document.definitions
+			.filter(definition => definition.kind === Kind.FRAGMENT_DEFINITION)
+			.map(fragment => [fragment.name.value, fragment])
+	)
+	const fields = new Set<string>()
+	const visitedFragments = new Set<string>()
+	const visit = (selectionSet: SelectionSetNode) => {
+		for (const selection of selectionSet.selections) {
+			if (selection.kind === Kind.FIELD) {
+				fields.add(selection.name.value)
+				continue
+			}
+			if (selection.kind === Kind.INLINE_FRAGMENT) {
+				visit(selection.selectionSet)
+				continue
+			}
+			if (visitedFragments.has(selection.name.value)) continue
+			visitedFragments.add(selection.name.value)
+			const fragment = fragments.get(selection.name.value)
+			if (fragment) visit(fragment.selectionSet)
+		}
+	}
+	visit(operation.selectionSet)
+	return Array.from(fields)
+}
+
+/** Classify the selected schema fields, never the caller-controlled operation name. */
+export function graphQLWorkloadForDocument(body: unknown): GraphQLWorkload {
+	if (!body || typeof body !== 'object' || Array.isArray(body)) {
+		return 'public-other'
+	}
+	const candidate = body as { query?: unknown; operationName?: unknown }
+	if (typeof candidate.query !== 'string') return 'public-other'
+	const operationName =
+		typeof candidate.operationName === 'string'
+			? candidate.operationName
+			: undefined
+	try {
+		const workloads = new Set(
+			rootFieldsForOperation(parse(candidate.query), operationName).map(
+				workloadForRootField
+			)
+		)
+		return workloads.size === 1
+			? (Array.from(workloads)[0] ?? 'public-other')
+			: 'public-other'
+	} catch {
+		return 'public-other'
+	}
 }
 
 export function validateMiniProgramDeviceId(value: string | null): string | null {
@@ -46,7 +110,7 @@ export function validateMiniProgramDeviceId(value: string | null): string | null
 }
 
 function looksLikeLegacyMiniProgram(headers: Headers): boolean {
-	return /micromessenger|miniProgram/i.test(headers.get('user-agent') ?? '')
+	return /\bminiProgram\b/i.test(headers.get('user-agent') ?? '')
 }
 
 export function buildGraphQLProxyIngress({

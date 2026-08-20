@@ -1,6 +1,7 @@
 import 'server-only'
 
 import type { Session } from '@/lib/auth'
+import { capacityRequestIdForCurrentRun } from '@/lib/capacity-run'
 import { executeQuery, type ExecuteQueryOptions } from '@/lib/graphql-client'
 import {
 	buildIngressContextHeadersV2,
@@ -63,6 +64,9 @@ export async function executePublicServerQuery<T>(
 	options?: Omit<ExecuteQueryOptions, 'headers'>,
 ): Promise<T> {
 	const cacheResult = options?.cache === 'force-cache' ? 'eligible' : 'bypass'
+	const requestId = capacityRequestIdForCurrentRun()
+	const ingressHeaders = getPublicServerIngressHeaders(workload)
+	if (requestId) ingressHeaders['X-Request-Id'] = requestId
 	console.info('[graphql rsc request]', {
 		trafficClass: 'web_rsc',
 		workload,
@@ -70,6 +74,6 @@ export async function executePublicServerQuery<T>(
 	})
 	return executeQuery<T>(query, variables, {
 		...options,
-		headers: getPublicServerIngressHeaders(workload),
+		headers: ingressHeaders,
 	})
 }

@@ -35,6 +35,7 @@ describe('GraphQL proxy read path', () => {
 		assert.match(server, /buildOpaqueRscSubject\(workload, secret\)/)
 		assert.match(server, /buildIngressContextHeadersV2/)
 		assert.match(server, /workload: GraphQLWorkload/)
+		assert.match(server, /capacityRequestIdForCurrentRun/)
 		assert.doesNotMatch(server, /getGraphQLServiceTokenHeaders/)
 	})
 })

@@ -23,6 +23,8 @@ test('passes Retry-After and v3 policy headers without forwarding arbitrary upst
 			'Retry-After': '17',
 			'X-RateLimit-Policy': 'graphql-v3',
 			'X-RateLimit-Scope': 'client',
+			'X-RateLimit-Shadow-Outcome': 'deny',
+			'X-RateLimit-Shadow-Scope': 'client',
 			'X-Internal-Secret': 'never-forward'
 		}),
 		target
@@ -30,6 +32,8 @@ test('passes Retry-After and v3 policy headers without forwarding arbitrary upst
 	assert.equal(target.get('retry-after'), '17')
 	assert.equal(target.get('x-ratelimit-policy'), 'graphql-v3')
 	assert.equal(target.get('x-ratelimit-scope'), 'client')
+	assert.equal(target.get('x-ratelimit-shadow-outcome'), 'deny')
+	assert.equal(target.get('x-ratelimit-shadow-scope'), 'client')
 	assert.equal(target.has('x-internal-secret'), false)
 })
 

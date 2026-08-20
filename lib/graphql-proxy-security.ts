@@ -21,7 +21,9 @@ const SAFE_UPSTREAM_RESPONSE_HEADERS = [
 	'content-language',
 	'retry-after',
 	'x-ratelimit-policy',
-	'x-ratelimit-scope'
+	'x-ratelimit-scope',
+	'x-ratelimit-shadow-outcome',
+	'x-ratelimit-shadow-scope'
 ] as const
 
 export function copySafeGraphQLUpstreamHeaders(

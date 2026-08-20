@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
 	buildGraphQLProxyIngress,
-	graphQLWorkloadForOperation,
+	graphQLWorkloadForDocument,
 	validateMiniProgramDeviceId
 } from '../lib/graphql-ingress'
 
@@ -107,11 +107,46 @@ describe('GraphQL ingress v2', () => {
 		])
 	})
 
-	it('maps controlled operation families to workloads', () => {
-		assert.equal(graphQLWorkloadForOperation('GetMarketPulse'), 'market')
-		assert.equal(graphQLWorkloadForOperation('GetFixtureWindow'), 'fixtures')
-		assert.equal(graphQLWorkloadForOperation('GetPlayerStatsDesk'), 'player-stats')
-		assert.equal(graphQLWorkloadForOperation('GetEntryHistory'), 'interactive')
-		assert.equal(graphQLWorkloadForOperation('UnknownOperation'), 'public-other')
+	it('does not treat an ordinary WeChat webview as a legacy Mini client', () => {
+		const ingress = buildGraphQLProxyIngress({
+			headers: new Headers({
+				'user-agent':
+					'Mozilla/5.0 MicroMessenger/8.0.50 NetType/WIFI Language/en'
+			}),
+			secret: 'test-secret',
+			workload: 'market'
+		})
+		assert.equal(ingress.ok, true)
+		if (!ingress.ok) return
+		assert.equal(ingress.trafficClass, 'web_browser')
+		assert.equal(decode(ingress.headers).trafficClass, 'web_browser')
+	})
+
+	it('derives workload from the selected root fields, not operation names', () => {
+		assert.equal(
+			graphQLWorkloadForDocument({
+				operationName: 'GetFixtureWindow',
+				query: 'query GetFixtureWindow { marketPulse(days: 7) { coverage } }'
+			}),
+			'market'
+		)
+		assert.equal(
+			graphQLWorkloadForDocument({
+				operationName: 'Chosen',
+				query: `
+					query Other { eventFixtures(eventId: 1) { id } }
+					query Chosen { ...PlayerRoot }
+					fragment PlayerRoot on Query { playerStatsDesk(playerIds: [1]) { state } }
+				`
+			}),
+			'player-stats'
+		)
+		assert.equal(
+			graphQLWorkloadForDocument({
+				query: 'query Mixed { eventFixtures(eventId: 1) { id } marketPulse(days: 7) { coverage } }'
+			}),
+			'public-other'
+		)
+		assert.equal(graphQLWorkloadForDocument({ query: 'not graphql' }), 'public-other')
 	})
 })

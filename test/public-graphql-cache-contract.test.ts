@@ -46,4 +46,31 @@ describe('public GraphQL cache contract', () => {
 		assert.match(fixtures, /rollingOwnership: null/)
 		assert.match(playerStats, /rollingOwnership: null/)
 	})
+
+	it('coalesces gameweek desk cold fills before caching only normalized success', async () => {
+		const source = await read('lib/gameweek-desk-server.ts')
+		assert.match(source, /unstable_cache/)
+		assert.match(source, /coalescePublicSeed/)
+		assert.match(source, /CORE_AUTHORITY_ORIGIN_OPTIONS/)
+		assert.match(source, /result\.outcome === 'failed'/)
+		assert.match(source, /CORE_AUTHORITY_DATA_CACHE/)
+		assert.doesNotMatch(source, /CORE_AUTHORITY_FETCH_OPTIONS/)
+	})
+
+	it('correlates signed capacity page runs without making cache keys request-derived', async () => {
+		const [playerStats, fixtures, market, serverContext, publicServer] =
+			await Promise.all([
+				read('app/[locale]/explore/player-stats/page.tsx'),
+				read('app/[locale]/explore/fixtures/page.tsx'),
+				read('app/[locale]/explore/market/page.tsx'),
+				read('lib/server-user-context.ts'),
+				read('lib/graphql-server.ts')
+			])
+		for (const source of [playerStats, fixtures, market]) {
+			assert.match(source, /withCapacityRunForRequest/)
+		}
+		assert.match(serverContext, /capacityRequestIdForHeaders/)
+		assert.match(publicServer, /capacityRequestIdForCurrentRun/)
+		assert.doesNotMatch(publicServer, /from 'next\/headers'/)
+	})
 })
