@@ -1,8 +1,7 @@
 import 'server-only'
 
-import { randomUUID } from 'node:crypto'
-
 type ContentCommandRole = 'editor' | 'publisher'
+type ContentCommandOptions = { idempotencyKey: string; actorId: string }
 
 type ContentCommandResponse<T> = {
 	success: boolean
@@ -23,20 +22,22 @@ async function contentCommand<T>(
 	path: string,
 	role: ContentCommandRole,
 	body: unknown,
-	options: { idempotencyKey?: string; actorId?: string } = {}
+	options: ContentCommandOptions
 ): Promise<T> {
 	const baseUrl = dataBaseUrl()
 	const apiKey = keyForRole(role)
 	if (!baseUrl || !apiKey)
 		throw new Error(`Briefing ${role} command is not configured`)
+	if (!options.idempotencyKey.trim() || !options.actorId.trim())
+		throw new Error('Stable Idempotency-Key and actorId are required')
 	const response = await fetch(`${baseUrl}${path}`, {
 		method: 'POST',
 		cache: 'no-store',
 		headers: {
 			'content-type': 'application/json',
 			'x-api-key': apiKey,
-			'idempotency-key': options.idempotencyKey ?? randomUUID(),
-			...(options.actorId ? { 'x-actor-id': options.actorId } : {})
+			'idempotency-key': options.idempotencyKey,
+			'x-actor-id': options.actorId
 		},
 		body: JSON.stringify(body)
 	})
@@ -55,11 +56,13 @@ export function upsertBriefingSourceGroup(input: {
 	groupKey: string
 	displayName: string
 	pollPolicy?: Record<string, unknown>
-}) {
+	},
+	options: ContentCommandOptions) {
 	return contentCommand<{ groupId: string }>(
 		'/content/sources/groups',
 		'editor',
-		input
+		input,
+		options
 	)
 }
 
@@ -71,27 +74,26 @@ export function upsertBriefingSource(input: {
 	sourceType: string
 	reportingFamily: string
 	rightsPolicy?: Record<string, unknown>
-}) {
+	},
+	options: ContentCommandOptions) {
 	return contentCommand<{ sourceId: string }>(
 		'/content/sources',
 		'editor',
-		input
+		input,
+		options
 	)
 }
 
-export function attachBriefingSource(groupKey: string, sourceId: string) {
+export function attachBriefingSource(
+	groupKey: string,
+	sourceId: string,
+	options: ContentCommandOptions
+) {
 	return contentCommand<{ success: true }>(
 		`/content/sources/groups/${encodeURIComponent(groupKey)}/members/${encodeURIComponent(sourceId)}`,
 		'editor',
-		{}
-	)
-}
-
-export function publishBriefingWeek(body: { en: unknown; 'zh-CN': unknown }) {
-	return contentCommand<{ publicationId: string; revision: number }>(
-		'/content/briefing/week/publish',
-		'publisher',
-		body
+		{},
+		options
 	)
 }
 
@@ -102,7 +104,7 @@ export function createBriefingCandidate(
 		materiality?: string
 		receiptIds: string[]
 	},
-	options?: { idempotencyKey?: string; actorId?: string }
+	options: ContentCommandOptions
 ) {
 	return contentCommand<{ candidateId: string }>(
 		'/content/editorial/candidates',
@@ -114,7 +116,7 @@ export function createBriefingCandidate(
 
 export function acceptBriefingCandidate(
 	candidateId: string,
-	options?: { idempotencyKey?: string; actorId?: string }
+	options: ContentCommandOptions
 ) {
 	return contentCommand<void>(
 		`/content/editorial/candidates/${encodeURIComponent(candidateId)}/accept`,
@@ -127,7 +129,7 @@ export function acceptBriefingCandidate(
 export function mergeBriefingCandidates(
 	targetCandidateId: string,
 	sourceCandidateIds: string[],
-	options?: { idempotencyKey?: string; actorId?: string }
+	options: ContentCommandOptions
 ) {
 	return contentCommand<void>(
 		`/content/editorial/candidates/${encodeURIComponent(targetCandidateId)}/merge`,
@@ -151,7 +153,7 @@ export function createBriefingStory(
 			claims?: string[]
 		}>
 	},
-	options?: { idempotencyKey?: string; actorId?: string }
+	options: ContentCommandOptions
 ) {
 	return contentCommand<{ storyId: string }>(
 		'/content/editorial/stories',
@@ -164,7 +166,7 @@ export function createBriefingStory(
 export function attachBriefingStoryEvidence(
 	storyId: string,
 	receiptIds: string[],
-	options?: { idempotencyKey?: string; actorId?: string }
+	options: ContentCommandOptions
 ) {
 	return contentCommand<{ inserted: number }>(
 		`/content/editorial/stories/${encodeURIComponent(storyId)}/evidence`,
@@ -176,7 +178,7 @@ export function attachBriefingStoryEvidence(
 
 export function markBriefingStoryReady(
 	storyId: string,
-	options?: { idempotencyKey?: string; actorId?: string }
+	options: ContentCommandOptions
 ) {
 	return contentCommand<void>(
 		`/content/editorial/stories/${encodeURIComponent(storyId)}/ready`,
@@ -193,8 +195,9 @@ export function createBriefingWeekEdition(
 		eventName: string
 		deadlineTime: string
 		sourceSnapshotRevision: string
+		sourceRunIds: string[]
 	},
-	options?: { idempotencyKey?: string; actorId?: string }
+	options: ContentCommandOptions
 ) {
 	return contentCommand<{ editionId: string }>(
 		'/content/editorial/week-editions',
@@ -212,7 +215,7 @@ export function addBriefingWeekEditionItem(
 		placement?: 'featured' | 'standard'
 		position: number
 	},
-	options?: { idempotencyKey?: string; actorId?: string }
+	options: ContentCommandOptions
 ) {
 	return contentCommand<void>(
 		`/content/editorial/week-editions/${encodeURIComponent(editionId)}/items`,
@@ -224,9 +227,14 @@ export function addBriefingWeekEditionItem(
 
 export function markBriefingWeekEditionReady(
 	editionId: string,
-	options?: { idempotencyKey?: string; actorId?: string }
+	options: ContentCommandOptions
 ) {
-	return contentCommand<void>(
+	return contentCommand<{
+		editionId: string
+		status: 'READY'
+		frozenSha256: string
+		replayed: boolean
+	}>(
 		`/content/editorial/week-editions/${encodeURIComponent(editionId)}/ready`,
 		'editor',
 		{},
@@ -237,16 +245,18 @@ export function markBriefingWeekEditionReady(
 export function publishBriefingWeekEdition(
 	editionId: string,
 	input: {
-		revision: number
-		publicationId: string
-		sourceCheckedAt: string
-		publishedAt: string
+		expectedFrozenSha256: string
 		validUntil?: string | null
 		reason: string
 	},
-	options?: { idempotencyKey?: string; actorId?: string }
+	options: ContentCommandOptions
 ) {
-	return contentCommand<{ publicationId: string; revision: number }>(
+	return contentCommand<{
+		publicationId: string
+		revision: number
+		state: 'READY' | 'EMPTY' | 'STALE' | 'OFFSEASON' | 'UNAVAILABLE' | 'REMOVED'
+		replayed: boolean
+	}>(
 		`/content/briefing/week/editions/${encodeURIComponent(editionId)}/publish`,
 		'publisher',
 		input,
