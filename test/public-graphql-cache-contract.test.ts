@@ -62,6 +62,20 @@ describe('public GraphQL cache contract', () => {
 		assert.doesNotMatch(source, /CORE_AUTHORITY_FETCH_OPTIONS/)
 	})
 
+	it('keeps Home route caching single-layered and transient gameweeks out of Data Cache', async () => {
+		const home = await read('lib/home-data-server.ts')
+		const fixturesLoader = home.slice(
+			home.indexOf('const loadHomeFixturesFromOrigin'),
+			home.indexOf('export const loadHomeFixtures')
+		)
+		assert.match(fixturesLoader, /coalescePublicSeed/)
+		assert.doesNotMatch(fixturesLoader, /unstable_cache/)
+		assert.match(home, /gameweek\.gameweekDesk\.lifecycle !== 'PROVISIONAL'/)
+		assert.match(home, /overviewState !== 'PENDING'/)
+		assert.match(home, /boardsState !== 'PENDING'/)
+		assert.match(home, /TransientHomeGameweekError/)
+	})
+
 	it('correlates signed capacity page runs without making cache keys request-derived', async () => {
 		const [playerStats, fixtures, market, serverContext, publicServer] =
 			await Promise.all([

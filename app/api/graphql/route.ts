@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
 				workload
 			})
 		: null
+	const effectiveWorkload = ingress?.ok ? ingress.workload : workload
 	if (ingress && !ingress.ok) {
 		return noStoreJson(
 			{
@@ -209,7 +210,7 @@ export async function POST(request: NextRequest) {
 		requestId,
 		operationName,
 		trafficClass: ingress?.ok ? ingress.trafficClass : 'development',
-		workload,
+		workload: effectiveWorkload,
 		status: response.status,
 		totalMs: Number(requestTiming.elapsedMs().toFixed(2)),
 		timings: requestTiming.snapshot(),

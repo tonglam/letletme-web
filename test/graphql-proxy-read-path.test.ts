@@ -50,6 +50,12 @@ describe('GraphQL proxy read path', () => {
 		}
 	})
 
+	it('logs the effective signed workload for legacy ingress', () => {
+		const route = readFileSync(new URL('../app/api/graphql/route.ts', import.meta.url), 'utf8')
+		assert.match(route, /const effectiveWorkload = ingress\?\.ok \? ingress\.workload : workload/)
+		assert.match(route, /workload: effectiveWorkload/)
+	})
+
 	it('adds trusted server context to direct RSC GraphQL requests', () => {
 		const client = readFileSync(new URL('../lib/graphql-client.ts', import.meta.url), 'utf8')
 		const server = readFileSync(new URL('../lib/graphql-server.ts', import.meta.url), 'utf8')

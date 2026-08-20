@@ -23,6 +23,21 @@ import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { coalescePublicSeed } from '@/lib/public-seed-singleflight'
 
+class TransientHomeGameweekError extends Error {
+	constructor(readonly gameweek: HomeGameweek) {
+		super('Home gameweek is not stable enough for the durable cache')
+		this.name = 'TransientHomeGameweekError'
+	}
+}
+
+function isHomeGameweekDurablyCacheable(gameweek: HomeGameweek): boolean {
+	return (
+		gameweek.gameweekDesk.lifecycle !== 'PROVISIONAL' &&
+		gameweek.gameweekDesk.overviewState !== 'PENDING' &&
+		gameweek.gameweekDesk.boardsState !== 'PENDING'
+	)
+}
+
 function withEventId(
 	fixtures: Array<Omit<HomeFixture, 'eventId'>>,
 	eventId: number,
@@ -75,6 +90,7 @@ const getHomeGameweekFromOrigin = unstable_cache(
 				{ cache: 'no-store', timeoutMs: 5_000 }
 			)
 			const gameweek = response.homeGameweek
+			const cacheable = isHomeGameweekDurablyCacheable(gameweek)
 			console.info('[home-gameweek]', {
 				lifecycle: gameweek.gameweekDesk.lifecycle,
 				dreamTeamRows: gameweek.gameweekDesk.dreamTeam.length,
@@ -82,8 +98,9 @@ const getHomeGameweekFromOrigin = unstable_cache(
 				transferRows:
 					gameweek.topTransfersIn.length + gameweek.topTransfersOut.length,
 				durationMs: Number((performance.now() - startedAt).toFixed(2)),
-				cacheResult: 'miss-fill'
+				cacheResult: cacheable ? 'miss-fill' : 'bypass-transient'
 			})
+			if (!cacheable) throw new TransientHomeGameweekError(gameweek)
 			return gameweek
 		}),
 	['graphql', 'home-gameweek', 'v1'],
@@ -93,28 +110,35 @@ const getHomeGameweekFromOrigin = unstable_cache(
 	}
 )
 
-export const getHomeGameweek = cache(getHomeGameweekFromOrigin)
+const getHomeGameweekCached = cache(getHomeGameweekFromOrigin)
 
-const loadHomeFixturesFromOrigin = unstable_cache(
-	async (eventId: number): Promise<HomeFixturesResponse> =>
-		coalescePublicSeed(`home-fixtures:${eventId}`, async () => {
-			const response =
-				await executePublicServerQuery<HomeEventFixturesGraphQLResponse>(
-					'fixtures',
-					GET_HOME_EVENT_FIXTURES,
-					{ eventId },
-					{ cache: 'no-store', timeoutMs: 5_000 }
-				)
-			return {
-				season: response.coreEventContext.season,
-				revision: response.coreEventContext.revision,
-				eventId,
-				fixtures: withEventId(response.eventFixtures, eventId)
-			}
-		}),
-	['graphql', 'home-fixtures', 'v1'],
-	{ revalidate: RevalidateSeconds.publicStats, tags: [CacheTag.fixtures] }
-)
+export async function getHomeGameweek(eventId: number): Promise<HomeGameweek> {
+	try {
+		return await getHomeGameweekCached(eventId)
+	} catch (error) {
+		if (error instanceof TransientHomeGameweekError) return error.gameweek
+		throw error
+	}
+}
+
+const loadHomeFixturesFromOrigin = async (
+	eventId: number
+): Promise<HomeFixturesResponse> =>
+	coalescePublicSeed(`home-fixtures:${eventId}`, async () => {
+		const response =
+			await executePublicServerQuery<HomeEventFixturesGraphQLResponse>(
+				'fixtures',
+				GET_HOME_EVENT_FIXTURES,
+				{ eventId },
+				{ cache: 'no-store', timeoutMs: 5_000 }
+			)
+		return {
+			season: response.coreEventContext.season,
+			revision: response.coreEventContext.revision,
+			eventId,
+			fixtures: withEventId(response.eventFixtures, eventId)
+		}
+	})
 
 export const loadHomeFixtures = cache(loadHomeFixturesFromOrigin)
 

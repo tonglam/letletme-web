@@ -145,7 +145,13 @@ describe('GraphQL ingress v2', () => {
 			graphQLWorkloadForDocument({
 				query: 'query Mixed { eventFixtures(eventId: 1) { id } marketPulse(days: 7) { coverage } }'
 			}),
-			'public-other'
+			'market'
+		)
+		assert.equal(
+			graphQLWorkloadForDocument({
+				query: 'query MetaMixed { marketPulse(days: 7) { coverage } __typename }'
+			}),
+			'market'
 		)
 		assert.equal(graphQLWorkloadForDocument({ query: 'not graphql' }), 'public-other')
 	})

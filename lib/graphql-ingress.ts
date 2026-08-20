@@ -20,6 +20,18 @@ export const MINI_PROGRAM_CLIENT = 'wechat-miniprogram'
 
 const SAFE_DEVICE_ID = /^[A-Za-z0-9._:-]{8,128}$/
 
+// Keep mixed documents in one deterministic workload-specific bucket. The
+// generic/meta fallback must never override a selected expensive public root.
+const CONSERVATIVE_WORKLOAD_ORDER = [
+	'market',
+	'fixtures',
+	'player-stats',
+	'gameweek',
+	'interactive',
+	'home',
+	'public-other'
+] as const satisfies readonly GraphQLWorkload[]
+
 export type GraphQLProxyIngress =
 	| {
 			ok: true
@@ -97,9 +109,10 @@ export function graphQLWorkloadForDocument(body: unknown): GraphQLWorkload {
 				workloadForRootField
 			)
 		)
-		return workloads.size === 1
-			? (Array.from(workloads)[0] ?? 'public-other')
-			: 'public-other'
+		return (
+			CONSERVATIVE_WORKLOAD_ORDER.find(workload => workloads.has(workload)) ??
+			'public-other'
+		)
 	} catch {
 		return 'public-other'
 	}
