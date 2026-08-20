@@ -7,24 +7,26 @@ import {
 	deleteBugReportStorage,
 	verifyBugReportStorageSignature
 } from '@/lib/bug-report-storage-internal'
+import { markPrivateNoStore } from '@/lib/private-no-store'
 
 export const dynamic = 'force-dynamic'
+
+function response(body: unknown, status = 200): Response {
+	return markPrivateNoStore(NextResponse.json(body, { status }))
+}
 
 export async function POST(request: Request) {
 	let body: string
 	try {
 		body = await readBoundedText(request, BUG_REPORT_STORAGE_BODY_MAX_BYTES)
 	} catch (error) {
-		return NextResponse.json(
+		return response(
 			{ success: false, error: error instanceof PayloadTooLargeError ? 'Payload too large' : 'Invalid body' },
-			{ status: error instanceof PayloadTooLargeError ? 413 : 400 }
+			error instanceof PayloadTooLargeError ? 413 : 400
 		)
 	}
 	if (!verifyBugReportStorageSignature(request, body)) {
-		return NextResponse.json(
-			{ success: false, error: 'Unauthorized' },
-			{ status: 401 }
-		)
+		return response({ success: false, error: 'Unauthorized' }, 401)
 	}
 	try {
 		if (
@@ -32,28 +34,25 @@ export async function POST(request: Request) {
 				request.headers.get('x-bug-report-nonce') || ''
 			))
 		) {
-			return NextResponse.json(
-				{ success: false, error: 'Unauthorized' },
-				{ status: 401 }
-			)
+			return response({ success: false, error: 'Unauthorized' }, 401)
 		}
 		const payload = JSON.parse(body) as { locator?: unknown }
 		if (typeof payload.locator !== 'string')
-			return NextResponse.json(
-				{ success: false, error: 'Invalid locator' },
-				{ status: 400 }
+			return response({ success: false, error: 'Invalid locator' }, 400)
+		const result = await deleteBugReportStorage(payload.locator)
+		if (result === 'missing')
+			return response(
+				{
+					success: true,
+					code: 'BUG_REPORT_STORAGE_OBJECT_MISSING',
+					objectMissing: true
+				},
+				404
 			)
-		await deleteBugReportStorage(payload.locator)
-		return NextResponse.json({ success: true })
+		return response({ success: true })
 	} catch (error) {
 		if (error instanceof SyntaxError)
-			return NextResponse.json(
-				{ success: false, error: 'Invalid JSON' },
-				{ status: 400 }
-			)
-		return NextResponse.json(
-			{ success: false, error: 'Storage delete failed' },
-			{ status: 502 }
-		)
+			return response({ success: false, error: 'Invalid JSON' }, 400)
+		return response({ success: false, error: 'Storage delete failed' }, 502)
 	}
 }
