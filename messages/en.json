@@ -1207,7 +1207,7 @@
 	},
 	"Market": {
 		"title": "Market",
-		"pageIntro": "Review daily, gameweek, and rolling-seven-day market signals with explicit comparison dates.",
+		"pageIntro": "Review daily and gameweek market signals with explicit comparison dates.",
 		"viewMode": {
 			"price-led": "Price-led view — genuine price changes are the primary signal.",
 			"availability-led": "Availability-led view — official player-status changes are the primary signal.",
@@ -1225,7 +1225,6 @@
 		"ownershipDates": "Daily snapshot dates",
 		"ownershipPeriodDaily": "Daily",
 		"ownershipPeriodGameweek": "GW comparison",
-		"ownershipPeriodRolling7d": "Rolling 7 days",
 		"ownershipPercentagePoints": "{value} percentage points",
 		"ownershipComparisonRange": "Comparison · {from} → {to}",
 		"ownershipObservedDays": "{observed}/{requested} expected dates observed",

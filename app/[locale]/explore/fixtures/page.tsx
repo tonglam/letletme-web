@@ -1,28 +1,21 @@
 import FixturesClient from '@/app/data/fixtures/FixturesClient'
 import { CurrentGameweekUnavailable } from '@/components/feedback/CurrentGameweekUnavailable'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import {
-	CacheTag,
-	publicFetchOptions,
-	RevalidateSeconds
-} from '@/lib/cache-policy'
+import { withCapacityRunForRequest } from '@/lib/capacity-run'
 import { DEFAULT_FDR_HORIZON } from '@/lib/fixtures-fdr'
 import { getCurrentAndNextEvents } from '@/lib/events'
+import { loadFixtureTeams } from '@/lib/fixture-team-seed-server'
 import { loadFixtureWindow } from '@/lib/fixture-window-server'
-import type { FixturePlanningFixture } from '@/lib/fixture-window'
-import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
-	GET_FIXTURE_PLANNING_SIGNALS,
-	GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK,
-	GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
+	loadFixturePlanningGameweekOwnership,
+	loadFixturePlanningSignals
+} from '@/lib/fixture-planning-seed-server'
+import type { FixturePlanningFixture } from '@/lib/fixture-window'
+import {
 	type FixturePlanningMarketSignals,
-	type FixturePlanningOwnershipResponse,
-	type FixturePlanningSignalsResponse
 } from '@/lib/graphql/operations/market'
 import {
-	GET_TEAMS_FOR_PICKER,
 	type TeamForPickerItem,
-	type TeamsForPickerResponse
 } from '@/lib/graphql/operations/players'
 import { resolveFixturePlanningGameweek } from '@/lib/review-gameweek'
 import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
@@ -48,7 +41,7 @@ export async function generateMetadata({ params }: PageProps) {
 	})
 }
 
-export default async function FixturesPage({ params }: PageProps) {
+async function renderFixturesPage({ params }: PageProps) {
 	await getPageLocale(params)
 
 	const [events, { session, entryId }] = await Promise.all([
@@ -76,42 +69,16 @@ export default async function FixturesPage({ params }: PageProps) {
 			fixtureWindow,
 			market,
 			gameweekOwnership,
-			rollingOwnership,
 			squadResult,
 			teamsResponse
 		] = await Promise.all([
 			loadFixtureWindow(fromGw, horizon),
-			executePublicServerQuery<FixturePlanningSignalsResponse>(
-				GET_FIXTURE_PLANNING_SIGNALS,
-				{},
-				publicFetchOptions({
-					revalidate: RevalidateSeconds.market,
-					tags: [CacheTag.market]
-				})
-			).catch(err => {
+			loadFixturePlanningSignals().catch(err => {
 				console.error('[fixtures] market pulse seed failed:', err)
 				return null
 			}),
-			executePublicServerQuery<FixturePlanningOwnershipResponse>(
-				GET_FIXTURE_PLANNING_OWNERSHIP_GAMEWEEK,
-				{},
-				publicFetchOptions({
-					revalidate: RevalidateSeconds.market,
-					tags: [CacheTag.market]
-				})
-			).catch(err => {
+			loadFixturePlanningGameweekOwnership().catch(err => {
 				console.error('[fixtures] gameweek ownership seed failed:', err)
-				return null
-			}),
-			executePublicServerQuery<FixturePlanningOwnershipResponse>(
-				GET_FIXTURE_PLANNING_OWNERSHIP_ROLLING_7D,
-				{},
-				publicFetchOptions({
-					revalidate: RevalidateSeconds.market,
-					tags: [CacheTag.market]
-				})
-			).catch(err => {
-				console.error('[fixtures] rolling ownership seed failed:', err)
 				return null
 			}),
 			entryId != null && session
@@ -125,15 +92,8 @@ export default async function FixturesPage({ params }: PageProps) {
 				: Promise.resolve({
 						picks: [] as SquadPickSeed[],
 						state: 'unbound' as const
-					}),
-			executePublicServerQuery<TeamsForPickerResponse>(
-				GET_TEAMS_FOR_PICKER,
-				{},
-				publicFetchOptions({
-					revalidate: RevalidateSeconds.publicStats,
-					tags: [CacheTag.fixtures]
-				})
-			).catch(err => {
+			}),
+			loadFixtureTeams().catch(err => {
 				console.error('[fixtures] team directory seed failed:', err)
 				return { teams: [] }
 			})
@@ -143,14 +103,13 @@ export default async function FixturesPage({ params }: PageProps) {
 			fixturesByEvent[Number(id)] = fixtures
 		})
 		unknownEventIds = fixtureWindow.unknownEventIds
-		const hasMarketSignals =
-			market != null || gameweekOwnership != null || rollingOwnership != null
+		const hasMarketSignals = market != null || gameweekOwnership != null
 		marketSignals = hasMarketSignals
 			? {
 					mostSelected: market?.marketPulse?.mostSelected ?? [],
 					transferMovers: market?.marketPulse?.transferMovers ?? [],
 					gameweekOwnership: gameweekOwnership?.marketOwnershipOverview ?? null,
-					rollingOwnership: rollingOwnership?.marketOwnershipOverview ?? null
+					rollingOwnership: null
 				}
 			: null
 		mySquadPicks = squadResult.picks
@@ -177,4 +136,8 @@ export default async function FixturesPage({ params }: PageProps) {
 			squadState={squadState}
 		/>
 	)
+}
+
+export default async function FixturesPage(props: PageProps) {
+	return withCapacityRunForRequest(() => renderFixturesPage(props))
 }

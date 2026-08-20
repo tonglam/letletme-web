@@ -2,8 +2,15 @@ import 'server-only'
 
 import { headers } from 'next/headers'
 import type { Session } from '@/lib/auth'
+import {
+	capacityRequestIdForCurrentRun,
+	capacityRequestIdForHeaders
+} from '@/lib/capacity-run'
 import { buildGraphQLUserContextHeaders } from '@/lib/graphql-envelope'
-import { buildIngressContextHeaders, buildOpaqueRateLimitSubject } from '@/lib/http-security-core'
+import {
+	buildIngressContextHeadersV2,
+	buildOpaqueRateLimitSubject
+} from '@/lib/http-security-core'
 
 function requireProxySecret(): string | null {
 	const secret = process.env.BACKEND_PROXY_SECRET
@@ -24,7 +31,19 @@ export async function buildServerUserContextHeaders(
 
 	const requestHeaders = await headers()
 	const subject = buildOpaqueRateLimitSubject(requestHeaders, secret)
-	const result = buildIngressContextHeaders(subject, secret)
+	const result = buildIngressContextHeadersV2(
+		{
+			trafficClass: 'web_browser',
+			subject,
+			abuseSubject: null,
+			workload: 'interactive'
+		},
+		secret
+	)
+	const capacityRequestId =
+		capacityRequestIdForCurrentRun() ??
+		capacityRequestIdForHeaders(requestHeaders, secret)
+	if (capacityRequestId) result['X-Request-Id'] = capacityRequestId
 	if (session?.user) {
 		Object.assign(result, buildGraphQLUserContextHeaders(session.user, secret))
 	}

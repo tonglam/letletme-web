@@ -205,6 +205,66 @@ export function buildOpaqueRateLimitSubject(
 		.digest('hex')
 }
 
+export type GraphQLTrafficClass =
+	| 'mini'
+	| 'web_browser'
+	| 'web_rsc'
+	| 'service'
+	| 'legacy'
+
+export type GraphQLWorkload =
+	| 'interactive'
+	| 'home'
+	| 'fixtures'
+	| 'market'
+	| 'player-stats'
+	| 'gameweek'
+	| 'public-other'
+
+export type IngressEnvelopeV2 = {
+	v: 2
+	aud: 'letletme-graphql'
+	trafficClass: Exclude<GraphQLTrafficClass, 'legacy'>
+	subject: string
+	abuseSubject: string | null
+	workload: GraphQLWorkload
+	iat: number
+	exp: number
+}
+
+const opaqueSubject = (
+	purpose: string,
+	value: string,
+	secret: string
+): string =>
+	createHmac('sha256', secret)
+		.update(`${purpose}:${value}`)
+		.digest('hex')
+
+export function buildOpaqueMiniDeviceSubject(
+	deviceId: string,
+	secret: string
+): string {
+	return opaqueSubject('rate-limit:mini-device', deviceId, secret)
+}
+
+export function buildOpaqueAbuseSubject(
+	headers: Headers,
+	secret: string
+): string | null {
+	const ip = resolveProviderClientIp(headers)
+	return ip === 'unknown'
+		? null
+		: opaqueSubject('rate-limit:abuse-ip', ip, secret)
+}
+
+export function buildOpaqueRscSubject(
+	workload: GraphQLWorkload,
+	secret: string
+): string {
+	return opaqueSubject('rate-limit:web-rsc', workload, secret)
+}
+
 export function buildIngressContextHeaders(
 	subject: string,
 	secret: string,
@@ -216,6 +276,35 @@ export function buildIngressContextHeaders(
 		iat: nowSeconds,
 		exp: nowSeconds + 60
 	})
+	return {
+		'X-Ingress-Context': Buffer.from(payload).toString('base64url'),
+		'X-Ingress-Context-Sig': createHmac('sha256', secret)
+			.update(payload)
+			.digest('base64url')
+	}
+}
+
+export function buildIngressContextHeadersV2(
+	input: {
+		trafficClass: Exclude<GraphQLTrafficClass, 'legacy'>
+		subject: string
+		abuseSubject: string | null
+		workload: GraphQLWorkload
+	},
+	secret: string,
+	nowSeconds = Math.floor(Date.now() / 1000)
+): Record<string, string> {
+	const envelope: IngressEnvelopeV2 = {
+		v: 2,
+		aud: 'letletme-graphql',
+		trafficClass: input.trafficClass,
+		subject: input.subject,
+		abuseSubject: input.abuseSubject,
+		workload: input.workload,
+		iat: nowSeconds,
+		exp: nowSeconds + 60
+	}
+	const payload = JSON.stringify(envelope)
 	return {
 		'X-Ingress-Context': Buffer.from(payload).toString('base64url'),
 		'X-Ingress-Context-Sig': createHmac('sha256', secret)

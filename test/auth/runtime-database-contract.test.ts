@@ -102,6 +102,7 @@ describe('Web runtime database boundary', () => {
 		assert.match(environment, /inherits only `letletme_web_auth`/)
 		assert.deepEqual([...WEB_AUTH_RUNTIME_TABLES].sort(), [
 			'account',
+			'bug_report_storage_nonces',
 			'fpl_entry_binding_challenges',
 			'mini_program_email_code',
 			'mini_program_session',
