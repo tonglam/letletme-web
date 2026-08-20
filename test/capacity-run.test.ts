@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import {
 	CAPACITY_RUN_HEADER,
 	CAPACITY_RUN_SIGNATURE_HEADER,
+	capacityRunRequestIdPrefix,
 	capacityRequestIdForCurrentRun,
 	capacityRequestIdForHeaders,
 	signCapacityRun,
@@ -38,8 +39,14 @@ describe('capacity run correlation', () => {
 			signedHeaders('capacity_300'),
 			secret
 		)
-		assert.match(requestId ?? '', /^capacity_300-[a-f0-9]{16}$/)
+		assert.match(requestId ?? '', /^cr12_capacity_300_[a-f0-9]{16}$/)
 		assert.equal(requestId?.includes(signCapacityRun('capacity_300', secret)), false)
+		assert.equal(
+			capacityRunRequestIdPrefix('capacity_300_extra').startsWith(
+				capacityRunRequestIdPrefix('capacity_300')
+			),
+			false
+		)
 	})
 
 	it('keeps concurrent request contexts isolated', async () => {
@@ -52,8 +59,8 @@ describe('capacity run correlation', () => {
 				capacityRequestIdForCurrentRun()
 			)
 		])
-		assert.match(left ?? '', /^capacity_left-[a-f0-9]{16}$/)
-		assert.match(right ?? '', /^capacity_right-[a-f0-9]{16}$/)
+		assert.match(left ?? '', /^cr13_capacity_left_[a-f0-9]{16}$/)
+		assert.match(right ?? '', /^cr14_capacity_right_[a-f0-9]{16}$/)
 		assert.equal(capacityRequestIdForCurrentRun(), null)
 	})
 })

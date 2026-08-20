@@ -56,8 +56,12 @@ export async function withCapacityRunForRequest<T>(
 	return withCapacityRun(runId, task)
 }
 
+export function capacityRunRequestIdPrefix(runId: string): string {
+	return `cr${runId.length}_${runId}_`
+}
+
 function requestIdForRun(runId: string): string {
-	return `${runId}-${randomUUID().replaceAll('-', '').slice(0, 16)}`
+	return `${capacityRunRequestIdPrefix(runId)}${randomUUID().replaceAll('-', '').slice(0, 16)}`
 }
 
 export function capacityRequestIdForCurrentRun(): string | null {
