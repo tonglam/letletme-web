@@ -9,6 +9,7 @@ import {
 	PLAYERS_DOCUMENT
 } from '@/lib/agent-tools/documents'
 import {
+	assertSelectionRevision,
 	coreEventId,
 	decodeCursor,
 	decodeCursorValue,
@@ -17,7 +18,7 @@ import {
 	fingerprint,
 	loadCoreContext,
 	type CoreContext,
-	type MarketContext,
+	type SelectionContext,
 	toolResponse,
 	type ToolRunOptions
 } from '@/lib/agent-tools/runtime'
@@ -39,7 +40,7 @@ type ToolPlayer = {
 
 type PlayersPageResult = {
 	coreEventContext: CoreContext
-	marketSnapshotContext: MarketContext
+	teamSelectionDesk: SelectionContext
 	playersForPicker: {
 		totalCount: number
 		nextCursor: number | null
@@ -48,9 +49,9 @@ type PlayersPageResult = {
 }
 
 // The production GraphQL weighted-complexity guard accepts this projection at
-// 38 rows with headroom. Aggregate larger tool pages under the one shared
+// 36 rows with headroom. Aggregate larger tool pages under the one shared
 // gateway deadline.
-const MAX_PICKER_QUERY_ROWS = 38
+const MAX_PICKER_QUERY_ROWS = 36
 
 // AUTO is a first-class PlayerPickerSort value in the GraphQL schema. Preserve
 // it so the repository can choose OWNERSHIP_DESC before event data exists and
@@ -76,7 +77,8 @@ const playerFilterKey = (
 const loadPlayersPage = (
 	options: ToolRunOptions<'letletme_players'>,
 	limit: number,
-	cursor: number | null
+	cursor: number | null,
+	eventId: number
 ): Promise<PlayersPageResult> =>
 	executeDocument<PlayersPageResult>(options, PLAYERS_DOCUMENT, {
 		search: options.input.query,
@@ -89,7 +91,8 @@ const loadPlayersPage = (
 		sort: options.input.sort,
 		ownershipBand: options.input.ownershipBand,
 		limit,
-		cursor
+		cursor,
+		eventId
 	})
 
 const sortCatalogPlayers = (
@@ -127,6 +130,7 @@ export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 		input.playerIds || input.status || input.eventId !== undefined
 	)
 	if (!catalogMode) {
+		const eventId = coreEventId(await loadCoreContext(options))
 		const filterKey = playerFilterKey(input)
 		const upstreamCursor = decodeCursorValue(input.cursor, {
 			kind: 'players',
@@ -150,20 +154,31 @@ export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 			const page = await loadPlayersPage(
 				options,
 				Math.min(input.limit - items.length, MAX_PICKER_QUERY_ROWS),
-				cursor
+				cursor,
+				eventId
 			)
+			assertSelectionRevision(page.coreEventContext, page.teamSelectionDesk)
+			if (page.teamSelectionDesk.eventId !== eventId) {
+				throw new AgentToolError(
+					'UPSTREAM_UNAVAILABLE',
+					'The published player context changed during this request. Retry the tool.',
+					502,
+					true
+				)
+			}
 			if (!first) {
 				first = page
 				key = fingerprint({
 					filter: filterKey,
-					coreRevision: first.coreEventContext.revision,
-					marketRevision: first.marketSnapshotContext.revision
+					coreRevision: first.teamSelectionDesk.coreRevision,
+					marketRevision: first.teamSelectionDesk.marketRevision
 				})
 				decodeCursor(input.cursor, { kind: 'players', mode: 'picker', key })
 			} else if (
-				page.coreEventContext.revision !== first.coreEventContext.revision ||
-				page.marketSnapshotContext.revision !==
-					first.marketSnapshotContext.revision
+				page.teamSelectionDesk.coreRevision !==
+					first.teamSelectionDesk.coreRevision ||
+				page.teamSelectionDesk.marketRevision !==
+					first.teamSelectionDesk.marketRevision
 			) {
 				warnings.push({
 					code: 'REVISION_MISMATCH',
@@ -180,7 +195,22 @@ export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 		if (!first || !finalPage || !key) {
 			throw new Error('LetLetMe player page did not return a result')
 		}
-		const { coreEventContext: core, marketSnapshotContext: market } = first
+		const { teamSelectionDesk: selection } = first
+		if (selection.playerPool.state !== 'READY') {
+			warnings.push({
+				code: `PLAYER_COVERAGE_${selection.playerPool.state}`,
+				message:
+					selection.playerPool.message ??
+					'Published player coverage is not complete.'
+			})
+		}
+		if (!selection.marketRevision) {
+			warnings.push({
+				code: 'MARKET_NOT_PUBLISHED',
+				message:
+					'No active market snapshot is published; ownership uses the published core player data.'
+			})
+		}
 		const nextCursor =
 			finalPage.nextCursor === null
 				? null
@@ -197,10 +227,16 @@ export async function runPlayers(options: ToolRunOptions<'letletme_players'>) {
 				totalCount: first.playersForPicker.totalCount,
 				items: items.map(item => ({ ...item, status: null }))
 			},
-			{ season: core.season, core: core.revision, market: market.revision },
+			{
+				season: selection.season,
+				core: selection.coreRevision,
+				...(selection.marketRevision
+					? { market: selection.marketRevision }
+					: {})
+			},
 			warnings,
 			{ nextCursor },
-			market.capturedAt ?? core.sourceCheckedAt
+			selection.checkedAt
 		)
 	}
 

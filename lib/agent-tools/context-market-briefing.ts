@@ -14,18 +14,49 @@ import {
 	MARKET_PULSE_UPDATES_DOCUMENT
 } from '@/lib/agent-tools/documents'
 import {
+	assertSelectionRevision,
+	coreEventId,
 	coreRevisions,
 	executeDocument,
+	loadCoreContext,
+	loadMarketContext,
+	loadSelectionContext,
 	type CoreContext,
 	type MarketContext,
+	type SelectionContext,
 	toolResponse,
 	type ToolRunOptions
 } from '@/lib/agent-tools/runtime'
 
+type MarketEnvelope = {
+	coreEventContext: CoreContext
+	marketSnapshotContext: MarketContext
+}
+
+const assertMarketRevision = (
+	core: CoreContext,
+	selection: SelectionContext,
+	envelope: MarketEnvelope
+): void => {
+	assertSelectionRevision(core, selection)
+	if (
+		envelope.coreEventContext.season !== core.season ||
+		envelope.coreEventContext.revision !== core.revision ||
+		envelope.marketSnapshotContext.season !== selection.season ||
+		envelope.marketSnapshotContext.revision !== selection.marketRevision
+	) {
+		throw new AgentToolError(
+			'UPSTREAM_UNAVAILABLE',
+			'The published market revision changed during this request. Retry the tool.',
+			502,
+			true
+		)
+	}
+}
+
 export async function runContext(options: ToolRunOptions<'letletme_context'>) {
 	const result = await executeDocument<{
 		coreEventContext: CoreContext
-		marketSnapshotContext: MarketContext
 		briefingWeek: {
 			state: string
 			revision: number | null
@@ -38,13 +69,22 @@ export async function runContext(options: ToolRunOptions<'letletme_context'>) {
 			sections: Array<{ key: string; items: unknown[] }>
 		}
 	}>(options, CONTEXT_DOCUMENT, { locale: 'EN' })
-	const {
-		coreEventContext: core,
-		marketSnapshotContext: market,
-		briefingWeek: briefing
-	} = result
+	const { coreEventContext: core, briefingWeek: briefing } = result
+	const selection = await loadSelectionContext(options, coreEventId(core))
+	assertSelectionRevision(core, selection)
+	const marketEnvelope = selection.marketRevision
+		? await loadMarketContext(options)
+		: null
+	if (marketEnvelope) assertMarketRevision(core, selection, marketEnvelope)
+	const market = marketEnvelope?.marketSnapshotContext ?? null
 	const warnings: AgentWarning[] = []
-	if (market.rowCount === 0) {
+	if (!market) {
+		warnings.push({
+			code: 'MARKET_NOT_PUBLISHED',
+			message:
+				'No active published market snapshot is available for this period.'
+		})
+	} else if (market.rowCount === 0) {
 		warnings.push({
 			code: 'MARKET_NO_DATA',
 			message: 'No published market rows are available.'
@@ -77,10 +117,11 @@ export async function runContext(options: ToolRunOptions<'letletme_context'>) {
 			coverage: {
 				core: { sourceCheckedAt: core.sourceCheckedAt },
 				market: {
-					source: market.source,
-					snapshotDate: market.snapshotDate,
-					capturedAt: market.capturedAt,
-					rowCount: market.rowCount
+					state: market ? 'READY' : 'NOT_PUBLISHED',
+					source: market?.source ?? null,
+					snapshotDate: market?.snapshotDate ?? null,
+					capturedAt: market?.capturedAt ?? null,
+					rowCount: market?.rowCount ?? 0
 				},
 				briefing: {
 					state: briefing.state,
@@ -100,7 +141,7 @@ export async function runContext(options: ToolRunOptions<'letletme_context'>) {
 		{
 			season: core.season,
 			core: core.revision,
-			market: market.revision,
+			...(market ? { market: market.revision } : {}),
 			...(briefing.revision === null
 				? {}
 				: { briefing: String(briefing.revision) })
@@ -112,9 +153,63 @@ export async function runContext(options: ToolRunOptions<'letletme_context'>) {
 }
 
 export async function runMarket(options: ToolRunOptions<'letletme_market'>) {
-	type MarketEnvelope = {
-		coreEventContext: CoreContext
-		marketSnapshotContext: MarketContext
+	const core = await loadCoreContext(options)
+	const selection = await loadSelectionContext(options, coreEventId(core))
+	assertSelectionRevision(core, selection)
+	if (!selection.marketRevision) {
+		return toolResponse(
+			options,
+			{
+				snapshot: null,
+				lineup: null,
+				ownership: {
+					period: options.input.ownershipPeriod,
+					gameweek: null,
+					coverage: {
+						status: 'NOT_READY',
+						requestedDays: 0,
+						observedDays: 0,
+						firstDate: null,
+						latestDate: null,
+						fromDate: null,
+						toDate: null,
+						missingDates: [],
+						capturedAt: null,
+						complete: false,
+						stale: false
+					},
+					risers: [],
+					fallers: []
+				},
+				pulse: {
+					coverage: {
+						requestedDays: options.input.days,
+						observedDays: 0,
+						firstDate: null,
+						latestDate: null,
+						capturedAt: null,
+						complete: false,
+						stale: false
+					},
+					mostSelected: [],
+					transferMovers: [],
+					availabilityHighlights: [],
+					newPlayers: [],
+					priceChanges: [],
+					availabilityUpdateCount: 0
+				}
+			},
+			coreRevisions(core),
+			[
+				{
+					code: 'MARKET_NOT_PUBLISHED',
+					message:
+						'No active published market snapshot is available for this period.'
+				}
+			],
+			undefined,
+			selection.checkedAt ?? core.sourceCheckedAt
+		)
 	}
 	const [
 		lineupResult,
@@ -173,6 +268,13 @@ export async function runMarket(options: ToolRunOptions<'letletme_market'>) {
 		].join(':')
 	const expectedRevision = revisionKey(lineupResult)
 	if (
+		expectedRevision !==
+			[
+				core.season,
+				core.revision,
+				selection.season,
+				selection.marketRevision
+			].join(':') ||
 		![risersResult, fallersResult, moversResult, updatesResult].every(
 			result => revisionKey(result) === expectedRevision
 		)
@@ -203,7 +305,7 @@ export async function runMarket(options: ToolRunOptions<'letletme_market'>) {
 			[key: string]: unknown
 		}
 	}
-	const { coreEventContext: core, marketSnapshotContext: market } = result
+	const { coreEventContext: resultCore, marketSnapshotContext: market } = result
 	const warnings: AgentWarning[] = []
 	if (!result.marketPulse.coverage.complete) {
 		warnings.push({
@@ -231,10 +333,14 @@ export async function runMarket(options: ToolRunOptions<'letletme_market'>) {
 			ownership: result.marketOwnershipOverview,
 			pulse: result.marketPulse
 		},
-		{ season: core.season, core: core.revision, market: market.revision },
+		{
+			season: resultCore.season,
+			core: resultCore.revision,
+			market: market.revision
+		},
 		warnings,
 		undefined,
-		market.capturedAt ?? core.sourceCheckedAt
+		market.capturedAt ?? resultCore.sourceCheckedAt
 	)
 }
 
@@ -291,9 +397,7 @@ export async function runBriefing(
 				...coreRevisions(result.coreEventContext),
 				...(publishable
 					? {
-							briefing: String(
-								result.briefingStory!.story!.storyRevision
-							)
+							briefing: String(result.briefingStory!.story!.storyRevision)
 						}
 					: result.briefingWeek.revision === null
 						? {}

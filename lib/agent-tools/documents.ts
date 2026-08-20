@@ -11,13 +11,28 @@ export const CONTEXT_DOCUMENT = `
     coreEventContext {
       season revision sourceCheckedAt currentEventId nextEventId nextDeadlineTime latestFinishedEventId
     }
-    marketSnapshotContext { season revision source snapshotDate capturedAt rowCount }
     briefingWeek(locale: $locale) {
       state revision publicationId publishedAt sourceCheckedAt staleAt
       event { seasonCode eventId name deadlineTime }
       featured { id }
       sections { key items { id } }
     }
+  }
+`
+
+export const SELECTION_CONTEXT_DOCUMENT = `
+  query AgentSelectionContext($eventId: Int!) {
+    teamSelectionDesk(eventId: $eventId, horizon: 1) {
+      season coreRevision marketRevision checkedAt eventId phase
+      playerPool { state checkedAt message }
+    }
+  }
+`
+
+export const MARKET_CONTEXT_DOCUMENT = `
+  query AgentMarketContext {
+    coreEventContext { season revision sourceCheckedAt }
+    marketSnapshotContext { season revision source snapshotDate capturedAt rowCount }
   }
 `
 
@@ -29,9 +44,13 @@ export const PLAYERS_DOCUMENT = `
     $ownershipBand: PlayerPickerOwnershipBand
     $limit: Int!
     $cursor: Int
+    $eventId: Int!
   ) {
     coreEventContext { season revision sourceCheckedAt }
-    marketSnapshotContext { season revision source snapshotDate capturedAt rowCount }
+    teamSelectionDesk(eventId: $eventId, horizon: 1) {
+      season coreRevision marketRevision checkedAt eventId phase
+      playerPool { state checkedAt message }
+    }
     playersForPicker(
       search: $search
       filter: $filter
@@ -289,6 +308,8 @@ export const BRIEFING_STORY_DOCUMENT = `
 export const AGENT_GRAPHQL_DOCUMENTS = Object.freeze({
 	CORE_CONTEXT_DOCUMENT,
 	CONTEXT_DOCUMENT,
+	SELECTION_CONTEXT_DOCUMENT,
+	MARKET_CONTEXT_DOCUMENT,
 	PLAYERS_DOCUMENT,
 	PLAYER_CATALOG_DOCUMENT,
 	GAMEWEEK_DOCUMENT,
