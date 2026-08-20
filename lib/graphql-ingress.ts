@@ -50,6 +50,8 @@ function workloadForRootField(field: string): GraphQLWorkload {
 		return 'gameweek'
 	}
 	if (/fixture/i.test(field)) return 'fixtures'
+	if (/^events$/i.test(field)) return 'home'
+	if (/^event$/i.test(field)) return 'gameweek'
 	if (/market|ownership|transfer|price|playervalue|availability/i.test(field)) {
 		return 'market'
 	}

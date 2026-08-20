@@ -84,7 +84,11 @@ describe('public GraphQL cache contract', () => {
 		])
 		assert.doesNotMatch(trends, /'public-other'/)
 		assert.equal((trends.match(/'interactive'/g) ?? []).length, 2)
-		assert.match(playerDesk, /unstable_cache\(\s*loadCompletePlayerStatsDeskFromOrigin/)
+		assert.match(
+			playerDesk,
+			/unstable_cache\(\s*loadCompletePlayerStatsDeskByPlayerFromOrigin/
+		)
+		assert.match(playerDesk, /playerIds\.map\(playerId/)
 		assert.match(
 			playerDesk,
 			/loadPlayerStatsDeskForPublicRoute[\s\S]*loadCompletePlayerStatsDeskFromOrigin/

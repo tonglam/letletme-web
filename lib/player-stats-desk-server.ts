@@ -8,7 +8,9 @@ import {
 	type PlayerStatsDeskSection
 } from '@/lib/graphql/operations/players'
 import {
+	mergePlayerStatsDeskLoadResults,
 	normalizePlayerStatsDeskResult,
+	PLAYER_STATS_DESK_MAX_PLAYERS,
 	type PlayerStatsDeskLoadResult
 } from '@/lib/player-stats-desk'
 import { coalescePublicSeed } from '@/lib/public-seed-singleflight'
@@ -60,41 +62,71 @@ const loadCompletePlayerStatsDeskFromOrigin = async (
 	})
 }
 
-const loadCompletePlayerStatsDesk = unstable_cache(
-	loadCompletePlayerStatsDeskFromOrigin,
+const loadCompletePlayerStatsDeskByPlayerFromOrigin = (
+	playerId: number,
+	eventId: number,
+	horizon: number,
+	section: PlayerStatsDeskSection
+) =>
+	loadCompletePlayerStatsDeskFromOrigin(
+		[playerId],
+		eventId,
+		horizon,
+		section
+	)
+
+const loadCompletePlayerStatsDeskByPlayer = unstable_cache(
+	loadCompletePlayerStatsDeskByPlayerFromOrigin,
 	['graphql', 'player-stats-desk', 'v1'],
 	{ revalidate: RevalidateSeconds.publicStats, tags: [CacheTag.gameweekStats] }
 )
 
-const loadPlayerStatsDeskCached = cache(loadCompletePlayerStatsDesk)
+const loadPlayerStatsDeskByPlayerCached = cache(
+	loadCompletePlayerStatsDeskByPlayer
+)
 
 async function resolvePlayerStatsDesk(
-	load: typeof loadCompletePlayerStatsDeskFromOrigin,
-	playerIds: number[],
-	eventId: number,
-	horizon: number,
-	section: PlayerStatsDeskSection
+	load: () => Promise<PlayerStatsDeskLoadResult>
 ): Promise<PlayerStatsDeskLoadResult> {
 	try {
-		return await load(playerIds, eventId, horizon, section)
+		return await load()
 	} catch (error) {
 		if (error instanceof IncompletePlayerStatsDeskError) return error.result
 		throw error
 	}
 }
 
-export function loadPlayerStatsDesk(
+export async function loadPlayerStatsDesk(
 	playerIds: number[],
 	eventId: number,
 	horizon: number,
 	section: PlayerStatsDeskSection
 ): Promise<PlayerStatsDeskLoadResult> {
-	return resolvePlayerStatsDesk(
-		loadPlayerStatsDeskCached,
+	if (
+		playerIds.length < 1 ||
+		playerIds.length > PLAYER_STATS_DESK_MAX_PLAYERS ||
+		new Set(playerIds).size !== playerIds.length
+	) {
+		throw new Error('Player Stats desk requires one or two unique players')
+	}
+	const results = await Promise.all(
+		playerIds.map(playerId =>
+			resolvePlayerStatsDesk(() =>
+				loadPlayerStatsDeskByPlayerCached(
+					playerId,
+					eventId,
+					horizon,
+					section
+				)
+			)
+		)
+	)
+	return mergePlayerStatsDeskLoadResults(
 		playerIds,
 		eventId,
 		horizon,
-		section
+		section,
+		results
 	)
 }
 
@@ -107,11 +139,12 @@ export function loadPlayerStatsDeskForPublicRoute(
 	horizon: number,
 	section: PlayerStatsDeskSection
 ): Promise<PlayerStatsDeskLoadResult> {
-	return resolvePlayerStatsDesk(
-		loadCompletePlayerStatsDeskFromOrigin,
-		playerIds,
-		eventId,
-		horizon,
-		section
+	return resolvePlayerStatsDesk(() =>
+		loadCompletePlayerStatsDeskFromOrigin(
+			playerIds,
+			eventId,
+			horizon,
+			section
+		)
 	)
 }

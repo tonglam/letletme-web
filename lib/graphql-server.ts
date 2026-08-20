@@ -3,6 +3,7 @@ import 'server-only'
 import type { Session } from '@/lib/auth'
 import { capacityRequestIdForCurrentRun } from '@/lib/capacity-run'
 import { executeQuery, type ExecuteQueryOptions } from '@/lib/graphql-client'
+import { publicGraphQLCacheResult } from '@/lib/graphql-public-cache'
 import {
 	buildIngressContextHeadersV2,
 	buildOpaqueRscSubject,
@@ -105,7 +106,7 @@ export async function executePublicServerQuery<T>(
 	options?: Omit<ExecuteQueryOptions, 'headers'>,
 ): Promise<T> {
 	const routeIngress = currentPublicRouteIngress.getStore()
-	const cacheResult = options?.cache === 'force-cache' ? 'eligible' : 'bypass'
+	const cacheResult = publicGraphQLCacheResult(options)
 	const requestId = routeIngress ? null : capacityRequestIdForCurrentRun()
 	const ingressHeaders = routeIngress
 		? getPublicRouteIngressHeaders(routeIngress, workload)

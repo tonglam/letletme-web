@@ -282,6 +282,55 @@ export function normalizePlayerStatsDeskResult(
 	}
 }
 
+export function mergePlayerStatsDeskLoadResults(
+	requestedPlayerIds: number[],
+	eventId: number,
+	horizon: number,
+	section: PlayerStatsDeskSection,
+	results: PlayerStatsDeskLoadResult[]
+): PlayerStatsDeskLoadResult {
+	if (
+		requestedPlayerIds.length === 0 ||
+		requestedPlayerIds.length !== results.length
+	) {
+		throw new Error('Player Stats desk merge requires one result per player')
+	}
+	const entriesByPlayerId = new Map(
+		results.flatMap(result => result.entries).map(entry => [entry.playerId, entry])
+	)
+	const unavailable = new Set(
+		results.flatMap(result => result.unavailablePlayerIds)
+	)
+	const entries = requestedPlayerIds.map(
+		playerId => entriesByPlayerId.get(playerId) ?? { playerId }
+	)
+	const unavailablePlayerIds = requestedPlayerIds.filter(
+		playerId => unavailable.has(playerId) || !entriesByPlayerId.has(playerId)
+	)
+	const hasAnyData = results.some(
+		result => result.outcome === 'complete' || result.outcome === 'partial'
+	)
+	const allNotFound = results.every(result => result.outcome === 'not-found')
+	const allFailed = results.every(result => result.outcome === 'failed')
+	return {
+		eventId,
+		horizon,
+		section,
+		entries,
+		unavailablePlayerIds,
+		outcome:
+			unavailablePlayerIds.length === 0
+				? 'complete'
+				: allNotFound
+					? 'not-found'
+					: hasAnyData
+						? 'partial'
+						: allFailed
+							? 'failed'
+							: 'partial'
+	}
+}
+
 export function playerStatsDeskResponseFromResult(
 	result: PlayerStatsDeskLoadResult
 ): PlayerStatsDeskResponse {

@@ -177,4 +177,23 @@ describe('GraphQL ingress v2', () => {
 			'interactive'
 		)
 	})
+
+	it('maps schema event and team roots to their canonical workloads', () => {
+		assert.equal(
+			graphQLWorkloadForDocument({
+				query: 'query GetCurrentAndNextEvents { events { id } }'
+			}),
+			'home'
+		)
+		assert.equal(
+			graphQLWorkloadForDocument({
+				query: 'query GetEventStatsById { event(id: 1) { id } }'
+			}),
+			'gameweek'
+		)
+		assert.equal(
+			graphQLWorkloadForDocument({ query: 'query Teams { teams { id } }' }),
+			'player-stats'
+		)
+	})
 })

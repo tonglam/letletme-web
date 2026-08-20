@@ -15,11 +15,11 @@ const loadFixtureTeamsFromOrigin = unstable_cache(
 		coalescePublicSeed('fixture-team-directory', async () => {
 			console.info('[public graphql cache]', {
 				key: 'fixture-team-directory',
-				workload: 'fixtures',
+				workload: 'player-stats',
 				cacheResult: 'miss-fill'
 			})
 			return executePublicServerQuery<TeamsForPickerResponse>(
-				'fixtures',
+				'player-stats',
 				GET_TEAMS_FOR_PICKER,
 				{},
 				{ cache: 'no-store', timeoutMs: 5_000 }
