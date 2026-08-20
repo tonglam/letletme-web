@@ -40,11 +40,11 @@ export function collectBrowserBugReportMeta(): Record<string, unknown> {
 					: /linux/i.test(userAgent)
 						? 'linux'
 						: 'other'
-		const osMajorMatch = userAgent.match(
-			/(?:Android |OS |Windows NT |Mac OS X )([0-9]+)/i
-		)
-		const viewportBucket = (value: number): string =>
-			value < 480 ? 'small' : value < 1024 ? 'medium' : 'large'
+	const osMajorMatch = userAgent.match(
+		/(?:Android |OS |Windows NT |Mac OS X )([0-9]+)/i
+	)
+	const viewportBucket = (value: number): string =>
+		value < 480 ? 'small' : value < 1024 ? 'medium' : 'large'
 	return {
 		route: window.location.pathname,
 		envVersion: 'web',

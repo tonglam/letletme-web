@@ -19,9 +19,9 @@ export async function consumeBugReportStorageNonce(
 		.where(lte(bugReportStorageNonce.expiresAt, now))
 	const [inserted] = await db
 		.insert(bugReportStorageNonce)
-	.values({
-			nonce,
-			expiresAt: new Date(now.getTime() + NONCE_RETENTION_MS)
+		.values({
+				nonce,
+				expiresAt: new Date(now.getTime() + NONCE_RETENTION_MS)
 		})
 		.onConflictDoNothing({ target: bugReportStorageNonce.nonce })
 		.returning({ nonce: bugReportStorageNonce.nonce })
