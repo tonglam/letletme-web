@@ -1,14 +1,13 @@
 import { PayloadTooLargeError, readBoundedText } from '@/lib/http-security-core'
 import {
+	BUG_REPORT_STORAGE_BODY_MAX_BYTES,
 	BugReportStorageObjectMissingError,
+	consumeBugReportStorageNonce,
 	deleteBugReportScreenshot,
-	migrateLegacyBugReportScreenshot
+	migrateLegacyBugReportScreenshot,
+	verifyBugReportStorageSignature
 } from '@/lib/bug-report-storage-internal'
-import {
-	BUG_REPORT_STORAGE_MAX_BODY_BYTES,
-	BugReportStorageInputError,
-	verifyBugReportStorageEnvelope
-} from '@/lib/bug-report-storage-contract'
+import { BugReportStorageInputError } from '@/lib/bug-report-storage-contract'
 import { markPrivateNoStore } from '@/lib/private-no-store'
 
 export const runtime = 'nodejs'
@@ -36,22 +35,19 @@ export async function POST(
 
 	let body: string
 	try {
-		body = await readBoundedText(request, BUG_REPORT_STORAGE_MAX_BODY_BYTES)
+		body = await readBoundedText(request, BUG_REPORT_STORAGE_BODY_MAX_BYTES)
 	} catch (error) {
 		if (error instanceof PayloadTooLargeError)
 			return response({ success: false, error: 'Payload too large' }, 413)
 		return response({ success: false, error: 'Invalid request body' }, 400)
 	}
 
+	if (!verifyBugReportStorageSignature(request, body))
+		return response({ success: false, error: 'Invalid request envelope' }, 401)
 	if (
-		!verifyBugReportStorageEnvelope({
-			secret,
-			timestamp: request.headers.get('x-bug-report-timestamp')?.trim() ?? '',
-			nonce: request.headers.get('x-bug-report-nonce')?.trim() ?? '',
-			bodyHash: request.headers.get('x-bug-report-body-sha256')?.trim() ?? '',
-			signature: request.headers.get('x-bug-report-signature')?.trim() ?? '',
-			body
-		})
+		!(await consumeBugReportStorageNonce(
+			request.headers.get('x-bug-report-nonce')?.trim() ?? ''
+		))
 	)
 		return response({ success: false, error: 'Invalid request envelope' }, 401)
 
