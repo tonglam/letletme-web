@@ -55,6 +55,10 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 				coreEventContext: CoreContext
 				myFplTeamDesk: {
 					state: string
+					context: {
+						season: string
+						coreRevision: string
+					}
 					history: unknown[]
 					[key: string]: unknown
 				}
@@ -71,7 +75,11 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 		if (
 			snapshot.coreEventContext.season !== deskResult.coreEventContext.season ||
 			snapshot.coreEventContext.revision !==
-				deskResult.coreEventContext.revision
+				deskResult.coreEventContext.revision ||
+			deskResult.myFplTeamDesk.context.season !==
+				snapshot.coreEventContext.season ||
+			deskResult.myFplTeamDesk.context.coreRevision !==
+				snapshot.coreEventContext.revision
 		) {
 			throw new AgentToolError(
 				'UPSTREAM_UNAVAILABLE',
@@ -251,6 +259,6 @@ export async function runCompetition(
 		coreRevisions(result.coreEventContext),
 		[],
 		{ nextCursor },
-		result.coreEventContext.sourceCheckedAt
+		result.liveSnapshot?.checkedAt ?? result.coreEventContext.sourceCheckedAt
 	)
 }

@@ -265,7 +265,8 @@ export async function runBriefing(
 		const publishable = Boolean(
 			storyState &&
 			isBriefingState(storyState) &&
-			isRenderableBriefingStoryState(storyState)
+			isRenderableBriefingStoryState(storyState) &&
+			result.briefingStory?.story
 		)
 		const warnings = publishable
 			? []

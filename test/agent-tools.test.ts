@@ -17,6 +17,7 @@ import {
 	MARKET_OWNERSHIP_RISERS_DOCUMENT,
 	MARKET_PULSE_MOVERS_DOCUMENT,
 	MARKET_PULSE_UPDATES_DOCUMENT,
+	OWN_ENTRY_DOCUMENT,
 	PLAYER_CATALOG_DOCUMENT,
 	PLAYERS_DOCUMENT
 } from '@/lib/agent-tools/documents'
@@ -413,6 +414,55 @@ test('corrected Briefing stories remain published Agent data', async () => {
 	assert.deepEqual(body.warnings, [])
 })
 
+test('Briefing envelopes without a story payload are not published', async () => {
+	const response = await handleAgentToolRequest(
+		request({ slug: 'missing-story', locale: 'EN' }),
+		'letletme_briefing',
+		dependencies(authenticated, async document => {
+			assert.equal(document, BRIEFING_STORY_DOCUMENT)
+			return {
+				coreEventContext: contextResult.coreEventContext,
+				briefingWeek: contextResult.briefingWeek,
+				briefingStory: {
+					state: 'READY',
+					canonicalSlug: 'missing-story',
+					story: null
+				}
+			}
+		})
+	)
+	assert.equal(response.status, 200)
+	const body = await response.json()
+	assert.equal(body.data.story, null)
+	assert.equal(body.warnings[0]?.code, 'BRIEFING_STORY_NOT_PUBLISHED')
+})
+
+test('verified-entry extensions must declare the same core revision', async () => {
+	const response = await handleAgentToolRequest(
+		request({}),
+		'letletme_entry',
+		dependencies(verified, async document => {
+			if (document === ENTRY_SNAPSHOT_DOCUMENT) {
+				return {
+					coreEventContext: contextResult.coreEventContext,
+					entrySnapshot: { id: 123 }
+				}
+			}
+			assert.equal(document, OWN_ENTRY_DOCUMENT)
+			return {
+				coreEventContext: contextResult.coreEventContext,
+				myFplTeamDesk: {
+					state: 'READY',
+					context: { season: '2627', coreRevision: 'core-6' },
+					history: []
+				}
+			}
+		})
+	)
+	assert.equal(response.status, 502)
+	assert.equal((await response.json()).code, 'UPSTREAM_UNAVAILABLE')
+})
+
 test('all saved GraphQL operations are queries and never use the side-effectful entry field', () => {
 	for (const [name, document] of Object.entries(AGENT_GRAPHQL_DOCUMENTS)) {
 		const parsed = parse(document)
@@ -519,7 +569,7 @@ test('competition cursors expire when the live standings publication changes', a
 			revision,
 			state: 'LIVE',
 			publishedAt: '2026-08-20T00:00:00.000Z',
-			checkedAt: '2026-08-20T00:00:00.000Z'
+			checkedAt: '2026-08-20T00:03:00.000Z'
 		},
 		tournament
 	})
@@ -537,6 +587,7 @@ test('competition cursors expire when the live standings publication changes', a
 	)
 	assert.equal(first.status, 200)
 	const firstBody = await first.json()
+	assert.equal(firstBody.asOf, '2026-08-20T00:03:00.000Z')
 	assert.ok(firstBody.page.nextCursor)
 
 	let calls = 0
