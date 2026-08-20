@@ -249,6 +249,7 @@ test('a 100-player page is assembled from production-budgeted GraphQL chunks', a
 		'letletme_players',
 		dependencies(authenticated, async (document, variables) => {
 			assert.equal(document, PLAYERS_DOCUMENT)
+			assert.equal(variables.sort, 'AUTO')
 			const limit = variables.limit as number
 			const cursor = (variables.cursor as number | null) ?? 0
 			chunkLimits.push(limit)

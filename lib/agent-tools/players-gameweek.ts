@@ -52,6 +52,10 @@ type PlayersPageResult = {
 // gateway deadline.
 const MAX_PICKER_QUERY_ROWS = 38
 
+// AUTO is a first-class PlayerPickerSort value in the GraphQL schema. Preserve
+// it so the repository can choose OWNERSHIP_DESC before event data exists and
+// TOTAL_POINTS_DESC once an event snapshot is available.
+
 const playerFilterKey = (
 	input: AgentToolInputMap['letletme_players'],
 	eventId?: number
