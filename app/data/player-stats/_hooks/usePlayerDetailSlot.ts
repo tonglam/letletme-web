@@ -54,7 +54,10 @@ function writeRecentPlayers(
 function withEmptyStateContext(
 	core: PlayerStateOverviewData
 ): PlayerStateProfileData {
-	const currentPoint = core.seasonTimeline.find(
+	const seasonTimeline = Array.isArray(core.seasonTimeline)
+		? core.seasonTimeline
+		: []
+	const currentPoint = seasonTimeline.find(
 		point => point.season === core.season
 	)
 	return {
@@ -77,7 +80,7 @@ function withEmptyStateContext(
 					}))
 				}
 			: null,
-		seasonTimeline: core.seasonTimeline.map(point => ({
+		seasonTimeline: seasonTimeline.map(point => ({
 			...point,
 			signals: point.signals.map(signal => ({
 				...signal,
