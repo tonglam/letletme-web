@@ -264,6 +264,10 @@ export async function submitBugReportToData({
 		let lastStatus = 502
 		let lastMessage = 'Could not send the report.'
 		for (let attempt = 0; attempt < 2; attempt += 1) {
+			// Cleanup eligibility belongs to the final observed attempt. A parse
+			// failure can trigger a retry, so never carry a prior 4xx decision
+			// into an ambiguous transport outcome.
+			cleanupOnDataRejection = false
 			try {
 				const response = await tournamentApiFetch(
 					'/bug-reports',
