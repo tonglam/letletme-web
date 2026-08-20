@@ -184,12 +184,22 @@ function ProcessSourceEvidence({
 	const firstMetrics = processMetrics(playerState)
 	const secondMetrics = processMetrics(comparisonState)
 	const firstUnderstatAvailable = Boolean(
-		playerState?.coverage.understatCurrent &&
-		playerState.coverage.mappingStatus === 'VERIFIED'
+		playerState?.coverage.sources.some(
+			source =>
+				source.provider === 'UNDERSTAT' &&
+				source.scope === 'CURRENT' &&
+				source.dataStatus === 'AVAILABLE' &&
+				source.mappingStatus === 'VERIFIED'
+		)
 	)
 	const secondUnderstatAvailable = Boolean(
-		comparisonState?.coverage.understatCurrent &&
-		comparisonState.coverage.mappingStatus === 'VERIFIED'
+		comparisonState?.coverage.sources.some(
+			source =>
+				source.provider === 'UNDERSTAT' &&
+				source.scope === 'CURRENT' &&
+				source.dataStatus === 'AVAILABLE' &&
+				source.mappingStatus === 'VERIFIED'
+		)
 	)
 	const gkp = player.elementType === 1
 

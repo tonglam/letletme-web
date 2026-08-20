@@ -67,6 +67,16 @@ export function createPlayerStatsDeskRouteHandler(
 					}
 				)
 			}
+			if (result.outcome === 'not-found') {
+				logger.info('[player-stats-desk]', detail)
+				return NextResponse.json(
+					{ error: 'Player stats player not found' },
+					{
+						status: 404,
+						headers: { 'Cache-Control': PLAYER_STATS_DESK_UNCACHEABLE_CONTROL }
+					}
+				)
+			}
 			logger.info('[player-stats-desk]', detail)
 			return NextResponse.json(playerStatsDeskResponseFromResult(result), {
 				status: 200,

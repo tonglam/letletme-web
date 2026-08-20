@@ -99,7 +99,7 @@ describe('player stats desk contract', () => {
 			[13],
 			'recent'
 		)
-		assert.equal(failed.outcome, 'failed')
+		assert.equal(failed.outcome, 'not-found')
 	})
 
 	it('does not cache a process section when either evidence or state is unavailable', () => {
@@ -120,6 +120,62 @@ describe('player stats desk contract', () => {
 		)
 		assert.equal(result.outcome, 'partial')
 		assert.deepEqual(result.unavailablePlayerIds, [13])
+	})
+
+	it('distinguishes valid empty values, missing players, and temporary field failures', () => {
+		const available = normalizePlayerStatsDeskResult(
+			{
+				eventId: 4,
+				horizon: 5,
+				entries: [
+					{
+						playerId: 13,
+						overview: { status: 'AVAILABLE', value: { id: 13 } } as never,
+						state: {
+							status: 'AVAILABLE',
+							value: { playerId: 13, trend: 'UNKNOWN', dimensions: [] }
+						} as never
+					}
+				]
+			},
+			[13],
+			'overview'
+		)
+		assert.equal(available.outcome, 'complete')
+
+		const missing = normalizePlayerStatsDeskResult(
+			{
+				eventId: 4,
+				horizon: 5,
+				entries: [
+					{
+						playerId: 13,
+						overview: { status: 'NOT_FOUND', value: null },
+						state: { status: 'NOT_FOUND', value: null }
+					}
+				]
+			},
+			[13],
+			'overview'
+		)
+		assert.equal(missing.outcome, 'not-found')
+
+		const temporary = normalizePlayerStatsDeskResult(
+			{
+				eventId: 4,
+				horizon: 5,
+				entries: [
+					{
+						playerId: 13,
+						overview: { status: 'TEMPORARILY_UNAVAILABLE', value: null },
+						state: { status: 'TEMPORARILY_UNAVAILABLE', value: null }
+					}
+				]
+			},
+			[13],
+			'overview'
+		)
+		assert.equal(temporary.outcome, 'failed')
 	})
 })
 
@@ -196,5 +252,27 @@ describe('player stats desk route', () => {
 		)
 		assert.equal(response.status, 400)
 		assert.equal(called, false)
+	})
+
+	it('maps all-not-found desk results to 404 without caching them', async () => {
+		const handler = createPlayerStatsDeskRouteHandler(
+			async () =>
+				result({
+					entries: [{ playerId: 13 }],
+					unavailablePlayerIds: [13],
+					outcome: 'not-found'
+				}),
+			quietLogger
+		)
+		const response = await handler(
+			new Request(
+				'https://letletme.top/api/player-stats/desk?playerIds=13&eventId=1&section=overview'
+			)
+		)
+		assert.equal(response.status, 404)
+		assert.equal(
+			response.headers.get('cache-control'),
+			PLAYER_STATS_DESK_UNCACHEABLE_CONTROL
+		)
 	})
 })

@@ -221,7 +221,7 @@ export const GET_PLAYER_STATE_PROFILE = `
   query GetPlayerStateProfile($playerId: Int!, $horizon: Int = 5) {
     playerStateProfile(playerId: $playerId, horizon: $horizon) {
 	      playerId teamId position season horizon asOfEventId asOf
-	      trend confidence fplOnly
+	      trend confidence providerMode
 	      reasons { code dimension current baseline percentile }
 	      profileRadar {
 	        source position season asOfEventId sampleMinutes smallSample
@@ -242,9 +242,11 @@ export const GET_PLAYER_STATE_PROFILE = `
 	        }
 	      }
 	      coverage {
-	        fplCurrent understatCurrent
-	        fplHistorySeasons understatHistorySeasons
-	        mappingStatus metricCoverage limitations
+	        sources {
+	          provider scope seasons dataStatus analysisStatus mappingStatus
+	          reasonCodes revision asOf freshnessSeconds stale
+	        }
+	        metricCoverage limitations
 	      }
 	    }
 	  }
@@ -267,11 +269,12 @@ export const GET_PLAYER_STATE_CONTEXT = `
       careerTrajectory {
         season position minutes fplPositionPercentile understatProcessPercentile expectedMetricsAvailable
       }
-      coverage {
-        providers {
-          provider scope season revision asOf freshnessSeconds stale available
-        }
-      }
+	      coverage {
+	        sources {
+	          provider scope seasons dataStatus analysisStatus mappingStatus
+	          reasonCodes revision asOf freshnessSeconds stale
+	        }
+	      }
     }
   }
 `
@@ -386,21 +389,36 @@ export interface PlayerStateBaselineSeason {
 }
 
 export type PlayerStateMappingStatus =
-	'VERIFIED' | 'UNVERIFIED' | 'AMBIGUOUS' | 'QUARANTINED' | 'UNAVAILABLE'
+	| 'VERIFIED'
+	| 'UNVERIFIED'
+	| 'AMBIGUOUS'
+	| 'QUARANTINED'
+	| 'UNAVAILABLE'
+	| 'NOT_APPLICABLE'
 
 export type PlayerStateProvider = 'FPL' | 'UNDERSTAT'
 export type PlayerStateProviderScope = 'CURRENT' | 'HISTORY'
+export type PlayerStateDataStatus = 'AVAILABLE' | 'UNAVAILABLE'
+export type PlayerStateAnalysisStatus =
+	'READY' | 'PRESEASON' | 'INSUFFICIENT' | 'NOT_APPLICABLE' | 'UNAVAILABLE'
+export type PlayerStateProviderMode =
+	'FPL_ONLY' | 'FPL_WITH_UNDERSTAT_HISTORY' | 'FPL_WITH_UNDERSTAT_CURRENT'
 
-export interface PlayerStateProviderRevision {
+export interface PlayerStateSourceCoverage {
 	provider: PlayerStateProvider
 	scope: PlayerStateProviderScope
-	season: string
+	seasons: string[]
+	dataStatus: PlayerStateDataStatus
+	analysisStatus: PlayerStateAnalysisStatus
+	mappingStatus: PlayerStateMappingStatus
+	reasonCodes: string[]
 	revision: string | null
 	asOf: string | null
 	freshnessSeconds: number | null
 	stale: boolean
-	available: boolean
 }
+
+export type PlayerStateProviderRevision = PlayerStateSourceCoverage
 
 export interface PlayerStateProfileData {
 	playerId: number
@@ -412,7 +430,7 @@ export interface PlayerStateProfileData {
 	asOf: string
 	trend: PlayerStateTrend
 	confidence: PlayerStateConfidence
-	fplOnly: boolean
+	providerMode: PlayerStateProviderMode
 	reasons: PlayerStateReason[]
 	profileRadar: PlayerRadarProfile | null
 	dimensions: PlayerStateDimension[]
@@ -439,14 +457,9 @@ export interface PlayerStateProfileData {
 		gameweeks: PlayerStateOutlookGameweek[]
 	}
 	coverage: {
-		fplCurrent: boolean
-		understatCurrent: boolean
-		fplHistorySeasons: string[]
-		understatHistorySeasons: string[]
-		mappingStatus: PlayerStateMappingStatus
+		sources: PlayerStateSourceCoverage[]
 		metricCoverage: string[]
 		limitations: string[]
-		providers: PlayerStateProviderRevision[]
 	}
 }
 
@@ -454,7 +467,7 @@ export type PlayerStateProfileCoreData = Omit<
 	PlayerStateProfileData,
 	'ownBaseline' | 'peerBaseline' | 'careerTrajectory' | 'coverage'
 > & {
-	coverage: Omit<PlayerStateProfileData['coverage'], 'providers'>
+	coverage: PlayerStateProfileData['coverage']
 }
 
 /**
@@ -473,7 +486,7 @@ export type PlayerStateOverviewData = Pick<
 	| 'asOf'
 	| 'trend'
 	| 'confidence'
-	| 'fplOnly'
+	| 'providerMode'
 > & {
 	reasons: Array<Pick<PlayerStateReason, 'code'>>
 	profileRadar:
@@ -501,7 +514,7 @@ export type PlayerStateProcessData = Pick<
 	dimensions: PlayerStateDimension[]
 	coverage: Pick<
 		PlayerStateProfileData['coverage'],
-		'understatCurrent' | 'mappingStatus' | 'metricCoverage' | 'limitations'
+		'sources' | 'metricCoverage' | 'limitations'
 	>
 }
 
@@ -509,7 +522,7 @@ export type PlayerStateContextData = Pick<
 	PlayerStateProfileData,
 	'playerId' | 'ownBaseline' | 'peerBaseline' | 'careerTrajectory'
 > & {
-	coverage: Pick<PlayerStateProfileData['coverage'], 'providers'>
+	coverage: Pick<PlayerStateProfileData['coverage'], 'sources'>
 }
 
 export interface PlayerStateProfileResponse {
@@ -525,14 +538,22 @@ export type PlayerStatsDeskSection =
 
 export type PlayerStatsDeskEntryData = {
 	playerId: number
-	overview?: PlayerDetailData | null
-	state?:
+	overview?: PlayerStatsDeskFieldResult<PlayerDetailData> | null
+	state?: PlayerStatsDeskFieldResult<
 		| PlayerStateOverviewData
 		| PlayerStateProfileCoreData
 		| PlayerStateContextData
 		| PlayerStateProcessData
-		| null
-	evidence?: Partial<PlayerDetailData> | null
+	> | null
+	evidence?: PlayerStatsDeskFieldResult<Partial<PlayerDetailData>> | null
+}
+
+export type PlayerStatsDeskFieldStatus =
+	'AVAILABLE' | 'NOT_FOUND' | 'TEMPORARILY_UNAVAILABLE'
+
+export type PlayerStatsDeskFieldResult<T> = {
+	status: PlayerStatsDeskFieldStatus
+	value: T | null
 }
 
 export type PlayerStatsDeskPayloadData = {
@@ -560,26 +581,32 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
       entries {
         playerId
         overview {
-          id webName teamShortName elementType elementTypeName
-          price startPrice
-          statsContext { scope season asOfEventId }
-          availability {
-            status news newsAdded observedDate capturedAt
-            chanceOfPlayingThisRound chanceOfPlayingNextRound stale
+          status
+          value {
+            id webName teamShortName elementType elementTypeName
+            price startPrice
+            statsContext { scope season asOfEventId }
+            availability {
+              status news newsAdded observedDate capturedAt
+              chanceOfPlayingThisRound chanceOfPlayingNextRound stale
+            }
+            totalPoints selectedByPercent form transfersInEvent transfersOutEvent
+            fixtures { id event againstTeamShortName wasHome finished kickoffTime score difficulty bgw }
           }
-          totalPoints selectedByPercent form transfersInEvent transfersOutEvent
-          fixtures { id event againstTeamShortName wasHome finished kickoffTime score difficulty bgw }
         }
         state {
-          playerId teamId position season horizon asOfEventId asOf
-          trend confidence fplOnly
-          reasons { code }
-          profileRadar {
-            position season asOfEventId
-            axes { code value percentile unit available }
-          }
-          dimensions {
-            kind rating direction confidence reasonCodes
+          status
+          value {
+            playerId teamId position season horizon asOfEventId asOf
+            trend confidence providerMode
+            reasons { code }
+            profileRadar {
+              position season asOfEventId
+              axes { code value percentile unit available }
+            }
+            dimensions {
+              kind rating direction confidence reasonCodes
+            }
           }
         }
       }
@@ -594,21 +621,23 @@ export const GET_PLAYER_STATS_DESK_CONTEXT = /* GraphQL */ `
       entries {
         playerId
         state {
-          playerId
-          ownBaseline {
-            weightedPercentile
-            seasons { season positionPercentile weight }
-          }
-          peerBaseline { position minimumMinutes cohortSize currentPercentile }
-          careerTrajectory {
-            season position minutes fplPositionPercentile understatProcessPercentile expectedMetricsAvailable
-          }
-          coverage {
-            fplCurrent understatCurrent
-            fplHistorySeasons understatHistorySeasons
-            mappingStatus metricCoverage limitations
-            providers {
-              provider scope season revision asOf freshnessSeconds stale available
+          status
+          value {
+            playerId
+            ownBaseline {
+              weightedPercentile
+              seasons { season positionPercentile weight }
+            }
+            peerBaseline { position minimumMinutes cohortSize currentPercentile }
+            careerTrajectory {
+              season position minutes fplPositionPercentile understatProcessPercentile expectedMetricsAvailable
+            }
+            coverage {
+              sources {
+                provider scope seasons dataStatus analysisStatus mappingStatus
+                reasonCodes revision asOf freshnessSeconds stale
+              }
+              metricCoverage limitations
             }
           }
         }
@@ -628,9 +657,12 @@ function playerStatsDeskEvidenceQuery(
       entries {
         playerId
         evidence {
-          id webName teamShortName elementType elementTypeName
-          statsContext { scope season asOfEventId }
-          ${fields}
+          status
+          value {
+            id webName teamShortName elementType elementTypeName
+            statsContext { scope season asOfEventId }
+            ${fields}
+          }
         }
       }
     }
@@ -660,22 +692,32 @@ export const GET_PLAYER_STATS_DESK_PROCESS = /* GraphQL */ `
       entries {
         playerId
         evidence {
-          id webName teamShortName elementType elementTypeName
-          statsContext { scope season asOfEventId }
-          expectedGoals expectedAssists expectedGoalInvolvements expectedGoalsConceded
-          influence creativity threat ictIndex
+          status
+          value {
+            id webName teamShortName elementType elementTypeName
+            statsContext { scope season asOfEventId }
+            expectedGoals expectedAssists expectedGoalInvolvements expectedGoalsConceded
+            influence creativity threat ictIndex
+          }
         }
         state {
-          playerId
-          dimensions {
-            kind rating direction confidence reasonCodes
-            metrics {
-              code source value baseline percentile unit season
-              sampleMinutes sampleSize smallSample capability
+          status
+          value {
+            playerId
+            dimensions {
+              kind rating direction confidence reasonCodes
+              metrics {
+                code source value baseline percentile unit season
+                sampleMinutes sampleSize smallSample capability
+              }
             }
-          }
-          coverage {
-            understatCurrent mappingStatus metricCoverage limitations
+            coverage {
+              sources {
+                provider scope seasons dataStatus analysisStatus mappingStatus reasonCodes
+                revision asOf freshnessSeconds stale
+              }
+              metricCoverage limitations
+            }
           }
         }
       }

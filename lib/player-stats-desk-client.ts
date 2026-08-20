@@ -136,9 +136,11 @@ export async function requestPlayerStatsDesk(
 		.then(async response => {
 			const body = await response.json().catch(() => null)
 			if (!response.ok || body == null || typeof body !== 'object') {
-				throw new Error(
+				const error = new Error(
 					`Player stats request failed with status ${response.status}`
 				)
+				;(error as Error & { status?: number }).status = response.status
+				throw error
 			}
 			const result = body as PlayerStatsDeskResponse
 			writeCache(key, result)

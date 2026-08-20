@@ -2,13 +2,13 @@
 
 import type { PlayerDirectoryOption } from '@/components/player/PlayerDirectoryPicker'
 import { requestPlayerStatsDesk } from '@/lib/player-stats-desk-client'
+import type { PlayerStatsDeskNormalizedEntry } from '@/lib/player-stats-desk'
 import type {
 	PlayerDetailData,
 	PlayerStateContextData,
 	PlayerStateOverviewData,
 	PlayerStateProcessData,
 	PlayerStateProfileData,
-	PlayerStatsDeskEntryData,
 	PlayerStatsDeskSection
 } from '@/lib/graphql/operations/players'
 import { useTranslations } from 'next-intl'
@@ -81,32 +81,27 @@ function withEmptyStateContext(
 		careerTrajectory: [],
 		outlook: { rating: 'UNAVAILABLE', gameweeks: [] },
 		coverage: {
-			fplCurrent: false,
-			understatCurrent: false,
-			fplHistorySeasons: [],
-			understatHistorySeasons: [],
-			mappingStatus: 'UNAVAILABLE',
+			sources: [],
 			metricCoverage: [],
-			limitations: [],
-			providers: []
+			limitations: []
 		}
 	}
 }
 
 function isCoreState(
-	state: PlayerStatsDeskEntryData['state']
+	state: PlayerStatsDeskNormalizedEntry['state']
 ): state is PlayerStateOverviewData {
 	return state != null && 'trend' in state && 'dimensions' in state
 }
 
 function isStateContext(
-	state: PlayerStatsDeskEntryData['state']
+	state: PlayerStatsDeskNormalizedEntry['state']
 ): state is PlayerStateContextData {
 	return state != null && 'ownBaseline' in state && 'careerTrajectory' in state
 }
 
 function isProcessState(
-	state: PlayerStatsDeskEntryData['state']
+	state: PlayerStatsDeskNormalizedEntry['state']
 ): state is PlayerStateProcessData {
 	return (
 		state != null &&
@@ -138,7 +133,7 @@ export function usePlayerDetailSlot({
 }: {
 	storageKey: string
 	eventId?: number
-	initialEntry?: PlayerStatsDeskEntryData | null
+	initialEntry?: PlayerStatsDeskNormalizedEntry | null
 }) {
 	const t = useTranslations('PlayerStats')
 	const initialDetail = initialEntry?.overview ?? null
@@ -265,13 +260,17 @@ export function usePlayerDetailSlot({
 				return detail
 					? { status: 'loaded', detail }
 					: { status: 'not-found', detail: null }
-			} catch {
+			} catch (error) {
 				if (requestId !== requestIdRef.current || controller.signal.aborted) {
 					return { status: 'superseded', detail: null }
 				}
-				setError(t('loadFailed'))
+				const status =
+					error instanceof Error
+						? (error as Error & { status?: number }).status
+						: null
+				setError(status === 404 ? t('playerNotFound') : t('loadFailed'))
 				setStateError(t('stateLoadFailed'))
-				return { status: 'failed', detail: null }
+				return { status: status === 404 ? 'not-found' : 'failed', detail: null }
 			} finally {
 				if (requestId === requestIdRef.current) {
 					setIsLoading(false)

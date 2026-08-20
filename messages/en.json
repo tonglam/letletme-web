@@ -865,6 +865,10 @@
 			"whyState": "Why this state",
 			"whyStateHint": "These are the three signals used to explain the state. Raw values stay in the evidence views below.",
 			"coverageTitle": "Data coverage",
+			"providerMode": {
+				"withUnderstatCurrent": "FPL current + Understat current",
+				"withUnderstatHistory": "FPL current + Understat history"
+			},
 			"fplOnly": "FPL-only",
 			"confidenceLabel": "{confidence} confidence",
 			"outputProcessTitle": "Output vs process",
@@ -893,6 +897,8 @@
 			"coverage": {
 				"unavailable": "Coverage metadata is currently unavailable.",
 				"available": "available",
+				"preseason": "current pool + fixtures available; season performance not started",
+				"currentSeasonNotPublished": "current season not published",
 				"unavailableShort": "unavailable",
 				"fplCurrent": "FPL current: {status}",
 				"understatCurrent": "Understat current: {status}",
@@ -900,6 +906,7 @@
 				"mappingUnverified": "Mapping unverified",
 				"mappingAmbiguous": "Mapping ambiguous",
 				"mappingQuarantined": "Mapping quarantined",
+				"mappingNotApplicable": "Not applicable",
 				"mappingUnavailable": "Mapping unavailable",
 				"asOfEvent": "{season} · through GW{gameweek}",
 				"asOfSeason": "{season} · no event anchor",
