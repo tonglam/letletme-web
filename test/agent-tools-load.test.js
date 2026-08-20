@@ -58,7 +58,7 @@ test('agent load runner spreads clients across opaque sessions without exposing 
 		endpoint: new URL('https://letletme.top/api/agent/v1/tools/letletme_context'),
 		cookies: ['session=one', 'session=two'],
 		clients: 2,
-		durationSeconds: 0.01,
+		durationSeconds: 1,
 		fetcher: async (_url, options) => {
 			seenCookies.push(options.headers.Cookie)
 			return Response.json({ schemaVersion: '1', tool: 'letletme_context' })
