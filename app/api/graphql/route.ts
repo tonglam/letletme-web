@@ -15,6 +15,7 @@ import {
 import {
 	PayloadTooLargeError,
 	readBoundedJson,
+	readBoundedResponseBytes,
 } from '@/lib/http-security-core'
 import { shouldResolveGraphQLProxySession } from '@/lib/graphql-proxy-session'
 import { RequestTiming, resolveRequestId } from '@/lib/request-timing'
@@ -22,6 +23,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const GRAPHQL_ENDPOINT = process.env.GRAPHQL_ENDPOINT || 'http://localhost:4000/graphql'
 const MAX_GRAPHQL_BODY_BYTES = 256 * 1024
+const MAX_GRAPHQL_RESPONSE_BYTES = 8 * 1024 * 1024
 const GRAPHQL_UPSTREAM_TIMEOUT_MS = 15_000
 
 function noStoreJson(body: unknown, status: number, headers: Record<string, string> = {}) {
@@ -152,7 +154,31 @@ export async function POST(request: NextRequest) {
 		request.signal.removeEventListener('abort', abortUpstream)
 	}
 
-	const responseBody = await requestTiming.measure('responseBody', () => response.arrayBuffer())
+	let responseBody: Uint8Array
+	try {
+		responseBody = await requestTiming.measure('responseBody', () =>
+			readBoundedResponseBytes(response, MAX_GRAPHQL_RESPONSE_BYTES)
+		)
+	} catch (error) {
+		if (error instanceof PayloadTooLargeError) {
+			return noStoreJson(
+				{
+					errors: [{
+						message: 'Upstream response too large',
+						extensions: { code: 'UPSTREAM_RESPONSE_TOO_LARGE' },
+					}]
+				},
+				502,
+				{ 'X-Request-Id': requestId }
+			)
+		}
+		console.error('[graphql proxy] upstream response read failed:', error)
+		return noStoreJson(
+			{ errors: [{ message: 'Upstream response unavailable' }] },
+			502,
+			{ 'X-Request-Id': requestId }
+		)
+	}
 	const { responseBodyOk, cacheControl } = requestTiming.measureSync('responsePolicy', () => {
 		const bodyOk = isSuccessfulGraphQLResponseBody(new TextDecoder().decode(responseBody))
 		return {
@@ -173,7 +199,7 @@ export async function POST(request: NextRequest) {
 	})
 	const proxyResponse = requestTiming.measureSync(
 		'responseBuild',
-		() => new NextResponse(responseBody, {
+		() => new NextResponse(responseBody as unknown as BodyInit, {
 			status: response.status,
 			headers: safeHeaders,
 		})

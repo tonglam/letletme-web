@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { createHmac, randomBytes } from 'crypto'
+import { createHmac, randomBytes, randomUUID } from 'crypto'
 
 import { tournamentApiFetch } from '@/lib/tournament/backend-client'
 import {
@@ -12,7 +12,16 @@ import {
 	type BugReportSource,
 } from '@/lib/bug-report-meta'
 import { checkDatabaseRateLimit, buildOpaqueRateLimitSubject, resolveProviderClientIp } from '@/lib/http-security'
-import { uploadBugReportScreenshot } from '@/lib/supabase-storage'
+import {
+	BUG_REPORT_SCREENSHOT_BUCKET,
+	buildBugReportScreenshotPath,
+	removeStorageObject,
+	uploadBugReportScreenshot,
+} from '@/lib/supabase-storage'
+import {
+	canCleanupBugReportScreenshotAfterDataAttempts,
+	type BugReportDataAttemptOutcome,
+} from '@/lib/bug-report-retry'
 
 export class BugReportSubmitError extends Error {
 	constructor(
@@ -223,14 +232,30 @@ export async function submitBugReportToData({
 		throw new BugReportSubmitError('That picture is too large. Skip it or pick a smaller one.', 413)
 	}
 
-	let screenshotUrl: string | null = null
+	const submissionId = randomUUID()
+	let screenshotObjectKey: string | null = null
 	if (screenshot) {
+		screenshotObjectKey = buildBugReportScreenshotPath(
+			submissionId,
+			screenshot.contentType
+		)
 		try {
-			screenshotUrl = await uploadBugReportScreenshot(
+			await uploadBugReportScreenshot(
 				screenshot.bytes,
-				screenshot.contentType
+				screenshot.contentType,
+				submissionId
 			)
 		} catch {
+			try {
+				await removeStorageObject(
+					BUG_REPORT_SCREENSHOT_BUCKET,
+					screenshotObjectKey
+				)
+			} catch (cleanupError) {
+				console.error('[bug-report] screenshot cleanup failed after upload error', {
+					error: cleanupError instanceof Error ? cleanupError.name : 'UnknownError'
+				})
+			}
 			throw new BugReportSubmitError(
 				'That picture did not attach. Skip it or try again.',
 				502
@@ -238,27 +263,72 @@ export async function submitBugReportToData({
 		}
 	}
 
-	const response = await tournamentApiFetch(
-		'/bug-reports',
-		{
-			method: 'POST',
-			body: JSON.stringify({
-				source,
-				userId,
-				entryId,
-				body: description,
-				screenshotUrl,
-				clientMeta: sanitizeBugReportClientMeta(clientMeta),
-			}),
-		},
-		request
-	)
-	const result = (await response.json()) as { success?: boolean; publicId?: string; error?: string }
-	if (!response.ok || !result.success || typeof result.publicId !== 'string') {
-		throw new BugReportSubmitError(
-			result.error || 'Could not send the report.',
-			response.status >= 400 ? response.status : 502
-		)
+	const dataAttemptOutcomes: BugReportDataAttemptOutcome[] = []
+	try {
+		let lastStatus = 502
+		let lastMessage = 'Could not send the report.'
+		for (let attempt = 0; attempt < 2; attempt += 1) {
+			// Cleanup is decided from the complete attempt history. A parse failure
+			// can trigger a retry, so a later 4xx must not override an earlier
+			// ambiguous outcome.
+			try {
+				const response = await tournamentApiFetch(
+					'/bug-reports',
+					{
+						method: 'POST',
+						body: JSON.stringify({
+							source,
+							userId,
+							entryId,
+							body: description,
+							submissionId,
+							screenshotObjectKey,
+							clientMeta: sanitizeBugReportClientMeta(clientMeta),
+						}),
+					},
+					request
+				)
+				// A 4xx response is a definitive rejection: the Data handler did not
+				// persist this submission, so an uploaded attachment can be removed.
+				// 5xx responses, malformed bodies, and transport errors are ambiguous;
+				// Data may have committed before the response was lost. Leave those
+				// objects for the private-bucket retention/orphan sweep.
+				const result = (await response.json()) as {
+					success?: boolean
+					publicId?: string
+					error?: string
+				}
+				if (response.ok && result.success && typeof result.publicId === 'string') {
+					dataAttemptOutcomes.push('success')
+					return { publicId: result.publicId }
+				}
+				if (response.status >= 400 && response.status < 500) {
+					dataAttemptOutcomes.push('definitive-rejection')
+				} else {
+					dataAttemptOutcomes.push('ambiguous')
+				}
+				lastStatus = response.status >= 400 ? response.status : 502
+				lastMessage = result.error || lastMessage
+				if (response.status < 500 || attempt === 1) break
+			} catch (error) {
+				dataAttemptOutcomes.push('ambiguous')
+				if (attempt === 1) throw error
+			}
+		}
+		throw new BugReportSubmitError(lastMessage, lastStatus)
+	} catch (error) {
+		if (
+			screenshotObjectKey &&
+			canCleanupBugReportScreenshotAfterDataAttempts(dataAttemptOutcomes)
+		) {
+			try {
+				await removeStorageObject(BUG_REPORT_SCREENSHOT_BUCKET, screenshotObjectKey)
+			} catch (cleanupError) {
+				console.error('[bug-report] screenshot cleanup failed after Data error', {
+					error: cleanupError instanceof Error ? cleanupError.name : 'UnknownError'
+				})
+			}
+		}
+		throw error
 	}
-	return { publicId: result.publicId }
 }

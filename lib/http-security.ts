@@ -7,6 +7,8 @@ export {
 	buildIngressContextHeaders,
 	buildOpaqueRateLimitSubject,
 	PayloadTooLargeError,
+	readBoundedBytes,
+	readBoundedResponseBytes,
 	readBoundedJson,
 	readBoundedText,
 	resolveProviderClientIp,

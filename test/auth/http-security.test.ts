@@ -6,6 +6,8 @@ import {
 	buildIngressContextHeaders,
 	buildOpaqueRateLimitSubject,
 	PayloadTooLargeError,
+	readBoundedBytes,
+	readBoundedResponseBytes,
 	readBoundedText,
 	resolveProviderClientIp
 } from '../../lib/http-security-core'
@@ -191,4 +193,20 @@ test('bounded streaming rejects chunked bodies before full buffering', async () 
 		duplex: 'half'
 	} as RequestInit & { duplex: 'half' })
 	await assert.rejects(() => readBoundedText(request, 6), PayloadTooLargeError)
+})
+
+test('bounded byte and upstream response readers enforce the hard cap', async () => {
+	const request = new Request('http://localhost', {
+		method: 'POST',
+		body: new Uint8Array([1, 2, 3, 4]),
+	})
+	assert.deepEqual(await readBoundedBytes(request, 4), new Uint8Array([1, 2, 3, 4]))
+	await assert.rejects(
+		() => readBoundedResponseBytes(new Response(new Uint8Array(9)), 8),
+		PayloadTooLargeError
+	)
+	assert.deepEqual(
+		await readBoundedResponseBytes(new Response(new Uint8Array([5, 6])), 8),
+		new Uint8Array([5, 6])
+	)
 })

@@ -16,7 +16,7 @@ import type {
 } from '../_lib/team-stats-model'
 import type { PlayerDetail } from '@/types/player-detail'
 import { useFormatter, useLocale, useTranslations } from 'next-intl'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 
 const POSITION_ORDER: Record<SquadPitchPlayer['position'], number> = {
 	GKP: 0,
@@ -154,8 +154,11 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 	const t = useTranslations('TeamStats')
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDetail | null>(null)
-	const formatOverallRank = (value: number) =>
-		value <= 0 ? '—' : format.number(value, { notation: 'compact' })
+	const formatOverallRank = useCallback(
+		(value: number) =>
+			value <= 0 ? '—' : format.number(value, { notation: 'compact' }),
+		[format]
+	)
 
 	const players = useMemo(
 		() =>
@@ -198,6 +201,20 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 		)
 		if (pick) setSelectedPlayer(buildPlayerDetail(pick))
 	}
+	const squadPitchLabels = {
+		formation: t('squadFormation', { title: stats.teamName }),
+		positions: {
+			GKP: t('squadGoalkeeper'),
+			DEF: t('squadDefenders'),
+			MID: t('squadMidfielders'),
+			FWD: t('squadForwards')
+		},
+		captain: t('captain'),
+		viceCaptain: t('viceCaptain'),
+		total: t('pitchTotalPoints'),
+		playerDetails: (player: { webName: string }) =>
+			t('viewPlayer', { player: player.webName })
+	}
 	const shareText = useMemo(() => {
 		const origin =
 			typeof window !== 'undefined'
@@ -235,7 +252,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 		]
 			.filter(line => line != null)
 			.join('\n')
-	}, [benchPlayers, format, locale, players, stats, t])
+	}, [benchPlayers, format, formatOverallRank, locale, players, stats, t])
 
 	if (players.length === 0) return null
 
@@ -266,6 +283,7 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 				<SquadPitch
 					onPlayerClick={handlePitchPlayerClick}
 					players={players}
+					labels={squadPitchLabels}
 					benchPlayers={benchPlayers}
 					benchTitle={t('substitutes')}
 					benchBoost={isBenchBoostChip(stats.eventChip)}

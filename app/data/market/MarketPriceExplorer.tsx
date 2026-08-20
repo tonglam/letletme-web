@@ -165,7 +165,7 @@ export function MarketPlayerLookupLauncher({
 				</label>
 				<Input
 					id="market-player-search"
-					role="combobox"
+					type="search"
 					value={searchTerm}
 					onChange={event => {
 						const value = event.target.value
@@ -179,8 +179,6 @@ export function MarketPlayerLookupLauncher({
 					placeholder={t('searchPlaceholder')}
 					maxLength={50}
 					className="h-11"
-					aria-controls="market-player-results"
-					aria-autocomplete="list"
 				/>
 			</>
 		)

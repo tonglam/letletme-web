@@ -5,6 +5,9 @@ import {
 	parseBriefingRevalidateEvent,
 	verifyBriefingRevalidateEnvelope,
 } from '@/lib/briefing-revalidate'
+import { PayloadTooLargeError, readBoundedText } from '@/lib/http-security-core'
+
+const MAX_REVALIDATE_BODY_BYTES = 32 * 1024
 
 export async function POST(request: Request) {
 	const secret = process.env.BRIEFING_REVALIDATE_SECRET?.trim()
@@ -17,7 +20,21 @@ export async function POST(request: Request) {
 	const timestamp = request.headers.get('x-briefing-timestamp')?.trim() ?? ''
 	const nonce = request.headers.get('x-briefing-nonce')?.trim() ?? ''
 	const signature = request.headers.get('x-briefing-signature')?.trim() ?? ''
-	const body = await request.text()
+	let body: string
+	try {
+		body = await readBoundedText(request, MAX_REVALIDATE_BODY_BYTES)
+	} catch (error) {
+		if (error instanceof PayloadTooLargeError) {
+			return Response.json(
+				{ success: false, error: 'Payload too large' },
+				{ status: 413 }
+			)
+		}
+		return Response.json(
+			{ success: false, error: 'Invalid request body' },
+			{ status: 400 }
+		)
+	}
 	if (
 		!verifyBriefingRevalidateEnvelope({
 			secret,
