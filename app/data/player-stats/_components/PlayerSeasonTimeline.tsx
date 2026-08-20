@@ -228,12 +228,19 @@ function signalLabel(
 	return t(SIGNAL_LABEL_KEYS[signal.code] as never)
 }
 
+function seasonTimelineOf(
+	profile: PlayerStateProfileData | null
+): PlayerSeasonTimelinePoint[] | null {
+	if (!profile) return null
+	return Array.isArray(profile.seasonTimeline) ? profile.seasonTimeline : null
+}
+
 function pointForSeason(
 	profile: PlayerStateProfileData | null,
 	season: string
 ): PlayerSeasonTimelinePoint | null {
 	return (
-		(profile?.seasonTimeline ?? []).find(point => point.season === season) ??
+		(seasonTimelineOf(profile) ?? []).find(point => point.season === season) ??
 		null
 	)
 }
@@ -277,6 +284,13 @@ function TimelineCell({
 	const t = useTranslations('PlayerStats')
 	const format = useFormatter()
 	if (!profile) {
+		return (
+			<div className="min-w-0 px-3 py-3 text-[0.7rem] leading-snug text-muted-foreground sm:px-4">
+				{t('timeline.loading')}
+			</div>
+		)
+	}
+	if (seasonTimelineOf(profile) === null) {
 		return (
 			<div className="min-w-0 px-3 py-3 text-[0.7rem] leading-snug text-muted-foreground sm:px-4">
 				{t('timeline.loading')}
@@ -400,11 +414,13 @@ export function PlayerSeasonTimeline({
 	const isCompare = comparison !== null
 	const currentSeason =
 		profile?.season ?? comparisonProfile?.season ?? player.statsContext.season
+	const profileTimeline = seasonTimelineOf(profile) ?? []
+	const comparisonTimeline = seasonTimelineOf(comparisonProfile) ?? []
 	const seasons = Array.from(
 		new Set([
 			currentSeason,
-			...(profile?.seasonTimeline ?? []).map(point => point.season),
-			...(comparisonProfile?.seasonTimeline ?? []).map(point => point.season)
+			...profileTimeline.map(point => point.season),
+			...comparisonTimeline.map(point => point.season)
 		])
 	).sort((left, right) => right.localeCompare(left))
 	const completedPoints = [profile, comparisonProfile]
