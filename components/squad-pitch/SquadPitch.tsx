@@ -1,6 +1,6 @@
 import Image from 'next/image'
 import { LogoMark, LogoWordmark } from '@/components/layout/Logo'
-import { forwardRef, type CSSProperties, type KeyboardEvent } from 'react'
+import { forwardRef, type CSSProperties } from 'react'
 
 export type SquadPosition = 'GKP' | 'DEF' | 'MID' | 'FWD'
 
@@ -38,8 +38,18 @@ export interface SquadPitchPlayer {
 	isViceCaptain?: boolean
 }
 
+export interface SquadPitchLabels {
+	formation: string
+	positions: Record<SquadPosition, string>
+	captain: string
+	viceCaptain: string
+	total: string
+	playerDetails: (player: SquadPitchPlayer) => string
+}
+
 interface SquadPitchProps {
 	players: readonly SquadPitchPlayer[]
+	labels: SquadPitchLabels
 	benchPlayers?: readonly SquadPitchPlayer[]
 	benchTitle?: string
 	benchBoost?: boolean
@@ -66,13 +76,6 @@ export interface SquadPitchHeaderDetail {
 
 const POSITION_ORDER: readonly SquadPosition[] = ['GKP', 'DEF', 'MID', 'FWD']
 
-const POSITION_LABELS: Record<SquadPosition, string> = {
-	GKP: 'Goalkeeper',
-	DEF: 'Defenders',
-	MID: 'Midfielders',
-	FWD: 'Forwards'
-}
-
 const POSITION_ROW_CLASS: Record<SquadPosition, string> = {
 	GKP: 'top-[13.1%]',
 	DEF: 'top-[32.5%]',
@@ -87,15 +90,16 @@ const POSITION_ROW_WITH_BENCH_CLASS: Record<SquadPosition, string> = {
 	FWD: 'top-[63%] sm:top-[68%]'
 }
 
-function PlayerMarker({ player }: { player: SquadPitchPlayer }) {
+function PlayerMarker({ player, labels }: { player: SquadPitchPlayer; labels: SquadPitchLabels }) {
 	const marker = player.isCaptain ? 'C' : player.isViceCaptain ? 'V' : null
 	if (!marker) return null
 
-	const label = marker === 'C' ? 'Captain' : 'Vice-captain'
+	const label = marker === 'C' ? labels.captain : labels.viceCaptain
 	const borderClass = marker === 'C' ? 'border-electric' : 'border-[#f5f1e8]'
 
 	return (
 		<span
+			role="img"
 			aria-label={label}
 			className={`absolute left-[3%] top-[7%] z-20 grid size-[clamp(1.1rem,3.6cqi,1.8rem)] place-items-center rounded-full border-2 bg-[#111315] font-display text-[clamp(0.62rem,1.9cqi,0.95rem)] font-bold leading-none text-[#f5f1e8] shadow-[0_4px_10px_rgba(0,0,0,0.38)] ${borderClass}`}
 		>
@@ -140,39 +144,23 @@ function TeamKitBadge({
 function PlayerCard({
 	player,
 	compact = false,
-	onPlayerClick
+	onPlayerClick,
+	labels
 }: {
 	player: SquadPitchPlayer
 	compact?: boolean
 	onPlayerClick?: (playerId: string) => void
+	labels: SquadPitchLabels
 }) {
 	const isInteractive = Boolean(onPlayerClick)
 	const openPlayerDetail = () => onPlayerClick?.(player.id)
-	const handleKeyDown = (event: KeyboardEvent<HTMLLIElement>) => {
-		if (!isInteractive || (event.key !== 'Enter' && event.key !== ' ')) return
-		event.preventDefault()
-		openPlayerDetail()
-	}
-
-	return (
-		<li
-			aria-label={
-				isInteractive ? `${player.webName}, ${player.score} points` : undefined
-			}
-			className={`group relative flex ${compact ? 'w-[clamp(2.8rem,11.5cqi,6rem)]' : 'w-[clamp(3.25rem,14cqi,7.2rem)]'} list-none flex-col items-center transition-transform duration-200 motion-reduce:transition-none ${isInteractive ? 'cursor-pointer hover:-translate-y-1 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]' : ''}`}
-			onClick={isInteractive ? openPlayerDetail : undefined}
-			onKeyDown={isInteractive ? handleKeyDown : undefined}
-			role={isInteractive ? 'button' : undefined}
-			tabIndex={isInteractive ? 0 : undefined}
-		>
+	const content = (
+		<>
 			<div
 				className={`relative z-10 transition-[filter,transform] duration-200 ${compact ? '-mb-[clamp(0.2rem,0.65cqi,0.36rem)] w-[86%]' : '-mb-[clamp(0.25rem,0.8cqi,0.45rem)] w-[90%]'} drop-shadow-[0_9px_8px_rgba(0,24,16,0.28)] ${isInteractive ? 'group-hover:-translate-y-0.5 group-hover:drop-shadow-[0_13px_11px_rgba(0,24,16,0.4)]' : ''}`}
 			>
-				<TeamKitBadge
-					player={player}
-					className="h-auto w-full select-none"
-				/>
-				<PlayerMarker player={player} />
+				<TeamKitBadge player={player} className="h-auto w-full select-none" />
+				<PlayerMarker player={player} labels={labels} />
 			</div>
 
 			<div className="relative z-20 w-full overflow-hidden rounded-[clamp(0.2rem,0.8cqi,0.45rem)] border border-white/45 shadow-[0_7px_14px_rgba(0,37,23,0.3)]">
@@ -195,6 +183,23 @@ function PlayerCard({
 					</span>
 				</div>
 			</div>
+		</>
+	)
+
+	return (
+		<li
+			className={`group relative flex ${compact ? 'w-[clamp(2.8rem,11.5cqi,6rem)]' : 'w-[clamp(3.25rem,14cqi,7.2rem)]'} list-none flex-col items-center transition-transform duration-200 motion-reduce:transition-none`}
+		>
+			{isInteractive ? (
+				<button
+					type="button"
+					aria-label={labels.playerDetails(player)}
+					className="group relative flex w-full cursor-pointer flex-col items-center border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-1 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
+					onClick={openPlayerDetail}
+				>
+					{content}
+				</button>
+			) : content}
 		</li>
 	)
 }
@@ -203,18 +208,20 @@ function PositionRow({
 	position,
 	players,
 	benchVisible,
-	onPlayerClick
+	onPlayerClick,
+	labels
 }: {
 	position: SquadPosition
 	players: readonly SquadPitchPlayer[]
 	benchVisible?: boolean
 	onPlayerClick?: (playerId: string) => void
+	labels: SquadPitchLabels
 }) {
 	if (players.length === 0) return null
 
 	return (
 		<ol
-			aria-label={POSITION_LABELS[position]}
+			aria-label={labels.positions[position]}
 			className={`absolute inset-x-[4.2%] z-10 grid items-start justify-items-center ${benchVisible ? POSITION_ROW_WITH_BENCH_CLASS[position] : POSITION_ROW_CLASS[position]}`}
 			style={
 				{
@@ -228,6 +235,7 @@ function PositionRow({
 					player={player}
 					compact={benchVisible}
 					onPlayerClick={onPlayerClick}
+					labels={labels}
 				/>
 			))}
 		</ol>
@@ -238,51 +246,55 @@ function BenchPlayerCard({
 	player,
 	label,
 	pointsLabel,
-	onPlayerClick
+	onPlayerClick,
+	labels
 }: {
 	player: SquadPitchPlayer
 	label: string
 	pointsLabel: string
 	onPlayerClick?: (playerId: string) => void
+	labels: SquadPitchLabels
 }) {
 	const isInteractive = Boolean(onPlayerClick)
 	const openPlayerDetail = () => onPlayerClick?.(player.id)
-	const handleKeyDown = (event: KeyboardEvent<HTMLLIElement>) => {
-		if (!isInteractive || (event.key !== 'Enter' && event.key !== ' ')) return
-		event.preventDefault()
-		openPlayerDetail()
-	}
+	const content = (
+		<div className="flex min-w-0 items-center gap-[clamp(0.2rem,0.8cqi,0.5rem)] rounded-[clamp(0.2rem,0.7cqi,0.4rem)] border border-white/80 bg-[#f8f6ef]/95 px-[clamp(0.2rem,0.8cqi,0.5rem)] py-[clamp(0.18rem,0.6cqi,0.38rem)] text-left shadow-[0_5px_12px_rgba(0,37,23,0.2)]">
+			<TeamKitBadge
+				player={player}
+				className="h-[clamp(1.55rem,5.8cqi,3.4rem)] w-[clamp(1.8rem,7cqi,4.2rem)] shrink-0 object-contain text-[clamp(0.42rem,1.1cqi,0.62rem)]"
+			/>
+			<div className="min-w-0 text-left">
+				<p className="truncate font-mono text-[clamp(0.34rem,0.82cqi,0.52rem)] font-bold uppercase leading-tight tracking-[0.08em] text-[#38003c]/55">
+					{label}
+				</p>
+				<p className="truncate font-display text-[clamp(0.42rem,1.2cqi,0.7rem)] font-bold uppercase leading-tight text-[#38003c]">
+					{player.webName}
+				</p>
+				<p className="truncate font-mono text-[clamp(0.36rem,0.9cqi,0.56rem)] tabular-nums leading-tight text-[#38003c]/75">
+					{player.fixture ?? player.teamCode ?? player.teamBadgeLabel}
+					<span className="text-[#38003c]/55">
+						{' '}
+						· {player.score} {pointsLabel}
+					</span>
+				</p>
+			</div>
+		</div>
+	)
 
 	return (
 		<li
-			aria-label={isInteractive ? `${player.webName}, ${player.score} points` : undefined}
-			className={`min-w-0 list-none ${isInteractive ? 'cursor-pointer transition-transform duration-200 hover:-translate-y-0.5 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]' : ''}`}
-			onClick={isInteractive ? openPlayerDetail : undefined}
-			onKeyDown={isInteractive ? handleKeyDown : undefined}
-			role={isInteractive ? 'button' : undefined}
-			tabIndex={isInteractive ? 0 : undefined}
+			className="min-w-0 list-none"
 		>
-			<div className="flex min-w-0 items-center gap-[clamp(0.2rem,0.8cqi,0.5rem)] rounded-[clamp(0.2rem,0.7cqi,0.4rem)] border border-white/80 bg-[#f8f6ef]/95 px-[clamp(0.2rem,0.8cqi,0.5rem)] py-[clamp(0.18rem,0.6cqi,0.38rem)] shadow-[0_5px_12px_rgba(0,37,23,0.2)]">
-				<TeamKitBadge
-					player={player}
-					className="h-[clamp(1.55rem,5.8cqi,3.4rem)] w-[clamp(1.8rem,7cqi,4.2rem)] shrink-0 object-contain text-[clamp(0.42rem,1.1cqi,0.62rem)]"
-				/>
-				<div className="min-w-0 text-left">
-					<p className="truncate font-mono text-[clamp(0.34rem,0.82cqi,0.52rem)] font-bold uppercase leading-tight tracking-[0.08em] text-[#38003c]/55">
-						{label}
-					</p>
-					<p className="truncate font-display text-[clamp(0.42rem,1.2cqi,0.7rem)] font-bold uppercase leading-tight text-[#38003c]">
-						{player.webName}
-					</p>
-					<p className="truncate font-mono text-[clamp(0.36rem,0.9cqi,0.56rem)] tabular-nums leading-tight text-[#38003c]/75">
-						{player.fixture ?? player.teamCode ?? player.teamBadgeLabel}
-						<span className="text-[#38003c]/55">
-							{' '}
-							· {player.score} {pointsLabel}
-						</span>
-					</p>
-				</div>
-			</div>
+			{isInteractive ? (
+				<button
+					type="button"
+					aria-label={labels.playerDetails(player)}
+					className="group w-full cursor-pointer border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-0.5 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
+					onClick={openPlayerDetail}
+				>
+					{content}
+				</button>
+			) : content}
 		</li>
 	)
 }
@@ -291,6 +303,7 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 	function SquadPitch(
 		{
 			players,
+			labels,
 			benchPlayers = [],
 			benchTitle = 'Substitutes',
 			benchBoost = false,
@@ -313,7 +326,7 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 		return (
 			<section
 				ref={ref}
-				aria-label={`${title} formation`}
+				aria-label={labels.formation}
 				className={`relative isolate ${benchPlayers.length > 0 ? 'aspect-[4/5] sm:aspect-[1304/1244]' : 'aspect-[1304/1244]'} w-full overflow-hidden rounded-xl border border-[#00ff85]/35 bg-[#210025] shadow-[0_30px_80px_-34px_rgba(21,0,25,0.78)] [container-type:inline-size] sm:rounded-2xl ${className}`}
 			>
 				<Image
@@ -368,7 +381,7 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 					) : (
 						<div className="shrink-0 border-l border-white/20 pl-[clamp(0.5rem,1.7cqi,1rem)] text-right">
 							<p className="font-mono text-[clamp(0.4rem,1cqi,0.6rem)] uppercase tracking-[0.16em] text-white/60">
-								Total
+								{labels.total}
 							</p>
 							<p className="font-display text-[clamp(0.8rem,2.4cqi,1.45rem)] font-bold leading-none tabular-nums text-[#00ff85]">
 								{totalScore}
@@ -400,6 +413,7 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 						players={players.filter(player => player.position === position)}
 						benchVisible={benchPlayers.length > 0}
 						onPlayerClick={onPlayerClick}
+						labels={labels}
 					/>
 				))}
 
@@ -432,6 +446,7 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 										label={label}
 										pointsLabel={benchPointsLabel}
 										onPlayerClick={onPlayerClick}
+										labels={labels}
 									/>
 								)
 							})}

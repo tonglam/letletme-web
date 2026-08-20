@@ -110,6 +110,21 @@ export function LivePointsDashboard({
 		)
 	})()
 	const gameweek = selectedGameweek ?? liveData?.event ?? currentGameweek
+	const squadTitle = liveData?.entryName ?? `Entry ${liveData?.entry ?? ''}`
+	const squadPitchLabels = {
+		formation: t('squadFormation', { title: squadTitle }),
+		positions: {
+			GKP: t('squadGoalkeeper'),
+			DEF: t('squadDefenders'),
+			MID: t('squadMidfielders'),
+			FWD: t('squadForwards')
+		},
+		captain: t('captain'),
+		viceCaptain: t('viceCaptain'),
+		total: t('pitchTotalPoints'),
+		playerDetails: (player: { webName: string }) =>
+			t('viewPlayer', { player: player.webName })
+	}
 	const showLiveOverallRank =
 		overall != null && gameweek === currentGameweek
 	const pitchHeaderStats = liveData
@@ -283,7 +298,8 @@ export function LivePointsDashboard({
 							benchBoost={benchBoostActive}
 							benchBoostLabel={t('pitchBenchBoost')}
 							benchPointsLabel={t('pointsAbbreviation')}
-							title={liveData.entryName ?? `Entry ${liveData.entry}`}
+							title={squadTitle}
+							labels={squadPitchLabels}
 							managerName={liveData.playerName ?? undefined}
 							headerStats={pitchHeaderStats}
 							eyebrow={`${t('livePoints')} · GW ${selectedGameweek ?? liveData.event}`}

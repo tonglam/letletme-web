@@ -33,6 +33,74 @@ export async function readBoundedText(
 	return body + decoder.decode()
 }
 
+export async function readBoundedBytes(
+	request: Request,
+	maxBytes: number
+): Promise<Uint8Array> {
+	const declared = Number(request.headers.get('content-length'))
+	if (Number.isFinite(declared) && declared > maxBytes) {
+		throw new PayloadTooLargeError(maxBytes)
+	}
+	if (!request.body) return new Uint8Array()
+	const reader = request.body.getReader()
+	const chunks: Uint8Array[] = []
+	let bytes = 0
+	for (;;) {
+		const { done, value } = await reader.read()
+		if (done) break
+		bytes += value.byteLength
+		if (bytes > maxBytes) {
+			await reader.cancel()
+			throw new PayloadTooLargeError(maxBytes)
+		}
+		chunks.push(value)
+	}
+	const result = new Uint8Array(bytes)
+	let offset = 0
+	for (const chunk of chunks) {
+		result.set(chunk, offset)
+		offset += chunk.byteLength
+	}
+	return result
+}
+
+export async function readBoundedResponseBytes(
+	response: Response,
+	maxBytes: number
+): Promise<Uint8Array> {
+	const declared = Number(response.headers.get('content-length'))
+	if (Number.isFinite(declared) && declared > maxBytes) {
+		if (response.body) await response.body.cancel()
+		throw new PayloadTooLargeError(maxBytes)
+	}
+	if (!response.body) return new Uint8Array()
+	const reader = response.body.getReader()
+	const chunks: Uint8Array[] = []
+	let bytes = 0
+	try {
+		for (;;) {
+			const { done, value } = await reader.read()
+			if (done) break
+			if (!value) continue
+			bytes += value.byteLength
+			if (bytes > maxBytes) {
+				await reader.cancel()
+				throw new PayloadTooLargeError(maxBytes)
+			}
+			chunks.push(value)
+		}
+	} finally {
+		reader.releaseLock()
+	}
+	const result = new Uint8Array(bytes)
+	let offset = 0
+	for (const chunk of chunks) {
+		result.set(chunk, offset)
+		offset += chunk.byteLength
+	}
+	return result
+}
+
 export async function readBoundedJson(
 	request: Request,
 	maxBytes: number
