@@ -3,7 +3,8 @@
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import {
 	isTournamentRosterSyncInFlight,
-	isTournamentSetupInFlight
+	isTournamentSetupInFlight,
+	isTournamentSetupPollingPending
 } from '@/lib/tournament/lifecycle'
 import { useRouter } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
@@ -98,7 +99,15 @@ export function useTournamentManagement(tournament: EntryTournament) {
 		currentTournament.rosterSyncStatus
 	)
 	const setupInFlight = isTournamentSetupInFlight(currentTournament.setupStatus)
-	const lifecycleWorkInFlight = rosterSyncInFlight || setupInFlight
+	const lifecycleWorkInFlight =
+		rosterSyncInFlight ||
+		isTournamentSetupPollingPending(
+			currentTournament.setupStatus,
+			currentTournament.insightsReadyAt,
+			currentTournament.warningSummaries?.some(
+				summary => summary.repairExhausted === true
+			)
+		)
 
 	useEffect(() => {
 		if (!lifecycleWorkInFlight) return

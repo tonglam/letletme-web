@@ -206,6 +206,10 @@ export default function TournamentClient({
 		}
 		return tournaments[0] ?? null
 	}, [requestedTournamentId, tournaments])
+	const selectedTournamentKey = selectedTournament?.id ?? null
+	const selectedSetupStatus = selectedTournament?.setupStatus
+	const selectedInsightsReadyAt = selectedTournament?.insightsReadyAt
+	const selectedSetupRepairExhausted = selectedTournament?.setupRepairExhausted
 	/** URL asked for a tournament that is not in this entry's membership list. */
 	const unknownTournamentFromUrl = Boolean(
 		tournamentIdFromUrl &&
@@ -355,10 +359,11 @@ export default function TournamentClient({
 	useEffect(() => {
 		if (
 			!isPageActive ||
-			!selectedTournament ||
+			!selectedTournamentKey ||
 			!isTournamentSetupPollingPending(
-				selectedTournament.setupStatus,
-				selectedTournament.insightsReadyAt
+				selectedSetupStatus ?? 'READY',
+				selectedInsightsReadyAt,
+				selectedSetupRepairExhausted
 			)
 		) {
 			return
@@ -390,11 +395,18 @@ export default function TournamentClient({
 			cancelled = true
 			if (timer !== undefined) window.clearTimeout(timer)
 		}
-	}, [entryId, isPageActive, selectedTournament])
+	}, [
+		entryId,
+		isPageActive,
+		selectedInsightsReadyAt,
+		selectedSetupRepairExhausted,
+		selectedSetupStatus,
+		selectedTournamentKey
+	])
 
 	useEffect(() => {
 		if (
-			!selectedTournament ||
+			!selectedTournamentKey ||
 			!standingsReady ||
 			selectedGameweek === undefined
 		) {
@@ -409,7 +421,7 @@ export default function TournamentClient({
 			}, 0)
 			return () => window.clearTimeout(resetTimer)
 		}
-		const resultsKey = `${selectedTournament.id}:${selectedGameweek}`
+		const resultsKey = `${selectedTournamentKey}:${selectedGameweek}`
 		if (initialResultsKeyRef.current === resultsKey) {
 			initialResultsKeyRef.current = null
 			return
@@ -425,7 +437,7 @@ export default function TournamentClient({
 		setIsLoadingResults(true)
 		acceptSnapshot(null)
 		void loadTournamentResults(
-			Number(selectedTournament.id),
+			Number(selectedTournamentKey),
 			selectedGameweek,
 			{
 				preserveOnError: false
@@ -435,7 +447,7 @@ export default function TournamentClient({
 		acceptSnapshot,
 		loadTournamentResults,
 		selectedGameweek,
-		selectedTournament,
+		selectedTournamentKey,
 		standingsReady
 	])
 

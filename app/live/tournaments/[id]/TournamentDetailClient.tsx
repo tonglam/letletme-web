@@ -337,6 +337,9 @@ export default function TournamentDetailClient({
 	const polledTournamentId = currentTournament?.id
 	const polledSetupStatus = currentTournament?.setupStatus
 	const polledInsightsReadyAt = currentTournament?.insightsReadyAt
+	const polledRepairExhausted = currentTournament?.warningSummaries?.some(
+		summary => summary.repairExhausted === true
+	)
 
 	useEffect(() => {
 		if (
@@ -345,6 +348,7 @@ export default function TournamentDetailClient({
 			!shouldPollTournamentSetup({
 				setupStatus: polledSetupStatus,
 				insightsReadyAt: polledInsightsReadyAt,
+				repairExhausted: polledRepairExhausted,
 				visible,
 				online
 			})
@@ -409,7 +413,10 @@ export default function TournamentDetailClient({
 				if (
 					isTournamentSetupPollingPending(
 						status.setupStatus,
-						status.insightsReadyAt
+						status.insightsReadyAt,
+						status.warningSummaries.some(
+							summary => summary.repairExhausted === true
+						)
 					)
 				) {
 					timer = setTimeout(poll, 5_000)
@@ -432,6 +439,7 @@ export default function TournamentDetailClient({
 		lifecycleT,
 		online,
 		polledInsightsReadyAt,
+		polledRepairExhausted,
 		polledSetupStatus,
 		polledTournamentId,
 		router,

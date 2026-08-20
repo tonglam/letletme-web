@@ -287,7 +287,10 @@ export function useTournamentStats({
 			insightsReady ||
 			!isTournamentSetupPollingPending(
 				selectedTournament.setupStatus,
-				selectedTournament.insightsReadyAt
+				selectedTournament.insightsReadyAt,
+				selectedTournament.warningSummaries?.some(
+					summary => summary.repairExhausted === true
+				)
 			)
 		) {
 			return

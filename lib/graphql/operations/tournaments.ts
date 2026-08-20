@@ -47,7 +47,7 @@ export const TOURNAMENT_INFO_FIELDS = `
     profilesReadyAt
     insightsReadyAt
     setupHasWarnings
-    warningSummaries { category affectedCount }
+    warningSummaries { category affectedCount repairExhausted }
     setupStartedAt
     setupFinishedAt
     createdAt
@@ -92,7 +92,7 @@ export const GET_ENTRY_TOURNAMENTS_LIST = `
       profilesReadyAt
       insightsReadyAt
       setupHasWarnings
-      warningSummaries { category affectedCount }
+      warningSummaries { category affectedCount repairExhausted }
       updatedAt
     }
   }
@@ -117,6 +117,7 @@ export type TournamentSetupWarningCategory = 'PROFILES' | 'INSIGHTS' | 'RESULTS'
 export interface TournamentSetupWarningSummary {
 	category: TournamentSetupWarningCategory
 	affectedCount: number
+	repairExhausted?: boolean
 }
 
 export interface EntryTournament {
@@ -240,7 +241,7 @@ export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_INFO_FIELDS}
       tournament { ...TournamentInfoFields }
       unavailableSections
       participants { entryId entryName playerName }
-		setup { status phase completedUnits totalUnits hasWarnings progressMode attempt maxAttempts nextRetryAt warningSummaries { category affectedCount } }
+		setup { status phase completedUnits totalUnits hasWarnings progressMode attempt maxAttempts nextRetryAt warningSummaries { category affectedCount repairExhausted } }
       officialH2H {
         eventId
         awaitingSchedule
@@ -331,7 +332,7 @@ export interface ManagedTournamentResponse {
 export const GET_MANAGED_TOURNAMENT_STATUS = `
   query GetManagedTournamentStatus($tournamentId: Int!, $entryId: Int!) {
     managedTournamentStatus(tournamentId: $tournamentId, entryId: $entryId) {
-	      revision state setupStatus setupPhase rosterSyncStatus setupCompletedUnits setupTotalUnits setupProgressMode setupAttempt setupMaxAttempts nextRetryAt standingsReadyAt profilesReadyAt insightsReadyAt setupHasWarnings warningSummaries { category affectedCount } issues { issueKey code diagnosticCode category severity eventId affectedEntryIds affectedCount repairAttempts nextRepairAt repairExhausted } updatedAt
+	      revision state setupStatus setupPhase rosterSyncStatus setupCompletedUnits setupTotalUnits setupProgressMode setupAttempt setupMaxAttempts nextRetryAt standingsReadyAt profilesReadyAt insightsReadyAt setupHasWarnings warningSummaries { category affectedCount repairExhausted } issues { issueKey code diagnosticCode category severity eventId affectedEntryIds affectedCount repairAttempts nextRepairAt repairExhausted } updatedAt
     }
   }
 `

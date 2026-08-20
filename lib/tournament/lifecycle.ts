@@ -59,6 +59,7 @@ export const getTournamentLifecycleBadge = (
 		| 'rosterSyncStatus'
 		| 'setupStatus'
 		| 'standingsReadyAt'
+		| 'insightsReadyAt'
 		| 'setupHasWarnings'
 		| 'warningSummaries'
 	>
@@ -79,6 +80,7 @@ export const getTournamentLifecycleBadge = (
 	) {
 		return 'readyWithWarnings'
 	}
+	if (!tournament.insightsReadyAt) return 'standingsReady'
 	return 'ready'
 }
 
@@ -99,18 +101,20 @@ export const areTournamentStandingsReady = (
 export const shouldPollTournamentSetup = ({
 	setupStatus,
 	insightsReadyAt,
+	repairExhausted = false,
 	visible,
 	online
 }: {
 	setupStatus: TournamentSetupStatus
 	insightsReadyAt: string | null | undefined
+	repairExhausted?: boolean
 	visible: boolean
 	online: boolean
 }): boolean =>
 	visible &&
 	online &&
 	(isTournamentSetupInFlight(setupStatus) ||
-		(setupStatus === 'READY' && !insightsReadyAt))
+		(setupStatus === 'READY' && !insightsReadyAt && !repairExhausted))
 
 export const isTournamentSetupInFlight = (
 	status: TournamentSetupStatus
@@ -118,10 +122,11 @@ export const isTournamentSetupInFlight = (
 
 export const isTournamentSetupPollingPending = (
 	setupStatus: TournamentSetupStatus,
-	insightsReadyAt: string | null | undefined
+	insightsReadyAt: string | null | undefined,
+	repairExhausted = false
 ): boolean =>
 	isTournamentSetupInFlight(setupStatus) ||
-	(setupStatus === 'READY' && !insightsReadyAt)
+	(setupStatus === 'READY' && !insightsReadyAt && !repairExhausted)
 
 export const isTournamentRosterSyncInFlight = (
 	status: TournamentSetupStatus | null
@@ -199,7 +204,8 @@ export const normalizeTournamentSetupStatus = (
 						category: String(
 							item.category
 						).toUpperCase() as TournamentSetupWarningSummary['category'],
-						affectedCount: Number(item.affectedCount)
+						affectedCount: Number(item.affectedCount),
+						repairExhausted: item.repairExhausted === true
 					}))
 			: [],
 		setupStartedAt: optionalString(payload.setupStartedAt),

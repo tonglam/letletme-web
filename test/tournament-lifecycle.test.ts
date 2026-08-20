@@ -23,6 +23,7 @@ const lifecycle = (
 	rosterSyncStatus: 'READY',
 	setupStatus: 'READY',
 	standingsReadyAt: '2026-08-04T00:00:00.000Z',
+	insightsReadyAt: '2026-08-04T00:00:00.000Z',
 	setupHasWarnings: false,
 	...overrides
 })
@@ -63,6 +64,10 @@ describe('tournament lifecycle presentation', () => {
 			'readyWithWarnings'
 		)
 		assert.equal(
+			getTournamentLifecycleBadge(lifecycle({ insightsReadyAt: null })),
+			'standingsReady'
+		)
+		assert.equal(
 			getTournamentLifecycleBadge(lifecycle({ state: 'INACTIVE' })),
 			'paused'
 		)
@@ -98,6 +103,16 @@ describe('tournament lifecycle presentation', () => {
 		)
 		assert.equal(
 			shouldPollTournamentSetup({
+				setupStatus: 'READY',
+				insightsReadyAt: null,
+				repairExhausted: true,
+				visible: true,
+				online: true
+			}),
+			false
+		)
+		assert.equal(
+			shouldPollTournamentSetup({
 				setupStatus: 'PROCESSING',
 				insightsReadyAt: null,
 				visible: false,
@@ -130,6 +145,7 @@ describe('tournament lifecycle presentation', () => {
 		assert.equal(isTournamentSetupInFlight('READY'), false)
 		assert.equal(isTournamentSetupInFlight('FAILED'), false)
 		assert.equal(isTournamentSetupPollingPending('READY', null), true)
+		assert.equal(isTournamentSetupPollingPending('READY', null, true), false)
 		assert.equal(
 			isTournamentSetupPollingPending('READY', '2026-08-04T00:00:00.000Z'),
 			false

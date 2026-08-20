@@ -321,7 +321,8 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 									? t('loading')
 									: selectedTournament.setupStatus === 'FAILED'
 										? lifecycleT('memberFailure')
-										: selectedTournament.warningSummaries?.length
+										: selectedTournament.warningSummaries?.length ||
+											  selectedTournament.setupHasWarnings
 											? lifecycleT('warningSummary')
 											: selectedTournament.standingsReadyAt
 												? lifecycleT('enrichingMessage')

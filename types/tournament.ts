@@ -61,4 +61,5 @@ export interface Tournament {
 	insightsReadyAt?: string | null
 	setupHasWarnings: boolean
 	warningSummaries?: TournamentSetupWarningSummary[]
+	setupRepairExhausted?: boolean
 }

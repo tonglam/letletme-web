@@ -26,7 +26,10 @@ export const mapEntryTournamentToLiveTournament = (
 		standingsReadyAt: tournament.standingsReadyAt,
 		insightsReadyAt: tournament.insightsReadyAt ?? null,
 		setupHasWarnings: tournament.setupHasWarnings,
-		warningSummaries: tournament.warningSummaries ?? []
+		warningSummaries: tournament.warningSummaries ?? [],
+		setupRepairExhausted: (tournament.warningSummaries ?? []).some(
+			summary => summary.repairExhausted === true
+		)
 	}
 }
 
