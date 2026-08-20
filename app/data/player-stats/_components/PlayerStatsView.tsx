@@ -661,9 +661,7 @@ export function PlayerStatsView({
 			: (requestedSection ?? 'fixtures')
 		startTransition(() => {
 			setActiveSection(section)
-			setContextOpen(
-				section === 'history' || section === 'market' || section === 'coverage'
-			)
+			setContextOpen(section === 'market' || section === 'coverage')
 		})
 	}, [hasSeasonStats, player])
 
@@ -708,11 +706,7 @@ export function PlayerStatsView({
 
 	const handleSectionJump = useCallback((section: PlayerStatsSectionId) => {
 		setActiveSection(section)
-		if (
-			section === 'history' ||
-			section === 'market' ||
-			section === 'coverage'
-		) {
+		if (section === 'market' || section === 'coverage') {
 			setContextOpen(true)
 		}
 		scrollToPlayerStatsSection(section)
