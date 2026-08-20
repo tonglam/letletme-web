@@ -2358,7 +2358,6 @@
 	"TournamentManage": {
 		"back": "返回赛事",
 		"eyebrow": "管理",
-		"tournamentNumber": "赛事 #{id}",
 		"manageTitle": "管理 {name}",
 		"settings": "赛事设置",
 		"settingsDescription": "可在此重命名赛事，管理员和赛制结构保持不变。",

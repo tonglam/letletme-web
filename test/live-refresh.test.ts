@@ -7,8 +7,10 @@ import type {
 } from '../lib/graphql/operations/live'
 import { getLiveMatchesSnapshot } from '../lib/live-matches'
 import {
+	canRequestLiveTournamentBoard,
 	LIVE_AUTO_REFRESH_SECONDS,
 	LIVE_EXPLAIN_REFRESH_INTERVAL_MS,
+	isSyntheticScheduledSnapshot,
 	liveRefreshEventIdentityChanged,
 	liveSnapshotNeedsRefresh,
 	shouldPollLiveSnapshot,
@@ -30,6 +32,14 @@ const snapshot = (state: LiveSnapshotStatus['state']): LiveSnapshotStatus => ({
 	publishedAt: '2026-08-04T10:00:00.000Z',
 	checkedAt: '2026-08-04T10:00:00.000Z'
 })
+
+const scheduledTournamentSnapshot: LiveSnapshotStatus = {
+	eventId: 1,
+	revision: 'scheduled-core-17',
+	state: 'SCHEDULED',
+	publishedAt: '2026-08-20T06:08:03.000Z',
+	checkedAt: '2026-08-20T06:08:03.000Z'
+}
 
 describe('live refresh policy', () => {
 	it('polls scheduled and live current events every 15 seconds', () => {
@@ -106,6 +116,19 @@ describe('live refresh policy', () => {
 			}),
 			true
 		)
+	})
+
+	it('does not send a synthetic scheduled tournament revision to the board API', () => {
+		assert.equal(isSyntheticScheduledSnapshot(scheduledTournamentSnapshot), true)
+		assert.equal(
+			canRequestLiveTournamentBoard(scheduledTournamentSnapshot),
+			false
+		)
+		assert.equal(
+			canRequestLiveTournamentBoard(scheduledTournamentSnapshot, '18'),
+			true
+		)
+		assert.equal(canRequestLiveTournamentBoard(snapshot('SCHEDULED')), true)
 	})
 
 	it('throttles explain fan-out to the ten-minute persistence cadence', () => {

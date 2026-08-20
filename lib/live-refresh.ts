@@ -30,6 +30,27 @@ export function liveContextToSnapshot(
 	}
 }
 
+/**
+ * Tournament detail uses a synthetic revision while the next event has no
+ * live publication yet. It is safe to probe for a real publication, but it
+ * must never be sent to the live board endpoint as if it were a live revision.
+ */
+export function isSyntheticScheduledSnapshot(
+	snapshot?: LiveSnapshotStatus | null
+): boolean {
+	return Boolean(
+		snapshot?.state === 'SCHEDULED' && snapshot.revision.startsWith('scheduled-')
+	)
+}
+
+export function canRequestLiveTournamentBoard(
+	snapshot: LiveSnapshotStatus | null | undefined,
+	nextRevision?: string | null
+): boolean {
+	if (!isSyntheticScheduledSnapshot(snapshot)) return true
+	return Boolean(nextRevision && !nextRevision.startsWith('scheduled-'))
+}
+
 export function shouldPollLiveSnapshot({
 	isPageActive,
 	currentEventId,

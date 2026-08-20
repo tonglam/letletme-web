@@ -31,6 +31,8 @@ import {
 	type TournamentParticipant
 } from '@/lib/graphql/operations/tournaments'
 import {
+	canRequestLiveTournamentBoard,
+	isSyntheticScheduledSnapshot,
 	liveSnapshotNeedsRefresh,
 	liveContextToSnapshot,
 	shouldPollLiveSnapshot
@@ -438,6 +440,9 @@ export default function TournamentDetailClient({
 			) {
 				return Promise.resolve()
 			}
+			if (!canRequestLiveTournamentBoard(snapshotRef.current, revision)) {
+				return Promise.resolve()
+			}
 			if (refreshInFlightRef.current) return refreshInFlightRef.current
 			refreshGenerationRef.current += 1
 
@@ -566,6 +571,13 @@ export default function TournamentDetailClient({
 				)
 				if (generation !== refreshGenerationRef.current) return
 				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
+				if (
+					!observedSnapshot &&
+					isSyntheticScheduledSnapshot(snapshotRef.current)
+				) {
+					if (failedEntryCountRef.current === 0) setError(null)
+					return
+				}
 				if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
 					acceptSnapshot(observedSnapshot)
 					if (failedEntryCountRef.current === 0) setError(null)
