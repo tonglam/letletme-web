@@ -140,6 +140,11 @@ jobs:
         env:
           DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
           PLAYWRIGHT_USE_EXISTING_BUILD: '1'
+      - name: Live match hydration E2E
+        run: npm run test:e2e:hydration
+        env:
+          DATABASE_URL: ${{ env.WEB_RUNTIME_DATABASE_URL }}
+          PLAYWRIGHT_USE_EXISTING_BUILD: '1'
       - name: Maintenance E2E
         run: npx playwright test e2e/maintenance-mode.spec.ts
         env:
@@ -156,3 +161,28 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Read pinned GraphQL contract
+        id: graphql-contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref=$(tr -d '[:space:]' < .github/graphql-contract-ref)
+          [[ "$ref" =~ ^[0-9a-f]{40}$ ]]
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - name: Checkout GraphQL contract
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          repository: tonglam/letletme-graphql
+          ref: ${{ steps.graphql-contract.outputs.ref }}
+          path: graphql-contract
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.14
+      - name: Install GraphQL contract dependencies
+        working-directory: graphql-contract
+        run: bun install --frozen-lockfile
+      - name: Validate GraphQL operations against the pinned schema
+        env:
+          GRAPHQL_SCHEMA_MODULE: ${{ github.workspace }}/graphql-contract/src/graphql/schema.ts
+        run: npm run contract:graphql
