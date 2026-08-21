@@ -2,19 +2,20 @@ import type { Session } from '@/lib/auth'
 import { PayloadTooLargeError, readBoundedJson } from '@/lib/http-security'
 import {
 	TournamentApiConfigurationError,
-	tournamentApiFetch,
+	tournamentApiFetch
 } from '@/lib/tournament/backend-client'
 import {
 	buildAuthoritativeTournamentDelete,
 	buildAuthoritativeTournamentAction,
 	buildAuthoritativeTournamentRename,
 	InvalidTournamentManagementPayloadError,
-	isTrustedTournamentMutationRequest,
+	isTrustedTournamentMutationRequest
 } from '@/lib/tournament/management-security'
 import { NextResponse } from 'next/server'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getPublicErrorMessage } from '@/lib/safe-errors'
 import { sanitizeTournamentApiErrorPayload } from '@/lib/tournament/public-response'
+import { isPlatformAdminIdentity } from '@/lib/platform-admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,15 +35,21 @@ type VerifiedSession = Session & {
 const errorResponse = (error: string, status: number) =>
 	NextResponse.json({ success: false, error }, { status })
 
-const getTournamentId = async (context: RouteContext): Promise<number | null> => {
+const getTournamentId = async (
+	context: RouteContext
+): Promise<number | null> => {
 	const { id } = await context.params
 	if (!/^\d+$/.test(id)) return null
 
 	const tournamentId = Number(id)
-	return Number.isSafeInteger(tournamentId) && tournamentId > 0 ? tournamentId : null
+	return Number.isSafeInteger(tournamentId) && tournamentId > 0
+		? tournamentId
+		: null
 }
 
-const getMutationSession = async (request: Request): Promise<VerifiedSession | NextResponse> => {
+const getMutationSession = async (
+	request: Request
+): Promise<VerifiedSession | NextResponse> => {
 	if (!isTrustedTournamentMutationRequest(request.url, request.headers)) {
 		return errorResponse('Cross-site request rejected', 403)
 	}
@@ -62,14 +69,19 @@ const getMutationSession = async (request: Request): Promise<VerifiedSession | N
 	return session as VerifiedSession
 }
 
-const isResponse = (value: VerifiedSession | NextResponse): value is NextResponse =>
-	value instanceof Response
+const isResponse = (
+	value: VerifiedSession | NextResponse
+): value is NextResponse => value instanceof Response
 
 const proxyResponse = async (response: Response): Promise<NextResponse> => {
 	if (response.status === 204) return new NextResponse(null, { status: 204 })
 
 	const text = await response.text()
-	if (!text) return NextResponse.json({ success: response.ok }, { status: response.status })
+	if (!text)
+		return NextResponse.json(
+			{ success: response.ok },
+			{ status: response.status }
+		)
 
 	try {
 		const payload = JSON.parse(text)
@@ -81,8 +93,10 @@ const proxyResponse = async (response: Response): Promise<NextResponse> => {
 		)
 	} catch {
 		return errorResponse(
-			response.ok ? 'Tournament service returned an invalid response' : 'Tournament request failed',
-			response.ok ? 502 : response.status,
+			response.ok
+				? 'Tournament service returned an invalid response'
+				: 'Tournament request failed',
+			response.ok ? 502 : response.status
 		)
 	}
 }
@@ -105,24 +119,31 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 	try {
 		const body = await readBoundedJson(request, MAX_UPDATE_BODY_BYTES)
-		const payload = buildAuthoritativeTournamentRename(body, session.user.fplEntryId)
+		const platformAdmin = isPlatformAdminIdentity(session.user)
+		const payload = buildAuthoritativeTournamentRename(
+			body,
+			session.user.fplEntryId,
+			platformAdmin
+		)
 
 		const response = await tournamentApiFetch(
 			`/tournaments/${tournamentId}`,
 			{
 				method: 'PATCH',
-				body: JSON.stringify(payload),
+				body: JSON.stringify(payload)
 			},
-			request,
+			request
 		)
 		return proxyResponse(response)
 	} catch (error) {
-		if (error instanceof PayloadTooLargeError) return errorResponse('Payload too large', 413)
-		if (error instanceof SyntaxError) return errorResponse('Invalid JSON body', 400)
+		if (error instanceof PayloadTooLargeError)
+			return errorResponse('Payload too large', 413)
+		if (error instanceof SyntaxError)
+			return errorResponse('Invalid JSON body', 400)
 		if (error instanceof InvalidTournamentManagementPayloadError) {
 			return errorResponse(
 				getPublicErrorMessage(error, 'Invalid tournament request'),
-				400,
+				400
 			)
 		}
 		return handleBackendError(error)
@@ -137,13 +158,19 @@ export async function DELETE(request: Request, context: RouteContext) {
 	if (isResponse(session)) return session
 
 	try {
+		const platformAdmin = isPlatformAdminIdentity(session.user)
 		const response = await tournamentApiFetch(
 			`/tournaments/${tournamentId}`,
 			{
 				method: 'DELETE',
-				body: JSON.stringify(buildAuthoritativeTournamentDelete(session.user.fplEntryId)),
+				body: JSON.stringify(
+					buildAuthoritativeTournamentDelete(
+						session.user.fplEntryId,
+						platformAdmin
+					)
+				)
 			},
-			request,
+			request
 		)
 		return proxyResponse(response)
 	} catch (error) {
@@ -160,41 +187,63 @@ export async function POST(request: Request, context: RouteContext) {
 
 	try {
 		const body = await readBoundedJson(request, MAX_UPDATE_BODY_BYTES)
-		const { action, adminEntryId } = buildAuthoritativeTournamentAction(
-			body,
-			session.user.fplEntryId,
-		)
-		const target = action === 'retry_setup'
-			? { path: 'setup', method: 'POST', payload: { adminEntryId } }
-			: action === 'retry_roster'
-				? { path: 'roster-sync', method: 'POST', payload: { adminEntryId } }
-				: action === 'enable_official_sync'
+		const hasPlatformAdminAccess = isPlatformAdminIdentity(session.user)
+		const { action, adminEntryId, platformAdmin } =
+			buildAuthoritativeTournamentAction(
+				body,
+				session.user.fplEntryId,
+				hasPlatformAdminAccess
+			)
+		const target =
+			action === 'retry_setup'
+				? {
+						path: 'setup',
+						method: 'POST',
+						payload: { adminEntryId, platformAdmin }
+					}
+				: action === 'retry_roster'
 					? {
-						path: 'roster-mode',
-						method: 'PATCH',
-						payload: { adminEntryId, rosterMode: 'official_sync' },
-					}
-					: {
-						path: 'state',
-						method: 'PATCH',
-						payload: { adminEntryId, state: action === 'pause' ? 'inactive' : 'active' },
-					}
+							path: 'roster-sync',
+							method: 'POST',
+							payload: { adminEntryId, platformAdmin }
+						}
+					: action === 'enable_official_sync'
+						? {
+								path: 'roster-mode',
+								method: 'PATCH',
+								payload: {
+									adminEntryId,
+									platformAdmin,
+									rosterMode: 'official_sync'
+								}
+							}
+						: {
+								path: 'state',
+								method: 'PATCH',
+								payload: {
+									adminEntryId,
+									platformAdmin,
+									state: action === 'pause' ? 'inactive' : 'active'
+								}
+							}
 		const response = await tournamentApiFetch(
 			`/tournaments/${tournamentId}/${target.path}`,
 			{
 				method: target.method,
-				body: JSON.stringify(target.payload),
+				body: JSON.stringify(target.payload)
 			},
-			request,
+			request
 		)
 		return proxyResponse(response)
 	} catch (error) {
-		if (error instanceof PayloadTooLargeError) return errorResponse('Payload too large', 413)
-		if (error instanceof SyntaxError) return errorResponse('Invalid JSON body', 400)
+		if (error instanceof PayloadTooLargeError)
+			return errorResponse('Payload too large', 413)
+		if (error instanceof SyntaxError)
+			return errorResponse('Invalid JSON body', 400)
 		if (error instanceof InvalidTournamentManagementPayloadError) {
 			return errorResponse(
 				getPublicErrorMessage(error, 'Invalid tournament request'),
-				400,
+				400
 			)
 		}
 		return handleBackendError(error)

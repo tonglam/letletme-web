@@ -9,7 +9,11 @@ export class InvalidTournamentPayloadError extends PublicError {
 
 export function buildAuthoritativeTournamentPayload(
 	body: unknown,
-	user: { fplEntryId: number; name?: string | null }
+	user: {
+		fplEntryId: number
+		name?: string | null
+		platformAdmin?: boolean | null
+	}
 ): Record<string, unknown> {
 	if (!body || typeof body !== 'object' || Array.isArray(body)) {
 		throw new InvalidTournamentPayloadError()
@@ -100,6 +104,7 @@ export function buildAuthoritativeTournamentPayload(
 			knockoutFormat: 'none',
 			adminId: String(user.fplEntryId),
 			creator,
+			platformAdmin: user.platformAdmin === true,
 			...(typeof browserPayload.previewToken === 'string'
 				? { previewToken: browserPayload.previewToken }
 				: {})
@@ -120,6 +125,7 @@ export function buildAuthoritativeTournamentPayload(
 		// Identity is server-owned. Browser values with the same names are always
 		// overwritten before the command crosses the trust boundary.
 		adminId: String(user.fplEntryId),
-		creator
+		creator,
+		platformAdmin: user.platformAdmin === true
 	}
 }
