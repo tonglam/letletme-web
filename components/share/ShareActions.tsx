@@ -15,10 +15,6 @@ import { ShareTextFallback } from './ShareTextFallback'
 
 type ShareTextValue = string | (() => string)
 
-function successResult(result: ShareResult): boolean {
-	return result === 'shared' || result === 'copied'
-}
-
 export function ShareActions({
 	text,
 	imageRef,
@@ -56,7 +52,14 @@ export function ShareActions({
 	const handleTextShare = useCallback(async () => {
 		const value = resolveText()
 		const result = await shareText(value, { title })
-		if (successResult(result)) {
+		if (result === 'shared') {
+			setManualShareText(null)
+			setTextShared(true)
+			toast.success(t('shareTextShared'))
+			window.setTimeout(() => setTextShared(false), 2000)
+			return
+		}
+		if (result === 'copied') {
 			setManualShareText(null)
 			setTextShared(true)
 			toast.success(t('shareTextCopied'))
@@ -74,9 +77,14 @@ export function ShareActions({
 		if (!element || imageShareInFlight.current) return
 		imageShareInFlight.current = true
 		try {
-			const value = resolveText()
-			const result = await shareElementImage(element, { title, text: value })
-			if (successResult(result)) {
+			const result = await shareElementImage(element)
+			if (result === 'shared') {
+				setImageShared(true)
+				toast.success(t('shareImageShared'))
+				window.setTimeout(() => setImageShared(false), 2000)
+				return
+			}
+			if (result === 'copied') {
 				setImageShared(true)
 				toast.success(t('shareImageCopied'))
 				window.setTimeout(() => setImageShared(false), 2000)
@@ -86,7 +94,7 @@ export function ShareActions({
 		} finally {
 			imageShareInFlight.current = false
 		}
-	}, [imageRef, reportFailure, resolveText, t, title])
+	}, [imageRef, reportFailure, t, title])
 
 	return (
 		<div className={className ?? 'flex flex-wrap items-center gap-2'}>

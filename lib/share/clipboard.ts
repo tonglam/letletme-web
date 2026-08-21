@@ -52,7 +52,6 @@ export async function copyElementImageToClipboard(
  */
 export async function shareElementImage(
 	element: HTMLElement,
-	options: { title?: string; text?: string } = {}
 ): Promise<ShareResult> {
 	if (typeof navigator === 'undefined') return 'unsupported'
 
@@ -65,13 +64,17 @@ export async function shareElementImage(
 				type: 'image/png'
 			})
 			const shareData: ShareData = {
-				title: options.title,
-				text: options.text,
 				files: [file]
 			}
 			if (!navigator.canShare || navigator.canShare(shareData)) {
-				await navigator.share(shareData)
-				return 'shared'
+				try {
+					await navigator.share(shareData)
+					return 'shared'
+				} catch {
+					// The native share may have consumed the user activation. Do not
+					// attempt a clipboard write after a rejected native share.
+					return 'failed'
+				}
 			}
 		}
 
@@ -93,8 +96,14 @@ export async function shareText(
 	if (typeof navigator === 'undefined') return 'unsupported'
 	try {
 		if (typeof navigator.share === 'function') {
-			await navigator.share({ title: options.title, text })
-			return 'shared'
+			try {
+				await navigator.share({ title: options.title, text })
+				return 'shared'
+			} catch {
+				// The native share may have consumed the user activation. Return a
+				// failure so the UI can expose its manual-copy fallback instead.
+				return 'failed'
+			}
 		}
 		return copyTextToClipboard(text)
 	} catch {
