@@ -204,7 +204,8 @@ describe('production GraphQL envelope contract', () => {
 			},
 			SECRET,
 			1_700_000_000,
-			'6953, 15702'
+			'6953, 15702',
+			'platform-admin'
 		)
 		const verifiedPayload = JSON.parse(
 			Buffer.from(verified['X-User-Context'], 'base64url').toString('utf8')
@@ -219,7 +220,8 @@ describe('production GraphQL envelope contract', () => {
 			},
 			SECRET,
 			1_700_000_000,
-			'6953'
+			'6953',
+			'platform-admin'
 		)
 		const unverifiedPayload = JSON.parse(
 			Buffer.from(unverified['X-User-Context'], 'base64url').toString('utf8')

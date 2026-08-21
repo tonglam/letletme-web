@@ -11,7 +11,8 @@ export function buildGraphQLUserContextHeaders(
 	user: GraphQLIdentity,
 	secret: string,
 	nowSeconds = Math.floor(Date.now() / 1000),
-	platformAdminConfig = process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS
+	platformAdminEntryConfig = process.env.PLATFORM_ADMIN_FPL_ENTRY_IDS,
+	platformAdminUserConfig = process.env.PLATFORM_ADMIN_USER_IDS
 ): Record<string, string> {
 	const verifiedAtCandidate = user.fplEntryVerifiedAt
 		? new Date(user.fplEntryVerifiedAt)
@@ -34,7 +35,13 @@ export function buildGraphQLUserContextHeaders(
 		evat: verifiedAt,
 		// The role is server-managed and covered by the same short-lived HMAC as
 		// the verified FPL binding. Never infer it from a browser payload.
-		adm: entryId !== null && isPlatformAdminIdentity(user, platformAdminConfig),
+		adm:
+			entryId !== null &&
+			isPlatformAdminIdentity(
+				user,
+				platformAdminEntryConfig,
+				platformAdminUserConfig
+			),
 		iat: nowSeconds,
 		exp: nowSeconds + 60
 	}
