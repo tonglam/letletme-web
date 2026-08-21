@@ -1,12 +1,13 @@
 import { createHash, createHmac, timingSafeEqual } from 'crypto'
 
-export class MiniProgramAuthError extends Error {
+import { PublicError } from '@/lib/safe-errors'
+
+export class MiniProgramAuthError extends PublicError {
 	status: number
 	retryAfterSeconds?: number
 
 	constructor(message: string, status = 400, retryAfterSeconds?: number) {
-		super(message)
-		this.name = 'MiniProgramAuthError'
+		super(message, 'MiniProgramAuthError')
 		this.status = status
 		this.retryAfterSeconds = retryAfterSeconds
 	}

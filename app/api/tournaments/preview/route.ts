@@ -8,6 +8,7 @@ import {
 } from '@/lib/http-security'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { tournamentApiFetch } from '@/lib/tournament/backend-client'
+import { sanitizeTournamentApiErrorPayload } from '@/lib/tournament/public-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,7 +82,10 @@ export async function POST(request: Request) {
 			unknown
 		>
 		if (!response.ok)
-			return NextResponse.json(result, { status: response.status })
+			return NextResponse.json(
+				sanitizeTournamentApiErrorPayload(result, response.status),
+				{ status: response.status }
+			)
 		const league =
 			result.league && typeof result.league === 'object'
 				? (result.league as Record<string, unknown>)

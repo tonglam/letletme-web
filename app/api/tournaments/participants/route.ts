@@ -56,8 +56,13 @@ export async function GET(request: Request) {
     const result = await fetchLeagueParticipants(leagueUrl);
     return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Failed to fetch tournament participants.';
-    return NextResponse.json({ error: message }, { status: 400 });
+    console.error(
+      '[tournament participants] preview failed:',
+      error instanceof Error ? error.name : 'UnknownError',
+    );
+    return NextResponse.json(
+      { error: 'League participants could not be loaded.' },
+      { status: 502 },
+    );
   }
 }

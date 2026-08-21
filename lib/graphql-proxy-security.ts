@@ -1,3 +1,5 @@
+import { publicGraphQLRequestMessage } from '@/lib/safe-errors'
+
 export type ForwardableAuthorization =
 	| { ok: true; value: string | null }
 	| { ok: false };
@@ -41,4 +43,103 @@ export function copySafeGraphQLUpstreamHeaders(
 		const value = upstream.get(name)
 		if (value) target.set(name, value)
 	}
+}
+
+const SAFE_GRAPHQL_ERROR_CODES = new Set([
+	'BAD_USER_INPUT',
+	'FORBIDDEN',
+	'GRAPHQL_PARSE_FAILED',
+	'GRAPHQL_VALIDATION_FAILED',
+	'INTERNAL_SERVER_ERROR',
+	'LIVE_REVISION_GONE',
+	'NOT_FOUND',
+	'RATE_LIMITED',
+	'UNAUTHENTICATED',
+])
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	typeof value === 'object' && value !== null && !Array.isArray(value)
+
+function publicGraphQLErrorCode(status: number, value: unknown): string {
+	const candidate =
+		isRecord(value) && isRecord(value.extensions) &&
+		typeof value.extensions.code === 'string'
+			? value.extensions.code
+			: null
+	if (candidate && SAFE_GRAPHQL_ERROR_CODES.has(candidate)) return candidate
+	if (status === 400) return 'BAD_USER_INPUT'
+	if (status === 401) return 'UNAUTHENTICATED'
+	if (status === 403) return 'FORBIDDEN'
+	if (status === 404) return 'NOT_FOUND'
+	if (status === 429) return 'RATE_LIMITED'
+	return 'UPSTREAM_GRAPHQL_ERROR'
+}
+
+function publicGraphQLRequestCode(status: number): string {
+	if (status === 400) return 'BAD_USER_INPUT'
+	if (status === 401) return 'UNAUTHENTICATED'
+	if (status === 403) return 'FORBIDDEN'
+	if (status === 404) return 'NOT_FOUND'
+	if (status === 429) return 'RATE_LIMITED'
+	return 'UPSTREAM_GRAPHQL_ERROR'
+}
+
+/**
+ * GraphQL resolver errors are untrusted upstream content. Keep only the
+ * public error contract and an allowlisted code before returning a response
+ * to a browser. Data is retained for partial GraphQL responses, but paths,
+ * extensions, stacks, and resolver/database messages are never proxied.
+ */
+export function sanitizeGraphQLUpstreamBody(body: string, status: number): string {
+	let parsed: unknown
+	try {
+		parsed = JSON.parse(body)
+	} catch {
+		return JSON.stringify({
+			errors: [
+				{
+					message: publicGraphQLRequestMessage(status, null),
+					extensions: { code: publicGraphQLRequestCode(status) },
+				}
+			]
+		})
+	}
+
+	if (!isRecord(parsed)) {
+		return JSON.stringify({
+			errors: [
+			{
+				message: publicGraphQLRequestMessage(status, null),
+				extensions: { code: publicGraphQLRequestCode(status) },
+			}
+		]
+	})
+	}
+
+	const rawErrors = parsed.errors
+	if (Array.isArray(rawErrors) && rawErrors.length > 0) {
+		return JSON.stringify({
+			...parsed,
+			errors: rawErrors.map(error => {
+				const code = publicGraphQLErrorCode(status, error)
+				return {
+					message: publicGraphQLRequestMessage(status, code),
+					extensions: { code },
+				}
+			}),
+		})
+	}
+
+	if (status < 200 || status >= 300) {
+		return JSON.stringify({
+			errors: [
+			{
+				message: publicGraphQLRequestMessage(status, null),
+				extensions: { code: publicGraphQLRequestCode(status) },
+			}
+		]
+		})
+	}
+
+	return body
 }

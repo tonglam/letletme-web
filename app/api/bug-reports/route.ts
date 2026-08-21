@@ -13,6 +13,7 @@ import {
 	takeAnonymousReportId
 } from '@/lib/bug-report-submit'
 import { markPrivateNoStore } from '@/lib/private-no-store'
+import { getPublicErrorMessage } from '@/lib/safe-errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,7 +90,10 @@ export async function POST(request: Request) {
 			if (error.retryAfterSeconds)
 				headers.set('Retry-After', String(error.retryAfterSeconds))
 			return jsonResponse(
-				{ success: false, error: error.message },
+				{
+					success: false,
+					error: getPublicErrorMessage(error, 'Could not send the report.')
+				},
 				{ status: error.status, headers },
 				anonymous.setCookie
 			)

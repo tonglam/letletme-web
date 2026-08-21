@@ -9,6 +9,7 @@ import {
 	readBoundedJson,
 } from '@/lib/http-security'
 import { MiniProgramAuthError } from '@/lib/miniprogram-account-core'
+import { getPublicErrorMessage } from '@/lib/safe-errors'
 
 const MAX_AUTH_BODY_BYTES = 16 * 1024
 
@@ -90,7 +91,7 @@ export async function enforceMiniProgramRateLimits({
 
 export function miniProgramErrorResponse(error: unknown, fallback: string): Response {
 	const status = error instanceof MiniProgramAuthError ? error.status : 500
-	const message = error instanceof MiniProgramAuthError ? error.message : fallback
+	const message = getPublicErrorMessage(error, fallback)
 	if (!(error instanceof MiniProgramAuthError)) console.error(`[mini auth] ${fallback}:`, error)
 	const headers = new Headers({ 'Cache-Control': 'no-store' })
 	if (error instanceof MiniProgramAuthError && error.retryAfterSeconds) {

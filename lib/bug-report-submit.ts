@@ -2,6 +2,7 @@ import 'server-only'
 
 import { createHmac, randomBytes, randomUUID } from 'crypto'
 
+import { PublicError } from '@/lib/safe-errors'
 import { tournamentApiFetch } from '@/lib/tournament/backend-client'
 import {
 	BUG_REPORT_BODY_MAX,
@@ -22,15 +23,13 @@ import {
 	canCleanupBugReportScreenshotAfterDataAttempts,
 	type BugReportDataAttemptOutcome,
 } from '@/lib/bug-report-retry'
-
-export class BugReportSubmitError extends Error {
+export class BugReportSubmitError extends PublicError {
 	constructor(
 		message: string,
 		readonly status: number,
 		readonly retryAfterSeconds?: number
 	) {
-		super(message)
-		this.name = 'BugReportSubmitError'
+		super(message, 'BugReportSubmitError')
 	}
 }
 
@@ -296,7 +295,6 @@ export async function submitBugReportToData({
 				const result = (await response.json()) as {
 					success?: boolean
 					publicId?: string
-					error?: string
 				}
 				if (response.ok && result.success && typeof result.publicId === 'string') {
 					dataAttemptOutcomes.push('success')
@@ -308,7 +306,11 @@ export async function submitBugReportToData({
 					dataAttemptOutcomes.push('ambiguous')
 				}
 				lastStatus = response.status >= 400 ? response.status : 502
-				lastMessage = result.error || lastMessage
+				// The Data API response is an untrusted service boundary. Do not copy
+				// its error text into a browser-facing response.
+				lastMessage = response.status === 429
+					? 'Too many reports just now. Please try again later.'
+					: lastMessage
 				if (response.status < 500 || attempt === 1) break
 			} catch (error) {
 				dataAttemptOutcomes.push('ambiguous')

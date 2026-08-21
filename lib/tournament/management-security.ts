@@ -1,9 +1,9 @@
 import { isTrustedSameSiteRequest } from '@/lib/request-origin'
+import { PublicError } from '@/lib/safe-errors'
 
-export class InvalidTournamentManagementPayloadError extends Error {
+export class InvalidTournamentManagementPayloadError extends PublicError {
 	constructor(message: string) {
-		super(message)
-		this.name = 'InvalidTournamentManagementPayloadError'
+		super(message, 'InvalidTournamentManagementPayloadError')
 	}
 }
 

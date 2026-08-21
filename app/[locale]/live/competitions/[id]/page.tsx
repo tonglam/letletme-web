@@ -113,10 +113,13 @@ export default async function Page({ params, searchParams }: PageProps) {
 			if (kind === 'no_access') {
 				console.warn(
 					'[tournament detail] No access:',
-					error instanceof Error ? error.message : error
+					error instanceof Error ? error.name : 'UnknownError'
 				)
 			} else {
-				console.error('[tournament detail] Failed to load:', error)
+				console.error(
+					'[tournament detail] Failed to load:',
+					error instanceof Error ? error.name : 'UnknownError'
+				)
 			}
 			loadError = kind
 			tournament = null

@@ -13,6 +13,8 @@ import {
 } from '@/lib/tournament/management-security'
 import { NextResponse } from 'next/server'
 import { getVerifiedEntryContext } from '@/lib/session'
+import { getPublicErrorMessage } from '@/lib/safe-errors'
+import { sanitizeTournamentApiErrorPayload } from '@/lib/tournament/public-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,7 +72,13 @@ const proxyResponse = async (response: Response): Promise<NextResponse> => {
 	if (!text) return NextResponse.json({ success: response.ok }, { status: response.status })
 
 	try {
-		return NextResponse.json(JSON.parse(text), { status: response.status })
+		const payload = JSON.parse(text)
+		return NextResponse.json(
+			response.ok
+				? payload
+				: sanitizeTournamentApiErrorPayload(payload, response.status),
+			{ status: response.status }
+		)
 	} catch {
 		return errorResponse(
 			response.ok ? 'Tournament service returned an invalid response' : 'Tournament request failed',
@@ -112,7 +120,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 		if (error instanceof PayloadTooLargeError) return errorResponse('Payload too large', 413)
 		if (error instanceof SyntaxError) return errorResponse('Invalid JSON body', 400)
 		if (error instanceof InvalidTournamentManagementPayloadError) {
-			return errorResponse(error.message, 400)
+			return errorResponse(
+				getPublicErrorMessage(error, 'Invalid tournament request'),
+				400,
+			)
 		}
 		return handleBackendError(error)
 	}
@@ -181,7 +192,10 @@ export async function POST(request: Request, context: RouteContext) {
 		if (error instanceof PayloadTooLargeError) return errorResponse('Payload too large', 413)
 		if (error instanceof SyntaxError) return errorResponse('Invalid JSON body', 400)
 		if (error instanceof InvalidTournamentManagementPayloadError) {
-			return errorResponse(error.message, 400)
+			return errorResponse(
+				getPublicErrorMessage(error, 'Invalid tournament request'),
+				400,
+			)
 		}
 		return handleBackendError(error)
 	}

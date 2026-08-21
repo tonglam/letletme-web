@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getAuthorizationSession } from '@/lib/auth';
 import { tournamentApiFetch } from '@/lib/tournament/backend-client';
+import { sanitizeTournamentNameCheckError } from '@/lib/tournament/public-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,8 +38,11 @@ export async function GET(request: Request) {
       request,
     );
 
-    const payload = await response.json();
-    return NextResponse.json(payload, { status: response.status });
+		const payload = await response.json();
+		return NextResponse.json(
+			response.ok ? payload : sanitizeTournamentNameCheckError(response.status),
+			{ status: response.status },
+		);
   } catch (error) {
     console.error('[tournaments] name check failed:', error);
     return NextResponse.json(

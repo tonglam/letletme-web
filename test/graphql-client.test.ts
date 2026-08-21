@@ -172,3 +172,86 @@ test('executeQuery exposes caller cancellation without reporting a timeout', asy
 		globalThis.fetch = originalFetch
 	}
 })
+
+test('browser GraphQL errors never expose upstream resolver details', async () => {
+	const originalFetch = globalThis.fetch
+	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+	const originalWarn = console.warn
+	const originalError = console.error
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: { location: { origin: 'https://letletme.test' } }
+	})
+	console.warn = () => undefined
+	console.error = () => undefined
+	globalThis.fetch = (async () =>
+		Response.json({
+			errors: [
+				{
+					message: 'relation private_table does not exist',
+					extensions: { code: 'INTERNAL_SERVER_ERROR' }
+				}
+			]
+		})) as typeof fetch
+	clearPendingClientQueries()
+
+	try {
+		await assert.rejects(
+			executeQuery('query SecretProbe { privateField }'),
+			(error: unknown) => {
+				assert.ok(error instanceof GraphQLRequestError)
+				assert.equal(error.message, 'The data service is unavailable.')
+				assert.equal(error.code, 'INTERNAL_SERVER_ERROR')
+				assert.doesNotMatch(error.message, /private_table|relation/)
+				return true
+			}
+		)
+	} finally {
+		clearPendingClientQueries()
+		globalThis.fetch = originalFetch
+		console.warn = originalWarn
+		console.error = originalError
+		if (originalWindow) {
+			Object.defineProperty(globalThis, 'window', originalWindow)
+		} else {
+			Reflect.deleteProperty(globalThis, 'window')
+		}
+	}
+})
+
+test('browser network errors use a fixed public message', async () => {
+	const originalFetch = globalThis.fetch
+	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
+	const originalError = console.error
+	Object.defineProperty(globalThis, 'window', {
+		configurable: true,
+		value: { location: { origin: 'https://letletme.test' } }
+	})
+	console.error = () => undefined
+	globalThis.fetch = (async () => {
+		throw new TypeError('Failed to fetch https://internal.example/graphql')
+	}) as typeof fetch
+	clearPendingClientQueries()
+
+	try {
+		await assert.rejects(
+			executeQuery('query NetworkProbe { __typename }'),
+			(error: unknown) => {
+				assert.ok(error instanceof GraphQLRequestError)
+				assert.equal(error.message, 'The data service is unavailable.')
+				assert.equal(error.code, 'NETWORK_ERROR')
+				assert.doesNotMatch(error.message, /Failed to fetch|internal\.example/)
+				return true
+			}
+		)
+	} finally {
+		clearPendingClientQueries()
+		globalThis.fetch = originalFetch
+		console.error = originalError
+		if (originalWindow) {
+			Object.defineProperty(globalThis, 'window', originalWindow)
+		} else {
+			Reflect.deleteProperty(globalThis, 'window')
+		}
+	}
+})

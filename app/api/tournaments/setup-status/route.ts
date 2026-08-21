@@ -8,6 +8,7 @@ import {
   GET_TOURNAMENT_METADATA,
   type TournamentMetadataResponse,
 } from '@/lib/graphql/operations/tournaments';
+import { sanitizeTournamentApiErrorPayload } from '@/lib/tournament/public-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,8 +57,13 @@ export async function GET(request: Request) {
       request,
     );
 
-    const payload = await response.json();
-    return NextResponse.json(payload, { status: response.status });
+		const payload = await response.json();
+		return NextResponse.json(
+			response.ok
+				? payload
+				: sanitizeTournamentApiErrorPayload(payload, response.status),
+			{ status: response.status },
+		);
   } catch (error) {
     console.error('[tournaments] setup status failed:', error);
     return NextResponse.json(

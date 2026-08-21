@@ -1,9 +1,9 @@
+import { PublicError } from '@/lib/safe-errors'
 import { parseLeagueUrl } from './league-url'
 
-export class InvalidTournamentPayloadError extends Error {
+export class InvalidTournamentPayloadError extends PublicError {
 	constructor(message = 'Invalid tournament payload.') {
-		super(message)
-		this.name = 'InvalidTournamentPayloadError'
+		super(message, 'InvalidTournamentPayloadError')
 	}
 }
 
