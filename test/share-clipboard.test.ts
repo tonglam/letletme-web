@@ -49,4 +49,44 @@ describe('shareText', () => {
 			restoreNavigator(previous)
 		}
 	})
+
+	it('falls back to text clipboard when a native share target rejects', async () => {
+		let copied = ''
+		const previous = setNavigator({
+			share: async () => {
+				throw new Error('target rejected')
+			},
+			clipboard: {
+				writeText: async (value: string) => {
+					copied = value
+				}
+			}
+		})
+		try {
+			assert.equal(await shareText('fallback after rejection'), 'copied')
+			assert.equal(copied, 'fallback after rejection')
+		} finally {
+			restoreNavigator(previous)
+		}
+	})
+
+	it('does not copy when the native share sheet is cancelled', async () => {
+		let copied = false
+		const previous = setNavigator({
+			share: async () => {
+				throw { name: 'AbortError' }
+			},
+			clipboard: {
+				writeText: async () => {
+					copied = true
+				}
+			}
+		})
+		try {
+			assert.equal(await shareText('cancelled'), 'cancelled')
+			assert.equal(copied, false)
+		} finally {
+			restoreNavigator(previous)
+		}
+	})
 })
