@@ -283,6 +283,7 @@ export const GET_LIVE_MATCHDAY_DESK = `
         homeScore
         awayScore
         kickoffTime
+        minutes
         started
 			finished
 		}
@@ -296,6 +297,7 @@ export const GET_LIVE_MATCHDAY_DESK = `
 			homeScore
 			awayScore
 			kickoffTime
+			minutes
 			started
 			finished
 		}
@@ -452,6 +454,7 @@ export interface LiveMatchdayDeskRow {
 	homeScore: number | null
 	awayScore: number | null
 	kickoffTime: string | null
+	minutes: number
 	started: boolean
 	finished: boolean
 }
