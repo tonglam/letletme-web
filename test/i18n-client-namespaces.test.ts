@@ -95,4 +95,14 @@ describe('client translation namespace lifecycle', () => {
 			)
 		}
 	})
+
+	it('includes Filters in the live competitions client payload', () => {
+		for (const messages of [en, zh]) {
+			const selected = selectMessages(messages as IntlMessages, [
+				...GLOBAL_CLIENT_NAMESPACES,
+				...ROUTE_CLIENT_NAMESPACES.liveCompetitions
+			])
+			assert.deepEqual(selected.Filters, messages.Filters)
+		}
+	})
 })
