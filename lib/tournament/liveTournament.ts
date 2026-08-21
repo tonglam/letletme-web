@@ -1,4 +1,4 @@
-import { type EntryTournament } from '@/lib/graphql/operations/tournaments'
+import { type LiveEntryTournament } from '@/lib/graphql/operations/tournaments'
 import { type Tournament } from '@/types/tournament'
 import { isTournamentInsightsRepairExhausted } from './lifecycle'
 
@@ -13,7 +13,7 @@ export const mapTournamentGroupFormat = (
 }
 
 export const mapEntryTournamentToLiveTournament = (
-	tournament: EntryTournament
+	tournament: LiveEntryTournament
 ): Tournament => {
 	return {
 		id: String(tournament.id),

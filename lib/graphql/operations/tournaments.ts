@@ -206,6 +206,18 @@ export type EntryTournamentListItem = Pick<
 	| 'updatedAt'
 >
 
+export type LiveEntryTournament = Pick<
+	EntryTournament,
+	| 'id'
+	| 'name'
+	| 'totalTeamNum'
+	| 'setupStatus'
+	| 'standingsReadyAt'
+	| 'insightsReadyAt'
+	| 'setupHasWarnings'
+	| 'warningSummaries'
+>
+
 export interface EntryTournamentsListResponse {
 	entryTournaments: EntryTournamentListItem[]
 }
@@ -629,13 +641,26 @@ export interface TournamentSelectionStatsResponse {
 	tournamentSelectionStats: TournamentSelectionStatsData | null
 }
 
-export const GET_TOURNAMENT_LIVE_DESK = `${TOURNAMENT_INFO_FIELDS}
+export const LIVE_TOURNAMENT_INFO_FIELDS = `
+  fragment LiveTournamentInfoFields on TournamentInfo {
+    id
+    name
+    totalTeamNum
+    setupStatus
+    standingsReadyAt
+    insightsReadyAt
+    setupHasWarnings
+    warningSummaries { category affectedCount repairExhausted }
+  }
+`
+
+export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_TOURNAMENT_INFO_FIELDS}
   query GetEntryLiveCompetitionsDesk($entryId: Int!, $selectedTournamentId: Int, $ref: LiveRevisionRefInput) {
     entryLiveCompetitionsDesk(entryId: $entryId, selectedTournamentId: $selectedTournamentId, ref: $ref) {
       eventId
       revision
       state
-      tournaments { ...TournamentInfoFields }
+      tournaments { ...LiveTournamentInfoFields }
       selectedTournamentId
       partial
       failedEntryIds
@@ -736,7 +761,7 @@ export interface TournamentLivePointsResponse {
 		eventId: number
 		revision: string | null
 		state: string
-		tournaments: EntryTournament[]
+		tournaments: LiveEntryTournament[]
 		selectedTournamentId: number | null
 		partial: boolean
 		failedEntryIds: number[]
