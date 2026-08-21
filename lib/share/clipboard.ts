@@ -1,14 +1,5 @@
 export type ClipboardCopyResult = 'copied' | 'unsupported' | 'failed'
-export type ShareResult = 'shared' | 'cancelled' | ClipboardCopyResult
-
-function isShareCancelled(error: unknown): boolean {
-	return (
-		typeof error === 'object' &&
-		error !== null &&
-		'name' in error &&
-		(error as { name?: unknown }).name === 'AbortError'
-	)
-}
+export type ShareResult = 'shared' | ClipboardCopyResult
 
 export async function copyTextToClipboard(
 	text: string
@@ -61,7 +52,6 @@ export async function copyElementImageToClipboard(
  */
 export async function shareElementImage(
 	element: HTMLElement,
-	options: { title?: string } = {}
 ): Promise<ShareResult> {
 	if (typeof navigator === 'undefined') return 'unsupported'
 
@@ -74,17 +64,16 @@ export async function shareElementImage(
 				type: 'image/png'
 			})
 			const shareData: ShareData = {
-				title: options.title,
 				files: [file]
 			}
 			if (!navigator.canShare || navigator.canShare(shareData)) {
 				try {
 					await navigator.share(shareData)
 					return 'shared'
-				} catch (error) {
-					if (isShareCancelled(error)) return 'cancelled'
-					// Fall through to the image clipboard path when a share target
-					// rejects the native file share.
+				} catch {
+					// The native share may have consumed the user activation. Do not
+					// attempt a clipboard write after a rejected native share.
+					return 'failed'
 				}
 			}
 		}
@@ -110,10 +99,10 @@ export async function shareText(
 			try {
 				await navigator.share({ title: options.title, text })
 				return 'shared'
-			} catch (error) {
-				if (isShareCancelled(error)) return 'cancelled'
-				// Native share targets can reject otherwise valid text. Preserve
-				// the user's content by falling back to a normal clipboard copy.
+			} catch {
+				// The native share may have consumed the user activation. Return a
+				// failure so the UI can expose its manual-copy fallback instead.
+				return 'failed'
 			}
 		}
 		return copyTextToClipboard(text)

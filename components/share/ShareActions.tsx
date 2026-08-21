@@ -77,7 +77,7 @@ export function ShareActions({
 		if (!element || imageShareInFlight.current) return
 		imageShareInFlight.current = true
 		try {
-			const result = await shareElementImage(element, { title })
+			const result = await shareElementImage(element)
 			if (result === 'shared') {
 				setImageShared(true)
 				toast.success(t('shareImageShared'))
