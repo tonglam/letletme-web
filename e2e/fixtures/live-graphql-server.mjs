@@ -1048,6 +1048,7 @@ const server = createServer((request, response) => {
 								homeScore: scheduledMatch.homeScore,
 								awayScore: scheduledMatch.awayScore,
 								kickoffTime: scheduledMatch.kickoffTime,
+								minutes: 0,
 								started: false,
 								finished: false
 							}

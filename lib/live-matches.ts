@@ -59,7 +59,7 @@ export function transformLiveMatches(
 			players: []
 		},
 		status: row.finished ? 'FT' : row.started ? 'LIVE' : 'NOT_STARTED',
-		minute: 0,
+		minute: row.minutes,
 		kickoff: row.kickoffTime ?? '',
 		viewers: 0
 	}))
@@ -75,6 +75,7 @@ export function transformUpcomingFixtures(
 				homeScore: number | null
 				awayScore: number | null
 				kickoffTime: string
+				minutes?: number
 		  }
 	>
 ): Match[] {
@@ -115,7 +116,7 @@ export function transformUpcomingFixtures(
 			players: []
 		},
 		status: 'UPCOMING',
-		minute: 0,
+		minute: fixture.minutes ?? 0,
 		kickoff: fixture.kickoffTime ?? '',
 		viewers: 0
 	}))

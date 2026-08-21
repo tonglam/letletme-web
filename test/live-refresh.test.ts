@@ -119,7 +119,10 @@ describe('live refresh policy', () => {
 	})
 
 	it('does not send a synthetic scheduled tournament revision to the board API', () => {
-		assert.equal(isSyntheticScheduledSnapshot(scheduledTournamentSnapshot), true)
+		assert.equal(
+			isSyntheticScheduledSnapshot(scheduledTournamentSnapshot),
+			true
+		)
 		assert.equal(
 			canRequestLiveTournamentBoard(scheduledTournamentSnapshot),
 			false
@@ -202,6 +205,7 @@ describe('live matches server snapshot', () => {
 						homeScore: null,
 						awayScore: null,
 						kickoffTime: '2026-08-11T18:00:00.000Z',
+						minutes: 0,
 						started: false,
 						finished: false
 					}
@@ -217,12 +221,14 @@ describe('live matches server snapshot', () => {
 		)
 
 		assert.equal(requests.length, 1)
+		assert.match(requests[0]?.query ?? '', /\bminutes\b/)
 		assert.equal(
 			requests.every(request => request.cache === 'no-store'),
 			true
 		)
 		assert.equal(result.matches.length, 1)
 		assert.equal(result.matches[0]?.status, 'UPCOMING')
+		assert.equal(result.matches[0]?.minute, 0)
 		assert.equal(result.snapshot?.revision, 'a'.repeat(24))
 	})
 
@@ -245,6 +251,7 @@ describe('live matches server snapshot', () => {
 						homeScore: 1,
 						awayScore: 0,
 						kickoffTime: '2026-08-11T18:00:00.000Z',
+						minutes: 12,
 						started: true,
 						finished: false
 					}
@@ -259,6 +266,7 @@ describe('live matches server snapshot', () => {
 
 		assert.equal(result.matches.length, 1)
 		assert.equal(result.matches[0]?.status, 'LIVE')
+		assert.equal(result.matches[0]?.minute, 12)
 	})
 
 	it('keeps the caller-provided event identity while merging the desk', async () => {
@@ -288,6 +296,7 @@ describe('live matches server snapshot', () => {
 								homeScore: null,
 								awayScore: null,
 								kickoffTime: '2026-08-11T18:00:00.000Z',
+								minutes: 0,
 								started: false,
 								finished: false
 							}

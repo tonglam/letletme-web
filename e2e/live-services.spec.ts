@@ -336,6 +336,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 						awayTeamName: 'Chelsea',
 						awayScore: 0,
 						kickoffTime: '2026-08-04T19:00:00.000Z',
+						minutes: 12,
 						started: true,
 						finished: false
 					}
