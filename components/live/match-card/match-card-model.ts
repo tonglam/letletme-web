@@ -184,7 +184,11 @@ export function buildBreakdownFromPlayerLive(
 	return rows
 }
 
-export function formatMatchKickoff(kickoff: string, locale: string): string | null {
+export function formatMatchKickoff(
+	kickoff: string,
+	locale: string,
+	useLocalTime = false,
+): string | null {
 	if (!kickoff) return null
 	const date = new Date(kickoff)
 	if (Number.isNaN(date.getTime())) return null
@@ -195,5 +199,6 @@ export function formatMatchKickoff(kickoff: string, locale: string): string | nu
 		hour: '2-digit',
 		minute: '2-digit',
 		hourCycle: 'h23',
+		...(useLocalTime ? {} : { timeZone: 'UTC' }),
 	}).format(date)
 }

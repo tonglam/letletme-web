@@ -4,6 +4,7 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { useHydrated } from '@/hooks/use-hydrated'
 import { teamCrestSrc } from '@/lib/team-crest'
 import type { Match } from '@/types/match'
 import { Activity, Clock, Eye, User } from 'lucide-react'
@@ -158,7 +159,8 @@ function TeamSummary({
 export function MatchHeader({ match }: { match: Match }) {
 	const locale = useLocale()
 	const format = useFormatter()
-	const kickoff = formatMatchKickoff(match.kickoff, locale)
+	const hydrated = useHydrated()
+	const kickoff = formatMatchKickoff(match.kickoff, locale, hydrated)
 	return (
 		<header className="flex flex-col gap-5">
 			<div className="flex min-h-10 items-center justify-between gap-4 pr-24 text-sm text-muted-foreground">
