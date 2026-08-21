@@ -53,6 +53,9 @@ export const GET_HOME_EVENT_FIXTURES = /* GraphQL */ `
 		coreEventContext {
 			season
 			revision
+			sourceCheckedAt
+			currentEventId
+			nextEventId
 		}
 		eventFixtures(eventId: $eventId) {
 			...HomeFixtureFields
@@ -300,14 +303,26 @@ export type HomePublicBootstrap = {
 }
 
 export type HomeEventFixturesGraphQLResponse = {
-	coreEventContext: Pick<HomeCoreEventContext, 'season' | 'revision'>
+	coreEventContext: Pick<
+		HomeCoreEventContext,
+		'season' | 'revision' | 'sourceCheckedAt' | 'currentEventId' | 'nextEventId'
+	>
 	eventFixtures: HomeGraphQLFixture[]
 }
+
+export type HomeFixtureSource = 'LIVE' | 'CORE'
+export type HomeFixtureState =
+	'LIVE' | 'SETTLED' | 'SCHEDULED' | 'CORE' | 'UNAVAILABLE'
 
 export type HomeFixturesResponse = {
 	season: string
 	revision: string
 	eventId: number
+	source: HomeFixtureSource
+	state: HomeFixtureState
+	sourceCheckedAt: string | null
+	publishedAt: string | null
+	stale: boolean
 	fixtures: HomeFixture[]
 }
 

@@ -3,6 +3,8 @@ export const GET_TREND_COHORTS = `
     trendCohorts(access: $access) {
       season
       revision
+		state
+		sourceCheckedAt
       cohorts {
         id kind access displayName setupStatus exact latestEventId revision availability
         capabilities { capability state }
@@ -41,8 +43,16 @@ export type TrendCohort = {
 	capabilities: TrendCapabilityStatus[]
 }
 
+export type TrendCatalogState = 'PUBLISHED' | 'NOT_PUBLISHED'
+
 export type TrendCohortsResponse = {
-	trendCohorts: { season: string; revision: string; cohorts: TrendCohort[] }
+	trendCohorts: {
+		season: string
+		revision: string
+		state: TrendCatalogState
+		sourceCheckedAt: string | null
+		cohorts: TrendCohort[]
+	}
 }
 
 export type TrendDeskRow = {

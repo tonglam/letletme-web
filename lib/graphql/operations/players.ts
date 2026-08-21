@@ -23,7 +23,7 @@ export const GET_PLAYER_DETAIL = `
     playerDetail(playerId: $playerId, eventId: $eventId) {
       id webName teamShortName elementType elementTypeName
       price startPrice
-      statsContext { scope season asOfEventId }
+			statsContext { scope season asOfEventId status }
       availability {
         status news newsAdded observedDate capturedAt
         chanceOfPlayingThisRound chanceOfPlayingNextRound stale
@@ -55,7 +55,7 @@ export const GET_PLAYER_OVERALL = `
     playerDetail(playerId: $playerId, eventId: $eventId) {
       id webName teamShortName elementType elementTypeName
       price startPrice
-      statsContext { scope season asOfEventId }
+			statsContext { scope season asOfEventId status }
       availability {
         status news newsAdded observedDate capturedAt
         chanceOfPlayingThisRound chanceOfPlayingNextRound stale
@@ -78,7 +78,7 @@ export const GET_PLAYER_EVIDENCE = GET_PLAYER_DETAIL.replace(
 
 const PLAYER_EVIDENCE_IDENTITY = `
       id webName teamShortName elementType elementTypeName
-      statsContext { scope season asOfEventId }
+			statsContext { scope season asOfEventId status }
 `
 
 function playerEvidenceQuery(operationName: string, fields: string): string {
@@ -121,10 +121,19 @@ export const GET_PLAYER_EVIDENCE_PROCESS = playerEvidenceQuery(
 export type PlayerStatsScope =
 	'CURRENT_SEASON' | 'PREVIOUS_SEASON' | 'UNAVAILABLE'
 
+export type PlayerStatsSnapshotStatus =
+	'AVAILABLE' | 'PRESEASON' | 'STALE' | 'INCOMPLETE' | 'UNAVAILABLE'
+
 export interface PlayerStatsContext {
 	scope: PlayerStatsScope
 	season: string
 	asOfEventId?: number | null
+	status: PlayerStatsSnapshotStatus
+	revision: string | null
+	sourceCheckedAt: string | null
+	publishedAt: string | null
+	rowCount: number
+	expectedRowCount: number
 }
 
 export interface PlayerAvailability {
@@ -422,7 +431,10 @@ export interface PlayerSeasonSignal {
 /** The overview request keeps the first paint below the GraphQL node guard.
  * Provider and sample-size metadata remain available in the full profile
  * document; the ledger only needs the display/status fields below. */
-type PlayerStateOverviewSignal = Omit<PlayerSeasonSignal, 'provider' | 'sampleMinutes'>
+type PlayerStateOverviewSignal = Omit<
+	PlayerSeasonSignal,
+	'provider' | 'sampleMinutes'
+>
 
 type PlayerStateOverviewTimelinePoint = Omit<
 	PlayerSeasonTimelinePoint,
@@ -620,9 +632,9 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
 		value {
 			id webName teamShortName elementType elementTypeName
 			price
-			statsContext { scope season }
-			availability {
-				status news observedDate
+				statsContext { season status }
+				availability {
+					status observedDate
 				chanceOfPlayingThisRound chanceOfPlayingNextRound
 			}
 			totalPoints selectedByPercent transfersInEvent transfersOutEvent
@@ -691,7 +703,7 @@ function playerStatsDeskEvidenceQuery(
           status
           value {
             id webName teamShortName elementType elementTypeName
-            statsContext { scope season asOfEventId }
+			statsContext { scope season asOfEventId status }
             ${fields}
           }
         }
@@ -726,7 +738,7 @@ export const GET_PLAYER_STATS_DESK_PROCESS = /* GraphQL */ `
           status
           value {
             id webName teamShortName elementType elementTypeName
-            statsContext { scope season asOfEventId }
+			statsContext { scope season asOfEventId status }
             expectedGoals expectedAssists expectedGoalInvolvements expectedGoalsConceded
             influence creativity threat ictIndex
           }
@@ -831,6 +843,14 @@ export const GET_PLAYER_STATS_BOOTSTRAP = /* GraphQL */ `
 				nextDeadlineTime
 				latestFinishedEventId
 			}
+			statsContext {
+				status
+				revision
+				sourceCheckedAt
+				publishedAt
+				rowCount
+				expectedRowCount
+			}
 			teams {
 				id
 				name
@@ -870,6 +890,15 @@ export type CoreEventContextData = {
 
 export type PlayerStatsBootstrapData = {
 	context: CoreEventContextData
+	statsContext: Pick<
+		PlayerStatsContext,
+		| 'status'
+		| 'revision'
+		| 'sourceCheckedAt'
+		| 'publishedAt'
+		| 'rowCount'
+		| 'expectedRowCount'
+	>
 	teams: TeamForPickerItem[]
 	directory: PlayerSearchForPickerResponse['playersForPicker']
 }

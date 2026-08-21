@@ -16,7 +16,8 @@ import type { EventsResponse } from '@/lib/graphql/operations/events'
 import {
 	GET_PLAYER_STATS_BOOTSTRAP,
 	type CoreEventContextData,
-	type PlayerStatsBootstrapResponse
+	type PlayerStatsBootstrapResponse,
+	type PlayerStatsSnapshotStatus
 } from '@/lib/graphql/operations/players'
 import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
 import {
@@ -43,10 +44,19 @@ export type PlayerStatsPersonalSeed = {
 	squadState: 'ready' | 'not-published' | 'unbound' | 'unavailable'
 	marketCompareCandidates: MarketCompareCandidate[]
 	seasonStatsAvailable: boolean
+	seasonStatsStatus: PlayerStatsSnapshotStatus
 }
 
 export type PlayerStatsBootstrapSeed = {
 	context: CoreEventContextData
+	statsContext: {
+		status: PlayerStatsSnapshotStatus
+		revision: string | null
+		sourceCheckedAt: string | null
+		publishedAt: string | null
+		rowCount: number
+		expectedRowCount: number
+	}
 	directorySeed: PlayerDirectorySeed
 	events: EventsResponse
 }
@@ -61,42 +71,55 @@ function measure<T>(
 	return timing ? timing.measure(stage, task) : task()
 }
 
-function reviewContext(context: CoreEventContextData): {
+function reviewContext(
+	context: CoreEventContextData,
+	statsContext: { status: PlayerStatsSnapshotStatus }
+): {
 	anchorGw: number | null
 	anchorSource: ReviewGameweekAnchorSource
 	seasonStatsAvailable: boolean
+	seasonStatsStatus: PlayerStatsSnapshotStatus
 	seasonState: PlayerDirectorySeasonState
 } {
+	const seasonStatsAvailable = statsContext.status === 'AVAILABLE'
+	const seasonState: PlayerDirectorySeasonState =
+		statsContext.status === 'PRESEASON'
+			? 'preseason'
+			: seasonStatsAvailable
+				? 'active'
+				: 'unavailable'
 	if (context.currentEventId != null) {
 		return {
 			anchorGw: context.currentEventId,
 			anchorSource: 'current',
-			seasonStatsAvailable: true,
-			seasonState: 'active'
+			seasonStatsAvailable,
+			seasonStatsStatus: statsContext.status,
+			seasonState
 		}
 	}
 	if (context.nextEventId != null) {
-		const anchorGw = context.nextEventId > 1 ? context.nextEventId - 1 : 1
-		const seasonStatsAvailable = anchorGw > 1
 		return {
-			anchorGw,
+			anchorGw: context.nextEventId > 1 ? context.nextEventId - 1 : 1,
 			anchorSource: 'next-derived',
 			seasonStatsAvailable,
-			seasonState: seasonStatsAvailable ? 'active' : 'preseason'
+			seasonStatsStatus: statsContext.status,
+			seasonState
 		}
 	}
 	if (context.latestFinishedEventId != null) {
 		return {
 			anchorGw: context.latestFinishedEventId,
 			anchorSource: 'history',
-			seasonStatsAvailable: true,
-			seasonState: 'active'
+			seasonStatsAvailable,
+			seasonStatsStatus: statsContext.status,
+			seasonState
 		}
 	}
 	return {
 		anchorGw: null,
 		anchorSource: 'none',
 		seasonStatsAvailable: false,
+		seasonStatsStatus: statsContext.status,
 		seasonState: 'unavailable'
 	}
 }
@@ -133,33 +156,35 @@ const loadPlayerStatsBootstrapFromOrigin = unstable_cache(
 					{ cache: 'no-store', timeoutMs: 5_000 }
 				)
 			const bootstrap = response.playerStatsBootstrap
-			const review = reviewContext(bootstrap.context)
+			const review = reviewContext(bootstrap.context, bootstrap.statsContext)
 			const anchorGw = review.anchorGw ?? 1
 			const sortBy = review.seasonStatsAvailable ? 'total_desc' : 'own_desc'
 			return {
-			context: bootstrap.context,
-			events: eventsFromContext(bootstrap.context),
-			directorySeed: {
-				teams: [...bootstrap.teams].sort((left, right) =>
-					left.shortName.localeCompare(right.shortName)
-				),
-				teamsState: 'ready',
-				players: bootstrap.directory.items,
-				playersState: 'ready',
-				totalCount: bootstrap.directory.totalCount,
-				nextCursor: bootstrap.directory.nextCursor,
-				queryKey: buildPlayerDirectoryQueryKey({
-					search: null,
-					teamId: null,
-					position: null,
-					maxPrice: null,
-					sortBy,
-					ownBand: 'ANY'
-				}),
-				seasonState: review.seasonState,
-				anchorGw,
-				seasonStatsAvailable: review.seasonStatsAvailable
-			}
+				context: bootstrap.context,
+				statsContext: bootstrap.statsContext,
+				events: eventsFromContext(bootstrap.context),
+				directorySeed: {
+					teams: [...bootstrap.teams].sort((left, right) =>
+						left.shortName.localeCompare(right.shortName)
+					),
+					teamsState: 'ready',
+					players: bootstrap.directory.items,
+					playersState: 'ready',
+					totalCount: bootstrap.directory.totalCount,
+					nextCursor: bootstrap.directory.nextCursor,
+					queryKey: buildPlayerDirectoryQueryKey({
+						search: null,
+						teamId: null,
+						position: null,
+						maxPrice: null,
+						sortBy,
+						ownBand: 'ANY'
+					}),
+					seasonState: review.seasonState,
+					anchorGw,
+					seasonStatsAvailable: review.seasonStatsAvailable,
+					seasonStatsStatus: review.seasonStatsStatus
+				}
 			}
 		})
 	},
@@ -212,7 +237,7 @@ export async function loadPlayerStatsPersonalSeed(
 		})
 	)
 	const bootstrap = await bootstrapPromise
-	const review = reviewContext(bootstrap.context)
+	const review = reviewContext(bootstrap.context, bootstrap.statsContext)
 	if (review.anchorGw == null || review.anchorGw <= 0) return null
 
 	const fixturePromise = measure(timing, 'fixture', () =>
@@ -234,13 +259,12 @@ export async function loadPlayerStatsPersonalSeed(
 		)
 	})()
 
-	const [windows, market, gameweekOwnership, squadResult] =
-		await Promise.all([
-			fixturePromise,
-			marketPromise,
-			gameweekOwnershipPromise,
-			squadPromise
-		])
+	const [windows, market, gameweekOwnership, squadResult] = await Promise.all([
+		fixturePromise,
+		marketPromise,
+		gameweekOwnershipPromise,
+		squadPromise
+	])
 	const fixturesByEvent = new Map<
 		number,
 		Array<(typeof windows)[number]['fixturesByEvent'][string][number]>
@@ -281,6 +305,7 @@ export async function loadPlayerStatsPersonalSeed(
 		mySquadPicks: squadResult.picks,
 		squadState: squadResult.state,
 		marketCompareCandidates: buildMarketCompareCandidates(model),
-		seasonStatsAvailable: review.seasonStatsAvailable
+		seasonStatsAvailable: review.seasonStatsAvailable,
+		seasonStatsStatus: review.seasonStatsStatus
 	}
 }

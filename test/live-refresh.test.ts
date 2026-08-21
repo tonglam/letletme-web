@@ -42,8 +42,8 @@ const scheduledTournamentSnapshot: LiveSnapshotStatus = {
 }
 
 describe('live refresh policy', () => {
-	it('polls scheduled and live current events every 15 seconds', () => {
-		assert.equal(LIVE_AUTO_REFRESH_SECONDS, 15)
+	it('polls scheduled and live current events every 30 seconds', () => {
+		assert.equal(LIVE_AUTO_REFRESH_SECONDS, 30)
 		for (const state of ['SCHEDULED', 'LIVE'] as const) {
 			assert.equal(
 				shouldPollLiveSnapshot({
@@ -193,6 +193,8 @@ describe('live matches server snapshot', () => {
 				revision: 'a'.repeat(24),
 				state: 'SCHEDULED',
 				publishedAt: new Date().toISOString(),
+				sourceCheckedAt: new Date().toISOString(),
+				stale: false,
 				matches: [],
 				nextFixtures: [
 					{
@@ -200,8 +202,10 @@ describe('live matches server snapshot', () => {
 						eventId: 34,
 						homeTeamId: 1,
 						homeTeamName: 'Arsenal',
+						homeTeamShortName: 'ARS',
 						awayTeamId: 2,
 						awayTeamName: 'Chelsea',
+						awayTeamShortName: 'CHE',
 						homeScore: null,
 						awayScore: null,
 						kickoffTime: '2026-08-11T18:00:00.000Z',
@@ -240,14 +244,18 @@ describe('live matches server snapshot', () => {
 				revision: 'b'.repeat(24),
 				state: 'LIVE',
 				publishedAt: new Date().toISOString(),
+				sourceCheckedAt: new Date().toISOString(),
+				stale: false,
 				matches: [
 					{
 						fixtureId: 3301,
 						eventId: 33,
 						homeTeamId: 1,
 						homeTeamName: 'Arsenal',
+						homeTeamShortName: 'ARS',
 						awayTeamId: 2,
 						awayTeamName: 'Chelsea',
+						awayTeamShortName: 'CHE',
 						homeScore: 1,
 						awayScore: 0,
 						kickoffTime: '2026-08-11T18:00:00.000Z',

@@ -65,16 +65,9 @@ export const GET_BRIEFING_STORY = `
 
 export type BriefingLocaleVariable = 'EN' | 'ZH_CN'
 export type BriefingWeekState =
-	| 'READY'
-	| 'EMPTY'
-	| 'STALE'
-	| 'OFFSEASON'
-	| 'UNAVAILABLE'
+	'READY' | 'EMPTY' | 'STALE' | 'OFFSEASON' | 'NOT_PUBLISHED' | 'UNAVAILABLE'
 export type BriefingStoryState =
-	| 'READY'
-	| 'CORRECTED'
-	| 'REMOVED'
-	| 'UNAVAILABLE'
+	'READY' | 'CORRECTED' | 'REMOVED' | 'UNAVAILABLE'
 export type BriefingState = BriefingWeekState | BriefingStoryState
 
 const BRIEFING_STATES = new Set<BriefingState>([
@@ -82,9 +75,10 @@ const BRIEFING_STATES = new Set<BriefingState>([
 	'EMPTY',
 	'STALE',
 	'OFFSEASON',
+	'NOT_PUBLISHED',
 	'UNAVAILABLE',
 	'CORRECTED',
-	'REMOVED',
+	'REMOVED'
 ])
 
 export function isBriefingState(value: string): value is BriefingState {

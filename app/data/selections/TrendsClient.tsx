@@ -23,11 +23,13 @@ import {
 import type {
 	TrendAccess,
 	TrendCohort,
-	TrendDesk
+	TrendDesk,
+	TrendCatalogState
 } from '@/lib/graphql/operations/trends'
 
 type Props = {
 	publicCohorts: TrendCohort[]
+	publicCatalogState: TrendCatalogState
 	myCohorts: TrendCohort[]
 	canLoadMine: boolean
 	myCohortsLoadFailed: boolean
@@ -58,6 +60,7 @@ const labelKeys: Record<
 
 export default function TrendsClient({
 	publicCohorts,
+	publicCatalogState,
 	myCohorts,
 	canLoadMine,
 	myCohortsLoadFailed,
@@ -316,8 +319,11 @@ export default function TrendsClient({
 		<>
 			<RouteReadyMarker
 				name="TRENDS_CATALOG_READY"
-				ready={cohorts.length > 0}
-				readyKey={`${access}:${cohorts.length}`}
+				ready={
+					cohorts.length > 0 &&
+					(access === 'MINE' || publicCatalogState === 'PUBLISHED')
+				}
+				readyKey={`${access}:${publicCatalogState}:${cohorts.length}`}
 				audienceHint={audienceHint}
 				goodMs={1000}
 				poorMs={1500}
@@ -486,6 +492,23 @@ export default function TrendsClient({
 								: t('noLeagueOptions')}
 						</div>
 					)}
+					{!committed &&
+						!error &&
+						publicCatalogState === 'NOT_PUBLISHED' &&
+						access === 'PUBLIC' && (
+							<div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+								{t('notPublished')}
+							</div>
+						)}
+					{!committed &&
+						!error &&
+						!(
+							publicCatalogState === 'NOT_PUBLISHED' && access === 'PUBLIC'
+						) && (
+							<div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+								{t('noLeagueOptions')}
+							</div>
+						)}
 					{committed && (
 						<>
 							<div className="mb-4 flex items-center justify-between">

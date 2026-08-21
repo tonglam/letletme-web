@@ -6,7 +6,7 @@ import type {
 // Context is a cheap ETag probe. Keep it more frequent than the Data live
 // publication poll so a newly published revision is noticed promptly without
 // causing another upstream FPL request.
-export const LIVE_AUTO_REFRESH_SECONDS = 15
+export const LIVE_AUTO_REFRESH_SECONDS = 30
 export const LIVE_EXPLAIN_REFRESH_INTERVAL_MS = 10 * 60 * 1000
 
 export function liveContextToSnapshot(
@@ -26,7 +26,8 @@ export function liveContextToSnapshot(
 		revision: context.revision,
 		state: context.state,
 		publishedAt: context.publishedAt,
-		checkedAt: context.checkedAt
+		checkedAt: context.checkedAt,
+		stale: context.stale
 	}
 }
 
@@ -39,7 +40,8 @@ export function isSyntheticScheduledSnapshot(
 	snapshot?: LiveSnapshotStatus | null
 ): boolean {
 	return Boolean(
-		snapshot?.state === 'SCHEDULED' && snapshot.revision.startsWith('scheduled-')
+		snapshot?.state === 'SCHEDULED' &&
+		snapshot.revision.startsWith('scheduled-')
 	)
 }
 

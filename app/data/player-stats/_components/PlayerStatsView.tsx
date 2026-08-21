@@ -72,6 +72,8 @@ interface PlayerStatsViewProps {
 	comparisonStateContextError: string | null
 	anchorGw: number
 	seasonStatsAvailable: boolean
+	seasonStatsStatus:
+		'AVAILABLE' | 'PRESEASON' | 'STALE' | 'INCOMPLETE' | 'UNAVAILABLE'
 }
 
 type PlayerNumberKey = {
@@ -619,10 +621,19 @@ export function PlayerStatsView({
 	stateContextError,
 	comparisonStateContextError,
 	anchorGw,
-	seasonStatsAvailable
+	seasonStatsAvailable,
+	seasonStatsStatus
 }: PlayerStatsViewProps) {
 	const t = useTranslations('PlayerStats')
 	const tl = useTranslations('PlayerStats.labels')
+	const seasonStatsStatusMessage =
+		{
+			AVAILABLE: null,
+			PRESEASON: t('timeline.preseasonPerformance'),
+			STALE: t('timeline.pointsUnavailable'),
+			INCOMPLETE: t('timeline.pointsUnavailable'),
+			UNAVAILABLE: t('timeline.pointsUnavailable')
+		}[seasonStatsStatus] ?? null
 	// Fixtures are the first evidence layer: they extend the schedule already
 	// visible in Overall and give the user a useful starting point without
 	// asking them to choose an empty state first.
@@ -637,8 +648,8 @@ export function PlayerStatsView({
 	)
 	const hasSeasonStats = Boolean(
 		seasonStatsAvailable &&
-		player?.statsContext.scope === 'CURRENT_SEASON' &&
-		(!comparison || comparison.statsContext.scope === 'CURRENT_SEASON')
+		player?.statsContext.status === 'AVAILABLE' &&
+		(!comparison || comparison.statsContext.status === 'AVAILABLE')
 	)
 	const navSections = useMemo<PlayerStatsSectionId[]>(
 		() =>
@@ -1011,6 +1022,7 @@ export function PlayerStatsView({
 					profile={playerState}
 					comparisonProfile={comparisonState}
 					seasonStatsAvailable={seasonStatsAvailable}
+					statusMessage={seasonStatsStatusMessage}
 					isLoading={isStateLoading}
 					isComparisonLoading={isComparisonStateLoading}
 				/>
@@ -1021,6 +1033,7 @@ export function PlayerStatsView({
 					profile={playerState}
 					comparisonProfile={comparisonState}
 					seasonStatsAvailable={seasonStatsAvailable}
+					statusMessage={seasonStatsStatusMessage}
 					isLoading={isStateLoading}
 					isComparisonLoading={isComparisonStateLoading}
 					error={stateError}

@@ -221,6 +221,7 @@ export function PlayerFplProfile({
 	profile,
 	comparisonProfile,
 	seasonStatsAvailable,
+	statusMessage,
 	isLoading,
 	isComparisonLoading
 }: {
@@ -229,6 +230,7 @@ export function PlayerFplProfile({
 	profile: PlayerStateProfileData | null
 	comparisonProfile: PlayerStateProfileData | null
 	seasonStatsAvailable: boolean
+	statusMessage: string | null
 	isLoading: boolean
 	isComparisonLoading: boolean
 }) {
@@ -261,10 +263,10 @@ export function PlayerFplProfile({
 			<PlayerStatsSection
 				id="ps-profile"
 				title={t('title')}
-				hint={t('preseasonHint')}
+				hint={statusMessage ?? t('preseasonHint')}
 			>
 				<p className="rounded-lg border border-border/60 px-3 py-3 text-sm text-muted-foreground">
-					{t('notRated')}
+					{statusMessage ?? t('notRated')}
 				</p>
 			</PlayerStatsSection>
 		)
@@ -375,7 +377,9 @@ export function PlayerFplProfile({
 					/>
 				</div>
 			)}
-			<p className="mt-3 text-caption text-muted-foreground">{t('percentileHint')}</p>
+			<p className="mt-3 text-caption text-muted-foreground">
+				{t('percentileHint')}
+			</p>
 		</PlayerStatsSection>
 	)
 }
