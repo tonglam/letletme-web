@@ -22,6 +22,7 @@
 		"measure:home": "node scripts/measure-home-performance.mjs",
 		"measure:competitions": "node scripts/measure-competitions-performance.mjs",
 		"load:agent-gateway": "node scripts/load-agent-gateway.mjs",
+		"platform-admin:resolve-user": "node scripts/resolve-platform-admin-user.mjs",
 		"lint": "eslint .",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "tsx scripts/migrate.ts",

@@ -14,6 +14,7 @@ import { createTournamentCreationProxyReporter } from '@/lib/tournament/creation
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getPublicErrorMessage } from '@/lib/safe-errors'
 import { sanitizeTournamentApiErrorPayload } from '@/lib/tournament/public-response'
+import { isPlatformAdminIdentity } from '@/lib/platform-admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,7 +48,8 @@ export async function POST(request: Request) {
 		const body = await readBoundedJson(request, 256 * 1024)
 		const payload = buildAuthoritativeTournamentPayload(body, {
 			fplEntryId: session.user.fplEntryId,
-			name: session.user.name
+			name: session.user.name,
+			platformAdmin: isPlatformAdminIdentity(session.user)
 		})
 		const response = await tournamentApiFetch(
 			'/tournaments',

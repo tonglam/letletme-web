@@ -177,6 +177,7 @@ describe('production GraphQL envelope contract', () => {
 			uid: 'user-verified',
 			eid: 15702,
 			evat: '2026-07-18T00:00:00.000Z',
+			adm: false,
 			iat: 1_700_000_000,
 			exp: 1_700_000_060
 		})
@@ -191,5 +192,40 @@ describe('production GraphQL envelope contract', () => {
 		)
 		assert.equal(unverifiedDecoded.eid, null)
 		assert.equal(unverifiedDecoded.evat, null)
+		assert.equal(unverifiedDecoded.adm, false)
+	})
+
+	it('signs the account role only alongside a verified FPL binding', () => {
+		const verified = buildGraphQLUserContextHeaders(
+			{
+				id: 'platform-admin',
+				fplEntryId: 6953,
+				fplEntryVerifiedAt: '2026-08-21T00:00:00.000Z'
+			},
+			SECRET,
+			1_700_000_000,
+			'6953, 15702',
+			'platform-admin'
+		)
+		const verifiedPayload = JSON.parse(
+			Buffer.from(verified['X-User-Context'], 'base64url').toString('utf8')
+		)
+		assert.equal(verifiedPayload.adm, true)
+
+		const unverified = buildGraphQLUserContextHeaders(
+			{
+				id: 'platform-admin',
+				fplEntryId: 6953,
+				fplEntryVerifiedAt: null
+			},
+			SECRET,
+			1_700_000_000,
+			'6953',
+			'platform-admin'
+		)
+		const unverifiedPayload = JSON.parse(
+			Buffer.from(unverified['X-User-Context'], 'base64url').toString('utf8')
+		)
+		assert.equal(unverifiedPayload.adm, false)
 	})
 })

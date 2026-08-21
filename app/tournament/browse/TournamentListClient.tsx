@@ -116,11 +116,13 @@ const mapTournamentToRow = (
 
 export default function TournamentListClient({
 	currentEntryId,
+	platformAdmin,
 	initialTournaments,
 	initialError,
 	initialAdminOnly = false
 }: {
 	currentEntryId: number
+	platformAdmin: boolean
 	initialTournaments: EntryTournamentListItem[]
 	initialError: string | null
 	/** From ?mine=true — filter to tournaments this entry administers */
@@ -210,7 +212,9 @@ export default function TournamentListClient({
 				statusFilter === 'all' || tournament.state === statusFilter
 
 			const matchesAdmin =
-				!adminOnly || tournament.adminEntryId === currentEntryId
+				!adminOnly ||
+				platformAdmin ||
+				tournament.adminEntryId === currentEntryId
 
 			return matchesSearch && matchesType && matchesStatus && matchesAdmin
 		})
@@ -236,6 +240,7 @@ export default function TournamentListClient({
 	}, [
 		adminOnly,
 		currentEntryId,
+		platformAdmin,
 		searchQuery,
 		sortOption,
 		statusFilter,
@@ -283,7 +288,10 @@ export default function TournamentListClient({
 							className="gap-2 shadow-sm"
 							asChild
 						>
-							<Link href="/competitions/create" prefetch={false}>
+							<Link
+								href="/competitions/create"
+								prefetch={false}
+							>
 								<Plus
 									className="size-4"
 									aria-hidden="true"
@@ -499,7 +507,8 @@ export default function TournamentListClient({
 														{t('viewLive')}
 													</Link>
 												</DropdownMenuItem>
-												{tournament.adminEntryId === currentEntryId ? (
+												{platformAdmin ||
+												tournament.adminEntryId === currentEntryId ? (
 													<DropdownMenuItem asChild>
 														<Link
 															href={`/competitions/${tournament.id}/manage`}

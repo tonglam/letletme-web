@@ -6,10 +6,11 @@ import { localizeHref } from '@/i18n/routing'
 import {
 	GET_ENTRY_TOURNAMENTS_LIST,
 	type EntryTournamentListItem,
-	type EntryTournamentsListResponse,
+	type EntryTournamentsListResponse
 } from '@/lib/graphql/operations/tournaments'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import { getVerifiedEntryContext } from '@/lib/session'
+import { isPlatformAdminIdentity } from '@/lib/platform-admin'
 import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 
@@ -26,7 +27,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/competitions/browse',
 		titleKey: 'competitionListTitle',
-		descriptionKey: 'competitionListDescription',
+		descriptionKey: 'competitionListDescription'
 	})
 }
 
@@ -52,19 +53,28 @@ export default async function Page({ params, searchParams }: PageProps) {
 	let initialTournaments: EntryTournamentListItem[] = []
 	let initialError: string | null = null
 	try {
-		const response = await executeServerQueryWithSession<EntryTournamentsListResponse>(
-			session,
-			GET_ENTRY_TOURNAMENTS_LIST,
-			{ entryId },
-			{ cache: 'no-store' },
-		)
+		const response =
+			await executeServerQueryWithSession<EntryTournamentsListResponse>(
+				session,
+				GET_ENTRY_TOURNAMENTS_LIST,
+				{ entryId },
+				{ cache: 'no-store' }
+			)
 		initialTournaments = response.entryTournaments
 	} catch (error) {
 		console.error('[tournament list] Failed to load:', error)
 		initialError = t('competitionsUnavailable')
 	}
 
-	return <RouteIntlProvider namespaces={ROUTE_CLIENT_NAMESPACES.competitionsBrowse}>
-		<TournamentListClient currentEntryId={entryId} initialTournaments={initialTournaments} initialError={initialError} initialAdminOnly={initialAdminOnly} />
-	</RouteIntlProvider>
+	return (
+		<RouteIntlProvider namespaces={ROUTE_CLIENT_NAMESPACES.competitionsBrowse}>
+			<TournamentListClient
+				currentEntryId={entryId}
+				platformAdmin={isPlatformAdminIdentity(session.user)}
+				initialTournaments={initialTournaments}
+				initialError={initialError}
+				initialAdminOnly={initialAdminOnly}
+			/>
+		</RouteIntlProvider>
+	)
 }
