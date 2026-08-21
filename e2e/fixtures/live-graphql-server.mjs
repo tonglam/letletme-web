@@ -1,7 +1,8 @@
 import { createServer } from 'node:http'
 
 const host = '127.0.0.1'
-const port = 4100
+const port = Number(process.env.E2E_GRAPHQL_PORT ?? 4100)
+const liveHydrationFixtureEnabled = process.env.E2E_LIVE_HYDRATION === '1'
 
 const json = (response, status, body) => {
 	response.writeHead(status, {
@@ -32,6 +33,14 @@ const scheduledMatch = {
 	awayTeamDataList: [],
 	kickoffTime: '2026-08-04T19:00:00.000Z',
 	playStatus: 'NOT_STARTED'
+}
+
+const hydrationLiveMatch = {
+	...scheduledMatch,
+	homeScore: 2,
+	awayScore: 0,
+	minutes: 45,
+	playStatus: 'LIVE'
 }
 
 const marketPlayer = {
@@ -1019,7 +1028,7 @@ const server = createServer((request, response) => {
 						eventId: 33,
 						nextEventId: 34,
 						revision: 'a'.repeat(24),
-						state: 'SCHEDULED',
+						state: liveHydrationFixtureEnabled ? 'LIVE_ACTIVE' : 'SCHEDULED',
 						checkedAt: '2026-08-04T18:00:30.000Z',
 						publishedAt: '2026-08-04T18:00:00.000Z'
 					}
@@ -1028,31 +1037,53 @@ const server = createServer((request, response) => {
 			return
 		}
 		if (query.includes('GetLiveMatchdayDesk')) {
+			const match = liveHydrationFixtureEnabled
+				? hydrationLiveMatch
+				: scheduledMatch
 			json(response, 200, {
 				data: {
 					liveMatchdayDesk: {
 						season: '2627',
 						eventId: 33,
 						revision: 'a'.repeat(24),
-						state: 'SCHEDULED',
+						state: liveHydrationFixtureEnabled ? 'LIVE' : 'SCHEDULED',
 						publishedAt: '2026-08-04T18:00:00.000Z',
-						matches: [],
-						nextFixtures: [
-							{
-								fixtureId: scheduledMatch.matchId,
-								eventId: 33,
-								homeTeamId: scheduledMatch.homeTeamId,
-								homeTeamName: scheduledMatch.homeTeamName,
-								awayTeamId: scheduledMatch.awayTeamId,
-								awayTeamName: scheduledMatch.awayTeamName,
-								homeScore: scheduledMatch.homeScore,
-								awayScore: scheduledMatch.awayScore,
-								kickoffTime: scheduledMatch.kickoffTime,
-								minutes: 0,
-								started: false,
-								finished: false
-							}
-						],
+						matches: liveHydrationFixtureEnabled
+							? [
+									{
+										fixtureId: match.matchId,
+										eventId: 33,
+										homeTeamId: match.homeTeamId,
+										homeTeamName: match.homeTeamName,
+										awayTeamId: match.awayTeamId,
+										awayTeamName: match.awayTeamName,
+										homeScore: match.homeScore,
+										awayScore: match.awayScore,
+										kickoffTime: match.kickoffTime,
+										minutes: match.minutes,
+										started: true,
+										finished: false
+									}
+								]
+							: [],
+						nextFixtures: liveHydrationFixtureEnabled
+							? []
+							: [
+									{
+										fixtureId: match.matchId,
+										eventId: 33,
+										homeTeamId: match.homeTeamId,
+										homeTeamName: match.homeTeamName,
+										awayTeamId: match.awayTeamId,
+										awayTeamName: match.awayTeamName,
+										homeScore: match.homeScore,
+										awayScore: match.awayScore,
+										kickoffTime: match.kickoffTime,
+										minutes: 0,
+										started: false,
+										finished: false
+									}
+								],
 						highlights: []
 					}
 				}
