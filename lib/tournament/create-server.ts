@@ -2,10 +2,9 @@ import 'server-only';
 
 import { z } from 'zod';
 import {
-  LeagueUrlError,
-  parseLeagueUrl as parseOfficialLeagueUrl,
-  type LeagueType,
-  type ParsedLeagueUrl,
+	parseLeagueUrl as parseOfficialLeagueUrl,
+	type LeagueType,
+	type ParsedLeagueUrl,
 } from './league-url';
 
 export type { LeagueType } from './league-url';
@@ -117,16 +116,8 @@ const mapStandingToParticipant = (result: RawStandingsResult): TournamentPartici
   };
 };
 
-export const parseLeagueUrl = (rawUrl: string): ParsedLeagueUrl => {
-  try {
-    return parseOfficialLeagueUrl(rawUrl);
-  } catch (error) {
-    if (error instanceof LeagueUrlError) {
-      throw new Error(error.message);
-    }
-    throw error;
-  }
-};
+export const parseLeagueUrl = (rawUrl: string): ParsedLeagueUrl =>
+	parseOfficialLeagueUrl(rawUrl);
 
 export const fetchLeagueParticipants = async (
   leagueUrl: string,

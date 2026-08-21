@@ -12,6 +12,8 @@ import {
 } from '@/lib/tournament/security'
 import { createTournamentCreationProxyReporter } from '@/lib/tournament/creation-proxy-report'
 import { getVerifiedEntryContext } from '@/lib/session'
+import { getPublicErrorMessage } from '@/lib/safe-errors'
+import { sanitizeTournamentApiErrorPayload } from '@/lib/tournament/public-response'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,7 +65,12 @@ export async function POST(request: Request) {
 			response.status,
 			result
 		)
-		return NextResponse.json(result, { status: response.status })
+		return NextResponse.json(
+			response.ok
+				? result
+				: sanitizeTournamentApiErrorPayload(result, response.status),
+			{ status: response.status }
+		)
 	} catch (error) {
 		if (error instanceof PayloadTooLargeError) {
 			report('rejected', 413)
@@ -82,7 +89,10 @@ export async function POST(request: Request) {
 		) {
 			report('rejected', 400)
 			return NextResponse.json(
-				{ success: false, error: error.message || 'Invalid JSON body' },
+				{
+					success: false,
+					error: getPublicErrorMessage(error, 'Invalid tournament request')
+				},
 				{ status: 400 }
 			)
 		}

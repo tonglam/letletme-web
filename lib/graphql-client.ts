@@ -1,3 +1,6 @@
+import { recordBugReportDiagnostic } from '@/lib/bug-report-diagnostics'
+import { publicGraphQLRequestMessage } from '@/lib/safe-errors'
+
 const getGraphQLEndpoint = () => {
 	if (typeof window === 'undefined') {
 		return process.env.GRAPHQL_ENDPOINT || 'http://localhost:4000/graphql'
@@ -32,8 +35,6 @@ export class GraphQLRequestError extends Error {
 		this.retryAfterSeconds = options.retryAfterSeconds ?? null
 	}
 }
-
-import { recordBugReportDiagnostic } from '@/lib/bug-report-diagnostics'
 
 const DEFAULT_GRAPHQL_TIMEOUT_MS = 15_000
 const PUBLIC_BROWSER_CACHE_TTL_MS = 60_000
@@ -178,12 +179,17 @@ async function doFetch<T>(
 		const firstError = meaningfulErrors[0]
 
 		if (!response.ok) {
+			const code =
+				graphQLErrorCode(firstError) ??
+				(isClient ? 'UPSTREAM_GRAPHQL_ERROR' : null)
 			throw new GraphQLRequestError(
-				firstError?.message?.trim() ||
-					`Request failed with status ${response.status}`,
+				isClient
+					? publicGraphQLRequestMessage(response.status, code)
+					: firstError?.message?.trim() ||
+						`Request failed with status ${response.status}`,
 				{
 					status: response.status,
-					code: graphQLErrorCode(firstError),
+					code,
 					retryAfterSeconds: parseRetryAfterSeconds(
 						response.headers.get('retry-after')
 					)
@@ -199,6 +205,9 @@ async function doFetch<T>(
 		}
 
 		if (meaningfulErrors.length > 0) {
+			const code =
+				graphQLErrorCode(firstError) ??
+				(isClient ? 'UPSTREAM_GRAPHQL_ERROR' : null)
 			const errorMessages = meaningfulErrors
 				.map((error, index) => {
 					const fallback = safeSerializeForLog(error)
@@ -214,25 +223,44 @@ async function doFetch<T>(
 				})
 				.join('; ')
 
-			console.warn(
-				`GraphQL errors: ${errorMessages}`,
-				'\nraw:',
-				safeSerializeForLog(result.errors)
-			)
+			if (isClient) {
+				console.warn('GraphQL request returned an error', {
+					operation: extractOperationName(query) || undefined,
+					status: response.status,
+					code,
+					requestId
+				})
+			} else {
+				console.warn('GraphQL request returned upstream errors', {
+					operation: extractOperationName(query) || undefined,
+					status: response.status,
+					code,
+					requestId
+				})
+			}
 			throw new GraphQLRequestError(
-				`GraphQL Error: ${errorMessages || 'Unknown GraphQL error'}`,
+				isClient
+					? publicGraphQLRequestMessage(response.status, code)
+					: `GraphQL Error: ${errorMessages || 'Unknown GraphQL error'}`,
 				{
 					status: response.status,
-					code: graphQLErrorCode(firstError)
+					code
 				}
 			)
 		}
 
 		if (result.errors != null && normalizedErrors.length > 0) {
-			console.warn(
-				'GraphQL response contained error entries with no usable details; using data if present.',
-				safeSerializeForLog(result.errors)
-			)
+			if (isClient) {
+				console.warn('GraphQL response contained unusable error details; using data if present.', {
+					operation: extractOperationName(query) || undefined,
+					requestId
+				})
+			} else {
+				console.warn(
+					'GraphQL response contained error entries with no usable details; using data if present.',
+					safeSerializeForLog(result.errors)
+				)
+			}
 		}
 
 		if (result.data === undefined || result.data === null) {
@@ -270,9 +298,10 @@ async function doFetch<T>(
 					: typeof error === 'string'
 						? error
 						: safeSerializeForLog(error)
-			normalizedError = new GraphQLRequestError(message, {
-				code: 'NETWORK_ERROR'
-			})
+			normalizedError = new GraphQLRequestError(
+				isClient ? publicGraphQLRequestMessage(0, 'NETWORK_ERROR') : message,
+				{ code: 'NETWORK_ERROR' }
+			)
 		}
 
 		if (
@@ -281,22 +310,44 @@ async function doFetch<T>(
 				normalizedError.code === 'REQUEST_CANCELLED'
 			)
 		) {
-			console.error(
-				`GraphQL query error [${endpoint}]: ${
-					normalizedError instanceof Error
-						? normalizedError.message
-						: String(normalizedError)
-				}`
-			)
+			if (isClient) {
+				console.error('GraphQL request failed', {
+					operation: extractOperationName(query) || undefined,
+					status:
+						normalizedError instanceof GraphQLRequestError
+							? normalizedError.status
+							: undefined,
+					code:
+						normalizedError instanceof GraphQLRequestError
+							? normalizedError.code
+							: 'UNKNOWN_ERROR',
+					requestId
+				})
+			} else {
+				console.error('GraphQL query failed', {
+					operation: extractOperationName(query) || undefined,
+					status:
+						normalizedError instanceof GraphQLRequestError
+							? normalizedError.status
+							: undefined,
+					code:
+						normalizedError instanceof GraphQLRequestError
+							? normalizedError.code
+							: 'UNKNOWN_ERROR',
+					requestId
+				})
+			}
 			if (typeof window !== 'undefined') {
 				recordBugReportDiagnostic({
 					at: new Date().toISOString(),
 					operation: extractOperationName(query) || undefined,
 					requestId,
-					message:
-						normalizedError instanceof Error
-							? normalizedError.message
-							: String(normalizedError),
+					...(normalizedError instanceof GraphQLRequestError
+						? {
+								code: normalizedError.code ?? undefined,
+								status: normalizedError.status
+							}
+						: {})
 				})
 			}
 		}

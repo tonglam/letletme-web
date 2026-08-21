@@ -1,4 +1,5 @@
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
+import { publicTournamentServiceError } from '@/lib/tournament/public-response'
 import { z } from 'zod'
 
 export const createTournamentNameSchema = (messages = {
@@ -59,8 +60,6 @@ export const formatTournamentDate = (value: string) => {
 }
 
 export const readTournamentMutationError = async (response: Response) => {
-	const result = await response.json().catch(() => null)
-	return result && typeof result === 'object' && 'error' in result && typeof result.error === 'string'
-		? result.error
-		: 'The tournament service could not complete this request.'
+	await response.json().catch(() => null)
+	return publicTournamentServiceError(response.status)
 }

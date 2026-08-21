@@ -18,6 +18,7 @@ import {
 } from '@/lib/bug-report-submit'
 import { getVerifiedFplEntryId } from '@/lib/fpl-binding-core'
 import { createHmac } from 'node:crypto'
+import { getPublicErrorMessage } from '@/lib/safe-errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -91,9 +92,10 @@ export async function POST(request: Request) {
 			)
 		}
 		if (error instanceof BugReportSubmitError) {
+			const message = getPublicErrorMessage(error, 'Could not send the report.')
 			return miniProgramErrorResponse(
-				new MiniProgramAuthError(error.message, error.status, error.retryAfterSeconds),
-				error.message
+				new MiniProgramAuthError(message, error.status, error.retryAfterSeconds),
+				message
 			)
 		}
 		return miniProgramErrorResponse(error, 'Could not send the report.')

@@ -106,10 +106,11 @@ export function ReportProblemEntry({
 			const result = (await response.json()) as {
 				success?: boolean
 				publicId?: string
-				error?: string
 			}
 			if (!response.ok || !result.success || !result.publicId) {
-				toast.error(result.error || t('failed'))
+				// The response body is an untrusted network boundary. The API owns
+				// the detailed diagnostic; the browser only shows bounded copy.
+				toast.error(t('failed'))
 				return
 			}
 			toast.success(t('received', { id: result.publicId }))

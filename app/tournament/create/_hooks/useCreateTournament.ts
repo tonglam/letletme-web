@@ -17,6 +17,27 @@ import {
 	type TournamentFormData
 } from '../_lib/tournament-form'
 import { useTranslations } from 'next-intl'
+import { getSafeClientErrorMessage } from '@/lib/safe-errors'
+import type { PublicTournamentErrorCode } from '@/lib/tournament/public-response'
+
+type CreateErrorMessageKey =
+	| 'createNameExists'
+	| 'createInProgress'
+	| 'createPreviewExpired'
+	| 'createAdminNotParticipant'
+	| 'createParticipantsTooFew'
+	| 'createInvalidSchedule'
+	| 'createInvalidFormat'
+	| 'createInvalidLeague'
+	| 'createLeagueEmpty'
+	| 'createLeagueUnavailable'
+	| 'createAuthRequired'
+	| 'createForbidden'
+	| 'createRateLimited'
+	| 'createTimeout'
+	| 'createConflict'
+	| 'createRequestInvalid'
+	| 'createUnavailable'
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
 	try {
@@ -26,6 +47,51 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 			: {}
 	} catch {
 		return {}
+	}
+}
+
+function getCreateErrorMessage(
+	code: unknown,
+	status: number,
+	t: (key: CreateErrorMessageKey) => string
+): string {
+	switch (code as PublicTournamentErrorCode) {
+		case 'TOURNAMENT_NAME_EXISTS':
+			return t('createNameExists')
+		case 'TOURNAMENT_CREATE_IN_PROGRESS':
+			return t('createInProgress')
+		case 'TOURNAMENT_PREVIEW_EXPIRED':
+			return t('createPreviewExpired')
+		case 'TOURNAMENT_ADMIN_NOT_PARTICIPANT':
+			return t('createAdminNotParticipant')
+		case 'TOURNAMENT_PARTICIPANTS_TOO_FEW':
+			return t('createParticipantsTooFew')
+		case 'TOURNAMENT_INVALID_SCHEDULE':
+			return t('createInvalidSchedule')
+		case 'TOURNAMENT_INVALID_FORMAT':
+			return t('createInvalidFormat')
+		case 'TOURNAMENT_INVALID_LEAGUE_URL':
+			return t('createInvalidLeague')
+		case 'TOURNAMENT_LEAGUE_EMPTY':
+			return t('createLeagueEmpty')
+		case 'TOURNAMENT_LEAGUE_UNAVAILABLE':
+			return t('createLeagueUnavailable')
+		case 'TOURNAMENT_AUTH_REQUIRED':
+			return t('createAuthRequired')
+		case 'TOURNAMENT_FORBIDDEN':
+			return t('createForbidden')
+		case 'TOURNAMENT_RATE_LIMITED':
+			return t('createRateLimited')
+		case 'TOURNAMENT_TIMEOUT':
+			return t('createTimeout')
+		case 'TOURNAMENT_CONFLICT':
+			return t('createConflict')
+		case 'TOURNAMENT_REQUEST_INVALID':
+			return t('createRequestInvalid')
+		case 'TOURNAMENT_UNAVAILABLE':
+			return t('createUnavailable')
+		default:
+			return status === 400 ? t('createRequestInvalid') : t('createUnavailable')
 	}
 }
 
@@ -461,7 +527,7 @@ export function useCreateTournament() {
 			)
 				return
 			setParticipantError(
-				error instanceof Error ? error.message : t('participantsLoadFailed')
+				getSafeClientErrorMessage(error, t('participantsLoadFailed'))
 			)
 			setParticipants([])
 			setSelectedParticipantIds([])
@@ -545,7 +611,10 @@ export function useCreateTournament() {
 				body: JSON.stringify(payload)
 			})
 			const result = await readJson(response)
-			if (!response.ok) throw new Error(t('createFailed'))
+			if (!response.ok || result.success === false) {
+				setSubmitError(getCreateErrorMessage(result.code, response.status, t))
+				return
+			}
 			const tournament =
 				result.tournament && typeof result.tournament === 'object'
 					? (result.tournament as Record<string, unknown>)

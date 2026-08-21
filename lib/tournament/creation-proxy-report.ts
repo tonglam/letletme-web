@@ -1,3 +1,8 @@
+import {
+	publicTournamentErrorCode,
+	type PublicTournamentErrorCode
+} from './public-response'
+
 export type TournamentCreationProxyOutcome =
 	'success' | 'upstream_rejected' | 'rejected' | 'timeout' | 'unavailable'
 
@@ -8,6 +13,7 @@ export type TournamentCreationProxyReport = {
 	responseStatus: number
 	tournamentId: number | null
 	setupStatus: 'pending' | 'processing' | 'ready' | 'failed' | null
+	failureCode: PublicTournamentErrorCode | null
 }
 
 const SETUP_STATUSES = new Set(['pending', 'processing', 'ready', 'failed'])
@@ -56,7 +62,11 @@ export function createTournamentCreationProxyReporter(
 			outcome,
 			durationMs: Math.max(0, Math.round(performance.now() - startedAtMs)),
 			responseStatus,
-			...creation
+			...creation,
+			failureCode:
+				outcome === 'success'
+					? null
+					: publicTournamentErrorCode(result, responseStatus)
 		})
 	}
 }

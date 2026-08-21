@@ -1,7 +1,8 @@
 export type BugReportDiagnostic = {
 	at: string
 	requestId?: string
-	message?: string
+	code?: string
+	status?: number
 	operation?: string
 }
 
@@ -9,10 +10,19 @@ const MAX_DIAGNOSTICS = 3
 const diagnostics: BugReportDiagnostic[] = []
 
 export function recordBugReportDiagnostic(entry: BugReportDiagnostic): void {
+	const status = entry.status
+	const normalizedStatus =
+		typeof status === 'number' &&
+		Number.isSafeInteger(status) &&
+		status >= 0 &&
+		status <= 599
+			? status
+			: undefined
 	diagnostics.push({
 		at: entry.at,
 		requestId: entry.requestId?.slice(0, 80),
-		message: entry.message?.slice(0, 180),
+		code: entry.code?.slice(0, 80),
+		status: normalizedStatus,
 		operation: entry.operation?.slice(0, 80),
 	})
 	if (diagnostics.length > MAX_DIAGNOSTICS) diagnostics.shift()
@@ -53,10 +63,11 @@ export function collectBrowserBugReportMeta(): Record<string, unknown> {
 		...(osMajorMatch ? { osMajor: Number(osMajorMatch[1]) } : {}),
 		language: (document.documentElement.lang || navigator.language || '').slice(0, 32),
 		viewportBucket: `${viewportBucket(window.innerWidth)}x${viewportBucket(window.innerHeight)}`,
-		operations: readBugReportDiagnostics().map(({ requestId, message, operation }) => ({
+		operations: readBugReportDiagnostics().map(({ requestId, code, status, operation }) => ({
 			...(operation ? { operation } : {}),
 			...(requestId ? { requestId } : {}),
-			...(message ? { message } : {})
+			...(code ? { code } : {}),
+			...(typeof status === 'number' ? { status } : {})
 		})),
 	}
 }

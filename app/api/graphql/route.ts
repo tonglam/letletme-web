@@ -6,7 +6,8 @@ import {
 } from '@/lib/graphql-proxy-cache'
 import {
 	copySafeGraphQLUpstreamHeaders,
-	readForwardableMiniProgramAuthorization
+	readForwardableMiniProgramAuthorization,
+	sanitizeGraphQLUpstreamBody
 } from '@/lib/graphql-proxy-security'
 import {
 	buildGraphQLProxyIngress,
@@ -211,6 +212,12 @@ export async function POST(request: NextRequest) {
 	const { responseBodyOk, cacheControl } = requestTiming.measureSync(
 		'responsePolicy',
 		() => {
+			responseBody = new TextEncoder().encode(
+				sanitizeGraphQLUpstreamBody(
+					new TextDecoder().decode(responseBody),
+					response.status
+				)
+			)
 			const bodyOk = isSuccessfulGraphQLResponseBody(
 				new TextDecoder().decode(responseBody)
 			)

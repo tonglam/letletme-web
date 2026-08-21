@@ -33,7 +33,8 @@ describe('browser bug-report diagnostics', () => {
 			at: '2026-08-20T00:00:00.000Z',
 			operation: 'LiveFixturePlayers',
 			requestId: 'request-1',
-			message: 'upstream failed'
+			code: 'UPSTREAM_GRAPHQL_ERROR',
+			status: 502
 		})
 		Object.defineProperty(globalThis, 'window', {
 			configurable: true,
@@ -63,7 +64,8 @@ describe('browser bug-report diagnostics', () => {
 			{
 				operation: 'LiveFixturePlayers',
 				requestId: 'request-1',
-				message: 'upstream failed'
+				code: 'UPSTREAM_GRAPHQL_ERROR',
+				status: 502
 			}
 		])
 		assert.equal('userAgent' in meta, false)

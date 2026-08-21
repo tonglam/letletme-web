@@ -1,16 +1,17 @@
+import { PublicError } from '@/lib/safe-errors'
+
 export const FPL_HOSTNAME = 'fantasy.premierleague.com'
 
 export type LeagueType = 'classic' | 'h2h'
 export type LeagueUrlSurface = 'standings' | 'new-entries' | 'admin' | 'join'
 export type LeagueUrlErrorCode = 'incomplete' | 'domain' | 'path' | 'id' | 'type'
 
-export class LeagueUrlError extends Error {
+export class LeagueUrlError extends PublicError {
 	constructor(
 		public readonly code: LeagueUrlErrorCode,
 		message: string,
 	) {
-		super(message)
-		this.name = 'LeagueUrlError'
+		super(message, 'LeagueUrlError')
 	}
 }
 
