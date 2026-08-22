@@ -243,7 +243,45 @@ export interface TournamentParticipantsResponse {
 	tournamentParticipants: TournamentParticipant[]
 }
 
-export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_INFO_FIELDS}
+const TOURNAMENT_DETAIL_INFO_FIELDS = `
+  fragment TournamentDetailInfoFields on TournamentInfo {
+    id
+    name
+    creator
+    leagueId
+    leagueType
+    sourceLeagueName
+    totalTeamNum
+    groupMode
+    groupTeamNum
+    groupNum
+    groupStartedEventId
+    groupEndedEventId
+    knockoutMode
+    knockoutTeamNum
+    knockoutRounds
+    knockoutStartedEventId
+    knockoutEndedEventId
+    state
+    rosterMode
+    rosterSyncStatus
+    setupStatus
+    setupPhase
+    setupCompletedUnits
+    setupTotalUnits
+    setupProgressUpdatedAt
+    setupProgressMode
+    standingsReadyAt
+    insightsReadyAt
+    setupHasWarnings
+    warningSummaries { category affectedCount repairExhausted }
+    setupStartedAt
+    setupFinishedAt
+    updatedAt
+  }
+`
+
+export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_DETAIL_INFO_FIELDS}
   query GetTournamentDetailDesk($tournamentId: Int!, $entryId: Int!, $eventId: Int) {
     tournamentDetailDesk(tournamentId: $tournamentId, entryId: $entryId, eventId: $eventId) {
       revision
@@ -251,7 +289,7 @@ export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_INFO_FIELDS}
       context { season coreRevision activeEventId requestedEventId }
       viewerEntryId
       canManage
-      tournament { ...TournamentInfoFields }
+      tournament { ...TournamentDetailInfoFields }
       unavailableSections
       participants { entryId entryName playerName }
 		setup { status phase completedUnits totalUnits hasWarnings progressMode attempt maxAttempts nextRetryAt warningSummaries { category affectedCount repairExhausted } }

@@ -502,7 +502,32 @@ const server = createServer((request, response) => {
 								index === 0
 									? { direction: 'UP', places: 6 }
 									: { direction: 'FLAT', places: 0 },
-							tournamentId: index === 1 ? 77 : null
+							tournamentId: index === 1 ? 77 : index === 6 ? 6 : null,
+							h2hMatchup:
+								index === 6
+									? {
+											officialMatchId: 2071743,
+											eventId: 1,
+											isLive: true,
+											isFinal: false,
+											isBye: false,
+											sourceCheckedAt: '2026-08-22T20:09:19.668Z',
+											viewer: {
+												entryId: 15702,
+												entryName: '让让群の一美',
+												playerName: 'Future Xu',
+												isAverage: false,
+												points: 24
+											},
+											opponent: {
+												entryId: 31056,
+												entryName: 'Tong言无忌',
+												playerName: '炸群高手 磊磊酱',
+												isAverage: false,
+												points: 43
+											}
+										}
+									: null
 						})),
 						sourceCheckedAt: '2026-08-14T00:00:00.000Z'
 					}

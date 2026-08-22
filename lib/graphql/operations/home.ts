@@ -141,12 +141,35 @@ export const GET_HOME_PERSONAL_DESK = /* GraphQL */ `
 			leagueRanks {
 				key
 				name
+				leagueType
 				rank
 				movement {
 					direction
 					places
 				}
 				tournamentId
+				h2hMatchup {
+					officialMatchId
+					eventId
+					isLive
+					isFinal
+					isBye
+					sourceCheckedAt
+					viewer {
+						entryId
+						entryName
+						playerName
+						isAverage
+						points
+					}
+					opponent {
+						entryId
+						entryName
+						playerName
+						isAverage
+						points
+					}
+				}
 			}
 			sourceCheckedAt
 		}
@@ -371,14 +394,33 @@ export type HomeGameweekResponse = {
 
 export type HomeRankDirection = 'UP' | 'DOWN' | 'FLAT' | 'UNKNOWN'
 
+export type HomeH2HMatchupSide = {
+	entryId: number | null
+	entryName: string | null
+	playerName: string | null
+	isAverage: boolean
+	points: number | null
+}
+
+export type HomeH2HMatchup = {
+	officialMatchId: number
+	eventId: number
+	isLive: boolean
+	isFinal: boolean
+	isBye: boolean
+	viewer: HomeH2HMatchupSide
+	opponent: HomeH2HMatchupSide
+	sourceCheckedAt: string | null
+}
+
 export type HomeLeagueRank = {
 	key: string
 	name: string
-	/** Optional until every GraphQL deployment exposes the H2H enum field. */
-	leagueType?: 'CLASSIC' | 'H2H' | null
+	leagueType: 'CLASSIC' | 'H2H'
 	rank: number | null
 	movement: { direction: HomeRankDirection; places: number | null }
 	tournamentId: number | null
+	h2hMatchup: HomeH2HMatchup | null
 }
 
 export type HomePersonalDesk = {
