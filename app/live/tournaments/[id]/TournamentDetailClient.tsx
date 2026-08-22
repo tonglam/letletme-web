@@ -31,8 +31,6 @@ import {
 	type TournamentParticipant
 } from '@/lib/graphql/operations/tournaments'
 import {
-	canRequestLiveTournamentBoard,
-	isSyntheticScheduledSnapshot,
 	liveSnapshotNeedsRefresh,
 	liveContextToSnapshot,
 	shouldPollLiveSnapshot
@@ -485,9 +483,6 @@ export default function TournamentDetailClient({
 			) {
 				return Promise.resolve()
 			}
-			if (!canRequestLiveTournamentBoard(snapshotRef.current, revision)) {
-				return Promise.resolve()
-			}
 			if (refreshInFlightRef.current) return refreshInFlightRef.current
 			refreshGenerationRef.current += 1
 
@@ -553,9 +548,9 @@ export default function TournamentDetailClient({
 							? {
 									eventId: batch.eventId,
 									revision: batch.revision,
-									state: 'LIVE' as const,
-									publishedAt: new Date().toISOString(),
-									checkedAt: new Date().toISOString()
+									state: (batch.windowState ?? batch.state) as LiveSnapshotStatus['state'],
+									publishedAt: null,
+									checkedAt: null
 								}
 							: null
 					)
@@ -616,13 +611,6 @@ export default function TournamentDetailClient({
 				)
 				if (generation !== refreshGenerationRef.current) return
 				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
-				if (
-					!observedSnapshot &&
-					isSyntheticScheduledSnapshot(snapshotRef.current)
-				) {
-					if (failedEntryCountRef.current === 0) setError(null)
-					return
-				}
 				const managerScoreDue = Boolean(
 					managerNextRefreshAt &&
 					Date.parse(managerNextRefreshAt) <= Date.now()
@@ -759,7 +747,9 @@ export default function TournamentDetailClient({
 		selectedEventId: currentGameweek,
 		snapshot,
 		managerScoreState: managerScoreSettling ? 'SETTLING' : null,
-		managerNextRefreshAt
+		managerNextRefreshAt,
+		windowState: snapshot?.windowState ?? snapshot?.state,
+		nextRefreshAt: snapshot?.nextRefreshAt
 	})
 
 	// Full-page empty state for access / link / bind failures

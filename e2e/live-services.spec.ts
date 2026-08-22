@@ -259,10 +259,19 @@ test('live points keeps polling after the seed and first client load fail', asyn
 							season: '2627',
 							eventId: 33,
 							nextEventId: 34,
+							anchorEventId: 33,
+							latestFinalizedEventId: 32,
 							revision: 'a'.repeat(24),
 							state: 'SCHEDULED',
+							windowState: 'EVENT_SCHEDULED',
+							producerState: 'PICKS_PROBE',
+							anchorMode: 'CURRENT',
+							dataAvailability: 'SCHEDULED',
+							nextRefreshAt: '2026-08-04T18:35:00.000Z',
 							publishedAt: '2026-08-04T18:00:00.000Z',
-							checkedAt: '2026-08-04T18:00:30.000Z'
+							checkedAt: '2026-08-04T18:00:30.000Z',
+							source: 'CORE',
+							stale: false
 						}
 					}
 				}
@@ -393,10 +402,19 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 							coreRevision: 'e2e-core-v1',
 							eventId: 33,
 							nextEventId: 34,
+							anchorEventId: 33,
+							latestFinalizedEventId: 32,
 							revision,
 							state: 'LIVE_ACTIVE',
+							windowState: 'LIVE_ACTIVE',
+							producerState: 'LIVE_ACTIVE',
+							anchorMode: 'CURRENT',
+							dataAvailability: 'FRESH',
+							nextRefreshAt: '2026-08-04T18:31:00.000Z',
 							checkedAt: '2026-08-04T18:30:30.000Z',
-							publishedAt: '2026-08-04T18:30:00.000Z'
+							publishedAt: '2026-08-04T18:30:00.000Z',
+							source: 'REDIS',
+							stale: false
 						}
 					}
 				}

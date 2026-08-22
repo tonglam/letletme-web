@@ -9,6 +9,7 @@ import {
 } from '@/lib/graphql/operations/tournaments'
 import { executeServerQuery } from '@/lib/graphql-server'
 import { getLivePageContext } from '@/lib/live-context-server'
+import { liveContextToSnapshot } from '@/lib/live-refresh'
 import { getCurrentEntryId } from '@/lib/session'
 import { getCurrentSeasonKey } from '@/lib/season'
 import { getTournamentLiveBatchSeed } from '@/lib/tournament/liveEntries'
@@ -47,14 +48,16 @@ export default async function Page({ params, searchParams }: PageProps) {
 	])
 	if (
 		presentation.phase === 'PRESEASON' ||
-		presentation.phase === 'BETWEEN_GAMEWEEKS' ||
-		presentation.phase === 'OFFSEASON' ||
+		liveContext?.windowState === 'PRESEASON' ||
+		liveContext?.windowState === 'OFFSEASON' ||
+			(!liveContext?.anchorEventId &&
+				presentation.phase !== 'BETWEEN_GAMEWEEKS') ||
 		presentation.phase === 'UNAVAILABLE'
 	) {
 		return <SeasonPhaseState feature="competition" presentation={presentation} />
 	}
 
-	const currentEventId = presentation.currentEventId
+	const currentEventId = liveContext?.anchorEventId ?? presentation.currentEventId
 	if (!currentEventId) {
 		return <SeasonPhaseState feature="competition" presentation={presentation} />
 	}
@@ -77,10 +80,10 @@ export default async function Page({ params, searchParams }: PageProps) {
 			const requestedTournamentIdNumber = Number(requestedTournamentId)
 			const context = liveContext
 			const ref =
-				context?.revision && context.eventId
+				context?.revision && context.anchorEventId
 					? {
 							season: context.season || String(getCurrentSeasonKey()),
-							eventId: context.eventId,
+							eventId: context.anchorEventId,
 							revision: context.revision
 						}
 					: null
@@ -114,7 +117,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			) {
 				const seed = getTournamentLiveBatchSeed(desk)
 				initialCurrentRows = seed.rows
-				initialSnapshot = seed.snapshot
+				initialSnapshot = liveContextToSnapshot(liveContext) ?? seed.snapshot
 				if (seed.failedCount > 0) {
 					initialResultsError = liveT('partialResults', {
 						failed: seed.failedCount,

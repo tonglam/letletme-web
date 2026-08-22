@@ -2,16 +2,17 @@ import TeamPointsClient from '@/app/live/points/[id]/TeamPointsClient'
 import { SeasonPhaseState } from '@/components/feedback/SeasonPhaseState'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getLivePageContext } from '@/lib/live-context-server'
+import { liveContextToSnapshot } from '@/lib/live-refresh'
 import {
 	GET_ENTRY,
 	type EntryOverallSnapshot,
-	type EntrySummaryResponse,
+	type EntrySummaryResponse
 } from '@/lib/graphql/operations/entries'
 import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
 	type LiveCalcDataResponse,
-	type LiveSnapshotStatus,
+	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import { executeServerQuery } from '@/lib/graphql-server'
 
@@ -23,7 +24,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: `/live/points/${encodeURIComponent(id)}`,
 		titleKey: 'entryPointsTitle',
-		titleValues: { id },
+		titleValues: { id }
 	})
 }
 
@@ -37,10 +38,12 @@ export default async function Page({ params, searchParams }: PageProps) {
 	const { gw, tournamentId } = await searchParams
 	const entryId = Number(id)
 
-	const { presentation } = await getLivePageContext()
+	const { presentation, liveContext } = await getLivePageContext()
 	const requestedGameweekValue = typeof gw === 'string' ? Number(gw) : null
 	const historicalMaxGameweek =
-		presentation.currentEventId ?? presentation.latestFinishedEventId
+		liveContext?.anchorEventId ??
+		presentation.currentEventId ??
+		presentation.latestFinishedEventId
 	const requestedGameweek =
 		requestedGameweekValue !== null &&
 		Number.isInteger(requestedGameweekValue) &&
@@ -50,7 +53,8 @@ export default async function Page({ params, searchParams }: PageProps) {
 			? requestedGameweekValue
 			: null
 	const allowHistoricalBetweenGameweeks =
-		presentation.phase === 'BETWEEN_GAMEWEEKS' && requestedGameweek !== null
+		liveContext?.windowState === 'BETWEEN_GAMEWEEKS' ||
+		(presentation.phase === 'BETWEEN_GAMEWEEKS' && requestedGameweek !== null)
 	if (
 		presentation.phase === 'PRESEASON' ||
 		(presentation.phase === 'BETWEEN_GAMEWEEKS' &&
@@ -58,16 +62,27 @@ export default async function Page({ params, searchParams }: PageProps) {
 		presentation.phase === 'OFFSEASON' ||
 		presentation.phase === 'UNAVAILABLE'
 	) {
-		return <SeasonPhaseState feature="points" presentation={presentation} />
+		return (
+			<SeasonPhaseState
+				feature="points"
+				presentation={presentation}
+			/>
+		)
 	}
 
 	const currentEventId =
+		liveContext?.anchorEventId ??
 		presentation.currentEventId ??
 		(allowHistoricalBetweenGameweeks
 			? presentation.latestFinishedEventId
 			: null)
 	if (!currentEventId) {
-		return <SeasonPhaseState feature="points" presentation={presentation} />
+		return (
+			<SeasonPhaseState
+				feature="points"
+				presentation={presentation}
+			/>
+		)
 	}
 	const initialEventId = requestedGameweek ?? currentEventId
 	const seedCurrentOverall = initialEventId === currentEventId
@@ -81,38 +96,43 @@ export default async function Page({ params, searchParams }: PageProps) {
 			executeServerQuery<LiveCalcDataResponse>(
 				GET_LIVE_POINTS,
 				{ eventId: initialEventId, entryId },
-				{ cache: 'no-store' },
+				{ cache: 'no-store' }
 			),
 			seedCurrentOverall
 				? executeServerQuery<EntrySummaryResponse>(
 						GET_ENTRY,
 						{ id: entryId },
-						{ cache: 'no-store' },
+						{ cache: 'no-store' }
 					)
-				: Promise.resolve(null),
+				: Promise.resolve(null)
 		])
 
 		if (liveResult.status === 'fulfilled') {
 			initialLiveData = liveResult.value.calcLivePointsByEntry
-			initialSnapshot = liveResult.value.liveSnapshot
+			initialSnapshot =
+				(liveContext?.anchorEventId === initialEventId
+					? liveContextToSnapshot(liveContext)
+					: null) ??
+				liveResult.value.calcLivePointsByEntry.snapshot ??
+				null
 		} else {
 			console.error('Failed to seed live points page:', liveResult.reason)
 		}
 
-		if (
-			overallResult.status === 'fulfilled' &&
-			overallResult.value?.entry
-		) {
+		if (overallResult.status === 'fulfilled' && overallResult.value?.entry) {
 			const entry = overallResult.value.entry
 			initialOverall = {
 				overallPoints: entry.overallPoints,
 				overallRank: entry.overallRank,
 				teamValue: entry.teamValue,
 				bank: entry.bank,
-				totalTransfers: entry.totalTransfers,
+				totalTransfers: entry.totalTransfers
 			}
 		} else if (overallResult.status === 'rejected') {
-			console.error('Failed to seed team overall snapshot:', overallResult.reason)
+			console.error(
+				'Failed to seed team overall snapshot:',
+				overallResult.reason
+			)
 		}
 	}
 

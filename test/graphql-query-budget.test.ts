@@ -208,8 +208,8 @@ describe('GraphQL request budget', () => {
 		let astNodes = 0
 		visit(document, { enter: () => void (astNodes += 1) })
 		assert.ok(
-			astNodes < 200,
-			`GET_TOURNAMENT_LIVE_DESK has ${astNodes} AST nodes`
+			astNodes <= 200,
+			`GET_TOURNAMENT_LIVE_DESK has ${astNodes} AST nodes; backend limit is 200`
 		)
 	})
 })

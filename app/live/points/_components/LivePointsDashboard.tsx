@@ -40,7 +40,8 @@ export function LivePointsDashboard({
 	benchPlayers,
 	onGameweekChange,
 	onAutoRefresh,
-	onRefresh
+	onRefresh,
+	nextRefreshAt
 }: {
 	entrySearch?: ReactNode
 	currentGameweek: number
@@ -57,6 +58,7 @@ export function LivePointsDashboard({
 	onGameweekChange: (gameweek: number) => void
 	onAutoRefresh: () => Promise<void>
 	onRefresh: () => Promise<void>
+	nextRefreshAt?: string | null
 }) {
 	const t = useTranslations('LivePoints')
 	const format = useFormatter()
@@ -247,8 +249,9 @@ export function LivePointsDashboard({
 					) : null}
 					<div className="flex flex-wrap items-center gap-2 sm:gap-3">
 						<LivePointsAutoRefreshCountdown
-							enabled={autoRefreshEnabled}
-							onRefresh={onAutoRefresh}
+				enabled={autoRefreshEnabled}
+				onRefresh={onAutoRefresh}
+				nextRefreshAt={nextRefreshAt}
 						/>
 						<ShareActions
 							text={shareText}

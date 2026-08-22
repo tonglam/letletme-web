@@ -38,7 +38,7 @@ export default function TeamPointsClient({
 	initialSelectedGameweek,
 	initialLiveData,
 	initialSnapshot,
-	initialOverall,
+	initialOverall
 }: TeamPointsClientProps) {
 	const t = useTranslations('LivePoints')
 	const livePoints = useLivePoints({
@@ -60,8 +60,7 @@ export default function TeamPointsClient({
 	}, [entryId, initialEventId, initialOverall])
 
 	useEffect(() => {
-		const selectedGw =
-			livePoints.selectedGameweek ?? livePoints.currentGameweek
+		const selectedGw = livePoints.selectedGameweek ?? livePoints.currentGameweek
 		if (entryId <= 0 || selectedGw !== livePoints.currentGameweek) {
 			setOverall(undefined)
 			overallLoadedKeyRef.current = null
@@ -130,6 +129,11 @@ export default function TeamPointsClient({
 				onGameweekChange={livePoints.changeGameweek}
 				onAutoRefresh={livePoints.autoRefresh}
 				onRefresh={livePoints.refresh}
+				nextRefreshAt={
+					livePoints.snapshot?.nextRefreshAt ??
+					livePoints.liveData?.score?.nextRefreshAt ??
+					null
+				}
 			/>
 		)
 	}
@@ -146,7 +150,10 @@ export default function TeamPointsClient({
 						<ArrowLeft aria-hidden="true" /> {t('backTournament')}
 					</Link>
 				</Button>
-				<StatsPageHeader eyebrow={t('livePoints')} title={t('teamTitle')} />
+				<StatsPageHeader
+					eyebrow={t('livePoints')}
+					title={t('teamTitle')}
+				/>
 				{content}
 			</div>
 		</PageShell>

@@ -7,31 +7,50 @@ describe('GraphQL proxy read path', () => {
 	it('skips Better Auth without a browser cookie', () => {
 		assert.equal(shouldResolveGraphQLProxySession(new Headers()), false)
 		assert.equal(
-			shouldResolveGraphQLProxySession(new Headers({ authorization: 'Bearer opaque-mini-token' })),
-			false,
+			shouldResolveGraphQLProxySession(
+				new Headers({ authorization: 'Bearer opaque-mini-token' })
+			),
+			false
 		)
 		assert.equal(
-			shouldResolveGraphQLProxySession(new Headers({ cookie: 'better-auth.session_token=value' })),
-			true,
+			shouldResolveGraphQLProxySession(
+				new Headers({ cookie: 'better-auth.session_token=value' })
+			),
+			true
 		)
 	})
 
 	it('does not use the PostgreSQL limiter in the GraphQL proxy route', () => {
-		const route = readFileSync(new URL('../app/api/graphql/route.ts', import.meta.url), 'utf8')
-		assert.doesNotMatch(route, /checkDatabaseRateLimit|databaseRateLimit|graphql-proxy-ip/)
+		const route = readFileSync(
+			new URL('../app/api/graphql/route.ts', import.meta.url),
+			'utf8'
+		)
+		assert.doesNotMatch(
+			route,
+			/checkDatabaseRateLimit|databaseRateLimit|graphql-proxy-ip/
+		)
 		assert.doesNotMatch(route, /from ['"]@\/lib\/http-security['"]/)
 		assert.match(route, /await import\(['"]@\/lib\/auth['"]\)/)
 		assert.match(route, /buildGraphQLProxyIngress/)
 		assert.match(route, /copySafeGraphQLUpstreamHeaders/)
 		assert.match(route, /includeRateLimitMetadata: cacheControl === 'no-store'/)
-		assert.match(route, /if \(cacheControl === 'no-store'\) safeHeaders\.set\('X-Request-Id'/)
+		assert.match(
+			route,
+			/if \(cacheControl === 'no-store'\) safeHeaders\.set\('X-Request-Id'/
+		)
 		assert.doesNotMatch(route, /forwardHeaders\[[^\]]*Device-Id/)
 	})
 
 	it('attributes public API cache fills to the originating browser identity', () => {
-		const server = readFileSync(new URL('../lib/graphql-server.ts', import.meta.url), 'utf8')
+		const server = readFileSync(
+			new URL('../lib/graphql-server.ts', import.meta.url),
+			'utf8'
+		)
 		assert.match(server, /new AsyncLocalStorage<PublicRouteIngressContext>/)
-		assert.match(server, /buildOpaqueRateLimitSubject\(request\.headers, secret\)/)
+		assert.match(
+			server,
+			/buildOpaqueRateLimitSubject\(request\.headers, secret\)/
+		)
 		assert.match(server, /trafficClass: 'web_browser'/)
 		assert.match(server, /routeIngress \? 'web_browser' : 'web_rsc'/)
 
@@ -50,16 +69,41 @@ describe('GraphQL proxy read path', () => {
 		}
 	})
 
+	it('does not key live context validation only by publication revision', () => {
+		const route = readFileSync(
+			new URL('../app/api/live/context/route.ts', import.meta.url),
+			'utf8'
+		)
+		assert.match(route, /data\.liveContext\?\.windowState/)
+		assert.match(route, /data\.liveContext\?\.anchorEventId/)
+		assert.match(route, /data\.coreEventContext\?\.revision/)
+	})
+
 	it('logs the effective signed workload for legacy ingress', () => {
-		const route = readFileSync(new URL('../app/api/graphql/route.ts', import.meta.url), 'utf8')
-		assert.match(route, /const effectiveWorkload = ingress\?\.ok \? ingress\.workload : workload/)
+		const route = readFileSync(
+			new URL('../app/api/graphql/route.ts', import.meta.url),
+			'utf8'
+		)
+		assert.match(
+			route,
+			/const effectiveWorkload = ingress\?\.ok \? ingress\.workload : workload/
+		)
 		assert.match(route, /workload: effectiveWorkload/)
 	})
 
 	it('adds trusted server context to direct RSC GraphQL requests', () => {
-		const client = readFileSync(new URL('../lib/graphql-client.ts', import.meta.url), 'utf8')
-		const server = readFileSync(new URL('../lib/graphql-server.ts', import.meta.url), 'utf8')
-		assert.doesNotMatch(client, /server-user-context|getServerUserContextHeaders/)
+		const client = readFileSync(
+			new URL('../lib/graphql-client.ts', import.meta.url),
+			'utf8'
+		)
+		const server = readFileSync(
+			new URL('../lib/graphql-server.ts', import.meta.url),
+			'utf8'
+		)
+		assert.doesNotMatch(
+			client,
+			/server-user-context|getServerUserContextHeaders/
+		)
 		assert.doesNotMatch(client, /localhost:3000\/api\/graphql/)
 		assert.match(server, /getServerUserContextHeaders/)
 		assert.match(server, /buildOpaqueRscSubject\(workload, secret\)/)

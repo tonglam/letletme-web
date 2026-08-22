@@ -7,10 +7,12 @@ import { useEffect, useRef, useState } from 'react'
 export function LiveAutoRefreshCountdown({
 	enabled,
 	onRefresh,
+	nextRefreshAt,
 	renderLabel
 }: {
 	enabled: boolean
 	onRefresh: () => Promise<void>
+	nextRefreshAt?: string | null
 	renderLabel: (seconds: number) => ReactNode
 }) {
 	const [countdown, setCountdown] = useState<number | null>(null)
@@ -39,7 +41,12 @@ export function LiveAutoRefreshCountdown({
 			})
 		}
 
-		let refreshDeadline = Date.now() + LIVE_AUTO_REFRESH_SECONDS * 1000
+		const serverDeadline = nextRefreshAt ? Date.parse(nextRefreshAt) : Number.NaN
+		const baseDelay = Number.isFinite(serverDeadline)
+			? Math.max(0, serverDeadline - Date.now())
+			: LIVE_AUTO_REFRESH_SECONDS * 1000
+		const jitter = baseDelay > 0 ? baseDelay * (Math.random() * 0.2 - 0.1) : 0
+		let refreshDeadline = Date.now() + Math.max(0, baseDelay + jitter)
 		const initialTimer = window.setTimeout(
 			() => setCountdown(LIVE_AUTO_REFRESH_SECONDS),
 			0
@@ -64,7 +71,7 @@ export function LiveAutoRefreshCountdown({
 			window.clearTimeout(initialTimer)
 			window.clearInterval(intervalId)
 		}
-	}, [enabled])
+	}, [enabled, nextRefreshAt])
 
 	if (!enabled || countdown === null) return null
 

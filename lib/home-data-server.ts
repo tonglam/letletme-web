@@ -196,9 +196,9 @@ const loadHomeFixturesFromOrigin = async (
 					eventId: desk.eventId,
 					source: 'LIVE' as const,
 					state: liveStateToHomeState(desk.state),
-					sourceCheckedAt: desk.sourceCheckedAt,
-					publishedAt: desk.publishedAt,
-					stale: desk.stale,
+					sourceCheckedAt: desk.sourceCheckedAt ?? null,
+					publishedAt: desk.publishedAt ?? null,
+					stale: desk.stale ?? false,
 					fixtures: liveFixturesToHomeFixtures(desk.matches)
 				}
 			} catch (error) {

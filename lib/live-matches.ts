@@ -88,7 +88,7 @@ export function transformUpcomingFixtures(
 					: fixture.homeTeam.name,
 			shortName:
 				'homeTeamName' in fixture
-					? getTeamShortName(fixture.homeTeamName)
+					? fixture.homeTeamShortName || getTeamShortName(fixture.homeTeamName)
 					: fixture.homeTeam.shortName ||
 						getTeamShortName(fixture.homeTeam.name),
 			score: fixture.homeScore ?? 0,
@@ -105,7 +105,7 @@ export function transformUpcomingFixtures(
 					: fixture.awayTeam.name,
 			shortName:
 				'awayTeamName' in fixture
-					? getTeamShortName(fixture.awayTeamName)
+					? fixture.awayTeamShortName || getTeamShortName(fixture.awayTeamName)
 					: fixture.awayTeam.shortName ||
 						getTeamShortName(fixture.awayTeam.name),
 			score: fixture.awayScore ?? 0,
@@ -127,6 +127,9 @@ export interface LiveMatchesSnapshot {
 	snapshot: LiveSnapshotStatus | null
 	currentEventId: number | null
 	nextEventId: number | null
+	windowState?: string
+	dataAvailability?: string
+	nextRefreshAt?: string | null
 }
 
 export interface LiveMatchesLoadOptions {
@@ -170,13 +173,22 @@ export async function getLiveMatchesSnapshot(
 	}
 	const current = validEventId(desk.liveMatchdayDesk?.eventId) ?? currentEventId
 	const snapshot = desk.liveMatchdayDesk
-		? {
+			? {
 				eventId: desk.liveMatchdayDesk.eventId,
-				revision: desk.liveMatchdayDesk.revision,
-				state: desk.liveMatchdayDesk.state,
-				publishedAt: desk.liveMatchdayDesk.publishedAt,
-				checkedAt: desk.liveMatchdayDesk.sourceCheckedAt,
-				stale: desk.liveMatchdayDesk.stale
+				revision: desk.liveMatchdayDesk.liveRevision,
+				state:
+					desk.liveMatchdayDesk.windowState ?? desk.liveMatchdayDesk.state,
+				publishedAt: desk.liveMatchdayDesk.liveRevision
+					? desk.liveMatchdayDesk.publishedAt
+					: null,
+				checkedAt:
+					desk.liveMatchdayDesk.liveRevision
+					? desk.liveMatchdayDesk.sourceCheckedAt ??
+						desk.liveMatchdayDesk.publishedAt
+					: null,
+				windowState: desk.liveMatchdayDesk.windowState,
+				dataAvailability: desk.liveMatchdayDesk.dataAvailability,
+				nextRefreshAt: desk.liveMatchdayDesk.nextRefreshAt
 			}
 		: null
 	return {
@@ -186,7 +198,10 @@ export async function getLiveMatchesSnapshot(
 		],
 		snapshot,
 		currentEventId: current,
-		nextEventId
+		nextEventId,
+		windowState: desk.liveMatchdayDesk?.windowState,
+		dataAvailability: desk.liveMatchdayDesk?.dataAvailability,
+		nextRefreshAt: desk.liveMatchdayDesk?.nextRefreshAt ?? null
 	}
 }
 

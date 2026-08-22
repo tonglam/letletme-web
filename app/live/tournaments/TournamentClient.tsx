@@ -94,15 +94,17 @@ const fetchLivePoints = async (
 		failedCount: batch.failedEntryIds.length,
 		failedEntryIds: batch.failedEntryIds,
 		totalEntries: batch.totalEntries,
-		snapshot: batch.revision
-			? {
-					eventId: batch.eventId,
-					revision: batch.revision,
-					state: 'LIVE' as const,
-					publishedAt: new Date().toISOString(),
-					checkedAt: new Date().toISOString()
-				}
-			: null
+		snapshot: {
+			eventId: batch.eventId,
+			revision: batch.revision ?? null,
+			state: (batch.windowState ?? batch.state) as LiveSnapshotStatus['state'],
+			publishedAt: null,
+			checkedAt: null,
+			windowState: batch.windowState as LiveSnapshotStatus['windowState'],
+			dataAvailability:
+				batch.dataAvailability as LiveSnapshotStatus['dataAvailability'],
+			nextRefreshAt: batch.nextRefreshAt ?? null
+		}
 	}
 }
 
@@ -151,9 +153,10 @@ export default function TournamentClient({
 		initialSnapshot ?? null
 	)
 	const snapshotRef = useRef<LiveSnapshotStatus | null>(initialSnapshot ?? null)
-	const [currentGameweek] = useState<number>(initialEventId)
+	const [currentGameweek, setCurrentGameweek] = useState<number>(initialEventId)
 	const [selectedGameweek, setSelectedGameweek] =
 		useState<number>(initialEventId)
+	const followsAnchorRef = useRef(true)
 	const [selectedRows, setSelectedRows] =
 		useState<TournamentLiveCalcData[]>(initialCurrentRows)
 	const [tableEntriesForShare, setTableEntriesForShare] = useState<
@@ -496,7 +499,9 @@ export default function TournamentClient({
 			selectedEventId: selectedGameweek,
 			snapshot,
 			managerScoreState: managerScoreSettling ? 'SETTLING' : null,
-			managerNextRefreshAt
+			managerNextRefreshAt,
+			windowState: snapshot?.windowState ?? snapshot?.state,
+			nextRefreshAt: snapshot?.nextRefreshAt
 		})
 	const refreshTournamentResults = useCallback(
 		async (revision?: string | null) => {
@@ -525,10 +530,21 @@ export default function TournamentClient({
 					{ cache: 'no-store' }
 				)
 				if (requestId !== resultsRequestIdRef.current) return
+				const context = probe.liveContext
+				const observedAnchorEventId = context?.anchorEventId ?? undefined
+				if (
+					observedAnchorEventId &&
+					observedAnchorEventId !== currentGameweek
+				) {
+					setCurrentGameweek(observedAnchorEventId)
+					if (followsAnchorRef.current) {
+						setSelectedGameweek(observedAnchorEventId)
+					}
+					return
+				}
 				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
 				const managerScoreDue = Boolean(
-					managerNextRefreshAt &&
-					Date.parse(managerNextRefreshAt) <= Date.now()
+					managerNextRefreshAt && Date.parse(managerNextRefreshAt) <= Date.now()
 				)
 				if (
 					!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot) &&
@@ -558,8 +574,13 @@ export default function TournamentClient({
 		selectedTournament,
 		standingsReady,
 		t,
-		managerNextRefreshAt
+		managerNextRefreshAt,
+		currentGameweek
 	])
+	const handleGameweekChange = useCallback((gameweek: number) => {
+		followsAnchorRef.current = false
+		setSelectedGameweek(gameweek)
+	}, [])
 	const captainOptions = useMemo(
 		() =>
 			Array.from(
@@ -795,7 +816,7 @@ export default function TournamentClient({
 
 				<Card className="p-4 mb-6">
 					<GameweekSelector
-						onGameweekChange={setSelectedGameweek}
+						onGameweekChange={handleGameweekChange}
 						currentGameweek={currentGameweek}
 						selectedGameweek={selectedGameweek}
 						disabled={
@@ -806,6 +827,7 @@ export default function TournamentClient({
 						<LiveAutoRefreshCountdown
 							enabled={autoRefreshEnabled}
 							onRefresh={autoRefreshTournamentResults}
+							nextRefreshAt={snapshot?.nextRefreshAt ?? managerNextRefreshAt}
 							renderLabel={seconds => t('nextRefresh', { seconds })}
 						/>
 						{/* Manual refresh — same idea as /live/points (auto countdown alone is easy to miss) */}
