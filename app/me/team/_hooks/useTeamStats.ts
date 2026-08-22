@@ -18,6 +18,7 @@ import {
 	hydrateTeamStatsSessionCache,
 	identityFromEventResult,
 	mapApiDataToTeamStats,
+	peekEntryDeskState,
 	peekEntryEventResult,
 	peekEntryGameweekState,
 	peekEntryHistory,
@@ -86,7 +87,7 @@ export function useTeamStats({
 }: UseTeamStatsOptions) {
 	const t = useTranslations('TeamStats')
 	const [currentGameweek, setCurrentGameweek] = useState(initialCurrentGameweek)
-	const [deskState] = useState<MyFplReviewState>(initialDeskState)
+	const [deskState, setDeskState] = useState<MyFplReviewState>(initialDeskState)
 	const [selectedGameweek, setSelectedGameweek] = useState(
 		initialSelectedGameweek && initialSelectedGameweek > 0
 			? initialSelectedGameweek
@@ -182,6 +183,7 @@ export function useTeamStats({
 			entryId,
 			seedGw,
 			currentGameweek: initialCurrentGameweek,
+			deskState: initialDeskState,
 			history: initialEntryHistory,
 			historyState: initialPastSeasonsState,
 			event: initialEntryEventResult,
@@ -196,6 +198,7 @@ export function useTeamStats({
 		initialPastSeasonsState,
 		initialEntryHistory,
 		initialEntryIdentity,
+		initialDeskState,
 		initialEntryTransfers,
 		initialEntryTransfersState,
 		initialCurrentGameweek,
@@ -221,6 +224,8 @@ export function useTeamStats({
 		}
 		const cachedHistory = peekEntryHistory(entryId)
 		if (cachedHistory !== undefined) {
+			const cachedDeskState = peekEntryDeskState(entryId)
+			if (cachedDeskState) setDeskState(cachedDeskState)
 			const cachedState = peekEntryHistoryState(entryId)
 			if (cachedState) setPastSeasonsState(cachedState)
 			if (cachedState === 'PENDING') scheduleRetry()
@@ -233,6 +238,8 @@ export function useTeamStats({
 			try {
 				const history = await getEntryHistoryCached(entryId)
 				if (cancelled || !history) return
+				const nextDeskState = peekEntryDeskState(entryId)
+				if (nextDeskState) setDeskState(nextDeskState)
 				const nextPastSeasonsState = peekEntryHistoryState(entryId)
 				if (nextPastSeasonsState) {
 					setPastSeasonsState(nextPastSeasonsState)
@@ -361,7 +368,11 @@ export function useTeamStats({
 			setEmptyStateMessage(null)
 			return
 		}
-		if (cachedEvent === null) {
+		const forceGameweekFetch =
+			gameweekRetryNonce > 0 &&
+			cachedEvent === null &&
+			cachedState === 'PENDING'
+		if (cachedEvent === null && !forceGameweekFetch) {
 			setTeamStats(null)
 			setGameweekState(cachedState)
 			setEmptyStateMessage(formatEmptyStateMessage(cachedState))
@@ -384,7 +395,7 @@ export function useTeamStats({
 					selectedGameweek,
 					{
 						isCurrentGameweek: selectedGameweek === currentGameweek,
-						force: gameweekRetryNonce > 0
+						force: forceGameweekFetch
 					}
 				)
 				if (requestId !== gwRequestIdRef.current) return

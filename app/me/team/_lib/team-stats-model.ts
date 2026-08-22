@@ -492,6 +492,7 @@ const entryHistoryStateCache = new Map<
 	number,
 	TimedCacheValue<MyFplReviewState>
 >()
+const entryDeskStateCache = new Map<number, TimedCacheValue<MyFplReviewState>>()
 const entryHistoryInFlight = new Map<
 	number,
 	Promise<EntryHistoryResponse['entryHistory']>
@@ -526,6 +527,11 @@ export const peekEntryHistoryState = (
 	entryId: number
 ): MyFplReviewState | undefined =>
 	getFreshCacheValue(entryHistoryStateCache, entryId)
+
+export const peekEntryDeskState = (
+	entryId: number
+): MyFplReviewState | undefined =>
+	getFreshCacheValue(entryDeskStateCache, entryId)
 
 export const peekTransferHistory = (
 	entryId: number
@@ -601,6 +607,13 @@ export const seedEntryHistoryCache = (
 	)
 }
 
+export const seedEntryDeskState = (
+	entryId: number,
+	state: MyFplReviewState
+): void => {
+	setCacheValue(entryDeskStateCache, entryId, state, HISTORY_CACHE_TTL_MS)
+}
+
 export const seedTransferHistoryCache = (
 	entryId: number,
 	value: EntryGameweekTransfers[],
@@ -627,6 +640,7 @@ export function hydrateTeamStatsSessionCache(opts: {
 	entryId: number
 	seedGw: number
 	currentGameweek: number
+	deskState?: MyFplReviewState
 	history: EntryHistoryResponse['entryHistory'] | null
 	historyState?: MyFplReviewState
 	event: EntryEventResult | null
@@ -638,6 +652,7 @@ export function hydrateTeamStatsSessionCache(opts: {
 		entryId,
 		seedGw,
 		currentGameweek,
+		deskState,
 		history,
 		historyState,
 		event,
@@ -645,6 +660,7 @@ export function hydrateTeamStatsSessionCache(opts: {
 		transfers,
 		transfersState
 	} = opts
+	if (deskState) seedEntryDeskState(entryId, deskState)
 	if (history) seedEntryHistoryCache(entryId, history, historyState ?? 'READY')
 	if (transfers !== null)
 		seedTransferHistoryCache(entryId, transfers, transfersState ?? 'READY')
@@ -670,6 +686,7 @@ export const getEntryHistoryCached = async (
 	)
 		.then(response => {
 			const snapshot = response.myFplTeamDesk
+			seedEntryDeskState(entryId, snapshot.state)
 			const history = historyFromMyFplDesk(snapshot)
 			seedEntryHistoryCache(entryId, history, snapshot.pastSeasonsState)
 			return history

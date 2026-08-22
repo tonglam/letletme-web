@@ -118,6 +118,25 @@ function SortHeader({
 	)
 }
 
+function PlainHeader({
+	label,
+	align = 'left',
+	className
+}: {
+	label: string
+	align?: 'left' | 'right'
+	className?: string
+}) {
+	return (
+		<DataTh
+			align={align}
+			className={className}
+		>
+			{label}
+		</DataTh>
+	)
+}
+
 export function TournamentSeasonField({
 	field,
 	hasMoreServerRows = false,
@@ -134,8 +153,10 @@ export function TournamentSeasonField({
 	const [visibleCount, setVisibleCount] = useState(PREVIEW_ROWS)
 	const [sortKey, setSortKey] = useState<SortKey>('rank')
 	const [sortDir, setSortDir] = useState<SortDir>('asc')
+	const allowLocalSort = !hasMoreServerRows
 
 	const handleSort = (key: SortKey) => {
+		if (!allowLocalSort) return
 		if (key === sortKey) {
 			setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
 			return
@@ -146,8 +167,9 @@ export function TournamentSeasonField({
 
 	const sortedStandings = useMemo(() => {
 		if (!field) return []
+		if (!allowLocalSort) return field.standings
 		return sortStandings(field.standings, sortKey, sortDir)
-	}, [field, sortKey, sortDir])
+	}, [allowLocalSort, field, sortKey, sortDir])
 
 	useEffect(() => {
 		setVisibleCount(PREVIEW_ROWS)
@@ -279,36 +301,65 @@ export function TournamentSeasonField({
 					className="mx-0 mt-4 rounded-lg border border-border/70 px-0"
 				>
 					<DataThead>
-						<SortHeader
-							label={t('rank')}
-							active={sortKey === 'rank'}
-							dir={sortDir}
-							className="w-10 sm:w-12"
-							onClick={() => handleSort('rank')}
-						/>
+						{allowLocalSort ? (
+							<SortHeader
+								label={t('rank')}
+								active={sortKey === 'rank'}
+								dir={sortDir}
+								className="w-10 sm:w-12"
+								onClick={() => handleSort('rank')}
+							/>
+						) : (
+							<PlainHeader
+								label={t('rank')}
+								className="w-10 sm:w-12"
+							/>
+						)}
 						<DataTh className="min-w-[7rem]">{t('team')}</DataTh>
-						<SortHeader
-							label={t('totalPoints')}
-							active={sortKey === 'totalPoints'}
-							dir={sortDir}
-							align="right"
-							onClick={() => handleSort('totalPoints')}
-						/>
-						<SortHeader
-							label={t('overallRankShort')}
-							active={sortKey === 'overallRank'}
-							dir={sortDir}
-							align="right"
-							className="hidden sm:table-cell"
-							onClick={() => handleSort('overallRank')}
-						/>
-						<SortHeader
-							label={t('value')}
-							active={sortKey === 'teamValue'}
-							dir={sortDir}
-							align="right"
-							onClick={() => handleSort('teamValue')}
-						/>
+						{allowLocalSort ? (
+							<SortHeader
+								label={t('totalPoints')}
+								active={sortKey === 'totalPoints'}
+								dir={sortDir}
+								align="right"
+								onClick={() => handleSort('totalPoints')}
+							/>
+						) : (
+							<PlainHeader
+								label={t('totalPoints')}
+								align="right"
+							/>
+						)}
+						{allowLocalSort ? (
+							<SortHeader
+								label={t('overallRankShort')}
+								active={sortKey === 'overallRank'}
+								dir={sortDir}
+								align="right"
+								className="hidden sm:table-cell"
+								onClick={() => handleSort('overallRank')}
+							/>
+						) : (
+							<PlainHeader
+								label={t('overallRankShort')}
+								align="right"
+								className="hidden sm:table-cell"
+							/>
+						)}
+						{allowLocalSort ? (
+							<SortHeader
+								label={t('value')}
+								active={sortKey === 'teamValue'}
+								dir={sortDir}
+								align="right"
+								onClick={() => handleSort('teamValue')}
+							/>
+						) : (
+							<PlainHeader
+								label={t('value')}
+								align="right"
+							/>
+						)}
 					</DataThead>
 					<tbody>
 						{rows.map(row => (

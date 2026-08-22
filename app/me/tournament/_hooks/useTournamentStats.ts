@@ -518,6 +518,7 @@ export function useTournamentStats({
 					boardRowsToEventResults(boardWithViewer, selectedTournament)
 				)
 			}
+			setError(null)
 		},
 		[aggregate, commitBoardPage, entryId, selectedTournament, standingsSearch]
 	)
@@ -543,8 +544,8 @@ export function useTournamentStats({
 		boardAbortRef.current?.abort()
 		const controller = new AbortController()
 		boardAbortRef.current = controller
+		setIsBoardLoading(true)
 		const timer = window.setTimeout(() => {
-			setIsBoardLoading(true)
 			void fetchBoardPage({
 				tournamentId: selectedTournament.id,
 				eventId,
@@ -600,6 +601,7 @@ export function useTournamentStats({
 
 	const loadMoreStandings = useCallback(async () => {
 		if (
+			isBoardLoading ||
 			!boardPage ||
 			!selectedTournament ||
 			boardPage.page >= boardPage.totalPages
@@ -637,7 +639,14 @@ export function useTournamentStats({
 			if (boardId === boardSequenceRef.current && !controller.signal.aborted)
 				setIsBoardLoading(false)
 		}
-	}, [boardPage, rebuildStatsFromBoard, selectedTournament, standingsSearch, t])
+	}, [
+		boardPage,
+		isBoardLoading,
+		rebuildStatsFromBoard,
+		selectedTournament,
+		standingsSearch,
+		t
+	])
 
 	// Dedicated server path replaces client-side N× full-field reconstruction.
 	useEffect(() => {
