@@ -160,7 +160,7 @@ describe('live refresh policy', () => {
 				...accepted,
 				checkedAt: '2026-08-04T10:01:00.000Z'
 			}),
-			false
+			true
 		)
 		assert.equal(
 			liveSnapshotNeedsRefresh(accepted, {
@@ -232,7 +232,7 @@ describe('live matches server snapshot', () => {
 		assert.equal(result.snapshot?.revision, 'a'.repeat(24))
 	})
 
-	it('keeps live results when the optional upcoming-fixtures query fails', async () => {
+	it('keeps provisional completion out of the live bucket when the optional upcoming-fixtures query fails', async () => {
 		const response: LiveMatchdayDeskResponse = {
 			liveMatchdayDesk: {
 				season: '2026',
@@ -253,7 +253,8 @@ describe('live matches server snapshot', () => {
 						kickoffTime: '2026-08-11T18:00:00.000Z',
 						minutes: 12,
 						started: true,
-						finished: false
+						finished: false,
+						finishedProvisional: true
 					}
 				],
 				nextFixtures: []
@@ -265,7 +266,8 @@ describe('live matches server snapshot', () => {
 		)
 
 		assert.equal(result.matches.length, 1)
-		assert.equal(result.matches[0]?.status, 'LIVE')
+		assert.equal(result.matches[0]?.status, 'FT')
+		assert.equal(result.matches[0]?.provisional, true)
 		assert.equal(result.matches[0]?.minute, 12)
 	})
 

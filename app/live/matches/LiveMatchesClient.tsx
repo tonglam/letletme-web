@@ -338,6 +338,7 @@ export function LiveMatchesClient({
 			liveMinute: (minute: number) => t('liveMinute', { minute }),
 			halfTime: t('halfTime'),
 			fullTime: t('fullTime'),
+			provisional: t('pendingFinal'),
 			notStarted: t('notStarted'),
 			upcoming: t('upcoming'),
 			goals: t('goals'),

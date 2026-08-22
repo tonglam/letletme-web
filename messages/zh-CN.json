@@ -487,6 +487,7 @@
 		"liveMinute": "{minute}′",
 		"halfTime": "中场休息",
 		"fullTime": "比赛结束",
+		"pendingFinal": "等待官方结算",
 		"managerLabel": "{team}，经理 {name}",
 		"pointsShort": "{points} 分",
 		"matchHighlights": "比赛事件",

@@ -58,10 +58,11 @@ export function transformLiveMatches(
 			corners: 0,
 			players: []
 		},
-		status: row.finished ? 'FT' : row.started ? 'LIVE' : 'NOT_STARTED',
+		status: row.finished || row.finishedProvisional ? 'FT' : row.started ? 'LIVE' : 'NOT_STARTED',
 		minute: row.minutes,
 		kickoff: row.kickoffTime ?? '',
-		viewers: 0
+		viewers: 0,
+		provisional: row.finishedProvisional === true
 	}))
 }
 
@@ -175,7 +176,7 @@ export async function getLiveMatchesSnapshot(
 				revision: desk.liveMatchdayDesk.revision,
 				state: desk.liveMatchdayDesk.state,
 				publishedAt: desk.liveMatchdayDesk.publishedAt,
-				checkedAt: desk.liveMatchdayDesk.publishedAt
+				checkedAt: desk.liveMatchdayDesk.sourceCheckedAt ?? desk.liveMatchdayDesk.publishedAt
 			}
 		: null
 	return {

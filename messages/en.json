@@ -487,6 +487,7 @@
 		"liveMinute": "{minute}′ live",
 		"halfTime": "Half time",
 		"fullTime": "Full time",
+		"pendingFinal": "Awaiting official finalization",
 		"managerLabel": "{team}, managed by {name}",
 		"pointsShort": "{points} pts",
 		"matchHighlights": "Match highlights",

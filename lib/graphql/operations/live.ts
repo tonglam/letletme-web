@@ -326,6 +326,11 @@ export const GET_LIVE_MATCHDAY_DESK = `
       revision
       state
       publishedAt
+      sourceCheckedAt
+      windowState
+      dataAvailability
+      stale
+      nextRefreshAt
 		matches {
         fixtureId
         eventId
@@ -339,6 +344,7 @@ export const GET_LIVE_MATCHDAY_DESK = `
         minutes
         started
 			finished
+			finishedProvisional
 		}
 		nextFixtures {
 			fixtureId
@@ -353,6 +359,7 @@ export const GET_LIVE_MATCHDAY_DESK = `
 			minutes
 			started
 			finished
+			finishedProvisional
 		}
     }
   }
@@ -510,6 +517,7 @@ export interface LiveMatchdayDeskRow {
 	minutes: number
 	started: boolean
 	finished: boolean
+	finishedProvisional?: boolean
 }
 
 export interface LiveMatchdayDesk {
@@ -518,6 +526,11 @@ export interface LiveMatchdayDesk {
 	revision: string
 	state: LiveSnapshotState
 	publishedAt: string
+	sourceCheckedAt?: string
+	windowState?: string
+	dataAvailability?: string
+	stale?: boolean
+	nextRefreshAt?: string | null
 	matches: LiveMatchdayDeskRow[]
 	nextFixtures: LiveMatchdayDeskRow[]
 }

@@ -16,7 +16,8 @@ async function handleGet(request: Request) {
 	try {
 		const data = await executePublicServerQuery<LiveMatchdayDeskResponse>('gameweek', GET_LIVE_MATCHDAY_DESK, { ref: { season, eventId, revision } }, { cache: 'no-store' })
 		const response = NextResponse.json(data)
-		response.headers.set('Cache-Control', 'public, max-age=300, s-maxage=21600, stale-while-revalidate=86400, no-transform')
+		response.headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate, no-transform')
+		response.headers.set('CDN-Cache-Control', 'no-store')
 		return response
 	} catch (error) {
 		const message = error instanceof Error ? error.message : ''
