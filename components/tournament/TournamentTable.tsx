@@ -1,27 +1,33 @@
 'use client'
 
+import { ShareActions } from '@/components/share/ShareActions'
 import { Button } from '@/components/ui/button'
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
-	SelectValue,
+	SelectValue
 } from '@/components/ui/select'
 import { Link } from '@/i18n/navigation'
 import { cn, formatCompactNumber } from '@/lib/utils'
+import {
+	sortTournamentEntries,
+	type TournamentSortColumn,
+	type TournamentSortDirection
+} from '@/lib/tournament/table-sort'
 import type { TournamentEntry } from '@/types/tournament'
 import { ArrowDown, ArrowUp, GitCompareArrows } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useFormatter, useTranslations } from 'next-intl'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type RefObject } from 'react'
 
 const EntryCompareSheet = dynamic(
 	() =>
 		import('./EntryCompareSheet').then(mod => ({
-			default: mod.EntryCompareSheet,
+			default: mod.EntryCompareSheet
 		})),
-	{ ssr: false },
+	{ ssr: false }
 )
 
 /**
@@ -40,6 +46,10 @@ interface TournamentTableProps {
 	viewerEntryId?: number
 	/** Reports the rows in the same order currently visible in the table. */
 	onVisibleEntriesChange?: (entries: TournamentEntry[]) => void
+	/** Optional share controls rendered beside Compare in the table toolbar. */
+	shareText?: string | (() => string)
+	shareImageRef?: RefObject<HTMLElement | null>
+	shareTitle?: string
 }
 
 /** FPL money fields are tenths of £m (1005 → £100.5m). */
@@ -48,8 +58,15 @@ function formatTeamMoney(value: number | undefined): string {
 	return `£${(value / 10).toFixed(1)}m`
 }
 
-function isViewerEntry(entry: TournamentEntry, viewerEntryId?: number): boolean {
-	if (viewerEntryId == null || !Number.isFinite(viewerEntryId) || viewerEntryId <= 0) {
+function isViewerEntry(
+	entry: TournamentEntry,
+	viewerEntryId?: number
+): boolean {
+	if (
+		viewerEntryId == null ||
+		!Number.isFinite(viewerEntryId) ||
+		viewerEntryId <= 0
+	) {
 		return false
 	}
 	return entry.id === String(viewerEntryId)
@@ -59,7 +76,7 @@ function isViewerEntry(entry: TournamentEntry, viewerEntryId?: number): boolean 
 function takeVisibleWithPinMe(
 	sorted: TournamentEntry[],
 	visibleCount: number,
-	viewerEntryId?: number,
+	viewerEntryId?: number
 ): TournamentEntry[] {
 	if (sorted.length <= visibleCount) return sorted
 	const top = sorted.slice(0, visibleCount)
@@ -77,14 +94,20 @@ export function TournamentTable({
 	gameweek,
 	viewerEntryId,
 	onVisibleEntriesChange,
+	shareText,
+	shareImageRef,
+	shareTitle
 }: TournamentTableProps) {
 	const t = useTranslations('LiveTournament')
 	const format = useFormatter()
-	const [sortColumn, setSortColumn] = useState<string>('standings')
-	const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+	const [sortColumn, setSortColumn] = useState<TournamentSortColumn>('gwPoints')
+	const [sortDirection, setSortDirection] =
+		useState<TournamentSortDirection>('desc')
 	/** Checkboxes only appear while compare mode is on. */
 	const [compareMode, setCompareMode] = useState(false)
-	const [compareSelection, setCompareSelection] = useState<TournamentEntry[]>([])
+	const [compareSelection, setCompareSelection] = useState<TournamentEntry[]>(
+		[]
+	)
 	const [isCompareOpen, setIsCompareOpen] = useState(false)
 	const [visibleCount, setVisibleCount] = useState(PREVIEW_ROWS)
 
@@ -104,82 +127,18 @@ export function TournamentTable({
 	}
 
 	const sortOptions = [
-		{ value: 'standings', label: t('sortStandingsOrder') },
 		{ value: 'gwPoints', label: t('gameweekPointsShort') },
 		{ value: 'totalPoints', label: t('totalPointsShort') },
 		{ value: 'overallRank', label: t('overallRankShort') },
 		{ value: 'teamValue', label: t('teamValueShort') },
-		{ value: 'eventCost', label: t('cost') },
+		{ value: 'eventCost', label: t('cost') }
 	]
 
-	const sortedEntries = useMemo(() => {
-		const filtered = entries.filter(entry => {
-			if (!searchQuery) return true
-			const query = searchQuery.toLowerCase()
-			return (
-				entry.teamName.toLowerCase().includes(query) ||
-				entry.managerName.toLowerCase().includes(query)
-			)
-		})
-
-		return [...filtered].sort((a, b) => {
-			// Stale retained rows always sort after live recalcs (any column).
-			if (Boolean(a.stale) !== Boolean(b.stale)) {
-				return a.stale ? 1 : -1
-			}
-
-			let valueA: number
-			let valueB: number
-			let unknownA = false
-			let unknownB = false
-
-			switch (sortColumn) {
-				case 'overallRank':
-					valueA =
-						a.overallRank && a.overallRank > 0
-							? a.overallRank
-							: Number.MAX_SAFE_INTEGER
-					valueB =
-						b.overallRank && b.overallRank > 0
-							? b.overallRank
-							: Number.MAX_SAFE_INTEGER
-					break
-				case 'eventCost':
-					valueA = a.eventCost ?? 0
-					valueB = b.eventCost ?? 0
-					break
-				case 'gwPoints':
-					valueA = a.gwPoints ?? a.livePoints ?? 0
-					valueB = b.gwPoints ?? b.livePoints ?? 0
-					unknownA = a.gwPoints == null && a.livePoints == null
-					unknownB = b.gwPoints == null && b.livePoints == null
-					break
-				case 'totalPoints':
-					valueA = a.totalPoints ?? 0
-					valueB = b.totalPoints ?? 0
-					unknownA = a.totalPoints == null
-					unknownB = b.totalPoints == null
-					break
-				case 'teamValue':
-					valueA = a.teamValue ?? -1
-					valueB = b.teamValue ?? -1
-					break
-				case 'standings':
-				case 'rank':
-				default:
-					valueA = a.rank > 0 ? a.rank : Number.MAX_SAFE_INTEGER
-					valueB = b.rank > 0 ? b.rank : Number.MAX_SAFE_INTEGER
-			}
-			if (unknownA !== unknownB) return unknownA ? 1 : -1
-
-			const primary =
-				sortDirection === 'asc' ? valueA - valueB : valueB - valueA
-			if (primary !== 0) return primary
-			const rankDiff = (a.rank || 999999) - (b.rank || 999999)
-			if (rankDiff !== 0) return rankDiff
-			return a.id.localeCompare(b.id)
-		})
-	}, [entries, searchQuery, sortColumn, sortDirection])
+	const sortedEntries = useMemo(
+		() =>
+			sortTournamentEntries(entries, searchQuery, sortColumn, sortDirection),
+		[entries, searchQuery, sortColumn, sortDirection]
+	)
 
 	useEffect(() => {
 		setVisibleCount(PREVIEW_ROWS)
@@ -187,7 +146,7 @@ export function TournamentTable({
 
 	const visibleEntries = useMemo(
 		() => takeVisibleWithPinMe(sortedEntries, visibleCount, viewerEntryId),
-		[sortedEntries, visibleCount, viewerEntryId],
+		[sortedEntries, visibleCount, viewerEntryId]
 	)
 	useEffect(() => {
 		onVisibleEntriesChange?.(visibleEntries)
@@ -203,8 +162,14 @@ export function TournamentTable({
 		return format.number(rank, { notation: 'compact' })
 	}
 
-	const getDefaultDirectionForColumn = (column: string): 'asc' | 'desc' => {
-		if (column === 'standings' || column === 'rank' || column === 'overallRank') {
+	const getDefaultDirectionForColumn = (
+		column: TournamentSortColumn
+	): TournamentSortDirection => {
+		if (
+			column === 'standings' ||
+			column === 'rank' ||
+			column === 'overallRank'
+		) {
 			return 'asc'
 		}
 		return 'desc'
@@ -237,14 +202,18 @@ export function TournamentTable({
 	return (
 		<>
 			<section className="overflow-hidden rounded-xl border border-border/80 bg-card">
-				<div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
+				<div
+					className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-4 py-3"
+					data-share-exclude="true"
+				>
 					<div className="flex items-center gap-2">
 						<span className="text-xs text-muted-foreground">{t('sortBy')}</span>
 						<Select
 							value={sortColumn}
 							onValueChange={nextColumn => {
-								setSortColumn(nextColumn)
-								setSortDirection(getDefaultDirectionForColumn(nextColumn))
+								const column = nextColumn as TournamentSortColumn
+								setSortColumn(column)
+								setSortDirection(getDefaultDirectionForColumn(column))
 							}}
 						>
 							<SelectTrigger
@@ -255,7 +224,10 @@ export function TournamentTable({
 							</SelectTrigger>
 							<SelectContent>
 								{sortOptions.map(option => (
-									<SelectItem key={option.value} value={option.value}>
+									<SelectItem
+										key={option.value}
+										value={option.value}
+									>
 										{option.label}
 									</SelectItem>
 								))}
@@ -265,19 +237,34 @@ export function TournamentTable({
 							type="button"
 							className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
 							onClick={() =>
-								setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+								setSortDirection(direction =>
+									direction === 'asc' ? 'desc' : 'asc'
+								)
 							}
 						>
 							{sortDirection === 'asc' ? (
-								<ArrowUp className="size-3.5" aria-hidden="true" />
+								<ArrowUp
+									className="size-3.5"
+									aria-hidden="true"
+								/>
 							) : (
-								<ArrowDown className="size-3.5" aria-hidden="true" />
+								<ArrowDown
+									className="size-3.5"
+									aria-hidden="true"
+								/>
 							)}
 							{sortDirection === 'asc' ? t('ascending') : t('descending')}
 						</button>
 					</div>
 
-					<div className="flex items-center gap-2">
+					<div className="flex flex-wrap items-center justify-end gap-2">
+						{shareText ? (
+							<ShareActions
+								text={shareText}
+								imageRef={shareImageRef}
+								title={shareTitle}
+							/>
+						) : null}
 						{!compareMode ? (
 							<Button
 								size="sm"
@@ -285,7 +272,10 @@ export function TournamentTable({
 								className="h-8 gap-1.5 text-xs"
 								onClick={() => setCompareMode(true)}
 							>
-								<GitCompareArrows className="size-3.5" aria-hidden="true" />
+								<GitCompareArrows
+									className="size-3.5"
+									aria-hidden="true"
+								/>
 								{t('compareTeams')}
 							</Button>
 						) : (
@@ -307,7 +297,10 @@ export function TournamentTable({
 										className="h-8 gap-1.5 text-xs"
 										onClick={() => setIsCompareOpen(true)}
 									>
-										<GitCompareArrows className="size-3.5" aria-hidden="true" />
+										<GitCompareArrows
+											className="size-3.5"
+											aria-hidden="true"
+										/>
 										{t('compareCount', { count: 2 })}
 									</Button>
 								) : null}
@@ -365,7 +358,7 @@ export function TournamentTable({
 										'hover:bg-muted/30',
 										isChecked && 'bg-primary/[0.04]',
 										isMe && !isChecked && 'row-self',
-										entry.stale && 'opacity-60',
+										entry.stale && 'opacity-60'
 									)}
 									title={entry.stale ? t('staleRowHint') : undefined}
 								>
@@ -379,7 +372,7 @@ export function TournamentTable({
 												onChange={() => toggleCompare(entry)}
 												className="size-3.5 shrink-0 rounded border-muted-foreground/25 accent-[hsl(var(--primary))] disabled:cursor-not-allowed disabled:opacity-40"
 												aria-label={t('selectForComparison', {
-													team: entry.teamName,
+													team: entry.teamName
 												})}
 											/>
 										) : null}
@@ -388,7 +381,7 @@ export function TournamentTable({
 												'w-7 shrink-0 text-center font-mono text-sm tabular-nums',
 												entry.rank <= 3 && entry.rank > 0
 													? 'font-semibold text-primary-ink'
-													: 'text-muted-foreground',
+													: 'text-muted-foreground'
 											)}
 										>
 											{entry.rank > 0 ? entry.rank : '—'}
@@ -399,20 +392,20 @@ export function TournamentTable({
 												prefetch={false}
 												className={cn(
 													'block min-w-0 tracking-tight hover:text-primary-ink hover:underline underline-offset-2',
-													isMe && 'text-primary-ink',
+													isMe && 'text-primary-ink'
 												)}
 											>
-													<span className="block truncate text-sm font-semibold">
-														{entry.teamName}
-														{isMe ? (
-															<span className="ml-1.5 text-caption font-semibold text-primary-ink">
-																{t('youBadge')}
-															</span>
-														) : null}
-													</span>
-													<span className="mt-0.5 block truncate text-xs text-muted-foreground">
-														{entry.managerName}
-													</span>
+												<span className="block truncate text-sm font-semibold">
+													{entry.teamName}
+													{isMe ? (
+														<span className="ml-1.5 text-caption font-semibold text-primary-ink">
+															{t('youBadge')}
+														</span>
+													) : null}
+												</span>
+												<span className="mt-0.5 block truncate text-xs text-muted-foreground">
+													{entry.managerName}
+												</span>
 											</Link>
 										</div>
 										<div className="shrink-0 text-right">
@@ -484,7 +477,7 @@ export function TournamentTable({
 												onChange={() => toggleCompare(entry)}
 												className="size-3.5 justify-self-center rounded border-muted-foreground/25 accent-[hsl(var(--primary))] disabled:cursor-not-allowed disabled:opacity-40"
 												aria-label={t('selectForComparison', {
-													team: entry.teamName,
+													team: entry.teamName
 												})}
 											/>
 										) : null}
@@ -493,7 +486,7 @@ export function TournamentTable({
 												'justify-self-center font-mono text-sm tabular-nums',
 												entry.rank <= 3 && entry.rank > 0
 													? 'font-semibold text-primary-ink'
-													: 'text-muted-foreground',
+													: 'text-muted-foreground'
 											)}
 										>
 											{entry.rank > 0 ? entry.rank : '—'}
@@ -506,20 +499,20 @@ export function TournamentTable({
 												prefetch={false}
 												className={cn(
 													'block min-w-0 tracking-tight hover:text-primary-ink hover:underline underline-offset-2',
-													isMe && 'text-primary-ink',
+													isMe && 'text-primary-ink'
 												)}
 											>
-													<span className="block truncate text-sm font-semibold">
-														{entry.teamName}
-														{isMe ? (
-															<span className="ml-1.5 text-caption font-semibold text-primary-ink">
-																{t('youBadge')}
-															</span>
-														) : null}
-													</span>
-													<span className="mt-0.5 block truncate text-xs text-muted-foreground">
-														{entry.managerName}
-													</span>
+												<span className="block truncate text-sm font-semibold">
+													{entry.teamName}
+													{isMe ? (
+														<span className="ml-1.5 text-caption font-semibold text-primary-ink">
+															{t('youBadge')}
+														</span>
+													) : null}
+												</span>
+												<span className="mt-0.5 block truncate text-xs text-muted-foreground">
+													{entry.managerName}
+												</span>
 											</Link>
 										</div>
 
@@ -553,7 +546,9 @@ export function TournamentTable({
 											{formatOverallRank(entry.overallRank)}
 										</span>
 										<span className="text-right font-mono text-sm tabular-nums text-foreground/90">
-											{entry.totalPoints == null ? '—' : formatCompactNumber(entry.totalPoints)}
+											{entry.totalPoints == null
+												? '—'
+												: formatCompactNumber(entry.totalPoints)}
 										</span>
 										<div className="text-right">
 											<div className="font-mono text-base font-semibold tabular-nums tracking-tight text-primary-ink">
@@ -581,7 +576,7 @@ export function TournamentTable({
 							<p className="text-xs text-muted-foreground">
 								{t('showingEntries', {
 									shown: Math.min(visibleCount, total),
-									total,
+									total
 								})}
 							</p>
 						) : null}
@@ -595,7 +590,7 @@ export function TournamentTable({
 										className="min-h-10 w-full sm:w-auto"
 										onClick={() =>
 											setVisibleCount(count =>
-												Math.min(count + ROW_STEP, total),
+												Math.min(count + ROW_STEP, total)
 											)
 										}
 									>

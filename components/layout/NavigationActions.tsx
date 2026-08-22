@@ -129,6 +129,7 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 					) : (
 					<details
 						key={item.id}
+						name="primary-navigation"
 						data-navigation-group={item.id}
 						data-navigation-disclosure
 						className="group relative"
@@ -153,6 +154,7 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 					)
 				))}
 				<details
+					name="primary-navigation"
 					data-navigation-disclosure
 					className="group relative ml-2"
 				>
@@ -170,6 +172,7 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 			<ThemeToggle />
 
 			<details
+				name="primary-navigation"
 				data-navigation-mobile
 				data-navigation-disclosure
 				className="group relative md:hidden"

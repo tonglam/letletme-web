@@ -65,18 +65,26 @@ export function MiniProgramPopover({ label, scanText }: MiniProgramPopoverProps)
 						if (!activatedRef.current) e.preventDefault()
 						activatedRef.current = false
 					}}
-					className="w-auto border-electric/40 bg-fascia p-3 text-fascia-foreground"
+					className="w-[min(92vw,42rem)] overflow-hidden border-electric/40 bg-card p-0 text-card-foreground shadow-xl"
 				>
-					<div className="rounded-md bg-white p-2">
+					<div className="bg-card p-2">
 						<Image
-							src="/images/miniprogram.webp"
-							alt=""
-							width={465}
-							height={439}
-							className="h-auto w-[148px]"
+							src="/images/miniprogram-light.png"
+							alt={`${label}: ${scanText}`}
+							width={1761}
+							height={420}
+							sizes="(max-width: 44rem) 92vw, 42rem"
+							className="block h-auto w-full dark:hidden"
+						/>
+						<Image
+							src="/images/miniprogram-dark.png"
+							alt={`${label}: ${scanText}`}
+							width={1761}
+							height={420}
+							sizes="(max-width: 44rem) 92vw, 42rem"
+							className="hidden h-auto w-full dark:block"
 						/>
 					</div>
-					<p className="mt-2 text-center text-xs text-fascia-foreground/70">{scanText}</p>
 				</PopoverContent>
 			</Popover>
 		</div>

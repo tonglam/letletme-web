@@ -281,7 +281,6 @@ export default function TournamentListClient({
 				data-competition-perf-ready="browse"
 			>
 				<StatsPageHeader
-					eyebrow={t('eyebrow')}
 					title={t('title')}
 					badge={
 						<Button

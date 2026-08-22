@@ -94,10 +94,13 @@ export function ShareActions({
 		} finally {
 			imageShareInFlight.current = false
 		}
-	}, [imageRef, reportFailure, t, title])
+	}, [imageRef, reportFailure, t])
 
 	return (
-		<div className={className ?? 'flex flex-wrap items-center gap-2'}>
+		<div
+			className={className ?? 'flex flex-wrap items-center gap-2'}
+			data-share-exclude="true"
+		>
 			<Button
 				type="button"
 				variant="outline"

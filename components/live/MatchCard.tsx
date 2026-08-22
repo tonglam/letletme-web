@@ -3,7 +3,7 @@
 import { Card } from '@/components/ui/card'
 import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import type { Match } from '@/types/match'
-import { memo, useMemo, useState } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { PlayerDetailModal } from './PlayerDetailModal'
 import { MatchHeader } from './match-card/MatchHeader'
@@ -48,6 +48,7 @@ function MatchCardComponent({
 	const detail = useMatchPlayerDetail(eventId)
 	const t = useTranslations('LiveMatches')
 	const [manualShareText, setManualShareText] = useState<string | null>(null)
+	const shareRef = useRef<HTMLDivElement | null>(null)
 
 	return (
 		<Card
@@ -57,6 +58,7 @@ function MatchCardComponent({
 			<div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 sm:right-4 sm:top-4">
 				<MatchShareButton
 					match={match}
+					imageRef={shareRef}
 					onManualShareTextChange={setManualShareText}
 				/>
 				<MatchNavigation
@@ -64,7 +66,7 @@ function MatchCardComponent({
 					currentIndex={currentIndex}
 				/>
 			</div>
-			<div className="flex flex-col gap-5">
+			<div ref={shareRef} className="flex flex-col gap-5">
 				<MatchHeader match={match} />
 				<MatchHighlights groups={highlights} />
 				{isMatchStarted(match) ? (

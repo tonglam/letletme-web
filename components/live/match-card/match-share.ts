@@ -5,7 +5,6 @@ export type MatchShareLabels = {
 	liveMinute: (minute: number) => string
 	halfTime: string
 	fullTime: string
-	provisional: string
 	notStarted: string
 	upcoming: string
 	goals: string
@@ -26,7 +25,7 @@ function statusLine(match: Match, labels: MatchShareLabels): string {
 		case 'HT':
 			return labels.halfTime
 		case 'FT':
-			return match.provisional ? labels.provisional : labels.fullTime
+			return labels.fullTime
 		case 'NOT_STARTED':
 			return labels.notStarted
 		case 'UPCOMING':

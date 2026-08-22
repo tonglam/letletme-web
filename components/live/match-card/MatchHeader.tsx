@@ -43,7 +43,7 @@ function MatchStatus({ match }: { match: Match }) {
 				className="inline-flex items-center rounded-full bg-fascia-foreground/10 px-2.5 py-0.5 text-xs font-semibold text-fascia-foreground/70"
 				role="status"
 			>
-				{match.provisional ? t('pendingFinal') : t('fullTime')}
+				{t('fullTime')}
 			</span>
 		)
 	}

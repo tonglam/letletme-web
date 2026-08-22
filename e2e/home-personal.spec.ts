@@ -150,14 +150,16 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 		await expect(main.getByText('E2E United')).toBeVisible()
 		await expect(main.getByText('1,234')).toBeVisible()
 		await expect(main.getByText('E2E Classic')).toBeVisible()
+		await expect(main.getByRole('heading', { name: 'Classic' })).toBeVisible()
+		await expect(main.getByRole('heading', { name: 'H2H' })).toBeVisible()
+		await expect(main.getByText('E2E H2H', { exact: true })).toBeVisible()
 		await expect(main.locator('[data-home-personal-ready]')).toBeVisible()
 		await expect(main.locator('[data-home-league-ranks-ready]')).toBeVisible()
 		await expect(main.getByText('#12')).toBeVisible()
-		await expect(main.getByText('Classic', { exact: true })).toHaveCount(0)
 		await expect(main.getByText(/teams?$/i)).toHaveCount(0)
 		await expect(main.getByText(/^\d+ leagues?$/i)).toHaveCount(0)
 		await expect(
-			main.getByText('E2E League 7', { exact: true })
+			main.getByText('E2E League 8', { exact: true })
 		).not.toBeVisible()
 		await expect(
 			main.getByRole('link', { name: /E2E League 2/ })
@@ -174,7 +176,7 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 			}
 		})
 		await main.locator('summary').filter({ hasText: 'Show more' }).click()
-		await expect(main.getByText('E2E League 7', { exact: true })).toBeVisible()
+		await expect(main.getByText('E2E League 8', { exact: true })).toBeVisible()
 		expect(expansionRequests).toEqual([])
 	} finally {
 		await session.cleanup()

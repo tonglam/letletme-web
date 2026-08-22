@@ -30,6 +30,7 @@ interface PlayerOwnershipFilterProps {
   onMatchedEntryIdsChange: (entryIds: string[] | null) => void;
   initialScope?: OwnershipScope;
   className?: string;
+  onDismiss?: () => void;
 }
 
 export function PlayerOwnershipFilter({
@@ -37,6 +38,7 @@ export function PlayerOwnershipFilter({
   onMatchedEntryIdsChange,
   initialScope = "any",
   className,
+  onDismiss,
 }: PlayerOwnershipFilterProps) {
   const t = useTranslations("Filters");
   const [scope, setScope] = useState<OwnershipScope>(initialScope);
@@ -93,18 +95,33 @@ export function PlayerOwnershipFilter({
   return (
     <div className={cn("mb-4 rounded-lg border bg-card p-4 last:mb-0 md:mb-6", className)}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Users className="h-4 w-4 text-primary-ink" />
-            {t("playerOwnership")}
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Users className="h-4 w-4 text-primary-ink" />
+              {t("playerOwnership")}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {t("matched", {
+                matched: summary.matchedCount,
+                total: summary.totalCount,
+                percentage: summary.percentage,
+              })}
+            </div>
           </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            {t("matched", {
-              matched: summary.matchedCount,
-              total: summary.totalCount,
-              percentage: summary.percentage,
-            })}
-          </div>
+          {onDismiss ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8 shrink-0"
+              aria-label={t("removePlayer", { name: t("playerOwnership") })}
+              title={t("removePlayer", { name: t("playerOwnership") })}
+              onClick={onDismiss}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : null}
         </div>
 
         <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">

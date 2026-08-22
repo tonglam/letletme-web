@@ -88,7 +88,6 @@ async function renderPriceChangesPage({ params }: PageProps) {
 		<PageShell>
 			<div className="container mx-auto max-w-6xl px-4 py-8">
 				<StatsPageHeader
-					eyebrow={t('eyebrow')}
 					title={t('title')}
 					badge={
 						<Badge

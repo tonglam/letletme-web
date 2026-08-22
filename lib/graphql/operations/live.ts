@@ -665,6 +665,26 @@ export const GET_EVENT_LIVE_EXPLAIN = `
     eventLiveExplain(eventId: $eventId, elementId: $elementId) {
       elementId
       selectedBy
+      stats {
+        minutes
+        goalsScored
+        assists
+        cleanSheets
+        goalsConceded
+        ownGoals
+        penaltiesSaved
+        penaltiesMissed
+        yellowCards
+        redCards
+        saves
+        defensiveContribution
+        bonus
+      }
+      contributions {
+        identifier
+        value
+        points
+      }
       player {
         id
         webName
@@ -768,6 +788,7 @@ export const GET_PLAYER_LIVE = `
       yellowCards
       redCards
       saves
+      defensiveContribution
       bonus
       bps
       totalPoints
@@ -787,6 +808,7 @@ export interface PlayerLiveStats {
 	yellowCards: number
 	redCards: number
 	saves: number
+	defensiveContribution: number
 	bonus: number
 	bps: number
 	totalPoints: number

@@ -116,7 +116,11 @@ export function MatchPlayerList({ match, onSelectPlayer }: MatchPlayerListProps)
 	const selectPlayer = (player: PlayerStat, team: MatchTeam) => onSelectPlayer(player, team.name, team.shortName)
 
 	return (
-		<section aria-label={t('playerPoints')} className="flex flex-col gap-3">
+		<section
+			aria-label={t('playerPoints')}
+			className="flex flex-col gap-3"
+			data-share-exclude="true"
+		>
 			<Button
 				type="button"
 				variant="outline"

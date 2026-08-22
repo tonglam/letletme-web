@@ -43,8 +43,28 @@ export function useMatchPlayerDetail(eventId?: number) {
 					points: live?.totalPoints ?? current.points,
 					bps: live?.bps ?? current.bps,
 					bonusPoints: live?.bonus ?? current.bonusPoints,
+					stats: live
+						? {
+							minutes: live.minutes,
+							goals: live.goalsScored,
+							assists: live.assists,
+							cleanSheets: live.cleanSheets,
+							saves: live.saves,
+							penaltiesSaved: live.penaltiesSaved,
+							goalsConceded: live.goalsConceded,
+							defensiveContribution: live.defensiveContribution,
+							ownGoals: live.ownGoals,
+							penaltiesMissed: live.penaltiesMissed,
+							yellowCards: live.yellowCards,
+							redCards: live.redCards,
+						}
+						: current.stats,
 					pointsBreakdown: live
-						? buildBreakdownFromPlayerLive(live, player.elementType ?? 3)
+						? buildBreakdownFromPlayerLive(
+								live,
+								player.elementType ?? 3,
+								explain?.contributions ?? [],
+							)
 						: current.pointsBreakdown,
 				}
 			})

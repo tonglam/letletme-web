@@ -244,11 +244,10 @@ export async function MarketTeaser() {
 					<CardHeader className="border-b bg-muted/30 pb-5">
 						<div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
 							<div>
-								<p className="chyron">{t('homeEyebrow')}</p>
 								<CardTitle asChild>
 									<h2
 										id="home-market-title"
-										className="mt-2 text-2xl font-bold uppercase tracking-wide sm:text-3xl"
+										className="text-2xl font-bold uppercase tracking-wide sm:text-3xl"
 									>
 										{t('homeTitle')}
 									</h2>

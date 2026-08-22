@@ -215,7 +215,7 @@ export function PriceChangesBoard({
 
 	return (
 		<div className="space-y-5">
-			<div className="grid gap-3 rounded-xl border border-border/80 bg-card/40 p-4 sm:grid-cols-3 sm:p-5">
+			<div className="grid gap-3 rounded-xl border border-border/80 bg-card/40 p-4 sm:grid-cols-2 sm:p-5">
 				<div>
 					<p className="eyebrow">{t('deadlineLabel')}</p>
 					<p className="mt-1 font-display text-base font-semibold tabular-nums">
@@ -234,16 +234,6 @@ export function PriceChangesBoard({
 							/ {board.expectedPlayerCount.toLocaleString(locale)}
 						</span>
 					</p>
-					<p className="mt-1 text-xs text-muted-foreground">
-						{t('officialSource')}
-					</p>
-				</div>
-				<div>
-					<p className="eyebrow">{t('updatedLabel')}</p>
-					<p className="mt-1 font-display text-base font-semibold">
-						{formatDeadline(board.fetchedAt, locale)}
-					</p>
-					<p className="mt-1 text-xs text-muted-foreground">{board.revision}</p>
 				</div>
 			</div>
 

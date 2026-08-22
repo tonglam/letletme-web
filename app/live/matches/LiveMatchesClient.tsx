@@ -4,7 +4,6 @@ import PageShell from '@/components/layout/PageShell'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import { LiveAutoRefreshCountdown } from '@/components/live/LiveAutoRefreshCountdown'
 import { MatchCard } from '@/components/live/MatchCard'
-import { ShareActions } from '@/components/share/ShareActions'
 import {
 	StatsPageHeader,
 	StatsTabsShell
@@ -26,7 +25,6 @@ import {
 import { getLiveMatchesSnapshot } from '@/lib/live-matches'
 import { usePageActive } from '@/hooks/use-page-active'
 import type { Match } from '@/types/match'
-import { formatMatchShareText } from '@/components/live/match-card/match-share'
 import { RefreshCw } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -123,7 +121,6 @@ export function LiveMatchesClient({
 	const pendingRefreshRef = useRef(false)
 	const mountedRef = useRef(true)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
-	const shareRef = useRef<HTMLDivElement | null>(null)
 	const hasLastGoodData = useRef(initialMatches.length > 0)
 	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
 		snapshotRef.current = next
@@ -329,45 +326,9 @@ export function LiveMatchesClient({
 	})
 	const activeTabConfig = TAB_CONFIG.find(config => config.value === activeTab)
 	const activeMatches = matchesByTab[activeTab]
-	const shareText = useMemo(() => {
-		const origin =
-			typeof window !== 'undefined'
-				? window.location.origin
-				: 'https://letletme.top'
-		const shareUrl = `${origin}${typeof window !== 'undefined' ? window.location.pathname : '/live/matches'}`
-		const footer = t('shareFooter', { url: shareUrl })
-		const matchLabels = {
-			liveMinute: (minute: number) => t('liveMinute', { minute }),
-			halfTime: t('halfTime'),
-			fullTime: t('fullTime'),
-			provisional: t('pendingFinal'),
-			notStarted: t('notStarted'),
-			upcoming: t('upcoming'),
-			goals: t('goals'),
-			assists: t('assists'),
-			bonusPoints: t('bonusPoints'),
-			bps: t('bps'),
-			defensiveContribution: t('defensiveContribution'),
-			saves: t('saves'),
-			yellowCards: t('yellowCards'),
-			redCards: t('redCards')
-		}
-		const body = activeMatches
-			.map(match => formatMatchShareText(match, matchLabels))
-			.join('\n\n')
-		return body ? `${body}\n\n${footer}` : footer
-	}, [activeMatches, t])
 
 	const headerActions = (
 		<div className="flex flex-wrap items-center justify-end gap-2">
-			{activeMatches.length > 0 ? (
-				<ShareActions
-					text={shareText}
-					imageRef={shareRef}
-					title={t('title')}
-					compact
-				/>
-			) : null}
 			<div className="flex flex-col items-end gap-1">
 				<Button
 					variant="outline"
@@ -398,7 +359,6 @@ export function LiveMatchesClient({
 			<PageShell>
 				<div className="container mx-auto max-w-4xl px-4 py-8">
 					<StatsPageHeader
-						eyebrow={t('eyebrow')}
 						title={t('title')}
 						badge={
 							<Button
@@ -425,7 +385,6 @@ export function LiveMatchesClient({
 			<PageShell>
 				<div className="container mx-auto max-w-4xl px-4 py-8">
 					<StatsPageHeader
-						eyebrow={t('eyebrow')}
 						title={t('title')}
 						badge={headerActions}
 					/>
@@ -467,11 +426,10 @@ export function LiveMatchesClient({
 					</p>
 				) : null}
 				<StatsPageHeader
-					eyebrow={t('eyebrow')}
 					title={t('title')}
 					badge={headerActions}
 				/>
-				<div ref={shareRef}>
+				<div>
 					<Tabs
 						value={activeTab}
 						onValueChange={handleTabChange}

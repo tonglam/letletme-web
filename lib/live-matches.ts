@@ -58,7 +58,12 @@ export function transformLiveMatches(
 			corners: 0,
 			players: []
 		},
-		status: row.finished || row.finishedProvisional ? 'FT' : row.started ? 'LIVE' : 'NOT_STARTED',
+		status:
+			row.finished || row.finishedProvisional
+				? 'FT'
+				: row.started
+					? 'LIVE'
+					: 'NOT_STARTED',
 		minute: row.minutes,
 		kickoff: row.kickoffTime ?? '',
 		viewers: 0,
@@ -166,26 +171,34 @@ export async function getLiveMatchesSnapshot(
 			throw new Error(`Live matches request failed (${response.status})`)
 		desk = (await response.json()) as LiveMatchdayDeskResponse
 	} else {
+		const variables =
+			currentEventId && options.revision
+				? {
+						ref: {
+							season: String(getCurrentSeasonKey()),
+							eventId: currentEventId,
+							revision: options.revision
+						}
+					}
+				: undefined
 		desk = await executor<LiveMatchdayDeskResponse>(
 			GET_LIVE_MATCHDAY_DESK,
-			undefined,
+			variables,
 			{ cache: 'no-store' }
 		)
 	}
 	const current = validEventId(desk.liveMatchdayDesk?.eventId) ?? currentEventId
 	const snapshot = desk.liveMatchdayDesk
-			? {
+		? {
 				eventId: desk.liveMatchdayDesk.eventId,
 				revision: desk.liveMatchdayDesk.liveRevision,
-				state:
-					desk.liveMatchdayDesk.windowState ?? desk.liveMatchdayDesk.state,
+				state: desk.liveMatchdayDesk.windowState ?? desk.liveMatchdayDesk.state,
 				publishedAt: desk.liveMatchdayDesk.liveRevision
 					? desk.liveMatchdayDesk.publishedAt
 					: null,
-				checkedAt:
-					desk.liveMatchdayDesk.liveRevision
-					? desk.liveMatchdayDesk.sourceCheckedAt ??
-						desk.liveMatchdayDesk.publishedAt
+				checkedAt: desk.liveMatchdayDesk.liveRevision
+					? (desk.liveMatchdayDesk.sourceCheckedAt ??
+						desk.liveMatchdayDesk.publishedAt)
 					: null,
 				windowState: desk.liveMatchdayDesk.windowState,
 				dataAvailability: desk.liveMatchdayDesk.dataAvailability,

@@ -62,7 +62,7 @@ const contentSecurityPolicy = [
 	"frame-ancestors 'none'",
 	"frame-src 'none'",
 	"object-src 'none'",
-	"script-src 'self' 'unsafe-inline'",
+	`script-src 'self' 'unsafe-inline'${isProduction ? '' : " 'unsafe-eval'"}`,
 	"style-src 'self' 'unsafe-inline'",
 	"img-src 'self' data: blob: https://*.supabase.co https://*.googleusercontent.com",
 	"font-src 'self' data:",
@@ -75,6 +75,7 @@ const contentSecurityPolicy = [
 const nextConfig = {
 	output: 'standalone',
 	poweredByHeader: false,
+	allowedDevOrigins: ['127.0.0.1'],
 	...deploymentConfig,
 	generateBuildId: async () => releaseSha,
 	env: {

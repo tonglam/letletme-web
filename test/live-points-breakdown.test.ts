@@ -4,7 +4,7 @@ import { describe, it } from 'node:test'
 import {
 	buildProvisionalBreakdownFromPlayer,
 	breakdownSum,
-	resolvePointsBreakdown,
+	resolvePointsBreakdown
 } from '../app/live/points/_lib/live-points-breakdown'
 import type { Player } from '../types/player'
 
@@ -13,7 +13,7 @@ function basePlayer(
 		position?: Player['position']
 		playingStatus?: Player['playingStatus']
 		stats?: Partial<Player['stats']>
-	} = {},
+	} = {}
 ): Player {
 	return {
 		id: '1',
@@ -37,8 +37,8 @@ function basePlayer(
 			redCards: 0,
 			points: 0,
 			bonusPoints: 0,
-			...overrides.stats,
-		},
+			...overrides.stats
+		}
 	}
 }
 
@@ -51,8 +51,8 @@ describe('buildProvisionalBreakdownFromPlayer', () => {
 				goals: 1,
 				assists: 1,
 				points: 10, // 2 + 5 + 3
-				bonusPoints: 0,
-			},
+				bonusPoints: 0
+			}
 		})
 		const lines = buildProvisionalBreakdownFromPlayer(player)
 		assert.equal(breakdownSum(lines), 10)
@@ -68,27 +68,47 @@ describe('buildProvisionalBreakdownFromPlayer', () => {
 				saves: 4,
 				cleanSheets: 1,
 				bonusPoints: 1,
-				points: 8, // 2 + 1 + 4 + 1
-			},
+				points: 8 // 2 + 1 + 4 + 1
+			}
 		})
 		const lines = buildProvisionalBreakdownFromPlayer(player)
 		assert.equal(breakdownSum(lines), 8)
+	})
+
+	it('includes defensive-contribution points in the provisional total', () => {
+		const player = basePlayer({
+			position: 'MID',
+			stats: {
+				minutes: 90,
+				goals: 1,
+				assists: 1,
+				defensiveContribution: 12,
+				bonusPoints: 1,
+				points: 13 // 2 + 5 + 3 + 2 DC + 1 bonus
+			}
+		})
+		const lines = buildProvisionalBreakdownFromPlayer(player)
+		assert.equal(breakdownSum(lines), 13)
+		assert.deepEqual(
+			lines.find(line => line.category === 'Defensive Contribution'),
+			{ category: 'Defensive Contribution', points: 2, value: 12 }
+		)
 	})
 })
 
 describe('resolvePointsBreakdown', () => {
 	it('prefers official explain when totals match', () => {
 		const player = basePlayer({
-			stats: { minutes: 90, goals: 1, points: 7, bonusPoints: 0 },
+			stats: { minutes: 90, goals: 1, points: 7, bonusPoints: 0 }
 		})
 		const official = [
 			{ category: 'Appearance', points: 2, value: 90 },
-			{ category: 'Goals', points: 5, value: 1 },
+			{ category: 'Goals', points: 5, value: 1 }
 		]
 		const resolved = resolvePointsBreakdown({
 			official,
 			officialMatchesTotal: true,
-			player,
+			player
 		})
 		assert.equal(resolved.source, 'official')
 		assert.equal(resolved.lines.length, 2)
@@ -102,13 +122,13 @@ describe('resolvePointsBreakdown', () => {
 				minutes: 90,
 				goals: 2,
 				bonusPoints: 3,
-				points: 13, // 2 + 8 + 3
-			},
+				points: 13 // 2 + 8 + 3
+			}
 		})
 		const resolved = resolvePointsBreakdown({
 			official: [],
 			officialMatchesTotal: false,
-			player,
+			player
 		})
 		assert.equal(resolved.source, 'provisional')
 		assert.equal(breakdownSum(resolved.lines), 13)
@@ -122,13 +142,13 @@ describe('resolvePointsBreakdown', () => {
 				minutes: 90,
 				goals: 2,
 				bonusPoints: 3,
-				points: 26, // double of 13
-			},
+				points: 26 // double of 13
+			}
 		})
 		const resolved = resolvePointsBreakdown({
 			official: [],
 			officialMatchesTotal: false,
-			player,
+			player
 		})
 		assert.equal(resolved.source, 'provisional')
 		assert.equal(breakdownSum(resolved.lines), 26)

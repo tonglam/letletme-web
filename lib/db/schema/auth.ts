@@ -54,6 +54,44 @@ export const user = authSchema.table(
 	})
 )
 
+/**
+ * Durable snapshots of FPL team names seen for a bound entry. The current
+ * name remains on `user` for the fast display path; this table preserves the
+ * previous names when FPL renames the entry.
+ */
+export const fplEntryNameHistory = authSchema.table(
+	'fpl_entry_name_history',
+	{
+		id: text('id').primaryKey(),
+		userId: text('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		entryId: integer('entry_id').notNull(),
+		teamName: text('team_name').notNull(),
+		managerName: text('manager_name'),
+		firstSeenAt: timestamp('first_seen_at', { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+		lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
+			.notNull()
+			.defaultNow()
+	},
+	table => ({
+		userEntryNameUnique: unique(
+			'fpl_entry_name_history_user_entry_name_unique'
+		).on(table.userId, table.entryId, table.teamName),
+		userEntrySeenIdx: index('fpl_entry_name_history_user_entry_seen_idx').on(
+			table.userId,
+			table.entryId,
+			table.lastSeenAt
+		),
+		teamNameNonempty: check(
+			'fpl_entry_name_history_team_name_nonempty',
+			sql`btrim(${table.teamName}) <> ''`
+		)
+	})
+)
+
 export const session = authSchema.table('session', {
 	id: text('id').primaryKey(),
 	expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),

@@ -150,10 +150,7 @@ export default function TeamPointsClient({
 						<ArrowLeft aria-hidden="true" /> {t('backTournament')}
 					</Link>
 				</Button>
-				<StatsPageHeader
-					eyebrow={t('livePoints')}
-					title={t('teamTitle')}
-				/>
+				<StatsPageHeader title={t('title')} />
 				{content}
 			</div>
 		</PageShell>
