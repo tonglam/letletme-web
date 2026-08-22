@@ -41,6 +41,40 @@ type Props = {
 	initialDeskError?: boolean
 }
 
+const TOP_RANK_LIMIT = 12
+const PERSONAL_SQUAD_SIZE = 15
+
+// GraphQL returns PERSONAL_EXPOSURE independently of the ranking limit. The
+// request remains capped at twelve because that limit is only for ranked
+// sections; the UI explicitly renders the complete personal section.
+
+function sectionDenominator(
+	section: TrendDesk['sections'][number]
+): number | null {
+	const denominator = section.evidenceContext.denominator
+	return denominator != null && Number.isFinite(denominator) && denominator > 0
+		? denominator
+		: null
+}
+
+function denominatorSummary(sections: TrendDesk['sections']) {
+	const denominators = sections
+		.map(sectionDenominator)
+		.filter((value): value is number => value !== null)
+	const uniqueDenominators = Array.from(new Set(denominators))
+	const everySectionHasDenominator =
+		sections.length > 0 && denominators.length === sections.length
+	const shared =
+		everySectionHasDenominator && uniqueDenominators.length === 1
+			? denominators[0]
+			: null
+	return {
+		shared,
+		mismatch: uniqueDenominators.length > 1,
+		missing: sections.length > 0 && !everySectionHasDenominator
+	}
+}
+
 const labelKeys: Record<
 	string,
 	| 'ownershipLabel'
@@ -122,6 +156,10 @@ export default function TrendsClient({
 		typeof document === 'undefined'
 			? ('unknown' as const)
 			: resolveAudienceHint()
+	const denominators = useMemo(
+		() => denominatorSummary(committed?.sections ?? []),
+		[committed]
+	)
 
 	function updateUrl(
 		nextAccess: TrendAccess,
@@ -260,7 +298,9 @@ export default function TrendsClient({
 				section => section.evidenceContext.sampleSize != null
 			)?.evidenceContext.sampleSize ?? '?'
 		const cohortScope = committed.cohort.exact
-			? t('exactCompetition')
+			? denominators.shared !== null
+				? t('exactCompetitionWithCount', { count: denominators.shared })
+				: t('exactCompetition')
 			: t('sampledCohort', { count: sampleSize })
 
 		const lines = [
@@ -273,7 +313,19 @@ export default function TrendsClient({
 			if (!section.rows || section.rows.length === 0) {
 				lines.push(t('noData'))
 			} else {
-				for (const row of section.rows.slice(0, 12)) {
+				lines.push(
+					section.capability === 'PERSONAL_EXPOSURE'
+						? t('squadPicks', {
+								shown: section.rows.length,
+								expected: PERSONAL_SQUAD_SIZE
+							})
+						: t('topRanked', { count: TOP_RANK_LIMIT })
+				)
+				const rows =
+					section.capability === 'PERSONAL_EXPOSURE'
+						? section.rows
+						: section.rows.slice(0, TOP_RANK_LIMIT)
+				for (const row of rows) {
 					lines.push(
 						`- ${row.playerName} ${row.teamShortName} · ${row.percentage == null ? '—' : `${row.percentage.toFixed(1)}%`} · ${row.count}`
 					)
@@ -292,7 +344,7 @@ export default function TrendsClient({
 				: 'https://letletme.top/explore/selections'
 		)
 		return lines.join('\n')
-	}, [access, committed, t])
+	}, [access, committed, denominators.shared, t])
 
 	useEffect(() => {
 		const onPopState = () => {
@@ -531,7 +583,11 @@ export default function TrendsClient({
 								<div className="flex items-center gap-2">
 									<span className="rounded-full bg-muted px-3 py-1 text-xs">
 										{committed.cohort.exact
-											? t('exactCompetition')
+											? denominators.shared !== null
+												? t('exactCompetitionWithCount', {
+														count: denominators.shared
+													})
+												: t('exactCompetition')
 											: t('sampledCohort', {
 													count:
 														committed.sections.find(
@@ -548,10 +604,27 @@ export default function TrendsClient({
 									/>
 								</div>
 							</div>
+							{denominators.mismatch ? (
+								<p className="mb-4 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
+									{t('denominatorMismatch')}
+								</p>
+							) : null}
+							{denominators.missing ? (
+								<p className="mb-4 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
+									{t('denominatorMissing')}
+								</p>
+							) : null}
 							<div ref={shareRef}>
 								<div className="grid gap-4 md:grid-cols-2">
 									{committed.sections.map(section => {
 										const availability = resolveTrendAvailabilityState(section)
+										const denominator = sectionDenominator(section)
+										const personalExposure =
+											section.capability === 'PERSONAL_EXPOSURE'
+										const sectionRows =
+											section.rows && personalExposure
+												? section.rows
+												: section.rows?.slice(0, TOP_RANK_LIMIT)
 										return (
 											<article
 												key={section.capability}
@@ -567,6 +640,20 @@ export default function TrendsClient({
 														{t(trendAvailabilityLabelKey(availability))}
 													</span>
 												</div>
+												{section.rows !== null ? (
+													<p className="mb-3 text-xs text-muted-foreground">
+														{personalExposure
+															? t('squadPicks', {
+																	shown: section.rows.length,
+																	expected: PERSONAL_SQUAD_SIZE
+																})
+															: t('topRanked', { count: TOP_RANK_LIMIT })}{' '}
+														·{' '}
+														{denominator === null
+															? t('fieldSizeUnavailable')
+															: t('fieldSize', { count: denominator })}
+													</p>
+												) : null}
 												{section.rows === null ? (
 													<div className="space-y-3">
 														<p className="text-sm text-muted-foreground">
@@ -604,7 +691,7 @@ export default function TrendsClient({
 													</p>
 												) : (
 													<ol className="space-y-2">
-														{section.rows.slice(0, 12).map(row => (
+														{sectionRows?.map(row => (
 															<li
 																key={row.elementId}
 																className="flex items-center justify-between gap-3 text-sm"

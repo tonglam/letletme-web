@@ -26,6 +26,8 @@ export const MARKET_PUBLIC_CACHE_HEADERS = {
 	'Vercel-CDN-Cache-Control': MARKET_PUBLIC_CACHE_CONTROL
 } as const
 
+const MARKET_AVAILABILITY_PAGE_SIZE = 20
+
 function logMarketRoute(
 	route: 'players' | 'history' | 'availability',
 	outcome: 'success' | 'revision_changed' | 'rate_limited' | 'failure',
@@ -127,8 +129,8 @@ export function parseMarketHistoryParams(
 
 export function parseMarketAvailabilityParams(
 	params: URLSearchParams
-): (ParsedBase & { days: number }) | { error: string } {
-	const unknown = rejectUnknown(params, ['revision', 'days'])
+): (ParsedBase & { days: number; offset: number }) | { error: string } {
+	const unknown = rejectUnknown(params, ['revision', 'days', 'offset'])
 	if (unknown) return { error: unknown }
 	const base = parseBase(params)
 	if ('error' in base) return base
@@ -136,7 +138,11 @@ export function parseMarketAvailabilityParams(
 	const days = parsePositive(daysValue)
 	if (days === null || days > 30)
 		return { error: 'days must be an integer between 1 and 30' }
-	return { ...base, days }
+	const offsetValue = one(params, 'offset')
+	const offset = offsetValue === null ? 0 : parseNonNegative(offsetValue)
+	if (offset === null || !Number.isSafeInteger(offset) || offset > 5000)
+		return { error: 'offset must be an integer between 0 and 5000' }
+	return { ...base, days, offset }
 }
 
 const ingressHeaders = (request: Request): Record<string, string> => {
@@ -333,7 +339,11 @@ export async function handleMarketAvailability(
 	try {
 		const data = await executeQuery<MarketAvailabilityResponse>(
 			GET_MARKET_AVAILABILITY,
-			{ days: parsed.days },
+			{
+				days: parsed.days,
+				limit: MARKET_AVAILABILITY_PAGE_SIZE,
+				offset: parsed.offset
+			},
 			{
 				cache: 'no-store',
 				timeoutMs: 2_000,
@@ -341,26 +351,34 @@ export async function handleMarketAvailability(
 				headers: ingressHeaders(request)
 			}
 		)
-		const changed = revisionResponse(parsed.revision, data)
+		const page = data.marketAvailabilityPage
+		const changed = revisionResponse(parsed.revision, {
+			marketSnapshotContext: page.context
+		})
 		if (changed) {
 			logMarketRoute('availability', 'revision_changed', startedAt, {
-				source: data.marketSnapshotContext.source
+				source: page.context.source,
+				offset: parsed.offset
 			})
 			return changed
 		}
 		logMarketRoute('availability', 'success', startedAt, {
-			source: data.marketSnapshotContext.source,
-			rowCount: data.marketPulse.availabilityUpdates.length
+			source: page.context.source,
+			offset: parsed.offset,
+			rowCount: page.items.length,
+			totalCount: page.totalCount
 		})
 		return NextResponse.json(
 			{
-				revision: data.marketSnapshotContext.revision,
-				items: data.marketPulse.availabilityUpdates
+				revision: page.context.revision,
+				items: page.items,
+				totalCount: page.totalCount,
+				nextOffset: page.nextOffset
 			},
 			{
 				status: 200,
 				headers:
-					data.marketSnapshotContext.source === 'DATA_PUBLICATION'
+					page.context.source === 'DATA_PUBLICATION'
 						? MARKET_PUBLIC_CACHE_HEADERS
 						: { 'Cache-Control': MARKET_UNCACHEABLE_CONTROL }
 			}
