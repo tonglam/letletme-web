@@ -14,7 +14,7 @@ import {
 	SelectTrigger,
 	SelectValue
 } from '@/components/ui/select'
-import { Link } from '@/i18n/navigation'
+import { Link, useRouter } from '@/i18n/navigation'
 import type {
 	PriceChangeBoard,
 	PriceChangePlayer
@@ -66,7 +66,8 @@ function formatDeadline(value: string | null, locale: string): string {
 		day: 'numeric',
 		month: 'short',
 		hour: '2-digit',
-		minute: '2-digit'
+		minute: '2-digit',
+		timeZone: 'UTC'
 	}).format(new Date(timestamp))
 }
 
@@ -141,6 +142,7 @@ export function PriceChangesBoard({
 	mySquadState: SquadLoadState
 }) {
 	const t = useTranslations('PriceChanges')
+	const router = useRouter()
 	const [search, setSearch] = useState('')
 	const [movement, setMovement] = useState<MovementFilter>('all')
 	const [scope, setScope] = useState<ScopeFilter>('all')
@@ -148,6 +150,11 @@ export function PriceChangesBoard({
 	const [page, setPage] = useState(1)
 	const countdown = useDeadlineCountdown(board.deadline)
 	const mySquad = useMemo(() => new Set(mySquadElementIds), [mySquadElementIds])
+
+	useEffect(() => {
+		const timer = window.setInterval(() => router.refresh(), 5 * 60 * 1_000)
+		return () => window.clearInterval(timer)
+	}, [router])
 
 	const filteredPlayers = useMemo(() => {
 		const query = search.trim().toLowerCase()
@@ -495,9 +502,10 @@ export function PriceChangesBoard({
 														<span>{player.selectedByPercent.toFixed(1)}%</span>
 													</div>
 													<p className="mt-0.5 text-xs text-muted-foreground">
-														{player.transfersInEvent.toLocaleString(locale)} in
-														· {player.transfersOutEvent.toLocaleString(locale)}{' '}
-														out
+														{player.transfersInEvent.toLocaleString(locale)}{' '}
+														{t('transfersIn')}·{' '}
+														{player.transfersOutEvent.toLocaleString(locale)}{' '}
+														{t('transfersOut')}
 													</p>
 												</td>
 											</tr>

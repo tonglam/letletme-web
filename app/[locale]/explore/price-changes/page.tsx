@@ -8,7 +8,7 @@ import { getCurrentAndNextEvents } from '@/lib/events'
 import { EMPTY_PRICE_CHANGE_BOARD } from '@/lib/graphql/operations/price-changes'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
 import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
-import type { SquadLoadState } from '@/lib/squad-picks'
+import type { EntrySquadPicksResult, SquadLoadState } from '@/lib/squad-picks'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getTranslations } from 'next-intl/server'
 
@@ -39,11 +39,11 @@ function statusBadgeClass(status: string): string {
 async function renderPriceChangesPage({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	const t = await getTranslations('PriceChanges')
-	const [boardResponse, events, identity] = await Promise.all([
-		loadPriceChangeBoard().catch(error => {
-			console.error('[price-changes] board seed failed:', error)
-			return { priceChangeBoard: EMPTY_PRICE_CHANGE_BOARD }
-		}),
+	const boardPromise = loadPriceChangeBoard().catch(error => {
+		console.error('[price-changes] board seed failed:', error)
+		return { priceChangeBoard: EMPTY_PRICE_CHANGE_BOARD }
+	})
+	const [events, identity] = await Promise.all([
 		getCurrentAndNextEvents(),
 		getVerifiedEntryContext()
 	])
@@ -51,21 +51,27 @@ async function renderPriceChangesPage({ params }: PageProps) {
 	let mySquadElementIds: number[] = []
 	let mySquadState: SquadLoadState =
 		identity.entryId != null ? 'not-published' : 'unbound'
+	let squadPromise: Promise<EntrySquadPicksResult | null> =
+		Promise.resolve(null)
 	if (identity.session && identity.entryId != null) {
-		try {
-			const squad = await loadEntrySquadPicks(
-				identity.session,
-				identity.entryId,
-				events
-			)
-			mySquadElementIds = squad.picks
-				.map(pick => pick.elementId)
-				.filter((id): id is number => id != null && id > 0)
-			mySquadState = squad.state
-		} catch (error) {
+		squadPromise = loadEntrySquadPicks(
+			identity.session,
+			identity.entryId,
+			events
+		).catch(error => {
 			console.error('[price-changes] squad seed failed:', error)
-			mySquadState = 'unavailable'
-		}
+			return null
+		})
+	}
+
+	const [boardResponse, squad] = await Promise.all([boardPromise, squadPromise])
+	if (squad) {
+		mySquadElementIds = squad.picks
+			.map(pick => pick.elementId)
+			.filter((id): id is number => id != null && id > 0)
+		mySquadState = squad.state
+	} else if (identity.session && identity.entryId != null) {
+		mySquadState = 'unavailable'
 	}
 
 	const board = boardResponse.priceChangeBoard

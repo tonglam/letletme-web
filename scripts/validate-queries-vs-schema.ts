@@ -75,6 +75,7 @@ import {
 	GET_TOP_TRANSFERS_IN,
 	GET_TOP_TRANSFERS_OUT
 } from '../lib/graphql/operations/prices'
+import { GET_PRICE_CHANGE_BOARD } from '../lib/graphql/operations/price-changes'
 import {
 	GET_ENTRY_OFFICIAL_H2H_DESK,
 	GET_ENTRY_TOURNAMENTS,
@@ -173,6 +174,7 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 	['GET_LIVE_CONTEXT', GET_LIVE_CONTEXT],
 	['GET_TOP_TRANSFERS_IN', GET_TOP_TRANSFERS_IN],
 	['GET_TOP_TRANSFERS_OUT', GET_TOP_TRANSFERS_OUT],
+	['GET_PRICE_CHANGE_BOARD', GET_PRICE_CHANGE_BOARD],
 	['GET_EVENT_FIXTURES', GET_EVENT_FIXTURES],
 	['GET_FIXTURE_WINDOW_5', buildFixtureWindowQuery(5)],
 	['GET_LIVE_POINTS', GET_LIVE_POINTS],

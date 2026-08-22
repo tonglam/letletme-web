@@ -1403,6 +1403,8 @@
 		"ownership": "持有率",
 		"signal": "信号",
 		"movement": "走势",
+		"transfersIn": "转入",
+		"transfersOut": "转出",
 		"noMatchesBoard": "没有球员符合当前筛选条件。",
 		"resultCountBoard": "显示第 {from}–{to} 名，共 {total} 名",
 		"previousPage": "上一页",

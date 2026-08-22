@@ -1403,6 +1403,8 @@
 		"ownership": "Owned",
 		"signal": "Signal",
 		"movement": "Movement",
+		"transfersIn": "in",
+		"transfersOut": "out",
 		"noMatchesBoard": "No players match the current filters.",
 		"resultCountBoard": "Showing {from}–{to} of {total} players",
 		"previousPage": "Previous page",

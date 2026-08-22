@@ -11,12 +11,6 @@ export type PriceChangeOwnershipTrend = 'UP' | 'DOWN' | 'FLAT'
 export type PriceChangeBoardStatus =
 	'READY' | 'PARTIAL' | 'STALE' | 'UNAVAILABLE'
 
-export type PriceChangeProjection = {
-	offset: number
-	projectedPercent: number
-	likelihood: number
-}
-
 export type PriceChangePlayer = {
 	playerId: number
 	playerCode: number
@@ -35,7 +29,6 @@ export type PriceChangePlayer = {
 	transfersOutEvent: number
 	lockedUntil: string | null
 	calibrating: boolean
-	projections: PriceChangeProjection[]
 }
 
 export type PriceChangeBoard = {
@@ -98,11 +91,6 @@ export const GET_PRICE_CHANGE_BOARD = /* GraphQL */ `
 				transfersOutEvent
 				lockedUntil
 				calibrating
-				projections {
-					offset
-					projectedPercent
-					likelihood
-				}
 			}
 		}
 	}
