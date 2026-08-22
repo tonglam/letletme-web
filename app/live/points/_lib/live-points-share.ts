@@ -131,15 +131,18 @@ export function formatLivePointsShareText({
 	const chip = formatChip(liveData.chip, labels)
 	const transferCost = liveData.transferCost ?? 0
 	const hitsPart = transferCost > 0 ? ` (−${transferCost} ${labels.hits})` : ''
-	const netPoints = liveData.score
-		? liveData.score.netEventPoints
-		: liveData.liveNetPoints
+	const netPoints = liveData.score?.netEventPoints ?? null
+	const eventPoints = liveData.score?.eventPoints ?? null
+	const totalPoints =
+		liveData.score?.totalScope === 'OVERALL'
+			? liveData.score.totalPoints
+			: null
 	const netText = netPoints == null ? '—' : String(netPoints)
 
 	const header = [
 		`# ${teamName} · GW${gameweek}`,
 		manager ? manager : null,
-		`${labels.live}: **${liveData.livePoints}**${hitsPart} · ${labels.net}: ${netText} · ${labels.season}: ${liveData.liveTotalPoints}`,
+		`${labels.live}: **${eventPoints == null ? '—' : eventPoints}**${hitsPart} · ${labels.net}: ${netText} · ${labels.season}: ${totalPoints == null ? '—' : totalPoints}`,
 		`${labels.chip}: ${chip} · ${labels.captain}: ${liveData.captainName || '—'}`
 	]
 		.filter(Boolean)

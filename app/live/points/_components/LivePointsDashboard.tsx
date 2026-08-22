@@ -114,9 +114,6 @@ export function LivePointsDashboard({
 		const score = liveData?.score
 		if (!score || score.state === 'UNAVAILABLE') return t('scoreUnavailable')
 		if (score.state === 'SETTLING') return t('scoreSettling')
-		if (score.source === 'LOCAL_MULTIPLIER_FALLBACK' || score.state === 'FALLBACK') {
-			return t('scoreFallback')
-		}
 		if (score.state === 'STALE') return t('scoreDelayed')
 		return t('scoreOfficial')
 	})()

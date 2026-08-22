@@ -313,12 +313,6 @@ export default function TournamentDetailClient({
 		const states = rows.map(row => row.score?.state)
 		if (states.includes('SETTLING')) return scoreT('scoreSettling')
 		if (states.includes('STALE')) return scoreT('scoreDelayed')
-		if (
-			states.includes('FALLBACK') ||
-			rows.some(row => row.score?.source === 'LOCAL_MULTIPLIER_FALLBACK')
-		) {
-			return scoreT('scoreFallback')
-		}
 		if (rows.length === 0 || states.includes('UNAVAILABLE')) {
 			return scoreT('scoreUnavailable')
 		}

@@ -539,7 +539,6 @@
 		"autoPast": "过去或无法确认的轮次不会自动刷新。",
 		"scoreOfficial": "官方实时",
 		"scoreDelayed": "官方数据延迟",
-		"scoreFallback": "本地回退",
 		"scoreSettling": "结算中",
 		"scoreUnavailable": "官方分数暂不可用",
 		"scoreDetailsSyncing": "球员明细仍在同步",

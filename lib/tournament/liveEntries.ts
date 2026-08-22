@@ -46,18 +46,15 @@ export const buildRankMap = (rows: TournamentLiveCalcData[]): Map<number, number
 		row.score?.source === 'FPL_CLASSIC_STANDINGS' ||
 		row.score?.source === 'FPL_FINAL_RESULT'
 	const rankableRows = rows.filter(row => {
-		if (row.score === undefined) return true
-		return isOfficialSource(row) && typeof row.score.eventPoints === 'number'
+		return isOfficialSource(row) && typeof row.score?.eventPoints === 'number'
 	})
 	const eventPointsForRanking = (row: TournamentLiveCalcData): number =>
-		row.score === undefined
-			? row.livePoints
-			: row.score.eventPoints ?? 0
+		row.score?.eventPoints ?? 0
 	const totalPointsForRanking = (row: TournamentLiveCalcData): number =>
 		row.score?.totalScope === 'OVERALL' &&
 			typeof row.score.totalPoints === 'number'
 			? row.score.totalPoints
-			: row.liveTotalPoints
+			: 0
 
 	const sorted = [...rankableRows].sort((a, b) => {
 		const eventPointDiff = eventPointsForRanking(b) - eventPointsForRanking(a)
@@ -96,17 +93,13 @@ export const buildTournamentEntries = (
 	const currentRankByEntryId = buildRankMap(rankSource)
 
 	return currentRows.map(row => {
-		const headlineEventPoints =
-			typeof row.score?.eventPoints === 'number'
-				? row.score.eventPoints
-				: row.livePoints
-		const headlineNetPoints =
-			row.score?.netEventPoints ?? row.liveNetPoints ?? headlineEventPoints
+		const headlineEventPoints = row.score?.eventPoints ?? null
+		const headlineNetPoints = row.score?.netEventPoints ?? null
 		const headlineTotalPoints =
 			row.score?.totalScope === 'OVERALL' &&
 			typeof row.score.totalPoints === 'number'
 				? row.score.totalPoints
-				: row.liveTotalPoints
+				: null
 		const captainPick = row.pickList.find(player => player.isCaptain)
 		const effectiveCaptainPick =
 			row.score?.state === 'FINAL'
@@ -130,9 +123,7 @@ export const buildTournamentEntries = (
 			captainPoints,
 			gwPoints: headlineEventPoints ?? 0,
 			gwNetPoints:
-				row.score && row.score.netEventPoints === null
-					? undefined
-					: headlineNetPoints ?? 0,
+				headlineNetPoints ?? undefined,
 			eventCost: row.transferCost ?? 0,
 			overallRank: row.overallRank ?? 0,
 			lastOverallRank:

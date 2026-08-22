@@ -539,7 +539,6 @@
 		"autoPast": "Auto refresh paused for past or unavailable gameweeks.",
 		"scoreOfficial": "Official live",
 		"scoreDelayed": "Official data delayed",
-		"scoreFallback": "Local fallback",
 		"scoreSettling": "Settling",
 		"scoreUnavailable": "Official score unavailable",
 		"scoreDetailsSyncing": "Player details are still syncing",

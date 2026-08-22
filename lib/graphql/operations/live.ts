@@ -265,7 +265,7 @@ export type LiveManagerScore = {
 	eventPoints: number | null
 	netEventPoints: number | null
 	totalPoints: number | null
-	totalScope: 'OVERALL' | 'CLASSIC_PHASE' | 'LOCAL_OVERALL' | 'UNKNOWN'
+	totalScope: 'OVERALL' | 'CLASSIC_PHASE' | 'UNKNOWN'
 	eventRank: number | null
 	overallRank: number | null
 	leagueRank: number | null
@@ -274,9 +274,8 @@ export type LiveManagerScore = {
 		| 'FPL_ENTRY_SUMMARY'
 		| 'FPL_CLASSIC_STANDINGS'
 		| 'FPL_FINAL_RESULT'
-		| 'LOCAL_MULTIPLIER_FALLBACK'
 		| 'UNAVAILABLE'
-	state: 'FRESH' | 'STALE' | 'FALLBACK' | 'SETTLING' | 'FINAL' | 'UNAVAILABLE'
+	state: 'FRESH' | 'STALE' | 'SETTLING' | 'FINAL' | 'UNAVAILABLE'
 	eventPointSemantics: 'GROSS' | 'NET' | 'ZERO_COST_EQUIVALENT' | 'UNKNOWN'
 	revision: string | null
 	checkedAt: string | null
