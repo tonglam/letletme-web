@@ -74,6 +74,8 @@ describe('live tournament desk', () => {
 				played: 3,
 				toPlay: 8,
 				captainName: 'Captain',
+				teamValue: 100.5,
+				bank: 7.49,
 				chip: null,
 				pickList: [],
 				score: managerScore({
@@ -108,6 +110,9 @@ describe('live tournament desk', () => {
 		assert.equal(entries[0]?.rank, 3)
 		assert.equal(entries[0]?.totalPoints, 101)
 		assert.equal(entries[0]?.overallRank, 123)
+		assert.equal(entries[0]?.teamValue, 100.5)
+		assert.equal(entries[0]?.bank, 7.49)
+		assert.equal(entries[1]?.overallRank, 0)
 		assert.deepEqual(buildTournamentStats(entries), {
 			averagePoints: 6,
 			highestPoints: 6,

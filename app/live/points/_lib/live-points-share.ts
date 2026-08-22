@@ -3,6 +3,7 @@ export {
 	copyElementImageToClipboard,
 	copyTextToClipboard,
 	shareElementImage,
+	shareImageBlob,
 	shareText,
 	type ClipboardCopyResult,
 	type ShareResult

@@ -6,7 +6,8 @@ import {
 	copyElementImageToClipboard,
 	copyTextToClipboard,
 	formatLivePointsShareText,
-	formatShareFooter
+	formatShareFooter,
+	shareImageBlob
 } from '../app/live/points/_lib/live-points-share'
 import { formatChipName } from '../lib/utils'
 import type { Player } from '../types/player'
@@ -316,6 +317,77 @@ describe('copyElementImageToClipboard', () => {
 			if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
 			else Reflect.deleteProperty(globalThis, 'navigator')
 			if (clipboardItemDescriptor) Object.defineProperty(globalThis, 'ClipboardItem', clipboardItemDescriptor)
+			else Reflect.deleteProperty(globalThis, 'ClipboardItem')
+		}
+	})
+})
+
+describe('shareImageBlob', () => {
+	it('falls back to the image clipboard when native sharing rejects', async () => {
+		const navigatorDescriptor = Object.getOwnPropertyDescriptor(
+			globalThis,
+			'navigator'
+		)
+		const fileDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'File')
+		const clipboardItemDescriptor = Object.getOwnPropertyDescriptor(
+			globalThis,
+			'ClipboardItem'
+		)
+		let nativeShareCalled = false
+		let clipboardWriteCalled = false
+
+		Object.defineProperty(globalThis, 'File', {
+			configurable: true,
+			value: class FakeFile {
+				constructor(
+					readonly parts: unknown[],
+					readonly name: string,
+					readonly options: unknown
+				) {}
+			}
+		})
+		Object.defineProperty(globalThis, 'ClipboardItem', {
+			configurable: true,
+			value: class FakeClipboardItem {
+				constructor(readonly data: unknown) {}
+			}
+		})
+		Object.defineProperty(globalThis, 'navigator', {
+			configurable: true,
+			value: {
+				canShare: () => true,
+				share: async () => {
+					nativeShareCalled = true
+					throw new Error('user activation expired')
+				},
+				clipboard: {
+					write: async () => {
+						clipboardWriteCalled = true
+					}
+				}
+			}
+		})
+
+		try {
+			const result = await shareImageBlob(
+				new Blob(['png'], { type: 'image/png' })
+			)
+			assert.equal(result, 'copied')
+			assert.equal(nativeShareCalled, true)
+			assert.equal(clipboardWriteCalled, true)
+		} finally {
+			if (navigatorDescriptor)
+				Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+			else Reflect.deleteProperty(globalThis, 'navigator')
+			if (fileDescriptor)
+				Object.defineProperty(globalThis, 'File', fileDescriptor)
+			else Reflect.deleteProperty(globalThis, 'File')
+			if (clipboardItemDescriptor)
+				Object.defineProperty(
+					globalThis,
+					'ClipboardItem',
+					clipboardItemDescriptor
+				)
 			else Reflect.deleteProperty(globalThis, 'ClipboardItem')
 		}
 	})

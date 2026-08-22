@@ -5,6 +5,7 @@ import { Link } from '@/i18n/navigation'
 import { ChevronDown, Menu, UserCircle } from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 import { LanguageSwitcher } from './LanguageSwitcher'
+import { NavigationDisclosureController } from './NavigationDisclosureController'
 import { NavigationMenuLink } from './NavigationMenuLink'
 import { menuItems } from './config'
 
@@ -16,7 +17,7 @@ export async function GuestNavigationActions() {
 	const t = await getTranslations('Navigation')
 
 	return (
-		<>
+		<NavigationDisclosureController>
 			<div className="ml-6 hidden items-center gap-0.5 md:flex">
 				{menuItems.map(item => (
 					item.directHref ? (
@@ -123,6 +124,6 @@ export async function GuestNavigationActions() {
 					</NavigationMenuLink>
 				</div>
 			</details>
-		</>
+		</NavigationDisclosureController>
 	)
 }
