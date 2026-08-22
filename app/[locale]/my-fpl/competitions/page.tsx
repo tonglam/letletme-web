@@ -7,9 +7,11 @@ import {
 import { parseTournamentStatsView } from '@/app/me/tournament/_lib/tournament-stats-url'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import {
+	GET_MY_FPL_COMPETITION_BOARD,
 	GET_MY_FPL_COMPETITIONS_DESK,
 	type MyFplCompetitionAggregate,
 	type MyFplCompetitionBoardPage,
+	type MyFplCompetitionBoardResponse,
 	type MyFplCompetitionsDeskResponse,
 	type MyFplReviewState
 } from '@/lib/graphql/operations/my-fpl'
@@ -148,10 +150,33 @@ export default async function TournamentStatsPage({
 		const desk = response.myFplCompetitionsDesk
 		initialTournaments = desk.tournaments
 		initialSelectedTournamentId = String(desk.selectedTournamentId ?? '')
-		initialReviewState =
-			desk.state === 'READY' ? (desk.board?.state ?? desk.state) : desk.state
+		initialReviewState = desk.state
+		if (
+			desk.state === 'READY' &&
+			desk.selectedTournamentId !== null &&
+			desk.eventId !== null
+		) {
+			const boardResponse = await timing.measure(
+				'my-fpl-competition-board',
+				() =>
+					executeServerQueryWithSession<MyFplCompetitionBoardResponse>(
+						session,
+						GET_MY_FPL_COMPETITION_BOARD,
+						{
+							tournamentId: desk.selectedTournamentId,
+							eventId: desk.eventId,
+							page: 1,
+							pageSize: 100,
+							search: null
+						},
+						{ cache: 'no-store' }
+					)
+			)
+			initialBoard = boardResponse.myFplCompetitionBoard
+			initialReviewState = initialBoard.state
+		}
 		const reviewReady = initialReviewState === 'READY'
-		initialBoard = reviewReady ? desk.board : null
+		if (!reviewReady) initialBoard = null
 		initialAggregate = reviewReady ? desk.aggregate : null
 		currentGameweek =
 			desk.context.currentEventId ?? desk.context.latestFinalizedEventId ?? 0
@@ -182,7 +207,7 @@ export default async function TournamentStatsPage({
 			latestFinalizedGw: desk.context.latestFinalizedEventId,
 			state: initialReviewState,
 			rows: initialCurrentRows.length,
-			fieldSize: desk.board?.fieldSize ?? 0
+			fieldSize: initialBoard?.fieldSize ?? 0
 		})
 	} catch (error) {
 		console.error('[tournament stats] Failed to seed finalized desk:', error)

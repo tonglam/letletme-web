@@ -263,7 +263,8 @@ export interface MyFplCompetitionsDesk {
 	selectedTournamentId: number | null
 	selectedTournament: EntryTournament | null
 	eventId: number | null
-	board: MyFplCompetitionBoardPage | null
+	/** Loaded by the dedicated board root after the desk/list request. */
+	board?: MyFplCompetitionBoardPage | null
 	aggregate: MyFplCompetitionAggregate | null
 }
 
@@ -529,17 +530,6 @@ export const GET_MY_FPL_COMPETITIONS_DESK = `${TOURNAMENT_INFO_FIELDS}
       selectedTournamentId
       selectedTournament { ...TournamentInfoFields }
       eventId
-      board {
-        state
-        eventId
-        page
-        pageSize
-        totalRows
-        totalPages
-        fieldSize
-        rows {${BOARD_ROW_FIELDS}}
-        viewerRow {${BOARD_ROW_FIELDS}}
-      }
       aggregate {${AGGREGATE_FIELDS}}
     }
   }
