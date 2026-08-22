@@ -1674,6 +1674,8 @@
 		"pendingReviewForGameweek": "Gameweek {gameweek} is still being finalized. Open Live for provisional updates.",
 		"openLive": "Open Live",
 		"pastSeasonsPending": "Historical season results are still syncing. They will appear after the full history checkpoint is confirmed.",
+		"reviewPending": "Verified My Team results are still syncing. Finalized data will appear after the desk is ready.",
+		"reviewUnavailable": "Verified My Team results are temporarily unavailable. Please try again shortly.",
 		"loadFailed": "Failed to load My Team.",
 		"seasonPreseasonHint": "GW1 has not started. Season points and rank will appear after the official release.",
 		"notSynced": "Lineup information has not synced yet.",

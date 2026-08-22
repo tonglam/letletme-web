@@ -156,6 +156,7 @@ export default async function TeamStatsPage({
 		typeof historyFromMyFplDesk
 	> | null
 	let initialEntryIdentity = null as ReturnType<typeof identityFromMyFplEntry>
+	let initialDeskState: MyFplReviewState = 'EMPTY'
 	let initialEntryGameweekState: MyFplReviewState | undefined
 	let initialPastSeasonsState: MyFplReviewState | undefined
 	let initialError: string | null = null
@@ -179,10 +180,16 @@ export default async function TeamStatsPage({
 			)
 		)
 		const desk = response.myFplTeamDesk
-		initialEntryHistory = historyFromMyFplDesk(desk)
+		initialDeskState = desk.state
+		initialEntryHistory =
+			desk.state === 'READY' ? historyFromMyFplDesk(desk) : null
 		initialEntryIdentity = identityFromMyFplEntry(desk.entry)
-		initialEntryEventResult = eventResultFromMyFplGameweek(desk.gameweek)
-		initialEntryGameweekState = desk.gameweek?.state
+		initialEntryEventResult =
+			desk.state === 'READY'
+				? eventResultFromMyFplGameweek(desk.gameweek)
+				: null
+		initialEntryGameweekState =
+			desk.state === 'READY' ? desk.gameweek?.state : desk.state
 		initialPastSeasonsState = desk.pastSeasonsState
 		currentGameweek =
 			desk.context.currentEventId ?? desk.context.latestFinalizedEventId ?? 0
@@ -239,6 +246,7 @@ export default async function TeamStatsPage({
 				initialSelectedGameweek={initialSelectedGameweek}
 				initialEntryEventResult={initialEntryEventResult}
 				initialEntryGameweekState={initialEntryGameweekState}
+				initialDeskState={initialDeskState}
 				initialPastSeasonsState={initialPastSeasonsState}
 				initialEntryHistory={initialEntryHistory}
 				initialEntryIdentity={initialEntryIdentity}

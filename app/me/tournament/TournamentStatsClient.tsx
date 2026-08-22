@@ -73,6 +73,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 		seasonMe,
 		seasonPath,
 		seasonPathLoading,
+		seasonPathState,
 		selectedGameweek,
 		setSelectedGameweek,
 		selectedTournament,
@@ -365,6 +366,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 								seasonMe={seasonMe}
 								seasonPath={seasonPath}
 								seasonPathLoading={seasonPathLoading}
+								seasonPathState={seasonPathState}
 								filteredStandings={filteredStandings}
 								hasMoreStandings={hasMoreStandings}
 								hasMoreSeasonRows={
@@ -402,6 +404,7 @@ function TournamentViews({
 	seasonMe,
 	seasonPath,
 	seasonPathLoading,
+	seasonPathState,
 	filteredStandings,
 	hasMoreStandings,
 	hasMoreSeasonRows,
@@ -426,6 +429,7 @@ function TournamentViews({
 	seasonMe: ReturnType<typeof useTournamentStats>['seasonMe']
 	seasonPath: ReturnType<typeof useTournamentStats>['seasonPath']
 	seasonPathLoading: boolean
+	seasonPathState: ReturnType<typeof useTournamentStats>['seasonPathState']
 	filteredStandings: ReturnType<typeof useTournamentStats>['filteredStandings']
 	hasMoreStandings: boolean
 	hasMoreSeasonRows: boolean
@@ -570,6 +574,7 @@ function TournamentViews({
 					<TournamentSeasonCharts
 						points={seasonPath}
 						loading={seasonPathLoading}
+						state={seasonPathState}
 						onOpenGameweek={gw => workspace.openGameweek(gw)}
 					/>
 				</div>

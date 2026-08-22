@@ -1674,6 +1674,8 @@
 		"pendingReviewForGameweek": "第 {gameweek} 轮仍在结算中，暂不作为复盘结果。实时变化请前往 Live。",
 		"openLive": "前往 Live",
 		"pastSeasonsPending": "历史赛季仍在同步，待完整历史检查点确认后显示。",
+		"reviewPending": "已验证的我的球队结果仍在同步，数据准备完成后会显示。",
+		"reviewUnavailable": "已验证的我的球队结果暂时不可用，请稍后重试。",
 		"loadFailed": "我的球队加载失败。",
 		"seasonPreseasonHint": "GW1 尚未开始，赛季积分和排名会在官方发布后显示。",
 		"notSynced": "阵容信息尚未同步。",

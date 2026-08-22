@@ -146,15 +146,17 @@ export default async function TournamentStatsPage({
 		}
 
 		const desk = response.myFplCompetitionsDesk
-		initialBoard = desk.board
-		initialAggregate = desk.aggregate
 		initialTournaments = desk.tournaments
 		initialSelectedTournamentId = String(desk.selectedTournamentId ?? '')
-		initialReviewState = desk.board?.state ?? desk.state
+		initialReviewState =
+			desk.state === 'READY' ? (desk.board?.state ?? desk.state) : desk.state
+		const reviewReady = initialReviewState === 'READY'
+		initialBoard = reviewReady ? desk.board : null
+		initialAggregate = reviewReady ? desk.aggregate : null
 		currentGameweek =
 			desk.context.currentEventId ?? desk.context.latestFinalizedEventId ?? 0
-		initialSliceGameweek = desk.eventId
-		const rows = boardRowsToEventResults(desk.board, desk.selectedTournament)
+		initialSliceGameweek = reviewReady ? desk.eventId : null
+		const rows = boardRowsToEventResults(initialBoard, desk.selectedTournament)
 		initialCurrentRows = initialReviewState === 'READY' ? rows : []
 		initialSeasonFieldRows = initialCurrentRows
 		initialLatestFinalizedGameweek = desk.context.latestFinalizedEventId ?? null
@@ -164,11 +166,12 @@ export default async function TournamentStatsPage({
 					? (initialLatestFinalizedGameweek ?? desk.eventId)
 					: desk.eventId
 				: null
-		initialSeasonSnapshot = aggregateToSeasonSnapshot(
-			desk.aggregate,
-			desk.board
-		)
-		initialRankingSummary = aggregateToRankingSummary(desk.aggregate)
+		initialSeasonSnapshot = reviewReady
+			? aggregateToSeasonSnapshot(initialAggregate, initialBoard)
+			: null
+		initialRankingSummary = reviewReady
+			? aggregateToRankingSummary(initialAggregate)
+			: null
 
 		console.info('[tournament stats] SSR finalized desk seed', {
 			view: initialView,

@@ -46,6 +46,7 @@ interface UseTeamStatsOptions {
 	loadGameweekData: boolean
 	initialEntryEventResult: EntryEventResult | null
 	initialEntryGameweekState?: MyFplReviewState
+	initialDeskState?: MyFplReviewState
 	initialPastSeasonsState?: MyFplReviewState
 	initialEntryHistory?: InitialEntryHistory
 	initialEntryIdentity?: InitialEntryIdentity
@@ -73,6 +74,7 @@ export function useTeamStats({
 	loadGameweekData,
 	initialEntryEventResult,
 	initialEntryGameweekState,
+	initialDeskState = 'EMPTY',
 	initialPastSeasonsState,
 	initialEntryHistory = null,
 	initialEntryIdentity = null,
@@ -84,6 +86,7 @@ export function useTeamStats({
 }: UseTeamStatsOptions) {
 	const t = useTranslations('TeamStats')
 	const [currentGameweek, setCurrentGameweek] = useState(initialCurrentGameweek)
+	const [deskState] = useState<MyFplReviewState>(initialDeskState)
 	const [selectedGameweek, setSelectedGameweek] = useState(
 		initialSelectedGameweek && initialSelectedGameweek > 0
 			? initialSelectedGameweek
@@ -441,6 +444,7 @@ export function useTeamStats({
 
 	return {
 		currentGameweek,
+		deskState,
 		emptyStateMessage,
 		error: gameweekError ?? baseError,
 		gameweekState,

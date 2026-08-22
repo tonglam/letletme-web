@@ -43,6 +43,7 @@ interface TeamStatsClientProps {
 	initialSelectedGameweek?: number
 	initialEntryEventResult: EntryEventResult | null
 	initialEntryGameweekState?: MyFplReviewState
+	initialDeskState?: MyFplReviewState
 	initialPastSeasonsState?: MyFplReviewState
 	initialEntryHistory?: InitialEntryHistory
 	initialEntryIdentity?: SeasonIdentity | null
@@ -76,6 +77,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 
 	const {
 		currentGameweek,
+		deskState,
 		emptyStateMessage,
 		error,
 		gameweekState,
@@ -183,6 +185,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 							isLoading={isLoading}
 							isTransfersLoading={isTransfersLoading}
 							gameweekState={gameweekState}
+							deskState={deskState}
 							teamStats={teamStats}
 							seasonOverall={seasonOverall}
 							preseason={props.initialSeasonPhase === 'PRESEASON'}
@@ -219,6 +222,7 @@ interface TeamStatsViewsProps {
 	isLoading: boolean
 	isTransfersLoading: boolean
 	gameweekState?: MyFplReviewState
+	deskState: ReturnType<typeof useTeamStats>['deskState']
 	teamStats: ReturnType<typeof useTeamStats>['teamStats']
 	seasonOverall: ReturnType<typeof useTeamStats>['seasonOverall']
 	preseason: boolean
@@ -239,6 +243,7 @@ function TeamStatsViews({
 	isLoading,
 	isTransfersLoading,
 	gameweekState,
+	deskState,
 	teamStats,
 	seasonOverall,
 	preseason,
@@ -362,6 +367,18 @@ function TeamStatsViews({
 
 			{view === 'season' ? (
 				<div className="space-y-6 sm:space-y-8">
+					{deskState === 'PENDING' ? (
+						<Alert className="shadow-sm">
+							<AlertDescription>{t('reviewPending')}</AlertDescription>
+						</Alert>
+					) : deskState === 'UNAVAILABLE' ? (
+						<Alert
+							variant="destructive"
+							className="shadow-sm"
+						>
+							<AlertDescription>{t('reviewUnavailable')}</AlertDescription>
+						</Alert>
+					) : null}
 					{pastSeasonsState === 'PENDING' ? (
 						<Alert className="shadow-sm">
 							<AlertDescription>{t('pastSeasonsPending')}</AlertDescription>
@@ -395,6 +412,18 @@ function TeamStatsViews({
 				</div>
 			) : (
 				<div>
+					{deskState === 'PENDING' ? (
+						<Alert className="mb-5 shadow-sm">
+							<AlertDescription>{t('reviewPending')}</AlertDescription>
+						</Alert>
+					) : deskState === 'UNAVAILABLE' ? (
+						<Alert
+							variant="destructive"
+							className="mb-5 shadow-sm"
+						>
+							<AlertDescription>{t('reviewUnavailable')}</AlertDescription>
+						</Alert>
+					) : null}
 					{(seasonOverall || currentGameweek > 0) && (
 						<div className="mb-5 space-y-3 sm:mb-6">
 							<GameweekSelector

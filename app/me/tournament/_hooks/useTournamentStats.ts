@@ -202,6 +202,8 @@ export function useTournamentStats({
 	const [isBoardLoading, setIsBoardLoading] = useState(false)
 	const [seasonPath, setSeasonPath] = useState<TournamentPathPoint[]>([])
 	const [seasonPathLoading, setSeasonPathLoading] = useState(false)
+	const [seasonPathState, setSeasonPathState] =
+		useState<MyFplReviewState>('EMPTY')
 	const [seasonPathRetryNonce, setSeasonPathRetryNonce] = useState(0)
 	const [error, setError] = useState<string | null>(initialError)
 	const [selectedGameweek, setSelectedGameweek] = useState(
@@ -359,6 +361,7 @@ export function useTournamentStats({
 		requestAbortRef.current?.abort()
 		const controller = new AbortController()
 		requestAbortRef.current = controller
+		let deskRetryTimer: number | undefined
 
 		if (
 			firstDeskLoadRef.current &&
@@ -393,9 +396,10 @@ export function useTournamentStats({
 					desk.selectedTournament ??
 					desk.tournaments.find(item => item.id === tournamentId) ??
 					null
-				const deskState = desk.state
 				const nextState =
-					deskState === 'READY' ? (desk.board?.state ?? deskState) : deskState
+					desk.state === 'READY'
+						? (desk.board?.state ?? desk.state)
+						: desk.state
 				const board = nextState === 'READY' ? desk.board : null
 				const aggregate = nextState === 'READY' ? desk.aggregate : null
 				const rows = boardRowsToEventResults(board, nextTournament)
@@ -418,6 +422,16 @@ export function useTournamentStats({
 						: desk.context.latestFinalizedEventId
 				)
 				setUsedFallbackGameweek(false)
+				if (nextState === 'PENDING') {
+					deskRetryTimer = window.setTimeout(() => {
+						if (
+							requestId === requestSequenceRef.current &&
+							!controller.signal.aborted
+						) {
+							setDeskRefreshNonce(value => value + 1)
+						}
+					}, 10_000)
+				}
 				if (nextTournament && nextState === 'READY' && aggregate && board) {
 					setTournamentStats(
 						aggregateToTournamentStats(
@@ -451,7 +465,10 @@ export function useTournamentStats({
 				}
 			})
 
-		return () => controller.abort()
+		return () => {
+			controller.abort()
+			if (deskRetryTimer !== undefined) window.clearTimeout(deskRetryTimer)
+		}
 	}, [
 		entryId,
 		initialBoard,
@@ -621,6 +638,7 @@ export function useTournamentStats({
 			seasonPathThroughEventId < 1
 		) {
 			setSeasonPath([])
+			setSeasonPathState('EMPTY')
 			if (!loadSeasonPath) setSeasonPathLoading(false)
 			return
 		}
@@ -629,6 +647,7 @@ export function useTournamentStats({
 		let retryPending = false
 		let retryTimer: number | undefined
 		setSeasonPath([])
+		setSeasonPathState('PENDING')
 		setSeasonPathLoading(true)
 		void executeQuery<{
 			myFplCompetitionSeasonPath: {
@@ -646,17 +665,23 @@ export function useTournamentStats({
 			.then(response => {
 				const path = response.myFplCompetitionSeasonPath
 				if (path.state === 'PENDING') {
+					if (!cancelled) setSeasonPathState('PENDING')
 					retryPending = true
 					retryTimer = window.setTimeout(() => {
 						if (!cancelled) setSeasonPathRetryNonce(value => value + 1)
 					}, 10_000)
 					return
 				}
-				if (!cancelled) setSeasonPath(path.points ?? [])
+				if (!cancelled) {
+					setSeasonPathState(path.state)
+					setSeasonPath(path.state === 'READY' ? (path.points ?? []) : [])
+				}
 			})
 			.catch(pathError => {
-				if (!controller.signal.aborted)
+				if (!controller.signal.aborted) {
+					setSeasonPathState('UNAVAILABLE')
 					console.warn('[tournament stats] season path failed:', pathError)
+				}
 			})
 			.finally(() => {
 				if (!cancelled) setSeasonPathLoading(retryPending)
@@ -695,6 +720,7 @@ export function useTournamentStats({
 		seasonMe,
 		seasonPath,
 		seasonPathLoading,
+		seasonPathState,
 		selectedGameweek,
 		setSelectedGameweek,
 		selectedTournament,
