@@ -323,7 +323,9 @@ export function LiveMatchesClient({
 		currentEventId: pollingEventId,
 		selectedEventId: pollingEventId,
 		snapshot,
-		probeEventIdentity: true
+		probeEventIdentity: true,
+		windowState: snapshot?.windowState ?? snapshot?.state,
+		nextRefreshAt: snapshot?.nextRefreshAt
 	})
 	const activeTabConfig = TAB_CONFIG.find(config => config.value === activeTab)
 	const activeMatches = matchesByTab[activeTab]
@@ -380,8 +382,9 @@ export function LiveMatchesClient({
 				</Button>
 				{!isLoading || isRefreshing ? (
 					<LiveAutoRefreshCountdown
-						enabled={autoRefreshEnabled}
+						 enabled={autoRefreshEnabled}
 						onRefresh={autoRefreshMatches}
+						nextRefreshAt={snapshot?.nextRefreshAt}
 						renderLabel={seconds => t('autoRefresh', { seconds })}
 					/>
 				) : null}

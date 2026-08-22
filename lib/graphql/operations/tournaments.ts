@@ -667,11 +667,12 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_TOURNAMENT_INFO_FIELDS}
       eventId
       revision
       state
+      windowState
+      dataAvailability
       tournaments { ...LiveTournamentInfoFields }
       selectedTournamentId
       managerRevision
       officialCoverage
-      unavailableEntryIds
       partial
       failedEntryIds
       totalEntries
@@ -815,6 +816,9 @@ export interface TournamentLivePointsResponse {
 		eventId: number
 		revision: string | null
 		state: string
+		windowState?: string
+		dataAvailability?: string
+		nextRefreshAt?: string | null
 		tournaments: LiveEntryTournament[]
 		selectedTournamentId: number | null
 		managerRevision?: string | null

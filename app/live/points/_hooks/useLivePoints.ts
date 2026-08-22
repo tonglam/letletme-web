@@ -222,7 +222,7 @@ export function useLivePoints({
 					hasLoadedLiveDataRef.current = true
 					latestLiveDataRef.current = { requestKey, live }
 					setLiveData(live)
-					acceptSnapshot(liveResponse.liveSnapshot)
+					acceptSnapshot(liveResponse.calcLivePointsByEntry.snapshot ?? null)
 					setStartingPlayers(allPlayers.filter(player => !player.isBench))
 					setBenchPlayers(allPlayers.filter(player => player.isBench))
 					void enrichLivePointBreakdowns(requestId, eventId, live, requestKey)
@@ -500,7 +500,9 @@ export function useLivePoints({
 		selectedEventId: selectedGameweek,
 		snapshot,
 		managerScoreState: liveData?.score?.state,
-		managerNextRefreshAt: liveData?.score?.nextRefreshAt
+		managerNextRefreshAt: liveData?.score?.nextRefreshAt,
+		windowState: snapshot?.windowState ?? snapshot?.state,
+		nextRefreshAt: snapshot?.nextRefreshAt
 	})
 
 	return {

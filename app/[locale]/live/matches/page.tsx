@@ -27,15 +27,14 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 	// in RSC, avoiding a second event query or self-HTTP hop.
 	const { presentation, liveContext } = await getLivePageContext()
 	if (
-		presentation.phase === 'PRESEASON' ||
-		presentation.phase === 'BETWEEN_GAMEWEEKS' ||
-		presentation.phase === 'OFFSEASON' ||
+		(!liveContext?.anchorEventId && presentation.phase !== 'PRESEASON') ||
+		liveContext?.windowState === 'OFFSEASON' ||
 		presentation.phase === 'UNAVAILABLE'
 	) {
 		return <SeasonPhaseState feature="matches" presentation={presentation} />
 	}
 
-	const currentEventId = presentation.currentEventId
+	const currentEventId = liveContext?.anchorEventId ?? presentation.currentEventId
 	if (!currentEventId) {
 		return <SeasonPhaseState feature="matches" presentation={presentation} />
 	}

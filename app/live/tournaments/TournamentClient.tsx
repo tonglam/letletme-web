@@ -98,9 +98,9 @@ const fetchLivePoints = async (
 			? {
 					eventId: batch.eventId,
 					revision: batch.revision,
-					state: 'LIVE' as const,
-					publishedAt: new Date().toISOString(),
-					checkedAt: new Date().toISOString()
+					state: (batch.windowState ?? batch.state) as LiveSnapshotStatus['state'],
+					publishedAt: null,
+					checkedAt: null
 				}
 			: null
 	}
@@ -496,7 +496,9 @@ export default function TournamentClient({
 			selectedEventId: selectedGameweek,
 			snapshot,
 			managerScoreState: managerScoreSettling ? 'SETTLING' : null,
-			managerNextRefreshAt
+			managerNextRefreshAt,
+			windowState: snapshot?.windowState ?? snapshot?.state,
+			nextRefreshAt: snapshot?.nextRefreshAt
 		})
 	const refreshTournamentResults = useCallback(
 		async (revision?: string | null) => {

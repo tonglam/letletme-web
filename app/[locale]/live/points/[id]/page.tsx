@@ -2,6 +2,7 @@ import TeamPointsClient from '@/app/live/points/[id]/TeamPointsClient'
 import { SeasonPhaseState } from '@/components/feedback/SeasonPhaseState'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getLivePageContext } from '@/lib/live-context-server'
+import { liveContextToSnapshot } from '@/lib/live-refresh'
 import {
 	GET_ENTRY,
 	type EntryOverallSnapshot,
@@ -37,10 +38,12 @@ export default async function Page({ params, searchParams }: PageProps) {
 	const { gw, tournamentId } = await searchParams
 	const entryId = Number(id)
 
-	const { presentation } = await getLivePageContext()
+	const { presentation, liveContext } = await getLivePageContext()
 	const requestedGameweekValue = typeof gw === 'string' ? Number(gw) : null
 	const historicalMaxGameweek =
-		presentation.currentEventId ?? presentation.latestFinishedEventId
+		liveContext?.anchorEventId ??
+		presentation.currentEventId ??
+		presentation.latestFinishedEventId
 	const requestedGameweek =
 		requestedGameweekValue !== null &&
 		Number.isInteger(requestedGameweekValue) &&
@@ -50,7 +53,8 @@ export default async function Page({ params, searchParams }: PageProps) {
 			? requestedGameweekValue
 			: null
 	const allowHistoricalBetweenGameweeks =
-		presentation.phase === 'BETWEEN_GAMEWEEKS' && requestedGameweek !== null
+		liveContext?.windowState === 'BETWEEN_GAMEWEEKS' ||
+		(presentation.phase === 'BETWEEN_GAMEWEEKS' && requestedGameweek !== null)
 	if (
 		presentation.phase === 'PRESEASON' ||
 		(presentation.phase === 'BETWEEN_GAMEWEEKS' &&
@@ -62,6 +66,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	}
 
 	const currentEventId =
+		liveContext?.anchorEventId ??
 		presentation.currentEventId ??
 		(allowHistoricalBetweenGameweeks
 			? presentation.latestFinishedEventId
@@ -94,7 +99,10 @@ export default async function Page({ params, searchParams }: PageProps) {
 
 		if (liveResult.status === 'fulfilled') {
 			initialLiveData = liveResult.value.calcLivePointsByEntry
-			initialSnapshot = liveResult.value.liveSnapshot
+			initialSnapshot =
+				liveContextToSnapshot(liveContext) ??
+				liveResult.value.calcLivePointsByEntry.snapshot ??
+				null
 		} else {
 			console.error('Failed to seed live points page:', liveResult.reason)
 		}

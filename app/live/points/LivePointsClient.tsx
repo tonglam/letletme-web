@@ -83,6 +83,7 @@ export default function LivePointsClient({
 				onGameweekChange={livePoints.changeGameweek}
 				onAutoRefresh={livePoints.autoRefresh}
 				onRefresh={livePoints.refresh}
+				nextRefreshAt={livePoints.liveData?.snapshot?.nextRefreshAt ?? null}
 			/>
 		)
 	}

@@ -97,8 +97,8 @@ export default async function Page({ params, searchParams }: PageProps) {
 						eventId: detail.live.eventId,
 						revision: detail.live.revision,
 						state: detail.live.state as LiveSnapshotStatus['state'],
-						publishedAt: new Date().toISOString(),
-						checkedAt: new Date().toISOString()
+						publishedAt: null,
+						checkedAt: null
 					}
 					if (detail.live.partial) {
 						softError = liveT('partialResults', {

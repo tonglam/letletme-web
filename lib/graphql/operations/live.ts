@@ -128,13 +128,6 @@ export interface GameweekBoardsResponse {
 // Query to fetch top transfers in
 export const GET_LIVE_POINTS = `
   query GetLiveCalcPoints($eventId: Int!, $entryId: Int!) {
-    liveSnapshot(eventId: $eventId) {
-      eventId
-      revision
-      state
-      publishedAt
-      checkedAt
-    }
     calcLivePointsByEntry(eventId: $eventId, entryId: $entryId) {
       entry
       event
@@ -160,6 +153,13 @@ export const GET_LIVE_POINTS = `
         nextRefreshAt
         reconciliation
         reasonCodes
+      }
+      snapshot {
+        eventId
+        revision
+        state
+        publishedAt
+        checkedAt
       }
       livePoints
       transferCost
@@ -259,6 +259,7 @@ export interface LiveCalcData {
 	liveTotalPoints: number
 	captainName: string
 	pickList: LivePick[]
+	snapshot?: LiveSnapshotStatus | null
 }
 
 export type LiveManagerScore = {
@@ -287,7 +288,7 @@ export type LiveManagerScore = {
 }
 
 export interface LiveCalcDataResponse {
-	liveSnapshot: LiveSnapshotStatus | null
+	liveSnapshot?: LiveSnapshotStatus | null
 	calcLivePointsByEntry: LiveCalcData
 }
 
@@ -304,14 +305,21 @@ export type LiveSnapshotState =
 	| 'DAY_SETTLING'
 	| 'GW_REVIEW'
 	| 'FINALIZED'
+	| 'PRESEASON'
+	| 'EVENT_SCHEDULED'
+	| 'BETWEEN_GAMEWEEKS'
+	| 'OFFSEASON'
 
 export interface LiveSnapshotStatus {
 	eventId: number
-	revision: string
+	/** Nullable when the window is scheduled or retaining core/final data without a live publication. */
+	revision: string | null
 	state: LiveSnapshotState
-	publishedAt: string
-	checkedAt: string
-	stale?: boolean
+	publishedAt: string | null
+	checkedAt: string | null
+	windowState?: LiveWindowState
+	dataAvailability?: LiveDataAvailability
+	nextRefreshAt?: string | null
 }
 
 export interface LiveSnapshotResponse {
@@ -325,18 +333,21 @@ export const GET_LIVE_MATCHDAY_DESK = `
       eventId
       revision
       state
-		sourceCheckedAt
+      windowState
+      dataAvailability
+      liveRevision
+      sourceCheckedAt
       publishedAt
-		stale
+      nextRefreshAt
+			stale
+		source
 		matches {
         fixtureId
         eventId
         homeTeamId
         homeTeamName
-		homeTeamShortName
         awayTeamId
         awayTeamName
-		awayTeamShortName
         homeScore
         awayScore
         kickoffTime
@@ -349,10 +360,8 @@ export const GET_LIVE_MATCHDAY_DESK = `
 			eventId
 			homeTeamId
 			homeTeamName
-			homeTeamShortName
 			awayTeamId
 			awayTeamName
-			awayTeamShortName
 			homeScore
 			awayScore
 			kickoffTime
@@ -525,9 +534,14 @@ export interface LiveMatchdayDesk {
 	eventId: number
 	revision: string
 	state: LiveSnapshotState
+	windowState: LiveWindowState
+	dataAvailability: LiveDataAvailability
+	liveRevision: string | null
 	publishedAt: string
-	sourceCheckedAt: string
-	stale: boolean
+	source: 'REDIS' | 'POSTGRES' | 'CORE' | 'STALE'
+	sourceCheckedAt?: string | null
+	stale?: boolean
+	nextRefreshAt?: string | null
 	matches: LiveMatchdayDeskRow[]
 	nextFixtures: LiveMatchdayDeskRow[]
 }
@@ -551,11 +565,19 @@ export const GET_LIVE_CONTEXT = `
 			season
       eventId: currentEventId
       nextEventId
+      anchorEventId
+      latestFinalizedEventId
       revision: liveRevision
       state
+      windowState
+      producerState
+      anchorMode
+      dataAvailability
+      nextRefreshAt
       publishedAt
       checkedAt: sourceCheckedAt
-		stale
+      source
+      stale
     }
   }
 `
@@ -568,11 +590,51 @@ export interface LiveContextResponse {
 		nextEventId: number | null
 		revision: string | null
 		state: LiveSnapshotState
+		windowState: LiveWindowState
+		producerState: LiveProducerState
+		anchorMode: LiveAnchorMode
+		dataAvailability: LiveDataAvailability
+		anchorEventId: number | null
+		latestFinalizedEventId: number | null
 		publishedAt: string | null
 		checkedAt: string | null
+		nextRefreshAt: string | null
+		source: 'REDIS' | 'POSTGRES' | 'CORE' | 'STALE' | null
 		stale: boolean
 	} | null
 }
+
+export type LiveWindowState =
+	| 'PRESEASON'
+	| 'EVENT_SCHEDULED'
+	| 'LIVE_ACTIVE'
+	| 'DAY_SETTLING'
+	| 'BETWEEN_FIXTURES'
+	| 'GW_REVIEW'
+	| 'FINALIZED'
+	| 'BETWEEN_GAMEWEEKS'
+	| 'OFFSEASON'
+
+export type LiveProducerState =
+	| 'PRE_DEADLINE'
+	| 'PICKS_WAIT'
+	| 'PICKS_PROBE'
+	| 'PICKS_SYNC'
+	| 'LIVE_ACTIVE'
+	| 'BETWEEN_FIXTURES'
+	| 'DAY_SETTLING'
+	| 'GW_REVIEW'
+	| 'FINALIZED'
+
+export type LiveDataAvailability =
+	| 'SCHEDULED'
+	| 'FRESH'
+	| 'LAST_GOOD'
+	| 'FINAL'
+	| 'PARTIAL'
+	| 'UNAVAILABLE'
+
+export type LiveAnchorMode = 'UPCOMING' | 'CURRENT' | 'PREVIOUS_FINAL' | 'OFFSEASON'
 
 export const GET_LIVE_FIXTURE_PLAYERS = `
   query GetLiveFixturePlayers($ref: LiveRevisionRefInput!, $fixtureId: Int!) {

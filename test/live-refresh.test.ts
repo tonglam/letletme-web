@@ -7,10 +7,8 @@ import type {
 } from '../lib/graphql/operations/live'
 import { getLiveMatchesSnapshot } from '../lib/live-matches'
 import {
-	canRequestLiveTournamentBoard,
 	LIVE_AUTO_REFRESH_SECONDS,
 	LIVE_EXPLAIN_REFRESH_INTERVAL_MS,
-	isSyntheticScheduledSnapshot,
 	liveRefreshEventIdentityChanged,
 	liveSnapshotNeedsRefresh,
 	shouldPollLiveSnapshot,
@@ -32,14 +30,6 @@ const snapshot = (state: LiveSnapshotStatus['state']): LiveSnapshotStatus => ({
 	publishedAt: '2026-08-04T10:00:00.000Z',
 	checkedAt: '2026-08-04T10:00:00.000Z'
 })
-
-const scheduledTournamentSnapshot: LiveSnapshotStatus = {
-	eventId: 1,
-	revision: 'scheduled-core-17',
-	state: 'SCHEDULED',
-	publishedAt: '2026-08-20T06:08:03.000Z',
-	checkedAt: '2026-08-20T06:08:03.000Z'
-}
 
 describe('live refresh policy', () => {
 	it('polls scheduled and live current events every 30 seconds', () => {
@@ -118,20 +108,27 @@ describe('live refresh policy', () => {
 		)
 	})
 
-	it('does not send a synthetic scheduled tournament revision to the board API', () => {
+	it('keeps a low-frequency preseason context probe but stops true offseason polling', () => {
 		assert.equal(
-			isSyntheticScheduledSnapshot(scheduledTournamentSnapshot),
+			shouldPollLiveSnapshot({
+				isPageActive: true,
+				currentEventId: 33,
+				selectedEventId: 33,
+				snapshot: null,
+				windowState: 'PRESEASON'
+			}),
 			true
 		)
 		assert.equal(
-			canRequestLiveTournamentBoard(scheduledTournamentSnapshot),
+			shouldPollLiveSnapshot({
+				isPageActive: true,
+				currentEventId: 33,
+				selectedEventId: 33,
+				snapshot: null,
+				windowState: 'OFFSEASON'
+			}),
 			false
 		)
-		assert.equal(
-			canRequestLiveTournamentBoard(scheduledTournamentSnapshot, '18'),
-			true
-		)
-		assert.equal(canRequestLiveTournamentBoard(snapshot('SCHEDULED')), true)
 	})
 
 	it('throttles explain fan-out to the ten-minute persistence cadence', () => {
@@ -192,6 +189,10 @@ describe('live matches server snapshot', () => {
 				eventId: 33,
 				revision: 'a'.repeat(24),
 				state: 'SCHEDULED',
+				windowState: 'EVENT_SCHEDULED',
+				dataAvailability: 'SCHEDULED',
+				liveRevision: null,
+				source: 'CORE',
 				publishedAt: new Date().toISOString(),
 				sourceCheckedAt: new Date().toISOString(),
 				stale: false,
@@ -233,7 +234,8 @@ describe('live matches server snapshot', () => {
 		assert.equal(result.matches.length, 1)
 		assert.equal(result.matches[0]?.status, 'UPCOMING')
 		assert.equal(result.matches[0]?.minute, 0)
-		assert.equal(result.snapshot?.revision, 'a'.repeat(24))
+		assert.equal(result.snapshot?.revision, null)
+		assert.equal(result.snapshot?.dataAvailability, 'SCHEDULED')
 	})
 
 	it('keeps live results when the optional upcoming-fixtures query fails', async () => {
@@ -243,6 +245,10 @@ describe('live matches server snapshot', () => {
 				eventId: 33,
 				revision: 'b'.repeat(24),
 				state: 'LIVE',
+				windowState: 'LIVE_ACTIVE',
+				dataAvailability: 'FRESH',
+				liveRevision: 'b'.repeat(24),
+				source: 'REDIS',
 				publishedAt: new Date().toISOString(),
 				sourceCheckedAt: new Date().toISOString(),
 				stale: false,
@@ -299,8 +305,10 @@ describe('live matches server snapshot', () => {
 								eventId: 34,
 								homeTeamId: 1,
 								homeTeamName: 'Arsenal',
+								homeTeamShortName: 'ARS',
 								awayTeamId: 2,
 								awayTeamName: 'Chelsea',
+								awayTeamShortName: 'CHE',
 								homeScore: null,
 								awayScore: null,
 								kickoffTime: '2026-08-11T18:00:00.000Z',
