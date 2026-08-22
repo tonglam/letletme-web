@@ -193,6 +193,7 @@
 		"personalH2HLive": "Live",
 		"personalH2HFinal": "Final",
 		"personalH2HScheduled": "Scheduled",
+		"personalH2HVersus": "VS",
 		"personalH2HAwaiting": "Waiting for the official GW1 schedule",
 		"personalH2HScheduledMatch": "You vs {opponent}",
 		"personalH2HScoredMatch": "You {myPoints} — {opponentPoints} {opponent}",

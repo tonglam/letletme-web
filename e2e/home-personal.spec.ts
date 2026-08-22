@@ -161,7 +161,9 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 		await expect(currentMatchup.getByText('24', { exact: true })).toBeVisible()
 		await expect(currentMatchup.getByText('43', { exact: true })).toBeVisible()
 		await expect(
-			main.getByRole('link', { name: /You 24.*43.*炸群高手 磊磊酱/ })
+			main.getByRole('link', {
+				name: /E2E H2H.*GW1.*Live.*Future Xu.*让让群の一美.*24.*43.*炸群高手 磊磊酱.*Tong言无忌/
+			})
 		).toHaveAttribute('href', '/live/competitions/6?gw=1')
 		await expect(main.locator('[data-home-personal-ready]')).toBeVisible()
 		await expect(main.locator('[data-home-league-ranks-ready]')).toBeVisible()

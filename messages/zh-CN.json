@@ -193,6 +193,7 @@
 		"personalH2HLive": "直播",
 		"personalH2HFinal": "完场",
 		"personalH2HScheduled": "待赛",
+		"personalH2HVersus": "对阵",
 		"personalH2HAwaiting": "等待 GW1 官方赛程",
 		"personalH2HScheduledMatch": "你 vs {opponent}",
 		"personalH2HScoredMatch": "你 {myPoints} — {opponentPoints} {opponent}",

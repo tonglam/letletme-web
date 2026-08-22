@@ -113,15 +113,20 @@ function ClassicLeagueRow({
 function H2HSide({
 	side,
 	align,
-	fallback
+	fallback,
+	displayOverride
 }: {
 	side: HomeH2HMatchupSide
 	align: 'left' | 'right'
 	fallback: string
+	displayOverride?: string
 }) {
 	const managerName =
-		side.playerName?.trim() || side.entryName?.trim() || fallback
-	const teamName = side.entryName?.trim()
+		displayOverride ||
+		side.playerName?.trim() ||
+		side.entryName?.trim() ||
+		fallback
+	const teamName = displayOverride ? null : side.entryName?.trim()
 
 	return (
 		<div className={cn('min-w-0', align === 'right' && 'text-right')}>
@@ -139,12 +144,10 @@ function H2HSide({
 
 function LinkedH2HBody({
 	row,
-	children,
-	ariaLabel
+	children
 }: {
 	row: HomeLeagueRank
 	children: ReactNode
-	ariaLabel?: string
 }) {
 	const bodyClassName = cn(
 		'block w-full rounded-sm px-1 py-3',
@@ -167,7 +170,6 @@ function LinkedH2HBody({
 				href={`/live/competitions/${row.tournamentId}${suffix}`}
 				prefetch={false}
 				className={bodyClassName}
-				aria-label={ariaLabel}
 			>
 				{children}
 			</Link>
@@ -186,15 +188,10 @@ function H2HLeagueRow({
 		live: string
 		final: string
 		scheduled: string
+		versus: string
 		noMatch: string
 		gameweek: (event: number) => string
 		rank: (rank: string) => string
-		scoredAria: (
-			myPoints: string,
-			opponentPoints: string,
-			opponent: string
-		) => string
-		scheduledAria: (opponent: string) => string
 	}
 }) {
 	const matchup = row.h2hMatchup
@@ -215,15 +212,11 @@ function H2HLeagueRow({
 		)
 	}
 
-	const opponentFallback = matchup.opponent.isAverage
-		? labels.averageTeam
-		: matchup.isBye
-			? labels.bye
+	const opponentFallback = matchup.isBye
+		? labels.bye
+		: matchup.opponent.isAverage
+			? labels.averageTeam
 			: labels.noMatch
-	const opponentName =
-		matchup.opponent.playerName?.trim() ||
-		matchup.opponent.entryName?.trim() ||
-		opponentFallback
 	const viewerPoints =
 		matchup.viewer.points == null ? '—' : formatInteger(matchup.viewer.points)
 	const opponentPoints =
@@ -236,16 +229,9 @@ function H2HLeagueRow({
 		: matchup.isLive
 			? labels.live
 			: labels.scheduled
-	const matchupAriaLabel = showScore
-		? labels.scoredAria(viewerPoints, opponentPoints, opponentName)
-		: labels.scheduledAria(opponentName)
-	const ariaLabel = `${row.name}: ${matchupAriaLabel}`
 
 	return (
-		<LinkedH2HBody
-			row={row}
-			ariaLabel={ariaLabel}
-		>
+		<LinkedH2HBody row={row}>
 			<div data-home-h2h-matchup={matchup.officialMatchId}>
 				<div className="flex items-start justify-between gap-3">
 					<p className="min-w-0 truncate text-sm font-semibold">{row.name}</p>
@@ -292,13 +278,14 @@ function H2HLeagueRow({
 						</div>
 					) : (
 						<div className="min-w-[4.5rem] rounded-md border border-border/80 bg-background px-2 py-2 text-center font-display text-xs font-bold text-muted-foreground shadow-sm">
-							VS
+							{labels.versus}
 						</div>
 					)}
 					<H2HSide
 						side={matchup.opponent}
 						align="left"
 						fallback={opponentFallback}
+						displayOverride={matchup.isBye ? labels.bye : undefined}
 					/>
 				</div>
 			</div>
@@ -336,17 +323,10 @@ export async function PersonalLeagueRankList({
 		live: t('personalH2HLive'),
 		final: t('personalH2HFinal'),
 		scheduled: t('personalH2HScheduled'),
+		versus: t('personalH2HVersus'),
 		noMatch: t('personalH2HNoMatch'),
 		gameweek: (event: number) => t('personalH2HGameweek', { event }),
-		rank: (rank: string) => t('personalLeagueRank', { rank }),
-		scoredAria: (myPoints: string, opponentPoints: string, opponent: string) =>
-			t('personalH2HScoredMatch', {
-				myPoints,
-				opponentPoints,
-				opponent
-			}),
-		scheduledAria: (opponent: string) =>
-			t('personalH2HScheduledMatch', { opponent })
+		rank: (rank: string) => t('personalLeagueRank', { rank })
 	}
 	const renderClassicRow = (row: HomeLeagueRank) => {
 		const rankDisplay = row.rank == null ? '—' : formatInteger(row.rank)
