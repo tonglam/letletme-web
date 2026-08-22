@@ -75,10 +75,11 @@ export function isSquadTeamCode(value: string): value is SquadTeamCode {
 }
 
 export function resolveSquadTeamCode(
-	teamShort: string,
-	teamName?: string
+	teamShort?: string | null,
+	teamName?: string | null
 ): SquadTeamCode | null {
-	const aliases = [teamShort, teamName ?? '']
+	const aliases = [teamShort, teamName]
+		.filter((value): value is string => typeof value === 'string')
 		.map(value => value.trim().toUpperCase())
 		.filter(Boolean)
 

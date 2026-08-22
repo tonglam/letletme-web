@@ -74,7 +74,10 @@ export function MarketAvailabilityClientList({
 				const chance =
 					update.chanceOfPlayingThisRound ?? update.chanceOfPlayingNextRound
 				return (
-					<li key={update.player.playerId} className="py-2.5 first:pt-0 last:pb-0">
+					<li
+						key={`${update.player.playerId}:${update.observedDate}`}
+						className="py-2.5 first:pt-0 last:pb-0"
+					>
 						<div className="flex items-start gap-2.5">
 							<PositionBadge player={update.player} />
 							<div className="min-w-0 flex-1">

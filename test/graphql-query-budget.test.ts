@@ -11,6 +11,7 @@ import {
 	GET_FIXTURE_PLANNING_SIGNALS,
 	GET_MARKET_PULSE
 } from '../lib/graphql/operations/market'
+import { GET_PRICE_CHANGE_BOARD } from '../lib/graphql/operations/price-changes'
 import {
 	GET_PLAYER_STATS_DESK_OVERVIEW,
 	GET_PLAYER_STATE_PROFILE,
@@ -64,6 +65,15 @@ describe('GraphQL request budget', () => {
 		visit(document, { enter: () => void (astNodes += 1) })
 
 		assert.ok(astNodes < 200, `GET_MARKET_PULSE has ${astNodes} AST nodes`)
+	})
+
+	it('keeps the official price-change board as one bounded public root', () => {
+		const document = parse(GET_PRICE_CHANGE_BOARD)
+		const operation = document.definitions.find(
+			definition => definition.kind === 'OperationDefinition'
+		)
+		assert.ok(operation?.kind === 'OperationDefinition')
+		assert.equal(operation.selectionSet.selections.length, 1)
 	})
 
 	it('keeps each Home document within the production query budget', () => {
@@ -208,8 +218,8 @@ describe('GraphQL request budget', () => {
 		let astNodes = 0
 		visit(document, { enter: () => void (astNodes += 1) })
 		assert.ok(
-			astNodes < 200,
-			`GET_TOURNAMENT_LIVE_DESK has ${astNodes} AST nodes`
+			astNodes <= 200,
+			`GET_TOURNAMENT_LIVE_DESK has ${astNodes} AST nodes; backend limit is 200`
 		)
 	})
 })

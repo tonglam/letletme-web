@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
 	buildSeasonOverallSnapshot,
-	type SeasonIdentity,
+	type SeasonIdentity
 } from '@/app/me/team/_lib/team-stats-model'
 import type { EntryHistoryItem } from '@/lib/graphql/operations/entries'
 
@@ -14,7 +14,7 @@ const identity: SeasonIdentity = {
 	overallPoints: 0,
 	overallRank: 0,
 	teamValue: null,
-	bank: null,
+	bank: null
 }
 
 const historyRow = (overrides: Partial<EntryHistoryItem> = {}) =>
@@ -33,28 +33,28 @@ const historyRow = (overrides: Partial<EntryHistoryItem> = {}) =>
 		eventPlayedCaptain: null,
 		teamValue: null,
 		bank: null,
-		...overrides,
+		...overrides
 	}) as EntryHistoryItem
 
 describe('buildSeasonOverallSnapshot', () => {
 	it('maps an upstream preseason zero placeholder to null only without history', () => {
-		const snapshot = buildSeasonOverallSnapshot(identity, [], { preseason: true })
+		const snapshot = buildSeasonOverallSnapshot(identity, [], {
+			preseason: true
+		})
 		assert.equal(snapshot.overallPoints, null)
 		assert.equal(snapshot.overallRank, null)
 	})
 
-	it('preserves a real zero after the season starts', () => {
+	it('does not use the unverified identity snapshot without finalized history', () => {
 		const snapshot = buildSeasonOverallSnapshot(identity, [])
-		assert.equal(snapshot.overallPoints, 0)
-		assert.equal(snapshot.overallRank, 0)
+		assert.equal(snapshot.overallPoints, null)
+		assert.equal(snapshot.overallRank, null)
 	})
 
 	it('preserves zero values when a real history row exists in preseason', () => {
-		const snapshot = buildSeasonOverallSnapshot(
-			identity,
-			[historyRow()],
-			{ preseason: true },
-		)
+		const snapshot = buildSeasonOverallSnapshot(identity, [historyRow()], {
+			preseason: true
+		})
 		assert.equal(snapshot.overallPoints, 0)
 		assert.equal(snapshot.overallRank, 0)
 	})

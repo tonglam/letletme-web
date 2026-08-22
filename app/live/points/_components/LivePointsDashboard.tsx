@@ -40,7 +40,8 @@ export function LivePointsDashboard({
 	benchPlayers,
 	onGameweekChange,
 	onAutoRefresh,
-	onRefresh
+	onRefresh,
+	nextRefreshAt
 }: {
 	entrySearch?: ReactNode
 	currentGameweek: number
@@ -57,6 +58,7 @@ export function LivePointsDashboard({
 	onGameweekChange: (gameweek: number) => void
 	onAutoRefresh: () => Promise<void>
 	onRefresh: () => Promise<void>
+	nextRefreshAt?: string | null
 }) {
 	const t = useTranslations('LivePoints')
 	const format = useFormatter()
@@ -110,11 +112,19 @@ export function LivePointsDashboard({
 		)
 	})()
 	const gameweek = selectedGameweek ?? liveData?.event ?? currentGameweek
+	const officialEventPoints = liveData?.score?.eventPoints ?? null
+	const officialTotalPoints =
+		liveData?.score?.totalScope === 'OVERALL'
+			? liveData.score.totalPoints
+			: null
 	const scoreStatus = (() => {
 		const score = liveData?.score
 		if (!score || score.state === 'UNAVAILABLE') return t('scoreUnavailable')
 		if (score.state === 'SETTLING') return t('scoreSettling')
-		if (score.source === 'LOCAL_MULTIPLIER_FALLBACK' || score.state === 'FALLBACK') {
+		if (
+			String(score.source) === 'LOCAL_MULTIPLIER_FALLBACK' ||
+			String(score.state) === 'FALLBACK'
+		) {
 			return t('scoreFallback')
 		}
 		if (score.state === 'STALE') return t('scoreDelayed')
@@ -137,15 +147,17 @@ export function LivePointsDashboard({
 	}
 	const showLiveOverallRank =
 		overall != null && gameweek === currentGameweek
+	const officialOverallRank =
+		liveData?.score?.overallRank ?? overall?.overallRank ?? null
 	const pitchHeaderStats = liveData
 		? {
 				eyebrow: showLiveOverallRank
-					? `${t('pitchTotalPoints')} ${formatOverallPoints(liveData.liveTotalPoints)} · ${t('pitchOverallRank')} ${formatOverallRank(overall.overallRank, { notation: 'compact' })}`
-					: `${t('pitchTotalPoints')} ${formatOverallPoints(liveData.liveTotalPoints)}`,
+					? `${t('pitchTotalPoints')} ${formatOverallPoints(officialTotalPoints)} · ${t('pitchOverallRank')} ${formatOverallRank(officialOverallRank, { notation: 'compact' })}`
+					: `${t('pitchTotalPoints')} ${formatOverallPoints(officialTotalPoints)}`,
 				details: [
 					{
 						label: t('pitchGameweekPoints'),
-						value: formatOverallPoints(liveData.livePoints),
+						value: formatOverallPoints(officialEventPoints),
 						accent: true
 					},
 					{
@@ -243,8 +255,9 @@ export function LivePointsDashboard({
 					) : null}
 					<div className="flex flex-wrap items-center gap-2 sm:gap-3">
 						<LivePointsAutoRefreshCountdown
-							enabled={autoRefreshEnabled}
-							onRefresh={onAutoRefresh}
+				enabled={autoRefreshEnabled}
+				onRefresh={onAutoRefresh}
+				nextRefreshAt={nextRefreshAt}
 						/>
 						<ShareActions
 							text={shareText}

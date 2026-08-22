@@ -4,6 +4,7 @@ import {
 	createHomeFixturesRouteHandler,
 	homeFixturesEtag,
 	HOME_FIXTURES_NO_STORE,
+	HOME_FIXTURES_LIVE_CACHE_CONTROL,
 	HOME_FIXTURES_PUBLIC_CACHE_CONTROL,
 	parseHomeFixtureEventId
 } from '../lib/home-fixtures-route'
@@ -13,6 +14,11 @@ const fixtureWindow = (eventId = 34): HomeFixturesResponse => ({
 	season: '2627',
 	revision: 'core-revision-7',
 	eventId,
+	source: 'CORE',
+	state: 'CORE',
+	sourceCheckedAt: '2026-08-21T00:00:00.000Z',
+	publishedAt: null,
+	stale: false,
 	fixtures: []
 })
 
@@ -23,14 +29,20 @@ const quietLogger = {
 
 describe('Home fixtures route', () => {
 	it('strictly validates one integer eventId at the GW boundaries', () => {
-		assert.deepEqual(parseHomeFixtureEventId(new URLSearchParams('eventId=1')), {
-			ok: true,
-			eventId: 1
-		})
-		assert.deepEqual(parseHomeFixtureEventId(new URLSearchParams('eventId=38')), {
-			ok: true,
-			eventId: 38
-		})
+		assert.deepEqual(
+			parseHomeFixtureEventId(new URLSearchParams('eventId=1')),
+			{
+				ok: true,
+				eventId: 1
+			}
+		)
+		assert.deepEqual(
+			parseHomeFixtureEventId(new URLSearchParams('eventId=38')),
+			{
+				ok: true,
+				eventId: 38
+			}
+		)
 		for (const query of [
 			'',
 			'eventId=0',
@@ -39,13 +51,19 @@ describe('Home fixtures route', () => {
 			'eventId=1.5',
 			'eventId=1&eventId=2'
 		]) {
-			assert.equal(parseHomeFixtureEventId(new URLSearchParams(query)).ok, false)
+			assert.equal(
+				parseHomeFixtureEventId(new URLSearchParams(query)).ok,
+				false
+			)
 		}
 	})
 
 	it('caches successful and real BGW responses with a revision ETag', async () => {
 		const payload = fixtureWindow()
-		const handler = createHomeFixturesRouteHandler(async () => payload, quietLogger)
+		const handler = createHomeFixturesRouteHandler(
+			async () => payload,
+			quietLogger
+		)
 		const response = await handler(
 			new Request('https://letletme.top/api/home/fixtures?eventId=34')
 		)
@@ -60,7 +78,10 @@ describe('Home fixtures route', () => {
 
 	it('returns 304 for a matching ETag without loading user data', async () => {
 		const payload = fixtureWindow()
-		const handler = createHomeFixturesRouteHandler(async () => payload, quietLogger)
+		const handler = createHomeFixturesRouteHandler(
+			async () => payload,
+			quietLogger
+		)
 		const response = await handler(
 			new Request('https://letletme.top/api/home/fixtures?eventId=34', {
 				headers: { 'If-None-Match': homeFixturesEtag(payload) }
@@ -89,5 +110,29 @@ describe('Home fixtures route', () => {
 		assert.equal(failed.status, 502)
 		assert.equal(failed.headers.get('cache-control'), HOME_FIXTURES_NO_STORE)
 		assert.equal(calls, 1)
+	})
+
+	it('uses the short live cache and keeps live revision in the ETag', async () => {
+		const payload: HomeFixturesResponse = {
+			...fixtureWindow(3),
+			source: 'LIVE',
+			state: 'LIVE',
+			revision: 'live-9',
+			sourceCheckedAt: '2026-08-21T00:00:00.000Z',
+			publishedAt: '2026-08-21T00:00:05.000Z',
+			stale: false
+		}
+		const handler = createHomeFixturesRouteHandler(
+			async () => payload,
+			quietLogger
+		)
+		const response = await handler(
+			new Request('https://letletme.top/api/home/fixtures?eventId=3')
+		)
+		assert.equal(
+			response.headers.get('cache-control'),
+			HOME_FIXTURES_LIVE_CACHE_CONTROL
+		)
+		assert.equal(response.headers.get('etag'), homeFixturesEtag(payload))
 	})
 })

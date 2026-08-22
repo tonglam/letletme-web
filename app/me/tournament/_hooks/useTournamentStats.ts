@@ -2,12 +2,18 @@
 
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_ENTRY_TOURNAMENTS,
-	GET_TOURNAMENT_ENTRY_RANKING_SUMMARY,
+	GET_MY_FPL_COMPETITION_BOARD,
+	GET_MY_FPL_COMPETITION_SEASON_PATH,
+	GET_MY_FPL_COMPETITIONS_DESK,
+	type MyFplCompetitionBoardPage,
+	type MyFplCompetitionBoardResponse,
+	type MyFplCompetitionAggregate,
+	type MyFplCompetitionsDeskResponse,
+	type MyFplReviewState
+} from '@/lib/graphql/operations/my-fpl'
+import {
 	type EntryTournament,
-	type EntryTournamentsResponse,
 	type TournamentEntryRankingSummary,
-	type TournamentEntryRankingSummaryResponse,
 	type TournamentEventResultItem,
 	type TournamentSeasonSnapshotApi
 } from '@/lib/graphql/operations/tournaments'
@@ -17,27 +23,15 @@ import {
 	isTournamentInsightsRepairExhausted,
 	isTournamentSetupPollingPending
 } from '@/lib/tournament/lifecycle'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import {
-	fetchPlayerMetaByIds,
-	fetchTournamentEventResultsCached,
-	fetchTournamentSeasonSnapshotCached,
-	loadTournamentSeasonPath,
-	type TournamentPathPoint
-} from '../_lib/tournament-stats-data'
-import {
-	clearRankingInFlight,
-	getRankingInFlight,
-	peekRanking,
-	rankingKey,
-	seedEventResults,
-	seedPlayerMeta,
-	seedRanking,
-	seedSeasonSnapshot,
-	setRankingInFlight,
-	getAllCachedPlayerMeta
-} from '../_lib/tournament-stats-cache'
+	aggregateToRankingSummary,
+	aggregateToSeasonSnapshot,
+	aggregateToTournamentStats,
+	boardRowsToEventResults
+} from '../_lib/my-fpl-adapters'
+import type { TournamentPathPoint } from '../_lib/tournament-stats-data'
 import {
 	buildTournamentSeasonField,
 	buildTournamentSeasonFieldFromSnapshot,
@@ -49,143 +43,118 @@ import {
 	type TournamentStatsViewModel,
 	resolveTournamentStatsLoadState
 } from '../_lib/tournament-stats-model'
-import { buildTournamentEventResultSeeds } from '../_lib/tournament-stats-seed'
 
 export interface TournamentStatsClientProps {
 	entryId: number
 	initialCurrentGameweek: number
+	initialLatestFinalizedGameweek?: number | null
 	initialTournaments: EntryTournament[]
 	initialSelectedTournamentId: string
 	initialDataGameweek: number | null
-	/** Event ID represented by initialCurrentRows; may differ for a deep link. */
 	initialSliceGameweek: number | null
 	initialCurrentRows: TournamentEventResultItem[]
-	/** Latest-data-GW full field for Season A; defaults to initialCurrentRows */
 	initialSeasonFieldRows?: TournamentEventResultItem[]
-	/** Phase 2: server season snapshot for dimension A */
 	initialSeasonSnapshot?: TournamentSeasonSnapshotApi | null
 	initialPreviousRows?: TournamentEventResultItem[]
 	initialRankingSummary?: TournamentEntryRankingSummary | null
 	initialPlayerMeta?: Record<number, PlayerMeta>
 	initialUsedFallbackGameweek?: boolean
+	initialReviewState?: MyFplReviewState
+	initialBoard?: MyFplCompetitionBoardPage | null
+	initialAggregate?: MyFplCompetitionAggregate | null
 	initialError: string | null
-	/** When true, load standings/performance for selectedGameweek */
 	loadGameweekData?: boolean
-	/** When true, load deferred multi-GW season path (Season tab only) */
 	loadSeasonPath?: boolean
 }
 
-async function fetchRankingCached(
+type BoardQueryOptions = {
+	tournamentId: number
+	eventId: number
+	page?: number
+	pageSize?: number
+	search?: string
+	signal?: AbortSignal
+}
+
+async function fetchBoardPage({
+	tournamentId,
+	eventId,
+	page = 1,
+	pageSize = 100,
+	search,
+	signal
+}: BoardQueryOptions): Promise<MyFplCompetitionBoardPage> {
+	const response = await executeQuery<MyFplCompetitionBoardResponse>(
+		GET_MY_FPL_COMPETITION_BOARD,
+		{ tournamentId, eventId, page, pageSize, search: search || null },
+		{ cache: 'no-store', signal }
+	)
+	return response.myFplCompetitionBoard
+}
+
+async function fetchDesk(
 	tournamentId: number,
-	eventId: number,
-	entryId: number
-): Promise<TournamentEntryRankingSummary | null> {
-	const cached = peekRanking<TournamentEntryRankingSummary>(
-		tournamentId,
-		eventId,
-		entryId
+	eventId: number | null,
+	signal?: AbortSignal
+): Promise<MyFplCompetitionsDeskResponse['myFplCompetitionsDesk']> {
+	const response = await executeQuery<MyFplCompetitionsDeskResponse>(
+		GET_MY_FPL_COMPETITIONS_DESK,
+		{ tournamentId, eventId },
+		{ cache: 'no-store', signal }
 	)
-	if (cached) return cached
-	const key = rankingKey(tournamentId, eventId, entryId)
-	const inflight = getRankingInFlight(key)
-	if (inflight) return inflight as Promise<TournamentEntryRankingSummary | null>
-
-	const request = executeQuery<TournamentEntryRankingSummaryResponse>(
-		GET_TOURNAMENT_ENTRY_RANKING_SUMMARY,
-		{ tournamentId, eventId, entryId },
-		{ cache: 'no-store' }
-	)
-		.then(response => {
-			const summary = response.tournamentEntryRankingSummary
-			seedRanking(tournamentId, eventId, entryId, summary)
-			return summary
-		})
-		.catch(err => {
-			console.warn('[tournament stats] ranking unavailable:', err)
-			return null
-		})
-		.finally(() => clearRankingInFlight(key))
-
-	setRankingInFlight(key, request)
-	return request
+	return response.myFplCompetitionsDesk
 }
 
 export function useTournamentStats({
 	entryId,
 	initialCurrentGameweek,
+	initialLatestFinalizedGameweek = null,
 	initialTournaments,
 	initialSelectedTournamentId,
 	initialDataGameweek,
 	initialSliceGameweek,
 	initialCurrentRows,
-	initialSeasonFieldRows,
+	initialSeasonFieldRows = [],
 	initialSeasonSnapshot = null,
 	initialPreviousRows = [],
 	initialRankingSummary = null,
 	initialPlayerMeta = {},
 	initialUsedFallbackGameweek = false,
+	initialReviewState = 'EMPTY',
+	initialBoard = null,
+	initialAggregate = null,
 	initialError,
 	loadGameweekData = false,
 	loadSeasonPath = false
 }: TournamentStatsClientProps) {
-	const seasonFieldSeed =
-		initialSeasonFieldRows && initialSeasonFieldRows.length > 0
-			? initialSeasonFieldRows
-			: initialCurrentRows
 	const t = useTranslations('TournamentStats')
 	const pageActive = usePageActive()
-
-	// Hydrate session cache from SSR once after mount so render stays pure.
-	const hydratedRef = useRef(false)
-	useEffect(() => {
-		if (hydratedRef.current) return
-		hydratedRef.current = true
-		const tid = Number(initialSelectedTournamentId)
-		if (Number.isFinite(tid) && tid > 0 && initialDataGameweek != null) {
-			buildTournamentEventResultSeeds({
-				dataGameweek: initialDataGameweek,
-				sliceGameweek: initialSliceGameweek,
-				seasonRows: seasonFieldSeed,
-				sliceRows: initialCurrentRows,
-				previousRows: initialPreviousRows
-			}).forEach(seed => seedEventResults(tid, seed.eventId, seed.rows))
-			if (initialSeasonSnapshot) {
-				seedSeasonSnapshot(tid, initialDataGameweek, initialSeasonSnapshot)
-			}
-			if (initialRankingSummary) {
-				seedRanking(tid, initialDataGameweek, entryId, initialRankingSummary)
-			}
-		}
-		Object.entries(initialPlayerMeta).forEach(([id, meta]) => {
-			seedPlayerMeta(Number(id), meta)
-		})
-	}, [
-		entryId,
-		initialCurrentRows,
-		initialDataGameweek,
-		initialPlayerMeta,
-		initialPreviousRows,
-		initialRankingSummary,
-		initialSeasonSnapshot,
-		initialSelectedTournamentId,
-		initialSliceGameweek,
-		seasonFieldSeed
-	])
-
 	const initialSelectedTournament =
 		initialTournaments.find(
 			item => String(item.id) === initialSelectedTournamentId
 		) ?? null
-	const initialStats =
+	const initialFallbackStats =
 		initialSelectedTournament &&
-		areTournamentInsightsReady(initialSelectedTournament) &&
-		initialSliceGameweek !== null
+		initialSliceGameweek !== null &&
+		initialCurrentRows.length > 0
 			? buildTournamentStats(
 					initialSelectedTournament,
 					initialSliceGameweek,
 					initialCurrentRows,
 					initialPreviousRows,
-					{ ...getAllCachedPlayerMeta(), ...initialPlayerMeta },
+					initialPlayerMeta,
+					entryId
+				)
+			: null
+	const initialAggregateStats =
+		initialSelectedTournament &&
+		initialAggregate &&
+		initialBoard &&
+		initialReviewState === 'READY'
+			? aggregateToTournamentStats(
+					initialSelectedTournament,
+					initialAggregate,
+					initialBoard,
 					entryId
 				)
 			: null
@@ -194,38 +163,79 @@ export function useTournamentStats({
 	const [selectedTournamentId, setSelectedTournamentIdState] = useState(
 		initialSelectedTournamentId
 	)
+	const [currentGameweek, setCurrentGameweek] = useState(initialCurrentGameweek)
+	const [latestFinalizedGameweek, setLatestFinalizedGameweek] = useState<
+		number | null
+	>(initialLatestFinalizedGameweek)
 	const [dataGameweek, setDataGameweek] = useState<number | null>(
 		initialDataGameweek
 	)
 	const [usedFallbackGameweek, setUsedFallbackGameweek] = useState(
 		initialUsedFallbackGameweek
 	)
+	const [reviewState, setReviewState] =
+		useState<MyFplReviewState>(initialReviewState)
 	const [tournamentStats, setTournamentStats] =
-		useState<TournamentStatsViewModel | null>(initialStats)
+		useState<TournamentStatsViewModel | null>(
+			initialAggregateStats ?? initialFallbackStats
+		)
+	const [aggregate, setAggregate] = useState<MyFplCompetitionAggregate | null>(
+		initialAggregate
+	)
+	const [boardPage, setBoardPage] = useState<MyFplCompetitionBoardPage | null>(
+		initialBoard
+	)
+	const [boardSearch, setBoardSearch] = useState('')
 	const [rankingSummary, setRankingSummary] =
 		useState<TournamentEntryRankingSummary | null>(initialRankingSummary)
-	/** Latest-data-GW full field rows for Season dimension A (fallback) */
 	const [seasonFieldRows, setSeasonFieldRows] = useState<
 		TournamentEventResultItem[]
-	>(() =>
-		initialDataGameweek != null && seasonFieldSeed.length > 0
-			? seasonFieldSeed
-			: []
+	>(
+		initialSeasonFieldRows.length > 0
+			? initialSeasonFieldRows
+			: initialCurrentRows
 	)
-	/** Phase 2 server snapshot for Season dimension A (preferred) */
 	const [seasonSnapshot, setSeasonSnapshot] =
 		useState<TournamentSeasonSnapshotApi | null>(initialSeasonSnapshot)
 	const [standingsSearch, setStandingsSearch] = useState('')
 	const [isLoading, setIsLoading] = useState(false)
+	const [isBoardLoading, setIsBoardLoading] = useState(false)
 	const [seasonPath, setSeasonPath] = useState<TournamentPathPoint[]>([])
 	const [seasonPathLoading, setSeasonPathLoading] = useState(false)
+	const [seasonPathState, setSeasonPathState] =
+		useState<MyFplReviewState>('EMPTY')
+	const [seasonPathRetryNonce, setSeasonPathRetryNonce] = useState(0)
 	const [error, setError] = useState<string | null>(initialError)
 	const [selectedGameweek, setSelectedGameweek] = useState(
 		initialSliceGameweek && initialSliceGameweek > 0
 			? initialSliceGameweek
 			: initialCurrentGameweek
 	)
-	const currentGameweek = initialCurrentGameweek
+
+	const requestSequenceRef = useRef(0)
+	const requestAbortRef = useRef<AbortController | null>(null)
+	const boardSequenceRef = useRef(0)
+	const boardAbortRef = useRef<AbortController | null>(null)
+	const boardPageRef = useRef<MyFplCompetitionBoardPage | null>(initialBoard)
+	const firstDeskLoadRef = useRef(true)
+	const initialBoardSearchSkippedRef = useRef(false)
+	const [deskRefreshNonce, setDeskRefreshNonce] = useState(0)
+
+	const commitBoardPage = useCallback(
+		(nextBoard: MyFplCompetitionBoardPage | null, search = '') => {
+			boardPageRef.current = nextBoard
+			setBoardPage(nextBoard)
+			setBoardSearch(search)
+		},
+		[]
+	)
+	const updateStandingsSearch = useCallback((value: string) => {
+		setStandingsSearch(value)
+		if (value.trim() === '') {
+			setSeasonFieldRows([])
+			setSeasonSnapshot(null)
+		}
+	}, [])
 
 	const selectedTournament = useMemo(
 		() =>
@@ -241,46 +251,51 @@ export function useTournamentStats({
 		hasSelectedTournament: Boolean(selectedTournament),
 		insightsReady
 	})
-	const filteredStandings = useMemo(() => {
-		if (!tournamentStats) return []
-		const query = standingsSearch.trim().toLowerCase()
-		if (!query) return tournamentStats.standings
-		return tournamentStats.standings.filter(
-			row =>
-				row.teamName.toLowerCase().includes(query) ||
-				row.managerName.toLowerCase().includes(query)
-		)
-	}, [standingsSearch, tournamentStats])
 
+	const filteredStandings = useMemo(
+		() => tournamentStats?.standings ?? [],
+		[tournamentStats]
+	)
 	const seasonField: TournamentSeasonField | null = useMemo(() => {
-		const fromSnap = buildTournamentSeasonFieldFromSnapshot(
+		const fromSnapshot = buildTournamentSeasonFieldFromSnapshot(
 			seasonSnapshot,
 			entryId
 		)
-		if (fromSnap) return fromSnap
+		if (fromSnapshot) return fromSnapshot
 		if (dataGameweek == null || seasonFieldRows.length === 0) return null
 		return buildTournamentSeasonField(seasonFieldRows, entryId, dataGameweek)
 	}, [dataGameweek, entryId, seasonFieldRows, seasonSnapshot])
-
 	const seasonMe: TournamentSeasonMe | null = useMemo(() => {
 		if (dataGameweek == null && !seasonSnapshot) return null
 		const asOf = seasonSnapshot?.asOfEventId ?? dataGameweek ?? 0
-		if (asOf < 1) return null
-		return buildTournamentSeasonMe(rankingSummary, seasonField, asOf)
+		return asOf > 0
+			? buildTournamentSeasonMe(rankingSummary, seasonField, asOf)
+			: null
 	}, [dataGameweek, rankingSummary, seasonField, seasonSnapshot])
 
-	// URL updates live in TournamentStatsClient (view/gw/tournamentId together)
 	const setSelectedTournamentId = (value: string) => {
+		requestSequenceRef.current += 1
+		requestAbortRef.current?.abort()
+		requestAbortRef.current = null
+		boardSequenceRef.current += 1
+		boardAbortRef.current?.abort()
+		boardAbortRef.current = null
+		setIsBoardLoading(false)
+		commitBoardPage(null)
 		setStandingsSearch('')
 		setSelectedTournamentIdState(value)
-		// Drop GW slice + season field so next load rebuilds for the new tournament
+		setSelectedGameweek(prev => (prev > 0 ? prev : currentGameweek))
 		setTournamentStats(null)
+		setBoardPage(null)
+		setAggregate(null)
 		setSeasonFieldRows([])
 		setSeasonSnapshot(null)
 		setRankingSummary(null)
+		setReviewState('PENDING')
+		setError(null)
 	}
 
-	// Setup in-flight: poll gently while page visible (review page — not Live 1s)
+	// The setup poll uses the same authenticated desk/list projection as the page.
 	useEffect(() => {
 		if (
 			!pageActive ||
@@ -291,231 +306,416 @@ export function useTournamentStats({
 				selectedTournament.insightsReadyAt,
 				isTournamentInsightsRepairExhausted(selectedTournament.warningSummaries)
 			)
-		) {
+		)
 			return
-		}
 
 		let cancelled = false
 		let timer: number | undefined
 		const poll = async () => {
 			try {
-				const data = await executeQuery<EntryTournamentsResponse>(
-					GET_ENTRY_TOURNAMENTS,
-					{ entryId },
+				const response = await executeQuery<MyFplCompetitionsDeskResponse>(
+					GET_MY_FPL_COMPETITIONS_DESK,
+					{ tournamentId: Number(selectedTournamentId) || null, eventId: null },
 					{ cache: 'no-store' }
 				)
-				if (!cancelled) setTournaments(data.entryTournaments)
+				if (!cancelled) {
+					const nextDesk = response.myFplCompetitionsDesk
+					const nextTournament =
+						nextDesk.selectedTournament ??
+						nextDesk.tournaments.find(
+							item => item.id === Number(selectedTournamentId)
+						) ??
+						null
+					setTournaments(nextDesk.tournaments)
+					if (
+						!insightsReady &&
+						nextTournament &&
+						areTournamentInsightsReady(nextTournament)
+					) {
+						setDeskRefreshNonce(value => value + 1)
+					}
+				}
 			} catch (pollError) {
 				console.warn('[tournament stats] setup poll failed:', pollError)
 			} finally {
 				if (!cancelled) timer = window.setTimeout(poll, 10_000)
 			}
 		}
-
 		timer = window.setTimeout(poll, 10_000)
 		return () => {
 			cancelled = true
 			if (timer !== undefined) window.clearTimeout(timer)
 		}
-	}, [entryId, insightsReady, pageActive, selectedTournament])
+	}, [insightsReady, pageActive, selectedTournament, selectedTournamentId])
 
-	// Season materials: ranking as-of latest available GW (not tied to open GW tabs)
+	// One request owns the selected tournament + GW. Abort and sequence-guard
+	// every previous selection so rapid switching cannot commit stale details.
 	useEffect(() => {
-		if (statsLoadState !== 'load' || !selectedTournament) return
-		let cancelled = false
-		const tournament = selectedTournament
+		const tournamentId = Number(selectedTournamentId)
+		if (!Number.isSafeInteger(tournamentId) || tournamentId <= 0) return
+		boardSequenceRef.current += 1
+		boardAbortRef.current?.abort()
+		boardAbortRef.current = null
+		const requestId = requestSequenceRef.current + 1
+		requestSequenceRef.current = requestId
+		requestAbortRef.current?.abort()
+		const controller = new AbortController()
+		requestAbortRef.current = controller
+		let deskRetryTimer: number | undefined
 
-		async function loadSeasonMaterials() {
-			try {
-				// Resolve latest GW with data (for ranking as-of)
-				let latestGameweek = initialCurrentGameweek
-				let currentRows = await fetchTournamentEventResultsCached(
-					tournament.id,
-					latestGameweek
+		if (
+			firstDeskLoadRef.current &&
+			tournamentId === Number(initialSelectedTournamentId) &&
+			initialReviewState === 'READY' &&
+			initialBoard !== null
+		) {
+			firstDeskLoadRef.current = false
+			return () => controller.abort()
+		}
+		firstDeskLoadRef.current = false
+		setIsLoading(true)
+		setError(null)
+		setTournamentStats(null)
+		setAggregate(null)
+		setRankingSummary(null)
+		setSeasonSnapshot(null)
+		setSeasonFieldRows([])
+		setDataGameweek(null)
+
+		void fetchDesk(
+			tournamentId,
+			loadGameweekData && selectedGameweek > 0 ? selectedGameweek : null,
+			controller.signal
+		)
+			.then(desk => {
+				if (
+					requestId !== requestSequenceRef.current ||
+					controller.signal.aborted
 				)
-				let fallback = false
-				// Critical path: at most one previous GW (match SSR). Avoid 1+4 full-field probes.
-				if (currentRows.length === 0 && latestGameweek > 1) {
-					const prevRows = await fetchTournamentEventResultsCached(
-						tournament.id,
-						latestGameweek - 1
-					)
-					if (prevRows.length > 0) {
-						latestGameweek = latestGameweek - 1
-						currentRows = prevRows
-						fallback = true
-					}
-				}
-				if (cancelled) return
-
-				setDataGameweek(currentRows.length > 0 ? latestGameweek : null)
-				setUsedFallbackGameweek(fallback)
-				// Dimension A fallback: keep full field rows
-				setSeasonFieldRows(currentRows)
-
-				if (currentRows.length === 0) {
-					setRankingSummary(null)
-					setSeasonSnapshot(null)
 					return
-				}
-
-				// Phase 2: snapshot (field) + ranking (me + gaps) in parallel
-				const [ranking, snapshot] = await Promise.all([
-					fetchRankingCached(tournament.id, latestGameweek, entryId),
-					fetchTournamentSeasonSnapshotCached(tournament.id, latestGameweek)
-				])
-				if (cancelled) return
-				setRankingSummary(ranking)
-				setSeasonSnapshot(snapshot)
-
-				// Keep selectedGameweek default aligned to latest if unset
-				setSelectedGameweek(prev => (prev > 0 ? prev : latestGameweek))
-			} catch (err) {
-				console.error('[tournament stats] season materials failed:', err)
-				if (!cancelled) setError(t('loadFailed'))
-			}
-		}
-
-		// Skip if SSR already seeded this tournament field + ranking
-		if (
-			rankingSummary &&
-			(seasonSnapshot || seasonFieldRows.length > 0) &&
-			selectedTournament.id === Number(initialSelectedTournamentId) &&
-			dataGameweek != null
-		) {
-			return
-		}
-
-		void loadSeasonMaterials()
-		return () => {
-			cancelled = true
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [entryId, initialCurrentGameweek, selectedTournament, statsLoadState, t])
-
-	// Gameweek slice — only while GW view is active
-	useEffect(() => {
-		if (!loadGameweekData) {
-			setIsLoading(false)
-			return
-		}
-		if (statsLoadState !== 'load' || !selectedTournament) return
-		if (selectedGameweek < 1) return
-
-		let cancelled = false
-		const tournament = selectedTournament
-		const gw = selectedGameweek
-
-		// Already showing this tournament+gw
-		if (
-			tournamentStats?.tournament.id === tournament.id &&
-			tournamentStats.currentGameweek === gw
-		) {
-			setIsLoading(false)
-			return
-		}
-
-		async function loadGw() {
-			setIsLoading(true)
-			setTournamentStats(null)
-			setError(null)
-			try {
-				const currentRows = await fetchTournamentEventResultsCached(
-					tournament.id,
-					gw
+				const nextTournament =
+					desk.selectedTournament ??
+					desk.tournaments.find(item => item.id === tournamentId) ??
+					null
+				const nextState =
+					desk.state === 'READY'
+						? (desk.board?.state ?? desk.state)
+						: desk.state
+				const board = nextState === 'READY' ? desk.board : null
+				const aggregate = nextState === 'READY' ? desk.aggregate : null
+				const rows = boardRowsToEventResults(board, nextTournament)
+				setTournaments(desk.tournaments)
+				setCurrentGameweek(
+					desk.context.currentEventId ??
+						desk.context.latestFinalizedEventId ??
+						0
 				)
-				if (cancelled) return
-				const captainIds = currentRows
-					.map(row => row.captainId)
-					.filter((value): value is number => value !== null && value > 0)
-				const [previousRows, playerMeta] = await Promise.all([
-					gw > 1
-						? fetchTournamentEventResultsCached(tournament.id, gw - 1)
-						: Promise.resolve([] as TournamentEventResultItem[]),
-					fetchPlayerMetaByIds(captainIds)
-				])
-				if (cancelled) return
-				setTournamentStats(
-					buildTournamentStats(
-						tournament,
-						gw,
-						currentRows,
-						previousRows,
-						{ ...getAllCachedPlayerMeta(), ...playerMeta },
-						entryId
+				setLatestFinalizedGameweek(desk.context.latestFinalizedEventId ?? null)
+				setReviewState(nextState)
+				commitBoardPage(board)
+				setAggregate(aggregate)
+				setRankingSummary(aggregateToRankingSummary(aggregate))
+				setSeasonSnapshot(aggregateToSeasonSnapshot(aggregate, board))
+				setSeasonFieldRows(nextState === 'READY' ? rows : [])
+				setDataGameweek(
+					nextState === 'READY'
+						? desk.eventId
+						: desk.context.latestFinalizedEventId
+				)
+				setUsedFallbackGameweek(false)
+				if (nextState === 'PENDING') {
+					deskRetryTimer = window.setTimeout(() => {
+						if (
+							requestId === requestSequenceRef.current &&
+							!controller.signal.aborted
+						) {
+							setDeskRefreshNonce(value => value + 1)
+						}
+					}, 10_000)
+				}
+				if (nextTournament && nextState === 'READY' && aggregate && board) {
+					setTournamentStats(
+						aggregateToTournamentStats(
+							nextTournament,
+							aggregate,
+							board,
+							entryId
+						)
 					)
-				)
-			} catch (err) {
-				console.error('[tournament stats] gameweek load failed:', err)
-				if (!cancelled) {
-					setTournamentStats(null)
-					setError(t('loadFailed'))
 				}
-			} finally {
-				if (!cancelled) setIsLoading(false)
-			}
-		}
+			})
+			.catch(loadError => {
+				if (
+					requestId !== requestSequenceRef.current ||
+					controller.signal.aborted
+				)
+					return
+				console.error(
+					'[tournament stats] selected desk load failed:',
+					loadError
+				)
+				setReviewState('UNAVAILABLE')
+				setError(t('loadFailed'))
+			})
+			.finally(() => {
+				if (
+					requestId === requestSequenceRef.current &&
+					!controller.signal.aborted
+				) {
+					setIsLoading(false)
+				}
+			})
 
-		void loadGw()
 		return () => {
-			cancelled = true
+			controller.abort()
+			if (deskRetryTimer !== undefined) window.clearTimeout(deskRetryTimer)
+			// A desk refresh can supersede an in-flight search or load-more request.
+			// Abort/clear the board channel as part of the same lifecycle so a stale
+			// request cannot leave the standings spinner permanently active.
+			boardSequenceRef.current += 1
+			boardAbortRef.current?.abort()
+			boardAbortRef.current = null
+			setIsBoardLoading(false)
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		entryId,
+		initialBoard,
+		initialReviewState,
+		initialSelectedTournamentId,
 		loadGameweekData,
+		commitBoardPage,
 		selectedGameweek,
+		selectedTournamentId,
+		t,
+		deskRefreshNonce
+	])
+
+	const rebuildStatsFromBoard = useCallback(
+		(nextBoard: MyFplCompetitionBoardPage, nextAggregate = aggregate) => {
+			if (!selectedTournament || !nextAggregate || nextBoard.state !== 'READY')
+				return
+			const previousBoard = boardPageRef.current
+			const boardWithViewer =
+				(nextBoard.viewerRow ?? previousBoard?.viewerRow)
+					? {
+							...nextBoard,
+							viewerRow: nextBoard.viewerRow ?? previousBoard?.viewerRow ?? null
+						}
+					: nextBoard
+			commitBoardPage(boardWithViewer, standingsSearch.trim())
+			setTournamentStats(
+				aggregateToTournamentStats(
+					selectedTournament,
+					nextAggregate,
+					boardWithViewer,
+					entryId
+				)
+			)
+			if (standingsSearch.trim() === '') {
+				setSeasonSnapshot(
+					aggregateToSeasonSnapshot(nextAggregate, boardWithViewer)
+				)
+				setSeasonFieldRows(
+					boardRowsToEventResults(boardWithViewer, selectedTournament)
+				)
+			}
+			setError(null)
+		},
+		[aggregate, commitBoardPage, entryId, selectedTournament, standingsSearch]
+	)
+	const boardEventId = boardPage?.eventId ?? null
+
+	// Search is server-side. Each new term has its own abort/sequence boundary.
+	useEffect(() => {
+		if (boardEventId === null || reviewState !== 'READY' || !selectedTournament)
+			return
+		if (
+			!initialBoardSearchSkippedRef.current &&
+			initialBoard !== null &&
+			initialReviewState === 'READY' &&
+			standingsSearch.trim() === '' &&
+			boardEventId === initialBoard.eventId
+		) {
+			initialBoardSearchSkippedRef.current = true
+			return
+		}
+		const eventId = boardEventId
+		const boardId = boardSequenceRef.current + 1
+		boardSequenceRef.current = boardId
+		boardAbortRef.current?.abort()
+		const controller = new AbortController()
+		boardAbortRef.current = controller
+		setIsBoardLoading(true)
+		const timer = window.setTimeout(() => {
+			void fetchBoardPage({
+				tournamentId: selectedTournament.id,
+				eventId,
+				page: 1,
+				pageSize: 100,
+				search: standingsSearch.trim(),
+				signal: controller.signal
+			})
+				.then(nextBoard => {
+					if (boardId !== boardSequenceRef.current || controller.signal.aborted)
+						return
+					rebuildStatsFromBoard(nextBoard)
+				})
+				.catch(searchError => {
+					if (!controller.signal.aborted) {
+						console.warn('[tournament stats] board search failed:', searchError)
+						setError(t('loadFailed'))
+						// Keep the last known stats and board cursor visible while the
+						// transient search error is shown. The old board search remains
+						// authoritative, so load-more stays disabled until a successful
+						// request matches the newly typed term.
+					}
+				})
+				.finally(() => {
+					if (
+						boardId === boardSequenceRef.current &&
+						!controller.signal.aborted
+					)
+						setIsBoardLoading(false)
+				})
+		}, 180)
+		return () => {
+			window.clearTimeout(timer)
+			controller.abort()
+			if (boardId === boardSequenceRef.current) setIsBoardLoading(false)
+		}
+	}, [
+		boardEventId,
+		commitBoardPage,
+		initialBoard,
+		initialReviewState,
+		rebuildStatsFromBoard,
+		reviewState,
 		selectedTournament,
-		statsLoadState,
+		standingsSearch,
 		t
 	])
 
-	// Deferred season path — Season tab only (multi-GW fetch; keep off critical GW path)
+	const loadMoreStandings = useCallback(async () => {
+		if (
+			isBoardLoading ||
+			boardSearch !== standingsSearch.trim() ||
+			!boardPage ||
+			!selectedTournament ||
+			boardPage.page >= boardPage.totalPages
+		)
+			return
+		const boardId = boardSequenceRef.current + 1
+		boardSequenceRef.current = boardId
+		boardAbortRef.current?.abort()
+		const controller = new AbortController()
+		boardAbortRef.current = controller
+		setIsBoardLoading(true)
+		setError(null)
+		try {
+			const nextPage = await fetchBoardPage({
+				tournamentId: selectedTournament.id,
+				eventId: boardPage.eventId,
+				page: boardPage.page + 1,
+				pageSize: boardPage.pageSize,
+				search: standingsSearch.trim(),
+				signal: controller.signal
+			})
+			if (boardId !== boardSequenceRef.current || controller.signal.aborted)
+				return
+			const merged: MyFplCompetitionBoardPage = {
+				...nextPage,
+				page: nextPage.page,
+				rows: [...boardPage.rows, ...nextPage.rows],
+				viewerRow: nextPage.viewerRow ?? boardPage.viewerRow
+			}
+			rebuildStatsFromBoard(merged)
+			setError(null)
+		} catch (loadError) {
+			if (!controller.signal.aborted) setError(t('loadFailed'))
+		} finally {
+			if (boardId === boardSequenceRef.current && !controller.signal.aborted)
+				setIsBoardLoading(false)
+		}
+	}, [
+		boardPage,
+		boardSearch,
+		isBoardLoading,
+		rebuildStatsFromBoard,
+		selectedTournament,
+		standingsSearch,
+		t
+	])
+
+	// Dedicated server path replaces client-side N× full-field reconstruction.
 	useEffect(() => {
+		const seasonPathThroughEventId = latestFinalizedGameweek ?? dataGameweek
 		if (
 			!loadSeasonPath ||
 			!selectedTournament ||
-			!insightsReady ||
-			dataGameweek == null
+			seasonPathThroughEventId == null ||
+			seasonPathThroughEventId < 1
 		) {
+			setSeasonPath([])
+			setSeasonPathState('EMPTY')
 			if (!loadSeasonPath) setSeasonPathLoading(false)
 			return
 		}
-		const fromGw =
-			selectedTournament.groupStartedEventId ??
-			selectedTournament.knockoutStartedEventId ??
-			1
-		const toGw = dataGameweek
-		if (toGw < fromGw) {
-			setSeasonPath([])
-			return
-		}
-
+		const controller = new AbortController()
 		let cancelled = false
+		let retryPending = false
+		let retryTimer: number | undefined
+		setSeasonPath([])
+		setSeasonPathState('PENDING')
 		setSeasonPathLoading(true)
-		void loadTournamentSeasonPath({
-			tournamentId: selectedTournament.id,
-			entryId,
-			fromGw: Math.max(1, fromGw),
-			toGw,
-			onProgress: points => {
-				if (!cancelled) setSeasonPath(points)
+		void executeQuery<{
+			myFplCompetitionSeasonPath: {
+				state: MyFplReviewState
+				points: TournamentPathPoint[]
 			}
-		})
-			.then(points => {
-				if (!cancelled) setSeasonPath(points)
+		}>(
+			GET_MY_FPL_COMPETITION_SEASON_PATH,
+			{
+				tournamentId: selectedTournament.id,
+				throughEventId: seasonPathThroughEventId
+			},
+			{ cache: 'no-store', signal: controller.signal }
+		)
+			.then(response => {
+				const path = response.myFplCompetitionSeasonPath
+				if (path.state === 'PENDING') {
+					if (!cancelled) setSeasonPathState('PENDING')
+					retryPending = true
+					retryTimer = window.setTimeout(() => {
+						if (!cancelled) setSeasonPathRetryNonce(value => value + 1)
+					}, 10_000)
+					return
+				}
+				if (!cancelled) {
+					setSeasonPathState(path.state)
+					setSeasonPath(path.state === 'READY' ? (path.points ?? []) : [])
+				}
 			})
-			.catch(err => {
-				console.warn('[tournament stats] season path failed:', err)
+			.catch(pathError => {
+				if (!controller.signal.aborted) {
+					setSeasonPathState('UNAVAILABLE')
+					console.warn('[tournament stats] season path failed:', pathError)
+				}
 			})
 			.finally(() => {
-				if (!cancelled) setSeasonPathLoading(false)
+				if (!cancelled) setSeasonPathLoading(retryPending)
 			})
-
 		return () => {
 			cancelled = true
+			controller.abort()
+			if (retryTimer !== undefined) window.clearTimeout(retryTimer)
 		}
-	}, [dataGameweek, entryId, insightsReady, loadSeasonPath, selectedTournament])
+	}, [
+		dataGameweek,
+		latestFinalizedGameweek,
+		loadSeasonPath,
+		selectedTournament,
+		seasonPathRetryNonce
+	])
 
 	return {
 		currentGameweek,
@@ -525,20 +725,30 @@ export function useTournamentStats({
 		insightsReady,
 		isBootstrapping: false,
 		isLoading,
+		isBoardLoading,
+		boardSearch,
+		hasMoreStandings: Boolean(
+			boardPage && boardPage.page < boardPage.totalPages
+		),
+		loadMoreStandings,
+		latestFinalizedGameweek,
 		rankingSummary,
+		reviewState,
 		seasonField,
 		seasonMe,
 		seasonPath,
 		seasonPathLoading,
+		seasonPathState,
 		selectedGameweek,
 		setSelectedGameweek,
 		selectedTournament,
 		selectedTournamentId,
 		setSelectedTournamentId,
-		setStandingsSearch,
+		setStandingsSearch: updateStandingsSearch,
 		standingsSearch,
 		tournamentStats,
 		tournaments,
-		usedFallbackGameweek
+		usedFallbackGameweek,
+		statsLoadState
 	}
 }

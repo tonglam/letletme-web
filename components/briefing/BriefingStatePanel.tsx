@@ -1,9 +1,16 @@
-import { AlertTriangle, CalendarClock, CircleOff, LoaderCircle, Newspaper, Radio } from 'lucide-react'
+import {
+	AlertTriangle,
+	CalendarClock,
+	CircleOff,
+	LoaderCircle,
+	Newspaper,
+	Radio
+} from 'lucide-react'
 import { getTranslations } from 'next-intl/server'
 import type { AppLocale } from '@/i18n/routing'
 import {
 	isBriefingState,
-	type BriefingState,
+	type BriefingState
 } from '@/lib/graphql/operations/briefing'
 
 const stateIcon: Record<BriefingState, typeof Newspaper> = {
@@ -12,13 +19,14 @@ const stateIcon: Record<BriefingState, typeof Newspaper> = {
 	EMPTY: CircleOff,
 	STALE: CalendarClock,
 	OFFSEASON: CalendarClock,
+	NOT_PUBLISHED: CircleOff,
 	UNAVAILABLE: Radio,
-	REMOVED: AlertTriangle,
+	REMOVED: AlertTriangle
 }
 
 export async function BriefingStatePanel({
 	state,
-	locale,
+	locale
 }: {
 	state: BriefingState | string
 	locale: AppLocale
@@ -33,10 +41,23 @@ export async function BriefingStatePanel({
 			className="fascia texture-grain relative isolate overflow-hidden rounded-2xl border border-fascia-foreground/10 px-5 py-12 text-center shadow-sticker-sm sm:px-10"
 			role={resolved === 'UNAVAILABLE' ? 'alert' : 'status'}
 		>
-			<div className="pitch-markings pointer-events-none absolute inset-0 opacity-30" aria-hidden="true" />
+			<div
+				className="pitch-markings pointer-events-none absolute inset-0 opacity-30"
+				aria-hidden="true"
+			/>
 			<div className="relative mx-auto max-w-xl">
 				<div className="mx-auto flex size-12 items-center justify-center rounded-full border border-electric/40 bg-electric/10 text-electric">
-					{resolved === 'UNAVAILABLE' ? <LoaderCircle className="size-5 animate-spin" aria-hidden="true" /> : <Icon className="size-5" aria-hidden="true" />}
+					{resolved === 'UNAVAILABLE' ? (
+						<LoaderCircle
+							className="size-5 animate-spin"
+							aria-hidden="true"
+						/>
+					) : (
+						<Icon
+							className="size-5"
+							aria-hidden="true"
+						/>
+					)}
 				</div>
 				<p className="chyron mt-5 text-electric">{t('statusEyebrow')}</p>
 				<h1 className="mt-2 font-display text-2xl font-bold tracking-tight text-fascia-foreground sm:text-3xl">

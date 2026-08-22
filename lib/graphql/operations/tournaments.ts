@@ -667,12 +667,13 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_TOURNAMENT_INFO_FIELDS}
       eventId
       revision
       state
+      windowState
+      dataAvailability
       tournaments { ...LiveTournamentInfoFields }
-      selectedTournamentId
-      managerRevision
-      officialCoverage
-      fallbackEntryIds
-      partial
+	      selectedTournamentId
+	      managerRevision
+	      officialCoverage
+	      partial
       failedEntryIds
       totalEntries
       board {
@@ -754,7 +755,7 @@ export interface TournamentLiveCalcData {
 		eventPoints: number | null
 		netEventPoints: number | null
 		totalPoints: number | null
-		totalScope: 'OVERALL' | 'CLASSIC_PHASE' | 'LOCAL_OVERALL' | 'UNKNOWN'
+		totalScope: 'OVERALL' | 'CLASSIC_PHASE' | 'UNKNOWN'
 		eventRank: number | null
 		overallRank: number | null
 		leagueRank: number | null
@@ -815,11 +816,14 @@ export interface TournamentLivePointsResponse {
 		eventId: number
 		revision: string | null
 		state: string
+		windowState?: string
+		dataAvailability?: string
+		nextRefreshAt?: string | null
 		tournaments: LiveEntryTournament[]
 		selectedTournamentId: number | null
 		managerRevision?: string | null
 		officialCoverage?: number
-		fallbackEntryIds?: number[]
+		unavailableEntryIds?: number[]
 		partial: boolean
 		failedEntryIds: number[]
 		totalEntries: number

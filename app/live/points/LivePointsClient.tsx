@@ -83,6 +83,11 @@ export default function LivePointsClient({
 				onGameweekChange={livePoints.changeGameweek}
 				onAutoRefresh={livePoints.autoRefresh}
 				onRefresh={livePoints.refresh}
+				nextRefreshAt={
+					livePoints.snapshot?.nextRefreshAt ??
+					livePoints.liveData?.score?.nextRefreshAt ??
+					null
+				}
 			/>
 		)
 	}
@@ -90,7 +95,10 @@ export default function LivePointsClient({
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
-				<StatsPageHeader eyebrow={t('livePoints')} title={t('title')} />
+				<StatsPageHeader
+					eyebrow={t('livePoints')}
+					title={t('title')}
+				/>
 				{content}
 			</div>
 		</PageShell>

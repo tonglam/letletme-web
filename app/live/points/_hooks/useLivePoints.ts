@@ -47,11 +47,13 @@ export function useLivePoints({
 	initialEventId,
 	initialSelectedGameweek,
 	initialLiveData,
-	initialSnapshot,
+	initialSnapshot
 }: UseLivePointsOptions) {
 	const t = useTranslations('LivePoints')
 	const isPageActive = usePageActive()
 	const seededEventId = initialLiveData?.event ?? initialEventId
+	const followsAnchorRef = useRef(initialSelectedGameweek == null)
+	const [currentGameweek, setCurrentGameweek] = useState<number>(initialEventId)
 	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(
 		initialSelectedGameweek ?? seededEventId
 	)
@@ -210,19 +212,19 @@ export function useLivePoints({
 					const liveResponse = await executeQuery<LiveCalcDataResponse>(
 						GET_LIVE_POINTS,
 						{ eventId, entryId: activeEntryId },
-						{ cache: 'no-store' },
+						{ cache: 'no-store' }
 					)
 					const live = liveResponse.calcLivePointsByEntry
 					if (requestId !== requestIdRef.current) return
 
 					const allPlayers = mapLiveDataToPlayers(
 						live,
-						breakdownLookupForRequest(breakdownCacheRef.current, requestKey),
+						breakdownLookupForRequest(breakdownCacheRef.current, requestKey)
 					)
 					hasLoadedLiveDataRef.current = true
 					latestLiveDataRef.current = { requestKey, live }
 					setLiveData(live)
-					acceptSnapshot(liveResponse.liveSnapshot)
+					acceptSnapshot(liveResponse.calcLivePointsByEntry.snapshot ?? null)
 					setStartingPlayers(allPlayers.filter(player => !player.isBench))
 					setBenchPlayers(allPlayers.filter(player => player.isBench))
 					void enrichLivePointBreakdowns(requestId, eventId, live, requestKey)
@@ -254,7 +256,7 @@ export function useLivePoints({
 			})
 			return request
 		},
-			[acceptSnapshot, activeEntryId, enrichLivePointBreakdowns, t]
+		[acceptSnapshot, activeEntryId, enrichLivePointBreakdowns, t]
 	)
 
 	const submitEntry = useCallback(() => {
@@ -282,6 +284,7 @@ export function useLivePoints({
 
 	const changeGameweek = useCallback(
 		(gameweek: number) => {
+			followsAnchorRef.current = false
 			lastExplainAttemptAtRef.current = 0
 			setSelectedGameweek(gameweek)
 			void fetchLivePointsForGameweek(gameweek)
@@ -301,16 +304,29 @@ export function useLivePoints({
 			const probe = await executeQuery<LiveContextResponse>(
 				GET_LIVE_CONTEXT,
 				undefined,
-				{ cache: 'no-store' },
+				{ cache: 'no-store' }
 			)
 			if (requestId !== requestIdRef.current) return
+			const context = probe.liveContext
+			const observedAnchorEventId = context?.anchorEventId ?? undefined
+			if (observedAnchorEventId && observedAnchorEventId !== currentGameweek) {
+				setCurrentGameweek(observedAnchorEventId)
+				if (followsAnchorRef.current) {
+					setSelectedGameweek(observedAnchorEventId)
+					await fetchLivePointsForGameweek(observedAnchorEventId)
+				}
+				return
+			}
 			const observedSnapshot = liveContextToSnapshot(probe.liveContext)
 			const latestLive = latestLiveDataRef.current
 			const managerScoreDue = Boolean(
-				latestLive?.live.score?.nextRefreshAt &&
-				Date.parse(latestLive.live.score.nextRefreshAt) <= Date.now()
-			)
-			if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot) && !managerScoreDue) {
+					latestLive?.live.score?.nextRefreshAt &&
+					Date.parse(latestLive.live.score.nextRefreshAt) <= Date.now()
+				)
+				if (
+					!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot) &&
+					!managerScoreDue
+				) {
 				acceptSnapshot(observedSnapshot)
 				setError(undefined)
 				if (
@@ -336,6 +352,7 @@ export function useLivePoints({
 		acceptSnapshot,
 		enrichLivePointBreakdowns,
 		fetchLivePointsForGameweek,
+		currentGameweek,
 		selectedGameweek,
 		t
 	])
@@ -356,16 +373,17 @@ export function useLivePoints({
 			initialSelectedGameweek ?? '',
 			initialLiveData?.event ?? '',
 			initialLiveData?.livePoints ?? '',
-			initialSnapshotKey,
+			initialSnapshotKey
 		].join(':')
 
 		if (lastSeedKeyRef.current === seedKey) return
 		lastSeedKeyRef.current = seedKey
 
 		const seededEventId = initialLiveData?.event ?? initialEventId
-		const nextSelectedGameweek =
-			initialSelectedGameweek ?? seededEventId
+		const nextSelectedGameweek = initialSelectedGameweek ?? seededEventId
 
+		followsAnchorRef.current = initialSelectedGameweek == null
+		setCurrentGameweek(initialEventId)
 		setActiveEntryId(initialEntryId)
 		setEntryIdInput(initialEntryId ? String(initialEntryId) : '')
 		setSelectedGameweek(nextSelectedGameweek)
@@ -421,7 +439,7 @@ export function useLivePoints({
 		initialEventId,
 		initialLiveData,
 		initialSelectedGameweek,
-		initialSnapshot,
+		initialSnapshot
 	])
 
 	useEffect(() => {
@@ -496,19 +514,21 @@ export function useLivePoints({
 
 	const shouldAutoRefresh = shouldPollLiveSnapshot({
 		isPageActive,
-		currentEventId: initialEventId,
+		currentEventId: currentGameweek,
 		selectedEventId: selectedGameweek,
-		snapshot,
-		managerScoreState: liveData?.score?.state,
-		managerNextRefreshAt: liveData?.score?.nextRefreshAt
-	})
+			snapshot,
+			managerScoreState: liveData?.score?.state,
+			managerNextRefreshAt: liveData?.score?.nextRefreshAt,
+			windowState: snapshot?.windowState ?? snapshot?.state,
+			nextRefreshAt: snapshot?.nextRefreshAt
+		})
 
 	return {
 		activeEntryId,
 		autoRefresh,
 		benchPlayers,
 		changeGameweek,
-		currentGameweek: initialEventId,
+		currentGameweek,
 		entryIdInput,
 		error,
 		isLoading,
@@ -517,6 +537,7 @@ export function useLivePoints({
 		liveData,
 		refresh,
 		selectedGameweek,
+		snapshot,
 		setEntryIdInput,
 		shouldAutoRefresh,
 		startingPlayers,

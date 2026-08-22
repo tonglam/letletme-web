@@ -1,4 +1,6 @@
 import PlayerStatsClient from '@/app/data/player-stats/PlayerStatsClient'
+
+import { PlayerStatsUnavailable } from '@/app/data/player-stats/PlayerStatsUnavailable'
 import {
 	PlayerStatsPersonalSeedCommit,
 	PlayerStatsPersonalSeedProvider
@@ -16,6 +18,7 @@ import {
 } from '@/lib/player-stats-seed'
 import { playerStatsDeskResponseFromResult } from '@/lib/player-stats-desk'
 import { loadPlayerStatsDesk } from '@/lib/player-stats-desk-server'
+import { GraphQLRequestError } from '@/lib/graphql-client'
 import { RequestTiming } from '@/lib/request-timing'
 import { getTranslations } from 'next-intl/server'
 import { Suspense } from 'react'
@@ -45,15 +48,16 @@ async function PersonalSeedStream({
 	return <PlayerStatsPersonalSeedCommit seed={await seedPromise} />
 }
 
-async function renderPlayerStatsPage({
-	params,
-	searchParams
-}: PageProps) {
+async function renderPlayerStatsPage({ params, searchParams }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	const timing = new RequestTiming()
 	const bootstrapPromise = loadPlayerStatsBootstrap(timing)
 	const translationPromise = timing.measure('translation', () =>
 		getTranslations('PlayerStats')
+	)
+	const bootstrapResultPromise = bootstrapPromise.then(
+		value => ({ ok: true as const, value }),
+		error => ({ ok: false as const, error })
 	)
 	const personalSeedPromise = loadPlayerStatsPersonalSeed(
 		bootstrapPromise,
@@ -63,11 +67,32 @@ async function renderPlayerStatsPage({
 		console.error('[player-stats] personal seed failed:', error)
 		return null
 	})
-	const [sp, bootstrap, t] = await Promise.all([
+	const [sp, bootstrapResult, t] = await Promise.all([
 		searchParams,
-		bootstrapPromise,
+		bootstrapResultPromise,
 		translationPromise
 	])
+	if (!bootstrapResult.ok) {
+		if (!(bootstrapResult.error instanceof GraphQLRequestError)) {
+			throw bootstrapResult.error
+		}
+		console.error('[player-stats] bootstrap unavailable:', {
+			code: bootstrapResult.error.code,
+			status: bootstrapResult.error.status
+		})
+		return (
+			<PageShell>
+				<div className="container mx-auto max-w-6xl px-4 py-8">
+					<StatsPageHeader title={t('title')} />
+					<p className="-mt-4 mb-6 max-w-2xl text-sm leading-6 text-muted-foreground">
+						{t('pageIntro')}
+					</p>
+					<PlayerStatsUnavailable />
+				</div>
+			</PageShell>
+		)
+	}
+	const bootstrap = bootstrapResult.value
 	const initialP1 = parsePlayerStatsPlayerId(sp.p1)
 	const parsedP2 = parsePlayerStatsPlayerId(sp.p2)
 	const initialP2 =
@@ -124,9 +149,9 @@ async function renderPlayerStatsPage({
 						<GameweekBadge
 							gameweek={directorySeed.anchorGw}
 							label={
-								directorySeed.seasonStatsAvailable
-									? undefined
-									: t('preseasonLabel')
+								directorySeed.seasonStatsStatus === 'PRESEASON'
+									? t('preseasonLabel')
+									: undefined
 							}
 						/>
 					}

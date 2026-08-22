@@ -326,10 +326,10 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 								/>
 								<OverviewRow
 									label={t('gameweekPointsShort')}
-									leftValue={costA > 0 ? `${gwPtsA} (-${costA})` : gwPtsA}
-									rightValue={costB > 0 ? `${gwPtsB} (-${costB})` : gwPtsB}
-									leftWins={gwPtsA > gwPtsB}
-									rightWins={gwPtsB > gwPtsA}
+									leftValue={gwPtsA == null ? '—' : costA > 0 ? `${gwPtsA} (-${costA})` : gwPtsA}
+									rightValue={gwPtsB == null ? '—' : costB > 0 ? `${gwPtsB} (-${costB})` : gwPtsB}
+									leftWins={gwPtsA != null && gwPtsB != null && gwPtsA > gwPtsB}
+									rightWins={gwPtsA != null && gwPtsB != null && gwPtsB > gwPtsA}
 								/>
 								<OverviewRow
 									label={t('gameweekNetShort')}
@@ -340,10 +340,10 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 								/>
 								<OverviewRow
 									label={t('totalPointsShort')}
-									leftValue={totalA}
-									rightValue={totalB}
-									leftWins={totalA > totalB}
-									rightWins={totalB > totalA}
+									leftValue={totalA ?? '—'}
+									rightValue={totalB ?? '—'}
+									leftWins={totalA != null && totalB != null && totalA > totalB}
+									rightWins={totalA != null && totalB != null && totalB > totalA}
 								/>
 								<OverviewRow
 									label={t('overallRank')}

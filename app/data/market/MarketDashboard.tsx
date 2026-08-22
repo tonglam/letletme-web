@@ -157,6 +157,21 @@ function CoverageMeta({
 					</>
 				) : null}
 			</div>
+			<p className="text-xs text-muted-foreground">
+				{t('ownershipObservedDays', {
+					observed: coverage.observedDays,
+					requested: coverage.requestedDays
+				})}
+			</p>
+			{coverage.missingDates.length > 0 ? (
+				<p className="text-xs text-muted-foreground">
+					{t('ownershipMissingDates', {
+						dates: coverage.missingDates
+							.map(date => formatCalendarDate(date, locale))
+							.join(', ')
+					})}
+				</p>
+			) : null}
 			{coverage.observedDays === 1 ? (
 				<p className="text-xs text-muted-foreground">
 					{t('movementNeedsAnotherDay')}

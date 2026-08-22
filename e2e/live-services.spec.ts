@@ -44,51 +44,51 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 			const elementIds = payload.variables?.elementIds ?? []
 			await explainGate
 			const recoveryResponse = {
-					data: {
-						eventLiveExplains: elementIds.map(elementId => ({
-							elementId,
-							stats: {
-								minutes: 45,
-								goalsScored: elementId === 1 ? 1 : 0,
-								assists: 0,
-								cleanSheets: 0,
-								goalsConceded: elementId === 1 ? 2 : 0,
-								ownGoals: 0,
-								penaltiesSaved: 0,
-								penaltiesMissed: 0,
-								yellowCards: 0,
-								redCards: 0,
-								saves: 0,
-								defensiveContribution: 0,
-								bonus: 0
-							},
-							contributions: [
-								{ identifier: 'minutes', value: 45, points: 1 },
-								...(elementId === 1
-									? [{ identifier: 'goals_scored', value: 1, points: 5 }]
-									: []),
-								...(elementId === 1
-									? [
-											{
-												identifier: 'goals_conceded',
-												value: 2,
-												points: -1
-											}
-										]
-									: []),
-								...(elementId === 1
-									? [
-											{
-												identifier: 'manual_refresh_explain',
-												value: 1,
-												points: 1
-											}
-										]
-									: [])
-							]
-						}))
-					}
+				data: {
+					eventLiveExplains: elementIds.map(elementId => ({
+						elementId,
+						stats: {
+							minutes: 45,
+							goalsScored: elementId === 1 ? 1 : 0,
+							assists: 0,
+							cleanSheets: 0,
+							goalsConceded: elementId === 1 ? 2 : 0,
+							ownGoals: 0,
+							penaltiesSaved: 0,
+							penaltiesMissed: 0,
+							yellowCards: 0,
+							redCards: 0,
+							saves: 0,
+							defensiveContribution: 0,
+							bonus: 0
+						},
+						contributions: [
+							{ identifier: 'minutes', value: 45, points: 1 },
+							...(elementId === 1
+								? [{ identifier: 'goals_scored', value: 1, points: 5 }]
+								: []),
+							...(elementId === 1
+								? [
+										{
+											identifier: 'goals_conceded',
+											value: 2,
+											points: -1
+										}
+									]
+								: []),
+							...(elementId === 1
+								? [
+										{
+											identifier: 'manual_refresh_explain',
+											value: 1,
+											points: 1
+										}
+									]
+								: [])
+						]
+					}))
 				}
+			}
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
@@ -139,7 +139,8 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 	releaseExplain()
 
 	await page
-		pitch.getByRole('button', { name: 'View details for Player 1', exact: true })
+	pitch
+		.getByRole('button', { name: 'View details for Player 1', exact: true })
 		.click()
 	const detail = page.getByRole('dialog')
 	await expect(
@@ -177,8 +178,7 @@ test('live points keeps polling after the seed and first client load fail', asyn
 			}
 			const pickList = Array.from({ length: 15 }, (_, index) => ({
 				element: index + 1,
-				elementType:
-					index < 2 ? 1 : index < 7 ? 2 : index < 12 ? 3 : 4,
+				elementType: index < 2 ? 1 : index < 7 ? 2 : index < 12 ? 3 : 4,
 				position: index + 1,
 				webName: `Player ${index + 1}`,
 				teamName: 'Arsenal',
@@ -211,29 +211,29 @@ test('live points keeps polling after the seed and first client load fail', asyn
 				inDreamTeam: false
 			}))
 			const recoveryResponse = {
-					data: {
-						liveSnapshot: {
-							eventId: 33,
-							revision: 'recovery-revision',
-							state: 'LIVE',
-							publishedAt: '2026-08-04T18:00:00.000Z',
-							checkedAt: '2026-08-04T18:00:30.000Z'
-						},
-						calcLivePointsByEntry: {
-							entry: 999,
-							event: 33,
-							entryName: 'E2E United',
-							playerName: 'Test Manager',
-							chip: null,
-							livePoints: 22,
-							transferCost: 0,
-							liveNetPoints: 22,
-							liveTotalPoints: 1234,
-							captainName: 'Player 1',
-							pickList
-						}
+				data: {
+					liveSnapshot: {
+						eventId: 33,
+						revision: 'recovery-revision',
+						state: 'LIVE',
+						publishedAt: '2026-08-04T18:00:00.000Z',
+						checkedAt: '2026-08-04T18:00:30.000Z'
+					},
+					calcLivePointsByEntry: {
+						entry: 999,
+						event: 33,
+						entryName: 'E2E United',
+						playerName: 'Test Manager',
+						chip: null,
+						livePoints: 22,
+						transferCost: 0,
+						liveNetPoints: 22,
+						liveTotalPoints: 1234,
+						captainName: 'Player 1',
+						pickList
 					}
 				}
+			}
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
@@ -259,10 +259,19 @@ test('live points keeps polling after the seed and first client load fail', asyn
 							season: '2627',
 							eventId: 33,
 							nextEventId: 34,
+							anchorEventId: 33,
+							latestFinalizedEventId: 32,
 							revision: 'a'.repeat(24),
 							state: 'SCHEDULED',
+							windowState: 'EVENT_SCHEDULED',
+							producerState: 'PICKS_PROBE',
+							anchorMode: 'CURRENT',
+							dataAvailability: 'SCHEDULED',
+							nextRefreshAt: '2026-08-04T18:35:00.000Z',
 							publishedAt: '2026-08-04T18:00:00.000Z',
-							checkedAt: '2026-08-04T18:00:30.000Z'
+							checkedAt: '2026-08-04T18:00:30.000Z',
+							source: 'CORE',
+							stale: false
 						}
 					}
 				}
@@ -283,10 +292,10 @@ test('live points keeps polling after the seed and first client load fail', asyn
 	).toBeVisible()
 	await expect(page.getByText(/Next refresh in \d+s/)).toBeVisible()
 
-	// The first retry is scheduled at the 15-second poll boundary.  Stop at
+	// The first retry is scheduled at the 30-second poll boundary.  Stop at
 	// that boundary so the request's own 15-second timeout cannot fire while
 	// Playwright is still flushing the deterministic response.
-	await page.clock.runFor(15_000)
+	await page.clock.runFor(30_000)
 	await expect.poll(() => clientLivePointsRequests).toBe(2)
 	// Flush the React update queued by the second network response while the
 	// browser fake clock is installed.
@@ -393,10 +402,19 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 							coreRevision: 'e2e-core-v1',
 							eventId: 33,
 							nextEventId: 34,
+							anchorEventId: 33,
+							latestFinalizedEventId: 32,
 							revision,
 							state: 'LIVE_ACTIVE',
+							windowState: 'LIVE_ACTIVE',
+							producerState: 'LIVE_ACTIVE',
+							anchorMode: 'CURRENT',
+							dataAvailability: 'FRESH',
+							nextRefreshAt: '2026-08-04T18:31:00.000Z',
 							checkedAt: '2026-08-04T18:30:30.000Z',
-							publishedAt: '2026-08-04T18:30:00.000Z'
+							publishedAt: '2026-08-04T18:30:00.000Z',
+							source: 'REDIS',
+							stale: false
 						}
 					}
 				}

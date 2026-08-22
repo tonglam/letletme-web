@@ -27,10 +27,10 @@ import type { Session } from '@/lib/auth'
 import { computeTimeLeft } from '@/lib/home-deadline'
 import {
 	getHomeGameweek,
+	loadHomeFixtures,
 	getHomePublicBootstrap,
 	getHomeVerifiedEntryContext
 } from '@/lib/home-data-server'
-import type { HomeFixturesResponse } from '@/lib/graphql/operations/home'
 import { hasSessionCookieHint } from '@/lib/session'
 import {
 	resolveSeasonPresentation,
@@ -79,7 +79,10 @@ function HomePersonalStripFallback() {
 			<div className="mt-4 space-y-2 border-t border-border/50 pt-3">
 				<Skeleton className="h-3 w-24" />
 				{Array.from({ length: 6 }).map((_, index) => (
-					<Skeleton key={index} className="h-11 w-full" />
+					<Skeleton
+						key={index}
+						className="h-11 w-full"
+					/>
 				))}
 			</div>
 		</div>
@@ -107,7 +110,10 @@ function HomePersonalStrip({
 	}
 
 	return (
-		<PersonalDesk session={session} presentation={presentation} />
+		<PersonalDesk
+			session={session}
+			presentation={presentation}
+		/>
 	)
 }
 
@@ -313,14 +319,25 @@ async function HomeInsights() {
 	])
 	const currentEventId = bootstrap?.context.currentEventId ?? null
 	const nextEventId = bootstrap?.context.nextEventId ?? null
-	const gameweek = currentEventId
-		? await getHomeGameweek(currentEventId).catch(error => {
-				console.error('[home-insights] gameweek failed', {
-					error: error instanceof Error ? error.name : 'UnknownError'
+	const fixturesEventId = currentEventId ?? nextEventId
+	const [gameweek, initialFixtures] = await Promise.all([
+		currentEventId
+			? getHomeGameweek(currentEventId).catch(error => {
+					console.error('[home-insights] gameweek failed', {
+						error: error instanceof Error ? error.name : 'UnknownError'
+					})
+					return null
 				})
-				return null
-			})
-		: null
+			: Promise.resolve(null),
+		fixturesEventId
+			? loadHomeFixtures(fixturesEventId).catch(error => {
+					console.error('[home-insights] fixtures failed', {
+						error: error instanceof Error ? error.name : 'UnknownError'
+					})
+					return null
+				})
+			: Promise.resolve(null)
+	])
 	const presentation = resolveSeasonPresentation(
 		bootstrap?.context,
 		gameweek?.gameweekDesk.lifecycle ?? null
@@ -334,17 +351,8 @@ async function HomeInsights() {
 				timeStyle: 'short'
 			})
 		: t('deadlineNotPublished')
-	const initialFixtures: HomeFixturesResponse | null =
-		bootstrap && nextEventId !== null
-			? {
-					season: bootstrap.context.season,
-					revision: bootstrap.context.revision,
-					eventId: nextEventId,
-					fixtures: bootstrap.fixtures
-				}
-			: null
 	const fixturesSeedKey = initialFixtures
-		? `${initialFixtures.season}:${initialFixtures.revision}:${initialFixtures.eventId}`
+		? `${initialFixtures.season}:${initialFixtures.source}:${initialFixtures.state}:${initialFixtures.revision}:${initialFixtures.eventId}`
 		: `${bootstrap?.context.season ?? 'unknown'}:${bootstrap?.context.revision ?? 'unknown'}:none`
 	const homePhaseNotice = (() => {
 		switch (presentation.phase) {
@@ -363,10 +371,12 @@ async function HomeInsights() {
 				return {
 					eyebrow: t('preDeadlineHomeEyebrow'),
 					title: t('preDeadlineHomeTitle', {
-						gameweek: presentation.currentEventId ?? presentation.nextEventId ?? 1
+						gameweek:
+							presentation.currentEventId ?? presentation.nextEventId ?? 1
 					}),
 					description: t('preDeadlineHomeDescription', {
-						gameweek: presentation.currentEventId ?? presentation.nextEventId ?? 1,
+						gameweek:
+							presentation.currentEventId ?? presentation.nextEventId ?? 1,
 						deadline: deadlineLabel
 					})
 				}
@@ -411,10 +421,16 @@ async function HomeInsights() {
 							presentation.phase === 'BETWEEN_GAMEWEEKS' ||
 							presentation.phase === 'OFFSEASON' ? (
 								<div className="mt-4 flex flex-wrap gap-4 text-sm font-semibold">
-									<Link className="underline underline-offset-4" href="/explore/fixtures">
+									<Link
+										className="underline underline-offset-4"
+										href="/explore/fixtures"
+									>
 										{t('viewFixtures')}
 									</Link>
-									<Link className="underline underline-offset-4" href="/explore/market">
+									<Link
+										className="underline underline-offset-4"
+										href="/explore/market"
+									>
 										{t('exploreMarket')}
 									</Link>
 								</div>

@@ -173,10 +173,7 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 				expansionRequests.push(request.url())
 			}
 		})
-		await main
-			.locator('summary')
-			.filter({ hasText: 'Show more' })
-			.click()
+		await main.locator('summary').filter({ hasText: 'Show more' }).click()
 		await expect(main.getByText('E2E League 7', { exact: true })).toBeVisible()
 		expect(expansionRequests).toEqual([])
 	} finally {
@@ -355,22 +352,19 @@ test('Home fixture switching uses one GET and returns to the RSC seed from memor
 		}
 	})
 	const matches = page.locator('[data-home-matches]')
-	await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
-	await expect(matches.getByText('GW34', { exact: true })).toBeVisible()
+	await expect(matches).toHaveAttribute('data-home-fixtures-event', '33')
+	await expect(matches.getByText('GW33', { exact: true })).toBeVisible()
 	const nextResponse = page.waitForResponse(response =>
-		response.url().includes('/api/home/fixtures?eventId=35')
+		response.url().includes('/api/home/fixtures?eventId=34')
 	)
 	await matches.getByRole('button', { name: 'Next gameweek' }).click()
 	expect((await nextResponse).status()).toBe(200)
-	await expect(matches).toHaveAttribute('data-home-fixtures-event', '35')
-	await expect(matches.getByText('GW35', { exact: true })).toBeVisible()
-	await expect(
-		matches.getByText('No matches scheduled for GW 35.')
-	).toBeVisible()
-
-	await matches.getByRole('button', { name: 'Previous gameweek' }).click()
 	await expect(matches).toHaveAttribute('data-home-fixtures-event', '34')
 	await expect(matches.getByText('GW34', { exact: true })).toBeVisible()
+
+	await matches.getByRole('button', { name: 'Previous gameweek' }).click()
+	await expect(matches).toHaveAttribute('data-home-fixtures-event', '33')
+	await expect(matches.getByText('GW33', { exact: true })).toBeVisible()
 	await page.waitForTimeout(100)
 	expect(fixtureRequests).toHaveLength(1)
 })

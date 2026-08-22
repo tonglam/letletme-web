@@ -6,6 +6,7 @@ import type {
 	OwnBand,
 	PlayerDirectorySort
 } from '@/lib/player-directory-filters'
+import type { PlayerStatsSnapshotStatus } from '@/lib/graphql/operations/players'
 
 export type PlayerDirectorySeasonState = 'active' | 'preseason' | 'unavailable'
 
@@ -35,4 +36,5 @@ export type PlayerDirectorySeed = {
 	seasonState: PlayerDirectorySeasonState
 	anchorGw: number
 	seasonStatsAvailable: boolean
+	seasonStatsStatus: PlayerStatsSnapshotStatus
 }

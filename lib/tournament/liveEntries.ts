@@ -1,6 +1,6 @@
 import {
 	type TournamentLiveCalcData,
-	type TournamentLivePointsResponse,
+	type TournamentLivePointsResponse
 } from '@/lib/graphql/operations/tournaments'
 import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import { type TournamentEntry } from '@/types/tournament'
@@ -17,52 +17,57 @@ export type LiveTournamentStats = {
  * revision polling while its row error remains visible to the user.
  */
 export const getTournamentLiveBatchSeed = (
-	response: TournamentLivePointsResponse,
+	response: TournamentLivePointsResponse
 ) => ({
 	rows: response.entryLiveCompetitionsDesk.board ?? [],
-	snapshot: response.entryLiveCompetitionsDesk.revision
-		? {
-				eventId: response.entryLiveCompetitionsDesk.eventId,
-				revision: response.entryLiveCompetitionsDesk.revision,
-				state: response.entryLiveCompetitionsDesk.state as LiveSnapshotStatus['state'],
-				publishedAt: new Date().toISOString(),
-				checkedAt: new Date().toISOString(),
-			}
-		: null,
+	snapshot: {
+		eventId: response.entryLiveCompetitionsDesk.eventId,
+		revision: response.entryLiveCompetitionsDesk.revision,
+		state: (response.entryLiveCompetitionsDesk.windowState ??
+			response.entryLiveCompetitionsDesk.state) as LiveSnapshotStatus['state'],
+		publishedAt: null,
+		checkedAt: null,
+		windowState: response.entryLiveCompetitionsDesk
+			.windowState as LiveSnapshotStatus['windowState'],
+		dataAvailability: response.entryLiveCompetitionsDesk
+			.dataAvailability as LiveSnapshotStatus['dataAvailability'],
+		nextRefreshAt: response.entryLiveCompetitionsDesk.nextRefreshAt ?? null
+	},
 	failedCount: response.entryLiveCompetitionsDesk.failedEntryIds.length,
-	totalEntries: response.entryLiveCompetitionsDesk.totalEntries,
+	totalEntries: response.entryLiveCompetitionsDesk.totalEntries
 })
 
 const mapEventChipToFlags = (eventChip: string | null) => ({
 	bench: eventChip === 'BENCH_BOOST',
 	triple: eventChip === 'TRIPLE_CAPTAIN',
 	wildcard: eventChip === 'WILDCARD',
-	freeHit: eventChip === 'FREE_HIT',
+	freeHit: eventChip === 'FREE_HIT'
 })
 
-export const buildRankMap = (rows: TournamentLiveCalcData[]): Map<number, number> => {
+export const buildRankMap = (
+	rows: TournamentLiveCalcData[]
+): Map<number, number> => {
 	const isOfficialSource = (row: TournamentLiveCalcData): boolean =>
 		row.score?.source === 'FPL_ENTRY_SUMMARY' ||
 		row.score?.source === 'FPL_CLASSIC_STANDINGS' ||
 		row.score?.source === 'FPL_FINAL_RESULT'
 	const rankableRows = rows.filter(row => {
-		if (row.score === undefined) return true
-		return isOfficialSource(row) && typeof row.score.eventPoints === 'number'
+		return (
+			isOfficialSource(row) && typeof row.score?.netEventPoints === 'number'
+		)
 	})
-	const eventPointsForRanking = (row: TournamentLiveCalcData): number =>
-		row.score === undefined
-			? row.livePoints
-			: row.score.eventPoints ?? 0
+	const netPointsForRanking = (row: TournamentLiveCalcData): number =>
+		row.score?.netEventPoints ?? 0
 	const totalPointsForRanking = (row: TournamentLiveCalcData): number =>
 		row.score?.totalScope === 'OVERALL' &&
-			typeof row.score.totalPoints === 'number'
+		typeof row.score.totalPoints === 'number'
 			? row.score.totalPoints
-			: row.liveTotalPoints
+			: 0
 
 	const sorted = [...rankableRows].sort((a, b) => {
-		const eventPointDiff = eventPointsForRanking(b) - eventPointsForRanking(a)
-		if (eventPointDiff !== 0) {
-			return eventPointDiff
+		const netPointDiff = netPointsForRanking(b) - netPointsForRanking(a)
+		if (netPointDiff !== 0) {
+			return netPointDiff
 		}
 		const totalPointDiff = totalPointsForRanking(b) - totalPointsForRanking(a)
 		if (totalPointDiff !== 0) {
@@ -75,8 +80,9 @@ export const buildRankMap = (rows: TournamentLiveCalcData[]): Map<number, number
 	let previousPoints: number | null = null
 	let previousRank = 0
 	for (let index = 0; index < sorted.length; index += 1) {
-		const points = eventPointsForRanking(sorted[index]!)
-		if (previousPoints === null || points !== previousPoints) previousRank = index + 1
+		const points = netPointsForRanking(sorted[index]!)
+		if (previousPoints === null || points !== previousPoints)
+			previousRank = index + 1
 		ranks.set(sorted[index]!.entry, previousRank)
 		previousPoints = points
 	}
@@ -85,7 +91,7 @@ export const buildRankMap = (rows: TournamentLiveCalcData[]): Map<number, number
 
 export const buildTournamentEntries = (
 	currentRows: TournamentLiveCalcData[],
-	options?: { staleEntryIds?: ReadonlySet<number> },
+	options?: { staleEntryIds?: ReadonlySet<number> }
 ): TournamentEntry[] => {
 	const staleIds = options?.staleEntryIds
 	// Rank only successful rows so retained failed scores cannot steal places.
@@ -96,21 +102,18 @@ export const buildTournamentEntries = (
 	const currentRankByEntryId = buildRankMap(rankSource)
 
 	return currentRows.map(row => {
-		const headlineEventPoints =
-			typeof row.score?.eventPoints === 'number'
-				? row.score.eventPoints
-				: row.livePoints
-		const headlineNetPoints =
-			row.score?.netEventPoints ?? row.liveNetPoints ?? headlineEventPoints
+		const headlineEventPoints = row.score?.eventPoints ?? null
+		const headlineNetPoints = row.score?.netEventPoints ?? null
 		const headlineTotalPoints =
 			row.score?.totalScope === 'OVERALL' &&
 			typeof row.score.totalPoints === 'number'
 				? row.score.totalPoints
-				: row.liveTotalPoints
+				: null
 		const captainPick = row.pickList.find(player => player.isCaptain)
 		const effectiveCaptainPick =
 			row.score?.state === 'FINAL'
-				? row.pickList.find(player => (player.multiplier ?? 0) >= 2) ?? captainPick
+				? (row.pickList.find(player => (player.multiplier ?? 0) >= 2) ??
+					captainPick)
 				: captainPick
 		const captainPoints =
 			row.activeCaptain?.points ??
@@ -125,20 +128,22 @@ export const buildTournamentEntries = (
 			teamName: row.entryName ?? `Entry ${row.entry}`,
 			managerName: row.playerName ?? '-',
 			captainName:
-				effectiveCaptainPick?.webName ?? row.activeCaptain?.name ?? row.captainName ?? 'N/A',
+				effectiveCaptainPick?.webName ??
+				row.activeCaptain?.name ??
+				row.captainName ??
+				'N/A',
 			captainTeam: effectiveCaptainPick?.teamShortName ?? 'N/A',
 			captainPoints,
-			gwPoints: headlineEventPoints ?? 0,
-			gwNetPoints:
-				row.score && row.score.netEventPoints === null
-					? undefined
-					: headlineNetPoints ?? 0,
+			gwPoints: headlineEventPoints,
+			gwNetPoints: headlineNetPoints ?? undefined,
 			eventCost: row.transferCost ?? 0,
 			overallRank: row.overallRank ?? 0,
 			lastOverallRank:
-				typeof row.lastOverallRank === 'number' ? row.lastOverallRank : undefined,
-			livePoints: headlineEventPoints ?? 0,
-			totalPoints: headlineTotalPoints ?? 0,
+				typeof row.lastOverallRank === 'number'
+					? row.lastOverallRank
+					: undefined,
+			livePoints: headlineEventPoints,
+			totalPoints: headlineTotalPoints,
 			playersPlayed: row.played ?? 0,
 			playersToPlay: row.toPlay ?? 0,
 			teamValue: typeof row.teamValue === 'number' ? row.teamValue : undefined,
@@ -154,10 +159,10 @@ export const buildTournamentEntries = (
 				pickActive: player.pickActive,
 				autoSub: player.autoSub,
 				isCaptain: player.isCaptain,
-				isViceCaptain: player.isViceCaptain,
+				isViceCaptain: player.isViceCaptain
 			})),
 			chips: mapEventChipToFlags(row.chip),
-			stale,
+			stale
 		}
 	})
 }
@@ -172,7 +177,7 @@ export const getRetainedFailedEntryIds = ({
 	nextRows,
 	previousRows,
 	failedEntryIds,
-	preserveFailed,
+	preserveFailed
 }: {
 	nextRows: TournamentLiveCalcData[]
 	previousRows: TournamentLiveCalcData[]
@@ -191,7 +196,7 @@ export const mergePartialTournamentRows = ({
 	nextRows,
 	previousRows,
 	failedEntryIds,
-	preserveFailed,
+	preserveFailed
 }: {
 	nextRows: TournamentLiveCalcData[]
 	previousRows: TournamentLiveCalcData[]
@@ -203,31 +208,38 @@ export const mergePartialTournamentRows = ({
 	const failed = new Set(failedEntryIds)
 	const refreshed = new Set(nextRows.map(row => row.entry))
 	const retained = previousRows.filter(
-		row => failed.has(row.entry) && !refreshed.has(row.entry),
+		row => failed.has(row.entry) && !refreshed.has(row.entry)
 	)
 	return [...nextRows, ...retained]
 }
 
-export const buildTournamentStats = (entries: TournamentEntry[]): LiveTournamentStats => {
+export const buildTournamentStats = (
+	entries: TournamentEntry[]
+): LiveTournamentStats => {
 	// Exclude stale retained rows so avg/highest are not inflated by failed recalcs.
-	const liveEntries = entries.filter(entry => !entry.stale)
+	const liveEntries = entries.filter(
+		entry => !entry.stale && typeof entry.livePoints === 'number'
+	)
 	if (liveEntries.length === 0) {
 		return {
 			averagePoints: 0,
 			highestPoints: 0,
-			totalEntries: 0,
+			totalEntries: 0
 		}
 	}
 
-	const totalPoints = liveEntries.reduce((sum, entry) => sum + entry.livePoints, 0)
+	const totalPoints = liveEntries.reduce(
+		(sum, entry) => sum + (entry.livePoints ?? 0),
+		0
+	)
 	const highestPoints = liveEntries.reduce(
-		(max, entry) => Math.max(max, entry.livePoints),
-		liveEntries[0]?.livePoints ?? 0,
+		(max, entry) => Math.max(max, entry.livePoints ?? 0),
+		liveEntries[0]?.livePoints ?? 0
 	)
 
 	return {
 		averagePoints: Math.round(totalPoints / liveEntries.length),
 		highestPoints,
-		totalEntries: liveEntries.length,
+		totalEntries: liveEntries.length
 	}
 }

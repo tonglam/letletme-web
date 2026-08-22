@@ -11,6 +11,7 @@ export const CacheTag = {
 	gameweekStats: 'gameweek-stats',
 	fixtures: 'fixtures',
 	market: 'market',
+	priceChanges: 'price-changes',
 	liveScores: 'live-scores',
 	transfers: 'transfers',
 } as const
@@ -21,6 +22,7 @@ export type CacheTagName = (typeof CacheTag)[keyof typeof CacheTag]
 export const RevalidateSeconds = {
 	/** Market desk updates ~daily; short SWR for home teaser */
 	market: 60,
+	priceChanges: 300,
 	/** Events / GW identity and public bootstrap */
 	events: 5,
 	/** Aggregated public stats, fixtures, TOTW */
@@ -54,6 +56,7 @@ export const PUBLIC_GRAPHQL_OPERATION_NAMES = new Set([
 	'GetEventOverallResult',
 	'GetEventFixtures',
 	'GetMarketPulse',
+	'GetPriceChangeBoard',
 	'GetTopTransfersIn',
 	'GetTopTransfersOut',
 	'GetLiveScores',

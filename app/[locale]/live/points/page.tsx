@@ -2,6 +2,7 @@ import LivePointsClient from '@/app/live/points/LivePointsClient'
 import { SeasonPhaseState } from '@/components/feedback/SeasonPhaseState'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getLivePageContext } from '@/lib/live-context-server'
+import { liveContextToSnapshot } from '@/lib/live-refresh'
 import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
@@ -28,17 +29,19 @@ export async function generateMetadata({ params }: PageProps) {
 export default async function LivePointsPage({ params }: PageProps) {
 	await getPageLocale(params)
 
-	const { presentation } = await getLivePageContext()
+	const { presentation, liveContext } = await getLivePageContext()
 	if (
 		presentation.phase === 'PRESEASON' ||
-		presentation.phase === 'BETWEEN_GAMEWEEKS' ||
-		presentation.phase === 'OFFSEASON' ||
+		liveContext?.windowState === 'PRESEASON' ||
+		liveContext?.windowState === 'OFFSEASON' ||
+			(!liveContext?.anchorEventId &&
+				presentation.phase !== 'BETWEEN_GAMEWEEKS') ||
 		presentation.phase === 'UNAVAILABLE'
 	) {
 		return <SeasonPhaseState feature="points" presentation={presentation} />
 	}
 
-	const currentEventId = presentation.currentEventId
+	const currentEventId = liveContext?.anchorEventId ?? presentation.currentEventId
 	if (!currentEventId) {
 		return <SeasonPhaseState feature="points" presentation={presentation} />
 	}
@@ -56,7 +59,10 @@ export default async function LivePointsPage({ params }: PageProps) {
 				{ cache: 'no-store' },
 			)
 			initialLiveData = response.calcLivePointsByEntry
-			initialSnapshot = response.liveSnapshot
+			initialSnapshot =
+				liveContextToSnapshot(liveContext) ??
+				response.calcLivePointsByEntry.snapshot ??
+				null
 		} catch (error) {
 			console.error('[live points] Failed to seed current entry:', error)
 		}

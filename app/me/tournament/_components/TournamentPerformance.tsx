@@ -1,22 +1,23 @@
 'use client'
 
-import { StatsMetricTile, StatsSectionCard } from '@/components/stats/StatsSurfaces'
+import {
+	StatsMetricTile,
+	StatsSectionCard
+} from '@/components/stats/StatsSurfaces'
 import { DeltaBadge } from '@/components/data/DeltaBadge'
 import { cn } from '@/lib/utils'
-import {
-	Flame,
-	TrendingDown,
-	TrendingUp,
-	Trophy,
-} from 'lucide-react'
+import { Flame, TrendingDown, TrendingUp, Trophy } from 'lucide-react'
 import { useFormatter, useTranslations } from 'next-intl'
 import type { TournamentStatsViewModel } from '../_lib/tournament-stats-model'
 
 function RankMovement({ stats }: { stats: TournamentStatsViewModel }) {
 	const t = useTranslations('TournamentStats')
 	const format = useFormatter()
-	if (stats.myRank === null || stats.myPreviousRank === null) {
-		return <span className="text-muted-foreground">{t('notInTournament')}</span>
+	if (stats.myRank === null) {
+		return <span className="text-muted-foreground">{t('resultsPending')}</span>
+	}
+	if (stats.myPreviousRank === null) {
+		return <span className="text-muted-foreground">{t('firstRanking')}</span>
 	}
 	if (stats.myPreviousRank > stats.myRank) {
 		return (
@@ -25,8 +26,8 @@ function RankMovement({ stats }: { stats: TournamentStatsViewModel }) {
 				format={v =>
 					t('up', {
 						count: format.number(v, {
-							notation: 'compact',
-						}),
+							notation: 'compact'
+						})
 					})
 				}
 			/>
@@ -39,8 +40,8 @@ function RankMovement({ stats }: { stats: TournamentStatsViewModel }) {
 				format={v =>
 					t('down', {
 						count: format.number(-v, {
-							notation: 'compact',
-						}),
+							notation: 'compact'
+						})
 					})
 				}
 			/>
@@ -54,7 +55,7 @@ function BoardRow({
 	primary,
 	secondary,
 	trailing,
-	emphasis,
+	emphasis
 }: {
 	primary: string
 	secondary: string
@@ -66,7 +67,7 @@ function BoardRow({
 			className={cn(
 				'flex items-center justify-between gap-2 border-b border-border/50 px-0.5 py-2.5 text-sm last:border-b-0',
 				emphasis === 'success' && 'border-l-2 border-l-success/70 pl-2',
-				emphasis === 'danger' && 'border-l-2 border-l-destructive/70 pl-2',
+				emphasis === 'danger' && 'border-l-2 border-l-destructive/70 pl-2'
 			)}
 		>
 			<div className="min-w-0">
@@ -83,7 +84,7 @@ function BoardColumn({
 	title,
 	empty,
 	children,
-	tone,
+	tone
 }: {
 	icon: typeof Trophy
 	title: string
@@ -101,10 +102,13 @@ function BoardColumn({
 					'mb-2 flex items-center gap-1.5 eyebrow',
 					tone === 'success' && 'text-success',
 					tone === 'danger' && 'text-destructive',
-					(!tone || tone === 'default') && 'text-muted-foreground',
+					(!tone || tone === 'default') && 'text-muted-foreground'
 				)}
 			>
-				<Icon className="size-3.5 shrink-0" aria-hidden="true" />
+				<Icon
+					className="size-3.5 shrink-0"
+					aria-hidden="true"
+				/>
 				{title}
 			</h3>
 			{hasKids ? (
@@ -122,7 +126,7 @@ function BoardColumn({
 
 export function TournamentPerformance({
 	dataGameweek,
-	stats,
+	stats
 }: {
 	dataGameweek: number | null
 	stats: TournamentStatsViewModel
@@ -136,7 +140,10 @@ export function TournamentPerformance({
 
 	return (
 		<div className="mb-5 space-y-5 sm:mb-6 sm:space-y-6">
-			<StatsSectionCard icon={Trophy} title={t('myPerformance')}>
+			<StatsSectionCard
+				icon={Trophy}
+				title={t('myPerformance')}
+			>
 				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
 					<StatsMetricTile
 						label={t('myRank')}
@@ -161,8 +168,8 @@ export function TournamentPerformance({
 										stats.myTeam?.eventCost == null
 											? '—'
 											: t('pointsValue', {
-													points: stats.myTeam.eventCost,
-												}),
+													points: stats.myTeam.eventCost
+												})
 								})}
 							</span>
 						}
@@ -170,9 +177,7 @@ export function TournamentPerformance({
 					<StatsMetricTile
 						label={t('captain')}
 						value={
-							stats.myTeam?.captaincy.name
-								? stats.myTeam.captaincy.name
-								: '—'
+							stats.myTeam?.captaincy.name ? stats.myTeam.captaincy.name : '—'
 						}
 						detail={
 							<span>
@@ -180,7 +185,7 @@ export function TournamentPerformance({
 									? `${stats.myTeam.captaincy.team} · `
 									: ''}
 								{t('pointsValue', {
-									points: stats.myTeam?.captaincy.points ?? 0,
+									points: stats.myTeam?.captaincy.points ?? 0
 								})}
 							</span>
 						}
@@ -190,7 +195,7 @@ export function TournamentPerformance({
 						value={
 							stats.topPerformers[0]
 								? t('pointsValue', {
-										points: stats.topPerformers[0].points,
+										points: stats.topPerformers[0].points
 									})
 								: '—'
 						}
@@ -205,7 +210,7 @@ export function TournamentPerformance({
 
 			<StatsSectionCard
 				title={t('gwHighlights', {
-					gameweek: dataGameweek ?? '—',
+					gameweek: dataGameweek ?? '—'
 				})}
 				description={t('gwHighlightsHint')}
 			>
@@ -225,8 +230,8 @@ export function TournamentPerformance({
 										? t('captainPoints', {
 												name: row.captain.name,
 												points: t('pointsValue', {
-													points: row.captain.points,
-												}),
+													points: row.captain.points
+												})
 											})
 										: row.managerName
 								}
@@ -252,7 +257,7 @@ export function TournamentPerformance({
 								primary={row.teamName}
 								secondary={t('rankMoveFromTo', {
 									from: row.previousRank,
-									to: row.rank,
+									to: row.rank
 								})}
 								trailing={
 									<DeltaBadge
@@ -279,14 +284,12 @@ export function TournamentPerformance({
 								primary={row.teamName}
 								secondary={t('rankMoveFromTo', {
 									from: row.previousRank,
-									to: row.rank,
+									to: row.rank
 								})}
 								trailing={
 									<DeltaBadge
 										value={-row.placesLost}
-										format={() =>
-											t('placesLost', { count: row.placesLost })
-										}
+										format={() => t('placesLost', { count: row.placesLost })}
 									/>
 								}
 							/>

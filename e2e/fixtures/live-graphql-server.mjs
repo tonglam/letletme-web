@@ -84,6 +84,18 @@ const pickerPlayers = [
 	}
 ]
 
+const playerStatsContext = {
+	scope: 'CURRENT_SEASON',
+	season: '2627',
+	asOfEventId: 33,
+	status: 'AVAILABLE',
+	revision: 'player-stats-e2e-v1',
+	sourceCheckedAt: '2026-08-13T09:40:00.000Z',
+	publishedAt: '2026-08-13T09:40:05.000Z',
+	rowCount: pickerPlayers.length,
+	expectedRowCount: pickerPlayers.length
+}
+
 const playerDetail = playerId => {
 	const player =
 		pickerPlayers.find(candidate => candidate.id === playerId) ??
@@ -97,9 +109,7 @@ const playerDetail = playerId => {
 		price: player.price,
 		startPrice: player.price - 5,
 		statsContext: {
-			scope: 'CURRENT_SEASON',
-			season: '2627',
-			asOfEventId: 33
+			...playerStatsContext
 		},
 		availability: {
 			status: 'a',
@@ -397,7 +407,12 @@ const server = createServer((request, response) => {
 			const eventId = Number(variables.eventId)
 			json(response, 200, {
 				data: {
-					coreEventContext: { season: '2627', revision: '7' },
+					coreEventContext: {
+						season: '2627',
+						revision: '7',
+						sourceCheckedAt: '2026-08-13T09:40:00.000Z',
+						currentEventId: 33
+					},
 					eventFixtures: planningFixturesForEvent(eventId)
 				}
 			})
@@ -503,6 +518,7 @@ const server = createServer((request, response) => {
 							nextDeadlineTime: '2026-08-11T17:30:00.000Z',
 							latestFinishedEventId: 32
 						},
+						statsContext: playerStatsContext,
 						teams: pickerTeams,
 						directory: {
 							items: pickerPlayers,
@@ -785,9 +801,7 @@ const server = createServer((request, response) => {
 						elementType: 3,
 						elementTypeName: 'MIDFIELDER',
 						statsContext: {
-							scope: 'CURRENT_SEASON',
-							season: '2026-27',
-							asOfEventId: 33
+							...playerStatsContext
 						},
 						fixtures: [],
 						recentGameweeks: [],
@@ -832,9 +846,7 @@ const server = createServer((request, response) => {
 						price: 100,
 						startPrice: 95,
 						statsContext: {
-							scope: 'CURRENT_SEASON',
-							season: '2026-27',
-							asOfEventId: 33
+							...playerStatsContext
 						},
 						availability: {
 							status: 'AVAILABLE',
@@ -902,6 +914,7 @@ const server = createServer((request, response) => {
 								kind: 'TRACKED_OFFICIAL_COMPETITION',
 								access: 'PUBLIC',
 								displayName: 'E2E Public League',
+								setupStatus: 'READY',
 								exact: true,
 								latestEventId: 33,
 								revision: 'e2e-trends-publication-v1',
@@ -927,6 +940,7 @@ const server = createServer((request, response) => {
 				kind: 'TRACKED_OFFICIAL_COMPETITION',
 				access: 'PUBLIC',
 				displayName: 'E2E Public League',
+				setupStatus: 'READY',
 				exact: true,
 				latestEventId: 33,
 				revision: 'e2e-trends-publication-v1',
@@ -1027,10 +1041,25 @@ const server = createServer((request, response) => {
 						coreRevision: 'e2e-core-v1',
 						eventId: 33,
 						nextEventId: 34,
+						anchorEventId: 33,
+						latestFinalizedEventId: 32,
 						revision: 'a'.repeat(24),
 						state: liveHydrationFixtureEnabled ? 'LIVE_ACTIVE' : 'SCHEDULED',
+						windowState: liveHydrationFixtureEnabled
+							? 'LIVE_ACTIVE'
+							: 'EVENT_SCHEDULED',
+						producerState: liveHydrationFixtureEnabled
+							? 'LIVE_ACTIVE'
+							: 'PICKS_PROBE',
+						anchorMode: 'CURRENT',
+						dataAvailability: liveHydrationFixtureEnabled
+							? 'FRESH'
+							: 'SCHEDULED',
+						nextRefreshAt: '2026-08-04T18:01:00.000Z',
+						sourceCheckedAt: '2026-08-04T18:00:30.000Z',
 						checkedAt: '2026-08-04T18:00:30.000Z',
-						publishedAt: '2026-08-04T18:00:00.000Z'
+						publishedAt: '2026-08-04T18:00:00.000Z',
+						stale: false
 					}
 				}
 			})
@@ -1047,7 +1076,17 @@ const server = createServer((request, response) => {
 						eventId: 33,
 						revision: 'a'.repeat(24),
 						state: liveHydrationFixtureEnabled ? 'LIVE' : 'SCHEDULED',
+						windowState: liveHydrationFixtureEnabled
+							? 'LIVE_ACTIVE'
+							: 'EVENT_SCHEDULED',
+						dataAvailability: liveHydrationFixtureEnabled
+							? 'FRESH'
+							: 'SCHEDULED',
+						liveRevision: 'a'.repeat(24),
+						nextRefreshAt: '2026-08-04T18:01:00.000Z',
+						sourceCheckedAt: '2026-08-04T18:00:30.000Z',
 						publishedAt: '2026-08-04T18:00:00.000Z',
+						stale: false,
 						matches: liveHydrationFixtureEnabled
 							? [
 									{
@@ -1305,6 +1344,7 @@ const server = createServer((request, response) => {
 					observedDays: 2,
 					firstDate: '2026-08-02',
 					latestDate: '2026-08-03',
+					missingDates: [],
 					capturedAt: '2026-08-03T09:40:00.000Z',
 					complete: false,
 					stale: false
@@ -1404,15 +1444,19 @@ const server = createServer((request, response) => {
 		if (query.includes('MarketAvailability')) {
 			json(response, 200, {
 				data: {
-					marketSnapshotContext: {
-						season: '2627',
-						revision: 'market-7',
-						source: 'DATA_PUBLICATION',
-						snapshotDate: '2026-08-03',
-						capturedAt: '2026-08-03T09:40:00.000Z',
-						rowCount: 2
-					},
-					marketPulse: { availabilityUpdates: [] }
+					marketAvailabilityPage: {
+						context: {
+							season: '2627',
+							revision: 'market-7',
+							source: 'DATA_PUBLICATION',
+							snapshotDate: '2026-08-03',
+							capturedAt: '2026-08-03T09:40:00.000Z',
+							rowCount: 2
+						},
+						items: [],
+						totalCount: 0,
+						nextOffset: null
+					}
 				}
 			})
 			return

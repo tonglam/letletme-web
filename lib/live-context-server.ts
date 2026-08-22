@@ -24,7 +24,7 @@ export async function getLivePageContext(): Promise<LivePageContext> {
 		return {
 			presentation: resolveSeasonPresentation(
 				response.coreEventContext,
-				response.liveContext?.state ?? null,
+				response.liveContext?.producerState ?? null,
 			),
 			liveContext: response.liveContext ?? null,
 		}

@@ -7,7 +7,7 @@ import { ShareActions } from '@/components/share/ShareActions'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { usePathname, useRouter } from '@/i18n/navigation'
+import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import { cn } from '@/lib/utils'
 import { AlertCircle, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -63,12 +63,17 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 		dataGameweek,
 		error,
 		filteredStandings,
+		hasMoreStandings,
+		boardSearch,
 		insightsReady,
+		isBoardLoading,
 		isLoading,
+		loadMoreStandings,
 		seasonField,
 		seasonMe,
 		seasonPath,
 		seasonPathLoading,
+		seasonPathState,
 		selectedGameweek,
 		setSelectedGameweek,
 		selectedTournament,
@@ -79,6 +84,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 		tournamentStats,
 		tournaments,
 		usedFallbackGameweek,
+		reviewState,
 		currentGameweek
 	} = useTournamentStats({
 		...props,
@@ -199,16 +205,26 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 		},
 		[replaceQuery, searchParams, setSelectedGameweek]
 	)
+	const handleNavigateSeason = useCallback(() => {
+		setStandingsSearch('')
+		// Season is an as-of-latest-finalized view. Do not carry the historical
+		// GW through the URL: workspace hydration would interpret it as a new
+		// gameweek selection and immediately switch the tab back to Gameweek.
+		replaceQuery({ view: 'season', gw: null })
+	}, [replaceQuery, setStandingsSearch])
 
 	// URL gw → selected gameweek
 	useEffect(() => {
-		if (maxGw <= 0) return
+		// Season is always a latest-finalized snapshot. A bookmarked `gw` query
+		// must not hydrate the prior event back into the gameweek state and
+		// trigger a historical desk request after the season desk has loaded.
+		if (view === 'season' || maxGw <= 0) return
 		const raw = searchParams.get('gw')
 		if (raw == null) return
 		const next = parseTournamentStatsGw(raw, maxGw, selectedGameweek || maxGw)
 		if (next > 0 && next !== selectedGameweek) setSelectedGameweek(next)
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [searchParams, maxGw])
+	}, [searchParams, maxGw, view])
 
 	// Restore last tournament when URL has no tournamentId (bare /my-fpl/competitions)
 	useEffect(() => {
@@ -337,13 +353,9 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 						>
 							<TournamentViews
 								view={view}
-								onNavigateSeason={() =>
-									replaceQuery({
-										view: 'season',
-										gw: selectedGameweek > 0 ? selectedGameweek : null
-									})
-								}
+								onNavigateSeason={handleNavigateSeason}
 								currentGameweek={currentGameweek}
+								selectedTournamentId={selectedTournament?.id ?? null}
 								maxGw={maxGw > 0 ? maxGw : seedGw}
 								selectedGameweek={selectedGameweek}
 								dataGameweek={dataGameweek}
@@ -354,7 +366,17 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 								seasonMe={seasonMe}
 								seasonPath={seasonPath}
 								seasonPathLoading={seasonPathLoading}
+								seasonPathState={seasonPathState}
 								filteredStandings={filteredStandings}
+								hasMoreStandings={hasMoreStandings}
+								hasMoreSeasonRows={
+									hasMoreStandings &&
+									standingsSearch.trim() === '' &&
+									boardSearch === ''
+								}
+								isBoardLoading={isBoardLoading}
+								loadMoreStandings={loadMoreStandings}
+								reviewState={reviewState}
 								standingsSearch={standingsSearch}
 								setStandingsSearch={setStandingsSearch}
 								searchParamsGw={searchParams.get('gw')}
@@ -371,6 +393,7 @@ function TournamentViews({
 	view,
 	onNavigateSeason,
 	currentGameweek,
+	selectedTournamentId,
 	maxGw,
 	selectedGameweek,
 	dataGameweek,
@@ -381,7 +404,13 @@ function TournamentViews({
 	seasonMe,
 	seasonPath,
 	seasonPathLoading,
+	seasonPathState,
 	filteredStandings,
+	hasMoreStandings,
+	hasMoreSeasonRows,
+	isBoardLoading,
+	loadMoreStandings,
+	reviewState,
 	standingsSearch,
 	setStandingsSearch,
 	searchParamsGw
@@ -389,6 +418,7 @@ function TournamentViews({
 	view: TournamentStatsPageView
 	onNavigateSeason: () => void
 	currentGameweek: number
+	selectedTournamentId: number | null
 	maxGw: number
 	selectedGameweek: number
 	dataGameweek: number | null
@@ -399,7 +429,13 @@ function TournamentViews({
 	seasonMe: ReturnType<typeof useTournamentStats>['seasonMe']
 	seasonPath: ReturnType<typeof useTournamentStats>['seasonPath']
 	seasonPathLoading: boolean
+	seasonPathState: ReturnType<typeof useTournamentStats>['seasonPathState']
 	filteredStandings: ReturnType<typeof useTournamentStats>['filteredStandings']
+	hasMoreStandings: boolean
+	hasMoreSeasonRows: boolean
+	isBoardLoading: boolean
+	loadMoreStandings: () => void
+	reviewState: ReturnType<typeof useTournamentStats>['reviewState']
 	standingsSearch: string
 	setStandingsSearch: (v: string) => void
 	searchParamsGw: string | null
@@ -512,14 +548,33 @@ function TournamentViews({
 
 			{view === 'season' ? (
 				<div className="space-y-5 sm:space-y-6">
+					{reviewState === 'UNAVAILABLE' ? (
+						<Alert>
+							<AlertDescription>
+								{t('reviewUnavailable')}{' '}
+								<Link
+									href={`/live/competitions/${selectedTournamentId}`}
+									className="font-semibold text-primary-ink underline-offset-4 hover:underline"
+								>
+									{t('openLive')}
+								</Link>
+							</AlertDescription>
+						</Alert>
+					) : null}
 					<p className="sr-only">{t('viewSeasonHint')}</p>
 					{/* A — tournament as a whole */}
-					<TournamentSeasonField field={seasonField} />
+					<TournamentSeasonField
+						field={seasonField}
+						hasMoreServerRows={hasMoreSeasonRows}
+						isLoadingServerRows={isBoardLoading}
+						onLoadMoreServerRows={loadMoreStandings}
+					/>
 					{/* B — me in this tournament */}
 					<TournamentSeasonMeSection me={seasonMe} />
 					<TournamentSeasonCharts
 						points={seasonPath}
 						loading={seasonPathLoading}
+						state={seasonPathState}
 						onOpenGameweek={gw => workspace.openGameweek(gw)}
 					/>
 				</div>
@@ -568,6 +623,9 @@ function TournamentViews({
 								onSearchChange={setStandingsSearch}
 								search={standingsSearch}
 								stats={tournamentStats}
+								hasMoreServerRows={hasMoreStandings}
+								isLoadingServerRows={isBoardLoading}
+								onLoadMoreServerRows={loadMoreStandings}
 							/>
 						</>
 					) : (
@@ -577,7 +635,31 @@ function TournamentViews({
 							aria-busy={isLoading}
 						>
 							<p className="text-sm text-muted-foreground">
-								{isLoading ? t('loading') : t('noStats')}
+								{isLoading ? (
+									t('loading')
+								) : reviewState === 'PENDING' ? (
+									<>
+										{t('resultsPending')}{' '}
+										<Link
+											href={`/live/competitions/${selectedTournamentId}`}
+											className="font-semibold text-primary-ink underline-offset-4 hover:underline"
+										>
+											{t('openLive')}
+										</Link>
+									</>
+								) : reviewState === 'UNAVAILABLE' ? (
+									<>
+										{t('reviewUnavailable')}{' '}
+										<Link
+											href={`/live/competitions/${selectedTournamentId}`}
+											className="font-semibold text-primary-ink underline-offset-4 hover:underline"
+										>
+											{t('openLive')}
+										</Link>
+									</>
+								) : (
+									t('noStats')
+								)}
 							</p>
 						</Card>
 					)}

@@ -13,6 +13,7 @@ export const PUBLIC_STATIC_PATHS = [
 	'/live/matches',
 	'/explore/player-stats',
 	'/explore/market',
+	'/explore/price-changes',
 	'/explore/gameweek',
 	'/explore/fixtures',
 ] as const

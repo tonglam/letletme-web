@@ -224,7 +224,7 @@ export function LiveMatchesClient({
 				)
 				const context = probe.liveContext
 				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
-				const observedCurrentEventId = context?.eventId ?? undefined
+				const observedCurrentEventId = context?.anchorEventId ?? undefined
 				const observedNextEventId = context?.nextEventId ?? undefined
 				if (
 					observedCurrentEventId &&
@@ -323,7 +323,9 @@ export function LiveMatchesClient({
 		currentEventId: pollingEventId,
 		selectedEventId: pollingEventId,
 		snapshot,
-		probeEventIdentity: true
+		probeEventIdentity: true,
+		windowState: snapshot?.windowState ?? snapshot?.state,
+		nextRefreshAt: snapshot?.nextRefreshAt
 	})
 	const activeTabConfig = TAB_CONFIG.find(config => config.value === activeTab)
 	const activeMatches = matchesByTab[activeTab]
@@ -348,7 +350,7 @@ export function LiveMatchesClient({
 			defensiveContribution: t('defensiveContribution'),
 			saves: t('saves'),
 			yellowCards: t('yellowCards'),
-			redCards: t('redCards'),
+			redCards: t('redCards')
 		}
 		const body = activeMatches
 			.map(match => formatMatchShareText(match, matchLabels))
@@ -383,6 +385,7 @@ export function LiveMatchesClient({
 					<LiveAutoRefreshCountdown
 						enabled={autoRefreshEnabled}
 						onRefresh={autoRefreshMatches}
+						nextRefreshAt={snapshot?.nextRefreshAt}
 						renderLabel={seconds => t('autoRefresh', { seconds })}
 					/>
 				) : null}
