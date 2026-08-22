@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import { parse, visit } from 'graphql'
 
+import { GET_LIVE_FIXTURE_PLAYERS_BATCH } from '../lib/graphql/operations/live'
 import {
 	getLiveMatchesSnapshot,
 	loadLiveMatchdayDesk,
@@ -79,6 +81,14 @@ const players = (revision = '8') => ({
 })
 
 describe('live match desk player sections', () => {
+	it('keeps the five-fixture operation inside the production AST limit', () => {
+		let astNodes = 0
+		visit(parse(GET_LIVE_FIXTURE_PLAYERS_BATCH), {
+			enter: () => void (astNodes += 1)
+		})
+		assert.ok(astNodes <= 200, `operation has ${astNodes} AST nodes`)
+	})
+
 	it('loads fixture players in one bounded follow-up operation', async () => {
 		let requests = 0
 		const executor: QueryExecutor = async query => {

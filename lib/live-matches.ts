@@ -3,7 +3,7 @@ import {
 	type EventsResponse
 } from '@/lib/graphql/operations/events'
 import {
-	GET_LIVE_FIXTURE_PLAYERS_BATCH,
+	buildLiveFixturePlayersBatchQuery,
 	GET_LIVE_MATCHDAY_DESK,
 	type LiveFixturePerformance,
 	type LiveFixturePlayersBatchResponse,
@@ -137,20 +137,13 @@ async function loadFixturePlayers(
 	const details: LiveFixturePlayersData[] = []
 	for (let offset = 0; offset < fixtureIds.length; offset += 5) {
 		const batch = fixtureIds.slice(offset, offset + 5)
-		const fallbackFixtureId = batch[0]!
 		const response = await executor<LiveFixturePlayersBatchResponse>(
-			GET_LIVE_FIXTURE_PLAYERS_BATCH,
+			buildLiveFixturePlayersBatchQuery(batch.length),
 			{
 				ref,
-				fixture0: fallbackFixtureId,
-				fixture1: batch[1] ?? fallbackFixtureId,
-				fixture2: batch[2] ?? fallbackFixtureId,
-				fixture3: batch[3] ?? fallbackFixtureId,
-				fixture4: batch[4] ?? fallbackFixtureId,
-				include1: batch.length > 1,
-				include2: batch.length > 2,
-				include3: batch.length > 3,
-				include4: batch.length > 4
+				...Object.fromEntries(
+					batch.map((fixtureId, index) => [`fixture${index}`, fixtureId])
+				)
 			},
 			{ cache: 'no-store' }
 		)
