@@ -1672,6 +1672,8 @@
 		"noStats": "No team data available.",
 		"noStatsForGameweek": "No data for Gameweek {gameweek}.",
 		"pendingReviewForGameweek": "Gameweek {gameweek} is still being finalized. Open Live for provisional updates.",
+		"gameweekReviewUnavailable": "Finalized Gameweek {gameweek} review is temporarily unavailable. Please try again shortly.",
+		"pastSeasonsUnavailable": "Past-season history is temporarily unavailable. Please try again shortly.",
 		"openLive": "Open Live",
 		"pastSeasonsPending": "Historical season results are still syncing. They will appear after the full history checkpoint is confirmed.",
 		"reviewPending": "Verified My Team results are still syncing. Finalized data will appear after the desk is ready.",

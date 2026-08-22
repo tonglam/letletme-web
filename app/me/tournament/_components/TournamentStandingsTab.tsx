@@ -100,6 +100,7 @@ function SortHeader({
 	label,
 	active,
 	dir,
+	disabled = false,
 	align = 'left',
 	className,
 	onClick
@@ -107,6 +108,7 @@ function SortHeader({
 	label: string
 	active: boolean
 	dir: SortDir
+	disabled?: boolean
 	align?: 'left' | 'right' | 'center'
 	className?: string
 	onClick: () => void
@@ -119,10 +121,11 @@ function SortHeader({
 		>
 			<button
 				type="button"
+				disabled={disabled}
 				onClick={onClick}
 				className={cn(
 					'inline-flex items-center gap-1 rounded-sm text-caption font-medium uppercase tracking-wide',
-					'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+					'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
 					align === 'right' && 'ml-auto flex-row-reverse',
 					align === 'center' && 'mx-auto',
 					active ? 'text-foreground' : 'text-muted-foreground'
@@ -209,6 +212,10 @@ export function TournamentStandingsTab({
 	const [visibleCount, setVisibleCount] = useState(PREVIEW_ROWS)
 
 	const handleSort = (key: SortKey) => {
+		// The API owns ordering while additional server pages are still
+		// available. Sorting the loaded prefix would present a false global
+		// order for large competitions.
+		if (hasMoreServerRows) return
 		if (key === sortKey) {
 			setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
 			return
@@ -218,8 +225,8 @@ export function TournamentStandingsTab({
 	}
 
 	const sorted = useMemo(
-		() => sortRows(rows, sortKey, sortDir),
-		[rows, sortKey, sortDir]
+		() => (hasMoreServerRows ? rows : sortRows(rows, sortKey, sortDir)),
+		[hasMoreServerRows, rows, sortKey, sortDir]
 	)
 
 	// Reset window when the list identity changes (search / sort / tournament).
@@ -267,6 +274,7 @@ export function TournamentStandingsTab({
 				<DataThead>
 					<SortHeader
 						label={t('rank')}
+						disabled={hasMoreServerRows}
 						active={sortKey === 'rank'}
 						dir={sortDir}
 						align="center"
@@ -275,6 +283,7 @@ export function TournamentStandingsTab({
 					/>
 					<SortHeader
 						label={t('team')}
+						disabled={hasMoreServerRows}
 						active={sortKey === 'teamName'}
 						dir={sortDir}
 						className="min-w-[7.5rem]"
@@ -282,6 +291,7 @@ export function TournamentStandingsTab({
 					/>
 					<SortHeader
 						label={t('gameweekPoints')}
+						disabled={hasMoreServerRows}
 						active={sortKey === 'gameweekPoints'}
 						dir={sortDir}
 						align="right"
@@ -289,6 +299,7 @@ export function TournamentStandingsTab({
 					/>
 					<SortHeader
 						label={t('totalPoints')}
+						disabled={hasMoreServerRows}
 						active={sortKey === 'totalPoints'}
 						dir={sortDir}
 						align="right"
@@ -296,6 +307,7 @@ export function TournamentStandingsTab({
 					/>
 					<SortHeader
 						label={t('overallRankShort')}
+						disabled={hasMoreServerRows}
 						active={sortKey === 'overallRank'}
 						dir={sortDir}
 						align="right"
@@ -304,6 +316,7 @@ export function TournamentStandingsTab({
 					/>
 					<SortHeader
 						label={t('value')}
+						disabled={hasMoreServerRows}
 						active={sortKey === 'teamValue'}
 						dir={sortDir}
 						align="right"

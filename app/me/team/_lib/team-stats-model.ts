@@ -684,12 +684,16 @@ export const getEntryHistoryCached = async (
 export const getEntryEventResultCached = async (
 	entryId: number,
 	eventId: number,
-	opts?: { isCurrentGameweek?: boolean }
+	opts?: { isCurrentGameweek?: boolean; force?: boolean }
 ): Promise<EntryEventResult | null> => {
 	const cacheKey = entryEventCacheKey(entryId, eventId)
-	const cached = getFreshCacheValue(entryEventCache, cacheKey)
+	const cached = opts?.force
+		? undefined
+		: getFreshCacheValue(entryEventCache, cacheKey)
 	if (cached !== undefined) return cached
-	const cachedInFlight = entryEventInFlightCache.get(cacheKey)
+	const cachedInFlight = opts?.force
+		? undefined
+		: entryEventInFlightCache.get(cacheKey)
 	if (cachedInFlight) return cachedInFlight
 	const ttl = opts?.isCurrentGameweek
 		? ENTRY_EVENT_CURRENT_CACHE_TTL_MS

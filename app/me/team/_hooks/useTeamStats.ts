@@ -163,6 +163,7 @@ export function useTeamStats({
 	>(
 		initialEntryGameweekState ?? (initialEntryEventResult ? 'READY' : undefined)
 	)
+	const [gameweekRetryNonce, setGameweekRetryNonce] = useState(0)
 	const [emptyStateMessage, setEmptyStateMessage] = useState<string | null>(
 		initialEntryGameweekState === 'PENDING'
 			? t('pendingReviewForGameweek', {
@@ -332,6 +333,19 @@ export function useTeamStats({
 		const cachedEvent = peekEntryEventResult(entryId, selectedGameweek)
 		const cachedState = peekEntryGameweekState(entryId, selectedGameweek)
 		setGameweekState(cachedState)
+		let cancelled = false
+		let retryTimer: number | undefined
+		const schedulePendingRetry = () => {
+			if (retryTimer !== undefined || cachedState !== 'PENDING') return
+			retryTimer = window.setTimeout(() => {
+				if (!cancelled) {
+					// The session cache deliberately keeps PENDING short-lived; a
+					// retry must be able to replace the null projection after Data
+					// finishes its rich sync.
+					setGameweekRetryNonce(value => value + 1)
+				}
+			}, 10_000)
+		}
 		if (cachedEvent !== undefined && teamStats?.eventId === selectedGameweek) {
 			setGameweekState(cachedState ?? 'READY')
 			setEmptyStateMessage(null)
@@ -351,8 +365,12 @@ export function useTeamStats({
 			setTeamStats(null)
 			setGameweekState(cachedState)
 			setEmptyStateMessage(formatEmptyStateMessage(cachedState))
+			schedulePendingRetry()
 			setIsLoading(false)
-			return
+			return () => {
+				cancelled = true
+				if (retryTimer !== undefined) window.clearTimeout(retryTimer)
+			}
 		}
 
 		const loadGw = async () => {
@@ -364,7 +382,10 @@ export function useTeamStats({
 				const entryEventResult = await getEntryEventResultCached(
 					entryId,
 					selectedGameweek,
-					{ isCurrentGameweek: selectedGameweek === currentGameweek }
+					{
+						isCurrentGameweek: selectedGameweek === currentGameweek,
+						force: gameweekRetryNonce > 0
+					}
 				)
 				if (requestId !== gwRequestIdRef.current) return
 				const resolvedState =
@@ -374,6 +395,13 @@ export function useTeamStats({
 
 				if (!entryEventResult) {
 					setTeamStats(null)
+					if (resolvedState === 'PENDING') {
+						retryTimer = window.setTimeout(() => {
+							if (!cancelled) {
+								setGameweekRetryNonce(value => value + 1)
+							}
+						}, 10_000)
+					}
 					setEmptyStateMessage(
 						formatEmptyStateMessage(
 							peekEntryGameweekState(entryId, selectedGameweek)
@@ -394,7 +422,9 @@ export function useTeamStats({
 
 		void loadGw()
 		return () => {
+			cancelled = true
 			gwRequestIdRef.current += 1
+			if (retryTimer !== undefined) window.clearTimeout(retryTimer)
 		}
 
 		function applyGameweekResult(entryEventResult: EntryEventResult) {
@@ -428,9 +458,13 @@ export function useTeamStats({
 		}
 
 		function formatEmptyStateMessage(state: MyFplReviewState | undefined) {
-			return state === 'PENDING'
-				? t('pendingReviewForGameweek', { gameweek: selectedGameweek })
-				: t('noStatsForGameweek', { gameweek: selectedGameweek })
+			if (state === 'PENDING') {
+				return t('pendingReviewForGameweek', { gameweek: selectedGameweek })
+			}
+			if (state === 'UNAVAILABLE') {
+				return t('gameweekReviewUnavailable', { gameweek: selectedGameweek })
+			}
+			return t('noStatsForGameweek', { gameweek: selectedGameweek })
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- intentional GW gate
 	}, [
@@ -438,6 +472,7 @@ export function useTeamStats({
 		selectedGameweek,
 		loadGameweekData,
 		currentGameweek,
+		gameweekRetryNonce,
 		preseason,
 		t
 	])

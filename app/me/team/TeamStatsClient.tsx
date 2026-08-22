@@ -384,6 +384,14 @@ function TeamStatsViews({
 							<AlertDescription>{t('pastSeasonsPending')}</AlertDescription>
 						</Alert>
 					) : null}
+					{pastSeasonsState === 'UNAVAILABLE' ? (
+						<Alert
+							variant="destructive"
+							className="shadow-sm"
+						>
+							<AlertDescription>{t('pastSeasonsUnavailable')}</AlertDescription>
+						</Alert>
+					) : null}
 					{seasonOverall ? (
 						<TeamSeasonOverall
 							snapshot={seasonOverall}

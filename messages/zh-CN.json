@@ -1672,6 +1672,8 @@
 		"noStats": "暂无球队数据。",
 		"noStatsForGameweek": "第 {gameweek} 轮暂无数据。",
 		"pendingReviewForGameweek": "第 {gameweek} 轮仍在结算中，暂不作为复盘结果。实时变化请前往 Live。",
+		"gameweekReviewUnavailable": "第 {gameweek} 轮已结算复盘暂时不可用，请稍后重试。",
+		"pastSeasonsUnavailable": "历史赛季数据暂时不可用，请稍后重试。",
 		"openLive": "前往 Live",
 		"pastSeasonsPending": "历史赛季仍在同步，待完整历史检查点确认后显示。",
 		"reviewPending": "已验证的我的球队结果仍在同步，数据准备完成后会显示。",

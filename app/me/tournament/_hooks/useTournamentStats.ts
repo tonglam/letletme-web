@@ -468,6 +468,9 @@ export function useTournamentStats({
 		return () => {
 			controller.abort()
 			if (deskRetryTimer !== undefined) window.clearTimeout(deskRetryTimer)
+			if (requestId === requestSequenceRef.current) {
+				setIsBoardLoading(false)
+			}
 		}
 	}, [
 		entryId,
@@ -556,7 +559,10 @@ export function useTournamentStats({
 						console.warn('[tournament stats] board search failed:', searchError)
 						setError(t('loadFailed'))
 						setTournamentStats(null)
-						commitBoardPage(null, standingsSearch.trim())
+						// Keep the last known event/page context on a transient search
+						// failure. Clearing it makes a valid member look like an empty
+						// or unselected competition and loses the server-side cursor.
+						commitBoardPage(boardPageRef.current, standingsSearch.trim())
 						if (standingsSearch.trim() === '') {
 							setSeasonSnapshot(null)
 							setSeasonFieldRows([])
