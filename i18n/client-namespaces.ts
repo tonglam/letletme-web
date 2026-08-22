@@ -40,6 +40,7 @@ export const ROUTE_CLIENT_NAMESPACES = {
 	myFpl: [
 		'TeamStats',
 		'TournamentStats',
+		'TournamentManage',
 		'TournamentLifecycle',
 		'LivePoints',
 		'Filters',
