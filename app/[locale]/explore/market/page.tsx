@@ -9,7 +9,6 @@ import { localizePathname } from '@/i18n/routing'
 import { withCapacityRunForRequest } from '@/lib/capacity-run'
 import {
 	type MarketPulse,
-	type MarketPulseSummaryResponse,
 	type MarketOwnershipDayResponse,
 	type MarketOwnershipOverviewResponse,
 	type MarketOwnershipPeriod
@@ -23,6 +22,11 @@ import {
 	isPublishedMarketOwnershipDate,
 	normalizeMarketOwnershipDate
 } from '@/lib/market-ownership-date'
+import {
+	normalizeMarketOwnershipDay,
+	normalizeMarketOwnershipOverview,
+	normalizeMarketPulseSummaryResponse
+} from '@/lib/market-overview-contract'
 import { getTranslations } from 'next-intl/server'
 import { redirect, unstable_rethrow } from 'next/navigation'
 import { connection } from 'next/server'
@@ -108,39 +112,49 @@ async function renderMarketContent({
 		overviewPromise
 	])
 	if (dataResult.status === 'fulfilled') {
-		pulse = { ...dataResult.value.marketPulse, availabilityUpdates: [] }
-		revision = dataResult.value.marketSnapshotContext.revision
+		const summary = normalizeMarketPulseSummaryResponse(dataResult.value)
+		if (summary) {
+			pulse = summary.marketPulse
+			revision = summary.marketSnapshotContext.revision
+		} else {
+			console.error('[market] pulse response missing required fields')
+		}
 	} else {
 		unstable_rethrow(dataResult.reason)
 		console.error('[market] pulse fetch failed:', dataResult.reason)
 	}
 	if (overviewResult.status === 'fulfilled') {
-		dailyOverview =
-			period === 'DAILY'
-				? overviewResult.value.marketOwnershipOverview
-				: null
-		publishedDate =
-			date &&
-			isPublishedMarketOwnershipDate(
-				date,
-				overviewResult.value.marketOwnershipOverview.coverage
-			)
-				? date
-				: null
-		if (!publishedDate) {
-			ownership = overviewResult.value.marketOwnershipOverview
+		const overview = normalizeMarketOwnershipOverview(overviewResult.value)
+		if (overview) {
+			dailyOverview = period === 'DAILY' ? overview : null
+			publishedDate =
+				date && isPublishedMarketOwnershipDate(date, overview.coverage)
+					? date
+					: null
+			if (!publishedDate) {
+				ownership = overview
+			}
+		} else {
+			console.error('[market] ownership response missing required fields')
 		}
 	} else {
 		unstable_rethrow(overviewResult.reason)
-		console.error('[market] ownership coverage fetch failed:', overviewResult.reason)
+		console.error(
+			'[market] ownership coverage fetch failed:',
+			overviewResult.reason
+		)
 	}
 	if (publishedDate) {
 		const [dayResult] = await Promise.allSettled([
 			loadMarketOwnershipDay(publishedDate)
 		])
 		if (dayResult.status === 'fulfilled') {
-			ownership = (dayResult.value as MarketOwnershipDayResponse)
-				.marketOwnershipDay
+			const day = normalizeMarketOwnershipDay(dayResult.value)
+			if (day) {
+				ownership = day
+			} else {
+				console.error('[market] ownership day response missing required fields')
+			}
 		} else {
 			unstable_rethrow(dayResult.reason)
 			console.error('[market] ownership day fetch failed:', dayResult.reason)
