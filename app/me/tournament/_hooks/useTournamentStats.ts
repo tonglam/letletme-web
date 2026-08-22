@@ -354,7 +354,7 @@ export function useTournamentStats({
 
 		void fetchDesk(
 			tournamentId,
-			selectedGameweek > 0 ? selectedGameweek : null,
+			loadGameweekData && selectedGameweek > 0 ? selectedGameweek : null,
 			controller.signal
 		)
 			.then(desk => {
@@ -433,6 +433,7 @@ export function useTournamentStats({
 		initialBoard,
 		initialReviewState,
 		initialSelectedTournamentId,
+		loadGameweekData,
 		selectedGameweek,
 		selectedTournamentId,
 		t,

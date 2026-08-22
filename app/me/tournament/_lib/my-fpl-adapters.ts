@@ -13,11 +13,21 @@ import type {
 import type { TournamentStatsViewModel } from './tournament-stats-model'
 import { normalizeChipCode } from './tournament-stats-model'
 
+function boardRowsIncludingViewer(
+	page: MyFplCompetitionBoardPage | null | undefined
+): MyFplCompetitionBoardRow[] {
+	const rows = page?.rows ?? []
+	const viewerRow = page?.viewerRow
+	if (!viewerRow || rows.some(row => row.entryId === viewerRow.entryId))
+		return rows
+	return [...rows, viewerRow]
+}
+
 export function boardRowsToEventResults(
 	page: MyFplCompetitionBoardPage | null | undefined,
 	tournament?: EntryTournament | null
 ): TournamentEventResultItem[] {
-	return (page?.rows ?? []).map(row => ({
+	return boardRowsIncludingViewer(page).map(row => ({
 		tournament: tournament ?? undefined,
 		event: { id: row.eventId, name: `Gameweek ${row.eventId}` },
 		groupId: row.groupId ?? 0,
@@ -60,7 +70,7 @@ export function aggregateToSeasonSnapshot(
 			averageValue: metric.averageValue,
 			higherIsBetter: metric.higherIsBetter
 		})),
-		standings: (board?.rows ?? []).map(row => ({
+		standings: boardRowsIncludingViewer(board).map(row => ({
 			entryId: row.entryId,
 			rank: row.rank,
 			entryName: row.entryName,
@@ -190,7 +200,9 @@ export function aggregateToTournamentStats(
 		topPerformers,
 		biggestRisers,
 		biggestFallers,
-		standings: board.rows.map(row => rowToStanding(row, entryId)),
+		standings: boardRowsIncludingViewer(board).map(row =>
+			rowToStanding(row, entryId)
+		),
 		captainStats: aggregate.captainDistribution
 			.filter(row => row.key !== 'NONE')
 			.map(row => ({
