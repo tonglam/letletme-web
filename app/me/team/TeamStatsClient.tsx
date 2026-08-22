@@ -11,7 +11,10 @@ import type {
 	EntryEventResult,
 	EntryGameweekTransfers
 } from '@/lib/graphql/operations/entries'
-import type { MyFplReviewState } from '@/lib/graphql/operations/my-fpl'
+import type {
+	MyFplReviewState,
+	MyFplSnapshotMeta
+} from '@/lib/graphql/operations/my-fpl'
 import type { SeasonIdentity } from './_lib/team-stats-model'
 import type { SeasonPresentationPhase } from '@/lib/season-presentation'
 import { cn } from '@/lib/utils'
@@ -52,6 +55,7 @@ interface TeamStatsClientProps {
 	initialError: string | null
 	initialRequestComplete: boolean
 	initialSeasonPhase: SeasonPresentationPhase
+	initialSnapshotMeta: MyFplSnapshotMeta | null
 }
 
 /**
@@ -88,7 +92,8 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 		seasonOverall,
 		selectedGameweek,
 		setSelectedGameweek,
-		teamStats
+		teamStats,
+		snapshotMeta
 	} = useTeamStats({
 		...props,
 		initialSelectedGameweek,
@@ -153,6 +158,31 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
 				<StatsPageHeader title={t('title')} />
+
+				{snapshotMeta ? (
+					<Alert className="mb-6">
+						<AlertDescription>
+							{snapshotMeta.kind === 'FINAL'
+								? t('snapshotFinal', { date: formatSnapshotDate(snapshotMeta) })
+								: t('snapshotProvisional', {
+										date: formatSnapshotDate(snapshotMeta)
+									})}{' '}
+							{snapshotMeta.freshness === 'STALE'
+								? t('snapshotStale')
+								: snapshotMeta.freshness === 'GENERATING'
+									? t('snapshotGenerating')
+									: null}
+							{snapshotMeta.kind === 'PROVISIONAL' ? (
+								<Link
+									href={`/live/points/${props.entryId}`}
+									className="ml-2 font-semibold text-primary-ink underline-offset-4 hover:underline"
+								>
+									{t('openLive')}
+								</Link>
+							) : null}
+						</AlertDescription>
+					</Alert>
+				) : null}
 
 				{error ? (
 					<Alert
@@ -231,6 +261,16 @@ interface TeamStatsViewsProps {
 	emptyStateMessage: string | null
 	hasAnyContent: boolean
 	searchParamsGw: string | null
+}
+
+function formatSnapshotDate(meta: MyFplSnapshotMeta): string {
+	const value = new Date(meta.publishedAt)
+	return Number.isFinite(value.getTime())
+		? value.toLocaleString(undefined, {
+				dateStyle: 'medium',
+				timeStyle: 'short'
+			})
+		: meta.snapshotDate
 }
 
 function TeamStatsViews({

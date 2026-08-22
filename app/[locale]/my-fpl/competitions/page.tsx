@@ -13,7 +13,8 @@ import {
 	type MyFplCompetitionBoardPage,
 	type MyFplCompetitionBoardResponse,
 	type MyFplCompetitionsDeskResponse,
-	type MyFplReviewState
+	type MyFplReviewState,
+	type MyFplSnapshotMeta
 } from '@/lib/graphql/operations/my-fpl'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import { getVerifiedEntryContext } from '@/lib/session'
@@ -60,7 +61,7 @@ const positiveInteger = (value: string | undefined): number | null => {
 	return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
 }
 
-/** My Competitions review is backed by the finalized My FPL desk projection. */
+/** My Competitions review is backed by one pinned My FPL publication revision. */
 export default async function TournamentStatsPage({
 	params,
 	searchParams
@@ -112,6 +113,7 @@ export default async function TournamentStatsPage({
 	let usedFallbackGameweek = false
 	let currentGameweek = 0
 	let initialLatestFinalizedGameweek: number | null = null
+	let initialSnapshotMeta: MyFplSnapshotMeta | null = null
 
 	try {
 		let response: MyFplCompetitionsDeskResponse
@@ -151,6 +153,7 @@ export default async function TournamentStatsPage({
 		initialTournaments = desk.tournaments
 		initialSelectedTournamentId = String(desk.selectedTournamentId ?? '')
 		initialReviewState = desk.state
+		initialSnapshotMeta = desk.snapshotMeta
 		if (
 			desk.state === 'READY' &&
 			desk.selectedTournamentId !== null &&
@@ -167,7 +170,8 @@ export default async function TournamentStatsPage({
 							eventId: desk.eventId,
 							page: 1,
 							pageSize: 100,
-							search: null
+							search: null,
+							snapshotRevision: desk.snapshotMeta?.revision ?? null
 						},
 						{ cache: 'no-store' }
 					)
@@ -198,7 +202,7 @@ export default async function TournamentStatsPage({
 			? aggregateToRankingSummary(initialAggregate)
 			: null
 
-		console.info('[tournament stats] SSR finalized desk seed', {
+		console.info('[tournament stats] SSR snapshot desk seed', {
 			view: initialView,
 			requestedTournamentId,
 			requestedEventId,
@@ -236,6 +240,7 @@ export default async function TournamentStatsPage({
 				initialBoard={initialBoard}
 				initialAggregate={initialAggregate}
 				initialError={initialError}
+				initialSnapshotMeta={initialSnapshotMeta}
 			/>
 		</Suspense>
 	)

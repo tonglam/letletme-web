@@ -11,6 +11,7 @@ import {
 	GET_MY_FPL_TEAM_GAMEWEEK,
 	GET_MY_FPL_TEAM_TRANSFERS,
 	type MyFplReviewState,
+	type MyFplSnapshotMeta,
 	type MyFplTeamDeskResponse,
 	type MyFplTeamGameweekResponse,
 	type MyFplTeamTransfersResponse
@@ -492,6 +493,10 @@ const entryHistoryStateCache = new Map<
 	number,
 	TimedCacheValue<MyFplReviewState>
 >()
+const entrySnapshotMetaCache = new Map<
+	number,
+	TimedCacheValue<MyFplSnapshotMeta | null>
+>()
 const entryDeskStateCache = new Map<number, TimedCacheValue<MyFplReviewState>>()
 const entryHistoryInFlight = new Map<
 	number,
@@ -514,8 +519,30 @@ const entryEventStateCache = new Map<
 	TimedCacheValue<MyFplReviewState>
 >()
 
-export const entryEventCacheKey = (entryId: number, eventId: number): string =>
-	`${entryId}:${eventId}`
+export const entryEventCacheKey = (
+	entryId: number,
+	eventId: number,
+	snapshotRevision?: string | null
+): string => `${entryId}:${eventId}:${snapshotRevision ?? 'legacy'}`
+
+const clearEntrySnapshotCaches = (entryId: number): void => {
+	entryHistoryCache.delete(entryId)
+	entryHistoryStateCache.delete(entryId)
+	transferHistoryCache.delete(entryId)
+	transferHistoryStateCache.delete(entryId)
+	entryHistoryInFlight.delete(entryId)
+	transferHistoryInFlight.delete(entryId)
+	const prefix = `${entryId}:`
+	entryEventCache.forEach((_value, key) => {
+		if (key.startsWith(prefix)) entryEventCache.delete(key)
+	})
+	entryEventStateCache.forEach((_value, key) => {
+		if (key.startsWith(prefix)) entryEventStateCache.delete(key)
+	})
+	entryEventInFlightCache.forEach((_value, key) => {
+		if (key.startsWith(prefix)) entryEventInFlightCache.delete(key)
+	})
+}
 
 /** Read session cache without fetching (undefined = miss / expired). */
 export const peekEntryHistory = (
@@ -527,6 +554,11 @@ export const peekEntryHistoryState = (
 	entryId: number
 ): MyFplReviewState | undefined =>
 	getFreshCacheValue(entryHistoryStateCache, entryId)
+
+export const peekEntrySnapshotMeta = (
+	entryId: number
+): MyFplSnapshotMeta | null | undefined =>
+	getFreshCacheValue(entrySnapshotMetaCache, entryId)
 
 export const peekEntryDeskState = (
 	entryId: number
@@ -547,13 +579,24 @@ export const peekEntryEventResult = (
 	entryId: number,
 	eventId: number
 ): EntryEventResult | null | undefined =>
-	getFreshCacheValue(entryEventCache, entryEventCacheKey(entryId, eventId))
+	getFreshCacheValue(
+		entryEventCache,
+		entryEventCacheKey(
+			entryId,
+			eventId,
+			peekEntrySnapshotMeta(entryId)?.revision
+		)
+	)
 
 export const peekEntryGameweekState = (
 	entryId: number,
 	eventId: number
 ): MyFplReviewState | undefined => {
-	const key = entryEventCacheKey(entryId, eventId)
+	const key = entryEventCacheKey(
+		entryId,
+		eventId,
+		peekEntrySnapshotMeta(entryId)?.revision
+	)
 	const state = getFreshCacheValue(entryEventStateCache, key)
 	if (state !== undefined) return state
 	const result = peekEntryEventResult(entryId, eventId)
@@ -576,13 +619,21 @@ export const seedEntryEventCache = (
 		: ENTRY_EVENT_CACHE_TTL_MS
 	setCacheValue(
 		entryEventCache,
-		entryEventCacheKey(entryId, eventId),
+		entryEventCacheKey(
+			entryId,
+			eventId,
+			peekEntrySnapshotMeta(entryId)?.revision
+		),
 		value,
 		ttl
 	)
 	setCacheValue(
 		entryEventStateCache,
-		entryEventCacheKey(entryId, eventId),
+		entryEventCacheKey(
+			entryId,
+			eventId,
+			peekEntrySnapshotMeta(entryId)?.revision
+		),
 		opts?.state ?? (value ? 'READY' : 'EMPTY'),
 		ttl
 	)
@@ -605,6 +656,17 @@ export const seedEntryHistoryCache = (
 		state,
 		state === 'PENDING' ? 10_000 : HISTORY_CACHE_TTL_MS
 	)
+}
+
+export const seedEntrySnapshotMeta = (
+	entryId: number,
+	meta: MyFplSnapshotMeta | null
+): void => {
+	const previous = getFreshCacheValue(entrySnapshotMetaCache, entryId)
+	if ((previous?.revision ?? null) !== (meta?.revision ?? null)) {
+		clearEntrySnapshotCaches(entryId)
+	}
+	setCacheValue(entrySnapshotMetaCache, entryId, meta, HISTORY_CACHE_TTL_MS)
 }
 
 export const seedEntryDeskState = (
@@ -647,6 +709,7 @@ export function hydrateTeamStatsSessionCache(opts: {
 	eventState?: MyFplReviewState
 	transfers: EntryGameweekTransfers[] | null
 	transfersState?: MyFplReviewState
+	snapshotMeta?: MyFplSnapshotMeta | null
 }): void {
 	const {
 		entryId,
@@ -658,8 +721,12 @@ export function hydrateTeamStatsSessionCache(opts: {
 		event,
 		eventState,
 		transfers,
-		transfersState
+		transfersState,
+		snapshotMeta
 	} = opts
+	// Pin the session payloads before seeding them so a revision change clears
+	// only the previous version, not the SSR data being hydrated now.
+	seedEntrySnapshotMeta(entryId, snapshotMeta ?? null)
 	if (deskState) seedEntryDeskState(entryId, deskState)
 	if (history) seedEntryHistoryCache(entryId, history, historyState ?? 'READY')
 	if (transfers !== null)
@@ -674,21 +741,30 @@ export function hydrateTeamStatsSessionCache(opts: {
 
 export const getEntryHistoryCached = async (
 	entryId: number,
-	opts?: { force?: boolean }
+	opts?: { force?: boolean; snapshotRevision?: string | null }
 ): Promise<EntryHistoryResponse['entryHistory']> => {
+	const requestedRevision = opts?.snapshotRevision ?? null
+	const cachedRevision = peekEntrySnapshotMeta(entryId)?.revision ?? null
+	const cacheMatchesRevision =
+		!requestedRevision || requestedRevision === cachedRevision
 	const cached = opts?.force
 		? undefined
-		: getFreshCacheValue(entryHistoryCache, entryId)
+		: cacheMatchesRevision
+			? getFreshCacheValue(entryHistoryCache, entryId)
+			: undefined
 	if (cached !== undefined) return cached
-	const inflight = entryHistoryInFlight.get(entryId)
+	const inflight = cacheMatchesRevision
+		? entryHistoryInFlight.get(entryId)
+		: undefined
 	if (inflight) return inflight
 	const request = executeQuery<MyFplTeamDeskResponse>(
 		GET_MY_FPL_TEAM_DESK,
-		{ eventId: null },
+		{ eventId: null, snapshotRevision: opts?.snapshotRevision ?? null },
 		{ cache: 'no-store' }
 	)
 		.then(response => {
 			const snapshot = response.myFplTeamDesk
+			seedEntrySnapshotMeta(entryId, snapshot.snapshotMeta ?? null)
 			seedEntryDeskState(entryId, snapshot.state)
 			const history = historyFromMyFplDesk(snapshot)
 			seedEntryHistoryCache(entryId, history, snapshot.pastSeasonsState)
@@ -704,9 +780,17 @@ export const getEntryHistoryCached = async (
 export const getEntryEventResultCached = async (
 	entryId: number,
 	eventId: number,
-	opts?: { isCurrentGameweek?: boolean; force?: boolean }
+	opts?: {
+		isCurrentGameweek?: boolean
+		force?: boolean
+		snapshotRevision?: string | null
+	}
 ): Promise<EntryEventResult | null> => {
-	const cacheKey = entryEventCacheKey(entryId, eventId)
+	const cacheKey = entryEventCacheKey(
+		entryId,
+		eventId,
+		opts?.snapshotRevision ?? peekEntrySnapshotMeta(entryId)?.revision
+	)
 	const cached = opts?.force
 		? undefined
 		: getFreshCacheValue(entryEventCache, cacheKey)
@@ -720,11 +804,12 @@ export const getEntryEventResultCached = async (
 		: ENTRY_EVENT_CACHE_TTL_MS
 	const request = executeQuery<MyFplTeamGameweekResponse>(
 		GET_MY_FPL_TEAM_GAMEWEEK,
-		{ eventId },
+		{ eventId, snapshotRevision: opts?.snapshotRevision ?? null },
 		{ cache: 'no-store' }
 	)
 		.then(response => {
 			const gameweek = response.myFplTeamGameweek
+			seedEntrySnapshotMeta(entryId, gameweek.snapshotMeta ?? null)
 			const result = eventResultFromMyFplGameweek(gameweek)
 			setCacheValue(entryEventCache, cacheKey, result, ttl)
 			setCacheValue(entryEventStateCache, cacheKey, gameweek.state, ttl)
@@ -738,19 +823,29 @@ export const getEntryEventResultCached = async (
 }
 
 export const getTransferHistoryCached = async (
-	entryId: number
+	entryId: number,
+	opts?: { snapshotRevision?: string | null }
 ): Promise<EntryGameweekTransfers[]> => {
-	const cached = getFreshCacheValue(transferHistoryCache, entryId)
+	const requestedRevision = opts?.snapshotRevision ?? null
+	const cachedRevision = peekEntrySnapshotMeta(entryId)?.revision ?? null
+	const cacheMatchesRevision =
+		!requestedRevision || requestedRevision === cachedRevision
+	const cached = cacheMatchesRevision
+		? getFreshCacheValue(transferHistoryCache, entryId)
+		: undefined
 	if (cached !== undefined) return cached
-	const inflight = transferHistoryInFlight.get(entryId)
+	const inflight = cacheMatchesRevision
+		? transferHistoryInFlight.get(entryId)
+		: undefined
 	if (inflight) return inflight
 	const request = executeQuery<MyFplTeamTransfersResponse>(
 		GET_MY_FPL_TEAM_TRANSFERS,
-		undefined,
+		{ snapshotRevision: opts?.snapshotRevision ?? null },
 		{ cache: 'no-store' }
 	)
 		.then(response => {
 			const snapshot = response.myFplTeamTransfers
+			seedEntrySnapshotMeta(entryId, snapshot.snapshotMeta ?? null)
 			const state = snapshot.state
 			const transfers = transfersFromMyFpl(snapshot)
 			setCacheValue(

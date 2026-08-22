@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import { cn } from '@/lib/utils'
+import type { MyFplSnapshotMeta } from '@/lib/graphql/operations/my-fpl'
 import { AlertCircle, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
@@ -81,6 +82,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 		setSelectedTournamentId,
 		setStandingsSearch,
 		standingsSearch,
+		snapshotMeta,
 		tournamentStats,
 		tournaments,
 		usedFallbackGameweek,
@@ -308,6 +310,32 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 						>
 							<AlertCircle aria-hidden="true" />
 							<AlertDescription>{error}</AlertDescription>
+						</Alert>
+					) : null}
+					{snapshotMeta ? (
+						<Alert className="mb-6">
+							<AlertDescription>
+								{snapshotMeta.kind === 'FINAL'
+									? t('snapshotFinal', {
+											date: formatSnapshotDate(snapshotMeta)
+										})
+									: t('snapshotProvisional', {
+											date: formatSnapshotDate(snapshotMeta)
+										})}{' '}
+								{snapshotMeta.freshness === 'STALE'
+									? t('snapshotStale')
+									: snapshotMeta.freshness === 'GENERATING'
+										? t('snapshotGenerating')
+										: null}
+								{snapshotMeta.kind === 'PROVISIONAL' && selectedTournamentId ? (
+									<Link
+										href={`/live/competitions/${selectedTournamentId}`}
+										className="ml-2 font-semibold text-primary-ink underline-offset-4 hover:underline"
+									>
+										{t('openLive')}
+									</Link>
+								) : null}
+							</AlertDescription>
 						</Alert>
 					) : null}
 
@@ -684,4 +712,14 @@ export default function TournamentStatsClient(
 			<TournamentStatsBody {...props} />
 		</Suspense>
 	)
+}
+
+function formatSnapshotDate(meta: MyFplSnapshotMeta): string {
+	const value = new Date(meta.publishedAt)
+	return Number.isFinite(value.getTime())
+		? value.toLocaleString(undefined, {
+				dateStyle: 'medium',
+				timeStyle: 'short'
+			})
+		: meta.snapshotDate
 }

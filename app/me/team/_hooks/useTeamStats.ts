@@ -6,7 +6,10 @@ import type {
 	EntryHistoryItem,
 	EntrySeasonHistoryItem
 } from '@/lib/graphql/operations/entries'
-import type { MyFplReviewState } from '@/lib/graphql/operations/my-fpl'
+import type {
+	MyFplReviewState,
+	MyFplSnapshotMeta
+} from '@/lib/graphql/operations/my-fpl'
 import { useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -23,6 +26,7 @@ import {
 	peekEntryGameweekState,
 	peekEntryHistory,
 	peekEntryHistoryState,
+	peekEntrySnapshotMeta,
 	peekTransferHistory,
 	peekTransferHistoryState,
 	seedTransferHistoryCache,
@@ -57,6 +61,7 @@ interface UseTeamStatsOptions {
 	initialError: string | null
 	initialRequestComplete: boolean
 	preseason: boolean
+	initialSnapshotMeta: MyFplSnapshotMeta | null
 }
 
 /**
@@ -83,7 +88,8 @@ export function useTeamStats({
 	initialEntryTransfersState,
 	initialError,
 	initialRequestComplete,
-	preseason
+	preseason,
+	initialSnapshotMeta
 }: UseTeamStatsOptions) {
 	const t = useTranslations('TeamStats')
 	const [currentGameweek, setCurrentGameweek] = useState(initialCurrentGameweek)
@@ -92,6 +98,12 @@ export function useTeamStats({
 		initialSelectedGameweek && initialSelectedGameweek > 0
 			? initialSelectedGameweek
 			: initialCurrentGameweek
+	)
+	const snapshotRevisionRef = useRef<string | null>(
+		initialSnapshotMeta?.revision ?? null
+	)
+	const [snapshotMeta, setSnapshotMeta] = useState<MyFplSnapshotMeta | null>(
+		initialSnapshotMeta
 	)
 
 	const seedGw =
@@ -189,7 +201,8 @@ export function useTeamStats({
 			event: initialEntryEventResult,
 			eventState: initialEntryGameweekState,
 			transfers: initialEntryTransfers,
-			transfersState: initialEntryTransfersState
+			transfersState: initialEntryTransfersState,
+			snapshotMeta: initialSnapshotMeta
 		})
 	}, [
 		entryId,
@@ -203,7 +216,8 @@ export function useTeamStats({
 		initialEntryTransfersState,
 		initialCurrentGameweek,
 		initialRequestComplete,
-		seedGw
+		seedGw,
+		initialSnapshotMeta
 	])
 
 	const rebuildSeasonLogs = (
@@ -245,9 +259,15 @@ export function useTeamStats({
 		void (async () => {
 			try {
 				const history = await getEntryHistoryCached(entryId, {
-					force: forceHistoryFetch
+					force: forceHistoryFetch,
+					snapshotRevision: snapshotRevisionRef.current
 				})
 				if (cancelled || !history) return
+				const nextSnapshotMeta = peekEntrySnapshotMeta(entryId) ?? null
+				if (nextSnapshotMeta?.revision) {
+					snapshotRevisionRef.current = nextSnapshotMeta.revision
+				}
+				setSnapshotMeta(nextSnapshotMeta)
 				const nextDeskState = peekEntryDeskState(entryId)
 				if (nextDeskState) setDeskState(nextDeskState)
 				const nextPastSeasonsState = peekEntryHistoryState(entryId)
@@ -282,7 +302,14 @@ export function useTeamStats({
 			cancelled = true
 			if (retryTimer !== undefined) window.clearTimeout(retryTimer)
 		}
-	}, [entryId, historyRetryNonce, initialCurrentGameweek, preseason, t])
+	}, [
+		entryId,
+		historyRetryNonce,
+		initialCurrentGameweek,
+		preseason,
+		snapshotMeta?.revision,
+		t
+	])
 
 	// Deferred transfers — once per entry unless already in session cache
 	useEffect(() => {
@@ -298,8 +325,15 @@ export function useTeamStats({
 		const loadTransfers = async () => {
 			setIsTransfersLoading(true)
 			try {
-				const transfers = await getTransferHistoryCached(entryId)
+				const transfers = await getTransferHistoryCached(entryId, {
+					snapshotRevision: snapshotRevisionRef.current
+				})
 				if (cancelled) return
+				const nextSnapshotMeta = peekEntrySnapshotMeta(entryId) ?? null
+				if (nextSnapshotMeta?.revision) {
+					snapshotRevisionRef.current = nextSnapshotMeta.revision
+				}
+				setSnapshotMeta(nextSnapshotMeta)
 				const state = peekTransferHistoryState(entryId) ?? 'READY'
 				setTransferState(state)
 				if (state === 'PENDING') {
@@ -334,7 +368,7 @@ export function useTeamStats({
 			cancelled = true
 			if (retryTimer !== undefined) window.clearTimeout(retryTimer)
 		}
-	}, [entryId, t, transferRetryNonce])
+	}, [entryId, snapshotMeta?.revision, t, transferRetryNonce])
 
 	// On-demand gameweek scoreboard + squad
 	useEffect(() => {
@@ -406,7 +440,8 @@ export function useTeamStats({
 					selectedGameweek,
 					{
 						isCurrentGameweek: selectedGameweek === currentGameweek,
-						force: forceGameweekFetch
+						force: forceGameweekFetch,
+						snapshotRevision: snapshotRevisionRef.current
 					}
 				)
 				if (requestId !== gwRequestIdRef.current) return
@@ -414,6 +449,11 @@ export function useTeamStats({
 					peekEntryGameweekState(entryId, selectedGameweek) ??
 					(entryEventResult ? 'READY' : undefined)
 				setGameweekState(resolvedState)
+				const nextSnapshotMeta = peekEntrySnapshotMeta(entryId) ?? null
+				if (nextSnapshotMeta?.revision) {
+					snapshotRevisionRef.current = nextSnapshotMeta.revision
+				}
+				setSnapshotMeta(nextSnapshotMeta)
 
 				if (!entryEventResult) {
 					setTeamStats(null)
@@ -496,6 +536,7 @@ export function useTeamStats({
 		currentGameweek,
 		gameweekRetryNonce,
 		preseason,
+		snapshotMeta?.revision,
 		t
 	])
 
@@ -513,7 +554,8 @@ export function useTeamStats({
 		selectedGameweek,
 		setSelectedGameweek,
 		teamStats,
-		pastSeasonsState
+		pastSeasonsState,
+		snapshotMeta
 	}
 }
 

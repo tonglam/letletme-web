@@ -4,12 +4,26 @@ import { TOURNAMENT_INFO_FIELDS } from './tournaments'
 export type MyFplReviewState =
 	'PRESEASON' | 'PENDING' | 'READY' | 'EMPTY' | 'UNAVAILABLE'
 
+export type MyFplSnapshotKind = 'PROVISIONAL' | 'FINAL'
+export type MyFplSnapshotFreshness = 'CURRENT' | 'GENERATING' | 'STALE'
+
+export interface MyFplSnapshotMeta {
+	revision: string
+	eventId: number
+	snapshotDate: string
+	sourceCheckedAt: string
+	publishedAt: string
+	kind: MyFplSnapshotKind
+	freshness: MyFplSnapshotFreshness
+}
+
 export interface MyFplReviewContext {
 	season: string
 	coreRevision: string
 	currentEventId: number | null
 	nextEventId: number | null
 	latestFinalizedEventId: number | null
+	latestPublishedEventId: number | null
 }
 
 export interface MyFplEntryIdentity {
@@ -107,6 +121,7 @@ export interface MyFplTeamGameweek {
 	eventId: number
 	entry: MyFplEntryIdentity | null
 	result: MyFplTeamGameweekResult | null
+	snapshotMeta?: MyFplSnapshotMeta | null
 }
 
 export interface MyFplTeamDesk {
@@ -122,6 +137,7 @@ export interface MyFplTeamDesk {
 	 * Gameweek detail is loaded through myFplTeamGameweek instead.
 	 */
 	gameweek?: MyFplTeamGameweek | null
+	snapshotMeta?: MyFplSnapshotMeta | null
 }
 
 export interface MyFplTransferMove {
@@ -148,6 +164,7 @@ export interface MyFplTeamTransfers {
 	state: MyFplReviewState
 	context: MyFplReviewContext
 	gameweeks: MyFplTransferGameweek[]
+	snapshotMeta: MyFplSnapshotMeta | null
 }
 
 export interface MyFplCompetitionBoardRow {
@@ -184,6 +201,7 @@ export interface MyFplCompetitionBoardPage {
 	fieldSize: number
 	rows: MyFplCompetitionBoardRow[]
 	viewerRow: MyFplCompetitionBoardRow | null
+	snapshotMeta?: MyFplSnapshotMeta | null
 }
 
 export interface MyFplCompetitionPerformance {
@@ -254,6 +272,7 @@ export interface MyFplCompetitionAggregate {
 	fallers: MyFplCompetitionPerformance[]
 	captainDistribution: MyFplCompetitionDistribution[]
 	chipDistribution: MyFplCompetitionDistribution[]
+	snapshotMeta?: MyFplSnapshotMeta | null
 }
 
 export interface MyFplCompetitionsDesk {
@@ -266,6 +285,7 @@ export interface MyFplCompetitionsDesk {
 	/** Loaded by the dedicated board root after the desk/list request. */
 	board?: MyFplCompetitionBoardPage | null
 	aggregate: MyFplCompetitionAggregate | null
+	snapshotMeta: MyFplSnapshotMeta | null
 }
 
 export interface MyFplCompetitionSeasonPathPoint {
@@ -285,6 +305,7 @@ export interface MyFplCompetitionSeasonPath {
 	tournamentId: number
 	throughEventId: number
 	points: MyFplCompetitionSeasonPathPoint[]
+	snapshotMeta: MyFplSnapshotMeta | null
 }
 
 export interface MyFplTeamDeskResponse {
@@ -330,6 +351,17 @@ const REVIEW_CONTEXT_FIELDS = `
       currentEventId
       nextEventId
       latestFinalizedEventId
+      latestPublishedEventId
+`
+
+const SNAPSHOT_META_FIELDS = `
+      revision
+      eventId
+      snapshotDate
+      sourceCheckedAt
+      publishedAt
+      kind
+      freshness
 `
 
 const TEAM_HISTORY_FIELDS = `
@@ -463,11 +495,12 @@ const AGGREGATE_FIELDS = `
 		fallers { entryId entryName playerName eventPoints eventNetPoints rank previousRank captainId captainWebName captainTeamShortName captainPoints }
 		captainDistribution { key label teamShortName count percentage averagePoints }
 		chipDistribution { key label teamShortName count percentage averagePoints }
+		snapshotMeta {${SNAPSHOT_META_FIELDS}}
 `
 
 export const GET_MY_FPL_TEAM_DESK = `
-  query GetMyFplTeamDesk($eventId: Int) {
-    myFplTeamDesk(eventId: $eventId) {
+  query GetMyFplTeamDesk($eventId: Int, $snapshotRevision: String) {
+    myFplTeamDesk(eventId: $eventId, snapshotRevision: $snapshotRevision) {
       state
       context {${REVIEW_CONTEXT_FIELDS}}
       entry {${ENTRY_FIELDS}}
@@ -475,13 +508,14 @@ export const GET_MY_FPL_TEAM_DESK = `
       pastSeasons { season totalPoints overallRank }
       pastSeasonsState
       selectedEventId
+      snapshotMeta {${SNAPSHOT_META_FIELDS}}
     }
   }
 `
 
 export const GET_MY_FPL_TEAM_GAMEWEEK = `
-  query GetMyFplTeamGameweek($eventId: Int!) {
-    myFplTeamGameweek(eventId: $eventId) {
+  query GetMyFplTeamGameweek($eventId: Int!, $snapshotRevision: String) {
+    myFplTeamGameweek(eventId: $eventId, snapshotRevision: $snapshotRevision) {
       state
       context {${REVIEW_CONTEXT_FIELDS}}
       eventId
@@ -502,13 +536,14 @@ export const GET_MY_FPL_TEAM_GAMEWEEK = `
         bank
         picks {${TEAM_PICK_FIELDS}}
       }
+      snapshotMeta {${SNAPSHOT_META_FIELDS}}
     }
   }
 `
 
 export const GET_MY_FPL_TEAM_TRANSFERS = `
-  query GetMyFplTeamTransfers {
-    myFplTeamTransfers {
+  query GetMyFplTeamTransfers($snapshotRevision: String) {
+    myFplTeamTransfers(snapshotRevision: $snapshotRevision) {
       state
       context {${REVIEW_CONTEXT_FIELDS}}
       gameweeks {
@@ -517,13 +552,14 @@ export const GET_MY_FPL_TEAM_TRANSFERS = `
         eventTransfersCost
         transfers {${TRANSFER_FIELDS}}
       }
+      snapshotMeta {${SNAPSHOT_META_FIELDS}}
     }
   }
 `
 
 export const GET_MY_FPL_COMPETITIONS_DESK = `${TOURNAMENT_INFO_FIELDS}
-  query GetMyFplCompetitionsDesk($tournamentId: Int, $eventId: Int) {
-    myFplCompetitionsDesk(tournamentId: $tournamentId, eventId: $eventId) {
+  query GetMyFplCompetitionsDesk($tournamentId: Int, $eventId: Int, $snapshotRevision: String) {
+    myFplCompetitionsDesk(tournamentId: $tournamentId, eventId: $eventId, snapshotRevision: $snapshotRevision) {
       state
       context {${REVIEW_CONTEXT_FIELDS}}
       tournaments { ...TournamentInfoFields }
@@ -531,6 +567,7 @@ export const GET_MY_FPL_COMPETITIONS_DESK = `${TOURNAMENT_INFO_FIELDS}
       selectedTournament { ...TournamentInfoFields }
       eventId
       aggregate {${AGGREGATE_FIELDS}}
+      snapshotMeta {${SNAPSHOT_META_FIELDS}}
     }
   }
 `
@@ -540,15 +577,17 @@ export const GET_MY_FPL_COMPETITION_BOARD = `
     $tournamentId: Int!
     $eventId: Int!
     $page: Int
-    $pageSize: Int
-    $search: String
+	$pageSize: Int
+		$search: String
+		$snapshotRevision: String
   ) {
     myFplCompetitionBoard(
       tournamentId: $tournamentId
       eventId: $eventId
       page: $page
-      pageSize: $pageSize
-      search: $search
+		  pageSize: $pageSize
+		  search: $search
+		  snapshotRevision: $snapshotRevision
     ) {
       state
       eventId
@@ -558,16 +597,18 @@ export const GET_MY_FPL_COMPETITION_BOARD = `
       totalPages
       fieldSize
       rows {${BOARD_ROW_FIELDS}}
-      viewerRow {${BOARD_ROW_FIELDS}}
+		  viewerRow {${BOARD_ROW_FIELDS}}
+		  snapshotMeta {${SNAPSHOT_META_FIELDS}}
     }
   }
 `
 
 export const GET_MY_FPL_COMPETITION_SEASON_PATH = `
-  query GetMyFplCompetitionSeasonPath($tournamentId: Int!, $throughEventId: Int!) {
+  query GetMyFplCompetitionSeasonPath($tournamentId: Int!, $throughEventId: Int!, $snapshotRevision: String) {
     myFplCompetitionSeasonPath(
       tournamentId: $tournamentId
       throughEventId: $throughEventId
+      snapshotRevision: $snapshotRevision
     ) {
       state
       context {${REVIEW_CONTEXT_FIELDS}}
@@ -583,6 +624,7 @@ export const GET_MY_FPL_COMPETITION_SEASON_PATH = `
         leaderOverallPoints
         averageOverallPoints
       }
+      snapshotMeta {${SNAPSHOT_META_FIELDS}}
     }
   }
 `
