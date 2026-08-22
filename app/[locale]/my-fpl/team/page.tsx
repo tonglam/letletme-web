@@ -113,6 +113,7 @@ export default async function TeamStatsPage({
 				<TeamStatsClient
 					entryId={MOCK_TEAM_ENTRY_ID}
 					currentGameweek={MOCK_TEAM_EVENT_ID}
+					initialMaxGameweek={MOCK_TEAM_EVENT_ID}
 					initialSelectedGameweek={mockSelectedGameweek}
 					initialEntryEventResult={mockEventResult}
 					initialEntryHistory={MOCK_TEAM_HISTORY}
@@ -171,6 +172,7 @@ export default async function TeamStatsPage({
 			? requestedGameweek
 			: null
 	let currentGameweek = 0
+	let maxKnownPublishedEvent = 0
 	let initialSelectedGameweek: number | undefined
 
 	try {
@@ -201,7 +203,7 @@ export default async function TeamStatsPage({
 		const currentEvent = desk.context.currentEventId ?? 0
 		const latestPublished = desk.context.latestPublishedEventId ?? 0
 		const maxKnownEvent = Math.max(currentEvent, latestFinalized)
-		const maxKnownPublishedEvent = Math.max(maxKnownEvent, latestPublished)
+		maxKnownPublishedEvent = Math.max(maxKnownEvent, latestPublished)
 		const safeRequestedEvent =
 			requestedEventId !== null && requestedEventId <= maxKnownPublishedEvent
 				? requestedEventId
@@ -256,6 +258,7 @@ export default async function TeamStatsPage({
 			<TeamStatsClient
 				entryId={entryId}
 				currentGameweek={currentGameweek > 0 ? currentGameweek : 0}
+				initialMaxGameweek={maxKnownPublishedEvent}
 				initialSelectedGameweek={initialSelectedGameweek}
 				initialEntryEventResult={initialEntryEventResult}
 				initialEntryGameweekState={initialEntryGameweekState}

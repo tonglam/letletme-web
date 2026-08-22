@@ -477,6 +477,32 @@ const setCacheValue = <K, T>(
 	cache.set(key, { value, expiresAt: now + ttlMs })
 }
 
+export class SnapshotRequestSupersededError extends Error {
+	constructor() {
+		super('My FPL snapshot request was superseded by a newer revision')
+		this.name = 'SnapshotRequestSupersededError'
+	}
+}
+
+export const isSnapshotRequestSuperseded = (
+	error: unknown
+): error is SnapshotRequestSupersededError =>
+	error instanceof SnapshotRequestSupersededError ||
+	(error instanceof Error && error.name === 'SnapshotRequestSupersededError')
+
+const snapshotRequestKey = (entryId: number, revision: string | null): string =>
+	`${entryId}:${revision ?? 'legacy'}`
+
+const canCommitSnapshotResponse = (
+	entryId: number,
+	requestedRevision: string | null,
+	responseRevision: string | null
+): boolean => {
+	const currentRevision = peekEntrySnapshotMeta(entryId)?.revision ?? null
+	if (currentRevision !== requestedRevision) return false
+	return requestedRevision === null || responseRevision === requestedRevision
+}
+
 export const entryEventCache = new Map<
 	string,
 	TimedCacheValue<EntryEventResult | null>
@@ -499,7 +525,7 @@ const entrySnapshotMetaCache = new Map<
 >()
 const entryDeskStateCache = new Map<number, TimedCacheValue<MyFplReviewState>>()
 const entryHistoryInFlight = new Map<
-	number,
+	string,
 	Promise<EntryHistoryResponse['entryHistory']>
 >()
 const transferHistoryCache = new Map<
@@ -511,7 +537,7 @@ const transferHistoryStateCache = new Map<
 	TimedCacheValue<MyFplReviewState>
 >()
 const transferHistoryInFlight = new Map<
-	number,
+	string,
 	Promise<EntryGameweekTransfers[]>
 >()
 const entryEventStateCache = new Map<
@@ -530,8 +556,12 @@ const clearEntrySnapshotCaches = (entryId: number): void => {
 	entryHistoryStateCache.delete(entryId)
 	transferHistoryCache.delete(entryId)
 	transferHistoryStateCache.delete(entryId)
-	entryHistoryInFlight.delete(entryId)
-	transferHistoryInFlight.delete(entryId)
+	entryHistoryInFlight.forEach((_value, key) => {
+		if (key.startsWith(`${entryId}:`)) entryHistoryInFlight.delete(key)
+	})
+	transferHistoryInFlight.forEach((_value, key) => {
+		if (key.startsWith(`${entryId}:`)) transferHistoryInFlight.delete(key)
+	})
 	const prefix = `${entryId}:`
 	entryEventCache.forEach((_value, key) => {
 		if (key.startsWith(prefix)) entryEventCache.delete(key)
@@ -745,8 +775,8 @@ export const getEntryHistoryCached = async (
 ): Promise<EntryHistoryResponse['entryHistory']> => {
 	const requestedRevision = opts?.snapshotRevision ?? null
 	const cachedRevision = peekEntrySnapshotMeta(entryId)?.revision ?? null
-	const cacheMatchesRevision =
-		!requestedRevision || requestedRevision === cachedRevision
+	const requestRevision = requestedRevision ?? cachedRevision
+	const cacheMatchesRevision = requestRevision === cachedRevision
 	const cached = opts?.force
 		? undefined
 		: cacheMatchesRevision
@@ -754,7 +784,7 @@ export const getEntryHistoryCached = async (
 			: undefined
 	if (cached !== undefined) return cached
 	const inflight = cacheMatchesRevision
-		? entryHistoryInFlight.get(entryId)
+		? entryHistoryInFlight.get(snapshotRequestKey(entryId, requestRevision))
 		: undefined
 	if (inflight) return inflight
 	const request = executeQuery<MyFplTeamDeskResponse>(
@@ -764,6 +794,15 @@ export const getEntryHistoryCached = async (
 	)
 		.then(response => {
 			const snapshot = response.myFplTeamDesk
+			if (
+				!canCommitSnapshotResponse(
+					entryId,
+					requestRevision,
+					snapshot.snapshotMeta?.revision ?? null
+				)
+			) {
+				throw new SnapshotRequestSupersededError()
+			}
 			seedEntrySnapshotMeta(entryId, snapshot.snapshotMeta ?? null)
 			seedEntryDeskState(entryId, snapshot.state)
 			const history = historyFromMyFplDesk(snapshot)
@@ -771,9 +810,14 @@ export const getEntryHistoryCached = async (
 			return history
 		})
 		.finally(() => {
-			entryHistoryInFlight.delete(entryId)
+			const key = snapshotRequestKey(entryId, requestRevision)
+			if (entryHistoryInFlight.get(key) === request)
+				entryHistoryInFlight.delete(key)
 		})
-	entryHistoryInFlight.set(entryId, request)
+	entryHistoryInFlight.set(
+		snapshotRequestKey(entryId, requestRevision),
+		request
+	)
 	return request
 }
 
@@ -786,11 +830,9 @@ export const getEntryEventResultCached = async (
 		snapshotRevision?: string | null
 	}
 ): Promise<EntryEventResult | null> => {
-	const cacheKey = entryEventCacheKey(
-		entryId,
-		eventId,
-		opts?.snapshotRevision ?? peekEntrySnapshotMeta(entryId)?.revision
-	)
+	const requestRevision =
+		opts?.snapshotRevision ?? peekEntrySnapshotMeta(entryId)?.revision ?? null
+	const cacheKey = entryEventCacheKey(entryId, eventId, requestRevision)
 	const cached = opts?.force
 		? undefined
 		: getFreshCacheValue(entryEventCache, cacheKey)
@@ -809,6 +851,15 @@ export const getEntryEventResultCached = async (
 	)
 		.then(response => {
 			const gameweek = response.myFplTeamGameweek
+			if (
+				!canCommitSnapshotResponse(
+					entryId,
+					requestRevision,
+					gameweek.snapshotMeta?.revision ?? null
+				)
+			) {
+				throw new SnapshotRequestSupersededError()
+			}
 			seedEntrySnapshotMeta(entryId, gameweek.snapshotMeta ?? null)
 			const result = eventResultFromMyFplGameweek(gameweek)
 			setCacheValue(entryEventCache, cacheKey, result, ttl)
@@ -816,7 +867,8 @@ export const getEntryEventResultCached = async (
 			return result
 		})
 		.finally(() => {
-			entryEventInFlightCache.delete(cacheKey)
+			if (entryEventInFlightCache.get(cacheKey) === request)
+				entryEventInFlightCache.delete(cacheKey)
 		})
 	entryEventInFlightCache.set(cacheKey, request)
 	return request
@@ -828,14 +880,14 @@ export const getTransferHistoryCached = async (
 ): Promise<EntryGameweekTransfers[]> => {
 	const requestedRevision = opts?.snapshotRevision ?? null
 	const cachedRevision = peekEntrySnapshotMeta(entryId)?.revision ?? null
-	const cacheMatchesRevision =
-		!requestedRevision || requestedRevision === cachedRevision
+	const requestRevision = requestedRevision ?? cachedRevision
+	const cacheMatchesRevision = requestRevision === cachedRevision
 	const cached = cacheMatchesRevision
 		? getFreshCacheValue(transferHistoryCache, entryId)
 		: undefined
 	if (cached !== undefined) return cached
 	const inflight = cacheMatchesRevision
-		? transferHistoryInFlight.get(entryId)
+		? transferHistoryInFlight.get(snapshotRequestKey(entryId, requestRevision))
 		: undefined
 	if (inflight) return inflight
 	const request = executeQuery<MyFplTeamTransfersResponse>(
@@ -845,6 +897,15 @@ export const getTransferHistoryCached = async (
 	)
 		.then(response => {
 			const snapshot = response.myFplTeamTransfers
+			if (
+				!canCommitSnapshotResponse(
+					entryId,
+					requestRevision,
+					snapshot.snapshotMeta?.revision ?? null
+				)
+			) {
+				throw new SnapshotRequestSupersededError()
+			}
 			seedEntrySnapshotMeta(entryId, snapshot.snapshotMeta ?? null)
 			const state = snapshot.state
 			const transfers = transfersFromMyFpl(snapshot)
@@ -867,9 +928,14 @@ export const getTransferHistoryCached = async (
 			return transfers
 		})
 		.finally(() => {
-			transferHistoryInFlight.delete(entryId)
+			const key = snapshotRequestKey(entryId, requestRevision)
+			if (transferHistoryInFlight.get(key) === request)
+				transferHistoryInFlight.delete(key)
 		})
-	transferHistoryInFlight.set(entryId, request)
+	transferHistoryInFlight.set(
+		snapshotRequestKey(entryId, requestRevision),
+		request
+	)
 	return request
 }
 

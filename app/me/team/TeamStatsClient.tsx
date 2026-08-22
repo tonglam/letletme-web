@@ -19,7 +19,7 @@ import type { SeasonIdentity } from './_lib/team-stats-model'
 import type { SeasonPresentationPhase } from '@/lib/season-presentation'
 import { cn } from '@/lib/utils'
 import { AlertCircle, X } from 'lucide-react'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { TeamGameweekOverall } from './_components/TeamGameweekOverall'
@@ -43,6 +43,7 @@ import {
 interface TeamStatsClientProps {
 	entryId: number
 	currentGameweek: number
+	initialMaxGameweek?: number
 	initialSelectedGameweek?: number
 	initialEntryEventResult: EntryEventResult | null
 	initialEntryGameweekState?: MyFplReviewState
@@ -65,6 +66,7 @@ interface TeamStatsClientProps {
  */
 export default function TeamStatsClient(props: TeamStatsClientProps) {
 	const t = useTranslations('TeamStats')
+	const locale = useLocale()
 	const router = useRouter()
 	const pathname = usePathname()
 	const searchParams = useSearchParams()
@@ -102,14 +104,12 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 	})
 
 	// Prefer live current; fall back to selected seed / history-driven max
-	const maxGw =
-		currentGameweek > 0
-			? currentGameweek
-			: props.currentGameweek > 0
-				? props.currentGameweek
-				: initialSelectedGameweek > 0
-					? initialSelectedGameweek
-					: 0
+	const maxGw = Math.max(
+		props.initialMaxGameweek ?? 0,
+		currentGameweek > 0 ? currentGameweek : 0,
+		props.currentGameweek > 0 ? props.currentGameweek : 0,
+		initialSelectedGameweek > 0 ? initialSelectedGameweek : 0
+	)
 
 	const replaceQuery = useCallback(
 		(next: { view: TeamStatsPageView; gw: number | null }) => {
@@ -163,9 +163,11 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 					<Alert className="mb-6">
 						<AlertDescription>
 							{snapshotMeta.kind === 'FINAL'
-								? t('snapshotFinal', { date: formatSnapshotDate(snapshotMeta) })
+								? t('snapshotFinal', {
+										date: formatSnapshotDate(snapshotMeta, locale)
+									})
 								: t('snapshotProvisional', {
-										date: formatSnapshotDate(snapshotMeta)
+										date: formatSnapshotDate(snapshotMeta, locale)
 									})}{' '}
 							{snapshotMeta.freshness === 'STALE'
 								? t('snapshotStale')
@@ -263,10 +265,10 @@ interface TeamStatsViewsProps {
 	searchParamsGw: string | null
 }
 
-function formatSnapshotDate(meta: MyFplSnapshotMeta): string {
+function formatSnapshotDate(meta: MyFplSnapshotMeta, locale: string): string {
 	const value = new Date(meta.publishedAt)
 	return Number.isFinite(value.getTime())
-		? value.toLocaleString(undefined, {
+		? value.toLocaleString(locale, {
 				dateStyle: 'medium',
 				timeStyle: 'short'
 			})

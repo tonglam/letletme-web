@@ -444,8 +444,12 @@ export function useTournamentStats({
 				const board = nextState === 'READY' ? (desk.board ?? null) : null
 				const aggregate = nextState === 'READY' ? desk.aggregate : null
 				const rows = boardRowsToEventResults(board, nextTournament)
+				const nextSnapshotMeta = desk.snapshotMeta ?? null
+				if (nextSnapshotMeta?.revision) {
+					snapshotRevisionRef.current = nextSnapshotMeta.revision
+				}
 				setTournaments(desk.tournaments)
-				setSnapshotMeta(desk.snapshotMeta ?? null)
+				setSnapshotMeta(nextSnapshotMeta)
 				setCurrentGameweek(
 					desk.context.currentEventId ??
 						desk.context.latestFinalizedEventId ??

@@ -30,6 +30,7 @@ import {
 	peekTransferHistory,
 	peekTransferHistoryState,
 	seedTransferHistoryCache,
+	isSnapshotRequestSuperseded,
 	type SeasonIdentity,
 	type TeamSeasonLogs,
 	type TeamSeasonOverallSnapshot,
@@ -294,6 +295,7 @@ export function useTeamStats({
 					)
 				}
 			} catch (e) {
+				if (isSnapshotRequestSuperseded(e)) return
 				console.error('[team stats] history load failed:', e)
 				if (!cancelled) setBaseError(t('loadFailed'))
 			}
@@ -349,6 +351,7 @@ export function useTeamStats({
 				const history = peekEntryHistory(entryId)
 				if (history) rebuildSeasonLogs(history, transfers)
 			} catch (transferError) {
+				if (isSnapshotRequestSuperseded(transferError)) return
 				console.warn(
 					'[team stats] transfers deferred load failed:',
 					transferError
@@ -473,6 +476,7 @@ export function useTeamStats({
 				}
 				applyGameweekResult(entryEventResult)
 			} catch (loadError) {
+				if (isSnapshotRequestSuperseded(loadError)) return
 				if (requestId !== gwRequestIdRef.current) return
 				console.error('[team stats] gameweek load failed:', loadError)
 				setGameweekError(t('loadFailed'))
