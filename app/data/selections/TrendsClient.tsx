@@ -11,6 +11,11 @@ import {
 } from '@/lib/analytics/client-vitals'
 import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import {
+	isTrendCohortReady,
+	mergeVisibleTrendCohorts
+} from './_lib/trend-cohorts'
+import { buildTrendUrl } from './_lib/trend-url'
+import {
 	resolveTrendAvailabilityState,
 	trendAvailabilityLabelKey,
 	trendAvailabilityMessageKey
@@ -25,6 +30,8 @@ type Props = {
 	publicCohorts: TrendCohort[]
 	myCohorts: TrendCohort[]
 	canLoadMine: boolean
+	myCohortsLoadFailed: boolean
+	publicCohortsLoadFailed: boolean
 	initialDesk: TrendDesk | null
 	initialAccess: TrendAccess
 	initialCohortId: string | null
@@ -53,6 +60,8 @@ export default function TrendsClient({
 	publicCohorts,
 	myCohorts,
 	canLoadMine,
+	myCohortsLoadFailed,
+	publicCohortsLoadFailed,
 	initialDesk,
 	initialAccess,
 	initialCohortId,
@@ -61,7 +70,6 @@ export default function TrendsClient({
 }: Props) {
 	const t = useTranslations('Selections')
 	const [access, setAccess] = useState<TrendAccess>(initialAccess)
-	const [mineCohortState, setMineCohortState] = useState(myCohorts)
 	const [cohortId, setCohortId] = useState(initialCohortId ?? '')
 	const [eventId, setEventId] = useState(initialEventId)
 	const [committed, setCommitted] = useState<TrendDesk | null>(initialDesk)
@@ -87,11 +95,20 @@ export default function TrendsClient({
 	}, [initialAccess, initialDesk])
 
 	const cohorts = useMemo(
-		() => (access === 'MINE' ? mineCohortState : publicCohorts),
-		[access, mineCohortState, publicCohorts]
+		() => mergeVisibleTrendCohorts(myCohorts, publicCohorts),
+		[myCohorts, publicCohorts]
 	)
 	const selected =
-		cohorts.find(item => item.id === cohortId) ?? cohorts[0] ?? null
+		cohorts.find(item => item.id === cohortId && isTrendCohortReady(item)) ??
+		cohorts.find(isTrendCohortReady) ??
+		null
+	const groupedCohorts = useMemo(
+		() => ({
+			mine: cohorts.filter(item => item.access === 'MINE'),
+			public: cohorts.filter(item => item.access === 'PUBLIC')
+		}),
+		[cohorts]
+	)
 	const committedAvailability = committed
 		? resolveTrendAvailabilityState({
 				state: committed.cohort.availability,
@@ -106,29 +123,47 @@ export default function TrendsClient({
 	function updateUrl(
 		nextAccess: TrendAccess,
 		nextCohort: string,
-		nextEvent: number
+		nextEvent: number,
+		mode: 'push' | 'replace' = 'push'
 	) {
-		const url = new URL(window.location.href)
-		url.searchParams.set('cohort', nextCohort)
-		url.searchParams.set('gw', String(nextEvent))
-		url.searchParams.set('scope', nextAccess === 'MINE' ? 'mine' : 'public')
-		url.searchParams.delete('tournament')
-		window.history.pushState(
+		const url = buildTrendUrl(
+			window.location.href,
+			nextAccess,
+			nextCohort,
+			nextEvent
+		)
+		window.history[mode === 'replace' ? 'replaceState' : 'pushState'](
 			{ access: nextAccess, cohort: nextCohort, gw: nextEvent },
 			'',
-			`${url.pathname}?${url.searchParams.toString()}`
+			`${url.pathname}${url.search}${url.hash}`
 		)
 	}
 
+	useEffect(() => {
+		if (!initialCohortId) return
+		const currentUrl = new URL(window.location.href)
+		const selectedUrl = buildTrendUrl(
+			currentUrl.href,
+			initialAccess,
+			initialCohortId,
+			initialEventId
+		)
+		if (
+			`${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}` ===
+			`${selectedUrl.pathname}${selectedUrl.search}${selectedUrl.hash}`
+		)
+			return
+		updateUrl(initialAccess, initialCohortId, initialEventId, 'replace')
+	}, [initialAccess, initialCohortId, initialEventId])
+
 	async function select(
-		nextAccess: TrendAccess,
 		nextCohort: string,
 		nextEvent: number,
 		pushHistory = true
 	) {
-		const knownCohort = (
-			nextAccess === 'MINE' ? mineCohortState : publicCohorts
-		).find(item => item.id === nextCohort)
+		const knownCohort = cohorts.find(item => item.id === nextCohort)
+		if (!knownCohort || !isTrendCohortReady(knownCohort)) return
+		const nextAccess = knownCohort.access
 		const key = `${nextAccess}:${nextCohort}:${nextEvent}:${knownCohort?.revision ?? ''}`
 		setAccess(nextAccess)
 		setCohortId(nextCohort)
@@ -245,30 +280,30 @@ export default function TrendsClient({
 		}
 		lines.push(
 			typeof window !== 'undefined'
-				? window.location.href
+				? buildTrendUrl(
+						window.location.href,
+						access,
+						committed.cohort.id,
+						committed.eventId
+					).href
 				: 'https://letletme.top/explore/selections'
 		)
 		return lines.join('\n')
-	}, [committed, t])
+	}, [access, committed, t])
 
 	useEffect(() => {
-		const onPopState = (historyEvent: PopStateEvent) => {
+		const onPopState = () => {
 			const params = new URLSearchParams(window.location.search)
 			const nextCohort =
 				params.get('cohort') ?? params.get('tournament') ?? cohortId
 			const nextEvent = Number(params.get('gw') ?? eventId)
-			const historyAccess = historyEvent.state?.access
-			const nextAccess: TrendAccess =
-				historyAccess === 'MINE' || params.get('scope') === 'mine'
-					? 'MINE'
-					: 'PUBLIC'
 			if (nextCohort && Number.isInteger(nextEvent)) {
 				const normalizedCohort = /^(?:competition|custom|rank-sample):/i.test(
 					nextCohort
 				)
 					? nextCohort
 					: `competition:${nextCohort}`
-				void select(nextAccess, normalizedCohort, nextEvent, false)
+				void select(normalizedCohort, nextEvent, false)
 			}
 		}
 		window.addEventListener('popstate', onPopState)
@@ -334,71 +369,50 @@ export default function TrendsClient({
 					</div>
 				</div>
 
-				<div className="grid gap-3 rounded-xl border bg-card p-4 shadow-sm sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-end">
-					<label className="flex flex-col gap-1 text-sm font-medium">
-						<span>{t('scopeLabel')}</span>
-						<select
-							value={access}
-							onChange={event => {
-								const nextAccess = event.target.value as TrendAccess
-								if (
-									nextAccess === 'MINE' &&
-									mineCohortState.length === 0 &&
-									canLoadMine
-								) {
-									void fetch('/api/trends/my-cohorts', { cache: 'no-store' })
-										.then(async response => {
-											if (!response.ok)
-												throw new Error(`HTTP ${response.status}`)
-											const payload = (await response.json()) as {
-												cohorts?: TrendCohort[]
-											}
-											const loaded = payload.cohorts ?? []
-											setMineCohortState(loaded)
-											const next = loaded[0]
-											if (next) await select(nextAccess, next.id, eventId)
-										})
-										.catch(() => setError(t('myLeaguesError')))
-									return
-								}
-								const next = (
-									nextAccess === 'MINE' ? mineCohortState : publicCohorts
-								)[0]
-								if (next) void select(nextAccess, next.id, eventId)
-							}}
-							className="h-10 rounded-md border bg-background px-3"
-							aria-busy={pending}
-						>
-							<option value="PUBLIC">Public</option>
-							<option
-								value="MINE"
-								disabled={!canLoadMine && mineCohortState.length === 0}
-							>
-								My competitions
-							</option>
-						</select>
-					</label>
+				<div className="grid gap-3 rounded-xl border bg-card p-4 shadow-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
 					<label className="flex min-w-0 flex-col gap-1 text-sm font-medium">
 						<span>{t('leagueSelectorLabel')}</span>
 						<select
 							value={selected?.id ?? ''}
-							onChange={event =>
-								void select(access, event.target.value, eventId)
-							}
+							onChange={event => void select(event.target.value, eventId)}
 							className="h-10 min-w-0 rounded-md border bg-background px-3"
 							aria-busy={pending}
 						>
 							{cohorts.length === 0 && (
 								<option value="">{t('noLeagueOptions')}</option>
 							)}
-							{cohorts.map(item => (
-								<option
-									key={item.id}
-									value={item.id}
-								>
-									{item.displayName}
-								</option>
-							))}
+							{cohorts.length > 0 && !selected && (
+								<option value="">{t('leagueSelectorPlaceholder')}</option>
+							)}
+							{groupedCohorts.mine.length > 0 && (
+								<optgroup label={t('myLeagues')}>
+									{groupedCohorts.mine.map(item => (
+										<option
+											key={item.id}
+											value={item.id}
+											disabled={!isTrendCohortReady(item)}
+										>
+											{isTrendCohortReady(item)
+												? item.displayName
+												: t('competitionNotReady', {
+														name: item.displayName
+													})}
+										</option>
+									))}
+								</optgroup>
+							)}
+							{groupedCohorts.public.length > 0 && (
+								<optgroup label={t('publicLeagues')}>
+									{groupedCohorts.public.map(item => (
+										<option
+											key={item.id}
+											value={item.id}
+										>
+											{item.displayName}
+										</option>
+									))}
+								</optgroup>
+							)}
 						</select>
 					</label>
 					<label className="flex flex-col gap-1 text-sm font-medium">
@@ -406,8 +420,7 @@ export default function TrendsClient({
 						<select
 							value={eventId}
 							onChange={event =>
-								selected &&
-								void select(access, selected.id, Number(event.target.value))
+								selected && void select(selected.id, Number(event.target.value))
 							}
 							className="h-10 rounded-md border bg-background px-3"
 							aria-busy={pending}
@@ -428,6 +441,22 @@ export default function TrendsClient({
 				{!canLoadMine && (
 					<p className="mt-3 text-xs text-muted-foreground">{t('needEntry')}</p>
 				)}
+				{myCohortsLoadFailed && (
+					<p
+						className="mt-3 text-xs text-destructive"
+						role="status"
+					>
+						{t('myLeaguesError')}
+					</p>
+				)}
+				{publicCohortsLoadFailed && (
+					<p
+						className="mt-3 text-xs text-destructive"
+						role="status"
+					>
+						{t('publicLeaguesError')}
+					</p>
+				)}
 
 				<div
 					className="mt-6 min-h-[480px]"
@@ -443,7 +472,7 @@ export default function TrendsClient({
 								<button
 									type="button"
 									className="mt-3 rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted"
-									onClick={() => void select(access, selected.id, eventId)}
+									onClick={() => void select(selected.id, eventId)}
 								>
 									{t('retry')}
 								</button>
@@ -452,7 +481,9 @@ export default function TrendsClient({
 					)}
 					{!committed && !error && (
 						<div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-							{t('noLeagueOptions')}
+							{cohorts.length > 0
+								? t('noReadyLeagueOptions')
+								: t('noLeagueOptions')}
 						</div>
 					)}
 					{committed && (
@@ -494,8 +525,7 @@ export default function TrendsClient({
 							<div ref={shareRef}>
 								<div className="grid gap-4 md:grid-cols-2">
 									{committed.sections.map(section => {
-										const availability =
-											resolveTrendAvailabilityState(section)
+										const availability = resolveTrendAvailabilityState(section)
 										return (
 											<article
 												key={section.capability}
@@ -524,7 +554,6 @@ export default function TrendsClient({
 																className="rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted"
 																onClick={() =>
 																	void select(
-																		access,
 																		committed.cohort.id,
 																		committed.eventId,
 																		false
