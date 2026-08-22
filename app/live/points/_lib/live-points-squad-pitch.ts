@@ -6,10 +6,12 @@ export function mapPlayersToSquadPitch(
 	players: readonly Player[]
 ): SquadPitchPlayer[] {
 	return players.map(player => {
-		const teamCode = resolveSquadTeamCode(player.teamShort, player.team)
+		const teamShort =
+			typeof player.teamShort === 'string' ? player.teamShort : ''
+		const teamName = typeof player.team === 'string' ? player.team : ''
+		const teamCode = resolveSquadTeamCode(teamShort, teamName)
 		const teamBadgeLabel =
-			player.teamShort.trim().toUpperCase() ||
-			player.team.trim().slice(0, 3).toUpperCase()
+			teamShort.trim().toUpperCase() || teamName.trim().slice(0, 3).toUpperCase()
 
 		return {
 			id: player.id,
