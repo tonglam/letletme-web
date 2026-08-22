@@ -366,8 +366,8 @@ export function useTournamentStats({
 		if (
 			firstDeskLoadRef.current &&
 			tournamentId === Number(initialSelectedTournamentId) &&
-			initialReviewState !== 'PENDING' &&
-			(initialBoard !== null || initialReviewState !== 'EMPTY')
+			initialReviewState === 'READY' &&
+			initialBoard !== null
 		) {
 			firstDeskLoadRef.current = false
 			return () => controller.abort()

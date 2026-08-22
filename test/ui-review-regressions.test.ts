@@ -175,7 +175,8 @@ describe('asynchronous selection safety', () => {
 			tournamentHook,
 			/commitBoardPage\(boardWithViewer, standingsSearch\.trim\(\)\)/
 		)
-		assert.match(tournamentHook, /initialReviewState !== 'PENDING'/)
+		assert.match(tournamentHook, /initialReviewState === 'READY'/)
+		assert.match(tournamentHook, /initialBoard !== null/)
 		const searchFailure = tournamentHook.indexOf('board search failed:')
 		assert.ok(searchFailure >= 0)
 		assert.equal(
