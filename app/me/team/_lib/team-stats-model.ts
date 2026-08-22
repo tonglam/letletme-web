@@ -673,9 +673,12 @@ export function hydrateTeamStatsSessionCache(opts: {
 }
 
 export const getEntryHistoryCached = async (
-	entryId: number
+	entryId: number,
+	opts?: { force?: boolean }
 ): Promise<EntryHistoryResponse['entryHistory']> => {
-	const cached = getFreshCacheValue(entryHistoryCache, entryId)
+	const cached = opts?.force
+		? undefined
+		: getFreshCacheValue(entryHistoryCache, entryId)
 	if (cached !== undefined) return cached
 	const inflight = entryHistoryInFlight.get(entryId)
 	if (inflight) return inflight

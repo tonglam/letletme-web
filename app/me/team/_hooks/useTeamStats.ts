@@ -218,17 +218,25 @@ export function useTeamStats({
 		let cancelled = false
 		let retryTimer: number | undefined
 		const scheduleRetry = () => {
+			if (retryTimer !== undefined) return
 			retryTimer = window.setTimeout(() => {
 				if (!cancelled) setHistoryRetryNonce(value => value + 1)
 			}, 10_000)
 		}
-		const cachedHistory = peekEntryHistory(entryId)
-		if (cachedHistory !== undefined) {
-			const cachedDeskState = peekEntryDeskState(entryId)
+		const cachedDeskState = peekEntryDeskState(entryId)
+		const cachedHistoryState = peekEntryHistoryState(entryId)
+		const forceHistoryFetch =
+			historyRetryNonce > 0 &&
+			(cachedDeskState === 'PENDING' || cachedHistoryState === 'PENDING')
+		const cachedHistory = forceHistoryFetch
+			? undefined
+			: peekEntryHistory(entryId)
+		if (cachedHistory !== undefined && !forceHistoryFetch) {
 			if (cachedDeskState) setDeskState(cachedDeskState)
-			const cachedState = peekEntryHistoryState(entryId)
+			const cachedState = cachedHistoryState
 			if (cachedState) setPastSeasonsState(cachedState)
-			if (cachedState === 'PENDING') scheduleRetry()
+			if (cachedDeskState === 'PENDING' || cachedState === 'PENDING')
+				scheduleRetry()
 			return () => {
 				cancelled = true
 				if (retryTimer !== undefined) window.clearTimeout(retryTimer)
@@ -236,15 +244,18 @@ export function useTeamStats({
 		}
 		void (async () => {
 			try {
-				const history = await getEntryHistoryCached(entryId)
+				const history = await getEntryHistoryCached(entryId, {
+					force: forceHistoryFetch
+				})
 				if (cancelled || !history) return
 				const nextDeskState = peekEntryDeskState(entryId)
 				if (nextDeskState) setDeskState(nextDeskState)
 				const nextPastSeasonsState = peekEntryHistoryState(entryId)
 				if (nextPastSeasonsState) {
 					setPastSeasonsState(nextPastSeasonsState)
-					if (nextPastSeasonsState === 'PENDING') scheduleRetry()
 				}
+				if (nextDeskState === 'PENDING' || nextPastSeasonsState === 'PENDING')
+					scheduleRetry()
 				if (initialCurrentGameweek <= 0) {
 					setCurrentGameweek(
 						history.results.reduce(

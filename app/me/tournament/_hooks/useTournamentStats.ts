@@ -366,6 +366,7 @@ export function useTournamentStats({
 		if (
 			firstDeskLoadRef.current &&
 			tournamentId === Number(initialSelectedTournamentId) &&
+			initialReviewState !== 'PENDING' &&
 			(initialBoard !== null || initialReviewState !== 'EMPTY')
 		) {
 			firstDeskLoadRef.current = false
@@ -563,15 +564,10 @@ export function useTournamentStats({
 					if (!controller.signal.aborted) {
 						console.warn('[tournament stats] board search failed:', searchError)
 						setError(t('loadFailed'))
-						setTournamentStats(null)
-						// Keep the last known event/page context on a transient search
-						// failure. Clearing it makes a valid member look like an empty
-						// or unselected competition and loses the server-side cursor.
-						commitBoardPage(boardPageRef.current, standingsSearch.trim())
-						if (standingsSearch.trim() === '') {
-							setSeasonSnapshot(null)
-							setSeasonFieldRows([])
-						}
+						// Keep the last known stats and board cursor visible while the
+						// transient search error is shown. The old board search remains
+						// authoritative, so load-more stays disabled until a successful
+						// request matches the newly typed term.
 					}
 				})
 				.finally(() => {

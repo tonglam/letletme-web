@@ -175,6 +175,13 @@ describe('asynchronous selection safety', () => {
 			tournamentHook,
 			/commitBoardPage\(boardWithViewer, standingsSearch\.trim\(\)\)/
 		)
+		assert.match(tournamentHook, /initialReviewState !== 'PENDING'/)
+		const searchFailure = tournamentHook.indexOf('board search failed:')
+		assert.ok(searchFailure >= 0)
+		assert.equal(
+			tournamentHook.indexOf('setTournamentStats(null)', searchFailure),
+			-1
+		)
 		assert.match(tournamentHook, /setSeasonPath\(\[\]\)/)
 		assert.match(tournamentHook, /initialBoardSearchSkippedRef\.current/)
 		assert.match(tournamentHook, /latestFinalizedGameweek \?\? dataGameweek/)
@@ -225,5 +232,10 @@ describe('asynchronous selection safety', () => {
 		assert.match(teamSource, /error: gameweekError \?\? baseError/)
 		assert.match(teamSource, /peekTransferHistoryState\(entryId\)/)
 		assert.match(teamSource, /setTransferRetryNonce\(value => value \+ 1\)/)
+		assert.match(
+			teamSource,
+			/cachedDeskState === 'PENDING' \|\| cachedState === 'PENDING'/
+		)
+		assert.match(teamSource, /force: forceHistoryFetch/)
 	})
 })
