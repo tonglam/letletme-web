@@ -547,6 +547,7 @@
 		"autoHidden": "Auto refresh paused while this tab is hidden or offline.",
 		"autoPast": "Auto refresh paused for past or unavailable gameweeks.",
 		"scoreOfficial": "Official live",
+		"scorePartial": "Official live: {available}/{total} teams available",
 		"scoreDelayed": "Official data delayed",
 		"scoreFallback": "Local fallback",
 		"scoreSettling": "Settling",

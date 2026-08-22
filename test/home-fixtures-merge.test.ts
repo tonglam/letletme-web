@@ -19,6 +19,7 @@ const liveRow = (partial: Partial<LiveMatchdayDeskRow> = {}) =>
 		minutes: 90,
 		started: true,
 		finished: false,
+		finishedProvisional: false,
 		...partial
 	}) as LiveMatchdayDeskRow
 
@@ -61,5 +62,14 @@ describe('mergeLiveFixturesIntoHomeFixtures', () => {
 		assert.equal(fixture.homeTeam.shortName, '')
 		assert.equal(fixture.awayTeam.shortName, '')
 		assert.equal(fixture.homeTeam.name, 'Arsenal')
+	})
+
+	it('presents a provisional completion while preserving core identity', () => {
+		const [fixture] = mergeLiveFixturesIntoHomeFixtures(
+			[liveRow({ finishedProvisional: true })],
+			[]
+		)
+
+		assert.equal(fixture.finished, true)
 	})
 })

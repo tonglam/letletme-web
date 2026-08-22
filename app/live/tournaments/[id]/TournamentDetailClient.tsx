@@ -47,6 +47,7 @@ import {
 	buildTournamentEntries,
 	buildTournamentStats,
 	getRetainedFailedEntryIds,
+	mergeUnavailableTournamentEntryIds,
 	mergePartialTournamentRows
 } from '@/lib/tournament/liveEntries'
 import { Link, useRouter } from '@/i18n/navigation'
@@ -301,14 +302,14 @@ export default function TournamentDetailClient({
 			.sort()
 		return refreshTimes[0] ?? null
 	}, [rows])
-	const managerScoreSettling = rows.some(
-		row => row.score?.state === 'SETTLING'
-	)
+	const managerScoreSettling = rows.some(row => row.score?.state === 'SETTLING')
 	const managerScoreStatus = useMemo(() => {
-		if (currentTournament?.leagueType === 'H2H') {
-			return t('officialH2HLiveUnavailable')
-		}
 		const states = rows.map(row => row.score?.state)
+		const available = rows.filter(
+			row =>
+				row.score?.source !== 'UNAVAILABLE' &&
+				typeof row.score?.eventPoints === 'number'
+		).length
 		if (states.includes('SETTLING')) return scoreT('scoreSettling')
 		if (states.includes('STALE')) return scoreT('scoreDelayed')
 		if (
@@ -317,11 +318,14 @@ export default function TournamentDetailClient({
 		) {
 			return scoreT('scoreFallback')
 		}
+		if (available > 0 && available < rows.length) {
+			return scoreT('scorePartial', { available, total: rows.length })
+		}
 		if (rows.length === 0 || states.includes('UNAVAILABLE')) {
 			return scoreT('scoreUnavailable')
 		}
 		return scoreT('scoreOfficial')
-	}, [currentTournament?.leagueType, rows, scoreT, t])
+	}, [rows, scoreT])
 	const [staleEntryIds, setStaleEntryIds] = useState<ReadonlySet<number>>(
 		() => new Set()
 	)
@@ -526,8 +530,11 @@ export default function TournamentDetailClient({
 						)
 					}
 					const batch = response.entryLiveCompetitionsDesk
-					failedEntryCountRef.current = batch.failedEntryIds.length
-					const failedIds = batch.failedEntryIds
+					const failedIds = mergeUnavailableTournamentEntryIds(
+						batch.failedEntryIds,
+						batch.unavailableEntryIds ?? []
+					)
+					failedEntryCountRef.current = failedIds.length
 					const nextRows = batch.board ?? []
 					setRows(previousRows => {
 						const retainedIds = getRetainedFailedEntryIds({
@@ -554,7 +561,8 @@ export default function TournamentDetailClient({
 							? {
 									eventId: batch.eventId,
 									revision: batch.revision,
-									state: (batch.windowState ?? batch.state) as LiveSnapshotStatus['state'],
+									state: (batch.windowState ??
+										batch.state) as LiveSnapshotStatus['state'],
 									publishedAt: null,
 									checkedAt: null
 								}
@@ -563,7 +571,7 @@ export default function TournamentDetailClient({
 					if (batch.partial) {
 						setError(
 							t('partialResults', {
-								failed: batch.failedEntryIds.length,
+								failed: failedIds.length,
 								total: batch.totalEntries
 							})
 						)
@@ -618,8 +626,7 @@ export default function TournamentDetailClient({
 				if (generation !== refreshGenerationRef.current) return
 				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
 				const managerScoreDue = Boolean(
-					managerNextRefreshAt &&
-					Date.parse(managerNextRefreshAt) <= Date.now()
+					managerNextRefreshAt && Date.parse(managerNextRefreshAt) <= Date.now()
 				)
 				if (
 					!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot) &&
@@ -1006,7 +1013,7 @@ export default function TournamentDetailClient({
 								</Button>
 							</div>
 						) : null}
-						{currentTournament ? (
+						{currentTournament && (!isOfficialH2H || rows.length > 0) ? (
 							<p className="mb-4 text-right text-xs text-muted-foreground">
 								{managerScoreStatus}
 							</p>

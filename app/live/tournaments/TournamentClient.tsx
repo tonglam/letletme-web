@@ -40,6 +40,7 @@ import {
 	buildTournamentEntries,
 	buildTournamentStats,
 	getRetainedFailedEntryIds,
+	mergeUnavailableTournamentEntryIds,
 	mergePartialTournamentRows,
 	type LiveTournamentStats
 } from '@/lib/tournament/liveEntries'
@@ -64,6 +65,8 @@ const fetchLivePoints = async (
 	rows: TournamentLiveCalcData[]
 	failedCount: number
 	failedEntryIds: number[]
+	officialCoverage: number
+	unavailableEntryIds: number[]
 	totalEntries: number
 	snapshot: LiveSnapshotStatus | null
 }> => {
@@ -89,10 +92,16 @@ const fetchLivePoints = async (
 		)
 	}
 	const batch = response.entryLiveCompetitionsDesk
+	const unavailableEntryIds = mergeUnavailableTournamentEntryIds(
+		batch.failedEntryIds,
+		batch.unavailableEntryIds ?? []
+	)
 	return {
 		rows: batch.board ?? [],
-		failedCount: batch.failedEntryIds.length,
-		failedEntryIds: batch.failedEntryIds,
+		failedCount: unavailableEntryIds.length,
+		failedEntryIds: unavailableEntryIds,
+		officialCoverage: batch.officialCoverage ?? 0,
+		unavailableEntryIds,
 		totalEntries: batch.totalEntries,
 		snapshot: {
 			eventId: batch.eventId,
@@ -117,6 +126,7 @@ interface TournamentClientProps {
 	initialResultsLoaded?: boolean
 	initialResultsError?: string | null
 	initialSnapshot?: LiveSnapshotStatus | null
+	initialOfficialCoverage?: number
 }
 
 export default function TournamentClient({
@@ -127,7 +137,8 @@ export default function TournamentClient({
 	initialCurrentRows = [],
 	initialResultsLoaded = false,
 	initialResultsError = null,
-	initialSnapshot
+	initialSnapshot,
+	initialOfficialCoverage = 0
 }: TournamentClientProps) {
 	const t = useTranslations('LiveTournament')
 	const scoreT = useTranslations('LivePoints')
@@ -159,6 +170,9 @@ export default function TournamentClient({
 	const followsAnchorRef = useRef(true)
 	const [selectedRows, setSelectedRows] =
 		useState<TournamentLiveCalcData[]>(initialCurrentRows)
+	const [officialCoverage, setOfficialCoverage] = useState<number>(
+		initialOfficialCoverage
+	)
 	const [tableEntriesForShare, setTableEntriesForShare] = useState<
 		TournamentEntry[]
 	>([])
@@ -222,10 +236,17 @@ export default function TournamentClient({
 	}, [requestedTournamentId, tournaments])
 	const selectedTournamentKey = selectedTournament?.id ?? null
 	const managerScoreStatus = useMemo(() => {
-		if (selectedTournament?.leagueType === 'H2H') {
-			return t('officialH2HLiveUnavailable')
-		}
 		const states = selectedRows.map(row => row.score?.state)
+		const totalEntries = selectedTournament?.totalEntries || selectedRows.length
+		const rowCoverage = selectedRows.filter(
+			row =>
+				row.score?.source !== 'UNAVAILABLE' &&
+				typeof row.score?.eventPoints === 'number'
+		).length
+		const availableEntries =
+			officialCoverage > 0
+				? Math.min(totalEntries, Math.round(officialCoverage * totalEntries))
+				: rowCoverage
 		if (states.includes('SETTLING')) return scoreT('scoreSettling')
 		if (states.includes('STALE')) return scoreT('scoreDelayed')
 		if (
@@ -236,11 +257,17 @@ export default function TournamentClient({
 		) {
 			return scoreT('scoreFallback')
 		}
-		if (selectedRows.length === 0 || states.includes('UNAVAILABLE')) {
+		if (availableEntries > 0 && availableEntries < totalEntries) {
+			return scoreT('scorePartial', {
+				available: availableEntries,
+				total: totalEntries
+			})
+		}
+		if (selectedRows.length === 0 || availableEntries === 0) {
 			return scoreT('scoreUnavailable')
 		}
 		return scoreT('scoreOfficial')
-	}, [scoreT, selectedRows, selectedTournament?.leagueType, t])
+	}, [officialCoverage, scoreT, selectedRows, selectedTournament?.totalEntries])
 	const selectedSetupStatus = selectedTournament?.setupStatus
 	const selectedInsightsReadyAt = selectedTournament?.insightsReadyAt
 	const selectedSetupRepairExhausted = selectedTournament?.setupRepairExhausted
@@ -289,6 +316,7 @@ export default function TournamentClient({
 					}
 
 					failedEntryCountRef.current = currentBatch.failedCount
+					setOfficialCoverage(currentBatch.officialCoverage)
 					acceptSnapshot(currentBatch.snapshot)
 					// Read previous rows via functional update, then set rows + stale separately
 					// (avoid nested setState inside another updater).
@@ -320,6 +348,7 @@ export default function TournamentClient({
 					setResultsError(t('standingsFailed'))
 					if (!options.preserveOnError) {
 						setSelectedRows([])
+						setOfficialCoverage(0)
 						setStaleEntryIds(new Set())
 					}
 				} finally {
@@ -451,6 +480,7 @@ export default function TournamentClient({
 				setIsLoadingResults(false)
 				setResultsError(null)
 				setSelectedRows([])
+				setOfficialCoverage(0)
 				setStaleEntryIds(new Set())
 			}, 0)
 			return () => window.clearTimeout(resetTimer)
@@ -466,6 +496,7 @@ export default function TournamentClient({
 		resultsRequestIdRef.current += 1
 		resultsInFlightRef.current = null
 		setSelectedRows([])
+		setOfficialCoverage(0)
 		setStaleEntryIds(new Set())
 		setResultsError(null)
 		setIsLoadingResults(true)
