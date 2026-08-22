@@ -353,8 +353,8 @@ export const GET_LIVE_MATCHDAY_DESK = `
         homeScore
         awayScore
         kickoffTime
-        minutes
-        started
+		minutes
+		started
 			finished
 			finishedProvisional
 		}
@@ -426,12 +426,12 @@ export interface NotStartedMatch {
 	minutes: number
 	homeTeamId: number
 	homeTeamName: string
-	homeTeamShortName: string
+	homeTeamShortName?: string
 	homePosition: number
 	homeScore: number
 	awayTeamId: number
 	awayTeamName: string
-	awayTeamShortName: string
+	awayTeamShortName?: string
 	awayPosition: number
 	awayScore: number
 	kickoffTime: string
@@ -634,14 +634,10 @@ export type LiveProducerState =
 	| 'FINALIZED'
 
 export type LiveDataAvailability =
-	| 'SCHEDULED'
-	| 'FRESH'
-	| 'LAST_GOOD'
-	| 'FINAL'
-	| 'PARTIAL'
-	| 'UNAVAILABLE'
+	'SCHEDULED' | 'FRESH' | 'LAST_GOOD' | 'FINAL' | 'PARTIAL' | 'UNAVAILABLE'
 
-export type LiveAnchorMode = 'UPCOMING' | 'CURRENT' | 'PREVIOUS_FINAL' | 'OFFSEASON'
+export type LiveAnchorMode =
+	'UPCOMING' | 'CURRENT' | 'PREVIOUS_FINAL' | 'OFFSEASON'
 
 export const GET_LIVE_FIXTURE_PLAYERS = `
   query GetLiveFixturePlayers($ref: LiveRevisionRefInput!, $fixtureId: Int!) {
@@ -659,6 +655,84 @@ export const GET_LIVE_FIXTURE_PLAYERS = `
     }
   }
 `
+
+export interface LiveFixturePerformance {
+	player: {
+		id: number
+		webName: string
+		position: 'GOALKEEPER' | 'DEFENDER' | 'MIDFIELDER' | 'FORWARD'
+		team: { id: number; name: string; shortName: string } | null
+	} | null
+	minutes: number | null
+	goalsScored: number | null
+	assists: number | null
+	cleanSheets: number | null
+	goalsConceded: number | null
+	ownGoals: number | null
+	penaltiesSaved: number | null
+	penaltiesMissed: number | null
+	yellowCards: number | null
+	redCards: number | null
+	saves: number | null
+	bonus: number | null
+	bps: number | null
+	defensiveContribution: number | null
+	totalPoints: number
+}
+
+export interface LiveFixturePlayersData {
+	season: string
+	eventId: number
+	revision: string
+	fixtureId: number
+	players: LiveFixturePerformance[]
+}
+
+export interface LiveFixturePlayersBatchResponse {
+	fixture0: LiveFixturePlayersData
+	fixture1?: LiveFixturePlayersData
+	fixture2?: LiveFixturePlayersData
+	fixture3?: LiveFixturePlayersData
+	fixture4?: LiveFixturePlayersData
+}
+
+const LIVE_FIXTURE_PLAYERS_FRAGMENT = `
+	fragment LiveFixturePlayersBatchFields on LiveFixturePlayers {
+		season eventId revision fixtureId
+		players {
+			player { id webName position team { id name shortName } }
+			minutes goalsScored assists cleanSheets goalsConceded ownGoals
+			penaltiesSaved penaltiesMissed yellowCards redCards saves bonus bps
+			defensiveContribution totalPoints
+		}
+	}
+`
+
+/** Five fixtures per operation keeps one match window bounded without N+1 calls. */
+export function buildLiveFixturePlayersBatchQuery(count: number): string {
+	const boundedCount = Math.max(1, Math.min(5, Math.trunc(count)))
+	const definitions = Array.from(
+		{ length: boundedCount },
+		(_, index) => `$fixture${index}: Int!`
+	).join('\n\t\t')
+	const selections = Array.from(
+		{ length: boundedCount },
+		(_, index) =>
+			`fixture${index}: liveFixturePlayers(ref: $ref, fixtureId: $fixture${index}) { ...LiveFixturePlayersBatchFields }`
+	).join('\n\t\t')
+	return `
+		query GetLiveFixturePlayersBatch(
+			$ref: LiveRevisionRefInput!
+			${definitions}
+		) {
+			${selections}
+		}
+		${LIVE_FIXTURE_PLAYERS_FRAGMENT}
+	`
+}
+
+export const GET_LIVE_FIXTURE_PLAYERS_BATCH =
+	buildLiveFixturePlayersBatchQuery(5)
 
 export const GET_EVENT_LIVE_EXPLAIN = `
   query EventLiveExplainPlayer($eventId: Int!, $elementId: Int!) {

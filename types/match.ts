@@ -1,6 +1,7 @@
 export interface Match {
   id: string;
   homeTeam: {
+    id?: number;
     name: string;
     shortName: string;
     score: number;
@@ -16,6 +17,7 @@ export interface Match {
     };
   };
   awayTeam: {
+    id?: number;
     name: string;
     shortName: string;
     score: number;

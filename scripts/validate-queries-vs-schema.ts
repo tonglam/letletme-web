@@ -19,7 +19,8 @@ import {
 	getIntrospectionQuery,
 	GraphQLSchema,
 	parse,
-	validate
+	validate,
+	visit
 } from 'graphql'
 import { buildFixtureWindowQuery } from '../lib/fixture-window'
 import {
@@ -38,6 +39,8 @@ import {
 import {
 	GET_EVENT_LIVE_EXPLAIN,
 	GET_EVENT_LIVE_EXPLAINS,
+	GET_LIVE_FIXTURE_PLAYERS,
+	GET_LIVE_FIXTURE_PLAYERS_BATCH,
 	GET_LIVE_MATCHDAY_DESK,
 	GET_LIVE_POINTS,
 	GET_LIVE_SCORES,
@@ -82,6 +85,7 @@ import {
 	GET_MANAGED_TOURNAMENT,
 	GET_TOURNAMENT_ENTRY_RANKING_SUMMARY,
 	GET_TOURNAMENT_EVENT_RESULTS,
+	GET_TOURNAMENT_DETAIL_DESK,
 	GET_TOURNAMENT_LIVE_DESK,
 	GET_TOURNAMENT_METADATA,
 	GET_TOURNAMENT_OFFICIAL_H2H,
@@ -179,11 +183,14 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 	['GET_FIXTURE_WINDOW_5', buildFixtureWindowQuery(5)],
 	['GET_LIVE_POINTS', GET_LIVE_POINTS],
 	['GET_TOURNAMENT_LIVE_DESK', GET_TOURNAMENT_LIVE_DESK],
+	['GET_TOURNAMENT_DETAIL_DESK', GET_TOURNAMENT_DETAIL_DESK],
 	['SEARCH_ENTRIES', SEARCH_ENTRIES],
 	['GET_ENTRY_EVENT_RESULT', GET_ENTRY_EVENT_RESULT],
 	['GET_ENTRY_HISTORY', GET_ENTRY_HISTORY],
 	['GET_ENTRY_TRANSFER_HISTORY', GET_ENTRY_TRANSFER_HISTORY],
 	['GET_LIVE_MATCHDAY_DESK', GET_LIVE_MATCHDAY_DESK],
+	['GET_LIVE_FIXTURE_PLAYERS', GET_LIVE_FIXTURE_PLAYERS],
+	['GET_LIVE_FIXTURE_PLAYERS_BATCH', GET_LIVE_FIXTURE_PLAYERS_BATCH],
 	['GET_EVENT_LIVE_EXPLAIN', GET_EVENT_LIVE_EXPLAIN],
 	['GET_EVENT_LIVE_EXPLAINS', GET_EVENT_LIVE_EXPLAINS],
 	['GET_PLAYER_LIVE', GET_PLAYER_LIVE],
@@ -289,6 +296,17 @@ async function main(): Promise<void> {
 			continue
 		}
 		const errs = validate(schema, ast)
+		if (name === 'GET_LIVE_FIXTURE_PLAYERS_BATCH') {
+			let astNodes = 0
+			visit(ast, { enter: () => void (astNodes += 1) })
+			if (astNodes > 200) {
+				failed += 1
+				console.log(
+					`[LIMIT_FAIL] ${name}: ${astNodes} AST nodes exceeds the production limit of 200`
+				)
+				continue
+			}
+		}
 		if (errs.length > 0) {
 			failed += 1
 			console.log(`[SCHEMA_FAIL] ${name}`)
