@@ -198,6 +198,8 @@
 		"personalH2HScoredMatch": "你 {myPoints} — {opponentPoints} {opponent}",
 		"personalH2HNoMatch": "本轮没有官方对阵",
 		"personalH2HAverageTeam": "平均队",
+		"personalH2HBye": "轮空",
+		"personalH2HGameweek": "GW{event}",
 		"personalH2HOpponent": "对手",
 		"personalLivePoints": "我的实时积分",
 		"personalLiveCompetitions": "赛事实时榜",
