@@ -107,6 +107,14 @@ describe('Home first-screen performance boundary', () => {
 		assert.doesNotMatch(leagueList, /visible\.length\}\/\{rows\.length/)
 	})
 
+	it('keeps the Home Desk query compatible with the older GraphQL schema', () => {
+		assert.doesNotMatch(
+			homeGraphql,
+			/leagueRanks\s*\{[\s\S]*?^\s+leagueType\s*$/m
+		)
+		assert.match(leagueList, /startsWith\('h2h:'\)/)
+	})
+
 	it('switches fixtures through one GET route without shipping GraphQL or Radix tabs', () => {
 		assert.match(
 			matches,
