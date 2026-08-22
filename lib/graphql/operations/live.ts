@@ -696,37 +696,43 @@ export interface LiveFixturePlayersBatchResponse {
 	fixture4?: LiveFixturePlayersData
 }
 
-const LIVE_FIXTURE_PLAYERS_FIELDS = `
-	season eventId revision fixtureId
-	players {
-		player { id webName position team { id name shortName } }
-		minutes goalsScored assists cleanSheets goalsConceded ownGoals
-		penaltiesSaved penaltiesMissed yellowCards redCards saves bonus bps
-		defensiveContribution totalPoints
+const LIVE_FIXTURE_PLAYERS_FRAGMENT = `
+	fragment LiveFixturePlayersBatchFields on LiveFixturePlayers {
+		season eventId revision fixtureId
+		players {
+			player { id webName position team { id name shortName } }
+			minutes goalsScored assists cleanSheets goalsConceded ownGoals
+			penaltiesSaved penaltiesMissed yellowCards redCards saves bonus bps
+			defensiveContribution totalPoints
+		}
 	}
 `
 
 /** Five fixtures per operation keeps one match window bounded without N+1 calls. */
-export const GET_LIVE_FIXTURE_PLAYERS_BATCH = `
-	query GetLiveFixturePlayersBatch(
-		$ref: LiveRevisionRefInput!
-		$fixture0: Int!
-		$fixture1: Int!
-		$fixture2: Int!
-		$fixture3: Int!
-		$fixture4: Int!
-		$include1: Boolean!
-		$include2: Boolean!
-		$include3: Boolean!
-		$include4: Boolean!
-	) {
-		fixture0: liveFixturePlayers(ref: $ref, fixtureId: $fixture0) { ${LIVE_FIXTURE_PLAYERS_FIELDS} }
-		fixture1: liveFixturePlayers(ref: $ref, fixtureId: $fixture1) @include(if: $include1) { ${LIVE_FIXTURE_PLAYERS_FIELDS} }
-		fixture2: liveFixturePlayers(ref: $ref, fixtureId: $fixture2) @include(if: $include2) { ${LIVE_FIXTURE_PLAYERS_FIELDS} }
-		fixture3: liveFixturePlayers(ref: $ref, fixtureId: $fixture3) @include(if: $include3) { ${LIVE_FIXTURE_PLAYERS_FIELDS} }
-		fixture4: liveFixturePlayers(ref: $ref, fixtureId: $fixture4) @include(if: $include4) { ${LIVE_FIXTURE_PLAYERS_FIELDS} }
-	}
-`
+export function buildLiveFixturePlayersBatchQuery(count: number): string {
+	const boundedCount = Math.max(1, Math.min(5, Math.trunc(count)))
+	const definitions = Array.from(
+		{ length: boundedCount },
+		(_, index) => `$fixture${index}: Int!`
+	).join('\n\t\t')
+	const selections = Array.from(
+		{ length: boundedCount },
+		(_, index) =>
+			`fixture${index}: liveFixturePlayers(ref: $ref, fixtureId: $fixture${index}) { ...LiveFixturePlayersBatchFields }`
+	).join('\n\t\t')
+	return `
+		query GetLiveFixturePlayersBatch(
+			$ref: LiveRevisionRefInput!
+			${definitions}
+		) {
+			${selections}
+		}
+		${LIVE_FIXTURE_PLAYERS_FRAGMENT}
+	`
+}
+
+export const GET_LIVE_FIXTURE_PLAYERS_BATCH =
+	buildLiveFixturePlayersBatchQuery(5)
 
 export const GET_EVENT_LIVE_EXPLAIN = `
   query EventLiveExplainPlayer($eventId: Int!, $elementId: Int!) {
