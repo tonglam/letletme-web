@@ -224,7 +224,7 @@ export function LiveMatchesClient({
 				)
 				const context = probe.liveContext
 				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
-				const observedCurrentEventId = context?.eventId ?? undefined
+				const observedCurrentEventId = context?.anchorEventId ?? undefined
 				const observedNextEventId = context?.nextEventId ?? undefined
 				if (
 					observedCurrentEventId &&
@@ -349,7 +349,7 @@ export function LiveMatchesClient({
 			defensiveContribution: t('defensiveContribution'),
 			saves: t('saves'),
 			yellowCards: t('yellowCards'),
-			redCards: t('redCards'),
+			redCards: t('redCards')
 		}
 		const body = activeMatches
 			.map(match => formatMatchShareText(match, matchLabels))
@@ -382,7 +382,7 @@ export function LiveMatchesClient({
 				</Button>
 				{!isLoading || isRefreshing ? (
 					<LiveAutoRefreshCountdown
-						 enabled={autoRefreshEnabled}
+						enabled={autoRefreshEnabled}
 						onRefresh={autoRefreshMatches}
 						nextRefreshAt={snapshot?.nextRefreshAt}
 						renderLabel={seconds => t('autoRefresh', { seconds })}

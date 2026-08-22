@@ -6,13 +6,13 @@ import { liveContextToSnapshot } from '@/lib/live-refresh'
 import {
 	GET_ENTRY,
 	type EntryOverallSnapshot,
-	type EntrySummaryResponse,
+	type EntrySummaryResponse
 } from '@/lib/graphql/operations/entries'
 import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
 	type LiveCalcDataResponse,
-	type LiveSnapshotStatus,
+	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import { executeServerQuery } from '@/lib/graphql-server'
 
@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: `/live/points/${encodeURIComponent(id)}`,
 		titleKey: 'entryPointsTitle',
-		titleValues: { id },
+		titleValues: { id }
 	})
 }
 
@@ -62,7 +62,12 @@ export default async function Page({ params, searchParams }: PageProps) {
 		presentation.phase === 'OFFSEASON' ||
 		presentation.phase === 'UNAVAILABLE'
 	) {
-		return <SeasonPhaseState feature="points" presentation={presentation} />
+		return (
+			<SeasonPhaseState
+				feature="points"
+				presentation={presentation}
+			/>
+		)
 	}
 
 	const currentEventId =
@@ -72,7 +77,12 @@ export default async function Page({ params, searchParams }: PageProps) {
 			? presentation.latestFinishedEventId
 			: null)
 	if (!currentEventId) {
-		return <SeasonPhaseState feature="points" presentation={presentation} />
+		return (
+			<SeasonPhaseState
+				feature="points"
+				presentation={presentation}
+			/>
+		)
 	}
 	const initialEventId = requestedGameweek ?? currentEventId
 	const seedCurrentOverall = initialEventId === currentEventId
@@ -86,41 +96,43 @@ export default async function Page({ params, searchParams }: PageProps) {
 			executeServerQuery<LiveCalcDataResponse>(
 				GET_LIVE_POINTS,
 				{ eventId: initialEventId, entryId },
-				{ cache: 'no-store' },
+				{ cache: 'no-store' }
 			),
 			seedCurrentOverall
 				? executeServerQuery<EntrySummaryResponse>(
 						GET_ENTRY,
 						{ id: entryId },
-						{ cache: 'no-store' },
+						{ cache: 'no-store' }
 					)
-				: Promise.resolve(null),
+				: Promise.resolve(null)
 		])
 
 		if (liveResult.status === 'fulfilled') {
 			initialLiveData = liveResult.value.calcLivePointsByEntry
 			initialSnapshot =
-				liveContextToSnapshot(liveContext) ??
+				(liveContext?.anchorEventId === initialEventId
+					? liveContextToSnapshot(liveContext)
+					: null) ??
 				liveResult.value.calcLivePointsByEntry.snapshot ??
 				null
 		} else {
 			console.error('Failed to seed live points page:', liveResult.reason)
 		}
 
-		if (
-			overallResult.status === 'fulfilled' &&
-			overallResult.value?.entry
-		) {
+		if (overallResult.status === 'fulfilled' && overallResult.value?.entry) {
 			const entry = overallResult.value.entry
 			initialOverall = {
 				overallPoints: entry.overallPoints,
 				overallRank: entry.overallRank,
 				teamValue: entry.teamValue,
 				bank: entry.bank,
-				totalTransfers: entry.totalTransfers,
+				totalTransfers: entry.totalTransfers
 			}
 		} else if (overallResult.status === 'rejected') {
-			console.error('Failed to seed team overall snapshot:', overallResult.reason)
+			console.error(
+				'Failed to seed team overall snapshot:',
+				overallResult.reason
+			)
 		}
 	}
 
