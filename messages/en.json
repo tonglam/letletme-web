@@ -2604,7 +2604,7 @@
 	"Navigation": {
 		"primary": "Primary",
 		"menu": "Menu",
-		"openMenu": "Open navigation menu",
+		"openMenu": "Menu",
 		"live": "Live",
 		"briefing": "Briefing",
 		"livePoints": "Live Points",
@@ -2629,7 +2629,7 @@
 		"reportProblem": "Something not working?",
 		"signOut": "Sign out",
 		"signingOut": "Signing out…",
-		"signOutFailed": "Could not sign out. Please try again.",
+		"signOutFailed": "Sign out failed. Try again.",
 		"openAccountMenu": "Open account menu for {name}",
 		"accountLabel": "Account",
 		"fplTeamLabel": "FPL team",
@@ -2638,7 +2638,7 @@
 		"fplLinked": "Linked",
 		"fplNotLinked": "Not linked",
 		"fplTeamUntitled": "Untitled team",
-		"fplLinkHint": "Link an FPL entry to unlock live points and private competitions.",
+		"fplLinkHint": "Link an FPL entry for live points and private competitions.",
 		"linkFplTeam": "Link FPL team"
 	},
 	"Language": {
