@@ -3,10 +3,7 @@ import {
 	executePublicServerQuery,
 	withPublicRouteGraphQLIngress
 } from '@/lib/graphql-server'
-import {
-	GET_LIVE_MATCHDAY_DESK,
-	type LiveMatchdayDeskResponse
-} from '@/lib/graphql/operations/live'
+import { loadLiveMatchdayDesk, type QueryExecutor } from '@/lib/live-matches'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,25 +23,21 @@ async function handleGet(request: Request) {
 			{ status: 400 }
 		)
 	try {
-		const data = await executePublicServerQuery<LiveMatchdayDeskResponse>(
-			'gameweek',
-			GET_LIVE_MATCHDAY_DESK,
-			{ ref: { season, eventId, revision } },
-			{ cache: 'no-store' }
-		)
+		const executor: QueryExecutor = (query, variables, options) =>
+			executePublicServerQuery('gameweek', query, variables, options)
+		const data = await loadLiveMatchdayDesk(executor, {
+			season: season!,
+			eventId,
+			revision
+		})
 		const response = NextResponse.json(data)
 		response.headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate, no-transform')
 		response.headers.set('CDN-Cache-Control', 'no-store')
 		return response
 	} catch (error) {
-		const message = error instanceof Error ? error.message : ''
-		const status = message.includes('LIVE_REVISION_GONE') ? 409 : 503
 		return NextResponse.json(
-			{
-				error:
-					status === 409 ? 'LIVE_REVISION_GONE' : 'Live matches unavailable'
-			},
-			{ status, headers: { 'Cache-Control': 'no-store' } }
+			{ error: 'Live matches unavailable' },
+			{ status: 503, headers: { 'Cache-Control': 'no-store' } }
 		)
 	}
 }

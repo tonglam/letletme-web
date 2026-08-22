@@ -212,7 +212,8 @@ describe('live matches server snapshot', () => {
 						kickoffTime: '2026-08-11T18:00:00.000Z',
 						minutes: 0,
 						started: false,
-						finished: false
+						finished: false,
+						finishedProvisional: false
 					}
 				]
 			}

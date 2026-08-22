@@ -3,6 +3,7 @@ import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import { GET_TOURNAMENT_LIVE_DESK } from '@/lib/graphql/operations/tournaments'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getCurrentSeasonKey } from '@/lib/season'
+import { loadTournamentLiveDeskWithRevisionRecovery } from '@/lib/tournament/liveDesk'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,15 +33,15 @@ export async function GET(
 			{ status: 400 }
 		)
 	try {
-		const data = await executeServerQueryWithSession(
-			session,
-			GET_TOURNAMENT_LIVE_DESK,
-			{
-				entryId,
-				selectedTournamentId: tournamentId,
-				ref: { season: String(getCurrentSeasonKey()), eventId, revision }
-			},
-			{ cache: 'no-store', signal: request.signal }
+		const data = await loadTournamentLiveDeskWithRevisionRecovery(
+			ref =>
+				executeServerQueryWithSession(
+					session,
+					GET_TOURNAMENT_LIVE_DESK,
+					{ entryId, selectedTournamentId: tournamentId, ref },
+					{ cache: 'no-store', signal: request.signal }
+				),
+			{ season: String(getCurrentSeasonKey()), eventId, revision }
 		)
 		return NextResponse.json(data, {
 			headers: { 'Cache-Control': 'private, no-store' }

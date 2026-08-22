@@ -268,7 +268,7 @@ export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_INFO_FIELDS}
       live {
         eventId revision state partial failedEntryIds totalEntries
         rows {
-          entry provisional entryName playerName overallRank lastOverallRank overallPoints teamValue bank value
+          entry provisional rank entryName playerName overallRank lastOverallRank overallPoints teamValue bank value
           chip livePoints transferCost liveNetPoints liveTotalPoints played toPlay captainName
           score {
             eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
@@ -670,23 +670,22 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_TOURNAMENT_INFO_FIELDS}
       windowState
       dataAvailability
       tournaments { ...LiveTournamentInfoFields }
-	      selectedTournamentId
-	      managerRevision
-	      officialCoverage
-	      partial
+      selectedTournamentId
+      managerRevision
+      officialCoverage
+      unavailableEntryIds
+      partial
       failedEntryIds
       totalEntries
       board {
         entry
-        provisional
+        rank
         entryName
         playerName
         overallRank
         lastOverallRank
-        overallPoints
         teamValue
         bank
-        value
         chip
         score {
           eventPoints
@@ -708,10 +707,7 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_TOURNAMENT_INFO_FIELDS}
           reconciliation
           reasonCodes
         }
-        livePoints
         transferCost
-        liveNetPoints
-        liveTotalPoints
         played
         toPlay
         captainName
@@ -751,6 +747,7 @@ export interface BatchCalcMeta {
 export interface TournamentLiveCalcData {
 	entry: number
 	provisional?: boolean
+	rank?: number
 	score?: {
 		eventPoints: number | null
 		netEventPoints: number | null
@@ -784,10 +781,10 @@ export interface TournamentLiveCalcData {
 	/** teamValue + bank. */
 	value?: number | null
 	chip: string | null
-	livePoints: number
+	livePoints?: number
 	transferCost: number
-	liveNetPoints: number
-	liveTotalPoints: number
+	liveNetPoints?: number
+	liveTotalPoints?: number
 	played: number
 	toPlay: number
 	captainName: string

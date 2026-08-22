@@ -18,8 +18,7 @@ function mergeTeam(
 	return {
 		id: coreTeam?.id ?? fallback.id,
 		name: safeText(coreTeam?.name) || safeText(fallback.name),
-		shortName:
-			safeText(coreTeam?.shortName) || safeText(fallback.shortName)
+		shortName: safeText(coreTeam?.shortName) || safeText(fallback.shortName)
 	}
 }
 
@@ -31,14 +30,18 @@ export function mergeLiveFixturesIntoHomeFixtures(
 	rows: readonly LiveMatchdayDeskRow[],
 	coreFixtures: readonly CoreHomeFixture[]
 ): HomeFixture[] {
-	const coreByFixtureId = new Map(coreFixtures.map(fixture => [fixture.id, fixture]))
+	const coreByFixtureId = new Map(
+		coreFixtures.map(fixture => [fixture.id, fixture])
+	)
 
 	return rows.map(row => {
 		const core = coreByFixtureId.get(row.fixtureId)
 		return {
 			id: row.fixtureId,
 			eventId: row.eventId,
-			finished: Boolean(row.finished || core?.finished),
+			finished: Boolean(
+				row.finished || row.finishedProvisional || core?.finished
+			),
 			started: Boolean(row.started || core?.started),
 			kickoffTime: core?.kickoffTime ?? row.kickoffTime ?? null,
 			homeTeam: mergeTeam(core?.homeTeam, {

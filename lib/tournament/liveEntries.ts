@@ -11,6 +11,11 @@ export type LiveTournamentStats = {
 	totalEntries: number
 }
 
+export const mergeUnavailableTournamentEntryIds = (
+	failedEntryIds: readonly number[],
+	unavailableEntryIds: readonly number[]
+): number[] => Array.from(new Set([...failedEntryIds, ...unavailableEntryIds]))
+
 /**
  * Keep producer metadata independent from per-entry calculation failures.
  * A partial batch can still carry a valid SETTLED snapshot that must stop
@@ -18,24 +23,34 @@ export type LiveTournamentStats = {
  */
 export const getTournamentLiveBatchSeed = (
 	response: TournamentLivePointsResponse
-) => ({
-	rows: response.entryLiveCompetitionsDesk.board ?? [],
-	snapshot: {
-		eventId: response.entryLiveCompetitionsDesk.eventId,
-		revision: response.entryLiveCompetitionsDesk.revision,
-		state: (response.entryLiveCompetitionsDesk.windowState ??
-			response.entryLiveCompetitionsDesk.state) as LiveSnapshotStatus['state'],
-		publishedAt: null,
-		checkedAt: null,
-		windowState: response.entryLiveCompetitionsDesk
-			.windowState as LiveSnapshotStatus['windowState'],
-		dataAvailability: response.entryLiveCompetitionsDesk
-			.dataAvailability as LiveSnapshotStatus['dataAvailability'],
-		nextRefreshAt: response.entryLiveCompetitionsDesk.nextRefreshAt ?? null
-	},
-	failedCount: response.entryLiveCompetitionsDesk.failedEntryIds.length,
-	totalEntries: response.entryLiveCompetitionsDesk.totalEntries
-})
+) => {
+	const unavailableEntryIds = mergeUnavailableTournamentEntryIds(
+		response.entryLiveCompetitionsDesk.failedEntryIds,
+		response.entryLiveCompetitionsDesk.unavailableEntryIds ?? []
+	)
+	return {
+		rows: response.entryLiveCompetitionsDesk.board ?? [],
+		snapshot: {
+			eventId: response.entryLiveCompetitionsDesk.eventId,
+			revision: response.entryLiveCompetitionsDesk.revision,
+			state: (response.entryLiveCompetitionsDesk.windowState ??
+				response.entryLiveCompetitionsDesk
+					.state) as LiveSnapshotStatus['state'],
+			publishedAt: null,
+			checkedAt: null,
+			windowState: response.entryLiveCompetitionsDesk
+				.windowState as LiveSnapshotStatus['windowState'],
+			dataAvailability: response.entryLiveCompetitionsDesk
+				.dataAvailability as LiveSnapshotStatus['dataAvailability'],
+			nextRefreshAt: response.entryLiveCompetitionsDesk.nextRefreshAt ?? null
+		},
+		failedCount: unavailableEntryIds.length,
+		failedEntryIds: unavailableEntryIds,
+		officialCoverage: response.entryLiveCompetitionsDesk.officialCoverage ?? 0,
+		unavailableEntryIds,
+		totalEntries: response.entryLiveCompetitionsDesk.totalEntries
+	}
+}
 
 const mapEventChipToFlags = (eventChip: string | null) => ({
 	bench: eventChip === 'BENCH_BOOST',
@@ -105,10 +120,7 @@ export const buildTournamentEntries = (
 		const headlineEventPoints = row.score?.eventPoints ?? null
 		const headlineNetPoints = row.score?.netEventPoints ?? null
 		const headlineTotalPoints =
-			row.score?.totalScope === 'OVERALL' &&
-			typeof row.score.totalPoints === 'number'
-				? row.score.totalPoints
-				: null
+			typeof row.score?.totalPoints === 'number' ? row.score.totalPoints : null
 		const captainPick = row.pickList.find(player => player.isCaptain)
 		const effectiveCaptainPick =
 			row.score?.state === 'FINAL'
@@ -124,7 +136,11 @@ export const buildTournamentEntries = (
 
 		return {
 			id: String(row.entry),
-			rank: stale ? 0 : (currentRankByEntryId.get(row.entry) ?? 0),
+			rank: stale
+				? 0
+				: typeof row.rank === 'number' && row.rank > 0
+					? row.rank
+					: (currentRankByEntryId.get(row.entry) ?? 0),
 			teamName: row.entryName ?? `Entry ${row.entry}`,
 			managerName: row.playerName ?? '-',
 			captainName:
@@ -137,7 +153,7 @@ export const buildTournamentEntries = (
 			gwPoints: headlineEventPoints,
 			gwNetPoints: headlineNetPoints ?? undefined,
 			eventCost: row.transferCost ?? 0,
-			overallRank: row.overallRank ?? 0,
+			overallRank: row.score?.overallRank ?? row.overallRank ?? 0,
 			lastOverallRank:
 				typeof row.lastOverallRank === 'number'
 					? row.lastOverallRank
@@ -224,7 +240,7 @@ export const buildTournamentStats = (
 		return {
 			averagePoints: 0,
 			highestPoints: 0,
-			totalEntries: 0
+			totalEntries: entries.length
 		}
 	}
 
@@ -240,6 +256,6 @@ export const buildTournamentStats = (
 	return {
 		averagePoints: Math.round(totalPoints / liveEntries.length),
 		highestPoints,
-		totalEntries: liveEntries.length
+		totalEntries: entries.length
 	}
 }

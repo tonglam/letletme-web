@@ -13,6 +13,7 @@ import { liveContextToSnapshot } from '@/lib/live-refresh'
 import { getCurrentEntryId } from '@/lib/session'
 import { getCurrentSeasonKey } from '@/lib/season'
 import { getTournamentLiveBatchSeed } from '@/lib/tournament/liveEntries'
+import { loadTournamentLiveDeskWithRevisionRecovery } from '@/lib/tournament/liveDesk'
 import { areTournamentStandingsReady } from '@/lib/tournament/lifecycle'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 import { getTranslations } from 'next-intl/server'
@@ -50,16 +51,27 @@ export default async function Page({ params, searchParams }: PageProps) {
 		presentation.phase === 'PRESEASON' ||
 		liveContext?.windowState === 'PRESEASON' ||
 		liveContext?.windowState === 'OFFSEASON' ||
-			(!liveContext?.anchorEventId &&
-				presentation.phase !== 'BETWEEN_GAMEWEEKS') ||
+		(!liveContext?.anchorEventId &&
+			presentation.phase !== 'BETWEEN_GAMEWEEKS') ||
 		presentation.phase === 'UNAVAILABLE'
 	) {
-		return <SeasonPhaseState feature="competition" presentation={presentation} />
+		return (
+			<SeasonPhaseState
+				feature="competition"
+				presentation={presentation}
+			/>
+		)
 	}
 
-	const currentEventId = liveContext?.anchorEventId ?? presentation.currentEventId
+	const currentEventId =
+		liveContext?.anchorEventId ?? presentation.currentEventId
 	if (!currentEventId) {
-		return <SeasonPhaseState feature="competition" presentation={presentation} />
+		return (
+			<SeasonPhaseState
+				feature="competition"
+				presentation={presentation}
+			/>
+		)
 	}
 
 	let initialTournaments: ReturnType<
@@ -70,6 +82,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	let initialResultsLoaded = false
 	let initialResultsError: string | null = null
 	let initialSnapshot: LiveSnapshotStatus | null = null
+	let initialOfficialCoverage = 0
 
 	if (entryId) {
 		try {
@@ -87,19 +100,20 @@ export default async function Page({ params, searchParams }: PageProps) {
 							revision: context.revision
 						}
 					: null
-			const desk = await executeServerQuery<TournamentLivePointsResponse>(
-				GET_TOURNAMENT_LIVE_DESK,
-				{
-					entryId,
-					selectedTournamentId:
-						requestedTournamentId &&
-						Number.isSafeInteger(requestedTournamentIdNumber) &&
-						requestedTournamentIdNumber > 0
-							? requestedTournamentIdNumber
-							: null,
-					ref
-				},
-				{ cache: 'no-store' }
+			const selectedTournamentId =
+				requestedTournamentId &&
+				Number.isSafeInteger(requestedTournamentIdNumber) &&
+				requestedTournamentIdNumber > 0
+					? requestedTournamentIdNumber
+					: null
+			const desk = await loadTournamentLiveDeskWithRevisionRecovery(
+				liveRef =>
+					executeServerQuery<TournamentLivePointsResponse>(
+						GET_TOURNAMENT_LIVE_DESK,
+						{ entryId, selectedTournamentId, ref: liveRef },
+						{ cache: 'no-store' }
+					),
+				ref
 			)
 			initialTournaments = desk.entryLiveCompetitionsDesk.tournaments.map(
 				mapEntryTournamentToLiveTournament
@@ -117,6 +131,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			) {
 				const seed = getTournamentLiveBatchSeed(desk)
 				initialCurrentRows = seed.rows
+				initialOfficialCoverage = seed.officialCoverage
 				initialSnapshot = liveContextToSnapshot(liveContext) ?? seed.snapshot
 				if (seed.failedCount > 0) {
 					initialResultsError = liveT('partialResults', {
@@ -141,6 +156,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			initialResultsLoaded={initialResultsLoaded}
 			initialResultsError={initialResultsError}
 			initialSnapshot={initialSnapshot}
+			initialOfficialCoverage={initialOfficialCoverage}
 		/>
 	)
 }
