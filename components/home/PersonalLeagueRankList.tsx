@@ -5,11 +5,13 @@ import {
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import { Link } from '@/i18n/navigation'
 import type {
+	HomeH2HMatchupSide,
 	HomeLeagueRank,
 	HomeRankDirection
 } from '@/lib/graphql/operations/home'
 import { cn, formatInteger } from '@/lib/utils'
 import { getTranslations } from 'next-intl/server'
+import type { ReactNode } from 'react'
 
 const HOME_LEAGUE_RANK_LIMIT = 6
 
@@ -18,11 +20,7 @@ const HOME_LEAGUE_RANK_LIMIT = 6
 type HomeLeagueType = 'CLASSIC' | 'H2H'
 
 function getLeagueType(row: HomeLeagueRank): HomeLeagueType {
-	// The key fallback keeps the compact Home desk compatible with an older
-	// GraphQL deployment while the explicit field rolls out.
-	return row.leagueType === 'H2H' || row.key.toLowerCase().startsWith('h2h:')
-		? 'H2H'
-		: 'CLASSIC'
+	return row.leagueType
 }
 
 function MovementBadge({
@@ -56,22 +54,17 @@ function MovementBadge({
 	return <span className="text-caption text-muted-foreground/50">·</span>
 }
 
-function LeagueRow({
+function ClassicLeagueRow({
 	row,
-	ariaLabel,
-	elementTiming
+	ariaLabel
 }: {
 	row: HomeLeagueRank
 	ariaLabel: string
-	elementTiming?: string
 }) {
 	const rankDisplay = row.rank == null ? '—' : formatInteger(row.rank)
 	const body = (
 		<>
-			<span
-				className="min-w-0 flex-1 truncate text-sm font-medium leading-tight"
-				{...(elementTiming ? { elementtiming: elementTiming } : {})}
-			>
+			<span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
 				{row.name}
 			</span>
 			<span
@@ -94,7 +87,7 @@ function LeagueRow({
 	const rowClass = cn(
 		'flex min-h-11 w-full items-center gap-2 border-b border-border/40 py-2.5 last:border-b-0',
 		row.tournamentId != null &&
-			'transition-colors hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+			'rounded-sm transition-colors hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 	)
 
 	if (row.tournamentId == null) {
@@ -114,6 +107,202 @@ function LeagueRow({
 				{body}
 			</Link>
 		</li>
+	)
+}
+
+function H2HSide({
+	side,
+	align,
+	fallback
+}: {
+	side: HomeH2HMatchupSide
+	align: 'left' | 'right'
+	fallback: string
+}) {
+	const managerName =
+		side.playerName?.trim() || side.entryName?.trim() || fallback
+	const teamName = side.entryName?.trim()
+
+	return (
+		<div className={cn('min-w-0', align === 'right' && 'text-right')}>
+			<p className="truncate font-display text-sm font-bold leading-tight text-foreground">
+				{managerName}
+			</p>
+			{teamName && teamName !== managerName ? (
+				<p className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground">
+					{teamName}
+				</p>
+			) : null}
+		</div>
+	)
+}
+
+function LinkedH2HBody({
+	row,
+	children,
+	ariaLabel
+}: {
+	row: HomeLeagueRank
+	children: ReactNode
+	ariaLabel?: string
+}) {
+	const bodyClassName = cn(
+		'block w-full rounded-sm px-1 py-3',
+		row.tournamentId != null &&
+			'transition-colors hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+	)
+	if (row.tournamentId == null) {
+		return (
+			<li className="border-b border-border/40 last:border-b-0">
+				<div className={bodyClassName}>{children}</div>
+			</li>
+		)
+	}
+	const suffix = row.h2hMatchup
+		? `?gw=${encodeURIComponent(String(row.h2hMatchup.eventId))}`
+		: ''
+	return (
+		<li className="border-b border-border/40 last:border-b-0">
+			<Link
+				href={`/live/competitions/${row.tournamentId}${suffix}`}
+				prefetch={false}
+				className={bodyClassName}
+				aria-label={ariaLabel}
+			>
+				{children}
+			</Link>
+		</li>
+	)
+}
+
+function H2HLeagueRow({
+	row,
+	labels
+}: {
+	row: HomeLeagueRank
+	labels: {
+		averageTeam: string
+		bye: string
+		live: string
+		final: string
+		scheduled: string
+		noMatch: string
+		gameweek: (event: number) => string
+		rank: (rank: string) => string
+		scoredAria: (
+			myPoints: string,
+			opponentPoints: string,
+			opponent: string
+		) => string
+		scheduledAria: (opponent: string) => string
+	}
+}) {
+	const matchup = row.h2hMatchup
+	const rankDisplay = row.rank == null ? null : formatInteger(row.rank)
+	if (!matchup) {
+		return (
+			<LinkedH2HBody row={row}>
+				<div className="flex items-start justify-between gap-3">
+					<p className="min-w-0 truncate text-sm font-semibold">{row.name}</p>
+					{rankDisplay ? (
+						<span className="shrink-0 text-[10px] font-semibold text-muted-foreground">
+							{labels.rank(rankDisplay)}
+						</span>
+					) : null}
+				</div>
+				<p className="mt-2 text-xs text-muted-foreground">{labels.noMatch}</p>
+			</LinkedH2HBody>
+		)
+	}
+
+	const opponentFallback = matchup.opponent.isAverage
+		? labels.averageTeam
+		: matchup.isBye
+			? labels.bye
+			: labels.noMatch
+	const opponentName =
+		matchup.opponent.playerName?.trim() ||
+		matchup.opponent.entryName?.trim() ||
+		opponentFallback
+	const viewerPoints =
+		matchup.viewer.points == null ? '—' : formatInteger(matchup.viewer.points)
+	const opponentPoints =
+		matchup.opponent.points == null
+			? '—'
+			: formatInteger(matchup.opponent.points)
+	const showScore = matchup.isLive || matchup.isFinal
+	const statusLabel = matchup.isFinal
+		? labels.final
+		: matchup.isLive
+			? labels.live
+			: labels.scheduled
+	const matchupAriaLabel = showScore
+		? labels.scoredAria(viewerPoints, opponentPoints, opponentName)
+		: labels.scheduledAria(opponentName)
+	const ariaLabel = `${row.name}: ${matchupAriaLabel}`
+
+	return (
+		<LinkedH2HBody
+			row={row}
+			ariaLabel={ariaLabel}
+		>
+			<div data-home-h2h-matchup={matchup.officialMatchId}>
+				<div className="flex items-start justify-between gap-3">
+					<p className="min-w-0 truncate text-sm font-semibold">{row.name}</p>
+					<div className="flex shrink-0 items-center gap-1.5">
+						<span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+							{labels.gameweek(matchup.eventId)}
+						</span>
+						<span
+							className={cn(
+								'rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+								matchup.isLive
+									? 'bg-primary/15 text-primary-ink'
+									: 'bg-muted text-muted-foreground'
+							)}
+						>
+							{statusLabel}
+						</span>
+						{rankDisplay ? (
+							<span className="text-[10px] font-semibold text-muted-foreground">
+								{labels.rank(rankDisplay)}
+							</span>
+						) : null}
+					</div>
+				</div>
+
+				<div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3">
+					<H2HSide
+						side={matchup.viewer}
+						align="right"
+						fallback="—"
+					/>
+					{showScore ? (
+						<div className="grid min-w-[4.5rem] grid-cols-[1fr_auto_1fr] items-center rounded-md border border-border/80 bg-background px-2 py-2 text-center shadow-sm">
+							<span className="font-display text-base font-bold tabular-nums text-primary-ink">
+								{viewerPoints}
+							</span>
+							<span
+								className="mx-1 h-5 w-px bg-border"
+								aria-hidden="true"
+							/>
+							<span className="font-display text-base font-bold tabular-nums text-primary-ink">
+								{opponentPoints}
+							</span>
+						</div>
+					) : (
+						<div className="min-w-[4.5rem] rounded-md border border-border/80 bg-background px-2 py-2 text-center font-display text-xs font-bold text-muted-foreground shadow-sm">
+							VS
+						</div>
+					)}
+					<H2HSide
+						side={matchup.opponent}
+						align="left"
+						fallback={opponentFallback}
+					/>
+				</div>
+			</div>
+		</LinkedH2HBody>
 	)
 }
 
@@ -141,7 +330,25 @@ export async function PersonalLeagueRankList({
 			rows: rows.filter(row => getLeagueType(row) === 'H2H')
 		}
 	]
-	const renderRow = (row: HomeLeagueRank, elementTiming?: string) => {
+	const h2hLabels = {
+		averageTeam: t('personalH2HAverageTeam'),
+		bye: t('personalH2HBye'),
+		live: t('personalH2HLive'),
+		final: t('personalH2HFinal'),
+		scheduled: t('personalH2HScheduled'),
+		noMatch: t('personalH2HNoMatch'),
+		gameweek: (event: number) => t('personalH2HGameweek', { event }),
+		rank: (rank: string) => t('personalLeagueRank', { rank }),
+		scoredAria: (myPoints: string, opponentPoints: string, opponent: string) =>
+			t('personalH2HScoredMatch', {
+				myPoints,
+				opponentPoints,
+				opponent
+			}),
+		scheduledAria: (opponent: string) =>
+			t('personalH2HScheduledMatch', { opponent })
+	}
+	const renderClassicRow = (row: HomeLeagueRank) => {
 		const rankDisplay = row.rank == null ? '—' : formatInteger(row.rank)
 		const ariaMove =
 			row.movement.direction === 'UP'
@@ -152,14 +359,23 @@ export async function PersonalLeagueRankList({
 						? t('personalLeagueFlat')
 						: t('personalLeagueNoChange')
 		return (
-			<LeagueRow
+			<ClassicLeagueRow
 				key={row.key}
 				row={row}
 				ariaLabel={`${t('personalLeagueRank', { rank: rankDisplay })}, ${ariaMove}`}
-				elementTiming={elementTiming}
 			/>
 		)
 	}
+	const renderRow = (group: (typeof groups)[number], row: HomeLeagueRank) =>
+		group.type === 'H2H' ? (
+			<H2HLeagueRow
+				key={row.key}
+				row={row}
+				labels={h2hLabels}
+			/>
+		) : (
+			renderClassicRow(row)
+		)
 	const renderGroup = (group: (typeof groups)[number], groupIndex: number) => {
 		const initialRows = group.rows.slice(0, HOME_LEAGUE_RANK_LIMIT)
 		const remainingRows = group.rows.slice(HOME_LEAGUE_RANK_LIMIT)
@@ -194,7 +410,7 @@ export async function PersonalLeagueRankList({
 				) : (
 					<>
 						<ul className="rounded-lg border surface-inset-soft px-3">
-							{initialRows.map(row => renderRow(row))}
+							{initialRows.map(row => renderRow(group, row))}
 						</ul>
 						{remainingRows.length > 0 ? (
 							<details className="group mt-2.5">
@@ -213,7 +429,7 @@ export async function PersonalLeagueRankList({
 									</span>
 								</summary>
 								<ul className="mt-2 rounded-lg border surface-inset-soft px-3">
-									{remainingRows.map(row => renderRow(row))}
+									{remainingRows.map(row => renderRow(group, row))}
 								</ul>
 							</details>
 						) : null}
