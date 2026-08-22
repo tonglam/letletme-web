@@ -141,7 +141,6 @@ export const GET_HOME_PERSONAL_DESK = /* GraphQL */ `
 			leagueRanks {
 				key
 				name
-				leagueType
 				rank
 				movement {
 					direction
@@ -375,7 +374,8 @@ export type HomeRankDirection = 'UP' | 'DOWN' | 'FLAT' | 'UNKNOWN'
 export type HomeLeagueRank = {
 	key: string
 	name: string
-	leagueType: 'CLASSIC' | 'H2H'
+	/** Optional until every GraphQL deployment exposes the H2H enum field. */
+	leagueType?: 'CLASSIC' | 'H2H' | null
 	rank: number | null
 	movement: { direction: HomeRankDirection; places: number | null }
 	tournamentId: number | null
