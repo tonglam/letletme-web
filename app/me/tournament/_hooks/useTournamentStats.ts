@@ -102,7 +102,26 @@ async function fetchDesk(
 		{ tournamentId, eventId },
 		{ cache: 'no-store', signal }
 	)
-	return response.myFplCompetitionsDesk
+	const desk = response.myFplCompetitionsDesk
+	if (
+		desk.state !== 'READY' ||
+		desk.selectedTournamentId === null ||
+		desk.eventId === null
+	) {
+		return { ...desk, board: null }
+	}
+	const boardResponse = await executeQuery<MyFplCompetitionBoardResponse>(
+		GET_MY_FPL_COMPETITION_BOARD,
+		{
+			tournamentId: desk.selectedTournamentId,
+			eventId: desk.eventId,
+			page: 1,
+			pageSize: 100,
+			search: null
+		},
+		{ cache: 'no-store', signal }
+	)
+	return { ...desk, board: boardResponse.myFplCompetitionBoard }
 }
 
 export function useTournamentStats({
@@ -401,7 +420,7 @@ export function useTournamentStats({
 					desk.state === 'READY'
 						? (desk.board?.state ?? desk.state)
 						: desk.state
-				const board = nextState === 'READY' ? desk.board : null
+				const board = nextState === 'READY' ? (desk.board ?? null) : null
 				const aggregate = nextState === 'READY' ? desk.aggregate : null
 				const rows = boardRowsToEventResults(board, nextTournament)
 				setTournaments(desk.tournaments)
