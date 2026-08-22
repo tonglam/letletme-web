@@ -2604,7 +2604,7 @@
 	"Navigation": {
 		"primary": "主导航",
 		"menu": "菜单",
-		"openMenu": "打开菜单",
+		"openMenu": "打开导航菜单",
 		"live": "实时",
 		"briefing": "资讯",
 		"livePoints": "实时积分",
@@ -2638,7 +2638,7 @@
 		"fplLinked": "已绑定",
 		"fplNotLinked": "未绑定",
 		"fplTeamUntitled": "未命名球队",
-		"fplLinkHint": "绑定 FPL 球队即可使用实时积分和私人赛事。",
+		"fplLinkHint": "绑定 FPL 球队后即可使用实时积分和私人赛事。",
 		"linkFplTeam": "绑定 FPL 球队"
 	},
 	"Language": {

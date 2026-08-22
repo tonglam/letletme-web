@@ -2604,7 +2604,7 @@
 	"Navigation": {
 		"primary": "Primary",
 		"menu": "Menu",
-		"openMenu": "Menu",
+		"openMenu": "Open menu",
 		"live": "Live",
 		"briefing": "Briefing",
 		"livePoints": "Live Points",
@@ -2623,13 +2623,13 @@
 		"market": "Market",
 		"trends": "Trends",
 		"players": "Players",
-		"priceChanges": "Price Changes",
+		"priceChanges": "Price moves",
 		"login": "Login",
 		"profileSettings": "Profile settings",
 		"reportProblem": "Something not working?",
 		"signOut": "Sign out",
 		"signingOut": "Signing out…",
-		"signOutFailed": "Sign out failed. Try again.",
+		"signOutFailed": "Could not sign out. Please try again.",
 		"openAccountMenu": "Open account menu for {name}",
 		"accountLabel": "Account",
 		"fplTeamLabel": "FPL team",
@@ -2638,7 +2638,7 @@
 		"fplLinked": "Linked",
 		"fplNotLinked": "Not linked",
 		"fplTeamUntitled": "Untitled team",
-		"fplLinkHint": "Link an FPL entry for live points and private competitions.",
+		"fplLinkHint": "Link FPL: live points and private competitions.",
 		"linkFplTeam": "Link FPL team"
 	},
 	"Language": {
