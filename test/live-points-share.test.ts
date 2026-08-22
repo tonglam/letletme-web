@@ -136,6 +136,26 @@ describe('formatLivePointsShareText', () => {
 				entry: 6953,
 				entryName: "Tong's Team",
 				playerName: 'Tong Lam',
+				score: {
+					eventPoints: 101,
+					netEventPoints: 97,
+					totalPoints: 145,
+					totalScope: 'OVERALL',
+					eventRank: null,
+					overallRank: null,
+					leagueRank: null,
+					transferCost: 4,
+					source: 'FPL_ENTRY_SUMMARY',
+					state: 'FRESH',
+					eventPointSemantics: 'UNKNOWN',
+					revision: 'test-revision',
+					checkedAt: null,
+					upstreamUpdatedAt: null,
+					staleAt: null,
+					nextRefreshAt: null,
+					reconciliation: 'MATCHED',
+					reasonCodes: []
+				},
 				livePoints: 101,
 				liveNetPoints: 97,
 				liveTotalPoints: 145,
@@ -165,7 +185,7 @@ describe('formatLivePointsShareText', () => {
 		)
 	})
 
-	it('omits hits when transfer cost is zero and shows chip name', () => {
+	it('omits hits when transfer cost is zero and shows the chip code', () => {
 		const text = formatLivePointsShareText({
 			gameweek: 12,
 			liveData: {
@@ -223,7 +243,7 @@ describe('formatLivePointsShareText', () => {
 })
 
 describe('formatChipName', () => {
-	it('maps API enums and short codes', () => {
+	it('maps API enums and short codes to stable FPL chip codes', () => {
 		assert.equal(formatChipName('BENCH_BOOST'), 'BB')
 		assert.equal(formatChipName('bboost'), 'BB')
 		assert.equal(formatChipName('TRIPLE_CAPTAIN'), 'TC')

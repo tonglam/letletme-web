@@ -128,6 +128,7 @@ export default function TournamentClient({
 	initialSnapshot
 }: TournamentClientProps) {
 	const t = useTranslations('LiveTournament')
+	const scoreT = useTranslations('LivePoints')
 	const lifecycleT = useTranslations('TournamentLifecycle')
 	const isPageActive = usePageActive()
 	const router = useRouter()
@@ -177,6 +178,16 @@ export default function TournamentClient({
 		() => buildTournamentStats(selectedEntries),
 		[selectedEntries]
 	)
+	const managerNextRefreshAt = useMemo(() => {
+		const refreshTimes = selectedRows
+			.map(row => row.score?.nextRefreshAt)
+			.filter((value): value is string => Boolean(value))
+			.sort()
+		return refreshTimes[0] ?? null
+	}, [selectedRows])
+	const managerScoreSettling = selectedRows.some(
+		row => row.score?.state === 'SETTLING'
+	)
 	const initialResultsKeyRef = useRef(
 		initialResultsLoaded && initialSelectedTournamentId && initialEventId
 			? `${initialSelectedTournamentId}:${initialEventId}`
@@ -207,6 +218,18 @@ export default function TournamentClient({
 		return tournaments[0] ?? null
 	}, [requestedTournamentId, tournaments])
 	const selectedTournamentKey = selectedTournament?.id ?? null
+	const managerScoreStatus = useMemo(() => {
+		if (selectedTournament?.leagueType === 'H2H') {
+			return t('officialH2HLiveUnavailable')
+		}
+		const states = selectedRows.map(row => row.score?.state)
+		if (states.includes('SETTLING')) return scoreT('scoreSettling')
+		if (states.includes('STALE')) return scoreT('scoreDelayed')
+		if (selectedRows.length === 0 || states.includes('UNAVAILABLE')) {
+			return scoreT('scoreUnavailable')
+		}
+		return scoreT('scoreOfficial')
+	}, [scoreT, selectedRows, selectedTournament?.leagueType, t])
 	const selectedSetupStatus = selectedTournament?.setupStatus
 	const selectedInsightsReadyAt = selectedTournament?.insightsReadyAt
 	const selectedSetupRepairExhausted = selectedTournament?.setupRepairExhausted
@@ -471,7 +494,9 @@ export default function TournamentClient({
 			isPageActive,
 			currentEventId: currentGameweek,
 			selectedEventId: selectedGameweek,
-			snapshot
+			snapshot,
+			managerScoreState: managerScoreSettling ? 'SETTLING' : null,
+			managerNextRefreshAt
 		})
 	const refreshTournamentResults = useCallback(
 		async (revision?: string | null) => {
@@ -501,7 +526,14 @@ export default function TournamentClient({
 				)
 				if (requestId !== resultsRequestIdRef.current) return
 				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
-				if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
+				const managerScoreDue = Boolean(
+					managerNextRefreshAt &&
+					Date.parse(managerNextRefreshAt) <= Date.now()
+				)
+				if (
+					!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot) &&
+					!managerScoreDue
+				) {
 					acceptSnapshot(observedSnapshot)
 					if (failedEntryCountRef.current === 0) setResultsError(null)
 					return
@@ -525,7 +557,8 @@ export default function TournamentClient({
 		refreshTournamentResults,
 		selectedTournament,
 		standingsReady,
-		t
+		t,
+		managerNextRefreshAt
 	])
 	const captainOptions = useMemo(
 		() =>
@@ -630,7 +663,7 @@ export default function TournamentClient({
 				: filteredEntries.slice(0, 20)
 		for (const entry of entriesInTableOrder.slice(0, 20)) {
 			lines.push(
-				`- ${entry.rank || '—'} ${entry.teamName} · ${entry.gwPoints} GW · ${entry.totalPoints} total`
+				`- ${entry.rank || '—'} ${entry.teamName} · ${entry.gwPoints ?? '—'} GW · ${entry.totalPoints ?? '—'} total`
 			)
 		}
 		lines.push(
@@ -794,6 +827,11 @@ export default function TournamentClient({
 							{t('refresh')}
 						</Button>
 					</div>
+					{selectedTournament ? (
+						<p className="mt-2 text-right text-xs text-muted-foreground">
+							{managerScoreStatus}
+						</p>
+					) : null}
 				</Card>
 
 				{isLoadingTournaments && (

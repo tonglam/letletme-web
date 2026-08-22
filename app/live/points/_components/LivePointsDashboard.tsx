@@ -110,6 +110,18 @@ export function LivePointsDashboard({
 		)
 	})()
 	const gameweek = selectedGameweek ?? liveData?.event ?? currentGameweek
+	const officialEventPoints = liveData?.score?.eventPoints ?? null
+	const officialTotalPoints =
+		liveData?.score?.totalScope === 'OVERALL'
+			? liveData.score.totalPoints
+			: null
+	const scoreStatus = (() => {
+		const score = liveData?.score
+		if (!score || score.state === 'UNAVAILABLE') return t('scoreUnavailable')
+		if (score.state === 'SETTLING') return t('scoreSettling')
+		if (score.state === 'STALE') return t('scoreDelayed')
+		return t('scoreOfficial')
+	})()
 	const squadTitle = liveData?.entryName ?? `Entry ${liveData?.entry ?? ''}`
 	const squadPitchLabels = {
 		formation: t('squadFormation', { title: squadTitle }),
@@ -127,15 +139,17 @@ export function LivePointsDashboard({
 	}
 	const showLiveOverallRank =
 		overall != null && gameweek === currentGameweek
+	const officialOverallRank =
+		liveData?.score?.overallRank ?? overall?.overallRank ?? null
 	const pitchHeaderStats = liveData
 		? {
 				eyebrow: showLiveOverallRank
-					? `${t('pitchTotalPoints')} ${formatOverallPoints(liveData.liveTotalPoints)} · ${t('pitchOverallRank')} ${formatOverallRank(overall.overallRank, { notation: 'compact' })}`
-					: `${t('pitchTotalPoints')} ${formatOverallPoints(liveData.liveTotalPoints)}`,
+					? `${t('pitchTotalPoints')} ${formatOverallPoints(officialTotalPoints)} · ${t('pitchOverallRank')} ${formatOverallRank(officialOverallRank, { notation: 'compact' })}`
+					: `${t('pitchTotalPoints')} ${formatOverallPoints(officialTotalPoints)}`,
 				details: [
 					{
 						label: t('pitchGameweekPoints'),
-						value: formatOverallPoints(liveData.livePoints),
+						value: formatOverallPoints(officialEventPoints),
 						accent: true
 					},
 					{
@@ -223,6 +237,14 @@ export function LivePointsDashboard({
 								? t('autoHidden')
 								: t('autoPast')}
 					</p>
+					{liveData ? (
+						<p className="text-xs text-muted-foreground" role="status">
+							{scoreStatus}
+							{liveData.score?.reconciliation === 'SOURCE_SKEW'
+								? ` · ${t('scoreDetailsSyncing')}`
+								: ''}
+						</p>
+					) : null}
 					<div className="flex flex-wrap items-center gap-2 sm:gap-3">
 						<LivePointsAutoRefreshCountdown
 							enabled={autoRefreshEnabled}

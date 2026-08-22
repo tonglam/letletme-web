@@ -130,6 +130,8 @@ export function TournamentTable({
 
 			let valueA: number
 			let valueB: number
+			let unknownA = false
+			let unknownB = false
 
 			switch (sortColumn) {
 				case 'overallRank':
@@ -147,12 +149,16 @@ export function TournamentTable({
 					valueB = b.eventCost ?? 0
 					break
 				case 'gwPoints':
-					valueA = a.gwPoints ?? a.livePoints
-					valueB = b.gwPoints ?? b.livePoints
+					valueA = a.gwPoints ?? a.livePoints ?? 0
+					valueB = b.gwPoints ?? b.livePoints ?? 0
+					unknownA = a.gwPoints == null && a.livePoints == null
+					unknownB = b.gwPoints == null && b.livePoints == null
 					break
 				case 'totalPoints':
-					valueA = a.totalPoints
-					valueB = b.totalPoints
+					valueA = a.totalPoints ?? 0
+					valueB = b.totalPoints ?? 0
+					unknownA = a.totalPoints == null
+					unknownB = b.totalPoints == null
 					break
 				case 'teamValue':
 					valueA = a.teamValue ?? -1
@@ -164,6 +170,7 @@ export function TournamentTable({
 					valueA = a.rank > 0 ? a.rank : Number.MAX_SAFE_INTEGER
 					valueB = b.rank > 0 ? b.rank : Number.MAX_SAFE_INTEGER
 			}
+			if (unknownA !== unknownB) return unknownA ? 1 : -1
 
 			const primary =
 				sortDirection === 'asc' ? valueA - valueB : valueB - valueA
@@ -339,9 +346,9 @@ export function TournamentTable({
 							const isChecked = compareSelection.some(e => e.id === entry.id)
 							const isDisabled = !isChecked && compareSelection.length >= 2
 							const isMe = isViewerEntry(entry, viewerEntryId)
-							const gwPts = entry.gwPoints ?? entry.livePoints
+							const gwPts = entry.gwPoints ?? entry.livePoints ?? '—'
 							const hits = entry.eventCost ?? 0
-							const net = entry.gwNetPoints ?? entry.livePoints
+							const net = entry.gwNetPoints
 							const playedTotal =
 								(entry.playersPlayed ?? 0) + (entry.playersToPlay ?? 0)
 							const chips = chipLabel(entry)
@@ -414,7 +421,7 @@ export function TournamentTable({
 											</div>
 											{hits > 0 ? (
 												<div className="font-mono text-label text-destructive/90">
-													{t('netLabel')} {net}
+													{t('netLabel')} {net ?? '—'}
 												</div>
 											) : null}
 										</div>
@@ -459,7 +466,7 @@ export function TournamentTable({
 										<span className="font-mono tabular-nums">
 											{t('totalPointsShort')}{' '}
 											<span className="font-semibold text-foreground">
-												{entry.totalPoints}
+												{entry.totalPoints ?? '—'}
 											</span>
 										</span>
 									</div>
@@ -546,7 +553,7 @@ export function TournamentTable({
 											{formatOverallRank(entry.overallRank)}
 										</span>
 										<span className="text-right font-mono text-sm tabular-nums text-foreground/90">
-											{formatCompactNumber(entry.totalPoints)}
+											{entry.totalPoints == null ? '—' : formatCompactNumber(entry.totalPoints)}
 										</span>
 										<div className="text-right">
 											<div className="font-mono text-base font-semibold tabular-nums tracking-tight text-primary-ink">

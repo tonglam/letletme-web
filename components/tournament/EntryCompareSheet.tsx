@@ -274,8 +274,8 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 
 	const gwPtsA = entryA.gwPoints ?? entryA.livePoints
 	const gwPtsB = entryB.gwPoints ?? entryB.livePoints
-	const gwNetA = entryA.gwNetPoints ?? entryA.livePoints
-	const gwNetB = entryB.gwNetPoints ?? entryB.livePoints
+	const gwNetA = entryA.gwNetPoints
+	const gwNetB = entryB.gwNetPoints
 	const costA = entryA.eventCost ?? 0
 	const costB = entryB.eventCost ?? 0
 	const totalA = entryA.totalPoints ?? entryA.livePoints
@@ -326,24 +326,24 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 								/>
 								<OverviewRow
 									label={t('gameweekPointsShort')}
-									leftValue={costA > 0 ? `${gwPtsA} (-${costA})` : gwPtsA}
-									rightValue={costB > 0 ? `${gwPtsB} (-${costB})` : gwPtsB}
-									leftWins={gwPtsA > gwPtsB}
-									rightWins={gwPtsB > gwPtsA}
+									leftValue={gwPtsA == null ? '—' : costA > 0 ? `${gwPtsA} (-${costA})` : gwPtsA}
+									rightValue={gwPtsB == null ? '—' : costB > 0 ? `${gwPtsB} (-${costB})` : gwPtsB}
+									leftWins={gwPtsA != null && gwPtsB != null && gwPtsA > gwPtsB}
+									rightWins={gwPtsA != null && gwPtsB != null && gwPtsB > gwPtsA}
 								/>
 								<OverviewRow
 									label={t('gameweekNetShort')}
-									leftValue={gwNetA}
-									rightValue={gwNetB}
-									leftWins={gwNetA > gwNetB}
-									rightWins={gwNetB > gwNetA}
+									leftValue={gwNetA ?? '—'}
+									rightValue={gwNetB ?? '—'}
+									leftWins={gwNetA != null && gwNetB != null && gwNetA > gwNetB}
+									rightWins={gwNetA != null && gwNetB != null && gwNetB > gwNetA}
 								/>
 								<OverviewRow
 									label={t('totalPointsShort')}
-									leftValue={totalA}
-									rightValue={totalB}
-									leftWins={totalA > totalB}
-									rightWins={totalB > totalA}
+									leftValue={totalA ?? '—'}
+									rightValue={totalB ?? '—'}
+									leftWins={totalA != null && totalB != null && totalA > totalB}
+									rightWins={totalA != null && totalB != null && totalB > totalA}
 								/>
 								<OverviewRow
 									label={t('overallRank')}

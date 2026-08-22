@@ -41,17 +41,43 @@ const mapEventChipToFlags = (eventChip: string | null) => ({
 })
 
 export const buildRankMap = (rows: TournamentLiveCalcData[]): Map<number, number> => {
-	const sorted = [...rows].sort((a, b) => {
-		if (b.liveNetPoints !== a.liveNetPoints) {
-			return b.liveNetPoints - a.liveNetPoints
+	const isOfficialSource = (row: TournamentLiveCalcData): boolean =>
+		row.score?.source === 'FPL_ENTRY_SUMMARY' ||
+		row.score?.source === 'FPL_CLASSIC_STANDINGS' ||
+		row.score?.source === 'FPL_FINAL_RESULT'
+	const rankableRows = rows.filter(row => {
+		return isOfficialSource(row) && typeof row.score?.netEventPoints === 'number'
+	})
+	const netPointsForRanking = (row: TournamentLiveCalcData): number =>
+		row.score?.netEventPoints ?? 0
+	const totalPointsForRanking = (row: TournamentLiveCalcData): number =>
+		row.score?.totalScope === 'OVERALL' &&
+			typeof row.score.totalPoints === 'number'
+			? row.score.totalPoints
+			: 0
+
+	const sorted = [...rankableRows].sort((a, b) => {
+		const netPointDiff = netPointsForRanking(b) - netPointsForRanking(a)
+		if (netPointDiff !== 0) {
+			return netPointDiff
 		}
-		if (b.liveTotalPoints !== a.liveTotalPoints) {
-			return b.liveTotalPoints - a.liveTotalPoints
+		const totalPointDiff = totalPointsForRanking(b) - totalPointsForRanking(a)
+		if (totalPointDiff !== 0) {
+			return totalPointDiff
 		}
 		return a.entry - b.entry
 	})
 
-	return new Map(sorted.map((row, index) => [row.entry, index + 1]))
+	const ranks = new Map<number, number>()
+	let previousPoints: number | null = null
+	let previousRank = 0
+	for (let index = 0; index < sorted.length; index += 1) {
+		const points = netPointsForRanking(sorted[index]!)
+		if (previousPoints === null || points !== previousPoints) previousRank = index + 1
+		ranks.set(sorted[index]!.entry, previousRank)
+		previousPoints = points
+	}
+	return ranks
 }
 
 export const buildTournamentEntries = (
@@ -67,10 +93,23 @@ export const buildTournamentEntries = (
 	const currentRankByEntryId = buildRankMap(rankSource)
 
 	return currentRows.map(row => {
+		const headlineEventPoints = row.score?.eventPoints ?? null
+		const headlineNetPoints = row.score?.netEventPoints ?? null
+		const headlineTotalPoints =
+			row.score?.totalScope === 'OVERALL' &&
+			typeof row.score.totalPoints === 'number'
+				? row.score.totalPoints
+				: null
 		const captainPick = row.pickList.find(player => player.isCaptain)
+		const effectiveCaptainPick =
+			row.score?.state === 'FINAL'
+				? row.pickList.find(player => (player.multiplier ?? 0) >= 2) ?? captainPick
+				: captainPick
 		const captainPoints =
 			row.activeCaptain?.points ??
-			(typeof captainPick?.totalPoints === 'number' ? captainPick.totalPoints : 0)
+			(typeof effectiveCaptainPick?.totalPoints === 'number'
+				? effectiveCaptainPick.totalPoints
+				: 0)
 		const stale = Boolean(staleIds?.has(row.entry))
 
 		return {
@@ -79,17 +118,18 @@ export const buildTournamentEntries = (
 			teamName: row.entryName ?? `Entry ${row.entry}`,
 			managerName: row.playerName ?? '-',
 			captainName:
-				captainPick?.webName ?? row.activeCaptain?.name ?? row.captainName ?? 'N/A',
-			captainTeam: captainPick?.teamShortName ?? 'N/A',
+				effectiveCaptainPick?.webName ?? row.activeCaptain?.name ?? row.captainName ?? 'N/A',
+			captainTeam: effectiveCaptainPick?.teamShortName ?? 'N/A',
 			captainPoints,
-			gwPoints: row.livePoints ?? 0,
-			gwNetPoints: row.liveNetPoints ?? row.livePoints ?? 0,
+			gwPoints: headlineEventPoints,
+			gwNetPoints:
+				headlineNetPoints ?? undefined,
 			eventCost: row.transferCost ?? 0,
 			overallRank: row.overallRank ?? 0,
 			lastOverallRank:
 				typeof row.lastOverallRank === 'number' ? row.lastOverallRank : undefined,
-			livePoints: row.liveNetPoints ?? row.livePoints ?? 0,
-			totalPoints: row.liveTotalPoints ?? 0,
+			livePoints: headlineEventPoints,
+			totalPoints: headlineTotalPoints,
 			playersPlayed: row.played ?? 0,
 			playersToPlay: row.toPlay ?? 0,
 			teamValue: typeof row.teamValue === 'number' ? row.teamValue : undefined,
@@ -101,6 +141,9 @@ export const buildTournamentEntries = (
 				teamName: player.teamName,
 				elementTypeName: player.elementTypeName,
 				position: player.position,
+				multiplier: player.multiplier,
+				pickActive: player.pickActive,
+				autoSub: player.autoSub,
 				isCaptain: player.isCaptain,
 				isViceCaptain: player.isViceCaptain,
 			})),
@@ -158,7 +201,9 @@ export const mergePartialTournamentRows = ({
 
 export const buildTournamentStats = (entries: TournamentEntry[]): LiveTournamentStats => {
 	// Exclude stale retained rows so avg/highest are not inflated by failed recalcs.
-	const liveEntries = entries.filter(entry => !entry.stale)
+	const liveEntries = entries.filter(
+		entry => !entry.stale && typeof entry.livePoints === 'number'
+	)
 	if (liveEntries.length === 0) {
 		return {
 			averagePoints: 0,
@@ -167,9 +212,12 @@ export const buildTournamentStats = (entries: TournamentEntry[]): LiveTournament
 		}
 	}
 
-	const totalPoints = liveEntries.reduce((sum, entry) => sum + entry.livePoints, 0)
+	const totalPoints = liveEntries.reduce(
+		(sum, entry) => sum + (entry.livePoints ?? 0),
+		0,
+	)
 	const highestPoints = liveEntries.reduce(
-		(max, entry) => Math.max(max, entry.livePoints),
+		(max, entry) => Math.max(max, entry.livePoints ?? 0),
 		liveEntries[0]?.livePoints ?? 0,
 	)
 

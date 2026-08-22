@@ -10,6 +10,9 @@ export interface TournamentEntryPick {
 	teamName: string
 	elementTypeName: string
 	position: number
+	multiplier?: number
+	pickActive?: boolean
+	autoSub?: boolean
 	isCaptain: boolean
 	isViceCaptain: boolean
 }
@@ -23,14 +26,14 @@ export interface TournamentEntry {
 	captainName: string
 	captainTeam: string
 	captainPoints: number
-	gwPoints?: number
-	gwNetPoints?: number
+	gwPoints?: number | null
+	gwNetPoints?: number | null
 	eventCost?: number
 	overallRank?: number
 	/** Previous overall rank for delta display. */
 	lastOverallRank?: number
-	livePoints: number
-	totalPoints: number
+	livePoints: number | null
+	totalPoints: number | null
 	playersPlayed: number
 	playersToPlay: number
 	/** Squad value in tenths of £m (1005 → £100.5m). */
@@ -51,6 +54,7 @@ export interface TournamentEntry {
 export interface Tournament {
 	id: string
 	name: string
+	leagueType?: string
 	entries: TournamentEntry[]
 	gameweek: number
 	averagePoints: number
