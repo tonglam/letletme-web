@@ -88,7 +88,8 @@ export function liveSnapshotNeedsRefresh(
 	if (!accepted || !observed) return true
 	return (
 		accepted.eventId !== observed.eventId ||
-		accepted.revision !== observed.revision
+		accepted.revision !== observed.revision ||
+		accepted.checkedAt !== observed.checkedAt
 	)
 }
 

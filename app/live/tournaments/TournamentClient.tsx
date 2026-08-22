@@ -228,6 +228,14 @@ export default function TournamentClient({
 		const states = selectedRows.map(row => row.score?.state)
 		if (states.includes('SETTLING')) return scoreT('scoreSettling')
 		if (states.includes('STALE')) return scoreT('scoreDelayed')
+		if (
+			states.some(state => String(state) === 'FALLBACK') ||
+			selectedRows.some(
+				row => String(row.score?.source) === 'LOCAL_MULTIPLIER_FALLBACK'
+			)
+		) {
+			return scoreT('scoreFallback')
+		}
 		if (selectedRows.length === 0 || states.includes('UNAVAILABLE')) {
 			return scoreT('scoreUnavailable')
 		}
@@ -497,11 +505,11 @@ export default function TournamentClient({
 			isPageActive,
 			currentEventId: currentGameweek,
 			selectedEventId: selectedGameweek,
-			snapshot,
-			managerScoreState: managerScoreSettling ? 'SETTLING' : null,
-			managerNextRefreshAt,
-			windowState: snapshot?.windowState ?? snapshot?.state,
-			nextRefreshAt: snapshot?.nextRefreshAt
+				snapshot,
+				managerScoreState: managerScoreSettling ? 'SETTLING' : null,
+				managerNextRefreshAt,
+				windowState: snapshot?.windowState ?? snapshot?.state,
+				nextRefreshAt: snapshot?.nextRefreshAt
 		})
 	const refreshTournamentResults = useCallback(
 		async (revision?: string | null) => {
@@ -571,11 +579,11 @@ export default function TournamentClient({
 	}, [
 		acceptSnapshot,
 		refreshTournamentResults,
-		selectedTournament,
-		standingsReady,
-		t,
-		managerNextRefreshAt,
-		currentGameweek
+			selectedTournament,
+			standingsReady,
+			t,
+			managerNextRefreshAt,
+			currentGameweek
 	])
 	const handleGameweekChange = useCallback((gameweek: number) => {
 		followsAnchorRef.current = false

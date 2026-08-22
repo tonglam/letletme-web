@@ -31,6 +31,7 @@ export interface Match {
     };
   };
   status: "LIVE" | "HT" | "FT" | "UPCOMING" | "NOT_STARTED";
+  provisional?: boolean;
   minute: number;
   kickoff: string;
   viewers: number;

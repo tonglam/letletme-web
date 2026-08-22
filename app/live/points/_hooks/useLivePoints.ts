@@ -320,13 +320,13 @@ export function useLivePoints({
 			const observedSnapshot = liveContextToSnapshot(probe.liveContext)
 			const latestLive = latestLiveDataRef.current
 			const managerScoreDue = Boolean(
-				latestLive?.live.score?.nextRefreshAt &&
-				Date.parse(latestLive.live.score.nextRefreshAt) <= Date.now()
-			)
-			if (
-				!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot) &&
-				!managerScoreDue
-			) {
+					latestLive?.live.score?.nextRefreshAt &&
+					Date.parse(latestLive.live.score.nextRefreshAt) <= Date.now()
+				)
+				if (
+					!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot) &&
+					!managerScoreDue
+				) {
 				acceptSnapshot(observedSnapshot)
 				setError(undefined)
 				if (
@@ -516,12 +516,12 @@ export function useLivePoints({
 		isPageActive,
 		currentEventId: currentGameweek,
 		selectedEventId: selectedGameweek,
-		snapshot,
-		managerScoreState: liveData?.score?.state,
-		managerNextRefreshAt: liveData?.score?.nextRefreshAt,
-		windowState: snapshot?.windowState ?? snapshot?.state,
-		nextRefreshAt: snapshot?.nextRefreshAt
-	})
+			snapshot,
+			managerScoreState: liveData?.score?.state,
+			managerNextRefreshAt: liveData?.score?.nextRefreshAt,
+			windowState: snapshot?.windowState ?? snapshot?.state,
+			nextRefreshAt: snapshot?.nextRefreshAt
+		})
 
 	return {
 		activeEntryId,

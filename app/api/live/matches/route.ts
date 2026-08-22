@@ -33,10 +33,8 @@ async function handleGet(request: Request) {
 			{ cache: 'no-store' }
 		)
 		const response = NextResponse.json(data)
-		response.headers.set(
-			'Cache-Control',
-			'public, s-maxage=10, stale-while-revalidate=20, no-transform'
-		)
+		response.headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate, no-transform')
+		response.headers.set('CDN-Cache-Control', 'no-store')
 		return response
 	} catch (error) {
 		const message = error instanceof Error ? error.message : ''

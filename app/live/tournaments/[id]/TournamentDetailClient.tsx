@@ -311,6 +311,12 @@ export default function TournamentDetailClient({
 		const states = rows.map(row => row.score?.state)
 		if (states.includes('SETTLING')) return scoreT('scoreSettling')
 		if (states.includes('STALE')) return scoreT('scoreDelayed')
+		if (
+			states.some(state => String(state) === 'FALLBACK') ||
+			rows.some(row => String(row.score?.source) === 'LOCAL_MULTIPLIER_FALLBACK')
+		) {
+			return scoreT('scoreFallback')
+		}
 		if (rows.length === 0 || states.includes('UNAVAILABLE')) {
 			return scoreT('scoreUnavailable')
 		}
@@ -745,8 +751,8 @@ export default function TournamentDetailClient({
 		isPageActive: isPageActive && !isOfficialH2H,
 		currentEventId: currentGameweek,
 		selectedEventId: currentGameweek,
-		snapshot,
-		managerScoreState: managerScoreSettling ? 'SETTLING' : null,
+			snapshot,
+			managerScoreState: managerScoreSettling ? 'SETTLING' : null,
 		managerNextRefreshAt,
 		windowState: snapshot?.windowState ?? snapshot?.state,
 		nextRefreshAt: snapshot?.nextRefreshAt

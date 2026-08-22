@@ -670,10 +670,10 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_TOURNAMENT_INFO_FIELDS}
       windowState
       dataAvailability
       tournaments { ...LiveTournamentInfoFields }
-      selectedTournamentId
-      managerRevision
-      officialCoverage
-      partial
+	      selectedTournamentId
+	      managerRevision
+	      officialCoverage
+	      partial
       failedEntryIds
       totalEntries
       board {

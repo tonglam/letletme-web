@@ -151,16 +151,16 @@ export const GET_LIVE_POINTS = `
         upstreamUpdatedAt
         staleAt
         nextRefreshAt
-        reconciliation
-        reasonCodes
-      }
-      snapshot {
-        eventId
-        revision
-        state
-        publishedAt
-        checkedAt
-      }
+	        reconciliation
+	        reasonCodes
+	      }
+	      snapshot {
+	        eventId
+	        revision
+	        state
+	        publishedAt
+	        checkedAt
+	      }
       livePoints
       transferCost
       liveNetPoints
@@ -335,39 +335,45 @@ export const GET_LIVE_MATCHDAY_DESK = `
       state
       windowState
       dataAvailability
-      liveRevision
-      sourceCheckedAt
-      publishedAt
-      nextRefreshAt
+	      liveRevision
+	      sourceCheckedAt
+	      publishedAt
+	      nextRefreshAt
 			stale
-		source
+			source
 		matches {
         fixtureId
         eventId
         homeTeamId
         homeTeamName
+		homeTeamShortName
         awayTeamId
         awayTeamName
+		awayTeamShortName
         homeScore
         awayScore
         kickoffTime
         minutes
         started
 			finished
+			finishedProvisional
 		}
 		nextFixtures {
 			fixtureId
 			eventId
 			homeTeamId
 			homeTeamName
+			homeTeamShortName
 			awayTeamId
 			awayTeamName
+			awayTeamShortName
 			homeScore
 			awayScore
 			kickoffTime
 			minutes
 			started
 			finished
+			finishedProvisional
 		}
     }
   }
@@ -527,6 +533,7 @@ export interface LiveMatchdayDeskRow {
 	minutes: number
 	started: boolean
 	finished: boolean
+	finishedProvisional?: boolean
 }
 
 export interface LiveMatchdayDesk {
@@ -535,12 +542,12 @@ export interface LiveMatchdayDesk {
 	revision: string
 	state: LiveSnapshotState
 	windowState: LiveWindowState
-	dataAvailability: LiveDataAvailability
-	liveRevision: string | null
-	publishedAt: string
-	source: 'REDIS' | 'POSTGRES' | 'CORE' | 'STALE'
-	sourceCheckedAt?: string | null
-	stale?: boolean
+		dataAvailability: LiveDataAvailability
+		liveRevision: string | null
+		publishedAt: string
+		source: 'REDIS' | 'POSTGRES' | 'CORE' | 'STALE'
+		sourceCheckedAt?: string | null
+		stale?: boolean
 	nextRefreshAt?: string | null
 	matches: LiveMatchdayDeskRow[]
 	nextFixtures: LiveMatchdayDeskRow[]
