@@ -1517,6 +1517,8 @@
 		"loadingCompetitions": "正在加载赛事…",
 		"noCompetitions": "你还没有加入任何赛事。加入后即可看到该联赛的选人分布。",
 		"noLeagueOptions": "暂无公共联赛样本。",
+		"noReadyLeagueOptions": "已显示你加入的赛事，但目前还没有赛事完成 Trends 数据准备。",
+		"competitionNotReady": "{name}（Trends 尚未就绪）",
 		"myLeaguesError": "我的联赛加载失败；公共联赛数据不受影响。",
 		"publicLeaguesError": "公共联赛加载失败。",
 		"statsError": "联赛趋势加载失败。本次失败不会被伪装成空数据。",

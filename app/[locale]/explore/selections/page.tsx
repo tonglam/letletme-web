@@ -1,4 +1,8 @@
 import TrendsClient from '@/app/data/selections/TrendsClient'
+import {
+	isTrendCohortReady,
+	mergeVisibleTrendCohorts
+} from '@/app/data/selections/_lib/trend-cohorts'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getCurrentAndNextEvents } from '@/lib/events'
 import { getVerifiedEntryContext } from '@/lib/session'
@@ -50,50 +54,51 @@ export default async function SelectionsPage({
 }: PageProps) {
 	await getPageLocale(params)
 	const query = await searchParams
-	const [events, sessionContext, publicCatalog] = await Promise.all([
-		getCurrentAndNextEvents(),
-		getVerifiedEntryContext(),
-		loadTrendCohorts('PUBLIC').catch(error => {
+	const eventsPromise = getCurrentAndNextEvents()
+	const publicCatalogPromise = loadTrendCohorts('PUBLIC')
+		.then(catalog => ({ catalog, loadFailed: false }))
+		.catch(error => {
 			console.error('[trends] public catalog failed:', error)
-			return { season: '', revision: '', cohorts: [] as TrendCohort[] }
+			return {
+				catalog: {
+					season: '',
+					revision: '',
+					cohorts: [] as TrendCohort[]
+				},
+				loadFailed: true
+			}
 		})
+	const sessionContext = await getVerifiedEntryContext()
+	const myCohortsPromise =
+		sessionContext.session && sessionContext.entryId
+			? loadTrendCohorts('MINE', sessionContext.session)
+					.then(catalog => ({ cohorts: catalog.cohorts, loadFailed: false }))
+					.catch(error => {
+						console.error('[trends] private catalog failed:', error)
+						return { cohorts: [] as TrendCohort[], loadFailed: true }
+					})
+			: Promise.resolve({ cohorts: [] as TrendCohort[], loadFailed: false })
+	const [events, publicCatalogResult, myCohortsResult] = await Promise.all([
+		eventsPromise,
+		publicCatalogPromise,
+		myCohortsPromise
 	])
+	const publicCatalog = publicCatalogResult.catalog
+	const myCohorts = myCohortsResult.cohorts
 
 	const review = resolveReviewGameweekAnchor(events)
 	const defaultGameweek = review.anchorGw ?? 1
 	const requested = requestedCohort(query)
-	const requestedAccess: TrendAccess | null =
-		query.scope === 'mine' ? 'MINE' : query.scope === 'public' ? 'PUBLIC' : null
-	let myCohorts: TrendCohort[] = []
-	const shouldLoadMine =
-		requestedAccess === 'MINE' ||
-		(!requestedAccess && !findCohort(publicCatalog.cohorts, requested))
-	if (shouldLoadMine && sessionContext.session && sessionContext.entryId) {
-		try {
-			myCohorts = (await loadTrendCohorts('MINE', sessionContext.session))
-				.cohorts
-		} catch (error) {
-			console.error('[trends] private catalog failed:', error)
-		}
-	}
-
-	const selectedMine = findCohort(myCohorts, requested)
-	const fallbackMine = !requested ? (myCohorts[0] ?? null) : null
-	const selectedMineOrFallback = selectedMine ?? fallbackMine
-	const selectedPublic = findCohort(publicCatalog.cohorts, requested)
-	const initialAccess: TrendAccess =
-		requestedAccess === 'MINE' ||
-		(!requestedAccess &&
-			publicCatalog.cohorts.length === 0 &&
-			Boolean(selectedMineOrFallback))
-			? 'MINE'
-			: 'PUBLIC'
-	const activeCohorts =
-		initialAccess === 'MINE' ? myCohorts : publicCatalog.cohorts
+	const visibleCohorts = mergeVisibleTrendCohorts(
+		myCohorts,
+		publicCatalog.cohorts
+	)
+	const requestedSelection = findCohort(visibleCohorts, requested)
 	const selected =
-		initialAccess === 'MINE'
-			? (selectedMineOrFallback ?? activeCohorts[0] ?? null)
-			: (selectedPublic ?? activeCohorts[0] ?? null)
+		requestedSelection && isTrendCohortReady(requestedSelection)
+			? requestedSelection
+			: (visibleCohorts.find(isTrendCohortReady) ?? null)
+	const initialAccess: TrendAccess = selected?.access ?? 'PUBLIC'
 	const initialEventId =
 		Number(query.gw) >= 1 && Number(query.gw) <= 38
 			? Number(query.gw)
@@ -105,7 +110,7 @@ export default async function SelectionsPage({
 			initialDesk = await loadTrendDesk(
 				selected.id,
 				initialEventId,
-				initialAccess,
+				selected.access,
 				sessionContext.session
 			)
 		} catch (error) {
@@ -119,6 +124,8 @@ export default async function SelectionsPage({
 			publicCohorts={publicCatalog.cohorts}
 			myCohorts={myCohorts}
 			canLoadMine={Boolean(sessionContext.session && sessionContext.entryId)}
+			myCohortsLoadFailed={myCohortsResult.loadFailed}
+			publicCohortsLoadFailed={publicCatalogResult.loadFailed}
 			initialDesk={initialDesk}
 			initialAccess={initialAccess}
 			initialCohortId={selected?.id ?? null}

@@ -1517,6 +1517,8 @@
 		"loadingCompetitions": "Loading competitions…",
 		"noCompetitions": "You have not joined a competition yet. Join one to see how that field picks.",
 		"noLeagueOptions": "No public league sample is available yet.",
+		"noReadyLeagueOptions": "Your competitions are visible, but none has Trends data ready yet.",
+		"competitionNotReady": "{name} (Trends not ready)",
 		"myLeaguesError": "My Leagues could not be loaded. Public League data is unaffected.",
 		"publicLeaguesError": "Public Leagues could not be loaded.",
 		"statsError": "League trends could not be loaded. Your request was not treated as an empty result.",
