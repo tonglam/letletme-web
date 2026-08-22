@@ -28,13 +28,18 @@ type PriceStartEvent = {
 }
 
 function uniqueElementIds(picks: readonly SquadPickSeed[]): number[] {
-	return Array.from(new Set(
-		picks
-			.map(pick => pick.elementId)
-			.filter((elementId): elementId is number =>
-				typeof elementId === 'number' && Number.isSafeInteger(elementId) && elementId > 0,
-			),
-	))
+	return Array.from(
+		new Set(
+			picks
+				.map(pick => pick.elementId)
+				.filter(
+					(elementId): elementId is number =>
+						typeof elementId === 'number' &&
+						Number.isSafeInteger(elementId) &&
+						elementId > 0,
+				),
+		),
+	)
 }
 
 async function loadStartPrice({ elementId, eventId }: PriceStartEvent): Promise<SquadStartPrice> {
@@ -67,9 +72,9 @@ async function loadStartPrice({ elementId, eventId }: PriceStartEvent): Promise<
 
 export async function loadPersonalPriceContext(params: {
 	session: Session
-		entryId: number
-		picks: SquadPickSeed[]
-		eventId: number | null
+	entryId: number
+	picks: SquadPickSeed[]
+	eventId: number | null
 }): Promise<PersonalPriceContext> {
 	const elementIds = uniqueElementIds(params.picks)
 	if (elementIds.length === 0) {

@@ -7,9 +7,7 @@ import { withCapacityRunForRequest } from '@/lib/capacity-run'
 import { getCurrentAndNextEvents, pickCurrentEventId } from '@/lib/events'
 import { EMPTY_PRICE_CHANGE_BOARD } from '@/lib/graphql/operations/price-changes'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
-import {
-	loadPersonalPriceContext,
-} from '@/lib/price-change-personal-server'
+import { loadPersonalPriceContext } from '@/lib/price-change-personal-server'
 import type { PersonalPriceContext } from '@/lib/price-change-personal'
 import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
 import type {
