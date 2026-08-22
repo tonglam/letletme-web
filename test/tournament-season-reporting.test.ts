@@ -77,6 +77,7 @@ describe('tournament season cumulative standings', () => {
 			playerName: `Manager ${entryId}`,
 			rank: groupRank,
 			previousRank: null,
+			fieldRank: overallPoints === 120 ? 1 : overallPoints === 110 ? 2 : 3,
 			eventPoints: 70,
 			eventCost: 0,
 			eventNetPoints: 70,
@@ -125,6 +126,71 @@ describe('tournament season cumulative standings', () => {
 				{ entryId: 2, rank: 1 },
 				{ entryId: 3, rank: 2 },
 				{ entryId: 1, rank: 3 }
+			]
+		)
+	})
+
+	it('keeps full-field ranks when the board page is only a partial sample', () => {
+		const row = (entryId: number, fieldRank: number, points: number) => ({
+			eventId: 3,
+			groupId: 1,
+			entryId,
+			entryName: `Entry ${entryId}`,
+			playerName: `Manager ${entryId}`,
+			rank: fieldRank,
+			previousRank: null,
+			fieldRank,
+			eventPoints: 70,
+			eventCost: 0,
+			eventNetPoints: 70,
+			eventRank: 100,
+			overallPoints: points,
+			overallRank: fieldRank,
+			eventChip: null,
+			captainId: null,
+			captainWebName: null,
+			captainTeamShortName: null,
+			captainPoints: null,
+			teamValue: 1000,
+			bank: 0
+		})
+		const board = {
+			state: 'READY',
+			eventId: 3,
+			page: 2,
+			pageSize: 100,
+			totalRows: 200,
+			totalPages: 2,
+			fieldSize: 200,
+			rows: [row(50, 50, 100), row(75, 75, 90)],
+			viewerRow: null
+		} satisfies MyFplCompetitionBoardPage
+		const aggregate = {
+			eventId: 3,
+			entryCount: 200,
+			leaderOverallPoints: 150,
+			secondOverallPoints: 149,
+			gapFirstSecond: 1,
+			averageOverallPoints: 110,
+			metrics: [],
+			viewer: null,
+			topPerformers: [],
+			risers: [],
+			fallers: [],
+			captainDistribution: [],
+			chipDistribution: []
+		} as MyFplCompetitionAggregate
+
+		const snapshot = aggregateToSeasonSnapshot(aggregate, board)
+		assert.ok(snapshot)
+		assert.deepEqual(
+			snapshot.standings.map(item => ({
+				entryId: item.entryId,
+				rank: item.rank
+			})),
+			[
+				{ entryId: 50, rank: 50 },
+				{ entryId: 75, rank: 75 }
 			]
 		)
 	})

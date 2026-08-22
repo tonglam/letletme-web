@@ -45,6 +45,16 @@ function compareSeasonBoardRows(
 	return a.entryId - b.entryId
 }
 
+function compareFieldRankRows(
+	a: MyFplCompetitionBoardRow,
+	b: MyFplCompetitionBoardRow
+): number {
+	const fieldRankA = a.fieldRank ?? Number.MAX_SAFE_INTEGER
+	const fieldRankB = b.fieldRank ?? Number.MAX_SAFE_INTEGER
+	if (fieldRankA !== fieldRankB) return fieldRankA - fieldRankB
+	return compareSeasonBoardRows(a, b)
+}
+
 export function boardRowsToEventResults(
 	page: MyFplCompetitionBoardPage | null | undefined,
 	tournament?: EntryTournament | null
@@ -93,13 +103,10 @@ export function aggregateToSeasonSnapshot(
 			higherIsBetter: metric.higherIsBetter
 		})),
 		standings: [...boardRowsIncludingViewer(board)]
-			.sort(compareSeasonBoardRows)
-			.map((row, index) => ({
+			.sort(compareFieldRankRows)
+			.map(row => ({
 				entryId: row.entryId,
-				rank:
-					row.overallPoints != null && Number.isFinite(row.overallPoints)
-						? index + 1
-						: null,
+				rank: row.fieldRank,
 				entryName: row.entryName,
 				playerName: row.playerName,
 				overallPoints: row.overallPoints,

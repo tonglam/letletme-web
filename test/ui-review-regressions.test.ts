@@ -164,7 +164,10 @@ describe('asynchronous selection safety', () => {
 			/initialView === 'season' \? null : requestedEventId/
 		)
 		assert.match(tournamentClient, /const handleNavigateSeason = useCallback/)
-		assert.match(tournamentClient, /latestFinalizedGameweek/)
+		assert.match(
+			tournamentClient,
+			/replaceQuery\(\{ view: 'season', gw: null \}\)/
+		)
 		assert.match(tournamentHook, /setDeskRefreshNonce\(value => value \+ 1\)/)
 		assert.match(tournamentHook, /boardAbortRef\.current\?\.abort\(\)/)
 		assert.match(tournamentHook, /setIsBoardLoading\(false\)/)
@@ -178,6 +181,8 @@ describe('asynchronous selection safety', () => {
 		assert.match(tournamentClient, /setStandingsSearch\(''\)/)
 		assert.match(tournamentClient, /boardSearch === ''/)
 		assert.match(adapters, /myRank: viewerRow\?\.rank \?\? aggregate\.viewer/)
+		assert.match(adapters, /rank: row\.fieldRank/)
+		assert.match(tournamentHook, /setError\(t\('loadFailed'\)\)/)
 		assert.match(
 			teamPage,
 			/const maxKnownEvent = Math\.max\(currentEvent, latestFinalized\)/
@@ -218,5 +223,7 @@ describe('asynchronous selection safety', () => {
 		)
 		assert.match(teamSource, /setGameweekError\(null\)/)
 		assert.match(teamSource, /error: gameweekError \?\? baseError/)
+		assert.match(teamSource, /peekTransferHistoryState\(entryId\)/)
+		assert.match(teamSource, /setTransferRetryNonce\(value => value \+ 1\)/)
 	})
 })

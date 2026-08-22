@@ -496,6 +496,10 @@ const transferHistoryCache = new Map<
 	number,
 	TimedCacheValue<EntryGameweekTransfers[]>
 >()
+const transferHistoryStateCache = new Map<
+	number,
+	TimedCacheValue<MyFplReviewState>
+>()
 const transferHistoryInFlight = new Map<
 	number,
 	Promise<EntryGameweekTransfers[]>
@@ -518,6 +522,11 @@ export const peekTransferHistory = (
 	entryId: number
 ): EntryGameweekTransfers[] | undefined =>
 	getFreshCacheValue(transferHistoryCache, entryId)
+
+export const peekTransferHistoryState = (
+	entryId: number
+): MyFplReviewState | undefined =>
+	getFreshCacheValue(transferHistoryStateCache, entryId)
 
 export const peekEntryEventResult = (
 	entryId: number,
@@ -573,9 +582,20 @@ export const seedEntryHistoryCache = (
 
 export const seedTransferHistoryCache = (
 	entryId: number,
-	value: EntryGameweekTransfers[]
+	value: EntryGameweekTransfers[],
+	state: MyFplReviewState = 'READY'
 ): void => {
-	setCacheValue(transferHistoryCache, entryId, value, HISTORY_CACHE_TTL_MS)
+	setCacheValue(
+		transferHistoryStateCache,
+		entryId,
+		state,
+		state === 'PENDING' ? 10_000 : HISTORY_CACHE_TTL_MS
+	)
+	if (state === 'PENDING') {
+		transferHistoryCache.delete(entryId)
+	} else {
+		setCacheValue(transferHistoryCache, entryId, value, HISTORY_CACHE_TTL_MS)
+	}
 }
 
 /**
@@ -590,6 +610,7 @@ export function hydrateTeamStatsSessionCache(opts: {
 	event: EntryEventResult | null
 	eventState?: MyFplReviewState
 	transfers: EntryGameweekTransfers[] | null
+	transfersState?: MyFplReviewState
 }): void {
 	const {
 		entryId,
@@ -598,10 +619,12 @@ export function hydrateTeamStatsSessionCache(opts: {
 		history,
 		event,
 		eventState,
-		transfers
+		transfers,
+		transfersState
 	} = opts
 	if (history) seedEntryHistoryCache(entryId, history)
-	if (transfers !== null) seedTransferHistoryCache(entryId, transfers)
+	if (transfers !== null)
+		seedTransferHistoryCache(entryId, transfers, transfersState ?? 'READY')
 	if (seedGw > 0 && (event || eventState)) {
 		seedEntryEventCache(entryId, seedGw, event, {
 			isCurrentGameweek: seedGw === currentGameweek,
@@ -679,13 +702,25 @@ export const getTransferHistoryCached = async (
 		{ cache: 'no-store' }
 	)
 		.then(response => {
-			const transfers = transfersFromMyFpl(response.myFplTeamTransfers)
+			const snapshot = response.myFplTeamTransfers
+			const state = snapshot.state
+			const transfers = transfersFromMyFpl(snapshot)
 			setCacheValue(
-				transferHistoryCache,
+				transferHistoryStateCache,
 				entryId,
-				transfers,
-				HISTORY_CACHE_TTL_MS
+				state,
+				state === 'PENDING' ? 10_000 : HISTORY_CACHE_TTL_MS
 			)
+			if (state === 'PENDING') {
+				transferHistoryCache.delete(entryId)
+			} else {
+				setCacheValue(
+					transferHistoryCache,
+					entryId,
+					transfers,
+					HISTORY_CACHE_TTL_MS
+				)
+			}
 			return transfers
 		})
 		.finally(() => {

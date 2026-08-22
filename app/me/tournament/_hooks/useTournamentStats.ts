@@ -536,8 +536,16 @@ export function useTournamentStats({
 					rebuildStatsFromBoard(nextBoard)
 				})
 				.catch(searchError => {
-					if (!controller.signal.aborted)
+					if (!controller.signal.aborted) {
 						console.warn('[tournament stats] board search failed:', searchError)
+						setError(t('loadFailed'))
+						setTournamentStats(null)
+						commitBoardPage(null, standingsSearch.trim())
+						if (standingsSearch.trim() === '') {
+							setSeasonSnapshot(null)
+							setSeasonFieldRows([])
+						}
+					}
 				})
 				.finally(() => {
 					if (
@@ -553,12 +561,14 @@ export function useTournamentStats({
 		}
 	}, [
 		boardEventId,
+		commitBoardPage,
 		initialBoard,
 		initialReviewState,
 		rebuildStatsFromBoard,
 		reviewState,
 		selectedTournament,
-		standingsSearch
+		standingsSearch,
+		t
 	])
 
 	const loadMoreStandings = useCallback(async () => {

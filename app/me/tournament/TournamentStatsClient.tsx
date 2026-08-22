@@ -69,7 +69,6 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 		isBoardLoading,
 		isLoading,
 		loadMoreStandings,
-		latestFinalizedGameweek,
 		seasonField,
 		seasonMe,
 		seasonPath,
@@ -206,15 +205,12 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 		[replaceQuery, searchParams, setSelectedGameweek]
 	)
 	const handleNavigateSeason = useCallback(() => {
-		const seasonGameweek =
-			latestFinalizedGameweek && latestFinalizedGameweek > 0
-				? latestFinalizedGameweek
-				: dataGameweek && dataGameweek > 0
-					? dataGameweek
-					: null
 		setStandingsSearch('')
-		replaceQuery({ view: 'season', gw: seasonGameweek })
-	}, [dataGameweek, latestFinalizedGameweek, replaceQuery, setStandingsSearch])
+		// Season is an as-of-latest-finalized view. Do not carry the historical
+		// GW through the URL: workspace hydration would interpret it as a new
+		// gameweek selection and immediately switch the tab back to Gameweek.
+		replaceQuery({ view: 'season', gw: null })
+	}, [replaceQuery, setStandingsSearch])
 
 	// URL gw → selected gameweek
 	useEffect(() => {

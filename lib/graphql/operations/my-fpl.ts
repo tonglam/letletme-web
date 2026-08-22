@@ -154,6 +154,7 @@ export interface MyFplCompetitionBoardRow {
 	playerName: string | null
 	rank: number | null
 	previousRank: number | null
+	fieldRank: number | null
 	eventPoints: number | null
 	eventCost: number | null
 	eventNetPoints: number | null
@@ -400,6 +401,7 @@ const BOARD_ROW_FIELDS = `
           playerName
           rank
           previousRank
+          fieldRank
           eventPoints
           eventCost
           eventNetPoints
