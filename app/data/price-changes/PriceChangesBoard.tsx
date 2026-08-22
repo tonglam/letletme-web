@@ -246,8 +246,12 @@ export function PriceChangesBoard({
 			return
 		}
 
-		const lastValidBoard = readLastValidBoard()
-		setDisplayBoard(lastValidBoard ?? board)
+		setDisplayBoard(current => {
+			const lastValidBoard = readLastValidBoard()
+			if (lastValidBoard) return lastValidBoard
+			if (isPersistableBoard(current)) return { ...current, status: 'STALE' }
+			return board
+		})
 	}, [board])
 
 	useEffect(() => {
@@ -577,7 +581,12 @@ export function PriceChangesBoard({
 				) : (
 					<>
 						<div className="hidden overflow-x-auto md:block">
-							<table className="w-full min-w-[760px] text-left text-sm">
+							<table
+								className={cn(
+									'w-full text-left text-sm',
+									scope === 'mine' ? 'min-w-[980px]' : 'min-w-[760px]'
+								)}
+							>
 								<thead className="border-b border-border/70 bg-muted/10 text-xs uppercase tracking-[0.12em] text-muted-foreground">
 									<tr>
 										<th className="px-5 py-3 font-semibold">

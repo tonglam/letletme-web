@@ -119,10 +119,25 @@ export async function loadPersonalPriceContext(params: {
 		}
 	}
 
-	return buildPersonalPurchasePrices({
+	const personalPrices = buildPersonalPurchasePrices({
 		picks: params.picks,
 		startPrices,
 		transfers: transfersResponse?.myFplTeamTransfers ?? null,
 		historyChips,
 	})
+	const transferState = transfersResponse?.myFplTeamTransfers?.state
+	if (
+		transfersResponse == null ||
+		transferState === 'PENDING' ||
+		transferState === 'UNAVAILABLE'
+	) {
+		return {
+			state: 'UNAVAILABLE',
+			purchasePrices: {},
+		}
+	}
+	if (historyResponse == null && personalPrices.state === 'READY') {
+		return { ...personalPrices, state: 'PARTIAL' }
+	}
+	return personalPrices
 }
