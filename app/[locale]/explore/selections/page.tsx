@@ -62,7 +62,9 @@ export default async function SelectionsPage({
 			return {
 				catalog: {
 					season: '',
-					revision: '',
+					revision: 'not-published:unknown',
+					state: 'NOT_PUBLISHED' as const,
+					sourceCheckedAt: null,
 					cohorts: [] as TrendCohort[]
 				},
 				loadFailed: true
@@ -122,6 +124,7 @@ export default async function SelectionsPage({
 	return (
 		<TrendsClient
 			publicCohorts={publicCatalog.cohorts}
+			publicCatalogState={publicCatalog.state}
 			myCohorts={myCohorts}
 			canLoadMine={Boolean(sessionContext.session && sessionContext.entryId)}
 			myCohortsLoadFailed={myCohortsResult.loadFailed}

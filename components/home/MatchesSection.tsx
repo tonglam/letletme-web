@@ -37,7 +37,9 @@ interface MatchDay {
 		time: string
 		homeScore: number | null
 		awayScore: number | null
+		started: boolean
 		finished: boolean
+		stale: boolean
 	}>
 }
 
@@ -66,7 +68,11 @@ function fixtureDateFormatter(
 export function parseHomeFixturesToMatchDays(
 	fixtures: HomeFixture[],
 	useLocalTime: boolean,
-	locale: string
+	locale: string,
+	metadata: Pick<HomeFixturesResponse, 'source' | 'stale'> = {
+		source: 'CORE',
+		stale: false
+	}
 ): MatchDay[] {
 	const byDate = new Map<string, HomeFixture[]>()
 	for (const fixture of fixtures) {
@@ -112,9 +118,21 @@ export function parseHomeFixturesToMatchDays(
 						minute: '2-digit',
 						hourCycle: 'h23'
 					}).format(new Date(fixture.kickoffTime ?? '')),
-					homeScore: fixture.finished ? fixture.homeScore : null,
-					awayScore: fixture.finished ? fixture.awayScore : null,
-					finished: fixture.finished
+					homeScore:
+						fixture.started &&
+						fixture.homeScore !== null &&
+						fixture.awayScore !== null
+							? fixture.homeScore
+							: null,
+					awayScore:
+						fixture.started &&
+						fixture.homeScore !== null &&
+						fixture.awayScore !== null
+							? fixture.awayScore
+							: null,
+					started: fixture.started,
+					finished: fixture.finished,
+					stale: metadata.source === 'LIVE' && metadata.stale
 				}))
 			}
 		})
@@ -147,7 +165,7 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 							</div>
 
 							<div className="mx-auto rounded-md border border-electric/25 bg-plum px-4 py-2 text-center font-display text-sm font-semibold text-electric md:text-base">
-								{match.finished &&
+								{match.started &&
 								match.homeScore !== null &&
 								match.awayScore !== null ? (
 									<span className="text-lg tabular-nums">
@@ -156,6 +174,11 @@ function MatchList({ matches }: { matches: MatchDay['matches'] }) {
 								) : (
 									<span className="tabular-nums">{match.time}</span>
 								)}
+								{match.stale ? (
+									<span className="mt-1 block text-[10px] font-sans font-medium uppercase tracking-wide text-amber-300">
+										{t('fixturesDelayed')}
+									</span>
+								) : null}
 							</div>
 
 							<div className="flex items-center justify-start gap-3">
@@ -197,7 +220,7 @@ export function MatchesSection({
 	const locale = useLocale()
 	const t = useTranslations('Home')
 	const initialEventId = initialFixtures?.eventId ?? null
-	const [minimumEventId] = useState(initialEventId)
+	const [minimumEventId] = useState(1)
 	const [committed, setCommitted] = useState(initialFixtures)
 	const [pendingEventId, setPendingEventId] = useState<number | null>(null)
 	const [fixtureError, setFixtureError] = useState<string | null>(null)
@@ -205,18 +228,10 @@ export function MatchesSection({
 	const [activeDayKey, setActiveDayKey] = useState<string | null>(null)
 	const generation = useRef(0)
 	const inFlight = useRef(new Map<number, InFlightRequest>())
-	const revision = useRef(initialFixtures?.revision ?? null)
 	const [cache] = useState(
 		() =>
-			new Map<string, HomeFixturesResponse>(
-				initialFixtures
-					? [
-							[
-								`${initialFixtures.revision}:${initialFixtures.eventId}`,
-								initialFixtures
-							]
-						]
-					: []
+			new Map<number, HomeFixturesResponse>(
+				initialFixtures ? [[initialFixtures.eventId, initialFixtures]] : []
 			)
 	)
 	const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
@@ -257,7 +272,8 @@ export function MatchesSection({
 				? parseHomeFixturesToMatchDays(
 						committed.fixtures,
 						useLocalTimezone,
-						locale
+						locale,
+						committed
 					)
 				: [],
 		[committed, locale, useLocalTimezone]
@@ -269,12 +285,9 @@ export function MatchesSection({
 	const intentEventId = pendingEventId ?? committed?.eventId ?? initialEventId
 
 	const loadEvent = useCallback(
-		(eventId: number) => {
+		(eventId: number, options: { force?: boolean } = {}) => {
 			clearFixtureError()
-			const cacheKey = revision.current
-				? `${revision.current}:${eventId}`
-				: null
-			const cached = cacheKey ? cache.get(cacheKey) : null
+			const cached = !options.force ? cache.get(eventId) : null
 			if (cached) {
 				generation.current += 1
 				for (const request of Array.from(inFlight.current.values())) {
@@ -308,6 +321,7 @@ export function MatchesSection({
 			const promise = fetch(`/api/home/fixtures?eventId=${eventId}`, {
 				method: 'GET',
 				headers: { Accept: 'application/json' },
+				cache: options.force ? 'no-store' : 'default',
 				signal: controller.signal
 			}).then(async response => {
 				if (!response.ok)
@@ -328,11 +342,11 @@ export function MatchesSection({
 					) {
 						return
 					}
-					if (revision.current !== next.revision) {
-						cache.clear()
-						revision.current = next.revision
-					}
-					cache.set(`${next.revision}:${eventId}`, next)
+					// Core and live publications intentionally have independent
+					// revisions. Keep the RSC seed for other events when navigating
+					// between them; each event is replaced atomically on its own
+					// successful response or an explicit force refresh.
+					cache.set(eventId, next)
 					setActiveDayKey(null)
 					startTransition(() => setCommitted(next))
 				})
@@ -355,6 +369,21 @@ export function MatchesSection({
 		},
 		[cache, clearFixtureError, showFixtureError]
 	)
+
+	useEffect(() => {
+		if (committed?.source !== 'LIVE' || committed.state === 'SETTLED') return
+
+		const refresh = () => {
+			if (document.visibilityState !== 'visible') return
+			loadEvent(committed.eventId, { force: true })
+		}
+		const intervalId = window.setInterval(refresh, 30_000)
+		document.addEventListener('visibilitychange', refresh)
+		return () => {
+			window.clearInterval(intervalId)
+			document.removeEventListener('visibilitychange', refresh)
+		}
+	}, [committed?.eventId, committed?.source, committed?.state, loadEvent])
 
 	const navigate = (direction: -1 | 1) => {
 		if (intentEventId === null) return
@@ -394,6 +423,7 @@ export function MatchesSection({
 	}
 
 	const committedEventId = committed?.eventId ?? initialEventId
+	const isLivePublication = committed?.source === 'LIVE'
 	const canGoPrev =
 		intentEventId !== null &&
 		minimumEventId !== null &&
@@ -416,9 +446,13 @@ export function MatchesSection({
 			) : null}
 			<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div>
-					<p className="eyebrow">{t('nextGameweekLabel')}</p>
+					<p className="eyebrow">
+						{t(
+							isLivePublication ? 'currentGameweekLabel' : 'nextGameweekLabel'
+						)}
+					</p>
 					<h2 className="mt-1 flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
-						{t('upcomingMatches')}
+						{t(isLivePublication ? 'currentMatches' : 'upcomingMatches')}
 						<GameweekBadge
 							gameweek={committedEventId}
 							size="sm"
@@ -480,7 +514,11 @@ export function MatchesSection({
 					: t('fixturesLoading', { gameweek: pendingEventId })}
 			</p>
 
-			{matchDays.length === 0 ? (
+			{committed?.source === 'LIVE' && committed.state === 'UNAVAILABLE' ? (
+				<p className="py-8 text-center text-sm text-muted-foreground">
+					{t('fixturesLiveUnavailable')}
+				</p>
+			) : matchDays.length === 0 ? (
 				<p className="py-8 text-center text-sm text-muted-foreground">
 					{t('noMatches', { gameweek: committedEventId })}
 				</p>

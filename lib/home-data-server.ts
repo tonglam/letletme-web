@@ -11,14 +11,19 @@ import {
 	GET_HOME_PUBLIC_BOOTSTRAP,
 	type HomeEventFixturesGraphQLResponse,
 	type HomeFixture,
+	type HomeFixtureState,
 	type HomeFixturesResponse,
 	type HomeGameweek,
 	type HomeGameweekResponse,
 	type HomePublicBootstrap,
 	type HomePublicBootstrapGraphQLResponse,
 	GET_HOME_PERSONAL_DESK,
-	type HomePersonalDeskResponse,
+	type HomePersonalDeskResponse
 } from '@/lib/graphql/operations/home'
+import {
+	GET_LIVE_MATCHDAY_DESK,
+	type LiveMatchdayDeskResponse
+} from '@/lib/graphql/operations/live'
 import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { coalescePublicSeed } from '@/lib/public-seed-singleflight'
@@ -41,9 +46,47 @@ function isHomeGameweekDurablyCacheable(gameweek: HomeGameweek): boolean {
 
 function withEventId(
 	fixtures: Array<Omit<HomeFixture, 'eventId'>>,
-	eventId: number,
+	eventId: number
 ): HomeFixture[] {
 	return fixtures.map(fixture => ({ ...fixture, eventId }))
+}
+
+function liveStateToHomeState(state: string): HomeFixtureState {
+	if (state === 'SETTLED' || state === 'FINALIZED') {
+		return 'SETTLED'
+	}
+	if (
+		state === 'SCHEDULED' ||
+		state === 'PRE_DEADLINE' ||
+		state === 'PICKS_WAIT'
+	) {
+		return 'SCHEDULED'
+	}
+	return 'LIVE'
+}
+
+function liveFixturesToHomeFixtures(
+	rows: LiveMatchdayDeskResponse['liveMatchdayDesk']['matches']
+): HomeFixture[] {
+	return rows.map(row => ({
+		id: row.fixtureId,
+		eventId: row.eventId,
+		finished: row.finished,
+		started: row.started,
+		kickoffTime: row.kickoffTime,
+		homeTeam: {
+			id: row.homeTeamId,
+			name: row.homeTeamName,
+			shortName: row.homeTeamShortName
+		},
+		awayTeam: {
+			id: row.awayTeamId,
+			name: row.awayTeamName,
+			shortName: row.awayTeamShortName
+		},
+		homeScore: row.homeScore,
+		awayScore: row.awayScore
+	}))
 }
 
 const getHomePublicBootstrapFromOrigin = unstable_cache(
@@ -133,10 +176,58 @@ const loadHomeFixturesFromOrigin = async (
 				{ eventId },
 				{ cache: 'no-store', timeoutMs: 5_000 }
 			)
+		const core = response.coreEventContext
+		if (core.currentEventId === eventId) {
+			try {
+				const liveResponse =
+					await executePublicServerQuery<LiveMatchdayDeskResponse>(
+						'fixtures',
+						GET_LIVE_MATCHDAY_DESK,
+						undefined,
+						{ cache: 'no-store', timeoutMs: 5_000 }
+					)
+				const desk = liveResponse.liveMatchdayDesk
+				if (desk.eventId !== eventId) {
+					throw new Error('LIVE_EVENT_CHANGED')
+				}
+				return {
+					season: desk.season,
+					revision: desk.revision,
+					eventId: desk.eventId,
+					source: 'LIVE' as const,
+					state: liveStateToHomeState(desk.state),
+					sourceCheckedAt: desk.sourceCheckedAt,
+					publishedAt: desk.publishedAt,
+					stale: desk.stale,
+					fixtures: liveFixturesToHomeFixtures(desk.matches)
+				}
+			} catch (error) {
+				console.warn('[home-fixtures] live publication unavailable', {
+					eventId,
+					error: error instanceof Error ? error.name : 'UnknownError'
+				})
+				return {
+					season: core.season,
+					revision: 'live-unavailable',
+					eventId,
+					source: 'LIVE' as const,
+					state: 'UNAVAILABLE' as const,
+					sourceCheckedAt: null,
+					publishedAt: null,
+					stale: true,
+					fixtures: []
+				}
+			}
+		}
 		return {
-			season: response.coreEventContext.season,
-			revision: response.coreEventContext.revision,
+			season: core.season,
+			revision: core.revision,
 			eventId,
+			source: 'CORE' as const,
+			state: 'CORE' as const,
+			sourceCheckedAt: core.sourceCheckedAt,
+			publishedAt: null,
+			stale: false,
 			fixtures: withEventId(response.eventFixtures, eventId)
 		}
 	})

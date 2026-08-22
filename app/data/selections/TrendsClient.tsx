@@ -23,11 +23,13 @@ import {
 import type {
 	TrendAccess,
 	TrendCohort,
-	TrendDesk
+	TrendDesk,
+	TrendCatalogState
 } from '@/lib/graphql/operations/trends'
 
 type Props = {
 	publicCohorts: TrendCohort[]
+	publicCatalogState: TrendCatalogState
 	myCohorts: TrendCohort[]
 	canLoadMine: boolean
 	myCohortsLoadFailed: boolean
@@ -58,6 +60,7 @@ const labelKeys: Record<
 
 export default function TrendsClient({
 	publicCohorts,
+	publicCatalogState,
 	myCohorts,
 	canLoadMine,
 	myCohortsLoadFailed,
@@ -316,8 +319,11 @@ export default function TrendsClient({
 		<>
 			<RouteReadyMarker
 				name="TRENDS_CATALOG_READY"
-				ready={cohorts.length > 0}
-				readyKey={`${access}:${cohorts.length}`}
+				ready={
+					cohorts.length > 0 &&
+					(access === 'MINE' || publicCatalogState === 'PUBLISHED')
+				}
+				readyKey={`${access}:${publicCatalogState}:${cohorts.length}`}
 				audienceHint={audienceHint}
 				goodMs={1000}
 				poorMs={1500}
@@ -479,13 +485,33 @@ export default function TrendsClient({
 							)}
 						</div>
 					)}
-					{!committed && !error && (
-						<div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-							{cohorts.length > 0
-								? t('noReadyLeagueOptions')
-								: t('noLeagueOptions')}
+					{!committed && !error && publicCohortsLoadFailed ? (
+						<div
+							className="rounded-xl border border-destructive/30 p-10 text-center text-sm text-destructive"
+							role="alert"
+						>
+							<p>{t('publicLeaguesError')}</p>
+							<button
+								type="button"
+								className="mt-3 rounded-md border px-3 py-1 text-xs font-medium text-foreground hover:bg-muted"
+								onClick={() => window.location.reload()}
+							>
+								{t('retry')}
+							</button>
 						</div>
-					)}
+					) : !committed && !error ? (
+						publicCatalogState === 'NOT_PUBLISHED' && access === 'PUBLIC' ? (
+							<div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+								{t('notPublished')}
+							</div>
+						) : (
+							<div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+								{cohorts.length > 0
+									? t('noReadyLeagueOptions')
+									: t('noLeagueOptions')}
+							</div>
+						)
+					) : null}
 					{committed && (
 						<>
 							<div className="mb-4 flex items-center justify-between">

@@ -40,7 +40,7 @@ export function transformLiveMatches(
 		id: String(row.fixtureId),
 		homeTeam: {
 			name: row.homeTeamName,
-			shortName: getTeamShortName(row.homeTeamName),
+			shortName: row.homeTeamShortName || getTeamShortName(row.homeTeamName),
 			score: row.homeScore ?? 0,
 			possession: 0,
 			shots: 0,
@@ -50,7 +50,7 @@ export function transformLiveMatches(
 		},
 		awayTeam: {
 			name: row.awayTeamName,
-			shortName: getTeamShortName(row.awayTeamName),
+			shortName: row.awayTeamShortName || getTeamShortName(row.awayTeamName),
 			score: row.awayScore ?? 0,
 			possession: 0,
 			shots: 0,
@@ -175,7 +175,8 @@ export async function getLiveMatchesSnapshot(
 				revision: desk.liveMatchdayDesk.revision,
 				state: desk.liveMatchdayDesk.state,
 				publishedAt: desk.liveMatchdayDesk.publishedAt,
-				checkedAt: desk.liveMatchdayDesk.publishedAt
+				checkedAt: desk.liveMatchdayDesk.sourceCheckedAt,
+				stale: desk.liveMatchdayDesk.stale
 			}
 		: null
 	return {

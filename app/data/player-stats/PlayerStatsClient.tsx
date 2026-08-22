@@ -50,7 +50,7 @@ export default function PlayerStatsClient({
 	const t = useTranslations('PlayerStats')
 	const { seed: personalSeed, resolved: personalSeedResolved } =
 		usePlayerStatsPersonalSeed()
-	const { anchorGw, seasonStatsAvailable } = directorySeed
+	const { anchorGw, seasonStatsAvailable, seasonStatsStatus } = directorySeed
 	const mySquadPicks = personalSeed?.mySquadPicks ?? []
 	const marketCompareCandidates = personalSeed?.marketCompareCandidates
 	const initialFirstEntry = initialDeskSeed?.entries.find(
@@ -288,7 +288,7 @@ export default function PlayerStatsClient({
 	)
 
 	const pickerStatsAvailable =
-		firstPlayer.playerDetail?.statsContext.scope === 'CURRENT_SEASON' ||
+		firstPlayer.playerDetail?.statsContext.status === 'AVAILABLE' ||
 		(firstPlayer.playerDetail == null && seasonStatsAvailable)
 	const personalSeedReady =
 		personalSeedResolved && personalSeed?.squadState === 'ready'
@@ -456,6 +456,7 @@ export default function PlayerStatsClient({
 					comparisonStateContextError={secondPlayer.stateContextError}
 					anchorGw={anchorGw}
 					seasonStatsAvailable={seasonStatsAvailable}
+					seasonStatsStatus={seasonStatsStatus}
 				/>
 			) : null}
 		</>

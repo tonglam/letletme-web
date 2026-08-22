@@ -311,6 +311,7 @@ export interface LiveSnapshotStatus {
 	state: LiveSnapshotState
 	publishedAt: string
 	checkedAt: string
+	stale?: boolean
 }
 
 export interface LiveSnapshotResponse {
@@ -324,14 +325,18 @@ export const GET_LIVE_MATCHDAY_DESK = `
       eventId
       revision
       state
+		sourceCheckedAt
       publishedAt
+		stale
 		matches {
         fixtureId
         eventId
         homeTeamId
         homeTeamName
+		homeTeamShortName
         awayTeamId
         awayTeamName
+		awayTeamShortName
         homeScore
         awayScore
         kickoffTime
@@ -344,8 +349,10 @@ export const GET_LIVE_MATCHDAY_DESK = `
 			eventId
 			homeTeamId
 			homeTeamName
+			homeTeamShortName
 			awayTeamId
 			awayTeamName
+			awayTeamShortName
 			homeScore
 			awayScore
 			kickoffTime
@@ -501,8 +508,10 @@ export interface LiveMatchdayDeskRow {
 	eventId: number
 	homeTeamId: number
 	homeTeamName: string
+	homeTeamShortName: string
 	awayTeamId: number
 	awayTeamName: string
+	awayTeamShortName: string
 	homeScore: number | null
 	awayScore: number | null
 	kickoffTime: string | null
@@ -517,6 +526,8 @@ export interface LiveMatchdayDesk {
 	revision: string
 	state: LiveSnapshotState
 	publishedAt: string
+	sourceCheckedAt: string
+	stale: boolean
 	matches: LiveMatchdayDeskRow[]
 	nextFixtures: LiveMatchdayDeskRow[]
 }
@@ -544,6 +555,7 @@ export const GET_LIVE_CONTEXT = `
       state
       publishedAt
       checkedAt: sourceCheckedAt
+		stale
     }
   }
 `
@@ -558,6 +570,7 @@ export interface LiveContextResponse {
 		state: LiveSnapshotState
 		publishedAt: string | null
 		checkedAt: string | null
+		stale: boolean
 	} | null
 }
 

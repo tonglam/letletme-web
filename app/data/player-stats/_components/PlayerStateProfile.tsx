@@ -15,6 +15,7 @@ export function PlayerStateProfile({
 	profile,
 	comparisonProfile,
 	seasonStatsAvailable,
+	statusMessage,
 	isLoading,
 	isComparisonLoading,
 	error,
@@ -25,6 +26,7 @@ export function PlayerStateProfile({
 	profile: PlayerStateProfileData | null
 	comparisonProfile: PlayerStateProfileData | null
 	seasonStatsAvailable: boolean
+	statusMessage: string | null
 	isLoading: boolean
 	isComparisonLoading: boolean
 	error: string | null
@@ -37,10 +39,10 @@ export function PlayerStateProfile({
 			<PlayerStatsSection
 				id="ps-state"
 				title={t('notRatedTitle')}
-				hint={t('notRatedHint')}
+				hint={statusMessage ?? t('notRatedHint')}
 			>
 				<p className="rounded-lg border border-border/60 px-3 py-3 text-sm text-muted-foreground">
-					{t('notRatedHint')}
+					{statusMessage ?? t('notRatedHint')}
 				</p>
 			</PlayerStatsSection>
 		)
