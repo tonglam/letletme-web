@@ -44,6 +44,10 @@ type Props = {
 const TOP_RANK_LIMIT = 12
 const PERSONAL_SQUAD_SIZE = 15
 
+// GraphQL returns PERSONAL_EXPOSURE independently of the ranking limit. The
+// request remains capped at twelve because that limit is only for ranked
+// sections; the UI explicitly renders the complete personal section.
+
 function sectionDenominator(
 	section: TrendDesk['sections'][number]
 ): number | null {
@@ -57,16 +61,17 @@ function denominatorSummary(sections: TrendDesk['sections']) {
 	const denominators = sections
 		.map(sectionDenominator)
 		.filter((value): value is number => value !== null)
+	const uniqueDenominators = Array.from(new Set(denominators))
 	const everySectionHasDenominator =
 		sections.length > 0 && denominators.length === sections.length
 	const shared =
-		everySectionHasDenominator &&
-		denominators.every(value => value === denominators[0])
+		everySectionHasDenominator && uniqueDenominators.length === 1
 			? denominators[0]
 			: null
 	return {
 		shared,
-		mismatch: sections.length > 0 && shared === null
+		mismatch: uniqueDenominators.length > 1,
+		missing: sections.length > 0 && !everySectionHasDenominator
 	}
 }
 
@@ -602,6 +607,11 @@ export default function TrendsClient({
 							{denominators.mismatch ? (
 								<p className="mb-4 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
 									{t('denominatorMismatch')}
+								</p>
+							) : null}
+							{denominators.missing ? (
+								<p className="mb-4 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
+									{t('denominatorMissing')}
 								</p>
 							) : null}
 							<div ref={shareRef}>

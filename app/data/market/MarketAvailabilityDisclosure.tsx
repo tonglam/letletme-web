@@ -6,6 +6,7 @@ import type { MarketAvailabilityUpdate } from '@/lib/graphql/operations/market'
 import { fetchMarketJson, marketRevisionParam } from '@/lib/market-client'
 import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import { MARKET_AVAILABILITY_HIGHLIGHT_LIMIT } from '@/lib/market'
+import { useRouter } from '@/i18n/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -41,6 +42,7 @@ export function MarketAvailabilityDisclosure({
 	const t = useTranslations('Market')
 	const common = useTranslations('Common')
 	const locale = useLocale()
+	const router = useRouter()
 	const snapshotKey = `${revision ?? 'none'}:${days}`
 	const [loadedSnapshot, setLoadedSnapshot] = useState<LoadedSnapshot | null>(
 		null
@@ -194,7 +196,7 @@ export function MarketAvailabilityDisclosure({
 									<button
 										type="button"
 										className="rounded-md border px-2.5 py-1 font-medium hover:bg-muted"
-										onClick={() => void loadInitial()}
+										onClick={() => router.refresh()}
 									>
 										{common('tryAgain')}
 									</button>

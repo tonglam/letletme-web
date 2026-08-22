@@ -59,6 +59,14 @@ async function renderPlayerStatsPage({ params, searchParams }: PageProps) {
 		value => ({ ok: true as const, value }),
 		error => ({ ok: false as const, error })
 	)
+	const personalSeedPromise = loadPlayerStatsPersonalSeed(
+		bootstrapPromise,
+		undefined,
+		timing
+	).catch(error => {
+		console.error('[player-stats] personal seed failed:', error)
+		return null
+	})
 	const [sp, bootstrapResult, t] = await Promise.all([
 		searchParams,
 		bootstrapResultPromise,
@@ -85,14 +93,6 @@ async function renderPlayerStatsPage({ params, searchParams }: PageProps) {
 		)
 	}
 	const bootstrap = bootstrapResult.value
-	const personalSeedPromise = loadPlayerStatsPersonalSeed(
-		Promise.resolve(bootstrap),
-		undefined,
-		timing
-	).catch(error => {
-		console.error('[player-stats] personal seed failed:', error)
-		return null
-	})
 	const initialP1 = parsePlayerStatsPlayerId(sp.p1)
 	const parsedP2 = parsePlayerStatsPlayerId(sp.p2)
 	const initialP2 =

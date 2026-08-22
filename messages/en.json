@@ -1517,6 +1517,7 @@
 		"topRanked": "Top {count}",
 		"squadPicks": "{shown} of {expected} squad picks",
 		"denominatorMismatch": "Sections report different field sizes; percentages remain section-specific.",
+		"denominatorMissing": "Some sections do not report a field size; percentages remain section-specific.",
 		"pageIntro": "See who different league fields own, captain, and transfer — and where your team is exposed if those players return.",
 		"scopeLabel": "Scope",
 		"scopeMeta": "{tournament} · GW{gw}",

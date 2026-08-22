@@ -1517,6 +1517,7 @@
 		"topRanked": "前 {count} 名",
 		"squadPicks": "阵容球员 {shown}/{expected} 人",
 		"denominatorMismatch": "不同区块的参赛人数不一致；百分比仍按各自分母计算。",
+		"denominatorMissing": "部分区块未提供参赛人数；百分比仍按各自分母计算。",
 		"pageIntro": "查看不同联赛在持有、队长和转会上的选择，并理解这些球员取得回报时你的阵容暴露。",
 		"scopeLabel": "范围",
 		"scopeMeta": "{tournament} · 第 {gw} 轮",
