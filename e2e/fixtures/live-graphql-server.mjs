@@ -1041,8 +1041,21 @@ const server = createServer((request, response) => {
 						coreRevision: 'e2e-core-v1',
 						eventId: 33,
 						nextEventId: 34,
+						anchorEventId: 33,
+						latestFinalizedEventId: 32,
 						revision: 'a'.repeat(24),
 						state: liveHydrationFixtureEnabled ? 'LIVE_ACTIVE' : 'SCHEDULED',
+						windowState: liveHydrationFixtureEnabled
+							? 'LIVE_ACTIVE'
+							: 'EVENT_SCHEDULED',
+						producerState: liveHydrationFixtureEnabled
+							? 'LIVE_ACTIVE'
+							: 'PICKS_PROBE',
+						anchorMode: 'CURRENT',
+						dataAvailability: liveHydrationFixtureEnabled
+							? 'FRESH'
+							: 'SCHEDULED',
+						nextRefreshAt: '2026-08-04T18:01:00.000Z',
 						sourceCheckedAt: '2026-08-04T18:00:30.000Z',
 						checkedAt: '2026-08-04T18:00:30.000Z',
 						publishedAt: '2026-08-04T18:00:00.000Z',
@@ -1063,6 +1076,14 @@ const server = createServer((request, response) => {
 						eventId: 33,
 						revision: 'a'.repeat(24),
 						state: liveHydrationFixtureEnabled ? 'LIVE' : 'SCHEDULED',
+						windowState: liveHydrationFixtureEnabled
+							? 'LIVE_ACTIVE'
+							: 'EVENT_SCHEDULED',
+						dataAvailability: liveHydrationFixtureEnabled
+							? 'FRESH'
+							: 'SCHEDULED',
+						liveRevision: 'a'.repeat(24),
+						nextRefreshAt: '2026-08-04T18:01:00.000Z',
 						sourceCheckedAt: '2026-08-04T18:00:30.000Z',
 						publishedAt: '2026-08-04T18:00:00.000Z',
 						stale: false,
