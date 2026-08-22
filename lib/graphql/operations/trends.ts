@@ -4,7 +4,7 @@ export const GET_TREND_COHORTS = `
       season
       revision
       cohorts {
-        id kind access displayName exact latestEventId revision availability
+        id kind access displayName setupStatus exact latestEventId revision availability
         capabilities { capability state }
       }
     }
@@ -15,7 +15,7 @@ export const GET_TREND_COHORT_SNAPSHOT = `
   query TrendCohortSnapshot($cohortId: ID!, $eventId: Int!, $limit: Int!, $access: TrendCohortAccess!) {
     trendCohortSnapshot(cohortId: $cohortId, eventId: $eventId, limit: $limit, access: $access) {
       eventId
-      cohort { id displayName kind access exact latestEventId revision availability capabilities { capability state } }
+      cohort { id displayName kind access setupStatus exact latestEventId revision availability capabilities { capability state } }
       sections {
         capability state
         evidenceContext { availabilityState coverageState exact denominator sampleSize methodKey methodVersion limitations }
@@ -33,6 +33,7 @@ export type TrendCohort = {
 	kind: string
 	access: TrendAccess
 	displayName: string
+	setupStatus: string
 	exact: boolean
 	latestEventId: number | null
 	revision: string | null
