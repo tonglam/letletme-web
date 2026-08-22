@@ -29,6 +29,7 @@ interface TeamExposureFilterProps {
 	entries: TeamExposureEntry[]
 	onMatchedEntryIdsChange: (entryIds: string[] | null) => void
 	className?: string
+	onDismiss?: () => void
 }
 
 type SelectedTeam = {
@@ -41,8 +42,9 @@ export function TeamExposureFilter({
 	entries,
 	onMatchedEntryIdsChange,
 	className,
+	onDismiss,
 }: TeamExposureFilterProps) {
-	const t = useTranslations('Filters')
+		const t = useTranslations('Filters')
 	const [pendingTeam, setPendingTeam] = useState<string>('')
 	const [pendingCount, setPendingCount] = useState<number>(1)
 	const [scope, setScope] = useState<OwnershipScope>('any')
@@ -154,19 +156,34 @@ export function TeamExposureFilter({
 	return (
 		<div className={cn('mb-4 rounded-lg border bg-card p-4 last:mb-0 md:mb-6', className)}>
 			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-				<div>
-					<div className="flex items-center gap-2 text-sm font-medium">
-						<Shirt className="h-4 w-4 text-primary-ink" />
-						{t('teamExposure')}
+					<div className="flex min-w-0 items-start justify-between gap-3">
+						<div>
+							<div className="flex items-center gap-2 text-sm font-medium">
+								<Shirt className="h-4 w-4 text-primary-ink" />
+								{t('teamExposure')}
+							</div>
+							<div className="mt-1 text-xs text-muted-foreground">
+								{t('matched', {
+									matched: summary.matchedCount,
+									total: summary.totalCount,
+									percentage: summary.percentage,
+								})}
+							</div>
+						</div>
+						{onDismiss ? (
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon"
+								className="size-8 shrink-0"
+								aria-label={t('removeTeam')}
+								title={t('removeTeam')}
+								onClick={onDismiss}
+							>
+								<X className="h-4 w-4" />
+							</Button>
+						) : null}
 					</div>
-					<div className="mt-1 text-xs text-muted-foreground">
-						{t('matched', {
-							matched: summary.matchedCount,
-							total: summary.totalCount,
-							percentage: summary.percentage,
-						})}
-					</div>
-				</div>
 
 				<div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
 					{/* Shared scope for all selected teams */}

@@ -211,7 +211,7 @@ test('server-rendered mobile navigation opens and closes after navigation', asyn
 		mobileMenu.getByRole('link', { name: 'My Competitions', exact: true })
 	).toHaveAttribute('href', '/competitions/browse?mine=true')
 	await expect(
-		mobileMenu.getByRole('link', { name: 'Create Competition', exact: true })
+		mobileMenu.getByRole('link', { name: 'Competition', exact: true })
 	).toHaveAttribute('href', '/competitions/create')
 
 	await mobileMenu.getByRole('link', { name: 'Market' }).click()
@@ -254,15 +254,17 @@ test('Simplified Chinese mobile navigation uses the same competition vocabulary'
 	await mobileMenu.locator(':scope > summary').click()
 	await expect(mobileMenu).toHaveAttribute('open', '')
 	for (const label of ['实时', '我的 FPL', '赛事', '探索']) {
-		await expect(mobileMenu.getByText(label, { exact: true })).toBeVisible()
+		await expect(
+			mobileMenu.locator('section > p').filter({ hasText: label })
+		).toBeVisible()
 	}
 
 	await expect(
-		mobileMenu.getByRole('link', { name: '我的赛事', exact: true })
-	).toHaveAttribute('href', '/zh-CN/competitions/browse?mine=true')
+		mobileMenu.locator('a[href="/zh-CN/my-fpl/competitions"]')
+	).toHaveText('赛事')
 	await expect(
-		mobileMenu.getByRole('link', { name: '创建赛事', exact: true })
-	).toHaveAttribute('href', '/zh-CN/competitions/create')
+		mobileMenu.locator('a[href="/zh-CN/competitions/create"]')
+	).toHaveText('赛事')
 })
 
 test('Market stays accessible and usable on a 390px Simplified Chinese screen', async ({

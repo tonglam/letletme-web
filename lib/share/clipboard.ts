@@ -20,7 +20,8 @@ async function elementToPng(element: HTMLElement): Promise<Blob | null> {
 	return toBlob(element, {
 		backgroundColor: '#210025',
 		cacheBust: true,
-		pixelRatio: 2
+		pixelRatio: 2,
+		filter: node => node.dataset.shareExclude !== 'true',
 	})
 }
 

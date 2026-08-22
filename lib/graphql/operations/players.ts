@@ -46,6 +46,22 @@ export const GET_PLAYER_DETAIL = `
   }
 `
 
+export const GET_PLAYER_START_PRICE = /* GraphQL */ `
+	query GetPlayerStartPrice($playerId: Int!, $eventId: Int!) {
+		playerDetail(playerId: $playerId, eventId: $eventId) {
+			id
+			startPrice
+		}
+	}
+`
+
+export interface PlayerStartPriceResponse {
+	playerDetail: {
+		id: number
+		startPrice: number | null
+	} | null
+}
+
 /**
  * The first request for a selected player is intentionally small. Evidence
  * fields are requested only after the user opens an evidence view.

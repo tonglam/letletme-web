@@ -130,6 +130,10 @@ function coreMatchStatKeys(position: string): Array<{
 		common[0],
 		common[1],
 		common[2],
+		{
+			labelKey: 'defensiveContribution',
+			getValue: p => p.stats.defensiveContribution ?? 0,
+		},
 		common[3],
 		common[4],
 		common[5],

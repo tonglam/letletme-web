@@ -82,6 +82,8 @@ describe('Home first-screen performance boundary', () => {
 			assert.doesNotMatch(leagueList, new RegExp(removed))
 		}
 		assert.match(leagueList, /row\.name/)
+		assert.match(leagueList, /leagueType/)
+		assert.match(leagueList, /data-home-league-group/)
 		assert.match(leagueList, /row\.rank/)
 		assert.match(leagueList, /row\.movement\.direction/)
 		assert.match(leagueList, /HOME_LEAGUE_RANKS_READY/)

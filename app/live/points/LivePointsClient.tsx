@@ -3,6 +3,12 @@
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Card } from '@/components/ui/card'
+import {
+	GET_ENTRY,
+	type EntryOverallSnapshot,
+	type EntrySummaryResponse
+} from '@/lib/graphql/operations/entries'
+import { executeQuery } from '@/lib/graphql-client'
 import type {
 	LiveCalcData,
 	LiveSnapshotStatus
@@ -12,19 +18,22 @@ import { LivePointsDashboard } from './_components/LivePointsDashboard'
 import { LivePointsLoading } from './_components/LivePointsLoading'
 import { useLivePoints } from './_hooks/useLivePoints'
 import { useTranslations } from 'next-intl'
+import { useEffect, useRef, useState } from 'react'
 
 interface LivePointsClientProps {
 	initialEntryId: number
 	initialEventId: number
 	initialLiveData?: LiveCalcData
 	initialSnapshot?: LiveSnapshotStatus | null
+	initialOverall?: EntryOverallSnapshot
 }
 
 export default function LivePointsClient({
 	initialEntryId,
 	initialEventId,
 	initialLiveData,
-	initialSnapshot
+	initialSnapshot,
+	initialOverall
 }: LivePointsClientProps) {
 	const t = useTranslations('LivePoints')
 	const livePoints = useLivePoints({
@@ -33,6 +42,60 @@ export default function LivePointsClient({
 		initialLiveData,
 		initialSnapshot
 	})
+	const [overall, setOverall] = useState(initialOverall)
+	const overallLoadedKeyRef = useRef<string | null>(
+		initialOverall != null ? `${initialEntryId}:${initialEventId}` : null
+	)
+
+	useEffect(() => {
+		setOverall(initialOverall)
+		overallLoadedKeyRef.current =
+			initialOverall != null ? `${initialEntryId}:${initialEventId}` : null
+	}, [initialEntryId, initialEventId, initialOverall])
+
+	useEffect(() => {
+		const selectedGw = livePoints.selectedGameweek ?? livePoints.currentGameweek
+		if (
+			livePoints.activeEntryId <= 0 ||
+			selectedGw !== livePoints.currentGameweek
+		) {
+			setOverall(undefined)
+			overallLoadedKeyRef.current = null
+			return
+		}
+		const overallKey = `${livePoints.activeEntryId}:${livePoints.currentGameweek}`
+		if (overallLoadedKeyRef.current === overallKey) return
+		overallLoadedKeyRef.current = overallKey
+
+		let cancelled = false
+		void executeQuery<EntrySummaryResponse>(
+			GET_ENTRY,
+			{ id: livePoints.activeEntryId },
+			{ cache: 'no-store' }
+		)
+			.then(response => {
+				if (cancelled || !response.entry) return
+				setOverall({
+					overallPoints: response.entry.overallPoints,
+					overallRank: response.entry.overallRank,
+					teamValue: response.entry.teamValue,
+					bank: response.entry.bank,
+					totalTransfers: response.entry.totalTransfers
+				})
+			})
+			.catch(error => {
+				if (!cancelled) overallLoadedKeyRef.current = null
+				console.warn('[live points] overall snapshot fetch failed:', error)
+			})
+
+		return () => {
+			cancelled = true
+		}
+	}, [
+		livePoints.activeEntryId,
+		livePoints.currentGameweek,
+		livePoints.selectedGameweek
+	])
 	const entrySearch = (
 		<EntrySearchForm
 			value={livePoints.entryIdInput}
@@ -78,6 +141,7 @@ export default function LivePointsClient({
 				isPageActive={livePoints.isPageActive}
 				shouldAutoRefresh={livePoints.shouldAutoRefresh}
 				liveData={livePoints.liveData}
+				overall={overall}
 				startingPlayers={livePoints.startingPlayers}
 				benchPlayers={livePoints.benchPlayers}
 				onGameweekChange={livePoints.changeGameweek}
@@ -95,10 +159,7 @@ export default function LivePointsClient({
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-4xl px-4 py-8">
-				<StatsPageHeader
-					eyebrow={t('livePoints')}
-					title={t('title')}
-				/>
+				<StatsPageHeader title={t('title')} />
 				{content}
 			</div>
 		</PageShell>

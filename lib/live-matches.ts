@@ -362,7 +362,15 @@ export async function getLiveMatchesSnapshot(
 			throw new Error(`Live matches request failed (${response.status})`)
 		desk = (await response.json()) as LiveMatchdayDeskPayload
 	} else {
-		desk = await loadLiveMatchdayDesk(executor)
+		const ref =
+			currentEventId && options.revision
+				? {
+						season: String(getCurrentSeasonKey()),
+						eventId: currentEventId,
+						revision: options.revision
+					}
+				: null
+		desk = await loadLiveMatchdayDesk(executor, ref)
 	}
 	const current = validEventId(desk.liveMatchdayDesk?.eventId) ?? currentEventId
 	const snapshot = desk.liveMatchdayDesk

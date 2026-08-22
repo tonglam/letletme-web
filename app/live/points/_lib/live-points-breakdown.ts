@@ -1,4 +1,5 @@
 import type { Player } from '@/types/player'
+import { getDefensiveContributionPoints } from '@/lib/fpl-scoring'
 
 export type BreakdownLine = {
 	category: string
@@ -14,7 +15,7 @@ export type BreakdownLine = {
  * Does not attempt DGW fixture splits or auto-subs — those require explain.
  */
 export function buildProvisionalBreakdownFromPlayer(
-	player: Pick<Player, 'position' | 'stats'>,
+	player: Pick<Player, 'position' | 'stats'>
 ): BreakdownLine[] {
 	const { position, stats } = player
 	const lines: BreakdownLine[] = []
@@ -37,11 +38,7 @@ export function buildProvisionalBreakdownFromPlayer(
 	// Goals (position-weighted)
 	if (stats.goals > 0) {
 		const per =
-			position === 'GKP' || position === 'DEF'
-				? 6
-				: position === 'MID'
-					? 5
-					: 4
+			position === 'GKP' || position === 'DEF' ? 6 : position === 'MID' ? 5 : 4
 		push('Goals', stats.goals * per, stats.goals)
 	}
 
@@ -81,7 +78,11 @@ export function buildProvisionalBreakdownFromPlayer(
 
 	// Penalties missed
 	if ((stats.penaltiesMissed ?? 0) > 0) {
-		push('Penalty Missed', (stats.penaltiesMissed ?? 0) * -2, stats.penaltiesMissed)
+		push(
+			'Penalty Missed',
+			(stats.penaltiesMissed ?? 0) * -2,
+			stats.penaltiesMissed
+		)
 	}
 
 	// Own goals
@@ -97,17 +98,28 @@ export function buildProvisionalBreakdownFromPlayer(
 		push('Red Card', stats.redCards * -3, stats.redCards)
 	}
 
-	// Defensive contribution (approx — threshold varies by position in FPL)
+	// Defensive contribution (the raw count is not itself the points award).
+	// The live pick total already contains this award, so include it when the
+	// explain payload is missing or does not reconcile with that total.
+	const elementType =
+		position === 'DEF' ? 2 : position === 'MID' ? 3 : position === 'FWD' ? 4 : 1
+	const defensiveContributionPoints = getDefensiveContributionPoints(
+		elementType,
+		stats.defensiveContribution
+	)
+	if (defensiveContributionPoints > 0) {
+		push(
+			'Defensive Contribution',
+			defensiveContributionPoints,
+			stats.defensiveContribution
+		)
+	}
+
 	// Show raw bonus from pick when present rather than re-derive DC points.
 	// Bonus is authoritative on the pick.
 	if (stats.bonusPoints > 0) {
 		push('Bonus Points', stats.bonusPoints, stats.bonusPoints)
 	}
-
-	// Defensive contribution points are already folded into totalPoints by FPL;
-	// we cannot recover the exact point award without explain. If DC count is
-	// high enough that it might have scored, surface value-only is not useful.
-	// Skip unless we later get an explain payload.
 
 	return lines
 }
@@ -124,7 +136,11 @@ export function resolvePointsBreakdown(input: {
 	official: BreakdownLine[]
 	officialMatchesTotal: boolean
 	player: Pick<Player, 'position' | 'stats' | 'playingStatus'>
-}): { lines: BreakdownLine[]; source: 'official' | 'provisional' | 'none'; pending: boolean } {
+}): {
+	lines: BreakdownLine[]
+	source: 'official' | 'provisional' | 'none'
+	pending: boolean
+} {
 	const total = input.player.stats.points
 
 	if (input.officialMatchesTotal && input.official.length > 0) {
@@ -136,10 +152,8 @@ export function resolvePointsBreakdown(input: {
 
 	// Captain/VC multipliers can make provisional sum a divisor of the shown total.
 	const matchesExactly = provisionalSum === total
-	const matchesDouble =
-		provisionalSum > 0 && total === provisionalSum * 2
-	const matchesTriple =
-		provisionalSum > 0 && total === provisionalSum * 3
+	const matchesDouble = provisionalSum > 0 && total === provisionalSum * 2
+	const matchesTriple = provisionalSum > 0 && total === provisionalSum * 3
 
 	if (matchesExactly || matchesDouble || matchesTriple) {
 		const multiplier = matchesTriple ? 3 : matchesDouble ? 2 : 1
@@ -148,7 +162,7 @@ export function resolvePointsBreakdown(input: {
 				? provisional
 				: provisional.map(line => ({
 						...line,
-						points: line.points * multiplier,
+						points: line.points * multiplier
 					}))
 		return { lines, source: 'provisional', pending: false }
 	}
@@ -159,7 +173,7 @@ export function resolvePointsBreakdown(input: {
 		return {
 			lines: provisional,
 			source: 'provisional',
-			pending: provisionalSum !== total,
+			pending: provisionalSum !== total
 		}
 	}
 

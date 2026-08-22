@@ -8,6 +8,7 @@ import type {
 	HomeFixture,
 	HomeFixturesResponse
 } from '@/lib/graphql/operations/home'
+import { resolvePreferredHomeMatchDayKey } from '@/lib/home-match-day-selection'
 import { teamCrestSrc } from '@/lib/team-crest'
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
 import Image from 'next/image'
@@ -284,6 +285,16 @@ export function MatchesSection({
 		''
 	const intentEventId = pendingEventId ?? committed?.eventId ?? initialEventId
 
+	useEffect(() => {
+		if (!useLocalTimezone || matchDays.length === 0) return
+		const preferredDayKey = resolvePreferredHomeMatchDayKey(matchDays)
+		setActiveDayKey(currentDayKey =>
+			currentDayKey && matchDays.some(day => day.dateKey === currentDayKey)
+				? currentDayKey
+				: preferredDayKey
+		)
+	}, [matchDays, useLocalTimezone])
+
 	const loadEvent = useCallback(
 		(eventId: number, options: { force?: boolean } = {}) => {
 			clearFixtureError()
@@ -446,11 +457,9 @@ export function MatchesSection({
 			) : null}
 			<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div>
-					<p className="eyebrow">
-						{t(
-							isLivePublication ? 'currentGameweekLabel' : 'nextGameweekLabel'
-						)}
-					</p>
+					{!isLivePublication ? (
+						<p className="eyebrow">{t('nextGameweekLabel')}</p>
+					) : null}
 					<h2 className="mt-1 flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
 						{t(isLivePublication ? 'currentMatches' : 'upcomingMatches')}
 						<GameweekBadge

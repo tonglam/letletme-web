@@ -31,6 +31,7 @@ export async function GuestNavigationActions() {
 					) : (
 					<details
 						key={item.id}
+						name="primary-navigation"
 						data-navigation-group={item.id}
 						data-navigation-disclosure
 						className="group relative"
@@ -73,6 +74,7 @@ export async function GuestNavigationActions() {
 			<ThemeToggle />
 
 			<details
+				name="primary-navigation"
 				data-navigation-mobile
 				data-navigation-disclosure
 				className="group relative md:hidden"

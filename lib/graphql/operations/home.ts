@@ -141,6 +141,7 @@ export const GET_HOME_PERSONAL_DESK = /* GraphQL */ `
 			leagueRanks {
 				key
 				name
+				leagueType
 				rank
 				movement {
 					direction
@@ -374,6 +375,7 @@ export type HomeRankDirection = 'UP' | 'DOWN' | 'FLAT' | 'UNKNOWN'
 export type HomeLeagueRank = {
 	key: string
 	name: string
+	leagueType: 'CLASSIC' | 'H2H'
 	rank: number | null
 	movement: { direction: HomeRankDirection; places: number | null }
 	tournamentId: number | null

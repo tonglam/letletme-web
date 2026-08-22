@@ -13,7 +13,6 @@ import { SearchHeader } from '@/components/tournament/SearchHeader'
 import { TournamentHeader } from '@/components/tournament/TournamentHeader'
 import { TournamentSelector } from '@/components/tournament/TournamentSelector'
 import { TournamentTable } from '@/components/tournament/TournamentTable'
-import { ShareActions } from '@/components/share/ShareActions'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { executeQuery } from '@/lib/graphql-client'
@@ -201,6 +200,8 @@ export default function TournamentClient({
 	>(null)
 	const [teamExposureMatchedEntryIds, setTeamExposureMatchedEntryIds] =
 		useState<string[] | null>(null)
+	const [showOwnershipFilter, setShowOwnershipFilter] = useState(true)
+	const [showTeamExposureFilter, setShowTeamExposureFilter] = useState(true)
 	const selectedStats: LiveTournamentStats = useMemo(
 		() => buildTournamentStats(selectedEntries),
 		[selectedEntries]
@@ -567,12 +568,12 @@ export default function TournamentClient({
 			resultsInFlightRef.current = null
 			const resetTimer = window.setTimeout(() => {
 				setIsLoadingResults(false)
-				setResultsError(null)
-				setSelectedRows([])
-				setOfficialCoverage(0)
-				setStaleEntryIds(new Set())
-				setLoadedResultsKey(null)
-			}, 0)
+					setResultsError(null)
+					setSelectedRows([])
+					setOfficialCoverage(0)
+					setStaleEntryIds(new Set())
+					setLoadedResultsKey(null)
+				}, 0)
 			return () => window.clearTimeout(resetTimer)
 		}
 		const resultsKey = `${selectedTournamentKey}:${selectedGameweek}`
@@ -737,6 +738,16 @@ export default function TournamentClient({
 		[]
 	)
 
+	const dismissOwnershipFilter = useCallback(() => {
+		setOwnershipMatchedEntryIds(null)
+		setShowOwnershipFilter(false)
+	}, [])
+
+	const dismissTeamExposureFilter = useCallback(() => {
+		setTeamExposureMatchedEntryIds(null)
+		setShowTeamExposureFilter(false)
+	}, [])
+
 	const handleTableEntriesForShareChange = useCallback(
 		(entries: TournamentEntry[]) => {
 			setTableEntriesForShare(entries)
@@ -820,16 +831,8 @@ export default function TournamentClient({
 		lines.push(
 			'',
 			typeof window !== 'undefined'
-				? (() => {
-						const url = new URL(window.location.href)
-						if (selectedTournament) {
-							url.searchParams.set('tournamentId', selectedTournament.id)
-						}
-						return url.toString()
-					})()
-				: selectedTournament
-					? `https://letletme.top/live/competitions?tournamentId=${encodeURIComponent(selectedTournament.id)}`
-					: 'https://letletme.top/live/competitions'
+				? window.location.href
+				: 'https://letletme.top/live/competitions'
 		)
 		return lines.join('\n')
 	}, [
@@ -846,7 +849,6 @@ export default function TournamentClient({
 			<PageShell>
 				<div className="container mx-auto max-w-4xl px-4 py-8">
 					<StatsPageHeader
-						eyebrow={t('liveStandings')}
 						title={t('liveStandings')}
 					/>
 					<Card className="p-6 text-sm text-muted-foreground shadow-sm">
@@ -881,17 +883,9 @@ export default function TournamentClient({
 					readyKey={`${selectedTournament?.id ?? 'none'}:${selectedGameweek ?? 'none'}`}
 				/>
 				<StatsPageHeader
-					eyebrow={t('liveStandings')}
 					title={t('liveStandings')}
 					badge={
 						<div className="flex items-center gap-2">
-							{selectedTournament && standingsReady ? (
-								<ShareActions
-									text={shareText}
-									imageRef={shareRef}
-									title={selectedTournament.name}
-								/>
-							) : null}
 							{selectedGameweek ? (
 								<GameweekBadge gameweek={selectedGameweek} />
 							) : null}
@@ -942,17 +936,17 @@ export default function TournamentClient({
 
 				{/* Always offer the membership list so a bad ?tournamentId= can be corrected in-place. */}
 				{tournaments.length > 0 && (
-					<TournamentSelector
+						<TournamentSelector
 						tournaments={tournaments}
 						// Unknown URL id: force a non-matching value so every membership stays selectable.
 						currentTournamentId={
 							selectedTournament?.id ??
 							(unknownTournamentFromUrl ? '__unknown__' : '')
 						}
-						onTournamentChange={id => {
-							if (selectedTournament && id === selectedTournament.id) return
-							setRestoredTournamentId(id)
-							try {
+							onTournamentChange={id => {
+								if (selectedTournament && id === selectedTournament.id) return
+								setRestoredTournamentId(id)
+								try {
 								writeLiveTournamentSelection(window.localStorage, entryId, id)
 							} catch {
 								// Storage is optional; URL navigation remains authoritative.
@@ -1082,28 +1076,36 @@ export default function TournamentClient({
 									onCaptainFilterChange={setCaptainFilter}
 								/>
 
+								{showOwnershipFilter || showTeamExposureFilter ? (
 								<MobileCollapsibleFilters
 									activeCount={
 										(ownershipMatchedEntryIds ? 1 : 0) +
 										(teamExposureMatchedEntryIds ? 1 : 0)
 									}
 								>
+									{showOwnershipFilter ? (
 									<PlayerOwnershipFilter
 										key={`${selectedTournament.id}-${displayGameweek}`}
 										entries={selectedEntries}
 										onMatchedEntryIdsChange={
 											handleOwnershipMatchedEntryIdsChange
 										}
+										onDismiss={dismissOwnershipFilter}
 									/>
+									) : null}
 
+									{showTeamExposureFilter ? (
 									<TeamExposureFilter
 										key={`team-${selectedTournament.id}-${displayGameweek}`}
 										entries={selectedEntries}
 										onMatchedEntryIdsChange={
 											handleTeamExposureMatchedEntryIdsChange
 										}
+										onDismiss={dismissTeamExposureFilter}
 									/>
+									) : null}
 								</MobileCollapsibleFilters>
+								) : null}
 
 								<TournamentTable
 									key={`table-${selectedTournament.id}-${displayGameweek}`}
@@ -1113,6 +1115,9 @@ export default function TournamentClient({
 									gameweek={displayGameweek}
 									viewerEntryId={entryId}
 									onVisibleEntriesChange={handleTableEntriesForShareChange}
+									shareText={shareText}
+									shareImageRef={shareRef}
+									shareTitle={selectedTournament.name}
 								/>
 							</>
 						)}

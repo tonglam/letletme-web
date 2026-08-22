@@ -22,7 +22,7 @@ import { getVerifiedFplEntryId } from "@/lib/fpl-binding-core";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
-import { ChevronDown, LogOut, Menu, MessageCircleWarning, Settings, Shirt, UserCircle, UserRound } from "lucide-react";
+import { ChevronDown, LogOut, Menu, MessageCircleWarning, Settings, Shirt, UserCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -126,10 +126,6 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
             {user ? (
               <div className="flex flex-col gap-3">
                 <div className="rounded-lg border px-3 py-2.5">
-                  <p className="mb-2 flex items-center gap-1.5 eyebrow">
-                    <UserRound aria-hidden="true" className="size-3" />
-                    {t("accountLabel")}
-                  </p>
                   <div className="flex items-center gap-3">
                     <Avatar className="h-8 w-8 shrink-0">
                       <AvatarImage src={user.image ?? undefined} alt={accountName} />

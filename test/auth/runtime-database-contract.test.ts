@@ -104,6 +104,7 @@ describe('Web runtime database boundary', () => {
 			'account',
 			'bug_report_storage_nonces',
 			'fpl_entry_binding_challenges',
+			'fpl_entry_name_history',
 			'mini_program_email_code',
 			'mini_program_session',
 			'request_rate_limits',

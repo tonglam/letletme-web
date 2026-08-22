@@ -4,11 +4,17 @@ import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { withCapacityRunForRequest } from '@/lib/capacity-run'
-import { getCurrentAndNextEvents } from '@/lib/events'
+import { getCurrentAndNextEvents, pickCurrentEventId } from '@/lib/events'
 import { EMPTY_PRICE_CHANGE_BOARD } from '@/lib/graphql/operations/price-changes'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
+import { loadPersonalPriceContext } from '@/lib/price-change-personal-server'
+import type { PersonalPriceContext } from '@/lib/price-change-personal'
 import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
-import type { EntrySquadPicksResult, SquadLoadState } from '@/lib/squad-picks'
+import type {
+	EntrySquadPicksResult,
+	SquadLoadState,
+	SquadPickSeed,
+} from '@/lib/squad-picks'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getTranslations } from 'next-intl/server'
 
@@ -49,6 +55,7 @@ async function renderPriceChangesPage({ params }: PageProps) {
 	])
 
 	let mySquadElementIds: number[] = []
+	let mySquadPicks: SquadPickSeed[] = []
 	let mySquadState: SquadLoadState =
 		identity.entryId != null ? 'not-published' : 'unbound'
 	let squadPromise: Promise<EntrySquadPicksResult | null> =
@@ -66,12 +73,30 @@ async function renderPriceChangesPage({ params }: PageProps) {
 
 	const [boardResponse, squad] = await Promise.all([boardPromise, squadPromise])
 	if (squad) {
+		mySquadPicks = squad.picks
 		mySquadElementIds = squad.picks
 			.map(pick => pick.elementId)
 			.filter((id): id is number => id != null && id > 0)
 		mySquadState = squad.state
 	} else if (identity.session && identity.entryId != null) {
 		mySquadState = 'unavailable'
+	}
+
+	let personalPriceContext: PersonalPriceContext = {
+		state: 'UNAVAILABLE',
+		purchasePrices: {}
+	}
+	if (
+		identity.session &&
+		identity.entryId != null &&
+		mySquadPicks.length > 0
+	) {
+		personalPriceContext = await loadPersonalPriceContext({
+			session: identity.session,
+			entryId: identity.entryId,
+			picks: mySquadPicks,
+			eventId: pickCurrentEventId(events) ?? events?.next?.[0]?.id ?? null,
+		})
 	}
 
 	const board = boardResponse.priceChangeBoard
@@ -88,7 +113,6 @@ async function renderPriceChangesPage({ params }: PageProps) {
 		<PageShell>
 			<div className="container mx-auto max-w-6xl px-4 py-8">
 				<StatsPageHeader
-					eyebrow={t('eyebrow')}
 					title={t('title')}
 					badge={
 						<Badge
@@ -107,6 +131,8 @@ async function renderPriceChangesPage({ params }: PageProps) {
 					locale={locale}
 					mySquadElementIds={mySquadElementIds}
 					mySquadState={mySquadState}
+					personalPurchasePrices={personalPriceContext.purchasePrices}
+					personalPriceState={personalPriceContext.state}
 				/>
 			</div>
 		</PageShell>

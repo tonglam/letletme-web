@@ -14,7 +14,7 @@ import {
 	FPL_BINDING_RATE_LIMIT_WINDOW_SECONDS,
 	FPL_IDENTITY_REFRESH_INTERVAL_MS,
 	assertFplEntryId,
-	fplTeamNamesMatch,
+	fplTeamNamesMatch
 } from '@/lib/fpl-binding-core'
 import { validateFplEntry } from '@/lib/fpl'
 
@@ -44,21 +44,21 @@ function requiredTeamName(): string {
 function isUniqueViolation(error: unknown): boolean {
 	return Boolean(
 		error &&
-			typeof error === 'object' &&
-			'code' in error &&
-			(error as { code?: unknown }).code === '23505',
+		typeof error === 'object' &&
+		'code' in error &&
+		(error as { code?: unknown }).code === '23505'
 	)
 }
 
 export async function startFplEntryBindingChallenge(
 	userId: string,
-	entryIdInput: unknown,
+	entryIdInput: unknown
 ): Promise<FplBindingChallenge> {
 	const entryId = assertFplEntryId(entryIdInput)
 	const entry = await validateFplEntry(entryId)
 	if (!entry.valid || !entry.teamName || !entry.managerName) {
 		throw new FplBindingError(
-			`No FPL team found with ID ${entryId}. Check your FPL entry number.`,
+			`No FPL team found with ID ${entryId}. Check your FPL entry number.`
 		)
 	}
 
@@ -68,36 +68,43 @@ export async function startFplEntryBindingChallenge(
 		userId,
 		entryId,
 		requiredName: requiredTeamName(),
-		expiresAt: new Date(now.getTime() + FPL_BINDING_CHALLENGE_TTL_MS),
+		expiresAt: new Date(now.getTime() + FPL_BINDING_CHALLENGE_TTL_MS)
 	}
 
 	await db.transaction(async tx => {
 		const lockedUsers = await tx.execute<{ id: string }>(
-			sql`select id from bauth."user" where id = ${userId} for update`,
+			sql`select id from bauth."user" where id = ${userId} for update`
 		)
 		if (!lockedUsers[0]) throw new FplBindingError('Not authenticated', 401)
 
 		const [recent] = await tx
 			.select({ value: count() })
 			.from(schema.fplEntryBindingChallenge)
-			.where(and(
-				eq(schema.fplEntryBindingChallenge.userId, userId),
-				gte(
-					schema.fplEntryBindingChallenge.createdAt,
-					new Date(now.getTime() - 60 * 60 * 1000),
-				),
-			))
+			.where(
+				and(
+					eq(schema.fplEntryBindingChallenge.userId, userId),
+					gte(
+						schema.fplEntryBindingChallenge.createdAt,
+						new Date(now.getTime() - 60 * 60 * 1000)
+					)
+				)
+			)
 		if ((recent?.value ?? 0) >= FPL_BINDING_CREATION_LIMIT) {
-			throw new FplBindingError('Too many binding challenges; try again later', 429)
+			throw new FplBindingError(
+				'Too many binding challenges; try again later',
+				429
+			)
 		}
 
 		await tx
 			.update(schema.fplEntryBindingChallenge)
 			.set({ consumedAt: now, updatedAt: now })
-			.where(and(
-				eq(schema.fplEntryBindingChallenge.userId, userId),
-				isNull(schema.fplEntryBindingChallenge.consumedAt),
-			))
+			.where(
+				and(
+					eq(schema.fplEntryBindingChallenge.userId, userId),
+					isNull(schema.fplEntryBindingChallenge.consumedAt)
+				)
+			)
 
 		await tx.insert(schema.fplEntryBindingChallenge).values(challenge)
 	})
@@ -108,14 +115,19 @@ export async function startFplEntryBindingChallenge(
 		requiredName: challenge.requiredName,
 		expiresAt: challenge.expiresAt.toISOString(),
 		teamName: entry.teamName,
-		managerName: entry.managerName,
+		managerName: entry.managerName
 	}
 }
 
 export async function confirmFplEntryBindingChallenge(
 	userId: string,
-	challengeId: unknown,
-): Promise<{ entryId: number; teamName: string; managerName: string; verifiedAt: string }> {
+	challengeId: unknown
+): Promise<{
+	entryId: number
+	teamName: string
+	managerName: string
+	verifiedAt: string
+}> {
 	if (typeof challengeId !== 'string' || !challengeId) {
 		throw new FplBindingError('Binding challenge is required')
 	}
@@ -123,11 +135,13 @@ export async function confirmFplEntryBindingChallenge(
 	const [pending] = await db
 		.select()
 		.from(schema.fplEntryBindingChallenge)
-		.where(and(
-			eq(schema.fplEntryBindingChallenge.id, challengeId),
-			eq(schema.fplEntryBindingChallenge.userId, userId),
-			isNull(schema.fplEntryBindingChallenge.consumedAt),
-		))
+		.where(
+			and(
+				eq(schema.fplEntryBindingChallenge.id, challengeId),
+				eq(schema.fplEntryBindingChallenge.userId, userId),
+				isNull(schema.fplEntryBindingChallenge.consumedAt)
+			)
+		)
 		.orderBy(desc(schema.fplEntryBindingChallenge.createdAt))
 		.limit(1)
 
@@ -148,7 +162,9 @@ export async function confirmFplEntryBindingChallenge(
 	if (!fplTeamNamesMatch(entry.teamName, pending.requiredName)) {
 		await db.transaction(async tx => {
 			const attemptNow = new Date()
-			await tx.execute(sql`select id from bauth."user" where id = ${userId} for update`)
+			await tx.execute(
+				sql`select id from bauth."user" where id = ${userId} for update`
+			)
 			const locked = await tx.execute<{ attempts: number }>(sql`
 				select attempts
 				from bauth.fpl_entry_binding_challenges
@@ -161,13 +177,14 @@ export async function confirmFplEntryBindingChallenge(
 				.update(schema.fplEntryBindingChallenge)
 				.set({
 					attempts: nextAttempts,
-				consumedAt: nextAttempts >= FPL_BINDING_MAX_ATTEMPTS ? attemptNow : null,
-				updatedAt: attemptNow,
+					consumedAt:
+						nextAttempts >= FPL_BINDING_MAX_ATTEMPTS ? attemptNow : null,
+					updatedAt: attemptNow
 				})
 				.where(eq(schema.fplEntryBindingChallenge.id, challengeId))
 		})
 		throw new FplBindingError(
-			`Team name does not yet match ${pending.requiredName}. Change it in FPL and try again.`,
+			`Team name does not yet match ${pending.requiredName}. Change it in FPL and try again.`
 		)
 	}
 
@@ -175,7 +192,7 @@ export async function confirmFplEntryBindingChallenge(
 		await db.transaction(async tx => {
 			const confirmedAt = new Date()
 			const lockedUsers = await tx.execute<{ id: string }>(
-				sql`select id from bauth."user" where id = ${userId} for update`,
+				sql`select id from bauth."user" where id = ${userId} for update`
 			)
 			if (!lockedUsers[0]) throw new FplBindingError('Not authenticated', 401)
 			const lockedChallenges = await tx.execute<{
@@ -202,19 +219,22 @@ export async function confirmFplEntryBindingChallenge(
 				.update(schema.user)
 				.set({
 					fplEntryId: pending.entryId,
-				fplEntryBoundAt: confirmedAt,
-				fplEntryVerifiedAt: confirmedAt,
-				updatedAt: confirmedAt,
+					fplEntryBoundAt: confirmedAt,
+					fplEntryVerifiedAt: confirmedAt,
+					updatedAt: confirmedAt
 				})
 				.where(eq(schema.user.id, userId))
 			await tx
 				.update(schema.fplEntryBindingChallenge)
-			.set({ consumedAt: confirmedAt, updatedAt: confirmedAt })
+				.set({ consumedAt: confirmedAt, updatedAt: confirmedAt })
 				.where(eq(schema.fplEntryBindingChallenge.id, challengeId))
 		})
 	} catch (error) {
 		if (isUniqueViolation(error)) {
-			throw new FplBindingError('This FPL entry is already verified by another account', 409)
+			throw new FplBindingError(
+				'This FPL entry is already verified by another account',
+				409
+			)
 		}
 		throw error
 	}
@@ -223,7 +243,7 @@ export async function confirmFplEntryBindingChallenge(
 		entryId: pending.entryId,
 		teamName: entry.teamName,
 		managerName: entry.managerName,
-		verifiedAt: now.toISOString(),
+		verifiedAt: now.toISOString()
 	}
 }
 
@@ -251,15 +271,15 @@ async function assertBindingRateLimit(userId: string): Promise<void> {
 			bucketStart,
 			windowSeconds: FPL_BINDING_RATE_LIMIT_WINDOW_SECONDS,
 			count: 1,
-			expiresAt,
+			expiresAt
 		})
 		.onConflictDoUpdate({
 			target: [
 				schema.requestRateLimit.scope,
 				schema.requestRateLimit.subject,
-				schema.requestRateLimit.bucketStart,
+				schema.requestRateLimit.bucketStart
 			],
-			set: { count: sql`${schema.requestRateLimit.count} + 1` },
+			set: { count: sql`${schema.requestRateLimit.count} + 1` }
 		})
 		.returning({ count: schema.requestRateLimit.count })
 
@@ -277,37 +297,88 @@ async function assertBindingRateLimit(userId: string): Promise<void> {
  */
 export async function bindFplEntryDirectly(
 	userId: string,
-	entryIdInput: unknown,
-): Promise<{ entryId: number; teamName: string; managerName: string; verifiedAt: string }> {
+	entryIdInput: unknown
+): Promise<{
+	entryId: number
+	teamName: string
+	managerName: string
+	verifiedAt: string
+}> {
 	await assertBindingRateLimit(userId)
 	const entryId = assertFplEntryId(entryIdInput)
 	const entry = await validateFplEntry(entryId)
 	if (!entry.valid || !entry.teamName || !entry.managerName) {
 		throw new FplBindingError(
-			`No FPL team found with ID ${entryId}. Check your FPL entry number.`,
+			`No FPL team found with ID ${entryId}. Check your FPL entry number.`
 		)
 	}
+	const teamName = entry.teamName
+	const managerName = entry.managerName
 
 	const boundAt = new Date()
 	try {
-		const [updated] = await db
-			.update(schema.user)
-			.set({
-				fplEntryId: entryId,
-				fplEntryBoundAt: boundAt,
-				fplEntryVerifiedAt: boundAt,
-				fplTeamName: entry.teamName,
-				fplManagerName: entry.managerName,
-				fplIdentityRefreshedAt: boundAt,
-				updatedAt: boundAt,
-			})
-			.where(eq(schema.user.id, userId))
-			.returning({ id: schema.user.id })
+		const [updated] = await db.transaction(async tx => {
+			const [current] = await tx
+				.select({
+					fplEntryId: schema.user.fplEntryId,
+					fplTeamName: schema.user.fplTeamName,
+					fplManagerName: schema.user.fplManagerName,
+					fplIdentityRefreshedAt: schema.user.fplIdentityRefreshedAt
+				})
+				.from(schema.user)
+				.where(eq(schema.user.id, userId))
+				.limit(1)
+
+			if (current?.fplEntryId && current.fplTeamName?.trim()) {
+				await tx
+					.insert(schema.fplEntryNameHistory)
+					.values({
+						id: randomUUID(),
+						userId,
+						entryId: current.fplEntryId,
+						teamName: current.fplTeamName.trim(),
+						managerName: current.fplManagerName?.trim() || null,
+						firstSeenAt: current.fplIdentityRefreshedAt ?? boundAt,
+						lastSeenAt: current.fplIdentityRefreshedAt ?? boundAt
+					})
+					.onConflictDoNothing()
+			}
+
+			await tx
+				.insert(schema.fplEntryNameHistory)
+				.values({
+					id: randomUUID(),
+					userId,
+					entryId,
+					teamName: teamName.trim(),
+					managerName: managerName.trim(),
+					firstSeenAt: boundAt,
+					lastSeenAt: boundAt
+				})
+				.onConflictDoNothing()
+
+			return tx
+				.update(schema.user)
+				.set({
+					fplEntryId: entryId,
+					fplEntryBoundAt: boundAt,
+					fplEntryVerifiedAt: boundAt,
+					fplTeamName: teamName,
+					fplManagerName: managerName,
+					fplIdentityRefreshedAt: boundAt,
+					updatedAt: boundAt
+				})
+				.where(eq(schema.user.id, userId))
+				.returning({ id: schema.user.id })
+		})
 
 		if (!updated) throw new FplBindingError('Not authenticated', 401)
 	} catch (error) {
 		if (isUniqueViolation(error)) {
-			throw new FplBindingError('This FPL entry is already verified by another account', 409)
+			throw new FplBindingError(
+				'This FPL entry is already verified by another account',
+				409
+			)
 		}
 		throw error
 	}
@@ -321,7 +392,7 @@ export async function bindFplEntryDirectly(
 		entryId,
 		teamName: entry.teamName,
 		managerName: entry.managerName,
-		verifiedAt: boundAt.toISOString(),
+		verifiedAt: boundAt.toISOString()
 	}
 }
 
@@ -335,7 +406,7 @@ export async function unlinkFplEntry(userId: string): Promise<void> {
 			fplTeamName: null,
 			fplManagerName: null,
 			fplIdentityRefreshedAt: null,
-			updatedAt: new Date(),
+			updatedAt: new Date()
 		})
 		.where(eq(schema.user.id, userId))
 		.returning({ id: schema.user.id })
@@ -352,7 +423,7 @@ export async function unlinkFplEntry(userId: string): Promise<void> {
  */
 export async function claimFplIdentityRefresh(
 	userId: string,
-	entryId: number,
+	entryId: number
 ): Promise<boolean> {
 	const now = new Date()
 	const staleBefore = new Date(now.getTime() - FPL_IDENTITY_REFRESH_INTERVAL_MS)
@@ -365,18 +436,18 @@ export async function claimFplIdentityRefresh(
 				eq(schema.user.fplEntryId, entryId),
 				or(
 					isNull(schema.user.fplIdentityRefreshedAt),
-					lt(schema.user.fplIdentityRefreshedAt, staleBefore),
-				),
-			),
+					lt(schema.user.fplIdentityRefreshedAt, staleBefore)
+				)
+			)
 		)
 		.returning({ id: schema.user.id })
 	return claimed.length > 0
 }
 
 /**
- * Re-sync the display-only team/manager name snapshot from FPL. Callers gate
- * invocations via claimFplIdentityRefresh, so this always performs the fetch
- * when invoked.
+ * Re-sync the display-only team/manager name snapshot from FPL and preserve
+ * every observed name. Callers can gate this with claimFplIdentityRefresh for
+ * background refreshes, or invoke it directly for an explicit profile view.
  *
  * The update is constrained by the still-current fplEntryId: if the user
  * rebinds while this lookup is in flight, the stale snapshot for the old
@@ -386,23 +457,72 @@ export async function claimFplIdentityRefresh(
  */
 export async function refreshFplIdentitySnapshot(
 	userId: string,
-	entryId: number,
+	entryId: number
 ): Promise<void> {
 	const entry = await validateFplEntry(entryId)
 	if (!entry.valid || !entry.teamName || !entry.managerName) {
 		await db
 			.update(schema.user)
 			.set({ fplIdentityRefreshedAt: null })
-			.where(and(eq(schema.user.id, userId), eq(schema.user.fplEntryId, entryId)))
+			.where(
+				and(eq(schema.user.id, userId), eq(schema.user.fplEntryId, entryId))
+			)
 		return
 	}
+	const teamName = entry.teamName
+	const managerName = entry.managerName
 
-	await db
-		.update(schema.user)
-		.set({
-			fplTeamName: entry.teamName,
-			fplManagerName: entry.managerName,
-			fplIdentityRefreshedAt: new Date(),
-		})
-		.where(and(eq(schema.user.id, userId), eq(schema.user.fplEntryId, entryId)))
+	const refreshedAt = new Date()
+	await db.transaction(async tx => {
+		const [current] = await tx
+			.select({
+				fplTeamName: schema.user.fplTeamName,
+				fplManagerName: schema.user.fplManagerName,
+				fplIdentityRefreshedAt: schema.user.fplIdentityRefreshedAt
+			})
+			.from(schema.user)
+			.where(
+				and(eq(schema.user.id, userId), eq(schema.user.fplEntryId, entryId))
+			)
+			.limit(1)
+
+		if (current?.fplTeamName?.trim()) {
+			await tx
+				.insert(schema.fplEntryNameHistory)
+				.values({
+					id: randomUUID(),
+					userId,
+					entryId,
+					teamName: current.fplTeamName.trim(),
+					managerName: current.fplManagerName?.trim() || null,
+					firstSeenAt: current.fplIdentityRefreshedAt ?? refreshedAt,
+					lastSeenAt: current.fplIdentityRefreshedAt ?? refreshedAt
+				})
+				.onConflictDoNothing()
+		}
+
+		await tx
+			.insert(schema.fplEntryNameHistory)
+			.values({
+				id: randomUUID(),
+				userId,
+				entryId,
+				teamName: teamName.trim(),
+				managerName: managerName.trim(),
+				firstSeenAt: refreshedAt,
+				lastSeenAt: refreshedAt
+			})
+			.onConflictDoNothing()
+
+		await tx
+			.update(schema.user)
+			.set({
+				fplTeamName: teamName,
+				fplManagerName: managerName,
+				fplIdentityRefreshedAt: refreshedAt
+			})
+			.where(
+				and(eq(schema.user.id, userId), eq(schema.user.fplEntryId, entryId))
+			)
+	})
 }

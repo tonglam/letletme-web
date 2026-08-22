@@ -44,8 +44,7 @@ export function TournamentHeader({
 
 	return (
 		<header className="mb-6">
-			<p className="chyron">{t('liveStandings')}</p>
-			<h2 className="mt-1 font-display text-2xl font-bold tracking-tight sm:text-3xl">
+			<h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
 				{name}
 			</h2>
 

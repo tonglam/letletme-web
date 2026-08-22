@@ -330,6 +330,39 @@ describe('live matches server snapshot', () => {
 		assert.equal(result.matches[0]?.id, 'next-3401')
 		assert.equal(requests.length, 1)
 	})
+
+	it('pins the server desk read to the live revision used by the page context', async () => {
+		const requests: Array<{ variables?: Record<string, unknown> }> = []
+		await getLiveMatchesSnapshot(
+			34,
+			async (_query, variables) => {
+				requests.push({ variables })
+				return {
+					liveMatchdayDesk: {
+						season: '2627',
+						eventId: 33,
+						revision: 'rev-33',
+						state: 'LIVE',
+						windowState: 'LIVE_ACTIVE',
+						dataAvailability: 'FRESH',
+						liveRevision: 'rev-33',
+						publishedAt: new Date().toISOString(),
+						source: 'REDIS',
+						matches: [],
+						nextFixtures: []
+					}
+				} as never
+			},
+			33,
+			{ revision: 'rev-33' }
+		)
+
+		const ref = (requests[0]?.variables as { ref?: Record<string, unknown> })
+			?.ref
+		assert.equal(ref?.eventId, 33)
+		assert.equal(ref?.revision, 'rev-33')
+		assert.match(String(ref?.season), /^\d{4}$/)
+	})
 })
 
 describe('partial tournament refreshes', () => {

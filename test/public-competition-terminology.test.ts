@@ -7,11 +7,16 @@ type Messages = Record<string, unknown>
 
 const readMessages = (locale: string): Messages =>
 	JSON.parse(
-		fs.readFileSync(path.join(process.cwd(), 'messages', `${locale}.json`), 'utf8')
+		fs.readFileSync(
+			path.join(process.cwd(), 'messages', `${locale}.json`),
+			'utf8'
+		)
 	) as Messages
 
 const get = (messages: Messages, namespace: string, key: string): string => {
-	const value = (messages[namespace] as Record<string, unknown> | undefined)?.[key]
+	const value = (messages[namespace] as Record<string, unknown> | undefined)?.[
+		key
+	]
 	assert.equal(typeof value, 'string', `${namespace}.${key} must exist`)
 	return value as string
 }
@@ -47,7 +52,7 @@ test('public competition copy is complete and contains no accidental legacy term
 				competitions: 'Competitions',
 				explore: 'Explore',
 				myCompetitions: 'My Competitions',
-				createCompetition: 'Create Competition',
+				createCompetition: 'Competition',
 				myTournament: 'My Tournament'
 			},
 			home: {
@@ -67,8 +72,8 @@ test('public competition copy is complete and contains no accidental legacy term
 				competitions: '赛事',
 				explore: '探索',
 				myCompetitions: '我的赛事',
-				createCompetition: '创建赛事',
-				myTournament: '我的锦标赛'
+				createCompetition: '赛事',
+				myTournament: '赛事'
 			},
 			home: {
 				liveCompetitionStandings: '赛事实时积分榜',
@@ -82,7 +87,11 @@ test('public competition copy is complete and contains no accidental legacy term
 
 	for (const locale of locales) {
 		for (const [key, expected] of Object.entries(locale.navigation)) {
-			assert.equal(get(locale.messages, 'Navigation', key), expected, `${locale.name} Navigation.${key}`)
+			assert.equal(
+				get(locale.messages, 'Navigation', key),
+				expected,
+				`${locale.name} Navigation.${key}`
+			)
 		}
 		assert.equal(
 			(locale.messages.Navigation as Record<string, unknown>).myFplOverview,
@@ -90,7 +99,11 @@ test('public competition copy is complete and contains no accidental legacy term
 			`${locale.name} must not expose the removed My FPL Overview item`
 		)
 		for (const [key, expected] of Object.entries(locale.home)) {
-			assert.equal(get(locale.messages, 'Home', key), expected, `${locale.name} Home.${key}`)
+			assert.equal(
+				get(locale.messages, 'Home', key),
+				expected,
+				`${locale.name} Home.${key}`
+			)
 		}
 
 		const legacyTerm = locale.name === 'en' ? /tournament/i : /锦标赛/
@@ -107,8 +120,14 @@ test('public competition copy is complete and contains no accidental legacy term
 })
 
 test('competition navigation and homepage entry routes remain aligned', () => {
-	const config = fs.readFileSync(path.join(process.cwd(), 'components/layout/config.ts'), 'utf8')
-	const home = fs.readFileSync(path.join(process.cwd(), 'app/[locale]/page.tsx'), 'utf8')
+	const config = fs.readFileSync(
+		path.join(process.cwd(), 'components/layout/config.ts'),
+		'utf8'
+	)
+	const home = fs.readFileSync(
+		path.join(process.cwd(), 'app/[locale]/page.tsx'),
+		'utf8'
+	)
 
 	for (const href of [
 		"href: '/live/competitions'",
@@ -116,11 +135,17 @@ test('competition navigation and homepage entry routes remain aligned', () => {
 		"href: '/competitions/create'",
 		"href: '/my-fpl/competitions'"
 	]) {
-		assert.match(config, new RegExp(href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+		assert.match(
+			config,
+			new RegExp(href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+		)
 	}
 	assert.doesNotMatch(config, /myFplOverview/)
 
-	assert.match(home, /href="\/live\/competitions"[\s\S]*liveCompetitionStandings/)
+	assert.match(
+		home,
+		/href="\/live\/competitions"[\s\S]*liveCompetitionStandings/
+	)
 	assert.match(home, /href="\/competitions\/browse"[\s\S]*browseCompetitions/)
 	assert.match(home, /href="\/competitions\/create"[\s\S]*createCompetition/)
 })

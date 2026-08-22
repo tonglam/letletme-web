@@ -6,6 +6,14 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
 	Select,
@@ -19,13 +27,19 @@ import type {
 	PriceChangeBoard,
 	PriceChangePlayer
 } from '@/lib/graphql/operations/price-changes'
+import {
+	calculateSellingPrice,
+	type PersonalPriceState
+} from '@/lib/price-change-personal'
 import type { SquadLoadState } from '@/lib/squad-picks'
 import { cn } from '@/lib/utils'
+import { useHydrated } from '@/hooks/use-hydrated'
 import {
 	ArrowDownRight,
 	ArrowLeft,
 	ArrowRight,
 	ArrowUpRight,
+	CircleHelp,
 	Minus,
 	RefreshCcw,
 	Search
@@ -38,6 +52,9 @@ const PAGE_SIZE = 20
 type MovementFilter = 'all' | 'rise' | 'fall' | 'locked'
 type ScopeFilter = 'all' | 'mine'
 type SortMode = 'momentum' | 'ownership'
+
+const LAST_VALID_BOARD_STORAGE_KEY = 'letletme:price-change-board:v1'
+const LAST_VALID_BOARD_MAX_AGE_MS = 24 * 60 * 60 * 1_000
 
 const statusTranslationKey = {
 	VERY_LIKELY_RISE: 'statusVeryLikelyRise',
@@ -58,7 +75,12 @@ function formatPercent(value: number): string {
 	return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
 }
 
-function formatDeadline(value: string | null, locale: string): string {
+function formatDeadline(
+	value: string | null,
+	locale: string,
+	hydrated: boolean,
+): string {
+	if (!hydrated) return '—'
 	if (!value) return '—'
 	const timestamp = Date.parse(value)
 	if (!Number.isFinite(timestamp)) return '—'
@@ -67,8 +89,67 @@ function formatDeadline(value: string | null, locale: string): string {
 		month: 'short',
 		hour: '2-digit',
 		minute: '2-digit',
-		timeZone: 'UTC'
+		timeZoneName: 'short'
 	}).format(new Date(timestamp))
+}
+
+function isPersistableBoard(value: unknown): value is PriceChangeBoard {
+	if (value == null || typeof value !== 'object') return false
+	const board = value as Partial<PriceChangeBoard>
+	return (
+		Array.isArray(board.players) &&
+		board.players.length > 0 &&
+		typeof board.revision === 'string' &&
+		typeof board.observedPlayerCount === 'number' &&
+		board.observedPlayerCount > 0
+	)
+}
+
+function readLastValidBoard(): PriceChangeBoard | null {
+	if (typeof window === 'undefined') return null
+	try {
+		const raw = window.localStorage.getItem(LAST_VALID_BOARD_STORAGE_KEY)
+		if (!raw) return null
+		const value = JSON.parse(raw) as {
+			savedAt?: unknown
+			board?: unknown
+		}
+		if (typeof value.savedAt !== 'number') return null
+		if (Date.now() - value.savedAt > LAST_VALID_BOARD_MAX_AGE_MS) {
+			window.localStorage.removeItem(LAST_VALID_BOARD_STORAGE_KEY)
+			return null
+		}
+		if (!isPersistableBoard(value.board)) return null
+		return { ...value.board, status: 'STALE' }
+	} catch {
+		return null
+	}
+}
+
+function persistLastValidBoard(board: PriceChangeBoard): void {
+	if (typeof window === 'undefined' || !isPersistableBoard(board)) return
+	try {
+		const fetchedAt = board.fetchedAt ? Date.parse(board.fetchedAt) : NaN
+		const savedAt = Number.isFinite(fetchedAt) ? fetchedAt : Date.now()
+		window.localStorage.setItem(
+			LAST_VALID_BOARD_STORAGE_KEY,
+			JSON.stringify({ savedAt, board }),
+		)
+	} catch {
+		// Storage is an enhancement. The in-memory board remains authoritative.
+	}
+}
+
+function personalPriceForPlayer(
+	player: PriceChangePlayer,
+	purchasePrices: Record<string, number>,
+): { purchasePrice: number; sellingPrice: number } | null {
+	const purchasePrice = purchasePrices[String(player.playerId)]
+	if (!Number.isFinite(purchasePrice)) return null
+	return {
+		purchasePrice,
+		sellingPrice: calculateSellingPrice(purchasePrice, player.currentPrice)
+	}
 }
 
 function useDeadlineCountdown(deadline: string | null): string | null {
@@ -134,33 +215,72 @@ export function PriceChangesBoard({
 	board,
 	locale,
 	mySquadElementIds,
-	mySquadState
+	mySquadState,
+	personalPurchasePrices,
+	personalPriceState
 }: {
 	board: PriceChangeBoard
 	locale: string
 	mySquadElementIds: number[]
 	mySquadState: SquadLoadState
+	personalPurchasePrices: Record<string, number>
+	personalPriceState: PersonalPriceState
 }) {
 	const t = useTranslations('PriceChanges')
 	const router = useRouter()
+	const hydrated = useHydrated()
 	const [search, setSearch] = useState('')
 	const [movement, setMovement] = useState<MovementFilter>('all')
 	const [scope, setScope] = useState<ScopeFilter>('all')
 	const [sort, setSort] = useState<SortMode>('momentum')
+	const [teamId, setTeamId] = useState('all')
 	const [page, setPage] = useState(1)
-	const countdown = useDeadlineCountdown(board.deadline)
+	const [displayBoard, setDisplayBoard] = useState(board)
 	const mySquad = useMemo(() => new Set(mySquadElementIds), [mySquadElementIds])
+	const countdown = useDeadlineCountdown(displayBoard.deadline)
+
+	useEffect(() => {
+		if (isPersistableBoard(board)) {
+			setDisplayBoard(board)
+			persistLastValidBoard(board)
+			return
+		}
+
+		setDisplayBoard(current => {
+			const lastValidBoard = readLastValidBoard()
+			if (lastValidBoard) return lastValidBoard
+			if (isPersistableBoard(current)) return { ...current, status: 'STALE' }
+			return board
+		})
+	}, [board])
 
 	useEffect(() => {
 		const timer = window.setInterval(() => router.refresh(), 5 * 60 * 1_000)
 		return () => window.clearInterval(timer)
 	}, [router])
 
+	const teamOptions = useMemo(() => {
+		const teams = new Map<number, { id: number; name: string; shortName: string }>()
+		for (const player of displayBoard.players) {
+			if (!teams.has(player.teamId)) {
+				teams.set(player.teamId, {
+					id: player.teamId,
+					name: player.teamName,
+					shortName: player.teamShortName
+				})
+			}
+		}
+		return Array.from(teams.values()).sort((left, right) =>
+			left.name.localeCompare(right.name, locale),
+		)
+	}, [displayBoard.players, locale])
+
 	const filteredPlayers = useMemo(() => {
 		const query = search.trim().toLowerCase()
-		return board.players
+		return displayBoard.players
 			.filter(player => {
 				if (scope === 'mine' && !mySquad.has(player.playerId)) return false
+				if (teamId !== 'all' && String(player.teamId) !== teamId) return false
 				if (movement === 'rise' && player.progressPercent <= 0) return false
 				if (movement === 'fall' && player.progressPercent >= 0) return false
 				if (
@@ -183,7 +303,7 @@ export function PriceChangesBoard({
 				if (primary !== 0) return primary
 				return left.webName.localeCompare(right.webName)
 			})
-	}, [board.players, movement, mySquad, scope, search, sort])
+	}, [displayBoard.players, movement, mySquad, scope, search, sort, teamId])
 
 	const pageCount = Math.max(1, Math.ceil(filteredPlayers.length / PAGE_SIZE))
 	const safePage = Math.min(page, pageCount)
@@ -201,6 +321,7 @@ export function PriceChangesBoard({
 		setMovement('all')
 		setScope('all')
 		setSort('momentum')
+		setTeamId('all')
 		setPage(1)
 	}
 
@@ -208,42 +329,33 @@ export function PriceChangesBoard({
 		search.length > 0 ||
 		movement !== 'all' ||
 		scope !== 'all' ||
-		sort !== 'momentum'
-	const alertVariant = statusAlertVariant(board.status)
+		sort !== 'momentum' ||
+		teamId !== 'all'
+	const alertVariant = statusAlertVariant(displayBoard.status)
 	const from = filteredPlayers.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1
 	const to = Math.min(safePage * PAGE_SIZE, filteredPlayers.length)
 
 	return (
 		<div className="space-y-5">
-			<div className="grid gap-3 rounded-xl border border-border/80 bg-card/40 p-4 sm:grid-cols-3 sm:p-5">
+			<div className="grid gap-3 rounded-xl border border-border/80 bg-card/40 p-4 sm:grid-cols-2 sm:p-5">
 				<div>
 					<p className="eyebrow">{t('deadlineLabel')}</p>
 					<p className="mt-1 font-display text-base font-semibold tabular-nums">
-						{formatDeadline(board.deadline, locale)}
+						{formatDeadline(displayBoard.deadline, locale, hydrated)}
 					</p>
 					<p className="mt-1 text-xs text-muted-foreground">
 						{countdown ??
-							(board.deadline ? t('deadlinePassed') : t('noDeadline'))}
+							(displayBoard.deadline ? t('deadlinePassed') : t('noDeadline'))}
 					</p>
 				</div>
 				<div>
 					<p className="eyebrow">{t('playersLabel')}</p>
 					<p className="mt-1 font-display text-base font-semibold tabular-nums">
-						{board.observedPlayerCount.toLocaleString(locale)}
+						{displayBoard.observedPlayerCount.toLocaleString(locale)}
 						<span className="ml-1 text-sm font-normal text-muted-foreground">
-							/ {board.expectedPlayerCount.toLocaleString(locale)}
+							/ {displayBoard.expectedPlayerCount.toLocaleString(locale)}
 						</span>
 					</p>
-					<p className="mt-1 text-xs text-muted-foreground">
-						{t('officialSource')}
-					</p>
-				</div>
-				<div>
-					<p className="eyebrow">{t('updatedLabel')}</p>
-					<p className="mt-1 font-display text-base font-semibold">
-						{formatDeadline(board.fetchedAt, locale)}
-					</p>
-					<p className="mt-1 text-xs text-muted-foreground">{board.revision}</p>
 				</div>
 			</div>
 
@@ -254,25 +366,53 @@ export function PriceChangesBoard({
 						aria-hidden="true"
 					/>
 					<AlertTitle>
-						{board.status === 'PARTIAL'
+						{displayBoard.status === 'PARTIAL'
 							? t('partial')
-							: board.status === 'STALE'
+							: displayBoard.status === 'STALE'
 								? t('stale')
 								: t('unavailable')}
 					</AlertTitle>
 					<AlertDescription>
-						{board.status === 'PARTIAL'
+						{displayBoard.status === 'PARTIAL'
 							? t('statusPartial')
-							: board.status === 'STALE'
+							: displayBoard.status === 'STALE'
 								? t('statusStale')
 								: t('statusUnavailable')}
 					</AlertDescription>
 				</Alert>
 			) : null}
 
+			<div className="flex flex-col gap-3 rounded-xl border border-primary/15 bg-primary/[0.035] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+				<p className="text-sm text-muted-foreground">{t('guideSummary')}</p>
+				<Dialog>
+					<DialogTrigger asChild>
+						<Button type="button" variant="outline" size="sm" className="shrink-0">
+							<CircleHelp data-icon="inline-start" aria-hidden="true" />
+							{t('understandingPriceChanges')}
+						</Button>
+					</DialogTrigger>
+					<DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+						<DialogHeader>
+							<DialogTitle>{t('understandingTitle')}</DialogTitle>
+							<DialogDescription>
+								{t('understandingDescription')}
+							</DialogDescription>
+						</DialogHeader>
+						<div className="space-y-4 text-sm leading-6 text-muted-foreground">
+							<p>{t('understandingProgress')}</p>
+							<p>{t('understandingStatus')}</p>
+							<p>{t('understandingDeadline')}</p>
+							<p className="rounded-lg bg-muted/50 px-3 py-2 text-foreground">
+								{t('understandingCaveat')}
+							</p>
+						</div>
+					</DialogContent>
+				</Dialog>
+			</div>
+
 			<Card className="overflow-hidden border-border/80 shadow-sm">
 				<div className="border-b border-border/70 bg-muted/10 p-4 sm:p-5">
-					<div className="grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_repeat(3,minmax(0,1fr))_auto] lg:items-end">
+					<div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_repeat(4,minmax(0,1fr))_auto] lg:items-end">
 						<div className="space-y-1.5">
 							<label
 								className="eyebrow"
@@ -318,6 +458,33 @@ export function PriceChangesBoard({
 								<SelectContent>
 									<SelectItem value="all">{t('scopeAll')}</SelectItem>
 									<SelectItem value="mine">{t('scopeMine')}</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="space-y-1.5">
+							<label
+								className="eyebrow"
+								htmlFor="price-change-team"
+							>
+								{t('filterByTeam')}
+							</label>
+							<Select
+								value={teamId}
+								onValueChange={value => {
+									setTeamId(value)
+									setPage(1)
+								}}
+							>
+								<SelectTrigger id="price-change-team">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent className="max-h-72">
+									<SelectItem value="all">{t('allTeams')}</SelectItem>
+									{teamOptions.map(team => (
+										<SelectItem key={team.id} value={String(team.id)}>
+											{team.shortName} · {team.name}
+										</SelectItem>
+									))}
 								</SelectContent>
 							</Select>
 						</div>
@@ -390,15 +557,20 @@ export function PriceChangesBoard({
 								total: filteredPlayers.length
 							})}
 						</p>
-						{scope === 'mine' && mySquadElementIds.length === 0 ? (
-							<p role="status">
-								{mySquadState === 'unavailable'
-									? t('mySquadUnavailable')
-									: mySquadState === 'not-published'
-										? t('mySquadNotPublished')
-										: t('mySquadEmpty')}
-							</p>
-						) : null}
+						<div className="space-y-1 text-right" role="status">
+							{scope === 'mine' && mySquadElementIds.length === 0 ? (
+								<p>
+									{mySquadState === 'unavailable'
+										? t('mySquadUnavailable')
+										: mySquadState === 'not-published'
+											? t('mySquadNotPublished')
+											: t('mySquadEmpty')}
+								</p>
+							) : null}
+							{scope === 'mine' && mySquadElementIds.length > 0 && personalPriceState !== 'READY' ? (
+								<p>{t('personalPriceUnavailable')}</p>
+							) : null}
+						</div>
 					</div>
 				</div>
 
@@ -409,7 +581,12 @@ export function PriceChangesBoard({
 				) : (
 					<>
 						<div className="hidden overflow-x-auto md:block">
-							<table className="w-full min-w-[760px] text-left text-sm">
+							<table
+								className={cn(
+									'w-full text-left text-sm',
+									scope === 'mine' ? 'min-w-[980px]' : 'min-w-[760px]'
+								)}
+							>
 								<thead className="border-b border-border/70 bg-muted/10 text-xs uppercase tracking-[0.12em] text-muted-foreground">
 									<tr>
 										<th className="px-5 py-3 font-semibold">
@@ -419,6 +596,16 @@ export function PriceChangesBoard({
 											{t('positionLabel')}
 										</th>
 										<th className="px-3 py-3 font-semibold">{t('price')}</th>
+										{scope === 'mine' ? (
+											<>
+												<th className="px-3 py-3 font-semibold">
+													{t('purchasePrice')}
+												</th>
+												<th className="px-3 py-3 font-semibold">
+													{t('sellingPrice')}
+												</th>
+											</>
+										) : null}
 										<th className="px-3 py-3 font-semibold">{t('progress')}</th>
 										<th className="px-3 py-3 font-semibold">{t('signal')}</th>
 										<th className="px-5 py-3 text-right font-semibold">
@@ -429,6 +616,10 @@ export function PriceChangesBoard({
 								<tbody className="divide-y divide-border/60">
 									{visiblePlayers.map(player => {
 										const TrendIcon = ownershipIcon(player.ownershipTrend)
+										const personalPrice =
+											scope === 'mine'
+												? personalPriceForPlayer(player, personalPurchasePrices)
+												: null
 										return (
 											<tr
 												key={player.playerId}
@@ -459,6 +650,20 @@ export function PriceChangesBoard({
 												<td className="px-3 py-3.5 font-mono tabular-nums">
 													{formatPrice(player.currentPrice)}
 												</td>
+												{scope === 'mine' ? (
+													<>
+														<td className="px-3 py-3.5 font-mono tabular-nums">
+															{personalPrice
+																? formatPrice(personalPrice.purchasePrice)
+																: '—'}
+														</td>
+														<td className="px-3 py-3.5 font-mono tabular-nums">
+															{personalPrice
+																? formatPrice(personalPrice.sellingPrice)
+																: '—'}
+														</td>
+													</>
+												) : null}
 												<td className="px-3 py-3.5">
 													<div className="flex min-w-[130px] items-center gap-2">
 														<div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
@@ -518,6 +723,10 @@ export function PriceChangesBoard({
 						<div className="divide-y divide-border/60 md:hidden">
 							{visiblePlayers.map(player => {
 								const TrendIcon = ownershipIcon(player.ownershipTrend)
+								const personalPrice =
+									scope === 'mine'
+										? personalPriceForPlayer(player, personalPurchasePrices)
+										: null
 								return (
 									<div
 										key={player.playerId}
@@ -582,7 +791,27 @@ export function PriceChangesBoard({
 												{player.transfersInEvent.toLocaleString(locale)} /{' '}
 												{player.transfersOutEvent.toLocaleString(locale)}
 											</span>
-										</div>
+											</div>
+										{scope === 'mine' ? (
+											<div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/35 px-3 py-2 text-xs">
+												<div>
+													<p className="text-muted-foreground">{t('purchasePrice')}</p>
+													<p className="mt-0.5 font-mono font-medium tabular-nums text-foreground">
+														{personalPrice
+															? formatPrice(personalPrice.purchasePrice)
+															: '—'}
+													</p>
+												</div>
+												<div>
+													<p className="text-muted-foreground">{t('sellingPrice')}</p>
+													<p className="mt-0.5 font-mono font-medium tabular-nums text-foreground">
+														{personalPrice
+															? formatPrice(personalPrice.sellingPrice)
+															: '—'}
+													</p>
+												</div>
+											</div>
+										) : null}
 									</div>
 								)
 							})}

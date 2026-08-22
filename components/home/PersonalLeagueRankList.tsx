@@ -15,6 +15,16 @@ const HOME_LEAGUE_RANK_LIMIT = 6
 
 /** Rows come from homePersonalDesk already filtered to invitational leagues. */
 
+type HomeLeagueType = 'CLASSIC' | 'H2H'
+
+function getLeagueType(row: HomeLeagueRank): HomeLeagueType {
+	// The key fallback keeps the compact Home desk compatible with an older
+	// GraphQL deployment while the explicit field rolls out.
+	return row.leagueType === 'H2H' || row.key.toLowerCase().startsWith('h2h:')
+		? 'H2H'
+		: 'CLASSIC'
+}
+
 function MovementBadge({
 	direction,
 	places
@@ -115,8 +125,22 @@ export async function PersonalLeagueRankList({
 	readyKey: string
 }) {
 	const t = await getTranslations('Home')
-	const initialRows = rows.slice(0, HOME_LEAGUE_RANK_LIMIT)
-	const remainingRows = rows.slice(HOME_LEAGUE_RANK_LIMIT)
+	const groups: Array<{
+		type: HomeLeagueType
+		label: string
+		rows: HomeLeagueRank[]
+	}> = [
+		{
+			type: 'CLASSIC',
+			label: t('personalLeagueClassic'),
+			rows: rows.filter(row => getLeagueType(row) === 'CLASSIC')
+		},
+		{
+			type: 'H2H',
+			label: t('personalLeagueH2H'),
+			rows: rows.filter(row => getLeagueType(row) === 'H2H')
+		}
+	]
 	const renderRow = (row: HomeLeagueRank, elementTiming?: string) => {
 		const rankDisplay = row.rank == null ? '—' : formatInteger(row.rank)
 		const ariaMove =
@@ -136,6 +160,68 @@ export async function PersonalLeagueRankList({
 			/>
 		)
 	}
+	const renderGroup = (group: (typeof groups)[number], groupIndex: number) => {
+		const initialRows = group.rows.slice(0, HOME_LEAGUE_RANK_LIMIT)
+		const remainingRows = group.rows.slice(HOME_LEAGUE_RANK_LIMIT)
+		const headingId = `home-league-group-${group.type.toLowerCase()}`
+
+		return (
+			<section
+				key={group.type}
+				className="min-w-0 rounded-lg border border-border/70 bg-background/45 p-3 shadow-sm"
+				aria-labelledby={headingId}
+				data-home-league-group={group.type.toLowerCase()}
+			>
+				<div className="mb-2 flex items-center justify-between gap-3">
+					<h3
+						id={headingId}
+						className="font-display text-sm font-bold uppercase tracking-wide text-primary-ink"
+						{...(groupIndex === 0
+							? { elementtiming: 'home-league-ranks' }
+							: {})}
+					>
+						{group.label}
+					</h3>
+					<span className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+						{group.rows.length}
+					</span>
+				</div>
+
+				{group.rows.length === 0 ? (
+					<p className="rounded-md border border-dashed border-border/70 px-3 py-3 text-center text-xs text-muted-foreground">
+						{t('personalLeaguesTypeEmpty', { type: group.label })}
+					</p>
+				) : (
+					<>
+						<ul className="rounded-lg border surface-inset-soft px-3">
+							{initialRows.map(row => renderRow(row))}
+						</ul>
+						{remainingRows.length > 0 ? (
+							<details className="group mt-2.5">
+								<summary className="flex h-9 w-full cursor-pointer list-none items-center justify-center gap-1.5 rounded-md border border-border/80 bg-background px-3 text-xs font-semibold shadow-sm transition-colors hover:bg-accent [&::-webkit-details-marker]:hidden">
+									<span className="group-open:hidden">
+										{t('personalLeaguesShowMore')}
+									</span>
+									<span className="hidden group-open:inline">
+										{t('personalLeaguesShowLess')}
+									</span>
+									<span
+										className="transition-transform group-open:rotate-180"
+										aria-hidden="true"
+									>
+										⌄
+									</span>
+								</summary>
+								<ul className="mt-2 rounded-lg border surface-inset-soft px-3">
+									{remainingRows.map(row => renderRow(row))}
+								</ul>
+							</details>
+						) : null}
+					</>
+				)}
+			</section>
+		)
+	}
 
 	return (
 		<div data-home-league-ranks-ready="true">
@@ -147,34 +233,9 @@ export async function PersonalLeagueRankList({
 					{t('personalLeaguesEmpty')}
 				</p>
 			) : (
-				<>
-					<ul className="rounded-lg border surface-inset-soft px-3">
-						{initialRows.map((row, index) =>
-							renderRow(row, index === 0 ? 'home-league-ranks' : undefined)
-						)}
-					</ul>
-					{remainingRows.length > 0 ? (
-						<details className="group mt-2.5">
-							<summary className="flex h-9 w-full cursor-pointer list-none items-center justify-center gap-1.5 rounded-md border border-border/80 bg-background px-3 text-xs font-semibold shadow-sm transition-colors hover:bg-accent [&::-webkit-details-marker]:hidden">
-								<span className="group-open:hidden">
-									{t('personalLeaguesShowMore')}
-								</span>
-								<span className="hidden group-open:inline">
-									{t('personalLeaguesShowLess')}
-								</span>
-								<span
-									className="transition-transform group-open:rotate-180"
-									aria-hidden="true"
-								>
-									⌄
-								</span>
-							</summary>
-							<ul className="mt-2 rounded-lg border surface-inset-soft px-3">
-								{remainingRows.map(row => renderRow(row))}
-							</ul>
-						</details>
-					) : null}
-				</>
+				<div className="grid gap-3 md:grid-cols-2">
+					{groups.map(renderGroup)}
+				</div>
 			)}
 			<RouteReadyMarker
 				name="HOME_LEAGUE_RANKS_READY"

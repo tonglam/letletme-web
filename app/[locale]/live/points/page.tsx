@@ -4,10 +4,15 @@ import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getLivePageContext } from '@/lib/live-context-server'
 import { liveContextToSnapshot } from '@/lib/live-refresh'
 import {
+	GET_ENTRY,
+	type EntryOverallSnapshot,
+	type EntrySummaryResponse
+} from '@/lib/graphql/operations/entries'
+import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
 	type LiveCalcDataResponse,
-	type LiveSnapshotStatus,
+	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import { executeServerQuery } from '@/lib/graphql-server'
 import { getCurrentEntryId } from '@/lib/session'
@@ -22,7 +27,7 @@ export async function generateMetadata({ params }: PageProps) {
 		locale,
 		pathname: '/live/points',
 		titleKey: 'livePointsTitle',
-		descriptionKey: 'livePointsDescription',
+		descriptionKey: 'livePointsDescription'
 	})
 }
 
@@ -34,37 +39,74 @@ export default async function LivePointsPage({ params }: PageProps) {
 		presentation.phase === 'PRESEASON' ||
 		liveContext?.windowState === 'PRESEASON' ||
 		liveContext?.windowState === 'OFFSEASON' ||
-			(!liveContext?.anchorEventId &&
-				presentation.phase !== 'BETWEEN_GAMEWEEKS') ||
+		(!liveContext?.anchorEventId &&
+			presentation.phase !== 'BETWEEN_GAMEWEEKS') ||
 		presentation.phase === 'UNAVAILABLE'
 	) {
-		return <SeasonPhaseState feature="points" presentation={presentation} />
+		return (
+			<SeasonPhaseState
+				feature="points"
+				presentation={presentation}
+			/>
+		)
 	}
 
-	const currentEventId = liveContext?.anchorEventId ?? presentation.currentEventId
+	const currentEventId =
+		liveContext?.anchorEventId ?? presentation.currentEventId
 	if (!currentEventId) {
-		return <SeasonPhaseState feature="points" presentation={presentation} />
+		return (
+			<SeasonPhaseState
+				feature="points"
+				presentation={presentation}
+			/>
+		)
 	}
 
 	// Only then session-scoped seed.
 	const entryId = await getCurrentEntryId()
 	let initialLiveData: LiveCalcData | undefined
 	let initialSnapshot: LiveSnapshotStatus | null = null
+	let initialOverall: EntryOverallSnapshot | undefined
 
 	if (entryId) {
-		try {
-			const response = await executeServerQuery<LiveCalcDataResponse>(
+		const [liveResult, overallResult] = await Promise.allSettled([
+			executeServerQuery<LiveCalcDataResponse>(
 				GET_LIVE_POINTS,
 				{ eventId: currentEventId, entryId },
-				{ cache: 'no-store' },
+				{ cache: 'no-store' }
+			),
+			executeServerQuery<EntrySummaryResponse>(
+				GET_ENTRY,
+				{ id: entryId },
+				{ cache: 'no-store' }
 			)
-			initialLiveData = response.calcLivePointsByEntry
+		])
+		if (liveResult.status === 'fulfilled') {
+			initialLiveData = liveResult.value.calcLivePointsByEntry
 			initialSnapshot =
 				liveContextToSnapshot(liveContext) ??
-				response.calcLivePointsByEntry.snapshot ??
+				liveResult.value.calcLivePointsByEntry.snapshot ??
 				null
-		} catch (error) {
-			console.error('[live points] Failed to seed current entry:', error)
+		} else {
+			console.error(
+				'[live points] Failed to seed current entry:',
+				liveResult.reason
+			)
+		}
+		if (overallResult.status === 'fulfilled' && overallResult.value.entry) {
+			const entry = overallResult.value.entry
+			initialOverall = {
+				overallPoints: entry.overallPoints,
+				overallRank: entry.overallRank,
+				teamValue: entry.teamValue,
+				bank: entry.bank,
+				totalTransfers: entry.totalTransfers
+			}
+		} else if (overallResult.status === 'rejected') {
+			console.error(
+				'[live points] Failed to seed current entry overall:',
+				overallResult.reason
+			)
 		}
 	}
 
@@ -74,6 +116,7 @@ export default async function LivePointsPage({ params }: PageProps) {
 			initialEventId={currentEventId}
 			initialLiveData={initialLiveData}
 			initialSnapshot={initialSnapshot}
+			initialOverall={initialOverall}
 		/>
 	)
 }

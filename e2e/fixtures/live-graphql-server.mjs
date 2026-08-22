@@ -489,8 +489,14 @@ const server = createServer((request, response) => {
 						overallRank: 56789,
 						teamValue: 1005,
 						leagueRanks: Array.from({ length: 8 }, (_, index) => ({
-							key: `classic:${314 + index}`,
-							name: index === 0 ? 'E2E Classic' : `E2E League ${index + 1}`,
+							key: `${index === 6 ? 'h2h' : 'classic'}:${314 + index}`,
+							name:
+								index === 0
+									? 'E2E Classic'
+									: index === 6
+										? 'E2E H2H'
+										: `E2E League ${index + 1}`,
+							leagueType: index === 6 ? 'H2H' : 'CLASSIC',
 							rank: 12 + index,
 							movement:
 								index === 0
