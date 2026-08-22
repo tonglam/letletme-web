@@ -26,6 +26,7 @@ const transfers: MyFplTeamTransfers = {
 		currentEventId: 2,
 		nextEventId: 3,
 		latestFinalizedEventId: 2,
+		latestPublishedEventId: 2,
 	},
 	gameweeks: [
 		{
