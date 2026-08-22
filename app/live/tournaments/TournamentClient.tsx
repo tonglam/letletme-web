@@ -176,6 +176,15 @@ export default function TournamentClient({
 	const [currentGameweek, setCurrentGameweek] = useState<number>(initialEventId)
 	const [selectedGameweek, setSelectedGameweek] =
 		useState<number>(initialEventId)
+	const requestedGameweekFromUrl = (() => {
+		const raw = searchParams.get('gw')
+		if (!raw || !/^\d+$/.test(raw)) return null
+		const parsed = Number(raw)
+		return Number.isInteger(parsed) && parsed >= 1 && parsed <= 38
+			? parsed
+			: null
+	})()
+	const initialRetryAttemptedRef = useRef(false)
 	const followsAnchorRef = useRef(true)
 	const [selectedRows, setSelectedRows] =
 		useState<TournamentLiveCalcData[]>(initialCurrentRows)
@@ -390,7 +399,9 @@ export default function TournamentClient({
 						entryId,
 						tournamentId,
 						eventId,
-						options.revision ?? snapshotRef.current?.revision ?? null
+						options.revision !== undefined
+							? options.revision
+							: (snapshotRef.current?.revision ?? null)
 					)
 					if (requestId !== resultsRequestIdRef.current) return
 
@@ -511,6 +522,17 @@ export default function TournamentClient({
 
 	useEffect(() => {
 		if (
+			requestedGameweekFromUrl !== null &&
+			requestedGameweekFromUrl <= currentGameweek &&
+			requestedGameweekFromUrl !== selectedGameweek
+		) {
+			followsAnchorRef.current = false
+			setSelectedGameweek(requestedGameweekFromUrl)
+		}
+	}, [currentGameweek, requestedGameweekFromUrl, selectedGameweek])
+
+	useEffect(() => {
+		if (
 			!isPageActive ||
 			!selectedTournamentKey ||
 			!isTournamentSetupPollingPending(
@@ -579,6 +601,26 @@ export default function TournamentClient({
 		const resultsKey = `${selectedTournamentKey}:${selectedGameweek}`
 		if (initialResultsKeyRef.current === resultsKey) {
 			initialResultsKeyRef.current = null
+			if (
+				initialResultsError &&
+				initialCurrentRows.length === 0 &&
+				!initialRetryAttemptedRef.current
+			) {
+				initialRetryAttemptedRef.current = true
+				const retryTimer = window.setTimeout(() => {
+					void loadTournamentResults(
+						Number(selectedTournamentKey),
+						selectedGameweek,
+						{
+							preserveOnError: false,
+							// A full initial failure is often a stale publication
+							// snapshot. Force the retry to ask for the current desk.
+							revision: null
+						}
+					)
+				}, 1_000)
+				return () => window.clearTimeout(retryTimer)
+			}
 			return
 		}
 
@@ -603,6 +645,8 @@ export default function TournamentClient({
 	}, [
 		acceptSnapshot,
 		loadTournamentResults,
+		initialCurrentRows.length,
+		initialResultsError,
 		selectedGameweek,
 		selectedTournamentKey,
 		standingsReady

@@ -133,6 +133,13 @@ export const buildTournamentEntries = (
 				? effectiveCaptainPick.totalPoints
 				: 0)
 		const stale = Boolean(staleIds?.has(row.entry))
+		// Once the live score contract is present, its OR is the only value that
+		// may be displayed. In particular, classic standings can temporarily
+		// have no OR while Data is fetching the official entry summary; falling
+		// back to row.overallRank would show the stale rank saved at signup.
+		const overallRank = row.score
+			? (row.score.overallRank ?? 0)
+			: (row.overallRank ?? 0)
 
 		return {
 			id: String(row.entry),
@@ -153,7 +160,7 @@ export const buildTournamentEntries = (
 			gwPoints: headlineEventPoints,
 			gwNetPoints: headlineNetPoints ?? undefined,
 			eventCost: row.transferCost ?? 0,
-			overallRank: row.score?.overallRank ?? row.overallRank ?? 0,
+			overallRank,
 			lastOverallRank:
 				typeof row.lastOverallRank === 'number'
 					? row.lastOverallRank

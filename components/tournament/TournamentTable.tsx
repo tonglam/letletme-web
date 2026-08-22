@@ -52,10 +52,10 @@ interface TournamentTableProps {
 	shareTitle?: string
 }
 
-/** FPL money fields are tenths of £m (1005 → £100.5m). */
+/** LiveCalcData exposes squad value as £m already (100.5 → £100.5m). */
 function formatTeamMoney(value: number | undefined): string {
 	if (value === undefined || !Number.isFinite(value)) return '—'
-	return `£${(value / 10).toFixed(1)}m`
+	return `£${value.toFixed(1)}m`
 }
 
 function isViewerEntry(
@@ -333,7 +333,10 @@ export function TournamentTable({
 					<span className="text-right">{t('gameweekPointsShort')}</span>
 				</div>
 
-				<ul className="divide-y divide-border/50">
+				<ul
+					key={`${sortColumn}:${sortDirection}:${searchQuery}`}
+					className="divide-y divide-border/50"
+				>
 					{visibleEntries.length > 0 ? (
 						visibleEntries.map(entry => {
 							const isChecked = compareSelection.some(e => e.id === entry.id)

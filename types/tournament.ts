@@ -36,9 +36,9 @@ export interface TournamentEntry {
 	totalPoints: number | null
 	playersPlayed: number
 	playersToPlay: number
-	/** Squad value in tenths of £m (1005 → £100.5m). */
+	/** Squad value in £m as returned by the live GraphQL desk (100.5 → £100.5m). */
 	teamValue?: number
-	/** Bank / ITB in tenths of £m. */
+	/** Bank / ITB in £m as returned by the live GraphQL desk. */
 	bank?: number
 	picks: TournamentEntryPick[]
 	chips: {

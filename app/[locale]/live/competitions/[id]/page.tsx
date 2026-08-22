@@ -1,5 +1,6 @@
 import TournamentDetailClient from '@/app/live/tournaments/[id]/TournamentDetailClient'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
+import { localizeHref } from '@/i18n/routing'
 import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import {
 	GET_TOURNAMENT_DETAIL_DESK,
@@ -15,6 +16,7 @@ import {
 	type TournamentDetailLoadError
 } from '@/lib/tournament/detail-load-error'
 import { getTranslations } from 'next-intl/server'
+import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +36,7 @@ type PageProps = {
 }
 
 export default async function Page({ params, searchParams }: PageProps) {
-	const { id } = await getPageLocale(params)
+	const { id, locale } = await getPageLocale(params)
 	const liveT = await getTranslations('LiveTournament')
 	const tournamentId = Number(id)
 	const { entryId, session } = await import('@/lib/session').then(
@@ -119,6 +121,23 @@ export default async function Page({ params, searchParams }: PageProps) {
 				console.error(
 					'[tournament detail] Failed to load:',
 					error instanceof Error ? error.name : 'UnknownError'
+				)
+			}
+			if (kind === 'unavailable') {
+				const fallbackParams = new URLSearchParams({
+					tournamentId: String(tournamentId)
+				})
+				if (requestedGameweek !== null) {
+					fallbackParams.set('gw', String(requestedGameweek))
+				}
+				// The list desk has revision recovery and a bounded retry path. Do
+				// not strand a user on the less resilient detail route after a
+				// transient live-publication failure.
+				redirect(
+					localizeHref(
+						`/live/competitions?${fallbackParams.toString()}`,
+						locale
+					)
 				)
 			}
 			loadError = kind
