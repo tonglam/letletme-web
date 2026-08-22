@@ -198,6 +198,8 @@
 		"personalH2HScoredMatch": "You {myPoints} — {opponentPoints} {opponent}",
 		"personalH2HNoMatch": "No official matchup for this gameweek",
 		"personalH2HAverageTeam": "Average Team",
+		"personalH2HBye": "Bye",
+		"personalH2HGameweek": "GW{event}",
 		"personalH2HOpponent": "Opponent",
 		"personalLivePoints": "My live points",
 		"personalLiveCompetitions": "Live competition standings",
