@@ -79,7 +79,11 @@ export function shouldPollLiveSnapshot({
 	// Keep current-event polling enabled so the UI can recover automatically.
 	if (!snapshot || snapshot.eventId !== selectedEventId) return true
 	if (managerScoreState === 'SETTLING') return true
-	if (managerNextRefreshAt && Date.parse(managerNextRefreshAt) <= Date.now()) return true
+	// Keep the normal countdown armed for both due and future official manager
+	// refreshes. React will not re-evaluate this predicate merely because time
+	// passed, so disabling it for a future deadline would leave stale scores
+	// stuck until a manual refresh.
+	if (managerNextRefreshAt && Number.isFinite(Date.parse(managerNextRefreshAt))) return true
 
 	return snapshot.state !== 'SETTLED' || probeEventIdentity
 }

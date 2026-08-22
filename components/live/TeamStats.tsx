@@ -10,10 +10,10 @@ interface TeamStatsProps {
 	stats: {
 		teamName: string
 		playerName: string
-		livePoints: number
-		transferCost: number
+		livePoints: number | null
+		transferCost: number | null
 		captainName: string
-		liveTotalPoints: number
+		liveTotalPoints: number | null
 		played: string
 		chips: {
 			bench: boolean
@@ -98,7 +98,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
 						className="surface-inset"
 						icon={<Zap className="size-3.5 sm:size-4" aria-hidden="true" />}
 						label={t('livePoints')}
-						value={stats.livePoints}
+						value={stats.livePoints ?? '—'}
 						valueClassName="text-primary-ink"
 					/>
 					<StatsMetricTile
@@ -106,7 +106,9 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
 						icon={<Repeat className="size-3.5 sm:size-4" aria-hidden="true" />}
 						label={t('transferCost')}
 						value={
-							stats.transferCost > 0 ? (
+							stats.transferCost == null ? (
+								'—'
+							) : stats.transferCost > 0 ? (
 								<span className="text-destructive">-{stats.transferCost}</span>
 							) : (
 								0
@@ -124,7 +126,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
 						className="surface-inset"
 						icon={<Trophy className="size-3.5 sm:size-4" aria-hidden="true" />}
 						label={t('liveTotal')}
-						value={stats.liveTotalPoints}
+						value={stats.liveTotalPoints ?? '—'}
 					/>
 				</div>
 			</div>

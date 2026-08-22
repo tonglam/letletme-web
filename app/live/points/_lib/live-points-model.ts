@@ -199,14 +199,19 @@ export function mapLiveDataToPlayers(
 	const sortedPicks = [...live.pickList].sort((a, b) => a.position - b.position)
 
 	return sortedPicks.map(pick => {
-		// Prefer pick flags from the calc payload; fall back to captain name match.
-		const isCaptain =
-			(pick.multiplier ?? 0) >= 2 ||
-			pick.isCaptain === true ||
-			(!pick.isCaptain &&
-				!pick.isViceCaptain &&
-				live.captainName === pick.webName)
-		const isViceCaptain = pick.isViceCaptain === true
+		// Final/live multipliers are authoritative after an auto-captain
+		// substitution. Only use the original pick flags when no multiplier was
+		// published yet (the provisional live shape).
+		const hasMultiplier = typeof pick.multiplier === 'number'
+		const isCaptain = hasMultiplier
+			? (pick.multiplier ?? 0) >= 2
+			: pick.isCaptain === true ||
+				(!pick.isCaptain &&
+					!pick.isViceCaptain &&
+					live.captainName === pick.webName)
+		const isViceCaptain =
+			pick.isViceCaptain === true &&
+			(!hasMultiplier || (pick.multiplier ?? 0) < 2)
 		// Keep bench-vs-starting distinction stable, even when Bench Boost is active.
 		const isBench = pick.position >= 12
 		const position = normalizePosition(pick.elementType, 'elementType')
@@ -279,10 +284,13 @@ export function deriveLiveTeamStats(live: LiveCalcData) {
 	return {
 		teamName: live.entryName ?? `Entry ${live.entry}`,
 		playerName: live.playerName ?? '',
-		livePoints: live.livePoints,
-		transferCost: live.transferCost ?? 0,
+		livePoints: live.score?.eventPoints ?? null,
+		transferCost: live.score?.transferCost ?? null,
 		captainName: live.captainName,
-		liveTotalPoints: live.liveTotalPoints,
+		liveTotalPoints:
+			live.score?.totalScope === 'OVERALL'
+				? live.score.totalPoints
+				: null,
 		played: `${playedCount}/${startingPicks.length}`,
 		chips: {
 			bench:

@@ -663,7 +663,7 @@ export default function TournamentClient({
 				: filteredEntries.slice(0, 20)
 		for (const entry of entriesInTableOrder.slice(0, 20)) {
 			lines.push(
-				`- ${entry.rank || '—'} ${entry.teamName} · ${entry.gwPoints} GW · ${entry.totalPoints} total`
+				`- ${entry.rank || '—'} ${entry.teamName} · ${entry.gwPoints ?? '—'} GW · ${entry.totalPoints ?? '—'} total`
 			)
 		}
 		lines.push(

@@ -110,6 +110,11 @@ export function LivePointsDashboard({
 		)
 	})()
 	const gameweek = selectedGameweek ?? liveData?.event ?? currentGameweek
+	const officialEventPoints = liveData?.score?.eventPoints ?? null
+	const officialTotalPoints =
+		liveData?.score?.totalScope === 'OVERALL'
+			? liveData.score.totalPoints
+			: null
 	const scoreStatus = (() => {
 		const score = liveData?.score
 		if (!score || score.state === 'UNAVAILABLE') return t('scoreUnavailable')
@@ -134,15 +139,17 @@ export function LivePointsDashboard({
 	}
 	const showLiveOverallRank =
 		overall != null && gameweek === currentGameweek
+	const officialOverallRank =
+		liveData?.score?.overallRank ?? overall?.overallRank ?? null
 	const pitchHeaderStats = liveData
 		? {
 				eyebrow: showLiveOverallRank
-					? `${t('pitchTotalPoints')} ${formatOverallPoints(liveData.liveTotalPoints)} · ${t('pitchOverallRank')} ${formatOverallRank(overall.overallRank, { notation: 'compact' })}`
-					: `${t('pitchTotalPoints')} ${formatOverallPoints(liveData.liveTotalPoints)}`,
+					? `${t('pitchTotalPoints')} ${formatOverallPoints(officialTotalPoints)} · ${t('pitchOverallRank')} ${formatOverallRank(officialOverallRank, { notation: 'compact' })}`
+					: `${t('pitchTotalPoints')} ${formatOverallPoints(officialTotalPoints)}`,
 				details: [
 					{
 						label: t('pitchGameweekPoints'),
-						value: formatOverallPoints(liveData.livePoints),
+						value: formatOverallPoints(officialEventPoints),
 						accent: true
 					},
 					{
