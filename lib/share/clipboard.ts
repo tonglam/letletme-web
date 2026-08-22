@@ -50,6 +50,15 @@ async function copyImageBlobToClipboard(
 	}
 }
 
+function isNativeShareCancellation(error: unknown): boolean {
+	return (
+		typeof error === 'object' &&
+		error !== null &&
+		'name' in error &&
+		(error as { name?: unknown }).name === 'AbortError'
+	)
+}
+
 /** Render a visual result to PNG and copy it to the system clipboard. */
 export async function copyElementImageToClipboard(
 	element: HTMLElement
@@ -91,7 +100,8 @@ export async function shareImageBlob(blob: Blob): Promise<ShareResult> {
 					await navigator.share(shareData)
 					return 'shared'
 				}
-			} catch {
+			} catch (error) {
+				if (isNativeShareCancellation(error)) return 'failed'
 				// Rendering the image is asynchronous, so desktop browsers and
 				// some mobile browsers can reject the native share because the
 				// original user activation has expired. The image is still valid;
