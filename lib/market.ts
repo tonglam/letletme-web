@@ -5,6 +5,9 @@ import type {
 	MarketPulse
 } from '@/lib/graphql/operations/market'
 
+export type MarketPositionCode =
+	MarketPlayer['position'] | 'GKP' | 'DEF' | 'MID' | 'FWD'
+
 export type MarketCoverageMode = 'empty' | 'one-day' | 'tracking'
 export type MarketTeaserMode = 'price' | 'selected' | 'empty'
 export type MarketViewMode =
@@ -52,16 +55,20 @@ export function rankOwnershipChanges(
 }
 
 export function shortMarketPosition(
-	position: MarketPlayer['position']
+	position: MarketPositionCode
 ): 'GKP' | 'DEF' | 'MID' | 'FWD' {
 	switch (position) {
 		case 'GOALKEEPER':
+		case 'GKP':
 			return 'GKP'
 		case 'DEFENDER':
+		case 'DEF':
 			return 'DEF'
 		case 'MIDFIELDER':
+		case 'MID':
 			return 'MID'
 		case 'FORWARD':
+		case 'FWD':
 			return 'FWD'
 	}
 }
