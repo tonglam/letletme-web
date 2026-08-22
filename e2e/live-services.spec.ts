@@ -106,7 +106,7 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 	await page.goto('/live/points/123')
 
 	await expect(
-		page.getByRole('heading', { level: 1, name: 'Team live points' })
+		page.getByRole('heading', { level: 1, name: 'Live Points' })
 	).toBeVisible()
 	const pitch = page.getByRole('region', { name: /formation/ })
 	await expect(
@@ -283,7 +283,7 @@ test('live points keeps polling after the seed and first client load fail', asyn
 
 	await page.goto('/live/points/999')
 	await expect(
-		page.getByRole('heading', { level: 1, name: 'Team live points' })
+		page.getByRole('heading', { level: 1, name: 'Live Points' })
 	).toBeVisible()
 	await expect(
 		page.getByText('Live points could not be loaded. Please try again.', {
@@ -432,7 +432,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	await expect(
 		page.getByRole('heading', { name: 'Live Matches' })
 	).toBeVisible()
-	await expect(page.getByRole('tab', { name: 'Upcoming' })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: 'Next Gameweek' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	)
