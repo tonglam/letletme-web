@@ -76,8 +76,7 @@ describe('Home first-screen performance boundary', () => {
 			'setInterval',
 			'officialH2H',
 			'totalTeamNum',
-			'matchPoints',
-			'opponent'
+			'matchPoints'
 		]) {
 			assert.doesNotMatch(leagueList, new RegExp(removed))
 		}
@@ -86,6 +85,9 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(leagueList, /data-home-league-group/)
 		assert.match(leagueList, /row\.rank/)
 		assert.match(leagueList, /row\.movement\.direction/)
+		assert.match(leagueList, /row\.h2hMatchup/)
+		assert.match(leagueList, /data-home-h2h-matchup/)
+		assert.match(leagueList, /\/live\/competitions\//)
 		assert.match(leagueList, /HOME_LEAGUE_RANKS_READY/)
 		assert.match(leagueList, /elementtiming: 'home-league-ranks'/)
 		assert.match(routeReadyMarker, /observeElementPaintTime/)
@@ -107,12 +109,14 @@ describe('Home first-screen performance boundary', () => {
 		assert.doesNotMatch(leagueList, /visible\.length\}\/\{rows\.length/)
 	})
 
-	it('keeps the Home Desk query compatible with the older GraphQL schema', () => {
-		assert.doesNotMatch(
-			homeGraphql,
-			/leagueRanks\s*\{[\s\S]*?^\s+leagueType\s*$/m
-		)
-		assert.match(leagueList, /startsWith\('h2h:'\)/)
+	it('requests only the typed current-matchup projection for H2H leagues', () => {
+		assert.match(homeGraphql, /leagueRanks\s*\{[\s\S]*?\bleagueType\b/)
+		assert.match(homeGraphql, /\bh2hMatchup\s*\{/)
+		assert.match(homeGraphql, /\bviewer\s*\{/)
+		assert.match(homeGraphql, /\bopponent\s*\{/)
+		assert.doesNotMatch(homeGraphql, /\bentryOfficialH2HDesk\b/)
+		assert.doesNotMatch(homeGraphql, /\bstandings\s*\{/)
+		assert.doesNotMatch(homeGraphql, /\bmatches\s*\{/)
 	})
 
 	it('switches fixtures through one GET route without shipping GraphQL or Radix tabs', () => {

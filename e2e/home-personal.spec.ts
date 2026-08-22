@@ -153,6 +153,18 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 		await expect(main.getByRole('heading', { name: 'Classic' })).toBeVisible()
 		await expect(main.getByRole('heading', { name: 'H2H' })).toBeVisible()
 		await expect(main.getByText('E2E H2H', { exact: true })).toBeVisible()
+		const currentMatchup = main.locator('[data-home-h2h-matchup="2071743"]')
+		await expect(currentMatchup.getByText('Future Xu')).toBeVisible()
+		await expect(currentMatchup.getByText('让让群の一美')).toBeVisible()
+		await expect(currentMatchup.getByText('炸群高手 磊磊酱')).toBeVisible()
+		await expect(currentMatchup.getByText('Tong言无忌')).toBeVisible()
+		await expect(currentMatchup.getByText('24', { exact: true })).toBeVisible()
+		await expect(currentMatchup.getByText('43', { exact: true })).toBeVisible()
+		await expect(
+			main.getByRole('link', {
+				name: /E2E H2H.*GW1.*Live.*Future Xu.*让让群の一美.*24.*43.*炸群高手 磊磊酱.*Tong言无忌/
+			})
+		).toHaveAttribute('href', '/live/competitions/6?gw=1')
 		await expect(main.locator('[data-home-personal-ready]')).toBeVisible()
 		await expect(main.locator('[data-home-league-ranks-ready]')).toBeVisible()
 		await expect(main.getByText('#12')).toBeVisible()
