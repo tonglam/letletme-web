@@ -49,6 +49,10 @@ import {
 	areTournamentStandingsReady,
 	isTournamentSetupPollingPending
 } from '@/lib/tournament/lifecycle'
+import {
+	readLiveTournamentSelection,
+	writeLiveTournamentSelection
+} from '@/lib/tournament/live-selection'
 import { Tournament, type TournamentEntry } from '@/types/tournament'
 import { Link, useRouter } from '@/i18n/navigation'
 import { RefreshCw } from 'lucide-react'
@@ -152,6 +156,12 @@ export default function TournamentClient({
 	const [captainFilter, setCaptainFilter] = useState<string>('all')
 	const [tournaments, setTournaments] =
 		useState<Tournament[]>(initialTournaments)
+	const [restoredTournamentId, setRestoredTournamentId] = useState<
+		string | null
+	>(null)
+	const [selectionRestoreComplete, setSelectionRestoreComplete] =
+		useState(false)
+	const selectionRestoreAttemptedRef = useRef(false)
 	const [loadError, setLoadError] = useState<string | null>(null)
 	const [resultsError, setResultsError] = useState<string | null>(
 		initialResultsError
@@ -205,10 +215,13 @@ export default function TournamentClient({
 	const managerScoreSettling = selectedRows.some(
 		row => row.score?.state === 'SETTLING'
 	)
-	const initialResultsKeyRef = useRef(
+	const initialResultsKey =
 		initialResultsLoaded && initialSelectedTournamentId && initialEventId
 			? `${initialSelectedTournamentId}:${initialEventId}`
 			: null
+	const initialResultsKeyRef = useRef(initialResultsKey)
+	const [loadedResultsKey, setLoadedResultsKey] = useState<string | null>(
+		initialResultsKey
 	)
 	const resultsRequestIdRef = useRef(0)
 	const failedEntryCountRef = useRef(initialResultsError ? 1 : 0)
@@ -224,9 +237,83 @@ export default function TournamentClient({
 	}, [])
 
 	const tournamentIdFromUrl = searchParams.get('tournamentId')
+	const normalizedTournamentIdFromUrl = tournamentIdFromUrl?.trim() || null
 
 	const requestedTournamentId =
-		(tournamentIdFromUrl ?? initialSelectedTournamentId) || null
+		(normalizedTournamentIdFromUrl ??
+			restoredTournamentId ??
+			initialSelectedTournamentId) ||
+		null
+
+	useEffect(() => {
+		if (entryId <= 0 || tournaments.length === 0) return
+
+		let storage: Storage | null = null
+		try {
+			storage = window.localStorage
+		} catch {
+			// Storage is optional; live standings must remain usable when blocked.
+		}
+
+		const urlTournament = normalizedTournamentIdFromUrl ?? ''
+		const urlTournamentIsKnown = tournaments.some(
+			tournament => tournament.id === urlTournament
+		)
+		if (urlTournament) {
+			if (urlTournamentIsKnown) {
+				setRestoredTournamentId(urlTournament)
+				writeLiveTournamentSelection(storage, entryId, urlTournament)
+			}
+			setSelectionRestoreComplete(true)
+			return
+		}
+
+		if (!selectionRestoreAttemptedRef.current) {
+			selectionRestoreAttemptedRef.current = true
+			const cachedTournamentId = readLiveTournamentSelection(storage, entryId)
+			if (
+				cachedTournamentId &&
+				tournaments.some(tournament => tournament.id === cachedTournamentId)
+			) {
+				setRestoredTournamentId(cachedTournamentId)
+				setSelectionRestoreComplete(true)
+				return
+			}
+		}
+
+		if (
+			restoredTournamentId &&
+			tournaments.some(tournament => tournament.id === restoredTournamentId)
+		) {
+			setSelectionRestoreComplete(true)
+			return
+		}
+		if (
+			restoredTournamentId &&
+			!tournaments.some(tournament => tournament.id === restoredTournamentId)
+		) {
+			setRestoredTournamentId(null)
+		}
+
+		const fallbackTournamentId =
+			initialSelectedTournamentId &&
+			tournaments.some(
+				tournament => tournament.id === initialSelectedTournamentId
+			)
+				? initialSelectedTournamentId
+				: tournaments[0]?.id
+		if (fallbackTournamentId) {
+			setRestoredTournamentId(fallbackTournamentId)
+			writeLiveTournamentSelection(storage, entryId, fallbackTournamentId)
+		}
+		setSelectionRestoreComplete(true)
+	}, [
+		entryId,
+		initialSelectedTournamentId,
+		normalizedTournamentIdFromUrl,
+		restoredTournamentId,
+		tournaments
+	])
 	const selectedTournament = useMemo(() => {
 		if (tournaments.length === 0) return null
 		if (requestedTournamentId) {
@@ -273,9 +360,9 @@ export default function TournamentClient({
 	const selectedSetupRepairExhausted = selectedTournament?.setupRepairExhausted
 	/** URL asked for a tournament that is not in this entry's membership list. */
 	const unknownTournamentFromUrl = Boolean(
-		tournamentIdFromUrl &&
+		normalizedTournamentIdFromUrl &&
 		tournaments.length > 0 &&
-		!tournaments.some(t => t.id === tournamentIdFromUrl)
+		!tournaments.some(t => t.id === normalizedTournamentIdFromUrl)
 	)
 	const standingsReady = selectedTournament
 		? areTournamentStandingsReady(selectedTournament)
@@ -317,6 +404,7 @@ export default function TournamentClient({
 
 					failedEntryCountRef.current = currentBatch.failedCount
 					setOfficialCoverage(currentBatch.officialCoverage)
+					setLoadedResultsKey(requestKey)
 					acceptSnapshot(currentBatch.snapshot)
 					// Read previous rows via functional update, then set rows + stale separately
 					// (avoid nested setState inside another updater).
@@ -350,6 +438,7 @@ export default function TournamentClient({
 						setSelectedRows([])
 						setOfficialCoverage(0)
 						setStaleEntryIds(new Set())
+						setLoadedResultsKey(null)
 					}
 				} finally {
 					if (requestId === resultsRequestIdRef.current) {
@@ -482,6 +571,7 @@ export default function TournamentClient({
 				setSelectedRows([])
 				setOfficialCoverage(0)
 				setStaleEntryIds(new Set())
+				setLoadedResultsKey(null)
 			}, 0)
 			return () => window.clearTimeout(resetTimer)
 		}
@@ -498,6 +588,7 @@ export default function TournamentClient({
 		setSelectedRows([])
 		setOfficialCoverage(0)
 		setStaleEntryIds(new Set())
+		setLoadedResultsKey(null)
 		setResultsError(null)
 		setIsLoadingResults(true)
 		acceptSnapshot(null)
@@ -729,8 +820,16 @@ export default function TournamentClient({
 		lines.push(
 			'',
 			typeof window !== 'undefined'
-				? window.location.href
-				: 'https://letletme.top/live/competitions'
+				? (() => {
+						const url = new URL(window.location.href)
+						if (selectedTournament) {
+							url.searchParams.set('tournamentId', selectedTournament.id)
+						}
+						return url.toString()
+					})()
+				: selectedTournament
+					? `https://letletme.top/live/competitions?tournamentId=${encodeURIComponent(selectedTournament.id)}`
+					: 'https://letletme.top/live/competitions'
 		)
 		return lines.join('\n')
 	}, [
@@ -770,7 +869,11 @@ export default function TournamentClient({
 				<RouteReadyMarker
 					name="LIVE_COMPETITION_BOARD_READY"
 					ready={Boolean(
-						selectedTournament && standingsReady && !isLoadingResults
+						selectedTournament &&
+						selectionRestoreComplete &&
+						standingsReady &&
+						!isLoadingResults &&
+						loadedResultsKey === `${selectedTournament.id}:${selectedGameweek}`
 					)}
 					audienceHint="session-hint"
 					goodMs={1000}
@@ -848,6 +951,12 @@ export default function TournamentClient({
 						}
 						onTournamentChange={id => {
 							if (selectedTournament && id === selectedTournament.id) return
+							setRestoredTournamentId(id)
+							try {
+								writeLiveTournamentSelection(window.localStorage, entryId, id)
+							} catch {
+								// Storage is optional; URL navigation remains authoritative.
+							}
 							router.replace(`/live/competitions?tournamentId=${id}`)
 						}}
 					/>
