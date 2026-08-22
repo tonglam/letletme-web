@@ -485,30 +485,33 @@ export default function TrendsClient({
 							)}
 						</div>
 					)}
-					{!committed && !error && (
-						<div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-							{cohorts.length > 0
-								? t('noReadyLeagueOptions')
-								: t('noLeagueOptions')}
+					{!committed && !error && publicCohortsLoadFailed ? (
+						<div
+							className="rounded-xl border border-destructive/30 p-10 text-center text-sm text-destructive"
+							role="alert"
+						>
+							<p>{t('publicLeaguesError')}</p>
+							<button
+								type="button"
+								className="mt-3 rounded-md border px-3 py-1 text-xs font-medium text-foreground hover:bg-muted"
+								onClick={() => window.location.reload()}
+							>
+								{t('retry')}
+							</button>
 						</div>
-					)}
-					{!committed &&
-						!error &&
-						publicCatalogState === 'NOT_PUBLISHED' &&
-						access === 'PUBLIC' && (
+					) : !committed && !error ? (
+						publicCatalogState === 'NOT_PUBLISHED' && access === 'PUBLIC' ? (
 							<div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
 								{t('notPublished')}
 							</div>
-						)}
-					{!committed &&
-						!error &&
-						!(
-							publicCatalogState === 'NOT_PUBLISHED' && access === 'PUBLIC'
-						) && (
+						) : (
 							<div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-								{t('noLeagueOptions')}
+								{cohorts.length > 0
+									? t('noReadyLeagueOptions')
+									: t('noLeagueOptions')}
 							</div>
-						)}
+						)
+					) : null}
 					{committed && (
 						<>
 							<div className="mb-4 flex items-center justify-between">

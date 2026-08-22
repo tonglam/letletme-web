@@ -209,6 +209,8 @@
 		"competitionBandTitle": "像比赛日工作台一样运营你的小联赛",
 		"competitionBandDescription": "浏览公开赛事，或按你们真正想要的计分规则创建私人赛事。",
 		"thisGameweek": "本轮",
+		"currentGameweekLabel": "本轮",
+		"currentMatches": "本轮赛况",
 		"nextGameweekLabel": "下一轮",
 		"viewGameweekStats": "完整 GW 统计",
 		"viewSelections": "联赛趋势",

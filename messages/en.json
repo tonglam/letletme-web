@@ -209,6 +209,8 @@
 		"competitionBandTitle": "Run your mini-league like a matchday desk",
 		"competitionBandDescription": "Browse open competitions or create a private competition with the scoring rules your group actually wants.",
 		"thisGameweek": "This gameweek",
+		"currentGameweekLabel": "Current gameweek",
+		"currentMatches": "Current Matches",
 		"nextGameweekLabel": "Next gameweek",
 		"viewGameweekStats": "Full gameweek stats",
 		"viewSelections": "League Trends",

@@ -52,7 +52,7 @@ function withEventId(
 }
 
 function liveStateToHomeState(state: string): HomeFixtureState {
-	if (state === 'SETTLED' || state === 'FINALIZED' || state === 'GW_REVIEW') {
+	if (state === 'SETTLED' || state === 'FINALIZED') {
 		return 'SETTLED'
 	}
 	if (

@@ -45,10 +45,7 @@ async function PersonalSeedStream({
 	return <PlayerStatsPersonalSeedCommit seed={await seedPromise} />
 }
 
-async function renderPlayerStatsPage({
-	params,
-	searchParams
-}: PageProps) {
+async function renderPlayerStatsPage({ params, searchParams }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	const timing = new RequestTiming()
 	const bootstrapPromise = loadPlayerStatsBootstrap(timing)
@@ -124,9 +121,9 @@ async function renderPlayerStatsPage({
 						<GameweekBadge
 							gameweek={directorySeed.anchorGw}
 							label={
-								directorySeed.seasonStatsAvailable
-									? undefined
-									: t('preseasonLabel')
+								directorySeed.seasonStatsStatus === 'PRESEASON'
+									? t('preseasonLabel')
+									: undefined
 							}
 						/>
 					}

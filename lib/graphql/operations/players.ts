@@ -634,7 +634,7 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
 			price
 				statsContext { season status }
 				availability {
-					status observedDate
+					status news observedDate
 				chanceOfPlayingThisRound chanceOfPlayingNextRound
 			}
 			totalPoints selectedByPercent transfersInEvent transfersOutEvent

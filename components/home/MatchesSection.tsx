@@ -371,12 +371,7 @@ export function MatchesSection({
 	)
 
 	useEffect(() => {
-		if (
-			committed?.source !== 'LIVE' ||
-			committed.state === 'SETTLED' ||
-			committed.state === 'UNAVAILABLE'
-		)
-			return
+		if (committed?.source !== 'LIVE' || committed.state === 'SETTLED') return
 
 		const refresh = () => {
 			if (document.visibilityState !== 'visible') return
@@ -428,6 +423,7 @@ export function MatchesSection({
 	}
 
 	const committedEventId = committed?.eventId ?? initialEventId
+	const isLivePublication = committed?.source === 'LIVE'
 	const canGoPrev =
 		intentEventId !== null &&
 		minimumEventId !== null &&
@@ -450,9 +446,13 @@ export function MatchesSection({
 			) : null}
 			<div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div>
-					<p className="eyebrow">{t('nextGameweekLabel')}</p>
+					<p className="eyebrow">
+						{t(
+							isLivePublication ? 'currentGameweekLabel' : 'nextGameweekLabel'
+						)}
+					</p>
 					<h2 className="mt-1 flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
-						{t('upcomingMatches')}
+						{t(isLivePublication ? 'currentMatches' : 'upcomingMatches')}
 						<GameweekBadge
 							gameweek={committedEventId}
 							size="sm"
