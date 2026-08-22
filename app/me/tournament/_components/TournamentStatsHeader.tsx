@@ -5,7 +5,7 @@ import {
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
-	SelectValue,
+	SelectValue
 } from '@/components/ui/select'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import { cn } from '@/lib/utils'
@@ -25,7 +25,7 @@ function MetaChip({ children }: { children: ReactNode }) {
 			className={cn(
 				'inline-flex items-center rounded-md border border-border/70',
 				'bg-muted/35 px-2 py-0.5 text-caption font-medium text-muted-foreground',
-				'dark:bg-muted/20',
+				'dark:bg-muted/20'
 			)}
 		>
 			{children}
@@ -37,9 +37,10 @@ export function TournamentStatsHeader({
 	onTournamentChange,
 	selectedTournament,
 	selectedTournamentId,
-	tournaments,
+	tournaments
 }: TournamentStatsHeaderProps) {
 	const t = useTranslations('TournamentStats')
+	const lifecycleT = useTranslations('TournamentManage')
 	const format = useFormatter()
 
 	const groupModeLabel =
@@ -69,10 +70,31 @@ export function TournamentStatsHeader({
 		metaChips.push(
 			t('teams', {
 				count: format.number(selectedTournament.totalTeamNum, {
-					notation: 'compact',
-				}),
-			}),
+					notation: 'compact'
+				})
+			})
 		)
+		const rosterTime =
+			selectedTournament.rosterMode === 'OFFICIAL_SYNC'
+				? selectedTournament.rosterLastSyncedAt
+				: selectedTournament.createdAt
+		metaChips.push(
+			selectedTournament.rosterMode === 'OFFICIAL_SYNC'
+				? lifecycleT('officialRoster')
+				: lifecycleT('snapshotRoster')
+		)
+		if (rosterTime) {
+			metaChips.push(
+				`${lifecycleT(
+					selectedTournament.rosterMode === 'OFFICIAL_SYNC'
+						? 'lastUpdated'
+						: 'created'
+				)}: ${format.dateTime(new Date(rosterTime), {
+					dateStyle: 'medium',
+					timeStyle: 'short'
+				})}`
+			)
+		}
 		if (groupModeLabel && selectedTournament.groupStartedEventId != null) {
 			metaChips.push(t('groupStage'))
 			metaChips.push(groupModeLabel)
@@ -80,30 +102,33 @@ export function TournamentStatsHeader({
 				selectedTournament.groupEndedEventId != null
 					? t('gameweekRange', {
 							start: selectedTournament.groupStartedEventId,
-							end: selectedTournament.groupEndedEventId,
+							end: selectedTournament.groupEndedEventId
 						})
 					: t('gameweekFrom', {
-							start: selectedTournament.groupStartedEventId,
-						}),
+							start: selectedTournament.groupStartedEventId
+						})
 			)
 		}
-		if (knockoutModeLabel && selectedTournament.knockoutStartedEventId != null) {
+		if (
+			knockoutModeLabel &&
+			selectedTournament.knockoutStartedEventId != null
+		) {
 			metaChips.push(t('knockoutStage'))
 			metaChips.push(knockoutModeLabel)
 			metaChips.push(
 				selectedTournament.knockoutEndedEventId != null
 					? t('gameweekRange', {
 							start: selectedTournament.knockoutStartedEventId,
-							end: selectedTournament.knockoutEndedEventId,
+							end: selectedTournament.knockoutEndedEventId
 						})
 					: t('gameweekFrom', {
-							start: selectedTournament.knockoutStartedEventId,
-						}),
+							start: selectedTournament.knockoutStartedEventId
+						})
 			)
 		}
 		if (selectedTournament.groupQualifyNum != null) {
 			metaChips.push(
-				t('topQualify', { count: selectedTournament.groupQualifyNum }),
+				t('topQualify', { count: selectedTournament.groupQualifyNum })
 			)
 		}
 	}

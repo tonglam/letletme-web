@@ -6,11 +6,12 @@ import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { usePathname, useRouter } from '@/i18n/navigation'
+import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import type {
 	EntryEventResult,
 	EntryGameweekTransfers
 } from '@/lib/graphql/operations/entries'
+import type { MyFplReviewState } from '@/lib/graphql/operations/my-fpl'
 import type { SeasonIdentity } from './_lib/team-stats-model'
 import type { SeasonPresentationPhase } from '@/lib/season-presentation'
 import { cn } from '@/lib/utils'
@@ -41,6 +42,8 @@ interface TeamStatsClientProps {
 	currentGameweek: number
 	initialSelectedGameweek?: number
 	initialEntryEventResult: EntryEventResult | null
+	initialEntryGameweekState?: MyFplReviewState
+	initialPastSeasonsState?: MyFplReviewState
 	initialEntryHistory?: InitialEntryHistory
 	initialEntryIdentity?: SeasonIdentity | null
 	/** null = deferred client fetch; array = SSR complete */
@@ -75,6 +78,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 		currentGameweek,
 		emptyStateMessage,
 		error,
+		gameweekState,
 		isLoading,
 		isTransfersLoading,
 		seasonLogs,
@@ -174,11 +178,14 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 							selectedGameweek={selectedGameweek}
 							currentGameweek={currentGameweek}
 							maxGw={maxGw}
-								isLoading={isLoading}
-								isTransfersLoading={isTransfersLoading}
-								teamStats={teamStats}
-								seasonOverall={seasonOverall}
-								preseason={props.initialSeasonPhase === 'PRESEASON'}
+							entryId={props.entryId}
+							isLoading={isLoading}
+							isTransfersLoading={isTransfersLoading}
+							gameweekState={gameweekState}
+							teamStats={teamStats}
+							seasonOverall={seasonOverall}
+							preseason={props.initialSeasonPhase === 'PRESEASON'}
+							pastSeasonsState={props.initialPastSeasonsState}
 							seasonLogs={seasonLogs}
 							emptyStateMessage={emptyStateMessage}
 							hasAnyContent={hasAnyContent}
@@ -207,11 +214,14 @@ interface TeamStatsViewsProps {
 	selectedGameweek: number
 	currentGameweek: number
 	maxGw: number
+	entryId: number
 	isLoading: boolean
 	isTransfersLoading: boolean
+	gameweekState?: MyFplReviewState
 	teamStats: ReturnType<typeof useTeamStats>['teamStats']
 	seasonOverall: ReturnType<typeof useTeamStats>['seasonOverall']
 	preseason: boolean
+	pastSeasonsState?: MyFplReviewState
 	seasonLogs: ReturnType<typeof useTeamStats>['seasonLogs']
 	emptyStateMessage: string | null
 	hasAnyContent: boolean
@@ -224,11 +234,14 @@ function TeamStatsViews({
 	selectedGameweek,
 	currentGameweek,
 	maxGw,
+	entryId,
 	isLoading,
 	isTransfersLoading,
+	gameweekState,
 	teamStats,
 	seasonOverall,
 	preseason,
+	pastSeasonsState,
 	seasonLogs,
 	emptyStateMessage,
 	hasAnyContent,
@@ -348,6 +361,11 @@ function TeamStatsViews({
 
 			{view === 'season' ? (
 				<div className="space-y-6 sm:space-y-8">
+					{pastSeasonsState === 'PENDING' ? (
+						<Alert className="shadow-sm">
+							<AlertDescription>{t('pastSeasonsPending')}</AlertDescription>
+						</Alert>
+					) : null}
 					{seasonOverall ? (
 						<TeamSeasonOverall
 							snapshot={seasonOverall}
@@ -417,6 +435,14 @@ function TeamStatsViews({
 							<p className="text-sm text-muted-foreground">
 								{isLoading ? t('loading') : (emptyStateMessage ?? t('noStats'))}
 							</p>
+							{gameweekState === 'PENDING' ? (
+								<Link
+									href={`/live/points/${entryId}`}
+									className="mt-3 inline-flex text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
+								>
+									{t('openLive')}
+								</Link>
+							) : null}
 						</Card>
 					)}
 				</div>

@@ -6,7 +6,7 @@ import {
 	DataTd,
 	DataTh,
 	DataThead,
-	DataTr,
+	DataTr
 } from '@/components/data/DataTable'
 import { cn, formatCompactNumber } from '@/lib/utils'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
@@ -14,13 +14,13 @@ import { useFormatter, useTranslations } from 'next-intl'
 import { useEffect, useMemo, useState } from 'react'
 import type {
 	TournamentSeasonField,
-	TournamentSeasonStandingRow,
+	TournamentSeasonStandingRow
 } from '../_lib/tournament-stats-model'
 
 /** First N rows; if You is outside the window, pin at the end. */
 function takeVisibleWithPinMe(
 	sorted: TournamentSeasonStandingRow[],
-	visibleCount: number,
+	visibleCount: number
 ): TournamentSeasonStandingRow[] {
 	if (sorted.length <= visibleCount) return sorted
 	const top = sorted.slice(0, visibleCount)
@@ -47,7 +47,7 @@ function defaultDir(key: SortKey): SortDir {
 function compareNullable(
 	a: number | null,
 	b: number | null,
-	dir: SortDir,
+	dir: SortDir
 ): number {
 	if (a == null && b == null) return 0
 	if (a == null) return 1 // nulls last
@@ -59,7 +59,7 @@ function compareNullable(
 function sortStandings(
 	rows: TournamentSeasonStandingRow[],
 	key: SortKey,
-	dir: SortDir,
+	dir: SortDir
 ): TournamentSeasonStandingRow[] {
 	return [...rows].sort((a, b) => {
 		const primary = compareNullable(a[key], b[key], dir)
@@ -77,7 +77,7 @@ function SortHeader({
 	dir,
 	align = 'left',
 	className,
-	onClick,
+	onClick
 }: {
 	label: string
 	active: boolean
@@ -88,7 +88,10 @@ function SortHeader({
 }) {
 	const Icon = !active ? ArrowUpDown : dir === 'asc' ? ArrowUp : ArrowDown
 	return (
-		<DataTh align={align} className={className}>
+		<DataTh
+			align={align}
+			className={className}
+		>
 			<button
 				type="button"
 				onClick={onClick}
@@ -96,7 +99,7 @@ function SortHeader({
 					'inline-flex items-center gap-1 rounded-sm text-caption font-medium uppercase tracking-wide',
 					'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
 					align === 'right' && 'ml-auto flex-row-reverse',
-					active ? 'text-foreground' : 'text-muted-foreground',
+					active ? 'text-foreground' : 'text-muted-foreground'
 				)}
 				aria-sort={
 					active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'
@@ -106,7 +109,7 @@ function SortHeader({
 				<Icon
 					className={cn(
 						'size-3.5 shrink-0',
-						active ? 'opacity-100' : 'opacity-50',
+						active ? 'opacity-100' : 'opacity-50'
 					)}
 					aria-hidden="true"
 				/>
@@ -117,8 +120,14 @@ function SortHeader({
 
 export function TournamentSeasonField({
 	field,
+	hasMoreServerRows = false,
+	isLoadingServerRows = false,
+	onLoadMoreServerRows
 }: {
 	field: TournamentSeasonField | null
+	hasMoreServerRows?: boolean
+	isLoadingServerRows?: boolean
+	onLoadMoreServerRows?: () => void
 }) {
 	const t = useTranslations('TournamentStats')
 	const format = useFormatter()
@@ -146,16 +155,14 @@ export function TournamentSeasonField({
 
 	const rows = useMemo(
 		() => takeVisibleWithPinMe(sortedStandings, visibleCount),
-		[sortedStandings, visibleCount],
+		[sortedStandings, visibleCount]
 	)
 
 	if (!field) {
 		return (
 			<section className="mb-5 overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm sm:mb-6">
 				<div className="px-4 py-5 sm:px-5">
-					<p className="eyebrow">
-						{t('tournamentField')}
-					</p>
+					<p className="eyebrow">{t('tournamentField')}</p>
 					<p className="mt-3 text-sm text-muted-foreground">
 						{t('tournamentFieldEmpty')}
 					</p>
@@ -169,6 +176,7 @@ export function TournamentSeasonField({
 	const remaining = Math.max(0, total - visibleCount)
 	const canCollapse = visibleCount > PREVIEW_ROWS && total > PREVIEW_ROWS
 	const nextStep = Math.min(ROW_STEP, remaining)
+	const showServerMore = hasMoreServerRows && onLoadMoreServerRows !== undefined
 
 	return (
 		<section
@@ -229,9 +237,7 @@ export function TournamentSeasonField({
 
 				{field.metrics.length > 0 ? (
 					<div className="mt-4">
-						<p className="mb-2 eyebrow">
-							{t('fieldLeaders')}
-						</p>
+						<p className="mb-2 eyebrow">{t('fieldLeaders')}</p>
 						<div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
 							{field.metrics.map(metric => (
 								<div
@@ -259,7 +265,7 @@ export function TournamentSeasonField({
 									) : null}
 									<p className="mt-1 font-mono text-caption tabular-nums text-muted-foreground">
 										{t('fieldMetricAverage', {
-											value: metric.averageDisplay,
+											value: metric.averageDisplay
 										})}
 									</p>
 								</div>
@@ -280,9 +286,7 @@ export function TournamentSeasonField({
 							className="w-10 sm:w-12"
 							onClick={() => handleSort('rank')}
 						/>
-						<DataTh className="min-w-[7rem]">
-							{t('team')}
-						</DataTh>
+						<DataTh className="min-w-[7rem]">{t('team')}</DataTh>
 						<SortHeader
 							label={t('totalPoints')}
 							active={sortKey === 'totalPoints'}
@@ -319,7 +323,7 @@ export function TournamentSeasonField({
 									<p
 										className={cn(
 											'truncate font-medium',
-											row.isMe && 'text-primary-ink',
+											row.isMe && 'text-primary-ink'
 										)}
 									>
 										{row.teamName}
@@ -369,13 +373,13 @@ export function TournamentSeasonField({
 					</tbody>
 				</DataTable>
 
-				{hasMore || canCollapse ? (
+				{hasMore || canCollapse || showServerMore ? (
 					<div className="mt-3 flex flex-wrap items-center justify-center gap-2">
 						{total > PREVIEW_ROWS ? (
 							<p className="w-full text-center text-xs text-muted-foreground sm:w-auto sm:text-left">
 								{t('standingsShowing', {
 									shown: Math.min(visibleCount, total),
-									total,
+									total
 								})}
 							</p>
 						) : null}
@@ -412,6 +416,18 @@ export function TournamentSeasonField({
 								onClick={() => setVisibleCount(PREVIEW_ROWS)}
 							>
 								{t('standingsShowLess')}
+							</Button>
+						) : null}
+						{showServerMore ? (
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								className="text-xs"
+								disabled={isLoadingServerRows}
+								onClick={onLoadMoreServerRows}
+							>
+								{isLoadingServerRows ? t('loading') : t('standingsLoadMore')}
 							</Button>
 						) : null}
 					</div>

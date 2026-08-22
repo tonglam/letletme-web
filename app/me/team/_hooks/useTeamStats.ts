@@ -4,8 +4,9 @@ import type {
 	EntryEventResult,
 	EntryGameweekTransfers,
 	EntryHistoryItem,
-	EntrySeasonHistoryItem,
+	EntrySeasonHistoryItem
 } from '@/lib/graphql/operations/entries'
+import type { MyFplReviewState } from '@/lib/graphql/operations/my-fpl'
 import { useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -18,13 +19,14 @@ import {
 	identityFromEventResult,
 	mapApiDataToTeamStats,
 	peekEntryEventResult,
+	peekEntryGameweekState,
 	peekEntryHistory,
 	peekTransferHistory,
 	seedTransferHistoryCache,
 	type SeasonIdentity,
 	type TeamSeasonLogs,
 	type TeamSeasonOverallSnapshot,
-	type TeamStatsViewModel,
+	type TeamStatsViewModel
 } from '../_lib/team-stats-model'
 
 export type InitialEntryHistory = {
@@ -41,6 +43,7 @@ interface UseTeamStatsOptions {
 	/** Gameweek tab active → load entryEventResult(selected). */
 	loadGameweekData: boolean
 	initialEntryEventResult: EntryEventResult | null
+	initialEntryGameweekState?: MyFplReviewState
 	initialEntryHistory?: InitialEntryHistory
 	initialEntryIdentity?: InitialEntryIdentity
 	/** null = deferred client fetch; array = already complete */
@@ -65,19 +68,20 @@ export function useTeamStats({
 	initialSelectedGameweek,
 	loadGameweekData,
 	initialEntryEventResult,
+	initialEntryGameweekState,
 	initialEntryHistory = null,
 	initialEntryIdentity = null,
 	initialEntryTransfers = null,
 	initialError,
 	initialRequestComplete,
-	preseason,
+	preseason
 }: UseTeamStatsOptions) {
 	const t = useTranslations('TeamStats')
 	const [currentGameweek, setCurrentGameweek] = useState(initialCurrentGameweek)
 	const [selectedGameweek, setSelectedGameweek] = useState(
 		initialSelectedGameweek && initialSelectedGameweek > 0
 			? initialSelectedGameweek
-			: initialCurrentGameweek,
+			: initialCurrentGameweek
 	)
 
 	const seedGw =
@@ -105,15 +109,15 @@ export function useTeamStats({
 					initialEntryEventResult,
 					historyResults0,
 					seasonHistory0,
-					transfers0,
+					transfers0
 				)
-			: null,
+			: null
 	)
 	const [seasonOverall, setSeasonOverall] =
 		useState<TeamSeasonOverallSnapshot | null>(() =>
 			identity0
 				? buildSeasonOverallSnapshot(identity0, historyResults0, { preseason })
-				: null,
+				: null
 		)
 	const [seasonLogs, setSeasonLogs] = useState<TeamSeasonLogs | null>(() => {
 		if (
@@ -128,12 +132,16 @@ export function useTeamStats({
 
 	const [isLoading, setIsLoading] = useState(false)
 	const [isTransfersLoading, setIsTransfersLoading] = useState(
-		() => !transfersSeeded && peekTransferHistory(entryId) === undefined,
+		() => !transfersSeeded && peekTransferHistory(entryId) === undefined
 	)
 	const [baseError, setBaseError] = useState<string | null>(initialError)
 	const [gameweekError, setGameweekError] = useState<string | null>(null)
 	const [emptyStateMessage, setEmptyStateMessage] = useState<string | null>(
-		null,
+		initialEntryGameweekState === 'PENDING'
+			? t('pendingReviewForGameweek', {
+					gameweek: initialSelectedGameweek ?? initialCurrentGameweek
+				})
+			: null
 	)
 
 	const identityRef = useRef<SeasonIdentity | null>(identity0)
@@ -148,26 +156,26 @@ export function useTeamStats({
 			currentGameweek: initialCurrentGameweek,
 			history: initialEntryHistory,
 			event: initialEntryEventResult,
-			transfers: initialEntryTransfers,
+			eventState: initialEntryGameweekState,
+			transfers: initialEntryTransfers
 		})
 	}, [
 		entryId,
 		initialEntryEventResult,
+		initialEntryGameweekState,
 		initialEntryHistory,
 		initialEntryIdentity,
 		initialEntryTransfers,
 		initialCurrentGameweek,
 		initialRequestComplete,
-		seedGw,
+		seedGw
 	])
 
 	const rebuildSeasonLogs = (
 		history: NonNullable<InitialEntryHistory>,
-		transfers: EntryGameweekTransfers[],
+		transfers: EntryGameweekTransfers[]
 	) => {
-		setSeasonLogs(
-			buildSeasonLogs(history.results, history.history, transfers),
-		)
+		setSeasonLogs(buildSeasonLogs(history.results, history.history, transfers))
 	}
 
 	// History fallback if SSR missed (session cache empty)
@@ -178,21 +186,21 @@ export function useTeamStats({
 			try {
 				const history = await getEntryHistoryCached(entryId)
 				if (cancelled || !history) return
-				setCurrentGameweek(
-					history.results.reduce(
-						(maxEventId, item) => Math.max(maxEventId, item.eventId),
-						1,
-					),
-				)
+				if (initialCurrentGameweek <= 0) {
+					setCurrentGameweek(
+						history.results.reduce(
+							(maxEventId, item) => Math.max(maxEventId, item.eventId),
+							1
+						)
+					)
+				}
 				const transfers = peekTransferHistory(entryId) ?? []
 				rebuildSeasonLogs(history, transfers)
 				if (identityRef.current) {
 					setSeasonOverall(
-						buildSeasonOverallSnapshot(
-							identityRef.current,
-							history.results,
-							{ preseason },
-						),
+						buildSeasonOverallSnapshot(identityRef.current, history.results, {
+							preseason
+						})
 					)
 				}
 			} catch (e) {
@@ -203,7 +211,7 @@ export function useTeamStats({
 		return () => {
 			cancelled = true
 		}
-	}, [entryId, preseason, t])
+	}, [entryId, initialCurrentGameweek, preseason, t])
 
 	// Deferred transfers — once per entry unless already in session cache
 	useEffect(() => {
@@ -220,7 +228,10 @@ export function useTeamStats({
 				const history = peekEntryHistory(entryId)
 				if (history) rebuildSeasonLogs(history, transfers)
 			} catch (transferError) {
-				console.warn('[team stats] transfers deferred load failed:', transferError)
+				console.warn(
+					'[team stats] transfers deferred load failed:',
+					transferError
+				)
 				if (!cancelled) {
 					// Mark empty so we do not retry forever this session
 					seedTransferHistoryCache(entryId, [])
@@ -248,13 +259,15 @@ export function useTeamStats({
 		setGameweekError(null)
 
 		const cachedEvent = peekEntryEventResult(entryId, selectedGameweek)
+		const cachedState = peekEntryGameweekState(entryId, selectedGameweek)
 		if (cachedEvent !== undefined && teamStats?.eventId === selectedGameweek) {
-			setIsLoading(false)
 			setEmptyStateMessage(null)
+			setIsLoading(false)
 			return
 		}
 		// Sync apply cache hit without network
 		if (cachedEvent !== undefined && cachedEvent !== null) {
+			setEmptyStateMessage(null)
 			applyGameweekResult(cachedEvent)
 			setIsLoading(false)
 			setEmptyStateMessage(null)
@@ -262,9 +275,7 @@ export function useTeamStats({
 		}
 		if (cachedEvent === null) {
 			setTeamStats(null)
-			setEmptyStateMessage(
-				t('noStatsForGameweek', { gameweek: selectedGameweek }),
-			)
+			setEmptyStateMessage(formatEmptyStateMessage(cachedState))
 			setIsLoading(false)
 			return
 		}
@@ -277,14 +288,16 @@ export function useTeamStats({
 				const entryEventResult = await getEntryEventResultCached(
 					entryId,
 					selectedGameweek,
-					{ isCurrentGameweek: selectedGameweek === currentGameweek },
+					{ isCurrentGameweek: selectedGameweek === currentGameweek }
 				)
 				if (requestId !== gwRequestIdRef.current) return
 
 				if (!entryEventResult) {
 					setTeamStats(null)
 					setEmptyStateMessage(
-						t('noStatsForGameweek', { gameweek: selectedGameweek }),
+						formatEmptyStateMessage(
+							peekEntryGameweekState(entryId, selectedGameweek)
+						)
 					)
 					return
 				}
@@ -313,13 +326,13 @@ export function useTeamStats({
 			const transfers = peekTransferHistory(entryId) ?? []
 
 			setSeasonOverall(
-				buildSeasonOverallSnapshot(identity, historyResults, { preseason }),
+				buildSeasonOverallSnapshot(identity, historyResults, { preseason })
 			)
 			const mapped = mapApiDataToTeamStats(
 				entryEventResult,
 				historyResults,
 				seasonHistory,
-				transfers,
+				transfers
 			)
 			setTeamStats(mapped)
 			if (historyResults.length > 0 || transfers.length > 0) {
@@ -328,24 +341,38 @@ export function useTeamStats({
 					seasonHistoryRows: mapped.seasonHistoryRows,
 					chipUsageRows: mapped.chipUsageRows,
 					chipCounts: mapped.chipCounts,
-					transferRows: mapped.transferRows,
+					transferRows: mapped.transferRows
 				})
 			}
 		}
+
+		function formatEmptyStateMessage(state: MyFplReviewState | undefined) {
+			return state === 'PENDING'
+				? t('pendingReviewForGameweek', { gameweek: selectedGameweek })
+				: t('noStatsForGameweek', { gameweek: selectedGameweek })
+		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- intentional GW gate
-	}, [entryId, selectedGameweek, loadGameweekData, currentGameweek, preseason, t])
+	}, [
+		entryId,
+		selectedGameweek,
+		loadGameweekData,
+		currentGameweek,
+		preseason,
+		t
+	])
 
 	return {
 		currentGameweek,
 		emptyStateMessage,
 		error: gameweekError ?? baseError,
+		gameweekState: peekEntryGameweekState(entryId, selectedGameweek),
 		isLoading,
 		isTransfersLoading,
 		seasonLogs,
 		seasonOverall,
 		selectedGameweek,
 		setSelectedGameweek,
-		teamStats,
+		teamStats
 	}
 }
 

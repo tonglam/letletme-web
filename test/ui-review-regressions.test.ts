@@ -99,13 +99,15 @@ describe('asynchronous selection safety', () => {
 		)
 		assert.ok(teamLoad >= 0 && teamClear > teamLoad && teamRequest > teamClear)
 
-		const tournamentLoad = tournamentSource.indexOf('async function loadGw()')
+		const tournamentLoad = tournamentSource.indexOf(
+			'// One request owns the selected tournament + GW'
+		)
 		const tournamentClear = tournamentSource.indexOf(
 			'setTournamentStats(null)',
 			tournamentLoad
 		)
 		const tournamentRequest = tournamentSource.indexOf(
-			'await fetchTournamentEventResultsCached',
+			'selectedGameweek > 0 ? selectedGameweek : null',
 			tournamentLoad
 		)
 		assert.ok(
