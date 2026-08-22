@@ -107,7 +107,7 @@ describe('asynchronous selection safety', () => {
 			tournamentLoad
 		)
 		const tournamentRequest = tournamentSource.indexOf(
-			'selectedGameweek > 0 ? selectedGameweek : null',
+			'loadGameweekData && selectedGameweek > 0 ? selectedGameweek : null',
 			tournamentLoad
 		)
 		assert.ok(
@@ -167,8 +167,16 @@ describe('asynchronous selection safety', () => {
 		assert.match(tournamentClient, /latestFinalizedGameweek/)
 		assert.match(tournamentHook, /setDeskRefreshNonce\(value => value \+ 1\)/)
 		assert.match(tournamentHook, /boardAbortRef\.current\?\.abort\(\)/)
+		assert.match(tournamentHook, /setIsBoardLoading\(false\)/)
+		assert.match(
+			tournamentHook,
+			/commitBoardPage\(boardWithViewer, standingsSearch\.trim\(\)\)/
+		)
+		assert.match(tournamentHook, /setSeasonPath\(\[\]\)/)
 		assert.match(tournamentHook, /initialBoardSearchSkippedRef\.current/)
 		assert.match(tournamentHook, /latestFinalizedGameweek \?\? dataGameweek/)
+		assert.match(tournamentClient, /setStandingsSearch\(''\)/)
+		assert.match(tournamentClient, /boardSearch === ''/)
 		assert.match(adapters, /myRank: viewerRow\?\.rank \?\? aggregate\.viewer/)
 		assert.match(
 			teamPage,

@@ -64,6 +64,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 		error,
 		filteredStandings,
 		hasMoreStandings,
+		boardSearch,
 		insightsReady,
 		isBoardLoading,
 		isLoading,
@@ -211,17 +212,9 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 				: dataGameweek && dataGameweek > 0
 					? dataGameweek
 					: null
-		if (seasonGameweek !== null && seasonGameweek !== selectedGameweek) {
-			setSelectedGameweek(seasonGameweek)
-		}
+		setStandingsSearch('')
 		replaceQuery({ view: 'season', gw: seasonGameweek })
-	}, [
-		dataGameweek,
-		latestFinalizedGameweek,
-		replaceQuery,
-		selectedGameweek,
-		setSelectedGameweek
-	])
+	}, [dataGameweek, latestFinalizedGameweek, replaceQuery, setStandingsSearch])
 
 	// URL gw → selected gameweek
 	useEffect(() => {
@@ -376,7 +369,9 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 								filteredStandings={filteredStandings}
 								hasMoreStandings={hasMoreStandings}
 								hasMoreSeasonRows={
-									hasMoreStandings && standingsSearch.trim() === ''
+									hasMoreStandings &&
+									standingsSearch.trim() === '' &&
+									boardSearch === ''
 								}
 								isBoardLoading={isBoardLoading}
 								loadMoreStandings={loadMoreStandings}

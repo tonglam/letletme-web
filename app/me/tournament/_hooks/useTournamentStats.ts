@@ -185,6 +185,7 @@ export function useTournamentStats({
 	const [boardPage, setBoardPage] = useState<MyFplCompetitionBoardPage | null>(
 		initialBoard
 	)
+	const [boardSearch, setBoardSearch] = useState('')
 	const [rankingSummary, setRankingSummary] =
 		useState<TournamentEntryRankingSummary | null>(initialRankingSummary)
 	const [seasonFieldRows, setSeasonFieldRows] = useState<
@@ -212,9 +213,26 @@ export function useTournamentStats({
 	const requestAbortRef = useRef<AbortController | null>(null)
 	const boardSequenceRef = useRef(0)
 	const boardAbortRef = useRef<AbortController | null>(null)
+	const boardPageRef = useRef<MyFplCompetitionBoardPage | null>(initialBoard)
 	const firstDeskLoadRef = useRef(true)
 	const initialBoardSearchSkippedRef = useRef(false)
 	const [deskRefreshNonce, setDeskRefreshNonce] = useState(0)
+
+	const commitBoardPage = useCallback(
+		(nextBoard: MyFplCompetitionBoardPage | null, search = '') => {
+			boardPageRef.current = nextBoard
+			setBoardPage(nextBoard)
+			setBoardSearch(search)
+		},
+		[]
+	)
+	const updateStandingsSearch = useCallback((value: string) => {
+		setStandingsSearch(value)
+		if (value.trim() === '') {
+			setSeasonFieldRows([])
+			setSeasonSnapshot(null)
+		}
+	}, [])
 
 	const selectedTournament = useMemo(
 		() =>
@@ -259,6 +277,8 @@ export function useTournamentStats({
 		boardSequenceRef.current += 1
 		boardAbortRef.current?.abort()
 		boardAbortRef.current = null
+		setIsBoardLoading(false)
+		commitBoardPage(null)
 		setStandingsSearch('')
 		setSelectedTournamentIdState(value)
 		setSelectedGameweek(prev => (prev > 0 ? prev : currentGameweek))
@@ -378,7 +398,7 @@ export function useTournamentStats({
 				)
 				setLatestFinalizedGameweek(desk.context.latestFinalizedEventId ?? null)
 				setReviewState(nextState)
-				setBoardPage(board)
+				commitBoardPage(board)
 				setAggregate(desk.aggregate)
 				setRankingSummary(aggregateToRankingSummary(desk.aggregate))
 				setSeasonSnapshot(aggregateToSeasonSnapshot(desk.aggregate, board))
@@ -434,6 +454,7 @@ export function useTournamentStats({
 		initialReviewState,
 		initialSelectedTournamentId,
 		loadGameweekData,
+		commitBoardPage,
 		selectedGameweek,
 		selectedTournamentId,
 		t,
@@ -444,14 +465,15 @@ export function useTournamentStats({
 		(nextBoard: MyFplCompetitionBoardPage, nextAggregate = aggregate) => {
 			if (!selectedTournament || !nextAggregate || nextBoard.state !== 'READY')
 				return
+			const previousBoard = boardPageRef.current
 			const boardWithViewer =
-				(nextBoard.viewerRow ?? boardPage?.viewerRow)
+				(nextBoard.viewerRow ?? previousBoard?.viewerRow)
 					? {
 							...nextBoard,
-							viewerRow: nextBoard.viewerRow ?? boardPage?.viewerRow ?? null
+							viewerRow: nextBoard.viewerRow ?? previousBoard?.viewerRow ?? null
 						}
 					: nextBoard
-			setBoardPage(boardWithViewer)
+			commitBoardPage(boardWithViewer, standingsSearch.trim())
 			setTournamentStats(
 				aggregateToTournamentStats(
 					selectedTournament,
@@ -469,7 +491,7 @@ export function useTournamentStats({
 				)
 			}
 		},
-		[aggregate, boardPage, entryId, selectedTournament, standingsSearch]
+		[aggregate, commitBoardPage, entryId, selectedTournament, standingsSearch]
 	)
 	const boardEventId = boardPage?.eventId ?? null
 
@@ -582,11 +604,13 @@ export function useTournamentStats({
 			seasonPathThroughEventId == null ||
 			seasonPathThroughEventId < 1
 		) {
+			setSeasonPath([])
 			if (!loadSeasonPath) setSeasonPathLoading(false)
 			return
 		}
 		const controller = new AbortController()
 		let cancelled = false
+		setSeasonPath([])
 		setSeasonPathLoading(true)
 		void executeQuery<{
 			myFplCompetitionSeasonPath: {
@@ -632,6 +656,7 @@ export function useTournamentStats({
 		isBootstrapping: false,
 		isLoading,
 		isBoardLoading,
+		boardSearch,
 		hasMoreStandings: Boolean(
 			boardPage && boardPage.page < boardPage.totalPages
 		),
@@ -648,7 +673,7 @@ export function useTournamentStats({
 		selectedTournament,
 		selectedTournamentId,
 		setSelectedTournamentId,
-		setStandingsSearch,
+		setStandingsSearch: updateStandingsSearch,
 		standingsSearch,
 		tournamentStats,
 		tournaments,
