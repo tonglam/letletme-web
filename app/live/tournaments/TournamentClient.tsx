@@ -49,6 +49,10 @@ import {
 	areTournamentStandingsReady,
 	isTournamentSetupPollingPending
 } from '@/lib/tournament/lifecycle'
+import {
+	readLiveTournamentSelection,
+	writeLiveTournamentSelection
+} from '@/lib/tournament/live-selection'
 import { Tournament, type TournamentEntry } from '@/types/tournament'
 import { Link, useRouter } from '@/i18n/navigation'
 import { RefreshCw } from 'lucide-react'
@@ -152,6 +156,10 @@ export default function TournamentClient({
 	const [captainFilter, setCaptainFilter] = useState<string>('all')
 	const [tournaments, setTournaments] =
 		useState<Tournament[]>(initialTournaments)
+	const [restoredTournamentId, setRestoredTournamentId] = useState<
+		string | null
+	>(null)
+	const selectionRestoreAttemptedRef = useRef(false)
 	const [loadError, setLoadError] = useState<string | null>(null)
 	const [resultsError, setResultsError] = useState<string | null>(
 		initialResultsError
@@ -226,7 +234,74 @@ export default function TournamentClient({
 	const tournamentIdFromUrl = searchParams.get('tournamentId')
 
 	const requestedTournamentId =
-		(tournamentIdFromUrl ?? initialSelectedTournamentId) || null
+		(tournamentIdFromUrl ??
+			restoredTournamentId ??
+			initialSelectedTournamentId) ||
+		null
+
+	useEffect(() => {
+		if (entryId <= 0 || tournaments.length === 0) return
+
+		let storage: Storage | null = null
+		try {
+			storage = window.localStorage
+		} catch {
+			// Storage is optional; live standings must remain usable when blocked.
+		}
+
+		const urlTournament = tournamentIdFromUrl?.trim() ?? ''
+		const urlTournamentIsKnown = tournaments.some(
+			tournament => tournament.id === urlTournament
+		)
+		if (urlTournament) {
+			if (urlTournamentIsKnown) {
+				writeLiveTournamentSelection(storage, entryId, urlTournament)
+			}
+			return
+		}
+
+		if (!selectionRestoreAttemptedRef.current) {
+			selectionRestoreAttemptedRef.current = true
+			const cachedTournamentId = readLiveTournamentSelection(storage, entryId)
+			if (
+				cachedTournamentId &&
+				tournaments.some(tournament => tournament.id === cachedTournamentId)
+			) {
+				setRestoredTournamentId(cachedTournamentId)
+				return
+			}
+		}
+
+		if (
+			restoredTournamentId &&
+			tournaments.some(tournament => tournament.id === restoredTournamentId)
+		) {
+			return
+		}
+		if (
+			restoredTournamentId &&
+			!tournaments.some(tournament => tournament.id === restoredTournamentId)
+		) {
+			setRestoredTournamentId(null)
+		}
+
+		const fallbackTournamentId =
+			initialSelectedTournamentId &&
+			tournaments.some(
+				tournament => tournament.id === initialSelectedTournamentId
+			)
+				? initialSelectedTournamentId
+				: tournaments[0]?.id
+		if (fallbackTournamentId) {
+			writeLiveTournamentSelection(storage, entryId, fallbackTournamentId)
+		}
+	}, [
+		entryId,
+		initialSelectedTournamentId,
+		restoredTournamentId,
+		tournamentIdFromUrl,
+		tournaments
+	])
 	const selectedTournament = useMemo(() => {
 		if (tournaments.length === 0) return null
 		if (requestedTournamentId) {
@@ -848,6 +923,11 @@ export default function TournamentClient({
 						}
 						onTournamentChange={id => {
 							if (selectedTournament && id === selectedTournament.id) return
+							try {
+								writeLiveTournamentSelection(window.localStorage, entryId, id)
+							} catch {
+								// Storage is optional; URL navigation remains authoritative.
+							}
 							router.replace(`/live/competitions?tournamentId=${id}`)
 						}}
 					/>
