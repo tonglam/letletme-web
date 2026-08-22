@@ -1,7 +1,9 @@
 'use client'
 
+import { formatPriceChangeShareText } from '@/app/data/price-changes/_lib/price-change-share'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { MarketPositionBadge } from '@/components/data/MarketMarkup'
+import { ShareActions } from '@/components/share/ShareActions'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -28,6 +30,13 @@ import type {
 	PriceChangePlayer
 } from '@/lib/graphql/operations/price-changes'
 import {
+	DEFAULT_PRICE_CHANGE_SORT,
+	sortPriceChangePlayers,
+	type PriceChangeSortColumn,
+	type PriceChangeSortDirection,
+	type PriceChangeSortState,
+} from '@/lib/price-change-sorting'
+import {
 	calculateSellingPrice,
 	type PersonalPriceState
 } from '@/lib/price-change-personal'
@@ -35,23 +44,25 @@ import type { SquadLoadState } from '@/lib/squad-picks'
 import { cn } from '@/lib/utils'
 import { useHydrated } from '@/hooks/use-hydrated'
 import {
+	ArrowDown,
 	ArrowDownRight,
 	ArrowLeft,
 	ArrowRight,
+	ArrowUp,
 	ArrowUpRight,
+	ArrowUpDown,
 	CircleHelp,
 	Minus,
 	RefreshCcw,
 	Search
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 const PAGE_SIZE = 20
 
 type MovementFilter = 'all' | 'rise' | 'fall' | 'locked'
 type ScopeFilter = 'all' | 'mine'
-type SortMode = 'momentum' | 'ownership'
 
 const LAST_VALID_BOARD_STORAGE_KEY = 'letletme:price-change-board:v1'
 const LAST_VALID_BOARD_MAX_AGE_MS = 24 * 60 * 60 * 1_000
@@ -211,6 +222,57 @@ function statusAlertVariant(
 	return null
 }
 
+function SortableHeader({
+	column,
+	label,
+	sort,
+	onSort,
+	align = 'left',
+}: {
+	column: PriceChangeSortColumn
+	label: string
+	sort: PriceChangeSortState
+	onSort: (column: PriceChangeSortColumn) => void
+	align?: 'left' | 'right'
+}) {
+	const active = sort.column === column
+	const SortIcon = active
+		? sort.direction === 'asc'
+			? ArrowUp
+			: ArrowDown
+		: ArrowUpDown
+
+	return (
+		<th
+			className={cn(
+				'px-3 py-3 font-semibold',
+				align === 'right' && 'text-right',
+			)}
+			aria-sort={
+				active
+					? sort.direction === 'asc'
+						? 'ascending'
+						: 'descending'
+					: 'none'
+			}
+		>
+			<button
+				type="button"
+				className={cn(
+					'inline-flex items-center gap-1.5 rounded-sm text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+					align === 'right' && 'ml-auto text-right',
+					active && 'text-foreground',
+				)}
+				onClick={() => onSort(column)}
+				aria-label={label}
+			>
+				<span>{label}</span>
+				<SortIcon className="size-3.5" aria-hidden="true" />
+			</button>
+		</th>
+	)
+}
+
 export function PriceChangesBoard({
 	board,
 	locale,
@@ -231,12 +293,17 @@ export function PriceChangesBoard({
 	const hydrated = useHydrated()
 	const [search, setSearch] = useState('')
 	const [movement, setMovement] = useState<MovementFilter>('all')
-	const [scope, setScope] = useState<ScopeFilter>('all')
-	const [sort, setSort] = useState<SortMode>('momentum')
+	const defaultScope: ScopeFilter =
+		mySquadElementIds.length > 0 ? 'mine' : 'all'
+	const [scope, setScope] = useState<ScopeFilter>(defaultScope)
+	const [sort, setSort] = useState<PriceChangeSortState>(
+		DEFAULT_PRICE_CHANGE_SORT,
+	)
 	const [teamId, setTeamId] = useState('all')
 	const [page, setPage] = useState(1)
 	const [displayBoard, setDisplayBoard] = useState(board)
 	const mySquad = useMemo(() => new Set(mySquadElementIds), [mySquadElementIds])
+	const shareRef = useRef<HTMLDivElement | null>(null)
 	const countdown = useDeadlineCountdown(displayBoard.deadline)
 
 	useEffect(() => {
@@ -277,8 +344,7 @@ export function PriceChangesBoard({
 
 	const filteredPlayers = useMemo(() => {
 		const query = search.trim().toLowerCase()
-		return displayBoard.players
-			.filter(player => {
+		const matchingPlayers = displayBoard.players.filter(player => {
 				if (scope === 'mine' && !mySquad.has(player.playerId)) return false
 				if (teamId !== 'all' && String(player.teamId) !== teamId) return false
 				if (movement === 'rise' && player.progressPercent <= 0) return false
@@ -295,15 +361,23 @@ export function PriceChangesBoard({
 					.toLowerCase()
 					.includes(query)
 			})
-			.sort((left, right) => {
-				const primary =
-					sort === 'ownership'
-						? right.selectedByPercent - left.selectedByPercent
-						: Math.abs(right.progressPercent) - Math.abs(left.progressPercent)
-				if (primary !== 0) return primary
-				return left.webName.localeCompare(right.webName)
-			})
-	}, [displayBoard.players, movement, mySquad, scope, search, sort, teamId])
+		return sortPriceChangePlayers(matchingPlayers, {
+			sort,
+			squadElementIds: mySquad,
+			purchasePrices: personalPurchasePrices,
+			locale,
+		})
+	}, [
+		displayBoard.players,
+		locale,
+		movement,
+		mySquad,
+		personalPurchasePrices,
+		scope,
+		search,
+		sort,
+		teamId,
+	])
 
 	const pageCount = Math.max(1, Math.ceil(filteredPlayers.length / PAGE_SIZE))
 	const safePage = Math.min(page, pageCount)
@@ -319,8 +393,8 @@ export function PriceChangesBoard({
 	const resetFilters = () => {
 		setSearch('')
 		setMovement('all')
-		setScope('all')
-		setSort('momentum')
+		setScope(defaultScope)
+		setSort(DEFAULT_PRICE_CHANGE_SORT)
 		setTeamId('all')
 		setPage(1)
 	}
@@ -328,12 +402,70 @@ export function PriceChangesBoard({
 	const hasFilters =
 		search.length > 0 ||
 		movement !== 'all' ||
-		scope !== 'all' ||
-		sort !== 'momentum' ||
+		scope !== defaultScope ||
+		sort.column !== DEFAULT_PRICE_CHANGE_SORT.column ||
+		sort.direction !== DEFAULT_PRICE_CHANGE_SORT.direction ||
 		teamId !== 'all'
+	const setSortColumn = (column: PriceChangeSortColumn) => {
+		setSort(current =>
+			current.column === column
+				? {
+						column,
+						direction: current.direction === 'desc' ? 'asc' : 'desc',
+					}
+				: { column, direction: 'desc' },
+		)
+		setPage(1)
+	}
+	const setSortValue = (value: string) => {
+		const [column, direction] = value.split(':') as [
+			PriceChangeSortColumn,
+			PriceChangeSortDirection,
+		]
+		if (!column || !direction) return
+		setSort({ column, direction })
+		setPage(1)
+	}
 	const alertVariant = statusAlertVariant(displayBoard.status)
 	const from = filteredPlayers.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1
 	const to = Math.min(safePage * PAGE_SIZE, filteredPlayers.length)
+	const shareText = useMemo(() => {
+		const shareUrl =
+			typeof window !== 'undefined'
+				? window.location.href
+				: `https://letletme.top/${locale}/explore/price-changes`
+		const scopeLabel = scope === 'mine' ? t('scopeMine') : t('scopeAll')
+		return formatPriceChangeShareText({
+			players: visiblePlayers,
+			deadlineLabel: formatDeadline(displayBoard.deadline, locale, hydrated),
+			labels: {
+				title: t('title'),
+				scope: scopeLabel,
+				deadline: t('deadlineLabel'),
+				progress: t('progress'),
+				signal: t('signal'),
+				movement: t('netTransfers'),
+				none: t('noMatchesBoard'),
+				status: {
+					VERY_LIKELY_RISE: t('statusVeryLikelyRise'),
+					LIKELY_RISE: t('statusLikelyRise'),
+					UNLIKELY: t('statusUnlikely'),
+					LIKELY_FALL: t('statusLikelyFall'),
+					VERY_LIKELY_FALL: t('statusVeryLikelyFall'),
+					LOCKED: t('statusLocked'),
+					CALIBRATING: t('statusCalibrating'),
+				},
+				footer: shareUrl,
+			},
+		})
+	}, [
+		displayBoard.deadline,
+		hydrated,
+		locale,
+		scope,
+		t,
+		visiblePlayers,
+	])
 
 	return (
 		<div className="space-y-5">
@@ -383,37 +515,46 @@ export function PriceChangesBoard({
 			) : null}
 
 			<div className="flex flex-col gap-3 rounded-xl border border-primary/15 bg-primary/[0.035] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-				<p className="text-sm text-muted-foreground">{t('guideSummary')}</p>
-				<Dialog>
-					<DialogTrigger asChild>
-						<Button type="button" variant="outline" size="sm" className="shrink-0">
-							<CircleHelp data-icon="inline-start" aria-hidden="true" />
-							{t('understandingPriceChanges')}
-						</Button>
-					</DialogTrigger>
-					<DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-						<DialogHeader>
-							<DialogTitle>{t('understandingTitle')}</DialogTitle>
-							<DialogDescription>
-								{t('understandingDescription')}
-							</DialogDescription>
-						</DialogHeader>
-						<div className="space-y-4 text-sm leading-6 text-muted-foreground">
-							<p>{t('understandingProgress')}</p>
-							<p>{t('understandingStatus')}</p>
-							<p>{t('understandingDeadline')}</p>
-							<p className="rounded-lg bg-muted/50 px-3 py-2 text-foreground">
-								{t('understandingCaveat')}
-							</p>
-						</div>
-					</DialogContent>
-				</Dialog>
+				<p className="min-w-0 flex-1 text-sm text-muted-foreground">
+					{t('guideSummary')}
+				</p>
+				<div className="flex flex-wrap items-center gap-2">
+					<ShareActions
+						text={shareText}
+						imageRef={shareRef}
+						title={t('title')}
+					/>
+					<Dialog>
+						<DialogTrigger asChild>
+							<Button type="button" variant="outline" size="sm" className="shrink-0">
+								<CircleHelp data-icon="inline-start" aria-hidden="true" />
+								{t('understandingPriceChanges')}
+							</Button>
+						</DialogTrigger>
+						<DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+							<DialogHeader>
+								<DialogTitle>{t('understandingTitle')}</DialogTitle>
+								<DialogDescription>
+									{t('understandingDescription')}
+								</DialogDescription>
+							</DialogHeader>
+							<div className="space-y-4 text-sm leading-6 text-muted-foreground">
+								<p>{t('understandingProgress')}</p>
+								<p>{t('understandingStatus')}</p>
+								<p>{t('understandingDeadline')}</p>
+								<p className="rounded-lg bg-muted/50 px-3 py-2 text-foreground">
+									{t('understandingCaveat')}
+								</p>
+							</div>
+						</DialogContent>
+					</Dialog>
+				</div>
 			</div>
 
 			<Card className="overflow-hidden border-border/80 shadow-sm">
 				<div className="border-b border-border/70 bg-muted/10 p-4 sm:p-5">
-					<div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_repeat(4,minmax(0,1fr))_auto] lg:items-end">
-						<div className="space-y-1.5">
+					<div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+						<div className="w-full max-w-xl space-y-1.5">
 							<label
 								className="eyebrow"
 								htmlFor="price-change-search"
@@ -438,13 +579,11 @@ export function PriceChangesBoard({
 								/>
 							</div>
 						</div>
-						<div className="space-y-1.5">
-							<label
-								className="eyebrow"
-								htmlFor="price-change-scope"
-							>
-								{t('scopeLabel')}
-							</label>
+						<div
+							className="flex flex-wrap items-center gap-2"
+							data-share-exclude="true"
+						>
+							<span className="eyebrow mr-1">{t('filtersLabel')}</span>
 							<Select
 								value={scope}
 								onValueChange={value => {
@@ -452,7 +591,15 @@ export function PriceChangesBoard({
 									setPage(1)
 								}}
 							>
-								<SelectTrigger id="price-change-scope">
+								<SelectTrigger
+									id="price-change-scope"
+									aria-label={t('scopeLabel')}
+									className={cn(
+										'h-9 w-auto min-w-[9.25rem] rounded-full px-3 text-xs font-medium',
+										scope === 'mine' && 'border-primary/50 bg-primary/10 text-foreground',
+									)}
+								>
+									<span className="mr-1 text-muted-foreground">{t('scopeLabel')}:</span>
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
@@ -460,14 +607,31 @@ export function PriceChangesBoard({
 									<SelectItem value="mine">{t('scopeMine')}</SelectItem>
 								</SelectContent>
 							</Select>
-						</div>
-						<div className="space-y-1.5">
-							<label
-								className="eyebrow"
-								htmlFor="price-change-team"
+							<Select
+								value={movement}
+								onValueChange={value => {
+									setMovement(value as MovementFilter)
+									setPage(1)
+								}}
 							>
-								{t('filterByTeam')}
-							</label>
+								<SelectTrigger
+									id="price-change-movement"
+									aria-label={t('filterLabel')}
+									className={cn(
+										'h-9 w-auto min-w-[8.5rem] rounded-full px-3 text-xs font-medium',
+										movement !== 'all' && 'border-primary/50 bg-primary/10 text-foreground',
+									)}
+								>
+									<span className="mr-1 text-muted-foreground">{t('filterLabel')}:</span>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">{t('filterAll')}</SelectItem>
+									<SelectItem value="rise">{t('filterRise')}</SelectItem>
+									<SelectItem value="fall">{t('filterFall')}</SelectItem>
+									<SelectItem value="locked">{t('filterLocked')}</SelectItem>
+								</SelectContent>
+							</Select>
 							<Select
 								value={teamId}
 								onValueChange={value => {
@@ -475,7 +639,15 @@ export function PriceChangesBoard({
 									setPage(1)
 								}}
 							>
-								<SelectTrigger id="price-change-team">
+								<SelectTrigger
+									id="price-change-team"
+									aria-label={t('filterByTeam')}
+									className={cn(
+										'h-9 w-auto min-w-[9.5rem] max-w-full rounded-full px-3 text-xs font-medium',
+										teamId !== 'all' && 'border-primary/50 bg-primary/10 text-foreground',
+									)}
+								>
+									<span className="mr-1 text-muted-foreground">{t('teamFilterLabel')}:</span>
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent className="max-h-72">
@@ -488,60 +660,11 @@ export function PriceChangesBoard({
 								</SelectContent>
 							</Select>
 						</div>
-						<div className="space-y-1.5">
-							<label
-								className="eyebrow"
-								htmlFor="price-change-movement"
-							>
-								{t('filterLabel')}
-							</label>
-							<Select
-								value={movement}
-								onValueChange={value => {
-									setMovement(value as MovementFilter)
-									setPage(1)
-								}}
-							>
-								<SelectTrigger id="price-change-movement">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">{t('filterAll')}</SelectItem>
-									<SelectItem value="rise">{t('filterRise')}</SelectItem>
-									<SelectItem value="fall">{t('filterFall')}</SelectItem>
-									<SelectItem value="locked">{t('filterLocked')}</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-						<div className="space-y-1.5">
-							<label
-								className="eyebrow"
-								htmlFor="price-change-sort"
-							>
-								{t('sortLabel')}
-							</label>
-							<Select
-								value={sort}
-								onValueChange={value => {
-									setSort(value as SortMode)
-									setPage(1)
-								}}
-							>
-								<SelectTrigger id="price-change-sort">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="momentum">{t('sortMomentum')}</SelectItem>
-									<SelectItem value="ownership">
-										{t('sortOwnership')}
-									</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
 						{hasFilters ? (
 							<Button
 								type="button"
 								variant="ghost"
+								size="sm"
 								onClick={resetFilters}
 							>
 								{t('resetFilters')}
@@ -574,12 +697,59 @@ export function PriceChangesBoard({
 					</div>
 				</div>
 
-				{visiblePlayers.length === 0 ? (
-					<div className="px-4 py-14 text-center text-sm text-muted-foreground sm:px-6">
-						{t('noMatchesBoard')}
-					</div>
-				) : (
-					<>
+				<div ref={shareRef}>
+					{visiblePlayers.length === 0 ? (
+						<div className="px-4 py-14 text-center text-sm text-muted-foreground sm:px-6">
+							{t('noMatchesBoard')}
+						</div>
+					) : (
+						<>
+							<div
+								className="flex items-center gap-2 px-4 pt-4 md:hidden"
+								data-share-exclude="true"
+							>
+								<span className="text-xs font-medium text-muted-foreground">
+									{t('sortLabel')}:
+								</span>
+								<Select
+									value={`${sort.column}:${sort.direction}`}
+									onValueChange={setSortValue}
+								>
+									<SelectTrigger
+										id="price-change-mobile-sort"
+										className="h-8 w-auto min-w-[9rem] rounded-full px-3 text-xs"
+										aria-label={t('sortLabel')}
+									>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="progress:desc">{t('progress')} ↓</SelectItem>
+										<SelectItem value="progress:asc">{t('progress')} ↑</SelectItem>
+										<SelectItem value="price:desc">{t('price')} ↓</SelectItem>
+										<SelectItem value="price:asc">{t('price')} ↑</SelectItem>
+										<SelectItem value="signal:desc">{t('signal')} ↓</SelectItem>
+										<SelectItem value="signal:asc">{t('signal')} ↑</SelectItem>
+										<SelectItem value="movement:desc">{t('movement')} ↓</SelectItem>
+										<SelectItem value="movement:asc">{t('movement')} ↑</SelectItem>
+										{scope === 'mine' ? (
+											<>
+												<SelectItem value="purchasePrice:desc">
+													{t('purchasePrice')} ↓
+												</SelectItem>
+												<SelectItem value="purchasePrice:asc">
+													{t('purchasePrice')} ↑
+												</SelectItem>
+												<SelectItem value="sellingPrice:desc">
+													{t('sellingPrice')} ↓
+												</SelectItem>
+												<SelectItem value="sellingPrice:asc">
+													{t('sellingPrice')} ↑
+												</SelectItem>
+											</>
+										) : null}
+									</SelectContent>
+								</Select>
+							</div>
 						<div className="hidden overflow-x-auto md:block">
 							<table
 								className={cn(
@@ -595,22 +765,47 @@ export function PriceChangesBoard({
 										<th className="px-3 py-3 font-semibold">
 											{t('positionLabel')}
 										</th>
-										<th className="px-3 py-3 font-semibold">{t('price')}</th>
+										<SortableHeader
+											column="price"
+											label={t('price')}
+											sort={sort}
+											onSort={setSortColumn}
+										/>
 										{scope === 'mine' ? (
 											<>
-												<th className="px-3 py-3 font-semibold">
-													{t('purchasePrice')}
-												</th>
-												<th className="px-3 py-3 font-semibold">
-													{t('sellingPrice')}
-												</th>
+												<SortableHeader
+													column="purchasePrice"
+													label={t('purchasePrice')}
+													sort={sort}
+													onSort={setSortColumn}
+												/>
+												<SortableHeader
+													column="sellingPrice"
+													label={t('sellingPrice')}
+													sort={sort}
+													onSort={setSortColumn}
+												/>
 											</>
 										) : null}
-										<th className="px-3 py-3 font-semibold">{t('progress')}</th>
-										<th className="px-3 py-3 font-semibold">{t('signal')}</th>
-										<th className="px-5 py-3 text-right font-semibold">
-											{t('movement')}
-										</th>
+										<SortableHeader
+											column="progress"
+											label={t('progress')}
+											sort={sort}
+											onSort={setSortColumn}
+										/>
+										<SortableHeader
+											column="signal"
+											label={t('signal')}
+											sort={sort}
+											onSort={setSortColumn}
+										/>
+										<SortableHeader
+											column="movement"
+											label={t('movement')}
+											sort={sort}
+											onSort={setSortColumn}
+											align="right"
+										/>
 									</tr>
 								</thead>
 								<tbody className="divide-y divide-border/60">
@@ -820,7 +1015,10 @@ export function PriceChangesBoard({
 				)}
 
 				{visiblePlayers.length > 0 && pageCount > 1 ? (
-					<div className="flex items-center justify-between border-t border-border/70 px-4 py-3 sm:px-5">
+					<div
+						className="flex items-center justify-between border-t border-border/70 px-4 py-3 sm:px-5"
+						data-share-exclude="true"
+					>
 						<Button
 							type="button"
 							variant="outline"
@@ -848,6 +1046,7 @@ export function PriceChangesBoard({
 						</Button>
 					</div>
 				) : null}
+				</div>
 			</Card>
 		</div>
 	)
