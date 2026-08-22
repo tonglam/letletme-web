@@ -44,6 +44,21 @@ export function homeFixturesCacheControl(
 	return HOME_FIXTURES_NO_STORE
 }
 
+function homeFixturesCacheHeaders(
+	response: HomeFixturesResponse
+): Record<string, string> {
+	const cacheControl = homeFixturesCacheControl(response)
+	const headers: Record<string, string> = { 'Cache-Control': cacheControl }
+	if (response.state !== 'UNAVAILABLE') {
+		// Keep the CDN-specific directives alongside Cache-Control. Vercel may
+		// normalize Cache-Control on dynamic functions, while the EdgeOne path
+		// reads the standard header.
+		headers['CDN-Cache-Control'] = cacheControl
+		headers['Vercel-CDN-Cache-Control'] = cacheControl
+	}
+	return headers
+}
+
 type HomeFixturesLoader = (eventId: number) => Promise<HomeFixturesResponse>
 type HomeFixturesLogger = {
 	info: (message: string, detail: Record<string, unknown>) => void
@@ -83,7 +98,7 @@ export function createHomeFixturesRouteHandler(
 			}
 			logger.info('[home-fixtures]', detail)
 			const headers = {
-				'Cache-Control': homeFixturesCacheControl(response),
+				...homeFixturesCacheHeaders(response),
 				ETag: etag
 			}
 			if (request.headers.get('if-none-match') === etag) {
