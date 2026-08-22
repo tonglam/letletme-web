@@ -20,6 +20,7 @@ import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import {
 	GET_MY_FPL_TEAM_DESK,
 	type MyFplReviewState,
+	type MyFplSnapshotMeta,
 	type MyFplTeamDeskResponse
 } from '@/lib/graphql/operations/my-fpl'
 import { getVerifiedEntryContext } from '@/lib/session'
@@ -112,6 +113,7 @@ export default async function TeamStatsPage({
 				<TeamStatsClient
 					entryId={MOCK_TEAM_ENTRY_ID}
 					currentGameweek={MOCK_TEAM_EVENT_ID}
+					initialMaxGameweek={MOCK_TEAM_EVENT_ID}
 					initialSelectedGameweek={mockSelectedGameweek}
 					initialEntryEventResult={mockEventResult}
 					initialEntryHistory={MOCK_TEAM_HISTORY}
@@ -120,6 +122,7 @@ export default async function TeamStatsPage({
 					initialError={null}
 					initialRequestComplete
 					initialSeasonPhase="SETTLED"
+					initialSnapshotMeta={null}
 				/>
 			</Suspense>
 		)
@@ -159,6 +162,7 @@ export default async function TeamStatsPage({
 	let initialDeskState: MyFplReviewState = 'EMPTY'
 	let initialEntryGameweekState: MyFplReviewState | undefined
 	let initialPastSeasonsState: MyFplReviewState | undefined
+	let initialSnapshotMeta: MyFplSnapshotMeta | null = null
 	let initialError: string | null = null
 	let initialRequestComplete = false
 
@@ -168,6 +172,7 @@ export default async function TeamStatsPage({
 			? requestedGameweek
 			: null
 	let currentGameweek = 0
+	let maxKnownPublishedEvent = 0
 	let initialSelectedGameweek: number | undefined
 
 	try {
@@ -191,22 +196,28 @@ export default async function TeamStatsPage({
 		initialEntryGameweekState =
 			desk.state === 'READY' ? desk.gameweek?.state : desk.state
 		initialPastSeasonsState = desk.pastSeasonsState
+		initialSnapshotMeta = desk.snapshotMeta ?? null
 		currentGameweek =
 			desk.context.currentEventId ?? desk.context.latestFinalizedEventId ?? 0
 		const latestFinalized = desk.context.latestFinalizedEventId ?? 0
 		const currentEvent = desk.context.currentEventId ?? 0
+		const latestPublished = desk.context.latestPublishedEventId ?? 0
 		const maxKnownEvent = Math.max(currentEvent, latestFinalized)
+		maxKnownPublishedEvent = Math.max(maxKnownEvent, latestPublished)
 		const safeRequestedEvent =
-			requestedEventId !== null && requestedEventId <= maxKnownEvent
+			requestedEventId !== null && requestedEventId <= maxKnownPublishedEvent
 				? requestedEventId
 				: null
 		initialSelectedGameweek =
 			safeRequestedEvent ??
-			(latestFinalized > 0
-				? latestFinalized
-				: currentEvent > 0
-					? currentEvent
-					: undefined)
+			desk.selectedEventId ??
+			(latestPublished > 0
+				? latestPublished
+				: latestFinalized > 0
+					? latestFinalized
+					: currentEvent > 0
+						? currentEvent
+						: undefined)
 		const deskGameweekMatchesSelection =
 			desk.gameweek?.eventId === (initialSelectedGameweek ?? 0)
 		if (!deskGameweekMatchesSelection) {
@@ -229,7 +240,11 @@ export default async function TeamStatsPage({
 			pastSeasonsState: desk.pastSeasonsState
 		})
 
-		if (!initialEntryIdentity && !initialEntryHistory?.results?.length) {
+		if (
+			!initialEntryIdentity &&
+			!initialEntryHistory?.results?.length &&
+			initialDeskState !== 'PENDING'
+		) {
 			initialError = t('teamStatsUnavailable')
 		}
 	} catch (error) {
@@ -243,6 +258,7 @@ export default async function TeamStatsPage({
 			<TeamStatsClient
 				entryId={entryId}
 				currentGameweek={currentGameweek > 0 ? currentGameweek : 0}
+				initialMaxGameweek={maxKnownPublishedEvent}
 				initialSelectedGameweek={initialSelectedGameweek}
 				initialEntryEventResult={initialEntryEventResult}
 				initialEntryGameweekState={initialEntryGameweekState}
@@ -254,6 +270,7 @@ export default async function TeamStatsPage({
 				initialError={initialError}
 				initialRequestComplete={initialRequestComplete}
 				initialSeasonPhase={seasonPresentation.phase}
+				initialSnapshotMeta={initialSnapshotMeta}
 			/>
 		</Suspense>
 	)
