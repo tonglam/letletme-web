@@ -117,7 +117,11 @@ export interface MyFplTeamDesk {
 	pastSeasons: MyFplPastSeason[]
 	pastSeasonsState: MyFplReviewState
 	selectedEventId: number | null
-	gameweek: MyFplTeamGameweek | null
+	/**
+	 * The desk query intentionally omits the heavy gameweek/picks payload.
+	 * Gameweek detail is loaded through myFplTeamGameweek instead.
+	 */
+	gameweek?: MyFplTeamGameweek | null
 }
 
 export interface MyFplTransferMove {
@@ -470,28 +474,6 @@ export const GET_MY_FPL_TEAM_DESK = `
       pastSeasons { season totalPoints overallRank }
       pastSeasonsState
       selectedEventId
-      gameweek {
-        state
-        context {${REVIEW_CONTEXT_FIELDS}}
-        eventId
-        entry {${ENTRY_FIELDS}}
-        result {
-          eventId
-          eventPoints
-          overallPoints
-          overallRank
-          eventTransfers
-          eventTransfersCost
-          eventNetPoints
-          eventBenchPoints
-          eventChip
-          eventCaptainPoints
-          playedCaptainWebName
-          teamValue
-          bank
-          picks {${TEAM_PICK_FIELDS}}
-        }
-      }
     }
   }
 `
