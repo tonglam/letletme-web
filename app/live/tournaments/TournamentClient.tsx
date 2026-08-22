@@ -24,8 +24,9 @@ import {
 } from '@/lib/graphql/operations/live'
 import {
 	GET_ENTRY_TOURNAMENTS,
-	GET_TOURNAMENT_LIVE_DESK,
+	GET_TOURNAMENT_DETAIL_DESK,
 	type EntryTournamentsResponse,
+	type TournamentDetailDeskResponse,
 	type TournamentLiveCalcData,
 	type TournamentLivePointsResponse
 } from '@/lib/graphql/operations/tournaments'
@@ -89,10 +90,41 @@ const fetchLivePoints = async (
 			)
 		response = (await httpResponse.json()) as TournamentLivePointsResponse
 	} else {
-		response = await executeQuery<TournamentLivePointsResponse>(
-			GET_TOURNAMENT_LIVE_DESK,
-			{ entryId, selectedTournamentId: tournamentId, ref: null }
+		// A null live revision must still honor the selected historical GW. The
+		// list desk intentionally resolves its event from the live anchor, so use
+		// the detail projection, whose eventId argument is the actual selection.
+		const detailResponse = await executeQuery<TournamentDetailDeskResponse>(
+			GET_TOURNAMENT_DETAIL_DESK,
+			{ entryId, tournamentId, eventId },
+			{ cache: 'no-store' }
 		)
+		const live = detailResponse.tournamentDetailDesk?.live
+		if (!live) throw new Error('Tournament live board is unavailable')
+		const unavailableEntryIds = mergeUnavailableTournamentEntryIds(
+			live.failedEntryIds,
+			[]
+		)
+		const officialRows = live.rows.filter(
+			row =>
+				row.score?.source !== 'UNAVAILABLE' &&
+				typeof row.score?.eventPoints === 'number'
+		)
+		return {
+			rows: live.rows,
+			failedCount: unavailableEntryIds.length,
+			failedEntryIds: unavailableEntryIds,
+			officialCoverage:
+				live.totalEntries > 0 ? officialRows.length / live.totalEntries : 0,
+			unavailableEntryIds,
+			totalEntries: live.totalEntries,
+			snapshot: {
+				eventId: live.eventId,
+				revision: live.revision,
+				state: live.state as LiveSnapshotStatus['state'],
+				publishedAt: null,
+				checkedAt: null
+			}
+		}
 	}
 	const batch = response.entryLiveCompetitionsDesk
 	const unavailableEntryIds = mergeUnavailableTournamentEntryIds(
@@ -176,7 +208,17 @@ export default function TournamentClient({
 	const [currentGameweek, setCurrentGameweek] = useState<number>(initialEventId)
 	const [selectedGameweek, setSelectedGameweek] =
 		useState<number>(initialEventId)
+	const requestedGameweekFromUrl = (() => {
+		const raw = searchParams.get('gw')
+		if (!raw || !/^\d+$/.test(raw)) return null
+		const parsed = Number(raw)
+		return Number.isInteger(parsed) && parsed >= 1 && parsed <= 38
+			? parsed
+			: null
+	})()
+	const initialRetryAttemptedRef = useRef(false)
 	const followsAnchorRef = useRef(true)
+	const appliedUrlGameweekRef = useRef<number | null | undefined>(undefined)
 	const [selectedRows, setSelectedRows] =
 		useState<TournamentLiveCalcData[]>(initialCurrentRows)
 	const [officialCoverage, setOfficialCoverage] = useState<number>(
@@ -390,7 +432,9 @@ export default function TournamentClient({
 						entryId,
 						tournamentId,
 						eventId,
-						options.revision ?? snapshotRef.current?.revision ?? null
+						options.revision !== undefined
+							? options.revision
+							: (snapshotRef.current?.revision ?? null)
 					)
 					if (requestId !== resultsRequestIdRef.current) return
 
@@ -510,6 +554,21 @@ export default function TournamentClient({
 	}, [entryId, initialTournaments.length, t])
 
 	useEffect(() => {
+		if (requestedGameweekFromUrl === null) {
+			appliedUrlGameweekRef.current = null
+			return
+		}
+		if (requestedGameweekFromUrl > currentGameweek) return
+		if (appliedUrlGameweekRef.current === requestedGameweekFromUrl) return
+
+		appliedUrlGameweekRef.current = requestedGameweekFromUrl
+		followsAnchorRef.current = false
+		if (requestedGameweekFromUrl !== selectedGameweek) {
+			setSelectedGameweek(requestedGameweekFromUrl)
+		}
+	}, [currentGameweek, requestedGameweekFromUrl, selectedGameweek])
+
+	useEffect(() => {
 		if (
 			!isPageActive ||
 			!selectedTournamentKey ||
@@ -579,6 +638,26 @@ export default function TournamentClient({
 		const resultsKey = `${selectedTournamentKey}:${selectedGameweek}`
 		if (initialResultsKeyRef.current === resultsKey) {
 			initialResultsKeyRef.current = null
+			if (
+				initialResultsError &&
+				initialCurrentRows.length === 0 &&
+				!initialRetryAttemptedRef.current
+			) {
+				initialRetryAttemptedRef.current = true
+				const retryTimer = window.setTimeout(() => {
+					void loadTournamentResults(
+						Number(selectedTournamentKey),
+						selectedGameweek,
+						{
+							preserveOnError: false,
+							// A full initial failure is often a stale publication
+							// snapshot. Force the retry to ask for the current desk.
+							revision: null
+						}
+					)
+				}, 1_000)
+				return () => window.clearTimeout(retryTimer)
+			}
 			return
 		}
 
@@ -603,6 +682,8 @@ export default function TournamentClient({
 	}, [
 		acceptSnapshot,
 		loadTournamentResults,
+		initialCurrentRows.length,
+		initialResultsError,
 		selectedGameweek,
 		selectedTournamentKey,
 		standingsReady

@@ -812,9 +812,9 @@ export interface TournamentLiveCalcData {
 	/** Previous overall rank (for OR delta when available). */
 	lastOverallRank?: number | null
 	overallPoints?: number | null
-	/** Squad value in tenths of £m (e.g. 1005 → £100.5m). */
+	/** Squad value in £m as returned by LiveCalcData (e.g. 100.5 → £100.5m). */
 	teamValue?: number | null
-	/** ITB in tenths of £m. */
+	/** ITB in £m as returned by LiveCalcData. */
 	bank?: number | null
 	/** teamValue + bank. */
 	value?: number | null

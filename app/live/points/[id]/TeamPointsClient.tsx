@@ -96,12 +96,13 @@ export default function TeamPointsClient({
 		}
 	}, [entryId, livePoints.currentGameweek, livePoints.selectedGameweek])
 
-	const backQuery = livePoints.selectedGameweek
-		? `?gw=${livePoints.selectedGameweek}`
-		: ''
-	const backHref = tournamentId
-		? `/live/competitions/${tournamentId}${backQuery}`
-		: '/live/competitions'
+	const backParams = new URLSearchParams()
+	if (tournamentId) backParams.set('tournamentId', tournamentId)
+	if (livePoints.selectedGameweek) {
+		backParams.set('gw', String(livePoints.selectedGameweek))
+	}
+	const backQuery = backParams.toString()
+	const backHref = `/live/competitions${backQuery ? `?${backQuery}` : ''}`
 
 	let content
 	if (livePoints.isLoading && !livePoints.liveData) {

@@ -21,8 +21,42 @@ async function elementToPng(element: HTMLElement): Promise<Blob | null> {
 		backgroundColor: '#210025',
 		cacheBust: true,
 		pixelRatio: 2,
+		// The app uses next/font CSS. Embedding remote font faces can reject the
+		// whole SVG render in browsers with a stricter CORS policy; system fonts
+		// keep the share usable when that optional embed is unavailable.
+		skipFonts: true,
 		filter: node => node.dataset.shareExclude !== 'true',
 	})
+}
+
+async function copyImageBlobToClipboard(
+	blob: Blob
+): Promise<ClipboardCopyResult> {
+	if (
+		typeof navigator === 'undefined' ||
+		!navigator.clipboard?.write ||
+		typeof ClipboardItem === 'undefined'
+	) {
+		return 'unsupported'
+	}
+
+	try {
+		await navigator.clipboard.write([
+			new ClipboardItem({ 'image/png': blob })
+		])
+		return 'copied'
+	} catch {
+		return 'failed'
+	}
+}
+
+function isNativeShareCancellation(error: unknown): boolean {
+	return (
+		typeof error === 'object' &&
+		error !== null &&
+		'name' in error &&
+		(error as { name?: unknown }).name === 'AbortError'
+	)
 }
 
 /** Render a visual result to PNG and copy it to the system clipboard. */
@@ -40,8 +74,42 @@ export async function copyElementImageToClipboard(
 	try {
 		const blob = await elementToPng(element)
 		if (!blob) return 'failed'
-		await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-		return 'copied'
+		return copyImageBlobToClipboard(blob)
+	} catch {
+		return 'failed'
+	}
+}
+
+/**
+ * Share an already-rendered image. Keeping this separate from DOM rendering
+ * makes the native-share/clipboard fallback deterministic and testable.
+ */
+export async function shareImageBlob(blob: Blob): Promise<ShareResult> {
+	if (typeof navigator === 'undefined') return 'unsupported'
+
+	try {
+		if (typeof File !== 'undefined' && typeof navigator.share === 'function') {
+			try {
+				const file = new File([blob], 'letletme-share.png', {
+					type: 'image/png'
+				})
+				const shareData: ShareData = {
+					files: [file]
+				}
+				if (!navigator.canShare || navigator.canShare(shareData)) {
+					await navigator.share(shareData)
+					return 'shared'
+				}
+			} catch (error) {
+				if (isNativeShareCancellation(error)) return 'failed'
+				// Rendering the image is asynchronous, so desktop browsers and
+				// some mobile browsers can reject the native share because the
+				// original user activation has expired. The image is still valid;
+				// continue with the clipboard fallback instead of losing it.
+			}
+		}
+
+		return copyImageBlobToClipboard(blob)
 	} catch {
 		return 'failed'
 	}
@@ -54,36 +122,10 @@ export async function copyElementImageToClipboard(
 export async function shareElementImage(
 	element: HTMLElement,
 ): Promise<ShareResult> {
-	if (typeof navigator === 'undefined') return 'unsupported'
-
 	try {
 		const blob = await elementToPng(element)
 		if (!blob) return 'failed'
-
-		if (typeof File !== 'undefined' && typeof navigator.share === 'function') {
-			const file = new File([blob], 'letletme-share.png', {
-				type: 'image/png'
-			})
-			const shareData: ShareData = {
-				files: [file]
-			}
-			if (!navigator.canShare || navigator.canShare(shareData)) {
-				try {
-					await navigator.share(shareData)
-					return 'shared'
-				} catch {
-					// The native share may have consumed the user activation. Do not
-					// attempt a clipboard write after a rejected native share.
-					return 'failed'
-				}
-			}
-		}
-
-		if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
-			return 'unsupported'
-		}
-		await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-		return 'copied'
+		return shareImageBlob(blob)
 	} catch {
 		return 'failed'
 	}

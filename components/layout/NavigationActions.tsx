@@ -5,6 +5,7 @@ import { localizePathname, type AppLocale } from '@/i18n/routing'
 import { ChevronDown, Menu, MessageCircleWarning, Settings, Shirt } from 'lucide-react'
 import { getLocale, getTranslations } from 'next-intl/server'
 import { LanguageSwitcher } from './LanguageSwitcher'
+import { NavigationDisclosureController } from './NavigationDisclosureController'
 import { NavigationMenuLink } from './NavigationMenuLink'
 import { SignOutForm } from './SignOutForm'
 import { menuItems } from './config'
@@ -114,7 +115,7 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 	const homeHref = localizePathname('/', locale as AppLocale)
 
 	return (
-		<>
+		<NavigationDisclosureController>
 			<div className="ml-6 hidden items-center gap-0.5 md:flex">
 				{menuItems.map(item => (
 					item.directHref ? (
@@ -221,6 +222,6 @@ export async function NavigationActions({ user }: { user: NavigationUser }) {
 					</div>
 				</div>
 			</details>
-		</>
+		</NavigationDisclosureController>
 	)
 }
