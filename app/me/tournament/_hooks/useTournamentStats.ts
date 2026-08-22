@@ -602,6 +602,7 @@ export function useTournamentStats({
 	const loadMoreStandings = useCallback(async () => {
 		if (
 			isBoardLoading ||
+			boardSearch !== standingsSearch.trim() ||
 			!boardPage ||
 			!selectedTournament ||
 			boardPage.page >= boardPage.totalPages
@@ -641,6 +642,7 @@ export function useTournamentStats({
 		}
 	}, [
 		boardPage,
+		boardSearch,
 		isBoardLoading,
 		rebuildStatsFromBoard,
 		selectedTournament,
