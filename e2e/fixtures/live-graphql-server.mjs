@@ -1344,6 +1344,7 @@ const server = createServer((request, response) => {
 					observedDays: 2,
 					firstDate: '2026-08-02',
 					latestDate: '2026-08-03',
+					missingDates: [],
 					capturedAt: '2026-08-03T09:40:00.000Z',
 					complete: false,
 					stale: false
@@ -1443,15 +1444,19 @@ const server = createServer((request, response) => {
 		if (query.includes('MarketAvailability')) {
 			json(response, 200, {
 				data: {
-					marketSnapshotContext: {
-						season: '2627',
-						revision: 'market-7',
-						source: 'DATA_PUBLICATION',
-						snapshotDate: '2026-08-03',
-						capturedAt: '2026-08-03T09:40:00.000Z',
-						rowCount: 2
-					},
-					marketPulse: { availabilityUpdates: [] }
+					marketAvailabilityPage: {
+						context: {
+							season: '2627',
+							revision: 'market-7',
+							source: 'DATA_PUBLICATION',
+							snapshotDate: '2026-08-03',
+							capturedAt: '2026-08-03T09:40:00.000Z',
+							rowCount: 2
+						},
+						items: [],
+						totalCount: 0,
+						nextOffset: null
+					}
 				}
 			})
 			return

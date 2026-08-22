@@ -47,7 +47,13 @@ describe('market route parameter validation', () => {
 		)
 		assert.deepEqual(
 			parseMarketAvailabilityParams(new URLSearchParams('days=30&revision=2')),
-			{ days: 30, revision: 2 }
+			{ days: 30, offset: 0, revision: 2 }
+		)
+		assert.deepEqual(
+			parseMarketAvailabilityParams(
+				new URLSearchParams('days=7&offset=20&revision=2')
+			),
+			{ days: 7, offset: 20, revision: 2 }
 		)
 		assert.ok(
 			'error' in
@@ -60,6 +66,20 @@ describe('market route parameter validation', () => {
 		assert.ok(
 			'error' in
 				parseMarketAvailabilityParams(new URLSearchParams('revision=1'))
+		)
+		for (const value of ['-1', '1.5', '5001', 'NaN']) {
+			assert.ok(
+				'error' in
+					parseMarketAvailabilityParams(
+						new URLSearchParams(`days=7&offset=${value}&revision=1`)
+					)
+			)
+		}
+		assert.ok(
+			'error' in
+				parseMarketAvailabilityParams(
+					new URLSearchParams('days=7&offset=1&offset=2&revision=1')
+				)
 		)
 	})
 })

@@ -6,6 +6,7 @@ export const GET_MARKET_PULSE = /* GraphQL */ `
 				observedDays
 				firstDate
 				latestDate
+				missingDates
 				capturedAt
 				complete
 				stale
@@ -94,6 +95,7 @@ export const GET_MARKET_PULSE_SUMMARY = /* GraphQL */ `
 				observedDays
 				firstDate
 				latestDate
+				missingDates
 				capturedAt
 				complete
 				stale
@@ -253,6 +255,7 @@ export interface MarketCoverage {
 	observedDays: number
 	firstDate: string | null
 	latestDate: string | null
+	missingDates: string[]
 	capturedAt: string | null
 	complete: boolean
 	stale: boolean
@@ -505,16 +508,16 @@ export const GET_MARKET_PRICE_HISTORY = /* GraphQL */ `
 `
 
 export const GET_MARKET_AVAILABILITY = /* GraphQL */ `
-	query MarketAvailability($days: Int = 7) {
-		marketSnapshotContext {
-			revision
-			source
-			snapshotDate
-			capturedAt
-			rowCount
-		}
-		marketPulse(days: $days) {
-			availabilityUpdates {
+	query MarketAvailability($days: Int = 7, $limit: Int = 20, $offset: Int = 0) {
+		marketAvailabilityPage(days: $days, limit: $limit, offset: $offset) {
+			context {
+				revision
+				source
+				snapshotDate
+				capturedAt
+				rowCount
+			}
+			items {
 				player {
 					...MarketPlayerFields
 				}
@@ -526,6 +529,8 @@ export const GET_MARKET_AVAILABILITY = /* GraphQL */ `
 				chanceOfPlayingThisRound
 				chanceOfPlayingNextRound
 			}
+			totalCount
+			nextOffset
 		}
 	}
 
@@ -576,8 +581,12 @@ export interface MarketHistoryResponse {
 }
 
 export interface MarketAvailabilityResponse {
-	marketSnapshotContext: MarketSnapshotContext
-	marketPulse: { availabilityUpdates: MarketAvailabilityUpdate[] }
+	marketAvailabilityPage: {
+		context: MarketSnapshotContext
+		items: MarketAvailabilityUpdate[]
+		totalCount: number
+		nextOffset: number | null
+	}
 }
 
 export type FixtureSignalPlayer = Pick<

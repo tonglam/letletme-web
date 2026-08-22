@@ -34,7 +34,8 @@ const pulse = (): MarketPulse => ({
 		latestDate: null,
 		capturedAt: null,
 		complete: false,
-		stale: false
+		stale: false,
+		missingDates: []
 	},
 	mostSelected: [],
 	transferMovers: [],
