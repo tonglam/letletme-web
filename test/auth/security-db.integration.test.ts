@@ -125,7 +125,7 @@ test(
 				anon_schema: false,
 				anon_user: false,
 				authenticated_session: false,
-				policy_count: 11,
+				policy_count: 12,
 				invalid_policy_count: 0,
 				missing_rls: 0
 			})
