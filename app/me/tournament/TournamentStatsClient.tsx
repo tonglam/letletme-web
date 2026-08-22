@@ -218,13 +218,16 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 
 	// URL gw → selected gameweek
 	useEffect(() => {
-		if (maxGw <= 0) return
+		// Season is always a latest-finalized snapshot. A bookmarked `gw` query
+		// must not hydrate the prior event back into the gameweek state and
+		// trigger a historical desk request after the season desk has loaded.
+		if (view === 'season' || maxGw <= 0) return
 		const raw = searchParams.get('gw')
 		if (raw == null) return
 		const next = parseTournamentStatsGw(raw, maxGw, selectedGameweek || maxGw)
 		if (next > 0 && next !== selectedGameweek) setSelectedGameweek(next)
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [searchParams, maxGw])
+	}, [searchParams, maxGw, view])
 
 	// Restore last tournament when URL has no tournamentId (bare /my-fpl/competitions)
 	useEffect(() => {
