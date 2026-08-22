@@ -117,6 +117,66 @@ describe('asynchronous selection safety', () => {
 		)
 	})
 
+	it('keeps finalized season context and viewer state across tournament refreshes', async () => {
+		const [
+			competitionPage,
+			tournamentClient,
+			tournamentHook,
+			adapters,
+			teamPage
+		] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/[locale]/my-fpl/competitions/page.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/me/tournament/TournamentStatsClient.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/me/tournament/_hooks/useTournamentStats.ts',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/me/tournament/_lib/my-fpl-adapters.ts',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL('../app/[locale]/my-fpl/team/page.tsx', import.meta.url),
+				'utf8'
+			)
+		])
+
+		assert.match(
+			competitionPage,
+			/initialView === 'season' \? null : requestedEventId/
+		)
+		assert.match(tournamentClient, /const handleNavigateSeason = useCallback/)
+		assert.match(tournamentClient, /latestFinalizedGameweek/)
+		assert.match(tournamentHook, /setDeskRefreshNonce\(value => value \+ 1\)/)
+		assert.match(tournamentHook, /boardAbortRef\.current\?\.abort\(\)/)
+		assert.match(tournamentHook, /initialBoardSearchSkippedRef\.current/)
+		assert.match(tournamentHook, /latestFinalizedGameweek \?\? dataGameweek/)
+		assert.match(adapters, /myRank: viewerRow\?\.rank \?\? aggregate\.viewer/)
+		assert.match(
+			teamPage,
+			/const maxKnownEvent = Math\.max\(currentEvent, latestFinalized\)/
+		)
+		assert.match(teamPage, /const safeRequestedEvent =/)
+	})
+
 	it('invalidates stale picker cursors and retries incomplete personalized stats', async () => {
 		const [pickerSource, selectionsSource, teamSource] = await Promise.all([
 			readFile(

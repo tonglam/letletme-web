@@ -68,6 +68,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 		isBoardLoading,
 		isLoading,
 		loadMoreStandings,
+		latestFinalizedGameweek,
 		seasonField,
 		seasonMe,
 		seasonPath,
@@ -203,6 +204,24 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 		},
 		[replaceQuery, searchParams, setSelectedGameweek]
 	)
+	const handleNavigateSeason = useCallback(() => {
+		const seasonGameweek =
+			latestFinalizedGameweek && latestFinalizedGameweek > 0
+				? latestFinalizedGameweek
+				: dataGameweek && dataGameweek > 0
+					? dataGameweek
+					: null
+		if (seasonGameweek !== null && seasonGameweek !== selectedGameweek) {
+			setSelectedGameweek(seasonGameweek)
+		}
+		replaceQuery({ view: 'season', gw: seasonGameweek })
+	}, [
+		dataGameweek,
+		latestFinalizedGameweek,
+		replaceQuery,
+		selectedGameweek,
+		setSelectedGameweek
+	])
 
 	// URL gw → selected gameweek
 	useEffect(() => {
@@ -341,12 +360,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 						>
 							<TournamentViews
 								view={view}
-								onNavigateSeason={() =>
-									replaceQuery({
-										view: 'season',
-										gw: selectedGameweek > 0 ? selectedGameweek : null
-									})
-								}
+								onNavigateSeason={handleNavigateSeason}
 								currentGameweek={currentGameweek}
 								selectedTournamentId={selectedTournament?.id ?? null}
 								maxGw={maxGw > 0 ? maxGw : seedGw}

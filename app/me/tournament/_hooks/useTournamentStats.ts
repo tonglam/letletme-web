@@ -47,6 +47,7 @@ import {
 export interface TournamentStatsClientProps {
 	entryId: number
 	initialCurrentGameweek: number
+	initialLatestFinalizedGameweek?: number | null
 	initialTournaments: EntryTournament[]
 	initialSelectedTournamentId: string
 	initialDataGameweek: number | null
@@ -107,6 +108,7 @@ async function fetchDesk(
 export function useTournamentStats({
 	entryId,
 	initialCurrentGameweek,
+	initialLatestFinalizedGameweek = null,
 	initialTournaments,
 	initialSelectedTournamentId,
 	initialDataGameweek,
@@ -162,6 +164,9 @@ export function useTournamentStats({
 		initialSelectedTournamentId
 	)
 	const [currentGameweek, setCurrentGameweek] = useState(initialCurrentGameweek)
+	const [latestFinalizedGameweek, setLatestFinalizedGameweek] = useState<
+		number | null
+	>(initialLatestFinalizedGameweek)
 	const [dataGameweek, setDataGameweek] = useState<number | null>(
 		initialDataGameweek
 	)
@@ -208,6 +213,8 @@ export function useTournamentStats({
 	const boardSequenceRef = useRef(0)
 	const boardAbortRef = useRef<AbortController | null>(null)
 	const firstDeskLoadRef = useRef(true)
+	const initialBoardSearchSkippedRef = useRef(false)
+	const [deskRefreshNonce, setDeskRefreshNonce] = useState(0)
 
 	const selectedTournament = useMemo(
 		() =>
@@ -288,8 +295,23 @@ export function useTournamentStats({
 					{ tournamentId: Number(selectedTournamentId) || null, eventId: null },
 					{ cache: 'no-store' }
 				)
-				if (!cancelled)
-					setTournaments(response.myFplCompetitionsDesk.tournaments)
+				if (!cancelled) {
+					const nextDesk = response.myFplCompetitionsDesk
+					const nextTournament =
+						nextDesk.selectedTournament ??
+						nextDesk.tournaments.find(
+							item => item.id === Number(selectedTournamentId)
+						) ??
+						null
+					setTournaments(nextDesk.tournaments)
+					if (
+						!insightsReady &&
+						nextTournament &&
+						areTournamentInsightsReady(nextTournament)
+					) {
+						setDeskRefreshNonce(value => value + 1)
+					}
+				}
 			} catch (pollError) {
 				console.warn('[tournament stats] setup poll failed:', pollError)
 			} finally {
@@ -308,6 +330,9 @@ export function useTournamentStats({
 	useEffect(() => {
 		const tournamentId = Number(selectedTournamentId)
 		if (!Number.isSafeInteger(tournamentId) || tournamentId <= 0) return
+		boardSequenceRef.current += 1
+		boardAbortRef.current?.abort()
+		boardAbortRef.current = null
 		const requestId = requestSequenceRef.current + 1
 		requestSequenceRef.current = requestId
 		requestAbortRef.current?.abort()
@@ -351,6 +376,7 @@ export function useTournamentStats({
 						desk.context.latestFinalizedEventId ??
 						0
 				)
+				setLatestFinalizedGameweek(desk.context.latestFinalizedEventId ?? null)
 				setReviewState(nextState)
 				setBoardPage(board)
 				setAggregate(desk.aggregate)
@@ -409,30 +435,40 @@ export function useTournamentStats({
 		initialSelectedTournamentId,
 		selectedGameweek,
 		selectedTournamentId,
-		t
+		t,
+		deskRefreshNonce
 	])
 
 	const rebuildStatsFromBoard = useCallback(
 		(nextBoard: MyFplCompetitionBoardPage, nextAggregate = aggregate) => {
 			if (!selectedTournament || !nextAggregate || nextBoard.state !== 'READY')
 				return
-			setBoardPage(nextBoard)
+			const boardWithViewer =
+				(nextBoard.viewerRow ?? boardPage?.viewerRow)
+					? {
+							...nextBoard,
+							viewerRow: nextBoard.viewerRow ?? boardPage?.viewerRow ?? null
+						}
+					: nextBoard
+			setBoardPage(boardWithViewer)
 			setTournamentStats(
 				aggregateToTournamentStats(
 					selectedTournament,
 					nextAggregate,
-					nextBoard,
+					boardWithViewer,
 					entryId
 				)
 			)
 			if (standingsSearch.trim() === '') {
-				setSeasonSnapshot(aggregateToSeasonSnapshot(nextAggregate, nextBoard))
+				setSeasonSnapshot(
+					aggregateToSeasonSnapshot(nextAggregate, boardWithViewer)
+				)
 				setSeasonFieldRows(
-					boardRowsToEventResults(nextBoard, selectedTournament)
+					boardRowsToEventResults(boardWithViewer, selectedTournament)
 				)
 			}
 		},
-		[aggregate, entryId, selectedTournament, standingsSearch]
+		[aggregate, boardPage, entryId, selectedTournament, standingsSearch]
 	)
 	const boardEventId = boardPage?.eventId ?? null
 
@@ -440,6 +476,16 @@ export function useTournamentStats({
 	useEffect(() => {
 		if (boardEventId === null || reviewState !== 'READY' || !selectedTournament)
 			return
+		if (
+			!initialBoardSearchSkippedRef.current &&
+			initialBoard !== null &&
+			initialReviewState === 'READY' &&
+			standingsSearch.trim() === '' &&
+			boardEventId === initialBoard.eventId
+		) {
+			initialBoardSearchSkippedRef.current = true
+			return
+		}
 		const eventId = boardEventId
 		const boardId = boardSequenceRef.current + 1
 		boardSequenceRef.current = boardId
@@ -479,6 +525,8 @@ export function useTournamentStats({
 		}
 	}, [
 		boardEventId,
+		initialBoard,
+		initialReviewState,
 		rebuildStatsFromBoard,
 		reviewState,
 		selectedTournament,
@@ -526,11 +574,12 @@ export function useTournamentStats({
 
 	// Dedicated server path replaces client-side N× full-field reconstruction.
 	useEffect(() => {
+		const seasonPathThroughEventId = latestFinalizedGameweek ?? dataGameweek
 		if (
 			!loadSeasonPath ||
 			!selectedTournament ||
-			dataGameweek == null ||
-			dataGameweek < 1
+			seasonPathThroughEventId == null ||
+			seasonPathThroughEventId < 1
 		) {
 			if (!loadSeasonPath) setSeasonPathLoading(false)
 			return
@@ -545,7 +594,10 @@ export function useTournamentStats({
 			}
 		}>(
 			GET_MY_FPL_COMPETITION_SEASON_PATH,
-			{ tournamentId: selectedTournament.id, throughEventId: dataGameweek },
+			{
+				tournamentId: selectedTournament.id,
+				throughEventId: seasonPathThroughEventId
+			},
 			{ cache: 'no-store', signal: controller.signal }
 		)
 			.then(response => {
@@ -563,7 +615,12 @@ export function useTournamentStats({
 			cancelled = true
 			controller.abort()
 		}
-	}, [dataGameweek, loadSeasonPath, selectedTournament])
+	}, [
+		dataGameweek,
+		latestFinalizedGameweek,
+		loadSeasonPath,
+		selectedTournament
+	])
 
 	return {
 		currentGameweek,
@@ -578,6 +635,7 @@ export function useTournamentStats({
 			boardPage && boardPage.page < boardPage.totalPages
 		),
 		loadMoreStandings,
+		latestFinalizedGameweek,
 		rankingSummary,
 		reviewState,
 		seasonField,

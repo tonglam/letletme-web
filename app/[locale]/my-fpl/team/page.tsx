@@ -187,8 +187,25 @@ export default async function TeamStatsPage({
 		currentGameweek =
 			desk.context.currentEventId ?? desk.context.latestFinalizedEventId ?? 0
 		const latestFinalized = desk.context.latestFinalizedEventId ?? 0
+		const currentEvent = desk.context.currentEventId ?? 0
+		const maxKnownEvent = Math.max(currentEvent, latestFinalized)
+		const safeRequestedEvent =
+			requestedEventId !== null && requestedEventId <= maxKnownEvent
+				? requestedEventId
+				: null
 		initialSelectedGameweek =
-			requestedEventId ?? (latestFinalized > 0 ? latestFinalized : undefined)
+			safeRequestedEvent ??
+			(latestFinalized > 0
+				? latestFinalized
+				: currentEvent > 0
+					? currentEvent
+					: undefined)
+		const deskGameweekMatchesSelection =
+			desk.gameweek?.eventId === (initialSelectedGameweek ?? 0)
+		if (!deskGameweekMatchesSelection) {
+			initialEntryEventResult = null
+			initialEntryGameweekState = undefined
+		}
 
 		initialRequestComplete = true
 

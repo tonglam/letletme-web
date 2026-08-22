@@ -173,7 +173,7 @@ export function aggregateToTournamentStats(
 			null,
 		endGameweek:
 			tournament.groupEndedEventId ?? tournament.knockoutEndedEventId ?? null,
-		myRank: aggregate.viewer?.tournamentOverallRank ?? viewerRow?.rank ?? null,
+		myRank: viewerRow?.rank ?? aggregate.viewer?.tournamentOverallRank ?? null,
 		myPreviousRank: viewerRow?.previousRank ?? null,
 		myTeam: viewerRow
 			? {

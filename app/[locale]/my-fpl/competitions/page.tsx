@@ -109,6 +109,7 @@ export default async function TournamentStatsPage({
 	let initialError: string | null = null
 	let usedFallbackGameweek = false
 	let currentGameweek = 0
+	let initialLatestFinalizedGameweek: number | null = null
 
 	try {
 		let response: MyFplCompetitionsDeskResponse
@@ -117,7 +118,10 @@ export default async function TournamentStatsPage({
 				executeServerQueryWithSession<MyFplCompetitionsDeskResponse>(
 					session,
 					GET_MY_FPL_COMPETITIONS_DESK,
-					{ tournamentId: requestedTournamentId, eventId: requestedEventId },
+					{
+						tournamentId: requestedTournamentId,
+						eventId: initialView === 'season' ? null : requestedEventId
+					},
 					{ cache: 'no-store' }
 				)
 			)
@@ -132,7 +136,10 @@ export default async function TournamentStatsPage({
 				executeServerQueryWithSession<MyFplCompetitionsDeskResponse>(
 					session,
 					GET_MY_FPL_COMPETITIONS_DESK,
-					{ tournamentId: null, eventId: requestedEventId },
+					{
+						tournamentId: null,
+						eventId: initialView === 'season' ? null : requestedEventId
+					},
 					{ cache: 'no-store' }
 				)
 			)
@@ -150,9 +157,12 @@ export default async function TournamentStatsPage({
 		const rows = boardRowsToEventResults(desk.board, desk.selectedTournament)
 		initialCurrentRows = initialReviewState === 'READY' ? rows : []
 		initialSeasonFieldRows = initialCurrentRows
+		initialLatestFinalizedGameweek = desk.context.latestFinalizedEventId ?? null
 		initialDataGameweek =
 			initialReviewState === 'READY' && desk.eventId !== null
-				? desk.eventId
+				? initialView === 'season'
+					? (initialLatestFinalizedGameweek ?? desk.eventId)
+					: desk.eventId
 				: null
 		initialSeasonSnapshot = aggregateToSeasonSnapshot(
 			desk.aggregate,
@@ -182,6 +192,7 @@ export default async function TournamentStatsPage({
 			<TournamentStatsClient
 				entryId={entryId}
 				initialCurrentGameweek={currentGameweek}
+				initialLatestFinalizedGameweek={initialLatestFinalizedGameweek}
 				initialTournaments={initialTournaments}
 				initialSelectedTournamentId={initialSelectedTournamentId}
 				initialDataGameweek={initialDataGameweek}
