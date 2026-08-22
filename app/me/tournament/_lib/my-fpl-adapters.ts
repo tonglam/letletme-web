@@ -23,6 +23,28 @@ function boardRowsIncludingViewer(
 	return [...rows, viewerRow]
 }
 
+function compareSeasonBoardRows(
+	a: MyFplCompetitionBoardRow,
+	b: MyFplCompetitionBoardRow
+): number {
+	const pointsA =
+		a.overallPoints != null && Number.isFinite(a.overallPoints)
+			? a.overallPoints
+			: null
+	const pointsB =
+		b.overallPoints != null && Number.isFinite(b.overallPoints)
+			? b.overallPoints
+			: null
+	if (pointsA != null && pointsB != null && pointsA !== pointsB)
+		return pointsB - pointsA
+	if (pointsA != null && pointsB == null) return -1
+	if (pointsA == null && pointsB != null) return 1
+	const overallRankA = a.overallRank ?? Number.MAX_SAFE_INTEGER
+	const overallRankB = b.overallRank ?? Number.MAX_SAFE_INTEGER
+	if (overallRankA !== overallRankB) return overallRankA - overallRankB
+	return a.entryId - b.entryId
+}
+
 export function boardRowsToEventResults(
 	page: MyFplCompetitionBoardPage | null | undefined,
 	tournament?: EntryTournament | null
@@ -70,15 +92,20 @@ export function aggregateToSeasonSnapshot(
 			averageValue: metric.averageValue,
 			higherIsBetter: metric.higherIsBetter
 		})),
-		standings: boardRowsIncludingViewer(board).map(row => ({
-			entryId: row.entryId,
-			rank: row.rank,
-			entryName: row.entryName,
-			playerName: row.playerName,
-			overallPoints: row.overallPoints,
-			overallRank: row.overallRank,
-			teamValue: row.teamValue
-		}))
+		standings: [...boardRowsIncludingViewer(board)]
+			.sort(compareSeasonBoardRows)
+			.map((row, index) => ({
+				entryId: row.entryId,
+				rank:
+					row.overallPoints != null && Number.isFinite(row.overallPoints)
+						? index + 1
+						: null,
+				entryName: row.entryName,
+				playerName: row.playerName,
+				overallPoints: row.overallPoints,
+				overallRank: row.overallRank,
+				teamValue: row.teamValue
+			}))
 	}
 }
 

@@ -136,6 +136,11 @@ export function useTeamStats({
 	)
 	const [baseError, setBaseError] = useState<string | null>(initialError)
 	const [gameweekError, setGameweekError] = useState<string | null>(null)
+	const [gameweekState, setGameweekState] = useState<
+		MyFplReviewState | undefined
+	>(
+		initialEntryGameweekState ?? (initialEntryEventResult ? 'READY' : undefined)
+	)
 	const [emptyStateMessage, setEmptyStateMessage] = useState<string | null>(
 		initialEntryGameweekState === 'PENDING'
 			? t('pendingReviewForGameweek', {
@@ -251,6 +256,7 @@ export function useTeamStats({
 	useEffect(() => {
 		if (!loadGameweekData) {
 			setIsLoading(false)
+			setGameweekState(undefined)
 			return
 		}
 
@@ -260,13 +266,16 @@ export function useTeamStats({
 
 		const cachedEvent = peekEntryEventResult(entryId, selectedGameweek)
 		const cachedState = peekEntryGameweekState(entryId, selectedGameweek)
+		setGameweekState(cachedState)
 		if (cachedEvent !== undefined && teamStats?.eventId === selectedGameweek) {
+			setGameweekState(cachedState ?? 'READY')
 			setEmptyStateMessage(null)
 			setIsLoading(false)
 			return
 		}
 		// Sync apply cache hit without network
 		if (cachedEvent !== undefined && cachedEvent !== null) {
+			setGameweekState(cachedState ?? 'READY')
 			setEmptyStateMessage(null)
 			applyGameweekResult(cachedEvent)
 			setIsLoading(false)
@@ -275,6 +284,7 @@ export function useTeamStats({
 		}
 		if (cachedEvent === null) {
 			setTeamStats(null)
+			setGameweekState(cachedState)
 			setEmptyStateMessage(formatEmptyStateMessage(cachedState))
 			setIsLoading(false)
 			return
@@ -283,6 +293,7 @@ export function useTeamStats({
 		const loadGw = async () => {
 			setIsLoading(true)
 			setTeamStats(null)
+			setGameweekState(undefined)
 			setEmptyStateMessage(null)
 			try {
 				const entryEventResult = await getEntryEventResultCached(
@@ -291,6 +302,10 @@ export function useTeamStats({
 					{ isCurrentGameweek: selectedGameweek === currentGameweek }
 				)
 				if (requestId !== gwRequestIdRef.current) return
+				const resolvedState =
+					peekEntryGameweekState(entryId, selectedGameweek) ??
+					(entryEventResult ? 'READY' : undefined)
+				setGameweekState(resolvedState)
 
 				if (!entryEventResult) {
 					setTeamStats(null)
@@ -318,6 +333,7 @@ export function useTeamStats({
 		}
 
 		function applyGameweekResult(entryEventResult: EntryEventResult) {
+			setGameweekState('READY')
 			const identity = identityFromEventResult(entryEventResult)
 			identityRef.current = identity
 			const history = peekEntryHistory(entryId)
@@ -365,7 +381,7 @@ export function useTeamStats({
 		currentGameweek,
 		emptyStateMessage,
 		error: gameweekError ?? baseError,
-		gameweekState: peekEntryGameweekState(entryId, selectedGameweek),
+		gameweekState,
 		isLoading,
 		isTransfersLoading,
 		seasonLogs,

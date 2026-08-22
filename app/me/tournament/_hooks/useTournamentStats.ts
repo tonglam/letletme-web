@@ -371,6 +371,11 @@ export function useTournamentStats({
 		setIsLoading(true)
 		setError(null)
 		setTournamentStats(null)
+		setAggregate(null)
+		setRankingSummary(null)
+		setSeasonSnapshot(null)
+		setSeasonFieldRows([])
+		setDataGameweek(null)
 
 		void fetchDesk(
 			tournamentId,
@@ -569,6 +574,7 @@ export function useTournamentStats({
 		const controller = new AbortController()
 		boardAbortRef.current = controller
 		setIsBoardLoading(true)
+		setError(null)
 		try {
 			const nextPage = await fetchBoardPage({
 				tournamentId: selectedTournament.id,
@@ -587,6 +593,7 @@ export function useTournamentStats({
 				viewerRow: nextPage.viewerRow ?? boardPage.viewerRow
 			}
 			rebuildStatsFromBoard(merged)
+			setError(null)
 		} catch (loadError) {
 			if (!controller.signal.aborted) setError(t('loadFailed'))
 		} finally {
