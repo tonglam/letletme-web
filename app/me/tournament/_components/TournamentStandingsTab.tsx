@@ -119,30 +119,35 @@ function SortHeader({
 			align={align}
 			className={className}
 		>
-			<button
-				type="button"
-				disabled={disabled}
-				onClick={onClick}
-				className={cn(
-					'inline-flex items-center gap-1 rounded-sm text-caption font-medium uppercase tracking-wide',
-					'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
-					align === 'right' && 'ml-auto flex-row-reverse',
-					align === 'center' && 'mx-auto',
-					active ? 'text-foreground' : 'text-muted-foreground'
-				)}
-				aria-sort={
-					active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'
-				}
-			>
-				{label}
-				<Icon
+			{disabled ? (
+				<span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
+					{label}
+				</span>
+			) : (
+				<button
+					type="button"
+					onClick={onClick}
 					className={cn(
-						'size-3.5 shrink-0',
-						active ? 'opacity-100' : 'opacity-50'
+						'inline-flex items-center gap-1 rounded-sm text-caption font-medium uppercase tracking-wide',
+						'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+						align === 'right' && 'ml-auto flex-row-reverse',
+						align === 'center' && 'mx-auto',
+						active ? 'text-foreground' : 'text-muted-foreground'
 					)}
-					aria-hidden="true"
-				/>
-			</button>
+					aria-sort={
+						active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'
+					}
+				>
+					{label}
+					<Icon
+						className={cn(
+							'size-3.5 shrink-0',
+							active ? 'opacity-100' : 'opacity-50'
+						)}
+						aria-hidden="true"
+					/>
+				</button>
+			)}
 		</DataTh>
 	)
 }

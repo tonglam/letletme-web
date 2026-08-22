@@ -468,9 +468,13 @@ export function useTournamentStats({
 		return () => {
 			controller.abort()
 			if (deskRetryTimer !== undefined) window.clearTimeout(deskRetryTimer)
-			if (requestId === requestSequenceRef.current) {
-				setIsBoardLoading(false)
-			}
+			// A desk refresh can supersede an in-flight search or load-more request.
+			// Abort/clear the board channel as part of the same lifecycle so a stale
+			// request cannot leave the standings spinner permanently active.
+			boardSequenceRef.current += 1
+			boardAbortRef.current?.abort()
+			boardAbortRef.current = null
+			setIsBoardLoading(false)
 		}
 	}, [
 		entryId,
@@ -580,6 +584,7 @@ export function useTournamentStats({
 		return () => {
 			window.clearTimeout(timer)
 			controller.abort()
+			if (boardId === boardSequenceRef.current) setIsBoardLoading(false)
 		}
 	}, [
 		boardEventId,
