@@ -68,6 +68,7 @@ const transfers: MyFplTeamTransfers = {
 			],
 		},
 	],
+	snapshotMeta: null,
 }
 
 describe('calculateSellingPrice', () => {
