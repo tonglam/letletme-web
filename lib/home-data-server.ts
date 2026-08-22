@@ -24,6 +24,7 @@ import {
 	GET_LIVE_MATCHDAY_DESK,
 	type LiveMatchdayDeskResponse
 } from '@/lib/graphql/operations/live'
+import { mergeLiveFixturesIntoHomeFixtures } from '@/lib/home-fixtures-merge'
 import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { coalescePublicSeed } from '@/lib/public-seed-singleflight'
@@ -63,30 +64,6 @@ function liveStateToHomeState(state: string): HomeFixtureState {
 		return 'SCHEDULED'
 	}
 	return 'LIVE'
-}
-
-function liveFixturesToHomeFixtures(
-	rows: LiveMatchdayDeskResponse['liveMatchdayDesk']['matches']
-): HomeFixture[] {
-	return rows.map(row => ({
-		id: row.fixtureId,
-		eventId: row.eventId,
-		finished: row.finished,
-		started: row.started,
-		kickoffTime: row.kickoffTime,
-		homeTeam: {
-			id: row.homeTeamId,
-			name: row.homeTeamName,
-			shortName: row.homeTeamShortName
-		},
-		awayTeam: {
-			id: row.awayTeamId,
-			name: row.awayTeamName,
-			shortName: row.awayTeamShortName
-		},
-		homeScore: row.homeScore,
-		awayScore: row.awayScore
-	}))
 }
 
 const getHomePublicBootstrapFromOrigin = unstable_cache(
@@ -199,7 +176,10 @@ const loadHomeFixturesFromOrigin = async (
 					sourceCheckedAt: desk.sourceCheckedAt ?? null,
 					publishedAt: desk.publishedAt ?? null,
 					stale: desk.stale ?? false,
-					fixtures: liveFixturesToHomeFixtures(desk.matches)
+					fixtures: mergeLiveFixturesIntoHomeFixtures(
+						desk.matches,
+						response.eventFixtures
+					)
 				}
 			} catch (error) {
 				console.warn('[home-fixtures] live publication unavailable', {
