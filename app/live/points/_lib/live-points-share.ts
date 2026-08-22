@@ -51,6 +51,7 @@ export type FormatLivePointsShareInput = {
 		| 'livePoints'
 		| 'liveNetPoints'
 		| 'liveTotalPoints'
+		| 'score'
 		| 'transferCost'
 		| 'chip'
 		| 'captainName'
@@ -130,11 +131,15 @@ export function formatLivePointsShareText({
 	const chip = formatChip(liveData.chip, labels)
 	const transferCost = liveData.transferCost ?? 0
 	const hitsPart = transferCost > 0 ? ` (−${transferCost} ${labels.hits})` : ''
+	const netPoints = liveData.score
+		? liveData.score.netEventPoints
+		: liveData.liveNetPoints
+	const netText = netPoints == null ? '—' : String(netPoints)
 
 	const header = [
 		`# ${teamName} · GW${gameweek}`,
 		manager ? manager : null,
-		`${labels.live}: **${liveData.livePoints}**${hitsPart} · ${labels.net}: ${liveData.liveNetPoints} · ${labels.season}: ${liveData.liveTotalPoints}`,
+		`${labels.live}: **${liveData.livePoints}**${hitsPart} · ${labels.net}: ${netText} · ${labels.season}: ${liveData.liveTotalPoints}`,
 		`${labels.chip}: ${chip} · ${labels.captain}: ${liveData.captainName || '—'}`
 	]
 		.filter(Boolean)

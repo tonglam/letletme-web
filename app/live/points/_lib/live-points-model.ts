@@ -201,6 +201,7 @@ export function mapLiveDataToPlayers(
 	return sortedPicks.map(pick => {
 		// Prefer pick flags from the calc payload; fall back to captain name match.
 		const isCaptain =
+			(pick.multiplier ?? 0) >= 2 ||
 			pick.isCaptain === true ||
 			(!pick.isCaptain &&
 				!pick.isViceCaptain &&

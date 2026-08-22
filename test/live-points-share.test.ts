@@ -165,7 +165,7 @@ describe('formatLivePointsShareText', () => {
 		)
 	})
 
-	it('omits hits when transfer cost is zero and shows chip name', () => {
+	it('omits hits when transfer cost is zero and shows the chip code', () => {
 		const text = formatLivePointsShareText({
 			gameweek: 12,
 			liveData: {
@@ -191,7 +191,7 @@ describe('formatLivePointsShareText', () => {
 		})
 
 		assert.doesNotMatch(text, /hits/)
-		assert.match(text, /Chip: Triple Captain/)
+		assert.match(text, /Chip: TC/)
 		assert.doesNotMatch(text, /## Bench/)
 		// empty playerName should not leave a blank manager line
 		assert.doesNotMatch(text, /^# Test FC · GW12\n\n/m)
@@ -223,12 +223,12 @@ describe('formatLivePointsShareText', () => {
 })
 
 describe('formatChipName', () => {
-	it('maps API enums and short codes', () => {
-		assert.equal(formatChipName('BENCH_BOOST'), 'Bench Boost')
-		assert.equal(formatChipName('bboost'), 'Bench Boost')
-		assert.equal(formatChipName('TRIPLE_CAPTAIN'), 'Triple Captain')
-		assert.equal(formatChipName('FREE_HIT'), 'Free Hit')
-		assert.equal(formatChipName('WILDCARD'), 'Wildcard')
+	it('maps API enums and short codes to stable FPL chip codes', () => {
+		assert.equal(formatChipName('BENCH_BOOST'), 'BB')
+		assert.equal(formatChipName('bboost'), 'BB')
+		assert.equal(formatChipName('TRIPLE_CAPTAIN'), 'TC')
+		assert.equal(formatChipName('FREE_HIT'), 'FH')
+		assert.equal(formatChipName('WILDCARD'), 'WC')
 	})
 })
 

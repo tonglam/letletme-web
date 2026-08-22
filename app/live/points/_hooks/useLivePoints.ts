@@ -305,10 +305,14 @@ export function useLivePoints({
 			)
 			if (requestId !== requestIdRef.current) return
 			const observedSnapshot = liveContextToSnapshot(probe.liveContext)
-			if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
+			const latestLive = latestLiveDataRef.current
+			const managerScoreDue = Boolean(
+				latestLive?.live.score?.nextRefreshAt &&
+				Date.parse(latestLive.live.score.nextRefreshAt) <= Date.now()
+			)
+			if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot) && !managerScoreDue) {
 				acceptSnapshot(observedSnapshot)
 				setError(undefined)
-				const latestLive = latestLiveDataRef.current
 				if (
 					latestLive?.requestKey === currentRequestKeyRef.current &&
 					latestLive.live.event === selectedGameweek
@@ -494,7 +498,9 @@ export function useLivePoints({
 		isPageActive,
 		currentEventId: initialEventId,
 		selectedEventId: selectedGameweek,
-		snapshot
+		snapshot,
+		managerScoreState: liveData?.score?.state,
+		managerNextRefreshAt: liveData?.score?.nextRefreshAt
 	})
 
 	return {

@@ -289,12 +289,41 @@ export default function TournamentDetailClient({
 	justCreated: boolean
 }) {
 	const t = useTranslations('LiveTournament')
+	const scoreT = useTranslations('LivePoints')
 	const lifecycleT = useTranslations('TournamentLifecycle')
 	const router = useRouter()
 	const isPageActive = usePageActive()
 	const [searchQuery, setSearchQuery] = useState('')
 	const [currentTournament, setCurrentTournament] = useState(tournament)
 	const [rows, setRows] = useState(initialRows)
+	const managerNextRefreshAt = useMemo(() => {
+		const refreshTimes = rows
+			.map(row => row.score?.nextRefreshAt)
+			.filter((value): value is string => Boolean(value))
+			.sort()
+		return refreshTimes[0] ?? null
+	}, [rows])
+	const managerScoreSettling = rows.some(
+		row => row.score?.state === 'SETTLING'
+	)
+	const managerScoreStatus = useMemo(() => {
+		if (currentTournament?.leagueType === 'H2H') {
+			return t('officialH2HLiveUnavailable')
+		}
+		const states = rows.map(row => row.score?.state)
+		if (states.includes('SETTLING')) return scoreT('scoreSettling')
+		if (states.includes('STALE')) return scoreT('scoreDelayed')
+		if (
+			states.includes('FALLBACK') ||
+			rows.some(row => row.score?.source === 'LOCAL_MULTIPLIER_FALLBACK')
+		) {
+			return scoreT('scoreFallback')
+		}
+		if (rows.length === 0 || states.includes('UNAVAILABLE')) {
+			return scoreT('scoreUnavailable')
+		}
+		return scoreT('scoreOfficial')
+	}, [currentTournament?.leagueType, rows, scoreT, t])
 	const [staleEntryIds, setStaleEntryIds] = useState<ReadonlySet<number>>(
 		() => new Set()
 	)
@@ -600,7 +629,14 @@ export default function TournamentDetailClient({
 					if (failedEntryCountRef.current === 0) setError(null)
 					return
 				}
-				if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
+				const managerScoreDue = Boolean(
+					managerNextRefreshAt &&
+					Date.parse(managerNextRefreshAt) <= Date.now()
+				)
+				if (
+					!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot) &&
+					!managerScoreDue
+				) {
 					acceptSnapshot(observedSnapshot)
 					if (failedEntryCountRef.current === 0) setError(null)
 					return
@@ -626,7 +662,8 @@ export default function TournamentDetailClient({
 		isOfficialH2H,
 		refreshStandings,
 		standingsReady,
-		t
+		t,
+		managerNextRefreshAt
 	])
 
 	const entries = useMemo(
@@ -726,7 +763,9 @@ export default function TournamentDetailClient({
 		isPageActive: isPageActive && !isOfficialH2H,
 		currentEventId: currentGameweek,
 		selectedEventId: currentGameweek,
-		snapshot
+		snapshot,
+		managerScoreState: managerScoreSettling ? 'SETTLING' : null,
+		managerNextRefreshAt
 	})
 
 	// Full-page empty state for access / link / bind failures
@@ -976,6 +1015,11 @@ export default function TournamentDetailClient({
 									{t('refresh')}
 								</Button>
 							</div>
+						) : null}
+						{currentTournament ? (
+							<p className="mb-4 text-right text-xs text-muted-foreground">
+								{managerScoreStatus}
+							</p>
 						) : null}
 
 						{currentTournament.setupStatus !== 'READY' || hasSetupWarnings ? (

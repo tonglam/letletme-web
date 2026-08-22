@@ -10,6 +10,9 @@ export interface TournamentEntryPick {
 	teamName: string
 	elementTypeName: string
 	position: number
+	multiplier?: number
+	pickActive?: boolean
+	autoSub?: boolean
 	isCaptain: boolean
 	isViceCaptain: boolean
 }
@@ -51,6 +54,7 @@ export interface TournamentEntry {
 export interface Tournament {
 	id: string
 	name: string
+	leagueType?: string
 	entries: TournamentEntry[]
 	gameweek: number
 	averagePoints: number

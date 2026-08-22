@@ -210,6 +210,7 @@ export type LiveEntryTournament = Pick<
 	EntryTournament,
 	| 'id'
 	| 'name'
+	| 'leagueType'
 	| 'totalTeamNum'
 	| 'setupStatus'
 	| 'standingsReadyAt'
@@ -269,8 +270,13 @@ export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_INFO_FIELDS}
         rows {
           entry provisional entryName playerName overallRank lastOverallRank overallPoints teamValue bank value
           chip livePoints transferCost liveNetPoints liveTotalPoints played toPlay captainName
+          score {
+            eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
+            transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
+            staleAt nextRefreshAt reconciliation reasonCodes
+          }
           activeCaptain { name points }
-          pickList { element webName elementTypeName position isCaptain isViceCaptain teamShortName teamName totalPoints }
+          pickList { element webName elementTypeName position multiplier isCaptain isViceCaptain teamShortName teamName totalPoints }
         }
       }
     }
@@ -645,6 +651,7 @@ export const LIVE_TOURNAMENT_INFO_FIELDS = `
   fragment LiveTournamentInfoFields on TournamentInfo {
     id
     name
+    leagueType
     totalTeamNum
     setupStatus
     standingsReadyAt
@@ -662,6 +669,9 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_TOURNAMENT_INFO_FIELDS}
       state
       tournaments { ...LiveTournamentInfoFields }
       selectedTournamentId
+      managerRevision
+      officialCoverage
+      fallbackEntryIds
       partial
       failedEntryIds
       totalEntries
@@ -677,6 +687,26 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_TOURNAMENT_INFO_FIELDS}
         bank
         value
         chip
+        score {
+          eventPoints
+          netEventPoints
+          totalPoints
+          totalScope
+          eventRank
+          overallRank
+          leagueRank
+          transferCost
+          source
+          state
+          eventPointSemantics
+          revision
+          checkedAt
+          upstreamUpdatedAt
+          staleAt
+          nextRefreshAt
+          reconciliation
+          reasonCodes
+        }
         livePoints
         transferCost
         liveNetPoints
@@ -693,6 +723,7 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_TOURNAMENT_INFO_FIELDS}
           webName
           elementTypeName
           position
+          multiplier
           isCaptain
           isViceCaptain
           teamShortName
@@ -719,6 +750,26 @@ export interface BatchCalcMeta {
 export interface TournamentLiveCalcData {
 	entry: number
 	provisional?: boolean
+	score?: {
+		eventPoints: number | null
+		netEventPoints: number | null
+		totalPoints: number | null
+		totalScope: 'OVERALL' | 'CLASSIC_PHASE' | 'LOCAL_OVERALL' | 'UNKNOWN'
+		eventRank: number | null
+		overallRank: number | null
+		leagueRank: number | null
+		transferCost: number
+		source: string
+		state: string
+		eventPointSemantics: string
+		revision: string | null
+		checkedAt: string | null
+		upstreamUpdatedAt: string | null
+		staleAt: string | null
+		nextRefreshAt: string | null
+		reconciliation: string
+		reasonCodes: string[]
+	}
 	entryName: string
 	playerName: string
 	overallRank: number
@@ -748,6 +799,9 @@ export interface TournamentLiveCalcData {
 		webName: string
 		elementTypeName: string
 		position: number
+		multiplier?: number
+		pickActive?: boolean
+		autoSub?: boolean
 		isCaptain: boolean
 		isViceCaptain: boolean
 		teamShortName: string
@@ -763,6 +817,9 @@ export interface TournamentLivePointsResponse {
 		state: string
 		tournaments: LiveEntryTournament[]
 		selectedTournamentId: number | null
+		managerRevision?: string | null
+		officialCoverage?: number
+		fallbackEntryIds?: number[]
 		partial: boolean
 		failedEntryIds: number[]
 		totalEntries: number
@@ -783,7 +840,15 @@ export const GET_TOURNAMENT_ENTRY_SQUADS = `
   query GetTournamentEntrySquads($entryId: Int!, $tournamentId: Int!, $comparedEntryIds: [Int!]!, $ref: LiveRevisionRefInput!) {
     tournamentEntrySquads(entryId: $entryId, tournamentId: $tournamentId, comparedEntryIds: $comparedEntryIds, ref: $ref) {
       tournamentId eventId revision
-      entries { entry entryName playerName livePoints liveNetPoints liveTotalPoints transferCost pickList { element webName elementTypeName position isCaptain isViceCaptain teamShortName teamName totalPoints } }
+      entries {
+        entry entryName playerName livePoints liveNetPoints liveTotalPoints transferCost
+        score {
+          eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
+          transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
+          staleAt nextRefreshAt reconciliation reasonCodes
+        }
+        pickList { element webName elementTypeName position isCaptain isViceCaptain teamShortName teamName totalPoints }
+      }
     }
   }
 `

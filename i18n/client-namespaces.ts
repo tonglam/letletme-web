@@ -21,29 +21,29 @@ export const ROUTE_CLIENT_NAMESPACES = {
 		'Share'
 	],
 	selections: ['Selections', 'Share'],
-	competitions: [
-		'TournamentList',
-		'TournamentCreate',
-		'TournamentManage',
-		'TournamentHelp',
-		'TournamentLifecycle',
-		'LiveTournament',
-		'Filters'
-	],
 	competitionsBrowse: ['TournamentList', 'TournamentLifecycle'],
 	competitionsCreate: ['TournamentCreate', 'TournamentHelp'],
 	competitionsManage: ['TournamentManage', 'TournamentLifecycle'],
 	competitionsDetail: ['LiveTournament', 'TournamentLifecycle', 'Share'],
-	liveMatches: ['LiveMatches', 'SeasonState', 'Share'],
+	liveMatches: ['LiveMatches', 'LivePoints', 'SeasonState', 'Share'],
 	livePoints: ['LivePoints', 'SeasonState', 'Share'],
 	liveCompetitions: [
 		'LiveTournament',
+		'LivePoints',
 		'TournamentLifecycle',
 		'SeasonState',
 		'Filters',
+		'PlayerDirectory',
 		'Share'
 	],
-	myFpl: ['TeamStats', 'TournamentStats', 'TournamentLifecycle', 'Filters', 'Share'],
+	myFpl: [
+		'TeamStats',
+		'TournamentStats',
+		'TournamentLifecycle',
+		'LivePoints',
+		'Filters',
+		'Share'
+	],
 	onboarding: ['Onboarding', 'FplEntryLookup'],
 	profile: ['Profile', 'Sessions', 'ReportProblem', 'FplEntryLookup']
 } as const satisfies Record<string, readonly (keyof IntlMessages)[]>

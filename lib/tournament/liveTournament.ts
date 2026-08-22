@@ -18,6 +18,7 @@ export const mapEntryTournamentToLiveTournament = (
 	return {
 		id: String(tournament.id),
 		name: tournament.name,
+		leagueType: tournament.leagueType,
 		gameweek: 1,
 		averagePoints: 0,
 		highestPoints: 0,

@@ -110,6 +110,16 @@ export function LivePointsDashboard({
 		)
 	})()
 	const gameweek = selectedGameweek ?? liveData?.event ?? currentGameweek
+	const scoreStatus = (() => {
+		const score = liveData?.score
+		if (!score || score.state === 'UNAVAILABLE') return t('scoreUnavailable')
+		if (score.state === 'SETTLING') return t('scoreSettling')
+		if (score.source === 'LOCAL_MULTIPLIER_FALLBACK' || score.state === 'FALLBACK') {
+			return t('scoreFallback')
+		}
+		if (score.state === 'STALE') return t('scoreDelayed')
+		return t('scoreOfficial')
+	})()
 	const squadTitle = liveData?.entryName ?? `Entry ${liveData?.entry ?? ''}`
 	const squadPitchLabels = {
 		formation: t('squadFormation', { title: squadTitle }),
@@ -223,6 +233,14 @@ export function LivePointsDashboard({
 								? t('autoHidden')
 								: t('autoPast')}
 					</p>
+					{liveData ? (
+						<p className="text-xs text-muted-foreground" role="status">
+							{scoreStatus}
+							{liveData.score?.reconciliation === 'SOURCE_SKEW'
+								? ` · ${t('scoreDetailsSyncing')}`
+								: ''}
+						</p>
+					) : null}
 					<div className="flex flex-wrap items-center gap-2 sm:gap-3">
 						<LivePointsAutoRefreshCountdown
 							enabled={autoRefreshEnabled}

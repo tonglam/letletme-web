@@ -56,12 +56,17 @@ export function shouldPollLiveSnapshot({
 	currentEventId,
 	selectedEventId,
 	snapshot,
+	managerScoreState,
+	managerNextRefreshAt,
 	probeEventIdentity = false
 }: {
 	isPageActive: boolean
 	currentEventId?: number
 	selectedEventId?: number
 	snapshot?: LiveSnapshotStatus | null
+	/** Official manager score may refresh after the player snapshot settles. */
+	managerScoreState?: string | null
+	managerNextRefreshAt?: string | null
 	/** Keep the matches page alive so it can discover the next event after settlement. */
 	probeEventIdentity?: boolean
 }): boolean {
@@ -73,6 +78,8 @@ export function shouldPollLiveSnapshot({
 	// A stale/mismatched snapshot can also remain after a failed gameweek switch.
 	// Keep current-event polling enabled so the UI can recover automatically.
 	if (!snapshot || snapshot.eventId !== selectedEventId) return true
+	if (managerScoreState === 'SETTLING') return true
+	if (managerNextRefreshAt && Date.parse(managerNextRefreshAt) <= Date.now()) return true
 
 	return snapshot.state !== 'SETTLED' || probeEventIdentity
 }

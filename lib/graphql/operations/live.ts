@@ -141,6 +141,26 @@ export const GET_LIVE_POINTS = `
       entryName
       playerName
       chip
+      score {
+        eventPoints
+        netEventPoints
+        totalPoints
+        totalScope
+        eventRank
+        overallRank
+        leagueRank
+        transferCost
+        source
+        state
+        eventPointSemantics
+        revision
+        checkedAt
+        upstreamUpdatedAt
+        staleAt
+        nextRefreshAt
+        reconciliation
+        reasonCodes
+      }
       livePoints
       transferCost
       liveNetPoints
@@ -174,6 +194,9 @@ export const GET_LIVE_POINTS = `
         isPlayed
         isCaptain
         isViceCaptain
+        multiplier
+        pickActive
+        autoSub
         expectedGoals
         expectedAssists
         expectedGoalInvolvements
@@ -213,6 +236,9 @@ export interface LivePick {
 	isPlayed: boolean
 	isCaptain: boolean
 	isViceCaptain: boolean
+	multiplier?: number
+	pickActive?: boolean
+	autoSub?: boolean
 	expectedGoals: number | null
 	expectedAssists: number | null
 	expectedGoalInvolvements: number | null
@@ -226,12 +252,39 @@ export interface LiveCalcData {
 	entryName?: string
 	playerName?: string
 	chip?: string | null
+	score?: LiveManagerScore
 	livePoints: number
 	transferCost: number
 	liveNetPoints: number
 	liveTotalPoints: number
 	captainName: string
 	pickList: LivePick[]
+}
+
+export type LiveManagerScore = {
+	eventPoints: number | null
+	netEventPoints: number | null
+	totalPoints: number | null
+	totalScope: 'OVERALL' | 'CLASSIC_PHASE' | 'LOCAL_OVERALL' | 'UNKNOWN'
+	eventRank: number | null
+	overallRank: number | null
+	leagueRank: number | null
+	transferCost: number
+	source:
+		| 'FPL_ENTRY_SUMMARY'
+		| 'FPL_CLASSIC_STANDINGS'
+		| 'FPL_FINAL_RESULT'
+		| 'LOCAL_MULTIPLIER_FALLBACK'
+		| 'UNAVAILABLE'
+	state: 'FRESH' | 'STALE' | 'FALLBACK' | 'SETTLING' | 'FINAL' | 'UNAVAILABLE'
+	eventPointSemantics: 'GROSS' | 'NET' | 'ZERO_COST_EQUIVALENT' | 'UNKNOWN'
+	revision: string | null
+	checkedAt: string | null
+	upstreamUpdatedAt: string | null
+	staleAt: string | null
+	nextRefreshAt: string | null
+	reconciliation: 'MATCHED' | 'SOURCE_SKEW' | 'NOT_COMPARABLE' | 'NO_LINEUP'
+	reasonCodes: string[]
 }
 
 export interface LiveCalcDataResponse {

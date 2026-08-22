@@ -341,7 +341,7 @@ export function TournamentTable({
 							const isMe = isViewerEntry(entry, viewerEntryId)
 							const gwPts = entry.gwPoints ?? entry.livePoints
 							const hits = entry.eventCost ?? 0
-							const net = entry.gwNetPoints ?? entry.livePoints
+							const net = entry.gwNetPoints
 							const playedTotal =
 								(entry.playersPlayed ?? 0) + (entry.playersToPlay ?? 0)
 							const chips = chipLabel(entry)
@@ -414,7 +414,7 @@ export function TournamentTable({
 											</div>
 											{hits > 0 ? (
 												<div className="font-mono text-label text-destructive/90">
-													{t('netLabel')} {net}
+													{t('netLabel')} {net ?? '—'}
 												</div>
 											) : null}
 										</div>

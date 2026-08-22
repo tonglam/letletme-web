@@ -45,23 +45,23 @@ export function formatInteger(number: number): string {
   return new Intl.NumberFormat('en-US').format(number);
 }
 
-const CHIP_LABELS: Record<string, string> = {
-  bboost: 'Bench Boost',
-  bb: 'Bench Boost',
-  benchboost: 'Bench Boost',
-  bench_boost: 'Bench Boost',
-  '3xc': 'Triple Captain',
-  tc: 'Triple Captain',
-  triplecaptain: 'Triple Captain',
-  triple_captain: 'Triple Captain',
-  wildcard: 'Wildcard',
-  wc: 'Wildcard',
-  freehit: 'Free Hit',
-  fh: 'Free Hit',
-  free_hit: 'Free Hit',
+const CHIP_CODES: Record<string, string> = {
+  bboost: 'BB',
+  bb: 'BB',
+  benchboost: 'BB',
+  bench_boost: 'BB',
+  '3xc': 'TC',
+  tc: 'TC',
+  triplecaptain: 'TC',
+  triple_captain: 'TC',
+  wildcard: 'WC',
+  wc: 'WC',
+  freehit: 'FH',
+  fh: 'FH',
+  free_hit: 'FH',
 };
 
-/** Normalize API enums (BENCH_BOOST) and short codes (bboost) for display. */
+/** Normalize API enums and aliases to the stable FPL chip codes used in UI/share text. */
 export function formatChipName(chipName?: string | null): string {
   if (!chipName) {
     return 'Unknown';
@@ -71,9 +71,9 @@ export function formatChipName(chipName?: string | null): string {
   const compact = raw.replace(/[\s-]+/g, '_')
   const nosep = raw.replace(/[\s_-]+/g, '')
   return (
-    CHIP_LABELS[raw] ??
-    CHIP_LABELS[compact] ??
-    CHIP_LABELS[nosep] ??
+    CHIP_CODES[raw] ??
+    CHIP_CODES[compact] ??
+    CHIP_CODES[nosep] ??
     chipName
   )
 }

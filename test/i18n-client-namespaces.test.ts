@@ -31,9 +31,73 @@ function keyPaths(value: unknown, prefix = ''): string[] {
 	)
 }
 
+const CHIP_CODES = {
+	benchBoost: 'BB',
+	tripleCaptain: 'TC',
+	wildcard: 'WC',
+	freeHit: 'FH',
+	pitchBenchBoost: 'BB',
+	pitchTripleCaptain: 'TC',
+	pitchWildcard: 'WC',
+	pitchFreeHit: 'FH'
+} as const
+
+function assertChineseChipCodes(value: unknown, path = ''): void {
+	if (value == null || typeof value !== 'object' || Array.isArray(value)) return
+	for (const [key, child] of Object.entries(value)) {
+		const childPath = path ? `${path}.${key}` : key
+		if (key in CHIP_CODES) {
+			assert.equal(
+				child,
+				CHIP_CODES[key as keyof typeof CHIP_CODES],
+				`${childPath} must keep its FPL chip code`
+			)
+		}
+		assertChineseChipCodes(child, childPath)
+	}
+}
+
+const POSITION_CODES = {
+	goalkeeper: 'GKP',
+	defender: 'DEF',
+	midfielder: 'MID',
+	forward: 'FWD',
+	squadGoalkeeper: 'GKP',
+	squadDefenders: 'DEF',
+	squadMidfielders: 'MID',
+	squadForwards: 'FWD'
+} as const
+
+function assertChinesePositionCodes(value: unknown, path = ''): void {
+	if (value == null || typeof value !== 'object' || Array.isArray(value)) return
+	for (const [key, child] of Object.entries(value)) {
+		const childPath = path ? `${path}.${key}` : key
+		if (key in POSITION_CODES) {
+			assert.equal(
+				child,
+				POSITION_CODES[key as keyof typeof POSITION_CODES],
+				`${childPath} must keep its FPL position code`
+			)
+		}
+		assertChinesePositionCodes(child, childPath)
+	}
+}
+
 describe('client translation namespace lifecycle', () => {
 	it('keeps English and Chinese message keys deployment-compatible', () => {
 		assert.deepEqual(keyPaths(en).sort(), keyPaths(zh).sort())
+	})
+
+	it('keeps every Chinese chip label on its stable FPL code', () => {
+		assertChineseChipCodes(zh)
+		assert.doesNotMatch(
+			JSON.stringify(zh),
+			/(板凳加成|三倍队长|外卡|自由转会)/
+		)
+	})
+
+	it('keeps every Chinese position label on its stable FPL code', () => {
+		assertChinesePositionCodes(zh)
 	})
 
 	it('covers every client useTranslations namespace in the route matrix', async () => {
