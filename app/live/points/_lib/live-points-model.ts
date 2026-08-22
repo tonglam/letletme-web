@@ -239,8 +239,8 @@ export function mapLiveDataToPlayers(
 		return {
 			id: String(pick.element),
 			name: pick.webName,
-			team: pick.teamName,
-			teamShort: pick.teamShortName,
+			team: pick.teamName ?? '',
+			teamShort: pick.teamShortName ?? '',
 			position,
 			playingStatus,
 			isBench,
