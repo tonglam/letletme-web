@@ -1,16 +1,25 @@
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_ENTRY_EVENT_RESULT,
-	GET_ENTRY_HISTORY,
-	GET_ENTRY_TRANSFER_HISTORY,
 	type EntryEventResult,
-	type EntryEventResultResponse,
 	type EntryGameweekTransfers,
 	type EntryHistoryItem,
 	type EntryHistoryResponse,
-	type EntrySeasonHistoryItem,
-	type EntryTransferHistoryResponse
+	type EntrySeasonHistoryItem
 } from '@/lib/graphql/operations/entries'
+import {
+	GET_MY_FPL_TEAM_DESK,
+	GET_MY_FPL_TEAM_GAMEWEEK,
+	GET_MY_FPL_TEAM_TRANSFERS,
+	type MyFplReviewState,
+	type MyFplTeamDeskResponse,
+	type MyFplTeamGameweekResponse,
+	type MyFplTeamTransfersResponse
+} from '@/lib/graphql/operations/my-fpl'
+import {
+	eventResultFromMyFplGameweek,
+	historyFromMyFplDesk,
+	transfersFromMyFpl
+} from './my-fpl-adapters'
 
 export interface EventPickViewModel {
 	element: number | null
@@ -36,6 +45,9 @@ export interface EventPickViewModel {
 	againstShortName: string
 	wasHome: string
 	score: string
+	fixtureCount: number
+	bgw: boolean
+	dgw: boolean
 	isPlayed: boolean
 	autoSub: boolean
 	expectedGoals: number | null
@@ -138,7 +150,7 @@ export type SeasonIdentity = {
 	playerName: string
 	region: string
 	totalTransfers: number | null
-	/** Fallbacks when history is empty */
+	/** Identity snapshot fields; finalized season score/rank come from history. */
 	overallPoints?: number
 	overallRank?: number
 	teamValue?: number | null
@@ -153,33 +165,23 @@ export type SeasonIdentity = {
 export function buildSeasonOverallSnapshot(
 	identity: SeasonIdentity,
 	entryHistoryResults: EntryHistoryItem[],
-	options?: { preseason?: boolean }
+	_options?: { preseason?: boolean }
 ): TeamSeasonOverallSnapshot {
 	const latestHistory =
 		entryHistoryResults.length > 0
 			? [...entryHistoryResults].sort((a, b) => b.eventId - a.eventId)[0]
 			: null
 
-	const hasHistory = latestHistory !== null
-	const normalizePreseasonPlaceholder = (value: number | undefined) => {
-		if (value === undefined) return null
-		return options?.preseason && !hasHistory && value === 0 ? null : value
-	}
-
 	return {
 		teamName: identity.teamName,
 		playerName: identity.playerName || '-',
 		region: identity.region || '-',
-		overallPoints:
-			latestHistory?.overallPoints ??
-			normalizePreseasonPlaceholder(identity.overallPoints),
-		overallRank:
-			latestHistory?.overallRank ??
-			normalizePreseasonPlaceholder(identity.overallRank),
+		overallPoints: latestHistory?.overallPoints ?? null,
+		overallRank: latestHistory?.overallRank ?? null,
 		teamValue: latestHistory?.teamValue ?? identity.teamValue ?? null,
 		bank: latestHistory?.bank ?? identity.bank ?? null,
 		totalTransfers: identity.totalTransfers,
-		asOfGameweek: latestHistory?.eventId ?? identity.asOfGameweek ?? 0
+		asOfGameweek: latestHistory?.eventId ?? 0
 	}
 }
 
@@ -385,6 +387,9 @@ export const mapApiDataToTeamStats = (
 					againstShortName: pick.againstShortName ?? '',
 					wasHome: pick.wasHome ?? '',
 					score: pick.score ?? '',
+					fixtureCount: pick.fixtureCount ?? 0,
+					bgw: pick.bgw ?? false,
+					dgw: pick.dgw ?? false,
 					isPlayed: pick.isPlayed ?? pick.minutes > 0,
 					autoSub: pick.autoSub ?? false,
 					expectedGoals: pick.expectedGoals ?? null,
@@ -483,6 +488,11 @@ const entryHistoryCache = new Map<
 	number,
 	TimedCacheValue<EntryHistoryResponse['entryHistory']>
 >()
+const entryHistoryStateCache = new Map<
+	number,
+	TimedCacheValue<MyFplReviewState>
+>()
+const entryDeskStateCache = new Map<number, TimedCacheValue<MyFplReviewState>>()
 const entryHistoryInFlight = new Map<
 	number,
 	Promise<EntryHistoryResponse['entryHistory']>
@@ -491,9 +501,17 @@ const transferHistoryCache = new Map<
 	number,
 	TimedCacheValue<EntryGameweekTransfers[]>
 >()
+const transferHistoryStateCache = new Map<
+	number,
+	TimedCacheValue<MyFplReviewState>
+>()
 const transferHistoryInFlight = new Map<
 	number,
 	Promise<EntryGameweekTransfers[]>
+>()
+const entryEventStateCache = new Map<
+	string,
+	TimedCacheValue<MyFplReviewState>
 >()
 
 export const entryEventCacheKey = (entryId: number, eventId: number): string =>
@@ -505,10 +523,25 @@ export const peekEntryHistory = (
 ): EntryHistoryResponse['entryHistory'] | undefined =>
 	getFreshCacheValue(entryHistoryCache, entryId)
 
+export const peekEntryHistoryState = (
+	entryId: number
+): MyFplReviewState | undefined =>
+	getFreshCacheValue(entryHistoryStateCache, entryId)
+
+export const peekEntryDeskState = (
+	entryId: number
+): MyFplReviewState | undefined =>
+	getFreshCacheValue(entryDeskStateCache, entryId)
+
 export const peekTransferHistory = (
 	entryId: number
 ): EntryGameweekTransfers[] | undefined =>
 	getFreshCacheValue(transferHistoryCache, entryId)
+
+export const peekTransferHistoryState = (
+	entryId: number
+): MyFplReviewState | undefined =>
+	getFreshCacheValue(transferHistoryStateCache, entryId)
 
 export const peekEntryEventResult = (
 	entryId: number,
@@ -516,12 +549,27 @@ export const peekEntryEventResult = (
 ): EntryEventResult | null | undefined =>
 	getFreshCacheValue(entryEventCache, entryEventCacheKey(entryId, eventId))
 
+export const peekEntryGameweekState = (
+	entryId: number,
+	eventId: number
+): MyFplReviewState | undefined => {
+	const key = entryEventCacheKey(entryId, eventId)
+	const state = getFreshCacheValue(entryEventStateCache, key)
+	if (state !== undefined) return state
+	const result = peekEntryEventResult(entryId, eventId)
+	if (result !== undefined) return result ? 'READY' : 'EMPTY'
+	return undefined
+}
+
 /** Seed client caches from SSR so the first client fetch is a hit. */
 export const seedEntryEventCache = (
 	entryId: number,
 	eventId: number,
 	value: EntryEventResult | null,
-	opts?: { isCurrentGameweek?: boolean }
+	opts?: {
+		isCurrentGameweek?: boolean
+		state?: MyFplReviewState
+	}
 ): void => {
 	const ttl = opts?.isCurrentGameweek
 		? ENTRY_EVENT_CURRENT_CACHE_TTL_MS
@@ -532,20 +580,56 @@ export const seedEntryEventCache = (
 		value,
 		ttl
 	)
+	setCacheValue(
+		entryEventStateCache,
+		entryEventCacheKey(entryId, eventId),
+		opts?.state ?? (value ? 'READY' : 'EMPTY'),
+		ttl
+	)
 }
 
 export const seedEntryHistoryCache = (
 	entryId: number,
-	value: EntryHistoryResponse['entryHistory']
+	value: EntryHistoryResponse['entryHistory'],
+	state: MyFplReviewState = 'READY'
 ): void => {
-	setCacheValue(entryHistoryCache, entryId, value, HISTORY_CACHE_TTL_MS)
+	setCacheValue(
+		entryHistoryCache,
+		entryId,
+		value,
+		state === 'PENDING' ? 10_000 : HISTORY_CACHE_TTL_MS
+	)
+	setCacheValue(
+		entryHistoryStateCache,
+		entryId,
+		state,
+		state === 'PENDING' ? 10_000 : HISTORY_CACHE_TTL_MS
+	)
+}
+
+export const seedEntryDeskState = (
+	entryId: number,
+	state: MyFplReviewState
+): void => {
+	setCacheValue(entryDeskStateCache, entryId, state, HISTORY_CACHE_TTL_MS)
 }
 
 export const seedTransferHistoryCache = (
 	entryId: number,
-	value: EntryGameweekTransfers[]
+	value: EntryGameweekTransfers[],
+	state: MyFplReviewState = 'READY'
 ): void => {
-	setCacheValue(transferHistoryCache, entryId, value, HISTORY_CACHE_TTL_MS)
+	setCacheValue(
+		transferHistoryStateCache,
+		entryId,
+		state,
+		state === 'PENDING' ? 10_000 : HISTORY_CACHE_TTL_MS
+	)
+	if (state === 'PENDING') {
+		transferHistoryCache.delete(entryId)
+	} else {
+		setCacheValue(transferHistoryCache, entryId, value, HISTORY_CACHE_TTL_MS)
+	}
 }
 
 /**
@@ -556,40 +640,59 @@ export function hydrateTeamStatsSessionCache(opts: {
 	entryId: number
 	seedGw: number
 	currentGameweek: number
+	deskState?: MyFplReviewState
 	history: EntryHistoryResponse['entryHistory'] | null
+	historyState?: MyFplReviewState
 	event: EntryEventResult | null
+	eventState?: MyFplReviewState
 	transfers: EntryGameweekTransfers[] | null
+	transfersState?: MyFplReviewState
 }): void {
-	const { entryId, seedGw, currentGameweek, history, event, transfers } = opts
-	if (history) seedEntryHistoryCache(entryId, history)
-	if (transfers !== null) seedTransferHistoryCache(entryId, transfers)
-	if (event && seedGw > 0) {
+	const {
+		entryId,
+		seedGw,
+		currentGameweek,
+		deskState,
+		history,
+		historyState,
+		event,
+		eventState,
+		transfers,
+		transfersState
+	} = opts
+	if (deskState) seedEntryDeskState(entryId, deskState)
+	if (history) seedEntryHistoryCache(entryId, history, historyState ?? 'READY')
+	if (transfers !== null)
+		seedTransferHistoryCache(entryId, transfers, transfersState ?? 'READY')
+	if (seedGw > 0 && (event || eventState)) {
 		seedEntryEventCache(entryId, seedGw, event, {
-			isCurrentGameweek: seedGw === currentGameweek
+			isCurrentGameweek: seedGw === currentGameweek,
+			state: eventState
 		})
 	}
 }
 
 export const getEntryHistoryCached = async (
-	entryId: number
+	entryId: number,
+	opts?: { force?: boolean }
 ): Promise<EntryHistoryResponse['entryHistory']> => {
-	const cached = getFreshCacheValue(entryHistoryCache, entryId)
+	const cached = opts?.force
+		? undefined
+		: getFreshCacheValue(entryHistoryCache, entryId)
 	if (cached !== undefined) return cached
 	const inflight = entryHistoryInFlight.get(entryId)
 	if (inflight) return inflight
-	const request = executeQuery<EntryHistoryResponse>(
-		GET_ENTRY_HISTORY,
-		{ entryId },
+	const request = executeQuery<MyFplTeamDeskResponse>(
+		GET_MY_FPL_TEAM_DESK,
+		{ eventId: null },
 		{ cache: 'no-store' }
 	)
 		.then(response => {
-			setCacheValue(
-				entryHistoryCache,
-				entryId,
-				response.entryHistory,
-				HISTORY_CACHE_TTL_MS
-			)
-			return response.entryHistory
+			const snapshot = response.myFplTeamDesk
+			seedEntryDeskState(entryId, snapshot.state)
+			const history = historyFromMyFplDesk(snapshot)
+			seedEntryHistoryCache(entryId, history, snapshot.pastSeasonsState)
+			return history
 		})
 		.finally(() => {
 			entryHistoryInFlight.delete(entryId)
@@ -601,24 +704,30 @@ export const getEntryHistoryCached = async (
 export const getEntryEventResultCached = async (
 	entryId: number,
 	eventId: number,
-	opts?: { isCurrentGameweek?: boolean }
+	opts?: { isCurrentGameweek?: boolean; force?: boolean }
 ): Promise<EntryEventResult | null> => {
 	const cacheKey = entryEventCacheKey(entryId, eventId)
-	const cached = getFreshCacheValue(entryEventCache, cacheKey)
+	const cached = opts?.force
+		? undefined
+		: getFreshCacheValue(entryEventCache, cacheKey)
 	if (cached !== undefined) return cached
-	const cachedInFlight = entryEventInFlightCache.get(cacheKey)
+	const cachedInFlight = opts?.force
+		? undefined
+		: entryEventInFlightCache.get(cacheKey)
 	if (cachedInFlight) return cachedInFlight
 	const ttl = opts?.isCurrentGameweek
 		? ENTRY_EVENT_CURRENT_CACHE_TTL_MS
 		: ENTRY_EVENT_CACHE_TTL_MS
-	const request = executeQuery<EntryEventResultResponse>(
-		GET_ENTRY_EVENT_RESULT,
-		{ eventId, entryId },
+	const request = executeQuery<MyFplTeamGameweekResponse>(
+		GET_MY_FPL_TEAM_GAMEWEEK,
+		{ eventId },
 		{ cache: 'no-store' }
 	)
 		.then(response => {
-			const result = response.entryEventResult ?? null
+			const gameweek = response.myFplTeamGameweek
+			const result = eventResultFromMyFplGameweek(gameweek)
 			setCacheValue(entryEventCache, cacheKey, result, ttl)
+			setCacheValue(entryEventStateCache, cacheKey, gameweek.state, ttl)
 			return result
 		})
 		.finally(() => {
@@ -635,19 +744,31 @@ export const getTransferHistoryCached = async (
 	if (cached !== undefined) return cached
 	const inflight = transferHistoryInFlight.get(entryId)
 	if (inflight) return inflight
-	const request = executeQuery<EntryTransferHistoryResponse>(
-		GET_ENTRY_TRANSFER_HISTORY,
-		{ entryId },
+	const request = executeQuery<MyFplTeamTransfersResponse>(
+		GET_MY_FPL_TEAM_TRANSFERS,
+		undefined,
 		{ cache: 'no-store' }
 	)
 		.then(response => {
-			const transfers = response.entryTransferHistory ?? []
+			const snapshot = response.myFplTeamTransfers
+			const state = snapshot.state
+			const transfers = transfersFromMyFpl(snapshot)
 			setCacheValue(
-				transferHistoryCache,
+				transferHistoryStateCache,
 				entryId,
-				transfers,
-				HISTORY_CACHE_TTL_MS
+				state,
+				state === 'PENDING' ? 10_000 : HISTORY_CACHE_TTL_MS
 			)
+			if (state === 'PENDING') {
+				transferHistoryCache.delete(entryId)
+			} else {
+				setCacheValue(
+					transferHistoryCache,
+					entryId,
+					transfers,
+					HISTORY_CACHE_TTL_MS
+				)
+			}
 			return transfers
 		})
 		.finally(() => {

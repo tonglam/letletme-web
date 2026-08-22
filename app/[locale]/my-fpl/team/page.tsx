@@ -1,9 +1,9 @@
 import TeamStatsClient from '@/app/me/team/TeamStatsClient'
 import {
-	identityFromEntrySummary,
-	identityFromEventResult,
-	type SeasonIdentity
-} from '@/app/me/team/_lib/team-stats-model'
+	eventResultFromMyFplGameweek,
+	historyFromMyFplDesk,
+	identityFromMyFplEntry
+} from '@/app/me/team/_lib/my-fpl-adapters'
 import {
 	MOCK_TEAM_ENTRY_ID,
 	MOCK_TEAM_EVENT_ID,
@@ -15,21 +15,13 @@ import {
 	parseTeamStatsGw,
 	parseTeamStatsView
 } from '@/app/me/team/_lib/team-stats-url'
-import { getCoreEventContext, getCurrentAndNextEvents } from '@/lib/events'
-import {
-	maxEventIdFromHistory,
-	resolveReviewGameweekAnchor
-} from '@/lib/review-gameweek'
+import { getCoreEventContext } from '@/lib/events'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import {
-	GET_ENTRY,
-	GET_ENTRY_EVENT_RESULT,
-	GET_ENTRY_HISTORY,
-	type EntryEventResult,
-	type EntryEventResultResponse,
-	type EntryHistoryResponse,
-	type EntrySummaryResponse
-} from '@/lib/graphql/operations/entries'
+	GET_MY_FPL_TEAM_DESK,
+	type MyFplReviewState,
+	type MyFplTeamDeskResponse
+} from '@/lib/graphql/operations/my-fpl'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { resolveSeasonPresentation } from '@/lib/season-presentation'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
@@ -84,7 +76,10 @@ function TeamStatsFallback() {
  *   gate once + events + history + entry identity
  * Gameweek deep link: also entryEventResult(seedGw)
  */
-export default async function TeamStatsPage({ params, searchParams }: PageProps) {
+export default async function TeamStatsPage({
+	params,
+	searchParams
+}: PageProps) {
 	const [pageLocale, t, sp] = await Promise.all([
 		getPageLocale(params),
 		getTranslations('States'),
@@ -131,18 +126,16 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 	}
 
 	const timing = new RouteLoaderTiming('/my-fpl/team')
-	const [context, coreEventContext, events] = await Promise.all([
+	const [context, coreEventContext] = await Promise.all([
 		timing.measure('session', () => getVerifiedEntryContext()),
 		timing.measure('event-context', () =>
 			getCoreEventContext().catch(error => {
 				console.warn('[team stats] event context failed:', error)
 				return null
 			})
-		),
-		timing.measure('events', () => getCurrentAndNextEvents())
+		)
 	])
 	const initialView = parseTeamStatsView(sp.view)
-	const needsGameweekSeed = initialView === 'gameweek'
 
 	const { session, entryId } = context
 	if (!session) {
@@ -154,96 +147,89 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 		redirect(localizeHref('/onboarding/bind-entry', locale))
 	}
 
-	const eventsAnchor = resolveReviewGameweekAnchor(events)
 	const seasonPresentation = resolveSeasonPresentation(coreEventContext)
 
-	let initialEntryEventResult: EntryEventResult | null = null
-	let initialEntryHistory: EntryHistoryResponse['entryHistory'] | null = null
-	let initialEntryIdentity: SeasonIdentity | null = null
+	let initialEntryEventResult = null as ReturnType<
+		typeof eventResultFromMyFplGameweek
+	>
+	let initialEntryHistory = null as ReturnType<
+		typeof historyFromMyFplDesk
+	> | null
+	let initialEntryIdentity = null as ReturnType<typeof identityFromMyFplEntry>
+	let initialDeskState: MyFplReviewState = 'EMPTY'
+	let initialEntryGameweekState: MyFplReviewState | undefined
+	let initialPastSeasonsState: MyFplReviewState | undefined
 	let initialError: string | null = null
 	let initialRequestComplete = false
 
-	let reviewMaxGw = eventsAnchor.anchorGw ?? 0
-	let currentGameweek = eventsAnchor.currentGw ?? reviewMaxGw
+	const requestedGameweek = Number(sp.gw)
+	const requestedEventId =
+		Number.isSafeInteger(requestedGameweek) && requestedGameweek > 0
+			? requestedGameweek
+			: null
+	let currentGameweek = 0
+	let initialSelectedGameweek: number | undefined
 
 	try {
-		const [historyResult, entryResult] = await Promise.allSettled([
-			timing.measure('history', () =>
-				executeServerQueryWithSession<EntryHistoryResponse>(
-					session,
-					GET_ENTRY_HISTORY,
-					{ entryId },
-					{ cache: 'no-store' }
-				)
-			),
-			timing.measure('entry', () =>
-				executeServerQueryWithSession<EntrySummaryResponse>(
-					session,
-					GET_ENTRY,
-					{ id: entryId },
-					{ cache: 'no-store' }
-				)
+		const response = await timing.measure('my-fpl-desk', () =>
+			executeServerQueryWithSession<MyFplTeamDeskResponse>(
+				session,
+				GET_MY_FPL_TEAM_DESK,
+				{ eventId: requestedEventId },
+				{ cache: 'no-store' }
 			)
-		])
-
-		const historyResponse =
-			historyResult.status === 'fulfilled' ? historyResult.value : null
-		const entryResponse =
-			entryResult.status === 'fulfilled' ? entryResult.value : null
-		if (historyResult.status === 'rejected')
-			console.warn('[team stats] history seed failed:', historyResult.reason)
-		if (entryResult.status === 'rejected')
-			console.warn('[team stats] entry seed failed:', entryResult.reason)
-
-		initialEntryHistory = historyResponse?.entryHistory ?? null
-		if (entryResponse?.entry) {
-			initialEntryIdentity = identityFromEntrySummary(entryResponse.entry)
-		}
-
-		const historyMax = maxEventIdFromHistory(initialEntryHistory?.results)
-		const refined = resolveReviewGameweekAnchor(events, {
-			historyMaxEventId: historyMax
-		})
-		reviewMaxGw = refined.anchorGw ?? historyMax ?? 0
-		currentGameweek = refined.currentGw ?? reviewMaxGw
-
-		const seedGw =
-			reviewMaxGw > 0 ? parseTeamStatsGw(sp.gw, reviewMaxGw, reviewMaxGw) : 0
-
-		if (needsGameweekSeed && seedGw > 0) {
-			try {
-				const eventResponse = await timing.measure('gameweek', () =>
-					executeServerQueryWithSession<EntryEventResultResponse>(
-						session,
-						GET_ENTRY_EVENT_RESULT,
-						{ eventId: seedGw, entryId },
-						{ cache: 'no-store' }
-					)
-				)
-				initialEntryEventResult = eventResponse.entryEventResult ?? null
-			} catch (error) {
-				console.warn('[team stats] event seed failed:', error)
-			}
-			if (!initialEntryIdentity && initialEntryEventResult) {
-				initialEntryIdentity = identityFromEventResult(initialEntryEventResult)
-			}
+		)
+		const desk = response.myFplTeamDesk
+		initialDeskState = desk.state
+		initialEntryHistory =
+			desk.state === 'READY' ? historyFromMyFplDesk(desk) : null
+		initialEntryIdentity = identityFromMyFplEntry(desk.entry)
+		initialEntryEventResult =
+			desk.state === 'READY'
+				? eventResultFromMyFplGameweek(desk.gameweek)
+				: null
+		initialEntryGameweekState =
+			desk.state === 'READY' ? desk.gameweek?.state : desk.state
+		initialPastSeasonsState = desk.pastSeasonsState
+		currentGameweek =
+			desk.context.currentEventId ?? desk.context.latestFinalizedEventId ?? 0
+		const latestFinalized = desk.context.latestFinalizedEventId ?? 0
+		const currentEvent = desk.context.currentEventId ?? 0
+		const maxKnownEvent = Math.max(currentEvent, latestFinalized)
+		const safeRequestedEvent =
+			requestedEventId !== null && requestedEventId <= maxKnownEvent
+				? requestedEventId
+				: null
+		initialSelectedGameweek =
+			safeRequestedEvent ??
+			(latestFinalized > 0
+				? latestFinalized
+				: currentEvent > 0
+					? currentEvent
+					: undefined)
+		const deskGameweekMatchesSelection =
+			desk.gameweek?.eventId === (initialSelectedGameweek ?? 0)
+		if (!deskGameweekMatchesSelection) {
+			initialEntryEventResult = null
+			initialEntryGameweekState = undefined
 		}
 
 		initialRequestComplete = true
 
 		console.info('[team stats] ssr seed', {
-			seedGw,
 			view: initialView,
-			currentGw: refined.currentGw,
-			anchorGw: refined.anchorGw,
-			anchorSource: refined.source,
+			requestedEventId,
+			currentGw: desk.context.currentEventId,
+			latestFinalizedGw: desk.context.latestFinalizedEventId,
 			hasHistory: Boolean(initialEntryHistory?.results?.length),
 			historyRows: initialEntryHistory?.results?.length ?? 0,
 			hasIdentity: Boolean(initialEntryIdentity),
-			hasEvent: Boolean(initialEntryEventResult)
+			hasEvent: Boolean(initialEntryEventResult),
+			gameweekState: initialEntryGameweekState,
+			pastSeasonsState: desk.pastSeasonsState
 		})
 
-		if (!initialEntryHistory && !initialEntryIdentity) {
+		if (!initialEntryIdentity && !initialEntryHistory?.results?.length) {
 			initialError = t('teamStatsUnavailable')
 		}
 	} catch (error) {
@@ -252,18 +238,16 @@ export default async function TeamStatsPage({ params, searchParams }: PageProps)
 	}
 	timing.finish(initialError ? 'unavailable' : 'ready')
 
-	const seedGwForClient =
-		reviewMaxGw > 0 ? parseTeamStatsGw(sp.gw, reviewMaxGw, reviewMaxGw) : 0
-
 	return (
 		<Suspense fallback={<TeamStatsFallback />}>
 			<TeamStatsClient
 				entryId={entryId}
 				currentGameweek={currentGameweek > 0 ? currentGameweek : 0}
-				initialSelectedGameweek={
-					seedGwForClient > 0 ? seedGwForClient : undefined
-				}
+				initialSelectedGameweek={initialSelectedGameweek}
 				initialEntryEventResult={initialEntryEventResult}
+				initialEntryGameweekState={initialEntryGameweekState}
+				initialDeskState={initialDeskState}
+				initialPastSeasonsState={initialPastSeasonsState}
 				initialEntryHistory={initialEntryHistory}
 				initialEntryIdentity={initialEntryIdentity}
 				initialEntryTransfers={null}

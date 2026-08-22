@@ -8,7 +8,7 @@ import {
 	DataTd,
 	DataTh,
 	DataThead,
-	DataTr,
+	DataTr
 } from '@/components/data/DataTable'
 import { cn, formatCompactNumber } from '@/lib/utils'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
@@ -16,7 +16,7 @@ import { useFormatter, useTranslations } from 'next-intl'
 import { useEffect, useMemo, useState } from 'react'
 import {
 	formatMoneyValue,
-	type StandingRow,
+	type StandingRow
 } from '../_lib/tournament-stats-model'
 
 /** Large leagues (~100 teams): preview first, load more in steps, pin You. */
@@ -34,7 +34,11 @@ type SortKey =
 type SortDir = 'asc' | 'desc'
 
 function defaultDir(key: SortKey): SortDir {
-	if (key === 'gameweekPoints' || key === 'totalPoints' || key === 'teamValue') {
+	if (
+		key === 'gameweekPoints' ||
+		key === 'totalPoints' ||
+		key === 'teamValue'
+	) {
 		return 'desc'
 	}
 	return 'asc'
@@ -43,7 +47,7 @@ function defaultDir(key: SortKey): SortDir {
 function compareNullable(
 	a: number | null | undefined,
 	b: number | null | undefined,
-	dir: SortDir,
+	dir: SortDir
 ): number {
 	const aNull = a == null || !Number.isFinite(a)
 	const bNull = b == null || !Number.isFinite(b)
@@ -57,7 +61,7 @@ function compareNullable(
 function sortRows(
 	rows: StandingRow[],
 	key: SortKey,
-	dir: SortDir,
+	dir: SortDir
 ): StandingRow[] {
 	return [...rows].sort((a, b) => {
 		if (key === 'teamName') {
@@ -71,14 +75,17 @@ function sortRows(
 		}
 		const primary = compareNullable(a[key], b[key], dir)
 		if (primary !== 0) return primary
-		return compareNullable(a.displayRank, b.displayRank, 'asc') || a.entryId - b.entryId
+		return (
+			compareNullable(a.displayRank, b.displayRank, 'asc') ||
+			a.entryId - b.entryId
+		)
 	})
 }
 
 /** First N rows; if You is outside the window, pin at the end so you stay visible. */
 function takeVisibleWithPinMe(
 	sorted: StandingRow[],
-	visibleCount: number,
+	visibleCount: number
 ): StandingRow[] {
 	if (sorted.length <= visibleCount) return sorted
 	const top = sorted.slice(0, visibleCount)
@@ -93,43 +100,54 @@ function SortHeader({
 	label,
 	active,
 	dir,
+	disabled = false,
 	align = 'left',
 	className,
-	onClick,
+	onClick
 }: {
 	label: string
 	active: boolean
 	dir: SortDir
+	disabled?: boolean
 	align?: 'left' | 'right' | 'center'
 	className?: string
 	onClick: () => void
 }) {
 	const Icon = !active ? ArrowUpDown : dir === 'asc' ? ArrowUp : ArrowDown
 	return (
-		<DataTh align={align} className={className}>
-			<button
-				type="button"
-				onClick={onClick}
-				className={cn(
-					'inline-flex items-center gap-1 rounded-sm text-caption font-medium uppercase tracking-wide',
-					'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-					align === 'right' && 'ml-auto flex-row-reverse',
-					align === 'center' && 'mx-auto',
-					active ? 'text-foreground' : 'text-muted-foreground',
-				)}
-				aria-sort={
-					active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'
-				}
-			>
-				{label}
-				<Icon
+		<DataTh
+			align={align}
+			className={className}
+		>
+			{disabled ? (
+				<span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
+					{label}
+				</span>
+			) : (
+				<button
+					type="button"
+					onClick={onClick}
 					className={cn(
-						'size-3.5 shrink-0',
-						active ? 'opacity-100' : 'opacity-50',
+						'inline-flex items-center gap-1 rounded-sm text-caption font-medium uppercase tracking-wide',
+						'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+						align === 'right' && 'ml-auto flex-row-reverse',
+						align === 'center' && 'mx-auto',
+						active ? 'text-foreground' : 'text-muted-foreground'
 					)}
-					aria-hidden="true"
-				/>
-			</button>
+					aria-sort={
+						active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'
+					}
+				>
+					{label}
+					<Icon
+						className={cn(
+							'size-3.5 shrink-0',
+							active ? 'opacity-100' : 'opacity-50'
+						)}
+						aria-hidden="true"
+					/>
+				</button>
+			)}
 		</DataTh>
 	)
 }
@@ -174,6 +192,9 @@ interface TournamentStandingsTabProps {
 	onSearchChange: (value: string) => void
 	rows: StandingRow[]
 	search: string
+	hasMoreServerRows?: boolean
+	isLoadingServerRows?: boolean
+	onLoadMoreServerRows?: () => void
 }
 
 /**
@@ -185,6 +206,9 @@ export function TournamentStandingsTab({
 	onSearchChange,
 	rows,
 	search,
+	hasMoreServerRows = false,
+	isLoadingServerRows = false,
+	onLoadMoreServerRows
 }: TournamentStandingsTabProps) {
 	const t = useTranslations('TournamentStats')
 	const format = useFormatter()
@@ -193,6 +217,10 @@ export function TournamentStandingsTab({
 	const [visibleCount, setVisibleCount] = useState(PREVIEW_ROWS)
 
 	const handleSort = (key: SortKey) => {
+		// The API owns ordering while additional server pages are still
+		// available. Sorting the loaded prefix would present a false global
+		// order for large competitions.
+		if (hasMoreServerRows) return
 		if (key === sortKey) {
 			setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
 			return
@@ -202,8 +230,8 @@ export function TournamentStandingsTab({
 	}
 
 	const sorted = useMemo(
-		() => sortRows(rows, sortKey, sortDir),
-		[rows, sortKey, sortDir],
+		() => (hasMoreServerRows ? rows : sortRows(rows, sortKey, sortDir)),
+		[hasMoreServerRows, rows, sortKey, sortDir]
 	)
 
 	// Reset window when the list identity changes (search / sort / tournament).
@@ -213,7 +241,7 @@ export function TournamentStandingsTab({
 
 	const displayRows = useMemo(
 		() => takeVisibleWithPinMe(sorted, visibleCount),
-		[sorted, visibleCount],
+		[sorted, visibleCount]
 	)
 
 	const total = sorted.length
@@ -229,7 +257,7 @@ export function TournamentStandingsTab({
 					<p className="text-xs text-muted-foreground">
 						{t('standingsShowing', {
 							shown: Math.min(visibleCount, total),
-							total,
+							total
 						})}
 					</p>
 				) : (
@@ -251,6 +279,7 @@ export function TournamentStandingsTab({
 				<DataThead>
 					<SortHeader
 						label={t('rank')}
+						disabled={hasMoreServerRows}
 						active={sortKey === 'rank'}
 						dir={sortDir}
 						align="center"
@@ -259,6 +288,7 @@ export function TournamentStandingsTab({
 					/>
 					<SortHeader
 						label={t('team')}
+						disabled={hasMoreServerRows}
 						active={sortKey === 'teamName'}
 						dir={sortDir}
 						className="min-w-[7.5rem]"
@@ -266,6 +296,7 @@ export function TournamentStandingsTab({
 					/>
 					<SortHeader
 						label={t('gameweekPoints')}
+						disabled={hasMoreServerRows}
 						active={sortKey === 'gameweekPoints'}
 						dir={sortDir}
 						align="right"
@@ -273,6 +304,7 @@ export function TournamentStandingsTab({
 					/>
 					<SortHeader
 						label={t('totalPoints')}
+						disabled={hasMoreServerRows}
 						active={sortKey === 'totalPoints'}
 						dir={sortDir}
 						align="right"
@@ -280,6 +312,7 @@ export function TournamentStandingsTab({
 					/>
 					<SortHeader
 						label={t('overallRankShort')}
+						disabled={hasMoreServerRows}
 						active={sortKey === 'overallRank'}
 						dir={sortDir}
 						align="right"
@@ -288,6 +321,7 @@ export function TournamentStandingsTab({
 					/>
 					<SortHeader
 						label={t('value')}
+						disabled={hasMoreServerRows}
 						active={sortKey === 'teamValue'}
 						dir={sortDir}
 						align="right"
@@ -318,7 +352,7 @@ export function TournamentStandingsTab({
 									<p
 										className={cn(
 											'truncate font-medium text-foreground',
-											row.isMe && 'text-primary-ink',
+											row.isMe && 'text-primary-ink'
 										)}
 									>
 										{row.teamName}
@@ -408,6 +442,21 @@ export function TournamentStandingsTab({
 							{t('standingsShowLess')}
 						</Button>
 					) : null}
+				</div>
+			) : null}
+			{hasMoreServerRows && onLoadMoreServerRows ? (
+				<div className="flex justify-center">
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						disabled={isLoadingServerRows}
+						onClick={onLoadMoreServerRows}
+					>
+						{isLoadingServerRows
+							? t('loading')
+							: t('standingsShowMore', { count: 100 })}
+					</Button>
 				</div>
 			) : null}
 		</div>
