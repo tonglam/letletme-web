@@ -202,6 +202,7 @@ export function useTournamentStats({
 	const [isBoardLoading, setIsBoardLoading] = useState(false)
 	const [seasonPath, setSeasonPath] = useState<TournamentPathPoint[]>([])
 	const [seasonPathLoading, setSeasonPathLoading] = useState(false)
+	const [seasonPathRetryNonce, setSeasonPathRetryNonce] = useState(0)
 	const [error, setError] = useState<string | null>(initialError)
 	const [selectedGameweek, setSelectedGameweek] = useState(
 		initialSliceGameweek && initialSliceGameweek > 0
@@ -392,8 +393,11 @@ export function useTournamentStats({
 					desk.selectedTournament ??
 					desk.tournaments.find(item => item.id === tournamentId) ??
 					null
-				const board = desk.board
-				const nextState = board?.state ?? desk.state
+				const deskState = desk.state
+				const nextState =
+					deskState === 'READY' ? (desk.board?.state ?? deskState) : deskState
+				const board = nextState === 'READY' ? desk.board : null
+				const aggregate = nextState === 'READY' ? desk.aggregate : null
 				const rows = boardRowsToEventResults(board, nextTournament)
 				setTournaments(desk.tournaments)
 				setCurrentGameweek(
@@ -404,9 +408,9 @@ export function useTournamentStats({
 				setLatestFinalizedGameweek(desk.context.latestFinalizedEventId ?? null)
 				setReviewState(nextState)
 				commitBoardPage(board)
-				setAggregate(desk.aggregate)
-				setRankingSummary(aggregateToRankingSummary(desk.aggregate))
-				setSeasonSnapshot(aggregateToSeasonSnapshot(desk.aggregate, board))
+				setAggregate(aggregate)
+				setRankingSummary(aggregateToRankingSummary(aggregate))
+				setSeasonSnapshot(aggregateToSeasonSnapshot(aggregate, board))
 				setSeasonFieldRows(nextState === 'READY' ? rows : [])
 				setDataGameweek(
 					nextState === 'READY'
@@ -414,16 +418,11 @@ export function useTournamentStats({
 						: desk.context.latestFinalizedEventId
 				)
 				setUsedFallbackGameweek(false)
-				if (
-					nextTournament &&
-					nextState === 'READY' &&
-					desk.aggregate &&
-					board
-				) {
+				if (nextTournament && nextState === 'READY' && aggregate && board) {
 					setTournamentStats(
 						aggregateToTournamentStats(
 							nextTournament,
-							desk.aggregate,
+							aggregate,
 							board,
 							entryId
 						)
@@ -627,6 +626,8 @@ export function useTournamentStats({
 		}
 		const controller = new AbortController()
 		let cancelled = false
+		let retryPending = false
+		let retryTimer: number | undefined
 		setSeasonPath([])
 		setSeasonPathLoading(true)
 		void executeQuery<{
@@ -643,25 +644,34 @@ export function useTournamentStats({
 			{ cache: 'no-store', signal: controller.signal }
 		)
 			.then(response => {
-				if (!cancelled)
-					setSeasonPath(response.myFplCompetitionSeasonPath.points ?? [])
+				const path = response.myFplCompetitionSeasonPath
+				if (path.state === 'PENDING') {
+					retryPending = true
+					retryTimer = window.setTimeout(() => {
+						if (!cancelled) setSeasonPathRetryNonce(value => value + 1)
+					}, 10_000)
+					return
+				}
+				if (!cancelled) setSeasonPath(path.points ?? [])
 			})
 			.catch(pathError => {
 				if (!controller.signal.aborted)
 					console.warn('[tournament stats] season path failed:', pathError)
 			})
 			.finally(() => {
-				if (!cancelled) setSeasonPathLoading(false)
+				if (!cancelled) setSeasonPathLoading(retryPending)
 			})
 		return () => {
 			cancelled = true
 			controller.abort()
+			if (retryTimer !== undefined) window.clearTimeout(retryTimer)
 		}
 	}, [
 		dataGameweek,
 		latestFinalizedGameweek,
 		loadSeasonPath,
-		selectedTournament
+		selectedTournament,
+		seasonPathRetryNonce
 	])
 
 	return {

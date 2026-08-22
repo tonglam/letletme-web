@@ -177,9 +177,11 @@ export function aggregateToTournamentStats(
 	entryId: number
 ): TournamentStatsViewModel {
 	const viewerRow = board.viewerRow
-	const topPerformers = aggregate.topPerformers.map(row => ({
+	const topPerformers = aggregate.topPerformers.map((row, index) => ({
 		entryId: row.entryId,
-		rank: row.rank ?? Number.MAX_SAFE_INTEGER,
+		// The API rank is the tournament standing rank. Top performers are
+		// already ordered by event score, so their display number is positional.
+		rank: index + 1,
 		teamName: performanceName(row),
 		managerName: row.playerName?.trim() || '—',
 		points: row.eventNetPoints,

@@ -21,6 +21,7 @@ import {
 	peekEntryEventResult,
 	peekEntryGameweekState,
 	peekEntryHistory,
+	peekEntryHistoryState,
 	peekTransferHistory,
 	peekTransferHistoryState,
 	seedTransferHistoryCache,
@@ -45,6 +46,7 @@ interface UseTeamStatsOptions {
 	loadGameweekData: boolean
 	initialEntryEventResult: EntryEventResult | null
 	initialEntryGameweekState?: MyFplReviewState
+	initialPastSeasonsState?: MyFplReviewState
 	initialEntryHistory?: InitialEntryHistory
 	initialEntryIdentity?: InitialEntryIdentity
 	/** null = deferred client fetch; array = already complete */
@@ -71,6 +73,7 @@ export function useTeamStats({
 	loadGameweekData,
 	initialEntryEventResult,
 	initialEntryGameweekState,
+	initialPastSeasonsState,
 	initialEntryHistory = null,
 	initialEntryIdentity = null,
 	initialEntryTransfers = null,
@@ -134,6 +137,10 @@ export function useTeamStats({
 	})
 
 	const [isLoading, setIsLoading] = useState(false)
+	const [historyRetryNonce, setHistoryRetryNonce] = useState(0)
+	const [pastSeasonsState, setPastSeasonsState] = useState<
+		MyFplReviewState | undefined
+	>(initialPastSeasonsState)
 	const [isTransfersLoading, setIsTransfersLoading] = useState(
 		() => !transfersSeeded && peekTransferHistory(entryId) === undefined
 	)
@@ -141,7 +148,12 @@ export function useTeamStats({
 		MyFplReviewState | undefined
 	>(initialEntryTransfersState ?? (transfersSeeded ? 'READY' : undefined))
 	const [transferRetryNonce, setTransferRetryNonce] = useState(0)
-	const [baseError, setBaseError] = useState<string | null>(initialError)
+	const [baseError, setBaseError] = useState<string | null>(
+		initialError ??
+			(initialEntryTransfersState === 'UNAVAILABLE'
+				? t('transferDetailsUnavailable')
+				: null)
+	)
 	const [gameweekError, setGameweekError] = useState<string | null>(null)
 	const [gameweekState, setGameweekState] = useState<
 		MyFplReviewState | undefined
@@ -167,6 +179,7 @@ export function useTeamStats({
 			seedGw,
 			currentGameweek: initialCurrentGameweek,
 			history: initialEntryHistory,
+			historyState: initialPastSeasonsState,
 			event: initialEntryEventResult,
 			eventState: initialEntryGameweekState,
 			transfers: initialEntryTransfers,
@@ -176,6 +189,7 @@ export function useTeamStats({
 		entryId,
 		initialEntryEventResult,
 		initialEntryGameweekState,
+		initialPastSeasonsState,
 		initialEntryHistory,
 		initialEntryIdentity,
 		initialEntryTransfers,
@@ -194,12 +208,32 @@ export function useTeamStats({
 
 	// History fallback if SSR missed (session cache empty)
 	useEffect(() => {
-		if (peekEntryHistory(entryId) !== undefined) return
 		let cancelled = false
+		let retryTimer: number | undefined
+		const scheduleRetry = () => {
+			retryTimer = window.setTimeout(() => {
+				if (!cancelled) setHistoryRetryNonce(value => value + 1)
+			}, 10_000)
+		}
+		const cachedHistory = peekEntryHistory(entryId)
+		if (cachedHistory !== undefined) {
+			const cachedState = peekEntryHistoryState(entryId)
+			if (cachedState) setPastSeasonsState(cachedState)
+			if (cachedState === 'PENDING') scheduleRetry()
+			return () => {
+				cancelled = true
+				if (retryTimer !== undefined) window.clearTimeout(retryTimer)
+			}
+		}
 		void (async () => {
 			try {
 				const history = await getEntryHistoryCached(entryId)
 				if (cancelled || !history) return
+				const nextPastSeasonsState = peekEntryHistoryState(entryId)
+				if (nextPastSeasonsState) {
+					setPastSeasonsState(nextPastSeasonsState)
+					if (nextPastSeasonsState === 'PENDING') scheduleRetry()
+				}
 				if (initialCurrentGameweek <= 0) {
 					setCurrentGameweek(
 						history.results.reduce(
@@ -224,8 +258,9 @@ export function useTeamStats({
 		})()
 		return () => {
 			cancelled = true
+			if (retryTimer !== undefined) window.clearTimeout(retryTimer)
 		}
-	}, [entryId, initialCurrentGameweek, preseason, t])
+	}, [entryId, historyRetryNonce, initialCurrentGameweek, preseason, t])
 
 	// Deferred transfers — once per entry unless already in session cache
 	useEffect(() => {
@@ -251,6 +286,9 @@ export function useTeamStats({
 						if (!cancelled) setTransferRetryNonce(value => value + 1)
 					}, 10_000)
 					return
+				}
+				if (state === 'UNAVAILABLE') {
+					setBaseError(prev => prev ?? t('transferDetailsUnavailable'))
 				}
 				const history = peekEntryHistory(entryId)
 				if (history) rebuildSeasonLogs(history, transfers)
@@ -413,7 +451,8 @@ export function useTeamStats({
 		seasonOverall,
 		selectedGameweek,
 		setSelectedGameweek,
-		teamStats
+		teamStats,
+		pastSeasonsState
 	}
 }
 

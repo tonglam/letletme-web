@@ -488,6 +488,10 @@ const entryHistoryCache = new Map<
 	number,
 	TimedCacheValue<EntryHistoryResponse['entryHistory']>
 >()
+const entryHistoryStateCache = new Map<
+	number,
+	TimedCacheValue<MyFplReviewState>
+>()
 const entryHistoryInFlight = new Map<
 	number,
 	Promise<EntryHistoryResponse['entryHistory']>
@@ -517,6 +521,11 @@ export const peekEntryHistory = (
 	entryId: number
 ): EntryHistoryResponse['entryHistory'] | undefined =>
 	getFreshCacheValue(entryHistoryCache, entryId)
+
+export const peekEntryHistoryState = (
+	entryId: number
+): MyFplReviewState | undefined =>
+	getFreshCacheValue(entryHistoryStateCache, entryId)
 
 export const peekTransferHistory = (
 	entryId: number
@@ -575,9 +584,21 @@ export const seedEntryEventCache = (
 
 export const seedEntryHistoryCache = (
 	entryId: number,
-	value: EntryHistoryResponse['entryHistory']
+	value: EntryHistoryResponse['entryHistory'],
+	state: MyFplReviewState = 'READY'
 ): void => {
-	setCacheValue(entryHistoryCache, entryId, value, HISTORY_CACHE_TTL_MS)
+	setCacheValue(
+		entryHistoryCache,
+		entryId,
+		value,
+		state === 'PENDING' ? 10_000 : HISTORY_CACHE_TTL_MS
+	)
+	setCacheValue(
+		entryHistoryStateCache,
+		entryId,
+		state,
+		state === 'PENDING' ? 10_000 : HISTORY_CACHE_TTL_MS
+	)
 }
 
 export const seedTransferHistoryCache = (
@@ -607,6 +628,7 @@ export function hydrateTeamStatsSessionCache(opts: {
 	seedGw: number
 	currentGameweek: number
 	history: EntryHistoryResponse['entryHistory'] | null
+	historyState?: MyFplReviewState
 	event: EntryEventResult | null
 	eventState?: MyFplReviewState
 	transfers: EntryGameweekTransfers[] | null
@@ -617,12 +639,13 @@ export function hydrateTeamStatsSessionCache(opts: {
 		seedGw,
 		currentGameweek,
 		history,
+		historyState,
 		event,
 		eventState,
 		transfers,
 		transfersState
 	} = opts
-	if (history) seedEntryHistoryCache(entryId, history)
+	if (history) seedEntryHistoryCache(entryId, history, historyState ?? 'READY')
 	if (transfers !== null)
 		seedTransferHistoryCache(entryId, transfers, transfersState ?? 'READY')
 	if (seedGw > 0 && (event || eventState)) {
@@ -646,8 +669,9 @@ export const getEntryHistoryCached = async (
 		{ cache: 'no-store' }
 	)
 		.then(response => {
-			const history = historyFromMyFplDesk(response.myFplTeamDesk)
-			setCacheValue(entryHistoryCache, entryId, history, HISTORY_CACHE_TTL_MS)
+			const snapshot = response.myFplTeamDesk
+			const history = historyFromMyFplDesk(snapshot)
+			seedEntryHistoryCache(entryId, history, snapshot.pastSeasonsState)
 			return history
 		})
 		.finally(() => {

@@ -222,7 +222,7 @@ export default async function TeamStatsPage({
 			pastSeasonsState: desk.pastSeasonsState
 		})
 
-		if (!initialEntryIdentity) {
+		if (!initialEntryIdentity && !initialEntryHistory?.results?.length) {
 			initialError = t('teamStatsUnavailable')
 		}
 	} catch (error) {

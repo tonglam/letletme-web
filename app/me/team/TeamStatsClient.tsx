@@ -81,6 +81,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 		gameweekState,
 		isLoading,
 		isTransfersLoading,
+		pastSeasonsState,
 		seasonLogs,
 		seasonOverall,
 		selectedGameweek,
@@ -185,7 +186,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 							teamStats={teamStats}
 							seasonOverall={seasonOverall}
 							preseason={props.initialSeasonPhase === 'PRESEASON'}
-							pastSeasonsState={props.initialPastSeasonsState}
+							pastSeasonsState={pastSeasonsState}
 							seasonLogs={seasonLogs}
 							emptyStateMessage={emptyStateMessage}
 							hasAnyContent={hasAnyContent}
