@@ -228,18 +228,10 @@ export function MatchesSection({
 	const [activeDayKey, setActiveDayKey] = useState<string | null>(null)
 	const generation = useRef(0)
 	const inFlight = useRef(new Map<number, InFlightRequest>())
-	const revision = useRef(initialFixtures?.revision ?? null)
 	const [cache] = useState(
 		() =>
-			new Map<string, HomeFixturesResponse>(
-				initialFixtures
-					? [
-							[
-								`${initialFixtures.revision}:${initialFixtures.eventId}`,
-								initialFixtures
-							]
-						]
-					: []
+			new Map<number, HomeFixturesResponse>(
+				initialFixtures ? [[initialFixtures.eventId, initialFixtures]] : []
 			)
 	)
 	const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
@@ -295,10 +287,7 @@ export function MatchesSection({
 	const loadEvent = useCallback(
 		(eventId: number, options: { force?: boolean } = {}) => {
 			clearFixtureError()
-			const cacheKey = revision.current
-				? `${revision.current}:${eventId}`
-				: null
-			const cached = !options.force && cacheKey ? cache.get(cacheKey) : null
+			const cached = !options.force ? cache.get(eventId) : null
 			if (cached) {
 				generation.current += 1
 				for (const request of Array.from(inFlight.current.values())) {
@@ -353,11 +342,11 @@ export function MatchesSection({
 					) {
 						return
 					}
-					if (revision.current !== next.revision) {
-						cache.clear()
-						revision.current = next.revision
-					}
-					cache.set(`${next.revision}:${eventId}`, next)
+					// Core and live publications intentionally have independent
+					// revisions. Keep the RSC seed for other events when navigating
+					// between them; each event is replaced atomically on its own
+					// successful response or an explicit force refresh.
+					cache.set(eventId, next)
 					setActiveDayKey(null)
 					startTransition(() => setCommitted(next))
 				})
