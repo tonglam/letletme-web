@@ -9,7 +9,8 @@ import {
 	type MyFplCompetitionBoardResponse,
 	type MyFplCompetitionAggregate,
 	type MyFplCompetitionsDeskResponse,
-	type MyFplReviewState
+	type MyFplReviewState,
+	type MyFplSnapshotMeta
 } from '@/lib/graphql/operations/my-fpl'
 import {
 	type EntryTournament,
@@ -63,6 +64,7 @@ export interface TournamentStatsClientProps {
 	initialBoard?: MyFplCompetitionBoardPage | null
 	initialAggregate?: MyFplCompetitionAggregate | null
 	initialError: string | null
+	initialSnapshotMeta: MyFplSnapshotMeta | null
 	loadGameweekData?: boolean
 	loadSeasonPath?: boolean
 }
@@ -73,6 +75,7 @@ type BoardQueryOptions = {
 	page?: number
 	pageSize?: number
 	search?: string
+	snapshotRevision?: string | null
 	signal?: AbortSignal
 }
 
@@ -82,11 +85,19 @@ async function fetchBoardPage({
 	page = 1,
 	pageSize = 100,
 	search,
+	snapshotRevision,
 	signal
 }: BoardQueryOptions): Promise<MyFplCompetitionBoardPage> {
 	const response = await executeQuery<MyFplCompetitionBoardResponse>(
 		GET_MY_FPL_COMPETITION_BOARD,
-		{ tournamentId, eventId, page, pageSize, search: search || null },
+		{
+			tournamentId,
+			eventId,
+			page,
+			pageSize,
+			search: search || null,
+			snapshotRevision: snapshotRevision ?? null
+		},
 		{ cache: 'no-store', signal }
 	)
 	return response.myFplCompetitionBoard
@@ -95,11 +106,12 @@ async function fetchBoardPage({
 async function fetchDesk(
 	tournamentId: number,
 	eventId: number | null,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	snapshotRevision?: string | null
 ): Promise<MyFplCompetitionsDeskResponse['myFplCompetitionsDesk']> {
 	const response = await executeQuery<MyFplCompetitionsDeskResponse>(
 		GET_MY_FPL_COMPETITIONS_DESK,
-		{ tournamentId, eventId },
+		{ tournamentId, eventId, snapshotRevision: snapshotRevision ?? null },
 		{ cache: 'no-store', signal }
 	)
 	const desk = response.myFplCompetitionsDesk
@@ -117,7 +129,8 @@ async function fetchDesk(
 			eventId: desk.eventId,
 			page: 1,
 			pageSize: 100,
-			search: null
+			search: null,
+			snapshotRevision: desk.snapshotMeta?.revision ?? snapshotRevision ?? null
 		},
 		{ cache: 'no-store', signal }
 	)
@@ -143,6 +156,7 @@ export function useTournamentStats({
 	initialBoard = null,
 	initialAggregate = null,
 	initialError,
+	initialSnapshotMeta,
 	loadGameweekData = false,
 	loadSeasonPath = false
 }: TournamentStatsClientProps) {
@@ -194,6 +208,12 @@ export function useTournamentStats({
 	)
 	const [reviewState, setReviewState] =
 		useState<MyFplReviewState>(initialReviewState)
+	const snapshotRevisionRef = useRef<string | null>(
+		initialSnapshotMeta?.revision ?? null
+	)
+	const [snapshotMeta, setSnapshotMeta] = useState<MyFplSnapshotMeta | null>(
+		initialSnapshotMeta
+	)
 	const [tournamentStats, setTournamentStats] =
 		useState<TournamentStatsViewModel | null>(
 			initialAggregateStats ?? initialFallbackStats
@@ -404,7 +424,8 @@ export function useTournamentStats({
 		void fetchDesk(
 			tournamentId,
 			loadGameweekData && selectedGameweek > 0 ? selectedGameweek : null,
-			controller.signal
+			controller.signal,
+			snapshotRevisionRef.current
 		)
 			.then(desk => {
 				if (
@@ -423,7 +444,12 @@ export function useTournamentStats({
 				const board = nextState === 'READY' ? (desk.board ?? null) : null
 				const aggregate = nextState === 'READY' ? desk.aggregate : null
 				const rows = boardRowsToEventResults(board, nextTournament)
+				const nextSnapshotMeta = desk.snapshotMeta ?? null
+				if (nextSnapshotMeta?.revision) {
+					snapshotRevisionRef.current = nextSnapshotMeta.revision
+				}
 				setTournaments(desk.tournaments)
+				setSnapshotMeta(nextSnapshotMeta)
 				setCurrentGameweek(
 					desk.context.currentEventId ??
 						desk.context.latestFinalizedEventId ??
@@ -572,6 +598,7 @@ export function useTournamentStats({
 				page: 1,
 				pageSize: 100,
 				search: standingsSearch.trim(),
+				snapshotRevision: snapshotRevisionRef.current,
 				signal: controller.signal
 			})
 				.then(nextBoard => {
@@ -637,6 +664,7 @@ export function useTournamentStats({
 				page: boardPage.page + 1,
 				pageSize: boardPage.pageSize,
 				search: standingsSearch.trim(),
+				snapshotRevision: snapshotRevisionRef.current,
 				signal: controller.signal
 			})
 			if (boardId !== boardSequenceRef.current || controller.signal.aborted)
@@ -695,7 +723,8 @@ export function useTournamentStats({
 			GET_MY_FPL_COMPETITION_SEASON_PATH,
 			{
 				tournamentId: selectedTournament.id,
-				throughEventId: seasonPathThroughEventId
+				throughEventId: seasonPathThroughEventId,
+				snapshotRevision: snapshotRevisionRef.current
 			},
 			{ cache: 'no-store', signal: controller.signal }
 		)
@@ -768,6 +797,7 @@ export function useTournamentStats({
 		tournamentStats,
 		tournaments,
 		usedFallbackGameweek,
-		statsLoadState
+		statsLoadState,
+		snapshotMeta
 	}
 }
