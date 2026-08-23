@@ -68,18 +68,18 @@ if (!file || !edgeoneCname || !vercelA) {
 		const apexEdgeOne = find(records, line, 'CNAME', edgeoneCname)
 		const apexOverseas = find(records, '境外', 'A', vercelA)
 		const apexDefault = find(records, '默认', 'A', vercelA)
-		const missingHosts = requiredHosts.filter(host => {
-			const spec = requiredSpecs.find(required =>
-				String(required.Name).toLowerCase() === host.toLowerCase()
-			)
-			return !spec || !records.some(record =>
+		const missingHosts = requiredHosts.filter(host => !requiredSpecs.some(required =>
+			String(required.Name).toLowerCase() === host.toLowerCase()
+		))
+		const missingRequiredRecords = requiredSpecs
+			.filter(spec => !records.some(record =>
 				enabled(record) &&
 				String(record.Name ?? '').toLowerCase() === spec.Name.toLowerCase() &&
 				String(record.Type ?? '').toUpperCase() === spec.Type.toUpperCase() &&
 				normalized(record.Value) === normalized(spec.Value) &&
 				String(record.Line ?? '') === spec.Line
-			)
-		})
+			))
+			.map(spec => `${spec.Name}/${spec.Type}/${spec.Line}`)
 		const disabled = records.filter(record =>
 			String(record.Name ?? '').toLowerCase() === '@' &&
 			String(record.Line ?? '') === line &&
@@ -93,12 +93,14 @@ if (!file || !edgeoneCname || !vercelA) {
 				default: Boolean(apexDefault && enabled(apexDefault))
 			},
 			missingHosts,
+			missingRequiredRecords,
 			disabledRegionalRecords: disabled.map(record => Number(record.RecordId)),
 			ok: Boolean(
 				apexEdgeOne && enabled(apexEdgeOne) &&
 				apexOverseas && enabled(apexOverseas) &&
 				apexDefault && enabled(apexDefault) &&
-				missingHosts.length === 0
+				missingHosts.length === 0 &&
+				missingRequiredRecords.length === 0
 			)
 		}
 		console.log(JSON.stringify(result, null, 2))

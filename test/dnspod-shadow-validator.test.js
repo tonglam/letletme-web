@@ -82,3 +82,34 @@ test('validator rejects a required host with the wrong route target', () => {
 		return true
 	})
 })
+
+test('validator rejects an extra required record specification that is absent', () => {
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'letletme-dnspod-'))
+	const file = path.join(directory, 'records.json')
+	fs.writeFileSync(file, JSON.stringify(validRecords))
+	try {
+		assert.throws(() => execFileSync(process.execPath, [
+			script,
+			file,
+			'--edgeone-cname',
+			'edge.example.com',
+			'--vercel-a',
+			'76.76.21.21'
+		], {
+			encoding: 'utf8',
+			env: {
+				...process.env,
+				DNSPOD_REQUIRED_HOSTS: 'www,api',
+				DNSPOD_REQUIRED_RECORDS_JSON: JSON.stringify([
+					{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
+					{ Name: 'api', Type: 'CNAME', Value: 'api.example.com', Line: '默认' }
+				])
+			}
+		}), error => {
+			assert.equal(error.status, 1)
+			return true
+		})
+	} finally {
+		fs.rmSync(directory, { recursive: true, force: true })
+	}
+})

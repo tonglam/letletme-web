@@ -139,13 +139,18 @@ export async function getConfiguredRecord(env, fetchImpl) {
 			? { DomainId: Number(env.DNSPOD_DOMAIN_ID) }
 			: {}),
 		SubDomain: '@',
-		RecordType: 'CNAME',
 		RecordLine: env.DNSPOD_EDGEONE_LINE || '境内',
 		Offset: 0,
 		Limit: 100,
 		ErrorOnEmpty: 'no'
 	})
 	const records = Array.isArray(response.RecordList) ? response.RecordList : []
+	const regionalApex = records.filter(record =>
+		String(record.Name || '').toLowerCase() === '@' &&
+		String(record.Line || '') === (env.DNSPOD_EDGEONE_LINE || '境内') &&
+		String(record.Status || '').toUpperCase() === 'ENABLE'
+	)
+	if (regionalApex.length > 1) return null
 	return records.find(record => Number(record.RecordId) === recordId(env)) || null
 }
 

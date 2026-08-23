@@ -69,6 +69,7 @@ function health(edge) {
 function fakeFetchFactory({
 	record,
 	records,
+	regionalRecords,
 	defaultRecord,
 	defaultRecords,
 	edgeResponses = [],
@@ -77,6 +78,7 @@ function fakeFetchFactory({
 }) {
 	const calls = []
 	const dnsRecords = (records ? [...records] : [record]).map(toDnsRecord)
+	const regionalRecordList = regionalRecords?.map(toDnsRecord) || null
 	let currentRecord = dnsRecords[0] || null
 	const fallbackRecord = toDnsRecord(defaultRecord ?? {
 		RecordId: 456,
@@ -102,6 +104,9 @@ function fakeFetchFactory({
 								? [fallbackRecord]
 								: []
 						return Response.json({ Response: { RecordList: records } })
+					}
+					if (regionalRecordList) {
+						return Response.json({ Response: { RecordList: regionalRecordList } })
 					}
 					const next = dnsRecords.length > 0 ? dnsRecords.shift() : currentRecord
 					if (next) currentRecord = next
@@ -279,8 +284,21 @@ test('revalidates the DNS record immediately before failover', async () => {
 	assert.equal(calls.filter(call => call.action === 'ModifyRecordStatus').length, 0)
 	const regionalDescribes = calls
 		.filter(call => call.action === 'DescribeRecordList')
-		.filter(call => JSON.parse(call.init.body).RecordType === 'CNAME')
+		.filter(call => JSON.parse(call.init.body).RecordType === undefined)
 	assert.equal(regionalDescribes.length, 2)
+})
+
+test('does not fail over when another enabled regional apex record competes', async () => {
+	const env = makeEnv()
+	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false }
+	const competingRecord = { RecordId: 789, Name: '@', Type: 'A', Value: '203.0.113.12', Line: '境内', Status: 'ENABLE' }
+	const { fetch, calls } = fakeFetchFactory({
+		regionalRecords: [edgeRecord, competingRecord],
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'manual-dns-state')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 
 test('deduplicates a sustained dual-outage alert', async () => {
