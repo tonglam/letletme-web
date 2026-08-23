@@ -308,13 +308,19 @@ async function main(): Promise<void> {
 			continue
 		}
 		const errs = validate(schema, ast)
-		if (name === 'GET_LIVE_FIXTURE_PLAYERS_BATCH') {
+		const astNodeLimit =
+			name === 'GET_ENTRY_LIVE_COMPETITION_BOARD'
+				? 400
+				: name === 'GET_LIVE_FIXTURE_PLAYERS_BATCH'
+					? 200
+					: null
+		if (astNodeLimit !== null) {
 			let astNodes = 0
 			visit(ast, { enter: () => void (astNodes += 1) })
-			if (astNodes > 200) {
+			if (astNodes > astNodeLimit) {
 				failed += 1
 				console.log(
-					`[LIMIT_FAIL] ${name}: ${astNodes} AST nodes exceeds the production limit of 200`
+					`[LIMIT_FAIL] ${name}: ${astNodes} AST nodes exceeds the production limit of ${astNodeLimit}`
 				)
 				continue
 			}
