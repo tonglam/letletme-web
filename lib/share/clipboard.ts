@@ -1,6 +1,15 @@
 export type ClipboardCopyResult = 'copied' | 'unsupported' | 'failed'
 export type ShareResult = 'shared' | ClipboardCopyResult
 
+export function shouldIncludeShareImageNode(node: {
+	nodeType: number
+	getAttribute?: (name: string) => string | null
+}): boolean {
+	return (
+		node.nodeType !== 1 || node.getAttribute?.('data-share-exclude') !== 'true'
+	)
+}
+
 export async function copyTextToClipboard(
 	text: string
 ): Promise<ClipboardCopyResult> {
@@ -17,16 +26,33 @@ export async function copyTextToClipboard(
 
 async function elementToPng(element: HTMLElement): Promise<Blob | null> {
 	const { toBlob } = await import('html-to-image')
+	const captureWidth = getShareCaptureWidth(element)
 	return toBlob(element, {
 		backgroundColor: '#210025',
 		cacheBust: true,
 		pixelRatio: 2,
+		...(captureWidth
+			? {
+					width: captureWidth,
+					style: { width: `${captureWidth}px` }
+				}
+			: {}),
 		// The app uses next/font CSS. Embedding remote font faces can reject the
 		// whole SVG render in browsers with a stricter CORS policy; system fonts
 		// keep the share usable when that optional embed is unavailable.
 		skipFonts: true,
-		filter: node => node.dataset.shareExclude !== 'true',
+		// html-to-image applies the filter to text nodes as well as elements.
+		filter: shouldIncludeShareImageNode
 	})
+}
+
+function getShareCaptureWidth(element: HTMLElement): number | undefined {
+	const widths = [element.clientWidth, element.scrollWidth]
+	element.querySelectorAll<HTMLElement>('*').forEach(child => {
+		widths.push(child.scrollWidth)
+	})
+	const width = Math.max(...widths)
+	return width > element.clientWidth ? width : undefined
 }
 
 async function copyImageBlobToClipboard(
@@ -41,22 +67,44 @@ async function copyImageBlobToClipboard(
 	}
 
 	try {
-		await navigator.clipboard.write([
-			new ClipboardItem({ 'image/png': blob })
-		])
+		await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
 		return 'copied'
 	} catch {
 		return 'failed'
 	}
 }
 
-function isNativeShareCancellation(error: unknown): boolean {
+function prefersNativeImageShare(): boolean {
+	if (typeof navigator === 'undefined') return false
+	const userAgentData = (
+		navigator as Navigator & { userAgentData?: { mobile?: boolean } }
+	).userAgentData
 	return (
-		typeof error === 'object' &&
-		error !== null &&
-		'name' in error &&
-		(error as { name?: unknown }).name === 'AbortError'
+		userAgentData?.mobile === true ||
+		/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent ?? '')
 	)
+}
+
+async function tryNativeImageShare(blob: Blob): Promise<ShareResult> {
+	if (typeof File === 'undefined' || typeof navigator.share !== 'function') {
+		return 'unsupported'
+	}
+
+	try {
+		const file = new File([blob], 'letletme-share.png', {
+			type: 'image/png'
+		})
+		const shareData: ShareData = { files: [file] }
+		if (navigator.canShare && !navigator.canShare(shareData)) {
+			return 'unsupported'
+		}
+		await navigator.share(shareData)
+		return 'shared'
+	} catch {
+		// A rejected native share can consume transient user activation. Do not
+		// retry the clipboard in this same handler; let the caller report failure.
+		return 'failed'
+	}
 }
 
 /** Render a visual result to PNG and copy it to the system clipboard. */
@@ -88,28 +136,24 @@ export async function shareImageBlob(blob: Blob): Promise<ShareResult> {
 	if (typeof navigator === 'undefined') return 'unsupported'
 
 	try {
-		if (typeof File !== 'undefined' && typeof navigator.share === 'function') {
-			try {
-				const file = new File([blob], 'letletme-share.png', {
-					type: 'image/png'
-				})
-				const shareData: ShareData = {
-					files: [file]
-				}
-				if (!navigator.canShare || navigator.canShare(shareData)) {
-					await navigator.share(shareData)
-					return 'shared'
-				}
-			} catch (error) {
-				if (isNativeShareCancellation(error)) return 'failed'
-				// Rendering the image is asynchronous, so desktop browsers and
-				// some mobile browsers can reject the native share because the
-				// original user activation has expired. The image is still valid;
-				// continue with the clipboard fallback instead of losing it.
-			}
+		if (prefersNativeImageShare()) {
+			const nativeResult = await tryNativeImageShare(blob)
+			if (nativeResult !== 'unsupported') return nativeResult
 		}
 
-		return copyImageBlobToClipboard(blob)
+		const clipboardResult = await copyImageBlobToClipboard(blob)
+		if (clipboardResult === 'copied') return 'copied'
+		if (clipboardResult === 'failed') {
+			// Clipboard permission failures do not necessarily mean that the OS
+			// share sheet is unavailable. Try it before reporting a hard failure.
+			const nativeResult = await tryNativeImageShare(blob)
+			return nativeResult === 'unsupported' ? 'failed' : nativeResult
+		}
+
+		// On desktop, use native sharing only when image clipboard support is
+		// absent. This preserves the original click activation for the first
+		// usable operation instead of consuming it on an unavailable share sheet.
+		return tryNativeImageShare(blob)
 	} catch {
 		return 'failed'
 	}
@@ -120,7 +164,7 @@ export async function shareImageBlob(blob: Blob): Promise<ShareResult> {
  * browsers usually cannot, so the image is copied to the clipboard instead.
  */
 export async function shareElementImage(
-	element: HTMLElement,
+	element: HTMLElement
 ): Promise<ShareResult> {
 	try {
 		const blob = await elementToPng(element)
