@@ -165,14 +165,63 @@ export const miniProgramEmailCode = authSchema.table(
 	})
 )
 
+export const miniProgramAccount = authSchema.table(
+	'mini_program_account',
+	{
+		id: text('id').primaryKey(),
+		openid: text('openid').notNull(),
+		unionid: text('unionid'),
+		linkedWebUserId: text('linked_web_user_id').references(() => user.id, {
+			onDelete: 'set null'
+		}),
+		linkedAt: timestamp('linked_at', { withTimezone: true }),
+		followEntryId: integer('follow_entry_id'),
+		entryChoice: text('entry_choice'),
+		entryChoiceMiniEntryId: integer('entry_choice_mini_entry_id'),
+		entryChoiceWebEntryId: integer('entry_choice_web_entry_id'),
+		createdAt: timestamp('created_at', { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.notNull()
+			.defaultNow()
+	},
+	table => ({
+		openIdUnique: unique('mini_program_account_openid_unique').on(table.openid),
+		unionIdUnique: uniqueIndex('mini_program_account_unionid_unique')
+			.on(table.unionid)
+			.where(sql`${table.unionid} is not null`),
+		linkedWebUserUnique: uniqueIndex(
+			'mini_program_account_linked_web_user_unique'
+		)
+			.on(table.linkedWebUserId)
+			.where(sql`${table.linkedWebUserId} is not null`),
+		followEntryPositive: check(
+			'mini_program_account_follow_entry_positive',
+			sql`${table.followEntryId} is null or ${table.followEntryId} > 0`
+		),
+		entryChoiceValid: check(
+			'mini_program_account_entry_choice_valid',
+			sql`${table.entryChoice} is null or ${table.entryChoice} in ('MINI', 'WEB')`
+		),
+		entryChoicePairValid: check(
+			'mini_program_account_entry_choice_pair_valid',
+			sql`(${table.entryChoice} is null and ${table.entryChoiceMiniEntryId} is null and ${table.entryChoiceWebEntryId} is null) or (${table.entryChoice} is not null and ${table.entryChoiceMiniEntryId} > 0 and ${table.entryChoiceWebEntryId} > 0 and ${table.entryChoiceMiniEntryId} <> ${table.entryChoiceWebEntryId})`
+		)
+	})
+)
+
 export const miniProgramSession = authSchema.table(
 	'mini_program_session',
 	{
 		id: text('id').primaryKey(),
 		tokenHash: text('token_hash').notNull(),
-		userId: text('user_id')
-			.notNull()
-			.references(() => user.id, { onDelete: 'cascade' }),
+		userId: text('user_id').references(() => user.id, {
+			onDelete: 'set null'
+		}),
+		accountId: text('account_id').references(() => miniProgramAccount.id, {
+			onDelete: 'cascade'
+		}),
 		deviceId: text('device_id').notNull(),
 		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 		lastUsedAt: timestamp('last_used_at', { withTimezone: true })
@@ -191,7 +240,16 @@ export const miniProgramSession = authSchema.table(
 			'mini_program_session_active_user_device_unique'
 		)
 			.on(table.userId, table.deviceId)
-			.where(sql`${table.revokedAt} is null`)
+			.where(sql`${table.revokedAt} is null and ${table.userId} is not null`),
+		activeAccountDeviceUnique: uniqueIndex(
+			'mini_program_session_active_account_device_unique'
+		)
+			.on(table.accountId, table.deviceId)
+			.where(sql`${table.revokedAt} is null and ${table.accountId} is not null`),
+		principalPresent: check(
+			'mini_program_session_principal_present',
+			sql`${table.userId} is not null or ${table.accountId} is not null`
+		)
 	})
 )
 

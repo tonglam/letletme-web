@@ -16,14 +16,21 @@ import {
 
 describe('Web runtime database boundary', () => {
 	it('installs an auth-only capability role and startup contract', async () => {
-		const [baseline, journal, instrumentation, environment, runtimeContract] =
-			await Promise.all([
-				readFile('drizzle/0000_auth_baseline.sql', 'utf8'),
-				readFile('drizzle/meta/_journal.json', 'utf8'),
-				readFile('instrumentation.ts', 'utf8'),
-				readFile('.env.example', 'utf8'),
-				readFile('lib/db/runtime-contract.ts', 'utf8')
-			])
+		const [
+			baseline,
+			standaloneAccountMigration,
+			journal,
+			instrumentation,
+			environment,
+			runtimeContract
+		] = await Promise.all([
+			readFile('drizzle/0000_auth_baseline.sql', 'utf8'),
+			readFile('drizzle/0003_graceful_husk.sql', 'utf8'),
+			readFile('drizzle/meta/_journal.json', 'utf8'),
+			readFile('instrumentation.ts', 'utf8'),
+			readFile('.env.example', 'utf8'),
+			readFile('lib/db/runtime-contract.ts', 'utf8')
+		])
 
 		assert.match(baseline, /CREATE ROLE letletme_web_auth/)
 		for (const attribute of [
@@ -87,6 +94,30 @@ describe('Web runtime database boundary', () => {
 			)
 		}
 		assert.match(baseline, /CREATE POLICY graphql_auth_reader_select/g)
+		assert.match(
+			standaloneAccountMigration,
+			/GRANT SELECT\(id, linked_web_user_id, follow_entry_id, entry_choice, entry_choice_mini_entry_id, entry_choice_web_entry_id\)/
+		)
+		assert.match(
+			standaloneAccountMigration,
+			/GRANT SELECT\(account_id\)[\s\S]*bauth\.mini_program_session/
+		)
+		assert.match(
+			standaloneAccountMigration,
+			/DROP CONSTRAINT "mini_program_session_user_id_user_id_fk"/
+		)
+		assert.match(
+			standaloneAccountMigration,
+			/FOREIGN KEY \("user_id"\) REFERENCES "bauth"\."user"\("id"\) ON DELETE set null/
+		)
+		assert.match(
+			standaloneAccountMigration,
+			/INSERT INTO bauth\.mini_program_account[\s\S]*UPDATE bauth\.mini_program_session session[\s\S]*SET account_id = account\.id/
+		)
+		assert.match(
+			standaloneAccountMigration,
+			/CONSTRAINT "mini_program_session_principal_present" CHECK/
+		)
 		assert.match(instrumentation, /validateWebRuntimeDatabaseConfiguration/)
 		assert.match(instrumentation, /DATABASE_URL must use/)
 		assert.match(
@@ -105,6 +136,7 @@ describe('Web runtime database boundary', () => {
 			'bug_report_storage_nonces',
 			'fpl_entry_binding_challenges',
 			'fpl_entry_name_history',
+			'mini_program_account',
 			'mini_program_email_code',
 			'mini_program_session',
 			'request_rate_limits',
@@ -114,6 +146,7 @@ describe('Web runtime database boundary', () => {
 		])
 		assert.equal(GRAPHQL_AUTH_CAPABILITY_ROLE, 'letletme_graphql_reader')
 		assert.deepEqual([...GRAPHQL_AUTH_RUNTIME_TABLES].sort(), [
+			'mini_program_account',
 			'mini_program_session',
 			'user'
 		])
@@ -206,17 +239,30 @@ test(
 			await administrator.begin(async transaction => {
 				await transaction.unsafe('SET LOCAL ROLE letletme_graphql_reader')
 				await transaction`
-				SELECT id, fpl_entry_id, fpl_entry_verified_at
+					SELECT id, linked_web_user_id, follow_entry_id,
+					       entry_choice, entry_choice_mini_entry_id,
+					       entry_choice_web_entry_id
+					FROM bauth.mini_program_account
+					LIMIT 0
+				`
+				await transaction`
+					SELECT id, fpl_entry_id, fpl_entry_verified_at
 				FROM bauth."user"
 				LIMIT 0
 			`
 				await transaction`
-				SELECT user_id, token_hash, revoked_at, expires_at
+					SELECT user_id, account_id, token_hash, revoked_at, expires_at
 				FROM bauth.mini_program_session
 				LIMIT 0
 			`
 			})
 
+			await assert.rejects(
+				administrator.begin(async transaction => {
+					await transaction.unsafe('SET LOCAL ROLE letletme_graphql_reader')
+					await transaction`SELECT openid FROM bauth.mini_program_account LIMIT 0`
+				})
+			)
 			await assert.rejects(
 				administrator.begin(async transaction => {
 					await transaction.unsafe('SET LOCAL ROLE letletme_graphql_reader')

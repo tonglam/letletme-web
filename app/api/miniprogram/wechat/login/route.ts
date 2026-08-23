@@ -15,6 +15,7 @@ export async function POST(request: Request) {
 		const result = await signInMiniProgramWithWeChat({
 			code: body?.code,
 			deviceId: body?.deviceId,
+			contractVersion: body?.contractVersion,
 		})
 
 		return miniProgramSuccessResponse({ success: true, ...result })
