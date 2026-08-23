@@ -11,7 +11,7 @@ import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import { cn } from '@/lib/utils'
 import type { MyFplSnapshotMeta } from '@/lib/graphql/operations/my-fpl'
 import { AlertCircle, X } from 'lucide-react'
-import { useLocale, useTranslations } from 'next-intl'
+import { useFormatter, useTranslations } from 'next-intl'
 import { useSearchParams } from 'next/navigation'
 import {
 	Suspense,
@@ -49,7 +49,7 @@ import {
 
 function TournamentStatsBody(props: TournamentStatsClientProps) {
 	const t = useTranslations('TournamentStats')
-	const locale = useLocale()
+	const format = useFormatter()
 	const lifecycleT = useTranslations('TournamentLifecycle')
 	const router = useRouter()
 	const pathname = usePathname()
@@ -318,10 +318,10 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 							<AlertDescription>
 								{snapshotMeta.kind === 'FINAL'
 									? t('snapshotFinal', {
-											date: formatSnapshotDate(snapshotMeta, locale)
+											date: formatSnapshotDate(snapshotMeta, format)
 										})
 									: t('snapshotProvisional', {
-											date: formatSnapshotDate(snapshotMeta, locale)
+											date: formatSnapshotDate(snapshotMeta, format)
 										})}{' '}
 								{snapshotMeta.freshness === 'STALE'
 									? t('snapshotStale')
@@ -715,10 +715,13 @@ export default function TournamentStatsClient(
 	)
 }
 
-function formatSnapshotDate(meta: MyFplSnapshotMeta, locale: string): string {
+function formatSnapshotDate(
+	meta: MyFplSnapshotMeta,
+	format: ReturnType<typeof useFormatter>
+): string {
 	const value = new Date(meta.publishedAt)
 	return Number.isFinite(value.getTime())
-		? value.toLocaleString(locale, {
+		? format.dateTime(value, {
 				dateStyle: 'medium',
 				timeStyle: 'short'
 			})
