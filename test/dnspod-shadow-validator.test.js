@@ -54,3 +54,13 @@ test('validator rejects disabled apex records', () => {
 		return true
 	})
 })
+
+test('validator rejects disabled required hosts', () => {
+	const records = validRecords.map(record =>
+		record.Name === 'www' ? { ...record, Status: 'DISABLE' } : record
+	)
+	assert.throws(() => runValidator(records), error => {
+		assert.equal(error.status, 1)
+		return true
+	})
+})

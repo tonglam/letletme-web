@@ -60,7 +60,7 @@ function runCheckWithTestCoordinator(env, options) {
 }
 
 function health(edge) {
-	return new Response(JSON.stringify({ status: 'ok', origin: 'vercel' }), {
+	return new Response(JSON.stringify({ status: 'ok', origin: edge ? 'tencent' : 'vercel' }), {
 		status: 200,
 		headers: edge ? { 'X-Letletme-Edge': 'edgeone' } : undefined
 	})

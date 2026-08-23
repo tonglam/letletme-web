@@ -168,6 +168,9 @@ package. Configure:
 - removal of browser-supplied `X-Letletme-Origin-Token`,
   `X-Letletme-Client-IP`, and both internal proxy headers before injecting the
   trusted values;
+- injection of `X-Letletme-Origin-Token` with the same private token installed
+  in Tencent Nginx at `/etc/letletme/origin-token`; without this header the
+  Tencent origin must reject the request;
 - `X-Letletme-Proxy-Secret` set to the current application secret; and
 - `X-Letletme-Edge: edgeone` on EdgeOne responses.
 
@@ -290,7 +293,10 @@ GraphQL, bot, mini-program, mail, or validation dependency blocks NS change.
 
 The watchdog runs once per minute with no public request route. It:
 
-1. probes EdgeOne/Tencent safe-read health and direct Vercel health;
+1. probes a dedicated EdgeOne/Tencent safe-read URL whose `/healthz` response
+   must contain `origin: tencent` and `X-Letletme-Edge: edgeone`, alongside
+   direct Vercel health; leaving the probe on Vercel would never detect a
+   Tencent outage;
 2. requires three consecutive EdgeOne failures while Vercel is healthy;
 3. re-reads the exact `@ / 境内 / CNAME` record and the enabled default Vercel
    A record before mutation;

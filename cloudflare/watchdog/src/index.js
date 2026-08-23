@@ -59,7 +59,7 @@ export function isFallbackRecord(record, env) {
 	return isDisabledRecord(record, env)
 }
 
-async function probe(url, fetchImpl, timeoutMs, requireEdgeOne) {
+async function probe(url, fetchImpl, timeoutMs, expectedOrigin, requireEdgeOne) {
 	if (!url) return { ok: false, reason: 'url-missing' }
 	const controller = new AbortController()
 	const timeout = setTimeout(() => controller.abort('probe-timeout'), timeoutMs)
@@ -75,7 +75,7 @@ async function probe(url, fetchImpl, timeoutMs, requireEdgeOne) {
 		const ok =
 			response.status === 200 &&
 			payload?.status === 'ok' &&
-			payload?.origin === 'vercel' &&
+			payload?.origin === expectedOrigin &&
 			(!requireEdgeOne || edgeMarker === 'edgeone')
 		return {
 			ok,
@@ -249,8 +249,8 @@ export async function runCheck(env, options = {}) {
 	}
 
 	const [edge, vercel] = await Promise.all([
-		probe(env.EDGEONE_HEALTH_URL, fetchImpl, timeoutMs, true),
-		probe(env.VERCEL_HEALTH_URL, fetchImpl, timeoutMs, false)
+		probe(env.EDGEONE_HEALTH_URL, fetchImpl, timeoutMs, 'tencent', true),
+		probe(env.VERCEL_HEALTH_URL, fetchImpl, timeoutMs, 'vercel', false)
 	])
 	if (edge.ok) {
 		let coordination

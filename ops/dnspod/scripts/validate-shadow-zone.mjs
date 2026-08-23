@@ -51,7 +51,10 @@ if (!file || !edgeoneCname || !vercelA) {
 		const apexOverseas = find(records, '境外', 'A', vercelA)
 		const apexDefault = find(records, '默认', 'A', vercelA)
 		const missingHosts = requiredHosts.filter(host =>
-			!records.some(record => String(record.Name ?? '').toLowerCase() === host.toLowerCase())
+			!records.some(record =>
+				String(record.Name ?? '').toLowerCase() === host.toLowerCase() &&
+				enabled(record)
+			)
 		)
 		const disabled = records.filter(record =>
 			String(record.Name ?? '').toLowerCase() === '@' &&
