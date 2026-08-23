@@ -169,7 +169,15 @@ The existing `eo-canary.letletme.top` record is only for `curl --resolve` and
 canary tests. It must not be added to Auth trusted origins or advertised as a
 user URL.
 
-## Watchdog deployment values
+## Historical Cloudflare fallback notes
+
+The older Cloudflare-record fallback notes below are retained as migration
+history only and must not be deployed. The current implementation uses the
+DNSPod watchdog documented in `ops/dnspod/README.md`: it has no request route,
+keeps `WATCHDOG_ENABLED=false` until the regional DNS cutover is explicitly
+approved, and can only disable the exact DNSPod `@ / 境内 / CNAME` record.
+
+## Historical watchdog deployment values
 
 Create the KV namespace, then deploy the SQLite-backed Durable Object declared
 in `cloudflare/watchdog/wrangler.toml`. The Durable Object serializes the

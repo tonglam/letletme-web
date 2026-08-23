@@ -1,3 +1,10 @@
+import {
+	disableConfiguredRecord,
+	getConfiguredRecord,
+	isDisabledRecord,
+	isEnabledRecord
+} from './dnspod.js'
+
 const STATE_KEY = 'watchdog-state-v1'
 const FAILURE_THRESHOLD = 3
 const DEFAULT_TIMEOUT_MS = 8_000
@@ -6,10 +13,6 @@ const COORDINATOR_NAME = 'letletme-top'
 
 function bool(value) {
 	return value === true || value === 'true'
-}
-
-function normalized(value) {
-	return String(value ?? '').trim().replace(/\.$/, '').toLowerCase()
 }
 
 export function parseState(raw) {
@@ -44,47 +47,12 @@ export function parseState(raw) {
 	}
 }
 
-function apiUrl(env, path) {
-	const base = (env.DNS_API_BASE || 'https://api.cloudflare.com/client/v4').replace(/\/$/, '')
-	return `${base}/zones/${encodeURIComponent(env.ZONE_ID)}/dns_records/${encodeURIComponent(env.DNS_RECORD_ID)}${path || ''}`
-}
-
-async function apiRequest(env, fetchImpl, method, path, body) {
-	if (!env.ZONE_ID || !env.DNS_RECORD_ID || !env.CLOUDFLARE_API_TOKEN) {
-		throw new Error('dns-api-configuration-missing')
-	}
-	const response = await fetchImpl(apiUrl(env, path), {
-		method,
-		headers: {
-			Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
-			Accept: 'application/json',
-			...(body ? { 'Content-Type': 'application/json' } : {})
-		},
-		...(body ? { body: JSON.stringify(body) } : {})
-	})
-	const payload = await response.json().catch(() => null)
-	if (!response.ok || payload?.success !== true) {
-		throw new Error(`dns-api-${response.status}`)
-	}
-	return payload.result
-}
-
 export function isEdgeOneRecord(record, env) {
-	return (
-		record?.type === 'CNAME' &&
-		normalized(record.name) === normalized(env.APEX_NAME || 'letletme.top') &&
-		normalized(record.content) === normalized(env.EDGEONE_CNAME_TARGET) &&
-		record.proxied === false
-	)
+	return isEnabledRecord(record, env)
 }
 
 export function isFallbackRecord(record, env) {
-	return (
-		record?.type === 'A' &&
-		normalized(record.name) === normalized(env.APEX_NAME || 'letletme.top') &&
-		normalized(record.content) === normalized(env.VERCEL_FALLBACK_A) &&
-		record.proxied === true
-	)
+	return isDisabledRecord(record, env)
 }
 
 async function probe(url, fetchImpl, timeoutMs, requireEdgeOne) {
@@ -189,8 +157,8 @@ async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coo
 		lastAction: 'already-fallback',
 		coordinatorResetPending: false
 	}
-	const alertKey = `fallback:${env.VERCEL_FALLBACK_A}`
-	const alertMessage = `letletme watchdog 已回退 Cloudflare → Vercel：EdgeOne 连续失败，Vercel 健康。`
+	const alertKey = `fallback:${env.DNSPOD_EDGEONE_RECORD_ID}`
+	const alertMessage = `letletme watchdog 已停用 DNSPod 境内 EdgeOne 记录：EdgeOne 连续失败，Vercel 健康。`
 	if (next.pendingAlert) {
 		next = await applyAlert(
 			env,
@@ -217,8 +185,8 @@ async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coo
 
 async function manualDnsState(env, rawState, state, record, fetchImpl, coordinator) {
 	const coordination = await coordinator.reset()
-	const alertKey = `manual:${record?.type || 'unknown'}:${record?.content || 'unknown'}:${record?.proxied}`
-	const message = `letletme watchdog 未改 DNS：apex 不是预期 EdgeOne 记录（当前 ${record?.type || 'unknown'} ${record?.content || 'unknown'}）。`
+	const alertKey = `manual:${record?.RecordId || 'unknown'}:${record?.Type || 'unknown'}:${record?.Value || 'unknown'}:${record?.Line || 'unknown'}:${record?.Status || 'unknown'}`
+	const message = `letletme watchdog 未改 DNSPod：境内 EdgeOne 记录身份或状态不符合预期。`
 	let next = {
 		...state,
 		failureCount: coordination.failureCount,
@@ -236,7 +204,7 @@ async function manualDnsState(env, rawState, state, record, fetchImpl, coordinat
 async function bothUnhealthyState(env, rawState, state, record, edge, vercel, fetchImpl, coordinator) {
 	const coordination = await coordinator.reset()
 	const alertKey = `both-unhealthy:${edge.reason}:${vercel.reason}`
-	const message = `letletme watchdog 暂不回退：EdgeOne 与 Vercel 同时异常。EdgeOne=${edge.reason} Vercel=${vercel.reason}`
+	const message = `letletme watchdog 暂不改 DNSPod：EdgeOne 与 Vercel 同时异常。EdgeOne=${edge.reason} Vercel=${vercel.reason}`
 	let next = {
 		...state,
 		failureCount: coordination.failureCount,
@@ -262,7 +230,7 @@ export async function runCheck(env, options = {}) {
 	}
 	const coordinator = coordinatorClient(env, options)
 
-	const record = await apiRequest(env, fetchImpl, 'GET')
+	const record = await getConfiguredRecord(env, fetchImpl)
 	if (isFallbackRecord(record, env)) {
 		return alreadyFallbackState(env, rawState, state, record, fetchImpl, coordinator)
 	}
@@ -341,7 +309,7 @@ export async function runCheck(env, options = {}) {
 
 	// Health probes can take several seconds. Re-read the record immediately
 	// before the mutation so an operator's DNS change wins the race.
-	const latestRecord = await apiRequest(env, fetchImpl, 'GET')
+	const latestRecord = await getConfiguredRecord(env, fetchImpl)
 	if (isFallbackRecord(latestRecord, env)) {
 		return alreadyFallbackState(env, rawState, state, latestRecord, fetchImpl, coordinator)
 	}
@@ -349,23 +317,19 @@ export async function runCheck(env, options = {}) {
 		return manualDnsState(env, rawState, state, latestRecord, fetchImpl, coordinator)
 	}
 
-	const fallback = {
-		name: env.APEX_NAME || 'letletme.top',
-		type: 'A',
-		content: env.VERCEL_FALLBACK_A,
-		ttl: Number(env.VERCEL_FALLBACK_TTL) || 1,
-		proxied: true
-	}
 	let updated
 	try {
-		updated = await apiRequest(env, fetchImpl, 'PUT', '', fallback)
-		if (!isFallbackRecord(updated, env)) throw new Error('fallback-record-verification-failed')
+		updated = await disableConfiguredRecord(env, fetchImpl)
+		const disabledRecord = await getConfiguredRecord(env, fetchImpl)
+		if (!isFallbackRecord(disabledRecord, env)) {
+			throw new Error('dnspod-disabled-record-verification-failed')
+		}
 	} catch (error) {
 		await coordinator.release()
 		throw error
 	}
-	const alertKey = `fallback:${env.VERCEL_FALLBACK_A}`
-	const message = `letletme watchdog 已回退 Cloudflare → Vercel：EdgeOne 连续 ${failureCount} 次异常，Vercel 健康。`
+	const alertKey = `fallback:${env.DNSPOD_EDGEONE_RECORD_ID}`
+	const message = `letletme watchdog 已停用 DNSPod 境内 EdgeOne 记录：连续 ${failureCount} 次异常，Vercel 健康。`
 	let next = {
 		...state,
 		failureCount,

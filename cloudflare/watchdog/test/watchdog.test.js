@@ -11,14 +11,14 @@ import {
 
 const baseEnv = {
 	WATCHDOG_ENABLED: 'true',
-	ZONE_ID: 'zone',
-	DNS_RECORD_ID: 'record',
-	CLOUDFLARE_API_TOKEN: 'token',
-	APEX_NAME: 'letletme.top',
-	EDGEONE_CNAME_TARGET: 'edge.example.com',
-	VERCEL_FALLBACK_A: '76.76.21.21',
-	EDGEONE_HEALTH_URL: 'https://letletme.top/healthz',
-	VERCEL_HEALTH_URL: 'https://letletme-web.vercel.app/healthz',
+	DNSPOD_SECRET_ID: 'secret-id',
+	DNSPOD_SECRET_KEY: 'secret-key',
+	DNSPOD_DOMAIN: 'letletme.top',
+	DNSPOD_EDGEONE_RECORD_ID: '123',
+	DNSPOD_EDGEONE_CNAME: 'edge.example.com',
+	DNSPOD_EDGEONE_LINE: '境内',
+	EDGEONE_HEALTH_URL: 'https://eo-personal-canary.letletme.top/healthz',
+	VERCEL_HEALTH_URL: 'https://vercel-origin.letletme.top/healthz',
 	FAILOVER_STATE: null
 }
 
@@ -71,23 +71,30 @@ function fakeFetchFactory({
 	telegramResponses = []
 }) {
 	const calls = []
-	const dnsRecords = records ? [...records] : [record]
+	const dnsRecords = (records ? [...records] : [record]).map(toDnsRecord)
+	let currentRecord = dnsRecords[0] || null
 	return {
 		calls,
 		fetch: async (input, init = {}) => {
 			const url = String(input)
-			calls.push({ url, init })
-			if (url.includes('/dns_records/')) {
-				if (init.method === 'PUT') {
-					const body = JSON.parse(init.body)
-					return Response.json({ success: true, result: { ...body, id: 'record' } })
+			const action = init.headers?.['X-TC-Action'] || init.headers?.['x-tc-action']
+			calls.push({ url, init, action })
+			if (url === 'https://dnspod.tencentcloudapi.com/') {
+				if (action === 'DescribeRecordList') {
+					const next = dnsRecords.length > 0 ? dnsRecords.shift() : currentRecord
+					if (next) currentRecord = next
+					return Response.json({ Response: { RecordList: next ? [next] : [] } })
 				}
-				return Response.json({ success: true, result: dnsRecords.length > 1 ? dnsRecords.shift() : dnsRecords[0] })
+				if (action === 'ModifyRecordStatus') {
+					const body = JSON.parse(init.body)
+					if (currentRecord) currentRecord.Status = body.Status
+					return Response.json({ Response: { RecordId: body.RecordId } })
+				}
 			}
 			if (url.startsWith('https://api.telegram.org/')) {
 				return telegramResponses.shift() || new Response('', { status: 200 })
 			}
-			if (url === 'https://letletme.top/healthz') {
+			if (url === 'https://eo-personal-canary.letletme.top/healthz') {
 				return edgeResponses.shift() || health(false)
 			}
 			return vercelResponse
@@ -95,12 +102,24 @@ function fakeFetchFactory({
 	}
 }
 
+function toDnsRecord(record) {
+	if (!record) return null
+	return {
+		RecordId: Number(record.RecordId ?? record.id ?? 123),
+		Name: record.Name ?? (record.name === 'letletme.top' ? '@' : record.name ?? '@'),
+		Type: record.Type ?? record.type ?? 'CNAME',
+		Value: record.Value ?? record.content ?? 'edge.example.com',
+		Line: record.Line ?? '境内',
+		Status: record.Status ?? (record.proxied === false ? 'ENABLE' : 'DISABLE')
+	}
+}
+
 test('recognizes only the exact EdgeOne and fallback records', () => {
 	const env = baseEnv
-	assert.equal(isEdgeOneRecord({ type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false }, env), true)
-	assert.equal(isEdgeOneRecord({ type: 'CNAME', name: 'letletme.top', content: 'attacker.example.com', proxied: false }, env), false)
-	assert.equal(isFallbackRecord({ type: 'A', name: 'letletme.top', content: '76.76.21.21', proxied: true }, env), true)
-	assert.equal(isFallbackRecord({ type: 'A', name: 'letletme.top', content: '76.76.21.21', proxied: false }, env), false)
+	assert.equal(isEdgeOneRecord(toDnsRecord({ content: 'edge.example.com', proxied: false }), env), true)
+	assert.equal(isEdgeOneRecord(toDnsRecord({ content: 'attacker.example.com', proxied: false }), env), false)
+	assert.equal(isFallbackRecord(toDnsRecord({ content: 'edge.example.com', Status: 'DISABLE' }), env), true)
+	assert.equal(isFallbackRecord(toDnsRecord({ content: 'edge.example.com', Status: 'ENABLE' }), env), false)
 })
 
 test('requires three consecutive EdgeOne failures before one DNS update', async () => {
@@ -110,7 +129,7 @@ test('requires three consecutive EdgeOne failures before one DNS update', async 
 	const { fetch, calls } = fakeFetchFactory({ record: edgeRecord, edgeResponses: [new Response('', { status: 503 })] })
 	const first = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
 	assert.equal(first.action, 'counted-failure')
-	assert.equal(calls.filter(call => call.init.method === 'PUT').length, 0)
+	assert.equal(calls.filter(call => call.action === 'ModifyRecordStatus').length, 0)
 	assert.equal(env.writes.at(-1).failureCount, 1)
 
 	const saved = JSON.stringify(env.writes.at(-1))
@@ -124,7 +143,7 @@ test('requires three consecutive EdgeOne failures before one DNS update', async 
 	const thirdFetch = fakeFetchFactory({ record: edgeRecord, edgeResponses: [new Response('', { status: 503 })] })
 	const third = await runCheckWithTestCoordinator(thirdEnv, { fetchImpl: thirdFetch.fetch })
 	assert.equal(third.action, 'fallback-applied')
-	assert.equal(thirdFetch.calls.filter(call => call.init.method === 'PUT').length, 1)
+	assert.equal(thirdFetch.calls.filter(call => call.action === 'ModifyRecordStatus').length, 1)
 })
 
 test('does not change DNS when Vercel is also unhealthy', async () => {
@@ -136,7 +155,7 @@ test('does not change DNS when Vercel is also unhealthy', async () => {
 	})
 	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
 	assert.equal(result.action, 'both-unhealthy')
-	assert.equal(calls.some(call => call.init.method === 'PUT'), false)
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 
 test('does not overwrite a manually changed DNS record', async () => {
@@ -146,17 +165,17 @@ test('does not overwrite a manually changed DNS record', async () => {
 	})
 	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
 	assert.equal(result.action, 'manual-dns-state')
-	assert.equal(calls.some(call => call.init.method === 'PUT'), false)
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 
 test('is idempotent once fallback is active', async () => {
 	const env = makeEnv(JSON.stringify({ failureCount: 3, fallbackActive: true }))
 	const { fetch, calls } = fakeFetchFactory({
-		record: { type: 'A', name: 'letletme.top', content: '76.76.21.21', proxied: true }
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'DISABLE' }
 	})
 	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
 	assert.equal(result.action, 'already-fallback')
-	assert.equal(calls.some(call => call.init.method === 'PUT'), false)
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 
 test('invalid persisted state is safely reset', () => {
@@ -195,8 +214,8 @@ test('revalidates the DNS record immediately before failover', async () => {
 	})
 	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
 	assert.equal(result.action, 'manual-dns-state')
-	assert.equal(calls.filter(call => call.init.method === 'PUT').length, 0)
-	assert.equal(calls.filter(call => call.url.includes('/dns_records/')).length, 2)
+	assert.equal(calls.filter(call => call.action === 'ModifyRecordStatus').length, 0)
+	assert.equal(calls.filter(call => call.action === 'DescribeRecordList').length, 2)
 })
 
 test('deduplicates a sustained dual-outage alert', async () => {
@@ -233,11 +252,11 @@ test('retries a failover alert after DNS already changed', async () => {
 	})
 	const first = await runCheckWithTestCoordinator(firstEnv, { fetchImpl: firstFetch.fetch })
 	assert.equal(first.action, 'fallback-applied')
-	assert.equal(first.state.pendingAlert?.key, 'fallback:76.76.21.21')
+	assert.equal(first.state.pendingAlert?.key, 'fallback:123')
 
 	const secondEnv = { ...makeEnv(JSON.stringify(firstEnv.writes.at(-1)), coordinator), TELEGRAM_BOT_TOKEN: 'bot', TELEGRAM_CHAT_ID: 'chat' }
 	const secondFetch = fakeFetchFactory({
-		record: { type: 'A', name: 'letletme.top', content: '76.76.21.21', proxied: true },
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'DISABLE' },
 		telegramResponses: [new Response('', { status: 200 })]
 	})
 	const second = await runCheckWithTestCoordinator(secondEnv, { fetchImpl: secondFetch.fetch })
@@ -272,7 +291,7 @@ test('attempts the failover alert even when the state prewrite fails', async () 
 	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
 	assert.equal(result.action, 'fallback-applied')
 	assert.equal(calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 1)
-	assert.equal(writes.at(-1).lastAlertKey, 'fallback:76.76.21.21')
+	assert.equal(writes.at(-1).lastAlertKey, 'fallback:123')
 })
 
 test('reconstructs a fallback alert when coordinator confirmation fails', async () => {
@@ -284,13 +303,13 @@ test('reconstructs a fallback alert when coordinator confirmation fails', async 
 		TELEGRAM_CHAT_ID: 'chat'
 	}
 	const { fetch, calls } = fakeFetchFactory({
-		record: { type: 'A', name: 'letletme.top', content: '76.76.21.21', proxied: true },
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'DISABLE' },
 		telegramResponses: [new Response('', { status: 200 })]
 	})
 	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
 	assert.equal(result.action, 'already-fallback')
 	assert.equal(calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 1)
-	assert.equal(result.state.lastAlertKey, 'fallback:76.76.21.21')
+	assert.equal(result.state.lastAlertKey, 'fallback:123')
 })
 
 test('does not reuse a broken streak while a healthy reset is pending', async () => {
@@ -307,7 +326,7 @@ test('does not reuse a broken streak while a healthy reset is pending', async ()
 	const secondFetch = fakeFetchFactory({ record: edgeRecord, edgeResponses: [new Response('', { status: 503 })] })
 	const second = await runCheckWithTestCoordinator(secondEnv, { fetchImpl: secondFetch.fetch })
 	assert.equal(second.action, 'coordinator-reset-pending')
-	assert.equal(secondFetch.calls.filter(call => call.init.method === 'PUT').length, 0)
+	assert.equal(secondFetch.calls.filter(call => call.action === 'ModifyRecordStatus').length, 0)
 })
 
 test('serializes the threshold claim in the Durable Object coordinator', async () => {

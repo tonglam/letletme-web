@@ -1,7 +1,7 @@
 name = "edgeone-watchdog"
 main = "src/index.js"
 compatibility_date = "2026-08-15"
-workers_dev = true
+workers_dev = false
 
 [triggers]
 crons = ["* * * * *"]
@@ -20,9 +20,8 @@ new_sqlite_classes = [ "FailoverCoordinator" ]
 
 [vars]
 WATCHDOG_ENABLED = "false"
-APEX_NAME = "letletme.top"
-VERCEL_HEALTH_URL = "https://letletme-web.vercel.app/healthz"
-EDGEONE_HEALTH_URL = "https://letletme.top/healthz"
-VERCEL_FALLBACK_TTL = "1"
+DNSPOD_DOMAIN = "letletme.top"
+DNSPOD_EDGEONE_LINE = "境内"
+VERCEL_HEALTH_URL = "https://vercel-origin.letletme.top/healthz"
+EDGEONE_HEALTH_URL = "https://eo-personal-canary.letletme.top/healthz"
 PROBE_TIMEOUT_MS = "8000"
-DNS_API_BASE = "https://api.cloudflare.com/client/v4"
