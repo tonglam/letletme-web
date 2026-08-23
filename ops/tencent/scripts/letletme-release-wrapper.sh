@@ -80,7 +80,6 @@ stage)
 	fi
 	"$script_root/letletme-deploy-release.sh" "$verified_source" "$3" stage
 	;;
-	;;
 verify)
 	if [[ $# -ne 2 || ! $2 =~ ^[a-f0-9]{40}$ ]]; then
 		echo "usage: $0 verify <40-char-git-sha>" >&2
