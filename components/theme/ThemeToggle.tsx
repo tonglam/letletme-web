@@ -1,49 +1,52 @@
-"use client";
+import { Moon, Sun } from 'lucide-react'
+import { getTranslations } from 'next-intl/server'
 
-import * as React from "react";
-import { Moon, Sun } from "lucide-react";
-import { useTheme } from "@/components/theme/ThemeProvider";
-import { Button } from "@/components/ui/button";
-import { useHydrated } from "@/hooks/use-hydrated";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useTranslations } from "next-intl";
+const themeOptions = ['light', 'dark', 'system'] as const
 
-export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const hydrated = useHydrated();
-  const t = useTranslations("Theme");
+export async function ThemeToggle() {
+	const t = await getTranslations('Theme')
 
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={t("change")}
-          aria-busy={!hydrated}
-          disabled={!hydrated}
-        >
-          <Sun aria-hidden="true" className="rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon aria-hidden="true" className="absolute rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">{t("toggle")}</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuRadioGroup
-          value={theme}
-          onValueChange={(value) => setTheme(value as "light" | "dark" | "system")}
-        >
-          <DropdownMenuRadioItem value="light">{t("light")}</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="dark">{t("dark")}</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="system">{t("system")}</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+	return (
+		<details
+			data-navigation-disclosure
+			data-theme-picker
+			inert
+			aria-disabled="true"
+			className="group relative"
+		>
+			<summary
+				aria-label={t('change')}
+				className="relative flex size-9 cursor-pointer list-none items-center justify-center rounded-md text-fascia-foreground hover:bg-fascia-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric [&::-webkit-details-marker]:hidden"
+			>
+				<Sun
+					aria-hidden="true"
+					className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0"
+				/>
+				<Moon
+					aria-hidden="true"
+					className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100"
+				/>
+				<span className="sr-only">{t('toggle')}</span>
+			</summary>
+			<div
+				role="radiogroup"
+				aria-label={t('change')}
+				className="absolute right-0 top-full z-50 mt-2 min-w-36 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+			>
+				{themeOptions.map(option => (
+					<button
+						key={option}
+						type="button"
+						role="radio"
+						aria-checked={option === 'system'}
+						tabIndex={option === 'system' ? 0 : -1}
+						data-theme-choice={option}
+						className="block w-full rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent aria-checked:bg-accent"
+					>
+						{t(option)}
+					</button>
+				))}
+			</div>
+		</details>
+	)
 }

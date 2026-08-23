@@ -119,7 +119,7 @@ function TeamSummary({
 			src={teamCrestSrc(team.shortName)}
 			width={32}
 			height={32}
-			unoptimized
+			sizes="(min-width: 768px) 36px, 32px"
 			className="size-8 shrink-0 object-contain md:size-9"
 		/>
 	)

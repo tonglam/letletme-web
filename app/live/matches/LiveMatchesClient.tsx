@@ -342,14 +342,16 @@ export function LiveMatchesClient({
 					/>
 					<span className="sr-only">{t('refresh')}</span>
 				</Button>
-				{!isLoading || isRefreshing ? (
-					<LiveAutoRefreshCountdown
-						enabled={autoRefreshEnabled}
-						onRefresh={autoRefreshMatches}
-						nextRefreshAt={snapshot?.nextRefreshAt}
-						renderLabel={seconds => t('autoRefresh', { seconds })}
-					/>
-				) : null}
+				<div className="min-h-4">
+					{!isLoading || isRefreshing ? (
+						<LiveAutoRefreshCountdown
+							enabled={autoRefreshEnabled}
+							onRefresh={autoRefreshMatches}
+							nextRefreshAt={snapshot?.nextRefreshAt}
+							renderLabel={seconds => t('autoRefresh', { seconds })}
+						/>
+					) : null}
+				</div>
 			</div>
 		</div>
 	)
