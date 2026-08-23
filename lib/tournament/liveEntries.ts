@@ -59,6 +59,19 @@ const mapEventChipToFlags = (eventChip: string | null) => ({
 	freeHit: eventChip === 'FREE_HIT'
 })
 
+const isPositiveOverallRank = (
+	value: number | null | undefined
+): value is number =>
+	typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+
+const resolveOverallRank = (
+	liveOverallRank: number | null | undefined,
+	lastKnownOverallRank: number | null | undefined
+): number => {
+	if (isPositiveOverallRank(liveOverallRank)) return liveOverallRank
+	return isPositiveOverallRank(lastKnownOverallRank) ? lastKnownOverallRank : 0
+}
+
 export const buildRankMap = (
 	rows: TournamentLiveCalcData[]
 ): Map<number, number> => {
@@ -133,13 +146,12 @@ export const buildTournamentEntries = (
 				? effectiveCaptainPick.totalPoints
 				: 0)
 		const stale = Boolean(staleIds?.has(row.entry))
-		// Once the live score contract is present, its OR is the only value that
-		// may be displayed. In particular, classic standings can temporarily
-		// have no OR while Data is fetching the official entry summary; falling
-		// back to row.overallRank would show the stale rank saved at signup.
-		const overallRank = row.score
-			? (row.score.overallRank ?? 0)
-			: (row.overallRank ?? 0)
+		// The score carries the freshest official OR. GraphQL's top-level value
+		// is the last-known official fallback while the live summary catches up.
+		const overallRank = resolveOverallRank(
+			row.score?.overallRank,
+			row.overallRank
+		)
 
 		return {
 			id: String(row.entry),
