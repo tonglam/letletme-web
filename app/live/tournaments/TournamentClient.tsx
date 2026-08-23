@@ -809,7 +809,7 @@ export default function TournamentClient({
 	const shareText = useMemo(() => {
 		const lines = [
 			`# ${selectedTournament?.name ?? t('liveStandings')} · GW${selectedGameweek}`,
-			`${t('averageScore')}: ${boardPage ? formatLiveAveragePoints(boardPage.averageEventPoints) : '—'} · ${t('highestScore')}: ${boardPage?.highestEventPoints ?? '—'}`,
+			`${t('averageScore')}: ${boardPage?.averageEventPoints == null ? '—' : formatLiveAveragePoints(boardPage.averageEventPoints)} · ${t('highestScore')}: ${boardPage?.highestEventPoints ?? '—'}`,
 			'',
 			t('standings')
 		]
