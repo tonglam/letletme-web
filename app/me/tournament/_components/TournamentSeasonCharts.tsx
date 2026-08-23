@@ -35,6 +35,11 @@ export function TournamentSeasonCharts({
 	const [hover, setHover] = useState<TournamentPathPoint | null>(null)
 	const compact = (value: number) =>
 		format.number(value, { notation: 'compact', maximumFractionDigits: 1 })
+	const formatAverage = (value: number) =>
+		format.number(value, {
+			minimumFractionDigits: 2,
+			maximumFractionDigits: 2,
+		})
 	const form = useMemo(() => points.slice(-FORM_LEN), [points])
 
 	const chartData = useMemo(
@@ -91,7 +96,7 @@ export function TournamentSeasonCharts({
 		const average =
 			point.averageOverallPoints == null
 				? '—'
-				: format.number(Math.round(point.averageOverallPoints))
+				: formatAverage(point.averageOverallPoints)
 		const difference =
 			point.pointsVsAverage == null
 				? '—'
@@ -99,12 +104,10 @@ export function TournamentSeasonCharts({
 					? t('atAverage')
 					: point.pointsVsAverage > 0
 						? t('aboveAverageBy', {
-								points: format.number(Math.round(point.pointsVsAverage))
+								points: formatAverage(point.pointsVsAverage)
 							})
 						: t('belowAverageBy', {
-								points: format.number(
-									Math.abs(Math.round(point.pointsVsAverage))
-								)
+								points: formatAverage(Math.abs(point.pointsVsAverage))
 							})
 		return t('chartHoverDual', {
 			you,
