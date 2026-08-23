@@ -56,6 +56,25 @@ status of the one regional EdgeOne record. The implementation signs the
 current DNSPod API 3.0 endpoints `DescribeRecordList` and
 `ModifyRecordStatus`.
 
+Provision the value-bearing bindings only after the shadow-zone record IDs and
+targets have been captured; the commands below name the bindings without
+putting any value in Git:
+
+```sh
+wrangler secret put DNSPOD_SECRET_ID
+wrangler secret put DNSPOD_SECRET_KEY
+wrangler secret put DNSPOD_DOMAIN_ID
+wrangler secret put DNSPOD_EDGEONE_RECORD_ID
+wrangler secret put DNSPOD_EDGEONE_CNAME
+wrangler secret put DNSPOD_DEFAULT_VERCEL_A
+wrangler secret put TELEGRAM_BOT_TOKEN
+wrangler secret put TELEGRAM_CHAT_ID
+```
+
+Deploy the Worker with `WATCHDOG_ENABLED=false` first. Verify the live secret
+names and a read-only dry run before enabling the watchdog; never paste the
+secret values into a commit, log, or review comment.
+
 ## Shadow-zone procedure
 
 1. Export the current Cloudflare zone immediately before any DNS work. Do not
