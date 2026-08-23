@@ -1,9 +1,6 @@
 'use client'
 
-import {
-	isAppLocale,
-	stripLocaleFromHref,
-} from '@/i18n/routing'
+import { isAppLocale, stripLocaleFromHref } from '@/i18n/routing'
 import { useRouter } from '@/i18n/navigation'
 import { Languages } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
@@ -35,7 +32,10 @@ export function LanguageSwitcher() {
 				aria-busy={isPending}
 				className="flex size-9 cursor-pointer list-none items-center justify-center rounded-md text-fascia-foreground hover:bg-fascia-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric [&::-webkit-details-marker]:hidden"
 			>
-				<Languages aria-hidden="true" className="size-4" />
+				<Languages
+					aria-hidden="true"
+					className="size-4"
+				/>
 				<span className="sr-only">{t('change')}</span>
 			</summary>
 			<div
@@ -48,6 +48,7 @@ export function LanguageSwitcher() {
 					type="button"
 					role="radio"
 					aria-checked={locale === 'en'}
+					tabIndex={locale === 'en' ? 0 : -1}
 					lang="en"
 					disabled={isPending}
 					onClick={() => changeLocale('en')}
@@ -59,6 +60,7 @@ export function LanguageSwitcher() {
 					type="button"
 					role="radio"
 					aria-checked={locale === 'zh-CN'}
+					tabIndex={locale === 'zh-CN' ? 0 : -1}
 					lang="zh-CN"
 					disabled={isPending}
 					onClick={() => changeLocale('zh-CN')}

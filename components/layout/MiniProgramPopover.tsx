@@ -7,10 +7,14 @@ type MiniProgramPopoverProps = {
 }
 
 /** Footer-only disclosure that stays fully server rendered until navigation. */
-export function MiniProgramPopover({ label, scanText }: MiniProgramPopoverProps) {
+export function MiniProgramPopover({
+	label,
+	scanText
+}: MiniProgramPopoverProps) {
 	return (
 		<details
 			data-navigation-disclosure
+			data-mini-program-popover
 			className="group relative w-fit"
 		>
 			<summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-md border border-electric/40 bg-fascia-foreground/5 px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-caps text-fascia-foreground/80 transition-colors hover:border-electric hover:text-electric focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-electric [&::-webkit-details-marker]:hidden">
@@ -23,7 +27,7 @@ export function MiniProgramPopover({ label, scanText }: MiniProgramPopoverProps)
 			<div
 				role="group"
 				aria-label={scanText}
-				className="absolute bottom-full right-0 z-50 mb-3 w-[min(92vw,42rem)] overflow-hidden rounded-md border border-electric/40 bg-card p-2 text-card-foreground shadow-xl"
+				className="absolute bottom-full left-0 z-50 mb-3 w-[min(92vw,42rem)] overflow-hidden rounded-md border border-electric/40 bg-card p-2 text-card-foreground shadow-xl sm:left-auto sm:right-0"
 			>
 				<Image
 					src="/images/miniprogram-light.png"

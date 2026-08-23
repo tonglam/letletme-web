@@ -66,7 +66,7 @@ test('retired public routes return 404 instead of redirecting', async ({
 	}
 })
 
-test('server navigation and native disclosures stay usable without hydration', async ({
+test('server navigation stays usable while scripted controls remain inert', async ({
 	browser
 }) => {
 	const page = await browser.newPage({ javaScriptEnabled: false })
@@ -82,13 +82,26 @@ test('server navigation and native disclosures stay usable without hydration', a
 	const themeDisclosure = page.locator(
 		'details[data-navigation-disclosure]:has(summary[aria-label="Change color theme"])'
 	)
-	await themeDisclosure.locator(':scope > summary').click()
-	await expect(themeDisclosure).toHaveAttribute('open', '')
-	await expect(
-		themeDisclosure.getByRole('radio', { name: 'Dark' })
-	).toBeVisible()
+	await expect(themeDisclosure).toHaveAttribute('inert', '')
+	await expect(themeDisclosure).toHaveAttribute('aria-disabled', 'true')
 
 	await page.close()
+})
+
+test('footer QR disclosure stays inside the mobile viewport', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 })
+	await page.goto('/')
+
+	const disclosure = page.locator('details[data-mini-program-popover]')
+	await disclosure.locator(':scope > summary').click()
+	const panel = disclosure.getByRole('group')
+	await expect(panel).toBeVisible()
+	const bounds = await panel.boundingBox()
+	expect(bounds).not.toBeNull()
+	expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0)
+	expect((bounds?.x ?? 0) + (bounds?.width ?? 391)).toBeLessThanOrEqual(390)
 })
 
 test('home keeps the four-section vocabulary and competition entry links aligned', async ({
@@ -458,6 +471,45 @@ test('theme choice persists across a reload', async ({ page }) => {
 		.toBe('dark')
 	await page.reload()
 	await expect(page.locator('html')).toHaveClass(/dark/)
+})
+
+test('theme radio group uses one tab stop and arrow-key selection', async ({
+	page
+}) => {
+	await page.goto('/')
+	const summary = page.locator('summary[aria-label="Change color theme"]')
+	await summary.click()
+	const group = page.getByRole('radiogroup', { name: 'Change color theme' })
+	const light = group.getByRole('radio', { name: 'Light' })
+	const dark = group.getByRole('radio', { name: 'Dark' })
+	const system = group.getByRole('radio', { name: 'System' })
+
+	await expect(light).toHaveAttribute('tabindex', '-1')
+	await expect(dark).toHaveAttribute('tabindex', '-1')
+	await expect(system).toHaveAttribute('tabindex', '0')
+	await system.focus()
+	await system.press('ArrowLeft')
+
+	await expect(page.locator('[data-theme-choice="dark"]')).toHaveAttribute(
+		'aria-checked',
+		'true'
+	)
+	await expect(page.locator('html')).toHaveClass(/dark/)
+	await expect(summary).toBeFocused()
+})
+
+test('report dialog restores focus to its activating control', async ({
+	page
+}) => {
+	await page.goto('/')
+	const trigger = page
+		.getByRole('button', { name: 'Something not working?', exact: true })
+		.last()
+	await trigger.click()
+	await expect(page.getByRole('dialog')).toBeVisible()
+	await page.getByRole('button', { name: 'Close', exact: true }).click()
+	await expect(page.getByRole('dialog')).toBeHidden()
+	await expect(trigger).toBeFocused()
 })
 
 test('sign-up gives an in-app error for mismatched passwords', async ({

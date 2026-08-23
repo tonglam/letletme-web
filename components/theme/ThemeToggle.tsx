@@ -9,6 +9,9 @@ export async function ThemeToggle() {
 	return (
 		<details
 			data-navigation-disclosure
+			data-theme-picker
+			inert
+			aria-disabled="true"
 			className="group relative"
 		>
 			<summary
@@ -36,6 +39,7 @@ export async function ThemeToggle() {
 						type="button"
 						role="radio"
 						aria-checked={option === 'system'}
+						tabIndex={option === 'system' ? 0 : -1}
 						data-theme-choice={option}
 						className="block w-full rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent aria-checked:bg-accent"
 					>

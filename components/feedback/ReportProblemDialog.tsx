@@ -21,7 +21,7 @@ const ALLOWED_SCREENSHOT_TYPES = new Set([
 	'image/jpeg',
 	'image/png',
 	'image/webp',
-	'image/gif',
+	'image/gif'
 ])
 
 function readFileAsBase64(file: File): Promise<string> {
@@ -44,10 +44,12 @@ function readFileAsBase64(file: File): Promise<string> {
 export function ReportProblemDialog({
 	open,
 	onOpenChange,
-	className,
+	onRestoreFocus,
+	className
 }: {
 	open: boolean
 	onOpenChange: (open: boolean) => void
+	onRestoreFocus: () => boolean
 	className?: string
 }) {
 	const t = useTranslations('ReportProblem')
@@ -85,8 +87,8 @@ export function ReportProblemDialog({
 					body,
 					clientMeta: collectBrowserBugReportMeta(),
 					screenshotBase64,
-					screenshotMime,
-				}),
+					screenshotMime
+				})
 			})
 			const result = (await response.json()) as {
 				success?: boolean
@@ -111,8 +113,17 @@ export function ReportProblemDialog({
 	}
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent side="right" className={cn('z-[60] sm:max-w-md', className)}>
+		<Sheet
+			open={open}
+			onOpenChange={onOpenChange}
+		>
+			<SheetContent
+				side="right"
+				className={cn('z-[60] sm:max-w-md', className)}
+				onCloseAutoFocus={event => {
+					if (onRestoreFocus()) event.preventDefault()
+				}}
+			>
 				<SheetHeader>
 					<SheetTitle>{t('title')}</SheetTitle>
 					<SheetDescription>{t('description')}</SheetDescription>

@@ -2,7 +2,14 @@
 
 import { cn } from '@/lib/utils'
 import { useTranslations } from 'next-intl'
-import { lazy, Suspense, useState, type ReactNode } from 'react'
+import {
+	lazy,
+	Suspense,
+	useRef,
+	useState,
+	type MouseEvent as ReactMouseEvent,
+	type ReactNode
+} from 'react'
 
 const ReportProblemDialog = lazy(() =>
 	import('./ReportProblemDialog').then(module => ({
@@ -30,6 +37,7 @@ export function ReportProblemEntry({
 	const t = useTranslations('ReportProblem')
 	const [internalOpen, setInternalOpen] = useState(false)
 	const [activated, setActivated] = useState(Boolean(controlledOpen))
+	const triggerRef = useRef<HTMLElement | null>(null)
 	const open = controlledOpen ?? internalOpen
 
 	const handleOpenChange = (nextOpen: boolean) => {
@@ -37,13 +45,33 @@ export function ReportProblemEntry({
 		if (controlledOpen === undefined) setInternalOpen(nextOpen)
 		onOpenChange?.(nextOpen)
 	}
+	const handleTriggerClick = (event: ReactMouseEvent<HTMLElement>) => {
+		const clickedTarget =
+			event.target instanceof Element
+				? event.target.closest<HTMLElement>(
+						'button, a[href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])'
+					)
+				: null
+		const activeTarget =
+			document.activeElement instanceof HTMLElement
+				? document.activeElement
+				: null
+		triggerRef.current = clickedTarget ?? activeTarget ?? event.currentTarget
+		handleOpenChange(true)
+	}
+	const restoreTriggerFocus = () => {
+		const trigger = triggerRef.current
+		if (!trigger?.isConnected) return false
+		trigger.focus({ preventScroll: true })
+		return document.activeElement === trigger
+	}
 
 	return (
 		<>
 			{children ? (
 				<span
 					className="contents"
-					onClick={() => handleOpenChange(true)}
+					onClick={handleTriggerClick}
 				>
 					{children}
 				</span>
@@ -52,7 +80,7 @@ export function ReportProblemEntry({
 					type="button"
 					aria-haspopup="dialog"
 					className={cn(triggerClassName)}
-					onClick={() => handleOpenChange(true)}
+					onClick={handleTriggerClick}
 				>
 					{t('entry')}
 				</button>
@@ -62,6 +90,7 @@ export function ReportProblemEntry({
 					<ReportProblemDialog
 						open={open}
 						onOpenChange={handleOpenChange}
+						onRestoreFocus={restoreTriggerFocus}
 						className={className}
 					/>
 				</Suspense>

@@ -14,12 +14,18 @@ describe('server-first global shell performance boundary', () => {
 		)
 		const navigationLink = read('components/layout/NavigationMenuLink.tsx')
 		const miniProgram = read('components/layout/MiniProgramPopover.tsx')
+		const languageSwitcher = read('components/layout/LanguageSwitcher.tsx')
 
 		assert.doesNotMatch(layout, /ThemeProvider/)
 		assert.match(layout, /data-cfasync="false"/)
 		assert.doesNotMatch(clientNamespaces, /\n\s*'Theme',/)
 		assert.match(layout, /data-navigation-disclosure/)
 		assert.match(layout, /data-theme-choice/)
+		assert.match(layout, /ArrowDown[\s\S]*role="radio"/)
+		assert.match(themeToggle, /data-theme-picker[\s\S]*inert/)
+		assert.match(themeToggle, /tabIndex=/)
+		assert.match(languageSwitcher, /tabIndex=/)
+		assert.match(miniProgram, /left-0[\s\S]*sm:right-0/)
 		for (const source of [
 			themeToggle,
 			disclosureController,
@@ -39,7 +45,10 @@ describe('server-first global shell performance boundary', () => {
 		const entry = read('components/feedback/ReportProblemEntry.tsx')
 		const dialog = read('components/feedback/ReportProblemDialog.tsx')
 
-		assert.match(entry, /lazy\(\(\) =>[\s\S]*import\('\.\/ReportProblemDialog'\)/)
+		assert.match(
+			entry,
+			/lazy\(\(\) =>[\s\S]*import\('\.\/ReportProblemDialog'\)/
+		)
 		assert.doesNotMatch(entry, /components\/ui\/sheet|from 'sonner'/)
 		assert.match(dialog, /components\/ui\/sheet/)
 		assert.match(dialog, /from 'sonner'/)

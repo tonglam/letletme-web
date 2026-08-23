@@ -70,11 +70,18 @@ const shellBootstrapScript = `
 
 	const updateThemeControls = (theme) => {
 		document.querySelectorAll('[data-theme-choice]').forEach((choice) => {
-			choice.setAttribute(
-				'aria-checked',
-				choice.getAttribute('data-theme-choice') === theme ? 'true' : 'false'
-			);
+			const selected = choice.getAttribute('data-theme-choice') === theme;
+			choice.setAttribute('aria-checked', selected ? 'true' : 'false');
+			if (choice instanceof HTMLElement) choice.tabIndex = selected ? 0 : -1;
 		});
+	};
+
+	const enableShellControls = () => {
+		document.querySelectorAll('[data-theme-picker]').forEach((picker) => {
+			picker.removeAttribute('inert');
+			picker.setAttribute('aria-disabled', 'false');
+		});
+		updateThemeControls(readTheme());
 	};
 
 	const applyTheme = (theme) => {
@@ -101,7 +108,9 @@ const shellBootstrapScript = `
 			if (themeChoices.has(theme)) {
 				try { window.localStorage.setItem('theme', theme); } catch {}
 				applyTheme(theme);
-				themeChoice.closest(disclosureSelector)?.removeAttribute('open');
+				const disclosure = themeChoice.closest(disclosureSelector);
+				disclosure?.removeAttribute('open');
+				disclosure?.querySelector(':scope > summary')?.focus();
 			}
 			return;
 		}
@@ -113,16 +122,40 @@ const shellBootstrapScript = `
 		}
 		if (target.closest('summary')) closeDisclosures(disclosure);
 		if (target.closest('a')) disclosure.removeAttribute('open');
+		if (target.closest('[role="radio"]')) disclosure.removeAttribute('open');
 	});
 
 	document.addEventListener('keydown', (event) => {
+		const target = event.target;
+		const radio = target instanceof Element ? target.closest('[role="radio"]') : null;
+		const group = radio?.closest('[role="radiogroup"]');
+		if (radio && group && ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft', 'Home', 'End'].includes(event.key)) {
+			const choices = Array.from(group.querySelectorAll('[role="radio"]')).filter(
+				(choice) => choice instanceof HTMLButtonElement && !choice.disabled
+			);
+			const currentIndex = choices.indexOf(radio);
+			if (currentIndex >= 0 && choices.length > 0) {
+				event.preventDefault();
+				let nextIndex;
+				if (event.key === 'Home') nextIndex = 0;
+				else if (event.key === 'End') nextIndex = choices.length - 1;
+				else if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+					nextIndex = (currentIndex + 1) % choices.length;
+				} else {
+					nextIndex = (currentIndex - 1 + choices.length) % choices.length;
+				}
+				choices[nextIndex].focus();
+				choices[nextIndex].click();
+			}
+			return;
+		}
 		if (event.key === 'Escape') closeDisclosures();
 	});
 
 	colorSchemeQuery.addEventListener('change', () => {
 		if (readTheme() === 'system') applyTheme('system');
 	});
-	document.addEventListener('DOMContentLoaded', () => updateThemeControls(readTheme()), { once: true });
+	document.addEventListener('DOMContentLoaded', enableShellControls, { once: true });
 })();
 `
 
