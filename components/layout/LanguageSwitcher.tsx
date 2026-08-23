@@ -1,14 +1,5 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuLabel,
-	DropdownMenuRadioGroup,
-	DropdownMenuRadioItem,
-	DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import {
 	isAppLocale,
 	stripLocaleFromHref,
@@ -35,30 +26,47 @@ export function LanguageSwitcher() {
 	}
 
 	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button
-					variant="ghost"
-					size="icon"
-					aria-label={t('change')}
-					aria-busy={isPending}
+		<details
+			data-navigation-disclosure
+			className="group relative"
+		>
+			<summary
+				aria-label={t('change')}
+				aria-busy={isPending}
+				className="flex size-9 cursor-pointer list-none items-center justify-center rounded-md text-fascia-foreground hover:bg-fascia-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric [&::-webkit-details-marker]:hidden"
+			>
+				<Languages aria-hidden="true" className="size-4" />
+				<span className="sr-only">{t('change')}</span>
+			</summary>
+			<div
+				role="radiogroup"
+				aria-label={t('label')}
+				className="absolute right-0 top-full z-50 mt-2 min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+			>
+				<p className="px-2 py-1.5 text-sm font-semibold">{t('label')}</p>
+				<button
+					type="button"
+					role="radio"
+					aria-checked={locale === 'en'}
+					lang="en"
 					disabled={isPending}
+					onClick={() => changeLocale('en')}
+					className="block w-full rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent aria-checked:bg-accent disabled:opacity-50"
 				>
-					<Languages aria-hidden="true" />
-					<span className="sr-only">{t('change')}</span>
-				</Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end">
-				<DropdownMenuLabel>{t('label')}</DropdownMenuLabel>
-				<DropdownMenuRadioGroup value={locale} onValueChange={changeLocale}>
-					<DropdownMenuRadioItem value="en" lang="en">
-						{t('english')}
-					</DropdownMenuRadioItem>
-					<DropdownMenuRadioItem value="zh-CN" lang="zh-CN">
-						{t('simplifiedChinese')}
-					</DropdownMenuRadioItem>
-				</DropdownMenuRadioGroup>
-			</DropdownMenuContent>
-		</DropdownMenu>
+					{t('english')}
+				</button>
+				<button
+					type="button"
+					role="radio"
+					aria-checked={locale === 'zh-CN'}
+					lang="zh-CN"
+					disabled={isPending}
+					onClick={() => changeLocale('zh-CN')}
+					className="block w-full rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent aria-checked:bg-accent disabled:opacity-50"
+				>
+					{t('simplifiedChinese')}
+				</button>
+			</div>
+		</details>
 	)
 }

@@ -142,11 +142,11 @@ export function MatchPlayerList({ match, onSelectPlayer }: MatchPlayerListProps)
 					<Tabs defaultValue={match.homeTeam.shortName} className="w-full">
 						<TabsList className="mb-2 grid h-auto w-full grid-cols-2">
 							<TabsTrigger value={match.homeTeam.shortName} className="gap-2">
-								<Image src={teamCrestSrc(match.homeTeam.shortName)} alt="" width={16} height={16} unoptimized className="size-4 object-contain" />
+								<Image src={teamCrestSrc(match.homeTeam.shortName)} alt="" width={16} height={16} sizes="16px" className="size-4 object-contain" />
 								<span className="truncate">{match.homeTeam.name}</span>
 							</TabsTrigger>
 							<TabsTrigger value={match.awayTeam.shortName} className="gap-2">
-								<Image src={teamCrestSrc(match.awayTeam.shortName)} alt="" width={16} height={16} unoptimized className="size-4 object-contain" />
+								<Image src={teamCrestSrc(match.awayTeam.shortName)} alt="" width={16} height={16} sizes="16px" className="size-4 object-contain" />
 								<span className="truncate">{match.awayTeam.name}</span>
 							</TabsTrigger>
 						</TabsList>

@@ -2,7 +2,6 @@ export const GLOBAL_CLIENT_NAMESPACES = [
 	'Common',
 	'Navigation',
 	'Language',
-	'Theme',
 	'ReportProblem'
 ] as const satisfies readonly (keyof IntlMessages)[]
 
