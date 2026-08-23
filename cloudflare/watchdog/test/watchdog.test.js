@@ -70,6 +70,7 @@ function fakeFetchFactory({
 	record,
 	records,
 	defaultRecord,
+	defaultRecords,
 	edgeResponses = [],
 	vercelResponse = health(false),
 	telegramResponses = []
@@ -95,7 +96,12 @@ function fakeFetchFactory({
 				if (action === 'DescribeRecordList') {
 					const body = JSON.parse(init.body)
 					if (body.RecordType === 'A') {
-						return Response.json({ Response: { RecordList: fallbackRecord ? [fallbackRecord] : [] } })
+						const records = defaultRecords
+							? defaultRecords.map(toDnsRecord)
+							: fallbackRecord
+								? [fallbackRecord]
+								: []
+						return Response.json({ Response: { RecordList: records } })
 					}
 					const next = dnsRecords.length > 0 ? dnsRecords.shift() : currentRecord
 					if (next) currentRecord = next
@@ -191,6 +197,21 @@ test('does not disable regional EdgeOne when the default Vercel fallback is unsa
 	const { fetch, calls } = fakeFetchFactory({
 		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false },
 		defaultRecord: { Type: 'A', Value: '198.51.100.10', Line: '默认', Status: 'ENABLE' },
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'manual-dns-state')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
+test('does not disable regional EdgeOne when a competing default apex record is enabled', async () => {
+	const env = makeEnv()
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false },
+		defaultRecords: [
+			{ RecordId: 456, Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'ENABLE' },
+			{ RecordId: 457, Type: 'A', Value: '203.0.113.12', Line: '默认', Status: 'ENABLE' }
+		],
 		edgeResponses: [new Response('', { status: 503 })]
 	})
 	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })

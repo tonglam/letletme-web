@@ -163,7 +163,15 @@ export async function getDefaultVercelRecord(env, fetchImpl) {
 		ErrorOnEmpty: 'no'
 	})
 	const records = Array.isArray(response.RecordList) ? response.RecordList : []
-	return records.find(record => isDefaultVercelRecord(record, env)) || null
+	const enabledDefaultApexRecords = records.filter(record =>
+		String(record.Name || '').toLowerCase() === '@' &&
+		String(record.Line || '') === defaultVercelLine(env) &&
+		String(record.Status || '').toUpperCase() === 'ENABLE'
+	)
+	if (enabledDefaultApexRecords.length !== 1) return null
+	return isDefaultVercelRecord(enabledDefaultApexRecords[0], env)
+		? enabledDefaultApexRecords[0]
+		: null
 }
 
 export async function disableConfiguredRecord(env, fetchImpl) {
