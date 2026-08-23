@@ -152,6 +152,7 @@ describe('live tournament desk', () => {
 		])
 		assert.equal(fractionalStats.averagePoints, 98 / 3)
 		assert.equal(formatLiveAveragePoints(fractionalStats.averagePoints), '32.67')
+		assert.equal(formatLiveAveragePoints(201 / 200), '1.01')
 	})
 
 	it('retries an expired revision exactly once without a ref', async () => {

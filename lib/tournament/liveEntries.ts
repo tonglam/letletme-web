@@ -279,5 +279,11 @@ export const buildTournamentStats = (
 	}
 }
 
+const liveAverageFormatter = new Intl.NumberFormat('en-GB', {
+	minimumFractionDigits: 2,
+	maximumFractionDigits: 2,
+	useGrouping: false
+})
+
 export const formatLiveAveragePoints = (value: number): string =>
-	Number.isFinite(value) ? value.toFixed(2) : '—'
+	Number.isFinite(value) ? liveAverageFormatter.format(value) : '—'
