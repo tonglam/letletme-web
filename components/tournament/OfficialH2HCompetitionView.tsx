@@ -13,10 +13,16 @@ import {
 	type OfficialH2HMatch,
 	type OfficialH2HMatchSide,
 	type TournamentOfficialH2H,
-	type TournamentOfficialH2HResponse,
+	type TournamentOfficialH2HResponse
 } from '@/lib/graphql/operations/tournaments'
 import { cn, formatInteger } from '@/lib/utils'
-import { ArrowLeft, ArrowRight, CalendarClock, RefreshCw, Swords } from 'lucide-react'
+import {
+	ArrowLeft,
+	ArrowRight,
+	CalendarClock,
+	RefreshCw,
+	Swords
+} from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -31,9 +37,22 @@ function scoreLabel(side: OfficialH2HMatchSide): string {
 	return side.points == null ? '—' : formatInteger(side.points)
 }
 
+function shareMatchLabel(
+	match: OfficialH2HMatch,
+	averageLabel: string,
+	versusLabel: string
+): string {
+	const home = sideLabel(match.home, averageLabel)
+	const away = sideLabel(match.away, averageLabel)
+	if (match.home.points == null || match.away.points == null) {
+		return `${home} ${versusLabel} ${away}`
+	}
+	return `${home} ${scoreLabel(match.home)} — ${scoreLabel(match.away)} ${away}`
+}
+
 function MatchCard({
 	match,
-	viewerEntryId,
+	viewerEntryId
 }: {
 	match: OfficialH2HMatch
 	viewerEntryId?: number
@@ -41,7 +60,8 @@ function MatchCard({
 	const t = useTranslations('LiveTournament')
 	const involvesViewer =
 		viewerEntryId != null &&
-		(match.home.entryId === viewerEntryId || match.away.entryId === viewerEntryId)
+		(match.home.entryId === viewerEntryId ||
+			match.away.entryId === viewerEntryId)
 	const hasScore = match.home.points != null && match.away.points != null
 
 	return (
@@ -49,7 +69,7 @@ function MatchCard({
 			<Card
 				className={cn(
 					'overflow-hidden border-border/80 p-0 shadow-sm',
-					involvesViewer && 'border-primary/45 ring-1 ring-primary/20',
+					involvesViewer && 'border-primary/45 ring-1 ring-primary/20'
 				)}
 			>
 				<div className="flex items-center justify-between gap-3 border-b border-border/60 bg-muted/25 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -59,8 +79,12 @@ function MatchCard({
 							: t('officialH2HRegular')}
 					</span>
 					<span className="flex items-center gap-2">
-						{involvesViewer ? <Badge variant="outline">{t('youBadge')}</Badge> : null}
-						{match.isBye ? <Badge variant="outline">{t('officialH2HBye')}</Badge> : null}
+						{involvesViewer ? (
+							<Badge variant="outline">{t('youBadge')}</Badge>
+						) : null}
+						{match.isBye ? (
+							<Badge variant="outline">{t('officialH2HBye')}</Badge>
+						) : null}
 					</span>
 				</div>
 				<div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4 py-4">
@@ -113,7 +137,7 @@ export function OfficialH2HCompetitionView({
 	eventId,
 	initialSnapshot,
 	tournamentId,
-	viewerEntryId,
+	viewerEntryId
 }: {
 	activeEventId?: number
 	eventId: number
@@ -138,7 +162,7 @@ export function OfficialH2HCompetitionView({
 				const response = await executeQuery<TournamentOfficialH2HResponse>(
 					GET_TOURNAMENT_OFFICIAL_H2H,
 					{ tournamentId, eventId },
-					{ cache: 'no-store' },
+					{ cache: 'no-store' }
 				)
 				setSnapshot(response.tournamentOfficialH2H)
 				setRefreshFailed(false)
@@ -163,13 +187,16 @@ export function OfficialH2HCompetitionView({
 	}, [isCurrentEvent, isPageActive, refresh])
 
 	const standings = useMemo(
-		() => [...(snapshot?.standings ?? [])].sort((left, right) =>
-			(left.rank ?? Number.MAX_SAFE_INTEGER) - (right.rank ?? Number.MAX_SAFE_INTEGER) ||
-			right.matchPoints - left.matchPoints ||
-			right.pointsFor - left.pointsFor ||
-			left.entryId - right.entryId,
-		),
-		[snapshot?.standings],
+		() =>
+			[...(snapshot?.standings ?? [])].sort(
+				(left, right) =>
+					(left.rank ?? Number.MAX_SAFE_INTEGER) -
+						(right.rank ?? Number.MAX_SAFE_INTEGER) ||
+					right.matchPoints - left.matchPoints ||
+					right.pointsFor - left.pointsFor ||
+					left.entryId - right.entryId
+			),
+		[snapshot?.standings]
 	)
 	const matches = snapshot?.matches ?? EMPTY_OFFICIAL_H2H_MATCHES
 	const previousEvent = eventId > 1 ? eventId - 1 : null
@@ -178,16 +205,21 @@ export function OfficialH2HCompetitionView({
 		const lines = [
 			t('officialH2HGameweek', { event: eventId }),
 			`${t('officialH2HTable')}:`,
-			...standings.map(standing =>
-				`${standing.rank ?? '—'}. ${standing.entryName ?? `Entry ${standing.entryId}`} · ${standing.matchPoints} ${t('officialH2HMatchPoints')} · ${standing.pointsFor} ${t('officialH2HPointsFor')}`
-			),
+			...standings.map(
+				standing =>
+					`${standing.rank ?? '—'}. ${standing.entryName ?? `Entry ${standing.entryId}`} · ${standing.matchPoints} ${t('officialH2HMatchPoints')} · ${standing.pointsFor} ${t('officialH2HPointsFor')}`
+			)
 		]
 		if (matches.length > 0) {
 			lines.push(
 				'',
 				t('officialH2HFixtures'),
 				...matches.map(match =>
-					`${sideLabel(match.home, t('officialH2HAverageTeam'))} ${scoreLabel(match.home)} — ${scoreLabel(match.away)} ${sideLabel(match.away, t('officialH2HAverageTeam'))}`
+					shareMatchLabel(
+						match,
+						t('officialH2HAverageTeam'),
+						t('officialH2HVersus')
+					)
 				)
 			)
 		}
@@ -197,7 +229,10 @@ export function OfficialH2HCompetitionView({
 	const roundButtonClass = 'min-w-[5.75rem] justify-center'
 
 	return (
-		<div className="space-y-5">
+		<div
+			ref={shareRef}
+			className="space-y-5"
+		>
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div>
 					<p className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -207,7 +242,10 @@ export function OfficialH2HCompetitionView({
 						{t('officialH2HGameweek', { event: eventId })}
 					</h2>
 				</div>
-				<div className="flex items-center gap-2">
+				<div
+					className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 sm:w-auto"
+					data-share-exclude="true"
+				>
 					<Button
 						variant="outline"
 						size="sm"
@@ -221,7 +259,10 @@ export function OfficialH2HCompetitionView({
 								{t('previous')}
 							</>
 						) : (
-							<Link href={`/live/competitions/${tournamentId}?gw=${previousEvent}`} prefetch={false}>
+							<Link
+								href={`/live/competitions/${tournamentId}?gw=${previousEvent}`}
+								prefetch={false}
+							>
 								<ArrowLeft aria-hidden="true" />
 								{t('previous')}
 							</Link>
@@ -240,7 +281,10 @@ export function OfficialH2HCompetitionView({
 								<ArrowRight aria-hidden="true" />
 							</>
 						) : (
-							<Link href={`/live/competitions/${tournamentId}?gw=${nextEvent}`} prefetch={false}>
+							<Link
+								href={`/live/competitions/${tournamentId}?gw=${nextEvent}`}
+								prefetch={false}
+							>
 								{t('next')}
 								<ArrowRight aria-hidden="true" />
 							</Link>
@@ -252,7 +296,10 @@ export function OfficialH2HCompetitionView({
 						onClick={() => void refresh()}
 						disabled={isRefreshing}
 					>
-						<RefreshCw className={isRefreshing ? 'animate-spin' : undefined} aria-hidden="true" />
+						<RefreshCw
+							className={isRefreshing ? 'animate-spin' : undefined}
+							aria-hidden="true"
+						/>
 						{t('refresh')}
 					</Button>
 					<ShareActions
@@ -271,7 +318,10 @@ export function OfficialH2HCompetitionView({
 
 			{snapshot?.awaitingSchedule ? (
 				<Card className="border-dashed border-border/80 p-8 text-center shadow-sm">
-					<CalendarClock className="mx-auto size-7 text-primary-ink" aria-hidden="true" />
+					<CalendarClock
+						className="mx-auto size-7 text-primary-ink"
+						aria-hidden="true"
+					/>
 					<h3 className="mt-4 font-display text-lg font-bold tracking-tight">
 						{t('officialH2HAwaitingSchedule')}
 					</h3>
@@ -281,10 +331,13 @@ export function OfficialH2HCompetitionView({
 				</Card>
 			) : null}
 
-			<div ref={shareRef}>
+			<div>
 				<Card className="overflow-hidden border-border/80 p-0 shadow-sm">
 					<div className="flex items-center gap-2 border-b border-border/60 px-4 py-3 sm:px-5">
-						<Swords className="size-4 text-primary-ink" aria-hidden="true" />
+						<Swords
+							className="size-4 text-primary-ink"
+							aria-hidden="true"
+						/>
 						<h3 className="font-display text-base font-bold tracking-tight">
 							{t('officialH2HTable')}
 						</h3>
@@ -293,14 +346,54 @@ export function OfficialH2HCompetitionView({
 						<table className="w-full min-w-[38rem] text-sm">
 							<thead className="bg-muted/30 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
 								<tr>
-									<th scope="col" className="w-12 px-3 py-2 text-center">#</th>
-									<th scope="col" className="px-3 py-2 text-left">{t('team')}</th>
-									<th scope="col" className="px-2 py-2 text-center">P</th>
-									<th scope="col" className="px-2 py-2 text-center">W</th>
-									<th scope="col" className="px-2 py-2 text-center">D</th>
-									<th scope="col" className="px-2 py-2 text-center">L</th>
-									<th scope="col" className="px-3 py-2 text-right">{t('officialH2HPointsFor')}</th>
-									<th scope="col" className="px-3 py-2 text-right">{t('officialH2HMatchPoints')}</th>
+									<th
+										scope="col"
+										className="w-12 px-3 py-2 text-center"
+									>
+										#
+									</th>
+									<th
+										scope="col"
+										className="px-3 py-2 text-left"
+									>
+										{t('team')}
+									</th>
+									<th
+										scope="col"
+										className="px-2 py-2 text-center"
+									>
+										P
+									</th>
+									<th
+										scope="col"
+										className="px-2 py-2 text-center"
+									>
+										W
+									</th>
+									<th
+										scope="col"
+										className="px-2 py-2 text-center"
+									>
+										D
+									</th>
+									<th
+										scope="col"
+										className="px-2 py-2 text-center"
+									>
+										L
+									</th>
+									<th
+										scope="col"
+										className="px-3 py-2 text-right"
+									>
+										{t('officialH2HPointsFor')}
+									</th>
+									<th
+										scope="col"
+										className="px-3 py-2 text-right"
+									>
+										{t('officialH2HMatchPoints')}
+									</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -309,7 +402,8 @@ export function OfficialH2HCompetitionView({
 										key={standing.entryId}
 										className={cn(
 											'border-t border-border/50',
-											standing.entryId === viewerEntryId && 'bg-primary/5 dark:bg-primary/10',
+											standing.entryId === viewerEntryId &&
+												'bg-primary/5 dark:bg-primary/10'
 										)}
 									>
 										<td className="px-3 py-3 text-center font-mono font-semibold tabular-nums">
@@ -331,11 +425,25 @@ export function OfficialH2HCompetitionView({
 												) : null}
 											</Link>
 										</td>
-										{[standing.played, standing.won, standing.drawn, standing.lost].map((value, index) => (
-											<td key={index} className="px-2 py-3 text-center font-mono tabular-nums">{value}</td>
+										{[
+											standing.played,
+											standing.won,
+											standing.drawn,
+											standing.lost
+										].map((value, index) => (
+											<td
+												key={index}
+												className="px-2 py-3 text-center font-mono tabular-nums"
+											>
+												{value}
+											</td>
 										))}
-										<td className="px-3 py-3 text-right font-mono tabular-nums">{standing.pointsFor}</td>
-										<td className="px-3 py-3 text-right font-mono font-bold tabular-nums text-primary-ink">{standing.matchPoints}</td>
+										<td className="px-3 py-3 text-right font-mono tabular-nums">
+											{standing.pointsFor}
+										</td>
+										<td className="px-3 py-3 text-right font-mono font-bold tabular-nums text-primary-ink">
+											{standing.matchPoints}
+										</td>
 									</tr>
 								))}
 							</tbody>
@@ -345,7 +453,10 @@ export function OfficialH2HCompetitionView({
 
 				<section aria-labelledby="official-h2h-fixtures-title">
 					<div className="mb-3 flex items-center justify-between gap-3">
-						<h3 id="official-h2h-fixtures-title" className="font-display text-lg font-bold tracking-tight">
+						<h3
+							id="official-h2h-fixtures-title"
+							className="font-display text-lg font-bold tracking-tight"
+						>
 							{t('officialH2HFixtures')}
 						</h3>
 						<Badge variant="outline">{t('officialH2HOfficialOrder')}</Badge>
@@ -353,7 +464,11 @@ export function OfficialH2HCompetitionView({
 					{matches.length > 0 ? (
 						<ul className="grid gap-3 md:grid-cols-2">
 							{matches.map(match => (
-								<MatchCard key={match.officialMatchId} match={match} viewerEntryId={viewerEntryId} />
+								<MatchCard
+									key={match.officialMatchId}
+									match={match}
+									viewerEntryId={viewerEntryId}
+								/>
 							))}
 						</ul>
 					) : (

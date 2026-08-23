@@ -5,7 +5,9 @@ export function shouldIncludeShareImageNode(node: {
 	nodeType: number
 	getAttribute?: (name: string) => string | null
 }): boolean {
-	return node.nodeType !== 1 || node.getAttribute?.('data-share-exclude') !== 'true'
+	return (
+		node.nodeType !== 1 || node.getAttribute?.('data-share-exclude') !== 'true'
+	)
 }
 
 export async function copyTextToClipboard(
@@ -24,17 +26,33 @@ export async function copyTextToClipboard(
 
 async function elementToPng(element: HTMLElement): Promise<Blob | null> {
 	const { toBlob } = await import('html-to-image')
+	const captureWidth = getShareCaptureWidth(element)
 	return toBlob(element, {
 		backgroundColor: '#210025',
 		cacheBust: true,
 		pixelRatio: 2,
+		...(captureWidth
+			? {
+					width: captureWidth,
+					style: { width: `${captureWidth}px` }
+				}
+			: {}),
 		// The app uses next/font CSS. Embedding remote font faces can reject the
 		// whole SVG render in browsers with a stricter CORS policy; system fonts
 		// keep the share usable when that optional embed is unavailable.
 		skipFonts: true,
 		// html-to-image applies the filter to text nodes as well as elements.
-		filter: shouldIncludeShareImageNode,
+		filter: shouldIncludeShareImageNode
 	})
+}
+
+function getShareCaptureWidth(element: HTMLElement): number | undefined {
+	const widths = [element.clientWidth, element.scrollWidth]
+	element.querySelectorAll<HTMLElement>('*').forEach(child => {
+		widths.push(child.scrollWidth)
+	})
+	const width = Math.max(...widths)
+	return width > element.clientWidth ? width : undefined
 }
 
 async function copyImageBlobToClipboard(
@@ -49,9 +67,7 @@ async function copyImageBlobToClipboard(
 	}
 
 	try {
-		await navigator.clipboard.write([
-			new ClipboardItem({ 'image/png': blob })
-		])
+		await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
 		return 'copied'
 	} catch {
 		return 'failed'
@@ -126,7 +142,13 @@ export async function shareImageBlob(blob: Blob): Promise<ShareResult> {
 		}
 
 		const clipboardResult = await copyImageBlobToClipboard(blob)
-		if (clipboardResult !== 'unsupported') return clipboardResult
+		if (clipboardResult === 'copied') return 'copied'
+		if (clipboardResult === 'failed') {
+			// Clipboard permission failures do not necessarily mean that the OS
+			// share sheet is unavailable. Try it before reporting a hard failure.
+			const nativeResult = await tryNativeImageShare(blob)
+			return nativeResult === 'unsupported' ? 'failed' : nativeResult
+		}
 
 		// On desktop, use native sharing only when image clipboard support is
 		// absent. This preserves the original click activation for the first
@@ -142,7 +164,7 @@ export async function shareImageBlob(blob: Blob): Promise<ShareResult> {
  * browsers usually cannot, so the image is copied to the clipboard instead.
  */
 export async function shareElementImage(
-	element: HTMLElement,
+	element: HTMLElement
 ): Promise<ShareResult> {
 	try {
 		const blob = await elementToPng(element)
