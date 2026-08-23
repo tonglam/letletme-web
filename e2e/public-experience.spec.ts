@@ -66,7 +66,7 @@ test('retired public routes return 404 instead of redirecting', async ({
 	}
 })
 
-test('server navigation stays usable without hydration while client controls wait', async ({
+test('server navigation and native disclosures stay usable without hydration', async ({
 	browser
 }) => {
 	const page = await browser.newPage({ javaScriptEnabled: false })
@@ -79,9 +79,14 @@ test('server navigation stays usable without hydration while client controls wai
 	await expect(
 		mobileMenu.getByRole('link', { name: 'Market', exact: true })
 	).toBeVisible()
+	const themeDisclosure = page.locator(
+		'details[data-navigation-disclosure]:has(summary[aria-label="Change color theme"])'
+	)
+	await themeDisclosure.locator(':scope > summary').click()
+	await expect(themeDisclosure).toHaveAttribute('open', '')
 	await expect(
-		page.getByRole('button', { name: 'Change color theme' })
-	).toBeDisabled()
+		themeDisclosure.getByRole('radio', { name: 'Dark' })
+	).toBeVisible()
 
 	await page.close()
 })
@@ -158,10 +163,8 @@ test('language switch persists through the next client navigation', async ({
 }) => {
 	await page.goto('/zh-CN')
 
-	await page.getByRole('button', { name: '切换语言' }).click()
-	await page
-		.getByRole('menuitemradio', { name: 'English', exact: true })
-		.click()
+	await page.locator('summary[aria-label="切换语言"]').click()
+	await page.getByRole('radio', { name: 'English', exact: true }).click()
 	await expect(page).toHaveURL(/\/(?:en)?$/)
 	await expect(page.getByRole('heading', { level: 1 })).toContainText(
 		'Every point'
@@ -446,8 +449,8 @@ test('Fixtures renders every DGW match and explicit BGWs without horizontal over
 
 test('theme choice persists across a reload', async ({ page }) => {
 	await page.goto('/')
-	await page.getByRole('button', { name: 'Change color theme' }).click()
-	await page.getByRole('menuitemradio', { name: 'Dark' }).click()
+	await page.locator('summary[aria-label="Change color theme"]').click()
+	await page.getByRole('radio', { name: 'Dark' }).click()
 
 	await expect(page.locator('html')).toHaveClass(/dark/)
 	await expect
