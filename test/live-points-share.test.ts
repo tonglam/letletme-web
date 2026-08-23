@@ -7,7 +7,8 @@ import {
 	copyTextToClipboard,
 	formatLivePointsShareText,
 	formatShareFooter,
-	shareImageBlob
+	shareImageBlob,
+	shouldIncludeShareImageNode
 } from '../app/live/points/_lib/live-points-share'
 import { formatChipName } from '../lib/utils'
 import type { Player } from '../types/player'
@@ -322,76 +323,28 @@ describe('copyElementImageToClipboard', () => {
 	})
 })
 
-describe('shareImageBlob', () => {
-	it('does not copy after native sharing is cancelled', async () => {
-		const navigatorDescriptor = Object.getOwnPropertyDescriptor(
-			globalThis,
-			'navigator'
+describe('shouldIncludeShareImageNode', () => {
+	it('allows text nodes and excludes marked elements without reading dataset', () => {
+		assert.equal(shouldIncludeShareImageNode({ nodeType: 3 }), true)
+		assert.equal(
+			shouldIncludeShareImageNode({
+				nodeType: 1,
+				getAttribute: () => 'true'
+			}),
+			false
 		)
-		const fileDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'File')
-		const clipboardItemDescriptor = Object.getOwnPropertyDescriptor(
-			globalThis,
-			'ClipboardItem'
+		assert.equal(
+			shouldIncludeShareImageNode({
+				nodeType: 1,
+				getAttribute: () => null
+			}),
+			true
 		)
-		let clipboardWriteCalled = false
-
-		Object.defineProperty(globalThis, 'File', {
-			configurable: true,
-			value: class FakeFile {
-				constructor(
-					readonly parts: unknown[],
-					readonly name: string,
-					readonly options: unknown
-				) {}
-			}
-		})
-		Object.defineProperty(globalThis, 'ClipboardItem', {
-			configurable: true,
-			value: class FakeClipboardItem {
-				constructor(readonly data: unknown) {}
-			}
-		})
-		Object.defineProperty(globalThis, 'navigator', {
-			configurable: true,
-			value: {
-				canShare: () => true,
-				share: async () => {
-					throw Object.assign(new Error('user cancelled'), {
-						name: 'AbortError'
-					})
-				},
-				clipboard: {
-					write: async () => {
-						clipboardWriteCalled = true
-					}
-				}
-			}
-		})
-
-		try {
-			const result = await shareImageBlob(
-				new Blob(['png'], { type: 'image/png' })
-			)
-			assert.equal(result, 'failed')
-			assert.equal(clipboardWriteCalled, false)
-		} finally {
-			if (navigatorDescriptor)
-				Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
-			else Reflect.deleteProperty(globalThis, 'navigator')
-			if (fileDescriptor)
-				Object.defineProperty(globalThis, 'File', fileDescriptor)
-			else Reflect.deleteProperty(globalThis, 'File')
-			if (clipboardItemDescriptor)
-				Object.defineProperty(
-					globalThis,
-					'ClipboardItem',
-					clipboardItemDescriptor
-				)
-			else Reflect.deleteProperty(globalThis, 'ClipboardItem')
-		}
 	})
+})
 
-	it('falls back to the image clipboard when native sharing rejects', async () => {
+describe('shareImageBlob', () => {
+	it('copies directly on desktop without consuming activation in native share', async () => {
 		const navigatorDescriptor = Object.getOwnPropertyDescriptor(
 			globalThis,
 			'navigator'
@@ -423,6 +376,7 @@ describe('shareImageBlob', () => {
 		Object.defineProperty(globalThis, 'navigator', {
 			configurable: true,
 			value: {
+				userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
 				canShare: () => true,
 				share: async () => {
 					nativeShareCalled = true
@@ -441,8 +395,77 @@ describe('shareImageBlob', () => {
 				new Blob(['png'], { type: 'image/png' })
 			)
 			assert.equal(result, 'copied')
-			assert.equal(nativeShareCalled, true)
+			assert.equal(nativeShareCalled, false)
 			assert.equal(clipboardWriteCalled, true)
+		} finally {
+			if (navigatorDescriptor)
+				Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+			else Reflect.deleteProperty(globalThis, 'navigator')
+			if (fileDescriptor)
+				Object.defineProperty(globalThis, 'File', fileDescriptor)
+			else Reflect.deleteProperty(globalThis, 'File')
+			if (clipboardItemDescriptor)
+				Object.defineProperty(
+					globalThis,
+					'ClipboardItem',
+					clipboardItemDescriptor
+				)
+			else Reflect.deleteProperty(globalThis, 'ClipboardItem')
+		}
+	})
+
+	it('does not retry the clipboard after a mobile native share rejection', async () => {
+		const navigatorDescriptor = Object.getOwnPropertyDescriptor(
+			globalThis,
+			'navigator'
+		)
+		const fileDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'File')
+		const clipboardItemDescriptor = Object.getOwnPropertyDescriptor(
+			globalThis,
+			'ClipboardItem'
+		)
+		let clipboardWriteCalled = false
+
+		Object.defineProperty(globalThis, 'File', {
+			configurable: true,
+			value: class FakeFile {
+				constructor(
+					readonly parts: unknown[],
+					readonly name: string,
+					readonly options: unknown
+				) {}
+			}
+		})
+		Object.defineProperty(globalThis, 'ClipboardItem', {
+			configurable: true,
+			value: class FakeClipboardItem {
+				constructor(readonly data: unknown) {}
+			}
+		})
+		Object.defineProperty(globalThis, 'navigator', {
+			configurable: true,
+			value: {
+				userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+				canShare: () => true,
+				share: async () => {
+					throw Object.assign(new Error('user cancelled'), {
+						name: 'AbortError'
+					})
+				},
+				clipboard: {
+					write: async () => {
+						clipboardWriteCalled = true
+					}
+				}
+			}
+		})
+
+		try {
+			const result = await shareImageBlob(
+				new Blob(['png'], { type: 'image/png' })
+			)
+			assert.equal(result, 'failed')
+			assert.equal(clipboardWriteCalled, false)
 		} finally {
 			if (navigatorDescriptor)
 				Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)

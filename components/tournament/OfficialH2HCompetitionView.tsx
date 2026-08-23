@@ -1,5 +1,6 @@
 'use client'
 
+import { ShareActions } from '@/components/share/ShareActions'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,7 @@ import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const REFRESH_INTERVAL_MS = 60_000
+const EMPTY_OFFICIAL_H2H_MATCHES: readonly OfficialH2HMatch[] = []
 
 function sideLabel(side: OfficialH2HMatchSide, averageLabel: string): string {
 	return side.isAverage ? averageLabel : side.entryName
@@ -125,6 +127,7 @@ export function OfficialH2HCompetitionView({
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [refreshFailed, setRefreshFailed] = useState(false)
 	const inFlightRef = useRef<Promise<void> | null>(null)
+	const shareRef = useRef<HTMLDivElement | null>(null)
 	const isCurrentEvent = activeEventId === eventId
 
 	const refresh = useCallback(() => {
@@ -168,9 +171,30 @@ export function OfficialH2HCompetitionView({
 		),
 		[snapshot?.standings],
 	)
-	const matches = snapshot?.matches ?? []
+	const matches = snapshot?.matches ?? EMPTY_OFFICIAL_H2H_MATCHES
 	const previousEvent = eventId > 1 ? eventId - 1 : null
 	const nextEvent = eventId < 38 ? eventId + 1 : null
+	const shareText = useMemo(() => {
+		const lines = [
+			t('officialH2HGameweek', { event: eventId }),
+			`${t('officialH2HTable')}:`,
+			...standings.map(standing =>
+				`${standing.rank ?? '—'}. ${standing.entryName ?? `Entry ${standing.entryId}`} · ${standing.matchPoints} ${t('officialH2HMatchPoints')} · ${standing.pointsFor} ${t('officialH2HPointsFor')}`
+			),
+		]
+		if (matches.length > 0) {
+			lines.push(
+				'',
+				t('officialH2HFixtures'),
+				...matches.map(match =>
+					`${sideLabel(match.home, t('officialH2HAverageTeam'))} ${scoreLabel(match.home)} — ${scoreLabel(match.away)} ${sideLabel(match.away, t('officialH2HAverageTeam'))}`
+				)
+			)
+		}
+		if (typeof window !== 'undefined') lines.push('', window.location.href)
+		return lines.join('\n')
+	}, [eventId, matches, standings, t])
+	const roundButtonClass = 'min-w-[5.75rem] justify-center'
 
 	return (
 		<div className="space-y-5">
@@ -184,21 +208,41 @@ export function OfficialH2HCompetitionView({
 					</h2>
 				</div>
 				<div className="flex items-center gap-2">
-					<Button variant="outline" size="sm" asChild={previousEvent != null} disabled={previousEvent == null}>
+					<Button
+						variant="outline"
+						size="sm"
+						className={roundButtonClass}
+						asChild={previousEvent != null}
+						disabled={previousEvent == null}
+					>
 						{previousEvent == null ? (
-							<span><ArrowLeft aria-hidden="true" /> {t('previous')}</span>
+							<>
+								<ArrowLeft aria-hidden="true" />
+								{t('previous')}
+							</>
 						) : (
 							<Link href={`/live/competitions/${tournamentId}?gw=${previousEvent}`} prefetch={false}>
-								<ArrowLeft aria-hidden="true" /> {t('previous')}
+								<ArrowLeft aria-hidden="true" />
+								{t('previous')}
 							</Link>
 						)}
 					</Button>
-					<Button variant="outline" size="sm" asChild={nextEvent != null} disabled={nextEvent == null}>
+					<Button
+						variant="outline"
+						size="sm"
+						className={roundButtonClass}
+						asChild={nextEvent != null}
+						disabled={nextEvent == null}
+					>
 						{nextEvent == null ? (
-							<span>{t('next')} <ArrowRight aria-hidden="true" /></span>
+							<>
+								{t('next')}
+								<ArrowRight aria-hidden="true" />
+							</>
 						) : (
 							<Link href={`/live/competitions/${tournamentId}?gw=${nextEvent}`} prefetch={false}>
-								{t('next')} <ArrowRight aria-hidden="true" />
+								{t('next')}
+								<ArrowRight aria-hidden="true" />
 							</Link>
 						)}
 					</Button>
@@ -211,6 +255,11 @@ export function OfficialH2HCompetitionView({
 						<RefreshCw className={isRefreshing ? 'animate-spin' : undefined} aria-hidden="true" />
 						{t('refresh')}
 					</Button>
+					<ShareActions
+						text={shareText}
+						imageRef={shareRef}
+						title={t('officialH2HGameweek', { event: eventId })}
+					/>
 				</div>
 			</div>
 
@@ -232,88 +281,90 @@ export function OfficialH2HCompetitionView({
 				</Card>
 			) : null}
 
-			<Card className="overflow-hidden border-border/80 p-0 shadow-sm">
-				<div className="flex items-center gap-2 border-b border-border/60 px-4 py-3 sm:px-5">
-					<Swords className="size-4 text-primary-ink" aria-hidden="true" />
-					<h3 className="font-display text-base font-bold tracking-tight">
-						{t('officialH2HTable')}
-					</h3>
-				</div>
-				<div className="overflow-x-auto">
-					<table className="w-full min-w-[38rem] text-sm">
-						<thead className="bg-muted/30 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-							<tr>
-								<th scope="col" className="w-12 px-3 py-2 text-center">#</th>
-								<th scope="col" className="px-3 py-2 text-left">{t('team')}</th>
-								<th scope="col" className="px-2 py-2 text-center">P</th>
-								<th scope="col" className="px-2 py-2 text-center">W</th>
-								<th scope="col" className="px-2 py-2 text-center">D</th>
-								<th scope="col" className="px-2 py-2 text-center">L</th>
-								<th scope="col" className="px-3 py-2 text-right">{t('officialH2HPointsFor')}</th>
-								<th scope="col" className="px-3 py-2 text-right">{t('officialH2HMatchPoints')}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{standings.map(standing => (
-								<tr
-									key={standing.entryId}
-									className={cn(
-										'border-t border-border/50',
-										standing.entryId === viewerEntryId && 'bg-primary/5 dark:bg-primary/10',
-									)}
-								>
-									<td className="px-3 py-3 text-center font-mono font-semibold tabular-nums">
-										{standing.rank ?? '—'}
-									</td>
-									<td className="px-3 py-3">
-										<Link
-											href={`/live/points/${standing.entryId}?tournamentId=${tournamentId}&gw=${eventId}`}
-											prefetch={false}
-													className="block min-w-0 hover:text-primary-ink hover:underline underline-offset-2"
-										>
-											<p className="truncate font-medium">
-												{standing.entryName ?? `Entry ${standing.entryId}`}
-											</p>
-											{standing.playerName ? (
-												<p className="truncate text-xs text-muted-foreground">
-													{standing.playerName}
-												</p>
-											) : null}
-										</Link>
-									</td>
-									{[standing.played, standing.won, standing.drawn, standing.lost].map((value, index) => (
-										<td key={index} className="px-2 py-3 text-center font-mono tabular-nums">{value}</td>
-									))}
-									<td className="px-3 py-3 text-right font-mono tabular-nums">{standing.pointsFor}</td>
-									<td className="px-3 py-3 text-right font-mono font-bold tabular-nums text-primary-ink">{standing.matchPoints}</td>
+			<div ref={shareRef}>
+				<Card className="overflow-hidden border-border/80 p-0 shadow-sm">
+					<div className="flex items-center gap-2 border-b border-border/60 px-4 py-3 sm:px-5">
+						<Swords className="size-4 text-primary-ink" aria-hidden="true" />
+						<h3 className="font-display text-base font-bold tracking-tight">
+							{t('officialH2HTable')}
+						</h3>
+					</div>
+					<div className="overflow-x-auto">
+						<table className="w-full min-w-[38rem] text-sm">
+							<thead className="bg-muted/30 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+								<tr>
+									<th scope="col" className="w-12 px-3 py-2 text-center">#</th>
+									<th scope="col" className="px-3 py-2 text-left">{t('team')}</th>
+									<th scope="col" className="px-2 py-2 text-center">P</th>
+									<th scope="col" className="px-2 py-2 text-center">W</th>
+									<th scope="col" className="px-2 py-2 text-center">D</th>
+									<th scope="col" className="px-2 py-2 text-center">L</th>
+									<th scope="col" className="px-3 py-2 text-right">{t('officialH2HPointsFor')}</th>
+									<th scope="col" className="px-3 py-2 text-right">{t('officialH2HMatchPoints')}</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
-			</Card>
+							</thead>
+							<tbody>
+								{standings.map(standing => (
+									<tr
+										key={standing.entryId}
+										className={cn(
+											'border-t border-border/50',
+											standing.entryId === viewerEntryId && 'bg-primary/5 dark:bg-primary/10',
+										)}
+									>
+										<td className="px-3 py-3 text-center font-mono font-semibold tabular-nums">
+											{standing.rank ?? '—'}
+										</td>
+										<td className="px-3 py-3">
+											<Link
+												href={`/live/points/${standing.entryId}?tournamentId=${tournamentId}&gw=${eventId}`}
+												prefetch={false}
+												className="block min-w-0 hover:text-primary-ink hover:underline underline-offset-2"
+											>
+												<p className="truncate font-medium">
+													{standing.entryName ?? `Entry ${standing.entryId}`}
+												</p>
+												{standing.playerName ? (
+													<p className="truncate text-xs text-muted-foreground">
+														{standing.playerName}
+													</p>
+												) : null}
+											</Link>
+										</td>
+										{[standing.played, standing.won, standing.drawn, standing.lost].map((value, index) => (
+											<td key={index} className="px-2 py-3 text-center font-mono tabular-nums">{value}</td>
+										))}
+										<td className="px-3 py-3 text-right font-mono tabular-nums">{standing.pointsFor}</td>
+										<td className="px-3 py-3 text-right font-mono font-bold tabular-nums text-primary-ink">{standing.matchPoints}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</Card>
 
-			<section aria-labelledby="official-h2h-fixtures-title">
-				<div className="mb-3 flex items-center justify-between gap-3">
-					<h3 id="official-h2h-fixtures-title" className="font-display text-lg font-bold tracking-tight">
-						{t('officialH2HFixtures')}
-					</h3>
-					<Badge variant="outline">{t('officialH2HOfficialOrder')}</Badge>
-				</div>
-				{matches.length > 0 ? (
-					<ul className="grid gap-3 md:grid-cols-2">
-						{matches.map(match => (
-							<MatchCard key={match.officialMatchId} match={match} viewerEntryId={viewerEntryId} />
-						))}
-					</ul>
-				) : (
-					<Card className="border-dashed border-border/80 p-6 text-center text-sm text-muted-foreground shadow-sm">
-						{snapshot?.awaitingSchedule
-							? t('officialH2HAwaitingGameweek', { event: eventId })
-							: t('officialH2HNoFixtures', { event: eventId })}
-					</Card>
-				)}
-			</section>
+				<section aria-labelledby="official-h2h-fixtures-title">
+					<div className="mb-3 flex items-center justify-between gap-3">
+						<h3 id="official-h2h-fixtures-title" className="font-display text-lg font-bold tracking-tight">
+							{t('officialH2HFixtures')}
+						</h3>
+						<Badge variant="outline">{t('officialH2HOfficialOrder')}</Badge>
+					</div>
+					{matches.length > 0 ? (
+						<ul className="grid gap-3 md:grid-cols-2">
+							{matches.map(match => (
+								<MatchCard key={match.officialMatchId} match={match} viewerEntryId={viewerEntryId} />
+							))}
+						</ul>
+					) : (
+						<Card className="border-dashed border-border/80 p-6 text-center text-sm text-muted-foreground shadow-sm">
+							{snapshot?.awaitingSchedule
+								? t('officialH2HAwaitingGameweek', { event: eventId })
+								: t('officialH2HNoFixtures', { event: eventId })}
+						</Card>
+					)}
+				</section>
+			</div>
 		</div>
 	)
 }

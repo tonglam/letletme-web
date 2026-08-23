@@ -5,6 +5,7 @@ export {
 	shareElementImage,
 	shareImageBlob,
 	shareText,
+	shouldIncludeShareImageNode,
 	type ClipboardCopyResult,
 	type ShareResult
 } from '@/lib/share/clipboard'
