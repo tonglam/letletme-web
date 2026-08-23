@@ -41,6 +41,21 @@ describe('My FPL tournament hydration', () => {
 			/<SelectValue placeholder=\{t\('selectTournament'\)\}>\s*\{selectedTournament\?\.name \?\? t\('selectTournament'\)\}\s*<\/SelectValue>/
 		)
 	})
+
+	it('formats snapshot timestamps through the shared SSR formatter', async () => {
+		const source = await readFile(
+			new URL(
+				'../app/me/tournament/TournamentStatsClient.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.match(source, /const format = useFormatter\(\)/)
+		assert.match(source, /formatSnapshotDate\(snapshotMeta, format\)/)
+		assert.match(source, /format\.dateTime\(value, \{/)
+		assert.doesNotMatch(source, /value\.toLocaleString\(locale/)
+	})
 })
 
 describe('live tournament filter visibility', () => {
