@@ -122,7 +122,14 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 					t('tournamentFieldAsOf', { gameweek: seasonField.asOfGameweek }),
 					`${t('fieldTeams')}: ${seasonField.entryCount}`,
 					`${t('fieldLeaderPoints')}: ${seasonField.leaderPoints ?? '—'}`,
-					`${t('fieldAveragePoints')}: ${seasonField.averagePoints ?? '—'}`,
+					`${t('fieldAveragePoints')}: ${
+						seasonField.averagePoints == null
+							? '—'
+							: format.number(seasonField.averagePoints, {
+									minimumFractionDigits: 2,
+									maximumFractionDigits: 2
+								})
+					}`,
 					'',
 					t('standings')
 				)
@@ -158,6 +165,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 	}, [
 		currentGameweek,
 		filteredStandings,
+		format,
 		seasonField,
 		seasonMe,
 		selectedGameweek,

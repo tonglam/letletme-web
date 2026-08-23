@@ -56,6 +56,7 @@ interface TeamStatsClientProps {
 	initialError: string | null
 	initialRequestComplete: boolean
 	initialSeasonPhase: SeasonPresentationPhase
+	currentSeason: string | null
 	initialSnapshotMeta: MyFplSnapshotMeta | null
 }
 
@@ -221,6 +222,7 @@ export default function TeamStatsClient(props: TeamStatsClientProps) {
 							teamStats={teamStats}
 							seasonOverall={seasonOverall}
 							preseason={props.initialSeasonPhase === 'PRESEASON'}
+							currentSeason={props.currentSeason}
 							pastSeasonsState={pastSeasonsState}
 							seasonLogs={seasonLogs}
 							emptyStateMessage={emptyStateMessage}
@@ -258,6 +260,7 @@ interface TeamStatsViewsProps {
 	teamStats: ReturnType<typeof useTeamStats>['teamStats']
 	seasonOverall: ReturnType<typeof useTeamStats>['seasonOverall']
 	preseason: boolean
+	currentSeason: string | null
 	pastSeasonsState?: MyFplReviewState
 	seasonLogs: ReturnType<typeof useTeamStats>['seasonLogs']
 	emptyStateMessage: string | null
@@ -292,6 +295,7 @@ function TeamStatsViews({
 	teamStats,
 	seasonOverall,
 	preseason,
+	currentSeason,
 	pastSeasonsState,
 	seasonLogs,
 	emptyStateMessage,
@@ -452,6 +456,7 @@ function TeamStatsViews({
 							<p className="mb-4 eyebrow">{t('seasonLogs')}</p>
 							<TeamStatsDeepDive
 								logs={seasonLogs}
+								currentSeason={currentSeason}
 								transfersLoading={isTransfersLoading}
 							/>
 						</div>

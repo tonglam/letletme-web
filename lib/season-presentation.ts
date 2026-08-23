@@ -68,6 +68,26 @@ export type SeasonPresentation = {
 	signal: SeasonPhaseSignal | null
 }
 
+/**
+ * Compare a human FPL history label such as `2025/26` with the authoritative
+ * core season (`2526` or `2025/26`). A history row's position is never proof
+ * that it belongs to the current season.
+ */
+export function isCurrentSeasonLabel(
+	historySeason: string | null | undefined,
+	currentSeason: string | null | undefined,
+): boolean {
+	const seasonKey = (value: string | null | undefined): string => {
+		const digits = String(value ?? '').replace(/\D/g, '')
+		if (/^\d{4}$/.test(digits)) return digits
+		if (/^20\d{4}$/.test(digits)) return digits.slice(2)
+		return ''
+	}
+	const historyKey = seasonKey(historySeason)
+	const currentKey = seasonKey(currentSeason)
+	return Boolean(historyKey && currentKey && historyKey === currentKey)
+}
+
 const isNullablePositiveInteger = (value: unknown): value is number | null =>
 	value === null ||
 	(typeof value === 'number' && Number.isSafeInteger(value) && value > 0)
