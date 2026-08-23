@@ -9,6 +9,7 @@ import {
 	type LiveCalcData,
 	type LiveCalcDataResponse,
 } from '@/lib/graphql/operations/live'
+import { getPlayedPlayerLimit } from '@/lib/tournament/played-total'
 import type { TournamentEntry } from '@/types/tournament'
 import { useEffect, useState } from 'react'
 import { useFormatter, useTranslations } from 'next-intl'
@@ -280,6 +281,8 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 	const costB = entryB.eventCost ?? 0
 	const totalA = entryA.totalPoints ?? entryA.livePoints
 	const totalB = entryB.totalPoints ?? entryB.livePoints
+	const playedLimitA = getPlayedPlayerLimit(entryA.chips)
+	const playedLimitB = getPlayedPlayerLimit(entryB.chips)
 
 	const picksA = liveA
 		? [...liveA.pickList].sort((a, b) => a.position - b.position)
@@ -359,8 +362,8 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 								/>
 								<OverviewRow
 									label={t('played')}
-									leftValue={`${entryA.playersPlayed}/${entryA.playersPlayed + entryA.playersToPlay}`}
-									rightValue={`${entryB.playersPlayed}/${entryB.playersPlayed + entryB.playersToPlay}`}
+									leftValue={`${entryA.playersPlayed}/${playedLimitA}`}
+									rightValue={`${entryB.playersPlayed}/${playedLimitB}`}
 									leftWins={entryA.playersPlayed > entryB.playersPlayed}
 									rightWins={entryB.playersPlayed > entryA.playersPlayed}
 								/>

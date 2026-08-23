@@ -2,7 +2,7 @@ import { defineConfig } from "eslint/config";
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 
 export default defineConfig([{
-    ignores: [".claude/**", ".next/**", "out/**"],
+    ignores: [".claude/**", ".next/**", ".vercel/**", "out/**"],
 }, {
     extends: [...nextCoreWebVitals],
     rules: {
