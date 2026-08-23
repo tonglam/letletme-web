@@ -26,6 +26,23 @@ describe('theme bootstrap', () => {
 	})
 })
 
+describe('My FPL tournament hydration', () => {
+	it('renders the selected tournament label deterministically on the server', async () => {
+		const source = await readFile(
+			new URL(
+				'../app/me/tournament/_components/TournamentStatsHeader.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.match(
+			source,
+			/<SelectValue placeholder=\{t\('selectTournament'\)\}>\s*\{selectedTournament\?\.name \?\? t\('selectTournament'\)\}\s*<\/SelectValue>/
+		)
+	})
+})
+
 describe('live tournament filter visibility', () => {
 	it('keeps both advanced filters recoverable after dismissal', async () => {
 		const [clientSource, ownershipSource, exposureSource] = await Promise.all([
