@@ -282,7 +282,7 @@ jobs:
 
           installed_tooling="$(ssh -F "$ssh_dir/config" letletme-tencent \
             "sudo /usr/local/libexec/letletme-release version")"
-          [[ "$installed_tooling" == "letletme-release-tooling 20260824-1" ]] || {
+          [[ "$installed_tooling" == "letletme-release-tooling 20260824-2" ]] || {
             echo "Tencent release tooling is stale: $installed_tooling" >&2
             echo "Rerun ops/tencent/scripts/install-host.sh as root before enabling Web automation." >&2
             exit 1
