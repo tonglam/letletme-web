@@ -152,7 +152,9 @@ export function TournamentStatsHeader({
 								id="tournament-stats-select"
 								className="h-11 w-full max-w-md font-display text-base font-semibold tracking-tight"
 							>
-								<SelectValue placeholder={t('selectTournament')} />
+								<SelectValue placeholder={t('selectTournament')}>
+									{selectedTournament?.name ?? t('selectTournament')}
+								</SelectValue>
 							</SelectTrigger>
 							<SelectContent>
 								{tournaments.map(tournament => (
