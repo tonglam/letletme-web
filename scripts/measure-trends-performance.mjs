@@ -73,6 +73,7 @@ async function measure(browser, profile, index) {
 	})
 	const url = new URL(targetUrl)
 	url.searchParams.set('_trendsPerf', `${profile.name}-${index}-${Date.now()}`)
+	url.searchParams.set('_perfSource', 'synthetic')
 	const response = await page.goto(url.toString(), { waitUntil: 'load' })
 	await page.waitForTimeout(500)
 	const firstSelect = page.locator('select').nth(1)

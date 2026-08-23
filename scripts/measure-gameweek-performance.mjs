@@ -144,6 +144,7 @@ async function measureRun(browser, profile, index) {
 		'_gameweekPerf',
 		`${profile.name}-${index}-${Date.now()}`
 	)
+	runUrl.searchParams.set('_perfSource', 'synthetic')
 	const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
 	await waitForReady(page)
 	const telemetryDeadline = Date.now() + 5_000

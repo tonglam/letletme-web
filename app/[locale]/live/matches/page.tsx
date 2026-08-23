@@ -54,7 +54,10 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 			(query, variables, options) =>
 				executePublicServerQuery('gameweek', query, variables, options),
 			currentEventId,
-			{ revision: liveContext?.revision }
+			{
+				revision: liveContext?.revision,
+				includeFixturePlayers: false
+			}
 		)
 		matches = live.matches
 		snapshot = live.snapshot

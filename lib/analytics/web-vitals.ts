@@ -35,8 +35,34 @@ const WEB_VITAL_NAMES = new Set([
 const WEB_VITAL_RATINGS = new Set(['good', 'needs-improvement', 'poor'])
 const DEVICE_GROUPS = new Set(['mobile', 'tablet', 'desktop'])
 const AUDIENCE_HINTS = new Set(['public', 'session-hint', 'unknown'])
+const WEB_VITAL_SOURCES = new Set(['user', 'synthetic', 'unknown'])
 
 export type AudienceHint = 'public' | 'session-hint' | 'unknown'
+export type WebVitalSource = 'user' | 'synthetic' | 'unknown'
+
+/**
+ * Keep synthetic browser runs out of the real-user denominator without
+ * relying on a user-controlled identity. Measurement scripts add the
+ * explicit marker; webdriver and the legacy run parameters are fallbacks for
+ * older harnesses.
+ */
+export const resolveWebVitalSource = ({
+	search = '',
+	webdriver = false
+}: {
+	search?: string
+	webdriver?: boolean
+} = {}): Exclude<WebVitalSource, 'unknown'> => {
+	if (webdriver) return 'synthetic'
+	const params = new URLSearchParams(search)
+	if (params.get('_perfSource') === 'synthetic') return 'synthetic'
+	for (const key of Array.from(params.keys())) {
+		if (key === 'cold' || /^_[a-z0-9-]*perf(?:ormance)?$/i.test(key)) {
+			return 'synthetic'
+		}
+	}
+	return 'user'
+}
 
 export type WebVitalPayload = {
 	name: string
@@ -47,6 +73,7 @@ export type WebVitalPayload = {
 	page: string
 	device: string
 	audienceHint: AudienceHint
+	source: WebVitalSource
 }
 
 const routePatterns: Array<[RegExp, string]> = [
@@ -89,6 +116,8 @@ export const parseWebVitalPayload = (
 		typeof candidate.audienceHint === 'string'
 			? candidate.audienceHint
 			: 'unknown'
+	const source =
+		typeof candidate.source === 'string' ? candidate.source : 'unknown'
 	const value = candidate.value
 	const delta = candidate.delta
 
@@ -96,6 +125,7 @@ export const parseWebVitalPayload = (
 	if (
 		!DEVICE_GROUPS.has(device) ||
 		!AUDIENCE_HINTS.has(audienceHint) ||
+		!WEB_VITAL_SOURCES.has(source) ||
 		!page ||
 		page.length > 128
 	)
@@ -120,6 +150,7 @@ export const parseWebVitalPayload = (
 		metricId,
 		page,
 		device,
-		audienceHint: audienceHint as AudienceHint
+		audienceHint: audienceHint as AudienceHint,
+		source: source as WebVitalSource
 	}
 }

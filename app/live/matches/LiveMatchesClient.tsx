@@ -122,6 +122,7 @@ export function LiveMatchesClient({
 	const mountedRef = useRef(true)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
 	const hasLastGoodData = useRef(initialMatches.length > 0)
+	const hasRequestedInitialFixturePlayers = useRef(false)
 	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
 		snapshotRef.current = next
 		setSnapshot(next)
@@ -280,6 +281,20 @@ export function LiveMatchesClient({
 			// Tab preference is optional.
 		}
 	}
+
+	useEffect(() => {
+		if (
+			hasRequestedInitialFixturePlayers.current ||
+			!initialMatches.some(match =>
+				match.status === 'LIVE' || match.status === 'HT' || match.status === 'FT'
+			)
+		)
+			return
+		hasRequestedInitialFixturePlayers.current = true
+		// Keep the score/status desk in the first RSC payload and hydrate the
+		// optional player section in the background.
+		void fetchMatches(true)
+	}, [fetchMatches, initialMatches])
 
 	useEffect(() => {
 		let savedTab: string | null = null

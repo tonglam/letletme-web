@@ -86,6 +86,7 @@ async function measure(browser, path, index) {
 	)
 	const url = new URL(`${origin}/${locale}${path}`)
 	url.searchParams.set('_competitionsPerf', `${path}-${index}-${Date.now()}`)
+	url.searchParams.set('_perfSource', 'synthetic')
 	const response = await page.goto(url.toString(), { waitUntil: 'load' })
 	if (!page.url().includes(`${origin}/${locale}${path}`)) {
 		throw new Error(

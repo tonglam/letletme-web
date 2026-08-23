@@ -12,6 +12,7 @@ async function handleGet(request: Request) {
 	const season = params.get('season')
 	const eventId = Number(params.get('eventId'))
 	const revision = params.get('revision')
+	const includeFixturePlayers = params.get('includePlayers') !== '0'
 	if (
 		!/^\d{4}$/.test(season ?? '') ||
 		!Number.isSafeInteger(eventId) ||
@@ -25,11 +26,15 @@ async function handleGet(request: Request) {
 	try {
 		const executor: QueryExecutor = (query, variables, options) =>
 			executePublicServerQuery('gameweek', query, variables, options)
-		const data = await loadLiveMatchdayDesk(executor, {
-			season: season!,
-			eventId,
-			revision
-		})
+		const data = await loadLiveMatchdayDesk(
+			executor,
+			{
+				season: season!,
+				eventId,
+				revision
+			},
+			{ includeFixturePlayers }
+		)
 		const response = NextResponse.json(data)
 		response.headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate, no-transform')
 		response.headers.set('CDN-Cache-Control', 'no-store')

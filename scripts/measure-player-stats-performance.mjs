@@ -137,6 +137,7 @@ async function measureRun(browser, profile, scenario, index) {
 		'_playerStatsPerf',
 		`${profile.name}-${scenario.name}-${index}-${Date.now()}`
 	)
+	runUrl.searchParams.set('_perfSource', 'synthetic')
 	const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
 	await page.waitForFunction(
 		metricName =>

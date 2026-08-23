@@ -1,4 +1,7 @@
-import type { AudienceHint } from '@/lib/analytics/web-vitals'
+import {
+	resolveWebVitalSource,
+	type AudienceHint
+} from '@/lib/analytics/web-vitals'
 
 const getSampleRate = () => {
 	const configured = Number(process.env.NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE)
@@ -53,7 +56,11 @@ export function reportBrowserPerformanceMetric(
 
 	const payload = JSON.stringify({
 		...metric,
-		device: getDeviceGroup()
+		device: getDeviceGroup(),
+		source: resolveWebVitalSource({
+			search: window.location.search,
+			webdriver: navigator.webdriver === true
+		})
 	})
 	if (navigator.sendBeacon) {
 		const accepted = navigator.sendBeacon(

@@ -123,6 +123,23 @@ describe('live match desk player sections', () => {
 		})
 	})
 
+	it('can return the score desk without serialising fixture players', async () => {
+		let requests = 0
+		const executor: QueryExecutor = async query => {
+			requests += 1
+			return (query.includes('GetLiveFixturePlayersBatch') ? players() : desk()) as never
+		}
+
+		const result = await loadLiveMatchdayDesk(
+			executor,
+			{ season: '2627', eventId: 1, revision: '8' },
+			{ includeFixturePlayers: false }
+		)
+		assert.equal(requests, 1)
+		assert.deepEqual(result.fixturePlayers, [])
+		assert.equal(result.liveMatchdayDesk.matches[0]?.homeScore, 3)
+	})
+
 	it('refreshes the desk and retries details once when a revision expires', async () => {
 		let requests = 0
 		const executor: QueryExecutor = async query => {
