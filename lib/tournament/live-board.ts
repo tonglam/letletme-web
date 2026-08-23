@@ -8,7 +8,7 @@ import type {
 } from '@/lib/graphql/operations/tournaments'
 import type { TournamentEntry } from '@/types/tournament'
 
-export const LIVE_BOARD_CONTRACT_VERSION = 'entry-live-board-v1'
+export const LIVE_BOARD_CONTRACT_VERSION = 'entry-live-board-v2'
 export const LIVE_BOARD_PAGE_SIZE = 20
 const LIVE_BOARD_OPERATION = 'GetEntryLiveCompetitionBoard'
 const TRANSIENT_STATUSES = new Set([502, 503, 504])
@@ -126,10 +126,9 @@ const validateScore = (
 
 const validateRow = (
 	value: unknown,
-	index: number,
+	path: string,
 	missing: string[]
 ): value is EntryLiveCompetitionBoardRow => {
-	const path = `rows[${index}]`
 	if (!isRecord(value)) {
 		missing.push(path)
 		return false
@@ -215,10 +214,41 @@ export function parseEntryLiveCompetitionBoardPage(
 			missing.push(field)
 	}
 	if (!Array.isArray(root.rows)) missing.push('rows')
-	else root.rows.forEach((row, index) => validateRow(row, index, missing))
+	else
+		root.rows.forEach((row, index) =>
+			validateRow(row, `rows[${index}]`, missing)
+		)
+	if (root.viewerRow !== null) validateRow(root.viewerRow, 'viewerRow', missing)
 
 	if (missing.length > 0) throw new LiveBoardInvalidResponseError(missing)
 	return root as unknown as EntryLiveCompetitionBoardPage
+}
+
+export const isCurrentLiveBoardRequest = (
+	requestVersion: number,
+	currentVersion: number,
+	expectedScope: string,
+	activeScope: string | null
+): boolean => requestVersion === currentVersion && expectedScope === activeScope
+
+export const resolveAnchoredGameweek = (input: {
+	nextEvent: number
+	requestedGameweek: number | null
+	followsAnchor: boolean
+}): { selectedGameweek: number; followsAnchor: boolean } => {
+	if (!input.followsAnchor) {
+		return { selectedGameweek: input.nextEvent, followsAnchor: false }
+	}
+	if (
+		input.requestedGameweek !== null &&
+		input.requestedGameweek <= input.nextEvent
+	) {
+		return {
+			selectedGameweek: input.requestedGameweek,
+			followsAnchor: false
+		}
+	}
+	return { selectedGameweek: input.nextEvent, followsAnchor: true }
 }
 
 const scopePart = (value: string | number): string =>

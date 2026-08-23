@@ -2203,6 +2203,7 @@
 		"overallRank": "总排名",
 		"chip": "道具卡",
 		"squadComparison": "阵容对比",
+		"comparisonUnavailable": "两边阵容加载失败，请重试后再查看阵容对比。",
 		"startingEleven": "首发阵容",
 		"substitutes": "替补",
 		"backToCompetitions": "返回全部赛事",

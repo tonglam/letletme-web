@@ -32,12 +32,17 @@ import {
 	boardRowToTournamentEntry,
 	clearOtherLiveBoardLastGood,
 	fetchEntryLiveCompetitionBoard,
+	isCurrentLiveBoardRequest,
 	liveBoardLastGoodKey,
 	readLiveBoardLastGood,
+	resolveAnchoredGameweek,
 	writeLiveBoardLastGood,
 	type LiveBoardFilterState
 } from '@/lib/tournament/live-board'
-import { formatLiveAveragePoints } from '@/lib/tournament/liveEntries'
+import {
+	formatLiveAveragePoints,
+	mergeUnavailableTournamentEntryIds
+} from '@/lib/tournament/liveEntries'
 import {
 	areTournamentStandingsReady,
 	isTournamentSetupPollingPending
@@ -113,6 +118,12 @@ const pageRows = (
 	page: EntryLiveCompetitionBoardPage | null
 ): TournamentEntry[] => (page ? page.rows.map(boardRowToTournamentEntry) : [])
 
+const partialFailureCount = (page: EntryLiveCompetitionBoardPage): number =>
+	mergeUnavailableTournamentEntryIds(
+		page.failedEntryIds,
+		page.unavailableEntryIds
+	).length
+
 const exactUpdatedAt = (value: string | null): string | null => {
 	if (!value || !Number.isFinite(Date.parse(value))) return null
 	return `${value.replace('T', ' ').replace(/\.\d{3}Z$/, '')} UTC`
@@ -172,7 +183,9 @@ export default function TournamentClient({
 			? gameweekFromUrl
 			: initialEventId
 	)
-	const followsAnchorRef = useRef(gameweekFromUrl === null)
+	const followsAnchorRef = useRef(
+		gameweekFromUrl === null || gameweekFromUrl > initialEventId
+	)
 	const requestedTournamentId =
 		tournamentIdFromUrl ?? restoredTournamentId ?? initialSelectedTournamentId
 	const selectedTournament = useMemo(() => {
@@ -423,8 +436,12 @@ export default function TournamentClient({
 				)
 				if (
 					controller.signal.aborted ||
-					version !== requestVersionRef.current ||
-					activeScopeRef.current !== options.expectedScope
+					!isCurrentLiveBoardRequest(
+						version,
+						requestVersionRef.current,
+						options.expectedScope,
+						activeScopeRef.current
+					)
 				) {
 					return false
 				}
@@ -436,7 +453,7 @@ export default function TournamentClient({
 				setResultsError(
 					page.partial
 						? t('partialResults', {
-								failed: page.unavailableEntryIds.length,
+								failed: partialFailureCount(page),
 								total: page.totalEntries
 							})
 						: null
@@ -532,7 +549,7 @@ export default function TournamentClient({
 			if (initial.page.partial) {
 				setResultsError(
 					t('partialResults', {
-						failed: initial.page.unavailableEntryIds.length,
+						failed: partialFailureCount(initial.page),
 						total: initial.page.totalEntries
 					})
 				)
@@ -651,6 +668,7 @@ export default function TournamentClient({
 		) {
 			return
 		}
+		const version = requestVersionRef.current
 		setIsLoadingMore(true)
 		try {
 			const next = await fetchEntryLiveCompetitionBoard(
@@ -663,7 +681,16 @@ export default function TournamentClient({
 					boardPage.boardRevision
 				)
 			)
-			if (activeScopeRef.current !== scopeKey) return
+			if (
+				!isCurrentLiveBoardRequest(
+					version,
+					requestVersionRef.current,
+					scopeKey,
+					activeScopeRef.current
+				)
+			) {
+				return
+			}
 			setEntries(current => {
 				const byId = new Map(current.map(entry => [entry.id, entry]))
 				for (const entry of pageRows(next)) byId.set(entry.id, entry)
@@ -673,12 +700,22 @@ export default function TournamentClient({
 			setResultsError(
 				next.partial
 					? t('partialResults', {
-							failed: next.unavailableEntryIds.length,
+							failed: partialFailureCount(next),
 							total: next.totalEntries
 						})
 					: null
 			)
 		} catch (error) {
+			if (
+				!isCurrentLiveBoardRequest(
+					version,
+					requestVersionRef.current,
+					scopeKey,
+					activeScopeRef.current
+				)
+			) {
+				return
+			}
 			if (
 				error instanceof LiveBoardRequestError &&
 				error.code === 'LIVE_BOARD_REVISION_GONE'
@@ -745,14 +782,22 @@ export default function TournamentClient({
 			const nextEvent = probe.liveContext?.anchorEventId
 			if (nextEvent && nextEvent !== currentGameweek) {
 				setCurrentGameweek(nextEvent)
-				if (followsAnchorRef.current) setSelectedGameweek(nextEvent)
+				if (followsAnchorRef.current) {
+					const nextSelection = resolveAnchoredGameweek({
+						nextEvent,
+						requestedGameweek: gameweekFromUrl,
+						followsAnchor: true
+					})
+					followsAnchorRef.current = nextSelection.followsAnchor
+					setSelectedGameweek(nextSelection.selectedGameweek)
+				}
 				return
 			}
 			await refresh()
 		} catch {
 			if (entries.length > 0) setResultsError(t('refreshFailedRetained'))
 		}
-	}, [currentGameweek, entries.length, refresh, t])
+	}, [currentGameweek, entries.length, gameweekFromUrl, refresh, t])
 
 	const managerStatus = useMemo(() => {
 		if (!boardPage) return t('scoreConfirming')
@@ -777,6 +822,7 @@ export default function TournamentClient({
 		[contentScopeKey, entries, scopeKey]
 	)
 	const hasContent = visibleEntries.length > 0
+	const hasBoard = contentScopeKey === scopeKey && boardPage !== null
 	const activeFilterCount =
 		(queryState.filters.ownership ? 1 : 0) +
 		queryState.filters.teamCountRules.length +
@@ -1025,7 +1071,7 @@ export default function TournamentClient({
 							>
 								{t('loadingStandings')}
 							</Card>
-						) : hasContent && boardPage ? (
+						) : hasBoard && boardPage ? (
 							<>
 								<SearchHeader
 									showFilters={false}
@@ -1061,6 +1107,11 @@ export default function TournamentClient({
 									tournamentId={selectedTournament.id}
 									gameweek={selectedGameweek}
 									viewerEntryId={entryId}
+									pinnedViewerEntry={
+										boardPage.viewerRow
+											? boardRowToTournamentEntry(boardPage.viewerRow)
+											: undefined
+									}
 									onVisibleEntriesChange={setTableEntriesForShare}
 									shareText={shareText}
 									shareImageRef={shareRef}

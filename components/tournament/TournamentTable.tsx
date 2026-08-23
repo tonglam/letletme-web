@@ -45,6 +45,8 @@ interface TournamentTableProps {
 	gameweek: number
 	/** Signed-in viewer’s FPL entry — pin + highlight when off-screen */
 	viewerEntryId?: number
+	/** Filtered viewer row returned independently from the current server page. */
+	pinnedViewerEntry?: TournamentEntry
 	/** Reports the rows in the same order currently visible in the table. */
 	onVisibleEntriesChange?: (entries: TournamentEntry[]) => void
 	/** Optional share controls rendered beside Compare in the table toolbar. */
@@ -108,6 +110,7 @@ export function TournamentTable({
 	tournamentId,
 	gameweek,
 	viewerEntryId,
+	pinnedViewerEntry,
 	onVisibleEntriesChange,
 	shareText,
 	shareImageRef,
@@ -181,19 +184,32 @@ export function TournamentTable({
 		serverControl
 	])
 
-	const visibleEntries = useMemo(
-		() =>
-			serverControl
-				? sortedEntries
-				: takeVisibleWithPinMe(sortedEntries, visibleCount, viewerEntryId),
-		[serverControl, sortedEntries, visibleCount, viewerEntryId]
-	)
+	const visibleEntries = useMemo(() => {
+		if (!serverControl)
+			return takeVisibleWithPinMe(sortedEntries, visibleCount, viewerEntryId)
+		if (
+			!pinnedViewerEntry ||
+			sortedEntries.some(entry => entry.id === pinnedViewerEntry.id)
+		) {
+			return sortedEntries
+		}
+		return [...sortedEntries, pinnedViewerEntry]
+	}, [
+		pinnedViewerEntry,
+		serverControl,
+		sortedEntries,
+		viewerEntryId,
+		visibleCount
+	])
 	useEffect(() => {
 		onVisibleEntriesChange?.(visibleEntries)
 	}, [onVisibleEntriesChange, visibleEntries])
 	const total = serverControl?.filteredEntries ?? sortedEntries.length
 	const hasMoreRows = serverControl?.hasMore ?? total > visibleCount
-	const remaining = Math.max(0, total - visibleEntries.length)
+	const remaining = Math.max(
+		0,
+		total - (serverControl ? sortedEntries.length : visibleEntries.length)
+	)
 	const canCollapse =
 		!serverControl && visibleCount > PREVIEW_ROWS && total > PREVIEW_ROWS
 	const nextStep = Math.min(ROW_STEP, remaining)
