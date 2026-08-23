@@ -133,7 +133,11 @@ export function parseHomeFixturesToMatchDays(
 							: null,
 					started: fixture.started,
 					finished: fixture.finished,
-					stale: metadata.source === 'LIVE' && metadata.stale
+					stale:
+						metadata.source === 'LIVE' &&
+						metadata.stale &&
+						fixture.started &&
+						!fixture.finished
 				}))
 			}
 		})

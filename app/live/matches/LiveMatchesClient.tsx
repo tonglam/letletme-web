@@ -122,6 +122,7 @@ export function LiveMatchesClient({
 	const mountedRef = useRef(true)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
 	const hasLastGoodData = useRef(initialMatches.length > 0)
+	const hasRequestedInitialFixturePlayers = useRef(false)
 	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
 		snapshotRef.current = next
 		setSnapshot(next)
@@ -282,6 +283,20 @@ export function LiveMatchesClient({
 	}
 
 	useEffect(() => {
+		if (
+			hasRequestedInitialFixturePlayers.current ||
+			!initialMatches.some(match =>
+				match.status === 'LIVE' || match.status === 'HT' || match.status === 'FT'
+			)
+		)
+			return
+		hasRequestedInitialFixturePlayers.current = true
+		// Keep the score/status desk in the first RSC payload and hydrate the
+		// optional player section in the background.
+		void fetchMatches(true)
+	}, [fetchMatches, initialMatches])
+
+	useEffect(() => {
 		let savedTab: string | null = null
 		try {
 			savedTab = window.localStorage.getItem(LIVE_MATCHES_TAB_STORAGE_KEY)
@@ -342,14 +357,16 @@ export function LiveMatchesClient({
 					/>
 					<span className="sr-only">{t('refresh')}</span>
 				</Button>
-				{!isLoading || isRefreshing ? (
-					<LiveAutoRefreshCountdown
-						enabled={autoRefreshEnabled}
-						onRefresh={autoRefreshMatches}
-						nextRefreshAt={snapshot?.nextRefreshAt}
-						renderLabel={seconds => t('autoRefresh', { seconds })}
-					/>
-				) : null}
+				<div className="min-h-4">
+					{!isLoading || isRefreshing ? (
+						<LiveAutoRefreshCountdown
+							enabled={autoRefreshEnabled}
+							onRefresh={autoRefreshMatches}
+							nextRefreshAt={snapshot?.nextRefreshAt}
+							renderLabel={seconds => t('autoRefresh', { seconds })}
+						/>
+					) : null}
+				</div>
 			</div>
 		</div>
 	)

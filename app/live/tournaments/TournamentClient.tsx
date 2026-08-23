@@ -37,6 +37,7 @@ import {
 	writeLiveBoardLastGood,
 	type LiveBoardFilterState
 } from '@/lib/tournament/live-board'
+import { formatLiveAveragePoints } from '@/lib/tournament/liveEntries'
 import {
 	areTournamentStandingsReady,
 	isTournamentSetupPollingPending
@@ -808,7 +809,7 @@ export default function TournamentClient({
 	const shareText = useMemo(() => {
 		const lines = [
 			`# ${selectedTournament?.name ?? t('liveStandings')} · GW${selectedGameweek}`,
-			`${t('averageScore')}: ${boardPage?.averageEventPoints ?? '—'} · ${t('highestScore')}: ${boardPage?.highestEventPoints ?? '—'}`,
+			`${t('averageScore')}: ${boardPage ? formatLiveAveragePoints(boardPage.averageEventPoints) : '—'} · ${t('highestScore')}: ${boardPage?.highestEventPoints ?? '—'}`,
 			'',
 			t('standings')
 		]

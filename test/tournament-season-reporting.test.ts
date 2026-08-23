@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
 	buildTournamentSeasonField,
+	buildTournamentSeasonFieldFromSnapshot,
+	buildTournamentSeasonMe,
 	compareTournamentSeasonRows
 } from '../app/me/tournament/_lib/tournament-stats-model'
 import { aggregateToSeasonSnapshot } from '../app/me/tournament/_lib/my-fpl-adapters'
@@ -9,7 +11,11 @@ import type {
 	MyFplCompetitionAggregate,
 	MyFplCompetitionBoardPage
 } from '../lib/graphql/operations/my-fpl'
-import type { TournamentEventResultItem } from '../lib/graphql/operations/tournaments'
+import type {
+	TournamentEntryRankingSummary,
+	TournamentEventResultItem,
+	TournamentSeasonSnapshotApi
+} from '../lib/graphql/operations/tournaments'
 
 function result(
 	entryId: number,
@@ -39,6 +45,62 @@ function result(
 }
 
 describe('tournament season cumulative standings', () => {
+	it('keeps field and metric averages at two decimal places', () => {
+		const snapshot = {
+			asOfEventId: 1,
+			entryCount: 98,
+			leaderOverallPoints: 59,
+			secondOverallPoints: 56,
+			gapFirstSecond: 3,
+			averageOverallPoints: 32.01020408163265,
+			metrics: [
+				{
+					key: 'OVERALL_POINTS',
+					leaderValue: 59,
+					leaderEntryId: 1,
+					leaderEntryName: 'Leader',
+					leaderPlayerName: 'Manager',
+					averageValue: 32.01020408163265,
+					higherIsBetter: true
+				},
+				{
+					key: 'TEAM_VALUE',
+					leaderValue: 1000,
+					leaderEntryId: 2,
+					leaderEntryName: 'Value leader',
+					leaderPlayerName: 'Manager',
+					averageValue: 1000,
+					higherIsBetter: true
+				}
+			],
+			standings: []
+		} as TournamentSeasonSnapshotApi
+
+		const field = buildTournamentSeasonFieldFromSnapshot(snapshot, 1)
+		assert.ok(field)
+		assert.equal(field.averagePoints, 32.01020408163265)
+		assert.equal(field.metrics[0]?.averageDisplay, '32.01 pts')
+		assert.equal(field.metrics[1]?.averageDisplay, '£100.00m')
+
+		const summary = {
+			entryId: 1,
+			overallRank: 100,
+			tournamentOverallRank: 1,
+			teamValue: 1000,
+			tournamentTeamValueRank: 1,
+			transfersNum: 0,
+			tournamentTransfersRank: 1,
+			totalCosts: 0,
+			tournamentCostsRank: 1,
+			totalBenchPoints: 6,
+			tournamentBenchPointsRank: 1,
+			autoSubPoints: 0,
+			tournamentAutoSubRank: 1
+		} satisfies TournamentEntryRankingSummary
+		const me = buildTournamentSeasonMe(summary, field, 1)
+		assert.equal(me?.secondary[0]?.averageDisplay, '£100.00m')
+	})
+
 	it('orders and ranks by cumulative points instead of per-group rank', () => {
 		const rows = [
 			result(1, 1, 100, 300),

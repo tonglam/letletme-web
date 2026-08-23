@@ -25,9 +25,11 @@ import { TeamTransfersTab } from './TeamTransfersTab'
  */
 export function TeamStatsDeepDive({
 	logs,
+	currentSeason,
 	transfersLoading = false,
 }: {
 	logs: TeamSeasonLogs
+	currentSeason: string | null
 	/** Move-level transfer details load after paint (counts already on rows). */
 	transfersLoading?: boolean
 }) {
@@ -93,7 +95,10 @@ export function TeamStatsDeepDive({
 						title={t('seasonHistory')}
 						description={t('seasonHistoryHint')}
 					>
-						<TeamSeasonHistory stats={logs} />
+						<TeamSeasonHistory
+							stats={logs}
+							currentSeason={currentSeason}
+						/>
 					</StatsSectionCard>
 				</div>
 			</div>

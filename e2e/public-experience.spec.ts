@@ -66,7 +66,7 @@ test('retired public routes return 404 instead of redirecting', async ({
 	}
 })
 
-test('server navigation stays usable without hydration while client controls wait', async ({
+test('server navigation stays usable while scripted controls remain inert', async ({
 	browser
 }) => {
 	const page = await browser.newPage({ javaScriptEnabled: false })
@@ -79,11 +79,46 @@ test('server navigation stays usable without hydration while client controls wai
 	await expect(
 		mobileMenu.getByRole('link', { name: 'Market', exact: true })
 	).toBeVisible()
+	const themeDisclosure = page.locator(
+		'details[data-navigation-disclosure]:has(summary[aria-label="Change color theme"])'
+	)
+	await expect(themeDisclosure).toHaveAttribute('inert', '')
+	await expect(themeDisclosure).toHaveAttribute('aria-disabled', 'true')
+
+	await page.goto('/zh-CN?view=compact')
+	const languageDisclosure = page.locator(
+		'details[data-navigation-disclosure]:has(summary[aria-label="切换语言"])'
+	)
+	await languageDisclosure.locator(':scope > summary').click()
 	await expect(
-		page.getByRole('button', { name: 'Change color theme' })
-	).toBeDisabled()
+		languageDisclosure.getByRole('radio', { name: '简体中文', exact: true })
+	).toHaveAttribute('tabindex', '0')
+	await expect(
+		languageDisclosure.getByRole('radio', { name: 'English', exact: true })
+	).toHaveAttribute('tabindex', '0')
+	await languageDisclosure
+		.getByRole('radio', { name: 'English', exact: true })
+		.click()
+	await expect(page).toHaveURL(/\/en\?view=compact$/)
+	await expect(page.locator('html')).toHaveAttribute('lang', 'en')
 
 	await page.close()
+})
+
+test('footer QR disclosure stays inside the mobile viewport', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 })
+	await page.goto('/')
+
+	const disclosure = page.locator('details[data-mini-program-popover]')
+	await disclosure.locator(':scope > summary').click()
+	const panel = disclosure.getByRole('group')
+	await expect(panel).toBeVisible()
+	const bounds = await panel.boundingBox()
+	expect(bounds).not.toBeNull()
+	expect(bounds?.x ?? -1).toBeGreaterThanOrEqual(0)
+	expect((bounds?.x ?? 0) + (bounds?.width ?? 391)).toBeLessThanOrEqual(390)
 })
 
 test('home keeps the four-section vocabulary and competition entry links aligned', async ({
@@ -153,16 +188,55 @@ test('home keeps the four-section vocabulary and competition entry links aligned
 	).toHaveAttribute('href', '/zh-CN/competitions/create')
 })
 
+test('modified navigation link clicks keep their disclosure open', async ({
+	page,
+	context
+}) => {
+	await page.goto('/')
+	const explore = page.locator('details[data-navigation-group="explore"]')
+	await explore.locator(':scope > summary').click()
+	await explore
+		.getByRole('link', { name: 'Market', exact: true })
+		.click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] })
+	await expect(explore).toHaveAttribute('open', '')
+	for (const candidate of context.pages()) {
+		if (candidate !== page) await candidate.close()
+	}
+})
+
 test('language switch persists through the next client navigation', async ({
 	page
 }) => {
-	await page.goto('/zh-CN')
+	await page.goto('/zh-CN?view=compact#language-state')
 
-	await page.getByRole('button', { name: '切换语言' }).click()
-	await page
-		.getByRole('menuitemradio', { name: 'English', exact: true })
+	const disclosure = page.locator(
+		'details[data-locale-picker]:has(summary[aria-label="切换语言"])'
+	)
+	const summary = disclosure.locator(':scope > summary')
+	await summary.click()
+	await disclosure
+		.getByRole('radio', { name: '简体中文', exact: true })
 		.click()
-	await expect(page).toHaveURL(/\/(?:en)?$/)
+	await expect(disclosure).not.toHaveAttribute('open', '')
+	await expect(summary).toBeFocused()
+	await summary.click()
+	const english = page.getByRole('radio', { name: 'English', exact: true })
+	await expect(english).toHaveAttribute(
+		'href',
+		/\?view=compact#language-state$/
+	)
+	await page.evaluate(() => {
+		window.history.pushState(null, '', '#updated-language-state')
+		window.dispatchEvent(new PopStateEvent('popstate'))
+	})
+	await expect(english).toHaveAttribute(
+		'href',
+		/\?view=compact#updated-language-state$/
+	)
+	await english.click()
+	await expect(page).toHaveURL(
+		/\/(?:en)?\?view=compact#updated-language-state$/
+	)
 	await expect(page.getByRole('heading', { level: 1 })).toContainText(
 		'Every point'
 	)
@@ -446,8 +520,8 @@ test('Fixtures renders every DGW match and explicit BGWs without horizontal over
 
 test('theme choice persists across a reload', async ({ page }) => {
 	await page.goto('/')
-	await page.getByRole('button', { name: 'Change color theme' }).click()
-	await page.getByRole('menuitemradio', { name: 'Dark' }).click()
+	await page.locator('summary[aria-label="Change color theme"]').click()
+	await page.getByRole('radio', { name: 'Dark' }).click()
 
 	await expect(page.locator('html')).toHaveClass(/dark/)
 	await expect
@@ -455,6 +529,71 @@ test('theme choice persists across a reload', async ({ page }) => {
 		.toBe('dark')
 	await page.reload()
 	await expect(page.locator('html')).toHaveClass(/dark/)
+})
+
+test('theme radio group uses one tab stop and arrow-key selection', async ({
+	page
+}) => {
+	await page.goto('/')
+	const summary = page.locator('summary[aria-label="Change color theme"]')
+	await summary.click()
+	const group = page.getByRole('radiogroup', { name: 'Change color theme' })
+	const light = group.getByRole('radio', { name: 'Light' })
+	const dark = group.getByRole('radio', { name: 'Dark' })
+	const system = group.getByRole('radio', { name: 'System' })
+
+	await expect(light).toHaveAttribute('tabindex', '-1')
+	await expect(dark).toHaveAttribute('tabindex', '-1')
+	await expect(system).toHaveAttribute('tabindex', '0')
+	await page.evaluate(() => {
+		const observer = new MutationObserver(records => {
+			if (
+				records.some(record =>
+					Array.from(record.addedNodes).some(
+						node =>
+							node instanceof Element &&
+							node.hasAttribute('data-theme-transition-guard')
+					)
+				)
+			) {
+				document.documentElement.dataset.themeTransitionGuardSeen = 'true'
+				observer.disconnect()
+			}
+		})
+		observer.observe(document.head, { childList: true })
+	})
+	await system.focus()
+	await page.keyboard.press('Escape')
+	await expect(summary).toBeFocused()
+	await expect(summary.locator('..')).not.toHaveAttribute('open', '')
+	await summary.click()
+	await system.focus()
+	await system.press('ArrowLeft')
+
+	await expect(page.locator('[data-theme-choice="dark"]')).toHaveAttribute(
+		'aria-checked',
+		'true'
+	)
+	await expect(page.locator('html')).toHaveClass(/dark/)
+	await expect(page.locator('html')).toHaveAttribute(
+		'data-theme-transition-guard-seen',
+		'true'
+	)
+	await expect(summary).toBeFocused()
+})
+
+test('report dialog restores focus to its activating control', async ({
+	page
+}) => {
+	await page.goto('/')
+	const trigger = page
+		.getByRole('button', { name: 'Something not working?', exact: true })
+		.last()
+	await trigger.click()
+	await expect(page.getByRole('dialog')).toBeVisible()
+	await page.getByRole('button', { name: 'Close', exact: true }).click()
+	await expect(page.getByRole('dialog')).toBeHidden()
+	await expect(trigger).toBeFocused()
 })
 
 test('sign-up gives an in-app error for mismatched passwords', async ({

@@ -9,9 +9,11 @@ import type {
 import {
 	buildTournamentEntries,
 	buildTournamentStats,
+	formatLiveAveragePoints,
 	mergeUnavailableTournamentEntryIds
 } from '../lib/tournament/liveEntries'
 import { loadTournamentLiveDeskWithRevisionRecovery } from '../lib/tournament/liveDesk'
+import { sortTournamentEntries } from '../lib/tournament/table-sort'
 
 const response = {
 	entryLiveCompetitionsDesk: {
@@ -59,7 +61,7 @@ describe('live tournament desk', () => {
 		)
 	})
 
-	it('uses the official board rank and keeps classic phase totals', () => {
+	it('uses a positive live OR, falls back to the top-level OR, and sorts the resolved value', () => {
 		const rows = [
 			{
 				entry: 1,
@@ -103,6 +105,23 @@ describe('live tournament desk', () => {
 				chip: null,
 				pickList: [],
 				score: managerScore({})
+			},
+			{
+				entry: 3,
+				rank: 0,
+				entryName: 'No rank yet',
+				playerName: 'Manager 3',
+				overallRank: 0,
+				transferCost: 0,
+				livePoints: 0,
+				liveNetPoints: 0,
+				liveTotalPoints: 0,
+				played: 0,
+				toPlay: 11,
+				captainName: 'Captain',
+				chip: null,
+				pickList: [],
+				score: managerScore({ overallRank: 0 })
 			}
 		] satisfies TournamentLiveCalcData[]
 
@@ -112,12 +131,28 @@ describe('live tournament desk', () => {
 		assert.equal(entries[0]?.overallRank, 123)
 		assert.equal(entries[0]?.teamValue, 100.5)
 		assert.equal(entries[0]?.bank, 7.49)
-		assert.equal(entries[1]?.overallRank, 0)
+		assert.equal(entries[1]?.overallRank, 456)
+		assert.equal(entries[2]?.overallRank, 0)
+		assert.deepEqual(
+			sortTournamentEntries(entries, '', 'overallRank', 'asc').map(
+				entry => entry.id
+			),
+			['1', '2', '3']
+		)
 		assert.deepEqual(buildTournamentStats(entries), {
 			averagePoints: 6,
 			highestPoints: 6,
-			totalEntries: 2
+			totalEntries: 3
 		})
+
+		const fractionalStats = buildTournamentStats([
+			{ ...entries[0], id: 'fraction-1', livePoints: 59, stale: false },
+			{ ...entries[0], id: 'fraction-2', livePoints: 39, stale: false },
+			{ ...entries[0], id: 'fraction-3', livePoints: 0, stale: false }
+		])
+		assert.equal(fractionalStats.averagePoints, 98 / 3)
+		assert.equal(formatLiveAveragePoints(fractionalStats.averagePoints), '32.67')
+		assert.equal(formatLiveAveragePoints(201 / 200), '1.01')
 	})
 
 	it('retries an expired revision exactly once without a ref', async () => {

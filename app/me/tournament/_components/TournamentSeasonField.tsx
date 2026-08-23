@@ -242,7 +242,10 @@ export function TournamentSeasonField({
 						<p className="mt-0.5 font-display text-xl font-bold tabular-nums">
 							{field.averagePoints == null
 								? '—'
-								: format.number(field.averagePoints)}
+								: format.number(field.averagePoints, {
+										minimumFractionDigits: 2,
+										maximumFractionDigits: 2,
+									})}
 						</p>
 					</div>
 					<div className="rounded-lg border border-border/70 px-3 py-2.5">

@@ -1,5 +1,6 @@
 'use client'
 
+import { formatLiveAveragePoints } from '@/lib/tournament/liveEntries'
 import { useFormatter, useTranslations } from 'next-intl'
 
 interface TournamentHeaderProps {
@@ -32,7 +33,9 @@ export function TournamentHeader({
 		},
 		{
 			label: t('averageScore'),
-			value: showScores ? t('pointsValue', { points: averagePoints }) : '—'
+			value: showScores
+				? t('pointsValue', { points: formatLiveAveragePoints(averagePoints) })
+				: '—'
 		},
 		{
 			label: t('totalEntries'),
