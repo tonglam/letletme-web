@@ -13,15 +13,13 @@ import {
 	buildGraphQLProxyIngress,
 	graphQLWorkloadForDocument
 } from '@/lib/graphql-ingress'
-import {
-	PayloadTooLargeError,
-	readBoundedJson
-} from '@/lib/http-security-core'
+import { PayloadTooLargeError, readBoundedJson } from '@/lib/http-security-core'
 import {
 	GraphQLUpstreamError,
 	readGraphQLUpstream
 } from '@/lib/graphql-proxy-upstream'
 import { shouldResolveGraphQLProxySession } from '@/lib/graphql-proxy-session'
+import { logSafeAuthDiagnostic } from '@/lib/auth-safe-log'
 import { RequestTiming, resolveRequestId } from '@/lib/request-timing'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -122,8 +120,9 @@ export async function POST(request: NextRequest) {
 				getAuthorizationSession(request.headers)
 			)
 		} catch (error) {
-			console.error(
-				'[graphql proxy] authorization session lookup failed:',
+			logSafeAuthDiagnostic(
+				'error',
+				'graphql proxy authorization session lookup failed',
 				error
 			)
 			return noStoreJson(
