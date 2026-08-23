@@ -393,6 +393,7 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 				<div
 					aria-hidden="true"
 					data-watermark="letletme"
+					data-share-exclude="true"
 					className="pointer-events-none absolute inset-x-[-18%] top-[49%] z-[1] flex -translate-y-1/2 -rotate-[9deg] items-center justify-center whitespace-nowrap select-none opacity-[0.2]"
 				>
 					<div className="flex items-center gap-[clamp(0.45rem,2.2cqi,1.4rem)] text-[#f8f6ef] [text-shadow:0_2px_10px_rgba(0,0,0,0.22)]">

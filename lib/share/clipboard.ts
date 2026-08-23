@@ -1,3 +1,5 @@
+import { brandedCanvasToPng } from './image-branding'
+
 export type ClipboardCopyResult = 'copied' | 'unsupported' | 'failed'
 export type ShareResult = 'shared' | ClipboardCopyResult
 
@@ -97,10 +99,13 @@ export async function copyTextToClipboard(
 	}
 }
 
-async function elementToPng(element: HTMLElement): Promise<Blob | null> {
-	const { toBlob } = await import('html-to-image')
+/** Render any share target to the canonical, branded PNG output. */
+export async function renderElementShareImage(
+	element: HTMLElement
+): Promise<Blob | null> {
+	const { toCanvas } = await import('html-to-image')
 	const captureWidth = getShareCaptureWidth(element)
-	return toBlob(element, {
+	const canvas = await toCanvas(element, {
 		backgroundColor: '#210025',
 		cacheBust: true,
 		pixelRatio: 2,
@@ -118,6 +123,7 @@ async function elementToPng(element: HTMLElement): Promise<Blob | null> {
 		// html-to-image applies the filter to text nodes as well as elements.
 		filter: shouldIncludeShareImageNode
 	})
+	return brandedCanvasToPng(canvas)
 }
 
 function getShareCaptureWidth(element: HTMLElement): number | undefined {
@@ -205,7 +211,7 @@ export async function copyElementImageToClipboard(
 	}
 
 	try {
-		const blob = await elementToPng(element)
+		const blob = await renderElementShareImage(element)
 		if (!blob) return 'failed'
 		return copyImageBlobToClipboard(blob)
 	} catch {
@@ -252,7 +258,7 @@ export async function shareElementImage(
 	element: HTMLElement
 ): Promise<ShareResult> {
 	try {
-		const blob = await elementToPng(element)
+		const blob = await renderElementShareImage(element)
 		if (!blob) return 'failed'
 		return shareImageBlob(blob)
 	} catch {
