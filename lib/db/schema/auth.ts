@@ -219,9 +219,6 @@ export const miniProgramSession = authSchema.table(
 		userId: text('user_id').references(() => user.id, {
 			onDelete: 'set null'
 		}),
-		accountId: text('account_id').references(() => miniProgramAccount.id, {
-			onDelete: 'cascade'
-		}),
 		deviceId: text('device_id').notNull(),
 		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 		lastUsedAt: timestamp('last_used_at', { withTimezone: true })
@@ -230,7 +227,10 @@ export const miniProgramSession = authSchema.table(
 		revokedAt: timestamp('revoked_at', { withTimezone: true }),
 		createdAt: timestamp('created_at', { withTimezone: true })
 			.notNull()
-			.defaultNow()
+			.defaultNow(),
+		accountId: text('account_id').references(() => miniProgramAccount.id, {
+			onDelete: 'cascade'
+		})
 	},
 	table => ({
 		tokenHashIdx: uniqueIndex('mini_program_session_token_hash_idx').on(
