@@ -70,6 +70,25 @@ test('ignores spoofed forwarding headers outside verified provider boundaries', 
 	else process.env.BETTER_AUTH_URL = previousAuthUrl
 })
 
+test('uses loopback as the local development client IP for Mini ingress', () => {
+	assert.equal(
+		resolveProviderClientIp(
+			new Headers({
+				host: 'localhost:3001'
+			})
+		),
+		'127.0.0.1'
+	)
+	assert.equal(
+		resolveProviderClientIp(
+			new Headers({
+				host: '127.0.0.1:3001'
+			})
+		),
+		'127.0.0.1'
+	)
+})
+
 test('trusts one valid Nginx-injected IP only with the local proxy secret', () => {
 	const previousAuthUrl = process.env.BETTER_AUTH_URL
 	const previousProxySecret = process.env.LETLETME_LOCAL_PROXY_SECRET
