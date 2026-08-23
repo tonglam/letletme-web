@@ -31,6 +31,12 @@ export const getVerifiedEntryContext = cache(
 		)
 		if (handoff) {
 			const syntheticSession = {
+				session: {
+					// The signed handoff is bound to this exact auth cookie. Keeping its
+					// digest as the synthetic session id makes browser last-good caches
+					// session-scoped even before Better Auth has rehydrated on the server.
+					id: handoff.cookieHash
+				},
 				user: {
 					id: handoff.uid,
 					name: handoff.name,

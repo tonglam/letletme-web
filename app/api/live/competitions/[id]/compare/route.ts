@@ -20,7 +20,7 @@ export async function GET(
 	const entryIds = (params.get('entryIds') ?? '')
 		.split(',')
 		.map(Number)
-		.filter(Number.isSafeInteger)
+		.filter(entryId => Number.isSafeInteger(entryId) && entryId > 0)
 	if (
 		!Number.isSafeInteger(tournamentId) ||
 		tournamentId <= 0 ||
@@ -28,7 +28,8 @@ export async function GET(
 		eventId <= 0 ||
 		!revision ||
 		entryIds.length < 1 ||
-		entryIds.length > 2
+		entryIds.length > 2 ||
+		new Set(entryIds).size !== entryIds.length
 	)
 		return NextResponse.json(
 			{ error: 'Invalid live comparison parameters' },

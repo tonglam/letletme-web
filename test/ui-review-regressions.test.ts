@@ -45,32 +45,24 @@ describe('My FPL tournament hydration', () => {
 
 describe('live tournament filter visibility', () => {
 	it('keeps both advanced filters recoverable after dismissal', async () => {
-		const [clientSource, ownershipSource, exposureSource] = await Promise.all([
+		const [clientSource, filtersSource] = await Promise.all([
 			readFile(
 				new URL('../app/live/tournaments/TournamentClient.tsx', import.meta.url),
 				'utf8'
 			),
 			readFile(
 				new URL(
-					'../components/player/PlayerOwnershipFilter.tsx',
-					import.meta.url
-				),
-				'utf8'
-			),
-			readFile(
-				new URL(
-					'../components/player/TeamExposureFilter.tsx',
+					'../components/tournament/LiveCompetitionBoardFilters.tsx',
 					import.meta.url
 				),
 				'utf8'
 			)
 		])
 
-		assert.match(clientSource, /setShowOwnershipFilter\(true\)/)
-		assert.match(clientSource, /setShowTeamExposureFilter\(true\)/)
-		assert.match(clientSource, /filtersT\('showFilter'/)
-		assert.match(ownershipSource, /t\("hideFilter"/)
-		assert.match(exposureSource, /t\('hideFilter'/)
+		assert.match(clientSource, /setShowAdvancedFilters\(open => !open\)/)
+		assert.match(clientSource, /<LiveCompetitionBoardFilters/)
+		assert.match(filtersSource, /t\('playerOwnership'\)/)
+		assert.match(filtersSource, /t\('teamExposure'\)/)
 	})
 })
 
