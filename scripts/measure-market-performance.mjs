@@ -83,6 +83,7 @@ async function measureRun(browser, profile, index) {
 		'_marketPerf',
 		`${profile.name}-${index}-${Date.now()}`
 	)
+	runUrl.searchParams.set('_perfSource', 'synthetic')
 	const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
 	await page.waitForTimeout(500)
 	const responseBody = response ? await response.body() : Buffer.alloc(0)

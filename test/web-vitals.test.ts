@@ -4,7 +4,8 @@ import { describe, it } from 'node:test'
 
 import {
 	normalizeMetricPage,
-	parseWebVitalPayload
+	parseWebVitalPayload,
+	resolveWebVitalSource
 } from '../lib/analytics/web-vitals'
 import { isTrustedSameSiteRequest } from '../lib/request-origin'
 
@@ -16,7 +17,8 @@ const validMetric = {
 	metricId: 'metric-123.abc',
 	page: '/live/competitions/987?token=secret',
 	device: 'mobile',
-	audienceHint: 'public'
+	audienceHint: 'public',
+	source: 'user'
 }
 
 describe('privacy-safe web vitals', () => {
@@ -97,6 +99,20 @@ describe('privacy-safe web vitals', () => {
 			...validMetric,
 			page: '/live/competitions/:tournamentId'
 		})
+	})
+
+	it('classifies explicit and legacy synthetic measurement contexts', () => {
+		assert.equal(
+			resolveWebVitalSource({ search: '?_perfSource=synthetic' }),
+			'synthetic'
+		)
+		assert.equal(
+			resolveWebVitalSource({ search: '?_marketPerf=mobile-1' }),
+			'synthetic'
+		)
+		assert.equal(resolveWebVitalSource({ search: '?cold=mobile-1' }), 'synthetic')
+		assert.equal(resolveWebVitalSource({ webdriver: true }), 'synthetic')
+		assert.equal(resolveWebVitalSource({ search: '?utm_source=home' }), 'user')
 	})
 
 	it('rejects unknown metrics, invalid numbers, and identifiers', () => {
@@ -194,5 +210,11 @@ describe('privacy-safe web vitals', () => {
 	it('maps older clients without the hint to unknown during rollout', () => {
 		const { audienceHint: _audienceHint, ...legacyMetric } = validMetric
 		assert.equal(parseWebVitalPayload(legacyMetric)?.audienceHint, 'unknown')
+		assert.equal(parseWebVitalPayload(legacyMetric)?.source, 'user')
+	})
+
+	it('maps older clients without a source marker to unknown', () => {
+		const { source: _source, ...legacyMetric } = validMetric
+		assert.equal(parseWebVitalPayload(legacyMetric)?.source, 'unknown')
 	})
 })

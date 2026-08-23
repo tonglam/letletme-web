@@ -29,6 +29,9 @@ export interface LiveMatchdayDeskPayload extends LiveMatchdayDeskResponse {
 
 type LiveRef = { season: string; eventId: number; revision: string }
 
+const FIXTURE_PLAYER_BATCH_SIZE = 5
+const FIXTURE_PLAYER_BATCH_CONCURRENCY = 2
+
 const POSITION_ELEMENT_TYPE: Record<
 	NonNullable<LiveFixturePerformance['player']>['position'],
 	number
@@ -134,19 +137,44 @@ async function loadFixturePlayers(
 		eventId: desk.eventId,
 		revision: desk.liveRevision
 	}
-	const details: LiveFixturePlayersData[] = []
-	for (let offset = 0; offset < fixtureIds.length; offset += 5) {
-		const batch = fixtureIds.slice(offset, offset + 5)
-		const response = await executor<LiveFixturePlayersBatchResponse>(
-			buildLiveFixturePlayersBatchQuery(batch.length),
-			{
-				ref,
-				...Object.fromEntries(
-					batch.map((fixtureId, index) => [`fixture${index}`, fixtureId])
-				)
-			},
-			{ cache: 'no-store' }
+	const batches = Array.from(
+		{ length: Math.ceil(fixtureIds.length / FIXTURE_PLAYER_BATCH_SIZE) },
+		(_, index) =>
+			fixtureIds.slice(
+				index * FIXTURE_PLAYER_BATCH_SIZE,
+				(index + 1) * FIXTURE_PLAYER_BATCH_SIZE
+			)
+	)
+	const responses: LiveFixturePlayersBatchResponse[] = new Array(batches.length)
+	let nextBatchIndex = 0
+	const loadNextBatch = async () => {
+		while (true) {
+			const batchIndex = nextBatchIndex++
+			const batch = batches[batchIndex]
+			if (!batch) return
+			responses[batchIndex] = await executor<LiveFixturePlayersBatchResponse>(
+				buildLiveFixturePlayersBatchQuery(batch.length),
+				{
+					ref,
+					...Object.fromEntries(
+						batch.map((fixtureId, index) => [`fixture${index}`, fixtureId])
+					)
+				},
+				{ cache: 'no-store' }
+			)
+		}
+	}
+	await Promise.all(
+		Array.from(
+			{ length: Math.min(FIXTURE_PLAYER_BATCH_CONCURRENCY, batches.length) },
+			() => loadNextBatch()
 		)
+	)
+
+	const details: LiveFixturePlayersData[] = []
+	for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+		const batch = batches[batchIndex]!
+		const response = responses[batchIndex]!
 		for (let index = 0; index < batch.length; index += 1) {
 			const detail =
 				response[`fixture${index}` as keyof LiveFixturePlayersBatchResponse]
@@ -167,8 +195,10 @@ async function loadFixturePlayers(
 /** Resolve a desk and its optional player section with one bounded revision retry. */
 export async function loadLiveMatchdayDesk(
 	executor: QueryExecutor,
-	ref: LiveRef | null = null
+	ref: LiveRef | null = null,
+	options: { includeFixturePlayers?: boolean } = {}
 ): Promise<LiveMatchdayDeskPayload> {
+	const includeFixturePlayers = options.includeFixturePlayers !== false
 	const queryDesk = (nextRef: LiveRef | null) =>
 		executor<LiveMatchdayDeskResponse>(
 			GET_LIVE_MATCHDAY_DESK,
@@ -185,22 +215,22 @@ export async function loadLiveMatchdayDesk(
 		recoveredRevision = true
 	}
 
+	const withOptionalFixturePlayers = async (
+		payload: LiveMatchdayDeskResponse
+	): Promise<LiveMatchdayDeskPayload> => ({
+		...payload,
+		fixturePlayers: includeFixturePlayers
+			? await loadFixturePlayers(executor, payload.liveMatchdayDesk)
+			: []
+	})
+
 	try {
-		return {
-			...desk,
-			fixturePlayers: await loadFixturePlayers(executor, desk.liveMatchdayDesk)
-		}
+		return await withOptionalFixturePlayers(desk)
 	} catch (error) {
 		if (!recoveredRevision && liveRevisionGone(error)) {
 			const refreshed = await queryDesk(null)
 			try {
-				return {
-					...refreshed,
-					fixturePlayers: await loadFixturePlayers(
-						executor,
-						refreshed.liveMatchdayDesk
-					)
-				}
+				return await withOptionalFixturePlayers(refreshed)
 			} catch {
 				return { ...refreshed, fixturePlayers: [] }
 			}
@@ -333,6 +363,8 @@ export interface LiveMatchesLoadOptions {
 	/** Browser refreshes use the cacheable revision-aware GET route. */
 	preferHttp?: boolean
 	revision?: string | null
+	/** Initial RSC can defer the large player section to the browser refresh. */
+	includeFixturePlayers?: boolean
 	signal?: AbortSignal
 }
 
@@ -352,7 +384,8 @@ export async function getLiveMatchesSnapshot(
 		const params = new URLSearchParams({
 			season: String(getCurrentSeasonKey()),
 			eventId: String(currentEventId),
-			revision: options.revision
+			revision: options.revision,
+			includePlayers: options.includeFixturePlayers === false ? '0' : '1'
 		})
 		const response = await fetch(`/api/live/matches?${params.toString()}`, {
 			cache: 'no-store',
@@ -370,7 +403,9 @@ export async function getLiveMatchesSnapshot(
 						revision: options.revision
 					}
 				: null
-		desk = await loadLiveMatchdayDesk(executor, ref)
+		desk = await loadLiveMatchdayDesk(executor, ref, {
+			includeFixturePlayers: options.includeFixturePlayers
+		})
 	}
 	const current = validEventId(desk.liveMatchdayDesk?.eventId) ?? currentEventId
 	const snapshot = desk.liveMatchdayDesk

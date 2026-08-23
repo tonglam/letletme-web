@@ -223,10 +223,10 @@ async function measureColdLoad(browser, profile, index) {
 		}).observe({ type: 'longtask', buffered: true })
 	})
 	const navigationStartedAt = performance.now()
-	const response = await page.goto(
-		`${baseUrl}${baseUrl.includes('?') ? '&' : '?'}cold=${profile.name}-${index}`,
-		{ waitUntil: 'load' }
-	)
+	const runUrl = new URL(baseUrl)
+	runUrl.searchParams.set('cold', `${profile.name}-${index}`)
+	runUrl.searchParams.set('_perfSource', 'synthetic')
+	const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
 	const readySamples = new Map()
 	if (sessionCookie) {
 		const names = ['HOME_TEAM_DESK_READY', 'HOME_LEAGUE_RANKS_READY']
