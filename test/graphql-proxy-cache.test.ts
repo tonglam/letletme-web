@@ -4,10 +4,11 @@ import {
 	extractGraphQLOperationName,
 	isPublicCacheableGraphQLRequest,
 	PUBLIC_PROXY_CACHE_CONTROL,
+	PRICE_CHANGE_PROXY_CACHE_CONTROL
 } from '../lib/cache-policy'
 import {
 	isSuccessfulGraphQLResponseBody,
-	resolveGraphQLProxyCacheControl,
+	resolveGraphQLProxyCacheControl
 } from '../lib/graphql-proxy-cache'
 
 describe('GraphQL proxy public cache policy', () => {
@@ -15,73 +16,84 @@ describe('GraphQL proxy public cache policy', () => {
 		assert.equal(
 			extractGraphQLOperationName({
 				operationName: 'GetMarketPulse',
-				query: 'query GetMarketPulse { marketPulse { asOf } }',
+				query: 'query GetMarketPulse { marketPulse { asOf } }'
 			}),
-			'GetMarketPulse',
+			'GetMarketPulse'
 		)
 	})
 
 	it('extracts the name from the query string when operationName is absent', () => {
 		assert.equal(
 			extractGraphQLOperationName({
-				query: 'query GetEventFixtures($eventId: Int!) { eventFixtures(eventId: $eventId) { id } }',
+				query:
+					'query GetEventFixtures($eventId: Int!) { eventFixtures(eventId: $eventId) { id } }'
 			}),
-			'GetEventFixtures',
+			'GetEventFixtures'
 		)
 	})
 
 	it('allows CDN cache only for allowlisted public operations without session/auth', () => {
 		assert.equal(
 			isPublicCacheableGraphQLRequest({
-				body: { operationName: 'GetMarketPulse', query: 'query GetMarketPulse { __typename }' },
+				body: {
+					operationName: 'GetMarketPulse',
+					query: 'query GetMarketPulse { __typename }'
+				},
 				hasSessionUser: false,
-				hasAuthorization: false,
+				hasAuthorization: false
 			}),
-			true,
+			true
 		)
 		assert.equal(
 			isPublicCacheableGraphQLRequest({
-				body: { operationName: 'GetMarketPulse', query: 'query GetMarketPulse { __typename }' },
+				body: {
+					operationName: 'GetMarketPulse',
+					query: 'query GetMarketPulse { __typename }'
+				},
 				hasSessionUser: true,
-				hasAuthorization: false,
+				hasAuthorization: false
 			}),
-			false,
+			false
 		)
 		assert.equal(
 			isPublicCacheableGraphQLRequest({
 				body: {
 					operationName: 'GetEntryTournaments',
-					query: 'query GetEntryTournaments { __typename }',
+					query: 'query GetEntryTournaments { __typename }'
 				},
 				hasSessionUser: false,
-				hasAuthorization: false,
+				hasAuthorization: false
 			}),
-			false,
+			false
 		)
 		assert.equal(
 			isPublicCacheableGraphQLRequest({
 				body: {
 					operationName: 'SearchEntries',
-					query: 'query SearchEntries($query: String!) { searchEntries(query: $query) { id } }',
+					query:
+						'query SearchEntries($query: String!) { searchEntries(query: $query) { id } }'
 				},
 				hasSessionUser: false,
-				hasAuthorization: false,
+				hasAuthorization: false
 			}),
-			true,
+			true
 		)
 	})
 
 	it('sets Cache-Control on successful public responses only', () => {
-		const body = { operationName: 'GetCurrentAndNextEvents', query: 'query GetCurrentAndNextEvents { __typename }' }
+		const body = {
+			operationName: 'GetCurrentAndNextEvents',
+			query: 'query GetCurrentAndNextEvents { __typename }'
+		}
 		assert.equal(
 			resolveGraphQLProxyCacheControl({
 				body,
 				hasSessionUser: false,
 				hasAuthorization: false,
 				responseOk: true,
-				responseBodyOk: true,
+				responseBodyOk: true
 			}),
-			PUBLIC_PROXY_CACHE_CONTROL,
+			PUBLIC_PROXY_CACHE_CONTROL
 		)
 		assert.equal(
 			resolveGraphQLProxyCacheControl({
@@ -89,22 +101,38 @@ describe('GraphQL proxy public cache policy', () => {
 				hasSessionUser: false,
 				hasAuthorization: false,
 				responseOk: false,
-				responseBodyOk: true,
+				responseBodyOk: true
 			}),
-			'no-store',
+			'no-store'
+		)
+	})
+
+	it('uses the shorter 60/60 policy for the price-change board only', () => {
+		assert.equal(
+			resolveGraphQLProxyCacheControl({
+				body: {
+					operationName: 'GetPriceChangeBoard',
+					query: 'query GetPriceChangeBoard { priceChangeBoard { status } }'
+				},
+				hasSessionUser: false,
+				hasAuthorization: false,
+				responseOk: true,
+				responseBodyOk: true
+			}),
+			PRICE_CHANGE_PROXY_CACHE_CONTROL
 		)
 	})
 
 	it('rejects HTTP-200 GraphQL error envelopes and malformed bodies', () => {
 		assert.equal(
 			isSuccessfulGraphQLResponseBody('{"data":{"events":[]}}'),
-			true,
+			true
 		)
 		assert.equal(
 			isSuccessfulGraphQLResponseBody(
-				'{"data":null,"errors":[{"message":"resolver failed"}]}',
+				'{"data":null,"errors":[{"message":"resolver failed"}]}'
 			),
-			false,
+			false
 		)
 		assert.equal(isSuccessfulGraphQLResponseBody('not-json'), false)
 
@@ -112,14 +140,14 @@ describe('GraphQL proxy public cache policy', () => {
 			resolveGraphQLProxyCacheControl({
 				body: {
 					operationName: 'GetCurrentAndNextEvents',
-					query: 'query GetCurrentAndNextEvents { __typename }',
+					query: 'query GetCurrentAndNextEvents { __typename }'
 				},
 				hasSessionUser: false,
 				hasAuthorization: false,
 				responseOk: true,
-				responseBodyOk: false,
+				responseBodyOk: false
 			}),
-			'no-store',
+			'no-store'
 		)
 	})
 })

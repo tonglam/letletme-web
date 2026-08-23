@@ -25,7 +25,7 @@ const loadFromOrigin = unstable_cache(
 				{ cache: 'no-store', timeoutMs: 5_000 }
 			)
 		),
-	['graphql', 'price-change-board', 'v1'],
+	['graphql', 'price-change-board', 'v2'],
 	dataCache
 )
 

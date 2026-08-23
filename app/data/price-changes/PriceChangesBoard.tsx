@@ -34,7 +34,7 @@ import {
 	sortPriceChangePlayers,
 	type PriceChangeSortColumn,
 	type PriceChangeSortDirection,
-	type PriceChangeSortState,
+	type PriceChangeSortState
 } from '@/lib/price-change-sorting'
 import {
 	calculateSellingPrice,
@@ -64,8 +64,9 @@ const PAGE_SIZE = 20
 type MovementFilter = 'all' | 'rise' | 'fall' | 'locked'
 type ScopeFilter = 'all' | 'mine'
 
-const LAST_VALID_BOARD_STORAGE_KEY = 'letletme:price-change-board:v1'
-const LAST_VALID_BOARD_MAX_AGE_MS = 24 * 60 * 60 * 1_000
+const LAST_VALID_BOARD_STORAGE_KEY = 'letletme:price-change-board:v2'
+const LEGACY_LAST_VALID_BOARD_STORAGE_KEY = 'letletme:price-change-board:v1'
+const LAST_VALID_BOARD_MAX_AGE_MS = 60 * 60 * 1_000
 
 const statusTranslationKey = {
 	VERY_LIKELY_RISE: 'statusVeryLikelyRise',
@@ -89,7 +90,7 @@ function formatPercent(value: number): string {
 function formatDeadline(
 	value: string | null,
 	locale: string,
-	hydrated: boolean,
+	hydrated: boolean
 ): string {
 	if (!hydrated) return '—'
 	if (!value) return '—'
@@ -144,7 +145,7 @@ function persistLastValidBoard(board: PriceChangeBoard): void {
 		const savedAt = Number.isFinite(fetchedAt) ? fetchedAt : Date.now()
 		window.localStorage.setItem(
 			LAST_VALID_BOARD_STORAGE_KEY,
-			JSON.stringify({ savedAt, board }),
+			JSON.stringify({ savedAt, board })
 		)
 	} catch {
 		// Storage is an enhancement. The in-memory board remains authoritative.
@@ -153,7 +154,7 @@ function persistLastValidBoard(board: PriceChangeBoard): void {
 
 function personalPriceForPlayer(
 	player: PriceChangePlayer,
-	purchasePrices: Record<string, number>,
+	purchasePrices: Record<string, number>
 ): { purchasePrice: number; sellingPrice: number } | null {
 	const purchasePrice = purchasePrices[String(player.playerId)]
 	if (!Number.isFinite(purchasePrice)) return null
@@ -227,7 +228,7 @@ function SortableHeader({
 	label,
 	sort,
 	onSort,
-	align = 'left',
+	align = 'left'
 }: {
 	column: PriceChangeSortColumn
 	label: string
@@ -246,7 +247,7 @@ function SortableHeader({
 		<th
 			className={cn(
 				'px-3 py-3 font-semibold',
-				align === 'right' && 'text-right',
+				align === 'right' && 'text-right'
 			)}
 			aria-sort={
 				active
@@ -261,13 +262,16 @@ function SortableHeader({
 				className={cn(
 					'inline-flex items-center gap-1.5 rounded-sm text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
 					align === 'right' && 'ml-auto text-right',
-					active && 'text-foreground',
+					active && 'text-foreground'
 				)}
 				onClick={() => onSort(column)}
 				aria-label={label}
 			>
 				<span>{label}</span>
-				<SortIcon className="size-3.5" aria-hidden="true" />
+				<SortIcon
+					className="size-3.5"
+					aria-hidden="true"
+				/>
 			</button>
 		</th>
 	)
@@ -297,7 +301,7 @@ export function PriceChangesBoard({
 		mySquadElementIds.length > 0 ? 'mine' : 'all'
 	const [scope, setScope] = useState<ScopeFilter>(defaultScope)
 	const [sort, setSort] = useState<PriceChangeSortState>(
-		DEFAULT_PRICE_CHANGE_SORT,
+		DEFAULT_PRICE_CHANGE_SORT
 	)
 	const [teamId, setTeamId] = useState('all')
 	const [page, setPage] = useState(1)
@@ -305,6 +309,14 @@ export function PriceChangesBoard({
 	const mySquad = useMemo(() => new Set(mySquadElementIds), [mySquadElementIds])
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const countdown = useDeadlineCountdown(displayBoard.deadline)
+
+	useEffect(() => {
+		try {
+			window.localStorage.removeItem(LEGACY_LAST_VALID_BOARD_STORAGE_KEY)
+		} catch {
+			// Storage cleanup is best effort; the new v2 key remains authoritative.
+		}
+	}, [])
 
 	useEffect(() => {
 		if (isPersistableBoard(board)) {
@@ -327,7 +339,10 @@ export function PriceChangesBoard({
 	}, [router])
 
 	const teamOptions = useMemo(() => {
-		const teams = new Map<number, { id: number; name: string; shortName: string }>()
+		const teams = new Map<
+			number,
+			{ id: number; name: string; shortName: string }
+		>()
 		for (const player of displayBoard.players) {
 			if (!teams.has(player.teamId)) {
 				teams.set(player.teamId, {
@@ -338,34 +353,34 @@ export function PriceChangesBoard({
 			}
 		}
 		return Array.from(teams.values()).sort((left, right) =>
-			left.name.localeCompare(right.name, locale),
+			left.name.localeCompare(right.name, locale)
 		)
 	}, [displayBoard.players, locale])
 
 	const filteredPlayers = useMemo(() => {
 		const query = search.trim().toLowerCase()
 		const matchingPlayers = displayBoard.players.filter(player => {
-				if (scope === 'mine' && !mySquad.has(player.playerId)) return false
-				if (teamId !== 'all' && String(player.teamId) !== teamId) return false
-				if (movement === 'rise' && player.progressPercent <= 0) return false
-				if (movement === 'fall' && player.progressPercent >= 0) return false
-				if (
-					movement === 'locked' &&
-					player.status !== 'LOCKED' &&
-					player.status !== 'CALIBRATING'
-				) {
-					return false
-				}
-				if (!query) return true
-				return `${player.webName} ${player.teamName} ${player.teamShortName}`
-					.toLowerCase()
-					.includes(query)
-			})
+			if (scope === 'mine' && !mySquad.has(player.playerId)) return false
+			if (teamId !== 'all' && String(player.teamId) !== teamId) return false
+			if (movement === 'rise' && player.progressPercent <= 0) return false
+			if (movement === 'fall' && player.progressPercent >= 0) return false
+			if (
+				movement === 'locked' &&
+				player.status !== 'LOCKED' &&
+				player.status !== 'CALIBRATING'
+			) {
+				return false
+			}
+			if (!query) return true
+			return `${player.webName} ${player.teamName} ${player.teamShortName}`
+				.toLowerCase()
+				.includes(query)
+		})
 		return sortPriceChangePlayers(matchingPlayers, {
 			sort,
 			squadElementIds: mySquad,
 			purchasePrices: personalPurchasePrices,
-			locale,
+			locale
 		})
 	}, [
 		displayBoard.players,
@@ -376,7 +391,7 @@ export function PriceChangesBoard({
 		scope,
 		search,
 		sort,
-		teamId,
+		teamId
 	])
 
 	const pageCount = Math.max(1, Math.ceil(filteredPlayers.length / PAGE_SIZE))
@@ -411,16 +426,16 @@ export function PriceChangesBoard({
 			current.column === column
 				? {
 						column,
-						direction: current.direction === 'desc' ? 'asc' : 'desc',
+						direction: current.direction === 'desc' ? 'asc' : 'desc'
 					}
-				: { column, direction: 'desc' },
+				: { column, direction: 'desc' }
 		)
 		setPage(1)
 	}
 	const setSortValue = (value: string) => {
 		const [column, direction] = value.split(':') as [
 			PriceChangeSortColumn,
-			PriceChangeSortDirection,
+			PriceChangeSortDirection
 		]
 		if (!column || !direction) return
 		setSort({ column, direction })
@@ -453,19 +468,12 @@ export function PriceChangesBoard({
 					LIKELY_FALL: t('statusLikelyFall'),
 					VERY_LIKELY_FALL: t('statusVeryLikelyFall'),
 					LOCKED: t('statusLocked'),
-					CALIBRATING: t('statusCalibrating'),
+					CALIBRATING: t('statusCalibrating')
 				},
-				footer: shareUrl,
-			},
+				footer: shareUrl
+			}
 		})
-	}, [
-		displayBoard.deadline,
-		hydrated,
-		locale,
-		scope,
-		t,
-		visiblePlayers,
-	])
+	}, [displayBoard.deadline, hydrated, locale, scope, t, visiblePlayers])
 
 	return (
 		<div className="space-y-5">
@@ -526,8 +534,16 @@ export function PriceChangesBoard({
 					/>
 					<Dialog>
 						<DialogTrigger asChild>
-							<Button type="button" variant="outline" size="sm" className="shrink-0">
-								<CircleHelp data-icon="inline-start" aria-hidden="true" />
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								className="shrink-0"
+							>
+								<CircleHelp
+									data-icon="inline-start"
+									aria-hidden="true"
+								/>
 								{t('understandingPriceChanges')}
 							</Button>
 						</DialogTrigger>
@@ -596,10 +612,13 @@ export function PriceChangesBoard({
 									aria-label={t('scopeLabel')}
 									className={cn(
 										'h-9 w-auto min-w-[9.25rem] rounded-full px-3 text-xs font-medium',
-										scope === 'mine' && 'border-primary/50 bg-primary/10 text-foreground',
+										scope === 'mine' &&
+											'border-primary/50 bg-primary/10 text-foreground'
 									)}
 								>
-									<span className="mr-1 text-muted-foreground">{t('scopeLabel')}:</span>
+									<span className="mr-1 text-muted-foreground">
+										{t('scopeLabel')}:
+									</span>
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
@@ -619,10 +638,13 @@ export function PriceChangesBoard({
 									aria-label={t('filterLabel')}
 									className={cn(
 										'h-9 w-auto min-w-[8.5rem] rounded-full px-3 text-xs font-medium',
-										movement !== 'all' && 'border-primary/50 bg-primary/10 text-foreground',
+										movement !== 'all' &&
+											'border-primary/50 bg-primary/10 text-foreground'
 									)}
 								>
-									<span className="mr-1 text-muted-foreground">{t('filterLabel')}:</span>
+									<span className="mr-1 text-muted-foreground">
+										{t('filterLabel')}:
+									</span>
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
@@ -644,16 +666,22 @@ export function PriceChangesBoard({
 									aria-label={t('filterByTeam')}
 									className={cn(
 										'h-9 w-auto min-w-[9.5rem] max-w-full rounded-full px-3 text-xs font-medium',
-										teamId !== 'all' && 'border-primary/50 bg-primary/10 text-foreground',
+										teamId !== 'all' &&
+											'border-primary/50 bg-primary/10 text-foreground'
 									)}
 								>
-									<span className="mr-1 text-muted-foreground">{t('teamFilterLabel')}:</span>
+									<span className="mr-1 text-muted-foreground">
+										{t('teamFilterLabel')}:
+									</span>
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent className="max-h-72">
 									<SelectItem value="all">{t('allTeams')}</SelectItem>
 									{teamOptions.map(team => (
-										<SelectItem key={team.id} value={String(team.id)}>
+										<SelectItem
+											key={team.id}
+											value={String(team.id)}
+										>
 											{team.shortName} · {team.name}
 										</SelectItem>
 									))}
@@ -680,7 +708,10 @@ export function PriceChangesBoard({
 								total: filteredPlayers.length
 							})}
 						</p>
-						<div className="space-y-1 text-right" role="status">
+						<div
+							className="space-y-1 text-right"
+							role="status"
+						>
 							{scope === 'mine' && mySquadElementIds.length === 0 ? (
 								<p>
 									{mySquadState === 'unavailable'
@@ -690,7 +721,9 @@ export function PriceChangesBoard({
 											: t('mySquadEmpty')}
 								</p>
 							) : null}
-							{scope === 'mine' && mySquadElementIds.length > 0 && personalPriceState !== 'READY' ? (
+							{scope === 'mine' &&
+							mySquadElementIds.length > 0 &&
+							personalPriceState !== 'READY' ? (
 								<p>{t('personalPriceUnavailable')}</p>
 							) : null}
 						</div>
@@ -723,14 +756,22 @@ export function PriceChangesBoard({
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
-										<SelectItem value="progress:desc">{t('progress')} ↓</SelectItem>
-										<SelectItem value="progress:asc">{t('progress')} ↑</SelectItem>
+										<SelectItem value="progress:desc">
+											{t('progress')} ↓
+										</SelectItem>
+										<SelectItem value="progress:asc">
+											{t('progress')} ↑
+										</SelectItem>
 										<SelectItem value="price:desc">{t('price')} ↓</SelectItem>
 										<SelectItem value="price:asc">{t('price')} ↑</SelectItem>
 										<SelectItem value="signal:desc">{t('signal')} ↓</SelectItem>
 										<SelectItem value="signal:asc">{t('signal')} ↑</SelectItem>
-										<SelectItem value="movement:desc">{t('movement')} ↓</SelectItem>
-										<SelectItem value="movement:asc">{t('movement')} ↑</SelectItem>
+										<SelectItem value="movement:desc">
+											{t('movement')} ↓
+										</SelectItem>
+										<SelectItem value="movement:asc">
+											{t('movement')} ↑
+										</SelectItem>
 										{scope === 'mine' ? (
 											<>
 												<SelectItem value="purchasePrice:desc">
@@ -750,302 +791,312 @@ export function PriceChangesBoard({
 									</SelectContent>
 								</Select>
 							</div>
-						<div className="hidden overflow-x-auto md:block">
-							<table
-								className={cn(
-									'w-full text-left text-sm',
-									scope === 'mine' ? 'min-w-[980px]' : 'min-w-[760px]'
-								)}
-							>
-								<thead className="border-b border-border/70 bg-muted/10 text-xs uppercase tracking-[0.12em] text-muted-foreground">
-									<tr>
-										<th className="px-5 py-3 font-semibold">
-											{t('playerLabel')}
-										</th>
-										<th className="px-3 py-3 font-semibold">
-											{t('positionLabel')}
-										</th>
-										<SortableHeader
-											column="price"
-											label={t('price')}
-											sort={sort}
-											onSort={setSortColumn}
-										/>
-										{scope === 'mine' ? (
-											<>
-												<SortableHeader
-													column="purchasePrice"
-													label={t('purchasePrice')}
-													sort={sort}
-													onSort={setSortColumn}
-												/>
-												<SortableHeader
-													column="sellingPrice"
-													label={t('sellingPrice')}
-													sort={sort}
-													onSort={setSortColumn}
-												/>
-											</>
-										) : null}
-										<SortableHeader
-											column="progress"
-											label={t('progress')}
-											sort={sort}
-											onSort={setSortColumn}
-										/>
-										<SortableHeader
-											column="signal"
-											label={t('signal')}
-											sort={sort}
-											onSort={setSortColumn}
-										/>
-										<SortableHeader
-											column="movement"
-											label={t('movement')}
-											sort={sort}
-											onSort={setSortColumn}
-											align="right"
-										/>
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-border/60">
-									{visiblePlayers.map(player => {
-										const TrendIcon = ownershipIcon(player.ownershipTrend)
-										const personalPrice =
-											scope === 'mine'
-												? personalPriceForPlayer(player, personalPurchasePrices)
-												: null
-										return (
-											<tr
-												key={player.playerId}
-												className="align-middle hover:bg-muted/15"
-											>
-												<td className="px-5 py-3.5">
-													<div className="flex items-center gap-3">
-														<MarketPositionBadge position={player.position} />
-														<div className="min-w-0">
-															<Link
-																prefetch={false}
-																href={playerStatsHref({
-																	p1: String(player.playerId)
-																})}
-																className="block truncate font-semibold text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
-															>
-																{player.webName}
-															</Link>
-															<span className="block truncate text-xs text-muted-foreground">
-																{player.teamShortName} · {player.teamName}
+							<div className="hidden overflow-x-auto md:block">
+								<table
+									className={cn(
+										'w-full text-left text-sm',
+										scope === 'mine' ? 'min-w-[980px]' : 'min-w-[760px]'
+									)}
+								>
+									<thead className="border-b border-border/70 bg-muted/10 text-xs uppercase tracking-[0.12em] text-muted-foreground">
+										<tr>
+											<th className="px-5 py-3 font-semibold">
+												{t('playerLabel')}
+											</th>
+											<th className="px-3 py-3 font-semibold">
+												{t('positionLabel')}
+											</th>
+											<SortableHeader
+												column="price"
+												label={t('price')}
+												sort={sort}
+												onSort={setSortColumn}
+											/>
+											{scope === 'mine' ? (
+												<>
+													<SortableHeader
+														column="purchasePrice"
+														label={t('purchasePrice')}
+														sort={sort}
+														onSort={setSortColumn}
+													/>
+													<SortableHeader
+														column="sellingPrice"
+														label={t('sellingPrice')}
+														sort={sort}
+														onSort={setSortColumn}
+													/>
+												</>
+											) : null}
+											<SortableHeader
+												column="progress"
+												label={t('progress')}
+												sort={sort}
+												onSort={setSortColumn}
+											/>
+											<SortableHeader
+												column="signal"
+												label={t('signal')}
+												sort={sort}
+												onSort={setSortColumn}
+											/>
+											<SortableHeader
+												column="movement"
+												label={t('movement')}
+												sort={sort}
+												onSort={setSortColumn}
+												align="right"
+											/>
+										</tr>
+									</thead>
+									<tbody className="divide-y divide-border/60">
+										{visiblePlayers.map(player => {
+											const TrendIcon = ownershipIcon(player.ownershipTrend)
+											const personalPrice =
+												scope === 'mine'
+													? personalPriceForPlayer(
+															player,
+															personalPurchasePrices
+														)
+													: null
+											return (
+												<tr
+													key={player.playerId}
+													className="align-middle hover:bg-muted/15"
+												>
+													<td className="px-5 py-3.5">
+														<div className="flex items-center gap-3">
+															<MarketPositionBadge position={player.position} />
+															<div className="min-w-0">
+																<Link
+																	prefetch={false}
+																	href={playerStatsHref({
+																		p1: String(player.playerId)
+																	})}
+																	className="block truncate font-semibold text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+																>
+																	{player.webName}
+																</Link>
+																<span className="block truncate text-xs text-muted-foreground">
+																	{player.teamShortName} · {player.teamName}
+																</span>
+															</div>
+														</div>
+													</td>
+													<td className="px-3 py-3.5 text-xs font-semibold text-muted-foreground">
+														{player.position}
+													</td>
+													<td className="px-3 py-3.5 font-mono tabular-nums">
+														{formatPrice(player.currentPrice)}
+													</td>
+													{scope === 'mine' ? (
+														<>
+															<td className="px-3 py-3.5 font-mono tabular-nums">
+																{personalPrice
+																	? formatPrice(personalPrice.purchasePrice)
+																	: '—'}
+															</td>
+															<td className="px-3 py-3.5 font-mono tabular-nums">
+																{personalPrice
+																	? formatPrice(personalPrice.sellingPrice)
+																	: '—'}
+															</td>
+														</>
+													) : null}
+													<td className="px-3 py-3.5">
+														<div className="flex min-w-[130px] items-center gap-2">
+															<div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+																<div
+																	className={cn(
+																		'h-full rounded-full',
+																		progressClass(player.progressPercent)
+																	)}
+																	style={{
+																		width: `${Math.min(100, Math.abs(player.progressPercent))}%`
+																	}}
+																/>
+															</div>
+															<span className="font-mono text-xs tabular-nums">
+																{formatPercent(player.progressPercent)}
 															</span>
 														</div>
+													</td>
+													<td className="px-3 py-3.5">
+														<Badge
+															variant="outline"
+															className={cn(
+																'whitespace-nowrap',
+																statusClass(player.status)
+															)}
+														>
+															{t(statusTranslationKey[player.status])}
+														</Badge>
+													</td>
+													<td className="px-5 py-3.5 text-right">
+														<div
+															className={cn(
+																'flex items-center justify-end gap-1.5 font-medium',
+																ownershipClass(player.ownershipTrend)
+															)}
+														>
+															<TrendIcon
+																className="size-4"
+																aria-hidden="true"
+															/>
+															<span>
+																{player.selectedByPercent.toFixed(1)}%
+															</span>
+														</div>
+														<p className="mt-0.5 text-xs text-muted-foreground">
+															{player.transfersInEvent.toLocaleString(locale)}{' '}
+															{t('transfersIn')}·{' '}
+															{player.transfersOutEvent.toLocaleString(locale)}{' '}
+															{t('transfersOut')}
+														</p>
+													</td>
+												</tr>
+											)
+										})}
+									</tbody>
+								</table>
+							</div>
+
+							<div className="divide-y divide-border/60 md:hidden">
+								{visiblePlayers.map(player => {
+									const TrendIcon = ownershipIcon(player.ownershipTrend)
+									const personalPrice =
+										scope === 'mine'
+											? personalPriceForPlayer(player, personalPurchasePrices)
+											: null
+									return (
+										<div
+											key={player.playerId}
+											className="space-y-3 p-4"
+										>
+											<div className="flex items-start justify-between gap-3">
+												<div className="flex min-w-0 items-center gap-2.5">
+													<MarketPositionBadge position={player.position} />
+													<div className="min-w-0">
+														<Link
+															prefetch={false}
+															href={playerStatsHref({
+																p1: String(player.playerId)
+															})}
+															className="block truncate font-semibold text-primary-ink underline decoration-primary/35 underline-offset-2"
+														>
+															{player.webName}
+														</Link>
+														<p className="truncate text-xs text-muted-foreground">
+															{player.teamShortName} ·{' '}
+															{formatPrice(player.currentPrice)}
+														</p>
 													</div>
-												</td>
-												<td className="px-3 py-3.5 text-xs font-semibold text-muted-foreground">
-													{player.position}
-												</td>
-												<td className="px-3 py-3.5 font-mono tabular-nums">
-													{formatPrice(player.currentPrice)}
-												</td>
-												{scope === 'mine' ? (
-													<>
-														<td className="px-3 py-3.5 font-mono tabular-nums">
+												</div>
+												<Badge
+													variant="outline"
+													className={cn('shrink-0', statusClass(player.status))}
+												>
+													{t(statusTranslationKey[player.status])}
+												</Badge>
+											</div>
+											<div className="flex items-center gap-3">
+												<div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+													<div
+														className={cn(
+															'h-full rounded-full',
+															progressClass(player.progressPercent)
+														)}
+														style={{
+															width: `${Math.min(100, Math.abs(player.progressPercent))}%`
+														}}
+													/>
+												</div>
+												<span className="w-14 text-right font-mono text-xs tabular-nums">
+													{formatPercent(player.progressPercent)}
+												</span>
+											</div>
+											<div className="flex items-center justify-between text-xs text-muted-foreground">
+												<span>
+													{t('ownership')}:{' '}
+													{player.selectedByPercent.toFixed(1)}%
+												</span>
+												<span
+													className={cn(
+														'inline-flex items-center gap-1 font-medium',
+														ownershipClass(player.ownershipTrend)
+													)}
+												>
+													<TrendIcon
+														className="size-3.5"
+														aria-hidden="true"
+													/>
+													{player.transfersInEvent.toLocaleString(locale)} /{' '}
+													{player.transfersOutEvent.toLocaleString(locale)}
+												</span>
+											</div>
+											{scope === 'mine' ? (
+												<div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/35 px-3 py-2 text-xs">
+													<div>
+														<p className="text-muted-foreground">
+															{t('purchasePrice')}
+														</p>
+														<p className="mt-0.5 font-mono font-medium tabular-nums text-foreground">
 															{personalPrice
 																? formatPrice(personalPrice.purchasePrice)
 																: '—'}
-														</td>
-														<td className="px-3 py-3.5 font-mono tabular-nums">
+														</p>
+													</div>
+													<div>
+														<p className="text-muted-foreground">
+															{t('sellingPrice')}
+														</p>
+														<p className="mt-0.5 font-mono font-medium tabular-nums text-foreground">
 															{personalPrice
 																? formatPrice(personalPrice.sellingPrice)
 																: '—'}
-														</td>
-													</>
-												) : null}
-												<td className="px-3 py-3.5">
-													<div className="flex min-w-[130px] items-center gap-2">
-														<div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
-															<div
-																className={cn(
-																	'h-full rounded-full',
-																	progressClass(player.progressPercent)
-																)}
-																style={{
-																	width: `${Math.min(100, Math.abs(player.progressPercent))}%`
-																}}
-															/>
-														</div>
-														<span className="font-mono text-xs tabular-nums">
-															{formatPercent(player.progressPercent)}
-														</span>
+														</p>
 													</div>
-												</td>
-												<td className="px-3 py-3.5">
-													<Badge
-														variant="outline"
-														className={cn(
-															'whitespace-nowrap',
-															statusClass(player.status)
-														)}
-													>
-														{t(statusTranslationKey[player.status])}
-													</Badge>
-												</td>
-												<td className="px-5 py-3.5 text-right">
-													<div
-														className={cn(
-															'flex items-center justify-end gap-1.5 font-medium',
-															ownershipClass(player.ownershipTrend)
-														)}
-													>
-														<TrendIcon
-															className="size-4"
-															aria-hidden="true"
-														/>
-														<span>{player.selectedByPercent.toFixed(1)}%</span>
-													</div>
-													<p className="mt-0.5 text-xs text-muted-foreground">
-														{player.transfersInEvent.toLocaleString(locale)}{' '}
-														{t('transfersIn')}·{' '}
-														{player.transfersOutEvent.toLocaleString(locale)}{' '}
-														{t('transfersOut')}
-													</p>
-												</td>
-											</tr>
-										)
-									})}
-								</tbody>
-							</table>
-						</div>
-
-						<div className="divide-y divide-border/60 md:hidden">
-							{visiblePlayers.map(player => {
-								const TrendIcon = ownershipIcon(player.ownershipTrend)
-								const personalPrice =
-									scope === 'mine'
-										? personalPriceForPlayer(player, personalPurchasePrices)
-										: null
-								return (
-									<div
-										key={player.playerId}
-										className="space-y-3 p-4"
-									>
-										<div className="flex items-start justify-between gap-3">
-											<div className="flex min-w-0 items-center gap-2.5">
-												<MarketPositionBadge position={player.position} />
-												<div className="min-w-0">
-													<Link
-														prefetch={false}
-														href={playerStatsHref({
-															p1: String(player.playerId)
-														})}
-														className="block truncate font-semibold text-primary-ink underline decoration-primary/35 underline-offset-2"
-													>
-														{player.webName}
-													</Link>
-													<p className="truncate text-xs text-muted-foreground">
-														{player.teamShortName} ·{' '}
-														{formatPrice(player.currentPrice)}
-													</p>
 												</div>
-											</div>
-											<Badge
-												variant="outline"
-												className={cn('shrink-0', statusClass(player.status))}
-											>
-												{t(statusTranslationKey[player.status])}
-											</Badge>
+											) : null}
 										</div>
-										<div className="flex items-center gap-3">
-											<div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-												<div
-													className={cn(
-														'h-full rounded-full',
-														progressClass(player.progressPercent)
-													)}
-													style={{
-														width: `${Math.min(100, Math.abs(player.progressPercent))}%`
-													}}
-												/>
-											</div>
-											<span className="w-14 text-right font-mono text-xs tabular-nums">
-												{formatPercent(player.progressPercent)}
-											</span>
-										</div>
-										<div className="flex items-center justify-between text-xs text-muted-foreground">
-											<span>
-												{t('ownership')}: {player.selectedByPercent.toFixed(1)}%
-											</span>
-											<span
-												className={cn(
-													'inline-flex items-center gap-1 font-medium',
-													ownershipClass(player.ownershipTrend)
-												)}
-											>
-												<TrendIcon
-													className="size-3.5"
-													aria-hidden="true"
-												/>
-												{player.transfersInEvent.toLocaleString(locale)} /{' '}
-												{player.transfersOutEvent.toLocaleString(locale)}
-											</span>
-											</div>
-										{scope === 'mine' ? (
-											<div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/35 px-3 py-2 text-xs">
-												<div>
-													<p className="text-muted-foreground">{t('purchasePrice')}</p>
-													<p className="mt-0.5 font-mono font-medium tabular-nums text-foreground">
-														{personalPrice
-															? formatPrice(personalPrice.purchasePrice)
-															: '—'}
-													</p>
-												</div>
-												<div>
-													<p className="text-muted-foreground">{t('sellingPrice')}</p>
-													<p className="mt-0.5 font-mono font-medium tabular-nums text-foreground">
-														{personalPrice
-															? formatPrice(personalPrice.sellingPrice)
-															: '—'}
-													</p>
-												</div>
-											</div>
-										) : null}
-									</div>
-								)
-							})}
-						</div>
-					</>
-				)}
+									)
+								})}
+							</div>
+						</>
+					)}
 
-				{visiblePlayers.length > 0 && pageCount > 1 ? (
-					<div
-						className="flex items-center justify-between border-t border-border/70 px-4 py-3 sm:px-5"
-						data-share-exclude="true"
-					>
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							disabled={safePage <= 1}
-							onClick={() => setPage(current => Math.max(1, current - 1))}
+					{visiblePlayers.length > 0 && pageCount > 1 ? (
+						<div
+							className="flex items-center justify-between border-t border-border/70 px-4 py-3 sm:px-5"
+							data-share-exclude="true"
 						>
-							<ArrowLeft aria-hidden="true" />
-							<span className="hidden sm:inline">{t('previousPage')}</span>
-						</Button>
-						<span className="text-xs text-muted-foreground">
-							{t('pageOf', { page: safePage, pages: pageCount })}
-						</span>
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							disabled={safePage >= pageCount}
-							onClick={() =>
-								setPage(current => Math.min(pageCount, current + 1))
-							}
-						>
-							<span className="hidden sm:inline">{t('nextPage')}</span>
-							<ArrowRight aria-hidden="true" />
-						</Button>
-					</div>
-				) : null}
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								disabled={safePage <= 1}
+								onClick={() => setPage(current => Math.max(1, current - 1))}
+							>
+								<ArrowLeft aria-hidden="true" />
+								<span className="hidden sm:inline">{t('previousPage')}</span>
+							</Button>
+							<span className="text-xs text-muted-foreground">
+								{t('pageOf', { page: safePage, pages: pageCount })}
+							</span>
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								disabled={safePage >= pageCount}
+								onClick={() =>
+									setPage(current => Math.min(pageCount, current + 1))
+								}
+							>
+								<span className="hidden sm:inline">{t('nextPage')}</span>
+								<ArrowRight aria-hidden="true" />
+							</Button>
+						</div>
+					) : null}
 				</div>
 			</Card>
 		</div>
