@@ -16,6 +16,7 @@ describe('server-first global shell performance boundary', () => {
 		const miniProgram = read('components/layout/MiniProgramPopover.tsx')
 
 		assert.doesNotMatch(layout, /ThemeProvider/)
+		assert.match(layout, /data-cfasync="false"/)
 		assert.doesNotMatch(clientNamespaces, /\n\s*'Theme',/)
 		assert.match(layout, /data-navigation-disclosure/)
 		assert.match(layout, /data-theme-choice/)

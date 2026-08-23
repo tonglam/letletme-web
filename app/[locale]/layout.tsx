@@ -179,6 +179,7 @@ export default async function LocaleLayout({
 			<head>
 				<script
 					id="theme-bootstrap"
+					data-cfasync="false"
 					dangerouslySetInnerHTML={{ __html: shellBootstrapScript }}
 				/>
 			</head>
