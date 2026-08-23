@@ -19,7 +19,10 @@ import type {
 	TournamentEntrySquadsResponse,
 	TournamentLiveCalcData
 } from '@/lib/graphql/operations/tournaments'
-import { mapComparisonPick } from '@/lib/tournament/entry-comparison'
+import {
+	comparisonPositionLabel,
+	mapComparisonPick
+} from '@/lib/tournament/entry-comparison'
 import { getPlayedPlayerLimit } from '@/lib/tournament/played-total'
 import type { TournamentEntry } from '@/types/tournament'
 import { useEffect, useState } from 'react'
@@ -69,22 +72,6 @@ function PlayedDot({
 	return (
 		<span className={`inline-block size-2 shrink-0 rounded-full ${color}`} />
 	)
-}
-
-function elementTypeLabel(elementType: number, position: number): string {
-	if (position >= 12) return 'SUB'
-	switch (elementType) {
-		case 1:
-			return 'GKP'
-		case 2:
-			return 'DEF'
-		case 3:
-			return 'MID'
-		case 4:
-			return 'FWD'
-		default:
-			return '—'
-	}
 }
 
 function ChipBadges({
@@ -591,15 +578,7 @@ export function EntryCompareSheet({
 									const leftPick = mapComparisonPick(pA, Boolean(liveA))
 									const rightPick = mapComparisonPick(pB, Boolean(liveB))
 
-									const elementType =
-										(pA as { elementType?: number; elementTypeName?: string })
-											?.elementType ??
-										(pA as { elementTypeName?: string })?.elementTypeName ??
-										0
-									const posLabel =
-										typeof elementType === 'number'
-											? elementTypeLabel(elementType, i + 1)
-											: String(elementType ?? '—').slice(0, 3)
+									const posLabel = comparisonPositionLabel(pA ?? pB, i + 1)
 
 									return (
 										<PlayerCompareRow

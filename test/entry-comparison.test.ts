@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { mapComparisonPick } from '@/lib/tournament/entry-comparison'
+import {
+	comparisonPositionLabel,
+	mapComparisonPick
+} from '@/lib/tournament/entry-comparison'
 
 describe('live tournament entry comparison', () => {
 	it('uses the squad pick role flags even without an entry-level captain name', () => {
@@ -30,5 +33,20 @@ describe('live tournament entry comparison', () => {
 
 		assert.equal(pick?.isViceCaptain, true)
 		assert.equal(pick?.totalPoints, 0)
+	})
+
+	it('normalizes full GraphQL position names for the lineup columns', () => {
+		assert.equal(
+			comparisonPositionLabel({ elementTypeName: 'GOALKEEPER' }, 1),
+			'GKP'
+		)
+		assert.equal(
+			comparisonPositionLabel({ elementTypeName: 'FORWARD' }, 11),
+			'FWD'
+		)
+		assert.equal(
+			comparisonPositionLabel({ elementTypeName: 'FORWARD' }, 12),
+			'SUB'
+		)
 	})
 })

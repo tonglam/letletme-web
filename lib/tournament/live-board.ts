@@ -234,6 +234,17 @@ export const isCurrentLiveBoardRequest = (
 export const shouldAutoRefreshLiveBoardPage = (page: number | null): boolean =>
 	page === 1
 
+export const canLoadMoreLiveBoard = (input: {
+	hasMore: boolean
+	isLoadingMore: boolean
+	replacementPending: boolean
+	rateLimited: boolean
+}): boolean =>
+	input.hasMore &&
+	!input.isLoadingMore &&
+	!input.replacementPending &&
+	!input.rateLimited
+
 export const shouldSyncLiveBoardSearchInput = (
 	requestedInput: string,
 	currentInput: string
@@ -261,6 +272,16 @@ export const resolveAnchoredGameweek = (input: {
 	}
 	return { selectedGameweek: input.nextEvent, followsAnchor: true }
 }
+
+export const resolveUrlGameweekSelection = (input: {
+	currentEvent: number
+	requestedGameweek: number | null
+}): { selectedGameweek: number; followsAnchor: boolean } =>
+	resolveAnchoredGameweek({
+		nextEvent: input.currentEvent,
+		requestedGameweek: input.requestedGameweek,
+		followsAnchor: true
+	})
 
 const scopePart = (value: string | number): string =>
 	encodeURIComponent(String(value).trim())

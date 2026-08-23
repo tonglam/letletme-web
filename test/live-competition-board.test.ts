@@ -6,6 +6,7 @@ import {
 	LIVE_BOARD_CONTRACT_VERSION,
 	LiveBoardInvalidResponseError,
 	LiveBoardRequestError,
+	canLoadMoreLiveBoard,
 	fetchEntryLiveCompetitionBoard,
 	isCurrentLiveBoardRequest,
 	isLiveBoardRevisionGoneCode,
@@ -13,6 +14,7 @@ import {
 	parseEntryLiveCompetitionBoardPage,
 	readLiveBoardLastGood,
 	resolveAnchoredGameweek,
+	resolveUrlGameweekSelection,
 	shouldAutoRefreshLiveBoardPage,
 	shouldSyncLiveBoardSearchInput,
 	writeLiveBoardLastGood
@@ -215,6 +217,27 @@ describe('live competition board request coordination', () => {
 		assert.equal(shouldAutoRefreshLiveBoardPage(null), false)
 	})
 
+	it('blocks pagination while a replacement query is in flight', () => {
+		assert.equal(
+			canLoadMoreLiveBoard({
+				hasMore: true,
+				isLoadingMore: false,
+				replacementPending: true,
+				rateLimited: false
+			}),
+			false
+		)
+		assert.equal(
+			canLoadMoreLiveBoard({
+				hasMore: true,
+				isLoadingMore: false,
+				replacementPending: false,
+				rateLimited: false
+			}),
+			true
+		)
+	})
+
 	it('only synchronizes the search box while the triggering input is unchanged', () => {
 		assert.equal(shouldSyncLiveBoardSearchInput('abc', 'abc'), true)
 		assert.equal(shouldSyncLiveBoardSearchInput('abc', 'abcd'), false)
@@ -242,6 +265,17 @@ describe('live competition board request coordination', () => {
 				followsAnchor: true
 			}),
 			{ selectedGameweek: 8, followsAnchor: false }
+		)
+	})
+
+	it('treats a changed URL gameweek as authoritative selection state', () => {
+		assert.deepEqual(
+			resolveUrlGameweekSelection({ currentEvent: 8, requestedGameweek: 3 }),
+			{ selectedGameweek: 3, followsAnchor: false }
+		)
+		assert.deepEqual(
+			resolveUrlGameweekSelection({ currentEvent: 8, requestedGameweek: null }),
+			{ selectedGameweek: 8, followsAnchor: true }
 		)
 	})
 })

@@ -1,3 +1,5 @@
+import { positionCodeFromElementTypeName } from '@/lib/squad-picks'
+
 export type ComparisonPickSource = {
 	webName: string
 	totalPoints?: number | null
@@ -20,6 +22,31 @@ export type ComparisonPick = {
 	isGwFinished?: boolean | null
 	isGwStarted?: boolean | null
 	isPlayed?: boolean | null
+}
+
+export const comparisonPositionLabel = (
+	pick:
+		| { elementType?: number | null; elementTypeName?: string | null }
+		| null
+		| undefined,
+	position: number
+): string => {
+	if (position >= 12) return 'SUB'
+	if (typeof pick?.elementType === 'number') {
+		switch (pick.elementType) {
+			case 1:
+				return 'GKP'
+			case 2:
+				return 'DEF'
+			case 3:
+				return 'MID'
+			case 4:
+				return 'FWD'
+		}
+	}
+	return pick?.elementTypeName
+		? positionCodeFromElementTypeName(pick.elementTypeName)
+		: '—'
 }
 
 export const mapComparisonPick = (
