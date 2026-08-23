@@ -16,6 +16,7 @@ import {
 	type TournamentSortColumn,
 	type TournamentSortDirection
 } from '@/lib/tournament/table-sort'
+import { getPlayedPlayerLimit } from '@/lib/tournament/played-total'
 import type { TournamentEntry } from '@/types/tournament'
 import { ArrowDown, ArrowUp, GitCompareArrows } from 'lucide-react'
 import dynamic from 'next/dynamic'
@@ -345,8 +346,7 @@ export function TournamentTable({
 							const gwPts = entry.gwPoints ?? entry.livePoints ?? '—'
 							const hits = entry.eventCost ?? 0
 							const net = entry.gwNetPoints
-							const playedTotal =
-								(entry.playersPlayed ?? 0) + (entry.playersToPlay ?? 0)
+							const playedTotal = getPlayedPlayerLimit(entry.chips)
 							const chips = chipLabel(entry)
 							const captainLabel =
 								entry.captainName && entry.captainName !== 'N/A'
@@ -444,7 +444,7 @@ export function TournamentTable({
 										<span className="font-mono tabular-nums">
 											{t('played')}{' '}
 											<span className="font-semibold text-foreground">
-												{entry.playersPlayed}/{playedTotal || '—'}
+												{entry.playersPlayed}/{playedTotal}
 											</span>
 										</span>
 										<span className="font-mono tabular-nums">
@@ -539,7 +539,7 @@ export function TournamentTable({
 										<span className="text-right font-mono text-xs tabular-nums text-muted-foreground">
 											{entry.playersPlayed}
 											<span className="text-muted-foreground/50">
-												/{playedTotal || '—'}
+												/{playedTotal}
 											</span>
 										</span>
 										<span className="text-right font-mono text-xs tabular-nums text-foreground/90">
