@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
 	isEdgeOneRecord,
 	isFallbackRecord,
+	isDefaultVercelRecord,
 	parseState,
 	runCheck,
 	FailoverCoordinator
@@ -17,6 +18,8 @@ const baseEnv = {
 	DNSPOD_EDGEONE_RECORD_ID: '123',
 	DNSPOD_EDGEONE_CNAME: 'edge.example.com',
 	DNSPOD_EDGEONE_LINE: '境内',
+	DNSPOD_DEFAULT_VERCEL_A: '76.76.21.21',
+	DNSPOD_DEFAULT_VERCEL_LINE: '默认',
 	EDGEONE_HEALTH_URL: 'https://eo-personal-canary.letletme.top/healthz',
 	VERCEL_HEALTH_URL: 'https://vercel-origin.letletme.top/healthz',
 	FAILOVER_STATE: null
@@ -66,6 +69,7 @@ function health(edge) {
 function fakeFetchFactory({
 	record,
 	records,
+	defaultRecord,
 	edgeResponses = [],
 	vercelResponse = health(false),
 	telegramResponses = []
@@ -73,6 +77,14 @@ function fakeFetchFactory({
 	const calls = []
 	const dnsRecords = (records ? [...records] : [record]).map(toDnsRecord)
 	let currentRecord = dnsRecords[0] || null
+	const fallbackRecord = toDnsRecord(defaultRecord ?? {
+		RecordId: 456,
+		Name: '@',
+		Type: 'A',
+		Value: '76.76.21.21',
+		Line: '默认',
+		Status: 'ENABLE'
+	})
 	return {
 		calls,
 		fetch: async (input, init = {}) => {
@@ -81,6 +93,10 @@ function fakeFetchFactory({
 			calls.push({ url, init, action })
 			if (url === 'https://dnspod.tencentcloudapi.com/') {
 				if (action === 'DescribeRecordList') {
+					const body = JSON.parse(init.body)
+					if (body.RecordType === 'A') {
+						return Response.json({ Response: { RecordList: fallbackRecord ? [fallbackRecord] : [] } })
+					}
 					const next = dnsRecords.length > 0 ? dnsRecords.shift() : currentRecord
 					if (next) currentRecord = next
 					return Response.json({ Response: { RecordList: next ? [next] : [] } })
@@ -120,6 +136,8 @@ test('recognizes only the exact EdgeOne and fallback records', () => {
 	assert.equal(isEdgeOneRecord(toDnsRecord({ content: 'attacker.example.com', proxied: false }), env), false)
 	assert.equal(isFallbackRecord(toDnsRecord({ content: 'edge.example.com', Status: 'DISABLE' }), env), true)
 	assert.equal(isFallbackRecord(toDnsRecord({ content: 'edge.example.com', Status: 'ENABLE' }), env), false)
+	assert.equal(isDefaultVercelRecord(toDnsRecord({ Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'ENABLE' }), env), true)
+	assert.equal(isDefaultVercelRecord(toDnsRecord({ Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'DISABLE' }), env), false)
 })
 
 test('requires three consecutive EdgeOne failures before one DNS update', async () => {
@@ -162,6 +180,18 @@ test('does not overwrite a manually changed DNS record', async () => {
 	const env = makeEnv()
 	const { fetch, calls } = fakeFetchFactory({
 		record: { type: 'CNAME', name: 'letletme.top', content: 'manual.example.com', proxied: false }
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'manual-dns-state')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
+test('does not disable regional EdgeOne when the default Vercel fallback is unsafe', async () => {
+	const env = makeEnv()
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false },
+		defaultRecord: { Type: 'A', Value: '198.51.100.10', Line: '默认', Status: 'ENABLE' },
+		edgeResponses: [new Response('', { status: 503 })]
 	})
 	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
 	assert.equal(result.action, 'manual-dns-state')
@@ -215,7 +245,10 @@ test('revalidates the DNS record immediately before failover', async () => {
 	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
 	assert.equal(result.action, 'manual-dns-state')
 	assert.equal(calls.filter(call => call.action === 'ModifyRecordStatus').length, 0)
-	assert.equal(calls.filter(call => call.action === 'DescribeRecordList').length, 2)
+	const regionalDescribes = calls
+		.filter(call => call.action === 'DescribeRecordList')
+		.filter(call => JSON.parse(call.init.body).RecordType === 'CNAME')
+	assert.equal(regionalDescribes.length, 2)
 })
 
 test('deduplicates a sustained dual-outage alert', async () => {

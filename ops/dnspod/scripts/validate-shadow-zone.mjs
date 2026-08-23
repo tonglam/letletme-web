@@ -35,17 +35,18 @@ function find(records, line, type, value) {
 
 const argv = process.argv.slice(2)
 const file = argv[0]
-const edgeoneCname = valueAfter('--edgeone-cname') || process.env.DNSPOD_EDGEONE_CNAME
-const vercelA = valueAfter('--vercel-a') || process.env.VERCEL_RECOMMENDED_A
+const edgeoneCname = valueAfter('--edgeone-cname', argv) || process.env.DNSPOD_EDGEONE_CNAME
+const vercelA = valueAfter('--vercel-a', argv) || process.env.VERCEL_RECOMMENDED_A
 const line = process.env.DNSPOD_EDGEONE_LINE || '境内'
 const requiredHosts = (process.env.DNSPOD_REQUIRED_HOSTS ||
-	'www,api,static,hermes,pop,cdn').split(',').map(value => value.trim()).filter(Boolean)
+	'www,api,static,hermes,pop,cdn,vercel-origin,eo-personal-canary').split(',').map(value => value.trim()).filter(Boolean)
 
 if (!file || !edgeoneCname || !vercelA) {
 	fail('usage: validate-shadow-zone.mjs <record-json> --edgeone-cname <cname> --vercel-a <ipv4>')
 } else {
 	try {
 		const records = readRecords(file)
+		const enabled = record => String(record.Status ?? '').toUpperCase() === 'ENABLE'
 		const apexEdgeOne = find(records, line, 'CNAME', edgeoneCname)
 		const apexOverseas = find(records, '境外', 'A', vercelA)
 		const apexDefault = find(records, '默认', 'A', vercelA)
@@ -60,13 +61,18 @@ if (!file || !edgeoneCname || !vercelA) {
 		const result = {
 			recordCount: records.length,
 			apex: {
-				edgeone: Boolean(apexEdgeOne),
-				overseas: Boolean(apexOverseas),
-				default: Boolean(apexDefault)
+				edgeone: Boolean(apexEdgeOne && enabled(apexEdgeOne)),
+				overseas: Boolean(apexOverseas && enabled(apexOverseas)),
+				default: Boolean(apexDefault && enabled(apexDefault))
 			},
 			missingHosts,
 			disabledRegionalRecords: disabled.map(record => Number(record.RecordId)),
-			ok: Boolean(apexEdgeOne && apexOverseas && apexDefault && missingHosts.length === 0)
+			ok: Boolean(
+				apexEdgeOne && enabled(apexEdgeOne) &&
+				apexOverseas && enabled(apexOverseas) &&
+				apexDefault && enabled(apexDefault) &&
+				missingHosts.length === 0
+			)
 		}
 		console.log(JSON.stringify(result, null, 2))
 		if (!result.ok) process.exitCode = 1

@@ -22,6 +22,7 @@ new_sqlite_classes = [ "FailoverCoordinator" ]
 WATCHDOG_ENABLED = "false"
 DNSPOD_DOMAIN = "letletme.top"
 DNSPOD_EDGEONE_LINE = "境内"
+DNSPOD_DEFAULT_VERCEL_LINE = "默认"
 VERCEL_HEALTH_URL = "https://vercel-origin.letletme.top/healthz"
 EDGEONE_HEALTH_URL = "https://eo-personal-canary.letletme.top/healthz"
 PROBE_TIMEOUT_MS = "8000"

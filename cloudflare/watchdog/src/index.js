@@ -1,9 +1,13 @@
 import {
 	disableConfiguredRecord,
+	getDefaultVercelRecord,
 	getConfiguredRecord,
 	isDisabledRecord,
+	isDefaultVercelRecord,
 	isEnabledRecord
 } from './dnspod.js'
+
+export { isDefaultVercelRecord } from './dnspod.js'
 
 const STATE_KEY = 'watchdog-state-v1'
 const FAILURE_THRESHOLD = 3
@@ -183,10 +187,12 @@ async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coo
 	return { action: 'already-fallback', state: next, record, persistedState }
 }
 
-async function manualDnsState(env, rawState, state, record, fetchImpl, coordinator) {
+async function manualDnsState(env, rawState, state, record, fetchImpl, coordinator, reason = 'regional') {
 	const coordination = await coordinator.reset()
-	const alertKey = `manual:${record?.RecordId || 'unknown'}:${record?.Type || 'unknown'}:${record?.Value || 'unknown'}:${record?.Line || 'unknown'}:${record?.Status || 'unknown'}`
-	const message = `letletme watchdog 未改 DNSPod：境内 EdgeOne 记录身份或状态不符合预期。`
+	const alertKey = `manual:${reason}:${record?.RecordId || 'unknown'}:${record?.Type || 'unknown'}:${record?.Value || 'unknown'}:${record?.Line || 'unknown'}:${record?.Status || 'unknown'}`
+	const message = reason === 'default'
+		? 'letletme watchdog 未改 DNSPod：默认线路的 Vercel 回退记录身份或状态不符合预期。'
+		: 'letletme watchdog 未改 DNSPod：境内 EdgeOne 记录身份或状态不符合预期。'
 	let next = {
 		...state,
 		failureCount: coordination.failureCount,
@@ -236,6 +242,10 @@ export async function runCheck(env, options = {}) {
 	}
 	if (!isEdgeOneRecord(record, env)) {
 		return manualDnsState(env, rawState, state, record, fetchImpl, coordinator)
+	}
+	const defaultRecord = await getDefaultVercelRecord(env, fetchImpl)
+	if (!isDefaultVercelRecord(defaultRecord, env)) {
+		return manualDnsState(env, rawState, state, defaultRecord, fetchImpl, coordinator, 'default')
 	}
 
 	const [edge, vercel] = await Promise.all([
@@ -315,6 +325,10 @@ export async function runCheck(env, options = {}) {
 	}
 	if (!isEdgeOneRecord(latestRecord, env)) {
 		return manualDnsState(env, rawState, state, latestRecord, fetchImpl, coordinator)
+	}
+	const latestDefaultRecord = await getDefaultVercelRecord(env, fetchImpl)
+	if (!isDefaultVercelRecord(latestDefaultRecord, env)) {
+		return manualDnsState(env, rawState, state, latestDefaultRecord, fetchImpl, coordinator, 'default')
 	}
 
 	let updated

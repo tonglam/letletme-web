@@ -22,11 +22,16 @@ line. It reads the exact record identified by:
 - `DNSPOD_EDGEONE_RECORD_ID=<integer>`
 - `DNSPOD_EDGEONE_LINE=境内`
 - `DNSPOD_EDGEONE_CNAME=<EdgeOne-assigned CNAME>`
+- `DNSPOD_DEFAULT_VERCEL_A=<current Vercel fallback IPv4>`
+- `DNSPOD_DEFAULT_VERCEL_LINE=默认`
 
 After three consecutive EdgeOne health failures while direct Vercel is healthy,
 it calls DNSPod `ModifyRecordStatus` with `DISABLE` for that one record.
 DNSPod then falls back to the enabled default line according to its line
-selection rules. The watchdog does not automatically re-enable the record.
+selection rules. Before disabling the regional record, the watchdog verifies
+that the default line is enabled, is an apex A record, and still contains the
+exact configured Vercel fallback IPv4. The watchdog does not automatically
+re-enable the record.
 
 The Cloudflare Scheduled Worker has no request route. Keep
 `WATCHDOG_ENABLED=false` until the shadow zone, live line queries, complete
@@ -41,6 +46,10 @@ Git:
 - `DNSPOD_SECRET_KEY`
 - `DNSPOD_DOMAIN_ID` when the account has a stable numeric domain ID
 - `DNSPOD_EDGEONE_RECORD_ID`
+- `DNSPOD_EDGEONE_CNAME`
+- `DNSPOD_DEFAULT_VERCEL_A`
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
 
 The DNSPod CAM identity must be limited to reading records and changing the
 status of the one regional EdgeOne record. The implementation signs the

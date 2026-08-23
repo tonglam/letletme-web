@@ -117,6 +117,21 @@ function normalize(value) {
 	return String(value ?? '').trim().replace(/\.$/, '').toLowerCase()
 }
 
+function defaultVercelLine(env) {
+	return env.DNSPOD_DEFAULT_VERCEL_LINE || '默认'
+}
+
+export function isDefaultVercelRecord(record, env) {
+	return (
+		record &&
+		String(record.Name || '').toLowerCase() === '@' &&
+		String(record.Type || '').toUpperCase() === 'A' &&
+		normalize(record.Value) === normalize(env.DNSPOD_DEFAULT_VERCEL_A) &&
+		String(record.Line || '') === defaultVercelLine(env) &&
+		String(record.Status || '').toUpperCase() === 'ENABLE'
+	)
+}
+
 export async function getConfiguredRecord(env, fetchImpl) {
 	const response = await dnsPodRequest(env, fetchImpl, 'DescribeRecordList', {
 		Domain: env.DNSPOD_DOMAIN,
@@ -125,12 +140,30 @@ export async function getConfiguredRecord(env, fetchImpl) {
 			: {}),
 		SubDomain: '@',
 		RecordType: 'CNAME',
+		RecordLine: env.DNSPOD_EDGEONE_LINE || '境内',
 		Offset: 0,
 		Limit: 100,
 		ErrorOnEmpty: 'no'
 	})
 	const records = Array.isArray(response.RecordList) ? response.RecordList : []
 	return records.find(record => Number(record.RecordId) === recordId(env)) || null
+}
+
+export async function getDefaultVercelRecord(env, fetchImpl) {
+	const response = await dnsPodRequest(env, fetchImpl, 'DescribeRecordList', {
+		Domain: env.DNSPOD_DOMAIN,
+		...(env.DNSPOD_DOMAIN_ID
+			? { DomainId: Number(env.DNSPOD_DOMAIN_ID) }
+			: {}),
+		SubDomain: '@',
+		RecordType: 'A',
+		RecordLine: defaultVercelLine(env),
+		Offset: 0,
+		Limit: 100,
+		ErrorOnEmpty: 'no'
+	})
+	const records = Array.isArray(response.RecordList) ? response.RecordList : []
+	return records.find(record => isDefaultVercelRecord(record, env)) || null
 }
 
 export async function disableConfiguredRecord(env, fetchImpl) {
