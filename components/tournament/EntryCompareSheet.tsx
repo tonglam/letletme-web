@@ -19,6 +19,7 @@ import type {
 	TournamentEntrySquadsResponse,
 	TournamentLiveCalcData
 } from '@/lib/graphql/operations/tournaments'
+import { mapComparisonPick } from '@/lib/tournament/entry-comparison'
 import { getPlayedPlayerLimit } from '@/lib/tournament/played-total'
 import type { TournamentEntry } from '@/types/tournament'
 import { useEffect, useState } from 'react'
@@ -587,47 +588,8 @@ export function EntryCompareSheet({
 									const pA = picksA[i]
 									const pB = picksB[i]
 
-									const leftPick =
-										liveA && pA
-											? {
-													webName: pA.webName,
-													totalPoints:
-														(pA as { totalPoints?: number }).totalPoints ?? 0,
-													minutes: (pA as { minutes?: number }).minutes ?? 0,
-													starts: (pA as { starts?: boolean }).starts ?? false,
-													isCaptain: liveA.captainName === pA.webName
-												}
-											: pA
-												? {
-														webName: pA.webName,
-														totalPoints: 0,
-														minutes: 0,
-														starts: false,
-														isCaptain:
-															(pA as { isCaptain?: boolean }).isCaptain ?? false
-													}
-												: null
-
-									const rightPick =
-										liveB && pB
-											? {
-													webName: pB.webName,
-													totalPoints:
-														(pB as { totalPoints?: number }).totalPoints ?? 0,
-													minutes: (pB as { minutes?: number }).minutes ?? 0,
-													starts: (pB as { starts?: boolean }).starts ?? false,
-													isCaptain: liveB.captainName === pB.webName
-												}
-											: pB
-												? {
-														webName: pB.webName,
-														totalPoints: 0,
-														minutes: 0,
-														starts: false,
-														isCaptain:
-															(pB as { isCaptain?: boolean }).isCaptain ?? false
-													}
-												: null
+									const leftPick = mapComparisonPick(pA, Boolean(liveA))
+									const rightPick = mapComparisonPick(pB, Boolean(liveB))
 
 									const elementType =
 										(pA as { elementType?: number; elementTypeName?: string })
@@ -665,51 +627,8 @@ export function EntryCompareSheet({
 										const pA = picksA[idx]
 										const pB = picksB[idx]
 
-										const leftPick =
-											liveA && pA
-												? {
-														webName: pA.webName,
-														totalPoints:
-															(pA as { totalPoints?: number }).totalPoints ?? 0,
-														minutes: (pA as { minutes?: number }).minutes ?? 0,
-														starts:
-															(pA as { starts?: boolean }).starts ?? false,
-														isCaptain: liveA.captainName === pA.webName
-													}
-												: pA
-													? {
-															webName: pA.webName,
-															totalPoints: 0,
-															minutes: 0,
-															starts: false,
-															isCaptain:
-																(pA as { isCaptain?: boolean }).isCaptain ??
-																false
-														}
-													: null
-
-										const rightPick =
-											liveB && pB
-												? {
-														webName: pB.webName,
-														totalPoints:
-															(pB as { totalPoints?: number }).totalPoints ?? 0,
-														minutes: (pB as { minutes?: number }).minutes ?? 0,
-														starts:
-															(pB as { starts?: boolean }).starts ?? false,
-														isCaptain: liveB.captainName === pB.webName
-													}
-												: pB
-													? {
-															webName: pB.webName,
-															totalPoints: 0,
-															minutes: 0,
-															starts: false,
-															isCaptain:
-																(pB as { isCaptain?: boolean }).isCaptain ??
-																false
-														}
-													: null
+										const leftPick = mapComparisonPick(pA, Boolean(liveA))
+										const rightPick = mapComparisonPick(pB, Boolean(liveB))
 
 										return (
 											<PlayerCompareRow

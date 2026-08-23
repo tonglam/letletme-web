@@ -74,7 +74,10 @@ describe('live tournament filter visibility', () => {
 	it('keeps both advanced filters recoverable after dismissal', async () => {
 		const [clientSource, filtersSource] = await Promise.all([
 			readFile(
-				new URL('../app/live/tournaments/TournamentClient.tsx', import.meta.url),
+				new URL(
+					'../app/live/tournaments/TournamentClient.tsx',
+					import.meta.url
+				),
 				'utf8'
 			),
 			readFile(
@@ -90,6 +93,22 @@ describe('live tournament filter visibility', () => {
 		assert.match(clientSource, /<LiveCompetitionBoardFilters/)
 		assert.match(filtersSource, /t\('playerOwnership'\)/)
 		assert.match(filtersSource, /t\('teamExposure'\)/)
+	})
+
+	it('keeps setup polling failures handled and nullable score headers unavailable', async () => {
+		const source = await readFile(
+			new URL('../app/live/tournaments/TournamentClient.tsx', import.meta.url),
+			'utf8'
+		)
+
+		assert.match(
+			source,
+			/catch \{\s*if \(!cancelled\) setListError\(t\('listFailed'\)\)/
+		)
+		assert.match(
+			source,
+			/scoresAvailable=\{\s*typeof boardPage\?\.averageEventPoints === 'number' &&\s*typeof boardPage\?\.highestEventPoints === 'number'/
+		)
 	})
 })
 

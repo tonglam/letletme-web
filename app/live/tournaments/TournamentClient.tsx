@@ -33,9 +33,12 @@ import {
 	clearOtherLiveBoardLastGood,
 	fetchEntryLiveCompetitionBoard,
 	isCurrentLiveBoardRequest,
+	isLiveBoardRevisionGoneCode,
 	liveBoardLastGoodKey,
 	readLiveBoardLastGood,
 	resolveAnchoredGameweek,
+	shouldAutoRefreshLiveBoardPage,
+	shouldSyncLiveBoardSearchInput,
 	writeLiveBoardLastGood,
 	type LiveBoardFilterState
 } from '@/lib/tournament/live-board'
@@ -240,6 +243,7 @@ export default function TournamentClient({
 		useState<BoardQueryState>(defaultQueryState)
 	const queryStateRef = useRef(queryState)
 	const [searchInput, setSearchInput] = useState('')
+	const searchInputRef = useRef(searchInput)
 	const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
 	const [resultsError, setResultsError] = useState<string | null>(
 		initialResultsError
@@ -258,6 +262,10 @@ export default function TournamentClient({
 	const activeScopeRef = useRef(scopeKey)
 	const refreshInFlightRef = useRef<Promise<boolean> | null>(null)
 	const shareRef = useRef<HTMLDivElement | null>(null)
+	const updateSearchInput = useCallback((value: string): void => {
+		searchInputRef.current = value
+		setSearchInput(value)
+	}, [])
 
 	useEffect(() => {
 		queryStateRef.current = queryState
@@ -366,10 +374,14 @@ export default function TournamentClient({
 					{ entryId },
 					{ cache: 'no-store' }
 				)
-				if (!cancelled)
+				if (!cancelled) {
 					setTournaments(
 						data.entryTournaments.map(mapEntryTournamentToLiveTournament)
 					)
+					setListError(null)
+				}
+			} catch {
+				if (!cancelled) setListError(t('listFailed'))
 			} finally {
 				if (!cancelled) timer = window.setTimeout(poll, 5_000)
 			}
@@ -385,7 +397,8 @@ export default function TournamentClient({
 		selectedTournamentId,
 		selectedTournamentInsightsReadyAt,
 		selectedTournamentSetupRepairExhausted,
-		selectedTournamentSetupStatus
+		selectedTournamentSetupStatus,
+		t
 	])
 
 	const buildVariables = useCallback(
@@ -421,6 +434,7 @@ export default function TournamentClient({
 			options: { preserve: boolean; expectedScope: string }
 		): Promise<boolean> => {
 			if (rateLimitSecondsRef.current > 0) return false
+			const searchInputAtStart = searchInputRef.current
 			replaceAbortRef.current?.abort()
 			const controller = new AbortController()
 			replaceAbortRef.current = controller
@@ -448,8 +462,16 @@ export default function TournamentClient({
 				setBoardPage(page)
 				setEntries(pageRows(page))
 				setContentScopeKey(options.expectedScope)
+				queryStateRef.current = query
 				setQueryState(query)
-				setSearchInput(query.search)
+				if (
+					shouldSyncLiveBoardSearchInput(
+						searchInputAtStart,
+						searchInputRef.current
+					)
+				) {
+					updateSearchInput(query.search)
+				}
 				setResultsError(
 					page.partial
 						? t('partialResults', {
@@ -502,7 +524,7 @@ export default function TournamentClient({
 				}
 			}
 		},
-		[buildVariables, entryId, season, sessionCacheKey, t]
+		[buildVariables, entryId, season, sessionCacheKey, t, updateSearchInput]
 	)
 
 	useEffect(() => {
@@ -517,8 +539,9 @@ export default function TournamentClient({
 		const tournamentId = Number(selectedTournamentId)
 		const eventId = selectedGameweek
 		const nextQuery = defaultQueryState()
+		queryStateRef.current = nextQuery
 		setQueryState(nextQuery)
-		setSearchInput('')
+		updateSearchInput('')
 		setShowAdvancedFilters(false)
 		setTableEntriesForShare([])
 		setResultsError(null)
@@ -587,21 +610,28 @@ export default function TournamentClient({
 		selectionRestoreComplete,
 		sessionCacheKey,
 		standingsReady,
-		t
+		t,
+		updateSearchInput
 	])
 
 	useEffect(() => {
 		if (!scopeKey || !selectedTournamentId || !standingsReady) return
 		if (searchInput === queryState.search) return
 		const timer = window.setTimeout(() => {
-			const next = { ...queryStateRef.current, search: searchInput.trim() }
+			const requestedInput = searchInput
+			const next = { ...queryStateRef.current, search: requestedInput.trim() }
 			void replaceFirstPage(
 				Number(selectedTournamentId),
 				selectedGameweek,
 				next,
 				{ preserve: entries.length > 0, expectedScope: scopeKey }
 			).then(accepted => {
-				if (!accepted) setSearchInput(queryStateRef.current.search)
+				if (
+					!accepted &&
+					shouldSyncLiveBoardSearchInput(requestedInput, searchInputRef.current)
+				) {
+					updateSearchInput(queryStateRef.current.search)
+				}
 			})
 		}, 350)
 		return () => window.clearTimeout(timer)
@@ -613,7 +643,8 @@ export default function TournamentClient({
 		searchInput,
 		selectedGameweek,
 		selectedTournamentId,
-		standingsReady
+		standingsReady,
+		updateSearchInput
 	])
 
 	const applyFilters = useCallback(
@@ -718,7 +749,7 @@ export default function TournamentClient({
 			}
 			if (
 				error instanceof LiveBoardRequestError &&
-				error.code === 'LIVE_BOARD_REVISION_GONE'
+				isLiveBoardRevisionGoneCode(error.code)
 			) {
 				void replaceFirstPage(
 					Number(selectedTournamentId),
@@ -834,6 +865,7 @@ export default function TournamentClient({
 		standingsReady &&
 		selectedGameweek === currentGameweek &&
 		hasContent &&
+		shouldAutoRefreshLiveBoardPage(boardPage?.page ?? null) &&
 		rateLimitSeconds === 0
 	)
 	const serverControl = useMemo(
@@ -1062,6 +1094,10 @@ export default function TournamentClient({
 								boardPage?.totalEntries ?? selectedTournament.totalEntries
 							}
 							isLoading={isLoadingInitial && !hasContent}
+							scoresAvailable={
+								typeof boardPage?.averageEventPoints === 'number' &&
+								typeof boardPage?.highestEventPoints === 'number'
+							}
 						/>
 
 						{isLoadingInitial && !hasContent ? (
@@ -1076,7 +1112,9 @@ export default function TournamentClient({
 								<SearchHeader
 									showFilters={false}
 									searchQuery={searchInput}
-									setSearchQuery={value => setSearchInput(value.slice(0, 100))}
+									setSearchQuery={value =>
+										updateSearchInput(value.slice(0, 100))
+									}
 								/>
 								<div className="mb-3 flex justify-end">
 									<Button

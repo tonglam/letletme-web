@@ -231,6 +231,17 @@ export const isCurrentLiveBoardRequest = (
 	activeScope: string | null
 ): boolean => requestVersion === currentVersion && expectedScope === activeScope
 
+export const shouldAutoRefreshLiveBoardPage = (page: number | null): boolean =>
+	page === 1
+
+export const shouldSyncLiveBoardSearchInput = (
+	requestedInput: string,
+	currentInput: string
+): boolean => requestedInput === currentInput
+
+export const isLiveBoardRevisionGoneCode = (code: string): boolean =>
+	code === 'LIVE_BOARD_REVISION_GONE' || code === 'LIVE_REVISION_GONE'
+
 export const resolveAnchoredGameweek = (input: {
 	nextEvent: number
 	requestedGameweek: number | null
