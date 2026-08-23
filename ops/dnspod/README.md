@@ -81,7 +81,10 @@ secret values into a commit, log, or review comment.
    use an archived August export as production truth.
 2. Create the DNSPod records without changing registrar NS.
 3. Run `validate-shadow-zone.mjs` against the DNSPod API export with the
-   current EdgeOne CNAME and Vercel recommended A value.
+   current EdgeOne CNAME, Vercel recommended A value, and an exact JSON
+   specification for every required non-apex host. The specification must
+   include each host's intended `Name`, `Type`, `Value`, and `Line`; an enabled
+   record with only a matching name is not sufficient.
 4. Query the DNSPod assigned authoritative nameservers directly. Verify apex
    CNAME/A line separation, TLS, `www`, mail/TXT verification records, and
    every existing `api`, `static`, `hermes`, `pop`, and `cdn` consumer.
@@ -98,6 +101,8 @@ secret values into a commit, log, or review comment.
 node ops/dnspod/scripts/validate-shadow-zone.mjs ./evidence/dnspod-records.json \
   --edgeone-cname '<edgeone-cname>' \
   --vercel-a '<current-vercel-recommended-a>'
+# Also set DNSPOD_REQUIRED_RECORDS_JSON to the exact planned route map before
+# running the command; do not use a placeholder map for a cutover decision.
 
 npm run watchdog:dry-run
 ```

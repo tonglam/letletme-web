@@ -208,6 +208,17 @@ test('is idempotent once fallback is active', async () => {
 	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 
+test('does not claim fallback is safe when the default Vercel record drifted', async () => {
+	const env = makeEnv(JSON.stringify({ failureCount: 0, fallbackActive: true }))
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'DISABLE' },
+		defaultRecord: { Type: 'A', Value: '198.51.100.10', Line: '默认', Status: 'ENABLE' }
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'manual-dns-state')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
 test('invalid persisted state is safely reset', () => {
 	assert.deepEqual(parseState('{not-json'), {
 		failureCount: 0,

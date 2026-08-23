@@ -41,21 +41,45 @@ const line = process.env.DNSPOD_EDGEONE_LINE || '境内'
 const requiredHosts = (process.env.DNSPOD_REQUIRED_HOSTS ||
 	'www,api,static,hermes,pop,cdn,vercel-origin,eo-personal-canary').split(',').map(value => value.trim()).filter(Boolean)
 
+function readRequiredSpecs() {
+	const raw = process.env.DNSPOD_REQUIRED_RECORDS_JSON
+	if (!raw) throw new Error('DNSPOD_REQUIRED_RECORDS_JSON is required')
+	const specs = JSON.parse(raw)
+	if (!Array.isArray(specs)) throw new Error('DNSPOD_REQUIRED_RECORDS_JSON must be an array')
+	for (const spec of specs) {
+		if (!spec || typeof spec !== 'object' ||
+			typeof spec.Name !== 'string' ||
+			typeof spec.Type !== 'string' ||
+			typeof spec.Value !== 'string' ||
+			typeof spec.Line !== 'string') {
+			throw new Error('each required DNS record spec needs Name, Type, Value, and Line')
+		}
+	}
+	return specs
+}
+
 if (!file || !edgeoneCname || !vercelA) {
 	fail('usage: validate-shadow-zone.mjs <record-json> --edgeone-cname <cname> --vercel-a <ipv4>')
 } else {
 	try {
 		const records = readRecords(file)
+		const requiredSpecs = readRequiredSpecs()
 		const enabled = record => String(record.Status ?? '').toUpperCase() === 'ENABLE'
 		const apexEdgeOne = find(records, line, 'CNAME', edgeoneCname)
 		const apexOverseas = find(records, '境外', 'A', vercelA)
 		const apexDefault = find(records, '默认', 'A', vercelA)
-		const missingHosts = requiredHosts.filter(host =>
-			!records.some(record =>
-				String(record.Name ?? '').toLowerCase() === host.toLowerCase() &&
-				enabled(record)
+		const missingHosts = requiredHosts.filter(host => {
+			const spec = requiredSpecs.find(required =>
+				String(required.Name).toLowerCase() === host.toLowerCase()
 			)
-		)
+			return !spec || !records.some(record =>
+				enabled(record) &&
+				String(record.Name ?? '').toLowerCase() === spec.Name.toLowerCase() &&
+				String(record.Type ?? '').toUpperCase() === spec.Type.toUpperCase() &&
+				normalized(record.Value) === normalized(spec.Value) &&
+				String(record.Line ?? '') === spec.Line
+			)
+		})
 		const disabled = records.filter(record =>
 			String(record.Name ?? '').toLowerCase() === '@' &&
 			String(record.Line ?? '') === line &&

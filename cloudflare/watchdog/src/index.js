@@ -238,6 +238,10 @@ export async function runCheck(env, options = {}) {
 
 	const record = await getConfiguredRecord(env, fetchImpl)
 	if (isFallbackRecord(record, env)) {
+		const defaultRecord = await getDefaultVercelRecord(env, fetchImpl)
+		if (!isDefaultVercelRecord(defaultRecord, env)) {
+			return manualDnsState(env, rawState, state, defaultRecord, fetchImpl, coordinator, 'default')
+		}
 		return alreadyFallbackState(env, rawState, state, record, fetchImpl, coordinator)
 	}
 	if (!isEdgeOneRecord(record, env)) {

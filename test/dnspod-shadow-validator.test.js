@@ -20,8 +20,14 @@ function runValidator(records) {
 			'--vercel-a',
 			'76.76.21.21'
 		], {
-			encoding: 'utf8',
-			env: { ...process.env, DNSPOD_REQUIRED_HOSTS: 'www' }
+		encoding: 'utf8',
+		env: {
+			...process.env,
+			DNSPOD_REQUIRED_HOSTS: 'www',
+			DNSPOD_REQUIRED_RECORDS_JSON: JSON.stringify([
+				{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' }
+			])
+		}
 		})
 		return JSON.parse(stdout)
 	} finally {
@@ -58,6 +64,18 @@ test('validator rejects disabled apex records', () => {
 test('validator rejects disabled required hosts', () => {
 	const records = validRecords.map(record =>
 		record.Name === 'www' ? { ...record, Status: 'DISABLE' } : record
+	)
+	assert.throws(() => runValidator(records), error => {
+		assert.equal(error.status, 1)
+		return true
+	})
+})
+
+test('validator rejects a required host with the wrong route target', () => {
+	const records = validRecords.map(record =>
+		record.Name === 'www'
+			? { ...record, Type: 'A', Value: '203.0.113.10' }
+			: record
 	)
 	assert.throws(() => runValidator(records), error => {
 		assert.equal(error.status, 1)
