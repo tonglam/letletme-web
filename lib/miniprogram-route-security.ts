@@ -89,6 +89,50 @@ export async function enforceMiniProgramRateLimits({
 	}
 }
 
+export async function enforceMiniProgramMutationRateLimits(input: {
+	request: Request
+	token: string
+	scope: 'follow-entry' | 'entry-choice' | 'account-unlink'
+}): Promise<void> {
+	const secret = process.env.BACKEND_PROXY_SECRET
+	if (!secret) throw new MiniProgramAuthError('Request safety checks are unavailable', 503)
+	const checks = [
+		{
+			suffix: 'ip',
+			subject: buildOpaqueRateLimitSubject(input.request.headers, secret),
+			limit: 30,
+			windowSeconds: 60,
+		},
+		{
+			suffix: 'account',
+			subject: keyedSubject(secret, 'mini-token', input.token),
+			limit: 20,
+			windowSeconds: 60,
+		},
+	]
+	try {
+		for (const check of checks) {
+			const result = await checkDatabaseRateLimit({
+				scope: `mini-${input.scope}-${check.suffix}`,
+				subject: check.subject,
+				limit: check.limit,
+				windowSeconds: check.windowSeconds,
+			})
+			if (!result.allowed) {
+				throw new MiniProgramAuthError(
+					'Too many requests',
+					429,
+					result.retryAfterSeconds
+				)
+			}
+		}
+	} catch (error) {
+		if (error instanceof MiniProgramAuthError) throw error
+		console.error(`[mini auth] ${input.scope} rate-limit storage unavailable:`, error)
+		throw new MiniProgramAuthError('Request safety checks are unavailable', 503)
+	}
+}
+
 export function miniProgramErrorResponse(error: unknown, fallback: string): Response {
 	const status = error instanceof MiniProgramAuthError ? error.status : 500
 	const message = getPublicErrorMessage(error, fallback)

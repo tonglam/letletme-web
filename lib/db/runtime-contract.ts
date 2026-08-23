@@ -9,6 +9,7 @@ export const WEB_AUTH_RUNTIME_TABLES = [
 	'bug_report_storage_nonces',
 	'fpl_entry_binding_challenges',
 	'fpl_entry_name_history',
+	'mini_program_account',
 	'mini_program_email_code',
 	'mini_program_session',
 	'request_rate_limits',
@@ -18,6 +19,7 @@ export const WEB_AUTH_RUNTIME_TABLES = [
 ] as const
 
 export const GRAPHQL_AUTH_RUNTIME_TABLES = [
+	'mini_program_account',
 	'mini_program_session',
 	'user'
 ] as const
