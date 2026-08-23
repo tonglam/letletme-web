@@ -273,8 +273,17 @@ export const buildTournamentStats = (
 	)
 
 	return {
-		averagePoints: Math.round(totalPoints / liveEntries.length),
+		averagePoints: totalPoints / liveEntries.length,
 		highestPoints,
 		totalEntries: entries.length
 	}
 }
+
+const liveAverageFormatter = new Intl.NumberFormat('en-GB', {
+	minimumFractionDigits: 2,
+	maximumFractionDigits: 2,
+	useGrouping: false
+})
+
+export const formatLiveAveragePoints = (value: number): string =>
+	Number.isFinite(value) ? liveAverageFormatter.format(value) : '—'

@@ -9,6 +9,7 @@ import type {
 import {
 	buildTournamentEntries,
 	buildTournamentStats,
+	formatLiveAveragePoints,
 	mergeUnavailableTournamentEntryIds
 } from '../lib/tournament/liveEntries'
 import { loadTournamentLiveDeskWithRevisionRecovery } from '../lib/tournament/liveDesk'
@@ -143,6 +144,15 @@ describe('live tournament desk', () => {
 			highestPoints: 6,
 			totalEntries: 3
 		})
+
+		const fractionalStats = buildTournamentStats([
+			{ ...entries[0], id: 'fraction-1', livePoints: 59, stale: false },
+			{ ...entries[0], id: 'fraction-2', livePoints: 39, stale: false },
+			{ ...entries[0], id: 'fraction-3', livePoints: 0, stale: false }
+		])
+		assert.equal(fractionalStats.averagePoints, 98 / 3)
+		assert.equal(formatLiveAveragePoints(fractionalStats.averagePoints), '32.67')
+		assert.equal(formatLiveAveragePoints(201 / 200), '1.01')
 	})
 
 	it('retries an expired revision exactly once without a ref', async () => {
