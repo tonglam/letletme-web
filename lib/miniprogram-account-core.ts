@@ -39,6 +39,68 @@ export function assertValidDeviceId(value: unknown): string {
 	return deviceId
 }
 
+export type MiniProgramEntryChoice = 'MINI' | 'WEB'
+
+export function assertMiniProgramEntryChoice(
+	value: unknown
+): MiniProgramEntryChoice {
+	if (value !== 'MINI' && value !== 'WEB') {
+		throw new MiniProgramAuthError('entry choice must be MINI or WEB', 400)
+	}
+	return value
+}
+
+export type MiniProgramEntryState = {
+	effectiveEntryId: number | null
+	effectiveEntrySource: MiniProgramEntryChoice | null
+	entryConflict: boolean
+}
+
+export function resolveMiniProgramEntryState(input: {
+	followEntryId: number | null
+	webVerifiedEntryId: number | null
+	entryChoice: string | null
+	entryChoiceMiniEntryId: number | null
+	entryChoiceWebEntryId: number | null
+}): MiniProgramEntryState {
+	const miniEntryId = input.followEntryId
+	const webEntryId = input.webVerifiedEntryId
+	if (!miniEntryId && !webEntryId) {
+		return {
+			effectiveEntryId: null,
+			effectiveEntrySource: null,
+			entryConflict: false
+		}
+	}
+	if (!miniEntryId) {
+		return {
+			effectiveEntryId: webEntryId,
+			effectiveEntrySource: 'WEB',
+			entryConflict: false
+		}
+	}
+	if (!webEntryId || miniEntryId === webEntryId) {
+		return {
+			effectiveEntryId: miniEntryId,
+			effectiveEntrySource: 'MINI',
+			entryConflict: false
+		}
+	}
+
+	const choiceMatchesCurrentPair =
+		(input.entryChoice === 'MINI' || input.entryChoice === 'WEB') &&
+		input.entryChoiceMiniEntryId === miniEntryId &&
+		input.entryChoiceWebEntryId === webEntryId
+	const source: MiniProgramEntryChoice = choiceMatchesCurrentPair
+		? (input.entryChoice as MiniProgramEntryChoice)
+		: 'MINI'
+	return {
+		effectiveEntryId: source === 'WEB' ? webEntryId : miniEntryId,
+		effectiveEntrySource: source,
+		entryConflict: !choiceMatchesCurrentPair
+	}
+}
+
 export function assertValidWeChatLoginCode(value: unknown): string {
 	if (typeof value !== 'string') {
 		throw new MiniProgramAuthError('wechatCode is required', 400)

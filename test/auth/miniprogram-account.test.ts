@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
 	MiniProgramAuthError,
 	assertValidWeChatLoginCode,
+	assertMiniProgramEntryChoice,
 	assertValidDeviceId,
 	getBearerToken,
 	hashMiniProgramChallenge,
@@ -11,6 +12,7 @@ import {
 	isExpired,
 	normalizeEmail,
 	normalizeWeChatOpenId,
+	resolveMiniProgramEntryState,
 } from '../../lib/miniprogram-account-core'
 
 describe('mini program account email normalization', () => {
@@ -89,5 +91,74 @@ describe('mini program account expiry handling', () => {
 
 		assert.equal(isExpired(new Date('2026-04-29T23:59:59Z'), now), true)
 		assert.equal(isExpired(new Date('2026-04-30T00:00:01Z'), now), false)
+	})
+})
+
+describe('mini program entry selection', () => {
+	it('uses the local follow immediately when no web team exists', () => {
+		assert.deepEqual(
+			resolveMiniProgramEntryState({
+				followEntryId: 6953,
+				webVerifiedEntryId: null,
+				entryChoice: null,
+				entryChoiceMiniEntryId: null,
+				entryChoiceWebEntryId: null,
+			}),
+			{
+				effectiveEntryId: 6953,
+				effectiveEntrySource: 'MINI',
+				entryConflict: false,
+			},
+		)
+	})
+
+	it('defaults to the local team and prompts once for a new conflict pair', () => {
+		assert.deepEqual(
+			resolveMiniProgramEntryState({
+				followEntryId: 6953,
+				webVerifiedEntryId: 1234,
+				entryChoice: null,
+				entryChoiceMiniEntryId: null,
+				entryChoiceWebEntryId: null,
+			}),
+			{
+				effectiveEntryId: 6953,
+				effectiveEntrySource: 'MINI',
+				entryConflict: true,
+			},
+		)
+	})
+
+	it('remembers a choice only while the exact conflict pair is current', () => {
+		const selected = resolveMiniProgramEntryState({
+			followEntryId: 6953,
+			webVerifiedEntryId: 1234,
+			entryChoice: 'WEB',
+			entryChoiceMiniEntryId: 6953,
+			entryChoiceWebEntryId: 1234,
+		})
+		assert.deepEqual(selected, {
+			effectiveEntryId: 1234,
+			effectiveEntrySource: 'WEB',
+			entryConflict: false,
+		})
+
+		const changed = resolveMiniProgramEntryState({
+			followEntryId: 6953,
+			webVerifiedEntryId: 5678,
+			entryChoice: 'WEB',
+			entryChoiceMiniEntryId: 6953,
+			entryChoiceWebEntryId: 1234,
+		})
+		assert.equal(changed.entryConflict, true)
+		assert.equal(changed.effectiveEntryId, 6953)
+	})
+
+	it('rejects unsupported conflict choices', () => {
+		assert.equal(assertMiniProgramEntryChoice('MINI'), 'MINI')
+		assert.throws(
+			() => assertMiniProgramEntryChoice('LOCAL'),
+			(error) => error instanceof MiniProgramAuthError && error.status === 400,
+		)
 	})
 })

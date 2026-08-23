@@ -16,7 +16,6 @@ import {
 	enforceBugReportReporterLimit,
 	submitBugReportToData,
 } from '@/lib/bug-report-submit'
-import { getVerifiedFplEntryId } from '@/lib/fpl-binding-core'
 import { createHmac } from 'node:crypto'
 import { getPublicErrorMessage } from '@/lib/safe-errors'
 
@@ -49,8 +48,8 @@ export async function POST(request: Request) {
 		if (token) {
 			try {
 				const profile = await getMiniProgramProfileByToken(token)
-				userId = profile.id
-				entryId = getVerifiedFplEntryId(profile)
+				userId = `mini_account:${profile.id}`
+				entryId = profile.effectiveEntryId
 			} catch (error) {
 				if (error instanceof MiniProgramAuthError && error.status === 401) {
 					throw new MiniProgramAuthError('登录过期了，请先打开「我」再发', 401)
