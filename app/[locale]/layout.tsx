@@ -53,9 +53,14 @@ const shellBootstrapScript = `
 	const themeChoices = new Set(['light', 'dark', 'system']);
 	const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
-	const closeDisclosures = (except) => {
+	const closeDisclosures = (except, restoreFocus = false) => {
 		document.querySelectorAll(disclosureSelector).forEach((disclosure) => {
-			if (disclosure !== except) disclosure.removeAttribute('open');
+			if (disclosure === except) return;
+			const focusWasInside = restoreFocus && disclosure.hasAttribute('open') &&
+				document.activeElement instanceof Node &&
+				disclosure.contains(document.activeElement);
+			disclosure.removeAttribute('open');
+			if (focusWasInside) disclosure.querySelector(':scope > summary')?.focus();
 		});
 	};
 
@@ -82,6 +87,22 @@ const shellBootstrapScript = `
 			picker.setAttribute('aria-disabled', 'false');
 		});
 		updateThemeControls(readTheme());
+		document.querySelectorAll('[role="radiogroup"]').forEach((group) => {
+			const choices = Array.from(group.querySelectorAll('[role="radio"]')).filter(
+				(choice) => choice instanceof HTMLElement
+			);
+			const selected = choices.find((choice) => choice.getAttribute('aria-checked') === 'true') ?? choices[0];
+			choices.forEach((choice) => {
+				choice.tabIndex = choice === selected ? 0 : -1;
+			});
+		});
+		document.querySelectorAll('[data-locale-link]').forEach((link) => {
+			if (!(link instanceof HTMLAnchorElement)) return;
+			const target = new URL(link.href, window.location.href);
+			target.search = window.location.search;
+			target.hash = window.location.hash;
+			link.href = target.href;
+		});
 	};
 
 	const suppressThemeTransitions = () => {
@@ -172,7 +193,7 @@ const shellBootstrapScript = `
 			}
 			return;
 		}
-		if (event.key === 'Escape') closeDisclosures();
+		if (event.key === 'Escape') closeDisclosures(undefined, true);
 	});
 
 	colorSchemeQuery.addEventListener('change', () => {

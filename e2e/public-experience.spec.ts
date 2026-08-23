@@ -85,14 +85,21 @@ test('server navigation stays usable while scripted controls remain inert', asyn
 	await expect(themeDisclosure).toHaveAttribute('inert', '')
 	await expect(themeDisclosure).toHaveAttribute('aria-disabled', 'true')
 
-	await page.goto('/zh-CN')
+	await page.goto('/zh-CN?view=compact')
 	const languageDisclosure = page.locator(
 		'details[data-navigation-disclosure]:has(summary[aria-label="切换语言"])'
 	)
 	await languageDisclosure.locator(':scope > summary').click()
+	await expect(
+		languageDisclosure.getByRole('radio', { name: '简体中文', exact: true })
+	).toHaveAttribute('tabindex', '0')
+	await expect(
+		languageDisclosure.getByRole('radio', { name: 'English', exact: true })
+	).toHaveAttribute('tabindex', '0')
 	await languageDisclosure
 		.getByRole('radio', { name: 'English', exact: true })
 		.click()
+	await expect(page).toHaveURL(/\/en\?view=compact$/)
 	await expect(page.locator('html')).toHaveAttribute('lang', 'en')
 
 	await page.close()
@@ -200,11 +207,16 @@ test('modified navigation link clicks keep their disclosure open', async ({
 test('language switch persists through the next client navigation', async ({
 	page
 }) => {
-	await page.goto('/zh-CN')
+	await page.goto('/zh-CN?view=compact#language-state')
 
 	await page.locator('summary[aria-label="切换语言"]').click()
-	await page.getByRole('radio', { name: 'English', exact: true }).click()
-	await expect(page).toHaveURL(/\/(?:en)?$/)
+	const english = page.getByRole('radio', { name: 'English', exact: true })
+	await expect(english).toHaveAttribute(
+		'href',
+		/\?view=compact#language-state$/
+	)
+	await english.click()
+	await expect(page).toHaveURL(/\/(?:en)?\?view=compact#language-state$/)
 	await expect(page.getByRole('heading', { level: 1 })).toContainText(
 		'Every point'
 	)
@@ -530,6 +542,11 @@ test('theme radio group uses one tab stop and arrow-key selection', async ({
 		})
 		observer.observe(document.head, { childList: true })
 	})
+	await system.focus()
+	await page.keyboard.press('Escape')
+	await expect(summary).toBeFocused()
+	await expect(summary.locator('..')).not.toHaveAttribute('open', '')
+	await summary.click()
 	await system.focus()
 	await system.press('ArrowLeft')
 

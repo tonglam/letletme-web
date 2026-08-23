@@ -3,12 +3,13 @@
 import { cn } from '@/lib/utils'
 import { useTranslations } from 'next-intl'
 import {
+	cloneElement,
 	lazy,
 	Suspense,
 	useRef,
 	useState,
 	type MouseEvent as ReactMouseEvent,
-	type ReactNode
+	type ReactElement
 } from 'react'
 
 const ReportProblemDialog = lazy(() =>
@@ -16,6 +17,12 @@ const ReportProblemDialog = lazy(() =>
 		default: module.ReportProblemDialog
 	}))
 )
+
+type DialogTriggerChildProps = {
+	'aria-haspopup'?: 'dialog'
+	'aria-expanded'?: boolean
+	'data-report-problem-trigger'?: string
+}
 
 /**
  * Keep the globally rendered entry point small. Form controls, diagnostics,
@@ -28,7 +35,7 @@ export function ReportProblemEntry({
 	open: controlledOpen,
 	onOpenChange
 }: {
-	children?: ReactNode
+	children?: ReactElement<DialogTriggerChildProps>
 	className?: string
 	triggerClassName?: string
 	open?: boolean
@@ -73,12 +80,17 @@ export function ReportProblemEntry({
 					className="contents"
 					onClick={handleTriggerClick}
 				>
-					{children}
+					{cloneElement(children, {
+						'aria-haspopup': 'dialog',
+						'aria-expanded': open,
+						'data-report-problem-trigger': ''
+					})}
 				</span>
 			) : controlledOpen === undefined ? (
 				<button
 					type="button"
 					aria-haspopup="dialog"
+					aria-expanded={open}
 					className={cn(triggerClassName)}
 					onClick={handleTriggerClick}
 				>

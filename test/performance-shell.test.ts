@@ -28,6 +28,10 @@ describe('server-first global shell performance boundary', () => {
 		assert.match(themeToggle, /tabIndex=/)
 		assert.match(languageSwitcher, /tabIndex=/)
 		assert.match(languageSwitcher, /<Link[\s\S]*locale="en"/)
+		assert.match(languageSwitcher, /useSearchParams/)
+		assert.match(languageSwitcher, /data-locale-link/)
+		assert.match(layout, /data-locale-link[\s\S]*window\.location\.hash/)
+		assert.match(layout, /Escape[\s\S]*closeDisclosures\(undefined, true\)/)
 		assert.match(miniProgram, /left-0[\s\S]*sm:right-0/)
 		for (const source of [
 			themeToggle,
@@ -55,6 +59,8 @@ describe('server-first global shell performance boundary', () => {
 		assert.doesNotMatch(entry, /components\/ui\/sheet|from 'sonner'/)
 		assert.match(dialog, /components\/ui\/sheet/)
 		assert.match(dialog, /from 'sonner'/)
+		assert.match(entry, /cloneElement\(children[\s\S]*'aria-haspopup': 'dialog'/)
+		assert.match(entry, /'aria-expanded': open/)
 	})
 })
 
