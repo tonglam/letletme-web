@@ -1,8 +1,9 @@
-# Tencent candidate origin operations
+# Tencent Web origin operations
 
-The Tencent host is a candidate Web origin only. The overseas production host
-continues to run GraphQL, Data, the Redis master and the bot. DNSPod is not part
-of this routing path.
+The Tencent host is the mainland Web origin candidate. The overseas production
+host continues to run GraphQL, Data, the Redis master and the bot. It must not
+be stopped or migrated by these scripts. DNSPod and EdgeOne changes are handled
+by a separate, fail-closed control-plane workflow.
 
 ## Required host-only files
 
@@ -14,6 +15,10 @@ Create these without committing them:
   the same value is the Worker `ORIGIN_TOKEN` secret.
 - `/etc/letletme/local-proxy-secret` (`root:root`, `0600`) — a different 32-byte
   hex secret used only between Nginx and Node.
+- During a proxy-secret rotation, add
+  `LETLETME_LOCAL_PROXY_SECRET_PREVIOUS` to `web.env` temporarily. It must be
+  different from the active value and is removed after EdgeOne and Vercel have
+  accepted the new value.
 - `/etc/letletme/tls/origin.pem` and `origin-key.pem` — Cloudflare Origin CA
   material for `letletme.top`.
 
@@ -38,19 +43,20 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
 
 ## Host and release flow
 
-1. Run `ops/tencent/scripts/install-host.sh` once as root. This installs Git
-   and OpenSSL because the release gate validates the checkout and generates a
-   per-run Redis restore password.
+1. Run `ops/tencent/scripts/install-host.sh` once as root. This installs the
+   `deploy` account and a sudo allow-list for the release wrapper; it does not
+   grant that account a general root shell.
 2. Install the host-only files above.
-3. Copy a clean checkout, including usable Git metadata, at the exact release
-   SHA to the host. A linked local worktree `.git` file is not portable; use a
-   normal clone or transfer a self-contained bundle and clone it on the host.
-4. Run `deploy-release.sh <checkout> <full-sha>` as root. It rejects a dirty
-   worktree or a HEAD that does not exactly match the requested SHA, then
-   archives that Git commit before building. It performs `npm ci` and
-   `next build`, verifies the SHA-backed deployment ID, assembles standalone
-   output under `/opt/letletme/releases/<sha>`, switches
-   `/opt/letletme/current` atomically, and rolls back on a failed health check.
+3. Copy either a clean checkout with usable Git metadata, or a release archive
+   containing `.letletme-release-sha`, at the exact release SHA to the host.
+   A linked local worktree `.git` file is not portable.
+4. Run `deploy-release.sh <checkout-or-archive> <full-sha> stage` as root (or
+   call the restricted wrapper as `deploy`). It rejects a dirty or mismatched
+   source, builds the exact SHA, and leaves `/opt/letletme/current` unchanged.
+5. After Vercel has been promoted and returns the exact same release header,
+   run `activate-release.sh <full-sha>`. It switches the current symlink
+   atomically, restarts systemd, verifies `/healthz`, and renders Nginx.
+   `rollback-release.sh` activates the safe `/opt/letletme/previous` release.
    The dependency install and Next.js build run as the unprivileged `letletme`
    user; root is used only for artifact installation and activation. It never
    runs a database migration.
@@ -59,7 +65,7 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
    avoids Next self-hosted Proxy/middleware attempting an HTTPS internal fetch
    to the plain listener. The public request remains HTTPS, the Host is pinned
    to `letletme.top`, and Cloudflare Origin CA still protects the external hop.
-5. Keep the previous release directory and its matching
+6. Keep the previous release directory and its matching
    `/opt/letletme/static-releases/<sha>` directory until the new release has
    been stable for at least 24 hours. After that rollback window, each
    successful deployment prunes older release, static, and Next cache
@@ -91,10 +97,9 @@ The EdgeOne free-plan site is configured only as a DNS-only canary; the apex
 has not changed and no watchdog is enabled. The canary origin is Vercel, not
 this Tencent host.
 
-Do not upload a `cn-router` version or configure a Tencent route split. The
-existing `106.52.109.82:8443` placement probe is a TCP-only probe, not a Web
-origin; it currently returns its fixed probe banner and must not carry
-application traffic. Remove it only during an approved hardening window after
-confirming no placement-hint consumer remains. Any future Web release must
-preserve the Cloudflare Transform Rules path and validate any new edge
-candidate separately before changing DNS.
+The formal target is DNSPod mainland → EdgeOne → safe Tencent reads, while
+DNSPod overseas/default → Vercel. Until the separate DNSPod PR, EdgeOne rule
+snapshots, same-SHA canary, and explicit NS authorization all pass, the current
+Cloudflare → Vercel production path remains unchanged. The existing
+`106.52.109.82:8443` placement probe is a TCP-only probe, not a Web origin; it
+must not carry application traffic.

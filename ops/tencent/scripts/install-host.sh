@@ -11,7 +11,7 @@ ops_dir=$(cd -- "$script_dir/.." && pwd)
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y ca-certificates curl git gnupg nginx openssl rsync
+apt-get install -y ca-certificates curl git gnupg nginx openssl rsync sudo
 
 install -d -m 0755 /etc/apt/keyrings
 key_tmp=$(mktemp)
@@ -35,10 +35,15 @@ fi
 if ! id letletme >/dev/null 2>&1; then
 	useradd --system --home-dir /nonexistent --shell /usr/sbin/nologin letletme
 fi
+if ! id deploy >/dev/null 2>&1; then
+	useradd --system --create-home --home-dir /home/deploy --shell /bin/bash deploy
+fi
+install -d -o deploy -g deploy -m 0700 /home/deploy/.ssh
 
 install -d -o root -g letletme -m 0750 /etc/letletme
 install -d -o root -g root -m 0700 /etc/letletme/tls
 install -d -o root -g root -m 0755 /etc/nginx/snippets
+install -d -o root -g root -m 0755 /usr/local/libexec
 install -d -o root -g letletme -m 0751 /opt/letletme
 chmod 0751 /opt/letletme
 install -d -o root -g letletme -m 0750 /opt/letletme/releases
@@ -59,6 +64,22 @@ install -o root -g www-data -m 0640 /dev/null \
 	/etc/nginx/snippets/letletme-static-try-files.conf
 ln -sfn /etc/nginx/sites-available/letletme /etc/nginx/sites-enabled/letletme
 rm -f /etc/nginx/sites-enabled/default
+
+install -o root -g root -m 0750 \
+	"$script_dir/deploy-release.sh" /usr/local/libexec/letletme-deploy-release.sh
+install -o root -g root -m 0750 \
+	"$script_dir/activate-release.sh" /usr/local/libexec/letletme-activate-release.sh
+install -o root -g root -m 0750 \
+	"$script_dir/rollback-release.sh" /usr/local/libexec/letletme-rollback-release.sh
+install -o root -g root -m 0750 \
+	"$script_dir/render-nginx-config.sh" /usr/local/libexec/render-nginx-config.sh
+install -o root -g root -m 0755 \
+	"$script_dir/letletme-release-wrapper.sh" /usr/local/libexec/letletme-release
+install -o root -g root -m 0440 /dev/stdin /etc/sudoers.d/letletme-release <<'EOF'
+Defaults:deploy !setenv
+deploy ALL=(root) NOPASSWD: /usr/local/libexec/letletme-release
+EOF
+visudo --check --file=/etc/sudoers.d/letletme-release
 systemctl daemon-reload
 systemctl enable letletme-web.service nginx.service
 

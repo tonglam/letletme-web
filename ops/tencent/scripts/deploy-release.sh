@@ -5,13 +5,18 @@ if [[ $EUID -ne 0 ]]; then
 	echo "run as root" >&2
 	exit 1
 fi
-if [[ $# -ne 2 || ! $2 =~ ^[a-f0-9]{40}$ ]]; then
-	echo "usage: $0 <source-directory> <40-char-git-sha>" >&2
+if [[ $# -lt 2 || $# -gt 3 || ! $2 =~ ^[a-f0-9]{40}$ ]]; then
+	echo "usage: $0 <source-directory> <40-char-git-sha> [stage|activate]" >&2
 	exit 1
 fi
 
 source_dir=$(realpath "$1")
 release_sha=$2
+mode=${3:-activate}
+if [[ $mode != stage && $mode != activate ]]; then
+	echo "mode must be stage or activate" >&2
+	exit 1
+fi
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 release_root=/opt/letletme/releases
 release_dir=$release_root/$release_sha
@@ -29,6 +34,7 @@ previous_release=''
 if [[ -L $current_link ]]; then
 	previous_release=$(readlink -e "$current_link" 2>/dev/null || true)
 fi
+previous_link=/opt/letletme/previous
 activation_started=0
 deployment_succeeded=0
 rollback_in_progress=0
@@ -37,23 +43,34 @@ cache_dir_created=0
 cache_parent=/var/cache/letletme-next
 release_retention_seconds=$((24 * 60 * 60))
 
-if ! git -C "$source_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-	echo "source directory is not a Git worktree: $source_dir" >&2
-	exit 1
-fi
-repo_root=$(realpath "$(git -C "$source_dir" rev-parse --show-toplevel)")
-if [[ $repo_root != "$source_dir" ]]; then
-	echo "source directory must be the Git worktree root: $repo_root" >&2
-	exit 1
-fi
-checkout_sha=$(git -C "$source_dir" rev-parse HEAD)
-if [[ $checkout_sha != "$release_sha" ]]; then
-	echo "checkout HEAD $checkout_sha does not match release SHA $release_sha" >&2
-	exit 1
-fi
-if [[ -n $(git -C "$source_dir" status --porcelain=v1 --untracked-files=all) ]]; then
-	echo "source checkout is dirty: $source_dir" >&2
-	exit 1
+source_is_git=0
+if git -C "$source_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+	source_is_git=1
+	repo_root=$(realpath "$(git -C "$source_dir" rev-parse --show-toplevel)")
+	if [[ $repo_root != "$source_dir" ]]; then
+		echo "source directory must be the Git worktree root: $repo_root" >&2
+		exit 1
+	fi
+	checkout_sha=$(git -C "$source_dir" rev-parse HEAD)
+	if [[ $checkout_sha != "$release_sha" ]]; then
+		echo "checkout HEAD $checkout_sha does not match release SHA $release_sha" >&2
+		exit 1
+	fi
+	if [[ -n $(git -C "$source_dir" status --porcelain=v1 --untracked-files=all) ]]; then
+		echo "source checkout is dirty: $source_dir" >&2
+		exit 1
+	fi
+else
+	marker="$source_dir/.letletme-release-sha"
+	if [[ ! -f $marker ]]; then
+		echo "source directory is neither a clean Git worktree nor an exact release archive: $source_dir" >&2
+		exit 1
+	fi
+	checkout_sha=$(tr -d '[:space:]' < "$marker")
+	if [[ $checkout_sha != "$release_sha" ]]; then
+		echo "release archive marker $checkout_sha does not match release SHA $release_sha" >&2
+		exit 1
+	fi
 fi
 
 for required in package.json package-lock.json next.config.js; do
@@ -75,8 +92,13 @@ for required in \
 done
 local_proxy_secret=$(< /etc/letletme/local-proxy-secret)
 configured_proxy_secret=$(sed -n 's/^LETLETME_LOCAL_PROXY_SECRET=//p' /etc/letletme/web.env)
+configured_previous_proxy_secret=$(sed -n 's/^LETLETME_LOCAL_PROXY_SECRET_PREVIOUS=//p' /etc/letletme/web.env)
 if [[ -z $local_proxy_secret || $configured_proxy_secret != "$local_proxy_secret" ]]; then
 	echo "web.env local proxy secret does not match /etc/letletme/local-proxy-secret" >&2
+	exit 1
+fi
+if [[ -n $configured_previous_proxy_secret && $configured_previous_proxy_secret == "$configured_proxy_secret" ]]; then
+	echo "previous proxy secret must differ from the active proxy secret" >&2
 	exit 1
 fi
 if [[ -e $release_dir ]]; then
@@ -107,8 +129,12 @@ chown root:www-data "$static_root"
 chmod 0751 "$static_root"
 
 install -d -o letletme -g letletme -m 0700 "$build_dir"
-git -C "$source_dir" archive --format=tar "$release_sha" | \
-	tar -xf - -C "$build_dir"
+if [[ $source_is_git == 1 ]]; then
+	git -C "$source_dir" archive --format=tar "$release_sha" | \
+		tar -xf - -C "$build_dir"
+else
+	tar -cf - -C "$source_dir" . | tar -xf - -C "$build_dir"
+fi
 chown -R letletme:letletme "$build_dir"
 
 stage_dir=''
@@ -193,7 +219,9 @@ trap cleanup_build EXIT
 		NEXT_PUBLIC_SUPABASE_URL \
 		NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE \
 		BETTER_AUTH_URL \
-		NEXT_SERVER_ACTIONS_ENCRYPTION_KEY; do
+		NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
+		LETLETME_LOCAL_PROXY_SECRET \
+		LETLETME_LOCAL_PROXY_SECRET_PREVIOUS; do
 		if [[ -n ${!build_key-} ]]; then
 			build_env+=("$build_key=${!build_key}")
 		fi
@@ -245,10 +273,22 @@ rsync -a "$release_dir/.next/static/" "$static_release_dir/"
 chown -R root:www-data "$static_release_dir"
 chmod -R u=rwX,g=rX,o= "$static_release_dir"
 
+if [[ $mode == stage ]]; then
+	deployment_succeeded=1
+	echo "staged release $release_sha"
+	exit 0
+fi
+
 next_link=$current_link.next
 ln -s "$release_dir" "$next_link"
 mv -Tf "$next_link" "$current_link"
 activation_started=1
+if [[ -n $previous_release && $previous_release != "$release_dir" ]]; then
+	previous_next=$previous_link.next
+	rm -f -- "$previous_next"
+	ln -s "$previous_release" "$previous_next"
+	mv -Tf "$previous_next" "$previous_link"
+fi
 printf 'LETLETME_RELEASE_SHA=%s\n' "$release_sha" | install -o root -g root -m 0644 \
 	/dev/stdin /etc/letletme/release.env
 systemctl restart letletme-web.service
