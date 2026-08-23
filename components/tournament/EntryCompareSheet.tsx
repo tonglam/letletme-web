@@ -1,6 +1,7 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
 	Sheet,
 	SheetContent,
@@ -289,6 +290,8 @@ export function EntryCompareSheet({
 		[CompareLiveData | null, CompareLiveData | null]
 	>([null, null])
 	const [isLoading, setIsLoading] = useState(false)
+	const [loadError, setLoadError] = useState(false)
+	const [retryVersion, setRetryVersion] = useState(0)
 
 	const entryIdA = entries[0]?.id
 	const entryIdB = entries[1]?.id
@@ -303,6 +306,7 @@ export function EntryCompareSheet({
 			.then(async () => {
 				if (cancelled) return
 				setIsLoading(true)
+				setLoadError(false)
 				setLiveData([null, null])
 
 				if (tournamentId && playerRevision) {
@@ -315,15 +319,20 @@ export function EntryCompareSheet({
 						`/api/live/competitions/${tournamentId}/compare?${params.toString()}`,
 						{ cache: 'no-store', signal: controller.signal }
 					)
-					const data = response.ok
-						? ((await response.json()) as TournamentEntrySquadsResponse)
-						: null
+					if (!response.ok) {
+						throw new Error(
+							`Tournament comparison failed with ${response.status}`
+						)
+					}
+					const data = (await response.json()) as TournamentEntrySquadsResponse
 					if (cancelled) return
-					const rows = data?.tournamentEntrySquads?.entries ?? []
-					setLiveData([
-						rows.find(row => row.entry === Number(entryIdA)) ?? null,
-						rows.find(row => row.entry === Number(entryIdB)) ?? null
-					])
+					const rows = data.tournamentEntrySquads?.entries ?? []
+					const left = rows.find(row => row.entry === Number(entryIdA))
+					const right = rows.find(row => row.entry === Number(entryIdB))
+					if (!left || !right) {
+						throw new Error('Tournament comparison omitted a requested squad')
+					}
+					setLiveData([left, right])
 				} else {
 					const [resA, resB] = await Promise.allSettled([
 						executeQuery<LiveCalcDataResponse>(
@@ -344,13 +353,12 @@ export function EntryCompareSheet({
 						)
 					])
 					if (cancelled) return
+					if (resA.status === 'rejected' || resB.status === 'rejected') {
+						throw new Error('Tournament comparison entry request failed')
+					}
 					setLiveData([
-						resA.status === 'fulfilled'
-							? resA.value.calcLivePointsByEntry
-							: null,
-						resB.status === 'fulfilled'
-							? resB.value.calcLivePointsByEntry
-							: null
+						resA.value.calcLivePointsByEntry,
+						resB.value.calcLivePointsByEntry
 					])
 				}
 				setIsLoading(false)
@@ -361,6 +369,7 @@ export function EntryCompareSheet({
 					name: error instanceof Error ? error.name : 'UnknownError'
 				})
 				setLiveData([null, null])
+				setLoadError(true)
 				setIsLoading(false)
 			})
 
@@ -368,7 +377,15 @@ export function EntryCompareSheet({
 			cancelled = true
 			controller.abort()
 		}
-	}, [open, entryIdA, entryIdB, gameweek, playerRevision, tournamentId])
+	}, [
+		open,
+		entryIdA,
+		entryIdB,
+		gameweek,
+		playerRevision,
+		retryVersion,
+		tournamentId
+	])
 
 	const [entryA, entryB] = entries
 	const [liveA, liveB] = liveData
@@ -531,6 +548,20 @@ export function EntryCompareSheet({
 										<Skeleton className="h-3 w-24" />
 									</div>
 								))}
+							</div>
+						) : loadError ? (
+							<div className="flex flex-col items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-8 text-center">
+								<p className="text-sm text-destructive">
+									{t('comparisonUnavailable')}
+								</p>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									onClick={() => setRetryVersion(version => version + 1)}
+								>
+									{t('errorCtaRetry')}
+								</Button>
 							</div>
 						) : (
 							<div className="border rounded-lg overflow-hidden">

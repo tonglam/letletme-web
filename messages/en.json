@@ -2253,6 +2253,7 @@
 		"overallRank": "Overall Rank",
 		"chip": "Chip",
 		"squadComparison": "Squad Comparison",
+		"comparisonUnavailable": "The two squads could not be loaded. Try again to restore the lineup comparison.",
 		"startingEleven": "Starting XI",
 		"substitutes": "Substitutes",
 		"backToCompetitions": "Back to all competitions",

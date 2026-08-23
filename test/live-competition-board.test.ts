@@ -7,9 +7,11 @@ import {
 	LiveBoardInvalidResponseError,
 	LiveBoardRequestError,
 	fetchEntryLiveCompetitionBoard,
+	isCurrentLiveBoardRequest,
 	liveBoardLastGoodKey,
 	parseEntryLiveCompetitionBoardPage,
 	readLiveBoardLastGood,
+	resolveAnchoredGameweek,
 	writeLiveBoardLastGood
 } from '@/lib/tournament/live-board'
 
@@ -106,6 +108,7 @@ const page = (overrides: Partial<EntryLiveCompetitionBoardPage> = {}) =>
 				}
 			}
 		],
+		viewerRow: null,
 		...overrides
 	}) satisfies EntryLiveCompetitionBoardPage
 
@@ -127,6 +130,14 @@ const okResponse = () =>
 	})
 
 describe('live competition board contract', () => {
+	it('keeps a paged viewer row in the validated response', () => {
+		const viewerRow = page().rows[0]
+		const parsed = parseEntryLiveCompetitionBoardPage(
+			page({ rows: [], viewerRow })
+		)
+		assert.equal(parsed.viewerRow?.entry, 6953)
+	})
+
 	it('rejects malformed success payloads with the stable contract error', () => {
 		assert.throws(
 			() =>
@@ -184,6 +195,33 @@ describe('live competition board contract', () => {
 		assert.equal(storage.length, 0)
 		writeLiveBoardLastGood(storage, scope, page())
 		assert.equal(storage.length, 1)
+	})
+})
+
+describe('live competition board request coordination', () => {
+	it('rejects a load-more response after a replacement request starts', () => {
+		assert.equal(isCurrentLiveBoardRequest(4, 5, '99:1', '99:1'), false)
+		assert.equal(isCurrentLiveBoardRequest(5, 5, '99:1', '99:2'), false)
+		assert.equal(isCurrentLiveBoardRequest(5, 5, '99:1', '99:1'), true)
+	})
+
+	it('follows the live anchor until a future URL gameweek becomes selectable', () => {
+		assert.deepEqual(
+			resolveAnchoredGameweek({
+				nextEvent: 6,
+				requestedGameweek: 8,
+				followsAnchor: true
+			}),
+			{ selectedGameweek: 6, followsAnchor: true }
+		)
+		assert.deepEqual(
+			resolveAnchoredGameweek({
+				nextEvent: 8,
+				requestedGameweek: 8,
+				followsAnchor: true
+			}),
+			{ selectedGameweek: 8, followsAnchor: false }
+		)
 	})
 })
 

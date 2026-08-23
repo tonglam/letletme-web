@@ -944,6 +944,7 @@ export interface EntryLiveCompetitionBoardPage {
 	highestEventPoints: number | null
 	averageEventPoints: number | null
 	rows: EntryLiveCompetitionBoardRow[]
+	viewerRow: EntryLiveCompetitionBoardRow | null
 }
 
 export interface EntryLiveCompetitionBoardResponse {
@@ -989,6 +990,16 @@ export const GET_ENTRY_LIVE_COMPETITION_BOARD = `
       failedEntryIds partial totalEntries filteredEntries page pageSize hasMore
       highestEventPoints averageEventPoints
       rows {
+        entry entryName playerName rank overallRank teamValue chip livePoints
+        transferCost liveNetPoints liveTotalPoints played toPlay captainId
+        captainName captainPoints
+        score {
+          eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
+          transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
+          staleAt nextRefreshAt reconciliation reasonCodes
+        }
+      }
+      viewerRow {
         entry entryName playerName rank overallRank teamValue chip livePoints
         transferCost liveNetPoints liveTotalPoints played toPlay captainId
         captainName captainPoints
