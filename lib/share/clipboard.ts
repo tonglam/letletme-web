@@ -1,6 +1,79 @@
 export type ClipboardCopyResult = 'copied' | 'unsupported' | 'failed'
 export type ShareResult = 'shared' | ClipboardCopyResult
 
+// html-to-image copies every computed CSS property by default. On a large
+// standings page that can produce a multi-megabyte foreignObject SVG which
+// Chrome may never finish decoding. Keep the visual/layout properties needed
+// by our share cards while leaving browser-only properties out of the clone.
+const SHARE_IMAGE_STYLE_PROPERTIES = [
+	'align-content',
+	'align-items',
+	'align-self',
+	'background-color',
+	'background-image',
+	'background-position',
+	'background-repeat',
+	'background-size',
+	'border',
+	'border-collapse',
+	'border-color',
+	'border-radius',
+	'border-spacing',
+	'border-style',
+	'border-width',
+	'box-shadow',
+	'box-sizing',
+	'color',
+	'column-gap',
+	'display',
+	'fill',
+	'flex',
+	'flex-direction',
+	'flex-grow',
+	'flex-shrink',
+	'flex-wrap',
+	'font-family',
+	'font-size',
+	'font-style',
+	'font-weight',
+	'gap',
+	'grid-auto-flow',
+	'grid-template-columns',
+	'grid-template-rows',
+	'height',
+	'justify-content',
+	'justify-items',
+	'justify-self',
+	'letter-spacing',
+	'line-height',
+	'margin',
+	'max-height',
+	'max-width',
+	'min-height',
+	'min-width',
+	'object-fit',
+	'object-position',
+	'opacity',
+	'overflow',
+	'overflow-wrap',
+	'padding',
+	'position',
+	'right',
+	'row-gap',
+	'text-align',
+	'text-decoration',
+	'text-overflow',
+	'text-transform',
+	'top',
+	'transform',
+	'vertical-align',
+	'visibility',
+	'white-space',
+	'width',
+	'word-break',
+	'z-index'
+]
+
 export function shouldIncludeShareImageNode(node: {
 	nodeType: number
 	getAttribute?: (name: string) => string | null
@@ -37,6 +110,7 @@ async function elementToPng(element: HTMLElement): Promise<Blob | null> {
 					style: { width: `${captureWidth}px` }
 				}
 			: {}),
+		includeStyleProperties: SHARE_IMAGE_STYLE_PROPERTIES,
 		// The app uses next/font CSS. Embedding remote font faces can reject the
 		// whole SVG render in browsers with a stricter CORS policy; system fonts
 		// keep the share usable when that optional embed is unavailable.
@@ -75,6 +149,17 @@ async function copyImageBlobToClipboard(
 }
 
 function prefersNativeImageShare(): boolean {
+	if (typeof navigator === 'undefined') return false
+	const userAgentData = (
+		navigator as Navigator & { userAgentData?: { mobile?: boolean } }
+	).userAgentData
+	return (
+		userAgentData?.mobile === true ||
+		/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent ?? '')
+	)
+}
+
+function prefersNativeTextShare(): boolean {
 	if (typeof navigator === 'undefined') return false
 	const userAgentData = (
 		navigator as Navigator & { userAgentData?: { mobile?: boolean } }
@@ -182,7 +267,10 @@ export async function shareText(
 ): Promise<ShareResult> {
 	if (typeof navigator === 'undefined') return 'unsupported'
 	try {
-		if (typeof navigator.share === 'function') {
+		// Desktop Chrome exposes navigator.share but can reject it when no OS
+		// share target is available. Clipboard is the reliable desktop action;
+		// keep the native share sheet first on mobile where it is expected.
+		if (prefersNativeTextShare() && typeof navigator.share === 'function') {
 			try {
 				await navigator.share({ title: options.title, text })
 				return 'shared'
@@ -192,7 +280,15 @@ export async function shareText(
 				return 'failed'
 			}
 		}
-		return copyTextToClipboard(text)
+		const clipboardResult = await copyTextToClipboard(text)
+		if (clipboardResult !== 'unsupported') return clipboardResult
+		if (typeof navigator.share !== 'function') return clipboardResult
+		try {
+			await navigator.share({ title: options.title, text })
+			return 'shared'
+		} catch {
+			return 'failed'
+		}
 	} catch {
 		return 'failed'
 	}

@@ -18,9 +18,10 @@ function restoreNavigator(descriptor: PropertyDescriptor | undefined) {
 }
 
 describe('shareText', () => {
-	it('uses the native share sheet when available', async () => {
+	it('uses the native share sheet on mobile when available', async () => {
 		let payload: ShareData | null = null
 		const previous = setNavigator({
+			userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
 			share: async (next: ShareData) => {
 				payload = next
 			}
@@ -28,6 +29,29 @@ describe('shareText', () => {
 		try {
 			assert.equal(await shareText('hello', { title: 'Test' }), 'shared')
 			assert.deepEqual(payload, { text: 'hello', title: 'Test' })
+		} finally {
+			restoreNavigator(previous)
+		}
+	})
+
+	it('prefers the clipboard on desktop even when native share is exposed', async () => {
+		let copied = ''
+		let nativeShareCalled = false
+		const previous = setNavigator({
+			userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+			share: async () => {
+				nativeShareCalled = true
+			},
+			clipboard: {
+				writeText: async (value: string) => {
+					copied = value
+				}
+			}
+		})
+		try {
+			assert.equal(await shareText('desktop text'), 'copied')
+			assert.equal(copied, 'desktop text')
+			assert.equal(nativeShareCalled, false)
 		} finally {
 			restoreNavigator(previous)
 		}
@@ -53,6 +77,7 @@ describe('shareText', () => {
 	it('reports a native share target rejection for manual fallback', async () => {
 		let copied = ''
 		const previous = setNavigator({
+			userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
 			share: async () => {
 				throw new Error('target rejected')
 			},
@@ -73,6 +98,7 @@ describe('shareText', () => {
 	it('does not copy when the native share sheet rejects', async () => {
 		let copied = false
 		const previous = setNavigator({
+			userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
 			share: async () => {
 				throw { name: 'AbortError' }
 			},
