@@ -493,14 +493,35 @@ export const isSnapshotRequestSuperseded = (
 const snapshotRequestKey = (entryId: number, revision: string | null): string =>
 	`${entryId}:${revision ?? 'legacy'}`
 
-const canCommitSnapshotResponse = (
+const normalizeSnapshotRevision = (value: string | null): string | null => {
+	const candidate = value?.trim()
+	if (!candidate || !/^[0-9]+$/.test(candidate)) return null
+	return candidate.replace(/^0+(?=\d)/, '')
+}
+
+const isNewerSnapshotRevision = (candidate: string, current: string): boolean => {
+	const normalizedCandidate = normalizeSnapshotRevision(candidate)
+	const normalizedCurrent = normalizeSnapshotRevision(current)
+	if (!normalizedCandidate || !normalizedCurrent) return false
+	return (
+		normalizedCandidate.length > normalizedCurrent.length ||
+		(normalizedCandidate.length === normalizedCurrent.length &&
+			normalizedCandidate > normalizedCurrent)
+	)
+}
+
+export const canCommitSnapshotResponse = (
 	entryId: number,
 	requestedRevision: string | null,
 	responseRevision: string | null
 ): boolean => {
 	const currentRevision = peekEntrySnapshotMeta(entryId)?.revision ?? null
 	if (currentRevision !== requestedRevision) return false
-	return requestedRevision === null || responseRevision === requestedRevision
+	if (requestedRevision === null || responseRevision === requestedRevision) return true
+	return (
+		responseRevision !== null &&
+		isNewerSnapshotRevision(responseRevision, requestedRevision)
+	)
 }
 
 export const entryEventCache = new Map<
@@ -851,19 +872,25 @@ export const getEntryEventResultCached = async (
 	)
 		.then(response => {
 			const gameweek = response.myFplTeamGameweek
+			const responseRevision = gameweek.snapshotMeta?.revision ?? null
 			if (
 				!canCommitSnapshotResponse(
 					entryId,
 					requestRevision,
-					gameweek.snapshotMeta?.revision ?? null
+					responseRevision
 				)
 			) {
 				throw new SnapshotRequestSupersededError()
 			}
 			seedEntrySnapshotMeta(entryId, gameweek.snapshotMeta ?? null)
 			const result = eventResultFromMyFplGameweek(gameweek)
-			setCacheValue(entryEventCache, cacheKey, result, ttl)
-			setCacheValue(entryEventStateCache, cacheKey, gameweek.state, ttl)
+			const responseCacheKey = entryEventCacheKey(
+				entryId,
+				eventId,
+				responseRevision ?? requestRevision
+			)
+			setCacheValue(entryEventCache, responseCacheKey, result, ttl)
+			setCacheValue(entryEventStateCache, responseCacheKey, gameweek.state, ttl)
 			return result
 		})
 		.finally(() => {
