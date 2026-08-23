@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
+	isCurrentSeasonLabel,
 	resolveSeasonPresentation,
 	type SeasonPhaseSignal,
 } from '@/lib/season-presentation'
@@ -20,6 +21,13 @@ const baseContext = (
 })
 
 describe('resolveSeasonPresentation', () => {
+	it('matches history rows to the authoritative season instead of row order', () => {
+		assert.equal(isCurrentSeasonLabel('2025/26', '2627'), false)
+		assert.equal(isCurrentSeasonLabel('2026/27', '2627'), true)
+		assert.equal(isCurrentSeasonLabel('2026/27', '2026/27'), true)
+		assert.equal(isCurrentSeasonLabel('2025/26', null), false)
+	})
+
 	it('recognises valid preseason and does not substitute next GW for current', () => {
 		const result = resolveSeasonPresentation(baseContext())
 		assert.equal(result.phase, 'PRESEASON')

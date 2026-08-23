@@ -317,6 +317,23 @@ function formatMetricRawValue(
 	return String(Math.round(value))
 }
 
+function formatMetricAverageValue(
+	key: TournamentSeasonMetricKey,
+	value: number | null | undefined,
+): string {
+	if (value == null || !Number.isFinite(value)) return '—'
+	if (key === 'TEAM_VALUE') return `£${(value / 10).toFixed(2)}m`
+	if (
+		key === 'TOTAL_COSTS' ||
+		key === 'BENCH_POINTS' ||
+		key === 'AUTO_SUB_POINTS' ||
+		key === 'OVERALL_POINTS'
+	) {
+		return `${value.toFixed(2)} pts`
+	}
+	return value.toFixed(2)
+}
+
 function mapApiMetrics(
 	metrics: TournamentSeasonMetricApi[] | undefined | null,
 ): TournamentSeasonFieldMetric[] {
@@ -327,7 +344,7 @@ function mapApiMetrics(
 		leaderValueDisplay: formatMetricRawValue(m.key, m.leaderValue),
 		leaderTeamName: m.leaderEntryName?.trim() || null,
 		leaderManagerName: m.leaderPlayerName?.trim() || null,
-		averageDisplay: formatMetricRawValue(m.key, m.averageValue),
+		averageDisplay: formatMetricAverageValue(m.key, m.averageValue),
 		higherIsBetter: m.higherIsBetter,
 		averageRaw: m.averageValue,
 	}))
@@ -437,10 +454,8 @@ export function buildTournamentSeasonField(
 			: null
 	const averagePoints =
 		withPoints.length > 0
-			? Math.round(
-					withPoints.reduce((sum, s) => sum + (s.totalPoints as number), 0) /
-						withPoints.length,
-				)
+			? withPoints.reduce((sum, s) => sum + (s.totalPoints as number), 0) /
+				withPoints.length
 			: null
 
 	// Client-side metrics for points + team value only
@@ -463,7 +478,7 @@ export function buildTournamentSeasonField(
 			leaderValueDisplay: formatMetricRawValue('OVERALL_POINTS', leaderPoints),
 			leaderTeamName: pointsLeader?.entryName?.trim() || null,
 			leaderManagerName: pointsLeader?.playerName?.trim() || null,
-			averageDisplay: formatMetricRawValue('OVERALL_POINTS', averagePoints),
+			averageDisplay: formatMetricAverageValue('OVERALL_POINTS', averagePoints),
 			higherIsBetter: true,
 			averageRaw: averagePoints,
 		},
@@ -478,7 +493,7 @@ export function buildTournamentSeasonField(
 			),
 			leaderTeamName: tvLeader.entryName?.trim() || null,
 			leaderManagerName: tvLeader.playerName?.trim() || null,
-			averageDisplay: formatMetricRawValue('TEAM_VALUE', tvAvg),
+			averageDisplay: formatMetricAverageValue('TEAM_VALUE', tvAvg),
 			higherIsBetter: true,
 			averageRaw: tvAvg,
 		})
@@ -546,7 +561,7 @@ export function buildTournamentSeasonMe(
 		const avgOrNull = (key: TournamentSeasonMetricKey) => {
 			const raw = avgs[key]
 			return raw != null && Number.isFinite(raw)
-				? formatMetricRawValue(key, raw)
+				? formatMetricAverageValue(key, raw)
 				: null
 		}
 		secondary.push(

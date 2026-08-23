@@ -122,6 +122,7 @@ export default async function TeamStatsPage({
 					initialError={null}
 					initialRequestComplete
 					initialSeasonPhase="SETTLED"
+					currentSeason="2627"
 					initialSnapshotMeta={null}
 				/>
 			</Suspense>
@@ -270,6 +271,7 @@ export default async function TeamStatsPage({
 				initialError={initialError}
 				initialRequestComplete={initialRequestComplete}
 				initialSeasonPhase={seasonPresentation.phase}
+				currentSeason={seasonPresentation.season}
 				initialSnapshotMeta={initialSnapshotMeta}
 			/>
 		</Suspense>

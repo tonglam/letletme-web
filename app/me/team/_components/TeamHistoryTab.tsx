@@ -10,6 +10,7 @@ import {
 	DataTr,
 } from '@/components/data/DataTable'
 import { cn } from '@/lib/utils'
+import { isCurrentSeasonLabel } from '@/lib/season-presentation'
 import { useMemo, useState } from 'react'
 import { useFormatter, useTranslations } from 'next-intl'
 import type { TeamSeasonLogs } from '../_lib/team-stats-model'
@@ -150,7 +151,7 @@ type PastSeasonPoint = {
 	season: string
 	totalPoints: number
 	overallRank: number
-	/** Newest season first in API; chart draws oldest → newest. */
+	/** Matches the authoritative core season; chart draws oldest → newest. */
 	isCurrent: boolean
 }
 
@@ -223,7 +224,13 @@ function PastSeasonsRankChart({
 /**
  * Prior seasons — rank trend chart + compact list.
  */
-export function TeamSeasonHistory({ stats }: { stats: TeamSeasonLogs }) {
+export function TeamSeasonHistory({
+	stats,
+	currentSeason,
+}: {
+	stats: TeamSeasonLogs
+	currentSeason: string | null
+}) {
 	const t = useTranslations('TeamStats')
 	const format = useFormatter()
 	const compact = (value: number | null | undefined) =>
@@ -233,13 +240,13 @@ export function TeamSeasonHistory({ stats }: { stats: TeamSeasonLogs }) {
 		() =>
 			stats.seasonHistoryRows
 				.filter(r => Number.isFinite(r.overallRank) && r.overallRank > 0)
-				.map((row, index) => ({
+				.map(row => ({
 					season: row.season,
 					totalPoints: row.totalPoints,
 					overallRank: row.overallRank,
-					isCurrent: index === 0
+					isCurrent: isCurrentSeasonLabel(row.season, currentSeason)
 				})),
-		[stats.seasonHistoryRows]
+		[currentSeason, stats.seasonHistoryRows]
 	)
 
 	if (stats.seasonHistoryRows.length === 0) {
@@ -266,8 +273,8 @@ export function TeamSeasonHistory({ stats }: { stats: TeamSeasonLogs }) {
 					</span>
 				</div>
 				<ul className="divide-y divide-border/50">
-					{stats.seasonHistoryRows.map((row, index) => {
-						const isCurrent = index === 0
+					{stats.seasonHistoryRows.map(row => {
+						const isCurrent = isCurrentSeasonLabel(row.season, currentSeason)
 						return (
 							<li
 								key={row.season}
