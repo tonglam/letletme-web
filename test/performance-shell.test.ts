@@ -22,9 +22,12 @@ describe('server-first global shell performance boundary', () => {
 		assert.match(layout, /data-navigation-disclosure/)
 		assert.match(layout, /data-theme-choice/)
 		assert.match(layout, /ArrowDown[\s\S]*role="radio"/)
+		assert.match(layout, /event\.metaKey[\s\S]*event\.defaultPrevented/)
+		assert.match(layout, /data-theme-transition-guard[\s\S]*transition:none/)
 		assert.match(themeToggle, /data-theme-picker[\s\S]*inert/)
 		assert.match(themeToggle, /tabIndex=/)
 		assert.match(languageSwitcher, /tabIndex=/)
+		assert.match(languageSwitcher, /<Link[\s\S]*locale="en"/)
 		assert.match(miniProgram, /left-0[\s\S]*sm:right-0/)
 		for (const source of [
 			themeToggle,

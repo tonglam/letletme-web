@@ -85,6 +85,16 @@ test('server navigation stays usable while scripted controls remain inert', asyn
 	await expect(themeDisclosure).toHaveAttribute('inert', '')
 	await expect(themeDisclosure).toHaveAttribute('aria-disabled', 'true')
 
+	await page.goto('/zh-CN')
+	const languageDisclosure = page.locator(
+		'details[data-navigation-disclosure]:has(summary[aria-label="切换语言"])'
+	)
+	await languageDisclosure.locator(':scope > summary').click()
+	await languageDisclosure
+		.getByRole('radio', { name: 'English', exact: true })
+		.click()
+	await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+
 	await page.close()
 })
 
@@ -169,6 +179,22 @@ test('home keeps the four-section vocabulary and competition entry links aligned
 				exact: true
 			})
 	).toHaveAttribute('href', '/zh-CN/competitions/create')
+})
+
+test('modified navigation link clicks keep their disclosure open', async ({
+	page,
+	context
+}) => {
+	await page.goto('/')
+	const explore = page.locator('details[data-navigation-group="explore"]')
+	await explore.locator(':scope > summary').click()
+	await explore
+		.getByRole('link', { name: 'Market', exact: true })
+		.click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] })
+	await expect(explore).toHaveAttribute('open', '')
+	for (const candidate of context.pages()) {
+		if (candidate !== page) await candidate.close()
+	}
 })
 
 test('language switch persists through the next client navigation', async ({
@@ -487,6 +513,23 @@ test('theme radio group uses one tab stop and arrow-key selection', async ({
 	await expect(light).toHaveAttribute('tabindex', '-1')
 	await expect(dark).toHaveAttribute('tabindex', '-1')
 	await expect(system).toHaveAttribute('tabindex', '0')
+	await page.evaluate(() => {
+		const observer = new MutationObserver(records => {
+			if (
+				records.some(record =>
+					Array.from(record.addedNodes).some(
+						node =>
+							node instanceof Element &&
+							node.hasAttribute('data-theme-transition-guard')
+					)
+				)
+			) {
+				document.documentElement.dataset.themeTransitionGuardSeen = 'true'
+				observer.disconnect()
+			}
+		})
+		observer.observe(document.head, { childList: true })
+	})
 	await system.focus()
 	await system.press('ArrowLeft')
 
@@ -495,6 +538,10 @@ test('theme radio group uses one tab stop and arrow-key selection', async ({
 		'true'
 	)
 	await expect(page.locator('html')).toHaveClass(/dark/)
+	await expect(page.locator('html')).toHaveAttribute(
+		'data-theme-transition-guard-seen',
+		'true'
+	)
 	await expect(summary).toBeFocused()
 })
 

@@ -84,7 +84,16 @@ const shellBootstrapScript = `
 		updateThemeControls(readTheme());
 	};
 
-	const applyTheme = (theme) => {
+	const suppressThemeTransitions = () => {
+		const style = document.createElement('style');
+		style.setAttribute('data-theme-transition-guard', '');
+		style.textContent = '*,*::before,*::after{transition:none!important}';
+		document.head.append(style);
+		return () => requestAnimationFrame(() => requestAnimationFrame(() => style.remove()));
+	};
+
+	const applyTheme = (theme, suppressTransitions = false) => {
+		const restoreTransitions = suppressTransitions ? suppressThemeTransitions() : null;
 		const resolvedTheme = theme === 'system'
 			? (colorSchemeQuery.matches ? 'dark' : 'light')
 			: theme;
@@ -92,6 +101,7 @@ const shellBootstrapScript = `
 		document.documentElement.classList.add(resolvedTheme);
 		document.documentElement.style.colorScheme = resolvedTheme;
 		updateThemeControls(theme);
+		restoreTransitions?.();
 	};
 
 	try {
@@ -107,7 +117,7 @@ const shellBootstrapScript = `
 			const theme = themeChoice.getAttribute('data-theme-choice');
 			if (themeChoices.has(theme)) {
 				try { window.localStorage.setItem('theme', theme); } catch {}
-				applyTheme(theme);
+				applyTheme(theme, true);
 				const disclosure = themeChoice.closest(disclosureSelector);
 				disclosure?.removeAttribute('open');
 				disclosure?.querySelector(':scope > summary')?.focus();
@@ -121,8 +131,19 @@ const shellBootstrapScript = `
 			return;
 		}
 		if (target.closest('summary')) closeDisclosures(disclosure);
-		if (target.closest('a')) disclosure.removeAttribute('open');
-		if (target.closest('[role="radio"]')) disclosure.removeAttribute('open');
+		const anchor = target.closest('a');
+		if (anchor) {
+			const modified = event.button !== 0 || event.metaKey || event.ctrlKey ||
+				event.shiftKey || event.altKey || anchor.target === '_blank' ||
+				anchor.hasAttribute('download');
+			if (!modified) {
+				queueMicrotask(() => {
+					if (!event.defaultPrevented) disclosure.removeAttribute('open');
+				});
+			}
+		} else if (target.closest('[role="radio"]')) {
+			disclosure.removeAttribute('open');
+		}
 	});
 
 	document.addEventListener('keydown', (event) => {
@@ -131,7 +152,9 @@ const shellBootstrapScript = `
 		const group = radio?.closest('[role="radiogroup"]');
 		if (radio && group && ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft', 'Home', 'End'].includes(event.key)) {
 			const choices = Array.from(group.querySelectorAll('[role="radio"]')).filter(
-				(choice) => choice instanceof HTMLButtonElement && !choice.disabled
+				(choice) => choice instanceof HTMLElement &&
+					!(choice instanceof HTMLButtonElement && choice.disabled) &&
+					choice.getAttribute('aria-disabled') !== 'true'
 			);
 			const currentIndex = choices.indexOf(radio);
 			if (currentIndex >= 0 && choices.length > 0) {
@@ -153,7 +176,7 @@ const shellBootstrapScript = `
 	});
 
 	colorSchemeQuery.addEventListener('change', () => {
-		if (readTheme() === 'system') applyTheme('system');
+		if (readTheme() === 'system') applyTheme('system', true);
 	});
 	document.addEventListener('DOMContentLoaded', enableShellControls, { once: true });
 })();
