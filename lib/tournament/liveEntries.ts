@@ -273,8 +273,11 @@ export const buildTournamentStats = (
 	)
 
 	return {
-		averagePoints: Math.round(totalPoints / liveEntries.length),
+		averagePoints: totalPoints / liveEntries.length,
 		highestPoints,
 		totalEntries: entries.length
 	}
 }
+
+export const formatLiveAveragePoints = (value: number): string =>
+	Number.isFinite(value) ? value.toFixed(2) : '—'

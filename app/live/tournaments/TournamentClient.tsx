@@ -39,6 +39,7 @@ import {
 import {
 	buildTournamentEntries,
 	buildTournamentStats,
+	formatLiveAveragePoints,
 	getRetainedFailedEntryIds,
 	mergeUnavailableTournamentEntryIds,
 	mergePartialTournamentRows,
@@ -905,7 +906,7 @@ export default function TournamentClient({
 		const name = selectedTournament?.name ?? t('liveStandings')
 		const lines = [
 			`# ${name} · GW${displayGameweek}`,
-			`${t('averageScore')}: ${selectedStats.averagePoints} · ${t('highestScore')}: ${selectedStats.highestPoints}`,
+			`${t('averageScore')}: ${formatLiveAveragePoints(selectedStats.averagePoints)} · ${t('highestScore')}: ${selectedStats.highestPoints}`,
 			'',
 			t('standings')
 		]
