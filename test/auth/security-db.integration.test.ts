@@ -18,6 +18,7 @@ test(
 		const marker = randomUUID()
 		const userIds = [`db-a-${marker}`, `db-b-${marker}`]
 		const openid = `openid-${marker}`
+		const accountId = `account-${marker}`
 		const scope = `integration-${marker}`
 
 		try {
@@ -38,15 +39,21 @@ test(
 			SELECT id FROM bauth."user" WHERE openid = ${openid}
 		`
 			assert.ok(owner)
+			await sql`
+			INSERT INTO bauth.mini_program_account
+				(id, openid, linked_web_user_id, linked_at)
+			VALUES
+				(${accountId}, ${openid}, ${owner.id}, now())
+			`
 
 			const sessions = await Promise.allSettled(
 				[0, 1].map(
 					index => sql`
-			INSERT INTO bauth.mini_program_session
-				(id, token_hash, user_id, device_id, expires_at)
-			VALUES
-				(${`session-${index}-${marker}`}, ${`token-${index}-${marker}`}, ${owner.id},
-				 ${`device-${marker}`}, now() + interval '30 days')
+							INSERT INTO bauth.mini_program_session
+								(id, token_hash, user_id, account_id, device_id, expires_at)
+							VALUES
+								(${`session-${index}-${marker}`}, ${`token-${index}-${marker}`}, ${owner.id},
+								 ${accountId}, ${`device-${marker}`}, now() + interval '30 days')
 		`
 				)
 			)
@@ -106,8 +113,12 @@ test(
 					   AND replace(replace(coalesce(with_check, ''), '(', ''), ')', '') = 'true'
 					 )
 					 OR (
-					   policyname = 'graphql_auth_reader_select'
-					   AND tablename IN ('user', 'mini_program_session')
+										policyname = 'graphql_auth_reader_select'
+										AND tablename IN (
+											'user',
+											'mini_program_session',
+											'mini_program_account'
+										)
 					   AND permissive = 'PERMISSIVE'
 					   AND roles::text[] = ARRAY['letletme_graphql_reader']::text[]
 					   AND cmd = 'SELECT'
@@ -131,6 +142,7 @@ test(
 			})
 		} finally {
 			await sql`DELETE FROM bauth.request_rate_limits WHERE scope = ${scope}`
+			await sql`DELETE FROM bauth.mini_program_account WHERE id = ${accountId}`
 			await sql`DELETE FROM bauth."user" WHERE id IN ${sql(userIds)}`
 			await sql.end()
 		}
