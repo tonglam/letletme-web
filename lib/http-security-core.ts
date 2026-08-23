@@ -193,6 +193,15 @@ export function resolveProviderClientIp(headers: Headers): string {
 			'unknown'
 		)
 	}
+	// The local Next proxy cannot receive Cloudflare/Vercel client-IP headers.
+	// Give loopback Mini-program requests a stable abuse subject in development
+	// so they can exercise the same signed ingress contract as production.
+	if (
+		process.env.NODE_ENV !== 'production' &&
+		/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(host)
+	) {
+		return '127.0.0.1'
+	}
 	return 'unknown'
 }
 
