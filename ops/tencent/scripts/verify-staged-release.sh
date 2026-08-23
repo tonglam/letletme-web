@@ -14,7 +14,13 @@ release_sha=$1
 release_dir=/opt/letletme/releases/$release_sha
 verify_port=3101
 pid=''
-log_file=/tmp/letletme-verify-$release_sha.log
+verify_log_root=/var/lib/letletme/verify
+if [[ -L /var/lib/letletme || -e /var/lib/letletme && ! -d /var/lib/letletme ]]; then
+	echo "verification root is unsafe" >&2
+	exit 1
+fi
+install -d -o root -g root -m 0700 "$verify_log_root"
+log_file=$verify_log_root/$release_sha.log
 
 if [[ ! -d $release_dir || -L $release_dir || ! -f $release_dir/server.js || ! -d $release_dir/.next ]]; then
 	echo "staged release is incomplete: $release_dir" >&2

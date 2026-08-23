@@ -21,6 +21,11 @@ Create these without committing them:
   accepted the new value.
 - `/etc/letletme/tls/origin.pem` and `origin-key.pem` — Cloudflare Origin CA
   material for `letletme.top`.
+- `/etc/letletme/release-signing-public.pem` (`root:root`, `0644`) — the
+  public Ed25519 key corresponding to the GitHub Actions-only
+  `TENCENT_RELEASE_SIGNING_KEY` secret. The restricted wrapper verifies the
+  archive with this key and extracts it into a root-owned directory before
+  staging; do not enable automation without provisioning this file.
 
 `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` must be the same 32-byte base64 value at
 Vercel build time and Tencent build time. Do not put it in Git.
@@ -43,7 +48,7 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
 
 ## Host and release flow
 
-1. Run `ops/tencent/scripts/install-host.sh` once as root. This installs the
+1. Run `TENCENT_DEPLOY_PUBLIC_KEY='<deploy-public-key>' ops/tencent/scripts/install-host.sh` once as root. This installs the
    `deploy` account and a sudo allow-list for the release wrapper; it does not
    grant that account a general root shell. After changing release tooling,
    rerun this installer before enabling automation. The workflow checks

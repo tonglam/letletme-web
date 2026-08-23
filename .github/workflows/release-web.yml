@@ -125,6 +125,7 @@ jobs:
           TENCENT_SSH_PRIVATE_KEY: ${{ secrets.TENCENT_SSH_PRIVATE_KEY }}
           TENCENT_SSH_JUMP_PRIVATE_KEY: ${{ secrets.TENCENT_SSH_JUMP_PRIVATE_KEY }}
           TENCENT_SSH_KNOWN_HOSTS: ${{ secrets.TENCENT_SSH_KNOWN_HOSTS }}
+          TENCENT_RELEASE_SIGNING_KEY: ${{ secrets.TENCENT_RELEASE_SIGNING_KEY }}
           EDGEONE_TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_ID }}
           EDGEONE_TENCENTCLOUD_SECRET_KEY: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_KEY }}
           EDGEONE_ZONE_ID: ${{ secrets.EDGEONE_ZONE_ID }}
@@ -135,6 +136,7 @@ jobs:
           set -euo pipefail
           for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID \
             TENCENT_SSH_PRIVATE_KEY TENCENT_SSH_JUMP_PRIVATE_KEY TENCENT_SSH_KNOWN_HOSTS \
+            TENCENT_RELEASE_SIGNING_KEY \
             EDGEONE_TENCENTCLOUD_SECRET_ID EDGEONE_TENCENTCLOUD_SECRET_KEY EDGEONE_ZONE_ID \
             EDGEONE_RULE_ID EDGEONE_RULE_ALL_VERCEL_JSON EDGEONE_RULE_SPLIT_JSON; do
             [[ -n "${!name:-}" ]] || { echo "missing required production secret: $name" >&2; exit 1; }
@@ -142,6 +144,7 @@ jobs:
           export TENCENTCLOUD_SECRET_ID="$EDGEONE_TENCENTCLOUD_SECRET_ID"
           export TENCENTCLOUD_SECRET_KEY="$EDGEONE_TENCENTCLOUD_SECRET_KEY"
           node ops/release/edgeone-mode.mjs --mode all-vercel --dry-run >/dev/null
+          node ops/release/edgeone-mode.mjs --mode split --dry-run >/dev/null
 
       - name: Build and stage Vercel production candidate
         if: steps.automation-gate.outputs.enabled == 'true' && steps.build-gate.outputs.deploy == 'true'
@@ -182,6 +185,7 @@ jobs:
           TENCENT_SSH_PRIVATE_KEY: ${{ secrets.TENCENT_SSH_PRIVATE_KEY }}
           TENCENT_SSH_JUMP_PRIVATE_KEY: ${{ secrets.TENCENT_SSH_JUMP_PRIVATE_KEY }}
           TENCENT_SSH_KNOWN_HOSTS: ${{ secrets.TENCENT_SSH_KNOWN_HOSTS }}
+          TENCENT_RELEASE_SIGNING_KEY: ${{ secrets.TENCENT_RELEASE_SIGNING_KEY }}
           EDGEONE_TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_ID }}
           EDGEONE_TENCENTCLOUD_SECRET_KEY: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_KEY }}
           EDGEONE_ZONE_ID: ${{ secrets.EDGEONE_ZONE_ID }}
@@ -198,6 +202,8 @@ jobs:
           route_changed=0
           tencent_activated=0
           remote_root=''
+          remote_archive=''
+          remote_signature=''
           ssh_dir=''
           tmp_root=''
           restore_all_vercel() {
@@ -208,7 +214,7 @@ jobs:
           cleanup_remote_root() {
             if [[ -n "$remote_root" && -n "$ssh_dir" && -f "$ssh_dir/config" ]]; then
               ssh -F "$ssh_dir/config" letletme-tencent \
-                "rm -rf -- '$remote_root'" || true
+                "rm -rf -- '$remote_root' '$remote_archive' '$remote_signature'" || true
             fi
           }
           cleanup_staged_release() {
@@ -243,6 +249,13 @@ jobs:
           printf '%s\n' "$RELEASE_SHA" > "$tmp_root/.letletme-release-sha"
           tar --append --file="$tmp_root/release.tar" -C "$tmp_root" .letletme-release-sha
           gzip -c "$tmp_root/release.tar" > "$tmp_root/release.tar.gz"
+          printf '%s\n' "$TENCENT_RELEASE_SIGNING_KEY" > "$tmp_root/release-signing-key.pem"
+          chmod 0600 "$tmp_root/release-signing-key.pem"
+          openssl pkeyutl -sign -rawin \
+            -inkey "$tmp_root/release-signing-key.pem" \
+            -in "$tmp_root/release.tar.gz" \
+            -out "$tmp_root/release.tar.gz.sig"
+          rm -f -- "$tmp_root/release-signing-key.pem"
 
           ssh_dir="$HOME/.ssh/letletme-release"
           install -d -m 0700 "$ssh_dir"
@@ -278,9 +291,16 @@ jobs:
             "sudo /usr/local/libexec/letletme-release current")"
 
           remote_root="/tmp/letletme-release-$RELEASE_SHA"
-          ssh -F "$ssh_dir/config" letletme-tencent "rm -rf -- '$remote_root' && install -d -m 0750 '$remote_root'"
+          remote_archive="/tmp/letletme-release-$RELEASE_SHA.tar.gz"
+          remote_signature="/tmp/letletme-release-$RELEASE_SHA.sig"
+          ssh -F "$ssh_dir/config" letletme-tencent \
+            "rm -rf -- '$remote_root' '$remote_archive' '$remote_signature' && install -d -m 0750 '$remote_root'"
           cat "$tmp_root/release.tar.gz" |
-            ssh -F "$ssh_dir/config" letletme-tencent "tar -xzf - -C '$remote_root'"
+            ssh -F "$ssh_dir/config" letletme-tencent "install -m 0640 /dev/stdin '$remote_archive'"
+          cat "$tmp_root/release.tar.gz.sig" |
+            ssh -F "$ssh_dir/config" letletme-tencent "install -m 0640 /dev/stdin '$remote_signature'"
+          ssh -F "$ssh_dir/config" letletme-tencent \
+            "tar -xzf '$remote_archive' -C '$remote_root'"
           if [[ "$current_release" == "/opt/letletme/releases/$RELEASE_SHA" ]]; then
             echo "Tencent release $RELEASE_SHA is already active; retrying idempotently."
           else

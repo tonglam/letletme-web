@@ -39,12 +39,32 @@ if ! id deploy >/dev/null 2>&1; then
 	useradd --system --create-home --home-dir /home/deploy --shell /bin/bash deploy
 fi
 install -d -o deploy -g deploy -m 0700 /home/deploy/.ssh
+authorized_keys=/home/deploy/.ssh/authorized_keys
+if [[ -n ${TENCENT_DEPLOY_PUBLIC_KEY:-} ]]; then
+	if [[ ! $TENCENT_DEPLOY_PUBLIC_KEY =~ ^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp[0-9]+)[[:space:]] ]]; then
+		echo "TENCENT_DEPLOY_PUBLIC_KEY is not a supported SSH public key" >&2
+		exit 1
+	fi
+	if [[ -e $authorized_keys && ! -f $authorized_keys ]]; then
+		echo "deploy authorized_keys path is unsafe" >&2
+		exit 1
+	fi
+	if [[ -f $authorized_keys ]] && [[ $(tr -d '\n' < "$authorized_keys") != "$TENCENT_DEPLOY_PUBLIC_KEY" ]]; then
+		echo "deploy authorized_keys already contains a different key" >&2
+		exit 1
+	fi
+	printf '%s\n' "$TENCENT_DEPLOY_PUBLIC_KEY" | install -o deploy -g deploy -m 0600 /dev/stdin "$authorized_keys"
+elif [[ ! -s $authorized_keys ]]; then
+	echo "set TENCENT_DEPLOY_PUBLIC_KEY on the first host install or provision /home/deploy/.ssh/authorized_keys before enabling automation" >&2
+	exit 1
+fi
 
 install -d -o root -g letletme -m 0750 /etc/letletme
 install -d -o root -g root -m 0700 /etc/letletme/tls
 install -d -o root -g root -m 0755 /etc/nginx/snippets
 install -d -o root -g root -m 0755 /usr/local/libexec
 install -d -o root -g root -m 0755 /usr/local/share/letletme/nginx
+install -d -o root -g root -m 0700 /var/lib/letletme
 install -d -o root -g letletme -m 0751 /opt/letletme
 chmod 0751 /opt/letletme
 install -d -o root -g letletme -m 0750 /opt/letletme/releases
