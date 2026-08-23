@@ -209,14 +209,34 @@ test('language switch persists through the next client navigation', async ({
 }) => {
 	await page.goto('/zh-CN?view=compact#language-state')
 
-	await page.locator('summary[aria-label="切换语言"]').click()
+	const disclosure = page.locator(
+		'details[data-locale-picker]:has(summary[aria-label="切换语言"])'
+	)
+	const summary = disclosure.locator(':scope > summary')
+	await summary.click()
+	await disclosure
+		.getByRole('radio', { name: '简体中文', exact: true })
+		.click()
+	await expect(disclosure).not.toHaveAttribute('open', '')
+	await expect(summary).toBeFocused()
+	await summary.click()
 	const english = page.getByRole('radio', { name: 'English', exact: true })
 	await expect(english).toHaveAttribute(
 		'href',
 		/\?view=compact#language-state$/
 	)
+	await page.evaluate(() => {
+		window.history.pushState(null, '', '#updated-language-state')
+		window.dispatchEvent(new PopStateEvent('popstate'))
+	})
+	await expect(english).toHaveAttribute(
+		'href',
+		/\?view=compact#updated-language-state$/
+	)
 	await english.click()
-	await expect(page).toHaveURL(/\/(?:en)?\?view=compact#language-state$/)
+	await expect(page).toHaveURL(
+		/\/(?:en)?\?view=compact#updated-language-state$/
+	)
 	await expect(page.getByRole('heading', { level: 1 })).toContainText(
 		'Every point'
 	)

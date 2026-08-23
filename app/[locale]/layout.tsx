@@ -50,6 +50,7 @@ type LocaleLayoutProps = {
 const shellBootstrapScript = `
 (() => {
 	const disclosureSelector = 'details[data-navigation-disclosure]';
+	const shellRadioGroupSelector = '[data-theme-picker] [role="radiogroup"], [data-locale-picker] [role="radiogroup"]';
 	const themeChoices = new Set(['light', 'dark', 'system']);
 	const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -87,7 +88,7 @@ const shellBootstrapScript = `
 			picker.setAttribute('aria-disabled', 'false');
 		});
 		updateThemeControls(readTheme());
-		document.querySelectorAll('[role="radiogroup"]').forEach((group) => {
+		document.querySelectorAll(shellRadioGroupSelector).forEach((group) => {
 			const choices = Array.from(group.querySelectorAll('[role="radio"]')).filter(
 				(choice) => choice instanceof HTMLElement
 			);
@@ -168,10 +169,12 @@ const shellBootstrapScript = `
 	});
 
 	document.addEventListener('keydown', (event) => {
+		if (event.defaultPrevented) return;
 		const target = event.target;
 		const radio = target instanceof Element ? target.closest('[role="radio"]') : null;
 		const group = radio?.closest('[role="radiogroup"]');
-		if (radio && group && ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft', 'Home', 'End'].includes(event.key)) {
+		const shellPicker = group?.closest('[data-theme-picker], [data-locale-picker]');
+		if (radio && group && shellPicker && ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft', 'Home', 'End'].includes(event.key)) {
 			const choices = Array.from(group.querySelectorAll('[role="radio"]')).filter(
 				(choice) => choice instanceof HTMLElement &&
 					!(choice instanceof HTMLButtonElement && choice.disabled) &&

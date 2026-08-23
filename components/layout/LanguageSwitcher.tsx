@@ -20,8 +20,15 @@ export function LanguageSwitcher() {
 	const currentHref = `${pathname}${search ? `?${search}` : ''}${hash}`
 
 	useEffect(() => {
+		const syncHash = () => setHash(window.location.hash)
 		setIsEnhanced(true)
-		setHash(window.location.hash)
+		syncHash()
+		window.addEventListener('hashchange', syncHash)
+		window.addEventListener('popstate', syncHash)
+		return () => {
+			window.removeEventListener('hashchange', syncHash)
+			window.removeEventListener('popstate', syncHash)
+		}
 	}, [])
 
 	const changeLocale = (
@@ -39,10 +46,16 @@ export function LanguageSwitcher() {
 			return
 		}
 		event.preventDefault()
-		if (isPending || nextLocale === locale) return
+		if (isPending) return
+		const disclosure = event.currentTarget.closest('details')
+		if (nextLocale === locale) {
+			disclosure?.removeAttribute('open')
+			disclosure?.querySelector<HTMLElement>(':scope > summary')?.focus()
+			return
+		}
 
 		setIsPending(true)
-		event.currentTarget.closest('details')?.removeAttribute('open')
+		disclosure?.removeAttribute('open')
 		const browserHref = `${window.location.pathname}${window.location.search}${window.location.hash}`
 		// Use next-intl's locale-aware navigation so it synchronizes NEXT_LOCALE
 		// before Next.js can reuse a cached RSC segment from the previous locale.
@@ -52,6 +65,7 @@ export function LanguageSwitcher() {
 	return (
 		<details
 			data-navigation-disclosure
+			data-locale-picker
 			className="group relative"
 		>
 			<summary

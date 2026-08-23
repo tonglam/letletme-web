@@ -30,7 +30,10 @@ describe('server-first global shell performance boundary', () => {
 		assert.match(languageSwitcher, /<Link[\s\S]*locale="en"/)
 		assert.match(languageSwitcher, /useSearchParams/)
 		assert.match(languageSwitcher, /data-locale-link/)
+		assert.match(languageSwitcher, /hashchange[\s\S]*popstate/)
+		assert.match(languageSwitcher, /nextLocale === locale[\s\S]*removeAttribute\('open'\)/)
 		assert.match(layout, /data-locale-link[\s\S]*window\.location\.hash/)
+		assert.match(layout, /shellRadioGroupSelector[\s\S]*shellPicker/)
 		assert.match(layout, /Escape[\s\S]*closeDisclosures\(undefined, true\)/)
 		assert.match(miniProgram, /left-0[\s\S]*sm:right-0/)
 		for (const source of [
