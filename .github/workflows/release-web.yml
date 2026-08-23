@@ -86,7 +86,7 @@ jobs:
         run: |
           set -euo pipefail
           previous_headers=''
-          if ! previous_headers="$(curl --silent --show-error --max-time 15 -D - -o /dev/null https://vercel-origin.letletme.top/healthz)"; then
+          if ! previous_headers="$(curl --fail --silent --show-error --max-time 15 -D - -o /dev/null https://vercel-origin.letletme.top/healthz)"; then
             echo "current production health is unavailable; fail-open to a full Web build" >&2
             echo "deploy=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -233,9 +233,9 @@ jobs:
             echo "refusing to change EdgeOne routing for stale release: main=$main_sha requested=$RELEASE_SHA" >&2
             exit 1
           }
-          node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null
           route_changed=1
-          candidate_headers="$(curl --silent --show-error --max-time 15 -D - -o /dev/null "https://$CANDIDATE_URL/healthz")"
+          node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null
+          candidate_headers="$(curl --fail --silent --show-error --max-time 15 -D - -o /dev/null "https://$CANDIDATE_URL/healthz")"
           grep -qi "^x-letletme-release: $RELEASE_SHA" <<<"$candidate_headers"
 
           tmp_root="$(mktemp -d)"
@@ -277,7 +277,7 @@ jobs:
             "sudo /usr/local/libexec/letletme-release verify '$RELEASE_SHA'"
 
           npx --yes "vercel@${VERCEL_CLI_VERSION}" promote "$CANDIDATE_URL" --yes
-          production_headers="$(curl --silent --show-error --max-time 15 -D - -o /dev/null https://vercel-origin.letletme.top/healthz)"
+          production_headers="$(curl --fail --silent --show-error --max-time 15 -D - -o /dev/null https://vercel-origin.letletme.top/healthz)"
           grep -qi "^x-letletme-release: $RELEASE_SHA" <<<"$production_headers"
 
           ssh -F "$ssh_dir/config" letletme-tencent \
