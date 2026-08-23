@@ -45,7 +45,10 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
 
 1. Run `ops/tencent/scripts/install-host.sh` once as root. This installs the
    `deploy` account and a sudo allow-list for the release wrapper; it does not
-   grant that account a general root shell.
+   grant that account a general root shell. After changing release tooling,
+   rerun this installer before enabling automation. The workflow checks
+   `sudo /usr/local/libexec/letletme-release version` and refuses to promote
+   Vercel when the installed tooling revision is stale.
 2. Install the host-only files above.
 3. Copy either a clean checkout with usable Git metadata, or a release archive
    containing `.letletme-release-sha`, at the exact release SHA to the host.

@@ -267,12 +267,20 @@ jobs:
           EOF
           chmod 0600 "$ssh_dir/config"
 
+          installed_tooling="$(ssh -F "$ssh_dir/config" letletme-tencent \
+            "sudo /usr/local/libexec/letletme-release version")"
+          [[ "$installed_tooling" == "letletme-release-tooling 20260824-1" ]] || {
+            echo "Tencent release tooling is stale: $installed_tooling" >&2
+            echo "Rerun ops/tencent/scripts/install-host.sh as root before enabling Web automation." >&2
+            exit 1
+          }
+          current_release="$(ssh -F "$ssh_dir/config" letletme-tencent \
+            "sudo /usr/local/libexec/letletme-release current")"
+
           remote_root="/tmp/letletme-release-$RELEASE_SHA"
           ssh -F "$ssh_dir/config" letletme-tencent "rm -rf -- '$remote_root' && install -d -m 0750 '$remote_root'"
           cat "$tmp_root/release.tar.gz" |
             ssh -F "$ssh_dir/config" letletme-tencent "tar -xzf - -C '$remote_root'"
-          current_release="$(ssh -F "$ssh_dir/config" letletme-tencent \
-            "readlink -e /opt/letletme/current 2>/dev/null || true")"
           if [[ "$current_release" == "/opt/letletme/releases/$RELEASE_SHA" ]]; then
             echo "Tencent release $RELEASE_SHA is already active; retrying idempotently."
           else

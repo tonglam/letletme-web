@@ -11,7 +11,24 @@ if [[ $# -lt 1 ]]; then
 fi
 
 script_root=/usr/local/libexec
+tooling_revision=20260824-1
 case $1 in
+version)
+	if [[ $# -ne 1 ]]; then
+		echo "usage: $0 version" >&2
+		exit 1
+	fi
+	echo "letletme-release-tooling $tooling_revision"
+	;;
+current)
+	if [[ $# -ne 1 ]]; then
+		echo "usage: $0 current" >&2
+		exit 1
+	fi
+	if [[ -L /opt/letletme/current ]]; then
+		readlink -e /opt/letletme/current 2>/dev/null || true
+	fi
+	;;
 stage)
 	if [[ $# -ne 3 || ! $2 =~ ^/tmp/letletme-release-[a-f0-9]{40}$ || ! $3 =~ ^[a-f0-9]{40}$ ]]; then
 		echo "usage: $0 stage /tmp/letletme-release-<sha> <40-char-git-sha>" >&2
