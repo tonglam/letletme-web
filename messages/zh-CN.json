@@ -2122,7 +2122,6 @@
 		"officialH2HLiveUnavailable": "官方实时 H2H 尚未开放。",
 		"participantsUnavailable": "参赛成员暂时无法获取；已保存的赛事仍可使用。",
 		"officialH2HRefreshFallback": "刷新失败，当前继续显示上一次保存的官方积分榜和对阵。",
-		"officialH2HMirror": "FPL 官方对战镜像",
 		"officialH2HGameweek": "GW{event} 积分榜与对阵",
 		"officialH2HAwaitingSchedule": "等待 GW1 官方赛程",
 		"officialH2HAwaitingScheduleHelp": "成员名单已就绪；FPL 发布对战赛程后，这里会按官方原始顺序显示全部对阵。",

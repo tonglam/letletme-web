@@ -235,10 +235,7 @@ export function OfficialH2HCompetitionView({
 		>
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<p className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-						{t('officialH2HMirror')}
-					</p>
-					<h2 className="mt-1 font-display text-xl font-bold tracking-tight">
+					<h2 className="font-display text-xl font-bold tracking-tight">
 						{t('officialH2HGameweek', { event: eventId })}
 					</h2>
 				</div>
