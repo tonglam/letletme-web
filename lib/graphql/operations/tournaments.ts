@@ -827,6 +827,11 @@ export interface TournamentLiveCalcData {
 		teamShortName: string
 		teamName: string
 		totalPoints?: number | null
+		minutes?: number | null
+		starts?: boolean | null
+		isGwFinished?: boolean | null
+		isGwStarted?: boolean | null
+		isPlayed?: boolean | null
 	}>
 }
 
@@ -850,14 +855,181 @@ export interface TournamentLivePointsResponse {
 	}
 }
 
+export type EntryLiveCompetitionBoardSort =
+	| 'EVENT_POINTS'
+	| 'NET_EVENT_POINTS'
+	| 'TRANSFER_COST'
+	| 'PLAYED'
+	| 'TOTAL_POINTS'
+	| 'OVERALL_RANK'
+	| 'TEAM_VALUE'
+	| 'RANK'
+	| 'ENTRY_NAME'
+
+export type EntryLiveCompetitionBoardSortDirection = 'ASC' | 'DESC'
+export type EntryLiveCompetitionPickScope = 'ANY' | 'STARTER' | 'BENCH'
+export type EntryLiveCompetitionCaptainMode = 'ANY' | 'CAPTAIN' | 'VICE'
+
+export interface EntryLiveCompetitionOwnershipFilter {
+	playerIds: number[]
+	scope: EntryLiveCompetitionPickScope
+	captainMode: EntryLiveCompetitionCaptainMode
+}
+
+export interface EntryLiveCompetitionTeamCountRule {
+	teamId: number
+	exactCount: number
+	scope: EntryLiveCompetitionPickScope
+}
+
+export interface EntryLiveCompetitionBoardVariables {
+	entryId: number
+	tournamentId: number
+	eventId: number
+	ref?: { season: string; eventId: number; revision: string } | null
+	page?: number
+	pageSize?: number
+	sort?: EntryLiveCompetitionBoardSort
+	direction?: EntryLiveCompetitionBoardSortDirection
+	search?: string | null
+	chips?: string[]
+	captainPlayerIds?: number[]
+	ownership?: EntryLiveCompetitionOwnershipFilter | null
+	teamCountRules?: EntryLiveCompetitionTeamCountRule[]
+	expectedBoardRevision?: string | null
+}
+
+export interface EntryLiveCompetitionBoardRow {
+	entry: number
+	entryName: string
+	playerName: string
+	rank: number
+	overallRank: number
+	teamValue: number
+	chip: string
+	livePoints: number
+	transferCost: number
+	liveNetPoints: number
+	liveTotalPoints: number
+	played: number
+	toPlay: number
+	captainId: number
+	captainName: string
+	captainPoints: number
+	score: NonNullable<TournamentLiveCalcData['score']>
+}
+
+export interface EntryLiveCompetitionBoardPage {
+	season: string
+	eventId: number
+	tournamentId: number
+	boardRevision: string
+	playerRevision: string
+	managerRevision: string | null
+	dataAvailability: string
+	managerDataAvailability: string
+	managerServedFrom: 'REDIS' | 'POSTGRES' | 'MIXED' | 'NONE'
+	managerRefreshQueued: boolean
+	managerCheckedAt: string | null
+	managerNextRefreshAt: string | null
+	officialCoverage: number
+	unavailableEntryIds: number[]
+	failedEntryIds: number[]
+	partial: boolean
+	totalEntries: number
+	filteredEntries: number
+	page: number
+	pageSize: number
+	hasMore: boolean
+	highestEventPoints: number | null
+	averageEventPoints: number | null
+	rows: EntryLiveCompetitionBoardRow[]
+}
+
+export interface EntryLiveCompetitionBoardResponse {
+	entryLiveCompetitionBoard: EntryLiveCompetitionBoardPage
+}
+
+export const GET_ENTRY_LIVE_COMPETITION_BOARD = `
+  query GetEntryLiveCompetitionBoard(
+    $entryId: Int!
+    $tournamentId: Int!
+    $eventId: Int!
+    $ref: LiveRevisionRefInput
+    $page: Int
+    $pageSize: Int
+    $sort: EntryLiveCompetitionBoardSort
+    $direction: EntryLiveCompetitionBoardSortDirection
+    $search: String
+    $chips: [String!]
+    $captainPlayerIds: [Int!]
+    $ownership: EntryLiveCompetitionOwnershipFilterInput
+    $teamCountRules: [EntryLiveCompetitionTeamCountRuleInput!]
+    $expectedBoardRevision: String
+  ) {
+    entryLiveCompetitionBoard(
+      entryId: $entryId
+      tournamentId: $tournamentId
+      eventId: $eventId
+      ref: $ref
+      page: $page
+      pageSize: $pageSize
+      sort: $sort
+      direction: $direction
+      search: $search
+      chips: $chips
+      captainPlayerIds: $captainPlayerIds
+      ownership: $ownership
+      teamCountRules: $teamCountRules
+      expectedBoardRevision: $expectedBoardRevision
+    ) {
+      season eventId tournamentId boardRevision playerRevision managerRevision
+      dataAvailability managerDataAvailability managerServedFrom managerRefreshQueued
+      managerCheckedAt managerNextRefreshAt officialCoverage unavailableEntryIds
+      failedEntryIds partial totalEntries filteredEntries page pageSize hasMore
+      highestEventPoints averageEventPoints
+      rows {
+        entry entryName playerName rank overallRank teamValue chip livePoints
+        transferCost liveNetPoints liveTotalPoints played toPlay captainId
+        captainName captainPoints
+        score {
+          eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
+          transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
+          staleAt nextRefreshAt reconciliation reasonCodes
+        }
+      }
+    }
+  }
+`
+
 export const GET_TOURNAMENT_SELECTION_INDEX = `
   query GetTournamentSelectionIndex($entryId: Int!, $tournamentId: Int!, $ref: LiveRevisionRefInput!) {
     tournamentSelectionIndex(entryId: $entryId, tournamentId: $tournamentId, ref: $ref) {
       tournamentId eventId revision
-      rows { playerId count percentage }
+      rows { playerId playerName teamId teamName teamShortName position count percentage }
     }
   }
 `
+
+export interface TournamentSelectionIndexRow {
+	playerId: number
+	playerName: string
+	teamId: number
+	teamName: string
+	teamShortName: string
+	position: string
+	count: number
+	percentage: number
+}
+
+export interface TournamentSelectionIndexResponse {
+	tournamentSelectionIndex: {
+		tournamentId: number
+		eventId: number
+		revision: string
+		rows: TournamentSelectionIndexRow[]
+	}
+}
 
 export const GET_TOURNAMENT_ENTRY_SQUADS = `
   query GetTournamentEntrySquads($entryId: Int!, $tournamentId: Int!, $comparedEntryIds: [Int!]!, $ref: LiveRevisionRefInput!) {
@@ -870,11 +1042,24 @@ export const GET_TOURNAMENT_ENTRY_SQUADS = `
           transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
           staleAt nextRefreshAt reconciliation reasonCodes
         }
-        pickList { element webName elementTypeName position isCaptain isViceCaptain teamShortName teamName totalPoints }
+        pickList {
+          element webName elementTypeName position multiplier pickActive autoSub
+          isCaptain isViceCaptain teamShortName teamName totalPoints minutes starts
+          isGwFinished isGwStarted isPlayed
+        }
       }
     }
   }
 `
+
+export interface TournamentEntrySquadsResponse {
+	tournamentEntrySquads: {
+		tournamentId: number
+		eventId: number
+		revision: string
+		entries: TournamentLiveCalcData[]
+	}
+}
 
 export const GET_TOURNAMENT_LIVE_PARTICIPANTS = `
   query GetTournamentLiveParticipants($entryId: Int!, $tournamentId: Int!) {

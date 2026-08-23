@@ -1,22 +1,16 @@
 import TournamentClient from '@/app/live/tournaments/TournamentClient'
+import { createHash } from 'node:crypto'
 import { SeasonPhaseState } from '@/components/feedback/SeasonPhaseState'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
-import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import {
-	GET_TOURNAMENT_LIVE_DESK,
-	type TournamentLiveCalcData,
-	type TournamentLivePointsResponse
+	GET_ENTRY_TOURNAMENTS,
+	type EntryTournamentsResponse
 } from '@/lib/graphql/operations/tournaments'
 import { executeServerQuery } from '@/lib/graphql-server'
 import { getLivePageContext } from '@/lib/live-context-server'
-import { liveContextToSnapshot } from '@/lib/live-refresh'
-import { getCurrentEntryId } from '@/lib/session'
+import { getVerifiedEntryContext } from '@/lib/session'
 import { getCurrentSeasonKey } from '@/lib/season'
-import { getTournamentLiveBatchSeed } from '@/lib/tournament/liveEntries'
-import { loadTournamentLiveDeskWithRevisionRecovery } from '@/lib/tournament/liveDesk'
-import { areTournamentStandingsReady } from '@/lib/tournament/lifecycle'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
-import { getTranslations } from 'next-intl/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,16 +31,17 @@ type PageProps = {
 
 export default async function Page({ params, searchParams }: PageProps) {
 	await getPageLocale(params)
-	const liveT = await getTranslations('LiveTournament')
 	const resolvedSearchParams = await searchParams
 
 	// Public lifecycle context and the fresh entry authorization hint are
-	// independent. Resolve them together so the desk is the only personalized
-	// live query on the initial render.
-	const [{ presentation, liveContext }, entryId] = await Promise.all([
+	// independent. Resolve them together; the initial render fetches only the
+	// lightweight tournament list, while the browser can paint strict last-good
+	// board data before starting the paginated board request.
+	const [{ presentation, liveContext }, verified] = await Promise.all([
 		getLivePageContext(),
-		getCurrentEntryId()
+		getVerifiedEntryContext()
 	])
+	const entryId = verified.entryId
 	if (
 		presentation.phase === 'PRESEASON' ||
 		liveContext?.windowState === 'PRESEASON' ||
@@ -78,11 +73,19 @@ export default async function Page({ params, searchParams }: PageProps) {
 		typeof mapEntryTournamentToLiveTournament
 	>[] = []
 	let initialSelectedTournamentId = ''
-	let initialCurrentRows: TournamentLiveCalcData[] = []
-	let initialResultsLoaded = false
-	let initialResultsError: string | null = null
-	let initialSnapshot: LiveSnapshotStatus | null = null
-	let initialOfficialCoverage = 0
+	const season = liveContext?.season || String(getCurrentSeasonKey())
+	const sessionIdentity = verified.session as unknown as {
+		user?: { id?: string }
+		session?: { id?: string }
+	} | null
+	const sessionCacheKey = entryId
+		? createHash('sha256')
+				.update(
+					`${sessionIdentity?.user?.id ?? 'handoff'}:${sessionIdentity?.session?.id ?? 'session'}:${entryId}`
+				)
+				.digest('hex')
+				.slice(0, 24)
+		: ''
 
 	if (entryId) {
 		try {
@@ -91,58 +94,30 @@ export default async function Page({ params, searchParams }: PageProps) {
 					? resolvedSearchParams.tournamentId
 					: ''
 			const requestedTournamentIdNumber = Number(requestedTournamentId)
-			const context = liveContext
-			const ref =
-				context?.revision && context.anchorEventId
-					? {
-							season: context.season || String(getCurrentSeasonKey()),
-							eventId: context.anchorEventId,
-							revision: context.revision
-						}
-					: null
-			const selectedTournamentId =
+			const selectedTournamentIdFromUrl =
 				requestedTournamentId &&
 				Number.isSafeInteger(requestedTournamentIdNumber) &&
 				requestedTournamentIdNumber > 0
 					? requestedTournamentIdNumber
 					: null
-			const desk = await loadTournamentLiveDeskWithRevisionRecovery(
-				(liveRef, recoveryOptions) =>
-					executeServerQuery<TournamentLivePointsResponse>(
-						GET_TOURNAMENT_LIVE_DESK,
-						{ entryId, selectedTournamentId, ref: liveRef },
-						{ cache: 'no-store', ...recoveryOptions }
-					),
-				ref
+<<<<<<< HEAD
+			const tournamentData = await executeServerQuery<EntryTournamentsResponse>(
+				GET_ENTRY_TOURNAMENTS,
+				{ entryId },
+				{ cache: 'no-store' }
 			)
-			initialTournaments = desk.entryLiveCompetitionsDesk.tournaments.map(
+			initialTournaments = tournamentData.entryTournaments.map(
 				mapEntryTournamentToLiveTournament
 			)
 			initialSelectedTournamentId =
-				desk.entryLiveCompetitionsDesk.selectedTournamentId?.toString() ??
-				initialTournaments[0]?.id ??
-				''
-			const selectedTournament = initialTournaments.find(
-				tournament => tournament.id === initialSelectedTournamentId
-			)
-			if (
-				selectedTournament &&
-				areTournamentStandingsReady(selectedTournament)
-			) {
-				const seed = getTournamentLiveBatchSeed(desk)
-				initialCurrentRows = seed.rows
-				initialOfficialCoverage = seed.officialCoverage
-				initialSnapshot = liveContextToSnapshot(liveContext) ?? seed.snapshot
-				if (seed.failedCount > 0) {
-					initialResultsError = liveT('partialResults', {
-						failed: seed.failedCount,
-						total: seed.totalEntries
-					})
-				}
-			}
-			initialResultsLoaded = true
+				(selectedTournamentIdFromUrl &&
+				initialTournaments.some(
+					tournament => tournament.id === String(selectedTournamentIdFromUrl)
+				)
+					? String(selectedTournamentIdFromUrl)
+					: initialTournaments[0]?.id) ?? ''
 		} catch (err) {
-			console.error('Failed to seed live tournament page:', err)
+			console.error('Failed to seed live tournament list:', err)
 		}
 	}
 
@@ -152,11 +127,11 @@ export default async function Page({ params, searchParams }: PageProps) {
 			initialTournaments={initialTournaments}
 			initialSelectedTournamentId={initialSelectedTournamentId}
 			initialEventId={currentEventId}
-			initialCurrentRows={initialCurrentRows}
-			initialResultsLoaded={initialResultsLoaded}
-			initialResultsError={initialResultsError}
-			initialSnapshot={initialSnapshot}
-			initialOfficialCoverage={initialOfficialCoverage}
+			initialBoardPage={null}
+			initialResultsLoaded={false}
+			initialResultsError={null}
+			season={season}
+			sessionCacheKey={sessionCacheKey}
 		/>
 	)
 }

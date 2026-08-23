@@ -2,6 +2,7 @@ import { createAuthClient } from 'better-auth/react'
 import { inferAdditionalFields } from 'better-auth/client/plugins'
 
 import { clearPendingClientQueries } from '@/lib/graphql-client'
+import { clearAllLiveBoardLastGood } from '@/lib/tournament/live-board'
 
 /**
  * Client-side field mirror of lib/auth.ts user.additionalFields.
@@ -52,12 +53,16 @@ const {
 
 export async function signOut(...args: Parameters<typeof rawSignOut>) {
 	const result = await rawSignOut(...args)
-	if (!result.error) clearPendingClientQueries()
+	if (!result.error) {
+		clearPendingClientQueries()
+		clearAllLiveBoardLastGood()
+	}
 	return result
 }
 
 export function clearAuthClientState() {
 	clearPendingClientQueries()
+	clearAllLiveBoardLastGood()
 }
 
 export { signIn, signUp, useSession, getSession }

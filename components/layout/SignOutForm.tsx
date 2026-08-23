@@ -2,6 +2,7 @@
 
 import { LogOut } from 'lucide-react'
 import { useState } from 'react'
+import { clearAllLiveBoardLastGood } from '@/lib/tournament/live-board'
 
 export function SignOutForm({
 	label,
@@ -31,6 +32,7 @@ export function SignOutForm({
 						headers: { Accept: 'application/json' }
 					})
 					if (!response.ok) throw new Error('Sign out failed')
+					clearAllLiveBoardLastGood()
 					window.location.assign(redirectHref)
 				} catch {
 					setError(true)
