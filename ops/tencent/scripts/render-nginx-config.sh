@@ -12,13 +12,19 @@ fi
 
 release_sha=$1
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-template=$(cd -- "$script_dir/../nginx" && pwd)/letletme-origin-auth.conf.template
+template=/usr/local/share/letletme/nginx/letletme-origin-auth.conf.template
+if [[ ! -f $template ]]; then
+	template=$(cd -- "$script_dir/../nginx" && pwd)/letletme-origin-auth.conf.template
+fi
 static_dir=/opt/letletme/static-releases/$release_sha
 if [[ -L $static_dir || ! -d $static_dir ]]; then
 	echo "missing static release directory: $static_dir" >&2
 	exit 1
 fi
-site_template=$(cd -- "$script_dir/../nginx" && pwd)/letletme.conf
+site_template=/usr/local/share/letletme/nginx/letletme.conf
+if [[ ! -f $site_template ]]; then
+	site_template=$(cd -- "$script_dir/../nginx" && pwd)/letletme.conf
+fi
 if [[ ! -f $site_template ]]; then
 	echo "missing Nginx site template: $site_template" >&2
 	exit 1

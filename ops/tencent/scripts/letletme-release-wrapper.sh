@@ -6,7 +6,7 @@ if [[ $EUID -ne 0 ]]; then
 	exit 1
 fi
 if [[ $# -lt 1 ]]; then
-	echo "usage: $0 <stage|activate|rollback> ..." >&2
+	echo "usage: $0 <stage|verify|cleanup|activate|rollback> ..." >&2
 	exit 1
 fi
 
@@ -28,6 +28,20 @@ stage)
 		exit 1
 	fi
 	exec "$script_root/letletme-deploy-release.sh" "$2" "$3" stage
+	;;
+verify)
+	if [[ $# -ne 2 || ! $2 =~ ^[a-f0-9]{40}$ ]]; then
+		echo "usage: $0 verify <40-char-git-sha>" >&2
+		exit 1
+	fi
+	exec "$script_root/letletme-verify-staged-release.sh" "$2"
+	;;
+cleanup)
+	if [[ $# -ne 2 || ! $2 =~ ^[a-f0-9]{40}$ ]]; then
+		echo "usage: $0 cleanup <40-char-git-sha>" >&2
+		exit 1
+	fi
+	exec "$script_root/letletme-cleanup-release.sh" "$2"
 	;;
 activate)
 	if [[ $# -ne 2 || ! $2 =~ ^[a-f0-9]{40}$ ]]; then

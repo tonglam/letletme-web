@@ -129,3 +129,37 @@ fi
 succeeded=1
 echo "activated release $release_sha"
 if [[ -n $old_current ]]; then echo "rollback release retained at $old_current"; fi
+
+prune_expired_releases() {
+	local now candidate candidate_sha candidate_mtime
+	local release_retention_seconds=$((24 * 60 * 60))
+	now=$(date +%s)
+	for candidate in /opt/letletme/releases/*; do
+		if [[ ! -d $candidate || -L $candidate ]]; then
+			continue
+		fi
+		candidate_sha=$(basename "$candidate")
+		if [[ ! $candidate_sha =~ ^[a-f0-9]{40}$ ]]; then
+			continue
+		fi
+		if [[ $candidate == "$release_dir" || $candidate == "$old_current" ]]; then
+			continue
+		fi
+		candidate_mtime=$(stat -c '%Y' "$candidate")
+		if (( now < candidate_mtime + release_retention_seconds )); then
+			continue
+		fi
+		echo "pruning expired release $candidate"
+		rm -rf -- "$candidate" || return 1
+		if [[ -d /opt/letletme/static-releases/$candidate_sha && ! -L /opt/letletme/static-releases/$candidate_sha ]]; then
+			rm -rf -- "/opt/letletme/static-releases/$candidate_sha" || return 1
+		fi
+		if [[ -d /var/cache/letletme-next/$candidate_sha && ! -L /var/cache/letletme-next/$candidate_sha ]]; then
+			rm -rf -- "/var/cache/letletme-next/$candidate_sha" || return 1
+		fi
+	done
+}
+
+if ! prune_expired_releases; then
+	echo "warning: release retention cleanup failed; active release remains deployed" >&2
+fi

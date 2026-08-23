@@ -25,6 +25,7 @@ static_release_dir=$static_root/$release_sha
 build_root=/opt/letletme/builds
 build_dir=$build_root/$release_sha
 current_link=/opt/letletme/current
+previous_link=/opt/letletme/previous
 exec 9>/run/lock/letletme-web-deploy.lock
 if ! flock -n 9; then
 	echo "another Web release is already being deployed" >&2
@@ -34,7 +35,7 @@ previous_release=''
 if [[ -L $current_link ]]; then
 	previous_release=$(readlink -e "$current_link" 2>/dev/null || true)
 fi
-previous_link=/opt/letletme/previous
+old_previous_release=$(readlink -e "$previous_link" 2>/dev/null || true)
 activation_started=0
 deployment_succeeded=0
 rollback_in_progress=0
@@ -164,6 +165,14 @@ rollback_activation() {
 			install -o root -g root -m 0644 /dev/stdin /etc/letletme/release.env || true
 		systemctl stop letletme-web.service || true
 		rm -f -- /etc/nginx/conf.d/letletme-origin-auth.conf
+	fi
+	if [[ -n $old_previous_release && -d $old_previous_release ]]; then
+		previous_rollback_link=$previous_link.rollback
+		rm -f -- "$previous_rollback_link"
+		ln -s "$old_previous_release" "$previous_rollback_link" || true
+		mv -Tf "$previous_rollback_link" "$previous_link" || true
+	else
+		rm -f -- "$previous_link"
 	fi
 }
 

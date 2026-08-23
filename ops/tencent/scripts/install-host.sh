@@ -44,6 +44,7 @@ install -d -o root -g letletme -m 0750 /etc/letletme
 install -d -o root -g root -m 0700 /etc/letletme/tls
 install -d -o root -g root -m 0755 /etc/nginx/snippets
 install -d -o root -g root -m 0755 /usr/local/libexec
+install -d -o root -g root -m 0755 /usr/local/share/letletme/nginx
 install -d -o root -g letletme -m 0751 /opt/letletme
 chmod 0751 /opt/letletme
 install -d -o root -g letletme -m 0750 /opt/letletme/releases
@@ -60,6 +61,12 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
 	"$ops_dir/nginx/letletme.conf" \
 	/etc/nginx/sites-available/letletme
+install -o root -g root -m 0644 \
+	"$ops_dir/nginx/letletme.conf" \
+	/usr/local/share/letletme/nginx/letletme.conf
+install -o root -g root -m 0644 \
+	"$ops_dir/nginx/letletme-origin-auth.conf.template" \
+	/usr/local/share/letletme/nginx/letletme-origin-auth.conf.template
 install -o root -g www-data -m 0640 /dev/null \
 	/etc/nginx/snippets/letletme-static-try-files.conf
 ln -sfn /etc/nginx/sites-available/letletme /etc/nginx/sites-enabled/letletme
@@ -73,6 +80,10 @@ install -o root -g root -m 0750 \
 	"$script_dir/rollback-release.sh" /usr/local/libexec/letletme-rollback-release.sh
 install -o root -g root -m 0750 \
 	"$script_dir/render-nginx-config.sh" /usr/local/libexec/render-nginx-config.sh
+install -o root -g root -m 0750 \
+	"$script_dir/verify-staged-release.sh" /usr/local/libexec/letletme-verify-staged-release.sh
+install -o root -g root -m 0750 \
+	"$script_dir/cleanup-release.sh" /usr/local/libexec/letletme-cleanup-release.sh
 install -o root -g root -m 0755 \
 	"$script_dir/letletme-release-wrapper.sh" /usr/local/libexec/letletme-release
 install -o root -g root -m 0440 /dev/stdin /etc/sudoers.d/letletme-release <<'EOF'
