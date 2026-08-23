@@ -5,6 +5,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { after } from 'next/server'
 
 import { instrumentAuthDatabaseAdapter } from '@/lib/auth-database-timing'
+import { logSafeAuthDiagnostic } from '@/lib/auth-safe-log'
 import { db } from '@/lib/db'
 import * as authSchema from '@/lib/db/schema/auth'
 import { sendPasswordResetEmail, sendVerificationEmail } from '@/lib/mailer'
@@ -127,6 +128,17 @@ export const authConfig = {
 	},
 	rateLimit: {
 		enabled: false
+	},
+	logger: {
+		level: 'warn' as const,
+		disableColors: true,
+		log: (
+			level: 'debug' | 'info' | 'warn' | 'error',
+			message: string,
+			...args: unknown[]
+		) => {
+			logSafeAuthDiagnostic(level, 'better-auth diagnostic', message, ...args)
+		}
 	},
 	trustedOrigins: trustedAuthOrigins(baseURL),
 	user: {
