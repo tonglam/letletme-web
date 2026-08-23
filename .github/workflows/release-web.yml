@@ -271,8 +271,14 @@ jobs:
           ssh -F "$ssh_dir/config" letletme-tencent "rm -rf -- '$remote_root' && install -d -m 0750 '$remote_root'"
           cat "$tmp_root/release.tar.gz" |
             ssh -F "$ssh_dir/config" letletme-tencent "tar -xzf - -C '$remote_root'"
-          ssh -F "$ssh_dir/config" letletme-tencent \
-            "sudo /usr/local/libexec/letletme-release stage '$remote_root' '$RELEASE_SHA'"
+          current_release="$(ssh -F "$ssh_dir/config" letletme-tencent \
+            "readlink -e /opt/letletme/current 2>/dev/null || true")"
+          if [[ "$current_release" == "/opt/letletme/releases/$RELEASE_SHA" ]]; then
+            echo "Tencent release $RELEASE_SHA is already active; retrying idempotently."
+          else
+            ssh -F "$ssh_dir/config" letletme-tencent \
+              "sudo /usr/local/libexec/letletme-release stage '$remote_root' '$RELEASE_SHA'"
+          fi
           ssh -F "$ssh_dir/config" letletme-tencent \
             "sudo /usr/local/libexec/letletme-release verify '$RELEASE_SHA'"
 

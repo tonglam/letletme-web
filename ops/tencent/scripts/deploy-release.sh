@@ -251,6 +251,18 @@ rsync -a "$build_dir/.next/static/" "$stage_dir/.next/static/"
 if [[ -d $build_dir/public ]]; then
 	rsync -a "$build_dir/public/" "$stage_dir/public/"
 fi
+template_dir=$source_dir/ops/tencent/nginx
+for template_name in letletme.conf letletme-origin-auth.conf.template; do
+	if [[ ! -f $template_dir/$template_name ]]; then
+		echo "missing release Nginx template: $template_dir/$template_name" >&2
+		exit 1
+	fi
+done
+install -d -m 0750 "$stage_dir/ops/tencent/nginx"
+install -o root -g root -m 0644 "$template_dir/letletme.conf" \
+	"$stage_dir/ops/tencent/nginx/letletme.conf"
+install -o root -g root -m 0644 "$template_dir/letletme-origin-auth.conf.template" \
+	"$stage_dir/ops/tencent/nginx/letletme-origin-auth.conf.template"
 find "$stage_dir" -maxdepth 1 -type f -name '.env*' -delete
 
 if [[ -L $cache_parent || ! -d $cache_parent ]]; then
