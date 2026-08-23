@@ -100,7 +100,6 @@ export default async function Page({ params, searchParams }: PageProps) {
 				requestedTournamentIdNumber > 0
 					? requestedTournamentIdNumber
 					: null
-<<<<<<< HEAD
 			const tournamentData = await executeServerQuery<EntryTournamentsResponse>(
 				GET_ENTRY_TOURNAMENTS,
 				{ entryId },

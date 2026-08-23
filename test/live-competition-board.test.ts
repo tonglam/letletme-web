@@ -8,10 +8,13 @@ import {
 	LiveBoardRequestError,
 	fetchEntryLiveCompetitionBoard,
 	isCurrentLiveBoardRequest,
+	isLiveBoardRevisionGoneCode,
 	liveBoardLastGoodKey,
 	parseEntryLiveCompetitionBoardPage,
 	readLiveBoardLastGood,
 	resolveAnchoredGameweek,
+	shouldAutoRefreshLiveBoardPage,
+	shouldSyncLiveBoardSearchInput,
 	writeLiveBoardLastGood
 } from '@/lib/tournament/live-board'
 
@@ -203,6 +206,24 @@ describe('live competition board request coordination', () => {
 		assert.equal(isCurrentLiveBoardRequest(4, 5, '99:1', '99:1'), false)
 		assert.equal(isCurrentLiveBoardRequest(5, 5, '99:1', '99:2'), false)
 		assert.equal(isCurrentLiveBoardRequest(5, 5, '99:1', '99:1'), true)
+	})
+
+	it('stops automatic page-one replacement after more rows have been loaded', () => {
+		assert.equal(shouldAutoRefreshLiveBoardPage(1), true)
+		assert.equal(shouldAutoRefreshLiveBoardPage(2), false)
+		assert.equal(shouldAutoRefreshLiveBoardPage(5), false)
+		assert.equal(shouldAutoRefreshLiveBoardPage(null), false)
+	})
+
+	it('only synchronizes the search box while the triggering input is unchanged', () => {
+		assert.equal(shouldSyncLiveBoardSearchInput('abc', 'abc'), true)
+		assert.equal(shouldSyncLiveBoardSearchInput('abc', 'abcd'), false)
+	})
+
+	it('recognizes both current and legacy revision-expiry codes', () => {
+		assert.equal(isLiveBoardRevisionGoneCode('LIVE_BOARD_REVISION_GONE'), true)
+		assert.equal(isLiveBoardRevisionGoneCode('LIVE_REVISION_GONE'), true)
+		assert.equal(isLiveBoardRevisionGoneCode('LIVE_BOARD_UNAVAILABLE'), false)
 	})
 
 	it('follows the live anchor until a future URL gameweek becomes selectable', () => {
