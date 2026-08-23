@@ -26,6 +26,37 @@ describe('theme bootstrap', () => {
 	})
 })
 
+describe('live tournament filter visibility', () => {
+	it('keeps both advanced filters recoverable after dismissal', async () => {
+		const [clientSource, ownershipSource, exposureSource] = await Promise.all([
+			readFile(
+				new URL('../app/live/tournaments/TournamentClient.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../components/player/PlayerOwnershipFilter.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../components/player/TeamExposureFilter.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		assert.match(clientSource, /setShowOwnershipFilter\(true\)/)
+		assert.match(clientSource, /setShowTeamExposureFilter\(true\)/)
+		assert.match(clientSource, /filtersT\('showFilter'/)
+		assert.match(ownershipSource, /t\("hideFilter"/)
+		assert.match(exposureSource, /t\('hideFilter'/)
+	})
+})
+
 describe('asynchronous selection safety', () => {
 	it('keeps the committed gameweek during desk loads and ignores superseded requests', async () => {
 		const [gameweekSource, playerSource] = await Promise.all([

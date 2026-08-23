@@ -1215,6 +1215,8 @@
 		"ownershipScope": "Player ownership squad scope",
 		"captaincyFilter": "Player captaincy filter",
 		"addPlayer": "Add player",
+		"hideFilter": "Hide {name}",
+		"showFilter": "Show {name}",
 		"removePlayer": "Remove {name}",
 		"clearAll": "Clear all",
 		"noOwnershipFilter": "No player ownership filter active.",
