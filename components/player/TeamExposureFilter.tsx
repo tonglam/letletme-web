@@ -176,8 +176,8 @@ export function TeamExposureFilter({
 								variant="ghost"
 								size="icon"
 								className="size-8 shrink-0"
-								aria-label={t('removeTeam')}
-								title={t('removeTeam')}
+								aria-label={t('hideFilter', { name: t('teamExposure') })}
+								title={t('hideFilter', { name: t('teamExposure') })}
 								onClick={onDismiss}
 							>
 								<X className="h-4 w-4" />

@@ -1,4 +1,5 @@
 import type { AppLocale } from '@/i18n/routing'
+import { AUTH_EMAIL_VERIFICATION_POLICY } from '@/lib/auth-policy'
 
 export type TransactionalEmail = {
 	subject: string
@@ -228,8 +229,8 @@ export function buildVerificationEmail({
 				: 'Button not working? Copy and paste this secure link into your browser:',
 		},
 		noticeTitle: chinese
-			? '链接将在 24 小时后过期'
-			: 'This link expires in 24 hours',
+			? `链接将在 ${AUTH_EMAIL_VERIFICATION_POLICY.expiresInHours} 小时后过期`
+			: `This link expires in ${AUTH_EMAIL_VERIFICATION_POLICY.expiresInHours} hours`,
 		noticeBody: chinese
 			? '为保障账户安全，验证链接仅可使用一次。'
 			: 'For your security, the verification link can only be used once.',

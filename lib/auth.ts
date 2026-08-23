@@ -11,6 +11,7 @@ import { sendPasswordResetEmail, sendVerificationEmail } from '@/lib/mailer'
 import { getRequestLocale } from '@/i18n/request-locale'
 import {
 	AUTH_COOKIE_PREFIX,
+	AUTH_EMAIL_VERIFICATION_POLICY,
 	AUTH_PASSWORD_POLICY,
 	AUTH_SESSION_POLICY,
 	AUTH_TRUSTED_PROVIDERS
@@ -87,6 +88,7 @@ export const authConfig = {
 				locale: getRequestLocale(request)
 			})
 		},
+		expiresIn: AUTH_EMAIL_VERIFICATION_POLICY.expiresIn,
 		autoSignInAfterVerification: true,
 		sendOnSignIn: true,
 		sendOnSignUp: true

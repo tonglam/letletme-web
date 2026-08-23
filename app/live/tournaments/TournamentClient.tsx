@@ -55,7 +55,7 @@ import {
 } from '@/lib/tournament/live-selection'
 import { Tournament, type TournamentEntry } from '@/types/tournament'
 import { Link, useRouter } from '@/i18n/navigation'
-import { RefreshCw } from 'lucide-react'
+import { Eye, RefreshCw } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -178,6 +178,7 @@ export default function TournamentClient({
 	const t = useTranslations('LiveTournament')
 	const scoreT = useTranslations('LivePoints')
 	const lifecycleT = useTranslations('TournamentLifecycle')
+	const filtersT = useTranslations('Filters')
 	const isPageActive = usePageActive()
 	const router = useRouter()
 	const searchParams = useSearchParams()
@@ -829,6 +830,14 @@ export default function TournamentClient({
 		setShowTeamExposureFilter(false)
 	}, [])
 
+	const restoreOwnershipFilter = useCallback(() => {
+		setShowOwnershipFilter(true)
+	}, [])
+
+	const restoreTeamExposureFilter = useCallback(() => {
+		setShowTeamExposureFilter(true)
+	}, [])
+
 	const handleTableEntriesForShareChange = useCallback(
 		(entries: TournamentEntry[]) => {
 			setTableEntriesForShare(entries)
@@ -1157,35 +1166,68 @@ export default function TournamentClient({
 									onCaptainFilterChange={setCaptainFilter}
 								/>
 
-								{showOwnershipFilter || showTeamExposureFilter ? (
-								<MobileCollapsibleFilters
-									activeCount={
-										(ownershipMatchedEntryIds ? 1 : 0) +
-										(teamExposureMatchedEntryIds ? 1 : 0)
-									}
-								>
-									{showOwnershipFilter ? (
-									<PlayerOwnershipFilter
-										key={`${selectedTournament.id}-${displayGameweek}`}
-										entries={selectedEntries}
-										onMatchedEntryIdsChange={
-											handleOwnershipMatchedEntryIdsChange
-										}
-										onDismiss={dismissOwnershipFilter}
-									/>
-									) : null}
+								{!showOwnershipFilter || !showTeamExposureFilter ? (
+									<div className="mb-3 flex flex-wrap items-center gap-2">
+										{!showOwnershipFilter ? (
+											<Button
+												type="button"
+												variant="outline"
+												size="sm"
+												className="gap-1.5"
+												onClick={restoreOwnershipFilter}
+											>
+												<Eye className="size-4" aria-hidden="true" />
+												{filtersT('showFilter', {
+													name: filtersT('playerOwnership')
+												})}
+											</Button>
+										) : null}
+										{!showTeamExposureFilter ? (
+											<Button
+												type="button"
+												variant="outline"
+												size="sm"
+												className="gap-1.5"
+												onClick={restoreTeamExposureFilter}
+											>
+												<Eye className="size-4" aria-hidden="true" />
+												{filtersT('showFilter', {
+													name: filtersT('teamExposure')
+												})}
+											</Button>
+										) : null}
+									</div>
+								) : null}
 
-									{showTeamExposureFilter ? (
-									<TeamExposureFilter
-										key={`team-${selectedTournament.id}-${displayGameweek}`}
-										entries={selectedEntries}
-										onMatchedEntryIdsChange={
-											handleTeamExposureMatchedEntryIdsChange
+								{showOwnershipFilter || showTeamExposureFilter ? (
+									<MobileCollapsibleFilters
+										activeCount={
+											(ownershipMatchedEntryIds ? 1 : 0) +
+											(teamExposureMatchedEntryIds ? 1 : 0)
 										}
-										onDismiss={dismissTeamExposureFilter}
-									/>
-									) : null}
-								</MobileCollapsibleFilters>
+									>
+										{showOwnershipFilter ? (
+											<PlayerOwnershipFilter
+												key={`${selectedTournament.id}-${displayGameweek}`}
+												entries={selectedEntries}
+												onMatchedEntryIdsChange={
+													handleOwnershipMatchedEntryIdsChange
+												}
+												onDismiss={dismissOwnershipFilter}
+											/>
+										) : null}
+
+										{showTeamExposureFilter ? (
+											<TeamExposureFilter
+												key={`team-${selectedTournament.id}-${displayGameweek}`}
+												entries={selectedEntries}
+												onMatchedEntryIdsChange={
+													handleTeamExposureMatchedEntryIdsChange
+												}
+												onDismiss={dismissTeamExposureFilter}
+											/>
+										) : null}
+									</MobileCollapsibleFilters>
 								) : null}
 
 								<TournamentTable

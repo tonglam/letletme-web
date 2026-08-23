@@ -11,6 +11,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import {
 	AUTH_COOKIE_PREFIX,
+	AUTH_EMAIL_VERIFICATION_POLICY,
 	AUTH_PASSWORD_POLICY,
 	AUTH_SESSION_POLICY,
 	AUTH_TRUSTED_PROVIDERS
@@ -77,6 +78,24 @@ describe('session configuration', () => {
 				new Headers({ cookie: 'unrelated.session_token=value' })
 			),
 			false
+		)
+	})
+})
+
+describe('email verification policy', () => {
+	it('keeps verification links valid for the promised 24 hours', async () => {
+		assert.equal(AUTH_EMAIL_VERIFICATION_POLICY.expiresIn, 60 * 60 * 24)
+		assert.equal(
+			AUTH_EMAIL_VERIFICATION_POLICY.expiresInHours,
+			AUTH_EMAIL_VERIFICATION_POLICY.expiresIn / (60 * 60)
+		)
+		const source = await readFile(
+			new URL('../../lib/auth.ts', import.meta.url),
+			'utf8'
+		)
+		assert.match(
+			source,
+			/expiresIn: AUTH_EMAIL_VERIFICATION_POLICY\.expiresIn/
 		)
 	})
 })

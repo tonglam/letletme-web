@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
+import { AUTH_EMAIL_VERIFICATION_POLICY } from '@/lib/auth-policy'
 import {
 	buildMiniProgramEmailCode,
 	buildPasswordResetEmail,
@@ -26,7 +27,12 @@ describe('transactional email templates', () => {
 		assert.match(message.html, /One click\. You&#39;re in\./)
 		assert.match(message.html, />Verify email &nbsp;&rarr;<\/a>/)
 		assert.match(message.html, /FPL decision desk/)
-		assert.match(message.html, /This link expires in 24 hours/)
+		assert.match(
+			message.html,
+			new RegExp(
+				`This link expires in ${AUTH_EMAIL_VERIFICATION_POLICY.expiresInHours} hours`
+			)
+		)
 		assert.match(message.html, /token=abc&amp;callbackURL=/)
 		assert.doesNotMatch(message.html, /token=abc&callbackURL=/)
 		assert.match(message.text, new RegExp(escapeRegExp(verifyUrl)))
@@ -42,7 +48,12 @@ describe('transactional email templates', () => {
 		assert.match(message.html, /<html lang="zh-CN">/)
 		assert.match(message.html, /一步完成验证/)
 		assert.match(message.html, />验证邮箱 &nbsp;&rarr;<\/a>/)
-		assert.match(message.text, /链接将在 24 小时后过期/)
+		assert.match(
+			message.text,
+			new RegExp(
+				`链接将在 ${AUTH_EMAIL_VERIFICATION_POLICY.expiresInHours} 小时后过期`
+			)
+		)
 	})
 
 	it('renders the password reset expiry and action distinctly', () => {
