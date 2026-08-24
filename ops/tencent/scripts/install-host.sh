@@ -62,7 +62,10 @@ else
 	mkdir --mode=0700 -- "$deploy_ssh_dir"
 fi
 chown --no-dereference "$deploy_uid:$deploy_gid" "$deploy_ssh_dir"
-chmod --no-dereference 0700 "$deploy_ssh_dir"
+if [[ $(stat -c '%u:%g:%a' "$deploy_ssh_dir") != "$deploy_uid:$deploy_gid:700" ]]; then
+	echo "deploy SSH directory must be owned by deploy with mode 0700: $deploy_ssh_dir" >&2
+	exit 1
+fi
 authorized_keys=$deploy_ssh_dir/authorized_keys
 if [[ -L $authorized_keys || -e $authorized_keys && ! -f $authorized_keys ]]; then
 	echo "deploy authorized_keys path is unsafe" >&2
@@ -91,9 +94,15 @@ if [[ -n ${TENCENT_DEPLOY_PUBLIC_KEY:-} ]]; then
 		exit 1
 	fi
 	chown --no-dereference "$deploy_uid:$deploy_gid" "$authorized_keys"
-	chmod --no-dereference 0600 "$authorized_keys"
+	if [[ $(stat -c '%u:%g:%a' "$authorized_keys") != "$deploy_uid:$deploy_gid:600" ]]; then
+		echo "deploy authorized_keys must be owned by deploy with mode 0600" >&2
+		exit 1
+	fi
 elif [[ ! -s $authorized_keys ]]; then
 	echo "set TENCENT_DEPLOY_PUBLIC_KEY on the first host install or provision /home/deploy/.ssh/authorized_keys before enabling automation" >&2
+	exit 1
+elif [[ $(stat -c '%u:%g:%a' "$authorized_keys") != "$deploy_uid:$deploy_gid:600" ]]; then
+	echo "deploy authorized_keys must be owned by deploy with mode 0600" >&2
 	exit 1
 fi
 
