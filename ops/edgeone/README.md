@@ -50,6 +50,13 @@ architecture below adds Tencent's `106.52.109.82` only for mainland safe reads.
 It is not a public Web origin until the filing, TLS, same-SHA, security, and
 performance gates have passed.
 
+The DNSPod fallback implementation is a separate control-plane change and is
+not installed or enabled by this Web release PR. Until the watchdog source and
+deployed Worker have been verified to call DNSPod `ModifyRecordStatus`, keep
+`WATCHDOG_ENABLED=false`; the documented enablement sequence below is
+conditional on that separate implementation being merged, tested, and
+deployed.
+
 ## Gates before public cutover
 
 Do not enable any paid feature, add-on, automatic renewal, apex DNS change, or
@@ -130,11 +137,14 @@ Cloudflare fallback path.
    and SNI contract, and the exact release SHA; do not substitute the current
    Vercel-only canary as evidence for the Tencent path.
 5. Configure the client-IP feature to write the custom header
-   `X-Letletme-Proxy-Client-IP`. Add an origin-request header rule that removes
-   client-provided `X-Letletme-Origin-Token` and `X-Letletme-Client-IP`, then
-   injects `X-Letletme-Proxy-Secret` with the same value as the Vercel
-   `LETLETME_LOCAL_PROXY_SECRET`. Do not delete the EdgeOne-generated client-IP
-   header after enabling the client-IP feature.
+   `X-Letletme-Proxy-Client-IP`. For Tencent-bound requests, remove
+   client-provided `X-Letletme-Origin-Token`, `X-Letletme-Client-IP`, and both
+   proxy headers, then inject `X-Letletme-Origin-Token` with the separate
+   `EDGEONE_ORIGIN_TOKEN` value matching `/etc/letletme/origin-token` and
+   inject `X-Letletme-Proxy-Secret` with the current
+   `LETLETME_LOCAL_PROXY_SECRET`. Nginx consumes the origin token before Node;
+   Vercel-bound requests must strip it. Do not delete the EdgeOne-generated
+   client-IP header after enabling the client-IP feature.
 6. Do not enable Edge Functions, Smart Acceleration, HTTP/3/QUIC, paid
    intelligent acceleration, add-on packages, or automatic paid upgrades.
 7. Enable HTTP/2 and Brotli/Gzip. Allow WebSocket pass-through.
@@ -173,6 +183,8 @@ schedule; no DNSPod or EdgeOne secret belongs in Git:
 - `DNSPOD_DEFAULT_VERCEL_A` and `DNSPOD_DEFAULT_VERCEL_LINE=默认`
 - `DNSPOD_SECRET_ID` and `DNSPOD_SECRET_KEY`, scoped only to the required
   DNSPod record read/status operations
+- `EDGEONE_ORIGIN_TOKEN`, matching the Tencent host's origin-token file and
+  never the proxy secret
 - `EDGEONE_HEALTH_URL` (Tencent safe-read `/healthz`),
   `EDGEONE_VERCEL_API_URL` (safe API probe through the EdgeOne Vercel rule),
   and `VERCEL_HEALTH_URL` (direct Vercel)
@@ -191,20 +203,21 @@ The safe control-plane sequence is:
 1. Export the complete live Cloudflare zone and DNSPod shadow records, then
    validate every apex, mail, verification, `api`, `static`, `hermes`, `pop`,
    and `cdn` dependency without changing NS.
-2. Deploy the watchdog with `WATCHDOG_ENABLED=false`. Run
-   `npm run watchdog:dry-run` and verify the deployed vars/secrets without
-   treating the Worker URL's 404 as a cron test; the Worker has no public
-   request route.
+2. After the separate DNSPod watchdog implementation is merged, deploy it
+   with `WATCHDOG_ENABLED=false`. Run `npm run watchdog:dry-run` and verify the
+   deployed vars/secrets and `ModifyRecordStatus` code path without treating
+   the Worker URL's 404 as a cron test; the Worker has no public request route.
 3. Confirm the enabled DNSPod default Vercel A record and the disabled or
    shadow `境内` EdgeOne CNAME by exact record ID, line, type, and value.
 4. Only after the full overseas hard gate, mainland split gate, and rollback
    rehearsal pass, obtain the separate explicit authorization to change the
    registrar NS to DNSPod. Keep Cloudflare authoritative and Vercel online
    throughout the mixed-NS cache period; do not cut over automatically.
-5. After DNSPod is authoritative and real mainland/overseas probes pass, set
+5. After DNSPod is authoritative, the separate watchdog implementation is
+   deployed, and real mainland/overseas probes pass, set
    `WATCHDOG_ENABLED=true` and immediately re-read the exact DNSPod records.
-   The watchdog probes Tencent safe-read `/healthz`, the EdgeOne-to-Vercel API
-   path, and direct Vercel before it is allowed to act.
+   The watchdog must call `ModifyRecordStatus` only after probing Tencent
+   safe-read `/healthz`, the EdgeOne-to-Vercel API path, and direct Vercel.
 
 On three consecutive failures of either EdgeOne path while direct Vercel is
 healthy, the watchdog re-reads the regional and default records, disables only

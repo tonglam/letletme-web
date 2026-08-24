@@ -11,7 +11,7 @@ ops_dir=$(cd -- "$script_dir/.." && pwd)
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y ca-certificates curl git gnupg nginx openssl rsync sudo
+apt-get install -y ca-certificates curl git gnupg nginx openssl python3 rsync sudo
 
 install -d -m 0755 /etc/apt/keyrings
 key_tmp=$(mktemp)
@@ -38,73 +38,102 @@ fi
 if ! id deploy >/dev/null 2>&1; then
 	useradd --system --create-home --home-dir /home/deploy --shell /bin/bash deploy
 fi
-deploy_home=/home/deploy
-deploy_ssh_dir=$deploy_home/.ssh
 deploy_uid=$(id -u deploy)
 deploy_gid=$(id -g deploy)
-for ancestor in /home "$deploy_home"; do
-	if [[ -L $ancestor || ! -d $ancestor ]]; then
-		echo "deploy home ancestor is unsafe: $ancestor" >&2
-		exit 1
-	fi
-done
-if [[ -L $deploy_ssh_dir ]]; then
-	echo "deploy SSH directory must not be a symlink: $deploy_ssh_dir" >&2
-	exit 1
-fi
-if [[ -e $deploy_ssh_dir ]]; then
-	if [[ ! -d $deploy_ssh_dir ]]; then
-		echo "deploy SSH path is not a directory: $deploy_ssh_dir" >&2
-		exit 1
-	fi
-else
-	# mkdir refuses an existing symlink instead of following it.
-	mkdir --mode=0700 -- "$deploy_ssh_dir"
-fi
-chown --no-dereference "$deploy_uid:$deploy_gid" "$deploy_ssh_dir"
-if [[ $(stat -c '%u:%g:%a' "$deploy_ssh_dir") != "$deploy_uid:$deploy_gid:700" ]]; then
-	echo "deploy SSH directory must be owned by deploy with mode 0700: $deploy_ssh_dir" >&2
-	exit 1
-fi
-authorized_keys=$deploy_ssh_dir/authorized_keys
-if [[ -L $authorized_keys || -e $authorized_keys && ! -f $authorized_keys ]]; then
-	echo "deploy authorized_keys path is unsafe" >&2
-	exit 1
-fi
 if [[ -n ${TENCENT_DEPLOY_PUBLIC_KEY:-} ]]; then
 	if [[ ! $TENCENT_DEPLOY_PUBLIC_KEY =~ ^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp[0-9]+)[[:space:]] ]]; then
 		echo "TENCENT_DEPLOY_PUBLIC_KEY is not a supported SSH public key" >&2
 		exit 1
 	fi
-	if [[ -f $authorized_keys ]] && [[ $(tr -d '\n' < "$authorized_keys") != "$TENCENT_DEPLOY_PUBLIC_KEY" ]]; then
-		echo "deploy authorized_keys already contains a different key" >&2
-		exit 1
-	fi
-	if [[ ! -e $authorized_keys ]]; then
-		# noclobber uses an exclusive create, so a concurrent symlink cannot
-		# redirect this write into a privileged file.
-		(
-			umask 077
-			set -C
-			printf '%s\n' "$TENCENT_DEPLOY_PUBLIC_KEY" > "$authorized_keys"
-		)
-	fi
-	if [[ -L $authorized_keys || ! -f $authorized_keys ]]; then
-		echo "deploy authorized_keys path changed unsafely" >&2
-		exit 1
-	fi
-	chown --no-dereference "$deploy_uid:$deploy_gid" "$authorized_keys"
-	if [[ $(stat -c '%u:%g:%a' "$authorized_keys") != "$deploy_uid:$deploy_gid:600" ]]; then
-		echo "deploy authorized_keys must be owned by deploy with mode 0600" >&2
-		exit 1
-	fi
-elif [[ ! -s $authorized_keys ]]; then
-	echo "set TENCENT_DEPLOY_PUBLIC_KEY on the first host install or provision /home/deploy/.ssh/authorized_keys before enabling automation" >&2
-	exit 1
-elif [[ $(stat -c '%u:%g:%a' "$authorized_keys") != "$deploy_uid:$deploy_gid:600" ]]; then
-	echo "deploy authorized_keys must be owned by deploy with mode 0600" >&2
-	exit 1
 fi
+export LETLETME_DEPLOY_PUBLIC_KEY=${TENCENT_DEPLOY_PUBLIC_KEY:-}
+export LETLETME_DEPLOY_UID=$deploy_uid
+export LETLETME_DEPLOY_GID=$deploy_gid
+python3 - <<'PY'
+import errno
+import os
+import stat
+
+uid = int(os.environ['LETLETME_DEPLOY_UID'])
+gid = int(os.environ['LETLETME_DEPLOY_GID'])
+expected_key = os.environ.get('LETLETME_DEPLOY_PUBLIC_KEY', '')
+flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+
+
+def fail(message):
+	print(message, file=os.sys.stderr)
+	raise SystemExit(1)
+
+
+def open_authorized_keys(ssh_fd):
+	try:
+		return os.open('authorized_keys', os.O_RDWR | os.O_NOFOLLOW, dir_fd=ssh_fd)
+	except FileNotFoundError:
+		if not expected_key:
+			fail('set TENCENT_DEPLOY_PUBLIC_KEY on the first host install or provision /home/deploy/.ssh/authorized_keys before enabling automation')
+		try:
+			fd = os.open(
+				'authorized_keys',
+				os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+				0o600,
+				dir_fd=ssh_fd,
+			)
+		except OSError as error:
+			if error.errno == errno.ELOOP:
+				fail('deploy authorized_keys path is a symlink')
+			raise
+		os.fchown(fd, uid, gid)
+		os.fchmod(fd, 0o600)
+		os.write(fd, (expected_key + '\n').encode())
+		return fd
+
+
+home_fd = None
+deploy_fd = None
+ssh_fd = None
+authorized_fd = None
+try:
+	home_fd = os.open('/home', flags)
+	deploy_fd = os.open('deploy', flags, dir_fd=home_fd)
+	try:
+		ssh_fd = os.open('.ssh', flags, dir_fd=deploy_fd)
+	except FileNotFoundError:
+		try:
+			os.mkdir('.ssh', 0o700, dir_fd=deploy_fd)
+			ssh_fd = os.open('.ssh', flags, dir_fd=deploy_fd)
+		except OSError as error:
+			if error.errno in (errno.ELOOP, errno.EEXIST):
+				fail('deploy SSH directory changed to an unsafe path')
+			raise
+
+	ssh_stat = os.fstat(ssh_fd)
+	if not stat.S_ISDIR(ssh_stat.st_mode):
+		fail('deploy SSH path is not a directory')
+	os.fchown(ssh_fd, uid, gid)
+	os.fchmod(ssh_fd, 0o700)
+
+	authorized_fd = open_authorized_keys(ssh_fd)
+	authorized_stat = os.fstat(authorized_fd)
+	if not stat.S_ISREG(authorized_stat.st_mode):
+		fail('deploy authorized_keys path is not a regular file')
+	data = os.pread(authorized_fd, 1024 * 1024, 0).decode()
+	if expected_key:
+		if data.replace('\n', '') != expected_key:
+			fail('deploy authorized_keys already contains a different key')
+	elif not data:
+		fail('deploy authorized_keys is empty')
+	os.fchown(authorized_fd, uid, gid)
+	os.fchmod(authorized_fd, 0o600)
+except OSError as error:
+	if error.errno == errno.ELOOP:
+		fail('deploy SSH or authorized_keys path is a symlink')
+	raise
+finally:
+	for fd in (authorized_fd, ssh_fd, deploy_fd, home_fd):
+		if fd is not None:
+			os.close(fd)
+PY
+unset LETLETME_DEPLOY_PUBLIC_KEY LETLETME_DEPLOY_UID LETLETME_DEPLOY_GID
 
 install -d -o root -g letletme -m 0750 /etc/letletme
 install -d -o root -g root -m 0700 /etc/letletme/tls
