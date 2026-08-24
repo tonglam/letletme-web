@@ -121,10 +121,12 @@ The EdgeOne rule must require all of the following before selecting Tencent:
    would make a Tencent read unsafe.
 4. Reuse the existing `letletme.top` CNAME-mode EdgeOne site in the global
    area; do not create a second site.
-5. Keep the existing EdgeOne-generated CNAME target on
+5. Keep the existing EdgeOne canary hostname
    `eo-canary.letletme.top` until a public cutover is approved.
-6. Use that target as `EDGEONE_CNAME_TARGET` only when preparing the watchdog.
-   Keep `WATCHDOG_ENABLED=false` while the apex remains on the fallback path.
+6. Store the live EdgeOne-assigned CNAME value in the
+   `DNSPOD_EDGEONE_CNAME` Worker secret when preparing the watchdog; do not use
+   the canary hostname as the secret value. Keep
+   `WATCHDOG_ENABLED=false` while the apex remains on the fallback path.
 7. Keep the canary origin as `letletme-web.vercel.app`, HTTPS port 443, origin
    Host `letletme.top`, and TLS SNI `letletme.top`. For the inactive production
    split, configure a separate HTTPS Tencent safe-read origin for the mainland

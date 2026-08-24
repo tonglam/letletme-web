@@ -13,10 +13,28 @@ function valueAfter(flag, argv) {
 
 function readRecords(file) {
 	const payload = JSON.parse(fs.readFileSync(file, 'utf8'))
-	if (Array.isArray(payload)) return payload
-	if (Array.isArray(payload.RecordList)) return payload.RecordList
-	if (Array.isArray(payload.recordList)) return payload.recordList
-	if (Array.isArray(payload.Response?.RecordList)) return payload.Response.RecordList
+	const records = Array.isArray(payload)
+		? payload
+		: Array.isArray(payload.RecordList)
+			? payload.RecordList
+			: Array.isArray(payload.recordList)
+				? payload.recordList
+				: Array.isArray(payload.Response?.RecordList)
+					? payload.Response.RecordList
+					: null
+	if (records) {
+		const rawTotal = payload.RecordCountInfo?.TotalCount ?? payload.Response?.RecordCountInfo?.TotalCount
+		if (rawTotal !== undefined && rawTotal !== null && rawTotal !== '') {
+			const total = Number(rawTotal)
+			if (!Number.isSafeInteger(total) || total < 0) {
+				throw new Error('input contains an invalid DNSPod RecordCountInfo.TotalCount')
+			}
+			if (total !== records.length) {
+				throw new Error('input contains an incomplete DNSPod RecordList pagination')
+			}
+		}
+		return records
+	}
 	throw new Error('input does not contain a DNSPod RecordList array')
 }
 
@@ -55,6 +73,7 @@ const apexRouteTypes = new Set([
 	'URL',
 	'URL2'
 ])
+const requiredRouteTypes = new Set([...apexRouteTypes, 'MX'])
 
 function isEnabled(record) {
 	return String(record.Status ?? '').toUpperCase() === 'ENABLE'
@@ -75,6 +94,7 @@ function enabledApexRoutes(records, line) {
 
 function find(records, line, type, value) {
 	return records.find(record =>
+		isEnabled(record) &&
 		String(record.Name ?? '').toLowerCase() === '@' &&
 		String(record.Line ?? '') === line &&
 		String(record.Type ?? '').toUpperCase() === type &&
@@ -88,7 +108,7 @@ const edgeoneCname = valueAfter('--edgeone-cname', argv) || process.env.DNSPOD_E
 const vercelA = valueAfter('--vercel-a', argv) || process.env.VERCEL_RECOMMENDED_A
 const line = process.env.DNSPOD_EDGEONE_LINE || '境内'
 const requiredHosts = (process.env.DNSPOD_REQUIRED_HOSTS ||
-	'www,api,static,hermes,pop,cdn,vercel-origin,eo-personal-canary,eo-tencent-canary,eo-vercel-canary').split(',').map(value => value.trim()).filter(Boolean)
+	'www,api,static,hermes,pop,cdn,vercel-origin,eo-canary,eo-tencent-canary,eo-vercel-canary').split(',').map(value => value.trim()).filter(Boolean)
 
 function readRequiredSpecs() {
 	const raw = process.env.DNSPOD_REQUIRED_RECORDS_JSON
@@ -145,12 +165,12 @@ if (!file || !edgeoneCname || !vercelA) {
 		const ambiguousRequiredRoutes = [...routeHosts].flatMap(host => {
 			const expectedRoutes = requiredSpecs.filter(spec =>
 				String(spec.Name).toLowerCase() === host &&
-				apexRouteTypes.has(String(spec.Type).toUpperCase())
+				requiredRouteTypes.has(String(spec.Type).toUpperCase())
 			)
 			const actualRoutes = records.filter(record =>
 				isEnabled(record) &&
 				String(record.Name ?? '').toLowerCase() === host &&
-				apexRouteTypes.has(String(record.Type ?? '').toUpperCase())
+				requiredRouteTypes.has(String(record.Type ?? '').toUpperCase())
 			)
 			const keyFor = record => [
 				String(record.Type ?? '').toUpperCase(),

@@ -14,6 +14,7 @@ const STATE_KEY = 'watchdog-state-v1'
 const FAILURE_THRESHOLD = 3
 const DEFAULT_TIMEOUT_MS = 8_000
 const CLAIM_TTL_MS = 2 * 60 * 1_000
+const MUTATION_TTL_MS = 5 * 60 * 1_000
 const COORDINATOR_NAME = 'letletme-top'
 
 function bool(value) {
@@ -24,8 +25,16 @@ const FULL_RELEASE_SHA = /^[0-9a-f]{40}$/i
 
 function releaseFrom(response, payload) {
 	const header = response.headers.get('x-letletme-release')
-	if (header) return header.trim()
-	return typeof payload?.release === 'string' ? payload.release.trim() : null
+	const headerRelease = header?.trim() || null
+	const bodyRelease = typeof payload?.release === 'string' ? payload.release.trim() : null
+	return {
+		release: headerRelease || bodyRelease,
+		conflict: Boolean(
+			headerRelease &&
+			bodyRelease &&
+			headerRelease.toLowerCase() !== bodyRelease.toLowerCase()
+		)
+	}
 }
 
 export function hasReleaseParity(...probes) {
@@ -91,20 +100,22 @@ async function probe(url, fetchImpl, timeoutMs, expectedOrigin, requireEdgeOne) 
 		const payload = await response.json().catch(() => null)
 		const edgeMarker = response.headers.get('x-letletme-edge')
 		const normalizedEdgeMarker = edgeMarker?.trim().toLowerCase() || null
-		const release = releaseFrom(response, payload)
+		const releaseInfo = releaseFrom(response, payload)
 		const ok =
 			response.status === 200 &&
 			payload?.status === 'ok' &&
 			payload?.origin === expectedOrigin &&
+			!releaseInfo.conflict &&
 			(requireEdgeOne
 				? normalizedEdgeMarker === 'edgeone'
 				: normalizedEdgeMarker === null)
 		return {
 			ok,
 			status: response.status,
-			reason: ok ? 'ok' : 'health-mismatch',
+			reason: ok ? 'ok' : releaseInfo.conflict ? 'release-mismatch' : 'health-mismatch',
 			edgeMarker,
-			release
+			release: releaseInfo.release,
+			releaseConflict: releaseInfo.conflict
 		}
 	} catch (error) {
 		return {
@@ -136,19 +147,21 @@ async function probeEdgeOneVercelApi(url, fetchImpl, timeoutMs) {
 		const payload = await response.json().catch(() => null)
 		const edgeMarker = response.headers.get('x-letletme-edge')
 		const originMarker = response.headers.get('x-letletme-origin')
-		const release = releaseFrom(response, payload)
+		const releaseInfo = releaseFrom(response, payload)
 		const ok =
 			response.status === 200 &&
 			payload?.data?.__typename === 'Query' &&
 			originMarker === 'vercel' &&
-			edgeMarker === 'edgeone'
+			edgeMarker === 'edgeone' &&
+			!releaseInfo.conflict
 		return {
 			ok,
 			status: response.status,
-			reason: ok ? 'ok' : 'health-mismatch',
+			reason: ok ? 'ok' : releaseInfo.conflict ? 'release-mismatch' : 'health-mismatch',
 			edgeMarker,
 			originMarker,
-			release
+			release: releaseInfo.release,
+			releaseConflict: releaseInfo.conflict
 		}
 	} catch (error) {
 		return {
@@ -208,7 +221,7 @@ function coordinatorClient(env, options) {
 		reset: () => command('reset'),
 		release: () => command('release'),
 		confirm: () => command('confirm'),
-		confirmClaim: claimToken => command('confirm-claim', { claimToken })
+		beginMutation: claimToken => command('begin-mutation', { claimToken })
 	}
 }
 
@@ -277,6 +290,7 @@ async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coo
 
 async function manualDnsState(env, rawState, state, record, fetchImpl, coordinator, reason = 'regional') {
 	const coordination = await coordinator.reset()
+	const mutationHeld = coordination.mutationHeld === true
 	const alertKey = `manual:${reason}:${record?.RecordId || 'unknown'}:${record?.Type || 'unknown'}:${record?.Value || 'unknown'}:${record?.Line || 'unknown'}:${record?.Status || 'unknown'}`
 	const message = reason === 'default'
 		? 'letletme watchdog 未改 DNSPod：默认线路的 Vercel 回退记录身份或状态不符合预期。'
@@ -285,14 +299,18 @@ async function manualDnsState(env, rawState, state, record, fetchImpl, coordinat
 		...state,
 		failureCount: coordination.failureCount,
 		fallbackActive: false,
-		lastAction: 'manual-dns-state',
+		lastAction: mutationHeld ? 'manual-dns-state-mutation-held' : 'manual-dns-state',
 		coordinatorResetPending: false
 	}
 	if (state.lastAlertKey !== alertKey || state.pendingAlert?.key === alertKey) {
 		next = await applyAlert(env, next, alertKey, message, fetchImpl)
 	}
 	await saveState(env, rawState, next)
-	return { action: 'manual-dns-state', state: next, record }
+	return {
+		action: mutationHeld ? 'manual-dns-state-mutation-held' : 'manual-dns-state',
+		state: next,
+		record
+	}
 }
 
 async function failoverMutationFailure(
@@ -365,13 +383,14 @@ async function bothUnhealthyState(
 	coordinator
 ) {
 	const coordination = await coordinator.reset()
+	const mutationHeld = coordination.mutationHeld === true
 	const alertKey = `both-unhealthy:${edge.reason}:${edgeVercel.reason}:${vercel.reason}`
 	const message = `letletme watchdog 暂不改 DNSPod：EdgeOne 与 Vercel 同时异常。EdgeOne Tencent=${edge.reason} EdgeOne Vercel=${edgeVercel.reason} Vercel=${vercel.reason}`
 	let next = {
 		...state,
 		failureCount: coordination.failureCount,
 		fallbackActive: false,
-		lastAction: 'both-unhealthy',
+		lastAction: mutationHeld ? 'both-unhealthy-mutation-held' : 'both-unhealthy',
 		coordinatorResetPending: false
 	}
 	if (state.lastAlertKey !== alertKey || state.pendingAlert?.key === alertKey) {
@@ -379,7 +398,7 @@ async function bothUnhealthyState(
 	}
 	await saveState(env, rawState, next)
 	return {
-		action: 'both-unhealthy',
+		action: mutationHeld ? 'both-unhealthy-mutation-held' : 'both-unhealthy',
 		state: next,
 		edge,
 		edgeVercel,
@@ -448,6 +467,23 @@ export async function runCheck(env, options = {}) {
 				record
 			}
 		}
+		if (coordination.mutationHeld === true) {
+			const next = {
+				...state,
+				coordinatorResetPending: false,
+				lastAction: 'healthy-failover-mutation-held'
+			}
+			await saveState(env, rawState, next)
+			return {
+				action: 'healthy-failover-mutation-held',
+				state: next,
+				edge,
+				edgeVercel,
+				vercel,
+				releaseParity,
+				record
+			}
+		}
 		const next = {
 			...state,
 			failureCount: coordination.failureCount,
@@ -467,6 +503,19 @@ export async function runCheck(env, options = {}) {
 	if (state.coordinatorResetPending) {
 		try {
 			const reset = await coordinator.reset()
+			if (reset.mutationHeld === true) {
+				const next = { ...state, lastAction: 'coordinator-failover-mutation-held' }
+				await saveState(env, rawState, next)
+				return {
+					action: 'coordinator-failover-mutation-held',
+					state: next,
+					edge,
+					edgeVercel,
+					vercel,
+					releaseParity,
+					record
+				}
+			}
 			state = { ...state, failureCount: reset.failureCount, coordinatorResetPending: false }
 			await saveState(env, rawState, state)
 		} catch (error) {
@@ -533,7 +582,7 @@ export async function runCheck(env, options = {}) {
 
 	let claim
 	try {
-		claim = await coordinator.confirmClaim(coordination.claimToken)
+		claim = await coordinator.beginMutation(coordination.claimToken)
 	} catch (error) {
 		console.error(JSON.stringify({
 			event: 'edgeone_watchdog_failover_claim_verification_error',
@@ -544,11 +593,11 @@ export async function runCheck(env, options = {}) {
 			failureCount: coordination.failureCount,
 			fallbackActive: false,
 			lastFailureAt: now,
-			lastAction: 'failover-claim-verification-failed',
+			lastAction: 'failover-mutation-begin-failed',
 			coordinatorResetPending: false
 		}
 		await saveState(env, rawState, next)
-		return { action: 'failover-claim-verification-failed', state: next, edge, edgeVercel, vercel, releaseParity, record }
+		return { action: 'failover-mutation-begin-failed', state: next, edge, edgeVercel, vercel, releaseParity, record }
 	}
 	if (claim?.claimed !== true) {
 		const next = {
@@ -556,11 +605,19 @@ export async function runCheck(env, options = {}) {
 			failureCount: Number.isInteger(claim?.failureCount) ? claim.failureCount : coordination.failureCount,
 			fallbackActive: false,
 			lastFailureAt: now,
-			lastAction: 'failover-claim-lost',
+			lastAction: claim?.mutationHeld === true ? 'failover-mutation-held' : 'failover-claim-lost',
 			coordinatorResetPending: false
 		}
 		await saveState(env, rawState, next)
-		return { action: 'failover-claim-lost', state: next, edge, edgeVercel, vercel, releaseParity, record }
+		return {
+			action: claim?.mutationHeld === true ? 'failover-mutation-held' : 'failover-claim-lost',
+			state: next,
+			edge,
+			edgeVercel,
+			vercel,
+			releaseParity,
+			record
+		}
 	}
 
 	let updated
@@ -637,7 +694,13 @@ export class FailoverCoordinator {
 	}
 
 	async readState() {
-		return (await this.ctx.storage.get('state')) || { failureCount: 0, claimAt: 0, claimToken: null }
+		return (await this.ctx.storage.get('state')) || {
+			failureCount: 0,
+			claimAt: 0,
+			claimToken: null,
+			mutationAt: 0,
+			mutationToken: null
+		}
 	}
 
 	async writeState(state) {
@@ -650,26 +713,55 @@ export class FailoverCoordinator {
 		const state = await this.readState()
 		const now = Date.now()
 		if (operation === 'record-failure') {
+			const mutationFresh = state.mutationAt > 0 && now - state.mutationAt < MUTATION_TTL_MS
+			if (mutationFresh) {
+				return Response.json({
+					ok: true,
+					failureCount: state.failureCount,
+					shouldFailover: false,
+					claimHeld: true,
+					mutationHeld: true,
+					claimToken: null
+				})
+			}
 			const claimFresh = state.claimAt > 0 && now - state.claimAt < CLAIM_TTL_MS
 			if (claimFresh) {
-				return Response.json({ ok: true, failureCount: state.failureCount, shouldFailover: false, claimHeld: true, claimToken: null })
+				return Response.json({ ok: true, failureCount: state.failureCount, shouldFailover: false, claimHeld: true, mutationHeld: false, claimToken: null })
 			}
 			const failureCount = Math.min(FAILURE_THRESHOLD, state.failureCount + 1)
 			const shouldFailover = failureCount >= FAILURE_THRESHOLD
 			const claimToken = shouldFailover ? crypto.randomUUID() : null
-			await this.writeState({ failureCount, claimAt: shouldFailover ? now : 0, claimToken })
-			return Response.json({ ok: true, failureCount, shouldFailover, claimHeld: false, claimToken })
+			await this.writeState({
+				failureCount,
+				claimAt: shouldFailover ? now : 0,
+				claimToken,
+				mutationAt: 0,
+				mutationToken: null
+			})
+			return Response.json({ ok: true, failureCount, shouldFailover, claimHeld: false, mutationHeld: false, claimToken })
 		}
-		if (operation === 'reset' || operation === 'confirm') {
-			await this.writeState({ failureCount: 0, claimAt: 0, claimToken: null })
+		if (operation === 'reset') {
+			const mutationFresh = state.mutationAt > 0 && now - state.mutationAt < MUTATION_TTL_MS
+			if (mutationFresh) {
+				return Response.json({ ok: true, failureCount: state.failureCount, mutationHeld: true })
+			}
+			await this.writeState({ failureCount: 0, claimAt: 0, claimToken: null, mutationAt: 0, mutationToken: null })
+			return Response.json({ ok: true, failureCount: 0 })
+		}
+		if (operation === 'confirm') {
+			await this.writeState({ failureCount: 0, claimAt: 0, claimToken: null, mutationAt: 0, mutationToken: null })
 			return Response.json({ ok: true, failureCount: 0 })
 		}
 		if (operation === 'release') {
-			await this.writeState({ ...state, claimAt: 0, claimToken: null })
+			await this.writeState({ ...state, claimAt: 0, claimToken: null, mutationAt: 0, mutationToken: null })
 			return Response.json({ ok: true, failureCount: state.failureCount })
 		}
-		if (operation === 'confirm-claim') {
+		if (operation === 'begin-mutation') {
 			const payload = await request.json().catch(() => null)
+			const mutationFresh = state.mutationAt > 0 && now - state.mutationAt < MUTATION_TTL_MS
+			if (mutationFresh) {
+				return Response.json({ ok: true, claimed: false, mutationHeld: true, failureCount: state.failureCount })
+			}
 			const claimFresh = state.claimAt > 0 && now - state.claimAt < CLAIM_TTL_MS
 			const claimed = Boolean(
 				claimFresh &&
@@ -677,7 +769,14 @@ export class FailoverCoordinator {
 				typeof payload?.claimToken === 'string' &&
 				payload.claimToken === state.claimToken
 			)
-			return Response.json({ ok: true, claimed, failureCount: state.failureCount })
+			if (claimed) {
+				await this.writeState({
+					...state,
+					mutationAt: now,
+					mutationToken: payload.claimToken
+				})
+			}
+			return Response.json({ ok: true, claimed, mutationHeld: claimed, failureCount: state.failureCount })
 		}
 		return new Response('not-found', { status: 404 })
 	}

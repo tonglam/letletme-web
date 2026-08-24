@@ -66,6 +66,19 @@ test('validator rejects disabled apex records', () => {
 	})
 })
 
+test('validator ignores disabled duplicates when selecting apex records', () => {
+	const disabledDuplicate = {
+		Name: '@',
+		Type: 'A',
+		Value: '76.76.21.21',
+		Line: '境外',
+		Status: 'DISABLE',
+		RecordId: 5
+	}
+	const result = runValidator([disabledDuplicate, ...validRecords])
+	assert.equal(result.ok, true)
+})
+
 test('validator rejects disabled required hosts', () => {
 	const records = validRecords.map(record =>
 		record.Name === 'www' ? { ...record, Status: 'DISABLE' } : record
@@ -199,6 +212,36 @@ test('validator rejects an unlisted route on a non-route-only required hostname'
 			{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
 			{ Name: '_verify', Type: 'TXT', Value: 'TokenABC', Line: '默认' }
 		]
+	}), error => {
+		assert.equal(error.status, 1)
+		return true
+	})
+})
+
+test('validator rejects an unlisted competing MX record', () => {
+	const records = [
+		...validRecords,
+		{ Name: '_mail', Type: 'MX', Value: '10 mail.example.com', Line: '默认', Status: 'ENABLE', RecordId: 5 },
+		{ Name: '_mail', Type: 'MX', Value: '20 attacker.example.com', Line: '默认', Status: 'ENABLE', RecordId: 6 }
+	]
+	assert.throws(() => runValidator(records, {
+		requiredHosts: 'www,_mail',
+		requiredSpecs: [
+			{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
+			{ Name: '_mail', Type: 'MX', Value: '10 mail.example.com', Line: '默认' }
+		]
+	}), error => {
+		assert.equal(error.status, 1)
+		return true
+	})
+})
+
+test('validator rejects a truncated DNSPod RecordList export', () => {
+	assert.throws(() => runValidator({
+		Response: {
+			RecordList: validRecords,
+			RecordCountInfo: { TotalCount: validRecords.length + 1 }
+		}
 	}), error => {
 		assert.equal(error.status, 1)
 		return true

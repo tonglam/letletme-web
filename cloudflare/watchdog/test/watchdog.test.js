@@ -34,7 +34,9 @@ function makeCoordinator(failureCount = 0) {
 		failureCount,
 		claimed: false,
 		claimToken: null,
+		mutationHeld: false,
 		async recordFailure() {
+			if (this.mutationHeld) return { failureCount: this.failureCount, shouldFailover: false, claimHeld: true, mutationHeld: true, claimToken: null }
 			if (this.claimed) return { failureCount: this.failureCount, shouldFailover: false, claimHeld: true, claimToken: null }
 			this.failureCount = Math.min(3, this.failureCount + 1)
 			if (this.failureCount >= 3) {
@@ -45,14 +47,24 @@ function makeCoordinator(failureCount = 0) {
 				failureCount: this.failureCount,
 				shouldFailover: this.failureCount >= 3,
 				claimHeld: false,
+				mutationHeld: false,
 				claimToken: this.claimToken
 			}
 		},
-		async reset() { this.failureCount = 0; this.claimed = false; this.claimToken = null; return { failureCount: 0 } },
-		async release() { this.claimed = false; this.claimToken = null; return { failureCount: this.failureCount } },
-		async confirm() { this.failureCount = 0; this.claimed = false; this.claimToken = null; return { failureCount: 0 } },
-		async confirmClaim(claimToken) {
-			return { claimed: this.claimed && claimToken === this.claimToken, failureCount: this.failureCount }
+		async reset() {
+			if (this.mutationHeld) return { failureCount: this.failureCount, mutationHeld: true }
+			this.failureCount = 0
+			this.claimed = false
+			this.claimToken = null
+			return { failureCount: 0, mutationHeld: false }
+		},
+		async release() { this.claimed = false; this.claimToken = null; this.mutationHeld = false; return { failureCount: this.failureCount } },
+		async confirm() { this.failureCount = 0; this.claimed = false; this.claimToken = null; this.mutationHeld = false; return { failureCount: 0 } },
+		async beginMutation(claimToken) {
+			if (this.mutationHeld) return { claimed: false, mutationHeld: true, failureCount: this.failureCount }
+			const claimed = this.claimed && claimToken === this.claimToken
+			if (claimed) this.mutationHeld = true
+			return { claimed, mutationHeld: claimed, failureCount: this.failureCount }
 		}
 	}
 }
@@ -75,11 +87,11 @@ function runCheckWithTestCoordinator(env, options) {
 	return runCheck(env, { ...options, coordinator: env.coordinator })
 }
 
-function health(edge, release = RELEASE_SHA) {
+function health(edge, release = RELEASE_SHA, headerRelease = release) {
 	return new Response(JSON.stringify({ status: 'ok', origin: edge ? 'tencent' : 'vercel', release }), {
 		status: 200,
 		headers: {
-			'X-Letletme-Release': release,
+			'X-Letletme-Release': headerRelease,
 			...(edge ? { 'X-Letletme-Edge': 'edgeone' } : {})
 		}
 	})
@@ -557,7 +569,7 @@ test('revalidates the default route after a concurrent fallback change', async (
 
 test('does not mutate DNS after a failover claim is cleared during revalidation', async () => {
 	const coordinator = makeCoordinator(2)
-	coordinator.confirmClaim = async () => ({ claimed: false, failureCount: 0 })
+	coordinator.beginMutation = async () => ({ claimed: false, failureCount: 0, mutationHeld: false })
 	const env = makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), coordinator)
 	const { fetch, calls } = fakeFetchFactory({
 		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
@@ -598,6 +610,19 @@ test('counts release drift as an EdgeOne failure even when all HTTP probes are h
 	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
 	assert.equal(result.action, 'counted-failure')
 	assert.equal(result.releaseParity, false)
+})
+
+test('counts conflicting release header and health body as an EdgeOne failure', async () => {
+	const env = makeEnv()
+	const { fetch } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
+		edgeResponses: [health(true, RELEASE_SHA, 'b'.repeat(40))]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'counted-failure')
+	assert.equal(result.edge.ok, false)
+	assert.equal(result.edge.reason, 'release-mismatch')
+	assert.equal(result.edge.releaseConflict, true)
 })
 
 test('counts an EdgeOne-to-Vercel API failure even when Tencent is healthy', async () => {
@@ -752,15 +777,17 @@ test('serializes the threshold claim in the Durable Object coordinator', async (
 	assert.equal(thresholdPayload.shouldFailover, true)
 	assert.equal(typeof thresholdPayload.claimToken, 'string')
 	assert.equal((await (await request()).json()).claimHeld, true)
-	const claimResponse = await coordinator.fetch(new Request('https://watchdog-coordinator/confirm-claim', {
+	const claimResponse = await coordinator.fetch(new Request('https://watchdog-coordinator/begin-mutation', {
 		method: 'POST',
 		body: JSON.stringify({ claimToken: thresholdPayload.claimToken })
 	}))
 	assert.equal((await claimResponse.json()).claimed, true)
+	const resetWhileMutating = await coordinator.fetch(new Request('https://watchdog-coordinator/reset', { method: 'POST' }))
+	assert.equal((await resetWhileMutating.json()).mutationHeld, true)
 	const confirmResponse = await coordinator.fetch(new Request('https://watchdog-coordinator/confirm', { method: 'POST' }))
 	const confirmPayload = await confirmResponse.json()
 	assert.equal(confirmPayload.failureCount, 0)
-	const staleClaimResponse = await coordinator.fetch(new Request('https://watchdog-coordinator/confirm-claim', {
+	const staleClaimResponse = await coordinator.fetch(new Request('https://watchdog-coordinator/begin-mutation', {
 		method: 'POST',
 		body: JSON.stringify({ claimToken: thresholdPayload.claimToken })
 	}))
