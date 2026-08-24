@@ -168,3 +168,38 @@ test('validator rejects competing enabled watchdog host routes on another DNS li
 		return true
 	})
 })
+
+test('validator rejects competing enabled routes for any required hostname', () => {
+	const records = [
+		...validRecords,
+		{ Name: 'api', Type: 'CNAME', Value: 'api.example.com', Line: '默认', Status: 'ENABLE', RecordId: 5 },
+		{ Name: 'api', Type: 'A', Value: '203.0.113.10', Line: '默认', Status: 'ENABLE', RecordId: 6 }
+	]
+	assert.throws(() => runValidator(records, {
+		requiredHosts: 'www,api',
+		requiredSpecs: [
+			{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
+			{ Name: 'api', Type: 'CNAME', Value: 'api.example.com', Line: '默认' }
+		]
+	}), error => {
+		assert.equal(error.status, 1)
+		return true
+	})
+})
+
+test('validator preserves case-sensitive opaque DNS values', () => {
+	const records = [
+		...validRecords,
+		{ Name: '_edgeone', Type: 'TXT', Value: 'tokenabc', Line: '默认', Status: 'ENABLE', RecordId: 5 }
+	]
+	assert.throws(() => runValidator(records, {
+		requiredHosts: 'www,_edgeone',
+		requiredSpecs: [
+			{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
+			{ Name: '_edgeone', Type: 'TXT', Value: 'TokenABC', Line: '默认' }
+		]
+	}), error => {
+		assert.equal(error.status, 1)
+		return true
+	})
+})

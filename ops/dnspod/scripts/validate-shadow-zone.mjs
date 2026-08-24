@@ -24,6 +24,14 @@ function normalized(value) {
 	return String(value ?? '').trim().replace(/\.$/, '').toLowerCase()
 }
 
+const hostnameValueTypes = new Set(['A', 'AAAA', 'ALIAS', 'CNAME', 'HTTPS', 'MX', 'NS', 'PTR', 'SVCB'])
+
+function valuesEqual(type, actual, expected) {
+	return hostnameValueTypes.has(String(type ?? '').toUpperCase())
+		? normalized(actual) === normalized(expected)
+		: String(actual ?? '') === String(expected ?? '')
+}
+
 const apexRouteTypes = new Set([
 	'A',
 	'AAAA',
@@ -68,8 +76,6 @@ const vercelA = valueAfter('--vercel-a', argv) || process.env.VERCEL_RECOMMENDED
 const line = process.env.DNSPOD_EDGEONE_LINE || '境内'
 const requiredHosts = (process.env.DNSPOD_REQUIRED_HOSTS ||
 	'www,api,static,hermes,pop,cdn,vercel-origin,eo-personal-canary,eo-tencent-canary,eo-vercel-canary').split(',').map(value => value.trim()).filter(Boolean)
-const watchdogHosts = new Set((process.env.DNSPOD_WATCHDOG_HOSTS ||
-	'vercel-origin,eo-personal-canary,eo-tencent-canary,eo-vercel-canary').split(',').map(value => value.trim().toLowerCase()).filter(Boolean))
 
 function readRequiredSpecs() {
 	const raw = process.env.DNSPOD_REQUIRED_RECORDS_JSON
@@ -106,7 +112,7 @@ if (!file || !edgeoneCname || !vercelA) {
 				isEnabled(record) &&
 				String(record.Name ?? '').toLowerCase() === String(required.Name).toLowerCase() &&
 				String(record.Type ?? '').toUpperCase() === String(required.Type).toUpperCase() &&
-				normalized(record.Value) === normalized(required.Value) &&
+				valuesEqual(record.Type, record.Value, required.Value) &&
 				String(record.Line ?? '') === String(required.Line)
 			)
 		))
@@ -115,11 +121,14 @@ if (!file || !edgeoneCname || !vercelA) {
 				isEnabled(record) &&
 				String(record.Name ?? '').toLowerCase() === spec.Name.toLowerCase() &&
 				String(record.Type ?? '').toUpperCase() === spec.Type.toUpperCase() &&
-				normalized(record.Value) === normalized(spec.Value) &&
+				valuesEqual(record.Type, record.Value, spec.Value) &&
 				String(record.Line ?? '') === spec.Line
 			))
 			.map(spec => `${spec.Name}/${spec.Type}/${spec.Line}`)
-		const ambiguousWatchdogRoutes = [...watchdogHosts].flatMap(host => {
+		const routeHosts = new Set(requiredSpecs
+			.filter(spec => apexRouteTypes.has(String(spec.Type).toUpperCase()))
+			.map(spec => String(spec.Name).trim().toLowerCase()))
+		const ambiguousRequiredRoutes = [...routeHosts].flatMap(host => {
 			const specs = requiredSpecs.filter(spec =>
 				String(spec.Name).toLowerCase() === host &&
 				apexRouteTypes.has(String(spec.Type).toUpperCase())
@@ -131,7 +140,7 @@ if (!file || !edgeoneCname || !vercelA) {
 					apexRouteTypes.has(String(record.Type ?? '').toUpperCase())
 				)
 				return routes.length === 1 &&
-					normalized(routes[0].Value) === normalized(spec.Value) &&
+					valuesEqual(routes[0].Type, routes[0].Value, spec.Value) &&
 					String(routes[0].Type ?? '').toUpperCase() === String(spec.Type).toUpperCase()
 					? []
 					: [`${spec.Name}/${spec.Type}/${spec.Line}`]
@@ -156,7 +165,7 @@ if (!file || !edgeoneCname || !vercelA) {
 			},
 			missingHosts,
 			missingRequiredRecords,
-			ambiguousWatchdogRoutes,
+			ambiguousRequiredRoutes,
 			disabledRegionalRecords: disabled.map(record => Number(record.RecordId)),
 			ok: Boolean(
 				edgeOneRoutes.length === 1 && apexEdgeOne && isEnabled(apexEdgeOne) &&
@@ -164,7 +173,7 @@ if (!file || !edgeoneCname || !vercelA) {
 				defaultRoutes.length === 1 && apexDefault && isEnabled(apexDefault) &&
 				missingHosts.length === 0 &&
 				missingRequiredRecords.length === 0 &&
-				ambiguousWatchdogRoutes.length === 0
+				ambiguousRequiredRoutes.length === 0
 			)
 		}
 		console.log(JSON.stringify(result, null, 2))

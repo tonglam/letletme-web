@@ -244,6 +244,14 @@ the current proxy secret, and EdgeOne's generated
 `X-Letletme-Proxy-Client-IP`. Nginx forwards that exact generated header to
 Node; it does not read the similarly named browser header.
 
+The public `eo-tencent-canary.letletme.top` route is a health-only probe, not a
+general Tencent origin. Its EdgeOne rule must allow only `GET` and `HEAD` for
+the exact `/healthz` path and must return a non-origin `404` or `405` for every
+other path or method. Denied requests must not receive the Tencent origin token
+or proxy secret and must not be forwarded to Nginx. Verify this before adding
+the hostname to `EDGEONE_TENCENT_HEALTH_URL`; if EdgeOne cannot express this
+host-and-path deny rule, do not publish the Tencent canary hostname.
+
 `DNSPOD_DEFAULT_VERCEL_A` is the exact enabled DNSPod default A record captured
 from the live Vercel project before the NS change; it is not a fresh DNS lookup
 performed during a failure. `DNSPOD_EDGEONE_RECORD_ID` is a different value: it
