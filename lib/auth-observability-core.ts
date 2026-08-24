@@ -43,6 +43,7 @@ export type MiniProgramLoginContext = {
 		| 'cold_start_restore_failed'
 		| 'profile_401'
 		| 'graphql_401'
+		| 'account_link'
 		| 'session_missing'
 	platform?: 'ios' | 'android' | 'windows' | 'macos' | 'linux' | 'unknown'
 	deviceClass?: 'phone' | 'tablet' | 'desktop' | 'unknown'
@@ -160,6 +161,7 @@ const SAFE_TRIGGERS = new Set<MiniProgramLoginContext['trigger']>([
 	'cold_start_restore_failed',
 	'profile_401',
 	'graphql_401',
+	'account_link',
 	'session_missing'
 ])
 
