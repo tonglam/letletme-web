@@ -20,6 +20,23 @@ function bool(value) {
 	return value === true || value === 'true'
 }
 
+const FULL_RELEASE_SHA = /^[0-9a-f]{40}$/i
+
+function releaseFrom(response, payload) {
+	const header = response.headers.get('x-letletme-release')
+	if (header) return header.trim()
+	return typeof payload?.release === 'string' ? payload.release.trim() : null
+}
+
+export function hasReleaseParity(...probes) {
+	const releases = probes.map(probe => probe?.release?.toLowerCase())
+	return (
+		releases.length > 0 &&
+		releases.every(release => FULL_RELEASE_SHA.test(release || '')) &&
+		new Set(releases).size === 1
+	)
+}
+
 export function parseState(raw) {
 	try {
 		const parsed = raw ? JSON.parse(raw) : {}
@@ -73,6 +90,7 @@ async function probe(url, fetchImpl, timeoutMs, expectedOrigin, requireEdgeOne) 
 		})
 		const payload = await response.json().catch(() => null)
 		const edgeMarker = response.headers.get('x-letletme-edge')
+		const release = releaseFrom(response, payload)
 		const ok =
 			response.status === 200 &&
 			payload?.status === 'ok' &&
@@ -82,7 +100,8 @@ async function probe(url, fetchImpl, timeoutMs, expectedOrigin, requireEdgeOne) 
 			ok,
 			status: response.status,
 			reason: ok ? 'ok' : 'health-mismatch',
-			edgeMarker
+			edgeMarker,
+			release
 		}
 	} catch (error) {
 		return {
@@ -114,6 +133,7 @@ async function probeEdgeOneVercelApi(url, fetchImpl, timeoutMs) {
 		const payload = await response.json().catch(() => null)
 		const edgeMarker = response.headers.get('x-letletme-edge')
 		const originMarker = response.headers.get('x-letletme-origin')
+		const release = releaseFrom(response, payload)
 		const ok =
 			response.status === 200 &&
 			payload?.data?.__typename === 'Query' &&
@@ -124,7 +144,8 @@ async function probeEdgeOneVercelApi(url, fetchImpl, timeoutMs) {
 			status: response.status,
 			reason: ok ? 'ok' : 'health-mismatch',
 			edgeMarker,
-			originMarker
+			originMarker,
+			release
 		}
 	} catch (error) {
 		return {
@@ -197,6 +218,18 @@ async function applyAlert(env, state, key, message, fetchImpl) {
 }
 
 async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coordinator) {
+	// Revalidate both sides of the fallback immediately before declaring the
+	// state healthy. The first DNS read can be stale if an operator changes the
+	// default record while this cron invocation is running.
+	const enabledRegionalApexRecords = await getEnabledRegionalApexRecords(env, fetchImpl)
+	if (enabledRegionalApexRecords.length !== 0) {
+		return manualDnsState(env, rawState, state, record, fetchImpl, coordinator, 'regional')
+	}
+	const defaultRecord = await getDefaultVercelRecord(env, fetchImpl)
+	if (!isDefaultVercelRecord(defaultRecord, env)) {
+		return manualDnsState(env, rawState, state, defaultRecord, fetchImpl, coordinator, 'default')
+	}
+
 	let next = {
 		...state,
 		failureCount: 0,
@@ -275,7 +308,15 @@ async function bothUnhealthyState(
 		next = await applyAlert(env, next, alertKey, message, fetchImpl)
 	}
 	await saveState(env, rawState, next)
-	return { action: 'both-unhealthy', state: next, edge, edgeVercel, vercel, record }
+	return {
+		action: 'both-unhealthy',
+		state: next,
+		edge,
+		edgeVercel,
+		vercel,
+		releaseParity: hasReleaseParity(edge, edgeVercel, vercel),
+		record
+	}
 }
 
 export async function runCheck(env, options = {}) {
@@ -310,11 +351,12 @@ export async function runCheck(env, options = {}) {
 	}
 
 	const [edge, edgeVercel, vercel] = await Promise.all([
-		probe(env.EDGEONE_HEALTH_URL, fetchImpl, timeoutMs, 'tencent', true),
+		probe(env.EDGEONE_TENCENT_HEALTH_URL, fetchImpl, timeoutMs, 'tencent', true),
 		probeEdgeOneVercelApi(env.EDGEONE_VERCEL_API_URL, fetchImpl, timeoutMs),
 		probe(env.VERCEL_HEALTH_URL, fetchImpl, timeoutMs, 'vercel', false)
 	])
-	if (edge.ok && edgeVercel.ok) {
+	const releaseParity = hasReleaseParity(edge, edgeVercel, vercel)
+	if (edge.ok && edgeVercel.ok && vercel.ok && releaseParity) {
 		let coordination
 		try {
 			coordination = await coordinator.reset()
@@ -326,7 +368,15 @@ export async function runCheck(env, options = {}) {
 				lastAction: 'healthy-coordinator-reset-pending'
 			}
 			await saveState(env, rawState, next)
-			return { action: 'healthy-coordinator-reset-pending', state: next, edge, vercel, record }
+			return {
+				action: 'healthy-coordinator-reset-pending',
+				state: next,
+				edge,
+				edgeVercel,
+				vercel,
+				releaseParity,
+				record
+			}
 		}
 		const next = {
 			...state,
@@ -338,7 +388,7 @@ export async function runCheck(env, options = {}) {
 			pendingAlert: null
 		}
 		await saveState(env, rawState, next)
-		return { action: 'healthy', state: next, edge, edgeVercel, vercel, record }
+		return { action: 'healthy', state: next, edge, edgeVercel, vercel, releaseParity, record }
 	}
 	if (!vercel.ok) {
 		return bothUnhealthyState(env, rawState, state, record, edge, edgeVercel, vercel, fetchImpl, coordinator)
@@ -352,7 +402,15 @@ export async function runCheck(env, options = {}) {
 		} catch (error) {
 			const next = { ...state, failureCount: 0, lastAction: 'coordinator-reset-pending' }
 			await saveState(env, rawState, next)
-			return { action: 'coordinator-reset-pending', state: next, edge, edgeVercel, vercel, record }
+			return {
+				action: 'coordinator-reset-pending',
+				state: next,
+				edge,
+				edgeVercel,
+				vercel,
+				releaseParity,
+				record
+			}
 		}
 	}
 
@@ -376,6 +434,7 @@ export async function runCheck(env, options = {}) {
 			edge,
 			edgeVercel,
 			vercel,
+			releaseParity,
 			record
 		}
 	}
@@ -407,7 +466,12 @@ export async function runCheck(env, options = {}) {
 		updated = await disableConfiguredRecord(env, fetchImpl)
 		const disabledRecord = await getConfiguredRecord(env, fetchImpl)
 		const enabledRegionalApexRecords = await getEnabledRegionalApexRecords(env, fetchImpl)
-		if (!isFallbackRecord(disabledRecord, env) || enabledRegionalApexRecords.length !== 0) {
+		const postDisableDefaultRecord = await getDefaultVercelRecord(env, fetchImpl)
+		if (
+			!isFallbackRecord(disabledRecord, env) ||
+			enabledRegionalApexRecords.length !== 0 ||
+			!isDefaultVercelRecord(postDisableDefaultRecord, env)
+		) {
 			throw new Error('dnspod-disabled-record-verification-failed')
 		}
 	} catch (error) {
@@ -451,7 +515,7 @@ export async function runCheck(env, options = {}) {
 			error: error instanceof Error ? error.message : String(error)
 		}))
 	}
-	return { action: 'fallback-applied', state: next, edge, vercel, record, updated }
+	return { action: 'fallback-applied', state: next, edge, edgeVercel, vercel, releaseParity, record, updated }
 }
 
 export class FailoverCoordinator {

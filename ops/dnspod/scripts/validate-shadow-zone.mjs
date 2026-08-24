@@ -24,6 +24,25 @@ function normalized(value) {
 	return String(value ?? '').trim().replace(/\.$/, '').toLowerCase()
 }
 
+const apexRouteTypes = new Set(['A', 'AAAA', 'ALIAS', 'CNAME', 'URL', 'URL2'])
+
+function isEnabled(record) {
+	return String(record.Status ?? '').toUpperCase() === 'ENABLE'
+}
+
+function isEnabledApexRoute(record, line) {
+	return (
+		isEnabled(record) &&
+		String(record.Name ?? '').toLowerCase() === '@' &&
+		String(record.Line ?? '') === line &&
+		apexRouteTypes.has(String(record.Type ?? '').toUpperCase())
+	)
+}
+
+function enabledApexRoutes(records, line) {
+	return records.filter(record => isEnabledApexRoute(record, line))
+}
+
 function find(records, line, type, value) {
 	return records.find(record =>
 		String(record.Name ?? '').toLowerCase() === '@' &&
@@ -39,7 +58,7 @@ const edgeoneCname = valueAfter('--edgeone-cname', argv) || process.env.DNSPOD_E
 const vercelA = valueAfter('--vercel-a', argv) || process.env.VERCEL_RECOMMENDED_A
 const line = process.env.DNSPOD_EDGEONE_LINE || '境内'
 const requiredHosts = (process.env.DNSPOD_REQUIRED_HOSTS ||
-	'www,api,static,hermes,pop,cdn,vercel-origin,eo-personal-canary').split(',').map(value => value.trim()).filter(Boolean)
+	'www,api,static,hermes,pop,cdn,vercel-origin,eo-personal-canary,eo-tencent-canary,eo-vercel-canary').split(',').map(value => value.trim()).filter(Boolean)
 
 function readRequiredSpecs() {
 	const raw = process.env.DNSPOD_REQUIRED_RECORDS_JSON
@@ -64,16 +83,25 @@ if (!file || !edgeoneCname || !vercelA) {
 	try {
 		const records = readRecords(file)
 		const requiredSpecs = readRequiredSpecs()
-		const enabled = record => String(record.Status ?? '').toUpperCase() === 'ENABLE'
 		const apexEdgeOne = find(records, line, 'CNAME', edgeoneCname)
 		const apexOverseas = find(records, '境外', 'A', vercelA)
 		const apexDefault = find(records, '默认', 'A', vercelA)
+		const edgeOneRoutes = enabledApexRoutes(records, line)
+		const overseasRoutes = enabledApexRoutes(records, '境外')
+		const defaultRoutes = enabledApexRoutes(records, '默认')
 		const missingHosts = requiredHosts.filter(host => !requiredSpecs.some(required =>
-			String(required.Name).toLowerCase() === host.toLowerCase()
+			String(required.Name).toLowerCase() === host.toLowerCase() &&
+			records.some(record =>
+				isEnabled(record) &&
+				String(record.Name ?? '').toLowerCase() === String(required.Name).toLowerCase() &&
+				String(record.Type ?? '').toUpperCase() === String(required.Type).toUpperCase() &&
+				normalized(record.Value) === normalized(required.Value) &&
+				String(record.Line ?? '') === String(required.Line)
+			)
 		))
 		const missingRequiredRecords = requiredSpecs
 			.filter(spec => !records.some(record =>
-				enabled(record) &&
+				isEnabled(record) &&
 				String(record.Name ?? '').toLowerCase() === spec.Name.toLowerCase() &&
 				String(record.Type ?? '').toUpperCase() === spec.Type.toUpperCase() &&
 				normalized(record.Value) === normalized(spec.Value) &&
@@ -88,17 +116,22 @@ if (!file || !edgeoneCname || !vercelA) {
 		const result = {
 			recordCount: records.length,
 			apex: {
-				edgeone: Boolean(apexEdgeOne && enabled(apexEdgeOne)),
-				overseas: Boolean(apexOverseas && enabled(apexOverseas)),
-				default: Boolean(apexDefault && enabled(apexDefault))
+				edgeone: Boolean(edgeOneRoutes.length === 1 && apexEdgeOne && isEnabled(apexEdgeOne)),
+				overseas: Boolean(overseasRoutes.length === 1 && apexOverseas && isEnabled(apexOverseas)),
+				default: Boolean(defaultRoutes.length === 1 && apexDefault && isEnabled(apexDefault)),
+				routeCounts: {
+					edgeone: edgeOneRoutes.length,
+					overseas: overseasRoutes.length,
+					default: defaultRoutes.length
+				}
 			},
 			missingHosts,
 			missingRequiredRecords,
 			disabledRegionalRecords: disabled.map(record => Number(record.RecordId)),
 			ok: Boolean(
-				apexEdgeOne && enabled(apexEdgeOne) &&
-				apexOverseas && enabled(apexOverseas) &&
-				apexDefault && enabled(apexDefault) &&
+				edgeOneRoutes.length === 1 && apexEdgeOne && isEnabled(apexEdgeOne) &&
+				overseasRoutes.length === 1 && apexOverseas && isEnabled(apexOverseas) &&
+				defaultRoutes.length === 1 && apexDefault && isEnabled(apexDefault) &&
 				missingHosts.length === 0 &&
 				missingRequiredRecords.length === 0
 			)

@@ -229,14 +229,20 @@ schedule; no DNSPod or EdgeOne secret belongs in Git:
 - `DNSPOD_DEFAULT_VERCEL_A` and `DNSPOD_DEFAULT_VERCEL_LINE=默认`
 - `DNSPOD_SECRET_ID` and `DNSPOD_SECRET_KEY`, scoped only to the required
   DNSPod record read/status operations
-- `EDGEONE_ORIGIN_TOKEN`, matching the Tencent host's origin-token file and
-  never the proxy secret
-- `EDGEONE_HEALTH_URL` (Tencent safe-read `/healthz`),
-  `EDGEONE_TENCENT_HEALTH_URL` (an isolated EdgeOne canary route that
-  unconditionally reaches Tencent, never the user apex),
-  `EDGEONE_VERCEL_API_URL` (safe API probe through the EdgeOne Vercel rule),
-  and `VERCEL_HEALTH_URL` (direct Vercel)
+- `EDGEONE_TENCENT_HEALTH_URL` (the isolated
+  `eo-tencent-canary.letletme.top` EdgeOne route that unconditionally reaches
+  Tencent, never the user apex), `EDGEONE_VERCEL_API_URL` (the isolated
+  `eo-vercel-canary.letletme.top` route that forces the Vercel origin), and
+  `VERCEL_HEALTH_URL` (direct Vercel)
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `WATCHDOG_ENABLED`
+
+`EDGEONE_ORIGIN_TOKEN` is not a Cloudflare Worker binding. It is provisioned
+only in the EdgeOne origin-request rule for the Tencent branch and must match
+the root-owned `/etc/letletme/origin-token` on the Tencent host. The rule must
+also remove browser-supplied origin/proxy headers before injecting the token,
+the current proxy secret, and EdgeOne's generated
+`X-Letletme-Proxy-Client-IP`. Nginx forwards that exact generated header to
+Node; it does not read the similarly named browser header.
 
 `DNSPOD_DEFAULT_VERCEL_A` is the exact enabled DNSPod default A record captured
 from the live Vercel project before the NS change; it is not a fresh DNS lookup

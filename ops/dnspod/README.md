@@ -26,9 +26,13 @@ line. It reads the exact record identified by:
 - `DNSPOD_DEFAULT_VERCEL_LINE=默认`
 
 The watchdog checks two EdgeOne paths before resetting its failure streak: the
-dedicated `/healthz` safe-read path must report `origin: tencent`, and a safe
-GraphQL POST through the EdgeOne API rule must report `origin: vercel`. After
-three consecutive failures of either EdgeOne path while direct Vercel is
+dedicated `eo-tencent-canary.letletme.top/healthz` safe-read path must report
+`origin: tencent`, and the dedicated `eo-vercel-canary.letletme.top` safe
+GraphQL POST path must report `origin: vercel`. Both canary hostnames must be
+configured with explicit EdgeOne origin rules; the Tencent rule must force the
+Lighthouse origin and the Vercel rule must force the Vercel origin. This makes
+the check independent of the Cloudflare Worker cron's execution geography.
+After three consecutive failures of either EdgeOne path while direct Vercel is
 healthy, it calls DNSPod `ModifyRecordStatus` with `DISABLE` for that one
 record.
 DNSPod then falls back to the enabled default line according to its line
@@ -60,6 +64,11 @@ Git:
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
 
+`DNSPOD_EDGEONE_CNAME` is mandatory. It is a secret because the EdgeOne target
+is account-specific; merely declaring the name in `wrangler.toml` is not
+enough. The secret must be present in the same environment as the deployed
+Worker before `WATCHDOG_ENABLED` can be enabled.
+
 The DNSPod CAM identity must be limited to reading records and changing the
 status of the one regional EdgeOne record. The implementation signs the
 current DNSPod API 3.0 endpoints `DescribeRecordList` and
@@ -78,11 +87,16 @@ wrangler secret put DNSPOD_EDGEONE_CNAME
 wrangler secret put DNSPOD_DEFAULT_VERCEL_A
 wrangler secret put TELEGRAM_BOT_TOKEN
 wrangler secret put TELEGRAM_CHAT_ID
+wrangler deploy --config cloudflare/watchdog/wrangler.toml
+wrangler secret list --config cloudflare/watchdog/wrangler.toml
 ```
 
 Deploy the Worker with `WATCHDOG_ENABLED=false` first. Verify the live secret
-names and a read-only dry run before enabling the watchdog; never paste the
-secret values into a commit, log, or review comment.
+names include `DNSPOD_EDGEONE_CNAME`, `DNSPOD_EDGEONE_RECORD_ID`,
+`DNSPOD_DEFAULT_VERCEL_A`, both Telegram bindings, and both DNSPod API
+bindings. Verify the forced Tencent/Vercel canary routes and a read-only dry
+run before enabling the watchdog; never paste secret values into a commit, log,
+or review comment.
 
 ## Shadow-zone procedure
 

@@ -44,7 +44,12 @@ const validRecords = [
 
 test('validator accepts exact CLI values and enabled apex records', () => {
 	const result = runValidator(validRecords)
-	assert.deepEqual(result.apex, { edgeone: true, overseas: true, default: true })
+	assert.deepEqual(result.apex, {
+		edgeone: true,
+		overseas: true,
+		default: true,
+		routeCounts: { edgeone: 1, overseas: 1, default: 1 }
+	})
 	assert.deepEqual(result.missingHosts, [])
 	assert.equal(result.ok, true)
 })
@@ -111,5 +116,18 @@ test('validator rejects an extra required record specification that is absent', 
 		})
 	} finally {
 		fs.rmSync(directory, { recursive: true, force: true })
+	}
+})
+
+test('validator rejects competing enabled apex routes', () => {
+	for (const competingRecord of [
+		{ Name: '@', Type: 'AAAA', Value: '2001:db8::1', Line: '默认', Status: 'ENABLE', RecordId: 5 },
+		{ Name: '@', Type: 'A', Value: '203.0.113.10', Line: '境外', Status: 'ENABLE', RecordId: 6 },
+		{ Name: '@', Type: 'A', Value: '203.0.113.11', Line: '境内', Status: 'ENABLE', RecordId: 7 }
+	]) {
+		assert.throws(() => runValidator([...validRecords, competingRecord]), error => {
+			assert.equal(error.status, 1)
+			return true
+		})
 	}
 })

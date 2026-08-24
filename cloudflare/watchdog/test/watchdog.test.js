@@ -5,6 +5,7 @@ import {
 	isEdgeOneRecord,
 	isFallbackRecord,
 	isDefaultVercelRecord,
+	hasReleaseParity,
 	parseState,
 	runCheck,
 	FailoverCoordinator
@@ -20,11 +21,13 @@ const baseEnv = {
 	DNSPOD_EDGEONE_LINE: '境内',
 	DNSPOD_DEFAULT_VERCEL_A: '76.76.21.21',
 	DNSPOD_DEFAULT_VERCEL_LINE: '默认',
-	EDGEONE_HEALTH_URL: 'https://eo-personal-canary.letletme.top/healthz',
-	EDGEONE_VERCEL_API_URL: 'https://eo-personal-canary.letletme.top/api/graphql',
+	EDGEONE_TENCENT_HEALTH_URL: 'https://eo-tencent-canary.letletme.top/healthz',
+	EDGEONE_VERCEL_API_URL: 'https://eo-vercel-canary.letletme.top/api/graphql',
 	VERCEL_HEALTH_URL: 'https://vercel-origin.letletme.top/healthz',
 	FAILOVER_STATE: null
 }
+
+const RELEASE_SHA = 'a'.repeat(40)
 
 function makeCoordinator(failureCount = 0) {
 	return {
@@ -60,10 +63,13 @@ function runCheckWithTestCoordinator(env, options) {
 	return runCheck(env, { ...options, coordinator: env.coordinator })
 }
 
-function health(edge) {
-	return new Response(JSON.stringify({ status: 'ok', origin: edge ? 'tencent' : 'vercel' }), {
+function health(edge, release = RELEASE_SHA) {
+	return new Response(JSON.stringify({ status: 'ok', origin: edge ? 'tencent' : 'vercel', release }), {
 		status: 200,
-		headers: edge ? { 'X-Letletme-Edge': 'edgeone' } : undefined
+		headers: {
+			'X-Letletme-Release': release,
+			...(edge ? { 'X-Letletme-Edge': 'edgeone' } : {})
+		}
 	})
 }
 
@@ -72,7 +78,8 @@ function graphqlHealth() {
 		status: 200,
 		headers: {
 			'X-Letletme-Edge': 'edgeone',
-			'X-Letletme-Origin': 'vercel'
+			'X-Letletme-Origin': 'vercel',
+			'X-Letletme-Release': RELEASE_SHA
 		}
 	})
 }
@@ -115,7 +122,7 @@ function fakeFetchFactory({
 			if (url === 'https://dnspod.tencentcloudapi.com/') {
 				if (action === 'DescribeRecordList') {
 					const body = JSON.parse(init.body)
-					if (body.RecordType === 'A') {
+					if (body.RecordLine === '默认') {
 						const records = defaultRecordSequence
 							? (defaultRecordSequence[Math.min(defaultDescribeCount++, defaultRecordSequence.length - 1)] || [])
 							: defaultRecords
@@ -145,10 +152,10 @@ function fakeFetchFactory({
 			if (url.startsWith('https://api.telegram.org/')) {
 				return telegramResponses.shift() || new Response('', { status: 200 })
 			}
-			if (url === 'https://eo-personal-canary.letletme.top/healthz') {
+			if (url === 'https://eo-tencent-canary.letletme.top/healthz') {
 				return edgeResponses.shift() || health(false)
 			}
-			if (url === 'https://eo-personal-canary.letletme.top/api/graphql') {
+			if (url === 'https://eo-vercel-canary.letletme.top/api/graphql') {
 				return edgeVercelResponses.shift() || graphqlHealth()
 			}
 			return vercelResponse
@@ -167,6 +174,26 @@ function toDnsRecord(record) {
 		Status: record.Status ?? (record.proxied === false ? 'ENABLE' : 'DISABLE')
 	}
 }
+
+test('requires all watchdog probes to report the same full release SHA', () => {
+	assert.equal(
+		hasReleaseParity(
+			{ release: RELEASE_SHA },
+			{ release: RELEASE_SHA },
+			{ release: RELEASE_SHA }
+		),
+		true
+	)
+	assert.equal(
+		hasReleaseParity(
+			{ release: RELEASE_SHA },
+			{ release: 'b'.repeat(40) },
+			{ release: RELEASE_SHA }
+		),
+		false
+	)
+	assert.equal(hasReleaseParity({ release: 'short' }, { release: 'short' }), false)
+})
 
 test('recognizes only the exact EdgeOne and fallback records', () => {
 	const env = baseEnv
@@ -243,6 +270,21 @@ test('does not disable regional EdgeOne when a competing default apex record is 
 		defaultRecords: [
 			{ RecordId: 456, Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'ENABLE' },
 			{ RecordId: 457, Type: 'A', Value: '203.0.113.12', Line: '默认', Status: 'ENABLE' }
+		],
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'manual-dns-state')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
+test('does not disable regional EdgeOne when an enabled default AAAA route competes', async () => {
+	const env = makeEnv()
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false },
+		defaultRecords: [
+			{ RecordId: 456, Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'ENABLE' },
+			{ RecordId: 458, Type: 'AAAA', Value: '2001:db8::1', Line: '默认', Status: 'ENABLE' }
 		],
 		edgeResponses: [new Response('', { status: 503 })]
 	})
@@ -345,7 +387,7 @@ test('revalidates the DNS record immediately before failover', async () => {
 	assert.equal(calls.filter(call => call.action === 'ModifyRecordStatus').length, 0)
 	const regionalDescribes = calls
 		.filter(call => call.action === 'DescribeRecordList')
-		.filter(call => JSON.parse(call.init.body).RecordType === undefined)
+		.filter(call => JSON.parse(call.init.body).RecordLine === '境内')
 	assert.equal(regionalDescribes.length, 2)
 })
 
@@ -370,10 +412,41 @@ test('revalidates the default route after a concurrent fallback change', async (
 	assert.equal(
 		calls.filter(call => {
 			if (call.action !== 'DescribeRecordList') return false
-			return JSON.parse(call.init.body).RecordType === 'A'
+			return JSON.parse(call.init.body).RecordLine === '默认'
 		}).length,
 		2
 	)
+})
+
+test('revalidates the default route after the disable mutation', async () => {
+	const env = makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), makeCoordinator(2))
+	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' }
+	const { fetch, calls } = fakeFetchFactory({
+		record: edgeRecord,
+		defaultRecordsSequence: [
+			[{ RecordId: 456, Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'ENABLE' }],
+			[{ RecordId: 456, Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'ENABLE' }],
+			[{ RecordId: 456, Type: 'A', Value: '198.51.100.10', Line: '默认', Status: 'ENABLE' }]
+		],
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	await assert.rejects(
+		runCheckWithTestCoordinator(env, { fetchImpl: fetch }),
+		/dnspod-disabled-record-verification-failed/
+	)
+	assert.equal(calls.filter(call => call.action === 'ModifyRecordStatus').length, 1)
+})
+
+test('counts release drift as an EdgeOne failure even when all HTTP probes are healthy', async () => {
+	const env = makeEnv()
+	const { fetch } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
+		edgeResponses: [health(true)],
+		vercelResponse: health(false, 'b'.repeat(40))
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'counted-failure')
+	assert.equal(result.releaseParity, false)
 })
 
 test('counts an EdgeOne-to-Vercel API failure even when Tencent is healthy', async () => {

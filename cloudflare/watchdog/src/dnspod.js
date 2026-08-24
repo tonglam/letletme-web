@@ -1,6 +1,7 @@
 const ENDPOINT = 'https://dnspod.tencentcloudapi.com/'
 const SERVICE = 'dnspod'
 const VERSION = '2021-03-23'
+const APEX_ROUTE_TYPES = new Set(['A', 'AAAA', 'ALIAS', 'CNAME', 'URL', 'URL2'])
 
 function bytes(value) {
 	return new TextEncoder().encode(value)
@@ -142,6 +143,16 @@ function isRegionalApexRecord(record, env) {
 function isEnabledRegionalApexRecord(record, env) {
 	return (
 		isRegionalApexRecord(record, env) &&
+		APEX_ROUTE_TYPES.has(String(record.Type || '').toUpperCase()) &&
+		String(record.Status || '').toUpperCase() === 'ENABLE'
+	)
+}
+
+function isEnabledApexRouteRecord(record, line) {
+	return (
+		String(record.Name || '').toLowerCase() === '@' &&
+		String(record.Line || '') === line &&
+		APEX_ROUTE_TYPES.has(String(record.Type || '').toUpperCase()) &&
 		String(record.Status || '').toUpperCase() === 'ENABLE'
 	)
 }
@@ -181,7 +192,6 @@ export async function getDefaultVercelRecord(env, fetchImpl) {
 			? { DomainId: Number(env.DNSPOD_DOMAIN_ID) }
 			: {}),
 		SubDomain: '@',
-		RecordType: 'A',
 		RecordLine: defaultVercelLine(env),
 		Offset: 0,
 		Limit: 100,
@@ -189,9 +199,7 @@ export async function getDefaultVercelRecord(env, fetchImpl) {
 	})
 	const records = Array.isArray(response.RecordList) ? response.RecordList : []
 	const enabledDefaultApexRecords = records.filter(record =>
-		String(record.Name || '').toLowerCase() === '@' &&
-		String(record.Line || '') === defaultVercelLine(env) &&
-		String(record.Status || '').toUpperCase() === 'ENABLE'
+		isEnabledApexRouteRecord(record, defaultVercelLine(env))
 	)
 	if (enabledDefaultApexRecords.length !== 1) return null
 	return isDefaultVercelRecord(enabledDefaultApexRecords[0], env)
