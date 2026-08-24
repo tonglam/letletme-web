@@ -320,18 +320,18 @@ export function normalizeClientEnvironment(
 	userAgent: string | null | undefined
 ): AuthClientEnvironment {
 	const value = typeof userAgent === 'string' ? userAgent : ''
-	const browser = value.match(/(?:Edg|Edge)\/(\d+)/i)
-		? ['edge', value.match(/(?:Edg|Edge)\/(\d+)/i)?.[1]]
-		: value.match(/(?:Chrome|CriOS)\/(\d+)/i)
-			? ['chrome', value.match(/(?:Chrome|CriOS)\/(\d+)/i)?.[1]]
-			: value.match(/Firefox\/(\d+)/i)
-				? ['firefox', value.match(/Firefox\/(\d+)/i)?.[1]]
-				: value.match(/(?:OPR|Opera)\/(\d+)/i)
-					? ['opera', value.match(/(?:OPR|Opera)\/(\d+)/i)?.[1]]
-					: value.match(/(?:Version)\/(\d+).*Safari\//i)
-						? ['safari', value.match(/(?:Version)\/(\d+).*Safari\//i)?.[1]]
-						: value.match(/MicroMessenger\/(\d+)/i)
-							? ['wechat', value.match(/MicroMessenger\/(\d+)/i)?.[1]]
+	const browser = value.match(/MicroMessenger\/(\d+)/i)
+		? ['wechat', value.match(/MicroMessenger\/(\d+)/i)?.[1]]
+		: value.match(/(?:OPR|Opera)\/(\d+)/i)
+			? ['opera', value.match(/(?:OPR|Opera)\/(\d+)/i)?.[1]]
+			: value.match(/(?:Edg|Edge)\/(\d+)/i)
+				? ['edge', value.match(/(?:Edg|Edge)\/(\d+)/i)?.[1]]
+				: value.match(/(?:Chrome|CriOS)\/(\d+)/i)
+					? ['chrome', value.match(/(?:Chrome|CriOS)\/(\d+)/i)?.[1]]
+					: value.match(/Firefox\/(\d+)/i)
+						? ['firefox', value.match(/Firefox\/(\d+)/i)?.[1]]
+						: value.match(/(?:Version)\/(\d+).*Safari\//i)
+							? ['safari', value.match(/(?:Version)\/(\d+)/i)?.[1]]
 							: undefined
 	const os = value.match(/Windows NT (\d+)/i)
 		? ['windows', value.match(/Windows NT (\d+)/i)?.[1]]

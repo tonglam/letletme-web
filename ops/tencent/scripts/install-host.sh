@@ -210,6 +210,6 @@ EOF
 visudo --check --file=/etc/sudoers.d/letletme-release
 systemctl daemon-reload
 systemctl enable letletme-web.service nginx.service
-systemctl enable letletme-auth-event-cleanup.timer
+systemctl enable --now letletme-auth-event-cleanup.timer
 
 echo "Host prerequisites installed. Add web.env, TLS material and origin secrets before starting services."

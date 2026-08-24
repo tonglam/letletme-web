@@ -22,6 +22,54 @@ import { logSafeAuthDiagnostic } from '@/lib/auth-safe-log'
 import { getPublicErrorMessage } from '@/lib/safe-errors'
 
 const MAX_AUTH_BODY_BYTES = 16 * 1024
+const LOGOUT_RATE_LIMIT = 30
+const LOGOUT_RATE_WINDOW_SECONDS = 60
+
+export async function enforceLogoutRateLimit({
+	request,
+	channel
+}: {
+	request: Request
+	channel: 'mini' | 'web'
+}): Promise<void> {
+	const secret = process.env.BACKEND_PROXY_SECRET
+	if (!secret) {
+		throw new MiniProgramAuthError(
+			'Request safety checks are unavailable',
+			503,
+			undefined,
+			'rate_limit_storage_unavailable'
+		)
+	}
+	try {
+		const result = await checkDatabaseRateLimit({
+			scope: `${channel}-logout-ip`,
+			subject: buildOpaqueRateLimitSubject(request.headers, secret),
+			limit: LOGOUT_RATE_LIMIT,
+			windowSeconds: LOGOUT_RATE_WINDOW_SECONDS
+		})
+		if (!result.allowed) {
+			throw new MiniProgramAuthError(
+				'Too many requests',
+				429,
+				result.retryAfterSeconds,
+				'rate_limited'
+			)
+		}
+	} catch (error) {
+		if (error instanceof MiniProgramAuthError) throw error
+		logSafeAuthDiagnostic('warn', 'better-auth diagnostic', {
+			name: 'LogoutRateLimitStorageUnavailable',
+			code: 'rate_limit_storage_unavailable'
+		})
+		throw new MiniProgramAuthError(
+			'Request safety checks are unavailable',
+			503,
+			undefined,
+			'rate_limit_storage_unavailable'
+		)
+	}
+}
 
 export function withMiniProgramAuthRequest(
 	request: Request,

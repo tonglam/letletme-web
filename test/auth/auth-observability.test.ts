@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
@@ -67,6 +68,18 @@ test('mini login context and browser metadata are coarse and bounded', () => {
 		osMajor: '17',
 		deviceClass: 'phone'
 	})
+	assert.equal(
+		normalizeClientEnvironment(
+			'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/126.0.0.0 Mobile Safari/537.36 MicroMessenger/8.0.50'
+		).browserFamily,
+		'wechat'
+	)
+	assert.equal(
+		normalizeClientEnvironment(
+			'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0.0.0 Safari/537.36 OPR/112.0.0.0'
+		).browserFamily,
+		'opera'
+	)
 	assert.equal(normalizeRequestId('bad request'), undefined)
 	assert.deepEqual(normalizePhaseTimings({ login: 12.345, bad: -1, huge: 99_999_999 }), { login: 12.35 })
 })
@@ -123,4 +136,14 @@ test('auth release prefers the self-hosted release over the Vercel fallback', ()
 			else process.env[name] = previous[name]
 		}
 	}
+})
+
+test('logout telemetry has an IP rate-limit boundary and self-hosted cleanup starts on install', () => {
+	const miniLogout = readFileSync('app/api/miniprogram/session/route.ts', 'utf8')
+	const webLogout = readFileSync('app/api/session/logout/route.ts', 'utf8')
+	const installHost = readFileSync('ops/tencent/scripts/install-host.sh', 'utf8')
+
+	assert.match(miniLogout, /enforceLogoutRateLimit\(\{ request, channel: 'mini' \}\)/)
+	assert.match(webLogout, /enforceLogoutRateLimit\(\{ request, channel: 'web' \}\)/)
+	assert.match(installHost, /systemctl enable --now letletme-auth-event-cleanup\.timer/)
 })

@@ -2,6 +2,7 @@ import { recordAuthEvent, updateAuthObservationContext } from '@/lib/auth-observ
 import { revokeMiniProgramSession } from '@/lib/miniprogram-account'
 import { getBearerToken, MiniProgramAuthError } from '@/lib/miniprogram-account-core'
 import {
+	enforceLogoutRateLimit,
 	miniProgramErrorResponse,
 	miniProgramSuccessResponse,
 	withMiniProgramAuthRequest,
@@ -12,6 +13,7 @@ export const dynamic = 'force-dynamic'
 export async function DELETE(request: Request) {
 	return withMiniProgramAuthRequest(request, 'logout', async () => {
 		try {
+			await enforceLogoutRateLimit({ request, channel: 'mini' })
 			const token = getBearerToken(request.headers.get('authorization'))
 			if (!token) {
 				throw new MiniProgramAuthError('Unauthenticated', 401)
