@@ -1,8 +1,8 @@
 import type { NavigationUser } from '@/components/profile/HeaderProfileCard'
-import { ReportProblemEntry } from '@/components/feedback/ReportProblemEntry'
+import { ReportProblemButton } from '@/components/feedback/ReportProblemButton'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
-import { ChevronDown, Menu, MessageCircleWarning, Settings, Shirt } from 'lucide-react'
+import { ChevronDown, Menu, Settings, Shirt } from 'lucide-react'
 import { getLocale, getTranslations } from 'next-intl/server'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { NavigationDisclosureController } from './NavigationDisclosureController'
@@ -88,15 +88,10 @@ async function AccountPanel({
 				<Settings aria-hidden="true" className="size-4" />
 				{t('profileSettings')}
 			</NavigationMenuLink>
-			<ReportProblemEntry>
-				<button
-					type="button"
-					className="flex min-h-10 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-				>
-					<MessageCircleWarning aria-hidden="true" className="size-4" />
-					{t('reportProblem')}
-				</button>
-			</ReportProblemEntry>
+			<ReportProblemButton
+				label={t('reportProblem')}
+				className="flex min-h-10 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			/>
 			<SignOutForm
 				label={t('signOut')}
 				pendingLabel={t('signingOut')}

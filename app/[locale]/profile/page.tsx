@@ -1,4 +1,4 @@
-import { ReportProblemEntry } from '@/components/feedback/ReportProblemEntry'
+import { ReportProblemButton } from '@/components/feedback/ReportProblemButton'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
@@ -264,15 +264,11 @@ export default async function ProfilePage({ params }: PageProps) {
 								<p className="mb-3 text-sm text-muted-foreground">
 									{tReport('description')}
 								</p>
-								<ReportProblemEntry>
-									<Button
-										type="button"
-										variant="outline"
-										className="w-full"
-									>
-										{tReport('entry')}
-									</Button>
-								</ReportProblemEntry>
+								<ReportProblemButton
+									label={tReport('entry')}
+									variant="outline"
+									className="w-full"
+								/>
 							</div>
 						</div>
 					</Card>
