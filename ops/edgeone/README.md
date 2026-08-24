@@ -233,8 +233,8 @@ schedule; no DNSPod or EdgeOne secret belongs in Git:
   DNSPod record read/status operations
 - `EDGEONE_TENCENT_HEALTH_URL` (the isolated
   `eo-tencent-canary.letletme.top` EdgeOne route that unconditionally reaches
-  Tencent, never the user apex), `EDGEONE_VERCEL_API_URL` (the isolated
-  `eo-vercel-canary.letletme.top` route that forces the Vercel origin), and
+  Tencent, never the user apex), `EDGEONE_VERCEL_API_URL` (the existing
+  `eo-canary.letletme.top` route that forces the Vercel origin), and
   `VERCEL_HEALTH_URL` (direct Vercel)
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `WATCHDOG_ENABLED`
 

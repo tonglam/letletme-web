@@ -22,7 +22,7 @@ const baseEnv = {
 	DNSPOD_DEFAULT_VERCEL_A: '76.76.21.21',
 	DNSPOD_DEFAULT_VERCEL_LINE: '默认',
 	EDGEONE_TENCENT_HEALTH_URL: 'https://eo-tencent-canary.letletme.top/healthz',
-	EDGEONE_VERCEL_API_URL: 'https://eo-vercel-canary.letletme.top/api/graphql',
+	EDGEONE_VERCEL_API_URL: 'https://eo-canary.letletme.top/api/graphql',
 	VERCEL_HEALTH_URL: 'https://vercel-origin.letletme.top/healthz',
 	FAILOVER_STATE: null
 }
@@ -196,7 +196,7 @@ function fakeFetchFactory({
 			if (url === 'https://eo-tencent-canary.letletme.top/healthz') {
 				return edgeResponses.shift() || health(false)
 			}
-			if (url === 'https://eo-vercel-canary.letletme.top/api/graphql') {
+			if (url === 'https://eo-canary.letletme.top/api/graphql') {
 				return edgeVercelResponses.shift() || graphqlHealth()
 			}
 			return vercelResponse
