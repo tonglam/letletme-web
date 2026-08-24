@@ -785,6 +785,7 @@
 			"loading": "赛季轨迹暂时不可用",
 			"signalsLabel": "位置指标",
 			"sampleInsufficient": "样本不足",
+			"sampleInsufficientWithValue": "{value}（样本不足）",
 			"realityUnverified": "现实数据未验证",
 			"metricUnavailable": "不可用",
 			"providerModeHistory": "FPL 当前 + Understat 历史",
