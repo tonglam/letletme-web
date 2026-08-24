@@ -165,7 +165,11 @@ export const authEvent = authSchema.table(
 			table.miniAccountRef
 		),
 		deviceIdx: index('auth_event_device_idx').on(table.deviceRef),
-		occurredIdx: index('auth_event_occurred_idx').on(table.occurredAt)
+		occurredIdx: index('auth_event_occurred_idx').on(table.occurredAt),
+		expiryWindow: check(
+			'auth_event_expiry_window_check',
+			sql`${table.expiresAt} >= ${table.occurredAt} AND ${table.expiresAt} <= ${table.occurredAt} + INTERVAL '45 days'`
+		)
 	})
 )
 
