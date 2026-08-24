@@ -159,7 +159,9 @@ export const buildTournamentEntries = (
 			id: String(row.entry),
 			rank: stale
 				? 0
-				: score && typeof row.rank === 'number' && row.rank > 0
+				: hasTraceableOfficialEventPoints(row.score) &&
+					  typeof row.rank === 'number' &&
+					  row.rank > 0
 					? row.rank
 					: (currentRankByEntryId.get(row.entry) ?? 0),
 			teamName: row.entryName ?? `Entry ${row.entry}`,

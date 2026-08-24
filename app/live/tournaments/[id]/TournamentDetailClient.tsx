@@ -303,7 +303,7 @@ export default function TournamentDetailClient({
 		[rows]
 	)
 	const managerScoreSettling = rows.some(
-		row => traceableOfficialManagerScore(row.score)?.state === 'SETTLING'
+		row => row.score?.state === 'SETTLING'
 	)
 	const managerScoreStatus = useMemo(() => {
 		const states = rows.flatMap(row => {

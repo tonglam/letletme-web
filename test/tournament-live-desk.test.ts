@@ -271,6 +271,33 @@ describe('live tournament desk', () => {
 		)
 	})
 
+	it('does not preserve a producer rank when official event points are absent', () => {
+		const row = {
+			entry: 1,
+			rank: 7,
+			entryName: 'Settling',
+			playerName: 'Manager',
+			overallRank: 1,
+			transferCost: 0,
+			livePoints: 0,
+			liveNetPoints: 0,
+			liveTotalPoints: 0,
+			played: 0,
+			toPlay: 11,
+			captainName: 'Captain',
+			chip: null,
+			pickList: [],
+			score: managerScore({
+				eventPoints: null,
+				source: 'FPL_EVENT_LIVE',
+				state: 'SETTLING',
+				revision: 'event-live:gw1:r1:1'
+			})
+		} satisfies TournamentLiveCalcData
+
+		assert.equal(buildTournamentEntries([row])[0]?.rank, 0)
+	})
+
 	it('keeps valid refresh metadata from a rejected score', () => {
 		const nextRefreshAt = '2026-08-24T06:05:00.000Z'
 		const row = {
