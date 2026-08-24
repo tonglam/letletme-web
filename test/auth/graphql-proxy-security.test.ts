@@ -10,9 +10,9 @@ test('normalizes a bounded Web-issued Mini Program bearer token', () => {
 	const token = 'a'.repeat(43)
 	assert.deepEqual(
 		readForwardableMiniProgramAuthorization(
-			new Headers({ Authorization: `bearer ${token}` }),
+			new Headers({ Authorization: `bearer ${token}` })
 		),
-		{ ok: true, value: `Bearer ${token}` },
+		{ ok: true, value: `Bearer ${token}` }
 	)
 })
 
@@ -23,6 +23,7 @@ test('passes Retry-After and v3 policy headers without forwarding arbitrary upst
 			'Retry-After': '17',
 			'X-RateLimit-Policy': 'graphql-v3',
 			'X-RateLimit-Scope': 'client',
+			'X-RateLimit-Workload': 'player-stats',
 			'X-RateLimit-Shadow-Outcome': 'deny',
 			'X-RateLimit-Shadow-Scope': 'client',
 			'X-Internal-Secret': 'never-forward'
@@ -32,6 +33,7 @@ test('passes Retry-After and v3 policy headers without forwarding arbitrary upst
 	assert.equal(target.get('retry-after'), '17')
 	assert.equal(target.get('x-ratelimit-policy'), 'graphql-v3')
 	assert.equal(target.get('x-ratelimit-scope'), 'client')
+	assert.equal(target.get('x-ratelimit-workload'), 'player-stats')
 	assert.equal(target.get('x-ratelimit-shadow-outcome'), 'deny')
 	assert.equal(target.get('x-ratelimit-shadow-scope'), 'client')
 	assert.equal(target.has('x-internal-secret'), false)
@@ -62,16 +64,18 @@ test('omits request-specific rate-limit metadata from shared-cache responses', (
 test('distinguishes absent credentials from malformed or oversized credentials', () => {
 	assert.deepEqual(readForwardableMiniProgramAuthorization(new Headers()), {
 		ok: true,
-		value: null,
+		value: null
 	})
 	assert.deepEqual(
-		readForwardableMiniProgramAuthorization(new Headers({ Authorization: 'Basic abc' })),
-		{ ok: false },
+		readForwardableMiniProgramAuthorization(
+			new Headers({ Authorization: 'Basic abc' })
+		),
+		{ ok: false }
 	)
 	assert.deepEqual(
 		readForwardableMiniProgramAuthorization(
-			new Headers({ Authorization: `Bearer ${'a'.repeat(513)}` }),
+			new Headers({ Authorization: `Bearer ${'a'.repeat(513)}` })
 		),
-		{ ok: false },
+		{ ok: false }
 	)
 })
