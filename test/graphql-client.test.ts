@@ -5,8 +5,17 @@ import {
 	clearPendingClientQueries,
 	executeQuery,
 	extractOperationName,
-	GraphQLRequestError
+	GraphQLRequestError,
+	normalizeGraphQLTimeoutMs
 } from '@/lib/graphql-client'
+
+test('normalizeGraphQLTimeoutMs matches the request deadline fallback', () => {
+	assert.equal(normalizeGraphQLTimeoutMs(), 15_000)
+	assert.equal(normalizeGraphQLTimeoutMs(5_000), 5_000)
+	assert.equal(normalizeGraphQLTimeoutMs(0), 15_000)
+	assert.equal(normalizeGraphQLTimeoutMs(Number.NaN), 15_000)
+	assert.equal(normalizeGraphQLTimeoutMs(Number.POSITIVE_INFINITY), 15_000)
+})
 
 test('executeQuery aborts a stalled request at the configured deadline', async () => {
 	const originalFetch = globalThis.fetch

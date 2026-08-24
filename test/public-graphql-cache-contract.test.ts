@@ -136,6 +136,10 @@ describe('public GraphQL cache contract', () => {
 		)
 		assert.match(serverContext, /capacityRequestIdForHeaders/)
 		assert.match(publicServer, /capacityRequestIdForCurrentRun/)
+		assert.match(
+			publicServer,
+			/timeoutMs: normalizeGraphQLTimeoutMs\(options\?\.timeoutMs\)/
+		)
 		assert.doesNotMatch(publicServer, /from 'next\/headers'/)
 	})
 })
