@@ -132,7 +132,7 @@ const edgeoneCname = valueAfter('--edgeone-cname', argv) || process.env.DNSPOD_E
 const vercelA = valueAfter('--vercel-a', argv) || process.env.VERCEL_RECOMMENDED_A
 const line = process.env.DNSPOD_EDGEONE_LINE || '境内'
 const requiredHosts = (process.env.DNSPOD_REQUIRED_HOSTS ||
-	'www,api,static,hermes,pop,cdn,vercel-origin,eo-canary,eo-tencent-canary,eo-vercel-canary').split(',').map(value => value.trim()).filter(Boolean)
+	'www,api,static,hermes,pop,cdn,vercel-origin,eo-canary,eo-tencent-canary').split(',').map(value => value.trim()).filter(Boolean)
 
 function readRequiredSpecs() {
 	const raw = process.env.DNSPOD_REQUIRED_RECORDS_JSON
