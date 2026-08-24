@@ -28,5 +28,5 @@ VERCEL_HEALTH_URL = "https://vercel-origin.letletme.top/healthz"
 # origin, so a Cloudflare cron invocation is independent of its execution
 # geography and cannot mistake a Vercel response for a healthy Tencent path.
 EDGEONE_TENCENT_HEALTH_URL = "https://eo-tencent-canary.letletme.top/healthz"
-EDGEONE_VERCEL_API_URL = "https://eo-vercel-canary.letletme.top/api/graphql"
+EDGEONE_VERCEL_API_URL = "https://eo-canary.letletme.top/api/graphql"
 PROBE_TIMEOUT_MS = "8000"
