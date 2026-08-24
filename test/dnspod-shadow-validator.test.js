@@ -187,6 +187,24 @@ test('validator rejects competing enabled routes for any required hostname', () 
 	})
 })
 
+test('validator accepts the complete required route set for a hostname', () => {
+	const records = [
+		...validRecords,
+		{ Name: 'api', Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'ENABLE', RecordId: 5 },
+		{ Name: 'api', Type: 'AAAA', Value: '2001:db8::1', Line: '默认', Status: 'ENABLE', RecordId: 6 }
+	]
+	const result = runValidator(records, {
+		requiredHosts: 'www,api',
+		requiredSpecs: [
+			{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
+			{ Name: 'api', Type: 'A', Value: '76.76.21.21', Line: '默认' },
+			{ Name: 'api', Type: 'AAAA', Value: '2001:db8::1', Line: '默认' }
+		]
+	})
+	assert.deepEqual(result.ambiguousRequiredRoutes, [])
+	assert.equal(result.ok, true)
+})
+
 test('validator preserves case-sensitive opaque DNS values', () => {
 	const records = [
 		...validRecords,
@@ -202,4 +220,23 @@ test('validator preserves case-sensitive opaque DNS values', () => {
 		assert.equal(error.status, 1)
 		return true
 	})
+})
+
+test('validator preserves case-sensitive HTTPS and SVCB values', () => {
+	for (const type of ['HTTPS', 'SVCB']) {
+		const records = [
+			...validRecords,
+			{ Name: '_service', Type: type, Value: '1 . alpn=h3 ech=tokenabc', Line: '默认', Status: 'ENABLE', RecordId: 5 }
+		]
+		assert.throws(() => runValidator(records, {
+			requiredHosts: 'www,_service',
+			requiredSpecs: [
+				{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
+				{ Name: '_service', Type: type, Value: '1 . alpn=h3 ech=TokenABC', Line: '默认' }
+			]
+		}), error => {
+			assert.equal(error.status, 1)
+			return true
+		})
+	}
 })

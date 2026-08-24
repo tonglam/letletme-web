@@ -24,12 +24,16 @@ function normalized(value) {
 	return String(value ?? '').trim().replace(/\.$/, '').toLowerCase()
 }
 
-const hostnameValueTypes = new Set(['A', 'AAAA', 'ALIAS', 'CNAME', 'HTTPS', 'MX', 'NS', 'PTR', 'SVCB'])
+const hostnameValueTypes = new Set(['A', 'AAAA', 'ALIAS', 'CNAME', 'MX', 'NS', 'PTR'])
+
+function canonicalValue(type, value) {
+	return hostnameValueTypes.has(String(type ?? '').toUpperCase())
+		? normalized(value)
+		: String(value ?? '')
+}
 
 function valuesEqual(type, actual, expected) {
-	return hostnameValueTypes.has(String(type ?? '').toUpperCase())
-		? normalized(actual) === normalized(expected)
-		: String(actual ?? '') === String(expected ?? '')
+	return canonicalValue(type, actual) === canonicalValue(type, expected)
 }
 
 const apexRouteTypes = new Set([
@@ -129,22 +133,35 @@ if (!file || !edgeoneCname || !vercelA) {
 			.filter(spec => apexRouteTypes.has(String(spec.Type).toUpperCase()))
 			.map(spec => String(spec.Name).trim().toLowerCase()))
 		const ambiguousRequiredRoutes = [...routeHosts].flatMap(host => {
-			const specs = requiredSpecs.filter(spec =>
+			const expectedRoutes = requiredSpecs.filter(spec =>
 				String(spec.Name).toLowerCase() === host &&
 				apexRouteTypes.has(String(spec.Type).toUpperCase())
 			)
-			return specs.flatMap(spec => {
-				const routes = records.filter(record =>
-					isEnabled(record) &&
-					String(record.Name ?? '').toLowerCase() === host &&
-					apexRouteTypes.has(String(record.Type ?? '').toUpperCase())
-				)
-				return routes.length === 1 &&
-					valuesEqual(routes[0].Type, routes[0].Value, spec.Value) &&
-					String(routes[0].Type ?? '').toUpperCase() === String(spec.Type).toUpperCase()
-					? []
-					: [`${spec.Name}/${spec.Type}/${spec.Line}`]
-			})
+			const actualRoutes = records.filter(record =>
+				isEnabled(record) &&
+				String(record.Name ?? '').toLowerCase() === host &&
+				apexRouteTypes.has(String(record.Type ?? '').toUpperCase())
+			)
+			const keyFor = record => [
+				String(record.Type ?? '').toUpperCase(),
+				String(record.Line ?? ''),
+				String(record.Name ?? '').trim().toLowerCase(),
+				canonicalValue(record.Type, record.Value)
+			].join('\u0000')
+			const expectedCounts = new Map()
+			for (const route of expectedRoutes) {
+				const key = keyFor(route)
+				expectedCounts.set(key, (expectedCounts.get(key) || 0) + 1)
+			}
+			const actualCounts = new Map()
+			for (const route of actualRoutes) {
+				const key = keyFor(route)
+				actualCounts.set(key, (actualCounts.get(key) || 0) + 1)
+			}
+			const allKeys = new Set([...expectedCounts.keys(), ...actualCounts.keys()])
+			return [...allKeys].some(key => expectedCounts.get(key) !== actualCounts.get(key))
+				? [`${host}: expected ${expectedRoutes.length} route(s), found ${actualRoutes.length}`]
+				: []
 		})
 		const disabled = records.filter(record =>
 			String(record.Name ?? '').toLowerCase() === '@' &&
