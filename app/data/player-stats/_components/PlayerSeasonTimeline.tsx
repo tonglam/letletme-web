@@ -162,7 +162,10 @@ function PlayerHeader({
 				>
 					{code === 'UNK' ? '—' : code}
 				</Badge>
-				<span className="truncate font-display text-sm font-bold uppercase tracking-wide sm:text-base">
+				<span
+					className="truncate font-display text-sm font-bold uppercase tracking-wide sm:text-base"
+					{...{ elementtiming: 'player-detail-card' }}
+				>
 					{player.webName}
 				</span>
 				<span className="text-xs text-muted-foreground">
@@ -584,7 +587,7 @@ function FragmentRow({
 		first && second && first.position === second.position
 			? first.signals.map((signal, index) =>
 					comparableWinner(signal, second.signals[index], true)
-			  )
+				  )
 			: []
 	return (
 		<div

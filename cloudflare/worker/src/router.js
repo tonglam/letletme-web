@@ -43,7 +43,14 @@ function originRequest(request, env) {
 	return new Request(url, init)
 }
 
-function annotateResponse(request, response, env) {
+function appendServerTiming(headers, name, durationMs) {
+	if (!Number.isFinite(durationMs) || durationMs < 0) return
+	const entry = `${name};dur=${Number(durationMs.toFixed(2))}`
+	const existing = headers.get('Server-Timing')
+	headers.set('Server-Timing', existing ? `${existing}, ${entry}` : entry)
+}
+
+function annotateResponse(request, response, env, originDurationMs) {
 	if (request.headers.get('upgrade')?.toLowerCase() === 'websocket') {
 		return response
 	}
@@ -62,6 +69,7 @@ function annotateResponse(request, response, env) {
 	}
 	headers.set('X-Letletme-Edge', env.EDGE_MARKER || 'cloudflare-fallback')
 	headers.set('X-Letletme-Origin', 'vercel')
+	appendServerTiming(headers, 'edge-origin', originDurationMs)
 	if (!headers.has('X-Letletme-Release')) {
 		headers.set('X-Letletme-Release', 'unknown')
 	}
@@ -73,10 +81,11 @@ function annotateResponse(request, response, env) {
 }
 
 export async function fetchVercel(request, env, fetchImpl = fetch) {
+	const startedAt = performance.now()
 	const response = await fetchImpl(originRequest(request, env), {
 		cf: { cacheEverything: false }
 	})
-	return annotateResponse(request, response, env)
+	return annotateResponse(request, response, env, performance.now() - startedAt)
 }
 
 export function isSpoofableHeaderRemoved(headers) {

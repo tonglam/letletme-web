@@ -1,5 +1,12 @@
 'use client'
 
+import { reportBrowserPerformanceMetric } from '@/lib/analytics/client-vitals'
+import {
+	cacheStatusFromHeaders,
+	createPerformanceCorrelationId,
+	type PerformanceCorrelation,
+	type PlayerStatsCacheStatus
+} from '@/lib/analytics/performance-correlation'
 import type { PlayerStatsDeskSection } from '@/lib/graphql/operations/players'
 import type { PlayerStatsDeskResponse } from '@/lib/player-stats-desk'
 
@@ -19,6 +26,10 @@ type PendingDeskRequest = {
 	signals: Set<AbortSignal>
 	hasUnabortableConsumer: boolean
 	cleanups: Array<() => void>
+}
+
+type DeskRequestOptions = PerformanceCorrelation & {
+	signal?: AbortSignal
 }
 
 const responseCache = new Map<
@@ -67,6 +78,28 @@ function writeCache(key: string, response: PlayerStatsDeskResponse): void {
 	}
 }
 
+function reportDeskResponse(
+	startedAt: number,
+	context: PerformanceCorrelation,
+	cacheStatus: PlayerStatsCacheStatus
+): void {
+	if (typeof window === 'undefined') return
+	const value = Math.max(0, performance.now() - startedAt)
+	reportBrowserPerformanceMetric({
+		name: 'PLAYER_DESK_RESPONSE',
+		value,
+		delta: value,
+		rating:
+			value <= 500 ? 'good' : value <= 1_500 ? 'needs-improvement' : 'poor',
+		metricId: createPerformanceCorrelationId('desk'),
+		page: window.location.pathname,
+		audienceHint: 'public',
+		navigationId: context.navigationId,
+		interactionId: context.interactionId,
+		cacheStatus
+	})
+}
+
 function attachConsumer(
 	pending: PendingDeskRequest,
 	signal: AbortSignal | undefined
@@ -100,12 +133,16 @@ export function primePlayerStatsDeskCache(
 
 export async function requestPlayerStatsDesk(
 	input: DeskRequest,
-	options: { signal?: AbortSignal } = {}
+	options: DeskRequestOptions = {}
 ): Promise<PlayerStatsDeskResponse> {
 	const request = canonicalRequest(input)
 	const key = requestKey(request)
+	const startedAt = typeof performance === 'undefined' ? 0 : performance.now()
 	const cached = readCache(key)
-	if (cached) return cached
+	if (cached) {
+		reportDeskResponse(startedAt, options, 'hit')
+		return cached
+	}
 	const existing = pendingRequests.get(key)
 	if (existing && !existing.controller.signal.aborted) {
 		attachConsumer(existing, options.signal)
@@ -120,6 +157,13 @@ export async function requestPlayerStatsDesk(
 		horizon: String(request.horizon),
 		section: request.section
 	})
+	const requestHeaders: Record<string, string> = {}
+	if (options.navigationId) {
+		requestHeaders['X-LetLetMe-Navigation-Id'] = options.navigationId
+	}
+	if (options.interactionId) {
+		requestHeaders['X-LetLetMe-Interaction-Id'] = options.interactionId
+	}
 	const pending: PendingDeskRequest = {
 		controller,
 		promise: Promise.resolve(null as never),
@@ -131,11 +175,18 @@ export async function requestPlayerStatsDesk(
 	pending.promise = fetch(`/api/player-stats/desk?${search.toString()}`, {
 		method: 'GET',
 		credentials: 'same-origin',
+		headers: requestHeaders,
 		signal: controller.signal
 	})
 		.then(async response => {
+			const responseCacheStatus = cacheStatusFromHeaders(response.headers)
 			const body = await response.json().catch(() => null)
 			if (!response.ok || body == null || typeof body !== 'object') {
+				reportDeskResponse(
+					startedAt,
+					options,
+					responseCacheStatus === 'unknown' ? 'bypass' : responseCacheStatus
+				)
 				const error = new Error(
 					`Player stats request failed with status ${response.status}`
 				)
@@ -144,6 +195,7 @@ export async function requestPlayerStatsDesk(
 			}
 			const result = body as PlayerStatsDeskResponse
 			writeCache(key, result)
+			reportDeskResponse(startedAt, options, responseCacheStatus)
 			return result
 		})
 		.finally(() => {

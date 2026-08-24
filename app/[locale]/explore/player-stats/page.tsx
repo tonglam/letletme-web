@@ -19,6 +19,7 @@ import {
 import { playerStatsDeskResponseFromResult } from '@/lib/player-stats-desk'
 import { loadPlayerStatsDesk } from '@/lib/player-stats-desk-server'
 import { GraphQLRequestError } from '@/lib/graphql-client'
+import { createPerformanceCorrelationId } from '@/lib/analytics/performance-correlation'
 import { RequestTiming } from '@/lib/request-timing'
 import { getTranslations } from 'next-intl/server'
 import { Suspense } from 'react'
@@ -51,6 +52,7 @@ async function PersonalSeedStream({
 async function renderPlayerStatsPage({ params, searchParams }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	const timing = new RequestTiming()
+	const navigationId = createPerformanceCorrelationId('nav')
 	const bootstrapPromise = loadPlayerStatsBootstrap(timing)
 	const translationPromise = timing.measure('translation', () =>
 		getTranslations('PlayerStats')
@@ -59,14 +61,6 @@ async function renderPlayerStatsPage({ params, searchParams }: PageProps) {
 		value => ({ ok: true as const, value }),
 		error => ({ ok: false as const, error })
 	)
-	const personalSeedPromise = loadPlayerStatsPersonalSeed(
-		bootstrapPromise,
-		undefined,
-		timing
-	).catch(error => {
-		console.error('[player-stats] personal seed failed:', error)
-		return null
-	})
 	const [sp, bootstrapResult, t] = await Promise.all([
 		searchParams,
 		bootstrapResultPromise,
@@ -125,14 +119,27 @@ async function renderPlayerStatsPage({ params, searchParams }: PageProps) {
 					})
 	console.info('[player-stats-loader]', {
 		locale,
+		navigationId,
 		phase: 'public-ready',
 		eventRevision: bootstrap.context.revision,
 		durationMs: Number(timing.elapsedMs().toFixed(2)),
 		stages: timing.snapshot()
 	})
+	// Start personal work only after the public directory and any deep-link
+	// detail seed have been admitted to the response. The personal tasks remain
+	// parallel with each other once this critical path has cleared.
+	const personalSeedPromise = loadPlayerStatsPersonalSeed(
+		Promise.resolve(bootstrap),
+		undefined,
+		timing
+	).catch(error => {
+		console.error('[player-stats] personal seed failed:', error)
+		return null
+	})
 	void personalSeedPromise.then(() => {
 		console.info('[player-stats-loader]', {
 			locale,
+			navigationId,
 			phase: 'stream-ready',
 			eventRevision: bootstrap.context.revision,
 			durationMs: Number(timing.elapsedMs().toFixed(2)),
@@ -165,6 +172,7 @@ async function renderPlayerStatsPage({ params, searchParams }: PageProps) {
 						directorySeed={directorySeed}
 						initialPlayerIds={initialPlayerIds}
 						initialDeskSeed={initialDeskSeed}
+						navigationId={navigationId}
 					/>
 					<Suspense fallback={null}>
 						<PersonalSeedStream seedPromise={personalSeedPromise} />

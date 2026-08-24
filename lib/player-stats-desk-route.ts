@@ -3,6 +3,7 @@ import {
 	playerStatsDeskResponseFromResult,
 	type PlayerStatsDeskLoadResult
 } from '@/lib/player-stats-desk'
+import { parsePerformanceCorrelationId } from '@/lib/analytics/performance-correlation'
 import { NextResponse } from 'next/server'
 
 export const PLAYER_STATS_DESK_PUBLIC_CACHE_CONTROL =
@@ -41,6 +42,16 @@ export function createPlayerStatsDeskRouteHandler(
 				}
 			)
 		}
+		const navigationId = parsePerformanceCorrelationId(
+			request.headers.get('x-letletme-navigation-id')
+		)
+		const interactionId = parsePerformanceCorrelationId(
+			request.headers.get('x-letletme-interaction-id')
+		)
+		const correlation = {
+			...(navigationId ? { navigationId } : {}),
+			...(interactionId ? { interactionId } : {})
+		}
 		const startedAt = performance.now()
 		try {
 			const result = await load(
@@ -50,6 +61,7 @@ export function createPlayerStatsDeskRouteHandler(
 				parsed.section
 			)
 			const detail = {
+				...correlation,
 				count: parsed.playerIds.length,
 				section: parsed.section,
 				outcome: result.outcome,
@@ -89,6 +101,7 @@ export function createPlayerStatsDeskRouteHandler(
 			})
 		} catch (error) {
 			logger.error('[player-stats-desk]', {
+				...correlation,
 				count: parsed.playerIds.length,
 				section: parsed.section,
 				outcome: 'failed',

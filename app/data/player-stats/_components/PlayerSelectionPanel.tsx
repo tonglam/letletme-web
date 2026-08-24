@@ -54,6 +54,7 @@ function RecentPlayers({
 					variant={selectedPlayerId === player.id ? 'default' : 'outline'}
 					size="sm"
 					onClick={() => onSelect(player)}
+					data-player-stats-recent-player={player.id}
 					className="h-7 gap-1 rounded-full px-2.5 text-xs"
 				>
 					{player.name}
@@ -222,36 +223,57 @@ function PlayerSlot({
 function CompactPlayerSlot({
 	label,
 	player,
+	slot,
 	onEdit,
 	onRemove
 }: {
 	label: string
 	player: PlayerDirectoryOption
+	slot: 'first' | 'second'
 	onEdit: () => void
 	onRemove?: () => void
 }) {
 	const t = useTranslations('PlayerStats')
 	return (
 		<div className="flex min-w-0 items-center gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-3">
-		<div className="min-w-0 flex-1">
-			<p className="eyebrow">
-				{label}
-			</p>
-			<p className="truncate text-sm font-medium">
-				{player.name}{' '}
-				<span className="text-muted-foreground">· {player.teamShortName}</span>
-			</p>
-		</div>
-		<Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={onEdit}>
-			<Pencil className="size-3.5" aria-hidden="true" />
-			{t('editPlayer')}
-		</Button>
-		{onRemove ? (
-			<Button type="button" variant="ghost" size="sm" className="h-8 px-2" onClick={onRemove}>
-				<X className="size-3.5" aria-hidden="true" />
-				{t('remove')}
+			<div className="min-w-0 flex-1">
+				<p className="eyebrow">{label}</p>
+				<p className="truncate text-sm font-medium">
+					{player.name}{' '}
+					<span className="text-muted-foreground">
+						· {player.teamShortName}
+					</span>
+				</p>
+			</div>
+			<Button
+				type="button"
+				variant="outline"
+				size="sm"
+				className="h-8 gap-1.5"
+				onClick={onEdit}
+				data-player-stats-edit-slot={slot}
+			>
+				<Pencil
+					className="size-3.5"
+					aria-hidden="true"
+				/>
+				{t('editPlayer')}
 			</Button>
-		) : null}
+			{onRemove ? (
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					className="h-8 px-2"
+					onClick={onRemove}
+				>
+					<X
+						className="size-3.5"
+						aria-hidden="true"
+					/>
+					{t('remove')}
+				</Button>
+			) : null}
 		</div>
 	)
 }
@@ -310,9 +332,7 @@ export function PlayerSelectionPanel({
 			className="mb-8 p-4 sm:p-5"
 		>
 			<div className="mb-3 border-b border-border/50 pb-2">
-				<p className="eyebrow sm:text-caption">
-					{t('scopeLabel')}
-				</p>
+				<p className="eyebrow sm:text-caption">{t('scopeLabel')}</p>
 				<p className="mt-0.5 text-caption text-muted-foreground">
 					{t('scopeHint')}
 				</p>
@@ -334,6 +354,7 @@ export function PlayerSelectionPanel({
 					<CompactPlayerSlot
 						label={t('playerOne')}
 						player={first.selectedPlayer}
+						slot="first"
 						onEdit={() => setEditingSlot('first')}
 					/>
 				) : null}
@@ -365,6 +386,7 @@ export function PlayerSelectionPanel({
 						<CompactPlayerSlot
 							label={t('playerTwo')}
 							player={second.selectedPlayer}
+							slot="second"
 							onEdit={() => setEditingSlot('second')}
 							onRemove={() => {
 								second.onClearSelection?.()
@@ -379,6 +401,7 @@ export function PlayerSelectionPanel({
 							variant="outline"
 							size="sm"
 							className="gap-1.5"
+							data-player-stats-add-compare="true"
 							onClick={onAddCompare}
 							disabled={!canCompare}
 						>

@@ -33,14 +33,15 @@ describe('public GraphQL cache contract', () => {
 	})
 
 	it('keeps private reads no-store and removes rolling ownership operations', async () => {
-		const [server, operations, fixtures, playerStats, en, zh] = await Promise.all([
-			read('lib/graphql-server.ts'),
-			read('lib/graphql/operations/market.ts'),
-			read('app/[locale]/explore/fixtures/page.tsx'),
-			read('lib/player-stats-seed.ts'),
-			read('messages/en.json'),
-			read('messages/zh-CN.json')
-		])
+		const [server, operations, fixtures, playerStats, en, zh] =
+			await Promise.all([
+				read('lib/graphql-server.ts'),
+				read('lib/graphql/operations/market.ts'),
+				read('app/[locale]/explore/fixtures/page.tsx'),
+				read('lib/player-stats-seed.ts'),
+				read('messages/en.json'),
+				read('messages/zh-CN.json')
+			])
 		assert.match(server, /executeServerQuery/)
 		assert.match(server, /options\?: Omit<ExecuteQueryOptions/)
 		assert.doesNotMatch(operations, /period:\s*ROLLING_7D/)
@@ -111,7 +112,10 @@ describe('public GraphQL cache contract', () => {
 			/loadPlayerStatsDeskForPublicRoute[\s\S]*loadCompletePlayerStatsDeskFromOrigin/
 		)
 		assert.match(playerDeskRoute, /loadPlayerStatsDeskForPublicRoute/)
-		assert.doesNotMatch(playerDeskRoute, /createPlayerStatsDeskRouteHandler\(loadPlayerStatsDesk\)/)
+		assert.doesNotMatch(
+			playerDeskRoute,
+			/createPlayerStatsDeskRouteHandler\(loadPlayerStatsDesk\)/
+		)
 	})
 
 	it('correlates signed capacity page runs without making cache keys request-derived', async () => {
@@ -141,5 +145,26 @@ describe('public GraphQL cache contract', () => {
 			/timeoutMs: normalizeGraphQLTimeoutMs\(options\?\.timeoutMs\)/
 		)
 		assert.doesNotMatch(publicServer, /from 'next\/headers'/)
+	})
+
+	it('keeps personal Player Stats work behind the public bootstrap', async () => {
+		const [seed, page, client] = await Promise.all([
+			read('lib/player-stats-seed.ts'),
+			read('app/[locale]/explore/player-stats/page.tsx'),
+			read('app/data/player-stats/PlayerStatsClient.tsx')
+		])
+		assert.match(seed, /const bootstrap = await bootstrapPromise/)
+		assert.ok(
+			seed.indexOf('const bootstrap = await bootstrapPromise') <
+				seed.indexOf('const sessionPromise = measure')
+		)
+		assert.match(page, /navigationId = createPerformanceCorrelationId\('nav'\)/)
+		assert.match(page, /navigationId\}/)
+		assert.ok(
+			page.indexOf('const initialDeskSeed') <
+				page.indexOf('const personalSeedPromise = loadPlayerStatsPersonalSeed')
+		)
+		assert.match(client, /void loadPlayerStatsView\(\)/)
+		assert.match(client, /interactionId: interaction\.interactionId/)
 	})
 })

@@ -1,6 +1,7 @@
 'use client'
 
 import type { PlayerDirectoryOption } from '@/components/player/PlayerDirectoryPicker'
+import type { PerformanceCorrelation } from '@/lib/analytics/performance-correlation'
 import { requestPlayerStatsDesk } from '@/lib/player-stats-desk-client'
 import type { PlayerStatsDeskNormalizedEntry } from '@/lib/player-stats-desk'
 import type {
@@ -156,11 +157,13 @@ const evidenceSectionToDeskSection: Record<
 export function usePlayerDetailSlot({
 	storageKey,
 	eventId,
-	initialEntry = null
+	initialEntry = null,
+	navigationId
 }: {
 	storageKey: string
 	eventId?: number
 	initialEntry?: PlayerStatsDeskNormalizedEntry | null
+	navigationId?: string
 }) {
 	const t = useTranslations('PlayerStats')
 	const initialDetail = initialEntry?.overview ?? null
@@ -232,7 +235,8 @@ export function usePlayerDetailSlot({
 	const loadPlayerDetail = useCallback(
 		async (
 			player: PlayerDirectoryOption,
-			batchPlayerIds?: number[]
+			batchPlayerIds?: number[],
+			interactionContext?: PerformanceCorrelation
 		): Promise<PlayerDetailLoadResult> => {
 			if (!eventId) {
 				setError(t('currentGameweekUnavailable'))
@@ -262,7 +266,11 @@ export function usePlayerDetailSlot({
 						eventId,
 						section: 'overview'
 					},
-					{ signal: controller.signal }
+					{
+						signal: controller.signal,
+						navigationId,
+						interactionId: interactionContext?.interactionId
+					}
 				)
 				if (requestId !== requestIdRef.current || controller.signal.aborted) {
 					return { status: 'superseded', detail: null }
@@ -305,7 +313,7 @@ export function usePlayerDetailSlot({
 				}
 			}
 		},
-		[abortRequests, eventId, evidenceLoaded, t]
+		[abortRequests, eventId, evidenceLoaded, navigationId, t]
 	)
 
 	const loadStateContext = useCallback(
@@ -333,7 +341,7 @@ export function usePlayerDetailSlot({
 						eventId,
 						section: 'context'
 					},
-					{ signal: controller.signal }
+					{ signal: controller.signal, navigationId }
 				)
 				if (requestId !== requestIdRef.current || controller.signal.aborted)
 					return
@@ -364,7 +372,14 @@ export function usePlayerDetailSlot({
 				if (requestId === requestIdRef.current) setIsStateContextLoading(false)
 			}
 		},
-		[eventId, isStateContextLoading, playerStateProfile, selectedPlayer, t]
+		[
+			eventId,
+			isStateContextLoading,
+			navigationId,
+			playerStateProfile,
+			selectedPlayer,
+			t
+		]
 	)
 
 	const loadEvidence = useCallback(
@@ -390,7 +405,7 @@ export function usePlayerDetailSlot({
 						eventId,
 						section: evidenceSectionToDeskSection[section]
 					},
-					{ signal: controller.signal }
+					{ signal: controller.signal, navigationId }
 				)
 				if (requestId !== requestIdRef.current || controller.signal.aborted)
 					return
@@ -442,7 +457,7 @@ export function usePlayerDetailSlot({
 					setIsEvidenceLoading(false)
 			}
 		},
-		[eventId, evidenceLoaded, selectedPlayer, t]
+		[eventId, evidenceLoaded, navigationId, selectedPlayer, t]
 	)
 
 	const rememberPlayer = useCallback(
@@ -460,20 +475,26 @@ export function usePlayerDetailSlot({
 	)
 
 	const selectPlayer = useCallback(
-		(player: PlayerDirectoryOption, batchPlayerIds?: number[]) => {
+		(
+			player: PlayerDirectoryOption,
+			batchPlayerIds?: number[],
+			interactionContext?: PerformanceCorrelation
+		) => {
 			setError(null)
 			setStateError(null)
 			setStateContextError(null)
 			setEvidenceError(null)
 			evidenceLoaded().clear()
 			stateContextLoadedRef.current = false
-			void loadPlayerDetail(player, batchPlayerIds).then(result => {
-				if (result.status === 'loaded') {
-					rememberPlayer(playerDetailToDirectoryOption(result.detail))
-				} else if (result.status === 'not-found') {
-					setError(t('playerNotFound'))
+			void loadPlayerDetail(player, batchPlayerIds, interactionContext).then(
+				result => {
+					if (result.status === 'loaded') {
+						rememberPlayer(playerDetailToDirectoryOption(result.detail))
+					} else if (result.status === 'not-found') {
+						setError(t('playerNotFound'))
+					}
 				}
-			})
+			)
 		},
 		[evidenceLoaded, loadPlayerDetail, rememberPlayer, t]
 	)
@@ -481,7 +502,11 @@ export function usePlayerDetailSlot({
 	const selectPlayerById = useCallback(
 		async (
 			playerId: number,
-			opts?: { silentNotFound?: boolean; batchPlayerIds?: number[] }
+			opts?: {
+				silentNotFound?: boolean
+				batchPlayerIds?: number[]
+				interactionId?: string
+			}
 		) => {
 			if (!eventId) {
 				setError(t('currentGameweekUnavailable'))
@@ -496,7 +521,10 @@ export function usePlayerDetailSlot({
 				teamShortName: '',
 				teamName: ''
 			}
-			const result = await loadPlayerDetail(placeholder, opts?.batchPlayerIds)
+			const result = await loadPlayerDetail(placeholder, opts?.batchPlayerIds, {
+				navigationId,
+				interactionId: opts?.interactionId
+			})
 			if (result.status === 'superseded') return null
 			if (result.status !== 'loaded') {
 				if (result.status === 'not-found' && !opts?.silentNotFound) {
@@ -508,7 +536,7 @@ export function usePlayerDetailSlot({
 			rememberPlayer(player)
 			return result.detail
 		},
-		[eventId, loadPlayerDetail, playerDetail, rememberPlayer, t]
+		[eventId, loadPlayerDetail, navigationId, playerDetail, rememberPlayer, t]
 	)
 
 	const clearSelection = useCallback(() => {
