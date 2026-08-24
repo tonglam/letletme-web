@@ -21,6 +21,7 @@ import {
 import { shouldResolveGraphQLProxySession } from '@/lib/graphql-proxy-session'
 import { logSafeAuthDiagnostic } from '@/lib/auth-safe-log'
 import { RequestTiming, resolveRequestId } from '@/lib/request-timing'
+import { appendServerTiming } from '@/lib/server-timing'
 import { NextRequest, NextResponse } from 'next/server'
 
 const GRAPHQL_ENDPOINT =
@@ -237,6 +238,12 @@ export async function POST(request: NextRequest) {
 	copySafeGraphQLUpstreamHeaders(response.headers, safeHeaders, {
 		includeRateLimitMetadata: cacheControl === 'no-store'
 	})
+	const proxyTimingSnapshot = requestTiming.snapshot()
+	appendServerTiming(safeHeaders, 'proxy', requestTiming.elapsedMs())
+	const upstreamDuration = proxyTimingSnapshot.upstreamFetchAndRead
+	if (typeof upstreamDuration === 'number') {
+		appendServerTiming(safeHeaders, 'upstream', upstreamDuration)
+	}
 	const proxyResponse = requestTiming.measureSync(
 		'responseBuild',
 		() =>

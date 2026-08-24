@@ -27,16 +27,16 @@ const profiles = [
 	{ name: 'mobile', viewport: { width: 390, height: 844 } }
 ]
 const scenarios = [
-	{ name: 'directory', query: {}, readyMetric: 'PLAYER_DIRECTORY_READY' },
+	{ name: 'directory', query: {}, readyMetric: 'PLAYER_DIRECTORY_PAINT' },
 	{
 		name: 'detail',
 		query: { p1: String(playerIds[0]) },
-		readyMetric: 'PLAYER_DETAIL_READY'
+		readyMetric: 'PLAYER_DETAIL_PAINT'
 	},
 	{
 		name: 'compare',
 		query: { p1: String(playerIds[0]), p2: String(playerIds[1]) },
-		readyMetric: 'PLAYER_COMPARE_READY'
+		readyMetric: 'PLAYER_COMPARE_PAINT'
 	}
 ]
 
@@ -50,7 +50,12 @@ function percentile(values, percentileValue) {
 }
 
 function distribution(runs, field) {
-	const values = runs.map(run => run[field])
+	const values = runs
+		.map(run => run[field])
+		.filter(value => typeof value === 'number' && Number.isFinite(value))
+	if (values.length === 0) {
+		return { p50: null, p95: null, max: null }
+	}
 	return {
 		p50: percentile(values, 50),
 		p95: percentile(values, 95),
@@ -58,27 +63,176 @@ function distribution(runs, field) {
 	}
 }
 
+function distributionNullable(runs, field) {
+	return distribution(
+		runs.filter(run => run[field] != null),
+		field
+	)
+}
+
 function summarize(runs) {
 	return {
 		runs: runs.length,
 		status200: runs.every(run => run.status === 200),
 		lcpMs: distribution(runs, 'lcpMs'),
+		fcpMs: distribution(runs, 'fcpMs'),
 		tbtMs: distribution(runs, 'tbtMs'),
 		cls: distribution(runs, 'cls'),
 		ttfbMs: distribution(runs, 'ttfbMs'),
 		htmlResponseMs: distribution(runs, 'htmlResponseMs'),
 		documentBytes: distribution(runs, 'documentBytes'),
 		readyMs: distribution(runs, 'readyMs'),
+		paintMs: distribution(runs, 'paintMs'),
+		deskDurationMs: distributionNullable(runs, 'deskDurationMs'),
+		chunkBytes: distribution(runs, 'chunkBytes'),
 		deskBrowserRequestCounts: runs.map(run => run.deskBrowserRequestCount),
+		deskCacheStatuses: runs.flatMap(run => run.deskCacheStatuses),
+		serverTiming: runs.flatMap(run => run.serverTiming),
+		releaseShas: Array.from(
+			new Set(runs.map(run => run.releaseSha).filter(Boolean))
+		),
+		interactions: runs.flatMap(run => run.interactions ?? []),
 		horizontalOverflow: runs.some(run => run.horizontalOverflow)
 	}
+}
+
+async function waitForEnabled(page, selector, timeoutMs = 8_000) {
+	await page.waitForFunction(
+		query => {
+			const element = document.querySelector(query)
+			return element instanceof HTMLButtonElement && !element.disabled
+		},
+		selector,
+		{ timeout: timeoutMs }
+	)
+}
+
+async function measureClickInteraction(
+	page,
+	metrics,
+	name,
+	metricName,
+	action
+) {
+	const metricOffset = metrics.length
+	const resourceOffset = await page.evaluate(
+		() => performance.getEntriesByType('resource').length
+	)
+	const startedAt = performance.now()
+	await action()
+	const metric = await (async () => {
+		const deadline = Date.now() + 8_000
+		while (Date.now() < deadline) {
+			const nextMetric = metrics
+				.slice(metricOffset)
+				.find(item => item?.name === metricName)
+			if (nextMetric) return nextMetric
+			await new Promise(resolve => setTimeout(resolve, 50))
+		}
+		return null
+	})()
+	const resources = await page.evaluate(
+		offset =>
+			performance
+				.getEntriesByType('resource')
+				.slice(offset)
+				.map(entry => ({
+					name: entry.name,
+					startTime: entry.startTime,
+					responseEnd: entry.responseEnd
+				})),
+		resourceOffset
+	)
+	const deskResources = resources.filter(resource =>
+		resource.name.includes('/api/player-stats/desk')
+	)
+	const chunkResources = resources.filter(resource =>
+		resource.name.includes('/_next/static/chunks/')
+	)
+	const parallelChunkDesk = deskResources.some(desk =>
+		chunkResources.some(
+			chunk =>
+				Math.max(desk.startTime, chunk.startTime) <
+				Math.min(desk.responseEnd, chunk.responseEnd)
+		)
+	)
+	return {
+		name,
+		metricName,
+		durationMs: Number((performance.now() - startedAt).toFixed(2)),
+		paintMs: metric?.value ?? null,
+		cacheStatus: metric?.cacheStatus ?? 'unknown',
+		navigationId: metric?.navigationId ?? null,
+		interactionId: metric?.interactionId ?? null,
+		parallelChunkDesk,
+		success: metric != null
+	}
+}
+
+async function runSamePageInteractions(page, metrics) {
+	const interactions = []
+	const firstResult = page
+		.locator('[data-player-stats-directory-result]')
+		.first()
+	await firstResult.waitFor({ state: 'visible', timeout: 8_000 })
+	interactions.push(
+		await measureClickInteraction(
+			page,
+			metrics,
+			'same-page-detail',
+			'PLAYER_DETAIL_PAINT',
+			() => firstResult.click()
+		)
+	)
+
+	const addCompare = page.locator('[data-player-stats-add-compare="true"]')
+	await addCompare.waitFor({ state: 'visible', timeout: 8_000 })
+	await waitForEnabled(page, '[data-player-stats-add-compare="true"]')
+	await addCompare.click()
+	const secondResult = page
+		.locator('[data-player-stats-directory-result]')
+		.first()
+	await secondResult.waitFor({ state: 'visible', timeout: 8_000 })
+	interactions.push(
+		await measureClickInteraction(
+			page,
+			metrics,
+			'same-page-compare',
+			'PLAYER_COMPARE_PAINT',
+			() => secondResult.click()
+		)
+	)
+
+	const editFirst = page.locator('[data-player-stats-edit-slot="first"]')
+	await editFirst.waitFor({ state: 'visible', timeout: 8_000 })
+	await waitForEnabled(page, '[data-player-stats-edit-slot="first"]')
+	await editFirst.click()
+	const recent = page.locator('[data-player-stats-recent-player]').first()
+	await recent.waitFor({ state: 'visible', timeout: 8_000 })
+	interactions.push(
+		await measureClickInteraction(
+			page,
+			metrics,
+			'client-warm-cache',
+			'PLAYER_DETAIL_PAINT',
+			() => recent.click()
+		)
+	)
+	return interactions
 }
 
 async function measureRun(browser, profile, scenario, index) {
 	const context = await browser.newContext({ viewport: profile.viewport })
 	const page = await context.newPage()
 	await page.addInitScript(() => {
-		window.__playerStatsPerformance = { cls: 0, lcp: 0, tbt: 0 }
+		window.__playerStatsPerformance = { cls: 0, fcp: 0, lcp: 0, tbt: 0 }
+		new PerformanceObserver(list => {
+			for (const entry of list.getEntries()) {
+				if (entry.name === 'first-contentful-paint') {
+					window.__playerStatsPerformance.fcp = entry.startTime
+				}
+			}
+		}).observe({ type: 'paint', buffered: true })
 		new PerformanceObserver(list => {
 			for (const entry of list.getEntries()) {
 				window.__playerStatsPerformance.lcp = entry.startTime
@@ -102,27 +256,78 @@ async function measureRun(browser, profile, scenario, index) {
 	await cdp.send('Network.enable')
 	let documentRequestId = null
 	let encodedDocumentBytes = 0
+	let chunkBytes = 0
+	const chunkRequestIds = new Set()
 	cdp.on('Network.responseReceived', event => {
 		if (event.type === 'Document') documentRequestId = event.requestId
+		if (
+			event.type === 'Script' &&
+			event.response.url.includes('/_next/static/chunks/')
+		) {
+			chunkRequestIds.add(event.requestId)
+		}
 	})
 	cdp.on('Network.loadingFinished', event => {
 		if (event.requestId === documentRequestId) {
 			encodedDocumentBytes = event.encodedDataLength
 		}
+		if (chunkRequestIds.has(event.requestId)) {
+			chunkBytes += event.encodedDataLength
+		}
 	})
 
 	let deskBrowserRequestCount = 0
+	const deskRequestStarts = []
+	const deskResponses = []
+	const serverTiming = []
+	let releaseSha = null
 	let readyMs = null
+	let paintMs = null
+	const telemetry = []
 	page.on('request', request => {
 		const url = new URL(request.url())
 		if (url.pathname === '/api/player-stats/desk') {
 			deskBrowserRequestCount += 1
+			deskRequestStarts.push({
+				url: request.url(),
+				startedAt: performance.now()
+			})
+		}
+	})
+	page.on('response', response => {
+		const url = new URL(response.url())
+		const headers = response.headers()
+		const responseServerTiming = response.headers()['server-timing']
+		if (responseServerTiming) serverTiming.push(responseServerTiming)
+		if (url.pathname === '/api/player-stats/desk') {
+			const started = deskRequestStarts.shift()
+			deskResponses.push({
+				status: response.status(),
+				durationMs: started
+					? Number((performance.now() - started.startedAt).toFixed(2))
+					: null,
+				cacheStatus:
+					headers['x-vercel-cache'] ??
+					headers['cf-cache-status'] ??
+					headers['x-letletme-cache-status'] ??
+					'unknown',
+				serverTiming: responseServerTiming ?? null
+			})
+		}
+		if (url.pathname === new URL(targetUrl).pathname) {
+			releaseSha = headers['x-letletme-release'] ?? releaseSha
 		}
 	})
 	await page.route('**/api/vitals', async route => {
 		try {
 			const metric = route.request().postDataJSON()
-			if (metric?.name === scenario.readyMetric) readyMs = metric.value
+			if (metric && typeof metric === 'object') {
+				telemetry.push(metric)
+				if (metric.name === scenario.readyMetric) {
+					readyMs = metric.value
+					paintMs = metric.value
+				}
+			}
 		} catch {
 			// A malformed telemetry payload should not abort the measurement itself.
 		}
@@ -139,6 +344,7 @@ async function measureRun(browser, profile, scenario, index) {
 	)
 	runUrl.searchParams.set('_perfSource', 'synthetic')
 	const response = await page.goto(runUrl.toString(), { waitUntil: 'load' })
+	releaseSha = response?.headers()['x-letletme-release'] ?? releaseSha
 	await page.waitForFunction(
 		metricName =>
 			performance.getEntriesByType('navigation').length > 0 &&
@@ -161,6 +367,7 @@ async function measureRun(browser, profile, scenario, index) {
 	const values = await page.evaluate(() => {
 		const navigation = performance.getEntriesByType('navigation')[0]
 		return {
+			fcpMs: window.__playerStatsPerformance?.fcp ?? 0,
 			lcpMs: window.__playerStatsPerformance?.lcp ?? 0,
 			cls: window.__playerStatsPerformance?.cls ?? 0,
 			tbtMs: window.__playerStatsPerformance?.tbt ?? 0,
@@ -170,13 +377,27 @@ async function measureRun(browser, profile, scenario, index) {
 				document.documentElement.scrollWidth > window.innerWidth
 		}
 	})
+	const interactions =
+		scenario.name === 'directory'
+			? await runSamePageInteractions(page, telemetry)
+			: []
+	const deskDurationMs =
+		deskResponses.find(item => item.durationMs != null)?.durationMs ?? null
+	const deskCacheStatuses = deskResponses.map(item => item.cacheStatus)
 	await context.close()
 	return {
 		status: response?.status() ?? 0,
 		...values,
 		documentBytes,
+		chunkBytes,
 		readyMs: readyMs ?? Number.POSITIVE_INFINITY,
-		deskBrowserRequestCount
+		paintMs: paintMs ?? readyMs ?? Number.POSITIVE_INFINITY,
+		deskBrowserRequestCount,
+		deskDurationMs,
+		deskCacheStatuses,
+		serverTiming,
+		releaseSha,
+		interactions
 	}
 }
 
@@ -253,6 +474,37 @@ console.log(
 							profile.compare.map(run => run.readyMs),
 							95
 						) <= 1_500
+				),
+				directoryPaint: Object.values(raw).every(
+					profile =>
+						percentile(
+							profile.directory.map(run => run.paintMs),
+							95
+						) <= 1_000
+				),
+				detailPaint: Object.values(raw).every(
+					profile =>
+						percentile(
+							profile.detail.map(run => run.paintMs),
+							95
+						) <= 1_500
+				),
+				comparePaint: Object.values(raw).every(
+					profile =>
+						percentile(
+							profile.compare.map(run => run.paintMs),
+							95
+						) <= 1_500
+				),
+				samePageInteraction: Object.values(raw).every(profile =>
+					profile.directory.every(run =>
+						run.interactions?.every(interaction => interaction.success)
+					)
+				),
+				chunkDeskParallel: Object.values(raw).every(profile =>
+					profile.directory.every(run =>
+						run.interactions?.some(interaction => interaction.parallelChunkDesk)
+					)
 				),
 				serverSeedAvoidsBrowserDeskFetch: Object.values(raw).every(profile =>
 					[...profile.detail, ...profile.compare].every(

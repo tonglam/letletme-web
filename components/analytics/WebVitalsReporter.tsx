@@ -2,7 +2,8 @@
 
 import {
 	reportBrowserPerformanceMetric,
-	resolveAudienceHint
+	resolveAudienceHint,
+	resolveNavigationId
 } from '@/lib/analytics/client-vitals'
 import { normalizeMetricPage } from '@/lib/analytics/web-vitals'
 import { usePathname } from 'next/navigation'
@@ -28,7 +29,8 @@ export function WebVitalsReporter() {
 			rating: metric.rating,
 			metricId: metric.id,
 			page,
-			audienceHint: resolveAudienceHint()
+			audienceHint: resolveAudienceHint(),
+			navigationId: resolveNavigationId()
 		})
 	}, [])
 

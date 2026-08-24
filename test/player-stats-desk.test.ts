@@ -36,21 +36,18 @@ const quietLogger = { info: () => undefined, error: () => undefined }
 
 describe('player stats desk contract', () => {
 	it('merges per-player cache entries without creating pair cache keys', () => {
-		const merged = mergePlayerStatsDeskLoadResults(
-			[27, 13],
-			4,
-			5,
-			'overview',
-			[
-				result({
-					entries: [{ playerId: 27 }],
-					unavailablePlayerIds: [27],
-					outcome: 'not-found'
-				}),
-				result({ entries: [overviewEntry(13)] })
-			]
+		const merged = mergePlayerStatsDeskLoadResults([27, 13], 4, 5, 'overview', [
+			result({
+				entries: [{ playerId: 27 }],
+				unavailablePlayerIds: [27],
+				outcome: 'not-found'
+			}),
+			result({ entries: [overviewEntry(13)] })
+		])
+		assert.deepEqual(
+			merged.entries.map(entry => entry.playerId),
+			[27, 13]
 		)
-		assert.deepEqual(merged.entries.map(entry => entry.playerId), [27, 13])
 		assert.deepEqual(merged.unavailablePlayerIds, [27])
 		assert.equal(merged.outcome, 'partial')
 	})
@@ -219,6 +216,30 @@ describe('player stats desk route', () => {
 			response.headers.get('cache-control'),
 			PLAYER_STATS_DESK_PUBLIC_CACHE_CONTROL
 		)
+	})
+
+	it('logs bounded request correlation without echoing it in cacheable responses', async () => {
+		const details: Array<Record<string, unknown>> = []
+		const handler = createPlayerStatsDeskRouteHandler(async () => result(), {
+			info: (_message, detail) => details.push(detail),
+			error: () => undefined
+		})
+		const response = await handler(
+			new Request(
+				'https://letletme.top/api/player-stats/desk?playerIds=13&eventId=1&section=overview',
+				{
+					headers: {
+						'X-LetLetMe-Navigation-Id': 'nav-12345678',
+						'X-LetLetMe-Interaction-Id': 'interaction-12345678'
+					}
+				}
+			)
+		)
+		assert.equal(response.status, 200)
+		assert.equal(details[0]?.navigationId, 'nav-12345678')
+		assert.equal(details[0]?.interactionId, 'interaction-12345678')
+		assert.equal(response.headers.has('x-letletme-navigation-id'), false)
+		assert.equal(response.headers.has('x-letletme-interaction-id'), false)
 	})
 
 	it('returns partial data as no-store and total failure as 502', async () => {

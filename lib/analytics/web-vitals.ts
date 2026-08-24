@@ -1,4 +1,9 @@
 import { stripLocaleFromPathname } from '@/i18n/routing'
+import {
+	PERFORMANCE_CORRELATION_ID_PATTERN,
+	PLAYER_STATS_CACHE_STATUSES,
+	type PlayerStatsCacheStatus
+} from '@/lib/analytics/performance-correlation'
 
 const WEB_VITAL_NAMES = new Set([
 	'CLS',
@@ -25,8 +30,12 @@ const WEB_VITAL_NAMES = new Set([
 	'MARKET_HISTORY_READY',
 	'MARKET_AVAILABILITY_READY',
 	'PLAYER_DIRECTORY_READY',
+	'PLAYER_DIRECTORY_PAINT',
 	'PLAYER_DETAIL_READY',
+	'PLAYER_DETAIL_PAINT',
 	'PLAYER_COMPARE_READY',
+	'PLAYER_COMPARE_PAINT',
+	'PLAYER_DESK_RESPONSE',
 	'TRENDS_CATALOG_READY',
 	'TRENDS_DESK_READY',
 	'TRENDS_SWITCH_READY',
@@ -39,6 +48,7 @@ const WEB_VITAL_SOURCES = new Set(['user', 'synthetic', 'unknown'])
 
 export type AudienceHint = 'public' | 'session-hint' | 'unknown'
 export type WebVitalSource = 'user' | 'synthetic' | 'unknown'
+export type { PlayerStatsCacheStatus }
 
 /**
  * Keep synthetic browser runs out of the real-user denominator without
@@ -74,6 +84,9 @@ export type WebVitalPayload = {
 	device: string
 	audienceHint: AudienceHint
 	source: WebVitalSource
+	navigationId?: string
+	interactionId?: string
+	cacheStatus?: PlayerStatsCacheStatus
 }
 
 const routePatterns: Array<[RegExp, string]> = [
@@ -118,6 +131,18 @@ export const parseWebVitalPayload = (
 			: 'unknown'
 	const source =
 		typeof candidate.source === 'string' ? candidate.source : 'unknown'
+	const navigationId =
+		typeof candidate.navigationId === 'string'
+			? candidate.navigationId
+			: undefined
+	const interactionId =
+		typeof candidate.interactionId === 'string'
+			? candidate.interactionId
+			: undefined
+	const cacheStatus =
+		typeof candidate.cacheStatus === 'string'
+			? candidate.cacheStatus
+			: undefined
 	const value = candidate.value
 	const delta = candidate.delta
 
@@ -132,6 +157,17 @@ export const parseWebVitalPayload = (
 		return null
 	if (!/^[A-Za-z0-9._-]{1,100}$/.test(metricId)) return null
 	if (
+		(navigationId !== undefined &&
+			!PERFORMANCE_CORRELATION_ID_PATTERN.test(navigationId)) ||
+		(interactionId !== undefined &&
+			!PERFORMANCE_CORRELATION_ID_PATTERN.test(interactionId)) ||
+		(cacheStatus !== undefined &&
+			!PLAYER_STATS_CACHE_STATUSES.includes(
+				cacheStatus as PlayerStatsCacheStatus
+			))
+	)
+		return null
+	if (
 		typeof value !== 'number' ||
 		!Number.isFinite(value) ||
 		value < 0 ||
@@ -142,7 +178,7 @@ export const parseWebVitalPayload = (
 	)
 		return null
 
-	return {
+	const parsed: WebVitalPayload = {
 		name,
 		value,
 		delta,
@@ -153,4 +189,9 @@ export const parseWebVitalPayload = (
 		audienceHint: audienceHint as AudienceHint,
 		source: source as WebVitalSource
 	}
+	if (navigationId !== undefined) parsed.navigationId = navigationId
+	if (interactionId !== undefined) parsed.interactionId = interactionId
+	if (cacheStatus !== undefined)
+		parsed.cacheStatus = cacheStatus as PlayerStatsCacheStatus
+	return parsed
 }

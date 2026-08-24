@@ -27,6 +27,7 @@ test('pass-through strips client-controlled internal headers and injects trusted
 			return new Response('ok', {
 				headers: {
 					Location: 'https://letletme-web.vercel.app/login',
+					'Server-Timing': 'upstream;dur=12',
 					'X-Letletme-Release': 'f669312c2906abaf4b7ec105528b7a81e2743d9c'
 				}
 			})
@@ -35,12 +36,20 @@ test('pass-through strips client-controlled internal headers and injects trusted
 
 	assert.equal(new URL(forwarded.url).hostname, env.VERCEL_ORIGIN_HOST)
 	assert.equal(forwarded.headers.get('host'), 'letletme.top')
-	assert.equal(forwarded.headers.get('x-letletme-proxy-client-ip'), '203.0.113.7')
-	assert.equal(forwarded.headers.get('x-letletme-proxy-secret'), 'trusted-secret')
+	assert.equal(
+		forwarded.headers.get('x-letletme-proxy-client-ip'),
+		'203.0.113.7'
+	)
+	assert.equal(
+		forwarded.headers.get('x-letletme-proxy-secret'),
+		'trusted-secret'
+	)
 	assert.equal(forwarded.headers.has('x-letletme-origin-token'), false)
 	assert.equal(response.headers.get('x-letletme-edge'), 'cloudflare-fallback')
 	assert.equal(response.headers.get('x-letletme-origin'), 'vercel')
 	assert.equal(response.headers.get('location'), 'https://letletme.top/login')
+	assert.match(response.headers.get('server-timing') ?? '', /upstream;dur=12/)
+	assert.match(response.headers.get('server-timing') ?? '', /edge-origin;dur=/)
 })
 
 test('forwards POST bodies without reading them', async () => {
