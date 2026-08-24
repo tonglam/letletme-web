@@ -37,6 +37,12 @@ function releaseFrom(response, payload) {
 	}
 }
 
+function releaseFailureReason(releaseInfo) {
+	if (releaseInfo.conflict) return 'release-mismatch'
+	if (!FULL_RELEASE_SHA.test(releaseInfo.release || '')) return 'release-invalid'
+	return null
+}
+
 export function hasReleaseParity(...probes) {
 	const releases = probes.map(probe => probe?.release?.toLowerCase())
 	return (
@@ -101,18 +107,19 @@ async function probe(url, fetchImpl, timeoutMs, expectedOrigin, requireEdgeOne) 
 		const edgeMarker = response.headers.get('x-letletme-edge')
 		const normalizedEdgeMarker = edgeMarker?.trim().toLowerCase() || null
 		const releaseInfo = releaseFrom(response, payload)
+		const releaseFailure = releaseFailureReason(releaseInfo)
 		const ok =
 			response.status === 200 &&
 			payload?.status === 'ok' &&
 			payload?.origin === expectedOrigin &&
-			!releaseInfo.conflict &&
+			!releaseFailure &&
 			(requireEdgeOne
 				? normalizedEdgeMarker === 'edgeone'
 				: normalizedEdgeMarker === null)
 		return {
 			ok,
 			status: response.status,
-			reason: ok ? 'ok' : releaseInfo.conflict ? 'release-mismatch' : 'health-mismatch',
+			reason: ok ? 'ok' : releaseFailure || 'health-mismatch',
 			edgeMarker,
 			release: releaseInfo.release,
 			releaseConflict: releaseInfo.conflict
@@ -148,16 +155,17 @@ async function probeEdgeOneVercelApi(url, fetchImpl, timeoutMs) {
 		const edgeMarker = response.headers.get('x-letletme-edge')
 		const originMarker = response.headers.get('x-letletme-origin')
 		const releaseInfo = releaseFrom(response, payload)
+		const releaseFailure = releaseFailureReason(releaseInfo)
 		const ok =
 			response.status === 200 &&
 			payload?.data?.__typename === 'Query' &&
 			originMarker === 'vercel' &&
 			edgeMarker === 'edgeone' &&
-			!releaseInfo.conflict
+			!releaseFailure
 		return {
 			ok,
 			status: response.status,
-			reason: ok ? 'ok' : releaseInfo.conflict ? 'release-mismatch' : 'health-mismatch',
+			reason: ok ? 'ok' : releaseFailure || 'health-mismatch',
 			edgeMarker,
 			originMarker,
 			release: releaseInfo.release,
@@ -536,6 +544,7 @@ export async function runCheck(env, options = {}) {
 	const coordination = await coordinator.recordFailure()
 	const failureCount = coordination.failureCount
 	if (!coordination.shouldFailover) {
+		const claimHeld = coordination.claimHeld === true || coordination.mutationHeld === true
 		const next = {
 			...state,
 			failureCount,
@@ -543,8 +552,8 @@ export async function runCheck(env, options = {}) {
 			coordinatorResetPending: false,
 			lastFailureAt: now,
 			lastAction: coordination.claimHeld ? 'fallback-claim-held' : 'edge-failure-counted',
-			lastAlertKey: null,
-			pendingAlert: null
+			lastAlertKey: claimHeld ? state.lastAlertKey : null,
+			pendingAlert: claimHeld ? state.pendingAlert : null
 		}
 		await saveState(env, rawState, next)
 		return {
@@ -578,6 +587,13 @@ export async function runCheck(env, options = {}) {
 	const latestDefaultRecord = await getDefaultVercelRecord(env, fetchImpl)
 	if (!isDefaultVercelRecord(latestDefaultRecord, env)) {
 		return manualDnsState(env, rawState, state, latestDefaultRecord, fetchImpl, coordinator, 'default')
+	}
+	const latestEnabledMainlandApexRecords = await getEnabledMainlandApexRecords(env, fetchImpl)
+	if (
+		latestEnabledMainlandApexRecords.length !== 1 ||
+		!latestEnabledMainlandApexRecords.some(record => isEnabledRecord(record, env))
+	) {
+		return manualDnsState(env, rawState, state, latestRecord, fetchImpl, coordinator, 'regional')
 	}
 
 	let claim

@@ -466,6 +466,40 @@ test('alerts when failover mutation locking fails', async () => {
 	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 
+test('preserves a mutation-lock alert while the threshold claim is held', async () => {
+	const coordinator = makeCoordinator(2)
+	coordinator.beginMutation = async () => { throw new Error('coordinator-unavailable') }
+	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' }
+	const firstEnv = {
+		...makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), coordinator),
+		TELEGRAM_BOT_TOKEN: 'bot',
+		TELEGRAM_CHAT_ID: 'chat'
+	}
+	const firstFetch = fakeFetchFactory({
+		record: edgeRecord,
+		edgeResponses: [new Response('', { status: 503 })],
+		telegramResponses: [new Response('', { status: 200 })]
+	})
+	const first = await runCheckWithTestCoordinator(firstEnv, { fetchImpl: firstFetch.fetch })
+	assert.equal(first.action, 'failover-mutation-begin-failed')
+
+	const secondEnv = {
+		...makeEnv(JSON.stringify(firstEnv.writes.at(-1)), coordinator),
+		TELEGRAM_BOT_TOKEN: 'bot',
+		TELEGRAM_CHAT_ID: 'chat'
+	}
+	const secondFetch = fakeFetchFactory({
+		record: edgeRecord,
+		edgeResponses: [new Response('', { status: 503 })],
+		telegramResponses: [new Response('', { status: 200 })]
+	})
+	const second = await runCheckWithTestCoordinator(secondEnv, { fetchImpl: secondFetch.fetch })
+	assert.equal(second.action, 'fallback-claim-held')
+	assert.equal(second.state.lastAlertKey, first.state.lastAlertKey)
+	assert.deepEqual(second.state.pendingAlert, first.state.pendingAlert)
+	assert.equal(secondFetch.calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 0)
+})
+
 test('deduplicates repeated DNS mutation failure alerts', async () => {
 	const coordinator = makeCoordinator(2)
 	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' }
@@ -632,6 +666,29 @@ test('counts release drift as an EdgeOne failure even when all HTTP probes are h
 	assert.equal(result.releaseParity, false)
 })
 
+for (const [label, release] of [
+	['missing', undefined],
+	['malformed', 'short-release']
+]) {
+	test(`does not fail over when direct Vercel health has a ${label} release`, async () => {
+		const coordinator = makeCoordinator(2)
+		const env = makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), coordinator)
+		const vercelResponse = new Response(JSON.stringify({ status: 'ok', origin: 'vercel', ...(release ? { release } : {}) }), {
+			status: 200
+		})
+		const { fetch, calls } = fakeFetchFactory({
+			record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
+			edgeResponses: [new Response('', { status: 503 })],
+			vercelResponse
+		})
+		const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+		assert.equal(result.action, 'both-unhealthy')
+		assert.equal(result.vercel.ok, false)
+		assert.equal(result.vercel.reason, 'release-invalid')
+		assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+	})
+}
+
 test('counts conflicting release header and health body as an EdgeOne failure', async () => {
 	const env = makeEnv()
 	const { fetch } = fakeFetchFactory({
@@ -668,6 +725,29 @@ test('does not fail over when another enabled regional apex record competes', as
 	})
 	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
 	assert.equal(result.action, 'manual-dns-state')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
+test('checks carrier-specific mainland routes before failover mutation', async () => {
+	const coordinator = makeCoordinator(2)
+	let beginMutationCalls = 0
+	const originalBeginMutation = coordinator.beginMutation
+	coordinator.beginMutation = async claimToken => {
+		beginMutationCalls += 1
+		return originalBeginMutation.call(coordinator, claimToken)
+	}
+	const env = makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), coordinator)
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
+		regionalRecords: [
+			{ type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Line: '境内', Status: 'ENABLE' },
+			{ RecordId: 789, Name: '@', Type: 'A', Value: '203.0.113.12', Line: '电信', Status: 'ENABLE' }
+		],
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'manual-dns-state')
+	assert.equal(beginMutationCalls, 0)
 	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 
