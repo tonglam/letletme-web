@@ -141,9 +141,19 @@ test('auth release prefers the self-hosted release over the Vercel fallback', ()
 test('logout telemetry has an IP rate-limit boundary and self-hosted cleanup starts on install', () => {
 	const miniLogout = readFileSync('app/api/miniprogram/session/route.ts', 'utf8')
 	const webLogout = readFileSync('app/api/session/logout/route.ts', 'utf8')
+	const authCatchAll = readFileSync('app/api/auth/[...all]/route.ts', 'utf8')
+	const observability = readFileSync('lib/auth-observability.ts', 'utf8')
 	const installHost = readFileSync('ops/tencent/scripts/install-host.sh', 'utf8')
 
 	assert.match(miniLogout, /enforceLogoutRateLimit\(\{ request, channel: 'mini' \}\)/)
 	assert.match(webLogout, /enforceLogoutRateLimit\(\{ request, channel: 'web' \}\)/)
+	assert.equal(webLogout.includes('isTrustedSameSiteRequest'), false)
+	assert.ok(
+		webLogout.indexOf('enforceLogoutRateLimit') <
+			webLogout.indexOf('withAuthDeviceCookie(request, await logout')
+	)
+	assert.match(authCatchAll, /BETTER_AUTH_GET_RATE_LIMIT = 30/)
+	assert.match(authCatchAll, /scope: 'better-auth-get-ip'/)
+	assert.match(observability, /recordAuthRequestOutcome\(\n\s+503,/)
 	assert.match(installHost, /systemctl enable --now letletme-auth-event-cleanup\.timer/)
 })

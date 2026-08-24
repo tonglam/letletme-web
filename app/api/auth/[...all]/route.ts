@@ -25,6 +25,7 @@ import {
 import { RequestTiming } from '@/lib/request-timing'
 
 const MAX_AUTH_BODY_BYTES = 16 * 1024
+const BETTER_AUTH_GET_RATE_LIMIT = 30
 
 function sanitizedAuthHeaders(request: Request): Headers {
 	const headers = new Headers(request.headers)
@@ -69,6 +70,42 @@ function responseWithPolicies(request: Request, response: Response): Response {
 	return withAuthDeviceCookie(request, withPrivateNoStore(response))
 }
 
+async function enforceBetterAuthGetRateLimit(
+	request: Request
+): Promise<Response | null> {
+	const secret = process.env.BACKEND_PROXY_SECRET
+	if (!secret) {
+		return responseWithPolicies(
+			request,
+			Response.json(
+				{
+					code: 'SERVICE_UNAVAILABLE',
+					message: 'Request safety checks are unavailable'
+				},
+				{ status: 503 }
+			)
+		)
+	}
+	const rate = await checkDatabaseRateLimit({
+		scope: 'better-auth-get-ip',
+		subject: buildOpaqueRateLimitSubject(request.headers, secret),
+		limit: BETTER_AUTH_GET_RATE_LIMIT,
+		windowSeconds: 60
+	})
+	if (rate.allowed) return null
+	recordAuthFailure('rate_limited', 429, 'rate_limited')
+	return responseWithPolicies(
+		request,
+		Response.json(
+			{ code: 'RATE_LIMITED', message: 'Too many requests' },
+			{
+				status: 429,
+				headers: { 'Retry-After': String(rate.retryAfterSeconds) }
+			}
+		)
+	)
+}
+
 export async function GET(request: Request) {
 	const getSession = isGetSessionRequest(request.url)
 	return withObservedAuthRequest(
@@ -77,6 +114,8 @@ export async function GET(request: Request) {
 		authOperation(request),
 		async () => {
 			if (!getSession) {
+				const rateLimitResponse = await enforceBetterAuthGetRateLimit(request)
+				if (rateLimitResponse) return rateLimitResponse
 				const response = await toNextJsHandler(getAuth()).GET(
 					new Request(request.url, {
 						method: 'GET',

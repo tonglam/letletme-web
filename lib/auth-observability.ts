@@ -395,7 +395,7 @@ export async function withObservedAuthRequest(
 		} catch (error) {
 			logSafeAuthDiagnostic('error', 'better-auth diagnostic', error)
 			recordAuthRequestOutcome(
-				500,
+				503,
 				undefined,
 				normalizeAuthErrorCode(
 					typeof error === 'object' && error !== null && 'code' in error
