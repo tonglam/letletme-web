@@ -51,8 +51,10 @@ const PUBLIC_BROWSER_OPERATION_ALLOWLIST = new Set([
 	'SearchEntries'
 ])
 
-const extractOperationName = (query: string): string | undefined =>
+export const extractOperationName = (query: string): string | undefined =>
 	query.match(/\b(?:query|mutation|subscription)\s+([A-Za-z_][A-Za-z0-9_]*)/)?.[1]
+
+const GRAPHQL_SLOW_REQUEST_THRESHOLD_MS = 750
 
 type GraphQLErrorLike = {
 	message?: string
@@ -140,6 +142,7 @@ async function doFetch<T>(
 	timeoutMs = DEFAULT_GRAPHQL_TIMEOUT_MS,
 	externalSignal?: AbortSignal
 ): Promise<T> {
+	const startedAt = Date.now()
 	const controller = new AbortController()
 	const safeTimeoutMs =
 		Number.isFinite(timeoutMs) && timeoutMs > 0
@@ -228,14 +231,18 @@ async function doFetch<T>(
 					operation: extractOperationName(query) || undefined,
 					status: response.status,
 					code,
-					requestId
+					requestId,
+					durationMs: Math.max(0, Date.now() - startedAt),
+					timeoutMs: safeTimeoutMs
 				})
 			} else {
 				console.warn('GraphQL request returned upstream errors', {
 					operation: extractOperationName(query) || undefined,
 					status: response.status,
 					code,
-					requestId
+					requestId,
+					durationMs: Math.max(0, Date.now() - startedAt),
+					timeoutMs: safeTimeoutMs
 				})
 			}
 			throw new GraphQLRequestError(
@@ -270,6 +277,17 @@ async function doFetch<T>(
 					: 'GraphQL response missing data.',
 				{ status: response.status, code: 'MISSING_DATA' }
 			)
+		}
+
+		const durationMs = Math.max(0, Date.now() - startedAt)
+		if (!isClient && durationMs >= GRAPHQL_SLOW_REQUEST_THRESHOLD_MS) {
+			console.warn('GraphQL query slow', {
+				operation: extractOperationName(query) || undefined,
+				status: response.status,
+				requestId,
+				durationMs,
+				timeoutMs: safeTimeoutMs
+			})
 		}
 
 		if (typeof window !== 'undefined') {
@@ -334,7 +352,9 @@ async function doFetch<T>(
 						normalizedError instanceof GraphQLRequestError
 							? normalizedError.code
 							: 'UNKNOWN_ERROR',
-					requestId
+					requestId,
+					durationMs: Math.max(0, Date.now() - startedAt),
+					timeoutMs: safeTimeoutMs
 				})
 			}
 			if (typeof window !== 'undefined') {

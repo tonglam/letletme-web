@@ -4,12 +4,20 @@ import test from 'node:test'
 import {
 	clearPendingClientQueries,
 	executeQuery,
+	extractOperationName,
 	GraphQLRequestError
 } from '@/lib/graphql-client'
 
 test('executeQuery aborts a stalled request at the configured deadline', async () => {
 	const originalFetch = globalThis.fetch
+	const originalError = console.error
 	let observedAbort = false
+	let observedLog: Record<string, unknown> | undefined
+	console.error = (_message?: unknown, details?: unknown) => {
+		if (details && typeof details === 'object') {
+			observedLog = details as Record<string, unknown>
+		}
+	}
 
 	globalThis.fetch = ((_input: string | URL | Request, init?: RequestInit) =>
 		new Promise<Response>((_resolve, reject) => {
@@ -27,9 +35,21 @@ test('executeQuery aborts a stalled request at the configured deadline', async (
 			/GraphQL request timed out/,
 		)
 		assert.equal(observedAbort, true)
+		assert.equal(observedLog?.operation, 'TimeoutProbe')
+		assert.equal(observedLog?.timeoutMs, 5)
+		assert.equal(typeof observedLog?.durationMs, 'number')
 	} finally {
 		globalThis.fetch = originalFetch
+		console.error = originalError
 	}
+})
+
+test('extractOperationName supports named GraphQL operations', () => {
+	assert.equal(
+		extractOperationName('query NamedProbe { __typename }'),
+		'NamedProbe'
+	)
+	assert.equal(extractOperationName('{ __typename }'), undefined)
 })
 
 test('executeQuery sends the named GraphQL operation', async () => {
