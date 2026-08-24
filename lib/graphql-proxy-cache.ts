@@ -1,6 +1,7 @@
 import {
+	extractGraphQLOperationName,
 	isPublicCacheableGraphQLRequest,
-	PUBLIC_PROXY_CACHE_CONTROL,
+	publicGraphQLProxyCacheControl
 } from '@/lib/cache-policy'
 
 export function resolveGraphQLProxyCacheControl(input: {
@@ -15,10 +16,12 @@ export function resolveGraphQLProxyCacheControl(input: {
 		isPublicCacheableGraphQLRequest({
 			body: input.body,
 			hasSessionUser: input.hasSessionUser,
-			hasAuthorization: input.hasAuthorization,
+			hasAuthorization: input.hasAuthorization
 		})
 	) {
-		return PUBLIC_PROXY_CACHE_CONTROL
+		return publicGraphQLProxyCacheControl(
+			extractGraphQLOperationName(input.body)
+		)
 	}
 	return 'no-store'
 }
@@ -26,7 +29,11 @@ export function resolveGraphQLProxyCacheControl(input: {
 export function isSuccessfulGraphQLResponseBody(body: string): boolean {
 	try {
 		const parsed: unknown = JSON.parse(body)
-		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+		if (
+			typeof parsed !== 'object' ||
+			parsed === null ||
+			Array.isArray(parsed)
+		) {
 			return false
 		}
 		const envelope = parsed as Record<string, unknown>
