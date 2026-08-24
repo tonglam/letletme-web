@@ -25,6 +25,7 @@ describe('theme bootstrap', () => {
 		assert.ok(source.includes('strategy="beforeInteractive"'))
 		assert.ok(source.includes('dangerouslySetInnerHTML'))
 		assert.ok(source.includes("localStorage.getItem('theme')"))
+		assert.ok(source.includes('applyTheme(readTheme(), false, false)'))
 		assert.equal(source.includes('<script'), false)
 	})
 })

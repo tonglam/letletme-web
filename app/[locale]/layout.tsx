@@ -115,7 +115,7 @@ const shellBootstrapScript = `
 		return () => requestAnimationFrame(() => requestAnimationFrame(() => style.remove()));
 	};
 
-	const applyTheme = (theme, suppressTransitions = false) => {
+	const applyTheme = (theme, suppressTransitions = false, syncControls = true) => {
 		const restoreTransitions = suppressTransitions ? suppressThemeTransitions() : null;
 		const resolvedTheme = theme === 'system'
 			? (colorSchemeQuery.matches ? 'dark' : 'light')
@@ -123,12 +123,14 @@ const shellBootstrapScript = `
 		document.documentElement.classList.remove('light', 'dark');
 		document.documentElement.classList.add(resolvedTheme);
 		document.documentElement.style.colorScheme = resolvedTheme;
-		updateThemeControls(theme);
+		if (syncControls) updateThemeControls(theme);
 		restoreTransitions?.();
 	};
 
 	try {
-		applyTheme(readTheme());
+		// Keep React-owned controls identical to the server markup until hydration
+		// completes; the document theme itself still changes before first paint.
+		applyTheme(readTheme(), false, false);
 	} catch {}
 
 	document.addEventListener('click', (event) => {
