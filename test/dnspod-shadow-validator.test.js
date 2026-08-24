@@ -150,3 +150,21 @@ test('validator rejects competing enabled watchdog host routes', () => {
 		return true
 	})
 })
+
+test('validator rejects competing enabled watchdog host routes on another DNS line', () => {
+	const records = [
+		...validRecords,
+		{ Name: 'vercel-origin', Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'ENABLE', RecordId: 5 },
+		{ Name: 'vercel-origin', Type: 'A', Value: '203.0.113.10', Line: '境外', Status: 'ENABLE', RecordId: 6 }
+	]
+	assert.throws(() => runValidator(records, {
+		requiredHosts: 'www,vercel-origin',
+		requiredSpecs: [
+			{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
+			{ Name: 'vercel-origin', Type: 'A', Value: '76.76.21.21', Line: '默认' }
+		]
+	}), error => {
+		assert.equal(error.status, 1)
+		return true
+	})
+})

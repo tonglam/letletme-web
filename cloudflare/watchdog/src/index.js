@@ -90,12 +90,15 @@ async function probe(url, fetchImpl, timeoutMs, expectedOrigin, requireEdgeOne) 
 		})
 		const payload = await response.json().catch(() => null)
 		const edgeMarker = response.headers.get('x-letletme-edge')
+		const normalizedEdgeMarker = edgeMarker?.trim().toLowerCase() || null
 		const release = releaseFrom(response, payload)
 		const ok =
 			response.status === 200 &&
 			payload?.status === 'ok' &&
 			payload?.origin === expectedOrigin &&
-			(!requireEdgeOne || edgeMarker === 'edgeone')
+			(requireEdgeOne
+				? normalizedEdgeMarker === 'edgeone'
+				: normalizedEdgeMarker === null)
 		return {
 			ok,
 			status: response.status,
@@ -283,33 +286,41 @@ async function manualDnsState(env, rawState, state, record, fetchImpl, coordinat
 	return { action: 'manual-dns-state', state: next, record }
 }
 
-async function postDisableVerificationFailure(
+async function failoverMutationFailure(
 	env,
 	rawState,
 	state,
 	error,
 	now,
 	fetchImpl,
-	coordinator
+	coordinator,
+	mutationApplied
 ) {
-	const alertKey = `post-disable-verification:${env.DNSPOD_EDGEONE_RECORD_ID}`
+	const alertKey = `${mutationApplied ? 'post-disable-verification' : 'disable-mutation'}:${env.DNSPOD_EDGEONE_RECORD_ID}`
 	const reason = error instanceof Error ? error.message : String(error)
-	const message = `letletme watchdog 已修改 DNSPod 境内记录，但回退校验失败；必须人工检查 DNSPod。原因=${reason}`
+	const message = mutationApplied
+		? `letletme watchdog 已修改 DNSPod 境内记录，但回退校验失败；必须人工检查 DNSPod。原因=${reason}`
+		: `letletme watchdog 无法停用 DNSPod 境内记录；必须人工检查 DNSPod。原因=${reason}`
+	const alertAlreadySent = state.lastAlertKey === alertKey && !state.pendingAlert
 	let next = {
 		...state,
 		failureCount: Math.max(FAILURE_THRESHOLD, state.failureCount),
 		fallbackActive: false,
 		lastFailureAt: now,
-		lastAction: 'post-disable-verification-failed',
+		lastAction: mutationApplied ? 'post-disable-verification-failed' : 'disable-mutation-failed',
 		coordinatorResetPending: false,
-		lastAlertKey: null,
-		pendingAlert: { key: alertKey, message }
+		lastAlertKey: alertAlreadySent ? alertKey : null,
+		pendingAlert: alertAlreadySent
+			? null
+			: state.pendingAlert?.key === alertKey
+				? state.pendingAlert
+				: { key: alertKey, message }
 	}
 	try {
 		await saveState(env, rawState, next)
 	} catch (writeError) {
 		console.error(JSON.stringify({
-			event: 'edgeone_watchdog_post_disable_state_prewrite_error',
+			event: 'edgeone_watchdog_failover_mutation_state_prewrite_error',
 			error: writeError instanceof Error ? writeError.message : String(writeError)
 		}))
 	}
@@ -318,7 +329,7 @@ async function postDisableVerificationFailure(
 		await saveState(env, rawState, next)
 	} catch (writeError) {
 		console.error(JSON.stringify({
-			event: 'edgeone_watchdog_post_disable_state_write_error',
+			event: 'edgeone_watchdog_failover_mutation_state_write_error',
 			error: writeError instanceof Error ? writeError.message : String(writeError)
 		}))
 	}
@@ -326,7 +337,7 @@ async function postDisableVerificationFailure(
 		await coordinator.release()
 	} catch (releaseError) {
 		console.error(JSON.stringify({
-			event: 'edgeone_watchdog_post_disable_coordinator_release_error',
+			event: 'edgeone_watchdog_failover_mutation_coordinator_release_error',
 			error: releaseError instanceof Error ? releaseError.message : String(releaseError)
 		}))
 	}
@@ -512,8 +523,10 @@ export async function runCheck(env, options = {}) {
 	}
 
 	let updated
+	let mutationApplied = false
 	try {
 		updated = await disableConfiguredRecord(env, fetchImpl)
+		mutationApplied = true
 		const disabledRecord = await getConfiguredRecord(env, fetchImpl)
 		const enabledRegionalApexRecords = await getEnabledRegionalApexRecords(env, fetchImpl)
 		const postDisableDefaultRecord = await getDefaultVercelRecord(env, fetchImpl)
@@ -525,14 +538,15 @@ export async function runCheck(env, options = {}) {
 			throw new Error('dnspod-disabled-record-verification-failed')
 		}
 	} catch (error) {
-		await postDisableVerificationFailure(
+		await failoverMutationFailure(
 			env,
 			rawState,
 			state,
 			error,
 			now,
 			fetchImpl,
-			coordinator
+			coordinator,
+			mutationApplied
 		)
 		throw error
 	}

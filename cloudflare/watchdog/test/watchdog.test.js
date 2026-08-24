@@ -92,6 +92,7 @@ function fakeFetchFactory({
 	defaultRecord,
 	defaultRecords,
 	defaultRecordsSequence,
+	modifyResponses = [],
 	edgeResponses = [],
 	edgeVercelResponses = [],
 	vercelResponse = health(false),
@@ -143,6 +144,8 @@ function fakeFetchFactory({
 					return Response.json({ Response: { RecordList: next ? [next] : [] } })
 				}
 				if (action === 'ModifyRecordStatus') {
+					const response = modifyResponses.shift()
+					if (response) return response
 					const body = JSON.parse(init.body)
 					if (currentRecord) currentRecord.Status = body.Status
 					regionalDisabled = body.Status === 'DISABLE'
@@ -308,6 +311,30 @@ test('does not disable regional EdgeOne when an enabled default HTTPS route comp
 	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 
+test('does not treat an EdgeOne-routed Vercel health response as direct Vercel health', async () => {
+	const env = makeEnv()
+	const vercelResponse = new Response(JSON.stringify({
+		status: 'ok',
+		origin: 'vercel',
+		release: RELEASE_SHA
+	}), {
+		status: 200,
+		headers: {
+			'X-Letletme-Edge': 'edgeone',
+			'X-Letletme-Release': RELEASE_SHA
+		}
+	})
+	const { fetch } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
+		edgeResponses: [health(true)],
+		vercelResponse
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'both-unhealthy')
+	assert.equal(result.vercel.ok, false)
+	assert.equal(result.vercel.edgeMarker, 'edgeone')
+})
+
 test('is idempotent once fallback is active', async () => {
 	const env = makeEnv(JSON.stringify({ failureCount: 3, fallbackActive: true }))
 	const { fetch, calls } = fakeFetchFactory({
@@ -357,6 +384,46 @@ test('rejects failover verification when a competing regional route remains afte
 	assert.equal(calls.filter(call => call.action === 'ModifyRecordStatus').length, 1)
 	assert.equal(env.writes.at(-1).lastAction, 'post-disable-verification-failed')
 	assert.equal(calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 1)
+})
+
+test('deduplicates repeated DNS mutation failure alerts', async () => {
+	const coordinator = makeCoordinator(2)
+	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' }
+	const firstEnv = {
+		...makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), coordinator),
+		TELEGRAM_BOT_TOKEN: 'bot',
+		TELEGRAM_CHAT_ID: 'chat'
+	}
+	const firstFetch = fakeFetchFactory({
+		record: edgeRecord,
+		edgeResponses: [new Response('', { status: 503 })],
+		modifyResponses: [new Response('', { status: 500 })],
+		telegramResponses: [new Response('', { status: 200 })]
+	})
+	await assert.rejects(
+		runCheckWithTestCoordinator(firstEnv, { fetchImpl: firstFetch.fetch }),
+		/dnspod-modifyrecordstatus-500/
+	)
+	assert.equal(firstEnv.writes.at(-1).lastAction, 'disable-mutation-failed')
+	assert.equal(firstFetch.calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 1)
+
+	const secondEnv = {
+		...makeEnv(JSON.stringify(firstEnv.writes.at(-1)), coordinator),
+		TELEGRAM_BOT_TOKEN: 'bot',
+		TELEGRAM_CHAT_ID: 'chat'
+	}
+	const secondFetch = fakeFetchFactory({
+		record: edgeRecord,
+		edgeResponses: [new Response('', { status: 503 })],
+		modifyResponses: [new Response('', { status: 500 })],
+		telegramResponses: [new Response('', { status: 200 })]
+	})
+	await assert.rejects(
+		runCheckWithTestCoordinator(secondEnv, { fetchImpl: secondFetch.fetch }),
+		/dnspod-modifyrecordstatus-500/
+	)
+	assert.equal(secondEnv.writes.at(-1).lastAction, 'disable-mutation-failed')
+	assert.equal(secondFetch.calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 0)
 })
 
 test('does not claim fallback is safe when the default Vercel record drifted', async () => {

@@ -128,7 +128,6 @@ if (!file || !edgeoneCname || !vercelA) {
 				const routes = records.filter(record =>
 					isEnabled(record) &&
 					String(record.Name ?? '').toLowerCase() === host &&
-					String(record.Line ?? '') === String(spec.Line) &&
 					apexRouteTypes.has(String(record.Type ?? '').toUpperCase())
 				)
 				return routes.length === 1 &&
