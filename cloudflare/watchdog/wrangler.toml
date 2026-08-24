@@ -1,7 +1,7 @@
 name = "edgeone-watchdog"
 main = "src/index.js"
 compatibility_date = "2026-08-15"
-workers_dev = true
+workers_dev = false
 
 [triggers]
 crons = ["* * * * *"]
@@ -20,9 +20,13 @@ new_sqlite_classes = [ "FailoverCoordinator" ]
 
 [vars]
 WATCHDOG_ENABLED = "false"
-APEX_NAME = "letletme.top"
-VERCEL_HEALTH_URL = "https://letletme-web.vercel.app/healthz"
-EDGEONE_HEALTH_URL = "https://letletme.top/healthz"
-VERCEL_FALLBACK_TTL = "1"
+DNSPOD_DOMAIN = "letletme.top"
+DNSPOD_EDGEONE_LINE = "境内"
+DNSPOD_DEFAULT_VERCEL_LINE = "默认"
+VERCEL_HEALTH_URL = "https://vercel-origin.letletme.top/healthz"
+# These are dedicated EdgeOne canaries. Their rules must force the named
+# origin, so a Cloudflare cron invocation is independent of its execution
+# geography and cannot mistake a Vercel response for a healthy Tencent path.
+EDGEONE_TENCENT_HEALTH_URL = "https://eo-tencent-canary.letletme.top/healthz"
+EDGEONE_VERCEL_API_URL = "https://eo-vercel-canary.letletme.top/api/graphql"
 PROBE_TIMEOUT_MS = "8000"
-DNS_API_BASE = "https://api.cloudflare.com/client/v4"

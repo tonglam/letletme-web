@@ -1,4 +1,5 @@
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
+import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
 import type { Player, PlayerBreakdownStat } from '@/types/player'
 
 type NumericPositionMode = 'elementType' | 'squadOrder'
@@ -266,15 +267,16 @@ export function mapLiveDataToPlayers(
 				yellowCards: pick.yellowCards,
 				redCards: pick.redCards,
 				points: pick.totalPoints,
-				bonusPoints: pick.bonus,
+				bonusPoints: pick.bonus
 			},
 			isCaptain,
-			isViceCaptain,
+			isViceCaptain
 		}
 	})
 }
 
 export function deriveLiveTeamStats(live: LiveCalcData) {
+	const score = traceableOfficialManagerScore(live.score)
 	const startingPicks = live.pickList.filter(pick => pick.position <= 11)
 	const playedCount = startingPicks.filter(
 		pick => (pick.minutes ?? 0) > 0
@@ -284,13 +286,10 @@ export function deriveLiveTeamStats(live: LiveCalcData) {
 	return {
 		teamName: live.entryName ?? `Entry ${live.entry}`,
 		playerName: live.playerName ?? '',
-		livePoints: live.score?.eventPoints ?? null,
-		transferCost: live.score?.transferCost ?? null,
+		livePoints: score?.eventPoints ?? null,
+		transferCost: score?.transferCost ?? null,
 		captainName: live.captainName,
-		liveTotalPoints:
-			live.score?.totalScope === 'OVERALL'
-				? live.score.totalPoints
-				: null,
+		liveTotalPoints: score?.totalScope === 'OVERALL' ? score.totalPoints : null,
 		played: `${playedCount}/${startingPicks.length}`,
 		chips: {
 			bench:
@@ -306,7 +305,7 @@ export function deriveLiveTeamStats(live: LiveCalcData) {
 				normalizedChip.includes('free') ||
 				normalizedChip === 'freehit' ||
 				normalizedChip === 'fh' ||
-				normalizedChip === 'free_hit',
-		},
+				normalizedChip === 'free_hit'
+		}
 	}
 }

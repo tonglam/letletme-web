@@ -3,6 +3,10 @@ import {
 	type TournamentLivePointsResponse
 } from '@/lib/graphql/operations/tournaments'
 import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
+import {
+	hasTraceableOfficialEventPoints,
+	traceableOfficialManagerScore
+} from '@/lib/live-manager-score'
 import { type TournamentEntry } from '@/types/tournament'
 
 export type LiveTournamentStats = {
@@ -76,12 +80,12 @@ export const buildRankMap = (
 	rows: TournamentLiveCalcData[]
 ): Map<number, number> => {
 	const isOfficialSource = (row: TournamentLiveCalcData): boolean =>
-		row.score?.source === 'FPL_ENTRY_SUMMARY' ||
-		row.score?.source === 'FPL_CLASSIC_STANDINGS' ||
-		row.score?.source === 'FPL_FINAL_RESULT'
+		traceableOfficialManagerScore(row.score) !== undefined
 	const rankableRows = rows.filter(row => {
 		return (
-			isOfficialSource(row) && typeof row.score?.netEventPoints === 'number'
+			isOfficialSource(row) &&
+			hasTraceableOfficialEventPoints(row.score) &&
+			typeof row.score?.netEventPoints === 'number'
 		)
 	})
 	const netPointsForRanking = (row: TournamentLiveCalcData): number =>
@@ -130,13 +134,16 @@ export const buildTournamentEntries = (
 	const currentRankByEntryId = buildRankMap(rankSource)
 
 	return currentRows.map(row => {
-		const headlineEventPoints = row.score?.eventPoints ?? null
-		const headlineNetPoints = row.score?.netEventPoints ?? null
+		const score = traceableOfficialManagerScore(row.score)
+		const headlineEventPoints = score?.eventPoints ?? null
+		const headlineNetPoints = score?.netEventPoints ?? null
 		const headlineTotalPoints =
-			typeof row.score?.totalPoints === 'number' ? row.score.totalPoints : null
+			score?.totalScope === 'OVERALL' && typeof score.totalPoints === 'number'
+				? score.totalPoints
+				: null
 		const captainPick = row.pickList.find(player => player.isCaptain)
 		const effectiveCaptainPick =
-			row.score?.state === 'FINAL'
+			score?.state === 'FINAL'
 				? (row.pickList.find(player => (player.multiplier ?? 0) >= 2) ??
 					captainPick)
 				: captainPick
@@ -148,16 +155,15 @@ export const buildTournamentEntries = (
 		const stale = Boolean(staleIds?.has(row.entry))
 		// The score carries the freshest official OR. GraphQL's top-level value
 		// is the last-known official fallback while the live summary catches up.
-		const overallRank = resolveOverallRank(
-			row.score?.overallRank,
-			row.overallRank
-		)
+		const overallRank = resolveOverallRank(score?.overallRank, row.overallRank)
 
 		return {
 			id: String(row.entry),
 			rank: stale
 				? 0
-				: typeof row.rank === 'number' && row.rank > 0
+				: hasTraceableOfficialEventPoints(row.score) &&
+					  typeof row.rank === 'number' &&
+					  row.rank > 0
 					? row.rank
 					: (currentRankByEntryId.get(row.entry) ?? 0),
 			teamName: row.entryName ?? `Entry ${row.entry}`,
@@ -171,7 +177,7 @@ export const buildTournamentEntries = (
 			captainPoints,
 			gwPoints: headlineEventPoints,
 			gwNetPoints: headlineNetPoints ?? undefined,
-			eventCost: row.transferCost ?? 0,
+			eventCost: score?.transferCost,
 			overallRank,
 			lastOverallRank:
 				typeof row.lastOverallRank === 'number'
@@ -200,6 +206,55 @@ export const buildTournamentEntries = (
 			stale
 		}
 	})
+}
+
+export const countTraceableTournamentScores = (
+	rows: readonly TournamentLiveCalcData[]
+): number =>
+	rows.filter(row => hasTraceableOfficialEventPoints(row.score)).length
+
+export const getBoundedTraceableTournamentCoverage = ({
+	rows,
+	totalEntries,
+	officialCoverage
+}: {
+	rows: readonly TournamentLiveCalcData[]
+	totalEntries: number
+	officialCoverage?: number | null
+}): number => {
+	const total = Math.max(0, Math.floor(totalEntries))
+	const rowCoverage = Math.min(total, countTraceableTournamentScores(rows))
+	if (rowCoverage === 0) return 0
+	if (
+		typeof officialCoverage !== 'number' ||
+		!Number.isFinite(officialCoverage) ||
+		officialCoverage <= 0
+	) {
+		return rowCoverage
+	}
+	const reportedCoverage = Math.min(
+		total,
+		Math.max(0, Math.round(officialCoverage * total))
+	)
+	return Math.min(rowCoverage, reportedCoverage)
+}
+
+/**
+ * Refresh scheduling is transport metadata, not a score value. Keep a valid
+ * deadline even when the accompanying score is rejected by provenance checks,
+ * otherwise a settled player snapshot can stop polling before the score heals.
+ */
+export const getTournamentManagerNextRefreshAt = (
+	rows: readonly TournamentLiveCalcData[]
+): string | null => {
+	const refreshTimes = rows
+		.map(row => row.score?.nextRefreshAt)
+		.filter(
+			(value): value is string =>
+				typeof value === 'string' && Number.isFinite(Date.parse(value))
+		)
+		.sort((left, right) => Date.parse(left) - Date.parse(right))
+	return refreshTimes[0] ?? null
 }
 
 /**

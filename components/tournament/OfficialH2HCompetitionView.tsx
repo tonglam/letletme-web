@@ -15,6 +15,7 @@ import {
 	type TournamentOfficialH2H,
 	type TournamentOfficialH2HResponse
 } from '@/lib/graphql/operations/tournaments'
+import { traceableOfficialH2HScore } from '@/lib/live-manager-score'
 import { cn, formatInteger } from '@/lib/utils'
 import {
 	ArrowLeft,
@@ -186,19 +187,32 @@ export function OfficialH2HCompetitionView({
 		return () => window.clearInterval(timer)
 	}, [isCurrentEvent, isPageActive, refresh])
 
+	const hasTraceableScore = traceableOfficialH2HScore(snapshot)
 	const standings = useMemo(
 		() =>
-			[...(snapshot?.standings ?? [])].sort(
+			hasTraceableScore
+				? [...(snapshot?.standings ?? [])].sort(
 				(left, right) =>
 					(left.rank ?? Number.MAX_SAFE_INTEGER) -
 						(right.rank ?? Number.MAX_SAFE_INTEGER) ||
 					right.matchPoints - left.matchPoints ||
 					right.pointsFor - left.pointsFor ||
 					left.entryId - right.entryId
-			),
-		[snapshot?.standings]
+				)
+				: [],
+		[hasTraceableScore, snapshot?.standings]
 	)
-	const matches = snapshot?.matches ?? EMPTY_OFFICIAL_H2H_MATCHES
+	const matches = useMemo(() => {
+		const source = snapshot?.matches ?? EMPTY_OFFICIAL_H2H_MATCHES
+		if (hasTraceableScore) return source
+		return source.map(match => ({
+			...match,
+			home: { ...match.home, points: null, matchPoints: null },
+			away: { ...match.away, points: null, matchPoints: null },
+			winnerEntryId: null,
+			sourceCheckedAt: null
+		}))
+	}, [hasTraceableScore, snapshot])
 	const previousEvent = eventId > 1 ? eventId - 1 : null
 	const nextEvent = eventId < 38 ? eventId + 1 : null
 	const shareText = useMemo(() => {

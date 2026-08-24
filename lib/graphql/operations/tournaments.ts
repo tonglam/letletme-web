@@ -1,4 +1,4 @@
-import type { LiveSnapshotStatus } from './live'
+import type { LiveManagerScore, LiveSnapshotStatus } from './live'
 
 export const TOURNAMENT_INFO_FIELDS = `
   fragment TournamentInfoFields on TournamentInfo {
@@ -296,6 +296,9 @@ export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_DETAIL_INFO_FIELDS}
       officialH2H {
         eventId
         awaitingSchedule
+		scoreSource
+		scoreRevision
+		scoreCheckedAt
         standings { entryId entryName playerName rank matchPoints played won drawn lost pointsFor }
         matches {
           officialMatchId eventId sourceOrder phase knockoutName isBye winnerEntryId tiebreak sourceCheckedAt
@@ -786,26 +789,7 @@ export interface TournamentLiveCalcData {
 	entry: number
 	provisional?: boolean
 	rank?: number
-	score?: {
-		eventPoints: number | null
-		netEventPoints: number | null
-		totalPoints: number | null
-		totalScope: 'OVERALL' | 'CLASSIC_PHASE' | 'UNKNOWN'
-		eventRank: number | null
-		overallRank: number | null
-		leagueRank: number | null
-		transferCost: number
-		source: string
-		state: string
-		eventPointSemantics: string
-		revision: string | null
-		checkedAt: string | null
-		upstreamUpdatedAt: string | null
-		staleAt: string | null
-		nextRefreshAt: string | null
-		reconciliation: string
-		reasonCodes: string[]
-	}
+	score?: LiveManagerScore
 	entryName: string
 	playerName: string
 	overallRank: number
@@ -933,6 +917,9 @@ export const GET_TOURNAMENT_OFFICIAL_H2H = `${OFFICIAL_H2H_MATCH_FIELDS}
     tournamentOfficialH2H(tournamentId: $tournamentId, eventId: $eventId) {
       eventId
       awaitingSchedule
+	  scoreSource
+	  scoreRevision
+	  scoreCheckedAt
       standings {
         entryId
         entryName
@@ -962,6 +949,9 @@ export const GET_ENTRY_OFFICIAL_H2H_DESK = `${OFFICIAL_H2H_MATCH_FIELDS}
       awaitingSchedule
       isLive
       isFinal
+	  scoreSource
+	  scoreRevision
+	  scoreCheckedAt
       rank
       lastRank
       matchPoints
@@ -1014,6 +1004,9 @@ export interface OfficialH2HMatch {
 export interface TournamentOfficialH2H {
 	eventId: number
 	awaitingSchedule: boolean
+	scoreSource: 'FPL_EVENT_LIVE' | 'FPL_H2H_FINAL' | 'UNAVAILABLE'
+	scoreRevision: string | null
+	scoreCheckedAt: string | null
 	standings: OfficialH2HStanding[]
 	matches: OfficialH2HMatch[]
 }
@@ -1030,6 +1023,9 @@ export interface EntryOfficialH2HDeskItem {
 	awaitingSchedule: boolean
 	isLive: boolean
 	isFinal: boolean
+	scoreSource: TournamentOfficialH2H['scoreSource']
+	scoreRevision: string | null
+	scoreCheckedAt: string | null
 	rank: number | null
 	lastRank: number | null
 	matchPoints: number
