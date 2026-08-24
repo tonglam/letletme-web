@@ -104,6 +104,7 @@
 		"chooseMethod": "选择一种方式继续",
 		"deskAgentDisclosureTitle": "LetLetMe Desk 数据工具",
 		"deskAgentDisclosure": "使用这些工具时，已发布、个人或比赛授权的数据结果可能会发送给你在 LetLetMe Desk 中选择的模型服务商。Desk App 会把本网站会话保存在独立的 Cookie 分区中。",
+		"authObservabilityDisclosure": "为保障登录和会话恢复，我们会使用第一方设备 Cookie，并最多保留 45 天的粗粒度浏览器/设备信息、请求 ID 和脱敏标识，用于鉴权诊断，不用于广告或用户画像。",
 		"reauthTitle": "确认是你本人",
 		"reauthDescription": "请重新登录，再查看和管理登录设备。",
 		"password": "密码",

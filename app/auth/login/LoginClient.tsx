@@ -130,6 +130,10 @@ export default function LoginClient({
 					</Alert>
 				)}
 
+				<p className="mb-4 text-xs leading-5 text-muted-foreground">
+					{t('authObservabilityDisclosure')}
+				</p>
+
 				{error && (
 					<Alert
 						variant="destructive"

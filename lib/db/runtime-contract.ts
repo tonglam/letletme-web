@@ -6,6 +6,7 @@ export const WEB_RUNTIME_LOGIN = 'letletme_web_runtime'
 
 export const WEB_AUTH_RUNTIME_TABLES = [
 	'account',
+	'auth_event',
 	'bug_report_storage_nonces',
 	'fpl_entry_binding_challenges',
 	'fpl_entry_name_history',
@@ -17,6 +18,8 @@ export const WEB_AUTH_RUNTIME_TABLES = [
 	'user',
 	'verification'
 ] as const
+
+export const AUTH_EVENT_RUNTIME_TABLE = 'auth_event' as const
 
 export const GRAPHQL_AUTH_RUNTIME_TABLES = [
 	'mini_program_account',
@@ -417,6 +420,7 @@ export async function validateWebDatabaseContract(
 		}
 		for (const table of authTables) {
 			const isRuntimeTable = expectedAuthTableNames.has(table.table_name)
+			const isAuthEventTable = table.table_name === AUTH_EVENT_RUNTIME_TABLE
 			if (table.owner_name === runtimeRole?.role_name) {
 				findings.push(`runtime role owns bauth.${table.table_name}`)
 			}
@@ -424,6 +428,7 @@ export async function validateWebDatabaseContract(
 				findings.push(`bauth.${table.table_name} is missing RLS`)
 			if (
 				isRuntimeTable &&
+				!isAuthEventTable &&
 				(!table.can_select ||
 					!table.can_insert ||
 					!table.can_update ||
@@ -431,6 +436,17 @@ export async function validateWebDatabaseContract(
 			) {
 				findings.push(
 					`bauth.${table.table_name} is missing required DML privileges`
+				)
+			}
+			if (
+				isAuthEventTable &&
+				(!table.can_select ||
+					!table.can_insert ||
+					!table.can_delete ||
+					table.can_update)
+			) {
+				findings.push(
+					'bauth.auth_event must allow SELECT/INSERT/expired DELETE only'
 				)
 			}
 			if (
@@ -465,10 +481,12 @@ export async function validateWebDatabaseContract(
 			GRAPHQL_AUTH_RUNTIME_TABLES
 		)
 		let webRuntimePolicyCount = 0
+		let authEventPolicyCount = 0
 		let graphqlAuthPolicyCount = 0
 		for (const policy of authPolicies) {
 			const isWebRuntimePolicy =
 				expectedAuthTableNames.has(policy.table_name) &&
+				policy.table_name !== AUTH_EVENT_RUNTIME_TABLE &&
 				policy.policy_name === AUTH_RUNTIME_POLICY &&
 				policy.permissive === 'PERMISSIVE' &&
 				compareNames(policy.roles, [WEB_AUTH_CAPABILITY_ROLE]) &&
@@ -483,17 +501,58 @@ export async function validateWebDatabaseContract(
 				policy.command === 'SELECT' &&
 				expressionIsTrue(policy.using_expression) &&
 				policy.check_expression === null
+			const isAuthEventSelectPolicy =
+				policy.table_name === AUTH_EVENT_RUNTIME_TABLE &&
+				policy.policy_name === 'web_auth_event_select' &&
+				policy.permissive === 'PERMISSIVE' &&
+				compareNames(policy.roles, [WEB_AUTH_CAPABILITY_ROLE]) &&
+				policy.command === 'SELECT' &&
+				expressionIsTrue(policy.using_expression) &&
+				policy.check_expression === null
+			const isAuthEventInsertPolicy =
+				policy.table_name === AUTH_EVENT_RUNTIME_TABLE &&
+				policy.policy_name === 'web_auth_event_insert' &&
+				policy.permissive === 'PERMISSIVE' &&
+				compareNames(policy.roles, [WEB_AUTH_CAPABILITY_ROLE]) &&
+				policy.command === 'INSERT' &&
+				policy.using_expression === null &&
+				(policy.check_expression ?? '').includes('45 days')
+			const isAuthEventDeletePolicy =
+				policy.table_name === AUTH_EVENT_RUNTIME_TABLE &&
+				policy.policy_name === 'web_auth_event_delete_expired' &&
+				policy.permissive === 'PERMISSIVE' &&
+				compareNames(policy.roles, [WEB_AUTH_CAPABILITY_ROLE]) &&
+				policy.command === 'DELETE' &&
+				(policy.using_expression ?? '').includes('CURRENT_TIMESTAMP') &&
+				policy.check_expression === null
 			if (isWebRuntimePolicy) webRuntimePolicyCount += 1
+			if (
+				isAuthEventSelectPolicy ||
+				isAuthEventInsertPolicy ||
+				isAuthEventDeletePolicy
+			)
+				authEventPolicyCount += 1
 			if (isGraphqlAuthPolicy) graphqlAuthPolicyCount += 1
-			if (!isWebRuntimePolicy && !isGraphqlAuthPolicy) {
+			if (
+				!isWebRuntimePolicy &&
+				!isAuthEventSelectPolicy &&
+				!isAuthEventInsertPolicy &&
+				!isAuthEventDeletePolicy &&
+				!isGraphqlAuthPolicy
+			) {
 				findings.push(
 					`bauth.${policy.table_name} has an invalid runtime policy`
 				)
 			}
 		}
-		if (webRuntimePolicyCount !== WEB_AUTH_RUNTIME_TABLES.length) {
+		if (webRuntimePolicyCount !== WEB_AUTH_RUNTIME_TABLES.length - 1) {
 			findings.push(
 				`bauth Web runtime policy count is ${webRuntimePolicyCount}`
+			)
+		}
+		if (authEventPolicyCount !== 3) {
+			findings.push(
+				`bauth auth_event policy count is ${authEventPolicyCount}`
 			)
 		}
 		if (graphqlAuthPolicyCount !== GRAPHQL_AUTH_RUNTIME_TABLES.length) {

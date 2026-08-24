@@ -9,9 +9,38 @@ import {
 	readBoundedJson,
 } from '@/lib/http-security'
 import { MiniProgramAuthError } from '@/lib/miniprogram-account-core'
+import {
+	recordAuthFailure,
+	updateAuthObservationContext,
+	withObservedAuthRequest
+} from '@/lib/auth-observability'
+import {
+	normalizeAuthErrorCode,
+	normalizeMiniProgramLoginContext
+} from '@/lib/auth-observability-core'
+import { logSafeAuthDiagnostic } from '@/lib/auth-safe-log'
 import { getPublicErrorMessage } from '@/lib/safe-errors'
 
 const MAX_AUTH_BODY_BYTES = 16 * 1024
+
+export function withMiniProgramAuthRequest(
+	request: Request,
+	operation: string,
+	handler: () => Promise<Response>
+): Promise<Response> {
+	return withObservedAuthRequest(request, 'mini', operation, handler)
+}
+
+export function setMiniProgramAuthObservation(
+	body: Record<string, unknown>
+): void {
+	updateAuthObservationContext({
+		miniDeviceId:
+			typeof body.deviceId === 'string' ? body.deviceId : undefined,
+		email: typeof body.email === 'string' ? body.email : undefined,
+		loginContext: normalizeMiniProgramLoginContext(body.loginContext)
+	})
+}
 
 export async function readMiniProgramJson(request: Request): Promise<Record<string, unknown>> {
 	try {
@@ -84,7 +113,10 @@ export async function enforceMiniProgramRateLimits({
 		}
 	} catch (error) {
 		if (error instanceof MiniProgramAuthError) throw error
-		console.error(`[mini auth] ${scope} rate-limit storage unavailable:`, error)
+		logSafeAuthDiagnostic('warn', 'better-auth diagnostic', {
+			name: 'MiniRateLimitStorageUnavailable',
+			code: 'rate_limit_storage_unavailable'
+		})
 		throw new MiniProgramAuthError('Request safety checks are unavailable', 503)
 	}
 }
@@ -92,7 +124,11 @@ export async function enforceMiniProgramRateLimits({
 export async function enforceMiniProgramMutationRateLimits(input: {
 	request: Request
 	token: string
-	scope: 'follow-entry' | 'entry-choice' | 'account-unlink'
+	scope:
+		| 'follow-entry'
+		| 'entry-choice'
+		| 'account-unlink'
+		| 'session-persistence'
 }): Promise<void> {
 	const secret = process.env.BACKEND_PROXY_SECRET
 	if (!secret) throw new MiniProgramAuthError('Request safety checks are unavailable', 503)
@@ -128,15 +164,39 @@ export async function enforceMiniProgramMutationRateLimits(input: {
 		}
 	} catch (error) {
 		if (error instanceof MiniProgramAuthError) throw error
-		console.error(`[mini auth] ${input.scope} rate-limit storage unavailable:`, error)
+		logSafeAuthDiagnostic('warn', 'better-auth diagnostic', {
+			name: 'MiniMutationRateLimitStorageUnavailable',
+			code: 'rate_limit_storage_unavailable'
+		})
 		throw new MiniProgramAuthError('Request safety checks are unavailable', 503)
 	}
+}
+
+function diagnosticErrorCode(error: unknown, status: number): string {
+	if (error instanceof MiniProgramAuthError && error.code) {
+		return normalizeAuthErrorCode(error.code) ?? 'service_unavailable'
+	}
+	if (status === 400) return 'bad_request'
+	if (status === 401) return 'unauthorized'
+	if (status === 403) return 'forbidden'
+	if (status === 429) return 'rate_limited'
+	return normalizeAuthErrorCode(`http_${status}`) ?? 'service_unavailable'
 }
 
 export function miniProgramErrorResponse(error: unknown, fallback: string): Response {
 	const status = error instanceof MiniProgramAuthError ? error.status : 500
 	const message = getPublicErrorMessage(error, fallback)
-	if (!(error instanceof MiniProgramAuthError)) console.error(`[mini auth] ${fallback}:`, error)
+	if (!(error instanceof MiniProgramAuthError)) {
+		logSafeAuthDiagnostic('error', 'better-auth diagnostic', {
+			name: 'MiniAuthRequestFailed',
+			status
+		})
+	}
+	recordAuthFailure(
+		diagnosticErrorCode(error, status),
+		status,
+		status === 429 ? 'rate_limited' : 'upstream_failure'
+	)
 	const headers = new Headers({ 'Cache-Control': 'no-store' })
 	if (error instanceof MiniProgramAuthError && error.retryAfterSeconds) {
 		headers.set('Retry-After', String(error.retryAfterSeconds))

@@ -8,7 +8,8 @@ import {
 	unique,
 	index,
 	primaryKey,
-	check
+	check,
+	jsonb
 } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
@@ -108,6 +109,65 @@ export const session = authSchema.table('session', {
 		.notNull()
 		.references(() => user.id, { onDelete: 'cascade' })
 })
+
+/**
+ * Append-only, privacy-preserving authentication telemetry. Raw identifiers
+ * never enter this table: the runtime turns them into purpose-separated HMAC
+ * references before the row is queued for insertion.
+ */
+export const authEvent = authSchema.table(
+	'auth_event',
+	{
+		id: text('id').primaryKey(),
+		occurredAt: timestamp('occurred_at', { withTimezone: true })
+			.notNull()
+			.defaultNow(),
+		expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+		requestId: text('request_id').notNull(),
+		eventType: text('event_type').notNull(),
+		channel: text('channel').notNull(),
+		operation: text('operation').notNull(),
+		outcome: text('outcome').notNull(),
+		statusCode: integer('status_code'),
+		errorCode: text('error_code'),
+		phaseTimings: jsonb('phase_timings').$type<Record<string, number> | null>(),
+		webUserRef: text('web_user_ref'),
+		miniAccountRef: text('mini_account_ref'),
+		emailRef: text('email_ref'),
+		sessionRef: text('session_ref'),
+		deviceRef: text('device_ref'),
+		ipRef: text('ip_ref'),
+		trigger: text('trigger'),
+		revokedSessionCount: integer('revoked_session_count'),
+		clientPlatform: text('client_platform'),
+		clientDeviceClass: text('client_device_class'),
+		clientOsFamily: text('client_os_family'),
+		clientOsMajor: text('client_os_major'),
+		clientBrowserFamily: text('client_browser_family'),
+		clientBrowserMajor: text('client_browser_major'),
+		wechatMajor: text('wechat_major'),
+		sdkVersion: text('sdk_version'),
+		miniProgramVersion: text('mini_program_version'),
+		envVersion: text('env_version'),
+		pageRoute: text('page_route'),
+		encryptedStorageSupported: boolean('encrypted_storage_supported'),
+		credentialState: text('credential_state'),
+		release: text('release'),
+		source: text('source'),
+		region: text('region')
+	},
+	table => ({
+		expiresIdx: index('auth_event_expires_idx').on(table.expiresAt),
+		requestIdx: index('auth_event_request_idx').on(table.requestId),
+		sessionIdx: index('auth_event_session_idx').on(table.sessionRef),
+		webUserIdx: index('auth_event_web_user_idx').on(table.webUserRef),
+		miniAccountIdx: index('auth_event_mini_account_idx').on(
+			table.miniAccountRef
+		),
+		deviceIdx: index('auth_event_device_idx').on(table.deviceRef),
+		occurredIdx: index('auth_event_occurred_idx').on(table.occurredAt)
+	})
+)
 
 export const account = authSchema.table('account', {
 	id: text('id').primaryKey(),
