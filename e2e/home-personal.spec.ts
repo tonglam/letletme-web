@@ -148,6 +148,7 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 		await page.goto('/')
 		const main = page.locator('#main-content')
 		await expect(main.getByText('E2E United')).toBeVisible()
+		await expect(main.getByRole('img', { name: 'Australia' })).toBeVisible()
 		await expect(main.getByText('1,234')).toBeVisible()
 		await expect(main.getByText('E2E Classic')).toBeVisible()
 		await expect(main.getByRole('heading', { name: 'Classic' })).toBeVisible()

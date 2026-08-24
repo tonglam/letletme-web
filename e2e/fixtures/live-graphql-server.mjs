@@ -485,6 +485,7 @@ const server = createServer((request, response) => {
 						state: 'READY',
 						entryName: 'E2E United',
 						playerName: 'Test Manager',
+						region: 'Australia',
 						overallPoints: 1234,
 						overallRank: 56789,
 						teamValue: 1005,

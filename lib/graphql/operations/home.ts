@@ -135,6 +135,7 @@ export const GET_HOME_PERSONAL_DESK = /* GraphQL */ `
 			state
 			entryName
 			playerName
+			region
 			overallPoints
 			overallRank
 			teamValue
@@ -427,6 +428,7 @@ export type HomePersonalDesk = {
 	state: 'READY' | 'EMPTY' | 'STALE' | 'UNAVAILABLE'
 	entryName: string | null
 	playerName: string | null
+	region: string | null
 	overallPoints: number | null
 	overallRank: number | null
 	teamValue: number | null
