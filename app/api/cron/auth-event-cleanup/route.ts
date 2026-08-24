@@ -10,7 +10,7 @@ export async function GET(request: Request): Promise<Response> {
 	}
 
 	try {
-		const deleted = await purgeExpiredAuthEvents()
+		const deleted = await purgeExpiredAuthEvents({ drain: true })
 		return Response.json({ ok: true, deleted })
 	} catch {
 		logSafeAuthDiagnostic('warn', 'telemetry_write_failed', {

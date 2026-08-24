@@ -88,6 +88,20 @@ export async function exchangeWeChatCode({
 		)
 	}
 
+	if (!response.ok && response.status >= 500) {
+		logSafeAuthDiagnostic('warn', 'better-auth diagnostic', {
+			name: 'WeChatCodeExchangeUnavailable',
+			code: 'wechat_upstream_unavailable',
+			status: response.status
+		})
+		throw new MiniProgramAuthError(
+			'WeChat login is temporarily unavailable',
+			503,
+			undefined,
+			'wechat_upstream_unavailable'
+		)
+	}
+
 	if (!response.ok || !payload.openid || payload.errcode) {
 		logSafeAuthDiagnostic('warn', 'better-auth diagnostic', {
 			name: 'WeChatCodeExchangeRejected',

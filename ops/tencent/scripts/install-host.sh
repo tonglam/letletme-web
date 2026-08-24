@@ -193,8 +193,16 @@ install -o root -g root -m 0750 \
 	"$script_dir/verify-staged-release.sh" /usr/local/libexec/letletme-verify-staged-release.sh
 install -o root -g root -m 0750 \
 	"$script_dir/cleanup-release.sh" /usr/local/libexec/letletme-cleanup-release.sh
+install -o root -g root -m 0750 \
+	"$script_dir/auth-event-cleanup.sh" /usr/local/libexec/letletme-auth-event-cleanup.sh
 install -o root -g root -m 0755 \
 	"$script_dir/letletme-release-wrapper.sh" /usr/local/libexec/letletme-release
+install -o root -g root -m 0644 \
+	"$ops_dir/systemd/letletme-auth-event-cleanup.service" \
+	/etc/systemd/system/letletme-auth-event-cleanup.service
+install -o root -g root -m 0644 \
+	"$ops_dir/systemd/letletme-auth-event-cleanup.timer" \
+	/etc/systemd/system/letletme-auth-event-cleanup.timer
 install -o root -g root -m 0440 /dev/stdin /etc/sudoers.d/letletme-release <<'EOF'
 Defaults:deploy !setenv
 deploy ALL=(root) NOPASSWD: /usr/local/libexec/letletme-release
@@ -202,5 +210,6 @@ EOF
 visudo --check --file=/etc/sudoers.d/letletme-release
 systemctl daemon-reload
 systemctl enable letletme-web.service nginx.service
+systemctl enable letletme-auth-event-cleanup.timer
 
 echo "Host prerequisites installed. Add web.env, TLS material and origin secrets before starting services."

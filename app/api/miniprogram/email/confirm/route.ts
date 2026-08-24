@@ -52,11 +52,10 @@ export async function POST(request: Request) {
 					operation: 'email-link-confirm',
 					outcome: 'succeeded',
 					miniAccountId: observability.accountId,
-					webUserId: observability.webUserId,
-					sessionId: observability.sessionId,
-					deviceId: observability.deviceId,
-					revokedSessionCount: observability.revokedSessionCount
-				})
+						webUserId: observability.webUserId,
+						sessionId: observability.sessionId,
+						deviceId: observability.deviceId
+					})
 			}
 
 			return miniProgramSuccessResponse({ success: true, ...publicResult })

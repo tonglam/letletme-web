@@ -261,6 +261,8 @@ function buildAuthEventRow(event: AuthEventInput): typeof schema.authEvent.$infe
 	}
 }
 
+const AUTH_EVENT_CLEANUP_BATCH_SIZE = 500
+
 async function flushAuthEvents(events: readonly AuthEventInput[]): Promise<void> {
 	if (events.length === 0) return
 	const rows = events
@@ -283,7 +285,7 @@ async function flushAuthEvents(events: readonly AuthEventInput[]): Promise<void>
 	}
 }
 
-export async function purgeExpiredAuthEvents(): Promise<number> {
+async function purgeExpiredAuthEventBatch(): Promise<number> {
 	const deleted = await db.execute(sql`
 		DELETE FROM bauth.auth_event
 		WHERE id IN (
@@ -291,11 +293,24 @@ export async function purgeExpiredAuthEvents(): Promise<number> {
 			FROM bauth.auth_event
 			WHERE expires_at <= CURRENT_TIMESTAMP
 			ORDER BY expires_at
-			LIMIT 500
+			LIMIT ${AUTH_EVENT_CLEANUP_BATCH_SIZE}
 		)
 		RETURNING id
 	`)
 	return deleted.length
+}
+
+export async function purgeExpiredAuthEvents(options: {
+	drain?: boolean
+} = {}): Promise<number> {
+	let totalDeleted = 0
+	do {
+		const deleted = await purgeExpiredAuthEventBatch()
+		totalDeleted += deleted
+		if (!options.drain || deleted < AUTH_EVENT_CLEANUP_BATCH_SIZE) {
+			return totalDeleted
+		}
+	} while (true)
 }
 
 async function runAuthEventCleanup(): Promise<void> {
@@ -314,9 +329,11 @@ export function scheduleAuthEventsAfterResponse(): void {
 	if (!context || context.flushScheduled) return
 	context.flushScheduled = true
 	const events = context.events.splice(0)
+	const shouldRunOpportunisticCleanup =
+		events.length > 0 && context.operation !== 'get-session'
 	const task = async () => {
 		await flushAuthEvents(events)
-		await runAuthEventCleanup()
+		if (shouldRunOpportunisticCleanup) await runAuthEventCleanup()
 	}
 	try {
 		after(task)
