@@ -1,6 +1,5 @@
 "use client";
 
-import { ReportProblemEntry } from "@/components/feedback/ReportProblemEntry";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { NavigationUser } from "@/components/profile/HeaderProfileCard";
 import { Button } from "@/components/ui/button";
@@ -22,7 +21,7 @@ import { getVerifiedFplEntryId } from "@/lib/fpl-binding-core";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
-import { ChevronDown, LogOut, Menu, MessageCircleWarning, Settings, Shirt, UserCircle } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Settings, Shirt, UserCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -195,12 +194,6 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
                       </Link>
                     </Button>
                   </SheetClose>
-                  <ReportProblemEntry>
-                    <Button variant="ghost" className="w-full justify-start">
-                      <MessageCircleWarning data-icon="inline-start" />
-                      {t("reportProblem")}
-                    </Button>
-                  </ReportProblemEntry>
                   <Button
                     variant="ghost"
                     className="w-full justify-start text-destructive hover:text-destructive"
@@ -214,12 +207,6 @@ export function MobileNav({ user }: { user: NavigationUser | null }) {
               </div>
             ) : (
               <div className="flex flex-col gap-1">
-                <ReportProblemEntry>
-                  <Button variant="ghost" className="w-full justify-start">
-                    <MessageCircleWarning data-icon="inline-start" />
-                    {t("reportProblem")}
-                  </Button>
-                </ReportProblemEntry>
               <SheetClose asChild>
                 <Button variant="ghost" className="w-full justify-start" asChild>
                   <Link href="/auth/login" prefetch={false}>

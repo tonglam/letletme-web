@@ -1,4 +1,4 @@
-import { ReportProblemEntry } from '@/components/feedback/ReportProblemEntry'
+import { ReportProblemButton } from '@/components/feedback/ReportProblemButton'
 import { Link } from '@/i18n/navigation'
 import { getTranslations } from 'next-intl/server'
 import { menuItems } from './config'
@@ -8,7 +8,7 @@ import { MiniProgramPopover } from './MiniProgramPopover'
 export async function Footer() {
 	const [t, nav] = await Promise.all([
 		getTranslations('Footer'),
-		getTranslations('Navigation'),
+		getTranslations('Navigation')
 	])
 	const currentYear = new Date().getFullYear()
 
@@ -64,12 +64,15 @@ export async function Footer() {
 
 				<div className="mt-10 flex flex-col gap-2 border-t border-fascia-foreground/10 pt-6 text-sm text-fascia-foreground/50 sm:flex-row sm:items-center sm:justify-between">
 					<p>{t('rights', { year: currentYear })}</p>
-					<ReportProblemEntry triggerClassName="text-left text-sm text-fascia-foreground/60 underline-offset-4 hover:text-electric hover:underline" />
 					<p className="font-display text-xs font-semibold uppercase tracking-caps">
 						{t('builtFor')}
 					</p>
 				</div>
 			</div>
+			<ReportProblemButton
+				label={nav('reportProblem')}
+				className="fixed bottom-4 right-4 z-40 inline-flex min-h-11 max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border-2 border-electric bg-fascia px-4 py-2.5 font-display text-xs font-semibold uppercase tracking-caps text-fascia-foreground shadow-sticker-sm transition-transform hover:-translate-y-0.5 hover:bg-fascia-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-electric focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:bottom-6 sm:right-6"
+			/>
 		</footer>
 	)
 }

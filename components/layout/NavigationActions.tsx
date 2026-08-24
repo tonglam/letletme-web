@@ -1,5 +1,4 @@
 import type { NavigationUser } from '@/components/profile/HeaderProfileCard'
-import { ReportProblemButton } from '@/components/feedback/ReportProblemButton'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
 import { ChevronDown, Menu, Settings, Shirt } from 'lucide-react'
@@ -88,10 +87,6 @@ async function AccountPanel({
 				<Settings aria-hidden="true" className="size-4" />
 				{t('profileSettings')}
 			</NavigationMenuLink>
-			<ReportProblemButton
-				label={t('reportProblem')}
-				className="flex min-h-10 w-full items-center gap-2 rounded-md px-2 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			/>
 			<SignOutForm
 				label={t('signOut')}
 				pendingLabel={t('signingOut')}

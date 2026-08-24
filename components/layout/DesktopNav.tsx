@@ -1,6 +1,5 @@
 'use client'
 
-import { ReportProblemEntry } from '@/components/feedback/ReportProblemEntry'
 import {
 	HeaderProfileCard,
 	type NavigationUser
@@ -74,7 +73,6 @@ export function DesktopNav({ user }: { user: NavigationUser | null }) {
 				<HeaderProfileCard user={user} />
 			) : (
 				<>
-					<ReportProblemEntry triggerClassName="px-3 text-sm text-fascia-foreground/70 hover:text-fascia-foreground" />
 					<Button
 						size="sm"
 						className="ml-2 font-display text-xs font-semibold uppercase tracking-caps shadow-sticker-sm transition-transform hover:-translate-y-px"
