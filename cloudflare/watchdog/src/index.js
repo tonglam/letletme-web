@@ -2,6 +2,7 @@ import {
 	disableConfiguredRecord,
 	getDefaultVercelRecord,
 	getConfiguredRecord,
+	getEnabledRegionalApexRecords,
 	isDisabledRecord,
 	isDefaultVercelRecord,
 	isEnabledRecord
@@ -82,6 +83,48 @@ async function probe(url, fetchImpl, timeoutMs, expectedOrigin, requireEdgeOne) 
 			status: response.status,
 			reason: ok ? 'ok' : 'health-mismatch',
 			edgeMarker
+		}
+	} catch (error) {
+		return {
+			ok: false,
+			reason: controller.signal.aborted ? 'timeout' : 'network-error',
+			error: error instanceof Error ? error.message : String(error)
+		}
+	} finally {
+		clearTimeout(timeout)
+	}
+}
+
+async function probeEdgeOneVercelApi(url, fetchImpl, timeoutMs) {
+	if (!url) return { ok: false, reason: 'url-missing' }
+	const controller = new AbortController()
+	const timeout = setTimeout(() => controller.abort('probe-timeout'), timeoutMs)
+	try {
+		const response = await fetchImpl(url, {
+			method: 'POST',
+			headers: {
+				Accept: 'application/json',
+				'Cache-Control': 'no-store',
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({ query: 'query { __typename }' }),
+			redirect: 'manual',
+			signal: controller.signal
+		})
+		const payload = await response.json().catch(() => null)
+		const edgeMarker = response.headers.get('x-letletme-edge')
+		const originMarker = response.headers.get('x-letletme-origin')
+		const ok =
+			response.status === 200 &&
+			payload?.data?.__typename === 'Query' &&
+			originMarker === 'vercel' &&
+			edgeMarker === 'edgeone'
+		return {
+			ok,
+			status: response.status,
+			reason: ok ? 'ok' : 'health-mismatch',
+			edgeMarker,
+			originMarker
 		}
 	} catch (error) {
 		return {
@@ -207,10 +250,20 @@ async function manualDnsState(env, rawState, state, record, fetchImpl, coordinat
 	return { action: 'manual-dns-state', state: next, record }
 }
 
-async function bothUnhealthyState(env, rawState, state, record, edge, vercel, fetchImpl, coordinator) {
+async function bothUnhealthyState(
+	env,
+	rawState,
+	state,
+	record,
+	edge,
+	edgeVercel,
+	vercel,
+	fetchImpl,
+	coordinator
+) {
 	const coordination = await coordinator.reset()
-	const alertKey = `both-unhealthy:${edge.reason}:${vercel.reason}`
-	const message = `letletme watchdog 暂不改 DNSPod：EdgeOne 与 Vercel 同时异常。EdgeOne=${edge.reason} Vercel=${vercel.reason}`
+	const alertKey = `both-unhealthy:${edge.reason}:${edgeVercel.reason}:${vercel.reason}`
+	const message = `letletme watchdog 暂不改 DNSPod：EdgeOne 与 Vercel 同时异常。EdgeOne Tencent=${edge.reason} EdgeOne Vercel=${edgeVercel.reason} Vercel=${vercel.reason}`
 	let next = {
 		...state,
 		failureCount: coordination.failureCount,
@@ -222,7 +275,7 @@ async function bothUnhealthyState(env, rawState, state, record, edge, vercel, fe
 		next = await applyAlert(env, next, alertKey, message, fetchImpl)
 	}
 	await saveState(env, rawState, next)
-	return { action: 'both-unhealthy', state: next, edge, vercel, record }
+	return { action: 'both-unhealthy', state: next, edge, edgeVercel, vercel, record }
 }
 
 export async function runCheck(env, options = {}) {
@@ -238,6 +291,10 @@ export async function runCheck(env, options = {}) {
 
 	const record = await getConfiguredRecord(env, fetchImpl)
 	if (isFallbackRecord(record, env)) {
+		const enabledRegionalApexRecords = await getEnabledRegionalApexRecords(env, fetchImpl)
+		if (enabledRegionalApexRecords.length !== 0) {
+			return manualDnsState(env, rawState, state, record, fetchImpl, coordinator, 'regional')
+		}
 		const defaultRecord = await getDefaultVercelRecord(env, fetchImpl)
 		if (!isDefaultVercelRecord(defaultRecord, env)) {
 			return manualDnsState(env, rawState, state, defaultRecord, fetchImpl, coordinator, 'default')
@@ -252,11 +309,12 @@ export async function runCheck(env, options = {}) {
 		return manualDnsState(env, rawState, state, defaultRecord, fetchImpl, coordinator, 'default')
 	}
 
-	const [edge, vercel] = await Promise.all([
+	const [edge, edgeVercel, vercel] = await Promise.all([
 		probe(env.EDGEONE_HEALTH_URL, fetchImpl, timeoutMs, 'tencent', true),
+		probeEdgeOneVercelApi(env.EDGEONE_VERCEL_API_URL, fetchImpl, timeoutMs),
 		probe(env.VERCEL_HEALTH_URL, fetchImpl, timeoutMs, 'vercel', false)
 	])
-	if (edge.ok) {
+	if (edge.ok && edgeVercel.ok) {
 		let coordination
 		try {
 			coordination = await coordinator.reset()
@@ -280,10 +338,10 @@ export async function runCheck(env, options = {}) {
 			pendingAlert: null
 		}
 		await saveState(env, rawState, next)
-		return { action: 'healthy', state: next, edge, vercel, record }
+		return { action: 'healthy', state: next, edge, edgeVercel, vercel, record }
 	}
 	if (!vercel.ok) {
-		return bothUnhealthyState(env, rawState, state, record, edge, vercel, fetchImpl, coordinator)
+		return bothUnhealthyState(env, rawState, state, record, edge, edgeVercel, vercel, fetchImpl, coordinator)
 	}
 
 	if (state.coordinatorResetPending) {
@@ -294,7 +352,7 @@ export async function runCheck(env, options = {}) {
 		} catch (error) {
 			const next = { ...state, failureCount: 0, lastAction: 'coordinator-reset-pending' }
 			await saveState(env, rawState, next)
-			return { action: 'coordinator-reset-pending', state: next, edge, vercel, record }
+			return { action: 'coordinator-reset-pending', state: next, edge, edgeVercel, vercel, record }
 		}
 	}
 
@@ -316,6 +374,7 @@ export async function runCheck(env, options = {}) {
 			action: coordination.claimHeld ? 'fallback-claim-held' : 'counted-failure',
 			state: next,
 			edge,
+			edgeVercel,
 			vercel,
 			record
 		}
@@ -325,6 +384,14 @@ export async function runCheck(env, options = {}) {
 	// before the mutation so an operator's DNS change wins the race.
 	const latestRecord = await getConfiguredRecord(env, fetchImpl)
 	if (isFallbackRecord(latestRecord, env)) {
+		const enabledRegionalApexRecords = await getEnabledRegionalApexRecords(env, fetchImpl)
+		if (enabledRegionalApexRecords.length !== 0) {
+			return manualDnsState(env, rawState, state, latestRecord, fetchImpl, coordinator, 'regional')
+		}
+		const latestDefaultRecord = await getDefaultVercelRecord(env, fetchImpl)
+		if (!isDefaultVercelRecord(latestDefaultRecord, env)) {
+			return manualDnsState(env, rawState, state, latestDefaultRecord, fetchImpl, coordinator, 'default')
+		}
 		return alreadyFallbackState(env, rawState, state, latestRecord, fetchImpl, coordinator)
 	}
 	if (!isEdgeOneRecord(latestRecord, env)) {
@@ -339,7 +406,8 @@ export async function runCheck(env, options = {}) {
 	try {
 		updated = await disableConfiguredRecord(env, fetchImpl)
 		const disabledRecord = await getConfiguredRecord(env, fetchImpl)
-		if (!isFallbackRecord(disabledRecord, env)) {
+		const enabledRegionalApexRecords = await getEnabledRegionalApexRecords(env, fetchImpl)
+		if (!isFallbackRecord(disabledRecord, env) || enabledRegionalApexRecords.length !== 0) {
 			throw new Error('dnspod-disabled-record-verification-failed')
 		}
 	} catch (error) {

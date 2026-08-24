@@ -25,13 +25,22 @@ line. It reads the exact record identified by:
 - `DNSPOD_DEFAULT_VERCEL_A=<current Vercel fallback IPv4>`
 - `DNSPOD_DEFAULT_VERCEL_LINE=默认`
 
-After three consecutive EdgeOne health failures while direct Vercel is healthy,
-it calls DNSPod `ModifyRecordStatus` with `DISABLE` for that one record.
+The watchdog checks two EdgeOne paths before resetting its failure streak: the
+dedicated `/healthz` safe-read path must report `origin: tencent`, and a safe
+GraphQL POST through the EdgeOne API rule must report `origin: vercel`. After
+three consecutive failures of either EdgeOne path while direct Vercel is
+healthy, it calls DNSPod `ModifyRecordStatus` with `DISABLE` for that one
+record.
 DNSPod then falls back to the enabled default line according to its line
 selection rules. Before disabling the regional record, the watchdog verifies
 that the default line is enabled, is an apex A record, and still contains the
 exact configured Vercel fallback IPv4. The watchdog does not automatically
 re-enable the record.
+
+`EDGEONE_VERCEL_API_URL` is the EdgeOne canary URL for the safe
+`POST /api/graphql` probe. It must remain an EdgeOne-routed URL whose rule
+forces the Vercel origin; probing `VERCEL_HEALTH_URL` alone cannot detect a
+broken EdgeOne-to-Vercel dynamic/API path.
 
 The Cloudflare Scheduled Worker has no request route. Keep
 `WATCHDOG_ENABLED=false` until the shadow zone, live line queries, complete

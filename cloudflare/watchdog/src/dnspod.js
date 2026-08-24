@@ -132,7 +132,21 @@ export function isDefaultVercelRecord(record, env) {
 	)
 }
 
-export async function getConfiguredRecord(env, fetchImpl) {
+function isRegionalApexRecord(record, env) {
+	return (
+		String(record.Name || '').toLowerCase() === '@' &&
+		String(record.Line || '') === (env.DNSPOD_EDGEONE_LINE || '境内')
+	)
+}
+
+function isEnabledRegionalApexRecord(record, env) {
+	return (
+		isRegionalApexRecord(record, env) &&
+		String(record.Status || '').toUpperCase() === 'ENABLE'
+	)
+}
+
+export async function getRegionalApexRecords(env, fetchImpl) {
 	const response = await dnsPodRequest(env, fetchImpl, 'DescribeRecordList', {
 		Domain: env.DNSPOD_DOMAIN,
 		...(env.DNSPOD_DOMAIN_ID
@@ -145,11 +159,17 @@ export async function getConfiguredRecord(env, fetchImpl) {
 		ErrorOnEmpty: 'no'
 	})
 	const records = Array.isArray(response.RecordList) ? response.RecordList : []
-	const regionalApex = records.filter(record =>
-		String(record.Name || '').toLowerCase() === '@' &&
-		String(record.Line || '') === (env.DNSPOD_EDGEONE_LINE || '境内') &&
-		String(record.Status || '').toUpperCase() === 'ENABLE'
-	)
+	return records.filter(record => isRegionalApexRecord(record, env))
+}
+
+export async function getEnabledRegionalApexRecords(env, fetchImpl) {
+	const records = await getRegionalApexRecords(env, fetchImpl)
+	return records.filter(record => isEnabledRegionalApexRecord(record, env))
+}
+
+export async function getConfiguredRecord(env, fetchImpl) {
+	const records = await getRegionalApexRecords(env, fetchImpl)
+	const regionalApex = records.filter(record => isEnabledRegionalApexRecord(record, env))
 	if (regionalApex.length > 1) return null
 	return records.find(record => Number(record.RecordId) === recordId(env)) || null
 }

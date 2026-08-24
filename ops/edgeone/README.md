@@ -294,10 +294,12 @@ GraphQL, bot, mini-program, mail, or validation dependency blocks NS change.
 The watchdog runs once per minute with no public request route. It:
 
 1. probes a dedicated EdgeOne/Tencent safe-read URL whose `/healthz` response
-   must contain `origin: tencent` and `X-Letletme-Edge: edgeone`, alongside
-   direct Vercel health; leaving the probe on Vercel would never detect a
-   Tencent outage;
-2. requires three consecutive EdgeOne failures while Vercel is healthy;
+   must contain `origin: tencent` and `X-Letletme-Edge: edgeone`, plus a safe
+   `POST /api/graphql` through an EdgeOne rule that must report
+   `origin: vercel`; the second probe detects a broken EdgeOne-to-Vercel
+   dynamic/API path;
+2. requires three consecutive failures of either EdgeOne path while direct
+   Vercel is healthy;
 3. re-reads the exact `@ / 境内 / CNAME` record and the enabled default Vercel
    A record before mutation;
 4. disables only the exact regional record using DNSPod `ModifyRecordStatus`;

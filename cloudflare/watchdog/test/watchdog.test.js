@@ -21,6 +21,7 @@ const baseEnv = {
 	DNSPOD_DEFAULT_VERCEL_A: '76.76.21.21',
 	DNSPOD_DEFAULT_VERCEL_LINE: '默认',
 	EDGEONE_HEALTH_URL: 'https://eo-personal-canary.letletme.top/healthz',
+	EDGEONE_VERCEL_API_URL: 'https://eo-personal-canary.letletme.top/api/graphql',
 	VERCEL_HEALTH_URL: 'https://vercel-origin.letletme.top/healthz',
 	FAILOVER_STATE: null
 }
@@ -66,20 +67,37 @@ function health(edge) {
 	})
 }
 
+function graphqlHealth() {
+	return new Response(JSON.stringify({ data: { __typename: 'Query' } }), {
+		status: 200,
+		headers: {
+			'X-Letletme-Edge': 'edgeone',
+			'X-Letletme-Origin': 'vercel'
+		}
+	})
+}
+
 function fakeFetchFactory({
 	record,
 	records,
 	regionalRecords,
+	regionalRecordsAfterDisable,
 	defaultRecord,
 	defaultRecords,
+	defaultRecordsSequence,
 	edgeResponses = [],
+	edgeVercelResponses = [],
 	vercelResponse = health(false),
 	telegramResponses = []
 }) {
 	const calls = []
 	const dnsRecords = (records ? [...records] : [record]).map(toDnsRecord)
 	const regionalRecordList = regionalRecords?.map(toDnsRecord) || null
+	const regionalRecordListAfterDisable = regionalRecordsAfterDisable?.map(toDnsRecord) || null
+	const defaultRecordSequence = defaultRecordsSequence?.map(records => records.map(toDnsRecord)) || null
 	let currentRecord = dnsRecords[0] || null
+	let regionalDisabled = false
+	let defaultDescribeCount = 0
 	const fallbackRecord = toDnsRecord(defaultRecord ?? {
 		RecordId: 456,
 		Name: '@',
@@ -98,15 +116,20 @@ function fakeFetchFactory({
 				if (action === 'DescribeRecordList') {
 					const body = JSON.parse(init.body)
 					if (body.RecordType === 'A') {
-						const records = defaultRecords
-							? defaultRecords.map(toDnsRecord)
+						const records = defaultRecordSequence
+							? (defaultRecordSequence[Math.min(defaultDescribeCount++, defaultRecordSequence.length - 1)] || [])
+							: defaultRecords
+								? defaultRecords.map(toDnsRecord)
 							: fallbackRecord
 								? [fallbackRecord]
 								: []
 						return Response.json({ Response: { RecordList: records } })
 					}
-					if (regionalRecordList) {
-						return Response.json({ Response: { RecordList: regionalRecordList } })
+					if (regionalRecordList || regionalRecordListAfterDisable) {
+						const selectedRecords = regionalDisabled && regionalRecordListAfterDisable
+							? regionalRecordListAfterDisable
+							: regionalRecordList || (currentRecord ? [currentRecord] : [])
+						return Response.json({ Response: { RecordList: selectedRecords } })
 					}
 					const next = dnsRecords.length > 0 ? dnsRecords.shift() : currentRecord
 					if (next) currentRecord = next
@@ -115,6 +138,7 @@ function fakeFetchFactory({
 				if (action === 'ModifyRecordStatus') {
 					const body = JSON.parse(init.body)
 					if (currentRecord) currentRecord.Status = body.Status
+					regionalDisabled = body.Status === 'DISABLE'
 					return Response.json({ Response: { RecordId: body.RecordId } })
 				}
 			}
@@ -123,6 +147,9 @@ function fakeFetchFactory({
 			}
 			if (url === 'https://eo-personal-canary.letletme.top/healthz') {
 				return edgeResponses.shift() || health(false)
+			}
+			if (url === 'https://eo-personal-canary.letletme.top/api/graphql') {
+				return edgeVercelResponses.shift() || graphqlHealth()
 			}
 			return vercelResponse
 		}
@@ -234,6 +261,40 @@ test('is idempotent once fallback is active', async () => {
 	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 
+test('does not treat fallback as safe when another regional route remains enabled', async () => {
+	const env = makeEnv(JSON.stringify({ failureCount: 0, fallbackActive: true }))
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'DISABLE' },
+		regionalRecords: [
+			{ type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'DISABLE' },
+			{ RecordId: 789, Name: '@', Type: 'A', Value: '203.0.113.12', Line: '境内', Status: 'ENABLE' }
+		]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'manual-dns-state')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
+test('rejects failover verification when a competing regional route remains after disable', async () => {
+	const coordinator = makeCoordinator(2)
+	const env = makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), coordinator)
+	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' }
+	const disabledRecord = { ...edgeRecord, Status: 'DISABLE' }
+	const { fetch, calls } = fakeFetchFactory({
+		record: edgeRecord,
+		regionalRecordsAfterDisable: [
+			disabledRecord,
+			{ RecordId: 789, Name: '@', Type: 'A', Value: '203.0.113.12', Line: '境内', Status: 'ENABLE' }
+		],
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	await assert.rejects(
+		runCheckWithTestCoordinator(env, { fetchImpl: fetch }),
+		/dnspod-disabled-record-verification-failed/
+	)
+	assert.equal(calls.filter(call => call.action === 'ModifyRecordStatus').length, 1)
+})
+
 test('does not claim fallback is safe when the default Vercel record drifted', async () => {
 	const env = makeEnv(JSON.stringify({ failureCount: 0, fallbackActive: true }))
 	const { fetch, calls } = fakeFetchFactory({
@@ -286,6 +347,46 @@ test('revalidates the DNS record immediately before failover', async () => {
 		.filter(call => call.action === 'DescribeRecordList')
 		.filter(call => JSON.parse(call.init.body).RecordType === undefined)
 	assert.equal(regionalDescribes.length, 2)
+})
+
+test('revalidates the default route after a concurrent fallback change', async () => {
+	const env = makeEnv(
+		JSON.stringify({ failureCount: 2, fallbackActive: false }),
+		makeCoordinator(2)
+	)
+	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' }
+	const disabledRecord = { ...edgeRecord, Status: 'DISABLE' }
+	const { fetch, calls } = fakeFetchFactory({
+		records: [edgeRecord, disabledRecord],
+		defaultRecordsSequence: [
+			[{ RecordId: 456, Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'ENABLE' }],
+			[{ RecordId: 456, Type: 'A', Value: '198.51.100.10', Line: '默认', Status: 'ENABLE' }]
+		],
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'manual-dns-state')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+	assert.equal(
+		calls.filter(call => {
+			if (call.action !== 'DescribeRecordList') return false
+			return JSON.parse(call.init.body).RecordType === 'A'
+		}).length,
+		2
+	)
+})
+
+test('counts an EdgeOne-to-Vercel API failure even when Tencent is healthy', async () => {
+	const env = makeEnv()
+	const { fetch } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
+		edgeResponses: [health(true)],
+		edgeVercelResponses: [new Response('', { status: 503 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'counted-failure')
+	assert.equal(result.edge.ok, true)
+	assert.equal(result.edgeVercel.ok, false)
 })
 
 test('does not fail over when another enabled regional apex record competes', async () => {
