@@ -20,12 +20,18 @@ type GraphQLRequestErrorOptions = {
 	status?: number
 	code?: string | null
 	retryAfterSeconds?: number | null
+	rateLimitPolicy?: string | null
+	rateLimitScope?: string | null
+	rateLimitWorkload?: string | null
 }
 
 export class GraphQLRequestError extends Error {
 	readonly status: number
 	readonly code: string | null
 	readonly retryAfterSeconds: number | null
+	readonly rateLimitPolicy: string | null
+	readonly rateLimitScope: string | null
+	readonly rateLimitWorkload: string | null
 
 	constructor(message: string, options: GraphQLRequestErrorOptions = {}) {
 		super(message)
@@ -33,6 +39,9 @@ export class GraphQLRequestError extends Error {
 		this.status = options.status ?? 0
 		this.code = options.code ?? null
 		this.retryAfterSeconds = options.retryAfterSeconds ?? null
+		this.rateLimitPolicy = options.rateLimitPolicy ?? null
+		this.rateLimitScope = options.rateLimitScope ?? null
+		this.rateLimitWorkload = options.rateLimitWorkload ?? null
 	}
 }
 
@@ -57,7 +66,9 @@ const PUBLIC_BROWSER_OPERATION_ALLOWLIST = new Set([
 ])
 
 export const extractOperationName = (query: string): string | undefined =>
-	query.match(/\b(?:query|mutation|subscription)\s+([A-Za-z_][A-Za-z0-9_]*)/)?.[1]
+	query.match(
+		/\b(?:query|mutation|subscription)\s+([A-Za-z_][A-Za-z0-9_]*)/
+	)?.[1]
 
 const GRAPHQL_SLOW_REQUEST_THRESHOLD_MS = 750
 
@@ -106,13 +117,16 @@ const isMeaningfulGraphQLError = (error: GraphQLErrorLike): boolean => {
 	if (keys.length === 0) return false
 	if (keys.length === 1 && keys[0] === 'message') return false
 	return keys.some(key => {
-		if (key === 'message' || key === 'path' || key === 'extensions') return false
+		if (key === 'message' || key === 'path' || key === 'extensions')
+			return false
 		const value = (error as Record<string, unknown>)[key]
 		return value != null && value !== ''
 	})
 }
 
-const graphQLErrorCode = (error: GraphQLErrorLike | undefined): string | null => {
+const graphQLErrorCode = (
+	error: GraphQLErrorLike | undefined
+): string | null => {
 	if (!error?.extensions || typeof error.extensions !== 'object') return null
 	const code = (error.extensions as Record<string, unknown>).code
 	return typeof code === 'string' && code.length > 0 ? code : null
@@ -136,6 +150,12 @@ const parseRetryAfterSeconds = (value: string | null): number | null => {
 		: null
 }
 
+const rateLimitMetadata = (response: Response) => ({
+	rateLimitPolicy: response.headers.get('x-ratelimit-policy'),
+	rateLimitScope: response.headers.get('x-ratelimit-scope'),
+	rateLimitWorkload: response.headers.get('x-ratelimit-workload')
+})
+
 async function doFetch<T>(
 	endpoint: string,
 	query: string,
@@ -157,7 +177,8 @@ async function doFetch<T>(
 	}, safeTimeoutMs)
 	const abortFromCaller = () => controller.abort()
 	if (externalSignal?.aborted) controller.abort()
-	else externalSignal?.addEventListener('abort', abortFromCaller, { once: true })
+	else
+		externalSignal?.addEventListener('abort', abortFromCaller, { once: true })
 
 	let requestId: string | undefined
 	try {
@@ -191,13 +212,14 @@ async function doFetch<T>(
 				isClient
 					? publicGraphQLRequestMessage(response.status, code)
 					: firstError?.message?.trim() ||
-						`Request failed with status ${response.status}`,
+							`Request failed with status ${response.status}`,
 				{
 					status: response.status,
 					code,
 					retryAfterSeconds: parseRetryAfterSeconds(
 						response.headers.get('retry-after')
-					)
+					),
+					...rateLimitMetadata(response)
 				}
 			)
 		}
@@ -253,17 +275,21 @@ async function doFetch<T>(
 					: `GraphQL Error: ${errorMessages || 'Unknown GraphQL error'}`,
 				{
 					status: response.status,
-					code
+					code,
+					...rateLimitMetadata(response)
 				}
 			)
 		}
 
 		if (result.errors != null && normalizedErrors.length > 0) {
 			if (isClient) {
-				console.warn('GraphQL response contained unusable error details; using data if present.', {
-					operation: extractOperationName(query) || undefined,
-					requestId
-				})
+				console.warn(
+					'GraphQL response contained unusable error details; using data if present.',
+					{
+						operation: extractOperationName(query) || undefined,
+						requestId
+					}
+				)
 			} else {
 				console.warn(
 					'GraphQL response contained error entries with no usable details; using data if present.',
@@ -297,6 +323,7 @@ async function doFetch<T>(
 				at: new Date().toISOString(),
 				operation: extractOperationName(query) || undefined,
 				requestId,
+				status: response.status
 			})
 		}
 		return result.data as T
@@ -324,12 +351,10 @@ async function doFetch<T>(
 			)
 		}
 
-		if (
-			!(
-				normalizedError instanceof GraphQLRequestError &&
-				normalizedError.code === 'REQUEST_CANCELLED'
-			)
-		) {
+		if (!(
+			normalizedError instanceof GraphQLRequestError &&
+			normalizedError.code === 'REQUEST_CANCELLED'
+		)) {
 			if (isClient) {
 				console.error('GraphQL request failed', {
 					operation: extractOperationName(query) || undefined,
@@ -367,7 +392,12 @@ async function doFetch<T>(
 					...(normalizedError instanceof GraphQLRequestError
 						? {
 								code: normalizedError.code ?? undefined,
-								status: normalizedError.status
+								status: normalizedError.status,
+								retryAfterSeconds:
+									normalizedError.retryAfterSeconds ?? undefined,
+								rateLimitPolicy: normalizedError.rateLimitPolicy ?? undefined,
+								rateLimitScope: normalizedError.rateLimitScope ?? undefined,
+								workload: normalizedError.rateLimitWorkload ?? undefined
 							}
 						: {})
 				})

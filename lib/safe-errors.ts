@@ -16,7 +16,7 @@ export class PublicError extends Error {
 
 export function getPublicErrorMessage(
 	error: unknown,
-	fallback: string,
+	fallback: string
 ): string {
 	return error instanceof PublicError ? error.publicMessage : fallback
 }
@@ -29,7 +29,7 @@ export function getPublicErrorMessage(
  */
 export function getSafeClientErrorMessage(
 	error: unknown,
-	fallback: string,
+	fallback: string
 ): string {
 	return getPublicErrorMessage(error, fallback)
 }
@@ -41,10 +41,13 @@ export function getSafeClientErrorMessage(
  */
 export function publicGraphQLRequestMessage(
 	status: number,
-	code: string | null | undefined,
+	code: string | null | undefined
 ): string {
 	if (code === 'UNAUTHENTICATED' || status === 401) {
 		return 'Authentication required.'
+	}
+	if (code === 'VIEWER_ENTRY_REQUIRED') {
+		return 'Please select your FPL team first.'
 	}
 	if (code === 'FORBIDDEN' || status === 403) {
 		return 'You are not allowed to view this data.'

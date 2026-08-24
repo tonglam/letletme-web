@@ -15,12 +15,12 @@ test('GraphQL proxy removes upstream resolver details while retaining safe codes
 						extensions: {
 							code: 'INTERNAL_SERVER_ERROR',
 							detail: 'postgres://user:secret@example/db',
-							stack: 'Error: private stack',
-						},
-					},
-				],
+							stack: 'Error: private stack'
+						}
+					}
+				]
 			}),
-			200,
+			200
 		)
 	)
 
@@ -29,35 +29,71 @@ test('GraphQL proxy removes upstream resolver details while retaining safe codes
 		errors: [
 			{
 				message: 'The data service is unavailable.',
-				extensions: { code: 'INTERNAL_SERVER_ERROR' },
-			},
-		],
+				extensions: { code: 'INTERNAL_SERVER_ERROR' }
+			}
+		]
 	})
-	assert.doesNotMatch(JSON.stringify(sanitized), /private_table|postgres:|private stack|secret/)
+	assert.doesNotMatch(
+		JSON.stringify(sanitized),
+		/private_table|postgres:|private stack|secret/
+	)
 })
 
 test('GraphQL proxy replaces malformed and non-OK upstream bodies', () => {
 	const malformed = JSON.parse(
-		sanitizeGraphQLUpstreamBody('upstream stack: password=secret', 502),
+		sanitizeGraphQLUpstreamBody('upstream stack: password=secret', 502)
 	)
 	assert.deepEqual(malformed, {
 		errors: [
 			{
 				message: 'The data service is unavailable.',
-				extensions: { code: 'UPSTREAM_GRAPHQL_ERROR' },
-			},
-		],
+				extensions: { code: 'UPSTREAM_GRAPHQL_ERROR' }
+			}
+		]
 	})
 
 	const forbidden = JSON.parse(
-		sanitizeGraphQLUpstreamBody(JSON.stringify({ error: 'database secret' }), 403),
+		sanitizeGraphQLUpstreamBody(
+			JSON.stringify({ error: 'database secret' }),
+			403
+		)
 	)
 	assert.deepEqual(forbidden, {
 		errors: [
 			{
 				message: 'You are not allowed to view this data.',
-				extensions: { code: 'FORBIDDEN' },
-			},
-		],
+				extensions: { code: 'FORBIDDEN' }
+			}
+		]
+	})
+})
+
+test('GraphQL proxy safely preserves the no-viewer-entry contract', () => {
+	const response = JSON.parse(
+		sanitizeGraphQLUpstreamBody(
+			JSON.stringify({
+				data: null,
+				errors: [
+					{
+						message: 'private resolver detail',
+						extensions: {
+							code: 'VIEWER_ENTRY_REQUIRED',
+							stack: 'secret stack'
+						}
+					}
+				]
+			}),
+			403
+		)
+	)
+
+	assert.deepEqual(response, {
+		data: null,
+		errors: [
+			{
+				message: 'Please select your FPL team first.',
+				extensions: { code: 'VIEWER_ENTRY_REQUIRED' }
+			}
+		]
 	})
 })
