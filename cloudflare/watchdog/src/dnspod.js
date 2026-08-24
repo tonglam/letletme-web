@@ -1,7 +1,16 @@
 const ENDPOINT = 'https://dnspod.tencentcloudapi.com/'
 const SERVICE = 'dnspod'
 const VERSION = '2021-03-23'
-const APEX_ROUTE_TYPES = new Set(['A', 'AAAA', 'ALIAS', 'CNAME', 'URL', 'URL2'])
+const APEX_ROUTE_TYPES = new Set([
+	'A',
+	'AAAA',
+	'ALIAS',
+	'CNAME',
+	'HTTPS',
+	'SVCB',
+	'URL',
+	'URL2'
+])
 
 function bytes(value) {
 	return new TextEncoder().encode(value)

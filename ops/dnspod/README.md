@@ -79,14 +79,14 @@ targets have been captured; the commands below name the bindings without
 putting any value in Git:
 
 ```sh
-wrangler secret put DNSPOD_SECRET_ID
-wrangler secret put DNSPOD_SECRET_KEY
-wrangler secret put DNSPOD_DOMAIN_ID
-wrangler secret put DNSPOD_EDGEONE_RECORD_ID
-wrangler secret put DNSPOD_EDGEONE_CNAME
-wrangler secret put DNSPOD_DEFAULT_VERCEL_A
-wrangler secret put TELEGRAM_BOT_TOKEN
-wrangler secret put TELEGRAM_CHAT_ID
+wrangler secret put DNSPOD_SECRET_ID --config cloudflare/watchdog/wrangler.toml
+wrangler secret put DNSPOD_SECRET_KEY --config cloudflare/watchdog/wrangler.toml
+wrangler secret put DNSPOD_DOMAIN_ID --config cloudflare/watchdog/wrangler.toml
+wrangler secret put DNSPOD_EDGEONE_RECORD_ID --config cloudflare/watchdog/wrangler.toml
+wrangler secret put DNSPOD_EDGEONE_CNAME --config cloudflare/watchdog/wrangler.toml
+wrangler secret put DNSPOD_DEFAULT_VERCEL_A --config cloudflare/watchdog/wrangler.toml
+wrangler secret put TELEGRAM_BOT_TOKEN --config cloudflare/watchdog/wrangler.toml
+wrangler secret put TELEGRAM_CHAT_ID --config cloudflare/watchdog/wrangler.toml
 wrangler deploy --config cloudflare/watchdog/wrangler.toml
 wrangler secret list --config cloudflare/watchdog/wrangler.toml
 ```

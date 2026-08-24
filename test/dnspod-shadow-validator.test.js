@@ -7,7 +7,7 @@ const test = require('node:test')
 
 const script = path.resolve('ops/dnspod/scripts/validate-shadow-zone.mjs')
 
-function runValidator(records) {
+function runValidator(records, options = {}) {
 	const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'letletme-dnspod-'))
 	const file = path.join(directory, 'records.json')
 	fs.writeFileSync(file, JSON.stringify(records))
@@ -23,8 +23,8 @@ function runValidator(records) {
 		encoding: 'utf8',
 		env: {
 			...process.env,
-			DNSPOD_REQUIRED_HOSTS: 'www',
-			DNSPOD_REQUIRED_RECORDS_JSON: JSON.stringify([
+			DNSPOD_REQUIRED_HOSTS: options.requiredHosts || 'www',
+			DNSPOD_REQUIRED_RECORDS_JSON: JSON.stringify(options.requiredSpecs || [
 				{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' }
 			])
 		}
@@ -122,6 +122,7 @@ test('validator rejects an extra required record specification that is absent', 
 test('validator rejects competing enabled apex routes', () => {
 	for (const competingRecord of [
 		{ Name: '@', Type: 'AAAA', Value: '2001:db8::1', Line: '默认', Status: 'ENABLE', RecordId: 5 },
+		{ Name: '@', Type: 'HTTPS', Value: '1 . alpn=h3', Line: '默认', Status: 'ENABLE', RecordId: 8 },
 		{ Name: '@', Type: 'A', Value: '203.0.113.10', Line: '境外', Status: 'ENABLE', RecordId: 6 },
 		{ Name: '@', Type: 'A', Value: '203.0.113.11', Line: '境内', Status: 'ENABLE', RecordId: 7 }
 	]) {
@@ -130,4 +131,22 @@ test('validator rejects competing enabled apex routes', () => {
 			return true
 		})
 	}
+})
+
+test('validator rejects competing enabled watchdog host routes', () => {
+	const records = [
+		...validRecords,
+		{ Name: 'vercel-origin', Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'ENABLE', RecordId: 5 },
+		{ Name: 'vercel-origin', Type: 'A', Value: '203.0.113.10', Line: '默认', Status: 'ENABLE', RecordId: 6 }
+	]
+	assert.throws(() => runValidator(records, {
+		requiredHosts: 'www,vercel-origin',
+		requiredSpecs: [
+			{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
+			{ Name: 'vercel-origin', Type: 'A', Value: '76.76.21.21', Line: '默认' }
+		]
+	}), error => {
+		assert.equal(error.status, 1)
+		return true
+	})
 })

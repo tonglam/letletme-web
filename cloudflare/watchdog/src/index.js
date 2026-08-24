@@ -283,6 +283,56 @@ async function manualDnsState(env, rawState, state, record, fetchImpl, coordinat
 	return { action: 'manual-dns-state', state: next, record }
 }
 
+async function postDisableVerificationFailure(
+	env,
+	rawState,
+	state,
+	error,
+	now,
+	fetchImpl,
+	coordinator
+) {
+	const alertKey = `post-disable-verification:${env.DNSPOD_EDGEONE_RECORD_ID}`
+	const reason = error instanceof Error ? error.message : String(error)
+	const message = `letletme watchdog 已修改 DNSPod 境内记录，但回退校验失败；必须人工检查 DNSPod。原因=${reason}`
+	let next = {
+		...state,
+		failureCount: Math.max(FAILURE_THRESHOLD, state.failureCount),
+		fallbackActive: false,
+		lastFailureAt: now,
+		lastAction: 'post-disable-verification-failed',
+		coordinatorResetPending: false,
+		lastAlertKey: null,
+		pendingAlert: { key: alertKey, message }
+	}
+	try {
+		await saveState(env, rawState, next)
+	} catch (writeError) {
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_post_disable_state_prewrite_error',
+			error: writeError instanceof Error ? writeError.message : String(writeError)
+		}))
+	}
+	next = await applyAlert(env, next, alertKey, message, fetchImpl)
+	try {
+		await saveState(env, rawState, next)
+	} catch (writeError) {
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_post_disable_state_write_error',
+			error: writeError instanceof Error ? writeError.message : String(writeError)
+		}))
+	}
+	try {
+		await coordinator.release()
+	} catch (releaseError) {
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_post_disable_coordinator_release_error',
+			error: releaseError instanceof Error ? releaseError.message : String(releaseError)
+		}))
+	}
+	return next
+}
+
 async function bothUnhealthyState(
 	env,
 	rawState,
@@ -475,7 +525,15 @@ export async function runCheck(env, options = {}) {
 			throw new Error('dnspod-disabled-record-verification-failed')
 		}
 	} catch (error) {
-		await coordinator.release()
+		await postDisableVerificationFailure(
+			env,
+			rawState,
+			state,
+			error,
+			now,
+			fetchImpl,
+			coordinator
+		)
 		throw error
 	}
 	const alertKey = `fallback:${env.DNSPOD_EDGEONE_RECORD_ID}`

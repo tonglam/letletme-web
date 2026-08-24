@@ -293,6 +293,21 @@ test('does not disable regional EdgeOne when an enabled default AAAA route compe
 	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 
+test('does not disable regional EdgeOne when an enabled default HTTPS route competes', async () => {
+	const env = makeEnv()
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false },
+		defaultRecords: [
+			{ RecordId: 456, Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'ENABLE' },
+			{ RecordId: 459, Type: 'HTTPS', Value: '1 . alpn=h3', Line: '默认', Status: 'ENABLE' }
+		],
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'manual-dns-state')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
 test('is idempotent once fallback is active', async () => {
 	const env = makeEnv(JSON.stringify({ failureCount: 3, fallbackActive: true }))
 	const { fetch, calls } = fakeFetchFactory({
@@ -319,7 +334,11 @@ test('does not treat fallback as safe when another regional route remains enable
 
 test('rejects failover verification when a competing regional route remains after disable', async () => {
 	const coordinator = makeCoordinator(2)
-	const env = makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), coordinator)
+	const env = {
+		...makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), coordinator),
+		TELEGRAM_BOT_TOKEN: 'bot',
+		TELEGRAM_CHAT_ID: 'chat'
+	}
 	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' }
 	const disabledRecord = { ...edgeRecord, Status: 'DISABLE' }
 	const { fetch, calls } = fakeFetchFactory({
@@ -328,13 +347,16 @@ test('rejects failover verification when a competing regional route remains afte
 			disabledRecord,
 			{ RecordId: 789, Name: '@', Type: 'A', Value: '203.0.113.12', Line: '境内', Status: 'ENABLE' }
 		],
-		edgeResponses: [new Response('', { status: 503 })]
+		edgeResponses: [new Response('', { status: 503 })],
+		telegramResponses: [new Response('', { status: 200 })]
 	})
 	await assert.rejects(
 		runCheckWithTestCoordinator(env, { fetchImpl: fetch }),
 		/dnspod-disabled-record-verification-failed/
 	)
 	assert.equal(calls.filter(call => call.action === 'ModifyRecordStatus').length, 1)
+	assert.equal(env.writes.at(-1).lastAction, 'post-disable-verification-failed')
+	assert.equal(calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 1)
 })
 
 test('does not claim fallback is safe when the default Vercel record drifted', async () => {
