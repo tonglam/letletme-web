@@ -137,14 +137,15 @@ Cloudflare fallback path.
    and SNI contract, and the exact release SHA; do not substitute the current
    Vercel-only canary as evidence for the Tencent path.
 5. Configure the client-IP feature to write the custom header
-   `X-Letletme-Proxy-Client-IP`. For Tencent-bound requests, remove
+   `X-Letletme-Proxy-Client-IP` for every EdgeOne-to-origin request. Remove
    client-provided `X-Letletme-Origin-Token`, `X-Letletme-Client-IP`, and both
-   proxy headers, then inject `X-Letletme-Origin-Token` with the separate
-   `EDGEONE_ORIGIN_TOKEN` value matching `/etc/letletme/origin-token` and
-   inject `X-Letletme-Proxy-Secret` with the current
-   `LETLETME_LOCAL_PROXY_SECRET`. Nginx consumes the origin token before Node;
-   Vercel-bound requests must strip it. Do not delete the EdgeOne-generated
-   client-IP header after enabling the client-IP feature.
+   proxy headers, then inject the EdgeOne-generated client IP and the current
+   `X-Letletme-Proxy-Secret` for both Tencent-bound and Vercel-bound requests.
+   For the Tencent branch additionally inject `X-Letletme-Origin-Token` with
+   the separate `EDGEONE_ORIGIN_TOKEN` value matching
+   `/etc/letletme/origin-token`; Nginx consumes that token before Node. The
+   Vercel branch must strip the origin token. Do not delete the EdgeOne-
+   generated client-IP header after enabling the client-IP feature.
 6. Do not enable Edge Functions, Smart Acceleration, HTTP/3/QUIC, paid
    intelligent acceleration, add-on packages, or automatic paid upgrades.
 7. Enable HTTP/2 and Brotli/Gzip. Allow WebSocket pass-through.
@@ -186,6 +187,8 @@ schedule; no DNSPod or EdgeOne secret belongs in Git:
 - `EDGEONE_ORIGIN_TOKEN`, matching the Tencent host's origin-token file and
   never the proxy secret
 - `EDGEONE_HEALTH_URL` (Tencent safe-read `/healthz`),
+  `EDGEONE_TENCENT_HEALTH_URL` (an isolated EdgeOne canary route that
+  unconditionally reaches Tencent, never the user apex),
   `EDGEONE_VERCEL_API_URL` (safe API probe through the EdgeOne Vercel rule),
   and `VERCEL_HEALTH_URL` (direct Vercel)
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `WATCHDOG_ENABLED`

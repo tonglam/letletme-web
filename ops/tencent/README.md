@@ -19,8 +19,12 @@ Create these without committing them:
   `LETLETME_LOCAL_PROXY_SECRET_PREVIOUS` to `web.env` temporarily. It must be
   different from the active value and is removed after EdgeOne and Vercel have
   accepted the new value.
-- `/etc/letletme/tls/origin.pem` and `origin-key.pem` — Cloudflare Origin CA
-  material for `letletme.top`.
+- `/etc/letletme/tls/origin.pem` and `origin-key.pem` — a publicly trusted
+  certificate chain and private key for `letletme.top` (for example an ACME
+  certificate), readable by Nginx. Cloudflare Origin CA material alone is not
+  trusted by EdgeOne and must not be used for the Tencent-bound public path.
+  Renew it before expiry, run `nginx -t`, reload Nginx, and recheck the
+  EdgeOne-to-Tencent canary before accepting a new certificate.
 - `/etc/letletme/release-signing-public.pem` (`root:root`, `0644`) — the
   public Ed25519 key corresponding to the GitHub Actions-only
   `TENCENT_RELEASE_SIGNING_KEY` secret. The restricted wrapper verifies the
@@ -72,7 +76,8 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
    is the TLS terminator, while the loopback Node listener is cleartext. This
    avoids Next self-hosted Proxy/middleware attempting an HTTPS internal fetch
    to the plain listener. The public request remains HTTPS, the Host is pinned
-   to `letletme.top`, and Cloudflare Origin CA still protects the external hop.
+   to `letletme.top`, and the public certificate protects both the EdgeOne path
+   and the Cloudflare standby path.
 6. Keep the previous release directory and its matching
    `/opt/letletme/static-releases/<sha>` directory until the new release has
    been stable for at least 24 hours. After that rollback window, each

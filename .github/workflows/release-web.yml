@@ -132,13 +132,15 @@ jobs:
           EDGEONE_RULE_ID: ${{ secrets.EDGEONE_RULE_ID }}
           EDGEONE_RULE_ALL_VERCEL_JSON: ${{ secrets.EDGEONE_RULE_ALL_VERCEL_JSON }}
           EDGEONE_RULE_SPLIT_JSON: ${{ secrets.EDGEONE_RULE_SPLIT_JSON }}
+          EDGEONE_TENCENT_HEALTH_URL: ${{ vars.EDGEONE_TENCENT_HEALTH_URL }}
         run: |
           set -euo pipefail
           for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID \
             TENCENT_SSH_PRIVATE_KEY TENCENT_SSH_JUMP_PRIVATE_KEY TENCENT_SSH_KNOWN_HOSTS \
             TENCENT_RELEASE_SIGNING_KEY \
             EDGEONE_TENCENTCLOUD_SECRET_ID EDGEONE_TENCENTCLOUD_SECRET_KEY EDGEONE_ZONE_ID \
-            EDGEONE_RULE_ID EDGEONE_RULE_ALL_VERCEL_JSON EDGEONE_RULE_SPLIT_JSON; do
+            EDGEONE_RULE_ID EDGEONE_RULE_ALL_VERCEL_JSON EDGEONE_RULE_SPLIT_JSON \
+            EDGEONE_TENCENT_HEALTH_URL; do
             [[ -n "${!name:-}" ]] || { echo "missing required production secret: $name" >&2; exit 1; }
           done
           export TENCENTCLOUD_SECRET_ID="$EDGEONE_TENCENTCLOUD_SECRET_ID"
@@ -192,6 +194,7 @@ jobs:
           EDGEONE_RULE_ID: ${{ secrets.EDGEONE_RULE_ID }}
           EDGEONE_RULE_ALL_VERCEL_JSON: ${{ secrets.EDGEONE_RULE_ALL_VERCEL_JSON }}
           EDGEONE_RULE_SPLIT_JSON: ${{ secrets.EDGEONE_RULE_SPLIT_JSON }}
+          EDGEONE_TENCENT_HEALTH_URL: ${{ vars.EDGEONE_TENCENT_HEALTH_URL }}
           GH_TOKEN: ${{ github.token }}
           CANDIDATE_URL: ${{ steps.vercel-candidate.outputs.candidate_url }}
         shell: bash
@@ -322,6 +325,11 @@ jobs:
             grep -qi "^x-letletme-release: $RELEASE_SHA"
 
           node ops/release/edgeone-mode.mjs --mode split >/dev/null
+          tencent_headers="$(curl --fail --silent --show-error --max-time 15 \
+            -D - -o /dev/null "$EDGEONE_TENCENT_HEALTH_URL")"
+          grep -qi '^x-letletme-origin: tencent' <<<"$tencent_headers"
+          grep -qi "^x-letletme-release: $RELEASE_SHA" <<<"$tencent_headers"
+          grep -qi '^x-letletme-edge: edgeone' <<<"$tencent_headers"
           route_changed=0
           cleanup_remote_root
           echo "Vercel and Tencent are active at exact SHA $RELEASE_SHA; EdgeOne split routing restored."
