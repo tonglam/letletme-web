@@ -189,8 +189,16 @@ function coordinatorClient(env, options) {
 	if (!env.FAILOVER_COORDINATOR) throw new Error('coordinator-binding-missing')
 	const id = env.FAILOVER_COORDINATOR.idFromName(COORDINATOR_NAME)
 	const stub = env.FAILOVER_COORDINATOR.get(id)
-	const command = async operation => {
-		const response = await stub.fetch(`https://watchdog-coordinator/${operation}`, { method: 'POST' })
+	const command = async (operation, body) => {
+		const response = await stub.fetch(`https://watchdog-coordinator/${operation}`, {
+			method: 'POST',
+			...(body
+				? {
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(body)
+				}
+				: {})
+		})
 		const payload = await response.json().catch(() => null)
 		if (!response.ok || payload?.ok !== true) throw new Error(`coordinator-${response.status}`)
 		return payload
@@ -199,7 +207,8 @@ function coordinatorClient(env, options) {
 		recordFailure: () => command('record-failure'),
 		reset: () => command('reset'),
 		release: () => command('release'),
-		confirm: () => command('confirm')
+		confirm: () => command('confirm'),
+		confirmClaim: claimToken => command('confirm-claim', { claimToken })
 	}
 }
 
@@ -522,6 +531,38 @@ export async function runCheck(env, options = {}) {
 		return manualDnsState(env, rawState, state, latestDefaultRecord, fetchImpl, coordinator, 'default')
 	}
 
+	let claim
+	try {
+		claim = await coordinator.confirmClaim(coordination.claimToken)
+	} catch (error) {
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_failover_claim_verification_error',
+			error: error instanceof Error ? error.message : String(error)
+		}))
+		const next = {
+			...state,
+			failureCount: coordination.failureCount,
+			fallbackActive: false,
+			lastFailureAt: now,
+			lastAction: 'failover-claim-verification-failed',
+			coordinatorResetPending: false
+		}
+		await saveState(env, rawState, next)
+		return { action: 'failover-claim-verification-failed', state: next, edge, edgeVercel, vercel, releaseParity, record }
+	}
+	if (claim?.claimed !== true) {
+		const next = {
+			...state,
+			failureCount: Number.isInteger(claim?.failureCount) ? claim.failureCount : coordination.failureCount,
+			fallbackActive: false,
+			lastFailureAt: now,
+			lastAction: 'failover-claim-lost',
+			coordinatorResetPending: false
+		}
+		await saveState(env, rawState, next)
+		return { action: 'failover-claim-lost', state: next, edge, edgeVercel, vercel, releaseParity, record }
+	}
+
 	let updated
 	let mutationApplied = false
 	try {
@@ -596,7 +637,7 @@ export class FailoverCoordinator {
 	}
 
 	async readState() {
-		return (await this.ctx.storage.get('state')) || { failureCount: 0, claimAt: 0 }
+		return (await this.ctx.storage.get('state')) || { failureCount: 0, claimAt: 0, claimToken: null }
 	}
 
 	async writeState(state) {
@@ -611,20 +652,32 @@ export class FailoverCoordinator {
 		if (operation === 'record-failure') {
 			const claimFresh = state.claimAt > 0 && now - state.claimAt < CLAIM_TTL_MS
 			if (claimFresh) {
-				return Response.json({ ok: true, failureCount: state.failureCount, shouldFailover: false, claimHeld: true })
+				return Response.json({ ok: true, failureCount: state.failureCount, shouldFailover: false, claimHeld: true, claimToken: null })
 			}
 			const failureCount = Math.min(FAILURE_THRESHOLD, state.failureCount + 1)
 			const shouldFailover = failureCount >= FAILURE_THRESHOLD
-			await this.writeState({ failureCount, claimAt: shouldFailover ? now : 0 })
-			return Response.json({ ok: true, failureCount, shouldFailover, claimHeld: false })
+			const claimToken = shouldFailover ? crypto.randomUUID() : null
+			await this.writeState({ failureCount, claimAt: shouldFailover ? now : 0, claimToken })
+			return Response.json({ ok: true, failureCount, shouldFailover, claimHeld: false, claimToken })
 		}
 		if (operation === 'reset' || operation === 'confirm') {
-			await this.writeState({ failureCount: 0, claimAt: 0 })
+			await this.writeState({ failureCount: 0, claimAt: 0, claimToken: null })
 			return Response.json({ ok: true, failureCount: 0 })
 		}
 		if (operation === 'release') {
-			await this.writeState({ ...state, claimAt: 0 })
+			await this.writeState({ ...state, claimAt: 0, claimToken: null })
 			return Response.json({ ok: true, failureCount: state.failureCount })
+		}
+		if (operation === 'confirm-claim') {
+			const payload = await request.json().catch(() => null)
+			const claimFresh = state.claimAt > 0 && now - state.claimAt < CLAIM_TTL_MS
+			const claimed = Boolean(
+				claimFresh &&
+				state.failureCount >= FAILURE_THRESHOLD &&
+				typeof payload?.claimToken === 'string' &&
+				payload.claimToken === state.claimToken
+			)
+			return Response.json({ ok: true, claimed, failureCount: state.failureCount })
 		}
 		return new Response('not-found', { status: 404 })
 	}

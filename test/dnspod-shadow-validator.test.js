@@ -187,6 +187,24 @@ test('validator rejects competing enabled routes for any required hostname', () 
 	})
 })
 
+test('validator rejects an unlisted route on a non-route-only required hostname', () => {
+	const records = [
+		...validRecords,
+		{ Name: '_verify', Type: 'TXT', Value: 'TokenABC', Line: '默认', Status: 'ENABLE', RecordId: 5 },
+		{ Name: '_verify', Type: 'A', Value: '203.0.113.10', Line: '默认', Status: 'ENABLE', RecordId: 6 }
+	]
+	assert.throws(() => runValidator(records, {
+		requiredHosts: 'www,_verify',
+		requiredSpecs: [
+			{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
+			{ Name: '_verify', Type: 'TXT', Value: 'TokenABC', Line: '默认' }
+		]
+	}), error => {
+		assert.equal(error.status, 1)
+		return true
+	})
+})
+
 test('validator accepts the complete required route set for a hostname', () => {
 	const records = [
 		...validRecords,
@@ -238,5 +256,22 @@ test('validator preserves case-sensitive HTTPS and SVCB values', () => {
 			assert.equal(error.status, 1)
 			return true
 		})
+	}
+})
+
+test('validator canonicalizes HTTPS and SVCB target hostnames only', () => {
+	for (const type of ['HTTPS', 'SVCB']) {
+		const records = [
+			...validRecords,
+			{ Name: '_service', Type: type, Value: '1 SVC.EXAMPLE.COM. ech=TokenABC', Line: '默认', Status: 'ENABLE', RecordId: 5 }
+		]
+		const result = runValidator(records, {
+			requiredHosts: 'www,_service',
+			requiredSpecs: [
+				{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
+				{ Name: '_service', Type: type, Value: '1 svc.example.com ech=TokenABC', Line: '默认' }
+			]
+		})
+		assert.equal(result.ok, true)
 	}
 })

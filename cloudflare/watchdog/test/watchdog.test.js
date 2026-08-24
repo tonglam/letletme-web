@@ -33,15 +33,27 @@ function makeCoordinator(failureCount = 0) {
 	return {
 		failureCount,
 		claimed: false,
+		claimToken: null,
 		async recordFailure() {
-			if (this.claimed) return { failureCount: this.failureCount, shouldFailover: false, claimHeld: true }
+			if (this.claimed) return { failureCount: this.failureCount, shouldFailover: false, claimHeld: true, claimToken: null }
 			this.failureCount = Math.min(3, this.failureCount + 1)
-			if (this.failureCount >= 3) this.claimed = true
-			return { failureCount: this.failureCount, shouldFailover: this.failureCount >= 3, claimHeld: false }
+			if (this.failureCount >= 3) {
+				this.claimed = true
+				this.claimToken = 'test-claim-token'
+			}
+			return {
+				failureCount: this.failureCount,
+				shouldFailover: this.failureCount >= 3,
+				claimHeld: false,
+				claimToken: this.claimToken
+			}
 		},
-		async reset() { this.failureCount = 0; this.claimed = false; return { failureCount: 0 } },
-		async release() { this.claimed = false; return { failureCount: this.failureCount } },
-		async confirm() { this.failureCount = 0; this.claimed = false; return { failureCount: 0 } }
+		async reset() { this.failureCount = 0; this.claimed = false; this.claimToken = null; return { failureCount: 0 } },
+		async release() { this.claimed = false; this.claimToken = null; return { failureCount: this.failureCount } },
+		async confirm() { this.failureCount = 0; this.claimed = false; this.claimToken = null; return { failureCount: 0 } },
+		async confirmClaim(claimToken) {
+			return { claimed: this.claimed && claimToken === this.claimToken, failureCount: this.failureCount }
+		}
 	}
 }
 
@@ -89,8 +101,10 @@ function fakeFetchFactory({
 	records,
 	regionalRecords,
 	regionalRecordsAfterDisable,
+	regionalRecordsPages,
 	defaultRecord,
 	defaultRecords,
+	defaultRecordsPages,
 	defaultRecordsSequence,
 	modifyResponses = [],
 	edgeResponses = [],
@@ -102,6 +116,8 @@ function fakeFetchFactory({
 	const dnsRecords = (records ? [...records] : [record]).map(toDnsRecord)
 	const regionalRecordList = regionalRecords?.map(toDnsRecord) || null
 	const regionalRecordListAfterDisable = regionalRecordsAfterDisable?.map(toDnsRecord) || null
+	const regionalRecordPages = regionalRecordsPages?.map(page => page.map(toDnsRecord)) || null
+	const defaultRecordPages = defaultRecordsPages?.map(page => page.map(toDnsRecord)) || null
 	const defaultRecordSequence = defaultRecordsSequence?.map(records => records.map(toDnsRecord)) || null
 	let currentRecord = dnsRecords[0] || null
 	let regionalDisabled = false
@@ -124,6 +140,11 @@ function fakeFetchFactory({
 				if (action === 'DescribeRecordList') {
 					const body = JSON.parse(init.body)
 					if (body.RecordLine === '默认') {
+						if (defaultRecordPages) {
+							const page = defaultRecordPages[Math.floor(Number(body.Offset || 0) / 100)] || []
+							const total = defaultRecordPages.reduce((count, records) => count + records.length, 0)
+							return Response.json({ Response: { RecordList: page, RecordCountInfo: { TotalCount: total } } })
+						}
 						const records = defaultRecordSequence
 							? (defaultRecordSequence[Math.min(defaultDescribeCount++, defaultRecordSequence.length - 1)] || [])
 							: defaultRecords
@@ -132,6 +153,11 @@ function fakeFetchFactory({
 								? [fallbackRecord]
 								: []
 						return Response.json({ Response: { RecordList: records } })
+					}
+					if (regionalRecordPages) {
+						const page = regionalRecordPages[Math.floor(Number(body.Offset || 0) / 100)] || []
+						const total = regionalRecordPages.reduce((count, records) => count + records.length, 0)
+						return Response.json({ Response: { RecordList: page, RecordCountInfo: { TotalCount: total } } })
 					}
 					if (regionalRecordList || regionalRecordListAfterDisable) {
 						const selectedRecords = regionalDisabled && regionalRecordListAfterDisable
@@ -309,6 +335,28 @@ test('does not disable regional EdgeOne when an enabled default HTTPS route comp
 	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
 	assert.equal(result.action, 'manual-dns-state')
 	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
+test('does not disable regional EdgeOne when a later DNSPod page contains a default route', async () => {
+	const env = makeEnv()
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false },
+		defaultRecordsPages: [
+			[{ RecordId: 456, Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'ENABLE' }],
+			[{ RecordId: 459, Type: 'AAAA', Value: '2001:db8::1', Line: '默认', Status: 'ENABLE' }]
+		],
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'manual-dns-state')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+	assert.deepEqual(
+		calls
+			.filter(call => call.action === 'DescribeRecordList')
+			.filter(call => JSON.parse(call.init.body).RecordLine === '默认')
+			.map(call => JSON.parse(call.init.body).Offset),
+		[0, 100]
+	)
 })
 
 test('does not treat an EdgeOne-routed Vercel health response as direct Vercel health', async () => {
@@ -507,6 +555,20 @@ test('revalidates the default route after a concurrent fallback change', async (
 	)
 })
 
+test('does not mutate DNS after a failover claim is cleared during revalidation', async () => {
+	const coordinator = makeCoordinator(2)
+	coordinator.confirmClaim = async () => ({ claimed: false, failureCount: 0 })
+	const env = makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), coordinator)
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'failover-claim-lost')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+	assert.equal(env.writes.at(-1).lastAction, 'failover-claim-lost')
+})
+
 test('revalidates the default route after the disable mutation', async () => {
 	const env = makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), makeCoordinator(2))
 	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' }
@@ -686,9 +748,21 @@ test('serializes the threshold claim in the Durable Object coordinator', async (
 	const request = () => coordinator.fetch(new Request('https://watchdog-coordinator/record-failure', { method: 'POST' }))
 	assert.equal((await (await request()).json()).shouldFailover, false)
 	assert.equal((await (await request()).json()).shouldFailover, false)
-	assert.equal((await (await request()).json()).shouldFailover, true)
+	const thresholdPayload = await (await request()).json()
+	assert.equal(thresholdPayload.shouldFailover, true)
+	assert.equal(typeof thresholdPayload.claimToken, 'string')
 	assert.equal((await (await request()).json()).claimHeld, true)
+	const claimResponse = await coordinator.fetch(new Request('https://watchdog-coordinator/confirm-claim', {
+		method: 'POST',
+		body: JSON.stringify({ claimToken: thresholdPayload.claimToken })
+	}))
+	assert.equal((await claimResponse.json()).claimed, true)
 	const confirmResponse = await coordinator.fetch(new Request('https://watchdog-coordinator/confirm', { method: 'POST' }))
 	const confirmPayload = await confirmResponse.json()
 	assert.equal(confirmPayload.failureCount, 0)
+	const staleClaimResponse = await coordinator.fetch(new Request('https://watchdog-coordinator/confirm-claim', {
+		method: 'POST',
+		body: JSON.stringify({ claimToken: thresholdPayload.claimToken })
+	}))
+	assert.equal((await staleClaimResponse.json()).claimed, false)
 })

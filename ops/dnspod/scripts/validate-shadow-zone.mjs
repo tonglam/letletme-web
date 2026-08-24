@@ -21,15 +21,24 @@ function readRecords(file) {
 }
 
 function normalized(value) {
-	return String(value ?? '').trim().replace(/\.$/, '').toLowerCase()
+	const trimmed = String(value ?? '').trim()
+	return (trimmed === '.' ? '.' : trimmed.replace(/\.$/, '')).toLowerCase()
 }
 
 const hostnameValueTypes = new Set(['A', 'AAAA', 'ALIAS', 'CNAME', 'MX', 'NS', 'PTR'])
+const structuredHostnameValueTypes = new Set(['HTTPS', 'SVCB'])
+
+function canonicalStructuredValue(value) {
+	const parts = String(value ?? '').trim().split(/\s+/).filter(Boolean)
+	if (parts.length < 2) return String(value ?? '').trim()
+	return [parts[0], normalized(parts[1]), ...parts.slice(2)].join(' ')
+}
 
 function canonicalValue(type, value) {
-	return hostnameValueTypes.has(String(type ?? '').toUpperCase())
-		? normalized(value)
-		: String(value ?? '')
+	const normalizedType = String(type ?? '').toUpperCase()
+	if (hostnameValueTypes.has(normalizedType)) return normalized(value)
+	if (structuredHostnameValueTypes.has(normalizedType)) return canonicalStructuredValue(value)
+	return String(value ?? '')
 }
 
 function valuesEqual(type, actual, expected) {
@@ -129,9 +138,10 @@ if (!file || !edgeoneCname || !vercelA) {
 				String(record.Line ?? '') === spec.Line
 			))
 			.map(spec => `${spec.Name}/${spec.Type}/${spec.Line}`)
-		const routeHosts = new Set(requiredSpecs
-			.filter(spec => apexRouteTypes.has(String(spec.Type).toUpperCase()))
-			.map(spec => String(spec.Name).trim().toLowerCase()))
+		const routeHosts = new Set([
+			...requiredHosts,
+			...requiredSpecs.map(spec => spec.Name)
+		].map(value => String(value).trim().toLowerCase()))
 		const ambiguousRequiredRoutes = [...routeHosts].flatMap(host => {
 			const expectedRoutes = requiredSpecs.filter(spec =>
 				String(spec.Name).toLowerCase() === host &&

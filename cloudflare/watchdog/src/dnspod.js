@@ -11,6 +11,8 @@ const APEX_ROUTE_TYPES = new Set([
 	'URL',
 	'URL2'
 ])
+const RECORD_PAGE_SIZE = 100
+const MAX_RECORD_PAGES = 100
 
 function bytes(value) {
 	return new TextEncoder().encode(value)
@@ -166,19 +168,55 @@ function isEnabledApexRouteRecord(record, line) {
 	)
 }
 
+async function describeRecordList(env, fetchImpl, line) {
+	const records = []
+	let offset = 0
+	let expectedTotal = null
+	for (let pageNumber = 0; pageNumber < MAX_RECORD_PAGES; pageNumber += 1) {
+		const response = await dnsPodRequest(env, fetchImpl, 'DescribeRecordList', {
+			Domain: env.DNSPOD_DOMAIN,
+			...(env.DNSPOD_DOMAIN_ID
+				? { DomainId: Number(env.DNSPOD_DOMAIN_ID) }
+				: {}),
+			SubDomain: '@',
+			RecordLine: line,
+			Offset: offset,
+			Limit: RECORD_PAGE_SIZE,
+			ErrorOnEmpty: 'no'
+		})
+		const page = Array.isArray(response.RecordList) ? response.RecordList : []
+		const reportedTotal = Number(response.RecordCountInfo?.TotalCount)
+		if (Number.isSafeInteger(reportedTotal) && reportedTotal >= 0) {
+			if (expectedTotal !== null && expectedTotal !== reportedTotal) {
+				throw new Error('dnspod-record-list-total-changed')
+			}
+			expectedTotal = reportedTotal
+		}
+		records.push(...page)
+		if (expectedTotal !== null && records.length >= expectedTotal) {
+			if (records.length !== expectedTotal) throw new Error('dnspod-record-list-overflow')
+			return records
+		}
+		if (page.length === 0) {
+			if (expectedTotal !== null && records.length < expectedTotal) {
+				throw new Error('dnspod-record-list-pagination-incomplete')
+			}
+			return records
+		}
+		if (page.length < RECORD_PAGE_SIZE) {
+			if (expectedTotal !== null && records.length < expectedTotal) {
+				offset += RECORD_PAGE_SIZE
+				continue
+			}
+			return records
+		}
+		offset += RECORD_PAGE_SIZE
+	}
+	throw new Error('dnspod-record-list-pagination-limit')
+}
+
 export async function getRegionalApexRecords(env, fetchImpl) {
-	const response = await dnsPodRequest(env, fetchImpl, 'DescribeRecordList', {
-		Domain: env.DNSPOD_DOMAIN,
-		...(env.DNSPOD_DOMAIN_ID
-			? { DomainId: Number(env.DNSPOD_DOMAIN_ID) }
-			: {}),
-		SubDomain: '@',
-		RecordLine: env.DNSPOD_EDGEONE_LINE || '境内',
-		Offset: 0,
-		Limit: 100,
-		ErrorOnEmpty: 'no'
-	})
-	const records = Array.isArray(response.RecordList) ? response.RecordList : []
+	const records = await describeRecordList(env, fetchImpl, env.DNSPOD_EDGEONE_LINE || '境内')
 	return records.filter(record => isRegionalApexRecord(record, env))
 }
 
@@ -195,18 +233,7 @@ export async function getConfiguredRecord(env, fetchImpl) {
 }
 
 export async function getDefaultVercelRecord(env, fetchImpl) {
-	const response = await dnsPodRequest(env, fetchImpl, 'DescribeRecordList', {
-		Domain: env.DNSPOD_DOMAIN,
-		...(env.DNSPOD_DOMAIN_ID
-			? { DomainId: Number(env.DNSPOD_DOMAIN_ID) }
-			: {}),
-		SubDomain: '@',
-		RecordLine: defaultVercelLine(env),
-		Offset: 0,
-		Limit: 100,
-		ErrorOnEmpty: 'no'
-	})
-	const records = Array.isArray(response.RecordList) ? response.RecordList : []
+	const records = await describeRecordList(env, fetchImpl, defaultVercelLine(env))
 	const enabledDefaultApexRecords = records.filter(record =>
 		isEnabledApexRouteRecord(record, defaultVercelLine(env))
 	)
