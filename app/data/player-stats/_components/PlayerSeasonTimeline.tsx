@@ -415,7 +415,7 @@ function TimelineCell({
 							</span>
 							<span
 								className={cn(
-									'shrink-0 font-medium tabular-nums',
+									'min-w-0 max-w-full break-words text-right font-medium tabular-nums',
 									currentCellWins &&
 										(accent === 'primary' ? 'text-primary-ink' : 'text-warning'),
 									signal.analysisStatus !== 'READY' &&
