@@ -311,6 +311,38 @@ test('alerts when manual DNS state cannot reset the coordinator', async () => {
 	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 
+test('alerts separately when a prior manual DNS alert is followed by coordinator failure', async () => {
+	const coordinator = makeCoordinator()
+	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'manual.example.com', proxied: false }
+	const firstEnv = {
+		...makeEnv(null, coordinator),
+		TELEGRAM_BOT_TOKEN: 'bot',
+		TELEGRAM_CHAT_ID: 'chat'
+	}
+	const firstFetch = fakeFetchFactory({
+		record: edgeRecord,
+		telegramResponses: [new Response('', { status: 200 })]
+	})
+	const first = await runCheckWithTestCoordinator(firstEnv, { fetchImpl: firstFetch.fetch })
+	assert.equal(first.action, 'manual-dns-state')
+	assert.equal(first.state.lastAlertKey.startsWith('manual:regional:'), true)
+
+	coordinator.reset = async () => { throw new Error('coordinator-unavailable') }
+	const secondEnv = {
+		...makeEnv(JSON.stringify(firstEnv.writes.at(-1)), coordinator),
+		TELEGRAM_BOT_TOKEN: 'bot',
+		TELEGRAM_CHAT_ID: 'chat'
+	}
+	const secondFetch = fakeFetchFactory({
+		record: edgeRecord,
+		telegramResponses: [new Response('', { status: 200 })]
+	})
+	const second = await runCheckWithTestCoordinator(secondEnv, { fetchImpl: secondFetch.fetch })
+	assert.equal(second.action, 'manual-dns-state-coordinator-reset-failed')
+	assert.equal(second.state.lastAlertKey.startsWith('manual-coordinator-reset-failed:regional:'), true)
+	assert.equal(secondFetch.calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 1)
+})
+
 test('does not disable regional EdgeOne when the default Vercel fallback is unsafe', async () => {
 	const env = makeEnv()
 	const { fetch, calls } = fakeFetchFactory({

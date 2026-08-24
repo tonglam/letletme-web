@@ -310,7 +310,8 @@ async function manualDnsState(env, rawState, state, record, fetchImpl, coordinat
 		}))
 	}
 	const mutationHeld = coordination.mutationHeld === true
-	const alertKey = `manual:${reason}:${record?.RecordId || 'unknown'}:${record?.Type || 'unknown'}:${record?.Value || 'unknown'}:${record?.Line || 'unknown'}:${record?.Status || 'unknown'}`
+	const alertKeyPrefix = coordinatorResetFailed ? 'manual-coordinator-reset-failed' : 'manual'
+	const alertKey = `${alertKeyPrefix}:${reason}:${record?.RecordId || 'unknown'}:${record?.Type || 'unknown'}:${record?.Value || 'unknown'}:${record?.Line || 'unknown'}:${record?.Status || 'unknown'}`
 	const dnsMessage = reason === 'default'
 		? 'letletme watchdog 未改 DNSPod：默认线路的 Vercel 回退记录身份或状态不符合预期。'
 		: 'letletme watchdog 未改 DNSPod：境内 EdgeOne 记录身份或状态不符合预期。'
