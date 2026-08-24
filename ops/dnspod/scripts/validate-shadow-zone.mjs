@@ -121,7 +121,11 @@ function readRequiredSpecs() {
 			typeof spec.Type !== 'string' ||
 			typeof spec.Value !== 'string' ||
 			typeof spec.Line !== 'string') {
-			throw new Error('each required DNS record spec needs Name, Type, Value, and Line')
+				throw new Error('each required DNS record spec needs Name, Type, Value, and Line')
+			}
+		if (spec.Type.toUpperCase() === 'MX' &&
+			(spec.MX === undefined || spec.MX === null || String(spec.MX).trim() === '')) {
+			throw new Error('MX required DNS record specs need an MX priority')
 		}
 	}
 	return specs
@@ -176,7 +180,8 @@ if (!file || !edgeoneCname || !vercelA) {
 				String(record.Type ?? '').toUpperCase(),
 				String(record.Line ?? ''),
 				String(record.Name ?? '').trim().toLowerCase(),
-				canonicalValue(record.Type, record.Value)
+				canonicalValue(record.Type, record.Value),
+				String(record.Type ?? '').toUpperCase() === 'MX' ? String(record.MX ?? '').trim() : ''
 			].join('\u0000')
 			const expectedCounts = new Map()
 			for (const route of expectedRoutes) {

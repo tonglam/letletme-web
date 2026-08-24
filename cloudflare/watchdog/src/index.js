@@ -2,7 +2,7 @@ import {
 	disableConfiguredRecord,
 	getDefaultVercelRecord,
 	getConfiguredRecord,
-	getEnabledRegionalApexRecords,
+	getEnabledMainlandApexRecords,
 	isDisabledRecord,
 	isDefaultVercelRecord,
 	isEnabledRecord
@@ -246,7 +246,7 @@ async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coo
 	// Revalidate both sides of the fallback immediately before declaring the
 	// state healthy. The first DNS read can be stale if an operator changes the
 	// default record while this cron invocation is running.
-	const enabledRegionalApexRecords = await getEnabledRegionalApexRecords(env, fetchImpl)
+	const enabledRegionalApexRecords = await getEnabledMainlandApexRecords(env, fetchImpl)
 	if (enabledRegionalApexRecords.length !== 0) {
 		return manualDnsState(env, rawState, state, record, fetchImpl, coordinator, 'regional')
 	}
@@ -421,7 +421,7 @@ export async function runCheck(env, options = {}) {
 
 	const record = await getConfiguredRecord(env, fetchImpl)
 	if (isFallbackRecord(record, env)) {
-		const enabledRegionalApexRecords = await getEnabledRegionalApexRecords(env, fetchImpl)
+		const enabledRegionalApexRecords = await getEnabledMainlandApexRecords(env, fetchImpl)
 		if (enabledRegionalApexRecords.length !== 0) {
 			return manualDnsState(env, rawState, state, record, fetchImpl, coordinator, 'regional')
 		}
@@ -562,7 +562,7 @@ export async function runCheck(env, options = {}) {
 	// before the mutation so an operator's DNS change wins the race.
 	const latestRecord = await getConfiguredRecord(env, fetchImpl)
 	if (isFallbackRecord(latestRecord, env)) {
-		const enabledRegionalApexRecords = await getEnabledRegionalApexRecords(env, fetchImpl)
+		const enabledRegionalApexRecords = await getEnabledMainlandApexRecords(env, fetchImpl)
 		if (enabledRegionalApexRecords.length !== 0) {
 			return manualDnsState(env, rawState, state, latestRecord, fetchImpl, coordinator, 'regional')
 		}
@@ -584,19 +584,40 @@ export async function runCheck(env, options = {}) {
 	try {
 		claim = await coordinator.beginMutation(coordination.claimToken)
 	} catch (error) {
+		const alertKey = `failover-mutation-lock:${env.DNSPOD_EDGEONE_RECORD_ID}`
+		const alertMessage = 'letletme watchdog 无法取得 DNSPod 故障转移锁；未修改 DNS，必须人工检查 watchdog 与 DNSPod。'
+		const alertAlreadySent = state.lastAlertKey === alertKey && !state.pendingAlert
 		console.error(JSON.stringify({
 			event: 'edgeone_watchdog_failover_claim_verification_error',
 			error: error instanceof Error ? error.message : String(error)
 		}))
-		const next = {
+		let next = {
 			...state,
 			failureCount: coordination.failureCount,
 			fallbackActive: false,
 			lastFailureAt: now,
 			lastAction: 'failover-mutation-begin-failed',
-			coordinatorResetPending: false
+			coordinatorResetPending: false,
+			lastAlertKey: alertAlreadySent ? alertKey : null,
+			pendingAlert: alertAlreadySent ? null : { key: alertKey, message: alertMessage }
 		}
-		await saveState(env, rawState, next)
+		try {
+			await saveState(env, rawState, next)
+		} catch (writeError) {
+			console.error(JSON.stringify({
+				event: 'edgeone_watchdog_failover_lock_state_prewrite_error',
+				error: writeError instanceof Error ? writeError.message : String(writeError)
+			}))
+		}
+		next = await applyAlert(env, next, alertKey, alertMessage, fetchImpl)
+		try {
+			await saveState(env, rawState, next)
+		} catch (writeError) {
+			console.error(JSON.stringify({
+				event: 'edgeone_watchdog_failover_lock_state_write_error',
+				error: writeError instanceof Error ? writeError.message : String(writeError)
+			}))
+		}
 		return { action: 'failover-mutation-begin-failed', state: next, edge, edgeVercel, vercel, releaseParity, record }
 	}
 	if (claim?.claimed !== true) {
@@ -626,7 +647,7 @@ export async function runCheck(env, options = {}) {
 		updated = await disableConfiguredRecord(env, fetchImpl)
 		mutationApplied = true
 		const disabledRecord = await getConfiguredRecord(env, fetchImpl)
-		const enabledRegionalApexRecords = await getEnabledRegionalApexRecords(env, fetchImpl)
+		const enabledRegionalApexRecords = await getEnabledMainlandApexRecords(env, fetchImpl)
 		const postDisableDefaultRecord = await getDefaultVercelRecord(env, fetchImpl)
 		if (
 			!isFallbackRecord(disabledRecord, env) ||

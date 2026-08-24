@@ -13,6 +13,7 @@ const APEX_ROUTE_TYPES = new Set([
 ])
 const RECORD_PAGE_SIZE = 100
 const MAX_RECORD_PAGES = 100
+const NON_MAINLAND_LINES = new Set(['境外', '默认'])
 
 function bytes(value) {
 	return new TextEncoder().encode(value)
@@ -159,6 +160,15 @@ function isEnabledRegionalApexRecord(record, env) {
 	)
 }
 
+function isEnabledMainlandApexRecord(record) {
+	return (
+		String(record.Name || '').toLowerCase() === '@' &&
+		!NON_MAINLAND_LINES.has(String(record.Line || '')) &&
+		APEX_ROUTE_TYPES.has(String(record.Type || '').toUpperCase()) &&
+		String(record.Status || '').toUpperCase() === 'ENABLE'
+	)
+}
+
 function isEnabledApexRouteRecord(record, line) {
 	return (
 		String(record.Name || '').toLowerCase() === '@' &&
@@ -179,7 +189,7 @@ async function describeRecordList(env, fetchImpl, line) {
 				? { DomainId: Number(env.DNSPOD_DOMAIN_ID) }
 				: {}),
 			SubDomain: '@',
-			RecordLine: line,
+			...(line === undefined || line === null ? {} : { RecordLine: line }),
 			Offset: offset,
 			Limit: RECORD_PAGE_SIZE,
 			ErrorOnEmpty: 'no'
@@ -223,6 +233,11 @@ export async function getRegionalApexRecords(env, fetchImpl) {
 export async function getEnabledRegionalApexRecords(env, fetchImpl) {
 	const records = await getRegionalApexRecords(env, fetchImpl)
 	return records.filter(record => isEnabledRegionalApexRecord(record, env))
+}
+
+export async function getEnabledMainlandApexRecords(env, fetchImpl) {
+	const records = await describeRecordList(env, fetchImpl)
+	return records.filter(isEnabledMainlandApexRecord)
 }
 
 export async function getConfiguredRecord(env, fetchImpl) {

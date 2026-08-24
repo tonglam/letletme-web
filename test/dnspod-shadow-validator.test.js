@@ -221,14 +221,31 @@ test('validator rejects an unlisted route on a non-route-only required hostname'
 test('validator rejects an unlisted competing MX record', () => {
 	const records = [
 		...validRecords,
-		{ Name: '_mail', Type: 'MX', Value: '10 mail.example.com', Line: '默认', Status: 'ENABLE', RecordId: 5 },
-		{ Name: '_mail', Type: 'MX', Value: '20 attacker.example.com', Line: '默认', Status: 'ENABLE', RecordId: 6 }
+		{ Name: '_mail', Type: 'MX', MX: 10, Value: 'mail.example.com', Line: '默认', Status: 'ENABLE', RecordId: 5 },
+		{ Name: '_mail', Type: 'MX', MX: 20, Value: 'attacker.example.com', Line: '默认', Status: 'ENABLE', RecordId: 6 }
 	]
 	assert.throws(() => runValidator(records, {
 		requiredHosts: 'www,_mail',
 		requiredSpecs: [
 			{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
-			{ Name: '_mail', Type: 'MX', Value: '10 mail.example.com', Line: '默认' }
+			{ Name: '_mail', Type: 'MX', MX: 10, Value: 'mail.example.com', Line: '默认' }
+		]
+	}), error => {
+		assert.equal(error.status, 1)
+		return true
+	})
+})
+
+test('validator rejects an incorrect MX priority for the expected target', () => {
+	const records = [
+		...validRecords,
+		{ Name: '_mail', Type: 'MX', MX: 20, Value: 'mail.example.com', Line: '默认', Status: 'ENABLE', RecordId: 5 }
+	]
+	assert.throws(() => runValidator(records, {
+		requiredHosts: 'www,_mail',
+		requiredSpecs: [
+			{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
+			{ Name: '_mail', Type: 'MX', MX: 10, Value: 'mail.example.com', Line: '默认' }
 		]
 	}), error => {
 		assert.equal(error.status, 1)
