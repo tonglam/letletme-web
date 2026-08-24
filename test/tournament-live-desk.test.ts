@@ -289,6 +289,7 @@ describe('live tournament desk', () => {
 			pickList: [],
 			score: managerScore({
 				eventPoints: null,
+				netEventPoints: 5,
 				source: 'FPL_EVENT_LIVE',
 				state: 'SETTLING',
 				revision: 'event-live:gw1:r1:1'

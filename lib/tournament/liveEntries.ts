@@ -83,7 +83,9 @@ export const buildRankMap = (
 		traceableOfficialManagerScore(row.score) !== undefined
 	const rankableRows = rows.filter(row => {
 		return (
-			isOfficialSource(row) && typeof row.score?.netEventPoints === 'number'
+			isOfficialSource(row) &&
+			hasTraceableOfficialEventPoints(row.score) &&
+			typeof row.score?.netEventPoints === 'number'
 		)
 	})
 	const netPointsForRanking = (row: TournamentLiveCalcData): number =>
