@@ -9,6 +9,69 @@ function sha256(value) {
 	return createHash('sha256').update(value).digest('hex')
 }
 
+const SERVER_MANAGED_RULE_FIELDS = new Set([
+	'CreateTime',
+	'CreatedAt',
+	'LastModified',
+	'LastModifiedTime',
+	'UpdateTime',
+	'UpdatedAt',
+	'UpdatedTime'
+])
+
+function normalizeRule(value) {
+	if (Array.isArray(value)) return value.map(normalizeRule)
+	if (!value || typeof value !== 'object') return value
+	return Object.fromEntries(
+		Object.keys(value)
+			.filter(key => !SERVER_MANAGED_RULE_FIELDS.has(key))
+			.sort()
+			.map(key => [key, normalizeRule(value[key])])
+	)
+}
+
+export function canonicalRuleJson(rule) {
+	return JSON.stringify(normalizeRule(rule))
+}
+
+export function ruleFingerprint(rule) {
+	return sha256(canonicalRuleJson(rule))
+}
+
+export function validateRuleTransition(mode, current, snapshots) {
+	if (!['all-vercel', 'split'].includes(mode)) {
+		throw new Error(`unsupported EdgeOne transition mode: ${mode}`)
+	}
+	const target = snapshots[mode]
+	const sourceMode = mode === 'all-vercel' ? 'split' : 'all-vercel'
+	const source = snapshots[sourceMode]
+	if (!target || !source) {
+		throw new Error(`missing EdgeOne ${sourceMode} or ${mode} rule snapshot`)
+	}
+	const currentFingerprint = ruleFingerprint(current)
+	const targetFingerprint = ruleFingerprint(target)
+	if (currentFingerprint === targetFingerprint) {
+		return {
+			shouldModify: false,
+			currentFingerprint,
+			targetFingerprint,
+			sourceMode: 'target'
+		}
+	}
+	const sourceFingerprint = ruleFingerprint(source)
+	if (currentFingerprint !== sourceFingerprint) {
+		throw new Error(
+			`EdgeOne current rule does not match the known ${sourceMode} snapshot; refusing to overwrite (current=${currentFingerprint})`
+		)
+	}
+	return {
+		shouldModify: true,
+		currentFingerprint,
+		targetFingerprint,
+		sourceMode
+	}
+}
+
 function hmac(key, value) {
 	return createHmac('sha256', key).update(value).digest()
 }
@@ -145,12 +208,26 @@ async function describeRule() {
 }
 
 async function apply(mode) {
-	const desired = readRule(mode)
+	const snapshots = {
+		'all-vercel': readRule('all-vercel'),
+		split: readRule('split')
+	}
+	const desired = snapshots[mode]
 	const current = await describeRule()
 	if (current.RuleId !== desired.RuleId) {
 		throw new Error(
 			'EdgeOne current rule identity changed; refusing to overwrite'
 		)
+	}
+	const transition = validateRuleTransition(mode, current, snapshots)
+	if (!transition.shouldModify) {
+		return {
+			mode,
+			ruleId: desired.RuleId,
+			ruleSha256: transition.targetFingerprint,
+			changed: false,
+			requestId: null
+		}
 	}
 	const response = await requestTencent('ModifyL7AccRule', {
 		ZoneId: process.env.EDGEONE_ZONE_ID,
@@ -159,7 +236,8 @@ async function apply(mode) {
 	return {
 		mode,
 		ruleId: desired.RuleId,
-		ruleSha256: sha256(JSON.stringify(desired)),
+		ruleSha256: transition.targetFingerprint,
+		changed: true,
 		requestId: response.RequestId ?? null
 	}
 }
@@ -179,7 +257,7 @@ export async function main(argv = process.argv.slice(2)) {
 	const summary = {
 		mode,
 		ruleId: desired.RuleId ?? null,
-		ruleSha256: sha256(JSON.stringify(desired)),
+		ruleSha256: ruleFingerprint(desired),
 		dryRun
 	}
 	if (dryRun) return summary

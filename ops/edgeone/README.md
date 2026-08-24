@@ -45,8 +45,10 @@ overseas review produces passing evidence. The canary is not a user URL and
 must not be added to Auth trusted origins.
 
 This directory records the free EdgeOne canary and the conditions for a future
-public cutover. The application remains on Vercel; Tencent's `106.52.109.82`
-is not a public Web origin in this architecture.
+public cutover. The current canary still uses Vercel as its origin; the target
+architecture below adds Tencent's `106.52.109.82` only for mainland safe reads.
+It is not a public Web origin until the filing, TLS, same-SHA, security, and
+performance gates have passed.
 
 ## Gates before public cutover
 
@@ -56,10 +58,10 @@ production watchdog until these cutover gates have current console evidence:
 1. The Tencent console currently shows `letletme.top` enabled in CNAME mode,
    global area, and the base `免费版`. The console accepted the domain; the
    public apex is still not pointed at it.
-2. If the origin is ever changed to Tencent Lighthouse `106.52.109.82`,
-   Tencent access filing must be completed first. The approved zero-cost
-   architecture keeps the origin on Vercel, so the Tencent Lighthouse access
-   filing branch must not be activated accidentally.
+2. The current Vercel-origin canary does not activate Tencent Lighthouse
+   access filing. The target mainland safe-read origin is Tencent Lighthouse
+   `106.52.109.82`, so its access-filing relationship, certificate, and
+   console approval must be proven before that origin receives public traffic.
 3. The free plan must remain the base plan: no Add-on Suite, Smart
    Acceleration, HTTP/3/QUIC, media processing, SLA, or automatic paid
    renewal. The free plan's unlimited traffic/request line does not authorize
@@ -83,30 +85,34 @@ The public cutover remains gated on the final console and network checks.
 
 ## Routing contract
 
-The proposed public Web path, currently inactive, is:
+The active public path remains the Cloudflare Proxied apex followed by the free
+Request/Response Transform Rules shown in **Current decision** above. The target
+path is intentionally inactive until the separate DNSPod and canary gates pass:
 
 ```text
-Cloudflare authoritative DNS (DNS-only apex CNAME)
-  → EdgeOne free global site
-    → Vercel Production (`letletme-web.vercel.app`)
+DNSPod authoritative DNS
+  ├─ 境内 → EdgeOne free global site
+  │          ├─ mainland safe GET/HEAD reads → Tencent Web 106.52.109.82
+  │          └─ API, Server Actions, uploads, WebSocket and unsafe/uncertain
+  │             requests → Vercel Production
+  └─ 境外/默认 → Vercel Production
 ```
 
-The active public path is the Cloudflare Proxied apex followed by the free
-Request/Response Transform Rules shown in **Current decision** above.
+The EdgeOne rule must route only a conservative safe-read allowlist to
+Tencent. `/api/*`, all non-`GET`/`HEAD` requests, `Next-Action`, WebSocket
+upgrades, ACME paths, requests with Cookie/Authorization, and unknown traffic
+remain on Vercel. HTML/RSC safety and cache behavior are acceptance gates, not
+assumptions. The EdgeOne canary's current Vercel origin validates the proxy
+path; the production split rule must additionally prove the Tencent origin.
 
-All paths and methods, including mainland reads, remain on the same Vercel
-origin. Do not add a mainland-to-Tencent split: it introduces a second
-application runtime, cross-region consistency risk, and the Lighthouse access
-filing requirement. `/api/*`, all non-`GET`/`HEAD` requests, WebSocket
-upgrades, ACME paths, HTML/RSC, cookies, and Authorization requests must not
-be EdgeOne-cached or routed to Tencent.
-
-If a future EdgeOne cutover is approved, Cloudflare remains authoritative and
-the apex becomes DNS-only with CNAME flattening; do not switch NS to EdgeOne
-or DNSPod. If EdgeOne fails, the watchdog restores the exact pre-cutover
-Cloudflare Proxied Vercel record and the free Transform Rules serve Vercel. It
-never automatically switches back to EdgeOne. The watchdog is disabled while
-the current apex remains on the fallback path.
+The target rollback is DNSPod-only: after three consecutive EdgeOne/Tencent
+failures while direct Vercel is healthy, the Cloudflare Scheduled Worker
+disables the exact DNSPod `境内` record. Mainland resolution then falls back to
+the enabled DNSPod default Vercel record. It does not proxy user requests and
+does not automatically re-enable the regional record. Cloudflare remains an
+exported standby and manual recovery path; it is not the normal target
+authority. The watchdog remains disabled while the current apex is on the
+Cloudflare fallback path.
 
 ## Required free configuration for a future cutover
 
@@ -116,8 +122,13 @@ the current apex remains on the fallback path.
    `eo-canary.letletme.top` until a public cutover is approved.
 3. Use that target as `EDGEONE_CNAME_TARGET` only when preparing the watchdog.
    Keep `WATCHDOG_ENABLED=false` while the apex remains on the fallback path.
-4. Configure the origin as `letletme-web.vercel.app`, HTTPS port 443, origin
-   Host `letletme.top`, and TLS SNI `letletme.top`.
+4. Keep the canary origin as `letletme-web.vercel.app`, HTTPS port 443, origin
+   Host `letletme.top`, and TLS SNI `letletme.top`. For the inactive production
+   split, configure a separate HTTPS Tencent safe-read origin for the mainland
+   allowlist and retain the Vercel origin for dynamic/API traffic. The Tencent
+   origin must use a publicly trusted certificate for EdgeOne, the same Host
+   and SNI contract, and the exact release SHA; do not substitute the current
+   Vercel-only canary as evidence for the Tencent path.
 5. Configure the client-IP feature to write the custom header
    `X-Letletme-Proxy-Client-IP`. Add an origin-request header rule that removes
    client-provided `X-Letletme-Origin-Token` and `X-Letletme-Client-IP`, then
@@ -154,59 +165,56 @@ in `cloudflare/watchdog/wrangler.toml`. The Durable Object serializes the
 three-failure counter; the KV namespace stores only alert and audit state.
 This remains within the Workers Free daily request allowance for a one-minute
 cron. Store the following as Worker secrets or vars before enabling the
-schedule:
+schedule; no DNSPod or EdgeOne secret belongs in Git:
 
-- `ZONE_ID`, `DNS_RECORD_ID` (the active post-cutover EdgeOne CNAME record)
-- `EDGEONE_CNAME_TARGET`
-- `VERCEL_FALLBACK_A` and, if needed, `VERCEL_FALLBACK_TTL`
-- `CLOUDFLARE_API_TOKEN` (only Zone DNS Edit for `letletme.top`)
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+- `DNSPOD_DOMAIN` and optional `DNSPOD_DOMAIN_ID`
+- `DNSPOD_EDGEONE_RECORD_ID`, `DNSPOD_EDGEONE_CNAME`, and
+  `DNSPOD_EDGEONE_LINE=境内`
+- `DNSPOD_DEFAULT_VERCEL_A` and `DNSPOD_DEFAULT_VERCEL_LINE=默认`
+- `DNSPOD_SECRET_ID` and `DNSPOD_SECRET_KEY`, scoped only to the required
+  DNSPod record read/status operations
+- `EDGEONE_HEALTH_URL` (Tencent safe-read `/healthz`),
+  `EDGEONE_VERCEL_API_URL` (safe API probe through the EdgeOne Vercel rule),
+  and `VERCEL_HEALTH_URL` (direct Vercel)
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `WATCHDOG_ENABLED`
 
-`VERCEL_FALLBACK_A` is not the current rotating address returned by
-`letletme-web.vercel.app`. It must be the exact proxied apex A record exported
-immediately before cutover. `DNS_RECORD_ID` is a separate value: it must
-identify the active post-cutover EdgeOne CNAME record. The archived
-pre-routing baseline used `76.76.21.21`; re-read and export the live
-Cloudflare record before every future cutover.
+`DNSPOD_DEFAULT_VERCEL_A` is the exact enabled DNSPod default A record captured
+from the live Vercel project before the NS change; it is not a fresh DNS lookup
+performed during a failure. `DNSPOD_EDGEONE_RECORD_ID` is a different value: it
+must identify the exact enabled `@ / 境内 / CNAME` record. Re-read both IDs,
+lines, values, and statuses immediately before every enablement. If the record
+identity differs from the saved values, the watchdog alerts and makes no DNS
+mutation.
 
-If the cutover changes the record type by deleting the old A record and
-creating a CNAME, Cloudflare assigns a new record ID. The safe sequence is:
+The safe control-plane sequence is:
 
-1. Export the old proxied A record, its ID, and `VERCEL_FALLBACK_A` for
-   rollback evidence.
-2. Before changing DNS, redeploy the currently deployed watchdog with
-   `WATCHDOG_ENABLED=false`; verify the deployed configuration has taken
-   effect so no scheduled run can write the rollback record during cutover.
-3. Delete the existing apex A record using the exported record ID, then
-   confirm the apex has no conflicting A/AAAA/CNAME record.
-4. Create the apex EdgeOne CNAME as DNS-only.
-5. If CNAME creation or its record verification fails after step 3, stop
-   immediately and recreate the exported proxied A record with the exact
-   saved name, content, TTL, and `proxied=true`; GET it back and verify it is
-   the fallback record. Failure to restore the A record is a hard stop for
-   manual Cloudflare recovery; never enable the watchdog in this state.
-6. Immediately query Cloudflare DNS and capture the new CNAME record ID;
-   verify the exact apex name, EdgeOne target, and `proxied=false`.
-7. Update or redeploy the watchdog with that new CNAME ID, still with
-   `WATCHDOG_ENABLED=false`. Verify that value in the deployed Worker
-   configuration, then run only non-mutating checks: `npm run watchdog:dry-run`
-   validates the bundle, `curl -fsS https://letletme-web.vercel.app/healthz`
-   validates direct Vercel, `curl -fsS https://letletme.top/healthz` validates
-   the current apex, and a request to the Worker URL returning 404 confirms
-   there is no public control endpoint. The 404 is not evidence that the cron
-   ran; the deployed `WATCHDOG_ENABLED=false` value is the disablement check.
-8. Enable the watchdog only after the direct Vercel health probe and the
-   exact EdgeOne-record check both pass.
+1. Export the complete live Cloudflare zone and DNSPod shadow records, then
+   validate every apex, mail, verification, `api`, `static`, `hermes`, `pop`,
+   and `cdn` dependency without changing NS.
+2. Deploy the watchdog with `WATCHDOG_ENABLED=false`. Run
+   `npm run watchdog:dry-run` and verify the deployed vars/secrets without
+   treating the Worker URL's 404 as a cron test; the Worker has no public
+   request route.
+3. Confirm the enabled DNSPod default Vercel A record and the disabled or
+   shadow `境内` EdgeOne CNAME by exact record ID, line, type, and value.
+4. Only after the full overseas hard gate, mainland split gate, and rollback
+   rehearsal pass, obtain the separate explicit authorization to change the
+   registrar NS to DNSPod. Keep Cloudflare authoritative and Vercel online
+   throughout the mixed-NS cache period; do not cut over automatically.
+5. After DNSPod is authoritative and real mainland/overseas probes pass, set
+   `WATCHDOG_ENABLED=true` and immediately re-read the exact DNSPod records.
+   The watchdog probes Tencent safe-read `/healthz`, the EdgeOne-to-Vercel API
+   path, and direct Vercel before it is allowed to act.
 
-If an in-place Cloudflare update preserves the record ID, still GET the record
-and verify that it is the active EdgeOne CNAME before enabling the watchdog;
-the same disable-before-DNS-change sequence applies. Never leave
-`DNS_RECORD_ID` set to the archived Vercel A-record ID:
-`VERCEL_FALLBACK_A` is rollback content, not the watchdog's live record ID.
-
-Set `WATCHDOG_ENABLED=true` only after the apex is the exact EdgeOne CNAME and
-the direct Vercel health probe succeeds. The watchdog never returns to
-EdgeOne automatically after a fallback.
+On three consecutive failures of either EdgeOne path while direct Vercel is
+healthy, the watchdog re-reads the regional and default records, disables only
+the exact `DNSPOD_EDGEONE_RECORD_ID` with `ModifyRecordStatus`, verifies that no
+enabled `境内` apex record remains and that the default Vercel record is still
+enabled, then sends one Telegram alert. If the records were manually changed,
+duplicated, or DNSPod and Vercel are both unhealthy, it makes no DNS change and
+alerts instead. It never automatically re-enables the regional record. DNSPod
+free-plan TTL and recursive caching make this a minutes-scale fail-open, not a
+request-level failover.
 
 ## Verification commands
 
@@ -217,9 +225,12 @@ curl -sS -D - -X POST https://letletme.top/api/vitals \
   -H 'content-type: application/json' -d '{}'
 ```
 
-For a future EdgeOne re-evaluation, the canary/public path must return
+For a future EdgeOne re-evaluation, the Vercel-origin canary must return
 `X-Letletme-Edge: edgeone`, `X-Letletme-Origin: vercel`, and the current Vercel
-release. The current production path must return
+release. The inactive production split must additionally prove that mainland
+safe reads return `X-Letletme-Origin: tencent` with that same SHA, while the
+EdgeOne API/unsafe path and all overseas/default traffic return
+`X-Letletme-Origin: vercel`. The current production path must return
 `X-Letletme-Edge: cloudflare-fallback` and remains the acceptance baseline.
 
 The latest live-state refresh is recorded in

@@ -38,22 +38,60 @@ fi
 if ! id deploy >/dev/null 2>&1; then
 	useradd --system --create-home --home-dir /home/deploy --shell /bin/bash deploy
 fi
-install -d -o deploy -g deploy -m 0700 /home/deploy/.ssh
-authorized_keys=/home/deploy/.ssh/authorized_keys
+deploy_home=/home/deploy
+deploy_ssh_dir=$deploy_home/.ssh
+deploy_uid=$(id -u deploy)
+deploy_gid=$(id -g deploy)
+for ancestor in /home "$deploy_home"; do
+	if [[ -L $ancestor || ! -d $ancestor ]]; then
+		echo "deploy home ancestor is unsafe: $ancestor" >&2
+		exit 1
+	fi
+done
+if [[ -L $deploy_ssh_dir ]]; then
+	echo "deploy SSH directory must not be a symlink: $deploy_ssh_dir" >&2
+	exit 1
+fi
+if [[ -e $deploy_ssh_dir ]]; then
+	if [[ ! -d $deploy_ssh_dir ]]; then
+		echo "deploy SSH path is not a directory: $deploy_ssh_dir" >&2
+		exit 1
+	fi
+else
+	# mkdir refuses an existing symlink instead of following it.
+	mkdir --mode=0700 -- "$deploy_ssh_dir"
+fi
+chown --no-dereference "$deploy_uid:$deploy_gid" "$deploy_ssh_dir"
+chmod --no-dereference 0700 "$deploy_ssh_dir"
+authorized_keys=$deploy_ssh_dir/authorized_keys
+if [[ -L $authorized_keys || -e $authorized_keys && ! -f $authorized_keys ]]; then
+	echo "deploy authorized_keys path is unsafe" >&2
+	exit 1
+fi
 if [[ -n ${TENCENT_DEPLOY_PUBLIC_KEY:-} ]]; then
 	if [[ ! $TENCENT_DEPLOY_PUBLIC_KEY =~ ^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp[0-9]+)[[:space:]] ]]; then
 		echo "TENCENT_DEPLOY_PUBLIC_KEY is not a supported SSH public key" >&2
-		exit 1
-	fi
-	if [[ -e $authorized_keys && ! -f $authorized_keys ]]; then
-		echo "deploy authorized_keys path is unsafe" >&2
 		exit 1
 	fi
 	if [[ -f $authorized_keys ]] && [[ $(tr -d '\n' < "$authorized_keys") != "$TENCENT_DEPLOY_PUBLIC_KEY" ]]; then
 		echo "deploy authorized_keys already contains a different key" >&2
 		exit 1
 	fi
-	printf '%s\n' "$TENCENT_DEPLOY_PUBLIC_KEY" | install -o deploy -g deploy -m 0600 /dev/stdin "$authorized_keys"
+	if [[ ! -e $authorized_keys ]]; then
+		# noclobber uses an exclusive create, so a concurrent symlink cannot
+		# redirect this write into a privileged file.
+		(
+			umask 077
+			set -C
+			printf '%s\n' "$TENCENT_DEPLOY_PUBLIC_KEY" > "$authorized_keys"
+		)
+	fi
+	if [[ -L $authorized_keys || ! -f $authorized_keys ]]; then
+		echo "deploy authorized_keys path changed unsafely" >&2
+		exit 1
+	fi
+	chown --no-dereference "$deploy_uid:$deploy_gid" "$authorized_keys"
+	chmod --no-dereference 0600 "$authorized_keys"
 elif [[ ! -s $authorized_keys ]]; then
 	echo "set TENCENT_DEPLOY_PUBLIC_KEY on the first host install or provision /home/deploy/.ssh/authorized_keys before enabling automation" >&2
 	exit 1
