@@ -204,15 +204,27 @@ jobs:
           export TENCENTCLOUD_SECRET_KEY="$EDGEONE_TENCENTCLOUD_SECRET_KEY"
           route_changed=0
           tencent_activated=0
+          rollback_failed=0
           remote_root=''
           remote_archive=''
           remote_signature=''
           ssh_dir=''
           tmp_root=''
           restore_all_vercel() {
-            if [[ $route_changed == 1 ]]; then
-              node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null || true
-            fi
+            [[ $route_changed == 1 ]] || return 0
+            local attempt
+            for attempt in 1 2 3; do
+              if node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null 2>&1 &&
+                node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null 2>&1; then
+                route_changed=0
+                echo "EdgeOne rollback to all-Vercel verified on attempt $attempt."
+                return 0
+              fi
+              echo "EdgeOne rollback attempt $attempt failed; retrying." >&2
+              [[ $attempt == 3 ]] || sleep $((attempt * 5))
+            done
+            echo 'CRITICAL: could not verify EdgeOne all-Vercel rollback after 3 attempts.' >&2
+            return 1
           }
           cleanup_remote_root() {
             if [[ -n "$remote_root" && -n "$ssh_dir" && -f "$ssh_dir/config" ]]; then
@@ -232,7 +244,12 @@ jobs:
             if [[ -n "$tmp_root" ]]; then rm -rf -- "$tmp_root"; fi
             cleanup_staged_release
             cleanup_remote_root
-            restore_all_vercel
+            if ! restore_all_vercel; then
+              rollback_failed=1
+            fi
+            if [[ $rollback_failed == 1 ]]; then
+              exit_code=1
+            fi
             exit "$exit_code"
           }
           trap cleanup_on_exit EXIT

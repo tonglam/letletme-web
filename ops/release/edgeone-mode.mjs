@@ -48,8 +48,14 @@ export function validateRuleTransition(mode, current, snapshots) {
 	if (!target || !source) {
 		throw new Error(`missing EdgeOne ${sourceMode} or ${mode} rule snapshot`)
 	}
-	const currentFingerprint = ruleFingerprint(current)
 	const targetFingerprint = ruleFingerprint(target)
+	const sourceFingerprint = ruleFingerprint(source)
+	if (targetFingerprint === sourceFingerprint) {
+		throw new Error(
+			`EdgeOne ${mode} and ${sourceMode} rule snapshots must differ`
+		)
+	}
+	const currentFingerprint = ruleFingerprint(current)
 	if (currentFingerprint === targetFingerprint) {
 		return {
 			shouldModify: false,
@@ -58,7 +64,6 @@ export function validateRuleTransition(mode, current, snapshots) {
 			sourceMode: 'target'
 		}
 	}
-	const sourceFingerprint = ruleFingerprint(source)
 	if (currentFingerprint !== sourceFingerprint) {
 		throw new Error(
 			`EdgeOne current rule does not match the known ${sourceMode} snapshot; refusing to overwrite (current=${currentFingerprint})`

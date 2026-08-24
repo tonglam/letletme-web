@@ -58,3 +58,17 @@ test('EdgeOne mode changes refuse an unrecognized live rule', async () => {
 		/does not match the known split snapshot; refusing to overwrite/
 	)
 })
+
+test('EdgeOne mode changes reject identical routing snapshots', async () => {
+	const { validateRuleTransition } = await loadModule()
+	const snapshots = rules()
+	const duplicateSnapshots = {
+		'all-vercel': snapshots['all-vercel'],
+		split: snapshots['all-vercel']
+	}
+
+	assert.throws(
+		() => validateRuleTransition('split', duplicateSnapshots.split, duplicateSnapshots),
+		/snapshots must differ/
+	)
+})
