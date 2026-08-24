@@ -48,7 +48,7 @@ test('validator accepts exact CLI values and enabled apex records', () => {
 		edgeone: true,
 		overseas: true,
 		default: true,
-		routeCounts: { edgeone: 1, overseas: 1, default: 1 }
+		routeCounts: { all: 3, edgeone: 1, overseas: 1, default: 1 }
 	})
 	assert.deepEqual(result.missingHosts, [])
 	assert.equal(result.ok, true)
@@ -146,6 +146,16 @@ test('validator rejects competing enabled apex routes', () => {
 	}
 })
 
+test('validator rejects an enabled carrier-specific apex route', () => {
+	assert.throws(() => runValidator([
+		...validRecords,
+		{ Name: '@', Type: 'A', Value: '203.0.113.10', Line: '电信', Status: 'ENABLE', RecordId: 5 }
+	]), error => {
+		assert.equal(error.status, 1)
+		return true
+	})
+})
+
 test('validator rejects competing enabled watchdog host routes', () => {
 	const records = [
 		...validRecords,
@@ -211,6 +221,24 @@ test('validator rejects an unlisted route on a non-route-only required hostname'
 		requiredSpecs: [
 			{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
 			{ Name: '_verify', Type: 'TXT', Value: 'TokenABC', Line: '默认' }
+		]
+	}), error => {
+		assert.equal(error.status, 1)
+		return true
+	})
+})
+
+test('validator rejects an extra non-route record for a required hostname', () => {
+	const records = [
+		...validRecords,
+		{ Name: '_dmarc', Type: 'TXT', Value: 'v=DMARC1; p=none', Line: '默认', Status: 'ENABLE', RecordId: 5 },
+		{ Name: '_dmarc', Type: 'TXT', Value: 'v=DMARC1; p=reject', Line: '默认', Status: 'ENABLE', RecordId: 6 }
+	]
+	assert.throws(() => runValidator(records, {
+		requiredHosts: 'www,_dmarc',
+		requiredSpecs: [
+			{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
+			{ Name: '_dmarc', Type: 'TXT', Value: 'v=DMARC1; p=none', Line: '默认' }
 		]
 	}), error => {
 		assert.equal(error.status, 1)

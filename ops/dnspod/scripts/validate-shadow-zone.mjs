@@ -73,8 +73,6 @@ const apexRouteTypes = new Set([
 	'URL',
 	'URL2'
 ])
-const requiredRouteTypes = new Set([...apexRouteTypes, 'MX'])
-
 function isEnabled(record) {
 	return String(record.Status ?? '').toUpperCase() === 'ENABLE'
 }
@@ -83,13 +81,39 @@ function isEnabledApexRoute(record, line) {
 	return (
 		isEnabled(record) &&
 		String(record.Name ?? '').toLowerCase() === '@' &&
-		String(record.Line ?? '') === line &&
+		(line === undefined || line === null || String(record.Line ?? '') === line) &&
 		apexRouteTypes.has(String(record.Type ?? '').toUpperCase())
 	)
 }
 
 function enabledApexRoutes(records, line) {
 	return records.filter(record => isEnabledApexRoute(record, line))
+}
+
+function recordKey(record) {
+	return [
+		String(record.Type ?? '').toUpperCase(),
+		String(record.Line ?? ''),
+		String(record.Name ?? '').trim().toLowerCase(),
+		canonicalValue(record.Type, record.Value),
+		String(record.Type ?? '').toUpperCase() === 'MX' ? String(record.MX ?? '').trim() : ''
+	].join('\u0000')
+}
+
+function sameRecordMultiset(expectedRecords, actualRecords) {
+	if (expectedRecords.length !== actualRecords.length) return false
+	const expectedCounts = new Map()
+	const actualCounts = new Map()
+	for (const record of expectedRecords) {
+		const key = recordKey(record)
+		expectedCounts.set(key, (expectedCounts.get(key) || 0) + 1)
+	}
+	for (const record of actualRecords) {
+		const key = recordKey(record)
+		actualCounts.set(key, (actualCounts.get(key) || 0) + 1)
+	}
+	const allKeys = new Set([...expectedCounts.keys(), ...actualCounts.keys()])
+	return [...allKeys].every(key => expectedCounts.get(key) === actualCounts.get(key))
 }
 
 function find(records, line, type, value) {
@@ -143,6 +167,13 @@ if (!file || !edgeoneCname || !vercelA) {
 		const edgeOneRoutes = enabledApexRoutes(records, line)
 		const overseasRoutes = enabledApexRoutes(records, '境外')
 		const defaultRoutes = enabledApexRoutes(records, '默认')
+		const allApexRoutes = enabledApexRoutes(records)
+		const expectedApexRoutes = [
+			{ Name: '@', Type: 'CNAME', Value: edgeoneCname, Line: line },
+			{ Name: '@', Type: 'A', Value: vercelA, Line: '境外' },
+			{ Name: '@', Type: 'A', Value: vercelA, Line: '默认' }
+		]
+		const apexRouteSetMatches = sameRecordMultiset(expectedApexRoutes, allApexRoutes)
 		const missingHosts = requiredHosts.filter(host => !requiredSpecs.some(required =>
 			String(required.Name).toLowerCase() === host.toLowerCase() &&
 			records.some(record =>
@@ -167,35 +198,13 @@ if (!file || !edgeoneCname || !vercelA) {
 			...requiredSpecs.map(spec => spec.Name)
 		].map(value => String(value).trim().toLowerCase()))
 		const ambiguousRequiredRoutes = [...routeHosts].flatMap(host => {
-			const expectedRoutes = requiredSpecs.filter(spec =>
-				String(spec.Name).toLowerCase() === host &&
-				requiredRouteTypes.has(String(spec.Type).toUpperCase())
-			)
+			const expectedRoutes = requiredSpecs.filter(spec => String(spec.Name).toLowerCase() === host)
 			const actualRoutes = records.filter(record =>
 				isEnabled(record) &&
-				String(record.Name ?? '').toLowerCase() === host &&
-				requiredRouteTypes.has(String(record.Type ?? '').toUpperCase())
+				String(record.Name ?? '').toLowerCase() === host
 			)
-			const keyFor = record => [
-				String(record.Type ?? '').toUpperCase(),
-				String(record.Line ?? ''),
-				String(record.Name ?? '').trim().toLowerCase(),
-				canonicalValue(record.Type, record.Value),
-				String(record.Type ?? '').toUpperCase() === 'MX' ? String(record.MX ?? '').trim() : ''
-			].join('\u0000')
-			const expectedCounts = new Map()
-			for (const route of expectedRoutes) {
-				const key = keyFor(route)
-				expectedCounts.set(key, (expectedCounts.get(key) || 0) + 1)
-			}
-			const actualCounts = new Map()
-			for (const route of actualRoutes) {
-				const key = keyFor(route)
-				actualCounts.set(key, (actualCounts.get(key) || 0) + 1)
-			}
-			const allKeys = new Set([...expectedCounts.keys(), ...actualCounts.keys()])
-			return [...allKeys].some(key => expectedCounts.get(key) !== actualCounts.get(key))
-				? [`${host}: expected ${expectedRoutes.length} route(s), found ${actualRoutes.length}`]
+			return !sameRecordMultiset(expectedRoutes, actualRoutes)
+				? [`${host}: expected ${expectedRoutes.length} record(s), found ${actualRoutes.length}`]
 				: []
 		})
 		const disabled = records.filter(record =>
@@ -210,7 +219,8 @@ if (!file || !edgeoneCname || !vercelA) {
 				overseas: Boolean(overseasRoutes.length === 1 && apexOverseas && isEnabled(apexOverseas)),
 				default: Boolean(defaultRoutes.length === 1 && apexDefault && isEnabled(apexDefault)),
 				routeCounts: {
-					edgeone: edgeOneRoutes.length,
+				all: allApexRoutes.length,
+				edgeone: edgeOneRoutes.length,
 					overseas: overseasRoutes.length,
 					default: defaultRoutes.length
 				}
@@ -218,11 +228,13 @@ if (!file || !edgeoneCname || !vercelA) {
 			missingHosts,
 			missingRequiredRecords,
 			ambiguousRequiredRoutes,
+			apexRouteSetMatches,
 			disabledRegionalRecords: disabled.map(record => Number(record.RecordId)),
 			ok: Boolean(
 				edgeOneRoutes.length === 1 && apexEdgeOne && isEnabled(apexEdgeOne) &&
 				overseasRoutes.length === 1 && apexOverseas && isEnabled(apexOverseas) &&
 				defaultRoutes.length === 1 && apexDefault && isEnabled(apexDefault) &&
+				apexRouteSetMatches &&
 				missingHosts.length === 0 &&
 				missingRequiredRecords.length === 0 &&
 				ambiguousRequiredRoutes.length === 0
