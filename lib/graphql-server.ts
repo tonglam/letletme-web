@@ -5,6 +5,7 @@ import { capacityRequestIdForCurrentRun } from '@/lib/capacity-run'
 import {
 	executeQuery,
 	extractOperationName,
+	normalizeGraphQLTimeoutMs,
 	type ExecuteQueryOptions
 } from '@/lib/graphql-client'
 import { publicGraphQLCacheResult } from '@/lib/graphql-public-cache'
@@ -121,7 +122,7 @@ export async function executePublicServerQuery<T>(
 		workload,
 		cacheResult,
 		operation: extractOperationName(query) || undefined,
-		timeoutMs: options?.timeoutMs,
+		timeoutMs: normalizeGraphQLTimeoutMs(options?.timeoutMs),
 		requestId: requestId ?? undefined
 	})
 	return executeQuery<T>(query, variables, {

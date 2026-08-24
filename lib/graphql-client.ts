@@ -36,7 +36,12 @@ export class GraphQLRequestError extends Error {
 	}
 }
 
-const DEFAULT_GRAPHQL_TIMEOUT_MS = 15_000
+export const DEFAULT_GRAPHQL_TIMEOUT_MS = 15_000
+
+export const normalizeGraphQLTimeoutMs = (timeoutMs?: number): number =>
+	typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0
+		? timeoutMs
+		: DEFAULT_GRAPHQL_TIMEOUT_MS
 const PUBLIC_BROWSER_CACHE_TTL_MS = 60_000
 const PUBLIC_BROWSER_CACHE_MAX_ENTRIES = 50
 const PUBLIC_BROWSER_OPERATION_ALLOWLIST = new Set([
@@ -144,10 +149,7 @@ async function doFetch<T>(
 ): Promise<T> {
 	const startedAt = Date.now()
 	const controller = new AbortController()
-	const safeTimeoutMs =
-		Number.isFinite(timeoutMs) && timeoutMs > 0
-			? timeoutMs
-			: DEFAULT_GRAPHQL_TIMEOUT_MS
+	const safeTimeoutMs = normalizeGraphQLTimeoutMs(timeoutMs)
 	let timedOut = false
 	const timeoutId = globalThis.setTimeout(() => {
 		timedOut = true
