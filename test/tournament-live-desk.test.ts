@@ -10,6 +10,8 @@ import {
 	buildTournamentEntries,
 	buildTournamentStats,
 	formatLiveAveragePoints,
+	getBoundedTraceableTournamentCoverage,
+	getTournamentManagerNextRefreshAt,
 	mergeUnavailableTournamentEntryIds
 } from '../lib/tournament/liveEntries'
 import { loadTournamentLiveDeskWithRevisionRecovery } from '../lib/tournament/liveDesk'
@@ -215,10 +217,85 @@ describe('live tournament desk', () => {
 		assert.equal(entry?.livePoints, null)
 		assert.equal(entry?.gwPoints, null)
 		assert.equal(entry?.totalPoints, null)
+		assert.equal(entry?.eventCost, undefined)
+		assert.equal(entry?.rank, 0)
 		assert.deepEqual(buildTournamentStats(entry ? [entry] : []), {
 			averagePoints: 0,
 			highestPoints: 0,
 			totalEntries: 1
 		})
+	})
+
+	it('caps coverage at rows with traceable event-live scores', () => {
+		const traceable = {
+			entry: 1,
+			rank: 1,
+			entryName: 'Traceable',
+			playerName: 'Manager',
+			overallRank: 1,
+			transferCost: 0,
+			livePoints: 6,
+			liveNetPoints: 6,
+			liveTotalPoints: 6,
+			played: 1,
+			toPlay: 10,
+			captainName: 'Captain',
+			chip: null,
+			pickList: [],
+			score: managerScore({
+				eventPoints: 6,
+				netEventPoints: 6,
+				source: 'FPL_EVENT_LIVE',
+				state: 'FRESH',
+				revision: 'event-live:gw1:r1:1'
+			})
+		} satisfies TournamentLiveCalcData
+		const rejected = {
+			...traceable,
+			entry: 2,
+			score: managerScore({
+				eventPoints: 99,
+				source: 'FPL_CLASSIC_STANDINGS',
+				state: 'FRESH',
+				revision: 'classic:gw1:r1'
+			})
+		} satisfies TournamentLiveCalcData
+
+		assert.equal(
+			getBoundedTraceableTournamentCoverage({
+				rows: [traceable, rejected],
+				totalEntries: 2,
+				officialCoverage: 1
+			}),
+			1
+		)
+	})
+
+	it('keeps valid refresh metadata from a rejected score', () => {
+		const nextRefreshAt = '2026-08-24T06:05:00.000Z'
+		const row = {
+			entry: 1,
+			rank: 1,
+			entryName: 'Pending authority',
+			playerName: 'Manager',
+			overallRank: 1,
+			transferCost: 0,
+			livePoints: 0,
+			liveNetPoints: 0,
+			liveTotalPoints: 0,
+			played: 0,
+			toPlay: 11,
+			captainName: 'Captain',
+			chip: null,
+			pickList: [],
+			score: managerScore({
+				source: 'FPL_ENTRY_SUMMARY',
+				state: 'FRESH',
+				revision: 'summary:gw1:r1',
+				nextRefreshAt
+			})
+		} satisfies TournamentLiveCalcData
+
+		assert.equal(getTournamentManagerNextRefreshAt([row]), nextRefreshAt)
 	})
 })

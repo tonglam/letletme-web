@@ -159,7 +159,7 @@ export const buildTournamentEntries = (
 			id: String(row.entry),
 			rank: stale
 				? 0
-				: typeof row.rank === 'number' && row.rank > 0
+				: score && typeof row.rank === 'number' && row.rank > 0
 					? row.rank
 					: (currentRankByEntryId.get(row.entry) ?? 0),
 			teamName: row.entryName ?? `Entry ${row.entry}`,
@@ -173,7 +173,7 @@ export const buildTournamentEntries = (
 			captainPoints,
 			gwPoints: headlineEventPoints,
 			gwNetPoints: headlineNetPoints ?? undefined,
-			eventCost: score?.transferCost ?? 0,
+			eventCost: score?.transferCost,
 			overallRank,
 			lastOverallRank:
 				typeof row.lastOverallRank === 'number'
@@ -208,6 +208,50 @@ export const countTraceableTournamentScores = (
 	rows: readonly TournamentLiveCalcData[]
 ): number =>
 	rows.filter(row => hasTraceableOfficialEventPoints(row.score)).length
+
+export const getBoundedTraceableTournamentCoverage = ({
+	rows,
+	totalEntries,
+	officialCoverage
+}: {
+	rows: readonly TournamentLiveCalcData[]
+	totalEntries: number
+	officialCoverage?: number | null
+}): number => {
+	const total = Math.max(0, Math.floor(totalEntries))
+	const rowCoverage = Math.min(total, countTraceableTournamentScores(rows))
+	if (rowCoverage === 0) return 0
+	if (
+		typeof officialCoverage !== 'number' ||
+		!Number.isFinite(officialCoverage) ||
+		officialCoverage <= 0
+	) {
+		return rowCoverage
+	}
+	const reportedCoverage = Math.min(
+		total,
+		Math.max(0, Math.round(officialCoverage * total))
+	)
+	return Math.min(rowCoverage, reportedCoverage)
+}
+
+/**
+ * Refresh scheduling is transport metadata, not a score value. Keep a valid
+ * deadline even when the accompanying score is rejected by provenance checks,
+ * otherwise a settled player snapshot can stop polling before the score heals.
+ */
+export const getTournamentManagerNextRefreshAt = (
+	rows: readonly TournamentLiveCalcData[]
+): string | null => {
+	const refreshTimes = rows
+		.map(row => row.score?.nextRefreshAt)
+		.filter(
+			(value): value is string =>
+				typeof value === 'string' && Number.isFinite(Date.parse(value))
+		)
+		.sort((left, right) => Date.parse(left) - Date.parse(right))
+	return refreshTimes[0] ?? null
+}
 
 /**
  * Entry IDs that were kept from the previous batch because they failed to

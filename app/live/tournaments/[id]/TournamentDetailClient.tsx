@@ -48,6 +48,7 @@ import {
 	buildTournamentStats,
 	countTraceableTournamentScores,
 	getRetainedFailedEntryIds,
+	getTournamentManagerNextRefreshAt,
 	mergeUnavailableTournamentEntryIds,
 	mergePartialTournamentRows
 } from '@/lib/tournament/liveEntries'
@@ -297,13 +298,10 @@ export default function TournamentDetailClient({
 	const [searchQuery, setSearchQuery] = useState('')
 	const [currentTournament, setCurrentTournament] = useState(tournament)
 	const [rows, setRows] = useState(initialRows)
-	const managerNextRefreshAt = useMemo(() => {
-		const refreshTimes = rows
-			.map(row => traceableOfficialManagerScore(row.score)?.nextRefreshAt)
-			.filter((value): value is string => Boolean(value))
-			.sort()
-		return refreshTimes[0] ?? null
-	}, [rows])
+	const managerNextRefreshAt = useMemo(
+		() => getTournamentManagerNextRefreshAt(rows),
+		[rows]
+	)
 	const managerScoreSettling = rows.some(
 		row => traceableOfficialManagerScore(row.score)?.state === 'SETTLING'
 	)

@@ -40,6 +40,8 @@ import {
 	buildTournamentEntries,
 	buildTournamentStats,
 	countTraceableTournamentScores,
+	getBoundedTraceableTournamentCoverage,
+	getTournamentManagerNextRefreshAt,
 	formatLiveAveragePoints,
 	getRetainedFailedEntryIds,
 	mergeUnavailableTournamentEntryIds,
@@ -248,13 +250,10 @@ export default function TournamentClient({
 		() => buildTournamentStats(selectedEntries),
 		[selectedEntries]
 	)
-	const managerNextRefreshAt = useMemo(() => {
-		const refreshTimes = selectedRows
-			.map(row => row.score?.nextRefreshAt)
-			.filter((value): value is string => Boolean(value))
-			.sort()
-		return refreshTimes[0] ?? null
-	}, [selectedRows])
+	const managerNextRefreshAt = useMemo(
+		() => getTournamentManagerNextRefreshAt(selectedRows),
+		[selectedRows]
+	)
 	const managerScoreSettling = selectedRows.some(
 		row => row.score?.state === 'SETTLING'
 	)
@@ -372,13 +371,11 @@ export default function TournamentClient({
 		})
 		const states = traceableScores.map(score => score.state)
 		const totalEntries = selectedTournament?.totalEntries || selectedRows.length
-		const rowCoverage = countTraceableTournamentScores(selectedRows)
-		const availableEntries =
-			rowCoverage === 0
-				? 0
-				: officialCoverage > 0
-					? Math.min(totalEntries, Math.round(officialCoverage * totalEntries))
-					: rowCoverage
+		const availableEntries = getBoundedTraceableTournamentCoverage({
+			rows: selectedRows,
+			totalEntries,
+			officialCoverage
+		})
 		if (states.includes('SETTLING')) return scoreT('scoreSettling')
 		if (states.includes('STALE')) return scoreT('scoreDelayed')
 		if (
