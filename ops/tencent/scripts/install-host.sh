@@ -72,8 +72,15 @@ install -d -o root -g letletme -m 0750 /opt/letletme/builds
 install -d -o root -g www-data -m 0751 /opt/letletme/static-releases
 chmod 0751 /opt/letletme/static-releases
 install -d -o root -g root -m 0755 /var/cache/letletme-next
-printf '%s\n' 'LETLETME_RELEASE_SHA=development' | install -o root -g root -m 0644 \
-	/dev/stdin /etc/letletme/release.env
+release_env=/etc/letletme/release.env
+if [[ -L $release_env || -e $release_env && ! -f $release_env ]]; then
+	echo "release environment path is unsafe: $release_env" >&2
+	exit 1
+fi
+if [[ ! -e $release_env ]]; then
+	printf '%s\n' 'LETLETME_RELEASE_SHA=development' | install -o root -g root -m 0644 \
+		/dev/stdin "$release_env"
+fi
 
 install -o root -g root -m 0644 \
 	"$ops_dir/systemd/letletme-web.service" \
@@ -87,8 +94,14 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
 	"$ops_dir/nginx/letletme-origin-auth.conf.template" \
 	/usr/local/share/letletme/nginx/letletme-origin-auth.conf.template
-install -o root -g www-data -m 0640 /dev/null \
-	/etc/nginx/snippets/letletme-static-try-files.conf
+static_try_files=/etc/nginx/snippets/letletme-static-try-files.conf
+if [[ -L $static_try_files || -e $static_try_files && ! -f $static_try_files ]]; then
+	echo "static try-files path is unsafe: $static_try_files" >&2
+	exit 1
+fi
+if [[ ! -e $static_try_files ]]; then
+	install -o root -g www-data -m 0640 /dev/null "$static_try_files"
+fi
 ln -sfn /etc/nginx/sites-available/letletme /etc/nginx/sites-enabled/letletme
 rm -f /etc/nginx/sites-enabled/default
 
