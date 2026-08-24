@@ -83,6 +83,7 @@ describe('My FPL Classic league visibility', () => {
 
 		assert.match(page, /GET_ENTRY_LEAGUES/)
 		assert.match(page, /selectUntrackedFplClassicLeagueRanks/)
+		assert.match(page, /timeoutMs: 1_500/)
 		assert.match(page, /initialFplClassicRanks=\{initialFplClassicRanks\}/)
 		assert.match(client, /fplClassicRanks=\{props\.initialFplClassicRanks\}/)
 		assert.match(header, /t\('fplClassicRanks'\)/)

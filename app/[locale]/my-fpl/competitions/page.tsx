@@ -97,7 +97,7 @@ export default async function TournamentStatsPage({
 				session,
 				GET_ENTRY_LEAGUES,
 				{ entryId },
-				{ cache: 'no-store' }
+				{ cache: 'no-store', timeoutMs: 1_500 }
 			)
 		)
 		.then(response =>
