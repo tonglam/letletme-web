@@ -1,9 +1,9 @@
 import type { HomeFixturesResponse } from '@/lib/graphql/operations/home'
 
 export const HOME_FIXTURES_PUBLIC_CACHE_CONTROL =
-	'public, s-maxage=300, stale-while-revalidate=300, no-transform'
+	'public, s-maxage=300, stale-while-revalidate=300, stale-if-error=86400, no-transform'
 export const HOME_FIXTURES_LIVE_CACHE_CONTROL =
-	'public, s-maxage=10, stale-while-revalidate=20, no-transform'
+	'public, s-maxage=10, stale-while-revalidate=20, stale-if-error=300, no-transform'
 export const HOME_FIXTURES_NO_STORE = 'no-store'
 
 export type HomeFixtureParamResult =

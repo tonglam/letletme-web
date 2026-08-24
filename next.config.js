@@ -11,12 +11,12 @@ function resolveReleaseSha() {
 					process.env.VERCEL_GIT_COMMIT_SHA,
 					process.env.LETLETME_RELEASE_SHA,
 					process.env.GITHUB_SHA
-			  ]
+				]
 			: [
 					process.env.LETLETME_RELEASE_SHA,
 					process.env.VERCEL_GIT_COMMIT_SHA,
 					process.env.GITHUB_SHA
-			  ]
+				]
 	for (const candidate of candidates) {
 		if (/^[a-f0-9]{7,64}$/i.test(candidate ?? '')) {
 			return candidate.toLowerCase()
@@ -51,8 +51,7 @@ const releaseSha = resolveReleaseSha()
 // receive a unique platform deployment ID; supplying the same commit-derived
 // custom ID on a redeploy makes Vercel reject the build as a duplicate.
 const deploymentId = releaseSha.slice(0, 32)
-const deploymentConfig =
-	process.env.VERCEL === '1' ? {} : { deploymentId }
+const deploymentConfig = process.env.VERCEL === '1' ? {} : { deploymentId }
 const deploymentOrigin = resolveDeploymentOrigin()
 const isProduction = process.env.NODE_ENV === 'production'
 const contentSecurityPolicy = [
@@ -62,11 +61,11 @@ const contentSecurityPolicy = [
 	"frame-ancestors 'none'",
 	"frame-src 'none'",
 	"object-src 'none'",
-	`script-src 'self' 'unsafe-inline'${isProduction ? '' : " 'unsafe-eval'"}`,
+	`script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com https://vercel.live${isProduction ? '' : " 'unsafe-eval'"}`,
 	"style-src 'self' 'unsafe-inline'",
 	"img-src 'self' data: blob: https://*.supabase.co https://*.googleusercontent.com",
 	"font-src 'self' data:",
-	"connect-src 'self' https://*.supabase.co",
+	"connect-src 'self' https://*.supabase.co https://cloudflareinsights.com https://vercel.live",
 	"worker-src 'self' blob:",
 	"manifest-src 'self'",
 	...(isProduction ? ['upgrade-insecure-requests'] : [])
@@ -103,7 +102,8 @@ const nextConfig = {
 					{ key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
 					{
 						key: 'Permissions-Policy',
-						value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
+						value:
+							'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
 					},
 					{ key: 'Content-Security-Policy', value: contentSecurityPolicy }
 				]

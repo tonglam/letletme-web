@@ -29,4 +29,15 @@ describe('Web runtime CI contract', () => {
 		assert.doesNotMatch(migrateWorkflow, /bootstrap-runtime-login/)
 		assert.doesNotMatch(migrateWorkflow, /WEB_RUNTIME_DB_PASSWORD/)
 	})
+
+	it('uses the Node 24-based setup action without changing the project Node version', () => {
+		for (const source of [workflow, migrateWorkflow]) {
+			assert.match(
+				source,
+				/actions\/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6/
+			)
+			assert.match(source, /node-version: 22/)
+			assert.doesNotMatch(source, /actions\/setup-node@49933ea/)
+		}
+	})
 })

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import type { LiveMatchdayDeskRow } from '../lib/graphql/operations/live'
-import { mergeLiveFixturesIntoHomeFixtures } from '../lib/home-fixtures-merge'
+import {
+	buildLiveCoreFixtureFallback,
+	mergeLiveFixturesIntoHomeFixtures
+} from '../lib/home-fixtures-merge'
 
 const liveRow = (partial: Partial<LiveMatchdayDeskRow> = {}) =>
 	({
@@ -71,5 +74,35 @@ describe('mergeLiveFixturesIntoHomeFixtures', () => {
 		)
 
 		assert.equal(fixture.finished, true)
+	})
+
+	it('keeps core fixtures visible when the live overlay is unavailable', () => {
+		const fallback = buildLiveCoreFixtureFallback(
+			{
+				season: '2026',
+				revision: 'core-7',
+				sourceCheckedAt: '2026-08-24T00:00:00.000Z'
+			},
+			1,
+			[
+				{
+					id: 1,
+					finished: false,
+					started: false,
+					kickoffTime: '2026-08-24T12:00:00.000Z',
+					homeTeam: { id: 1, name: 'Arsenal', shortName: 'ARS' },
+					awayTeam: { id: 2, name: 'Chelsea', shortName: 'CHE' },
+					homeScore: null,
+					awayScore: null
+				}
+			]
+		)
+
+		assert.equal(fallback.source, 'LIVE')
+		assert.equal(fallback.state, 'CORE')
+		assert.equal(fallback.stale, true)
+		assert.equal(fallback.revision, 'core-fallback:core-7')
+		assert.equal(fallback.fixtures.length, 1)
+		assert.equal(fallback.fixtures[0]?.eventId, 1)
 	})
 })

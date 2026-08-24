@@ -1,7 +1,16 @@
 import type { LiveMatchdayDeskRow } from '@/lib/graphql/operations/live'
-import type { HomeFixture } from '@/lib/graphql/operations/home'
+import type {
+	HomeFixture,
+	HomeFixturesResponse
+} from '@/lib/graphql/operations/home'
 
 type CoreHomeFixture = Omit<HomeFixture, 'eventId'>
+
+type CoreHomeFixtureContext = {
+	season: string
+	revision: string
+	sourceCheckedAt: string | null
+}
 
 function safeText(value: unknown): string {
 	return typeof value === 'string' ? value : ''
@@ -58,4 +67,27 @@ export function mergeLiveFixturesIntoHomeFixtures(
 			awayScore: row.awayScore ?? core?.awayScore ?? null
 		}
 	})
+}
+
+/**
+ * A missing live overlay must not erase the authoritative fixture schedule.
+ * Keep the response on the short live cache while making the core fallback
+ * explicit in its state and revision.
+ */
+export function buildLiveCoreFixtureFallback(
+	core: CoreHomeFixtureContext,
+	eventId: number,
+	coreFixtures: readonly CoreHomeFixture[]
+): HomeFixturesResponse {
+	return {
+		season: core.season,
+		revision: `core-fallback:${core.revision}`,
+		eventId,
+		source: 'LIVE',
+		state: 'CORE',
+		sourceCheckedAt: core.sourceCheckedAt,
+		publishedAt: null,
+		stale: true,
+		fixtures: coreFixtures.map(fixture => ({ ...fixture, eventId }))
+	}
 }
