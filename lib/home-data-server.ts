@@ -6,6 +6,10 @@ import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import type { Session } from '@/lib/auth'
 import { getVerifiedEntryContext } from '@/lib/session'
 import {
+	GET_EVENT_STATS_BY_ID,
+	type EventStatsByIdResponse
+} from '@/lib/graphql/operations/events'
+import {
 	GET_HOME_EVENT_FIXTURES,
 	GET_HOME_GAMEWEEK,
 	GET_HOME_PUBLIC_BOOTSTRAP,
@@ -104,25 +108,58 @@ const getHomeGameweekFromOrigin = unstable_cache(
 	async (eventId: number): Promise<HomeGameweek> =>
 		coalescePublicSeed(`home-gameweek:${eventId}`, async () => {
 			const startedAt = performance.now()
-			const response = await executePublicServerQuery<HomeGameweekResponse>(
-				'gameweek',
-				GET_HOME_GAMEWEEK,
-				{ eventId },
-				{ cache: 'no-store', timeoutMs: 5_000 }
-			)
+			// Keep the combined Home query compatible with older GraphQL schemas while
+			// reading the new entry id from the established event root in parallel.
+			const [response, overallStats] = await Promise.all([
+				executePublicServerQuery<HomeGameweekResponse>(
+					'gameweek',
+					GET_HOME_GAMEWEEK,
+					{ eventId },
+					{ cache: 'no-store', timeoutMs: 5_000 }
+				),
+				executePublicServerQuery<EventStatsByIdResponse>(
+					'gameweek',
+					GET_EVENT_STATS_BY_ID,
+					{ eventId },
+					{ cache: 'no-store', timeoutMs: 5_000 }
+				).catch(error => {
+					console.warn('[home-gameweek] highest-score entry unavailable', {
+						eventId,
+						error: error instanceof Error ? error.name : 'UnknownError'
+					})
+					return null
+				})
+			])
 			const gameweek = response.homeGameweek
-			const cacheable = isHomeGameweekDurablyCacheable(gameweek)
+			const highestScoringEntry =
+				gameweek.gameweekDesk.overview?.highestScoringEntry ??
+				overallStats?.event?.highestScoringEntry ??
+				null
+			const normalizedGameweek: HomeGameweek = {
+				...gameweek,
+				gameweekDesk: {
+					...gameweek.gameweekDesk,
+					overview: gameweek.gameweekDesk.overview
+						? {
+								...gameweek.gameweekDesk.overview,
+								highestScoringEntry
+							}
+						: null
+				}
+			}
+			const cacheable = isHomeGameweekDurablyCacheable(normalizedGameweek)
 			console.info('[home-gameweek]', {
-				lifecycle: gameweek.gameweekDesk.lifecycle,
-				dreamTeamRows: gameweek.gameweekDesk.dreamTeam.length,
-				transfersState: gameweek.transfersState,
+				lifecycle: normalizedGameweek.gameweekDesk.lifecycle,
+				dreamTeamRows: normalizedGameweek.gameweekDesk.dreamTeam.length,
+				transfersState: normalizedGameweek.transfersState,
 				transferRows:
-					gameweek.topTransfersIn.length + gameweek.topTransfersOut.length,
+					normalizedGameweek.topTransfersIn.length +
+					normalizedGameweek.topTransfersOut.length,
 				durationMs: Number((performance.now() - startedAt).toFixed(2)),
 				cacheResult: cacheable ? 'miss-fill' : 'bypass-transient'
 			})
-			if (!cacheable) throw new TransientHomeGameweekError(gameweek)
-			return gameweek
+			if (!cacheable) throw new TransientHomeGameweekError(normalizedGameweek)
+			return normalizedGameweek
 		}),
 	['graphql', 'home-gameweek', 'v1'],
 	{

@@ -326,7 +326,7 @@ function PriceColumns({
 													p1: String(change.player.playerId),
 													localePathPrefix: locale === 'en' ? '' : `/${locale}`
 												})}
-												className="pointer-events-auto block truncate text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+													className="pointer-events-auto market-player-link"
 											>
 												{change.player.webName}
 											</a>

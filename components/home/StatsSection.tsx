@@ -72,6 +72,9 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 		{
 			label: t('highestScore'),
 			value: overview.highestPoints?.toString() ?? '0',
+			href: overview.highestScoringEntry
+				? `/live/points/${overview.highestScoringEntry}`
+				: null,
 			icon: (
 				<Trophy
 					aria-hidden="true"
@@ -84,6 +87,7 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 			value: overview.topScorer
 				? `${overview.topScorer.webName} (${overview.topScorer.points})`
 				: 'N/A',
+			href: null,
 			icon: (
 				<Zap
 					aria-hidden="true"
@@ -94,6 +98,7 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 		{
 			label: t('mostSelectedCaptain'),
 			value: overview.mostCaptained?.webName ?? 'N/A',
+			href: null,
 			icon: (
 				<Crown
 					aria-hidden="true"
@@ -106,6 +111,7 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 			value: overview.mostPlayedChip
 				? `${chipLabels[overview.mostPlayedChip.name] ?? overview.mostPlayedChip.name} (${formatCompactNumber(overview.mostPlayedChip.numberPlayed)})`
 				: t('unknownChip'),
+			href: null,
 			icon: (
 				<ArrowRightCircle
 					aria-hidden="true"
@@ -119,24 +125,43 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 		<Card className="p-4 sm:p-6 lg:p-8">
 			{header}
 			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-				{stats.map((stat, index) => (
-					<div
-						key={stat.label}
-						className="rounded-lg border bg-background p-4 transition-transform hover:-translate-y-0.5 hover:shadow-sticker-sm"
-					>
-						<div
-							className={`mb-3 inline-flex rounded-md p-2.5 ${tileIconStyles[index % tileIconStyles.length]}`}
+				{stats.map((stat, index) => {
+					const tile = (
+						<>
+							<div
+								className={`mb-3 inline-flex rounded-md p-2.5 ${tileIconStyles[index % tileIconStyles.length]}`}
+							>
+								{stat.icon}
+							</div>
+							<div className="space-y-1">
+								<p className="eyebrow">{stat.label}</p>
+								<p className="whitespace-normal break-words font-display text-2xl font-bold text-foreground">
+									{stat.value}
+								</p>
+							</div>
+						</>
+					)
+					const tileClassName =
+						'block rounded-lg border bg-background p-4 transition-[transform,box-shadow,border-color] hover:-translate-y-0.5 hover:border-electric/50 hover:shadow-sticker-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+
+					return stat.href ? (
+						<Link
+							key={stat.label}
+							href={stat.href}
+							className={tileClassName}
+							aria-label={`${stat.label}: ${stat.value}`}
 						>
-							{stat.icon}
+							{tile}
+						</Link>
+					) : (
+						<div
+							key={stat.label}
+							className={tileClassName}
+						>
+							{tile}
 						</div>
-						<div className="space-y-1">
-							<p className="eyebrow">{stat.label}</p>
-							<p className="truncate font-display text-2xl font-bold text-foreground">
-								{stat.value}
-							</p>
-						</div>
-					</div>
-				))}
+					)
+				})}
 			</div>
 		</Card>
 	)

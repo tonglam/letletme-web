@@ -51,48 +51,50 @@ export function TransferList({ title, transfers, type }: TransferListProps) {
           <div className="text-center py-8 text-muted-foreground text-sm">
             {t("noTransfers")}
           </div>
-        ) : (
-          transfers.map((transfer) => (
-            <div
-              key={`${transfer.player}-${transfer.club}`}
-              className="flex w-full items-center gap-3 rounded-lg border border-border/50 bg-background/80 p-3 text-left"
-            >
-              <Badge
-                variant="secondary"
-                className={`shrink-0 text-xs font-semibold ${positionBadgeClass(transfer.position)}`}
-              >
-                {normalizePosition(transfer.position)}
-              </Badge>
-              
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-semibold truncate">
-                    {transfer.player}
-                  </span>
-                </div>
-                <span className="text-xs text-muted-foreground truncate block">
-                  {[
-                    transfer.club || "",
-                    t("selectedShort", { value:
-                      typeof transfer.selectedByPercent === "number"
-                        ? `${transfer.selectedByPercent.toFixed(1)}%`
-                        : "-"
-                    }),
-                    t("pointsShort", { value: typeof transfer.points === "number" ? transfer.points : "-" }),
-                  ]
-                    .filter((part) => part.length > 0)
-                    .join(" | ")}
-                </span>
-              </div>
+		) : (
+			transfers.map((transfer) => (
+				<div
+					key={`${transfer.player}-${transfer.club}`}
+					className="grid w-full grid-cols-[auto_minmax(0,1fr)] gap-x-3 rounded-lg border border-border/50 bg-background/80 p-3 text-left"
+				>
+					<Badge
+						variant="secondary"
+						className={`row-span-2 self-start text-xs font-semibold ${positionBadgeClass(transfer.position)}`}
+					>
+						{normalizePosition(transfer.position)}
+					</Badge>
 
-              <div className="flex flex-col items-end shrink-0">
-                <span className={`text-base font-bold ${valueClassName}`}>
-                  {formatCompactNumber(transfer.transfers)}
-                </span>
-              </div>
-            </div>
-          ))
-        )}
+					<div className="min-w-0">
+						<span className="block whitespace-normal text-sm font-semibold leading-tight">
+							{transfer.player}
+						</span>
+					</div>
+
+					<div className="col-start-2 mt-1 flex min-w-0 items-center justify-between gap-2">
+						<span className="min-w-0 truncate text-xs text-muted-foreground">
+							{[
+								transfer.club || "",
+								t("selectedShort", {
+									value:
+										typeof transfer.selectedByPercent === "number"
+											? `${transfer.selectedByPercent.toFixed(1)}%`
+											: "-"
+								}),
+								t("pointsShort", {
+									value:
+										typeof transfer.points === "number" ? transfer.points : "-"
+								}),
+							]
+								.filter((part) => part.length > 0)
+								.join(" | ")}
+						</span>
+						<span className={`text-base font-bold ${valueClassName}`}>
+							{formatCompactNumber(transfer.transfers)}
+						</span>
+					</div>
+				</div>
+			))
+		)}
       </div>
     </div>
   );

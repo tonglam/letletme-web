@@ -1,9 +1,9 @@
 import { DeadlineSection } from '@/components/home/DeadlineSection'
 import { HomePersonalHydratedMarker } from '@/components/analytics/HomePersonalHydratedMarker'
 import {
-	GameweekStatsSection,
-	GameweekStatsSectionFallback
-} from '@/components/home/GameweekStatsSection'
+	HomePriceChangeDesk,
+	HomePriceChangeDeskFallback
+} from '@/components/home/HomePriceChangeDesk'
 import { MatchesSection } from '@/components/home/MatchesSection'
 import {
 	MarketTeaser,
@@ -24,6 +24,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
 import { getPageLocale, type LocaleParams } from '@/i18n/page'
 import type { Session } from '@/lib/auth'
+import type {
+	HomeGameweek,
+	HomeGameweekPlayer
+} from '@/lib/graphql/operations/home'
 import { computeTimeLeft } from '@/lib/home-deadline'
 import {
 	getHomeGameweek,
@@ -306,6 +310,120 @@ async function HomeTournamentBand() {
 	)
 }
 
+type HomeGameweekOverview = NonNullable<
+	HomeGameweek['gameweekDesk']['overview']
+>
+
+function HomeDeskHeading({ id, title }: { id: string; title: string }) {
+	return (
+		<div className="mb-6 flex items-center gap-3">
+			<span
+				className="h-1.5 w-8 bg-electric shadow-sticker-sm"
+				aria-hidden="true"
+			/>
+			<h2
+				id={id}
+				className="font-display text-sm font-bold uppercase tracking-caps text-muted-foreground"
+			>
+				{title}
+			</h2>
+		</div>
+	)
+}
+
+function HomePerformanceDesk({
+	currentEventId,
+	overview,
+	dreamTeam,
+	hasTeamError
+}: {
+	currentEventId: number | null
+	overview: HomeGameweekOverview | null
+	dreamTeam: HomeGameweekPlayer[]
+	hasTeamError: boolean
+}) {
+	const t = useTranslations('Home')
+
+	return (
+		<section
+			className="border-t bg-muted/20 py-10"
+			aria-labelledby="home-performance-desk-title"
+		>
+			<div className="mx-auto max-w-4xl px-4">
+				<HomeDeskHeading
+					id="home-performance-desk-title"
+					title={t('performanceDesk')}
+				/>
+				<div className="space-y-8">
+					<StatsSection
+						currentEventId={currentEventId}
+						overview={overview}
+					/>
+					<TeamOfTheWeekSection
+						currentEventId={currentEventId}
+						dreamTeam={dreamTeam}
+						hasError={hasTeamError}
+					/>
+				</div>
+			</div>
+		</section>
+	)
+}
+
+function HomeMarketDesk() {
+	const t = useTranslations('Home')
+
+	return (
+		<section
+			className="border-y bg-secondary/40 py-10"
+			aria-labelledby="home-market-desk-title"
+		>
+			<div className="mx-auto max-w-6xl px-4">
+				<HomeDeskHeading
+					id="home-market-desk-title"
+					title={t('marketDesk')}
+				/>
+				<div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+					<Suspense fallback={<MarketTeaserFallback />}>
+						<MarketTeaser />
+					</Suspense>
+					<Suspense fallback={<HomePriceChangeDeskFallback />}>
+						<HomePriceChangeDesk />
+					</Suspense>
+				</div>
+			</div>
+		</section>
+	)
+}
+
+function HomeFixturesDesk({
+	fixturesSeedKey,
+	initialFixtures
+}: {
+	fixturesSeedKey: string
+	initialFixtures: Awaited<ReturnType<typeof loadHomeFixtures>> | null
+}) {
+	const t = useTranslations('Home')
+
+	return (
+		<section
+			className="border-t py-10"
+			aria-labelledby="home-fixtures-desk-title"
+		>
+			<div className="mx-auto max-w-4xl px-4">
+				<HomeDeskHeading
+					id="home-fixtures-desk-title"
+					title={t('fixturesDesk')}
+				/>
+				<MatchesSection
+					key={fixturesSeedKey}
+					initialFixtures={initialFixtures}
+				/>
+			</div>
+		</section>
+	)
+}
+
 async function HomeInsights() {
 	const [t, format, bootstrap] = await Promise.all([
 		getTranslations('Home'),
@@ -439,14 +557,12 @@ async function HomeInsights() {
 					</div>
 				</section>
 
-				<section className="py-10">
-					<div className="mx-auto max-w-4xl px-4">
-						<MatchesSection
-							key={fixturesSeedKey}
-							initialFixtures={initialFixtures}
-						/>
-					</div>
-				</section>
+				<HomeMarketDesk />
+
+				<HomeFixturesDesk
+					fixturesSeedKey={fixturesSeedKey}
+					initialFixtures={initialFixtures}
+				/>
 			</>
 		)
 	}
@@ -457,57 +573,32 @@ async function HomeInsights() {
 			presentation.phase === 'SETTLING' ||
 			presentation.phase === 'SETTLED' ? (
 				<>
-					<section className="py-10">
-						<div className="mx-auto max-w-4xl px-4">
-							<StatsSection
-								currentEventId={currentEventId}
-								overview={
-									gameweek?.gameweekDesk.overviewState === 'AVAILABLE'
-										? gameweek.gameweekDesk.overview
-										: null
-								}
-							/>
-						</div>
-					</section>
-
-					<section className="border-y bg-secondary/40 py-10">
-						<div className="mx-auto max-w-4xl px-4">
-							<div className="grid gap-8 md:grid-cols-2">
-								<TeamOfTheWeekSection
-									currentEventId={currentEventId}
-									dreamTeam={
-										gameweek?.gameweekDesk.boardsState === 'AVAILABLE'
-											? gameweek.gameweekDesk.dreamTeam
-											: []
-									}
-									hasError={
-										gameweek === null ||
-										gameweek.gameweekDesk.boardsState === 'UNAVAILABLE'
-									}
-								/>
-								<GameweekStatsSection
-									currentEventId={currentEventId}
-									transfersIn={gameweek?.topTransfersIn ?? []}
-									transfersOut={gameweek?.topTransfersOut ?? []}
-									hasError={
-										gameweek === null ||
-										gameweek.transfersState === 'UNAVAILABLE'
-									}
-								/>
-							</div>
-						</div>
-					</section>
+					<HomePerformanceDesk
+						currentEventId={currentEventId}
+						overview={
+							gameweek?.gameweekDesk.overviewState === 'AVAILABLE'
+								? gameweek.gameweekDesk.overview
+								: null
+						}
+						dreamTeam={
+							gameweek?.gameweekDesk.boardsState === 'AVAILABLE'
+								? gameweek.gameweekDesk.dreamTeam
+								: []
+						}
+						hasTeamError={
+							gameweek === null ||
+							gameweek.gameweekDesk.boardsState === 'UNAVAILABLE'
+						}
+					/>
 				</>
 			) : null}
 
-			<section className="py-10">
-				<div className="mx-auto max-w-4xl px-4">
-					<MatchesSection
-						key={fixturesSeedKey}
-						initialFixtures={initialFixtures}
-					/>
-				</div>
-			</section>
+			<HomeMarketDesk />
+
+			<HomeFixturesDesk
+				fixturesSeedKey={fixturesSeedKey}
+				initialFixtures={initialFixtures}
+			/>
 		</>
 	)
 }
@@ -523,10 +614,6 @@ export default async function Home({ params }: { params: LocaleParams }) {
 
 					<HomeTournamentBand />
 
-					<Suspense fallback={<MarketTeaserFallback />}>
-						<MarketTeaser />
-					</Suspense>
-
 					<Suspense fallback={<PageInsightsFallback />}>
 						<HomeInsights />
 					</Suspense>
@@ -540,12 +627,57 @@ function PageInsightsFallback() {
 	const t = useTranslations('Home')
 	return (
 		<div
-			className="mx-auto grid w-full max-w-4xl gap-8 px-4 py-10 md:grid-cols-2"
 			aria-label={t('loadingInsights')}
 			aria-busy="true"
 		>
-			<TeamOfTheWeekSectionFallback currentEventId={null} />
-			<GameweekStatsSectionFallback />
+			<section className="border-t bg-muted/20 py-10">
+				<div className="mx-auto max-w-6xl px-4">
+					<HomeDeskHeading
+						id="home-performance-desk-loading-title"
+						title={t('performanceDesk')}
+					/>
+					<div className="space-y-8">
+						<div className="rounded-xl border bg-card p-6">
+							<Skeleton className="h-6 w-40" />
+							<div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+								{[1, 2, 3, 4].map(item => (
+									<Skeleton
+										key={item}
+										className="h-28"
+									/>
+								))}
+							</div>
+						</div>
+						<TeamOfTheWeekSectionFallback currentEventId={null} />
+					</div>
+				</div>
+			</section>
+
+			<section className="border-y bg-secondary/40 py-10">
+				<div className="mx-auto max-w-6xl px-4">
+					<HomeDeskHeading
+						id="home-market-desk-loading-title"
+						title={t('marketDesk')}
+					/>
+					<div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+						<MarketTeaserFallback />
+						<HomePriceChangeDeskFallback />
+					</div>
+				</div>
+			</section>
+
+			<section className="border-t py-10">
+				<div className="mx-auto max-w-4xl px-4">
+					<HomeDeskHeading
+						id="home-fixtures-desk-loading-title"
+						title={t('fixturesDesk')}
+					/>
+					<div className="rounded-xl border bg-card p-6">
+						<Skeleton className="h-6 w-44" />
+						<Skeleton className="mt-6 h-72 w-full" />
+					</div>
+				</div>
+			</section>
 		</div>
 	)
 }

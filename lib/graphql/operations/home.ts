@@ -369,6 +369,7 @@ export type HomeGameweek = {
 		boardsState: 'PENDING' | 'AVAILABLE' | 'UNAVAILABLE'
 		overview: {
 			highestPoints: number | null
+			highestScoringEntry: number | null
 			mostCaptained: {
 				id: number
 				webName: string

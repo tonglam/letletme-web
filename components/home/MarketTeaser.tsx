@@ -39,25 +39,20 @@ const HOME_AVAILABILITY_MIN_OWNED = 1
 
 export function MarketTeaserFallback() {
 	return (
-		<section
-			className="py-10"
-			aria-hidden="true"
-		>
-			<div className="mx-auto max-w-4xl px-4">
-				<Card className="rounded-none p-5 sm:rounded-xl sm:p-6">
-					<Skeleton className="mb-3 h-4 w-28" />
-					<Skeleton className="mb-6 h-8 w-52" />
-					<div className="grid gap-3 sm:grid-cols-2">
-						{[1, 2, 3, 4].map(item => (
-							<Skeleton
-								key={item}
-								className="h-16"
-							/>
-						))}
-					</div>
-				</Card>
-			</div>
-		</section>
+		<div aria-hidden="true">
+			<Card className="rounded-none p-5 sm:rounded-xl sm:p-6">
+				<Skeleton className="mb-3 h-4 w-28" />
+				<Skeleton className="mb-6 h-8 w-52" />
+				<div className="grid gap-3 sm:grid-cols-2">
+					{[1, 2, 3, 4].map(item => (
+						<Skeleton
+							key={item}
+							className="h-16"
+						/>
+					))}
+				</div>
+			</Card>
+		</div>
 	)
 }
 
@@ -67,7 +62,9 @@ function TeaserPlayer({ player }: { player: MarketPlayer }) {
 		<>
 			<Badge className={positionBadgeClass(position)}>{position}</Badge>
 			<div className="min-w-0 flex-1">
-				<p className="truncate text-sm font-semibold">{player.webName}</p>
+				<p className="whitespace-normal text-sm font-semibold leading-tight">
+					{player.webName}
+				</p>
 				<p className="text-xs text-muted-foreground">{player.teamShortName}</p>
 			</div>
 		</>
@@ -86,21 +83,21 @@ function OwnershipMoverRow({
 	formatDelta: (value: number) => string
 }) {
 	return (
-		<li className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2">
+		<li className="home-market-mover-row">
 			<TeaserPlayer player={mover.player} />
 			<div
-				className="shrink-0 text-right"
+				className="home-market-mover-meta"
 				title={detailLabel}
 			>
+				<p className="min-w-0 truncate text-xs text-muted-foreground">
+					{fromToLabel}
+				</p>
 				<DeltaBadge
 					value={mover.changePercentagePoints}
 					size="md"
 					fontFamily="display"
 					format={formatDelta}
 				/>
-				<p className="mt-0.5 font-display text-caption tabular-nums text-muted-foreground">
-					{fromToLabel}
-				</p>
 			</div>
 		</li>
 	)
@@ -137,7 +134,7 @@ function AvailabilityTeaserList({
 						<div className="flex items-center justify-between gap-3">
 							<div className="min-w-0 flex-1">
 								<div className="flex flex-wrap items-center gap-2">
-									<p className="truncate text-sm font-semibold">
+									<p className="min-w-0 whitespace-normal text-sm font-semibold leading-tight">
 										{update.player.webName}
 									</p>
 									<Badge
@@ -235,173 +232,166 @@ export async function MarketTeaser() {
 	}
 
 	return (
-		<section
-			className="py-10"
+		<Card
+			className="overflow-hidden rounded-none border-electric/20 sm:rounded-xl"
 			aria-labelledby="home-market-title"
 		>
-			<div className="mx-auto max-w-4xl px-4">
-				<Card className="overflow-hidden rounded-none border-electric/20 sm:rounded-xl">
-					<CardHeader className="border-b bg-muted/30 pb-5">
-						<div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-							<div>
-								<CardTitle asChild>
-									<h2
-										id="home-market-title"
-										className="text-2xl font-bold uppercase tracking-wide sm:text-3xl"
-									>
-										{t('homeTitle')}
-									</h2>
-								</CardTitle>
-								<p className="mt-2 text-sm text-muted-foreground">
-									{coverageCopy}
-								</p>
-							</div>
-							<Button
-								asChild
-								className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-caps"
+			<CardHeader className="border-b bg-muted/30 pb-5">
+				<div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+					<div>
+						<CardTitle asChild>
+							<h2
+								id="home-market-title"
+								className="text-2xl font-bold uppercase tracking-wide sm:text-3xl"
 							>
-								<Link
-									href="/explore/market"
-									prefetch={false}
+								{t('homeTitle')}
+							</h2>
+						</CardTitle>
+						<p className="mt-2 text-sm text-muted-foreground">{coverageCopy}</p>
+					</div>
+					<Button
+						asChild
+						className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-caps"
+					>
+						<Link
+							href="/explore/market"
+							prefetch={false}
+						>
+							{t('openMarket')} <ArrowRight aria-hidden="true" />
+						</Link>
+					</Button>
+				</div>
+			</CardHeader>
+
+			{teaserMode === 'ownership' ? (
+				<CardContent className="space-y-6 pt-6">
+					{/* Split board: who managers are buying into vs selling away */}
+					<div className="grid gap-6 md:grid-cols-2">
+						<div>
+							<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-success">
+								<ArrowUpRight
+									aria-hidden="true"
+									className="size-4"
+								/>
+								{t('homeOwnershipRising')}
+							</h3>
+							{ownershipRisers.length > 0 ? (
+								<ol
+									className="space-y-2"
+									aria-label={t('homeOwnershipRising')}
 								>
-									{t('openMarket')} <ArrowRight aria-hidden="true" />
-								</Link>
-							</Button>
-						</div>
-					</CardHeader>
-
-					{teaserMode === 'ownership' ? (
-						<CardContent className="space-y-6 pt-6">
-							{/* Split board: who managers are buying into vs selling away */}
-							<div className="grid gap-6 md:grid-cols-2">
-								<div>
-									<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-success">
-										<ArrowUpRight
-											aria-hidden="true"
-											className="size-4"
-										/>
-										{t('homeOwnershipRising')}
-									</h3>
-									{ownershipRisers.length > 0 ? (
-										<ol
-											className="space-y-2"
-											aria-label={t('homeOwnershipRising')}
-										>
-											{ownershipRisers.map(mover => {
-												const from = mover.fromSelectedByPercent.toFixed(1)
-												const to = mover.toSelectedByPercent.toFixed(1)
-												const delta = formatDelta(mover.changePercentagePoints)
-												return (
-													<OwnershipMoverRow
-														key={mover.player.playerId}
-														mover={mover}
-														detailLabel={t('ownershipChangeDetail', {
-															from,
-															to,
-															delta
-														})}
-														fromToLabel={t('ownershipFromTo', { from, to })}
-														formatDelta={formatDelta}
-													/>
-												)
-											})}
-										</ol>
-									) : (
-										<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-											{t('noOwnershipRisers')}
-										</p>
-									)}
-								</div>
-								<div>
-									<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-destructive">
-										<ArrowDownRight
-											aria-hidden="true"
-											className="size-4"
-										/>
-										{t('homeOwnershipFalling')}
-									</h3>
-									{ownershipFallers.length > 0 ? (
-										<ol
-											className="space-y-2"
-											aria-label={t('homeOwnershipFalling')}
-										>
-											{ownershipFallers.map(mover => {
-												const from = mover.fromSelectedByPercent.toFixed(1)
-												const to = mover.toSelectedByPercent.toFixed(1)
-												const delta = formatDelta(mover.changePercentagePoints)
-												return (
-													<OwnershipMoverRow
-														key={mover.player.playerId}
-														mover={mover}
-														detailLabel={t('ownershipChangeDetail', {
-															from,
-															to,
-															delta
-														})}
-														fromToLabel={t('ownershipFromTo', { from, to })}
-														formatDelta={formatDelta}
-													/>
-												)
-											})}
-										</ol>
-									) : (
-										<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-											{t('noOwnershipFallers')}
-										</p>
-									)}
-								</div>
-							</div>
-
-							<div>
-								<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
-									<HeartPulse
-										aria-hidden="true"
-										className="size-4 text-pink"
-									/>
-									{t('availabilityWatch')}
-								</h3>
-								<AvailabilityTeaserList
-									updates={availability}
-									labels={availabilityLabels}
-								/>
-							</div>
-						</CardContent>
-					) : (
-						<CardContent className="grid gap-6 pt-6 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-							<div>
-								<h3 className="mb-3 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
-									{ownership
-										? ownershipStatusCopy[ownership.coverage.status]
-										: t('ownershipDataUnavailable')}
-								</h3>
+									{ownershipRisers.map(mover => {
+										const from = mover.fromSelectedByPercent.toFixed(1)
+										const to = mover.toSelectedByPercent.toFixed(1)
+										const delta = formatDelta(mover.changePercentagePoints)
+										return (
+											<OwnershipMoverRow
+												key={mover.player.playerId}
+												mover={mover}
+												detailLabel={t('ownershipChangeDetail', {
+													from,
+													to,
+													delta
+												})}
+												fromToLabel={t('ownershipFromTo', { from, to })}
+												formatDelta={formatDelta}
+											/>
+										)
+									})}
+								</ol>
+							) : (
 								<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-									{ownership
-										? ownership.coverage.status === 'BASELINE_MISSING'
-											? t('homeOwnershipBaselineMissingDescription', {
-													date:
-														ownership.date ?? ownership.coverage.toDate ?? '—'
-												})
-											: t('homeEmptyDescription', { time: '09:25–09:35 UTC+8' })
-										: t('ownershipDataUnavailable')}
+									{t('noOwnershipRisers')}
 								</p>
-							</div>
-							<div>
-								<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
-									<HeartPulse
-										aria-hidden="true"
-										className="size-4 text-pink"
-									/>
-									{t('availabilityWatch')}
-								</h3>
-								<AvailabilityTeaserList
-									updates={availability}
-									labels={availabilityLabels}
+							)}
+						</div>
+						<div>
+							<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-destructive">
+								<ArrowDownRight
+									aria-hidden="true"
+									className="size-4"
 								/>
-							</div>
-						</CardContent>
-					)}
-				</Card>
-			</div>
-		</section>
+								{t('homeOwnershipFalling')}
+							</h3>
+							{ownershipFallers.length > 0 ? (
+								<ol
+									className="space-y-2"
+									aria-label={t('homeOwnershipFalling')}
+								>
+									{ownershipFallers.map(mover => {
+										const from = mover.fromSelectedByPercent.toFixed(1)
+										const to = mover.toSelectedByPercent.toFixed(1)
+										const delta = formatDelta(mover.changePercentagePoints)
+										return (
+											<OwnershipMoverRow
+												key={mover.player.playerId}
+												mover={mover}
+												detailLabel={t('ownershipChangeDetail', {
+													from,
+													to,
+													delta
+												})}
+												fromToLabel={t('ownershipFromTo', { from, to })}
+												formatDelta={formatDelta}
+											/>
+										)
+									})}
+								</ol>
+							) : (
+								<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+									{t('noOwnershipFallers')}
+								</p>
+							)}
+						</div>
+					</div>
+
+					<div>
+						<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
+							<HeartPulse
+								aria-hidden="true"
+								className="size-4 text-pink"
+							/>
+							{t('availabilityWatch')}
+						</h3>
+						<AvailabilityTeaserList
+							updates={availability}
+							labels={availabilityLabels}
+						/>
+					</div>
+				</CardContent>
+			) : (
+				<CardContent className="grid gap-6 pt-6 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+					<div>
+						<h3 className="mb-3 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
+							{ownership
+								? ownershipStatusCopy[ownership.coverage.status]
+								: t('ownershipDataUnavailable')}
+						</h3>
+						<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+							{ownership
+								? ownership.coverage.status === 'BASELINE_MISSING'
+									? t('homeOwnershipBaselineMissingDescription', {
+											date: ownership.date ?? ownership.coverage.toDate ?? '—'
+										})
+									: t('homeEmptyDescription', { time: '09:25–09:35 UTC+8' })
+								: t('ownershipDataUnavailable')}
+						</p>
+					</div>
+					<div>
+						<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
+							<HeartPulse
+								aria-hidden="true"
+								className="size-4 text-pink"
+							/>
+							{t('availabilityWatch')}
+						</h3>
+						<AvailabilityTeaserList
+							updates={availability}
+							labels={availabilityLabels}
+						/>
+					</div>
+				</CardContent>
+			)}
+		</Card>
 	)
 }

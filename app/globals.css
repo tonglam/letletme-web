@@ -165,16 +165,19 @@
     @apply text-foreground;
   }
   .market-player-link {
-    @apply block truncate text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
+    @apply block whitespace-normal text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
   }
   .market-player-link--compact {
-    @apply block truncate text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
+    @apply block whitespace-normal text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
   }
   .market-player-subtext {
     @apply truncate text-[11px] text-muted-foreground;
   }
   .market-dense-row {
-    @apply flex items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0;
+    @apply flex items-start gap-2.5 border-b border-border/50 py-2.5 last:border-b-0;
+  }
+  .market-dense-row__trailing {
+    @apply shrink-0 text-right;
   }
   .market-mover-row {
     @apply relative overflow-hidden border-b border-border/50 py-2 last:border-b-0;
@@ -183,7 +186,7 @@
     @apply absolute inset-y-0 left-0 opacity-[0.07];
   }
   .market-mover-content {
-    @apply relative flex items-center gap-2.5;
+    @apply relative flex items-start gap-2.5;
   }
   .market-availability-row {
     @apply py-2.5 first:pt-0 last:pb-0;
@@ -202,6 +205,28 @@
   }
   .market-availability-date {
     @apply mt-1 text-[11px] text-muted-foreground;
+  }
+
+  .home-market-mover-row {
+    @apply grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 rounded-lg border px-3 py-2.5;
+  }
+  .home-market-mover-meta {
+    @apply col-start-2 mt-1 flex min-w-0 items-center justify-between gap-2;
+  }
+
+  @media (max-width: 639px) {
+    .market-dense-row {
+      @apply grid grid-cols-[auto_minmax(0,1fr)] items-start;
+    }
+    .market-dense-row__trailing {
+      @apply col-start-2 justify-self-start text-left;
+    }
+    .market-mover-content {
+      @apply grid grid-cols-[auto_minmax(0,1fr)] items-start;
+    }
+    .market-mover-content > :last-child {
+      @apply col-start-2 justify-self-start text-left;
+    }
   }
 
   /* Broadcast chyron label — green tick + condensed caps */
