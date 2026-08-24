@@ -38,6 +38,24 @@ export function ruleFingerprint(rule) {
 	return sha256(canonicalRuleJson(rule))
 }
 
+export function validateLiveRule(mode, current, snapshots) {
+	const target = snapshots[mode]
+	if (!target) throw new Error(`missing EdgeOne ${mode} rule snapshot`)
+	const currentFingerprint = ruleFingerprint(current)
+	const targetFingerprint = ruleFingerprint(target)
+	if (currentFingerprint !== targetFingerprint) {
+		throw new Error(
+			`EdgeOne live rule does not match the ${mode} snapshot (current=${currentFingerprint}, target=${targetFingerprint})`
+		)
+	}
+	return {
+		mode,
+		currentFingerprint,
+		targetFingerprint,
+		verified: true
+	}
+}
+
 export function validateRuleTransition(mode, current, snapshots) {
 	if (!['all-vercel', 'split'].includes(mode)) {
 		throw new Error(`unsupported EdgeOne transition mode: ${mode}`)
@@ -84,13 +102,17 @@ function hmac(key, value) {
 function parseArguments(argv) {
 	const modeIndex = argv.indexOf('--mode')
 	const dryRun = argv.includes('--dry-run')
+	const verifyOnly = argv.includes('--verify-only')
 	const mode = modeIndex >= 0 ? argv[modeIndex + 1] : null
 	if (!['all-vercel', 'split', 'describe'].includes(mode)) {
 		throw new Error(
 			'usage: edgeone-mode.mjs --mode all-vercel|split|describe [--dry-run]'
 		)
 	}
-	return { mode, dryRun }
+	if (verifyOnly && mode === 'describe') {
+		throw new Error('--verify-only requires an actionable EdgeOne mode')
+	}
+	return { mode, dryRun, verifyOnly }
 }
 
 function ruleEnvironmentName(mode) {
@@ -248,7 +270,7 @@ async function apply(mode) {
 }
 
 export async function main(argv = process.argv.slice(2)) {
-	const { mode, dryRun } = parseArguments(argv)
+	const { mode, dryRun, verifyOnly } = parseArguments(argv)
 	if (mode === 'describe') {
 		if (dryRun) return { mode, dryRun: true }
 		const rule = await describeRule()
@@ -258,14 +280,34 @@ export async function main(argv = process.argv.slice(2)) {
 			ruleSha256: sha256(JSON.stringify(rule))
 		}
 	}
-	const desired = readRule(mode)
+	const snapshots = {
+		'all-vercel': readRule('all-vercel'),
+		split: readRule('split')
+	}
+	const desired = snapshots[mode]
+	const sourceMode = mode === 'all-vercel' ? 'split' : 'all-vercel'
+	if (ruleFingerprint(desired) === ruleFingerprint(snapshots[sourceMode])) {
+		throw new Error(
+			`EdgeOne ${mode} and ${sourceMode} rule snapshots must differ`
+		)
+	}
 	const summary = {
 		mode,
 		ruleId: desired.RuleId ?? null,
 		ruleSha256: ruleFingerprint(desired),
-		dryRun
+		dryRun,
+		verifyOnly
 	}
 	if (dryRun) return summary
+	if (verifyOnly) {
+		const current = await describeRule()
+		if (current.RuleId !== desired.RuleId) {
+			throw new Error(
+				'EdgeOne current rule identity changed; refusing to verify'
+			)
+		}
+		return validateLiveRule(mode, current, snapshots)
+	}
 	return apply(mode)
 }
 

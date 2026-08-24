@@ -212,15 +212,25 @@ jobs:
           tmp_root=''
           restore_all_vercel() {
             [[ $route_changed == 1 ]] || return 0
-            local attempt
+            local attempt mutation_succeeded verify_attempt
             for attempt in 1 2 3; do
-              if node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null 2>&1 &&
-                node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null 2>&1; then
-                route_changed=0
-                echo "EdgeOne rollback to all-Vercel verified on attempt $attempt."
-                return 0
+              mutation_succeeded=0
+              if node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null 2>&1; then
+                mutation_succeeded=1
               fi
-              echo "EdgeOne rollback attempt $attempt failed; retrying." >&2
+              for verify_attempt in 1 2 3; do
+                if node ops/release/edgeone-mode.mjs --mode all-vercel --verify-only >/dev/null 2>&1; then
+                  route_changed=0
+                  echo "EdgeOne rollback to all-Vercel verified on attempt $attempt/$verify_attempt."
+                  return 0
+                fi
+                [[ $verify_attempt == 3 ]] || sleep 5
+              done
+              if [[ $mutation_succeeded == 0 ]]; then
+                echo "EdgeOne rollback mutation attempt $attempt failed; live verification did not converge." >&2
+              else
+                echo "EdgeOne rollback mutation attempt $attempt succeeded but live verification did not converge." >&2
+              fi
               [[ $attempt == 3 ]] || sleep $((attempt * 5))
             done
             echo 'CRITICAL: could not verify EdgeOne all-Vercel rollback after 3 attempts.' >&2

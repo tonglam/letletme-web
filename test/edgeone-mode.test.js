@@ -72,3 +72,16 @@ test('EdgeOne mode changes reject identical routing snapshots', async () => {
 		/snapshots must differ/
 	)
 })
+
+test('EdgeOne rollback verification is read-only and requires the target fingerprint', async () => {
+	const { validateLiveRule } = await loadModule()
+	const snapshots = rules()
+	const verified = validateLiveRule('all-vercel', snapshots['all-vercel'], snapshots)
+	assert.equal(verified.verified, true)
+	assert.equal(verified.currentFingerprint, verified.targetFingerprint)
+
+	assert.throws(
+		() => validateLiveRule('all-vercel', snapshots.split, snapshots),
+		/live rule does not match the all-vercel snapshot/
+	)
+})
