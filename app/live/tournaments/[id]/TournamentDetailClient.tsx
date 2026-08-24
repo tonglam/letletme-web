@@ -46,10 +46,12 @@ import {
 import {
 	buildTournamentEntries,
 	buildTournamentStats,
+	countTraceableTournamentScores,
 	getRetainedFailedEntryIds,
 	mergeUnavailableTournamentEntryIds,
 	mergePartialTournamentRows
 } from '@/lib/tournament/liveEntries'
+import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
 import { Link, useRouter } from '@/i18n/navigation'
 import {
 	ArrowLeft,
@@ -297,31 +299,34 @@ export default function TournamentDetailClient({
 	const [rows, setRows] = useState(initialRows)
 	const managerNextRefreshAt = useMemo(() => {
 		const refreshTimes = rows
-			.map(row => row.score?.nextRefreshAt)
+			.map(row => traceableOfficialManagerScore(row.score)?.nextRefreshAt)
 			.filter((value): value is string => Boolean(value))
 			.sort()
 		return refreshTimes[0] ?? null
 	}, [rows])
-	const managerScoreSettling = rows.some(row => row.score?.state === 'SETTLING')
+	const managerScoreSettling = rows.some(
+		row => traceableOfficialManagerScore(row.score)?.state === 'SETTLING'
+	)
 	const managerScoreStatus = useMemo(() => {
-		const states = rows.map(row => row.score?.state)
-		const available = rows.filter(
-			row =>
-				row.score?.source !== 'UNAVAILABLE' &&
-				typeof row.score?.eventPoints === 'number'
-		).length
+		const states = rows.flatMap(row => {
+			const score = traceableOfficialManagerScore(row.score)
+			return score ? [score.state] : []
+		})
+		const available = countTraceableTournamentScores(rows)
 		if (states.includes('SETTLING')) return scoreT('scoreSettling')
 		if (states.includes('STALE')) return scoreT('scoreDelayed')
 		if (
 			states.some(state => String(state) === 'FALLBACK') ||
-			rows.some(row => String(row.score?.source) === 'LOCAL_MULTIPLIER_FALLBACK')
+			rows.some(
+				row => String(row.score?.source) === 'LOCAL_MULTIPLIER_FALLBACK'
+			)
 		) {
 			return scoreT('scoreFallback')
 		}
 		if (available > 0 && available < rows.length) {
 			return scoreT('scorePartial', { available, total: rows.length })
 		}
-		if (rows.length === 0 || states.includes('UNAVAILABLE')) {
+		if (rows.length === 0 || available === 0) {
 			return scoreT('scoreUnavailable')
 		}
 		return scoreT('scoreOfficial')
@@ -758,8 +763,8 @@ export default function TournamentDetailClient({
 		isPageActive: isPageActive && !isOfficialH2H,
 		currentEventId: currentGameweek,
 		selectedEventId: currentGameweek,
-			snapshot,
-			managerScoreState: managerScoreSettling ? 'SETTLING' : null,
+		snapshot,
+		managerScoreState: managerScoreSettling ? 'SETTLING' : null,
 		managerNextRefreshAt,
 		windowState: snapshot?.windowState ?? snapshot?.state,
 		nextRefreshAt: snapshot?.nextRefreshAt

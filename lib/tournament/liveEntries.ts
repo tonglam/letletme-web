@@ -3,6 +3,10 @@ import {
 	type TournamentLivePointsResponse
 } from '@/lib/graphql/operations/tournaments'
 import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
+import {
+	hasTraceableOfficialEventPoints,
+	traceableOfficialManagerScore
+} from '@/lib/live-manager-score'
 import { type TournamentEntry } from '@/types/tournament'
 
 export type LiveTournamentStats = {
@@ -76,9 +80,7 @@ export const buildRankMap = (
 	rows: TournamentLiveCalcData[]
 ): Map<number, number> => {
 	const isOfficialSource = (row: TournamentLiveCalcData): boolean =>
-		row.score?.source === 'FPL_ENTRY_SUMMARY' ||
-		row.score?.source === 'FPL_CLASSIC_STANDINGS' ||
-		row.score?.source === 'FPL_FINAL_RESULT'
+		traceableOfficialManagerScore(row.score) !== undefined
 	const rankableRows = rows.filter(row => {
 		return (
 			isOfficialSource(row) && typeof row.score?.netEventPoints === 'number'
@@ -130,13 +132,16 @@ export const buildTournamentEntries = (
 	const currentRankByEntryId = buildRankMap(rankSource)
 
 	return currentRows.map(row => {
-		const headlineEventPoints = row.score?.eventPoints ?? null
-		const headlineNetPoints = row.score?.netEventPoints ?? null
+		const score = traceableOfficialManagerScore(row.score)
+		const headlineEventPoints = score?.eventPoints ?? null
+		const headlineNetPoints = score?.netEventPoints ?? null
 		const headlineTotalPoints =
-			typeof row.score?.totalPoints === 'number' ? row.score.totalPoints : null
+			score?.totalScope === 'OVERALL' && typeof score.totalPoints === 'number'
+				? score.totalPoints
+				: null
 		const captainPick = row.pickList.find(player => player.isCaptain)
 		const effectiveCaptainPick =
-			row.score?.state === 'FINAL'
+			score?.state === 'FINAL'
 				? (row.pickList.find(player => (player.multiplier ?? 0) >= 2) ??
 					captainPick)
 				: captainPick
@@ -148,10 +153,7 @@ export const buildTournamentEntries = (
 		const stale = Boolean(staleIds?.has(row.entry))
 		// The score carries the freshest official OR. GraphQL's top-level value
 		// is the last-known official fallback while the live summary catches up.
-		const overallRank = resolveOverallRank(
-			row.score?.overallRank,
-			row.overallRank
-		)
+		const overallRank = resolveOverallRank(score?.overallRank, row.overallRank)
 
 		return {
 			id: String(row.entry),
@@ -171,7 +173,7 @@ export const buildTournamentEntries = (
 			captainPoints,
 			gwPoints: headlineEventPoints,
 			gwNetPoints: headlineNetPoints ?? undefined,
-			eventCost: row.transferCost ?? 0,
+			eventCost: score?.transferCost ?? 0,
 			overallRank,
 			lastOverallRank:
 				typeof row.lastOverallRank === 'number'
@@ -201,6 +203,11 @@ export const buildTournamentEntries = (
 		}
 	})
 }
+
+export const countTraceableTournamentScores = (
+	rows: readonly TournamentLiveCalcData[]
+): number =>
+	rows.filter(row => hasTraceableOfficialEventPoints(row.score)).length
 
 /**
  * Entry IDs that were kept from the previous batch because they failed to

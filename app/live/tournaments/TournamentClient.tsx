@@ -39,12 +39,14 @@ import {
 import {
 	buildTournamentEntries,
 	buildTournamentStats,
+	countTraceableTournamentScores,
 	formatLiveAveragePoints,
 	getRetainedFailedEntryIds,
 	mergeUnavailableTournamentEntryIds,
 	mergePartialTournamentRows,
 	type LiveTournamentStats
 } from '@/lib/tournament/liveEntries'
+import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
 import {
 	areTournamentStandingsReady,
@@ -105,17 +107,13 @@ const fetchLivePoints = async (
 			live.failedEntryIds,
 			[]
 		)
-		const officialRows = live.rows.filter(
-			row =>
-				row.score?.source !== 'UNAVAILABLE' &&
-				typeof row.score?.eventPoints === 'number'
-		)
+		const officialRows = countTraceableTournamentScores(live.rows)
 		return {
 			rows: live.rows,
 			failedCount: unavailableEntryIds.length,
 			failedEntryIds: unavailableEntryIds,
 			officialCoverage:
-				live.totalEntries > 0 ? officialRows.length / live.totalEntries : 0,
+				live.totalEntries > 0 ? officialRows / live.totalEntries : 0,
 			unavailableEntryIds,
 			totalEntries: live.totalEntries,
 			snapshot: {
@@ -368,17 +366,19 @@ export default function TournamentClient({
 	}, [requestedTournamentId, tournaments])
 	const selectedTournamentKey = selectedTournament?.id ?? null
 	const managerScoreStatus = useMemo(() => {
-		const states = selectedRows.map(row => row.score?.state)
+		const traceableScores = selectedRows.flatMap(row => {
+			const score = traceableOfficialManagerScore(row.score)
+			return score ? [score] : []
+		})
+		const states = traceableScores.map(score => score.state)
 		const totalEntries = selectedTournament?.totalEntries || selectedRows.length
-		const rowCoverage = selectedRows.filter(
-			row =>
-				row.score?.source !== 'UNAVAILABLE' &&
-				typeof row.score?.eventPoints === 'number'
-		).length
+		const rowCoverage = countTraceableTournamentScores(selectedRows)
 		const availableEntries =
-			officialCoverage > 0
-				? Math.min(totalEntries, Math.round(officialCoverage * totalEntries))
-				: rowCoverage
+			rowCoverage === 0
+				? 0
+				: officialCoverage > 0
+					? Math.min(totalEntries, Math.round(officialCoverage * totalEntries))
+					: rowCoverage
 		if (states.includes('SETTLING')) return scoreT('scoreSettling')
 		if (states.includes('STALE')) return scoreT('scoreDelayed')
 		if (
@@ -629,12 +629,12 @@ export default function TournamentClient({
 			resultsInFlightRef.current = null
 			const resetTimer = window.setTimeout(() => {
 				setIsLoadingResults(false)
-					setResultsError(null)
-					setSelectedRows([])
-					setOfficialCoverage(0)
-					setStaleEntryIds(new Set())
-					setLoadedResultsKey(null)
-				}, 0)
+				setResultsError(null)
+				setSelectedRows([])
+				setOfficialCoverage(0)
+				setStaleEntryIds(new Set())
+				setLoadedResultsKey(null)
+			}, 0)
 			return () => window.clearTimeout(resetTimer)
 		}
 		const resultsKey = `${selectedTournamentKey}:${selectedGameweek}`
@@ -711,11 +711,11 @@ export default function TournamentClient({
 			isPageActive,
 			currentEventId: currentGameweek,
 			selectedEventId: selectedGameweek,
-				snapshot,
-				managerScoreState: managerScoreSettling ? 'SETTLING' : null,
-				managerNextRefreshAt,
-				windowState: snapshot?.windowState ?? snapshot?.state,
-				nextRefreshAt: snapshot?.nextRefreshAt
+			snapshot,
+			managerScoreState: managerScoreSettling ? 'SETTLING' : null,
+			managerNextRefreshAt,
+			windowState: snapshot?.windowState ?? snapshot?.state,
+			nextRefreshAt: snapshot?.nextRefreshAt
 		})
 	const refreshTournamentResults = useCallback(
 		async (revision?: string | null) => {
@@ -785,11 +785,11 @@ export default function TournamentClient({
 	}, [
 		acceptSnapshot,
 		refreshTournamentResults,
-			selectedTournament,
-			standingsReady,
-			t,
-			managerNextRefreshAt,
-			currentGameweek
+		selectedTournament,
+		standingsReady,
+		t,
+		managerNextRefreshAt,
+		currentGameweek
 	])
 	const handleGameweekChange = useCallback((gameweek: number) => {
 		followsAnchorRef.current = false
@@ -939,9 +939,7 @@ export default function TournamentClient({
 		return (
 			<PageShell>
 				<div className="container mx-auto max-w-4xl px-4 py-8">
-					<StatsPageHeader
-						title={t('liveStandings')}
-					/>
+					<StatsPageHeader title={t('liveStandings')} />
 					<Card className="p-6 text-sm text-muted-foreground shadow-sm">
 						{t('signInPrompt')}{' '}
 						<Link
@@ -1027,17 +1025,17 @@ export default function TournamentClient({
 
 				{/* Always offer the membership list so a bad ?tournamentId= can be corrected in-place. */}
 				{tournaments.length > 0 && (
-						<TournamentSelector
+					<TournamentSelector
 						tournaments={tournaments}
 						// Unknown URL id: force a non-matching value so every membership stays selectable.
 						currentTournamentId={
 							selectedTournament?.id ??
 							(unknownTournamentFromUrl ? '__unknown__' : '')
 						}
-							onTournamentChange={id => {
-								if (selectedTournament && id === selectedTournament.id) return
-								setRestoredTournamentId(id)
-								try {
+						onTournamentChange={id => {
+							if (selectedTournament && id === selectedTournament.id) return
+							setRestoredTournamentId(id)
+							try {
 								writeLiveTournamentSelection(window.localStorage, entryId, id)
 							} catch {
 								// Storage is optional; URL navigation remains authoritative.
@@ -1177,7 +1175,10 @@ export default function TournamentClient({
 												className="gap-1.5"
 												onClick={restoreOwnershipFilter}
 											>
-												<Eye className="size-4" aria-hidden="true" />
+												<Eye
+													className="size-4"
+													aria-hidden="true"
+												/>
 												{filtersT('showFilter', {
 													name: filtersT('playerOwnership')
 												})}
@@ -1191,7 +1192,10 @@ export default function TournamentClient({
 												className="gap-1.5"
 												onClick={restoreTeamExposureFilter}
 											>
-												<Eye className="size-4" aria-hidden="true" />
+												<Eye
+													className="size-4"
+													aria-hidden="true"
+												/>
 												{filtersT('showFilter', {
 													name: filtersT('teamExposure')
 												})}
