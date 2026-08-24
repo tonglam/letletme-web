@@ -149,10 +149,10 @@ test(
 					   AND permissive = 'PERMISSIVE'
 					   AND roles::text[] = ARRAY['letletme_web_auth']::text[]
 					   AND cmd = 'DELETE'
-					   AND coalesce(qual, '') LIKE '%CURRENT_TIMESTAMP%'
-					   AND with_check IS NULL
+						AND coalesce(qual, '') LIKE '%CURRENT_TIMESTAMP%'
+						AND with_check IS NULL
 					  )
-					  ))) AS invalid_policy_count,
+					  )) AS invalid_policy_count,
 				(SELECT count(*)::int
 				 FROM pg_class relation
 				 JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
@@ -164,7 +164,7 @@ test(
 				anon_schema: false,
 				anon_user: false,
 				authenticated_session: false,
-			policy_count: 17,
+				policy_count: 17,
 				invalid_policy_count: 0,
 				missing_rls: 0
 			})
