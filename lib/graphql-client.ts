@@ -276,6 +276,9 @@ async function doFetch<T>(
 				{
 					status: response.status,
 					code,
+					retryAfterSeconds: parseRetryAfterSeconds(
+						response.headers.get('retry-after')
+					),
 					...rateLimitMetadata(response)
 				}
 			)

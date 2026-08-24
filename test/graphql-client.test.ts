@@ -130,22 +130,37 @@ test('executeQuery preserves HTTP status, GraphQL code, and Retry-After', async 
 test('executeQuery preserves a GraphQL error code on a successful HTTP response', async () => {
 	const originalFetch = globalThis.fetch
 	globalThis.fetch = (async () =>
-		Response.json({
-			errors: [
-				{
-					message: 'Forbidden',
-					extensions: { code: 'FORBIDDEN' }
+		Response.json(
+			{
+				errors: [
+					{
+						message: 'Rate limit exceeded',
+						extensions: { code: 'RATE_LIMITED' }
+					}
+				]
+			},
+			{
+				status: 200,
+				headers: {
+					'Retry-After': '19',
+					'X-RateLimit-Policy': 'graphql-v4',
+					'X-RateLimit-Scope': 'workload',
+					'X-RateLimit-Workload': 'player-stats'
 				}
-			]
-		})) as typeof fetch
+			}
+		)) as typeof fetch
 
 	try {
 		await assert.rejects(
-			executeQuery('query ForbiddenProbe { __typename }'),
+			executeQuery('query RateLimitGraphQLErrorProbe { __typename }'),
 			(error: unknown) => {
 				assert.ok(error instanceof GraphQLRequestError)
 				assert.equal(error.status, 200)
-				assert.equal(error.code, 'FORBIDDEN')
+				assert.equal(error.code, 'RATE_LIMITED')
+				assert.equal(error.retryAfterSeconds, 19)
+				assert.equal(error.rateLimitPolicy, 'graphql-v4')
+				assert.equal(error.rateLimitScope, 'workload')
+				assert.equal(error.rateLimitWorkload, 'player-stats')
 				return true
 			}
 		)
