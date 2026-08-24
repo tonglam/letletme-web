@@ -16,10 +16,10 @@ static_dir=/opt/letletme/static-releases/$release_sha
 cache_dir=/var/cache/letletme-next/$release_sha
 build_dir=/opt/letletme/builds/$release_sha
 exec 9>/run/lock/letletme-web-deploy.lock
-if ! flock -n 9; then
-	echo "another Web release is already being deployed" >&2
-	exit 1
-fi
+# Cleanup is also used by the release workflow's EXIT trap.  If SSH drops while
+# activation is still running, wait for that operation to release the lock
+# before deciding which artifacts are safe to remove.
+flock 9
 current=$(readlink -e /opt/letletme/current 2>/dev/null || true)
 previous=$(readlink -e /opt/letletme/previous 2>/dev/null || true)
 
