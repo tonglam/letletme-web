@@ -297,25 +297,47 @@ async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coo
 }
 
 async function manualDnsState(env, rawState, state, record, fetchImpl, coordinator, reason = 'regional') {
-	const coordination = await coordinator.reset()
+	let coordination
+	let coordinatorResetFailed = false
+	try {
+		coordination = await coordinator.reset()
+	} catch (error) {
+		coordinatorResetFailed = true
+		coordination = { failureCount: state.failureCount, mutationHeld: false }
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_manual_dns_coordinator_reset_error',
+			error: error instanceof Error ? error.message : String(error)
+		}))
+	}
 	const mutationHeld = coordination.mutationHeld === true
 	const alertKey = `manual:${reason}:${record?.RecordId || 'unknown'}:${record?.Type || 'unknown'}:${record?.Value || 'unknown'}:${record?.Line || 'unknown'}:${record?.Status || 'unknown'}`
-	const message = reason === 'default'
+	const dnsMessage = reason === 'default'
 		? 'letletme watchdog 未改 DNSPod：默认线路的 Vercel 回退记录身份或状态不符合预期。'
 		: 'letletme watchdog 未改 DNSPod：境内 EdgeOne 记录身份或状态不符合预期。'
+	const message = coordinatorResetFailed
+		? `${dnsMessage} 同时无法确认 watchdog 协调器状态，必须人工检查。`
+		: dnsMessage
 	let next = {
 		...state,
 		failureCount: coordination.failureCount,
 		fallbackActive: false,
-		lastAction: mutationHeld ? 'manual-dns-state-mutation-held' : 'manual-dns-state',
-		coordinatorResetPending: false
+		lastAction: coordinatorResetFailed
+			? 'manual-dns-state-coordinator-reset-failed'
+			: mutationHeld
+				? 'manual-dns-state-mutation-held'
+				: 'manual-dns-state',
+		coordinatorResetPending: coordinatorResetFailed
 	}
 	if (state.lastAlertKey !== alertKey || state.pendingAlert?.key === alertKey) {
 		next = await applyAlert(env, next, alertKey, message, fetchImpl)
 	}
 	await saveState(env, rawState, next)
 	return {
-		action: mutationHeld ? 'manual-dns-state-mutation-held' : 'manual-dns-state',
+		action: coordinatorResetFailed
+			? 'manual-dns-state-coordinator-reset-failed'
+			: mutationHeld
+				? 'manual-dns-state-mutation-held'
+				: 'manual-dns-state',
 		state: next,
 		record
 	}

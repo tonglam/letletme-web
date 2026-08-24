@@ -292,6 +292,25 @@ test('does not overwrite a manually changed DNS record', async () => {
 	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 
+test('alerts when manual DNS state cannot reset the coordinator', async () => {
+	const coordinator = makeCoordinator()
+	coordinator.reset = async () => { throw new Error('coordinator-unavailable') }
+	const env = {
+		...makeEnv(null, coordinator),
+		TELEGRAM_BOT_TOKEN: 'bot',
+		TELEGRAM_CHAT_ID: 'chat'
+	}
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'manual.example.com', proxied: false },
+		telegramResponses: [new Response('', { status: 200 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'manual-dns-state-coordinator-reset-failed')
+	assert.equal(result.state.coordinatorResetPending, true)
+	assert.equal(calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 1)
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
 test('does not disable regional EdgeOne when the default Vercel fallback is unsafe', async () => {
 	const env = makeEnv()
 	const { fetch, calls } = fakeFetchFactory({
