@@ -5,11 +5,18 @@ import { PublicError } from '@/lib/safe-errors'
 export class MiniProgramAuthError extends PublicError {
 	status: number
 	retryAfterSeconds?: number
+	code?: string
 
-	constructor(message: string, status = 400, retryAfterSeconds?: number) {
+	constructor(
+		message: string,
+		status = 400,
+		retryAfterSeconds?: number,
+		code?: string
+	) {
 		super(message, 'MiniProgramAuthError')
 		this.status = status
 		this.retryAfterSeconds = retryAfterSeconds
+		this.code = code
 	}
 }
 

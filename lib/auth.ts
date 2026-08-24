@@ -5,6 +5,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { after } from 'next/server'
 
 import { instrumentAuthDatabaseAdapter } from '@/lib/auth-database-timing'
+import { recordAuthEvent } from '@/lib/auth-observability'
 import { logSafeAuthDiagnostic } from '@/lib/auth-safe-log'
 import { db } from '@/lib/db'
 import * as authSchema from '@/lib/db/schema/auth'
@@ -108,6 +109,46 @@ export const authConfig = {
 		accountLinking: {
 			enabled: true,
 			trustedProviders: [...AUTH_TRUSTED_PROVIDERS]
+		}
+	},
+	databaseHooks: {
+		session: {
+			create: {
+				after: async session => {
+					recordAuthEvent({
+						eventType: 'session_issued',
+						channel: 'web',
+						operation: 'session-issue',
+						outcome: 'succeeded',
+						webUserId: session.userId,
+						sessionId: session.id
+					})
+				}
+			},
+			update: {
+				after: async session => {
+					recordAuthEvent({
+						eventType: 'session_renewed',
+						channel: 'web',
+						operation: 'session-renew',
+						outcome: 'succeeded',
+						webUserId: session.userId,
+						sessionId: session.id
+					})
+				}
+			},
+			delete: {
+				after: async session => {
+					recordAuthEvent({
+						eventType: 'session_revoked',
+						channel: 'web',
+						operation: 'session-revoke',
+						outcome: 'succeeded',
+						webUserId: session.userId,
+						sessionId: session.id
+					})
+				}
+			}
 		}
 	},
 	session: {

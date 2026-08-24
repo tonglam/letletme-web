@@ -14,7 +14,8 @@ const SAFE_IDENTIFIER = /^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/
 const SAFE_METADATA_VALUE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/
 const SAFE_AUTH_EVENTS = new Set([
 	'better-auth diagnostic',
-	'graphql proxy authorization session lookup failed'
+	'graphql proxy authorization session lookup failed',
+	'telemetry_write_failed'
 ])
 
 function safeIdentifier(value: unknown): string | undefined {
@@ -94,16 +95,17 @@ export function logSafeAuthDiagnostic(
 	...values: unknown[]
 ): void {
 	const payload = {
+		level,
 		event: safeAuthLogEvent(event),
 		diagnostics: safeAuthLogDiagnostics(values)
 	}
 	if (level === 'error') {
-		console.error('[auth]', payload)
+		console.error(JSON.stringify(payload))
 		return
 	}
 	if (level === 'warn') {
-		console.warn('[auth]', payload)
+		console.warn(JSON.stringify(payload))
 		return
 	}
-	console.info('[auth]', payload)
+	console.info(JSON.stringify(payload))
 }

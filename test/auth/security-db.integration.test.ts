@@ -112,7 +112,7 @@ test(
 					   AND replace(replace(coalesce(qual, ''), '(', ''), ')', '') = 'true'
 					   AND replace(replace(coalesce(with_check, ''), '(', ''), ')', '') = 'true'
 					 )
-					 OR (
+						 OR (
 										policyname = 'graphql_auth_reader_select'
 										AND tablename IN (
 											'user',
@@ -124,7 +124,35 @@ test(
 					   AND cmd = 'SELECT'
 					   AND replace(replace(coalesce(qual, ''), '(', ''), ')', '') = 'true'
 					   AND with_check IS NULL
-					 ))) AS invalid_policy_count,
+					  )
+						 OR (
+										policyname = 'web_auth_event_select'
+										AND tablename = 'auth_event'
+					   AND permissive = 'PERMISSIVE'
+					   AND roles::text[] = ARRAY['letletme_web_auth']::text[]
+					   AND cmd = 'SELECT'
+					   AND replace(replace(coalesce(qual, ''), '(', ''), ')', '') = 'true'
+					   AND with_check IS NULL
+					  )
+						 OR (
+										policyname = 'web_auth_event_insert'
+										AND tablename = 'auth_event'
+					   AND permissive = 'PERMISSIVE'
+					   AND roles::text[] = ARRAY['letletme_web_auth']::text[]
+					   AND cmd = 'INSERT'
+					   AND qual IS NULL
+					   AND coalesce(with_check, '') LIKE '%45 days%'
+					  )
+						 OR (
+										policyname = 'web_auth_event_delete_expired'
+										AND tablename = 'auth_event'
+					   AND permissive = 'PERMISSIVE'
+					   AND roles::text[] = ARRAY['letletme_web_auth']::text[]
+					   AND cmd = 'DELETE'
+						AND coalesce(qual, '') LIKE '%CURRENT_TIMESTAMP%'
+						AND with_check IS NULL
+					  )
+					  )) AS invalid_policy_count,
 				(SELECT count(*)::int
 				 FROM pg_class relation
 				 JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
@@ -136,7 +164,7 @@ test(
 				anon_schema: false,
 				anon_user: false,
 				authenticated_session: false,
-				policy_count: 14,
+				policy_count: 17,
 				invalid_policy_count: 0,
 				missing_rls: 0
 			})

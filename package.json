@@ -33,6 +33,7 @@
 		"db:verify-runtime-login": "tsx scripts/verify-runtime-login.ts",
 		"db:bootstrap-runtime-login": "tsx scripts/bootstrap-runtime-login.ts",
 		"db:runtime-contract": "tsx scripts/check-runtime-database-contract.ts",
+		"auth:events": "tsx scripts/query-auth-events.ts",
 		"db:studio": "drizzle-kit studio"
 	},
 	"dependencies": {
