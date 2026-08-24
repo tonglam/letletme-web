@@ -21,14 +21,14 @@ function productionEnv(overrides = {}) {
 	}
 }
 
-test('Vercel disables every non-main Git branch including names with slashes', () => {
+test('Vercel disables Git auto-deployment for every branch', () => {
 	const config = JSON.parse(
 		readFileSync(path.resolve(__dirname, '../vercel.json'), 'utf8')
 	)
 
 	assert.deepEqual(config.git.deploymentEnabled, {
 		'**': false,
-		main: true
+		main: false
 	})
 	assert.equal(
 		config.ignoreCommand,

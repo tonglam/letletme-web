@@ -148,6 +148,13 @@ function secretsEqual(provided: string | null, expected: string): boolean {
 	)
 }
 
+function configuredLocalProxySecrets(): string[] {
+	return [
+		process.env.LETLETME_LOCAL_PROXY_SECRET,
+		process.env.LETLETME_LOCAL_PROXY_SECRET_PREVIOUS
+	].filter((secret): secret is string => Boolean(secret))
+}
+
 function expectedProductionHosts(): Set<string> {
 	const hosts = new Set<string>()
 	for (const raw of [
@@ -173,11 +180,12 @@ function expectedProductionHosts(): Set<string> {
 export function resolveProviderClientIp(headers: Headers): string {
 	const host = (headers.get('host') ?? '').toLowerCase()
 	const isExpectedProductionHost = expectedProductionHosts().has(host)
-	const localProxySecret = process.env.LETLETME_LOCAL_PROXY_SECRET
+	const localProxySecrets = configuredLocalProxySecrets()
 	if (
 		isExpectedProductionHost &&
-		localProxySecret &&
-		secretsEqual(headers.get('x-letletme-proxy-secret'), localProxySecret)
+		localProxySecrets.some(secret =>
+			secretsEqual(headers.get('x-letletme-proxy-secret'), secret)
+		)
 	) {
 		return validIp(headers.get('x-letletme-proxy-client-ip')) ?? 'unknown'
 	}
