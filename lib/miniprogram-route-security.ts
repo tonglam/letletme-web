@@ -192,11 +192,11 @@ export function miniProgramErrorResponse(error: unknown, fallback: string): Resp
 			status
 		})
 	}
-	recordAuthFailure(
-		diagnosticErrorCode(error, status),
-		status,
-		status === 429 ? 'rate_limited' : 'upstream_failure'
-	)
+	if (status === 429) {
+		recordAuthFailure(diagnosticErrorCode(error, status), status, 'rate_limited')
+	} else if (status >= 500) {
+		recordAuthFailure(diagnosticErrorCode(error, status), status, 'upstream_failure')
+	}
 	const headers = new Headers({ 'Cache-Control': 'no-store' })
 	if (error instanceof MiniProgramAuthError && error.retryAfterSeconds) {
 		headers.set('Retry-After', String(error.retryAfterSeconds))

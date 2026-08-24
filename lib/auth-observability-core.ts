@@ -5,6 +5,14 @@ export const AUTH_EVENT_RETENTION_MS = AUTH_EVENT_RETENTION_DAYS * 24 * 60 * 60 
 export const AUTH_DEVICE_COOKIE_NAME = 'letletme.auth_device'
 export const AUTH_DEVICE_COOKIE_MAX_AGE_SECONDS = 90 * 24 * 60 * 60
 
+export function resolveAuthRelease(): string {
+	return (
+		process.env.LETLETME_RELEASE_SHA?.trim().slice(0, 12) ||
+		process.env.VERCEL_GIT_COMMIT_SHA?.trim().slice(0, 12) ||
+		'local'
+	)
+}
+
 export type AuthChannel = 'web' | 'mini'
 
 export type AuthOutcome = 'started' | 'succeeded' | 'failed' | 'rejected'

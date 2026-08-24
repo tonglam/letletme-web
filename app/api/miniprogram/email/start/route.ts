@@ -25,7 +25,7 @@ export async function POST(request: Request) {
 				eventType: 'account_link',
 				channel: 'mini',
 				operation: 'email-link-start',
-				outcome: 'succeeded',
+				outcome: 'started',
 				email: typeof body.email === 'string' ? body.email : undefined,
 				deviceId: typeof body.deviceId === 'string' ? body.deviceId : undefined
 			})

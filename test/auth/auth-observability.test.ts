@@ -7,7 +7,8 @@ import {
 	normalizeClientEnvironment,
 	normalizeMiniProgramLoginContext,
 	normalizePhaseTimings,
-	normalizeRequestId
+	normalizeRequestId,
+	resolveAuthRelease
 } from '../../lib/auth-observability-core'
 import { safeAuthLogDiagnostics } from '../../lib/auth-safe-log'
 
@@ -106,5 +107,20 @@ test('safe auth diagnostics exclude messages, SQL, credentials, and headers', ()
 		'raw user agent'
 	]) {
 		assert.equal(serialized.includes(secret), false, secret)
+	}
+})
+
+test('auth release prefers the self-hosted release over the Vercel fallback', () => {
+	const names = ['LETLETME_RELEASE_SHA', 'VERCEL_GIT_COMMIT_SHA'] as const
+	const previous = Object.fromEntries(names.map(name => [name, process.env[name]]))
+	process.env.LETLETME_RELEASE_SHA = 'selfhosted123456789'
+	process.env.VERCEL_GIT_COMMIT_SHA = 'stale-vercel-release-987654321'
+	try {
+		assert.equal(resolveAuthRelease(), 'selfhosted12')
+	} finally {
+		for (const name of names) {
+			if (previous[name] === undefined) delete process.env[name]
+			else process.env[name] = previous[name]
+		}
 	}
 })

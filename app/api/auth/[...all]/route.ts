@@ -8,6 +8,7 @@ import {
 	withAuthDeviceCookie,
 	withObservedAuthRequest
 } from '@/lib/auth-observability'
+import { resolveAuthRelease } from '@/lib/auth-observability-core'
 import { withPrivateNoStore } from '@/lib/auth-response'
 import {
 	formatAuthServerTiming,
@@ -126,12 +127,12 @@ export async function GET(request: Request) {
 						database: Number(durations.databaseMs.toFixed(2)),
 						total: Number(durations.totalMs.toFixed(2))
 					},
-					release: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? 'local'
+					release: resolveAuthRelease()
 				})
 			)
 			return output
 		},
-		{ persistEvents: !getSession }
+		{ recordRequestEvent: !getSession }
 	)
 }
 

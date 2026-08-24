@@ -65,6 +65,13 @@ function parsePositiveInteger(value: string | undefined, name: string): number {
 	return parsed
 }
 
+function parseRequiredValue(value: string | undefined, name: string): string {
+	if (!value || value.startsWith('--') || value.trim() === '') {
+		throw new Error(`${name} requires a non-empty value`)
+	}
+	return value
+}
+
 function parseArgs(args: readonly string[]): QueryOptions {
 	const options: QueryOptions = { days: 7, limit: 500 }
 	for (let index = 0; index < args.length; index += 1) {
@@ -80,23 +87,23 @@ function parseArgs(args: readonly string[]): QueryOptions {
 				index += 1
 				break
 			case '--web-user-id':
-				options.webUserId = value
+				options.webUserId = parseRequiredValue(value, '--web-user-id')
 				index += 1
 				break
 			case '--mini-account-id':
-				options.miniAccountId = value
+				options.miniAccountId = parseRequiredValue(value, '--mini-account-id')
 				index += 1
 				break
 			case '--mini-device-id':
-				options.miniDeviceId = value
+				options.miniDeviceId = parseRequiredValue(value, '--mini-device-id')
 				index += 1
 				break
 			case '--session-id':
-				options.sessionId = value
+				options.sessionId = parseRequiredValue(value, '--session-id')
 				index += 1
 				break
 			case '--request-id':
-				options.requestId = value
+				options.requestId = parseRequiredValue(value, '--request-id')
 				index += 1
 				break
 			default:

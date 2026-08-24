@@ -23,6 +23,7 @@ import {
 	normalizeMiniProgramLoginContext,
 	normalizePhaseTimings,
 	normalizeRequestId,
+	resolveAuthRelease,
 	type AuthChannel,
 	type AuthClientEnvironment,
 	type AuthEventInput,
@@ -38,7 +39,7 @@ type ObservationContext = {
 	channel: AuthChannel
 	operation: string
 	startedAt: number
-	persistEvents: boolean
+	recordRequestEvent: boolean
 	ip?: string
 	userAgent?: string
 	deviceCookie?: string
@@ -58,14 +59,6 @@ type ObservationContext = {
 
 const observationStorage = new AsyncLocalStorage<ObservationContext>()
 
-function releaseName(): string {
-	return (
-		process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ??
-		process.env.NEXT_PUBLIC_APP_VERSION?.slice(0, 32) ??
-		'local'
-	)
-}
-
 function requestIdFor(request: Request): string {
 	return normalizeRequestId(request.headers.get('x-request-id')) ?? randomUUID()
 }
@@ -78,7 +71,7 @@ export function createAuthObservationContext(
 		requestId?: string
 		source?: string
 		loginContext?: MiniProgramLoginContext
-		persistEvents?: boolean
+		recordRequestEvent?: boolean
 	} = {}
 ): ObservationContext {
 	const userAgent = request.headers.get('user-agent') ?? undefined
@@ -88,12 +81,12 @@ export function createAuthObservationContext(
 		channel,
 		operation: normalizeAuthOperation(operation),
 		startedAt: Date.now(),
-		persistEvents: options.persistEvents !== false,
+		recordRequestEvent: options.recordRequestEvent !== false,
 		ip: normalizeIp(resolveProviderClientIp(request.headers)),
 		userAgent,
 		deviceCookie: authDeviceCookieValueFromHeader(request.headers.get('cookie')),
 		clientEnvironment: normalizeClientEnvironment(userAgent),
-		release: releaseName(),
+		release: resolveAuthRelease(),
 		source: options.source,
 		region: process.env.VERCEL_REGION,
 		loginContext: options.loginContext,
@@ -136,7 +129,7 @@ function outcomeForStatus(statusCode: number): AuthOutcome {
 
 export function recordAuthEvent(event: AuthEventInput): void {
 	const context = observationStorage.getStore()
-	if (!context || !context.persistEvents) return
+	if (!context) return
 	context.events.push({
 		...event,
 		requestId: event.requestId ?? context.requestId,
@@ -162,7 +155,7 @@ export function recordAuthRequestOutcome(
 	errorCode?: string
 ): void {
 	const context = observationStorage.getStore()
-	if (!context) return
+	if (!context || !context.recordRequestEvent) return
 	const safeErrorCode =
 		normalizeAuthErrorCode(errorCode) ?? httpAuthErrorCode(statusCode)
 	recordAuthEvent({
@@ -281,19 +274,7 @@ async function flushAuthEvents(events: readonly AuthEventInput[]): Promise<void>
 		return
 	}
 	try {
-		await db.transaction(async tx => {
-			await tx.insert(schema.authEvent).values(rows)
-			await tx.execute(sql`
-				DELETE FROM bauth.auth_event
-				WHERE id IN (
-					SELECT id
-					FROM bauth.auth_event
-					WHERE expires_at <= CURRENT_TIMESTAMP
-					ORDER BY expires_at
-					LIMIT 500
-				)
-			`)
-		})
+		await db.insert(schema.authEvent).values(rows)
 	} catch {
 		logSafeAuthDiagnostic('warn', 'telemetry_write_failed', {
 			code: 'auth_event_insert_failed',
@@ -302,12 +283,41 @@ async function flushAuthEvents(events: readonly AuthEventInput[]): Promise<void>
 	}
 }
 
+export async function purgeExpiredAuthEvents(): Promise<number> {
+	const deleted = await db.execute(sql`
+		DELETE FROM bauth.auth_event
+		WHERE id IN (
+			SELECT id
+			FROM bauth.auth_event
+			WHERE expires_at <= CURRENT_TIMESTAMP
+			ORDER BY expires_at
+			LIMIT 500
+		)
+		RETURNING id
+	`)
+	return deleted.length
+}
+
+async function runAuthEventCleanup(): Promise<void> {
+	try {
+		await purgeExpiredAuthEvents()
+	} catch {
+		logSafeAuthDiagnostic('warn', 'telemetry_write_failed', {
+			code: 'auth_event_cleanup_failed',
+			status: 503
+		})
+	}
+}
+
 export function scheduleAuthEventsAfterResponse(): void {
 	const context = observationStorage.getStore()
-	if (!context || context.flushScheduled || context.events.length === 0) return
+	if (!context || context.flushScheduled) return
 	context.flushScheduled = true
 	const events = context.events.splice(0)
-	const task = () => flushAuthEvents(events)
+	const task = async () => {
+		await flushAuthEvents(events)
+		await runAuthEventCleanup()
+	}
 	try {
 		after(task)
 	} catch {
@@ -357,7 +367,7 @@ export async function withObservedAuthRequest(
 	channel: AuthChannel,
 	operation: string,
 	handler: () => Promise<Response>,
-	options: { requestId?: string; source?: string; persistEvents?: boolean } = {}
+	options: { requestId?: string; source?: string; recordRequestEvent?: boolean } = {}
 ): Promise<Response> {
 	const context = createAuthObservationContext(request, channel, operation, options)
 	return runWithAuthObservationContext(context, async () => {
