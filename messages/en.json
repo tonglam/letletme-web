@@ -785,6 +785,7 @@
 			"loading": "Timeline temporarily unavailable",
 			"signalsLabel": "Position signals",
 			"sampleInsufficient": "Sample insufficient",
+			"sampleInsufficientWithValue": "{value} (sample insufficient)",
 			"realityUnverified": "Real-match data unverified",
 			"metricUnavailable": "Unavailable",
 			"providerModeHistory": "FPL current + Understat history",
