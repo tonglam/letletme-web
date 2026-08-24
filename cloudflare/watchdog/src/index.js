@@ -1,15 +1,55 @@
+import {
+	disableConfiguredRecord,
+	getDefaultVercelRecord,
+	getConfiguredRecord,
+	getEnabledMainlandApexRecords,
+	isDisabledRecord,
+	isDefaultVercelRecord,
+	isEnabledRecord
+} from './dnspod.js'
+
+export { isDefaultVercelRecord } from './dnspod.js'
+
 const STATE_KEY = 'watchdog-state-v1'
 const FAILURE_THRESHOLD = 3
 const DEFAULT_TIMEOUT_MS = 8_000
 const CLAIM_TTL_MS = 2 * 60 * 1_000
+const MUTATION_TTL_MS = 5 * 60 * 1_000
 const COORDINATOR_NAME = 'letletme-top'
 
 function bool(value) {
 	return value === true || value === 'true'
 }
 
-function normalized(value) {
-	return String(value ?? '').trim().replace(/\.$/, '').toLowerCase()
+const FULL_RELEASE_SHA = /^[0-9a-f]{40}$/i
+
+function releaseFrom(response, payload) {
+	const header = response.headers.get('x-letletme-release')
+	const headerRelease = header?.trim() || null
+	const bodyRelease = typeof payload?.release === 'string' ? payload.release.trim() : null
+	return {
+		release: headerRelease || bodyRelease,
+		conflict: Boolean(
+			headerRelease &&
+			bodyRelease &&
+			headerRelease.toLowerCase() !== bodyRelease.toLowerCase()
+		)
+	}
+}
+
+function releaseFailureReason(releaseInfo) {
+	if (releaseInfo.conflict) return 'release-mismatch'
+	if (!FULL_RELEASE_SHA.test(releaseInfo.release || '')) return 'release-invalid'
+	return null
+}
+
+export function hasReleaseParity(...probes) {
+	const releases = probes.map(probe => probe?.release?.toLowerCase())
+	return (
+		releases.length > 0 &&
+		releases.every(release => FULL_RELEASE_SHA.test(release || '')) &&
+		new Set(releases).size === 1
+	)
 }
 
 export function parseState(raw) {
@@ -44,50 +84,15 @@ export function parseState(raw) {
 	}
 }
 
-function apiUrl(env, path) {
-	const base = (env.DNS_API_BASE || 'https://api.cloudflare.com/client/v4').replace(/\/$/, '')
-	return `${base}/zones/${encodeURIComponent(env.ZONE_ID)}/dns_records/${encodeURIComponent(env.DNS_RECORD_ID)}${path || ''}`
-}
-
-async function apiRequest(env, fetchImpl, method, path, body) {
-	if (!env.ZONE_ID || !env.DNS_RECORD_ID || !env.CLOUDFLARE_API_TOKEN) {
-		throw new Error('dns-api-configuration-missing')
-	}
-	const response = await fetchImpl(apiUrl(env, path), {
-		method,
-		headers: {
-			Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
-			Accept: 'application/json',
-			...(body ? { 'Content-Type': 'application/json' } : {})
-		},
-		...(body ? { body: JSON.stringify(body) } : {})
-	})
-	const payload = await response.json().catch(() => null)
-	if (!response.ok || payload?.success !== true) {
-		throw new Error(`dns-api-${response.status}`)
-	}
-	return payload.result
-}
-
 export function isEdgeOneRecord(record, env) {
-	return (
-		record?.type === 'CNAME' &&
-		normalized(record.name) === normalized(env.APEX_NAME || 'letletme.top') &&
-		normalized(record.content) === normalized(env.EDGEONE_CNAME_TARGET) &&
-		record.proxied === false
-	)
+	return isEnabledRecord(record, env)
 }
 
 export function isFallbackRecord(record, env) {
-	return (
-		record?.type === 'A' &&
-		normalized(record.name) === normalized(env.APEX_NAME || 'letletme.top') &&
-		normalized(record.content) === normalized(env.VERCEL_FALLBACK_A) &&
-		record.proxied === true
-	)
+	return isDisabledRecord(record, env)
 }
 
-async function probe(url, fetchImpl, timeoutMs, requireEdgeOne) {
+async function probe(url, fetchImpl, timeoutMs, expectedOrigin, requireEdgeOne) {
 	if (!url) return { ok: false, reason: 'url-missing' }
 	const controller = new AbortController()
 	const timeout = setTimeout(() => controller.abort('probe-timeout'), timeoutMs)
@@ -100,16 +105,71 @@ async function probe(url, fetchImpl, timeoutMs, requireEdgeOne) {
 		})
 		const payload = await response.json().catch(() => null)
 		const edgeMarker = response.headers.get('x-letletme-edge')
+		const normalizedEdgeMarker = edgeMarker?.trim().toLowerCase() || null
+		const releaseInfo = releaseFrom(response, payload)
+		const releaseFailure = releaseFailureReason(releaseInfo)
 		const ok =
 			response.status === 200 &&
 			payload?.status === 'ok' &&
-			payload?.origin === 'vercel' &&
-			(!requireEdgeOne || edgeMarker === 'edgeone')
+			payload?.origin === expectedOrigin &&
+			!releaseFailure &&
+			(requireEdgeOne
+				? normalizedEdgeMarker === 'edgeone'
+				: normalizedEdgeMarker === null)
 		return {
 			ok,
 			status: response.status,
-			reason: ok ? 'ok' : 'health-mismatch',
-			edgeMarker
+			reason: ok ? 'ok' : releaseFailure || 'health-mismatch',
+			edgeMarker,
+			release: releaseInfo.release,
+			releaseConflict: releaseInfo.conflict
+		}
+	} catch (error) {
+		return {
+			ok: false,
+			reason: controller.signal.aborted ? 'timeout' : 'network-error',
+			error: error instanceof Error ? error.message : String(error)
+		}
+	} finally {
+		clearTimeout(timeout)
+	}
+}
+
+async function probeEdgeOneVercelApi(url, fetchImpl, timeoutMs) {
+	if (!url) return { ok: false, reason: 'url-missing' }
+	const controller = new AbortController()
+	const timeout = setTimeout(() => controller.abort('probe-timeout'), timeoutMs)
+	try {
+		const response = await fetchImpl(url, {
+			method: 'POST',
+			headers: {
+				Accept: 'application/json',
+				'Cache-Control': 'no-store',
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({ query: 'query { __typename }' }),
+			redirect: 'manual',
+			signal: controller.signal
+		})
+		const payload = await response.json().catch(() => null)
+		const edgeMarker = response.headers.get('x-letletme-edge')
+		const originMarker = response.headers.get('x-letletme-origin')
+		const releaseInfo = releaseFrom(response, payload)
+		const releaseFailure = releaseFailureReason(releaseInfo)
+		const ok =
+			response.status === 200 &&
+			payload?.data?.__typename === 'Query' &&
+			originMarker === 'vercel' &&
+			edgeMarker === 'edgeone' &&
+			!releaseFailure
+		return {
+			ok,
+			status: response.status,
+			reason: ok ? 'ok' : releaseFailure || 'health-mismatch',
+			edgeMarker,
+			originMarker,
+			release: releaseInfo.release,
+			releaseConflict: releaseInfo.conflict
 		}
 	} catch (error) {
 		return {
@@ -150,8 +210,16 @@ function coordinatorClient(env, options) {
 	if (!env.FAILOVER_COORDINATOR) throw new Error('coordinator-binding-missing')
 	const id = env.FAILOVER_COORDINATOR.idFromName(COORDINATOR_NAME)
 	const stub = env.FAILOVER_COORDINATOR.get(id)
-	const command = async operation => {
-		const response = await stub.fetch(`https://watchdog-coordinator/${operation}`, { method: 'POST' })
+	const command = async (operation, body) => {
+		const response = await stub.fetch(`https://watchdog-coordinator/${operation}`, {
+			method: 'POST',
+			...(body
+				? {
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(body)
+				}
+				: {})
+		})
 		const payload = await response.json().catch(() => null)
 		if (!response.ok || payload?.ok !== true) throw new Error(`coordinator-${response.status}`)
 		return payload
@@ -160,7 +228,8 @@ function coordinatorClient(env, options) {
 		recordFailure: () => command('record-failure'),
 		reset: () => command('reset'),
 		release: () => command('release'),
-		confirm: () => command('confirm')
+		confirm: () => command('confirm'),
+		beginMutation: claimToken => command('begin-mutation', { claimToken })
 	}
 }
 
@@ -182,6 +251,18 @@ async function applyAlert(env, state, key, message, fetchImpl) {
 }
 
 async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coordinator) {
+	// Revalidate both sides of the fallback immediately before declaring the
+	// state healthy. The first DNS read can be stale if an operator changes the
+	// default record while this cron invocation is running.
+	const enabledRegionalApexRecords = await getEnabledMainlandApexRecords(env, fetchImpl)
+	if (enabledRegionalApexRecords.length !== 0) {
+		return manualDnsState(env, rawState, state, record, fetchImpl, coordinator, 'regional')
+	}
+	const defaultRecord = await getDefaultVercelRecord(env, fetchImpl)
+	if (!isDefaultVercelRecord(defaultRecord, env)) {
+		return manualDnsState(env, rawState, state, defaultRecord, fetchImpl, coordinator, 'default')
+	}
+
 	let next = {
 		...state,
 		failureCount: 0,
@@ -189,8 +270,8 @@ async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coo
 		lastAction: 'already-fallback',
 		coordinatorResetPending: false
 	}
-	const alertKey = `fallback:${env.VERCEL_FALLBACK_A}`
-	const alertMessage = `letletme watchdog 已回退 Cloudflare → Vercel：EdgeOne 连续失败，Vercel 健康。`
+	const alertKey = `fallback:${env.DNSPOD_EDGEONE_RECORD_ID}`
+	const alertMessage = `letletme watchdog 已停用 DNSPod 境内 EdgeOne 记录：EdgeOne 连续失败，Vercel 健康。`
 	if (next.pendingAlert) {
 		next = await applyAlert(
 			env,
@@ -215,40 +296,147 @@ async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coo
 	return { action: 'already-fallback', state: next, record, persistedState }
 }
 
-async function manualDnsState(env, rawState, state, record, fetchImpl, coordinator) {
-	const coordination = await coordinator.reset()
-	const alertKey = `manual:${record?.type || 'unknown'}:${record?.content || 'unknown'}:${record?.proxied}`
-	const message = `letletme watchdog 未改 DNS：apex 不是预期 EdgeOne 记录（当前 ${record?.type || 'unknown'} ${record?.content || 'unknown'}）。`
+async function manualDnsState(env, rawState, state, record, fetchImpl, coordinator, reason = 'regional') {
+	let coordination
+	let coordinatorResetFailed = false
+	try {
+		coordination = await coordinator.reset()
+	} catch (error) {
+		coordinatorResetFailed = true
+		coordination = { failureCount: state.failureCount, mutationHeld: false }
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_manual_dns_coordinator_reset_error',
+			error: error instanceof Error ? error.message : String(error)
+		}))
+	}
+	const mutationHeld = coordination.mutationHeld === true
+	const alertKeyPrefix = coordinatorResetFailed ? 'manual-coordinator-reset-failed' : 'manual'
+	const alertKey = `${alertKeyPrefix}:${reason}:${record?.RecordId || 'unknown'}:${record?.Type || 'unknown'}:${record?.Value || 'unknown'}:${record?.Line || 'unknown'}:${record?.Status || 'unknown'}`
+	const dnsMessage = reason === 'default'
+		? 'letletme watchdog 未改 DNSPod：默认线路的 Vercel 回退记录身份或状态不符合预期。'
+		: 'letletme watchdog 未改 DNSPod：境内 EdgeOne 记录身份或状态不符合预期。'
+	const message = coordinatorResetFailed
+		? `${dnsMessage} 同时无法确认 watchdog 协调器状态，必须人工检查。`
+		: dnsMessage
 	let next = {
 		...state,
 		failureCount: coordination.failureCount,
 		fallbackActive: false,
-		lastAction: 'manual-dns-state',
-		coordinatorResetPending: false
+		lastAction: coordinatorResetFailed
+			? 'manual-dns-state-coordinator-reset-failed'
+			: mutationHeld
+				? 'manual-dns-state-mutation-held'
+				: 'manual-dns-state',
+		coordinatorResetPending: coordinatorResetFailed
 	}
 	if (state.lastAlertKey !== alertKey || state.pendingAlert?.key === alertKey) {
 		next = await applyAlert(env, next, alertKey, message, fetchImpl)
 	}
 	await saveState(env, rawState, next)
-	return { action: 'manual-dns-state', state: next, record }
+	return {
+		action: coordinatorResetFailed
+			? 'manual-dns-state-coordinator-reset-failed'
+			: mutationHeld
+				? 'manual-dns-state-mutation-held'
+				: 'manual-dns-state',
+		state: next,
+		record
+	}
 }
 
-async function bothUnhealthyState(env, rawState, state, record, edge, vercel, fetchImpl, coordinator) {
+async function failoverMutationFailure(
+	env,
+	rawState,
+	state,
+	error,
+	now,
+	fetchImpl,
+	coordinator,
+	mutationApplied
+) {
+	const alertKey = `${mutationApplied ? 'post-disable-verification' : 'disable-mutation'}:${env.DNSPOD_EDGEONE_RECORD_ID}`
+	const reason = error instanceof Error ? error.message : String(error)
+	const message = mutationApplied
+		? `letletme watchdog 已修改 DNSPod 境内记录，但回退校验失败；必须人工检查 DNSPod。原因=${reason}`
+		: `letletme watchdog 无法停用 DNSPod 境内记录；必须人工检查 DNSPod。原因=${reason}`
+	const alertAlreadySent = state.lastAlertKey === alertKey && !state.pendingAlert
+	let next = {
+		...state,
+		failureCount: Math.max(FAILURE_THRESHOLD, state.failureCount),
+		fallbackActive: false,
+		lastFailureAt: now,
+		lastAction: mutationApplied ? 'post-disable-verification-failed' : 'disable-mutation-failed',
+		coordinatorResetPending: false,
+		lastAlertKey: alertAlreadySent ? alertKey : null,
+		pendingAlert: alertAlreadySent
+			? null
+			: state.pendingAlert?.key === alertKey
+				? state.pendingAlert
+				: { key: alertKey, message }
+	}
+	try {
+		await saveState(env, rawState, next)
+	} catch (writeError) {
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_failover_mutation_state_prewrite_error',
+			error: writeError instanceof Error ? writeError.message : String(writeError)
+		}))
+	}
+	next = await applyAlert(env, next, alertKey, message, fetchImpl)
+	try {
+		await saveState(env, rawState, next)
+	} catch (writeError) {
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_failover_mutation_state_write_error',
+			error: writeError instanceof Error ? writeError.message : String(writeError)
+		}))
+	}
+	try {
+		await coordinator.release()
+	} catch (releaseError) {
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_failover_mutation_coordinator_release_error',
+			error: releaseError instanceof Error ? releaseError.message : String(releaseError)
+		}))
+	}
+	return next
+}
+
+async function bothUnhealthyState(
+	env,
+	rawState,
+	state,
+	record,
+	edge,
+	edgeVercel,
+	vercel,
+	fetchImpl,
+	coordinator
+) {
 	const coordination = await coordinator.reset()
-	const alertKey = `both-unhealthy:${edge.reason}:${vercel.reason}`
-	const message = `letletme watchdog 暂不回退：EdgeOne 与 Vercel 同时异常。EdgeOne=${edge.reason} Vercel=${vercel.reason}`
+	const mutationHeld = coordination.mutationHeld === true
+	const alertKey = `both-unhealthy:${edge.reason}:${edgeVercel.reason}:${vercel.reason}`
+	const message = `letletme watchdog 暂不改 DNSPod：EdgeOne 与 Vercel 同时异常。EdgeOne Tencent=${edge.reason} EdgeOne Vercel=${edgeVercel.reason} Vercel=${vercel.reason}`
 	let next = {
 		...state,
 		failureCount: coordination.failureCount,
 		fallbackActive: false,
-		lastAction: 'both-unhealthy',
+		lastAction: mutationHeld ? 'both-unhealthy-mutation-held' : 'both-unhealthy',
 		coordinatorResetPending: false
 	}
 	if (state.lastAlertKey !== alertKey || state.pendingAlert?.key === alertKey) {
 		next = await applyAlert(env, next, alertKey, message, fetchImpl)
 	}
 	await saveState(env, rawState, next)
-	return { action: 'both-unhealthy', state: next, edge, vercel, record }
+	return {
+		action: mutationHeld ? 'both-unhealthy-mutation-held' : 'both-unhealthy',
+		state: next,
+		edge,
+		edgeVercel,
+		vercel,
+		releaseParity: hasReleaseParity(edge, edgeVercel, vercel),
+		record
+	}
 }
 
 export async function runCheck(env, options = {}) {
@@ -262,19 +450,33 @@ export async function runCheck(env, options = {}) {
 	}
 	const coordinator = coordinatorClient(env, options)
 
-	const record = await apiRequest(env, fetchImpl, 'GET')
+	const record = await getConfiguredRecord(env, fetchImpl)
 	if (isFallbackRecord(record, env)) {
+		const enabledRegionalApexRecords = await getEnabledMainlandApexRecords(env, fetchImpl)
+		if (enabledRegionalApexRecords.length !== 0) {
+			return manualDnsState(env, rawState, state, record, fetchImpl, coordinator, 'regional')
+		}
+		const defaultRecord = await getDefaultVercelRecord(env, fetchImpl)
+		if (!isDefaultVercelRecord(defaultRecord, env)) {
+			return manualDnsState(env, rawState, state, defaultRecord, fetchImpl, coordinator, 'default')
+		}
 		return alreadyFallbackState(env, rawState, state, record, fetchImpl, coordinator)
 	}
 	if (!isEdgeOneRecord(record, env)) {
 		return manualDnsState(env, rawState, state, record, fetchImpl, coordinator)
 	}
+	const defaultRecord = await getDefaultVercelRecord(env, fetchImpl)
+	if (!isDefaultVercelRecord(defaultRecord, env)) {
+		return manualDnsState(env, rawState, state, defaultRecord, fetchImpl, coordinator, 'default')
+	}
 
-	const [edge, vercel] = await Promise.all([
-		probe(env.EDGEONE_HEALTH_URL, fetchImpl, timeoutMs, true),
-		probe(env.VERCEL_HEALTH_URL, fetchImpl, timeoutMs, false)
+	const [edge, edgeVercel, vercel] = await Promise.all([
+		probe(env.EDGEONE_TENCENT_HEALTH_URL, fetchImpl, timeoutMs, 'tencent', true),
+		probeEdgeOneVercelApi(env.EDGEONE_VERCEL_API_URL, fetchImpl, timeoutMs),
+		probe(env.VERCEL_HEALTH_URL, fetchImpl, timeoutMs, 'vercel', false)
 	])
-	if (edge.ok) {
+	const releaseParity = hasReleaseParity(edge, edgeVercel, vercel)
+	if (edge.ok && edgeVercel.ok && vercel.ok && releaseParity) {
 		let coordination
 		try {
 			coordination = await coordinator.reset()
@@ -286,7 +488,32 @@ export async function runCheck(env, options = {}) {
 				lastAction: 'healthy-coordinator-reset-pending'
 			}
 			await saveState(env, rawState, next)
-			return { action: 'healthy-coordinator-reset-pending', state: next, edge, vercel, record }
+			return {
+				action: 'healthy-coordinator-reset-pending',
+				state: next,
+				edge,
+				edgeVercel,
+				vercel,
+				releaseParity,
+				record
+			}
+		}
+		if (coordination.mutationHeld === true) {
+			const next = {
+				...state,
+				coordinatorResetPending: false,
+				lastAction: 'healthy-failover-mutation-held'
+			}
+			await saveState(env, rawState, next)
+			return {
+				action: 'healthy-failover-mutation-held',
+				state: next,
+				edge,
+				edgeVercel,
+				vercel,
+				releaseParity,
+				record
+			}
 		}
 		const next = {
 			...state,
@@ -298,27 +525,49 @@ export async function runCheck(env, options = {}) {
 			pendingAlert: null
 		}
 		await saveState(env, rawState, next)
-		return { action: 'healthy', state: next, edge, vercel, record }
+		return { action: 'healthy', state: next, edge, edgeVercel, vercel, releaseParity, record }
 	}
 	if (!vercel.ok) {
-		return bothUnhealthyState(env, rawState, state, record, edge, vercel, fetchImpl, coordinator)
+		return bothUnhealthyState(env, rawState, state, record, edge, edgeVercel, vercel, fetchImpl, coordinator)
 	}
 
 	if (state.coordinatorResetPending) {
 		try {
 			const reset = await coordinator.reset()
+			if (reset.mutationHeld === true) {
+				const next = { ...state, lastAction: 'coordinator-failover-mutation-held' }
+				await saveState(env, rawState, next)
+				return {
+					action: 'coordinator-failover-mutation-held',
+					state: next,
+					edge,
+					edgeVercel,
+					vercel,
+					releaseParity,
+					record
+				}
+			}
 			state = { ...state, failureCount: reset.failureCount, coordinatorResetPending: false }
 			await saveState(env, rawState, state)
 		} catch (error) {
 			const next = { ...state, failureCount: 0, lastAction: 'coordinator-reset-pending' }
 			await saveState(env, rawState, next)
-			return { action: 'coordinator-reset-pending', state: next, edge, vercel, record }
+			return {
+				action: 'coordinator-reset-pending',
+				state: next,
+				edge,
+				edgeVercel,
+				vercel,
+				releaseParity,
+				record
+			}
 		}
 	}
 
 	const coordination = await coordinator.recordFailure()
 	const failureCount = coordination.failureCount
 	if (!coordination.shouldFailover) {
+		const claimHeld = coordination.claimHeld === true || coordination.mutationHeld === true
 		const next = {
 			...state,
 			failureCount,
@@ -326,46 +575,141 @@ export async function runCheck(env, options = {}) {
 			coordinatorResetPending: false,
 			lastFailureAt: now,
 			lastAction: coordination.claimHeld ? 'fallback-claim-held' : 'edge-failure-counted',
-			lastAlertKey: null,
-			pendingAlert: null
+			lastAlertKey: claimHeld ? state.lastAlertKey : null,
+			pendingAlert: claimHeld ? state.pendingAlert : null
 		}
 		await saveState(env, rawState, next)
 		return {
 			action: coordination.claimHeld ? 'fallback-claim-held' : 'counted-failure',
 			state: next,
 			edge,
+			edgeVercel,
 			vercel,
+			releaseParity,
 			record
 		}
 	}
 
 	// Health probes can take several seconds. Re-read the record immediately
 	// before the mutation so an operator's DNS change wins the race.
-	const latestRecord = await apiRequest(env, fetchImpl, 'GET')
+	const latestRecord = await getConfiguredRecord(env, fetchImpl)
 	if (isFallbackRecord(latestRecord, env)) {
+		const enabledRegionalApexRecords = await getEnabledMainlandApexRecords(env, fetchImpl)
+		if (enabledRegionalApexRecords.length !== 0) {
+			return manualDnsState(env, rawState, state, latestRecord, fetchImpl, coordinator, 'regional')
+		}
+		const latestDefaultRecord = await getDefaultVercelRecord(env, fetchImpl)
+		if (!isDefaultVercelRecord(latestDefaultRecord, env)) {
+			return manualDnsState(env, rawState, state, latestDefaultRecord, fetchImpl, coordinator, 'default')
+		}
 		return alreadyFallbackState(env, rawState, state, latestRecord, fetchImpl, coordinator)
 	}
 	if (!isEdgeOneRecord(latestRecord, env)) {
 		return manualDnsState(env, rawState, state, latestRecord, fetchImpl, coordinator)
 	}
-
-	const fallback = {
-		name: env.APEX_NAME || 'letletme.top',
-		type: 'A',
-		content: env.VERCEL_FALLBACK_A,
-		ttl: Number(env.VERCEL_FALLBACK_TTL) || 1,
-		proxied: true
+	const latestDefaultRecord = await getDefaultVercelRecord(env, fetchImpl)
+	if (!isDefaultVercelRecord(latestDefaultRecord, env)) {
+		return manualDnsState(env, rawState, state, latestDefaultRecord, fetchImpl, coordinator, 'default')
 	}
-	let updated
+	const latestEnabledMainlandApexRecords = await getEnabledMainlandApexRecords(env, fetchImpl)
+	if (
+		latestEnabledMainlandApexRecords.length !== 1 ||
+		!latestEnabledMainlandApexRecords.some(record => isEnabledRecord(record, env))
+	) {
+		return manualDnsState(env, rawState, state, latestRecord, fetchImpl, coordinator, 'regional')
+	}
+
+	let claim
 	try {
-		updated = await apiRequest(env, fetchImpl, 'PUT', '', fallback)
-		if (!isFallbackRecord(updated, env)) throw new Error('fallback-record-verification-failed')
+		claim = await coordinator.beginMutation(coordination.claimToken)
 	} catch (error) {
-		await coordinator.release()
+		const alertKey = `failover-mutation-lock:${env.DNSPOD_EDGEONE_RECORD_ID}`
+		const alertMessage = 'letletme watchdog 无法取得 DNSPod 故障转移锁；未修改 DNS，必须人工检查 watchdog 与 DNSPod。'
+		const alertAlreadySent = state.lastAlertKey === alertKey && !state.pendingAlert
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_failover_claim_verification_error',
+			error: error instanceof Error ? error.message : String(error)
+		}))
+		let next = {
+			...state,
+			failureCount: coordination.failureCount,
+			fallbackActive: false,
+			lastFailureAt: now,
+			lastAction: 'failover-mutation-begin-failed',
+			coordinatorResetPending: false,
+			lastAlertKey: alertAlreadySent ? alertKey : null,
+			pendingAlert: alertAlreadySent ? null : { key: alertKey, message: alertMessage }
+		}
+		try {
+			await saveState(env, rawState, next)
+		} catch (writeError) {
+			console.error(JSON.stringify({
+				event: 'edgeone_watchdog_failover_lock_state_prewrite_error',
+				error: writeError instanceof Error ? writeError.message : String(writeError)
+			}))
+		}
+		next = await applyAlert(env, next, alertKey, alertMessage, fetchImpl)
+		try {
+			await saveState(env, rawState, next)
+		} catch (writeError) {
+			console.error(JSON.stringify({
+				event: 'edgeone_watchdog_failover_lock_state_write_error',
+				error: writeError instanceof Error ? writeError.message : String(writeError)
+			}))
+		}
+		return { action: 'failover-mutation-begin-failed', state: next, edge, edgeVercel, vercel, releaseParity, record }
+	}
+	if (claim?.claimed !== true) {
+		const next = {
+			...state,
+			failureCount: Number.isInteger(claim?.failureCount) ? claim.failureCount : coordination.failureCount,
+			fallbackActive: false,
+			lastFailureAt: now,
+			lastAction: claim?.mutationHeld === true ? 'failover-mutation-held' : 'failover-claim-lost',
+			coordinatorResetPending: false
+		}
+		await saveState(env, rawState, next)
+		return {
+			action: claim?.mutationHeld === true ? 'failover-mutation-held' : 'failover-claim-lost',
+			state: next,
+			edge,
+			edgeVercel,
+			vercel,
+			releaseParity,
+			record
+		}
+	}
+
+	let updated
+	let mutationApplied = false
+	try {
+		updated = await disableConfiguredRecord(env, fetchImpl)
+		mutationApplied = true
+		const disabledRecord = await getConfiguredRecord(env, fetchImpl)
+		const enabledRegionalApexRecords = await getEnabledMainlandApexRecords(env, fetchImpl)
+		const postDisableDefaultRecord = await getDefaultVercelRecord(env, fetchImpl)
+		if (
+			!isFallbackRecord(disabledRecord, env) ||
+			enabledRegionalApexRecords.length !== 0 ||
+			!isDefaultVercelRecord(postDisableDefaultRecord, env)
+		) {
+			throw new Error('dnspod-disabled-record-verification-failed')
+		}
+	} catch (error) {
+		await failoverMutationFailure(
+			env,
+			rawState,
+			state,
+			error,
+			now,
+			fetchImpl,
+			coordinator,
+			mutationApplied
+		)
 		throw error
 	}
-	const alertKey = `fallback:${env.VERCEL_FALLBACK_A}`
-	const message = `letletme watchdog 已回退 Cloudflare → Vercel：EdgeOne 连续 ${failureCount} 次异常，Vercel 健康。`
+	const alertKey = `fallback:${env.DNSPOD_EDGEONE_RECORD_ID}`
+	const message = `letletme watchdog 已停用 DNSPod 境内 EdgeOne 记录：连续 ${failureCount} 次异常，Vercel 健康。`
 	let next = {
 		...state,
 		failureCount,
@@ -401,7 +745,7 @@ export async function runCheck(env, options = {}) {
 			error: error instanceof Error ? error.message : String(error)
 		}))
 	}
-	return { action: 'fallback-applied', state: next, edge, vercel, record, updated }
+	return { action: 'fallback-applied', state: next, edge, edgeVercel, vercel, releaseParity, record, updated }
 }
 
 export class FailoverCoordinator {
@@ -410,7 +754,13 @@ export class FailoverCoordinator {
 	}
 
 	async readState() {
-		return (await this.ctx.storage.get('state')) || { failureCount: 0, claimAt: 0 }
+		return (await this.ctx.storage.get('state')) || {
+			failureCount: 0,
+			claimAt: 0,
+			claimToken: null,
+			mutationAt: 0,
+			mutationToken: null
+		}
 	}
 
 	async writeState(state) {
@@ -423,22 +773,70 @@ export class FailoverCoordinator {
 		const state = await this.readState()
 		const now = Date.now()
 		if (operation === 'record-failure') {
+			const mutationFresh = state.mutationAt > 0 && now - state.mutationAt < MUTATION_TTL_MS
+			if (mutationFresh) {
+				return Response.json({
+					ok: true,
+					failureCount: state.failureCount,
+					shouldFailover: false,
+					claimHeld: true,
+					mutationHeld: true,
+					claimToken: null
+				})
+			}
 			const claimFresh = state.claimAt > 0 && now - state.claimAt < CLAIM_TTL_MS
 			if (claimFresh) {
-				return Response.json({ ok: true, failureCount: state.failureCount, shouldFailover: false, claimHeld: true })
+				return Response.json({ ok: true, failureCount: state.failureCount, shouldFailover: false, claimHeld: true, mutationHeld: false, claimToken: null })
 			}
 			const failureCount = Math.min(FAILURE_THRESHOLD, state.failureCount + 1)
 			const shouldFailover = failureCount >= FAILURE_THRESHOLD
-			await this.writeState({ failureCount, claimAt: shouldFailover ? now : 0 })
-			return Response.json({ ok: true, failureCount, shouldFailover, claimHeld: false })
+			const claimToken = shouldFailover ? crypto.randomUUID() : null
+			await this.writeState({
+				failureCount,
+				claimAt: shouldFailover ? now : 0,
+				claimToken,
+				mutationAt: 0,
+				mutationToken: null
+			})
+			return Response.json({ ok: true, failureCount, shouldFailover, claimHeld: false, mutationHeld: false, claimToken })
 		}
-		if (operation === 'reset' || operation === 'confirm') {
-			await this.writeState({ failureCount: 0, claimAt: 0 })
+		if (operation === 'reset') {
+			const mutationFresh = state.mutationAt > 0 && now - state.mutationAt < MUTATION_TTL_MS
+			if (mutationFresh) {
+				return Response.json({ ok: true, failureCount: state.failureCount, mutationHeld: true })
+			}
+			await this.writeState({ failureCount: 0, claimAt: 0, claimToken: null, mutationAt: 0, mutationToken: null })
+			return Response.json({ ok: true, failureCount: 0 })
+		}
+		if (operation === 'confirm') {
+			await this.writeState({ failureCount: 0, claimAt: 0, claimToken: null, mutationAt: 0, mutationToken: null })
 			return Response.json({ ok: true, failureCount: 0 })
 		}
 		if (operation === 'release') {
-			await this.writeState({ ...state, claimAt: 0 })
+			await this.writeState({ ...state, claimAt: 0, claimToken: null, mutationAt: 0, mutationToken: null })
 			return Response.json({ ok: true, failureCount: state.failureCount })
+		}
+		if (operation === 'begin-mutation') {
+			const payload = await request.json().catch(() => null)
+			const mutationFresh = state.mutationAt > 0 && now - state.mutationAt < MUTATION_TTL_MS
+			if (mutationFresh) {
+				return Response.json({ ok: true, claimed: false, mutationHeld: true, failureCount: state.failureCount })
+			}
+			const claimFresh = state.claimAt > 0 && now - state.claimAt < CLAIM_TTL_MS
+			const claimed = Boolean(
+				claimFresh &&
+				state.failureCount >= FAILURE_THRESHOLD &&
+				typeof payload?.claimToken === 'string' &&
+				payload.claimToken === state.claimToken
+			)
+			if (claimed) {
+				await this.writeState({
+					...state,
+					mutationAt: now,
+					mutationToken: payload.claimToken
+				})
+			}
+			return Response.json({ ok: true, claimed, mutationHeld: claimed, failureCount: state.failureCount })
 		}
 		return new Response('not-found', { status: 404 })
 	}
