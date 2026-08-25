@@ -24,7 +24,11 @@ export function validateCidr(value, family, label = 'CIDR') {
 		throw new Error(`${label} is not a CIDR: ${value}`)
 	}
 	const address = value.slice(0, separator)
-	const prefix = Number(value.slice(separator + 1))
+	const prefixText = value.slice(separator + 1)
+	if (!/^(?:0|[1-9][0-9]*)$/.test(prefixText)) {
+		throw new Error(`${label} is not a valid IPv${family} CIDR: ${value}`)
+	}
+	const prefix = Number(prefixText)
 	const maxPrefix = family === 4 ? 32 : 128
 	if (isIP(address) !== family || !Number.isInteger(prefix) || prefix < 1 || prefix > maxPrefix) {
 		throw new Error(`${label} is not a valid IPv${family} CIDR: ${value}`)
@@ -42,8 +46,7 @@ function validateAddressList(value, family, label) {
 	return [...new Set(value.map((item, index) => validateCidr(item, family, `${label}[${index}]`)))].sort()
 }
 
-function normalizeAclVersion(value, label, required) {
-	if (value == null && !required) return null
+function normalizeAclVersion(value, label) {
 	if (typeof value !== 'string' || value.length === 0) {
 		throw new Error(`${label} version is missing`)
 	}
@@ -56,7 +59,7 @@ function normalizeAclBlock(value, label, required) {
 		throw new Error(`${label} is missing EntireAddresses`)
 	}
 	return {
-		version: normalizeAclVersion(value.Version, label, required),
+		version: normalizeAclVersion(value.Version, label),
 		activeTime: value.ActiveTime ?? null,
 		plannedActiveTime: value.PlannedActiveTime ?? null,
 		isPlanned: value.IsPlaned ?? null,

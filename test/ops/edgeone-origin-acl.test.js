@@ -9,6 +9,9 @@ test('validates non-default IPv4 and IPv6 CIDRs', () => {
 	assert.throws(() => validateCidr('0.0.0.0/0', 4), /valid IPv4 CIDR/)
 	assert.throws(() => validateCidr('43.174.0.0/33', 4), /valid IPv4 CIDR/)
 	assert.throws(() => validateCidr('43.174.0.0/16', 6), /valid IPv6 CIDR/)
+	assert.throws(() => validateCidr('43.174.0.0/0x10', 4), /valid IPv4 CIDR/)
+	assert.throws(() => validateCidr('43.174.0.0/1e1', 4), /valid IPv4 CIDR/)
+	assert.throws(() => validateCidr('43.174.0.0/016', 4), /valid IPv4 CIDR/)
 })
 
 test('normalizes and deduplicates current and next ACL ranges', () => {
@@ -45,4 +48,17 @@ test('rejects an ACL without an active complete address set', () => {
 		Status: 'online',
 		CurrentOriginACL: { Version: 'acl-current', EntireAddresses: { IPv4: [], IPv6: [] } }
 	}), /must contain at least one address/)
+})
+
+test('rejects a populated next ACL without a version', () => {
+	assert.throws(() => normalizeOriginAcl({
+		Status: 'online',
+		CurrentOriginACL: {
+			Version: 'acl-current',
+			EntireAddresses: { IPv4: ['43.174.0.0/16'], IPv6: ['240e:1234::/32'] }
+		},
+		NextOriginACL: {
+			EntireAddresses: { IPv4: ['43.175.0.0/16'], IPv6: ['240e:5678::/32'] }
+		}
+	}), /NextOriginACL version is missing/)
 })

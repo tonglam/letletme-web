@@ -15,9 +15,14 @@ jobs:
       - name: Check out the current production source
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Verify the workflow was dispatched from main
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: test "$DISPATCH_REF" = "refs/heads/main"
 
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -32,7 +37,7 @@ jobs:
         run: node ops/release/edgeone-origin-acl.mjs > edgeone-origin-acl.json
 
       - name: Upload the validated ACL evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: edgeone-origin-acl-${{ github.run_id }}
           path: edgeone-origin-acl.json
