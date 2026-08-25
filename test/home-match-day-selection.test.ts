@@ -12,12 +12,22 @@ test('home fixture tabs prefer the current local date', () => {
 	)
 })
 
-test('home fixture tabs fall back to the first available date', () => {
+test('home fixture tabs prefer the nearest future date', () => {
 	assert.equal(
 		resolvePreferredHomeMatchDayKey(
 			[{ dateKey: '2026-08-22' }, { dateKey: '2026-08-24' }],
 			new Date(2026, 7, 23, 1)
 		),
-		'2026-08-22'
+		'2026-08-24'
+	)
+})
+
+test('home fixture tabs use the latest past date when no future date exists', () => {
+	assert.equal(
+		resolvePreferredHomeMatchDayKey(
+			[{ dateKey: '2026-08-22' }, { dateKey: '2026-08-24' }],
+			new Date(2026, 7, 25, 1)
+		),
+		'2026-08-24'
 	)
 })

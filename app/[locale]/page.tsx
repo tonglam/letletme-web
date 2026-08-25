@@ -552,11 +552,30 @@ async function HomePerformanceSection() {
 
 async function HomeFixturesSection() {
 	const bootstrap = await getHomePublicBootstrap().catch(() => null)
+	const currentEventId = bootstrap?.context.currentEventId ?? null
+	const nextEventId = bootstrap?.context.nextEventId ?? null
 	const eventId =
 		bootstrap?.context.currentEventId ?? bootstrap?.context.nextEventId ?? null
-	const initialFixtures = eventId
+	let initialFixtures = eventId
 		? await loadHomeFixtures(eventId).catch(() => null)
 		: null
+
+	// Core keeps the current event until the next deadline, even after every
+	// fixture in that event has settled. The home desk is date-oriented, so
+	// move to the next event once the current one is over.
+	if (
+		initialFixtures &&
+		currentEventId !== null &&
+		nextEventId !== null &&
+		nextEventId !== currentEventId &&
+		(initialFixtures.state === 'SETTLED' ||
+			(initialFixtures.fixtures.length > 0 &&
+				initialFixtures.fixtures.every(fixture => fixture.finished)))
+	) {
+		initialFixtures = await loadHomeFixtures(nextEventId).catch(
+			() => initialFixtures
+		)
+	}
 	const fixturesSeedKey = initialFixtures
 		? `${initialFixtures.season}:${initialFixtures.source}:${initialFixtures.state}:${initialFixtures.revision}:${initialFixtures.eventId}`
 		: `${bootstrap?.context.season ?? 'unknown'}:${bootstrap?.context.revision ?? 'unknown'}:none`

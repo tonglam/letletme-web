@@ -358,14 +358,20 @@ export function HomeMarketCarousel({
 	if (!slides.some(slide => slide.enabled !== false)) return null
 
 	return (
-		<Card className="flex h-full flex-col rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8">
+		<Card
+			aria-labelledby="home-market-title"
+			className="flex h-full flex-col rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8"
+		>
 			<HomeAutoCarousel
 				slides={slides}
 				labels={labels}
 				dataAttribute="market"
 				renderHeader={slide => (
 					<div>
-						<h2 className="font-display text-xl font-bold uppercase tracking-wide">
+						<h2
+							id="home-market-title"
+							className="font-display text-xl font-bold uppercase tracking-wide"
+						>
 							{slide.label}
 						</h2>
 						<p className="mt-1 max-w-sm text-xs text-muted-foreground">

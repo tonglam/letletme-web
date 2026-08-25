@@ -79,8 +79,8 @@ function getPreferredTab(matches: Match[]): LiveMatchesTab {
 
 	if (hasLive) return 'live'
 	if (hasNotStarted) return 'not-started'
-	if (hasFinished) return 'finished'
 	if (hasUpcoming) return 'upcoming'
+	if (hasFinished) return 'finished'
 	return 'live'
 }
 
