@@ -131,6 +131,11 @@ For a staged Vercel CLI release, use a remote Production build with
 runtime `LETLETME_RELEASE_SHA`. Do not use `vercel pull` plus a local
 `vercel build`: Vercel intentionally returns empty placeholders for sensitive
 Production variables, so that build cannot reproduce the hosted environment.
+Create the unaliased candidate with `--no-wait`, then require
+`vercel inspect --wait` to report a `READY` Production deployment and use
+`vercel curl` to verify the protected `/healthz` endpoint. Vercel CLI 52 can
+otherwise wait for an alias event that `--skip-domain` intentionally suppresses
+and return a non-zero exit after a healthy candidate has already been created.
 A Vercel Git deployment obtains the SHA from `VERCEL_GIT_COMMIT_SHA`. Builds
 without either value fail before upload.
 

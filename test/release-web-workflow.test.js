@@ -33,8 +33,8 @@ test('Vercel CI uses the scoped project environment without relinking', () => {
 		'VERCEL_ORG_ID and VERCEL_PROJECT_ID must replace interactive project linking in CI'
 	)
 	const vercelCommands = extractVercelCommands(workflow)
-	assert.equal(vercelCommands.length, 2, 'the release must contain exactly two Vercel commands')
-	for (const command of ['deploy', 'promote']) {
+	assert.equal(vercelCommands.length, 4, 'the release must contain exactly four Vercel commands')
+	for (const command of ['deploy', 'inspect', 'curl', 'promote']) {
 		const matches = vercelCommands.filter((line) =>
 			line.startsWith(`npx --yes "vercel@\${VERCEL_CLI_VERSION}" ${command} `)
 		)
@@ -55,6 +55,7 @@ test('Vercel candidate uses a remote unaliased Production build', () => {
 	assert.ok(deployCommand, 'the staged remote deployment command must exist')
 	assert.match(deployCommand, /(?:^|\s)--prod(?:\s|$)/)
 	assert.match(deployCommand, /(?:^|\s)--skip-domain(?:\s|$)/)
+	assert.match(deployCommand, /(?:^|\s)--no-wait(?:\s|$)/)
 	assert.match(deployCommand, /(?:^|\s)--force(?:\s|$)/)
 	assert.match(
 		deployCommand,
@@ -67,4 +68,34 @@ test('Vercel candidate uses a remote unaliased Production build', () => {
 	assert.match(deployCommand, /(?:^|\s)--meta "gitSha=\$RELEASE_SHA"(?:\s|$)/)
 	assert.doesNotMatch(deployCommand, /(?:^|\s)--prebuilt(?:\s|$)/)
 	assert.doesNotMatch(workflow, /vercel@\$\{VERCEL_CLI_VERSION\}" (?:pull|build)(?:\s|\\)/)
+})
+
+test('Vercel candidate reaches READY and passes protected health verification before routing changes', () => {
+	const commands = extractVercelCommands(workflow)
+	const inspectCommand = commands.find((line) =>
+		line.startsWith('npx --yes "vercel@${VERCEL_CLI_VERSION}" inspect ')
+	)
+	const curlCommand = commands.find((line) =>
+		line.startsWith('npx --yes "vercel@${VERCEL_CLI_VERSION}" curl ')
+	)
+
+	assert.match(inspectCommand, /(?:^|\s)--wait(?:\s|$)/)
+	assert.match(inspectCommand, /(?:^|\s)--timeout 10m(?:\s|$)/)
+	assert.match(inspectCommand, /(?:^|\s)--format=json(?:\s|$)/)
+	assert.match(curlCommand, /(?:^|\s)curl \/healthz(?:\s|$)/)
+	assert.match(curlCommand, /(?:^|\s)--deployment "\$candidate_url"(?:\s|$)/)
+	assert.match(workflow, /value\.readyState !== "READY"/)
+	assert.match(workflow, /value\.target !== "production"/)
+	assert.match(workflow, /value\.release !== process\.env\.RELEASE_SHA/)
+
+	const readyCheck = workflow.indexOf('value.readyState !== "READY"')
+	const healthCheck = workflow.indexOf('value.release !== process.env.RELEASE_SHA')
+	const routeChange = workflow.indexOf('node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null')
+	assert.ok(readyCheck >= 0 && readyCheck < routeChange)
+	assert.ok(healthCheck >= 0 && healthCheck < routeChange)
+	assert.doesNotMatch(
+		workflow,
+		/curl[^\n]*"https:\/\/\$CANDIDATE_URL\/healthz"/,
+		'protected staged deployments must use vercel curl rather than unauthenticated curl'
+	)
 })
