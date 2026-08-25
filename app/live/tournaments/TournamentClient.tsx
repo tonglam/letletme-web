@@ -44,9 +44,7 @@ import {
 	writeLiveBoardLastGood,
 	type LiveBoardFilterState
 } from '@/lib/tournament/live-board'
-import {
-	formatLiveAveragePoints
-} from '@/lib/tournament/liveEntries'
+import { formatLiveAveragePoints } from '@/lib/tournament/liveEntries'
 import {
 	areTournamentStandingsReady,
 	isTournamentSetupPollingPending
@@ -140,7 +138,10 @@ const boardPartialMessage = (
 	) {
 		return messages.warming
 	}
-	if (page.unavailableEntryCount > 0 || page.managerDataAvailability === 'UNAVAILABLE') {
+	if (
+		page.unavailableEntryCount > 0 ||
+		page.managerDataAvailability === 'UNAVAILABLE'
+	) {
 		return messages.unavailable
 	}
 	return null
@@ -922,8 +923,7 @@ export default function TournamentClient({
 		if (showingLastGood) return t('showingLastGood')
 		if (boardPage.failedEntryCount > 0)
 			return t('calculationFailed', { count: boardPage.failedEntryCount })
-		if (boardPage.deferredEntryCount > 0)
-			return t('coverageWarming')
+		if (boardPage.deferredEntryCount > 0) return t('coverageWarming')
 		if (boardPage.unavailableEntryCount > 0)
 			return t('unavailableCalculation', {
 				count: boardPage.unavailableEntryCount
@@ -989,7 +989,7 @@ export default function TournamentClient({
 		selectedTournament &&
 		standingsReady &&
 		selectedGameweek === currentGameweek &&
-		hasContent &&
+		hasBoard &&
 		rateLimitSeconds === 0
 	)
 	const serverControl = useMemo(

@@ -412,7 +412,7 @@ export default function TournamentDetailClient({
 	)
 	const snapshotRef = useRef<LiveSnapshotStatus | null>(initialSnapshot ?? null)
 	const [isRefreshing, setIsRefreshing] = useState(false)
-	const refreshInFlightRef = useRef<Promise<void> | null>(null)
+	const refreshInFlightRef = useRef<Map<string, Promise<void>>>(new Map())
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
 	const failedEntryCountRef = useRef(softError ? 1 : 0)
 	const refreshGenerationRef = useRef(0)
@@ -567,7 +567,8 @@ export default function TournamentDetailClient({
 			direction: EntryLiveCompetitionBoardSortDirection = boardSort.direction ===
 			'asc'
 				? 'ASC'
-				: 'DESC'
+				: 'DESC',
+			search = searchQuery.trim()
 		): Promise<void> => {
 			if (
 				!currentTournament ||
@@ -580,8 +581,18 @@ export default function TournamentDetailClient({
 			}
 			const eventId = currentGameweek
 			const viewerEntryId = entryId
-			if (refreshInFlightRef.current) return refreshInFlightRef.current
-			refreshGenerationRef.current += 1
+			const requestKey = JSON.stringify({
+				tournamentId: currentTournament.id,
+				viewerEntryId,
+				eventId,
+				sort,
+				direction,
+				search
+			})
+			const existing = refreshInFlightRef.current.get(requestKey)
+			if (existing) return existing
+			const requestGeneration = refreshGenerationRef.current + 1
+			refreshGenerationRef.current = requestGeneration
 
 			const request = (async () => {
 				try {
@@ -597,9 +608,11 @@ export default function TournamentDetailClient({
 							pageSize: 20,
 							ref: null,
 							sort,
-							direction
+							direction,
+							search: search || null
 						}
 					)
+					if (requestGeneration !== refreshGenerationRef.current) return
 					setBoardPage(page)
 					failedEntryCountRef.current = page.failedEntryCount
 					setRows(page.rows.map(boardRowToCalcData))
@@ -625,6 +638,7 @@ export default function TournamentDetailClient({
 							})
 						)
 				} catch (refreshError) {
+					if (requestGeneration !== refreshGenerationRef.current) return
 					console.error(
 						'Failed to refresh live tournament standings:',
 						refreshError
@@ -636,14 +650,12 @@ export default function TournamentDetailClient({
 							: t('standingsFailed')
 					)
 				} finally {
-					setIsRefreshing(false)
+					refreshInFlightRef.current.delete(requestKey)
+					setIsRefreshing(refreshInFlightRef.current.size > 0)
 				}
 			})()
-			refreshInFlightRef.current = request
-			void request.finally(() => {
-				if (refreshInFlightRef.current === request)
-					refreshInFlightRef.current = null
-			})
+			refreshInFlightRef.current.set(requestKey, request)
+			setIsRefreshing(true)
 			return request
 		},
 		[
@@ -654,9 +666,35 @@ export default function TournamentDetailClient({
 			isOfficialH2H,
 			standingsReady,
 			t,
-			boardSort
+			boardSort,
+			searchQuery
 		]
 	)
+
+	const previousSearchQueryRef = useRef(searchQuery)
+	useEffect(() => {
+		const previous = previousSearchQueryRef.current
+		previousSearchQueryRef.current = searchQuery
+		if (
+			previous === searchQuery ||
+			!boardPage ||
+			!currentTournament ||
+			!standingsReady ||
+			!currentGameweek ||
+			isOfficialH2H
+		)
+			return
+		const timer = window.setTimeout(() => void refreshStandings(), 250)
+		return () => window.clearTimeout(timer)
+	}, [
+		boardPage,
+		currentGameweek,
+		currentTournament,
+		isOfficialH2H,
+		refreshStandings,
+		searchQuery,
+		standingsReady
+	])
 
 	const loadMoreStandings = useCallback(async (): Promise<void> => {
 		if (
@@ -680,6 +718,7 @@ export default function TournamentDetailClient({
 				pageSize: 20,
 				sort: tableSortToBoardSort(boardSort.column),
 				direction: boardSort.direction === 'asc' ? 'ASC' : 'DESC',
+				search: searchQuery.trim() || null,
 				expectedBoardRevision: boardPage.boardRevision
 			})
 			setBoardPage(next)
@@ -710,6 +749,7 @@ export default function TournamentDetailClient({
 		isOfficialH2H,
 		isRefreshing,
 		refreshStandings,
+		searchQuery,
 		t
 	])
 
@@ -798,7 +838,7 @@ export default function TournamentDetailClient({
 	)
 	const standingsStats = useMemo(() => buildTournamentStats(entries), [entries])
 	const liveServerControl = useMemo(() => {
-		if (!boardPage || isOfficialH2H || searchQuery.trim()) return undefined
+		if (!boardPage || isOfficialH2H) return undefined
 		return {
 			sortColumn: boardSort.column,
 			sortDirection: boardSort.direction,
@@ -825,8 +865,7 @@ export default function TournamentDetailClient({
 		isOfficialH2H,
 		isRefreshing,
 		loadMoreStandings,
-		refreshStandings,
-		searchQuery
+		refreshStandings
 	])
 	const insightsReady = currentTournament
 		? areTournamentInsightsReady(currentTournament)

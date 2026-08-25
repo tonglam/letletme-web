@@ -212,7 +212,9 @@ export async function POST(
 		const status =
 			code === 'LIVE_BOARD_REVISION_GONE' || code === 'LIVE_REVISION_GONE'
 				? 409
-				: error instanceof GraphQLRequestError && error.status === 429
+				: code === 'RATE_LIMITED' ||
+					  code === 'UPSTREAM_RATE_LIMITED' ||
+					  (error instanceof GraphQLRequestError && error.status === 429)
 					? 429
 					: code === 'BAD_USER_INPUT'
 						? 400
