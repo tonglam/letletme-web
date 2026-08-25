@@ -4,6 +4,7 @@ import { parse, visit } from 'graphql'
 import { GET_GAMEWEEK_DESK } from '../lib/graphql/operations/gameweek'
 import {
 	gameweekDeskCacheControl,
+	GAMEWEEK_DESK_FINAL_CACHE_CONTROL,
 	GAMEWEEK_DESK_SETTLED_CACHE_CONTROL,
 	isGameweekDeskData,
 	loadGameweekDeskWithExecutor,
@@ -108,6 +109,19 @@ describe('gameweek desk contract', () => {
 		)
 		assert.match(GAMEWEEK_DESK_SETTLED_CACHE_CONTROL, /s-maxage=60/)
 		assert.match(GAMEWEEK_DESK_SETTLED_CACHE_CONTROL, /stale-while-revalidate=60/)
+		assert.equal(
+			gameweekDeskCacheControl(
+				desk({
+					lifecycle: 'SETTLED',
+					liveRevision: '1230',
+					overviewState: 'AVAILABLE',
+					boardsState: 'AVAILABLE'
+				})
+			),
+			GAMEWEEK_DESK_FINAL_CACHE_CONTROL
+		)
+		assert.match(GAMEWEEK_DESK_FINAL_CACHE_CONTROL, /s-maxage=3600/)
+		assert.match(GAMEWEEK_DESK_FINAL_CACHE_CONTROL, /stale-while-revalidate=86400/)
 		assert.match(
 			gameweekDeskCacheControl(
 				desk({ lifecycle: 'SETTLED', overviewState: 'PENDING' })
