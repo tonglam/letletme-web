@@ -45,9 +45,10 @@ The manually observed EdgeOne node addresses are not a source allowlist. Use
 the `EdgeOne origin ACL query` workflow with the production environment to
 retrieve and validate the current IPv4/IPv6 ranges from `DescribeOriginACL`
 and the scoped canary route from `DescribeL7AccRules`. The workflow is
-read-only and stores the validated ACL plus safe enable/disable route snapshots
-as a short-lived artifact; it does not change EdgeOne, DNS, UFW, or application
-traffic.
+read-only and runs those queries as independent jobs. It stores the validated
+ACL and safe enable/disable route snapshots as separate short-lived artifacts;
+an ACL that is not provisioned must not prevent the release-route snapshot from
+being captured. It does not change EdgeOne, DNS, UFW, or application traffic.
 
 Before applying a new list to UFW, review both `current` and `next` versions in
 the artifact. Apply only the current list after confirming its version and

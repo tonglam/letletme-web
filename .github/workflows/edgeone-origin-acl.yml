@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  query:
+  acl:
     name: Query current EdgeOne origin ranges
     runs-on: ubuntu-latest
     environment: production
@@ -36,6 +36,35 @@ jobs:
           EDGEONE_ZONE_ID: ${{ secrets.EDGEONE_ZONE_ID }}
         run: node ops/release/edgeone-origin-acl.mjs > edgeone-origin-acl.json
 
+      - name: Upload the validated ACL evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: edgeone-origin-acl-${{ github.run_id }}
+          path: edgeone-origin-acl.json
+          retention-days: 7
+
+  route:
+    name: Query scoped EdgeOne release route
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Check out the current production source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify the workflow was dispatched from main
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: test "$DISPATCH_REF" = "refs/heads/main"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
       - name: Query and validate the scoped release rule
         env:
           TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_ID }}
@@ -44,11 +73,9 @@ jobs:
           EDGEONE_RULE_ID: ${{ secrets.EDGEONE_RULE_ID }}
         run: node ops/release/edgeone-mode.mjs --mode snapshots > edgeone-route-snapshots.json
 
-      - name: Upload the validated ACL evidence
+      - name: Upload the validated route snapshots
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: edgeone-origin-acl-${{ github.run_id }}
-          path: |
-            edgeone-origin-acl.json
-            edgeone-route-snapshots.json
+          name: edgeone-route-snapshots-${{ github.run_id }}
+          path: edgeone-route-snapshots.json
           retention-days: 7
