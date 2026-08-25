@@ -126,10 +126,13 @@ ID instead; reusing a commit-derived custom ID there would make a redeploy of
 the same commit fail. The gate does not mistake the internal BUILD_ID file for
 the release SHA.
 
-For a Vercel CLI production build, pass the full commit SHA explicitly as both
-build-time and runtime `LETLETME_RELEASE_SHA`; a Vercel Git deployment obtains
-the same value from `VERCEL_GIT_COMMIT_SHA`. Builds without either value fail
-before upload.
+For a staged Vercel CLI release, use a remote Production build with
+`--skip-domain`, and pass the full commit SHA explicitly as both build-time and
+runtime `LETLETME_RELEASE_SHA`. Do not use `vercel pull` plus a local
+`vercel build`: Vercel intentionally returns empty placeholders for sensitive
+Production variables, so that build cannot reproduce the hosted environment.
+A Vercel Git deployment obtains the SHA from `VERCEL_GIT_COMMIT_SHA`. Builds
+without either value fail before upload.
 
 ## Current public Web routing
 
