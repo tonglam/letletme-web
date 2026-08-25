@@ -30,7 +30,8 @@ function mapActualPriceChanges(desk: HomeMarketDesk): {
 	// An EMPTY section has no player row to carry changeDate. Keep the
 	// publication's captured date so the no-change state still tells the user
 	// when the data was last refreshed.
-	const date = desk.priceChanges[0]?.changeDate ?? desk.capturedAt
+	const date =
+		desk.priceChanges[0]?.changeDate ?? desk.capturedAt?.slice(0, 10) ?? null
 	return {
 		date,
 		changes: desk.priceChanges.filter(change => change.change !== 0)
