@@ -36,9 +36,19 @@ jobs:
           EDGEONE_ZONE_ID: ${{ secrets.EDGEONE_ZONE_ID }}
         run: node ops/release/edgeone-origin-acl.mjs > edgeone-origin-acl.json
 
+      - name: Query and validate the scoped release rule
+        env:
+          TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_ID }}
+          TENCENTCLOUD_SECRET_KEY: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_KEY }}
+          EDGEONE_ZONE_ID: ${{ secrets.EDGEONE_ZONE_ID }}
+          EDGEONE_RULE_ID: ${{ secrets.EDGEONE_RULE_ID }}
+        run: node ops/release/edgeone-mode.mjs --mode snapshots > edgeone-route-snapshots.json
+
       - name: Upload the validated ACL evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: edgeone-origin-acl-${{ github.run_id }}
-          path: edgeone-origin-acl.json
+          path: |
+            edgeone-origin-acl.json
+            edgeone-route-snapshots.json
           retention-days: 7
