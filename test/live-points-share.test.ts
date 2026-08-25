@@ -187,6 +187,34 @@ describe('formatLivePointsShareText', () => {
 		)
 	})
 
+	it('uses the promoted captain from the projected player list in the header', () => {
+		const promotedPlayers = starting.map(player => ({
+			...player,
+			isCaptain: player.name === 'Raya',
+			isViceCaptain: false
+		}))
+		const text = formatLivePointsShareText({
+			gameweek: 1,
+			liveData: {
+				entry: 6953,
+				entryName: 'Projected XI',
+				playerName: 'Manager',
+				livePoints: 20,
+				liveNetPoints: 20,
+				liveTotalPoints: 20,
+				transferCost: 0,
+				chip: null,
+				captainName: 'Haaland'
+			},
+			startingPlayers: promotedPlayers,
+			benchPlayers: bench,
+			labels: { ...labels, footer: undefined }
+		})
+
+		assert.match(text, /Chip: None · C: Raya/)
+		assert.doesNotMatch(text, /C: Haaland/)
+	})
+
 	it('does not share an entry-summary value as a live score', () => {
 		const text = formatLivePointsShareText({
 			gameweek: 1,

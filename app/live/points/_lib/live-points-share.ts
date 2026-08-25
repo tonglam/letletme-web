@@ -142,12 +142,15 @@ export function formatLivePointsShareText({
 	const eventPoints = score?.eventPoints ?? null
 	const totalPoints = score?.totalScope === 'OVERALL' ? score.totalPoints : null
 	const netText = netPoints == null ? '—' : String(netPoints)
+	const captainName =
+		[...startingPlayers, ...benchPlayers].find(player => player.isCaptain)
+			?.name ?? liveData.captainName
 
 	const header = [
 		`# ${teamName} · GW${gameweek}`,
 		manager ? manager : null,
 		`${labels.live}: **${eventPoints == null ? '—' : eventPoints}**${hitsPart} · ${labels.net}: ${netText} · ${labels.season}: ${totalPoints == null ? '—' : totalPoints}`,
-		`${labels.chip}: ${chip} · ${labels.captain}: ${liveData.captainName || '—'}`
+		`${labels.chip}: ${chip} · ${labels.captain}: ${captainName || '—'}`
 	]
 		.filter(Boolean)
 		.join('\n')

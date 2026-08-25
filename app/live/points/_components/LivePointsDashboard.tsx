@@ -142,6 +142,26 @@ export function LivePointsDashboard({
 		captain: t('captain'),
 		viceCaptain: t('viceCaptain'),
 		total: t('pitchTotalPoints'),
+		autoSub: (player: {
+			webName: string
+			autoSubRole?: string
+			autoSubPartnerName?: string
+		}) => {
+			const incoming = player.autoSubRole?.endsWith('_IN') ?? false
+			const official = player.autoSubRole?.startsWith('OFFICIAL_') ?? false
+			const label = official
+				? incoming
+					? 'officialAutoSubInLabel'
+					: 'officialAutoSubOutLabel'
+				: incoming
+					? 'autoSubInLabel'
+					: 'autoSubOutLabel'
+
+			return t(label, {
+				player: player.webName,
+				partner: player.autoSubPartnerName ?? t('autoSubUnknownPlayer')
+			})
+		},
 		playerDetails: (player: { webName: string }) =>
 			t('viewPlayer', { player: player.webName })
 	}

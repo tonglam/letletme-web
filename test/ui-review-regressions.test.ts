@@ -13,16 +13,72 @@ describe('route contract', () => {
 })
 
 describe('theme bootstrap', () => {
-	it('inlines the theme bootstrap script in the locale layout head', async () => {
-		const source = await readFile(
-			new URL('../app/[locale]/layout.tsx', import.meta.url),
-			'utf8'
-		)
+	it('keeps only the minimal theme selection render-blocking', async () => {
+		const [layout, bootstrap, shellReady] = await Promise.all([
+			readFile(new URL('../app/[locale]/layout.tsx', import.meta.url), 'utf8'),
+			readFile(
+				new URL('../public/theme-bootstrap.js', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/layout/ShellControlsReady.tsx', import.meta.url),
+				'utf8'
+			)
+		])
 
-		assert.ok(source.includes('id="theme-bootstrap"'))
-		assert.ok(source.includes('dangerouslySetInnerHTML'))
-		assert.ok(source.includes("localStorage.getItem('theme')"))
-		assert.equal(source.includes('strategy="afterInteractive"'), false)
+		assert.ok(layout.includes('id="theme-bootstrap"'))
+		assert.match(
+			layout,
+			/id="theme-bootstrap"[\s\S]*dangerouslySetInnerHTML=\{\{ __html: themeBootstrapScript \}\}/
+		)
+		assert.match(
+			layout,
+			/id="shell-controls-bootstrap"[\s\S]*data-cfasync="false"[\s\S]*src="\/theme-bootstrap\.js"[\s\S]*defer/
+		)
+		assert.doesNotMatch(layout, /blocking="render"|fetchPriority="high"/)
+		assert.match(layout, /const themeBootstrapScript = `[\s\S]*localStorage/)
+		assert.ok(bootstrap.includes("localStorage.getItem('theme')"))
+		assert.match(bootstrap, /data-shell-hydrated[\s\S]*shellReadyEvent/)
+		assert.ok(shellReady.includes("'letletme:shell-ready'"))
+	})
+})
+
+describe('live auto-sub presentation', () => {
+	it('reorders the existing XI instead of rendering a separate prediction panel', async () => {
+		const [dashboard, model, playerRow, squadPitch] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/live/points/_components/LivePointsDashboard.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/live/points/_lib/live-points-model.ts',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/live/PlayerRow.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/squad-pitch/SquadPitch.tsx', import.meta.url),
+				'utf8'
+			)
+		])
+
+		assert.doesNotMatch(dashboard, /LiveAutoSubSummary|pitchProjected/)
+		assert.match(
+			model,
+			/activePlayerIds[\s\S]*const isBench = !activePlayerIds\.has\(playerId\)/
+		)
+		for (const source of [playerRow, squadPitch]) {
+			assert.doesNotMatch(source, />\s*AS\{[^}]+\}\s*</)
+			assert.match(source, /\{\w+ \? '↑' : '↓'\}/)
+		}
 	})
 })
 
@@ -74,7 +130,10 @@ describe('live tournament filter visibility', () => {
 	it('keeps both advanced filters recoverable after dismissal', async () => {
 		const [clientSource, ownershipSource, exposureSource] = await Promise.all([
 			readFile(
-				new URL('../app/live/tournaments/TournamentClient.tsx', import.meta.url),
+				new URL(
+					'../app/live/tournaments/TournamentClient.tsx',
+					import.meta.url
+				),
 				'utf8'
 			),
 			readFile(
@@ -85,10 +144,7 @@ describe('live tournament filter visibility', () => {
 				'utf8'
 			),
 			readFile(
-				new URL(
-					'../components/player/TeamExposureFilter.tsx',
-					import.meta.url
-				),
+				new URL('../components/player/TeamExposureFilter.tsx', import.meta.url),
 				'utf8'
 			)
 		])
