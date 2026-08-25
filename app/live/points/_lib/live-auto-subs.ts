@@ -102,6 +102,129 @@ const isOfficialLineup = (live: ProjectionInput): boolean =>
 	live.snapshot?.state === 'SETTLED' ||
 	live.snapshot?.state === 'FINALIZED'
 
+const deriveOfficialProjection = ({
+	picks,
+	picksById,
+	effectivePositions,
+	benchBoostActive
+}: {
+	picks: LivePick[]
+	picksById: ReadonlyMap<string, LivePick>
+	effectivePositions: Record<string, number>
+	benchBoostActive: boolean
+}): LiveAutoSubProjection => {
+	// Terminal entry rows already contain FPL's settled multipliers and active
+	// flags. They take precedence over any inference from minutes, including
+	// after a late official correction.
+	const hasPublishedActiveFlags = picks.every(
+		pick => typeof pick.pickActive === 'boolean'
+	)
+	const activeIds = new Set(
+		picks
+			.filter(pick =>
+				benchBoostActive
+					? pick.position <= 11
+					: hasPublishedActiveFlags
+						? pick.pickActive === true
+						: (pick.multiplier ?? 0) > 0
+			)
+			.map(pick => String(pick.element))
+	)
+	const originalCaptain = picks.find(pick => pick.isCaptain) ?? null
+	const publishedCaptain =
+		picks.find(pick => (pick.multiplier ?? 0) >= 2) ?? null
+	const captainPromotion =
+		originalCaptain &&
+		publishedCaptain &&
+		publishedCaptain.element !== originalCaptain.element
+			? {
+					playerInId: String(publishedCaptain.element),
+					playerInName: publishedCaptain.webName,
+					playerOutId: String(originalCaptain.element),
+					playerOutName: originalCaptain.webName,
+					state: 'OFFICIAL' as const
+				}
+			: null
+
+	if (benchBoostActive) {
+		return {
+			state: captainPromotion ? 'OFFICIAL' : 'NONE',
+			benchBoostActive,
+			substitutions: [],
+			captainPromotion,
+			activePlayerIds: Array.from(activeIds),
+			effectivePositions
+		}
+	}
+
+	const outgoing = picks
+		.filter(pick => pick.position <= 11 && !activeIds.has(String(pick.element)))
+		.sort((left, right) => left.position - right.position)
+	const incoming = picks
+		.filter(
+			pick =>
+				pick.position > 11 &&
+				activeIds.has(String(pick.element)) &&
+				(pick.autoSub === true || pick.pickActive === true)
+		)
+		.sort((left, right) => left.position - right.position)
+	const remainingOutgoing = [...outgoing]
+	const presentationActiveIds = new Set(
+		picks.filter(pick => pick.position <= 11).map(pick => String(pick.element))
+	)
+	const substitutions: LiveAutoSubstitution[] = []
+
+	for (const benchPlayer of incoming) {
+		if (remainingOutgoing.length === 0) break
+
+		// The public contract identifies the settled active players, but not the
+		// individual in/out pair. Reconstruct that label without ever changing
+		// the authoritative active set used to render the XI.
+		let outgoingIndex = remainingOutgoing.findIndex(starter => {
+			const nextActiveIds = new Set(presentationActiveIds)
+			nextActiveIds.delete(String(starter.element))
+			nextActiveIds.add(String(benchPlayer.element))
+			return isValidFormation(picksById, nextActiveIds)
+		})
+		if (outgoingIndex < 0) {
+			outgoingIndex = remainingOutgoing.findIndex(
+				starter =>
+					(starter.elementType === 1) === (benchPlayer.elementType === 1)
+			)
+		}
+		if (outgoingIndex < 0) outgoingIndex = 0
+
+		const [starter] = remainingOutgoing.splice(outgoingIndex, 1)
+		const starterId = String(starter.element)
+		const benchPlayerId = String(benchPlayer.element)
+		presentationActiveIds.delete(starterId)
+		presentationActiveIds.add(benchPlayerId)
+		effectivePositions[benchPlayerId] = starter.position
+		effectivePositions[starterId] = benchPlayer.position
+		substitutions.push({
+			playerInId: benchPlayerId,
+			playerInName: benchPlayer.webName,
+			playerInOriginalPosition: benchPlayer.position,
+			playerOutId: starterId,
+			playerOutName: starter.webName,
+			playerOutOriginalPosition: starter.position,
+			state: 'OFFICIAL'
+		})
+	}
+
+	return {
+		state:
+			substitutions.length > 0 || captainPromotion !== null
+				? 'OFFICIAL'
+				: 'NONE',
+		benchBoostActive,
+		substitutions,
+		captainPromotion,
+		activePlayerIds: Array.from(activeIds),
+		effectivePositions
+	}
+}
+
 /**
  * Derive the XI that should be shown right now.
  *
@@ -122,13 +245,20 @@ export function deriveLiveAutoSubProjection(
 	const effectivePositions = Object.fromEntries(
 		picks.map(pick => [String(pick.element), pick.position])
 	)
+	const benchBoostActive = isBenchBoostChip(live.chip)
+	if (isOfficialLineup(live)) {
+		return deriveOfficialProjection({
+			picks,
+			picksById,
+			effectivePositions,
+			benchBoostActive
+		})
+	}
+
 	const activeIds = new Set(
 		picks.filter(pick => pick.position <= 11).map(pick => String(pick.element))
 	)
-	const benchBoostActive = isBenchBoostChip(live.chip)
-	const state: Exclude<LiveAutoSubState, 'NONE'> = isOfficialLineup(live)
-		? 'OFFICIAL'
-		: 'PREDICTED'
+	const state: Exclude<LiveAutoSubState, 'NONE'> = 'PREDICTED'
 	const originalCaptain = picks.find(pick => pick.isCaptain) ?? null
 	const viceCaptain = picks.find(pick => pick.isViceCaptain) ?? null
 	const viceCaptainId = viceCaptain ? String(viceCaptain.element) : null

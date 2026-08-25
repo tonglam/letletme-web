@@ -198,6 +198,7 @@ export function mapLiveDataToPlayers(
 ): Player[] {
 	const autoSubProjection = deriveLiveAutoSubProjection(live)
 	const benchBoostActive = autoSubProjection.benchBoostActive
+	const activePlayerIds = new Set(autoSubProjection.activePlayerIds)
 	const sortedPicks = [...live.pickList].sort((left, right) => {
 		const leftPosition =
 			autoSubProjection.effectivePositions[String(left.element)] ??
@@ -216,18 +217,13 @@ export function mapLiveDataToPlayers(
 	>()
 	for (const substitution of autoSubProjection.substitutions) {
 		autoSubByPlayerId.set(substitution.playerInId, {
-			role:
-				substitution.state === 'OFFICIAL'
-					? 'OFFICIAL_IN'
-					: 'PREDICTED_IN',
+			role: substitution.state === 'OFFICIAL' ? 'OFFICIAL_IN' : 'PREDICTED_IN',
 			partnerName: substitution.playerOutName ?? undefined
 		})
 		if (substitution.playerOutId) {
 			autoSubByPlayerId.set(substitution.playerOutId, {
 				role:
-					substitution.state === 'OFFICIAL'
-						? 'OFFICIAL_OUT'
-						: 'PREDICTED_OUT',
+					substitution.state === 'OFFICIAL' ? 'OFFICIAL_OUT' : 'PREDICTED_OUT',
 				partnerName: substitution.playerInName
 			})
 		}
@@ -256,7 +252,7 @@ export function mapLiveDataToPlayers(
 		const isViceCaptain = autoSubProjection.captainPromotion
 			? false
 			: publishedViceCaptain
-		const isBench = effectivePosition >= 12
+		const isBench = !activePlayerIds.has(playerId)
 		const position = normalizePosition(pick.elementType, 'elementType')
 		const breakdownEntry = breakdownLookup.get(playerId)
 		const breakdownStats = breakdownEntry?.stats

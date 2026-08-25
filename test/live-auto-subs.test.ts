@@ -238,6 +238,17 @@ const sampleLive = (
 	...overrides
 })
 
+const settledPicks = (): LivePick[] =>
+	samplePicks().map(pick => {
+		if (pick.webName === 'Pedro Porro') {
+			return { ...pick, multiplier: 0, pickActive: false }
+		}
+		if (pick.webName === 'Diop') {
+			return { ...pick, multiplier: 1, pickActive: true, autoSub: true }
+		}
+		return pick
+	})
+
 describe('live automatic substitutions', () => {
 	it('uses bench order while preserving a legal FPL formation', () => {
 		const projection = deriveLiveAutoSubProjection(sampleLive())
@@ -435,23 +446,29 @@ describe('live automatic substitutions', () => {
 		assert.equal(projection.captainPromotion, null)
 	})
 
-	it('marks settled substitutions as official', () => {
+	it('uses the published active picks for a final lineup', () => {
 		const projection = deriveLiveAutoSubProjection(
-			sampleLive(samplePicks(), { score: liveScore(42, 'FINAL') })
+			sampleLive(settledPicks(), { score: liveScore(42, 'FINAL') })
 		)
 
 		assert.equal(projection.state, 'OFFICIAL')
-		assert.equal(
-			projection.substitutions.every(
-				substitution => substitution.state === 'OFFICIAL'
-			),
-			true
+		assert.deepEqual(
+			projection.substitutions.map(substitution => [
+				substitution.playerInName,
+				substitution.playerOutName,
+				substitution.state
+			]),
+			[['Diop', 'Pedro Porro', 'OFFICIAL']]
 		)
+		assert.equal(projection.activePlayerIds.includes('5'), true)
+		assert.equal(projection.activePlayerIds.includes('13'), false)
+		assert.equal(projection.activePlayerIds.includes('14'), true)
+		assert.equal(projection.activePlayerIds.includes('2'), false)
 	})
 
-	it('marks a settled snapshot as official before an entry score becomes final', () => {
+	it('uses published picks once the snapshot settles before the score is final', () => {
 		const projection = deriveLiveAutoSubProjection(
-			sampleLive(samplePicks(), {
+			sampleLive(settledPicks(), {
 				snapshot: {
 					eventId: 1,
 					revision: 'a'.repeat(24),
@@ -463,12 +480,34 @@ describe('live automatic substitutions', () => {
 		)
 
 		assert.equal(projection.state, 'OFFICIAL')
-		assert.equal(
-			projection.substitutions.every(
-				substitution => substitution.state === 'OFFICIAL'
-			),
-			true
+		assert.deepEqual(projection.activePlayerIds.sort(), [
+			'1',
+			'10',
+			'11',
+			'14',
+			'3',
+			'4',
+			'5',
+			'6',
+			'7',
+			'8',
+			'9'
+		])
+	})
+
+	it('uses the published multiplier for an official captain promotion', () => {
+		const picks = settledPicks().map(pick => {
+			if (pick.webName === 'Haaland') return { ...pick, multiplier: 1 }
+			if (pick.webName === 'Raya') return { ...pick, multiplier: 2 }
+			return pick
+		})
+		const projection = deriveLiveAutoSubProjection(
+			sampleLive(picks, { score: liveScore(42, 'FINAL') })
 		)
+
+		assert.equal(projection.captainPromotion?.playerInName, 'Raya')
+		assert.equal(projection.captainPromotion?.playerOutName, 'Haaland')
+		assert.equal(projection.captainPromotion?.state, 'OFFICIAL')
 	})
 
 	it('moves incoming players into the existing XI and outgoing players onto the bench', () => {

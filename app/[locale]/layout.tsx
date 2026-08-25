@@ -48,6 +48,11 @@ type LocaleLayoutProps = {
 	params: Promise<{ locale: string }>
 }
 
+// This tiny inline script is the only render-blocking shell logic. It applies
+// the saved theme before first paint; the larger interaction controller loads
+// separately with `defer` and cannot block rendering.
+const themeBootstrapScript = `(()=>{try{const s=localStorage.getItem('theme');const t=s==='light'||s==='dark'?s:matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';const r=document.documentElement;r.classList.remove('light','dark');r.classList.add(t);r.style.colorScheme=t}catch{}})()`
+
 export function generateStaticParams() {
 	return routing.locales.map(locale => ({ locale }))
 }
@@ -102,10 +107,13 @@ export default async function LocaleLayout({
 				<script
 					id="theme-bootstrap"
 					data-cfasync="false"
+					dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
+				/>
+				<script
+					id="shell-controls-bootstrap"
+					data-cfasync="false"
 					src="/theme-bootstrap.js"
-					async
-					blocking="render"
-					fetchPriority="high"
+					defer
 				/>
 			</head>
 			<body className="min-h-svh bg-background font-sans text-foreground antialiased">
