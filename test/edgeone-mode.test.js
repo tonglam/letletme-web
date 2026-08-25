@@ -72,6 +72,16 @@ test('preserves a nullable EdgeOne rule description returned by the API', async 
 	assert.equal(snapshots['all-vercel'].Description, null)
 })
 
+test('omits an optional EdgeOne rule description absent from the API response', async () => {
+	const { buildScopedRuleSnapshots } = await loadModule()
+	const rule = scopedReleaseRule()
+	delete rule.Description
+	const snapshots = buildScopedRuleSnapshots(rule)
+
+	assert.equal('Description' in snapshots.split, false)
+	assert.equal('Description' in snapshots['all-vercel'], false)
+})
+
 test('refuses invalid EdgeOne rule description shapes', async () => {
 	const { buildScopedRuleSnapshots } = await loadModule()
 
