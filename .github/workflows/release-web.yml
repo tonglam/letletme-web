@@ -368,6 +368,7 @@ jobs:
 
           npx --yes "vercel@${VERCEL_CLI_VERSION}" promote "$CANDIDATE_URL" \
             --yes \
+            --scope "$VERCEL_ORG_ID" \
             --token "$VERCEL_TOKEN"
           production_headers="$(curl --fail --silent --show-error --max-time 15 -D - -o /dev/null https://vercel-origin.letletme.top/healthz)"
           grep -qi "^x-letletme-release: $RELEASE_SHA" <<<"$production_headers"
