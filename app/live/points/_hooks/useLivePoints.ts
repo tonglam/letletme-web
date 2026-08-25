@@ -105,6 +105,9 @@ export function useLivePoints({
 		attempt: number
 	} | null>(null)
 	const retryingRequestIdRef = useRef<number | null>(null)
+	const fetchLivePointsForGameweekRef = useRef<
+		((eventId: number) => Promise<void>) | null
+	>(null)
 	const lastExplainAttemptAtRef = useRef(0)
 	const breakdownCacheRef = useRef<CachedBreakdownLookup | null>(null)
 	const currentRequestKeyRef = useRef<string | null>(
@@ -262,7 +265,7 @@ export function useLivePoints({
 							liveDataRetryTimerRef.current = window.setTimeout(() => {
 								liveDataRetryTimerRef.current = null
 								if (requestId !== requestIdRef.current) return
-								void fetchLivePointsForGameweek(eventId)
+								void fetchLivePointsForGameweekRef.current?.(eventId)
 							}, retryDelay)
 							return
 						}
@@ -326,6 +329,13 @@ export function useLivePoints({
 		},
 		[acceptSnapshot, activeEntryId, enrichLivePointBreakdowns, t]
 	)
+
+	useEffect(() => {
+		fetchLivePointsForGameweekRef.current = fetchLivePointsForGameweek
+		return () => {
+			fetchLivePointsForGameweekRef.current = null
+		}
+	}, [fetchLivePointsForGameweek])
 
 	const submitEntry = useCallback(() => {
 		const nextEntryId = Number(entryIdInput)
