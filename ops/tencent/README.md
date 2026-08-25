@@ -39,6 +39,27 @@ Create these without committing them:
 `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` must be the same 32-byte base64 value at
 Vercel build time and Tencent build time. Do not put it in Git.
 
+## EdgeOne source ACL
+
+The manually observed EdgeOne node addresses are not a source allowlist. Use
+the `EdgeOne origin ACL query` workflow with the production environment to
+retrieve and validate the current IPv4/IPv6 ranges from `DescribeOriginACL`
+and the scoped canary route from `DescribeL7AccRules`. The workflow is
+read-only and stores the validated ACL plus safe enable/disable route snapshots
+as a short-lived artifact; it does not change EdgeOne, DNS, UFW, or application
+traffic.
+
+Before applying a new list to UFW, review both `current` and `next` versions in
+the artifact. Apply only the current list after confirming its version and
+planned-change state, preserve the WireGuard/SSH and Cloudflare rules, and
+remove only EdgeOne rules that were previously managed by the same operation.
+Never replace the list with a guessed IP, a default route, or `0.0.0.0/0`.
+
+Store the validated route snapshots as the production environment secrets
+`EDGEONE_RULE_SPLIT_JSON` and `EDGEONE_RULE_ALL_VERCEL_JSON`. The exporter
+accepts only the exact canary `ModifyOrigin` rule and rejects header actions,
+so proxy credentials cannot enter the artifact.
+
 The value in `/etc/letletme/local-proxy-secret` must also be configured as the
 sensitive Vercel Production variable `LETLETME_LOCAL_PROXY_SECRET`. The active
 public fallback uses the Cloudflare Request Transform Rule
