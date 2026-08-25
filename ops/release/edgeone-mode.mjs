@@ -67,10 +67,12 @@ export function buildScopedRuleSnapshots(rule) {
 	if (!['enable', 'disable'].includes(rule.Status)) {
 		throw new Error('EdgeOne release rule status is unexpected')
 	}
+	const description = rule.Description
 	if (
-		rule.Description !== null &&
-		(!Array.isArray(rule.Description) ||
-			!rule.Description.every(item => typeof item === 'string'))
+		description !== undefined &&
+		description !== null &&
+		(!Array.isArray(description) ||
+			!description.every(item => typeof item === 'string'))
 	) {
 		throw new Error('EdgeOne release rule description is invalid')
 	}
@@ -111,7 +113,9 @@ export function buildScopedRuleSnapshots(rule) {
 	const base = {
 		RuleId: rule.RuleId,
 		RuleName: rule.RuleName,
-		Description: rule.Description === null ? null : [...rule.Description],
+		...(description === undefined
+			? {}
+			: { Description: description === null ? null : [...description] }),
 		Branches: structuredClone(rule.Branches)
 	}
 	return {
