@@ -197,6 +197,7 @@ export const GET_LIVE_POINTS = `
         multiplier
         pickActive
         autoSub
+        bgw
         expectedGoals
         expectedAssists
         expectedGoalInvolvements
@@ -239,6 +240,7 @@ export interface LivePick {
 	multiplier?: number
 	pickActive?: boolean
 	autoSub?: boolean
+	bgw?: boolean
 	expectedGoals: number | null
 	expectedAssists: number | null
 	expectedGoalInvolvements: number | null

@@ -94,6 +94,21 @@ export function PlayerRow({ player }: PlayerRowProps) {
 	}
 
 	const playerDetail = useMemo(() => buildLivePlayerDetail(player), [player])
+	const autoSubIncoming = player.autoSubRole?.endsWith('_IN') ?? false
+	const autoSubOfficial = player.autoSubRole?.startsWith('OFFICIAL_') ?? false
+	const autoSubLabelKey = autoSubOfficial
+		? autoSubIncoming
+			? 'officialAutoSubInLabel'
+			: 'officialAutoSubOutLabel'
+		: autoSubIncoming
+			? 'autoSubInLabel'
+			: 'autoSubOutLabel'
+	const autoSubLabel = player.autoSubRole
+		? t(autoSubLabelKey, {
+				player: player.name,
+				partner: player.autoSubPartnerName ?? t('autoSubUnknownPlayer')
+			})
+		: null
 
 	const statusIcon =
 		player.playingStatus === 'FINISHED' ? (
@@ -123,6 +138,8 @@ export function PlayerRow({ player }: PlayerRowProps) {
 					'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
 					player.isBench && 'border-dashed bg-muted/25',
 					player.playingStatus === 'PLAYING' && 'border-success/20 bg-success/[0.03]',
+					autoSubIncoming && 'border-electric/40 bg-electric/[0.06]',
+					player.autoSubRole?.endsWith('_OUT') && 'border-destructive/25 bg-destructive/[0.03]',
 				)}
 				role="button"
 				tabIndex={0}
@@ -184,6 +201,21 @@ export function PlayerRow({ player }: PlayerRowProps) {
 							<span className="shrink-0 rounded-sm border border-plum/30 bg-plum/10 px-1 py-px font-mono text-label font-bold text-plum">
 								V
 							</span>
+						) : null}
+						{player.autoSubRole ? (
+							<Badge
+								title={autoSubLabel ?? undefined}
+								aria-label={autoSubLabel ?? undefined}
+								className={cn(
+									'h-5 shrink-0 px-1 font-mono text-label font-black tracking-tight',
+									autoSubIncoming
+										? 'border-electric bg-electric text-plum'
+										: 'border-destructive bg-destructive text-destructive-foreground',
+									!autoSubOfficial && 'border-dashed'
+								)}
+							>
+								{autoSubIncoming ? '↑' : '↓'}
+							</Badge>
 						) : null}
 					</div>
 

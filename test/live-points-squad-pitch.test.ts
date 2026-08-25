@@ -45,4 +45,39 @@ describe('live-points squad pitch mapping', () => {
 			]
 		)
 	})
+
+	it('preserves projected auto-sub roles for pitch and share rendering', () => {
+		const [player] = mapPlayersToSquadPitch([
+			{
+				id: '13',
+				name: 'Wilson',
+				team: 'Fulham',
+				teamShort: 'FUL',
+				position: 'MID',
+				playingStatus: 'FINISHED',
+				isBench: true,
+				autoSubRole: 'PREDICTED_IN',
+				autoSubPartnerName: 'Sarr',
+				stats: {
+					minutes: 65,
+					goals: 0,
+					expectedGoals: 0,
+					expectedAssists: 0,
+					expectedGoalInvolvements: 0,
+					expectedGoalsConceded: 0,
+					assists: 1,
+					saves: 0,
+					savePenalty: 0,
+					cleanSheets: 0,
+					yellowCards: 0,
+					redCards: 0,
+					points: 3,
+					bonusPoints: 0
+				}
+			}
+		])
+
+		assert.equal(player.autoSubRole, 'PREDICTED_IN')
+		assert.equal(player.autoSubPartnerName, 'Sarr')
+	})
 })

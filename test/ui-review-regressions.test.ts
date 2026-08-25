@@ -13,16 +13,65 @@ describe('route contract', () => {
 })
 
 describe('theme bootstrap', () => {
-	it('inlines the theme bootstrap script in the locale layout head', async () => {
-		const source = await readFile(
-			new URL('../app/[locale]/layout.tsx', import.meta.url),
-			'utf8'
-		)
+	it('loads the early theme bootstrap as a render-blocking script resource', async () => {
+		const [layout, bootstrap, shellReady] = await Promise.all([
+			readFile(
+				new URL('../app/[locale]/layout.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(new URL('../public/theme-bootstrap.js', import.meta.url), 'utf8'),
+			readFile(
+				new URL(
+					'../components/layout/ShellControlsReady.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
 
-		assert.ok(source.includes('id="theme-bootstrap"'))
-		assert.ok(source.includes('dangerouslySetInnerHTML'))
-		assert.ok(source.includes("localStorage.getItem('theme')"))
-		assert.equal(source.includes('strategy="afterInteractive"'), false)
+		assert.ok(layout.includes('id="theme-bootstrap"'))
+		assert.ok(layout.includes('src="/theme-bootstrap.js"'))
+		assert.match(layout, /async[\s\S]*blocking="render"/)
+		assert.doesNotMatch(layout, /dangerouslySetInnerHTML|next\/script/)
+		assert.ok(bootstrap.includes("localStorage.getItem('theme')"))
+		assert.match(bootstrap, /data-shell-hydrated[\s\S]*shellReadyEvent/)
+		assert.ok(shellReady.includes("'letletme:shell-ready'"))
+	})
+})
+
+describe('live auto-sub presentation', () => {
+	it('reorders the existing XI instead of rendering a separate prediction panel', async () => {
+		const [dashboard, model, playerRow, squadPitch] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/live/points/_components/LivePointsDashboard.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/live/points/_lib/live-points-model.ts',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/live/PlayerRow.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/squad-pitch/SquadPitch.tsx', import.meta.url),
+				'utf8'
+			)
+		])
+
+		assert.doesNotMatch(dashboard, /LiveAutoSubSummary|pitchProjected/)
+		assert.match(model, /effectivePositions[\s\S]*const isBench = effectivePosition >= 12/)
+		for (const source of [playerRow, squadPitch]) {
+			assert.doesNotMatch(source, />\s*AS\{[^}]+\}\s*</)
+			assert.match(source, /\{\w+ \? '↑' : '↓'\}/)
+		}
 	})
 })
 

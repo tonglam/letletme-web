@@ -33,6 +33,8 @@ export interface Player {
   };
   isCaptain?: boolean;
   isViceCaptain?: boolean;
+  autoSubRole?: "PREDICTED_IN" | "PREDICTED_OUT" | "OFFICIAL_IN" | "OFFICIAL_OUT";
+  autoSubPartnerName?: string;
 }
 
 export interface PlayerBreakdownStat {
