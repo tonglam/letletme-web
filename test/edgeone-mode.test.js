@@ -64,6 +64,27 @@ test('builds scoped split and all-Vercel snapshots without output-only fields', 
 	assert.equal('RulePriority' in snapshots.split, false)
 })
 
+test('preserves a nullable EdgeOne rule description returned by the API', async () => {
+	const { buildScopedRuleSnapshots } = await loadModule()
+	const snapshots = buildScopedRuleSnapshots(scopedReleaseRule({ Description: null }))
+
+	assert.equal(snapshots.split.Description, null)
+	assert.equal(snapshots['all-vercel'].Description, null)
+})
+
+test('refuses invalid EdgeOne rule description shapes', async () => {
+	const { buildScopedRuleSnapshots } = await loadModule()
+
+	assert.throws(
+		() => buildScopedRuleSnapshots(scopedReleaseRule({ Description: 'not-an-array' })),
+		/rule description is invalid/
+	)
+	assert.throws(
+		() => buildScopedRuleSnapshots(scopedReleaseRule({ Description: [null] })),
+		/rule description is invalid/
+	)
+})
+
 test('refuses to export an unexpected or header-bearing release rule', async () => {
 	const { buildScopedRuleSnapshots } = await loadModule()
 	assert.throws(
