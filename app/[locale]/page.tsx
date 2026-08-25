@@ -355,11 +355,15 @@ function HomeMarketDesk() {
 
 	return (
 		<section
+			data-home-market-section
 			className="border-y bg-secondary/40 py-10"
 			aria-label={t('marketDesk')}
 		>
 			<div className="mx-auto max-w-6xl px-4">
-				<div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+				<div
+					data-home-market-grid
+					className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]"
+				>
 					<Suspense fallback={<MarketTeaserFallback />}>
 						<MarketTeaser />
 					</Suspense>
