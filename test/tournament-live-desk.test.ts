@@ -10,6 +10,8 @@ import {
 	buildTournamentEntries,
 	buildTournamentStats,
 	formatLiveAveragePoints,
+	getBoundedTraceableTournamentCoverage,
+	getTournamentManagerNextRefreshAt,
 	mergeUnavailableTournamentEntryIds
 } from '../lib/tournament/liveEntries'
 import { loadTournamentLiveDeskWithRevisionRecovery } from '../lib/tournament/liveDesk'
@@ -44,11 +46,11 @@ const managerScore = (
 	state: 'UNAVAILABLE',
 	eventPointSemantics: 'UNKNOWN',
 	revision: null,
-	checkedAt: null,
+	checkedAt: '2026-08-24T06:00:00.000Z',
 	upstreamUpdatedAt: null,
 	staleAt: null,
 	nextRefreshAt: null,
-	reconciliation: 'NO_OFFICIAL_SCORE',
+	reconciliation: 'NO_LINEUP',
 	reasonCodes: [],
 	...overrides
 })
@@ -65,7 +67,7 @@ describe('live tournament desk', () => {
 		const rows = [
 			{
 				entry: 1,
-				rank: 3,
+				rank: 0,
 				entryName: 'Available',
 				playerName: 'Manager',
 				overallRank: 999,
@@ -82,11 +84,15 @@ describe('live tournament desk', () => {
 				pickList: [],
 				score: managerScore({
 					eventPoints: 6,
+					netEventPoints: 6,
 					totalPoints: 101,
-					totalScope: 'CLASSIC_PHASE',
+					totalScope: 'OVERALL',
 					overallRank: 123,
-					source: 'FPL_CLASSIC_STANDINGS',
-					state: 'LIVE'
+					source: 'FPL_EVENT_LIVE',
+					state: 'FRESH',
+					eventPointSemantics: 'ZERO_COST_EQUIVALENT',
+					revision: 'event-live:1:6:0',
+					reconciliation: 'MATCHED'
 				})
 			},
 			{
@@ -126,7 +132,7 @@ describe('live tournament desk', () => {
 		] satisfies TournamentLiveCalcData[]
 
 		const entries = buildTournamentEntries(rows)
-		assert.equal(entries[0]?.rank, 3)
+		assert.equal(entries[0]?.rank, 1)
 		assert.equal(entries[0]?.totalPoints, 101)
 		assert.equal(entries[0]?.overallRank, 123)
 		assert.equal(entries[0]?.teamValue, 100.5)
@@ -151,7 +157,10 @@ describe('live tournament desk', () => {
 			{ ...entries[0], id: 'fraction-3', livePoints: 0, stale: false }
 		])
 		assert.equal(fractionalStats.averagePoints, 98 / 3)
-		assert.equal(formatLiveAveragePoints(fractionalStats.averagePoints), '32.67')
+		assert.equal(
+			formatLiveAveragePoints(fractionalStats.averagePoints),
+			'32.67'
+		)
 		assert.equal(formatLiveAveragePoints(201 / 200), '1.01')
 	})
 
@@ -178,5 +187,146 @@ describe('live tournament desk', () => {
 			null
 		])
 		assert.deepEqual(handledCodes, [['LIVE_REVISION_GONE'], undefined])
+	})
+
+	it('never promotes Classic or summary points to a live tournament score', () => {
+		const staleClassic = {
+			entry: 109967,
+			rank: 79,
+			entryName: 'Lagging Classic',
+			playerName: 'Manager',
+			overallRank: 4090000,
+			transferCost: 0,
+			livePoints: 23,
+			liveNetPoints: 23,
+			liveTotalPoints: 23,
+			played: 7,
+			toPlay: 4,
+			captainName: 'Haaland',
+			chip: null,
+			pickList: [],
+			score: managerScore({
+				eventPoints: 23,
+				netEventPoints: 23,
+				totalPoints: 23,
+				totalScope: 'CLASSIC_PHASE',
+				source: 'FPL_CLASSIC_STANDINGS',
+				state: 'FRESH',
+				revision: 'classic:gw1:r4'
+			})
+		} satisfies TournamentLiveCalcData
+
+		const [entry] = buildTournamentEntries([staleClassic])
+		assert.equal(entry?.livePoints, null)
+		assert.equal(entry?.gwPoints, null)
+		assert.equal(entry?.totalPoints, null)
+		assert.equal(entry?.eventCost, undefined)
+		assert.equal(entry?.rank, 0)
+		assert.deepEqual(buildTournamentStats(entry ? [entry] : []), {
+			averagePoints: 0,
+			highestPoints: 0,
+			totalEntries: 1
+		})
+	})
+
+	it('caps coverage at rows with traceable event-live scores', () => {
+		const traceable = {
+			entry: 1,
+			rank: 1,
+			entryName: 'Traceable',
+			playerName: 'Manager',
+			overallRank: 1,
+			transferCost: 0,
+			livePoints: 6,
+			liveNetPoints: 6,
+			liveTotalPoints: 6,
+			played: 1,
+			toPlay: 10,
+			captainName: 'Captain',
+			chip: null,
+			pickList: [],
+			score: managerScore({
+				eventPoints: 6,
+				netEventPoints: 6,
+				source: 'FPL_EVENT_LIVE',
+				state: 'FRESH',
+				revision: 'event-live:gw1:r1:1'
+			})
+		} satisfies TournamentLiveCalcData
+		const rejected = {
+			...traceable,
+			entry: 2,
+			score: managerScore({
+				eventPoints: 99,
+				source: 'FPL_CLASSIC_STANDINGS',
+				state: 'FRESH',
+				revision: 'classic:gw1:r1'
+			})
+		} satisfies TournamentLiveCalcData
+
+		assert.equal(
+			getBoundedTraceableTournamentCoverage({
+				rows: [traceable, rejected],
+				totalEntries: 2,
+				officialCoverage: 1
+			}),
+			1
+		)
+	})
+
+	it('does not preserve a producer rank when official event points are absent', () => {
+		const row = {
+			entry: 1,
+			rank: 7,
+			entryName: 'Settling',
+			playerName: 'Manager',
+			overallRank: 1,
+			transferCost: 0,
+			livePoints: 0,
+			liveNetPoints: 0,
+			liveTotalPoints: 0,
+			played: 0,
+			toPlay: 11,
+			captainName: 'Captain',
+			chip: null,
+			pickList: [],
+			score: managerScore({
+				eventPoints: null,
+				netEventPoints: 5,
+				source: 'FPL_EVENT_LIVE',
+				state: 'SETTLING',
+				revision: 'event-live:gw1:r1:1'
+			})
+		} satisfies TournamentLiveCalcData
+
+		assert.equal(buildTournamentEntries([row])[0]?.rank, 0)
+	})
+
+	it('keeps valid refresh metadata from a rejected score', () => {
+		const nextRefreshAt = '2026-08-24T06:05:00.000Z'
+		const row = {
+			entry: 1,
+			rank: 1,
+			entryName: 'Pending authority',
+			playerName: 'Manager',
+			overallRank: 1,
+			transferCost: 0,
+			livePoints: 0,
+			liveNetPoints: 0,
+			liveTotalPoints: 0,
+			played: 0,
+			toPlay: 11,
+			captainName: 'Captain',
+			chip: null,
+			pickList: [],
+			score: managerScore({
+				source: 'FPL_ENTRY_SUMMARY',
+				state: 'FRESH',
+				revision: 'summary:gw1:r1',
+				nextRefreshAt
+			})
+		} satisfies TournamentLiveCalcData
+
+		assert.equal(getTournamentManagerNextRefreshAt([row]), nextRefreshAt)
 	})
 })

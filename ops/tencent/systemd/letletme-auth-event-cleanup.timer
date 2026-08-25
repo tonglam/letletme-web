@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily LetLetMe expired authentication event cleanup schedule
+
+[Timer]
+OnCalendar=*-*-* 02:17:00 UTC
+Persistent=true
+RandomizedDelaySec=5m
+Unit=letletme-auth-event-cleanup.service
+
+[Install]
+WantedBy=timers.target

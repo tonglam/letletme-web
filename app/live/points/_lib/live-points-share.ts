@@ -1,4 +1,5 @@
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
+import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
 export {
 	copyElementImageToClipboard,
 	copyTextToClipboard,
@@ -131,21 +132,25 @@ export function formatLivePointsShareText({
 		(liveData.entry ? `Entry ${liveData.entry}` : 'FPL Team')
 	const manager = liveData.playerName?.trim()
 	const chip = formatChip(liveData.chip, labels)
-	const transferCost = liveData.score?.transferCost ?? null
-	const hitsPart = transferCost != null && transferCost > 0 ? ` (−${transferCost} ${labels.hits})` : ''
-	const netPoints = liveData.score?.netEventPoints ?? null
-	const eventPoints = liveData.score?.eventPoints ?? null
-	const totalPoints =
-		liveData.score?.totalScope === 'OVERALL'
-			? liveData.score.totalPoints
-			: null
+	const score = traceableOfficialManagerScore(liveData.score)
+	const transferCost = score?.transferCost ?? null
+	const hitsPart =
+		transferCost != null && transferCost > 0
+			? ` (−${transferCost} ${labels.hits})`
+			: ''
+	const netPoints = score?.netEventPoints ?? null
+	const eventPoints = score?.eventPoints ?? null
+	const totalPoints = score?.totalScope === 'OVERALL' ? score.totalPoints : null
 	const netText = netPoints == null ? '—' : String(netPoints)
+	const captainName =
+		[...startingPlayers, ...benchPlayers].find(player => player.isCaptain)
+			?.name ?? liveData.captainName
 
 	const header = [
 		`# ${teamName} · GW${gameweek}`,
 		manager ? manager : null,
 		`${labels.live}: **${eventPoints == null ? '—' : eventPoints}**${hitsPart} · ${labels.net}: ${netText} · ${labels.season}: ${totalPoints == null ? '—' : totalPoints}`,
-		`${labels.chip}: ${chip} · ${labels.captain}: ${liveData.captainName || '—'}`
+		`${labels.chip}: ${chip} · ${labels.captain}: ${captainName || '—'}`
 	]
 		.filter(Boolean)
 		.join('\n')

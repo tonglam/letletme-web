@@ -3,9 +3,15 @@
 	"git": {
 		"deploymentEnabled": {
 			"**": false,
-			"main": true
+			"main": false
 		}
 	},
 	"ignoreCommand": "node scripts/vercel-ignore-build.mjs",
-	"regions": ["sin1"]
+	"regions": ["sin1"],
+	"crons": [
+		{
+			"path": "/api/cron/auth-event-cleanup",
+			"schedule": "17 2 * * *"
+		}
+	]
 }

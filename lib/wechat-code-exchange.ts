@@ -4,6 +4,7 @@ import {
 	normalizeOptionalWeChatUnionId,
 	normalizeWeChatOpenId
 } from '@/lib/miniprogram-account-core'
+import { logSafeAuthDiagnostic } from '@/lib/auth-safe-log'
 
 const WECHAT_CODE_SESSION_URL = 'https://api.weixin.qq.com/sns/jscode2session'
 
@@ -51,9 +52,15 @@ export async function exchangeWeChatCode({
 			}
 		)
 	} catch {
+		logSafeAuthDiagnostic('warn', 'better-auth diagnostic', {
+			name: 'WeChatCodeExchangeUnavailable',
+			code: 'wechat_upstream_unavailable'
+		})
 		throw new MiniProgramAuthError(
 			'WeChat login is temporarily unavailable',
-			503
+			503,
+			undefined,
+			'wechat_upstream_unavailable'
 		)
 	}
 
@@ -68,18 +75,46 @@ export async function exchangeWeChatCode({
 	try {
 		payload = (await response.json()) as Code2SessionResponse
 	} catch {
+		logSafeAuthDiagnostic('warn', 'better-auth diagnostic', {
+			name: 'WeChatCodeExchangeInvalidResponse',
+			code: 'wechat_upstream_unavailable',
+			status: response.status
+		})
 		throw new MiniProgramAuthError(
 			'WeChat login is temporarily unavailable',
-			503
+			503,
+			undefined,
+			'wechat_upstream_unavailable'
+		)
+	}
+
+	if (!response.ok && response.status >= 500) {
+		logSafeAuthDiagnostic('warn', 'better-auth diagnostic', {
+			name: 'WeChatCodeExchangeUnavailable',
+			code: 'wechat_upstream_unavailable',
+			status: response.status
+		})
+		throw new MiniProgramAuthError(
+			'WeChat login is temporarily unavailable',
+			503,
+			undefined,
+			'wechat_upstream_unavailable'
 		)
 	}
 
 	if (!response.ok || !payload.openid || payload.errcode) {
-		console.warn('[mini auth] WeChat code exchange rejected', {
+		logSafeAuthDiagnostic('warn', 'better-auth diagnostic', {
+			name: 'WeChatCodeExchangeRejected',
+			code: 'wechat_upstream_rejected',
 			status: response.status,
 			errcode: payload.errcode
 		})
-		throw new MiniProgramAuthError('WeChat login failed', 401)
+		throw new MiniProgramAuthError(
+			'WeChat login failed',
+			401,
+			undefined,
+			'wechat_upstream_rejected'
+		)
 	}
 
 	return {

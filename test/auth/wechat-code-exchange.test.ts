@@ -49,6 +49,27 @@ describe('WeChat code exchange', () => {
 		)
 	})
 
+	it('preserves an upstream outage as a temporary service error', async () => {
+		await assert.rejects(
+			() =>
+				exchangeWeChatCode({
+					codeInput: 'fresh-login-code',
+					appId: 'mini-app-id',
+					appSecret: 'mini-app-secret',
+					fetcher: async () =>
+						Response.json(
+							{ errcode: -1, errmsg: 'temporary outage' },
+							{ status: 503 }
+						)
+				}),
+			(error: unknown) =>
+				error instanceof MiniProgramAuthError &&
+				error.status === 503 &&
+				error.code === 'wechat_upstream_unavailable' &&
+				error.message === 'WeChat login is temporarily unavailable'
+		)
+	})
+
 	it('fails closed when credentials or the upstream exchange are unavailable', async () => {
 		await assert.rejects(
 			() =>

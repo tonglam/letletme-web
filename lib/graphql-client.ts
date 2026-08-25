@@ -14,12 +14,9 @@ export interface ExecuteQueryOptions {
 	headers?: Record<string, string>
 	timeoutMs?: number
 	signal?: AbortSignal
-	/**
-	 * Error codes the immediate caller deliberately catches and recovers from.
-	 * They still reject the request, but skip generic console/error diagnostics.
-	 */
+	/** Error codes the immediate caller deliberately catches and recovers from. */
 	handledErrorCodes?: readonly string[]
-	/** Optional server-side sections may recover without emitting a console error. */
+	/** Optional server-side sections may recover without generic console diagnostics. */
 	suppressErrorLog?: boolean
 }
 
@@ -27,12 +24,18 @@ type GraphQLRequestErrorOptions = {
 	status?: number
 	code?: string | null
 	retryAfterSeconds?: number | null
+	rateLimitPolicy?: string | null
+	rateLimitScope?: string | null
+	rateLimitWorkload?: string | null
 }
 
 export class GraphQLRequestError extends Error {
 	readonly status: number
 	readonly code: string | null
 	readonly retryAfterSeconds: number | null
+	readonly rateLimitPolicy: string | null
+	readonly rateLimitScope: string | null
+	readonly rateLimitWorkload: string | null
 
 	constructor(message: string, options: GraphQLRequestErrorOptions = {}) {
 		super(message)
@@ -40,10 +43,18 @@ export class GraphQLRequestError extends Error {
 		this.status = options.status ?? 0
 		this.code = options.code ?? null
 		this.retryAfterSeconds = options.retryAfterSeconds ?? null
+		this.rateLimitPolicy = options.rateLimitPolicy ?? null
+		this.rateLimitScope = options.rateLimitScope ?? null
+		this.rateLimitWorkload = options.rateLimitWorkload ?? null
 	}
 }
 
-const DEFAULT_GRAPHQL_TIMEOUT_MS = 15_000
+export const DEFAULT_GRAPHQL_TIMEOUT_MS = 15_000
+
+export const normalizeGraphQLTimeoutMs = (timeoutMs?: number): number =>
+	typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0
+		? timeoutMs
+		: DEFAULT_GRAPHQL_TIMEOUT_MS
 const PUBLIC_BROWSER_CACHE_TTL_MS = 60_000
 const PUBLIC_BROWSER_CACHE_MAX_ENTRIES = 50
 const PUBLIC_BROWSER_OPERATION_ALLOWLIST = new Set([
@@ -58,10 +69,12 @@ const PUBLIC_BROWSER_OPERATION_ALLOWLIST = new Set([
 	'SearchEntries'
 ])
 
-const extractOperationName = (query: string): string | undefined =>
+export const extractOperationName = (query: string): string | undefined =>
 	query.match(
 		/\b(?:query|mutation|subscription)\s+([A-Za-z_][A-Za-z0-9_]*)/
 	)?.[1]
+
+const GRAPHQL_SLOW_REQUEST_THRESHOLD_MS = 750
 
 type GraphQLErrorLike = {
 	message?: string
@@ -141,6 +154,12 @@ const parseRetryAfterSeconds = (value: string | null): number | null => {
 		: null
 }
 
+const rateLimitMetadata = (response: Response) => ({
+	rateLimitPolicy: response.headers.get('x-ratelimit-policy'),
+	rateLimitScope: response.headers.get('x-ratelimit-scope'),
+	rateLimitWorkload: response.headers.get('x-ratelimit-workload')
+})
+
 async function doFetch<T>(
 	endpoint: string,
 	query: string,
@@ -154,11 +173,9 @@ async function doFetch<T>(
 	handledErrorCodes?: readonly string[],
 	suppressErrorLog = false
 ): Promise<T> {
+	const startedAt = Date.now()
 	const controller = new AbortController()
-	const safeTimeoutMs =
-		Number.isFinite(timeoutMs) && timeoutMs > 0
-			? timeoutMs
-			: DEFAULT_GRAPHQL_TIMEOUT_MS
+	const safeTimeoutMs = normalizeGraphQLTimeoutMs(timeoutMs)
 	let timedOut = false
 	const timeoutId = globalThis.setTimeout(() => {
 		timedOut = true
@@ -207,7 +224,8 @@ async function doFetch<T>(
 					code,
 					retryAfterSeconds: parseRetryAfterSeconds(
 						response.headers.get('retry-after')
-					)
+					),
+					...rateLimitMetadata(response)
 				}
 			)
 		}
@@ -240,22 +258,24 @@ async function doFetch<T>(
 				})
 				.join('; ')
 
-			if (!isHandledError && !suppressErrorLog) {
-				if (isClient) {
-					console.warn('GraphQL request returned an error', {
-						operation: extractOperationName(query) || undefined,
-						status: response.status,
-						code,
-						requestId
-					})
-				} else {
-					console.warn('GraphQL request returned upstream errors', {
-						operation: extractOperationName(query) || undefined,
-						status: response.status,
-						code,
-						requestId
-					})
-				}
+			if (!isHandledError && !suppressErrorLog && isClient) {
+				console.warn('GraphQL request returned an error', {
+					operation: extractOperationName(query) || undefined,
+					status: response.status,
+					code,
+					requestId,
+					durationMs: Math.max(0, Date.now() - startedAt),
+					timeoutMs: safeTimeoutMs
+				})
+			} else if (!isHandledError && !suppressErrorLog) {
+				console.warn('GraphQL request returned upstream errors', {
+					operation: extractOperationName(query) || undefined,
+					status: response.status,
+					code,
+					requestId,
+					durationMs: Math.max(0, Date.now() - startedAt),
+					timeoutMs: safeTimeoutMs
+				})
 			}
 			throw new GraphQLRequestError(
 				isClient
@@ -263,7 +283,11 @@ async function doFetch<T>(
 					: `GraphQL Error: ${errorMessages || 'Unknown GraphQL error'}`,
 				{
 					status: response.status,
-					code
+					code,
+					retryAfterSeconds: parseRetryAfterSeconds(
+						response.headers.get('retry-after')
+					),
+					...rateLimitMetadata(response)
 				}
 			)
 		}
@@ -294,11 +318,23 @@ async function doFetch<T>(
 			)
 		}
 
+		const durationMs = Math.max(0, Date.now() - startedAt)
+		if (!isClient && durationMs >= GRAPHQL_SLOW_REQUEST_THRESHOLD_MS) {
+			console.warn('GraphQL query slow', {
+				operation: extractOperationName(query) || undefined,
+				status: response.status,
+				requestId,
+				durationMs,
+				timeoutMs: safeTimeoutMs
+			})
+		}
+
 		if (typeof window !== 'undefined') {
 			recordBugReportDiagnostic({
 				at: new Date().toISOString(),
 				operation: extractOperationName(query) || undefined,
-				requestId
+				requestId,
+				status: response.status
 			})
 		}
 		return result.data as T
@@ -358,7 +394,9 @@ async function doFetch<T>(
 						normalizedError instanceof GraphQLRequestError
 							? normalizedError.code
 							: 'UNKNOWN_ERROR',
-					requestId
+					requestId,
+					durationMs: Math.max(0, Date.now() - startedAt),
+					timeoutMs: safeTimeoutMs
 				})
 			}
 			if (typeof window !== 'undefined') {
@@ -369,7 +407,12 @@ async function doFetch<T>(
 					...(normalizedError instanceof GraphQLRequestError
 						? {
 								code: normalizedError.code ?? undefined,
-								status: normalizedError.status
+								status: normalizedError.status,
+								retryAfterSeconds:
+									normalizedError.retryAfterSeconds ?? undefined,
+								rateLimitPolicy: normalizedError.rateLimitPolicy ?? undefined,
+								rateLimitScope: normalizedError.rateLimitScope ?? undefined,
+								workload: normalizedError.rateLimitWorkload ?? undefined
 							}
 						: {})
 				})

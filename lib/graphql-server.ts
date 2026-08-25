@@ -2,7 +2,12 @@ import 'server-only'
 
 import type { Session } from '@/lib/auth'
 import { capacityRequestIdForCurrentRun } from '@/lib/capacity-run'
-import { executeQuery, type ExecuteQueryOptions } from '@/lib/graphql-client'
+import {
+	executeQuery,
+	extractOperationName,
+	normalizeGraphQLTimeoutMs,
+	type ExecuteQueryOptions
+} from '@/lib/graphql-client'
 import { publicGraphQLCacheResult } from '@/lib/graphql-public-cache'
 import {
 	buildIngressContextHeadersV2,
@@ -115,7 +120,10 @@ export async function executePublicServerQuery<T>(
 	console.info('[graphql public request]', {
 		trafficClass: routeIngress ? 'web_browser' : 'web_rsc',
 		workload,
-		cacheResult
+		cacheResult,
+		operation: extractOperationName(query) || undefined,
+		timeoutMs: normalizeGraphQLTimeoutMs(options?.timeoutMs),
+		requestId: requestId ?? undefined
 	})
 	return executeQuery<T>(query, variables, {
 		...options,

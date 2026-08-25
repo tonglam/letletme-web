@@ -1,5 +1,7 @@
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
+import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
 import type { Player, PlayerBreakdownStat } from '@/types/player'
+import { deriveLiveAutoSubProjection } from './live-auto-subs'
 
 type NumericPositionMode = 'elementType' | 'squadOrder'
 
@@ -194,30 +196,68 @@ export function mapLiveDataToPlayers(
 	live: LiveCalcData,
 	breakdownLookup: BreakdownLookup
 ): Player[] {
-	const benchBoostActive =
-		!!live.chip && live.chip.toLowerCase().includes('bench')
-	const sortedPicks = [...live.pickList].sort((a, b) => a.position - b.position)
+	const autoSubProjection = deriveLiveAutoSubProjection(live)
+	const benchBoostActive = autoSubProjection.benchBoostActive
+	const activePlayerIds = new Set(autoSubProjection.activePlayerIds)
+	const sortedPicks = [...live.pickList].sort((left, right) => {
+		const leftPosition =
+			autoSubProjection.effectivePositions[String(left.element)] ??
+			left.position
+		const rightPosition =
+			autoSubProjection.effectivePositions[String(right.element)] ??
+			right.position
+		return leftPosition - rightPosition
+	})
+	const autoSubByPlayerId = new Map<
+		string,
+		{
+			role: NonNullable<Player['autoSubRole']>
+			partnerName?: string
+		}
+	>()
+	for (const substitution of autoSubProjection.substitutions) {
+		autoSubByPlayerId.set(substitution.playerInId, {
+			role: substitution.state === 'OFFICIAL' ? 'OFFICIAL_IN' : 'PREDICTED_IN',
+			partnerName: substitution.playerOutName ?? undefined
+		})
+		if (substitution.playerOutId) {
+			autoSubByPlayerId.set(substitution.playerOutId, {
+				role:
+					substitution.state === 'OFFICIAL' ? 'OFFICIAL_OUT' : 'PREDICTED_OUT',
+				partnerName: substitution.playerInName
+			})
+		}
+	}
 
 	return sortedPicks.map(pick => {
+		const playerId = String(pick.element)
+		const effectivePosition =
+			autoSubProjection.effectivePositions[playerId] ?? pick.position
 		// Final/live multipliers are authoritative after an auto-captain
 		// substitution. Only use the original pick flags when no multiplier was
 		// published yet (the provisional live shape).
 		const hasMultiplier = typeof pick.multiplier === 'number'
-		const isCaptain = hasMultiplier
+		const publishedCaptain = hasMultiplier
 			? (pick.multiplier ?? 0) >= 2
 			: pick.isCaptain === true ||
 				(!pick.isCaptain &&
 					!pick.isViceCaptain &&
 					live.captainName === pick.webName)
-		const isViceCaptain =
+		const publishedViceCaptain =
 			pick.isViceCaptain === true &&
 			(!hasMultiplier || (pick.multiplier ?? 0) < 2)
-		// Keep bench-vs-starting distinction stable, even when Bench Boost is active.
-		const isBench = pick.position >= 12
+		const isCaptain = autoSubProjection.captainPromotion
+			? playerId === autoSubProjection.captainPromotion.playerInId
+			: publishedCaptain
+		const isViceCaptain = autoSubProjection.captainPromotion
+			? false
+			: publishedViceCaptain
+		const isBench = !activePlayerIds.has(playerId)
 		const position = normalizePosition(pick.elementType, 'elementType')
-		const breakdownEntry = breakdownLookup.get(String(pick.element))
+		const breakdownEntry = breakdownLookup.get(playerId)
 		const breakdownStats = breakdownEntry?.stats
 		const explanationStats = breakdownEntry?.explanationStats
+		const autoSub = autoSubByPlayerId.get(playerId)
 
 		// The entry calculation is refreshed with the live snapshot. Explanation
 		// rows persist less often and enrich only the modal point breakdown; they
@@ -237,7 +277,7 @@ export function mapLiveDataToPlayers(
 		}
 
 		return {
-			id: String(pick.element),
+			id: playerId,
 			name: pick.webName,
 			team: pick.teamName ?? '',
 			teamShort: pick.teamShortName ?? '',
@@ -266,16 +306,23 @@ export function mapLiveDataToPlayers(
 				yellowCards: pick.yellowCards,
 				redCards: pick.redCards,
 				points: pick.totalPoints,
-				bonusPoints: pick.bonus,
+				bonusPoints: pick.bonus
 			},
 			isCaptain,
 			isViceCaptain,
+			autoSubRole: autoSub?.role,
+			autoSubPartnerName: autoSub?.partnerName
 		}
 	})
 }
 
 export function deriveLiveTeamStats(live: LiveCalcData) {
-	const startingPicks = live.pickList.filter(pick => pick.position <= 11)
+	const score = traceableOfficialManagerScore(live.score)
+	const autoSubProjection = deriveLiveAutoSubProjection(live)
+	const activePlayerIds = new Set(autoSubProjection.activePlayerIds)
+	const startingPicks = live.pickList.filter(pick =>
+		activePlayerIds.has(String(pick.element))
+	)
 	const playedCount = startingPicks.filter(
 		pick => (pick.minutes ?? 0) > 0
 	).length
@@ -284,13 +331,11 @@ export function deriveLiveTeamStats(live: LiveCalcData) {
 	return {
 		teamName: live.entryName ?? `Entry ${live.entry}`,
 		playerName: live.playerName ?? '',
-		livePoints: live.score?.eventPoints ?? null,
-		transferCost: live.score?.transferCost ?? null,
-		captainName: live.captainName,
-		liveTotalPoints:
-			live.score?.totalScope === 'OVERALL'
-				? live.score.totalPoints
-				: null,
+		livePoints: score?.eventPoints ?? null,
+		transferCost: score?.transferCost ?? null,
+		captainName:
+			autoSubProjection.captainPromotion?.playerInName ?? live.captainName,
+		liveTotalPoints: score?.totalScope === 'OVERALL' ? score.totalPoints : null,
 		played: `${playedCount}/${startingPicks.length}`,
 		chips: {
 			bench:
@@ -306,7 +351,7 @@ export function deriveLiveTeamStats(live: LiveCalcData) {
 				normalizedChip.includes('free') ||
 				normalizedChip === 'freehit' ||
 				normalizedChip === 'fh' ||
-				normalizedChip === 'free_hit',
-		},
+				normalizedChip === 'free_hit'
+		}
 	}
 }

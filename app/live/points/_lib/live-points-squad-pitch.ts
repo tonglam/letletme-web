@@ -21,6 +21,12 @@ export function mapPlayersToSquadPitch(
 			position: player.position,
 			isCaptain: player.isCaptain,
 			isViceCaptain: player.isViceCaptain,
+			...(player.autoSubRole
+				? {
+						autoSubRole: player.autoSubRole,
+						autoSubPartnerName: player.autoSubPartnerName
+					}
+				: {})
 		}
 	})
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
+import { MessageCircleWarning } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import {
 	cloneElement,
@@ -32,12 +33,16 @@ export function ReportProblemEntry({
 	children,
 	className,
 	triggerClassName,
+	triggerLabel,
+	showReportIcon = false,
 	open: controlledOpen,
 	onOpenChange
 }: {
 	children?: ReactElement<DialogTriggerChildProps>
 	className?: string
 	triggerClassName?: string
+	triggerLabel?: string
+	showReportIcon?: boolean
 	open?: boolean
 	onOpenChange?: (open: boolean) => void
 }) {
@@ -94,7 +99,10 @@ export function ReportProblemEntry({
 					className={cn(triggerClassName)}
 					onClick={handleTriggerClick}
 				>
-					{t('entry')}
+					{showReportIcon ? (
+						<MessageCircleWarning aria-hidden="true" className="size-4" />
+					) : null}
+					{triggerLabel ?? t('entry')}
 				</button>
 			) : null}
 			{activated || open ? (

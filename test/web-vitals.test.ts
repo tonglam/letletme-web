@@ -110,7 +110,10 @@ describe('privacy-safe web vitals', () => {
 			resolveWebVitalSource({ search: '?_marketPerf=mobile-1' }),
 			'synthetic'
 		)
-		assert.equal(resolveWebVitalSource({ search: '?cold=mobile-1' }), 'synthetic')
+		assert.equal(
+			resolveWebVitalSource({ search: '?cold=mobile-1' }),
+			'synthetic'
+		)
 		assert.equal(resolveWebVitalSource({ webdriver: true }), 'synthetic')
 		assert.equal(resolveWebVitalSource({ search: '?utm_source=home' }), 'user')
 	})
@@ -196,15 +199,16 @@ describe('privacy-safe web vitals', () => {
 		assert.match(markerSource, /reportedIdentity\.current === readyIdentity/)
 		assert.match(playerStatsSource, /readyKey=\{playerDetailReadyKey\}/)
 		assert.match(playerStatsSource, /readyKey=\{playerCompareReadyKey\}/)
-		assert.match(
-			playerStatsSource,
-			/const playerDetailReadyKey = firstSelectedPlayerId \?\? ''/
-		)
+		assert.match(playerStatsSource, /const playerDetailReadyKey =/)
 		assert.match(playerStatsSource, /Boolean\(secondPlayer\.playerDetail\)/)
 		assert.match(
 			playerStatsSource,
-			/markRouteReadyStart\(window\.location\.pathname\)/
+			/markRouteReadyStart\(\s*window\.location\.pathname,\s*startedAt,\s*detail\.readyKey/
 		)
+		assert.match(playerStatsSource, /void loadPlayerStatsView\(\)/)
+		assert.match(playerStatsSource, /PLAYER_DIRECTORY_PAINT/)
+		assert.match(playerStatsSource, /PLAYER_DETAIL_PAINT/)
+		assert.match(playerStatsSource, /PLAYER_COMPARE_PAINT/)
 	})
 
 	it('maps older clients without the hint to unknown during rollout', () => {
@@ -216,5 +220,43 @@ describe('privacy-safe web vitals', () => {
 	it('maps older clients without a source marker to unknown', () => {
 		const { source: _source, ...legacyMetric } = validMetric
 		assert.equal(parseWebVitalPayload(legacyMetric)?.source, 'unknown')
+	})
+
+	it('accepts bounded player correlation metadata and cache status', () => {
+		assert.deepEqual(
+			parseWebVitalPayload({
+				...validMetric,
+				name: 'PLAYER_DESK_RESPONSE',
+				navigationId: 'nav-12345678',
+				interactionId: 'interaction-12345678',
+				cacheStatus: 'stale'
+			}),
+			{
+				...validMetric,
+				name: 'PLAYER_DESK_RESPONSE',
+				page: '/live/competitions/:tournamentId',
+				navigationId: 'nav-12345678',
+				interactionId: 'interaction-12345678',
+				cacheStatus: 'stale'
+			}
+		)
+	})
+
+	it('rejects unsafe or oversized correlation metadata', () => {
+		assert.equal(
+			parseWebVitalPayload({ ...validMetric, navigationId: 'player-13' }),
+			null
+		)
+		assert.equal(
+			parseWebVitalPayload({
+				...validMetric,
+				interactionId: 'x'.repeat(65)
+			}),
+			null
+		)
+		assert.equal(
+			parseWebVitalPayload({ ...validMetric, cacheStatus: 'origin-secret' }),
+			null
+		)
 	})
 })

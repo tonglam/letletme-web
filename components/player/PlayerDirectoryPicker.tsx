@@ -900,10 +900,16 @@ export function PlayerDirectoryPicker({
 							) : null}
 						</div>
 					) : (
-						visiblePlayers.map(player => (
+						visiblePlayers.map((player, index) => (
 							<button
 								key={player.id}
 								type="button"
+								{...(index === 0
+									? { 'data-player-stats-directory-result': 'true' }
+									: {})}
+								{...(index === 0
+									? { elementtiming: 'player-directory-result' }
+									: {})}
 								onClick={() => {
 									onSelect(player)
 									resetFilters()

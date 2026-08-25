@@ -19,6 +19,7 @@ describe('Web runtime database boundary', () => {
 		const [
 			baseline,
 			standaloneAccountMigration,
+			authEventMigration,
 			journal,
 			instrumentation,
 			environment,
@@ -26,6 +27,7 @@ describe('Web runtime database boundary', () => {
 		] = await Promise.all([
 			readFile('drizzle/0000_auth_baseline.sql', 'utf8'),
 			readFile('drizzle/0003_graceful_husk.sql', 'utf8'),
+			readFile('drizzle/0004_auth_event.sql', 'utf8'),
 			readFile('drizzle/meta/_journal.json', 'utf8'),
 			readFile('instrumentation.ts', 'utf8'),
 			readFile('.env.example', 'utf8'),
@@ -118,6 +120,13 @@ describe('Web runtime database boundary', () => {
 			standaloneAccountMigration,
 			/CONSTRAINT "mini_program_session_principal_present" CHECK/
 		)
+		assert.match(authEventMigration, /CREATE TABLE "bauth"\."auth_event"/)
+		assert.match(authEventMigration, /ALTER TABLE bauth\.auth_event\s+ENABLE ROW LEVEL SECURITY/)
+		assert.match(authEventMigration, /CREATE POLICY web_auth_event_select/)
+		assert.match(authEventMigration, /CREATE POLICY web_auth_event_insert/)
+		assert.match(authEventMigration, /CREATE POLICY web_auth_event_delete_expired/)
+		assert.match(authEventMigration, /GRANT SELECT, INSERT, DELETE ON TABLE bauth\.auth_event/)
+		assert.doesNotMatch(authEventMigration, /GRANT[^;]+UPDATE[^;]+auth_event/)
 		assert.match(instrumentation, /validateWebRuntimeDatabaseConfiguration/)
 		assert.match(instrumentation, /DATABASE_URL must use/)
 		assert.match(
@@ -133,6 +142,7 @@ describe('Web runtime database boundary', () => {
 		assert.match(environment, /inherits only `letletme_web_auth`/)
 		assert.deepEqual([...WEB_AUTH_RUNTIME_TABLES].sort(), [
 			'account',
+			'auth_event',
 			'bug_report_storage_nonces',
 			'fpl_entry_binding_challenges',
 			'fpl_entry_name_history',

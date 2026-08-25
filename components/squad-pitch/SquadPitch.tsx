@@ -40,6 +40,9 @@ export interface SquadPitchPlayer {
 	fixture?: string
 	isCaptain?: boolean
 	isViceCaptain?: boolean
+	autoSubRole?:
+		'PREDICTED_IN' | 'PREDICTED_OUT' | 'OFFICIAL_IN' | 'OFFICIAL_OUT'
+	autoSubPartnerName?: string
 }
 
 export interface SquadPitchLabels {
@@ -51,6 +54,7 @@ export interface SquadPitchLabels {
 	/** Prefer the callback for client callers; templates keep server callers serializable. */
 	playerDetails?: (player: SquadPitchPlayer) => string
 	playerDetailsTemplate?: string
+	autoSub?: (player: SquadPitchPlayer) => string
 }
 
 export interface SquadPitchProps {
@@ -97,7 +101,13 @@ const POSITION_ROW_WITH_BENCH_CLASS: Record<SquadPosition, string> = {
 	FWD: 'top-[63%] sm:top-[68%]'
 }
 
-function PlayerMarker({ player, labels }: { player: SquadPitchPlayer; labels: SquadPitchLabels }) {
+function PlayerMarker({
+	player,
+	labels
+}: {
+	player: SquadPitchPlayer
+	labels: SquadPitchLabels
+}) {
 	const marker = player.isCaptain ? 'C' : player.isViceCaptain ? 'V' : null
 	if (!marker) return null
 
@@ -111,6 +121,50 @@ function PlayerMarker({ player, labels }: { player: SquadPitchPlayer; labels: Sq
 			className={`absolute left-[3%] top-[7%] z-20 grid size-[clamp(1.1rem,3.6cqi,1.8rem)] place-items-center rounded-full border-2 bg-[#111315] font-display text-[clamp(0.62rem,1.9cqi,0.95rem)] font-bold leading-none text-[#f5f1e8] shadow-[0_4px_10px_rgba(0,0,0,0.38)] ${borderClass}`}
 		>
 			{marker}
+		</span>
+	)
+}
+
+function autoSubLabel(
+	player: SquadPitchPlayer,
+	labels: SquadPitchLabels
+): string {
+	const incoming = player.autoSubRole?.endsWith('_IN') ?? false
+	return labels.autoSub?.(player) ?? (incoming ? 'Auto-sub in' : 'Auto-sub out')
+}
+
+export function squadPitchPlayerDetailsLabel(
+	player: SquadPitchPlayer,
+	labels: SquadPitchLabels
+): string {
+	const details = playerDetailsLabel(player, labels)
+	return player.autoSubRole
+		? `${details}; ${autoSubLabel(player, labels)}`
+		: details
+}
+
+function AutoSubMarker({
+	player,
+	labels,
+	inline = false
+}: {
+	player: SquadPitchPlayer
+	labels: SquadPitchLabels
+	inline?: boolean
+}) {
+	if (!player.autoSubRole) return null
+	const incoming = player.autoSubRole.endsWith('_IN')
+	const predicted = player.autoSubRole.startsWith('PREDICTED_')
+	const label = autoSubLabel(player, labels)
+
+	return (
+		<span
+			role="img"
+			aria-label={label}
+			title={label}
+			className={`${inline ? 'inline-flex h-[clamp(0.8rem,2cqi,1.1rem)] shrink-0 items-center px-[clamp(0.18rem,0.45cqi,0.32rem)] text-[clamp(0.5rem,1cqi,0.7rem)]' : 'absolute right-[3%] top-[7%] z-20 grid min-w-[clamp(1rem,3cqi,1.5rem)] place-items-center px-[clamp(0.12rem,0.35cqi,0.22rem)] py-[clamp(0.08rem,0.25cqi,0.16rem)] text-[clamp(0.6rem,1.6cqi,0.85rem)]'} rounded-sm border font-mono font-black leading-none shadow-[0_4px_10px_rgba(0,0,0,0.3)] ${incoming ? 'border-[#00ff85] bg-[#00ff85] text-[#210025]' : 'border-[#ff5fa2] bg-[#e90052] text-white'} ${predicted ? 'border-dashed' : ''}`}
+		>
+			{incoming ? '↑' : '↓'}
 		</span>
 	)
 }
@@ -177,8 +231,18 @@ function PlayerCard({
 			<div
 				className={`relative z-10 transition-[filter,transform] duration-200 ${compact ? '-mb-[clamp(0.2rem,0.65cqi,0.36rem)] w-[86%]' : '-mb-[clamp(0.25rem,0.8cqi,0.45rem)] w-[90%]'} drop-shadow-[0_9px_8px_rgba(0,24,16,0.28)] ${isInteractive ? 'group-hover:-translate-y-0.5 group-hover:drop-shadow-[0_13px_11px_rgba(0,24,16,0.4)]' : ''}`}
 			>
-				<TeamKitBadge player={player} className="h-auto w-full select-none" />
-				<PlayerMarker player={player} labels={labels} />
+				<TeamKitBadge
+					player={player}
+					className="h-auto w-full select-none"
+				/>
+				<PlayerMarker
+					player={player}
+					labels={labels}
+				/>
+				<AutoSubMarker
+					player={player}
+					labels={labels}
+				/>
 			</div>
 
 			<div className="relative z-20 w-full overflow-hidden rounded-[clamp(0.2rem,0.8cqi,0.45rem)] border border-white/45 shadow-[0_7px_14px_rgba(0,37,23,0.3)]">
@@ -226,8 +290,8 @@ function PlayerCard({
 					>
 						{content}
 					</Link>
-				)
-			) : content}
+					)
+				) : content}
 		</li>
 	)
 }
@@ -285,16 +349,26 @@ function BenchPlayerCard({
 }) {
 	const isInteractive = Boolean(onPlayerClick || player.href)
 	const openPlayerDetail = () => onPlayerClick?.(player.id)
+	const autoSubbedOut = player.autoSubRole?.endsWith('_OUT') ?? false
 	const content = (
-		<div className="flex min-w-0 items-center gap-[clamp(0.2rem,0.8cqi,0.5rem)] rounded-[clamp(0.2rem,0.7cqi,0.4rem)] border border-white/80 bg-[#f8f6ef]/95 px-[clamp(0.2rem,0.8cqi,0.5rem)] py-[clamp(0.18rem,0.6cqi,0.38rem)] text-left shadow-[0_5px_12px_rgba(0,37,23,0.2)]">
+		<div
+			className={`flex min-w-0 items-center gap-[clamp(0.2rem,0.8cqi,0.5rem)] rounded-[clamp(0.2rem,0.7cqi,0.4rem)] border bg-[#f8f6ef]/95 px-[clamp(0.2rem,0.8cqi,0.5rem)] py-[clamp(0.18rem,0.6cqi,0.38rem)] text-left shadow-[0_5px_12px_rgba(0,37,23,0.2)] ${autoSubbedOut ? 'border-[#e90052] ring-1 ring-[#e90052]/30' : 'border-white/80'}`}
+		>
 			<TeamKitBadge
 				player={player}
 				className="h-[clamp(1.55rem,5.8cqi,3.4rem)] w-[clamp(1.8rem,7cqi,4.2rem)] shrink-0 object-contain text-[clamp(0.42rem,1.1cqi,0.62rem)]"
 			/>
 			<div className="min-w-0 text-left">
-				<p className="truncate font-mono text-[clamp(0.34rem,0.82cqi,0.52rem)] font-bold uppercase leading-tight tracking-[0.08em] text-[#38003c]/55">
-					{label}
-				</p>
+				<div className="flex min-w-0 items-center gap-[clamp(0.16rem,0.45cqi,0.3rem)]">
+					<p className="truncate font-mono text-[clamp(0.34rem,0.82cqi,0.52rem)] font-bold uppercase leading-tight tracking-[0.08em] text-[#38003c]/55">
+						{label}
+					</p>
+					<AutoSubMarker
+						player={player}
+						labels={labels}
+						inline
+					/>
+				</div>
 				<p className="truncate font-display text-[clamp(0.42rem,1.2cqi,0.7rem)] font-bold uppercase leading-tight text-[#38003c]">
 					{player.webName}
 				</p>
@@ -310,9 +384,7 @@ function BenchPlayerCard({
 	)
 
 	return (
-		<li
-			className="min-w-0 list-none"
-		>
+		<li className="min-w-0 list-none">
 			{isInteractive ? (
 				onPlayerClick ? (
 					<button
@@ -331,8 +403,8 @@ function BenchPlayerCard({
 					>
 						{content}
 					</Link>
-				)
-			) : content}
+					)
+				) : content}
 		</li>
 	)
 }

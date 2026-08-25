@@ -147,11 +147,11 @@ describe('formatLivePointsShareText', () => {
 					overallRank: null,
 					leagueRank: null,
 					transferCost: 4,
-					source: 'FPL_ENTRY_SUMMARY',
+					source: 'FPL_EVENT_LIVE',
 					state: 'FRESH',
 					eventPointSemantics: 'UNKNOWN',
 					revision: 'test-revision',
-					checkedAt: null,
+					checkedAt: '2026-08-24T06:00:00.000Z',
 					upstreamUpdatedAt: null,
 					staleAt: null,
 					nextRefreshAt: null,
@@ -185,6 +185,79 @@ describe('formatLivePointsShareText', () => {
 			text,
 			/Live points: https:\/\/letletme\.top\/live\/points\/6953$/
 		)
+	})
+
+	it('uses the promoted captain from the projected player list in the header', () => {
+		const promotedPlayers = starting.map(player => ({
+			...player,
+			isCaptain: player.name === 'Raya',
+			isViceCaptain: false
+		}))
+		const text = formatLivePointsShareText({
+			gameweek: 1,
+			liveData: {
+				entry: 6953,
+				entryName: 'Projected XI',
+				playerName: 'Manager',
+				livePoints: 20,
+				liveNetPoints: 20,
+				liveTotalPoints: 20,
+				transferCost: 0,
+				chip: null,
+				captainName: 'Haaland'
+			},
+			startingPlayers: promotedPlayers,
+			benchPlayers: bench,
+			labels: { ...labels, footer: undefined }
+		})
+
+		assert.match(text, /Chip: None · C: Raya/)
+		assert.doesNotMatch(text, /C: Haaland/)
+	})
+
+	it('does not share an entry-summary value as a live score', () => {
+		const text = formatLivePointsShareText({
+			gameweek: 1,
+			liveData: {
+				entry: 6953,
+				entryName: 'Lagging Summary',
+				playerName: 'Manager',
+				score: {
+					eventPoints: 23,
+					netEventPoints: 23,
+					totalPoints: 23,
+					totalScope: 'OVERALL',
+					eventRank: null,
+					overallRank: null,
+					leagueRank: null,
+					transferCost: 0,
+					source: 'FPL_ENTRY_SUMMARY',
+					state: 'FRESH',
+					eventPointSemantics: 'UNKNOWN',
+					revision: 'summary:gw1:r4',
+					checkedAt: '2026-08-24T06:00:00.000Z',
+					upstreamUpdatedAt: null,
+					staleAt: null,
+					nextRefreshAt: null,
+					reconciliation: 'MATCHED',
+					reasonCodes: []
+				},
+				livePoints: 23,
+				liveNetPoints: 23,
+				liveTotalPoints: 23,
+				transferCost: 0,
+				chip: null,
+				captainName: 'Haaland'
+			},
+			startingPlayers: [],
+			benchPlayers: [],
+			labels: { ...labels, footer: undefined }
+		})
+
+		assert.match(text, /Live: \*\*—\*\*/)
+		assert.match(text, /Net: —/)
+		assert.match(text, /Season: —/)
+		assert.doesNotMatch(text, /\*\*23\*\*/)
 	})
 
 	it('omits hits when transfer cost is zero and shows the chip code', () => {

@@ -92,8 +92,10 @@ test('uses loopback as the local development client IP for Mini ingress', () => 
 test('trusts one valid Nginx-injected IP only with the local proxy secret', () => {
 	const previousAuthUrl = process.env.BETTER_AUTH_URL
 	const previousProxySecret = process.env.LETLETME_LOCAL_PROXY_SECRET
+	const previousPreviousProxySecret = process.env.LETLETME_LOCAL_PROXY_SECRET_PREVIOUS
 	process.env.BETTER_AUTH_URL = 'https://letletme.top'
 	process.env.LETLETME_LOCAL_PROXY_SECRET = 'local-proxy-secret'
+	process.env.LETLETME_LOCAL_PROXY_SECRET_PREVIOUS = 'previous-proxy-secret'
 	try {
 		assert.equal(
 			resolveProviderClientIp(
@@ -101,6 +103,16 @@ test('trusts one valid Nginx-injected IP only with the local proxy secret', () =
 					host: 'letletme.top',
 					'x-letletme-proxy-client-ip': '203.0.113.7',
 					'x-letletme-proxy-secret': 'local-proxy-secret'
+				})
+			),
+			'203.0.113.7'
+		)
+		assert.equal(
+			resolveProviderClientIp(
+				new Headers({
+					host: 'letletme.top',
+					'x-letletme-proxy-client-ip': '203.0.113.7',
+					'x-letletme-proxy-secret': 'previous-proxy-secret'
 				})
 			),
 			'203.0.113.7'
@@ -142,6 +154,11 @@ test('trusts one valid Nginx-injected IP only with the local proxy secret', () =
 			delete process.env.LETLETME_LOCAL_PROXY_SECRET
 		} else {
 			process.env.LETLETME_LOCAL_PROXY_SECRET = previousProxySecret
+		}
+		if (previousPreviousProxySecret === undefined) {
+			delete process.env.LETLETME_LOCAL_PROXY_SECRET_PREVIOUS
+		} else {
+			process.env.LETLETME_LOCAL_PROXY_SECRET_PREVIOUS = previousPreviousProxySecret
 		}
 	}
 })

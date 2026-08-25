@@ -1,4 +1,5 @@
 import { safeRedirectPath } from './auth-redirects'
+import { logSafeAuthDiagnostic } from './auth-safe-log'
 import { isTrustedSameSiteRequest } from './request-origin'
 
 type SignOutRequest = (headers: Headers) => Promise<Response>
@@ -32,7 +33,8 @@ export function createLogoutRouteHandler(
 		try {
 			const authResponse = await signOut(request.headers)
 			if (!authResponse.ok) {
-				console.error('[logout] auth sign-out rejected', {
+				logSafeAuthDiagnostic('warn', 'better-auth diagnostic', {
+					name: 'LogoutRejected',
 					status: authResponse.status
 				})
 				return Response.json(
@@ -57,8 +59,9 @@ export function createLogoutRouteHandler(
 			copySetCookies(authResponse.headers, response.headers)
 			return response
 		} catch (error) {
-			console.error('[logout] sign-out failed', {
-				error: error instanceof Error ? error.name : 'UnknownError'
+			logSafeAuthDiagnostic('error', 'better-auth diagnostic', {
+				name: 'LogoutFailed',
+				cause: error
 			})
 			return Response.json(
 				{ error: 'Sign out failed' },

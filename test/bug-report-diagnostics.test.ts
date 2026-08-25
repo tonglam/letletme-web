@@ -38,7 +38,11 @@ describe('browser bug-report diagnostics', () => {
 		})
 		Object.defineProperty(globalThis, 'window', {
 			configurable: true,
-			value: { location: { pathname: '/live/matches' }, innerWidth: 390, innerHeight: 844 }
+			value: {
+				location: { pathname: '/live/matches' },
+				innerWidth: 390,
+				innerHeight: 844
+			}
 		})
 		Object.defineProperty(globalThis, 'document', {
 			configurable: true,
@@ -62,6 +66,7 @@ describe('browser bug-report diagnostics', () => {
 		assert.equal(meta.viewportBucket, 'smallxmedium')
 		assert.deepEqual(meta.operations, [
 			{
+				at: '2026-08-20T00:00:00.000Z',
 				operation: 'LiveFixturePlayers',
 				requestId: 'request-1',
 				code: 'UPSTREAM_GRAPHQL_ERROR',

@@ -62,20 +62,44 @@ export interface MiniProgramConfirmResult {
 	token: string
 	expiresAt: string
 	profile: MiniProgramAccountProfile
+	/** Internal-only audit data stripped by the route before serialization. */
+	observability?: MiniProgramSessionAudit
+}
+
+export interface MiniProgramSessionAudit {
+	sessionId: string
+	accountId: string
+	webUserId: string | null
+	deviceId: string
+	newAccount: boolean
+	revokedSessionCount: number
+}
+
+export interface MiniProgramSessionIdentity {
+	sessionId: string
+	accountId: string
+	webUserId: string | null
+	deviceId: string
+}
+
+type MiniProgramAccountWithCreation = MiniProgramAccount & {
+	created: boolean
 }
 
 export type MiniProgramWeChatLoginResult =
 	| {
 			contractVersion: 1
 			linked: false
-	  }
+			observability?: undefined
+		}
 	| {
 			contractVersion: 1
 			linked: true
 			token: string
 			expiresAt: string
 			profile: MiniProgramAccountProfile
-	  }
+			observability?: MiniProgramSessionAudit
+		}
 	| {
 			contractVersion: 2
 			authenticated: true
@@ -83,7 +107,8 @@ export type MiniProgramWeChatLoginResult =
 			token: string
 			expiresAt: string
 			profile: MiniProgramAccountProfile
-	  }
+			observability?: MiniProgramSessionAudit
+		}
 
 function generateEmailCode(): string {
 	return String(randomInt(0, 1000000)).padStart(6, '0')
@@ -162,8 +187,8 @@ async function findOrCreateMiniProgramAccount(input: {
 	identity: WeChatIdentity
 	now: Date
 	legacyWebUserId?: string | null
-}): Promise<MiniProgramAccount> {
-	await input.tx
+}): Promise<MiniProgramAccountWithCreation> {
+	const inserted = await input.tx
 		.insert(schema.miniProgramAccount)
 		.values({
 			id: randomUUID(),
@@ -177,6 +202,8 @@ async function findOrCreateMiniProgramAccount(input: {
 			updatedAt: input.now
 		})
 		.onConflictDoNothing()
+		.returning({ id: schema.miniProgramAccount.id })
+	const created = inserted.length > 0
 
 	const identityMatch = input.identity.unionId
 		? or(
@@ -249,7 +276,7 @@ async function findOrCreateMiniProgramAccount(input: {
 			.returning()
 	}
 	if (!account) throw new MiniProgramAuthError('Unauthenticated', 401)
-	return account
+	return { ...account, created }
 }
 
 async function loadWebUser(userId: string | null): Promise<WebUser | null> {
@@ -276,6 +303,8 @@ async function loadAccountProfile(
 
 async function resolveAccountByToken(token: string): Promise<{
 	sessionId: string
+	deviceId: string
+	webUserId: string | null
 	account: MiniProgramAccount
 }> {
 	const [session] = await db
@@ -307,7 +336,24 @@ async function resolveAccountByToken(token: string): Promise<{
 			.limit(1)
 	}
 	if (!account) throw new MiniProgramAuthError('Unauthenticated', 401)
-	return { sessionId: session.id, account }
+	return {
+		sessionId: session.id,
+		deviceId: session.deviceId,
+		webUserId: session.userId,
+		account
+	}
+}
+
+export async function getMiniProgramSessionIdentity(
+	token: string
+): Promise<MiniProgramSessionIdentity> {
+	const resolved = await resolveAccountByToken(token)
+	return {
+		sessionId: resolved.sessionId,
+		accountId: resolved.account.id,
+		webUserId: resolved.webUserId,
+		deviceId: resolved.deviceId
+	}
 }
 
 export async function exchangeWeChatLoginCode(
@@ -461,6 +507,7 @@ export async function confirmMiniProgramEmailBinding(input: {
 				.update(schema.user)
 				.set({ openid: identity.openId, updatedAt: now })
 				.where(eq(schema.user.id, user.id))
+			const sessionId = randomUUID()
 			await tx
 				.update(schema.miniProgramSession)
 				.set({ userId: user.id })
@@ -470,7 +517,7 @@ export async function confirmMiniProgramEmailBinding(input: {
 						isNull(schema.miniProgramSession.revokedAt)
 					)
 				)
-			await tx
+			const revokedSessions = await tx
 				.update(schema.miniProgramSession)
 				.set({ revokedAt: now })
 				.where(
@@ -480,8 +527,9 @@ export async function confirmMiniProgramEmailBinding(input: {
 						isNull(schema.miniProgramSession.revokedAt)
 					)
 				)
+				.returning({ id: schema.miniProgramSession.id })
 			await tx.insert(schema.miniProgramSession).values({
-				id: randomUUID(),
+				id: sessionId,
 				tokenHash: hashMiniProgramSecret(token),
 				accountId: account.id,
 				userId: user.id,
@@ -493,7 +541,14 @@ export async function confirmMiniProgramEmailBinding(input: {
 				.update(schema.miniProgramEmailCode)
 				.set({ consumedAt: now })
 				.where(eq(schema.miniProgramEmailCode.id, pending.id))
-			return { kind: 'ok' as const, accountId: account.id }
+			return {
+				kind: 'ok' as const,
+				accountId: account.id,
+				webUserId: user.id,
+				sessionId,
+				newAccount: account.created,
+				revokedSessionCount: revokedSessions.length
+			}
 		})
 
 		if (result.kind === 'invalid') {
@@ -512,6 +567,15 @@ export async function confirmMiniProgramEmailBinding(input: {
 			token,
 			expiresAt: expiresAt.toISOString(),
 			profile: await loadAccountProfile(result.accountId)
+			,
+			observability: {
+				sessionId: result.sessionId,
+				accountId: result.accountId,
+				webUserId: result.webUserId,
+				deviceId,
+				newAccount: result.newAccount,
+				revokedSessionCount: result.revokedSessionCount
+			}
 		}
 	} catch (error) {
 		if (isUniqueViolation(error)) {
@@ -531,7 +595,7 @@ async function signInStandaloneMiniProgram(input: {
 	const now = new Date()
 	const token = generateToken()
 	const expiresAt = new Date(now.getTime() + SESSION_TTL_MS)
-	const accountId = await db.transaction(async tx => {
+	const audit = await db.transaction(async tx => {
 		const [legacyUser] = await tx
 			.select()
 			.from(schema.user)
@@ -545,7 +609,8 @@ async function signInStandaloneMiniProgram(input: {
 			legacyWebUserId: legacyUser?.id
 		})
 
-		await tx
+		const sessionId = randomUUID()
+		const revokedSessions = await tx
 			.update(schema.miniProgramSession)
 			.set({ revokedAt: now })
 			.where(
@@ -555,8 +620,9 @@ async function signInStandaloneMiniProgram(input: {
 					isNull(schema.miniProgramSession.revokedAt)
 				)
 			)
+			.returning({ id: schema.miniProgramSession.id })
 		await tx.insert(schema.miniProgramSession).values({
-			id: randomUUID(),
+			id: sessionId,
 			tokenHash: hashMiniProgramSecret(token),
 			accountId: account.id,
 			userId: account.linkedWebUserId,
@@ -564,16 +630,24 @@ async function signInStandaloneMiniProgram(input: {
 			expiresAt,
 			lastUsedAt: now
 		})
-		return account.id
+		return {
+			sessionId,
+			accountId: account.id,
+			webUserId: account.linkedWebUserId,
+			deviceId: input.deviceId,
+			newAccount: account.created,
+			revokedSessionCount: revokedSessions.length
+		}
 	})
-	const profile = await loadAccountProfile(accountId)
+	const profile = await loadAccountProfile(audit.accountId)
 	return {
 		contractVersion: 2,
 		authenticated: true,
 		webAccountLinked: profile.webAccountLinked,
 		token,
 		expiresAt: expiresAt.toISOString(),
-		profile
+		profile,
+		observability: audit
 	}
 }
 
@@ -591,7 +665,7 @@ async function signInLegacyMiniProgram(input: {
 	const now = new Date()
 	const token = generateToken()
 	const expiresAt = new Date(now.getTime() + SESSION_TTL_MS)
-	const accountId = await db.transaction(async tx => {
+	const audit = await db.transaction(async tx => {
 		const account = await findOrCreateMiniProgramAccount({
 			tx,
 			identity: input.identity,
@@ -601,7 +675,8 @@ async function signInLegacyMiniProgram(input: {
 		if (!account || account.linkedWebUserId !== user.id) {
 			throw new MiniProgramAuthError('Unauthenticated', 401)
 		}
-		await tx
+		const sessionId = randomUUID()
+		const revokedSessions = await tx
 			.update(schema.miniProgramSession)
 			.set({ revokedAt: now })
 			.where(
@@ -611,8 +686,9 @@ async function signInLegacyMiniProgram(input: {
 					isNull(schema.miniProgramSession.revokedAt)
 				)
 			)
+			.returning({ id: schema.miniProgramSession.id })
 		await tx.insert(schema.miniProgramSession).values({
-			id: randomUUID(),
+			id: sessionId,
 			tokenHash: hashMiniProgramSecret(token),
 			accountId: account.id,
 			userId: user.id,
@@ -620,14 +696,22 @@ async function signInLegacyMiniProgram(input: {
 			expiresAt,
 			lastUsedAt: now
 		})
-		return account.id
+		return {
+			sessionId,
+			accountId: account.id,
+			webUserId: user.id,
+			deviceId: input.deviceId,
+			newAccount: account.created,
+			revokedSessionCount: revokedSessions.length
+		}
 	})
 	return {
 		contractVersion: 1,
 		linked: true,
 		token,
 		expiresAt: expiresAt.toISOString(),
-		profile: await loadAccountProfile(accountId)
+		profile: await loadAccountProfile(audit.accountId),
+		observability: audit
 	}
 }
 
@@ -770,11 +854,31 @@ export async function unlinkMiniProgramWebAccount(
 	return loadAccountProfile(resolved.account.id)
 }
 
-export async function revokeMiniProgramSession(token: string): Promise<void> {
-	await db
+export async function revokeMiniProgramSession(
+	token: string
+): Promise<MiniProgramSessionAudit | null> {
+	const [session] = await db
 		.update(schema.miniProgramSession)
 		.set({ revokedAt: new Date() })
 		.where(
-			eq(schema.miniProgramSession.tokenHash, hashMiniProgramSecret(token))
+			and(
+				eq(schema.miniProgramSession.tokenHash, hashMiniProgramSecret(token)),
+			isNull(schema.miniProgramSession.revokedAt)
+			)
 		)
+		.returning({
+			id: schema.miniProgramSession.id,
+			accountId: schema.miniProgramSession.accountId,
+			userId: schema.miniProgramSession.userId,
+			deviceId: schema.miniProgramSession.deviceId
+		})
+	if (!session || !session.accountId) return null
+	return {
+		sessionId: session.id,
+		accountId: session.accountId,
+		webUserId: session.userId,
+		deviceId: session.deviceId,
+		newAccount: false,
+		revokedSessionCount: 1
+	}
 }

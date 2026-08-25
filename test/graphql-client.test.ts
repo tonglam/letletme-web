@@ -4,12 +4,29 @@ import test from 'node:test'
 import {
 	clearPendingClientQueries,
 	executeQuery,
-	GraphQLRequestError
+	extractOperationName,
+	GraphQLRequestError,
+	normalizeGraphQLTimeoutMs
 } from '@/lib/graphql-client'
+
+test('normalizeGraphQLTimeoutMs matches the request deadline fallback', () => {
+	assert.equal(normalizeGraphQLTimeoutMs(), 15_000)
+	assert.equal(normalizeGraphQLTimeoutMs(5_000), 5_000)
+	assert.equal(normalizeGraphQLTimeoutMs(0), 15_000)
+	assert.equal(normalizeGraphQLTimeoutMs(Number.NaN), 15_000)
+	assert.equal(normalizeGraphQLTimeoutMs(Number.POSITIVE_INFINITY), 15_000)
+})
 
 test('executeQuery aborts a stalled request at the configured deadline', async () => {
 	const originalFetch = globalThis.fetch
+	const originalError = console.error
 	let observedAbort = false
+	let observedLog: Record<string, unknown> | undefined
+	console.error = (_message?: unknown, details?: unknown) => {
+		if (details && typeof details === 'object') {
+			observedLog = details as Record<string, unknown>
+		}
+	}
 
 	globalThis.fetch = ((_input: string | URL | Request, init?: RequestInit) =>
 		new Promise<Response>((_resolve, reject) => {
@@ -23,19 +40,36 @@ test('executeQuery aborts a stalled request at the configured deadline', async (
 
 	try {
 		await assert.rejects(
-			executeQuery('query TimeoutProbe { __typename }', undefined, { timeoutMs: 5 }),
-			/GraphQL request timed out/,
+			executeQuery('query TimeoutProbe { __typename }', undefined, {
+				timeoutMs: 5
+			}),
+			/GraphQL request timed out/
 		)
 		assert.equal(observedAbort, true)
+		assert.equal(observedLog?.operation, 'TimeoutProbe')
+		assert.equal(observedLog?.timeoutMs, 5)
+		assert.equal(typeof observedLog?.durationMs, 'number')
 	} finally {
 		globalThis.fetch = originalFetch
+		console.error = originalError
 	}
+})
+
+test('extractOperationName supports named GraphQL operations', () => {
+	assert.equal(
+		extractOperationName('query NamedProbe { __typename }'),
+		'NamedProbe'
+	)
+	assert.equal(extractOperationName('{ __typename }'), undefined)
 })
 
 test('executeQuery sends the named GraphQL operation', async () => {
 	const originalFetch = globalThis.fetch
 	let requestBody: unknown
-	globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+	globalThis.fetch = (async (
+		_input: string | URL | Request,
+		init?: RequestInit
+	) => {
 		requestBody = JSON.parse(String(init?.body))
 		return Response.json({ data: { __typename: 'Query' } })
 	}) as typeof fetch
@@ -44,7 +78,7 @@ test('executeQuery sends the named GraphQL operation', async () => {
 		await executeQuery('query NamedProbe { __typename }')
 		assert.deepEqual(requestBody, {
 			operationName: 'NamedProbe',
-			query: 'query NamedProbe { __typename }',
+			query: 'query NamedProbe { __typename }'
 		})
 	} finally {
 		globalThis.fetch = originalFetch
@@ -63,7 +97,15 @@ test('executeQuery preserves HTTP status, GraphQL code, and Retry-After', async 
 					}
 				]
 			},
-			{ status: 429, headers: { 'Retry-After': '37' } }
+			{
+				status: 429,
+				headers: {
+					'Retry-After': '37',
+					'X-RateLimit-Policy': 'graphql-v4',
+					'X-RateLimit-Scope': 'workload',
+					'X-RateLimit-Workload': 'player-stats'
+				}
+			}
 		)) as typeof fetch
 
 	try {
@@ -74,6 +116,9 @@ test('executeQuery preserves HTTP status, GraphQL code, and Retry-After', async 
 				assert.equal(error.status, 429)
 				assert.equal(error.code, 'RATE_LIMITED')
 				assert.equal(error.retryAfterSeconds, 37)
+				assert.equal(error.rateLimitPolicy, 'graphql-v4')
+				assert.equal(error.rateLimitScope, 'workload')
+				assert.equal(error.rateLimitWorkload, 'player-stats')
 				return true
 			}
 		)
@@ -85,22 +130,37 @@ test('executeQuery preserves HTTP status, GraphQL code, and Retry-After', async 
 test('executeQuery preserves a GraphQL error code on a successful HTTP response', async () => {
 	const originalFetch = globalThis.fetch
 	globalThis.fetch = (async () =>
-		Response.json({
-			errors: [
-				{
-					message: 'Forbidden',
-					extensions: { code: 'FORBIDDEN' }
+		Response.json(
+			{
+				errors: [
+					{
+						message: 'Rate limit exceeded',
+						extensions: { code: 'RATE_LIMITED' }
+					}
+				]
+			},
+			{
+				status: 200,
+				headers: {
+					'Retry-After': '19',
+					'X-RateLimit-Policy': 'graphql-v4',
+					'X-RateLimit-Scope': 'workload',
+					'X-RateLimit-Workload': 'player-stats'
 				}
-			]
-		})) as typeof fetch
+			}
+		)) as typeof fetch
 
 	try {
 		await assert.rejects(
-			executeQuery('query ForbiddenProbe { __typename }'),
+			executeQuery('query RateLimitGraphQLErrorProbe { __typename }'),
 			(error: unknown) => {
 				assert.ok(error instanceof GraphQLRequestError)
 				assert.equal(error.status, 200)
-				assert.equal(error.code, 'FORBIDDEN')
+				assert.equal(error.code, 'RATE_LIMITED')
+				assert.equal(error.retryAfterSeconds, 19)
+				assert.equal(error.rateLimitPolicy, 'graphql-v4')
+				assert.equal(error.rateLimitScope, 'workload')
+				assert.equal(error.rateLimitWorkload, 'player-stats')
 				return true
 			}
 		)
@@ -164,7 +224,8 @@ test('executeQuery caches only allowlisted public browser responses', async () =
 	clearPendingClientQueries()
 
 	try {
-		const query = 'query SearchPlayersForPicker { playersForPicker { items { id } } }'
+		const query =
+			'query SearchPlayersForPicker { playersForPicker { items { id } } }'
 		await executeQuery(query)
 		await executeQuery(query)
 		assert.equal(calls, 1)

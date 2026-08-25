@@ -1,14 +1,13 @@
 import { publicGraphQLRequestMessage } from '@/lib/safe-errors'
 
 export type ForwardableAuthorization =
-	| { ok: true; value: string | null }
-	| { ok: false };
+	{ ok: true; value: string | null } | { ok: false }
 
-const MINI_PROGRAM_BEARER = /^Bearer ([A-Za-z0-9_-]{32,512})$/i;
+const MINI_PROGRAM_BEARER = /^Bearer ([A-Za-z0-9_-]{32,512})$/i
 
 /** Accept only the opaque Web-issued Mini Program token format. */
 export function readForwardableMiniProgramAuthorization(
-	headers: Headers,
+	headers: Headers
 ): ForwardableAuthorization {
 	const raw = headers.get('authorization')
 	if (raw === null) return { ok: true, value: null }
@@ -27,6 +26,7 @@ const REQUEST_RATE_LIMIT_RESPONSE_HEADERS = [
 	'retry-after',
 	'x-ratelimit-policy',
 	'x-ratelimit-scope',
+	'x-ratelimit-workload',
 	'x-ratelimit-shadow-outcome',
 	'x-ratelimit-shadow-scope'
 ] as const
@@ -36,9 +36,13 @@ export function copySafeGraphQLUpstreamHeaders(
 	target: Headers,
 	options: { includeRateLimitMetadata?: boolean } = {}
 ): void {
-	const names = options.includeRateLimitMetadata === false
-		? SAFE_UPSTREAM_RESPONSE_HEADERS
-		: [...SAFE_UPSTREAM_RESPONSE_HEADERS, ...REQUEST_RATE_LIMIT_RESPONSE_HEADERS]
+	const names =
+		options.includeRateLimitMetadata === false
+			? SAFE_UPSTREAM_RESPONSE_HEADERS
+			: [
+					...SAFE_UPSTREAM_RESPONSE_HEADERS,
+					...REQUEST_RATE_LIMIT_RESPONSE_HEADERS
+				]
 	for (const name of names) {
 		const value = upstream.get(name)
 		if (value) target.set(name, value)
@@ -55,6 +59,7 @@ const SAFE_GRAPHQL_ERROR_CODES = new Set([
 	'NOT_FOUND',
 	'RATE_LIMITED',
 	'UNAUTHENTICATED',
+	'VIEWER_ENTRY_REQUIRED'
 ])
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -62,7 +67,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 function publicGraphQLErrorCode(status: number, value: unknown): string {
 	const candidate =
-		isRecord(value) && isRecord(value.extensions) &&
+		isRecord(value) &&
+		isRecord(value.extensions) &&
 		typeof value.extensions.code === 'string'
 			? value.extensions.code
 			: null
@@ -90,7 +96,10 @@ function publicGraphQLRequestCode(status: number): string {
  * to a browser. Data is retained for partial GraphQL responses, but paths,
  * extensions, stacks, and resolver/database messages are never proxied.
  */
-export function sanitizeGraphQLUpstreamBody(body: string, status: number): string {
+export function sanitizeGraphQLUpstreamBody(
+	body: string,
+	status: number
+): string {
 	let parsed: unknown
 	try {
 		parsed = JSON.parse(body)
@@ -99,7 +108,7 @@ export function sanitizeGraphQLUpstreamBody(body: string, status: number): strin
 			errors: [
 				{
 					message: publicGraphQLRequestMessage(status, null),
-					extensions: { code: publicGraphQLRequestCode(status) },
+					extensions: { code: publicGraphQLRequestCode(status) }
 				}
 			]
 		})
@@ -108,12 +117,12 @@ export function sanitizeGraphQLUpstreamBody(body: string, status: number): strin
 	if (!isRecord(parsed)) {
 		return JSON.stringify({
 			errors: [
-			{
-				message: publicGraphQLRequestMessage(status, null),
-				extensions: { code: publicGraphQLRequestCode(status) },
-			}
-		]
-	})
+				{
+					message: publicGraphQLRequestMessage(status, null),
+					extensions: { code: publicGraphQLRequestCode(status) }
+				}
+			]
+		})
 	}
 
 	const rawErrors = parsed.errors
@@ -124,20 +133,20 @@ export function sanitizeGraphQLUpstreamBody(body: string, status: number): strin
 				const code = publicGraphQLErrorCode(status, error)
 				return {
 					message: publicGraphQLRequestMessage(status, code),
-					extensions: { code },
+					extensions: { code }
 				}
-			}),
+			})
 		})
 	}
 
 	if (status < 200 || status >= 300) {
 		return JSON.stringify({
 			errors: [
-			{
-				message: publicGraphQLRequestMessage(status, null),
-				extensions: { code: publicGraphQLRequestCode(status) },
-			}
-		]
+				{
+					message: publicGraphQLRequestMessage(status, null),
+					extensions: { code: publicGraphQLRequestCode(status) }
+				}
+			]
 		})
 	}
 

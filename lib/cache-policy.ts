@@ -13,7 +13,7 @@ export const CacheTag = {
 	market: 'market',
 	priceChanges: 'price-changes',
 	liveScores: 'live-scores',
-	transfers: 'transfers',
+	transfers: 'transfers'
 } as const
 
 export type CacheTagName = (typeof CacheTag)[keyof typeof CacheTag]
@@ -22,13 +22,13 @@ export type CacheTagName = (typeof CacheTag)[keyof typeof CacheTag]
 export const RevalidateSeconds = {
 	/** Market desk updates ~daily; short SWR for home teaser */
 	market: 60,
-	priceChanges: 300,
+	priceChanges: 60,
 	/** Events / GW identity and public bootstrap */
 	events: 5,
 	/** Aggregated public stats, fixtures, TOTW */
 	publicStats: 300,
 	/** Rarely changing overall season summary on home */
-	homeInsights: 3600,
+	homeInsights: 3600
 } as const
 
 export function publicFetchOptions(opts: {
@@ -42,7 +42,7 @@ export function publicFetchOptions(opts: {
 	return {
 		cache: 'force-cache',
 		next: { revalidate: opts.revalidate, tags: [...opts.tags] },
-		timeoutMs: 5_000,
+		timeoutMs: 5_000
 	}
 }
 
@@ -70,12 +70,15 @@ export const PUBLIC_GRAPHQL_OPERATION_NAMES = new Set([
 	'PublicLeagueTrends',
 	'PublicLeagueSelectionStats',
 	'TrendCohorts',
-	'TrendCohortSnapshot',
+	'TrendCohortSnapshot'
 ])
 
 /** CDN edge cache for allowlisted public proxy responses */
 export const PUBLIC_PROXY_CACHE_CONTROL =
 	'public, s-maxage=60, stale-while-revalidate=300, no-transform'
+
+export const PRICE_CHANGE_PROXY_CACHE_CONTROL =
+	'public, s-maxage=60, stale-while-revalidate=60, no-transform'
 
 export function extractGraphQLOperationName(body: unknown): string | null {
 	if (body == null || typeof body !== 'object') return null
@@ -84,8 +87,18 @@ export function extractGraphQLOperationName(body: unknown): string | null {
 		return record.operationName.trim()
 	}
 	if (typeof record.query !== 'string') return null
-	const match = record.query.match(/\b(?:query|mutation)\s+([A-Za-z_][A-Za-z0-9_]*)/)
+	const match = record.query.match(
+		/\b(?:query|mutation)\s+([A-Za-z_][A-Za-z0-9_]*)/
+	)
 	return match?.[1] ?? null
+}
+
+export function publicGraphQLProxyCacheControl(
+	operationName: string | null
+): string {
+	return operationName === 'GetPriceChangeBoard'
+		? PRICE_CHANGE_PROXY_CACHE_CONTROL
+		: PUBLIC_PROXY_CACHE_CONTROL
 }
 
 export function isPublicCacheableGraphQLRequest(input: {

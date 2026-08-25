@@ -162,7 +162,10 @@ function PlayerHeader({
 				>
 					{code === 'UNK' ? '—' : code}
 				</Badge>
-				<span className="truncate font-display text-sm font-bold uppercase tracking-wide sm:text-base">
+				<span
+					className="truncate font-display text-sm font-bold uppercase tracking-wide sm:text-base"
+					{...{ elementtiming: 'player-detail-card' }}
+				>
 					{player.webName}
 				</span>
 				<span className="text-xs text-muted-foreground">
@@ -242,18 +245,24 @@ function signalDisplay(
 ): string {
 	if (signal.analysisStatus === 'PRESEASON')
 		return t('timeline.preseasonPerformance')
-	if (signal.analysisStatus === 'INSUFFICIENT')
-		return t('timeline.sampleInsufficient')
 	if (signal.reasonCodes.includes('UNDERSTAT_MAPPING_NOT_VERIFIED')) {
 		return t('timeline.realityUnverified')
 	}
-	if (signal.value == null) return t('timeline.metricUnavailable')
-	return signal.unit === 'percent'
-		? `${format.number(signal.value, { maximumFractionDigits: 1 })}%`
-		: format.number(signal.value, {
-				minimumFractionDigits: 2,
-				maximumFractionDigits: 2
-			})
+	if (signal.value == null) {
+		return signal.analysisStatus === 'INSUFFICIENT'
+			? t('timeline.sampleInsufficient')
+			: t('timeline.metricUnavailable')
+	}
+	const formattedValue =
+		signal.unit === 'percent'
+			? `${format.number(signal.value, { maximumFractionDigits: 1 })}%`
+			: format.number(signal.value, {
+					minimumFractionDigits: 2,
+					maximumFractionDigits: 2
+				})
+	return signal.analysisStatus === 'INSUFFICIENT'
+		? t('timeline.sampleInsufficientWithValue', { value: formattedValue })
+		: formattedValue
 }
 
 function signalLabel(
@@ -406,7 +415,7 @@ function TimelineCell({
 							</span>
 							<span
 								className={cn(
-									'shrink-0 font-medium tabular-nums',
+									'min-w-0 max-w-full break-words text-right font-medium tabular-nums',
 									currentCellWins &&
 										(accent === 'primary' ? 'text-primary-ink' : 'text-warning'),
 									signal.analysisStatus !== 'READY' &&
@@ -584,7 +593,7 @@ function FragmentRow({
 		first && second && first.position === second.position
 			? first.signals.map((signal, index) =>
 					comparableWinner(signal, second.signals[index], true)
-			  )
+				  )
 			: []
 	return (
 		<div

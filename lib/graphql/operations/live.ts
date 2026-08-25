@@ -197,6 +197,7 @@ export const GET_LIVE_POINTS = `
         multiplier
         pickActive
         autoSub
+        bgw
         expectedGoals
         expectedAssists
         expectedGoalInvolvements
@@ -239,6 +240,7 @@ export interface LivePick {
 	multiplier?: number
 	pickActive?: boolean
 	autoSub?: boolean
+	bgw?: boolean
 	expectedGoals: number | null
 	expectedAssists: number | null
 	expectedGoalInvolvements: number | null
@@ -272,6 +274,7 @@ export type LiveManagerScore = {
 	leagueRank: number | null
 	transferCost: number
 	source:
+		| 'FPL_EVENT_LIVE'
 		| 'FPL_ENTRY_SUMMARY'
 		| 'FPL_CLASSIC_STANDINGS'
 		| 'FPL_FINAL_RESULT'
@@ -542,12 +545,12 @@ export interface LiveMatchdayDesk {
 	revision: string
 	state: LiveSnapshotState
 	windowState: LiveWindowState
-		dataAvailability: LiveDataAvailability
-		liveRevision: string | null
-		publishedAt: string
-		source: 'REDIS' | 'POSTGRES' | 'CORE' | 'STALE'
-		sourceCheckedAt?: string | null
-		stale?: boolean
+	dataAvailability: LiveDataAvailability
+	liveRevision: string | null
+	publishedAt: string
+	source: 'REDIS' | 'POSTGRES' | 'CORE' | 'STALE'
+	sourceCheckedAt?: string | null
+	stale?: boolean
 	nextRefreshAt?: string | null
 	matches: LiveMatchdayDeskRow[]
 	nextFixtures: LiveMatchdayDeskRow[]

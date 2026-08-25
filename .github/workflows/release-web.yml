@@ -1,0 +1,366 @@
+name: Web production release
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: 'Exact origin/main SHA to release'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: letletme-web-production-release
+  cancel-in-progress: false
+
+env:
+  VERCEL_CLI_VERSION: 52.0.0
+  RELEASE_SHA: ${{ github.event.workflow_run.head_sha || inputs.release_sha || github.sha }}
+
+jobs:
+  deploy:
+    name: Release one exact SHA to Vercel and Tencent
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Check release automation gate
+        id: automation-gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ vars.LETLETME_RELEASE_AUTOMATION_ENABLED }}" != "true" ]]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Web release automation is disabled until production credentials and EdgeOne snapshots are configured."
+            exit 0
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact release SHA
+        if: steps.automation-gate.outputs.enabled == 'true'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify release is still origin/main
+        if: steps.automation-gate.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$main_sha" == "$RELEASE_SHA" ]] || {
+            echo "refusing stale release: main=$main_sha requested=$RELEASE_SHA" >&2
+            exit 1
+          }
+
+      - name: Set up Node.js
+        if: steps.automation-gate.outputs.enabled == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install release tooling
+        if: steps.automation-gate.outputs.enabled == 'true'
+        run: npm ci --ignore-scripts
+
+      - name: Decide whether this SHA needs a Web release
+        if: steps.automation-gate.outputs.enabled == 'true'
+        id: build-gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          previous_headers=''
+          if ! previous_headers="$(curl --fail --silent --show-error --max-time 15 -D - -o /dev/null https://vercel-origin.letletme.top/healthz)"; then
+            echo "current production health is unavailable; fail-open to a full Web build" >&2
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          previous_sha="$(awk 'tolower($1) == "x-letletme-release:" { gsub("\\r", "", $2); print $2; exit }' <<<"$previous_headers")"
+          if [[ ! "$previous_sha" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "current production release header is unavailable; fail-open to a full Web build" >&2
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
+          VERCEL_ENV=production \
+          VERCEL_GIT_COMMIT_REF=main \
+          VERCEL_GIT_PREVIOUS_SHA="$previous_sha" \
+          VERCEL_GIT_COMMIT_SHA="$RELEASE_SHA" \
+          node scripts/vercel-ignore-build.mjs
+          decision=$?
+          set -e
+          if [[ $decision -eq 0 ]]; then
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Documentation-only SHA; Web release skipped."
+          elif [[ $decision -eq 1 ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ignoreCommand returned unexpected status $decision" >&2
+            exit 1
+          fi
+
+      - name: Verify production credentials and scoped route snapshots
+        if: steps.automation-gate.outputs.enabled == 'true' && steps.build-gate.outputs.deploy == 'true'
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          TENCENT_SSH_PRIVATE_KEY: ${{ secrets.TENCENT_SSH_PRIVATE_KEY }}
+          TENCENT_SSH_JUMP_PRIVATE_KEY: ${{ secrets.TENCENT_SSH_JUMP_PRIVATE_KEY }}
+          TENCENT_SSH_KNOWN_HOSTS: ${{ secrets.TENCENT_SSH_KNOWN_HOSTS }}
+          TENCENT_RELEASE_SIGNING_KEY: ${{ secrets.TENCENT_RELEASE_SIGNING_KEY }}
+          EDGEONE_TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_ID }}
+          EDGEONE_TENCENTCLOUD_SECRET_KEY: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_KEY }}
+          EDGEONE_ZONE_ID: ${{ secrets.EDGEONE_ZONE_ID }}
+          EDGEONE_RULE_ID: ${{ secrets.EDGEONE_RULE_ID }}
+          EDGEONE_RULE_ALL_VERCEL_JSON: ${{ secrets.EDGEONE_RULE_ALL_VERCEL_JSON }}
+          EDGEONE_RULE_SPLIT_JSON: ${{ secrets.EDGEONE_RULE_SPLIT_JSON }}
+          EDGEONE_TENCENT_HEALTH_URL: ${{ vars.EDGEONE_TENCENT_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID \
+            TENCENT_SSH_PRIVATE_KEY TENCENT_SSH_JUMP_PRIVATE_KEY TENCENT_SSH_KNOWN_HOSTS \
+            TENCENT_RELEASE_SIGNING_KEY \
+            EDGEONE_TENCENTCLOUD_SECRET_ID EDGEONE_TENCENTCLOUD_SECRET_KEY EDGEONE_ZONE_ID \
+            EDGEONE_RULE_ID EDGEONE_RULE_ALL_VERCEL_JSON EDGEONE_RULE_SPLIT_JSON \
+            EDGEONE_TENCENT_HEALTH_URL; do
+            [[ -n "${!name:-}" ]] || { echo "missing required production secret: $name" >&2; exit 1; }
+          done
+          export TENCENTCLOUD_SECRET_ID="$EDGEONE_TENCENTCLOUD_SECRET_ID"
+          export TENCENTCLOUD_SECRET_KEY="$EDGEONE_TENCENTCLOUD_SECRET_KEY"
+          node ops/release/edgeone-mode.mjs --mode all-vercel --dry-run >/dev/null
+          node ops/release/edgeone-mode.mjs --mode split --dry-run >/dev/null
+
+      - name: Build and stage Vercel production candidate
+        if: steps.automation-gate.outputs.enabled == 'true' && steps.build-gate.outputs.deploy == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          LETLETME_RELEASE_SHA: ${{ env.RELEASE_SHA }}
+          VERCEL_GIT_COMMIT_SHA: ${{ env.RELEASE_SHA }}
+          VERCEL_GIT_COMMIT_REF: main
+          LETLETME_FORCE_VERCEL_BUILD: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" link --yes \
+            --scope "$VERCEL_ORG_ID" \
+            --project "$VERCEL_PROJECT_ID"
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" pull --yes --environment=production
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" build --prod
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" deploy --prebuilt --prod --skip-domain --format=json > /tmp/vercel-candidate.json
+          candidate_url="$(node --input-type=module -e '
+            import fs from "node:fs";
+            const value = JSON.parse(fs.readFileSync("/tmp/vercel-candidate.json", "utf8"));
+            const url = Array.isArray(value) ? value.at(-1)?.url : value.url;
+            if (!url) process.exit(1);
+            process.stdout.write(url);
+          ')"
+          [[ "$candidate_url" =~ ^[a-zA-Z0-9.-]+$ ]]
+          echo "candidate_url=$candidate_url" >> "$GITHUB_OUTPUT"
+        id: vercel-candidate
+
+      - name: Promote and activate exact SHA with fail-closed routing
+        if: steps.automation-gate.outputs.enabled == 'true' && steps.build-gate.outputs.deploy == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          TENCENT_SSH_PRIVATE_KEY: ${{ secrets.TENCENT_SSH_PRIVATE_KEY }}
+          TENCENT_SSH_JUMP_PRIVATE_KEY: ${{ secrets.TENCENT_SSH_JUMP_PRIVATE_KEY }}
+          TENCENT_SSH_KNOWN_HOSTS: ${{ secrets.TENCENT_SSH_KNOWN_HOSTS }}
+          TENCENT_RELEASE_SIGNING_KEY: ${{ secrets.TENCENT_RELEASE_SIGNING_KEY }}
+          EDGEONE_TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_ID }}
+          EDGEONE_TENCENTCLOUD_SECRET_KEY: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_KEY }}
+          EDGEONE_ZONE_ID: ${{ secrets.EDGEONE_ZONE_ID }}
+          EDGEONE_RULE_ID: ${{ secrets.EDGEONE_RULE_ID }}
+          EDGEONE_RULE_ALL_VERCEL_JSON: ${{ secrets.EDGEONE_RULE_ALL_VERCEL_JSON }}
+          EDGEONE_RULE_SPLIT_JSON: ${{ secrets.EDGEONE_RULE_SPLIT_JSON }}
+          EDGEONE_TENCENT_HEALTH_URL: ${{ vars.EDGEONE_TENCENT_HEALTH_URL }}
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_URL: ${{ steps.vercel-candidate.outputs.candidate_url }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export TENCENTCLOUD_SECRET_ID="$EDGEONE_TENCENTCLOUD_SECRET_ID"
+          export TENCENTCLOUD_SECRET_KEY="$EDGEONE_TENCENTCLOUD_SECRET_KEY"
+          route_changed=0
+          tencent_activated=0
+          rollback_failed=0
+          remote_root=''
+          remote_archive=''
+          remote_signature=''
+          ssh_dir=''
+          tmp_root=''
+          restore_all_vercel() {
+            [[ $route_changed == 1 ]] || return 0
+            local attempt mutation_succeeded verify_attempt
+            for attempt in 1 2 3; do
+              mutation_succeeded=0
+              if node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null 2>&1; then
+                mutation_succeeded=1
+              fi
+              for verify_attempt in 1 2 3; do
+                if node ops/release/edgeone-mode.mjs --mode all-vercel --verify-only >/dev/null 2>&1; then
+                  route_changed=0
+                  echo "EdgeOne rollback to all-Vercel verified on attempt $attempt/$verify_attempt."
+                  return 0
+                fi
+                [[ $verify_attempt == 3 ]] || sleep 5
+              done
+              if [[ $mutation_succeeded == 0 ]]; then
+                echo "EdgeOne rollback mutation attempt $attempt failed; live verification did not converge." >&2
+              else
+                echo "EdgeOne rollback mutation attempt $attempt succeeded but live verification did not converge." >&2
+              fi
+              [[ $attempt == 3 ]] || sleep $((attempt * 5))
+            done
+            echo 'CRITICAL: could not verify EdgeOne all-Vercel rollback after 3 attempts.' >&2
+            return 1
+          }
+          cleanup_remote_root() {
+            if [[ -n "$remote_root" && -n "$ssh_dir" && -f "$ssh_dir/config" ]]; then
+              ssh -F "$ssh_dir/config" letletme-tencent \
+                "rm -rf -- '$remote_root' '$remote_archive' '$remote_signature'" || true
+            fi
+          }
+          cleanup_staged_release() {
+            if [[ "$tencent_activated" == 0 && -n "$ssh_dir" && -f "$ssh_dir/config" && "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+              ssh -F "$ssh_dir/config" letletme-tencent \
+                "sudo /usr/local/libexec/letletme-release cleanup '$RELEASE_SHA'" || true
+            fi
+          }
+          cleanup_on_exit() {
+            exit_code=$?
+            set +e
+            if [[ -n "$tmp_root" ]]; then rm -rf -- "$tmp_root"; fi
+            cleanup_staged_release
+            cleanup_remote_root
+            if ! restore_all_vercel; then
+              rollback_failed=1
+            fi
+            if [[ $rollback_failed == 1 ]]; then
+              exit_code=1
+            fi
+            exit "$exit_code"
+          }
+          trap cleanup_on_exit EXIT
+
+          main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$main_sha" == "$RELEASE_SHA" ]] || {
+            echo "refusing to change EdgeOne routing for stale release: main=$main_sha requested=$RELEASE_SHA" >&2
+            exit 1
+          }
+          route_changed=1
+          node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null
+          candidate_headers="$(curl --fail --silent --show-error --max-time 15 -D - -o /dev/null "https://$CANDIDATE_URL/healthz")"
+          grep -qi "^x-letletme-release: $RELEASE_SHA" <<<"$candidate_headers"
+
+          tmp_root="$(mktemp -d)"
+          git archive --format=tar "$RELEASE_SHA" > "$tmp_root/release.tar"
+          printf '%s\n' "$RELEASE_SHA" > "$tmp_root/.letletme-release-sha"
+          tar --append --file="$tmp_root/release.tar" -C "$tmp_root" .letletme-release-sha
+          gzip -c "$tmp_root/release.tar" > "$tmp_root/release.tar.gz"
+          printf '%s\n' "$TENCENT_RELEASE_SIGNING_KEY" > "$tmp_root/release-signing-key.pem"
+          chmod 0600 "$tmp_root/release-signing-key.pem"
+          openssl pkeyutl -sign -rawin \
+            -inkey "$tmp_root/release-signing-key.pem" \
+            -in "$tmp_root/release.tar.gz" \
+            -out "$tmp_root/release.tar.gz.sig"
+          rm -f -- "$tmp_root/release-signing-key.pem"
+
+          ssh_dir="$HOME/.ssh/letletme-release"
+          install -d -m 0700 "$ssh_dir"
+          printf '%s\n' "$TENCENT_SSH_PRIVATE_KEY" > "$ssh_dir/tencent"
+          printf '%s\n' "$TENCENT_SSH_JUMP_PRIVATE_KEY" > "$ssh_dir/jump"
+          printf '%s\n' "$TENCENT_SSH_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          chmod 0600 "$ssh_dir/tencent" "$ssh_dir/jump" "$ssh_dir/known_hosts"
+          cat > "$ssh_dir/config" <<EOF
+          Host letletme-jump
+            HostName 43.163.91.9
+            User tong
+            IdentityFile $ssh_dir/jump
+            StrictHostKeyChecking yes
+            UserKnownHostsFile $ssh_dir/known_hosts
+          Host letletme-tencent
+            HostName 10.77.0.2
+            User deploy
+            IdentityFile $ssh_dir/tencent
+            ProxyJump letletme-jump
+            StrictHostKeyChecking yes
+            UserKnownHostsFile $ssh_dir/known_hosts
+          EOF
+          chmod 0600 "$ssh_dir/config"
+
+          installed_tooling="$(ssh -F "$ssh_dir/config" letletme-tencent \
+            "sudo /usr/local/libexec/letletme-release version")"
+          [[ "$installed_tooling" == "letletme-release-tooling 20260824-3" ]] || {
+            echo "Tencent release tooling is stale: $installed_tooling" >&2
+            echo "Rerun ops/tencent/scripts/install-host.sh as root before enabling Web automation." >&2
+            exit 1
+          }
+          current_release="$(ssh -F "$ssh_dir/config" letletme-tencent \
+            "sudo /usr/local/libexec/letletme-release current")"
+
+          remote_root="/tmp/letletme-release-$RELEASE_SHA"
+          remote_archive="/tmp/letletme-release-$RELEASE_SHA.tar.gz"
+          remote_signature="/tmp/letletme-release-$RELEASE_SHA.sig"
+          ssh -F "$ssh_dir/config" letletme-tencent \
+            "rm -rf -- '$remote_root' '$remote_archive' '$remote_signature' && install -d -m 0750 '$remote_root'"
+          cat "$tmp_root/release.tar.gz" |
+            ssh -F "$ssh_dir/config" letletme-tencent "install -m 0640 /dev/stdin '$remote_archive'"
+          cat "$tmp_root/release.tar.gz.sig" |
+            ssh -F "$ssh_dir/config" letletme-tencent "install -m 0640 /dev/stdin '$remote_signature'"
+          ssh -F "$ssh_dir/config" letletme-tencent \
+            "tar -xzf '$remote_archive' -C '$remote_root'"
+          if [[ "$current_release" == "/opt/letletme/releases/$RELEASE_SHA" ]]; then
+            echo "Tencent release $RELEASE_SHA is already active; retrying idempotently."
+          else
+            ssh -F "$ssh_dir/config" letletme-tencent \
+              "sudo /usr/local/libexec/letletme-release stage '$remote_root' '$RELEASE_SHA'"
+          fi
+          ssh -F "$ssh_dir/config" letletme-tencent \
+            "sudo /usr/local/libexec/letletme-release verify '$RELEASE_SHA'"
+
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" promote "$CANDIDATE_URL" --yes
+          production_headers="$(curl --fail --silent --show-error --max-time 15 -D - -o /dev/null https://vercel-origin.letletme.top/healthz)"
+          grep -qi "^x-letletme-release: $RELEASE_SHA" <<<"$production_headers"
+
+          ssh -F "$ssh_dir/config" letletme-tencent \
+            "sudo /usr/local/libexec/letletme-release activate '$RELEASE_SHA'"
+          tencent_activated=1
+          ssh -F "$ssh_dir/config" letletme-tencent \
+            "curl --fail --silent --show-error --max-time 10 -D - -o /dev/null http://127.0.0.1:3000/healthz" |
+            grep -qi "^x-letletme-release: $RELEASE_SHA"
+
+          node ops/release/edgeone-mode.mjs --mode split >/dev/null
+          tencent_headers="$(curl --fail --silent --show-error --max-time 15 \
+            -D - -o /dev/null "$EDGEONE_TENCENT_HEALTH_URL")"
+          grep -qi '^x-letletme-origin: tencent' <<<"$tencent_headers"
+          grep -qi "^x-letletme-release: $RELEASE_SHA" <<<"$tencent_headers"
+          grep -qi '^x-letletme-edge: edgeone' <<<"$tencent_headers"
+          route_changed=0
+          cleanup_remote_root
+          echo "Vercel and Tencent are active at exact SHA $RELEASE_SHA; EdgeOne split routing restored."
+
+      - name: Print skipped documentation release
+        if: steps.automation-gate.outputs.enabled == 'true' && steps.build-gate.outputs.deploy == 'false'
+        run: echo "Documentation-only change; no Vercel or Tencent release was attempted."

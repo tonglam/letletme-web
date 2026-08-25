@@ -220,9 +220,17 @@ export async function loadPlayerStatsPersonalSeed(
 	horizon: FdrHorizon = DEFAULT_FDR_HORIZON,
 	timing?: RequestTiming
 ): Promise<PlayerStatsPersonalSeed | null> {
+	// The public directory is the first-screen dependency. Start personalized
+	// work only after it resolves so session/market/ownership I/O cannot compete
+	// with the bootstrap request; those independent tasks still run in parallel
+	// once the public anchor is known.
+	const bootstrap = await bootstrapPromise
+	const review = reviewContext(bootstrap.context, bootstrap.statsContext)
+	if (review.anchorGw == null || review.anchorGw <= 0) return null
+
 	const sessionPromise = measure(timing, 'session', getVerifiedEntryContext)
-	// Keep the speculative authorization lookup from becoming an unhandled
-	// rejection if bootstrap fails or has no usable gameweek.
+	// Keep the authorization lookup from becoming an unhandled rejection if a
+	// later personal task fails.
 	void sessionPromise.catch(() => undefined)
 	const marketPromise = measure(timing, 'market', () =>
 		loadFixturePlanningSignals().catch(error => {
@@ -236,10 +244,6 @@ export async function loadPlayerStatsPersonalSeed(
 			return null
 		})
 	)
-	const bootstrap = await bootstrapPromise
-	const review = reviewContext(bootstrap.context, bootstrap.statsContext)
-	if (review.anchorGw == null || review.anchorGw <= 0) return null
-
 	const fixturePromise = measure(timing, 'fixture', () =>
 		loadFixtureWindows(review.anchorGw!, horizon)
 	)

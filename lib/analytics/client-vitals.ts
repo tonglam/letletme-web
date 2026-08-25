@@ -1,7 +1,9 @@
 import {
 	resolveWebVitalSource,
+	type PlayerStatsCacheStatus,
 	type AudienceHint
 } from '@/lib/analytics/web-vitals'
+import type { PerformanceCorrelation } from '@/lib/analytics/performance-correlation'
 
 const getSampleRate = () => {
 	const configured = Number(process.env.NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE)
@@ -46,7 +48,22 @@ export type BrowserPerformanceMetric = {
 	metricId: string
 	page: string
 	audienceHint: AudienceHint
+	navigationId?: string
+	interactionId?: string
+	cacheStatus?: PlayerStatsCacheStatus
 }
+
+export function resolveNavigationId(
+	root: Pick<Document, 'querySelector'> = document
+): string | undefined {
+	return (
+		root
+			.querySelector('[data-player-stats-navigation-id]')
+			?.getAttribute('data-player-stats-navigation-id') ?? undefined
+	)
+}
+
+export type BrowserPerformanceContext = PerformanceCorrelation
 
 export function reportBrowserPerformanceMetric(
 	metric: BrowserPerformanceMetric,

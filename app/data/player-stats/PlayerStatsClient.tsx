@@ -1,6 +1,7 @@
 'use client'
 
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
+import { createPerformanceCorrelationId } from '@/lib/analytics/performance-correlation'
 import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import type { PlayerDirectorySeed } from '@/lib/player-directory-seed'
 import type { PlayerStatsDeskResponse } from '@/lib/player-stats-desk'
@@ -22,30 +23,29 @@ import {
 const RECENT_PLAYERS_KEY_1 = 'player-stats-recent-1'
 const RECENT_PLAYERS_KEY_2 = 'player-stats-recent-2'
 
-const PlayerStatsView = dynamic(
-	() =>
-		import('./_components/PlayerStatsView').then(
-			module => module.PlayerStatsView
-		),
-	{
-		loading: () => (
-			<div
-				className="min-h-72 animate-pulse rounded-xl border border-border/70 bg-muted/20"
-				role="status"
-				aria-label="Loading player details"
-			/>
-		)
-	}
-)
+const loadPlayerStatsView = () =>
+	import('./_components/PlayerStatsView').then(module => module.PlayerStatsView)
+
+const PlayerStatsView = dynamic(loadPlayerStatsView, {
+	loading: () => (
+		<div
+			className="min-h-72 animate-pulse rounded-xl border border-border/70 bg-muted/20"
+			role="status"
+			aria-label="Loading player details"
+		/>
+	)
+})
 
 export default function PlayerStatsClient({
 	initialPlayerIds,
 	directorySeed,
-	initialDeskSeed = null
+	initialDeskSeed = null,
+	navigationId
 }: {
 	initialPlayerIds: { p1: number | null; p2: number | null }
 	directorySeed: PlayerDirectorySeed
 	initialDeskSeed?: PlayerStatsDeskResponse | null
+	navigationId: string
 }) {
 	const t = useTranslations('PlayerStats')
 	const { seed: personalSeed, resolved: personalSeedResolved } =
@@ -62,12 +62,14 @@ export default function PlayerStatsClient({
 	const firstPlayer = usePlayerDetailSlot({
 		storageKey: RECENT_PLAYERS_KEY_1,
 		eventId: anchorGw,
-		initialEntry: initialFirstEntry
+		initialEntry: initialFirstEntry,
+		navigationId
 	})
 	const secondPlayer = usePlayerDetailSlot({
 		storageKey: RECENT_PLAYERS_KEY_2,
 		eventId: anchorGw,
-		initialEntry: initialSecondEntry
+		initialEntry: initialSecondEntry,
+		navigationId
 	})
 	const firstSelectPlayer = firstPlayer.selectPlayer
 	const firstSelectPlayerById = firstPlayer.selectPlayerById
@@ -85,9 +87,67 @@ export default function PlayerStatsClient({
 	const handleDirectoryReady = useCallback(() => setDirectoryReady(true), [])
 	const deepLinkKey = `${initialPlayerIds.p1 ?? ''}:${initialPlayerIds.p2 ?? ''}`
 	const deepLinkKeyRef = useRef<string | null>(null)
-	const beginLocalPlayerDetailLoad = useCallback(() => {
-		markRouteReadyStart(window.location.pathname)
-	}, [])
+	type InteractionClock = {
+		id: string
+		targetKey: string
+		readyKey: string
+	}
+	const [detailInteraction, setDetailInteraction] =
+		useState<InteractionClock | null>(null)
+	const [compareInteraction, setCompareInteraction] =
+		useState<InteractionClock | null>(null)
+	const beginLocalPlayerDetailLoad = useCallback(
+		({
+			firstPlayerId,
+			secondPlayerId,
+			scope = 'both'
+		}: {
+			firstPlayerId: number | string
+			secondPlayerId?: number | string | null
+			scope?: 'detail' | 'compare' | 'both'
+		}): {
+			interactionId: string
+			detail: InteractionClock
+			compare: InteractionClock | null
+		} => {
+			void loadPlayerStatsView()
+			const interactionId = createPerformanceCorrelationId('interaction')
+			const startedAt = performance.now()
+			const detailTargetKey = String(firstPlayerId)
+			const detail = {
+				id: interactionId,
+				targetKey: detailTargetKey,
+				readyKey: `detail:${detailTargetKey}:${interactionId}`
+			}
+			const compareTargetKey =
+				secondPlayerId == null
+					? null
+					: `${detailTargetKey}:${String(secondPlayerId)}`
+			const compare = compareTargetKey
+				? {
+						id: interactionId,
+						targetKey: compareTargetKey,
+						readyKey: `compare:${compareTargetKey}:${interactionId}`
+					}
+				: null
+			if (scope === 'detail' || scope === 'both') {
+				markRouteReadyStart(
+					window.location.pathname,
+					startedAt,
+					detail.readyKey
+				)
+			}
+			if ((scope === 'compare' || scope === 'both') && compare) {
+				markRouteReadyStart(
+					window.location.pathname,
+					startedAt,
+					compare.readyKey
+				)
+			}
+			return { interactionId, detail, compare }
+		},
+		[]
+	)
 
 	useEffect(() => {
 		if (!initialDeskSeed || initialDeskSeed.section !== 'overview') return
@@ -123,6 +183,8 @@ export default function PlayerStatsClient({
 		if (deepLinkKeyRef.current === deepLinkKey) return
 		deepLinkKeyRef.current = deepLinkKey
 		setDeepLinkReady(false)
+		setDetailInteraction(null)
+		setCompareInteraction(null)
 
 		const seed = async () => {
 			if (initialPlayerIds.p1 == null) {
@@ -198,12 +260,22 @@ export default function PlayerStatsClient({
 
 	const handleSquadSelect = useCallback(
 		(playerId: number) => {
-			beginLocalPlayerDetailLoad()
+			const nextSecondPlayerId =
+				secondSelectedPlayerId === String(playerId)
+					? null
+					: secondSelectedPlayerId
+			const interaction = beginLocalPlayerDetailLoad({
+				firstPlayerId: playerId,
+				secondPlayerId: nextSecondPlayerId
+			})
+			setDetailInteraction(interaction.detail)
+			setCompareInteraction(interaction.compare)
 			if (secondSelectedPlayerId === String(playerId)) {
 				secondClearSelection()
 				setCompareOpen(false)
 			}
 			void firstSelectPlayerById(playerId, {
+				interactionId: interaction.interactionId,
 				batchPlayerIds: [playerId, Number(secondSelectedPlayerId)].filter(
 					value => Number.isInteger(value) && value > 0
 				)
@@ -219,7 +291,14 @@ export default function PlayerStatsClient({
 
 	const handleFirstSelect = useCallback(
 		(player: Parameters<typeof firstSelectPlayer>[0]) => {
-			beginLocalPlayerDetailLoad()
+			const nextSecondPlayerId =
+				secondSelectedPlayerId === player.id ? null : secondSelectedPlayerId
+			const interaction = beginLocalPlayerDetailLoad({
+				firstPlayerId: player.id,
+				secondPlayerId: nextSecondPlayerId
+			})
+			setDetailInteraction(interaction.detail)
+			setCompareInteraction(interaction.compare)
 			if (secondSelectedPlayerId === player.id) {
 				secondClearSelection()
 				setCompareOpen(false)
@@ -228,7 +307,8 @@ export default function PlayerStatsClient({
 				player,
 				[player.id, secondSelectedPlayerId]
 					.map(Number)
-					.filter(value => Number.isInteger(value) && value > 0)
+					.filter(value => Number.isInteger(value) && value > 0),
+				{ interactionId: interaction.interactionId }
 			)
 		},
 		[
@@ -242,12 +322,18 @@ export default function PlayerStatsClient({
 	const handleSecondSelect = useCallback(
 		(player: Parameters<typeof secondSelectPlayer>[0]) => {
 			if (player.id === firstSelectedPlayerId) return
-			beginLocalPlayerDetailLoad()
+			const interaction = beginLocalPlayerDetailLoad({
+				firstPlayerId: firstSelectedPlayerId ?? '',
+				secondPlayerId: player.id,
+				scope: 'compare'
+			})
+			setCompareInteraction(interaction.compare)
 			secondSelectPlayer(
 				player,
 				[player.id, firstSelectedPlayerId]
 					.map(Number)
-					.filter(value => Number.isInteger(value) && value > 0)
+					.filter(value => Number.isInteger(value) && value > 0),
+				{ interactionId: interaction.interactionId }
 			)
 		},
 		[beginLocalPlayerDetailLoad, firstSelectedPlayerId, secondSelectPlayer]
@@ -276,9 +362,15 @@ export default function PlayerStatsClient({
 			const id = Number(playerId)
 			if (!Number.isFinite(id)) return
 			if (firstSelectedPlayerId === playerId) return
-			beginLocalPlayerDetailLoad()
+			const interaction = beginLocalPlayerDetailLoad({
+				firstPlayerId: firstSelectedPlayerId ?? '',
+				secondPlayerId: id,
+				scope: 'compare'
+			})
+			setCompareInteraction(interaction.compare)
 			setCompareOpen(true)
 			void secondSelectPlayerById(id, {
+				interactionId: interaction.interactionId,
 				batchPlayerIds: [id, Number(firstSelectedPlayerId)].filter(
 					value => Number.isInteger(value) && value > 0
 				)
@@ -292,13 +384,31 @@ export default function PlayerStatsClient({
 		(firstPlayer.playerDetail == null && seasonStatsAvailable)
 	const personalSeedReady =
 		personalSeedResolved && personalSeed?.squadState === 'ready'
-	const playerDetailReady = Boolean(firstPlayer.playerDetail)
+	const currentDetailInteraction =
+		detailInteraction?.targetKey === firstSelectedPlayerId
+			? detailInteraction
+			: null
+	const currentCompareInteraction =
+		compareInteraction?.targetKey ===
+		`${firstSelectedPlayerId ?? ''}:${secondSelectedPlayerId ?? ''}`
+			? compareInteraction
+			: null
+	const playerDetailReady =
+		Boolean(firstPlayer.playerDetail) &&
+		!firstPlayer.isLoading &&
+		firstPlayer.playerDetail?.id === Number(firstSelectedPlayerId)
 	const playerCompareReady =
 		secondSelectedPlayerId != null &&
 		Boolean(firstPlayer.playerDetail) &&
-		Boolean(secondPlayer.playerDetail)
-	const playerDetailReadyKey = firstSelectedPlayerId ?? ''
-	const playerCompareReadyKey = `${firstSelectedPlayerId ?? ''}:${secondSelectedPlayerId ?? ''}`
+		Boolean(secondPlayer.playerDetail) &&
+		!firstPlayer.isLoading &&
+		!secondPlayer.isLoading
+	const playerDetailReadyKey =
+		currentDetailInteraction?.readyKey ??
+		`detail:${firstSelectedPlayerId ?? ''}`
+	const playerCompareReadyKey =
+		currentCompareInteraction?.readyKey ??
+		`compare:${firstSelectedPlayerId ?? ''}:${secondSelectedPlayerId ?? ''}`
 	const personalStatus = !personalSeedResolved
 		? null
 		: personalSeed?.squadState === 'not-published'
@@ -312,6 +422,16 @@ export default function PlayerStatsClient({
 			<RouteReadyMarker
 				name="PLAYER_DIRECTORY_READY"
 				ready={directoryReady}
+				navigationId={navigationId}
+				audienceHint="public"
+				goodMs={1_000}
+				poorMs={1_500}
+			/>
+			<RouteReadyMarker
+				name="PLAYER_DIRECTORY_PAINT"
+				ready={directoryReady}
+				elementTiming="player-directory-result"
+				navigationId={navigationId}
 				audienceHint="public"
 				goodMs={1_000}
 				poorMs={1_500}
@@ -320,6 +440,19 @@ export default function PlayerStatsClient({
 				name="PLAYER_DETAIL_READY"
 				ready={playerDetailReady}
 				readyKey={playerDetailReadyKey}
+				navigationId={navigationId}
+				interactionId={currentDetailInteraction?.id}
+				audienceHint="public"
+				goodMs={1_000}
+				poorMs={1_500}
+			/>
+			<RouteReadyMarker
+				name="PLAYER_DETAIL_PAINT"
+				ready={playerDetailReady}
+				readyKey={playerDetailReadyKey}
+				elementTiming="player-detail-card"
+				navigationId={navigationId}
+				interactionId={currentDetailInteraction?.id}
 				audienceHint="public"
 				goodMs={1_000}
 				poorMs={1_500}
@@ -328,6 +461,19 @@ export default function PlayerStatsClient({
 				name="PLAYER_COMPARE_READY"
 				ready={playerCompareReady}
 				readyKey={playerCompareReadyKey}
+				navigationId={navigationId}
+				interactionId={currentCompareInteraction?.id}
+				audienceHint="public"
+				goodMs={1_000}
+				poorMs={1_500}
+			/>
+			<RouteReadyMarker
+				name="PLAYER_COMPARE_PAINT"
+				ready={playerCompareReady}
+				readyKey={playerCompareReadyKey}
+				elementTiming="player-detail-card"
+				navigationId={navigationId}
+				interactionId={currentCompareInteraction?.id}
 				audienceHint="public"
 				goodMs={1_000}
 				poorMs={1_500}
@@ -340,6 +486,7 @@ export default function PlayerStatsClient({
 						: 'flex items-center text-sm text-muted-foreground',
 					!personalSeedResolved && 'animate-pulse bg-muted/20'
 				)}
+				data-player-stats-navigation-id={navigationId}
 				aria-busy={!personalSeedResolved}
 				role={
 					personalSeedReady
@@ -388,8 +535,8 @@ export default function PlayerStatsClient({
 								onSelect: handleSecondSelect,
 								onClearRecent: secondPlayer.clearRecent,
 								onClearSelection: () => {
-									beginLocalPlayerDetailLoad()
 									secondPlayer.clearSelection()
+									setCompareInteraction(null)
 									setCompareOpen(false)
 								}
 							}

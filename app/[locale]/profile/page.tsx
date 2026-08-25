@@ -1,8 +1,8 @@
-import { ReportProblemButton } from '@/components/feedback/ReportProblemButton'
+import { ReportProblemEntry } from '@/components/feedback/ReportProblemEntry'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Link } from '@/i18n/navigation'
@@ -264,10 +264,12 @@ export default async function ProfilePage({ params }: PageProps) {
 								<p className="mb-3 text-sm text-muted-foreground">
 									{tReport('description')}
 								</p>
-								<ReportProblemButton
-									label={tReport('entry')}
-									variant="outline"
-									className="w-full"
+								<ReportProblemEntry
+									triggerLabel={tReport('entry')}
+									triggerClassName={buttonVariants({
+										variant: 'outline',
+										className: 'w-full'
+									})}
 								/>
 							</div>
 						</div>

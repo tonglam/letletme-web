@@ -1,6 +1,7 @@
 'use client'
 
 import { reportBrowserPerformanceMetric } from '@/lib/analytics/client-vitals'
+import type { PlayerStatsCacheStatus } from '@/lib/analytics/performance-correlation'
 import {
 	measureRouteReadyDuration,
 	nextPaintOpportunityTime,
@@ -30,8 +31,12 @@ type ReadyMetricName =
 	| 'MARKET_HISTORY_READY'
 	| 'MARKET_AVAILABILITY_READY'
 	| 'PLAYER_DIRECTORY_READY'
+	| 'PLAYER_DIRECTORY_PAINT'
 	| 'PLAYER_DETAIL_READY'
+	| 'PLAYER_DETAIL_PAINT'
 	| 'PLAYER_COMPARE_READY'
+	| 'PLAYER_COMPARE_PAINT'
+	| 'PLAYER_DESK_RESPONSE'
 	| 'TRENDS_CATALOG_READY'
 	| 'TRENDS_DESK_READY'
 	| 'TRENDS_SWITCH_READY'
@@ -48,6 +53,9 @@ export function RouteReadyMarker({
 	ready = true,
 	readyKey,
 	elementTiming,
+	navigationId,
+	interactionId,
+	cacheStatus,
 	audienceHint,
 	goodMs = 2_500,
 	poorMs = 4_000
@@ -56,6 +64,9 @@ export function RouteReadyMarker({
 	ready?: boolean
 	readyKey?: string
 	elementTiming?: string
+	navigationId?: string
+	interactionId?: string
+	cacheStatus?: PlayerStatsCacheStatus
 	audienceHint: AudienceHint
 	goodMs?: number
 	poorMs?: number
@@ -98,7 +109,10 @@ export function RouteReadyMarker({
 								: 'poor',
 					metricId: `${name.toLowerCase()}-${crypto.randomUUID()}`,
 					page: normalizeMetricPage(pathname),
-					audienceHint
+					audienceHint,
+					navigationId,
+					interactionId,
+					cacheStatus
 				},
 				{ always: true }
 			)
@@ -109,6 +123,9 @@ export function RouteReadyMarker({
 	}, [
 		audienceHint,
 		elementTiming,
+		interactionId,
+		navigationId,
+		cacheStatus,
 		goodMs,
 		name,
 		pathname,

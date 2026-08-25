@@ -10,6 +10,7 @@
 		"test:worker": "node --test cloudflare/worker/test/router.test.js",
 		"test:watchdog": "node --test cloudflare/watchdog/test/watchdog.test.js",
 		"test:edge": "npm run test:worker && npm run test:watchdog",
+		"dnspod:validate": "node ops/dnspod/scripts/validate-shadow-zone.mjs",
 		"worker:dry-run": "npx --yes wrangler@4.123.0 deploy --dry-run --config cloudflare/worker/wrangler.toml",
 		"watchdog:dry-run": "npx --yes wrangler@4.123.0 deploy --dry-run --config cloudflare/watchdog/wrangler.toml",
 		"test:e2e": "playwright test",
@@ -32,6 +33,7 @@
 		"db:verify-runtime-login": "tsx scripts/verify-runtime-login.ts",
 		"db:bootstrap-runtime-login": "tsx scripts/bootstrap-runtime-login.ts",
 		"db:runtime-contract": "tsx scripts/check-runtime-database-contract.ts",
+		"auth:events": "tsx scripts/query-auth-events.ts",
 		"db:studio": "drizzle-kit studio"
 	},
 	"dependencies": {

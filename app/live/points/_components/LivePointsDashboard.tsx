@@ -13,6 +13,7 @@ import { APP_URL } from '@/i18n/config'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
 import type { EntryOverallSnapshot } from '@/lib/graphql/operations/entries'
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
+import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
 import { cn } from '@/lib/utils'
 import type { Player } from '@/types/player'
 import type { PlayerDetail } from '@/types/player-detail'
@@ -112,14 +113,13 @@ export function LivePointsDashboard({
 		)
 	})()
 	const gameweek = selectedGameweek ?? liveData?.event ?? currentGameweek
-	const officialEventPoints = liveData?.score?.eventPoints ?? null
+	const officialScore = traceableOfficialManagerScore(liveData?.score)
+	const officialEventPoints = officialScore?.eventPoints ?? null
 	const officialTotalPoints =
-		liveData?.score?.totalScope === 'OVERALL'
-			? liveData.score.totalPoints
-			: null
+		officialScore?.totalScope === 'OVERALL' ? officialScore.totalPoints : null
 	const scoreStatus = (() => {
-		const score = liveData?.score
-		if (!score || score.state === 'UNAVAILABLE') return t('scoreUnavailable')
+		const score = officialScore
+		if (!score) return t('scoreUnavailable')
 		if (score.state === 'SETTLING') return t('scoreSettling')
 		if (
 			String(score.source) === 'LOCAL_MULTIPLIER_FALLBACK' ||
@@ -142,12 +142,32 @@ export function LivePointsDashboard({
 		captain: t('captain'),
 		viceCaptain: t('viceCaptain'),
 		total: t('pitchTotalPoints'),
+		autoSub: (player: {
+			webName: string
+			autoSubRole?: string
+			autoSubPartnerName?: string
+		}) => {
+			const incoming = player.autoSubRole?.endsWith('_IN') ?? false
+			const official = player.autoSubRole?.startsWith('OFFICIAL_') ?? false
+			const label = official
+				? incoming
+					? 'officialAutoSubInLabel'
+					: 'officialAutoSubOutLabel'
+				: incoming
+					? 'autoSubInLabel'
+					: 'autoSubOutLabel'
+
+			return t(label, {
+				player: player.webName,
+				partner: player.autoSubPartnerName ?? t('autoSubUnknownPlayer')
+			})
+		},
 		playerDetails: (player: { webName: string }) =>
 			t('viewPlayer', { player: player.webName })
 	}
 	const showLiveOverallRank = overall != null && gameweek === currentGameweek
 	const officialOverallRank =
-		liveData?.score?.overallRank ?? overall?.overallRank ?? null
+		officialScore?.overallRank ?? overall?.overallRank ?? null
 	const pitchHeaderStats = liveData
 		? {
 				eyebrow: showLiveOverallRank
@@ -250,7 +270,7 @@ export function LivePointsDashboard({
 							role="status"
 						>
 							{scoreStatus}
-							{liveData.score?.reconciliation === 'SOURCE_SKEW'
+							{officialScore?.reconciliation === 'SOURCE_SKEW'
 								? ` · ${t('scoreDetailsSyncing')}`
 								: ''}
 						</p>

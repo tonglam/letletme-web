@@ -5,7 +5,7 @@ const BLOCKED_META_KEYS = new Set([
 	'password',
 	'secret',
 	'otp',
-	'code',
+	'code'
 ])
 const ALLOWED_META_KEYS = new Set([
 	'route',
@@ -17,13 +17,24 @@ const ALLOWED_META_KEYS = new Set([
 	'sdkVersion',
 	'language',
 	'viewportBucket',
-	'operations',
+	'operations'
 ])
 
 export const BUG_REPORT_BODY_MIN = 8
 export const BUG_REPORT_BODY_MAX = 500
 export const BUG_REPORT_SCREENSHOT_MAX_BYTES = 2 * 1024 * 1024
 const CLIENT_META_MAX_BYTES = 16 * 1024
+const SAFE_DIAGNOSTIC_CODE = /^[A-Z][A-Z0-9_]{0,79}$/
+const DIAGNOSTIC_FIELD_MAX_LENGTH: Record<string, number> = {
+	at: 40,
+	operation: 80,
+	requestId: 80,
+	code: 80,
+	message: 180,
+	rateLimitPolicy: 32,
+	rateLimitScope: 16,
+	workload: 32
+}
 
 export type BugReportSource = 'website' | 'wechat_miniprogram'
 
@@ -43,29 +54,83 @@ export function sanitizeBugReportClientMeta(
 	if (!isRecord(value)) return {}
 	const cleaned: Record<string, unknown> = {}
 	for (const [key, entry] of Object.entries(value)) {
-		if (BLOCKED_META_KEYS.has(key.toLowerCase()) || !ALLOWED_META_KEYS.has(key)) continue
+		if (BLOCKED_META_KEYS.has(key.toLowerCase()) || !ALLOWED_META_KEYS.has(key))
+			continue
 		if (key === 'operations') {
 			if (!Array.isArray(entry)) continue
-			cleaned.operations = entry.slice(-3).flatMap((item) => {
+			cleaned.operations = entry.slice(-3).flatMap(item => {
 				if (!isRecord(item)) return []
-				const operation: Record<string, string> = {}
-				for (const field of ['operation', 'requestId', 'code', 'message']) {
+				const operation: Record<string, unknown> = {}
+				for (const field of [
+					'at',
+					'operation',
+					'requestId',
+					'code',
+					'message',
+					'rateLimitPolicy',
+					'rateLimitScope',
+					'workload'
+				]) {
 					if (typeof item[field] !== 'string') continue
 					const text = item[field]
 						.replace(/https?:\/\/[^\s]+/gi, '[url]')
 						.replace(/([A-Za-z0-9_-]+)=(?:[^\s&]+)/g, '$1=[redacted]')
-						.slice(0, 160)
-					if (text) operation[field] = text
+					const bounded = text.slice(
+						0,
+						DIAGNOSTIC_FIELD_MAX_LENGTH[field] ?? 160
+					)
+					if (field === 'code' && !SAFE_DIAGNOSTIC_CODE.test(bounded)) continue
+					if (bounded) operation[field] = bounded
+				}
+				if (
+					typeof operation.rateLimitPolicy === 'string' &&
+					!new Set(['graphql-v2', 'graphql-v3', 'graphql-v4']).has(
+						operation.rateLimitPolicy
+					)
+				)
+					delete operation.rateLimitPolicy
+				if (
+					typeof operation.rateLimitScope === 'string' &&
+					!new Set(['global', 'client', 'workload']).has(
+						operation.rateLimitScope
+					)
+				)
+					delete operation.rateLimitScope
+				if (
+					typeof operation.workload === 'string' &&
+					!new Set([
+						'interactive',
+						'home',
+						'fixtures',
+						'market',
+						'player-stats',
+						'gameweek',
+						'public-other'
+					]).has(operation.workload)
+				)
+					delete operation.workload
+				for (const field of ['status', 'retryAfterSeconds']) {
+					const numeric = item[field]
+					const valid =
+						typeof numeric === 'number' &&
+						Number.isSafeInteger(numeric) &&
+						(field === 'status'
+							? numeric >= 0 && numeric <= 599
+							: numeric >= 0 && numeric <= 120)
+					if (valid) operation[field] = numeric
 				}
 				return Object.keys(operation).length ? [operation] : []
 			})
 			continue
 		}
 		if (typeof entry === 'string') cleaned[key] = entry.slice(0, 160)
-		else if (typeof entry === 'number' && Number.isFinite(entry)) cleaned[key] = entry
+		else if (typeof entry === 'number' && Number.isFinite(entry))
+			cleaned[key] = entry
 		else if (typeof entry === 'boolean') cleaned[key] = entry
 	}
-	if (Buffer.byteLength(JSON.stringify(cleaned), 'utf8') > CLIENT_META_MAX_BYTES) {
+	if (
+		Buffer.byteLength(JSON.stringify(cleaned), 'utf8') > CLIENT_META_MAX_BYTES
+	) {
 		return { truncated: true }
 	}
 	return cleaned
@@ -81,7 +146,12 @@ function looksLikeSvgOrXml(bytes: Buffer): boolean {
 }
 
 function sniffImageContentType(bytes: Buffer): string | null {
-	if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+	if (
+		bytes.length >= 3 &&
+		bytes[0] === 0xff &&
+		bytes[1] === 0xd8 &&
+		bytes[2] === 0xff
+	) {
 		return 'image/jpeg'
 	}
 	if (
@@ -111,7 +181,10 @@ export function decodeOptionalScreenshot(
 	_mime: unknown
 ): { bytes: Buffer; contentType: string } | null {
 	if (typeof base64 !== 'string' || base64.trim().length === 0) return null
-	const bytes = Buffer.from(base64.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, ''), 'base64')
+	const bytes = Buffer.from(
+		base64.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, ''),
+		'base64'
+	)
 	if (bytes.length === 0) return null
 	if (bytes.length > BUG_REPORT_SCREENSHOT_MAX_BYTES) {
 		throw new Error('SCREENSHOT_TOO_LARGE')
