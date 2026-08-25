@@ -19,15 +19,15 @@ describe('server-first global shell performance boundary', () => {
 		const languageSwitcher = read('components/layout/LanguageSwitcher.tsx')
 
 		assert.doesNotMatch(layout, /ThemeProvider/)
-		assert.match(layout, /data-cfasync="false"/)
+		assert.match(
+			layout,
+			/id="theme-bootstrap"[\s\S]*data-cfasync="false"[\s\S]*src="\/theme-bootstrap\.js"/
+		)
 		assert.doesNotMatch(clientNamespaces, /\n\s*'Theme',/)
 		assert.match(shellBootstrap, /data-navigation-disclosure/)
 		assert.match(shellBootstrap, /data-theme-choice/)
 		assert.match(shellBootstrap, /ArrowDown[\s\S]*role="radio"/)
-		assert.match(
-			shellBootstrap,
-			/event\.metaKey[\s\S]*event\.defaultPrevented/
-		)
+		assert.match(shellBootstrap, /event\.metaKey[\s\S]*event\.defaultPrevented/)
 		assert.match(
 			shellBootstrap,
 			/data-theme-transition-guard[\s\S]*transition:none/
@@ -39,24 +39,21 @@ describe('server-first global shell performance boundary', () => {
 		assert.match(languageSwitcher, /useSearchParams/)
 		assert.match(languageSwitcher, /data-locale-link/)
 		assert.match(languageSwitcher, /hashchange[\s\S]*popstate/)
-		assert.match(languageSwitcher, /nextLocale === locale[\s\S]*removeAttribute\('open'\)/)
+		assert.match(
+			languageSwitcher,
+			/nextLocale === locale[\s\S]*removeAttribute\('open'\)/
+		)
 		assert.match(
 			shellBootstrap,
 			/data-locale-link[\s\S]*window\.location\.hash/
 		)
-		assert.match(
-			shellBootstrap,
-			/shellRadioGroupSelector[\s\S]*shellPicker/
-		)
+		assert.match(shellBootstrap, /shellRadioGroupSelector[\s\S]*shellPicker/)
 		assert.match(
 			shellBootstrap,
 			/Escape[\s\S]*closeDisclosures\(undefined, true\)/
 		)
 		assert.match(shellReady, /useEffect[\s\S]*letletme:shell-ready/)
-		assert.match(
-			shellBootstrap,
-			/data-shell-hydrated[\s\S]*shellReadyEvent/
-		)
+		assert.match(shellBootstrap, /data-shell-hydrated[\s\S]*shellReadyEvent/)
 		assert.match(
 			shellBootstrap,
 			/if \(shellControlsEnabled\) updateThemeControls\(theme\)/
@@ -89,7 +86,10 @@ describe('server-first global shell performance boundary', () => {
 		assert.doesNotMatch(entry, /components\/ui\/sheet|from 'sonner'/)
 		assert.match(dialog, /components\/ui\/sheet/)
 		assert.match(dialog, /from 'sonner'/)
-		assert.match(entry, /cloneElement\(children[\s\S]*'aria-haspopup': 'dialog'/)
+		assert.match(
+			entry,
+			/cloneElement\(children[\s\S]*'aria-haspopup': 'dialog'/
+		)
 		assert.match(entry, /'aria-expanded': open/)
 		assert.match(entry, /triggerLabel \?\? t\('entry'\)/)
 		assert.match(

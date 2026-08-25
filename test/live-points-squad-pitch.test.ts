@@ -2,6 +2,10 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import { mapPlayersToSquadPitch } from '../app/live/points/_lib/live-points-squad-pitch'
+import {
+	squadPitchPlayerDetailsLabel,
+	type SquadPitchLabels
+} from '../components/squad-pitch/SquadPitch'
 
 describe('live-points squad pitch mapping', () => {
 	it('does not throw when live team identity fields are absent', () => {
@@ -79,5 +83,36 @@ describe('live-points squad pitch mapping', () => {
 
 		assert.equal(player.autoSubRole, 'PREDICTED_IN')
 		assert.equal(player.autoSubPartnerName, 'Sarr')
+	})
+
+	it('includes the auto-sub status in an interactive pitch card label', () => {
+		const player = {
+			id: '13',
+			webName: 'Wilson',
+			score: 3,
+			position: 'MID' as const,
+			autoSubRole: 'PREDICTED_IN' as const,
+			autoSubPartnerName: 'Sarr'
+		}
+		const labels: SquadPitchLabels = {
+			formation: 'Formation',
+			positions: {
+				GKP: 'Goalkeepers',
+				DEF: 'Defenders',
+				MID: 'Midfielders',
+				FWD: 'Forwards'
+			},
+			captain: 'Captain',
+			viceCaptain: 'Vice-captain',
+			total: 'Total',
+			autoSub: current =>
+				`${current.webName} projected in for ${current.autoSubPartnerName}`,
+			playerDetails: current => `View ${current.webName}`
+		}
+
+		assert.equal(
+			squadPitchPlayerDetailsLabel(player, labels),
+			'View Wilson; Wilson projected in for Sarr'
+		)
 	})
 })

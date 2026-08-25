@@ -101,11 +101,11 @@ export default async function LocaleLayout({
 			<head>
 				<script
 					id="theme-bootstrap"
+					data-cfasync="false"
 					src="/theme-bootstrap.js"
 					async
 					blocking="render"
 					fetchPriority="high"
-					data-cfasync="false"
 				/>
 			</head>
 			<body className="min-h-svh bg-background font-sans text-foreground antialiased">

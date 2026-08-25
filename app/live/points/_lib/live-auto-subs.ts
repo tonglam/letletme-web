@@ -35,11 +35,12 @@ export type LiveAutoSubProjection = {
 }
 
 const normalizeChip = (chip: string | null | undefined): string =>
-	(chip ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+	(chip ?? '')
+		.trim()
+		.toUpperCase()
+		.replace(/[^A-Z0-9]/g, '')
 
-export const isBenchBoostChip = (
-	chip: string | null | undefined
-): boolean => {
+export const isBenchBoostChip = (chip: string | null | undefined): boolean => {
 	const normalized = normalizeChip(chip)
 	return (
 		normalized === 'BB' ||
@@ -116,26 +117,43 @@ export function deriveLiveAutoSubProjection(
 		picks.map(pick => [String(pick.element), pick.position])
 	)
 	const activeIds = new Set(
-		picks
-			.filter(pick => pick.position <= 11)
-			.map(pick => String(pick.element))
+		picks.filter(pick => pick.position <= 11).map(pick => String(pick.element))
 	)
 	const benchBoostActive = isBenchBoostChip(live.chip)
+	const state: Exclude<LiveAutoSubState, 'NONE'> = isOfficialLineup(live)
+		? 'OFFICIAL'
+		: 'PREDICTED'
+	const originalCaptain = picks.find(pick => pick.isCaptain) ?? null
+	const viceCaptain = picks.find(pick => pick.isViceCaptain) ?? null
+	const viceCaptainId = viceCaptain ? String(viceCaptain.element) : null
+	const deriveCaptainPromotion = (): LiveCaptainPromotion | null =>
+		originalCaptain &&
+		viceCaptain &&
+		viceCaptainId &&
+		completedWithoutPlaying(originalCaptain) &&
+		viceCaptain.minutes > 0 &&
+		activeIds.has(viceCaptainId)
+			? {
+					playerInId: viceCaptainId,
+					playerInName: viceCaptain.webName,
+					playerOutId: String(originalCaptain.element),
+					playerOutName: originalCaptain.webName,
+					state
+				}
+			: null
 
 	if (benchBoostActive) {
+		const captainPromotion = deriveCaptainPromotion()
 		return {
-			state: 'NONE',
+			state: captainPromotion ? state : 'NONE',
 			benchBoostActive,
 			substitutions: [],
-			captainPromotion: null,
+			captainPromotion,
 			activePlayerIds: Array.from(activeIds),
 			effectivePositions
 		}
 	}
 
-	const state: Exclude<LiveAutoSubState, 'NONE'> = isOfficialLineup(live)
-		? 'OFFICIAL'
-		: 'PREDICTED'
 	const nonPlayingStarters = picks
 		.filter(pick => pick.position <= 11 && completedWithoutPlaying(pick))
 		.sort((left, right) => left.position - right.position)
@@ -177,24 +195,7 @@ export function deriveLiveAutoSubProjection(
 		}
 	}
 
-	const originalCaptain = picks.find(pick => pick.isCaptain) ?? null
-	const viceCaptain = picks.find(pick => pick.isViceCaptain) ?? null
-	const viceCaptainId = viceCaptain ? String(viceCaptain.element) : null
-	const captainPromotion =
-		originalCaptain &&
-		viceCaptain &&
-		viceCaptainId &&
-		completedWithoutPlaying(originalCaptain) &&
-		!completedWithoutPlaying(viceCaptain) &&
-		activeIds.has(viceCaptainId)
-			? {
-					playerInId: viceCaptainId,
-					playerInName: viceCaptain.webName,
-					playerOutId: String(originalCaptain.element),
-					playerOutName: originalCaptain.webName,
-					state
-				}
-			: null
+	const captainPromotion = deriveCaptainPromotion()
 
 	return {
 		state:

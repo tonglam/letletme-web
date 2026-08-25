@@ -37,10 +37,7 @@ export interface SquadPitchPlayer {
 	isCaptain?: boolean
 	isViceCaptain?: boolean
 	autoSubRole?:
-		| 'PREDICTED_IN'
-		| 'PREDICTED_OUT'
-		| 'OFFICIAL_IN'
-		| 'OFFICIAL_OUT'
+		'PREDICTED_IN' | 'PREDICTED_OUT' | 'OFFICIAL_IN' | 'OFFICIAL_OUT'
 	autoSubPartnerName?: string
 }
 
@@ -97,7 +94,13 @@ const POSITION_ROW_WITH_BENCH_CLASS: Record<SquadPosition, string> = {
 	FWD: 'top-[63%] sm:top-[68%]'
 }
 
-function PlayerMarker({ player, labels }: { player: SquadPitchPlayer; labels: SquadPitchLabels }) {
+function PlayerMarker({
+	player,
+	labels
+}: {
+	player: SquadPitchPlayer
+	labels: SquadPitchLabels
+}) {
 	const marker = player.isCaptain ? 'C' : player.isViceCaptain ? 'V' : null
 	if (!marker) return null
 
@@ -115,6 +118,24 @@ function PlayerMarker({ player, labels }: { player: SquadPitchPlayer; labels: Sq
 	)
 }
 
+function autoSubLabel(
+	player: SquadPitchPlayer,
+	labels: SquadPitchLabels
+): string {
+	const incoming = player.autoSubRole?.endsWith('_IN') ?? false
+	return labels.autoSub?.(player) ?? (incoming ? 'Auto-sub in' : 'Auto-sub out')
+}
+
+export function squadPitchPlayerDetailsLabel(
+	player: SquadPitchPlayer,
+	labels: SquadPitchLabels
+): string {
+	const details = labels.playerDetails(player)
+	return player.autoSubRole
+		? `${details}; ${autoSubLabel(player, labels)}`
+		: details
+}
+
 function AutoSubMarker({
 	player,
 	labels,
@@ -127,7 +148,7 @@ function AutoSubMarker({
 	if (!player.autoSubRole) return null
 	const incoming = player.autoSubRole.endsWith('_IN')
 	const predicted = player.autoSubRole.startsWith('PREDICTED_')
-	const label = labels.autoSub?.(player) ?? (incoming ? 'Auto-sub in' : 'Auto-sub out')
+	const label = autoSubLabel(player, labels)
 
 	return (
 		<span
@@ -192,9 +213,18 @@ function PlayerCard({
 			<div
 				className={`relative z-10 transition-[filter,transform] duration-200 ${compact ? '-mb-[clamp(0.2rem,0.65cqi,0.36rem)] w-[86%]' : '-mb-[clamp(0.25rem,0.8cqi,0.45rem)] w-[90%]'} drop-shadow-[0_9px_8px_rgba(0,24,16,0.28)] ${isInteractive ? 'group-hover:-translate-y-0.5 group-hover:drop-shadow-[0_13px_11px_rgba(0,24,16,0.4)]' : ''}`}
 			>
-				<TeamKitBadge player={player} className="h-auto w-full select-none" />
-				<PlayerMarker player={player} labels={labels} />
-				<AutoSubMarker player={player} labels={labels} />
+				<TeamKitBadge
+					player={player}
+					className="h-auto w-full select-none"
+				/>
+				<PlayerMarker
+					player={player}
+					labels={labels}
+				/>
+				<AutoSubMarker
+					player={player}
+					labels={labels}
+				/>
 			</div>
 
 			<div className="relative z-20 w-full overflow-hidden rounded-[clamp(0.2rem,0.8cqi,0.45rem)] border border-white/45 shadow-[0_7px_14px_rgba(0,37,23,0.3)]">
@@ -227,13 +257,15 @@ function PlayerCard({
 			{isInteractive ? (
 				<button
 					type="button"
-					aria-label={labels.playerDetails(player)}
+					aria-label={squadPitchPlayerDetailsLabel(player, labels)}
 					className="group relative flex w-full cursor-pointer flex-col items-center border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-1 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
 					onClick={openPlayerDetail}
 				>
 					{content}
 				</button>
-			) : content}
+			) : (
+				content
+			)}
 		</li>
 	)
 }
@@ -305,7 +337,11 @@ function BenchPlayerCard({
 					<p className="truncate font-mono text-[clamp(0.34rem,0.82cqi,0.52rem)] font-bold uppercase leading-tight tracking-[0.08em] text-[#38003c]/55">
 						{label}
 					</p>
-					<AutoSubMarker player={player} labels={labels} inline />
+					<AutoSubMarker
+						player={player}
+						labels={labels}
+						inline
+					/>
 				</div>
 				<p className="truncate font-display text-[clamp(0.42rem,1.2cqi,0.7rem)] font-bold uppercase leading-tight text-[#38003c]">
 					{player.webName}
@@ -326,13 +362,15 @@ function BenchPlayerCard({
 			{isInteractive ? (
 				<button
 					type="button"
-					aria-label={labels.playerDetails(player)}
+					aria-label={squadPitchPlayerDetailsLabel(player, labels)}
 					className="group w-full cursor-pointer border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-0.5 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
 					onClick={openPlayerDetail}
 				>
 					{content}
 				</button>
-			) : content}
+			) : (
+				content
+			)}
 		</li>
 	)
 }

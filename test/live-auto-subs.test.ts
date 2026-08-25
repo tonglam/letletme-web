@@ -261,9 +261,7 @@ describe('live automatic substitutions', () => {
 
 	it('triggers for one confirmed starter without waiting for the other starters or the GW', () => {
 		const picks = samplePicks().map(pick =>
-			pick.webName === 'Pedro Porro'
-				? { ...pick, isGwFinished: false }
-				: pick
+			pick.webName === 'Pedro Porro' ? { ...pick, isGwFinished: false } : pick
 		)
 		const projection = deriveLiveAutoSubProjection(sampleLive(picks))
 
@@ -277,7 +275,7 @@ describe('live automatic substitutions', () => {
 		assert.equal(projection.activePlayerIds.includes('2'), true)
 	})
 
-	it('does not remove a zero-minute starter before that player\'s fixtures end', () => {
+	it("does not remove a zero-minute starter before that player's fixtures end", () => {
 		const picks = samplePicks().map(pick =>
 			pick.position <= 11 && pick.minutes === 0
 				? { ...pick, isGwFinished: false }
@@ -377,6 +375,21 @@ describe('live automatic substitutions', () => {
 		assert.deepEqual(projection.substitutions, [])
 	})
 
+	it('still promotes an appearing vice-captain during Bench Boost', () => {
+		const picks = samplePicks().map(pick =>
+			pick.webName === 'Haaland'
+				? { ...pick, minutes: 0, totalPoints: 0, isGwFinished: true }
+				: pick
+		)
+		const projection = deriveLiveAutoSubProjection(
+			sampleLive(picks, { chip: 'BB' })
+		)
+
+		assert.deepEqual(projection.substitutions, [])
+		assert.equal(projection.captainPromotion?.playerInName, 'Raya')
+		assert.equal(projection.state, 'PREDICTED')
+	})
+
 	it('promotes the vice-captain as soon as the captain is a confirmed no-show', () => {
 		const picks = samplePicks().map(pick =>
 			pick.webName === 'Haaland'
@@ -387,6 +400,21 @@ describe('live automatic substitutions', () => {
 
 		assert.equal(projection.captainPromotion?.playerInName, 'Raya')
 		assert.equal(projection.captainPromotion?.playerOutName, 'Haaland')
+	})
+
+	it('waits for the vice-captain to appear before promoting them', () => {
+		const picks = samplePicks().map(pick => {
+			if (pick.webName === 'Haaland') {
+				return { ...pick, minutes: 0, totalPoints: 0, isGwFinished: true }
+			}
+			if (pick.webName === 'Raya') {
+				return { ...pick, minutes: 0, isGwFinished: false }
+			}
+			return pick
+		})
+		const projection = deriveLiveAutoSubProjection(sampleLive(picks))
+
+		assert.equal(projection.captainPromotion, null)
 	})
 
 	it('marks settled substitutions as official', () => {
