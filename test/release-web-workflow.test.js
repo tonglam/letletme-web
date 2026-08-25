@@ -45,6 +45,14 @@ test('Vercel CI uses the scoped project environment without relinking', () => {
 			`${command} must use the restricted production token explicitly`
 		)
 	}
+	const promoteCommand = vercelCommands.find((line) =>
+		line.startsWith('npx --yes "vercel@${VERCEL_CLI_VERSION}" promote ')
+	)
+	assert.match(
+		promoteCommand,
+		/(?:^|\s)--scope "\$VERCEL_ORG_ID"(?:\s|$)/,
+		'promotion must resolve the same restricted team that owns the candidate'
+	)
 })
 
 test('Vercel candidate uses a remote unaliased Production build', () => {
