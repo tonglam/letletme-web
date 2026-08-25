@@ -18,7 +18,7 @@ export const GET_ENTRY_LEAGUES = `
 `
 
 export type LeagueType = 'CLASSIC' | 'H2H'
-export type OfficialLeagueKind = 'SYSTEM' | 'INVITATIONAL' | 'PUBLIC'
+export type OfficialLeagueKind = 'SYSTEM' | 'INVITATIONAL'
 
 export interface EntryLeague {
 	id: number

@@ -3,8 +3,10 @@ import 'server-only'
 import { CacheTag, RevalidateSeconds } from '@/lib/cache-policy'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import {
+	GET_HOME_MARKET_DESK,
 	GET_HOME_MARKET_OWNERSHIP,
 	GET_HOME_MARKET_PULSE,
+	type HomeMarketDeskResponse,
 	type HomeMarketOwnershipResponse,
 	type HomeMarketPulseResponse
 } from '@/lib/graphql/operations/home'
@@ -16,6 +18,33 @@ const cachePolicy = {
 	revalidate: RevalidateSeconds.market,
 	tags: [CacheTag.market]
 }
+
+const loadHomeMarketDeskFromOrigin = unstable_cache(
+	async (): Promise<HomeMarketDeskResponse> =>
+		coalescePublicSeed('home-market-desk', async () => {
+			const startedAt = performance.now()
+			const response = await executePublicServerQuery<HomeMarketDeskResponse>(
+				'market',
+				GET_HOME_MARKET_DESK,
+				undefined,
+				{
+					cache: 'no-store',
+					timeoutMs: 2_000,
+					suppressErrorLog: true
+				}
+			)
+			console.info('[home-market-desk]', {
+				revision: response.homeMarketDesk.revision,
+				ownershipState: response.homeMarketDesk.ownershipState,
+				priceChangesState: response.homeMarketDesk.priceChangesState,
+				availabilityState: response.homeMarketDesk.availabilityState,
+				durationMs: Number((performance.now() - startedAt).toFixed(2))
+			})
+			return response
+		}),
+	['graphql', 'home-market-desk', 'v2'],
+	cachePolicy
+)
 
 const loadHomeMarketPulseFromOrigin = unstable_cache(
 	async (): Promise<HomeMarketPulseResponse> =>
@@ -29,7 +58,7 @@ const loadHomeMarketPulseFromOrigin = unstable_cache(
 				'market',
 				GET_HOME_MARKET_PULSE,
 				{ days: 7 },
-				{ cache: 'no-store', timeoutMs: 5_000 }
+				{ cache: 'no-store', timeoutMs: 8_000 }
 			)
 		}),
 	['graphql', 'home-market-pulse', 'v1'],
@@ -48,7 +77,7 @@ const loadHomeMarketOwnershipFromOrigin = unstable_cache(
 				'market',
 				GET_HOME_MARKET_OWNERSHIP,
 				{},
-				{ cache: 'no-store', timeoutMs: 5_000 }
+				{ cache: 'no-store', timeoutMs: 8_000 }
 			)
 		}),
 	['graphql', 'home-market-ownership', 'v1'],
@@ -56,6 +85,5 @@ const loadHomeMarketOwnershipFromOrigin = unstable_cache(
 )
 
 export const loadHomeMarketPulse = cache(loadHomeMarketPulseFromOrigin)
-export const loadHomeMarketOwnership = cache(
-	loadHomeMarketOwnershipFromOrigin
-)
+export const loadHomeMarketOwnership = cache(loadHomeMarketOwnershipFromOrigin)
+export const loadHomeMarketDesk = cache(loadHomeMarketDeskFromOrigin)

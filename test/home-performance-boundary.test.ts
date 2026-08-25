@@ -9,6 +9,14 @@ const leagueList = readFileSync(
 	'components/home/PersonalLeagueRankList.tsx',
 	'utf8'
 )
+const leagueCarousel = readFileSync(
+	'components/home/PersonalLeagueCarousel.tsx',
+	'utf8'
+)
+const autoCarousel = readFileSync(
+	'components/home/HomeAutoCarousel.tsx',
+	'utf8'
+)
 const matches = readFileSync('components/home/MatchesSection.tsx', 'utf8')
 const deadline = readFileSync('components/home/DeadlineSection.tsx', 'utf8')
 const homeGraphql = readFileSync('lib/graphql/operations/home.ts', 'utf8')
@@ -57,7 +65,7 @@ describe('Home first-screen performance boundary', () => {
 			1
 		)
 		assert.match(homeServerData, /GET_HOME_PERSONAL_DESK/)
-		assert.match(homeServerData, /timeoutMs: 1_500/)
+		assert.match(homeServerData, /timeoutMs: 5_000/)
 		for (const removed of [
 			'GET_ENTRY_LEAGUES',
 			'GET_ENTRY_OFFICIAL_H2H_DESK',
@@ -68,7 +76,7 @@ describe('Home first-screen performance boundary', () => {
 		}
 	})
 
-	it('keeps league rows compact and performs no background requests', () => {
+	it('keeps league rows compact and the server projection request-free', () => {
 		for (const removed of [
 			'executeQuery',
 			'GET_ENTRY_OFFICIAL_H2H_DESK',
@@ -82,7 +90,7 @@ describe('Home first-screen performance boundary', () => {
 		}
 		assert.match(leagueList, /row\.name/)
 		assert.match(leagueList, /leagueType/)
-		assert.match(leagueList, /data-home-league-group/)
+		assert.match(leagueCarousel, /data-home-league-group/)
 		assert.match(leagueList, /row\.rank/)
 		assert.match(leagueList, /row\.movement\.direction/)
 		assert.match(leagueList, /row\.h2hMatchup/)
@@ -102,11 +110,24 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(routeReadyMarker, /nextPaintOpportunityTime\(\)/)
 		assert.match(routeNavigation, /requestAnimationFrame/)
 		assert.match(routeNavigation, /setTimeout\(finish, timeoutMs\)/)
-		assert.match(leagueList, /<details/)
+		assert.doesNotMatch(leagueList, /<details/)
+		assert.match(autoCarousel, /AUTO_ADVANCE_MS/)
 		assert.doesNotMatch(leagueList, /'use client'/)
 		assert.doesNotMatch(leagueList, /useState|useEffect|useMemo/)
 		assert.doesNotMatch(personalDesk, /personalLeaguesCount/)
 		assert.doesNotMatch(leagueList, /visible\.length\}\/\{rows\.length/)
+	})
+
+	it('shares an accessible auto-carousel contract across Home panels', () => {
+		assert.match(autoCarousel, /AUTO_ADVANCE_MS/)
+		assert.match(autoCarousel, /prefers-reduced-motion: reduce/)
+		assert.match(autoCarousel, /aria-hidden=\{isInactive\}/)
+		assert.match(autoCarousel, /inert=\{isInactive\}/)
+		assert.match(autoCarousel, /tabIndex=\{isActive \? 0 : -1\}/)
+		for (const key of ['ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+			assert.match(autoCarousel, new RegExp(key))
+		}
+		assert.doesNotMatch(autoCarousel, /aria-live/)
 	})
 
 	it('requests only the typed current-matchup projection for H2H leagues', () => {

@@ -3,6 +3,10 @@ import {
 	TOURNAMENT_STATS_PATH
 } from '@/app/me/tournament/_lib/tournament-stats-url'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
+import {
+	PersonalLeagueCarousel,
+	type PersonalLeagueCarouselSlide
+} from '@/components/home/PersonalLeagueCarousel'
 import { Link } from '@/i18n/navigation'
 import type {
 	HomeH2HMatchupSide,
@@ -13,13 +17,38 @@ import { cn, formatInteger } from '@/lib/utils'
 import { getTranslations } from 'next-intl/server'
 import type { ReactNode } from 'react'
 
-const HOME_LEAGUE_RANK_LIMIT = 6
+/** Rows come from homePersonalDesk already filtered to home-visible leagues. */
 
-/** Rows come from homePersonalDesk already filtered to invitational leagues. */
+type PersonalLeagueSection = 'CLASSIC' | 'H2H' | 'CUPS'
 
-type HomeLeagueType = 'CLASSIC' | 'H2H'
+const HOME_LEAGUE_PREVIEW_LIMIT = 10
 
-function getLeagueType(row: HomeLeagueRank): HomeLeagueType {
+function LeagueVisibilityBadge({
+	visibility,
+	labels
+}: {
+	visibility: HomeLeagueRank['visibility']
+	labels: { privateLeague: string; publicLeague: string }
+}) {
+	const isPublic = visibility === 'PUBLIC'
+	return (
+		<span
+			data-home-league-visibility={visibility.toLowerCase()}
+			className={cn(
+				'shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold leading-none',
+				isPublic
+					? 'border-primary/25 bg-primary/10 text-primary-ink'
+					: 'border-border/70 bg-muted/50 text-muted-foreground'
+			)}
+		>
+			{isPublic ? labels.publicLeague : labels.privateLeague}
+		</span>
+	)
+}
+
+function getLeagueType(
+	row: HomeLeagueRank
+): Exclude<PersonalLeagueSection, 'CUPS'> {
 	return row.leagueType
 }
 
@@ -56,16 +85,27 @@ function MovementBadge({
 
 function ClassicLeagueRow({
 	row,
-	ariaLabel
+	ariaLabel,
+	visibilityLabels
 }: {
 	row: HomeLeagueRank
 	ariaLabel: string
+	visibilityLabels: { privateLeague: string; publicLeague: string }
 }) {
 	const rankDisplay = row.rank == null ? '—' : formatInteger(row.rank)
 	const body = (
 		<>
-			<span className="min-w-0 flex-1 truncate text-sm font-medium leading-tight">
-				{row.name}
+			<span className="flex min-w-0 flex-1 items-center gap-2">
+				<LeagueVisibilityBadge
+					visibility={row.visibility}
+					labels={visibilityLabels}
+				/>
+				<span
+					className="min-w-0 flex-1 truncate text-sm font-medium leading-tight"
+					title={row.name}
+				>
+					{row.name}
+				</span>
 			</span>
 			<span
 				className="flex shrink-0 items-center gap-2 pl-2"
@@ -75,11 +115,13 @@ function ClassicLeagueRow({
 					<span className="text-muted-foreground">#</span>
 					{rankDisplay}
 				</span>
-				<span className="flex w-8 justify-end">
-					<MovementBadge
-						direction={row.movement.direction}
-						places={row.movement.places}
-					/>
+				<span className="flex min-w-8 justify-end">
+					{row.rankState === 'READY' ? (
+						<MovementBadge
+							direction={row.movement.direction}
+							places={row.movement.places}
+						/>
+					) : null}
 				</span>
 			</span>
 		</>
@@ -192,6 +234,8 @@ function H2HLeagueRow({
 		noMatch: string
 		gameweek: (event: number) => string
 		rank: (rank: string) => string
+		privateLeague: string
+		publicLeague: string
 	}
 }) {
 	const matchup = row.h2hMatchup
@@ -200,7 +244,18 @@ function H2HLeagueRow({
 		return (
 			<LinkedH2HBody row={row}>
 				<div className="flex items-start justify-between gap-3">
-					<p className="min-w-0 truncate text-sm font-semibold">{row.name}</p>
+					<div className="flex min-w-0 items-center gap-2">
+						<LeagueVisibilityBadge
+							visibility={row.visibility}
+							labels={labels}
+						/>
+						<p
+							className="min-w-0 flex-1 truncate text-sm font-semibold"
+							title={row.name}
+						>
+							{row.name}
+						</p>
+					</div>
 					{rankDisplay ? (
 						<span className="shrink-0 text-[10px] font-semibold text-muted-foreground">
 							{labels.rank(rankDisplay)}
@@ -234,7 +289,18 @@ function H2HLeagueRow({
 		<LinkedH2HBody row={row}>
 			<div data-home-h2h-matchup={matchup.officialMatchId}>
 				<div className="flex items-start justify-between gap-3">
-					<p className="min-w-0 truncate text-sm font-semibold">{row.name}</p>
+					<div className="flex min-w-0 items-center gap-2">
+						<LeagueVisibilityBadge
+							visibility={row.visibility}
+							labels={labels}
+						/>
+						<p
+							className="min-w-0 flex-1 truncate text-sm font-semibold"
+							title={row.name}
+						>
+							{row.name}
+						</p>
+					</div>
 					<div className="flex shrink-0 items-center gap-1.5">
 						<span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
 							{labels.gameweek(matchup.eventId)}
@@ -302,19 +368,32 @@ export async function PersonalLeagueRankList({
 }) {
 	const t = await getTranslations('Home')
 	const groups: Array<{
-		type: HomeLeagueType
+		type: PersonalLeagueSection
 		label: string
 		rows: HomeLeagueRank[]
+		emptyLabel: string
 	}> = [
 		{
 			type: 'CLASSIC',
 			label: t('personalLeagueClassic'),
-			rows: rows.filter(row => getLeagueType(row) === 'CLASSIC')
+			rows: rows.filter(row => getLeagueType(row) === 'CLASSIC'),
+			emptyLabel: t('personalLeaguesTypeEmpty', {
+				type: t('personalLeagueClassic')
+			})
 		},
 		{
 			type: 'H2H',
 			label: t('personalLeagueH2H'),
-			rows: rows.filter(row => getLeagueType(row) === 'H2H')
+			rows: rows.filter(row => getLeagueType(row) === 'H2H'),
+			emptyLabel: t('personalLeaguesTypeEmpty', {
+				type: t('personalLeagueH2H')
+			})
+		},
+		{
+			type: 'CUPS',
+			label: t('personalLeagueCups'),
+			rows: [],
+			emptyLabel: t('personalLeagueCupsEmpty')
 		}
 	]
 	const h2hLabels = {
@@ -326,23 +405,37 @@ export async function PersonalLeagueRankList({
 		versus: t('personalH2HVersus'),
 		noMatch: t('personalH2HNoMatch'),
 		gameweek: (event: number) => t('personalH2HGameweek', { event }),
-		rank: (rank: string) => t('personalLeagueRank', { rank })
+		rank: (rank: string) => t('personalLeagueRank', { rank }),
+		privateLeague: t('personalLeaguePrivate'),
+		publicLeague: t('personalLeaguePublic')
+	}
+	const visibilityLabels = {
+		privateLeague: t('personalLeaguePrivate'),
+		publicLeague: t('personalLeaguePublic')
 	}
 	const renderClassicRow = (row: HomeLeagueRank) => {
 		const rankDisplay = row.rank == null ? '—' : formatInteger(row.rank)
 		const ariaMove =
-			row.movement.direction === 'UP'
-				? t('personalLeagueUp', { count: row.movement.places ?? 0 })
-				: row.movement.direction === 'DOWN'
-					? t('personalLeagueDown', { count: row.movement.places ?? 0 })
-					: row.movement.direction === 'FLAT'
-						? t('personalLeagueFlat')
-						: t('personalLeagueNoChange')
+			row.rankState !== 'READY'
+				? null
+				: row.movement.direction === 'UP'
+					? t('personalLeagueUp', { count: row.movement.places ?? 0 })
+					: row.movement.direction === 'DOWN'
+						? t('personalLeagueDown', { count: row.movement.places ?? 0 })
+						: row.movement.direction === 'FLAT'
+							? t('personalLeagueFlat')
+							: t('personalLeagueNoChange')
 		return (
 			<ClassicLeagueRow
 				key={row.key}
 				row={row}
-				ariaLabel={`${t('personalLeagueRank', { rank: rankDisplay })}, ${ariaMove}`}
+				ariaLabel={[
+					t('personalLeagueRank', { rank: rankDisplay }),
+					ariaMove
+				]
+					.filter(Boolean)
+					.join(', ')}
+				visibilityLabels={visibilityLabels}
 			/>
 		)
 	}
@@ -356,68 +449,58 @@ export async function PersonalLeagueRankList({
 		) : (
 			renderClassicRow(row)
 		)
-	const renderGroup = (group: (typeof groups)[number], groupIndex: number) => {
-		const initialRows = group.rows.slice(0, HOME_LEAGUE_RANK_LIMIT)
-		const remainingRows = group.rows.slice(HOME_LEAGUE_RANK_LIMIT)
-		const headingId = `home-league-group-${group.type.toLowerCase()}`
-
+	const renderGroupContent = (
+		group: (typeof groups)[number],
+		groupRows: HomeLeagueRank[]
+	): ReactNode => {
+		if (groupRows.length === 0) {
+			return (
+				<p className="rounded-lg border border-dashed border-border/70 bg-muted/10 px-3 py-8 text-center text-xs text-muted-foreground">
+					{group.emptyLabel}
+				</p>
+			)
+		}
 		return (
-			<section
-				key={group.type}
-				className="min-w-0 rounded-lg border border-border/70 bg-background/45 p-3 shadow-sm"
-				aria-labelledby={headingId}
-				data-home-league-group={group.type.toLowerCase()}
-			>
-				<div className="mb-2 flex items-center justify-between gap-3">
-					<h3
-						id={headingId}
-						className="font-display text-sm font-bold uppercase tracking-wide text-primary-ink"
-						{...(groupIndex === 0
-							? { elementtiming: 'home-league-ranks' }
-							: {})}
-					>
-						{group.label}
-					</h3>
-					<span className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
-						{group.rows.length}
-					</span>
-				</div>
-
-				{group.rows.length === 0 ? (
-					<p className="rounded-md border border-dashed border-border/70 px-3 py-3 text-center text-xs text-muted-foreground">
-						{t('personalLeaguesTypeEmpty', { type: group.label })}
-					</p>
-				) : (
-					<>
-						<ul className="rounded-lg border surface-inset-soft px-3">
-							{initialRows.map(row => renderRow(group, row))}
-						</ul>
-						{remainingRows.length > 0 ? (
-							<details className="group mt-2.5">
-								<summary className="flex h-9 w-full cursor-pointer list-none items-center justify-center gap-1.5 rounded-md border border-border/80 bg-background px-3 text-xs font-semibold shadow-sm transition-colors hover:bg-accent [&::-webkit-details-marker]:hidden">
-									<span className="group-open:hidden">
-										{t('personalLeaguesShowMore')}
-									</span>
-									<span className="hidden group-open:inline">
-										{t('personalLeaguesShowLess')}
-									</span>
-									<span
-										className="transition-transform group-open:rotate-180"
-										aria-hidden="true"
-									>
-										⌄
-									</span>
-								</summary>
-								<ul className="mt-2 rounded-lg border surface-inset-soft px-3">
-									{remainingRows.map(row => renderRow(group, row))}
-								</ul>
-							</details>
-						) : null}
-					</>
-				)}
-			</section>
+			<ul className="rounded-lg border surface-inset-soft px-3">
+				{groupRows.map(row => renderRow(group, row))}
+			</ul>
 		)
 	}
+	const previewRows = (group: (typeof groups)[number]) => {
+		if (group.rows.length <= HOME_LEAGUE_PREVIEW_LIMIT) return group.rows
+		const preview = group.rows.slice(0, HOME_LEAGUE_PREVIEW_LIMIT)
+		let replacementIndex = preview.length - 1
+		for (const visibility of ['PUBLIC', 'PRIVATE'] as const) {
+			const anchor = group.rows.find(row => row.visibility === visibility)
+			if (
+				!anchor ||
+				preview.some(row => row.key === anchor.key) ||
+				replacementIndex < 0
+			) {
+				continue
+			}
+			preview[replacementIndex] = anchor
+			replacementIndex -= 1
+		}
+		return preview
+	}
+	const visibleGroups = groups.filter(
+		group => group.type !== 'CUPS' || group.rows.length > 0
+	)
+	const slides: PersonalLeagueCarouselSlide[] = visibleGroups.map(group => {
+		const rowsForPreview = previewRows(group)
+		const hasMore = group.rows.length > rowsForPreview.length
+		return {
+			id: group.type.toLowerCase(),
+			label: group.label,
+			count: group.rows.length,
+			content: renderGroupContent(group, rowsForPreview),
+			fullContent: hasMore ? renderGroupContent(group, group.rows) : undefined,
+			viewAllLabel: hasMore
+				? t('personalLeagueViewAll', { count: group.rows.length })
+				: undefined
+		}
+	})
 
 	return (
 		<div data-home-league-ranks-ready="true">
@@ -429,9 +512,16 @@ export async function PersonalLeagueRankList({
 					{t('personalLeaguesEmpty')}
 				</p>
 			) : (
-				<div className="grid gap-3 md:grid-cols-2">
-					{groups.map(renderGroup)}
-				</div>
+				<PersonalLeagueCarousel
+					slides={slides}
+					labels={{
+						pagerLabel: t('personalLeaguePager'),
+						previousPage: t('personalLeaguePrevious'),
+						nextPage: t('personalLeagueNext'),
+						pause: t('personalLeaguePause'),
+						resume: t('personalLeagueResume')
+					}}
+				/>
 			)}
 			<RouteReadyMarker
 				name="HOME_LEAGUE_RANKS_READY"

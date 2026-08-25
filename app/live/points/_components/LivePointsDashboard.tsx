@@ -281,13 +281,6 @@ export function LivePointsDashboard({
 							onRefresh={onAutoRefresh}
 							nextRefreshAt={nextRefreshAt}
 						/>
-						<ShareActions
-							text={shareText}
-							imageRef={squadPitchRef}
-							title={liveData?.entryName ?? t('teamTitle')}
-							className="flex flex-wrap items-center gap-2 sm:gap-3"
-							disabled={!liveData || isLoading}
-						/>
 						<Button
 							size="sm"
 							variant="outline"
@@ -341,6 +334,16 @@ export function LivePointsDashboard({
 						<TeamStats stats={deriveLiveTeamStats(liveData)} />
 					</div>
 
+					<div className="mb-3 flex justify-end">
+						<ShareActions
+							actions={['image']}
+							text={shareText}
+							imageRef={squadPitchRef}
+							title={liveData.entryName ?? t('teamTitle')}
+							disabled={!liveData || isLoading}
+						/>
+					</div>
+
 					<div className="mb-8">
 						<SquadPitch
 							ref={squadPitchRef}
@@ -370,17 +373,26 @@ export function LivePointsDashboard({
 					/>
 
 					<section aria-labelledby="live-squad-heading">
-						<div className="mb-3">
-							<p className="chyron">{t('livePoints')}</p>
-							<h2
-								id="live-squad-heading"
-								className="mt-1 font-display text-xl font-bold tracking-tight sm:text-2xl"
-							>
-								{t('squad')}
-							</h2>
-							<p className="mt-1.5 text-xs text-muted-foreground">
-								{t('ptsIncludeBonusHint')}
-							</p>
+						<div className="mb-3 flex items-start justify-between gap-4">
+							<div>
+								<p className="chyron">{t('livePoints')}</p>
+								<h2
+									id="live-squad-heading"
+									className="mt-1 font-display text-xl font-bold tracking-tight sm:text-2xl"
+								>
+									{t('squad')}
+								</h2>
+								<p className="mt-1.5 text-xs text-muted-foreground">
+									{t('ptsIncludeBonusHint')}
+								</p>
+							</div>
+							<ShareActions
+								actions={['text']}
+								text={shareText}
+								title={liveData.entryName ?? t('teamTitle')}
+								className="shrink-0"
+								disabled={!liveData || isLoading}
+							/>
 						</div>
 						<Card
 							className={cn(

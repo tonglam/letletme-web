@@ -22,7 +22,7 @@ const loadFromOrigin = unstable_cache(
 				'market',
 				GET_PRICE_CHANGE_BOARD,
 				undefined,
-				{ cache: 'no-store', timeoutMs: 5_000 }
+				{ cache: 'no-store', timeoutMs: 5_000, suppressErrorLog: true }
 			)
 		),
 	['graphql', 'price-change-board', 'v2'],

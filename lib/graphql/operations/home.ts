@@ -78,14 +78,17 @@ export const GET_HOME_GAMEWEEK = /* GraphQL */ `
 				boardsState
 				overview {
 					highestPoints
+					highestScoringEntry
 					mostCaptained {
 						id
 						webName
+						position
 						teamShortName
 					}
 					topScorer {
 						id
 						webName
+						position
 						teamShortName
 						points
 					}
@@ -135,14 +138,23 @@ export const GET_HOME_PERSONAL_DESK = /* GraphQL */ `
 			state
 			entryName
 			playerName
+			region
 			overallPoints
+			pointsState
+			pointsCheckedAt
 			overallRank
+			rankState
+			rankCheckedAt
 			teamValue
+			bank
 			leagueRanks {
 				key
 				name
 				leagueType
+				visibility
 				rank
+				rankState
+				rankCheckedAt
 				movement {
 					direction
 					places
@@ -283,6 +295,89 @@ export const GET_HOME_MARKET_OWNERSHIP = /* GraphQL */ `
 	}
 `
 
+export const GET_HOME_MARKET_DESK = /* GraphQL */ `
+	query GetHomeMarketDesk {
+		homeMarketDesk {
+			revision
+			capturedAt
+			ownershipState
+			ownership {
+				period
+				date
+				coverage {
+					status
+					requestedDays
+					observedDays
+					firstDate
+					latestDate
+					fromDate
+					toDate
+					missingDates
+					capturedAt
+					complete
+					stale
+				}
+				risers {
+					player {
+						...HomeMarketPlayerFields
+					}
+					fromSelectedByPercent
+					toSelectedByPercent
+					changePercentagePoints
+					fromDate
+					toDate
+				}
+				fallers {
+					player {
+						...HomeMarketPlayerFields
+					}
+					fromSelectedByPercent
+					toSelectedByPercent
+					changePercentagePoints
+					fromDate
+					toDate
+				}
+			}
+			priceChangesState
+			priceChanges {
+				player {
+					...HomeMarketPlayerFields
+				}
+				changeDate
+				oldPrice
+				newPrice
+				change
+				direction
+			}
+			availabilityState
+			availabilityUpdates {
+				player {
+					...HomeMarketPlayerFields
+				}
+				status
+				previousStatus
+				news
+				newsAdded
+				observedDate
+				chanceOfPlayingThisRound
+				chanceOfPlayingNextRound
+			}
+		}
+	}
+
+	fragment HomeMarketPlayerFields on MarketPlayer {
+		playerId
+		playerCode
+		webName
+		teamId
+		teamName
+		teamShortName
+		position
+		price
+		selectedByPercent
+	}
+`
+
 export type HomeCoreEventContext = {
 	season: string
 	revision: string
@@ -357,6 +452,13 @@ export type HomeGameweekPlayer = {
 	totalPoints: number
 }
 
+type HomeGameweekOverviewPlayer = {
+	id: number
+	webName: string
+	position: 'GOALKEEPER' | 'DEFENDER' | 'MIDFIELDER' | 'FORWARD'
+	teamShortName: string | null
+}
+
 export type HomeGameweek = {
 	gameweekDesk: {
 		season: string
@@ -368,17 +470,13 @@ export type HomeGameweek = {
 		boardsState: 'PENDING' | 'AVAILABLE' | 'UNAVAILABLE'
 		overview: {
 			highestPoints: number | null
-			mostCaptained: {
-				id: number
-				webName: string
-				teamShortName: string | null
-			} | null
-			topScorer: {
-				id: number
-				webName: string
-				teamShortName: string | null
-				points: number
-			} | null
+			highestScoringEntry: number | null
+			mostCaptained: HomeGameweekOverviewPlayer | null
+			topScorer:
+				| (HomeGameweekOverviewPlayer & {
+						points: number
+				  })
+				| null
 			mostPlayedChip: { name: string; numberPlayed: number } | null
 		} | null
 		dreamTeam: HomeGameweekPlayer[]
@@ -417,7 +515,10 @@ export type HomeLeagueRank = {
 	key: string
 	name: string
 	leagueType: 'CLASSIC' | 'H2H'
+	visibility: 'PRIVATE' | 'PUBLIC'
 	rank: number | null
+	rankState: 'READY' | 'UPDATING' | 'UNAVAILABLE'
+	rankCheckedAt: string | null
 	movement: { direction: HomeRankDirection; places: number | null }
 	tournamentId: number | null
 	h2hMatchup: HomeH2HMatchup | null
@@ -427,9 +528,15 @@ export type HomePersonalDesk = {
 	state: 'READY' | 'EMPTY' | 'STALE' | 'UNAVAILABLE'
 	entryName: string | null
 	playerName: string | null
+	region: string | null
 	overallPoints: number | null
+	pointsState: 'LIVE' | 'STALE' | 'SETTLING' | 'FINAL' | 'UNAVAILABLE'
+	pointsCheckedAt: string | null
 	overallRank: number | null
+	rankState: 'READY' | 'UPDATING' | 'UNAVAILABLE'
+	rankCheckedAt: string | null
 	teamValue: number | null
+	bank: number | null
 	leagueRanks: HomeLeagueRank[]
 	sourceCheckedAt: string | null
 }
@@ -451,4 +558,21 @@ export type HomeMarketPulseResponse = {
 
 export type HomeMarketOwnershipResponse = {
 	marketOwnershipDay: MarketOwnershipDay
+}
+
+export type HomeMarketSectionState = 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE'
+
+export type HomeMarketDesk = {
+	revision: string
+	capturedAt: string | null
+	ownershipState: HomeMarketSectionState
+	ownership: MarketOwnershipDay | null
+	priceChangesState: HomeMarketSectionState
+	priceChanges: MarketPriceChange[]
+	availabilityState: HomeMarketSectionState
+	availabilityUpdates: MarketAvailabilityUpdate[]
+}
+
+export type HomeMarketDeskResponse = {
+	homeMarketDesk: HomeMarketDesk
 }

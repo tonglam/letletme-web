@@ -434,6 +434,7 @@ const server = createServer((request, response) => {
 							boardsState: 'AVAILABLE',
 							overview: {
 								highestPoints: 101,
+								highestScoringEntry: 15702,
 								mostCaptained: {
 									id: 1,
 									webName: 'Saka',
@@ -485,9 +486,15 @@ const server = createServer((request, response) => {
 						state: 'READY',
 						entryName: 'E2E United',
 						playerName: 'Test Manager',
+						region: 'Australia',
 						overallPoints: 1234,
+						pointsState: 'LIVE',
+						pointsCheckedAt: '2026-08-25T00:00:00.000Z',
 						overallRank: 56789,
+						rankState: 'UPDATING',
+						rankCheckedAt: '2026-08-24T00:00:00.000Z',
 						teamValue: 1005,
+						bank: 15,
 						leagueRanks: Array.from({ length: 8 }, (_, index) => ({
 							key: `${index === 6 ? 'h2h' : 'classic'}:${314 + index}`,
 							name:
@@ -497,7 +504,10 @@ const server = createServer((request, response) => {
 										? 'E2E H2H'
 										: `E2E League ${index + 1}`,
 							leagueType: index === 6 ? 'H2H' : 'CLASSIC',
+							visibility: index >= 3 ? 'PUBLIC' : 'PRIVATE',
 							rank: 12 + index,
+							rankState: 'UPDATING',
+							rankCheckedAt: '2026-08-24T00:00:00.000Z',
 							movement:
 								index === 0
 									? { direction: 'UP', places: 6 }
@@ -1298,10 +1308,69 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
+		if (query.includes('GetPriceChangeBoard')) {
+			json(response, 200, {
+				data: {
+					priceChangeBoard: {
+						status: 'READY',
+						source: 'FPL_BOOTSTRAP',
+						deadline: '2026-08-04T10:00:00.000Z',
+						nextDeadlines: [],
+						fetchedAt: '2026-08-03T09:40:00.000Z',
+						staleAt: '2026-08-04T09:40:00.000Z',
+						revision: 'price-changes-7',
+						expectedPlayerCount: 2,
+						observedPlayerCount: 2,
+						players: [
+							{
+								playerId: 1,
+								playerCode: 1001,
+								webName: 'Saka',
+								teamId: 1,
+								teamName: 'Arsenal',
+								teamShortName: 'ARS',
+								position: 'MID',
+								currentPrice: 100,
+								selectedByPercent: 32.5,
+								progressPercent: 64.3,
+								hourlyRate: 1.2,
+								status: 'LIKELY_RISE',
+								ownershipTrend: 'UP',
+								transfersInEvent: 12000,
+								transfersOutEvent: 3000,
+								lockedUntil: null,
+								calibrating: false
+							},
+							{
+								playerId: 2,
+								playerCode: 1002,
+								webName: 'Palmer',
+								teamId: 2,
+								teamName: 'Chelsea',
+								teamShortName: 'CHE',
+								position: 'MID',
+								currentPrice: 105,
+								selectedByPercent: 41.2,
+								progressPercent: -58.7,
+								hourlyRate: -1.1,
+								status: 'LIKELY_FALL',
+								ownershipTrend: 'DOWN',
+								transfersInEvent: 3000,
+								transfersOutEvent: 12000,
+								lockedUntil: null,
+								calibrating: false
+							}
+						]
+					}
+				}
+			})
+			return
+		}
 		if (
 			query.includes('GetMarketPulse') ||
 			query.includes('GetHomeMarketPulse') ||
 			query.includes('GetHomeMarketOwnership') ||
+			query.includes('GetHomeMarketDesk') ||
 			query.includes('GetFixturePlanningSignals') ||
 			query.includes('GetFixturePlanningOwnershipGameweek') ||
 			query.includes('GetMarketOwnershipOverview') ||
@@ -1388,9 +1457,20 @@ const server = createServer((request, response) => {
 				newPlayers: [],
 				priceChanges: []
 			}
-			const data =
-				query.includes('GetMarketOwnershipDay') ||
-				query.includes('GetHomeMarketOwnership')
+			const homeMarketDesk = {
+				revision: 'market-7',
+				capturedAt: '2026-08-03T09:40:00.000Z',
+				ownershipState: 'AVAILABLE',
+				ownership: marketOwnershipDay,
+				priceChangesState: 'EMPTY',
+				priceChanges: [],
+				availabilityState: 'EMPTY',
+				availabilityUpdates: []
+			}
+			const data = query.includes('GetHomeMarketDesk')
+				? { homeMarketDesk }
+				: query.includes('GetMarketOwnershipDay') ||
+					  query.includes('GetHomeMarketOwnership')
 					? { marketOwnershipDay }
 					: query.includes('GetMarketOwnershipOverview')
 						? {

@@ -71,6 +71,7 @@ export const GET_EVENT_STATS_BY_ID = `
       id
       averageEntryScore
       highestScore
+      highestScoringEntry
       mostSelected
       mostTransferredIn
       mostCaptained
@@ -85,6 +86,7 @@ export interface EventStatsById {
 	id: number
 	averageEntryScore: number | null
 	highestScore: number | null
+	highestScoringEntry: number | null
 	mostSelected: number | null
 	mostTransferredIn: number | null
 	mostCaptained: number | null

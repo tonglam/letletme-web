@@ -166,9 +166,11 @@ describe('live tournament desk', () => {
 
 	it('retries an expired revision exactly once without a ref', async () => {
 		const refs: Array<{ revision: string } | null> = []
+		const handledCodes: Array<readonly string[] | undefined> = []
 		const result = await loadTournamentLiveDeskWithRevisionRecovery(
-			async ref => {
+			async (ref, options) => {
 				refs.push(ref)
+				handledCodes.push(options?.handledErrorCodes)
 				if (refs.length === 1) {
 					throw new GraphQLRequestError('expired', {
 						code: 'LIVE_REVISION_GONE'
@@ -184,6 +186,7 @@ describe('live tournament desk', () => {
 			{ season: '2026', eventId: 1, revision: 'old' },
 			null
 		])
+		assert.deepEqual(handledCodes, [['LIVE_REVISION_GONE'], undefined])
 	})
 
 	it('never promotes Classic or summary points to a live tournament score', () => {

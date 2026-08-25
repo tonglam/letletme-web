@@ -32,7 +32,7 @@ const signalLikelihoodRank: Record<PriceChangePlayer['status'], number> = {
 }
 
 /** Players likely to move are the primary default audience for this board. */
-function isLikelyToChange(player: PriceChangePlayer): boolean {
+export function isLikelyToChange(player: PriceChangePlayer): boolean {
 	return (
 		player.status === 'VERY_LIKELY_RISE' ||
 		player.status === 'LIKELY_RISE' ||

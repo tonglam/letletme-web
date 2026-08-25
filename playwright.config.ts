@@ -1,6 +1,76 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL
+const e2eDatabaseUrl = process.env.E2E_DATABASE_URL?.trim()
+if (!e2eDatabaseUrl) {
+	throw new Error(
+		'E2E_DATABASE_URL is required for Playwright and must point to an isolated test database'
+	)
+}
+const e2eDirectDatabaseUrl = process.env.E2E_DIRECT_DATABASE_URL?.trim()
+if (!e2eDirectDatabaseUrl) {
+	throw new Error(
+		'E2E_DIRECT_DATABASE_URL is required for Playwright fixtures and must target the same isolated database as E2E_DATABASE_URL'
+	)
+}
+
+function parseDatabaseTarget(value: string, variableName: string) {
+	try {
+		const parsed = new URL(value)
+		if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
+			throw new Error(`${variableName} must be a PostgreSQL URL`)
+		}
+		const database = decodeURIComponent(parsed.pathname.slice(1))
+		if (!parsed.hostname || !database) {
+			throw new Error(`${variableName} must include a database name`)
+		}
+		return {
+			host: parsed.hostname.toLowerCase(),
+			port: parsed.port || '5432',
+			database
+		}
+	} catch (error) {
+		if (error instanceof Error && error.message.startsWith(variableName)) {
+			throw error
+		}
+		throw new Error(`${variableName} must be a valid PostgreSQL URL`)
+	}
+}
+
+const e2eDatabaseTarget = parseDatabaseTarget(
+	e2eDatabaseUrl,
+	'E2E_DATABASE_URL'
+)
+try {
+	const parsedE2eDatabaseUrl = new URL(e2eDatabaseUrl)
+	if (
+		decodeURIComponent(parsedE2eDatabaseUrl.username) !== 'letletme_web_runtime'
+	) {
+		throw new Error('E2E_DATABASE_URL must use the letletme_web_runtime role')
+	}
+} catch (error) {
+	if (
+		error instanceof Error &&
+		(error.message.includes('letletme_web_runtime') ||
+			error.message.includes('valid PostgreSQL URL'))
+	) {
+		throw error
+	}
+	throw new Error('E2E_DATABASE_URL must be a valid PostgreSQL URL')
+}
+const e2eDirectDatabaseTarget = parseDatabaseTarget(
+	e2eDirectDatabaseUrl,
+	'E2E_DIRECT_DATABASE_URL'
+)
+if (
+	e2eDirectDatabaseTarget.host !== e2eDatabaseTarget.host ||
+	e2eDirectDatabaseTarget.port !== e2eDatabaseTarget.port ||
+	e2eDirectDatabaseTarget.database !== e2eDatabaseTarget.database
+) {
+	throw new Error(
+		'E2E_DIRECT_DATABASE_URL must target the same host, port, and database as E2E_DATABASE_URL'
+	)
+}
 // Chromium treats localhost as a trustworthy origin, so production-shaped
 // __Secure Better Auth cookies remain testable without weakening them.
 const localWebPort = process.env.E2E_WEB_PORT ?? '3100'
@@ -58,6 +128,8 @@ export default defineConfig({
 							'playwright-backend-proxy-secret-at-least-32-bytes',
 						BETTER_AUTH_SECRET:
 							'playwright-better-auth-secret-at-least-32-bytes',
+						E2E_DATABASE_URL: e2eDatabaseUrl,
+						DATABASE_URL: e2eDatabaseUrl,
 						GRAPHQL_ENDPOINT: `${graphqlFixtureURL}/graphql`,
 						GRAPHQL_SERVICE_TOKEN: graphqlServiceToken
 					},

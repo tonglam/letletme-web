@@ -1,9 +1,10 @@
 import { DeadlineSection } from '@/components/home/DeadlineSection'
 import { HomePersonalHydratedMarker } from '@/components/analytics/HomePersonalHydratedMarker'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import {
-	GameweekStatsSection,
-	GameweekStatsSectionFallback
-} from '@/components/home/GameweekStatsSection'
+	HomePriceChangeDesk,
+	HomePriceChangeDeskFallback
+} from '@/components/home/HomePriceChangeDesk'
 import { MatchesSection } from '@/components/home/MatchesSection'
 import {
 	MarketTeaser,
@@ -24,6 +25,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Link } from '@/i18n/navigation'
 import { getPageLocale, type LocaleParams } from '@/i18n/page'
 import type { Session } from '@/lib/auth'
+import type {
+	HomeGameweek,
+	HomeGameweekPlayer
+} from '@/lib/graphql/operations/home'
 import { computeTimeLeft } from '@/lib/home-deadline'
 import {
 	getHomeGameweek,
@@ -126,7 +131,7 @@ async function HomePersonalSlot({
 	// fresh, cache-bypassing Better Auth session below.
 	if (!hasSessionCookie) return null
 	const bootstrapPromise = getHomePublicBootstrap().catch(error => {
-		console.error('[home-personal] bootstrap failed', {
+		console.info('[home-personal] bootstrap unavailable', {
 			error: error instanceof Error ? error.name : 'UnknownError'
 		})
 		return null
@@ -162,13 +167,6 @@ async function HomeHero() {
 				{/* Primary hero: copy + deadline only — keeps the classic two-column balance */}
 				<div className="grid gap-12 lg:grid-cols-[1.12fr_0.88fr] lg:items-center">
 					<div>
-						<p className="mb-6 flex items-center gap-2.5 font-display text-xs font-semibold uppercase tracking-caps-wide text-muted-foreground">
-							<span
-								className="live-dot"
-								aria-hidden="true"
-							/>
-							{t('matchdayBadge')}
-						</p>
 						<h1 className="max-w-3xl text-balance font-display text-5xl font-bold uppercase leading-[0.95] tracking-[-0.01em] sm:text-6xl lg:text-7xl">
 							{t.rich('headline', {
 								marker: chunks => <span className="marker">{chunks}</span>
@@ -231,7 +229,7 @@ async function HomeDeadline() {
 	const { bootstrap, bootstrapFailed } = await getHomePublicBootstrap()
 		.then(bootstrap => ({ bootstrap, bootstrapFailed: false }))
 		.catch(error => {
-			console.error('[home-deadline] bootstrap failed', {
+			console.info('[home-deadline] bootstrap unavailable', {
 				error: error instanceof Error ? error.name : 'UnknownError'
 			})
 			return { bootstrap: null, bootstrapFailed: true }
@@ -306,38 +304,124 @@ async function HomeTournamentBand() {
 	)
 }
 
-async function HomeInsights() {
+type HomeGameweekOverview = NonNullable<
+	HomeGameweek['gameweekDesk']['overview']
+>
+
+function HomePerformanceDesk({
+	currentEventId,
+	overview,
+	dreamTeam,
+	hasTeamError
+}: {
+	currentEventId: number | null
+	overview: HomeGameweekOverview | null
+	dreamTeam: HomeGameweekPlayer[]
+	hasTeamError: boolean
+}) {
+	const t = useTranslations('Home')
+
+	return (
+		<section
+			className="border-t bg-muted/20 py-10"
+			aria-label={t('performanceDesk')}
+		>
+			<div className="mx-auto max-w-4xl px-4">
+				<div className="space-y-8">
+					<StatsSection
+						currentEventId={currentEventId}
+						overview={overview}
+					/>
+					<TeamOfTheWeekSection
+						currentEventId={currentEventId}
+						dreamTeam={dreamTeam}
+						hasError={hasTeamError}
+					/>
+				</div>
+			</div>
+			<RouteReadyMarker
+				name="HOME_PERFORMANCE_READY"
+				readyKey={String(currentEventId ?? 'unavailable')}
+				audienceHint="public"
+				goodMs={2_000}
+				poorMs={3_000}
+			/>
+		</section>
+	)
+}
+
+function HomeMarketDesk() {
+	const t = useTranslations('Home')
+
+	return (
+		<section
+			data-home-market-section
+			className="border-y bg-secondary/40 py-10"
+			aria-label={t('marketDesk')}
+		>
+			<div className="mx-auto max-w-6xl px-4">
+				<div
+					data-home-market-grid
+					className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]"
+				>
+					<Suspense fallback={<MarketTeaserFallback />}>
+						<MarketTeaser />
+					</Suspense>
+					<Suspense fallback={<HomePriceChangeDeskFallback />}>
+						<HomePriceChangeDesk />
+					</Suspense>
+				</div>
+			</div>
+		</section>
+	)
+}
+
+function HomeFixturesDesk({
+	fixturesSeedKey,
+	initialFixtures
+}: {
+	fixturesSeedKey: string
+	initialFixtures: Awaited<ReturnType<typeof loadHomeFixtures>> | null
+}) {
+	const t = useTranslations('Home')
+
+	return (
+		<section
+			className="border-t py-10"
+			aria-label={t('fixturesDesk')}
+		>
+			<div className="mx-auto max-w-4xl px-4">
+				<MatchesSection
+					key={fixturesSeedKey}
+					initialFixtures={initialFixtures}
+				/>
+				<RouteReadyMarker
+					name="HOME_FIXTURES_READY"
+					readyKey={fixturesSeedKey}
+					audienceHint="public"
+					goodMs={2_000}
+					poorMs={3_000}
+				/>
+			</div>
+		</section>
+	)
+}
+
+async function HomePerformanceSection() {
 	const [t, format, bootstrap] = await Promise.all([
 		getTranslations('Home'),
 		getFormatter(),
-		getHomePublicBootstrap().catch(error => {
-			console.error('[home-insights] bootstrap failed', {
-				error: error instanceof Error ? error.name : 'UnknownError'
-			})
-			return null
-		})
+		getHomePublicBootstrap().catch(() => null)
 	])
 	const currentEventId = bootstrap?.context.currentEventId ?? null
-	const nextEventId = bootstrap?.context.nextEventId ?? null
-	const fixturesEventId = currentEventId ?? nextEventId
-	const [gameweek, initialFixtures] = await Promise.all([
-		currentEventId
-			? getHomeGameweek(currentEventId).catch(error => {
-					console.error('[home-insights] gameweek failed', {
-						error: error instanceof Error ? error.name : 'UnknownError'
-					})
-					return null
-				})
-			: Promise.resolve(null),
-		fixturesEventId
-			? loadHomeFixtures(fixturesEventId).catch(error => {
-					console.error('[home-insights] fixtures failed', {
-						error: error instanceof Error ? error.name : 'UnknownError'
-					})
-					return null
-				})
-			: Promise.resolve(null)
-	])
+	const preferDurable =
+		currentEventId !== null &&
+		bootstrap?.context.latestFinishedEventId !== null &&
+		bootstrap?.context.latestFinishedEventId !== undefined &&
+		currentEventId <= bootstrap.context.latestFinishedEventId
+	const gameweek = currentEventId
+		? await getHomeGameweek(currentEventId, { preferDurable }).catch(() => null)
+		: null
 	const presentation = resolveSeasonPresentation(
 		bootstrap?.context,
 		gameweek?.gameweekDesk.lifecycle ?? null
@@ -351,9 +435,7 @@ async function HomeInsights() {
 				timeStyle: 'short'
 			})
 		: t('deadlineNotPublished')
-	const fixturesSeedKey = initialFixtures
-		? `${initialFixtures.season}:${initialFixtures.source}:${initialFixtures.state}:${initialFixtures.revision}:${initialFixtures.eventId}`
-		: `${bootstrap?.context.season ?? 'unknown'}:${bootstrap?.context.revision ?? 'unknown'}:none`
+
 	const homePhaseNotice = (() => {
 		switch (presentation.phase) {
 			case 'PRESEASON':
@@ -405,116 +487,174 @@ async function HomeInsights() {
 
 	if (!bootstrap || homePhaseNotice) {
 		return (
-			<>
-				<section className="py-10">
-					<div className="mx-auto max-w-4xl px-4">
-						<div className="rounded-xl border bg-card px-6 py-7">
-							<p className="chyron">{homePhaseNotice?.eyebrow}</p>
-							<h2 className="mt-2 font-display text-2xl font-bold uppercase tracking-wide">
-								{homePhaseNotice?.title}
-							</h2>
-							<p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-								{homePhaseNotice?.description}
-							</p>
-							{presentation.phase === 'PRESEASON' ||
-							presentation.phase === 'PRE_DEADLINE' ||
-							presentation.phase === 'BETWEEN_GAMEWEEKS' ||
-							presentation.phase === 'OFFSEASON' ? (
-								<div className="mt-4 flex flex-wrap gap-4 text-sm font-semibold">
-									<Link
-										className="underline underline-offset-4"
-										href="/explore/fixtures"
-									>
-										{t('viewFixtures')}
-									</Link>
-									<Link
-										className="underline underline-offset-4"
-										href="/explore/market"
-									>
-										{t('exploreMarket')}
-									</Link>
-								</div>
-							) : null}
-						</div>
+			<section className="py-10">
+				<div className="mx-auto max-w-4xl px-4">
+					<div className="rounded-xl border bg-card px-6 py-7">
+						<p className="chyron">{homePhaseNotice?.eyebrow}</p>
+						<h2 className="mt-2 font-display text-2xl font-bold uppercase tracking-wide">
+							{homePhaseNotice?.title}
+						</h2>
+						<p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+							{homePhaseNotice?.description}
+						</p>
+						{presentation.phase === 'PRESEASON' ||
+						presentation.phase === 'PRE_DEADLINE' ||
+						presentation.phase === 'BETWEEN_GAMEWEEKS' ||
+						presentation.phase === 'OFFSEASON' ? (
+							<div className="mt-4 flex flex-wrap gap-4 text-sm font-semibold">
+								<Link
+									className="underline underline-offset-4"
+									href="/explore/fixtures"
+								>
+									{t('viewFixtures')}
+								</Link>
+								<Link
+									className="underline underline-offset-4"
+									href="/explore/market"
+								>
+									{t('exploreMarket')}
+								</Link>
+							</div>
+						) : null}
 					</div>
-				</section>
-
-				<section className="py-10">
-					<div className="mx-auto max-w-4xl px-4">
-						<MatchesSection
-							key={fixturesSeedKey}
-							initialFixtures={initialFixtures}
-						/>
-					</div>
-				</section>
-			</>
+				</div>
+			</section>
 		)
 	}
 
+	if (
+		presentation.phase !== 'LIVE' &&
+		presentation.phase !== 'SETTLING' &&
+		presentation.phase !== 'SETTLED'
+	) {
+		return null
+	}
+
 	return (
-		<>
-			{presentation.phase === 'LIVE' ||
-			presentation.phase === 'SETTLING' ||
-			presentation.phase === 'SETTLED' ? (
-				<>
-					<section className="py-10">
-						<div className="mx-auto max-w-4xl px-4">
-							<StatsSection
-								currentEventId={currentEventId}
-								overview={
-									gameweek?.gameweekDesk.overviewState === 'AVAILABLE'
-										? gameweek.gameweekDesk.overview
-										: null
-								}
-							/>
-						</div>
-					</section>
+		<HomePerformanceDesk
+			currentEventId={currentEventId}
+			overview={
+				gameweek?.gameweekDesk.overviewState === 'AVAILABLE'
+					? gameweek.gameweekDesk.overview
+					: null
+			}
+			dreamTeam={
+				gameweek?.gameweekDesk.boardsState === 'AVAILABLE'
+					? gameweek.gameweekDesk.dreamTeam
+					: []
+			}
+			hasTeamError={
+				gameweek === null || gameweek.gameweekDesk.boardsState === 'UNAVAILABLE'
+			}
+		/>
+	)
+}
 
-					<section className="border-y bg-secondary/40 py-10">
-						<div className="mx-auto max-w-4xl px-4">
-							<div className="grid gap-8 md:grid-cols-2">
-								<TeamOfTheWeekSection
-									currentEventId={currentEventId}
-									dreamTeam={
-										gameweek?.gameweekDesk.boardsState === 'AVAILABLE'
-											? gameweek.gameweekDesk.dreamTeam
-											: []
-									}
-									hasError={
-										gameweek === null ||
-										gameweek.gameweekDesk.boardsState === 'UNAVAILABLE'
-									}
-								/>
-								<GameweekStatsSection
-									currentEventId={currentEventId}
-									transfersIn={gameweek?.topTransfersIn ?? []}
-									transfersOut={gameweek?.topTransfersOut ?? []}
-									hasError={
-										gameweek === null ||
-										gameweek.transfersState === 'UNAVAILABLE'
-									}
-								/>
-							</div>
-						</div>
-					</section>
-				</>
-			) : null}
+async function HomeFixturesSection() {
+	const bootstrap = await getHomePublicBootstrap().catch(() => null)
+	const currentEventId = bootstrap?.context.currentEventId ?? null
+	const nextEventId = bootstrap?.context.nextEventId ?? null
+	const latestFinishedEventId =
+		bootstrap?.context.latestFinishedEventId ?? null
+	const preferNextEvent =
+		currentEventId !== null &&
+		nextEventId !== null &&
+		latestFinishedEventId === currentEventId
+	const eventId =
+		(preferNextEvent ? nextEventId : currentEventId) ?? nextEventId
+	let initialFixtures = eventId
+		? await loadHomeFixtures(eventId).catch(() => null)
+		: null
 
-			<section className="py-10">
-				<div className="mx-auto max-w-4xl px-4">
-					<MatchesSection
-						key={fixturesSeedKey}
-						initialFixtures={initialFixtures}
-					/>
+	// Core keeps the current event until the next deadline, even after every
+	// fixture in that event has settled. The home desk is date-oriented, so
+	// move to the next event once the current one is over.
+	if (
+		initialFixtures &&
+		currentEventId !== null &&
+		nextEventId !== null &&
+		nextEventId !== currentEventId &&
+		!preferNextEvent &&
+		(initialFixtures.state === 'SETTLED' ||
+			(initialFixtures.fixtures.length > 0 &&
+				initialFixtures.fixtures.every(fixture => fixture.finished)))
+	) {
+		initialFixtures = await loadHomeFixtures(nextEventId).catch(
+			() => initialFixtures
+		)
+	}
+	const fixturesSeedKey = initialFixtures
+		? `${initialFixtures.season}:${initialFixtures.source}:${initialFixtures.state}:${initialFixtures.revision}:${initialFixtures.eventId}`
+		: `${bootstrap?.context.season ?? 'unknown'}:${bootstrap?.context.revision ?? 'unknown'}:none`
+	return (
+		<HomeFixturesDesk
+			fixturesSeedKey={fixturesSeedKey}
+			initialFixtures={initialFixtures}
+		/>
+	)
+}
+
+function HomePerformanceSectionFallback() {
+	return (
+		<section
+			className="border-t bg-muted/20 py-10"
+			aria-hidden="true"
+		>
+			<div className="mx-auto max-w-4xl px-4">
+				<div className="space-y-8">
+					<div className="rounded-xl border bg-card p-6">
+						<Skeleton className="h-6 w-40" />
+						<div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+							{[1, 2, 3, 4].map(item => (
+								<Skeleton
+									key={item}
+									className="h-28"
+								/>
+							))}
+						</div>
+					</div>
+					<TeamOfTheWeekSectionFallback currentEventId={null} />
 				</div>
-			</section>
-		</>
+			</div>
+		</section>
+	)
+}
+
+function HomeMarketSectionFallback() {
+	return (
+		<section
+			className="border-y bg-secondary/40 py-10"
+			aria-hidden="true"
+		>
+			<div className="mx-auto max-w-6xl px-4">
+				<div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+					<MarketTeaserFallback />
+					<HomePriceChangeDeskFallback />
+				</div>
+			</div>
+		</section>
+	)
+}
+
+function HomeFixturesSectionFallback() {
+	return (
+		<section
+			className="border-t py-10"
+			aria-hidden="true"
+		>
+			<div className="mx-auto max-w-4xl px-4">
+				<div className="rounded-xl border bg-card p-6">
+					<Skeleton className="h-6 w-44" />
+					<Skeleton className="mt-6 h-72 w-full" />
+				</div>
+			</div>
+		</section>
 	)
 }
 
 export default async function Home({ params }: { params: LocaleParams }) {
 	await getPageLocale(params)
-	void getHomePublicBootstrap()
+	void getHomePublicBootstrap().catch(() => undefined)
 	return (
 		<RouteIntlProvider namespaces={ROUTE_CLIENT_NAMESPACES.home}>
 			<PageShell>
@@ -523,29 +663,17 @@ export default async function Home({ params }: { params: LocaleParams }) {
 
 					<HomeTournamentBand />
 
-					<Suspense fallback={<MarketTeaserFallback />}>
-						<MarketTeaser />
+					<Suspense fallback={<HomePerformanceSectionFallback />}>
+						<HomePerformanceSection />
 					</Suspense>
-
-					<Suspense fallback={<PageInsightsFallback />}>
-						<HomeInsights />
+					<Suspense fallback={<HomeMarketSectionFallback />}>
+						<HomeMarketDesk />
+					</Suspense>
+					<Suspense fallback={<HomeFixturesSectionFallback />}>
+						<HomeFixturesSection />
 					</Suspense>
 				</div>
 			</PageShell>
 		</RouteIntlProvider>
-	)
-}
-
-function PageInsightsFallback() {
-	const t = useTranslations('Home')
-	return (
-		<div
-			className="mx-auto grid w-full max-w-4xl gap-8 px-4 py-10 md:grid-cols-2"
-			aria-label={t('loadingInsights')}
-			aria-busy="true"
-		>
-			<TeamOfTheWeekSectionFallback currentEventId={null} />
-			<GameweekStatsSectionFallback />
-		</div>
 	)
 }

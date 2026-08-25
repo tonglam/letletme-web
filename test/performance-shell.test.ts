@@ -21,7 +21,7 @@ describe('server-first global shell performance boundary', () => {
 		assert.doesNotMatch(layout, /ThemeProvider/)
 		assert.match(
 			layout,
-			/id="theme-bootstrap"[\s\S]*themeBootstrapScript[\s\S]*id="shell-controls-bootstrap"[\s\S]*data-cfasync="false"[\s\S]*src="\/theme-bootstrap\.js"[\s\S]*defer/
+			/id="theme-bootstrap"[\s\S]*themeBootstrapScript[\s\S]*id="shell-controls-bootstrap"[\s\S]*data-cfasync="false"[\s\S]*src="\/theme-bootstrap\.js"[\s\S]*strategy="beforeInteractive"/
 		)
 		assert.doesNotMatch(layout, /blocking="render"/)
 		assert.doesNotMatch(clientNamespaces, /\n\s*'Theme',/)

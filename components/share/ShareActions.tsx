@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { ShareTextFallback } from './ShareTextFallback'
 
 type ShareTextValue = string | (() => string)
+type ShareActionKind = 'text' | 'image'
 
 export function ShareActions({
 	text,
@@ -21,7 +22,8 @@ export function ShareActions({
 	title,
 	className,
 	compact = false,
-	disabled = false
+	disabled = false,
+	actions = ['text', 'image'] as ShareActionKind[]
 }: {
 	text: ShareTextValue
 	imageRef?: RefObject<HTMLElement | null>
@@ -29,6 +31,7 @@ export function ShareActions({
 	className?: string
 	compact?: boolean
 	disabled?: boolean
+	actions?: ShareActionKind[]
 }) {
 	const t = useTranslations('Share')
 	const [textShared, setTextShared] = useState(false)
@@ -101,33 +104,35 @@ export function ShareActions({
 			className={className ?? 'flex flex-wrap items-center gap-2'}
 			data-share-exclude="true"
 		>
-			<Button
-				type="button"
-				variant="outline"
-				size={compact ? 'icon' : 'sm'}
-				className={compact ? 'size-8' : 'gap-1.5'}
-				onClick={() => void handleTextShare()}
-				disabled={disabled}
-				aria-label={t('shareText')}
-				title={compact ? t('shareText') : undefined}
-			>
-				{textShared ? (
-					<Check
-						data-icon="inline-start"
-						className="text-primary-ink"
-					/>
-				) : (
-					<Share2 data-icon="inline-start" />
-				)}
-				{compact ? (
-					<span className="sr-only">{t('shareText')}</span>
-				) : textShared ? (
-					t('shareDone')
-				) : (
-					t('shareText')
-				)}
-			</Button>
-			{imageRef ? (
+			{actions.includes('text') ? (
+				<Button
+					type="button"
+					variant="outline"
+					size={compact ? 'icon' : 'sm'}
+					className={compact ? 'size-8' : 'gap-1.5'}
+					onClick={() => void handleTextShare()}
+					disabled={disabled}
+					aria-label={t('shareText')}
+					title={compact ? t('shareText') : undefined}
+				>
+					{textShared ? (
+						<Check
+							data-icon="inline-start"
+							className="text-primary-ink"
+						/>
+					) : (
+						<Share2 data-icon="inline-start" />
+					)}
+					{compact ? (
+						<span className="sr-only">{t('shareText')}</span>
+					) : textShared ? (
+						t('shareDone')
+					) : (
+						t('shareText')
+					)}
+				</Button>
+			) : null}
+			{imageRef && actions.includes('image') ? (
 				<Button
 					type="button"
 					variant="outline"

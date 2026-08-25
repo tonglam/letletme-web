@@ -13,6 +13,23 @@ describe('route contract', () => {
 })
 
 describe('theme bootstrap', () => {
+	it('uses Next Script before interactive rendering for the theme bootstrap', async () => {
+		const source = await readFile(
+			new URL('../app/[locale]/layout.tsx', import.meta.url),
+			'utf8'
+		)
+
+		assert.ok(source.includes("from 'next/script'"))
+		assert.ok(source.includes('<Script'))
+		assert.ok(source.includes('id="theme-bootstrap"'))
+		assert.ok(source.includes('strategy="beforeInteractive"'))
+		assert.ok(source.includes('dangerouslySetInnerHTML'))
+		assert.ok(source.includes("localStorage.getItem('theme')"))
+		assert.ok(source.includes('<ShellControlsReady />'))
+		assert.ok(source.includes('src="/theme-bootstrap.js"'))
+		assert.equal(source.includes('<script'), false)
+	})
+
 	it('keeps only the minimal theme selection render-blocking', async () => {
 		const [layout, bootstrap, shellReady] = await Promise.all([
 			readFile(new URL('../app/[locale]/layout.tsx', import.meta.url), 'utf8'),
@@ -33,7 +50,7 @@ describe('theme bootstrap', () => {
 		)
 		assert.match(
 			layout,
-			/id="shell-controls-bootstrap"[\s\S]*data-cfasync="false"[\s\S]*src="\/theme-bootstrap\.js"[\s\S]*defer/
+			/id="shell-controls-bootstrap"[\s\S]*data-cfasync="false"[\s\S]*src="\/theme-bootstrap\.js"[\s\S]*strategy="beforeInteractive"/
 		)
 		assert.doesNotMatch(layout, /blocking="render"|fetchPriority="high"/)
 		assert.match(layout, /const themeBootstrapScript = `[\s\S]*localStorage/)

@@ -122,7 +122,7 @@ function DensePlayerRow({
 					<p className="market-player-subtext">{player.teamShortName}</p>
 				)}
 			</div>
-			<div className="shrink-0 text-right">{trailing}</div>
+				<div className="market-dense-row__trailing">{trailing}</div>
 		</li>
 	)
 }
@@ -432,12 +432,12 @@ function GlanceStrip({
 							<PlayerStatsAnchor
 								playerId={cell.playerId}
 								locale={locale}
-								className="mt-1 block truncate text-xs text-foreground underline decoration-primary/55 underline-offset-2 hover:decoration-primary"
+								className="mt-1 block whitespace-normal text-xs text-foreground underline decoration-primary/55 underline-offset-2 hover:decoration-primary"
 							>
 								{cell.secondary}
 							</PlayerStatsAnchor>
 						) : (
-							<p className="mt-1 truncate text-xs text-muted-foreground">
+								<p className="mt-1 whitespace-normal text-xs text-muted-foreground">
 								{cell.secondary}
 							</p>
 						)}

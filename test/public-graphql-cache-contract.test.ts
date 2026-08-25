@@ -71,11 +71,11 @@ describe('public GraphQL cache contract', () => {
 		)
 		assert.match(fixturesLoader, /coalescePublicSeed/)
 		assert.doesNotMatch(fixturesLoader, /unstable_cache/)
-		assert.match(home, /gameweek\.gameweekDesk\.lifecycle !== 'PROVISIONAL'/)
+		assert.match(home, /gameweek\.gameweekDesk\.lifecycle === 'SETTLED'/)
 		assert.match(home, /overviewState === 'AVAILABLE'/)
 		assert.match(home, /boardsState === 'AVAILABLE'/)
 		assert.match(home, /transfersState === 'AVAILABLE'/)
-		assert.match(home, /TransientHomeGameweekError/)
+		assert.doesNotMatch(home, /TransientHomeGameweekError/)
 	})
 
 	it('keeps the fixture API CDN cache separate from the RSC Data Cache', async () => {

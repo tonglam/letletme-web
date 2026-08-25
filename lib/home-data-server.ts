@@ -29,16 +29,9 @@ import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { coalescePublicSeed } from '@/lib/public-seed-singleflight'
 
-class TransientHomeGameweekError extends Error {
-	constructor(readonly gameweek: HomeGameweek) {
-		super('Home gameweek is not stable enough for the durable cache')
-		this.name = 'TransientHomeGameweekError'
-	}
-}
-
 function isHomeGameweekDurablyCacheable(gameweek: HomeGameweek): boolean {
 	return (
-		gameweek.gameweekDesk.lifecycle !== 'PROVISIONAL' &&
+		gameweek.gameweekDesk.lifecycle === 'SETTLED' &&
 		gameweek.gameweekDesk.overviewState === 'AVAILABLE' &&
 		gameweek.gameweekDesk.boardsState === 'AVAILABLE' &&
 		gameweek.transfersState === 'AVAILABLE'
@@ -75,7 +68,7 @@ const getHomePublicBootstrapFromOrigin = unstable_cache(
 					'home',
 					GET_HOME_PUBLIC_BOOTSTRAP,
 					undefined,
-					{ cache: 'no-store', timeoutMs: 5_000 }
+					{ cache: 'no-store', timeoutMs: 5_000, suppressErrorLog: true }
 				)
 			const { context, fixtures } = response.homePublicBootstrap
 			const result = {
@@ -100,7 +93,29 @@ const getHomePublicBootstrapFromOrigin = unstable_cache(
 
 export const getHomePublicBootstrap = cache(getHomePublicBootstrapFromOrigin)
 
-const getHomeGameweekFromOrigin = unstable_cache(
+const homeGameweekCachePolicy = {
+	revalidate: RevalidateSeconds.publicStats,
+	tags: [CacheTag.gameweekStats, CacheTag.liveScores, CacheTag.transfers]
+}
+
+type HomeGameweekCacheLoader = () => Promise<HomeGameweek>
+
+const HOME_GAMEWEEK_CACHE_BYPASS = Symbol('HOME_GAMEWEEK_CACHE_BYPASS')
+
+// Keep reads and write-through fills on the exact same cache key. The loader
+// closure is intentionally shared by this factory so a settled request can
+// seed the durable entry without issuing a second GraphQL request.
+const createHomeGameweekCache = (
+	eventId: number,
+	loader: HomeGameweekCacheLoader
+) =>
+	unstable_cache(
+		async () => loader(),
+		['graphql', 'home-gameweek', 'v2', String(eventId)],
+		homeGameweekCachePolicy
+	)
+
+const loadHomeGameweekFromOrigin = cache(
 	async (eventId: number): Promise<HomeGameweek> =>
 		coalescePublicSeed(`home-gameweek:${eventId}`, async () => {
 			const startedAt = performance.now()
@@ -108,38 +123,63 @@ const getHomeGameweekFromOrigin = unstable_cache(
 				'gameweek',
 				GET_HOME_GAMEWEEK,
 				{ eventId },
-				{ cache: 'no-store', timeoutMs: 5_000 }
+				{ cache: 'no-store', timeoutMs: 5_000, suppressErrorLog: true }
 			)
 			const gameweek = response.homeGameweek
 			const cacheable = isHomeGameweekDurablyCacheable(gameweek)
 			console.info('[home-gameweek]', {
+				eventId,
 				lifecycle: gameweek.gameweekDesk.lifecycle,
 				dreamTeamRows: gameweek.gameweekDesk.dreamTeam.length,
 				transfersState: gameweek.transfersState,
 				transferRows:
 					gameweek.topTransfersIn.length + gameweek.topTransfersOut.length,
 				durationMs: Number((performance.now() - startedAt).toFixed(2)),
-				cacheResult: cacheable ? 'miss-fill' : 'bypass-transient'
+				cacheResult: cacheable ? 'durable-candidate' : 'request-only'
 			})
-			if (!cacheable) throw new TransientHomeGameweekError(gameweek)
 			return gameweek
-		}),
-	['graphql', 'home-gameweek', 'v1'],
-	{
-		revalidate: RevalidateSeconds.publicStats,
-		tags: [CacheTag.gameweekStats, CacheTag.liveScores, CacheTag.transfers]
-	}
+		})
 )
 
-const getHomeGameweekCached = cache(getHomeGameweekFromOrigin)
-
-export async function getHomeGameweek(eventId: number): Promise<HomeGameweek> {
+const getHomeGameweekDurable = async (
+	eventId: number
+): Promise<HomeGameweek> => {
 	try {
-		return await getHomeGameweekCached(eventId)
+		return await createHomeGameweekCache(eventId, async () => {
+			const gameweek = await loadHomeGameweekFromOrigin(eventId)
+			if (!isHomeGameweekDurablyCacheable(gameweek)) {
+				// A rejected unstable_cache loader is not written to the durable cache.
+				// Keep the transient result available to this request without exposing a
+				// recoverable error or allowing an incomplete settled desk to persist.
+				throw HOME_GAMEWEEK_CACHE_BYPASS
+			}
+			return gameweek
+		})()
 	} catch (error) {
-		if (error instanceof TransientHomeGameweekError) return error.gameweek
+		if (error === HOME_GAMEWEEK_CACHE_BYPASS) {
+			return loadHomeGameweekFromOrigin(eventId)
+		}
 		throw error
 	}
+}
+
+async function persistHomeGameweek(
+	eventId: number,
+	gameweek: HomeGameweek
+): Promise<void> {
+	await createHomeGameweekCache(eventId, async () => gameweek)()
+}
+
+export async function getHomeGameweek(
+	eventId: number,
+	options: { preferDurable?: boolean } = {}
+): Promise<HomeGameweek> {
+	if (options.preferDurable) return getHomeGameweekDurable(eventId)
+	const gameweek = await loadHomeGameweekFromOrigin(eventId)
+	if (isHomeGameweekDurablyCacheable(gameweek)) {
+		await persistHomeGameweek(eventId, gameweek)
+	}
+	return gameweek
 }
 
 const loadHomeFixturesFromOrigin = async (
@@ -151,7 +191,7 @@ const loadHomeFixturesFromOrigin = async (
 				'fixtures',
 				GET_HOME_EVENT_FIXTURES,
 				{ eventId },
-				{ cache: 'no-store', timeoutMs: 5_000 }
+				{ cache: 'no-store', timeoutMs: 5_000, suppressErrorLog: true }
 			)
 		const core = response.coreEventContext
 		if (core.currentEventId === eventId) {
@@ -161,7 +201,7 @@ const loadHomeFixturesFromOrigin = async (
 						'fixtures',
 						GET_LIVE_MATCHDAY_DESK,
 						undefined,
-						{ cache: 'no-store', timeoutMs: 5_000 }
+						{ cache: 'no-store', timeoutMs: 5_000, suppressErrorLog: true }
 					)
 				const desk = liveResponse.liveMatchdayDesk
 				if (desk.eventId !== eventId) {
@@ -234,7 +274,7 @@ export async function loadHomePersonalDesk(session: Session | null) {
 				session,
 				GET_HOME_PERSONAL_DESK,
 				undefined,
-				{ cache: 'no-store', timeoutMs: 1_500 }
+				{ cache: 'no-store', timeoutMs: 5_000, suppressErrorLog: true }
 			)
 		console.info('[home-personal-desk]', {
 			state: response.homePersonalDesk.state,
@@ -243,7 +283,7 @@ export async function loadHomePersonalDesk(session: Session | null) {
 		})
 		return response
 	} catch (error) {
-		console.error('[home-personal-desk] compact desk fetch failed', {
+		console.info('[home-personal-desk] compact desk unavailable', {
 			error: error instanceof Error ? error.name : 'UnknownError',
 			durationMs: Number((performance.now() - startedAt).toFixed(2))
 		})

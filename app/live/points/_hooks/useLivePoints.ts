@@ -34,6 +34,15 @@ import {
 	selectLiveDataForExplainResponse
 } from '../_lib/live-points-model'
 
+const LIVE_DATA_RETRY_DELAYS_MS = [1500, 3000, 7000, 12000] as const
+
+function isPendingEntrySync(live: LiveCalcData) {
+	return (
+		live.pickList.length === 0 &&
+		(!live.entryName?.trim() || live.score?.state === 'UNAVAILABLE')
+	)
+}
+
 interface UseLivePointsOptions {
 	initialEntryId: number
 	initialEventId: number
@@ -90,6 +99,15 @@ export function useLivePoints({
 	const requestIdRef = useRef(0)
 	const hasLoadedLiveDataRef = useRef(Boolean(initialLiveData))
 	const skipInitialFetchRef = useRef(Boolean(initialLiveData))
+	const liveDataRetryTimerRef = useRef<number | null>(null)
+	const liveDataRetryRef = useRef<{
+		requestKey: string
+		attempt: number
+	} | null>(null)
+	const retryingRequestIdRef = useRef<number | null>(null)
+	const fetchLivePointsForGameweekRef = useRef<
+		((eventId: number) => Promise<void>) | null
+	>(null)
 	const lastExplainAttemptAtRef = useRef(0)
 	const breakdownCacheRef = useRef<CachedBreakdownLookup | null>(null)
 	const currentRequestKeyRef = useRef<string | null>(
@@ -111,6 +129,14 @@ export function useLivePoints({
 	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
 		snapshotRef.current = next
 		setSnapshot(next)
+	}, [])
+	const resetLiveDataRetry = useCallback(() => {
+		if (liveDataRetryTimerRef.current !== null) {
+			window.clearTimeout(liveDataRetryTimerRef.current)
+			liveDataRetryTimerRef.current = null
+		}
+		liveDataRetryRef.current = null
+		retryingRequestIdRef.current = null
 	}, [])
 
 	const enrichLivePointBreakdowns = useCallback(
@@ -179,6 +205,13 @@ export function useLivePoints({
 		(eventId: number): Promise<void> => {
 			if (!activeEntryId) return Promise.resolve()
 			const requestKey = `${activeEntryId}:${eventId}`
+			if (liveDataRetryRef.current?.requestKey !== requestKey) {
+				if (liveDataRetryTimerRef.current !== null) {
+					window.clearTimeout(liveDataRetryTimerRef.current)
+					liveDataRetryTimerRef.current = null
+				}
+				liveDataRetryRef.current = { requestKey, attempt: 0 }
+			}
 			if (inFlightRequestRef.current?.key === requestKey) {
 				return inFlightRequestRef.current.promise
 			}
@@ -217,6 +250,42 @@ export function useLivePoints({
 					const live = liveResponse.calcLivePointsByEntry
 					if (requestId !== requestIdRef.current) return
 
+					if (live.pickList.length === 0) {
+						const retryState =
+							liveDataRetryRef.current ?? { requestKey, attempt: 0 }
+						liveDataRetryRef.current = retryState
+						const retryDelay = isPendingEntrySync(live)
+							? LIVE_DATA_RETRY_DELAYS_MS[retryState.attempt]
+							: undefined
+
+						if (retryDelay !== undefined) {
+							retryState.attempt += 1
+							retryingRequestIdRef.current = requestId
+							setError(undefined)
+							liveDataRetryTimerRef.current = window.setTimeout(() => {
+								liveDataRetryTimerRef.current = null
+								if (requestId !== requestIdRef.current) return
+								void fetchLivePointsForGameweekRef.current?.(eventId)
+							}, retryDelay)
+							return
+						}
+
+						// Do not paint an empty pitch after the bounded sync window.
+						// Keep the page in its explicit no-data state instead.
+						liveDataRetryRef.current = null
+						latestLiveDataRef.current = null
+						hasLoadedLiveDataRef.current = false
+						setLiveData(undefined)
+						setStartingPlayers([])
+						setBenchPlayers([])
+						acceptSnapshot(live.snapshot ?? null)
+						setError(undefined)
+						return
+					}
+
+					liveDataRetryRef.current = null
+					retryingRequestIdRef.current = null
+
 					const allPlayers = mapLiveDataToPlayers(
 						live,
 						breakdownLookupForRequest(breakdownCacheRef.current, requestKey)
@@ -243,8 +312,10 @@ export function useLivePoints({
 					}
 				} finally {
 					if (requestId === requestIdRef.current) {
-						setIsLoading(false)
-						setIsRefreshing(false)
+						if (retryingRequestIdRef.current !== requestId) {
+							setIsLoading(false)
+							setIsRefreshing(false)
+						}
 					}
 				}
 			})()
@@ -259,6 +330,13 @@ export function useLivePoints({
 		[acceptSnapshot, activeEntryId, enrichLivePointBreakdowns, t]
 	)
 
+	useEffect(() => {
+		fetchLivePointsForGameweekRef.current = fetchLivePointsForGameweek
+		return () => {
+			fetchLivePointsForGameweekRef.current = null
+		}
+	}, [fetchLivePointsForGameweek])
+
 	const submitEntry = useCallback(() => {
 		const nextEntryId = Number(entryIdInput)
 		if (!Number.isInteger(nextEntryId) || nextEntryId <= 0) {
@@ -267,6 +345,7 @@ export function useLivePoints({
 		}
 
 		requestIdRef.current += 1
+		resetLiveDataRetry()
 		currentRequestKeyRef.current = null
 		latestLiveDataRef.current = null
 		hasLoadedLiveDataRef.current = false
@@ -280,22 +359,27 @@ export function useLivePoints({
 		setError(undefined)
 		setIsLoading(true)
 		return true
-	}, [acceptSnapshot, entryIdInput, t])
+	}, [acceptSnapshot, entryIdInput, resetLiveDataRetry, t])
 
 	const changeGameweek = useCallback(
 		(gameweek: number) => {
+			resetLiveDataRetry()
 			followsAnchorRef.current = false
 			lastExplainAttemptAtRef.current = 0
 			setSelectedGameweek(gameweek)
 			void fetchLivePointsForGameweek(gameweek)
 		},
-		[fetchLivePointsForGameweek]
+		[fetchLivePointsForGameweek, resetLiveDataRetry]
 	)
 
 	const refresh = useCallback(async () => {
-		if (selectedGameweek !== undefined)
+		if (selectedGameweek !== undefined) {
+			resetLiveDataRetry()
 			await fetchLivePointsForGameweek(selectedGameweek)
-	}, [fetchLivePointsForGameweek, selectedGameweek])
+		}
+	}, [fetchLivePointsForGameweek, resetLiveDataRetry, selectedGameweek])
+
+	useEffect(() => resetLiveDataRetry, [resetLiveDataRetry])
 
 	const autoRefresh = useCallback(async () => {
 		if (selectedGameweek === undefined) return

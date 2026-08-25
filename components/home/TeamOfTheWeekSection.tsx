@@ -1,11 +1,45 @@
+'use client'
+
+import {
+	SquadPitch,
+	type SquadPitchPlayer
+} from '@/components/squad-pitch/SquadPitch'
+import { PlayerDetailModal } from '@/components/live/PlayerDetailModal'
+import { useMatchPlayerDetail } from '@/components/live/match-card/useMatchPlayerDetail'
 import { GameweekBadge } from '@/components/stats/GameweekBadge'
-import { Badge } from '@/components/ui/badge'
+import { ShareActions } from '@/components/share/ShareActions'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { APP_URL } from '@/i18n/config'
+import { localizePathname, type AppLocale } from '@/i18n/routing'
 import type { HomeGameweekPlayer } from '@/lib/graphql/operations/home'
-import { positionBadgeClass } from '@/lib/position-style'
-import { normalizePosition } from '@/lib/utils'
-import { useTranslations } from 'next-intl'
+import { resolveSquadTeamCode } from '@/lib/squad-pitch-team-codes'
+import type { PlayerStat } from '@/types/match'
+import { useLocale, useTranslations } from 'next-intl'
+import { useCallback, useMemo, useRef } from 'react'
+
+const HOME_POSITION_MAP: Record<
+	HomeGameweekPlayer['position'],
+	SquadPitchPlayer['position']
+> = {
+	GOALKEEPER: 'GKP',
+	DEFENDER: 'DEF',
+	MIDFIELDER: 'MID',
+	FORWARD: 'FWD'
+}
+
+function mapTeamOfWeekPlayer(player: HomeGameweekPlayer): SquadPitchPlayer {
+	const teamBadgeLabel = player.teamShortName?.trim().toUpperCase() || '—'
+	const teamCode = resolveSquadTeamCode(player.teamShortName)
+
+	return {
+		id: String(player.id),
+		webName: player.webName,
+		score: player.totalPoints,
+		position: HOME_POSITION_MAP[player.position],
+		...(teamCode ? { teamCode } : { teamBadgeLabel })
+	}
+}
 
 interface TeamOfTheWeekSectionProps {
 	currentEventId: number | null
@@ -37,79 +71,141 @@ function TeamOfTheWeekCard({
 	hasError?: boolean
 }) {
 	const t = useTranslations('Home')
+	const tPitch = useTranslations('LivePoints')
+	const locale = useLocale() as AppLocale
+	const shareRef = useRef<HTMLDivElement | null>(null)
+	const {
+		closePlayerDetail,
+		isLoading: isPlayerDetailLoading,
+		isOpen: isPlayerDetailOpen,
+		openPlayerDetail,
+		selectedPlayer
+	} = useMatchPlayerDetail(currentEventId ?? undefined)
+	const pitchPlayers = teamOfTheWeek.map(mapTeamOfWeekPlayer)
+	const handlePlayerClick = useCallback(
+		(playerId: string) => {
+			const player = teamOfTheWeek.find(
+				candidate => String(candidate.id) === playerId
+			)
+			if (!player) return
+			const playerStat: PlayerStat = {
+				player: player.webName,
+				element: player.id,
+				elementType:
+					player.position === 'GOALKEEPER'
+						? 1
+						: player.position === 'DEFENDER'
+							? 2
+							: player.position === 'FORWARD'
+								? 4
+								: 3,
+				totalPoints: player.totalPoints
+			}
+			void openPlayerDetail(
+				playerStat,
+				player.teamShortName,
+				player.teamShortName
+			)
+		},
+		[openPlayerDetail, teamOfTheWeek]
+	)
+	const shareText = useMemo(() => {
+		if (teamOfTheWeek.length === 0) return ''
+		const origin =
+			typeof window !== 'undefined' ? window.location.origin : APP_URL.origin
+		const shareUrl = new URL(
+			localizePathname('/explore/gameweek', locale),
+			origin
+		)
+		if (currentEventId != null) {
+			shareUrl.searchParams.set('gw', String(currentEventId))
+		}
+
+		return [
+			`# ${t('teamOfWeek')}${currentEventId != null ? ` · GW${currentEventId}` : ''}`,
+			'',
+			...teamOfTheWeek.map(
+				player =>
+					`- ${player.webName} ${player.teamShortName} · ${player.totalPoints} ${tPitch('pointsAbbreviation')}`
+			),
+			'',
+			shareUrl.toString()
+		].join('\n')
+	}, [currentEventId, locale, t, tPitch, teamOfTheWeek])
 	return (
-		<Card className="rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8">
-			<div className="mb-6">
-				<p className="eyebrow">{t('thisGameweek')}</p>
-				<h2 className="mt-1 flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide">
-					<GameweekBadge
-						gameweek={currentEventId}
-						size="sm"
-						fontFamily="display"
-					/>
-					<span>{t('teamOfWeek')}</span>
-					{teamOfTheWeek.length > 0 && !isLoading ? (
-						<Badge variant="secondary">
-							{t('playerCount', { count: teamOfTheWeek.length })}
-						</Badge>
-					) : null}
-				</h2>
-			</div>
-
-			{hasError ? (
-				<div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 p-3">
-					<p className="text-sm text-destructive">{t('teamOfWeekFailed')}</p>
-				</div>
-			) : null}
-
-			{isLoading ? (
-				<div className="space-y-2">
-					{Array.from({ length: 11 }).map((_, index) => (
-						<Skeleton
-							key={index}
-							className="h-14 w-full rounded-lg"
+		<>
+			<Card
+				ref={shareRef}
+				aria-labelledby="home-team-of-week-title"
+				className="overflow-hidden rounded-none sm:rounded-lg"
+			>
+				<div className="flex flex-col gap-4 border-b px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-6 lg:px-8">
+					<h2
+						id="home-team-of-week-title"
+						className="flex flex-wrap items-center gap-2.5 font-display text-xl font-bold uppercase tracking-wide text-foreground sm:text-2xl"
+					>
+						<GameweekBadge
+							gameweek={currentEventId}
+							size="sm"
+							fontFamily="display"
 						/>
-					))}
+						<span>{t('teamOfWeek')}</span>
+					</h2>
+					{teamOfTheWeek.length > 0 && !isLoading ? (
+						<ShareActions
+							text={shareText}
+							imageRef={shareRef}
+							title={t('teamOfWeek')}
+							className="flex shrink-0 flex-wrap items-center gap-2"
+						/>
+					) : null}
 				</div>
-			) : teamOfTheWeek.length === 0 ? (
-				<p className="py-8 text-center text-sm text-muted-foreground">
-					{t('noTeamOfWeek')}
-				</p>
-			) : (
-				<ol className="divide-y rounded-lg border surface-inset-soft px-3">
-					{teamOfTheWeek.map((player, index) => {
-						const position = normalizePosition(player.position)
-						return (
-							<li
-								key={player.id}
-								className="grid min-h-12 grid-cols-[2rem_3rem_minmax(0,1fr)_auto] items-center gap-2 py-2"
-							>
-								<span className="font-display text-xs tabular-nums text-muted-foreground">
-									{index + 1}
-								</span>
-								<Badge
-									variant="secondary"
-									className={positionBadgeClass(position)}
-								>
-									{position}
-								</Badge>
-								<span className="min-w-0">
-									<span className="block truncate text-sm font-semibold">
-										{player.webName}
-									</span>
-									<span className="block text-caption text-muted-foreground">
-										{player.teamShortName}
-									</span>
-								</span>
-								<span className="font-display text-sm font-bold tabular-nums text-primary-ink">
-									{player.totalPoints}
-								</span>
-							</li>
-						)
-					})}
-				</ol>
-			)}
-		</Card>
+
+				{hasError ? (
+					<div className="border-b border-destructive/20 bg-destructive/10 p-4 sm:p-6">
+						<p className="text-sm text-destructive">{t('teamOfWeekFailed')}</p>
+					</div>
+				) : null}
+
+				{isLoading ? (
+					<Skeleton className="m-4 aspect-[1304/1244] rounded-xl sm:m-6" />
+				) : teamOfTheWeek.length === 0 ? (
+					<p className="px-4 py-12 text-center text-sm text-muted-foreground sm:px-6">
+						{t('noTeamOfWeek')}
+					</p>
+				) : (
+					<SquadPitch
+						players={pitchPlayers}
+						onPlayerClick={handlePlayerClick}
+						labels={{
+							formation: tPitch('squadFormation', {
+								title: t('teamOfWeek')
+							}),
+							positions: {
+								GKP: tPitch('squadGoalkeeper'),
+								DEF: tPitch('squadDefenders'),
+								MID: tPitch('squadMidfielders'),
+								FWD: tPitch('squadForwards')
+							},
+							captain: tPitch('captain'),
+							viceCaptain: tPitch('viceCaptain'),
+							total: tPitch('pitchTotalPoints'),
+							playerDetailsTemplate: tPitch('viewPlayer', {
+								player: '{player}'
+							})
+						}}
+						showHeader={false}
+						className="rounded-none border-0 shadow-none sm:rounded-none"
+					/>
+				)}
+			</Card>
+			<PlayerDetailModal
+				player={selectedPlayer}
+				isOpen={isPlayerDetailOpen}
+				onClose={closePlayerDetail}
+				isLoading={isPlayerDetailLoading}
+			/>
+		</>
 	)
 }
 

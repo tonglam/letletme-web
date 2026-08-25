@@ -6,6 +6,7 @@ import { Link } from '@/i18n/navigation'
 import type { Session } from '@/lib/auth'
 import { type HomePersonalDesk } from '@/lib/graphql/operations/home'
 import { loadHomePersonalDesk } from '@/lib/home-data-server'
+import { regionToFlagEmoji } from '@/lib/region-flag'
 import { formatCompactNumber, formatInteger } from '@/lib/utils'
 import type { SeasonPresentation } from '@/lib/season-presentation'
 import { ArrowRight } from 'lucide-react'
@@ -90,7 +91,12 @@ function PersonalDeskUnavailable({ message }: { message: string }) {
 
 function metricTiles(
 	desk: HomePersonalDesk,
-	labels: { points: string; rank: string; value: string },
+	labels: {
+		points: string
+		rank: string
+		value: string
+		bank: string
+	},
 	options?: { hideSeasonMetrics?: boolean }
 ) {
 	return [
@@ -112,6 +118,10 @@ function metricTiles(
 			label: labels.value,
 			value:
 				desk.teamValue == null ? '—' : `£${(desk.teamValue / 10).toFixed(1)}m`
+		},
+		{
+			label: labels.bank,
+			value: desk.bank == null ? '—' : `£${(desk.bank / 10).toFixed(1)}m`
 		}
 	] as const
 }
@@ -135,21 +145,27 @@ export async function PersonalDesk({
 		return <PersonalDeskUnavailable message={t('personalDataUnavailable')} />
 	}
 
-	const tiles = metricTiles(desk, {
-		points: t('personalPointsLabel'),
-		rank: t('personalRankLabel'),
-		value: t('personalTeamValueLabel')
-	}, {
-		hideSeasonMetrics:
-			desk.state === 'EMPTY' && presentation.phase === 'PRESEASON'
-	})
-	const readyKey = `${desk.sourceCheckedAt ?? 'unknown'}:${desk.state}`
-	const staleDate = desk.sourceCheckedAt
-		? new Date(desk.sourceCheckedAt)
-		: null
-	const staleDateLabel = staleDate && !Number.isNaN(staleDate.getTime())
-		? format.dateTime(staleDate, { dateStyle: 'medium', timeStyle: 'short' })
-		: t('personalDataLastSyncUnknown')
+	const tiles = metricTiles(
+		desk,
+		{
+			points: t('personalPointsLabel'),
+			rank: t('personalRankLabel'),
+			value: t('personalTeamValueLabel'),
+			bank: t('personalBankLabel')
+		},
+		{
+			hideSeasonMetrics:
+				desk.state === 'EMPTY' && presentation.phase === 'PRESEASON'
+		}
+	)
+	const readyKey = `${desk.pointsCheckedAt ?? 'unknown'}:${desk.pointsState}:${desk.rankState}:${desk.sourceCheckedAt ?? 'unknown'}:${desk.state}`
+	const staleDate = desk.sourceCheckedAt ? new Date(desk.sourceCheckedAt) : null
+	const staleDateLabel =
+		staleDate && !Number.isNaN(staleDate.getTime())
+			? format.dateTime(staleDate, { dateStyle: 'medium', timeStyle: 'short' })
+			: t('personalDataLastSyncUnknown')
+	const managerName = desk.playerName?.trim() || '—'
+	const regionFlag = regionToFlagEmoji(desk.region)
 
 	return (
 		<PersonalDeskShell>
@@ -165,13 +181,22 @@ export async function PersonalDesk({
 						>
 							{desk.entryName?.trim() || t('teamNameFallback')}
 						</p>
-						<p className="mt-1 truncate text-sm text-muted-foreground">
+						<p className="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
 							<span className="sr-only">{t('personalManagerLabel')}: </span>
-							{desk.playerName?.trim() || '—'}
+							<span className="min-w-0 truncate">{managerName}</span>
+							{regionFlag ? (
+								<span
+									aria-label={desk.region?.trim() || undefined}
+									className="shrink-0 text-base leading-none"
+									role="img"
+								>
+									{regionFlag}
+								</span>
+							) : null}
 						</p>
 					</div>
 
-					<div className="grid min-w-0 flex-1 grid-cols-3 gap-px overflow-hidden rounded-lg border border-foreground/10 bg-foreground/10">
+					<div className="grid min-w-0 flex-1 grid-cols-4 gap-px overflow-hidden rounded-lg border border-foreground/10 bg-foreground/10">
 						{tiles.map(tile => (
 							<div
 								key={tile.label}

@@ -17,7 +17,8 @@ export function resolvePreferredHomeMatchDayKey(
 	const todayKey = localDateKey(now)
 	return (
 		matchDays.find(matchDay => matchDay.dateKey === todayKey)?.dateKey ??
-		matchDays[0]?.dateKey ??
+		matchDays.find(matchDay => matchDay.dateKey > todayKey)?.dateKey ??
+		matchDays[matchDays.length - 1]?.dateKey ??
 		''
 	)
 }

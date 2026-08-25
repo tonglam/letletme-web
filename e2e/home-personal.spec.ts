@@ -10,8 +10,8 @@ async function createSession(
 		entryId?: number
 	} = {}
 ): Promise<{ cookie: string; cleanup: () => Promise<void> }> {
-	const directDatabaseUrl = process.env.DIRECT_DATABASE_URL
-	if (!directDatabaseUrl) throw new Error('DIRECT_DATABASE_URL is required')
+	const directDatabaseUrl = process.env.E2E_DIRECT_DATABASE_URL
+	if (!directDatabaseUrl) throw new Error('E2E_DIRECT_DATABASE_URL is required')
 	const sql = postgres(directDatabaseUrl, { max: 1, prepare: false })
 	const suffix = randomUUID()
 	const userId = `home-e2e-user-${suffix}`
@@ -148,10 +148,22 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 		await page.goto('/')
 		const main = page.locator('#main-content')
 		await expect(main.getByText('E2E United')).toBeVisible()
+		await expect(main.getByRole('img', { name: 'Australia' })).toBeVisible()
 		await expect(main.getByText('1,234')).toBeVisible()
+		await expect(main.getByText('Auto-subs projected')).toHaveCount(0)
+		await expect(main.getByText('Official result')).toHaveCount(0)
+		await expect(main.getByText('Rank updating')).toHaveCount(0)
+		await expect(main.getByText('Updating', { exact: true })).toHaveCount(0)
 		await expect(main.getByText('E2E Classic')).toBeVisible()
-		await expect(main.getByRole('heading', { name: 'Classic' })).toBeVisible()
-		await expect(main.getByRole('heading', { name: 'H2H' })).toBeVisible()
+		const classicTab = main.getByRole('tab', { name: /Classic/ })
+		const h2hTab = main.getByRole('tab', { name: /H2H/ })
+		const cupsTab = main.getByRole('tab', { name: /Cups/ })
+		await expect(classicTab).toBeVisible()
+		await expect(h2hTab).toBeVisible()
+		await expect(cupsTab).toHaveCount(0)
+		await expect(classicTab).toHaveAttribute('aria-selected', 'true')
+		await h2hTab.click()
+		await expect(h2hTab).toHaveAttribute('aria-selected', 'true')
 		await expect(main.getByText('E2E H2H', { exact: true })).toBeVisible()
 		const currentMatchup = main.locator('[data-home-h2h-matchup="2071743"]')
 		await expect(currentMatchup.getByText('Future Xu')).toBeVisible()
@@ -167,29 +179,32 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 		).toHaveAttribute('href', '/live/competitions/6?gw=1')
 		await expect(main.locator('[data-home-personal-ready]')).toBeVisible()
 		await expect(main.locator('[data-home-league-ranks-ready]')).toBeVisible()
+		await classicTab.click()
+		await expect(classicTab).toHaveAttribute('aria-selected', 'true')
+		await page.evaluate(() => {
+			if (document.activeElement instanceof HTMLElement) {
+				document.activeElement.blur()
+			}
+		})
+		await page.waitForTimeout(7_200)
+		await expect(h2hTab).toHaveAttribute('aria-selected', 'true')
 		await expect(main.getByText('#12')).toBeVisible()
-		await expect(main.getByText(/teams?$/i)).toHaveCount(0)
-		await expect(main.getByText(/^\d+ leagues?$/i)).toHaveCount(0)
+		await classicTab.click()
+		await expect(classicTab).toHaveAttribute('aria-selected', 'true')
+		const personalDesk = main.locator('[data-home-personal-ready]')
+		await expect(personalDesk.getByText(/teams?$/i)).toHaveCount(0)
+		await expect(personalDesk.getByText(/^\d+ leagues?$/i)).toHaveCount(0)
+		await expect(main.getByText('E2E League 8', { exact: true })).toBeVisible()
 		await expect(
-			main.getByText('E2E League 8', { exact: true })
-		).not.toBeVisible()
+			main.locator('[data-home-league-visibility="public"]')
+		).toHaveCount(5)
+		await expect(
+			main.locator('[data-home-league-visibility="private"]')
+		).toHaveCount(3)
 		await expect(
 			main.getByRole('link', { name: /E2E League 2/ })
 		).toHaveAttribute('href', '/my-fpl/competitions?tournamentId=77')
-
-		const expansionRequests: string[] = []
-		page.on('request', request => {
-			if (
-				request.method() === 'GET' &&
-				(request.url().includes('/api/') ||
-					request.url().includes('/_next/data/'))
-			) {
-				expansionRequests.push(request.url())
-			}
-		})
-		await main.locator('summary').filter({ hasText: 'Show more' }).click()
-		await expect(main.getByText('E2E League 8', { exact: true })).toBeVisible()
-		expect(expansionRequests).toEqual([])
+		await expect(main.locator('summary')).toHaveCount(0)
 	} finally {
 		await session.cleanup()
 	}

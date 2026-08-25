@@ -14,6 +14,10 @@ export interface ExecuteQueryOptions {
 	headers?: Record<string, string>
 	timeoutMs?: number
 	signal?: AbortSignal
+	/** Error codes the immediate caller deliberately catches and recovers from. */
+	handledErrorCodes?: readonly string[]
+	/** Optional server-side sections may recover without generic console diagnostics. */
+	suppressErrorLog?: boolean
 }
 
 type GraphQLRequestErrorOptions = {
@@ -165,7 +169,9 @@ async function doFetch<T>(
 	isClient: boolean,
 	extraHeaders?: Record<string, string>,
 	timeoutMs = DEFAULT_GRAPHQL_TIMEOUT_MS,
-	externalSignal?: AbortSignal
+	externalSignal?: AbortSignal,
+	handledErrorCodes?: readonly string[],
+	suppressErrorLog = false
 ): Promise<T> {
 	const startedAt = Date.now()
 	const controller = new AbortController()
@@ -235,6 +241,8 @@ async function doFetch<T>(
 			const code =
 				graphQLErrorCode(firstError) ??
 				(isClient ? 'UPSTREAM_GRAPHQL_ERROR' : null)
+			const isHandledError =
+				code != null && handledErrorCodes?.includes(code) === true
 			const errorMessages = meaningfulErrors
 				.map((error, index) => {
 					const fallback = safeSerializeForLog(error)
@@ -250,7 +258,7 @@ async function doFetch<T>(
 				})
 				.join('; ')
 
-			if (isClient) {
+			if (!isHandledError && !suppressErrorLog && isClient) {
 				console.warn('GraphQL request returned an error', {
 					operation: extractOperationName(query) || undefined,
 					status: response.status,
@@ -259,7 +267,7 @@ async function doFetch<T>(
 					durationMs: Math.max(0, Date.now() - startedAt),
 					timeoutMs: safeTimeoutMs
 				})
-			} else {
+			} else if (!isHandledError && !suppressErrorLog) {
 				console.warn('GraphQL request returned upstream errors', {
 					operation: extractOperationName(query) || undefined,
 					status: response.status,
@@ -354,10 +362,14 @@ async function doFetch<T>(
 			)
 		}
 
-		if (!(
+		const isCancelled =
 			normalizedError instanceof GraphQLRequestError &&
 			normalizedError.code === 'REQUEST_CANCELLED'
-		)) {
+		const isHandledError =
+			normalizedError instanceof GraphQLRequestError &&
+			normalizedError.code != null &&
+			handledErrorCodes?.includes(normalizedError.code) === true
+		if (!isCancelled && !isHandledError && !suppressErrorLog) {
 			if (isClient) {
 				console.error('GraphQL request failed', {
 					operation: extractOperationName(query) || undefined,
@@ -483,7 +495,9 @@ export async function executeQuery<T>(
 			true,
 			undefined,
 			options?.timeoutMs,
-			options?.signal
+			options?.signal,
+			options?.handledErrorCodes,
+			options?.suppressErrorLog
 		).then(result => {
 			if (publicOperation) writePublicBrowserCache(key, result)
 			return result
@@ -504,6 +518,8 @@ export async function executeQuery<T>(
 		false,
 		options?.headers,
 		options?.timeoutMs,
-		options?.signal
+		options?.signal,
+		options?.handledErrorCodes,
+		options?.suppressErrorLog
 	)
 }
