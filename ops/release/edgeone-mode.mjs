@@ -5,8 +5,18 @@ const ENDPOINT = 'https://teo.tencentcloudapi.com/'
 const SERVICE = 'teo'
 const VERSION = '2022-09-01'
 const RELEASE_RULE_NAME = 'TEMP CN bafa to Tencent'
-const RELEASE_RULE_CONDITION =
-	"${http.request.host} in ['eo-personal-canary.letletme.top', 'letletme.top'] and ${http.request.ip.country} in ['CN'] and ${http.request.method} in ['GET']"
+export const RELEASE_RULE_CONDITION = [
+	"${http.request.host} in ['eo-personal-canary.letletme.top', 'letletme.top']",
+	"${http.request.ip.country} in ['CN']",
+	"${http.request.method} in ['GET', 'HEAD']",
+	"not ${http.request.uri.path} matches '^/api(?:/|$)'",
+	"not ${http.request.uri.path} matches '^/(?:en/|zh-CN/)?auth(?:/|$)'",
+	"not ${http.request.uri.path} matches '^/\\.well-known/acme-challenge(?:/|$)'",
+	"not ${http.request.headers['upgrade']} exists",
+	"not ${http.request.headers['next-action']} exists",
+	"not ${http.request.headers['authorization']} exists",
+	"not ${http.request.headers['cookie']} exists"
+].join(' and ')
 const RELEASE_ORIGIN_GROUP = 'og-3u1v4jecjhe8'
 
 function sha256(value) {
