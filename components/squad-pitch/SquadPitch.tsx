@@ -276,7 +276,7 @@ function PlayerCard({
 				onPlayerClick ? (
 					<button
 						type="button"
-						aria-label={playerDetailsLabel(player, labels)}
+						aria-label={squadPitchPlayerDetailsLabel(player, labels)}
 						className="group relative flex w-full cursor-pointer flex-col items-center border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-1 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
 						onClick={openPlayerDetail}
 					>
@@ -285,7 +285,7 @@ function PlayerCard({
 				) : (
 					<Link
 						href={player.href!}
-						aria-label={playerDetailsLabel(player, labels)}
+						aria-label={squadPitchPlayerDetailsLabel(player, labels)}
 						className="group relative flex w-full cursor-pointer flex-col items-center border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-1 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
 					>
 						{content}
@@ -389,7 +389,7 @@ function BenchPlayerCard({
 				onPlayerClick ? (
 					<button
 						type="button"
-						aria-label={playerDetailsLabel(player, labels)}
+						aria-label={squadPitchPlayerDetailsLabel(player, labels)}
 						className="group w-full cursor-pointer border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-0.5 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
 						onClick={openPlayerDetail}
 					>
@@ -398,7 +398,7 @@ function BenchPlayerCard({
 				) : (
 					<Link
 						href={player.href!}
-						aria-label={playerDetailsLabel(player, labels)}
+						aria-label={squadPitchPlayerDetailsLabel(player, labels)}
 						className="group block w-full cursor-pointer border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-0.5 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
 					>
 						{content}

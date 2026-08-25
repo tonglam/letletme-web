@@ -82,11 +82,13 @@ export const GET_HOME_GAMEWEEK = /* GraphQL */ `
 					mostCaptained {
 						id
 						webName
+						position
 						teamShortName
 					}
 					topScorer {
 						id
 						webName
+						position
 						teamShortName
 						points
 					}
@@ -450,6 +452,13 @@ export type HomeGameweekPlayer = {
 	totalPoints: number
 }
 
+type HomeGameweekOverviewPlayer = {
+	id: number
+	webName: string
+	position: 'GOALKEEPER' | 'DEFENDER' | 'MIDFIELDER' | 'FORWARD'
+	teamShortName: string | null
+}
+
 export type HomeGameweek = {
 	gameweekDesk: {
 		season: string
@@ -462,17 +471,12 @@ export type HomeGameweek = {
 		overview: {
 			highestPoints: number | null
 			highestScoringEntry: number | null
-			mostCaptained: {
-				id: number
-				webName: string
-				teamShortName: string | null
-			} | null
-			topScorer: {
-				id: number
-				webName: string
-				teamShortName: string | null
-				points: number
-			} | null
+			mostCaptained: HomeGameweekOverviewPlayer | null
+			topScorer:
+				| (HomeGameweekOverviewPlayer & {
+						points: number
+				  })
+				| null
 			mostPlayedChip: { name: string; numberPlayed: number } | null
 		} | null
 		dreamTeam: HomeGameweekPlayer[]

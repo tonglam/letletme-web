@@ -15,6 +15,23 @@ type HomeGameweekOverview = NonNullable<
 	HomeGameweek['gameweekDesk']['overview']
 >
 
+type HomeGameweekOverviewPlayer = NonNullable<HomeGameweekOverview['topScorer']>
+
+function elementTypeForPosition(
+	position: HomeGameweekOverviewPlayer['position']
+): number {
+	switch (position) {
+		case 'GOALKEEPER':
+			return 1
+		case 'DEFENDER':
+			return 2
+		case 'FORWARD':
+			return 4
+		default:
+			return 3
+	}
+}
+
 interface StatsSectionProps {
 	currentEventId: number | null
 	overview: HomeGameweekOverview | null
@@ -54,6 +71,7 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 			id: number
 			teamShortName?: string | null
 			webName: string
+			position: HomeGameweekOverviewPlayer['position']
 		},
 		points: number
 	): PlayerDetailTarget => {
@@ -62,7 +80,7 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 			player: {
 				player: player.webName,
 				element: player.id,
-				elementType: 3,
+				elementType: elementTypeForPosition(player.position),
 				totalPoints: points
 			},
 			team: teamShort,

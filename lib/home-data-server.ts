@@ -100,6 +100,8 @@ const homeGameweekCachePolicy = {
 
 type HomeGameweekCacheLoader = () => Promise<HomeGameweek>
 
+const HOME_GAMEWEEK_CACHE_BYPASS = Symbol('HOME_GAMEWEEK_CACHE_BYPASS')
+
 // Keep reads and write-through fills on the exact same cache key. The loader
 // closure is intentionally shared by this factory so a settled request can
 // seed the durable entry without issuing a second GraphQL request.
@@ -139,8 +141,27 @@ const loadHomeGameweekFromOrigin = cache(
 		})
 )
 
-const getHomeGameweekDurable = (eventId: number) =>
-	createHomeGameweekCache(eventId, () => loadHomeGameweekFromOrigin(eventId))()
+const getHomeGameweekDurable = async (
+	eventId: number
+): Promise<HomeGameweek> => {
+	try {
+		return await createHomeGameweekCache(eventId, async () => {
+			const gameweek = await loadHomeGameweekFromOrigin(eventId)
+			if (!isHomeGameweekDurablyCacheable(gameweek)) {
+				// A rejected unstable_cache loader is not written to the durable cache.
+				// Keep the transient result available to this request without exposing a
+				// recoverable error or allowing an incomplete settled desk to persist.
+				throw HOME_GAMEWEEK_CACHE_BYPASS
+			}
+			return gameweek
+		})()
+	} catch (error) {
+		if (error === HOME_GAMEWEEK_CACHE_BYPASS) {
+			return loadHomeGameweekFromOrigin(eventId)
+		}
+		throw error
+	}
+}
 
 async function persistHomeGameweek(
 	eventId: number,
@@ -166,11 +187,11 @@ const loadHomeFixturesFromOrigin = async (
 ): Promise<HomeFixturesResponse> =>
 	coalescePublicSeed(`home-fixtures:${eventId}`, async () => {
 		const response =
-				await executePublicServerQuery<HomeEventFixturesGraphQLResponse>(
-					'fixtures',
-					GET_HOME_EVENT_FIXTURES,
-					{ eventId },
-					{ cache: 'no-store', timeoutMs: 5_000, suppressErrorLog: true }
+			await executePublicServerQuery<HomeEventFixturesGraphQLResponse>(
+				'fixtures',
+				GET_HOME_EVENT_FIXTURES,
+				{ eventId },
+				{ cache: 'no-store', timeoutMs: 5_000, suppressErrorLog: true }
 			)
 		const core = response.coreEventContext
 		if (core.currentEventId === eventId) {
@@ -179,8 +200,8 @@ const loadHomeFixturesFromOrigin = async (
 					await executePublicServerQuery<LiveMatchdayDeskResponse>(
 						'fixtures',
 						GET_LIVE_MATCHDAY_DESK,
-					undefined,
-					{ cache: 'no-store', timeoutMs: 5_000, suppressErrorLog: true }
+						undefined,
+						{ cache: 'no-store', timeoutMs: 5_000, suppressErrorLog: true }
 					)
 				const desk = liveResponse.liveMatchdayDesk
 				if (desk.eventId !== eventId) {

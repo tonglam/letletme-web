@@ -8,6 +8,7 @@ import type { MarketPriceChange } from '@/lib/graphql/operations/market'
 import type { PriceChangeBoard } from '@/lib/graphql/operations/price-changes'
 import { loadHomeMarketDesk } from '@/lib/home-market-seed-server'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
+import { isLikelyToChange } from '@/lib/price-change-sorting'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
 import { getLocale, getTranslations } from 'next-intl/server'
 
@@ -56,11 +57,11 @@ function buildPredictionState(
 	notices: { partial: string; stale: string }
 ): HomePriceChangeCarouselProps['likely'] {
 	const rises = board.players
-		.filter(player => player.progressPercent > 0)
+		.filter(player => isLikelyToChange(player) && player.progressPercent > 0)
 		.sort((left, right) => compareProgress(left, right, locale))
 		.slice(0, 5)
 	const falls = board.players
-		.filter(player => player.progressPercent < 0)
+		.filter(player => isLikelyToChange(player) && player.progressPercent < 0)
 		.sort((left, right) => compareProgress(left, right, locale))
 		.slice(0, 5)
 	const notice =

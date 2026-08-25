@@ -10,8 +10,8 @@ async function createSession(
 		entryId?: number
 	} = {}
 ): Promise<{ cookie: string; cleanup: () => Promise<void> }> {
-	const directDatabaseUrl = process.env.DIRECT_DATABASE_URL
-	if (!directDatabaseUrl) throw new Error('DIRECT_DATABASE_URL is required')
+	const directDatabaseUrl = process.env.E2E_DIRECT_DATABASE_URL
+	if (!directDatabaseUrl) throw new Error('E2E_DIRECT_DATABASE_URL is required')
 	const sql = postgres(directDatabaseUrl, { max: 1, prepare: false })
 	const suffix = randomUUID()
 	const userId = `home-e2e-user-${suffix}`
