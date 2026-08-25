@@ -167,21 +167,43 @@ jobs:
           npx --yes "vercel@${VERCEL_CLI_VERSION}" deploy \
             --prod \
             --skip-domain \
+            --no-wait \
             --force \
             --build-env "LETLETME_RELEASE_SHA=$RELEASE_SHA" \
             --env "LETLETME_RELEASE_SHA=$RELEASE_SHA" \
             --meta "gitSha=$RELEASE_SHA" \
+            --token "$VERCEL_TOKEN" > /tmp/vercel-candidate-url
+          candidate_url="$(tr -d '\r\n' < /tmp/vercel-candidate-url)"
+          [[ "$candidate_url" =~ ^https://[a-zA-Z0-9.-]+\.vercel\.app$ ]]
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" inspect "$candidate_url" \
+            --wait \
+            --timeout 10m \
             --format=json \
             --token "$VERCEL_TOKEN" > /tmp/vercel-candidate.json
-          candidate_url="$(node --input-type=module -e '
+          CANDIDATE_URL="$candidate_url" node --input-type=module -e '
             import fs from "node:fs";
             const value = JSON.parse(fs.readFileSync("/tmp/vercel-candidate.json", "utf8"));
-            const url = Array.isArray(value) ? value.at(-1)?.url : value.url;
-            if (!url) process.exit(1);
-            process.stdout.write(url);
-          ')"
-          [[ "$candidate_url" =~ ^[a-zA-Z0-9.-]+$ ]]
-          echo "candidate_url=$candidate_url" >> "$GITHUB_OUTPUT"
+            const expectedUrl = process.env.CANDIDATE_URL;
+            if (value.readyState !== "READY" || value.target !== "production") process.exit(1);
+            if (`https://${value.url}` !== expectedUrl) process.exit(1);
+          '
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" curl /healthz \
+            --yes \
+            --deployment "$candidate_url" \
+            --token "$VERCEL_TOKEN" \
+            -- \
+            --silent \
+            --show-error \
+            --dump-header /tmp/vercel-candidate-headers \
+            --output /tmp/vercel-candidate-body
+          grep -qi "^x-letletme-release: $RELEASE_SHA" /tmp/vercel-candidate-headers
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const value = JSON.parse(fs.readFileSync("/tmp/vercel-candidate-body", "utf8"));
+            if (value.status !== "ok" || value.origin !== "vercel") process.exit(1);
+            if (value.release !== process.env.RELEASE_SHA) process.exit(1);
+          '
+          echo "candidate_url=${candidate_url#https://}" >> "$GITHUB_OUTPUT"
         id: vercel-candidate
 
       - name: Promote and activate exact SHA with fail-closed routing
@@ -277,8 +299,6 @@ jobs:
           }
           route_changed=1
           node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null
-          candidate_headers="$(curl --fail --silent --show-error --max-time 15 -D - -o /dev/null "https://$CANDIDATE_URL/healthz")"
-          grep -qi "^x-letletme-release: $RELEASE_SHA" <<<"$candidate_headers"
 
           tmp_root="$(mktemp -d)"
           git archive --format=tar "$RELEASE_SHA" > "$tmp_root/release.tar"
