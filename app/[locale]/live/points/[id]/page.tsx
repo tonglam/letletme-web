@@ -108,12 +108,18 @@ export default async function Page({ params, searchParams }: PageProps) {
 		])
 
 		if (liveResult.status === 'fulfilled') {
-			initialLiveData = liveResult.value.calcLivePointsByEntry
+			const liveData = liveResult.value.calcLivePointsByEntry
+			// A first lookup for an entry may enqueue its FPL picks and return
+			// an intentionally empty placeholder. Do not seed that placeholder
+			// into the client: the live-points hook must be allowed to retry.
+			if (liveData.pickList.length > 0) {
+				initialLiveData = liveData
+			}
 			initialSnapshot =
 				(liveContext?.anchorEventId === initialEventId
 					? liveContextToSnapshot(liveContext)
 					: null) ??
-				liveResult.value.calcLivePointsByEntry.snapshot ??
+				liveData.snapshot ??
 				null
 		} else {
 			console.error('Failed to seed live points page:', liveResult.reason)
