@@ -554,8 +554,14 @@ async function HomeFixturesSection() {
 	const bootstrap = await getHomePublicBootstrap().catch(() => null)
 	const currentEventId = bootstrap?.context.currentEventId ?? null
 	const nextEventId = bootstrap?.context.nextEventId ?? null
+	const latestFinishedEventId =
+		bootstrap?.context.latestFinishedEventId ?? null
+	const preferNextEvent =
+		currentEventId !== null &&
+		nextEventId !== null &&
+		latestFinishedEventId === currentEventId
 	const eventId =
-		bootstrap?.context.currentEventId ?? bootstrap?.context.nextEventId ?? null
+		(preferNextEvent ? nextEventId : currentEventId) ?? nextEventId
 	let initialFixtures = eventId
 		? await loadHomeFixtures(eventId).catch(() => null)
 		: null
@@ -568,6 +574,7 @@ async function HomeFixturesSection() {
 		currentEventId !== null &&
 		nextEventId !== null &&
 		nextEventId !== currentEventId &&
+		!preferNextEvent &&
 		(initialFixtures.state === 'SETTLED' ||
 			(initialFixtures.fixtures.length > 0 &&
 				initialFixtures.fixtures.every(fixture => fixture.finished)))
