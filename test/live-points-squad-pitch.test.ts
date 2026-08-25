@@ -6,6 +6,7 @@ import {
 	squadPitchPlayerDetailsLabel,
 	type SquadPitchLabels
 } from '../components/squad-pitch/SquadPitch'
+import { playerRowAriaLabel } from '../components/live/PlayerRow'
 
 describe('live-points squad pitch mapping', () => {
 	it('does not throw when live team identity fields are absent', () => {
@@ -114,5 +115,13 @@ describe('live-points squad pitch mapping', () => {
 			squadPitchPlayerDetailsLabel(player, labels),
 			'View Wilson; Wilson projected in for Sarr'
 		)
+	})
+
+	it('includes the auto-sub status in an interactive list-row label', () => {
+		assert.equal(
+			playerRowAriaLabel('View Wilson', 'Wilson projected in for Sarr'),
+			'View Wilson; Wilson projected in for Sarr'
+		)
+		assert.equal(playerRowAriaLabel('View Wilson', null), 'View Wilson')
 	})
 })

@@ -49,7 +49,11 @@ export const isBenchBoostChip = (chip: string | null | undefined): boolean => {
 	)
 }
 
-/** A player is ruled out only after all of that player's GW fixtures have ended. */
+/**
+ * A player is ruled out only after all of that player's GW fixtures have ended.
+ * `isPlayed` is not an appearance-only signal in the GraphQL contract: it is
+ * also true for a zero-minute player who receives a touchline card.
+ */
 const completedWithoutPlaying = (pick: LivePick): boolean =>
 	pick.minutes === 0 && (pick.isGwFinished === true || pick.bgw === true)
 
@@ -94,7 +98,9 @@ const isValidFormation = (
 }
 
 const isOfficialLineup = (live: ProjectionInput): boolean =>
-	live.score?.state === 'FINAL' || live.snapshot?.state === 'FINALIZED'
+	live.score?.state === 'FINAL' ||
+	live.snapshot?.state === 'SETTLED' ||
+	live.snapshot?.state === 'FINALIZED'
 
 /**
  * Derive the XI that should be shown right now.

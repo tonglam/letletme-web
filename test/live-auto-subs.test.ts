@@ -275,6 +275,24 @@ describe('live automatic substitutions', () => {
 		assert.equal(projection.activePlayerIds.includes('2'), true)
 	})
 
+	it('still replaces a zero-minute no-show whose derived isPlayed flag comes from a card', () => {
+		const picks = samplePicks().map(pick =>
+			pick.webName === 'Sarr'
+				? { ...pick, isPlayed: true, yellowCards: 1 }
+				: pick
+		)
+		const projection = deriveLiveAutoSubProjection(sampleLive(picks))
+
+		assert.equal(
+			projection.substitutions.some(
+				substitution =>
+					substitution.playerInName === 'Wilson' &&
+					substitution.playerOutName === 'Sarr'
+			),
+			true
+		)
+	})
+
 	it("does not remove a zero-minute starter before that player's fixtures end", () => {
 		const picks = samplePicks().map(pick =>
 			pick.position <= 11 && pick.minutes === 0
@@ -420,6 +438,28 @@ describe('live automatic substitutions', () => {
 	it('marks settled substitutions as official', () => {
 		const projection = deriveLiveAutoSubProjection(
 			sampleLive(samplePicks(), { score: liveScore(42, 'FINAL') })
+		)
+
+		assert.equal(projection.state, 'OFFICIAL')
+		assert.equal(
+			projection.substitutions.every(
+				substitution => substitution.state === 'OFFICIAL'
+			),
+			true
+		)
+	})
+
+	it('marks a settled snapshot as official before an entry score becomes final', () => {
+		const projection = deriveLiveAutoSubProjection(
+			sampleLive(samplePicks(), {
+				snapshot: {
+					eventId: 1,
+					revision: 'a'.repeat(24),
+					state: 'SETTLED',
+					publishedAt: '2026-08-25T00:00:00.000Z',
+					checkedAt: '2026-08-25T00:00:00.000Z'
+				}
+			})
 		)
 
 		assert.equal(projection.state, 'OFFICIAL')

@@ -5,7 +5,7 @@ import {
 	Tooltip,
 	TooltipContent,
 	TooltipProvider,
-	TooltipTrigger,
+	TooltipTrigger
 } from '@/components/ui/tooltip'
 import { positionBadgeClass } from '@/lib/position-style'
 import { cn } from '@/lib/utils'
@@ -26,34 +26,55 @@ interface StatConfig {
 	description: string
 }
 
+export function playerRowAriaLabel(
+	playerDetailsLabel: string,
+	autoSubLabel: string | null
+): string {
+	return autoSubLabel
+		? `${playerDetailsLabel}; ${autoSubLabel}`
+		: playerDetailsLabel
+}
+
 /** Full position stats — MIN / xG / scoring events. */
 const positionStats: Record<Player['position'], StatConfig[]> = {
 	GKP: [
 		{ label: 'MIN', key: 'minutes', description: 'Minutes Played' },
-		{ label: 'XGC', key: 'expectedGoalsConceded', description: 'Expected Goals Conceded' },
+		{
+			label: 'XGC',
+			key: 'expectedGoalsConceded',
+			description: 'Expected Goals Conceded'
+		},
 		{ label: 'CS', key: 'cleanSheets', description: 'Clean Sheets' },
 		{ label: 'SV', key: 'saves', description: 'Saves' },
 		{ label: 'PS', key: 'savePenalty', description: 'Penalties Saved' },
 		{ label: 'YC', key: 'yellowCards', description: 'Yellow Cards' },
-		{ label: 'RC', key: 'redCards', description: 'Red Cards' },
+		{ label: 'RC', key: 'redCards', description: 'Red Cards' }
 	],
 	DEF: [
 		{ label: 'MIN', key: 'minutes', description: 'Minutes Played' },
-		{ label: 'XGC', key: 'expectedGoalsConceded', description: 'Expected Goals Conceded' },
+		{
+			label: 'XGC',
+			key: 'expectedGoalsConceded',
+			description: 'Expected Goals Conceded'
+		},
 		{ label: 'CS', key: 'cleanSheets', description: 'Clean Sheets' },
 		{ label: 'G', key: 'goals', description: 'Goals' },
 		{ label: 'A', key: 'assists', description: 'Assists' },
 		{ label: 'YC', key: 'yellowCards', description: 'Yellow Cards' },
-		{ label: 'RC', key: 'redCards', description: 'Red Cards' },
+		{ label: 'RC', key: 'redCards', description: 'Red Cards' }
 	],
 	MID: [
 		{ label: 'MIN', key: 'minutes', description: 'Minutes Played' },
-		{ label: 'XGI', key: 'expectedGoalInvolvements', description: 'Expected Goal Involvements' },
+		{
+			label: 'XGI',
+			key: 'expectedGoalInvolvements',
+			description: 'Expected Goal Involvements'
+		},
 		{ label: 'G', key: 'goals', description: 'Goals' },
 		{ label: 'A', key: 'assists', description: 'Assists' },
 		{ label: 'CS', key: 'cleanSheets', description: 'Clean Sheets' },
 		{ label: 'YC', key: 'yellowCards', description: 'Yellow Cards' },
-		{ label: 'RC', key: 'redCards', description: 'Red Cards' },
+		{ label: 'RC', key: 'redCards', description: 'Red Cards' }
 	],
 	FWD: [
 		{ label: 'MIN', key: 'minutes', description: 'Minutes Played' },
@@ -62,13 +83,14 @@ const positionStats: Record<Player['position'], StatConfig[]> = {
 		{ label: 'G', key: 'goals', description: 'Goals' },
 		{ label: 'A', key: 'assists', description: 'Assists' },
 		{ label: 'YC', key: 'yellowCards', description: 'Yellow Cards' },
-		{ label: 'RC', key: 'redCards', description: 'Red Cards' },
-	],
+		{ label: 'RC', key: 'redCards', description: 'Red Cards' }
+	]
 }
 
 function formatStatValue(value: number | undefined | null): string {
 	if (value === undefined || value === null) return '0'
-	if (typeof value === 'number' && !Number.isInteger(value)) return value.toFixed(1)
+	if (typeof value === 'number' && !Number.isInteger(value))
+		return value.toFixed(1)
 	return String(value)
 }
 
@@ -90,7 +112,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 		Assists: t('assists'),
 		'Expected Goal Involvements': t('expectedGoalInvolvements'),
 		'Expected Goals': t('expectedGoals'),
-		'Expected Assists': t('expectedAssists'),
+		'Expected Assists': t('expectedAssists')
 	}
 
 	const playerDetail = useMemo(() => buildLivePlayerDetail(player), [player])
@@ -109,14 +131,27 @@ export function PlayerRow({ player }: PlayerRowProps) {
 				partner: player.autoSubPartnerName ?? t('autoSubUnknownPlayer')
 			})
 		: null
+	const detailsLabel = playerRowAriaLabel(
+		t('viewPlayer', { player: player.name }),
+		autoSubLabel
+	)
 
 	const statusIcon =
 		player.playingStatus === 'FINISHED' ? (
-			<CheckCircle2 aria-hidden="true" className="size-3.5 text-primary-ink" />
+			<CheckCircle2
+				aria-hidden="true"
+				className="size-3.5 text-primary-ink"
+			/>
 		) : player.playingStatus === 'NOT_STARTED' ? (
-			<Clock aria-hidden="true" className="size-3.5 text-muted-foreground" />
+			<Clock
+				aria-hidden="true"
+				className="size-3.5 text-muted-foreground"
+			/>
 		) : (
-			<span className="live-dot" aria-hidden="true" />
+			<span
+				className="live-dot"
+				aria-hidden="true"
+			/>
 		)
 
 	const statusText =
@@ -137,13 +172,15 @@ export function PlayerRow({ player }: PlayerRowProps) {
 					'hover:border-electric/30 hover:bg-accent/30',
 					'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
 					player.isBench && 'border-dashed bg-muted/25',
-					player.playingStatus === 'PLAYING' && 'border-success/20 bg-success/[0.03]',
+					player.playingStatus === 'PLAYING' &&
+						'border-success/20 bg-success/[0.03]',
 					autoSubIncoming && 'border-electric/40 bg-electric/[0.06]',
-					player.autoSubRole?.endsWith('_OUT') && 'border-destructive/25 bg-destructive/[0.03]',
+					player.autoSubRole?.endsWith('_OUT') &&
+						'border-destructive/25 bg-destructive/[0.03]'
 				)}
 				role="button"
 				tabIndex={0}
-				aria-label={t('viewPlayer', { player: player.name })}
+				aria-label={detailsLabel}
 				onClick={() => setIsDetailModalOpen(true)}
 				onKeyDown={event => {
 					if (event.key === 'Enter' || event.key === ' ') {
@@ -160,7 +197,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 				<div
 					className="grid w-full items-center gap-x-2 sm:gap-x-3"
 					style={{
-						gridTemplateColumns: `auto auto auto minmax(4.5rem, 9rem) minmax(0, 1fr) 2.75rem`,
+						gridTemplateColumns: `auto auto auto minmax(4.5rem, 9rem) minmax(0, 1fr) 2.75rem`
 					}}
 				>
 					{/* Status */}
@@ -176,7 +213,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 					<Badge
 						className={cn(
 							'h-5 shrink-0 px-1.5 font-display text-label font-bold tracking-wide',
-							positionBadgeClass(player.position),
+							positionBadgeClass(player.position)
 						)}
 					>
 						{player.position}
@@ -226,7 +263,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 						<div
 							className="grid min-w-0"
 							style={{
-								gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))`,
+								gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))`
 							}}
 						>
 							{stats.map(stat => {
@@ -246,7 +283,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 												className="min-w-0 px-0.5 text-center"
 												aria-label={t('statValue', {
 													stat: description,
-													value,
+													value
 												})}
 											>
 												<div className="truncate font-display text-micro font-semibold uppercase tracking-wider text-muted-foreground">
@@ -255,7 +292,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 												<div
 													className={cn(
 														'truncate font-mono text-xs font-semibold tabular-nums sm:text-sm',
-														highlight ? 'text-primary-ink' : 'text-foreground',
+														highlight ? 'text-primary-ink' : 'text-foreground'
 													)}
 												>
 													{value}
@@ -266,7 +303,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 											<p>
 												{t('statValue', {
 													stat: description,
-													value,
+													value
 												})}
 											</p>
 										</TooltipContent>
@@ -283,7 +320,7 @@ export function PlayerRow({ player }: PlayerRowProps) {
 							player.stats.bonusPoints > 0
 								? t('pointsIncludingBonus', {
 										points: player.stats.points,
-										bonus: player.stats.bonusPoints,
+										bonus: player.stats.bonusPoints
 									})
 								: t('pointsTotalOnly', { points: player.stats.points })
 						}
