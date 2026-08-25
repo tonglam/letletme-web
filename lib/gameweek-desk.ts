@@ -12,6 +12,10 @@ export type {
 export const GAMEWEEK_DESK_MAX_EVENT_ID = 38
 export const GAMEWEEK_DESK_PUBLIC_CACHE_CONTROL =
 	'public, s-maxage=300, stale-while-revalidate=300, no-transform'
+export const GAMEWEEK_DESK_SETTLED_CACHE_CONTROL =
+	'public, s-maxage=60, stale-while-revalidate=60, no-transform'
+export const GAMEWEEK_DESK_FINAL_CACHE_CONTROL =
+	'public, s-maxage=3600, stale-while-revalidate=86400, no-transform'
 export const GAMEWEEK_DESK_UNCACHEABLE_CONTROL = 'no-store'
 
 export type GameweekDeskLoadResult = GameweekDeskData & {
@@ -186,7 +190,11 @@ export function gameweekDeskCacheControl(
 		return 'public, s-maxage=30, stale-while-revalidate=30, no-transform'
 	}
 	if (data.lifecycle === 'SETTLED') {
-		return 'public, s-maxage=3600, stale-while-revalidate=86400, no-transform'
+		// A settled desk can precede the canonical live publication. Once its
+		// revision is present, the historical response can retain long caching.
+		return data.liveRevision === null
+			? GAMEWEEK_DESK_SETTLED_CACHE_CONTROL
+			: GAMEWEEK_DESK_FINAL_CACHE_CONTROL
 	}
 	if (data.lifecycle === 'PROVISIONAL') {
 		return 'public, s-maxage=10, stale-while-revalidate=20, no-transform'
