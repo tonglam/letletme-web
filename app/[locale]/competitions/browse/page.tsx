@@ -4,9 +4,11 @@ import { ROUTE_CLIENT_NAMESPACES } from '@/i18n/client-namespaces'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { localizeHref } from '@/i18n/routing'
 import {
+	GET_MANAGEABLE_TOURNAMENTS_LIST,
 	GET_ENTRY_TOURNAMENTS_LIST,
 	type EntryTournamentListItem,
-	type EntryTournamentsListResponse
+	type EntryTournamentsListResponse,
+	type ManageableTournamentsListResponse
 } from '@/lib/graphql/operations/tournaments'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import { getVerifiedEntryContext } from '@/lib/session'
@@ -51,16 +53,41 @@ export default async function Page({ params, searchParams }: PageProps) {
 		mineParam === 'true' || mineParam === '1' || mineParam === 'yes'
 
 	let initialTournaments: EntryTournamentListItem[] = []
+	let participatingTournamentIds: number[] = []
 	let initialError: string | null = null
 	try {
-		const response =
-			await executeServerQueryWithSession<EntryTournamentsListResponse>(
-				session,
-				GET_ENTRY_TOURNAMENTS_LIST,
-				{ entryId },
-				{ cache: 'no-store' }
+		if (initialAdminOnly) {
+			const [manageable, participating] = await Promise.all([
+				executeServerQueryWithSession<ManageableTournamentsListResponse>(
+					session,
+					GET_MANAGEABLE_TOURNAMENTS_LIST,
+					{ entryId },
+					{ cache: 'no-store' }
+				),
+				executeServerQueryWithSession<EntryTournamentsListResponse>(
+					session,
+					GET_ENTRY_TOURNAMENTS_LIST,
+					{ entryId },
+					{ cache: 'no-store' }
+				)
+			])
+			initialTournaments = manageable.manageableTournaments
+			participatingTournamentIds = participating.entryTournaments.map(
+				tournament => tournament.id
 			)
-		initialTournaments = response.entryTournaments
+		} else {
+			const response =
+				await executeServerQueryWithSession<EntryTournamentsListResponse>(
+					session,
+					GET_ENTRY_TOURNAMENTS_LIST,
+					{ entryId },
+					{ cache: 'no-store' }
+				)
+			initialTournaments = response.entryTournaments
+			participatingTournamentIds = initialTournaments.map(
+				tournament => tournament.id
+			)
+		}
 	} catch (error) {
 		console.error('[tournament list] Failed to load:', error)
 		initialError = t('competitionsUnavailable')
@@ -72,6 +99,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 				currentEntryId={entryId}
 				platformAdmin={isPlatformAdminIdentity(session.user)}
 				initialTournaments={initialTournaments}
+				participatingTournamentIds={participatingTournamentIds}
 				initialError={initialError}
 				initialAdminOnly={initialAdminOnly}
 			/>

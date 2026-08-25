@@ -119,7 +119,8 @@ export default function TournamentListClient({
 	platformAdmin,
 	initialTournaments,
 	initialError,
-	initialAdminOnly = false
+	initialAdminOnly = false,
+	participatingTournamentIds = []
 }: {
 	currentEntryId: number
 	platformAdmin: boolean
@@ -127,6 +128,7 @@ export default function TournamentListClient({
 	initialError: string | null
 	/** From ?mine=true — filter to tournaments this entry administers */
 	initialAdminOnly?: boolean
+	participatingTournamentIds?: number[]
 }) {
 	const t = useTranslations('TournamentList')
 	const router = useRouter()
@@ -145,6 +147,10 @@ export default function TournamentListClient({
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 	/** Show only tournaments this entry administers */
 	const [adminOnly, setAdminOnly] = useState(initialAdminOnly)
+	const participatingTournamentIdSet = useMemo(
+		() => new Set(participatingTournamentIds),
+		[participatingTournamentIds]
+	)
 	const tournaments = useMemo(
 		() => initialTournaments.map(mapTournamentToRow),
 		[initialTournaments]
@@ -435,6 +441,15 @@ export default function TournamentListClient({
 								<DataTr key={tournament.id}>
 									<DataTd>
 										<div className="font-medium">{tournament.name}</div>
+										{adminOnly && (
+											<div className="mt-1 flex gap-1">
+												<Badge variant="secondary" className="text-[10px]">
+													{participatingTournamentIdSet.has(Number(tournament.id))
+														? t('managementAndParticipating')
+														: t('managementOnly')}
+												</Badge>
+											</div>
+										)}
 									</DataTd>
 									<DataTd>{tournament.participantCount}</DataTd>
 									<DataTd>{tournament.creatorName}</DataTd>

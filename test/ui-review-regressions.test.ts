@@ -58,7 +58,6 @@ describe('theme bootstrap', () => {
 		assert.match(bootstrap, /data-shell-hydrated[\s\S]*shellReadyEvent/)
 		assert.ok(shellReady.includes("'letletme:shell-ready'"))
 	})
-	})
 })
 
 describe('My FPL hydration', () => {

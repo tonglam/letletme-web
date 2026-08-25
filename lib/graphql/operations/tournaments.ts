@@ -57,7 +57,7 @@ export const TOURNAMENT_INFO_FIELDS = `
 
 export const GET_ENTRY_TOURNAMENTS = `${TOURNAMENT_INFO_FIELDS}
   query GetEntryTournaments($entryId: Int!) {
-    entryTournaments(entryId: $entryId) {
+    entryTournaments: entryParticipatingTournaments(entryId: $entryId) {
       ...TournamentInfoFields
     }
   }
@@ -69,7 +69,46 @@ export const GET_ENTRY_TOURNAMENTS = `${TOURNAMENT_INFO_FIELDS}
  */
 export const GET_ENTRY_TOURNAMENTS_LIST = `
   query GetEntryTournamentsList($entryId: Int!) {
-    entryTournaments(entryId: $entryId) {
+    entryTournaments: entryParticipatingTournaments(entryId: $entryId) {
+      id
+      name
+      creator
+      adminEntryId
+      leagueType
+      sourceLeagueName
+      totalTeamNum
+      groupMode
+      knockoutMode
+      groupStartedEventId
+      groupEndedEventId
+      state
+      rosterSyncStatus
+      setupStatus
+      setupProgressMode
+      setupAttempt
+      setupMaxAttempts
+      nextRetryAt
+      standingsReadyAt
+      profilesReadyAt
+      insightsReadyAt
+      setupHasWarnings
+      warningSummaries { category affectedCount repairExhausted }
+      updatedAt
+    }
+  }
+`
+
+export const GET_MANAGEABLE_TOURNAMENTS = `${TOURNAMENT_INFO_FIELDS}
+  query GetManageableTournaments($entryId: Int!) {
+    manageableTournaments(entryId: $entryId) {
+      ...TournamentInfoFields
+    }
+  }
+`
+
+export const GET_MANAGEABLE_TOURNAMENTS_LIST = `
+  query GetManageableTournamentsList($entryId: Int!) {
+    manageableTournaments(entryId: $entryId) {
       id
       name
       creator
@@ -177,6 +216,10 @@ export interface EntryTournamentsResponse {
 	entryTournaments: EntryTournament[]
 }
 
+export interface ManageableTournamentsResponse {
+	manageableTournaments: EntryTournament[]
+}
+
 /** Fields returned by GET_ENTRY_TOURNAMENTS_LIST */
 export type EntryTournamentListItem = Pick<
 	EntryTournament,
@@ -221,6 +264,10 @@ export type LiveEntryTournament = Pick<
 
 export interface EntryTournamentsListResponse {
 	entryTournaments: EntryTournamentListItem[]
+}
+
+export interface ManageableTournamentsListResponse {
+	manageableTournaments: EntryTournamentListItem[]
 }
 
 export interface TournamentParticipant {
@@ -932,6 +979,12 @@ export interface EntryLiveCompetitionBoardPage {
 	managerRefreshQueued: boolean
 	managerCheckedAt: string | null
 	managerNextRefreshAt: string | null
+	coverageState: 'WARMING' | 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE'
+	rankScope: 'FULL_FIELD' | 'AVAILABLE_ROWS'
+	computedEntries: number
+	deferredEntryCount: number
+	failedEntryCount: number
+	unavailableEntryCount: number
 	officialCoverage: number
 	unavailableEntryIds: number[]
 	failedEntryIds: number[]
@@ -986,8 +1039,9 @@ export const GET_ENTRY_LIVE_COMPETITION_BOARD = `
     ) {
       season eventId tournamentId boardRevision playerRevision managerRevision
       dataAvailability managerDataAvailability managerServedFrom managerRefreshQueued
-      managerCheckedAt managerNextRefreshAt officialCoverage unavailableEntryIds
-      failedEntryIds partial totalEntries filteredEntries page pageSize hasMore
+      managerCheckedAt managerNextRefreshAt coverageState rankScope computedEntries
+      deferredEntryCount failedEntryCount unavailableEntryCount officialCoverage
+      unavailableEntryIds failedEntryIds partial totalEntries filteredEntries page pageSize hasMore
       highestEventPoints averageEventPoints
       rows {
         entry entryName playerName rank overallRank teamValue chip livePoints

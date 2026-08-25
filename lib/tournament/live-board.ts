@@ -47,6 +47,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isInteger = (value: unknown): value is number =>
 	typeof value === 'number' && Number.isSafeInteger(value)
 
+const isNonNegativeInteger = (value: unknown): value is number =>
+	isInteger(value) && value >= 0
+
 const isNullableString = (value: unknown): value is string | null =>
 	value === null || typeof value === 'string'
 
@@ -189,6 +192,23 @@ export function parseEntryLiveCompetitionBoardPage(
 	}
 	for (const field of ['managerDataAvailability', 'managerServedFrom']) {
 		if (typeof root[field] !== 'string') missing.push(field)
+	}
+	if (
+		root.coverageState !== 'WARMING' &&
+		root.coverageState !== 'COMPLETE' &&
+		root.coverageState !== 'PARTIAL' &&
+		root.coverageState !== 'UNAVAILABLE'
+	)
+		missing.push('coverageState')
+	if (root.rankScope !== 'FULL_FIELD' && root.rankScope !== 'AVAILABLE_ROWS')
+		missing.push('rankScope')
+	for (const field of [
+		'computedEntries',
+		'deferredEntryCount',
+		'failedEntryCount',
+		'unavailableEntryCount'
+	]) {
+		if (!isNonNegativeInteger(root[field])) missing.push(field)
 	}
 	for (const field of ['partial', 'hasMore', 'managerRefreshQueued']) {
 		if (typeof root[field] !== 'boolean') missing.push(field)

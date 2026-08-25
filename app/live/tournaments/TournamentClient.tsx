@@ -45,8 +45,7 @@ import {
 	type LiveBoardFilterState
 } from '@/lib/tournament/live-board'
 import {
-	formatLiveAveragePoints,
-	mergeUnavailableTournamentEntryIds
+	formatLiveAveragePoints
 } from '@/lib/tournament/liveEntries'
 import {
 	areTournamentStandingsReady,
@@ -123,11 +122,29 @@ const pageRows = (
 	page: EntryLiveCompetitionBoardPage | null
 ): TournamentEntry[] => (page ? page.rows.map(boardRowToTournamentEntry) : [])
 
-const partialFailureCount = (page: EntryLiveCompetitionBoardPage): number =>
-	mergeUnavailableTournamentEntryIds(
-		page.failedEntryIds,
-		page.unavailableEntryIds
-	).length
+const boardPartialMessage = (
+	page: EntryLiveCompetitionBoardPage,
+	messages: {
+		failed: string
+		warming: string
+		unavailable: string
+	}
+): string | null => {
+	if (page.failedEntryCount > 0) {
+		return messages.failed
+	}
+	if (
+		page.deferredEntryCount > 0 ||
+		page.coverageState === 'WARMING' ||
+		page.coverageState === 'PARTIAL'
+	) {
+		return messages.warming
+	}
+	if (page.unavailableEntryCount > 0 || page.managerDataAvailability === 'UNAVAILABLE') {
+		return messages.unavailable
+	}
+	return null
+}
 
 const exactUpdatedAt = (value: string | null): string | null => {
 	if (!value || !Number.isFinite(Date.parse(value))) return null
@@ -369,6 +386,27 @@ export default function TournamentClient({
 
 	useEffect(() => {
 		if (
+			!selectionRestoreComplete ||
+			!tournamentIdFromUrl ||
+			tournaments.length === 0 ||
+			tournaments.some(tournament => tournament.id === tournamentIdFromUrl)
+		)
+			return
+		const fallback = tournaments[0]
+		if (!fallback) return
+		const params = new URLSearchParams({ tournamentId: fallback.id })
+		if (gameweekFromUrl) params.set('gw', String(gameweekFromUrl))
+		router.replace(`/live/competitions?${params.toString()}`)
+	}, [
+		gameweekFromUrl,
+		router,
+		selectionRestoreComplete,
+		tournamentIdFromUrl,
+		tournaments
+	])
+
+	useEffect(() => {
+		if (
 			!isPageActive ||
 			!selectedTournamentId ||
 			!selectedTournamentSetupStatus ||
@@ -490,9 +528,14 @@ export default function TournamentClient({
 				}
 				setResultsError(
 					page.partial
-						? t('partialResults', {
-								failed: partialFailureCount(page),
-								total: page.totalEntries
+						? boardPartialMessage(page, {
+								failed: t('calculationFailed', {
+									count: page.failedEntryCount
+								}),
+								warming: t('coverageWarming'),
+								unavailable: t('unavailableCalculation', {
+									count: page.unavailableEntryCount || page.totalEntries
+								})
 							})
 						: null
 				)
@@ -591,9 +634,15 @@ export default function TournamentClient({
 			writeLiveBoardLastGood(storage, cacheScope, initial.page)
 			if (initial.page.partial) {
 				setResultsError(
-					t('partialResults', {
-						failed: partialFailureCount(initial.page),
-						total: initial.page.totalEntries
+					boardPartialMessage(initial.page, {
+						failed: t('calculationFailed', {
+							count: initial.page.failedEntryCount
+						}),
+						warming: t('coverageWarming'),
+						unavailable: t('unavailableCalculation', {
+							count:
+								initial.page.unavailableEntryCount || initial.page.totalEntries
+						})
 					})
 				)
 			}
@@ -754,9 +803,14 @@ export default function TournamentClient({
 			setBoardPage(next)
 			setResultsError(
 				next.partial
-					? t('partialResults', {
-							failed: partialFailureCount(next),
-							total: next.totalEntries
+					? boardPartialMessage(next, {
+							failed: t('calculationFailed', {
+								count: next.failedEntryCount
+							}),
+							warming: t('coverageWarming'),
+							unavailable: t('unavailableCalculation', {
+								count: next.unavailableEntryCount || next.totalEntries
+							})
 						})
 					: null
 			)
@@ -865,7 +919,21 @@ export default function TournamentClient({
 
 	const managerStatus = useMemo(() => {
 		if (!boardPage) return t('scoreConfirming')
-		if (showingLastGood || boardPage.managerDataAvailability === 'LAST_GOOD')
+		if (showingLastGood) return t('showingLastGood')
+		if (boardPage.failedEntryCount > 0)
+			return t('calculationFailed', { count: boardPage.failedEntryCount })
+		if (boardPage.deferredEntryCount > 0)
+			return t('coverageWarming')
+		if (boardPage.unavailableEntryCount > 0)
+			return t('unavailableCalculation', {
+				count: boardPage.unavailableEntryCount
+			})
+		if (
+			boardPage.coverageState === 'WARMING' ||
+			boardPage.coverageState === 'PARTIAL'
+		)
+			return t('coverageWarming')
+		if (boardPage.managerDataAvailability === 'LAST_GOOD')
 			return t('scoreOfficialDelayed')
 		if (
 			boardPage.managerDataAvailability === 'PARTIAL' ||
@@ -879,6 +947,30 @@ export default function TournamentClient({
 			return t('scoreOfficialUnavailable')
 		return t('scoreOfficialLive')
 	}, [boardPage, showingLastGood, t])
+	const boardCoverageSummary = useMemo(() => {
+		if (!boardPage) return null
+		const parts = [
+			t('computedCoverage', {
+				computed: boardPage.computedEntries,
+				total: boardPage.totalEntries
+			})
+		]
+		if (boardPage.deferredEntryCount > 0)
+			parts.push(
+				t('deferredCalculation', { count: boardPage.deferredEntryCount })
+			)
+		if (boardPage.failedEntryCount > 0)
+			parts.push(t('calculationFailed', { count: boardPage.failedEntryCount }))
+		if (boardPage.unavailableEntryCount > 0)
+			parts.push(
+				t('unavailableCalculation', {
+					count: boardPage.unavailableEntryCount
+				})
+			)
+		if (boardPage.rankScope === 'FULL_FIELD') parts.push(t('fullFieldRank'))
+		else parts.push(t('availableRowsRank'))
+		return parts.join(' · ')
+	}, [boardPage, t])
 
 	const updatedAt = exactUpdatedAt(boardPage?.managerCheckedAt ?? null)
 	const visibleEntries = useMemo(
@@ -1075,6 +1167,11 @@ export default function TournamentClient({
 						{managerStatus}
 						{updatedAt ? ` · ${t('lastUpdated', { time: updatedAt })}` : ''}
 					</p>
+					{boardCoverageSummary ? (
+						<p className="mt-1 text-right text-xs text-muted-foreground">
+							{boardCoverageSummary}
+						</p>
+					) : null}
 				</Card>
 
 				{isLoadingTournaments ? (
