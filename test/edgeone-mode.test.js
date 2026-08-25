@@ -38,7 +38,7 @@ function scopedReleaseRule(overrides = {}) {
 		Description: [],
 		RulePriority: 3,
 		Branches: [{
-			Condition: "${http.request.host} in ['eo-personal-canary.letletme.top'] and ${http.request.ip.country} in ['CN'] and ${http.request.method} in ['GET']",
+			Condition: "${http.request.host} in ['eo-personal-canary.letletme.top', 'letletme.top'] and ${http.request.ip.country} in ['CN'] and ${http.request.method} in ['GET']",
 			Actions: [{
 				Name: 'ModifyOrigin',
 				ModifyOriginParameters: {

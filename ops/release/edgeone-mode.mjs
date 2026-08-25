@@ -6,7 +6,7 @@ const SERVICE = 'teo'
 const VERSION = '2022-09-01'
 const RELEASE_RULE_NAME = 'TEMP CN bafa to Tencent'
 const RELEASE_RULE_CONDITION =
-	"${http.request.host} in ['eo-personal-canary.letletme.top'] and ${http.request.ip.country} in ['CN'] and ${http.request.method} in ['GET']"
+	"${http.request.host} in ['eo-personal-canary.letletme.top', 'letletme.top'] and ${http.request.ip.country} in ['CN'] and ${http.request.method} in ['GET']"
 const RELEASE_ORIGIN_GROUP = 'og-3u1v4jecjhe8'
 
 function sha256(value) {
