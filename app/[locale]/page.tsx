@@ -166,13 +166,6 @@ async function HomeHero() {
 				{/* Primary hero: copy + deadline only — keeps the classic two-column balance */}
 				<div className="grid gap-12 lg:grid-cols-[1.12fr_0.88fr] lg:items-center">
 					<div>
-						<p className="mb-6 flex items-center gap-2.5 font-display text-xs font-semibold uppercase tracking-caps-wide text-muted-foreground">
-							<span
-								className="live-dot"
-								aria-hidden="true"
-							/>
-							{t('matchdayBadge')}
-						</p>
 						<h1 className="max-w-3xl text-balance font-display text-5xl font-bold uppercase leading-[0.95] tracking-[-0.01em] sm:text-6xl lg:text-7xl">
 							{t.rich('headline', {
 								marker: chunks => <span className="marker">{chunks}</span>
@@ -314,23 +307,6 @@ type HomeGameweekOverview = NonNullable<
 	HomeGameweek['gameweekDesk']['overview']
 >
 
-function HomeDeskHeading({ id, title }: { id: string; title: string }) {
-	return (
-		<div className="mb-6 flex items-center gap-3">
-			<span
-				className="h-1.5 w-8 bg-electric shadow-sticker-sm"
-				aria-hidden="true"
-			/>
-			<h2
-				id={id}
-				className="font-display text-sm font-bold uppercase tracking-caps text-muted-foreground"
-			>
-				{title}
-			</h2>
-		</div>
-	)
-}
-
 function HomePerformanceDesk({
 	currentEventId,
 	overview,
@@ -347,13 +323,9 @@ function HomePerformanceDesk({
 	return (
 		<section
 			className="border-t bg-muted/20 py-10"
-			aria-labelledby="home-performance-desk-title"
+			aria-label={t('performanceDesk')}
 		>
 			<div className="mx-auto max-w-4xl px-4">
-				<HomeDeskHeading
-					id="home-performance-desk-title"
-					title={t('performanceDesk')}
-				/>
 				<div className="space-y-8">
 					<StatsSection
 						currentEventId={currentEventId}
@@ -376,13 +348,9 @@ function HomeMarketDesk() {
 	return (
 		<section
 			className="border-y bg-secondary/40 py-10"
-			aria-labelledby="home-market-desk-title"
+			aria-label={t('marketDesk')}
 		>
 			<div className="mx-auto max-w-6xl px-4">
-				<HomeDeskHeading
-					id="home-market-desk-title"
-					title={t('marketDesk')}
-				/>
 				<div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
 					<Suspense fallback={<MarketTeaserFallback />}>
 						<MarketTeaser />
@@ -408,13 +376,9 @@ function HomeFixturesDesk({
 	return (
 		<section
 			className="border-t py-10"
-			aria-labelledby="home-fixtures-desk-title"
+			aria-label={t('fixturesDesk')}
 		>
 			<div className="mx-auto max-w-4xl px-4">
-				<HomeDeskHeading
-					id="home-fixtures-desk-title"
-					title={t('fixturesDesk')}
-				/>
 				<MatchesSection
 					key={fixturesSeedKey}
 					initialFixtures={initialFixtures}
@@ -632,10 +596,6 @@ function PageInsightsFallback() {
 		>
 			<section className="border-t bg-muted/20 py-10">
 				<div className="mx-auto max-w-6xl px-4">
-					<HomeDeskHeading
-						id="home-performance-desk-loading-title"
-						title={t('performanceDesk')}
-					/>
 					<div className="space-y-8">
 						<div className="rounded-xl border bg-card p-6">
 							<Skeleton className="h-6 w-40" />
@@ -655,10 +615,6 @@ function PageInsightsFallback() {
 
 			<section className="border-y bg-secondary/40 py-10">
 				<div className="mx-auto max-w-6xl px-4">
-					<HomeDeskHeading
-						id="home-market-desk-loading-title"
-						title={t('marketDesk')}
-					/>
 					<div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
 						<MarketTeaserFallback />
 						<HomePriceChangeDeskFallback />
@@ -668,10 +624,6 @@ function PageInsightsFallback() {
 
 			<section className="border-t py-10">
 				<div className="mx-auto max-w-4xl px-4">
-					<HomeDeskHeading
-						id="home-fixtures-desk-loading-title"
-						title={t('fixturesDesk')}
-					/>
 					<div className="rounded-xl border bg-card p-6">
 						<Skeleton className="h-6 w-44" />
 						<Skeleton className="mt-6 h-72 w-full" />

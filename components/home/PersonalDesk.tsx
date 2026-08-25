@@ -91,7 +91,12 @@ function PersonalDeskUnavailable({ message }: { message: string }) {
 
 function metricTiles(
 	desk: HomePersonalDesk,
-	labels: { points: string; rank: string; value: string },
+	labels: {
+		points: string
+		rank: string
+		value: string
+		bank: string
+	},
 	options?: { hideSeasonMetrics?: boolean }
 ) {
 	return [
@@ -113,6 +118,10 @@ function metricTiles(
 			label: labels.value,
 			value:
 				desk.teamValue == null ? '—' : `£${(desk.teamValue / 10).toFixed(1)}m`
+		},
+		{
+			label: labels.bank,
+			value: desk.bank == null ? '—' : `£${(desk.bank / 10).toFixed(1)}m`
 		}
 	] as const
 }
@@ -141,14 +150,15 @@ export async function PersonalDesk({
 		{
 			points: t('personalPointsLabel'),
 			rank: t('personalRankLabel'),
-			value: t('personalTeamValueLabel')
+			value: t('personalTeamValueLabel'),
+			bank: t('personalBankLabel')
 		},
 		{
 			hideSeasonMetrics:
 				desk.state === 'EMPTY' && presentation.phase === 'PRESEASON'
 		}
 	)
-	const readyKey = `${desk.sourceCheckedAt ?? 'unknown'}:${desk.state}`
+	const readyKey = `${desk.pointsCheckedAt ?? 'unknown'}:${desk.pointsState}:${desk.rankState}:${desk.sourceCheckedAt ?? 'unknown'}:${desk.state}`
 	const staleDate = desk.sourceCheckedAt ? new Date(desk.sourceCheckedAt) : null
 	const staleDateLabel =
 		staleDate && !Number.isNaN(staleDate.getTime())
@@ -186,7 +196,7 @@ export async function PersonalDesk({
 						</p>
 					</div>
 
-					<div className="grid min-w-0 flex-1 grid-cols-3 gap-px overflow-hidden rounded-lg border border-foreground/10 bg-foreground/10">
+					<div className="grid min-w-0 flex-1 grid-cols-4 gap-px overflow-hidden rounded-lg border border-foreground/10 bg-foreground/10">
 						{tiles.map(tile => (
 							<div
 								key={tile.label}

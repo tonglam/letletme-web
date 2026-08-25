@@ -6,7 +6,7 @@ export const GLOBAL_CLIENT_NAMESPACES = [
 ] as const satisfies readonly (keyof IntlMessages)[]
 
 export const ROUTE_CLIENT_NAMESPACES = {
-	home: ['Home'],
+	home: ['Home', 'LivePoints', 'Share'],
 	auth: ['Auth'],
 	fixtures: ['Fixtures', 'Share'],
 	gameweek: ['GameweekStats', 'PlayerDirectory', 'Share'],

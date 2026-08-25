@@ -29,7 +29,7 @@ const loadHomeMarketPulseFromOrigin = unstable_cache(
 				'market',
 				GET_HOME_MARKET_PULSE,
 				{ days: 7 },
-				{ cache: 'no-store', timeoutMs: 5_000 }
+				{ cache: 'no-store', timeoutMs: 8_000 }
 			)
 		}),
 	['graphql', 'home-market-pulse', 'v1'],
@@ -48,7 +48,7 @@ const loadHomeMarketOwnershipFromOrigin = unstable_cache(
 				'market',
 				GET_HOME_MARKET_OWNERSHIP,
 				{},
-				{ cache: 'no-store', timeoutMs: 5_000 }
+				{ cache: 'no-store', timeoutMs: 8_000 }
 			)
 		}),
 	['graphql', 'home-market-ownership', 'v1'],

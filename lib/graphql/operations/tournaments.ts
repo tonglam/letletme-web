@@ -351,7 +351,7 @@ export interface TournamentDetailDeskResponse {
 		officialH2H: TournamentOfficialH2H | null
 		live: {
 			eventId: number
-			revision: string
+			revision: string | null
 			state: string
 			partial: boolean
 			failedEntryIds: number[]

@@ -8,8 +8,13 @@ export type TournamentLiveRevisionRef = {
 } | null
 
 type TournamentDeskExecutor = (
-	ref: TournamentLiveRevisionRef
+	ref: TournamentLiveRevisionRef,
+	options?: { handledErrorCodes?: readonly string[] }
 ) => Promise<TournamentLivePointsResponse>
+
+const REVISION_RECOVERY_OPTIONS = {
+	handledErrorCodes: ['LIVE_REVISION_GONE']
+} as const
 
 export const isLiveRevisionGone = (error: unknown): boolean =>
 	(error instanceof GraphQLRequestError &&
@@ -25,7 +30,7 @@ export async function loadTournamentLiveDeskWithRevisionRecovery(
 	ref: TournamentLiveRevisionRef
 ): Promise<TournamentLivePointsResponse> {
 	try {
-		return await execute(ref)
+		return await execute(ref, ref ? REVISION_RECOVERY_OPTIONS : undefined)
 	} catch (error) {
 		if (!ref || !isLiveRevisionGone(error)) throw error
 		return execute(null)

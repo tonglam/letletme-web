@@ -188,6 +188,97 @@ test('home keeps the four-section vocabulary and competition entry links aligned
 	).toHaveAttribute('href', '/zh-CN/competitions/create')
 })
 
+test('home team of the week shows each player name, gameweek score, and detail action', async ({
+	page
+}) => {
+	await page.goto('/zh-CN')
+
+	const pitch = page.locator(
+		'[aria-labelledby="home-team-of-week-title"] section[aria-label]:visible'
+	)
+	await expect(pitch).toBeVisible()
+
+	const dreamTeamCard = page
+		.locator('[aria-labelledby="home-team-of-week-title"]:visible')
+		.first()
+	await expect(
+		dreamTeamCard.getByRole('heading', { name: /梦之队/ })
+	).toBeVisible()
+	await expect(dreamTeamCard.getByText(/\d+ 名球员/)).toHaveCount(0)
+	await expect(
+		dreamTeamCard.getByRole('button', { name: '文字', exact: true })
+	).toBeVisible()
+	await expect(
+		dreamTeamCard.getByRole('button', { name: '图片', exact: true })
+	).toBeVisible()
+
+	const playerCards = pitch.locator('button[aria-label^="查看 "]')
+	const playerCount = await playerCards.count()
+	expect(playerCount).toBeGreaterThan(0)
+	for (let index = 0; index < playerCount; index += 1) {
+		const playerCard = playerCards.nth(index)
+		await expect(playerCard).toBeVisible()
+		await expect(playerCard.locator('span').first()).not.toHaveText('')
+		const playerScore = await playerCard.locator('span').nth(1).innerText()
+		expect(playerScore).toMatch(/^\d+$/)
+	}
+
+	await playerCards.first().click()
+	await expect(page).toHaveURL(/\/zh-CN$/)
+	await expect(page.getByRole('dialog')).toContainText('Saka')
+	await page.keyboard.press('Escape')
+
+	const topScorer = page.getByRole('button', {
+		name: '最高分球员: Saka (12)',
+		exact: true
+	})
+	await expect(topScorer).toBeVisible()
+	await topScorer.click()
+	await expect(page.getByRole('dialog')).toContainText('Saka')
+})
+
+test('home market copy uses human-readable updated dates without signal-status wording', async ({
+	page
+}) => {
+	await page.goto('/zh-CN')
+	const marketCard = page.locator(
+		'[aria-labelledby="home-market-title"]:visible'
+	)
+	await expect(
+		marketCard.getByRole('tab', { name: '持有率变化', exact: true })
+	).toBeVisible()
+	await expect(
+		marketCard.getByRole('tab', { name: '出场状态观察', exact: true })
+	).toBeVisible()
+
+	const updatedDate = '更新于 2026年8月3日'
+	await expect(
+		marketCard.locator('p:visible').filter({ hasText: updatedDate })
+	).toBeVisible()
+	await expect(
+		page
+			.locator('#home-price-changes-today:visible p:visible')
+			.filter({ hasText: updatedDate })
+	).toBeVisible()
+
+	await marketCard
+		.getByRole('tab', { name: '出场状态观察', exact: true })
+		.click()
+	await expect(
+		marketCard.locator('#home-market-availability:visible')
+	).toBeVisible()
+
+	await page.locator('#home-price-changes-likely-tab:visible').click()
+	await expect(
+		page
+			.locator('p:visible')
+			.filter({ hasText: '按预测进度展示上涨和下跌各前 5 名。' })
+	).toBeVisible()
+	await expect(page.getByText('并保留信号状态', { exact: false })).toHaveCount(
+		0
+	)
+})
+
 test('modified navigation link clicks keep their disclosure open', async ({
 	page,
 	context
@@ -214,9 +305,7 @@ test('language switch persists through the next client navigation', async ({
 	)
 	const summary = disclosure.locator(':scope > summary')
 	await summary.click()
-	await disclosure
-		.getByRole('radio', { name: '简体中文', exact: true })
-		.click()
+	await disclosure.getByRole('radio', { name: '简体中文', exact: true }).click()
 	await expect(disclosure).not.toHaveAttribute('open', '')
 	await expect(summary).toBeFocused()
 	await summary.click()
@@ -407,7 +496,7 @@ test('Market stays accessible and usable on a 390px Simplified Chinese screen', 
 	expect(initialAccessibility.violations).toEqual([])
 
 	await expect(page.getByRole('list', { name: '上升' })).toBeVisible()
-	await expect(page.getByText('+1 个百分点').first()).toBeVisible()
+	await expect(page.getByText('+1 个%').first()).toBeVisible()
 
 	await page.getByRole('link', { name: 'GW 比较' }).click()
 	await expect(page).toHaveURL(/period=GAMEWEEK/)

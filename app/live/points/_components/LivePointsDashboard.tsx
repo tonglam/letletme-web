@@ -145,8 +145,7 @@ export function LivePointsDashboard({
 		playerDetails: (player: { webName: string }) =>
 			t('viewPlayer', { player: player.webName })
 	}
-	const showLiveOverallRank =
-		overall != null && gameweek === currentGameweek
+	const showLiveOverallRank = overall != null && gameweek === currentGameweek
 	const officialOverallRank =
 		liveData?.score?.overallRank ?? overall?.overallRank ?? null
 	const pitchHeaderStats = liveData
@@ -246,7 +245,10 @@ export function LivePointsDashboard({
 								: t('autoPast')}
 					</p>
 					{liveData ? (
-						<p className="text-xs text-muted-foreground" role="status">
+						<p
+							className="text-xs text-muted-foreground"
+							role="status"
+						>
 							{scoreStatus}
 							{liveData.score?.reconciliation === 'SOURCE_SKEW'
 								? ` · ${t('scoreDetailsSyncing')}`
@@ -255,16 +257,9 @@ export function LivePointsDashboard({
 					) : null}
 					<div className="flex flex-wrap items-center gap-2 sm:gap-3">
 						<LivePointsAutoRefreshCountdown
-				enabled={autoRefreshEnabled}
-				onRefresh={onAutoRefresh}
-				nextRefreshAt={nextRefreshAt}
-						/>
-						<ShareActions
-							text={shareText}
-							imageRef={squadPitchRef}
-							title={liveData?.entryName ?? t('teamTitle')}
-							className="flex flex-wrap items-center gap-2 sm:gap-3"
-							disabled={!liveData || isLoading}
+							enabled={autoRefreshEnabled}
+							onRefresh={onAutoRefresh}
+							nextRefreshAt={nextRefreshAt}
 						/>
 						<Button
 							size="sm"
@@ -319,6 +314,16 @@ export function LivePointsDashboard({
 						<TeamStats stats={deriveLiveTeamStats(liveData)} />
 					</div>
 
+					<div className="mb-3 flex justify-end">
+						<ShareActions
+							actions={['image']}
+							text={shareText}
+							imageRef={squadPitchRef}
+							title={liveData.entryName ?? t('teamTitle')}
+							disabled={!liveData || isLoading}
+						/>
+					</div>
+
 					<div className="mb-8">
 						<SquadPitch
 							ref={squadPitchRef}
@@ -348,17 +353,26 @@ export function LivePointsDashboard({
 					/>
 
 					<section aria-labelledby="live-squad-heading">
-						<div className="mb-3">
-							<p className="chyron">{t('livePoints')}</p>
-							<h2
-								id="live-squad-heading"
-								className="mt-1 font-display text-xl font-bold tracking-tight sm:text-2xl"
-							>
-								{t('squad')}
-							</h2>
-							<p className="mt-1.5 text-xs text-muted-foreground">
-								{t('ptsIncludeBonusHint')}
-							</p>
+						<div className="mb-3 flex items-start justify-between gap-4">
+							<div>
+								<p className="chyron">{t('livePoints')}</p>
+								<h2
+									id="live-squad-heading"
+									className="mt-1 font-display text-xl font-bold tracking-tight sm:text-2xl"
+								>
+									{t('squad')}
+								</h2>
+								<p className="mt-1.5 text-xs text-muted-foreground">
+									{t('ptsIncludeBonusHint')}
+								</p>
+							</div>
+							<ShareActions
+								actions={['text']}
+								text={shareText}
+								title={liveData.entryName ?? t('teamTitle')}
+								className="shrink-0"
+								disabled={!liveData || isLoading}
+							/>
 						</div>
 						<Card
 							className={cn(

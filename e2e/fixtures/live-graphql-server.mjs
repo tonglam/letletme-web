@@ -487,8 +487,13 @@ const server = createServer((request, response) => {
 						playerName: 'Test Manager',
 						region: 'Australia',
 						overallPoints: 1234,
+						pointsState: 'LIVE',
+						pointsCheckedAt: '2026-08-25T00:00:00.000Z',
 						overallRank: 56789,
+						rankState: 'UPDATING',
+						rankCheckedAt: '2026-08-24T00:00:00.000Z',
 						teamValue: 1005,
+						bank: 15,
 						leagueRanks: Array.from({ length: 8 }, (_, index) => ({
 							key: `${index === 6 ? 'h2h' : 'classic'}:${314 + index}`,
 							name:
@@ -498,7 +503,10 @@ const server = createServer((request, response) => {
 										? 'E2E H2H'
 										: `E2E League ${index + 1}`,
 							leagueType: index === 6 ? 'H2H' : 'CLASSIC',
+							visibility: index >= 3 ? 'PUBLIC' : 'PRIVATE',
 							rank: 12 + index,
+							rankState: 'UPDATING',
+							rankCheckedAt: '2026-08-24T00:00:00.000Z',
 							movement:
 								index === 0
 									? { direction: 'UP', places: 6 }

@@ -4,10 +4,6 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { MarketPriceChange } from '@/lib/graphql/operations/market'
 import type { PriceChangeBoard } from '@/lib/graphql/operations/price-changes'
-import {
-	isLikelyToChange,
-	sortPriceChangePlayers
-} from '@/lib/price-change-sorting'
 import { loadHomeMarketPulse } from '@/lib/home-market-seed-server'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
@@ -42,15 +38,31 @@ function selectLatestPriceChanges(priceChanges: MarketPriceChange[]): {
 	return { date, changes }
 }
 
+function compareProgress(
+	left: PriceChangeBoard['players'][number],
+	right: PriceChangeBoard['players'][number],
+	locale: string
+): number {
+	const progress =
+		Math.abs(right.progressPercent) - Math.abs(left.progressPercent)
+	if (progress !== 0) return progress
+	const name = left.webName.localeCompare(right.webName, locale)
+	return name !== 0 ? name : left.playerId - right.playerId
+}
+
 function buildPredictionState(
 	board: PriceChangeBoard,
 	locale: string,
 	notices: { partial: string; stale: string }
 ): HomePriceChangeCarouselProps['likely'] {
-	const players = sortPriceChangePlayers(
-		board.players.filter(isLikelyToChange),
-		{ locale }
-	)
+	const rises = board.players
+		.filter(player => player.progressPercent > 0)
+		.sort((left, right) => compareProgress(left, right, locale))
+		.slice(0, 5)
+	const falls = board.players
+		.filter(player => player.progressPercent < 0)
+		.sort((left, right) => compareProgress(left, right, locale))
+		.slice(0, 5)
 	const notice =
 		board.status === 'PARTIAL'
 			? notices.partial
@@ -62,10 +74,11 @@ function buildPredictionState(
 		state:
 			board.status === 'UNAVAILABLE'
 				? 'UNAVAILABLE'
-				: players.length > 0
+				: rises.length + falls.length > 0
 					? 'AVAILABLE'
 					: 'EMPTY',
-		players,
+		rises,
+		falls,
 		notice
 	}
 }
@@ -152,7 +165,8 @@ export async function HomePriceChangeDesk() {
 		)
 		likely = {
 			state: 'UNAVAILABLE',
-			players: [],
+			rises: [],
+			falls: [],
 			notice: null
 		}
 	} else {
@@ -185,10 +199,14 @@ export async function HomePriceChangeDesk() {
 		pagerLabel: tHome('homePriceChangesPagerLabel'),
 		priceRises: tMarket('priceRises'),
 		priceFalls: tMarket('priceFalls'),
+		trendRises: tHome('homePriceTrendRises'),
+		trendFalls: tHome('homePriceTrendFalls'),
 		noPriceChanges: tHome('homeNoPriceChanges'),
-		noPriceRises: tHome('homeNoPriceRises'),
-		noPriceFalls: tHome('homeNoPriceFalls'),
-		noLikelyToChange: tHome('homeNoLikelyToChange'),
+			noPriceRises: tHome('homeNoPriceRises'),
+			noPriceFalls: tHome('homeNoPriceFalls'),
+			noTrendRises: tHome('homeNoTrendRises'),
+			noTrendFalls: tHome('homeNoTrendFalls'),
+			noLikelyToChange: tHome('homeNoLikelyToChange'),
 		likelyUnavailable: tHome('homeLikelyUnavailable'),
 		likelyUnavailableDescription: tHome(
 			'homeLikelyUnavailableDescription'

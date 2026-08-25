@@ -34,12 +34,12 @@ export async function GET(
 		)
 	try {
 		const data = await loadTournamentLiveDeskWithRevisionRecovery(
-			ref =>
+			(ref, recoveryOptions) =>
 				executeServerQueryWithSession(
 					session,
 					GET_TOURNAMENT_LIVE_DESK,
 					{ entryId, selectedTournamentId: tournamentId, ref },
-					{ cache: 'no-store', signal: request.signal }
+					{ cache: 'no-store', signal: request.signal, ...recoveryOptions }
 				),
 			{ season: String(getCurrentSeasonKey()), eventId, revision }
 		)

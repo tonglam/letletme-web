@@ -1,4 +1,7 @@
+'use client'
+
 import Image from 'next/image'
+import Link from 'next/link'
 import { LogoMark, LogoWordmark } from '@/components/layout/Logo'
 import { forwardRef, type CSSProperties } from 'react'
 
@@ -30,6 +33,7 @@ export interface SquadPitchPlayer {
 	id: string
 	webName: string
 	score: number
+	href?: string
 	teamCode?: SquadTeamCode
 	teamBadgeLabel?: string
 	position: SquadPosition
@@ -44,10 +48,12 @@ export interface SquadPitchLabels {
 	captain: string
 	viceCaptain: string
 	total: string
-	playerDetails: (player: SquadPitchPlayer) => string
+	/** Prefer the callback for client callers; templates keep server callers serializable. */
+	playerDetails?: (player: SquadPitchPlayer) => string
+	playerDetailsTemplate?: string
 }
 
-interface SquadPitchProps {
+export interface SquadPitchProps {
 	players: readonly SquadPitchPlayer[]
 	labels: SquadPitchLabels
 	benchPlayers?: readonly SquadPitchPlayer[]
@@ -56,6 +62,7 @@ interface SquadPitchProps {
 	benchBoostLabel?: string
 	benchPointsLabel?: string
 	onPlayerClick?: (playerId: string) => void
+	showHeader?: boolean
 	title?: string
 	managerName?: string
 	eyebrow?: string
@@ -141,6 +148,17 @@ function TeamKitBadge({
 	)
 }
 
+function playerDetailsLabel(
+	player: SquadPitchPlayer,
+	labels: SquadPitchLabels
+) {
+	if (labels.playerDetails) return labels.playerDetails(player)
+	if (labels.playerDetailsTemplate) {
+		return labels.playerDetailsTemplate.replaceAll('{player}', player.webName)
+	}
+	return player.webName
+}
+
 function PlayerCard({
 	player,
 	compact = false,
@@ -152,7 +170,7 @@ function PlayerCard({
 	onPlayerClick?: (playerId: string) => void
 	labels: SquadPitchLabels
 }) {
-	const isInteractive = Boolean(onPlayerClick)
+	const isInteractive = Boolean(onPlayerClick || player.href)
 	const openPlayerDetail = () => onPlayerClick?.(player.id)
 	const content = (
 		<>
@@ -168,7 +186,7 @@ function PlayerCard({
 					className={`flex ${compact ? 'h-[clamp(0.85rem,2.75cqi,1.4rem)]' : 'h-[clamp(0.95rem,3.25cqi,1.65rem)]'} items-center justify-center bg-[#f8f6ef] px-[clamp(0.16rem,0.7cqi,0.4rem)] text-[#38003c]`}
 				>
 					<span
-						className={`max-w-full truncate font-display ${compact ? 'text-[clamp(0.42rem,1.35cqi,0.72rem)]' : 'text-[clamp(0.48rem,1.6cqi,0.84rem)]'} font-bold leading-none tracking-[-0.01em]`}
+						className={`max-w-full truncate font-display ${compact ? 'text-[clamp(0.46rem,1.35cqi,0.72rem)]' : 'text-[clamp(0.55rem,1.6cqi,0.84rem)]'} font-bold leading-none tracking-[-0.01em]`}
 					>
 						{player.webName}
 					</span>
@@ -177,7 +195,7 @@ function PlayerCard({
 					className={`flex ${compact ? 'h-[clamp(0.8rem,2.55cqi,1.3rem)]' : 'h-[clamp(0.9rem,3cqi,1.5rem)]'} items-center justify-center bg-[#38003c] px-1 text-[#f8f6ef]`}
 				>
 					<span
-						className={`font-display ${compact ? 'text-[clamp(0.44rem,1.45cqi,0.76rem)]' : 'text-[clamp(0.5rem,1.75cqi,0.9rem)]'} font-bold leading-none tabular-nums`}
+						className={`font-display ${compact ? 'text-[clamp(0.48rem,1.45cqi,0.76rem)]' : 'text-[clamp(0.58rem,1.75cqi,0.9rem)]'} font-bold leading-none tabular-nums`}
 					>
 						{player.score}
 					</span>
@@ -191,14 +209,24 @@ function PlayerCard({
 			className={`group relative flex ${compact ? 'w-[clamp(2.8rem,11.5cqi,6rem)]' : 'w-[clamp(3.25rem,14cqi,7.2rem)]'} list-none flex-col items-center transition-transform duration-200 motion-reduce:transition-none`}
 		>
 			{isInteractive ? (
-				<button
-					type="button"
-					aria-label={labels.playerDetails(player)}
-					className="group relative flex w-full cursor-pointer flex-col items-center border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-1 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
-					onClick={openPlayerDetail}
-				>
-					{content}
-				</button>
+				onPlayerClick ? (
+					<button
+						type="button"
+						aria-label={playerDetailsLabel(player, labels)}
+						className="group relative flex w-full cursor-pointer flex-col items-center border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-1 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
+						onClick={openPlayerDetail}
+					>
+						{content}
+					</button>
+				) : (
+					<Link
+						href={player.href!}
+						aria-label={playerDetailsLabel(player, labels)}
+						className="group relative flex w-full cursor-pointer flex-col items-center border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-1 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
+					>
+						{content}
+					</Link>
+				)
 			) : content}
 		</li>
 	)
@@ -255,7 +283,7 @@ function BenchPlayerCard({
 	onPlayerClick?: (playerId: string) => void
 	labels: SquadPitchLabels
 }) {
-	const isInteractive = Boolean(onPlayerClick)
+	const isInteractive = Boolean(onPlayerClick || player.href)
 	const openPlayerDetail = () => onPlayerClick?.(player.id)
 	const content = (
 		<div className="flex min-w-0 items-center gap-[clamp(0.2rem,0.8cqi,0.5rem)] rounded-[clamp(0.2rem,0.7cqi,0.4rem)] border border-white/80 bg-[#f8f6ef]/95 px-[clamp(0.2rem,0.8cqi,0.5rem)] py-[clamp(0.18rem,0.6cqi,0.38rem)] text-left shadow-[0_5px_12px_rgba(0,37,23,0.2)]">
@@ -286,14 +314,24 @@ function BenchPlayerCard({
 			className="min-w-0 list-none"
 		>
 			{isInteractive ? (
-				<button
-					type="button"
-					aria-label={labels.playerDetails(player)}
-					className="group w-full cursor-pointer border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-0.5 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
-					onClick={openPlayerDetail}
-				>
-					{content}
-				</button>
+				onPlayerClick ? (
+					<button
+						type="button"
+						aria-label={playerDetailsLabel(player, labels)}
+						className="group w-full cursor-pointer border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-0.5 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
+						onClick={openPlayerDetail}
+					>
+						{content}
+					</button>
+				) : (
+					<Link
+						href={player.href!}
+						aria-label={playerDetailsLabel(player, labels)}
+						className="group block w-full cursor-pointer border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-0.5 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
+					>
+						{content}
+					</Link>
+				)
 			) : content}
 		</li>
 	)
@@ -310,6 +348,7 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 			benchBoostLabel = 'BB',
 			benchPointsLabel = 'pts',
 			onPlayerClick,
+			showHeader = true,
 			title = 'LetLetMe XI',
 			managerName,
 			eyebrow = 'Gameweek squad',
@@ -342,53 +381,55 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 
 				<div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,transparent_30%,rgba(0,31,20,0.13)_100%)]" />
 
-				<header className="absolute inset-x-[5.2%] top-[1.93%] z-20 flex h-[10.13%] items-center justify-between gap-[clamp(0.75rem,3cqi,2rem)] text-[#f8f6ef]">
-					<div className="flex min-w-0 flex-col justify-center">
-						<p className="truncate py-[0.08em] font-mono text-[clamp(0.42rem,1.15cqi,0.66rem)] font-medium uppercase leading-[1.2] tracking-[0.18em] text-[#00ff85]">
-							{headerStats?.eyebrow ?? eyebrow}
-						</p>
-						<h2 className="truncate py-[0.04em] font-display text-[clamp(0.78rem,2.55cqi,1.55rem)] font-bold uppercase leading-[1.1] tracking-[0.04em]">
-							{title}
-						</h2>
-						{managerName ? (
-							<p className="mt-[clamp(0.08rem,0.35cqi,0.2rem)] truncate py-[0.08em] font-mono text-[clamp(0.68rem,1.55cqi,0.95rem)] leading-[1.15] text-white/70">
-								{managerName}
+				{showHeader ? (
+					<header className="absolute inset-x-[5.2%] top-[1.93%] z-20 flex h-[10.13%] items-center justify-between gap-[clamp(0.75rem,3cqi,2rem)] text-[#f8f6ef]">
+						<div className="flex min-w-0 flex-col justify-center">
+							<p className="truncate py-[0.08em] font-mono text-[clamp(0.42rem,1.15cqi,0.66rem)] font-medium uppercase leading-[1.2] tracking-[0.18em] text-[#00ff85]">
+								{headerStats?.eyebrow ?? eyebrow}
 							</p>
-						) : null}
-					</div>
-					{headerStats ? (
-						<div className="flex min-w-[clamp(6.5rem,18cqi,9.25rem)] self-stretch shrink-0 flex-col justify-center border-l border-white/25 pl-[clamp(0.5rem,1.9cqi,1.1rem)] font-mono tabular-nums">
-							{headerStats.details.map(detail => (
-								<p
-									key={detail.label}
-									className="flex min-h-[clamp(0.95rem,2.65cqi,1.3rem)] items-center justify-end gap-[clamp(0.3rem,0.85cqi,0.6rem)] whitespace-nowrap leading-none"
-								>
-									<span className="text-[clamp(0.58rem,1.35cqi,0.78rem)] uppercase tracking-[0.08em] text-white/55">
-										{detail.label}
-									</span>
-									<span
-										className={
-											detail.accent
-												? 'font-display text-[clamp(0.82rem,2cqi,1.15rem)] font-bold leading-none text-[#00ff85]'
-												: 'font-mono text-[clamp(0.68rem,1.6cqi,0.92rem)] font-semibold leading-none text-white/85'
-										}
-									>
-										{detail.value}
-									</span>
+							<h2 className="truncate py-[0.04em] font-display text-[clamp(0.78rem,2.55cqi,1.55rem)] font-bold uppercase leading-[1.1] tracking-[0.04em]">
+								{title}
+							</h2>
+							{managerName ? (
+								<p className="mt-[clamp(0.08rem,0.35cqi,0.2rem)] truncate py-[0.08em] font-mono text-[clamp(0.68rem,1.55cqi,0.95rem)] leading-[1.15] text-white/70">
+									{managerName}
 								</p>
-							))}
+							) : null}
 						</div>
-					) : (
-						<div className="shrink-0 border-l border-white/20 pl-[clamp(0.5rem,1.7cqi,1rem)] text-right">
-							<p className="font-mono text-[clamp(0.4rem,1cqi,0.6rem)] uppercase tracking-[0.16em] text-white/60">
-								{labels.total}
-							</p>
-							<p className="font-display text-[clamp(0.8rem,2.4cqi,1.45rem)] font-bold leading-none tabular-nums text-[#00ff85]">
-								{totalScore}
-							</p>
-						</div>
-					)}
-				</header>
+						{headerStats ? (
+							<div className="flex min-w-[clamp(6.5rem,18cqi,9.25rem)] shrink-0 self-stretch flex-col justify-center border-l border-white/25 pl-[clamp(0.5rem,1.9cqi,1.1rem)] font-mono tabular-nums">
+								{headerStats.details.map(detail => (
+									<p
+										key={detail.label}
+										className="flex min-h-[clamp(0.95rem,2.65cqi,1.3rem)] items-center justify-end gap-[clamp(0.3rem,0.85cqi,0.6rem)] whitespace-nowrap leading-none"
+									>
+										<span className="text-[clamp(0.58rem,1.35cqi,0.78rem)] uppercase tracking-[0.08em] text-white/55">
+											{detail.label}
+										</span>
+										<span
+											className={
+												detail.accent
+													? 'font-display text-[clamp(0.82rem,2cqi,1.15rem)] font-bold leading-none text-[#00ff85]'
+													: 'font-mono text-[clamp(0.68rem,1.6cqi,0.92rem)] font-semibold leading-none text-white/85'
+											}
+										>
+											{detail.value}
+										</span>
+									</p>
+								))}
+							</div>
+						) : (
+							<div className="shrink-0 border-l border-white/20 pl-[clamp(0.5rem,1.7cqi,1rem)] text-right">
+								<p className="font-mono text-[clamp(0.4rem,1cqi,0.6rem)] uppercase tracking-[0.16em] text-white/60">
+									{labels.total}
+								</p>
+								<p className="font-display text-[clamp(0.8rem,2.4cqi,1.45rem)] font-bold leading-none tabular-nums text-[#00ff85]">
+									{totalScore}
+								</p>
+							</div>
+						)}
+					</header>
+				) : null}
 
 				<div
 					aria-hidden="true"

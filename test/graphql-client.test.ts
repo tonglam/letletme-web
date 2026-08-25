@@ -109,6 +109,46 @@ test('executeQuery preserves a GraphQL error code on a successful HTTP response'
 	}
 })
 
+test('executeQuery leaves deliberately handled GraphQL errors to the caller without console diagnostics', async () => {
+	const originalFetch = globalThis.fetch
+	const originalWarn = console.warn
+	const originalError = console.error
+	let warnings = 0
+	let errors = 0
+	console.warn = () => void (warnings += 1)
+	console.error = () => void (errors += 1)
+	globalThis.fetch = (async () =>
+		Response.json({
+			errors: [
+				{
+					message: 'Revision expired',
+					extensions: { code: 'LIVE_REVISION_GONE' }
+				}
+			]
+		})) as typeof fetch
+
+	try {
+		await assert.rejects(
+			executeQuery(
+				'query RevisionProbe { __typename }',
+				undefined,
+				{ handledErrorCodes: ['LIVE_REVISION_GONE'] }
+			),
+			(error: unknown) => {
+				assert.ok(error instanceof GraphQLRequestError)
+				assert.equal(error.code, 'LIVE_REVISION_GONE')
+				return true
+			}
+		)
+		assert.equal(warnings, 0)
+		assert.equal(errors, 0)
+	} finally {
+		globalThis.fetch = originalFetch
+		console.warn = originalWarn
+		console.error = originalError
+	}
+})
+
 test('executeQuery caches only allowlisted public browser responses', async () => {
 	const originalFetch = globalThis.fetch
 	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')

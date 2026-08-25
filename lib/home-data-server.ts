@@ -41,10 +41,15 @@ class TransientHomeGameweekError extends Error {
 }
 
 function isHomeGameweekDurablyCacheable(gameweek: HomeGameweek): boolean {
+	const boardsAreStable =
+		gameweek.gameweekDesk.boardsState === 'AVAILABLE' ||
+		// After official settlement, a missing live publication is an explicit
+		// unavailable state rather than a transient in-progress projection.
+		gameweek.gameweekDesk.lifecycle === 'SETTLED'
 	return (
 		gameweek.gameweekDesk.lifecycle !== 'PROVISIONAL' &&
 		gameweek.gameweekDesk.overviewState === 'AVAILABLE' &&
-		gameweek.gameweekDesk.boardsState === 'AVAILABLE' &&
+		boardsAreStable &&
 		gameweek.transfersState === 'AVAILABLE'
 	)
 }
@@ -271,7 +276,7 @@ export async function loadHomePersonalDesk(session: Session | null) {
 				session,
 				GET_HOME_PERSONAL_DESK,
 				undefined,
-				{ cache: 'no-store', timeoutMs: 1_500 }
+				{ cache: 'no-store', timeoutMs: 5_000 }
 			)
 		console.info('[home-personal-desk]', {
 			state: response.homePersonalDesk.state,

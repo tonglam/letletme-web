@@ -73,6 +73,7 @@ describe('public GraphQL cache contract', () => {
 		assert.match(home, /gameweek\.gameweekDesk\.lifecycle !== 'PROVISIONAL'/)
 		assert.match(home, /overviewState === 'AVAILABLE'/)
 		assert.match(home, /boardsState === 'AVAILABLE'/)
+		assert.match(home, /gameweek\.gameweekDesk\.lifecycle === 'SETTLED'/)
 		assert.match(home, /transfersState === 'AVAILABLE'/)
 		assert.match(home, /TransientHomeGameweekError/)
 	})

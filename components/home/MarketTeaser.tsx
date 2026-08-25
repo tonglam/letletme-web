@@ -1,15 +1,14 @@
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { DeltaBadge } from '@/components/data/DeltaBadge'
+import { HomeMarketCarousel } from '@/components/home/HomeMarketCarousel'
+import type {
+	HomeMarketAvailabilityItem,
+	HomeMarketCarouselProps,
+	HomeMarketOwnershipMover
+} from '@/components/home/HomeMarketCarousel'
+import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Link } from '@/i18n/navigation'
 import {
-	type MarketAvailabilityUpdate,
-	type MarketOwnershipChange,
 	type MarketOwnershipDay,
-	type MarketOwnershipCoverageStatus,
-	type MarketPlayer
+	type MarketOwnershipCoverageStatus
 } from '@/lib/graphql/operations/market'
 import {
 	loadHomeMarketOwnership,
@@ -20,16 +19,21 @@ import {
 	marketAvailabilityStatusKey,
 	selectHomeAvailabilityUpdates
 } from '@/lib/market-availability'
-import { shortMarketPosition } from '@/lib/market'
-import { positionBadgeClass } from '@/lib/position-style'
-import {
-	ArrowDownRight,
-	ArrowRight,
-	ArrowUpRight,
-	HeartPulse
-} from 'lucide-react'
-import { getTranslations } from 'next-intl/server'
+import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
+import { getLocale, getTranslations } from 'next-intl/server'
 import { unstable_rethrow } from 'next/navigation'
+
+function formatCalendarDate(value: string | null, locale: string): string {
+	if (!value) return '—'
+	const parsed = parseCalendarDate(value)
+	if (!parsed) return value
+	return new Intl.DateTimeFormat(locale, {
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric',
+		timeZone: CALENDAR_DATE_TIME_ZONE
+	}).format(parsed)
+}
 
 /** Home teaser keeps a short list; full desks live on /explore/market. */
 const HOME_TEASER_LIMIT = 5
@@ -56,112 +60,11 @@ export function MarketTeaserFallback() {
 	)
 }
 
-function TeaserPlayer({ player }: { player: MarketPlayer }) {
-	const position = shortMarketPosition(player.position)
-	return (
-		<>
-			<Badge className={positionBadgeClass(position)}>{position}</Badge>
-			<div className="min-w-0 flex-1">
-				<p className="whitespace-normal text-sm font-semibold leading-tight">
-					{player.webName}
-				</p>
-				<p className="text-xs text-muted-foreground">{player.teamShortName}</p>
-			</div>
-		</>
-	)
-}
-
-function OwnershipMoverRow({
-	mover,
-	detailLabel,
-	fromToLabel,
-	formatDelta
-}: {
-	mover: MarketOwnershipChange
-	detailLabel: string
-	fromToLabel: string
-	formatDelta: (value: number) => string
-}) {
-	return (
-		<li className="home-market-mover-row">
-			<TeaserPlayer player={mover.player} />
-			<div
-				className="home-market-mover-meta"
-				title={detailLabel}
-			>
-				<p className="min-w-0 truncate text-xs text-muted-foreground">
-					{fromToLabel}
-				</p>
-				<DeltaBadge
-					value={mover.changePercentagePoints}
-					size="md"
-					fontFamily="display"
-					format={formatDelta}
-				/>
-			</div>
-		</li>
-	)
-}
-
-function AvailabilityTeaserList({
-	updates,
-	labels
-}: {
-	updates: MarketAvailabilityUpdate[]
-	labels: {
-		empty: string
-		status: (key: ReturnType<typeof marketAvailabilityStatusKey>) => string
-		body: (update: MarketAvailabilityUpdate) => string
-	}
-}) {
-	if (updates.length === 0) {
-		return (
-			<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-				{labels.empty}
-			</p>
-		)
-	}
-
-	return (
-		<ul className="grid gap-2 sm:grid-cols-2">
-			{updates.map(update => {
-				const key = marketAvailabilityStatusKey(update.status)
-				return (
-					<li
-						key={update.player.playerId}
-						className="min-h-14 rounded-lg border px-3 py-2"
-					>
-						<div className="flex items-center justify-between gap-3">
-							<div className="min-w-0 flex-1">
-								<div className="flex flex-wrap items-center gap-2">
-									<p className="min-w-0 whitespace-normal text-sm font-semibold leading-tight">
-										{update.player.webName}
-									</p>
-									<Badge
-										variant={key === 'available' ? 'secondary' : 'outline'}
-										className="shrink-0 text-label"
-									>
-										{labels.status(key)}
-									</Badge>
-								</div>
-								<p className="mt-0.5 text-xs text-muted-foreground">
-									{update.player.teamShortName} ·{' '}
-									{update.player.selectedByPercent.toFixed(1)}%
-								</p>
-							</div>
-						</div>
-						<p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-							{labels.body(update)}
-						</p>
-					</li>
-				)
-			})}
-		</ul>
-	)
-}
-
 export async function MarketTeaser() {
-	const t = await getTranslations('Market')
+	const [t, locale] = await Promise.all([
+		getTranslations('Market'),
+		getLocale()
+	])
 	const [pulseResult, ownershipResult] = await Promise.allSettled([
 		loadHomeMarketPulse(),
 		loadHomeMarketOwnership()
@@ -190,7 +93,6 @@ export async function MarketTeaser() {
 	const ownershipCanRender =
 		ownership !== null &&
 		(ownershipReady || ownership.coverage.status === 'PARTIAL')
-	const teaserMode = ownershipCanRender ? 'ownership' : 'empty'
 	// Keep rise / fall separate so the desk reads like a transfer board, not a mixed top-3.
 	const ownershipRisers = [...(ownership?.risers ?? [])]
 		.sort((a, b) => b.changePercentagePoints - a.changePercentagePoints)
@@ -219,179 +121,98 @@ export async function MarketTeaser() {
 	const coverageCopy = ownership
 		? ownershipReady
 			? t('homeDailyCoverage', {
-					date: ownership.coverage.toDate ?? ownership.date ?? '—'
+					date: formatCalendarDate(
+						ownership.coverage.toDate ?? ownership.date ?? null,
+						locale
+					)
 				})
 			: ownershipStatusCopy[ownership.coverage.status]
 		: t('ownershipDataUnavailable')
-	const availabilityLabels = {
-		empty: t('noAvailabilityUpdates'),
-		status: (key: ReturnType<typeof marketAvailabilityStatusKey>) =>
-			t(`status.${key}`),
-		body: (update: MarketAvailabilityUpdate) =>
-			availabilityBodyText(update, key => t(key))
-	}
+	const ownershipState: HomeMarketCarouselProps['ownership'] =
+		ownership === null
+			? {
+					state: 'UNAVAILABLE',
+					risers: [],
+					fallers: []
+				}
+			: ownershipCanRender
+				? {
+						state: 'AVAILABLE',
+						risers: ownershipRisers.map(mover => ({
+							player: mover.player,
+							changePercentagePoints: mover.changePercentagePoints,
+							fromToLabel: t('ownershipFromTo', {
+								from: mover.fromSelectedByPercent.toFixed(1),
+								to: mover.toSelectedByPercent.toFixed(1)
+							}),
+							deltaLabel: formatDelta(mover.changePercentagePoints),
+							detailLabel: t('ownershipChangeDetail', {
+								from: mover.fromSelectedByPercent.toFixed(1),
+								to: mover.toSelectedByPercent.toFixed(1),
+								delta: formatDelta(mover.changePercentagePoints)
+							})
+						})),
+						fallers: ownershipFallers.map(mover => ({
+							player: mover.player,
+							changePercentagePoints: mover.changePercentagePoints,
+							fromToLabel: t('ownershipFromTo', {
+								from: mover.fromSelectedByPercent.toFixed(1),
+								to: mover.toSelectedByPercent.toFixed(1)
+							}),
+							deltaLabel: formatDelta(mover.changePercentagePoints),
+							detailLabel: t('ownershipChangeDetail', {
+								from: mover.fromSelectedByPercent.toFixed(1),
+								to: mover.toSelectedByPercent.toFixed(1),
+								delta: formatDelta(mover.changePercentagePoints)
+							})
+						}))
+					}
+				: {
+						state: 'EMPTY',
+						risers: [],
+						fallers: []
+					}
+	const availabilityItems: HomeMarketAvailabilityItem[] = availability.map(
+		update => {
+			const key = marketAvailabilityStatusKey(update.status)
+			return {
+				player: update.player,
+				statusLabel: t(`status.${key}`),
+				body: availabilityBodyText(update, messageKey => t(messageKey))
+			}
+		}
+	)
+	const ownershipEmptyDescription =
+		ownership?.coverage.status === 'BASELINE_MISSING'
+			? t('homeOwnershipBaselineMissingDescription', {
+					date: ownership.date ?? ownership.coverage.toDate ?? '—'
+				})
+			: t('homeEmptyDescription', { time: '09:25–09:35 UTC+8' })
 
 	return (
-		<Card
-			className="overflow-hidden rounded-none border-electric/20 sm:rounded-xl"
-			aria-labelledby="home-market-title"
-		>
-			<CardHeader className="border-b bg-muted/30 pb-5">
-				<div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-					<div>
-						<CardTitle asChild>
-							<h2
-								id="home-market-title"
-								className="text-2xl font-bold uppercase tracking-wide sm:text-3xl"
-							>
-								{t('homeTitle')}
-							</h2>
-						</CardTitle>
-						<p className="mt-2 text-sm text-muted-foreground">{coverageCopy}</p>
-					</div>
-					<Button
-						asChild
-						className="min-h-11 shrink-0 font-display font-semibold uppercase tracking-caps"
-					>
-						<Link
-							href="/explore/market"
-							prefetch={false}
-						>
-							{t('openMarket')} <ArrowRight aria-hidden="true" />
-						</Link>
-					</Button>
-				</div>
-			</CardHeader>
-
-			{teaserMode === 'ownership' ? (
-				<CardContent className="space-y-6 pt-6">
-					{/* Split board: who managers are buying into vs selling away */}
-					<div className="grid gap-6 md:grid-cols-2">
-						<div>
-							<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-success">
-								<ArrowUpRight
-									aria-hidden="true"
-									className="size-4"
-								/>
-								{t('homeOwnershipRising')}
-							</h3>
-							{ownershipRisers.length > 0 ? (
-								<ol
-									className="space-y-2"
-									aria-label={t('homeOwnershipRising')}
-								>
-									{ownershipRisers.map(mover => {
-										const from = mover.fromSelectedByPercent.toFixed(1)
-										const to = mover.toSelectedByPercent.toFixed(1)
-										const delta = formatDelta(mover.changePercentagePoints)
-										return (
-											<OwnershipMoverRow
-												key={mover.player.playerId}
-												mover={mover}
-												detailLabel={t('ownershipChangeDetail', {
-													from,
-													to,
-													delta
-												})}
-												fromToLabel={t('ownershipFromTo', { from, to })}
-												formatDelta={formatDelta}
-											/>
-										)
-									})}
-								</ol>
-							) : (
-								<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-									{t('noOwnershipRisers')}
-								</p>
-							)}
-						</div>
-						<div>
-							<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-destructive">
-								<ArrowDownRight
-									aria-hidden="true"
-									className="size-4"
-								/>
-								{t('homeOwnershipFalling')}
-							</h3>
-							{ownershipFallers.length > 0 ? (
-								<ol
-									className="space-y-2"
-									aria-label={t('homeOwnershipFalling')}
-								>
-									{ownershipFallers.map(mover => {
-										const from = mover.fromSelectedByPercent.toFixed(1)
-										const to = mover.toSelectedByPercent.toFixed(1)
-										const delta = formatDelta(mover.changePercentagePoints)
-										return (
-											<OwnershipMoverRow
-												key={mover.player.playerId}
-												mover={mover}
-												detailLabel={t('ownershipChangeDetail', {
-													from,
-													to,
-													delta
-												})}
-												fromToLabel={t('ownershipFromTo', { from, to })}
-												formatDelta={formatDelta}
-											/>
-										)
-									})}
-								</ol>
-							) : (
-								<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-									{t('noOwnershipFallers')}
-								</p>
-							)}
-						</div>
-					</div>
-
-					<div>
-						<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
-							<HeartPulse
-								aria-hidden="true"
-								className="size-4 text-pink"
-							/>
-							{t('availabilityWatch')}
-						</h3>
-						<AvailabilityTeaserList
-							updates={availability}
-							labels={availabilityLabels}
-						/>
-					</div>
-				</CardContent>
-			) : (
-				<CardContent className="grid gap-6 pt-6 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-					<div>
-						<h3 className="mb-3 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
-							{ownership
-								? ownershipStatusCopy[ownership.coverage.status]
-								: t('ownershipDataUnavailable')}
-						</h3>
-						<p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-							{ownership
-								? ownership.coverage.status === 'BASELINE_MISSING'
-									? t('homeOwnershipBaselineMissingDescription', {
-											date: ownership.date ?? ownership.coverage.toDate ?? '—'
-										})
-									: t('homeEmptyDescription', { time: '09:25–09:35 UTC+8' })
-								: t('ownershipDataUnavailable')}
-						</p>
-					</div>
-					<div>
-						<h3 className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps text-muted-foreground">
-							<HeartPulse
-								aria-hidden="true"
-								className="size-4 text-pink"
-							/>
-							{t('availabilityWatch')}
-						</h3>
-						<AvailabilityTeaserList
-							updates={availability}
-							labels={availabilityLabels}
-						/>
-					</div>
-				</CardContent>
-			)}
-		</Card>
+		<HomeMarketCarousel
+			ownership={ownershipState}
+			availability={availabilityItems}
+			locale={locale}
+			labels={{
+				ownershipPage: t('ownershipTitle'),
+				ownershipDescription: coverageCopy,
+				availabilityPage: t('availabilityWatch'),
+				availabilityDescription: t('homeAvailabilityDescription'),
+				openMarket: t('openMarket'),
+				previousPage: t('homeMarketPrevious'),
+				nextPage: t('homeMarketNext'),
+				pagerLabel: t('homeMarketPagerLabel'),
+				ownershipRising: t('homeOwnershipRising'),
+				ownershipFalling: t('homeOwnershipFalling'),
+				noOwnershipRisers: t('noOwnershipRisers'),
+				noOwnershipFallers: t('noOwnershipFallers'),
+				ownershipEmptyTitle: t('ownershipStatus.NO_DATA'),
+				ownershipEmptyDescription,
+				ownershipUnavailableTitle: t('ownershipDataUnavailable'),
+				ownershipUnavailableDescription: t('ownershipDataUnavailable'),
+				availabilityEmpty: t('noAvailabilityUpdates')
+			}}
+		/>
 	)
 }

@@ -62,9 +62,17 @@ export async function Footer() {
 					))}
 				</nav>
 
-				<div className="mt-10 flex flex-col gap-2 border-t border-fascia-foreground/10 pt-6 text-sm text-fascia-foreground/50 sm:flex-row sm:items-center sm:justify-between">
-					<p>{t('rights', { year: currentYear })}</p>
-					<p className="font-display text-xs font-semibold uppercase tracking-caps">
+				<div className="mt-10 grid gap-2 border-t border-fascia-foreground/10 pt-6 text-sm text-fascia-foreground/50 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+					<p className="sm:justify-self-start">{t('rights', { year: currentYear })}</p>
+					<a
+						href="https://beian.miit.gov.cn/"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="justify-self-center font-display text-xs font-semibold tracking-wide text-fascia-foreground/60 underline-offset-4 transition-colors hover:text-electric hover:underline"
+					>
+						{t('icpRecord')}
+					</a>
+					<p className="font-display text-xs font-semibold uppercase tracking-caps sm:justify-self-end">
 						{t('builtFor')}
 					</p>
 				</div>

@@ -137,13 +137,21 @@ export const GET_HOME_PERSONAL_DESK = /* GraphQL */ `
 			playerName
 			region
 			overallPoints
+			pointsState
+			pointsCheckedAt
 			overallRank
+			rankState
+			rankCheckedAt
 			teamValue
+			bank
 			leagueRanks {
 				key
 				name
 				leagueType
+				visibility
 				rank
+				rankState
+				rankCheckedAt
 				movement {
 					direction
 					places
@@ -419,7 +427,10 @@ export type HomeLeagueRank = {
 	key: string
 	name: string
 	leagueType: 'CLASSIC' | 'H2H'
+	visibility: 'PRIVATE' | 'PUBLIC'
 	rank: number | null
+	rankState: 'READY' | 'UPDATING' | 'UNAVAILABLE'
+	rankCheckedAt: string | null
 	movement: { direction: HomeRankDirection; places: number | null }
 	tournamentId: number | null
 	h2hMatchup: HomeH2HMatchup | null
@@ -431,8 +442,13 @@ export type HomePersonalDesk = {
 	playerName: string | null
 	region: string | null
 	overallPoints: number | null
+	pointsState: 'LIVE' | 'STALE' | 'SETTLING' | 'FINAL' | 'UNAVAILABLE'
+	pointsCheckedAt: string | null
 	overallRank: number | null
+	rankState: 'READY' | 'UPDATING' | 'UNAVAILABLE'
+	rankCheckedAt: string | null
 	teamValue: number | null
+	bank: number | null
 	leagueRanks: HomeLeagueRank[]
 	sourceCheckedAt: string | null
 }

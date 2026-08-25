@@ -20,7 +20,9 @@ import {
 	ChevronRight,
 	Minus
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+
+const AUTO_ADVANCE_MS = 7000
 
 export type HomePriceChangeCarouselLabels = {
 	title: string
@@ -35,9 +37,13 @@ export type HomePriceChangeCarouselLabels = {
 	pagerLabel: string
 	priceRises: string
 	priceFalls: string
+	trendRises: string
+	trendFalls: string
 	noPriceChanges: string
 	noPriceRises: string
 	noPriceFalls: string
+	noTrendRises: string
+	noTrendFalls: string
 	noLikelyToChange: string
 	likelyUnavailable: string
 	likelyUnavailableDescription: string
@@ -55,7 +61,8 @@ export type HomePriceChangeCarouselProps = {
 	}
 	likely: {
 		state: 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE'
-		players: PriceChangePlayer[]
+		rises: PriceChangePlayer[]
+		falls: PriceChangePlayer[]
 		notice: string | null
 	}
 	locale: string
@@ -177,7 +184,7 @@ function PriceChangeDirection({
 							<div className="min-w-0">
 								<a
 									href={priceChangeHref(change.player.playerId, locale)}
-									className="block whitespace-normal text-sm font-semibold leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+									className="block whitespace-nowrap text-sm font-semibold leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
 								>
 									{change.player.webName}
 								</a>
@@ -271,48 +278,113 @@ function LikelyPlayerRow({
 	labels: HomePriceChangeCarouselLabels
 }) {
 	const progressTone = player.progressPercent >= 0 ? 'bg-success' : 'bg-destructive'
+	const progressTextTone =
+		player.progressPercent >= 0 ? 'text-success' : 'text-destructive'
 
 	return (
-		<li className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 rounded-lg border border-border/50 bg-background/80 p-3">
-			<span className="row-span-2 self-start">
+		<li className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 border-b border-border/50 py-2.5 last:border-b-0">
+			<span className="row-span-3 self-start pt-0.5">
 				<MarketPositionBadge position={player.position} />
 			</span>
 			<div className="min-w-0">
 				<a
 					href={priceChangeHref(player.playerId, locale)}
-					className="block whitespace-normal text-sm font-semibold leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+					className="block whitespace-nowrap text-sm font-semibold leading-snug text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
 				>
 					{player.webName}
 				</a>
-				<p className="text-xs text-muted-foreground">
+				<p className="whitespace-nowrap text-[11px] leading-tight text-muted-foreground">
 					{player.teamShortName} · {formatPrice(player.currentPrice)}
 				</p>
 			</div>
-			<div className="col-start-2 mt-2 space-y-2">
-				<div className="flex items-center gap-2">
-					<div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-						<div
-							className={cn('h-full rounded-full', progressTone)}
-							style={{
-								width: `${Math.min(100, Math.abs(player.progressPercent))}%`
-							}}
-						/>
-					</div>
-					<span className="shrink-0 font-mono text-xs tabular-nums">
-						{formatPercent(player.progressPercent)}
-					</span>
+			<div className="col-start-2 mt-1 flex min-w-0 items-center gap-2">
+				<div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+					<div
+						className={cn('h-full rounded-full', progressTone)}
+						style={{
+							width: `${Math.min(100, Math.abs(player.progressPercent))}%`
+						}}
+					/>
 				</div>
-				<Badge
-					variant="outline"
+				<span
 					className={cn(
-						'w-fit whitespace-nowrap text-[10px]',
-						predictionStatusClass(player.status)
+						'shrink-0 font-display text-sm font-bold tabular-nums',
+						progressTextTone
 					)}
 				>
-					{labels.status[player.status]}
-				</Badge>
+					{formatPercent(player.progressPercent)}
+				</span>
 			</div>
+			<Badge
+				variant="outline"
+				className={cn(
+					'col-start-2 row-start-3 w-fit whitespace-nowrap px-1.5 py-0 text-[9px]',
+					predictionStatusClass(player.status)
+				)}
+			>
+				{labels.status[player.status]}
+			</Badge>
 		</li>
+	)
+}
+
+function PredictionDirection({
+	players,
+	direction,
+	locale,
+	title,
+	emptyLabel,
+	labels
+}: {
+	players: PriceChangePlayer[]
+	direction: 'RISE' | 'FALL'
+	locale: string
+	title: string
+	emptyLabel: string
+	labels: HomePriceChangeCarouselLabels
+}) {
+	const isRise = direction === 'RISE'
+	const Icon = isRise ? ArrowUpRight : ArrowDownRight
+	const tone = isRise ? 'text-success' : 'text-destructive'
+
+	return (
+		<section aria-label={title}>
+			<h3
+				className={cn(
+					'mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps',
+					tone
+				)}
+			>
+				<Icon
+					aria-hidden="true"
+					className="size-4"
+				/>
+				{title}
+				<span className="font-mono text-xs text-muted-foreground">
+					({players.length})
+				</span>
+			</h3>
+			{players.length === 0 ? (
+				<div className="rounded-lg border border-dashed border-border/70 bg-muted/15 px-3 py-5 text-center">
+					<Minus
+						aria-hidden="true"
+						className="mx-auto size-4 text-muted-foreground"
+					/>
+					<p className="mt-2 text-xs text-muted-foreground">{emptyLabel}</p>
+				</div>
+			) : (
+				<ul className="space-y-2">
+					{players.map(player => (
+						<LikelyPlayerRow
+							key={player.playerId}
+							player={player}
+							locale={locale}
+							labels={labels}
+						/>
+					))}
+				</ul>
+			)}
+		</section>
 	)
 }
 
@@ -345,17 +417,23 @@ function LikelyPage({
 					{likely.notice}
 				</p>
 			) : null}
-			<div className="max-h-[31rem] overflow-y-auto pr-1">
-				<ul className="space-y-2">
-					{likely.players.map(player => (
-						<LikelyPlayerRow
-							key={player.playerId}
-							player={player}
-							locale={locale}
-							labels={labels}
-						/>
-					))}
-				</ul>
+			<div className="grid gap-4 sm:grid-cols-2">
+				<PredictionDirection
+					players={likely.rises}
+					direction="RISE"
+					locale={locale}
+					title={labels.trendRises}
+					emptyLabel={labels.noTrendRises}
+					labels={labels}
+				/>
+				<PredictionDirection
+					players={likely.falls}
+					direction="FALL"
+					locale={locale}
+					title={labels.trendFalls}
+					emptyLabel={labels.noTrendFalls}
+					labels={labels}
+				/>
 			</div>
 		</div>
 	)
@@ -368,8 +446,23 @@ export function HomePriceChangeCarousel({
 	labels
 }: HomePriceChangeCarouselProps) {
 	const [activePage, setActivePage] = useState<0 | 1>(0)
-	const actualCount = actual.rises.length + actual.falls.length
-	const likelyCount = likely.players.length
+	const [isPaused, setIsPaused] = useState(false)
+
+	useEffect(() => {
+		if (
+			isPaused ||
+			window.matchMedia('(prefers-reduced-motion: reduce)').matches
+		) {
+			return
+		}
+
+		const interval = window.setInterval(() => {
+			setActivePage(currentPage => (currentPage === 0 ? 1 : 0))
+		}, AUTO_ADVANCE_MS)
+
+		return () => window.clearInterval(interval)
+	}, [activePage, isPaused])
+
 	const pageTitle = activePage === 0 ? labels.todayPage : labels.likelyPage
 	const pageDescription =
 		activePage === 0 ? labels.todayDescription : labels.likelyDescription
@@ -379,11 +472,23 @@ export function HomePriceChangeCarousel({
 		activePage === 0 ? labels.openRecorded : labels.openPredictions
 
 	return (
-		<Card className="flex h-full flex-col rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8">
+		<Card
+			className="flex h-full flex-col rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8"
+			onMouseEnter={() => setIsPaused(true)}
+			onMouseLeave={() => setIsPaused(false)}
+			onFocusCapture={() => setIsPaused(true)}
+			onBlurCapture={event => {
+				if (
+					!event.relatedTarget ||
+					!event.currentTarget.contains(event.relatedTarget as Node)
+				) {
+					setIsPaused(false)
+				}
+			}}
+		>
 			<div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div>
-					<p className="eyebrow">{labels.title}</p>
-					<h2 className="mt-1 font-display text-xl font-bold uppercase tracking-wide">
+					<h2 className="font-display text-xl font-bold uppercase tracking-wide">
 						{pageTitle}
 					</h2>
 					<p className="mt-1 max-w-sm text-xs text-muted-foreground">
@@ -422,10 +527,9 @@ export function HomePriceChangeCarousel({
 								? 'bg-background text-foreground shadow-sm'
 								: 'text-muted-foreground hover:text-foreground'
 						)}
-					>
-						<span className="truncate">{labels.todayPage}</span>
-						<span className="font-mono text-[10px]">({actualCount})</span>
-					</button>
+						>
+							<span className="truncate">{labels.todayPage}</span>
+						</button>
 					<button
 						type="button"
 						id="home-price-changes-likely-tab"
@@ -439,10 +543,9 @@ export function HomePriceChangeCarousel({
 								? 'bg-background text-foreground shadow-sm'
 								: 'text-muted-foreground hover:text-foreground'
 						)}
-					>
-						<span className="truncate">{labels.likelyPage}</span>
-						<span className="font-mono text-[10px]">({likelyCount})</span>
-					</button>
+						>
+							<span className="truncate">{labels.likelyPage}</span>
+						</button>
 				</div>
 				<div className="flex shrink-0 gap-1">
 					<Button

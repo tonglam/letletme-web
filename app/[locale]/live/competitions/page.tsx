@@ -107,11 +107,11 @@ export default async function Page({ params, searchParams }: PageProps) {
 					? requestedTournamentIdNumber
 					: null
 			const desk = await loadTournamentLiveDeskWithRevisionRecovery(
-				liveRef =>
+				(liveRef, recoveryOptions) =>
 					executeServerQuery<TournamentLivePointsResponse>(
 						GET_TOURNAMENT_LIVE_DESK,
 						{ entryId, selectedTournamentId, ref: liveRef },
-						{ cache: 'no-store' }
+						{ cache: 'no-store', ...recoveryOptions }
 					),
 				ref
 			)
