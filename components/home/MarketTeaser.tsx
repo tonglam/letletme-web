@@ -1,4 +1,5 @@
 import { HomeMarketCarousel } from '@/components/home/HomeMarketCarousel'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import type {
 	HomeMarketAvailabilityItem,
 	HomeMarketCarouselProps,
@@ -6,22 +7,18 @@ import type {
 } from '@/components/home/HomeMarketCarousel'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import type { HomeMarketSectionState } from '@/lib/graphql/operations/home'
 import {
 	type MarketOwnershipDay,
 	type MarketOwnershipCoverageStatus
 } from '@/lib/graphql/operations/market'
-import {
-	loadHomeMarketOwnership,
-	loadHomeMarketPulse
-} from '@/lib/home-market-seed-server'
+import { loadHomeMarketDesk } from '@/lib/home-market-seed-server'
 import {
 	availabilityBodyText,
-	marketAvailabilityStatusKey,
-	selectHomeAvailabilityUpdates
+	marketAvailabilityStatusKey
 } from '@/lib/market-availability'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
 import { getLocale, getTranslations } from 'next-intl/server'
-import { unstable_rethrow } from 'next/navigation'
 
 function formatCalendarDate(value: string | null, locale: string): string {
 	if (!value) return '—'
@@ -38,8 +35,6 @@ function formatCalendarDate(value: string | null, locale: string): string {
 /** Home teaser keeps a short list; full desks live on /explore/market. */
 const HOME_TEASER_LIMIT = 5
 const HOME_AVAILABILITY_LIMIT = 5
-/** Prefer publicly significant ownership; fill below this if the list is short. */
-const HOME_AVAILABILITY_MIN_OWNED = 1
 
 export function MarketTeaserFallback() {
 	return (
@@ -61,38 +56,22 @@ export function MarketTeaserFallback() {
 }
 
 export async function MarketTeaser() {
-	const [t, locale] = await Promise.all([
+	const [t, tHome, locale] = await Promise.all([
 		getTranslations('Market'),
+		getTranslations('Home'),
 		getLocale()
 	])
-	const [pulseResult, ownershipResult] = await Promise.allSettled([
-		loadHomeMarketPulse(),
-		loadHomeMarketOwnership()
-	])
+	const deskResult = await Promise.allSettled([loadHomeMarketDesk()])
 
-	if (pulseResult.status === 'rejected') {
-		unstable_rethrow(pulseResult.reason)
-		console.error('[market-teaser] pulse fetch failed:', pulseResult.reason)
+	if (deskResult[0].status === 'rejected') {
 		return null
 	}
 
-	const pulse = pulseResult.value.homeMarketPulse
-	const ownership: MarketOwnershipDay | null =
-		ownershipResult.status === 'fulfilled'
-			? ownershipResult.value.marketOwnershipDay
-			: null
-	if (ownershipResult.status === 'rejected') {
-		unstable_rethrow(ownershipResult.reason)
-		console.error(
-			'[market-teaser] ownership fetch failed:',
-			ownershipResult.reason
-		)
-	}
+	const desk = deskResult[0].value.homeMarketDesk
+	const ownership: MarketOwnershipDay | null = desk.ownership
 
-	const ownershipReady = ownership?.coverage.status === 'READY'
-	const ownershipCanRender =
-		ownership !== null &&
-		(ownershipReady || ownership.coverage.status === 'PARTIAL')
+	const ownershipReady = desk.ownershipState === 'AVAILABLE'
+	const ownershipCanRender = ownershipReady && ownership !== null
 	// Keep rise / fall separate so the desk reads like a transfer board, not a mixed top-3.
 	const ownershipRisers = [...(ownership?.risers ?? [])]
 		.sort((a, b) => b.changePercentagePoints - a.changePercentagePoints)
@@ -104,10 +83,9 @@ export async function MarketTeaser() {
 		t('ownershipPercentagePoints', {
 			value: `${value > 0 ? '+' : ''}${value.toFixed(1)}`
 		})
-	const availability = selectHomeAvailabilityUpdates(
-		pulse.availabilityUpdates,
-		HOME_AVAILABILITY_LIMIT,
-		HOME_AVAILABILITY_MIN_OWNED
+	const availability = desk.availabilityUpdates.slice(
+		0,
+		HOME_AVAILABILITY_LIMIT
 	)
 
 	const ownershipStatusCopy: Record<MarketOwnershipCoverageStatus, string> = {
@@ -127,9 +105,11 @@ export async function MarketTeaser() {
 					)
 				})
 			: ownershipStatusCopy[ownership.coverage.status]
-		: t('ownershipDataUnavailable')
+		: desk.ownershipState === 'EMPTY'
+			? t('homeEmptyDescription', { time: '09:25–09:35 UTC+8' })
+			: t('ownershipDataUnavailable')
 	const ownershipState: HomeMarketCarouselProps['ownership'] =
-		ownership === null
+		desk.ownershipState === 'UNAVAILABLE'
 			? {
 					state: 'UNAVAILABLE',
 					risers: [],
@@ -190,29 +170,45 @@ export async function MarketTeaser() {
 			: t('homeEmptyDescription', { time: '09:25–09:35 UTC+8' })
 
 	return (
-		<HomeMarketCarousel
-			ownership={ownershipState}
-			availability={availabilityItems}
-			locale={locale}
-			labels={{
-				ownershipPage: t('ownershipTitle'),
-				ownershipDescription: coverageCopy,
-				availabilityPage: t('availabilityWatch'),
-				availabilityDescription: t('homeAvailabilityDescription'),
-				openMarket: t('openMarket'),
-				previousPage: t('homeMarketPrevious'),
-				nextPage: t('homeMarketNext'),
-				pagerLabel: t('homeMarketPagerLabel'),
-				ownershipRising: t('homeOwnershipRising'),
-				ownershipFalling: t('homeOwnershipFalling'),
-				noOwnershipRisers: t('noOwnershipRisers'),
-				noOwnershipFallers: t('noOwnershipFallers'),
-				ownershipEmptyTitle: t('ownershipStatus.NO_DATA'),
-				ownershipEmptyDescription,
-				ownershipUnavailableTitle: t('ownershipDataUnavailable'),
-				ownershipUnavailableDescription: t('ownershipDataUnavailable'),
-				availabilityEmpty: t('noAvailabilityUpdates')
-			}}
-		/>
+		<>
+			<HomeMarketCarousel
+				ownership={ownershipState}
+				availability={availabilityItems}
+				availabilityState={desk.availabilityState as HomeMarketSectionState}
+				locale={locale}
+				labels={{
+					ownershipPage: t('ownershipTitle'),
+					ownershipDescription: coverageCopy,
+					availabilityPage: t('availabilityWatch'),
+					availabilityDescription: t('homeAvailabilityDescription'),
+					openMarket: t('openMarket'),
+					previousPage: t('homeMarketPrevious'),
+					nextPage: t('homeMarketNext'),
+					pause: tHome('homeCarouselPause'),
+					resume: tHome('homeCarouselResume'),
+					pagerLabel: t('homeMarketPagerLabel'),
+					ownershipRising: t('homeOwnershipRising'),
+					ownershipFalling: t('homeOwnershipFalling'),
+					noOwnershipRisers: t('noOwnershipRisers'),
+					noOwnershipFallers: t('noOwnershipFallers'),
+					ownershipEmptyTitle: t('ownershipStatus.NO_DATA'),
+					ownershipEmptyDescription,
+					ownershipUnavailableTitle: t('ownershipDataUnavailable'),
+					ownershipUnavailableDescription: t('ownershipDataUnavailable'),
+					availabilityEmpty: t('noAvailabilityUpdates')
+				}}
+			/>
+			<RouteReadyMarker
+				name="HOME_MARKET_READY"
+				ready={
+					desk.ownershipState !== 'UNAVAILABLE' ||
+					desk.availabilityState !== 'UNAVAILABLE'
+				}
+				readyKey={desk.revision}
+				audienceHint="public"
+				goodMs={2_000}
+				poorMs={3_000}
+			/>
+		</>
 	)
 }

@@ -1,14 +1,15 @@
 import { HomePriceChangeCarousel } from '@/components/home/HomePriceChangeCarousel'
 import type { HomePriceChangeCarouselProps } from '@/components/home/HomePriceChangeCarousel'
+import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import type { HomeMarketDesk } from '@/lib/graphql/operations/home'
 import type { MarketPriceChange } from '@/lib/graphql/operations/market'
 import type { PriceChangeBoard } from '@/lib/graphql/operations/price-changes'
-import { loadHomeMarketPulse } from '@/lib/home-market-seed-server'
+import { loadHomeMarketDesk } from '@/lib/home-market-seed-server'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
 import { getLocale, getTranslations } from 'next-intl/server'
-import { unstable_rethrow } from 'next/navigation'
 
 function formatCalendarDate(value: string | null, locale: string): string {
 	if (!value) return '—'
@@ -22,20 +23,15 @@ function formatCalendarDate(value: string | null, locale: string): string {
 	}).format(parsed)
 }
 
-function selectLatestPriceChanges(priceChanges: MarketPriceChange[]): {
+function mapActualPriceChanges(desk: HomeMarketDesk): {
 	date: string | null
 	changes: MarketPriceChange[]
 } {
-	const date =
-		Array.from(new Set(priceChanges.map(change => change.changeDate)))
-			.sort()
-			.at(-1) ?? null
-	const changes = (date
-		? priceChanges.filter(change => change.changeDate === date)
-		: priceChanges
-	).filter(change => change.change !== 0)
-
-	return { date, changes }
+	const date = desk.priceChanges[0]?.changeDate ?? null
+	return {
+		date,
+		changes: desk.priceChanges.filter(change => change.change !== 0)
+	}
 }
 
 function compareProgress(
@@ -115,19 +111,14 @@ export async function HomePriceChangeDesk() {
 		getTranslations('PriceChanges'),
 		getLocale()
 	])
-	const [pulseResult, predictionResult] = await Promise.allSettled([
-		loadHomeMarketPulse(),
+	const [deskResult, predictionResult] = await Promise.allSettled([
+		loadHomeMarketDesk(),
 		loadPriceChangeBoard()
 	])
 
 	let actual: HomePriceChangeCarouselProps['actual']
 	let actualDate: string | null = null
-	if (pulseResult.status === 'rejected') {
-		unstable_rethrow(pulseResult.reason)
-		console.error(
-			'[home-price-change-desk] pulse fetch failed:',
-			pulseResult.reason
-		)
+	if (deskResult.status === 'rejected') {
 		actual = {
 			state: 'UNAVAILABLE',
 			coverageLabel: null,
@@ -135,15 +126,20 @@ export async function HomePriceChangeDesk() {
 			falls: []
 		}
 	} else {
-		const pulse = pulseResult.value.homeMarketPulse
-		const latest = selectLatestPriceChanges(pulse.priceChanges)
-		actualDate = latest.date ?? pulse.coverage.latestDate ?? null
+		const desk = deskResult.value.homeMarketDesk
+		const latest = mapActualPriceChanges(desk)
+		actualDate = latest.date
 		actual = {
-			state: latest.changes.length > 0 ? 'AVAILABLE' : 'EMPTY',
+			state:
+				desk.priceChangesState === 'UNAVAILABLE'
+					? 'UNAVAILABLE'
+					: desk.priceChangesState === 'EMPTY' || latest.changes.length === 0
+						? 'EMPTY'
+						: 'AVAILABLE',
 			coverageLabel: actualDate
 				? tHome('homePriceChangesTodayDescription', {
-					date: formatCalendarDate(actualDate, locale)
-				})
+						date: formatCalendarDate(actualDate, locale)
+					})
 				: null,
 			rises: latest.changes
 				.filter(change => change.direction === 'RISE')
@@ -158,11 +154,6 @@ export async function HomePriceChangeDesk() {
 
 	let likely: HomePriceChangeCarouselProps['likely']
 	if (predictionResult.status === 'rejected') {
-		unstable_rethrow(predictionResult.reason)
-		console.error(
-			'[home-price-change-desk] prediction fetch failed:',
-			predictionResult.reason
-		)
 		likely = {
 			state: 'UNAVAILABLE',
 			rises: [],
@@ -196,21 +187,21 @@ export async function HomePriceChangeDesk() {
 		openPredictions: tHome('openPredictions'),
 		previousPage: tHome('homePriceChangesPrevious'),
 		nextPage: tHome('homePriceChangesNext'),
+		pause: tHome('homeCarouselPause'),
+		resume: tHome('homeCarouselResume'),
 		pagerLabel: tHome('homePriceChangesPagerLabel'),
 		priceRises: tMarket('priceRises'),
 		priceFalls: tMarket('priceFalls'),
 		trendRises: tHome('homePriceTrendRises'),
 		trendFalls: tHome('homePriceTrendFalls'),
 		noPriceChanges: tHome('homeNoPriceChanges'),
-			noPriceRises: tHome('homeNoPriceRises'),
-			noPriceFalls: tHome('homeNoPriceFalls'),
-			noTrendRises: tHome('homeNoTrendRises'),
-			noTrendFalls: tHome('homeNoTrendFalls'),
-			noLikelyToChange: tHome('homeNoLikelyToChange'),
+		noPriceRises: tHome('homeNoPriceRises'),
+		noPriceFalls: tHome('homeNoPriceFalls'),
+		noTrendRises: tHome('homeNoTrendRises'),
+		noTrendFalls: tHome('homeNoTrendFalls'),
+		noLikelyToChange: tHome('homeNoLikelyToChange'),
 		likelyUnavailable: tHome('homeLikelyUnavailable'),
-		likelyUnavailableDescription: tHome(
-			'homeLikelyUnavailableDescription'
-		),
+		likelyUnavailableDescription: tHome('homeLikelyUnavailableDescription'),
 		dataUnavailable: tMarket('dataUnavailable'),
 		dataUnavailableDescription: tMarket('dataUnavailableDescription'),
 		status: {
@@ -225,11 +216,21 @@ export async function HomePriceChangeDesk() {
 	}
 
 	return (
-		<HomePriceChangeCarousel
-			actual={actual}
-			likely={likely}
-			locale={locale}
-			labels={labels}
-		/>
+		<>
+			<HomePriceChangeCarousel
+				actual={actual}
+				likely={likely}
+				locale={locale}
+				labels={labels}
+			/>
+			<RouteReadyMarker
+				name="HOME_PRICE_CHANGES_READY"
+				ready={actual.state !== 'UNAVAILABLE' || likely.state !== 'UNAVAILABLE'}
+				readyKey={`${actual.state}:${actualDate ?? 'none'}:${likely.state}`}
+				audienceHint="public"
+				goodMs={2_000}
+				poorMs={3_000}
+			/>
+		</>
 	)
 }

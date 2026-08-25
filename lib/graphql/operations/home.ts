@@ -78,6 +78,7 @@ export const GET_HOME_GAMEWEEK = /* GraphQL */ `
 				boardsState
 				overview {
 					highestPoints
+					highestScoringEntry
 					mostCaptained {
 						id
 						webName
@@ -292,6 +293,89 @@ export const GET_HOME_MARKET_OWNERSHIP = /* GraphQL */ `
 	}
 `
 
+export const GET_HOME_MARKET_DESK = /* GraphQL */ `
+	query GetHomeMarketDesk {
+		homeMarketDesk {
+			revision
+			capturedAt
+			ownershipState
+			ownership {
+				period
+				date
+				coverage {
+					status
+					requestedDays
+					observedDays
+					firstDate
+					latestDate
+					fromDate
+					toDate
+					missingDates
+					capturedAt
+					complete
+					stale
+				}
+				risers {
+					player {
+						...HomeMarketPlayerFields
+					}
+					fromSelectedByPercent
+					toSelectedByPercent
+					changePercentagePoints
+					fromDate
+					toDate
+				}
+				fallers {
+					player {
+						...HomeMarketPlayerFields
+					}
+					fromSelectedByPercent
+					toSelectedByPercent
+					changePercentagePoints
+					fromDate
+					toDate
+				}
+			}
+			priceChangesState
+			priceChanges {
+				player {
+					...HomeMarketPlayerFields
+				}
+				changeDate
+				oldPrice
+				newPrice
+				change
+				direction
+			}
+			availabilityState
+			availabilityUpdates {
+				player {
+					...HomeMarketPlayerFields
+				}
+				status
+				previousStatus
+				news
+				newsAdded
+				observedDate
+				chanceOfPlayingThisRound
+				chanceOfPlayingNextRound
+			}
+		}
+	}
+
+	fragment HomeMarketPlayerFields on MarketPlayer {
+		playerId
+		playerCode
+		webName
+		teamId
+		teamName
+		teamShortName
+		position
+		price
+		selectedByPercent
+	}
+`
+
 export type HomeCoreEventContext = {
 	season: string
 	revision: string
@@ -470,4 +554,21 @@ export type HomeMarketPulseResponse = {
 
 export type HomeMarketOwnershipResponse = {
 	marketOwnershipDay: MarketOwnershipDay
+}
+
+export type HomeMarketSectionState = 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE'
+
+export type HomeMarketDesk = {
+	revision: string
+	capturedAt: string | null
+	ownershipState: HomeMarketSectionState
+	ownership: MarketOwnershipDay | null
+	priceChangesState: HomeMarketSectionState
+	priceChanges: MarketPriceChange[]
+	availabilityState: HomeMarketSectionState
+	availabilityUpdates: MarketAvailabilityUpdate[]
+}
+
+export type HomeMarketDeskResponse = {
+	homeMarketDesk: HomeMarketDesk
 }

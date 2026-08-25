@@ -1,8 +1,11 @@
 'use client'
 
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
+import {
+	HomeAutoCarousel,
+	type HomeAutoCarouselSlide
+} from '@/components/home/HomeAutoCarousel'
 import { MarketPositionBadge } from '@/components/data/MarketMarkup'
-import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Link } from '@/i18n/navigation'
 import type {
@@ -10,17 +13,7 @@ import type {
 	MarketOwnershipChange
 } from '@/lib/graphql/operations/market'
 import { cn } from '@/lib/utils'
-import {
-	ArrowDownRight,
-	ArrowRight,
-	ArrowUpRight,
-	ChevronLeft,
-	ChevronRight,
-	Minus
-} from 'lucide-react'
-import { useEffect, useState } from 'react'
-
-const AUTO_ADVANCE_MS = 7000
+import { ArrowDownRight, ArrowRight, ArrowUpRight, Minus } from 'lucide-react'
 
 export type HomeMarketOwnershipMover = {
 	player: MarketOwnershipChange['player']
@@ -44,6 +37,8 @@ export type HomeMarketCarouselLabels = {
 	openMarket: string
 	previousPage: string
 	nextPage: string
+	pause: string
+	resume: string
 	pagerLabel: string
 	ownershipRising: string
 	ownershipFalling: string
@@ -63,6 +58,7 @@ export type HomeMarketCarouselProps = {
 		fallers: HomeMarketOwnershipMover[]
 	}
 	availability: HomeMarketAvailabilityItem[]
+	availabilityState: 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE'
 	locale: string
 	labels: HomeMarketCarouselLabels
 }
@@ -329,177 +325,70 @@ function OwnershipPage({
 export function HomeMarketCarousel({
 	ownership,
 	availability,
+	availabilityState,
 	locale,
 	labels
 }: HomeMarketCarouselProps) {
-	const [activePage, setActivePage] = useState<0 | 1>(0)
-	const [isPaused, setIsPaused] = useState(false)
-
-	useEffect(() => {
-		if (
-			isPaused ||
-			window.matchMedia('(prefers-reduced-motion: reduce)').matches
-		) {
-			return
+	const slides: HomeAutoCarouselSlide[] = [
+		{
+			id: 'ownership',
+			label: labels.ownershipPage,
+			enabled: ownership.state !== 'UNAVAILABLE',
+			content: (
+				<OwnershipPage
+					ownership={ownership}
+					labels={labels}
+					locale={locale}
+				/>
+			)
+		},
+		{
+			id: 'availability',
+			label: labels.availabilityPage,
+			enabled: availabilityState !== 'UNAVAILABLE',
+			content: (
+				<AvailabilityTeaserList
+					updates={availability}
+					emptyLabel={labels.availabilityEmpty}
+					locale={locale}
+				/>
+			)
 		}
-
-		const interval = window.setInterval(() => {
-			setActivePage(currentPage => (currentPage === 0 ? 1 : 0))
-		}, AUTO_ADVANCE_MS)
-
-		return () => window.clearInterval(interval)
-	}, [activePage, isPaused])
-
-	const pageTitle =
-		activePage === 0 ? labels.ownershipPage : labels.availabilityPage
-	const pageDescription =
-		activePage === 0
-			? labels.ownershipDescription
-			: labels.availabilityDescription
+	]
+	if (!slides.some(slide => slide.enabled !== false)) return null
 
 	return (
-		<Card
-			className="flex h-full flex-col rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8"
-			aria-labelledby="home-market-title"
-			onMouseEnter={() => setIsPaused(true)}
-			onMouseLeave={() => setIsPaused(false)}
-			onFocusCapture={() => setIsPaused(true)}
-			onBlurCapture={event => {
-				if (
-					!event.relatedTarget ||
-					!event.currentTarget.contains(event.relatedTarget as Node)
-				) {
-					setIsPaused(false)
-				}
-			}}
-		>
-			<div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-				<div>
-					<h2
-						id="home-market-title"
-						className="font-display text-xl font-bold uppercase tracking-wide"
+		<Card className="flex h-full flex-col rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8">
+			<HomeAutoCarousel
+				slides={slides}
+				labels={labels}
+				dataAttribute="market"
+				renderHeader={slide => (
+					<div>
+						<h2 className="font-display text-xl font-bold uppercase tracking-wide">
+							{slide.label}
+						</h2>
+						<p className="mt-1 max-w-sm text-xs text-muted-foreground">
+							{slide.id === 'ownership'
+								? labels.ownershipDescription
+								: labels.availabilityDescription}
+						</p>
+					</div>
+				)}
+				renderAction={() => (
+					<Link
+						href="/explore/market"
+						prefetch={false}
+						className="inline-flex min-h-9 shrink-0 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
 					>
-						{pageTitle}
-					</h2>
-					<p className="mt-1 max-w-sm text-xs text-muted-foreground">
-						{pageDescription}
-					</p>
-				</div>
-				<Link
-					href="/explore/market"
-					prefetch={false}
-					className="inline-flex min-h-9 shrink-0 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
-				>
-					{labels.openMarket}
-					<ArrowRight
-						aria-hidden="true"
-						className="size-4"
-					/>
-				</Link>
-			</div>
-
-			<div className="mb-5 flex flex-wrap items-center gap-3">
-				<div
-					role="tablist"
-					aria-label={labels.pagerLabel}
-					className="grid min-w-0 flex-1 grid-cols-2 rounded-lg border border-border/70 bg-muted/20 p-1"
-				>
-					<button
-						type="button"
-						id="home-market-ownership-tab"
-						role="tab"
-						aria-selected={activePage === 0}
-						aria-controls="home-market-ownership"
-						onClick={() => setActivePage(0)}
-						className={cn(
-							'flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors',
-							activePage === 0
-								? 'bg-background text-foreground shadow-sm'
-								: 'text-muted-foreground hover:text-foreground'
-						)}
-					>
-						<span className="truncate">{labels.ownershipPage}</span>
-					</button>
-					<button
-						type="button"
-						id="home-market-availability-tab"
-						role="tab"
-						aria-selected={activePage === 1}
-						aria-controls="home-market-availability"
-						onClick={() => setActivePage(1)}
-						className={cn(
-							'flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors',
-							activePage === 1
-								? 'bg-background text-foreground shadow-sm'
-								: 'text-muted-foreground hover:text-foreground'
-						)}
-					>
-						<span className="truncate">{labels.availabilityPage}</span>
-					</button>
-				</div>
-				<div className="flex shrink-0 gap-1">
-					<Button
-						variant="outline"
-						size="icon"
-						type="button"
-						disabled={activePage === 0}
-						aria-label={labels.previousPage}
-						onClick={() => setActivePage(0)}
-						className="size-9"
-					>
-						<ChevronLeft aria-hidden="true" />
-					</Button>
-					<Button
-						variant="outline"
-						size="icon"
-						type="button"
-						disabled={activePage === 1}
-						aria-label={labels.nextPage}
-						onClick={() => setActivePage(1)}
-						className="size-9"
-					>
-						<ChevronRight aria-hidden="true" />
-					</Button>
-				</div>
-			</div>
-
-			<div
-				className="overflow-hidden"
-				aria-live="polite"
-			>
-				<div
-					className="flex w-full motion-reduce:transition-none"
-					style={{
-						transform: `translateX(-${activePage * 100}%)`,
-						transition: 'transform 280ms ease-out'
-					}}
-				>
-					<section
-						id="home-market-ownership"
-						role="tabpanel"
-						aria-labelledby="home-market-ownership-tab"
-						className="min-w-full"
-					>
-						<OwnershipPage
-							ownership={ownership}
-							labels={labels}
-							locale={locale}
+						{labels.openMarket}
+						<ArrowRight
+							aria-hidden="true"
+							className="size-4"
 						/>
-					</section>
-					<section
-						id="home-market-availability"
-						role="tabpanel"
-						aria-labelledby="home-market-availability-tab"
-						className="min-w-full"
-					>
-						<AvailabilityTeaserList
-							updates={availability}
-							emptyLabel={labels.availabilityEmpty}
-							locale={locale}
-						/>
-					</section>
-				</div>
-			</div>
+					</Link>
+				)}
+			/>
 		</Card>
 	)
 }

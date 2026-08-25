@@ -434,6 +434,7 @@ const server = createServer((request, response) => {
 							boardsState: 'AVAILABLE',
 							overview: {
 								highestPoints: 101,
+								highestScoringEntry: 15702,
 								mostCaptained: {
 									id: 1,
 									webName: 'Saka',
@@ -1311,6 +1312,7 @@ const server = createServer((request, response) => {
 			query.includes('GetMarketPulse') ||
 			query.includes('GetHomeMarketPulse') ||
 			query.includes('GetHomeMarketOwnership') ||
+			query.includes('GetHomeMarketDesk') ||
 			query.includes('GetFixturePlanningSignals') ||
 			query.includes('GetFixturePlanningOwnershipGameweek') ||
 			query.includes('GetMarketOwnershipOverview') ||
@@ -1397,9 +1399,20 @@ const server = createServer((request, response) => {
 				newPlayers: [],
 				priceChanges: []
 			}
-			const data =
-				query.includes('GetMarketOwnershipDay') ||
-				query.includes('GetHomeMarketOwnership')
+			const homeMarketDesk = {
+				revision: 'market-7',
+				capturedAt: '2026-08-03T09:40:00.000Z',
+				ownershipState: 'AVAILABLE',
+				ownership: marketOwnershipDay,
+				priceChangesState: 'EMPTY',
+				priceChanges: [],
+				availabilityState: 'EMPTY',
+				availabilityUpdates: []
+			}
+			const data = query.includes('GetHomeMarketDesk')
+				? { homeMarketDesk }
+				: query.includes('GetMarketOwnershipDay') ||
+					  query.includes('GetHomeMarketOwnership')
 					? { marketOwnershipDay }
 					: query.includes('GetMarketOwnershipOverview')
 						? {

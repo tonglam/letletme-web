@@ -197,6 +197,8 @@
 		"personalLeagueNext": "Next league group",
 		"personalLeaguePause": "Pause automatic league rotation",
 		"personalLeagueResume": "Resume automatic league rotation",
+		"homeCarouselPause": "Pause automatic rotation",
+		"homeCarouselResume": "Resume automatic rotation",
 		"personalLeaguePrivate": "Private",
 		"personalLeaguePublic": "Public",
 		"personalLeagueTeams": "{count, plural, one {# team} other {# teams}}",

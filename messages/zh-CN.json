@@ -197,6 +197,8 @@
 		"personalLeagueNext": "下一个联赛分类",
 		"personalLeaguePause": "暂停自动切换联赛分类",
 		"personalLeagueResume": "继续自动切换联赛分类",
+		"homeCarouselPause": "暂停自动切换",
+		"homeCarouselResume": "继续自动切换",
 		"personalLeaguePrivate": "私人",
 		"personalLeaguePublic": "公开",
 		"personalLeagueTeams": "{count} 支队伍",

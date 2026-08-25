@@ -1,6 +1,26 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL
+const e2eDatabaseUrl = process.env.E2E_DATABASE_URL?.trim()
+if (!e2eDatabaseUrl) {
+	throw new Error(
+		'E2E_DATABASE_URL is required for Playwright and must point to an isolated test database'
+	)
+}
+try {
+	const parsedE2eDatabaseUrl = new URL(e2eDatabaseUrl)
+	if (parsedE2eDatabaseUrl.username !== 'letletme_web_runtime') {
+		throw new Error('E2E_DATABASE_URL must use the letletme_web_runtime role')
+	}
+} catch (error) {
+	if (
+		error instanceof Error &&
+		error.message.includes('letletme_web_runtime')
+	) {
+		throw error
+	}
+	throw new Error('E2E_DATABASE_URL must be a valid PostgreSQL URL')
+}
 // Chromium treats localhost as a trustworthy origin, so production-shaped
 // __Secure Better Auth cookies remain testable without weakening them.
 const localWebPort = process.env.E2E_WEB_PORT ?? '3100'
@@ -58,6 +78,8 @@ export default defineConfig({
 							'playwright-backend-proxy-secret-at-least-32-bytes',
 						BETTER_AUTH_SECRET:
 							'playwright-better-auth-secret-at-least-32-bytes',
+						E2E_DATABASE_URL: e2eDatabaseUrl,
+						DATABASE_URL: e2eDatabaseUrl,
 						GRAPHQL_ENDPOINT: `${graphqlFixtureURL}/graphql`,
 						GRAPHQL_SERVICE_TOKEN: graphqlServiceToken
 					},
