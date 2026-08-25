@@ -161,12 +161,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes "vercel@${VERCEL_CLI_VERSION}" link --yes \
-            --scope "$VERCEL_ORG_ID" \
-            --project "$VERCEL_PROJECT_ID"
-          npx --yes "vercel@${VERCEL_CLI_VERSION}" pull --yes --environment=production
-          npx --yes "vercel@${VERCEL_CLI_VERSION}" build --prod
-          npx --yes "vercel@${VERCEL_CLI_VERSION}" deploy --prebuilt --prod --skip-domain --format=json > /tmp/vercel-candidate.json
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" pull --yes \
+            --environment=production \
+            --token "$VERCEL_TOKEN"
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" build --prod \
+            --token "$VERCEL_TOKEN"
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" deploy \
+            --prebuilt \
+            --prod \
+            --skip-domain \
+            --format=json \
+            --token "$VERCEL_TOKEN" > /tmp/vercel-candidate.json
           candidate_url="$(node --input-type=module -e '
             import fs from "node:fs";
             const value = JSON.parse(fs.readFileSync("/tmp/vercel-candidate.json", "utf8"));
@@ -340,7 +345,9 @@ jobs:
           ssh -F "$ssh_dir/config" letletme-tencent \
             "sudo /usr/local/libexec/letletme-release verify '$RELEASE_SHA'"
 
-          npx --yes "vercel@${VERCEL_CLI_VERSION}" promote "$CANDIDATE_URL" --yes
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" promote "$CANDIDATE_URL" \
+            --yes \
+            --token "$VERCEL_TOKEN"
           production_headers="$(curl --fail --silent --show-error --max-time 15 -D - -o /dev/null https://vercel-origin.letletme.top/healthz)"
           grep -qi "^x-letletme-release: $RELEASE_SHA" <<<"$production_headers"
 
