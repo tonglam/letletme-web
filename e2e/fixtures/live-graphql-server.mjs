@@ -1308,6 +1308,64 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
+		if (query.includes('GetPriceChangeBoard')) {
+			json(response, 200, {
+				data: {
+					priceChangeBoard: {
+						status: 'READY',
+						source: 'FPL_BOOTSTRAP',
+						deadline: '2026-08-04T10:00:00.000Z',
+						nextDeadlines: [],
+						fetchedAt: '2026-08-03T09:40:00.000Z',
+						staleAt: '2026-08-04T09:40:00.000Z',
+						revision: 'price-changes-7',
+						expectedPlayerCount: 2,
+						observedPlayerCount: 2,
+						players: [
+							{
+								playerId: 1,
+								playerCode: 1001,
+								webName: 'Saka',
+								teamId: 1,
+								teamName: 'Arsenal',
+								teamShortName: 'ARS',
+								position: 'MID',
+								currentPrice: 100,
+								selectedByPercent: 32.5,
+								progressPercent: 64.3,
+								hourlyRate: 1.2,
+								status: 'LIKELY_RISE',
+								ownershipTrend: 'UP',
+								transfersInEvent: 12000,
+								transfersOutEvent: 3000,
+								lockedUntil: null,
+								calibrating: false
+							},
+							{
+								playerId: 2,
+								playerCode: 1002,
+								webName: 'Palmer',
+								teamId: 2,
+								teamName: 'Chelsea',
+								teamShortName: 'CHE',
+								position: 'MID',
+								currentPrice: 105,
+								selectedByPercent: 41.2,
+								progressPercent: -58.7,
+								hourlyRate: -1.1,
+								status: 'LIKELY_FALL',
+								ownershipTrend: 'DOWN',
+								transfersInEvent: 3000,
+								transfersOutEvent: 12000,
+								lockedUntil: null,
+								calibrating: false
+							}
+						]
+					}
+				}
+			})
+			return
+		}
 		if (
 			query.includes('GetMarketPulse') ||
 			query.includes('GetHomeMarketPulse') ||

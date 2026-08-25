@@ -365,7 +365,7 @@ export function HomeMarketCarousel({
 			<HomeAutoCarousel
 				slides={slides}
 				labels={labels}
-				dataAttribute="market"
+				dataAttribute="home-market"
 				renderHeader={slide => (
 					<div>
 						<h2

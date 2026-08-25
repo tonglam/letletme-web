@@ -473,14 +473,20 @@ export function HomePriceChangeCarousel({
 	if (!slides.some(slide => slide.enabled !== false)) return null
 
 	return (
-		<Card className="flex h-full flex-col rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8">
+		<Card
+			aria-labelledby="home-price-changes-title"
+			className="flex h-full flex-col rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8"
+		>
 			<HomeAutoCarousel
 				slides={slides}
 				labels={labels}
-				dataAttribute="price-changes"
+				dataAttribute="home-price-changes"
 				renderHeader={slide => (
 					<div>
-						<h2 className="font-display text-xl font-bold uppercase tracking-wide">
+						<h2
+							id="home-price-changes-title"
+							className="font-display text-xl font-bold uppercase tracking-wide"
+						>
 							{slide.label}
 						</h2>
 						<p className="mt-1 max-w-sm text-xs text-muted-foreground">
