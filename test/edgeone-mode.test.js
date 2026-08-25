@@ -68,15 +68,15 @@ function scopedReleaseRule(overrides = {}) {
 }
 
 test('formal split rule is limited to anonymous mainland safe reads', async () => {
-	const module = await loadModule()
-	assert.equal(module.RELEASE_RULE_CONDITION, RELEASE_RULE_CONDITION)
-	assert.match(module.RELEASE_RULE_CONDITION, /\['GET', 'HEAD'\]/)
-	assert.match(module.RELEASE_RULE_CONDITION, /\^\/api/)
-	assert.match(module.RELEASE_RULE_CONDITION, /auth/)
-	assert.match(module.RELEASE_RULE_CONDITION, /acme-challenge/)
+	const edgeoneModule = await loadModule()
+	assert.equal(edgeoneModule.RELEASE_RULE_CONDITION, RELEASE_RULE_CONDITION)
+	assert.match(edgeoneModule.RELEASE_RULE_CONDITION, /\['GET', 'HEAD'\]/)
+	assert.match(edgeoneModule.RELEASE_RULE_CONDITION, /\^\/api/)
+	assert.match(edgeoneModule.RELEASE_RULE_CONDITION, /auth/)
+	assert.match(edgeoneModule.RELEASE_RULE_CONDITION, /acme-challenge/)
 	for (const header of ['upgrade', 'next-action', 'authorization', 'cookie']) {
 		assert.match(
-			module.RELEASE_RULE_CONDITION,
+			edgeoneModule.RELEASE_RULE_CONDITION,
 			new RegExp(`headers\\['${header}'\\]\\} exists`)
 		)
 	}
