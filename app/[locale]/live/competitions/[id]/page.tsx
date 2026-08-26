@@ -119,6 +119,11 @@ export default async function Page({ params, searchParams }: PageProps) {
 			const selectedTournament =
 				metadata.tournament ?? managedResult.data?.managedTournament ?? null
 			if (!selectedTournament) {
+				// A manager-only viewer has no participant metadata. Do not turn a
+				// transient management lookup failure into a false no-access result;
+				// only tolerate that soft failure once metadata has already authorized
+				// the detail page.
+				if (managedResult.error) throw managedResult.error
 				loadError = 'no_access'
 			} else {
 				tournament = selectedTournament

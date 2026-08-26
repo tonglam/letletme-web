@@ -425,6 +425,7 @@ export default function TournamentDetailClient({
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
 	const failedEntryCountRef = useRef(softError ? 1 : 0)
 	const refreshGenerationRef = useRef(0)
+	const appliedBoardSearchRef = useRef('')
 	const searchQueryRef = useRef(searchQuery)
 	const handleSearchQueryChange = useCallback((query: string): void => {
 		if (searchQueryRef.current === query) return
@@ -656,6 +657,7 @@ export default function TournamentDetailClient({
 					)
 					if (requestGeneration !== refreshGenerationRef.current) return
 					setBoardPage(page)
+					appliedBoardSearchRef.current = search
 					failedEntryCountRef.current = page.failedEntryCount
 					setRows(page.rows.map(boardRowToCalcData))
 					setStaleEntryIds(new Set())
@@ -748,6 +750,7 @@ export default function TournamentDetailClient({
 			!currentGameweek ||
 			!boardPage ||
 			!boardPage.hasMore ||
+			appliedBoardSearchRef.current !== searchQuery.trim() ||
 			isRefreshing ||
 			loadMoreInFlightRef.current ||
 			rateLimitSecondsRef.current > 0 ||
