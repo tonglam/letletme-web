@@ -84,21 +84,35 @@ export async function POST(request: Request) {
 		const signal = metric
 			? toClientSignal(metric)
 			: toRuntimeSignal(runtime as ClientRuntimePayload)
-		after(() => forwardClientSignalBatch(signal))
-		console.info(
-			JSON.stringify({
-				event: 'client_signal_accepted',
-				client: 'web',
-				metric: metric ? metricForWebVital(metric.name) : 'runtime_error',
-				surface: metric
-					? surfaceForPage(metric.page)
-					: surfaceForPage(runtime?.page ?? ''),
-				sampleSource:
-					(metric?.source ?? runtime?.source) === 'synthetic'
-						? 'synthetic'
-						: 'real'
-			})
-		)
+		if (signal) after(() => forwardClientSignalBatch(signal))
+		if (metric) {
+			// Keep the existing validated metric log as a best-effort local
+			// diagnostic when Data forwarding is unavailable or intentionally
+			// omitted (for example, an unknown rollout source).
+			console.info(
+				JSON.stringify({
+					event: 'web_vital',
+					...metric,
+					release: releaseName(),
+					recordedAt: new Date().toISOString(),
+					forwarded: signal !== null
+				})
+			)
+		} else {
+			console.info(
+				JSON.stringify({
+					event: 'client_runtime_signal',
+					client: 'web',
+					metric: 'runtime_error',
+					surface: surfaceForPage(runtime?.page ?? ''),
+					deviceGroup: runtime?.device ?? 'unknown',
+					sampleSource: runtime?.source ?? 'unknown',
+					release: releaseName(),
+					recordedAt: new Date().toISOString(),
+					forwarded: signal !== null
+				})
+			)
+		}
 		return new NextResponse(null, { status: 204 })
 	} catch (error) {
 		if (error instanceof PayloadTooLargeError) {
@@ -125,6 +139,7 @@ function releaseName(): string {
 
 function surfaceForPage(page: string): ClientSignalSurface {
 	if (page.includes('/live/matches')) return 'live_matches'
+	if (page.includes('/live/points')) return 'live_entry'
 	if (page.includes('/live/competitions')) return 'live_entry'
 	if (page.includes('/live/')) return 'live_match'
 	if (page.includes('price')) return 'price_changes'
@@ -135,14 +150,26 @@ function surfaceForPage(page: string): ClientSignalSurface {
 	return 'other'
 }
 
-function metricForWebVital(name: string): ClientSignalMetric {
+function metricForWebVital(name: string): ClientSignalMetric | null {
 	if (name === 'LCP') return 'lcp_ms'
 	if (name === 'INP') return 'inp_ms'
 	if (name === 'CLS') return 'cls'
-	return 'route_ready_ms'
+	if (!['FCP', 'FID', 'TTFB'].includes(name)) return 'route_ready_ms'
+	return null
 }
 
-function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV1 {
+function signalSource(
+		source: WebVitalPayload['source'] | ClientRuntimePayload['source']
+): 'real' | 'synthetic' | null {
+	if (source === 'synthetic') return 'synthetic'
+	if (source === 'user') return 'real'
+	return null
+}
+
+function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV1 | null {
+	const metricName = metricForWebVital(metric.name)
+	const sampleSource = signalSource(metric.source)
+	if (!metricName || !sampleSource) return null
 	const deviceGroup: ClientSignalDeviceGroup =
 		metric.device === 'mobile' ||
 		metric.device === 'tablet' ||
@@ -159,9 +186,9 @@ function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV1 {
 			{
 				observedAt: new Date().toISOString(),
 				surface: surfaceForPage(metric.page),
-				metric: metricForWebVital(metric.name),
-				deviceGroup,
-				sampleSource: metric.source === 'synthetic' ? 'synthetic' : 'real',
+					metric: metricName,
+					deviceGroup,
+					sampleSource,
 				result: 'ok',
 				value: metric.value
 			}
@@ -169,7 +196,9 @@ function toClientSignal(metric: WebVitalPayload): ClientSignalBatchV1 {
 	}
 }
 
-function toRuntimeSignal(runtime: ClientRuntimePayload): ClientSignalBatchV1 {
+function toRuntimeSignal(runtime: ClientRuntimePayload): ClientSignalBatchV1 | null {
+	const sampleSource = signalSource(runtime.source)
+	if (!sampleSource) return null
 	return {
 		schemaVersion: 1,
 		batchId: randomUUID(),
@@ -182,7 +211,7 @@ function toRuntimeSignal(runtime: ClientRuntimePayload): ClientSignalBatchV1 {
 				surface: surfaceForPage(runtime.page),
 				metric: 'runtime_error',
 				deviceGroup: runtime.device,
-				sampleSource: runtime.source === 'synthetic' ? 'synthetic' : 'real',
+					sampleSource,
 				result: 'error'
 			}
 		]

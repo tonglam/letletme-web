@@ -20,6 +20,7 @@ import {
 } from '@/lib/graphql-proxy-upstream'
 import { shouldResolveGraphQLProxySession } from '@/lib/graphql-proxy-session'
 import { logSafeAuthDiagnostic } from '@/lib/auth-safe-log'
+import { resolveWebVitalSource } from '@/lib/analytics/web-vitals'
 import { RequestTiming, resolveRequestId } from '@/lib/request-timing'
 import { appendServerTiming } from '@/lib/server-timing'
 import type {
@@ -54,6 +55,8 @@ export async function POST(request: NextRequest) {
 	const requestTiming = new RequestTiming()
 	const startedAt = Date.now()
 	const requestId = resolveRequestId(request.headers.get('x-request-id'))
+	let observedTrafficClass: 'mini' | 'web_browser' | 'legacy' | 'development' =
+		'development'
 	const observeResponse = (
 		response: Response,
 		operationName = 'anonymous',
@@ -65,7 +68,8 @@ export async function POST(request: NextRequest) {
 			operationName,
 			workload,
 			responseBodyOk,
-			request
+			request,
+			trafficClass: observedTrafficClass
 		})
 	let body: unknown
 	try {
@@ -133,6 +137,7 @@ export async function POST(request: NextRequest) {
 				workload
 			})
 		: null
+	observedTrafficClass = ingress?.ok ? ingress.trafficClass : 'web_browser'
 	const effectiveWorkload = ingress?.ok ? ingress.workload : workload
 	observedWorkload = effectiveWorkload
 	if (ingress && !ingress.ok) {
@@ -339,12 +344,31 @@ function surfaceForWorkload(
 	return 'other'
 }
 
-function deviceGroupForRequest(request: Request): ClientSignalDeviceGroup {
-	if (request.headers.get('x-letletme-client') === 'wechat-miniprogram')
-		return 'mobile'
+function deviceGroupForRequest(
+	request: Request,
+	trafficClass: 'mini' | 'web_browser' | 'legacy' | 'development'
+): ClientSignalDeviceGroup {
+	if (trafficClass === 'mini') return 'wechat_phone'
 	const userAgent = request.headers.get('user-agent') ?? ''
 	if (/mobile|android|iphone|ipad/i.test(userAgent)) return 'mobile'
 	return 'unknown'
+}
+
+function sampleSourceForRequest(request: Request): 'real' | 'synthetic' {
+	if (request.headers.get('x-letletme-perf-source') === 'synthetic')
+		return 'synthetic'
+	const referer = request.headers.get('referer')
+	if (referer) {
+		try {
+			return resolveWebVitalSource({ search: new URL(referer).search }) ===
+				'synthetic'
+				? 'synthetic'
+				: 'real'
+		} catch {
+			// An invalid referrer is not a trusted synthetic marker.
+		}
+	}
+	return 'real'
 }
 
 function proxyResult(
@@ -366,6 +390,7 @@ function observeProxyResponse(
 		workload: string
 		responseBodyOk: boolean
 		request: Request
+		trafficClass: 'mini' | 'web_browser' | 'legacy' | 'development'
 	}
 ): Response {
 	const result = proxyResult(response.status, input.responseBodyOk)
@@ -374,7 +399,8 @@ function observeProxyResponse(
 	const batch: ClientSignalBatchV1 = {
 		schemaVersion: 1,
 		batchId: randomUUID(),
-		client: 'web',
+		client:
+			input.trafficClass === 'mini' ? 'wechat_miniprogram' : 'web',
 		release: releaseName(),
 		sentAt: new Date().toISOString(),
 		samples: [
@@ -382,8 +408,11 @@ function observeProxyResponse(
 				observedAt: new Date().toISOString(),
 				surface: surfaceForWorkload(input.workload, input.operationName),
 				metric: 'graphql_proxy_ms',
-				deviceGroup: deviceGroupForRequest(input.request),
-				sampleSource: 'real',
+				deviceGroup: deviceGroupForRequest(
+					input.request,
+					input.trafficClass
+				),
+				sampleSource: sampleSourceForRequest(input.request),
 				result,
 				value: Math.max(0, Date.now() - input.startedAt)
 			}

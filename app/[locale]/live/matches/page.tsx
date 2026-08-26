@@ -152,7 +152,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 				? 'STALE'
 				: 'READY'
 	const markerRevision =
-		liveContext?.revision ?? snapshot?.revision ?? 'unavailable'
+		snapshot?.revision ?? liveContext?.revision ?? 'unavailable'
 	const markerObserved = matches.length
 
 	return (

@@ -76,6 +76,18 @@ export const extractOperationName = (query: string): string | undefined =>
 
 const GRAPHQL_SLOW_REQUEST_THRESHOLD_MS = 750
 
+const syntheticBrowserTelemetryHeaders = (): Record<string, string> => {
+	if (typeof window === 'undefined') return {}
+	const params = new URLSearchParams(window.location.search)
+	if (
+		params.get('_perfSource') === 'synthetic' ||
+		params.get('cold') !== null ||
+		Array.from(params.keys()).some(key => /^_[a-z0-9-]*perf(?:ormance)?$/i.test(key))
+	)
+		return { 'X-Letletme-Perf-Source': 'synthetic' }
+	return {}
+}
+
 type GraphQLErrorLike = {
 	message?: string
 	path?: string[]
@@ -191,7 +203,11 @@ async function doFetch<T>(
 		const fetchOptions: RequestInit & { next?: ExecuteQueryOptions['next'] } = {
 			method: 'POST',
 			cache,
-			headers: { 'Content-Type': 'application/json', ...extraHeaders },
+			headers: {
+				'Content-Type': 'application/json',
+				...(isClient ? syntheticBrowserTelemetryHeaders() : {}),
+				...extraHeaders
+			},
 			body: JSON.stringify({
 				operationName: extractOperationName(query),
 				query,

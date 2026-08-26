@@ -102,6 +102,15 @@ const NUMERIC_METRICS = new Set<ClientSignalMetric>([
 	'cls',
 	'last_good_age_ms'
 ])
+const MAX_NUMERIC_VALUES: Partial<Record<ClientSignalMetric, number>> = {
+	route_ready_ms: 10_000_000,
+	api_duration_ms: 10_000_000,
+	graphql_proxy_ms: 10_000_000,
+	lcp_ms: 10_000_000,
+	inp_ms: 10_000_000,
+	cls: 10,
+	last_good_age_ms: 24 * 60 * 60 * 1_000
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -125,6 +134,15 @@ const isFixedValue = <T extends string>(
 	value: unknown,
 	values: Set<T>
 ): value is T => typeof value === 'string' && values.has(value as T)
+
+const isValidNumericValue = (
+	metric: ClientSignalMetric,
+	value: unknown
+): value is number =>
+	typeof value === 'number' &&
+	Number.isFinite(value) &&
+	value >= 0 &&
+	value <= (MAX_NUMERIC_VALUES[metric] ?? Number.POSITIVE_INFINITY)
 
 function validTimestamp(value: unknown, now: number): value is string {
 	if (
@@ -189,11 +207,12 @@ export function parseClientSignalBatch(
 			!isFixedValue(sample.deviceGroup, DEVICE_GROUPS) ||
 			!isFixedValue(sample.sampleSource, SAMPLE_SOURCES) ||
 			!isFixedValue(sample.result, RESULTS) ||
-			(sample.value !== undefined &&
-				(typeof sample.value !== 'number' ||
-					!Number.isFinite(sample.value) ||
-					sample.value < 0)) ||
-			(NUMERIC_METRICS.has(sample.metric) && typeof sample.value !== 'number')
+				(sample.value !== undefined &&
+					!NUMERIC_METRICS.has(sample.metric)) ||
+				(sample.value !== undefined &&
+					!isValidNumericValue(sample.metric, sample.value)) ||
+				(NUMERIC_METRICS.has(sample.metric) &&
+					!isValidNumericValue(sample.metric, sample.value))
 		)
 			return null
 		return {
