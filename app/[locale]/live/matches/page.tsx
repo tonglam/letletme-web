@@ -3,6 +3,7 @@ import { SeasonPhaseState } from '@/components/feedback/SeasonPhaseState'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import { getLiveMatchesSnapshot } from '@/lib/live-matches'
+import { selectLiveMatchEvent } from '@/lib/live-match-selection'
 import { getLivePageContext } from '@/lib/live-context-server'
 import { getTranslations } from 'next-intl/server'
 
@@ -31,12 +32,23 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 		liveContext?.windowState === 'OFFSEASON' ||
 		presentation.phase === 'UNAVAILABLE'
 	) {
-		return <SeasonPhaseState feature="matches" presentation={presentation} />
+		return (
+			<SeasonPhaseState
+				feature="matches"
+				presentation={presentation}
+			/>
+		)
 	}
 
-	const currentEventId = liveContext?.anchorEventId ?? presentation.currentEventId
+	const currentEventId =
+		liveContext?.anchorEventId ?? presentation.currentEventId
 	if (!currentEventId) {
-		return <SeasonPhaseState feature="matches" presentation={presentation} />
+		return (
+			<SeasonPhaseState
+				feature="matches"
+				presentation={presentation}
+			/>
+		)
 	}
 	const nextEventId = presentation.nextEventId
 
@@ -45,6 +57,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 	let snapshot: Awaited<ReturnType<typeof getLiveMatchesSnapshot>>['snapshot'] =
 		null
 	let renderedCurrentEventId = currentEventId
+	let renderedSelectedEventId = currentEventId
 	let renderedNextEventId = nextEventId
 	let initialError: string | null = null
 
@@ -63,10 +76,27 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 		snapshot = live.snapshot
 		renderedCurrentEventId = live.currentEventId ?? currentEventId
 		renderedNextEventId = live.nextEventId
-		if (snapshot?.eventId != null && snapshot.eventId !== currentEventId) {
+		renderedSelectedEventId = selectLiveMatchEvent(
+			matches,
+			renderedCurrentEventId,
+			new Date()
+		)
+		if (renderedSelectedEventId !== renderedCurrentEventId) {
+			matches = matches.filter(
+				match => match.eventId === renderedSelectedEventId
+			)
+			snapshot = null
+		}
+		if (
+			snapshot?.eventId != null &&
+			snapshot.eventId !== renderedCurrentEventId
+		) {
 			console.warn(
 				'[live/matches] liveSnapshot.eventId differs from isCurrent',
-				{ snapshotEventId: snapshot.eventId, currentEventId }
+				{
+					snapshotEventId: snapshot.eventId,
+					currentEventId: renderedCurrentEventId
+				}
 			)
 		}
 	} catch (error) {
@@ -79,6 +109,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 			initialMatches={matches}
 			initialError={initialError}
 			currentEventId={renderedCurrentEventId}
+			selectedEventId={renderedSelectedEventId}
 			nextEventId={renderedNextEventId ?? undefined}
 			initialSnapshot={snapshot}
 		/>

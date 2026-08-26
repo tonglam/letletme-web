@@ -23,6 +23,7 @@ import {
 	shouldPollLiveSnapshot
 } from '@/lib/live-refresh'
 import { getLiveMatchesSnapshot } from '@/lib/live-matches'
+import { selectLiveMatchEvent } from '@/lib/live-match-selection'
 import { usePageActive } from '@/hooks/use-page-active'
 import type { Match } from '@/types/match'
 import { RefreshCw } from 'lucide-react'
@@ -88,12 +89,14 @@ export function LiveMatchesClient({
 	initialMatches,
 	initialError,
 	currentEventId,
+	selectedEventId: initialSelectedEventId,
 	nextEventId,
 	initialSnapshot
 }: {
 	initialMatches: Match[]
 	initialError?: string | null
 	currentEventId?: number
+	selectedEventId?: number
 	nextEventId?: number
 	initialSnapshot?: LiveSnapshotStatus | null
 }) {
@@ -103,6 +106,9 @@ export function LiveMatchesClient({
 	const [resolvedCurrentEventId, setResolvedCurrentEventId] = useState<
 		number | undefined
 	>(currentEventId)
+	const [selectedEventId, setSelectedEventId] = useState<number | undefined>(
+		initialSelectedEventId ?? currentEventId
+	)
 	const [resolvedNextEventId, setResolvedNextEventId] = useState<
 		number | undefined
 	>(nextEventId)
@@ -175,11 +181,30 @@ export function LiveMatchesClient({
 					}
 				)
 				if (!mountedRef.current) return
-				const mappedMatches = data.matches
+				const lifecycleCurrentEventId =
+					data.currentEventId ??
+					eventIds?.currentEventId ??
+					resolvedCurrentEventId
+				const nextSelectedEventId = lifecycleCurrentEventId
+					? selectLiveMatchEvent(
+							data.matches,
+							lifecycleCurrentEventId,
+							new Date()
+						)
+					: undefined
+				const mappedMatches =
+					nextSelectedEventId && nextSelectedEventId !== lifecycleCurrentEventId
+						? data.matches.filter(
+								match => match.eventId === nextSelectedEventId
+							)
+						: data.matches
 				setMatches(mappedMatches)
-				setResolvedCurrentEventId(data.currentEventId ?? undefined)
+				setResolvedCurrentEventId(lifecycleCurrentEventId)
+				setSelectedEventId(nextSelectedEventId)
 				setResolvedNextEventId(data.nextEventId ?? undefined)
-				acceptSnapshot(data.snapshot)
+				acceptSnapshot(
+					nextSelectedEventId === lifecycleCurrentEventId ? data.snapshot : null
+				)
 				hasLastGoodData.current = true
 
 				if (!hasSavedTabPreference.current) {
@@ -285,8 +310,11 @@ export function LiveMatchesClient({
 	useEffect(() => {
 		if (
 			hasRequestedInitialFixturePlayers.current ||
-			!initialMatches.some(match =>
-				match.status === 'LIVE' || match.status === 'HT' || match.status === 'FT'
+			!initialMatches.some(
+				match =>
+					match.status === 'LIVE' ||
+					match.status === 'HT' ||
+					match.status === 'FT'
 			)
 		)
 			return
@@ -492,7 +520,7 @@ export function LiveMatchesClient({
 										match={match}
 										allMatches={activeMatches}
 										currentIndex={i}
-										eventId={resolvedCurrentEventId}
+										eventId={selectedEventId}
 									/>
 								))
 							) : (
