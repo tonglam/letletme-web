@@ -107,3 +107,19 @@ test('Vercel candidate reaches READY and passes protected health verification be
 		'protected staged deployments must use vercel curl rather than unauthenticated curl'
 	)
 })
+
+test('Vercel promotion waits for the production alias before Tencent activation', () => {
+	const promote = workflow.indexOf('promote "$CANDIDATE_URL"')
+	const polling = workflow.indexOf('for attempt in $(seq 1 12)')
+	const releaseCheck = workflow.indexOf(
+		'grep -qi "^x-letletme-release: $RELEASE_SHA"',
+		polling
+	)
+	const activate = workflow.indexOf('letletme-release activate', releaseCheck)
+
+	assert.ok(promote >= 0 && promote < polling)
+	assert.ok(polling < releaseCheck && releaseCheck < activate)
+	assert.match(workflow, /--max-time 5/)
+	assert.match(workflow, /\[\[ \$attempt -eq 12 \]\] \|\| sleep 5/)
+	assert.match(workflow, /\[\[ \$production_ready == 1 \]\]/)
+})
