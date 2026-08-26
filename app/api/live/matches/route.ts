@@ -33,10 +33,25 @@ async function handleGet(request: Request) {
 				eventId,
 				revision
 			},
-			{ includeFixturePlayers }
+			{
+				includeFixturePlayers,
+				onFixturePlayerFailure: failure => {
+					console.warn('[live-matches] fixture player section unavailable', {
+						season: failure.season,
+						eventId: failure.eventId,
+						revision: failure.revision,
+						stage: failure.stage,
+						fixtureIds: failure.fixtureIds,
+						code: failure.code
+					})
+				}
+			}
 		)
 		const response = NextResponse.json(data)
-		response.headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate, no-transform')
+		response.headers.set(
+			'Cache-Control',
+			'private, no-store, max-age=0, must-revalidate, no-transform'
+		)
 		response.headers.set('CDN-Cache-Control', 'no-store')
 		return response
 	} catch (error) {

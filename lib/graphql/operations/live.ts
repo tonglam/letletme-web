@@ -691,6 +691,10 @@ export interface LiveFixturePlayersData {
 	players: LiveFixturePerformance[]
 }
 
+export interface LiveFixturePlayersResponse {
+	liveFixturePlayers: LiveFixturePlayersData
+}
+
 export interface LiveFixturePlayersBatchResponse {
 	fixture0: LiveFixturePlayersData
 	fixture1?: LiveFixturePlayersData
