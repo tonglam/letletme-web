@@ -22,8 +22,14 @@ new_sqlite_classes = [ "FailoverCoordinator" ]
 WATCHDOG_ENABLED = "false"
 DNSPOD_DOMAIN = "letletme.top"
 DNSPOD_EDGEONE_LINE = "境内"
-DNSPOD_DEFAULT_VERCEL_LINE = "默认"
+DNSPOD_DEFAULT_FALLBACK_LINE = "默认"
 VERCEL_HEALTH_URL = "https://vercel-origin.letletme.top/healthz"
+# DNSPOD_DEFAULT_FALLBACK_TYPE, DNSPOD_DEFAULT_FALLBACK_VALUE and
+# FALLBACK_HEALTH_URL are deployed as bindings only after the Cloudflare for
+# SaaS target and dedicated health path are active. Leaving the type unset here
+# preserves deployments that still use the legacy DNSPOD_DEFAULT_VERCEL_A
+# binding. If the new bindings are missing or unhealthy, the watchdog fails
+# closed and will not disable the mainland EdgeOne record.
 # These are dedicated EdgeOne canaries. Their rules must force the named
 # origin, so a Cloudflare cron invocation is independent of its execution
 # geography and cannot mistake a Vercel response for a healthy Tencent path.

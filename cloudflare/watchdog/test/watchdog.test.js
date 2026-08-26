@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
 	isEdgeOneRecord,
 	isFallbackRecord,
+	isDefaultFallbackRecord,
 	isDefaultVercelRecord,
 	hasReleaseParity,
 	parseState,
@@ -19,8 +20,9 @@ const baseEnv = {
 	DNSPOD_EDGEONE_RECORD_ID: '123',
 	DNSPOD_EDGEONE_CNAME: 'edge.example.com',
 	DNSPOD_EDGEONE_LINE: '境内',
-	DNSPOD_DEFAULT_VERCEL_A: '76.76.21.21',
-	DNSPOD_DEFAULT_VERCEL_LINE: '默认',
+	DNSPOD_DEFAULT_FALLBACK_TYPE: 'A',
+	DNSPOD_DEFAULT_FALLBACK_VALUE: '76.76.21.21',
+	DNSPOD_DEFAULT_FALLBACK_LINE: '默认',
 	EDGEONE_TENCENT_HEALTH_URL: 'https://eo-tencent-canary.letletme.top/healthz',
 	EDGEONE_VERCEL_API_URL: 'https://eo-personal-canary.letletme.top/api/graphql',
 	VERCEL_HEALTH_URL: 'https://vercel-origin.letletme.top/healthz',
@@ -108,6 +110,16 @@ function graphqlHealth() {
 	})
 }
 
+function fallbackHealth(release = RELEASE_SHA) {
+	return new Response(JSON.stringify({ status: 'ok', origin: 'vercel', release }), {
+		status: 200,
+		headers: {
+			'X-Letletme-Edge': 'cloudflare-fallback',
+			'X-Letletme-Release': release
+		}
+	})
+}
+
 function fakeFetchFactory({
 	record,
 	records,
@@ -122,6 +134,7 @@ function fakeFetchFactory({
 	edgeResponses = [],
 	edgeVercelResponses = [],
 	vercelResponse = health(false),
+	fallbackResponse = fallbackHealth(),
 	telegramResponses = []
 }) {
 	const calls = []
@@ -199,6 +212,9 @@ function fakeFetchFactory({
 			if (url === 'https://eo-personal-canary.letletme.top/api/graphql') {
 				return edgeVercelResponses.shift() || graphqlHealth()
 			}
+			if (url === 'https://cf-saas-canary.letletme.top/healthz') {
+				return fallbackResponse
+			}
 			return vercelResponse
 		}
 	}
@@ -244,6 +260,162 @@ test('recognizes only the exact EdgeOne and fallback records', () => {
 	assert.equal(isFallbackRecord(toDnsRecord({ content: 'edge.example.com', Status: 'ENABLE' }), env), false)
 	assert.equal(isDefaultVercelRecord(toDnsRecord({ Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'ENABLE' }), env), true)
 	assert.equal(isDefaultVercelRecord(toDnsRecord({ Type: 'A', Value: '76.76.21.21', Line: '默认', Status: 'DISABLE' }), env), false)
+})
+
+test('recognizes a Cloudflare for SaaS CNAME as the exact default fallback', () => {
+	const env = {
+		...baseEnv,
+		DNSPOD_DEFAULT_FALLBACK_TYPE: 'CNAME',
+		DNSPOD_DEFAULT_FALLBACK_VALUE: 'saas-gateway.qitonglan.com.'
+	}
+	assert.equal(isDefaultFallbackRecord(toDnsRecord({
+		Type: 'CNAME',
+		Value: 'SAAS-GATEWAY.QITONGLAN.COM',
+		Line: '默认',
+		Status: 'ENABLE'
+	}), env), true)
+	assert.equal(isDefaultFallbackRecord(toDnsRecord({
+		Type: 'A',
+		Value: '76.76.21.21',
+		Line: '默认',
+		Status: 'ENABLE'
+	}), env), false)
+})
+
+test('keeps the legacy Vercel A fallback bindings compatible', () => {
+	const legacyEnv = { ...baseEnv }
+	delete legacyEnv.DNSPOD_DEFAULT_FALLBACK_TYPE
+	delete legacyEnv.DNSPOD_DEFAULT_FALLBACK_VALUE
+	delete legacyEnv.DNSPOD_DEFAULT_FALLBACK_LINE
+	legacyEnv.DNSPOD_DEFAULT_VERCEL_A = '76.76.21.21'
+	legacyEnv.DNSPOD_DEFAULT_VERCEL_LINE = '默认'
+	assert.equal(isDefaultFallbackRecord(toDnsRecord({
+		Type: 'A',
+		Value: '76.76.21.21',
+		Line: '默认',
+		Status: 'ENABLE'
+	}), legacyEnv), true)
+})
+
+test('accepts the SaaS CNAME before counting an EdgeOne failure', async () => {
+	const env = {
+		...makeEnv(),
+		DNSPOD_DEFAULT_FALLBACK_TYPE: 'CNAME',
+		DNSPOD_DEFAULT_FALLBACK_VALUE: 'saas-gateway.qitonglan.com',
+		FALLBACK_HEALTH_URL: 'https://cf-saas-canary.letletme.top/healthz'
+	}
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
+		defaultRecord: {
+			Type: 'CNAME',
+			Value: 'saas-gateway.qitonglan.com.',
+			Line: '默认',
+			Status: 'ENABLE'
+		},
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'counted-failure')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
+test('does not fail over to a SaaS CNAME when its dedicated probe is missing', async () => {
+	const env = {
+		...makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), makeCoordinator(2)),
+		DNSPOD_DEFAULT_FALLBACK_TYPE: 'CNAME',
+		DNSPOD_DEFAULT_FALLBACK_VALUE: 'saas-gateway.qitonglan.com'
+	}
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
+		defaultRecord: {
+			Type: 'CNAME',
+			Value: 'saas-gateway.qitonglan.com',
+			Line: '默认',
+			Status: 'ENABLE'
+		},
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'fallback-unhealthy')
+	assert.equal(result.fallback.reason, 'url-missing')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
+test('alerts when an unsafe SaaS fallback cannot reset the coordinator', async () => {
+	const coordinator = makeCoordinator(2)
+	coordinator.reset = async () => { throw new Error('coordinator-unavailable') }
+	const env = {
+		...makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), coordinator),
+		DNSPOD_DEFAULT_FALLBACK_TYPE: 'CNAME',
+		DNSPOD_DEFAULT_FALLBACK_VALUE: 'saas-gateway.qitonglan.com',
+		TELEGRAM_BOT_TOKEN: 'bot',
+		TELEGRAM_CHAT_ID: 'chat'
+	}
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
+		defaultRecord: {
+			Type: 'CNAME',
+			Value: 'saas-gateway.qitonglan.com',
+			Line: '默认',
+			Status: 'ENABLE'
+		},
+		edgeResponses: [new Response('', { status: 503 })],
+		telegramResponses: [new Response('', { status: 200 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'fallback-unhealthy-coordinator-reset-failed')
+	assert.equal(result.state.failureCount, 2)
+	assert.equal(result.state.coordinatorResetPending, true)
+	assert.equal(calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 1)
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
+test('does not fail over to a SaaS CNAME with a stale release', async () => {
+	const env = {
+		...makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), makeCoordinator(2)),
+		DNSPOD_DEFAULT_FALLBACK_TYPE: 'CNAME',
+		DNSPOD_DEFAULT_FALLBACK_VALUE: 'saas-gateway.qitonglan.com',
+		FALLBACK_HEALTH_URL: 'https://cf-saas-canary.letletme.top/healthz'
+	}
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
+		defaultRecord: {
+			Type: 'CNAME',
+			Value: 'saas-gateway.qitonglan.com',
+			Line: '默认',
+			Status: 'ENABLE'
+		},
+		edgeResponses: [new Response('', { status: 503 })],
+		fallbackResponse: fallbackHealth('b'.repeat(40))
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'fallback-unhealthy')
+	assert.equal(result.fallback.reason, 'release-mismatch')
+	assert.equal(result.releaseParity, false)
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
+test('disables only the mainland record when the SaaS CNAME fallback is healthy', async () => {
+	const env = {
+		...makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), makeCoordinator(2)),
+		DNSPOD_DEFAULT_FALLBACK_TYPE: 'CNAME',
+		DNSPOD_DEFAULT_FALLBACK_VALUE: 'saas-gateway.qitonglan.com',
+		FALLBACK_HEALTH_URL: 'https://cf-saas-canary.letletme.top/healthz'
+	}
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
+		defaultRecord: {
+			Type: 'CNAME',
+			Value: 'saas-gateway.qitonglan.com',
+			Line: '默认',
+			Status: 'ENABLE'
+		},
+		edgeResponses: [new Response('', { status: 503 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'fallback-applied')
+	assert.equal(calls.filter(call => call.action === 'ModifyRecordStatus').length, 1)
+	assert.equal(JSON.parse(calls.find(call => call.action === 'ModifyRecordStatus').init.body).RecordId, 123)
 })
 
 test('requires three consecutive EdgeOne failures before one DNS update', async () => {
@@ -453,6 +625,49 @@ test('is idempotent once fallback is active', async () => {
 	})
 	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
 	assert.equal(result.action, 'already-fallback')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
+test('keeps a healthy active SaaS fallback idempotent', async () => {
+	const env = {
+		...makeEnv(JSON.stringify({ failureCount: 3, fallbackActive: true })),
+		DNSPOD_DEFAULT_FALLBACK_TYPE: 'CNAME',
+		DNSPOD_DEFAULT_FALLBACK_VALUE: 'saas-gateway.qitonglan.com',
+		FALLBACK_HEALTH_URL: 'https://cf-saas-canary.letletme.top/healthz'
+	}
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'DISABLE' },
+		defaultRecord: {
+			Type: 'CNAME',
+			Value: 'saas-gateway.qitonglan.com',
+			Line: '默认',
+			Status: 'ENABLE'
+		}
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'already-fallback')
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
+test('alerts without changing DNS when the active SaaS fallback becomes unhealthy', async () => {
+	const env = {
+		...makeEnv(JSON.stringify({ failureCount: 0, fallbackActive: true })),
+		DNSPOD_DEFAULT_FALLBACK_TYPE: 'CNAME',
+		DNSPOD_DEFAULT_FALLBACK_VALUE: 'saas-gateway.qitonglan.com'
+	}
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'DISABLE' },
+		defaultRecord: {
+			Type: 'CNAME',
+			Value: 'saas-gateway.qitonglan.com',
+			Line: '默认',
+			Status: 'ENABLE'
+		}
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'active-fallback-unhealthy')
+	assert.equal(result.state.fallbackActive, true)
+	assert.equal(result.fallback.reason, 'url-missing')
 	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 

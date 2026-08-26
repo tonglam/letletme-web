@@ -130,19 +130,37 @@ function normalize(value) {
 	return String(value ?? '').trim().replace(/\.$/, '').toLowerCase()
 }
 
-function defaultVercelLine(env) {
-	return env.DNSPOD_DEFAULT_VERCEL_LINE || '默认'
+function defaultFallbackLine(env) {
+	return env.DNSPOD_DEFAULT_FALLBACK_LINE || env.DNSPOD_DEFAULT_VERCEL_LINE || '默认'
 }
 
-export function isDefaultVercelRecord(record, env) {
+function defaultFallbackType(env) {
+	const configured = String(env.DNSPOD_DEFAULT_FALLBACK_TYPE || '').trim().toUpperCase()
+	if (configured) return configured
+	return env.DNSPOD_DEFAULT_VERCEL_A ? 'A' : ''
+}
+
+function defaultFallbackValue(env) {
+	return env.DNSPOD_DEFAULT_FALLBACK_VALUE || env.DNSPOD_DEFAULT_VERCEL_A || ''
+}
+
+export function isDefaultFallbackRecord(record, env) {
+	const expectedType = defaultFallbackType(env)
+	if (expectedType !== 'A' && expectedType !== 'CNAME') return false
 	return (
 		record &&
 		String(record.Name || '').toLowerCase() === '@' &&
-		String(record.Type || '').toUpperCase() === 'A' &&
-		normalize(record.Value) === normalize(env.DNSPOD_DEFAULT_VERCEL_A) &&
-		String(record.Line || '') === defaultVercelLine(env) &&
+		String(record.Type || '').toUpperCase() === expectedType &&
+		normalize(record.Value) === normalize(defaultFallbackValue(env)) &&
+		String(record.Line || '') === defaultFallbackLine(env) &&
 		String(record.Status || '').toUpperCase() === 'ENABLE'
 	)
+}
+
+// Backward-compatible export for older imports. The configured fallback may
+// now be either the legacy Vercel A record or a Cloudflare for SaaS CNAME.
+export function isDefaultVercelRecord(record, env) {
+	return isDefaultFallbackRecord(record, env)
 }
 
 function isRegionalApexRecord(record, env) {
@@ -247,15 +265,20 @@ export async function getConfiguredRecord(env, fetchImpl) {
 	return records.find(record => Number(record.RecordId) === recordId(env)) || null
 }
 
-export async function getDefaultVercelRecord(env, fetchImpl) {
-	const records = await describeRecordList(env, fetchImpl, defaultVercelLine(env))
+export async function getDefaultFallbackRecord(env, fetchImpl) {
+	const line = defaultFallbackLine(env)
+	const records = await describeRecordList(env, fetchImpl, line)
 	const enabledDefaultApexRecords = records.filter(record =>
-		isEnabledApexRouteRecord(record, defaultVercelLine(env))
+		isEnabledApexRouteRecord(record, line)
 	)
 	if (enabledDefaultApexRecords.length !== 1) return null
-	return isDefaultVercelRecord(enabledDefaultApexRecords[0], env)
+	return isDefaultFallbackRecord(enabledDefaultApexRecords[0], env)
 		? enabledDefaultApexRecords[0]
 		: null
+}
+
+export async function getDefaultVercelRecord(env, fetchImpl) {
+	return getDefaultFallbackRecord(env, fetchImpl)
 }
 
 export async function disableConfiguredRecord(env, fetchImpl) {

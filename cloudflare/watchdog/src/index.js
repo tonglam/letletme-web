@@ -1,14 +1,14 @@
 import {
 	disableConfiguredRecord,
-	getDefaultVercelRecord,
+	getDefaultFallbackRecord,
 	getConfiguredRecord,
 	getEnabledMainlandApexRecords,
 	isDisabledRecord,
-	isDefaultVercelRecord,
+	isDefaultFallbackRecord,
 	isEnabledRecord
 } from './dnspod.js'
 
-export { isDefaultVercelRecord } from './dnspod.js'
+export { isDefaultFallbackRecord, isDefaultVercelRecord } from './dnspod.js'
 
 const STATE_KEY = 'watchdog-state-v1'
 const FAILURE_THRESHOLD = 3
@@ -92,7 +92,7 @@ export function isFallbackRecord(record, env) {
 	return isDisabledRecord(record, env)
 }
 
-async function probe(url, fetchImpl, timeoutMs, expectedOrigin, requireEdgeOne) {
+async function probe(url, fetchImpl, timeoutMs, expectedOrigin, expectedEdgeMarker = null) {
 	if (!url) return { ok: false, reason: 'url-missing' }
 	const controller = new AbortController()
 	const timeout = setTimeout(() => controller.abort('probe-timeout'), timeoutMs)
@@ -113,9 +113,7 @@ async function probe(url, fetchImpl, timeoutMs, expectedOrigin, requireEdgeOne) 
 			payload?.status === 'ok' &&
 			payload?.origin === expectedOrigin &&
 			!releaseFailure &&
-			(requireEdgeOne
-				? normalizedEdgeMarker === 'edgeone'
-				: normalizedEdgeMarker === null)
+			normalizedEdgeMarker === expectedEdgeMarker
 		return {
 			ok,
 			status: response.status,
@@ -133,6 +131,32 @@ async function probe(url, fetchImpl, timeoutMs, expectedOrigin, requireEdgeOne) 
 	} finally {
 		clearTimeout(timeout)
 	}
+}
+
+function requiresDedicatedFallbackProbe(env) {
+	return String(env.DNSPOD_DEFAULT_FALLBACK_TYPE || '').trim().toUpperCase() === 'CNAME'
+}
+
+async function probeFallbackSafety(env, fetchImpl, timeoutMs) {
+	const [vercel, dedicatedFallback] = await Promise.all([
+		probe(env.VERCEL_HEALTH_URL, fetchImpl, timeoutMs, 'vercel'),
+		requiresDedicatedFallbackProbe(env)
+			? probe(
+				env.FALLBACK_HEALTH_URL,
+				fetchImpl,
+				timeoutMs,
+				'vercel',
+				'cloudflare-fallback'
+			)
+			: Promise.resolve(null)
+	])
+	const fallback = dedicatedFallback || vercel
+	const releaseParity = hasReleaseParity(fallback, vercel)
+	const fallbackSafe = vercel.ok && fallback.ok && releaseParity
+	const fallbackEvidence = fallback.ok && !releaseParity
+		? { ...fallback, reason: 'release-mismatch' }
+		: fallback
+	return { vercel, fallback: fallbackEvidence, fallbackSafe, releaseParity }
 }
 
 async function probeEdgeOneVercelApi(url, fetchImpl, timeoutMs) {
@@ -258,8 +282,8 @@ async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coo
 	if (enabledRegionalApexRecords.length !== 0) {
 		return manualDnsState(env, rawState, state, record, fetchImpl, coordinator, 'regional')
 	}
-	const defaultRecord = await getDefaultVercelRecord(env, fetchImpl)
-	if (!isDefaultVercelRecord(defaultRecord, env)) {
+	const defaultRecord = await getDefaultFallbackRecord(env, fetchImpl)
+	if (!isDefaultFallbackRecord(defaultRecord, env)) {
 		return manualDnsState(env, rawState, state, defaultRecord, fetchImpl, coordinator, 'default')
 	}
 
@@ -271,7 +295,7 @@ async function alreadyFallbackState(env, rawState, state, record, fetchImpl, coo
 		coordinatorResetPending: false
 	}
 	const alertKey = `fallback:${env.DNSPOD_EDGEONE_RECORD_ID}`
-	const alertMessage = `letletme watchdog 已停用 DNSPod 境内 EdgeOne 记录：EdgeOne 连续失败，Vercel 健康。`
+	const alertMessage = `letletme watchdog 已停用 DNSPod 境内 EdgeOne 记录：默认回退链路已生效。`
 	if (next.pendingAlert) {
 		next = await applyAlert(
 			env,
@@ -313,7 +337,7 @@ async function manualDnsState(env, rawState, state, record, fetchImpl, coordinat
 	const alertKeyPrefix = coordinatorResetFailed ? 'manual-coordinator-reset-failed' : 'manual'
 	const alertKey = `${alertKeyPrefix}:${reason}:${record?.RecordId || 'unknown'}:${record?.Type || 'unknown'}:${record?.Value || 'unknown'}:${record?.Line || 'unknown'}:${record?.Status || 'unknown'}`
 	const dnsMessage = reason === 'default'
-		? 'letletme watchdog 未改 DNSPod：默认线路的 Vercel 回退记录身份或状态不符合预期。'
+		? 'letletme watchdog 未改 DNSPod：默认线路的回退记录身份或状态不符合预期。'
 		: 'letletme watchdog 未改 DNSPod：境内 EdgeOne 记录身份或状态不符合预期。'
 	const message = coordinatorResetFailed
 		? `${dnsMessage} 同时无法确认 watchdog 协调器状态，必须人工检查。`
@@ -439,6 +463,108 @@ async function bothUnhealthyState(
 	}
 }
 
+async function unsafeFallbackState(
+	env,
+	rawState,
+	state,
+	record,
+	edge,
+	edgeVercel,
+	vercel,
+	fallback,
+	fetchImpl,
+	coordinator
+) {
+	let coordination
+	let coordinatorResetFailed = false
+	try {
+		coordination = await coordinator.reset()
+	} catch (error) {
+		coordinatorResetFailed = true
+		coordination = { failureCount: state.failureCount, mutationHeld: false }
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_fallback_unhealthy_coordinator_reset_error',
+			error: error instanceof Error ? error.message : String(error)
+		}))
+	}
+	const mutationHeld = coordination.mutationHeld === true
+	const alertKeyPrefix = coordinatorResetFailed
+		? 'fallback-unhealthy-coordinator-reset-failed'
+		: 'fallback-unhealthy'
+	const alertKey = `${alertKeyPrefix}:${fallback.reason}:${vercel.reason}`
+	const fallbackMessage = `letletme watchdog 暂不改 DNSPod：默认回退链路不安全。Fallback=${fallback.reason} Vercel=${vercel.reason}`
+	const message = coordinatorResetFailed
+		? `${fallbackMessage} 同时无法确认 watchdog 协调器状态，必须人工检查。`
+		: fallbackMessage
+	const action = coordinatorResetFailed
+		? 'fallback-unhealthy-coordinator-reset-failed'
+		: mutationHeld
+			? 'fallback-unhealthy-mutation-held'
+			: 'fallback-unhealthy'
+	let next = {
+		...state,
+		failureCount: coordination.failureCount,
+		fallbackActive: false,
+		lastAction: action,
+		coordinatorResetPending: coordinatorResetFailed
+	}
+	if (state.lastAlertKey !== alertKey || state.pendingAlert?.key === alertKey) {
+		next = await applyAlert(env, next, alertKey, message, fetchImpl)
+	}
+	await saveState(env, rawState, next)
+	return {
+		action,
+		state: next,
+		edge,
+		edgeVercel,
+		vercel,
+		fallback,
+		releaseParity: hasReleaseParity(edge, edgeVercel, vercel, fallback),
+		record
+	}
+}
+
+async function activeFallbackUnhealthyState(
+	env,
+	rawState,
+	state,
+	record,
+	vercel,
+	fallback,
+	fetchImpl,
+	coordinator
+) {
+	const alertKey = `active-fallback-unhealthy:${fallback.reason}:${vercel.reason}`
+	const message = `letletme watchdog 检测到已生效的默认回退链路异常。Fallback=${fallback.reason} Vercel=${vercel.reason}。DNS 未自动恢复，必须人工处理。`
+	let next = {
+		...state,
+		failureCount: 0,
+		fallbackActive: true,
+		lastAction: 'active-fallback-unhealthy',
+		coordinatorResetPending: false
+	}
+	if (state.lastAlertKey !== alertKey || state.pendingAlert?.key === alertKey) {
+		next = await applyAlert(env, next, alertKey, message, fetchImpl)
+	}
+	try {
+		await coordinator.confirm()
+	} catch (error) {
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_active_fallback_coordinator_confirm_error',
+			error: error instanceof Error ? error.message : String(error)
+		}))
+	}
+	await saveState(env, rawState, next)
+	return {
+		action: 'active-fallback-unhealthy',
+		state: next,
+		vercel,
+		fallback,
+		releaseParity: hasReleaseParity(fallback, vercel),
+		record
+	}
+}
+
 export async function runCheck(env, options = {}) {
 	const fetchImpl = options.fetchImpl || fetch
 	const now = options.now || new Date().toISOString()
@@ -456,27 +582,41 @@ export async function runCheck(env, options = {}) {
 		if (enabledRegionalApexRecords.length !== 0) {
 			return manualDnsState(env, rawState, state, record, fetchImpl, coordinator, 'regional')
 		}
-		const defaultRecord = await getDefaultVercelRecord(env, fetchImpl)
-		if (!isDefaultVercelRecord(defaultRecord, env)) {
+		const defaultRecord = await getDefaultFallbackRecord(env, fetchImpl)
+		if (!isDefaultFallbackRecord(defaultRecord, env)) {
 			return manualDnsState(env, rawState, state, defaultRecord, fetchImpl, coordinator, 'default')
+		}
+		const fallbackSafety = await probeFallbackSafety(env, fetchImpl, timeoutMs)
+		if (!fallbackSafety.fallbackSafe) {
+			return activeFallbackUnhealthyState(
+				env,
+				rawState,
+				state,
+				record,
+				fallbackSafety.vercel,
+				fallbackSafety.fallback,
+				fetchImpl,
+				coordinator
+			)
 		}
 		return alreadyFallbackState(env, rawState, state, record, fetchImpl, coordinator)
 	}
 	if (!isEdgeOneRecord(record, env)) {
 		return manualDnsState(env, rawState, state, record, fetchImpl, coordinator)
 	}
-	const defaultRecord = await getDefaultVercelRecord(env, fetchImpl)
-	if (!isDefaultVercelRecord(defaultRecord, env)) {
+	const defaultRecord = await getDefaultFallbackRecord(env, fetchImpl)
+	if (!isDefaultFallbackRecord(defaultRecord, env)) {
 		return manualDnsState(env, rawState, state, defaultRecord, fetchImpl, coordinator, 'default')
 	}
 
-	const [edge, edgeVercel, vercel] = await Promise.all([
-		probe(env.EDGEONE_TENCENT_HEALTH_URL, fetchImpl, timeoutMs, 'tencent', true),
+	const [edge, edgeVercel, fallbackSafety] = await Promise.all([
+		probe(env.EDGEONE_TENCENT_HEALTH_URL, fetchImpl, timeoutMs, 'tencent', 'edgeone'),
 		probeEdgeOneVercelApi(env.EDGEONE_VERCEL_API_URL, fetchImpl, timeoutMs),
-		probe(env.VERCEL_HEALTH_URL, fetchImpl, timeoutMs, 'vercel', false)
+		probeFallbackSafety(env, fetchImpl, timeoutMs)
 	])
-	const releaseParity = hasReleaseParity(edge, edgeVercel, vercel)
-	if (edge.ok && edgeVercel.ok && vercel.ok && releaseParity) {
+	const { vercel, fallback, fallbackSafe } = fallbackSafety
+	const releaseParity = hasReleaseParity(edge, edgeVercel, vercel, fallback)
+	if (edge.ok && edgeVercel.ok && vercel.ok && fallbackSafe && releaseParity) {
 		let coordination
 		try {
 			coordination = await coordinator.reset()
@@ -529,6 +669,20 @@ export async function runCheck(env, options = {}) {
 	}
 	if (!vercel.ok) {
 		return bothUnhealthyState(env, rawState, state, record, edge, edgeVercel, vercel, fetchImpl, coordinator)
+	}
+	if (!fallbackSafe) {
+		return unsafeFallbackState(
+			env,
+			rawState,
+			state,
+			record,
+			edge,
+			edgeVercel,
+			vercel,
+			fallback,
+			fetchImpl,
+			coordinator
+		)
 	}
 
 	if (state.coordinatorResetPending) {
@@ -598,8 +752,8 @@ export async function runCheck(env, options = {}) {
 		if (enabledRegionalApexRecords.length !== 0) {
 			return manualDnsState(env, rawState, state, latestRecord, fetchImpl, coordinator, 'regional')
 		}
-		const latestDefaultRecord = await getDefaultVercelRecord(env, fetchImpl)
-		if (!isDefaultVercelRecord(latestDefaultRecord, env)) {
+		const latestDefaultRecord = await getDefaultFallbackRecord(env, fetchImpl)
+		if (!isDefaultFallbackRecord(latestDefaultRecord, env)) {
 			return manualDnsState(env, rawState, state, latestDefaultRecord, fetchImpl, coordinator, 'default')
 		}
 		return alreadyFallbackState(env, rawState, state, latestRecord, fetchImpl, coordinator)
@@ -607,8 +761,8 @@ export async function runCheck(env, options = {}) {
 	if (!isEdgeOneRecord(latestRecord, env)) {
 		return manualDnsState(env, rawState, state, latestRecord, fetchImpl, coordinator)
 	}
-	const latestDefaultRecord = await getDefaultVercelRecord(env, fetchImpl)
-	if (!isDefaultVercelRecord(latestDefaultRecord, env)) {
+	const latestDefaultRecord = await getDefaultFallbackRecord(env, fetchImpl)
+	if (!isDefaultFallbackRecord(latestDefaultRecord, env)) {
 		return manualDnsState(env, rawState, state, latestDefaultRecord, fetchImpl, coordinator, 'default')
 	}
 	const latestEnabledMainlandApexRecords = await getEnabledMainlandApexRecords(env, fetchImpl)
@@ -687,11 +841,11 @@ export async function runCheck(env, options = {}) {
 		mutationApplied = true
 		const disabledRecord = await getConfiguredRecord(env, fetchImpl)
 		const enabledRegionalApexRecords = await getEnabledMainlandApexRecords(env, fetchImpl)
-		const postDisableDefaultRecord = await getDefaultVercelRecord(env, fetchImpl)
+		const postDisableDefaultRecord = await getDefaultFallbackRecord(env, fetchImpl)
 		if (
 			!isFallbackRecord(disabledRecord, env) ||
 			enabledRegionalApexRecords.length !== 0 ||
-			!isDefaultVercelRecord(postDisableDefaultRecord, env)
+			!isDefaultFallbackRecord(postDisableDefaultRecord, env)
 		) {
 			throw new Error('dnspod-disabled-record-verification-failed')
 		}
@@ -709,7 +863,7 @@ export async function runCheck(env, options = {}) {
 		throw error
 	}
 	const alertKey = `fallback:${env.DNSPOD_EDGEONE_RECORD_ID}`
-	const message = `letletme watchdog 已停用 DNSPod 境内 EdgeOne 记录：连续 ${failureCount} 次异常，Vercel 健康。`
+	const message = `letletme watchdog 已停用 DNSPod 境内 EdgeOne 记录：连续 ${failureCount} 次异常，默认回退链路与 Vercel 健康。`
 	let next = {
 		...state,
 		failureCount,
