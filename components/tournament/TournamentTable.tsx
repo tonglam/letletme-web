@@ -45,12 +45,29 @@ interface TournamentTableProps {
 	gameweek: number
 	/** Signed-in viewer’s FPL entry — pin + highlight when off-screen */
 	viewerEntryId?: number
+	/** Filtered viewer row returned independently from the current server page. */
+	pinnedViewerEntry?: TournamentEntry
 	/** Reports the rows in the same order currently visible in the table. */
 	onVisibleEntriesChange?: (entries: TournamentEntry[]) => void
 	/** Optional share controls rendered beside Compare in the table toolbar. */
 	shareText?: string | (() => string)
 	shareImageRef?: RefObject<HTMLElement | null>
 	shareTitle?: string
+	/** Server-owned ordering/paging for the lightweight live board. */
+	serverControl?: {
+		sortColumn: TournamentSortColumn
+		sortDirection: TournamentSortDirection
+		onSortChange: (
+			column: TournamentSortColumn,
+			direction: TournamentSortDirection
+		) => void
+		hasMore: boolean
+		filteredEntries: number
+		isLoadingMore: boolean
+		onLoadMore: () => void
+		playerRevision: string
+		onRevisionGone?: () => Promise<void>
+	}
 }
 
 /** LiveCalcData exposes squad value as £m already (100.5 → £100.5m). */
@@ -94,10 +111,12 @@ export function TournamentTable({
 	tournamentId,
 	gameweek,
 	viewerEntryId,
+	pinnedViewerEntry,
 	onVisibleEntriesChange,
 	shareText,
 	shareImageRef,
-	shareTitle
+	shareTitle,
+	serverControl
 }: TournamentTableProps) {
 	const t = useTranslations('LiveTournament')
 	const format = useFormatter()
@@ -135,27 +154,65 @@ export function TournamentTable({
 		{ value: 'eventCost', label: t('cost') }
 	]
 
+	const effectiveSortColumn = serverControl?.sortColumn ?? sortColumn
+	const effectiveSortDirection = serverControl?.sortDirection ?? sortDirection
 	const sortedEntries = useMemo(
 		() =>
-			sortTournamentEntries(entries, searchQuery, sortColumn, sortDirection),
-		[entries, searchQuery, sortColumn, sortDirection]
+			serverControl
+				? entries
+				: sortTournamentEntries(
+						entries,
+						searchQuery,
+						effectiveSortColumn,
+						effectiveSortDirection
+					),
+		[
+			entries,
+			searchQuery,
+			effectiveSortColumn,
+			effectiveSortDirection,
+			serverControl
+		]
 	)
 
 	useEffect(() => {
-		setVisibleCount(PREVIEW_ROWS)
-	}, [entries, searchQuery, sortColumn, sortDirection])
+		if (!serverControl) setVisibleCount(PREVIEW_ROWS)
+	}, [
+		entries,
+		searchQuery,
+		effectiveSortColumn,
+		effectiveSortDirection,
+		serverControl
+	])
 
-	const visibleEntries = useMemo(
-		() => takeVisibleWithPinMe(sortedEntries, visibleCount, viewerEntryId),
-		[sortedEntries, visibleCount, viewerEntryId]
-	)
+	const visibleEntries = useMemo(() => {
+		if (!serverControl)
+			return takeVisibleWithPinMe(sortedEntries, visibleCount, viewerEntryId)
+		if (
+			!pinnedViewerEntry ||
+			sortedEntries.some(entry => entry.id === pinnedViewerEntry.id)
+		) {
+			return sortedEntries
+		}
+		return [...sortedEntries, pinnedViewerEntry]
+	}, [
+		pinnedViewerEntry,
+		serverControl,
+		sortedEntries,
+		viewerEntryId,
+		visibleCount
+	])
 	useEffect(() => {
 		onVisibleEntriesChange?.(visibleEntries)
 	}, [onVisibleEntriesChange, visibleEntries])
-	const total = sortedEntries.length
-	const hasMoreRows = total > visibleCount
-	const remaining = Math.max(0, total - visibleCount)
-	const canCollapse = visibleCount > PREVIEW_ROWS && total > PREVIEW_ROWS
+	const total = serverControl?.filteredEntries ?? sortedEntries.length
+	const hasMoreRows = serverControl?.hasMore ?? total > visibleCount
+	const remaining = Math.max(
+		0,
+		total - (serverControl ? sortedEntries.length : visibleEntries.length)
+	)
+	const canCollapse =
+		!serverControl && visibleCount > PREVIEW_ROWS && total > PREVIEW_ROWS
 	const nextStep = Math.min(ROW_STEP, remaining)
 
 	const formatOverallRank = (rank?: number) => {
@@ -210,11 +267,15 @@ export function TournamentTable({
 					<div className="flex items-center gap-2">
 						<span className="text-xs text-muted-foreground">{t('sortBy')}</span>
 						<Select
-							value={sortColumn}
+							value={effectiveSortColumn}
 							onValueChange={nextColumn => {
 								const column = nextColumn as TournamentSortColumn
-								setSortColumn(column)
-								setSortDirection(getDefaultDirectionForColumn(column))
+								const direction = getDefaultDirectionForColumn(column)
+								if (serverControl) serverControl.onSortChange(column, direction)
+								else {
+									setSortColumn(column)
+									setSortDirection(direction)
+								}
 							}}
 						>
 							<SelectTrigger
@@ -237,13 +298,15 @@ export function TournamentTable({
 						<button
 							type="button"
 							className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-							onClick={() =>
-								setSortDirection(direction =>
-									direction === 'asc' ? 'desc' : 'asc'
-								)
-							}
+							onClick={() => {
+								const direction =
+									effectiveSortDirection === 'asc' ? 'desc' : 'asc'
+								if (serverControl)
+									serverControl.onSortChange(effectiveSortColumn, direction)
+								else setSortDirection(direction)
+							}}
 						>
-							{sortDirection === 'asc' ? (
+							{effectiveSortDirection === 'asc' ? (
 								<ArrowUp
 									className="size-3.5"
 									aria-hidden="true"
@@ -254,7 +317,9 @@ export function TournamentTable({
 									aria-hidden="true"
 								/>
 							)}
-							{sortDirection === 'asc' ? t('ascending') : t('descending')}
+							{effectiveSortDirection === 'asc'
+								? t('ascending')
+								: t('descending')}
 						</button>
 					</div>
 
@@ -335,7 +400,7 @@ export function TournamentTable({
 				</div>
 
 				<ul
-					key={`${sortColumn}:${sortDirection}:${searchQuery}`}
+					key={`${effectiveSortColumn}:${effectiveSortDirection}:${searchQuery}`}
 					className="divide-y divide-border/50"
 				>
 					{visibleEntries.length > 0 ? (
@@ -578,7 +643,7 @@ export function TournamentTable({
 						{total > PREVIEW_ROWS ? (
 							<p className="text-xs text-muted-foreground">
 								{t('showingEntries', {
-									shown: Math.min(visibleCount, total),
+									shown: Math.min(visibleEntries.length, total),
 									total
 								})}
 							</p>
@@ -591,23 +656,28 @@ export function TournamentTable({
 										variant="outline"
 										size="sm"
 										className="min-h-10 w-full sm:w-auto"
-										onClick={() =>
-											setVisibleCount(count =>
-												Math.min(count + ROW_STEP, total)
-											)
-										}
+										onClick={() => {
+											if (serverControl) serverControl.onLoadMore()
+											else
+												setVisibleCount(count =>
+													Math.min(count + ROW_STEP, total)
+												)
+										}}
+										disabled={serverControl?.isLoadingMore}
 									>
 										{t('showMoreEntries', { count: nextStep })}
 									</Button>
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										className="min-h-10 w-full sm:w-auto"
-										onClick={() => setVisibleCount(total)}
-									>
-										{t('showAllEntries', { count: total })}
-									</Button>
+									{!serverControl ? (
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											className="min-h-10 w-full sm:w-auto"
+											onClick={() => setVisibleCount(total)}
+										>
+											{t('showAllEntries', { count: total })}
+										</Button>
+									) : null}
 								</>
 							) : null}
 							{canCollapse ? (
@@ -630,6 +700,11 @@ export function TournamentTable({
 				<EntryCompareSheet
 					entries={[compareSelection[0], compareSelection[1]]}
 					gameweek={gameweek}
+					tournamentId={
+						serverControl && tournamentId ? Number(tournamentId) : undefined
+					}
+					playerRevision={serverControl?.playerRevision}
+					onRevisionGone={serverControl?.onRevisionGone}
 					open={isCompareOpen}
 					onOpenChange={setIsCompareOpen}
 				/>

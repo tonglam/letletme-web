@@ -1,17 +1,31 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Button } from '@/components/ui/button'
+import {
+	Sheet,
+	SheetContent,
+	SheetHeader,
+	SheetTitle
+} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_LIVE_POINTS,
 	type LiveCalcData,
-	type LiveCalcDataResponse,
+	type LiveCalcDataResponse
 } from '@/lib/graphql/operations/live'
+import type {
+	TournamentEntrySquadsResponse,
+	TournamentLiveCalcData
+} from '@/lib/graphql/operations/tournaments'
+import {
+	comparisonPositionLabel,
+	mapComparisonPick
+} from '@/lib/tournament/entry-comparison'
 import { getPlayedPlayerLimit } from '@/lib/tournament/played-total'
 import type { TournamentEntry } from '@/types/tournament'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useFormatter, useTranslations } from 'next-intl'
 
 interface EntryCompareSheetProps {
@@ -19,7 +33,12 @@ interface EntryCompareSheetProps {
 	gameweek: number
 	open: boolean
 	onOpenChange: (open: boolean) => void
+	tournamentId?: number
+	playerRevision?: string
+	onRevisionGone?: () => Promise<void>
 }
+
+type CompareLiveData = LiveCalcData | TournamentLiveCalcData
 
 function getPlayedStatus(pick: {
 	minutes?: number | null
@@ -40,7 +59,11 @@ function getPlayedStatus(pick: {
 	return 'NOT_STARTED'
 }
 
-function PlayedDot({ status }: { status: 'FINISHED' | 'PLAYING' | 'NOT_STARTED' }) {
+function PlayedDot({
+	status
+}: {
+	status: 'FINISHED' | 'PLAYING' | 'NOT_STARTED'
+}) {
 	const color =
 		status === 'FINISHED'
 			? 'bg-success'
@@ -48,27 +71,19 @@ function PlayedDot({ status }: { status: 'FINISHED' | 'PLAYING' | 'NOT_STARTED' 
 				? 'bg-warning'
 				: 'bg-muted-foreground/30'
 	return (
-		<span
-			className={`inline-block size-2 shrink-0 rounded-full ${color}`}
-		/>
+		<span className={`inline-block size-2 shrink-0 rounded-full ${color}`} />
 	)
 }
 
-function elementTypeLabel(elementType: number, position: number): string {
-	if (position >= 12) return 'SUB'
-	switch (elementType) {
-		case 1: return 'GKP'
-		case 2: return 'DEF'
-		case 3: return 'MID'
-		case 4: return 'FWD'
-		default: return '—'
-	}
-}
-
 function ChipBadges({
-	chips,
+	chips
 }: {
-	chips: { bench: boolean; triple: boolean; wildcard: boolean; freeHit?: boolean }
+	chips: {
+		bench: boolean
+		triple: boolean
+		wildcard: boolean
+		freeHit?: boolean
+	}
 }) {
 	if (!chips.bench && !chips.triple && !chips.wildcard && !chips.freeHit) {
 		return <span className="text-muted-foreground">—</span>
@@ -119,14 +134,26 @@ interface OverviewRowProps {
 	rightWins?: boolean
 }
 
-function OverviewRow({ label, leftValue, rightValue, leftWins, rightWins }: OverviewRowProps) {
+function OverviewRow({
+	label,
+	leftValue,
+	rightValue,
+	leftWins,
+	rightWins
+}: OverviewRowProps) {
 	return (
 		<div className="grid grid-cols-[1fr_auto_1fr] items-center py-2 border-b last:border-0">
-			<div className={`text-right pr-3 text-sm ${leftWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}>
+			<div
+				className={`text-right pr-3 text-sm ${leftWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}
+			>
 				{leftValue}
 			</div>
-			<div className="text-xs text-muted-foreground text-center min-w-[80px] px-1">{label}</div>
-			<div className={`text-left pl-3 text-sm ${rightWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}>
+			<div className="text-xs text-muted-foreground text-center min-w-[80px] px-1">
+				{label}
+			</div>
+			<div
+				className={`text-left pl-3 text-sm ${rightWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}
+			>
 				{rightValue}
 			</div>
 		</div>
@@ -160,7 +187,12 @@ interface PlayerCompareRowProps {
 	isBench: boolean
 }
 
-function PlayerCompareRow({ leftPick, rightPick, posLabel, isBench }: PlayerCompareRowProps) {
+function PlayerCompareRow({
+	leftPick,
+	rightPick,
+	posLabel,
+	isBench
+}: PlayerCompareRowProps) {
 	const bg = isBench ? 'bg-accent/20' : ''
 	const leftStatus = leftPick ? getPlayedStatus(leftPick) : 'NOT_STARTED'
 	const rightStatus = rightPick ? getPlayedStatus(rightPick) : 'NOT_STARTED'
@@ -170,7 +202,9 @@ function PlayerCompareRow({ leftPick, rightPick, posLabel, isBench }: PlayerComp
 	const rightWins = rightPts > leftPts
 
 	return (
-		<div className={`grid grid-cols-[1fr_auto_1fr] items-center py-2 px-3 border-b last:border-0 ${bg}`}>
+		<div
+			className={`grid grid-cols-[1fr_auto_1fr] items-center py-2 px-3 border-b last:border-0 ${bg}`}
+		>
 			{/* Left entry player */}
 			<div className="flex items-center gap-1.5 justify-end">
 				{leftPick ? (
@@ -186,7 +220,9 @@ function PlayerCompareRow({ leftPick, rightPick, posLabel, isBench }: PlayerComp
 									: ''}
 						</span>
 						<PlayedDot status={leftStatus} />
-						<span className={`text-xs font-mono w-6 text-right flex-shrink-0 ${leftWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}>
+						<span
+							className={`text-xs font-mono w-6 text-right flex-shrink-0 ${leftWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}
+						>
 							{leftPts}
 						</span>
 					</>
@@ -196,13 +232,17 @@ function PlayerCompareRow({ leftPick, rightPick, posLabel, isBench }: PlayerComp
 			</div>
 
 			{/* Center position label */}
-			<div className="text-label text-muted-foreground text-center min-w-[36px] px-1 font-mono">{posLabel}</div>
+			<div className="text-label text-muted-foreground text-center min-w-[36px] px-1 font-mono">
+				{posLabel}
+			</div>
 
 			{/* Right entry player */}
 			<div className="flex items-center gap-1.5 justify-start">
 				{rightPick ? (
 					<>
-						<span className={`text-xs font-mono w-6 text-left flex-shrink-0 ${rightWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}>
+						<span
+							className={`text-xs font-mono w-6 text-left flex-shrink-0 ${rightWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}
+						>
 							{rightPts}
 						</span>
 						<PlayedDot status={rightStatus} />
@@ -225,50 +265,154 @@ function PlayerCompareRow({ leftPick, rightPick, posLabel, isBench }: PlayerComp
 	)
 }
 
-export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: EntryCompareSheetProps) {
+export function EntryCompareSheet({
+	entries,
+	gameweek,
+	open,
+	onOpenChange,
+	tournamentId,
+	playerRevision,
+	onRevisionGone
+}: EntryCompareSheetProps) {
 	const t = useTranslations('LiveTournament')
 	const format = useFormatter()
-	const [liveData, setLiveData] = useState<[LiveCalcData | null, LiveCalcData | null]>([null, null])
+	const [liveData, setLiveData] = useState<
+		[CompareLiveData | null, CompareLiveData | null]
+	>([null, null])
 	const [isLoading, setIsLoading] = useState(false)
+	const [loadError, setLoadError] = useState(false)
+	const [retryVersion, setRetryVersion] = useState(0)
+	const revisionRetryRef = useRef(false)
+	const comparisonIdentityRef = useRef<string | null>(null)
 
 	const entryIdA = entries[0]?.id
 	const entryIdB = entries[1]?.id
 
 	// Depend on stable entry ids — parent often passes a new `entries` array each render.
 	useEffect(() => {
-		if (!open || !entryIdA || !entryIdB) return
+		if (!open || !entryIdA || !entryIdB) {
+			comparisonIdentityRef.current = null
+			revisionRetryRef.current = false
+			return
+		}
+		const comparisonIdentity = [
+			open,
+			entryIdA,
+			entryIdB,
+			gameweek,
+			tournamentId ?? '',
+			playerRevision ?? ''
+		].join(':')
+		if (comparisonIdentityRef.current !== comparisonIdentity) {
+			comparisonIdentityRef.current = comparisonIdentity
+			revisionRetryRef.current = false
+		}
 
 		let cancelled = false
-		void Promise.resolve().then(async () => {
-			if (cancelled) return
-			setIsLoading(true)
-			setLiveData([null, null])
+		const controller = new AbortController()
+		void Promise.resolve()
+			.then(async () => {
+				if (cancelled) return
+				setIsLoading(true)
+				setLoadError(false)
+				setLiveData([null, null])
 
-			const [resA, resB] = await Promise.allSettled([
-				executeQuery<LiveCalcDataResponse>(GET_LIVE_POINTS, {
-					entryId: Number(entryIdA),
-					eventId: gameweek,
-				}),
-				executeQuery<LiveCalcDataResponse>(GET_LIVE_POINTS, {
-					entryId: Number(entryIdB),
-					eventId: gameweek,
-				}),
-			])
-
-			if (cancelled) return
-
-			const a =
-				resA.status === 'fulfilled' ? resA.value.calcLivePointsByEntry : null
-			const b =
-				resB.status === 'fulfilled' ? resB.value.calcLivePointsByEntry : null
-			setLiveData([a, b])
-			setIsLoading(false)
-		})
+				if (tournamentId && playerRevision) {
+					const params = new URLSearchParams({
+						eventId: String(gameweek),
+						revision: playerRevision,
+						entryIds: `${entryIdA},${entryIdB}`
+					})
+					const response = await fetch(
+						`/api/live/competitions/${tournamentId}/compare?${params.toString()}`,
+						{ cache: 'no-store', signal: controller.signal }
+					)
+					if (!response.ok) {
+						const errorBody = (await response.json().catch(() => null)) as {
+							error?: unknown
+						} | null
+						const errorCode =
+							typeof errorBody?.error === 'string' ? errorBody.error : null
+						if (
+							response.status === 409 &&
+							(errorCode === 'LIVE_BOARD_REVISION_GONE' ||
+								errorCode === 'LIVE_REVISION_GONE') &&
+							onRevisionGone &&
+							!revisionRetryRef.current
+						) {
+							revisionRetryRef.current = true
+							await onRevisionGone()
+							if (cancelled) return
+							setRetryVersion(version => version + 1)
+							return
+						}
+						throw new Error(
+							`Tournament comparison failed with ${response.status}`
+						)
+					}
+					const data = (await response.json()) as TournamentEntrySquadsResponse
+					if (cancelled) return
+					const rows = data.tournamentEntrySquads?.entries ?? []
+					const left = rows.find(row => row.entry === Number(entryIdA))
+					const right = rows.find(row => row.entry === Number(entryIdB))
+					if (!left || !right) {
+						throw new Error('Tournament comparison omitted a requested squad')
+					}
+					setLiveData([left, right])
+				} else {
+					const [resA, resB] = await Promise.allSettled([
+						executeQuery<LiveCalcDataResponse>(
+							GET_LIVE_POINTS,
+							{
+								entryId: Number(entryIdA),
+								eventId: gameweek
+							},
+							{ signal: controller.signal }
+						),
+						executeQuery<LiveCalcDataResponse>(
+							GET_LIVE_POINTS,
+							{
+								entryId: Number(entryIdB),
+								eventId: gameweek
+							},
+							{ signal: controller.signal }
+						)
+					])
+					if (cancelled) return
+					if (resA.status === 'rejected' || resB.status === 'rejected') {
+						throw new Error('Tournament comparison entry request failed')
+					}
+					setLiveData([
+						resA.value.calcLivePointsByEntry,
+						resB.value.calcLivePointsByEntry
+					])
+				}
+				setIsLoading(false)
+			})
+			.catch(error => {
+				if (cancelled) return
+				console.warn('Tournament comparison unavailable', {
+					name: error instanceof Error ? error.name : 'UnknownError'
+				})
+				setLiveData([null, null])
+				setLoadError(true)
+				setIsLoading(false)
+			})
 
 		return () => {
 			cancelled = true
+			controller.abort()
 		}
-	}, [open, entryIdA, entryIdB, gameweek])
+	}, [
+		open,
+		entryIdA,
+		entryIdB,
+		gameweek,
+		playerRevision,
+		retryVersion,
+		tournamentId,
+		onRevisionGone
+	])
 
 	const [entryA, entryB] = entries
 	const [liveA, liveB] = liveData
@@ -292,10 +436,14 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 		: [...entryB.picks].sort((a, b) => a.position - b.position)
 
 	const maxPicks = Math.max(picksA.length, picksB.length)
-	const formatOR = (rank?: number) => !rank || rank <= 0 ? '—' : format.number(rank, { notation: 'compact' })
+	const formatOR = (rank?: number) =>
+		!rank || rank <= 0 ? '—' : format.number(rank, { notation: 'compact' })
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
+		<Sheet
+			open={open}
+			onOpenChange={onOpenChange}
+		>
 			<SheetContent
 				side="right"
 				className="w-full sm:max-w-[680px] overflow-y-auto p-0 flex flex-col"
@@ -306,7 +454,9 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 						<span className="text-muted-foreground mx-2">{t('versus')}</span>
 						<span className="text-primary-ink">{entryB.teamName}</span>
 					</SheetTitle>
-					<p className="text-xs text-muted-foreground">{t('comparison', { gameweek })}</p>
+					<p className="text-xs text-muted-foreground">
+						{t('comparison', { gameweek })}
+					</p>
 				</SheetHeader>
 
 				<div className="flex-1 overflow-y-auto">
@@ -316,44 +466,82 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 						<div className="border rounded-lg overflow-hidden">
 							{/* Entry headers */}
 							<div className="grid grid-cols-[1fr_auto_1fr] bg-muted/30 px-3 py-2">
-								<div className="text-right text-xs font-medium truncate pr-3">{entryA.teamName}</div>
+								<div className="text-right text-xs font-medium truncate pr-3">
+									{entryA.teamName}
+								</div>
 								<div className="min-w-[80px]" />
-								<div className="text-left text-xs font-medium truncate pl-3">{entryB.teamName}</div>
+								<div className="text-left text-xs font-medium truncate pl-3">
+									{entryB.teamName}
+								</div>
 							</div>
 
 							<div className="px-3">
 								<OverviewRow
 									label={t('manager')}
-									leftValue={<span className="text-foreground text-xs">{entryA.managerName}</span>}
-									rightValue={<span className="text-foreground text-xs">{entryB.managerName}</span>}
+									leftValue={
+										<span className="text-foreground text-xs">
+											{entryA.managerName}
+										</span>
+									}
+									rightValue={
+										<span className="text-foreground text-xs">
+											{entryB.managerName}
+										</span>
+									}
 								/>
 								<OverviewRow
 									label={t('gameweekPointsShort')}
-									leftValue={gwPtsA == null ? '—' : costA > 0 ? `${gwPtsA} (-${costA})` : gwPtsA}
-									rightValue={gwPtsB == null ? '—' : costB > 0 ? `${gwPtsB} (-${costB})` : gwPtsB}
+									leftValue={
+										gwPtsA == null
+											? '—'
+											: costA > 0
+												? `${gwPtsA} (-${costA})`
+												: gwPtsA
+									}
+									rightValue={
+										gwPtsB == null
+											? '—'
+											: costB > 0
+												? `${gwPtsB} (-${costB})`
+												: gwPtsB
+									}
 									leftWins={gwPtsA != null && gwPtsB != null && gwPtsA > gwPtsB}
-									rightWins={gwPtsA != null && gwPtsB != null && gwPtsB > gwPtsA}
+									rightWins={
+										gwPtsA != null && gwPtsB != null && gwPtsB > gwPtsA
+									}
 								/>
 								<OverviewRow
 									label={t('gameweekNetShort')}
 									leftValue={gwNetA ?? '—'}
 									rightValue={gwNetB ?? '—'}
 									leftWins={gwNetA != null && gwNetB != null && gwNetA > gwNetB}
-									rightWins={gwNetA != null && gwNetB != null && gwNetB > gwNetA}
+									rightWins={
+										gwNetA != null && gwNetB != null && gwNetB > gwNetA
+									}
 								/>
 								<OverviewRow
 									label={t('totalPointsShort')}
 									leftValue={totalA ?? '—'}
 									rightValue={totalB ?? '—'}
 									leftWins={totalA != null && totalB != null && totalA > totalB}
-									rightWins={totalA != null && totalB != null && totalB > totalA}
+									rightWins={
+										totalA != null && totalB != null && totalB > totalA
+									}
 								/>
 								<OverviewRow
 									label={t('overallRank')}
 									leftValue={formatOR(entryA.overallRank)}
 									rightValue={formatOR(entryB.overallRank)}
-									leftWins={!!entryA.overallRank && !!entryB.overallRank && entryA.overallRank < entryB.overallRank}
-									rightWins={!!entryA.overallRank && !!entryB.overallRank && entryB.overallRank < entryA.overallRank}
+									leftWins={
+										!!entryA.overallRank &&
+										!!entryB.overallRank &&
+										entryA.overallRank < entryB.overallRank
+									}
+									rightWins={
+										!!entryA.overallRank &&
+										!!entryB.overallRank &&
+										entryB.overallRank < entryA.overallRank
+									}
 								/>
 								<OverviewRow
 									label={t('chip')}
@@ -378,61 +566,58 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 						{isLoading ? (
 							<div className="border rounded-lg overflow-hidden">
 								{Array.from({ length: 15 }).map((_, i) => (
-									<div key={i} className="grid grid-cols-[1fr_auto_1fr] items-center py-2 px-3 border-b last:border-0">
+									<div
+										key={i}
+										className="grid grid-cols-[1fr_auto_1fr] items-center py-2 px-3 border-b last:border-0"
+									>
 										<Skeleton className="h-3 w-24 ml-auto" />
 										<div className="min-w-[36px]" />
 										<Skeleton className="h-3 w-24" />
 									</div>
 								))}
 							</div>
+						) : loadError ? (
+							<div className="flex flex-col items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-8 text-center">
+								<p className="text-sm text-destructive">
+									{t('comparisonUnavailable')}
+								</p>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									onClick={() => setRetryVersion(version => version + 1)}
+								>
+									{t('errorCtaRetry')}
+								</Button>
+							</div>
 						) : (
 							<div className="border rounded-lg overflow-hidden">
 								{/* Column headers */}
 								<div className="grid grid-cols-[1fr_auto_1fr] bg-muted/30 px-3 py-1.5">
-									<div className="text-right text-label text-muted-foreground pr-3">{entryA.teamName}</div>
+									<div className="text-right text-label text-muted-foreground pr-3">
+										{entryA.teamName}
+									</div>
 									<div className="min-w-[36px]" />
-									<div className="text-left text-label text-muted-foreground pl-3">{entryB.teamName}</div>
+									<div className="text-left text-label text-muted-foreground pl-3">
+										{entryB.teamName}
+									</div>
 								</div>
 
 								{/* Starting XI label */}
 								<div className="px-3 py-1 bg-muted/10 border-b">
-									<span className="text-label text-muted-foreground font-medium">{t('startingEleven')}</span>
+									<span className="text-label text-muted-foreground font-medium">
+										{t('startingEleven')}
+									</span>
 								</div>
 
 								{Array.from({ length: Math.min(11, maxPicks) }).map((_, i) => {
 									const pA = picksA[i]
 									const pB = picksB[i]
 
-									const leftPick = liveA && pA
-										? {
-												webName: pA.webName,
-												totalPoints: (pA as { totalPoints?: number }).totalPoints ?? 0,
-												minutes: (pA as { minutes?: number }).minutes ?? 0,
-												starts: (pA as { starts?: boolean }).starts ?? false,
-												isCaptain: liveA.captainName === pA.webName
-											}
-										: pA
-											? { webName: pA.webName, totalPoints: 0, minutes: 0, starts: false, isCaptain: (pA as { isCaptain?: boolean }).isCaptain ?? false }
-											: null
+									const leftPick = mapComparisonPick(pA, Boolean(liveA))
+									const rightPick = mapComparisonPick(pB, Boolean(liveB))
 
-									const rightPick = liveB && pB
-										? {
-												webName: pB.webName,
-												totalPoints: (pB as { totalPoints?: number }).totalPoints ?? 0,
-												minutes: (pB as { minutes?: number }).minutes ?? 0,
-												starts: (pB as { starts?: boolean }).starts ?? false,
-												isCaptain: liveB.captainName === pB.webName
-											}
-										: pB
-											? { webName: pB.webName, totalPoints: 0, minutes: 0, starts: false, isCaptain: (pB as { isCaptain?: boolean }).isCaptain ?? false }
-											: null
-
-									const elementType = (pA as { elementType?: number; elementTypeName?: string })?.elementType
-										?? (pA as { elementTypeName?: string })?.elementTypeName
-										?? 0
-									const posLabel = typeof elementType === 'number'
-										? elementTypeLabel(elementType, i + 1)
-										: String(elementType ?? '—').slice(0, 3)
+									const posLabel = comparisonPositionLabel(pA ?? pB, i + 1)
 
 									return (
 										<PlayerCompareRow
@@ -448,49 +633,31 @@ export function EntryCompareSheet({ entries, gameweek, open, onOpenChange }: Ent
 								{/* Bench label */}
 								{maxPicks > 11 && (
 									<div className="px-3 py-1 bg-accent/30 border-b border-t">
-										<span className="text-label text-muted-foreground font-medium">{t('substitutes')}</span>
+										<span className="text-label text-muted-foreground font-medium">
+											{t('substitutes')}
+										</span>
 									</div>
 								)}
 
-								{maxPicks > 11 && Array.from({ length: maxPicks - 11 }).map((_, i) => {
-									const idx = 11 + i
-									const pA = picksA[idx]
-									const pB = picksB[idx]
+								{maxPicks > 11 &&
+									Array.from({ length: maxPicks - 11 }).map((_, i) => {
+										const idx = 11 + i
+										const pA = picksA[idx]
+										const pB = picksB[idx]
 
-									const leftPick = liveA && pA
-										? {
-												webName: pA.webName,
-												totalPoints: (pA as { totalPoints?: number }).totalPoints ?? 0,
-												minutes: (pA as { minutes?: number }).minutes ?? 0,
-												starts: (pA as { starts?: boolean }).starts ?? false,
-												isCaptain: liveA.captainName === pA.webName
-											}
-										: pA
-											? { webName: pA.webName, totalPoints: 0, minutes: 0, starts: false, isCaptain: (pA as { isCaptain?: boolean }).isCaptain ?? false }
-											: null
+										const leftPick = mapComparisonPick(pA, Boolean(liveA))
+										const rightPick = mapComparisonPick(pB, Boolean(liveB))
 
-									const rightPick = liveB && pB
-										? {
-												webName: pB.webName,
-												totalPoints: (pB as { totalPoints?: number }).totalPoints ?? 0,
-												minutes: (pB as { minutes?: number }).minutes ?? 0,
-												starts: (pB as { starts?: boolean }).starts ?? false,
-												isCaptain: liveB.captainName === pB.webName
-											}
-										: pB
-											? { webName: pB.webName, totalPoints: 0, minutes: 0, starts: false, isCaptain: (pB as { isCaptain?: boolean }).isCaptain ?? false }
-											: null
-
-									return (
-										<PlayerCompareRow
-											key={idx}
-											leftPick={leftPick}
-											rightPick={rightPick}
-											posLabel="SUB"
-											isBench
-										/>
-									)
-								})}
+										return (
+											<PlayerCompareRow
+												key={idx}
+												leftPick={leftPick}
+												rightPick={rightPick}
+												posLabel="SUB"
+												isBench
+											/>
+										)
+									})}
 							</div>
 						)}
 					</div>

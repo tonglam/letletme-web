@@ -342,6 +342,12 @@ export function OfficialH2HCompetitionView({
 				</Card>
 			) : null}
 
+			{snapshot && !snapshot.awaitingSchedule && !hasTraceableScore ? (
+				<Alert variant="warning">
+					<AlertDescription>{t('officialH2HPendingSettlement')}</AlertDescription>
+				</Alert>
+			) : null}
+
 			<div>
 				<Card className="overflow-hidden border-border/80 p-0 shadow-sm">
 					<div className="flex items-center gap-2 border-b border-border/60 px-4 py-3 sm:px-5">

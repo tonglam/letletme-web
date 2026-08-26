@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
+import { GraphQLRequestError } from '@/lib/graphql-client'
 import { GET_TOURNAMENT_ENTRY_SQUADS } from '@/lib/graphql/operations/tournaments'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getCurrentSeasonKey } from '@/lib/season'
@@ -20,7 +21,7 @@ export async function GET(
 	const entryIds = (params.get('entryIds') ?? '')
 		.split(',')
 		.map(Number)
-		.filter(Number.isSafeInteger)
+		.filter(entryId => Number.isSafeInteger(entryId) && entryId > 0)
 	if (
 		!Number.isSafeInteger(tournamentId) ||
 		tournamentId <= 0 ||
@@ -28,7 +29,8 @@ export async function GET(
 		eventId <= 0 ||
 		!revision ||
 		entryIds.length < 1 ||
-		entryIds.length > 2
+		entryIds.length > 2 ||
+		new Set(entryIds).size !== entryIds.length
 	)
 		return NextResponse.json(
 			{ error: 'Invalid live comparison parameters' },
@@ -49,10 +51,28 @@ export async function GET(
 		return NextResponse.json(data, {
 			headers: { 'Cache-Control': 'private, no-store' }
 		})
-	} catch {
+	} catch (error) {
+		const code = error instanceof GraphQLRequestError ? error.code : null
+		const status =
+			code === 'LIVE_BOARD_REVISION_GONE' || code === 'LIVE_REVISION_GONE'
+				? 409
+				: code === 'UNAUTHENTICATED'
+					? 401
+					: code === 'FORBIDDEN'
+						? 403
+						: 502
 		return NextResponse.json(
-			{ error: 'Comparison unavailable' },
-			{ status: 502 }
+			{
+				error:
+					status === 409
+						? code
+						: status === 401
+							? 'UNAUTHENTICATED'
+							: status === 403
+								? 'FORBIDDEN'
+								: 'Comparison unavailable'
+			},
+			{ status, headers: { 'Cache-Control': 'private, no-store' } }
 		)
 	}
 }
