@@ -73,8 +73,8 @@ Git:
   literal value `CNAME`)
 - `DNSPOD_DEFAULT_FALLBACK_VALUE`
 - `FALLBACK_HEALTH_URL`
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_CHAT_ID`
+- `TELEGRAM_NOTIFICATION_URL` for the existing LetLetMe notification bridge;
+  alternatively provide both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`
 
 `DNSPOD_EDGEONE_CNAME` is mandatory. It is a secret because the EdgeOne target
 is account-specific; merely declaring the name in `wrangler.toml` is not
@@ -99,8 +99,7 @@ wrangler secret put DNSPOD_EDGEONE_CNAME --config cloudflare/watchdog/wrangler.t
 wrangler secret put DNSPOD_DEFAULT_FALLBACK_TYPE --config cloudflare/watchdog/wrangler.toml
 wrangler secret put DNSPOD_DEFAULT_FALLBACK_VALUE --config cloudflare/watchdog/wrangler.toml
 wrangler secret put FALLBACK_HEALTH_URL --config cloudflare/watchdog/wrangler.toml
-wrangler secret put TELEGRAM_BOT_TOKEN --config cloudflare/watchdog/wrangler.toml
-wrangler secret put TELEGRAM_CHAT_ID --config cloudflare/watchdog/wrangler.toml
+wrangler secret put TELEGRAM_NOTIFICATION_URL --config cloudflare/watchdog/wrangler.toml
 wrangler deploy --config cloudflare/watchdog/wrangler.toml
 wrangler secret list --config cloudflare/watchdog/wrangler.toml
 ```
@@ -108,7 +107,10 @@ wrangler secret list --config cloudflare/watchdog/wrangler.toml
 Deploy the Worker with `WATCHDOG_ENABLED=false` first. Verify the live secret
 names include `DNSPOD_EDGEONE_CNAME`, `DNSPOD_EDGEONE_RECORD_ID`,
 `DNSPOD_DEFAULT_FALLBACK_TYPE`, `DNSPOD_DEFAULT_FALLBACK_VALUE`,
-`FALLBACK_HEALTH_URL`, both Telegram bindings, and both DNSPod API bindings.
+`FALLBACK_HEALTH_URL`, one complete alert channel, and both DNSPod API bindings.
+The notification bridge is preferred because it reuses the existing LetLetMe
+bot contract (`{ "type": "text", "text": "..." }`) without copying the bot
+token into a second service. Direct Telegram remains a supported fallback.
 Enter exactly `CNAME` when Wrangler prompts for
 `DNSPOD_DEFAULT_FALLBACK_TYPE`. Verify the forced Tencent/Vercel canary routes,
 the actual Cloudflare SaaS fallback marker, release parity, and a read-only dry

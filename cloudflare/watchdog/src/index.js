@@ -207,6 +207,16 @@ async function probeEdgeOneVercelApi(url, fetchImpl, timeoutMs) {
 }
 
 async function sendAlert(env, message, fetchImpl) {
+	if (env.TELEGRAM_NOTIFICATION_URL) {
+		const response = await fetchImpl(env.TELEGRAM_NOTIFICATION_URL, {
+			method: 'POST',
+			redirect: 'error',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ type: 'text', text: message })
+		})
+		if (!response.ok) throw new Error(`notification-bridge-${response.status}`)
+		return { sent: true, channel: 'notification-bridge' }
+	}
 	if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
 		console.error(JSON.stringify({ event: 'edgeone_watchdog_alert_missing_telegram', message }))
 		return { sent: false, reason: 'telegram-not-configured' }
