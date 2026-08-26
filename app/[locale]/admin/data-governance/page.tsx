@@ -283,12 +283,17 @@ export default async function DataGovernancePage({ params }: PageProps) {
 		dataApiRequest = undefined
 	}
 
+	const unavailableRequest = Promise.reject(
+		new Error('Web origin evidence is unavailable')
+	)
 	const [overviewResult, windowsResult, casesResult] = await Promise.allSettled(
-		[
-			getDataGovernanceOverview('1h', dataApiRequest),
-			getDataGovernanceWindows('1h', dataApiRequest),
-			getDataGovernanceCases(dataApiRequest)
-		]
+		dataApiRequest
+			? [
+					getDataGovernanceOverview('1h', dataApiRequest),
+					getDataGovernanceWindows('1h', dataApiRequest),
+					getDataGovernanceCases(dataApiRequest)
+				]
+			: [unavailableRequest, unavailableRequest, unavailableRequest]
 	)
 	const overview: DataGovernanceOverview | null =
 		overviewResult.status === 'fulfilled' ? overviewResult.value : null
@@ -483,7 +488,7 @@ export default async function DataGovernancePage({ params }: PageProps) {
 												</td>
 											</tr>
 										) : (
-											registryValues.slice(0, 22).map((value, index) => {
+											registryValues.map((value, index) => {
 												const item = record(value)
 												return (
 													<tr

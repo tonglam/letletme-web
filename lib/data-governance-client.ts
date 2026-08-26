@@ -180,6 +180,7 @@ export function selectGovernanceContract(
 	publicationConsistency: unknown
 	publicationConsistencyAvailable: boolean
 	governanceCases: unknown[]
+	governanceCasesAvailable: boolean
 	admissions: unknown[]
 	generatedAt: string | null
 } {
@@ -212,6 +213,7 @@ export function selectGovernanceContract(
 		const value = item as { contractKey?: unknown }
 		return value.contractKey === contractKey
 	})
+	const governanceCasesAvailable = Array.isArray(overview.governanceCases)
 	const admissions = (overview.admissions ?? []).filter(item => {
 		if (!item || typeof item !== 'object') return false
 		const name = (item as { name?: unknown }).name
@@ -232,6 +234,7 @@ export function selectGovernanceContract(
 		publicationConsistency: overview.publicationConsistency ?? null,
 		publicationConsistencyAvailable,
 		governanceCases,
+		governanceCasesAvailable,
 		admissions,
 		generatedAt: overview.generatedAt ?? null
 	}

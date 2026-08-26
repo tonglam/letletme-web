@@ -53,6 +53,11 @@ export async function GET(request: Request, { params }: RouteContext) {
 				'Data governance queue evidence is unavailable'
 			)
 		}
+		if (!Array.isArray(overview.governanceCases)) {
+			throw new DataGovernanceUnavailableError(
+				'Data governance case evidence is unavailable'
+			)
+		}
 		const contract = selectGovernanceContract(overview, contractKey)
 		if (!contract.registry) {
 			return NextResponse.json({ error: 'Contract not found' }, { status: 404 })
