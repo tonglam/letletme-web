@@ -47,6 +47,7 @@ const statusTone = (value: unknown): string => {
 	switch (value) {
 		case 'MET':
 		case 'HEALTHY':
+			return 'border-emerald-300/30 bg-emerald-300/10 text-emerald-200'
 		case 'BREACHED':
 		case 'INVALID':
 		case 'DRAIN_ONLY':
@@ -266,12 +267,28 @@ export default async function DataGovernancePage({ params }: PageProps) {
 		() => null
 	)
 	if (!session?.user || !isPlatformAdminIdentity(session.user)) notFound()
+	const requestHeaders = await headers()
+	let dataApiRequest: Request | undefined
+	try {
+		const host =
+			requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host')
+		const protocol =
+			requestHeaders.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'https'
+		if (host)
+			dataApiRequest = new Request(
+				`${protocol}://${host}/admin/data-governance`
+			)
+	} catch {
+		// The client will still fail closed if the deployment cannot provide a
+		// trustworthy origin for the Data API guard.
+		dataApiRequest = undefined
+	}
 
 	const [overviewResult, windowsResult, casesResult] = await Promise.allSettled(
 		[
-			getDataGovernanceOverview('1h'),
-			getDataGovernanceWindows('1h'),
-			getDataGovernanceCases()
+			getDataGovernanceOverview('1h', dataApiRequest),
+			getDataGovernanceWindows('1h', dataApiRequest),
+			getDataGovernanceCases(dataApiRequest)
 		]
 	)
 	const overview: DataGovernanceOverview | null =
@@ -292,8 +309,18 @@ export default async function DataGovernancePage({ params }: PageProps) {
 		typeof freshnessValue === 'object' &&
 		!Array.isArray(freshnessValue)
 	const freshness = record(freshnessValue)
-	const runtime = record(overview?.runtime)
-	const consistency = record(overview?.publicationConsistency)
+	const runtimeAvailable =
+		overview?.runtime !== null &&
+		typeof overview?.runtime === 'object' &&
+		!Array.isArray(overview?.runtime)
+	const consistencyAvailable =
+		overview?.publicationConsistency !== null &&
+		typeof overview?.publicationConsistency === 'object' &&
+		!Array.isArray(overview?.publicationConsistency)
+	const runtime = runtimeAvailable ? record(overview?.runtime) : {}
+	const consistency = consistencyAvailable
+		? record(overview?.publicationConsistency)
+		: {}
 	const windowsResponse =
 		windowsResult.status === 'fulfilled' ? windowsResult.value : null
 	const freshnessWindowsAvailable =
@@ -617,52 +644,64 @@ export default async function DataGovernancePage({ params }: PageProps) {
 									<p className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/40">
 										publication parity
 									</p>
-									<div className="mt-4 grid gap-2 sm:grid-cols-2">
-										{Object.entries(consistency).map(([key, value]) => (
-											<div
-												key={key}
-												className="flex items-center justify-between rounded-lg border border-white/8 bg-black/15 px-3 py-2"
-											>
-												<span className="font-mono text-xs text-white/65">
-													{key}
-												</span>
-												<Pill value={value === true ? 'MET' : 'INVALID'} />
-											</div>
-										))}
-									</div>
+									{!consistencyAvailable ? (
+										<div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 px-3 py-3 font-mono text-xs uppercase tracking-[0.12em] text-amber-200">
+											publication parity evidence unavailable
+										</div>
+									) : (
+										<div className="mt-4 grid gap-2 sm:grid-cols-2">
+											{Object.entries(consistency).map(([key, value]) => (
+												<div
+													key={key}
+													className="flex items-center justify-between rounded-lg border border-white/8 bg-black/15 px-3 py-2"
+												>
+													<span className="font-mono text-xs text-white/65">
+														{key}
+													</span>
+													<Pill value={value === true ? 'MET' : 'INVALID'} />
+												</div>
+											))}
+										</div>
+									)}
 								</div>
 								<div className="rounded-xl border border-white/10 bg-[#0b171d] p-5">
 									<p className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/40">
 										runtime inventory
 									</p>
-									<div className="mt-4 space-y-2">
-										{Object.entries(runtime).map(([key, value]) => {
-											const item = record(value)
-											return (
-												<div
-													key={key}
-													className="flex items-center justify-between rounded-lg border border-white/8 px-3 py-2"
-												>
-													<span className="font-mono text-xs text-white/65">
-														{key}
-													</span>
-													<span className="flex items-center gap-2">
-														<Pill
-															value={
-																item.healthy === true ? 'HEALTHY' : 'INVALID'
-															}
-														/>
-														<span className="font-mono text-[10px] text-white/35">
-															{text(
-																record(item.heartbeat).releaseSha,
-																'sha unavailable'
-															)}
+									{!runtimeAvailable ? (
+										<div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 px-3 py-3 font-mono text-xs uppercase tracking-[0.12em] text-amber-200">
+											runtime evidence unavailable
+										</div>
+									) : (
+										<div className="mt-4 space-y-2">
+											{Object.entries(runtime).map(([key, value]) => {
+												const item = record(value)
+												return (
+													<div
+														key={key}
+														className="flex items-center justify-between rounded-lg border border-white/8 px-3 py-2"
+													>
+														<span className="font-mono text-xs text-white/65">
+															{key}
 														</span>
-													</span>
-												</div>
-											)
-										})}
-									</div>
+														<span className="flex items-center gap-2">
+															<Pill
+																value={
+																	item.healthy === true ? 'HEALTHY' : 'INVALID'
+																}
+															/>
+															<span className="font-mono text-[10px] text-white/35">
+																{text(
+																	record(item.heartbeat).releaseSha,
+																	'sha unavailable'
+																)}
+															</span>
+														</span>
+													</div>
+												)
+											})}
+										</div>
+									)}
 								</div>
 							</div>
 						</section>

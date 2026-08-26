@@ -171,8 +171,14 @@ export function selectGovernanceContract(
 	contractKey: string
 	registry: NonNullable<DataGovernanceOverview['registry']>[number] | null
 	queues: unknown[]
+	queuesAvailable: boolean
+	queueHealthWindowsAvailable: boolean
 	obligations: unknown
 	freshness: unknown
+	runtime: unknown
+	runtimeAvailable: boolean
+	publicationConsistency: unknown
+	publicationConsistencyAvailable: boolean
 	governanceCases: unknown[]
 	admissions: unknown[]
 	generatedAt: string | null
@@ -191,6 +197,16 @@ export function selectGovernanceContract(
 			queueNames !== null && typeof name === 'string' && queueNames.has(name)
 		)
 	})
+	const queuesAvailable = Array.isArray(overview.queues)
+	const queueHealthWindowsAvailable = Array.isArray(overview.queueHealthWindows)
+	const runtimeAvailable =
+		overview.runtime !== null &&
+		typeof overview.runtime === 'object' &&
+		!Array.isArray(overview.runtime)
+	const publicationConsistencyAvailable =
+		overview.publicationConsistency !== null &&
+		typeof overview.publicationConsistency === 'object' &&
+		!Array.isArray(overview.publicationConsistency)
 	const governanceCases = (overview.governanceCases ?? []).filter(item => {
 		if (!item || typeof item !== 'object') return false
 		const value = item as { contractKey?: unknown }
@@ -199,14 +215,22 @@ export function selectGovernanceContract(
 	const admissions = (overview.admissions ?? []).filter(item => {
 		if (!item || typeof item !== 'object') return false
 		const name = (item as { name?: unknown }).name
-		return queueNames !== null && typeof name === 'string' && queueNames.has(name)
+		return (
+			queueNames !== null && typeof name === 'string' && queueNames.has(name)
+		)
 	})
 	return {
 		contractKey,
 		registry,
 		queues,
+		queuesAvailable,
+		queueHealthWindowsAvailable,
 		obligations: overview.obligations ?? null,
 		freshness: overview.freshness ?? null,
+		runtime: overview.runtime ?? null,
+		runtimeAvailable,
+		publicationConsistency: overview.publicationConsistency ?? null,
+		publicationConsistencyAvailable,
 		governanceCases,
 		admissions,
 		generatedAt: overview.generatedAt ?? null
