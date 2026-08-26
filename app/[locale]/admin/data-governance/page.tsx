@@ -47,11 +47,10 @@ const statusTone = (value: unknown): string => {
 	switch (value) {
 		case 'MET':
 		case 'HEALTHY':
-		case 'OPEN':
-			return 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300'
 		case 'BREACHED':
 		case 'INVALID':
 		case 'DRAIN_ONLY':
+		case 'OPEN':
 			return 'border-rose-400/30 bg-rose-400/10 text-rose-300'
 		case 'PENDING':
 		default:
@@ -142,10 +141,14 @@ const QueueRow = ({ value }: { value: unknown }) => {
 				<Pill value={health.backlogClass} />
 			</td>
 			<td className="py-3 pr-3 font-mono text-white/75">
-				{text(counts.waiting, '0')}
+				{text(counts.waiting)}
 			</td>
 			<td className="py-3 pr-3 font-mono text-white/75">
-				{durationSeconds(health.oldestRunnableAgeMs, '0')}s
+				{durationSeconds(health.oldestRunnableAgeMs)}
+				{health.oldestRunnableAgeMs === null ||
+				health.oldestRunnableAgeMs === undefined
+					? ''
+					: 's'}
 			</td>
 			<td className="py-3 font-mono text-white/55">
 				{durationSeconds(health.drainEtaMs)}
@@ -159,11 +162,20 @@ const QueueRow = ({ value }: { value: unknown }) => {
 
 const QueueHeatmap = ({
 	queues,
-	windows
+	windows,
+	available
 }: {
 	queues: unknown[]
 	windows: unknown[]
+	available: boolean
 }) => {
+	if (!available) {
+		return (
+			<div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 font-mono text-xs uppercase tracking-[0.12em] text-amber-200">
+				queue history evidence unavailable
+			</div>
+		)
+	}
 	const byQueue = new Map<string, Record<string, unknown>[]>()
 	for (const value of windows) {
 		const item = record(value)
@@ -264,9 +276,16 @@ export default async function DataGovernancePage({ params }: PageProps) {
 	)
 	const overview: DataGovernanceOverview | null =
 		overviewResult.status === 'fulfilled' ? overviewResult.value : null
-	const queueValues = array(overview?.queues)
-	const queueHealthWindows = array(overview?.queueHealthWindows)
-	const registryValues = array(overview?.registry)
+	const queuesAvailable = Array.isArray(overview?.queues)
+	const queueHealthWindowsAvailable = Array.isArray(
+		overview?.queueHealthWindows
+	)
+	const registryAvailable = Array.isArray(overview?.registry)
+	const queueValues = queuesAvailable ? array(overview?.queues) : []
+	const queueHealthWindows = queueHealthWindowsAvailable
+		? array(overview?.queueHealthWindows)
+		: []
+	const registryValues = registryAvailable ? array(overview?.registry) : []
 	const freshnessValue = overview?.freshness
 	const freshnessAvailable =
 		freshnessValue !== null &&
@@ -289,11 +308,20 @@ export default async function DataGovernancePage({ params }: PageProps) {
 	const governanceCases: unknown[] = casesAvailable ? casesPayload : []
 	const openGovernanceCases = governanceCases.filter(value => {
 		const status = record(value).status
-		return status === 'OPEN' || status === 'AUTO_REPAIRING' || status === 'REQUIRES_REVIEW'
+		return (
+			status === 'OPEN' ||
+			status === 'AUTO_REPAIRING' ||
+			status === 'REQUIRES_REVIEW'
+		)
 	})
 	const burn = record(overview?.errorBudgetBurn)
 	const burnRate =
 		typeof burn.burnRate === 'number' ? burn.burnRate.toFixed(2) : '—'
+	const burnCountersAvailable =
+		typeof burn.breached === 'number' && typeof burn.eligible === 'number'
+	const burnDetail = burnCountersAvailable
+		? `${text(burn.breached)} breaches / ${text(burn.eligible)} eligible`
+		: 'burn evidence unavailable'
 	const latestWindow = record(freshnessWindows[0])
 	const generatedAt = overview?.generatedAt ?? null
 
@@ -340,28 +368,62 @@ export default async function DataGovernancePage({ params }: PageProps) {
 							<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
 								<Metric
 									label="pending"
-									value={freshnessAvailable ? text(freshness.pending, '—') : '—'}
-									detail={freshnessAvailable ? 'open windows' : 'freshness evidence unavailable'}
+									value={
+										freshnessAvailable ? text(freshness.pending, '—') : '—'
+									}
+									detail={
+										freshnessAvailable
+											? 'open windows'
+											: 'freshness evidence unavailable'
+									}
 								/>
 								<Metric
 									label="breached"
-									value={freshnessAvailable ? text(freshness.breached, '—') : '—'}
-									detail={freshnessAvailable ? 'historical breach stays breach' : 'freshness evidence unavailable'}
+									value={
+										freshnessAvailable ? text(freshness.breached, '—') : '—'
+									}
+									detail={
+										freshnessAvailable
+											? 'historical breach stays breach'
+											: 'freshness evidence unavailable'
+									}
 								/>
 								<Metric
 									label="invalid"
-									value={freshnessAvailable ? text(freshness.invalid, '—') : '—'}
-									detail={freshnessAvailable ? 'cannot prove denominator' : 'freshness evidence unavailable'}
+									value={
+										freshnessAvailable ? text(freshness.invalid, '—') : '—'
+									}
+									detail={
+										freshnessAvailable
+											? 'cannot prove denominator'
+											: 'freshness evidence unavailable'
+									}
 								/>
 								<Metric
 									label="N/A"
-									value={freshnessAvailable ? text(freshness.notApplicable, '—') : '—'}
-									detail={freshnessAvailable ? 'late entrants excluded' : 'freshness evidence unavailable'}
+									value={
+										freshnessAvailable
+											? text(freshness.notApplicable, '—')
+											: '—'
+									}
+									detail={
+										freshnessAvailable
+											? 'late entrants excluded'
+											: 'freshness evidence unavailable'
+									}
 								/>
 								<Metric
 									label="oldest due"
-									value={freshnessAvailable ? dateText(freshness.oldestPendingDueAt) : '—'}
-									detail={freshnessAvailable ? 'Asia/Shanghai display' : 'freshness evidence unavailable'}
+									value={
+										freshnessAvailable
+											? dateText(freshness.oldestPendingDueAt)
+											: '—'
+									}
+									detail={
+										freshnessAvailable
+											? 'Asia/Shanghai display'
+											: 'freshness evidence unavailable'
+									}
 								/>
 							</div>
 							<div className="mt-4 overflow-x-auto rounded-xl border border-white/10 bg-[#0b171d] p-4">
@@ -376,31 +438,51 @@ export default async function DataGovernancePage({ params }: PageProps) {
 										</tr>
 									</thead>
 									<tbody>
-										{registryValues.slice(0, 22).map((value, index) => {
-											const item = record(value)
-											return (
-												<tr
-													key={`${text(item.contractKey)}-${index}`}
-													className="border-t border-white/8 text-sm"
+										{!registryAvailable ? (
+											<tr className="border-t border-white/8 text-sm">
+												<td
+													colSpan={5}
+													className="py-5 text-center font-mono text-xs uppercase tracking-[0.12em] text-amber-200"
 												>
-													<td className="py-3 pr-3 font-mono text-xs text-cyan-200">
-														{text(item.contractKey)}
-													</td>
-													<td className="py-3 pr-3 font-mono text-xs text-white/70">
-														{text(item.queueName)}
-													</td>
-													<td className="py-3 pr-3">
-														<Pill value={item.criticality} />
-													</td>
-													<td className="py-3 pr-3 text-white/60">
-														{text(item.cadence)}
-													</td>
-													<td className="py-3 text-xs text-white/50">
-														scheduler → consumer evidence
-													</td>
-												</tr>
-											)
-										})}
+													registry evidence unavailable
+												</td>
+											</tr>
+										) : registryValues.length === 0 ? (
+											<tr className="border-t border-white/8 text-sm">
+												<td
+													colSpan={5}
+													className="py-5 text-center font-mono text-xs uppercase tracking-[0.12em] text-white/45"
+												>
+													no contracts reported
+												</td>
+											</tr>
+										) : (
+											registryValues.slice(0, 22).map((value, index) => {
+												const item = record(value)
+												return (
+													<tr
+														key={`${text(item.contractKey)}-${index}`}
+														className="border-t border-white/8 text-sm"
+													>
+														<td className="py-3 pr-3 font-mono text-xs text-cyan-200">
+															{text(item.contractKey)}
+														</td>
+														<td className="py-3 pr-3 font-mono text-xs text-white/70">
+															{text(item.queueName)}
+														</td>
+														<td className="py-3 pr-3">
+															<Pill value={item.criticality} />
+														</td>
+														<td className="py-3 pr-3 text-white/60">
+															{text(item.cadence)}
+														</td>
+														<td className="py-3 text-xs text-white/50">
+															scheduler → consumer evidence
+														</td>
+													</tr>
+												)
+											})
+										)}
 									</tbody>
 								</table>
 							</div>
@@ -471,6 +553,7 @@ export default async function DataGovernancePage({ params }: PageProps) {
 							<QueueHeatmap
 								queues={queueValues}
 								windows={queueHealthWindows}
+								available={queuesAvailable && queueHealthWindowsAvailable}
 							/>
 						</section>
 
@@ -492,12 +575,32 @@ export default async function DataGovernancePage({ params }: PageProps) {
 										</tr>
 									</thead>
 									<tbody>
-										{queueValues.map((value, index) => (
-											<QueueRow
-												key={`${text(record(value).name)}-${index}`}
-												value={value}
-											/>
-										))}
+										{!queuesAvailable ? (
+											<tr className="border-t border-white/8 text-sm">
+												<td
+													colSpan={5}
+													className="py-5 text-center font-mono text-xs uppercase tracking-[0.12em] text-amber-200"
+												>
+													queue evidence unavailable
+												</td>
+											</tr>
+										) : queueValues.length === 0 ? (
+											<tr className="border-t border-white/8 text-sm">
+												<td
+													colSpan={5}
+													className="py-5 text-center font-mono text-xs uppercase tracking-[0.12em] text-white/45"
+												>
+													no queues reported
+												</td>
+											</tr>
+										) : (
+											queueValues.map((value, index) => (
+												<QueueRow
+													key={`${text(record(value).name)}-${index}`}
+													value={value}
+												/>
+											))
+										)}
 									</tbody>
 								</table>
 							</div>
@@ -574,7 +677,7 @@ export default async function DataGovernancePage({ params }: PageProps) {
 								<Metric
 									label={`${text(overview?.window, '1h')} burn`}
 									value={burnRate}
-									detail={`${text(burn.breached, '0')} breaches / ${text(burn.eligible, '0')} eligible`}
+									detail={burnDetail}
 								/>
 								<Metric
 									label="target"
@@ -588,7 +691,9 @@ export default async function DataGovernancePage({ params }: PageProps) {
 								/>
 								<Metric
 									label="open cases"
-									value={casesAvailable ? String(openGovernanceCases.length) : '—'}
+									value={
+										casesAvailable ? String(openGovernanceCases.length) : '—'
+									}
 									detail={
 										casesAvailable
 											? 'deduplicated repair work'

@@ -43,6 +43,11 @@ export async function GET(request: Request, { params }: RouteContext) {
 
 	try {
 		const overview = await getDataGovernanceOverview(window, request)
+		if (!Array.isArray(overview.registry)) {
+			throw new DataGovernanceUnavailableError(
+				'Data governance registry evidence is unavailable'
+			)
+		}
 		const contract = selectGovernanceContract(overview, contractKey)
 		if (!contract.registry) {
 			return NextResponse.json({ error: 'Contract not found' }, { status: 404 })
