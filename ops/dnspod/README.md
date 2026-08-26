@@ -27,7 +27,7 @@ line. It reads the exact record identified by:
 
 The watchdog checks two EdgeOne paths before resetting its failure streak: the
 dedicated `eo-tencent-canary.letletme.top/healthz` safe-read path must report
-`origin: tencent`, and the existing `eo-canary.letletme.top` safe
+`origin: tencent`, and the existing `eo-personal-canary.letletme.top` safe
 GraphQL POST path must report `origin: vercel`. Both canary hostnames must be
 configured with explicit EdgeOne origin rules; the Tencent rule must force the
 Lighthouse origin and the Vercel rule must force the Vercel origin. This makes

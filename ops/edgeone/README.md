@@ -122,7 +122,7 @@ The EdgeOne rule must require all of the following before selecting Tencent:
 4. Reuse the existing `letletme.top` CNAME-mode EdgeOne site in the global
    area; do not create a second site.
 5. Keep the existing EdgeOne canary hostname
-   `eo-canary.letletme.top` until a public cutover is approved.
+   `eo-personal-canary.letletme.top` until a public cutover is approved.
 6. Store the live EdgeOne-assigned CNAME value in the
    `DNSPOD_EDGEONE_CNAME` Worker secret when preparing the watchdog; do not use
    the canary hostname as the secret value. Keep
@@ -234,7 +234,7 @@ schedule; no DNSPod or EdgeOne secret belongs in Git:
 - `EDGEONE_TENCENT_HEALTH_URL` (the isolated
   `eo-tencent-canary.letletme.top` EdgeOne route that unconditionally reaches
   Tencent, never the user apex), `EDGEONE_VERCEL_API_URL` (the existing
-  `eo-canary.letletme.top` route that forces the Vercel origin), and
+  `eo-personal-canary.letletme.top` route that forces the Vercel origin), and
   `VERCEL_HEALTH_URL` (direct Vercel)
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `WATCHDOG_ENABLED`
 
