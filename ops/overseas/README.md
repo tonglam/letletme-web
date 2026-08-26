@@ -20,6 +20,8 @@ clear-text path requires both a current official Cloudflare source CIDR and
 Cloudflare's original-HTTPS marker; browser-supplied forwarding headers alone
 cannot select it. Refresh the CIDR snapshot from
 `https://api.cloudflare.com/client/v4/ips` immediately before the transition.
+The same source validation gates use of `CF-Connecting-IP`; the rate-limit and
+forwarding identity fall back to the socket address for direct DNSPod traffic.
 
 ## Staging without traffic changes
 
