@@ -125,6 +125,10 @@ describe('live tournament filter visibility', () => {
 
 		assert.match(clientSource, /setShowAdvancedFilters\(open => !open\)/)
 		assert.match(clientSource, /<LiveCompetitionBoardFilters/)
+		assert.match(
+			clientSource,
+			/playerRevision: boardPage\.playerRevision,\s*onRevisionGone: handleBoardRevisionGone/
+		)
 		assert.match(filtersSource, /t\('playerOwnership'\)/)
 		assert.match(filtersSource, /t\('teamExposure'\)/)
 	})

@@ -974,7 +974,9 @@ export default function TournamentClient({
 		selectedGameweek,
 		selectedTournamentId
 	])
-	const handleBoardRevisionGone = useCallback(() => refresh(), [refresh])
+	const handleBoardRevisionGone = useCallback(async (): Promise<void> => {
+		await refresh()
+	}, [refresh])
 
 	const autoRefresh = useCallback(async (): Promise<void> => {
 		try {
@@ -1114,12 +1116,14 @@ export default function TournamentClient({
 						filteredEntries: boardPage.filteredEntries,
 						isLoadingMore: isLoadingMore || isRefreshing || isLoadingInitial,
 						onLoadMore: () => void loadMore(),
-						playerRevision: boardPage.playerRevision
+						playerRevision: boardPage.playerRevision,
+						onRevisionGone: handleBoardRevisionGone
 					}
 				: undefined,
 		[
 			applySort,
 			boardPage,
+			handleBoardRevisionGone,
 			isLoadingInitial,
 			isLoadingMore,
 			isRefreshing,
