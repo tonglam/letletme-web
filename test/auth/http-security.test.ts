@@ -89,7 +89,7 @@ test('uses loopback as the local development client IP for Mini ingress', () => 
 	)
 })
 
-test('trusts one valid proxy IP during a controlled two-secret rotation', () => {
+test('trusts one valid Nginx-injected IP only with the active proxy secret', () => {
 	const previousAuthUrl = process.env.BETTER_AUTH_URL
 	const previousProxySecret = process.env.LETLETME_LOCAL_PROXY_SECRET
 	const previousLegacyProxySecret =
@@ -116,7 +116,7 @@ test('trusts one valid proxy IP during a controlled two-secret rotation', () => 
 					'x-letletme-proxy-secret': 'previous-proxy-secret'
 				})
 			),
-			'203.0.113.7'
+			'unknown'
 		)
 		assert.equal(
 			resolveProviderClientIp(
@@ -147,18 +147,6 @@ test('trusts one valid proxy IP during a controlled two-secret rotation', () => 
 				})
 			),
 			'unknown'
-		)
-		delete process.env.LETLETME_LOCAL_PROXY_SECRET
-		assert.equal(
-			resolveProviderClientIp(
-				new Headers({
-					host: 'letletme.top',
-					'x-letletme-proxy-client-ip': '203.0.113.7',
-					'x-letletme-proxy-secret': 'previous-proxy-secret'
-				})
-			),
-			'unknown',
-			'a secondary secret must never become trusted without an active secret'
 		)
 	} finally {
 		if (previousAuthUrl === undefined) delete process.env.BETTER_AUTH_URL
