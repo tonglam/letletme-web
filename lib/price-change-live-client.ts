@@ -13,8 +13,9 @@ const HOT_WINDOW_AFTER_MS = 5 * 60_000
 const HOT_POLL_MS = 2_000
 const IDLE_POLL_MS = 60_000
 const HIDDEN_POLL_MS = 30_000
+const LIVE_DISABLED_REFRESH_MS = 5 * 60_000
 
-function enabled(): boolean {
+export function isPriceChangeLiveEnabled(): boolean {
 	const raw = process.env.NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED
 	if (raw === undefined) return process.env.NODE_ENV !== 'production'
 	return ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase())
@@ -51,7 +52,8 @@ function isLiveBoard(value: unknown): value is LiveBoardResponse {
 
 function nextDeadlineMs(board: PriceChangeBoard): number | null {
 	const now = Date.now()
-	const candidates = board.nextDeadlines
+	const candidates = [board.deadline, ...board.nextDeadlines]
+		.filter((value): value is string => typeof value === 'string')
 		.map(value => Date.parse(value))
 		.filter(timestamp => Number.isFinite(timestamp))
 		.filter(
@@ -75,12 +77,16 @@ function pollTimeoutMs(board: PriceChangeBoard): number {
 	return isHotWindow(board) ? HOT_POLL_MS : IDLE_POLL_MS
 }
 
-async function fetchJson<T>(url: string, timeoutMs: number): Promise<T | null> {
+async function fetchJson<T>(
+	url: string,
+	timeoutMs: number,
+	cache: RequestCache = 'no-store'
+): Promise<T | null> {
 	const controller = new AbortController()
 	const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
 	try {
 		const response = await fetch(url, {
-			cache: 'no-store',
+			cache,
 			headers: { Accept: 'application/json' },
 			signal: controller.signal
 		})
@@ -101,12 +107,14 @@ export function usePriceChangeLiveBoard({
 	onUpdate: (board: PriceChangeBoard, state: PriceChangeLiveState) => void
 }): void {
 	const boardRef = useRef(board)
+	const durableBoardRef = useRef(board)
 	const onUpdateRef = useRef(onUpdate)
 	const revisionRef = useRef(board.revision)
 	const stateRef = useRef<PriceChangeLiveState>('DURABLE')
 
 	useEffect(() => {
 		boardRef.current = board
+		durableBoardRef.current = board
 		revisionRef.current = board.revision
 		stateRef.current = 'DURABLE'
 	}, [board])
@@ -116,7 +124,7 @@ export function usePriceChangeLiveBoard({
 	}, [onUpdate])
 
 	useEffect(() => {
-		if (!enabled()) return
+		if (!isPriceChangeLiveEnabled()) return
 		let stopped = false
 		let timer: number | null = null
 		let requestInFlight = false
@@ -133,27 +141,49 @@ export function usePriceChangeLiveBoard({
 				if (!document.hidden) {
 					const cursor = await fetchJson<LiveCursorResponse>(
 						'/api/price-changes/live-cursor',
-						1_500
+						1_500,
+						'default'
 					)
-					if (
-						isLiveCursor(cursor) &&
-						cursor.revision &&
-						(cursor.revision !== revisionRef.current ||
-							cursor.state !== stateRef.current)
-					) {
-						const live = await fetchJson<LiveBoardResponse>(
-							`/api/price-changes/live-board?revision=${encodeURIComponent(cursor.revision)}`,
-							2_500
-						)
-						if (
-							isLiveBoard(live) &&
-							live.revision === cursor.revision &&
-							live.state !== 'UNAVAILABLE'
+					if (isLiveCursor(cursor)) {
+						if (!cursor.revision || cursor.state === 'UNAVAILABLE') {
+							// A provisional snapshot can expire or be withdrawn before
+							// the next poll. Restore the durable seed immediately instead
+							// of leaving expired prices on screen indefinitely.
+							const fallback = durableBoardRef.current
+							if (
+								stateRef.current !== cursor.state ||
+								boardRef.current !== fallback
+							) {
+								revisionRef.current = fallback.revision
+								stateRef.current = cursor.state
+								boardRef.current = fallback
+								onUpdateRef.current(fallback, cursor.state)
+							}
+						} else if (
+							cursor.revision !== revisionRef.current ||
+							cursor.state !== stateRef.current
 						) {
-							revisionRef.current = live.revision
-							stateRef.current = live.state
-							boardRef.current = live.board
-							onUpdateRef.current(live.board, live.state)
+							const url =
+								cursor.state === 'PROVISIONAL'
+									? `/api/price-changes/live-board?revision=${encodeURIComponent(cursor.revision)}`
+									: '/api/price-changes/live-board'
+							const live = await fetchJson<LiveBoardResponse>(url, 2_500)
+							const revisionMatches =
+								cursor.state !== 'PROVISIONAL' ||
+								live?.revision === cursor.revision
+							if (
+								isLiveBoard(live) &&
+								revisionMatches &&
+								live.state !== 'UNAVAILABLE'
+							) {
+								revisionRef.current = live.revision
+								stateRef.current = live.state
+								boardRef.current = live.board
+								if (live.state === 'DURABLE') {
+									durableBoardRef.current = live.board
+								}
+								onUpdateRef.current(live.board, live.state)
+							}
 						}
 					}
 				}
@@ -181,3 +211,5 @@ export function usePriceChangeLiveBoard({
 		}
 	}, [])
 }
+
+export { LIVE_DISABLED_REFRESH_MS }

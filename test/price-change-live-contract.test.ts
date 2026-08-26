@@ -19,9 +19,11 @@ describe('price-change live delivery contract', () => {
 		assert.match(board, /searchParams\.get\('revision'\)/)
 		assert.match(client, /HOT_POLL_MS = 2_000/)
 		assert.match(client, /IDLE_POLL_MS = 60_000/)
+		assert.match(client, /\[board\.deadline, \.\.\.board\.nextDeadlines\]/)
 		assert.match(client, /visibilitychange/)
 		assert.match(component, /liveState === 'PROVISIONAL'/)
 		assert.match(component, /persistLastValidBoard\(nextBoard\)/)
+		assert.match(component, /router\.refresh\(\)/)
 	})
 
 	it('does not persist provisional data into the durable offline cache', async () => {

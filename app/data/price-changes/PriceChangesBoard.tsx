@@ -31,7 +31,6 @@ import type {
 	PriceChangeBoard,
 	PriceChangePlayer
 } from '@/lib/graphql/operations/price-changes'
-<<<<<<< HEAD
 import { usePriceChangeLiveBoard } from '@/lib/price-change-live-client'
 import type { TimeLeft } from '@/lib/home-deadline'
 import {
