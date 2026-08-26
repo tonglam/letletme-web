@@ -754,23 +754,25 @@ export default function TournamentDetailClient({
 		void refreshStandings(null, pending.sort, pending.direction, pending.search)
 	}, [rateLimitSeconds, refreshStandings])
 
-	const previousSearchQueryRef = useRef(searchQuery)
 	useEffect(() => {
-		const previous = previousSearchQueryRef.current
-		previousSearchQueryRef.current = searchQuery
+		const normalizedSearch = searchQuery.trim()
 		if (
-			previous === searchQuery ||
-			!boardPage ||
+			appliedBoardSearchRef.current === normalizedSearch ||
 			!currentTournament ||
 			!standingsReady ||
 			!currentGameweek ||
 			isOfficialH2H
 		)
 			return
-		const timer = window.setTimeout(() => void refreshStandings(), 250)
+		// Keep this timer scoped to the search value. Page appends update
+		// boardPage, but must not cancel a pending page-one replacement for the
+		// current search or leave an old page mixed into the new query.
+		const timer = window.setTimeout(() => {
+			if (searchQueryRef.current.trim() !== normalizedSearch) return
+			void refreshStandings(null, undefined, undefined, normalizedSearch)
+		}, 250)
 		return () => window.clearTimeout(timer)
 	}, [
-		boardPage,
 		currentGameweek,
 		currentTournament,
 		isOfficialH2H,
