@@ -15,11 +15,23 @@ Create these without committing them:
   the same value is the Worker `ORIGIN_TOKEN` secret.
 - `/etc/letletme/local-proxy-secret` (`root:root`, `0600`) — a different 32-byte
   hex secret used only between Nginx and Node.
-- Do not retain `LETLETME_LOCAL_PROXY_SECRET_PREVIOUS` in steady state. A
-  planned rotation may use a temporary, reviewed application release that
-  explicitly accepts the prior value, but the final release must remove both
-  that compatibility path and the previous-value environment variable after
-  every trusted proxy has switched to the new value.
+- Do not retain `LETLETME_LOCAL_PROXY_SECRET_PREVIOUS` in steady state. The
+  temporary rotation release accepts it only when the active value is also
+  configured; an orphaned secondary value is never trusted. Use the following
+  fail-closed sequence, without printing either value:
+  1. generate a new value and configure it as the secondary value on Vercel
+     and Tencent while the existing active value remains unchanged;
+  2. deploy the reviewed two-secret release to Vercel and Tencent at the same
+     SHA, then prove both values independently against the trusted-host path;
+  3. switch the Cloudflare Transform Rule and EdgeOne trusted-proxy header to
+     the new value, then switch Tencent Nginx to the new value while the app
+     still accepts both;
+  4. make the new value active, remove the secondary value everywhere, and
+     deploy a reviewed steady-state release that removes the compatibility
+     path; verify forged and former values are rejected.
+  Keep only SHA-256 fingerprints in release evidence. Any failed check leaves
+  public routing on Vercel and rolls the changed injector back before the old
+  value is removed.
 - `/etc/letletme/tls/origin.pem` and `origin-key.pem` — a publicly trusted
   certificate chain and private key for `letletme.top` (for example an ACME
   certificate), readable by Nginx. Cloudflare Origin CA material alone is not
