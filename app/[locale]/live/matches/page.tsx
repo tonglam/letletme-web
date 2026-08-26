@@ -3,6 +3,7 @@ import { SeasonPhaseState } from '@/components/feedback/SeasonPhaseState'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import { getLiveMatchesSnapshot } from '@/lib/live-matches'
+import { selectLiveMatchEvent } from '@/lib/live-match-selection'
 import { getLivePageContext } from '@/lib/live-context-server'
 import { getTranslations } from 'next-intl/server'
 
@@ -63,6 +64,16 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 		snapshot = live.snapshot
 		renderedCurrentEventId = live.currentEventId ?? currentEventId
 		renderedNextEventId = live.nextEventId
+		const selectedEventId = selectLiveMatchEvent(
+			matches,
+			renderedCurrentEventId,
+			new Date()
+		)
+		if (selectedEventId !== renderedCurrentEventId) {
+			matches = matches.filter(match => match.eventId === selectedEventId)
+			renderedCurrentEventId = selectedEventId
+			snapshot = null
+		}
 		if (snapshot?.eventId != null && snapshot.eventId !== currentEventId) {
 			console.warn(
 				'[live/matches] liveSnapshot.eventId differs from isCurrent',

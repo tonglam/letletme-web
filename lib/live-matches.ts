@@ -426,6 +426,7 @@ export function transformLiveMatches(
 ): Match[] {
 	const matches: Match[] = rows.map(row => ({
 		id: String(row.fixtureId),
+		eventId: row.eventId,
 		homeTeam: {
 			id: row.homeTeamId,
 			name: row.homeTeamName,
@@ -478,6 +479,7 @@ export function transformUpcomingFixtures(
 ): Match[] {
 	return fixtures.map(fixture => ({
 		id: `next-${'fixtureId' in fixture ? fixture.fixtureId : fixture.id}`,
+		eventId: 'eventId' in fixture ? fixture.eventId : undefined,
 		homeTeam: {
 			name:
 				'homeTeamName' in fixture
