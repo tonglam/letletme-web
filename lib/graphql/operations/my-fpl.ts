@@ -6,6 +6,7 @@ export type MyFplReviewState =
 
 export type MyFplSnapshotKind = 'PROVISIONAL' | 'FINAL'
 export type MyFplSnapshotFreshness = 'CURRENT' | 'GENERATING' | 'STALE'
+export type MyFplScoreSource = 'FPL_EVENT_LIVE' | 'FPL_FINAL_RESULT'
 
 export interface MyFplSnapshotMeta {
 	revision: string
@@ -15,6 +16,12 @@ export interface MyFplSnapshotMeta {
 	publishedAt: string
 	kind: MyFplSnapshotKind
 	freshness: MyFplSnapshotFreshness
+	scoreSource: MyFplScoreSource
+	livePublicationId: string | null
+	liveRevision: string | null
+	algorithmVersion: string | null
+	sourceMinCheckedAt: string
+	sourceMaxCheckedAt: string
 }
 
 export interface MyFplReviewContext {
@@ -362,6 +369,12 @@ const SNAPSHOT_META_FIELDS = `
       publishedAt
       kind
       freshness
+      scoreSource
+      livePublicationId
+      liveRevision
+      algorithmVersion
+      sourceMinCheckedAt
+      sourceMaxCheckedAt
 `
 
 const TEAM_HISTORY_FIELDS = `

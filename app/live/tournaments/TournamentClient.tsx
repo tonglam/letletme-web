@@ -45,6 +45,10 @@ import {
 	type LiveBoardFilterState
 } from '@/lib/tournament/live-board'
 import { liveContextToSnapshot } from '@/lib/live-refresh'
+import {
+	liveManagerScoreAuthorityLabel,
+	traceableOfficialManagerScore
+} from '@/lib/live-manager-score'
 import { formatLiveAveragePoints } from '@/lib/tournament/liveEntries'
 import {
 	areTournamentStandingsReady,
@@ -201,6 +205,7 @@ export default function TournamentClient({
 	sessionCacheKey
 }: TournamentClientProps) {
 	const t = useTranslations('LiveTournament')
+	const scoreT = useTranslations('LivePoints')
 	const lifecycleT = useTranslations('TournamentLifecycle')
 	const filtersT = useTranslations('Filters')
 	const isPageActive = usePageActive()
@@ -1033,6 +1038,18 @@ export default function TournamentClient({
 
 	const managerStatus = useMemo(() => {
 		if (!boardPage) return t('scoreConfirming')
+		const authorityLabels = new Set(
+			boardPage.rows
+				.map(row =>
+					liveManagerScoreAuthorityLabel(
+						traceableOfficialManagerScore(row.score),
+						{ projected: scoreT('scoreProjected'), final: scoreT('scoreFinal') }
+					)
+				)
+				.filter((label): label is string => label !== null)
+		)
+		const authorityLabel =
+			authorityLabels.size === 1 ? Array.from(authorityLabels)[0] : null
 		if (showingLastGood) return t('showingLastGood')
 		if (boardPage.failedEntryCount > 0)
 			return t('calculationFailed', { count: boardPage.failedEntryCount })
@@ -1058,8 +1075,8 @@ export default function TournamentClient({
 			boardPage.officialCoverage === 0
 		)
 			return t('scoreOfficialUnavailable')
-		return t('scoreOfficialLive')
-	}, [boardPage, showingLastGood, t])
+		return authorityLabel ?? t('scoreOfficialLive')
+	}, [boardPage, scoreT, showingLastGood, t])
 	const boardCoverageSummary = useMemo(() => {
 		if (!boardPage) return null
 		const parts = [

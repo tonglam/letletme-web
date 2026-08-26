@@ -123,6 +123,18 @@ const validateScore = (
 	for (const field of ['source', 'state', 'eventPointSemantics']) {
 		if (typeof value[field] !== 'string') missing.push(`${path}.${field}`)
 	}
+	if (
+		value.source !== 'FPL_EVENT_LIVE' &&
+		value.source !== 'FPL_FINAL_RESULT' &&
+		value.source !== 'UNAVAILABLE'
+	)
+		missing.push(`${path}.source`)
+	if (
+		value.calculationMode !== 'PROJECTED_AUTOSUBS' &&
+		value.calculationMode !== 'FINAL_RESULT' &&
+		value.calculationMode !== null
+	)
+		missing.push(`${path}.calculationMode`)
 	if (!validDate(value.checkedAt)) missing.push(`${path}.checkedAt`)
 	if (!validDate(value.nextRefreshAt)) missing.push(`${path}.nextRefreshAt`)
 }

@@ -57,7 +57,10 @@ import {
 	countTraceableTournamentScores,
 	getTournamentManagerNextRefreshAt
 } from '@/lib/tournament/liveEntries'
-import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
+import {
+	liveManagerScoreAuthorityLabel,
+	traceableOfficialManagerScore
+} from '@/lib/live-manager-score'
 import type {
 	TournamentSortColumn,
 	TournamentSortDirection
@@ -377,6 +380,18 @@ export default function TournamentDetailClient({
 	)
 	const managerScoreSettling = rows.some(row => row.score?.state === 'SETTLING')
 	const managerScoreStatus = useMemo(() => {
+		const authorityLabels = new Set(
+			rows
+				.map(row =>
+					liveManagerScoreAuthorityLabel(
+						traceableOfficialManagerScore(row.score),
+						{ projected: scoreT('scoreProjected'), final: scoreT('scoreFinal') }
+					)
+				)
+				.filter((label): label is string => label !== null)
+		)
+		const authorityLabel =
+			authorityLabels.size === 1 ? Array.from(authorityLabels)[0] : null
 		if (boardPage) {
 			if (boardPage.failedEntryCount > 0)
 				return t('calculationFailed', {
@@ -402,21 +417,13 @@ export default function TournamentDetailClient({
 		const available = countTraceableTournamentScores(rows)
 		if (states.includes('SETTLING')) return scoreT('scoreSettling')
 		if (states.includes('STALE')) return scoreT('scoreDelayed')
-		if (
-			states.some(state => String(state) === 'FALLBACK') ||
-			rows.some(
-				row => String(row.score?.source) === 'LOCAL_MULTIPLIER_FALLBACK'
-			)
-		) {
-			return scoreT('scoreFallback')
-		}
 		if (available > 0 && available < rows.length) {
 			return scoreT('scorePartial', { available, total: rows.length })
 		}
 		if (rows.length === 0 || available === 0) {
 			return scoreT('scoreUnavailable')
 		}
-		return scoreT('scoreOfficial')
+		return authorityLabel ?? scoreT('scoreOfficial')
 	}, [boardPage, rows, scoreT, t])
 	const [staleEntryIds, setStaleEntryIds] = useState<ReadonlySet<number>>(
 		() => new Set()

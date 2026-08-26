@@ -45,6 +45,8 @@ const managerScore = (
 	source: 'UNAVAILABLE',
 	state: 'UNAVAILABLE',
 	eventPointSemantics: 'UNKNOWN',
+	calculationMode: 'PROJECTED_AUTOSUBS',
+	algorithmVersion: 'fpl-projected-autosubs-v1',
 	revision: null,
 	checkedAt: '2026-08-24T06:00:00.000Z',
 	upstreamUpdatedAt: null,
@@ -191,7 +193,7 @@ describe('live tournament desk', () => {
 		assert.deepEqual(handledCodes, [['LIVE_REVISION_GONE'], undefined])
 	})
 
-	it('never promotes Classic or summary points to a live tournament score', () => {
+	it('never promotes an untraceable score to a live tournament score', () => {
 		const staleClassic = {
 			entry: 109967,
 			rank: 79,
@@ -212,7 +214,7 @@ describe('live tournament desk', () => {
 				netEventPoints: 23,
 				totalPoints: 23,
 				totalScope: 'CLASSIC_PHASE',
-				source: 'FPL_CLASSIC_STANDINGS',
+				source: 'UNAVAILABLE',
 				state: 'FRESH',
 				revision: 'classic:gw1:r4'
 			})
@@ -260,7 +262,7 @@ describe('live tournament desk', () => {
 			entry: 2,
 			score: managerScore({
 				eventPoints: 99,
-				source: 'FPL_CLASSIC_STANDINGS',
+				source: 'UNAVAILABLE',
 				state: 'FRESH',
 				revision: 'classic:gw1:r1'
 			})
@@ -322,7 +324,7 @@ describe('live tournament desk', () => {
 			chip: null,
 			pickList: [],
 			score: managerScore({
-				source: 'FPL_ENTRY_SUMMARY',
+				source: 'UNAVAILABLE',
 				state: 'FRESH',
 				revision: 'summary:gw1:r1',
 				nextRefreshAt

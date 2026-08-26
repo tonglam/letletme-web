@@ -361,6 +361,7 @@ export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_DETAIL_INFO_FIELDS}
           score {
             eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
             transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
+            calculationMode algorithmVersion
             staleAt nextRefreshAt reconciliation reasonCodes
           }
           activeCaptain { name points }
@@ -787,6 +788,8 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_TOURNAMENT_INFO_FIELDS}
           source
           state
           eventPointSemantics
+          calculationMode
+          algorithmVersion
           revision
           checkedAt
           upstreamUpdatedAt
@@ -1052,6 +1055,7 @@ export const GET_ENTRY_LIVE_COMPETITION_BOARD = `
         score {
           eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
           transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
+          calculationMode algorithmVersion
           staleAt nextRefreshAt reconciliation reasonCodes
         }
       }
@@ -1062,6 +1066,7 @@ export const GET_ENTRY_LIVE_COMPETITION_BOARD = `
         score {
           eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
           transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
+          calculationMode algorithmVersion
           staleAt nextRefreshAt reconciliation reasonCodes
         }
       }
@@ -1107,6 +1112,7 @@ export const GET_TOURNAMENT_ENTRY_SQUADS = `
         score {
           eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
           transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
+          calculationMode algorithmVersion
           staleAt nextRefreshAt reconciliation reasonCodes
         }
         pickList {
