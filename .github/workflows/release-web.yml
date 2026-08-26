@@ -370,8 +370,22 @@ jobs:
             --yes \
             --scope "$VERCEL_ORG_ID" \
             --token "$VERCEL_TOKEN"
-          production_headers="$(curl --fail --silent --show-error --max-time 15 -D - -o /dev/null https://vercel-origin.letletme.top/healthz)"
-          grep -qi "^x-letletme-release: $RELEASE_SHA" <<<"$production_headers"
+          production_ready=0
+          for attempt in $(seq 1 12); do
+            production_headers=''
+            if production_headers="$(curl --fail --silent --show-error --max-time 5 \
+              -D - -o /dev/null https://vercel-origin.letletme.top/healthz)" && \
+              grep -qi "^x-letletme-release: $RELEASE_SHA" <<<"$production_headers"; then
+              production_ready=1
+              break
+            fi
+            echo "Waiting for the promoted Vercel alias to serve $RELEASE_SHA (attempt $attempt/12)."
+            [[ $attempt -eq 12 ]] || sleep 5
+          done
+          [[ $production_ready == 1 ]] || {
+            echo "promoted Vercel alias did not converge to $RELEASE_SHA" >&2
+            exit 1
+          }
 
           ssh -F "$ssh_dir/config" letletme-tencent \
             "sudo /usr/local/libexec/letletme-release activate '$RELEASE_SHA'"
