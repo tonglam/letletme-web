@@ -240,6 +240,12 @@ async function loadFixturePlayers(
 		fixtureIds: number[],
 		code: LiveFixturePlayerFailureCode
 	) => onFailure?.({ ...ref, stage, fixtureIds, code })
+	const loadAbortController = new AbortController()
+	let terminalFailure = false
+	const stopFixturePlayerLoads = () => {
+		terminalFailure = true
+		loadAbortController.abort()
+	}
 	const loadSingleFixture = async (
 		fixtureId: number
 	): Promise<LiveFixturePlayersData | null> => {
@@ -247,7 +253,7 @@ async function loadFixturePlayers(
 			const response = await executor<LiveFixturePlayersResponse>(
 				GET_LIVE_FIXTURE_PLAYERS,
 				{ ref, fixtureId },
-				{ cache: 'no-store' }
+				{ cache: 'no-store', signal: loadAbortController.signal }
 			)
 			if (
 				isExpectedFixtureDetail(response.liveFixturePlayers, ref, fixtureId)
@@ -259,7 +265,10 @@ async function loadFixturePlayers(
 		} catch (error) {
 			const code = liveFixturePlayerFailureCode(error)
 			reportFailure('fixture', [fixtureId], code)
-			if (code !== 'DETAIL_UNAVAILABLE') throw error
+			if (code !== 'DETAIL_UNAVAILABLE') {
+				stopFixturePlayerLoads()
+				throw error
+			}
 			return null
 		}
 	}
@@ -268,6 +277,7 @@ async function loadFixturePlayers(
 	): Promise<LiveFixturePlayersData[]> => {
 		const details: LiveFixturePlayersData[] = []
 		for (const fixtureId of fixtureIdsToLoad) {
+			if (terminalFailure) break
 			const detail = await loadSingleFixture(fixtureId)
 			if (detail) details.push(detail)
 		}
@@ -286,13 +296,15 @@ async function loadFixturePlayers(
 						batch.map((fixtureId, index) => [`fixture${index}`, fixtureId])
 					)
 				},
-				{ cache: 'no-store' }
+				{ cache: 'no-store', signal: loadAbortController.signal }
 			)
 		} catch (error) {
 			const code = liveFixturePlayerFailureCode(error)
 			reportFailure('batch', [...batch], code)
-			if (code === 'LIVE_REVISION_GONE') throw error
-			if (code === 'LIVE_PUBLICATION_UNAVAILABLE') return []
+			if (code !== 'DETAIL_UNAVAILABLE') {
+				stopFixturePlayerLoads()
+				throw error
+			}
 			if (!fixturePlayerBatchCanFallback(error)) return []
 			return loadSingleFallbacks(batch)
 		}
@@ -316,7 +328,7 @@ async function loadFixturePlayers(
 	const detailsByBatch: LiveFixturePlayersData[][] = new Array(batches.length)
 	let nextBatchIndex = 0
 	const loadNextBatch = async () => {
-		while (true) {
+		while (!terminalFailure) {
 			const batchIndex = nextBatchIndex++
 			const batch = batches[batchIndex]
 			if (!batch) return

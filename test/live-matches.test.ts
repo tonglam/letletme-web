@@ -337,6 +337,64 @@ describe('live match desk player sections', () => {
 		}
 	})
 
+	it('cancels sibling fallback workers after a terminal failure', async () => {
+		const payload = desk()
+		for (let fixtureId = 2; fixtureId <= 10; fixtureId += 1) {
+			payload.liveMatchdayDesk.matches.push({
+				...payload.liveMatchdayDesk.matches[0]!,
+				fixtureId
+			})
+		}
+		let markSiblingStarted: () => void = () => undefined
+		const siblingStarted = new Promise<void>(
+			resolve => void (markSiblingStarted = resolve)
+		)
+		const singleFixtureIds: number[] = []
+		let siblingSignalAborted = false
+		const executor: QueryExecutor = async (query, variables, options) => {
+			if (query.includes('GetLiveFixturePlayersBatch')) {
+				throw Object.assign(new Error('batch field failed'), {
+					code: 'UPSTREAM_GRAPHQL_ERROR'
+				})
+			}
+			if (query.includes('GetLiveFixturePlayers')) {
+				const fixtureId = Number(variables?.fixtureId)
+				singleFixtureIds.push(fixtureId)
+				if (fixtureId === 1) {
+					await siblingStarted
+					throw Object.assign(new Error('rate limited'), {
+						code: 'RATE_LIMITED',
+						status: 429
+					})
+				}
+				if (fixtureId === 6) {
+					markSiblingStarted()
+					await new Promise<void>(resolve => {
+						const timeout = setTimeout(resolve, 50)
+						options?.signal?.addEventListener(
+							'abort',
+							() => {
+								siblingSignalAborted = true
+								clearTimeout(timeout)
+								resolve()
+							},
+							{ once: true }
+						)
+					})
+					return singlePlayers('8', fixtureId) as never
+				}
+				throw new Error(`unexpected fallback for fixture ${fixtureId}`)
+			}
+			return payload as never
+		}
+
+		const result = await loadLiveMatchdayDesk(executor)
+
+		assert.deepEqual(singleFixtureIds, [1, 6])
+		assert.equal(siblingSignalAborted, true)
+		assert.deepEqual(result.fixturePlayers, [])
+	})
+
 	it('does not fan out when the shared live publication is unavailable', async () => {
 		let requests = 0
 		const failures: LiveFixturePlayerLoadFailure[] = []
