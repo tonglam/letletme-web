@@ -107,6 +107,20 @@ const nextConfig = {
 					},
 					{ key: 'Content-Security-Policy', value: contentSecurityPolicy }
 				]
+			},
+			{
+				source: '/miniprogram.webp',
+				headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }]
+			}
+		]
+	},
+	async rewrites() {
+		return [
+			{
+				// Preserve the only public R2 object URL when static.letletme.top
+				// moves to the Vercel project during the DNSPod migration.
+				source: '/miniprogram.webp',
+				destination: '/images/miniprogram.webp'
 			}
 		]
 	},

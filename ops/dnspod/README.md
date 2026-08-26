@@ -134,7 +134,18 @@ and preferred bindings in a new deployment.
    CNAME line separation, TLS, `www`, mail/TXT verification records, and
    every existing `api`, `static`, `hermes`, `pop`, and `cdn` consumer.
 5. For `api`, use real GraphQL GET/POST, bot, and mini-program calls. For
-   `static`, use a real R2 object URL with CORS and cache checks. For
+   `static`, preserve the currently active public URL exactly as
+   `https://static.letletme.top/miniprogram.webp`. The Web project exposes the
+   same 62,328-byte object at `/miniprogram.webp` through a rewrite to the
+   repository asset. Before changing delegation, add
+   `static.letletme.top` to the Vercel project without changing live DNS, query
+   Vercel's current recommended CNAME value, and place that exact value in the
+   shadow zone. Verify status 200, `image/webp`,
+   `Access-Control-Allow-Origin: *`, SHA-256
+   `8dc8e5e74ff0a9b8d5a5192359e799aba8bdf8a7ee14223b0e9eb79891d0fc90`,
+   and safe cache behaviour from the Vercel target before considering the R2
+   custom domain replaceable. Do not enable or CNAME to the rate-limited
+   `r2.dev` development URL. For
    `hermes`, prove the Cloudflare Tunnel replacement or keep NS migration
    blocked. For `cdn`, fix the known 525 or prove it has no consumers.
 6. Keep the current Cloudflare NS online until all checks pass. If any hostname

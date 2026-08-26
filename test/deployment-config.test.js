@@ -31,6 +31,12 @@ test('uses one Git SHA for the self-hosted build and its Vercel-safe prefix for 
 		assert.ok(config.deploymentId.length <= 32)
 		assert.equal(config.output, 'standalone')
 		assert.equal(config.experimental.runtimeServerDeploymentId, false)
+		assert.deepEqual(await config.rewrites(), [
+			{
+				source: '/miniprogram.webp',
+				destination: '/images/miniprogram.webp'
+			}
+		])
 		assert.deepEqual(config.env, {
 			LETLETME_RELEASE_SHA: '0123456789abcdef0123456789abcdef01234567'
 		})
@@ -51,6 +57,10 @@ test('uses one Git SHA for the self-hosted build and its Vercel-safe prefix for 
 			rules[0].headers.find(header => header.key === 'Content-Security-Policy').value.includes("object-src 'none'"),
 			true
 		)
+		assert.deepEqual(rules[1], {
+			source: '/miniprogram.webp',
+			headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }]
+		})
 	} finally {
 		for (const name of names) {
 			if (previous[name] === undefined) delete process.env[name]
