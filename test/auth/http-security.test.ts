@@ -115,7 +115,7 @@ test('trusts one valid Nginx-injected IP only with the local proxy secret', () =
 					'x-letletme-proxy-secret': 'previous-proxy-secret'
 				})
 			),
-			'203.0.113.7'
+			'unknown'
 		)
 		assert.equal(
 			resolveProviderClientIp(

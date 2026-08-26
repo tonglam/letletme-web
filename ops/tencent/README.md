@@ -15,10 +15,11 @@ Create these without committing them:
   the same value is the Worker `ORIGIN_TOKEN` secret.
 - `/etc/letletme/local-proxy-secret` (`root:root`, `0600`) — a different 32-byte
   hex secret used only between Nginx and Node.
-- During a proxy-secret rotation, add
-  `LETLETME_LOCAL_PROXY_SECRET_PREVIOUS` to `web.env` temporarily. It must be
-  different from the active value and is removed after EdgeOne and Vercel have
-  accepted the new value.
+- Do not retain `LETLETME_LOCAL_PROXY_SECRET_PREVIOUS` in steady state. A
+  planned rotation may use a temporary, reviewed application release that
+  explicitly accepts the prior value, but the final release must remove both
+  that compatibility path and the previous-value environment variable after
+  every trusted proxy has switched to the new value.
 - `/etc/letletme/tls/origin.pem` and `origin-key.pem` — a publicly trusted
   certificate chain and private key for `letletme.top` (for example an ACME
   certificate), readable by Nginx. Cloudflare Origin CA material alone is not
