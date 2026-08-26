@@ -1083,7 +1083,7 @@ export default function TournamentClient({
 						standingsReady &&
 						!isLoadingInitial &&
 						contentScopeKey === scopeKey &&
-						hasContent
+						hasBoard
 					)}
 					audienceHint="session-hint"
 					goodMs={1500}

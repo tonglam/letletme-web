@@ -434,7 +434,8 @@ export const boardRowToTournamentEntry = (
 	eventCost: row.score.transferCost,
 	overallRank: row.score.overallRank ?? row.overallRank,
 	livePoints: row.score.eventPoints,
-	totalPoints: row.score.totalPoints,
+	totalPoints:
+		row.score.totalScope === 'OVERALL' ? row.score.totalPoints : null,
 	playersPlayed: row.played,
 	playersToPlay: row.toPlay,
 	teamValue: row.teamValue,

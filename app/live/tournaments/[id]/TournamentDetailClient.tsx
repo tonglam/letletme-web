@@ -35,7 +35,8 @@ import {
 	LiveBoardRequestError,
 	boardRowToTournamentEntry,
 	fetchEntryLiveCompetitionBoard,
-	isLiveBoardRevisionGoneCode
+	isLiveBoardRevisionGoneCode,
+	shouldAutoRefreshLiveBoardPage
 } from '@/lib/tournament/live-board'
 import {
 	liveSnapshotNeedsRefresh,
@@ -415,6 +416,8 @@ export default function TournamentDetailClient({
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [isLoadingMore, setIsLoadingMore] = useState(false)
 	const loadMoreInFlightRef = useRef(false)
+	const [rateLimitSeconds, setRateLimitSeconds] = useState(0)
+	const rateLimitSecondsRef = useRef(0)
 	const refreshInFlightRef = useRef<Map<string, Promise<void>>>(new Map())
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
 	const failedEntryCountRef = useRef(softError ? 1 : 0)
@@ -428,6 +431,28 @@ export default function TournamentDetailClient({
 		refreshGenerationRef.current += 1
 		setSearchQuery(query)
 	}, [])
+	const noteRateLimit = useCallback((error: unknown): boolean => {
+		if (!(error instanceof LiveBoardRequestError) || error.status !== 429)
+			return false
+		const cooldown = Math.max(1, error.retryAfterSeconds ?? 30)
+		const next = Math.max(rateLimitSecondsRef.current, cooldown)
+		rateLimitSecondsRef.current = next
+		setRateLimitSeconds(next)
+		return true
+	}, [])
+	useEffect(() => {
+		if (rateLimitSeconds <= 0) return
+		const timer = window.setTimeout(
+			() =>
+				setRateLimitSeconds(seconds => {
+					const next = Math.max(0, seconds - 1)
+					rateLimitSecondsRef.current = next
+					return next
+				}),
+			1_000
+		)
+		return () => window.clearTimeout(timer)
+	}, [rateLimitSeconds])
 	const [visible, setVisible] = useState(true)
 	const [online, setOnline] = useState(true)
 	const [retrying, setRetrying] = useState(false)
@@ -587,7 +612,8 @@ export default function TournamentDetailClient({
 				!entryId ||
 				!currentGameweek ||
 				!standingsReady ||
-				isOfficialH2H
+				isOfficialH2H ||
+				rateLimitSecondsRef.current > 0
 			) {
 				return Promise.resolve()
 			}
@@ -655,9 +681,11 @@ export default function TournamentDetailClient({
 						'Failed to refresh live tournament standings:',
 						refreshError
 					)
+					const rateLimited = noteRateLimit(refreshError)
 					setError(
-						refreshError instanceof LiveBoardRequestError &&
-							isLiveBoardRevisionGoneCode(refreshError.code)
+						rateLimited ||
+							(refreshError instanceof LiveBoardRequestError &&
+								isLiveBoardRevisionGoneCode(refreshError.code))
 							? t('refreshFailedRetained')
 							: t('standingsFailed')
 					)
@@ -676,6 +704,7 @@ export default function TournamentDetailClient({
 			currentTournament,
 			entryId,
 			isOfficialH2H,
+			noteRateLimit,
 			standingsReady,
 			t,
 			boardSort,
@@ -717,6 +746,7 @@ export default function TournamentDetailClient({
 			!boardPage.hasMore ||
 			isRefreshing ||
 			loadMoreInFlightRef.current ||
+			rateLimitSecondsRef.current > 0 ||
 			isOfficialH2H
 		)
 			return
@@ -756,6 +786,7 @@ export default function TournamentDetailClient({
 				await refreshStandings()
 				return
 			}
+			noteRateLimit(error)
 			setError(t('refreshFailedRetained'))
 		} finally {
 			loadMoreInFlightRef.current = false
@@ -769,6 +800,7 @@ export default function TournamentDetailClient({
 		entryId,
 		isOfficialH2H,
 		isRefreshing,
+		noteRateLimit,
 		refreshStandings,
 		searchQuery,
 		t
@@ -779,7 +811,8 @@ export default function TournamentDetailClient({
 			!currentTournament ||
 			!currentGameweek ||
 			!standingsReady ||
-			isOfficialH2H
+			isOfficialH2H ||
+			!shouldAutoRefreshLiveBoardPage(boardPage?.page ?? null)
 		) {
 			return Promise.resolve()
 		}
@@ -822,6 +855,7 @@ export default function TournamentDetailClient({
 		return request
 	}, [
 		acceptSnapshot,
+		boardPage,
 		currentGameweek,
 		currentTournament,
 		isOfficialH2H,
@@ -986,16 +1020,19 @@ export default function TournamentDetailClient({
 			: currentTournament?.leagueType === 'CLASSIC'
 				? t('classic')
 				: currentTournament?.leagueType
-	const autoRefreshEnabled = shouldPollLiveSnapshot({
-		isPageActive: isPageActive && !isOfficialH2H,
-		currentEventId: currentGameweek,
-		selectedEventId: currentGameweek,
-		snapshot,
-		managerScoreState: managerScoreSettling ? 'SETTLING' : null,
-		managerNextRefreshAt,
-		windowState: snapshot?.windowState ?? snapshot?.state,
-		nextRefreshAt: snapshot?.nextRefreshAt
-	})
+	const autoRefreshEnabled =
+		shouldPollLiveSnapshot({
+			isPageActive: isPageActive && !isOfficialH2H,
+			currentEventId: currentGameweek,
+			selectedEventId: currentGameweek,
+			snapshot,
+			managerScoreState: managerScoreSettling ? 'SETTLING' : null,
+			managerNextRefreshAt,
+			windowState: snapshot?.windowState ?? snapshot?.state,
+			nextRefreshAt: snapshot?.nextRefreshAt
+		}) &&
+		shouldAutoRefreshLiveBoardPage(boardPage?.page ?? null) &&
+		rateLimitSeconds === 0
 
 	// Full-page empty state for access / link / bind failures
 	if (loadError || !currentTournament) {
@@ -1240,7 +1277,9 @@ export default function TournamentDetailClient({
 									size="sm"
 									variant="outline"
 									onClick={() => void refreshStandings()}
-									disabled={isRefreshing || !currentGameweek}
+									disabled={
+										isRefreshing || !currentGameweek || rateLimitSeconds > 0
+									}
 								>
 									<RefreshCw
 										className={isRefreshing ? 'animate-spin' : undefined}
