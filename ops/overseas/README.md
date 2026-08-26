@@ -23,13 +23,19 @@ cannot select it. Refresh the CIDR snapshot from
 
 ## Staging without traffic changes
 
-1. Install `nginx/hermes-direct.conf` as a separate enabled Nginx site.
-2. Run `nginx -t`, reload Nginx, and confirm all existing containers remain
-   healthy.
-3. With live DNS still pointing at Tunnel, use `curl --resolve` against
+1. Install `nginx/letletme-data.conf` as the canonical enabled API/Data site.
+   It explicitly owns `api.letletme.top`, `pop.letletme.top`, and the default
+   listeners; this prevents another site from capturing API traffic because
+   of include order.
+2. Install `nginx/hermes-direct.conf` as the separate
+   `/etc/nginx/sites-enabled/zz-hermes-direct` site.
+3. Run `nginx -t`, reload Nginx, then verify raw `/graphql` still reaches the
+   GraphQL service and Web `/api/graphql` still succeeds before continuing.
+   Confirm all existing containers remain healthy.
+4. With live DNS still pointing at Tunnel, use `curl --resolve` against
    `43.163.91.9`. Until the certificate is expanded, use `-k` only for this
    isolated direct-origin check.
-4. Compare `/health` and an unauthenticated `/v1/models` response through the
+5. Compare `/health` and an unauthenticated `/v1/models` response through the
    Tunnel and through direct Nginx. Status, response shape, and authentication
    behavior must agree.
 
