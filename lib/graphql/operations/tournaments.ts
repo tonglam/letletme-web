@@ -1056,6 +1056,12 @@ export const GET_ENTRY_LIVE_COMPETITION_BOARD = `
           eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
           transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
           calculationMode algorithmVersion
+          provenance {
+            scoreSource calculationMode algorithmVersion inputRevision scoreRevision rankRevision
+            livePublicationId liveRevision liveCheckedAt picksRevision picksCheckedAt
+            previousTotalsRevision previousTotalsThroughEventId resultRevision resultCheckedAt
+            dataCheckedAt rankSource rankCheckedAt
+          }
           staleAt nextRefreshAt reconciliation reasonCodes
         }
       }
@@ -1067,6 +1073,12 @@ export const GET_ENTRY_LIVE_COMPETITION_BOARD = `
           eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
           transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
           calculationMode algorithmVersion
+          provenance {
+            scoreSource calculationMode algorithmVersion inputRevision scoreRevision rankRevision
+            livePublicationId liveRevision liveCheckedAt picksRevision picksCheckedAt
+            previousTotalsRevision previousTotalsThroughEventId resultRevision resultCheckedAt
+            dataCheckedAt rankSource rankCheckedAt
+          }
           staleAt nextRefreshAt reconciliation reasonCodes
         }
       }

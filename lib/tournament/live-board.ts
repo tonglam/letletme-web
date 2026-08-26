@@ -60,6 +60,9 @@ const validDate = (value: unknown): value is string | null =>
 	value === null ||
 	(typeof value === 'string' && Number.isFinite(Date.parse(value)))
 
+const nonEmptyString = (value: unknown): value is string =>
+	typeof value === 'string' && value.trim().length > 0
+
 export class LiveBoardInvalidResponseError extends Error {
 	readonly code = 'LIVE_BOARD_INVALID_RESPONSE'
 	readonly missingFields: string[]
@@ -130,6 +133,13 @@ const validateScore = (
 	)
 		missing.push(`${path}.source`)
 	if (
+		value.reconciliation !== 'MATCHED' &&
+		value.reconciliation !== 'NO_LINEUP' &&
+		value.reconciliation !== 'SOURCE_SKEW' &&
+		value.reconciliation !== 'NOT_COMPARABLE'
+	)
+		missing.push(`${path}.reconciliation`)
+	if (
 		value.calculationMode !== 'PROJECTED_AUTOSUBS' &&
 		value.calculationMode !== 'FINAL_RESULT' &&
 		value.calculationMode !== null
@@ -137,6 +147,95 @@ const validateScore = (
 		missing.push(`${path}.calculationMode`)
 	if (!validDate(value.checkedAt)) missing.push(`${path}.checkedAt`)
 	if (!validDate(value.nextRefreshAt)) missing.push(`${path}.nextRefreshAt`)
+
+	if (value.source === 'UNAVAILABLE') {
+		if (
+			value.calculationMode !== null ||
+			value.algorithmVersion !== null ||
+			value.revision !== null ||
+			value.checkedAt !== null ||
+			value.provenance !== null
+		)
+			missing.push(`${path}.unavailableTraceability`)
+		return
+	}
+
+	const expectedMode =
+		value.source === 'FPL_EVENT_LIVE' ? 'PROJECTED_AUTOSUBS' : 'FINAL_RESULT'
+	if (value.calculationMode !== expectedMode)
+		missing.push(`${path}.calculationMode`)
+	if (!nonEmptyString(value.revision)) missing.push(`${path}.revision`)
+	if (!validDate(value.checkedAt) || value.checkedAt === null)
+		missing.push(`${path}.checkedAt`)
+	if (value.reconciliation !== 'MATCHED' && value.reconciliation !== 'NO_LINEUP')
+		missing.push(`${path}.reconciliation`)
+
+	if (!isRecord(value.provenance)) {
+		missing.push(`${path}.provenance`)
+		return
+	}
+	const provenance = value.provenance
+	if (provenance.scoreSource !== value.source)
+		missing.push(`${path}.provenance.scoreSource`)
+	if (provenance.calculationMode !== expectedMode)
+		missing.push(`${path}.provenance.calculationMode`)
+	if (!nonEmptyString(provenance.inputRevision))
+		missing.push(`${path}.provenance.inputRevision`)
+	if (!nonEmptyString(provenance.scoreRevision))
+		missing.push(`${path}.provenance.scoreRevision`)
+	if (!validDate(provenance.liveCheckedAt))
+		missing.push(`${path}.provenance.liveCheckedAt`)
+	if (!validDate(provenance.picksCheckedAt))
+		missing.push(`${path}.provenance.picksCheckedAt`)
+	if (!validDate(provenance.resultCheckedAt))
+		missing.push(`${path}.provenance.resultCheckedAt`)
+	if (!validDate(provenance.dataCheckedAt))
+		missing.push(`${path}.provenance.dataCheckedAt`)
+	if (!validDate(provenance.rankCheckedAt))
+		missing.push(`${path}.provenance.rankCheckedAt`)
+
+	if (expectedMode === 'PROJECTED_AUTOSUBS') {
+		if (value.algorithmVersion !== 'fpl-projected-autosubs-v1')
+			missing.push(`${path}.algorithmVersion`)
+		if (provenance.algorithmVersion !== 'fpl-projected-autosubs-v1')
+			missing.push(`${path}.provenance.algorithmVersion`)
+		for (const field of [
+			'livePublicationId',
+			'liveRevision',
+			'picksRevision',
+			'previousTotalsRevision'
+		]) {
+			if (!nonEmptyString(provenance[field]))
+				missing.push(`${path}.provenance.${field}`)
+		}
+		if (
+			provenance.resultRevision !== null ||
+			provenance.resultCheckedAt !== null ||
+			provenance.dataCheckedAt !== null
+		)
+			missing.push(`${path}.provenance.resultFields`)
+	} else {
+		if (value.algorithmVersion !== null)
+			missing.push(`${path}.algorithmVersion`)
+		if (provenance.algorithmVersion !== null)
+			missing.push(`${path}.provenance.algorithmVersion`)
+		if (
+			provenance.livePublicationId !== null ||
+			provenance.liveRevision !== null ||
+			provenance.liveCheckedAt !== null ||
+			provenance.previousTotalsRevision !== null
+		)
+			missing.push(`${path}.provenance.liveFields`)
+		for (const field of ['picksRevision', 'resultRevision']) {
+			if (!nonEmptyString(provenance[field]))
+				missing.push(`${path}.provenance.${field}`)
+		}
+		if (
+			provenance.resultCheckedAt === null ||
+			provenance.dataCheckedAt === null
+		)
+			missing.push(`${path}.provenance.resultCheckedAt`)
+	}
 }
 
 const validateRow = (

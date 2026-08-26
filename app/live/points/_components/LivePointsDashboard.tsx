@@ -273,7 +273,7 @@ export function LivePointsDashboard({
 							role="status"
 						>
 							{scoreStatus}
-							{officialScore?.reconciliation === 'SOURCE_SKEW'
+							{liveData?.score?.reconciliation === 'SOURCE_SKEW'
 								? ` · ${t('scoreDetailsSyncing')}`
 								: ''}
 						</p>

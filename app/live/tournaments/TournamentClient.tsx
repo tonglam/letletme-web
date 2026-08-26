@@ -1075,7 +1075,9 @@ export default function TournamentClient({
 			boardPage.officialCoverage === 0
 		)
 			return t('scoreOfficialUnavailable')
-		return authorityLabel ?? t('scoreOfficialLive')
+		if (authorityLabels.size === 0) return t('scoreOfficialUnavailable')
+		if (authorityLabels.size > 1) return t('scorePartiallyAvailable')
+		return authorityLabel!
 	}, [boardPage, scoreT, showingLastGood, t])
 	const boardCoverageSummary = useMemo(() => {
 		if (!boardPage) return null
