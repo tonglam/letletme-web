@@ -96,6 +96,10 @@ type StandingsRefreshRequest = {
 	sort: EntryLiveCompetitionBoardSort
 	direction: EntryLiveCompetitionBoardSortDirection
 	search: string
+	tableSort?: {
+		column: TournamentSortColumn
+		direction: TournamentSortDirection
+	}
 }
 
 const boardRowToCalcData = (
@@ -429,7 +433,7 @@ export default function TournamentDetailClient({
 	const [rateLimitSeconds, setRateLimitSeconds] = useState(0)
 	const rateLimitSecondsRef = useRef(0)
 	const refreshInFlightRef = useRef<
-		Map<string, { generation: number; promise: Promise<void> }>
+		Map<string, { generation: number; promise: Promise<boolean> }>
 	>(new Map())
 	const pendingRefreshRef = useRef<StandingsRefreshRequest | null>(null)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
@@ -619,8 +623,9 @@ export default function TournamentDetailClient({
 			'asc'
 				? 'ASC'
 				: 'DESC',
-			search = searchQuery.trim()
-		): Promise<void> => {
+			search = searchQuery.trim(),
+			tableSort?: StandingsRefreshRequest['tableSort']
+		): Promise<boolean> => {
 			if (
 				!currentTournament ||
 				!entryId ||
@@ -628,16 +633,17 @@ export default function TournamentDetailClient({
 				!standingsReady ||
 				isOfficialH2H
 			) {
-				return Promise.resolve()
+				return Promise.resolve(false)
 			}
 			const normalizedSearch = search.trim()
 			if (rateLimitSecondsRef.current > 0) {
 				pendingRefreshRef.current = {
 					sort,
 					direction,
-					search: normalizedSearch
+					search: normalizedSearch,
+					tableSort
 				}
-				return Promise.resolve()
+				return Promise.resolve(false)
 			}
 			const eventId = currentGameweek
 			const viewerEntryId = entryId
@@ -674,7 +680,7 @@ export default function TournamentDetailClient({
 							search: normalizedSearch || null
 						}
 					)
-					if (requestGeneration !== refreshGenerationRef.current) return
+					if (requestGeneration !== refreshGenerationRef.current) return false
 					setBoardPage(page)
 					appliedBoardSearchRef.current = normalizedSearch
 					failedEntryCountRef.current = page.failedEntryCount
@@ -703,8 +709,9 @@ export default function TournamentDetailClient({
 						)
 					else if (page.deferredEntryCount > 0)
 						setStandingsError(t('coverageWarming'))
+					return true
 				} catch (refreshError) {
-					if (requestGeneration !== refreshGenerationRef.current) return
+					if (requestGeneration !== refreshGenerationRef.current) return false
 					console.error(
 						'Failed to refresh live tournament standings:',
 						refreshError
@@ -717,6 +724,7 @@ export default function TournamentDetailClient({
 							? t('refreshFailedRetained')
 							: t('standingsFailed')
 					)
+					return false
 				} finally {
 					const activeRequest = refreshInFlightRef.current.get(requestKey)
 					if (activeRequest?.generation === requestGeneration) {
@@ -751,7 +759,15 @@ export default function TournamentDetailClient({
 		const pending = pendingRefreshRef.current
 		if (!pending) return
 		pendingRefreshRef.current = null
-		void refreshStandings(null, pending.sort, pending.direction, pending.search)
+		void refreshStandings(
+			null,
+			pending.sort,
+			pending.direction,
+			pending.search,
+			pending.tableSort
+		).then(applied => {
+			if (applied && pending.tableSort) setBoardSort(pending.tableSort)
+		})
 	}, [rateLimitSeconds, refreshStandings])
 
 	useEffect(() => {
@@ -949,19 +965,25 @@ export default function TournamentDetailClient({
 				column: TournamentSortColumn,
 				direction: TournamentSortDirection
 			) => {
-				setBoardSort({ column, direction })
+				const requestedSort = { column, direction }
 				void refreshStandings(
 					null,
 					tableSortToBoardSort(column),
-					direction === 'asc' ? 'ASC' : 'DESC'
-				)
+					direction === 'asc' ? 'ASC' : 'DESC',
+					undefined,
+					requestedSort
+				).then(applied => {
+					if (applied) setBoardSort(requestedSort)
+				})
 			},
 			hasMore: boardPage.hasMore,
 			filteredEntries: boardPage.filteredEntries,
 			isLoadingMore,
 			onLoadMore: () => void loadMoreStandings(),
 			playerRevision: boardPage.playerRevision,
-			onRevisionGone: refreshStandings
+			onRevisionGone: async () => {
+				await refreshStandings()
+			}
 		}
 	}, [
 		boardPage,

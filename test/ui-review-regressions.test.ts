@@ -150,6 +150,25 @@ describe('live tournament filter visibility', () => {
 	})
 })
 
+describe('live tournament detail sorting', () => {
+	it('only commits server sort state after accepted rows', async () => {
+		const source = await readFile(
+			new URL(
+				'../app/live/tournaments/[id]/TournamentDetailClient.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.match(source, /tableSort\?: StandingsRefreshRequest\['tableSort'\]/)
+		assert.match(source, /const requestedSort = \{ column, direction \}/)
+		assert.match(
+			source,
+			/refreshStandings\([\s\S]*requestedSort[\s\S]*\)\.then\(applied => \{[\s\S]*if \(applied\) setBoardSort\(requestedSort\)/
+		)
+	})
+})
+
 describe('asynchronous selection safety', () => {
 	it('keeps the committed gameweek during desk loads and ignores superseded requests', async () => {
 		const [gameweekSource, playerSource] = await Promise.all([
