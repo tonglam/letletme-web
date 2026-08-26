@@ -475,23 +475,45 @@ async function unsafeFallbackState(
 	fetchImpl,
 	coordinator
 ) {
-	const coordination = await coordinator.reset()
+	let coordination
+	let coordinatorResetFailed = false
+	try {
+		coordination = await coordinator.reset()
+	} catch (error) {
+		coordinatorResetFailed = true
+		coordination = { failureCount: state.failureCount, mutationHeld: false }
+		console.error(JSON.stringify({
+			event: 'edgeone_watchdog_fallback_unhealthy_coordinator_reset_error',
+			error: error instanceof Error ? error.message : String(error)
+		}))
+	}
 	const mutationHeld = coordination.mutationHeld === true
-	const alertKey = `fallback-unhealthy:${fallback.reason}:${vercel.reason}`
-	const message = `letletme watchdog 暂不改 DNSPod：默认回退链路不安全。Fallback=${fallback.reason} Vercel=${vercel.reason}`
+	const alertKeyPrefix = coordinatorResetFailed
+		? 'fallback-unhealthy-coordinator-reset-failed'
+		: 'fallback-unhealthy'
+	const alertKey = `${alertKeyPrefix}:${fallback.reason}:${vercel.reason}`
+	const fallbackMessage = `letletme watchdog 暂不改 DNSPod：默认回退链路不安全。Fallback=${fallback.reason} Vercel=${vercel.reason}`
+	const message = coordinatorResetFailed
+		? `${fallbackMessage} 同时无法确认 watchdog 协调器状态，必须人工检查。`
+		: fallbackMessage
+	const action = coordinatorResetFailed
+		? 'fallback-unhealthy-coordinator-reset-failed'
+		: mutationHeld
+			? 'fallback-unhealthy-mutation-held'
+			: 'fallback-unhealthy'
 	let next = {
 		...state,
 		failureCount: coordination.failureCount,
 		fallbackActive: false,
-		lastAction: mutationHeld ? 'fallback-unhealthy-mutation-held' : 'fallback-unhealthy',
-		coordinatorResetPending: false
+		lastAction: action,
+		coordinatorResetPending: coordinatorResetFailed
 	}
 	if (state.lastAlertKey !== alertKey || state.pendingAlert?.key === alertKey) {
 		next = await applyAlert(env, next, alertKey, message, fetchImpl)
 	}
 	await saveState(env, rawState, next)
 	return {
-		action: mutationHeld ? 'fallback-unhealthy-mutation-held' : 'fallback-unhealthy',
+		action,
 		state: next,
 		edge,
 		edgeVercel,

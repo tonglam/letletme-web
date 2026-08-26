@@ -341,6 +341,35 @@ test('does not fail over to a SaaS CNAME when its dedicated probe is missing', a
 	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
 })
 
+test('alerts when an unsafe SaaS fallback cannot reset the coordinator', async () => {
+	const coordinator = makeCoordinator(2)
+	coordinator.reset = async () => { throw new Error('coordinator-unavailable') }
+	const env = {
+		...makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), coordinator),
+		DNSPOD_DEFAULT_FALLBACK_TYPE: 'CNAME',
+		DNSPOD_DEFAULT_FALLBACK_VALUE: 'saas-gateway.qitonglan.com',
+		TELEGRAM_BOT_TOKEN: 'bot',
+		TELEGRAM_CHAT_ID: 'chat'
+	}
+	const { fetch, calls } = fakeFetchFactory({
+		record: { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', Status: 'ENABLE' },
+		defaultRecord: {
+			Type: 'CNAME',
+			Value: 'saas-gateway.qitonglan.com',
+			Line: '默认',
+			Status: 'ENABLE'
+		},
+		edgeResponses: [new Response('', { status: 503 })],
+		telegramResponses: [new Response('', { status: 200 })]
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(result.action, 'fallback-unhealthy-coordinator-reset-failed')
+	assert.equal(result.state.failureCount, 2)
+	assert.equal(result.state.coordinatorResetPending, true)
+	assert.equal(calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 1)
+	assert.equal(calls.some(call => call.action === 'ModifyRecordStatus'), false)
+})
+
 test('does not fail over to a SaaS CNAME with a stale release', async () => {
 	const env = {
 		...makeEnv(JSON.stringify({ failureCount: 2, fallbackActive: false }), makeCoordinator(2)),
