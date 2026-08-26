@@ -93,13 +93,8 @@ for required in \
 done
 local_proxy_secret=$(< /etc/letletme/local-proxy-secret)
 configured_proxy_secret=$(sed -n 's/^LETLETME_LOCAL_PROXY_SECRET=//p' /etc/letletme/web.env)
-configured_previous_proxy_secret=$(sed -n 's/^LETLETME_LOCAL_PROXY_SECRET_PREVIOUS=//p' /etc/letletme/web.env)
 if [[ -z $local_proxy_secret || $configured_proxy_secret != "$local_proxy_secret" ]]; then
 	echo "web.env local proxy secret does not match /etc/letletme/local-proxy-secret" >&2
-	exit 1
-fi
-if [[ -n $configured_previous_proxy_secret && $configured_previous_proxy_secret == "$configured_proxy_secret" ]]; then
-	echo "previous proxy secret must differ from the active proxy secret" >&2
 	exit 1
 fi
 if [[ -e $release_dir ]]; then
@@ -241,8 +236,7 @@ trap cleanup_build EXIT
 			NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE \
 			BETTER_AUTH_URL \
 			NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
-			LETLETME_LOCAL_PROXY_SECRET \
-			LETLETME_LOCAL_PROXY_SECRET_PREVIOUS; do
+			LETLETME_LOCAL_PROXY_SECRET; do
 			if [[ -n ${!build_key-} ]]; then
 				write_build_env "$build_key" "${!build_key}"
 			fi

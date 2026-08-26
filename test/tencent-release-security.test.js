@@ -33,6 +33,13 @@ test('Tencent builds pass secrets through a temporary env file, not process argu
 	assert.doesNotMatch(deployRelease, /build_env\+=\(/)
 })
 
+test('steady-state Tencent builds do not propagate the retired proxy secret', () => {
+	assert.doesNotMatch(
+		deployRelease,
+		/LETLETME_LOCAL_PROXY_SECRET_PREVIOUS/
+	)
+})
+
 test('release workflow requires the matching host tooling revision', () => {
 	const [, toolingRevision] = releaseWrapper.match(/tooling_revision=(\d+-\d+)/) ?? []
 	assert.ok(toolingRevision, 'release wrapper must declare a tooling revision')
