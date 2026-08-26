@@ -1,4 +1,8 @@
-import type { LiveCalcData, LivePick } from '@/lib/graphql/operations/live'
+import type {
+	LiveCalcData,
+	LiveManagerScoreEffectiveLineup,
+	LivePick
+} from '@/lib/graphql/operations/live'
 
 type ProjectionInput = Pick<
 	LiveCalcData,
@@ -225,6 +229,63 @@ const deriveOfficialProjection = ({
 	}
 }
 
+const authoritativeProjection = (
+	live: ProjectionInput,
+	picks: LivePick[]
+): LiveAutoSubProjection | null => {
+	const publishedLineup = live.score?.effectiveLineup
+	if (!publishedLineup || publishedLineup.length !== picks.length) return null
+	const byElement = new Map(
+		publishedLineup.map(row => [row.elementId, row] as const)
+	)
+	if (
+		byElement.size !== picks.length ||
+		picks.some(pick => !byElement.has(pick.element))
+	) {
+		return null
+	}
+
+	// The Data materialization owns active status, effective multipliers,
+	// captain fallback and lineup slots. Feed those values into the existing
+	// presentation projection so the browser never re-derives scoring state
+	// from minutes or fixture heuristics.
+	const authoritativePicks = picks.map(pick => {
+		const row = byElement.get(pick.element) as LiveManagerScoreEffectiveLineup
+		return {
+			...pick,
+			position: row.position,
+			multiplier: row.effectiveMultiplier,
+			pickActive: row.pickActive,
+			autoSub: row.autoSub,
+			isCaptain: row.isCaptain,
+			isViceCaptain: row.isViceCaptain
+		}
+	})
+	const projection = deriveOfficialProjection({
+		picks: authoritativePicks,
+		picksById: new Map(
+			authoritativePicks.map(pick => [String(pick.element), pick] as const)
+		),
+		effectivePositions: Object.fromEntries(
+			publishedLineup.map(row => [String(row.elementId), row.position])
+		),
+		benchBoostActive: isBenchBoostChip(live.chip)
+	})
+	if (isOfficialLineup(live)) return projection
+	const state = projection.state === 'NONE' ? 'NONE' : 'PREDICTED'
+	return {
+		...projection,
+		state,
+		substitutions: projection.substitutions.map(substitution => ({
+			...substitution,
+			state: 'PREDICTED'
+		})),
+		captainPromotion: projection.captainPromotion
+			? { ...projection.captainPromotion, state: 'PREDICTED' }
+			: null
+	}
+}
+
 /**
  * Derive the XI that should be shown right now.
  *
@@ -245,6 +306,8 @@ export function deriveLiveAutoSubProjection(
 	const effectivePositions = Object.fromEntries(
 		picks.map(pick => [String(pick.element), pick.position])
 	)
+	const authoritative = authoritativeProjection(live, picks)
+	if (authoritative) return authoritative
 	const benchBoostActive = isBenchBoostChip(live.chip)
 	if (isOfficialLineup(live)) {
 		return deriveOfficialProjection({

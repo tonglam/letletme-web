@@ -13,7 +13,10 @@ import { APP_URL } from '@/i18n/config'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
 import type { EntryOverallSnapshot } from '@/lib/graphql/operations/entries'
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
-import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
+import {
+	liveManagerScoreAuthorityLabel,
+	traceableOfficialManagerScore
+} from '@/lib/live-manager-score'
 import { cn } from '@/lib/utils'
 import type { Player } from '@/types/player'
 import type { PlayerDetail } from '@/types/player-detail'
@@ -120,15 +123,15 @@ export function LivePointsDashboard({
 	const scoreStatus = (() => {
 		const score = officialScore
 		if (!score) return t('scoreUnavailable')
-		if (score.state === 'SETTLING') return t('scoreSettling')
-		if (
-			String(score.source) === 'LOCAL_MULTIPLIER_FALLBACK' ||
-			String(score.state) === 'FALLBACK'
-		) {
-			return t('scoreFallback')
-		}
-		if (score.state === 'STALE') return t('scoreDelayed')
-		return t('scoreOfficial')
+		const authorityLabel = liveManagerScoreAuthorityLabel(score, {
+			projected: t('scoreProjected'),
+			final: t('scoreFinal')
+		})
+		if (score.state === 'SETTLING')
+			return `${authorityLabel ?? t('scoreOfficial')} · ${t('scoreSettling')}`
+		if (score.state === 'STALE')
+			return `${authorityLabel ?? t('scoreOfficial')} · ${t('scoreDelayed')}`
+		return authorityLabel ?? t('scoreOfficial')
 	})()
 	const squadTitle = liveData?.entryName ?? `Entry ${liveData?.entry ?? ''}`
 	const squadPitchLabels = {
@@ -270,7 +273,7 @@ export function LivePointsDashboard({
 							role="status"
 						>
 							{scoreStatus}
-							{officialScore?.reconciliation === 'SOURCE_SKEW'
+							{liveData?.score?.reconciliation === 'SOURCE_SKEW'
 								? ` · ${t('scoreDetailsSyncing')}`
 								: ''}
 						</p>
