@@ -395,6 +395,65 @@ describe('live match desk player sections', () => {
 		assert.deepEqual(result.fixturePlayers, [])
 	})
 
+	it('preserves revision-gone when sibling cancellation rejects first', async () => {
+		const initialDesk = desk('8')
+		for (let fixtureId = 2; fixtureId <= 6; fixtureId += 1) {
+			initialDesk.liveMatchdayDesk.matches.push({
+				...initialDesk.liveMatchdayDesk.matches[0]!,
+				fixtureId
+			})
+		}
+		let deskRequests = 0
+		let markSiblingBatchStarted: () => void = () => undefined
+		const siblingBatchStarted = new Promise<void>(
+			resolve => void (markSiblingBatchStarted = resolve)
+		)
+		let siblingSignalAborted = false
+		const executor: QueryExecutor = async (query, variables, options) => {
+			if (query.includes('GetLiveFixturePlayersBatch')) {
+				const ref = variables?.ref as { revision?: string } | undefined
+				if (ref?.revision === '9') return players('9') as never
+				if (Number(variables?.fixture0) === 1) {
+					await siblingBatchStarted
+					throw Object.assign(new Error('batch field failed'), {
+						code: 'UPSTREAM_GRAPHQL_ERROR'
+					})
+				}
+				markSiblingBatchStarted()
+				await new Promise<void>((_, reject) => {
+					options?.signal?.addEventListener(
+						'abort',
+						() => {
+							siblingSignalAborted = true
+							reject(
+								Object.assign(new Error('cancelled'), { name: 'AbortError' })
+							)
+						},
+						{ once: true }
+					)
+				})
+			}
+			if (query.includes('GetLiveFixturePlayers')) {
+				throw Object.assign(new Error('expired'), {
+					code: 'LIVE_REVISION_GONE'
+				})
+			}
+			deskRequests += 1
+			return (deskRequests === 1 ? initialDesk : desk('9')) as never
+		}
+
+		const result = await loadLiveMatchdayDesk(executor, {
+			season: '2627',
+			eventId: 1,
+			revision: '8'
+		})
+
+		assert.equal(siblingSignalAborted, true)
+		assert.equal(deskRequests, 2)
+		assert.equal(result.liveMatchdayDesk.liveRevision, '9')
+		assert.equal(result.fixturePlayers?.[0]?.revision, '9')
+	})
+
 	it('does not fan out when the shared live publication is unavailable', async () => {
 		let requests = 0
 		const failures: LiveFixturePlayerLoadFailure[] = []

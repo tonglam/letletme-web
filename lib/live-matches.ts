@@ -242,7 +242,10 @@ async function loadFixturePlayers(
 	) => onFailure?.({ ...ref, stage, fixtureIds, code })
 	const loadAbortController = new AbortController()
 	let terminalFailure = false
-	const stopFixturePlayerLoads = () => {
+	let terminalError: unknown
+	const stopFixturePlayerLoads = (error: unknown) => {
+		if (terminalFailure) return
+		terminalError = error
 		terminalFailure = true
 		loadAbortController.abort()
 	}
@@ -266,7 +269,7 @@ async function loadFixturePlayers(
 			const code = liveFixturePlayerFailureCode(error)
 			reportFailure('fixture', [fixtureId], code)
 			if (code !== 'DETAIL_UNAVAILABLE') {
-				stopFixturePlayerLoads()
+				stopFixturePlayerLoads(error)
 				throw error
 			}
 			return null
@@ -302,7 +305,7 @@ async function loadFixturePlayers(
 			const code = liveFixturePlayerFailureCode(error)
 			reportFailure('batch', [...batch], code)
 			if (code !== 'DETAIL_UNAVAILABLE') {
-				stopFixturePlayerLoads()
+				stopFixturePlayerLoads(error)
 				throw error
 			}
 			if (!fixturePlayerBatchCanFallback(error)) return []
@@ -335,12 +338,17 @@ async function loadFixturePlayers(
 			detailsByBatch[batchIndex] = await loadBatch(batch)
 		}
 	}
-	await Promise.all(
-		Array.from(
-			{ length: Math.min(FIXTURE_PLAYER_BATCH_CONCURRENCY, batches.length) },
-			() => loadNextBatch()
+	try {
+		await Promise.all(
+			Array.from(
+				{ length: Math.min(FIXTURE_PLAYER_BATCH_CONCURRENCY, batches.length) },
+				() => loadNextBatch()
+			)
 		)
-	)
+	} catch (error) {
+		if (terminalFailure) throw terminalError
+		throw error
+	}
 
 	return detailsByBatch.flat()
 }
