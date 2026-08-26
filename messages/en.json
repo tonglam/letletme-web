@@ -1466,6 +1466,8 @@
 		"statusPartial": "Some official player fields are missing; available predictions are shown.",
 		"statusStale": "The official prediction service is delayed. Showing the last cached board.",
 		"statusUnavailable": "The official prediction service is unavailable. Try again after the next refresh.",
+		"instantUpdate": "Instant update",
+		"instantUpdateDescription": "Official price moves are visible while the durable record catches up.",
 		"guideSummary": "Read the progress and status together with the next deadline.",
 		"understandingPriceChanges": "How to read this",
 		"understandingTitle": "How to understand price changes",

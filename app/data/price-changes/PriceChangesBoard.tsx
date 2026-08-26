@@ -26,11 +26,13 @@ import {
 	SelectTrigger,
 	SelectValue
 } from '@/components/ui/select'
-import { Link, useRouter } from '@/i18n/navigation'
+import { Link } from '@/i18n/navigation'
 import type {
 	PriceChangeBoard,
 	PriceChangePlayer
 } from '@/lib/graphql/operations/price-changes'
+<<<<<<< HEAD
+import { usePriceChangeLiveBoard } from '@/lib/price-change-live-client'
 import type { TimeLeft } from '@/lib/home-deadline'
 import {
 	DEFAULT_PRICE_CHANGE_SORT,
@@ -278,7 +280,6 @@ export function PriceChangesBoard({
 	mySquadState: SquadLoadState
 }) {
 	const t = useTranslations('PriceChanges')
-	const router = useRouter()
 	const hydrated = useHydrated()
 	const [search, setSearch] = useState('')
 	const [movement, setMovement] = useState<MovementFilter>('all')
@@ -289,6 +290,9 @@ export function PriceChangesBoard({
 	const [teamId, setTeamId] = useState('all')
 	const [page, setPage] = useState(1)
 	const [displayBoard, setDisplayBoard] = useState(board)
+	const [liveState, setLiveState] = useState<
+		'PROVISIONAL' | 'DURABLE' | 'UNAVAILABLE'
+	>('DURABLE')
 	const mySquad = useMemo(() => new Set(mySquadElementIds), [mySquadElementIds])
 	const shareRef = useRef<HTMLDivElement | null>(null)
 
@@ -303,6 +307,7 @@ export function PriceChangesBoard({
 	useEffect(() => {
 		if (isPersistableBoard(board)) {
 			setDisplayBoard(board)
+			setLiveState('DURABLE')
 			persistLastValidBoard(board)
 			return
 		}
@@ -315,10 +320,14 @@ export function PriceChangesBoard({
 		})
 	}, [board])
 
-	useEffect(() => {
-		const timer = window.setInterval(() => router.refresh(), 5 * 60 * 1_000)
-		return () => window.clearInterval(timer)
-	}, [router])
+	usePriceChangeLiveBoard({
+		board,
+		onUpdate: (nextBoard, state) => {
+			setDisplayBoard(nextBoard)
+			setLiveState(state)
+			if (state === 'DURABLE') persistLastValidBoard(nextBoard)
+		}
+	})
 
 	const teamOptions = useMemo(() => {
 		const teams = new Map<
@@ -558,6 +567,20 @@ export function PriceChangesBoard({
 					</Button>
 				</div>
 			</div>
+			{liveState === 'PROVISIONAL' ? (
+				<div
+					className="flex items-center gap-2 text-xs text-muted-foreground"
+					role="status"
+				>
+					<Badge
+						variant="outline"
+						className="border-primary/40 bg-primary/10 text-primary"
+					>
+						{t('instantUpdate')}
+					</Badge>
+					<span>{t('instantUpdateDescription')}</span>
+				</div>
+			) : null}
 
 			{alertVariant ? (
 				<Alert variant={alertVariant}>

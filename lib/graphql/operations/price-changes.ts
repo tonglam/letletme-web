@@ -44,8 +44,36 @@ export type PriceChangeBoard = {
 	players: PriceChangePlayer[]
 }
 
+export type PriceChangeLiveState = 'PROVISIONAL' | 'DURABLE' | 'UNAVAILABLE'
+
+export type PriceChangeLiveCursor = {
+	seasonCode: string
+	revision: string | null
+	state: PriceChangeLiveState
+	detectedAt: string | null
+	fetchedAt: string | null
+	expiresAt: string | null
+}
+
+export type PriceChangeLiveBoard = {
+	revision: string
+	state: PriceChangeLiveState
+	detectedAt: string | null
+	expiresAt: string | null
+	durablePublicationId: string | null
+	board: PriceChangeBoard
+}
+
 export type PriceChangeBoardResponse = {
 	priceChangeBoard: PriceChangeBoard
+}
+
+export type PriceChangeLiveCursorResponse = {
+	priceChangeLiveCursor: PriceChangeLiveCursor
+}
+
+export type PriceChangeLiveBoardResponse = {
+	priceChangeLiveBoard: PriceChangeLiveBoard
 }
 
 export const EMPTY_PRICE_CHANGE_BOARD: PriceChangeBoard = {
@@ -92,6 +120,65 @@ export const GET_PRICE_CHANGE_BOARD = /* GraphQL */ `
 				lockedUntil
 				calibrating
 			}
+		}
+	}
+`
+
+export const GET_PRICE_CHANGE_LIVE_CURSOR = /* GraphQL */ `
+	query GetPriceChangeLiveCursor {
+		priceChangeLiveCursor {
+			seasonCode
+			revision
+			state
+			detectedAt
+			fetchedAt
+			expiresAt
+		}
+	}
+`
+
+const PRICE_CHANGE_LIVE_BOARD_FIELDS = /* GraphQL */ `
+	{
+		status
+		source
+		deadline
+		nextDeadlines
+		fetchedAt
+		staleAt
+		revision
+		expectedPlayerCount
+		observedPlayerCount
+		players {
+			playerId
+			playerCode
+			webName
+			teamId
+			teamName
+			teamShortName
+			position
+			currentPrice
+			selectedByPercent
+			progressPercent
+			hourlyRate
+			status
+			ownershipTrend
+			transfersInEvent
+			transfersOutEvent
+			lockedUntil
+			calibrating
+		}
+	}
+`
+
+export const GET_PRICE_CHANGE_LIVE_BOARD = /* GraphQL */ `
+	query GetPriceChangeLiveBoard($revision: String) {
+		priceChangeLiveBoard(revision: $revision) {
+			revision
+			state
+			detectedAt
+			expiresAt
+			durablePublicationId
+			board ${PRICE_CHANGE_LIVE_BOARD_FIELDS}
 		}
 	}
 `
