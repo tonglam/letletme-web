@@ -1044,9 +1044,13 @@ test('deduplicates a sustained dual-outage alert', async () => {
 	assert.equal(secondFetch.calls.filter(call => call.url.startsWith('https://api.telegram.org/')).length, 0)
 })
 
-test('sends alerts through the existing notification bridge when configured', async () => {
+test('sends authenticated alerts through the existing notification bridge when configured', async () => {
 	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false }
-	const env = { ...makeEnv(), TELEGRAM_NOTIFICATION_URL: 'https://bot.example.test/telegram' }
+	const env = {
+		...makeEnv(),
+		TELEGRAM_NOTIFICATION_URL: 'https://bot.example.test/telegram',
+		TELEGRAM_NOTIFICATION_API_TOKEN: 'notification-token'
+	}
 	const { fetch, calls } = fakeFetchFactory({
 		record: edgeRecord,
 		edgeResponses: [new Response('', { status: 503 })],
@@ -1059,12 +1063,30 @@ test('sends alerts through the existing notification bridge when configured', as
 	const payload = JSON.parse(notificationCall.init.body)
 	assert.equal(payload.type, 'text')
 	assert.match(payload.text, /EdgeOne 与 Vercel 同时异常/)
+	assert.equal(notificationCall.init.headers.Authorization, 'Bearer notification-token')
 	assert.equal(calls.some(call => call.url.startsWith('https://api.telegram.org/')), false)
+})
+
+test('keeps a bridge alert pending when the notification token is missing', async () => {
+	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false }
+	const env = { ...makeEnv(), TELEGRAM_NOTIFICATION_URL: 'https://bot.example.test/telegram' }
+	const { fetch, calls } = fakeFetchFactory({
+		record: edgeRecord,
+		edgeResponses: [new Response('', { status: 503 })],
+		vercelResponse: new Response('', { status: 503 })
+	})
+	const result = await runCheckWithTestCoordinator(env, { fetchImpl: fetch })
+	assert.equal(calls.some(call => call.url === 'https://bot.example.test/telegram'), false)
+	assert.match(result.state.pendingAlert?.key || '', /^both-unhealthy:/)
 })
 
 test('keeps a notification-bridge alert pending when the bridge rejects it', async () => {
 	const edgeRecord = { type: 'CNAME', name: 'letletme.top', content: 'edge.example.com', proxied: false }
-	const env = { ...makeEnv(), TELEGRAM_NOTIFICATION_URL: 'https://bot.example.test/telegram' }
+	const env = {
+		...makeEnv(),
+		TELEGRAM_NOTIFICATION_URL: 'https://bot.example.test/telegram',
+		TELEGRAM_NOTIFICATION_API_TOKEN: 'notification-token'
+	}
 	const { fetch } = fakeFetchFactory({
 		record: edgeRecord,
 		edgeResponses: [new Response('', { status: 503 })],

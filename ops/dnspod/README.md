@@ -73,7 +73,8 @@ Git:
   literal value `CNAME`)
 - `DNSPOD_DEFAULT_FALLBACK_VALUE`
 - `FALLBACK_HEALTH_URL`
-- `TELEGRAM_NOTIFICATION_URL` for the existing LetLetMe notification bridge;
+- `TELEGRAM_NOTIFICATION_URL` and `TELEGRAM_NOTIFICATION_API_TOKEN` for the
+  existing authenticated LetLetMe notification bridge;
   alternatively provide both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`
 
 `DNSPOD_EDGEONE_CNAME` is mandatory. It is a secret because the EdgeOne target
@@ -100,6 +101,7 @@ wrangler secret put DNSPOD_DEFAULT_FALLBACK_TYPE --config cloudflare/watchdog/wr
 wrangler secret put DNSPOD_DEFAULT_FALLBACK_VALUE --config cloudflare/watchdog/wrangler.toml
 wrangler secret put FALLBACK_HEALTH_URL --config cloudflare/watchdog/wrangler.toml
 wrangler secret put TELEGRAM_NOTIFICATION_URL --config cloudflare/watchdog/wrangler.toml
+wrangler secret put TELEGRAM_NOTIFICATION_API_TOKEN --config cloudflare/watchdog/wrangler.toml
 wrangler deploy --config cloudflare/watchdog/wrangler.toml
 wrangler secret list --config cloudflare/watchdog/wrangler.toml
 ```
@@ -109,8 +111,9 @@ names include `DNSPOD_EDGEONE_CNAME`, `DNSPOD_EDGEONE_RECORD_ID`,
 `DNSPOD_DEFAULT_FALLBACK_TYPE`, `DNSPOD_DEFAULT_FALLBACK_VALUE`,
 `FALLBACK_HEALTH_URL`, one complete alert channel, and both DNSPod API bindings.
 The notification bridge is preferred because it reuses the existing LetLetMe
-bot contract (`{ "type": "text", "text": "..." }`) without copying the bot
-token into a second service. Direct Telegram remains a supported fallback.
+bot contract (`{ "type": "text", "text": "..." }`) and its bearer API token
+without copying the Telegram bot token into a second service. Direct Telegram
+remains a supported fallback.
 Enter exactly `CNAME` when Wrangler prompts for
 `DNSPOD_DEFAULT_FALLBACK_TYPE`. Verify the forced Tencent/Vercel canary routes,
 the actual Cloudflare SaaS fallback marker, release parity, and a read-only dry
