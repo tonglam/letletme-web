@@ -27,6 +27,7 @@ import {
 	getLiveMatchesSnapshot,
 	getPreferredLiveMatchesTab
 } from '@/lib/live-matches'
+import { selectLiveMatchEvent } from '@/lib/live-match-selection'
 import { usePageActive } from '@/hooks/use-page-active'
 import type { Match } from '@/types/match'
 import { RefreshCw } from 'lucide-react'
@@ -166,9 +167,7 @@ export function LiveMatchesClient({
 				)
 				if (!mountedRef.current) return
 				const lifecycleCurrentEventId =
-					data.currentEventId ??
-					eventIds?.currentEventId ??
-					resolvedCurrentEventId
+					data.currentEventId ?? eventIds?.currentEventId ?? resolvedCurrentEventId
 				const nextSelectedEventId = lifecycleCurrentEventId
 					? selectLiveMatchEvent(
 							data.matches,
@@ -177,7 +176,8 @@ export function LiveMatchesClient({
 						)
 					: undefined
 				const mappedMatches =
-					nextSelectedEventId && nextSelectedEventId !== lifecycleCurrentEventId
+					nextSelectedEventId &&
+					nextSelectedEventId !== lifecycleCurrentEventId
 						? data.matches.filter(
 								match => match.eventId === nextSelectedEventId
 							)
@@ -186,9 +186,11 @@ export function LiveMatchesClient({
 				setResolvedCurrentEventId(lifecycleCurrentEventId)
 				setSelectedEventId(nextSelectedEventId)
 				setResolvedNextEventId(data.nextEventId ?? undefined)
-				acceptSnapshot(
-					nextSelectedEventId === lifecycleCurrentEventId ? data.snapshot : null
-				)
+					acceptSnapshot(
+							nextSelectedEventId === lifecycleCurrentEventId
+								? data.snapshot
+								: null
+					)
 				hasLastGoodData.current = true
 
 				if (
@@ -660,7 +662,7 @@ export function LiveMatchesClient({
 										match={match}
 										allMatches={activeMatches}
 										currentIndex={i}
-										eventId={selectedEventId}
+						eventId={selectedEventId}
 									/>
 								))
 							) : (

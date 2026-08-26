@@ -5,6 +5,7 @@ import {
 import {
 	buildLiveFixturePlayersBatchQuery,
 	GET_EVENT_LIVE_PERFORMANCES,
+	GET_LIVE_FIXTURE_PLAYERS,
 	GET_LIVE_MATCHDAY_DESK,
 	type EventLivePerformancesResponse,
 	type LiveFixturePerformance,
@@ -252,7 +253,8 @@ export function mergeLiveFixturePlayers(
 async function loadPublicationFixturePlayers(
 	executor: QueryExecutor,
 	desk: LiveMatchdayDeskResponse['liveMatchdayDesk'],
-	fixtureIds: number[]
+	fixtureIds: number[],
+	onFailure?: (failure: LiveFixturePlayerLoadFailure) => void
 ): Promise<LiveFixturePlayersData[]> {
 	if (!desk.liveRevision || fixtureIds.length === 0) return []
 	const ref: LiveRef = {
@@ -270,9 +272,9 @@ async function loadPublicationFixturePlayers(
 	)
 	const reportFailure = (
 		stage: LiveFixturePlayerLoadFailure['stage'],
-		fixtureIds: number[],
+		failedFixtureIds: number[],
 		code: LiveFixturePlayerFailureCode
-	) => onFailure?.({ ...ref, stage, fixtureIds, code })
+	) => onFailure?.({ ...ref, stage, fixtureIds: failedFixtureIds, code })
 	const loadAbortController = new AbortController()
 	let terminalFailure = false
 	let terminalError: unknown
@@ -291,10 +293,8 @@ async function loadPublicationFixturePlayers(
 				{ ref, fixtureId },
 				{ cache: 'no-store', signal: loadAbortController.signal }
 			)
-			if (
-				isExpectedFixtureDetail(response.liveFixturePlayers, ref, fixtureId)
-			) {
-				return response.liveFixturePlayers
+			if (isExpectedFixtureDetail(response.liveFixturePlayers, ref, fixtureId)) {
+				return { ...response.liveFixturePlayers, source: 'LIVE_PUBLICATION' }
 			}
 			reportFailure('fixture', [fixtureId], 'DETAIL_UNAVAILABLE')
 			return null
@@ -309,10 +309,10 @@ async function loadPublicationFixturePlayers(
 		}
 	}
 	const loadSingleFallbacks = async (
-		fixtureIdsToLoad: number[]
+		failedFixtureIds: number[]
 	): Promise<LiveFixturePlayersData[]> => {
 		const details: LiveFixturePlayersData[] = []
-		for (const fixtureId of fixtureIdsToLoad) {
+		for (const fixtureId of failedFixtureIds) {
 			if (terminalFailure) break
 			const detail = await loadSingleFixture(fixtureId)
 			if (detail) details.push(detail)
@@ -332,7 +332,11 @@ async function loadPublicationFixturePlayers(
 						batch.map((fixtureId, index) => [`fixture${index}`, fixtureId])
 					)
 				},
-				{ cache: 'no-store', ...REVISION_RECOVERY_OPTIONS }
+				{
+					cache: 'no-store',
+					signal: loadAbortController.signal,
+					...REVISION_RECOVERY_OPTIONS
+				}
 			)
 		} catch (error) {
 			const code = liveFixturePlayerFailureCode(error)
@@ -351,15 +355,27 @@ async function loadPublicationFixturePlayers(
 			const fixtureId = batch[index]!
 			const detail =
 				response[`fixture${index}` as keyof LiveFixturePlayersBatchResponse]
-			if (
-				detail &&
-					detail.season === ref.season &&
-					detail.eventId === ref.eventId &&
-					detail.revision === ref.revision &&
-					detail.fixtureId === batch[index]
-				) {
+			if (isExpectedFixtureDetail(detail, ref, fixtureId)) {
 				details.push({ ...detail, source: 'LIVE_PUBLICATION' })
+			} else {
+				missingFixtureIds.push(fixtureId)
 			}
+		}
+		if (missingFixtureIds.length > 0) {
+			reportFailure('batch', missingFixtureIds, 'DETAIL_UNAVAILABLE')
+			details.push(...(await loadSingleFallbacks(missingFixtureIds)))
+		}
+		return details
+	}
+
+	const detailsByBatch: LiveFixturePlayersData[][] = new Array(batches.length)
+	let nextBatchIndex = 0
+	const loadNextBatch = async () => {
+		while (!terminalFailure) {
+			const batchIndex = nextBatchIndex++
+			const batch = batches[batchIndex]
+			if (!batch) return
+			detailsByBatch[batchIndex] = await loadBatch(batch)
 		}
 	}
 	try {
@@ -411,7 +427,8 @@ async function loadDurableFixturePlayers(
 
 async function loadFixturePlayers(
 	executor: QueryExecutor,
-	desk: LiveMatchdayDeskResponse['liveMatchdayDesk']
+	desk: LiveMatchdayDeskResponse['liveMatchdayDesk'],
+	onFailure?: (failure: LiveFixturePlayerLoadFailure) => void
 ): Promise<LiveFixturePlayersData[]> {
 	const fixtureIds = desk.matches
 		.filter(
@@ -429,7 +446,8 @@ async function loadFixturePlayers(
 		const details = await loadPublicationFixturePlayers(
 			executor,
 			desk,
-			fixtureIds
+			fixtureIds,
+			onFailure
 		)
 		const complete =
 			details.length === fixtureIds.length &&
@@ -477,9 +495,9 @@ export async function loadLiveMatchdayDesk(
 		fixturePlayers: includeFixturePlayers
 			? await loadFixturePlayers(
 					executor,
-					payload.liveMatchdayDesk,
-					options.onFixturePlayerFailure
-				)
+				payload.liveMatchdayDesk,
+				options.onFixturePlayerFailure
+			)
 			: []
 	})
 

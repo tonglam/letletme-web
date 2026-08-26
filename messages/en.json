@@ -591,6 +591,7 @@
 		"nextRefresh": "Next refresh in {seconds}s",
 		"lastUpdated": "Updated {time}",
 		"scoreOfficial": "Live",
+		"scoreFallback": "Score available",
 		"scoreProjected": "Projected",
 		"scoreFinal": "Official final",
 		"scorePartial": "Live: {available}/{total} teams available",

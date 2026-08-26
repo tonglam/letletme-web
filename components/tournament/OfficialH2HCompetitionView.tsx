@@ -43,7 +43,6 @@ const H2H_STANDING_COLUMNS =
 function sideLabel(side: OfficialH2HMatchSide, averageLabel: string): string {
 	return side.isAverage ? averageLabel : side.entryName
 }
-
 function scoreLabel(side: OfficialH2HMatchSide): string {
 	return side.points == null ? '—' : formatInteger(side.points)
 }

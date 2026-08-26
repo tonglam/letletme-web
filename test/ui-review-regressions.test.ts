@@ -95,7 +95,7 @@ describe('live auto-sub presentation', () => {
 		for (const source of [playerRow, squadPitch]) {
 			assert.doesNotMatch(source, />\s*AS\{[^}]+\}\s*</)
 			assert.match(source, /\{\w+ \? '↑' : '↓'\}/)
-		}
+}
 		assert.match(squadPitch, /grid-cols-\[1fr_auto\]/)
 		assert.match(
 			squadPitch,
@@ -559,7 +559,7 @@ describe('My FPL hydration', () => {
 
 describe('live tournament filter visibility', () => {
 	it('keeps both advanced filters recoverable after dismissal', async () => {
-		const [clientSource, filtersSource] = await Promise.all([
+		const [clientSource, ownershipSource, exposureSource] = await Promise.all([
 			readFile(
 				new URL(
 					'../app/live/tournaments/TournamentClient.tsx',
@@ -569,56 +569,22 @@ describe('live tournament filter visibility', () => {
 			),
 			readFile(
 				new URL(
-					'../components/tournament/LiveCompetitionBoardFilters.tsx',
+					'../components/player/PlayerOwnershipFilter.tsx',
 					import.meta.url
 				),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/player/TeamExposureFilter.tsx', import.meta.url),
 				'utf8'
 			)
 		])
 
-		assert.match(clientSource, /setShowAdvancedFilters\(open => !open\)/)
-		assert.match(clientSource, /<LiveCompetitionBoardFilters/)
-		assert.match(
-			clientSource,
-			/playerRevision: boardPage\.playerRevision,\s*onRevisionGone: handleBoardRevisionGone/
-		)
-		assert.match(filtersSource, /t\('playerOwnership'\)/)
-		assert.match(filtersSource, /t\('teamExposure'\)/)
-	})
-
-	it('keeps setup polling failures handled and nullable score headers unavailable', async () => {
-		const source = await readFile(
-			new URL('../app/live/tournaments/TournamentClient.tsx', import.meta.url),
-			'utf8'
-		)
-
-		assert.match(
-			source,
-			/catch \{\s*if \(!cancelled\) setListError\(t\('listFailed'\)\)/
-		)
-		assert.match(
-			source,
-			/scoresAvailable=\{\s*typeof boardPage\?\.averageEventPoints === 'number' &&\s*typeof boardPage\?\.highestEventPoints === 'number'/
-		)
-	})
-})
-
-describe('live tournament detail sorting', () => {
-	it('only commits server sort state after accepted rows', async () => {
-		const source = await readFile(
-			new URL(
-				'../app/live/tournaments/[id]/TournamentDetailClient.tsx',
-				import.meta.url
-			),
-			'utf8'
-		)
-
-		assert.match(source, /tableSort\?: StandingsRefreshRequest\['tableSort'\]/)
-		assert.match(source, /const requestedSort = \{ column, direction \}/)
-		assert.match(
-			source,
-			/refreshStandings\([\s\S]*requestedSort[\s\S]*\)\.then\(applied => \{[\s\S]*if \(applied\) setBoardSort\(requestedSort\)/
-		)
+		assert.match(clientSource, /setShowOwnershipFilter\(true\)/)
+		assert.match(clientSource, /setShowTeamExposureFilter\(true\)/)
+		assert.match(clientSource, /filtersT\('showFilter'/)
+		assert.match(ownershipSource, /t\("hideFilter"/)
+		assert.match(exposureSource, /t\('hideFilter'/)
 	})
 
 	it('uses the event-aware live desk for official H2H board fallback', async () => {

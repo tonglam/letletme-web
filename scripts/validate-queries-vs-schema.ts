@@ -84,6 +84,7 @@ import {
 } from '../lib/graphql/operations/prices'
 import { GET_PRICE_CHANGE_BOARD } from '../lib/graphql/operations/price-changes'
 import {
+	GET_ENTRY_LIVE_COMPETITION_BOARD,
 	GET_ENTRY_OFFICIAL_H2H_DESK,
 	GET_ENTRY_OFFICIAL_H2H_MATCHUPS,
 	GET_ENTRY_TOURNAMENTS,

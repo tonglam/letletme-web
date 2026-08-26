@@ -591,6 +591,7 @@
 		"nextRefresh": "{seconds} 秒后刷新",
 		"lastUpdated": "更新于 {time}",
 		"scoreOfficial": "实时",
+		"scoreFallback": "分数可用",
 		"scoreProjected": "预计",
 		"scoreFinal": "官方最终",
 		"scorePartial": "实时：{available}/{total} 支球队已有分数",

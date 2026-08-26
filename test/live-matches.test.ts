@@ -6,6 +6,7 @@ import { GET_LIVE_FIXTURE_PLAYERS_BATCH } from '../lib/graphql/operations/live'
 import {
 	getLiveMatchesSnapshot,
 	getPreferredLiveMatchesTab,
+	liveFixturePlayerFailureCode,
 	loadLiveMatchdayDesk,
 	type LiveFixturePlayerLoadFailure,
 	type QueryExecutor
@@ -79,6 +80,13 @@ const players = (revision = '8') => ({
 				totalPoints: 6
 			}
 		]
+	}
+})
+
+const singlePlayers = (revision = '8', fixtureId = 1) => ({
+	liveFixturePlayers: {
+		...players(revision).fixture0,
+		fixtureId
 	}
 })
 
