@@ -12,6 +12,17 @@ function runValidator(records, options = {}) {
 	const file = path.join(directory, 'records.json')
 	fs.writeFileSync(file, JSON.stringify(records))
 	try {
+		const env = {
+			...process.env,
+			DNSPOD_REQUIRED_RECORDS_JSON: JSON.stringify(options.requiredSpecs || [
+				{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' }
+			])
+		}
+		if (options.useDefaultRequiredHosts) {
+			delete env.DNSPOD_REQUIRED_HOSTS
+		} else {
+			env.DNSPOD_REQUIRED_HOSTS = options.requiredHosts || 'www'
+		}
 		const stdout = execFileSync(process.execPath, [
 			script,
 			file,
@@ -20,14 +31,8 @@ function runValidator(records, options = {}) {
 			'--vercel-a',
 			'76.76.21.21'
 		], {
-		encoding: 'utf8',
-		env: {
-			...process.env,
-			DNSPOD_REQUIRED_HOSTS: options.requiredHosts || 'www',
-			DNSPOD_REQUIRED_RECORDS_JSON: JSON.stringify(options.requiredSpecs || [
-				{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' }
-			])
-		}
+			encoding: 'utf8',
+			env
 		})
 		return JSON.parse(stdout)
 	} finally {
@@ -49,6 +54,42 @@ test('validator accepts exact CLI values and enabled apex records', () => {
 		overseas: true,
 		default: true,
 		routeCounts: { all: 3, edgeone: 1, overseas: 1, default: 1 }
+	})
+	assert.deepEqual(result.missingHosts, [])
+	assert.equal(result.ok, true)
+})
+
+test('validator defaults to the active personal EdgeOne canary hostname', () => {
+	const requiredNames = [
+		'api',
+		'static',
+		'hermes',
+		'pop',
+		'cdn',
+		'vercel-origin',
+		'eo-personal-canary',
+		'eo-tencent-canary'
+	]
+	const requiredSpecs = [
+		{ Name: 'www', Type: 'CNAME', Value: 'letletme.top', Line: '默认' },
+		...requiredNames.map((Name, index) => ({
+			Name,
+			Type: 'A',
+			Value: `203.0.113.${index + 10}`,
+			Line: '默认'
+		}))
+	]
+	const records = [
+		...validRecords,
+		...requiredSpecs.slice(1).map((record, index) => ({
+			...record,
+			Status: 'ENABLE',
+			RecordId: index + 10
+		}))
+	]
+	const result = runValidator(records, {
+		useDefaultRequiredHosts: true,
+		requiredSpecs
 	})
 	assert.deepEqual(result.missingHosts, [])
 	assert.equal(result.ok, true)
