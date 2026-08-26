@@ -242,10 +242,7 @@ async function loadFixturePlayers(
 	) => onFailure?.({ ...ref, stage, fixtureIds, code })
 	const loadSingleFixture = async (
 		fixtureId: number
-	): Promise<{
-		detail: LiveFixturePlayersData | null
-		publicationUnavailable: boolean
-	}> => {
+	): Promise<LiveFixturePlayersData | null> => {
 		try {
 			const response = await executor<LiveFixturePlayersResponse>(
 				GET_LIVE_FIXTURE_PLAYERS,
@@ -255,21 +252,15 @@ async function loadFixturePlayers(
 			if (
 				isExpectedFixtureDetail(response.liveFixturePlayers, ref, fixtureId)
 			) {
-				return {
-					detail: response.liveFixturePlayers,
-					publicationUnavailable: false
-				}
+				return response.liveFixturePlayers
 			}
 			reportFailure('fixture', [fixtureId], 'DETAIL_UNAVAILABLE')
-			return { detail: null, publicationUnavailable: false }
+			return null
 		} catch (error) {
 			const code = liveFixturePlayerFailureCode(error)
 			reportFailure('fixture', [fixtureId], code)
-			if (code === 'LIVE_REVISION_GONE') throw error
-			return {
-				detail: null,
-				publicationUnavailable: code === 'LIVE_PUBLICATION_UNAVAILABLE'
-			}
+			if (code !== 'DETAIL_UNAVAILABLE') throw error
+			return null
 		}
 	}
 	const loadSingleFallbacks = async (
@@ -277,9 +268,8 @@ async function loadFixturePlayers(
 	): Promise<LiveFixturePlayersData[]> => {
 		const details: LiveFixturePlayersData[] = []
 		for (const fixtureId of fixtureIdsToLoad) {
-			const result = await loadSingleFixture(fixtureId)
-			if (result.detail) details.push(result.detail)
-			if (result.publicationUnavailable) break
+			const detail = await loadSingleFixture(fixtureId)
+			if (detail) details.push(detail)
 		}
 		return details
 	}

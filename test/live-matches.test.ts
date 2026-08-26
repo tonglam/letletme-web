@@ -282,6 +282,61 @@ describe('live match desk player sections', () => {
 		)
 	})
 
+	it('stops a single-fixture fallback after a non-recoverable failure', async () => {
+		const terminalFailures = [
+			Object.assign(new Error('publication unavailable'), {
+				code: 'LIVE_PUBLICATION_UNAVAILABLE'
+			}),
+			Object.assign(new Error('rate limited'), {
+				code: 'RATE_LIMITED',
+				status: 429
+			}),
+			Object.assign(new Error('unauthenticated'), {
+				code: 'UNAUTHENTICATED',
+				status: 401
+			}),
+			Object.assign(new Error('forbidden'), {
+				code: 'FORBIDDEN',
+				status: 403
+			}),
+			Object.assign(new Error('timed out'), { code: 'REQUEST_TIMEOUT' }),
+			Object.assign(new Error('cancelled'), { name: 'AbortError' }),
+			Object.assign(new Error('network unavailable'), { code: 'NETWORK_ERROR' })
+		]
+
+		for (const fixtureFailure of terminalFailures) {
+			const payload = desk()
+			payload.liveMatchdayDesk.matches.push(
+				{
+					...payload.liveMatchdayDesk.matches[0]!,
+					fixtureId: 2
+				},
+				{
+					...payload.liveMatchdayDesk.matches[0]!,
+					fixtureId: 3
+				}
+			)
+			const singleFixtureIds: number[] = []
+			const executor: QueryExecutor = async (query, variables) => {
+				if (query.includes('GetLiveFixturePlayersBatch')) {
+					throw Object.assign(new Error('batch field failed'), {
+						code: 'UPSTREAM_GRAPHQL_ERROR'
+					})
+				}
+				if (query.includes('GetLiveFixturePlayers')) {
+					singleFixtureIds.push(Number(variables?.fixtureId))
+					throw fixtureFailure
+				}
+				return payload as never
+			}
+
+			const result = await loadLiveMatchdayDesk(executor)
+
+			assert.deepEqual(singleFixtureIds, [1])
+			assert.deepEqual(result.fixturePlayers, [])
+		}
+	})
+
 	it('does not fan out when the shared live publication is unavailable', async () => {
 		let requests = 0
 		const failures: LiveFixturePlayerLoadFailure[] = []
