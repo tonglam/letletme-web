@@ -1073,6 +1073,7 @@ export default function TournamentDetailClient({
 									enabled={autoRefreshEnabled}
 									onRefresh={autoRefreshStandings}
 									renderLabel={seconds => t('nextRefresh', { seconds })}
+									showLabel={false}
 								/>
 								<Button
 									size="sm"

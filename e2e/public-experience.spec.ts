@@ -202,7 +202,7 @@ test('home team of the week shows each player name, gameweek score, and detail a
 		.locator('[aria-labelledby="home-team-of-week-title"]:visible')
 		.first()
 	await expect(
-		dreamTeamCard.getByRole('heading', { name: /梦之队/ })
+		dreamTeamCard.getByRole('heading', { name: /GW\d+ 梦之队/, exact: true })
 	).toBeVisible()
 	await expect(dreamTeamCard.getByText(/\d+ 名球员/)).toHaveCount(0)
 	await expect(
@@ -270,9 +270,10 @@ test('home market copy uses human-readable updated dates without signal-status w
 
 	await page.locator('#home-price-changes-likely-tab:visible').click()
 	await expect(
-		page
-			.locator('p:visible')
-			.filter({ hasText: '按预测进度展示上涨和下跌各前 5 名。' })
+		marketCard.getByRole('heading', { name: '上涨趋势', exact: true })
+	).toBeVisible()
+	await expect(
+		marketCard.getByRole('heading', { name: '下跌趋势', exact: true })
 	).toBeVisible()
 	await expect(page.getByText('并保留信号状态', { exact: false })).toHaveCount(
 		0
@@ -374,7 +375,7 @@ test('server-rendered mobile navigation opens and closes after navigation', asyn
 		mobileMenu.getByRole('link', { name: 'My Competitions', exact: true })
 	).toHaveAttribute('href', '/competitions/browse?mine=true')
 	await expect(
-		mobileMenu.getByRole('link', { name: 'Competition', exact: true })
+		mobileMenu.getByRole('link', { name: 'New Competition', exact: true })
 	).toHaveAttribute('href', '/competitions/create')
 
 	await mobileMenu.getByRole('link', { name: 'Market' }).click()
@@ -427,7 +428,7 @@ test('Simplified Chinese mobile navigation uses the same competition vocabulary'
 	).toHaveText('赛事')
 	await expect(
 		mobileMenu.locator('a[href="/zh-CN/competitions/create"]')
-	).toHaveText('赛事')
+	).toHaveText('新建赛事')
 })
 
 test('Market stays accessible and usable on a 390px Simplified Chinese screen', async ({
@@ -576,10 +577,10 @@ test('Gameweek keeps Dream Team and every 10+ haul independent during live play'
 
 	await expect(page.getByText('Provisional')).toBeVisible()
 	await expect(
-		page.getByRole('heading', { name: 'Gameweek 33 Dream Team' })
+		page.getByRole('heading', { name: 'GW33 Dream Team', exact: true })
 	).toBeVisible()
 	await expect(
-		page.getByRole('heading', { name: 'Double-digit Hauls' })
+		page.getByRole('heading', { name: 'Players Scoring 10+', exact: true })
 	).toBeVisible()
 	await expect(page.getByRole('link', { name: 'Palmer' })).toHaveAttribute(
 		'href',

@@ -19,6 +19,7 @@ export function LivePointsAutoRefreshCountdown({
 			onRefresh={onRefresh}
 			nextRefreshAt={nextRefreshAt}
 			renderLabel={seconds => t('nextRefresh', { seconds })}
+			showLabel={false}
 		/>
 	)
 }

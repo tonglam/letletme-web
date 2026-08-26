@@ -531,7 +531,7 @@ export function LiveMatchesClient({
 							onRefresh={autoRefreshMatches}
 							nextRefreshAt={transitionPolling ? null : snapshot?.nextRefreshAt}
 							renderLabel={seconds => t('autoRefresh', { seconds })}
-							showLabel={!transitionPolling}
+							showLabel={false}
 						/>
 				) : null}
 			</div>

@@ -19,6 +19,9 @@ export function LiveAutoRefreshCountdown({
 }) {
 	const [countdown, setCountdown] = useState<number | null>(null)
 	const refreshInFlightRef = useRef(false)
+	const refreshPendingRef = useRef(false)
+	const refreshRunnerRef = useRef<(() => void) | null>(null)
+	const enabledRef = useRef(enabled)
 	const onRefreshRef = useRef(onRefresh)
 	const wasEnabledRef = useRef(enabled)
 
@@ -27,21 +30,38 @@ export function LiveAutoRefreshCountdown({
 	}, [onRefresh])
 
 	useEffect(() => {
+		enabledRef.current = enabled
 		const resumed = enabled && !wasEnabledRef.current
 		wasEnabledRef.current = enabled
 
 		if (!enabled) {
+			refreshPendingRef.current = false
 			const resetTimer = window.setTimeout(() => setCountdown(null), 0)
 			return () => window.clearTimeout(resetTimer)
 		}
 
 		const runRefresh = () => {
-			if (refreshInFlightRef.current) return
+			if (!enabledRef.current) return
+			if (refreshInFlightRef.current) {
+				// A timer tick can happen while the previous probe is still in
+				// flight (especially when the browser clock jumps). Remember the
+				// missed refresh and run one trailing probe after it settles.
+				refreshPendingRef.current = true
+				return
+			}
+			refreshPendingRef.current = false
 			refreshInFlightRef.current = true
-			void onRefreshRef.current().finally(() => {
-				refreshInFlightRef.current = false
-			})
+			void onRefreshRef
+				.current()
+				.catch(() => undefined)
+				.finally(() => {
+					refreshInFlightRef.current = false
+					if (!enabledRef.current || !refreshPendingRef.current) return
+					refreshPendingRef.current = false
+					window.setTimeout(() => refreshRunnerRef.current?.(), 0)
+				})
 		}
+		refreshRunnerRef.current = runRefresh
 
 		const serverDeadline = nextRefreshAt ? Date.parse(nextRefreshAt) : Number.NaN
 		const baseDelay = Number.isFinite(serverDeadline)
@@ -72,6 +92,9 @@ export function LiveAutoRefreshCountdown({
 		return () => {
 			window.clearTimeout(initialTimer)
 			window.clearInterval(intervalId)
+			if (refreshRunnerRef.current === runRefresh) {
+				refreshRunnerRef.current = null
+			}
 		}
 	}, [enabled, nextRefreshAt])
 
