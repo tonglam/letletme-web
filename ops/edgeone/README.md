@@ -241,7 +241,10 @@ schedule; no DNSPod or EdgeOne secret belongs in Git:
   `eo-personal-canary.letletme.top` route that forces the Vercel origin), and
   `VERCEL_HEALTH_URL` (direct Vercel), and `FALLBACK_HEALTH_URL` (the
   dedicated Cloudflare for SaaS path)
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `WATCHDOG_ENABLED`
+- `TELEGRAM_NOTIFICATION_URL` and `TELEGRAM_NOTIFICATION_API_TOKEN` for the
+  existing authenticated LetLetMe notification bridge (or both
+  `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`), plus
+  `WATCHDOG_ENABLED`
 
 `EDGEONE_ORIGIN_TOKEN` is not a Cloudflare Worker binding. It is provisioned
 only in the EdgeOne origin-request rule for the Tencent branch and must match
