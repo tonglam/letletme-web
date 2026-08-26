@@ -267,23 +267,35 @@ export default async function DataGovernancePage({ params }: PageProps) {
 	const queueValues = array(overview?.queues)
 	const queueHealthWindows = array(overview?.queueHealthWindows)
 	const registryValues = array(overview?.registry)
-	const freshness = record(overview?.freshness)
+	const freshnessValue = overview?.freshness
+	const freshnessAvailable =
+		freshnessValue !== null &&
+		typeof freshnessValue === 'object' &&
+		!Array.isArray(freshnessValue)
+	const freshness = record(freshnessValue)
 	const runtime = record(overview?.runtime)
 	const consistency = record(overview?.publicationConsistency)
-	const freshnessWindows =
-		windowsResult.status === 'fulfilled'
-			? array(windowsResult.value.windows)
-			: []
+	const windowsResponse =
+		windowsResult.status === 'fulfilled' ? windowsResult.value : null
+	const freshnessWindowsAvailable =
+		windowsResponse?.success === true && Array.isArray(windowsResponse.windows)
+	const freshnessWindows = freshnessWindowsAvailable
+		? array(windowsResponse?.windows)
+		: []
 	const casesResponse =
 		casesResult.status === 'fulfilled' ? casesResult.value : null
 	const casesPayload = casesResponse?.cases
 	const casesAvailable = Array.isArray(casesPayload)
 	const governanceCases: unknown[] = casesAvailable ? casesPayload : []
+	const openGovernanceCases = governanceCases.filter(value => {
+		const status = record(value).status
+		return status === 'OPEN' || status === 'AUTO_REPAIRING' || status === 'REQUIRES_REVIEW'
+	})
 	const burn = record(overview?.errorBudgetBurn)
 	const burnRate =
 		typeof burn.burnRate === 'number' ? burn.burnRate.toFixed(2) : '—'
 	const latestWindow = record(freshnessWindows[0])
-	const generatedAt = overview?.generatedAt ?? new Date().toISOString()
+	const generatedAt = overview?.generatedAt ?? null
 
 	return (
 		<div className="min-h-svh bg-[#071016] text-white">
@@ -328,28 +340,28 @@ export default async function DataGovernancePage({ params }: PageProps) {
 							<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
 								<Metric
 									label="pending"
-									value={text(freshness.pending, '0')}
-									detail="open windows"
+									value={freshnessAvailable ? text(freshness.pending, '—') : '—'}
+									detail={freshnessAvailable ? 'open windows' : 'freshness evidence unavailable'}
 								/>
 								<Metric
 									label="breached"
-									value={text(freshness.breached, '0')}
-									detail="historical breach stays breach"
+									value={freshnessAvailable ? text(freshness.breached, '—') : '—'}
+									detail={freshnessAvailable ? 'historical breach stays breach' : 'freshness evidence unavailable'}
 								/>
 								<Metric
 									label="invalid"
-									value={text(freshness.invalid, '0')}
-									detail="cannot prove denominator"
+									value={freshnessAvailable ? text(freshness.invalid, '—') : '—'}
+									detail={freshnessAvailable ? 'cannot prove denominator' : 'freshness evidence unavailable'}
 								/>
 								<Metric
 									label="N/A"
-									value={text(freshness.notApplicable, '0')}
-									detail="late entrants excluded"
+									value={freshnessAvailable ? text(freshness.notApplicable, '—') : '—'}
+									detail={freshnessAvailable ? 'late entrants excluded' : 'freshness evidence unavailable'}
 								/>
 								<Metric
 									label="oldest due"
-									value={dateText(freshness.oldestPendingDueAt)}
-									detail="Asia/Shanghai display"
+									value={freshnessAvailable ? dateText(freshness.oldestPendingDueAt) : '—'}
+									detail={freshnessAvailable ? 'Asia/Shanghai display' : 'freshness evidence unavailable'}
 								/>
 							</div>
 							<div className="mt-4 overflow-x-auto rounded-xl border border-white/10 bg-[#0b171d] p-4">
@@ -400,6 +412,11 @@ export default async function DataGovernancePage({ params }: PageProps) {
 								title="Eligibility to Web"
 								note="The latest persisted window is shown as a latency chain. Missing milestones remain visible instead of being collapsed into a green status."
 							/>
+							{!freshnessWindowsAvailable ? (
+								<div className="mb-4 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 font-mono text-xs uppercase tracking-[0.12em] text-amber-200">
+									freshness window evidence unavailable
+								</div>
+							) : null}
 							<div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
 								{[
 									['eligible', latestWindow.eligibleAt],
@@ -571,7 +588,7 @@ export default async function DataGovernancePage({ params }: PageProps) {
 								/>
 								<Metric
 									label="open cases"
-									value={casesAvailable ? String(governanceCases.length) : '—'}
+									value={casesAvailable ? String(openGovernanceCases.length) : '—'}
 									detail={
 										casesAvailable
 											? 'deduplicated repair work'

@@ -125,10 +125,16 @@ export async function getDataGovernanceOverview(
 		`/ops/data-governance/overview?window=${encodeURIComponent(window)}`,
 		request
 	)
-	if (!response.success) {
+	const normalized = normalizeGovernanceOverview(response)
+	const nested = normalized.governance
+	const nestedSuccess =
+		nested && typeof nested === 'object' && !Array.isArray(nested)
+			? (nested as { success?: unknown }).success
+			: undefined
+	if (normalized.success !== true || nestedSuccess === false) {
 		throw new DataGovernanceUnavailableError('Data governance request failed')
 	}
-	return normalizeGovernanceOverview(response)
+	return normalized
 }
 
 export type DataGovernanceWindowsResponse = {
@@ -190,6 +196,11 @@ export function selectGovernanceContract(
 		const value = item as { contractKey?: unknown }
 		return value.contractKey === contractKey
 	})
+	const admissions = (overview.admissions ?? []).filter(item => {
+		if (!item || typeof item !== 'object') return false
+		const name = (item as { name?: unknown }).name
+		return queueNames !== null && typeof name === 'string' && queueNames.has(name)
+	})
 	return {
 		contractKey,
 		registry,
@@ -197,7 +208,7 @@ export function selectGovernanceContract(
 		obligations: overview.obligations ?? null,
 		freshness: overview.freshness ?? null,
 		governanceCases,
-		admissions: overview.admissions ?? [],
+		admissions,
 		generatedAt: overview.generatedAt ?? null
 	}
 }
