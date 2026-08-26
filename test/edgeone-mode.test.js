@@ -5,6 +5,19 @@ async function loadModule() {
 	return import('../ops/release/edgeone-mode.mjs')
 }
 
+const RELEASE_RULE_CONDITION = [
+	"${http.request.host} in ['eo-personal-canary.letletme.top', 'letletme.top']",
+	"${http.request.ip.country} in ['CN']",
+	"${http.request.method} in ['GET', 'HEAD']",
+	"not ${http.request.uri.path} matches '^/api(?:/|$)'",
+	"not ${http.request.uri.path} matches '^/(?:en/|zh-CN/)?auth(?:/|$)'",
+	"not ${http.request.uri.path} matches '^/\\.well-known/acme-challenge(?:/|$)'",
+	"not ${http.request.headers['upgrade']} exists",
+	"not ${http.request.headers['next-action']} exists",
+	"not ${http.request.headers['authorization']} exists",
+	"not ${http.request.headers['cookie']} exists"
+].join(' and ')
+
 function rules() {
 	const common = {
 		RuleId: 'rule-1',
@@ -38,7 +51,7 @@ function scopedReleaseRule(overrides = {}) {
 		Description: [],
 		RulePriority: 3,
 		Branches: [{
-			Condition: "${http.request.host} in ['eo-personal-canary.letletme.top'] and ${http.request.ip.country} in ['CN'] and ${http.request.method} in ['GET']",
+			Condition: RELEASE_RULE_CONDITION,
 			Actions: [{
 				Name: 'ModifyOrigin',
 				ModifyOriginParameters: {
@@ -53,6 +66,21 @@ function scopedReleaseRule(overrides = {}) {
 		...overrides
 	}
 }
+
+test('formal split rule is limited to anonymous mainland safe reads', async () => {
+	const edgeoneModule = await loadModule()
+	assert.equal(edgeoneModule.RELEASE_RULE_CONDITION, RELEASE_RULE_CONDITION)
+	assert.match(edgeoneModule.RELEASE_RULE_CONDITION, /\['GET', 'HEAD'\]/)
+	assert.match(edgeoneModule.RELEASE_RULE_CONDITION, /\^\/api/)
+	assert.match(edgeoneModule.RELEASE_RULE_CONDITION, /auth/)
+	assert.match(edgeoneModule.RELEASE_RULE_CONDITION, /acme-challenge/)
+	for (const header of ['upgrade', 'next-action', 'authorization', 'cookie']) {
+		assert.match(
+			edgeoneModule.RELEASE_RULE_CONDITION,
+			new RegExp(`headers\\['${header}'\\]\\} exists`)
+		)
+	}
+})
 
 test('builds scoped split and all-Vercel snapshots without output-only fields', async () => {
 	const { buildScopedRuleSnapshots } = await loadModule()
