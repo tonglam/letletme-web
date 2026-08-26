@@ -92,6 +92,12 @@ const SETUP_PHASES = [
 const ROSTER_PREVIEW = 20
 const ROSTER_STEP = 20
 
+type StandingsRefreshRequest = {
+	sort: EntryLiveCompetitionBoardSort
+	direction: EntryLiveCompetitionBoardSortDirection
+	search: string
+}
+
 const boardRowToCalcData = (
 	row: EntryLiveCompetitionBoardRow
 ): TournamentLiveCalcData => ({
@@ -421,7 +427,10 @@ export default function TournamentDetailClient({
 	const loadMoreInFlightRef = useRef(false)
 	const [rateLimitSeconds, setRateLimitSeconds] = useState(0)
 	const rateLimitSecondsRef = useRef(0)
-	const refreshInFlightRef = useRef<Map<string, Promise<void>>>(new Map())
+	const refreshInFlightRef = useRef<
+		Map<string, { generation: number; promise: Promise<void> }>
+	>(new Map())
+	const pendingRefreshRef = useRef<StandingsRefreshRequest | null>(null)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
 	const failedEntryCountRef = useRef(softError ? 1 : 0)
 	const refreshGenerationRef = useRef(0)
@@ -616,9 +625,17 @@ export default function TournamentDetailClient({
 				!entryId ||
 				!currentGameweek ||
 				!standingsReady ||
-				isOfficialH2H ||
-				rateLimitSecondsRef.current > 0
+				isOfficialH2H
 			) {
+				return Promise.resolve()
+			}
+			const normalizedSearch = search.trim()
+			if (rateLimitSecondsRef.current > 0) {
+				pendingRefreshRef.current = {
+					sort,
+					direction,
+					search: normalizedSearch
+				}
 				return Promise.resolve()
 			}
 			const eventId = currentGameweek
@@ -629,10 +646,11 @@ export default function TournamentDetailClient({
 				eventId,
 				sort,
 				direction,
-				search
+				normalizedSearch
 			})
 			const existing = refreshInFlightRef.current.get(requestKey)
-			if (existing) return existing
+			if (existing?.generation === refreshGenerationRef.current)
+				return existing.promise
 			const requestGeneration = refreshGenerationRef.current + 1
 			refreshGenerationRef.current = requestGeneration
 
@@ -652,12 +670,12 @@ export default function TournamentDetailClient({
 							ref: null,
 							sort,
 							direction,
-							search: search || null
+							search: normalizedSearch || null
 						}
 					)
 					if (requestGeneration !== refreshGenerationRef.current) return
 					setBoardPage(page)
-					appliedBoardSearchRef.current = search
+					appliedBoardSearchRef.current = normalizedSearch
 					failedEntryCountRef.current = page.failedEntryCount
 					setRows(page.rows.map(boardRowToCalcData))
 					setStaleEntryIds(new Set())
@@ -696,11 +714,17 @@ export default function TournamentDetailClient({
 							: t('standingsFailed')
 					)
 				} finally {
-					refreshInFlightRef.current.delete(requestKey)
+					const activeRequest = refreshInFlightRef.current.get(requestKey)
+					if (activeRequest?.generation === requestGeneration) {
+						refreshInFlightRef.current.delete(requestKey)
+					}
 					setIsRefreshing(refreshInFlightRef.current.size > 0)
 				}
 			})()
-			refreshInFlightRef.current.set(requestKey, request)
+			refreshInFlightRef.current.set(requestKey, {
+				generation: requestGeneration,
+				promise: request
+			})
 			setIsRefreshing(true)
 			return request
 		},
@@ -717,6 +741,14 @@ export default function TournamentDetailClient({
 			searchQuery
 		]
 	)
+
+	useEffect(() => {
+		if (rateLimitSeconds !== 0) return
+		const pending = pendingRefreshRef.current
+		if (!pending) return
+		pendingRefreshRef.current = null
+		void refreshStandings(null, pending.sort, pending.direction, pending.search)
+	}, [rateLimitSeconds, refreshStandings])
 
 	const previousSearchQueryRef = useRef(searchQuery)
 	useEffect(() => {
