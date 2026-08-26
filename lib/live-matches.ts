@@ -32,7 +32,15 @@ export interface LiveMatchdayDeskPayload extends LiveMatchdayDeskResponse {
 type LiveRef = { season: string; eventId: number; revision: string }
 
 export type LiveFixturePlayerFailureCode =
-	'LIVE_REVISION_GONE' | 'LIVE_PUBLICATION_UNAVAILABLE' | 'DETAIL_UNAVAILABLE'
+	| 'LIVE_REVISION_GONE'
+	| 'LIVE_PUBLICATION_UNAVAILABLE'
+	| 'RATE_LIMITED'
+	| 'UNAUTHENTICATED'
+	| 'FORBIDDEN'
+	| 'REQUEST_TIMEOUT'
+	| 'REQUEST_CANCELLED'
+	| 'NETWORK_ERROR'
+	| 'DETAIL_UNAVAILABLE'
 
 export interface LiveFixturePlayerLoadFailure extends LiveRef {
 	stage: 'batch' | 'fixture'
@@ -58,23 +66,63 @@ const POSITION_ELEMENT_TYPE: Record<
 	FORWARD: 4
 }
 
+const errorCode = (error: unknown): string | null =>
+	error && typeof error === 'object' && 'code' in error
+		? typeof (error as { code?: unknown }).code === 'string'
+			? (error as { code: string }).code
+			: null
+		: null
+
+const errorStatus = (error: unknown): number | null =>
+	error && typeof error === 'object' && 'status' in error
+		? typeof (error as { status?: unknown }).status === 'number'
+			? (error as { status: number }).status
+			: null
+		: null
+
 export const liveFixturePlayerFailureCode = (
 	error: unknown
 ): LiveFixturePlayerFailureCode => {
-	if (error && typeof error === 'object' && 'code' in error) {
-		const code = (error as { code?: unknown }).code
-		if (
-			code === 'LIVE_REVISION_GONE' ||
-			code === 'LIVE_PUBLICATION_UNAVAILABLE'
-		)
-			return code
+	const code = errorCode(error)
+	if (
+		code === 'LIVE_REVISION_GONE' ||
+		code === 'LIVE_PUBLICATION_UNAVAILABLE' ||
+		code === 'RATE_LIMITED' ||
+		code === 'UNAUTHENTICATED' ||
+		code === 'FORBIDDEN' ||
+		code === 'REQUEST_TIMEOUT' ||
+		code === 'REQUEST_CANCELLED' ||
+		code === 'NETWORK_ERROR'
+	) {
+		return code
 	}
+	const status = errorStatus(error)
+	if (status === 401) return 'UNAUTHENTICATED'
+	if (status === 403) return 'FORBIDDEN'
+	if (status === 408) return 'REQUEST_TIMEOUT'
+	if (status === 429) return 'RATE_LIMITED'
+	if (error instanceof Error && error.name === 'AbortError')
+		return 'REQUEST_CANCELLED'
 	const message =
 		error instanceof Error || typeof error === 'string' ? String(error) : ''
 	if (message.includes('LIVE_REVISION_GONE')) return 'LIVE_REVISION_GONE'
 	if (message.includes('LIVE_PUBLICATION_UNAVAILABLE'))
 		return 'LIVE_PUBLICATION_UNAVAILABLE'
 	return 'DETAIL_UNAVAILABLE'
+}
+
+const RECOVERABLE_FIXTURE_PLAYER_BATCH_CODES = new Set([
+	'NOT_FOUND',
+	'GRAPHQL_VALIDATION_FAILED',
+	'INTERNAL_SERVER_ERROR',
+	'UPSTREAM_GRAPHQL_ERROR'
+])
+
+const fixturePlayerBatchCanFallback = (error: unknown): boolean => {
+	const status = errorStatus(error)
+	if (status !== null && status !== 0 && status !== 200) return false
+	const code = errorCode(error)
+	return code !== null && RECOVERABLE_FIXTURE_PLAYER_BATCH_CODES.has(code)
 }
 
 const liveRevisionGone = (error: unknown): boolean =>
@@ -255,6 +303,7 @@ async function loadFixturePlayers(
 			reportFailure('batch', [...batch], code)
 			if (code === 'LIVE_REVISION_GONE') throw error
 			if (code === 'LIVE_PUBLICATION_UNAVAILABLE') return []
+			if (!fixturePlayerBatchCanFallback(error)) return []
 			return loadSingleFallbacks(batch)
 		}
 

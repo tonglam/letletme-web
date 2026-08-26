@@ -215,7 +215,9 @@ describe('live match desk player sections', () => {
 		const executor: QueryExecutor = async query => {
 			requests += 1
 			if (query.includes('GetLiveFixturePlayersBatch'))
-				throw new Error('batch transport failed')
+				throw Object.assign(new Error('batch field failed'), {
+					code: 'UPSTREAM_GRAPHQL_ERROR'
+				})
 			if (query.includes('GetLiveFixturePlayers'))
 				return singlePlayers() as never
 			return desk() as never
@@ -248,7 +250,9 @@ describe('live match desk player sections', () => {
 		const failures: LiveFixturePlayerLoadFailure[] = []
 		const executor: QueryExecutor = async (query, variables) => {
 			if (query.includes('GetLiveFixturePlayersBatch'))
-				throw new Error('batch transport failed')
+				throw Object.assign(new Error('batch field failed'), {
+					code: 'UPSTREAM_GRAPHQL_ERROR'
+				})
 			if (query.includes('GetLiveFixturePlayers')) {
 				const fixtureId = Number(variables?.fixtureId)
 				if (fixtureId === 2) throw new Error('fixture unavailable')
@@ -300,6 +304,37 @@ describe('live match desk player sections', () => {
 		assert.equal(requests, 2)
 		assert.deepEqual(result.fixturePlayers, [])
 		assert.equal(failures[0]?.code, 'LIVE_PUBLICATION_UNAVAILABLE')
+	})
+
+	it('does not fan out rate-limit, auth, timeout, cancellation, or network failures', async () => {
+		const failures = [
+			Object.assign(new Error('rate limited'), {
+				code: 'RATE_LIMITED',
+				status: 429
+			}),
+			Object.assign(new Error('unauthenticated'), {
+				code: 'UNAUTHENTICATED',
+				status: 401
+			}),
+			Object.assign(new Error('timed out'), { code: 'REQUEST_TIMEOUT' }),
+			Object.assign(new Error('cancelled'), { name: 'AbortError' }),
+			Object.assign(new Error('network unavailable'), { code: 'NETWORK_ERROR' })
+		]
+
+		for (const batchFailure of failures) {
+			let requests = 0
+			const executor: QueryExecutor = async query => {
+				requests += 1
+				if (query.includes('GetLiveFixturePlayersBatch')) throw batchFailure
+				if (query.includes('GetLiveFixturePlayers'))
+					throw new Error('single fixture query should not run')
+				return desk() as never
+			}
+
+			const result = await loadLiveMatchdayDesk(executor)
+			assert.equal(requests, 2)
+			assert.deepEqual(result.fixturePlayers, [])
+		}
 	})
 
 	it('keeps score and status when the optional player section fails', async () => {
