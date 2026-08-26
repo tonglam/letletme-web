@@ -22,12 +22,22 @@ import { shouldResolveGraphQLProxySession } from '@/lib/graphql-proxy-session'
 import { logSafeAuthDiagnostic } from '@/lib/auth-safe-log'
 import { RequestTiming, resolveRequestId } from '@/lib/request-timing'
 import { appendServerTiming } from '@/lib/server-timing'
-import { NextRequest, NextResponse } from 'next/server'
+import type {
+	ClientSignalBatchV1,
+	ClientSignalDeviceGroup,
+	ClientSignalMetric,
+	ClientSignalResult,
+	ClientSignalSurface
+} from '@/lib/client-signal-contract'
+import { forwardClientSignalBatch } from '@/lib/ops-client-signals'
+import { randomUUID } from 'node:crypto'
+import { after, NextRequest, NextResponse } from 'next/server'
 
 const GRAPHQL_ENDPOINT =
 	process.env.GRAPHQL_ENDPOINT || 'http://localhost:4000/graphql'
 const MAX_GRAPHQL_BODY_BYTES = 256 * 1024
 const MAX_GRAPHQL_RESPONSE_BYTES = 8 * 1024 * 1024
+const SUCCESS_SIGNAL_SAMPLE_RATE = 0.1
 
 function noStoreJson(
 	body: unknown,
@@ -42,7 +52,21 @@ function noStoreJson(
 
 export async function POST(request: NextRequest) {
 	const requestTiming = new RequestTiming()
+	const startedAt = Date.now()
 	const requestId = resolveRequestId(request.headers.get('x-request-id'))
+	const observeResponse = (
+		response: Response,
+		operationName = 'anonymous',
+		workload = 'unknown',
+		responseBodyOk = false
+	) =>
+		observeProxyResponse(response, {
+			startedAt,
+			operationName,
+			workload,
+			responseBodyOk,
+			request
+		})
 	let body: unknown
 	try {
 		body = await requestTiming.measure('bodyRead', () =>
@@ -50,45 +74,56 @@ export async function POST(request: NextRequest) {
 		)
 	} catch (error) {
 		if (error instanceof PayloadTooLargeError) {
-			return noStoreJson(
-				{
-					errors: [
-						{
-							message: 'Payload too large',
-							extensions: { code: 'PAYLOAD_TOO_LARGE' }
-						}
-					]
-				},
-				413
+			return observeResponse(
+				noStoreJson(
+					{
+						errors: [
+							{
+								message: 'Payload too large',
+								extensions: { code: 'PAYLOAD_TOO_LARGE' }
+							}
+						]
+					},
+					413
+				)
 			)
 		}
-		return noStoreJson({ errors: [{ message: 'Invalid JSON' }] }, 400)
+		return observeResponse(
+			noStoreJson({ errors: [{ message: 'Invalid JSON' }] }, 400)
+		)
 	}
 	const operationName = extractGraphQLOperationName(body) || 'anonymous'
 	const workload = graphQLWorkloadForDocument(body)
+	let observedWorkload = workload
+	const completeResponse = (response: Response, responseBodyOk = false) =>
+		observeResponse(response, operationName, observedWorkload, responseBodyOk)
 
 	const authorization = requestTiming.measureSync('authorizationHeader', () =>
 		readForwardableMiniProgramAuthorization(request.headers)
 	)
 	if (!authorization.ok) {
-		return noStoreJson(
-			{
-				errors: [
-					{
-						message: 'Invalid Authorization header',
-						extensions: { code: 'INVALID_AUTHORIZATION_HEADER' }
-					}
-				]
-			},
-			400
+		return completeResponse(
+			noStoreJson(
+				{
+					errors: [
+						{
+							message: 'Invalid Authorization header',
+							extensions: { code: 'INVALID_AUTHORIZATION_HEADER' }
+						}
+					]
+				},
+				400
+			)
 		)
 	}
 
 	const secret = process.env.BACKEND_PROXY_SECRET
 	if (!secret && process.env.NODE_ENV === 'production') {
-		return noStoreJson(
-			{ errors: [{ message: 'Proxy security is unavailable' }] },
-			503
+		return completeResponse(
+			noStoreJson(
+				{ errors: [{ message: 'Proxy security is unavailable' }] },
+				503
+			)
 		)
 	}
 	const ingress = secret
@@ -99,17 +134,20 @@ export async function POST(request: NextRequest) {
 			})
 		: null
 	const effectiveWorkload = ingress?.ok ? ingress.workload : workload
+	observedWorkload = effectiveWorkload
 	if (ingress && !ingress.ok) {
-		return noStoreJson(
-			{
-				errors: [
-					{
-						message: ingress.message,
-						extensions: { code: 'INVALID_CLIENT_IDENTITY' }
-					}
-				]
-			},
-			400
+		return completeResponse(
+			noStoreJson(
+				{
+					errors: [
+						{
+							message: ingress.message,
+							extensions: { code: 'INVALID_CLIENT_IDENTITY' }
+						}
+					]
+				},
+				400
+			)
 		)
 	}
 
@@ -126,9 +164,11 @@ export async function POST(request: NextRequest) {
 				'graphql proxy authorization session lookup failed',
 				error
 			)
-			return noStoreJson(
-				{ errors: [{ message: 'Authentication unavailable' }] },
-				503
+			return completeResponse(
+				noStoreJson(
+					{ errors: [{ message: 'Authentication unavailable' }] },
+					503
+				)
 			)
 		}
 	}
@@ -173,23 +213,27 @@ export async function POST(request: NextRequest) {
 		responseBody = upstream.body
 	} catch (error) {
 		if (error instanceof PayloadTooLargeError) {
-			return noStoreJson(
-				{
-					errors: [
-						{
-							message: 'Upstream response too large',
-							extensions: { code: 'UPSTREAM_RESPONSE_TOO_LARGE' }
-						}
-					]
-				},
-				502,
-				{ 'X-Request-Id': requestId }
+			return completeResponse(
+				noStoreJson(
+					{
+						errors: [
+							{
+								message: 'Upstream response too large',
+								extensions: { code: 'UPSTREAM_RESPONSE_TOO_LARGE' }
+							}
+						]
+					},
+					502,
+					{ 'X-Request-Id': requestId }
+				)
 			)
 		}
 		if (error instanceof GraphQLUpstreamError && error.code === 'timeout') {
-			return noStoreJson({ errors: [{ message: 'Upstream timed out' }] }, 504, {
-				'X-Request-Id': requestId
-			})
+			return completeResponse(
+				noStoreJson({ errors: [{ message: 'Upstream timed out' }] }, 504, {
+					'X-Request-Id': requestId
+				})
+			)
 		}
 		if (
 			error instanceof GraphQLUpstreamError &&
@@ -198,16 +242,18 @@ export async function POST(request: NextRequest) {
 			console.info('[graphql proxy] client aborted upstream request', {
 				requestId
 			})
-			return noStoreJson(
-				{ errors: [{ message: 'Client disconnected' }] },
-				499,
-				{ 'X-Request-Id': requestId }
+			return completeResponse(
+				noStoreJson({ errors: [{ message: 'Client disconnected' }] }, 499, {
+					'X-Request-Id': requestId
+				})
 			)
 		}
 		console.error('[graphql proxy] upstream read failed:', error)
-		return noStoreJson({ errors: [{ message: 'Upstream unavailable' }] }, 502, {
-			'X-Request-Id': requestId
-		})
+		return completeResponse(
+			noStoreJson({ errors: [{ message: 'Upstream unavailable' }] }, 502, {
+				'X-Request-Id': requestId
+			})
+		)
 	}
 	const { responseBodyOk, cacheControl } = requestTiming.measureSync(
 		'responsePolicy',
@@ -267,5 +313,82 @@ export async function POST(request: NextRequest) {
 			cacheResult: cacheControl === 'no-store' ? 'bypass' : 'eligible'
 		})
 	)
-	return proxyResponse
+	return completeResponse(proxyResponse, responseBodyOk)
+}
+
+function releaseName(): string {
+	const release =
+		process.env.LETLETME_RELEASE_SHA?.trim() ||
+		process.env.VERCEL_GIT_COMMIT_SHA?.trim() ||
+		'local'
+	return release.replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 64) || 'local'
+}
+
+function surfaceForWorkload(
+	workload: string,
+	operationName: string
+): ClientSignalSurface {
+	const value = `${workload}:${operationName}`.toLowerCase()
+	if (value.includes('live') && value.includes('match')) return 'live_match'
+	if (value.includes('live')) return 'live_matches'
+	if (value.includes('price') || value.includes('market'))
+		return 'price_changes'
+	if (value.includes('player')) return 'player_stats'
+	if (value.includes('fixture')) return 'fixtures'
+	if (value.includes('my') || value.includes('entry')) return 'my_fpl'
+	return 'other'
+}
+
+function deviceGroupForRequest(request: Request): ClientSignalDeviceGroup {
+	if (request.headers.get('x-letletme-client') === 'wechat-miniprogram')
+		return 'mobile'
+	const userAgent = request.headers.get('user-agent') ?? ''
+	if (/mobile|android|iphone|ipad/i.test(userAgent)) return 'mobile'
+	return 'unknown'
+}
+
+function proxyResult(
+	statusCode: number,
+	responseBodyOk: boolean
+): ClientSignalResult {
+	if (statusCode === 401 || statusCode === 403) return 'auth_error'
+	if (statusCode === 408 || statusCode === 504) return 'timeout'
+	return statusCode >= 200 && statusCode < 300 && responseBodyOk
+		? 'ok'
+		: 'error'
+}
+
+function observeProxyResponse(
+	response: Response,
+	input: {
+		startedAt: number
+		operationName: string
+		workload: string
+		responseBodyOk: boolean
+		request: Request
+	}
+): Response {
+	const result = proxyResult(response.status, input.responseBodyOk)
+	if (result === 'ok' && Math.random() >= SUCCESS_SIGNAL_SAMPLE_RATE)
+		return response
+	const batch: ClientSignalBatchV1 = {
+		schemaVersion: 1,
+		batchId: randomUUID(),
+		client: 'web',
+		release: releaseName(),
+		sentAt: new Date().toISOString(),
+		samples: [
+			{
+				observedAt: new Date().toISOString(),
+				surface: surfaceForWorkload(input.workload, input.operationName),
+				metric: 'graphql_proxy_ms',
+				deviceGroup: deviceGroupForRequest(input.request),
+				sampleSource: 'real',
+				result,
+				value: Math.max(0, Date.now() - input.startedAt)
+			}
+		]
+	}
+	after(() => forwardClientSignalBatch(batch))
+	return response
 }

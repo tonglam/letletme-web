@@ -2,6 +2,7 @@
 
 import {
 	reportBrowserPerformanceMetric,
+	reportBrowserRuntimeError,
 	resolveAudienceHint,
 	resolveNavigationId
 } from '@/lib/analytics/client-vitals'
@@ -35,6 +36,16 @@ export function WebVitalsReporter() {
 	}, [])
 
 	useReportWebVitals(reportWebVital)
+
+	useEffect(() => {
+		const reportRuntimeError = () => reportBrowserRuntimeError()
+		window.addEventListener('error', reportRuntimeError)
+		window.addEventListener('unhandledrejection', reportRuntimeError)
+		return () => {
+			window.removeEventListener('error', reportRuntimeError)
+			window.removeEventListener('unhandledrejection', reportRuntimeError)
+		}
+	}, [])
 
 	return null
 }

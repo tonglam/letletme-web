@@ -13,7 +13,7 @@ import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
 import type {
 	EntrySquadPicksResult,
 	SquadLoadState,
-	SquadPickSeed,
+	SquadPickSeed
 } from '@/lib/squad-picks'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getTranslations } from 'next-intl/server'
@@ -40,6 +40,29 @@ function statusBadgeClass(status: string): string {
 	if (status === 'UNAVAILABLE')
 		return 'border-destructive/45 bg-destructive/10 text-destructive'
 	return 'border-border/70 bg-muted/30 text-muted-foreground'
+}
+
+function PriceChangesContractMarker({
+	status,
+	revision,
+	expected,
+	observed
+}: {
+	status: 'READY' | 'STALE' | 'UNAVAILABLE'
+	revision: string
+	expected: number
+	observed: number
+}) {
+	return (
+		<span
+			hidden
+			data-letletme-contract="price_changes"
+			data-status={status}
+			data-revision={revision}
+			data-expected={String(expected)}
+			data-observed={String(observed)}
+		/>
+	)
 }
 
 async function renderPriceChangesPage({ params }: PageProps) {
@@ -86,16 +109,12 @@ async function renderPriceChangesPage({ params }: PageProps) {
 		state: 'UNAVAILABLE',
 		purchasePrices: {}
 	}
-	if (
-		identity.session &&
-		identity.entryId != null &&
-		mySquadPicks.length > 0
-	) {
+	if (identity.session && identity.entryId != null && mySquadPicks.length > 0) {
 		personalPriceContext = await loadPersonalPriceContext({
 			session: identity.session,
 			entryId: identity.entryId,
 			picks: mySquadPicks,
-			eventId: pickCurrentEventId(events) ?? events?.next?.[0]?.id ?? null,
+			eventId: pickCurrentEventId(events) ?? events?.next?.[0]?.id ?? null
 		})
 	}
 
@@ -111,6 +130,18 @@ async function renderPriceChangesPage({ params }: PageProps) {
 
 	return (
 		<PageShell>
+			<PriceChangesContractMarker
+				status={
+					board.status === 'READY'
+						? 'READY'
+						: board.status === 'STALE' || board.status === 'PARTIAL'
+							? 'STALE'
+							: 'UNAVAILABLE'
+				}
+				revision={board.revision || 'unavailable'}
+				expected={board.expectedPlayerCount}
+				observed={board.observedPlayerCount}
+			/>
 			<div className="container mx-auto max-w-6xl px-4 py-8">
 				<StatsPageHeader
 					title={t('title')}
