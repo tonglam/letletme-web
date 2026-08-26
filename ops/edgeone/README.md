@@ -121,19 +121,21 @@ The EdgeOne rule must require all of the following before selecting Tencent:
    would make a Tencent read unsafe.
 4. Reuse the existing `letletme.top` CNAME-mode EdgeOne site in the global
    area; do not create a second site.
-5. Keep the existing EdgeOne canary hostname
-   `eo-personal-canary.letletme.top` until a public cutover is approved.
+5. Keep `eo-personal-canary.letletme.top` as the formal split canary until a
+   public cutover is approved. Mainland anonymous safe reads use Tencent;
+   API, unsafe methods, Server Actions, requests with session state, and
+   non-mainland traffic use Vercel.
 6. Store the live EdgeOne-assigned CNAME value in the
    `DNSPOD_EDGEONE_CNAME` Worker secret when preparing the watchdog; do not use
    the canary hostname as the secret value. Keep
    `WATCHDOG_ENABLED=false` while the apex remains on the fallback path.
-7. Keep the canary origin as `letletme-web.vercel.app`, HTTPS port 443, origin
-   Host `letletme.top`, and TLS SNI `letletme.top`. For the inactive production
-   split, configure a separate HTTPS Tencent safe-read origin for the mainland
-   allowlist and retain the Vercel origin for dynamic/API traffic. The Tencent
-   origin must use a publicly trusted certificate for EdgeOne, the same Host
-   and SNI contract, and the exact release SHA; do not substitute the current
-   Vercel-only canary as evidence for the Tencent path.
+7. Keep the canary's default origin as `vercel-origin.letletme.top`, HTTPS port
+   443, origin Host `letletme.top`, and TLS SNI `letletme.top`. Configure the
+   separate HTTPS Tencent safe-read origin only for the mainland allowlist.
+   The Tencent origin must use a publicly trusted certificate for EdgeOne, the
+   same Host and SNI contract, and the exact release SHA. The watchdog's Vercel
+   API probe uses this split canary's `/api/graphql` route; it does not treat a
+   safe-read response from Tencent as Vercel evidence.
 8. Configure the client-IP feature to write the custom header
    `X-Letletme-Proxy-Client-IP` for every EdgeOne-to-origin request. Remove
    client-provided `X-Letletme-Origin-Token`, `X-Letletme-Client-IP`, and both
