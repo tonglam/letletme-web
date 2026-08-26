@@ -93,13 +93,8 @@ for required in \
 done
 local_proxy_secret=$(< /etc/letletme/local-proxy-secret)
 configured_proxy_secret=$(sed -n 's/^LETLETME_LOCAL_PROXY_SECRET=//p' /etc/letletme/web.env)
-configured_previous_proxy_secret=$(sed -n 's/^LETLETME_LOCAL_PROXY_SECRET_PREVIOUS=//p' /etc/letletme/web.env)
 if [[ -z $local_proxy_secret || $configured_proxy_secret != "$local_proxy_secret" ]]; then
 	echo "web.env local proxy secret does not match /etc/letletme/local-proxy-secret" >&2
-	exit 1
-fi
-if [[ -n $configured_previous_proxy_secret && $configured_previous_proxy_secret == "$configured_proxy_secret" ]]; then
-	echo "previous proxy secret must differ from the active proxy secret" >&2
 	exit 1
 fi
 if [[ -e $release_dir ]]; then
@@ -212,35 +207,54 @@ trap cleanup_build EXIT
 	export HOME=$build_dir/.home
 	export npm_config_cache=$build_dir/.npm-cache
 	install -d -o letletme -g letletme -m 0700 "$HOME" "$npm_config_cache"
-	build_env=(
-		"PATH=${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
-		"HOME=$HOME"
-		"npm_config_cache=$npm_config_cache"
-		"NODE_ENV=$NODE_ENV"
-		"NODE_OPTIONS=$NODE_OPTIONS"
-		"LETLETME_ORIGIN=$LETLETME_ORIGIN"
-		"LETLETME_RELEASE_SHA=$LETLETME_RELEASE_SHA"
-		"NEXT_DEPLOYMENT_ID=$NEXT_DEPLOYMENT_ID"
-		"LETLETME_BUILD_DIR=$LETLETME_BUILD_DIR"
-	)
-	for build_key in \
-		NEXT_PUBLIC_APP_URL \
-		NEXT_PUBLIC_SUPABASE_URL \
-		NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE \
-		BETTER_AUTH_URL \
-		NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
-		LETLETME_LOCAL_PROXY_SECRET \
-		LETLETME_LOCAL_PROXY_SECRET_PREVIOUS; do
-		if [[ -n ${!build_key-} ]]; then
-			build_env+=("$build_key=${!build_key}")
+	build_env_file=$(mktemp "/run/letletme-build-env-$release_sha.XXXXXX")
+	cleanup_build_env() {
+		if [[ -n ${build_env_file:-} && $build_env_file == /run/letletme-build-env-$release_sha.* ]]; then
+			rm -f -- "$build_env_file"
 		fi
-	done
+	}
+	trap cleanup_build_env EXIT
+	chmod 0600 "$build_env_file"
+	write_build_env() {
+		local build_key=$1
+		local build_value=$2
+		printf 'export %s=%q\n' "$build_key" "$build_value"
+	}
+	{
+		write_build_env PATH "${PATH:-/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
+		write_build_env HOME "$HOME"
+		write_build_env npm_config_cache "$npm_config_cache"
+		write_build_env NODE_ENV "$NODE_ENV"
+		write_build_env NODE_OPTIONS "$NODE_OPTIONS"
+		write_build_env LETLETME_ORIGIN "$LETLETME_ORIGIN"
+		write_build_env LETLETME_RELEASE_SHA "$LETLETME_RELEASE_SHA"
+		write_build_env NEXT_DEPLOYMENT_ID "$NEXT_DEPLOYMENT_ID"
+		write_build_env LETLETME_BUILD_DIR "$LETLETME_BUILD_DIR"
+		for build_key in \
+			NEXT_PUBLIC_APP_URL \
+			NEXT_PUBLIC_SUPABASE_URL \
+			NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE \
+			BETTER_AUTH_URL \
+			NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
+			LETLETME_LOCAL_PROXY_SECRET; do
+			if [[ -n ${!build_key-} ]]; then
+				write_build_env "$build_key" "${!build_key}"
+			fi
+		done
+	} > "$build_env_file"
+	chown letletme:letletme "$build_env_file"
 	cd -- "$build_dir"
-	runuser --user letletme -- /usr/bin/env -i "${build_env[@]}" /bin/bash -c '
+	runuser --user letletme -- /usr/bin/env -i /bin/bash --noprofile --norc -c '
+		set -euo pipefail
+		# shellcheck disable=SC1090
+		source "$1"
 		cd -- "$LETLETME_BUILD_DIR"
 		npm ci --include=dev
 		npm run build
-	'
+	' letletme-build "$build_env_file"
+	rm -f -- "$build_env_file"
+	build_env_file=''
+	trap - EXIT
 	node -e 'const f=require("./.next/required-server-files.json"); if(f.config.deploymentId !== process.env.LETLETME_RELEASE_SHA.slice(0, 32)) process.exit(1)'
 )
 

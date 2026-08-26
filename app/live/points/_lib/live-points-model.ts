@@ -253,6 +253,10 @@ export function mapLiveDataToPlayers(
 			? false
 			: publishedViceCaptain
 		const isBench = !activePlayerIds.has(playerId)
+		// Player.position is the player's FPL element type (the pitch row). The
+		// authoritative lineup slot is still used above for ordering and bench
+		// membership; it must not be mistaken for the element type when a legal
+		// cross-position auto-sub changes the XI.
 		const position = normalizePosition(pick.elementType, 'elementType')
 		const breakdownEntry = breakdownLookup.get(playerId)
 		const breakdownStats = breakdownEntry?.stats

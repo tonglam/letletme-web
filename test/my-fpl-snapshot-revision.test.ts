@@ -13,7 +13,13 @@ const meta = (revision: string): MyFplSnapshotMeta => ({
 	sourceCheckedAt: '2026-08-23T01:00:00.000Z',
 	publishedAt: '2026-08-23T01:01:00.000Z',
 	kind: 'PROVISIONAL',
-	freshness: 'CURRENT'
+	freshness: 'CURRENT',
+	scoreSource: 'FPL_EVENT_LIVE',
+	livePublicationId: '00000000-0000-4000-8000-000000000007',
+	liveRevision: '8',
+	algorithmVersion: 'fpl-projected-autosubs-v1',
+	sourceMinCheckedAt: '2026-08-23T01:00:00.000Z',
+	sourceMaxCheckedAt: '2026-08-23T01:01:00.000Z'
 })
 
 describe('My FPL snapshot revision rollover', () => {

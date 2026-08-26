@@ -8,7 +8,10 @@ import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 // therefore omit the heavy match card/tab graph when the server rendered
 // preseason branch never mounts this entry.
 const LiveMatchesClient = dynamic(
-	() => import('@/app/live/matches/LiveMatchesClient').then(mod => mod.LiveMatchesClient),
+	() =>
+		import('@/app/live/matches/LiveMatchesClient').then(
+			mod => mod.LiveMatchesClient
+		),
 	{ ssr: true }
 )
 
@@ -16,12 +19,14 @@ export function LiveMatchesEntry({
 	initialMatches,
 	initialError,
 	currentEventId,
+	selectedEventId,
 	nextEventId,
 	initialSnapshot
 }: {
 	initialMatches: Match[]
 	initialError?: string | null
 	currentEventId?: number
+	selectedEventId?: number
 	nextEventId?: number
 	initialSnapshot?: LiveSnapshotStatus | null
 }) {
@@ -30,6 +35,7 @@ export function LiveMatchesEntry({
 			initialMatches={initialMatches}
 			initialError={initialError}
 			currentEventId={currentEventId}
+			selectedEventId={selectedEventId}
 			nextEventId={nextEventId}
 			initialSnapshot={initialSnapshot}
 		/>

@@ -57,7 +57,7 @@ export const TOURNAMENT_INFO_FIELDS = `
 
 export const GET_ENTRY_TOURNAMENTS = `${TOURNAMENT_INFO_FIELDS}
   query GetEntryTournaments($entryId: Int!) {
-    entryTournaments(entryId: $entryId) {
+    entryTournaments: entryParticipatingTournaments(entryId: $entryId) {
       ...TournamentInfoFields
     }
   }
@@ -69,7 +69,46 @@ export const GET_ENTRY_TOURNAMENTS = `${TOURNAMENT_INFO_FIELDS}
  */
 export const GET_ENTRY_TOURNAMENTS_LIST = `
   query GetEntryTournamentsList($entryId: Int!) {
-    entryTournaments(entryId: $entryId) {
+    entryTournaments: entryParticipatingTournaments(entryId: $entryId) {
+      id
+      name
+      creator
+      adminEntryId
+      leagueType
+      sourceLeagueName
+      totalTeamNum
+      groupMode
+      knockoutMode
+      groupStartedEventId
+      groupEndedEventId
+      state
+      rosterSyncStatus
+      setupStatus
+      setupProgressMode
+      setupAttempt
+      setupMaxAttempts
+      nextRetryAt
+      standingsReadyAt
+      profilesReadyAt
+      insightsReadyAt
+      setupHasWarnings
+      warningSummaries { category affectedCount repairExhausted }
+      updatedAt
+    }
+  }
+`
+
+export const GET_MANAGEABLE_TOURNAMENTS = `${TOURNAMENT_INFO_FIELDS}
+  query GetManageableTournaments($entryId: Int!) {
+    manageableTournaments(entryId: $entryId) {
+      ...TournamentInfoFields
+    }
+  }
+`
+
+export const GET_MANAGEABLE_TOURNAMENTS_LIST = `
+  query GetManageableTournamentsList($entryId: Int!) {
+    manageableTournaments(entryId: $entryId) {
       id
       name
       creator
@@ -177,6 +216,10 @@ export interface EntryTournamentsResponse {
 	entryTournaments: EntryTournament[]
 }
 
+export interface ManageableTournamentsResponse {
+	manageableTournaments: EntryTournament[]
+}
+
 /** Fields returned by GET_ENTRY_TOURNAMENTS_LIST */
 export type EntryTournamentListItem = Pick<
 	EntryTournament,
@@ -223,6 +266,10 @@ export type LiveEntryTournament = Pick<
 
 export interface EntryTournamentsListResponse {
 	entryTournaments: EntryTournamentListItem[]
+}
+
+export interface ManageableTournamentsListResponse {
+	manageableTournaments: EntryTournamentListItem[]
 }
 
 export interface TournamentParticipant {
@@ -315,6 +362,7 @@ export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_DETAIL_INFO_FIELDS}
           score {
             eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
             transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
+            calculationMode algorithmVersion
             staleAt nextRefreshAt reconciliation reasonCodes
           }
           activeCaptain { name points }
@@ -742,6 +790,8 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_TOURNAMENT_INFO_FIELDS}
           source
           state
           eventPointSemantics
+          calculationMode
+          algorithmVersion
           revision
           checkedAt
           upstreamUpdatedAt
@@ -812,6 +862,8 @@ export interface TournamentLiveCalcData {
 	played: number
 	toPlay: number
 	captainName: string
+	/** Official captain points carried by the bounded competition-board row. */
+	captainPoints?: number | null
 	activeCaptain?: {
 		name: string
 		points: number
@@ -829,6 +881,11 @@ export interface TournamentLiveCalcData {
 		teamShortName: string
 		teamName: string
 		totalPoints?: number | null
+		minutes?: number | null
+		starts?: boolean | null
+		isGwFinished?: boolean | null
+		isGwStarted?: boolean | null
+		isPlayed?: boolean | null
 	}>
 }
 
@@ -852,14 +909,201 @@ export interface TournamentLivePointsResponse {
 	}
 }
 
+export type EntryLiveCompetitionBoardSort =
+	| 'EVENT_POINTS'
+	| 'NET_EVENT_POINTS'
+	| 'TRANSFER_COST'
+	| 'PLAYED'
+	| 'TOTAL_POINTS'
+	| 'OVERALL_RANK'
+	| 'TEAM_VALUE'
+	| 'RANK'
+	| 'ENTRY_NAME'
+
+export type EntryLiveCompetitionBoardSortDirection = 'ASC' | 'DESC'
+export type EntryLiveCompetitionPickScope = 'ANY' | 'STARTER' | 'BENCH'
+export type EntryLiveCompetitionCaptainMode = 'ANY' | 'CAPTAIN' | 'VICE'
+
+export interface EntryLiveCompetitionOwnershipFilter {
+	playerIds: number[]
+	scope: EntryLiveCompetitionPickScope
+	captainMode: EntryLiveCompetitionCaptainMode
+}
+
+export interface EntryLiveCompetitionTeamCountRule {
+	teamId: number
+	exactCount: number
+	scope: EntryLiveCompetitionPickScope
+}
+
+export interface EntryLiveCompetitionBoardVariables {
+	entryId: number
+	tournamentId: number
+	eventId: number
+	ref?: { season: string; eventId: number; revision: string } | null
+	page?: number
+	pageSize?: number
+	sort?: EntryLiveCompetitionBoardSort
+	direction?: EntryLiveCompetitionBoardSortDirection
+	search?: string | null
+	chips?: string[]
+	captainPlayerIds?: number[]
+	ownership?: EntryLiveCompetitionOwnershipFilter | null
+	teamCountRules?: EntryLiveCompetitionTeamCountRule[]
+	expectedBoardRevision?: string | null
+}
+
+export interface EntryLiveCompetitionBoardRow {
+	entry: number
+	entryName: string
+	playerName: string
+	rank: number
+	overallRank: number
+	teamValue: number
+	chip: string
+	livePoints: number
+	transferCost: number
+	liveNetPoints: number
+	liveTotalPoints: number
+	played: number
+	toPlay: number
+	captainId: number
+	captainName: string
+	captainPoints: number
+	score: NonNullable<TournamentLiveCalcData['score']>
+}
+
+export interface EntryLiveCompetitionBoardPage {
+	season: string
+	eventId: number
+	tournamentId: number
+	boardRevision: string
+	playerRevision: string
+	managerRevision: string | null
+	dataAvailability: string
+	managerDataAvailability: string
+	managerServedFrom: 'REDIS' | 'POSTGRES' | 'MIXED' | 'NONE'
+	managerRefreshQueued: boolean
+	managerCheckedAt: string | null
+	managerNextRefreshAt: string | null
+	coverageState: 'WARMING' | 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE'
+	rankScope: 'FULL_FIELD' | 'AVAILABLE_ROWS'
+	computedEntries: number
+	deferredEntryCount: number
+	failedEntryCount: number
+	unavailableEntryCount: number
+	officialCoverage: number
+	unavailableEntryIds: number[]
+	failedEntryIds: number[]
+	partial: boolean
+	totalEntries: number
+	filteredEntries: number
+	page: number
+	pageSize: number
+	hasMore: boolean
+	highestEventPoints: number | null
+	averageEventPoints: number | null
+	rows: EntryLiveCompetitionBoardRow[]
+	viewerRow: EntryLiveCompetitionBoardRow | null
+}
+
+export interface EntryLiveCompetitionBoardResponse {
+	entryLiveCompetitionBoard: EntryLiveCompetitionBoardPage
+}
+
+export const GET_ENTRY_LIVE_COMPETITION_BOARD = `
+  query GetEntryLiveCompetitionBoard(
+    $entryId: Int!
+    $tournamentId: Int!
+    $eventId: Int!
+    $ref: LiveRevisionRefInput
+    $page: Int
+    $pageSize: Int
+    $sort: EntryLiveCompetitionBoardSort
+    $direction: EntryLiveCompetitionBoardSortDirection
+    $search: String
+    $chips: [String!]
+    $captainPlayerIds: [Int!]
+    $ownership: EntryLiveCompetitionOwnershipFilterInput
+    $teamCountRules: [EntryLiveCompetitionTeamCountRuleInput!]
+    $expectedBoardRevision: String
+  ) {
+    entryLiveCompetitionBoard(
+      entryId: $entryId
+      tournamentId: $tournamentId
+      eventId: $eventId
+      ref: $ref
+      page: $page
+      pageSize: $pageSize
+      sort: $sort
+      direction: $direction
+      search: $search
+      chips: $chips
+      captainPlayerIds: $captainPlayerIds
+      ownership: $ownership
+      teamCountRules: $teamCountRules
+      expectedBoardRevision: $expectedBoardRevision
+    ) {
+      season eventId tournamentId boardRevision playerRevision managerRevision
+      dataAvailability managerDataAvailability managerServedFrom managerRefreshQueued
+      managerCheckedAt managerNextRefreshAt coverageState rankScope computedEntries
+      deferredEntryCount failedEntryCount unavailableEntryCount officialCoverage
+      unavailableEntryIds failedEntryIds partial totalEntries filteredEntries page pageSize hasMore
+      highestEventPoints averageEventPoints
+      rows { ...EntryLiveCompetitionBoardRowFields }
+      viewerRow { ...EntryLiveCompetitionBoardRowFields }
+    }
+  }
+
+  fragment EntryLiveCompetitionBoardRowFields on EntryLiveCompetitionBoardRow {
+    entry entryName playerName rank overallRank teamValue chip livePoints
+    transferCost liveNetPoints liveTotalPoints played toPlay captainId
+    captainName captainPoints
+    score { ...EntryLiveCompetitionScoreFields }
+  }
+
+  fragment EntryLiveCompetitionScoreFields on LiveManagerScore {
+    eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
+    transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
+    calculationMode algorithmVersion
+    provenance {
+      scoreSource calculationMode algorithmVersion inputRevision scoreRevision rankRevision
+      livePublicationId liveRevision liveCheckedAt picksRevision picksCheckedAt
+      previousTotalsRevision previousTotalsThroughEventId resultRevision resultCheckedAt
+      dataCheckedAt rankSource rankCheckedAt
+    }
+    staleAt nextRefreshAt reconciliation reasonCodes
+  }
+`
+
 export const GET_TOURNAMENT_SELECTION_INDEX = `
   query GetTournamentSelectionIndex($entryId: Int!, $tournamentId: Int!, $ref: LiveRevisionRefInput!) {
     tournamentSelectionIndex(entryId: $entryId, tournamentId: $tournamentId, ref: $ref) {
       tournamentId eventId revision
-      rows { playerId count percentage }
+      rows { playerId playerName teamId teamName teamShortName position count percentage }
     }
   }
 `
+
+export interface TournamentSelectionIndexRow {
+	playerId: number
+	playerName: string
+	teamId: number
+	teamName: string
+	teamShortName: string
+	position: string
+	count: number
+	percentage: number
+}
+
+export interface TournamentSelectionIndexResponse {
+	tournamentSelectionIndex: {
+		tournamentId: number
+		eventId: number
+		revision: string
+		rows: TournamentSelectionIndexRow[]
+	}
+}
 
 export const GET_TOURNAMENT_ENTRY_SQUADS = `
   query GetTournamentEntrySquads($entryId: Int!, $tournamentId: Int!, $comparedEntryIds: [Int!]!, $ref: LiveRevisionRefInput!) {
@@ -870,13 +1114,27 @@ export const GET_TOURNAMENT_ENTRY_SQUADS = `
         score {
           eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
           transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
+          calculationMode algorithmVersion
           staleAt nextRefreshAt reconciliation reasonCodes
         }
-        pickList { element webName elementTypeName position isCaptain isViceCaptain teamShortName teamName totalPoints }
+        pickList {
+          element webName elementTypeName position multiplier pickActive autoSub
+          isCaptain isViceCaptain teamShortName teamName totalPoints minutes starts
+          isGwFinished isGwStarted isPlayed
+        }
       }
     }
   }
 `
+
+export interface TournamentEntrySquadsResponse {
+	tournamentEntrySquads: {
+		tournamentId: number
+		eventId: number
+		revision: string
+		entries: TournamentLiveCalcData[]
+	}
+}
 
 export const GET_TOURNAMENT_LIVE_PARTICIPANTS = `
   query GetTournamentLiveParticipants($entryId: Int!, $tournamentId: Int!) {

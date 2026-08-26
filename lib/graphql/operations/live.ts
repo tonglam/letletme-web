@@ -146,6 +146,39 @@ export const GET_LIVE_POINTS = `
         source
         state
         eventPointSemantics
+        calculationMode
+        algorithmVersion
+        provenance {
+          scoreSource
+          calculationMode
+          algorithmVersion
+          inputRevision
+          scoreRevision
+          rankRevision
+          livePublicationId
+          liveRevision
+          liveCheckedAt
+          picksRevision
+          picksCheckedAt
+          previousTotalsRevision
+          previousTotalsThroughEventId
+          resultRevision
+          resultCheckedAt
+          dataCheckedAt
+          rankSource
+          rankCheckedAt
+        }
+        effectiveLineup {
+          elementId
+          position
+          sourceMultiplier
+          effectiveMultiplier
+          pickActive
+          autoSub
+          isCaptain
+          isViceCaptain
+          captainForScoring
+        }
         revision
         checkedAt
         upstreamUpdatedAt
@@ -273,14 +306,13 @@ export type LiveManagerScore = {
 	overallRank: number | null
 	leagueRank: number | null
 	transferCost: number
-	source:
-		| 'FPL_EVENT_LIVE'
-		| 'FPL_ENTRY_SUMMARY'
-		| 'FPL_CLASSIC_STANDINGS'
-		| 'FPL_FINAL_RESULT'
-		| 'UNAVAILABLE'
+	source: 'FPL_EVENT_LIVE' | 'FPL_FINAL_RESULT' | 'UNAVAILABLE'
 	state: 'FRESH' | 'STALE' | 'SETTLING' | 'FINAL' | 'UNAVAILABLE'
 	eventPointSemantics: 'GROSS' | 'NET' | 'ZERO_COST_EQUIVALENT' | 'UNKNOWN'
+	calculationMode?: 'PROJECTED_AUTOSUBS' | 'FINAL_RESULT' | null
+	algorithmVersion?: string | null
+	provenance?: LiveManagerScoreProvenance | null
+	effectiveLineup?: LiveManagerScoreEffectiveLineup[] | null
 	revision: string | null
 	checkedAt: string | null
 	upstreamUpdatedAt: string | null
@@ -288,6 +320,39 @@ export type LiveManagerScore = {
 	nextRefreshAt: string | null
 	reconciliation: 'MATCHED' | 'SOURCE_SKEW' | 'NOT_COMPARABLE' | 'NO_LINEUP'
 	reasonCodes: string[]
+}
+
+export type LiveManagerScoreProvenance = {
+	scoreSource: 'FPL_EVENT_LIVE' | 'FPL_FINAL_RESULT'
+	calculationMode: 'PROJECTED_AUTOSUBS' | 'FINAL_RESULT'
+	algorithmVersion: string | null
+	inputRevision: string
+	scoreRevision: string
+	rankRevision: string | null
+	livePublicationId: string | null
+	liveRevision: string | null
+	liveCheckedAt: string | null
+	picksRevision: string | null
+	picksCheckedAt: string | null
+	previousTotalsRevision: string | null
+	previousTotalsThroughEventId: number | null
+	resultRevision: string | null
+	resultCheckedAt: string | null
+	dataCheckedAt: string | null
+	rankSource: 'FPL_ENTRY_SUMMARY' | 'FPL_CLASSIC_STANDINGS' | null
+	rankCheckedAt: string | null
+}
+
+export type LiveManagerScoreEffectiveLineup = {
+	elementId: number
+	position: number
+	sourceMultiplier: number
+	effectiveMultiplier: number
+	pickActive: boolean
+	autoSub: boolean
+	isCaptain: boolean
+	isViceCaptain: boolean
+	captainForScoring: boolean
 }
 
 export interface LiveCalcDataResponse {
@@ -690,6 +755,10 @@ export interface LiveFixturePlayersData {
 	fixtureId: number
 	players: LiveFixturePerformance[]
 	source?: 'LIVE_PUBLICATION' | 'DURABLE_DB'
+}
+
+export interface LiveFixturePlayersResponse {
+	liveFixturePlayers: LiveFixturePlayersData
 }
 
 export interface LiveFixturePlayersBatchResponse {

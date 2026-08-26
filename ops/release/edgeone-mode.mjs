@@ -4,6 +4,20 @@ import { createHash, createHmac } from 'node:crypto'
 const ENDPOINT = 'https://teo.tencentcloudapi.com/'
 const SERVICE = 'teo'
 const VERSION = '2022-09-01'
+const RELEASE_RULE_NAME = 'TEMP CN bafa to Tencent'
+export const RELEASE_RULE_CONDITION = [
+	"${http.request.host} in ['eo-personal-canary.letletme.top', 'letletme.top']",
+	"${http.request.ip.country} in ['CN']",
+	"${http.request.method} in ['GET', 'HEAD']",
+	"not ${http.request.uri.path} matches '^/api(?:/|$)'",
+	"not ${http.request.uri.path} matches '^/(?:en/|zh-CN/)?auth(?:/|$)'",
+	"not ${http.request.uri.path} matches '^/[.]well-known/acme-challenge(?:/|$)'",
+	"not ${http.request.headers['upgrade']} exists",
+	"not ${http.request.headers['next-action']} exists",
+	"not ${http.request.headers['authorization']} exists",
+	"not ${http.request.headers['cookie']} exists"
+].join(' and ')
+const RELEASE_ORIGIN_GROUP = 'og-3u1v4jecjhe8'
 
 function sha256(value) {
 	return createHash('sha256').update(value).digest('hex')
@@ -14,6 +28,7 @@ const SERVER_MANAGED_RULE_FIELDS = new Set([
 	'CreatedAt',
 	'LastModified',
 	'LastModifiedTime',
+	'RulePriority',
 	'UpdateTime',
 	'UpdatedAt',
 	'UpdatedTime'
@@ -36,6 +51,87 @@ export function canonicalRuleJson(rule) {
 
 export function ruleFingerprint(rule) {
 	return sha256(canonicalRuleJson(rule))
+}
+
+function requireExactKeys(value, expected, label) {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) {
+		throw new Error(`${label} is invalid`)
+	}
+	const actual = Object.keys(value).sort()
+	const wanted = [...expected].sort()
+	if (JSON.stringify(actual) !== JSON.stringify(wanted)) {
+		throw new Error(`${label} has unexpected fields`)
+	}
+}
+
+export function buildScopedRuleSnapshots(rule) {
+	if (!rule || typeof rule !== 'object' || Array.isArray(rule)) {
+		throw new Error('EdgeOne release rule is missing')
+	}
+	if (typeof rule.RuleId !== 'string' || rule.RuleId.length === 0) {
+		throw new Error('EdgeOne release rule ID is missing')
+	}
+	if (rule.RuleName !== RELEASE_RULE_NAME) {
+		throw new Error('EdgeOne release rule name is unexpected')
+	}
+	if (!['enable', 'disable'].includes(rule.Status)) {
+		throw new Error('EdgeOne release rule status is unexpected')
+	}
+	const description = rule.Description
+	if (
+		description !== undefined &&
+		description !== null &&
+		(!Array.isArray(description) ||
+			!description.every(item => typeof item === 'string'))
+	) {
+		throw new Error('EdgeOne release rule description is invalid')
+	}
+	if (!Array.isArray(rule.Branches) || rule.Branches.length !== 1) {
+		throw new Error('EdgeOne release rule must contain exactly one branch')
+	}
+	const branch = rule.Branches[0]
+	requireExactKeys(branch, ['Actions', 'Condition'], 'EdgeOne release branch')
+	if (branch.Condition !== RELEASE_RULE_CONDITION) {
+		throw new Error('EdgeOne release rule condition is unexpected')
+	}
+	if (!Array.isArray(branch.Actions) || branch.Actions.length !== 1) {
+		throw new Error('EdgeOne release rule must contain exactly one action')
+	}
+	const action = branch.Actions[0]
+	requireExactKeys(action, ['ModifyOriginParameters', 'Name'], 'EdgeOne release action')
+	if (action.Name !== 'ModifyOrigin') {
+		throw new Error('EdgeOne release rule action is unexpected')
+	}
+	const parameters = action.ModifyOriginParameters
+	if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) {
+		throw new Error('EdgeOne release origin parameters are missing')
+	}
+	requireExactKeys(
+		parameters,
+		['HTTPOriginPort', 'HTTPSOriginPort', 'Origin', 'OriginProtocol', 'OriginType'],
+		'EdgeOne release origin parameters'
+	)
+	if (
+		parameters.HTTPOriginPort !== 80 ||
+		parameters.HTTPSOriginPort !== 443 ||
+		parameters.OriginType !== 'OriginGroup' ||
+		parameters.Origin !== RELEASE_ORIGIN_GROUP ||
+		parameters.OriginProtocol !== 'follow'
+	) {
+		throw new Error('EdgeOne release origin parameters are unexpected')
+	}
+	const base = {
+		RuleId: rule.RuleId,
+		RuleName: rule.RuleName,
+		...(description === undefined
+			? {}
+			: { Description: description === null ? null : [...description] }),
+		Branches: structuredClone(rule.Branches)
+	}
+	return {
+		'all-vercel': { ...base, Status: 'disable' },
+		split: { ...base, Status: 'enable' }
+	}
 }
 
 export function validateLiveRule(mode, current, snapshots) {
@@ -104,12 +200,12 @@ function parseArguments(argv) {
 	const dryRun = argv.includes('--dry-run')
 	const verifyOnly = argv.includes('--verify-only')
 	const mode = modeIndex >= 0 ? argv[modeIndex + 1] : null
-	if (!['all-vercel', 'split', 'describe'].includes(mode)) {
+	if (!['all-vercel', 'split', 'describe', 'snapshots'].includes(mode)) {
 		throw new Error(
-			'usage: edgeone-mode.mjs --mode all-vercel|split|describe [--dry-run]'
+			'usage: edgeone-mode.mjs --mode all-vercel|split|describe|snapshots [--dry-run]'
 		)
 	}
-	if (verifyOnly && mode === 'describe') {
+	if (verifyOnly && ['describe', 'snapshots'].includes(mode)) {
 		throw new Error('--verify-only requires an actionable EdgeOne mode')
 	}
 	return { mode, dryRun, verifyOnly }
@@ -218,7 +314,7 @@ async function requestTencent(action, body) {
 	return result.Response
 }
 
-async function describeRule() {
+export async function describeRule() {
 	const zoneId = process.env.EDGEONE_ZONE_ID
 	const ruleId = process.env.EDGEONE_RULE_ID
 	if (!ruleId) throw new Error('missing EDGEONE_RULE_ID')
@@ -271,6 +367,16 @@ async function apply(mode) {
 
 export async function main(argv = process.argv.slice(2)) {
 	const { mode, dryRun, verifyOnly } = parseArguments(argv)
+	if (mode === 'snapshots') {
+		if (dryRun) return { mode, dryRun: true }
+		const rule = await describeRule()
+		return {
+			mode,
+			ruleId: rule.RuleId,
+			liveStatus: rule.Status,
+			snapshots: buildScopedRuleSnapshots(rule)
+		}
+	}
 	if (mode === 'describe') {
 		if (dryRun) return { mode, dryRun: true }
 		const rule = await describeRule()

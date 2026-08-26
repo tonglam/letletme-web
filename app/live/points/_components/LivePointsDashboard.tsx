@@ -13,7 +13,10 @@ import { APP_URL } from '@/i18n/config'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
 import type { EntryOverallSnapshot } from '@/lib/graphql/operations/entries'
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
-import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
+import {
+	liveManagerScoreAuthorityLabel,
+	traceableOfficialManagerScore
+} from '@/lib/live-manager-score'
 import { cn } from '@/lib/utils'
 import type { Player } from '@/types/player'
 import type { PlayerDetail } from '@/types/player-detail'

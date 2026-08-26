@@ -5,6 +5,19 @@ async function loadModule() {
 	return import('../ops/release/edgeone-mode.mjs')
 }
 
+const RELEASE_RULE_CONDITION = [
+	"${http.request.host} in ['eo-personal-canary.letletme.top', 'letletme.top']",
+	"${http.request.ip.country} in ['CN']",
+	"${http.request.method} in ['GET', 'HEAD']",
+	"not ${http.request.uri.path} matches '^/api(?:/|$)'",
+	"not ${http.request.uri.path} matches '^/(?:en/|zh-CN/)?auth(?:/|$)'",
+	"not ${http.request.uri.path} matches '^/[.]well-known/acme-challenge(?:/|$)'",
+	"not ${http.request.headers['upgrade']} exists",
+	"not ${http.request.headers['next-action']} exists",
+	"not ${http.request.headers['authorization']} exists",
+	"not ${http.request.headers['cookie']} exists"
+].join(' and ')
+
 function rules() {
 	const common = {
 		RuleId: 'rule-1',
@@ -25,9 +38,107 @@ function rules() {
 
 test('EdgeOne rule fingerprints are stable across key order and server metadata', async () => {
 	const { ruleFingerprint } = await loadModule()
-	const first = { RuleId: 'rule-1', UpdateTime: 'old', Nested: { b: 2, a: 1 } }
-	const second = { Nested: { a: 1, b: 2 }, CreateTime: 'new', RuleId: 'rule-1' }
+	const first = { RuleId: 'rule-1', RulePriority: 3, UpdateTime: 'old', Nested: { b: 2, a: 1 } }
+	const second = { Nested: { a: 1, b: 2 }, CreateTime: 'new', RulePriority: 9, RuleId: 'rule-1' }
 	assert.equal(ruleFingerprint(first), ruleFingerprint(second))
+})
+
+function scopedReleaseRule(overrides = {}) {
+	return {
+		Status: 'enable',
+		RuleId: 'rule-release',
+		RuleName: 'TEMP CN bafa to Tencent',
+		Description: [],
+		RulePriority: 3,
+		Branches: [{
+			Condition: RELEASE_RULE_CONDITION,
+			Actions: [{
+				Name: 'ModifyOrigin',
+				ModifyOriginParameters: {
+					HTTPOriginPort: 80,
+					HTTPSOriginPort: 443,
+					OriginType: 'OriginGroup',
+					Origin: 'og-3u1v4jecjhe8',
+					OriginProtocol: 'follow'
+				}
+			}]
+		}],
+		...overrides
+	}
+}
+
+test('formal split rule is limited to anonymous mainland safe reads', async () => {
+	const edgeoneModule = await loadModule()
+	assert.equal(edgeoneModule.RELEASE_RULE_CONDITION, RELEASE_RULE_CONDITION)
+	assert.match(edgeoneModule.RELEASE_RULE_CONDITION, /\['GET', 'HEAD'\]/)
+	assert.match(edgeoneModule.RELEASE_RULE_CONDITION, /\^\/api/)
+	assert.match(edgeoneModule.RELEASE_RULE_CONDITION, /auth/)
+	assert.match(edgeoneModule.RELEASE_RULE_CONDITION, /acme-challenge/)
+	for (const header of ['upgrade', 'next-action', 'authorization', 'cookie']) {
+		assert.match(
+			edgeoneModule.RELEASE_RULE_CONDITION,
+			new RegExp(`headers\\['${header}'\\]\\} exists`)
+		)
+	}
+})
+
+test('builds scoped split and all-Vercel snapshots without output-only fields', async () => {
+	const { buildScopedRuleSnapshots } = await loadModule()
+	const snapshots = buildScopedRuleSnapshots(scopedReleaseRule())
+
+	assert.equal(snapshots.split.Status, 'enable')
+	assert.equal(snapshots['all-vercel'].Status, 'disable')
+	assert.equal(snapshots.split.RuleId, 'rule-release')
+	assert.equal('RulePriority' in snapshots.split, false)
+})
+
+test('preserves a nullable EdgeOne rule description returned by the API', async () => {
+	const { buildScopedRuleSnapshots } = await loadModule()
+	const snapshots = buildScopedRuleSnapshots(scopedReleaseRule({ Description: null }))
+
+	assert.equal(snapshots.split.Description, null)
+	assert.equal(snapshots['all-vercel'].Description, null)
+})
+
+test('omits an optional EdgeOne rule description absent from the API response', async () => {
+	const { buildScopedRuleSnapshots } = await loadModule()
+	const rule = scopedReleaseRule()
+	delete rule.Description
+	const snapshots = buildScopedRuleSnapshots(rule)
+
+	assert.equal('Description' in snapshots.split, false)
+	assert.equal('Description' in snapshots['all-vercel'], false)
+})
+
+test('refuses invalid EdgeOne rule description shapes', async () => {
+	const { buildScopedRuleSnapshots } = await loadModule()
+
+	assert.throws(
+		() => buildScopedRuleSnapshots(scopedReleaseRule({ Description: 'not-an-array' })),
+		/rule description is invalid/
+	)
+	assert.throws(
+		() => buildScopedRuleSnapshots(scopedReleaseRule({ Description: [null] })),
+		/rule description is invalid/
+	)
+})
+
+test('refuses to export an unexpected or header-bearing release rule', async () => {
+	const { buildScopedRuleSnapshots } = await loadModule()
+	assert.throws(
+		() => buildScopedRuleSnapshots(scopedReleaseRule({ RuleName: 'another rule' })),
+		/rule name is unexpected/
+	)
+	const headerRule = scopedReleaseRule()
+	headerRule.Branches[0].Actions = [{ Name: 'ModifyRequestHeader', Parameters: {} }]
+	assert.throws(
+		() => buildScopedRuleSnapshots(headerRule),
+		/release action has unexpected fields/
+	)
+	assert.throws(
+		() => buildScopedRuleSnapshots(scopedReleaseRule({ Branches: [null] })),
+		/release branch is invalid/
+	)
 })
 
 test('EdgeOne mode changes accept only the known opposite mode or are idempotent', async () => {

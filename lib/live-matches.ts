@@ -10,6 +10,7 @@ import {
 	type LiveFixturePerformance,
 	type LiveFixturePlayersBatchResponse,
 	type LiveFixturePlayersData,
+	type LiveFixturePlayersResponse,
 	type LiveMatchdayDeskRow,
 	type LiveMatchdayDeskResponse,
 	type LiveSnapshotStatus
@@ -36,6 +37,28 @@ export interface LiveMatchdayDeskPayload extends LiveMatchdayDeskResponse {
 }
 
 type LiveRef = { season: string; eventId: number; revision: string }
+
+export type LiveFixturePlayerFailureCode =
+	| 'LIVE_REVISION_GONE'
+	| 'LIVE_PUBLICATION_UNAVAILABLE'
+	| 'RATE_LIMITED'
+	| 'UNAUTHENTICATED'
+	| 'FORBIDDEN'
+	| 'REQUEST_TIMEOUT'
+	| 'REQUEST_CANCELLED'
+	| 'NETWORK_ERROR'
+	| 'DETAIL_UNAVAILABLE'
+
+export interface LiveFixturePlayerLoadFailure extends LiveRef {
+	stage: 'batch' | 'fixture'
+	fixtureIds: number[]
+	code: LiveFixturePlayerFailureCode
+}
+
+type LiveMatchdayDeskLoadOptions = {
+	includeFixturePlayers?: boolean
+	onFixturePlayerFailure?: (failure: LiveFixturePlayerLoadFailure) => void
+}
 
 const FIXTURE_PLAYER_BATCH_SIZE = 5
 const FIXTURE_PLAYER_BATCH_CONCURRENCY = 2
@@ -82,12 +105,77 @@ const POSITION_ELEMENT_TYPE: Record<
 	FORWARD: 4
 }
 
-const liveRevisionGone = (error: unknown): boolean => {
-	if (error && typeof error === 'object' && 'code' in error) {
-		if ((error as { code?: unknown }).code === 'LIVE_REVISION_GONE') return true
+const errorCode = (error: unknown): string | null =>
+	error && typeof error === 'object' && 'code' in error
+		? typeof (error as { code?: unknown }).code === 'string'
+			? (error as { code: string }).code
+			: null
+		: null
+
+const errorStatus = (error: unknown): number | null =>
+	error && typeof error === 'object' && 'status' in error
+		? typeof (error as { status?: unknown }).status === 'number'
+			? (error as { status: number }).status
+			: null
+		: null
+
+export const liveFixturePlayerFailureCode = (
+	error: unknown
+): LiveFixturePlayerFailureCode => {
+	const code = errorCode(error)
+	if (
+		code === 'LIVE_REVISION_GONE' ||
+		code === 'LIVE_PUBLICATION_UNAVAILABLE' ||
+		code === 'RATE_LIMITED' ||
+		code === 'UNAUTHENTICATED' ||
+		code === 'FORBIDDEN' ||
+		code === 'REQUEST_TIMEOUT' ||
+		code === 'REQUEST_CANCELLED' ||
+		code === 'NETWORK_ERROR'
+	) {
+		return code
 	}
-	return String(error).includes('LIVE_REVISION_GONE')
+	const status = errorStatus(error)
+	if (status === 401) return 'UNAUTHENTICATED'
+	if (status === 403) return 'FORBIDDEN'
+	if (status === 408) return 'REQUEST_TIMEOUT'
+	if (status === 429) return 'RATE_LIMITED'
+	if (error instanceof Error && error.name === 'AbortError')
+		return 'REQUEST_CANCELLED'
+	const message =
+		error instanceof Error || typeof error === 'string' ? String(error) : ''
+	if (message.includes('LIVE_REVISION_GONE')) return 'LIVE_REVISION_GONE'
+	if (message.includes('LIVE_PUBLICATION_UNAVAILABLE'))
+		return 'LIVE_PUBLICATION_UNAVAILABLE'
+	return 'DETAIL_UNAVAILABLE'
 }
+
+const RECOVERABLE_FIXTURE_PLAYER_BATCH_CODES = new Set([
+	'NOT_FOUND',
+	'GRAPHQL_VALIDATION_FAILED',
+	'INTERNAL_SERVER_ERROR',
+	'UPSTREAM_GRAPHQL_ERROR'
+])
+
+const fixturePlayerBatchCanFallback = (error: unknown): boolean => {
+	const status = errorStatus(error)
+	if (status !== null && status !== 0 && status !== 200) return false
+	const code = errorCode(error)
+	return code !== null && RECOVERABLE_FIXTURE_PLAYER_BATCH_CODES.has(code)
+}
+
+const liveRevisionGone = (error: unknown): boolean =>
+	liveFixturePlayerFailureCode(error) === 'LIVE_REVISION_GONE'
+
+const isExpectedFixtureDetail = (
+	detail: LiveFixturePlayersData | null | undefined,
+	ref: LiveRef,
+	fixtureId: number
+): detail is LiveFixturePlayersData =>
+	detail?.season === ref.season &&
+	detail.eventId === ref.eventId &&
+	detail.revision === ref.revision &&
+	detail.fixtureId === fixtureId
 
 const mapFixturePlayer = (row: LiveFixturePerformance): PlayerStat | null => {
 	if (!row.player?.team) return null
@@ -180,14 +268,63 @@ async function loadPublicationFixturePlayers(
 				(index + 1) * FIXTURE_PLAYER_BATCH_SIZE
 			)
 	)
-	const responses: LiveFixturePlayersBatchResponse[] = new Array(batches.length)
-	let nextBatchIndex = 0
-	const loadNextBatch = async () => {
-		while (true) {
-			const batchIndex = nextBatchIndex++
-			const batch = batches[batchIndex]
-			if (!batch) return
-			responses[batchIndex] = await executor<LiveFixturePlayersBatchResponse>(
+	const reportFailure = (
+		stage: LiveFixturePlayerLoadFailure['stage'],
+		fixtureIds: number[],
+		code: LiveFixturePlayerFailureCode
+	) => onFailure?.({ ...ref, stage, fixtureIds, code })
+	const loadAbortController = new AbortController()
+	let terminalFailure = false
+	let terminalError: unknown
+	const stopFixturePlayerLoads = (error: unknown) => {
+		if (terminalFailure) return
+		terminalError = error
+		terminalFailure = true
+		loadAbortController.abort()
+	}
+	const loadSingleFixture = async (
+		fixtureId: number
+	): Promise<LiveFixturePlayersData | null> => {
+		try {
+			const response = await executor<LiveFixturePlayersResponse>(
+				GET_LIVE_FIXTURE_PLAYERS,
+				{ ref, fixtureId },
+				{ cache: 'no-store', signal: loadAbortController.signal }
+			)
+			if (
+				isExpectedFixtureDetail(response.liveFixturePlayers, ref, fixtureId)
+			) {
+				return response.liveFixturePlayers
+			}
+			reportFailure('fixture', [fixtureId], 'DETAIL_UNAVAILABLE')
+			return null
+		} catch (error) {
+			const code = liveFixturePlayerFailureCode(error)
+			reportFailure('fixture', [fixtureId], code)
+			if (code !== 'DETAIL_UNAVAILABLE') {
+				stopFixturePlayerLoads(error)
+				throw error
+			}
+			return null
+		}
+	}
+	const loadSingleFallbacks = async (
+		fixtureIdsToLoad: number[]
+	): Promise<LiveFixturePlayersData[]> => {
+		const details: LiveFixturePlayersData[] = []
+		for (const fixtureId of fixtureIdsToLoad) {
+			if (terminalFailure) break
+			const detail = await loadSingleFixture(fixtureId)
+			if (detail) details.push(detail)
+		}
+		return details
+	}
+	const loadBatch = async (
+		batch: number[]
+	): Promise<LiveFixturePlayersData[]> => {
+		let response: LiveFixturePlayersBatchResponse
+		try {
+			response = await executor<LiveFixturePlayersBatchResponse>(
 				buildLiveFixturePlayersBatchQuery(batch.length),
 				{
 					ref,
@@ -197,20 +334,21 @@ async function loadPublicationFixturePlayers(
 				},
 				{ cache: 'no-store', ...REVISION_RECOVERY_OPTIONS }
 			)
+		} catch (error) {
+			const code = liveFixturePlayerFailureCode(error)
+			reportFailure('batch', [...batch], code)
+			if (code !== 'DETAIL_UNAVAILABLE') {
+				stopFixturePlayerLoads(error)
+				throw error
+			}
+			if (!fixturePlayerBatchCanFallback(error)) return []
+			return loadSingleFallbacks(batch)
 		}
-	}
-	await Promise.all(
-		Array.from(
-			{ length: Math.min(FIXTURE_PLAYER_BATCH_CONCURRENCY, batches.length) },
-			() => loadNextBatch()
-		)
-	)
 
-	const details: LiveFixturePlayersData[] = []
-	for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
-		const batch = batches[batchIndex]!
-		const response = responses[batchIndex]!
+		const details: LiveFixturePlayersData[] = []
+		const missingFixtureIds: number[] = []
 		for (let index = 0; index < batch.length; index += 1) {
+			const fixtureId = batch[index]!
 			const detail =
 				response[`fixture${index}` as keyof LiveFixturePlayersBatchResponse]
 			if (
@@ -224,7 +362,19 @@ async function loadPublicationFixturePlayers(
 			}
 		}
 	}
-	return details
+	try {
+		await Promise.all(
+			Array.from(
+				{ length: Math.min(FIXTURE_PLAYER_BATCH_CONCURRENCY, batches.length) },
+				() => loadNextBatch()
+			)
+		)
+	} catch (error) {
+		if (terminalFailure) throw terminalError
+		throw error
+	}
+
+	return detailsByBatch.flat()
 }
 
 async function loadDurableFixturePlayers(
@@ -298,7 +448,7 @@ async function loadFixturePlayers(
 export async function loadLiveMatchdayDesk(
 	executor: QueryExecutor,
 	ref: LiveRef | null = null,
-	options: { includeFixturePlayers?: boolean } = {}
+	options: LiveMatchdayDeskLoadOptions = {}
 ): Promise<LiveMatchdayDeskPayload> {
 	const includeFixturePlayers = options.includeFixturePlayers !== false
 	const queryDesk = (
@@ -325,7 +475,11 @@ export async function loadLiveMatchdayDesk(
 	): Promise<LiveMatchdayDeskPayload> => ({
 		...payload,
 		fixturePlayers: includeFixturePlayers
-			? await loadFixturePlayers(executor, payload.liveMatchdayDesk)
+			? await loadFixturePlayers(
+					executor,
+					payload.liveMatchdayDesk,
+					options.onFixturePlayerFailure
+				)
 			: []
 	})
 
@@ -366,6 +520,7 @@ export function transformLiveMatches(
 ): Match[] {
 	const matches: Match[] = rows.map(row => ({
 		id: String(row.fixtureId),
+		eventId: row.eventId,
 		homeTeam: {
 			id: row.homeTeamId,
 			name: row.homeTeamName,
@@ -418,6 +573,7 @@ export function transformUpcomingFixtures(
 ): Match[] {
 	return fixtures.map(fixture => ({
 		id: `next-${'fixtureId' in fixture ? fixture.fixtureId : fixture.id}`,
+		eventId: 'eventId' in fixture ? fixture.eventId : undefined,
 		homeTeam: {
 			name:
 				'homeTeamName' in fixture

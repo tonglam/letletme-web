@@ -15,10 +15,23 @@ Create these without committing them:
   the same value is the Worker `ORIGIN_TOKEN` secret.
 - `/etc/letletme/local-proxy-secret` (`root:root`, `0600`) — a different 32-byte
   hex secret used only between Nginx and Node.
-- During a proxy-secret rotation, add
-  `LETLETME_LOCAL_PROXY_SECRET_PREVIOUS` to `web.env` temporarily. It must be
-  different from the active value and is removed after EdgeOne and Vercel have
-  accepted the new value.
+- Do not retain `LETLETME_LOCAL_PROXY_SECRET_PREVIOUS` in steady state. The
+  temporary rotation release accepts it only when the active value is also
+  configured; an orphaned secondary value is never trusted. Use the following
+  fail-closed sequence, without printing either value:
+  1. generate a new value and configure it as the secondary value on Vercel
+     and Tencent while the existing active value remains unchanged;
+  2. deploy the reviewed two-secret release to Vercel and Tencent at the same
+     SHA, then prove both values independently against the trusted-host path;
+  3. switch the Cloudflare Transform Rule and EdgeOne trusted-proxy header to
+     the new value, then switch Tencent Nginx to the new value while the app
+     still accepts both;
+  4. make the new value active, remove the secondary value everywhere, and
+     deploy a reviewed steady-state release that removes the compatibility
+     path; verify forged and former values are rejected.
+  Keep only SHA-256 fingerprints in release evidence. Any failed check leaves
+  public routing on Vercel and rolls the changed injector back before the old
+  value is removed.
 - `/etc/letletme/tls/origin.pem` and `origin-key.pem` — a publicly trusted
   certificate chain and private key for `letletme.top` (for example an ACME
   certificate), readable by Nginx. Cloudflare Origin CA material alone is not
@@ -38,6 +51,28 @@ Create these without committing them:
 
 `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` must be the same 32-byte base64 value at
 Vercel build time and Tencent build time. Do not put it in Git.
+
+## EdgeOne source ACL
+
+The manually observed EdgeOne node addresses are not a source allowlist. Use
+the `EdgeOne origin ACL query` workflow with the production environment to
+retrieve and validate the current IPv4/IPv6 ranges from `DescribeOriginACL`
+and the scoped canary route from `DescribeL7AccRules`. The workflow is
+read-only and runs those queries as independent jobs. It stores the validated
+ACL and safe enable/disable route snapshots as separate short-lived artifacts;
+an ACL that is not provisioned must not prevent the release-route snapshot from
+being captured. It does not change EdgeOne, DNS, UFW, or application traffic.
+
+Before applying a new list to UFW, review both `current` and `next` versions in
+the artifact. Apply only the current list after confirming its version and
+planned-change state, preserve the WireGuard/SSH and Cloudflare rules, and
+remove only EdgeOne rules that were previously managed by the same operation.
+Never replace the list with a guessed IP, a default route, or `0.0.0.0/0`.
+
+Store the validated route snapshots as the production environment secrets
+`EDGEONE_RULE_SPLIT_JSON` and `EDGEONE_RULE_ALL_VERCEL_JSON`. The exporter
+accepts only the exact canary `ModifyOrigin` rule and rejects header actions,
+so proxy credentials cannot enter the artifact.
 
 The value in `/etc/letletme/local-proxy-secret` must also be configured as the
 sensitive Vercel Production variable `LETLETME_LOCAL_PROXY_SECRET`. The active
@@ -104,10 +139,21 @@ ID instead; reusing a commit-derived custom ID there would make a redeploy of
 the same commit fail. The gate does not mistake the internal BUILD_ID file for
 the release SHA.
 
-For a Vercel CLI production build, pass the full commit SHA explicitly as both
-build-time and runtime `LETLETME_RELEASE_SHA`; a Vercel Git deployment obtains
-the same value from `VERCEL_GIT_COMMIT_SHA`. Builds without either value fail
-before upload.
+For a staged Vercel CLI release, use a remote Production build with
+`--skip-domain`, and pass the full commit SHA explicitly as both build-time and
+runtime `LETLETME_RELEASE_SHA`. Do not use `vercel pull` plus a local
+`vercel build`: Vercel intentionally returns empty placeholders for sensitive
+Production variables, so that build cannot reproduce the hosted environment.
+Create the unaliased candidate with `--no-wait`, then require
+`vercel inspect --wait` to report a `READY` Production deployment and use
+`vercel curl` to verify the protected `/healthz` endpoint. Vercel CLI 52 can
+otherwise wait for an alias event that `--skip-domain` intentionally suppresses
+and return a non-zero exit after a healthy candidate has already been created.
+The later `vercel promote` command must pass the production `VERCEL_ORG_ID` as
+its explicit `--scope`; token authentication alone defaults to the user's scope
+and cannot promote a deployment owned by the team.
+A Vercel Git deployment obtains the SHA from `VERCEL_GIT_COMMIT_SHA`. Builds
+without either value fail before upload.
 
 ## Current public Web routing
 

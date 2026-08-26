@@ -150,6 +150,8 @@ describe('formatLivePointsShareText', () => {
 					source: 'FPL_EVENT_LIVE',
 					state: 'FRESH',
 					eventPointSemantics: 'UNKNOWN',
+					calculationMode: 'PROJECTED_AUTOSUBS',
+					algorithmVersion: 'fpl-projected-autosubs-v1',
 					revision: 'test-revision',
 					checkedAt: '2026-08-24T06:00:00.000Z',
 					upstreamUpdatedAt: null,
@@ -215,7 +217,7 @@ describe('formatLivePointsShareText', () => {
 		assert.doesNotMatch(text, /C: Haaland/)
 	})
 
-	it('does not share an entry-summary value as a live score', () => {
+	it('does not share an unavailable value as a live score', () => {
 		const text = formatLivePointsShareText({
 			gameweek: 1,
 			liveData: {
@@ -231,7 +233,7 @@ describe('formatLivePointsShareText', () => {
 					overallRank: null,
 					leagueRank: null,
 					transferCost: 0,
-					source: 'FPL_ENTRY_SUMMARY',
+					source: 'UNAVAILABLE',
 					state: 'FRESH',
 					eventPointSemantics: 'UNKNOWN',
 					revision: 'summary:gw1:r4',

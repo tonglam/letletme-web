@@ -1,5 +1,6 @@
 export interface Match {
   id: string;
+  eventId?: number;
   homeTeam: {
     id?: number;
     name: string;

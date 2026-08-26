@@ -149,6 +149,7 @@ export const buildTournamentEntries = (
 				: captainPick
 		const captainPoints =
 			row.activeCaptain?.points ??
+			(typeof row.captainPoints === 'number' ? row.captainPoints : undefined) ??
 			(typeof effectiveCaptainPick?.totalPoints === 'number'
 				? effectiveCaptainPick.totalPoints
 				: 0)

@@ -95,6 +95,8 @@ import {
 	GET_TOURNAMENT_METADATA,
 	GET_TOURNAMENT_OFFICIAL_H2H,
 	GET_TOURNAMENT_PARTICIPANTS,
+	GET_TOURNAMENT_ENTRY_SQUADS,
+	GET_TOURNAMENT_SELECTION_INDEX,
 	GET_TOURNAMENT_SELECTION_STATS
 } from '../lib/graphql/operations/tournaments'
 import {
@@ -146,6 +148,7 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 	['GET_PLAYER_STATS_DESK_PRODUCTION', GET_PLAYER_STATS_DESK_PRODUCTION],
 	['GET_PLAYER_STATS_DESK_PROCESS', GET_PLAYER_STATS_DESK_PROCESS],
 	['GET_ENTRY_TOURNAMENTS', GET_ENTRY_TOURNAMENTS],
+	['GET_ENTRY_LIVE_COMPETITION_BOARD', GET_ENTRY_LIVE_COMPETITION_BOARD],
 	['GET_ENTRY_OFFICIAL_H2H_DESK', GET_ENTRY_OFFICIAL_H2H_DESK],
 	['GET_ENTRY_OFFICIAL_H2H_MATCHUPS', GET_ENTRY_OFFICIAL_H2H_MATCHUPS],
 	['GET_TOURNAMENT_EVENT_RESULTS', GET_TOURNAMENT_EVENT_RESULTS],
@@ -159,6 +162,8 @@ const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
 	['GET_MANAGED_TOURNAMENT', GET_MANAGED_TOURNAMENT],
 	['GET_EVENT_STATS_BY_ID', GET_EVENT_STATS_BY_ID],
 	['GET_TOURNAMENT_SELECTION_STATS', GET_TOURNAMENT_SELECTION_STATS],
+	['GET_TOURNAMENT_SELECTION_INDEX', GET_TOURNAMENT_SELECTION_INDEX],
+	['GET_TOURNAMENT_ENTRY_SQUADS', GET_TOURNAMENT_ENTRY_SQUADS],
 	['GET_TREND_COHORTS', GET_TREND_COHORTS],
 	['GET_TREND_COHORT_SNAPSHOT', GET_TREND_COHORT_SNAPSHOT],
 	['GET_PLAYER_DETAIL', GET_PLAYER_DETAIL],
@@ -306,13 +311,19 @@ async function main(): Promise<void> {
 			continue
 		}
 		const errs = validate(schema, ast)
-		if (name === 'GET_LIVE_FIXTURE_PLAYERS_BATCH') {
+		const astNodeLimit =
+			name === 'GET_ENTRY_LIVE_COMPETITION_BOARD'
+				? 400
+				: name === 'GET_LIVE_FIXTURE_PLAYERS_BATCH'
+					? 200
+					: null
+		if (astNodeLimit !== null) {
 			let astNodes = 0
 			visit(ast, { enter: () => void (astNodes += 1) })
-			if (astNodes > 200) {
+			if (astNodes > astNodeLimit) {
 				failed += 1
 				console.log(
-					`[LIMIT_FAIL] ${name}: ${astNodes} AST nodes exceeds the production limit of 200`
+					`[LIMIT_FAIL] ${name}: ${astNodes} AST nodes exceeds the production limit of ${astNodeLimit}`
 				)
 				continue
 			}

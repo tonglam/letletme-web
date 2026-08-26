@@ -14,9 +14,17 @@ import {
 	type LiveCalcData,
 	type LiveCalcDataResponse
 } from '@/lib/graphql/operations/live'
+import type {
+	TournamentEntrySquadsResponse,
+	TournamentLiveCalcData
+} from '@/lib/graphql/operations/tournaments'
+import {
+	comparisonPositionLabel,
+	mapComparisonPick
+} from '@/lib/tournament/entry-comparison'
 import { getPlayedPlayerLimit } from '@/lib/tournament/played-total'
 import type { TournamentEntry } from '@/types/tournament'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useFormatter, useTranslations } from 'next-intl'
 
 interface EntryCompareSheetProps {
@@ -24,7 +32,12 @@ interface EntryCompareSheetProps {
 	gameweek: number
 	open: boolean
 	onOpenChange: (open: boolean) => void
+	tournamentId?: number
+	playerRevision?: string
+	onRevisionGone?: () => Promise<void>
 }
+
+type CompareLiveData = LiveCalcData | TournamentLiveCalcData
 
 function getPlayedStatus(pick: {
 	minutes?: number | null
@@ -471,19 +484,42 @@ export function EntryCompareSheet({
 		[LiveCalcData | null, LiveCalcData | null]
 	>([null, null])
 	const [isLoading, setIsLoading] = useState(false)
+	const [loadError, setLoadError] = useState(false)
+	const [retryVersion, setRetryVersion] = useState(0)
+	const revisionRetryRef = useRef(false)
+	const comparisonIdentityRef = useRef<string | null>(null)
 
 	const entryIdA = entries[0]?.id
 	const entryIdB = entries[1]?.id
 
 	// Depend on stable entry ids — parent often passes a new `entries` array each render.
 	useEffect(() => {
-		if (!open || !entryIdA || !entryIdB) return
+		if (!open || !entryIdA || !entryIdB) {
+			comparisonIdentityRef.current = null
+			revisionRetryRef.current = false
+			return
+		}
+		const comparisonIdentity = [
+			open,
+			entryIdA,
+			entryIdB,
+			gameweek,
+			tournamentId ?? '',
+			playerRevision ?? ''
+		].join(':')
+		if (comparisonIdentityRef.current !== comparisonIdentity) {
+			comparisonIdentityRef.current = comparisonIdentity
+			revisionRetryRef.current = false
+		}
 
 		let cancelled = false
-		void Promise.resolve().then(async () => {
-			if (cancelled) return
-			setIsLoading(true)
-			setLiveData([null, null])
+		const controller = new AbortController()
+		void Promise.resolve()
+			.then(async () => {
+				if (cancelled) return
+				setIsLoading(true)
+				setLoadError(false)
+				setLiveData([null, null])
 
 			const [resA, resB] = await Promise.allSettled([
 				executeQuery<LiveCalcDataResponse>(GET_LIVE_POINTS, {
@@ -508,8 +544,18 @@ export function EntryCompareSheet({
 
 		return () => {
 			cancelled = true
+			controller.abort()
 		}
-	}, [open, entryIdA, entryIdB, gameweek])
+	}, [
+		open,
+		entryIdA,
+		entryIdB,
+		gameweek,
+		playerRevision,
+		retryVersion,
+		tournamentId,
+		onRevisionGone
+	])
 
 	const [entryA, entryB] = entries
 	const [liveA, liveB] = liveData
@@ -644,6 +690,20 @@ export function EntryCompareSheet({
 										<Skeleton className="h-3 w-24" />
 									</div>
 								))}
+							</div>
+						) : loadError ? (
+							<div className="flex flex-col items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-8 text-center">
+								<p className="text-sm text-destructive">
+									{t('comparisonUnavailable')}
+								</p>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									onClick={() => setRetryVersion(version => version + 1)}
+								>
+									{t('errorCtaRetry')}
+								</Button>
 							</div>
 						) : (
 							<div className="border rounded-lg overflow-hidden">
