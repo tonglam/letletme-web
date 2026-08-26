@@ -53,11 +53,11 @@ export default async function Page({ params, searchParams }: PageProps) {
 		mineParam === 'true' || mineParam === '1' || mineParam === 'yes'
 
 	let initialTournaments: EntryTournamentListItem[] = []
-	let participatingTournamentIds: number[] = []
+	let participatingTournamentIds: number[] | null = []
 	let initialError: string | null = null
 	try {
 		if (initialAdminOnly) {
-			const [manageable, participating] = await Promise.all([
+			const [manageable, participating] = await Promise.allSettled([
 				executeServerQueryWithSession<ManageableTournamentsListResponse>(
 					session,
 					GET_MANAGEABLE_TOURNAMENTS_LIST,
@@ -71,10 +71,18 @@ export default async function Page({ params, searchParams }: PageProps) {
 					{ cache: 'no-store' }
 				)
 			])
-			initialTournaments = manageable.manageableTournaments
-			participatingTournamentIds = participating.entryTournaments.map(
-				tournament => tournament.id
-			)
+			if (manageable.status === 'rejected') throw manageable.reason
+			initialTournaments = manageable.value.manageableTournaments
+			if (participating.status === 'fulfilled') {
+				participatingTournamentIds = participating.value.entryTournaments.map(
+					tournament => tournament.id
+				)
+			} else {
+				participatingTournamentIds = null
+				console.warn(
+					'[tournament list] Membership badges unavailable; preserving manageable list'
+				)
+			}
 		} else {
 			const response =
 				await executeServerQueryWithSession<EntryTournamentsListResponse>(

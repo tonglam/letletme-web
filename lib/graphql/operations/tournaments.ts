@@ -857,6 +857,8 @@ export interface TournamentLiveCalcData {
 	played: number
 	toPlay: number
 	captainName: string
+	/** Official captain points carried by the bounded competition-board row. */
+	captainPoints?: number | null
 	activeCaptain?: {
 		name: string
 		points: number

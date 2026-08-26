@@ -39,6 +39,7 @@ export function SearchHeader(props: SearchHeaderProps) {
           placeholder={t("searchPlaceholder")}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          maxLength={100}
           className="h-10 min-h-10 w-full pl-9 pr-9 sm:h-9 sm:min-h-9"
         />
         {searchQuery.trim().length > 0 && (

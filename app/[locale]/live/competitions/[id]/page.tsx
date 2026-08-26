@@ -89,21 +89,26 @@ export default async function Page({ params, searchParams }: PageProps) {
 					data => ({ data, error: null as unknown }),
 					error => ({ data: null, error })
 				)
+			const managedPromise =
+				executeServerQueryWithSession<ManagedTournamentResponse>(
+					session,
+					GET_MANAGED_TOURNAMENT,
+					{ tournamentId, entryId },
+					{ cache: 'no-store' }
+				).then(
+					data => ({ data, error: null as unknown }),
+					error => ({ data: null, error })
+				)
 			// Keep the detail shell cheap. Live standings are deliberately not part
 			// of this request; the client loads the bounded paginated board below.
-			const [metadata, managed, liveContext] = await Promise.all([
+			const [metadata, managedResult, liveContext] = await Promise.all([
 				executeServerQueryWithSession<TournamentMetadataResponse>(
 					session,
 					GET_TOURNAMENT_METADATA,
 					{ tournamentId, entryId },
 					{ cache: 'no-store' }
 				),
-				executeServerQueryWithSession<ManagedTournamentResponse>(
-					session,
-					GET_MANAGED_TOURNAMENT,
-					{ tournamentId, entryId },
-					{ cache: 'no-store' }
-				),
+				managedPromise,
 				executeServerQueryWithSession<LiveContextResponse>(
 					session,
 					GET_LIVE_CONTEXT,
@@ -112,39 +117,47 @@ export default async function Page({ params, searchParams }: PageProps) {
 				)
 			])
 			const selectedTournament =
-				metadata.tournament ?? managed.managedTournament
+				metadata.tournament ?? managedResult.data?.managedTournament ?? null
 			if (!selectedTournament) {
 				loadError = 'no_access'
 			} else {
 				tournament = selectedTournament
-				canManage = Boolean(managed.managedTournament)
+				canManage = Boolean(managedResult.data?.managedTournament)
 				currentEventId =
 					liveContext.liveContext?.anchorEventId ??
 					liveContext.coreEventContext.currentEventId ??
 					null
 				officialGameweek = requestedGameweek ?? currentEventId ?? 1
-				const participantResult = await participantsPromise
+				const isOfficialH2H =
+					selectedTournament.leagueType === 'H2H' &&
+					selectedTournament.rosterMode === 'OFFICIAL_SYNC' &&
+					selectedTournament.groupMode === 'BATTLE_RACES'
+				const officialH2HPromise =
+					isOfficialH2H && officialGameweek > 0
+						? executeServerQueryWithSession<TournamentOfficialH2HResponse>(
+								session,
+								GET_TOURNAMENT_OFFICIAL_H2H,
+								{ tournamentId, eventId: officialGameweek },
+								{ cache: 'no-store' }
+							).then(
+								data => ({ data, error: null as unknown }),
+								error => ({ data: null, error })
+							)
+						: Promise.resolve(null)
+				const [participantResult, officialH2HResult] = await Promise.all([
+					participantsPromise,
+					officialH2HPromise
+				])
 				if (!participantResult.data) {
 					softError = liveT('participantsUnavailable')
 				} else {
 					participants = participantResult.data.tournamentParticipants
 				}
-				const isOfficialH2H =
-					selectedTournament.leagueType === 'H2H' &&
-					selectedTournament.rosterMode === 'OFFICIAL_SYNC' &&
-					selectedTournament.groupMode === 'BATTLE_RACES'
-				if (isOfficialH2H && officialGameweek > 0) {
-					try {
-						const official =
-							await executeServerQueryWithSession<TournamentOfficialH2HResponse>(
-								session,
-								GET_TOURNAMENT_OFFICIAL_H2H,
-								{ tournamentId, eventId: officialGameweek },
-								{ cache: 'no-store' }
-							)
-						initialOfficialH2H = official.tournamentOfficialH2H
+				if (officialH2HResult) {
+					if (officialH2HResult.data) {
+						initialOfficialH2H = officialH2HResult.data.tournamentOfficialH2H
 						if (!initialOfficialH2H) softError = liveT('officialH2HUnavailable')
-					} catch {
+					} else {
 						softError = liveT('officialH2HUnavailable')
 					}
 				}

@@ -109,6 +109,7 @@ const boardRowToCalcData = (
 	played: row.played,
 	toPlay: row.toPlay,
 	captainName: row.captainName,
+	captainPoints: row.captainPoints,
 	activeCaptain: null,
 	pickList: [],
 	score: row.score
@@ -352,6 +353,8 @@ export default function TournamentDetailClient({
 	const [rows, setRows] = useState(initialRows)
 	const [boardPage, setBoardPage] =
 		useState<EntryLiveCompetitionBoardPage | null>(null)
+	const [initialBoardLoadAttempted, setInitialBoardLoadAttempted] =
+		useState(false)
 	const [boardSort, setBoardSort] = useState<{
 		column: TournamentSortColumn
 		direction: TournamentSortDirection
@@ -634,6 +637,7 @@ export default function TournamentDetailClient({
 
 			const request = (async () => {
 				try {
+					setInitialBoardLoadAttempted(true)
 					setIsRefreshing(true)
 					setError(null)
 					const page = await fetchEntryLiveCompetitionBoard(
@@ -929,6 +933,14 @@ export default function TournamentDetailClient({
 	const insightsReady = currentTournament
 		? areTournamentInsightsReady(currentTournament)
 		: false
+	const isLoadingInitialBoard = Boolean(
+		currentGameweek &&
+		standingsReady &&
+		!isOfficialH2H &&
+		boardPage === null &&
+		rows.length === 0 &&
+		(!initialBoardLoadAttempted || isRefreshing)
+	)
 	const warningSummaries = currentTournament?.warningSummaries ?? []
 	const hasSetupWarnings =
 		Boolean(currentTournament?.setupHasWarnings) || warningSummaries.length > 0
@@ -1477,12 +1489,27 @@ export default function TournamentDetailClient({
 										tournamentId={currentTournament.id}
 										viewerEntryId={entryId ?? undefined}
 									/>
+								) : isLoadingInitialBoard ? (
+									<Card
+										className="p-6 text-sm text-muted-foreground"
+										aria-busy="true"
+									>
+										<div className="flex items-center justify-center gap-2">
+											<LoaderCircle
+												className="size-4 animate-spin"
+												aria-hidden="true"
+											/>
+											{t('loadingStandings')}
+										</div>
+									</Card>
 								) : currentGameweek &&
 								  (entries.length > 0 || boardPage !== null) ? (
 									<>
 										<SearchHeader
 											searchQuery={searchQuery}
-											setSearchQuery={handleSearchQueryChange}
+											setSearchQuery={value =>
+												handleSearchQueryChange(value.slice(0, 100))
+											}
 											showFilters={false}
 										/>
 										<TournamentTable
