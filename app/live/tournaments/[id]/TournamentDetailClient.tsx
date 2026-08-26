@@ -416,6 +416,15 @@ export default function TournamentDetailClient({
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
 	const failedEntryCountRef = useRef(softError ? 1 : 0)
 	const refreshGenerationRef = useRef(0)
+	const searchQueryRef = useRef(searchQuery)
+	const handleSearchQueryChange = useCallback((query: string): void => {
+		if (searchQueryRef.current === query) return
+		searchQueryRef.current = query
+		// Invalidate an in-flight page append synchronously, before React commits
+		// the debounced page-1 search refresh.
+		refreshGenerationRef.current += 1
+		setSearchQuery(query)
+	}, [])
 	const [visible, setVisible] = useState(true)
 	const [online, setOnline] = useState(true)
 	const [retrying, setRetrying] = useState(false)
@@ -709,6 +718,7 @@ export default function TournamentDetailClient({
 			return
 		const eventId = currentGameweek
 		const viewerEntryId = entryId
+		const requestGeneration = refreshGenerationRef.current
 		try {
 			const next = await fetchEntryLiveCompetitionBoard(currentTournament.id, {
 				entryId: viewerEntryId,
@@ -721,6 +731,7 @@ export default function TournamentDetailClient({
 				search: searchQuery.trim() || null,
 				expectedBoardRevision: boardPage.boardRevision
 			})
+			if (requestGeneration !== refreshGenerationRef.current) return
 			setBoardPage(next)
 			setRows(previous => {
 				const byEntry = new Map(previous.map(row => [row.entry, row] as const))
@@ -731,6 +742,7 @@ export default function TournamentDetailClient({
 			})
 			failedEntryCountRef.current = next.failedEntryCount
 		} catch (error) {
+			if (requestGeneration !== refreshGenerationRef.current) return
 			if (
 				error instanceof LiveBoardRequestError &&
 				isLiveBoardRevisionGoneCode(error.code)
@@ -857,7 +869,8 @@ export default function TournamentDetailClient({
 			filteredEntries: boardPage.filteredEntries,
 			isLoadingMore: isRefreshing,
 			onLoadMore: () => void loadMoreStandings(),
-			playerRevision: boardPage.playerRevision
+			playerRevision: boardPage.playerRevision,
+			onRevisionGone: refreshStandings
 		}
 	}, [
 		boardPage,
@@ -1071,7 +1084,12 @@ export default function TournamentDetailClient({
 			>
 				<RouteReadyMarker
 					name="LIVE_COMPETITION_BOARD_READY"
-					ready={Boolean(currentTournament && !retrying && !isRefreshing)}
+					ready={Boolean(
+						currentTournament &&
+						(isOfficialH2H || boardPage) &&
+						!retrying &&
+						!isRefreshing
+					)}
 					audienceHint="session-hint"
 					goodMs={1000}
 					poorMs={1500}
@@ -1408,11 +1426,12 @@ export default function TournamentDetailClient({
 										tournamentId={currentTournament.id}
 										viewerEntryId={entryId ?? undefined}
 									/>
-								) : currentGameweek && entries.length > 0 ? (
+								) : currentGameweek &&
+								  (entries.length > 0 || boardPage !== null) ? (
 									<>
 										<SearchHeader
 											searchQuery={searchQuery}
-											setSearchQuery={setSearchQuery}
+											setSearchQuery={handleSearchQueryChange}
 											showFilters={false}
 										/>
 										<TournamentTable

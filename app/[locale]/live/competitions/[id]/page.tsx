@@ -77,6 +77,18 @@ export default async function Page({ params, searchParams }: PageProps) {
 		loadError = 'invalid_link'
 	} else {
 		try {
+			// Participant metadata is independent of the lightweight shell queries;
+			// start it now so the detail page does not serialize the first render.
+			const participantsPromise =
+				executeServerQueryWithSession<TournamentParticipantsResponse>(
+					session,
+					GET_TOURNAMENT_PARTICIPANTS,
+					{ tournamentId },
+					{ cache: 'no-store' }
+				).then(
+					data => ({ data, error: null as unknown }),
+					error => ({ data: null, error })
+				)
 			// Keep the detail shell cheap. Live standings are deliberately not part
 			// of this request; the client loads the bounded paginated board below.
 			const [metadata, managed, liveContext] = await Promise.all([
@@ -111,17 +123,11 @@ export default async function Page({ params, searchParams }: PageProps) {
 					liveContext.coreEventContext.currentEventId ??
 					null
 				officialGameweek = requestedGameweek ?? currentEventId ?? 1
-				try {
-					const participantData =
-						await executeServerQueryWithSession<TournamentParticipantsResponse>(
-							session,
-							GET_TOURNAMENT_PARTICIPANTS,
-							{ tournamentId },
-							{ cache: 'no-store' }
-						)
-					participants = participantData.tournamentParticipants
-				} catch {
+				const participantResult = await participantsPromise
+				if (!participantResult.data) {
 					softError = liveT('participantsUnavailable')
+				} else {
+					participants = participantResult.data.tournamentParticipants
 				}
 				const isOfficialH2H =
 					selectedTournament.leagueType === 'H2H' &&
@@ -137,8 +143,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 								{ cache: 'no-store' }
 							)
 						initialOfficialH2H = official.tournamentOfficialH2H
-						if (!initialOfficialH2H)
-							softError = liveT('officialH2HUnavailable')
+						if (!initialOfficialH2H) softError = liveT('officialH2HUnavailable')
 					} catch {
 						softError = liveT('officialH2HUnavailable')
 					}

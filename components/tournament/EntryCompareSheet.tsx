@@ -25,7 +25,7 @@ import {
 } from '@/lib/tournament/entry-comparison'
 import { getPlayedPlayerLimit } from '@/lib/tournament/played-total'
 import type { TournamentEntry } from '@/types/tournament'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useFormatter, useTranslations } from 'next-intl'
 
 interface EntryCompareSheetProps {
@@ -35,6 +35,7 @@ interface EntryCompareSheetProps {
 	onOpenChange: (open: boolean) => void
 	tournamentId?: number
 	playerRevision?: string
+	onRevisionGone?: () => Promise<void>
 }
 
 type CompareLiveData = LiveCalcData | TournamentLiveCalcData
@@ -270,7 +271,8 @@ export function EntryCompareSheet({
 	open,
 	onOpenChange,
 	tournamentId,
-	playerRevision
+	playerRevision,
+	onRevisionGone
 }: EntryCompareSheetProps) {
 	const t = useTranslations('LiveTournament')
 	const format = useFormatter()
@@ -280,13 +282,31 @@ export function EntryCompareSheet({
 	const [isLoading, setIsLoading] = useState(false)
 	const [loadError, setLoadError] = useState(false)
 	const [retryVersion, setRetryVersion] = useState(0)
+	const revisionRetryRef = useRef(false)
+	const comparisonIdentityRef = useRef<string | null>(null)
 
 	const entryIdA = entries[0]?.id
 	const entryIdB = entries[1]?.id
 
 	// Depend on stable entry ids — parent often passes a new `entries` array each render.
 	useEffect(() => {
-		if (!open || !entryIdA || !entryIdB) return
+		if (!open || !entryIdA || !entryIdB) {
+			comparisonIdentityRef.current = null
+			revisionRetryRef.current = false
+			return
+		}
+		const comparisonIdentity = [
+			open,
+			entryIdA,
+			entryIdB,
+			gameweek,
+			tournamentId ?? '',
+			playerRevision ?? ''
+		].join(':')
+		if (comparisonIdentityRef.current !== comparisonIdentity) {
+			comparisonIdentityRef.current = comparisonIdentity
+			revisionRetryRef.current = false
+		}
 
 		let cancelled = false
 		const controller = new AbortController()
@@ -308,6 +328,24 @@ export function EntryCompareSheet({
 						{ cache: 'no-store', signal: controller.signal }
 					)
 					if (!response.ok) {
+						const errorBody = (await response.json().catch(() => null)) as {
+							error?: unknown
+						} | null
+						const errorCode =
+							typeof errorBody?.error === 'string' ? errorBody.error : null
+						if (
+							response.status === 409 &&
+							(errorCode === 'LIVE_BOARD_REVISION_GONE' ||
+								errorCode === 'LIVE_REVISION_GONE') &&
+							onRevisionGone &&
+							!revisionRetryRef.current
+						) {
+							revisionRetryRef.current = true
+							await onRevisionGone()
+							if (cancelled) return
+							setRetryVersion(version => version + 1)
+							return
+						}
 						throw new Error(
 							`Tournament comparison failed with ${response.status}`
 						)
@@ -372,7 +410,8 @@ export function EntryCompareSheet({
 		gameweek,
 		playerRevision,
 		retryVersion,
-		tournamentId
+		tournamentId,
+		onRevisionGone
 	])
 
 	const [entryA, entryB] = entries
