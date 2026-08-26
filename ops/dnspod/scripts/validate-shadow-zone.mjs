@@ -129,7 +129,17 @@ function find(records, line, type, value) {
 const argv = process.argv.slice(2)
 const file = argv[0]
 const edgeoneCname = valueAfter('--edgeone-cname', argv) || process.env.DNSPOD_EDGEONE_CNAME
-const vercelA = valueAfter('--vercel-a', argv) || process.env.VERCEL_RECOMMENDED_A
+const legacyVercelA = valueAfter('--vercel-a', argv) || process.env.VERCEL_RECOMMENDED_A
+const fallbackType = String(
+	valueAfter('--fallback-type', argv) ||
+	process.env.DNSPOD_DEFAULT_FALLBACK_TYPE ||
+	(legacyVercelA ? 'A' : '')
+).trim().toUpperCase()
+const fallbackValue =
+	valueAfter('--fallback-value', argv) ||
+	process.env.DNSPOD_DEFAULT_FALLBACK_VALUE ||
+	legacyVercelA
+const supportedFallbackTypes = new Set(['A', 'CNAME'])
 const line = process.env.DNSPOD_EDGEONE_LINE || '境内'
 const requiredHosts = (process.env.DNSPOD_REQUIRED_HOSTS ||
 	'www,api,static,hermes,pop,cdn,vercel-origin,eo-personal-canary,eo-tencent-canary').split(',').map(value => value.trim()).filter(Boolean)
@@ -155,23 +165,25 @@ function readRequiredSpecs() {
 	return specs
 }
 
-if (!file || !edgeoneCname || !vercelA) {
-	fail('usage: validate-shadow-zone.mjs <record-json> --edgeone-cname <cname> --vercel-a <ipv4>')
+if (!file || !edgeoneCname || !fallbackType || !fallbackValue) {
+	fail('usage: validate-shadow-zone.mjs <record-json> --edgeone-cname <cname> (--fallback-type A|CNAME --fallback-value <target> | --vercel-a <ipv4>)')
+} else if (!supportedFallbackTypes.has(fallbackType)) {
+	fail(`unsupported fallback type: ${fallbackType}; expected A or CNAME`)
 } else {
 	try {
 		const records = readRecords(file)
 		const requiredSpecs = readRequiredSpecs()
 		const apexEdgeOne = find(records, line, 'CNAME', edgeoneCname)
-		const apexOverseas = find(records, '境外', 'A', vercelA)
-		const apexDefault = find(records, '默认', 'A', vercelA)
+		const apexOverseas = find(records, '境外', fallbackType, fallbackValue)
+		const apexDefault = find(records, '默认', fallbackType, fallbackValue)
 		const edgeOneRoutes = enabledApexRoutes(records, line)
 		const overseasRoutes = enabledApexRoutes(records, '境外')
 		const defaultRoutes = enabledApexRoutes(records, '默认')
 		const allApexRoutes = enabledApexRoutes(records)
 		const expectedApexRoutes = [
 			{ Name: '@', Type: 'CNAME', Value: edgeoneCname, Line: line },
-			{ Name: '@', Type: 'A', Value: vercelA, Line: '境外' },
-			{ Name: '@', Type: 'A', Value: vercelA, Line: '默认' }
+			{ Name: '@', Type: fallbackType, Value: fallbackValue, Line: '境外' },
+			{ Name: '@', Type: fallbackType, Value: fallbackValue, Line: '默认' }
 		]
 		const apexRouteSetMatches = sameRecordMultiset(expectedApexRoutes, allApexRoutes)
 		const missingHosts = requiredHosts.filter(host => !requiredSpecs.some(required =>

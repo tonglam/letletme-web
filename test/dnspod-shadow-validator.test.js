@@ -23,13 +23,17 @@ function runValidator(records, options = {}) {
 		} else {
 			env.DNSPOD_REQUIRED_HOSTS = options.requiredHosts || 'www'
 		}
+		const fallbackType = options.fallbackType || 'A'
+		const fallbackValue = options.fallbackValue || '76.76.21.21'
+		const fallbackArgs = options.useLegacyVercelA
+			? ['--vercel-a', fallbackValue]
+			: ['--fallback-type', fallbackType, '--fallback-value', fallbackValue]
 		const stdout = execFileSync(process.execPath, [
 			script,
 			file,
 			'--edgeone-cname',
 			'edge.example.com',
-			'--vercel-a',
-			'76.76.21.21'
+			...fallbackArgs
 		], {
 			encoding: 'utf8',
 			env
@@ -57,6 +61,38 @@ test('validator accepts exact CLI values and enabled apex records', () => {
 	})
 	assert.deepEqual(result.missingHosts, [])
 	assert.equal(result.ok, true)
+})
+
+test('validator accepts a Cloudflare for SaaS CNAME on overseas and default lines', () => {
+	const records = validRecords.map(record =>
+		record.Name === '@' && (record.Line === '境外' || record.Line === '默认')
+			? { ...record, Type: 'CNAME', Value: 'saas-gateway.qitonglan.com.' }
+			: record
+	)
+	const result = runValidator(records, {
+		fallbackType: 'CNAME',
+		fallbackValue: 'SAAS-GATEWAY.QITONGLAN.COM'
+	})
+	assert.equal(result.apex.overseas, true)
+	assert.equal(result.apex.default, true)
+	assert.equal(result.ok, true)
+})
+
+test('validator keeps the legacy Vercel A argument compatible', () => {
+	const result = runValidator(validRecords, { useLegacyVercelA: true })
+	assert.equal(result.ok, true)
+})
+
+test('validator rejects a mixed fallback route type', () => {
+	const records = validRecords.map(record =>
+		record.Name === '@' && record.Line === '默认'
+			? { ...record, Type: 'CNAME', Value: 'saas-gateway.qitonglan.com' }
+			: record
+	)
+	assert.throws(() => runValidator(records), error => {
+		assert.equal(error.status, 1)
+		return true
+	})
 })
 
 test('validator defaults to the active personal EdgeOne canary hostname', () => {

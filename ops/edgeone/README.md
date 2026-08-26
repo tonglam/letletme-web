@@ -216,8 +216,8 @@ The intended records are:
 
 ```text
 @ / 境内 / CNAME / EdgeOne-assigned target
-@ / 境外 / A     / current Vercel recommended IPv4
-@ / 默认 / A     / the same Vercel recommended IPv4
+@ / 境外 / CNAME / Cloudflare for SaaS target
+@ / 默认 / CNAME / the same Cloudflare for SaaS target
 ```
 
 Create the KV namespace, then deploy the SQLite-backed Durable Object declared
@@ -230,14 +230,17 @@ schedule; no DNSPod or EdgeOne secret belongs in Git:
 - `DNSPOD_DOMAIN` and optional `DNSPOD_DOMAIN_ID`
 - `DNSPOD_EDGEONE_RECORD_ID`, `DNSPOD_EDGEONE_CNAME`, and
   `DNSPOD_EDGEONE_LINE=境内`
-- `DNSPOD_DEFAULT_VERCEL_A` and `DNSPOD_DEFAULT_VERCEL_LINE=默认`
+- `DNSPOD_DEFAULT_FALLBACK_TYPE=CNAME`,
+  `DNSPOD_DEFAULT_FALLBACK_VALUE`, and
+  `DNSPOD_DEFAULT_FALLBACK_LINE=默认`
 - `DNSPOD_SECRET_ID` and `DNSPOD_SECRET_KEY`, scoped only to the required
   DNSPod record read/status operations
 - `EDGEONE_TENCENT_HEALTH_URL` (the isolated
   `eo-tencent-canary.letletme.top` EdgeOne route that unconditionally reaches
   Tencent, never the user apex), `EDGEONE_VERCEL_API_URL` (the existing
   `eo-personal-canary.letletme.top` route that forces the Vercel origin), and
-  `VERCEL_HEALTH_URL` (direct Vercel)
+  `VERCEL_HEALTH_URL` (direct Vercel), and `FALLBACK_HEALTH_URL` (the
+  dedicated Cloudflare for SaaS path)
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `WATCHDOG_ENABLED`
 
 `EDGEONE_ORIGIN_TOKEN` is not a Cloudflare Worker binding. It is provisioned
@@ -256,13 +259,13 @@ or proxy secret and must not be forwarded to Nginx. Verify this before adding
 the hostname to `EDGEONE_TENCENT_HEALTH_URL`; if EdgeOne cannot express this
 host-and-path deny rule, do not publish the Tencent canary hostname.
 
-`DNSPOD_DEFAULT_VERCEL_A` is the exact enabled DNSPod default A record captured
-from the live Vercel project before the NS change; it is not a fresh DNS lookup
-performed during a failure. `DNSPOD_EDGEONE_RECORD_ID` is a different value: it
-must identify the exact enabled `@ / 境内 / CNAME` record. Re-read both IDs,
-lines, values, and statuses immediately before every enablement. If the record
-identity differs from the saved values, the watchdog alerts and makes no DNS
-mutation.
+`DNSPOD_DEFAULT_FALLBACK_VALUE` is the exact enabled DNSPod default Cloudflare
+for SaaS CNAME target captured before the NS change; it is not a fresh DNS
+lookup performed during a failure. `DNSPOD_EDGEONE_RECORD_ID` is a different
+value: it must identify the exact enabled `@ / 境内 / CNAME` record. Re-read
+both IDs, lines, types, values, and statuses immediately before every
+enablement. If the record identity differs from the saved values, the watchdog
+alerts and makes no DNS mutation.
 
 The safe control-plane sequence is:
 
@@ -273,8 +276,9 @@ The safe control-plane sequence is:
    with `WATCHDOG_ENABLED=false`. Run `npm run watchdog:dry-run` and verify the
    deployed vars/secrets and `ModifyRecordStatus` code path without treating
    the Worker URL's 404 as a cron test; the Worker has no public request route.
-3. Confirm the enabled DNSPod default Vercel A record and the disabled or
-   shadow `境内` EdgeOne CNAME by exact record ID, line, type, and value.
+3. Confirm the enabled DNSPod default Cloudflare for SaaS CNAME record and the
+   disabled or shadow `境内` EdgeOne CNAME by exact record ID, line, type,
+   and value.
 4. Only after the full overseas hard gate, mainland split gate, and rollback
    rehearsal pass, obtain the separate explicit authorization to change the
    registrar NS to DNSPod. Keep Cloudflare authoritative and Vercel online
@@ -283,17 +287,19 @@ The safe control-plane sequence is:
    deployed, and real mainland/overseas probes pass, set
    `WATCHDOG_ENABLED=true` and immediately re-read the exact DNSPod records.
    The watchdog must call `ModifyRecordStatus` only after probing Tencent
-   safe-read `/healthz`, the EdgeOne-to-Vercel API path, and direct Vercel.
+   safe-read `/healthz`, the EdgeOne-to-Vercel API path, direct Vercel, and the
+   actual Cloudflare for SaaS fallback path.
 
-On three consecutive failures of either EdgeOne path while direct Vercel is
-healthy, the watchdog re-reads the regional and default records, disables only
-the exact `DNSPOD_EDGEONE_RECORD_ID` with `ModifyRecordStatus`, verifies that no
-enabled `境内` apex record remains and that the default Vercel record is still
+On three consecutive failures of either EdgeOne path while direct Vercel and
+the Cloudflare for SaaS fallback path are healthy and on the same release, the
+watchdog re-reads the regional and default records, disables only the exact
+`DNSPOD_EDGEONE_RECORD_ID` with `ModifyRecordStatus`, verifies that no enabled
+`境内` apex record remains and that the exact default fallback record is still
 enabled, then sends one Telegram alert. If the records were manually changed,
-duplicated, or DNSPod and Vercel are both unhealthy, it makes no DNS change and
-alerts instead. It never automatically re-enables the regional record. DNSPod
-free-plan TTL and recursive caching make this a minutes-scale fail-open, not a
-request-level failover.
+duplicated, the SaaS path is stale/unhealthy, or direct Vercel is unhealthy, it
+makes no DNS change and alerts instead. It never automatically re-enables the
+regional record. DNSPod free-plan TTL and recursive caching make this a
+minutes-scale fail-open, not a request-level failover.
 
 For a future EdgeOne re-evaluation, the Vercel-origin canary must return
 `X-Letletme-Edge: edgeone`, `X-Letletme-Origin: vercel`, and the current Vercel
@@ -317,9 +323,10 @@ The watchdog runs once per minute with no public request route. It:
    `origin: vercel`; the second probe detects a broken EdgeOne-to-Vercel
    dynamic/API path;
 2. requires three consecutive failures of either EdgeOne path while direct
-   Vercel is healthy;
-3. re-reads the exact `@ / 境内 / CNAME` record and the enabled default Vercel
-   A record before mutation;
+   Vercel and the dedicated Cloudflare for SaaS path are healthy and report the
+   same full release SHA;
+3. re-reads the exact `@ / 境内 / CNAME` record and the enabled default
+   Cloudflare for SaaS CNAME before mutation;
 4. disables only the exact regional record using DNSPod `ModifyRecordStatus`;
 5. verifies the disabled state and sends one Telegram alert; and
 6. never automatically re-enables the regional record.
