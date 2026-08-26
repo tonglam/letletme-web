@@ -145,6 +145,8 @@ export type DataGovernanceWindowsResponse = {
 export type DataGovernanceCasesResponse = {
 	success: boolean
 	cases?: Array<Record<string, unknown>>
+	openCount?: number
+	total?: number
 }
 
 export const getDataGovernanceWindows = (
@@ -182,6 +184,7 @@ export function selectGovernanceContract(
 	governanceCases: unknown[]
 	governanceCasesAvailable: boolean
 	admissions: unknown[]
+	admissionsAvailable: boolean
 	generatedAt: string | null
 } {
 	const registry =
@@ -214,6 +217,7 @@ export function selectGovernanceContract(
 		return value.contractKey === contractKey
 	})
 	const governanceCasesAvailable = Array.isArray(overview.governanceCases)
+	const admissionsAvailable = Array.isArray(overview.admissions)
 	const admissions = (overview.admissions ?? []).filter(item => {
 		if (!item || typeof item !== 'object') return false
 		const name = (item as { name?: unknown }).name
@@ -236,6 +240,7 @@ export function selectGovernanceContract(
 		governanceCases,
 		governanceCasesAvailable,
 		admissions,
+		admissionsAvailable,
 		generatedAt: overview.generatedAt ?? null
 	}
 }

@@ -283,9 +283,6 @@ export default async function DataGovernancePage({ params }: PageProps) {
 		dataApiRequest = undefined
 	}
 
-	const unavailableRequest = Promise.reject(
-		new Error('Web origin evidence is unavailable')
-	)
 	const [overviewResult, windowsResult, casesResult] = await Promise.allSettled(
 		dataApiRequest
 			? [
@@ -293,7 +290,11 @@ export default async function DataGovernancePage({ params }: PageProps) {
 					getDataGovernanceWindows('1h', dataApiRequest),
 					getDataGovernanceCases(dataApiRequest)
 				]
-			: [unavailableRequest, unavailableRequest, unavailableRequest]
+				: [
+						Promise.reject(new Error('Web origin evidence is unavailable')),
+						Promise.reject(new Error('Web origin evidence is unavailable')),
+						Promise.reject(new Error('Web origin evidence is unavailable'))
+					]
 	)
 	const overview: DataGovernanceOverview | null =
 		overviewResult.status === 'fulfilled' ? overviewResult.value : null
@@ -335,16 +336,9 @@ export default async function DataGovernancePage({ params }: PageProps) {
 	const casesResponse =
 		casesResult.status === 'fulfilled' ? casesResult.value : null
 	const casesPayload = casesResponse?.cases
-	const casesAvailable = Array.isArray(casesPayload)
+	const casesAvailable =
+		casesResponse?.success === true && Array.isArray(casesPayload)
 	const governanceCases: unknown[] = casesAvailable ? casesPayload : []
-	const openGovernanceCases = governanceCases.filter(value => {
-		const status = record(value).status
-		return (
-			status === 'OPEN' ||
-			status === 'AUTO_REPAIRING' ||
-			status === 'REQUIRES_REVIEW'
-		)
-	})
 	const burn = record(overview?.errorBudgetBurn)
 	const burnRate =
 		typeof burn.burnRate === 'number' ? burn.burnRate.toFixed(2) : '—'
@@ -743,7 +737,10 @@ export default async function DataGovernancePage({ params }: PageProps) {
 								<Metric
 									label="open cases"
 									value={
-										casesAvailable ? String(openGovernanceCases.length) : '—'
+											casesAvailable &&
+											typeof casesResponse?.openCount === 'number'
+												? String(casesResponse.openCount)
+												: '—'
 									}
 									detail={
 										casesAvailable
