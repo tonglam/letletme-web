@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { GraphQLRequestError } from '@/lib/graphql-client'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import { GET_TOURNAMENT_SELECTION_INDEX } from '@/lib/graphql/operations/tournaments'
 import { getVerifiedEntryContext } from '@/lib/session'
@@ -42,10 +43,28 @@ export async function GET(
 		return NextResponse.json(data, {
 			headers: { 'Cache-Control': 'private, no-store' }
 		})
-	} catch {
+	} catch (error) {
+		const code = error instanceof GraphQLRequestError ? error.code : null
+		const status =
+			code === 'LIVE_BOARD_REVISION_GONE' || code === 'LIVE_REVISION_GONE'
+				? 409
+				: code === 'UNAUTHENTICATED'
+					? 401
+					: code === 'FORBIDDEN'
+						? 403
+						: 502
 		return NextResponse.json(
-			{ error: 'Selection index unavailable' },
-			{ status: 502 }
+			{
+				error:
+					status === 409
+						? code
+						: status === 401
+							? 'UNAUTHENTICATED'
+							: status === 403
+								? 'FORBIDDEN'
+								: 'Selection index unavailable'
+			},
+			{ status, headers: { 'Cache-Control': 'private, no-store' } }
 		)
 	}
 }

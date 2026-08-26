@@ -31,6 +31,7 @@ type Props = {
 	value: LiveBoardFilterState
 	disabled?: boolean
 	onApply: (next: LiveBoardFilterState) => Promise<boolean>
+	onRevisionGone?: () => Promise<unknown> | unknown
 }
 
 const scopes: EntryLiveCompetitionPickScope[] = ['ANY', 'STARTER', 'BENCH']
@@ -83,7 +84,8 @@ export function LiveCompetitionBoardFilters({
 	playerRevision,
 	value,
 	disabled,
-	onApply
+	onApply,
+	onRevisionGone
 }: Props) {
 	const t = useTranslations('Filters')
 	const liveT = useTranslations('LiveTournament')
@@ -116,8 +118,21 @@ export function LiveCompetitionBoardFilters({
 			{ cache: 'no-store', signal: controller.signal }
 		)
 			.then(async response => {
-				if (!response.ok) throw new Error(`selection-index:${response.status}`)
-				return (await response.json()) as TournamentSelectionIndexResponse
+				const data = (await response.json().catch(() => null)) as {
+					error?: unknown
+				} | null
+				if (!response.ok) {
+					const error = new Error(
+						`selection-index:${response.status}`
+					) as Error & {
+						code?: string
+						status?: number
+					}
+					error.code = typeof data?.error === 'string' ? data.error : undefined
+					error.status = response.status
+					throw error
+				}
+				return data as TournamentSelectionIndexResponse
 			})
 			.then(data => {
 				const next = data.tournamentSelectionIndex?.rows
@@ -127,6 +142,17 @@ export function LiveCompetitionBoardFilters({
 			})
 			.catch(error => {
 				if (controller.signal.aborted) return
+				const requestError = error as { code?: string; status?: number }
+				if (
+					requestError.status === 409 ||
+					requestError.code === 'LIVE_BOARD_REVISION_GONE' ||
+					requestError.code === 'LIVE_REVISION_GONE'
+				) {
+					setRows([])
+					setLoadError(false)
+					void onRevisionGone?.()
+					return
+				}
 				console.warn('Tournament selection index unavailable', {
 					name: error instanceof Error ? error.name : 'UnknownError'
 				})
@@ -136,7 +162,7 @@ export function LiveCompetitionBoardFilters({
 				if (!controller.signal.aborted) setLoading(false)
 			})
 		return () => controller.abort()
-	}, [eventId, playerRevision, tournamentId])
+	}, [eventId, onRevisionGone, playerRevision, tournamentId])
 
 	const selectedOwnerIds = new Set(draft.ownership?.playerIds ?? [])
 	const selectedCaptainIds = new Set(draft.captainPlayerIds)
@@ -339,7 +365,7 @@ export function LiveCompetitionBoardFilters({
 								{player?.playerName ?? playerId}
 								<button
 									type="button"
-						aria-label={liveT('removeCaptain', {
+									aria-label={liveT('removeCaptain', {
 										name: player?.playerName ?? String(playerId)
 									})}
 									onClick={() =>

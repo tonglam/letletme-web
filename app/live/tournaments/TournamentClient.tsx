@@ -881,6 +881,7 @@ export default function TournamentClient({
 		selectedGameweek,
 		selectedTournamentId
 	])
+	const handleBoardRevisionGone = useCallback(() => refresh(), [refresh])
 
 	const autoRefresh = useCallback(async (): Promise<void> => {
 		try {
@@ -923,11 +924,11 @@ export default function TournamentClient({
 		if (showingLastGood) return t('showingLastGood')
 		if (boardPage.failedEntryCount > 0)
 			return t('calculationFailed', { count: boardPage.failedEntryCount })
-		if (boardPage.deferredEntryCount > 0) return t('coverageWarming')
 		if (boardPage.unavailableEntryCount > 0)
 			return t('unavailableCalculation', {
 				count: boardPage.unavailableEntryCount
 			})
+		if (boardPage.deferredEntryCount > 0) return t('coverageWarming')
 		if (
 			boardPage.coverageState === 'WARMING' ||
 			boardPage.coverageState === 'PARTIAL'
@@ -1016,6 +1017,14 @@ export default function TournamentClient({
 			queryState
 		]
 	)
+	const shareUrl = useMemo(() => {
+		const params = new URLSearchParams()
+		if (selectedTournament?.id)
+			params.set('tournamentId', selectedTournament.id)
+		if (selectedGameweek > 0) params.set('gw', String(selectedGameweek))
+		const query = params.toString()
+		return `https://letletme.top/live/competitions${query ? `?${query}` : ''}`
+	}, [selectedGameweek, selectedTournament?.id])
 	const shareText = useMemo(() => {
 		const lines = [
 			`# ${selectedTournament?.name ?? t('liveStandings')} · GW${selectedGameweek}`,
@@ -1031,7 +1040,7 @@ export default function TournamentClient({
 			lines.push(
 				`- ${entry.rank || '—'} ${entry.teamName} · ${entry.gwPoints ?? '—'} GW · ${entry.totalPoints ?? '—'} total`
 			)
-		lines.push('', 'https://letletme.top/live/competitions')
+		lines.push('', shareUrl)
 		return lines.join('\n')
 	}, [
 		boardPage?.averageEventPoints,
@@ -1040,7 +1049,8 @@ export default function TournamentClient({
 		selectedTournament?.name,
 		t,
 		tableEntriesForShare,
-		visibleEntries
+		visibleEntries,
+		shareUrl
 	])
 
 	if (entryId <= 0) {
@@ -1273,6 +1283,7 @@ export default function TournamentClient({
 										value={queryState.filters}
 										disabled={isRefreshing || rateLimitSeconds > 0}
 										onApply={applyFilters}
+										onRevisionGone={handleBoardRevisionGone}
 									/>
 								) : null}
 								<TournamentTable

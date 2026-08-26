@@ -33,6 +33,7 @@ import {
 } from '@/lib/graphql/operations/tournaments'
 import {
 	LiveBoardRequestError,
+	boardRowToTournamentEntry,
 	fetchEntryLiveCompetitionBoard,
 	isLiveBoardRevisionGoneCode
 } from '@/lib/tournament/live-board'
@@ -367,11 +368,11 @@ export default function TournamentDetailClient({
 				return t('calculationFailed', {
 					count: boardPage.failedEntryCount
 				})
-			if (boardPage.deferredEntryCount > 0) return t('coverageWarming')
 			if (boardPage.unavailableEntryCount > 0)
 				return t('unavailableCalculation', {
 					count: boardPage.unavailableEntryCount
 				})
+			if (boardPage.deferredEntryCount > 0) return t('coverageWarming')
 			if (
 				boardPage.coverageState === 'WARMING' ||
 				boardPage.coverageState === 'PARTIAL'
@@ -412,6 +413,8 @@ export default function TournamentDetailClient({
 	)
 	const snapshotRef = useRef<LiveSnapshotStatus | null>(initialSnapshot ?? null)
 	const [isRefreshing, setIsRefreshing] = useState(false)
+	const [isLoadingMore, setIsLoadingMore] = useState(false)
+	const loadMoreInFlightRef = useRef(false)
 	const refreshInFlightRef = useRef<Map<string, Promise<void>>>(new Map())
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
 	const failedEntryCountRef = useRef(softError ? 1 : 0)
@@ -639,13 +642,13 @@ export default function TournamentDetailClient({
 					)
 					if (page.failedEntryCount > 0)
 						setError(t('calculationFailed', { count: page.failedEntryCount }))
-					else if (page.deferredEntryCount > 0) setError(t('coverageWarming'))
 					else if (page.unavailableEntryCount > 0)
 						setError(
 							t('unavailableCalculation', {
 								count: page.unavailableEntryCount
 							})
 						)
+					else if (page.deferredEntryCount > 0) setError(t('coverageWarming'))
 				} catch (refreshError) {
 					if (requestGeneration !== refreshGenerationRef.current) return
 					console.error(
@@ -713,9 +716,12 @@ export default function TournamentDetailClient({
 			!boardPage ||
 			!boardPage.hasMore ||
 			isRefreshing ||
+			loadMoreInFlightRef.current ||
 			isOfficialH2H
 		)
 			return
+		loadMoreInFlightRef.current = true
+		setIsLoadingMore(true)
 		const eventId = currentGameweek
 		const viewerEntryId = entryId
 		const requestGeneration = refreshGenerationRef.current
@@ -751,6 +757,9 @@ export default function TournamentDetailClient({
 				return
 			}
 			setError(t('refreshFailedRetained'))
+		} finally {
+			loadMoreInFlightRef.current = false
+			setIsLoadingMore(false)
 		}
 	}, [
 		boardPage,
@@ -828,7 +837,7 @@ export default function TournamentDetailClient({
 			!standingsReady ||
 			!currentGameweek ||
 			isOfficialH2H ||
-			rows.length > 0
+			boardPage !== null
 		)
 			return
 		void refreshStandings()
@@ -837,7 +846,7 @@ export default function TournamentDetailClient({
 		currentTournament,
 		isOfficialH2H,
 		refreshStandings,
-		rows.length,
+		boardPage,
 		standingsReady
 	])
 
@@ -848,6 +857,9 @@ export default function TournamentDetailClient({
 			}),
 		[rows, staleEntryIds]
 	)
+	const pinnedViewerEntry = boardPage?.viewerRow
+		? boardRowToTournamentEntry(boardPage.viewerRow)
+		: undefined
 	const standingsStats = useMemo(() => buildTournamentStats(entries), [entries])
 	const liveServerControl = useMemo(() => {
 		if (!boardPage || isOfficialH2H) return undefined
@@ -867,7 +879,7 @@ export default function TournamentDetailClient({
 			},
 			hasMore: boardPage.hasMore,
 			filteredEntries: boardPage.filteredEntries,
-			isLoadingMore: isRefreshing,
+			isLoadingMore,
 			onLoadMore: () => void loadMoreStandings(),
 			playerRevision: boardPage.playerRevision,
 			onRevisionGone: refreshStandings
@@ -876,7 +888,7 @@ export default function TournamentDetailClient({
 		boardPage,
 		boardSort,
 		isOfficialH2H,
-		isRefreshing,
+		isLoadingMore,
 		loadMoreStandings,
 		refreshStandings
 	])
@@ -1440,6 +1452,7 @@ export default function TournamentDetailClient({
 											tournamentId={String(currentTournament.id)}
 											gameweek={currentGameweek}
 											viewerEntryId={entryId ?? undefined}
+											pinnedViewerEntry={pinnedViewerEntry}
 											serverControl={liveServerControl}
 										/>
 									</>
