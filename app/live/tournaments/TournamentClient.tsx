@@ -44,6 +44,7 @@ import {
 	writeLiveBoardLastGood,
 	type LiveBoardFilterState
 } from '@/lib/tournament/live-board'
+import { liveContextToSnapshot } from '@/lib/live-refresh'
 import { formatLiveAveragePoints } from '@/lib/tournament/liveEntries'
 import {
 	areTournamentStandingsReady,
@@ -119,6 +120,30 @@ const tableSortToBoardSort = (
 const pageRows = (
 	page: EntryLiveCompetitionBoardPage | null
 ): TournamentEntry[] => (page ? page.rows.map(boardRowToTournamentEntry) : [])
+
+type BoardFreshnessMarker = {
+	eventId: number
+	revision: string
+	dataAvailability: string
+}
+
+const boardFreshnessMarker = (
+	page: EntryLiveCompetitionBoardPage | null
+): BoardFreshnessMarker | null =>
+	page?.playerRevision
+		? {
+				eventId: page.eventId,
+				revision: page.playerRevision,
+				dataAvailability: page.dataAvailability
+			}
+		: null
+
+type PendingBoardReplacement = {
+	tournamentId: number
+	eventId: number
+	query: BoardQueryState
+	options: { preserve: boolean; expectedScope: string }
+}
 
 const boardPartialMessage = (
 	page: EntryLiveCompetitionBoardPage,
@@ -283,6 +308,10 @@ export default function TournamentClient({
 	const requestVersionRef = useRef(0)
 	const activeScopeRef = useRef(scopeKey)
 	const refreshInFlightRef = useRef<Promise<boolean> | null>(null)
+	const pendingReplacementRef = useRef<PendingBoardReplacement | null>(null)
+	const acceptedBoardFreshnessRef = useRef<BoardFreshnessMarker | null>(
+		boardFreshnessMarker(initialBoardPage)
+	)
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const updateSearchInput = useCallback((value: string): void => {
 		searchInputRef.current = value
@@ -487,7 +516,15 @@ export default function TournamentClient({
 			query: BoardQueryState,
 			options: { preserve: boolean; expectedScope: string }
 		): Promise<boolean> => {
-			if (rateLimitSecondsRef.current > 0) return false
+			if (rateLimitSecondsRef.current > 0) {
+				pendingReplacementRef.current = {
+					tournamentId,
+					eventId,
+					query,
+					options
+				}
+				return false
+			}
 			const searchInputAtStart = searchInputRef.current
 			replaceAbortRef.current?.abort()
 			const controller = new AbortController()
@@ -517,6 +554,7 @@ export default function TournamentClient({
 				setBoardPage(page)
 				setEntries(pageRows(page))
 				setContentScopeKey(options.expectedScope)
+				acceptedBoardFreshnessRef.current = boardFreshnessMarker(page)
 				queryStateRef.current = query
 				setQueryState(query)
 				if (
@@ -565,6 +603,12 @@ export default function TournamentClient({
 				if (controller.signal.aborted) return false
 				if (error instanceof LiveBoardRequestError && error.status === 429) {
 					const cooldown = Math.max(1, error.retryAfterSeconds ?? 30)
+					pendingReplacementRef.current = {
+						tournamentId,
+						eventId,
+						query,
+						options
+					}
 					rateLimitSecondsRef.current = cooldown
 					setRateLimitSeconds(cooldown)
 				}
@@ -590,6 +634,37 @@ export default function TournamentClient({
 		},
 		[buildVariables, entryId, season, sessionCacheKey, t, updateSearchInput]
 	)
+
+	useEffect(() => {
+		if (!selectionRestoreComplete) return
+		if (scopeKey && selectedTournamentId && standingsReady) return
+		replaceAbortRef.current?.abort()
+		replaceAbortRef.current = null
+		replaceInFlightRef.current = false
+		requestVersionRef.current += 1
+		refreshInFlightRef.current = null
+		pendingReplacementRef.current = null
+		acceptedBoardFreshnessRef.current = null
+		queryStateRef.current = defaultQueryState()
+		setQueryState(queryStateRef.current)
+		updateSearchInput('')
+		setShowAdvancedFilters(false)
+		setTableEntriesForShare([])
+		setBoardPage(null)
+		setEntries([])
+		setContentScopeKey(scopeKey)
+		setResultsError(null)
+		setIsLoadingInitial(false)
+		setIsLoadingMore(false)
+		setIsRefreshing(false)
+		setShowingLastGood(false)
+	}, [
+		selectedTournamentId,
+		selectionRestoreComplete,
+		scopeKey,
+		standingsReady,
+		updateSearchInput
+	])
 
 	useEffect(() => {
 		if (
@@ -631,6 +706,7 @@ export default function TournamentClient({
 			setBoardPage(initial.page)
 			setEntries(pageRows(initial.page))
 			setContentScopeKey(scopeKey)
+			acceptedBoardFreshnessRef.current = boardFreshnessMarker(initial.page)
 			setShowingLastGood(false)
 			writeLiveBoardLastGood(storage, cacheScope, initial.page)
 			if (initial.page.partial) {
@@ -655,6 +731,7 @@ export default function TournamentClient({
 			setBoardPage(cached)
 			setEntries(pageRows(cached))
 			setContentScopeKey(scopeKey)
+			acceptedBoardFreshnessRef.current = boardFreshnessMarker(cached)
 			setShowingLastGood(true)
 		} else if (contentScopeKey !== scopeKey) {
 			setBoardPage(null)
@@ -683,6 +760,23 @@ export default function TournamentClient({
 		t,
 		updateSearchInput
 	])
+
+	useEffect(() => {
+		if (rateLimitSeconds !== 0) return
+		const pending = pendingReplacementRef.current
+		if (!pending) return
+		if (pending.options.expectedScope !== activeScopeRef.current) {
+			pendingReplacementRef.current = null
+			return
+		}
+		pendingReplacementRef.current = null
+		void replaceFirstPage(
+			pending.tournamentId,
+			pending.eventId,
+			pending.query,
+			pending.options
+		)
+	}, [rateLimitSeconds, replaceFirstPage])
 
 	useEffect(() => {
 		if (!scopeKey || !selectedTournamentId || !standingsReady) return
@@ -859,8 +953,7 @@ export default function TournamentClient({
 	])
 
 	const refresh = useCallback((): Promise<boolean> => {
-		if (!scopeKey || !selectedTournamentId || rateLimitSecondsRef.current > 0)
-			return Promise.resolve(false)
+		if (!scopeKey || !selectedTournamentId) return Promise.resolve(false)
 		if (refreshInFlightRef.current) return refreshInFlightRef.current
 		const request = replaceFirstPage(
 			Number(selectedTournamentId),
@@ -904,7 +997,23 @@ export default function TournamentClient({
 				}
 				return
 			}
-			if (shouldAutoRefreshLiveBoardPage(boardPage?.page ?? null)) {
+			const observedSnapshot = liveContextToSnapshot(probe.liveContext)
+			const accepted = acceptedBoardFreshnessRef.current
+			const boardPublicationChanged =
+				!observedSnapshot ||
+				!accepted ||
+				accepted.eventId !== observedSnapshot.eventId ||
+				(accepted.revision !== observedSnapshot.revision &&
+					observedSnapshot.revision !== null) ||
+				accepted.dataAvailability !== observedSnapshot.dataAvailability
+			const managerScoreDue = Boolean(
+				boardPage?.managerNextRefreshAt &&
+				Date.parse(boardPage.managerNextRefreshAt) <= Date.now()
+			)
+			if (
+				shouldAutoRefreshLiveBoardPage(boardPage?.page ?? null) &&
+				(boardPublicationChanged || managerScoreDue)
+			) {
 				await refresh()
 			}
 		} catch {
@@ -912,6 +1021,7 @@ export default function TournamentClient({
 		}
 	}, [
 		boardPage?.page,
+		boardPage?.managerNextRefreshAt,
 		currentGameweek,
 		entries.length,
 		gameweekFromUrl,

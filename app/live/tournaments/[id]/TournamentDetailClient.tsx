@@ -417,7 +417,8 @@ export default function TournamentDetailClient({
 	const [staleEntryIds, setStaleEntryIds] = useState<ReadonlySet<number>>(
 		() => new Set()
 	)
-	const [error, setError] = useState(softError)
+	const [standingsError, setStandingsError] = useState<string | null>(null)
+	const error = [softError, standingsError].filter(Boolean).join(' · ') || null
 	const [snapshot, setSnapshot] = useState<LiveSnapshotStatus | null>(
 		initialSnapshot ?? null
 	)
@@ -658,7 +659,7 @@ export default function TournamentDetailClient({
 				try {
 					setInitialBoardLoadAttempted(true)
 					setIsRefreshing(true)
-					setError(null)
+					setStandingsError(null)
 					const page = await fetchEntryLiveCompetitionBoard(
 						currentTournament.id,
 						{
@@ -691,14 +692,17 @@ export default function TournamentDetailClient({
 							: null
 					)
 					if (page.failedEntryCount > 0)
-						setError(t('calculationFailed', { count: page.failedEntryCount }))
+						setStandingsError(
+							t('calculationFailed', { count: page.failedEntryCount })
+						)
 					else if (page.unavailableEntryCount > 0)
-						setError(
+						setStandingsError(
 							t('unavailableCalculation', {
 								count: page.unavailableEntryCount
 							})
 						)
-					else if (page.deferredEntryCount > 0) setError(t('coverageWarming'))
+					else if (page.deferredEntryCount > 0)
+						setStandingsError(t('coverageWarming'))
 				} catch (refreshError) {
 					if (requestGeneration !== refreshGenerationRef.current) return
 					console.error(
@@ -706,7 +710,7 @@ export default function TournamentDetailClient({
 						refreshError
 					)
 					const rateLimited = noteRateLimit(refreshError)
-					setError(
+					setStandingsError(
 						rateLimited ||
 							(refreshError instanceof LiveBoardRequestError &&
 								isLiveBoardRevisionGoneCode(refreshError.code))
@@ -826,7 +830,7 @@ export default function TournamentDetailClient({
 				return
 			}
 			noteRateLimit(error)
-			setError(t('refreshFailedRetained'))
+			setStandingsError(t('refreshFailedRetained'))
 		} finally {
 			loadMoreInFlightRef.current = false
 			setIsLoadingMore(false)
@@ -875,14 +879,14 @@ export default function TournamentDetailClient({
 					!managerScoreDue
 				) {
 					acceptSnapshot(observedSnapshot)
-					if (failedEntryCountRef.current === 0) setError(null)
+					if (failedEntryCountRef.current === 0) setStandingsError(null)
 					return
 				}
 				await refreshStandings(observedSnapshot?.revision ?? null)
 			} catch (probeError) {
 				if (generation !== refreshGenerationRef.current) return
 				console.error('Failed to check live tournament freshness:', probeError)
-				setError(t('standingsFailed'))
+				setStandingsError(t('standingsFailed'))
 			}
 		})()
 		freshnessRequestRef.current = request
@@ -1000,7 +1004,13 @@ export default function TournamentDetailClient({
 				!isOfficialH2H && boardPage
 					? (boardPage.highestEventPoints ?? 0)
 					: standingsStats.highestPoints,
-			scoresAvailable: Boolean(currentGameweek && (isOfficialH2H || boardPage)),
+			scoresAvailable: Boolean(
+				currentGameweek &&
+				(isOfficialH2H ||
+					(boardPage &&
+						typeof boardPage.averageEventPoints === 'number' &&
+						typeof boardPage.highestEventPoints === 'number'))
+			),
 			totalEntries:
 				(!isOfficialH2H && boardPage?.totalEntries) ||
 				standingsStats.totalEntries ||
