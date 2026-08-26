@@ -4,7 +4,9 @@ import {
 } from '@/lib/graphql/operations/events'
 import {
 	buildLiveFixturePlayersBatchQuery,
+	GET_EVENT_LIVE_PERFORMANCES,
 	GET_LIVE_MATCHDAY_DESK,
+	type EventLivePerformancesResponse,
 	type LiveFixturePerformance,
 	type LiveFixturePlayersBatchResponse,
 	type LiveFixturePlayersData,
@@ -17,10 +19,16 @@ import { getCurrentSeasonKey } from '@/lib/season'
 import { teamFullNames } from '@/types/common'
 import type { Match, PlayerStat } from '@/types/match'
 
+type QueryExecutorOptions = {
+	cache?: RequestCache
+	signal?: AbortSignal
+	handledErrorCodes?: readonly string[]
+}
+
 export type QueryExecutor = <T>(
 	query: string,
 	variables?: Record<string, unknown>,
-	options?: { cache?: RequestCache; signal?: AbortSignal }
+	options?: QueryExecutorOptions
 ) => Promise<T>
 
 export interface LiveMatchdayDeskPayload extends LiveMatchdayDeskResponse {
@@ -31,6 +39,60 @@ type LiveRef = { season: string; eventId: number; revision: string }
 
 const FIXTURE_PLAYER_BATCH_SIZE = 5
 const FIXTURE_PLAYER_BATCH_CONCURRENCY = 2
+
+const REVISION_RECOVERY_OPTIONS = {
+	handledErrorCodes: ['LIVE_REVISION_GONE']
+} as const
+
+const isSettledDesk = (
+	desk: LiveMatchdayDeskResponse['liveMatchdayDesk']
+): boolean =>
+	desk.state === 'SETTLED' &&
+	(desk.windowState === 'FINALIZED' || desk.dataAvailability === 'FINAL')
+
+const hasCoherentLiveRevision = (
+	desk: LiveMatchdayDeskResponse['liveMatchdayDesk']
+): boolean =>
+	(desk.source === 'REDIS' || desk.source === 'POSTGRES') &&
+	Boolean(desk.liveRevision) &&
+	desk.revision === desk.liveRevision
+
+export function getPreferredLiveMatchesTab(
+	matches: readonly Match[]
+): 'live' | 'finished' | 'not-started' | 'upcoming' {
+	const hasLive = matches.some(
+		match => match.status === 'LIVE' || match.status === 'HT'
+	)
+	const hasFinished = matches.some(match => match.status === 'FT')
+	const hasNotStarted = matches.some(match => match.status === 'NOT_STARTED')
+	const hasUpcoming = matches.some(match => match.status === 'UPCOMING')
+
+	if (hasLive) return 'live'
+	if (hasNotStarted) return 'not-started'
+	if (hasUpcoming) return 'upcoming'
+	if (hasFinished) return 'finished'
+	return 'live'
+}
+
+/**
+ * Once every fixture in the anchored gameweek is finished, the next-fixture
+ * rows are the page's primary view. A persisted `finished` tab must not pin
+ * the page to the previous gameweek in that transition window.
+ */
+export function shouldAutoAdvanceToNextLiveMatchesTab(
+	matches: readonly Match[]
+): boolean {
+	const hasUpcoming = matches.some(match => match.status === 'UPCOMING')
+	const hasFinished = matches.some(match => match.status === 'FT')
+	const hasCurrentMatch = matches.some(
+		match =>
+			match.status === 'LIVE' ||
+			match.status === 'HT' ||
+			match.status === 'NOT_STARTED'
+	)
+
+	return hasUpcoming && hasFinished && !hasCurrentMatch
+}
 
 const POSITION_ELEMENT_TYPE: Record<
 	NonNullable<LiveFixturePerformance['player']>['position'],
@@ -121,17 +183,12 @@ export function mergeLiveFixturePlayers(
 	})
 }
 
-async function loadFixturePlayers(
+async function loadPublicationFixturePlayers(
 	executor: QueryExecutor,
-	desk: LiveMatchdayDeskResponse['liveMatchdayDesk']
+	desk: LiveMatchdayDeskResponse['liveMatchdayDesk'],
+	fixtureIds: number[]
 ): Promise<LiveFixturePlayersData[]> {
-	if (!desk.liveRevision) return []
-	const fixtureIds = desk.matches
-		.filter(
-			match => match.started || match.finished || match.finishedProvisional
-		)
-		.map(match => match.fixtureId)
-	if (fixtureIds.length === 0) return []
+	if (!desk.liveRevision || fixtureIds.length === 0) return []
 	const ref: LiveRef = {
 		season: desk.season,
 		eventId: desk.eventId,
@@ -160,7 +217,7 @@ async function loadFixturePlayers(
 						batch.map((fixtureId, index) => [`fixture${index}`, fixtureId])
 					)
 				},
-				{ cache: 'no-store' }
+				{ cache: 'no-store', ...REVISION_RECOVERY_OPTIONS }
 			)
 		}
 	}
@@ -180,16 +237,83 @@ async function loadFixturePlayers(
 				response[`fixture${index}` as keyof LiveFixturePlayersBatchResponse]
 			if (
 				detail &&
-				detail.season === ref.season &&
-				detail.eventId === ref.eventId &&
-				detail.revision === ref.revision &&
-				detail.fixtureId === batch[index]
-			) {
-				details.push(detail)
+					detail.season === ref.season &&
+					detail.eventId === ref.eventId &&
+					detail.revision === ref.revision &&
+					detail.fixtureId === batch[index]
+				) {
+				details.push({ ...detail, source: 'LIVE_PUBLICATION' })
 			}
 		}
 	}
 	return details
+}
+
+async function loadDurableFixturePlayers(
+	executor: QueryExecutor,
+	desk: LiveMatchdayDeskResponse['liveMatchdayDesk']
+): Promise<LiveFixturePlayersData[]> {
+	const matches = desk.matches.filter(
+		match => match.started || match.finished || match.finishedProvisional
+	)
+	if (matches.length === 0) return []
+
+	const response = await executor<EventLivePerformancesResponse>(
+		GET_EVENT_LIVE_PERFORMANCES,
+		{ eventId: desk.eventId },
+		{ cache: 'no-store' }
+	)
+	const performances = response.eventLive?.performances ?? []
+	if (performances.length === 0) {
+		throw new Error('Durable event-live performances are unavailable')
+	}
+
+	return matches.map(match => ({
+		season: desk.season,
+		eventId: desk.eventId,
+		revision: null,
+		source: 'DURABLE_DB' as const,
+		fixtureId: match.fixtureId,
+		players: performances.filter(performance => {
+			const teamId = performance.player?.team?.id
+			return teamId === match.homeTeamId || teamId === match.awayTeamId
+		})
+	}))
+}
+
+async function loadFixturePlayers(
+	executor: QueryExecutor,
+	desk: LiveMatchdayDeskResponse['liveMatchdayDesk']
+): Promise<LiveFixturePlayersData[]> {
+	const fixtureIds = desk.matches
+		.filter(
+			match => match.started || match.finished || match.finishedProvisional
+		)
+		.map(match => match.fixtureId)
+	if (fixtureIds.length === 0) return []
+
+	const settled = isSettledDesk(desk)
+	if (!hasCoherentLiveRevision(desk)) {
+		return settled ? loadDurableFixturePlayers(executor, desk) : []
+	}
+
+	try {
+		const details = await loadPublicationFixturePlayers(
+			executor,
+			desk,
+			fixtureIds
+		)
+		const complete =
+			details.length === fixtureIds.length &&
+			details.every(detail => detail.players.length > 0)
+		if (settled && !complete) {
+			return loadDurableFixturePlayers(executor, desk)
+		}
+		return details
+	} catch (error) {
+		if (!settled) throw error
+		return loadDurableFixturePlayers(executor, desk)
+	}
 }
 
 /** Resolve a desk and its optional player section with one bounded revision retry. */
@@ -199,16 +323,19 @@ export async function loadLiveMatchdayDesk(
 	options: { includeFixturePlayers?: boolean } = {}
 ): Promise<LiveMatchdayDeskPayload> {
 	const includeFixturePlayers = options.includeFixturePlayers !== false
-	const queryDesk = (nextRef: LiveRef | null) =>
+	const queryDesk = (
+		nextRef: LiveRef | null,
+		queryOptions?: Pick<QueryExecutorOptions, 'handledErrorCodes'>
+	) =>
 		executor<LiveMatchdayDeskResponse>(
 			GET_LIVE_MATCHDAY_DESK,
 			{ ref: nextRef },
-			{ cache: 'no-store' }
+			{ ...queryOptions, cache: 'no-store' }
 		)
 	let recoveredRevision = false
 	let desk: LiveMatchdayDeskResponse
 	try {
-		desk = await queryDesk(ref)
+		desk = await queryDesk(ref, ref ? REVISION_RECOVERY_OPTIONS : undefined)
 	} catch (error) {
 		if (!ref || !liveRevisionGone(error)) throw error
 		desk = await queryDesk(null)
@@ -283,7 +410,12 @@ export function transformLiveMatches(
 			corners: 0,
 			players: []
 		},
-		status: row.finished || row.finishedProvisional ? 'FT' : row.started ? 'LIVE' : 'NOT_STARTED',
+		status:
+			row.finished || row.finishedProvisional
+				? 'FT'
+				: row.started
+					? 'LIVE'
+					: 'NOT_STARTED',
 		minute: row.minutes,
 		kickoff: row.kickoffTime ?? '',
 		viewers: 0,
@@ -411,15 +543,14 @@ export async function getLiveMatchesSnapshot(
 	const snapshot = desk.liveMatchdayDesk
 		? {
 				eventId: desk.liveMatchdayDesk.eventId,
-				revision: desk.liveMatchdayDesk.liveRevision,
+				revision: hasCoherentLiveRevision(desk.liveMatchdayDesk)
+					? desk.liveMatchdayDesk.liveRevision
+					: null,
 				state: desk.liveMatchdayDesk.windowState ?? desk.liveMatchdayDesk.state,
-				publishedAt: desk.liveMatchdayDesk.liveRevision
+				publishedAt: hasCoherentLiveRevision(desk.liveMatchdayDesk)
 					? desk.liveMatchdayDesk.publishedAt
 					: null,
-				checkedAt: desk.liveMatchdayDesk.liveRevision
-					? (desk.liveMatchdayDesk.sourceCheckedAt ??
-						desk.liveMatchdayDesk.publishedAt)
-					: null,
+				checkedAt: desk.liveMatchdayDesk.sourceCheckedAt ?? null,
 				windowState: desk.liveMatchdayDesk.windowState,
 				dataAvailability: desk.liveMatchdayDesk.dataAvailability,
 				nextRefreshAt: desk.liveMatchdayDesk.nextRefreshAt

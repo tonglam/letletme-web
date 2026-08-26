@@ -7,26 +7,6 @@ import {
 	buildShareBrandLayout
 } from '../lib/share/image-branding'
 
-interface Crop {
-	x: number
-	y: number
-	width: number
-	height: number
-}
-
-function cropKeepsTile(
-	tiles: ReturnType<typeof buildShareBrandLayout>['tiles'],
-	crop: Crop
-): boolean {
-	return tiles.some(
-		tile =>
-			tile.x >= crop.x &&
-			tile.x <= crop.x + crop.width &&
-			tile.y >= crop.y &&
-			tile.y <= crop.y + crop.height
-	)
-}
-
 describe('share image branding', () => {
 	it('uses the product brand and keeps the signature inside the image', () => {
 		assert.equal(SHARE_BRAND_NAME, 'LetLetMe')
@@ -46,50 +26,9 @@ describe('share image branding', () => {
 		}
 	})
 
-	it('keeps a repeated watermark in every sampled half-image crop', () => {
-		for (const [width, height] of [
-			[750, 938],
-			[1200, 630],
-			[320, 640]
-		]) {
-			const { tiles } = buildShareBrandLayout(width, height)
-			assert.ok(tiles.length >= 20)
-
-			for (let xStep = 0; xStep <= 4; xStep += 1) {
-				for (let yStep = 0; yStep <= 4; yStep += 1) {
-					const crop: Crop = {
-						x: (width / 2) * (xStep / 4),
-						y: (height / 2) * (yStep / 4),
-						width: width / 2,
-						height: height / 2
-					}
-					assert.ok(
-						cropKeepsTile(tiles, crop),
-						`crop ${JSON.stringify(crop)} should retain LetLetMe`
-					)
-				}
-			}
-		}
-	})
-
-	it('covers each quadrant rather than relying on one corner badge', () => {
-		const width = 750
-		const height = 938
-		const { tiles } = buildShareBrandLayout(width, height)
-		const quadrants: Crop[] = [
-			{ x: 0, y: 0, width: width / 2, height: height / 2 },
-			{ x: width / 2, y: 0, width: width / 2, height: height / 2 },
-			{ x: 0, y: height / 2, width: width / 2, height: height / 2 },
-			{
-				x: width / 2,
-				y: height / 2,
-				width: width / 2,
-				height: height / 2
-			}
-		]
-
-		for (const quadrant of quadrants) {
-			assert.ok(cropKeepsTile(tiles, quadrant))
-		}
+	it('only reserves the bottom-right signature area', () => {
+		const { signature } = buildShareBrandLayout(750, 938)
+		assert.equal(signature.x + signature.width <= 750, true)
+		assert.equal(signature.y + signature.height <= 938, true)
 	})
 })

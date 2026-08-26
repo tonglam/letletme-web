@@ -45,6 +45,7 @@ interface TeamOfTheWeekSectionProps {
 	currentEventId: number | null
 	dreamTeam?: HomeGameweekPlayer[]
 	hasError?: boolean
+	showShareActions?: boolean
 }
 
 export function TeamOfTheWeekSectionFallback({
@@ -63,17 +64,19 @@ function TeamOfTheWeekCard({
 	currentEventId,
 	teamOfTheWeek,
 	isLoading = false,
-	hasError
+	hasError,
+	showShareActions = true
 }: {
 	currentEventId: number | null
 	teamOfTheWeek: HomeGameweekPlayer[]
 	isLoading?: boolean
 	hasError?: boolean
+	showShareActions?: boolean
 }) {
 	const t = useTranslations('Home')
 	const tPitch = useTranslations('LivePoints')
 	const locale = useLocale() as AppLocale
-	const shareRef = useRef<HTMLDivElement | null>(null)
+	const shareRef = useRef<HTMLElement | null>(null)
 	const {
 		closePlayerDetail,
 		isLoading: isPlayerDetailLoading,
@@ -135,7 +138,6 @@ function TeamOfTheWeekCard({
 	return (
 		<>
 			<Card
-				ref={shareRef}
 				aria-labelledby="home-team-of-week-title"
 				className="overflow-hidden rounded-none sm:rounded-lg"
 			>
@@ -151,7 +153,7 @@ function TeamOfTheWeekCard({
 						/>
 						<span>{t('teamOfWeek')}</span>
 					</h2>
-					{teamOfTheWeek.length > 0 && !isLoading ? (
+					{showShareActions && teamOfTheWeek.length > 0 && !isLoading ? (
 						<ShareActions
 							text={shareText}
 							imageRef={shareRef}
@@ -175,6 +177,7 @@ function TeamOfTheWeekCard({
 					</p>
 				) : (
 					<SquadPitch
+						ref={shareRef}
 						players={pitchPlayers}
 						onPlayerClick={handlePlayerClick}
 						labels={{
@@ -194,8 +197,14 @@ function TeamOfTheWeekCard({
 								player: '{player}'
 							})
 						}}
-						showHeader={false}
-						className="rounded-none border-0 shadow-none sm:rounded-none"
+						showHeader
+						title={t('teamOfWeek')}
+						eyebrow={
+							currentEventId != null
+								? `GW${currentEventId}`
+								: t('teamOfWeek')
+						}
+						className="mx-auto max-w-3xl"
 					/>
 				)}
 			</Card>
@@ -212,13 +221,15 @@ function TeamOfTheWeekCard({
 export function TeamOfTheWeekSection({
 	currentEventId,
 	dreamTeam = [],
-	hasError = false
+	hasError = false,
+	showShareActions = true
 }: TeamOfTheWeekSectionProps) {
 	return (
 		<TeamOfTheWeekCard
 			currentEventId={currentEventId}
 			teamOfTheWeek={dreamTeam}
 			hasError={hasError}
+			showShareActions={showShareActions}
 		/>
 	)
 }

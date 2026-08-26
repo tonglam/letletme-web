@@ -162,7 +162,7 @@ export async function PersonalDesk({
 	const staleDate = desk.sourceCheckedAt ? new Date(desk.sourceCheckedAt) : null
 	const staleDateLabel =
 		staleDate && !Number.isNaN(staleDate.getTime())
-			? format.dateTime(staleDate, { dateStyle: 'medium', timeStyle: 'short' })
+			? format.dateTime(staleDate, { dateStyle: 'medium', timeStyle: 'medium' })
 			: t('personalDataLastSyncUnknown')
 	const managerName = desk.playerName?.trim() || '—'
 	const regionFlag = regionToFlagEmoji(desk.region)
@@ -226,10 +226,10 @@ export async function PersonalDesk({
 				) : null}
 
 				<div className="mt-4 border-t border-border/50 pt-3">
-					<p className="mb-2 eyebrow">{t('personalLeaguesTitle')}</p>
 					<PersonalLeagueRankList
 						rows={desk.leagueRanks}
 						readyKey={readyKey}
+						title={t('personalLeaguesTitle')}
 					/>
 				</div>
 			</div>

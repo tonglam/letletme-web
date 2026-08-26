@@ -36,6 +36,7 @@ export function MatchNavigation({
 					variant="outline"
 					size="icon"
 					className="size-8 rounded-full border-border/70 bg-card/90 shadow-sm backdrop-blur-sm hover:bg-accent"
+					data-match-navigation="true"
 					onClick={() => navigate('previous')}
 					aria-label={t('previousMatch')}
 				>
@@ -48,6 +49,7 @@ export function MatchNavigation({
 					variant="outline"
 					size="icon"
 					className="size-8 rounded-full border-border/70 bg-card/90 shadow-sm backdrop-blur-sm hover:bg-accent"
+					data-match-navigation="true"
 					onClick={() => navigate('next')}
 					aria-label={t('nextMatch')}
 				>

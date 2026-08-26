@@ -35,7 +35,7 @@ function LeagueVisibilityBadge({
 		<span
 			data-home-league-visibility={visibility.toLowerCase()}
 			className={cn(
-				'shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold leading-none',
+				'shrink-0 whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[10px] font-semibold leading-none',
 				isPublic
 					? 'border-primary/25 bg-primary/10 text-primary-ink'
 					: 'border-border/70 bg-muted/50 text-muted-foreground'
@@ -257,7 +257,7 @@ function H2HLeagueRow({
 						</p>
 					</div>
 					{rankDisplay ? (
-						<span className="shrink-0 text-[10px] font-semibold text-muted-foreground">
+						<span className="shrink-0 whitespace-nowrap text-[10px] font-semibold text-muted-foreground">
 							{labels.rank(rankDisplay)}
 						</span>
 					) : null}
@@ -302,12 +302,12 @@ function H2HLeagueRow({
 						</p>
 					</div>
 					<div className="flex shrink-0 items-center gap-1.5">
-						<span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+						<span className="whitespace-nowrap rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
 							{labels.gameweek(matchup.eventId)}
 						</span>
 						<span
 							className={cn(
-								'rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+								'whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide',
 								matchup.isLive
 									? 'bg-primary/15 text-primary-ink'
 									: 'bg-muted text-muted-foreground'
@@ -316,7 +316,7 @@ function H2HLeagueRow({
 							{statusLabel}
 						</span>
 						{rankDisplay ? (
-							<span className="text-[10px] font-semibold text-muted-foreground">
+							<span className="whitespace-nowrap text-[10px] font-semibold text-muted-foreground">
 								{labels.rank(rankDisplay)}
 							</span>
 						) : null}
@@ -361,10 +361,12 @@ function H2HLeagueRow({
 
 export async function PersonalLeagueRankList({
 	rows,
-	readyKey
+	readyKey,
+	title
 }: {
 	rows: HomeLeagueRank[]
 	readyKey: string
+	title: string
 }) {
 	const t = await getTranslations('Home')
 	const groups: Array<{
@@ -505,15 +507,19 @@ export async function PersonalLeagueRankList({
 	return (
 		<div data-home-league-ranks-ready="true">
 			{rows.length === 0 ? (
-				<p
-					className="min-h-11 rounded-md border border-dashed border-border/70 px-3 py-3 text-center text-xs text-muted-foreground"
-					{...{ elementtiming: 'home-league-ranks' }}
-				>
-					{t('personalLeaguesEmpty')}
-				</p>
+				<div>
+					<p className="mb-2 eyebrow">{title}</p>
+					<p
+						className="min-h-11 rounded-md border border-dashed border-border/70 px-3 py-3 text-center text-xs text-muted-foreground"
+						{...{ elementtiming: 'home-league-ranks' }}
+					>
+						{t('personalLeaguesEmpty')}
+					</p>
+				</div>
 			) : (
 				<PersonalLeagueCarousel
 					slides={slides}
+					title={title}
 					labels={{
 						pagerLabel: t('personalLeaguePager'),
 						previousPage: t('personalLeaguePrevious'),

@@ -686,9 +686,10 @@ export interface LiveFixturePerformance {
 export interface LiveFixturePlayersData {
 	season: string
 	eventId: number
-	revision: string
+	revision: string | null
 	fixtureId: number
 	players: LiveFixturePerformance[]
+	source?: 'LIVE_PUBLICATION' | 'DURABLE_DB'
 }
 
 export interface LiveFixturePlayersBatchResponse {
@@ -697,6 +698,25 @@ export interface LiveFixturePlayersBatchResponse {
 	fixture2?: LiveFixturePlayersData
 	fixture3?: LiveFixturePlayersData
 	fixture4?: LiveFixturePlayersData
+}
+
+export const GET_EVENT_LIVE_PERFORMANCES = `
+	query GetEventLivePerformances($eventId: Int!) {
+		eventLive(eventId: $eventId) {
+			performances {
+				player { id webName position team { id name shortName } }
+				minutes goalsScored assists cleanSheets goalsConceded ownGoals
+				penaltiesSaved penaltiesMissed yellowCards redCards saves bonus bps
+				defensiveContribution totalPoints starts inDreamTeam
+			}
+		}
+	}
+`
+
+export interface EventLivePerformancesResponse {
+	eventLive: {
+		performances: LiveFixturePerformance[]
+	} | null
 }
 
 const LIVE_FIXTURE_PLAYERS_FRAGMENT = `

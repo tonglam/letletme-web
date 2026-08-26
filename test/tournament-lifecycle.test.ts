@@ -12,7 +12,8 @@ import {
 } from '@/lib/tournament/lifecycle'
 import {
 	mapEntryTournamentToLiveTournament,
-	mapTournamentGroupFormat
+	mapTournamentGroupFormat,
+	isOfficialH2HTournament
 } from '@/lib/tournament/liveTournament'
 import { resolveTournamentStatsLoadState } from '@/app/me/tournament/_lib/tournament-stats-model'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
@@ -196,6 +197,27 @@ describe('tournament lifecycle presentation', () => {
 		assert.equal(mapTournamentGroupFormat('POINTS_RACES'), 'points')
 		assert.equal(mapTournamentGroupFormat('BATTLE_RACES'), 'headToHead')
 		assert.equal(mapTournamentGroupFormat('NONE'), 'none')
+	})
+
+	it('keeps official H2H competitions on the live competition path', () => {
+		const mapped = mapEntryTournamentToLiveTournament({
+			id: 12,
+			name: 'Official H2H',
+			leagueType: 'H2H',
+			groupMode: 'BATTLE_RACES',
+			rosterMode: 'OFFICIAL_SYNC',
+			totalTeamNum: 20,
+			setupStatus: 'READY',
+			standingsReadyAt: '2026-08-04T00:00:00.000Z',
+			insightsReadyAt: '2026-08-04T00:00:00.000Z',
+			setupHasWarnings: false
+		} as EntryTournament)
+
+		assert.equal(isOfficialH2HTournament(mapped), true)
+		assert.equal(
+			isOfficialH2HTournament({ ...mapped, rosterMode: 'SNAPSHOT' }),
+			false
+		)
 	})
 
 	it('resets a cancelled stats load when the new tournament is not ready', () => {

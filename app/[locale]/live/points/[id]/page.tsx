@@ -35,7 +35,7 @@ type PageProps = {
 
 export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await getPageLocale(params)
-	const { gw, tournamentId } = await searchParams
+	const { from, gw, tournamentId } = await searchParams
 	const entryId = Number(id)
 
 	const { presentation, liveContext } = await getLivePageContext()
@@ -146,6 +146,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 		<TeamPointsClient
 			entryId={entryId}
 			tournamentId={typeof tournamentId === 'string' ? tournamentId : undefined}
+			from={from === 'home' ? 'home' : undefined}
 			initialEventId={currentEventId}
 			initialSelectedGameweek={requestedGameweek ?? undefined}
 			initialLiveData={initialLiveData}

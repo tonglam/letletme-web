@@ -53,8 +53,7 @@ function compareProgress(
 
 function buildPredictionState(
 	board: PriceChangeBoard,
-	locale: string,
-	notices: { partial: string; stale: string }
+	locale: string
 ): HomePriceChangeCarouselProps['likely'] {
 	const rises = board.players
 		.filter(player => isLikelyToChange(player) && player.progressPercent > 0)
@@ -64,13 +63,6 @@ function buildPredictionState(
 		.filter(player => isLikelyToChange(player) && player.progressPercent < 0)
 		.sort((left, right) => compareProgress(left, right, locale))
 		.slice(0, 5)
-	const notice =
-		board.status === 'PARTIAL'
-			? notices.partial
-			: board.status === 'STALE'
-				? notices.stale
-				: null
-
 	return {
 		state:
 			board.status === 'UNAVAILABLE'
@@ -78,9 +70,9 @@ function buildPredictionState(
 				: rises.length + falls.length > 0
 					? 'AVAILABLE'
 					: 'EMPTY',
+		capturedAt: board.fetchedAt,
 		rises,
-		falls,
-		notice
+		falls
 	}
 }
 
@@ -127,6 +119,7 @@ export async function HomePriceChangeDesk() {
 		actual = {
 			state: 'UNAVAILABLE',
 			coverageLabel: null,
+			capturedAt: null,
 			rises: [],
 			falls: []
 		}
@@ -146,6 +139,7 @@ export async function HomePriceChangeDesk() {
 						date: formatCalendarDate(actualDate, locale)
 					})
 				: null,
+			capturedAt: desk.capturedAt,
 			rises: latest.changes
 				.filter(change => change.direction === 'RISE')
 				.sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
@@ -161,18 +155,14 @@ export async function HomePriceChangeDesk() {
 	if (predictionResult.status === 'rejected') {
 		likely = {
 			state: 'UNAVAILABLE',
+			capturedAt: null,
 			rises: [],
-			falls: [],
-			notice: null
+			falls: []
 		}
 	} else {
 		likely = buildPredictionState(
 			predictionResult.value.priceChangeBoard,
-			locale,
-			{
-				partial: tHome('homeLikelyPartial'),
-				stale: tHome('homeLikelyStale')
-			}
+			locale
 		)
 	}
 
@@ -186,6 +176,9 @@ export async function HomePriceChangeDesk() {
 		title: tHome('homePriceChangesTitle'),
 		todayPage: tHome('homePriceChangesToday'),
 		todayDescription: actualDescription,
+		todayUpdatedPrefix: tHome('homePriceChangesTodayDescription', {
+			date: ''
+		}).trim(),
 		likelyPage: tHome('homePriceChangesLikely'),
 		likelyDescription: tHome('homePriceChangesLikelyDescription'),
 		openRecorded: tMarket('openMarket'),

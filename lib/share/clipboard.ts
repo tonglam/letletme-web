@@ -3,6 +3,40 @@ import { brandedCanvasToPng } from './image-branding'
 export type ClipboardCopyResult = 'copied' | 'unsupported' | 'failed'
 export type ShareResult = 'shared' | ClipboardCopyResult
 
+/** Every exported share image uses the product's light canvas, regardless of UI theme. */
+export const SHARE_BACKGROUND_COLOR = '#faf9f5'
+
+const LIGHT_SHARE_THEME_VARIABLES = {
+	'--background': '48 30% 97%',
+	'--foreground': '288 42% 13%',
+	'--card': '0 0% 100%',
+	'--card-foreground': '288 42% 13%',
+	'--popover': '0 0% 100%',
+	'--popover-foreground': '288 42% 13%',
+	'--primary': '152 100% 41%',
+	'--primary-foreground': '288 100% 9%',
+	'--primary-ink': '152 100% 26%',
+	'--secondary': '288 16% 91%',
+	'--secondary-foreground': '288 42% 15%',
+	'--muted': '44 18% 93%',
+	'--muted-foreground': '287 12% 38%',
+	'--accent': '152 46% 90%',
+	'--accent-foreground': '288 45% 14%',
+	'--destructive': '346 78% 44%',
+	'--destructive-foreground': '0 0% 98%',
+	'--success': '152 100% 26%',
+	'--success-foreground': '0 0% 100%',
+	'--warning': '36 92% 30%',
+	'--warning-foreground': '0 0% 100%',
+	'--info': '288 60% 32%',
+	'--info-foreground': '48 33% 96%',
+	'--border': '287 14% 84%',
+	'--input': '287 14% 80%',
+	'--ring': '152 100% 34%',
+	'--sticker': '288 84% 10%',
+	'--sticker-alpha': '1'
+} as const
+
 // html-to-image copies every computed CSS property by default. On a large
 // standings page that can produce a multi-megabyte foreignObject SVG which
 // Chrome may never finish decoding. Keep the visual/layout properties needed
@@ -48,6 +82,8 @@ const SHARE_IMAGE_STYLE_PROPERTIES = [
 	'justify-self',
 	'letter-spacing',
 	'line-height',
+	'list-style',
+	'list-style-type',
 	'margin',
 	'max-height',
 	'max-width',
@@ -99,40 +135,158 @@ export async function copyTextToClipboard(
 	}
 }
 
+function applyLightShareTheme(element: HTMLElement): () => void {
+	const previousValues = new Map<string, string>()
+	for (const [property, value] of Object.entries(LIGHT_SHARE_THEME_VARIABLES)) {
+		previousValues.set(property, element.style.getPropertyValue(property))
+		element.style.setProperty(property, value)
+	}
+
+	return () => {
+		previousValues.forEach((previousValue, property) => {
+			if (previousValue) element.style.setProperty(property, previousValue)
+			else element.style.removeProperty(property)
+		})
+	}
+}
+
 /** Render any share target to the canonical, branded PNG output. */
 export async function renderElementShareImage(
 	element: HTMLElement
 ): Promise<Blob | null> {
 	const { toCanvas } = await import('html-to-image')
-	const captureWidth = getShareCaptureWidth(element)
-	const canvas = await toCanvas(element, {
-		backgroundColor: '#210025',
-		cacheBust: true,
-		pixelRatio: 2,
-		...(captureWidth
-			? {
-					width: captureWidth,
-					style: { width: `${captureWidth}px` }
-				}
-			: {}),
-		includeStyleProperties: SHARE_IMAGE_STYLE_PROPERTIES,
-		// The app uses next/font CSS. Embedding remote font faces can reject the
-		// whole SVG render in browsers with a stricter CORS policy; system fonts
-		// keep the share usable when that optional embed is unavailable.
-		skipFonts: true,
-		// html-to-image applies the filter to text nodes as well as elements.
-		filter: shouldIncludeShareImageNode
-	})
-	return brandedCanvasToPng(canvas)
+	const previousShareState = element.getAttribute('data-share-rendering')
+	const previousCaptureHeight = element.getAttribute('data-share-capture-height')
+	element.setAttribute('data-share-rendering', 'true')
+	const restoreLightShareTheme = applyLightShareTheme(element)
+
+	try {
+		const captureWidth = getShareCaptureWidth(element)
+		const captureHeight = getShareCaptureHeight(element)
+		if (captureHeight) {
+			element.setAttribute('data-share-capture-height', 'true')
+		}
+		const captureStyle: Partial<CSSStyleDeclaration> = {}
+		if (captureWidth) captureStyle.width = `${captureWidth}px`
+		if (captureHeight) captureStyle.height = `${captureHeight}px`
+		const hasCaptureStyle = Object.keys(captureStyle).length > 0
+		const canvas = await toCanvas(element, {
+			backgroundColor: SHARE_BACKGROUND_COLOR,
+			cacheBust: true,
+			pixelRatio: 2,
+			...(captureWidth
+				? {
+						width: captureWidth
+					}
+				: {}),
+			...(captureHeight ? { height: captureHeight } : {}),
+			...(hasCaptureStyle ? { style: captureStyle } : {}),
+			includeStyleProperties: SHARE_IMAGE_STYLE_PROPERTIES,
+			// The app uses next/font CSS. Embedding remote font faces can reject the
+			// whole SVG render in browsers with a stricter CORS policy; system fonts
+			// keep the share usable when that optional embed is unavailable.
+			skipFonts: true,
+			// html-to-image applies the filter to text nodes as well as elements.
+			filter: shouldIncludeShareImageNode
+		})
+		return brandedCanvasToPng(canvas)
+	} finally {
+		restoreLightShareTheme()
+		if (previousShareState === null) {
+			element.removeAttribute('data-share-rendering')
+		} else {
+			element.setAttribute('data-share-rendering', previousShareState)
+		}
+		if (previousCaptureHeight === null) {
+			element.removeAttribute('data-share-capture-height')
+		} else {
+			element.setAttribute('data-share-capture-height', previousCaptureHeight)
+		}
+	}
 }
 
-function getShareCaptureWidth(element: HTMLElement): number | undefined {
+export function getShareCaptureWidth(element: HTMLElement): number | undefined {
+	// Some share targets deliberately contain decorative overflow. Their
+	// exported canvas must remain the target's own box, not the widest child.
+	if (element.getAttribute('data-share-preserve-width') === 'true')
+		return undefined
+
 	const widths = [element.clientWidth, element.scrollWidth]
 	element.querySelectorAll<HTMLElement>('*').forEach(child => {
 		widths.push(child.scrollWidth)
 	})
 	const width = Math.max(...widths)
 	return width > element.clientWidth ? width : undefined
+}
+
+function parseSharePixelValue(element: HTMLElement, property: string): number {
+	if (typeof window === 'undefined') return 0
+	const value = window.getComputedStyle(element).getPropertyValue(property)
+	const parsed = Number.parseFloat(value)
+	return Number.isFinite(parsed) ? parsed : 0
+}
+
+function hasExcludedShareAncestor(
+	element: HTMLElement,
+	root: HTMLElement
+): boolean {
+	if (element.getAttribute('data-share-exclude') === 'true') return true
+	let ancestor = element.parentElement
+	while (ancestor && ancestor !== root) {
+		if (ancestor.getAttribute('data-share-exclude') === 'true') return true
+		ancestor = ancestor.parentElement
+	}
+	return false
+}
+
+function getIncludedShareContentHeight(element: HTMLElement): number | undefined {
+	if (
+		typeof window === 'undefined' ||
+		typeof element.getBoundingClientRect !== 'function'
+	)
+		return undefined
+
+	const excludedNodes = element.querySelectorAll<HTMLElement>(
+		'[data-share-exclude="true"]'
+	)
+	if (excludedNodes.length === 0) return undefined
+
+	const rootRect = element.getBoundingClientRect()
+	let bottom = 0
+	element.querySelectorAll<HTMLElement>('*').forEach(child => {
+		if (hasExcludedShareAncestor(child, element)) return
+		if (child.querySelector('[data-share-exclude="true"]')) return
+		const rect = child.getBoundingClientRect()
+		if (rect.width <= 0 || rect.height <= 0) return
+		bottom = Math.max(bottom, rect.bottom - rootRect.top)
+	})
+	if (bottom <= 0) return undefined
+
+	return Math.ceil(
+		bottom +
+		parseSharePixelValue(element, 'padding-bottom') +
+		parseSharePixelValue(element, 'border-bottom-width')
+	)
+}
+
+/**
+ * Fit marked share targets to the content that will actually be cloned.
+ * html-to-image normally measures clientHeight, which is the visible height
+ * of a scroll container and can crop a long match's event list. When a target
+ * contains excluded controls or sections, use the last included descendant so
+ * those sections do not leave a blank tail in the exported image.
+ */
+export function getShareCaptureHeight(element: HTMLElement): number | undefined {
+	if (element.getAttribute('data-share-fit-content') !== 'true')
+		return undefined
+
+	const clientHeight = element.clientHeight
+	const scrollHeight = element.scrollHeight
+	const borderHeight = Math.max(0, element.offsetHeight - clientHeight)
+	const includedContentHeight = getIncludedShareContentHeight(element)
+	const height =
+		includedContentHeight ?? Math.max(clientHeight, scrollHeight) + borderHeight
+	return height > 0 ? Math.ceil(height) : undefined
 }
 
 async function copyImageBlobToClipboard(

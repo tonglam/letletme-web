@@ -31,6 +31,7 @@ import {
 } from '../lib/graphql/operations/events'
 import {
 	GET_EVENT_LIVE_EXPLAIN,
+	GET_EVENT_LIVE_PERFORMANCES,
 	GET_LIVE_MATCHDAY_DESK,
 	GET_LIVE_POINTS,
 	GET_LIVE_SCORES,
@@ -341,6 +342,11 @@ async function main() {
 			variables: { entryId }
 		},
 		{ name: 'GET_LIVE_MATCHDAY_DESK', query: GET_LIVE_MATCHDAY_DESK },
+		{
+			name: 'GET_EVENT_LIVE_PERFORMANCES',
+			query: GET_EVENT_LIVE_PERFORMANCES,
+			variables: { eventId }
+		},
 		{
 			name: 'GET_EVENT_LIVE_EXPLAIN',
 			query: GET_EVENT_LIVE_EXPLAIN,

@@ -245,7 +245,7 @@ function CoverageCard({
 		? profile.asOf
 		: format.dateTime(asOfDate, {
 				dateStyle: 'medium',
-				timeStyle: 'short'
+				timeStyle: 'medium'
 			})
 
 	return (
@@ -313,7 +313,7 @@ function CoverageCard({
 							providerDate && !Number.isNaN(providerDate.getTime())
 								? format.dateTime(providerDate, {
 										dateStyle: 'short',
-										timeStyle: 'short'
+										timeStyle: 'medium'
 									})
 								: (provider.asOf ?? '—')
 						const freshness =

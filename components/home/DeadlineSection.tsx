@@ -1,6 +1,7 @@
 'use client'
 
 import { GameweekBadge } from '@/components/stats/GameweekBadge'
+import { ShareActions } from '@/components/share/ShareActions'
 import { CalendarClock } from 'lucide-react'
 import { usePageActive } from '@/hooks/use-page-active'
 import { useRouter } from '@/i18n/navigation'
@@ -60,6 +61,7 @@ export function DeadlineSection({
 	const refreshCount = useRef(0)
 	const refreshDeadline = useRef<string | null>(effectiveDeadlineTime)
 	const isPageActive = usePageActive()
+	const shareRef = useRef<HTMLDivElement | null>(null)
 
 	useEffect(() => {
 		if (incomingSchedule) {
@@ -147,8 +149,22 @@ export function DeadlineSection({
 
 	if (!effectiveNextEventId || !effectiveDeadlineTime) {
 		return (
-			<div className="scoreboard texture-grain rounded-xl p-6 sm:p-7">
-				<p className="chyron text-electric">{t('nextDeadline')}</p>
+			<div
+				ref={shareRef}
+				data-share-preserve-width="true"
+				className="scoreboard texture-grain rounded-xl p-6 sm:p-7"
+			>
+				<div className="flex items-center justify-between gap-3">
+					<p className="chyron text-electric">{t('nextDeadline')}</p>
+					<ShareActions
+						actions={['image']}
+						text={t('nextDeadline')}
+						imageRef={shareRef}
+						title={t('nextDeadline')}
+						buttonClassName="text-primary-ink hover:text-primary-ink"
+						compact
+					/>
+				</div>
 				<h2 className="mt-3 font-display text-2xl font-bold uppercase tracking-wide">
 					{t('scheduleUnavailable')}
 				</h2>
@@ -160,20 +176,37 @@ export function DeadlineSection({
 	}
 
 	return (
-		<div className="scoreboard texture-grain rounded-xl p-6 sm:p-7">
+		<div
+			ref={shareRef}
+			data-share-preserve-width="true"
+			className="scoreboard texture-grain rounded-xl p-6 sm:p-7"
+		>
 			<div className="flex items-center justify-between gap-3">
 				<p className="chyron text-electric">{t('nextDeadline')}</p>
-				<span className="inline-flex items-center gap-2">
-					<span
-						className="live-dot"
-						aria-hidden="true"
+				<div
+					className="flex items-center gap-2"
+					data-share-deadline-actions="true"
+				>
+					<ShareActions
+						actions={['image']}
+						text={t('nextDeadline')}
+						imageRef={shareRef}
+						title={t('nextDeadline')}
+						buttonClassName="text-primary-ink hover:text-primary-ink"
+						compact
 					/>
-					<GameweekBadge
-						gameweek={effectiveNextEventId}
-						size="sm"
-						fontFamily="display"
-					/>
-				</span>
+					<span className="inline-flex items-center gap-2">
+						<span
+							className="live-dot"
+							aria-hidden="true"
+						/>
+						<GameweekBadge
+							gameweek={effectiveNextEventId}
+							size="sm"
+							fontFamily="display"
+						/>
+					</span>
+				</div>
 			</div>
 
 			<h2 className="mt-4 font-display text-3xl font-bold uppercase leading-none tracking-wide sm:text-4xl">

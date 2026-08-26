@@ -9,6 +9,7 @@ import { LiveAutoRefreshCountdown } from '@/components/live/LiveAutoRefreshCount
 import { PlayerOwnershipFilter } from '@/components/player/PlayerOwnershipFilter'
 import { TeamExposureFilter } from '@/components/player/TeamExposureFilter'
 import { MobileCollapsibleFilters } from '@/components/tournament/MobileCollapsibleFilters'
+import { OfficialH2HCompetitionView } from '@/components/tournament/OfficialH2HCompetitionView'
 import { SearchHeader } from '@/components/tournament/SearchHeader'
 import { TournamentHeader } from '@/components/tournament/TournamentHeader'
 import { TournamentSelector } from '@/components/tournament/TournamentSelector'
@@ -25,6 +26,7 @@ import {
 import {
 	GET_ENTRY_TOURNAMENTS,
 	GET_TOURNAMENT_DETAIL_DESK,
+	GET_TOURNAMENT_LIVE_DESK,
 	type EntryTournamentsResponse,
 	type TournamentDetailDeskResponse,
 	type TournamentLiveCalcData,
@@ -40,7 +42,6 @@ import {
 	buildTournamentEntries,
 	buildTournamentStats,
 	countTraceableTournamentScores,
-	getBoundedTraceableTournamentCoverage,
 	getTournamentManagerNextRefreshAt,
 	formatLiveAveragePoints,
 	getRetainedFailedEntryIds,
@@ -49,7 +50,10 @@ import {
 	type LiveTournamentStats
 } from '@/lib/tournament/liveEntries'
 import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
-import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
+import {
+	isOfficialH2HTournament,
+	mapEntryTournamentToLiveTournament
+} from '@/lib/tournament/liveTournament'
 import {
 	areTournamentStandingsReady,
 	isTournamentSetupPollingPending
@@ -62,7 +66,7 @@ import { Tournament, type TournamentEntry } from '@/types/tournament'
 import { Link, useRouter } from '@/i18n/navigation'
 import { Eye, RefreshCw } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
-import { useTranslations } from 'next-intl'
+import { useFormatter, useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const fetchLivePoints = async (
@@ -103,28 +107,47 @@ const fetchLivePoints = async (
 			{ entryId, tournamentId, eventId },
 			{ cache: 'no-store' }
 		)
-		const live = detailResponse.tournamentDetailDesk?.live
-		if (!live) throw new Error('Tournament live board is unavailable')
-		const unavailableEntryIds = mergeUnavailableTournamentEntryIds(
-			live.failedEntryIds,
-			[]
-		)
-		const officialRows = countTraceableTournamentScores(live.rows)
-		return {
-			rows: live.rows,
-			failedCount: unavailableEntryIds.length,
-			failedEntryIds: unavailableEntryIds,
-			officialCoverage:
-				live.totalEntries > 0 ? officialRows / live.totalEntries : 0,
-			unavailableEntryIds,
-			totalEntries: live.totalEntries,
-			snapshot: {
-				eventId: live.eventId,
-				revision: live.revision,
-				state: live.state as LiveSnapshotStatus['state'],
-				publishedAt: null,
-				checkedAt: null
+		const detailDesk = detailResponse.tournamentDetailDesk
+		const live = detailDesk?.live
+		if (live) {
+			const unavailableEntryIds = mergeUnavailableTournamentEntryIds(
+				live.failedEntryIds,
+				[]
+			)
+			const officialRows = countTraceableTournamentScores(live.rows)
+			return {
+				rows: live.rows,
+				failedCount: unavailableEntryIds.length,
+				failedEntryIds: unavailableEntryIds,
+				officialCoverage:
+					live.totalEntries > 0 ? officialRows / live.totalEntries : 0,
+				unavailableEntryIds,
+				totalEntries: live.totalEntries,
+				snapshot: {
+					eventId: live.eventId,
+					revision: live.revision,
+					state: live.state as LiveSnapshotStatus['state'],
+					publishedAt: null,
+					checkedAt: null
+				}
 			}
+		}
+
+		// Official H2H tournaments deliberately expose their settled standings
+		// through `officialH2H` on the detail desk, not through `live`. The
+		// competitions page still needs the current event board, so use the list
+		// desk as the event-aware fallback instead of treating that valid H2H
+		// response as an unavailable board.
+		if (detailDesk?.kind !== 'OFFICIAL_H2H') {
+			throw new Error('Tournament live board is unavailable')
+		}
+		response = await executeQuery<TournamentLivePointsResponse>(
+			GET_TOURNAMENT_LIVE_DESK,
+			{ entryId, selectedTournamentId: tournamentId, ref: null },
+			{ cache: 'no-store' }
+		)
+		if (response.entryLiveCompetitionsDesk.eventId !== eventId) {
+			throw new Error('Tournament live board returned an unexpected gameweek')
 		}
 	}
 	const batch = response.entryLiveCompetitionsDesk
@@ -177,7 +200,7 @@ export default function TournamentClient({
 	initialOfficialCoverage = 0
 }: TournamentClientProps) {
 	const t = useTranslations('LiveTournament')
-	const scoreT = useTranslations('LivePoints')
+	const format = useFormatter()
 	const lifecycleT = useTranslations('TournamentLifecycle')
 	const filtersT = useTranslations('Filters')
 	const isPageActive = usePageActive()
@@ -363,40 +386,44 @@ export default function TournamentClient({
 		}
 		return tournaments[0] ?? null
 	}, [requestedTournamentId, tournaments])
+	const selectedTournamentIsOfficialH2H = isOfficialH2HTournament(selectedTournament)
 	const selectedTournamentKey = selectedTournament?.id ?? null
-	const managerScoreStatus = useMemo(() => {
-		const traceableScores = selectedRows.flatMap(row => {
-			const score = traceableOfficialManagerScore(row.score)
-			return score ? [score] : []
-		})
-		const states = traceableScores.map(score => score.state)
-		const totalEntries = selectedTournament?.totalEntries || selectedRows.length
-		const availableEntries = getBoundedTraceableTournamentCoverage({
-			rows: selectedRows,
-			totalEntries,
-			officialCoverage
-		})
-		if (states.includes('SETTLING')) return scoreT('scoreSettling')
-		if (states.includes('STALE')) return scoreT('scoreDelayed')
-		if (
-			states.some(state => String(state) === 'FALLBACK') ||
-			selectedRows.some(
-				row => String(row.score?.source) === 'LOCAL_MULTIPLIER_FALLBACK'
+	const lastUpdatedAt = useMemo(() => {
+		const candidates = [
+			snapshot?.checkedAt ?? null,
+			...selectedRows.map(
+				row => traceableOfficialManagerScore(row.score)?.checkedAt ?? null
 			)
-		) {
-			return scoreT('scoreFallback')
+		].filter((value): value is string => Boolean(value))
+
+		return candidates.reduce<string | null>((latest, candidate) => {
+			if (!latest || Date.parse(candidate) > Date.parse(latest)) return candidate
+			return latest
+		}, null)
+	}, [selectedRows, snapshot?.checkedAt])
+	const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string | null>(null)
+	useEffect(() => {
+		if (!lastUpdatedAt) {
+			setLastUpdatedLabel(null)
+			return
 		}
-		if (availableEntries > 0 && availableEntries < totalEntries) {
-			return scoreT('scorePartial', {
-				available: availableEntries,
-				total: totalEntries
+		const parsed = new Date(lastUpdatedAt)
+		if (Number.isNaN(parsed.getTime())) {
+			setLastUpdatedLabel(null)
+			return
+		}
+		const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+		setLastUpdatedLabel(
+			format.dateTime(parsed, {
+				day: 'numeric',
+				month: 'short',
+				hour: '2-digit',
+				minute: '2-digit',
+				second: '2-digit',
+				timeZone: browserTimeZone
 			})
-		}
-		if (selectedRows.length === 0 || availableEntries === 0) {
-			return scoreT('scoreUnavailable')
-		}
-		return scoreT('scoreOfficial')
-	}, [officialCoverage, scoreT, selectedRows, selectedTournament?.totalEntries])
+		)
+	}, [format, lastUpdatedAt])
 	const selectedSetupStatus = selectedTournament?.setupStatus
 	const selectedInsightsReadyAt = selectedTournament?.insightsReadyAt
 	const selectedSetupRepairExhausted = selectedTournament?.setupRepairExhausted
@@ -635,6 +662,22 @@ export default function TournamentClient({
 			return () => window.clearTimeout(resetTimer)
 		}
 		const resultsKey = `${selectedTournamentKey}:${selectedGameweek}`
+		if (selectedTournamentIsOfficialH2H) {
+			// Official H2H has its own settled fixture/standings projection. Do not
+			// run the manager live-board request and surface a misleading points-table
+			// error while the H2H view is loading its authoritative snapshot.
+			initialResultsKeyRef.current = null
+			resultsRequestIdRef.current += 1
+			resultsInFlightRef.current = null
+			setSelectedRows([])
+			setOfficialCoverage(0)
+			setStaleEntryIds(new Set())
+			setLoadedResultsKey(resultsKey)
+			setResultsError(null)
+			setIsLoadingResults(false)
+			acceptSnapshot(null)
+			return
+		}
 		if (initialResultsKeyRef.current === resultsKey) {
 			initialResultsKeyRef.current = null
 			if (
@@ -684,6 +727,7 @@ export default function TournamentClient({
 		initialCurrentRows.length,
 		initialResultsError,
 		selectedGameweek,
+		selectedTournamentIsOfficialH2H,
 		selectedTournamentKey,
 		standingsReady
 	])
@@ -907,11 +951,22 @@ export default function TournamentClient({
 			'',
 			t('standings')
 		]
-		const entriesInTableOrder =
-			tableEntriesForShare.length > 0
-				? tableEntriesForShare
-				: filteredEntries.slice(0, 20)
-		for (const entry of entriesInTableOrder.slice(0, 20)) {
+		const entriesInRankOrder = (
+			tableEntriesForShare.length > 0 ? tableEntriesForShare : filteredEntries
+		)
+			.slice()
+			.sort((left, right) => {
+				const leftRank =
+					Number.isFinite(left.rank) && left.rank > 0
+						? left.rank
+						: Number.POSITIVE_INFINITY
+				const rightRank =
+					Number.isFinite(right.rank) && right.rank > 0
+						? right.rank
+						: Number.POSITIVE_INFINITY
+				return leftRank - rightRank || left.id.localeCompare(right.id)
+			})
+		for (const entry of entriesInRankOrder.slice(0, 20)) {
 			lines.push(
 				`- ${entry.rank || '—'} ${entry.teamName} · ${entry.gwPoints ?? '—'} GW · ${entry.totalPoints ?? '—'} total`
 			)
@@ -971,7 +1026,40 @@ export default function TournamentClient({
 				<StatsPageHeader
 					title={t('liveStandings')}
 					badge={
-						<div className="flex items-center gap-2">
+						<div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+							{lastUpdatedAt && lastUpdatedLabel ? (
+								<time
+									dateTime={lastUpdatedAt}
+									className="whitespace-nowrap text-xs text-muted-foreground"
+									role="status"
+								>
+									{t('lastUpdated', { time: lastUpdatedLabel })}
+								</time>
+							) : null}
+							<Button
+								size="sm"
+								variant="outline"
+								onClick={() => void refreshTournamentResults()}
+								disabled={
+									!selectedTournament ||
+									!standingsReady ||
+									isLoadingResults ||
+									selectedGameweek === undefined
+								}
+							>
+								<RefreshCw
+									data-icon="inline-start"
+									className={isLoadingResults ? 'animate-spin' : undefined}
+								/>
+								{t('refresh')}
+							</Button>
+							<LiveAutoRefreshCountdown
+								enabled={autoRefreshEnabled}
+								onRefresh={autoRefreshTournamentResults}
+								nextRefreshAt={snapshot?.nextRefreshAt ?? managerNextRefreshAt}
+								renderLabel={seconds => t('nextRefresh', { seconds })}
+								showLabel={false}
+							/>
 							{selectedGameweek ? (
 								<GameweekBadge gameweek={selectedGameweek} />
 							) : null}
@@ -1051,37 +1139,6 @@ export default function TournamentClient({
 							isLoadingResults || Boolean(selectedTournament && !standingsReady)
 						}
 					/>
-					<div className="mt-2 flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-						<LiveAutoRefreshCountdown
-							enabled={autoRefreshEnabled}
-							onRefresh={autoRefreshTournamentResults}
-							nextRefreshAt={snapshot?.nextRefreshAt ?? managerNextRefreshAt}
-							renderLabel={seconds => t('nextRefresh', { seconds })}
-						/>
-						{/* Manual refresh — same idea as /live/points (auto countdown alone is easy to miss) */}
-						<Button
-							size="sm"
-							variant="outline"
-							onClick={() => void refreshTournamentResults()}
-							disabled={
-								!selectedTournament ||
-								!standingsReady ||
-								isLoadingResults ||
-								selectedGameweek === undefined
-							}
-						>
-							<RefreshCw
-								data-icon="inline-start"
-								className={isLoadingResults ? 'animate-spin' : undefined}
-							/>
-							{t('refresh')}
-						</Button>
-					</div>
-					{selectedTournament ? (
-						<p className="mt-2 text-right text-xs text-muted-foreground">
-							{managerScoreStatus}
-						</p>
-					) : null}
 				</Card>
 
 				{isLoadingTournaments && (
@@ -1113,19 +1170,30 @@ export default function TournamentClient({
 					</Card>
 				)}
 
-				{selectedTournament && standingsReady && (
-					<div ref={shareRef}>
-						<TournamentHeader
-							name={selectedTournament.name}
-							averagePoints={selectedStats.averagePoints}
-							highestPoints={selectedStats.highestPoints}
-							totalEntries={
-								selectedStats.totalEntries || selectedTournament.totalEntries
-							}
-							isLoading={isLoadingResults}
-						/>
+		{selectedTournament && standingsReady && (
+					<div>
+						{!selectedTournamentIsOfficialH2H ? (
+							<TournamentHeader
+								name={selectedTournament.name}
+								averagePoints={selectedStats.averagePoints}
+								highestPoints={selectedStats.highestPoints}
+								totalEntries={
+									selectedStats.totalEntries || selectedTournament.totalEntries
+								}
+								isLoading={isLoadingResults}
+							/>
+						) : null}
 
-						{isLoadingResults ? (
+						{selectedTournamentIsOfficialH2H ? (
+							<OfficialH2HCompetitionView
+								key={`${selectedTournament.id}:${displayGameweek}`}
+								activeEventId={currentGameweek}
+								eventId={displayGameweek}
+								initialSnapshot={null}
+								tournamentId={Number(selectedTournament.id)}
+								viewerEntryId={entryId}
+							/>
+						) : isLoadingResults ? (
 							<div
 								className="space-y-4"
 								aria-busy="true"
@@ -1151,7 +1219,7 @@ export default function TournamentClient({
 								</div>
 							</div>
 						) : (
-							<>
+							<div ref={shareRef}>
 								<SearchHeader
 									searchQuery={searchQuery}
 									setSearchQuery={setSearchQuery}
@@ -1244,7 +1312,7 @@ export default function TournamentClient({
 									shareImageRef={shareRef}
 									shareTitle={selectedTournament.name}
 								/>
-							</>
+							</div>
 						)}
 					</div>
 				)}

@@ -250,7 +250,7 @@ function PlayerCard({
 					className={`flex ${compact ? 'h-[clamp(0.85rem,2.75cqi,1.4rem)]' : 'h-[clamp(0.95rem,3.25cqi,1.65rem)]'} items-center justify-center bg-[#f8f6ef] px-[clamp(0.16rem,0.7cqi,0.4rem)] text-[#38003c]`}
 				>
 					<span
-						className={`max-w-full truncate font-display ${compact ? 'text-[clamp(0.46rem,1.35cqi,0.72rem)]' : 'text-[clamp(0.55rem,1.6cqi,0.84rem)]'} font-bold leading-none tracking-[-0.01em]`}
+						className={`share-pitch-player-name max-w-full truncate font-display ${compact ? 'text-[clamp(0.46rem,1.35cqi,0.72rem)]' : 'text-[clamp(0.55rem,1.6cqi,0.84rem)]'} font-bold leading-none tracking-[-0.01em]`}
 					>
 						{player.webName}
 					</span>
@@ -288,8 +288,8 @@ function PlayerCard({
 						aria-label={squadPitchPlayerDetailsLabel(player, labels)}
 						className="group relative flex w-full cursor-pointer flex-col items-center border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-1 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
 					>
-						{content}
-					</Link>
+							{content}
+						</Link>
 					)
 				) : content}
 		</li>
@@ -369,7 +369,7 @@ function BenchPlayerCard({
 						inline
 					/>
 				</div>
-				<p className="truncate font-display text-[clamp(0.42rem,1.2cqi,0.7rem)] font-bold uppercase leading-tight text-[#38003c]">
+				<p className="share-pitch-player-name truncate font-display text-[clamp(0.42rem,1.2cqi,0.7rem)] font-bold uppercase leading-tight text-[#38003c]">
 					{player.webName}
 				</p>
 				<p className="truncate font-mono text-[clamp(0.36rem,0.9cqi,0.56rem)] tabular-nums leading-tight text-[#38003c]/75">
@@ -401,8 +401,8 @@ function BenchPlayerCard({
 						aria-label={squadPitchPlayerDetailsLabel(player, labels)}
 						className="group block w-full cursor-pointer border-0 bg-transparent p-0 text-inherit transition-transform duration-200 hover:-translate-y-0.5 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff85] focus-visible:ring-offset-2 focus-visible:ring-offset-[#210025]"
 					>
-						{content}
-					</Link>
+							{content}
+						</Link>
 					)
 				) : content}
 		</li>
@@ -438,6 +438,7 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 			<section
 				ref={ref}
 				aria-label={labels.formation}
+				data-share-preserve-width="true"
 				className={`relative isolate ${benchPlayers.length > 0 ? 'aspect-[4/5] sm:aspect-[1304/1244]' : 'aspect-[1304/1244]'} w-full overflow-hidden rounded-xl border border-[#00ff85]/35 bg-[#210025] shadow-[0_30px_80px_-34px_rgba(21,0,25,0.78)] [container-type:inline-size] sm:rounded-2xl ${className}`}
 			>
 				<Image
@@ -455,11 +456,11 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 
 				{showHeader ? (
 					<header className="absolute inset-x-[5.2%] top-[1.93%] z-20 flex h-[10.13%] items-center justify-between gap-[clamp(0.75rem,3cqi,2rem)] text-[#f8f6ef]">
-						<div className="flex min-w-0 flex-col justify-center">
+						<div className="flex min-w-0 flex-1 flex-col justify-center">
 							<p className="truncate py-[0.08em] font-mono text-[clamp(0.42rem,1.15cqi,0.66rem)] font-medium uppercase leading-[1.2] tracking-[0.18em] text-[#00ff85]">
 								{headerStats?.eyebrow ?? eyebrow}
 							</p>
-							<h2 className="truncate py-[0.04em] font-display text-[clamp(0.78rem,2.55cqi,1.55rem)] font-bold uppercase leading-[1.1] tracking-[0.04em]">
+							<h2 className="share-pitch-title whitespace-nowrap py-[0.04em] font-display text-[clamp(0.78rem,2.55cqi,1.55rem)] font-bold uppercase leading-[1.1] tracking-[0.04em]">
 								{title}
 							</h2>
 							{managerName ? (
@@ -473,16 +474,16 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 								{headerStats.details.map(detail => (
 									<p
 										key={detail.label}
-										className="flex min-h-[clamp(0.95rem,2.65cqi,1.3rem)] items-center justify-end gap-[clamp(0.3rem,0.85cqi,0.6rem)] whitespace-nowrap leading-none"
+									className="grid min-h-[clamp(0.95rem,2.65cqi,1.3rem)] w-full grid-cols-[1fr_auto] items-center justify-end gap-[clamp(0.3rem,0.85cqi,0.6rem)] whitespace-nowrap text-right leading-none"
 									>
-										<span className="text-[clamp(0.58rem,1.35cqi,0.78rem)] uppercase tracking-[0.08em] text-white/55">
+										<span className="text-right text-[clamp(0.58rem,1.35cqi,0.78rem)] uppercase tracking-[0.08em] text-white/55">
 											{detail.label}
 										</span>
 										<span
 											className={
 												detail.accent
-													? 'font-display text-[clamp(0.82rem,2cqi,1.15rem)] font-bold leading-none text-[#00ff85]'
-													: 'font-mono text-[clamp(0.68rem,1.6cqi,0.92rem)] font-semibold leading-none text-white/85'
+													? 'min-w-[clamp(2.5rem,4cqi,3.5rem)] text-right font-display text-[clamp(0.82rem,2cqi,1.15rem)] font-bold leading-none text-[#00ff85]'
+													: 'min-w-[clamp(2.5rem,4cqi,3.5rem)] text-right font-mono text-[clamp(0.68rem,1.6cqi,0.92rem)] font-semibold leading-none text-white/85'
 											}
 										>
 											{detail.value}
@@ -544,15 +545,8 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 							) : null}
 						</div>
 						<ol className="grid grid-cols-4 gap-[clamp(0.25rem,1cqi,0.65rem)]">
-							{benchPlayers.map((player, index) => {
-								const outfieldIndex =
-									benchPlayers
-										.slice(0, index)
-										.filter(item => item.position !== 'GKP').length + 1
-								const label =
-									player.position === 'GKP'
-										? 'GKP'
-										: `${outfieldIndex}. ${player.position}`
+							{benchPlayers.map(player => {
+								const label = player.position
 								return (
 									<BenchPlayerCard
 										key={player.id}

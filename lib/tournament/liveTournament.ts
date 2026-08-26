@@ -12,6 +12,15 @@ export const mapTournamentGroupFormat = (
 	return 'none'
 }
 
+export const isOfficialH2HTournament = (
+	tournament: Pick<Tournament, 'leagueType' | 'groupMode' | 'rosterMode'> | null | undefined
+): boolean =>
+	Boolean(
+		tournament?.leagueType === 'H2H' &&
+			tournament.rosterMode === 'OFFICIAL_SYNC' &&
+			tournament.groupMode === 'BATTLE_RACES'
+	)
+
 export const mapEntryTournamentToLiveTournament = (
 	tournament: LiveEntryTournament
 ): Tournament => {
@@ -19,6 +28,8 @@ export const mapEntryTournamentToLiveTournament = (
 		id: String(tournament.id),
 		name: tournament.name,
 		leagueType: tournament.leagueType,
+		groupMode: tournament.groupMode,
+		rosterMode: tournament.rosterMode,
 		gameweek: 1,
 		averagePoints: 0,
 		highestPoints: 0,

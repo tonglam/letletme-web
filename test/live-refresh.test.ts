@@ -11,6 +11,7 @@ import {
 	LIVE_EXPLAIN_REFRESH_INTERVAL_MS,
 	liveRefreshEventIdentityChanged,
 	liveSnapshotNeedsRefresh,
+	shouldPollLiveMatchesTransition,
 	shouldPollLiveSnapshot,
 	shouldRefreshLiveExplain
 } from '../lib/live-refresh'
@@ -75,19 +76,80 @@ describe('live refresh policy', () => {
 			}),
 			false
 		)
+	})
+
+	it('stops refresh after a gameweek even when stale refresh deadlines remain', () => {
 		assert.equal(
 			shouldPollLiveSnapshot({
 				isPageActive: true,
 				currentEventId: 33,
 				selectedEventId: 33,
 				snapshot: snapshot('SETTLED'),
-				probeEventIdentity: true
+				managerNextRefreshAt: '2026-08-04T10:05:00.000Z',
+				nextRefreshAt: '2026-08-04T10:05:00.000Z'
 			}),
-			true
+			false
+		)
+		assert.equal(
+			shouldPollLiveSnapshot({
+				isPageActive: true,
+				currentEventId: 33,
+				selectedEventId: 33,
+				snapshot: snapshot('LIVE'),
+				windowState: 'BETWEEN_GAMEWEEKS',
+				nextRefreshAt: '2026-08-04T10:05:00.000Z'
+			}),
+			false
 		)
 	})
 
-	it('keeps polling while refreshed metadata is not yet available', () => {
+	it('keeps a lightweight lifecycle probe after a finalized matchday', () => {
+		assert.equal(
+			shouldPollLiveMatchesTransition({
+				isPageActive: true,
+				currentEventId: 33,
+				nextEventId: 34,
+				snapshot: {
+					...snapshot('SETTLED'),
+					windowState: 'FINALIZED'
+				}
+			}),
+			true
+		)
+		assert.equal(
+			shouldPollLiveMatchesTransition({
+				isPageActive: true,
+				currentEventId: 33,
+				nextEventId: 34,
+				snapshot: snapshot('LIVE')
+			}),
+			false
+		)
+		assert.equal(
+			shouldPollLiveMatchesTransition({
+				isPageActive: true,
+				currentEventId: 33,
+				nextEventId: undefined,
+				snapshot: snapshot('SETTLED')
+			}),
+			false
+		)
+	})
+
+	it('stops live points refresh when the official manager score is final', () => {
+		assert.equal(
+			shouldPollLiveSnapshot({
+				isPageActive: true,
+				currentEventId: 33,
+				selectedEventId: 33,
+				snapshot: null,
+				managerScoreState: 'FINAL'
+			}),
+			false
+		)
+	})
+
+	it('does not poll while the selected round cannot be confirmed', () => {
 		assert.equal(
 			shouldPollLiveSnapshot({
 				isPageActive: true,
@@ -95,7 +157,7 @@ describe('live refresh policy', () => {
 				selectedEventId: 33,
 				snapshot: null
 			}),
-			true
+			false
 		)
 		assert.equal(
 			shouldPollLiveSnapshot({
@@ -104,11 +166,11 @@ describe('live refresh policy', () => {
 				selectedEventId: 33,
 				snapshot: { ...snapshot('LIVE'), eventId: 34 }
 			}),
-			true
+			false
 		)
 	})
 
-	it('keeps a low-frequency preseason context probe but stops true offseason polling', () => {
+	it('does not poll when the live window cannot be confirmed', () => {
 		assert.equal(
 			shouldPollLiveSnapshot({
 				isPageActive: true,
@@ -117,7 +179,7 @@ describe('live refresh policy', () => {
 				snapshot: null,
 				windowState: 'PRESEASON'
 			}),
-			true
+			false
 		)
 		assert.equal(
 			shouldPollLiveSnapshot({

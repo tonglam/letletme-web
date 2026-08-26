@@ -55,6 +55,8 @@ export interface Tournament {
 	id: string
 	name: string
 	leagueType?: string
+	groupMode?: string | null
+	rosterMode?: string
 	entries: TournamentEntry[]
 	gameweek: number
 	averagePoints: number

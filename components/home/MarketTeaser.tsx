@@ -173,12 +173,18 @@ export async function MarketTeaser() {
 		<>
 			<HomeMarketCarousel
 				ownership={ownershipState}
+				ownershipUpdatedAt={
+					ownershipReady
+						? ownership?.coverage.capturedAt ?? desk.capturedAt
+						: null
+				}
 				availability={availabilityItems}
 				availabilityState={desk.availabilityState as HomeMarketSectionState}
 				locale={locale}
 				labels={{
 					ownershipPage: t('ownershipTitle'),
 					ownershipDescription: coverageCopy,
+					ownershipUpdatedPrefix: t('lastUpdated', { date: '' }).trim(),
 					availabilityPage: t('availabilityWatch'),
 					availabilityDescription: t('homeAvailabilityDescription'),
 					openMarket: t('openMarket'),

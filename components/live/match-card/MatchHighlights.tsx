@@ -119,7 +119,7 @@ export function MatchHighlights({ groups }: { groups: MatchHighlightGroup[] }) {
 							{group.items.map((item, index) => (
 								<span
 									key={`${item.player}-${item.team}-${index}`}
-									className="inline-flex items-center gap-1 rounded-full border border-border/50 bg-background/90 px-2.5 py-1 text-xs"
+									className="share-match-highlight-item inline-flex items-center gap-1 rounded-full border border-border/50 bg-background/90 px-2.5 py-1 text-xs"
 								>
 									{group.kind === 'yellow' || group.kind === 'red' ? (
 										<CardGlyph kind={group.kind} />

@@ -2,6 +2,7 @@
 
 import { Tournament } from "@/types/tournament";
 import { Trophy, ChevronDown } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import {
   DropdownMenu,
@@ -26,7 +27,11 @@ export function TournamentSelector({
   className,
 }: TournamentSelectorProps) {
   const t = useTranslations("Common");
+  const liveT = useTranslations("LiveTournament");
   const currentTournament = tournaments.find(t => t.id === currentTournamentId);
+
+  const typeLabel = (tournament: Tournament) =>
+    tournament.leagueType === "H2H" ? liveT("headToHead") : liveT("classic");
 
   return (
     <Card className={className ?? "mb-6 p-4"}>
@@ -43,8 +48,15 @@ export function TournamentSelector({
               className="w-full justify-between sm:max-w-md sm:flex-1"
               aria-label={t("selectTournament")}
             >
-              <span className="truncate">
-                {currentTournament?.name ?? t("selectTournament")}
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="min-w-0 truncate">
+                  {currentTournament?.name ?? t("selectTournament")}
+                </span>
+                {currentTournament ? (
+                  <Badge variant="outline" className="shrink-0 text-[10px]">
+                    {typeLabel(currentTournament)}
+                  </Badge>
+                ) : null}
               </span>
               <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
             </Button>
@@ -64,7 +76,12 @@ export function TournamentSelector({
                   }}
                   className="flex items-center justify-between gap-2"
                 >
-                  <span className="min-w-0 truncate">{tournament.name}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 truncate">{tournament.name}</span>
+                    <Badge variant="outline" className="shrink-0 text-[10px]">
+                      {typeLabel(tournament)}
+                    </Badge>
+                  </span>
                   {isCurrent ? (
                     <Trophy className="h-4 w-4 shrink-0 text-primary-ink" aria-hidden="true" />
                   ) : null}

@@ -211,6 +211,8 @@ export type LiveEntryTournament = Pick<
 	| 'id'
 	| 'name'
 	| 'leagueType'
+	| 'groupMode'
+	| 'rosterMode'
 	| 'totalTeamNum'
 	| 'setupStatus'
 	| 'standingsReadyAt'
@@ -693,6 +695,8 @@ export const LIVE_TOURNAMENT_INFO_FIELDS = `
     id
     name
     leagueType
+    groupMode
+    rosterMode
     totalTeamNum
     setupStatus
     standingsReadyAt

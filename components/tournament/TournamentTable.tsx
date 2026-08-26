@@ -400,11 +400,6 @@ export function TournamentTable({
 											>
 												<span className="block truncate text-sm font-semibold">
 													{entry.teamName}
-													{isMe ? (
-														<span className="ml-1.5 text-caption font-semibold text-primary-ink">
-															{t('youBadge')}
-														</span>
-													) : null}
 												</span>
 												<span className="mt-0.5 block truncate text-xs text-muted-foreground">
 													{entry.managerName}
@@ -507,11 +502,6 @@ export function TournamentTable({
 											>
 												<span className="block truncate text-sm font-semibold">
 													{entry.teamName}
-													{isMe ? (
-														<span className="ml-1.5 text-caption font-semibold text-primary-ink">
-															{t('youBadge')}
-														</span>
-													) : null}
 												</span>
 												<span className="mt-0.5 block truncate text-xs text-muted-foreground">
 													{entry.managerName}

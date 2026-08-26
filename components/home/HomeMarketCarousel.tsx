@@ -1,11 +1,13 @@
 'use client'
 
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
+import { LocalUpdatedLabel } from '@/components/data/LocalUpdatedLabel'
 import {
 	HomeAutoCarousel,
 	type HomeAutoCarouselSlide
 } from '@/components/home/HomeAutoCarousel'
 import { MarketPositionBadge } from '@/components/data/MarketMarkup'
+import { ShareActions } from '@/components/share/ShareActions'
 import { Card } from '@/components/ui/card'
 import { Link } from '@/i18n/navigation'
 import type {
@@ -14,6 +16,7 @@ import type {
 } from '@/lib/graphql/operations/market'
 import { cn } from '@/lib/utils'
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Minus } from 'lucide-react'
+import { useRef } from 'react'
 
 export type HomeMarketOwnershipMover = {
 	player: MarketOwnershipChange['player']
@@ -32,6 +35,7 @@ export type HomeMarketAvailabilityItem = {
 export type HomeMarketCarouselLabels = {
 	ownershipPage: string
 	ownershipDescription: string
+	ownershipUpdatedPrefix: string
 	availabilityPage: string
 	availabilityDescription: string
 	openMarket: string
@@ -57,6 +61,7 @@ export type HomeMarketCarouselProps = {
 		risers: HomeMarketOwnershipMover[]
 		fallers: HomeMarketOwnershipMover[]
 	}
+	ownershipUpdatedAt: string | null
 	availability: HomeMarketAvailabilityItem[]
 	availabilityState: 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE'
 	locale: string
@@ -324,11 +329,13 @@ function OwnershipPage({
 
 export function HomeMarketCarousel({
 	ownership,
+	ownershipUpdatedAt,
 	availability,
 	availabilityState,
 	locale,
 	labels
 }: HomeMarketCarouselProps) {
+	const shareRef = useRef<HTMLDivElement | null>(null)
 	const slides: HomeAutoCarouselSlide[] = [
 		{
 			id: 'ownership',
@@ -359,7 +366,10 @@ export function HomeMarketCarousel({
 
 	return (
 		<Card
+			ref={shareRef}
 			aria-labelledby="home-market-title"
+			data-share-preserve-width="true"
+			data-share-fit-content="true"
 			className="flex h-full flex-col rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8"
 		>
 			<HomeAutoCarousel
@@ -376,23 +386,41 @@ export function HomeMarketCarousel({
 						</h2>
 						<p className="mt-1 max-w-sm text-xs text-muted-foreground">
 							{slide.id === 'ownership'
-								? labels.ownershipDescription
+								? (
+										<LocalUpdatedLabel
+											value={ownershipUpdatedAt}
+											prefix={labels.ownershipUpdatedPrefix}
+											fallback={labels.ownershipDescription}
+										/>
+								  )
 								: labels.availabilityDescription}
 						</p>
 					</div>
 				)}
-				renderAction={() => (
-					<Link
-						href="/explore/market"
-						prefetch={false}
-						className="inline-flex min-h-9 shrink-0 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
+				renderAction={slide => (
+					<div
+						className="flex shrink-0 items-center gap-3"
+						data-share-exclude="true"
 					>
-						{labels.openMarket}
-						<ArrowRight
-							aria-hidden="true"
-							className="size-4"
+						<Link
+							href="/explore/market"
+							prefetch={false}
+							className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
+						>
+							{labels.openMarket}
+							<ArrowRight
+								aria-hidden="true"
+								className="size-4"
+							/>
+						</Link>
+						<ShareActions
+							actions={['image']}
+							text={slide.label}
+							imageRef={shareRef}
+							title={slide.label}
+							compact
 						/>
-					</Link>
+					</div>
 				)}
 			/>
 		</Card>

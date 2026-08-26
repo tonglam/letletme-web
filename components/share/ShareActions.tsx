@@ -7,11 +7,12 @@ import {
 	shareText,
 	type ShareResult
 } from '@/lib/share/clipboard'
+import { cn } from '@/lib/utils'
 import { Check, ImageIcon, Share2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useCallback, useRef, useState, type RefObject } from 'react'
-import { toast } from 'sonner'
 import { ShareTextFallback } from './ShareTextFallback'
+import { notifyShareSuccess, notifyShareWarning } from './share-notification'
 
 type ShareTextValue = string | (() => string)
 type ShareActionKind = 'text' | 'image'
@@ -21,6 +22,7 @@ export function ShareActions({
 	imageRef,
 	title,
 	className,
+	buttonClassName,
 	compact = false,
 	disabled = false,
 	actions = ['text', 'image'] as ShareActionKind[]
@@ -29,6 +31,7 @@ export function ShareActions({
 	imageRef?: RefObject<HTMLElement | null>
 	title?: string
 	className?: string
+	buttonClassName?: string
 	compact?: boolean
 	disabled?: boolean
 	actions?: ShareActionKind[]
@@ -46,8 +49,8 @@ export function ShareActions({
 
 	const reportFailure = useCallback(
 		(result: ShareResult) => {
-			if (result === 'unsupported') toast.warning(t('shareUnsupported'))
-			else if (result === 'failed') toast.warning(t('shareFailed'))
+			if (result === 'unsupported') notifyShareWarning(t('shareUnsupported'))
+			else if (result === 'failed') notifyShareWarning(t('shareFailed'))
 		},
 		[t]
 	)
@@ -58,14 +61,14 @@ export function ShareActions({
 		if (result === 'shared') {
 			setManualShareText(null)
 			setTextShared(true)
-			toast.success(t('shareTextShared'))
+			notifyShareSuccess(t('shareTextShared'))
 			window.setTimeout(() => setTextShared(false), 2000)
 			return
 		}
 		if (result === 'copied') {
 			setManualShareText(null)
 			setTextShared(true)
-			toast.success(t('shareTextCopied'))
+			notifyShareSuccess(t('shareTextCopied'))
 			window.setTimeout(() => setTextShared(false), 2000)
 			return
 		}
@@ -83,13 +86,13 @@ export function ShareActions({
 			const result = await shareElementImage(element)
 			if (result === 'shared') {
 				setImageShared(true)
-				toast.success(t('shareImageShared'))
+				notifyShareSuccess(t('shareImageShared'))
 				window.setTimeout(() => setImageShared(false), 2000)
 				return
 			}
 			if (result === 'copied') {
 				setImageShared(true)
-				toast.success(t('shareImageCopied'))
+				notifyShareSuccess(t('shareImageCopied'))
 				window.setTimeout(() => setImageShared(false), 2000)
 				return
 			}
@@ -109,7 +112,7 @@ export function ShareActions({
 					type="button"
 					variant="outline"
 					size={compact ? 'icon' : 'sm'}
-					className={compact ? 'size-8' : 'gap-1.5'}
+					className={cn(compact ? 'size-8' : 'gap-1.5', buttonClassName)}
 					onClick={() => void handleTextShare()}
 					disabled={disabled}
 					aria-label={t('shareText')}
@@ -137,7 +140,7 @@ export function ShareActions({
 					type="button"
 					variant="outline"
 					size={compact ? 'icon' : 'sm'}
-					className={compact ? 'size-8' : 'gap-1.5'}
+					className={cn(compact ? 'size-8' : 'gap-1.5', buttonClassName)}
 					onClick={() => void handleImageShare()}
 					disabled={disabled}
 					aria-label={t('shareImage')}

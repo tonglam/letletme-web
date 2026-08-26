@@ -8,12 +8,14 @@ export function LiveAutoRefreshCountdown({
 	enabled,
 	onRefresh,
 	nextRefreshAt,
-	renderLabel
+	renderLabel,
+	showLabel = true
 }: {
 	enabled: boolean
 	onRefresh: () => Promise<void>
 	nextRefreshAt?: string | null
 	renderLabel: (seconds: number) => ReactNode
+	showLabel?: boolean
 }) {
 	const [countdown, setCountdown] = useState<number | null>(null)
 	const refreshInFlightRef = useRef(false)
@@ -73,7 +75,7 @@ export function LiveAutoRefreshCountdown({
 		}
 	}, [enabled, nextRefreshAt])
 
-	if (!enabled || countdown === null) return null
+	if (!enabled || countdown === null || !showLabel) return null
 
 	return (
 		<span className="text-xs text-muted-foreground">

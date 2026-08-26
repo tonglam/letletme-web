@@ -91,7 +91,7 @@ export function TournamentStatsHeader({
 						: 'created'
 				)}: ${format.dateTime(new Date(rosterTime), {
 					dateStyle: 'medium',
-					timeStyle: 'short'
+					timeStyle: 'medium'
 				})}`
 			)
 		}

@@ -24,6 +24,7 @@ import { useLivePoints } from '../_hooks/useLivePoints'
 interface TeamPointsClientProps {
 	entryId: number
 	tournamentId?: string
+	from?: 'home'
 	initialEventId: number
 	initialSelectedGameweek?: number
 	initialLiveData?: LiveCalcData
@@ -34,6 +35,7 @@ interface TeamPointsClientProps {
 export default function TeamPointsClient({
 	entryId,
 	tournamentId,
+	from,
 	initialEventId,
 	initialSelectedGameweek,
 	initialLiveData,
@@ -96,13 +98,16 @@ export default function TeamPointsClient({
 		}
 	}, [entryId, livePoints.currentGameweek, livePoints.selectedGameweek])
 
+	const hasCompetitionContext = Boolean(tournamentId) && from !== 'home'
 	const backParams = new URLSearchParams()
 	if (tournamentId) backParams.set('tournamentId', tournamentId)
 	if (livePoints.selectedGameweek) {
 		backParams.set('gw', String(livePoints.selectedGameweek))
 	}
 	const backQuery = backParams.toString()
-	const backHref = `/live/competitions${backQuery ? `?${backQuery}` : ''}`
+	const backHref = hasCompetitionContext
+		? `/live/competitions${backQuery ? `?${backQuery}` : ''}`
+		: '/'
 
 	let content
 	if (livePoints.isLoading && !livePoints.liveData) {
@@ -148,7 +153,8 @@ export default function TeamPointsClient({
 					asChild
 				>
 					<Link href={backHref}>
-						<ArrowLeft aria-hidden="true" /> {t('backTournament')}
+						<ArrowLeft aria-hidden="true" />{' '}
+						{hasCompetitionContext ? t('backTournament') : t('backHome')}
 					</Link>
 				</Button>
 				<StatsPageHeader title={t('title')} />

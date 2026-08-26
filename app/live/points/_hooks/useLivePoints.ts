@@ -14,7 +14,6 @@ import {
 	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import {
-	LIVE_EXPLAIN_REFRESH_INTERVAL_MS,
 	liveSnapshotNeedsRefresh,
 	liveContextToSnapshot,
 	shouldPollLiveSnapshot,
@@ -251,8 +250,10 @@ export function useLivePoints({
 					if (requestId !== requestIdRef.current) return
 
 					if (live.pickList.length === 0) {
-						const retryState =
-							liveDataRetryRef.current ?? { requestKey, attempt: 0 }
+						const retryState = liveDataRetryRef.current ?? {
+							requestKey,
+							attempt: 0
+						}
 						liveDataRetryRef.current = retryState
 						const retryDelay = isPendingEntrySync(live)
 							? LIVE_DATA_RETRY_DELAYS_MS[retryState.attempt]
@@ -404,13 +405,13 @@ export function useLivePoints({
 			const observedSnapshot = liveContextToSnapshot(probe.liveContext)
 			const latestLive = latestLiveDataRef.current
 			const managerScoreDue = Boolean(
-					latestLive?.live.score?.nextRefreshAt &&
-					Date.parse(latestLive.live.score.nextRefreshAt) <= Date.now()
-				)
-				if (
-					!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot) &&
-					!managerScoreDue
-				) {
+				latestLive?.live.score?.nextRefreshAt &&
+				Date.parse(latestLive.live.score.nextRefreshAt) <= Date.now()
+			)
+			if (
+				!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot) &&
+				!managerScoreDue
+			) {
 				acceptSnapshot(observedSnapshot)
 				setError(undefined)
 				if (
@@ -552,60 +553,16 @@ export function useLivePoints({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [activeEntryId])
 
-	useEffect(() => {
-		if (
-			!isPageActive ||
-			snapshot?.state !== 'SETTLED' ||
-			selectedGameweek === undefined ||
-			snapshot.eventId !== selectedGameweek
-		) {
-			return
-		}
-		const requestKey = currentRequestKeyRef.current
-		const latestLive = latestLiveDataRef.current
-		if (!requestKey || latestLive?.requestKey !== requestKey) return
-
-		// Snapshot polling intentionally stops once the event settles. Keep one
-		// bounded explanation-only retry aligned with the durable persistence
-		// cadence so a previous-cycle or transiently failed detail batch can land.
-		const elapsed = Date.now() - lastExplainAttemptAtRef.current
-		const delay = Math.max(0, LIVE_EXPLAIN_REFRESH_INTERVAL_MS - elapsed)
-		const retryTimer = window.setTimeout(() => {
-			const currentLive = latestLiveDataRef.current
-			if (
-				currentRequestKeyRef.current !== requestKey ||
-				currentLive?.requestKey !== requestKey
-			) {
-				return
-			}
-			void enrichLivePointBreakdowns(
-				requestIdRef.current,
-				selectedGameweek,
-				currentLive.live,
-				requestKey
-			)
-		}, delay)
-
-		return () => window.clearTimeout(retryTimer)
-	}, [
-		enrichLivePointBreakdowns,
-		isPageActive,
-		selectedGameweek,
-		snapshot?.eventId,
-		snapshot?.revision,
-		snapshot?.state
-	])
-
 	const shouldAutoRefresh = shouldPollLiveSnapshot({
 		isPageActive,
 		currentEventId: currentGameweek,
 		selectedEventId: selectedGameweek,
-			snapshot,
-			managerScoreState: liveData?.score?.state,
-			managerNextRefreshAt: liveData?.score?.nextRefreshAt,
-			windowState: snapshot?.windowState ?? snapshot?.state,
-			nextRefreshAt: snapshot?.nextRefreshAt
-		})
+		snapshot,
+		managerScoreState: liveData?.score?.state,
+		managerNextRefreshAt: liveData?.score?.nextRefreshAt,
+		windowState: snapshot?.windowState ?? snapshot?.state,
+		nextRefreshAt: snapshot?.nextRefreshAt
+	})
 
 	return {
 		activeEntryId,

@@ -20,13 +20,18 @@ import {
 	liveRefreshEventIdentityChanged,
 	liveContextToSnapshot,
 	liveSnapshotNeedsRefresh,
+	shouldPollLiveMatchesTransition,
 	shouldPollLiveSnapshot
 } from '@/lib/live-refresh'
-import { getLiveMatchesSnapshot } from '@/lib/live-matches'
+import {
+	getLiveMatchesSnapshot,
+	getPreferredLiveMatchesTab,
+	shouldAutoAdvanceToNextLiveMatchesTab
+} from '@/lib/live-matches'
 import { usePageActive } from '@/hooks/use-page-active'
 import type { Match } from '@/types/match'
 import { RefreshCw } from 'lucide-react'
-import { useTranslations } from 'next-intl'
+import { useFormatter, useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const LIVE_MATCHES_TAB_STORAGE_KEY = 'live-matches-active-tab'
@@ -69,21 +74,6 @@ function isLiveMatchesTab(value: string): value is LiveMatchesTab {
 	)
 }
 
-function getPreferredTab(matches: Match[]): LiveMatchesTab {
-	const hasLive = matches.some(
-		match => match.status === 'LIVE' || match.status === 'HT'
-	)
-	const hasFinished = matches.some(match => match.status === 'FT')
-	const hasNotStarted = matches.some(match => match.status === 'NOT_STARTED')
-	const hasUpcoming = matches.some(match => match.status === 'UPCOMING')
-
-	if (hasLive) return 'live'
-	if (hasNotStarted) return 'not-started'
-	if (hasUpcoming) return 'upcoming'
-	if (hasFinished) return 'finished'
-	return 'live'
-}
-
 export function LiveMatchesClient({
 	initialMatches,
 	initialError,
@@ -98,6 +88,7 @@ export function LiveMatchesClient({
 	initialSnapshot?: LiveSnapshotStatus | null
 }) {
 	const t = useTranslations('LiveMatches')
+	const format = useFormatter()
 	const isPageActive = usePageActive()
 	const [matches, setMatches] = useState<Match[]>(initialMatches)
 	const [resolvedCurrentEventId, setResolvedCurrentEventId] = useState<
@@ -107,7 +98,7 @@ export function LiveMatchesClient({
 		number | undefined
 	>(nextEventId)
 	const [activeTab, setActiveTab] = useState<LiveMatchesTab>(() =>
-		getPreferredTab(initialMatches)
+		getPreferredLiveMatchesTab(initialMatches)
 	)
 	const [isLoading, setIsLoading] = useState(false)
 	const [isRefreshing, setIsRefreshing] = useState(false)
@@ -117,6 +108,7 @@ export function LiveMatchesClient({
 	)
 	const snapshotRef = useRef<LiveSnapshotStatus | null>(initialSnapshot ?? null)
 	const hasSavedTabPreference = useRef(false)
+	const hasUserSelectedTab = useRef(false)
 	const isFetchInFlight = useRef(false)
 	const pendingRefreshRef = useRef(false)
 	const mountedRef = useRef(true)
@@ -182,8 +174,18 @@ export function LiveMatchesClient({
 				acceptSnapshot(data.snapshot)
 				hasLastGoodData.current = true
 
-				if (!hasSavedTabPreference.current) {
-					setActiveTab(getPreferredTab(mappedMatches))
+				if (!hasUserSelectedTab.current) {
+					if (shouldAutoAdvanceToNextLiveMatchesTab(mappedMatches)) {
+						hasSavedTabPreference.current = false
+						setActiveTab('upcoming')
+						try {
+							window.localStorage.removeItem(LIVE_MATCHES_TAB_STORAGE_KEY)
+						} catch {
+							// Tab preference is optional.
+						}
+					} else if (!hasSavedTabPreference.current) {
+						setActiveTab(getPreferredLiveMatchesTab(mappedMatches))
+					}
 				}
 			} catch (err) {
 				console.error('Failed to fetch live matches:', err)
@@ -224,15 +226,15 @@ export function LiveMatchesClient({
 				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
 				const observedCurrentEventId = context?.anchorEventId ?? undefined
 				const observedNextEventId = context?.nextEventId ?? undefined
-				if (
-					observedCurrentEventId &&
+				const eventIdentityChanged =
+					Boolean(observedCurrentEventId) &&
 					liveRefreshEventIdentityChanged(
 						resolvedCurrentEventId,
 						resolvedNextEventId,
 						observedCurrentEventId,
 						observedNextEventId
 					)
-				) {
+				if (eventIdentityChanged) {
 					setResolvedCurrentEventId(observedCurrentEventId)
 					setResolvedNextEventId(observedNextEventId)
 					await fetchMatches(true, {
@@ -241,6 +243,20 @@ export function LiveMatchesClient({
 						revision: observedSnapshot?.revision ?? null
 					})
 					return
+				}
+				// Once the selected matchday is terminal, this heartbeat is only
+				// for discovering a new event identity. Do not reload the same
+				// finalized desk just because its checkedAt changed.
+				if (
+					shouldPollLiveMatchesTransition({
+						isPageActive,
+						currentEventId: resolvedCurrentEventId,
+						nextEventId: resolvedNextEventId,
+						snapshot: snapshotRef.current
+						})
+				) {
+						setError(null)
+						return
 				}
 				if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
 					acceptSnapshot(observedSnapshot)
@@ -265,6 +281,7 @@ export function LiveMatchesClient({
 	}, [
 		acceptSnapshot,
 		fetchMatches,
+		isPageActive,
 		resolvedCurrentEventId,
 		resolvedNextEventId,
 		t
@@ -274,6 +291,7 @@ export function LiveMatchesClient({
 		if (!isLiveMatchesTab(value)) return
 
 		setActiveTab(value)
+		hasUserSelectedTab.current = true
 		hasSavedTabPreference.current = true
 		try {
 			window.localStorage.setItem(LIVE_MATCHES_TAB_STORAGE_KEY, value)
@@ -281,34 +299,6 @@ export function LiveMatchesClient({
 			// Tab preference is optional.
 		}
 	}
-
-	useEffect(() => {
-		if (
-			hasRequestedInitialFixturePlayers.current ||
-			!initialMatches.some(match =>
-				match.status === 'LIVE' || match.status === 'HT' || match.status === 'FT'
-			)
-		)
-			return
-		hasRequestedInitialFixturePlayers.current = true
-		// Keep the score/status desk in the first RSC payload and hydrate the
-		// optional player section in the background.
-		void fetchMatches(true)
-	}, [fetchMatches, initialMatches])
-
-	useEffect(() => {
-		let savedTab: string | null = null
-		try {
-			savedTab = window.localStorage.getItem(LIVE_MATCHES_TAB_STORAGE_KEY)
-		} catch {
-			return
-		}
-		if (savedTab && isLiveMatchesTab(savedTab)) {
-			hasSavedTabPreference.current = true
-			const timeoutId = window.setTimeout(() => setActiveTab(savedTab), 0)
-			return () => window.clearTimeout(timeoutId)
-		}
-	}, [])
 
 	const matchesByTab = useMemo(() => {
 		return {
@@ -328,6 +318,62 @@ export function LiveMatchesClient({
 			upcoming: matches.filter(match => match.status === 'UPCOMING')
 		} satisfies Record<LiveMatchesTab, Match[]>
 	}, [matches])
+	const shouldAutoAdvanceToUpcoming =
+		shouldAutoAdvanceToNextLiveMatchesTab(matches)
+
+	useEffect(() => {
+		if (
+			hasRequestedInitialFixturePlayers.current ||
+			!initialMatches.some(
+				match =>
+					match.status === 'LIVE' ||
+					match.status === 'HT' ||
+					match.status === 'FT'
+			)
+		)
+			return
+		hasRequestedInitialFixturePlayers.current = true
+		// Keep the score/status desk in the first RSC payload and hydrate the
+		// optional player section in the background.
+		void fetchMatches(true)
+	}, [fetchMatches, initialMatches])
+
+	useEffect(() => {
+		if (hasUserSelectedTab.current) return
+		if (shouldAutoAdvanceToUpcoming) {
+			hasSavedTabPreference.current = false
+			setActiveTab('upcoming')
+			try {
+				window.localStorage.removeItem(LIVE_MATCHES_TAB_STORAGE_KEY)
+			} catch {
+				// Tab preference is optional.
+			}
+			return
+		}
+		if (hasSavedTabPreference.current) return
+		let savedTab: string | null = null
+		try {
+			savedTab = window.localStorage.getItem(LIVE_MATCHES_TAB_STORAGE_KEY)
+		} catch {
+			return
+		}
+		if (
+			savedTab &&
+			isLiveMatchesTab(savedTab) &&
+			matchesByTab[savedTab].length > 0
+		) {
+			hasSavedTabPreference.current = true
+			const timeoutId = window.setTimeout(() => setActiveTab(savedTab), 0)
+			return () => window.clearTimeout(timeoutId)
+		}
+		if (savedTab && isLiveMatchesTab(savedTab)) {
+			try {
+				window.localStorage.removeItem(LIVE_MATCHES_TAB_STORAGE_KEY)
+			} catch {
+				// Tab preference is optional.
+			}
+		}
+	}, [matchesByTab, shouldAutoAdvanceToUpcoming])
 
 	const pollingEventId = resolvedCurrentEventId
 	const autoRefreshEnabled = shouldPollLiveSnapshot({
@@ -335,38 +381,162 @@ export function LiveMatchesClient({
 		currentEventId: pollingEventId,
 		selectedEventId: pollingEventId,
 		snapshot,
-		probeEventIdentity: true,
 		windowState: snapshot?.windowState ?? snapshot?.state,
 		nextRefreshAt: snapshot?.nextRefreshAt
+	}) || shouldPollLiveMatchesTransition({
+		isPageActive,
+		currentEventId: resolvedCurrentEventId,
+		nextEventId: resolvedNextEventId,
+		snapshot
 	})
+	const transitionPolling = shouldPollLiveMatchesTransition({
+		isPageActive,
+		currentEventId: resolvedCurrentEventId,
+		nextEventId: resolvedNextEventId,
+		snapshot
+	})
+	const lastUpdatedAt = snapshot?.checkedAt ?? null
+	const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string | null>(null)
+	useEffect(() => {
+		if (!lastUpdatedAt) {
+			setLastUpdatedLabel(null)
+			return
+		}
+		const parsed = new Date(lastUpdatedAt)
+		if (Number.isNaN(parsed.getTime())) {
+			setLastUpdatedLabel(null)
+			return
+		}
+		const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+		setLastUpdatedLabel(
+			format.dateTime(parsed, {
+				day: 'numeric',
+				month: 'short',
+				hour: '2-digit',
+				minute: '2-digit',
+				second: '2-digit',
+				timeZone: browserTimeZone
+			})
+		)
+	}, [format, lastUpdatedAt])
 	const activeTabConfig = TAB_CONFIG.find(config => config.value === activeTab)
 	const activeMatches = matchesByTab[activeTab]
 
+	useEffect(() => {
+		if (activeMatches.length < 2) return
+
+		const handleKeyDown = (event: KeyboardEvent) => {
+			const direction =
+				event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0
+			if (
+				direction === 0 ||
+				event.defaultPrevented ||
+				event.altKey ||
+				event.ctrlKey ||
+				event.metaKey ||
+				event.shiftKey
+			) {
+				return
+			}
+
+			const eventTarget =
+				event.target instanceof Element ? event.target : null
+			if (
+				eventTarget?.closest(
+					'input, textarea, select, [contenteditable="true"], [role="dialog"], [data-radix-dialog-content]'
+				)
+			) {
+				return
+			}
+
+			const isMatchNavigation = Boolean(
+				eventTarget?.closest('[data-match-navigation="true"]')
+			)
+			const isInteractive = Boolean(
+				eventTarget?.closest(
+					'button, a, summary, [role="button"], [role="tab"], [role="menuitem"]'
+				)
+			)
+			if (isInteractive && !isMatchNavigation) return
+
+			const matchIds = activeMatches.map(match => String(match.id))
+			const cards = Array.from(
+				document.querySelectorAll<HTMLElement>('[data-live-match-card="true"]')
+			).filter(card => matchIds.includes(card.dataset.matchId ?? ''))
+			if (cards.length < 2) return
+
+			let currentIndex = -1
+			const focusedCard = eventTarget?.closest<HTMLElement>(
+				'[data-live-match-card="true"]'
+			)
+			if (focusedCard) currentIndex = cards.indexOf(focusedCard)
+
+			if (currentIndex < 0) {
+				const viewportAnchor = Math.min(
+					Math.max(window.innerHeight * 0.35, 120),
+					window.innerHeight - 80
+				)
+				currentIndex = cards.findIndex(card => {
+					const rect = card.getBoundingClientRect()
+					return rect.top <= viewportAnchor && rect.bottom > viewportAnchor
+				})
+				if (currentIndex < 0) {
+					currentIndex = cards.findIndex(
+						card => card.getBoundingClientRect().bottom > 0
+					)
+				}
+				if (currentIndex < 0) currentIndex = 0
+			}
+
+			const targetCard = cards[currentIndex + direction]
+			if (!targetCard) return
+
+			event.preventDefault()
+			targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' })
+			window.requestAnimationFrame(() => {
+				targetCard
+					.querySelector<HTMLElement>('[data-match-navigation="true"]')
+					?.focus({ preventScroll: true })
+			})
+		}
+
+		window.addEventListener('keydown', handleKeyDown)
+		return () => window.removeEventListener('keydown', handleKeyDown)
+	}, [activeMatches])
+
 	const headerActions = (
 		<div className="flex flex-wrap items-center justify-end gap-2">
-			<div className="flex flex-col items-end gap-1">
-				<Button
-					variant="outline"
-					size="icon"
-					onClick={() => fetchMatches(true)}
-					disabled={isRefreshing || isLoading}
-					className="shrink-0"
+			{lastUpdatedAt && lastUpdatedLabel ? (
+				<time
+					dateTime={lastUpdatedAt}
+					className="whitespace-nowrap text-xs text-muted-foreground"
+					role="status"
 				>
-					<RefreshCw
-						className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
-					/>
-					<span className="sr-only">{t('refresh')}</span>
-				</Button>
-				<div className="min-h-4">
-					{!isLoading || isRefreshing ? (
+					{t('lastUpdated', { time: lastUpdatedLabel })}
+				</time>
+			) : null}
+			<Button
+				variant="outline"
+				size="icon"
+				onClick={() => fetchMatches(true)}
+				disabled={isRefreshing || isLoading}
+				className="shrink-0"
+			>
+				<RefreshCw
+					className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
+				/>
+				<span className="sr-only">{t('refresh')}</span>
+			</Button>
+			<div className="min-h-4">
+				{!isLoading || isRefreshing ? (
 						<LiveAutoRefreshCountdown
 							enabled={autoRefreshEnabled}
 							onRefresh={autoRefreshMatches}
-							nextRefreshAt={snapshot?.nextRefreshAt}
+							nextRefreshAt={transitionPolling ? null : snapshot?.nextRefreshAt}
 							renderLabel={seconds => t('autoRefresh', { seconds })}
+							showLabel={!transitionPolling}
 						/>
-					) : null}
-				</div>
+				) : null}
 			</div>
 		</div>
 	)
@@ -493,6 +663,7 @@ export function LiveMatchesClient({
 										allMatches={activeMatches}
 										currentIndex={i}
 										eventId={resolvedCurrentEventId}
+										showShareActions={activeTab !== 'upcoming'}
 									/>
 								))
 							) : (

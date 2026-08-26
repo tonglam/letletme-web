@@ -5,10 +5,13 @@ import { Button } from '@/components/ui/button'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
 import { shareElementImage } from '@/lib/share/clipboard'
 import type { Match } from '@/types/match'
+import {
+	notifyShareSuccess,
+	notifyShareWarning,
+} from '@/components/share/share-notification'
 import { Check, Copy, ImageIcon } from 'lucide-react'
 import { useLocale, useTranslations } from 'next-intl'
 import { useCallback, useRef, useState, type RefObject } from 'react'
-import { toast } from 'sonner'
 import { formatMatchShareText } from './match-share'
 
 export function MatchShareButton({
@@ -59,11 +62,11 @@ export function MatchShareButton({
 		if (result === 'copied') {
 			onManualShareTextChange(null)
 			setCopied(true)
-			toast.success(t('shareCopied'))
+			notifyShareSuccess(t('shareCopied'))
 			window.setTimeout(() => setCopied(false), 2000)
 		} else if (result === 'unsupported' || result === 'failed') {
 			onManualShareTextChange(text)
-			toast.warning(
+			notifyShareWarning(
 				result === 'unsupported'
 					? t('shareCopyUnsupported')
 					: t('shareCopyFailed')
@@ -79,16 +82,16 @@ export function MatchShareButton({
 			const result = await shareElementImage(element)
 			if (result === 'shared') {
 				setImageShared(true)
-				toast.success(shareT('shareImageShared'))
+				notifyShareSuccess(shareT('shareImageShared'))
 				window.setTimeout(() => setImageShared(false), 2000)
 			} else if (result === 'copied') {
 				setImageShared(true)
-				toast.success(shareT('shareImageCopied'))
+				notifyShareSuccess(shareT('shareImageCopied'))
 				window.setTimeout(() => setImageShared(false), 2000)
 			} else if (result === 'unsupported') {
-				toast.warning(shareT('shareUnsupported'))
+				notifyShareWarning(shareT('shareUnsupported'))
 			} else {
-				toast.warning(shareT('shareFailed'))
+				notifyShareWarning(shareT('shareFailed'))
 			}
 		} finally {
 			imageShareInFlight.current = false
@@ -96,7 +99,7 @@ export function MatchShareButton({
 	}, [imageRef, shareT])
 
 	return (
-		<div className="flex items-center gap-1.5">
+		<div className="flex items-center gap-1.5" data-share-exclude="true">
 			<Button
 				type="button"
 				variant="outline"

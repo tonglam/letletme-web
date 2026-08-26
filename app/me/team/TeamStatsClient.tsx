@@ -276,7 +276,7 @@ function formatSnapshotDate(
 	return Number.isFinite(value.getTime())
 		? format.dateTime(value, {
 				dateStyle: 'medium',
-				timeStyle: 'short'
+				timeStyle: 'medium'
 			})
 		: meta.snapshotDate
 }
