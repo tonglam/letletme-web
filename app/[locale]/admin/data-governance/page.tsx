@@ -686,8 +686,16 @@ export default async function DataGovernancePage({ params }: PageProps) {
 								/>
 								<Metric
 									label="queue samples"
-									value={String(queueHealthWindows.length)}
-									detail="minute windows retained"
+									value={
+										queueHealthWindowsAvailable
+											? String(queueHealthWindows.length)
+											: '—'
+									}
+									detail={
+										queueHealthWindowsAvailable
+											? 'minute windows retained'
+											: 'queue history evidence unavailable'
+									}
 								/>
 								<Metric
 									label="open cases"
