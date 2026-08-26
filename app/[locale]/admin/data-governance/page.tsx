@@ -44,10 +44,9 @@ const dateText = (value: unknown): string => {
 }
 
 const statusTone = (value: unknown): string => {
+	if (value === 'MET' || value === 'HEALTHY')
+		return 'border-emerald-300/30 bg-emerald-300/10 text-emerald-200'
 	switch (value) {
-		case 'MET':
-		case 'HEALTHY':
-			return 'border-emerald-300/30 bg-emerald-300/10 text-emerald-200'
 		case 'BREACHED':
 		case 'INVALID':
 		case 'DRAIN_ONLY':
