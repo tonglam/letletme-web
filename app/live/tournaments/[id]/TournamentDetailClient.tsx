@@ -717,6 +717,14 @@ export default function TournamentDetailClient({
 						refreshError
 					)
 					const rateLimited = noteRateLimit(refreshError)
+					if (rateLimited) {
+						pendingRefreshRef.current = {
+							sort,
+							direction,
+							search: normalizedSearch,
+							tableSort
+						}
+					}
 					setStandingsError(
 						rateLimited ||
 							(refreshError instanceof LiveBoardRequestError &&
