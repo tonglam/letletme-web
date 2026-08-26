@@ -11,7 +11,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 script_root=/usr/local/libexec
-tooling_revision=20260824-3
+tooling_revision=20260826-1
 case $1 in
 version)
 	if [[ $# -ne 1 ]]; then
