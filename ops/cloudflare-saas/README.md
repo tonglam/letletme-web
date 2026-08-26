@@ -132,10 +132,12 @@ Only after the SaaS canary passes:
 ```
 
 Run the offline DNSPod validator with `--fallback-type CNAME`. Configure the
-watchdog with the exact fallback target and a dedicated health URL that must
-return the Cloudflare fallback marker and the same release as direct Vercel.
-The watchdog remains disabled until its healthy, one-failure, three-failure,
-fallback-unhealthy, concurrent-manual-edit, and idempotency drills all pass.
+watchdog with `DNSPOD_DEFAULT_FALLBACK_TYPE=CNAME`, the exact fallback target
+in `DNSPOD_DEFAULT_FALLBACK_VALUE`, and a dedicated `FALLBACK_HEALTH_URL` that
+must return the Cloudflare fallback marker and the same release as direct
+Vercel. Provision those three bindings together. The watchdog remains disabled
+until its healthy, one-failure, three-failure, fallback-unhealthy,
+concurrent-manual-edit, and idempotency drills all pass.
 
 If EdgeOne/Tencent fails while the SaaS and direct Vercel probes are healthy,
 the watchdog disables only the mainland record. DNSPod then sends mainland

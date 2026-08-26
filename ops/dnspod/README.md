@@ -69,6 +69,8 @@ Git:
 - `DNSPOD_DOMAIN_ID` when the account has a stable numeric domain ID
 - `DNSPOD_EDGEONE_RECORD_ID`
 - `DNSPOD_EDGEONE_CNAME`
+- `DNSPOD_DEFAULT_FALLBACK_TYPE` (the preferred SaaS deployment must use the
+  literal value `CNAME`)
 - `DNSPOD_DEFAULT_FALLBACK_VALUE`
 - `FALLBACK_HEALTH_URL`
 - `TELEGRAM_BOT_TOKEN`
@@ -94,6 +96,7 @@ wrangler secret put DNSPOD_SECRET_KEY --config cloudflare/watchdog/wrangler.toml
 wrangler secret put DNSPOD_DOMAIN_ID --config cloudflare/watchdog/wrangler.toml
 wrangler secret put DNSPOD_EDGEONE_RECORD_ID --config cloudflare/watchdog/wrangler.toml
 wrangler secret put DNSPOD_EDGEONE_CNAME --config cloudflare/watchdog/wrangler.toml
+wrangler secret put DNSPOD_DEFAULT_FALLBACK_TYPE --config cloudflare/watchdog/wrangler.toml
 wrangler secret put DNSPOD_DEFAULT_FALLBACK_VALUE --config cloudflare/watchdog/wrangler.toml
 wrangler secret put FALLBACK_HEALTH_URL --config cloudflare/watchdog/wrangler.toml
 wrangler secret put TELEGRAM_BOT_TOKEN --config cloudflare/watchdog/wrangler.toml
@@ -104,16 +107,18 @@ wrangler secret list --config cloudflare/watchdog/wrangler.toml
 
 Deploy the Worker with `WATCHDOG_ENABLED=false` first. Verify the live secret
 names include `DNSPOD_EDGEONE_CNAME`, `DNSPOD_EDGEONE_RECORD_ID`,
-`DNSPOD_DEFAULT_FALLBACK_VALUE`, `FALLBACK_HEALTH_URL`, both Telegram bindings,
-and both DNSPod API bindings. Verify the forced Tencent/Vercel canary routes,
+`DNSPOD_DEFAULT_FALLBACK_TYPE`, `DNSPOD_DEFAULT_FALLBACK_VALUE`,
+`FALLBACK_HEALTH_URL`, both Telegram bindings, and both DNSPod API bindings.
+Enter exactly `CNAME` when Wrangler prompts for
+`DNSPOD_DEFAULT_FALLBACK_TYPE`. Verify the forced Tencent/Vercel canary routes,
 the actual Cloudflare SaaS fallback marker, release parity, and a read-only dry
 run before enabling the watchdog; never paste secret values into a commit, log,
 or review comment.
 
 Legacy deployments may continue to provide `DNSPOD_DEFAULT_VERCEL_A` and
 `DNSPOD_DEFAULT_VERCEL_LINE`; the implementation treats them as an A-record
-fallback. Do not provide both legacy and preferred bindings in a new
-deployment.
+fallback without `DNSPOD_DEFAULT_FALLBACK_TYPE`. Do not provide both legacy
+and preferred bindings in a new deployment.
 
 ## Shadow-zone procedure
 
