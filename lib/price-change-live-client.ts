@@ -12,7 +12,6 @@ const HOT_WINDOW_BEFORE_MS = 30_000
 const HOT_WINDOW_AFTER_MS = 5 * 60_000
 const HOT_POLL_MS = 2_000
 const IDLE_POLL_MS = 60_000
-const HIDDEN_POLL_MS = 30_000
 const LIVE_DISABLED_REFRESH_MS = 5 * 60_000
 
 export function isPriceChangeLiveEnabled(): boolean {
@@ -73,7 +72,6 @@ function isHotWindow(board: PriceChangeBoard): boolean {
 }
 
 function pollTimeoutMs(board: PriceChangeBoard): number {
-	if (typeof document !== 'undefined' && document.hidden) return HIDDEN_POLL_MS
 	return isHotWindow(board) ? HOT_POLL_MS : IDLE_POLL_MS
 }
 
@@ -130,7 +128,10 @@ export function usePriceChangeLiveBoard({
 		let requestInFlight = false
 
 		const schedule = (delay: number) => {
-			if (stopped) return
+			if (stopped || document.hidden) {
+				timer = null
+				return
+			}
 			timer = window.setTimeout(() => void poll(), delay)
 		}
 
