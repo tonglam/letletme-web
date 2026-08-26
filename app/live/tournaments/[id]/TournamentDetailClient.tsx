@@ -12,7 +12,6 @@ import { TournamentTable } from '@/components/tournament/TournamentTable'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { usePageActive } from '@/hooks/use-page-active'
 import { executeQuery } from '@/lib/graphql-client'
@@ -37,7 +36,6 @@ import {
 } from '@/lib/live-refresh'
 import type { TournamentDetailLoadError } from '@/lib/tournament/detail-load-error'
 import {
-	areTournamentInsightsReady,
 	isTournamentInsightsRepairExhausted,
 	isTournamentSetupPollingPending,
 	normalizeTournamentSetupStatus,
@@ -58,6 +56,7 @@ import {
 	ArrowLeft,
 	Calendar,
 	Check,
+	ChevronDown,
 	Circle,
 	KeyRound,
 	Link2Off,
@@ -65,7 +64,6 @@ import {
 	Lock,
 	RefreshCw,
 	ServerCrash,
-	Settings,
 	Users
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -259,8 +257,156 @@ function TournamentRosterList({
 	)
 }
 
+function CompetitionDetailsDisclosure({
+	tournament,
+	participants,
+	viewerEntryId,
+	tournamentId,
+	gameweek
+}: {
+	tournament: EntryTournament
+	participants: TournamentParticipant[]
+	viewerEntryId?: number
+	tournamentId: number
+	gameweek?: number
+}) {
+	const t = useTranslations('LiveTournament')
+	const formatGroupMode = (groupMode: string) =>
+		groupMode === 'BATTLE_RACES'
+			? t('headToHead')
+			: groupMode === 'POINTS_RACES'
+				? t('pointsRace')
+				: t('noGroup')
+	const formatKnockoutMode = (knockoutMode: string) =>
+		knockoutMode === 'SINGLE_ELIMINATION'
+			? t('singleElimination')
+			: knockoutMode === 'DOUBLE_ELIMINATION'
+				? t('homeAway')
+				: knockoutMode === 'HEAD_TO_HEAD'
+					? t('officialH2HKnockout')
+					: t('noKnockout')
+	const leagueType =
+		tournament.leagueType === 'H2H'
+			? t('headToHead')
+			: tournament.leagueType === 'CLASSIC'
+				? t('classic')
+				: tournament.leagueType
+
+	return (
+		<details className="group mt-6 rounded-xl border border-border/80 bg-card shadow-sm">
+			<summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3.5 outline-none transition-colors hover:bg-muted/25 focus-visible:ring-2 focus-visible:ring-ring/50 sm:px-5 [&::-webkit-details-marker]:hidden">
+				<div className="min-w-0">
+					<p className="font-display text-sm font-semibold tracking-tight">
+						{t('competitionDetails')}
+					</p>
+					<p className="mt-0.5 text-xs text-muted-foreground">
+						{t('competitionDetailsHint')}
+					</p>
+				</div>
+				<ChevronDown
+					className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
+					aria-hidden="true"
+				/>
+			</summary>
+			<div className="border-t border-border/70 p-3 sm:p-4">
+				<div className="grid gap-4 lg:grid-cols-2">
+					<Card className="p-4 shadow-none sm:p-5">
+						<h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
+							{t('statistics')}
+						</h2>
+						<div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+							<div className="space-y-1 rounded-lg border surface-inset p-4">
+								<div className="eyebrow">{t('creator')}</div>
+								<div className="font-display text-base font-semibold">
+									{tournament.creator}
+								</div>
+							</div>
+							<div className="space-y-1 rounded-lg border surface-inset p-4">
+								<div className="eyebrow">{t('leagueType')}</div>
+								<div className="font-display text-base font-semibold">
+									{leagueType}
+								</div>
+							</div>
+							<div className="space-y-1 rounded-lg border surface-inset p-4 sm:col-span-2">
+								<div className="eyebrow">{t('participantCount')}</div>
+								<div className="font-display text-2xl font-bold tabular-nums">
+									{tournament.totalTeamNum}
+								</div>
+							</div>
+						</div>
+					</Card>
+
+					<Card className="p-4 shadow-none sm:p-5">
+						<h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
+							{t('competitionRules')}
+						</h2>
+						<ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+							<li>
+								{t('mode', { mode: formatGroupMode(tournament.groupMode) })}
+							</li>
+							<li>{t('teamsPerGroup', { count: tournament.groupTeamNum })}</li>
+							<li>{t('groups', { count: tournament.groupNum })}</li>
+							<li>
+								{t('gameweeks', {
+									value:
+										tournament.groupStartedEventId &&
+										tournament.groupEndedEventId
+											? t('gameweekRange', {
+													start: tournament.groupStartedEventId,
+													end: tournament.groupEndedEventId
+												})
+											: t('notScheduled')
+								})}
+							</li>
+							<li>
+								{t('mode', {
+									mode: formatKnockoutMode(tournament.knockoutMode)
+								})}
+							</li>
+							{tournament.knockoutMode !== 'NO_KNOCKOUT' ? (
+								<>
+									<li>
+										{t('teamsCount', {
+											count: tournament.knockoutTeamNum ?? t('notConfigured')
+										})}
+									</li>
+									<li>
+										{t('rounds', {
+											count: tournament.knockoutRounds ?? t('notConfigured')
+										})}
+									</li>
+									<li>
+										{t('gameweeks', {
+											value:
+												tournament.knockoutStartedEventId &&
+												tournament.knockoutEndedEventId
+													? t('gameweekRange', {
+															start: tournament.knockoutStartedEventId,
+															end: tournament.knockoutEndedEventId
+														})
+													: t('notScheduled')
+										})}
+									</li>
+								</>
+							) : null}
+						</ul>
+					</Card>
+				</div>
+
+				<div className="mt-4">
+					<TournamentRosterList
+						participants={participants}
+						viewerEntryId={viewerEntryId}
+						tournamentId={tournamentId}
+						gameweek={gameweek}
+					/>
+				</div>
+			</div>
+		</details>
+	)
+}
+
 export default function TournamentDetailClient({
-	canManage,
 	tournament,
 	currentGameweek,
 	activeGameweek,
@@ -273,7 +419,6 @@ export default function TournamentDetailClient({
 	initialParticipants,
 	justCreated
 }: {
-	canManage: boolean
 	tournament: EntryTournament | null
 	currentGameweek?: number
 	/** Actual current FPL event; the selected H2H event may be historical. */
@@ -302,9 +447,7 @@ export default function TournamentDetailClient({
 		() => getTournamentManagerNextRefreshAt(rows),
 		[rows]
 	)
-	const managerScoreSettling = rows.some(
-		row => row.score?.state === 'SETTLING'
-	)
+	const managerScoreSettling = rows.some(row => row.score?.state === 'SETTLING')
 	const managerScoreStatus = useMemo(() => {
 		const states = rows.flatMap(row => {
 			const score = traceableOfficialManagerScore(row.score)
@@ -344,8 +487,6 @@ export default function TournamentDetailClient({
 	const refreshGenerationRef = useRef(0)
 	const [visible, setVisible] = useState(true)
 	const [online, setOnline] = useState(true)
-	const [retrying, setRetrying] = useState(false)
-	const [actionError, setActionError] = useState<string | null>(null)
 	const [announcement, setAnnouncement] = useState('')
 	const previousStandingsReadyAt = useRef(tournament?.standingsReadyAt ?? null)
 	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
@@ -672,9 +813,6 @@ export default function TournamentDetailClient({
 		[rows, staleEntryIds]
 	)
 	const standingsStats = useMemo(() => buildTournamentStats(entries), [entries])
-	const insightsReady = currentTournament
-		? areTournamentInsightsReady(currentTournament)
-		: false
 	const warningSummaries = currentTournament?.warningSummaries ?? []
 	const hasSetupWarnings =
 		Boolean(currentTournament?.setupHasWarnings) || warningSummaries.length > 0
@@ -705,58 +843,6 @@ export default function TournamentDetailClient({
 		standingsStats
 	])
 
-	const retrySetup = async () => {
-		if (!currentTournament || retrying) return
-		setRetrying(true)
-		setActionError(null)
-		try {
-			const response = await fetch(`/api/tournaments/${currentTournament.id}`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ action: 'retry_setup' })
-			})
-			if (!response.ok) throw new Error('retry failed')
-			setCurrentTournament(current =>
-				current
-					? {
-							...current,
-							setupStatus: 'PENDING',
-							setupPhase: 'QUEUED',
-							setupHasWarnings: false,
-							warningSummaries: [],
-							profilesReadyAt: null,
-							insightsReadyAt: null
-						}
-					: current
-			)
-			setAnnouncement(lifecycleT('retryQueued'))
-		} catch {
-			setActionError(lifecycleT('retryFailed'))
-		} finally {
-			setRetrying(false)
-		}
-	}
-
-	const formatGroupMode = (groupMode: string) =>
-		groupMode === 'BATTLE_RACES'
-			? t('headToHead')
-			: groupMode === 'POINTS_RACES'
-				? t('pointsRace')
-				: t('noGroup')
-	const formatKnockoutMode = (knockoutMode: string) =>
-		knockoutMode === 'SINGLE_ELIMINATION'
-			? t('singleElimination')
-			: knockoutMode === 'DOUBLE_ELIMINATION'
-				? t('homeAway')
-				: knockoutMode === 'HEAD_TO_HEAD'
-					? t('officialH2HKnockout')
-					: t('noKnockout')
-	const leagueType =
-		currentTournament?.leagueType === 'H2H'
-			? t('headToHead')
-			: currentTournament?.leagueType === 'CLASSIC'
-				? t('classic')
-				: currentTournament?.leagueType
 	const autoRefreshEnabled = shouldPollLiveSnapshot({
 		isPageActive: isPageActive && !isOfficialH2H,
 		currentEventId: currentGameweek,
@@ -867,7 +953,7 @@ export default function TournamentDetailClient({
 			>
 				<RouteReadyMarker
 					name="LIVE_COMPETITION_BOARD_READY"
-					ready={Boolean(currentTournament && !retrying && !isRefreshing)}
+					ready={Boolean(currentTournament && !isRefreshing)}
 					audienceHint="session-hint"
 					goodMs={1000}
 					poorMs={1500}
@@ -887,19 +973,6 @@ export default function TournamentDetailClient({
 							<span>{t('backToCompetitions')}</span>
 						</Link>
 					</Button>
-					{canManage ? (
-						<Button
-							variant="outline"
-							asChild
-						>
-							<Link
-								href={`/competitions/${currentTournament.id}/manage`}
-								prefetch={false}
-							>
-								<Settings aria-hidden="true" /> {t('manage')}
-							</Link>
-						</Button>
-					) : null}
 				</div>
 
 				<p
@@ -1048,37 +1121,11 @@ export default function TournamentDetailClient({
 
 								{currentTournament.setupStatus === 'FAILED' ? (
 									<div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
-										<p>
-											{canManage
-												? lifecycleT('ownerFailure')
-												: lifecycleT('memberFailure')}
-										</p>
-										{canManage ? (
-											<Button
-												className="mt-3"
-												size="sm"
-												onClick={retrySetup}
-												disabled={retrying}
-											>
-												{retrying ? (
-													<LoaderCircle
-														className="animate-spin"
-														aria-hidden="true"
-													/>
-												) : (
-													<RefreshCw aria-hidden="true" />
-												)}
-												{lifecycleT('recoverSetup')}
-											</Button>
-										) : null}
+										<p>{lifecycleT('memberFailure')}</p>
 									</div>
 								) : hasSetupWarnings ? (
 									<div className="mt-4 rounded-lg border border-border/80 bg-muted/30 p-4 text-sm">
-										<p>
-											{canManage
-												? lifecycleT('warningOwner')
-												: lifecycleT('warningMember')}
-										</p>
+										<p>{lifecycleT('warningMember')}</p>
 									</div>
 								) : (
 									<ol className="mt-5 space-y-3">
@@ -1136,191 +1183,60 @@ export default function TournamentDetailClient({
 										})}
 									</ol>
 								)}
-								{actionError ? (
-									<p className="mt-3 text-sm text-destructive">{actionError}</p>
-								) : null}
 							</Card>
 						) : null}
 
-						<Tabs
-							defaultValue="standings"
-							className="mb-6"
-						>
-							<div>
-								<div className="rounded-lg border border-border/80 bg-card p-2 shadow-sm sm:p-3">
-									<TabsList className="grid h-auto w-full grid-cols-3 gap-1.5 sm:gap-2">
-										<TabsTrigger value="standings">
-											{t('standings')}
-										</TabsTrigger>
-										<TabsTrigger
-											value="stats"
-											disabled={!insightsReady}
-										>
-											{t('tournamentStats')}
-										</TabsTrigger>
-										<TabsTrigger value="rules">{t('rules')}</TabsTrigger>
-									</TabsList>
-								</div>
-								{!insightsReady ? (
-									<p className="mt-3 text-center text-xs text-muted-foreground">
-										{lifecycleT('insightsLoading')}
-									</p>
-								) : null}
-							</div>
-
-							<TabsContent value="standings">
-								{!standingsReady ? (
-									<Card className="p-8 text-center shadow-sm">
-										<LoaderCircle
-											className="mx-auto size-6 animate-spin text-primary"
-											aria-hidden="true"
-										/>
-										<h2 className="mt-4 font-display text-lg font-semibold tracking-tight">
-											{lifecycleT('standingsPreparing')}
-										</h2>
-										<p className="mt-1 text-sm text-muted-foreground">
-											{lifecycleT('standingsPreparingDescription')}
-										</p>
-									</Card>
-								) : isOfficialH2H && currentGameweek ? (
-									<OfficialH2HCompetitionView
-										activeEventId={activeGameweek}
-										eventId={currentGameweek}
-										initialSnapshot={initialOfficialH2H}
-										tournamentId={currentTournament.id}
-										viewerEntryId={entryId ?? undefined}
+						<div className="mb-6">
+							{!standingsReady ? (
+								<Card className="p-8 text-center shadow-sm">
+									<LoaderCircle
+										className="mx-auto size-6 animate-spin text-primary"
+										aria-hidden="true"
 									/>
-								) : currentGameweek && entries.length > 0 ? (
-									<>
-										<SearchHeader
-											searchQuery={searchQuery}
-											setSearchQuery={setSearchQuery}
-											showFilters={false}
-										/>
-										<TournamentTable
-											entries={entries}
-											searchQuery={searchQuery}
-											tournamentId={String(currentTournament.id)}
-											gameweek={currentGameweek}
-											viewerEntryId={entryId ?? undefined}
-										/>
-									</>
-								) : (
-									<Card className="p-6 text-sm text-muted-foreground shadow-sm">
-										{t('liveUnavailable')}
-									</Card>
-								)}
-							</TabsContent>
-
-							<TabsContent value="stats">
-								<Card className="p-4 shadow-sm sm:p-6">
-									<h2 className="mb-5 font-display text-lg font-bold tracking-tight sm:text-xl">
-										{t('statistics')}
+									<h2 className="mt-4 font-display text-lg font-semibold tracking-tight">
+										{lifecycleT('standingsPreparing')}
 									</h2>
-									<div className="grid grid-cols-1 gap-3 md:grid-cols-2 sm:gap-4">
-										<div className="space-y-1 rounded-lg border surface-inset p-4">
-											<div className="eyebrow">{t('creator')}</div>
-											<div className="font-display text-base font-semibold">
-												{currentTournament.creator}
-											</div>
-										</div>
-										<div className="space-y-1 rounded-lg border surface-inset p-4">
-											<div className="eyebrow">{t('leagueType')}</div>
-											<div className="font-display text-base font-semibold">
-												{leagueType}
-											</div>
-										</div>
-										<div className="space-y-1 rounded-lg border surface-inset p-4">
-											<div className="eyebrow">{t('participantCount')}</div>
-											<div className="font-display text-2xl font-bold tabular-nums">
-												{currentTournament.totalTeamNum}
-											</div>
-										</div>
-									</div>
+									<p className="mt-1 text-sm text-muted-foreground">
+										{lifecycleT('standingsPreparingDescription')}
+									</p>
 								</Card>
-							</TabsContent>
-
-							<TabsContent value="rules">
-								<div className="grid gap-6 md:grid-cols-2">
-									<Card className="p-4 shadow-sm sm:p-6">
-										<h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
-											{t('competitionRules')}
-										</h2>
-										<ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-											<li>
-												{t('mode', {
-													mode: formatGroupMode(currentTournament.groupMode)
-												})}
-											</li>
-											<li>
-												{t('teamsPerGroup', {
-													count: currentTournament.groupTeamNum
-												})}
-											</li>
-											<li>
-												{t('groups', { count: currentTournament.groupNum })}
-											</li>
-											<li>
-												{t('gameweeks', {
-													value:
-														currentTournament.groupStartedEventId &&
-														currentTournament.groupEndedEventId
-															? t('gameweekRange', {
-																	start: currentTournament.groupStartedEventId,
-																	end: currentTournament.groupEndedEventId
-																})
-															: t('notScheduled')
-												})}
-											</li>
-											<li>
-												{t('mode', {
-													mode: formatKnockoutMode(
-														currentTournament.knockoutMode
-													)
-												})}
-											</li>
-											{currentTournament.knockoutMode !== 'NO_KNOCKOUT' ? (
-												<>
-													<li>
-														{t('teamsCount', {
-															count:
-																currentTournament.knockoutTeamNum ??
-																t('notConfigured')
-														})}
-													</li>
-													<li>
-														{t('rounds', {
-															count:
-																currentTournament.knockoutRounds ??
-																t('notConfigured')
-														})}
-													</li>
-													<li>
-														{t('gameweeks', {
-															value:
-																currentTournament.knockoutStartedEventId &&
-																currentTournament.knockoutEndedEventId
-																	? t('gameweekRange', {
-																			start:
-																				currentTournament.knockoutStartedEventId,
-																			end: currentTournament.knockoutEndedEventId
-																		})
-																	: t('notScheduled')
-														})}
-													</li>
-												</>
-											) : null}
-										</ul>
-									</Card>
-									<TournamentRosterList
-										participants={initialParticipants}
-										viewerEntryId={entryId ?? undefined}
-										tournamentId={currentTournament.id}
-										gameweek={currentGameweek}
+							) : isOfficialH2H && currentGameweek ? (
+								<OfficialH2HCompetitionView
+									activeEventId={activeGameweek}
+									eventId={currentGameweek}
+									initialSnapshot={initialOfficialH2H}
+									tournamentId={currentTournament.id}
+									viewerEntryId={entryId ?? undefined}
+								/>
+							) : currentGameweek && entries.length > 0 ? (
+								<>
+									<SearchHeader
+										searchQuery={searchQuery}
+										setSearchQuery={setSearchQuery}
+										showFilters={false}
 									/>
-								</div>
-							</TabsContent>
-						</Tabs>
+									<TournamentTable
+										entries={entries}
+										searchQuery={searchQuery}
+										tournamentId={String(currentTournament.id)}
+										gameweek={currentGameweek}
+										viewerEntryId={entryId ?? undefined}
+									/>
+								</>
+							) : (
+								<Card className="p-6 text-sm text-muted-foreground shadow-sm">
+									{t('liveUnavailable')}
+								</Card>
+							)}
+						</div>
+
+						<CompetitionDetailsDisclosure
+							tournament={currentTournament}
+							participants={initialParticipants}
+							viewerEntryId={entryId ?? undefined}
+							tournamentId={currentTournament.id}
+							gameweek={currentGameweek}
+						/>
 					</>
 				) : null}
 			</div>

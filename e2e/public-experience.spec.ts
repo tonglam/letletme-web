@@ -496,7 +496,7 @@ test('Market stays accessible and usable on a 390px Simplified Chinese screen', 
 	expect(initialAccessibility.violations).toEqual([])
 
 	await expect(page.getByRole('list', { name: '上升' })).toBeVisible()
-	await expect(page.getByText('+1 个%').first()).toBeVisible()
+	await expect(page.getByText('+1%').first()).toBeVisible()
 
 	await page.getByRole('link', { name: 'GW 比较' }).click()
 	await expect(page).toHaveURL(/period=GAMEWEEK/)

@@ -30,7 +30,6 @@ function coreMatchStatKeys(position: string): Array<{
 		| 'defensiveContribution'
 		| 'yellowCards'
 		| 'redCards'
-		| 'bonusPoints'
 	getValue: (p: PlayerDetail) => number
 }> {
 	const common = [
@@ -53,10 +52,6 @@ function coreMatchStatKeys(position: string): Array<{
 		{
 			labelKey: 'redCards' as const,
 			getValue: (p: PlayerDetail) => p.stats.redCards,
-		},
-		{
-			labelKey: 'bonusPoints' as const,
-			getValue: (p: PlayerDetail) => p.bonusPoints,
 		},
 	]
 
@@ -81,7 +76,6 @@ function coreMatchStatKeys(position: string): Array<{
 			},
 			common[3],
 			common[4],
-			common[5],
 		]
 	}
 
@@ -104,7 +98,6 @@ function coreMatchStatKeys(position: string): Array<{
 			},
 			common[3],
 			common[4],
-			common[5],
 		]
 	}
 
@@ -123,7 +116,6 @@ function coreMatchStatKeys(position: string): Array<{
 			},
 			common[3],
 			common[4],
-			common[5],
 		]
 	}
 
@@ -138,7 +130,6 @@ function coreMatchStatKeys(position: string): Array<{
 		},
 		common[3],
 		common[4],
-		common[5],
 	]
 }
 
@@ -172,20 +163,6 @@ export function PlayerDetailModal({
 		'Total Points': t('totalPoints'),
 	}
 
-	const getBpsColor = (score: number) => {
-		if (score >= 50) return 'text-success'
-		if (score >= 25) return 'text-info'
-		if (score >= 0) return 'text-foreground'
-		return 'text-destructive'
-	}
-
-	const getBpsBgColor = (score: number) => {
-		if (score >= 50) return 'bg-success/10 border-success/25'
-		if (score >= 25) return 'bg-info/10 border-info/25'
-		if (score >= 0) return 'bg-muted/40 border-border/70'
-		return 'bg-destructive/10 border-destructive/25'
-	}
-
 	const breakdownSum = player.pointsBreakdown.reduce(
 		(sum, item) => sum + item.points,
 		0,
@@ -210,7 +187,13 @@ export function PlayerDetailModal({
 		},
 	].filter(row => row.value !== 0)
 
-	const allStatRows = [...matchStatRows, ...extraRows]
+	const allStatRows = [
+		...matchStatRows,
+		...extraRows,
+		...(typeof player.bps === 'number'
+			? [{ label: 'BPS', value: player.bps }]
+			: [])
+	]
 
 	const statusLabel =
 		player.playingStatus === 'PLAYING'
@@ -266,7 +249,7 @@ export function PlayerDetailModal({
 									</span>
 								</div>
 
-								{/* Meta chips: PTS then BPS — left edge = player name */}
+								{/* Meta chips: points first, with bonus occupying the secondary slot when earned */}
 								<div className="mt-3 flex flex-wrap items-center gap-2">
 									<div
 										className="inline-flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-1.5"
@@ -285,29 +268,17 @@ export function PlayerDetailModal({
 										<span className="font-mono text-base font-bold tabular-nums text-primary-ink">
 											{player.points}
 										</span>
-										{player.bonusPoints > 0 ? (
-											<span className="font-mono text-xs font-semibold tabular-nums text-warning">
-												+{player.bonusPoints}
-											</span>
-										) : null}
 									</div>
-									{typeof player.bps === 'number' ? (
+									{player.bonusPoints > 0 ? (
 										<div
-											className={cn(
-												'inline-flex items-center gap-2 rounded-md border px-3 py-1.5',
-												getBpsBgColor(player.bps),
-											)}
+											className="inline-flex items-center gap-2 rounded-md border border-warning/25 bg-warning/10 px-3 py-1.5"
+											aria-label={t('bonus', { points: player.bonusPoints })}
 										>
 											<span className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
-												BPS
+												{t('bonusPointsShort')}
 											</span>
-											<span
-												className={cn(
-													'font-mono text-base font-bold tabular-nums',
-													getBpsColor(player.bps),
-												)}
-											>
-												{player.bps}
+											<span className="font-mono text-base font-bold tabular-nums text-warning">
+												+{player.bonusPoints}
 											</span>
 										</div>
 									) : null}

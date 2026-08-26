@@ -120,6 +120,78 @@ describe('dream team share image', () => {
 	})
 })
 
+describe('my squad fixture pitch', () => {
+	it('uses the formation pitch with color-coded fixture strips and a detail dialog', async () => {
+		const [desk, pitch] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/data/fixtures/_components/MySquadFdrDesk.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/squad-pitch/SquadPitch.tsx', import.meta.url),
+				'utf8'
+			)
+		])
+
+		assert.match(desk, /<SquadPitch[\s\S]*onPlayerClick=\{handlePitchPlayerClick\}/)
+		assert.match(desk, /<Dialog[\s\S]*<FixtureDetailRow/)
+		assert.match(desk, /data-schedule-pitch="true"/)
+		assert.match(desk, /fixtureSchedule,/)
+		assert.doesNotMatch(desk, /<table\b|overflow-x-auto/)
+		assert.match(pitch, /SCHEDULE_FDR_CLASS/)
+		assert.match(pitch, /fixtureSchedule\?/)
+		assert.match(pitch, /role="listitem"/)
+	})
+})
+
+describe('team FDR average scale', () => {
+	it('shows exact averages with a continuous difficulty marker', async () => {
+		const source = await readFile(
+			new URL(
+				'../app/data/fixtures/_components/FdrMatrix.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.match(source, /function FdrAverageCell\(/)
+		assert.match(source, /const FDR_TEAM_CELL/)
+		assert.match(source, /const averageFdrTier = fdrTier\(row\.avgFdr\)/)
+		assert.match(source, /FDR_TEAM_CELL\[averageFdrTier\]/)
+		assert.match(source, /formatAvgFdrOutOfFive\(value\)/)
+		assert.match(source, /bg-gradient-to-r from-success\/80 via-warning\/80 to-destructive\/80/)
+		assert.match(source, /style=\{\{ left: `\$\{markerPosition\}%` \}\}/)
+		assert.match(source, /data-fdr-average=\{formatted\}/)
+	})
+})
+
+describe('fixture section sharing', () => {
+	it('keeps team FDR sharing with its section and adds squad-pitch image sharing', async () => {
+		const [page, desk] = await Promise.all([
+			readFile(new URL('../app/data/fixtures/FixturesClient.tsx', import.meta.url), 'utf8'),
+			readFile(
+				new URL('../app/data/fixtures/_components/MySquadFdrDesk.tsx', import.meta.url),
+				'utf8'
+			)
+		])
+
+		assert.match(
+			page,
+			/<SectionHead[\s\S]*id="my-squad-heading"[\s\S]*<ShareActions[\s\S]*actions=\{\['image'\]\}/
+		)
+		assert.match(page, /imageRef=\{mySquadShareRef\}/)
+		assert.match(
+			page,
+			/<Card[\s\S]*aria-labelledby="fdr-teams"[\s\S]*<ShareActions[\s\S]*imageRef=\{teamFdrShareRef\}/
+		)
+		assert.match(page, /text=\{shareText\}/)
+		assert.match(desk, /<SquadPitch[\s\S]*ref=\{shareRef\}/)
+	})
+})
+
 describe('explore gameweek dream team presentation', () => {
 	it('reuses the homepage pitch and removes the duplicate dream team list', async () => {
 		const [source, surfaces] = await Promise.all([
@@ -138,7 +210,12 @@ describe('explore gameweek dream team presentation', () => {
 
 		assert.match(source, /import \{ TeamOfTheWeekSection \}/)
 		assert.match(source, /function mapDreamTeamPlayers\(/)
-		assert.match(source, /const haulShareText[\s\S]*actions=\{\['text'\]\}/)
+		assert.match(
+			source,
+			/const haulShareText[\s\S]*imageRef=\{haulShareRef\}[\s\S]*actions=\{\['text', 'image'\]\}/
+		)
+		assert.match(source, /useMatchPlayerDetail\(visibleGameweek\)/)
+		assert.match(source, /onPlayerClick=\{handleHaulPlayerClick\}/)
 		assert.match(
 			source,
 			/<TeamOfTheWeekSection[\s\S]*currentEventId=\{visibleGameweek\}[\s\S]*dreamTeam=\{dreamTeam\}[\s\S]*showShareActions=\{false\}/
@@ -344,6 +421,8 @@ describe('player detail share card', () => {
 		)
 		assert.match(source, /data-share-fit-content="true"/)
 		assert.match(source, /data-share-preserve-width="true"/)
+		assert.match(source, /typeof player\.bps === 'number'[\s\S]*label: 'BPS'/)
+		assert.match(source, /player\.bonusPoints > 0[\s\S]*bonusPointsShort/)
 		assert.match(source, /share-player-breakdown-label[\s\S]*whitespace-nowrap/)
 		assert.match(source, /share-player-team min-w-0 truncate/)
 		assert.match(
@@ -423,6 +502,9 @@ describe('live match share card', () => {
 		assert.match(liveMatches, /activeMatches\.length < 2/)
 		assert.match(liveMatches, /event\.key === 'ArrowLeft'/)
 		assert.match(liveMatches, /event\.key === 'ArrowRight'/)
+		assert.match(liveMatches, /tabCountLabel\('live'\)/)
+		assert.match(liveMatches, /tabCountLabel\('finished'\)/)
+		assert.match(liveMatches, /tabCountLabel\('not-started'\)/)
 		assert.match(liveMatches, /data-match-navigation="true"/)
 		assert.match(
 			liveMatches,
@@ -521,6 +603,26 @@ describe('live tournament filter visibility', () => {
 		assert.ok(
 			source.includes('response.entryLiveCompetitionsDesk.eventId !== eventId')
 		)
+	})
+
+	it('allows keyboard gameweek navigation on official H2H boards', async () => {
+		const source = await readFile(
+			new URL(
+				'../components/tournament/OfficialH2HCompetitionView.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.ok(source.includes("keyboardEvent.key === 'ArrowLeft'"))
+		assert.ok(source.includes("keyboardEvent.key === 'ArrowRight'"))
+		assert.ok(source.includes('document.activeElement'))
+		assert.ok(
+			source.includes(
+				'router.push(`/live/competitions/${tournamentId}?gw=${targetEvent}`)'
+			)
+		)
+		assert.ok(source.includes('enabled: showStandings'))
 	})
 })
 

@@ -1,7 +1,7 @@
 'use client'
 
 import {
-	formatAvgFdr,
+	formatAvgFdrOutOfFive,
 	orderFdrTeamsForDisplay,
 	type TeamFdrRow,
 } from '@/lib/fixtures-fdr'
@@ -18,6 +18,66 @@ const FDR_CELL: Record<number, string> = {
 	3: 'border-border/70 bg-muted/40 text-foreground',
 	4: 'border-warning/45 bg-warning/15 text-foreground',
 	5: 'border-destructive/40 bg-destructive/15 text-foreground',
+}
+
+const FDR_TEAM_CELL: Record<number, string> = {
+	1: 'bg-success/25',
+	2: 'bg-success/15',
+	3: 'bg-muted/50',
+	4: 'bg-warning/20',
+	5: 'bg-destructive/20',
+}
+
+function fdrTier(value: number | null): number | null {
+	if (value == null || !Number.isFinite(value)) return null
+	return Math.min(5, Math.max(1, Math.round(value)))
+}
+
+function FdrAverageCell({
+	value,
+	label,
+}: {
+	value: number | null
+	label: string
+}) {
+	if (value == null) {
+		return (
+			<span
+				className="font-mono text-caption tabular-nums text-muted-foreground"
+				aria-label={`${label} —`}
+			>
+				—
+			</span>
+		)
+	}
+
+	const bounded = Math.min(5, Math.max(1, value))
+	// Keep the marker inside the track while preserving the exact decimal value.
+	const markerPosition = (2 + ((bounded - 1) / 4) * 96).toFixed(2)
+	const formatted = formatAvgFdrOutOfFive(value)
+
+	return (
+		<div
+			className="mx-auto flex min-w-[4.75rem] flex-col items-center gap-1"
+			aria-label={`${label} ${formatted}`}
+			title={`${label}: ${formatted}`}
+			data-fdr-average={formatted}
+		>
+			<span className="font-mono text-caption font-semibold tabular-nums text-primary-ink">
+				{formatted}
+			</span>
+			<span
+				className="relative block h-1.5 w-[4.5rem] overflow-hidden rounded-full bg-muted/70"
+				aria-hidden="true"
+			>
+				<span className="absolute inset-0 bg-gradient-to-r from-success/80 via-warning/80 to-destructive/80" />
+				<span
+					className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card bg-foreground shadow-sm"
+					style={{ left: `${markerPosition}%` }}
+				/>
+			</span>
+		</div>
+	)
 }
 
 export function FdrMatrix({
@@ -102,6 +162,7 @@ export function FdrMatrix({
 						)
 						const inSquad = exposure != null && exposure.count > 0
 						const focused = focusedTeamId === row.teamId
+						const averageFdrTier = fdrTier(row.avgFdr)
 						const byEvent = new Map(
 							row.gameweeks.map(gameweek => [gameweek.eventId, gameweek]),
 						)
@@ -125,10 +186,17 @@ export function FdrMatrix({
 								<th
 									scope="row"
 									className={cn(
-										'sticky left-0 z-10 bg-card/95 px-3 py-1.5 text-left font-display text-xs font-bold tracking-wide backdrop-blur-sm',
-										inSquad && 'bg-primary/10',
-										focused && 'bg-primary/10',
+										'sticky left-0 z-10 px-3 py-1.5 text-left font-display text-xs font-bold tracking-wide backdrop-blur-sm',
+										averageFdrTier == null
+											? 'bg-card/95'
+											: FDR_TEAM_CELL[averageFdrTier],
+										focused && 'ring-2 ring-inset ring-primary/50',
 									)}
+									title={
+										row.avgFdr == null
+											? row.teamShortName
+											: `${row.teamShortName} · FDR ${formatAvgFdrOutOfFive(row.avgFdr)}`
+									}
 								>
 									<span className="inline-flex flex-col items-start gap-0.5">
 										<span className="inline-flex items-center gap-1.5">
@@ -147,8 +215,11 @@ export function FdrMatrix({
 										</span>
 									</span>
 								</th>
-								<td className="px-2 py-1.5 text-center font-mono text-caption font-semibold tabular-nums text-primary-ink">
-									{formatAvgFdr(row.avgFdr)}
+								<td className="px-2 py-1.5 text-center">
+									<FdrAverageCell
+										value={row.avgFdr}
+										label={t('colAvg')}
+									/>
 								</td>
 								{eventIds.map(gw => {
 									const gameweek = byEvent.get(gw)

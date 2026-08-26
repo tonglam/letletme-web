@@ -50,11 +50,13 @@ export function PlayerList({
 	emptyText,
 	showRank = true,
 	playerHref,
+	onPlayerClick
 }: {
 	players: PlayerListItem[]
 	emptyText?: string
 	showRank?: boolean
 	playerHref?: (player: PlayerListItem) => string | null
+	onPlayerClick?: (player: PlayerListItem) => void
 }) {
 	const t = useTranslations('PlayerDirectory')
 
@@ -69,7 +71,7 @@ export function PlayerList({
 	// Any enrichment → full stat table; otherwise a tighter name/team/pts board
 	const rich = players.some(
 		p =>
-			p.stats != null ||
+		p.stats != null ||
 			typeof p.minutes === 'number' ||
 			typeof p.price === 'number' ||
 			typeof p.ownedBy === 'number',
@@ -172,7 +174,15 @@ export function PlayerList({
 								</Badge>
 							</DataTd>
 							<DataTd className="max-w-[9rem] px-2 sm:max-w-[12rem]">
-								{playerHref?.(player) ? (
+								{onPlayerClick ? (
+									<button
+										type="button"
+										className="block w-full truncate bg-transparent p-0 text-left text-sm font-semibold tracking-tight text-primary-ink underline decoration-primary/35 underline-offset-2 transition-colors hover:decoration-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+										onClick={() => onPlayerClick(player)}
+									>
+										{player.name}
+									</button>
+								) : playerHref?.(player) ? (
 									<Link
 										href={playerHref(player)!}
 										className="block truncate text-sm font-semibold tracking-tight text-primary-ink underline decoration-primary/35 underline-offset-2 transition-colors hover:decoration-primary hover:text-primary"

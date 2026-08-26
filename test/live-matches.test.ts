@@ -7,7 +7,6 @@ import {
 	getLiveMatchesSnapshot,
 	getPreferredLiveMatchesTab,
 	loadLiveMatchdayDesk,
-	shouldAutoAdvanceToNextLiveMatchesTab,
 	type QueryExecutor
 } from '../lib/live-matches'
 
@@ -158,7 +157,7 @@ describe('live match desk player sections', () => {
 		assert.equal(result.fixturePlayers?.[0]?.players[0]?.player?.webName, 'Tzolis')
 	})
 
-	it('keeps the next fixture tab as the default when finalized results coexist with a next fixture', () => {
+	it('keeps the completed tab as the default when next fixtures coexist with final results', () => {
 		assert.equal(
 			getPreferredLiveMatchesTab(
 				[
@@ -166,28 +165,19 @@ describe('live match desk player sections', () => {
 					{ status: 'UPCOMING' }
 				] as never
 			),
-			'upcoming'
-		)
-	})
-
-	it('auto-advances after the anchored gameweek finishes', () => {
-		assert.equal(
-			shouldAutoAdvanceToNextLiveMatchesTab(
-				[{ status: 'FT' }, { status: 'UPCOMING' }] as never
-			),
-			true
+			'finished'
 		)
 		assert.equal(
-			shouldAutoAdvanceToNextLiveMatchesTab(
-				[{ status: 'FT' }, { status: 'LIVE' }, { status: 'UPCOMING' }] as never
-			),
-			false
-		)
-		assert.equal(
-			shouldAutoAdvanceToNextLiveMatchesTab(
+			getPreferredLiveMatchesTab(
 				[{ status: 'FT' }, { status: 'NOT_STARTED' }, { status: 'UPCOMING' }] as never
 			),
-			false
+			'not-started'
+		)
+		assert.equal(
+			getPreferredLiveMatchesTab(
+				[{ status: 'LIVE' }, { status: 'FT' }, { status: 'UPCOMING' }] as never
+			),
+			'live'
 		)
 	})
 

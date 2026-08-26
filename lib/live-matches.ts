@@ -59,39 +59,17 @@ const hasCoherentLiveRevision = (
 
 export function getPreferredLiveMatchesTab(
 	matches: readonly Match[]
-): 'live' | 'finished' | 'not-started' | 'upcoming' {
+): 'live' | 'finished' | 'not-started' {
 	const hasLive = matches.some(
 		match => match.status === 'LIVE' || match.status === 'HT'
 	)
 	const hasFinished = matches.some(match => match.status === 'FT')
 	const hasNotStarted = matches.some(match => match.status === 'NOT_STARTED')
-	const hasUpcoming = matches.some(match => match.status === 'UPCOMING')
 
 	if (hasLive) return 'live'
 	if (hasNotStarted) return 'not-started'
-	if (hasUpcoming) return 'upcoming'
 	if (hasFinished) return 'finished'
 	return 'live'
-}
-
-/**
- * Once every fixture in the anchored gameweek is finished, the next-fixture
- * rows are the page's primary view. A persisted `finished` tab must not pin
- * the page to the previous gameweek in that transition window.
- */
-export function shouldAutoAdvanceToNextLiveMatchesTab(
-	matches: readonly Match[]
-): boolean {
-	const hasUpcoming = matches.some(match => match.status === 'UPCOMING')
-	const hasFinished = matches.some(match => match.status === 'FT')
-	const hasCurrentMatch = matches.some(
-		match =>
-			match.status === 'LIVE' ||
-			match.status === 'HT' ||
-			match.status === 'NOT_STARTED'
-	)
-
-	return hasUpcoming && hasFinished && !hasCurrentMatch
 }
 
 const POSITION_ELEMENT_TYPE: Record<

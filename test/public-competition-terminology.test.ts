@@ -52,7 +52,7 @@ test('public competition copy is complete and contains no accidental legacy term
 				competitions: 'Competitions',
 				explore: 'Explore',
 				myCompetitions: 'My Competitions',
-				createCompetition: 'Competition',
+				createCompetition: 'New Competition',
 				myTournament: 'My Tournament'
 			},
 			home: {
@@ -72,7 +72,7 @@ test('public competition copy is complete and contains no accidental legacy term
 				competitions: '赛事',
 				explore: '探索',
 				myCompetitions: '我的赛事',
-				createCompetition: '赛事',
+				createCompetition: '新建赛事',
 				myTournament: '赛事'
 			},
 			home: {

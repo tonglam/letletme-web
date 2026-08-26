@@ -2,6 +2,8 @@
 
 import { GameweekSelector } from '@/components/data/GameweekSelector'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
+import { PlayerDetailModal } from '@/components/live/PlayerDetailModal'
+import { useMatchPlayerDetail } from '@/components/live/match-card/useMatchPlayerDetail'
 import { TeamOfTheWeekSection } from '@/components/home/TeamOfTheWeekSection'
 import PageShell from '@/components/layout/PageShell'
 import { ShareActions } from '@/components/share/ShareActions'
@@ -27,7 +29,8 @@ import {
 	type GameweekBoardPlayer,
 	type GameweekDisplayState
 } from '@/lib/gameweek-board'
-import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
+import type { PlayerStat } from '@/types/match'
+import type { PlayerListItem } from '@/components/player/PlayerList'
 import { Star } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useFormatter, useTranslations } from 'next-intl'
@@ -96,6 +99,29 @@ function mapDreamTeamPlayers(
 		teamShortName: entry.teamShortName,
 		totalPoints: entry.totalPoints
 	}))
+}
+
+function elementTypeForPosition(
+	position: GameweekBoardPlayer['position']
+): number {
+	if (position === 'GKP') return 1
+	if (position === 'DEF') return 2
+	if (position === 'FWD') return 4
+	return 3
+}
+
+function boardPlayerToStat(player: GameweekBoardPlayer): PlayerStat {
+	return {
+		player: player.name,
+		element: player.id,
+		elementType: elementTypeForPosition(player.position),
+		minutes: player.minutes ?? 0,
+		goals: player.stats.goals ?? 0,
+		assists: player.stats.assists ?? 0,
+		cleanSheets: player.stats.cleanSheets ?? 0,
+		bonus_points: player.stats.bonusPoints ?? 0,
+		totalPoints: player.points
+	}
 }
 
 function mapOverallStats(desk: GameweekDeskData): OverallGameweekStats {
@@ -261,6 +287,14 @@ export default function GameweekStatsClient({
 	const isOverviewPending = committedDesk.overviewState === 'PENDING'
 	const isBoardsUnavailable = committedDesk.boardsState === 'UNAVAILABLE'
 	const isBoardsPending = committedDesk.boardsState === 'PENDING'
+	const haulShareRef = useRef<HTMLDivElement | null>(null)
+	const {
+		closePlayerDetail,
+		isLoading: isPlayerDetailLoading,
+		isOpen: isPlayerDetailOpen,
+		openPlayerDetail,
+		selectedPlayer
+	} = useMatchPlayerDetail(visibleGameweek)
 
 	const formatStat = useCallback(
 		(value: number | null, fallbackTip = t('pendingOfficial')) =>
@@ -303,9 +337,16 @@ export default function GameweekStatsClient({
 			})
 		)
 	}, [committedDesk.publishedAt, formatter])
-	const playerHref = useCallback(
-		(player: { id: number }) => playerStatsHref({ p1: String(player.id) }),
-		[]
+	const handleHaulPlayerClick = useCallback(
+		(player: PlayerListItem) => {
+			const boardPlayer = haulPlayers.find(
+				candidate => candidate.id === player.id
+			)
+			if (!boardPlayer) return
+			const team = boardPlayer.team ?? '—'
+			void openPlayerDetail(boardPlayerToStat(boardPlayer), team, team)
+		},
+		[haulPlayers, openPlayerDetail]
 	)
 	const haulShareText =
 		!isLoading &&
@@ -563,78 +604,93 @@ export default function GameweekStatsClient({
 								</p>
 							) : null}
 
-						{!isPreseasonSelection ? (
-							isBoardsUnavailable ? (
-								<StatsSectionCard
-									title={t('dreamTeamTitle', { gameweek: visibleGameweek })}
-								>
-									<p className="text-sm text-muted-foreground">
-										{t('loadFailed')}
-									</p>
-								</StatsSectionCard>
-							) : isScheduledSelection || isBoardsPending ? (
-								<StatsSectionCard
-									title={t('dreamTeamTitle', { gameweek: visibleGameweek })}
-								>
-									<p className="text-sm text-muted-foreground">
-										{t('pendingOfficial')}
-									</p>
-								</StatsSectionCard>
-							) : dreamTeam.length === 0 ? (
-								<StatsSectionCard
-									title={t('dreamTeamTitle', { gameweek: visibleGameweek })}
-								>
-									<p className="text-sm text-muted-foreground">
-										{t('noDreamTeam')}
-									</p>
-								</StatsSectionCard>
-							) : (
-								<TeamOfTheWeekSection
-									currentEventId={visibleGameweek}
-									dreamTeam={dreamTeam}
-									showShareActions={false}
-								/>
-							)) : null}
-
 							{!isPreseasonSelection ? (
-								<StatsSectionCard
-									icon={Star}
-									title={t('doubleDigitHauls')}
-									description={t('haulDescription')}
-									action={
-										haulShareText ? (
-											<ShareActions
-												text={haulShareText}
-												title={t('doubleDigitHauls')}
-												actions={['text']}
-											/>
-										) : null
-								}
-								>
-									{isBoardsUnavailable ? (
+								isBoardsUnavailable ? (
+									<StatsSectionCard
+										title={t('dreamTeamTitle', { gameweek: visibleGameweek })}
+									>
 										<p className="text-sm text-muted-foreground">
 											{t('loadFailed')}
 										</p>
-									) : isScheduledSelection || isBoardsPending ? (
+									</StatsSectionCard>
+								) : isScheduledSelection || isBoardsPending ? (
+									<StatsSectionCard
+										title={t('dreamTeamTitle', { gameweek: visibleGameweek })}
+									>
 										<p className="text-sm text-muted-foreground">
 											{t('pendingOfficial')}
 										</p>
-									) : haulPlayers.length === 0 ? (
+									</StatsSectionCard>
+								) : dreamTeam.length === 0 ? (
+									<StatsSectionCard
+										title={t('dreamTeamTitle', { gameweek: visibleGameweek })}
+									>
 										<p className="text-sm text-muted-foreground">
-											{t('noHauls')}
+											{t('noDreamTeam')}
 										</p>
-									) : (
-										<PlayerList
-											players={haulPlayers}
-											playerHref={playerHref}
-										/>
-									)}
-								</StatsSectionCard>
+									</StatsSectionCard>
+								) : (
+									<TeamOfTheWeekSection
+										currentEventId={visibleGameweek}
+										dreamTeam={dreamTeam}
+										showShareActions={false}
+									/>
+								)
+							) : null}
+
+							{!isPreseasonSelection ? (
+								<div
+									ref={haulShareRef}
+									data-share-fit-content="true"
+									data-share-preserve-width="true"
+									className="min-w-0"
+								>
+									<StatsSectionCard
+										icon={Star}
+										title={t('doubleDigitHauls')}
+										description={t('haulDescription')}
+										action={
+											haulShareText ? (
+												<ShareActions
+													text={haulShareText}
+													imageRef={haulShareRef}
+													title={t('doubleDigitHauls')}
+													actions={['text', 'image']}
+												/>
+											) : null
+										}
+									>
+										{isBoardsUnavailable ? (
+											<p className="text-sm text-muted-foreground">
+												{t('loadFailed')}
+											</p>
+										) : isScheduledSelection || isBoardsPending ? (
+											<p className="text-sm text-muted-foreground">
+												{t('pendingOfficial')}
+											</p>
+										) : haulPlayers.length === 0 ? (
+											<p className="text-sm text-muted-foreground">
+												{t('noHauls')}
+											</p>
+										) : (
+											<PlayerList
+												players={haulPlayers}
+												onPlayerClick={handleHaulPlayerClick}
+											/>
+										)}
+									</StatsSectionCard>
+								</div>
 							) : null}
 						</div>
 					</div>
 				</div>
 			</PageShell>
+			<PlayerDetailModal
+				player={selectedPlayer}
+				isOpen={isPlayerDetailOpen}
+				onClose={closePlayerDetail}
+				isLoading={isPlayerDetailLoading}
+			/>
 		</>
 	)
 }

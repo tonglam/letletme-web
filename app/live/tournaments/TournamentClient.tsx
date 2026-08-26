@@ -60,6 +60,7 @@ import {
 } from '@/lib/tournament/lifecycle'
 import {
 	readLiveTournamentSelection,
+	resolveLiveTournamentSelection,
 	writeLiveTournamentSelection
 } from '@/lib/tournament/live-selection'
 import { Tournament, type TournamentEntry } from '@/types/tournament'
@@ -217,7 +218,8 @@ export default function TournamentClient({
 	>(null)
 	const [selectionRestoreComplete, setSelectionRestoreComplete] =
 		useState(false)
-	const selectionRestoreAttemptedRef = useRef(false)
+	const selectionRestoreEntryIdRef = useRef<number | null>(null)
+	const cachedTournamentIdRef = useRef<string | null>(null)
 	const [loadError, setLoadError] = useState<string | null>(null)
 	const [resultsError, setResultsError] = useState<string | null>(
 		initialResultsError
@@ -320,63 +322,43 @@ export default function TournamentClient({
 			// Storage is optional; live standings must remain usable when blocked.
 		}
 
-		const urlTournament = normalizedTournamentIdFromUrl ?? ''
-		const urlTournamentIsKnown = tournaments.some(
-			tournament => tournament.id === urlTournament
-		)
-		if (urlTournament) {
-			if (urlTournamentIsKnown) {
-				setRestoredTournamentId(urlTournament)
-				writeLiveTournamentSelection(storage, entryId, urlTournament)
-			}
-			setSelectionRestoreComplete(true)
-			return
-		}
-
-		if (!selectionRestoreAttemptedRef.current) {
-			selectionRestoreAttemptedRef.current = true
-			const cachedTournamentId = readLiveTournamentSelection(storage, entryId)
-			if (
-				cachedTournamentId &&
-				tournaments.some(tournament => tournament.id === cachedTournamentId)
-			) {
-				setRestoredTournamentId(cachedTournamentId)
-				setSelectionRestoreComplete(true)
-				return
-			}
-		}
-
-		if (
-			restoredTournamentId &&
-			tournaments.some(tournament => tournament.id === restoredTournamentId)
-		) {
-			setSelectionRestoreComplete(true)
-			return
-		}
-		if (
-			restoredTournamentId &&
-			!tournaments.some(tournament => tournament.id === restoredTournamentId)
-		) {
+		if (selectionRestoreEntryIdRef.current !== entryId) {
+			selectionRestoreEntryIdRef.current = entryId
+			cachedTournamentIdRef.current = readLiveTournamentSelection(
+				storage,
+				entryId
+			)
 			setRestoredTournamentId(null)
 		}
 
-		const fallbackTournamentId =
-			initialSelectedTournamentId &&
-			tournaments.some(
-				tournament => tournament.id === initialSelectedTournamentId
-			)
-				? initialSelectedTournamentId
-				: tournaments[0]?.id
-		if (fallbackTournamentId) {
-			setRestoredTournamentId(fallbackTournamentId)
-			writeLiveTournamentSelection(storage, entryId, fallbackTournamentId)
+		const resolution = resolveLiveTournamentSelection({
+			availableIds: tournaments.map(tournament => tournament.id),
+			urlTournamentId: normalizedTournamentIdFromUrl,
+			cachedTournamentId: cachedTournamentIdRef.current,
+			initialTournamentId: initialSelectedTournamentId
+		})
+		if (resolution.source === 'unknown-url') {
+			setSelectionRestoreComplete(true)
+			return
+		}
+
+		if (resolution.selectedId) {
+			setRestoredTournamentId(resolution.selectedId)
+			if (resolution.source === 'url') {
+				cachedTournamentIdRef.current = resolution.selectedId
+				writeLiveTournamentSelection(storage, entryId, resolution.selectedId)
+			} else if (!resolution.cachedId) {
+				// Do not overwrite a cached id that is temporarily absent from an
+				// incomplete membership list. Apply it when the list catches up.
+				cachedTournamentIdRef.current = resolution.selectedId
+				writeLiveTournamentSelection(storage, entryId, resolution.selectedId)
+			}
 		}
 		setSelectionRestoreComplete(true)
 	}, [
 		entryId,
 		initialSelectedTournamentId,
 		normalizedTournamentIdFromUrl,
-		restoredTournamentId,
 		tournaments
 	])
 	const selectedTournament = useMemo(() => {
@@ -1120,6 +1102,7 @@ export default function TournamentClient({
 						onTournamentChange={id => {
 							if (selectedTournament && id === selectedTournament.id) return
 							setRestoredTournamentId(id)
+							cachedTournamentIdRef.current = id
 							try {
 								writeLiveTournamentSelection(window.localStorage, entryId, id)
 							} catch {

@@ -1,19 +1,19 @@
 import { PriceChangesBoard } from '@/app/data/price-changes/PriceChangesBoard'
 import PageShell from '@/components/layout/PageShell'
+import { LocalSnapshotTime } from '@/components/stats/LocalSnapshotTime'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Badge } from '@/components/ui/badge'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { withCapacityRunForRequest } from '@/lib/capacity-run'
-import { getCurrentAndNextEvents, pickCurrentEventId } from '@/lib/events'
+import { getCurrentAndNextEvents } from '@/lib/events'
 import { EMPTY_PRICE_CHANGE_BOARD } from '@/lib/graphql/operations/price-changes'
+import { computeTimeLeft } from '@/lib/home-deadline'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
-import { loadPersonalPriceContext } from '@/lib/price-change-personal-server'
-import type { PersonalPriceContext } from '@/lib/price-change-personal'
 import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
 import type {
 	EntrySquadPicksResult,
 	SquadLoadState,
-	SquadPickSeed,
+	SquadPickSeed
 } from '@/lib/squad-picks'
 import { getVerifiedEntryContext } from '@/lib/session'
 import { getTranslations } from 'next-intl/server'
@@ -82,24 +82,11 @@ async function renderPriceChangesPage({ params }: PageProps) {
 		mySquadState = 'unavailable'
 	}
 
-	let personalPriceContext: PersonalPriceContext = {
-		state: 'UNAVAILABLE',
-		purchasePrices: {}
-	}
-	if (
-		identity.session &&
-		identity.entryId != null &&
-		mySquadPicks.length > 0
-	) {
-		personalPriceContext = await loadPersonalPriceContext({
-			session: identity.session,
-			entryId: identity.entryId,
-			picks: mySquadPicks,
-			eventId: pickCurrentEventId(events) ?? events?.next?.[0]?.id ?? null,
-		})
-	}
-
 	const board = boardResponse.priceChangeBoard
+	const deadlineMs = board.deadline ? Date.parse(board.deadline) : NaN
+	const initialTimeLeft = computeTimeLeft(
+		Number.isFinite(deadlineMs) ? deadlineMs : null
+	)
 	const statusLabel =
 		board.status === 'READY'
 			? t('fresh')
@@ -115,12 +102,19 @@ async function renderPriceChangesPage({ params }: PageProps) {
 				<StatsPageHeader
 					title={t('title')}
 					badge={
-						<Badge
-							variant="outline"
-							className={statusBadgeClass(board.status)}
-						>
-							{statusLabel}
-						</Badge>
+						<div className="flex flex-col items-end gap-1">
+							<Badge
+								variant="outline"
+								className={statusBadgeClass(board.status)}
+							>
+								{statusLabel}
+							</Badge>
+							<LocalSnapshotTime
+								value={board.fetchedAt}
+								label={t('snapshotUpdatedAt')}
+								locale={locale}
+							/>
+						</div>
 					}
 				/>
 				<p className="-mt-4 mb-6 max-w-3xl text-sm leading-6 text-muted-foreground">
@@ -129,10 +123,10 @@ async function renderPriceChangesPage({ params }: PageProps) {
 				<PriceChangesBoard
 					board={board}
 					locale={locale}
+					initialTimeLeft={initialTimeLeft}
 					mySquadElementIds={mySquadElementIds}
+					mySquadPicks={mySquadPicks}
 					mySquadState={mySquadState}
-					personalPurchasePrices={personalPriceContext.purchasePrices}
-					personalPriceState={personalPriceContext.state}
 				/>
 			</div>
 		</PageShell>

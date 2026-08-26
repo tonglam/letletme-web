@@ -1,7 +1,7 @@
 'use client'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { SelectedFilterBadge } from '@/components/player/SelectedFilterBadge'
 import {
 	Select,
 	SelectContent,
@@ -279,24 +279,13 @@ export function TeamExposureFilter({
 			{selectedTeams.length > 0 ? (
 				<div className="mt-3 flex flex-wrap gap-2">
 					{selectedTeams.map(team => (
-						<Badge
+						<SelectedFilterBadge
 							key={team.shortName}
-							variant="outline"
-							className="gap-2 rounded-md px-2 py-1"
-						>
-							<span className="font-medium">{team.name}</span>
-							<span className="text-muted-foreground">
-								{team.shortName} · {team.count} · {scopeLabels[scope]}
-							</span>
-							<button
-								type="button"
-								aria-label={t('removeTeamItem', { team: team.name })}
-								className="rounded-sm text-muted-foreground hover:text-foreground"
-								onClick={() => removeTeam(team.shortName)}
-							>
-								<X className="h-3.5 w-3.5" />
-							</button>
-						</Badge>
+							name={team.name}
+							details={`${team.shortName} · ${team.count} · ${scopeLabels[scope]}`}
+							removeLabel={t('removeTeamItem', { team: team.name })}
+							onRemove={() => removeTeam(team.shortName)}
+						/>
 					))}
 					<Button
 						type="button"

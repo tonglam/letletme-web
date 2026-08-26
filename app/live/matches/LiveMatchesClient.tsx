@@ -25,8 +25,7 @@ import {
 } from '@/lib/live-refresh'
 import {
 	getLiveMatchesSnapshot,
-	getPreferredLiveMatchesTab,
-	shouldAutoAdvanceToNextLiveMatchesTab
+	getPreferredLiveMatchesTab
 } from '@/lib/live-matches'
 import { usePageActive } from '@/hooks/use-page-active'
 import type { Match } from '@/types/match'
@@ -35,12 +34,12 @@ import { useFormatter, useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const LIVE_MATCHES_TAB_STORAGE_KEY = 'live-matches-active-tab'
-type LiveMatchesTab = 'live' | 'finished' | 'not-started' | 'upcoming'
+type LiveMatchesTab = 'live' | 'finished' | 'not-started'
 type LiveStatusTab = Match['status']
 
 const TAB_CONFIG: ReadonlyArray<{
 	value: LiveMatchesTab
-	labelKey: 'noLive' | 'noFinished' | 'noNotStarted' | 'noUpcoming'
+	labelKey: 'noLive' | 'noFinished' | 'noNotStarted'
 	statuses: ReadonlyArray<LiveStatusTab>
 }> = [
 	{
@@ -57,11 +56,6 @@ const TAB_CONFIG: ReadonlyArray<{
 		value: 'not-started',
 		labelKey: 'noNotStarted',
 		statuses: ['NOT_STARTED']
-	},
-	{
-		value: 'upcoming',
-		labelKey: 'noUpcoming',
-		statuses: ['UPCOMING']
 	}
 ] as const
 
@@ -69,8 +63,7 @@ function isLiveMatchesTab(value: string): value is LiveMatchesTab {
 	return (
 		value === 'live' ||
 		value === 'finished' ||
-		value === 'not-started' ||
-		value === 'upcoming'
+		value === 'not-started'
 	)
 }
 
@@ -174,18 +167,11 @@ export function LiveMatchesClient({
 				acceptSnapshot(data.snapshot)
 				hasLastGoodData.current = true
 
-				if (!hasUserSelectedTab.current) {
-					if (shouldAutoAdvanceToNextLiveMatchesTab(mappedMatches)) {
-						hasSavedTabPreference.current = false
-						setActiveTab('upcoming')
-						try {
-							window.localStorage.removeItem(LIVE_MATCHES_TAB_STORAGE_KEY)
-						} catch {
-							// Tab preference is optional.
-						}
-					} else if (!hasSavedTabPreference.current) {
-						setActiveTab(getPreferredLiveMatchesTab(mappedMatches))
-					}
+				if (
+					!hasUserSelectedTab.current &&
+					!hasSavedTabPreference.current
+				) {
+					setActiveTab(getPreferredLiveMatchesTab(mappedMatches))
 				}
 			} catch (err) {
 				console.error('Failed to fetch live matches:', err)
@@ -314,13 +300,11 @@ export function LiveMatchesClient({
 						(Number.isNaN(tB) ? 1 : 0) - (Number.isNaN(tA) ? 1 : 0) || tB - tA
 					)
 				}),
-			'not-started': matches.filter(match => match.status === 'NOT_STARTED'),
-			upcoming: matches.filter(match => match.status === 'UPCOMING')
+			'not-started': matches.filter(match => match.status === 'NOT_STARTED')
 		} satisfies Record<LiveMatchesTab, Match[]>
 	}, [matches])
-	const shouldAutoAdvanceToUpcoming =
-		shouldAutoAdvanceToNextLiveMatchesTab(matches)
-
+	const tabCountLabel = (tab: LiveMatchesTab) =>
+		t('matchCount', { count: matchesByTab[tab].length })
 	useEffect(() => {
 		if (
 			hasRequestedInitialFixturePlayers.current ||
@@ -340,16 +324,6 @@ export function LiveMatchesClient({
 
 	useEffect(() => {
 		if (hasUserSelectedTab.current) return
-		if (shouldAutoAdvanceToUpcoming) {
-			hasSavedTabPreference.current = false
-			setActiveTab('upcoming')
-			try {
-				window.localStorage.removeItem(LIVE_MATCHES_TAB_STORAGE_KEY)
-			} catch {
-				// Tab preference is optional.
-			}
-			return
-		}
 		if (hasSavedTabPreference.current) return
 		let savedTab: string | null = null
 		try {
@@ -357,23 +331,20 @@ export function LiveMatchesClient({
 		} catch {
 			return
 		}
-		if (
-			savedTab &&
-			isLiveMatchesTab(savedTab) &&
-			matchesByTab[savedTab].length > 0
-		) {
+		if (savedTab && isLiveMatchesTab(savedTab) && matchesByTab[savedTab].length > 0) {
 			hasSavedTabPreference.current = true
 			const timeoutId = window.setTimeout(() => setActiveTab(savedTab), 0)
 			return () => window.clearTimeout(timeoutId)
 		}
-		if (savedTab && isLiveMatchesTab(savedTab)) {
+		// Remove the retired Next Gameweek tab from older browser sessions.
+		if (savedTab === 'upcoming' || (savedTab && isLiveMatchesTab(savedTab))) {
 			try {
 				window.localStorage.removeItem(LIVE_MATCHES_TAB_STORAGE_KEY)
 			} catch {
 				// Tab preference is optional.
 			}
 		}
-	}, [matchesByTab, shouldAutoAdvanceToUpcoming])
+	}, [matchesByTab])
 
 	const pollingEventId = resolvedCurrentEventId
 	const autoRefreshEnabled = shouldPollLiveSnapshot({
@@ -623,30 +594,33 @@ export function LiveMatchesClient({
 						className="space-y-5"
 					>
 						<StatsTabsShell>
-							<TabsList className="grid h-auto w-full grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
+							<TabsList className="grid h-auto w-full grid-cols-3 gap-1.5 sm:gap-2">
 								<TabsTrigger
 									value="live"
 									className="w-full"
 								>
 									{t('liveNow')}
+									<span className="ml-1 whitespace-nowrap font-mono text-xs text-muted-foreground">
+										{tabCountLabel('live')}
+									</span>
 								</TabsTrigger>
 								<TabsTrigger
 									value="finished"
 									className="w-full"
 								>
 									{t('finished')}
+									<span className="ml-1 whitespace-nowrap font-mono text-xs text-muted-foreground">
+										{tabCountLabel('finished')}
+									</span>
 								</TabsTrigger>
 								<TabsTrigger
 									value="not-started"
 									className="w-full"
 								>
 									{t('notStarted')}
-								</TabsTrigger>
-								<TabsTrigger
-									value="upcoming"
-									className="w-full"
-								>
-									{t('upcoming')}
+									<span className="ml-1 whitespace-nowrap font-mono text-xs text-muted-foreground">
+										{tabCountLabel('not-started')}
+									</span>
 								</TabsTrigger>
 							</TabsList>
 						</StatsTabsShell>
@@ -663,7 +637,6 @@ export function LiveMatchesClient({
 										allMatches={activeMatches}
 										currentIndex={i}
 										eventId={resolvedCurrentEventId}
-										showShareActions={activeTab !== 'upcoming'}
 									/>
 								))
 							) : (

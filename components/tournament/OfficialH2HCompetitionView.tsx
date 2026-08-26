@@ -5,11 +5,15 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { HomeAutoCarousel } from '@/components/home/HomeAutoCarousel'
 import { usePageActive } from '@/hooks/use-page-active'
-import { Link } from '@/i18n/navigation'
+import { Link, useRouter } from '@/i18n/navigation'
 import { executeQuery } from '@/lib/graphql-client'
 import {
+	GET_ENTRY_OFFICIAL_H2H_MATCHUPS,
 	GET_TOURNAMENT_OFFICIAL_H2H,
+	type EntryOfficialH2HMatchupsItem,
+	type EntryOfficialH2HMatchupsResponse,
 	type OfficialH2HMatch,
 	type OfficialH2HMatchSide,
 	type OfficialH2HStanding,
@@ -17,6 +21,7 @@ import {
 	type TournamentOfficialH2HResponse
 } from '@/lib/graphql/operations/tournaments'
 import { traceableOfficialH2HScore } from '@/lib/live-manager-score'
+import { shouldShowOfficialH2HStandings } from '@/lib/tournament/official-h2h-presentation'
 import { cn, formatInteger } from '@/lib/utils'
 import {
 	ArrowLeft,
@@ -25,14 +30,15 @@ import {
 	CheckCircle2,
 	RefreshCw,
 	Swords,
-	Trophy,
-	Users
+	Trophy
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const REFRESH_INTERVAL_MS = 60_000
 const EMPTY_OFFICIAL_H2H_MATCHES: readonly OfficialH2HMatch[] = []
+const H2H_STANDING_COLUMNS =
+	'2.5rem minmax(0,1fr) 2.75rem 2.75rem 2.75rem 3.75rem 4.5rem 5.5rem'
 
 function sideLabel(side: OfficialH2HMatchSide, averageLabel: string): string {
 	return side.isAverage ? averageLabel : side.entryName
@@ -53,10 +59,6 @@ function shareMatchLabel(
 		return `${home} ${versusLabel} ${away}`
 	}
 	return `${home} ${scoreLabel(match.home)} — ${scoreLabel(match.away)} ${away}`
-}
-
-function matchIsComplete(match: OfficialH2HMatch): boolean {
-	return match.home.points != null && match.away.points != null
 }
 
 function scoreSourceLabel(
@@ -95,85 +97,148 @@ function StandingBoard({
 
 	return (
 		<div className="overflow-hidden rounded-xl border border-border/70 bg-background/45">
-			<table className="w-full table-fixed text-[13px] sm:text-sm">
-				<thead className="border-b border-border/70 bg-muted/30 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-					<tr>
-						<th className="w-12 px-2 py-3 text-center sm:w-14 sm:px-3">
-							#
-						</th>
-						<th className="px-2 py-3 text-left sm:px-3">{t('team')}</th>
-						<th className="hidden w-10 px-1 py-3 text-center sm:table-cell">P</th>
-						<th className="hidden w-10 px-1 py-3 text-center sm:table-cell">W</th>
-						<th className="hidden w-10 px-1 py-3 text-center sm:table-cell">D</th>
-						<th className="hidden w-10 px-1 py-3 text-center sm:table-cell">L</th>
-						<th className="hidden w-20 px-2 py-3 text-right sm:table-cell sm:px-3">
-							{t('officialH2HPointsFor')}
-						</th>
-						<th className="w-[4.5rem] px-2 py-3 text-right sm:w-20 sm:px-3">
-							{t('officialH2HMatchPoints')}
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					{standings.map(standing => {
-						const isViewer = standing.entryId === viewerEntryId
-						return (
-							<tr
-								key={standing.entryId}
-								className={cn(
-									'border-t border-border/50 transition-colors first:border-t-0 hover:bg-muted/30',
-									isViewer &&
-										'bg-primary/[0.06] shadow-[inset_3px_0_0_hsl(var(--primary))]'
-								)}
-							>
-								<td className="px-2 py-3 text-center font-mono font-semibold tabular-nums text-muted-foreground sm:px-3">
+			<div
+				className="eyebrow hidden border-b border-border/60 bg-muted/20 px-4 py-2 lg:grid lg:items-center lg:gap-2"
+				style={{ gridTemplateColumns: H2H_STANDING_COLUMNS }}
+			>
+				<span className="text-center">#</span>
+				<span>{t('team')}</span>
+				<span className="text-right">{t('officialH2HWon')}</span>
+				<span className="text-right">{t('officialH2HDrawn')}</span>
+				<span className="text-right">{t('officialH2HLost')}</span>
+				<span className="text-right">{t('officialH2HPlayed')}</span>
+				<span className="text-right">{t('officialH2HPointsFor')}</span>
+				<span className="text-right">{t('officialH2HMatchPoints')}</span>
+			</div>
+			<ul className="divide-y divide-border/60">
+				{standings.map(standing => {
+					const isViewer = standing.entryId === viewerEntryId
+					const isTopThree = standing.rank != null && standing.rank <= 3
+					return (
+						<li
+							key={standing.entryId}
+							className={cn(
+								'px-3 py-2.5 transition-colors hover:bg-muted/30 sm:px-4',
+								isViewer &&
+									'bg-primary/[0.06] shadow-[inset_3px_0_0_hsl(var(--primary))]'
+							)}
+						>
+							<div className="flex min-w-0 items-start gap-3 lg:hidden">
+								<div
+									className={cn(
+										'w-7 shrink-0 pt-1 text-center font-display text-base font-bold tabular-nums',
+										isTopThree ? 'text-primary-ink' : 'text-muted-foreground'
+									)}
+								>
 									{standing.rank ?? '—'}
-								</td>
-								<td className="min-w-0 px-2 py-3 sm:px-3">
+								</div>
+								<div className="min-w-0 flex-1">
 									<Link
 										href={`/live/points/${standing.entryId}?tournamentId=${tournamentId}&gw=${eventId}`}
 										prefetch={false}
 										className="block min-w-0 hover:text-primary-ink hover:underline underline-offset-2"
 										title={standing.entryName ?? `Entry ${standing.entryId}`}
 									>
-										<p className="truncate whitespace-nowrap font-semibold leading-5">
+										<p className="break-words text-sm font-semibold leading-5">
 											{standing.entryName ?? `Entry ${standing.entryId}`}
 										</p>
 										{standing.playerName ? (
-											<p className="truncate whitespace-nowrap text-[11px] leading-4 text-muted-foreground">
+											<p className="break-words text-xs leading-4 text-muted-foreground">
 												{standing.playerName}
 											</p>
 										) : null}
-										<p className="truncate whitespace-nowrap text-[10px] leading-4 text-muted-foreground sm:hidden">
-											{standing.played} P · {standing.won} W · {standing.drawn} D ·{' '}
-											{standing.lost} L · {t('officialH2HPointsFor')} {standing.pointsFor}
-										</p>
 									</Link>
-								</td>
+								</div>
+								<div
+									className="shrink-0 rounded-md bg-primary/[0.08] px-2 py-1 text-right"
+									aria-label={`${t('officialH2HMatchPoints')}: ${standing.matchPoints}`}
+								>
+									<div className="text-[10px] leading-3 text-muted-foreground">
+										{t('officialH2HMatchPoints')}
+									</div>
+									<div className="font-display text-xl font-extrabold leading-6 tabular-nums text-primary-ink">
+										{standing.matchPoints}
+									</div>
+								</div>
+							</div>
+
+							<div className="mt-2 grid grid-cols-5 divide-x divide-border/50 border-t border-border/50 pt-2 lg:hidden">
 								{[
-									standing.played,
-									standing.won,
-									standing.drawn,
-									standing.lost
-								].map((value, index) => (
-									<td
-										key={index}
-										className="hidden px-1 py-3 text-center font-mono tabular-nums text-muted-foreground sm:table-cell"
+									[t('officialH2HWon'), standing.won],
+									[t('officialH2HDrawn'), standing.drawn],
+									[t('officialH2HLost'), standing.lost],
+									[t('officialH2HPlayed'), standing.played],
+									[t('officialH2HPointsFor'), standing.pointsFor]
+								].map(([label, value]) => (
+									<div
+										key={label}
+										className="min-w-0 px-1.5 text-center first:pl-0 last:pr-0"
 									>
-										{value}
-									</td>
+										<div className="text-[10px] leading-3 text-muted-foreground">
+											{label}
+										</div>
+										<div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-foreground/90">
+											{value}
+										</div>
+									</div>
 								))}
-								<td className="hidden px-2 py-3 text-right font-mono tabular-nums text-muted-foreground sm:table-cell sm:px-3">
+							</div>
+
+							<div
+								className="hidden items-center gap-2 lg:grid"
+								style={{ gridTemplateColumns: H2H_STANDING_COLUMNS }}
+							>
+								<div
+									className={cn(
+										'text-center font-display text-base font-bold tabular-nums',
+										isTopThree ? 'text-primary-ink' : 'text-muted-foreground'
+									)}
+								>
+									{standing.rank ?? '—'}
+								</div>
+								<div className="min-w-0">
+									<Link
+										href={`/live/points/${standing.entryId}?tournamentId=${tournamentId}&gw=${eventId}`}
+										prefetch={false}
+										className="block min-w-0 hover:text-primary-ink hover:underline underline-offset-2"
+										title={standing.entryName ?? `Entry ${standing.entryId}`}
+									>
+										<p className="break-words text-sm font-semibold leading-5">
+											{standing.entryName ?? `Entry ${standing.entryId}`}
+										</p>
+										{standing.playerName ? (
+											<p className="break-words text-xs leading-4 text-muted-foreground">
+												{standing.playerName}
+											</p>
+										) : null}
+									</Link>
+								</div>
+								<span className="text-right font-mono text-sm tabular-nums text-foreground/90">
+									{standing.won}
+								</span>
+								<span className="text-right font-mono text-sm tabular-nums text-foreground/90">
+									{standing.drawn}
+								</span>
+								<span className="text-right font-mono text-sm tabular-nums text-foreground/90">
+									{standing.lost}
+								</span>
+								<span className="text-right font-mono text-sm tabular-nums text-muted-foreground">
+									{standing.played}
+								</span>
+								<span className="text-right font-mono text-sm tabular-nums text-foreground/90">
 									{standing.pointsFor}
-								</td>
-								<td className="px-2 py-3 text-right font-mono text-base font-bold tabular-nums text-primary-ink sm:px-3">
+								</span>
+								<div
+									className="text-right font-display text-2xl font-extrabold leading-6 tabular-nums text-primary-ink"
+									aria-label={`${t('officialH2HMatchPoints')}: ${standing.matchPoints}`}
+								>
 									{standing.matchPoints}
-								</td>
-							</tr>
-						)
-					})}
-				</tbody>
-			</table>
+								</div>
+							</div>
+						</li>
+					)
+				})}
+			</ul>
 		</div>
 	)
 }
@@ -192,9 +257,13 @@ function MatchCard({
 			match.away.entryId === viewerEntryId)
 	const hasScore = match.home.points != null && match.away.points != null
 	const homeWon =
-		hasScore && match.winnerEntryId != null && match.winnerEntryId === match.home.entryId
+		hasScore &&
+		match.winnerEntryId != null &&
+		match.winnerEntryId === match.home.entryId
 	const awayWon =
-		hasScore && match.winnerEntryId != null && match.winnerEntryId === match.away.entryId
+		hasScore &&
+		match.winnerEntryId != null &&
+		match.winnerEntryId === match.away.entryId
 
 	return (
 		<li>
@@ -221,7 +290,10 @@ function MatchCard({
 							<span className="size-2 rounded-full bg-primary shadow-[0_0_0_3px_hsl(var(--primary)/0.16)]" />
 						) : null}
 						{match.isBye ? (
-							<Badge variant="outline" className="px-2 py-0 text-[10px]">
+							<Badge
+								variant="outline"
+								className="px-2 py-0 text-[10px]"
+							>
 								{t('officialH2HBye')}
 							</Badge>
 						) : null}
@@ -231,7 +303,7 @@ function MatchCard({
 					<div className="min-w-0 text-right">
 						<p
 							className={cn(
-								'truncate whitespace-nowrap text-sm font-semibold',
+								'break-words text-sm font-semibold leading-tight',
 								homeWon && 'text-primary-ink'
 							)}
 							title={sideLabel(match.home, t('officialH2HAverageTeam'))}
@@ -239,7 +311,7 @@ function MatchCard({
 							{sideLabel(match.home, t('officialH2HAverageTeam'))}
 						</p>
 						{match.home.playerName ? (
-							<p className="truncate whitespace-nowrap text-[10px] text-muted-foreground">
+							<p className="break-words text-[10px] leading-tight text-muted-foreground">
 								{match.home.playerName}
 							</p>
 						) : null}
@@ -262,16 +334,11 @@ function MatchCard({
 								</span>
 							)}
 						</div>
-						{hasScore ? (
-							<span className="text-[10px] font-medium text-muted-foreground">
-								{t('officialH2HMatchPoints')}
-							</span>
-						) : null}
 					</div>
 					<div className="min-w-0">
 						<p
 							className={cn(
-								'truncate whitespace-nowrap text-sm font-semibold',
+								'break-words text-sm font-semibold leading-tight',
 								awayWon && 'text-primary-ink'
 							)}
 							title={sideLabel(match.away, t('officialH2HAverageTeam'))}
@@ -279,7 +346,7 @@ function MatchCard({
 							{sideLabel(match.away, t('officialH2HAverageTeam'))}
 						</p>
 						{match.away.playerName ? (
-							<p className="truncate whitespace-nowrap text-[10px] text-muted-foreground">
+							<p className="break-words text-[10px] leading-tight text-muted-foreground">
 								{match.away.playerName}
 							</p>
 						) : null}
@@ -292,6 +359,107 @@ function MatchCard({
 				) : null}
 			</Card>
 		</li>
+	)
+}
+
+function MatchupHistoryBoard({
+	matches,
+	currentEventId,
+	isLive,
+	isFinal
+}: {
+	matches: readonly OfficialH2HMatch[]
+	currentEventId?: number
+	isLive?: boolean
+	isFinal?: boolean
+}) {
+	const t = useTranslations('LiveTournament')
+
+	return (
+		<div className="overflow-hidden rounded-xl border border-border/70 bg-background/45">
+			<ul className="divide-y divide-border/60">
+				{matches.map(match => {
+					const hasScore =
+						match.home.points != null && match.away.points != null
+					const isLiveMatch =
+						isLive === true && match.eventId === currentEventId
+					const isFinishedMatch =
+						currentEventId != null &&
+						(match.eventId < currentEventId ||
+							(match.eventId === currentEventId && isFinal === true))
+					const status = isLiveMatch
+						? t('officialH2HMatchupLive')
+						: isFinishedMatch
+							? t('officialH2HMatchupFinished')
+							: t('officialH2HMatchupUpcoming')
+					const home = sideLabel(match.home, t('officialH2HAverageTeam'))
+					const away = sideLabel(match.away, t('officialH2HAverageTeam'))
+
+					return (
+						<li
+							key={match.officialMatchId}
+							className="px-3 py-3 sm:px-4"
+						>
+							<div className="flex min-w-0 items-center gap-3">
+								<div className="flex w-12 shrink-0 flex-col gap-1">
+									<span className="font-mono text-xs font-bold tabular-nums text-primary-ink">
+										{t('officialH2HMatchupRound', { event: match.eventId })}
+									</span>
+									<Badge
+										variant="outline"
+										className={cn(
+											'w-fit rounded-full px-1.5 py-0 text-[9px] leading-4',
+											isLiveMatch
+												? 'border-primary/35 bg-primary/10 text-primary-ink'
+												: isFinishedMatch
+													? 'border-border/70 bg-muted/60 text-muted-foreground'
+													: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+										)}
+									>
+										{status}
+									</Badge>
+								</div>
+								<div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3">
+									<div className="min-w-0 text-right">
+										<p className="break-words text-sm font-semibold leading-5">
+											{home}
+										</p>
+										{match.home.playerName ? (
+											<p className="break-words text-[10px] leading-4 text-muted-foreground">
+												{match.home.playerName}
+											</p>
+										) : null}
+									</div>
+									<div className="min-w-10 text-center font-mono text-sm font-bold tabular-nums">
+										{hasScore ? (
+											<span>
+												{scoreLabel(match.home)}
+												<span className="px-1 text-muted-foreground">—</span>
+												{scoreLabel(match.away)}
+											</span>
+										) : (
+											<span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
+												{t('officialH2HVersus')}
+											</span>
+										)}
+									</div>
+									<div className="min-w-0">
+										<p className="break-words text-sm font-semibold leading-5">
+											{away}
+										</p>
+										{match.away.playerName ? (
+											<p className="break-words text-[10px] leading-4 text-muted-foreground">
+												{match.away.playerName}
+											</p>
+										) : null}
+									</div>
+								</div>
+							</div>
+						</li>
+					)
+				})}
+			</ul>
+		</div>
 	)
 }
 
@@ -309,32 +477,84 @@ export function OfficialH2HCompetitionView({
 	viewerEntryId?: number
 }) {
 	const t = useTranslations('LiveTournament')
+	const router = useRouter()
 	const isPageActive = usePageActive()
 	const [snapshot, setSnapshot] = useState(initialSnapshot)
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [refreshFailed, setRefreshFailed] = useState(false)
 	const [hasLoaded, setHasLoaded] = useState(Boolean(initialSnapshot))
+	const [entryDesk, setEntryDesk] =
+		useState<EntryOfficialH2HMatchupsItem | null>(null)
+	const [entryDeskFailed, setEntryDeskFailed] = useState(false)
+	const [hasLoadedEntryDesk, setHasLoadedEntryDesk] = useState(
+		viewerEntryId == null
+	)
 	const inFlightRef = useRef<Promise<void> | null>(null)
-	const shareRef = useRef<HTMLDivElement | null>(null)
+	const boardsShareRef = useRef<HTMLElement | null>(null)
 	const isCurrentEvent = activeEventId === eventId
+	const showStandings = shouldShowOfficialH2HStandings(eventId, activeEventId)
 
 	const refresh = useCallback(() => {
 		if (inFlightRef.current) return inFlightRef.current
 		const request = (async () => {
+			const settle = <T,>(promise: Promise<T>) =>
+				promise.then(
+					value => ({ ok: true as const, value }),
+					error => ({ ok: false as const, error })
+				)
+			const matchupRequest =
+				viewerEntryId == null
+					? Promise.resolve(null)
+					: settle(
+							executeQuery<EntryOfficialH2HMatchupsResponse>(
+								GET_ENTRY_OFFICIAL_H2H_MATCHUPS,
+								{ entryId: viewerEntryId },
+								{ cache: 'no-store' }
+							)
+						)
 			try {
 				setIsRefreshing(true)
-				const response = await executeQuery<TournamentOfficialH2HResponse>(
-					GET_TOURNAMENT_OFFICIAL_H2H,
-					{ tournamentId, eventId },
-					{ cache: 'no-store' }
-				)
-				setSnapshot(response.tournamentOfficialH2H)
-				setRefreshFailed(false)
+				const [snapshotResult, matchupResult] = await Promise.all([
+					settle(
+						executeQuery<TournamentOfficialH2HResponse>(
+							GET_TOURNAMENT_OFFICIAL_H2H,
+							{ tournamentId, eventId },
+							{ cache: 'no-store' }
+						)
+					),
+					matchupRequest
+				])
+				if (snapshotResult.ok) {
+					setSnapshot(snapshotResult.value.tournamentOfficialH2H)
+					setRefreshFailed(false)
+				} else {
+					console.error(
+						'Failed to refresh official H2H mirror:',
+						snapshotResult.error
+					)
+					setRefreshFailed(true)
+				}
 				setHasLoaded(true)
-			} catch (error) {
-				console.error('Failed to refresh official H2H mirror:', error)
-				setRefreshFailed(true)
-				setHasLoaded(true)
+				if (matchupResult === null) {
+					setEntryDesk(null)
+					setEntryDeskFailed(false)
+					setHasLoadedEntryDesk(true)
+				} else if (matchupResult.ok) {
+					setEntryDesk(
+						matchupResult.value.entryOfficialH2HDesk.find(
+							item => item.tournamentId === tournamentId
+						) ?? null
+					)
+					setEntryDeskFailed(false)
+					setHasLoadedEntryDesk(true)
+				} else {
+					console.error(
+						'Failed to refresh official H2H matchup history:',
+						matchupResult.error
+					)
+					setEntryDeskFailed(true)
+					setHasLoadedEntryDesk(true)
+				}
 			} finally {
 				setIsRefreshing(false)
 			}
@@ -344,12 +564,17 @@ export function OfficialH2HCompetitionView({
 			if (inFlightRef.current === request) inFlightRef.current = null
 		})
 		return request
-	}, [eventId, tournamentId])
+	}, [eventId, tournamentId, viewerEntryId])
 
 	useEffect(() => {
 		if (!isPageActive || snapshot?.eventId === eventId) return
 		void refresh()
 	}, [eventId, isPageActive, refresh, snapshot?.eventId])
+
+	useEffect(() => {
+		if (!isPageActive || viewerEntryId == null || hasLoadedEntryDesk) return
+		void refresh()
+	}, [hasLoadedEntryDesk, isPageActive, refresh, viewerEntryId])
 
 	useEffect(() => {
 		if (!isCurrentEvent || !isPageActive) return
@@ -362,13 +587,13 @@ export function OfficialH2HCompetitionView({
 		() =>
 			hasTraceableScore
 				? [...(snapshot?.standings ?? [])].sort(
-				(left, right) =>
-					(left.rank ?? Number.MAX_SAFE_INTEGER) -
-						(right.rank ?? Number.MAX_SAFE_INTEGER) ||
-					right.matchPoints - left.matchPoints ||
-					right.pointsFor - left.pointsFor ||
-					left.entryId - right.entryId
-				)
+						(left, right) =>
+							(left.rank ?? Number.MAX_SAFE_INTEGER) -
+								(right.rank ?? Number.MAX_SAFE_INTEGER) ||
+							right.matchPoints - left.matchPoints ||
+							right.pointsFor - left.pointsFor ||
+							left.entryId - right.entryId
+					)
 				: [],
 		[hasTraceableScore, snapshot?.standings]
 	)
@@ -384,11 +609,13 @@ export function OfficialH2HCompetitionView({
 		}))
 	}, [hasTraceableScore, snapshot])
 	const viewerStanding = useMemo(
-		() => standings.find(standing => standing.entryId === viewerEntryId) ?? null,
+		() =>
+			standings.find(standing => standing.entryId === viewerEntryId) ?? null,
 		[standings, viewerEntryId]
 	)
-	const matchCount = matches.length
-	const completedMatchCount = matches.filter(matchIsComplete).length
+	const matchupHistory = entryDesk?.matchupHistory ?? EMPTY_OFFICIAL_H2H_MATCHES
+	const isMatchupInitialLoading =
+		viewerEntryId != null && !hasLoadedEntryDesk && isRefreshing
 	const isInitialLoading = !hasLoaded && isRefreshing
 	const scoreStatus = scoreSourceLabel(
 		snapshot?.scoreSource ?? 'UNAVAILABLE',
@@ -396,7 +623,52 @@ export function OfficialH2HCompetitionView({
 	)
 	const previousEvent = eventId > 1 ? eventId - 1 : null
 	const nextEvent = eventId < 38 ? eventId + 1 : null
-	const shareText = useMemo(() => {
+
+	useEffect(() => {
+		if (!isPageActive) return
+
+		const handleKeyDown = (keyboardEvent: KeyboardEvent) => {
+			if (
+				keyboardEvent.defaultPrevented ||
+				keyboardEvent.altKey ||
+				keyboardEvent.ctrlKey ||
+				keyboardEvent.metaKey ||
+				keyboardEvent.shiftKey
+			)
+				return
+
+			const eventTarget =
+				keyboardEvent.target instanceof Element ? keyboardEvent.target : null
+			const activeElement = document.activeElement
+			if (
+				eventTarget?.closest(
+					'input, textarea, select, [contenteditable="true"], [role="dialog"], [data-radix-dialog-content]'
+				) ||
+				(activeElement instanceof HTMLElement &&
+					(activeElement.isContentEditable ||
+						['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A', 'SUMMARY'].includes(
+							activeElement.tagName
+						)))
+			)
+				return
+
+			const targetEvent =
+				keyboardEvent.key === 'ArrowLeft'
+					? previousEvent
+					: keyboardEvent.key === 'ArrowRight'
+						? nextEvent
+						: null
+			if (targetEvent == null) return
+
+			keyboardEvent.preventDefault()
+			router.push(`/live/competitions/${tournamentId}?gw=${targetEvent}`)
+		}
+
+		window.addEventListener('keydown', handleKeyDown)
+		return () => window.removeEventListener('keydown', handleKeyDown)
+	}, [isPageActive, nextEvent, previousEvent, router, tournamentId])
+
+	const standingsShareText = useMemo(() => {
 		const lines = [
 			t('officialH2HGameweek', { event: eventId }),
 			`${t('officialH2HTable')}:`,
@@ -405,28 +677,186 @@ export function OfficialH2HCompetitionView({
 					`${standing.rank ?? '—'}. ${standing.entryName ?? `Entry ${standing.entryId}`} · ${standing.matchPoints} ${t('officialH2HMatchPoints')} · ${standing.pointsFor} ${t('officialH2HPointsFor')}`
 			)
 		]
-		if (matches.length > 0) {
-			lines.push(
-				'',
-				t('officialH2HFixtures'),
-				...matches.map(match =>
-					shareMatchLabel(
-						match,
-						t('officialH2HAverageTeam'),
-						t('officialH2HVersus')
-					)
-				)
-			)
-		}
 		if (typeof window !== 'undefined') lines.push('', window.location.href)
 		return lines.join('\n')
-	}, [eventId, matches, standings, t])
+	}, [eventId, standings, t])
+	const fixturesShareText = useMemo(() => {
+		const lines = [
+			t('officialH2HGameweek', { event: eventId }),
+			`${t('officialH2HFixtures')}:`,
+			...matches.map(match =>
+				shareMatchLabel(
+					match,
+					t('officialH2HAverageTeam'),
+					t('officialH2HVersus')
+				)
+			)
+		]
+		if (typeof window !== 'undefined') lines.push('', window.location.href)
+		return lines.join('\n')
+	}, [eventId, matches, t])
+	const myMatchupsShareText = useMemo(() => {
+		const lines = [
+			t('officialH2HMyMatchups'),
+			...matchupHistory.map(
+				match =>
+					`${t('officialH2HMatchupRound', { event: match.eventId })}: ${shareMatchLabel(match, t('officialH2HAverageTeam'), t('officialH2HVersus'))}`
+			)
+		]
+		if (typeof window !== 'undefined') lines.push('', window.location.href)
+		return lines.join('\n')
+	}, [matchupHistory, t])
+	const boardSlides = useMemo(
+		() => [
+			{
+				id: 'standings',
+				enabled: showStandings,
+				label: t('officialH2HTable'),
+				count: standings.length,
+				content: isInitialLoading ? (
+					<div
+						className="space-y-1.5"
+						aria-busy="true"
+						aria-label={t('loadingStandings')}
+					>
+						{Array.from({ length: 7 }, (_, index) => (
+							<div
+								key={index}
+								className="h-12 animate-pulse rounded-lg bg-muted/60"
+							/>
+						))}
+					</div>
+				) : standings.length > 0 ? (
+					<StandingBoard
+						standings={standings}
+						tournamentId={tournamentId}
+						eventId={eventId}
+						viewerEntryId={viewerEntryId}
+					/>
+				) : (
+					<div className="flex min-h-44 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
+						<Trophy
+							className="size-7 text-muted-foreground/60"
+							aria-hidden="true"
+						/>
+						<p className="text-sm font-medium">
+							{snapshot?.awaitingSchedule
+								? t('officialH2HAwaitingSchedule')
+								: t('officialH2HLiveUnavailable', { event: eventId })}
+						</p>
+					</div>
+				)
+			},
+			{
+				id: 'fixtures',
+				label: t('officialH2HFixtures'),
+				count: matches.length,
+				content: isInitialLoading ? (
+					<div
+						className="grid gap-3"
+						aria-busy="true"
+						aria-label={t('loadingStandings')}
+					>
+						{Array.from({ length: 4 }, (_, index) => (
+							<div
+								key={index}
+								className="h-32 animate-pulse rounded-xl bg-muted/60"
+							/>
+						))}
+					</div>
+				) : matches.length > 0 ? (
+					<ul className="grid gap-3">
+						{matches.map(match => (
+							<MatchCard
+								key={match.officialMatchId}
+								match={match}
+								viewerEntryId={viewerEntryId}
+							/>
+						))}
+					</ul>
+				) : (
+					<div className="flex min-h-44 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
+						<CalendarClock
+							className="size-7 text-muted-foreground/60"
+							aria-hidden="true"
+						/>
+						<p className="text-sm font-medium text-muted-foreground">
+							{snapshot?.awaitingSchedule
+								? t('officialH2HAwaitingGameweek', { event: eventId })
+								: t('officialH2HNoFixtures', { event: eventId })}
+						</p>
+					</div>
+				)
+			},
+			{
+				id: 'my-matchups',
+				enabled: viewerEntryId != null,
+				label: t('officialH2HMyMatchups'),
+				count: matchupHistory.length,
+				content: isMatchupInitialLoading ? (
+					<div
+						className="grid gap-1.5"
+						aria-busy="true"
+						aria-label={t('loadingStandings')}
+					>
+						{Array.from({ length: 6 }, (_, index) => (
+							<div
+								key={index}
+								className="h-16 animate-pulse rounded-lg bg-muted/60"
+							/>
+						))}
+					</div>
+				) : entryDeskFailed ? (
+					<div className="flex min-h-44 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
+						<CalendarClock
+							className="size-7 text-muted-foreground/60"
+							aria-hidden="true"
+						/>
+						<p className="text-sm font-medium text-muted-foreground">
+							{t('officialH2HMyMatchupsUnavailable')}
+						</p>
+					</div>
+				) : matchupHistory.length > 0 ? (
+					<MatchupHistoryBoard
+						matches={matchupHistory}
+						currentEventId={entryDesk?.eventId}
+						isLive={entryDesk?.isLive}
+						isFinal={entryDesk?.isFinal}
+					/>
+				) : (
+					<div className="flex min-h-44 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
+						<CalendarClock
+							className="size-7 text-muted-foreground/60"
+							aria-hidden="true"
+						/>
+						<p className="text-sm font-medium text-muted-foreground">
+							{t('officialH2HNoMyMatchups')}
+						</p>
+					</div>
+				)
+			}
+		],
+		[
+			entryDesk?.eventId,
+			entryDesk?.isLive,
+			entryDesk?.isFinal,
+			entryDeskFailed,
+			eventId,
+			isInitialLoading,
+			isMatchupInitialLoading,
+			matches,
+			matchupHistory,
+			snapshot?.awaitingSchedule,
+			standings,
+			showStandings,
+			t,
+			tournamentId,
+			viewerEntryId
+		]
+	)
 
 	return (
-		<div
-			ref={shareRef}
-			className="space-y-4"
-		>
+		<div className="space-y-4">
 			<section className="relative overflow-hidden rounded-2xl border border-border/80 bg-card shadow-[0_16px_42px_-28px_rgba(45,11,59,0.55)]">
 				<div
 					className="pointer-events-none absolute -right-20 -top-24 size-64 rounded-full bg-primary/10 blur-3xl"
@@ -458,10 +888,6 @@ export function OfficialH2HCompetitionView({
 								>
 									{scoreStatus}
 								</Badge>
-								<span className="inline-flex items-center gap-1.5">
-									<span className="size-1.5 rounded-full bg-border" />
-									{t('officialH2HOfficialOrder')}
-								</span>
 							</div>
 						</div>
 						<div
@@ -480,7 +906,12 @@ export function OfficialH2HCompetitionView({
 									<ArrowLeft aria-hidden="true" />
 								) : (
 									<Link
-										href={'/live/competitions/' + tournamentId + '?gw=' + previousEvent}
+										href={
+											'/live/competitions/' +
+											tournamentId +
+											'?gw=' +
+											previousEvent
+										}
 										prefetch={false}
 									>
 										<ArrowLeft aria-hidden="true" />
@@ -499,7 +930,9 @@ export function OfficialH2HCompetitionView({
 									<ArrowRight aria-hidden="true" />
 								) : (
 									<Link
-										href={'/live/competitions/' + tournamentId + '?gw=' + nextEvent}
+										href={
+											'/live/competitions/' + tournamentId + '?gw=' + nextEvent
+										}
 										prefetch={false}
 									>
 										<ArrowRight aria-hidden="true" />
@@ -519,27 +952,28 @@ export function OfficialH2HCompetitionView({
 								/>
 								{t('refresh')}
 							</Button>
-							<ShareActions
-								text={shareText}
-								imageRef={shareRef}
-								title={t('officialH2HGameweek', { event: eventId })}
-							/>
 						</div>
 					</div>
 
 					<dl className="mt-5 grid grid-cols-3 divide-x divide-border/60 border-t border-border/60 pt-4">
 						<div className="flex min-w-0 flex-col gap-1 pr-3 sm:pr-5">
 							<dt className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-								<Trophy className="size-3.5 text-primary-ink" aria-hidden="true" />
+								<Trophy
+									className="size-3.5 text-primary-ink"
+									aria-hidden="true"
+								/>
 								{t('rank')}
 							</dt>
 							<dd className="font-mono text-xl font-bold tabular-nums tracking-tight sm:text-2xl">
-								{viewerStanding?.rank != null ? '#' + viewerStanding.rank : '—'}
+								{viewerStanding?.rank ?? '—'}
 							</dd>
 						</div>
 						<div className="flex min-w-0 flex-col gap-1 px-3 sm:px-5">
 							<dt className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-								<CheckCircle2 className="size-3.5 text-primary-ink" aria-hidden="true" />
+								<CheckCircle2
+									className="size-3.5 text-primary-ink"
+									aria-hidden="true"
+								/>
 								{t('officialH2HMatchPoints')}
 							</dt>
 							<dd className="font-mono text-xl font-bold tabular-nums tracking-tight sm:text-2xl">
@@ -548,11 +982,20 @@ export function OfficialH2HCompetitionView({
 						</div>
 						<div className="flex min-w-0 flex-col gap-1 pl-3 sm:pl-5">
 							<dt className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-								<Users className="size-3.5 text-primary-ink" aria-hidden="true" />
-								{t('officialH2HFixtures')}
+								<Swords
+									className="size-3.5 text-primary-ink"
+									aria-hidden="true"
+								/>
+								{t('officialH2HRecord')}
 							</dt>
-							<dd className="font-mono text-xl font-bold tabular-nums tracking-tight sm:text-2xl">
-								{matchCount > 0 ? completedMatchCount + '/' + matchCount : '—'}
+							<dd className="text-sm font-bold tracking-tight sm:text-base">
+								{viewerStanding
+									? t('officialH2HRecordValue', {
+											won: viewerStanding.won,
+											drawn: viewerStanding.drawn,
+											lost: viewerStanding.lost
+										})
+									: '—'}
 							</dd>
 						</div>
 					</dl>
@@ -560,7 +1003,10 @@ export function OfficialH2HCompetitionView({
 			</section>
 
 			{refreshFailed ? (
-				<Alert variant="warning" className="rounded-xl">
+				<Alert
+					variant="warning"
+					className="rounded-xl"
+				>
 					<AlertDescription>{t('officialH2HRefreshFallback')}</AlertDescription>
 				</Alert>
 			) : null}
@@ -582,114 +1028,70 @@ export function OfficialH2HCompetitionView({
 				</Card>
 			) : null}
 
-			<div className="grid gap-4 xl:grid-cols-[minmax(0,1.16fr)_minmax(20rem,0.84fr)]">
-				<section
-					aria-labelledby="official-h2h-standings-title"
-					className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm"
-				>
-					<div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-4 sm:px-5">
+			<section
+				ref={boardsShareRef}
+				aria-label={t('officialH2HBoardsPager')}
+				data-share-fit-content="true"
+				data-share-preserve-width="true"
+				className="overflow-hidden rounded-2xl border border-border/80 bg-card p-3 shadow-sm sm:p-4"
+			>
+				<HomeAutoCarousel
+					slides={boardSlides}
+					labels={{
+						pagerLabel: t('officialH2HBoardsPager'),
+						previousPage: t('officialH2HBoardsPrevious'),
+						nextPage: t('officialH2HBoardsNext'),
+						pause: t('officialH2HBoardsPause'),
+						resume: t('officialH2HBoardsResume')
+					}}
+					dataAttribute="official-h2h-boards"
+					renderHeader={slide => (
 						<div className="flex min-w-0 items-center gap-2.5">
-							<div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary-ink">
-								<Swords className="size-4" aria-hidden="true" />
-							</div>
-							<h3
-								id="official-h2h-standings-title"
-								className="truncate font-display text-base font-bold tracking-tight"
+							<div
+								className={cn(
+									'flex size-7 shrink-0 items-center justify-center rounded-lg',
+									slide.id === 'standings'
+										? 'bg-primary/10 text-primary-ink'
+										: 'bg-secondary/20 text-secondary-foreground'
+								)}
 							>
-								{t('officialH2HTable')}
+								{slide.id === 'standings' ? (
+									<Swords
+										className="size-4"
+										aria-hidden="true"
+									/>
+								) : (
+									<CalendarClock
+										className="size-4"
+										aria-hidden="true"
+									/>
+								)}
+							</div>
+							<h3 className="truncate font-display text-base font-bold tracking-tight">
+								{slide.label}
 							</h3>
 						</div>
-						<Badge variant="outline" className="shrink-0 rounded-full">
-							{standings.length}
-						</Badge>
-					</div>
-					{isInitialLoading ? (
-						<div
-							className="space-y-2 p-3"
-							aria-busy="true"
-							aria-label={t('loadingStandings')}
-						>
-							{Array.from({ length: 7 }, (_, index) => (
-								<div
-									key={index}
-									className="h-14 animate-pulse rounded-lg bg-muted/60"
-								/>
-							))}
-						</div>
-					) : standings.length > 0 ? (
-						<StandingBoard
-							standings={standings}
-							tournamentId={tournamentId}
-							eventId={eventId}
-							viewerEntryId={viewerEntryId}
+					)}
+					renderAction={slide => (
+						<ShareActions
+							text={
+								slide.id === 'standings'
+									? standingsShareText
+									: slide.id === 'fixtures'
+										? fixturesShareText
+										: myMatchupsShareText
+							}
+							imageRef={boardsShareRef}
+							title={slide.label}
+							disabled={
+								slide.id === 'my-matchups'
+									? isMatchupInitialLoading
+									: isInitialLoading
+							}
 						/>
-					) : (
-						<div className="flex min-h-44 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
-							<Trophy className="size-7 text-muted-foreground/60" aria-hidden="true" />
-							<p className="text-sm font-medium">
-								{snapshot?.awaitingSchedule
-									? t('officialH2HAwaitingSchedule')
-									: t('officialH2HLiveUnavailable')}
-							</p>
-						</div>
 					)}
-				</section>
-
-				<section
-					aria-labelledby="official-h2h-fixtures-title"
-					className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm"
-				>
-					<div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-4 sm:px-5">
-						<div className="flex min-w-0 items-center gap-2.5">
-							<div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary/20 text-secondary-foreground">
-								<CalendarClock className="size-4" aria-hidden="true" />
-							</div>
-							<h3
-								id="official-h2h-fixtures-title"
-								className="truncate font-display text-base font-bold tracking-tight"
-							>
-								{t('officialH2HFixtures')}
-							</h3>
-						</div>
-						<Badge variant="outline" className="shrink-0 rounded-full">
-							{t('officialH2HOfficialOrder')}
-						</Badge>
-					</div>
-					{isInitialLoading ? (
-						<div
-							className="grid gap-3 p-3"
-							aria-busy="true"
-							aria-label={t('loadingStandings')}
-						>
-							{Array.from({ length: 4 }, (_, index) => (
-								<div
-									key={index}
-									className="h-32 animate-pulse rounded-xl bg-muted/60"
-								/>
-							))}
-						</div>
-					) : matches.length > 0 ? (
-						<ul className="grid gap-3 p-3 md:grid-cols-2 xl:grid-cols-1">
-							{matches.map(match => (
-								<MatchCard
-									key={match.officialMatchId}
-									match={match}
-									viewerEntryId={viewerEntryId}
-								/>
-							))}
-						</ul>
-					) : (
-						<div className="flex min-h-44 flex-col items-center justify-center gap-2 px-6 py-8 text-center">
-							<CalendarClock className="size-7 text-muted-foreground/60" aria-hidden="true" />
-							<p className="text-sm font-medium text-muted-foreground">
-								{snapshot?.awaitingSchedule
-									? t('officialH2HAwaitingGameweek', { event: eventId })
-									: t('officialH2HNoFixtures', { event: eventId })}
-							</p>
-						</div>
-					)}
-				</section>
-			</div>
+				/>
+			</section>
 		</div>
 	)
 }

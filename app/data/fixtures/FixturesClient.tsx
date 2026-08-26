@@ -392,7 +392,8 @@ export default function FixturesClient({
 }) {
 	const t = useTranslations('Fixtures')
 	const locale = useLocale() as AppLocale
-	const shareRef = useRef<HTMLDivElement | null>(null)
+	const teamFdrShareRef = useRef<HTMLDivElement | null>(null)
+	const mySquadShareRef = useRef<HTMLElement | null>(null)
 
 	const [horizon, setHorizon] = useState<FdrHorizon>(initialHorizon)
 	const [pendingHorizon, setPendingHorizon] = useState<FdrHorizon | null>(null)
@@ -615,16 +616,7 @@ export default function FixturesClient({
 			/>
 			<PageShell>
 				<div className="container mx-auto max-w-6xl px-4 py-8">
-					<StatsPageHeader
-						title={t('title')}
-						badge={
-							<ShareActions
-								text={shareText}
-								imageRef={shareRef}
-								title={t('title')}
-							/>
-						}
-					/>
+					<StatsPageHeader title={t('title')} />
 					<p className="-mt-4 mb-6 max-w-2xl text-sm leading-6 text-muted-foreground">
 						{t('pageIntro')}
 					</p>
@@ -801,6 +793,16 @@ export default function FixturesClient({
 						<SectionHead
 							id="my-squad-heading"
 							title={t('mySquadTitle')}
+							action={
+								mySquadPicks.length > 0 ? (
+									<ShareActions
+										text={t('mySquadTitle')}
+										imageRef={mySquadShareRef}
+										title={t('mySquadTitle')}
+										actions={['image']}
+									/>
+								) : null
+							}
 						/>
 						<MySquadFdrDesk
 							picks={mySquadPicks}
@@ -809,6 +811,7 @@ export default function FixturesClient({
 							horizon={horizon}
 							hasLinkedEntry={hasLinkedEntry}
 							squadState={squadState}
+							shareRef={mySquadShareRef}
 						/>
 					</Card>
 
@@ -839,11 +842,18 @@ export default function FixturesClient({
 						role="region"
 						aria-labelledby="fdr-teams"
 						className="mb-8 p-4 sm:p-5"
-						ref={shareRef}
+						ref={teamFdrShareRef}
 					>
 						<SectionHead
 							id="fdr-teams"
 							title={t('teamsTitle')}
+							action={
+								<ShareActions
+									text={shareText}
+									imageRef={teamFdrShareRef}
+									title={t('teamsTitle')}
+								/>
+							}
 						/>
 						<FdrMatrix
 							teams={model.teams}
