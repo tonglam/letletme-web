@@ -25,7 +25,8 @@ forwarding identity fall back to the socket address for direct DNSPod traffic.
 
 ## Staging without traffic changes
 
-1. Install `nginx/letletme-data.conf` as the canonical enabled API/Data site.
+1. Install `nginx/letletme-client-ip.conf` under `/etc/nginx/conf.d`, then
+   install `nginx/letletme-data.conf` as the canonical enabled API/Data site.
    It explicitly owns `api.letletme.top`, `pop.letletme.top`, and the default
    listeners; this prevents another site from capturing API traffic because
    of include order.
