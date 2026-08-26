@@ -324,7 +324,7 @@ export function LiveCompetitionBoardFilters({
 						disabled={!pendingCaptain || selectedCaptainIds.size >= 15}
 					>
 						<Plus className="size-4" />
-						{t('addCaptain')}
+						{liveT('addCaptain')}
 					</Button>
 				</div>
 				<div className="flex flex-wrap gap-2">
@@ -339,7 +339,7 @@ export function LiveCompetitionBoardFilters({
 								{player?.playerName ?? playerId}
 								<button
 									type="button"
-									aria-label={t('removeCaptain', {
+						aria-label={liveT('removeCaptain', {
 										name: player?.playerName ?? String(playerId)
 									})}
 									onClick={() =>
@@ -624,7 +624,7 @@ export function LiveCompetitionBoardFilters({
 					onClick={() => void apply()}
 					disabled={disabled || applying}
 				>
-					{applying ? liveT('loadingStandings') : t('applyFilters')}
+					{applying ? liveT('loadingStandings') : liveT('applyFilters')}
 				</Button>
 			</div>
 		</Card>
