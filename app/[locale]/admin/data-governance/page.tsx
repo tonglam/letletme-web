@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation'
+import { headers } from 'next/headers'
 
 import { getPageLocale, type LocaleParams } from '@/i18n/page'
+import { getAuthorizationSession } from '@/lib/auth'
 import { isPlatformAdminIdentity } from '@/lib/platform-admin'
-import { getCurrentSession } from '@/lib/session'
 import {
 	getDataGovernanceCases,
 	getDataGovernanceOverview,
@@ -138,7 +139,7 @@ const QueueRow = ({ value }: { value: unknown }) => {
 				{text(queue.name)}
 			</td>
 			<td className="py-3 pr-3">
-				<Pill value={health.backlogClass ?? 'HEALTHY'} />
+				<Pill value={health.backlogClass} />
 			</td>
 			<td className="py-3 pr-3 font-mono text-white/75">
 				{text(counts.waiting, '0')}
@@ -249,7 +250,9 @@ const latencySeconds = (from: unknown, to: unknown): string => {
 
 export default async function DataGovernancePage({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
-	const session = await getCurrentSession().catch(() => null)
+	const session = await getAuthorizationSession(await headers()).catch(
+		() => null
+	)
 	if (!session?.user || !isPlatformAdminIdentity(session.user)) notFound()
 
 	const [overviewResult, windowsResult, casesResult] = await Promise.allSettled(
@@ -271,8 +274,11 @@ export default async function DataGovernancePage({ params }: PageProps) {
 		windowsResult.status === 'fulfilled'
 			? array(windowsResult.value.windows)
 			: []
-	const governanceCases =
-		casesResult.status === 'fulfilled' ? array(casesResult.value.cases) : []
+	const casesResponse =
+		casesResult.status === 'fulfilled' ? casesResult.value : null
+	const casesPayload = casesResponse?.cases
+	const casesAvailable = Array.isArray(casesPayload)
+	const governanceCases: unknown[] = casesAvailable ? casesPayload : []
 	const burn = record(overview?.errorBudgetBurn)
 	const burnRate =
 		typeof burn.burnRate === 'number' ? burn.burnRate.toFixed(2) : '—'
@@ -565,8 +571,12 @@ export default async function DataGovernancePage({ params }: PageProps) {
 								/>
 								<Metric
 									label="open cases"
-									value={String(governanceCases.length)}
-									detail="deduplicated repair work"
+									value={casesAvailable ? String(governanceCases.length) : '—'}
+									detail={
+										casesAvailable
+											? 'deduplicated repair work'
+											: 'case evidence unavailable'
+									}
 								/>
 							</div>
 							<div className="mt-4 overflow-x-auto rounded-xl border border-white/10 bg-[#0b171d] p-4">
@@ -581,31 +591,42 @@ export default async function DataGovernancePage({ params }: PageProps) {
 										</tr>
 									</thead>
 									<tbody>
-										{governanceCases.slice(0, 50).map((value, index) => {
-											const item = record(value)
-											return (
-												<tr
-													key={`${text(item.caseId)}-${index}`}
-													className="border-t border-white/8 text-sm"
+										{casesAvailable ? (
+											governanceCases.slice(0, 50).map((value, index) => {
+												const item = record(value)
+												return (
+													<tr
+														key={`${text(item.caseId)}-${index}`}
+														className="border-t border-white/8 text-sm"
+													>
+														<td className="py-3 pr-3 font-mono text-xs text-cyan-200">
+															{text(item.caseId)}
+														</td>
+														<td className="py-3 pr-3 text-white/70">
+															{text(item.contractKey)} / {text(item.lane)}
+														</td>
+														<td className="py-3 pr-3 font-mono text-xs text-white/55">
+															{text(item.errorCode, '—')}
+														</td>
+														<td className="py-3 pr-3">
+															<Pill value={item.status} />
+														</td>
+														<td className="py-3 font-mono text-xs text-white/45">
+															{dateText(item.updatedAt)}
+														</td>
+													</tr>
+												)
+											})
+										) : (
+											<tr className="border-t border-white/8 text-sm">
+												<td
+													colSpan={5}
+													className="py-5 text-center font-mono text-xs uppercase tracking-[0.12em] text-amber-200"
 												>
-													<td className="py-3 pr-3 font-mono text-xs text-cyan-200">
-														{text(item.caseId)}
-													</td>
-													<td className="py-3 pr-3 text-white/70">
-														{text(item.contractKey)} / {text(item.lane)}
-													</td>
-													<td className="py-3 pr-3 font-mono text-xs text-white/55">
-														{text(item.errorCode, '—')}
-													</td>
-													<td className="py-3 pr-3">
-														<Pill value={item.status} />
-													</td>
-													<td className="py-3 font-mono text-xs text-white/45">
-														{dateText(item.updatedAt)}
-													</td>
-												</tr>
-											)
-										})}
+													case evidence unavailable
+												</td>
+											</tr>
+										)}
 									</tbody>
 								</table>
 							</div>

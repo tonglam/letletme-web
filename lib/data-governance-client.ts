@@ -173,17 +173,16 @@ export function selectGovernanceContract(
 } {
 	const registry =
 		overview.registry?.find(entry => entry.contractKey === contractKey) ?? null
-	const queueNames = new Set(
-		(registry?.queueName ? [registry.queueName] : []).filter(
-			(value): value is string => typeof value === 'string'
-		)
-	)
+	const queueName = registry?.queueName
+	const queueNames =
+		typeof queueName === 'string' && queueName.trim() !== ''
+			? new Set([queueName])
+			: null
 	const queues = (overview.queues ?? []).filter(queue => {
 		if (!queue || typeof queue !== 'object') return false
 		const name = (queue as { name?: unknown }).name
 		return (
-			queueNames.size === 0 ||
-			(typeof name === 'string' && queueNames.has(name))
+			queueNames !== null && typeof name === 'string' && queueNames.has(name)
 		)
 	})
 	const governanceCases = (overview.governanceCases ?? []).filter(item => {
