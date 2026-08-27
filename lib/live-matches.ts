@@ -89,10 +89,12 @@ export function getPreferredLiveMatchesTab(
 	)
 	const hasFinished = matches.some(match => match.status === 'FT')
 	const hasNotStarted = matches.some(match => match.status === 'NOT_STARTED')
+	const hasUpcoming = matches.some(match => match.status === 'UPCOMING')
 
 	if (hasLive) return 'live'
 	if (hasNotStarted) return 'not-started'
 	if (hasFinished) return 'finished'
+	if (hasUpcoming) return 'not-started'
 	return 'live'
 }
 

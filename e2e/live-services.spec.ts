@@ -152,7 +152,9 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 	await expect(detail.getByText('-1', { exact: true }).first()).toBeVisible()
 
 	await page.clock.fastForward(10 * 60 * 1000)
-	await expect.poll(() => explainBatchRequests).toBeGreaterThanOrEqual(2)
+	// The deterministic fixture is outside the live window.  A scheduled or
+	// otherwise unconfirmed round must not re-arm the explanation poll.
+	expect(explainBatchRequests).toBe(1)
 })
 
 test('scheduled live points does not show a polling label and recovers manually', async ({

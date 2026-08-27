@@ -56,7 +56,7 @@ const TAB_CONFIG: ReadonlyArray<{
 	{
 		value: 'not-started',
 		labelKey: 'noNotStarted',
-		statuses: ['NOT_STARTED']
+		statuses: ['NOT_STARTED', 'UPCOMING']
 	}
 ] as const
 
@@ -326,7 +326,9 @@ export function LiveMatchesClient({
 						(Number.isNaN(tB) ? 1 : 0) - (Number.isNaN(tA) ? 1 : 0) || tB - tA
 					)
 				}),
-			'not-started': matches.filter(match => match.status === 'NOT_STARTED')
+			'not-started': matches.filter(
+				match => match.status === 'NOT_STARTED' || match.status === 'UPCOMING'
+			)
 		} satisfies Record<LiveMatchesTab, Match[]>
 	}, [matches])
 	const tabCountLabel = (tab: LiveMatchesTab) =>

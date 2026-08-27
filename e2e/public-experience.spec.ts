@@ -269,11 +269,14 @@ test('home market copy uses human-readable updated dates without signal-status w
 	).toBeVisible()
 
 	await page.locator('#home-price-changes-likely-tab:visible').click()
+	const priceChangesCard = page.locator(
+		'[aria-labelledby="home-price-changes-title"]:visible'
+	)
 	await expect(
-		marketCard.getByRole('heading', { name: '上涨趋势', exact: true })
+		priceChangesCard.getByRole('heading', { name: /上涨趋势/ })
 	).toBeVisible()
 	await expect(
-		marketCard.getByRole('heading', { name: '下跌趋势', exact: true })
+		priceChangesCard.getByRole('heading', { name: /下跌趋势/ })
 	).toBeVisible()
 	await expect(page.getByText('并保留信号状态', { exact: false })).toHaveCount(
 		0
@@ -582,10 +585,12 @@ test('Gameweek keeps Dream Team and every 10+ haul independent during live play'
 	await expect(
 		page.getByRole('heading', { name: 'Players Scoring 10+', exact: true })
 	).toBeVisible()
-	await expect(page.getByRole('link', { name: 'Palmer' })).toHaveAttribute(
-		'href',
-		'/explore/player-stats?p1=2'
-	)
+	const palmer = page
+		.getByRole('row', { name: /Palmer/ })
+		.getByRole('button', { name: 'Palmer', exact: true })
+	await expect(palmer).toBeVisible()
+	await palmer.click()
+	await expect(page.getByRole('dialog')).toContainText('Palmer')
 })
 
 test('Fixtures renders every DGW match and explicit BGWs without horizontal overflow', async ({

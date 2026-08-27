@@ -169,6 +169,12 @@ describe('live match desk player sections', () => {
 	it('keeps the completed tab as the default when next fixtures coexist with final results', () => {
 		assert.equal(
 			getPreferredLiveMatchesTab(
+				[{ status: 'UPCOMING' }] as never
+			),
+			'not-started'
+		)
+		assert.equal(
+			getPreferredLiveMatchesTab(
 				[
 					{ status: 'FT' },
 					{ status: 'UPCOMING' }
