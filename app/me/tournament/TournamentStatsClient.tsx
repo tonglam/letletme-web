@@ -310,7 +310,10 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 						/>
 					}
 				/>
-				<div ref={shareRef}>
+				<div
+					ref={shareRef}
+					data-share-preserve-width="true"
+				>
 					{error ? (
 						<Alert
 							variant="destructive"

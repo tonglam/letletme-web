@@ -1,19 +1,8 @@
 'use client'
 
-import dynamic from 'next/dynamic'
+import { LiveMatchesClient } from '@/app/live/matches/LiveMatchesClient'
 import type { Match } from '@/types/match'
 import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
-
-// The dynamic import lives behind a Client Component boundary.  Next can
-// therefore omit the heavy match card/tab graph when the server rendered
-// preseason branch never mounts this entry.
-const LiveMatchesClient = dynamic(
-	() =>
-		import('@/app/live/matches/LiveMatchesClient').then(
-			mod => mod.LiveMatchesClient
-		),
-	{ ssr: true }
-)
 
 export function LiveMatchesEntry({
 	initialMatches,

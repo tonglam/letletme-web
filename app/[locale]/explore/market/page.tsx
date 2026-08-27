@@ -96,6 +96,9 @@ async function renderMarketContent({
 	const translationPromise = getTranslations('Market')
 	const dataPromise = loadMarketPulseSummary(7)
 	const overviewPromise = loadMarketOwnershipOverview(period)
+	const glanceOverviewPromise = loadMarketOwnershipOverview(
+		period === 'DAILY' ? 'GAMEWEEK' : 'DAILY'
+	)
 	const t = await translationPromise
 	let pulse: MarketPulse | null = null
 	let revision: string | null = null
@@ -105,11 +108,14 @@ async function renderMarketContent({
 		| null = null
 	let dailyOverview:
 		MarketOwnershipOverviewResponse['marketOwnershipOverview'] | null = null
+	let gameweekOverview:
+		MarketOwnershipOverviewResponse['marketOwnershipOverview'] | null = null
 	let publishedDate: string | null = null
 
-	const [dataResult, overviewResult] = await Promise.allSettled([
+	const [dataResult, overviewResult, glanceOverviewResult] = await Promise.allSettled([
 		dataPromise,
-		overviewPromise
+		overviewPromise,
+		glanceOverviewPromise
 	])
 	if (dataResult.status === 'fulfilled') {
 		const summary = normalizeMarketPulseSummaryResponse(dataResult.value)
@@ -127,6 +133,7 @@ async function renderMarketContent({
 		const overview = normalizeMarketOwnershipOverview(overviewResult.value)
 		if (overview) {
 			dailyOverview = period === 'DAILY' ? overview : null
+			gameweekOverview = period === 'GAMEWEEK' ? overview : null
 			publishedDate =
 				date && isPublishedMarketOwnershipDate(date, overview.coverage)
 					? date
@@ -142,6 +149,24 @@ async function renderMarketContent({
 		console.error(
 			'[market] ownership coverage fetch failed:',
 			overviewResult.reason
+		)
+	}
+	if (glanceOverviewResult.status === 'fulfilled') {
+		const overview = normalizeMarketOwnershipOverview(glanceOverviewResult.value)
+		if (overview) {
+			if (period === 'DAILY') {
+				gameweekOverview = overview
+			} else {
+				dailyOverview = overview
+			}
+		} else {
+			console.error('[market] glance ownership response missing required fields')
+		}
+	} else {
+		unstable_rethrow(glanceOverviewResult.reason)
+		console.error(
+			'[market] glance ownership fetch failed:',
+			glanceOverviewResult.reason
 		)
 	}
 	if (publishedDate) {
@@ -185,6 +210,8 @@ async function renderMarketContent({
 			<MarketDashboard
 				pulse={pulse}
 				ownership={ownership}
+				dailyOwnership={dailyOverview}
+				gameweekOwnership={gameweekOverview}
 				requestedPeriod={period}
 				requestedDate={publishedDate}
 				dailyDates={recentCalendarDates({

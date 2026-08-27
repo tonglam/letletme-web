@@ -331,7 +331,7 @@ describe('privacy-safe web vitals', () => {
 			),
 			readFile(
 				new URL(
-					'../app/[locale]/explore/price-changes/page.tsx',
+					'../app/[locale]/explore/price-predictions/page.tsx',
 					import.meta.url
 				),
 				'utf8'

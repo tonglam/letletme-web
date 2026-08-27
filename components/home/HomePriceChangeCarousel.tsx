@@ -130,18 +130,18 @@ function UnavailableState({
 	)
 }
 
-function PriceChangeDirection({
-	changes,
+function PriceChangeDirection<T>({
+	items,
 	direction,
-	locale,
 	title,
-	emptyLabel
+	emptyLabel,
+	renderItem
 }: {
-	changes: MarketPriceChange[]
+	items: readonly T[]
 	direction: 'RISE' | 'FALL'
-	locale: string
 	title: string
 	emptyLabel: string
+	renderItem: (item: T) => ReactNode
 }) {
 	const isRise = direction === 'RISE'
 	const Icon = isRise ? ArrowUpRight : ArrowDownRight
@@ -161,10 +161,10 @@ function PriceChangeDirection({
 				/>
 				{title}
 				<span className="font-mono text-xs text-muted-foreground">
-					({changes.length})
+					({items.length})
 				</span>
 			</h3>
-			{changes.length === 0 ? (
+			{items.length === 0 ? (
 				<div className="rounded-lg border border-dashed border-border/70 bg-muted/15 px-3 py-5 text-center">
 					<Minus
 						aria-hidden="true"
@@ -173,42 +173,49 @@ function PriceChangeDirection({
 					<p className="mt-2 text-xs text-muted-foreground">{emptyLabel}</p>
 				</div>
 			) : (
-				<ul className="space-y-2">
-					{changes.map(change => (
-						<li
-							key={`${change.player.playerId}-${change.changeDate}`}
-							className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 rounded-lg border border-border/50 bg-background/80 p-3"
-						>
-							<span className="row-span-2 self-start">
-								<MarketPositionBadge position={change.player.position} />
-							</span>
-							<div className="min-w-0">
-								<a
-									href={priceChangeHref(change.player.playerId, locale)}
-									className="block whitespace-nowrap text-sm font-semibold leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
-								>
-									{change.player.webName}
-								</a>
-								<p className="text-xs text-muted-foreground">
-									{change.player.teamShortName}
-								</p>
-							</div>
-							<div className="col-start-2 mt-1 flex min-w-0 items-center justify-between gap-2">
-								<span className="min-w-0 truncate text-xs text-muted-foreground">
-									{formatPrice(change.oldPrice)} →{' '}
-									{formatPrice(change.newPrice)}
-								</span>
-								<span
-									className={`shrink-0 font-display text-sm font-bold ${tone}`}
-								>
-									{formatChange(change)}
-								</span>
-							</div>
-						</li>
-					))}
-				</ul>
+				<ul className="space-y-2">{items.map(item => renderItem(item))}</ul>
 			)}
 		</section>
+	)
+}
+
+function RecordedPriceChangeRow({
+	change,
+	locale
+}: {
+	change: MarketPriceChange
+	locale: string
+}) {
+	const tone = change.direction === 'RISE' ? 'text-success' : 'text-destructive'
+
+	return (
+		<li
+			key={`${change.player.playerId}-${change.changeDate}`}
+			className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 rounded-lg border border-border/50 bg-background/80 p-3"
+		>
+			<span className="row-span-2 self-start">
+				<MarketPositionBadge position={change.player.position} />
+			</span>
+			<div className="min-w-0">
+				<a
+					href={priceChangeHref(change.player.playerId, locale)}
+					className="block whitespace-nowrap text-sm font-semibold leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+				>
+					{change.player.webName}
+				</a>
+				<p className="text-xs text-muted-foreground">
+					{change.player.teamShortName}
+				</p>
+			</div>
+			<div className="col-start-2 mt-1 flex min-w-0 items-center justify-between gap-2">
+				<span className="min-w-0 truncate text-xs text-muted-foreground">
+					{formatPrice(change.oldPrice)} → {formatPrice(change.newPrice)}
+				</span>
+				<span className={`shrink-0 font-display text-sm font-bold ${tone}`}>
+					{formatChange(change)}
+				</span>
+			</div>
+		</li>
 	)
 }
 
@@ -249,28 +256,31 @@ function TodayPage({
 
 	return (
 		<div className="space-y-6">
-			{actual.coverageLabel ? (
-				<p className="text-xs text-muted-foreground">
-					<LocalUpdatedLabel
-						value={actual.capturedAt}
-						prefix={labels.todayUpdatedPrefix}
-						fallback={actual.coverageLabel}
-					/>
-				</p>
-			) : null}
 			<PriceChangeDirection
-				changes={actual.rises}
+				items={actual.rises}
 				direction="RISE"
-				locale={locale}
 				title={labels.priceRises}
 				emptyLabel={labels.noPriceRises}
+				renderItem={change => (
+					<RecordedPriceChangeRow
+						key={`${change.player.playerId}-${change.changeDate}`}
+						change={change}
+						locale={locale}
+					/>
+				)}
 			/>
 			<PriceChangeDirection
-				changes={actual.falls}
+				items={actual.falls}
 				direction="FALL"
-				locale={locale}
 				title={labels.priceFalls}
 				emptyLabel={labels.noPriceFalls}
+				renderItem={change => (
+					<RecordedPriceChangeRow
+						key={`${change.player.playerId}-${change.changeDate}`}
+						change={change}
+						locale={locale}
+					/>
+				)}
 			/>
 		</div>
 	)
@@ -301,109 +311,65 @@ function LikelyPlayerRow({
 		player.progressPercent >= 0 ? 'text-success' : 'text-destructive'
 
 	return (
-		<li className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 border-b border-border/50 py-2.5 last:border-b-0">
-			<span className="row-span-3 self-start pt-0.5">
+		<li
+			data-share-price-prediction-row="true"
+			className="flex items-start gap-3 rounded-lg border border-border/50 bg-background/80 p-3"
+		>
+			<span className="shrink-0 pt-0.5">
 				<MarketPositionBadge position={player.position} />
 			</span>
-			<div className="min-w-0">
-				<a
-					href={priceChangeHref(player.playerId, locale)}
-					className="block whitespace-nowrap text-sm font-semibold leading-snug text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
-				>
-					{player.webName}
-				</a>
-				<p className="whitespace-nowrap text-[11px] leading-tight text-muted-foreground">
-					{player.teamShortName} · {formatPrice(player.currentPrice)}
-				</p>
-			</div>
-			<div className="col-start-2 mt-1 flex min-w-0 items-center gap-2">
-				<div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-					<div
-						className={cn('h-full rounded-full', progressTone)}
-						style={{
-							width: `${Math.min(100, Math.abs(player.progressPercent))}%`
-						}}
-					/>
-				</div>
-				<span
-					className={cn(
-						'shrink-0 font-display text-sm font-bold tabular-nums',
-						progressTextTone
-					)}
-				>
-					{formatPercent(player.progressPercent)}
-				</span>
-			</div>
-			<Badge
-				variant="outline"
-				className={cn(
-					'col-start-2 row-start-3 w-fit whitespace-nowrap px-1.5 py-0 text-[9px]',
-					predictionStatusClass(player.status)
-				)}
+			<div
+				data-share-price-prediction-content="true"
+				className="min-w-0 flex-1"
 			>
-				{labels.status[player.status]}
-			</Badge>
-		</li>
-	)
-}
-
-function PredictionDirection({
-	players,
-	direction,
-	locale,
-	title,
-	emptyLabel,
-	labels
-}: {
-	players: PriceChangePlayer[]
-	direction: 'RISE' | 'FALL'
-	locale: string
-	title: string
-	emptyLabel: string
-	labels: HomePriceChangeCarouselLabels
-}) {
-	const isRise = direction === 'RISE'
-	const Icon = isRise ? ArrowUpRight : ArrowDownRight
-	const tone = isRise ? 'text-success' : 'text-destructive'
-
-	return (
-		<section aria-label={title}>
-			<h3
-				className={cn(
-					'mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-caps',
-					tone
-				)}
-			>
-				<Icon
-					aria-hidden="true"
-					className="size-4"
-				/>
-				{title}
-				<span className="font-mono text-xs text-muted-foreground">
-					({players.length})
-				</span>
-			</h3>
-			{players.length === 0 ? (
-				<div className="rounded-lg border border-dashed border-border/70 bg-muted/15 px-3 py-5 text-center">
-					<Minus
-						aria-hidden="true"
-						className="mx-auto size-4 text-muted-foreground"
-					/>
-					<p className="mt-2 text-xs text-muted-foreground">{emptyLabel}</p>
+				<div className="min-w-0">
+					<a
+						href={priceChangeHref(player.playerId, locale)}
+						className="block whitespace-nowrap text-sm font-semibold leading-snug text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
+					>
+						{player.webName}
+					</a>
+					<p className="whitespace-nowrap text-[11px] leading-tight text-muted-foreground">
+						{player.teamShortName} · {formatPrice(player.currentPrice)}
+					</p>
 				</div>
-			) : (
-				<ul className="space-y-2">
-					{players.map(player => (
-						<LikelyPlayerRow
-							key={player.playerId}
-							player={player}
-							locale={locale}
-							labels={labels}
+				<div
+					data-share-price-prediction-progress="true"
+					className="mt-1 flex min-w-0 items-center gap-2"
+				>
+					<div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+						<div
+							className={cn('h-full rounded-full', progressTone)}
+							style={{
+								width: `${Math.min(100, Math.abs(player.progressPercent))}%`
+							}}
 						/>
-					))}
-				</ul>
-			)}
-		</section>
+					</div>
+					<span
+						className={cn(
+							'shrink-0 font-display text-sm font-bold tabular-nums',
+							progressTextTone
+						)}
+					>
+						{formatPercent(player.progressPercent)}
+					</span>
+				</div>
+				<div
+					data-share-price-prediction-status="true"
+					className="mt-1 flex min-h-4 items-start"
+				>
+					<Badge
+						variant="outline"
+						className={cn(
+							'w-fit whitespace-nowrap px-1.5 py-0 text-[9px]',
+							predictionStatusClass(player.status)
+						)}
+					>
+						{labels.status[player.status]}
+					</Badge>
+				</div>
+			</div>
+		</li>
 	)
 }
 
@@ -430,22 +396,34 @@ function LikelyPage({
 	}
 
 	return (
-		<div className="grid gap-4 sm:grid-cols-2">
-			<PredictionDirection
-				players={likely.rises}
+		<div className="space-y-6">
+			<PriceChangeDirection
+				items={likely.rises}
 				direction="RISE"
-				locale={locale}
 				title={labels.trendRises}
 				emptyLabel={labels.noTrendRises}
-				labels={labels}
+				renderItem={player => (
+					<LikelyPlayerRow
+						key={player.playerId}
+						player={player}
+						locale={locale}
+						labels={labels}
+					/>
+				)}
 			/>
-			<PredictionDirection
-				players={likely.falls}
+			<PriceChangeDirection
+				items={likely.falls}
 				direction="FALL"
-				locale={locale}
 				title={labels.trendFalls}
 				emptyLabel={labels.noTrendFalls}
-				labels={labels}
+				renderItem={player => (
+					<LikelyPlayerRow
+						key={player.playerId}
+						player={player}
+						locale={locale}
+						labels={labels}
+					/>
+				)}
 			/>
 		</div>
 	)
@@ -499,11 +477,15 @@ export function HomePriceChangeCarousel({
 					<div>
 						<h2
 							id="home-price-changes-title"
+							data-share-title="true"
 							className="font-display text-xl font-bold uppercase tracking-wide"
 						>
 							{slide.label}
 						</h2>
-						<p className="mt-1 max-w-sm text-xs text-muted-foreground">
+						<p
+							data-share-meta="true"
+							className="mt-1 max-w-sm text-xs text-muted-foreground"
+						>
 							{slide.id === 'today'
 								? (
 										<LocalUpdatedLabel
@@ -524,7 +506,7 @@ export function HomePriceChangeCarousel({
 				)}
 				renderAction={slide => {
 					const href =
-						slide.id === 'today' ? '/explore/market' : '/explore/price-changes'
+						slide.id === 'today' ? '/explore/market' : '/explore/price-predictions'
 					const label =
 						slide.id === 'today' ? labels.openRecorded : labels.openPredictions
 					return (
@@ -548,7 +530,6 @@ export function HomePriceChangeCarousel({
 								text={slide.label}
 								imageRef={shareRef}
 								title={slide.label}
-								compact
 							/>
 						</div>
 					)

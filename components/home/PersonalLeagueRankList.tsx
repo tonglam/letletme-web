@@ -101,7 +101,8 @@ function ClassicLeagueRow({
 					labels={visibilityLabels}
 				/>
 				<span
-					className="min-w-0 flex-1 truncate text-sm font-medium leading-tight"
+					data-home-league-name="true"
+					className="home-league-name min-w-0 flex-1 text-sm font-medium leading-tight"
 					title={row.name}
 				>
 					{row.name}
@@ -244,13 +245,14 @@ function H2HLeagueRow({
 		return (
 			<LinkedH2HBody row={row}>
 				<div className="flex items-start justify-between gap-3">
-					<div className="flex min-w-0 items-center gap-2">
+					<div className="flex min-w-0 flex-1 items-start gap-2">
 						<LeagueVisibilityBadge
 							visibility={row.visibility}
 							labels={labels}
 						/>
 						<p
-							className="min-w-0 flex-1 truncate text-sm font-semibold"
+							data-home-league-name="true"
+							className="home-league-name min-w-0 flex-1 text-sm font-semibold"
 							title={row.name}
 						>
 							{row.name}
@@ -289,13 +291,14 @@ function H2HLeagueRow({
 		<LinkedH2HBody row={row}>
 			<div data-home-h2h-matchup={matchup.officialMatchId}>
 				<div className="flex items-start justify-between gap-3">
-					<div className="flex min-w-0 items-center gap-2">
+					<div className="flex min-w-0 flex-1 items-start gap-2">
 						<LeagueVisibilityBadge
 							visibility={row.visibility}
 							labels={labels}
 						/>
 						<p
-							className="min-w-0 flex-1 truncate text-sm font-semibold"
+							data-home-league-name="true"
+							className="home-league-name min-w-0 flex-1 text-sm font-semibold"
 							title={row.name}
 						>
 							{row.name}

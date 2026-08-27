@@ -82,7 +82,7 @@ function SectionHead({
 			<div className="min-w-0">
 				<h2
 					id={id}
-					className="eyebrow sm:text-caption"
+					className="font-display text-lg font-bold tracking-tight sm:text-xl"
 				>
 					{title}
 				</h2>
@@ -617,9 +617,6 @@ export default function FixturesClient({
 			<PageShell>
 				<div className="container mx-auto max-w-6xl px-4 py-8">
 					<StatsPageHeader title={t('title')} />
-					<p className="-mt-4 mb-6 max-w-2xl text-sm leading-6 text-muted-foreground">
-						{t('pageIntro')}
-					</p>
 
 					{/* Controls */}
 					<Card
@@ -661,34 +658,6 @@ export default function FixturesClient({
 									))}
 								</div>
 							</div>
-							<div>
-								<p className="mb-1.5 text-caption font-medium text-muted-foreground">
-									{t('sortLabel')}
-								</p>
-								<div className="flex flex-wrap gap-1.5">
-									{(
-										[
-											['easiest', t('sortEasiest')],
-											['hardest', t('sortHardest')]
-										] as const
-									).map(([id, label]) => (
-										<button
-											key={id}
-											type="button"
-											onClick={() => setSort(id)}
-											className={cn(
-												'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
-												sort === id
-													? 'border-success bg-success text-success-foreground'
-													: 'border-border/70 bg-background text-muted-foreground hover:text-foreground'
-											)}
-											aria-pressed={sort === id}
-										>
-											{label}
-										</button>
-									))}
-								</div>
-							</div>
 						</div>
 						{loading ? (
 							<p className="mt-3 text-xs text-muted-foreground">
@@ -717,7 +686,6 @@ export default function FixturesClient({
 								})}
 								easyHardLabel={t('glanceEasyHard')}
 							/>
-
 						) : (
 							<div className="rounded-lg border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">
 								—
@@ -843,16 +811,46 @@ export default function FixturesClient({
 						aria-labelledby="fdr-teams"
 						className="mb-8 p-4 sm:p-5"
 						ref={teamFdrShareRef}
+						data-share-preserve-width="true"
 					>
 						<SectionHead
 							id="fdr-teams"
 							title={t('teamsTitle')}
 							action={
-								<ShareActions
-									text={shareText}
-									imageRef={teamFdrShareRef}
-									title={t('teamsTitle')}
-								/>
+								<div className="flex flex-wrap items-center justify-end gap-2">
+									<div
+										className="flex flex-wrap gap-1.5"
+										role="group"
+										aria-label={t('sortLabel')}
+									>
+										{(
+											[
+												['easiest', t('sortEasiest')],
+												['hardest', t('sortHardest')]
+											] as const
+										).map(([id, label]) => (
+											<button
+												key={id}
+												type="button"
+												onClick={() => setSort(id)}
+												className={cn(
+													'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
+													sort === id
+														? 'border-success bg-success text-success-foreground'
+														: 'border-border/70 bg-background text-muted-foreground hover:text-foreground'
+												)}
+												aria-pressed={sort === id}
+											>
+												{label}
+											</button>
+										))}
+									</div>
+									<ShareActions
+										text={shareText}
+										imageRef={teamFdrShareRef}
+										title={t('teamsTitle')}
+									/>
+								</div>
 							}
 						/>
 						<FdrMatrix
@@ -909,25 +907,25 @@ export default function FixturesClient({
 									))}
 								</div>
 							</div>
-							<p className="max-w-sm text-caption leading-4 text-muted-foreground">
-								{squadKeySet.size > 0 ? (
-									t('actionsMySquadNote', { gw: fromGw })
-								) : squadState === 'unavailable' ? (
-									t('actionsMySquadLoadFailed')
-								) : squadState === 'not-published' ? (
-									t('mySquadNotPublished')
-								) : (
-									<>
-										{t('actionsMySquadEmpty')}{' '}
-										<Link
-											href="/onboarding/bind-entry"
-											className="font-medium text-primary-ink underline-offset-2 hover:underline"
-										>
-											{t('actionsBindCta')}
-										</Link>
-									</>
-								)}
-							</p>
+							{squadKeySet.size === 0 ? (
+								<p className="max-w-sm text-caption leading-4 text-muted-foreground">
+									{squadState === 'unavailable' ? (
+										t('actionsMySquadLoadFailed')
+									) : squadState === 'not-published' ? (
+										t('mySquadNotPublished')
+									) : (
+										<>
+											{t('actionsMySquadEmpty')}{' '}
+											<Link
+												href="/onboarding/bind-entry"
+												className="font-medium text-primary-ink underline-offset-2 hover:underline"
+											>
+												{t('actionsBindCta')}
+											</Link>
+										</>
+									)}
+								</p>
+							) : null}
 						</div>
 
 						<div className="grid gap-3 lg:grid-cols-3">

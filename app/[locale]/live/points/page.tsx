@@ -82,10 +82,14 @@ export default async function LivePointsPage({ params }: PageProps) {
 			)
 		])
 		if (liveResult.status === 'fulfilled') {
-			initialLiveData = liveResult.value.calcLivePointsByEntry
+			const liveData = liveResult.value.calcLivePointsByEntry
+			// The first lookup can enqueue a picks sync and return an empty
+			// placeholder. Do not seed that placeholder or the client hook will
+			// treat the empty response as a successful initial load.
+			if (liveData.pickList.length > 0) initialLiveData = liveData
 			initialSnapshot =
 				liveContextToSnapshot(liveContext) ??
-				liveResult.value.calcLivePointsByEntry.snapshot ??
+				liveData.snapshot ??
 				null
 		} else {
 			console.error(

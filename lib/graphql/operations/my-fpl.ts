@@ -508,7 +508,6 @@ const AGGREGATE_FIELDS = `
 		fallers { entryId entryName playerName eventPoints eventNetPoints rank previousRank captainId captainWebName captainTeamShortName captainPoints }
 		captainDistribution { key label teamShortName count percentage averagePoints }
 		chipDistribution { key label teamShortName count percentage averagePoints }
-		snapshotMeta {${SNAPSHOT_META_FIELDS}}
 `
 
 export const GET_MY_FPL_TEAM_DESK = `

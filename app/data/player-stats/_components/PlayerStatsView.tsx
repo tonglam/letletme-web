@@ -991,7 +991,10 @@ export function PlayerStatsView({
 					title={player.webName}
 				/>
 			</div>
-			<div ref={shareRef}>
+			<div
+				ref={shareRef}
+				data-share-preserve-width="true"
+			>
 				{requestPending ? (
 					<p
 						className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground"

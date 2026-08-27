@@ -25,7 +25,7 @@ interface MenuItem {
 			| 'gameweek'
 			| 'fixtures'
 			| 'market'
-			| 'priceChanges'
+			| 'pricePredictions'
 			| 'trends'
 			| 'players'
 		href: string
@@ -83,7 +83,7 @@ const allMenuItems: MenuItem[] = [
 			{ labelKey: 'gameweek', href: '/explore/gameweek' },
 			{ labelKey: 'fixtures', href: '/explore/fixtures' },
 			{ labelKey: 'market', href: '/explore/market' },
-			{ labelKey: 'priceChanges', href: '/explore/price-changes' },
+			{ labelKey: 'pricePredictions', href: '/explore/price-predictions' },
 			{ labelKey: 'trends', href: '/explore/selections' },
 			{ labelKey: 'players', href: '/explore/player-stats' },
 		],

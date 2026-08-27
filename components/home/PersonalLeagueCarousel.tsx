@@ -28,6 +28,7 @@ export function PersonalLeagueCarousel({
 				ref={shareRef}
 				data-share-preserve-width="true"
 				data-share-fit-content="true"
+				data-share-personal-leagues="true"
 				className="rounded-lg bg-card"
 			>
 				<div className="mb-2 flex items-center justify-between gap-3">
@@ -37,12 +38,19 @@ export function PersonalLeagueCarousel({
 						text={title}
 						imageRef={shareRef}
 						title={title}
-						compact
 					/>
 				</div>
 				<HomeAutoCarousel
 					slides={slides}
 					labels={labels}
+					renderFullContentAction={(slide, fullContentId) => (
+						<ShareActions
+							actions={['image']}
+							text={slide.label}
+							imageTargetId={fullContentId}
+							title={slide.label}
+						/>
+					)}
 					dataAttribute="personal-league"
 				/>
 			</div>

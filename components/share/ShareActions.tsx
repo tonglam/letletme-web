@@ -20,19 +20,19 @@ type ShareActionKind = 'text' | 'image'
 export function ShareActions({
 	text,
 	imageRef,
+	imageTargetId,
 	title,
 	className,
 	buttonClassName,
-	compact = false,
 	disabled = false,
 	actions = ['text', 'image'] as ShareActionKind[]
 }: {
 	text: ShareTextValue
 	imageRef?: RefObject<HTMLElement | null>
+	imageTargetId?: string
 	title?: string
 	className?: string
 	buttonClassName?: string
-	compact?: boolean
 	disabled?: boolean
 	actions?: ShareActionKind[]
 }) {
@@ -56,7 +56,11 @@ export function ShareActions({
 	)
 
 	const handleTextShare = useCallback(async () => {
-		const value = resolveText()
+		const value = resolveText().trim()
+		if (!value) {
+			notifyShareWarning(t('shareUnavailable'))
+			return
+		}
 		const result = await shareText(value, { title })
 		if (result === 'shared') {
 			setManualShareText(null)
@@ -79,8 +83,14 @@ export function ShareActions({
 	}, [reportFailure, resolveText, t, title])
 
 	const handleImageShare = useCallback(async () => {
-		const element = imageRef?.current
-		if (!element || imageShareInFlight.current) return
+		const element =
+			imageRef?.current ??
+			(imageTargetId ? document.getElementById(imageTargetId) : null)
+		if (!element) {
+			notifyShareWarning(t('shareUnavailable'))
+			return
+		}
+		if (imageShareInFlight.current) return
 		imageShareInFlight.current = true
 		try {
 			const result = await shareElementImage(element)
@@ -100,7 +110,7 @@ export function ShareActions({
 		} finally {
 			imageShareInFlight.current = false
 		}
-	}, [imageRef, reportFailure, t])
+	}, [imageRef, imageTargetId, reportFailure, t])
 
 	return (
 		<div
@@ -111,12 +121,14 @@ export function ShareActions({
 				<Button
 					type="button"
 					variant="outline"
-					size={compact ? 'icon' : 'sm'}
-					className={cn(compact ? 'size-8' : 'gap-1.5', buttonClassName)}
+					size="sm"
+					className={cn(
+						'h-9 shrink-0 gap-1.5 rounded-md px-3',
+						buttonClassName
+					)}
 					onClick={() => void handleTextShare()}
 					disabled={disabled}
 					aria-label={t('shareText')}
-					title={compact ? t('shareText') : undefined}
 				>
 					{textShared ? (
 						<Check
@@ -126,25 +138,25 @@ export function ShareActions({
 					) : (
 						<Share2 data-icon="inline-start" />
 					)}
-					{compact ? (
-						<span className="sr-only">{t('shareText')}</span>
-					) : textShared ? (
+					{textShared ? (
 						t('shareDone')
 					) : (
 						t('shareText')
 					)}
 				</Button>
 			) : null}
-			{imageRef && actions.includes('image') ? (
+			{(imageRef || imageTargetId) && actions.includes('image') ? (
 				<Button
 					type="button"
 					variant="outline"
-					size={compact ? 'icon' : 'sm'}
-					className={cn(compact ? 'size-8' : 'gap-1.5', buttonClassName)}
+					size="sm"
+					className={cn(
+						'h-9 shrink-0 gap-1.5 rounded-md px-3',
+						buttonClassName
+					)}
 					onClick={() => void handleImageShare()}
 					disabled={disabled}
 					aria-label={t('shareImage')}
-					title={compact ? t('shareImage') : undefined}
 				>
 					{imageShared ? (
 						<Check
@@ -154,9 +166,7 @@ export function ShareActions({
 					) : (
 						<ImageIcon data-icon="inline-start" />
 					)}
-					{compact ? (
-						<span className="sr-only">{t('shareImage')}</span>
-					) : imageShared ? (
+					{imageShared ? (
 						t('shareDone')
 					) : (
 						t('shareImage')

@@ -136,11 +136,56 @@
 @layer components {
   /*
    * Share exports are rendered in a foreignObject without the app's next/font
-   * faces embedded. Keep the pitch's important labels compact in that export
-   * context so fallback fonts cannot turn a complete name into an ellipsis.
-   * The attribute is toggled only while html-to-image is capturing; normal
-   * page typography is unchanged.
+   * faces embedded. html-to-image measures the live element first, then
+   * renders the clone with a fallback font. Different fallback metrics can
+   * therefore make a heading wrap, or push a value onto a second line after
+   * the layout has already been measured. Use one stable capture font for the
+   * whole exported tree so the measurement and clone agree. The attribute is
+   * toggled only while html-to-image is capturing; normal page typography is
+   * unchanged.
    */
+  [data-share-rendering='true'],
+  [data-share-rendering='true'] * {
+    font-family: Arial, Helvetica, sans-serif !important;
+  }
+
+  [data-share-rendering='true'] h1,
+  [data-share-rendering='true'] h2,
+  [data-share-rendering='true'] h3,
+  [data-share-rendering='true'] [data-share-title='true'],
+  [data-share-rendering='true'] [data-share-meta='true'] {
+    white-space: nowrap !important;
+  }
+
+  /* League titles share the row with a fixed status cluster. Let the title
+     consume the remaining width and wrap instead of inheriting an ellipsis
+     from a compact row treatment. This applies to both the live page and its
+     light-mode share export. */
+  .home-league-name {
+    display: block !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+    overflow-wrap: anywhere !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+
+  /* html-to-image clones the target into a foreignObject. Keep the
+     no-ellipsis contract explicit in that cloned tree too, even if a compact
+     utility class is added to a league row later. */
+  [data-share-rendering='true'] [data-home-league-name='true'] {
+    display: block !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+    overflow-wrap: anywhere !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+
   [data-share-rendering='true'] .share-pitch-title {
     font-size: clamp(0.62rem, 1.85cqi, 1.05rem) !important;
     letter-spacing: 0 !important;
@@ -198,6 +243,36 @@
     white-space: nowrap !important;
   }
 
+  /* Price-prediction rows contain a player, a progress bar and a status pill.
+     Keep them as one explicit flex column in the foreignObject clone. A grid
+     row-start/row-span layout can be re-autoplaced by html-to-image when the
+     cloned grid styles are resolved in a different order, which puts the
+     status pill above the progress bar. */
+  [data-share-rendering='true'] [data-share-price-prediction-row='true'] {
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 0.75rem !important;
+  }
+
+  [data-share-rendering='true']
+    [data-share-price-prediction-content='true'] {
+    display: block !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+  }
+
+  [data-share-rendering='true']
+    [data-share-price-prediction-progress='true'],
+  [data-share-rendering='true'] [data-share-price-prediction-status='true'] {
+    display: flex !important;
+    min-width: 0 !important;
+  }
+
+  [data-share-rendering='true'] [data-share-price-prediction-status='true'] {
+    align-items: flex-start !important;
+    min-height: 1rem !important;
+  }
+
   /* The image filter removes the share control, but its flex slot can remain
      in the cloned deadline header. Let the remaining badge own the full
      right-hand slot; otherwise the cloned wrapper keeps the share button's
@@ -208,6 +283,51 @@
     min-width: 0 !important;
     margin-left: auto !important;
     justify-content: flex-end !important;
+  }
+
+  /* Countdown exports use the same narrow two-column slot as the homepage.
+     Keep the badge out of the copy's flex calculation so the eyebrow and
+     gameweek remain a single readable line instead of colliding with the
+     timer grid. The badge is still pinned to the same top-right position. */
+  [data-share-rendering='true'][data-countdown-card]
+    [data-countdown-header='true'] {
+    position: relative !important;
+    display: block !important;
+  }
+
+  [data-share-rendering='true'][data-countdown-card]
+    [data-countdown-copy='true'] {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  [data-share-rendering='true'][data-countdown-card]
+    [data-countdown-eyebrow='true'],
+  [data-share-rendering='true'][data-countdown-card]
+    [data-countdown-title='true'] {
+    white-space: nowrap !important;
+  }
+
+  [data-share-rendering='true'][data-countdown-card]
+    [data-share-deadline-actions='true'] {
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    flex: none !important;
+  }
+
+  [data-share-rendering='true'][data-countdown-card]
+    [data-share-deadline-actions='true']
+    > [data-share-exclude='true'] {
+    display: none !important;
+  }
+
+  [data-share-rendering='true'][data-countdown-card]
+    [data-countdown-deadline] > span {
+    white-space: nowrap !important;
   }
 
   /* Export only the active slide. In the live carousel, the flex track uses
@@ -222,10 +342,33 @@
     transition: none !important;
   }
 
-  [data-share-rendering='true'][data-share-fit-content='true']:not([data-share-capture-height='true']) {
+	[data-share-rendering='true'][data-share-fit-content='true']:not([data-share-capture-height='true']) {
     align-self: flex-start !important;
     height: auto !important;
     min-height: 0 !important;
+  }
+
+  /* A full-list target can be opened inside a scrollable dialog for viewing,
+   * but the exported clone must contain the complete list. Reserve a small
+   * bottom-only safe area for the composited brand signature as well; this
+   * keeps the last row readable without widening the share canvas. */
+  [data-share-rendering='true'][data-share-full-content='true'] {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  [data-share-rendering='true'][data-share-reserve-brand-space='true'] {
+    box-sizing: border-box !important;
+    padding-bottom: 3rem !important;
+  }
+
+	/* The personal-league carousel is itself the share root. Its normal page
+     spacing comes from PersonalDesk, so the standalone export needs its own
+     inset after capture resets the root margin to zero. Keep the inset inside
+     the existing width; it must not widen the image canvas. */
+  [data-share-rendering='true'][data-share-personal-leagues='true'] {
+    box-sizing: border-box !important;
+    padding: 1rem !important;
   }
 
   /* Compact repeated Market rows. These preserve the generic Badge/link

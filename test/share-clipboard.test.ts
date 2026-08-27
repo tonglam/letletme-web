@@ -4,6 +4,7 @@ import { describe, it } from 'node:test'
 import {
 	getShareCaptureHeight,
 	getShareCaptureWidth,
+	SHARE_IMAGE_STYLE_PROPERTIES,
 	SHARE_BACKGROUND_COLOR,
 	shouldIncludeShareImageNode,
 	shareText
@@ -136,7 +137,19 @@ describe('getShareCaptureWidth', () => {
 		assert.equal(getShareCaptureWidth(target), undefined)
 	})
 
-	it('still expands legacy share targets with intentional overflow', () => {
+	it('only expands legacy share targets that explicitly opt in', () => {
+		const target = {
+			clientWidth: 768,
+			scrollWidth: 904,
+			getAttribute: (name: string) =>
+				name === 'data-share-expand-width' ? 'true' : null,
+			querySelectorAll: () => [{ scrollWidth: 1042 }]
+		} as unknown as HTMLElement
+
+		assert.equal(getShareCaptureWidth(target), 1042)
+	})
+
+	it('does not widen an unmarked target for descendant overflow', () => {
 		const target = {
 			clientWidth: 768,
 			scrollWidth: 904,
@@ -144,7 +157,7 @@ describe('getShareCaptureWidth', () => {
 			querySelectorAll: () => [{ scrollWidth: 1042 }]
 		} as unknown as HTMLElement
 
-		assert.equal(getShareCaptureWidth(target), 1042)
+		assert.equal(getShareCaptureWidth(target), undefined)
 	})
 })
 
@@ -176,6 +189,19 @@ describe('getShareCaptureHeight', () => {
 })
 
 describe('share image presentation', () => {
+	it('preserves grid placement when cloning share layouts', () => {
+		for (const property of [
+			'grid-column',
+			'grid-column-end',
+			'grid-column-start',
+			'grid-row',
+			'grid-row-end',
+			'grid-row-start'
+		]) {
+			assert.ok(SHARE_IMAGE_STYLE_PROPERTIES.includes(property))
+		}
+	})
+
 	it('uses the light-mode canvas color for every image export', () => {
 		assert.equal(SHARE_BACKGROUND_COLOR, '#faf9f5')
 	})

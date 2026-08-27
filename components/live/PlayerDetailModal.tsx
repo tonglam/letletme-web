@@ -289,7 +289,6 @@ export function PlayerDetailModal({
 							<ShareActions
 								text=""
 								imageRef={shareRef}
-								compact
 								actions={['image']}
 							/>
 						</div>
