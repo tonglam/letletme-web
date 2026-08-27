@@ -29,6 +29,7 @@ function isLiveCursor(value: unknown): value is LiveCursorResponse {
 	return (
 		typeof cursor.seasonCode === 'string' &&
 		(cursor.revision === null || typeof cursor.revision === 'string') &&
+		(cursor.sourceHash === null || typeof cursor.sourceHash === 'string') &&
 		(cursor.state === 'PROVISIONAL' ||
 			cursor.state === 'DURABLE' ||
 			cursor.state === 'UNAVAILABLE')
@@ -40,6 +41,7 @@ function isLiveBoard(value: unknown): value is LiveBoardResponse {
 	const live = value as Partial<LiveBoardResponse>
 	return (
 		typeof live.revision === 'string' &&
+		(live.sourceHash === null || typeof live.sourceHash === 'string') &&
 		(live.state === 'PROVISIONAL' ||
 			live.state === 'DURABLE' ||
 			live.state === 'UNAVAILABLE') &&
@@ -108,12 +110,14 @@ export function usePriceChangeLiveBoard({
 	const durableBoardRef = useRef(board)
 	const onUpdateRef = useRef(onUpdate)
 	const revisionRef = useRef(board.revision)
+	const sourceHashRef = useRef<string | null>(null)
 	const stateRef = useRef<PriceChangeLiveState>('DURABLE')
 
 	useEffect(() => {
 		boardRef.current = board
 		durableBoardRef.current = board
 		revisionRef.current = board.revision
+		sourceHashRef.current = null
 		stateRef.current = 'DURABLE'
 	}, [board])
 
@@ -153,31 +157,37 @@ export function usePriceChangeLiveBoard({
 							const fallback = durableBoardRef.current
 							if (
 								stateRef.current !== cursor.state ||
-								boardRef.current !== fallback
+								boardRef.current !== fallback ||
+								sourceHashRef.current !== null
 							) {
 								revisionRef.current = fallback.revision
+								sourceHashRef.current = null
 								stateRef.current = cursor.state
 								boardRef.current = fallback
 								onUpdateRef.current(fallback, cursor.state)
 							}
 						} else if (
 							cursor.revision !== revisionRef.current ||
-							cursor.state !== stateRef.current
+							cursor.state !== stateRef.current ||
+							(cursor.state === 'PROVISIONAL' &&
+								cursor.sourceHash !== sourceHashRef.current)
 						) {
 							const url =
 								cursor.state === 'PROVISIONAL'
-									? `/api/price-changes/live-board?revision=${encodeURIComponent(cursor.revision)}`
+									? `/api/price-changes/live-board?revision=${encodeURIComponent(cursor.revision)}&sourceHash=${encodeURIComponent(cursor.sourceHash ?? '')}`
 									: '/api/price-changes/live-board'
 							const live = await fetchJson<LiveBoardResponse>(url, 2_500)
 							const revisionMatches =
 								cursor.state !== 'PROVISIONAL' ||
-								live?.revision === cursor.revision
+								(live?.revision === cursor.revision &&
+									live.sourceHash === cursor.sourceHash)
 							if (
 								isLiveBoard(live) &&
 								revisionMatches &&
 								live.state !== 'UNAVAILABLE'
 							) {
 								revisionRef.current = live.revision
+								sourceHashRef.current = live.sourceHash
 								stateRef.current = live.state
 								boardRef.current = live.board
 								if (live.state === 'DURABLE') {

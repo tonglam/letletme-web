@@ -11,17 +11,19 @@ export const dynamic = 'force-dynamic'
 
 async function handler(request: Request): Promise<Response> {
 	try {
-		const revision = new URL(request.url).searchParams.get('revision')
+		const params = new URL(request.url).searchParams
+		const revision = params.get('revision')
+		const sourceHash = params.get('sourceHash')
 		const result = await executePublicServerQuery<PriceChangeLiveBoardResponse>(
 			'market',
 			GET_PRICE_CHANGE_LIVE_BOARD,
-			{ revision },
+			{ revision, sourceHash },
 			{ cache: 'no-store', timeoutMs: 3_000 }
 		)
 		return Response.json(result.priceChangeLiveBoard, {
 			headers: {
 				'Cache-Control': 'no-store',
-				ETag: `"${result.priceChangeLiveBoard.revision}"`
+				ETag: `"${result.priceChangeLiveBoard.revision}:${result.priceChangeLiveBoard.sourceHash ?? ''}"`
 			}
 		})
 	} catch (error) {

@@ -49,6 +49,7 @@ export type PriceChangeLiveState = 'PROVISIONAL' | 'DURABLE' | 'UNAVAILABLE'
 export type PriceChangeLiveCursor = {
 	seasonCode: string
 	revision: string | null
+	sourceHash: string | null
 	state: PriceChangeLiveState
 	detectedAt: string | null
 	fetchedAt: string | null
@@ -57,6 +58,7 @@ export type PriceChangeLiveCursor = {
 
 export type PriceChangeLiveBoard = {
 	revision: string
+	sourceHash: string | null
 	state: PriceChangeLiveState
 	detectedAt: string | null
 	expiresAt: string | null
@@ -129,6 +131,7 @@ export const GET_PRICE_CHANGE_LIVE_CURSOR = /* GraphQL */ `
 		priceChangeLiveCursor {
 			seasonCode
 			revision
+			sourceHash
 			state
 			detectedAt
 			fetchedAt
@@ -171,9 +174,10 @@ const PRICE_CHANGE_LIVE_BOARD_FIELDS = /* GraphQL */ `
 `
 
 export const GET_PRICE_CHANGE_LIVE_BOARD = /* GraphQL */ `
-	query GetPriceChangeLiveBoard($revision: String) {
-		priceChangeLiveBoard(revision: $revision) {
+	query GetPriceChangeLiveBoard($revision: String, $sourceHash: String) {
+		priceChangeLiveBoard(revision: $revision, sourceHash: $sourceHash) {
 			revision
+			sourceHash
 			state
 			detectedAt
 			expiresAt
