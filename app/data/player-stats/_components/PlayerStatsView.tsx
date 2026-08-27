@@ -13,7 +13,7 @@ import type {
 	PlayerStateMetric,
 	PlayerStateProfileData
 } from '@/lib/graphql/operations/players'
-import { ChevronDown, User } from 'lucide-react'
+import { ChevronDown, RefreshCw, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useFormatter, useTranslations } from 'next-intl'
 import {
@@ -32,6 +32,7 @@ import { PlayerPriceHistoryBlock } from './PlayerPriceHistoryBlock'
 import { PlayerRecentGameweeks } from './PlayerRecentGameweeks'
 import { PlayerStateContext, PlayerStateProfile } from './PlayerStateProfile'
 import type { PlayerEvidenceSection } from '../_hooks/usePlayerDetailSlot'
+import { playerDataAvailabilityIssues } from '../_lib/player-data-availability'
 import {
 	PlayerSectionNav,
 	scrollToPlayerStatsSection
@@ -58,6 +59,7 @@ interface PlayerStatsViewProps {
 	comparisonError: string | null
 	stateError: string | null
 	comparisonStateError: string | null
+	retryPlayerData: () => void
 	loadEvidence: (section: PlayerEvidenceSection) => Promise<void>
 	loadComparisonEvidence: (section: PlayerEvidenceSection) => Promise<void>
 	loadStateContext: () => Promise<void>
@@ -608,6 +610,7 @@ export function PlayerStatsView({
 	comparisonError,
 	stateError,
 	comparisonStateError,
+	retryPlayerData,
 	loadEvidence,
 	loadComparisonEvidence,
 	loadStateContext,
@@ -626,6 +629,19 @@ export function PlayerStatsView({
 }: PlayerStatsViewProps) {
 	const t = useTranslations('PlayerStats')
 	const tl = useTranslations('PlayerStats.labels')
+	const common = useTranslations('Common')
+	const dataSectionLabels = {
+		market: t('sectionNavMarket'),
+		historicalTeam: t('sectionNavHistory'),
+		fixtures: t('sectionNavFixtures'),
+		recentGameweeks: t('sectionNavRecent'),
+		player: t('sectionNavOverview')
+	} as const
+	const dataStateLabels = {
+		STALE: t('playerState.coverage.stale'),
+		FALLBACK: t('fallback'),
+		UNAVAILABLE: t('timeline.metricUnavailable')
+	} as const
 	const seasonStatsStatusMessage =
 		{
 			AVAILABLE: null,
@@ -773,27 +789,9 @@ export function PlayerStatsView({
 
 	if (!player) return null
 
-	const availabilitySections = [
-		['market', player.dataAvailability?.market],
-		['historicalTeam', player.dataAvailability?.historicalTeam],
-		['fixtures', player.dataAvailability?.fixtures],
-		['recentGameweeks', player.dataAvailability?.recentGameweeks]
-	] as const
-	const nonAuthoritativeStates: Array<[string, string]> = availabilitySections
-		.filter(([, section]) =>
-			Boolean(
-				section &&
-				!['READY', 'EMPTY', 'NOT_APPLICABLE'].includes(section.state)
-			)
-		)
-		.map(([name, section]) => [name, section!.state])
-	if (
-		player.dataAvailability &&
-		!player.dataAvailability.isFullyAuthoritative &&
-		nonAuthoritativeStates.length === 0
-	) {
-		nonAuthoritativeStates.push(['player', 'UNAVAILABLE'])
-	}
+	const dataAvailabilityIssues = playerDataAvailabilityIssues(
+		player.dataAvailability
+	)
 
 	const currentAsOf = player.statsContext.asOfEventId ?? anchorGw
 	const shareText = [
@@ -1033,18 +1031,56 @@ export function PlayerStatsView({
 						{requestError}
 					</p>
 				) : null}
-				{nonAuthoritativeStates.length > 0 ? (
-					<p
-						className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-muted-foreground"
-						role="status"
+				{dataAvailabilityIssues.length > 0 ? (
+					<div
+						className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-3 text-xs text-muted-foreground"
+						role={
+							dataAvailabilityIssues.some(
+								issue => issue.state === 'UNAVAILABLE'
+							)
+								? 'alert'
+								: 'status'
+						}
 						data-testid="player-data-availability"
 					>
-						{t('stale')} (
-						{nonAuthoritativeStates
-							.map(([section, state]) => `${section}: ${state}`)
-							.join(', ')}
-						)
-					</p>
+						<div className="flex flex-wrap items-start justify-between gap-3">
+							<div>
+								<p className="font-semibold text-foreground">
+									{t('playerState.limitation.evidenceUnavailable')}
+								</p>
+							</div>
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								disabled={requestPending}
+								onClick={retryPlayerData}
+							>
+								<RefreshCw
+									className={requestPending ? 'animate-spin' : undefined}
+									aria-hidden="true"
+								/>
+								{common('tryAgain')}
+							</Button>
+						</div>
+						<ul className="mt-2 flex flex-wrap gap-2">
+							{dataAvailabilityIssues.map(issue => (
+								<li
+									key={`${issue.section}:${issue.state}`}
+									className={
+										issue.state === 'UNAVAILABLE'
+											? 'rounded-full border border-destructive/30 bg-destructive/5 px-2 py-1 text-destructive'
+											: issue.state === 'STALE'
+												? 'rounded-full border border-warning/40 bg-warning/10 px-2 py-1 text-foreground'
+												: 'rounded-full border border-border/70 bg-background/70 px-2 py-1 text-foreground'
+									}
+								>
+									{dataSectionLabels[issue.section]}:{' '}
+									{dataStateLabels[issue.state]}
+								</li>
+							))}
+						</ul>
+					</div>
 				) : null}
 				<PlayerOverallCard
 					player={player}

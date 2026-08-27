@@ -563,6 +563,15 @@ export default function PlayerStatsClient({
 					comparisonError={secondPlayer.error}
 					stateError={firstPlayer.stateError}
 					comparisonStateError={secondPlayer.stateError}
+					retryPlayerData={() => {
+						if (!firstPlayer.selectedPlayer) return
+						firstPlayer.selectPlayer(
+							firstPlayer.selectedPlayer,
+							[firstSelectedPlayerId, secondSelectedPlayerId]
+								.map(Number)
+								.filter(value => Number.isInteger(value) && value > 0)
+						)
+					}}
 					loadEvidence={section =>
 						firstPlayer.loadEvidence(
 							section,
