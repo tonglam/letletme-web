@@ -12,11 +12,13 @@ import { getLivePageContext } from '@/lib/live-context-server'
 import { liveContextToSnapshot } from '@/lib/live-refresh'
 import { getCurrentEntryId } from '@/lib/session'
 import { getCurrentSeasonKey } from '@/lib/season'
-import { getTournamentLiveBatchSeed } from '@/lib/tournament/liveEntries'
+import {
+	appendDegradedTournamentRows,
+	getTournamentLiveBatchSeed
+} from '@/lib/tournament/liveEntries'
 import { loadTournamentLiveDeskWithRevisionRecovery } from '@/lib/tournament/liveDesk'
 import { areTournamentStandingsReady } from '@/lib/tournament/lifecycle'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
-import { getTranslations } from 'next-intl/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,7 +38,6 @@ type PageProps = {
 
 export default async function Page({ params, searchParams }: PageProps) {
 	await getPageLocale(params)
-	const liveT = await getTranslations('LiveTournament')
 	const resolvedSearchParams = await searchParams
 
 	// Public lifecycle context and the fresh entry authorization hint are
@@ -78,8 +79,9 @@ export default async function Page({ params, searchParams }: PageProps) {
 	>[] = []
 	let initialSelectedTournamentId = ''
 	let initialCurrentRows: TournamentLiveCalcData[] = []
+	let initialDegradedEntryIds: number[] = []
 	let initialResultsLoaded = false
-	let initialResultsError: string | null = null
+	const initialResultsError: string | null = null
 	let initialSnapshot: LiveSnapshotStatus | null = null
 	let initialOfficialCoverage = 0
 
@@ -129,15 +131,13 @@ export default async function Page({ params, searchParams }: PageProps) {
 				areTournamentStandingsReady(selectedTournament)
 			) {
 				const seed = getTournamentLiveBatchSeed(desk)
-				initialCurrentRows = seed.rows
+				initialDegradedEntryIds = seed.degradedEntryIds
+				initialCurrentRows = appendDegradedTournamentRows({
+					rows: seed.rows,
+					degradedEntryIds: seed.degradedEntryIds
+				})
 				initialOfficialCoverage = seed.officialCoverage
 				initialSnapshot = liveContextToSnapshot(liveContext) ?? seed.snapshot
-				if (seed.failedCount > 0) {
-					initialResultsError = liveT('partialResults', {
-						failed: seed.failedCount,
-						total: seed.totalEntries
-					})
-				}
 			}
 			initialResultsLoaded = true
 		} catch (err) {
@@ -152,6 +152,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			initialSelectedTournamentId={initialSelectedTournamentId}
 			initialEventId={currentEventId}
 			initialCurrentRows={initialCurrentRows}
+			initialDegradedEntryIds={initialDegradedEntryIds}
 			initialResultsLoaded={initialResultsLoaded}
 			initialResultsError={initialResultsError}
 			initialSnapshot={initialSnapshot}

@@ -14,11 +14,20 @@ import { Link } from '@/i18n/navigation'
 import type { MarketPriceChange } from '@/lib/graphql/operations/market'
 import type {
 	PriceChangePlayer,
-	PriceChangePredictionStatus
+	PriceChangePredictionStatus,
+	PriceChangeLiveState
 } from '@/lib/graphql/operations/price-changes'
+import {
+	buildHomePriceChangePredictionState,
+	type HomePriceChangePredictionState
+} from '@/lib/home-price-change'
+import {
+	type PriceChangeLiveSeed,
+	usePriceChangeLiveUpdates
+} from '@/lib/price-change-live-client'
 import { cn } from '@/lib/utils'
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Minus } from 'lucide-react'
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 export type HomePriceChangeCarouselLabels = {
@@ -60,12 +69,8 @@ export type HomePriceChangeCarouselProps = {
 		rises: MarketPriceChange[]
 		falls: MarketPriceChange[]
 	}
-	likely: {
-		state: 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE'
-		capturedAt: string | null
-		rises: PriceChangePlayer[]
-		falls: PriceChangePlayer[]
-	}
+	likely: HomePriceChangePredictionState
+	liveSeed: PriceChangeLiveSeed
 	locale: string
 	labels: HomePriceChangeCarouselLabels
 }
@@ -431,11 +436,40 @@ function LikelyPage({
 
 export function HomePriceChangeCarousel({
 	actual,
-	likely,
+	likely: initialLikely,
+	liveSeed,
 	locale,
 	labels
 }: HomePriceChangeCarouselProps) {
 	const shareRef = useRef<HTMLDivElement | null>(null)
+	const [likely, setLikely] = useState(initialLikely)
+	const [liveState, setLiveState] = useState<PriceChangeLiveState>(
+		initialLikely.state === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'DURABLE'
+	)
+	const [liveRevision, setLiveRevision] = useState(liveSeed.revision)
+
+	useEffect(() => {
+		setLikely(initialLikely)
+		setLiveState(
+			initialLikely.state === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'DURABLE'
+		)
+		setLiveRevision(liveSeed.revision)
+	}, [initialLikely, liveSeed.revision])
+
+	usePriceChangeLiveUpdates({
+		seed: liveSeed,
+		onUpdate: (board, state) => {
+			setLikely(buildHomePriceChangePredictionState(board, locale))
+			setLiveState(state)
+			setLiveRevision(board.revision)
+		},
+		onReset: state => {
+			setLikely(initialLikely)
+			setLiveState(state)
+			setLiveRevision(liveSeed.revision)
+		}
+	})
+
 	const slides: HomeAutoCarouselSlide[] = [
 		{
 			id: 'today',
@@ -465,6 +499,8 @@ export function HomePriceChangeCarousel({
 		<Card
 			ref={shareRef}
 			aria-labelledby="home-price-changes-title"
+			data-price-change-live-state={liveState}
+			data-price-change-revision={liveRevision}
 			data-share-preserve-width="true"
 			data-share-fit-content="true"
 			className="flex h-full flex-col rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8"

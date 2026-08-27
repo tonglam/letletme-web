@@ -7,12 +7,14 @@ import {
 	SelectTrigger,
 	SelectValue
 } from '@/components/ui/select'
+import type { FplClassicLeagueRank } from '@/lib/graphql/operations/leagues'
 import type { EntryTournament } from '@/lib/graphql/operations/tournaments'
 import { cn } from '@/lib/utils'
 import { useFormatter, useTranslations } from 'next-intl'
 import type { ReactNode } from 'react'
 
 interface TournamentStatsHeaderProps {
+	fplClassicRanks: FplClassicLeagueRank[]
 	onTournamentChange: (value: string) => void
 	selectedTournament: EntryTournament | null
 	selectedTournamentId: string
@@ -34,6 +36,7 @@ function MetaChip({ children }: { children: ReactNode }) {
 }
 
 export function TournamentStatsHeader({
+	fplClassicRanks,
 	onTournamentChange,
 	selectedTournament,
 	selectedTournamentId,
@@ -188,6 +191,59 @@ export function TournamentStatsHeader({
 							))}
 						</ul>
 					) : null
+				) : null}
+
+				{fplClassicRanks.length > 0 ? (
+					<div className="space-y-3 border-t border-border/70 pt-3.5">
+						<div>
+							<p
+								id="fpl-classic-ranks-title"
+								className="eyebrow"
+							>
+								{t('fplClassicRanks')}
+							</p>
+							<p className="mt-1 text-xs leading-5 text-muted-foreground">
+								{t('fplClassicRanksHint')}
+							</p>
+						</div>
+						<ul
+							className="grid gap-2 sm:grid-cols-2"
+							aria-labelledby="fpl-classic-ranks-title"
+						>
+							{fplClassicRanks.map(league => {
+								const movement =
+									league.rank !== null && league.previousRank !== null
+										? league.previousRank - league.rank
+										: null
+								return (
+									<li
+										key={league.leagueId}
+										className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/25 px-3 py-2.5"
+									>
+										<span className="min-w-0 truncate text-sm font-semibold">
+											{league.name}
+										</span>
+										<span className="shrink-0 text-right">
+											<span className="block font-display text-base font-bold tabular-nums">
+												{league.rank === null
+													? t('noData')
+													: `#${format.number(league.rank)}`}
+											</span>
+											{movement !== null ? (
+												<span className="block text-caption text-muted-foreground">
+													{movement > 0
+														? t('up', { count: movement })
+														: movement < 0
+															? t('down', { count: Math.abs(movement) })
+															: t('noChange')}
+												</span>
+											) : null}
+										</span>
+									</li>
+								)
+							})}
+						</ul>
+					</div>
 				) : null}
 			</div>
 		</Card>

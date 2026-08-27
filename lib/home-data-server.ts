@@ -24,7 +24,10 @@ import {
 	GET_LIVE_MATCHDAY_DESK,
 	type LiveMatchdayDeskResponse
 } from '@/lib/graphql/operations/live'
-import { mergeLiveFixturesIntoHomeFixtures } from '@/lib/home-fixtures-merge'
+import {
+	buildLiveCoreFixtureFallback,
+	mergeLiveFixturesIntoHomeFixtures
+} from '@/lib/home-fixtures-merge'
 import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 import { coalescePublicSeed } from '@/lib/public-seed-singleflight'
@@ -226,17 +229,11 @@ const loadHomeFixturesFromOrigin = async (
 					eventId,
 					error: error instanceof Error ? error.name : 'UnknownError'
 				})
-				return {
-					season: core.season,
-					revision: 'live-unavailable',
+				return buildLiveCoreFixtureFallback(
+					core,
 					eventId,
-					source: 'LIVE' as const,
-					state: 'UNAVAILABLE' as const,
-					sourceCheckedAt: null,
-					publishedAt: null,
-					stale: true,
-					fixtures: []
-				}
+					response.eventFixtures
+				)
 			}
 		}
 		return {

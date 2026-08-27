@@ -353,6 +353,7 @@ function TournamentStatsBody(props: TournamentStatsClientProps) {
 
 					{/* Frame: tournament picker always on */}
 					<TournamentStatsHeader
+						fplClassicRanks={props.initialFplClassicRanks}
 						onTournamentChange={handleTournamentChange}
 						selectedTournament={selectedTournament}
 						selectedTournamentId={selectedTournamentId}

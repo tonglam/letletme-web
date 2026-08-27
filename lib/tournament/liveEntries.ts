@@ -15,10 +15,59 @@ export type LiveTournamentStats = {
 	totalEntries: number
 }
 
-export const mergeUnavailableTournamentEntryIds = (
+export const mergeDegradedTournamentEntryIds = (
 	failedEntryIds: readonly number[],
 	unavailableEntryIds: readonly number[]
 ): number[] => Array.from(new Set([...failedEntryIds, ...unavailableEntryIds]))
+
+type DegradedTournamentEntryMetadata = {
+	entryName?: string | null
+	playerName?: string | null
+}
+
+/**
+ * Keep a failed entry visible when the producer omits its row entirely. These
+ * placeholders are deliberately scoreless and are marked stale by the caller;
+ * they preserve the denominator and give the user a row-level degraded state
+ * without inventing points or rank data.
+ */
+export const appendDegradedTournamentRows = ({
+	rows,
+	degradedEntryIds,
+	metadataByEntryId
+}: {
+	rows: TournamentLiveCalcData[]
+	degradedEntryIds: readonly number[]
+	metadataByEntryId?: ReadonlyMap<number, DegradedTournamentEntryMetadata>
+}): TournamentLiveCalcData[] => {
+	const existingEntryIds = new Set(rows.map(row => row.entry))
+	const placeholders = degradedEntryIds
+		.filter(entryId => !existingEntryIds.has(entryId))
+		.map(entryId => {
+			const metadata = metadataByEntryId?.get(entryId)
+			return {
+				entry: entryId,
+				entryName: metadata?.entryName ?? `Entry ${entryId}`,
+				playerName: metadata?.playerName ?? '—',
+				overallRank: 0,
+				chip: null,
+				transferCost: 0,
+				played: 0,
+				toPlay: 0,
+				captainName: 'N/A',
+				pickList: []
+			} satisfies TournamentLiveCalcData
+		})
+	return placeholders.length > 0 ? [...rows, ...placeholders] : rows
+}
+
+export const shouldShowTournamentResultsFatalError = ({
+	requestFailed,
+	canRetainUsableBoard
+}: {
+	requestFailed: boolean
+	canRetainUsableBoard: boolean
+}): boolean => requestFailed && !canRetainUsableBoard
 
 /**
  * Keep producer metadata independent from per-entry calculation failures.
@@ -28,9 +77,12 @@ export const mergeUnavailableTournamentEntryIds = (
 export const getTournamentLiveBatchSeed = (
 	response: TournamentLivePointsResponse
 ) => {
-	const unavailableEntryIds = mergeUnavailableTournamentEntryIds(
-		response.entryLiveCompetitionsDesk.failedEntryIds,
+	const failedEntryIds = response.entryLiveCompetitionsDesk.failedEntryIds
+	const unavailableEntryIds =
 		response.entryLiveCompetitionsDesk.unavailableEntryIds ?? []
+	const degradedEntryIds = mergeDegradedTournamentEntryIds(
+		failedEntryIds,
+		unavailableEntryIds
 	)
 	return {
 		rows: response.entryLiveCompetitionsDesk.board ?? [],
@@ -48,8 +100,9 @@ export const getTournamentLiveBatchSeed = (
 				.dataAvailability as LiveSnapshotStatus['dataAvailability'],
 			nextRefreshAt: response.entryLiveCompetitionsDesk.nextRefreshAt ?? null
 		},
-		failedCount: unavailableEntryIds.length,
-		failedEntryIds: unavailableEntryIds,
+		failedCount: failedEntryIds.length,
+		failedEntryIds,
+		degradedEntryIds,
 		officialCoverage: response.entryLiveCompetitionsDesk.officialCoverage ?? 0,
 		unavailableEntryIds,
 		totalEntries: response.entryLiveCompetitionsDesk.totalEntries

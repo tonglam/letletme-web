@@ -47,8 +47,9 @@ import {
 	countTraceableTournamentScores,
 	getRetainedFailedEntryIds,
 	getTournamentManagerNextRefreshAt,
-	mergeUnavailableTournamentEntryIds,
-	mergePartialTournamentRows
+	mergeDegradedTournamentEntryIds,
+	mergePartialTournamentRows,
+	shouldShowTournamentResultsFatalError
 } from '@/lib/tournament/liveEntries'
 import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
 import { Link, useRouter } from '@/i18n/navigation'
@@ -411,6 +412,7 @@ export default function TournamentDetailClient({
 	activeGameweek,
 	entryId,
 	initialRows,
+	initialDegradedEntryIds,
 	loadError,
 	softError,
 	initialSnapshot,
@@ -425,6 +427,7 @@ export default function TournamentDetailClient({
 	/** Viewer FPL entry — pin + highlight on live standings */
 	entryId?: number | null
 	initialRows: TournamentLiveCalcData[]
+	initialDegradedEntryIds?: number[]
 	/** Blocking failure — no tournament payload */
 	loadError: TournamentDetailLoadError | null
 	/** Soft banner while tournament is still shown (e.g. partial calc) */
@@ -442,6 +445,10 @@ export default function TournamentDetailClient({
 	const [searchQuery, setSearchQuery] = useState('')
 	const [currentTournament, setCurrentTournament] = useState(tournament)
 	const [rows, setRows] = useState(initialRows)
+	const rowsRef = useRef(initialRows)
+	useEffect(() => {
+		rowsRef.current = rows
+	}, [rows])
 	const managerNextRefreshAt = useMemo(
 		() => getTournamentManagerNextRefreshAt(rows),
 		[rows]
@@ -472,7 +479,12 @@ export default function TournamentDetailClient({
 		return scoreT('scoreOfficial')
 	}, [rows, scoreT])
 	const [staleEntryIds, setStaleEntryIds] = useState<ReadonlySet<number>>(
-		() => new Set()
+		() => new Set(initialDegradedEntryIds ?? [])
+	)
+	const hasUsableBoardRef = useRef(
+		initialRows.some(
+			row => !(initialDegradedEntryIds ?? []).includes(row.entry)
+		)
 	)
 	const [error, setError] = useState(softError)
 	const [snapshot, setSnapshot] = useState<LiveSnapshotStatus | null>(
@@ -482,7 +494,6 @@ export default function TournamentDetailClient({
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const refreshInFlightRef = useRef<Promise<void> | null>(null)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
-	const failedEntryCountRef = useRef(softError ? 1 : 0)
 	const refreshGenerationRef = useRef(0)
 	const [visible, setVisible] = useState(true)
 	const [online, setOnline] = useState(true)
@@ -673,23 +684,25 @@ export default function TournamentDetailClient({
 						)
 					}
 					const batch = response.entryLiveCompetitionsDesk
-					const failedIds = mergeUnavailableTournamentEntryIds(
+					const degradedEntryIds = mergeDegradedTournamentEntryIds(
 						batch.failedEntryIds,
 						batch.unavailableEntryIds ?? []
 					)
-					failedEntryCountRef.current = failedIds.length
 					const nextRows = batch.board ?? []
+					if (nextRows.some(row => !degradedEntryIds.includes(row.entry))) {
+						hasUsableBoardRef.current = true
+					}
 					setRows(previousRows => {
 						const retainedIds = getRetainedFailedEntryIds({
 							nextRows,
 							previousRows,
-							failedEntryIds: failedIds,
+							failedEntryIds: degradedEntryIds,
 							preserveFailed: true
 						})
 						const merged = mergePartialTournamentRows({
 							nextRows,
 							previousRows,
-							failedEntryIds: failedIds,
+							failedEntryIds: degradedEntryIds,
 							preserveFailed: true
 						})
 						queueMicrotask(() => {
@@ -711,20 +724,27 @@ export default function TournamentDetailClient({
 								}
 							: null
 					)
-					if (batch.partial) {
-						setError(
-							t('partialResults', {
-								failed: failedIds.length,
-								total: batch.totalEntries
-							})
-						)
-					}
 				} catch (refreshError) {
+					if (
+						shouldShowTournamentResultsFatalError({
+							requestFailed: true,
+							canRetainUsableBoard: hasUsableBoardRef.current
+						})
+					) {
+						setError(t('standingsFailed'))
+					} else if (hasUsableBoardRef.current) {
+						setStaleEntryIds(previous => {
+							const next = new Set(previous)
+							for (const row of rowsRef.current) {
+								next.add(row.entry)
+							}
+							return next
+						})
+					}
 					console.error(
 						'Failed to refresh live tournament standings:',
 						refreshError
 					)
-					setError(t('standingsFailed'))
 				} finally {
 					setIsRefreshing(false)
 				}
@@ -776,14 +796,12 @@ export default function TournamentDetailClient({
 					!managerScoreDue
 				) {
 					acceptSnapshot(observedSnapshot)
-					if (failedEntryCountRef.current === 0) setError(null)
 					return
 				}
 				await refreshStandings(observedSnapshot?.revision ?? null)
 			} catch (probeError) {
 				if (generation !== refreshGenerationRef.current) return
 				console.error('Failed to check live tournament freshness:', probeError)
-				setError(t('standingsFailed'))
 			}
 		})()
 		freshnessRequestRef.current = request
@@ -800,7 +818,6 @@ export default function TournamentDetailClient({
 		isOfficialH2H,
 		refreshStandings,
 		standingsReady,
-		t,
 		managerNextRefreshAt
 	])
 

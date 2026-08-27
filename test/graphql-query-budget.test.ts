@@ -11,7 +11,11 @@ import {
 	GET_FIXTURE_PLANNING_SIGNALS,
 	GET_MARKET_PULSE
 } from '../lib/graphql/operations/market'
-import { GET_PRICE_CHANGE_BOARD } from '../lib/graphql/operations/price-changes'
+import {
+	GET_PRICE_CHANGE_BOARD,
+	GET_PRICE_CHANGE_LIVE_BOARD,
+	GET_PRICE_CHANGE_LIVE_CURSOR
+} from '../lib/graphql/operations/price-changes'
 import {
 	GET_PLAYER_STATS_DESK_OVERVIEW,
 	GET_PLAYER_STATE_PROFILE,
@@ -77,6 +81,23 @@ describe('GraphQL request budget', () => {
 		)
 		assert.ok(operation?.kind === 'OperationDefinition')
 		assert.equal(operation.selectionSet.selections.length, 1)
+	})
+
+	it('keeps the live cursor and live board as bounded additive roots', () => {
+		for (const [name, query] of [
+			['GET_PRICE_CHANGE_LIVE_CURSOR', GET_PRICE_CHANGE_LIVE_CURSOR],
+			['GET_PRICE_CHANGE_LIVE_BOARD', GET_PRICE_CHANGE_LIVE_BOARD]
+		] as const) {
+			const document = parse(query)
+			let astNodes = 0
+			visit(document, { enter: () => void (astNodes += 1) })
+			const operation = document.definitions.find(
+				definition => definition.kind === 'OperationDefinition'
+			)
+			assert.ok(operation?.kind === 'OperationDefinition')
+			assert.equal(operation.selectionSet.selections.length, 1)
+			assert.ok(astNodes < 200, `${name} has ${astNodes} AST nodes`)
+		}
 	})
 
 	it('keeps each Home document within the production query budget', () => {

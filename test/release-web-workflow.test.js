@@ -73,9 +73,32 @@ test('Vercel candidate uses a remote unaliased Production build', () => {
 		deployCommand,
 		/(?:^|\s)--env "LETLETME_RELEASE_SHA=\$RELEASE_SHA"(?:\s|$)/
 	)
+	assert.match(
+		deployCommand,
+		/(?:^|\s)--build-env "NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=\$WEB_PRICE_CHANGE_LIVE_ENABLED"(?:\s|$)/
+	)
+	assert.match(
+		deployCommand,
+		/(?:^|\s)--env "NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=\$WEB_PRICE_CHANGE_LIVE_ENABLED"(?:\s|$)/
+	)
 	assert.match(deployCommand, /(?:^|\s)--meta "gitSha=\$RELEASE_SHA"(?:\s|$)/)
 	assert.doesNotMatch(deployCommand, /(?:^|\s)--prebuilt(?:\s|$)/)
 	assert.doesNotMatch(workflow, /vercel@\$\{VERCEL_CLI_VERSION\}" (?:pull|build)(?:\s|\\)/)
+})
+
+test('signed Tencent release archive carries the same public live flag', () => {
+	assert.match(
+		workflow,
+		/printf 'NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=%s\\n' "\$WEB_PRICE_CHANGE_LIVE_ENABLED" > "\$tmp_root\/\.env\.production"/
+	)
+	assert.match(
+		workflow,
+		/tar --append --file="\$tmp_root\/release\.tar" -C "\$tmp_root" \.env\.production/
+	)
+	assert.match(
+		workflow,
+		/identical client bundle without copying any host secrets/
+	)
 })
 
 test('Vercel candidate reaches READY and passes protected health verification before routing changes', () => {
