@@ -1,4 +1,75 @@
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
+
+function readLocalEnvValue(filename: string, key: string): string | undefined {
+	const p = path.join(process.cwd(), filename)
+	if (!existsSync(p)) return undefined
+	const line = readFileSync(p, 'utf8')
+		.split('\n')
+		.find(value => value.trimStart().startsWith(`${key}=`))
+	if (!line) return undefined
+	let value = line.slice(line.indexOf('=') + 1).trim()
+	if (
+		(value.startsWith('"') && value.endsWith('"')) ||
+		(value.startsWith("'") && value.endsWith("'"))
+	) {
+		value = value.slice(1, -1)
+	}
+	return value
+}
+
+function hydrateE2eEnvFromLocalFile(): void {
+	const p = path.join(process.cwd(), '.env.e2e.local')
+	if (!existsSync(p)) return
+	const text = readFileSync(p, 'utf8')
+	for (let line of text.split('\n')) {
+		line = line.trimEnd()
+		if (line.startsWith('#') || !line.includes('=')) continue
+		const ix = line.indexOf('=')
+		const key = line.slice(0, ix).trim()
+		if (key !== 'E2E_DATABASE_URL' && key !== 'E2E_DIRECT_DATABASE_URL') {
+			continue
+		}
+		let value = line.slice(ix + 1).trim()
+		if (
+			(value.startsWith('"') && value.endsWith('"')) ||
+			(value.startsWith("'") && value.endsWith("'"))
+		) {
+			value = value.slice(1, -1)
+		}
+		if (!process.env[key]) process.env[key] = value
+	}
+
+	const e2eDatabaseUrl = process.env.E2E_DATABASE_URL
+	if (!e2eDatabaseUrl) return
+	try {
+		const e2eUrl = new URL(e2eDatabaseUrl)
+		if (e2eUrl.password) return
+		const localRuntimeUrl = readLocalEnvValue(
+			'.env.development.local',
+			'DATABASE_URL'
+		)
+		if (!localRuntimeUrl) return
+		const configuredUrl = new URL(localRuntimeUrl)
+		if (
+			configuredUrl.username !== 'letletme_web_runtime' ||
+			!configuredUrl.password ||
+			configuredUrl.hostname !== e2eUrl.hostname ||
+			(configuredUrl.port || '5432') !== (e2eUrl.port || '5432')
+		) {
+			return
+		}
+		e2eUrl.username = configuredUrl.username
+		e2eUrl.password = configuredUrl.password
+		e2eUrl.search = configuredUrl.search
+		process.env.E2E_DATABASE_URL = e2eUrl.toString()
+	} catch {
+		// The normal validation below reports malformed URLs with the variable name.
+	}
+}
+
+hydrateE2eEnvFromLocalFile()
 
 const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL
 const e2eDatabaseUrl = process.env.E2E_DATABASE_URL?.trim()
@@ -79,10 +150,12 @@ const baseURL = externalBaseUrl ?? `http://localhost:${localWebPort}`
 const graphqlFixtureURL = `http://127.0.0.1:${localGraphqlPort}`
 const graphqlServiceToken =
 	'e2e-graphql-service-token-at-least-thirty-two-bytes'
+const standaloneServerCommand =
+	'mkdir -p .next/standalone/public .next/standalone/.next/static && cp -R public/. .next/standalone/public/ && cp -R .next/static/. .next/standalone/.next/static/ && node .next/standalone/server.js'
 const nextCommand =
 	process.env.PLAYWRIGHT_USE_EXISTING_BUILD === '1'
-		? `npm run start -- --hostname 127.0.0.1 --port ${localWebPort}`
-		: `npm run build && npm run start -- --hostname 127.0.0.1 --port ${localWebPort}`
+		? standaloneServerCommand
+		: `npm run build && ${standaloneServerCommand}`
 
 export default defineConfig({
 	testDir: './e2e',
@@ -123,6 +196,8 @@ export default defineConfig({
 						...process.env,
 						NODE_ENV: 'production',
 						TZ: 'UTC',
+						HOSTNAME: '127.0.0.1',
+						PORT: localWebPort,
 						BETTER_AUTH_URL: baseURL,
 						BACKEND_PROXY_SECRET:
 							'playwright-backend-proxy-secret-at-least-32-bytes',

@@ -401,16 +401,16 @@
     @apply text-foreground;
   }
   .market-player-link {
-    @apply block whitespace-normal text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
+    @apply block whitespace-nowrap text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
   }
   .market-player-link--compact {
-    @apply block whitespace-normal text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
+    @apply block whitespace-nowrap text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
   }
   .market-player-subtext {
     @apply truncate text-[11px] text-muted-foreground;
   }
   .market-dense-row {
-    @apply flex items-start gap-2.5 border-b border-border/50 py-2.5 last:border-b-0;
+    @apply grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0;
   }
   .market-dense-row__trailing {
     @apply shrink-0 text-right;
@@ -431,7 +431,7 @@
     @apply flex items-start gap-2.5;
   }
   .market-availability-link {
-    @apply text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
+    @apply whitespace-nowrap text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
   }
   .market-availability-meta {
     @apply mt-0.5 text-[11px] text-muted-foreground;
@@ -451,12 +451,6 @@
   }
 
   @media (max-width: 639px) {
-    .market-dense-row {
-      @apply grid grid-cols-[auto_minmax(0,1fr)] items-start;
-    }
-    .market-dense-row__trailing {
-      @apply col-start-2 justify-self-start text-left;
-    }
     .market-mover-content {
       @apply grid grid-cols-[auto_minmax(0,1fr)] items-start;
     }

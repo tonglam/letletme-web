@@ -8,16 +8,17 @@ import type {
 	MarketPlayer
 } from '@/lib/graphql/operations/market'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
-import { availabilityBodyText, marketAvailabilityStatusKey } from '@/lib/market-availability'
+import {
+	availabilityBodyText,
+	marketAvailabilityStatusKey
+} from '@/lib/market-availability'
 import { shortMarketPosition } from '@/lib/market'
 import { positionBadgeClass } from '@/lib/position-style'
 import { cn } from '@/lib/utils'
+import type { useTranslations } from 'next-intl'
 import type { ReactNode } from 'react'
 
-type MarketAvailabilityTranslator = (
-	key: any,
-	values?: any
-) => string
+type MarketAvailabilityTranslator = ReturnType<typeof useTranslations<'Market'>>
 
 function formatCalendarDate(value: string | null, locale: string): string {
 	if (!value) return '—'
@@ -84,7 +85,9 @@ export function MarketAvailabilityClientList({
 								<div className="flex flex-wrap items-center gap-2">
 									<Link
 										prefetch={false}
-										href={playerStatsHref({ p1: String(update.player.playerId) })}
+										href={playerStatsHref({
+											p1: String(update.player.playerId)
+										})}
 										className="text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary"
 									>
 										{update.player.webName}
@@ -97,14 +100,20 @@ export function MarketAvailabilityClientList({
 									</Badge>
 								</div>
 								<p className="mt-0.5 text-[11px] text-muted-foreground">
-									{update.player.teamShortName} · {formatOwnership(update.player.selectedByPercent, locale)} {t('owned')}
+									{update.player.teamShortName} ·{' '}
+									{formatOwnership(update.player.selectedByPercent, locale)}{' '}
+									{t('owned')}
 								</p>
 								<p className="mt-1.5 text-sm leading-snug text-foreground">
 									{availabilityBodyText(update, messageKey => t(messageKey))}
 								</p>
 								<p className="mt-1 text-[11px] text-muted-foreground">
-									{t('observedOn', { date: formatCalendarDate(update.observedDate, locale) })}
-									{chance !== null ? ` · ${t('playingChance', { chance })}` : ''}
+									{t('observedOn', {
+										date: formatCalendarDate(update.observedDate, locale)
+									})}
+									{chance !== null
+										? ` · ${t('playingChance', { chance })}`
+										: ''}
 								</p>
 							</div>
 						</div>

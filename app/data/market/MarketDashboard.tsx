@@ -2,7 +2,6 @@ import { MarketAvailabilityDisclosure } from './MarketAvailabilityDisclosure'
 import { MarketAvailabilityList } from '@/components/data/MarketAvailabilityList'
 import { MarketPositionBadge } from '@/components/data/MarketMarkup'
 import { MarketPriceExplorer } from './MarketPriceExplorer'
-import { MarketLocalUpdated } from '@/components/data/MarketLocalUpdated'
 import { OwnershipSwingDesk } from '@/components/data/OwnershipSwingDesk'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
@@ -20,10 +19,11 @@ import { getMarketViewMode } from '@/lib/market'
 import { Link } from '@/i18n/navigation'
 import { cn } from '@/lib/utils'
 import { getTranslations } from 'next-intl/server'
+import type { useTranslations } from 'next-intl'
 import { HeartPulse, Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-type MarketT = (key: any, values?: any) => string
+type MarketT = ReturnType<typeof useTranslations<'Market'>>
 
 function formatCalendarDate(value: string | null, locale: string): string {
 	if (!value) return '—'
@@ -39,6 +39,10 @@ function formatCalendarDate(value: string | null, locale: string): string {
 
 function formatOwnership(value: number, locale: string): string {
 	return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)}%`
+}
+
+function formatPlayerPrice(value: number): string {
+	return `£${(value / 10).toFixed(1)}m`
 }
 
 function PositionBadge({ player }: { player: MarketPlayer }) {
@@ -123,7 +127,7 @@ function DensePlayerRow({
 					<p className="market-player-subtext">{player.teamShortName}</p>
 				)}
 			</div>
-				<div className="market-dense-row__trailing">{trailing}</div>
+			<div className="market-dense-row__trailing">{trailing}</div>
 		</li>
 	)
 }
@@ -151,12 +155,6 @@ function CoverageMeta({
 		<div className="space-y-2">
 			<div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
 				<span>{rangeLabel}</span>
-				{coverage.capturedAt ? (
-					<>
-						<span aria-hidden="true">·</span>
-						<MarketLocalUpdated capturedAt={coverage.capturedAt} />
-					</>
-				) : null}
 			</div>
 			<p className="text-xs text-muted-foreground">
 				{t('ownershipObservedDays', {
@@ -251,7 +249,7 @@ function OwnershipCoverageMeta({
 					from: formatCalendarDate(coverage.fromDate, locale),
 					to: formatCalendarDate(coverage.toDate, locale)
 				})
-			: t('ownershipStatus.' + coverage.status)
+			: t(`ownershipStatus.${coverage.status}`)
 	const missing =
 		coverage.missingDates.length > 0
 			? t('ownershipMissingDates', {
@@ -278,16 +276,13 @@ function OwnershipCoverageMeta({
 						requested: coverage.requestedDays
 					})}
 				</span>
-				{coverage.capturedAt ? (
-					<>
-						<span aria-hidden="true">·</span>
-						<MarketLocalUpdated capturedAt={coverage.capturedAt} />
-					</>
-				) : null}
 			</div>
 			{gameweek ? (
 				<p className="text-xs text-muted-foreground">
-					{t('ownershipGameweekMeta', { gameweek: gameweek.name, deadline })}
+					{t('ownershipGameweekMeta', {
+						gameweek: gameweek.name,
+						deadline: deadline ?? '—'
+					})}
 				</p>
 			) : null}
 			{missing ? (
@@ -297,7 +292,7 @@ function OwnershipCoverageMeta({
 			) : null}
 			{coverage.status !== 'READY' && !missing ? (
 				<p className="text-xs text-muted-foreground">
-					{t('ownershipStatus.' + coverage.status)}
+					{t(`ownershipStatus.${coverage.status}`)}
 				</p>
 			) : null}
 			{coverage.stale ? (
@@ -524,7 +519,7 @@ function NewPlayersBlock({
 			{items.map(item => (
 				<li
 					key={item.player.playerId}
-					className="flex items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0"
+					className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0"
 				>
 					<PositionBadge player={item.player} />
 					<div className="min-w-0">
@@ -536,11 +531,15 @@ function NewPlayersBlock({
 							{item.player.webName}
 						</PlayerStatsAnchor>
 						<p className="market-player-subtext">
+							{item.player.teamShortName} ·{' '}
 							{t('firstSeen', {
 								date: formatCalendarDate(item.firstObservedDate, locale)
 							})}
 						</p>
 					</div>
+					<span className="shrink-0 text-right font-display text-sm font-semibold tabular-nums text-foreground">
+						{formatPlayerPrice(item.player.price)}
+					</span>
 				</li>
 			))}
 		</ul>
@@ -638,7 +637,7 @@ export async function MarketDashboard({
 					{ownership ? (
 						!['READY', 'PARTIAL'].includes(ownership.coverage.status) ? (
 							<EmptyHint>
-								{t('ownershipStatus.' + ownership.coverage.status)}
+								{t(`ownershipStatus.${ownership.coverage.status}`)}
 							</EmptyHint>
 						) : !hasMovers ? (
 							<EmptyHint>{t('noOwnershipMovement')}</EmptyHint>
@@ -756,16 +755,15 @@ export async function MarketDashboard({
 	return (
 		<div className="space-y-8">
 			{pulse ? (
-				<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+				<>
+					<div className="border-b border-border/60 pb-3">
 						<CoverageMeta
 							coverage={pulse.coverage}
 							locale={locale}
 							t={t}
 						/>
-						<p className="mt-3 border-t border-border/50 pt-3 text-[11px] text-muted-foreground">
-							{t(`viewMode.${viewMode}`)}
-						</p>
-					</section>
+					</div>
+				</>
 			) : null}
 			{glance}
 			{order.map(id => (

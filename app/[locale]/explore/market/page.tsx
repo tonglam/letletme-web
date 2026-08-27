@@ -3,6 +3,7 @@ import {
 	MarketDashboard,
 	MarketGlance
 } from '@/app/data/market/MarketDashboard'
+import { MarketLocalUpdated } from '@/components/data/MarketLocalUpdated'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
@@ -215,6 +216,10 @@ async function renderMarketContent({
 	const dailyCoverage =
 		dailyOverview?.coverage ??
 		(!date && ownership?.period === 'DAILY' ? ownership.coverage : null)
+	const updatedAt =
+		(publishedDate
+			? ownership?.coverage.capturedAt ?? pulse?.coverage.capturedAt
+			: pulse?.coverage.capturedAt ?? ownership?.coverage.capturedAt) ?? null
 	const marketGlance = (
 		<Suspense fallback={null}>
 			<MarketGlanceContent
@@ -229,6 +234,17 @@ async function renderMarketContent({
 
 	return (
 		<>
+			<StatsPageHeader
+				title={t('title')}
+				badge={
+					updatedAt ? (
+						<MarketLocalUpdated
+							capturedAt={updatedAt}
+							dateOnly
+						/>
+					) : null
+				}
+			/>
 			<RouteReadyMarker
 				name="MARKET_CONTENT_READY"
 				audienceHint="public"
@@ -272,9 +288,10 @@ async function MarketContent(props: MarketContentProps) {
 	return withCapacityRunForRequest(() => renderMarketContent(props))
 }
 
-function MarketViewFallback() {
+function MarketViewFallback({ title }: { title: string }) {
 	return (
 		<div className="space-y-4">
+			<StatsPageHeader title={title} />
 			<div className="h-4 w-56 animate-pulse rounded bg-muted/50" />
 			<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
 				{[1, 2, 3, 4].map(i => (
@@ -302,12 +319,7 @@ async function renderMarketPage({ params, searchParams }: PageProps) {
 	return (
 		<PageShell>
 			<div className="container mx-auto max-w-6xl px-4 py-8">
-				<StatsPageHeader title={t('title')} />
-				<p className="-mt-4 mb-6 max-w-2xl text-sm leading-6 text-muted-foreground">
-					{t('pageIntro')}
-				</p>
-
-				<Suspense fallback={<MarketViewFallback />}>
+				<Suspense fallback={<MarketViewFallback title={t('title')} />}>
 					<MarketContent
 						locale={locale}
 						period={period}

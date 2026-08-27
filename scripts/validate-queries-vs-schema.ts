@@ -111,28 +111,31 @@ import {
 import { AGENT_GRAPHQL_DOCUMENTS } from '../lib/agent-tools/documents'
 
 function hydrateGraphQlEnvFromLocalFile(): void {
-	const p = path.join(process.cwd(), '.env.local')
-	if (!existsSync(p)) return
-	const text = readFileSync(p, 'utf8')
-	for (let line of text.split('\n')) {
-		line = line.trimEnd()
-		if (line.startsWith('#') || !line.includes('=')) continue
-		const ix = line.indexOf('=')
-		const key = line.slice(0, ix).trim()
-		if (
-			key !== 'GRAPHQL_VERIFY_URL' &&
-			key !== 'GRAPHQL_ENDPOINT' &&
-			key !== 'GRAPHQL_SERVICE_TOKEN'
-		)
-			continue
-		let value = line.slice(ix + 1).trim()
-		if (
-			(value.startsWith('"') && value.endsWith('"')) ||
-			(value.startsWith("'") && value.endsWith("'"))
-		) {
-			value = value.slice(1, -1)
+	for (const filename of ['.env.e2e.local', '.env.local']) {
+		const p = path.join(process.cwd(), filename)
+		if (!existsSync(p)) continue
+		const text = readFileSync(p, 'utf8')
+		for (let line of text.split('\n')) {
+			line = line.trimEnd()
+			if (line.startsWith('#') || !line.includes('=')) continue
+			const ix = line.indexOf('=')
+			const key = line.slice(0, ix).trim()
+			if (
+				key !== 'GRAPHQL_VERIFY_URL' &&
+				key !== 'GRAPHQL_ENDPOINT' &&
+				key !== 'GRAPHQL_SERVICE_TOKEN' &&
+				key !== 'GRAPHQL_SCHEMA_MODULE'
+			)
+				continue
+			let value = line.slice(ix + 1).trim()
+			if (
+				(value.startsWith('"') && value.endsWith('"')) ||
+				(value.startsWith("'") && value.endsWith("'"))
+			) {
+				value = value.slice(1, -1)
+			}
+			if (!process.env[key]) process.env[key] = value
 		}
-		if (!process.env[key]) process.env[key] = value
 	}
 }
 

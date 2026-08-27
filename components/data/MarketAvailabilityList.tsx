@@ -1,17 +1,23 @@
-import { MarketPositionBadge, MarketStatusBadge } from '@/components/data/MarketMarkup'
+import {
+	MarketPositionBadge,
+	MarketStatusBadge
+} from '@/components/data/MarketMarkup'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import type {
 	MarketAvailabilityUpdate,
 	MarketPlayer
 } from '@/lib/graphql/operations/market'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
-import { availabilityBodyText, marketAvailabilityStatusKey } from '@/lib/market-availability'
+import {
+	availabilityBodyText,
+	marketAvailabilityStatusKey
+} from '@/lib/market-availability'
+import type { useTranslations } from 'next-intl'
 import type { ReactNode } from 'react'
 
-export type MarketAvailabilityTranslator = (
-	key: any,
-	values?: any
-) => string
+export type MarketAvailabilityTranslator = ReturnType<
+	typeof useTranslations<'Market'>
+>
 
 function formatCalendarDate(value: string | null, locale: string): string {
 	if (!value) return '—'
@@ -63,7 +69,10 @@ export function MarketAvailabilityList({
 				const chance =
 					update.chanceOfPlayingThisRound ?? update.chanceOfPlayingNextRound
 				return (
-					<li key={update.player.playerId} className="market-availability-row">
+					<li
+						key={update.player.playerId}
+						className="market-availability-row"
+					>
 						<div className="market-availability-content">
 							<PositionBadge player={update.player} />
 							<div className="min-w-0 flex-1">
@@ -71,8 +80,7 @@ export function MarketAvailabilityList({
 									<a
 										href={playerStatsHref({
 											p1: String(update.player.playerId),
-											localePathPrefix:
-												locale === 'en' ? '' : `/${locale}`
+											localePathPrefix: locale === 'en' ? '' : `/${locale}`
 										})}
 										className="market-availability-link"
 									>
@@ -83,14 +91,20 @@ export function MarketAvailabilityList({
 									</MarketStatusBadge>
 								</div>
 								<p className="market-availability-meta">
-									{update.player.teamShortName} · {formatOwnership(update.player.selectedByPercent, locale)} {t('owned')}
+									{update.player.teamShortName} ·{' '}
+									{formatOwnership(update.player.selectedByPercent, locale)}{' '}
+									{t('owned')}
 								</p>
 								<p className="market-availability-body">
 									{availabilityBodyText(update, messageKey => t(messageKey))}
 								</p>
 								<p className="market-availability-date">
-									{t('observedOn', { date: formatCalendarDate(update.observedDate, locale) })}
-									{chance !== null ? ` · ${t('playingChance', { chance })}` : ''}
+									{t('observedOn', {
+										date: formatCalendarDate(update.observedDate, locale)
+									})}
+									{chance !== null
+										? ` · ${t('playingChance', { chance })}`
+										: ''}
 								</p>
 							</div>
 						</div>
