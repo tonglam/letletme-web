@@ -35,7 +35,9 @@ export function isMaintenanceDataApi(pathname: string): boolean {
 		pathname === '/api/agent' ||
 		pathname.startsWith('/api/agent/') ||
 		pathname === '/api/tournaments' ||
-		pathname.startsWith('/api/tournaments/')
+		pathname.startsWith('/api/tournaments/') ||
+		pathname === '/api/ops/data-contracts' ||
+		pathname.startsWith('/api/ops/data-contracts/')
 	)
 }
 
