@@ -9,8 +9,10 @@ import { useEffect, useState } from 'react'
  */
 export function MarketLocalUpdated({
 	capturedAt,
+	dateOnly = false,
 }: {
 	capturedAt: string
+	dateOnly?: boolean
 }) {
 	const t = useTranslations('Market')
 	const format = useFormatter()
@@ -22,24 +24,32 @@ export function MarketLocalUpdated({
 			setLabel(capturedAt)
 			return
 		}
-		// No timeZone option → browser local zone
+		// No timeZone option → browser local zone. The market page uses the
+		// compact date-only variant in its page header; other consumers keep the
+		// precise capture timestamp.
+		const formatOptions = dateOnly
+			? {
+					day: 'numeric' as const,
+					month: 'short' as const,
+				}
+			: {
+					day: 'numeric' as const,
+					month: 'short' as const,
+					hour: '2-digit' as const,
+					minute: '2-digit' as const,
+					second: '2-digit' as const,
+					timeZoneName: 'short' as const,
+				}
 		setLabel(
-			format.dateTime(parsed, {
-				day: 'numeric',
-				month: 'short',
-				hour: '2-digit',
-				minute: '2-digit',
-				second: '2-digit',
-				timeZoneName: 'short',
-			}),
+			format.dateTime(parsed, formatOptions),
 		)
-	}, [capturedAt, format])
+	}, [capturedAt, dateOnly, format])
 
 	if (!label) {
 		return (
 			<time
 				dateTime={capturedAt}
-				className="inline-block min-h-5 min-w-56 whitespace-nowrap tabular-nums"
+				className={`inline-block min-h-5 whitespace-nowrap tabular-nums ${dateOnly ? 'min-w-0' : 'min-w-56'}`}
 				suppressHydrationWarning
 			>
 				{t('lastUpdated', { date: '…' })}
@@ -50,7 +60,7 @@ export function MarketLocalUpdated({
 	return (
 		<time
 			dateTime={capturedAt}
-			className="inline-block min-h-5 min-w-56 whitespace-nowrap tabular-nums"
+			className={`inline-block min-h-5 whitespace-nowrap tabular-nums ${dateOnly ? 'min-w-0' : 'min-w-56'}`}
 		>
 			{t('lastUpdated', { date: label })}
 		</time>

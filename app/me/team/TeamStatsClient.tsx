@@ -416,11 +416,7 @@ function TeamStatsViews({
 
 			{view === 'season' ? (
 				<div className="space-y-6 sm:space-y-8">
-					{deskState === 'PENDING' ? (
-						<Alert className="shadow-sm">
-							<AlertDescription>{t('reviewPending')}</AlertDescription>
-						</Alert>
-					) : deskState === 'UNAVAILABLE' ? (
+					{deskState === 'UNAVAILABLE' ? (
 						<Alert
 							variant="destructive"
 							className="shadow-sm"
@@ -452,14 +448,11 @@ function TeamStatsViews({
 					{seasonLogs ? <TeamSeasonCharts logs={seasonLogs} /> : null}
 
 					{seasonLogs ? (
-						<div>
-							<p className="mb-4 eyebrow">{t('seasonLogs')}</p>
-							<TeamStatsDeepDive
-								logs={seasonLogs}
-								currentSeason={currentSeason}
-								transfersLoading={isTransfersLoading}
-							/>
-						</div>
+						<TeamStatsDeepDive
+							logs={seasonLogs}
+							currentSeason={currentSeason}
+							transfersLoading={isTransfersLoading}
+						/>
 					) : !seasonOverall && !hasAnyContent ? (
 						<Card className="p-6 shadow-sm">
 							<p className="text-sm text-muted-foreground">
@@ -470,11 +463,7 @@ function TeamStatsViews({
 				</div>
 			) : (
 				<div>
-					{deskState === 'PENDING' ? (
-						<Alert className="mb-5 shadow-sm">
-							<AlertDescription>{t('reviewPending')}</AlertDescription>
-						</Alert>
-					) : deskState === 'UNAVAILABLE' ? (
+					{deskState === 'UNAVAILABLE' ? (
 						<Alert
 							variant="destructive"
 							className="mb-5 shadow-sm"
@@ -520,9 +509,13 @@ function TeamStatsViews({
 							aria-live="polite"
 							aria-busy={isLoading}
 						>
-							<p className="text-sm text-muted-foreground">
-								{isLoading ? t('loading') : (emptyStateMessage ?? t('noStats'))}
-							</p>
+							{isLoading ? (
+								<p className="text-sm text-muted-foreground">{t('loading')}</p>
+							) : gameweekState === 'PENDING' ? null : (
+								<p className="text-sm text-muted-foreground">
+									{emptyStateMessage ?? t('noStats')}
+								</p>
+							)}
 							{gameweekState === 'PENDING' ? (
 								<Link
 									href={`/live/points/${entryId}`}

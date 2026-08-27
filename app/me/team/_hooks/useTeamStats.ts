@@ -178,13 +178,7 @@ export function useTeamStats({
 		initialEntryGameweekState ?? (initialEntryEventResult ? 'READY' : undefined)
 	)
 	const [gameweekRetryNonce, setGameweekRetryNonce] = useState(0)
-	const [emptyStateMessage, setEmptyStateMessage] = useState<string | null>(
-		initialEntryGameweekState === 'PENDING'
-			? t('pendingReviewForGameweek', {
-					gameweek: initialSelectedGameweek ?? initialCurrentGameweek
-				})
-			: null
-	)
+	const [emptyStateMessage, setEmptyStateMessage] = useState<string | null>(null)
 
 	const identityRef = useRef<SeasonIdentity | null>(identity0)
 	const gwRequestIdRef = useRef(0)
@@ -525,7 +519,7 @@ export function useTeamStats({
 
 		function formatEmptyStateMessage(state: MyFplReviewState | undefined) {
 			if (state === 'PENDING') {
-				return t('pendingReviewForGameweek', { gameweek: selectedGameweek })
+				return null
 			}
 			if (state === 'UNAVAILABLE') {
 				return t('gameweekReviewUnavailable', { gameweek: selectedGameweek })
