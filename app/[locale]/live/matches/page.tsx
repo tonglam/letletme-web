@@ -9,6 +9,29 @@ import { getTranslations } from 'next-intl/server'
 
 type PageProps = { params: LocaleParams }
 
+function LiveContractMarker({
+	status,
+	revision,
+	expected,
+	observed
+}: {
+	status: 'READY' | 'STALE' | 'UNAVAILABLE'
+	revision: string
+	expected: number
+	observed: number
+}) {
+	return (
+		<span
+			hidden
+			data-letletme-contract="live_matches"
+			data-status={status}
+			data-revision={revision}
+			data-expected={String(expected)}
+			data-observed={String(observed)}
+		/>
+	)
+}
+
 export async function generateMetadata({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	return getPageMetadata({
@@ -33,10 +56,18 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 		presentation.phase === 'UNAVAILABLE'
 	) {
 		return (
-			<SeasonPhaseState
-				feature="matches"
-				presentation={presentation}
-			/>
+			<>
+				<LiveContractMarker
+					status="UNAVAILABLE"
+					revision={liveContext?.revision ?? 'unavailable'}
+					expected={0}
+					observed={0}
+				/>
+				<SeasonPhaseState
+					feature="matches"
+					presentation={presentation}
+				/>
+			</>
 		)
 	}
 
@@ -44,10 +75,18 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 		liveContext?.anchorEventId ?? presentation.currentEventId
 	if (!currentEventId) {
 		return (
-			<SeasonPhaseState
-				feature="matches"
-				presentation={presentation}
-			/>
+			<>
+				<LiveContractMarker
+					status="UNAVAILABLE"
+					revision={liveContext?.revision ?? 'unavailable'}
+					expected={0}
+					observed={0}
+				/>
+				<SeasonPhaseState
+					feature="matches"
+					presentation={presentation}
+				/>
+			</>
 		)
 	}
 	const nextEventId = presentation.nextEventId
@@ -103,15 +142,35 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 		console.error('Failed to fetch live matches:', error)
 		initialError = t('matchesFailed')
 	}
+	const markerStatus = initialError
+		? 'UNAVAILABLE'
+		: liveContext?.dataAvailability === 'UNAVAILABLE'
+			? 'UNAVAILABLE'
+			: liveContext?.stale ||
+				  liveContext?.dataAvailability === 'LAST_GOOD' ||
+				  liveContext?.dataAvailability === 'PARTIAL'
+				? 'STALE'
+				: 'READY'
+	const markerRevision =
+		snapshot?.revision ?? liveContext?.revision ?? 'unavailable'
+	const markerObserved = matches.length
 
 	return (
-		<LiveMatchesEntry
-			initialMatches={matches}
-			initialError={initialError}
-			currentEventId={renderedCurrentEventId}
-			selectedEventId={renderedSelectedEventId}
-			nextEventId={renderedNextEventId ?? undefined}
-			initialSnapshot={snapshot}
-		/>
+		<>
+			<LiveContractMarker
+				status={markerStatus}
+				revision={markerRevision}
+				expected={markerObserved}
+				observed={markerObserved}
+			/>
+			<LiveMatchesEntry
+				initialMatches={matches}
+				initialError={initialError}
+				currentEventId={renderedCurrentEventId}
+				selectedEventId={renderedSelectedEventId}
+				nextEventId={renderedNextEventId ?? undefined}
+				initialSnapshot={snapshot}
+			/>
+		</>
 	)
 }

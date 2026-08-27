@@ -1,6 +1,7 @@
 'use client'
 
 import { PageState } from '@/components/feedback/PageState'
+import { reportBrowserRuntimeError } from '@/lib/analytics/client-vitals'
 import { Button } from '@/components/ui/button'
 import { Link } from '@/i18n/navigation'
 import { AlertTriangle, RotateCcw } from 'lucide-react'
@@ -17,6 +18,7 @@ export default function ErrorPage({
 	const common = useTranslations('Common')
 
 	useEffect(() => {
+		reportBrowserRuntimeError()
 		console.error('[error boundary]', error)
 	}, [error])
 
