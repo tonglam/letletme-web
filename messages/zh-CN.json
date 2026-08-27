@@ -2534,7 +2534,7 @@
 		"teams": "球队",
 		"gameweeks": "轮次",
 		"gameweekRange": "第 {start}–{end} 轮",
-		"classicUpdateContract": "创建时会复制当前全部成员，此后每轮成绩将进入 LetLetMe 的常规数据更新和实时计算；创建后才加入 FPL 联赛的成员不会自动加入。",
+		"classicUpdateContract": "启用官方名单同步后，符合条件的官方经典积分赛（单组、无淘汰赛）会在安全的轮次边界同步 FPL 联赛后续加入和退出的成员；未启用同步或使用其他赛制时，会保留创建时的固定名单。",
 		"h2hUpdateContract": "对阵、主客顺序、比分、比赛积分、排名、平均队和淘汰赛均以 FPL 为准；LetLetMe 只刷新官方镜像，不另行生成本地赛程。",
 		"information": "赛事信息",
 		"name": "赛事名称",

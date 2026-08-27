@@ -2534,7 +2534,7 @@
 		"teams": "Teams",
 		"gameweeks": "Gameweeks",
 		"gameweekRange": "GW{start}–GW{end}",
-		"classicUpdateContract": "All current members are copied when you create the competition. Their weekly results enter LetLetMe’s normal data updates and live calculations; members who join the FPL league later are not added automatically.",
+		"classicUpdateContract": "With official roster sync enabled, eligible one-group Classic points competitions without a knockout stage sync later FPL league joins and departures at a safe gameweek boundary; without sync or with another format, the roster stays fixed from creation.",
 		"h2hUpdateContract": "FPL remains authoritative for fixtures, home/away order, scores, match points, table ranks, Average Team, and knockout rounds. LetLetMe refreshes the mirror without generating a separate local schedule.",
 		"information": "Competition Information",
 		"name": "Competition Name",
