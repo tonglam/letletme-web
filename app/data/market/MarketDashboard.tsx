@@ -19,10 +19,11 @@ import { getMarketViewMode } from '@/lib/market'
 import { Link } from '@/i18n/navigation'
 import { cn } from '@/lib/utils'
 import { getTranslations } from 'next-intl/server'
+import type { useTranslations } from 'next-intl'
 import { HeartPulse, Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-type MarketT = (key: any, values?: any) => string
+type MarketT = ReturnType<typeof useTranslations<'Market'>>
 
 function formatCalendarDate(value: string | null, locale: string): string {
 	if (!value) return '—'
@@ -122,7 +123,7 @@ function DensePlayerRow({
 					<p className="market-player-subtext">{player.teamShortName}</p>
 				)}
 			</div>
-				<div className="market-dense-row__trailing">{trailing}</div>
+			<div className="market-dense-row__trailing">{trailing}</div>
 		</li>
 	)
 }
@@ -250,7 +251,7 @@ function OwnershipCoverageMeta({
 					from: formatCalendarDate(coverage.fromDate, locale),
 					to: formatCalendarDate(coverage.toDate, locale)
 				})
-			: t('ownershipStatus.' + coverage.status)
+			: t(`ownershipStatus.${coverage.status}`)
 	const missing =
 		coverage.missingDates.length > 0
 			? t('ownershipMissingDates', {
@@ -286,7 +287,10 @@ function OwnershipCoverageMeta({
 			</div>
 			{gameweek ? (
 				<p className="text-xs text-muted-foreground">
-					{t('ownershipGameweekMeta', { gameweek: gameweek.name, deadline })}
+					{t('ownershipGameweekMeta', {
+						gameweek: gameweek.name,
+						deadline: deadline ?? '—'
+					})}
 				</p>
 			) : null}
 			{missing ? (
@@ -296,7 +300,7 @@ function OwnershipCoverageMeta({
 			) : null}
 			{coverage.status !== 'READY' && !missing ? (
 				<p className="text-xs text-muted-foreground">
-					{t('ownershipStatus.' + coverage.status)}
+					{t(`ownershipStatus.${coverage.status}`)}
 				</p>
 			) : null}
 			{coverage.stale ? (
@@ -437,7 +441,7 @@ function GlanceStrip({
 								{cell.secondary}
 							</PlayerStatsAnchor>
 						) : (
-								<p className="mt-1 whitespace-normal text-xs text-muted-foreground">
+							<p className="mt-1 whitespace-normal text-xs text-muted-foreground">
 								{cell.secondary}
 							</p>
 						)}
@@ -647,7 +651,7 @@ export async function MarketDashboard({
 					{ownership ? (
 						!['READY', 'PARTIAL'].includes(ownership.coverage.status) ? (
 							<EmptyHint>
-								{t('ownershipStatus.' + ownership.coverage.status)}
+								{t(`ownershipStatus.${ownership.coverage.status}`)}
 							</EmptyHint>
 						) : !hasMovers ? (
 							<EmptyHint>{t('noOwnershipMovement')}</EmptyHint>
