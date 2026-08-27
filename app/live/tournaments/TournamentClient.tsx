@@ -45,8 +45,9 @@ import {
 	getTournamentManagerNextRefreshAt,
 	formatLiveAveragePoints,
 	getRetainedFailedEntryIds,
-	mergeUnavailableTournamentEntryIds,
+	mergeDegradedTournamentEntryIds,
 	mergePartialTournamentRows,
+	shouldShowTournamentResultsFatalError,
 	type LiveTournamentStats
 } from '@/lib/tournament/liveEntries'
 import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
@@ -79,6 +80,7 @@ const fetchLivePoints = async (
 	rows: TournamentLiveCalcData[]
 	failedCount: number
 	failedEntryIds: number[]
+	degradedEntryIds: number[]
 	officialCoverage: number
 	unavailableEntryIds: number[]
 	totalEntries: number
@@ -111,15 +113,18 @@ const fetchLivePoints = async (
 		const detailDesk = detailResponse.tournamentDetailDesk
 		const live = detailDesk?.live
 		if (live) {
-			const unavailableEntryIds = mergeUnavailableTournamentEntryIds(
-				live.failedEntryIds,
-				[]
+			const failedEntryIds = live.failedEntryIds
+			const unavailableEntryIds: number[] = []
+			const degradedEntryIds = mergeDegradedTournamentEntryIds(
+				failedEntryIds,
+				unavailableEntryIds
 			)
 			const officialRows = countTraceableTournamentScores(live.rows)
 			return {
 				rows: live.rows,
-				failedCount: unavailableEntryIds.length,
-				failedEntryIds: unavailableEntryIds,
+				failedCount: failedEntryIds.length,
+				failedEntryIds,
+				degradedEntryIds,
 				officialCoverage:
 					live.totalEntries > 0 ? officialRows / live.totalEntries : 0,
 				unavailableEntryIds,
@@ -152,14 +157,17 @@ const fetchLivePoints = async (
 		}
 	}
 	const batch = response.entryLiveCompetitionsDesk
-	const unavailableEntryIds = mergeUnavailableTournamentEntryIds(
-		batch.failedEntryIds,
-		batch.unavailableEntryIds ?? []
+	const failedEntryIds = batch.failedEntryIds
+	const unavailableEntryIds = batch.unavailableEntryIds ?? []
+	const degradedEntryIds = mergeDegradedTournamentEntryIds(
+		failedEntryIds,
+		unavailableEntryIds
 	)
 	return {
 		rows: batch.board ?? [],
-		failedCount: unavailableEntryIds.length,
-		failedEntryIds: unavailableEntryIds,
+		failedCount: failedEntryIds.length,
+		failedEntryIds,
+		degradedEntryIds,
 		officialCoverage: batch.officialCoverage ?? 0,
 		unavailableEntryIds,
 		totalEntries: batch.totalEntries,
@@ -182,6 +190,7 @@ interface TournamentClientProps {
 	initialSelectedTournamentId?: string
 	initialEventId: number
 	initialCurrentRows?: TournamentLiveCalcData[]
+	initialDegradedEntryIds?: number[]
 	initialResultsLoaded?: boolean
 	initialResultsError?: string | null
 	initialSnapshot?: LiveSnapshotStatus | null
@@ -194,6 +203,7 @@ export default function TournamentClient({
 	initialSelectedTournamentId = '',
 	initialEventId,
 	initialCurrentRows = [],
+	initialDegradedEntryIds = [],
 	initialResultsLoaded = false,
 	initialResultsError = null,
 	initialSnapshot,
@@ -247,6 +257,10 @@ export default function TournamentClient({
 	const appliedUrlGameweekRef = useRef<number | null | undefined>(undefined)
 	const [selectedRows, setSelectedRows] =
 		useState<TournamentLiveCalcData[]>(initialCurrentRows)
+	const selectedRowsRef = useRef(initialCurrentRows)
+	useEffect(() => {
+		selectedRowsRef.current = selectedRows
+	}, [selectedRows])
 	const [officialCoverage, setOfficialCoverage] = useState<number>(
 		initialOfficialCoverage
 	)
@@ -254,7 +268,7 @@ export default function TournamentClient({
 		TournamentEntry[]
 	>([])
 	const [staleEntryIds, setStaleEntryIds] = useState<ReadonlySet<number>>(
-		() => new Set()
+		() => new Set(initialDegradedEntryIds)
 	)
 	const selectedEntries = useMemo(
 		() =>
@@ -289,8 +303,13 @@ export default function TournamentClient({
 	const [loadedResultsKey, setLoadedResultsKey] = useState<string | null>(
 		initialResultsKey
 	)
+	const hasUsableBoardRef = useRef(
+		initialResultsLoaded &&
+			initialCurrentRows.some(
+				row => !initialDegradedEntryIds.includes(row.entry)
+			)
+	)
 	const resultsRequestIdRef = useRef(0)
-	const failedEntryCountRef = useRef(initialResultsError ? 1 : 0)
 	const resultsInFlightRef = useRef<{
 		key: string
 		promise: Promise<void>
@@ -367,7 +386,8 @@ export default function TournamentClient({
 		}
 		return tournaments[0] ?? null
 	}, [requestedTournamentId, tournaments])
-	const selectedTournamentIsOfficialH2H = isOfficialH2HTournament(selectedTournament)
+	const selectedTournamentIsOfficialH2H =
+		isOfficialH2HTournament(selectedTournament)
 	const selectedTournamentKey = selectedTournament?.id ?? null
 	const lastUpdatedAt = useMemo(() => {
 		const candidates = [
@@ -378,7 +398,8 @@ export default function TournamentClient({
 		].filter((value): value is string => Boolean(value))
 
 		return candidates.reduce<string | null>((latest, candidate) => {
-			if (!latest || Date.parse(candidate) > Date.parse(latest)) return candidate
+			if (!latest || Date.parse(candidate) > Date.parse(latest))
+				return candidate
 			return latest
 		}, null)
 	}, [selectedRows, snapshot?.checkedAt])
@@ -445,17 +466,14 @@ export default function TournamentClient({
 					)
 					if (requestId !== resultsRequestIdRef.current) return
 
-					if (currentBatch.failedCount > 0) {
-						setResultsError(
-							t('partialResults', {
-								failed: currentBatch.failedCount,
-								total: currentBatch.totalEntries
-							})
-						)
-					}
-
-					failedEntryCountRef.current = currentBatch.failedCount
 					setOfficialCoverage(currentBatch.officialCoverage)
+					if (
+						currentBatch.rows.some(
+							row => !currentBatch.degradedEntryIds.includes(row.entry)
+						)
+					) {
+						hasUsableBoardRef.current = true
+					}
 					setLoadedResultsKey(requestKey)
 					acceptSnapshot(currentBatch.snapshot)
 					// Read previous rows via functional update, then set rows + stale separately
@@ -465,13 +483,13 @@ export default function TournamentClient({
 						const retainedIds = getRetainedFailedEntryIds({
 							nextRows,
 							previousRows,
-							failedEntryIds: currentBatch.failedEntryIds,
+							failedEntryIds: currentBatch.degradedEntryIds,
 							preserveFailed: options.preserveOnError
 						})
 						const merged = mergePartialTournamentRows({
 							nextRows,
 							previousRows,
-							failedEntryIds: currentBatch.failedEntryIds,
+							failedEntryIds: currentBatch.degradedEntryIds,
 							preserveFailed: options.preserveOnError
 						})
 						// Schedule after this updater commits — not inside the updater body.
@@ -485,8 +503,26 @@ export default function TournamentClient({
 					})
 				} catch {
 					if (requestId !== resultsRequestIdRef.current) return
-					setResultsError(t('standingsFailed'))
+					if (
+						shouldShowTournamentResultsFatalError({
+							requestFailed: true,
+							canRetainUsableBoard:
+								options.preserveOnError && hasUsableBoardRef.current
+						})
+					) {
+						setResultsError(t('standingsFailed'))
+					}
+					if (options.preserveOnError && hasUsableBoardRef.current) {
+						setStaleEntryIds(previous => {
+							const next = new Set(previous)
+							for (const row of selectedRowsRef.current) {
+								next.add(row.entry)
+							}
+							return next
+						})
+					}
 					if (!options.preserveOnError) {
+						hasUsableBoardRef.current = false
 						setSelectedRows([])
 						setOfficialCoverage(0)
 						setStaleEntryIds(new Set())
@@ -633,6 +669,7 @@ export default function TournamentClient({
 			resultsRequestIdRef.current += 1
 			resultsInFlightRef.current = null
 			const resetTimer = window.setTimeout(() => {
+				hasUsableBoardRef.current = false
 				setIsLoadingResults(false)
 				setResultsError(null)
 				setSelectedRows([])
@@ -650,6 +687,7 @@ export default function TournamentClient({
 			initialResultsKeyRef.current = null
 			resultsRequestIdRef.current += 1
 			resultsInFlightRef.current = null
+			hasUsableBoardRef.current = false
 			setSelectedRows([])
 			setOfficialCoverage(0)
 			setStaleEntryIds(new Set())
@@ -688,6 +726,7 @@ export default function TournamentClient({
 		// so we never paint "new header + old standings" for a frame.
 		resultsRequestIdRef.current += 1
 		resultsInFlightRef.current = null
+		hasUsableBoardRef.current = false
 		setSelectedRows([])
 		setOfficialCoverage(0)
 		setStaleEntryIds(new Set())
@@ -787,14 +826,13 @@ export default function TournamentClient({
 					!managerScoreDue
 				) {
 					acceptSnapshot(observedSnapshot)
-					if (failedEntryCountRef.current === 0) setResultsError(null)
+					setResultsError(null)
 					return
 				}
 				await refreshTournamentResults(observedSnapshot?.revision ?? null)
 			} catch (probeError) {
 				if (requestId !== resultsRequestIdRef.current) return
 				console.error('Failed to check live tournament freshness:', probeError)
-				setResultsError(t('standingsFailed'))
 			}
 		})()
 		freshnessRequestRef.current = request
@@ -809,7 +847,6 @@ export default function TournamentClient({
 		refreshTournamentResults,
 		selectedTournament,
 		standingsReady,
-		t,
 		managerNextRefreshAt,
 		currentGameweek
 	])
@@ -1152,7 +1189,7 @@ export default function TournamentClient({
 					</Card>
 				)}
 
-		{selectedTournament && standingsReady && (
+				{selectedTournament && standingsReady && (
 					<div>
 						{!selectedTournamentIsOfficialH2H ? (
 							<TournamentHeader
