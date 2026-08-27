@@ -347,6 +347,10 @@ jobs:
             IdentityFile $ssh_dir/jump
             StrictHostKeyChecking yes
             UserKnownHostsFile $ssh_dir/known_hosts
+            ServerAliveInterval 30
+            ServerAliveCountMax 20
+            TCPKeepAlive yes
+            ConnectTimeout 15
           Host letletme-tencent
             HostName 10.77.0.2
             User deploy
@@ -354,6 +358,10 @@ jobs:
             ProxyJump letletme-jump
             StrictHostKeyChecking yes
             UserKnownHostsFile $ssh_dir/known_hosts
+            ServerAliveInterval 30
+            ServerAliveCountMax 20
+            TCPKeepAlive yes
+            ConnectTimeout 15
           EOF
           chmod 0600 "$ssh_dir/config"
 
