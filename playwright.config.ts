@@ -150,10 +150,12 @@ const baseURL = externalBaseUrl ?? `http://localhost:${localWebPort}`
 const graphqlFixtureURL = `http://127.0.0.1:${localGraphqlPort}`
 const graphqlServiceToken =
 	'e2e-graphql-service-token-at-least-thirty-two-bytes'
+const standaloneServerCommand =
+	'mkdir -p .next/standalone/public .next/standalone/.next/static && cp -R public/. .next/standalone/public/ && cp -R .next/static/. .next/standalone/.next/static/ && node .next/standalone/server.js'
 const nextCommand =
 	process.env.PLAYWRIGHT_USE_EXISTING_BUILD === '1'
-		? `npm run start -- --hostname 127.0.0.1 --port ${localWebPort}`
-		: `npm run build && npm run start -- --hostname 127.0.0.1 --port ${localWebPort}`
+		? standaloneServerCommand
+		: `npm run build && ${standaloneServerCommand}`
 
 export default defineConfig({
 	testDir: './e2e',
@@ -194,6 +196,8 @@ export default defineConfig({
 						...process.env,
 						NODE_ENV: 'production',
 						TZ: 'UTC',
+						HOSTNAME: '127.0.0.1',
+						PORT: localWebPort,
 						BETTER_AUTH_URL: baseURL,
 						BACKEND_PROXY_SECRET:
 							'playwright-backend-proxy-secret-at-least-32-bytes',
