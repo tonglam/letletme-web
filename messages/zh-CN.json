@@ -1466,6 +1466,8 @@
 		"statusPartial": "部分官方球员字段缺失，当前仅显示可用预测。",
 		"statusStale": "官方预测服务响应延迟，当前显示上一次缓存看板。",
 		"statusUnavailable": "官方预测服务暂时不可用，请在下一次刷新后重试。",
+		"instantUpdate": "即时更新",
+		"instantUpdateDescription": "官方身价变化已先行展示，正式数据正在同步确认。",
 		"guideSummary": "先看进度和状态，再结合截止时间理解信号。",
 		"understandingPriceChanges": "如何理解",
 		"understandingTitle": "如何理解身价变化",
