@@ -25,6 +25,11 @@ export function isPriceChangeLiveEnabled(): boolean {
 type LiveCursorResponse = PriceChangeLiveCursor
 type LiveBoardResponse = PriceChangeLiveBoard
 
+export type PriceChangeLiveSeed = Pick<
+	PriceChangeBoard,
+	'revision' | 'deadline' | 'nextDeadlines'
+>
+
 function isLiveCursor(value: unknown): value is LiveCursorResponse {
 	if (value == null || typeof value !== 'object') return false
 	const cursor = value as Partial<LiveCursorResponse>
@@ -117,32 +122,40 @@ async function fetchJson<T>(
 	}
 }
 
-export function usePriceChangeLiveBoard({
-	board,
-	onUpdate
+export function usePriceChangeLiveUpdates({
+	seed,
+	durableBoard,
+	onUpdate,
+	onReset
 }: {
-	board: PriceChangeBoard
+	seed: PriceChangeLiveSeed
+	durableBoard?: PriceChangeBoard
 	onUpdate: (board: PriceChangeBoard, state: PriceChangeLiveState) => void
+	onReset?: (state: PriceChangeLiveState) => void
 }): void {
-	const boardRef = useRef(board)
-	const durableBoardRef = useRef(board)
+	const baseSeedRef = useRef(seed)
+	const policySeedRef = useRef<PriceChangeLiveSeed>(seed)
+	const durableBoardRef = useRef<PriceChangeBoard | null>(durableBoard ?? null)
 	const onUpdateRef = useRef(onUpdate)
-	const revisionRef = useRef(board.revision)
+	const onResetRef = useRef(onReset)
+	const revisionRef = useRef(seed.revision)
 	const sourceHashRef = useRef<string | null>(null)
 	const stateRef = useRef<PriceChangeLiveState>('DURABLE')
 	const windowDeadlineRef = useRef<number | null>(null)
 
 	useEffect(() => {
-		boardRef.current = board
-		durableBoardRef.current = board
-		revisionRef.current = board.revision
+		baseSeedRef.current = seed
+		policySeedRef.current = seed
+		durableBoardRef.current = durableBoard ?? null
+		revisionRef.current = seed.revision
 		sourceHashRef.current = null
 		stateRef.current = 'DURABLE'
-	}, [board])
+	}, [durableBoard, seed])
 
 	useEffect(() => {
 		onUpdateRef.current = onUpdate
-	}, [onUpdate])
+		onResetRef.current = onReset
+	}, [onReset, onUpdate])
 
 	useEffect(() => {
 		if (!isPriceChangeLiveEnabled()) return
@@ -161,7 +174,7 @@ export function usePriceChangeLiveBoard({
 		const poll = async () => {
 			if (stopped || requestInFlight) return
 			const policyAtStart = resolvePriceChangeLivePollPolicy(
-				boardRef.current,
+				policySeedRef.current,
 				Date.now(),
 				windowDeadlineRef.current
 			)
@@ -177,19 +190,25 @@ export function usePriceChangeLiveBoard({
 					if (isLiveCursor(cursor)) {
 						if (!cursor.revision || cursor.state === 'UNAVAILABLE') {
 							// A provisional snapshot can expire or be withdrawn before
-							// the next poll. Restore the durable seed immediately instead
-							// of leaving expired prices on screen indefinitely.
+							// the next poll. Restore a full durable board when one is
+							// available, otherwise let lightweight consumers reset to
+							// their server-rendered projection.
 							const fallback = durableBoardRef.current
+							const fallbackSeed = fallback ?? baseSeedRef.current
 							if (
 								stateRef.current !== cursor.state ||
-								boardRef.current !== fallback ||
+								revisionRef.current !== fallbackSeed.revision ||
 								sourceHashRef.current !== null
 							) {
-								revisionRef.current = fallback.revision
+								revisionRef.current = fallbackSeed.revision
 								sourceHashRef.current = null
 								stateRef.current = cursor.state
-								boardRef.current = fallback
-								onUpdateRef.current(fallback, cursor.state)
+								policySeedRef.current = fallbackSeed
+								if (fallback) {
+									onUpdateRef.current(fallback, cursor.state)
+								} else {
+									onResetRef.current?.(cursor.state)
+								}
 							}
 						} else if (
 							cursor.revision !== revisionRef.current ||
@@ -214,7 +233,7 @@ export function usePriceChangeLiveBoard({
 								revisionRef.current = live.revision
 								sourceHashRef.current = live.sourceHash
 								stateRef.current = live.state
-								boardRef.current = live.board
+								policySeedRef.current = live.board
 								if (live.state === 'DURABLE') {
 									durableBoardRef.current = live.board
 								}
@@ -227,7 +246,7 @@ export function usePriceChangeLiveBoard({
 				requestInFlight = false
 				if (!stopped) {
 					const policy = resolvePriceChangeLivePollPolicy(
-						boardRef.current,
+						policySeedRef.current,
 						Date.now(),
 						windowDeadlineRef.current
 					)
@@ -254,6 +273,20 @@ export function usePriceChangeLiveBoard({
 			window.removeEventListener('focus', onVisibilityChange)
 		}
 	}, [])
+}
+
+export function usePriceChangeLiveBoard({
+	board,
+	onUpdate
+}: {
+	board: PriceChangeBoard
+	onUpdate: (board: PriceChangeBoard, state: PriceChangeLiveState) => void
+}): void {
+	usePriceChangeLiveUpdates({
+		seed: board,
+		durableBoard: board,
+		onUpdate
+	})
 }
 
 export { LIVE_DISABLED_REFRESH_MS }
