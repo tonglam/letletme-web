@@ -25,7 +25,8 @@ export function ShareActions({
 	className,
 	buttonClassName,
 	disabled = false,
-	actions = ['text', 'image'] as ShareActionKind[]
+	actions = ['text', 'image'] as ShareActionKind[],
+	compact = false
 }: {
 	text: ShareTextValue
 	imageRef?: RefObject<HTMLElement | null>
@@ -35,6 +36,7 @@ export function ShareActions({
 	buttonClassName?: string
 	disabled?: boolean
 	actions?: ShareActionKind[]
+	compact?: boolean
 }) {
 	const t = useTranslations('Share')
 	const [textShared, setTextShared] = useState(false)
@@ -121,14 +123,17 @@ export function ShareActions({
 				<Button
 					type="button"
 					variant="outline"
-					size="sm"
+					size={compact ? 'icon' : 'sm'}
 					className={cn(
-						'h-9 shrink-0 gap-1.5 rounded-md px-3',
+						compact
+							? 'size-9 shrink-0 p-0'
+							: 'h-9 shrink-0 gap-1.5 rounded-md px-3',
 						buttonClassName
 					)}
 					onClick={() => void handleTextShare()}
 					disabled={disabled}
 					aria-label={t('shareText')}
+					title={t('shareText')}
 				>
 					{textShared ? (
 						<Check
@@ -138,25 +143,26 @@ export function ShareActions({
 					) : (
 						<Share2 data-icon="inline-start" />
 					)}
-					{textShared ? (
-						t('shareDone')
-					) : (
-						t('shareText')
-					)}
+					<span className={compact ? 'sr-only' : undefined}>
+						{textShared ? t('shareDone') : t('shareText')}
+					</span>
 				</Button>
 			) : null}
 			{(imageRef || imageTargetId) && actions.includes('image') ? (
 				<Button
 					type="button"
 					variant="outline"
-					size="sm"
+					size={compact ? 'icon' : 'sm'}
 					className={cn(
-						'h-9 shrink-0 gap-1.5 rounded-md px-3',
+						compact
+							? 'size-9 shrink-0 p-0'
+							: 'h-9 shrink-0 gap-1.5 rounded-md px-3',
 						buttonClassName
 					)}
 					onClick={() => void handleImageShare()}
 					disabled={disabled}
 					aria-label={t('shareImage')}
+					title={t('shareImage')}
 				>
 					{imageShared ? (
 						<Check
@@ -166,11 +172,9 @@ export function ShareActions({
 					) : (
 						<ImageIcon data-icon="inline-start" />
 					)}
-					{imageShared ? (
-						t('shareDone')
-					) : (
-						t('shareImage')
-					)}
+					<span className={compact ? 'sr-only' : undefined}>
+						{imageShared ? t('shareDone') : t('shareImage')}
+					</span>
 				</Button>
 			) : null}
 			{manualShareText ? (

@@ -237,6 +237,10 @@ describe('fixture section sharing', () => {
 			page,
 			/<Card[\s\S]*aria-labelledby="fdr-teams"[\s\S]*<ShareActions[\s\S]*imageRef=\{teamFdrShareRef\}/
 		)
+		assert.match(
+			page,
+			/<Card[\s\S]*aria-labelledby="fdr-teams"[\s\S]*data-share-expand-width="true"/
+		)
 		assert.match(page, /text=\{shareText\}/)
 		assert.match(desk, /<SquadPitch[\s\S]*ref=\{shareRef\}/)
 		assert.match(
@@ -543,6 +547,7 @@ describe('share notifications', () => {
 			/from ['"]sonner['"]|toast\.(success|warning)/
 		)
 		assert.match(matchActions, /<ShareActions/)
+		assert.match(matchActions, /compact/)
 		assert.doesNotMatch(
 			matchActions,
 			/from ['"]sonner['"]|toast\.(success|warning)/
@@ -583,7 +588,7 @@ describe('player detail share card', () => {
 		assert.match(source, /share-player-team min-w-0 truncate/)
 		assert.match(
 			source,
-			/<ShareActions[\s\S]*imageRef=\{shareRef\}[\s\S]*actions=\{\['image'\]\}/
+			/<ShareActions[\s\S]*imageRef=\{shareRef\}[\s\S]*actions=\{\['image'\]\}[\s\S]*compact/
 		)
 		assert.match(source, /max-h-\[calc\(100dvh-1rem\)\][\s\S]*overflow-y-auto/)
 		assert.doesNotMatch(source, /max-h-\[min\(60vh,28rem\)\]/)

@@ -125,10 +125,9 @@ export interface GameweekBoardsResponse {
 	liveSnapshot: LiveSnapshotStatus | null
 }
 
-// Keep this document compatible with the older development GraphQL schema and
-// below its 200 AST-node limit. The live-points UI already has a safe
-// pick-level projection fallback for schemas that do not expose the newer
-// calculated-lineup fields.
+// Keep this document below the 200 AST-node limit while retaining the
+// published calculated lineup. The live-points UI still has a safe pick-level
+// projection fallback for responses that do not contain an optional lineup.
 export const GET_LIVE_POINTS = `
   query GetLiveCalcPoints($eventId: Int!, $entryId: Int!) {
     calcLivePointsByEntry(eventId: $eventId, entryId: $entryId) {
@@ -149,6 +148,17 @@ export const GET_LIVE_POINTS = `
         source
         state
         eventPointSemantics
+		effectiveLineup {
+		  elementId
+		  position
+		  sourceMultiplier
+		  effectiveMultiplier
+		  pickActive
+		  autoSub
+		  isCaptain
+		  isViceCaptain
+		  captainForScoring
+		}
         revision
         checkedAt
         upstreamUpdatedAt

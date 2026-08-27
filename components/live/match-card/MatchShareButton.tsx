@@ -50,6 +50,7 @@ export function MatchShareButton({
 			text={shareText}
 			imageRef={imageRef}
 			title={`${match.homeTeam.shortName} – ${match.awayTeam.shortName}`}
+			compact
 			className="flex flex-wrap items-center justify-end gap-2"
 		/>
 	)

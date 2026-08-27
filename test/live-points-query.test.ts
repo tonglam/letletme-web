@@ -29,7 +29,7 @@ describe('live points GraphQL document', () => {
 		assert.match(GET_LIVE_POINTS, /autoSub/)
 		assert.match(GET_LIVE_POINTS, /nextRefreshAt/)
 		assert.match(GET_LIVE_POINTS, /reconciliation/)
-		assert.doesNotMatch(GET_LIVE_POINTS, /effectiveLineup/)
+		assert.match(GET_LIVE_POINTS, /effectiveLineup/)
 		assert.doesNotMatch(GET_LIVE_POINTS, /calculationMode/)
 		assert.doesNotMatch(GET_LIVE_POINTS, /algorithmVersion/)
 	})

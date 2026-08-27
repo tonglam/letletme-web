@@ -290,6 +290,7 @@ export function PlayerDetailModal({
 								text=""
 								imageRef={shareRef}
 								actions={['image']}
+								compact
 							/>
 						</div>
 					</div>

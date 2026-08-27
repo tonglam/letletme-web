@@ -811,7 +811,7 @@ export default function FixturesClient({
 						aria-labelledby="fdr-teams"
 						className="mb-8 p-4 sm:p-5"
 						ref={teamFdrShareRef}
-						data-share-preserve-width="true"
+						data-share-expand-width="true"
 					>
 						<SectionHead
 							id="fdr-teams"
