@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { describe, it } from 'node:test'
 
 import { GraphQLRequestError } from '../lib/graphql-client'
@@ -12,7 +13,8 @@ import {
 	formatLiveAveragePoints,
 	getBoundedTraceableTournamentCoverage,
 	getTournamentManagerNextRefreshAt,
-	mergeUnavailableTournamentEntryIds
+	mergeDegradedTournamentEntryIds,
+	shouldShowTournamentResultsFatalError
 } from '../lib/tournament/liveEntries'
 import { loadTournamentLiveDeskWithRevisionRecovery } from '../lib/tournament/liveDesk'
 import { sortTournamentEntries } from '../lib/tournament/table-sort'
@@ -58,11 +60,47 @@ const managerScore = (
 })
 
 describe('live tournament desk', () => {
-	it('unifies calculation failures and unavailable official manager rows', () => {
-		assert.deepEqual(
-			mergeUnavailableTournamentEntryIds([2, 3], [3, 4]),
-			[2, 3, 4]
+	it('tracks failed and unavailable rows as degraded rows without changing severity', () => {
+		assert.deepEqual(mergeDegradedTournamentEntryIds([2, 3], [3, 4]), [2, 3, 4])
+	})
+
+	it('reserves the fatal standings error for a failed request with no usable board', () => {
+		assert.equal(
+			shouldShowTournamentResultsFatalError({
+				requestFailed: false,
+				canRetainUsableBoard: false
+			}),
+			false
 		)
+		assert.equal(
+			shouldShowTournamentResultsFatalError({
+				requestFailed: true,
+				canRetainUsableBoard: true
+			}),
+			false
+		)
+		assert.equal(
+			shouldShowTournamentResultsFatalError({
+				requestFailed: true,
+				canRetainUsableBoard: false
+			}),
+			true
+		)
+	})
+
+	it('does not promote partial score batches to a global error banner', async () => {
+		const sources = await Promise.all(
+			[
+				'app/[locale]/live/competitions/page.tsx',
+				'app/[locale]/live/competitions/[id]/page.tsx',
+				'app/live/tournaments/TournamentClient.tsx',
+				'app/live/tournaments/[id]/TournamentDetailClient.tsx'
+			].map(path => readFile(path, 'utf8'))
+		)
+
+		for (const source of sources) {
+			assert.equal(source.includes('partialResults'), false)
+		}
 	})
 
 	it('uses a positive live OR, falls back to the top-level OR, and sorts the resolved value', () => {

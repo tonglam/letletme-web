@@ -99,12 +99,6 @@ export default async function Page({ params, searchParams }: PageProps) {
 						publishedAt: null,
 						checkedAt: null
 					}
-					if (detail.live.partial) {
-						softError = liveT('partialResults', {
-							failed: detail.live.failedEntryIds.length,
-							total: detail.live.totalEntries
-						})
-					}
 				}
 			}
 		} catch (error) {

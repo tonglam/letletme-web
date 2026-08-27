@@ -473,6 +473,28 @@ describe('partial tournament refreshes', () => {
 		)
 	})
 
+	it('keeps an unavailable row degraded without calling it a calculation failure', () => {
+		const seed = getTournamentLiveBatchSeed({
+			entryLiveCompetitionsDesk: {
+				eventId: 33,
+				revision: 'settled-33',
+				state: 'SETTLED',
+				tournaments: [],
+				selectedTournamentId: null,
+				partial: true,
+				board: [{ entry: 1 }] as TournamentLiveCalcData[],
+				failedEntryIds: [],
+				unavailableEntryIds: [2],
+				totalEntries: 2
+			}
+		} satisfies TournamentLivePointsResponse)
+
+		assert.equal(seed.failedCount, 0)
+		assert.deepEqual(seed.failedEntryIds, [])
+		assert.deepEqual(seed.unavailableEntryIds, [2])
+		assert.deepEqual(seed.degradedEntryIds, [2])
+	})
+
 	it('keeps the last-good row only for entries that failed this refresh', () => {
 		const previousRows = [
 			{ entry: 1, liveNetPoints: 10 },
