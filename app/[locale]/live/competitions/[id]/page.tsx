@@ -15,6 +15,7 @@ import {
 	classifyTournamentDetailError,
 	type TournamentDetailLoadError
 } from '@/lib/tournament/detail-load-error'
+import { appendDegradedTournamentRows } from '@/lib/tournament/liveEntries'
 import { getTranslations } from 'next-intl/server'
 import { redirect } from 'next/navigation'
 
@@ -44,6 +45,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	let currentEventId: number | null = null
 	let tournament: EntryTournament | null = null
 	let initialRows: TournamentLiveCalcData[] = []
+	let initialDegradedEntryIds: number[] = []
 	let participants: TournamentParticipant[] = []
 	let softError: string | null = null
 	let loadError: TournamentDetailLoadError | null = null
@@ -91,7 +93,21 @@ export default async function Page({ params, searchParams }: PageProps) {
 					softError = liveT('officialH2HUnavailable')
 				}
 				if (detail.kind === 'LIVE_POINTS' && detail.live) {
-					initialRows = detail.live.rows
+					initialDegradedEntryIds = detail.live.failedEntryIds
+					const participantMetadata = new Map(
+						participants.map(participant => [
+							participant.entryId,
+							{
+								entryName: participant.entryName,
+								playerName: participant.playerName
+							}
+						])
+					)
+					initialRows = appendDegradedTournamentRows({
+						rows: detail.live.rows,
+						degradedEntryIds: initialDegradedEntryIds,
+						metadataByEntryId: participantMetadata
+					})
 					initialSnapshot = {
 						eventId: detail.live.eventId,
 						revision: detail.live.revision,
@@ -150,6 +166,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			activeGameweek={currentEventId ?? undefined}
 			entryId={entryId}
 			initialRows={initialRows}
+			initialDegradedEntryIds={initialDegradedEntryIds}
 			loadError={loadError}
 			softError={softError}
 			initialSnapshot={initialSnapshot}

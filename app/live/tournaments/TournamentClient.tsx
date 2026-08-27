@@ -190,6 +190,7 @@ interface TournamentClientProps {
 	initialSelectedTournamentId?: string
 	initialEventId: number
 	initialCurrentRows?: TournamentLiveCalcData[]
+	initialDegradedEntryIds?: number[]
 	initialResultsLoaded?: boolean
 	initialResultsError?: string | null
 	initialSnapshot?: LiveSnapshotStatus | null
@@ -202,6 +203,7 @@ export default function TournamentClient({
 	initialSelectedTournamentId = '',
 	initialEventId,
 	initialCurrentRows = [],
+	initialDegradedEntryIds = [],
 	initialResultsLoaded = false,
 	initialResultsError = null,
 	initialSnapshot,
@@ -255,6 +257,10 @@ export default function TournamentClient({
 	const appliedUrlGameweekRef = useRef<number | null | undefined>(undefined)
 	const [selectedRows, setSelectedRows] =
 		useState<TournamentLiveCalcData[]>(initialCurrentRows)
+	const selectedRowsRef = useRef(initialCurrentRows)
+	useEffect(() => {
+		selectedRowsRef.current = selectedRows
+	}, [selectedRows])
 	const [officialCoverage, setOfficialCoverage] = useState<number>(
 		initialOfficialCoverage
 	)
@@ -262,7 +268,7 @@ export default function TournamentClient({
 		TournamentEntry[]
 	>([])
 	const [staleEntryIds, setStaleEntryIds] = useState<ReadonlySet<number>>(
-		() => new Set()
+		() => new Set(initialDegradedEntryIds)
 	)
 	const selectedEntries = useMemo(
 		() =>
@@ -297,7 +303,12 @@ export default function TournamentClient({
 	const [loadedResultsKey, setLoadedResultsKey] = useState<string | null>(
 		initialResultsKey
 	)
-	const hasUsableBoardRef = useRef(initialResultsLoaded)
+	const hasUsableBoardRef = useRef(
+		initialResultsLoaded &&
+			initialCurrentRows.some(
+				row => !initialDegradedEntryIds.includes(row.entry)
+			)
+	)
 	const resultsRequestIdRef = useRef(0)
 	const resultsInFlightRef = useRef<{
 		key: string
@@ -375,7 +386,8 @@ export default function TournamentClient({
 		}
 		return tournaments[0] ?? null
 	}, [requestedTournamentId, tournaments])
-	const selectedTournamentIsOfficialH2H = isOfficialH2HTournament(selectedTournament)
+	const selectedTournamentIsOfficialH2H =
+		isOfficialH2HTournament(selectedTournament)
 	const selectedTournamentKey = selectedTournament?.id ?? null
 	const lastUpdatedAt = useMemo(() => {
 		const candidates = [
@@ -386,7 +398,8 @@ export default function TournamentClient({
 		].filter((value): value is string => Boolean(value))
 
 		return candidates.reduce<string | null>((latest, candidate) => {
-			if (!latest || Date.parse(candidate) > Date.parse(latest)) return candidate
+			if (!latest || Date.parse(candidate) > Date.parse(latest))
+				return candidate
 			return latest
 		}, null)
 	}, [selectedRows, snapshot?.checkedAt])
@@ -454,7 +467,13 @@ export default function TournamentClient({
 					if (requestId !== resultsRequestIdRef.current) return
 
 					setOfficialCoverage(currentBatch.officialCoverage)
-					hasUsableBoardRef.current = true
+					if (
+						currentBatch.rows.some(
+							row => !currentBatch.degradedEntryIds.includes(row.entry)
+						)
+					) {
+						hasUsableBoardRef.current = true
+					}
 					setLoadedResultsKey(requestKey)
 					acceptSnapshot(currentBatch.snapshot)
 					// Read previous rows via functional update, then set rows + stale separately
@@ -492,6 +511,15 @@ export default function TournamentClient({
 						})
 					) {
 						setResultsError(t('standingsFailed'))
+					}
+					if (options.preserveOnError && hasUsableBoardRef.current) {
+						setStaleEntryIds(previous => {
+							const next = new Set(previous)
+							for (const row of selectedRowsRef.current) {
+								next.add(row.entry)
+							}
+							return next
+						})
 					}
 					if (!options.preserveOnError) {
 						hasUsableBoardRef.current = false
@@ -640,9 +668,9 @@ export default function TournamentClient({
 			// Invalidate any in-flight standings fetch for a previous selection.
 			resultsRequestIdRef.current += 1
 			resultsInFlightRef.current = null
-				const resetTimer = window.setTimeout(() => {
-					hasUsableBoardRef.current = false
-					setIsLoadingResults(false)
+			const resetTimer = window.setTimeout(() => {
+				hasUsableBoardRef.current = false
+				setIsLoadingResults(false)
 				setResultsError(null)
 				setSelectedRows([])
 				setOfficialCoverage(0)
@@ -1161,7 +1189,7 @@ export default function TournamentClient({
 					</Card>
 				)}
 
-		{selectedTournament && standingsReady && (
+				{selectedTournament && standingsReady && (
 					<div>
 						{!selectedTournamentIsOfficialH2H ? (
 							<TournamentHeader

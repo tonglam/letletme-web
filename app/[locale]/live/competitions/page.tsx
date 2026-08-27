@@ -12,7 +12,10 @@ import { getLivePageContext } from '@/lib/live-context-server'
 import { liveContextToSnapshot } from '@/lib/live-refresh'
 import { getCurrentEntryId } from '@/lib/session'
 import { getCurrentSeasonKey } from '@/lib/season'
-import { getTournamentLiveBatchSeed } from '@/lib/tournament/liveEntries'
+import {
+	appendDegradedTournamentRows,
+	getTournamentLiveBatchSeed
+} from '@/lib/tournament/liveEntries'
 import { loadTournamentLiveDeskWithRevisionRecovery } from '@/lib/tournament/liveDesk'
 import { areTournamentStandingsReady } from '@/lib/tournament/lifecycle'
 import { mapEntryTournamentToLiveTournament } from '@/lib/tournament/liveTournament'
@@ -76,6 +79,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	>[] = []
 	let initialSelectedTournamentId = ''
 	let initialCurrentRows: TournamentLiveCalcData[] = []
+	let initialDegradedEntryIds: number[] = []
 	let initialResultsLoaded = false
 	const initialResultsError: string | null = null
 	let initialSnapshot: LiveSnapshotStatus | null = null
@@ -127,7 +131,11 @@ export default async function Page({ params, searchParams }: PageProps) {
 				areTournamentStandingsReady(selectedTournament)
 			) {
 				const seed = getTournamentLiveBatchSeed(desk)
-				initialCurrentRows = seed.rows
+				initialDegradedEntryIds = seed.degradedEntryIds
+				initialCurrentRows = appendDegradedTournamentRows({
+					rows: seed.rows,
+					degradedEntryIds: seed.degradedEntryIds
+				})
 				initialOfficialCoverage = seed.officialCoverage
 				initialSnapshot = liveContextToSnapshot(liveContext) ?? seed.snapshot
 			}
@@ -144,6 +152,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			initialSelectedTournamentId={initialSelectedTournamentId}
 			initialEventId={currentEventId}
 			initialCurrentRows={initialCurrentRows}
+			initialDegradedEntryIds={initialDegradedEntryIds}
 			initialResultsLoaded={initialResultsLoaded}
 			initialResultsError={initialResultsError}
 			initialSnapshot={initialSnapshot}

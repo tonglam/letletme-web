@@ -13,6 +13,7 @@ import {
 	formatLiveAveragePoints,
 	getBoundedTraceableTournamentCoverage,
 	getTournamentManagerNextRefreshAt,
+	appendDegradedTournamentRows,
 	mergeDegradedTournamentEntryIds,
 	shouldShowTournamentResultsFatalError
 } from '../lib/tournament/liveEntries'
@@ -62,6 +63,42 @@ const managerScore = (
 describe('live tournament desk', () => {
 	it('tracks failed and unavailable rows as degraded rows without changing severity', () => {
 		assert.deepEqual(mergeDegradedTournamentEntryIds([2, 3], [3, 4]), [2, 3, 4])
+	})
+
+	it('keeps omitted degraded entries visible as scoreless stale rows', () => {
+		const rows = appendDegradedTournamentRows({
+			rows: [
+				{
+					entry: 1,
+					entryName: 'Available',
+					playerName: 'Manager',
+					overallRank: 0,
+					chip: null,
+					transferCost: 0,
+					played: 0,
+					toPlay: 11,
+					captainName: 'N/A',
+					pickList: []
+				}
+			],
+			degradedEntryIds: [1, 2],
+			metadataByEntryId: new Map([
+				[2, { entryName: 'Missing', playerName: 'Manager 2' }]
+			])
+		})
+
+		assert.deepEqual(
+			rows.map(row => [row.entry, row.entryName, row.playerName]),
+			[
+				[1, 'Available', 'Manager'],
+				[2, 'Missing', 'Manager 2']
+			]
+		)
+		const entries = buildTournamentEntries(rows, {
+			staleEntryIds: new Set([2])
+		})
+		assert.equal(entries[1]?.livePoints, null)
+		assert.equal(entries[1]?.stale, true)
 	})
 
 	it('reserves the fatal standings error for a failed request with no usable board', () => {
