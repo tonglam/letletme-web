@@ -11,7 +11,10 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { APP_URL } from '@/i18n/config'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
-import type { EntryOverallSnapshot } from '@/lib/graphql/operations/entries'
+import type {
+	EntryOverallSnapshot,
+	EntryLookupStatus
+} from '@/lib/graphql/operations/entries'
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
 import {
 	liveManagerScoreAuthorityLabel,
@@ -36,6 +39,7 @@ export function LivePointsDashboard({
 	isLoading,
 	isRefreshing,
 	error,
+	entryLookupStatus,
 	isPageActive,
 	shouldAutoRefresh,
 	liveData,
@@ -53,6 +57,7 @@ export function LivePointsDashboard({
 	isLoading: boolean
 	isRefreshing: boolean
 	error?: string
+	entryLookupStatus?: EntryLookupStatus
 	isPageActive: boolean
 	shouldAutoRefresh: boolean
 	liveData?: LiveCalcData
@@ -316,6 +321,20 @@ export function LivePointsDashboard({
 						/>
 						<span>{t('updating')}</span>
 					</div>
+				) : null}
+				{!isRefreshing && entryLookupStatus && entryLookupStatus !== 'FOUND' ? (
+					<p
+						className="mb-3 text-sm text-destructive"
+						role="alert"
+						data-testid="entry-lookup-status"
+					>
+						{entryLookupStatus === 'INVALID_ID'
+							? t('invalidEntry')
+							: entryLookupStatus === 'NOT_FOUND'
+								? t('noData')
+								: t('loadFailed')}{' '}
+						<span className="text-xs opacity-75">[{entryLookupStatus}]</span>
+					</p>
 				) : null}
 				{!isRefreshing && error ? (
 					<p

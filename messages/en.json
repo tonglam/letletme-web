@@ -867,6 +867,7 @@
 		"anchorSourceNone": "unavailable",
 		"availabilityTitle": "Availability",
 		"availabilityNone": "No official availability snapshot is available for this player.",
+		"stale": "Stale; retry.",
 		"availabilityChance": "{percent}% chance this round",
 		"availabilityChanceThisRound": "This round {percent}%",
 		"availabilityChanceNextRound": "Next round {percent}%",

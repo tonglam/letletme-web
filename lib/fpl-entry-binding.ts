@@ -384,7 +384,7 @@ export async function bindFplEntryDirectly(
 	}
 
 	// Post-response: land the entry in letletme_data's entry_infos so the daily
-	// cron and GraphQL entry(id) pick it up. Failure-isolated — syncEntryAfterBind
+	// cron and the GraphQL entryLookup(id) path pick it up. Failure-isolated — syncEntryAfterBind
 	// never throws, and after() runs it after the action's response is sent.
 	after(() => syncEntryAfterBind(entryId))
 

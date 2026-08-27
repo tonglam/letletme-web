@@ -24,6 +24,7 @@ import {
 } from 'graphql'
 import { buildFixtureWindowQuery } from '../lib/fixture-window'
 import {
+	GET_ENTRY,
 	GET_ENTRY_EVENT_RESULT,
 	GET_ENTRY_HISTORY,
 	GET_ENTRY_TRANSFER_HISTORY,
@@ -147,6 +148,7 @@ const endpoint =
 	'http://127.0.0.1:4000/graphql'
 
 const OPERATIONS: ReadonlyArray<readonly [string, string]> = [
+	['GET_ENTRY', GET_ENTRY],
 	['GET_CURRENT_AND_NEXT_EVENTS', GET_CURRENT_AND_NEXT_EVENTS],
 	['GET_CORE_EVENT_CONTEXT', GET_CORE_EVENT_CONTEXT],
 	['GET_PLAYER_STATS_BOOTSTRAP', GET_PLAYER_STATS_BOOTSTRAP],

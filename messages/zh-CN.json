@@ -867,6 +867,7 @@
 		"anchorSourceNone": "不可用",
 		"availabilityTitle": "伤病与状态",
 		"availabilityNone": "暂无该球员的官方可用性快照。",
+		"stale": "数据过期，请重试。",
 		"availabilityChance": "本轮出场概率 {percent}%",
 		"availabilityChanceThisRound": "本轮 {percent}%",
 		"availabilityChanceNextRound": "下轮 {percent}%",

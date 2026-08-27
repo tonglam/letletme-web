@@ -296,7 +296,9 @@ export function mergePlayerStatsDeskLoadResults(
 		throw new Error('Player Stats desk merge requires one result per player')
 	}
 	const entriesByPlayerId = new Map(
-		results.flatMap(result => result.entries).map(entry => [entry.playerId, entry])
+		results
+			.flatMap(result => result.entries)
+			.map(entry => [entry.playerId, entry])
 	)
 	const unavailable = new Set(
 		results.flatMap(result => result.unavailablePlayerIds)

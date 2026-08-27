@@ -24,10 +24,17 @@ export const GET_PLAYER_DETAIL = `
       id webName teamShortName elementType elementTypeName
       price startPrice
 			statsContext { scope season asOfEventId status }
-      availability: injuryAvailability {
-        status news newsAdded observedDate capturedAt
-        chanceOfPlayingThisRound chanceOfPlayingNextRound stale
-      }
+	  injuryAvailability {
+		status news newsAdded observedDate capturedAt
+		chanceOfPlayingThisRound chanceOfPlayingNextRound stale
+	  }
+	  dataAvailability {
+	    isFullyAuthoritative
+	    market { state reasonCode revision sourceCheckedAt }
+	    historicalTeam { state reasonCode revision sourceCheckedAt }
+	    fixtures { state reasonCode revision sourceCheckedAt }
+	    recentGameweeks { state reasonCode revision sourceCheckedAt }
+	  }
       totalPoints
       selectedByPercent form seasonTransfersIn seasonTransfersOut
       transfersInEvent transfersOutEvent
@@ -72,9 +79,16 @@ export const GET_PLAYER_OVERALL = `
       id webName teamShortName elementType elementTypeName
       price startPrice
 			statsContext { scope season asOfEventId status }
-      availability: injuryAvailability {
+      injuryAvailability {
         status news newsAdded observedDate capturedAt
         chanceOfPlayingThisRound chanceOfPlayingNextRound stale
+      }
+      dataAvailability {
+        isFullyAuthoritative
+        market { state reasonCode revision sourceCheckedAt }
+        historicalTeam { state reasonCode revision sourceCheckedAt }
+        fixtures { state reasonCode revision sourceCheckedAt }
+        recentGameweeks { state reasonCode revision sourceCheckedAt }
       }
       totalPoints selectedByPercent form transfersInEvent transfersOutEvent
       fixtures { id event againstTeamShortName wasHome finished kickoffTime score difficulty bgw }
@@ -95,6 +109,17 @@ export const GET_PLAYER_EVIDENCE = GET_PLAYER_DETAIL.replace(
 const PLAYER_EVIDENCE_IDENTITY = `
       id webName teamShortName elementType elementTypeName
 			statsContext { scope season asOfEventId status }
+      injuryAvailability {
+        status news newsAdded observedDate capturedAt
+        chanceOfPlayingThisRound chanceOfPlayingNextRound stale
+      }
+      dataAvailability {
+        isFullyAuthoritative
+        market { state reasonCode revision sourceCheckedAt }
+        historicalTeam { state reasonCode revision sourceCheckedAt }
+        fixtures { state reasonCode revision sourceCheckedAt }
+        recentGameweeks { state reasonCode revision sourceCheckedAt }
+      }
 `
 
 function playerEvidenceQuery(operationName: string, fields: string): string {
@@ -154,13 +179,31 @@ export interface PlayerStatsContext {
 
 export interface PlayerAvailability {
 	status: string
-	news: string
+	news?: string
 	newsAdded?: string | null
-	observedDate: string
+	observedDate?: string
 	capturedAt?: string | null
-	chanceOfPlayingThisRound: number | null
-	chanceOfPlayingNextRound: number | null
+	chanceOfPlayingThisRound?: number | null
+	chanceOfPlayingNextRound?: number | null
 	stale?: boolean
+}
+
+export type PlayerDataState =
+	'READY' | 'EMPTY' | 'STALE' | 'FALLBACK' | 'UNAVAILABLE' | 'NOT_APPLICABLE'
+
+export interface PlayerDataSectionAvailability {
+	state: PlayerDataState
+	reasonCode?: string | null
+	revision?: string | null
+	sourceCheckedAt?: string | null
+}
+
+export interface PlayerDetailDataAvailability {
+	isFullyAuthoritative: boolean
+	market?: PlayerDataSectionAvailability
+	historicalTeam?: PlayerDataSectionAvailability
+	fixtures?: PlayerDataSectionAvailability
+	recentGameweeks?: PlayerDataSectionAvailability
 }
 
 export interface PlayerRecentOpponent {
@@ -204,7 +247,8 @@ export interface PlayerDetailData {
 	price: number
 	startPrice?: number | null
 	statsContext: PlayerStatsContext
-	availability: PlayerAvailability | null
+	injuryAvailability: PlayerAvailability | null
+	dataAvailability: PlayerDetailDataAvailability
 	totalPoints?: number | null
 	selectedByPercent?: number | null
 	form?: number | null
@@ -552,7 +596,7 @@ export type PlayerStateOverviewData = Pick<
 > & {
 	reasons: Array<Pick<PlayerStateReason, 'code'>>
 	profileRadar:
-		| (Pick<PlayerRadarProfile, 'position' | 'asOfEventId'> & {
+		| (Pick<PlayerRadarProfile, 'position' | 'season' | 'asOfEventId'> & {
 				axes: Array<
 					Pick<
 						PlayerRadarAxis,
@@ -641,21 +685,19 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
   query GetPlayerStatsDeskOverview ${PLAYER_STATS_DESK_VARIABLES} {
     playerStatsDesk ${PLAYER_STATS_DESK_ARGUMENTS} {
       eventId horizon
-      entries {
-        playerId
-        overview {
-          status
-		value {
-			id webName teamShortName elementType elementTypeName
-			price
+	entries {
+		playerId
+		overview {
+			status
+			value {
+				id webName teamShortName elementType elementTypeName
+				price
 				statsContext { season status }
-				availability: injuryAvailability {
-					status news observedDate
-				chanceOfPlayingThisRound chanceOfPlayingNextRound
+				injuryAvailability { status }
+				dataAvailability { isFullyAuthoritative }
+				totalPoints selectedByPercent transfersInEvent transfersOutEvent
+				fixtures { id event againstTeamShortName wasHome finished difficulty bgw }
 			}
-			totalPoints selectedByPercent transfersInEvent transfersOutEvent
-			fixtures { id event againstTeamShortName wasHome finished difficulty bgw }
-          }
         }
         state {
           status
@@ -664,7 +706,7 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
             trend confidence providerMode
             reasons { code }
             profileRadar {
-              position asOfEventId
+              position season asOfEventId
               axes { code value percentile unit available }
             }
             dimensions {

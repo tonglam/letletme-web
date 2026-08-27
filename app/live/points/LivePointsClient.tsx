@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import {
 	GET_ENTRY,
 	type EntryOverallSnapshot,
+	type EntryLookupStatus,
 	type EntrySummaryResponse
 } from '@/lib/graphql/operations/entries'
 import { executeQuery } from '@/lib/graphql-client'
@@ -26,6 +27,7 @@ interface LivePointsClientProps {
 	initialLiveData?: LiveCalcData
 	initialSnapshot?: LiveSnapshotStatus | null
 	initialOverall?: EntryOverallSnapshot
+	initialEntryLookupStatus?: EntryLookupStatus
 }
 
 export default function LivePointsClient({
@@ -33,7 +35,8 @@ export default function LivePointsClient({
 	initialEventId,
 	initialLiveData,
 	initialSnapshot,
-	initialOverall
+	initialOverall,
+	initialEntryLookupStatus
 }: LivePointsClientProps) {
 	const t = useTranslations('LivePoints')
 	const livePoints = useLivePoints({
@@ -43,15 +46,19 @@ export default function LivePointsClient({
 		initialSnapshot
 	})
 	const [overall, setOverall] = useState(initialOverall)
+	const [entryLookupStatus, setEntryLookupStatus] = useState<
+		EntryLookupStatus | undefined
+	>(initialEntryLookupStatus)
 	const overallLoadedKeyRef = useRef<string | null>(
 		initialOverall != null ? `${initialEntryId}:${initialEventId}` : null
 	)
 
 	useEffect(() => {
 		setOverall(initialOverall)
+		setEntryLookupStatus(initialEntryLookupStatus)
 		overallLoadedKeyRef.current =
 			initialOverall != null ? `${initialEntryId}:${initialEventId}` : null
-	}, [initialEntryId, initialEventId, initialOverall])
+	}, [initialEntryId, initialEventId, initialEntryLookupStatus, initialOverall])
 
 	useEffect(() => {
 		const selectedGw = livePoints.selectedGameweek ?? livePoints.currentGameweek
@@ -74,17 +81,27 @@ export default function LivePointsClient({
 			{ cache: 'no-store' }
 		)
 			.then(response => {
-				if (cancelled || !response.entry) return
+				if (cancelled) return
+				setEntryLookupStatus(response.entryLookup.status)
+				if (
+					response.entryLookup.status !== 'FOUND' ||
+					!response.entryLookup.entry
+				) {
+					setOverall(undefined)
+					return
+				}
+				const entry = response.entryLookup.entry
 				setOverall({
-					overallPoints: response.entry.overallPoints,
-					overallRank: response.entry.overallRank,
-					teamValue: response.entry.teamValue,
-					bank: response.entry.bank,
-					totalTransfers: response.entry.totalTransfers
+					overallPoints: entry.overallPoints,
+					overallRank: entry.overallRank,
+					teamValue: entry.teamValue,
+					bank: entry.bank,
+					totalTransfers: entry.totalTransfers
 				})
 			})
 			.catch(error => {
 				if (!cancelled) overallLoadedKeyRef.current = null
+				if (!cancelled) setEntryLookupStatus('UNAVAILABLE')
 				console.warn('[live points] overall snapshot fetch failed:', error)
 			})
 
@@ -138,6 +155,7 @@ export default function LivePointsClient({
 				isLoading={livePoints.isLoading}
 				isRefreshing={livePoints.isRefreshing}
 				error={livePoints.error}
+				entryLookupStatus={entryLookupStatus}
 				isPageActive={livePoints.isPageActive}
 				shouldAutoRefresh={livePoints.shouldAutoRefresh}
 				liveData={livePoints.liveData}

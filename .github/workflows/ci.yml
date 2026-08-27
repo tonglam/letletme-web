@@ -97,7 +97,7 @@ jobs:
       - run: npm run worker:dry-run
       - run: npm run watchdog:dry-run
       - run: npm run lint
-      - run: npx tsc --noEmit
+      - run: npm run typecheck
       - name: Verify operational shell scripts
         run: bash -n ops/tencent/scripts/*.sh ops/redis/scripts/*.sh
       - run: npm run build

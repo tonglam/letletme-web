@@ -6,6 +6,7 @@ import { liveContextToSnapshot } from '@/lib/live-refresh'
 import {
 	GET_ENTRY,
 	type EntryOverallSnapshot,
+	type EntryLookupStatus,
 	type EntrySummaryResponse
 } from '@/lib/graphql/operations/entries'
 import {
@@ -111,6 +112,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	let initialLiveData: LiveCalcData | undefined
 	let initialSnapshot: LiveSnapshotStatus | null = null
 	let initialOverall: EntryOverallSnapshot | undefined
+	let initialEntryLookupStatus: EntryLookupStatus | undefined
 
 	if (Number.isInteger(entryId) && entryId > 0) {
 		const [liveResult, overallResult] = await Promise.allSettled([
@@ -148,16 +150,20 @@ export default async function Page({ params, searchParams }: PageProps) {
 			console.error('Failed to seed live points page:', liveResult.reason)
 		}
 
-		if (overallResult.status === 'fulfilled' && overallResult.value?.entry) {
-			const entry = overallResult.value.entry
-			initialOverall = {
-				overallPoints: entry.overallPoints,
-				overallRank: entry.overallRank,
-				teamValue: entry.teamValue,
-				bank: entry.bank,
-				totalTransfers: entry.totalTransfers
+		if (overallResult.status === 'fulfilled' && overallResult.value) {
+			initialEntryLookupStatus = overallResult.value.entryLookup.status
+			const entry = overallResult.value.entryLookup.entry
+			if (entry) {
+				initialOverall = {
+					overallPoints: entry.overallPoints,
+					overallRank: entry.overallRank,
+					teamValue: entry.teamValue,
+					bank: entry.bank,
+					totalTransfers: entry.totalTransfers
+				}
 			}
 		} else if (overallResult.status === 'rejected') {
+			initialEntryLookupStatus = 'UNAVAILABLE'
 			console.error(
 				'Failed to seed team overall snapshot:',
 				overallResult.reason
@@ -175,6 +181,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			initialLiveData={initialLiveData}
 			initialSnapshot={initialSnapshot}
 			initialOverall={initialOverall}
+			initialEntryLookupStatus={initialEntryLookupStatus}
 		/>
 	)
 }
