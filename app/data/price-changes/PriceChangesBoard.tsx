@@ -31,7 +31,11 @@ import type {
 	PriceChangeBoard,
 	PriceChangePlayer
 } from '@/lib/graphql/operations/price-changes'
-import { usePriceChangeLiveBoard } from '@/lib/price-change-live-client'
+import {
+	isPriceChangeLiveEnabled,
+	LIVE_DISABLED_REFRESH_MS,
+	usePriceChangeLiveBoard
+} from '@/lib/price-change-live-client'
 import type { TimeLeft } from '@/lib/home-deadline'
 import {
 	DEFAULT_PRICE_CHANGE_SORT,
@@ -43,6 +47,7 @@ import {
 import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
 import { cn } from '@/lib/utils'
 import { useHydrated } from '@/hooks/use-hydrated'
+import { useRouter } from 'next/navigation'
 import {
 	ArrowDown,
 	ArrowDownRight,
@@ -279,6 +284,7 @@ export function PriceChangesBoard({
 	mySquadState: SquadLoadState
 }) {
 	const t = useTranslations('PriceChanges')
+	const router = useRouter()
 	const hydrated = useHydrated()
 	const [search, setSearch] = useState('')
 	const [movement, setMovement] = useState<MovementFilter>('all')
@@ -318,6 +324,15 @@ export function PriceChangesBoard({
 			return board
 		})
 	}, [board])
+
+	useEffect(() => {
+		if (isPriceChangeLiveEnabled()) return
+		const timer = window.setInterval(
+			() => router.refresh(),
+			LIVE_DISABLED_REFRESH_MS
+		)
+		return () => window.clearInterval(timer)
+	}, [router])
 
 	usePriceChangeLiveBoard({
 		board,
