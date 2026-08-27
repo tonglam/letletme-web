@@ -1299,12 +1299,12 @@ export interface EntryOfficialH2HDeskResponse {
 
 export const GET_ENTRY_OFFICIAL_H2H_MATCHUPS = `${OFFICIAL_H2H_MATCH_FIELDS}
   query GetEntryOfficialH2HMatchups($entryId: Int!) {
-    entryOfficialH2HDesk(entryId: $entryId, includeMatchupHistory: true) {
+    entryOfficialH2HDesk(entryId: $entryId) {
       tournamentId
       eventId
       isLive
       isFinal
-      matchupHistory {
+      matches {
         ...OfficialH2HMatchFields
       }
     }
@@ -1316,7 +1316,7 @@ export interface EntryOfficialH2HMatchupsItem {
 	eventId: number
 	isLive: boolean
 	isFinal: boolean
-	matchupHistory: OfficialH2HMatch[]
+	matches: OfficialH2HMatch[]
 }
 
 export interface EntryOfficialH2HMatchupsResponse {

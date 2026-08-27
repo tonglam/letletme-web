@@ -539,11 +539,10 @@ export function OfficialH2HCompetitionView({
 					setEntryDeskFailed(false)
 					setHasLoadedEntryDesk(true)
 				} else if (matchupResult.ok) {
-					setEntryDesk(
-						matchupResult.value.entryOfficialH2HDesk.find(
-							item => item.tournamentId === tournamentId
-						) ?? null
+					const item = matchupResult.value.entryOfficialH2HDesk.find(
+						candidate => candidate.tournamentId === tournamentId
 					)
+					setEntryDesk(item ?? null)
 					setEntryDeskFailed(false)
 					setHasLoadedEntryDesk(true)
 				} else {
@@ -612,7 +611,7 @@ export function OfficialH2HCompetitionView({
 			standings.find(standing => standing.entryId === viewerEntryId) ?? null,
 		[standings, viewerEntryId]
 	)
-	const matchupHistory = entryDesk?.matchupHistory ?? EMPTY_OFFICIAL_H2H_MATCHES
+	const matchupHistory = entryDesk?.matches ?? EMPTY_OFFICIAL_H2H_MATCHES
 	const isMatchupInitialLoading =
 		viewerEntryId != null && !hasLoadedEntryDesk && isRefreshing
 	const isInitialLoading = !hasLoaded && isRefreshing
