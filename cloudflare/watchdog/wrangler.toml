@@ -19,7 +19,7 @@ tag = "v1"
 new_sqlite_classes = [ "FailoverCoordinator" ]
 
 [vars]
-WATCHDOG_ENABLED = "false"
+WATCHDOG_ENABLED = "true"
 DNSPOD_DOMAIN = "letletme.top"
 DNSPOD_EDGEONE_LINE = "境内"
 DNSPOD_DEFAULT_FALLBACK_LINE = "默认"
