@@ -26,7 +26,8 @@ export function ShareActions({
 	buttonClassName,
 	disabled = false,
 	actions = ['text', 'image'] as ShareActionKind[],
-	compact = false
+	compact = false,
+	onTextFallback
 }: {
 	text: ShareTextValue
 	imageRef?: RefObject<HTMLElement | null>
@@ -37,6 +38,7 @@ export function ShareActions({
 	disabled?: boolean
 	actions?: ShareActionKind[]
 	compact?: boolean
+	onTextFallback?: (text: string) => void
 }) {
 	const t = useTranslations('Share')
 	const [textShared, setTextShared] = useState(false)
@@ -79,10 +81,11 @@ export function ShareActions({
 			return
 		}
 		if (result === 'unsupported' || result === 'failed') {
-			setManualShareText(value)
+			if (onTextFallback) onTextFallback(value)
+			else setManualShareText(value)
 			reportFailure(result)
 		}
-	}, [reportFailure, resolveText, t, title])
+	}, [onTextFallback, reportFailure, resolveText, t, title])
 
 	const handleImageShare = useCallback(async () => {
 		const element =
@@ -177,7 +180,7 @@ export function ShareActions({
 					</span>
 				</Button>
 			) : null}
-			{manualShareText ? (
+			{manualShareText && !onTextFallback ? (
 				<ShareTextFallback
 					text={manualShareText}
 					message={t('shareUnsupported')}

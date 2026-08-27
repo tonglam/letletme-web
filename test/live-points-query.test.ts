@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { describe, it } from 'node:test'
 import { parse, visit } from 'graphql'
 
@@ -32,6 +33,15 @@ describe('live points GraphQL document', () => {
 		assert.match(GET_LIVE_POINTS, /effectiveLineup/)
 		assert.doesNotMatch(GET_LIVE_POINTS, /calculationMode/)
 		assert.doesNotMatch(GET_LIVE_POINTS, /algorithmVersion/)
+	})
+
+	it('uses the queried score revision to invalidate an entry-specific SSR seed', async () => {
+		const source = await readFile(
+			new URL('../app/live/points/_hooks/useLivePoints.ts', import.meta.url),
+			'utf8'
+		)
+		assert.match(source, /initialLiveData\?\.score\?\.revision/)
+		assert.doesNotMatch(source, /initialLiveData\?\.livePoints/)
 	})
 
 	it('accepts a legacy score when source and state are authoritative', () => {

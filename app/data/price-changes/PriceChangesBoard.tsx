@@ -46,6 +46,7 @@ import {
 	type PriceChangeSortDirection,
 	type PriceChangeSortState
 } from '@/lib/price-change-sorting'
+import { selectPriceChangeSquadPlayers } from '@/app/data/price-changes/_lib/price-change-share'
 import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
 import { cn } from '@/lib/utils'
 import { useHydrated } from '@/hooks/use-hydrated'
@@ -300,6 +301,7 @@ export function PriceChangesBoard({
 	>('DURABLE')
 	const mySquad = useMemo(() => new Set(mySquadElementIds), [mySquadElementIds])
 	const shareRef = useRef<HTMLDivElement | null>(null)
+	const mySquadShareRef = useRef<HTMLDivElement | null>(null)
 
 	useEffect(() => {
 		try {
@@ -442,6 +444,10 @@ export function PriceChangesBoard({
 			locale
 		})
 	}, [displayBoard.players, locale, mySquad, sort])
+	const mySquadBoardPlayers = useMemo(
+		() => selectPriceChangeSquadPlayers(displayBoard.players, mySquadPicks),
+		[displayBoard.players, mySquadPicks]
+	)
 	const snapshotUpdatedAtLabel = useMemo(
 		() =>
 			hydrated ? formatLocalSnapshotTime(displayBoard.fetchedAt, locale) : null,
@@ -490,7 +496,31 @@ export function PriceChangesBoard({
 		locale,
 		shareLabels,
 		shareScopePlayers,
-		snapshotUpdatedAtLabel
+			snapshotUpdatedAtLabel
+	])
+	const squadShareText = useMemo(() => {
+		const shareUrl =
+			typeof window !== 'undefined'
+				? window.location.href
+				: `https://letletme.top/${locale}/explore/price-predictions`
+		return formatPriceChangeShareText({
+			players: mySquadBoardPlayers,
+			updatedAtLabel: snapshotUpdatedAtLabel,
+			deadlineLabel: formatDeadline(displayBoard.deadline, locale, hydrated),
+			labels: {
+				...shareLabels,
+				scope: t('mySquadTab'),
+				footer: shareUrl
+			}
+		})
+	}, [
+		displayBoard.deadline,
+		hydrated,
+		locale,
+		mySquadBoardPlayers,
+		shareLabels,
+		snapshotUpdatedAtLabel,
+		t
 	])
 
 	return (
@@ -592,10 +622,20 @@ export function PriceChangesBoard({
 				</div>
 			</div>
 
+			{mySquadPicks.length > 0 ? (
+				<div className="flex justify-end">
+					<ShareActions
+						text={squadShareText}
+						imageRef={mySquadShareRef}
+						title={`${t('title')} · ${t('mySquadTab')}`}
+					/>
+				</div>
+			) : null}
 			<PriceChangeSquadPitch
 				picks={mySquadPicks}
 				players={displayBoard.players}
 				squadState={mySquadState}
+				shareRef={mySquadShareRef}
 			/>
 
 				<Card className="overflow-hidden border-border/80 shadow-sm">

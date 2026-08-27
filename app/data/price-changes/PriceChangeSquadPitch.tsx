@@ -16,7 +16,7 @@ import {
 } from '@/lib/squad-picks'
 import { resolveSquadTeamCode } from '@/lib/squad-pitch-team-codes'
 import { useTranslations } from 'next-intl'
-import { useMemo } from 'react'
+import { useMemo, type RefObject } from 'react'
 
 function formatProgress(value: number): string {
 	if (Math.abs(value) < 0.05) return '0.0%'
@@ -45,11 +45,13 @@ function squadMatchKey(webName: string, teamShortName: string): string {
 export function PriceChangeSquadPitch({
 	picks,
 	players,
-	squadState
+	squadState,
+	shareRef
 }: {
 	picks: readonly SquadPickSeed[]
 	players: readonly PriceChangePlayer[]
 	squadState: SquadLoadState
+	shareRef?: RefObject<HTMLDivElement | null>
 }) {
 	const t = useTranslations('PriceChanges')
 	const pitchData = useMemo(() => {
@@ -130,7 +132,10 @@ export function PriceChangeSquadPitch({
 	}
 
 	return (
-		<div className="mx-auto w-full max-w-3xl">
+		<div
+			ref={shareRef}
+			className="mx-auto w-full max-w-3xl"
+		>
 			<SquadPitch
 				players={pitchData.starters}
 				benchPlayers={pitchData.bench}

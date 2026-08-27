@@ -1,8 +1,10 @@
 'use client'
 
 import { Card } from '@/components/ui/card'
+import { ShareTextFallback } from '@/components/share/ShareTextFallback'
 import type { Match } from '@/types/match'
-import { memo, useMemo, useRef } from 'react'
+import { useTranslations } from 'next-intl'
+import { memo, useMemo, useRef, useState } from 'react'
 import { PlayerDetailModal } from './PlayerDetailModal'
 import { MatchHeader } from './match-card/MatchHeader'
 import { MatchHighlights } from './match-card/MatchHighlights'
@@ -47,6 +49,8 @@ function MatchCardComponent({
 	const highlights = useMemo(() => buildMatchHighlights(match), [match])
 	const detail = useMatchPlayerDetail(eventId)
 	const shareRef = useRef<HTMLDivElement | null>(null)
+	const shareT = useTranslations('Share')
+	const [manualShareText, setManualShareText] = useState<string | null>(null)
 
 	return (
 		<Card
@@ -62,10 +66,11 @@ function MatchCardComponent({
 				className="absolute right-3 top-3 z-10 flex items-center gap-1.5 sm:right-4 sm:top-4"
 			>
 				{showShareActions ? (
-					<MatchShareButton
-						match={match}
-						imageRef={shareRef}
-					/>
+						<MatchShareButton
+							match={match}
+							imageRef={shareRef}
+							onTextFallback={setManualShareText}
+						/>
 				) : null}
 				<MatchNavigation
 					allMatches={allMatches}
@@ -76,12 +81,23 @@ function MatchCardComponent({
 				<MatchHeader match={match} />
 				<MatchHighlights groups={highlights} />
 				{isMatchStarted(match) ? (
-					<MatchPlayerList
+						<MatchPlayerList
 						match={match}
 						onSelectPlayer={detail.openPlayerDetail}
 					/>
-				) : null}
+					) : null}
 			</div>
+			{manualShareText ? (
+				<div data-share-exclude="true">
+					<ShareTextFallback
+						text={manualShareText}
+						message={shareT('shareUnsupported')}
+						fieldLabel={shareT('shareManualLabel')}
+						closeLabel={shareT('shareClose')}
+						onClose={() => setManualShareText(null)}
+					/>
+				</div>
+			) : null}
 			<PlayerDetailModal
 				player={detail.selectedPlayer}
 				isOpen={detail.isOpen}

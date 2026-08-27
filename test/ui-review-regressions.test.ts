@@ -361,6 +361,8 @@ describe('data freshness timestamp precision', () => {
 		]) {
 			assert.match(source, /timeStyle: 'medium'/)
 		}
+		assert.match(tournament, /data-share-expand-width="true"/)
+		assert.doesNotMatch(tournament, /data-share-preserve-width="true"/)
 	})
 })
 
@@ -616,6 +618,11 @@ describe('live match share card', () => {
 		assert.match(source, /data-share-fit-content="true"/)
 		assert.match(source, /data-live-match-card="true"/)
 		assert.match(source, /data-share-exclude="true"[\s\S]*<MatchShareButton/)
+		assert.match(source, /onTextFallback=\{setManualShareText\}/)
+		assert.match(
+			source,
+			/<div data-share-exclude="true">[\s\S]*<ShareTextFallback/
+		)
 		assert.match(playerList, /data-share-exclude="true"/)
 		assert.doesNotMatch(source, /<div ref=\{shareRef\}/)
 
@@ -671,6 +678,35 @@ describe('live match share card', () => {
 			liveMatches,
 			/scrollIntoView\(\{ behavior: 'smooth', block: 'start' \}\)/
 		)
+	})
+})
+
+describe('price prediction share scopes', () => {
+	it('keeps linked-squad text and image sharing separate from the all-player board', async () => {
+		const [board, squad] = await Promise.all([
+			readFile(
+				new URL('../app/data/price-changes/PriceChangesBoard.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/data/price-changes/PriceChangeSquadPitch.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		assert.match(board, /mySquadBoardPlayers/)
+		assert.match(
+			board,
+			/<ShareActions[\s\S]*text=\{squadShareText\}[\s\S]*imageRef=\{mySquadShareRef\}/
+		)
+		assert.match(
+			board,
+			/<PriceChangeSquadPitch[\s\S]*shareRef=\{mySquadShareRef\}/
+		)
+		assert.match(squad, /ref=\{shareRef\}/)
 	})
 })
 

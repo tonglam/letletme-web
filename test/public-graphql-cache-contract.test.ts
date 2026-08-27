@@ -138,6 +138,12 @@ describe('public GraphQL cache contract', () => {
 			market,
 			/isPublishedMarketOwnershipDate\([\s\S]*loadMarketOwnershipDay\(publishedDate\)/
 		)
+		assert.match(market, /const \[dataResult, overviewResult\]/)
+		assert.doesNotMatch(market, /dataResult, overviewResult, glanceOverviewResult/)
+		assert.match(
+			market,
+			/<Suspense fallback=\{null\}>[\s\S]*<MarketGlanceContent/
+		)
 		assert.match(serverContext, /capacityRequestIdForHeaders/)
 		assert.match(publicServer, /capacityRequestIdForCurrentRun/)
 		assert.match(

@@ -550,8 +550,6 @@ function NewPlayersBlock({
 export async function MarketDashboard({
 	pulse,
 	ownership,
-	dailyOwnership,
-	gameweekOwnership,
 	requestedPeriod,
 	requestedDate,
 	dailyDates,
@@ -560,8 +558,6 @@ export async function MarketDashboard({
 }: {
 	pulse: MarketPulse | null
 	ownership: OwnershipResult | null
-	dailyOwnership: MarketOwnershipOverview | null
-	gameweekOwnership: MarketOwnershipOverview | null
 	requestedPeriod: MarketOwnershipPeriod
 	requestedDate: string | null
 	dailyDates: string[]
@@ -769,17 +765,32 @@ export async function MarketDashboard({
 							{t(`viewMode.${viewMode}`)}
 						</p>
 					</section>
-					<GlanceStrip
-						dailyOwnership={dailyOwnership}
-						gameweekOwnership={gameweekOwnership}
-						locale={locale}
-						t={t}
-					/>
 				</>
 			) : null}
 			{order.map(id => (
 				<section key={id}>{sectionById[id]}</section>
 			))}
 		</div>
+	)
+}
+
+export async function MarketGlance({
+	dailyOwnership,
+	gameweekOwnership,
+	locale
+}: {
+	dailyOwnership: MarketOwnershipOverview | null
+	gameweekOwnership: MarketOwnershipOverview | null
+	locale: string
+}) {
+	if (!dailyOwnership && !gameweekOwnership) return null
+	const t: MarketT = await getTranslations('Market')
+	return (
+		<GlanceStrip
+			dailyOwnership={dailyOwnership}
+			gameweekOwnership={gameweekOwnership}
+			locale={locale}
+			t={t}
+		/>
 	)
 }
