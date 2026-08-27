@@ -129,7 +129,6 @@ function TeamOfTheWeekCard({
 					</h2>
 					{showShareActions && teamOfTheWeek.length > 0 && !isLoading ? (
 						<ShareActions
-							actions={['image']}
 							text={t('teamOfWeek')}
 							imageRef={shareRef}
 							title={t('teamOfWeek')}
