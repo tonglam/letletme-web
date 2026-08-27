@@ -42,6 +42,29 @@ function statusBadgeClass(status: string): string {
 	return 'border-border/70 bg-muted/30 text-muted-foreground'
 }
 
+function PriceChangesContractMarker({
+	status,
+	revision,
+	expected,
+	observed
+}: {
+	status: 'READY' | 'STALE' | 'UNAVAILABLE'
+	revision: string
+	expected: number
+	observed: number
+}) {
+	return (
+		<span
+			hidden
+			data-letletme-contract="price_changes"
+			data-status={status}
+			data-revision={revision}
+			data-expected={String(expected)}
+			data-observed={String(observed)}
+		/>
+	)
+}
+
 async function renderPriceChangesPage({ params }: PageProps) {
 	const { locale } = await getPageLocale(params)
 	const t = await getTranslations('PriceChanges')
@@ -98,6 +121,18 @@ async function renderPriceChangesPage({ params }: PageProps) {
 
 	return (
 		<PageShell>
+			<PriceChangesContractMarker
+				status={
+					board.status === 'READY'
+						? 'READY'
+						: board.status === 'STALE' || board.status === 'PARTIAL'
+							? 'STALE'
+							: 'UNAVAILABLE'
+				}
+				revision={board.revision || 'unavailable'}
+				expected={board.expectedPlayerCount}
+				observed={board.observedPlayerCount}
+			/>
 			<div className="container mx-auto max-w-6xl px-4 py-8">
 				<StatsPageHeader
 					title={t('title')}

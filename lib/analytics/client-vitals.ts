@@ -1,4 +1,5 @@
 import {
+	normalizeMetricPage,
 	resolveWebVitalSource,
 	type PlayerStatsCacheStatus,
 	type AudienceHint
@@ -65,6 +66,23 @@ export function resolveNavigationId(
 
 export type BrowserPerformanceContext = PerformanceCorrelation
 
+function sendBrowserPayload(payload: string): void {
+	if (navigator.sendBeacon) {
+		const accepted = navigator.sendBeacon(
+			'/api/vitals',
+			new Blob([payload], { type: 'application/json' })
+		)
+		if (accepted) return
+	}
+
+	void fetch('/api/vitals', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: payload,
+		keepalive: true
+	}).catch(() => undefined)
+}
+
 export function reportBrowserPerformanceMetric(
 	metric: BrowserPerformanceMetric,
 	options: { always?: boolean } = {}
@@ -79,18 +97,19 @@ export function reportBrowserPerformanceMetric(
 			webdriver: navigator.webdriver === true
 		})
 	})
-	if (navigator.sendBeacon) {
-		const accepted = navigator.sendBeacon(
-			'/api/vitals',
-			new Blob([payload], { type: 'application/json' })
-		)
-		if (accepted) return
-	}
+	sendBrowserPayload(payload)
+}
 
-	void fetch('/api/vitals', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: payload,
-		keepalive: true
+/** Report only a fixed runtime-error code; never serialize the thrown value. */
+export function reportBrowserRuntimeError(): void {
+	const payload = JSON.stringify({
+		kind: 'runtime_error',
+		page: normalizeMetricPage(window.location.pathname),
+		device: getDeviceGroup(),
+		source: resolveWebVitalSource({
+			search: window.location.search,
+			webdriver: navigator.webdriver === true
+		})
 	})
+	sendBrowserPayload(payload)
 }

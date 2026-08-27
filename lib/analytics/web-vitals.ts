@@ -93,6 +93,12 @@ export type WebVitalPayload = {
 	cacheStatus?: PlayerStatsCacheStatus
 }
 
+export type ClientRuntimePayload = {
+	page: string
+	device: 'mobile' | 'tablet' | 'desktop'
+	source: WebVitalSource
+}
+
 const routePatterns: Array<[RegExp, string]> = [
 	[/^\/competitions\/browse$/, '/competitions/browse'],
 	[/^\/competitions\/create$/, '/competitions/create'],
@@ -198,4 +204,32 @@ export const parseWebVitalPayload = (
 	if (cacheStatus !== undefined)
 		parsed.cacheStatus = cacheStatus as PlayerStatsCacheStatus
 	return parsed
+}
+
+export const parseClientRuntimePayload = (
+	input: unknown
+): ClientRuntimePayload | null => {
+	if (!input || typeof input !== 'object' || Array.isArray(input)) return null
+	const candidate = input as Record<string, unknown>
+	const page =
+		typeof candidate.page === 'string'
+			? normalizeMetricPage(candidate.page)
+			: ''
+	const device = candidate.device
+	const source = candidate.source
+	if (
+		Object.keys(candidate).some(
+			key => !['kind', 'page', 'device', 'source'].includes(key)
+		) ||
+		candidate.kind !== 'runtime_error' ||
+		!page ||
+		!DEVICE_GROUPS.has(device as string) ||
+		!WEB_VITAL_SOURCES.has(source as string)
+	)
+		return null
+	return {
+		page,
+		device: device as ClientRuntimePayload['device'],
+		source: source as WebVitalSource
+	}
 }
