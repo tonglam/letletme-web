@@ -401,6 +401,7 @@ export function MarketPriceExplorer({
 			aria-labelledby="market-prices"
 			className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
 			ref={shareRef}
+			data-share-preserve-width="true"
 		>
 			<SectionTitle
 				id="market-prices"

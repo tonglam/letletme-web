@@ -91,6 +91,7 @@ describe('Home first-screen performance boundary', () => {
 		assert.match(leagueList, /row\.name/)
 		assert.match(leagueList, /leagueType/)
 		assert.match(leagueCarousel, /data-home-league-group/)
+		assert.match(leagueCarousel, /renderFullContentAction/)
 		assert.match(leagueList, /row\.rank/)
 		assert.match(leagueList, /row\.movement\.direction/)
 		assert.match(leagueList, /row\.h2hMatchup/)
@@ -116,6 +117,12 @@ describe('Home first-screen performance boundary', () => {
 		assert.doesNotMatch(leagueList, /useState|useEffect|useMemo/)
 		assert.doesNotMatch(personalDesk, /personalLeaguesCount/)
 		assert.doesNotMatch(leagueList, /visible\.length\}\/\{rows\.length/)
+		assert.doesNotMatch(
+			leagueList,
+			/min-w-0 flex-1 truncate text-sm (font-medium|font-semibold)/
+		)
+		assert.match(leagueList, /data-home-league-name="true"/)
+		assert.match(leagueList, /className="home-league-name min-w-0 flex-1/)
 	})
 
 	it('shares an accessible auto-carousel contract across Home panels', () => {

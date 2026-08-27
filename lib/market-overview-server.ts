@@ -19,7 +19,13 @@ const dataCache = {
 	revalidate: RevalidateSeconds.market,
 	tags: [CacheTag.market]
 }
-const originOptions = { cache: 'no-store' as const, timeoutMs: 2_000 }
+const pulseOriginOptions = { cache: 'no-store' as const, timeoutMs: 5_000 }
+// Ownership overview reads the published snapshot history and can be slower on
+// a cold local GraphQL/PostgreSQL cache than the compact pulse projection.
+const ownershipOriginOptions = {
+	cache: 'no-store' as const,
+	timeoutMs: 8_000
+}
 
 const loadMarketPulseFromOrigin = unstable_cache(
 	async (days: number): Promise<MarketPulseSummaryResponse> => {
@@ -34,7 +40,7 @@ const loadMarketPulseFromOrigin = unstable_cache(
 				'market',
 				GET_MARKET_PULSE_SUMMARY,
 				{ days },
-				originOptions
+				pulseOriginOptions
 			)
 		})
 	},
@@ -57,7 +63,7 @@ const loadMarketOwnershipOverviewFromOrigin = unstable_cache(
 				'market',
 				GET_MARKET_OWNERSHIP_OVERVIEW,
 				{ period, limit: 10 },
-				originOptions
+				ownershipOriginOptions
 			)
 		})
 	},
@@ -78,7 +84,7 @@ const loadMarketOwnershipDayFromOrigin = unstable_cache(
 				'market',
 				GET_MARKET_OWNERSHIP_DAY,
 				{ date, limit: 10 },
-				originOptions
+				ownershipOriginOptions
 			)
 		})
 	},

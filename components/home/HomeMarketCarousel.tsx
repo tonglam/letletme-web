@@ -37,7 +37,8 @@ export type HomeMarketCarouselLabels = {
 	ownershipDescription: string
 	ownershipUpdatedPrefix: string
 	availabilityPage: string
-	availabilityDescription: string
+	availabilityUpdatedPrefix: string
+	availabilityUpdatedFallback: string
 	openMarket: string
 	previousPage: string
 	nextPage: string
@@ -63,6 +64,7 @@ export type HomeMarketCarouselProps = {
 	}
 	ownershipUpdatedAt: string | null
 	availability: HomeMarketAvailabilityItem[]
+	availabilityUpdatedAt: string | null
 	availabilityState: 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE'
 	locale: string
 	labels: HomeMarketCarouselLabels
@@ -331,6 +333,7 @@ export function HomeMarketCarousel({
 	ownership,
 	ownershipUpdatedAt,
 	availability,
+	availabilityUpdatedAt,
 	availabilityState,
 	locale,
 	labels
@@ -380,11 +383,15 @@ export function HomeMarketCarousel({
 					<div>
 						<h2
 							id="home-market-title"
+							data-share-title="true"
 							className="font-display text-xl font-bold uppercase tracking-wide"
 						>
 							{slide.label}
 						</h2>
-						<p className="mt-1 max-w-sm text-xs text-muted-foreground">
+						<p
+							data-share-meta="true"
+							className="mt-1 max-w-sm text-xs text-muted-foreground"
+						>
 							{slide.id === 'ownership'
 								? (
 										<LocalUpdatedLabel
@@ -393,7 +400,13 @@ export function HomeMarketCarousel({
 											fallback={labels.ownershipDescription}
 										/>
 								  )
-								: labels.availabilityDescription}
+								: (
+										<LocalUpdatedLabel
+											value={availabilityUpdatedAt}
+											prefix={labels.availabilityUpdatedPrefix}
+											fallback={labels.availabilityUpdatedFallback}
+										/>
+								  )}
 						</p>
 					</div>
 				)}
@@ -418,7 +431,6 @@ export function HomeMarketCarousel({
 							text={slide.label}
 							imageRef={shareRef}
 							title={slide.label}
-							compact
 						/>
 					</div>
 				)}

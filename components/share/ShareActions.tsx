@@ -20,21 +20,27 @@ type ShareActionKind = 'text' | 'image'
 export function ShareActions({
 	text,
 	imageRef,
+	imageTargetId,
 	title,
 	className,
 	buttonClassName,
-	compact = false,
 	disabled = false,
-	actions = ['text', 'image'] as ShareActionKind[]
+	actions = ['text', 'image'] as ShareActionKind[],
+	compact = false,
+	onTextFallback,
+	onTextFallbackClear
 }: {
 	text: ShareTextValue
 	imageRef?: RefObject<HTMLElement | null>
+	imageTargetId?: string
 	title?: string
 	className?: string
 	buttonClassName?: string
-	compact?: boolean
 	disabled?: boolean
 	actions?: ShareActionKind[]
+	compact?: boolean
+	onTextFallback?: (text: string) => void
+	onTextFallbackClear?: () => void
 }) {
 	const t = useTranslations('Share')
 	const [textShared, setTextShared] = useState(false)
@@ -56,10 +62,15 @@ export function ShareActions({
 	)
 
 	const handleTextShare = useCallback(async () => {
-		const value = resolveText()
+		const value = resolveText().trim()
+		if (!value) {
+			notifyShareWarning(t('shareUnavailable'))
+			return
+		}
 		const result = await shareText(value, { title })
 		if (result === 'shared') {
 			setManualShareText(null)
+			onTextFallbackClear?.()
 			setTextShared(true)
 			notifyShareSuccess(t('shareTextShared'))
 			window.setTimeout(() => setTextShared(false), 2000)
@@ -67,20 +78,28 @@ export function ShareActions({
 		}
 		if (result === 'copied') {
 			setManualShareText(null)
+			onTextFallbackClear?.()
 			setTextShared(true)
 			notifyShareSuccess(t('shareTextCopied'))
 			window.setTimeout(() => setTextShared(false), 2000)
 			return
 		}
 		if (result === 'unsupported' || result === 'failed') {
-			setManualShareText(value)
+			if (onTextFallback) onTextFallback(value)
+			else setManualShareText(value)
 			reportFailure(result)
 		}
-	}, [reportFailure, resolveText, t, title])
+	}, [onTextFallback, onTextFallbackClear, reportFailure, resolveText, t, title])
 
 	const handleImageShare = useCallback(async () => {
-		const element = imageRef?.current
-		if (!element || imageShareInFlight.current) return
+		const element =
+			imageRef?.current ??
+			(imageTargetId ? document.getElementById(imageTargetId) : null)
+		if (!element) {
+			notifyShareWarning(t('shareUnavailable'))
+			return
+		}
+		if (imageShareInFlight.current) return
 		imageShareInFlight.current = true
 		try {
 			const result = await shareElementImage(element)
@@ -100,7 +119,7 @@ export function ShareActions({
 		} finally {
 			imageShareInFlight.current = false
 		}
-	}, [imageRef, reportFailure, t])
+	}, [imageRef, imageTargetId, reportFailure, t])
 
 	return (
 		<div
@@ -112,11 +131,16 @@ export function ShareActions({
 					type="button"
 					variant="outline"
 					size={compact ? 'icon' : 'sm'}
-					className={cn(compact ? 'size-8' : 'gap-1.5', buttonClassName)}
+					className={cn(
+						compact
+							? 'size-9 shrink-0 p-0'
+							: 'h-9 shrink-0 gap-1.5 rounded-md px-3',
+						buttonClassName
+					)}
 					onClick={() => void handleTextShare()}
 					disabled={disabled}
 					aria-label={t('shareText')}
-					title={compact ? t('shareText') : undefined}
+					title={t('shareText')}
 				>
 					{textShared ? (
 						<Check
@@ -126,25 +150,26 @@ export function ShareActions({
 					) : (
 						<Share2 data-icon="inline-start" />
 					)}
-					{compact ? (
-						<span className="sr-only">{t('shareText')}</span>
-					) : textShared ? (
-						t('shareDone')
-					) : (
-						t('shareText')
-					)}
+					<span className={compact ? 'sr-only' : undefined}>
+						{textShared ? t('shareDone') : t('shareText')}
+					</span>
 				</Button>
 			) : null}
-			{imageRef && actions.includes('image') ? (
+			{(imageRef || imageTargetId) && actions.includes('image') ? (
 				<Button
 					type="button"
 					variant="outline"
 					size={compact ? 'icon' : 'sm'}
-					className={cn(compact ? 'size-8' : 'gap-1.5', buttonClassName)}
+					className={cn(
+						compact
+							? 'size-9 shrink-0 p-0'
+							: 'h-9 shrink-0 gap-1.5 rounded-md px-3',
+						buttonClassName
+					)}
 					onClick={() => void handleImageShare()}
 					disabled={disabled}
 					aria-label={t('shareImage')}
-					title={compact ? t('shareImage') : undefined}
+					title={t('shareImage')}
 				>
 					{imageShared ? (
 						<Check
@@ -154,16 +179,12 @@ export function ShareActions({
 					) : (
 						<ImageIcon data-icon="inline-start" />
 					)}
-					{compact ? (
-						<span className="sr-only">{t('shareImage')}</span>
-					) : imageShared ? (
-						t('shareDone')
-					) : (
-						t('shareImage')
-					)}
+					<span className={compact ? 'sr-only' : undefined}>
+						{imageShared ? t('shareDone') : t('shareImage')}
+					</span>
 				</Button>
 			) : null}
-			{manualShareText ? (
+			{manualShareText && !onTextFallback ? (
 				<ShareTextFallback
 					text={manualShareText}
 					message={t('shareUnsupported')}

@@ -125,7 +125,9 @@ export interface GameweekBoardsResponse {
 	liveSnapshot: LiveSnapshotStatus | null
 }
 
-// Query to fetch top transfers in
+// Keep this document below the 200 AST-node limit while retaining the
+// published calculated lineup. The live-points UI still has a safe pick-level
+// projection fallback for responses that do not contain an optional lineup.
 export const GET_LIVE_POINTS = `
   query GetLiveCalcPoints($eventId: Int!, $entryId: Int!) {
     calcLivePointsByEntry(eventId: $eventId, entryId: $entryId) {
@@ -146,39 +148,17 @@ export const GET_LIVE_POINTS = `
         source
         state
         eventPointSemantics
-        calculationMode
-        algorithmVersion
-        provenance {
-          scoreSource
-          calculationMode
-          algorithmVersion
-          inputRevision
-          scoreRevision
-          rankRevision
-          livePublicationId
-          liveRevision
-          liveCheckedAt
-          picksRevision
-          picksCheckedAt
-          previousTotalsRevision
-          previousTotalsThroughEventId
-          resultRevision
-          resultCheckedAt
-          dataCheckedAt
-          rankSource
-          rankCheckedAt
-        }
-        effectiveLineup {
-          elementId
-          position
-          sourceMultiplier
-          effectiveMultiplier
-          pickActive
-          autoSub
-          isCaptain
-          isViceCaptain
-          captainForScoring
-        }
+		effectiveLineup {
+		  elementId
+		  position
+		  sourceMultiplier
+		  effectiveMultiplier
+		  pickActive
+		  autoSub
+		  isCaptain
+		  isViceCaptain
+		  captainForScoring
+		}
         revision
         checkedAt
         upstreamUpdatedAt
@@ -194,10 +174,7 @@ export const GET_LIVE_POINTS = `
 	        publishedAt
 	        checkedAt
 	      }
-      livePoints
       transferCost
-      liveNetPoints
-      liveTotalPoints
       captainName
       pickList {
         element
@@ -288,10 +265,10 @@ export interface LiveCalcData {
 	playerName?: string
 	chip?: string | null
 	score?: LiveManagerScore
-	livePoints: number
+	livePoints?: number
 	transferCost: number
-	liveNetPoints: number
-	liveTotalPoints: number
+	liveNetPoints?: number
+	liveTotalPoints?: number
 	captainName: string
 	pickList: LivePick[]
 	snapshot?: LiveSnapshotStatus | null

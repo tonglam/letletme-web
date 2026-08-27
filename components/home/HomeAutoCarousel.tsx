@@ -4,7 +4,11 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
-import type { KeyboardEvent, ReactNode, TouchEvent } from 'react'
+import type {
+	KeyboardEvent,
+	ReactNode,
+	TouchEvent
+} from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 const AUTO_ADVANCE_MS = 7_000
@@ -33,6 +37,10 @@ type HomeAutoCarouselProps = {
 	labels: HomeAutoCarouselLabels
 	renderHeader?: (slide: HomeAutoCarouselSlide) => ReactNode
 	renderAction?: (slide: HomeAutoCarouselSlide) => ReactNode
+	renderFullContentAction?: (
+		slide: HomeAutoCarouselSlide,
+		contentId: string
+	) => ReactNode
 	className?: string
 	dataAttribute?: string
 }
@@ -42,6 +50,7 @@ export function HomeAutoCarousel({
 	labels,
 	renderHeader,
 	renderAction,
+	renderFullContentAction,
 	className,
 	dataAttribute = 'home-auto-carousel'
 }: HomeAutoCarouselProps) {
@@ -103,6 +112,8 @@ export function HomeAutoCarousel({
 	}, [activeSlideId, firstSlideId, visibleSlides])
 
 	if (!activeSlide) return null
+
+	const fullContentId = `${dataAttribute}-${activeSlide.id}-full-list`
 
 	const move = (direction: -1 | 1) => {
 		if (visibleSlides.length < 2) return
@@ -338,19 +349,35 @@ export function HomeAutoCarousel({
 				</div>
 			</div>
 
-			{activeSlide.fullContent ? (
-				<Dialog
-					open={isFullListOpen}
-					onOpenChange={setIsFullListOpen}
-				>
-					<DialogContent className="max-h-[85vh] overflow-y-auto p-4 sm:max-w-xl sm:p-6">
-						<DialogTitle className="font-display text-base font-bold uppercase tracking-wide">
-							{activeSlide.label}
-						</DialogTitle>
+		{activeSlide.fullContent ? (
+			<Dialog
+				open={isFullListOpen}
+				onOpenChange={setIsFullListOpen}
+			>
+				<DialogContent className="max-h-[85vh] overflow-y-auto p-4 sm:max-w-xl sm:p-6">
+					<div
+						id={fullContentId}
+						data-share-preserve-width="true"
+						data-share-fit-content="true"
+						data-share-full-content="true"
+						data-share-reserve-brand-space="true"
+						className="rounded-lg bg-card"
+					>
+						<div className="flex min-w-0 items-start justify-between gap-4 pr-12">
+							<DialogTitle className="min-w-0 flex-1 font-display text-base font-bold uppercase tracking-wide">
+								{activeSlide.label}
+							</DialogTitle>
+							{renderFullContentAction ? (
+								<div className="shrink-0">
+									{renderFullContentAction(activeSlide, fullContentId)}
+								</div>
+							) : null}
+						</div>
 						<div className="mt-3">{activeSlide.fullContent}</div>
-					</DialogContent>
-				</Dialog>
-			) : null}
+					</div>
+				</DialogContent>
+			</Dialog>
+		) : null}
 		</div>
 	)
 }

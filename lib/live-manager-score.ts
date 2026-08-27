@@ -12,13 +12,28 @@ const DEFAULT_AUTHORITY_LABELS: LiveManagerScoreAuthorityLabels = {
 	final: '官方最终'
 }
 
+/**
+ * Older GraphQL deployments predate calculationMode. Its value is already
+ * encoded by the authoritative source enum, so infer only that presentation
+ * detail while leaving revision, timestamps, and state untouched.
+ */
+function effectiveCalculationMode(
+	score: Pick<LiveManagerScore, 'calculationMode' | 'source'>
+): LiveManagerScore['calculationMode'] {
+	if (score.calculationMode !== undefined) return score.calculationMode
+	if (score.source === 'FPL_EVENT_LIVE') return 'PROJECTED_AUTOSUBS'
+	if (score.source === 'FPL_FINAL_RESULT') return 'FINAL_RESULT'
+	return null
+}
+
 export function liveManagerScoreAuthorityLabel(
 	score?: Pick<LiveManagerScore, 'calculationMode' | 'source'> | null,
 	labels: LiveManagerScoreAuthorityLabels = DEFAULT_AUTHORITY_LABELS
 ): LiveManagerScoreAuthorityLabel | null {
 	if (!score) return null
-	if (score.calculationMode === 'PROJECTED_AUTOSUBS') return labels.projected
-	if (score.calculationMode === 'FINAL_RESULT') {
+	const calculationMode = effectiveCalculationMode(score)
+	if (calculationMode === 'PROJECTED_AUTOSUBS') return labels.projected
+	if (calculationMode === 'FINAL_RESULT') {
 		return labels.final
 	}
 	return null
@@ -48,9 +63,10 @@ export function traceableOfficialManagerScore(
 	) {
 		return undefined
 	}
+	const calculationMode = effectiveCalculationMode(score)
 	if (
 		score.source === 'FPL_EVENT_LIVE' &&
-		score.calculationMode === 'PROJECTED_AUTOSUBS' &&
+		calculationMode === 'PROJECTED_AUTOSUBS' &&
 		(score.state === 'FRESH' ||
 			score.state === 'STALE' ||
 			score.state === 'SETTLING')
@@ -59,7 +75,7 @@ export function traceableOfficialManagerScore(
 	}
 	if (
 		score.source === 'FPL_FINAL_RESULT' &&
-		score.calculationMode === 'FINAL_RESULT' &&
+		calculationMode === 'FINAL_RESULT' &&
 		score.state === 'FINAL'
 	) {
 		return score

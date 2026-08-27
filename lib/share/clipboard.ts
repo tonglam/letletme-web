@@ -41,7 +41,7 @@ const LIGHT_SHARE_THEME_VARIABLES = {
 // standings page that can produce a multi-megabyte foreignObject SVG which
 // Chrome may never finish decoding. Keep the visual/layout properties needed
 // by our share cards while leaving browser-only properties out of the clone.
-const SHARE_IMAGE_STYLE_PROPERTIES = [
+export const SHARE_IMAGE_STYLE_PROPERTIES = [
 	'align-content',
 	'align-items',
 	'align-self',
@@ -73,7 +73,13 @@ const SHARE_IMAGE_STYLE_PROPERTIES = [
 	'font-style',
 	'font-weight',
 	'gap',
+	'grid-column',
+	'grid-column-end',
+	'grid-column-start',
 	'grid-auto-flow',
+	'grid-row',
+	'grid-row-end',
+	'grid-row-start',
 	'grid-template-columns',
 	'grid-template-rows',
 	'height',
@@ -167,6 +173,13 @@ export async function renderElementShareImage(
 			element.setAttribute('data-share-capture-height', 'true')
 		}
 		const captureStyle: Partial<CSSStyleDeclaration> = {}
+		// html-to-image copies the resolved root margin into its foreignObject.
+		// A centered share target (for example SquadPitch with `mx-auto`) then
+		// starts inside the export canvas while the canvas dimensions still use
+		// the target box alone, shifting the whole image and clipping its right
+		// edge. Share output is the target itself, so its layout must start at
+		// the canvas origin; descendants keep their original spacing.
+		captureStyle.margin = '0px'
 		if (captureWidth) captureStyle.width = `${captureWidth}px`
 		if (captureHeight) captureStyle.height = `${captureHeight}px`
 		const hasCaptureStyle = Object.keys(captureStyle).length > 0
@@ -206,9 +219,13 @@ export async function renderElementShareImage(
 }
 
 export function getShareCaptureWidth(element: HTMLElement): number | undefined {
-	// Some share targets deliberately contain decorative overflow. Their
-	// exported canvas must remain the target's own box, not the widest child.
+	// Branding is composited onto the rendered canvas, so it must never affect
+	// the canvas width. Keep every share target inside its own layout box by
+	// default; an intentionally overflowing legacy target must opt in instead
+	// of being widened by a child, a fallback font, or a future brand layer.
 	if (element.getAttribute('data-share-preserve-width') === 'true')
+		return undefined
+	if (element.getAttribute('data-share-expand-width') !== 'true')
 		return undefined
 
 	const widths = [element.clientWidth, element.scrollWidth]

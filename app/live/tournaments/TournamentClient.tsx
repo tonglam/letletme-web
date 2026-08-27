@@ -1238,7 +1238,10 @@ export default function TournamentClient({
 								</div>
 							</div>
 						) : (
-							<div ref={shareRef}>
+							<div
+								ref={shareRef}
+								data-share-preserve-width="true"
+							>
 								<SearchHeader
 									searchQuery={searchQuery}
 									setSearchQuery={setSearchQuery}

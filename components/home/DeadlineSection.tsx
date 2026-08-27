@@ -129,10 +129,9 @@ export function DeadlineSection({
 						actions={['image']}
 						text={t('nextDeadline')}
 						imageRef={shareRef}
-						title={t('nextDeadline')}
-						buttonClassName="text-primary-ink hover:text-primary-ink"
-						compact
-					/>
+							title={t('nextDeadline')}
+							buttonClassName="border-electric/35 bg-fascia-foreground/5 text-electric hover:border-electric hover:bg-electric/10 hover:text-electric"
+						/>
 				}
 			/>
 		)
@@ -164,10 +163,9 @@ export function DeadlineSection({
 						actions={['image']}
 						text={t('nextDeadline')}
 						imageRef={shareRef}
-						title={t('nextDeadline')}
-						buttonClassName="text-primary-ink hover:text-primary-ink"
-						compact
-					/>
+							title={t('nextDeadline')}
+							buttonClassName="border-electric/35 bg-fascia-foreground/5 text-electric hover:border-electric hover:bg-electric/10 hover:text-electric"
+						/>
 					<span className="inline-flex items-center gap-2">
 						<span
 							className="live-dot"

@@ -22,7 +22,7 @@ const ROUTE_ENTRYPOINTS = {
 	fixtures: ['app/[locale]/explore/fixtures/page.tsx'],
 	gameweek: ['app/[locale]/explore/gameweek/page.tsx'],
 	market: ['app/[locale]/explore/market/page.tsx'],
-	priceChanges: ['app/[locale]/explore/price-changes/page.tsx'],
+	priceChanges: ['app/[locale]/explore/price-predictions/page.tsx'],
 	playerStats: ['app/[locale]/explore/player-stats/page.tsx'],
 	selections: ['app/[locale]/explore/selections/page.tsx'],
 	competitionsBrowse: ['app/[locale]/competitions/browse/page.tsx'],

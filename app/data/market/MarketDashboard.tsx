@@ -11,6 +11,7 @@ import type {
 	MarketPulse,
 	MarketTransferMover,
 	MarketOwnershipDay,
+	MarketOwnershipChange,
 	MarketOwnershipOverview,
 	MarketOwnershipPeriod
 } from '@/lib/graphql/operations/market'
@@ -343,62 +344,54 @@ function OwnershipDateNav({
 }
 
 function GlanceStrip({
-	pulse,
-	ownership,
+	dailyOwnership,
+	gameweekOwnership,
 	locale,
 	t
 }: {
-	pulse: MarketPulse
-	ownership: OwnershipResult | null
+	dailyOwnership: MarketOwnershipOverview | null
+	gameweekOwnership: MarketOwnershipOverview | null
 	locale: string
 	t: MarketT
 }) {
-	const rises = pulse.priceChanges.filter(c => c.direction === 'RISE').length
-	const falls = pulse.priceChanges.filter(c => c.direction === 'FALL').length
-	const topRise = ownership?.risers[0] ?? null
-	const topFall = ownership?.fallers[0] ?? null
 	const fmt = new Intl.NumberFormat(locale, {
 		maximumFractionDigits: 1,
 		signDisplay: 'exceptZero'
 	})
 	const cells = [
 		{
-			label: t('glancePriceRises'),
-			primary: String(rises),
-			secondary: t('glanceCountUnit'),
-			playerId: null,
-			tone: 'default'
-		},
-		{
-			label: t('glancePriceFalls'),
-			primary: String(falls),
-			secondary: t('glanceCountUnit'),
-			playerId: null,
-			tone: 'default'
-		},
-		{
-			label: t('glanceTopRiser'),
-			primary: topRise
-				? t('ownershipPercentagePoints', {
-						value: fmt.format(topRise.changePercentagePoints)
-					})
-				: '—',
-			secondary: topRise?.player.webName ?? '—',
-			playerId: topRise?.player.playerId ?? null,
+			label: t('glanceTodayOwnershipRises'),
+			change: dailyOwnership?.risers[0] ?? null,
 			tone: 'up'
 		},
 		{
-			label: t('glanceTopFaller'),
-			primary: topFall
-				? t('ownershipPercentagePoints', {
-						value: fmt.format(topFall.changePercentagePoints)
-					})
-				: '—',
-			secondary: topFall?.player.webName ?? '—',
-			playerId: topFall?.player.playerId ?? null,
+			label: t('glanceTodayOwnershipFalls'),
+			change: dailyOwnership?.fallers[0] ?? null,
+			tone: 'down'
+		},
+		{
+			label: t('glanceGameweekOwnershipRises'),
+			change: gameweekOwnership?.risers[0] ?? null,
+			tone: 'up'
+		},
+		{
+			label: t('glanceGameweekOwnershipFalls'),
+			change: gameweekOwnership?.fallers[0] ?? null,
 			tone: 'down'
 		}
-	] as const
+	].map(cell => {
+		const change: MarketOwnershipChange | null = cell.change
+		return {
+			...cell,
+			primary: change
+				? t('ownershipPercentagePoints', {
+						value: fmt.format(change.changePercentagePoints)
+					})
+				: '—',
+			secondary: change?.player.webName ?? '—',
+			playerId: change?.player.playerId ?? null
+		}
+	})
 
 	return (
 		<section
@@ -560,7 +553,8 @@ export async function MarketDashboard({
 	requestedDate,
 	dailyDates,
 	revision = null,
-	locale
+	locale,
+	glance
 }: {
 	pulse: MarketPulse | null
 	ownership: OwnershipResult | null
@@ -569,6 +563,7 @@ export async function MarketDashboard({
 	dailyDates: string[]
 	revision?: string | null
 	locale: string
+	glance?: ReactNode
 }) {
 	const t: MarketT = await getTranslations('Market')
 	const priceChangeDate = pulse
@@ -584,10 +579,6 @@ export async function MarketDashboard({
 				change => change.changeDate === priceChangeDate
 			)
 		: []
-	const viewPulse = pulse
-		? { ...pulse, priceChanges: latestPriceChanges }
-		: null
-
 	const hasMovers =
 		ownership !== null &&
 		(ownership.risers.length > 0 || ownership.fallers.length > 0)
@@ -772,17 +763,33 @@ export async function MarketDashboard({
 							t={t}
 						/>
 					</div>
-					<GlanceStrip
-						pulse={viewPulse!}
-						ownership={ownership}
-						locale={locale}
-						t={t}
-					/>
 				</>
 			) : null}
+			{glance}
 			{order.map(id => (
 				<section key={id}>{sectionById[id]}</section>
 			))}
 		</div>
+	)
+}
+
+export async function MarketGlance({
+	dailyOwnership,
+	gameweekOwnership,
+	locale
+}: {
+	dailyOwnership: MarketOwnershipOverview | null
+	gameweekOwnership: MarketOwnershipOverview | null
+	locale: string
+}) {
+	if (!dailyOwnership && !gameweekOwnership) return null
+	const t: MarketT = await getTranslations('Market')
+	return (
+		<GlanceStrip
+			dailyOwnership={dailyOwnership}
+			gameweekOwnership={gameweekOwnership}
+			locale={locale}
+			t={t}
+		/>
 	)
 }

@@ -458,7 +458,7 @@ export function useLivePoints({
 			initialEventId,
 			initialSelectedGameweek ?? '',
 			initialLiveData?.event ?? '',
-			initialLiveData?.livePoints ?? '',
+			initialLiveData?.score?.revision ?? '',
 			initialSnapshotKey
 		].join(':')
 

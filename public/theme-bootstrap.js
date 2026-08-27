@@ -1,4 +1,6 @@
 (() => {
+	// This external beforeInteractive script owns the tiny shell interaction
+	// layer without adding a React-rendered inline <script> to the layout.
 	const disclosureSelector = 'details[data-navigation-disclosure]'
 	const shellRadioGroupSelector =
 		'[data-theme-picker] [role="radiogroup"], [data-locale-picker] [role="radiogroup"]'

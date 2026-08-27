@@ -120,13 +120,20 @@ export const CountdownCard = forwardRef<HTMLDivElement, CountdownCardProps>(
 					className
 				)}
 			>
-				<div className="flex items-start justify-between gap-4">
-					<div className="min-w-0">
+				<div
+					className="flex items-start justify-between gap-4"
+					data-countdown-header="true"
+				>
+					<div
+						className="min-w-0"
+						data-countdown-copy="true"
+					>
 						<p
 							className={cn(
 								'chyron',
 								dark ? 'text-electric' : 'text-primary-ink'
 							)}
+							data-countdown-eyebrow="true"
 						>
 							{eyebrow}
 						</p>
@@ -134,8 +141,9 @@ export const CountdownCard = forwardRef<HTMLDivElement, CountdownCardProps>(
 							className={cn(
 								dark
 									? 'mt-3 font-display text-3xl font-bold uppercase leading-none tracking-wide text-fascia-foreground sm:text-4xl'
-									: 'mt-2 font-display text-xl font-bold leading-tight tracking-tight text-foreground sm:text-2xl'
+								: 'mt-2 font-display text-xl font-bold leading-tight tracking-tight text-foreground sm:text-2xl'
 							)}
+							data-countdown-title="true"
 						>
 							{title}
 						</h2>
@@ -209,6 +217,7 @@ export const CountdownCard = forwardRef<HTMLDivElement, CountdownCardProps>(
 								? 'divide-fascia-foreground/10 border border-fascia-foreground/10 bg-plum/30'
 								: 'divide-border/70 border border-primary/15 bg-background/75 shadow-inner'
 						)}
+						data-countdown-timer="true"
 						role="timer"
 						aria-label={String(title)}
 					>
@@ -251,6 +260,7 @@ export const CountdownCard = forwardRef<HTMLDivElement, CountdownCardProps>(
 								? 'border-fascia-foreground/10 bg-plum/20 text-fascia-foreground/60'
 								: 'border-primary/15 bg-card/70 text-muted-foreground'
 						)}
+						data-countdown-deadline="true"
 					>
 						<span
 							className={cn(

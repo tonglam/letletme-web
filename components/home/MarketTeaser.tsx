@@ -179,6 +179,7 @@ export async function MarketTeaser() {
 						: null
 				}
 				availability={availabilityItems}
+				availabilityUpdatedAt={desk.capturedAt}
 				availabilityState={desk.availabilityState as HomeMarketSectionState}
 				locale={locale}
 				labels={{
@@ -186,7 +187,8 @@ export async function MarketTeaser() {
 					ownershipDescription: coverageCopy,
 					ownershipUpdatedPrefix: t('lastUpdated', { date: '' }).trim(),
 					availabilityPage: t('availabilityWatch'),
-					availabilityDescription: t('homeAvailabilityDescription'),
+					availabilityUpdatedPrefix: t('lastUpdated', { date: '' }).trim(),
+					availabilityUpdatedFallback: t('lastUpdated', { date: '—' }),
 					openMarket: t('openMarket'),
 					previousPage: t('homeMarketPrevious'),
 					nextPage: t('homeMarketNext'),
