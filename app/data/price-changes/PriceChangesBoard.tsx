@@ -443,27 +443,6 @@ export function PriceChangesBoard({
 		})
 	}, [])
 
-	useEffect(() => {
-		const handleKeyDown = (event: KeyboardEvent) => {
-			const target = event.target
-			if (
-				target instanceof HTMLElement &&
-				(target.isContentEditable ||
-					target.tagName === 'INPUT' ||
-					target.tagName === 'TEXTAREA' ||
-					target.tagName === 'SELECT')
-			) {
-				return
-			}
-			if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-			event.preventDefault()
-			cycleView(event.key === 'ArrowLeft' ? 'previous' : 'next')
-		}
-
-		window.addEventListener('keydown', handleKeyDown)
-		return () => window.removeEventListener('keydown', handleKeyDown)
-	}, [cycleView])
-
 	const shareText = useMemo(() => {
 		const shareUrl =
 			typeof window !== 'undefined'
@@ -531,6 +510,11 @@ export function PriceChangesBoard({
 					className="grid min-w-0 flex-1 grid-cols-2 gap-1 rounded-lg bg-muted/35 p-1"
 					role="tablist"
 					aria-label={t('viewsLabel')}
+					onKeyDown={event => {
+						if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+						event.preventDefault()
+						cycleView(event.key === 'ArrowLeft' ? 'previous' : 'next')
+					}}
 				>
 					{(['all', 'mine'] as const).map(tabView => (
 						<button

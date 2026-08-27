@@ -83,6 +83,12 @@ export function shouldPollLiveSnapshot({
 	if (!isPageActive || !currentEventId || selectedEventId !== currentEventId) {
 		return false
 	}
+	// The player snapshot can settle before the official manager score. Keep the
+	// score refresh alive during that bounded settling window, even if the live
+	// window itself already reports a terminal state.
+	if (managerScoreState === 'SETTLING') {
+		return Boolean(snapshot && snapshot.eventId === selectedEventId)
+	}
 	// Once the gameweek has moved into review/finalization or the gap between
 	// gameweeks, the selected entry is durable data. Do not let a stale
 	// nextRefreshAt or manager score deadline re-arm the live countdown.
@@ -97,7 +103,6 @@ export function shouldPollLiveSnapshot({
 	// confirmed as live. Do not turn uncertainty into a background refresh loop;
 	// the user can still request a fresh snapshot with the manual button.
 	if (!snapshot || snapshot.eventId !== selectedEventId) return false
-	if (managerScoreState === 'SETTLING') return true
 	// Keep the normal countdown armed for both due and future official manager
 	// refreshes. React will not re-evaluate this predicate merely because time
 	// passed, so disabling it for a future deadline would leave stale scores

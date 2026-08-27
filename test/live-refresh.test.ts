@@ -103,6 +103,22 @@ describe('live refresh policy', () => {
 		)
 	})
 
+	it('keeps polling while the official manager score is settling', () => {
+		assert.equal(
+			shouldPollLiveSnapshot({
+				isPageActive: true,
+				currentEventId: 33,
+				selectedEventId: 33,
+				snapshot: {
+					...snapshot('SETTLED'),
+					windowState: 'FINALIZED'
+				},
+				managerScoreState: 'SETTLING'
+			}),
+			true
+		)
+	})
+
 	it('keeps a lightweight lifecycle probe after a finalized matchday', () => {
 		assert.equal(
 			shouldPollLiveMatchesTransition({

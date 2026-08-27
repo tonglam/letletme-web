@@ -166,6 +166,29 @@ describe('live match desk player sections', () => {
 		assert.equal(result.fixturePlayers?.[0]?.players[0]?.player?.webName, 'Tzolis')
 	})
 
+	it('does not duplicate event-level performances across repeated-team fixtures', async () => {
+		const payload = settledCoreDesk()
+		payload.liveMatchdayDesk.matches.push({
+			...payload.liveMatchdayDesk.matches[0]!,
+			fixtureId: 2,
+			awayTeamId: 3,
+			awayTeamName: 'Liverpool',
+			awayTeamShortName: 'LIV'
+		})
+		const executor: QueryExecutor = async query => {
+			if (query.includes('GetEventLivePerformances')) {
+				return {
+					eventLive: { performances: players().fixture0.players }
+				} as never
+			}
+			return payload as never
+		}
+
+		const result = await loadLiveMatchdayDesk(executor, null)
+
+		assert.deepEqual(result.fixturePlayers, [])
+	})
+
 	it('keeps the completed tab as the default when next fixtures coexist with final results', () => {
 		assert.equal(
 			getPreferredLiveMatchesTab(

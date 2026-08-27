@@ -414,17 +414,35 @@ async function loadDurableFixturePlayers(
 		throw new Error('Durable event-live performances are unavailable')
 	}
 
-	return matches.map(match => ({
-		season: desk.season,
-		eventId: desk.eventId,
-		revision: null,
-		source: 'DURABLE_DB' as const,
-		fixtureId: match.fixtureId,
-		players: performances.filter(performance => {
-			const teamId = performance.player?.team?.id
-			return teamId === match.homeTeamId || teamId === match.awayTeamId
-		})
-	}))
+	// eventLive.performances is an event-level aggregate and has no fixture id.
+	// A team can appear in more than one fixture in a double gameweek, so its
+	// aggregate cannot be assigned safely to either fixture. Leave those
+	// fixtures unpopulated rather than displaying the same performance twice.
+	const teamFixtureCounts = new Map<number, number>()
+	for (const match of matches) {
+		for (const teamId of [match.homeTeamId, match.awayTeamId]) {
+			teamFixtureCounts.set(teamId, (teamFixtureCounts.get(teamId) ?? 0) + 1)
+		}
+	}
+
+	return matches
+		.filter(
+			match =>
+				[match.homeTeamId, match.awayTeamId].every(
+					teamId => (teamFixtureCounts.get(teamId) ?? 0) === 1
+				)
+		)
+		.map(match => ({
+			season: desk.season,
+			eventId: desk.eventId,
+			revision: null,
+			source: 'DURABLE_DB' as const,
+			fixtureId: match.fixtureId,
+			players: performances.filter(performance => {
+				const teamId = performance.player?.team?.id
+				return teamId === match.homeTeamId || teamId === match.awayTeamId
+			})
+		}))
 }
 
 async function loadFixturePlayers(
