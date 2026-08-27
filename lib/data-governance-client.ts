@@ -94,6 +94,10 @@ async function fetchDataGovernanceEndpoint<T>(
 		const response = await fetch(`${dataApiBaseUrl(request)}${path}`, {
 			method: 'GET',
 			cache: 'no-store',
+			// The API key must never follow a redirect to the Web origin or any
+			// other host.  Treat redirects as an unavailable upstream instead of
+			// allowing fetch to forward the credential to an untrusted location.
+			redirect: 'error',
 			headers: { 'x-api-key': apiKey, accept: 'application/json' },
 			signal: controller.signal
 		})

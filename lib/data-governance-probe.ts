@@ -141,11 +141,12 @@ export async function probeDataContract(
 			}
 			case 'market-price': {
 				const board = await loadPriceChangeBoard()
-				graphqlRevision = revision(board.priceChangeBoard.revision)
-				expectedCount = board.priceChangeBoard.expectedPlayerCount
-				observedCount = board.priceChangeBoard.observedPlayerCount
+				const market = board.priceChangeBoard
+				graphqlRevision = revision(market.revision)
+				expectedCount = market.expectedPlayerCount
+				observedCount = market.observedPlayerCount
 				complete =
-					board.priceChangeBoard.status !== 'UNAVAILABLE' &&
+					market.status === 'READY' &&
 					expectedCount === observedCount
 				break
 			}
@@ -157,7 +158,20 @@ export async function probeDataContract(
 					)
 				}
 				const desk = await loadGameweekDesk(input.eventId)
-				graphqlRevision = revision(desk.liveRevision ?? desk.coreRevision)
+				if (desk.liveRevision === null) {
+					throw new DataGovernanceProbeError(
+						'BUSINESS_DATA_UNAVAILABLE',
+						'live snapshot has no canonical live revision'
+					)
+				}
+				const expectedSeason = input.scopeKey.match(/^(\d{4})(?::|$)/)?.[1]
+				if (!expectedSeason || desk.season !== expectedSeason) {
+					throw new DataGovernanceProbeError(
+						'BUSINESS_DATA_UNAVAILABLE',
+						'live snapshot season does not match the requested scope'
+					)
+				}
+				graphqlRevision = revision(desk.liveRevision)
 				complete =
 					desk.eventId === input.eventId &&
 					desk.overviewState === 'AVAILABLE' &&
