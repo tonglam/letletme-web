@@ -10,7 +10,7 @@ describe('data governance consumer probe contract', () => {
 		const source = await read('lib/data-governance-probe.ts')
 		assert.match(source, /market\.status === 'READY'/)
 		assert.match(source, /if \(desk\.liveRevision === null\)/)
-		assert.match(source, /desk\.season !== expectedSeason/)
+		assert.match(source, /desk\.season !== season/)
 		assert.doesNotMatch(
 			source,
 			/revision\(desk\.liveRevision \?\? desk\.coreRevision\)/
@@ -20,5 +20,28 @@ describe('data governance consumer probe contract', () => {
 	it('does not follow redirects while sending the Data API credential', async () => {
 		const source = await read('lib/data-governance-client.ts')
 		assert.match(source, /redirect: 'error'/)
+	})
+
+	it('uses server-only canaries for every authenticated business contract', async () => {
+		const source = await read('lib/data-governance-probe.ts')
+		for (const envName of [
+			'DATA_GOVERNANCE_CANARY_ENTRY_ID',
+			'DATA_GOVERNANCE_CANARY_TOURNAMENT_ID',
+			'DATA_GOVERNANCE_CANARY_PLAYER_IDS'
+		]) {
+			assert.match(source, new RegExp(envName))
+		}
+		for (const contractKey of [
+			'entry-data',
+			'live-picks',
+			'league-tournament',
+			'official-h2h',
+			'my-fpl',
+			'player-stats'
+		]) {
+			assert.match(source, new RegExp(`case '${contractKey}'`))
+		}
+		assert.match(source, /aggregate-only|aggregate metadata/)
+		assert.match(source, /new Date\(\)\.toISOString\(\)/)
 	})
 })

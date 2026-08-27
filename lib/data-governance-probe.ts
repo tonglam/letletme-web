@@ -1,8 +1,23 @@
 import 'server-only'
 
+import type { Session } from '@/lib/auth'
 import { getCoreEventContext } from '@/lib/events'
 import { loadGameweekDesk } from '@/lib/gameweek-desk-server'
+import { executeServerQueryWithSession } from '@/lib/graphql-server'
+import {
+	GET_LIVE_POINTS,
+	type LiveCalcDataResponse
+} from '@/lib/graphql/operations/live'
+import {
+	GET_MY_FPL_TEAM_GAMEWEEK,
+	type MyFplTeamGameweekResponse
+} from '@/lib/graphql/operations/my-fpl'
+import {
+	GET_TOURNAMENT_DETAIL_DESK,
+	type TournamentDetailDeskResponse
+} from '@/lib/graphql/operations/tournaments'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
+import { loadPlayerStatsDesk } from '@/lib/player-stats-desk-server'
 
 export type DataGovernanceProbeRequest = {
 	contractKey: string
@@ -116,11 +131,336 @@ const revision = (value: unknown): string => {
 	return result
 }
 
-/**
- * Execute the public server loaders used by the real Web surfaces.  The
- * response is aggregate-only; entry/tournament-specific contracts are left
- * fail-closed until a server-side canary loader is configured for them.
- */
+type DataGovernanceCanary = Readonly<{
+	entryId: number | null
+	tournamentId: number | null
+	playerIds: number[]
+	userId: string
+}>
+
+type ProbeEventContext = Readonly<{
+	eventId: number
+	season: string
+}>
+
+const CANARY_INTEGER = /^[1-9]\d*$/
+
+function parseCanaryInteger(name: string): number | null {
+	const raw = process.env[name]?.trim() ?? ''
+	if (!raw) return null
+	if (!CANARY_INTEGER.test(raw)) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'consumer canary configuration is invalid'
+		)
+	}
+	const value = Number(raw)
+	if (!Number.isSafeInteger(value) || value < 1) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'consumer canary configuration is invalid'
+		)
+	}
+	return value
+}
+
+function canaryForContract(contractKey: string): DataGovernanceCanary {
+	const requiresEntry = new Set([
+		'entry-data',
+		'live-picks',
+		'league-tournament',
+		'my-fpl',
+		'official-h2h'
+	])
+	const requiresTournament = new Set(['league-tournament', 'official-h2h'])
+	const requiresPlayers = contractKey === 'player-stats'
+	const entryId = requiresEntry.has(contractKey)
+		? parseCanaryInteger('DATA_GOVERNANCE_CANARY_ENTRY_ID')
+		: null
+	if (requiresEntry.has(contractKey) && entryId === null) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'consumer canary entry is not configured'
+		)
+	}
+	const tournamentId = requiresTournament
+		? parseCanaryInteger('DATA_GOVERNANCE_CANARY_TOURNAMENT_ID')
+		: null
+	if (requiresTournament.has(contractKey) && tournamentId === null) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'consumer canary tournament is not configured'
+		)
+	}
+	const playerIds = requiresPlayers
+		? (process.env.DATA_GOVERNANCE_CANARY_PLAYER_IDS?.trim() ?? '')
+				.split(',')
+				.map(value => value.trim())
+				.filter(Boolean)
+				.map(value => {
+					if (!CANARY_INTEGER.test(value)) {
+						throw new DataGovernanceProbeError(
+							'BUSINESS_DATA_UNAVAILABLE',
+							'consumer canary player configuration is invalid'
+						)
+					}
+					return Number(value)
+				})
+		: []
+	if (
+		requiresPlayers &&
+		(playerIds.length < 1 ||
+			playerIds.length > 2 ||
+			new Set(playerIds).size !== playerIds.length ||
+			playerIds.some(value => !Number.isSafeInteger(value) || value < 1))
+	) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'consumer canary player configuration is invalid'
+		)
+	}
+	const userId =
+		process.env.DATA_GOVERNANCE_CANARY_USER_ID?.trim() ||
+		'data-governance-probe'
+	if (userId.length > 128) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'consumer canary user configuration is invalid'
+		)
+	}
+	return { entryId, tournamentId, playerIds, userId }
+}
+
+function canarySession(config: DataGovernanceCanary): Session {
+	return {
+		session: { id: 'data-governance-probe' },
+		user: {
+			id: config.userId,
+			name: 'Data Governance Probe',
+			fplEntryId: config.entryId,
+			fplEntryVerifiedAt: new Date().toISOString()
+		}
+	} as unknown as Session
+}
+
+function scopeSeason(scopeKey: string): string | null {
+	return (
+		scopeKey.match(/^(?:season:)?(\d{4})(?::|$)/)?.[1] ??
+		scopeKey.match(/^season:(\d{4})(?::|$)/)?.[1] ??
+		null
+	)
+}
+
+function assertScopeSeason(scopeKey: string, season: string): void {
+	const requestedSeason = scopeSeason(scopeKey)
+	if (requestedSeason && requestedSeason !== season) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'consumer response season does not match the requested scope'
+		)
+	}
+}
+
+async function resolveProbeEvent(
+	input: DataGovernanceProbeRequest
+): Promise<ProbeEventContext> {
+	const context = await getCoreEventContext()
+	const eventId =
+		input.eventId ??
+		context.currentEventId ??
+		context.latestFinishedEventId ??
+		context.nextEventId
+	if (!positiveInteger(eventId)) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'consumer probe has no eligible event'
+		)
+	}
+	assertScopeSeason(input.scopeKey, context.season)
+	return { eventId, season: context.season }
+}
+
+function pickCountIsComplete(
+	picks: ReadonlyArray<{ position?: number | null }>
+): boolean {
+	const positions = picks
+		.map(pick => pick.position)
+		.filter((position): position is number => positiveInteger(position))
+	return (
+		picks.length === 15 &&
+		positions.length === 15 &&
+		new Set(positions).size === 15 &&
+		positions.every(position => position >= 1 && position <= 15)
+	)
+}
+
+function snapshotRevision(value: unknown): string {
+	if (!value || typeof value !== 'object') {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'consumer response has no snapshot metadata'
+		)
+	}
+	const candidate = (value as { revision?: unknown }).revision
+	return revision(candidate)
+}
+
+async function probeEntryData(
+	input: DataGovernanceProbeRequest,
+	config: DataGovernanceCanary
+): Promise<{ revision: string; complete: boolean }> {
+	const { eventId } = await resolveProbeEvent(input)
+	const response =
+		await executeServerQueryWithSession<MyFplTeamGameweekResponse>(
+			canarySession(config),
+			GET_MY_FPL_TEAM_GAMEWEEK,
+			{ eventId, snapshotRevision: null },
+			{ cache: 'no-store', timeoutMs: 5_000 }
+		)
+	const gameweek = response.myFplTeamGameweek
+	if (!gameweek || gameweek.eventId !== eventId) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'entry business loader returned the wrong event'
+		)
+	}
+	const picks = gameweek.result?.picks ?? []
+	return {
+		revision: snapshotRevision(gameweek.snapshotMeta),
+		complete:
+			gameweek.state === 'READY' &&
+			gameweek.result?.eventId === eventId &&
+			pickCountIsComplete(picks)
+	}
+}
+
+async function probeLivePicks(
+	input: DataGovernanceProbeRequest,
+	config: DataGovernanceCanary
+): Promise<{ revision: string; complete: boolean }> {
+	const { eventId } = await resolveProbeEvent(input)
+	if (config.entryId === null) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'live picks canary entry is not configured'
+		)
+	}
+	const response = await executeServerQueryWithSession<LiveCalcDataResponse>(
+		canarySession(config),
+		GET_LIVE_POINTS,
+		{ eventId, entryId: config.entryId },
+		{ cache: 'no-store', timeoutMs: 5_000 }
+	)
+	const live = response.calcLivePointsByEntry
+	if (!live || live.event !== eventId) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'live points loader returned the wrong event'
+		)
+	}
+	const liveRevision = live.snapshot?.revision ?? live.score?.revision
+	return {
+		revision: revision(liveRevision),
+		complete: pickCountIsComplete(live.pickList) && live.snapshot != null
+	}
+}
+
+async function probeTournament(
+	input: DataGovernanceProbeRequest,
+	config: DataGovernanceCanary,
+	contractKey: 'league-tournament' | 'official-h2h'
+): Promise<{ revision: string; complete: boolean }> {
+	const { eventId } = await resolveProbeEvent(input)
+	if (config.entryId === null || config.tournamentId === null) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			`${contractKey} canary is not configured`
+		)
+	}
+	const response =
+		await executeServerQueryWithSession<TournamentDetailDeskResponse>(
+			canarySession(config),
+			GET_TOURNAMENT_DETAIL_DESK,
+			{
+				tournamentId: config.tournamentId,
+				entryId: config.entryId,
+				eventId
+			},
+			{ cache: 'no-store', timeoutMs: 5_000 }
+		)
+	const detail = response.tournamentDetailDesk
+	if (!detail || detail.context.requestedEventId !== eventId) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'tournament business loader returned no matching event'
+		)
+	}
+	if (contractKey === 'official-h2h') {
+		const official = detail.officialH2H
+		if (!official) {
+			throw new DataGovernanceProbeError(
+				'BUSINESS_DATA_UNAVAILABLE',
+				'official H2H business loader has no payload'
+			)
+		}
+		return {
+			revision: revision(official.scoreRevision ?? detail.revision),
+			complete:
+				!official.awaitingSchedule &&
+				official.eventId === eventId &&
+				official.scoreRevision !== null &&
+				official.matches.some(match => match.eventId === eventId)
+		}
+	}
+	return {
+		revision: revision(detail.revision),
+		complete:
+			detail.tournament.state !== 'INACTIVE' &&
+			detail.participants.length > 0 &&
+			(detail.live === null || !detail.live.partial)
+	}
+}
+
+async function probeMyFpl(
+	input: DataGovernanceProbeRequest,
+	config: DataGovernanceCanary
+): Promise<{ revision: string; complete: boolean }> {
+	const { eventId } = await resolveProbeEvent(input)
+	const result = await probeEntryData({ ...input, eventId }, config)
+	return result
+}
+
+async function probePlayerStats(
+	input: DataGovernanceProbeRequest,
+	config: DataGovernanceCanary
+): Promise<{ revision: string; complete: boolean; observedCount: number }> {
+	const { eventId } = await resolveProbeEvent(input)
+	const result = await loadPlayerStatsDesk(
+		config.playerIds,
+		eventId,
+		5,
+		'overview'
+	)
+	const revisions = result.entries.flatMap(entry => {
+		const candidate = entry.overview?.statsContext?.revision
+		return typeof candidate === 'string' && candidate.trim() ? [candidate] : []
+	})
+	if (revisions.length === 0 || new Set(revisions).size !== 1) {
+		throw new DataGovernanceProbeError(
+			'BUSINESS_DATA_UNAVAILABLE',
+			'player stats loader has no coherent revision'
+		)
+	}
+	return {
+		revision: revisions[0]!,
+		complete:
+			result.outcome === 'complete' &&
+			result.entries.length === config.playerIds.length,
+		observedCount: result.entries.length
+	}
+}
+
+/** Execute the same server loaders and GraphQL operations used by public pages. */
 export async function probeDataContract(
 	input: DataGovernanceProbeRequest
 ): Promise<DataGovernanceProbeResponse> {
@@ -130,13 +470,13 @@ export async function probeDataContract(
 	let complete = false
 
 	try {
+		const config = canaryForContract(input.contractKey)
 		switch (input.contractKey) {
 			case 'core-fixtures': {
 				const context = await getCoreEventContext()
 				graphqlRevision = revision(context.revision)
-				complete =
-					context.season === input.scopeKey.split(':')[0] &&
-					context.sourceCheckedAt.length > 0
+				assertScopeSeason(input.scopeKey, context.season)
+				complete = context.sourceCheckedAt.length > 0
 				break
 			}
 			case 'market-price': {
@@ -145,27 +485,19 @@ export async function probeDataContract(
 				graphqlRevision = revision(market.revision)
 				expectedCount = market.expectedPlayerCount
 				observedCount = market.observedPlayerCount
-				complete =
-					market.status === 'READY' &&
-					expectedCount === observedCount
+				complete = market.status === 'READY' && expectedCount === observedCount
 				break
 			}
 			case 'live-snapshot': {
-				if (!positiveInteger(input.eventId)) {
-					throw new DataGovernanceProbeError(
-						'INVALID_REQUEST',
-						'live-snapshot probe requires eventId'
-					)
-				}
-				const desk = await loadGameweekDesk(input.eventId)
+				const { eventId, season } = await resolveProbeEvent(input)
+				const desk = await loadGameweekDesk(eventId)
 				if (desk.liveRevision === null) {
 					throw new DataGovernanceProbeError(
 						'BUSINESS_DATA_UNAVAILABLE',
 						'live snapshot has no canonical live revision'
 					)
 				}
-				const expectedSeason = input.scopeKey.match(/^(\d{4})(?::|$)/)?.[1]
-				if (!expectedSeason || desk.season !== expectedSeason) {
+				if (desk.season !== season) {
 					throw new DataGovernanceProbeError(
 						'BUSINESS_DATA_UNAVAILABLE',
 						'live snapshot season does not match the requested scope'
@@ -173,9 +505,41 @@ export async function probeDataContract(
 				}
 				graphqlRevision = revision(desk.liveRevision)
 				complete =
-					desk.eventId === input.eventId &&
+					desk.eventId === eventId &&
 					desk.overviewState === 'AVAILABLE' &&
 					desk.boardsState === 'AVAILABLE'
+				break
+			}
+			case 'entry-data': {
+				const result = await probeEntryData(input, config)
+				graphqlRevision = result.revision
+				complete = result.complete
+				break
+			}
+			case 'live-picks': {
+				const result = await probeLivePicks(input, config)
+				graphqlRevision = result.revision
+				complete = result.complete
+				break
+			}
+			case 'league-tournament':
+			case 'official-h2h': {
+				const result = await probeTournament(input, config, input.contractKey)
+				graphqlRevision = result.revision
+				complete = result.complete
+				break
+			}
+			case 'my-fpl': {
+				const result = await probeMyFpl(input, config)
+				graphqlRevision = result.revision
+				complete = result.complete
+				break
+			}
+			case 'player-stats': {
+				const result = await probePlayerStats(input, config)
+				graphqlRevision = result.revision
+				observedCount = input.observedCount ?? result.observedCount
+				complete = result.complete
 				break
 			}
 			default:
@@ -198,6 +562,8 @@ export async function probeDataContract(
 	// producer target is already known to disagree. Data will also enforce this
 	// parity check when it writes the observation.
 	const webRevision = graphqlRevision!
+	// Response is aggregate-only: canary identifiers and row-level payloads
+	// never cross the Data/Web governance boundary.
 	return {
 		success: true,
 		contractKey: input.contractKey,
