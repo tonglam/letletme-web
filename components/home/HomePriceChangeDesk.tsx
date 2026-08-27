@@ -5,10 +5,9 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { HomeMarketDesk } from '@/lib/graphql/operations/home'
 import type { MarketPriceChange } from '@/lib/graphql/operations/market'
-import type { PriceChangeBoard } from '@/lib/graphql/operations/price-changes'
 import { loadHomeMarketDesk } from '@/lib/home-market-seed-server'
+import { buildHomePriceChangePredictionState } from '@/lib/home-price-change'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
-import { isLikelyToChange } from '@/lib/price-change-sorting'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
 import { getLocale, getTranslations } from 'next-intl/server'
 
@@ -36,43 +35,6 @@ function mapActualPriceChanges(desk: HomeMarketDesk): {
 	return {
 		date,
 		changes: desk.priceChanges.filter(change => change.change !== 0)
-	}
-}
-
-function compareProgress(
-	left: PriceChangeBoard['players'][number],
-	right: PriceChangeBoard['players'][number],
-	locale: string
-): number {
-	const progress =
-		Math.abs(right.progressPercent) - Math.abs(left.progressPercent)
-	if (progress !== 0) return progress
-	const name = left.webName.localeCompare(right.webName, locale)
-	return name !== 0 ? name : left.playerId - right.playerId
-}
-
-function buildPredictionState(
-	board: PriceChangeBoard,
-	locale: string
-): HomePriceChangeCarouselProps['likely'] {
-	const rises = board.players
-		.filter(player => isLikelyToChange(player) && player.progressPercent > 0)
-		.sort((left, right) => compareProgress(left, right, locale))
-		.slice(0, 5)
-	const falls = board.players
-		.filter(player => isLikelyToChange(player) && player.progressPercent < 0)
-		.sort((left, right) => compareProgress(left, right, locale))
-		.slice(0, 5)
-	return {
-		state:
-			board.status === 'UNAVAILABLE'
-				? 'UNAVAILABLE'
-				: rises.length + falls.length > 0
-					? 'AVAILABLE'
-					: 'EMPTY',
-		capturedAt: board.fetchedAt,
-		rises,
-		falls
 	}
 }
 
@@ -152,6 +114,11 @@ export async function HomePriceChangeDesk() {
 	}
 
 	let likely: HomePriceChangeCarouselProps['likely']
+	let liveSeed: HomePriceChangeCarouselProps['liveSeed'] = {
+		revision: 'unavailable',
+		deadline: null,
+		nextDeadlines: []
+	}
 	if (predictionResult.status === 'rejected') {
 		likely = {
 			state: 'UNAVAILABLE',
@@ -160,10 +127,13 @@ export async function HomePriceChangeDesk() {
 			falls: []
 		}
 	} else {
-		likely = buildPredictionState(
-			predictionResult.value.priceChangeBoard,
-			locale
-		)
+		const board = predictionResult.value.priceChangeBoard
+		likely = buildHomePriceChangePredictionState(board, locale)
+		liveSeed = {
+			revision: board.revision,
+			deadline: board.deadline,
+			nextDeadlines: board.nextDeadlines
+		}
 	}
 
 	const actualDescription = actualDate
@@ -218,6 +188,7 @@ export async function HomePriceChangeDesk() {
 			<HomePriceChangeCarousel
 				actual={actual}
 				likely={likely}
+				liveSeed={liveSeed}
 				locale={locale}
 				labels={labels}
 			/>
