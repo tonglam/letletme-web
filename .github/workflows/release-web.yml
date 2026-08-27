@@ -21,6 +21,10 @@ concurrency:
 env:
   VERCEL_CLI_VERSION: 52.0.0
   RELEASE_SHA: ${{ github.event.workflow_run.head_sha || inputs.release_sha || github.sha }}
+  # Keep the live price-change channel explicitly controlled by a repository
+  # variable.  The safe default remains off until the Data hot watcher has
+  # been verified in production.
+  WEB_PRICE_CHANGE_LIVE_ENABLED: ${{ vars.LETLETME_PRICE_CHANGE_LIVE_ENABLED || 'false' }}
 
 jobs:
   deploy:
@@ -161,6 +165,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          case "$WEB_PRICE_CHANGE_LIVE_ENABLED" in
+            true|false) ;;
+            *) echo "invalid LETLETME_PRICE_CHANGE_LIVE_ENABLED value: $WEB_PRICE_CHANGE_LIVE_ENABLED" >&2; exit 1 ;;
+          esac
           # Keep sensitive Production variables inside Vercel. A local
           # `vercel build` receives empty placeholders for sensitive values,
           # while a remote Production build receives the real environment.
@@ -170,7 +178,9 @@ jobs:
             --no-wait \
             --force \
             --build-env "LETLETME_RELEASE_SHA=$RELEASE_SHA" \
+            --build-env "NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=$WEB_PRICE_CHANGE_LIVE_ENABLED" \
             --env "LETLETME_RELEASE_SHA=$RELEASE_SHA" \
+            --env "NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=$WEB_PRICE_CHANGE_LIVE_ENABLED" \
             --meta "gitSha=$RELEASE_SHA" \
             --token "$VERCEL_TOKEN" > /tmp/vercel-candidate-url
           candidate_url="$(tr -d '\r\n' < /tmp/vercel-candidate-url)"

@@ -73,6 +73,14 @@ test('Vercel candidate uses a remote unaliased Production build', () => {
 		deployCommand,
 		/(?:^|\s)--env "LETLETME_RELEASE_SHA=\$RELEASE_SHA"(?:\s|$)/
 	)
+	assert.match(
+		deployCommand,
+		/(?:^|\s)--build-env "NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=\$WEB_PRICE_CHANGE_LIVE_ENABLED"(?:\s|$)/
+	)
+	assert.match(
+		deployCommand,
+		/(?:^|\s)--env "NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=\$WEB_PRICE_CHANGE_LIVE_ENABLED"(?:\s|$)/
+	)
 	assert.match(deployCommand, /(?:^|\s)--meta "gitSha=\$RELEASE_SHA"(?:\s|$)/)
 	assert.doesNotMatch(deployCommand, /(?:^|\s)--prebuilt(?:\s|$)/)
 	assert.doesNotMatch(workflow, /vercel@\$\{VERCEL_CLI_VERSION\}" (?:pull|build)(?:\s|\\)/)
