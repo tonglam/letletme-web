@@ -37,4 +37,27 @@ describe('price-change live delivery contract', () => {
 		)
 		assert.doesNotMatch(component, /localStorage\.setItem\([^\n]*PROVISIONAL/)
 	})
+
+	it('updates the homepage projection without serializing the full board', async () => {
+		const [client, desk, carousel] = await Promise.all([
+			read('lib/price-change-live-client.ts'),
+			read('components/home/HomePriceChangeDesk.tsx'),
+			read('components/home/HomePriceChangeCarousel.tsx')
+		])
+
+		assert.match(client, /export type PriceChangeLiveSeed = Pick</)
+		assert.match(
+			client,
+			/'revision' \| 'deadline' \| 'nextDeadlines'/
+		)
+		assert.match(client, /export function usePriceChangeLiveUpdates/)
+		assert.match(desk, /revision: board\.revision/)
+		assert.match(desk, /deadline: board\.deadline/)
+		assert.match(desk, /nextDeadlines: board\.nextDeadlines/)
+		assert.doesNotMatch(desk, /players: board\.players/)
+		assert.match(carousel, /usePriceChangeLiveUpdates\(\{/)
+		assert.match(carousel, /buildHomePriceChangePredictionState\(board, locale\)/)
+		assert.match(carousel, /data-price-change-live-state=\{liveState\}/)
+		assert.match(carousel, /data-price-change-revision=\{liveRevision\}/)
+	})
 })
