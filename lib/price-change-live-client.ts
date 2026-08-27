@@ -8,9 +8,11 @@ import type {
 } from '@/lib/graphql/operations/price-changes'
 import { useEffect, useRef } from 'react'
 
-const HOT_WINDOW_BEFORE_MS = 30_000
+const HOT_WINDOW_BEFORE_MS = 5 * 60_000
 const HOT_WINDOW_AFTER_MS = 5 * 60_000
+const FINAL_WINDOW_BEFORE_MS = 10_000
 const HOT_POLL_MS = 2_000
+const FINAL_POLL_MS = 500
 const IDLE_POLL_MS = 60_000
 const LIVE_DISABLED_REFRESH_MS = 5 * 60_000
 
@@ -51,8 +53,10 @@ function isLiveBoard(value: unknown): value is LiveBoardResponse {
 	)
 }
 
-function nextDeadlineMs(board: PriceChangeBoard): number | null {
-	const now = Date.now()
+function nextDeadlineMs(
+	board: Pick<PriceChangeBoard, 'deadline' | 'nextDeadlines'>,
+	now: number = Date.now()
+): number | null {
 	const candidates = [board.deadline, ...board.nextDeadlines]
 		.filter((value): value is string => typeof value === 'string')
 		.map(value => Date.parse(value))
@@ -69,12 +73,26 @@ function nextDeadlineMs(board: PriceChangeBoard): number | null {
 	)
 }
 
-function isHotWindow(board: PriceChangeBoard): boolean {
-	return nextDeadlineMs(board) !== null
-}
-
-function pollTimeoutMs(board: PriceChangeBoard): number {
-	return isHotWindow(board) ? HOT_POLL_MS : IDLE_POLL_MS
+export function resolvePriceChangeLivePollPolicy(
+	board: Pick<PriceChangeBoard, 'deadline' | 'nextDeadlines'>,
+	now: number = Date.now(),
+	retainedDeadline: number | null = null
+): { delayMs: number; windowDeadline: number | null } {
+	const retainedDeadlineIsActive =
+		retainedDeadline !== null &&
+		retainedDeadline - now <= HOT_WINDOW_BEFORE_MS &&
+		retainedDeadline - now >= -HOT_WINDOW_AFTER_MS
+	const deadline =
+		nextDeadlineMs(board, now) ??
+		(retainedDeadlineIsActive ? retainedDeadline : null)
+	if (deadline === null) {
+		return { delayMs: IDLE_POLL_MS, windowDeadline: null }
+	}
+	return {
+		delayMs:
+			deadline - now <= FINAL_WINDOW_BEFORE_MS ? FINAL_POLL_MS : HOT_POLL_MS,
+		windowDeadline: deadline
+	}
 }
 
 async function fetchJson<T>(
@@ -112,6 +130,7 @@ export function usePriceChangeLiveBoard({
 	const revisionRef = useRef(board.revision)
 	const sourceHashRef = useRef<string | null>(null)
 	const stateRef = useRef<PriceChangeLiveState>('DURABLE')
+	const windowDeadlineRef = useRef<number | null>(null)
 
 	useEffect(() => {
 		boardRef.current = board
@@ -141,6 +160,12 @@ export function usePriceChangeLiveBoard({
 
 		const poll = async () => {
 			if (stopped || requestInFlight) return
+			const policyAtStart = resolvePriceChangeLivePollPolicy(
+				boardRef.current,
+				Date.now(),
+				windowDeadlineRef.current
+			)
+			windowDeadlineRef.current = policyAtStart.windowDeadline
 			requestInFlight = true
 			try {
 				if (!document.hidden) {
@@ -200,7 +225,15 @@ export function usePriceChangeLiveBoard({
 				}
 			} finally {
 				requestInFlight = false
-				if (!stopped) schedule(pollTimeoutMs(boardRef.current))
+				if (!stopped) {
+					const policy = resolvePriceChangeLivePollPolicy(
+						boardRef.current,
+						Date.now(),
+						windowDeadlineRef.current
+					)
+					windowDeadlineRef.current = policy.windowDeadline
+					schedule(policy.delayMs)
+				}
 			}
 		}
 
