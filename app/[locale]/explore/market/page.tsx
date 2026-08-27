@@ -217,7 +217,9 @@ async function renderMarketContent({
 		dailyOverview?.coverage ??
 		(!date && ownership?.period === 'DAILY' ? ownership.coverage : null)
 	const updatedAt =
-		pulse?.coverage.capturedAt ?? ownership?.coverage.capturedAt ?? null
+		(publishedDate
+			? ownership?.coverage.capturedAt ?? pulse?.coverage.capturedAt
+			: pulse?.coverage.capturedAt ?? ownership?.coverage.capturedAt) ?? null
 	const marketGlance = (
 		<Suspense fallback={null}>
 			<MarketGlanceContent
