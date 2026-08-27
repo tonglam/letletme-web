@@ -9,6 +9,11 @@ fi
 export REDISCLI_AUTH=$(< /etc/letletme-redis/admin.secret)
 redis_cli=(redis-cli -h 127.0.0.1 -p 6379 --no-auth-warning)
 max_replication_offset_lag_bytes=${REDIS_MAX_REPLICATION_OFFSET_LAG_BYTES:-1048576}
+replica_probe_timeout_seconds=${REDIS_REPLICA_PROBE_TIMEOUT_SECONDS:-3}
+[[ $replica_probe_timeout_seconds =~ ^[1-9][0-9]*$ ]] || {
+	echo "REDIS_REPLICA_PROBE_TIMEOUT_SECONDS must be a positive integer" >&2
+	exit 1
+}
 replication=$("${redis_cli[@]}" INFO replication)
 persistence=$("${redis_cli[@]}" INFO persistence)
 memory=$("${redis_cli[@]}" INFO memory)
@@ -27,7 +32,7 @@ primary_has_healthy_replicas() {
 	[[ $master_offset =~ ^[0-9]+$ ]] || return 1
 	[[ $max_replication_offset_lag_bytes =~ ^[0-9]+$ ]] || return 1
 
-	local healthy=0 line host port state lag replica_offset read_only offset_lag
+	local healthy=0 line host port state lag replica_offset read_only read_only_output offset_lag
 	while IFS= read -r line; do
 		host=$(sed -n 's/.*ip=\([^,]*\).*/\1/p' <<<"$line" | tr -d '\r')
 		port=$(sed -n 's/.*port=\([^,]*\).*/\1/p' <<<"$line" | tr -d '\r')
@@ -36,7 +41,11 @@ primary_has_healthy_replicas() {
 		replica_offset=$(sed -n 's/.*offset=\([^,]*\).*/\1/p' <<<"$line" | tr -d '\r')
 		read_only=''
 		if [[ $host =~ ^[A-Za-z0-9_.:-]+$ && $port =~ ^[0-9]+$ && $port -le 65535 ]]; then
-			read_only=$(redis-cli -h "$host" -p "$port" --no-auth-warning CONFIG GET replica-read-only 2>/dev/null | sed -n '2p' | tr -d '\r')
+			if read_only_output=$(redis-cli -h "$host" -p "$port" -t "$replica_probe_timeout_seconds" --no-auth-warning CONFIG GET replica-read-only 2>/dev/null); then
+				read_only=$(sed -n '2p' <<<"$read_only_output" | tr -d '\r')
+			else
+				read_only=''
+			fi
 		fi
 		if [[ $state == online && $lag =~ ^[0-9]+$ && $lag -le 30 && $replica_offset =~ ^[0-9]+$ && $read_only == 1 ]] && (( master_offset >= replica_offset )); then
 			offset_lag=$((master_offset - replica_offset))
