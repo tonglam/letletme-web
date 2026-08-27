@@ -773,6 +773,28 @@ export function PlayerStatsView({
 
 	if (!player) return null
 
+	const availabilitySections = [
+		['market', player.dataAvailability?.market],
+		['historicalTeam', player.dataAvailability?.historicalTeam],
+		['fixtures', player.dataAvailability?.fixtures],
+		['recentGameweeks', player.dataAvailability?.recentGameweeks]
+	] as const
+	const nonAuthoritativeStates: Array<[string, string]> = availabilitySections
+		.filter(([, section]) =>
+			Boolean(
+				section &&
+				!['READY', 'EMPTY', 'NOT_APPLICABLE'].includes(section.state)
+			)
+		)
+		.map(([name, section]) => [name, section!.state])
+	if (
+		player.dataAvailability &&
+		!player.dataAvailability.isFullyAuthoritative &&
+		nonAuthoritativeStates.length === 0
+	) {
+		nonAuthoritativeStates.push(['player', 'UNAVAILABLE'])
+	}
+
 	const currentAsOf = player.statsContext.asOfEventId ?? anchorGw
 	const shareText = [
 		`# ${player.webName} · ${player.teamShortName}`,
@@ -1009,6 +1031,19 @@ export function PlayerStatsView({
 						role="alert"
 					>
 						{requestError}
+					</p>
+				) : null}
+				{nonAuthoritativeStates.length > 0 ? (
+					<p
+						className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-muted-foreground"
+						role="status"
+						data-testid="player-data-availability"
+					>
+						{t('stale')} (
+						{nonAuthoritativeStates
+							.map(([section, state]) => `${section}: ${state}`)
+							.join(', ')}
+						)
 					</p>
 				) : null}
 				<PlayerOverallCard

@@ -3,7 +3,10 @@
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
 import { Button } from '@/components/ui/button'
-import type { EntryOverallSnapshot } from '@/lib/graphql/operations/entries'
+import type {
+	EntryOverallSnapshot,
+	EntryLookupStatus
+} from '@/lib/graphql/operations/entries'
 import type {
 	LiveCalcData,
 	LiveSnapshotStatus
@@ -30,6 +33,7 @@ interface TeamPointsClientProps {
 	initialLiveData?: LiveCalcData
 	initialSnapshot?: LiveSnapshotStatus | null
 	initialOverall?: EntryOverallSnapshot
+	initialEntryLookupStatus?: EntryLookupStatus
 }
 
 export default function TeamPointsClient({
@@ -40,7 +44,8 @@ export default function TeamPointsClient({
 	initialSelectedGameweek,
 	initialLiveData,
 	initialSnapshot,
-	initialOverall
+	initialOverall,
+	initialEntryLookupStatus
 }: TeamPointsClientProps) {
 	const t = useTranslations('LivePoints')
 	const livePoints = useLivePoints({
@@ -51,15 +56,19 @@ export default function TeamPointsClient({
 		initialSnapshot
 	})
 	const [overall, setOverall] = useState(initialOverall)
+	const [entryLookupStatus, setEntryLookupStatus] = useState<
+		EntryLookupStatus | undefined
+	>(initialEntryLookupStatus)
 	const overallLoadedKeyRef = useRef<string | null>(
 		initialOverall != null ? `${entryId}:${initialEventId}` : null
 	)
 
 	useEffect(() => {
 		setOverall(initialOverall)
+		setEntryLookupStatus(initialEntryLookupStatus)
 		overallLoadedKeyRef.current =
 			initialOverall != null ? `${entryId}:${initialEventId}` : null
-	}, [entryId, initialEventId, initialOverall])
+	}, [entryId, initialEventId, initialEntryLookupStatus, initialOverall])
 
 	useEffect(() => {
 		const selectedGw = livePoints.selectedGameweek ?? livePoints.currentGameweek
@@ -79,17 +88,27 @@ export default function TeamPointsClient({
 			{ cache: 'no-store' }
 		)
 			.then(response => {
-				if (cancelled || !response.entry) return
+				if (cancelled) return
+				setEntryLookupStatus(response.entryLookup.status)
+				if (
+					response.entryLookup.status !== 'FOUND' ||
+					!response.entryLookup.entry
+				) {
+					setOverall(undefined)
+					return
+				}
+				const entry = response.entryLookup.entry
 				setOverall({
-					overallPoints: response.entry.overallPoints,
-					overallRank: response.entry.overallRank,
-					teamValue: response.entry.teamValue,
-					bank: response.entry.bank,
-					totalTransfers: response.entry.totalTransfers
+					overallPoints: entry.overallPoints,
+					overallRank: entry.overallRank,
+					teamValue: entry.teamValue,
+					bank: entry.bank,
+					totalTransfers: entry.totalTransfers
 				})
 			})
 			.catch(error => {
 				if (!cancelled) overallLoadedKeyRef.current = null
+				if (!cancelled) setEntryLookupStatus('UNAVAILABLE')
 				console.warn('[live points] overall snapshot fetch failed:', error)
 			})
 
@@ -126,6 +145,7 @@ export default function TeamPointsClient({
 				isLoading={livePoints.isLoading}
 				isRefreshing={livePoints.isRefreshing}
 				error={livePoints.error}
+				entryLookupStatus={entryLookupStatus}
 				isPageActive={livePoints.isPageActive}
 				shouldAutoRefresh={livePoints.shouldAutoRefresh}
 				liveData={livePoints.liveData}
