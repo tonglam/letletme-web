@@ -152,10 +152,12 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 	await expect(detail.getByText('-1', { exact: true }).first()).toBeVisible()
 
 	await page.clock.fastForward(10 * 60 * 1000)
-	await expect.poll(() => explainBatchRequests).toBeGreaterThanOrEqual(2)
+	// The deterministic fixture is outside the live window.  A scheduled or
+	// otherwise unconfirmed round must not re-arm the explanation poll.
+	expect(explainBatchRequests).toBe(1)
 })
 
-test('live points keeps polling after the seed and first client load fail', async ({
+test('scheduled live points does not show a polling label and recovers manually', async ({
 	page
 }) => {
 	test.skip(
@@ -290,12 +292,13 @@ test('live points keeps polling after the seed and first client load fail', asyn
 			exact: true
 		})
 	).toBeVisible()
-	await expect(page.getByText(/Next refresh in \d+s/)).toBeVisible()
+	await expect(page.getByText(/Next refresh in \d+s/)).toHaveCount(0)
 
-	// The first retry is scheduled at the 30-second poll boundary.  Stop at
-	// that boundary so the request's own 15-second timeout cannot fire while
-	// Playwright is still flushing the deterministic response.
+	// A scheduled round is intentionally not auto-refreshed.  The user can
+	// still request a fresh snapshot explicitly when the round becomes live.
 	await page.clock.runFor(30_000)
+	await expect.poll(() => clientLivePointsRequests).toBe(1)
+	await page.getByRole('button', { name: 'Refresh', exact: true }).click()
 	await expect.poll(() => clientLivePointsRequests).toBe(2)
 	// Flush the React update queued by the second network response while the
 	// browser fake clock is installed.
@@ -432,12 +435,12 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	await expect(
 		page.getByRole('heading', { name: 'Live Matches' })
 	).toBeVisible()
-	await expect(page.getByRole('tab', { name: 'Next Gameweek' })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: 'Not Started' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	)
 	await expect(page.getByText(/0\s*[–-]\s*0/)).toBeVisible()
-	await expect(page.getByText(/Auto refresh in \d+s/)).toBeVisible()
+	await expect(page.getByText(/Auto refresh in \d+s/)).toHaveCount(0)
 
 	await page.clock.fastForward(90_000)
 	await expect.poll(() => heavyRequestCount).toBe(1)

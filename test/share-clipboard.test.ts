@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { shareText } from '../lib/share/clipboard'
+import {
+	getShareCaptureHeight,
+	getShareCaptureWidth,
+	SHARE_BACKGROUND_COLOR,
+	shouldIncludeShareImageNode,
+	shareText
+} from '../lib/share/clipboard'
 
 function setNavigator(value: unknown): PropertyDescriptor | undefined {
 	const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
@@ -114,5 +120,81 @@ describe('shareText', () => {
 		} finally {
 			restoreNavigator(previous)
 		}
+	})
+})
+
+describe('getShareCaptureWidth', () => {
+	it('keeps explicitly bounded share targets inside their own box', () => {
+		const target = {
+			clientWidth: 768,
+			scrollWidth: 904,
+			getAttribute: (name: string) =>
+				name === 'data-share-preserve-width' ? 'true' : null,
+			querySelectorAll: () => [{ scrollWidth: 1042 }]
+		} as unknown as HTMLElement
+
+		assert.equal(getShareCaptureWidth(target), undefined)
+	})
+
+	it('still expands legacy share targets with intentional overflow', () => {
+		const target = {
+			clientWidth: 768,
+			scrollWidth: 904,
+			getAttribute: () => null,
+			querySelectorAll: () => [{ scrollWidth: 1042 }]
+		} as unknown as HTMLElement
+
+		assert.equal(getShareCaptureWidth(target), 1042)
+	})
+})
+
+describe('getShareCaptureHeight', () => {
+	it('fits marked targets to their full scroll height including borders', () => {
+		const target = {
+			clientHeight: 600,
+			scrollHeight: 900,
+			offsetHeight: 604,
+			getAttribute: (name: string) =>
+				name === 'data-share-fit-content' ? 'true' : null,
+			querySelectorAll: () => []
+		} as unknown as HTMLElement
+
+		assert.equal(getShareCaptureHeight(target), 904)
+	})
+
+	it('does not change unmarked share targets', () => {
+		const target = {
+			clientHeight: 600,
+			scrollHeight: 900,
+			offsetHeight: 604,
+			getAttribute: () => null,
+			querySelectorAll: () => []
+		} as unknown as HTMLElement
+
+		assert.equal(getShareCaptureHeight(target), undefined)
+	})
+})
+
+describe('share image presentation', () => {
+	it('uses the light-mode canvas color for every image export', () => {
+		assert.equal(SHARE_BACKGROUND_COLOR, '#faf9f5')
+	})
+
+	it('filters excluded carousel slides from the exported clone', () => {
+		assert.equal(
+			shouldIncludeShareImageNode({
+				nodeType: 1,
+				getAttribute: name =>
+					name === 'data-share-exclude' ? 'true' : null
+			}),
+			false
+		)
+		assert.equal(
+			shouldIncludeShareImageNode({
+				nodeType: 1,
+				getAttribute: () => null
+			}),
+			true
+		)
 	})
 })

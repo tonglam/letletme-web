@@ -2,15 +2,6 @@ export const SHARE_BRAND_NAME = 'LetLetMe'
 export const SHARE_BRAND_URL = 'letletme.top'
 export const SHARE_BRAND_VERSION = 2
 
-const TILE_ANGLE = (-18 * Math.PI) / 180
-
-export interface ShareBrandTile {
-	x: number
-	y: number
-	fontSize: number
-	angle: number
-}
-
 export interface ShareBrandSignature {
 	x: number
 	y: number
@@ -20,7 +11,6 @@ export interface ShareBrandSignature {
 }
 
 export interface ShareBrandLayout {
-	tiles: ShareBrandTile[]
 	signature: ShareBrandSignature
 }
 
@@ -28,11 +18,6 @@ function clamp(value: number, minimum: number, maximum: number): number {
 	return Math.min(maximum, Math.max(minimum, value))
 }
 
-/**
- * Builds a dense, staggered watermark field. Its spacing is deliberately
- * smaller than a normal social crop, so trimming an edge cannot remove every
- * LetLetMe mark.
- */
 export function buildShareBrandLayout(
 	width: number,
 	height: number
@@ -40,41 +25,19 @@ export function buildShareBrandLayout(
 	const safeWidth = Math.max(1, width)
 	const safeHeight = Math.max(1, height)
 	const shortSide = Math.min(safeWidth, safeHeight)
-	const tileFontSize = clamp(Math.round(shortSide * 0.032), 14, 30)
-	const stepX = Math.max(tileFontSize * 7.3, safeWidth * 0.28)
-	const stepY = Math.max(tileFontSize * 4.8, safeHeight * 0.16)
-	const tiles: ShareBrandTile[] = []
-
-	let row = 0
-	for (
-		let y = -stepY * 0.2;
-		y <= safeHeight + stepY * 0.2;
-		y += stepY
-	) {
-		const offset = row % 2 === 0 ? 0 : stepX / 2
-		for (
-			let x = -stepX * 0.3 + offset;
-			x <= safeWidth + stepX * 0.3;
-			x += stepX
-		) {
-			tiles.push({ x, y, fontSize: tileFontSize, angle: TILE_ANGLE })
-		}
-		row += 1
-	}
 
 	const margin = clamp(Math.round(shortSide * 0.018), 8, 18)
-	const signatureFontSize = clamp(Math.round(shortSide * 0.024), 12, 20)
+	const signatureFontSize = clamp(Math.round(shortSide * 0.016), 9, 14)
 	const signatureHeight = Math.max(
 		1,
 		Math.min(safeHeight, Math.round(signatureFontSize * 2.15))
 	)
 	const signatureWidth = Math.max(
 		1,
-		Math.min(safeWidth, Math.round(signatureFontSize * 12.8))
+		Math.min(safeWidth, Math.round(signatureFontSize * 11.4))
 	)
 
 	return {
-		tiles,
 		signature: {
 			x: Math.max(0, safeWidth - margin - signatureWidth),
 			y: Math.max(0, safeHeight - margin - signatureHeight),
@@ -85,29 +48,13 @@ export function buildShareBrandLayout(
 	}
 }
 
-/** Draw the brand over the final pixels so captured content cannot cover it. */
+/** Draw the brand signature over the final pixels so captured content cannot cover it. */
 export function drawShareBranding(
 	context: CanvasRenderingContext2D,
 	width: number,
 	height: number
 ): void {
 	const layout = buildShareBrandLayout(width, height)
-
-	for (const tile of layout.tiles) {
-		context.save()
-		context.translate(tile.x, tile.y)
-		context.rotate(tile.angle)
-		context.globalAlpha = 0.12
-		context.textAlign = 'center'
-		context.textBaseline = 'middle'
-		context.font = `700 ${tile.fontSize}px ui-sans-serif, system-ui, sans-serif`
-		context.lineWidth = Math.max(1, tile.fontSize * 0.1)
-		context.strokeStyle = 'rgba(33, 0, 37, 0.7)'
-		context.strokeText(SHARE_BRAND_NAME, 0, 0)
-		context.fillStyle = '#f8f6ef'
-		context.fillText(SHARE_BRAND_NAME, 0, 0)
-		context.restore()
-	}
 
 	const signature = layout.signature
 	context.save()

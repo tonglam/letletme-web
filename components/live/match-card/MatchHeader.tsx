@@ -59,7 +59,7 @@ function MatchStatus({ match }: { match: Match }) {
 	}
 	return (
 		<span
-			className="inline-flex items-center rounded-full bg-info/15 px-2.5 py-0.5 text-xs font-semibold text-info"
+			className="inline-flex items-center rounded-full border border-success/25 bg-success/10 px-2.5 py-0.5 text-xs font-semibold text-success"
 			role="status"
 		>
 			{t('upcoming')}
@@ -124,13 +124,15 @@ function TeamSummary({
 		/>
 	)
 	return (
-		<div className={side === 'home' ? 'min-w-0 text-right' : 'min-w-0'}>
+		<div
+			className={`share-match-team-summary min-w-0 ${side === 'home' ? 'text-right' : ''}`}
+		>
 			<div
 				className={`flex items-center gap-2 ${side === 'home' ? 'justify-end' : ''}`}
 			>
 				{side === 'home' ? (
 					<>
-						<span className="truncate font-display text-sm font-semibold tracking-tight md:text-base">
+						<span className="share-match-team-name truncate font-display text-sm font-semibold tracking-tight md:text-base">
 							{team.name}
 						</span>
 						{logo}
@@ -138,7 +140,7 @@ function TeamSummary({
 				) : (
 					<>
 						{logo}
-						<span className="truncate font-display text-sm font-semibold tracking-tight md:text-base">
+						<span className="share-match-team-name truncate font-display text-sm font-semibold tracking-tight md:text-base">
 							{team.name}
 						</span>
 					</>
@@ -180,7 +182,7 @@ export function MatchHeader({ match }: { match: Match }) {
 				) : null}
 			</div>
 
-			<div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-4">
+			<div className="share-match-score-row grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-4">
 				<TeamSummary team={match.homeTeam} side="home" />
 				<div className="scoreboard rounded-xl px-3 py-2.5 text-center sm:px-4 sm:py-3">
 					<p className="mb-1.5 whitespace-nowrap font-display text-2xl font-bold tabular-nums tracking-tight text-electric sm:text-3xl">

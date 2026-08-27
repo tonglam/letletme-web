@@ -6,20 +6,21 @@ describe('lazy persistent toast boundary', () => {
 	it('activates the persistent toaster for every notification route family', () => {
 		const toaster = readFileSync('components/feedback/AppToaster.tsx', 'utf8')
 		for (const route of [
-			'/explore/fixtures',
-			'/explore/market',
-			'/explore/selections',
+			'/competitions',
+			'/explore',
 			'/live',
+			'/my-fpl',
 			'/onboarding',
 			'/profile'
 		]) {
 			assert.match(toaster, new RegExp(`'${route}'`))
 		}
+		assert.match(toaster, /pathname === '\/'/)
 		assert.match(toaster, /if \(routeEmitsToasts\) setActivated\(true\)/)
 		assert.doesNotMatch(toaster, /setActivated\(false\)/)
 	})
 
-	it('keeps the boundary mounted without loading Sonner on a cold Home route', () => {
+	it('keeps the boundary mounted and lazy-loads Sonner after activation', () => {
 		const toaster = readFileSync('components/feedback/AppToaster.tsx', 'utf8')
 		const localeLayout = readFileSync('app/[locale]/layout.tsx', 'utf8')
 		assert.match(localeLayout, /<AppToaster \/>/)

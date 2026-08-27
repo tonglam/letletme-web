@@ -190,7 +190,10 @@ export function HomeAutoCarousel({
 				</div>
 			) : null}
 
-			<div className="mb-5 flex flex-wrap items-center gap-3">
+			<div
+				className="mb-5 flex flex-wrap items-center gap-3"
+				data-share-exclude="true"
+			>
 				<div
 					role="tablist"
 					aria-label={labels.pagerLabel}
@@ -283,6 +286,7 @@ export function HomeAutoCarousel({
 			<div className="overflow-hidden">
 				<div
 					className="flex w-full motion-reduce:transition-none"
+					data-share-carousel-track="true"
 					style={{
 						transform: `translateX(-${activeSlideIndex * 100}%)`,
 						transition: isReducedMotion ? undefined : 'transform 280ms ease-out'
@@ -298,11 +302,18 @@ export function HomeAutoCarousel({
 								aria-labelledby={`${dataAttribute}-${slide.id}-tab`}
 								aria-hidden={isInactive}
 								inert={isInactive}
+								data-share-carousel-inactive={
+									isInactive ? 'true' : undefined
+								}
+								data-share-exclude={isInactive ? 'true' : undefined}
 								className="min-w-full"
 							>
 								{slide.content}
 								{slide.viewAllLabel && slide.fullContent ? (
-									<div className="mt-2 flex justify-end border-t border-border/45 pt-2">
+									<div
+										className="mt-2 flex justify-end border-t border-border/45 pt-2"
+										data-share-exclude="true"
+									>
 										<Button
 											variant="ghost"
 											size="sm"

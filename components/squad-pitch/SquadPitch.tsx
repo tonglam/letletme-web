@@ -29,20 +29,41 @@ export type SquadTeamCode =
 	| 'SUN'
 	| 'TOT'
 
+export type SquadPitchFixtureStatus = 'fixture' | 'blank' | 'unknown'
+
+export interface SquadPitchFixture {
+	id: string
+	eventId: number
+	value: string
+	label: string
+	difficulty: number | null
+	status?: SquadPitchFixtureStatus
+}
+
 export interface SquadPitchPlayer {
 	id: string
 	webName: string
 	score: number
+	scoreLabel?: string
+	scoreTone?: 'positive' | 'negative' | 'neutral'
 	href?: string
 	teamCode?: SquadTeamCode
 	teamBadgeLabel?: string
 	position: SquadPosition
 	fixture?: string
+	fixtureSchedule?: readonly SquadPitchFixture[]
+	fixtureScheduleLabel?: string
 	isCaptain?: boolean
 	isViceCaptain?: boolean
 	autoSubRole?:
 		'PREDICTED_IN' | 'PREDICTED_OUT' | 'OFFICIAL_IN' | 'OFFICIAL_OUT'
 	autoSubPartnerName?: string
+}
+
+function scoreToneClass(tone: SquadPitchPlayer['scoreTone']): string {
+	if (tone === 'positive') return 'text-[#00ff85]'
+	if (tone === 'negative') return 'text-[#ff5fa2]'
+	return 'text-[#f8f6ef]'
 }
 
 export interface SquadPitchLabels {
@@ -138,9 +159,12 @@ export function squadPitchPlayerDetailsLabel(
 	labels: SquadPitchLabels
 ): string {
 	const details = playerDetailsLabel(player, labels)
+	const schedule = player.fixtureScheduleLabel
+		? `; ${player.fixtureScheduleLabel}`
+		: ''
 	return player.autoSubRole
-		? `${details}; ${autoSubLabel(player, labels)}`
-		: details
+		? `${details}${schedule}; ${autoSubLabel(player, labels)}`
+		: `${details}${schedule}`
 }
 
 function AutoSubMarker({
@@ -202,6 +226,68 @@ function TeamKitBadge({
 	)
 }
 
+const SCHEDULE_FDR_CLASS: Record<number, string> = {
+	1: 'border-[#00ff85]/80 bg-[#00ff85] text-[#210025]',
+	2: 'border-[#7dffc1]/80 bg-[#7dffc1] text-[#210025]',
+	3: 'border-[#f8f6ef]/80 bg-[#f8f6ef] text-[#38003c]',
+	4: 'border-[#ffb347]/90 bg-[#ffb347] text-[#210025]',
+	5: 'border-[#e90052]/90 bg-[#e90052] text-white'
+}
+
+function scheduleFixtureClass(fixture: SquadPitchFixture): string {
+	if (fixture.status === 'blank') {
+		return 'border-white/35 bg-white/15 text-[#f8f6ef]/80'
+	}
+	if (fixture.status === 'unknown') {
+		return 'border-[#ffb347]/80 bg-[#ffb347]/80 text-[#210025]'
+	}
+	return (
+		SCHEDULE_FDR_CLASS[fixture.difficulty ?? 3] ??
+		'border-white/35 bg-white/15 text-[#f8f6ef]'
+	)
+}
+
+function ScheduleFixtureStrip({
+	player,
+	compact = false
+}: {
+	player: SquadPitchPlayer
+	compact?: boolean
+}) {
+	if (!player.fixtureSchedule) return null
+
+	return (
+		<div
+			className={`grid w-full grid-flow-col auto-cols-fr items-center ${compact ? 'gap-[clamp(0.08rem,0.3cqi,0.2rem)]' : 'gap-[clamp(0.1rem,0.35cqi,0.24rem)]'}`}
+			aria-label={player.fixtureScheduleLabel}
+			role="list"
+		>
+			{player.fixtureSchedule.map(fixture => (
+				<span
+					key={fixture.id}
+					role="listitem"
+					title={fixture.label}
+					className={`flex min-w-0 items-center justify-center rounded-[clamp(0.12rem,0.35cqi,0.24rem)] border px-[clamp(0.08rem,0.32cqi,0.2rem)] font-mono text-[clamp(0.36rem,1.05cqi,0.62rem)] font-bold leading-none tabular-nums ${compact ? 'h-[clamp(0.62rem,1.9cqi,1rem)]' : 'h-[clamp(0.72rem,2.2cqi,1.15rem)]'} ${scheduleFixtureClass(fixture)}`}
+				>
+					<span
+						className="sm:hidden"
+						aria-hidden="true"
+					>
+						●
+					</span>
+					<span
+						className="hidden sm:inline"
+						aria-hidden="true"
+					>
+						{fixture.value}
+					</span>
+					<span className="sr-only">{fixture.label}</span>
+				</span>
+			))}
+		</div>
+	)
+}
+
 function playerDetailsLabel(
 	player: SquadPitchPlayer,
 	labels: SquadPitchLabels
@@ -250,19 +336,26 @@ function PlayerCard({
 					className={`flex ${compact ? 'h-[clamp(0.85rem,2.75cqi,1.4rem)]' : 'h-[clamp(0.95rem,3.25cqi,1.65rem)]'} items-center justify-center bg-[#f8f6ef] px-[clamp(0.16rem,0.7cqi,0.4rem)] text-[#38003c]`}
 				>
 					<span
-						className={`max-w-full truncate font-display ${compact ? 'text-[clamp(0.46rem,1.35cqi,0.72rem)]' : 'text-[clamp(0.55rem,1.6cqi,0.84rem)]'} font-bold leading-none tracking-[-0.01em]`}
+						className={`share-pitch-player-name max-w-full truncate font-display ${compact ? 'text-[clamp(0.46rem,1.35cqi,0.72rem)]' : 'text-[clamp(0.55rem,1.6cqi,0.84rem)]'} font-bold leading-none tracking-[-0.01em]`}
 					>
 						{player.webName}
 					</span>
 				</div>
 				<div
-					className={`flex ${compact ? 'h-[clamp(0.8rem,2.55cqi,1.3rem)]' : 'h-[clamp(0.9rem,3cqi,1.5rem)]'} items-center justify-center bg-[#38003c] px-1 text-[#f8f6ef]`}
+					className={`flex ${compact ? 'h-[clamp(0.8rem,2.55cqi,1.3rem)]' : 'h-[clamp(0.9rem,3cqi,1.5rem)]'} items-center justify-center bg-[#38003c] px-[clamp(0.12rem,0.45cqi,0.3rem)] text-[#f8f6ef]`}
 				>
-					<span
-						className={`font-display ${compact ? 'text-[clamp(0.48rem,1.45cqi,0.76rem)]' : 'text-[clamp(0.58rem,1.75cqi,0.9rem)]'} font-bold leading-none tabular-nums`}
-					>
-						{player.score}
-					</span>
+					{player.fixtureSchedule ? (
+						<ScheduleFixtureStrip
+							player={player}
+							compact={compact}
+						/>
+					) : (
+						<span
+							className={`font-display ${compact ? 'text-[clamp(0.48rem,1.45cqi,0.76rem)]' : 'text-[clamp(0.58rem,1.75cqi,0.9rem)]'} ${scoreToneClass(player.scoreTone)} font-bold leading-none tabular-nums`}
+						>
+							{player.scoreLabel ?? player.score}
+						</span>
+					)}
 				</div>
 			</div>
 		</>
@@ -290,8 +383,10 @@ function PlayerCard({
 					>
 						{content}
 					</Link>
-					)
-				) : content}
+				)
+			) : (
+				content
+			)}
 		</li>
 	)
 }
@@ -369,16 +464,23 @@ function BenchPlayerCard({
 						inline
 					/>
 				</div>
-				<p className="truncate font-display text-[clamp(0.42rem,1.2cqi,0.7rem)] font-bold uppercase leading-tight text-[#38003c]">
+				<p className="share-pitch-player-name truncate font-display text-[clamp(0.42rem,1.2cqi,0.7rem)] font-bold uppercase leading-tight text-[#38003c]">
 					{player.webName}
 				</p>
-				<p className="truncate font-mono text-[clamp(0.36rem,0.9cqi,0.56rem)] tabular-nums leading-tight text-[#38003c]/75">
-					{player.fixture ?? player.teamCode ?? player.teamBadgeLabel}
-					<span className="text-[#38003c]/55">
-						{' '}
-						· {player.score} {pointsLabel}
-					</span>
-				</p>
+				{player.fixtureSchedule ? (
+					<ScheduleFixtureStrip
+						player={player}
+						compact
+					/>
+				) : (
+					<p className="truncate font-mono text-[clamp(0.36rem,0.9cqi,0.56rem)] tabular-nums leading-tight text-[#38003c]/75">
+						{player.fixture ?? player.teamCode ?? player.teamBadgeLabel}
+						<span className="text-[#38003c]/55">
+							{' '}
+							· {player.scoreLabel ?? player.score} {pointsLabel}
+						</span>
+					</p>
+				)}
 			</div>
 		</div>
 	)
@@ -403,8 +505,10 @@ function BenchPlayerCard({
 					>
 						{content}
 					</Link>
-					)
-				) : content}
+				)
+			) : (
+				content
+			)}
 		</li>
 	)
 }
@@ -438,6 +542,7 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 			<section
 				ref={ref}
 				aria-label={labels.formation}
+				data-share-preserve-width="true"
 				className={`relative isolate ${benchPlayers.length > 0 ? 'aspect-[4/5] sm:aspect-[1304/1244]' : 'aspect-[1304/1244]'} w-full overflow-hidden rounded-xl border border-[#00ff85]/35 bg-[#210025] shadow-[0_30px_80px_-34px_rgba(21,0,25,0.78)] [container-type:inline-size] sm:rounded-2xl ${className}`}
 			>
 				<Image
@@ -455,11 +560,11 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 
 				{showHeader ? (
 					<header className="absolute inset-x-[5.2%] top-[1.93%] z-20 flex h-[10.13%] items-center justify-between gap-[clamp(0.75rem,3cqi,2rem)] text-[#f8f6ef]">
-						<div className="flex min-w-0 flex-col justify-center">
+						<div className="flex min-w-0 flex-1 flex-col justify-center">
 							<p className="truncate py-[0.08em] font-mono text-[clamp(0.42rem,1.15cqi,0.66rem)] font-medium uppercase leading-[1.2] tracking-[0.18em] text-[#00ff85]">
 								{headerStats?.eyebrow ?? eyebrow}
 							</p>
-							<h2 className="truncate py-[0.04em] font-display text-[clamp(0.78rem,2.55cqi,1.55rem)] font-bold uppercase leading-[1.1] tracking-[0.04em]">
+							<h2 className="share-pitch-title whitespace-nowrap py-[0.04em] font-display text-[clamp(0.78rem,2.55cqi,1.55rem)] font-bold uppercase leading-[1.1] tracking-[0.04em]">
 								{title}
 							</h2>
 							{managerName ? (
@@ -473,16 +578,16 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 								{headerStats.details.map(detail => (
 									<p
 										key={detail.label}
-										className="flex min-h-[clamp(0.95rem,2.65cqi,1.3rem)] items-center justify-end gap-[clamp(0.3rem,0.85cqi,0.6rem)] whitespace-nowrap leading-none"
+										className="grid min-h-[clamp(0.95rem,2.65cqi,1.3rem)] w-full grid-cols-[1fr_auto] items-center justify-end gap-[clamp(0.3rem,0.85cqi,0.6rem)] whitespace-nowrap text-right leading-none"
 									>
-										<span className="text-[clamp(0.58rem,1.35cqi,0.78rem)] uppercase tracking-[0.08em] text-white/55">
+										<span className="text-right text-[clamp(0.58rem,1.35cqi,0.78rem)] uppercase tracking-[0.08em] text-white/55">
 											{detail.label}
 										</span>
 										<span
 											className={
 												detail.accent
-													? 'font-display text-[clamp(0.82rem,2cqi,1.15rem)] font-bold leading-none text-[#00ff85]'
-													: 'font-mono text-[clamp(0.68rem,1.6cqi,0.92rem)] font-semibold leading-none text-white/85'
+													? 'min-w-[clamp(2.5rem,4cqi,3.5rem)] text-right font-display text-[clamp(0.82rem,2cqi,1.15rem)] font-bold leading-none text-[#00ff85]'
+													: 'min-w-[clamp(2.5rem,4cqi,3.5rem)] text-right font-mono text-[clamp(0.68rem,1.6cqi,0.92rem)] font-semibold leading-none text-white/85'
 											}
 										>
 											{detail.value}
@@ -544,15 +649,8 @@ export const SquadPitch = forwardRef<HTMLElement, SquadPitchProps>(
 							) : null}
 						</div>
 						<ol className="grid grid-cols-4 gap-[clamp(0.25rem,1cqi,0.65rem)]">
-							{benchPlayers.map((player, index) => {
-								const outfieldIndex =
-									benchPlayers
-										.slice(0, index)
-										.filter(item => item.position !== 'GKP').length + 1
-								const label =
-									player.position === 'GKP'
-										? 'GKP'
-										: `${outfieldIndex}. ${player.position}`
+							{benchPlayers.map(player => {
+								const label = player.position
 								return (
 									<BenchPlayerCard
 										key={player.id}

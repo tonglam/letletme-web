@@ -1,7 +1,6 @@
 'use client'
 
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
 	Sheet,
 	SheetContent,
@@ -15,30 +14,21 @@ import {
 	type LiveCalcData,
 	type LiveCalcDataResponse
 } from '@/lib/graphql/operations/live'
-import type {
-	TournamentEntrySquadsResponse,
-	TournamentLiveCalcData
-} from '@/lib/graphql/operations/tournaments'
-import {
-	comparisonPositionLabel,
-	mapComparisonPick
-} from '@/lib/tournament/entry-comparison'
 import { getPlayedPlayerLimit } from '@/lib/tournament/played-total'
 import type { TournamentEntry } from '@/types/tournament'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useFormatter, useTranslations } from 'next-intl'
 
 interface EntryCompareSheetProps {
 	entries: [TournamentEntry, TournamentEntry]
 	gameweek: number
-	open: boolean
-	onOpenChange: (open: boolean) => void
+	/** Optional live-board context supplied by the paginated standings table. */
 	tournamentId?: number
 	playerRevision?: string
 	onRevisionGone?: () => Promise<void>
+	open: boolean
+	onOpenChange: (open: boolean) => void
 }
-
-type CompareLiveData = LiveCalcData | TournamentLiveCalcData
 
 function getPlayedStatus(pick: {
 	minutes?: number | null
@@ -75,6 +65,234 @@ function PlayedDot({
 	)
 }
 
+function elementTypeLabel(elementType: number, position: number): string {
+	if (position >= 12) return 'SUB'
+	switch (elementType) {
+		case 1:
+			return 'GKP'
+		case 2:
+			return 'DEF'
+		case 3:
+			return 'MID'
+		case 4:
+			return 'FWD'
+		default:
+			return '—'
+	}
+}
+
+type ComparePickSource = {
+	element?: number
+	webName: string
+	elementType?: number
+	elementTypeName?: string
+	position: number
+	totalPoints?: number | null
+	minutes?: number | null
+	starts?: boolean | null
+	isCaptain?: boolean
+	isViceCaptain?: boolean
+	isGwFinished?: boolean | null
+	isGwStarted?: boolean | null
+	isPlayed?: boolean | null
+}
+
+type ComparePick = {
+	element?: number
+	webName: string
+	totalPoints: number
+	minutes: number
+	starts: boolean
+	isCaptain: boolean
+	isViceCaptain: boolean
+	isGwFinished?: boolean | null
+	isGwStarted?: boolean | null
+	isPlayed?: boolean | null
+	position: number
+	positionLabel: string
+}
+
+const STARTING_POSITION_LABELS = ['GKP', 'DEF', 'MID', 'FWD'] as const
+
+function elementTypeNameLabel(
+	elementTypeName: string | undefined,
+	position: number
+): string {
+	if (position >= 12) return 'SUB'
+	const normalized = elementTypeName?.trim().toUpperCase()
+	if (
+		normalized === 'GKP' ||
+		normalized === 'DEF' ||
+		normalized === 'MID' ||
+		normalized === 'FWD'
+	) {
+		return normalized
+	}
+	if (normalized?.includes('GOALKEEP')) return 'GKP'
+	if (normalized?.includes('DEF')) return 'DEF'
+	if (normalized?.includes('MID')) return 'MID'
+	if (normalized?.includes('FWD') || normalized?.includes('FORWARD'))
+		return 'FWD'
+	return '—'
+}
+
+function toComparePick(
+	pick: ComparePickSource,
+	captainName?: string
+): ComparePick {
+	const positionLabel =
+		typeof pick.elementType === 'number'
+			? elementTypeLabel(pick.elementType, pick.position)
+			: elementTypeNameLabel(pick.elementTypeName, pick.position)
+	return {
+		element: pick.element,
+		webName: pick.webName,
+		totalPoints: pick.totalPoints ?? 0,
+		minutes: pick.minutes ?? 0,
+		starts: pick.starts ?? false,
+		isCaptain: pick.isCaptain ?? captainName === pick.webName,
+		isViceCaptain: pick.isViceCaptain ?? false,
+		isGwFinished: pick.isGwFinished,
+		isGwStarted: pick.isGwStarted,
+		isPlayed: pick.isPlayed,
+		position: pick.position,
+		positionLabel
+	}
+}
+
+function comparePickKey(pick: ComparePick): string {
+	return pick.element != null
+		? `element:${pick.element}`
+		: `name:${pick.webName.trim().toLowerCase()}`
+}
+
+type AlignedCompareRow = {
+	leftPick: ComparePick | null
+	rightPick: ComparePick | null
+	posLabel: string
+	isBench: boolean
+}
+
+function positionRank(positionLabel: string): number {
+	return (
+		STARTING_POSITION_LABELS.indexOf(
+			positionLabel as (typeof STARTING_POSITION_LABELS)[number]
+		) + 1 || 99
+	)
+}
+
+function alignedPositionLabel(
+	leftPick: ComparePick | null,
+	rightPick: ComparePick | null
+): string {
+	const leftLabel = leftPick?.positionLabel
+	const rightLabel = rightPick?.positionLabel
+	if (!leftLabel) return rightLabel ?? '—'
+	if (!rightLabel || leftLabel === rightLabel) return leftLabel
+	return `${leftLabel} · ${rightLabel}`
+}
+
+function compareAlignedRows(
+	left: AlignedCompareRow,
+	right: AlignedCompareRow
+): number {
+	const leftPrimary = Math.min(
+		positionRank(left.leftPick?.positionLabel ?? '—'),
+		positionRank(left.rightPick?.positionLabel ?? '—')
+	)
+	const rightPrimary = Math.min(
+		positionRank(right.leftPick?.positionLabel ?? '—'),
+		positionRank(right.rightPick?.positionLabel ?? '—')
+	)
+	if (leftPrimary !== rightPrimary) return leftPrimary - rightPrimary
+
+	const leftSecondary = Math.max(
+		positionRank(left.leftPick?.positionLabel ?? '—'),
+		positionRank(left.rightPick?.positionLabel ?? '—')
+	)
+	const rightSecondary = Math.max(
+		positionRank(right.leftPick?.positionLabel ?? '—'),
+		positionRank(right.rightPick?.positionLabel ?? '—')
+	)
+	return leftSecondary - rightSecondary
+}
+
+/**
+ * Align shared players globally first. Pairing by position is only a
+ * preference for the remaining rows; enforcing it independently per position
+ * would turn two valid 11-player XIs into 12 comparison rows when formations
+ * differ.
+ */
+function alignPickRows(
+	leftPicks: ComparePick[],
+	rightPicks: ComparePick[],
+	isBench: boolean
+): AlignedCompareRow[] {
+	const rightRemaining = [...rightPicks]
+	const rows: AlignedCompareRow[] = []
+	const unmatchedLeft: ComparePick[] = []
+
+	for (const leftPick of leftPicks) {
+		const rightIndex = rightRemaining.findIndex(
+			rightPick => comparePickKey(rightPick) === comparePickKey(leftPick)
+		)
+		if (rightIndex === -1) {
+			unmatchedLeft.push(leftPick)
+			continue
+		}
+		const [rightPick] = rightRemaining.splice(rightIndex, 1)
+		rows.push({
+			leftPick,
+			rightPick,
+			posLabel: alignedPositionLabel(leftPick, rightPick),
+			isBench
+		})
+	}
+
+	for (const leftPick of unmatchedLeft) {
+		const samePositionIndex = rightRemaining.findIndex(
+			rightPick => rightPick.positionLabel === leftPick.positionLabel
+		)
+		const rightIndex = samePositionIndex >= 0 ? samePositionIndex : 0
+		const rightPick = rightRemaining.splice(rightIndex, 1)[0] ?? null
+		rows.push({
+			leftPick,
+			rightPick,
+			posLabel: alignedPositionLabel(leftPick, rightPick),
+			isBench
+		})
+	}
+
+	for (const rightPick of rightRemaining) {
+		rows.push({
+			leftPick: null,
+			rightPick,
+			posLabel: alignedPositionLabel(null, rightPick),
+			isBench
+		})
+	}
+
+	return rows.sort(compareAlignedRows)
+}
+
+function alignComparePicks(
+	leftPicks: ComparePick[],
+	rightPicks: ComparePick[]
+): { starting: AlignedCompareRow[]; bench: AlignedCompareRow[] } {
+	return {
+		starting: alignPickRows(
+			leftPicks.filter(pick => pick.positionLabel !== 'SUB'),
+			rightPicks.filter(pick => pick.positionLabel !== 'SUB'),
+			false
+		),
+		bench: alignPickRows(
+			leftPicks.filter(pick => pick.positionLabel === 'SUB'),
+			rightPicks.filter(pick => pick.positionLabel === 'SUB'),
+			true
+		)
+	}
+}
+
 function ChipBadges({
 	chips
 }: {
@@ -89,11 +307,11 @@ function ChipBadges({
 		return <span className="text-muted-foreground">—</span>
 	}
 	return (
-		<span className="flex flex-wrap justify-center gap-1">
+		<span className="inline-flex min-h-5 items-center justify-center gap-1 align-middle leading-none">
 			{chips.bench && (
 				<Badge
 					variant="outline"
-					className="h-4 border-info/30 bg-info/10 px-1 text-label text-info"
+					className="inline-flex h-5 items-center border-info/30 bg-info/10 px-1 text-label leading-none text-info"
 				>
 					BB
 				</Badge>
@@ -101,7 +319,7 @@ function ChipBadges({
 			{chips.triple && (
 				<Badge
 					variant="outline"
-					className="h-4 border-success/30 bg-success/10 px-1 text-label text-success"
+					className="inline-flex h-5 items-center border-success/30 bg-success/10 px-1 text-label leading-none text-success"
 				>
 					TC
 				</Badge>
@@ -109,7 +327,7 @@ function ChipBadges({
 			{chips.wildcard && (
 				<Badge
 					variant="outline"
-					className="h-4 border-primary/30 bg-primary/10 px-1 text-label text-primary-ink"
+					className="inline-flex h-5 items-center border-primary/30 bg-primary/10 px-1 text-label leading-none text-primary-ink"
 				>
 					WC
 				</Badge>
@@ -117,7 +335,7 @@ function ChipBadges({
 			{chips.freeHit && (
 				<Badge
 					variant="outline"
-					className="h-4 border-warning/30 bg-warning/10 px-1 text-label text-warning"
+					className="inline-flex h-5 items-center border-warning/30 bg-warning/10 px-1 text-label leading-none text-warning"
 				>
 					FH
 				</Badge>
@@ -142,13 +360,13 @@ function OverviewRow({
 	rightWins
 }: OverviewRowProps) {
 	return (
-		<div className="grid grid-cols-[1fr_auto_1fr] items-center py-2 border-b last:border-0">
+		<div className="grid grid-cols-[1fr_auto_1fr] items-center border-b py-1.5 last:border-0">
 			<div
 				className={`text-right pr-3 text-sm ${leftWins ? 'text-primary-ink font-bold' : 'text-muted-foreground'}`}
 			>
 				{leftValue}
 			</div>
-			<div className="text-xs text-muted-foreground text-center min-w-[80px] px-1">
+			<div className="min-w-[80px] px-1 text-center text-xs text-muted-foreground">
 				{label}
 			</div>
 			<div
@@ -161,28 +379,8 @@ function OverviewRow({
 }
 
 interface PlayerCompareRowProps {
-	leftPick: {
-		webName: string
-		totalPoints: number
-		minutes: number
-		starts: boolean
-		isCaptain: boolean
-		isViceCaptain?: boolean
-		isGwFinished?: boolean | null
-		isGwStarted?: boolean | null
-		isPlayed?: boolean | null
-	} | null
-	rightPick: {
-		webName: string
-		totalPoints: number
-		minutes: number
-		starts: boolean
-		isCaptain: boolean
-		isViceCaptain?: boolean
-		isGwFinished?: boolean | null
-		isGwStarted?: boolean | null
-		isPlayed?: boolean | null
-	} | null
+	leftPick: ComparePick | null
+	rightPick: ComparePick | null
 	posLabel: string
 	isBench: boolean
 }
@@ -203,7 +401,7 @@ function PlayerCompareRow({
 
 	return (
 		<div
-			className={`grid grid-cols-[1fr_auto_1fr] items-center py-2 px-3 border-b last:border-0 ${bg}`}
+			className={`grid grid-cols-[1fr_auto_1fr] items-center border-b px-3 py-1.5 last:border-0 ${bg}`}
 		>
 			{/* Left entry player */}
 			<div className="flex items-center gap-1.5 justify-end">
@@ -232,7 +430,7 @@ function PlayerCompareRow({
 			</div>
 
 			{/* Center position label */}
-			<div className="text-label text-muted-foreground text-center min-w-[36px] px-1 font-mono">
+			<div className="min-w-[48px] whitespace-nowrap px-1 text-center font-mono text-label text-muted-foreground">
 				{posLabel}
 			</div>
 
@@ -269,150 +467,53 @@ export function EntryCompareSheet({
 	entries,
 	gameweek,
 	open,
-	onOpenChange,
-	tournamentId,
-	playerRevision,
-	onRevisionGone
+	onOpenChange
 }: EntryCompareSheetProps) {
 	const t = useTranslations('LiveTournament')
 	const format = useFormatter()
 	const [liveData, setLiveData] = useState<
-		[CompareLiveData | null, CompareLiveData | null]
+		[LiveCalcData | null, LiveCalcData | null]
 	>([null, null])
 	const [isLoading, setIsLoading] = useState(false)
-	const [loadError, setLoadError] = useState(false)
-	const [retryVersion, setRetryVersion] = useState(0)
-	const revisionRetryRef = useRef(false)
-	const comparisonIdentityRef = useRef<string | null>(null)
 
 	const entryIdA = entries[0]?.id
 	const entryIdB = entries[1]?.id
 
 	// Depend on stable entry ids — parent often passes a new `entries` array each render.
 	useEffect(() => {
-		if (!open || !entryIdA || !entryIdB) {
-			comparisonIdentityRef.current = null
-			revisionRetryRef.current = false
-			return
-		}
-		const comparisonIdentity = [
-			open,
-			entryIdA,
-			entryIdB,
-			gameweek,
-			tournamentId ?? '',
-			playerRevision ?? ''
-		].join(':')
-		if (comparisonIdentityRef.current !== comparisonIdentity) {
-			comparisonIdentityRef.current = comparisonIdentity
-			revisionRetryRef.current = false
-		}
+		if (!open || !entryIdA || !entryIdB) return
 
 		let cancelled = false
-		const controller = new AbortController()
-		void Promise.resolve()
-			.then(async () => {
-				if (cancelled) return
-				setIsLoading(true)
-				setLoadError(false)
-				setLiveData([null, null])
+		void Promise.resolve().then(async () => {
+			if (cancelled) return
+			setIsLoading(true)
+			setLiveData([null, null])
 
-				if (tournamentId && playerRevision) {
-					const params = new URLSearchParams({
-						eventId: String(gameweek),
-						revision: playerRevision,
-						entryIds: `${entryIdA},${entryIdB}`
-					})
-					const response = await fetch(
-						`/api/live/competitions/${tournamentId}/compare?${params.toString()}`,
-						{ cache: 'no-store', signal: controller.signal }
-					)
-					if (!response.ok) {
-						const errorBody = (await response.json().catch(() => null)) as {
-							error?: unknown
-						} | null
-						const errorCode =
-							typeof errorBody?.error === 'string' ? errorBody.error : null
-						if (
-							response.status === 409 &&
-							(errorCode === 'LIVE_BOARD_REVISION_GONE' ||
-								errorCode === 'LIVE_REVISION_GONE') &&
-							onRevisionGone &&
-							!revisionRetryRef.current
-						) {
-							revisionRetryRef.current = true
-							await onRevisionGone()
-							if (cancelled) return
-							setRetryVersion(version => version + 1)
-							return
-						}
-						throw new Error(
-							`Tournament comparison failed with ${response.status}`
-						)
-					}
-					const data = (await response.json()) as TournamentEntrySquadsResponse
-					if (cancelled) return
-					const rows = data.tournamentEntrySquads?.entries ?? []
-					const left = rows.find(row => row.entry === Number(entryIdA))
-					const right = rows.find(row => row.entry === Number(entryIdB))
-					if (!left || !right) {
-						throw new Error('Tournament comparison omitted a requested squad')
-					}
-					setLiveData([left, right])
-				} else {
-					const [resA, resB] = await Promise.allSettled([
-						executeQuery<LiveCalcDataResponse>(
-							GET_LIVE_POINTS,
-							{
-								entryId: Number(entryIdA),
-								eventId: gameweek
-							},
-							{ signal: controller.signal }
-						),
-						executeQuery<LiveCalcDataResponse>(
-							GET_LIVE_POINTS,
-							{
-								entryId: Number(entryIdB),
-								eventId: gameweek
-							},
-							{ signal: controller.signal }
-						)
-					])
-					if (cancelled) return
-					if (resA.status === 'rejected' || resB.status === 'rejected') {
-						throw new Error('Tournament comparison entry request failed')
-					}
-					setLiveData([
-						resA.value.calcLivePointsByEntry,
-						resB.value.calcLivePointsByEntry
-					])
-				}
-				setIsLoading(false)
-			})
-			.catch(error => {
-				if (cancelled) return
-				console.warn('Tournament comparison unavailable', {
-					name: error instanceof Error ? error.name : 'UnknownError'
+			const [resA, resB] = await Promise.allSettled([
+				executeQuery<LiveCalcDataResponse>(GET_LIVE_POINTS, {
+					entryId: Number(entryIdA),
+					eventId: gameweek
+				}),
+				executeQuery<LiveCalcDataResponse>(GET_LIVE_POINTS, {
+					entryId: Number(entryIdB),
+					eventId: gameweek
 				})
-				setLiveData([null, null])
-				setLoadError(true)
-				setIsLoading(false)
-			})
+			])
+
+			if (cancelled) return
+
+			const a =
+				resA.status === 'fulfilled' ? resA.value.calcLivePointsByEntry : null
+			const b =
+				resB.status === 'fulfilled' ? resB.value.calcLivePointsByEntry : null
+			setLiveData([a, b])
+			setIsLoading(false)
+		})
 
 		return () => {
 			cancelled = true
-			controller.abort()
 		}
-	}, [
-		open,
-		entryIdA,
-		entryIdB,
-		gameweek,
-		playerRevision,
-		retryVersion,
-		tournamentId,
-		onRevisionGone
-	])
+	}, [open, entryIdA, entryIdB, gameweek])
 
 	const [entryA, entryB] = entries
 	const [liveA, liveB] = liveData
@@ -428,14 +529,13 @@ export function EntryCompareSheet({
 	const playedLimitA = getPlayedPlayerLimit(entryA.chips)
 	const playedLimitB = getPlayedPlayerLimit(entryB.chips)
 
-	const picksA = liveA
-		? [...liveA.pickList].sort((a, b) => a.position - b.position)
-		: [...entryA.picks].sort((a, b) => a.position - b.position)
-	const picksB = liveB
-		? [...liveB.pickList].sort((a, b) => a.position - b.position)
-		: [...entryB.picks].sort((a, b) => a.position - b.position)
-
-	const maxPicks = Math.max(picksA.length, picksB.length)
+	const picksA = (liveA ? liveA.pickList : entryA.picks)
+		.map(pick => toComparePick(pick, liveA?.captainName ?? entryA.captainName))
+		.sort((a, b) => a.position - b.position)
+	const picksB = (liveB ? liveB.pickList : entryB.picks)
+		.map(pick => toComparePick(pick, liveB?.captainName ?? entryB.captainName))
+		.sort((a, b) => a.position - b.position)
+	const alignedPicks = alignComparePicks(picksA, picksB)
 	const formatOR = (rank?: number) =>
 		!rank || rank <= 0 ? '—' : format.number(rank, { notation: 'compact' })
 
@@ -446,9 +546,9 @@ export function EntryCompareSheet({
 		>
 			<SheetContent
 				side="right"
-				className="w-full sm:max-w-[680px] overflow-y-auto p-0 flex flex-col"
+				className="w-full gap-0 overflow-y-auto p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:max-w-[680px]"
 			>
-				<SheetHeader className="p-4 pb-3 border-b">
+				<SheetHeader className="border-b p-4 pb-2">
 					<SheetTitle className="text-sm">
 						<span className="text-primary-ink">{entryA.teamName}</span>
 						<span className="text-muted-foreground mx-2">{t('versus')}</span>
@@ -459,36 +559,11 @@ export function EntryCompareSheet({
 					</p>
 				</SheetHeader>
 
-				<div className="flex-1 overflow-y-auto">
+				<div>
 					{/* Overview section */}
-					<div className="px-3 pt-3 pb-1">
-						<p className="eyebrow mb-1 px-1">{t('overview')}</p>
+					<div className="px-3 pt-2 pb-1">
 						<div className="border rounded-lg overflow-hidden">
-							{/* Entry headers */}
-							<div className="grid grid-cols-[1fr_auto_1fr] bg-muted/30 px-3 py-2">
-								<div className="text-right text-xs font-medium truncate pr-3">
-									{entryA.teamName}
-								</div>
-								<div className="min-w-[80px]" />
-								<div className="text-left text-xs font-medium truncate pl-3">
-									{entryB.teamName}
-								</div>
-							</div>
-
 							<div className="px-3">
-								<OverviewRow
-									label={t('manager')}
-									leftValue={
-										<span className="text-foreground text-xs">
-											{entryA.managerName}
-										</span>
-									}
-									rightValue={
-										<span className="text-foreground text-xs">
-											{entryB.managerName}
-										</span>
-									}
-								/>
 								<OverviewRow
 									label={t('gameweekPointsShort')}
 									leftValue={
@@ -560,9 +635,7 @@ export function EntryCompareSheet({
 					</div>
 
 					{/* Squad comparison section */}
-					<div className="px-3 pt-4 pb-4">
-						<p className="eyebrow mb-1 px-1">{t('squadComparison')}</p>
-
+					<div className="px-3 pt-2 pb-3">
 						{isLoading ? (
 							<div className="border rounded-lg overflow-hidden">
 								{Array.from({ length: 15 }).map((_, i) => (
@@ -576,33 +649,8 @@ export function EntryCompareSheet({
 									</div>
 								))}
 							</div>
-						) : loadError ? (
-							<div className="flex flex-col items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-8 text-center">
-								<p className="text-sm text-destructive">
-									{t('comparisonUnavailable')}
-								</p>
-								<Button
-									type="button"
-									variant="outline"
-									size="sm"
-									onClick={() => setRetryVersion(version => version + 1)}
-								>
-									{t('errorCtaRetry')}
-								</Button>
-							</div>
 						) : (
 							<div className="border rounded-lg overflow-hidden">
-								{/* Column headers */}
-								<div className="grid grid-cols-[1fr_auto_1fr] bg-muted/30 px-3 py-1.5">
-									<div className="text-right text-label text-muted-foreground pr-3">
-										{entryA.teamName}
-									</div>
-									<div className="min-w-[36px]" />
-									<div className="text-left text-label text-muted-foreground pl-3">
-										{entryB.teamName}
-									</div>
-								</div>
-
 								{/* Starting XI label */}
 								<div className="px-3 py-1 bg-muted/10 border-b">
 									<span className="text-label text-muted-foreground font-medium">
@@ -610,28 +658,18 @@ export function EntryCompareSheet({
 									</span>
 								</div>
 
-								{Array.from({ length: Math.min(11, maxPicks) }).map((_, i) => {
-									const pA = picksA[i]
-									const pB = picksB[i]
-
-									const leftPick = mapComparisonPick(pA, Boolean(liveA))
-									const rightPick = mapComparisonPick(pB, Boolean(liveB))
-
-									const posLabel = comparisonPositionLabel(pA ?? pB, i + 1)
-
-									return (
-										<PlayerCompareRow
-											key={i}
-											leftPick={leftPick}
-											rightPick={rightPick}
-											posLabel={posLabel}
-											isBench={false}
-										/>
-									)
-								})}
+								{alignedPicks.starting.map((row, index) => (
+									<PlayerCompareRow
+										key={`starting-${index}`}
+										leftPick={row.leftPick}
+										rightPick={row.rightPick}
+										posLabel={row.posLabel}
+										isBench={row.isBench}
+									/>
+								))}
 
 								{/* Bench label */}
-								{maxPicks > 11 && (
+								{alignedPicks.bench.length > 0 && (
 									<div className="px-3 py-1 bg-accent/30 border-b border-t">
 										<span className="text-label text-muted-foreground font-medium">
 											{t('substitutes')}
@@ -639,25 +677,15 @@ export function EntryCompareSheet({
 									</div>
 								)}
 
-								{maxPicks > 11 &&
-									Array.from({ length: maxPicks - 11 }).map((_, i) => {
-										const idx = 11 + i
-										const pA = picksA[idx]
-										const pB = picksB[idx]
-
-										const leftPick = mapComparisonPick(pA, Boolean(liveA))
-										const rightPick = mapComparisonPick(pB, Boolean(liveB))
-
-										return (
-											<PlayerCompareRow
-												key={idx}
-												leftPick={leftPick}
-												rightPick={rightPick}
-												posLabel="SUB"
-												isBench
-											/>
-										)
-									})}
+								{alignedPicks.bench.map((row, index) => (
+									<PlayerCompareRow
+										key={`bench-${index}`}
+										leftPick={row.leftPick}
+										rightPick={row.rightPick}
+										posLabel={row.posLabel}
+										isBench={row.isBench}
+									/>
+								))}
 							</div>
 						)}
 					</div>

@@ -19,6 +19,7 @@ interface MatchCardProps {
 	allMatches?: Match[]
 	currentIndex?: number
 	eventId?: number
+	showShareActions?: boolean
 }
 
 function statusEdgeClass(status: Match['status']): string {
@@ -43,6 +44,7 @@ function MatchCardComponent({
 	allMatches,
 	currentIndex,
 	eventId,
+	showShareActions = true,
 }: MatchCardProps) {
 	const highlights = useMemo(() => buildMatchHighlights(match), [match])
 	const detail = useMatchPlayerDetail(eventId)
@@ -52,21 +54,30 @@ function MatchCardComponent({
 
 	return (
 		<Card
+			ref={shareRef}
 			data-match-id={match.id}
+			data-live-match-card="true"
+			data-share-preserve-width="true"
+			data-share-fit-content="true"
 			className={`relative overflow-hidden border-l-[3px] p-4 shadow-sm md:p-5 ${statusEdgeClass(match.status)}`}
 		>
-			<div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 sm:right-4 sm:top-4">
-				<MatchShareButton
-					match={match}
-					imageRef={shareRef}
-					onManualShareTextChange={setManualShareText}
-				/>
+			<div
+				data-share-exclude="true"
+				className="absolute right-3 top-3 z-10 flex items-center gap-1.5 sm:right-4 sm:top-4"
+			>
+				{showShareActions ? (
+					<MatchShareButton
+						match={match}
+						imageRef={shareRef}
+						onManualShareTextChange={setManualShareText}
+					/>
+				) : null}
 				<MatchNavigation
 					allMatches={allMatches}
 					currentIndex={currentIndex}
 				/>
 			</div>
-			<div ref={shareRef} className="flex flex-col gap-5">
+			<div className="flex flex-col gap-5">
 				<MatchHeader match={match} />
 				<MatchHighlights groups={highlights} />
 				{isMatchStarted(match) ? (
@@ -76,14 +87,16 @@ function MatchCardComponent({
 					/>
 				) : null}
 			</div>
-			{manualShareText ? (
-				<ShareTextFallback
-					text={manualShareText}
-					message={t('shareCopyUnsupported')}
-					fieldLabel={t('shareCopyManualLabel')}
-					closeLabel={t('shareCopyClose')}
-					onClose={() => setManualShareText(null)}
-				/>
+			{showShareActions && manualShareText ? (
+				<div data-share-exclude="true">
+					<ShareTextFallback
+						text={manualShareText}
+						message={t('shareCopyUnsupported')}
+						fieldLabel={t('shareCopyManualLabel')}
+						closeLabel={t('shareCopyClose')}
+						onClose={() => setManualShareText(null)}
+					/>
+				</div>
 			) : null}
 			<PlayerDetailModal
 				player={detail.selectedPlayer}

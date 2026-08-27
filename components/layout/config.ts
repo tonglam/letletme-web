@@ -6,7 +6,6 @@ import {
 	Timer,
 	UserRound,
 } from 'lucide-react'
-import { isBriefingPublicEnabled } from '@/lib/briefing-public'
 
 interface MenuItem {
 	id: string
@@ -91,6 +90,9 @@ const allMenuItems: MenuItem[] = [
 	},
 ]
 
-export const menuItems: MenuItem[] = isBriefingPublicEnabled()
-	? allMenuItems
-	: allMenuItems.filter(item => item.id !== 'briefing')
+// Keep the briefing routes available while the public navigation entry is
+// temporarily hidden. Re-enable this item here when the menu is ready to
+// expose the briefing surface again.
+export const menuItems: MenuItem[] = allMenuItems.filter(
+	item => item.id !== 'briefing'
+)

@@ -134,6 +134,100 @@
 }
 
 @layer components {
+  /*
+   * Share exports are rendered in a foreignObject without the app's next/font
+   * faces embedded. Keep the pitch's important labels compact in that export
+   * context so fallback fonts cannot turn a complete name into an ellipsis.
+   * The attribute is toggled only while html-to-image is capturing; normal
+   * page typography is unchanged.
+   */
+  [data-share-rendering='true'] .share-pitch-title {
+    font-size: clamp(0.62rem, 1.85cqi, 1.05rem) !important;
+    letter-spacing: 0 !important;
+  }
+
+  [data-share-rendering='true'] .share-pitch-player-name {
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: clamp(0.4rem, 1.1cqi, 0.64rem) !important;
+    letter-spacing: -0.025em !important;
+  }
+
+  /* Keep player-detail labels and team names on one measured line in the
+     foreignObject clone. Otherwise html-to-image can wrap the count while
+     the points value stays vertically centered against the original row. */
+  [data-share-rendering='true'] .share-player-breakdown-label {
+    white-space: nowrap !important;
+  }
+
+  [data-share-rendering='true'] .share-player-team {
+    flex-shrink: 0 !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+  }
+
+  /* Match exports must preserve the full FPL team name. The normal card uses
+     truncate to protect the responsive page layout, but that rule can measure
+     the foreignObject clone too narrowly and turn a complete name into an
+     ellipsis. Keep the share-only label intrinsic and on one line. */
+  [data-share-rendering='true'] .share-match-team-name {
+    flex: 0 0 auto !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: clamp(0.62rem, 1.6cqi, 0.95rem) !important;
+    line-height: 1.2 !important;
+    width: max-content !important;
+    max-width: none !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+  }
+
+  /* A highlight is one data unit: name, club and value move together to the
+     next row instead of wrapping the name inside the pill and drifting the
+     value vertically. */
+  [data-share-rendering='true'] .share-match-highlight-item {
+    flex: 0 0 auto !important;
+    flex-wrap: nowrap !important;
+    min-width: max-content !important;
+    white-space: nowrap !important;
+  }
+
+  [data-share-rendering='true'] .share-match-highlight-item > span {
+    flex: 0 0 auto !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    white-space: nowrap !important;
+  }
+
+  /* The image filter removes the share control, but its flex slot can remain
+     in the cloned deadline header. Let the remaining badge own the full
+     right-hand slot; otherwise the cloned wrapper keeps the share button's
+     intrinsic width and the GW badge drifts inward. */
+  [data-share-rendering='true'] [data-share-deadline-actions='true'] {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    margin-left: auto !important;
+    justify-content: flex-end !important;
+  }
+
+  /* Export only the active slide. In the live carousel, the flex track uses
+     every slide to determine its height; that is useful for stable page
+     layout, but leaves a large empty tail in a single-slide share image. */
+  [data-share-rendering='true'] [data-share-carousel-inactive='true'] {
+    display: none !important;
+  }
+
+  [data-share-rendering='true'] [data-share-carousel-track='true'] {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  [data-share-rendering='true'][data-share-fit-content='true']:not([data-share-capture-height='true']) {
+    align-self: flex-start !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
   /* Compact repeated Market rows. These preserve the generic Badge/link
      treatment while keeping the HTML and Flight payload small. */
   .market-position-badge,

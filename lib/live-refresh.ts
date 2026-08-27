@@ -9,6 +9,39 @@ import type {
 export const LIVE_AUTO_REFRESH_SECONDS = 30
 export const LIVE_EXPLAIN_REFRESH_INTERVAL_MS = 10 * 60 * 1000
 
+export function isLiveRefreshTerminalState(state?: string | null): boolean {
+	return (
+		state === 'SETTLED' ||
+		state === 'FINAL' ||
+		state === 'GW_REVIEW' ||
+		state === 'FINALIZED' ||
+		state === 'BETWEEN_GAMEWEEKS' ||
+		state === 'OFFSEASON'
+	)
+}
+
+/**
+ * A finished matchday still needs a cheap lifecycle probe so an open matches
+ * page can discover the next gameweek. This does not authorize another live
+ * score refresh; the caller only reloads the desk when the event identity
+ * changes.
+ */
+export function shouldPollLiveMatchesTransition({
+	isPageActive,
+	currentEventId,
+	nextEventId,
+	snapshot
+}: {
+	isPageActive: boolean
+	currentEventId?: number
+	nextEventId?: number
+	snapshot?: LiveSnapshotStatus | null
+}): boolean {
+	if (!isPageActive || !currentEventId || !nextEventId) return false
+	if (!snapshot || snapshot.eventId !== currentEventId) return false
+	return isLiveRefreshTerminalState(snapshot.windowState ?? snapshot.state)
+}
+
 export function liveContextToSnapshot(
 	context: LiveContextResponse['liveContext']
 ): LiveSnapshotStatus | null {
@@ -35,8 +68,7 @@ export function shouldPollLiveSnapshot({
 	managerScoreState,
 	managerNextRefreshAt,
 	windowState,
-	nextRefreshAt,
-	probeEventIdentity = false
+	nextRefreshAt
 }: {
 	isPageActive: boolean
 	currentEventId?: number
@@ -47,22 +79,30 @@ export function shouldPollLiveSnapshot({
 	managerNextRefreshAt?: string | null
 	windowState?: string | null
 	nextRefreshAt?: string | null
-	/** Keep the matches page alive so it can discover the next event after settlement. */
-	probeEventIdentity?: boolean
 }): boolean {
 	if (!isPageActive || !currentEventId || selectedEventId !== currentEventId) {
 		return false
 	}
-	// Preseason still has an upcoming anchor and needs a low-frequency context
-	// probe so the three live desks can switch together after the first actual
-	// kickoff. There is nothing to probe in a true offseason with no anchor.
-	if (windowState === 'OFFSEASON') return false
-
-	// A missing snapshot is expected briefly while a backend refresh is publishing.
-	// A stale/mismatched snapshot can also remain after a failed gameweek switch.
-	// Keep current-event polling enabled so the UI can recover automatically.
-	if (!snapshot || snapshot.eventId !== selectedEventId) return true
-	if (managerScoreState === 'SETTLING') return true
+	// The player snapshot can settle before the official manager score. Keep the
+	// score refresh alive during that bounded settling window, even if the live
+	// window itself already reports a terminal state.
+	if (managerScoreState === 'SETTLING') {
+		return Boolean(snapshot && snapshot.eventId === selectedEventId)
+	}
+	// Once the gameweek has moved into review/finalization or the gap between
+	// gameweeks, the selected entry is durable data. Do not let a stale
+	// nextRefreshAt or manager score deadline re-arm the live countdown.
+	if (
+		isLiveRefreshTerminalState(snapshot?.state) ||
+		isLiveRefreshTerminalState(windowState) ||
+		isLiveRefreshTerminalState(managerScoreState)
+	) {
+		return false
+	}
+	// A missing or mismatched snapshot means the selected round cannot be
+	// confirmed as live. Do not turn uncertainty into a background refresh loop;
+	// the user can still request a fresh snapshot with the manual button.
+	if (!snapshot || snapshot.eventId !== selectedEventId) return false
 	// Keep the normal countdown armed for both due and future official manager
 	// refreshes. React will not re-evaluate this predicate merely because time
 	// passed, so disabling it for a future deadline would leave stale scores
@@ -71,7 +111,7 @@ export function shouldPollLiveSnapshot({
 		return true
 	if (nextRefreshAt && Number.isFinite(Date.parse(nextRefreshAt))) return true
 
-	return snapshot.state !== 'SETTLED' || probeEventIdentity
+	return snapshot.state !== 'SETTLED'
 }
 
 export function shouldRefreshLiveExplain(

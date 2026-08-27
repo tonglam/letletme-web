@@ -22,7 +22,7 @@ import type { Player } from '@/types/player'
 import type { PlayerDetail } from '@/types/player-detail'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { useFormatter, useLocale, useTranslations } from 'next-intl'
-import { useCallback, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { NumberFormatOptions } from 'use-intl'
 import { deriveLiveTeamStats } from '../_lib/live-points-model'
 import { mapPlayersToSquadPitch } from '../_lib/live-points-squad-pitch'
@@ -120,19 +120,31 @@ export function LivePointsDashboard({
 	const officialEventPoints = officialScore?.eventPoints ?? null
 	const officialTotalPoints =
 		officialScore?.totalScope === 'OVERALL' ? officialScore.totalPoints : null
-	const scoreStatus = (() => {
-		const score = officialScore
-		if (!score) return t('scoreUnavailable')
-		const authorityLabel = liveManagerScoreAuthorityLabel(score, {
-			projected: t('scoreProjected'),
-			final: t('scoreFinal')
-		})
-		if (score.state === 'SETTLING')
-			return `${authorityLabel ?? t('scoreOfficial')} · ${t('scoreSettling')}`
-		if (score.state === 'STALE')
-			return `${authorityLabel ?? t('scoreOfficial')} · ${t('scoreDelayed')}`
-		return authorityLabel ?? t('scoreOfficial')
-	})()
+	const lastUpdatedAt =
+		officialScore?.checkedAt ?? liveData?.snapshot?.checkedAt ?? null
+	const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string | null>(null)
+	useEffect(() => {
+		if (!lastUpdatedAt) {
+			setLastUpdatedLabel(null)
+			return
+		}
+		const parsed = new Date(lastUpdatedAt)
+		if (Number.isNaN(parsed.getTime())) {
+			setLastUpdatedLabel(null)
+			return
+		}
+		const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+		setLastUpdatedLabel(
+			format.dateTime(parsed, {
+				day: 'numeric',
+				month: 'short',
+				hour: '2-digit',
+				minute: '2-digit',
+				second: '2-digit',
+				timeZone: browserTimeZone
+			})
+		)
+	}, [format, lastUpdatedAt])
 	const squadTitle = liveData?.entryName ?? `Entry ${liveData?.entry ?? ''}`
 	const squadPitchLabels = {
 		formation: t('squadFormation', { title: squadTitle }),
@@ -259,31 +271,17 @@ export function LivePointsDashboard({
 					selectedGameweek={selectedGameweek}
 					disabled={isLoading || isRefreshing}
 				/>
-				<div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-					<p className="text-xs text-muted-foreground">
-						{autoRefreshEnabled
-							? t('autoActive')
-							: shouldAutoRefresh
-								? t('autoHidden')
-								: t('autoPast')}
-					</p>
-					{liveData ? (
-						<p
-							className="text-xs text-muted-foreground"
-							role="status"
-						>
-							{scoreStatus}
-							{liveData?.score?.reconciliation === 'SOURCE_SKEW'
-								? ` · ${t('scoreDetailsSyncing')}`
-								: ''}
-						</p>
-					) : null}
-					<div className="flex flex-wrap items-center gap-2 sm:gap-3">
-						<LivePointsAutoRefreshCountdown
-							enabled={autoRefreshEnabled}
-							onRefresh={onAutoRefresh}
-							nextRefreshAt={nextRefreshAt}
-						/>
+				<div className="mt-2 flex justify-end">
+					<div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+						{lastUpdatedAt && lastUpdatedLabel ? (
+							<time
+								dateTime={lastUpdatedAt}
+								className="whitespace-nowrap text-xs text-muted-foreground"
+								role="status"
+							>
+								{t('lastUpdated', { time: lastUpdatedLabel })}
+							</time>
+						) : null}
 						<Button
 							size="sm"
 							variant="outline"
@@ -298,6 +296,11 @@ export function LivePointsDashboard({
 							/>
 							{t('refresh')}
 						</Button>
+						<LivePointsAutoRefreshCountdown
+							enabled={autoRefreshEnabled}
+							onRefresh={onAutoRefresh}
+							nextRefreshAt={nextRefreshAt}
+						/>
 					</div>
 				</div>
 			</div>
@@ -378,10 +381,9 @@ export function LivePointsDashboard({
 					<section aria-labelledby="live-squad-heading">
 						<div className="mb-3 flex items-start justify-between gap-4">
 							<div>
-								<p className="chyron">{t('livePoints')}</p>
 								<h2
 									id="live-squad-heading"
-									className="mt-1 font-display text-xl font-bold tracking-tight sm:text-2xl"
+									className="font-display text-xl font-bold tracking-tight sm:text-2xl"
 								>
 									{t('squad')}
 								</h2>

@@ -254,6 +254,8 @@ export type LiveEntryTournament = Pick<
 	| 'id'
 	| 'name'
 	| 'leagueType'
+	| 'groupMode'
+	| 'rosterMode'
 	| 'totalTeamNum'
 	| 'setupStatus'
 	| 'standingsReadyAt'
@@ -335,7 +337,6 @@ export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_DETAIL_INFO_FIELDS}
       kind
       context { season coreRevision activeEventId requestedEventId }
       viewerEntryId
-      canManage
       tournament { ...TournamentDetailInfoFields }
       unavailableSections
       participants { entryId entryName playerName }
@@ -383,7 +384,6 @@ export interface TournamentDetailDeskResponse {
 			requestedEventId: number
 		}
 		viewerEntryId: number
-		canManage: boolean
 		tournament: EntryTournament
 		unavailableSections: Array<'PARTICIPANTS'>
 		participants: TournamentParticipant[]
@@ -741,6 +741,8 @@ export const LIVE_TOURNAMENT_INFO_FIELDS = `
     id
     name
     leagueType
+    groupMode
+    rosterMode
     totalTeamNum
     setupStatus
     standingsReadyAt
@@ -1293,6 +1295,32 @@ export interface EntryOfficialH2HDeskItem {
 
 export interface EntryOfficialH2HDeskResponse {
 	entryOfficialH2HDesk: EntryOfficialH2HDeskItem[]
+}
+
+export const GET_ENTRY_OFFICIAL_H2H_MATCHUPS = `${OFFICIAL_H2H_MATCH_FIELDS}
+  query GetEntryOfficialH2HMatchups($entryId: Int!) {
+    entryOfficialH2HDesk(entryId: $entryId) {
+      tournamentId
+      eventId
+      isLive
+      isFinal
+      matches {
+        ...OfficialH2HMatchFields
+      }
+    }
+  }
+`
+
+export interface EntryOfficialH2HMatchupsItem {
+	tournamentId: number
+	eventId: number
+	isLive: boolean
+	isFinal: boolean
+	matches: OfficialH2HMatch[]
+}
+
+export interface EntryOfficialH2HMatchupsResponse {
+	entryOfficialH2HDesk: EntryOfficialH2HMatchupsItem[]
 }
 
 // Query to fetch entry result for a specific event

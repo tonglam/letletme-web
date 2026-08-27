@@ -1,15 +1,12 @@
 'use client'
 
 import { GameweekBadge } from '@/components/stats/GameweekBadge'
-import { CalendarClock } from 'lucide-react'
+import { CountdownCard } from '@/components/home/CountdownCard'
+import { ShareActions } from '@/components/share/ShareActions'
 import { usePageActive } from '@/hooks/use-page-active'
 import { useRouter } from '@/i18n/navigation'
-import {
-	computeTimeLeft,
-	homeDeadlineRefreshDelayMs,
-	type TimeLeft
-} from '@/lib/home-deadline'
-import { useLocale, useTranslations } from 'next-intl'
+import { homeDeadlineRefreshDelayMs, type TimeLeft } from '@/lib/home-deadline'
+import { useTranslations } from 'next-intl'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 interface DeadlineSectionProps {
@@ -31,7 +28,6 @@ export function DeadlineSection({
 	initialTimeLeft,
 	bootstrapFailed
 }: DeadlineSectionProps) {
-	const locale = useLocale()
 	const t = useTranslations('Home')
 	const incomingSchedule = useMemo<DeadlineSchedule | null>(
 		() =>
@@ -50,16 +46,13 @@ export function DeadlineSection({
 		() => (effectiveDeadlineTime ? new Date(effectiveDeadlineTime) : null),
 		[effectiveDeadlineTime]
 	)
-	const [timeLeft, setTimeLeft] = useState<TimeLeft>(
-		effectiveSchedule?.initialTimeLeft ?? initialTimeLeft
-	)
-	const [formattedDeadlineDate, setFormattedDeadlineDate] = useState('')
-	const [deadlinePassed, setDeadlinePassed] = useState(false)
 	const router = useRouter()
 	const routerRef = useRef(router)
 	const refreshCount = useRef(0)
 	const refreshDeadline = useRef<string | null>(effectiveDeadlineTime)
 	const isPageActive = usePageActive()
+	const shareRef = useRef<HTMLDivElement | null>(null)
+	// CountdownCard renders data-share-preserve-width="true" on the share root.
 
 	useEffect(() => {
 		if (incomingSchedule) {
@@ -80,35 +73,7 @@ export function DeadlineSection({
 			refreshDeadline.current = effectiveDeadlineTime
 			refreshCount.current = 0
 		}
-		if (!deadline) {
-			const resetTimer = window.setTimeout(() => {
-				setFormattedDeadlineDate('')
-				setDeadlinePassed(false)
-			}, 0)
-			return () => window.clearTimeout(resetTimer)
-		}
-
-		const updateTimeLeft = () => {
-			const isPast = deadline.getTime() <= Date.now()
-			setDeadlinePassed(isPast)
-			setTimeLeft(computeTimeLeft(deadline.getTime()))
-		}
-
-		const initialTimer = window.setTimeout(() => {
-			const formatted = new Intl.DateTimeFormat(locale, {
-				weekday: 'short',
-				day: 'numeric',
-				month: 'short',
-				year: 'numeric',
-				hour: '2-digit',
-				minute: '2-digit'
-			}).format(deadline)
-			setFormattedDeadlineDate(formatted)
-			updateTimeLeft()
-		}, 0)
-		const tickTimer = isPageActive
-			? setInterval(updateTimeLeft, 1000)
-			: undefined
+		if (!deadline) return
 
 		// The revision publisher can advance after the nominal deadline. Keep checking
 		// while the page is active, with an interval capped at five minutes, so a slow
@@ -138,92 +103,84 @@ export function DeadlineSection({
 		}
 
 		return () => {
-			window.clearTimeout(initialTimer)
-			if (tickTimer !== undefined) clearInterval(tickTimer)
 			if (expireTimer !== undefined) window.clearTimeout(expireTimer)
 			if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
 		}
-	}, [deadline, effectiveDeadlineTime, isPageActive, locale])
+	}, [deadline, effectiveDeadlineTime, isPageActive])
 
 	if (!effectiveNextEventId || !effectiveDeadlineTime) {
 		return (
-			<div className="scoreboard texture-grain rounded-xl p-6 sm:p-7">
-				<p className="chyron text-electric">{t('nextDeadline')}</p>
-				<h2 className="mt-3 font-display text-2xl font-bold uppercase tracking-wide">
-					{t('scheduleUnavailable')}
-				</h2>
-				<p className="mt-2 text-sm text-fascia-foreground/60">
-					{t('scheduleUnavailableDescription')}
-				</p>
-			</div>
+			<CountdownCard
+				ref={shareRef}
+				eyebrow={t('nextDeadline')}
+				title={t('scheduleUnavailable')}
+				deadlineTime={null}
+				initialTimeLeft={initialTimeLeft}
+				deadlinePrefix={t('deadlinePrefix')}
+				noDeadlineLabel={t('scheduleUnavailableDescription')}
+				unitLabels={{
+					days: t('days'),
+					hours: t('hours'),
+					minutes: t('minutes'),
+					seconds: t('seconds')
+				}}
+				headerAction={
+					<ShareActions
+						actions={['image']}
+						text={t('nextDeadline')}
+						imageRef={shareRef}
+						title={t('nextDeadline')}
+						buttonClassName="text-primary-ink hover:text-primary-ink"
+						compact
+					/>
+				}
+			/>
 		)
 	}
 
 	return (
-		<div className="scoreboard texture-grain rounded-xl p-6 sm:p-7">
-			<div className="flex items-center justify-between gap-3">
-				<p className="chyron text-electric">{t('nextDeadline')}</p>
-				<span className="inline-flex items-center gap-2">
-					<span
-						className="live-dot"
-						aria-hidden="true"
+		<CountdownCard
+			ref={shareRef}
+			eyebrow={t('nextDeadline')}
+			title={t('gameweek', { number: effectiveNextEventId })}
+			deadlineTime={effectiveDeadlineTime}
+			initialTimeLeft={effectiveSchedule?.initialTimeLeft ?? initialTimeLeft}
+			deadlinePrefix={t('deadlinePrefix')}
+			noDeadlineLabel={t('scheduleUnavailableDescription')}
+			unitLabels={{
+				days: t('days'),
+				hours: t('hours'),
+				minutes: t('minutes'),
+				seconds: t('seconds')
+			}}
+			expiredBadge={t('liveTag')}
+			expiredLabel={t('inProgress')}
+			headerAction={
+				<div
+					className="flex items-center gap-2"
+					data-share-deadline-actions="true"
+				>
+					<ShareActions
+						actions={['image']}
+						text={t('nextDeadline')}
+						imageRef={shareRef}
+						title={t('nextDeadline')}
+						buttonClassName="text-primary-ink hover:text-primary-ink"
+						compact
 					/>
-					<GameweekBadge
-						gameweek={effectiveNextEventId}
-						size="sm"
-						fontFamily="display"
-					/>
-				</span>
-			</div>
-
-			<h2 className="mt-4 font-display text-3xl font-bold uppercase leading-none tracking-wide sm:text-4xl">
-				{t('gameweek', { number: effectiveNextEventId })}
-			</h2>
-
-			{deadlinePassed ? (
-				<div className="mt-6 flex items-center gap-3 rounded-lg border border-pink/40 bg-pink/10 px-4 py-4">
-					<span className="rounded-sm bg-pink px-2 py-0.5 font-display text-xs font-bold uppercase tracking-caps-wide text-pink-950">
-						{t('liveTag')}
-					</span>
-					<p className="font-display text-lg font-semibold uppercase tracking-wide">
-						{t('inProgress')}
-					</p>
-				</div>
-			) : (
-				<>
-					<div className="mt-6 grid grid-cols-4 divide-x divide-fascia-foreground/10 overflow-hidden rounded-lg border border-fascia-foreground/10 bg-plum/30">
-						{(
-							[
-								{ value: timeLeft.days, label: t('days') },
-								{ value: timeLeft.hours, label: t('hours') },
-								{ value: timeLeft.minutes, label: t('minutes') },
-								{ value: timeLeft.seconds, label: t('seconds') }
-							] as const
-						).map(({ value, label }) => (
-							<div
-								key={label}
-								className="px-1 py-3 text-center sm:py-4"
-							>
-								<div className="font-display text-3xl font-semibold tabular-nums text-electric text-glow-electric sm:text-4xl">
-									{String(value).padStart(2, '0')}
-								</div>
-								<div className="mt-1 eyebrow text-fascia-foreground/50">
-									{label}
-								</div>
-							</div>
-						))}
-					</div>
-					<p className="mt-4 flex items-center gap-2 text-xs text-fascia-foreground/60">
-						<CalendarClock
+					<span className="inline-flex items-center gap-2">
+						<span
+							className="live-dot"
 							aria-hidden="true"
-							className="size-3.5 shrink-0 text-electric"
 						/>
-						{formattedDeadlineDate
-							? t('deadline', { date: formattedDeadlineDate })
-							: null}
-					</p>
-				</>
-			)}
-		</div>
+						<GameweekBadge
+							gameweek={effectiveNextEventId}
+							size="sm"
+							fontFamily="display"
+						/>
+					</span>
+				</div>
+			}
+		/>
 	)
 }

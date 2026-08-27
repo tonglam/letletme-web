@@ -5,6 +5,7 @@ import { parse, visit } from 'graphql'
 import { GET_LIVE_FIXTURE_PLAYERS_BATCH } from '../lib/graphql/operations/live'
 import {
 	getLiveMatchesSnapshot,
+	getPreferredLiveMatchesTab,
 	liveFixturePlayerFailureCode,
 	loadLiveMatchdayDesk,
 	type LiveFixturePlayerLoadFailure,
@@ -89,6 +90,17 @@ const singlePlayers = (revision = '8', fixtureId = 1) => ({
 	}
 })
 
+const settledCoreDesk = () => {
+	const payload = desk()
+	payload.liveMatchdayDesk.revision = 'scheduled-core-1310'
+	payload.liveMatchdayDesk.state = 'SETTLED'
+	payload.liveMatchdayDesk.windowState = 'FINALIZED'
+	payload.liveMatchdayDesk.dataAvailability = 'FINAL'
+	payload.liveMatchdayDesk.liveRevision = '1230'
+	payload.liveMatchdayDesk.source = 'CORE'
+	return payload
+}
+
 describe('live match desk player sections', () => {
 	it('keeps the five-fixture operation inside the production AST limit', () => {
 		let astNodes = 0
@@ -132,6 +144,81 @@ describe('live match desk player sections', () => {
 		})
 	})
 
+	it('loads settled player performances from durable event-live data when the live revision is stale', async () => {
+		let requests = 0
+		const payload = settledCoreDesk()
+		const executor: QueryExecutor = async query => {
+			requests += 1
+			if (query.includes('GetEventLivePerformances')) {
+				return {
+					eventLive: {
+						performances: players().fixture0.players
+					}
+				} as never
+			}
+			return payload as never
+		}
+
+		const result = await loadLiveMatchdayDesk(executor, null)
+		assert.equal(requests, 2)
+		assert.equal(result.fixturePlayers?.[0]?.source, 'DURABLE_DB')
+		assert.equal(result.fixturePlayers?.[0]?.revision, null)
+		assert.equal(result.fixturePlayers?.[0]?.players[0]?.player?.webName, 'Tzolis')
+	})
+
+	it('does not duplicate event-level performances across repeated-team fixtures', async () => {
+		const payload = settledCoreDesk()
+		payload.liveMatchdayDesk.matches.push({
+			...payload.liveMatchdayDesk.matches[0]!,
+			fixtureId: 2,
+			awayTeamId: 3,
+			awayTeamName: 'Liverpool',
+			awayTeamShortName: 'LIV'
+		})
+		const executor: QueryExecutor = async query => {
+			if (query.includes('GetEventLivePerformances')) {
+				return {
+					eventLive: { performances: players().fixture0.players }
+				} as never
+			}
+			return payload as never
+		}
+
+		const result = await loadLiveMatchdayDesk(executor, null)
+
+		assert.deepEqual(result.fixturePlayers, [])
+	})
+
+	it('keeps the completed tab as the default when next fixtures coexist with final results', () => {
+		assert.equal(
+			getPreferredLiveMatchesTab(
+				[{ status: 'UPCOMING' }] as never
+			),
+			'not-started'
+		)
+		assert.equal(
+			getPreferredLiveMatchesTab(
+				[
+					{ status: 'FT' },
+					{ status: 'UPCOMING' }
+				] as never
+			),
+			'finished'
+		)
+		assert.equal(
+			getPreferredLiveMatchesTab(
+				[{ status: 'FT' }, { status: 'NOT_STARTED' }, { status: 'UPCOMING' }] as never
+			),
+			'not-started'
+		)
+		assert.equal(
+			getPreferredLiveMatchesTab(
+				[{ status: 'LIVE' }, { status: 'FT' }, { status: 'UPCOMING' }] as never
+			),
+			'live'
+		)
+	})
+
 	it('can return the score desk without serialising fixture players', async () => {
 		let requests = 0
 		const executor: QueryExecutor = async query => {
@@ -153,8 +240,10 @@ describe('live match desk player sections', () => {
 
 	it('refreshes the desk and retries details once when a revision expires', async () => {
 		let requests = 0
-		const executor: QueryExecutor = async query => {
+		const handledCodes: Array<readonly string[] | undefined> = []
+		const executor: QueryExecutor = async (query, _variables, options) => {
 			requests += 1
+			handledCodes.push(options?.handledErrorCodes)
 			if (requests === 1) {
 				throw Object.assign(new Error('expired'), {
 					code: 'LIVE_REVISION_GONE'
@@ -171,6 +260,11 @@ describe('live match desk player sections', () => {
 			revision: '8'
 		})
 		assert.equal(requests, 3)
+		assert.deepEqual(handledCodes, [
+			['LIVE_REVISION_GONE'],
+			undefined,
+			['LIVE_REVISION_GONE']
+		])
 		assert.equal(result.liveMatchdayDesk.liveRevision, '9')
 		assert.equal(result.fixturePlayers?.[0]?.revision, '9')
 	})

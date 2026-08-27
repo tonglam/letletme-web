@@ -70,8 +70,7 @@ function TeamStatsComponent({ stats }: TeamStatsProps) {
 				{/* Team identity + light meta (not metric tiles) */}
 				<div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
 					<div className="min-w-0">
-						<p className="chyron">{t('livePoints')}</p>
-						<h2 className="mt-1 truncate font-display text-2xl font-bold uppercase tracking-wide">
+						<h2 className="truncate font-display text-2xl font-bold uppercase tracking-wide">
 							{stats.teamName}
 						</h2>
 						{stats.playerName ? (

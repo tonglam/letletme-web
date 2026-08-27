@@ -134,9 +134,10 @@ export function StatsSection({ currentEventId, overview }: StatsSectionProps) {
 		{
 			label: t('highestScore'),
 			value: overview.highestPoints?.toString() ?? '0',
-			href: overview.highestScoringEntry && currentEventId
-				? `/live/points/${overview.highestScoringEntry}?gw=${currentEventId}`
-				: null,
+			href:
+				overview.highestScoringEntry && currentEventId
+					? `/live/points/${overview.highestScoringEntry}?gw=${currentEventId}&from=home`
+					: null,
 			detailTarget: null,
 			icon: (
 				<Trophy

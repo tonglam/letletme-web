@@ -12,32 +12,23 @@ import { TournamentTable } from '@/components/tournament/TournamentTable'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { usePageActive } from '@/hooks/use-page-active'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_LIVE_CONTEXT,
 	type LiveContextResponse,
+	type LiveSnapshotResponse,
 	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import {
-	type EntryLiveCompetitionBoardPage,
-	type EntryLiveCompetitionBoardRow,
-	type EntryLiveCompetitionBoardSort,
-	type EntryLiveCompetitionBoardSortDirection,
+	GET_TOURNAMENT_LIVE_DESK,
 	type EntryTournament,
 	type TournamentOfficialH2H,
 	type TournamentLiveCalcData,
+	type TournamentLivePointsResponse,
 	type TournamentParticipant
 } from '@/lib/graphql/operations/tournaments'
-import {
-	LiveBoardRequestError,
-	boardRowToTournamentEntry,
-	fetchEntryLiveCompetitionBoard,
-	isLiveBoardRevisionGoneCode,
-	shouldAutoRefreshLiveBoardPage
-} from '@/lib/tournament/live-board'
 import {
 	liveSnapshotNeedsRefresh,
 	liveContextToSnapshot,
@@ -45,7 +36,6 @@ import {
 } from '@/lib/live-refresh'
 import type { TournamentDetailLoadError } from '@/lib/tournament/detail-load-error'
 import {
-	areTournamentInsightsReady,
 	isTournamentInsightsRepairExhausted,
 	isTournamentSetupPollingPending,
 	normalizeTournamentSetupStatus,
@@ -55,21 +45,18 @@ import {
 	buildTournamentEntries,
 	buildTournamentStats,
 	countTraceableTournamentScores,
-	getTournamentManagerNextRefreshAt
+	getRetainedFailedEntryIds,
+	getTournamentManagerNextRefreshAt,
+	mergeUnavailableTournamentEntryIds,
+	mergePartialTournamentRows
 } from '@/lib/tournament/liveEntries'
-import {
-	liveManagerScoreAuthorityLabel,
-	traceableOfficialManagerScore
-} from '@/lib/live-manager-score'
-import type {
-	TournamentSortColumn,
-	TournamentSortDirection
-} from '@/lib/tournament/table-sort'
+import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
 import { Link, useRouter } from '@/i18n/navigation'
 import {
 	ArrowLeft,
 	Calendar,
 	Check,
+	ChevronDown,
 	Circle,
 	KeyRound,
 	Link2Off,
@@ -77,7 +64,6 @@ import {
 	Lock,
 	RefreshCw,
 	ServerCrash,
-	Settings,
 	Users
 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -95,65 +81,10 @@ const SETUP_PHASES = [
 const ROSTER_PREVIEW = 20
 const ROSTER_STEP = 20
 
-type StandingsRefreshRequest = {
-	sort: EntryLiveCompetitionBoardSort
-	direction: EntryLiveCompetitionBoardSortDirection
-	search: string
-	tableSort?: {
-		column: TournamentSortColumn
-		direction: TournamentSortDirection
-	}
-}
-
-const boardRowToCalcData = (
-	row: EntryLiveCompetitionBoardRow
-): TournamentLiveCalcData => ({
-	entry: row.entry,
-	rank: row.rank,
-	entryName: row.entryName,
-	playerName: row.playerName,
-	overallRank: row.overallRank,
-	teamValue: row.teamValue,
-	chip: row.chip,
-	livePoints: row.livePoints,
-	transferCost: row.transferCost,
-	liveNetPoints: row.liveNetPoints,
-	liveTotalPoints: row.liveTotalPoints,
-	played: row.played,
-	toPlay: row.toPlay,
-	captainName: row.captainName,
-	captainPoints: row.captainPoints,
-	activeCaptain: null,
-	pickList: [],
-	score: row.score
-})
-
-const tableSortToBoardSort = (
-	column: TournamentSortColumn
-): EntryLiveCompetitionBoardSort => {
-	switch (column) {
-		case 'totalPoints':
-			return 'TOTAL_POINTS'
-		case 'overallRank':
-			return 'OVERALL_RANK'
-		case 'teamValue':
-			return 'TEAM_VALUE'
-		case 'eventCost':
-			return 'TRANSFER_COST'
-		case 'standings':
-		case 'rank':
-			return 'RANK'
-		case 'gwPoints':
-		default:
-			return 'EVENT_POINTS'
-	}
-}
-
 const phaseIndex = (phase: EntryTournament['setupPhase']) => {
 	if (phase === 'READY') return SETUP_PHASES.length
 	return SETUP_PHASES.findIndex(item => item === phase)
 }
-
 function TournamentRosterList({
 	participants,
 	viewerEntryId,
@@ -325,8 +256,156 @@ function TournamentRosterList({
 	)
 }
 
+function CompetitionDetailsDisclosure({
+	tournament,
+	participants,
+	viewerEntryId,
+	tournamentId,
+	gameweek
+}: {
+	tournament: EntryTournament
+	participants: TournamentParticipant[]
+	viewerEntryId?: number
+	tournamentId: number
+	gameweek?: number
+}) {
+	const t = useTranslations('LiveTournament')
+	const formatGroupMode = (groupMode: string) =>
+		groupMode === 'BATTLE_RACES'
+			? t('headToHead')
+			: groupMode === 'POINTS_RACES'
+				? t('pointsRace')
+				: t('noGroup')
+	const formatKnockoutMode = (knockoutMode: string) =>
+		knockoutMode === 'SINGLE_ELIMINATION'
+			? t('singleElimination')
+			: knockoutMode === 'DOUBLE_ELIMINATION'
+				? t('homeAway')
+				: knockoutMode === 'HEAD_TO_HEAD'
+					? t('officialH2HKnockout')
+					: t('noKnockout')
+	const leagueType =
+		tournament.leagueType === 'H2H'
+			? t('headToHead')
+			: tournament.leagueType === 'CLASSIC'
+				? t('classic')
+				: tournament.leagueType
+
+	return (
+		<details className="group mt-6 rounded-xl border border-border/80 bg-card shadow-sm">
+			<summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3.5 outline-none transition-colors hover:bg-muted/25 focus-visible:ring-2 focus-visible:ring-ring/50 sm:px-5 [&::-webkit-details-marker]:hidden">
+				<div className="min-w-0">
+					<p className="font-display text-sm font-semibold tracking-tight">
+						{t('competitionDetails')}
+					</p>
+					<p className="mt-0.5 text-xs text-muted-foreground">
+						{t('competitionDetailsHint')}
+					</p>
+				</div>
+				<ChevronDown
+					className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180"
+					aria-hidden="true"
+				/>
+			</summary>
+			<div className="border-t border-border/70 p-3 sm:p-4">
+				<div className="grid gap-4 lg:grid-cols-2">
+					<Card className="p-4 shadow-none sm:p-5">
+						<h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
+							{t('statistics')}
+						</h2>
+						<div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+							<div className="space-y-1 rounded-lg border surface-inset p-4">
+								<div className="eyebrow">{t('creator')}</div>
+								<div className="font-display text-base font-semibold">
+									{tournament.creator}
+								</div>
+							</div>
+							<div className="space-y-1 rounded-lg border surface-inset p-4">
+								<div className="eyebrow">{t('leagueType')}</div>
+								<div className="font-display text-base font-semibold">
+									{leagueType}
+								</div>
+							</div>
+							<div className="space-y-1 rounded-lg border surface-inset p-4 sm:col-span-2">
+								<div className="eyebrow">{t('participantCount')}</div>
+								<div className="font-display text-2xl font-bold tabular-nums">
+									{tournament.totalTeamNum}
+								</div>
+							</div>
+						</div>
+					</Card>
+
+					<Card className="p-4 shadow-none sm:p-5">
+						<h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
+							{t('competitionRules')}
+						</h2>
+						<ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+							<li>
+								{t('mode', { mode: formatGroupMode(tournament.groupMode) })}
+							</li>
+							<li>{t('teamsPerGroup', { count: tournament.groupTeamNum })}</li>
+							<li>{t('groups', { count: tournament.groupNum })}</li>
+							<li>
+								{t('gameweeks', {
+									value:
+										tournament.groupStartedEventId &&
+										tournament.groupEndedEventId
+											? t('gameweekRange', {
+													start: tournament.groupStartedEventId,
+													end: tournament.groupEndedEventId
+												})
+											: t('notScheduled')
+								})}
+							</li>
+							<li>
+								{t('mode', {
+									mode: formatKnockoutMode(tournament.knockoutMode)
+								})}
+							</li>
+							{tournament.knockoutMode !== 'NO_KNOCKOUT' ? (
+								<>
+									<li>
+										{t('teamsCount', {
+											count: tournament.knockoutTeamNum ?? t('notConfigured')
+										})}
+									</li>
+									<li>
+										{t('rounds', {
+											count: tournament.knockoutRounds ?? t('notConfigured')
+										})}
+									</li>
+									<li>
+										{t('gameweeks', {
+											value:
+												tournament.knockoutStartedEventId &&
+												tournament.knockoutEndedEventId
+													? t('gameweekRange', {
+															start: tournament.knockoutStartedEventId,
+															end: tournament.knockoutEndedEventId
+														})
+													: t('notScheduled')
+										})}
+									</li>
+								</>
+							) : null}
+						</ul>
+					</Card>
+				</div>
+
+				<div className="mt-4">
+					<TournamentRosterList
+						participants={participants}
+						viewerEntryId={viewerEntryId}
+						tournamentId={tournamentId}
+						gameweek={gameweek}
+					/>
+				</div>
+			</div>
+		</details>
+	)
+}
+
 export default function TournamentDetailClient({
-	canManage,
 	tournament,
 	currentGameweek,
 	activeGameweek,
@@ -339,7 +418,6 @@ export default function TournamentDetailClient({
 	initialParticipants,
 	justCreated
 }: {
-	canManage: boolean
 	tournament: EntryTournament | null
 	currentGameweek?: number
 	/** Actual current FPL event; the selected H2H event may be historical. */
@@ -364,52 +442,12 @@ export default function TournamentDetailClient({
 	const [searchQuery, setSearchQuery] = useState('')
 	const [currentTournament, setCurrentTournament] = useState(tournament)
 	const [rows, setRows] = useState(initialRows)
-	const [boardPage, setBoardPage] =
-		useState<EntryLiveCompetitionBoardPage | null>(null)
-	const [initialBoardLoadAttempted, setInitialBoardLoadAttempted] =
-		useState(false)
-	const [boardSort, setBoardSort] = useState<{
-		column: TournamentSortColumn
-		direction: TournamentSortDirection
-	}>({ column: 'gwPoints', direction: 'desc' })
 	const managerNextRefreshAt = useMemo(
-		() =>
-			boardPage?.managerNextRefreshAt ??
-			getTournamentManagerNextRefreshAt(rows),
-		[boardPage?.managerNextRefreshAt, rows]
+		() => getTournamentManagerNextRefreshAt(rows),
+		[rows]
 	)
 	const managerScoreSettling = rows.some(row => row.score?.state === 'SETTLING')
 	const managerScoreStatus = useMemo(() => {
-		const authorityLabels = new Set(
-			rows
-				.map(row =>
-					liveManagerScoreAuthorityLabel(
-						traceableOfficialManagerScore(row.score),
-						{ projected: scoreT('scoreProjected'), final: scoreT('scoreFinal') }
-					)
-				)
-				.filter((label): label is string => label !== null)
-		)
-		const authorityLabel =
-			authorityLabels.size === 1 ? Array.from(authorityLabels)[0] : null
-		if (boardPage) {
-			if (boardPage.failedEntryCount > 0)
-				return t('calculationFailed', {
-					count: boardPage.failedEntryCount
-				})
-			if (boardPage.unavailableEntryCount > 0)
-				return t('unavailableCalculation', {
-					count: boardPage.unavailableEntryCount
-				})
-			if (boardPage.deferredEntryCount > 0) return t('coverageWarming')
-			if (
-				boardPage.coverageState === 'WARMING' ||
-				boardPage.coverageState === 'PARTIAL'
-			)
-				return t('coverageWarming')
-			if (boardPage.managerDataAvailability === 'LAST_GOOD')
-				return t('scoreOfficialDelayed')
-		}
 		const states = rows.flatMap(row => {
 			const score = traceableOfficialManagerScore(row.score)
 			return score ? [score.state] : []
@@ -417,71 +455,37 @@ export default function TournamentDetailClient({
 		const available = countTraceableTournamentScores(rows)
 		if (states.includes('SETTLING')) return scoreT('scoreSettling')
 		if (states.includes('STALE')) return scoreT('scoreDelayed')
+		if (
+			states.some(state => String(state) === 'FALLBACK') ||
+			rows.some(
+				row => String(row.score?.source) === 'LOCAL_MULTIPLIER_FALLBACK'
+			)
+		) {
+			return scoreT('scoreFallback')
+		}
 		if (available > 0 && available < rows.length) {
 			return scoreT('scorePartial', { available, total: rows.length })
 		}
 		if (rows.length === 0 || available === 0) {
 			return scoreT('scoreUnavailable')
 		}
-		return authorityLabel ?? scoreT('scoreOfficial')
-	}, [boardPage, rows, scoreT, t])
+		return scoreT('scoreOfficial')
+	}, [rows, scoreT])
 	const [staleEntryIds, setStaleEntryIds] = useState<ReadonlySet<number>>(
 		() => new Set()
 	)
-	const [standingsError, setStandingsError] = useState<string | null>(null)
-	const error = [softError, standingsError].filter(Boolean).join(' · ') || null
+	const [error, setError] = useState(softError)
 	const [snapshot, setSnapshot] = useState<LiveSnapshotStatus | null>(
 		initialSnapshot ?? null
 	)
 	const snapshotRef = useRef<LiveSnapshotStatus | null>(initialSnapshot ?? null)
 	const [isRefreshing, setIsRefreshing] = useState(false)
-	const [isLoadingMore, setIsLoadingMore] = useState(false)
-	const loadMoreInFlightRef = useRef(false)
-	const [rateLimitSeconds, setRateLimitSeconds] = useState(0)
-	const rateLimitSecondsRef = useRef(0)
-	const refreshInFlightRef = useRef<
-		Map<string, { generation: number; promise: Promise<boolean> }>
-	>(new Map())
-	const pendingRefreshRef = useRef<StandingsRefreshRequest | null>(null)
+	const refreshInFlightRef = useRef<Promise<void> | null>(null)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
 	const failedEntryCountRef = useRef(softError ? 1 : 0)
 	const refreshGenerationRef = useRef(0)
-	const appliedBoardSearchRef = useRef('')
-	const searchQueryRef = useRef(searchQuery)
-	const handleSearchQueryChange = useCallback((query: string): void => {
-		if (searchQueryRef.current === query) return
-		searchQueryRef.current = query
-		// Invalidate an in-flight page append synchronously, before React commits
-		// the debounced page-1 search refresh.
-		refreshGenerationRef.current += 1
-		setSearchQuery(query)
-	}, [])
-	const noteRateLimit = useCallback((error: unknown): boolean => {
-		if (!(error instanceof LiveBoardRequestError) || error.status !== 429)
-			return false
-		const cooldown = Math.max(1, error.retryAfterSeconds ?? 30)
-		const next = Math.max(rateLimitSecondsRef.current, cooldown)
-		rateLimitSecondsRef.current = next
-		setRateLimitSeconds(next)
-		return true
-	}, [])
-	useEffect(() => {
-		if (rateLimitSeconds <= 0) return
-		const timer = window.setTimeout(
-			() =>
-				setRateLimitSeconds(seconds => {
-					const next = Math.max(0, seconds - 1)
-					rateLimitSecondsRef.current = next
-					return next
-				}),
-			1_000
-		)
-		return () => window.clearTimeout(timer)
-	}, [rateLimitSeconds])
 	const [visible, setVisible] = useState(true)
 	const [online, setOnline] = useState(true)
-	const [retrying, setRetrying] = useState(false)
-	const [actionError, setActionError] = useState<string | null>(null)
 	const [announcement, setAnnouncement] = useState('')
 	const previousStandingsReadyAt = useRef(tournament?.standingsReadyAt ?? null)
 	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
@@ -623,136 +627,113 @@ export default function TournamentDetailClient({
 	)
 
 	const refreshStandings = useCallback(
-		(
-			_revision?: string | null,
-			sort = tableSortToBoardSort(boardSort.column),
-			direction: EntryLiveCompetitionBoardSortDirection = boardSort.direction ===
-			'asc'
-				? 'ASC'
-				: 'DESC',
-			search = searchQuery.trim(),
-			tableSort?: StandingsRefreshRequest['tableSort']
-		): Promise<boolean> => {
+		(revision?: string | null): Promise<void> => {
 			if (
 				!currentTournament ||
-				!entryId ||
 				!currentGameweek ||
 				!standingsReady ||
 				isOfficialH2H
 			) {
-				return Promise.resolve(false)
+				return Promise.resolve()
 			}
-			const normalizedSearch = search.trim()
-			if (rateLimitSecondsRef.current > 0) {
-				pendingRefreshRef.current = {
-					sort,
-					direction,
-					search: normalizedSearch,
-					tableSort
-				}
-				return Promise.resolve(false)
-			}
-			const eventId = currentGameweek
-			const viewerEntryId = entryId
-			const requestKey = JSON.stringify({
-				tournamentId: currentTournament.id,
-				viewerEntryId,
-				eventId,
-				sort,
-				direction,
-				normalizedSearch
-			})
-			const existing = refreshInFlightRef.current.get(requestKey)
-			if (existing?.generation === refreshGenerationRef.current)
-				return existing.promise
-			const requestGeneration = refreshGenerationRef.current + 1
-			refreshGenerationRef.current = requestGeneration
+			if (refreshInFlightRef.current) return refreshInFlightRef.current
+			refreshGenerationRef.current += 1
 
 			const request = (async () => {
 				try {
-					setInitialBoardLoadAttempted(true)
 					setIsRefreshing(true)
-					setStandingsError(null)
-					const page = await fetchEntryLiveCompetitionBoard(
-						currentTournament.id,
-						{
-							entryId: viewerEntryId,
-							tournamentId: currentTournament.id,
-							eventId,
-							page: 1,
-							pageSize: 20,
-							ref: null,
-							sort,
-							direction,
-							search: normalizedSearch || null
-						}
+					setError(null)
+					const requestedRevision =
+						revision ?? snapshotRef.current?.revision ?? null
+					let response: TournamentLivePointsResponse
+					if (requestedRevision) {
+						const params = new URLSearchParams({
+							eventId: String(currentGameweek),
+							revision: requestedRevision
+						})
+						const httpResponse = await fetch(
+							`/api/live/competitions/${currentTournament.id}/board?${params.toString()}`,
+							{ cache: 'no-store' }
+						)
+						if (!httpResponse.ok)
+							throw new Error(
+								`Live competition request failed (${httpResponse.status})`
+							)
+						response =
+							(await httpResponse.json()) as TournamentLivePointsResponse
+					} else {
+						response = await executeQuery<TournamentLivePointsResponse>(
+							GET_TOURNAMENT_LIVE_DESK,
+							{
+								entryId,
+								selectedTournamentId: currentTournament.id,
+								ref: null
+							},
+							{ cache: 'no-store' }
+						)
+					}
+					const batch = response.entryLiveCompetitionsDesk
+					const failedIds = mergeUnavailableTournamentEntryIds(
+						batch.failedEntryIds,
+						batch.unavailableEntryIds ?? []
 					)
-					if (requestGeneration !== refreshGenerationRef.current) return false
-					setBoardPage(page)
-					appliedBoardSearchRef.current = normalizedSearch
-					failedEntryCountRef.current = page.failedEntryCount
-					setRows(page.rows.map(boardRowToCalcData))
-					setStaleEntryIds(new Set())
+					failedEntryCountRef.current = failedIds.length
+					const nextRows = batch.board ?? []
+					setRows(previousRows => {
+						const retainedIds = getRetainedFailedEntryIds({
+							nextRows,
+							previousRows,
+							failedEntryIds: failedIds,
+							preserveFailed: true
+						})
+						const merged = mergePartialTournamentRows({
+							nextRows,
+							previousRows,
+							failedEntryIds: failedIds,
+							preserveFailed: true
+						})
+						queueMicrotask(() => {
+							setStaleEntryIds(
+								retainedIds.length > 0 ? new Set(retainedIds) : new Set()
+							)
+						})
+						return merged
+					})
 					acceptSnapshot(
-						page.playerRevision
+						batch.revision
 							? {
-									eventId: page.eventId,
-									revision: page.playerRevision,
-									state: page.dataAvailability === 'FINAL' ? 'SETTLED' : 'LIVE',
+									eventId: batch.eventId,
+									revision: batch.revision,
+									state: (batch.windowState ??
+										batch.state) as LiveSnapshotStatus['state'],
 									publishedAt: null,
 									checkedAt: null
 								}
 							: null
 					)
-					if (page.failedEntryCount > 0)
-						setStandingsError(
-							t('calculationFailed', { count: page.failedEntryCount })
-						)
-					else if (page.unavailableEntryCount > 0)
-						setStandingsError(
-							t('unavailableCalculation', {
-								count: page.unavailableEntryCount
+					if (batch.partial) {
+						setError(
+							t('partialResults', {
+								failed: failedIds.length,
+								total: batch.totalEntries
 							})
 						)
-					else if (page.deferredEntryCount > 0)
-						setStandingsError(t('coverageWarming'))
-					return true
+					}
 				} catch (refreshError) {
-					if (requestGeneration !== refreshGenerationRef.current) return false
 					console.error(
 						'Failed to refresh live tournament standings:',
 						refreshError
 					)
-					const rateLimited = noteRateLimit(refreshError)
-					if (rateLimited) {
-						pendingRefreshRef.current = {
-							sort,
-							direction,
-							search: normalizedSearch,
-							tableSort
-						}
-					}
-					setStandingsError(
-						rateLimited ||
-							(refreshError instanceof LiveBoardRequestError &&
-								isLiveBoardRevisionGoneCode(refreshError.code))
-							? t('refreshFailedRetained')
-							: t('standingsFailed')
-					)
-					return false
+					setError(t('standingsFailed'))
 				} finally {
-					const activeRequest = refreshInFlightRef.current.get(requestKey)
-					if (activeRequest?.generation === requestGeneration) {
-						refreshInFlightRef.current.delete(requestKey)
-					}
-					setIsRefreshing(refreshInFlightRef.current.size > 0)
+					setIsRefreshing(false)
 				}
 			})()
-			refreshInFlightRef.current.set(requestKey, {
-				generation: requestGeneration,
-				promise: request
+			refreshInFlightRef.current = request
+			void request.finally(() => {
+				if (refreshInFlightRef.current === request)
+					refreshInFlightRef.current = null
 			})
-			setIsRefreshing(true)
 			return request
 		},
 		[
@@ -761,134 +742,17 @@ export default function TournamentDetailClient({
 			currentTournament,
 			entryId,
 			isOfficialH2H,
-			noteRateLimit,
 			standingsReady,
-			t,
-			boardSort,
-			searchQuery
+			t
 		]
 	)
-
-	useEffect(() => {
-		if (rateLimitSeconds !== 0) return
-		const pending = pendingRefreshRef.current
-		if (!pending) return
-		pendingRefreshRef.current = null
-		void refreshStandings(
-			null,
-			pending.sort,
-			pending.direction,
-			pending.search,
-			pending.tableSort
-		).then(applied => {
-			if (applied && pending.tableSort) setBoardSort(pending.tableSort)
-		})
-	}, [rateLimitSeconds, refreshStandings])
-
-	useEffect(() => {
-		const normalizedSearch = searchQuery.trim()
-		if (
-			appliedBoardSearchRef.current === normalizedSearch ||
-			!currentTournament ||
-			!standingsReady ||
-			!currentGameweek ||
-			isOfficialH2H
-		)
-			return
-		// Keep this timer scoped to the search value. Page appends update
-		// boardPage, but must not cancel a pending page-one replacement for the
-		// current search or leave an old page mixed into the new query.
-		const timer = window.setTimeout(() => {
-			if (searchQueryRef.current.trim() !== normalizedSearch) return
-			void refreshStandings(null, undefined, undefined, normalizedSearch)
-		}, 250)
-		return () => window.clearTimeout(timer)
-	}, [
-		currentGameweek,
-		currentTournament,
-		isOfficialH2H,
-		refreshStandings,
-		searchQuery,
-		standingsReady
-	])
-
-	const loadMoreStandings = useCallback(async (): Promise<void> => {
-		if (
-			!currentTournament ||
-			!entryId ||
-			!currentGameweek ||
-			!boardPage ||
-			!boardPage.hasMore ||
-			appliedBoardSearchRef.current !== searchQuery.trim() ||
-			isRefreshing ||
-			loadMoreInFlightRef.current ||
-			rateLimitSecondsRef.current > 0 ||
-			isOfficialH2H
-		)
-			return
-		loadMoreInFlightRef.current = true
-		setIsLoadingMore(true)
-		const eventId = currentGameweek
-		const viewerEntryId = entryId
-		const requestGeneration = refreshGenerationRef.current
-		try {
-			const next = await fetchEntryLiveCompetitionBoard(currentTournament.id, {
-				entryId: viewerEntryId,
-				tournamentId: currentTournament.id,
-				eventId,
-				page: boardPage.page + 1,
-				pageSize: 20,
-				sort: tableSortToBoardSort(boardSort.column),
-				direction: boardSort.direction === 'asc' ? 'ASC' : 'DESC',
-				search: searchQuery.trim() || null,
-				expectedBoardRevision: boardPage.boardRevision
-			})
-			if (requestGeneration !== refreshGenerationRef.current) return
-			setBoardPage(next)
-			setRows(previous => {
-				const byEntry = new Map(previous.map(row => [row.entry, row] as const))
-				next.rows
-					.map(boardRowToCalcData)
-					.forEach(row => byEntry.set(row.entry, row))
-				return Array.from(byEntry.values())
-			})
-			failedEntryCountRef.current = next.failedEntryCount
-		} catch (error) {
-			if (requestGeneration !== refreshGenerationRef.current) return
-			if (
-				error instanceof LiveBoardRequestError &&
-				isLiveBoardRevisionGoneCode(error.code)
-			) {
-				await refreshStandings()
-				return
-			}
-			noteRateLimit(error)
-			setStandingsError(t('refreshFailedRetained'))
-		} finally {
-			loadMoreInFlightRef.current = false
-			setIsLoadingMore(false)
-		}
-	}, [
-		boardPage,
-		boardSort,
-		currentGameweek,
-		currentTournament,
-		entryId,
-		isOfficialH2H,
-		isRefreshing,
-		noteRateLimit,
-		refreshStandings,
-		searchQuery,
-		t
-	])
 
 	const autoRefreshStandings = useCallback((): Promise<void> => {
 		if (
 			!currentTournament ||
 			!currentGameweek ||
 			!standingsReady ||
-			isOfficialH2H ||
-			!shouldAutoRefreshLiveBoardPage(boardPage?.page ?? null)
+			isOfficialH2H
 		) {
 			return Promise.resolve()
 		}
@@ -912,14 +776,14 @@ export default function TournamentDetailClient({
 					!managerScoreDue
 				) {
 					acceptSnapshot(observedSnapshot)
-					if (failedEntryCountRef.current === 0) setStandingsError(null)
+					if (failedEntryCountRef.current === 0) setError(null)
 					return
 				}
 				await refreshStandings(observedSnapshot?.revision ?? null)
 			} catch (probeError) {
 				if (generation !== refreshGenerationRef.current) return
 				console.error('Failed to check live tournament freshness:', probeError)
-				setStandingsError(t('standingsFailed'))
+				setError(t('standingsFailed'))
 			}
 		})()
 		freshnessRequestRef.current = request
@@ -931,7 +795,6 @@ export default function TournamentDetailClient({
 		return request
 	}, [
 		acceptSnapshot,
-		boardPage,
 		currentGameweek,
 		currentTournament,
 		isOfficialH2H,
@@ -941,25 +804,6 @@ export default function TournamentDetailClient({
 		managerNextRefreshAt
 	])
 
-	useEffect(() => {
-		if (
-			!currentTournament ||
-			!standingsReady ||
-			!currentGameweek ||
-			isOfficialH2H ||
-			boardPage !== null
-		)
-			return
-		void refreshStandings()
-	}, [
-		currentGameweek,
-		currentTournament,
-		isOfficialH2H,
-		refreshStandings,
-		boardPage,
-		standingsReady
-	])
-
 	const entries = useMemo(
 		() =>
 			buildTournamentEntries(rows, {
@@ -967,58 +811,7 @@ export default function TournamentDetailClient({
 			}),
 		[rows, staleEntryIds]
 	)
-	const pinnedViewerEntry = boardPage?.viewerRow
-		? boardRowToTournamentEntry(boardPage.viewerRow)
-		: undefined
 	const standingsStats = useMemo(() => buildTournamentStats(entries), [entries])
-	const liveServerControl = useMemo(() => {
-		if (!boardPage || isOfficialH2H) return undefined
-		return {
-			sortColumn: boardSort.column,
-			sortDirection: boardSort.direction,
-			onSortChange: (
-				column: TournamentSortColumn,
-				direction: TournamentSortDirection
-			) => {
-				const requestedSort = { column, direction }
-				void refreshStandings(
-					null,
-					tableSortToBoardSort(column),
-					direction === 'asc' ? 'ASC' : 'DESC',
-					undefined,
-					requestedSort
-				).then(applied => {
-					if (applied) setBoardSort(requestedSort)
-				})
-			},
-			hasMore: boardPage.hasMore,
-			filteredEntries: boardPage.filteredEntries,
-			isLoadingMore,
-			onLoadMore: () => void loadMoreStandings(),
-			playerRevision: boardPage.playerRevision,
-			onRevisionGone: async () => {
-				await refreshStandings()
-			}
-		}
-	}, [
-		boardPage,
-		boardSort,
-		isOfficialH2H,
-		isLoadingMore,
-		loadMoreStandings,
-		refreshStandings
-	])
-	const insightsReady = currentTournament
-		? areTournamentInsightsReady(currentTournament)
-		: false
-	const isLoadingInitialBoard = Boolean(
-		currentGameweek &&
-		standingsReady &&
-		!isOfficialH2H &&
-		boardPage === null &&
-		rows.length === 0 &&
-		(!initialBoardLoadAttempted || isRefreshing)
-	)
 	const warningSummaries = currentTournament?.warningSummaries ?? []
 	const hasSetupWarnings =
 		Boolean(currentTournament?.setupHasWarnings) || warningSummaries.length > 0
@@ -1035,100 +828,30 @@ export default function TournamentDetailClient({
 		if (!currentTournament || !standingsReady || isOfficialH2H) return null
 		return {
 			name: currentTournament.name,
-			averagePoints:
-				!isOfficialH2H && boardPage
-					? (boardPage.averageEventPoints ?? 0)
-					: standingsStats.averagePoints,
-			highestPoints:
-				!isOfficialH2H && boardPage
-					? (boardPage.highestEventPoints ?? 0)
-					: standingsStats.highestPoints,
-			scoresAvailable: Boolean(
-				currentGameweek &&
-				(isOfficialH2H ||
-					(boardPage &&
-						typeof boardPage.averageEventPoints === 'number' &&
-						typeof boardPage.highestEventPoints === 'number'))
-			),
+			averagePoints: standingsStats.averagePoints,
+			highestPoints: standingsStats.highestPoints,
+			scoresAvailable: Boolean(currentGameweek),
 			totalEntries:
-				(!isOfficialH2H && boardPage?.totalEntries) ||
-				standingsStats.totalEntries ||
-				currentTournament.totalTeamNum
+				standingsStats.totalEntries || currentTournament.totalTeamNum
 		}
 	}, [
 		currentGameweek,
 		currentTournament,
 		isOfficialH2H,
-		boardPage,
 		standingsReady,
 		standingsStats
 	])
 
-	const retrySetup = async () => {
-		if (!currentTournament || retrying) return
-		setRetrying(true)
-		setActionError(null)
-		try {
-			const response = await fetch(`/api/tournaments/${currentTournament.id}`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ action: 'retry_setup' })
-			})
-			if (!response.ok) throw new Error('retry failed')
-			setCurrentTournament(current =>
-				current
-					? {
-							...current,
-							setupStatus: 'PENDING',
-							setupPhase: 'QUEUED',
-							setupHasWarnings: false,
-							warningSummaries: [],
-							profilesReadyAt: null,
-							insightsReadyAt: null
-						}
-					: current
-			)
-			setAnnouncement(lifecycleT('retryQueued'))
-		} catch {
-			setActionError(lifecycleT('retryFailed'))
-		} finally {
-			setRetrying(false)
-		}
-	}
-
-	const formatGroupMode = (groupMode: string) =>
-		groupMode === 'BATTLE_RACES'
-			? t('headToHead')
-			: groupMode === 'POINTS_RACES'
-				? t('pointsRace')
-				: t('noGroup')
-	const formatKnockoutMode = (knockoutMode: string) =>
-		knockoutMode === 'SINGLE_ELIMINATION'
-			? t('singleElimination')
-			: knockoutMode === 'DOUBLE_ELIMINATION'
-				? t('homeAway')
-				: knockoutMode === 'HEAD_TO_HEAD'
-					? t('officialH2HKnockout')
-					: t('noKnockout')
-	const leagueType =
-		currentTournament?.leagueType === 'H2H'
-			? t('headToHead')
-			: currentTournament?.leagueType === 'CLASSIC'
-				? t('classic')
-				: currentTournament?.leagueType
-	const autoRefreshEnabled =
-		shouldPollLiveSnapshot({
-			isPageActive: isPageActive && !isOfficialH2H,
-			currentEventId: currentGameweek,
-			selectedEventId: currentGameweek,
-			snapshot,
-			managerScoreState: managerScoreSettling ? 'SETTLING' : null,
-			managerNextRefreshAt,
-			windowState: snapshot?.windowState ?? snapshot?.state,
-			nextRefreshAt: snapshot?.nextRefreshAt
-		}) &&
-		shouldAutoRefreshLiveBoardPage(boardPage?.page ?? null) &&
-		rateLimitSeconds === 0
+	const autoRefreshEnabled = shouldPollLiveSnapshot({
+		isPageActive: isPageActive && !isOfficialH2H,
+		currentEventId: currentGameweek,
+		selectedEventId: currentGameweek,
+		snapshot,
+		managerScoreState: managerScoreSettling ? 'SETTLING' : null,
+		managerNextRefreshAt,
+		windowState: snapshot?.windowState ?? snapshot?.state,
+		nextRefreshAt: snapshot?.nextRefreshAt
+	})
 
 	// Full-page empty state for access / link / bind failures
 	if (loadError || !currentTournament) {
@@ -1229,12 +952,7 @@ export default function TournamentDetailClient({
 			>
 				<RouteReadyMarker
 					name="LIVE_COMPETITION_BOARD_READY"
-					ready={Boolean(
-						currentTournament &&
-						(isOfficialH2H || boardPage) &&
-						!retrying &&
-						!isRefreshing
-					)}
+					ready={Boolean(currentTournament && !isRefreshing)}
 					audienceHint="session-hint"
 					goodMs={1000}
 					poorMs={1500}
@@ -1254,19 +972,6 @@ export default function TournamentDetailClient({
 							<span>{t('backToCompetitions')}</span>
 						</Link>
 					</Button>
-					{canManage ? (
-						<Button
-							variant="outline"
-							asChild
-						>
-							<Link
-								href={`/competitions/${currentTournament.id}/manage`}
-								prefetch={false}
-							>
-								<Settings aria-hidden="true" /> {t('manage')}
-							</Link>
-						</Button>
-					) : null}
 				</div>
 
 				<p
@@ -1368,14 +1073,13 @@ export default function TournamentDetailClient({
 									enabled={autoRefreshEnabled}
 									onRefresh={autoRefreshStandings}
 									renderLabel={seconds => t('nextRefresh', { seconds })}
+									showLabel={false}
 								/>
 								<Button
 									size="sm"
 									variant="outline"
 									onClick={() => void refreshStandings()}
-									disabled={
-										isRefreshing || !currentGameweek || rateLimitSeconds > 0
-									}
+									disabled={isRefreshing || !currentGameweek}
 								>
 									<RefreshCw
 										className={isRefreshing ? 'animate-spin' : undefined}
@@ -1388,20 +1092,6 @@ export default function TournamentDetailClient({
 						{currentTournament && (!isOfficialH2H || rows.length > 0) ? (
 							<p className="mb-4 text-right text-xs text-muted-foreground">
 								{managerScoreStatus}
-								{boardPage && !isOfficialH2H ? (
-									<span className="block">
-										{t('computedCoverage', {
-											computed: boardPage.computedEntries,
-											total: boardPage.totalEntries
-										})}
-										{boardPage.deferredEntryCount > 0
-											? ` · ${t('deferredCalculation', { count: boardPage.deferredEntryCount })}`
-											: ''}
-										{boardPage.failedEntryCount > 0
-											? ` · ${t('calculationFailed', { count: boardPage.failedEntryCount })}`
-											: ''}
-									</span>
-								) : null}
 							</p>
 						) : null}
 
@@ -1431,37 +1121,11 @@ export default function TournamentDetailClient({
 
 								{currentTournament.setupStatus === 'FAILED' ? (
 									<div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
-										<p>
-											{canManage
-												? lifecycleT('ownerFailure')
-												: lifecycleT('memberFailure')}
-										</p>
-										{canManage ? (
-											<Button
-												className="mt-3"
-												size="sm"
-												onClick={retrySetup}
-												disabled={retrying}
-											>
-												{retrying ? (
-													<LoaderCircle
-														className="animate-spin"
-														aria-hidden="true"
-													/>
-												) : (
-													<RefreshCw aria-hidden="true" />
-												)}
-												{lifecycleT('recoverSetup')}
-											</Button>
-										) : null}
+										<p>{lifecycleT('memberFailure')}</p>
 									</div>
 								) : hasSetupWarnings ? (
 									<div className="mt-4 rounded-lg border border-border/80 bg-muted/30 p-4 text-sm">
-										<p>
-											{canManage
-												? lifecycleT('warningOwner')
-												: lifecycleT('warningMember')}
-										</p>
+										<p>{lifecycleT('warningMember')}</p>
 									</div>
 								) : (
 									<ol className="mt-5 space-y-3">
@@ -1519,209 +1183,60 @@ export default function TournamentDetailClient({
 										})}
 									</ol>
 								)}
-								{actionError ? (
-									<p className="mt-3 text-sm text-destructive">{actionError}</p>
-								) : null}
 							</Card>
 						) : null}
 
-						<Tabs
-							defaultValue="standings"
-							className="mb-6"
-						>
-							<div>
-								<div className="rounded-lg border border-border/80 bg-card p-2 shadow-sm sm:p-3">
-									<TabsList className="grid h-auto w-full grid-cols-3 gap-1.5 sm:gap-2">
-										<TabsTrigger value="standings">
-											{t('standings')}
-										</TabsTrigger>
-										<TabsTrigger
-											value="stats"
-											disabled={!insightsReady}
-										>
-											{t('tournamentStats')}
-										</TabsTrigger>
-										<TabsTrigger value="rules">{t('rules')}</TabsTrigger>
-									</TabsList>
-								</div>
-								{!insightsReady ? (
-									<p className="mt-3 text-center text-xs text-muted-foreground">
-										{lifecycleT('insightsLoading')}
-									</p>
-								) : null}
-							</div>
-
-							<TabsContent value="standings">
-								{!standingsReady ? (
-									<Card className="p-8 text-center shadow-sm">
-										<LoaderCircle
-											className="mx-auto size-6 animate-spin text-primary"
-											aria-hidden="true"
-										/>
-										<h2 className="mt-4 font-display text-lg font-semibold tracking-tight">
-											{lifecycleT('standingsPreparing')}
-										</h2>
-										<p className="mt-1 text-sm text-muted-foreground">
-											{lifecycleT('standingsPreparingDescription')}
-										</p>
-									</Card>
-								) : isOfficialH2H && currentGameweek ? (
-									<OfficialH2HCompetitionView
-										activeEventId={activeGameweek}
-										eventId={currentGameweek}
-										initialSnapshot={initialOfficialH2H}
-										tournamentId={currentTournament.id}
-										viewerEntryId={entryId ?? undefined}
+						<div className="mb-6">
+							{!standingsReady ? (
+								<Card className="p-8 text-center shadow-sm">
+									<LoaderCircle
+										className="mx-auto size-6 animate-spin text-primary"
+										aria-hidden="true"
 									/>
-								) : isLoadingInitialBoard ? (
-									<Card
-										className="p-6 text-sm text-muted-foreground"
-										aria-busy="true"
-									>
-										<div className="flex items-center justify-center gap-2">
-											<LoaderCircle
-												className="size-4 animate-spin"
-												aria-hidden="true"
-											/>
-											{t('loadingStandings')}
-										</div>
-									</Card>
-								) : currentGameweek &&
-								  (entries.length > 0 || boardPage !== null) ? (
-									<>
-										<SearchHeader
-											searchQuery={searchQuery}
-											setSearchQuery={value =>
-												handleSearchQueryChange(value.slice(0, 100))
-											}
-											showFilters={false}
-										/>
-										<TournamentTable
-											entries={entries}
-											searchQuery={searchQuery}
-											tournamentId={String(currentTournament.id)}
-											gameweek={currentGameweek}
-											viewerEntryId={entryId ?? undefined}
-											pinnedViewerEntry={pinnedViewerEntry}
-											serverControl={liveServerControl}
-										/>
-									</>
-								) : (
-									<Card className="p-6 text-sm text-muted-foreground shadow-sm">
-										{t('liveUnavailable')}
-									</Card>
-								)}
-							</TabsContent>
-
-							<TabsContent value="stats">
-								<Card className="p-4 shadow-sm sm:p-6">
-									<h2 className="mb-5 font-display text-lg font-bold tracking-tight sm:text-xl">
-										{t('statistics')}
+									<h2 className="mt-4 font-display text-lg font-semibold tracking-tight">
+										{lifecycleT('standingsPreparing')}
 									</h2>
-									<div className="grid grid-cols-1 gap-3 md:grid-cols-2 sm:gap-4">
-										<div className="space-y-1 rounded-lg border surface-inset p-4">
-											<div className="eyebrow">{t('creator')}</div>
-											<div className="font-display text-base font-semibold">
-												{currentTournament.creator}
-											</div>
-										</div>
-										<div className="space-y-1 rounded-lg border surface-inset p-4">
-											<div className="eyebrow">{t('leagueType')}</div>
-											<div className="font-display text-base font-semibold">
-												{leagueType}
-											</div>
-										</div>
-										<div className="space-y-1 rounded-lg border surface-inset p-4">
-											<div className="eyebrow">{t('participantCount')}</div>
-											<div className="font-display text-2xl font-bold tabular-nums">
-												{currentTournament.totalTeamNum}
-											</div>
-										</div>
-									</div>
+									<p className="mt-1 text-sm text-muted-foreground">
+										{lifecycleT('standingsPreparingDescription')}
+									</p>
 								</Card>
-							</TabsContent>
-
-							<TabsContent value="rules">
-								<div className="grid gap-6 md:grid-cols-2">
-									<Card className="p-4 shadow-sm sm:p-6">
-										<h2 className="font-display text-lg font-bold tracking-tight sm:text-xl">
-											{t('competitionRules')}
-										</h2>
-										<ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-											<li>
-												{t('mode', {
-													mode: formatGroupMode(currentTournament.groupMode)
-												})}
-											</li>
-											<li>
-												{t('teamsPerGroup', {
-													count: currentTournament.groupTeamNum
-												})}
-											</li>
-											<li>
-												{t('groups', { count: currentTournament.groupNum })}
-											</li>
-											<li>
-												{t('gameweeks', {
-													value:
-														currentTournament.groupStartedEventId &&
-														currentTournament.groupEndedEventId
-															? t('gameweekRange', {
-																	start: currentTournament.groupStartedEventId,
-																	end: currentTournament.groupEndedEventId
-																})
-															: t('notScheduled')
-												})}
-											</li>
-											<li>
-												{t('mode', {
-													mode: formatKnockoutMode(
-														currentTournament.knockoutMode
-													)
-												})}
-											</li>
-											{currentTournament.knockoutMode !== 'NO_KNOCKOUT' ? (
-												<>
-													<li>
-														{t('teamsCount', {
-															count:
-																currentTournament.knockoutTeamNum ??
-																t('notConfigured')
-														})}
-													</li>
-													<li>
-														{t('rounds', {
-															count:
-																currentTournament.knockoutRounds ??
-																t('notConfigured')
-														})}
-													</li>
-													<li>
-														{t('gameweeks', {
-															value:
-																currentTournament.knockoutStartedEventId &&
-																currentTournament.knockoutEndedEventId
-																	? t('gameweekRange', {
-																			start:
-																				currentTournament.knockoutStartedEventId,
-																			end: currentTournament.knockoutEndedEventId
-																		})
-																	: t('notScheduled')
-														})}
-													</li>
-												</>
-											) : null}
-										</ul>
-									</Card>
-									<TournamentRosterList
-										participants={initialParticipants}
-										viewerEntryId={entryId ?? undefined}
-										tournamentId={currentTournament.id}
-										gameweek={currentGameweek}
+							) : isOfficialH2H && currentGameweek ? (
+								<OfficialH2HCompetitionView
+									activeEventId={activeGameweek}
+									eventId={currentGameweek}
+									initialSnapshot={initialOfficialH2H}
+									tournamentId={currentTournament.id}
+									viewerEntryId={entryId ?? undefined}
+								/>
+							) : currentGameweek && entries.length > 0 ? (
+								<>
+									<SearchHeader
+										searchQuery={searchQuery}
+										setSearchQuery={setSearchQuery}
+										showFilters={false}
 									/>
-								</div>
-							</TabsContent>
-						</Tabs>
+									<TournamentTable
+										entries={entries}
+										searchQuery={searchQuery}
+										tournamentId={String(currentTournament.id)}
+										gameweek={currentGameweek}
+										viewerEntryId={entryId ?? undefined}
+									/>
+								</>
+							) : (
+								<Card className="p-6 text-sm text-muted-foreground shadow-sm">
+									{t('liveUnavailable')}
+								</Card>
+							)}
+						</div>
+
+						<CompetitionDetailsDisclosure
+							tournament={currentTournament}
+							participants={initialParticipants}
+							viewerEntryId={entryId ?? undefined}
+							tournamentId={currentTournament.id}
+							gameweek={currentGameweek}
+						/>
 					</>
 				) : null}
 			</div>

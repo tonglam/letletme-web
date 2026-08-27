@@ -26,6 +26,7 @@ import {
 } from '../lib/graphql/operations/home'
 import {
 	GET_ENTRY_OFFICIAL_H2H_DESK,
+	GET_ENTRY_OFFICIAL_H2H_MATCHUPS,
 	GET_TOURNAMENT_DETAIL_DESK,
 	GET_TOURNAMENT_METADATA,
 	GET_TOURNAMENT_OFFICIAL_H2H,
@@ -205,7 +206,8 @@ describe('GraphQL request budget', () => {
 	it('keeps official H2H detail and Team Desk queries below the production guard', () => {
 		for (const [name, query] of [
 			['GET_TOURNAMENT_OFFICIAL_H2H', GET_TOURNAMENT_OFFICIAL_H2H],
-			['GET_ENTRY_OFFICIAL_H2H_DESK', GET_ENTRY_OFFICIAL_H2H_DESK]
+			['GET_ENTRY_OFFICIAL_H2H_DESK', GET_ENTRY_OFFICIAL_H2H_DESK],
+			['GET_ENTRY_OFFICIAL_H2H_MATCHUPS', GET_ENTRY_OFFICIAL_H2H_MATCHUPS]
 		] as const) {
 			const document = parse(query)
 			let astNodes = 0

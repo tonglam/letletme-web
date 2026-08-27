@@ -4,7 +4,7 @@ import {
   PlayerDirectoryPicker,
   type PlayerDirectoryOption,
 } from "@/components/player/PlayerDirectoryPicker";
-import { Badge } from "@/components/ui/badge";
+import { SelectedFilterBadge } from "@/components/player/SelectedFilterBadge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -178,26 +178,16 @@ export function PlayerOwnershipFilter({
       {selectedPlayers.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {selectedPlayers.map((player) => (
-            <Badge
+            <SelectedFilterBadge
               key={player.id}
-              variant="outline"
-              className="gap-2 rounded-md px-2 py-1"
-            >
-              <span className="font-medium">{player.name}</span>
-              <span className="text-muted-foreground">
-                {player.position} |{" "}
-                {resolveTeamDisplayName(player.teamShortName, player.teamName)} |{" "}
-                {scopeLabels[scope]} | {captainModeLabels[captainMode]}
-              </span>
-              <button
-                type="button"
-                aria-label={t("removePlayer", { name: player.name })}
-                className="rounded-sm text-muted-foreground hover:text-foreground"
-                onClick={() => removePlayer(player.id)}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </Badge>
+              name={player.name}
+              details={`${player.position} | ${resolveTeamDisplayName(
+                player.teamShortName,
+                player.teamName
+              )} | ${scopeLabels[scope]} | ${captainModeLabels[captainMode]}`}
+              removeLabel={t("removePlayer", { name: player.name })}
+              onRemove={() => removePlayer(player.id)}
+            />
           ))}
           <Button
             type="button"

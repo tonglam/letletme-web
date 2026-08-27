@@ -76,6 +76,7 @@ export function StatsSectionCard({
 	title,
 	titleId,
 	description,
+	action,
 	children,
 	className,
 }: {
@@ -84,6 +85,7 @@ export function StatsSectionCard({
 	title?: string
 	titleId?: string
 	description?: string
+	action?: ReactNode
 	children: ReactNode
 	className?: string
 }) {
@@ -91,19 +93,24 @@ export function StatsSectionCard({
 		<Card className={cn('border-border/80 p-4 shadow-sm sm:p-6', className)}>
 			{title ? (
 				<div className="mb-4 sm:mb-5">
-					{eyebrow ? <p className="chyron mb-1.5">{eyebrow}</p> : null}
-					<h2
-						id={titleId}
-						className="flex items-center gap-2 font-display text-lg font-bold tracking-tight sm:text-xl"
-					>
-						{Icon ? (
-							<Icon
-								className="size-5 shrink-0 text-primary-ink"
-								aria-hidden="true"
-							/>
-						) : null}
-						{title}
-					</h2>
+					<div className="flex items-start justify-between gap-3">
+						<div className="min-w-0">
+							{eyebrow ? <p className="chyron mb-1.5">{eyebrow}</p> : null}
+							<h2
+								id={titleId}
+								className="flex items-center gap-2 font-display text-lg font-bold tracking-tight sm:text-xl"
+							>
+								{Icon ? (
+									<Icon
+										className="size-5 shrink-0 text-primary-ink"
+										aria-hidden="true"
+									/>
+								) : null}
+								{title}
+							</h2>
+						</div>
+						{action ? <div className="shrink-0">{action}</div> : null}
+					</div>
 					{description ? (
 						<p className="mt-1.5 text-sm text-muted-foreground">
 							{description}

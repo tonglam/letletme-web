@@ -60,6 +60,459 @@ describe('theme bootstrap', () => {
 	})
 })
 
+describe('live auto-sub presentation', () => {
+	it('reorders the existing XI instead of rendering a separate prediction panel', async () => {
+		const [dashboard, model, playerRow, squadPitch] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/live/points/_components/LivePointsDashboard.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/live/points/_lib/live-points-model.ts',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/live/PlayerRow.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/squad-pitch/SquadPitch.tsx', import.meta.url),
+				'utf8'
+			)
+		])
+
+		assert.doesNotMatch(dashboard, /LiveAutoSubSummary|pitchProjected/)
+		assert.match(
+			model,
+			/activePlayerIds[\s\S]*const isBench = !activePlayerIds\.has\(playerId\)/
+		)
+		for (const source of [playerRow, squadPitch]) {
+			assert.doesNotMatch(source, />\s*AS\{[^}]+\}\s*</)
+			assert.match(source, /\{\w+ \? '↑' : '↓'\}/)
+}
+		assert.match(squadPitch, /grid-cols-\[1fr_auto\]/)
+		assert.match(
+			squadPitch,
+			/min-w-\[clamp\(2\.5rem,4cqi,3\.5rem\)\].*text-right/
+		)
+	})
+})
+
+describe('dream team share image', () => {
+	it('captures the pitch and its header instead of the surrounding card', async () => {
+		const source = await readFile(
+			new URL('../components/home/TeamOfTheWeekSection.tsx', import.meta.url),
+			'utf8'
+		)
+
+		assert.match(source, /const shareRef = useRef<HTMLElement \| null>\(null\)/)
+		assert.doesNotMatch(source, /<Card\b[^>]*\bref=\{shareRef\}/)
+		assert.match(
+			source,
+			/<SquadPitch[\s\S]*ref=\{shareRef\}[\s\S]*showHeader[\s\S]*title=\{t\('teamOfWeek'\)\}/
+		)
+	})
+})
+
+describe('my squad fixture pitch', () => {
+	it('uses the formation pitch with color-coded fixture strips and a detail dialog', async () => {
+		const [desk, pitch] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/data/fixtures/_components/MySquadFdrDesk.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/squad-pitch/SquadPitch.tsx', import.meta.url),
+				'utf8'
+			)
+		])
+
+		assert.match(desk, /<SquadPitch[\s\S]*onPlayerClick=\{handlePitchPlayerClick\}/)
+		assert.match(desk, /<Dialog[\s\S]*<FixtureDetailRow/)
+		assert.match(desk, /data-schedule-pitch="true"/)
+		assert.match(desk, /fixtureSchedule,/)
+		assert.doesNotMatch(desk, /<table\b|overflow-x-auto/)
+		assert.match(pitch, /SCHEDULE_FDR_CLASS/)
+		assert.match(pitch, /fixtureSchedule\?/)
+		assert.match(pitch, /role="listitem"/)
+	})
+})
+
+describe('team FDR average scale', () => {
+	it('shows exact averages with a continuous difficulty marker', async () => {
+		const source = await readFile(
+			new URL(
+				'../app/data/fixtures/_components/FdrMatrix.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.match(source, /function FdrAverageCell\(/)
+		assert.match(source, /const FDR_TEAM_CELL/)
+		assert.match(source, /const averageFdrTier = fdrTier\(row\.avgFdr\)/)
+		assert.match(source, /FDR_TEAM_CELL\[averageFdrTier\]/)
+		assert.match(source, /formatAvgFdrOutOfFive\(value\)/)
+		assert.match(source, /bg-gradient-to-r from-success\/80 via-warning\/80 to-destructive\/80/)
+		assert.match(source, /style=\{\{ left: `\$\{markerPosition\}%` \}\}/)
+		assert.match(source, /data-fdr-average=\{formatted\}/)
+	})
+})
+
+describe('fixture section sharing', () => {
+	it('keeps team FDR sharing with its section and adds squad-pitch image sharing', async () => {
+		const [page, desk] = await Promise.all([
+			readFile(new URL('../app/data/fixtures/FixturesClient.tsx', import.meta.url), 'utf8'),
+			readFile(
+				new URL('../app/data/fixtures/_components/MySquadFdrDesk.tsx', import.meta.url),
+				'utf8'
+			)
+		])
+
+		assert.match(
+			page,
+			/<SectionHead[\s\S]*id="my-squad-heading"[\s\S]*<ShareActions[\s\S]*actions=\{\['image'\]\}/
+		)
+		assert.match(page, /imageRef=\{mySquadShareRef\}/)
+		assert.match(
+			page,
+			/<Card[\s\S]*aria-labelledby="fdr-teams"[\s\S]*<ShareActions[\s\S]*imageRef=\{teamFdrShareRef\}/
+		)
+		assert.match(page, /text=\{shareText\}/)
+		assert.match(desk, /<SquadPitch[\s\S]*ref=\{shareRef\}/)
+	})
+})
+
+describe('explore gameweek dream team presentation', () => {
+	it('reuses the homepage pitch and removes the duplicate dream team list', async () => {
+		const [source, surfaces] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/data/gameweek/GameweekStatsClient.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/stats/StatsSurfaces.tsx', import.meta.url),
+				'utf8'
+			)
+		])
+
+		assert.match(source, /import \{ TeamOfTheWeekSection \}/)
+		assert.match(source, /function mapDreamTeamPlayers\(/)
+		assert.match(
+			source,
+			/const haulShareText[\s\S]*imageRef=\{haulShareRef\}[\s\S]*actions=\{\['text', 'image'\]\}/
+		)
+		assert.match(source, /useMatchPlayerDetail\(visibleGameweek\)/)
+		assert.match(source, /onPlayerClick=\{handleHaulPlayerClick\}/)
+		assert.match(
+			source,
+			/<TeamOfTheWeekSection[\s\S]*currentEventId=\{visibleGameweek\}[\s\S]*dreamTeam=\{dreamTeam\}[\s\S]*showShareActions=\{false\}/
+		)
+		assert.doesNotMatch(source, /<PlayerList[\s\S]*players=\{dreamTeam\}/)
+		assert.match(surfaces, /action\?: ReactNode/)
+	})
+})
+
+describe('gameweek update timestamp', () => {
+	it('uses the published data time in the browser timezone instead of the deadline', async () => {
+		const source = await readFile(
+			new URL('../app/data/gameweek/GameweekStatsClient.tsx', import.meta.url),
+			'utf8'
+		)
+
+		assert.match(source, /const \[updatedLabel, setUpdatedLabel\]/)
+		assert.match(
+			source,
+			/Intl\.DateTimeFormat\(\)\.resolvedOptions\(\)\.timeZone/
+		)
+		assert.match(source, /timeZone: browserTimeZone/)
+		assert.match(source, /timeStyle: 'medium'/)
+		assert.match(source, /<time[\s\S]*dateTime=\{committedDesk\.publishedAt\}/)
+		assert.doesNotMatch(source, /deadlineLabel/)
+	})
+})
+
+describe('data freshness timestamp precision', () => {
+	it('keeps seconds on market capture and snapshot/sync timestamps', async () => {
+		const [market, personal, playerState, team, tournament, tournamentHeader] =
+			await Promise.all([
+				readFile(
+					new URL('../components/data/MarketLocalUpdated.tsx', import.meta.url),
+					'utf8'
+				),
+				readFile(
+					new URL('../components/home/PersonalDesk.tsx', import.meta.url),
+					'utf8'
+				),
+				readFile(
+					new URL(
+						'../app/data/player-stats/_components/PlayerStateSections.tsx',
+						import.meta.url
+					),
+					'utf8'
+				),
+				readFile(
+					new URL('../app/me/team/TeamStatsClient.tsx', import.meta.url),
+					'utf8'
+				),
+				readFile(
+					new URL(
+						'../app/me/tournament/TournamentStatsClient.tsx',
+						import.meta.url
+					),
+					'utf8'
+				),
+				readFile(
+					new URL(
+						'../app/me/tournament/_components/TournamentStatsHeader.tsx',
+						import.meta.url
+					),
+					'utf8'
+				)
+			])
+
+		assert.match(market, /second: '2-digit'/)
+		for (const source of [
+			personal,
+			playerState,
+			team,
+			tournament,
+			tournamentHeader
+		]) {
+			assert.match(source, /timeStyle: 'medium'/)
+		}
+	})
+})
+
+describe('homepage share images', () => {
+	it('adds image actions without exporting carousel controls', async () => {
+		const [carousel, market, price, deadline, leagues, marketTeaser] =
+			await Promise.all([
+				readFile(
+					new URL('../components/home/HomeAutoCarousel.tsx', import.meta.url),
+					'utf8'
+				),
+				readFile(
+					new URL('../components/home/HomeMarketCarousel.tsx', import.meta.url),
+					'utf8'
+				),
+				readFile(
+					new URL(
+						'../components/home/HomePriceChangeCarousel.tsx',
+						import.meta.url
+					),
+					'utf8'
+				),
+				readFile(
+					new URL('../components/home/DeadlineSection.tsx', import.meta.url),
+					'utf8'
+				),
+				readFile(
+					new URL(
+						'../components/home/PersonalLeagueCarousel.tsx',
+						import.meta.url
+					),
+					'utf8'
+				),
+				readFile(
+					new URL('../components/home/MarketTeaser.tsx', import.meta.url),
+					'utf8'
+				)
+			])
+
+		assert.equal(carousel.match(/data-share-exclude="true"/g)?.length, 2)
+		assert.match(carousel, /data-share-carousel-track="true"/)
+		assert.match(carousel, /data-share-carousel-inactive=/)
+		for (const source of [market, price]) {
+			assert.match(source, /data-share-preserve-width="true"/)
+			assert.match(source, /data-share-fit-content="true"/)
+			assert.match(source, /<ShareActions[\s\S]*actions=\{\['image'\]\}/)
+		}
+		assert.match(market, /LocalUpdatedLabel/)
+		assert.match(market, /ownershipUpdatedAt/)
+		assert.match(price, /LocalUpdatedLabel/)
+		assert.match(price, /value=\{likely\.capturedAt\}/)
+		assert.doesNotMatch(price, /likely\.notice/)
+		assert.match(price, /capturedAt: string \| null/)
+		assert.match(marketTeaser, /ownershipUpdatedAt/)
+		assert.match(marketTeaser, /lastUpdated', \{ date: '' \}/)
+		assert.match(deadline, /data-share-preserve-width="true"/)
+		assert.match(deadline, /data-share-deadline-actions="true"/)
+		assert.match(
+			await readFile(
+				new URL('../app/globals.css', import.meta.url),
+				'utf8'
+			),
+			/data-share-deadline-actions[\s\S]*flex: 1 1 auto !important[\s\S]*width: auto !important[\s\S]*margin-left: auto !important[\s\S]*justify-content: flex-end !important/
+		)
+		assert.match(
+			deadline,
+			/buttonClassName="text-primary-ink hover:text-primary-ink"/
+		)
+		assert.match(leagues, /data-share-preserve-width="true"/)
+		assert.match(leagues, /data-share-fit-content="true"/)
+		assert.match(leagues, /<ShareActions[\s\S]*actions=\{\['image'\]\}/)
+	})
+})
+
+describe('share notifications', () => {
+	it('uses one notification lifecycle for text and image sharing', async () => {
+		const [sharedActions, matchActions, notification] = await Promise.all([
+			readFile(
+				new URL('../components/share/ShareActions.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../components/live/match-card/MatchShareButton.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/share/share-notification.ts', import.meta.url),
+				'utf8'
+			)
+		])
+
+		for (const source of [sharedActions, matchActions]) {
+			assert.match(source, /notifyShareSuccess/)
+			assert.match(source, /notifyShareWarning/)
+			assert.doesNotMatch(
+				source,
+				/from ['"]sonner['"]|toast\.(success|warning)/
+			)
+		}
+		assert.match(notification, /id: SHARE_NOTIFICATION_ID/)
+		assert.match(notification, /duration: 2400/)
+		assert.match(
+			notification,
+			/toast\.success\(message, SHARE_NOTIFICATION_OPTIONS\)/
+		)
+		assert.match(
+			notification,
+			/toast\.warning\(message, SHARE_NOTIFICATION_OPTIONS\)/
+		)
+	})
+})
+
+describe('player detail share card', () => {
+	it('shares the complete detail card without a nested scrollbar', async () => {
+		const source = await readFile(
+			new URL('../components/live/PlayerDetailModal.tsx', import.meta.url),
+			'utf8'
+		)
+
+		assert.match(
+			source,
+			/const shareRef = useRef<HTMLDivElement \| null>\(null\)/
+		)
+		assert.match(source, /data-share-fit-content="true"/)
+		assert.match(source, /data-share-preserve-width="true"/)
+		assert.match(source, /typeof player\.bps === 'number'[\s\S]*label: 'BPS'/)
+		assert.match(source, /player\.bonusPoints > 0[\s\S]*bonusPointsShort/)
+		assert.match(source, /share-player-breakdown-label[\s\S]*whitespace-nowrap/)
+		assert.match(source, /share-player-team min-w-0 truncate/)
+		assert.match(
+			source,
+			/<ShareActions[\s\S]*imageRef=\{shareRef\}[\s\S]*actions=\{\['image'\]\}/
+		)
+		assert.match(source, /max-h-\[calc\(100dvh-1rem\)\][\s\S]*overflow-y-auto/)
+		assert.doesNotMatch(source, /max-h-\[min\(60vh,28rem\)\]/)
+	})
+})
+
+describe('live match share card', () => {
+	it('captures the complete variable-height card without controls or player list', async () => {
+		const [source, playerList] = await Promise.all([
+			readFile(
+				new URL('../components/live/MatchCard.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../components/live/match-card/MatchPlayerList.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		assert.match(source, /<Card[\s\S]*ref=\{shareRef\}/)
+		assert.match(source, /data-share-preserve-width="true"/)
+		assert.match(source, /data-share-fit-content="true"/)
+		assert.match(source, /data-live-match-card="true"/)
+		assert.match(source, /data-share-exclude="true"[\s\S]*<MatchShareButton/)
+		assert.match(playerList, /data-share-exclude="true"/)
+		assert.doesNotMatch(source, /<div ref=\{shareRef\}/)
+
+		const [header, highlights, styles] = await Promise.all([
+			readFile(
+				new URL(
+					'../components/live/match-card/MatchHeader.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../components/live/match-card/MatchHighlights.tsx',
+					import.meta.url
+				),
+				'utf8'
+			),
+			readFile(new URL('../app/globals.css', import.meta.url), 'utf8')
+		])
+		assert.match(header, /share-match-team-name/)
+		assert.match(header, /share-match-team-summary/)
+		assert.match(header, /share-match-score-row/)
+		assert.match(highlights, /share-match-highlight-item/)
+		assert.match(styles, /share-match-team-name[\s\S]*white-space: nowrap/)
+		assert.match(styles, /share-match-team-name[\s\S]*font-family: Arial/)
+		assert.match(styles, /share-match-highlight-item[\s\S]*white-space: nowrap/)
+		assert.match(
+			styles,
+			/share-match-highlight-item > span[\s\S]*flex: 0 0 auto !important/
+		)
+
+		const navigation = await readFile(
+			new URL(
+				'../components/live/match-card/MatchNavigation.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+		const liveMatches = await readFile(
+			new URL('../app/live/matches/LiveMatchesClient.tsx', import.meta.url),
+			'utf8'
+		)
+		assert.match(navigation, /data-match-navigation="true"/)
+		assert.match(liveMatches, /activeMatches\.length < 2/)
+		assert.match(liveMatches, /event\.key === 'ArrowLeft'/)
+		assert.match(liveMatches, /event\.key === 'ArrowRight'/)
+		assert.match(liveMatches, /tabCountLabel\('live'\)/)
+		assert.match(liveMatches, /tabCountLabel\('finished'\)/)
+		assert.match(liveMatches, /tabCountLabel\('not-started'\)/)
+		assert.match(liveMatches, /data-match-navigation="true"/)
+		assert.match(
+			liveMatches,
+			/scrollIntoView\(\{ behavior: 'smooth', block: 'start' \}\)/
+		)
+	})
+})
+
 describe('My FPL hydration', () => {
 	it('renders the selected tournament label deterministically on the server', async () => {
 		const source = await readFile(
@@ -106,7 +559,7 @@ describe('My FPL hydration', () => {
 
 describe('live tournament filter visibility', () => {
 	it('keeps both advanced filters recoverable after dismissal', async () => {
-		const [clientSource, filtersSource] = await Promise.all([
+		const [clientSource, ownershipSource, exposureSource] = await Promise.all([
 			readFile(
 				new URL(
 					'../app/live/tournaments/TournamentClient.tsx',
@@ -116,56 +569,88 @@ describe('live tournament filter visibility', () => {
 			),
 			readFile(
 				new URL(
-					'../components/tournament/LiveCompetitionBoardFilters.tsx',
+					'../components/player/PlayerOwnershipFilter.tsx',
 					import.meta.url
 				),
+				'utf8'
+			),
+			readFile(
+				new URL('../components/player/TeamExposureFilter.tsx', import.meta.url),
 				'utf8'
 			)
 		])
 
-		assert.match(clientSource, /setShowAdvancedFilters\(open => !open\)/)
-		assert.match(clientSource, /<LiveCompetitionBoardFilters/)
-		assert.match(
-			clientSource,
-			/playerRevision: boardPage\.playerRevision,\s*onRevisionGone: handleBoardRevisionGone/
-		)
-		assert.match(filtersSource, /t\('playerOwnership'\)/)
-		assert.match(filtersSource, /t\('teamExposure'\)/)
+		assert.match(clientSource, /setShowOwnershipFilter\(true\)/)
+		assert.match(clientSource, /setShowTeamExposureFilter\(true\)/)
+		assert.match(clientSource, /filtersT\('showFilter'/)
+		assert.match(ownershipSource, /t\("hideFilter"/)
+		assert.match(exposureSource, /t\('hideFilter'/)
 	})
 
-	it('keeps setup polling failures handled and nullable score headers unavailable', async () => {
+	it('uses the event-aware live desk for official H2H board fallback', async () => {
 		const source = await readFile(
 			new URL('../app/live/tournaments/TournamentClient.tsx', import.meta.url),
 			'utf8'
 		)
 
-		assert.match(
-			source,
-			/catch \{\s*if \(!cancelled\) setListError\(t\('listFailed'\)\)/
+		assert.ok(source.includes('GET_TOURNAMENT_LIVE_DESK'))
+		assert.ok(source.includes("detailDesk?.kind !== 'OFFICIAL_H2H'"))
+		assert.ok(
+			source.includes(
+				'{ entryId, selectedTournamentId: tournamentId, ref: null }'
+			)
 		)
-		assert.match(
-			source,
-			/scoresAvailable=\{\s*typeof boardPage\?\.averageEventPoints === 'number' &&\s*typeof boardPage\?\.highestEventPoints === 'number'/
+		assert.ok(
+			source.includes('response.entryLiveCompetitionsDesk.eventId !== eventId')
 		)
 	})
-})
 
-describe('live tournament detail sorting', () => {
-	it('only commits server sort state after accepted rows', async () => {
+	it('allows keyboard gameweek navigation on official H2H boards', async () => {
 		const source = await readFile(
 			new URL(
-				'../app/live/tournaments/[id]/TournamentDetailClient.tsx',
+				'../components/tournament/OfficialH2HCompetitionView.tsx',
 				import.meta.url
 			),
 			'utf8'
 		)
 
-		assert.match(source, /tableSort\?: StandingsRefreshRequest\['tableSort'\]/)
-		assert.match(source, /const requestedSort = \{ column, direction \}/)
+		assert.ok(source.includes("keyboardEvent.key === 'ArrowLeft'"))
+		assert.ok(source.includes("keyboardEvent.key === 'ArrowRight'"))
+		assert.ok(source.includes('document.activeElement'))
+		assert.ok(
+			source.includes(
+				'router.push(`/live/competitions/${tournamentId}?gw=${targetEvent}`)'
+			)
+		)
+		assert.ok(source.includes('enabled: showStandings'))
+	})
+})
+
+describe('entry comparison layout', () => {
+	it('keeps the comparison compact and aligns two complete XIs', async () => {
+		const source = await readFile(
+			new URL(
+				'../components/tournament/EntryCompareSheet.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.ok(source.includes('function alignPickRows('))
+		assert.ok(source.includes('rows.sort(compareAlignedRows)'))
+		assert.doesNotMatch(source, /function alignPositionGroup\(/)
 		assert.match(
 			source,
-			/refreshStandings\([\s\S]*requestedSort[\s\S]*\)\.then\(applied => \{[\s\S]*if \(applied\) setBoardSort\(requestedSort\)/
+			/leftPicks\.filter\(pick => pick\.positionLabel !== 'SUB'\)/
 		)
+		assert.match(
+			source,
+			/rightPicks\.filter\(pick => pick\.positionLabel !== 'SUB'\)/
+		)
+		assert.match(source, /gap-0 overflow-y-auto/)
+		assert.match(source, /\[scrollbar-width:none\]/)
+		assert.match(source, /inline-flex min-h-5 items-center/)
+		assert.match(source, /min-w-\[48px\] whitespace-nowrap/)
 	})
 })
 

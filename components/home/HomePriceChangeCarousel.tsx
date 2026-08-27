@@ -1,11 +1,13 @@
 'use client'
 
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
+import { LocalUpdatedLabel } from '@/components/data/LocalUpdatedLabel'
 import { MarketPositionBadge } from '@/components/data/MarketMarkup'
 import {
 	HomeAutoCarousel,
 	type HomeAutoCarouselSlide
 } from '@/components/home/HomeAutoCarousel'
+import { ShareActions } from '@/components/share/ShareActions'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Link } from '@/i18n/navigation'
@@ -16,11 +18,14 @@ import type {
 } from '@/lib/graphql/operations/price-changes'
 import { cn } from '@/lib/utils'
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Minus } from 'lucide-react'
+import { useRef } from 'react'
+import type { ReactNode } from 'react'
 
 export type HomePriceChangeCarouselLabels = {
 	title: string
 	todayPage: string
 	todayDescription: string
+	todayUpdatedPrefix: string
 	likelyPage: string
 	likelyDescription: string
 	openRecorded: string
@@ -51,14 +56,15 @@ export type HomePriceChangeCarouselProps = {
 	actual: {
 		state: 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE'
 		coverageLabel: string | null
+		capturedAt: string | null
 		rises: MarketPriceChange[]
 		falls: MarketPriceChange[]
 	}
 	likely: {
 		state: 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE'
+		capturedAt: string | null
 		rises: PriceChangePlayer[]
 		falls: PriceChangePlayer[]
-		notice: string | null
 	}
 	locale: string
 	labels: HomePriceChangeCarouselLabels
@@ -89,7 +95,7 @@ function EmptyState({
 	description
 }: {
 	title: string
-	description?: string
+	description?: ReactNode
 }) {
 	return (
 		<div className="flex min-h-[18rem] flex-col items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/15 px-4 py-8 text-center">
@@ -228,7 +234,15 @@ function TodayPage({
 		return (
 			<EmptyState
 				title={labels.noPriceChanges}
-				description={actual.coverageLabel ?? undefined}
+				description={
+					actual.coverageLabel ? (
+						<LocalUpdatedLabel
+							value={actual.capturedAt}
+							prefix={labels.todayUpdatedPrefix}
+							fallback={actual.coverageLabel}
+						/>
+					) : undefined
+				}
 			/>
 		)
 	}
@@ -236,7 +250,13 @@ function TodayPage({
 	return (
 		<div className="space-y-6">
 			{actual.coverageLabel ? (
-				<p className="text-xs text-muted-foreground">{actual.coverageLabel}</p>
+				<p className="text-xs text-muted-foreground">
+					<LocalUpdatedLabel
+						value={actual.capturedAt}
+						prefix={labels.todayUpdatedPrefix}
+						fallback={actual.coverageLabel}
+					/>
+				</p>
 			) : null}
 			<PriceChangeDirection
 				changes={actual.rises}
@@ -410,30 +430,23 @@ function LikelyPage({
 	}
 
 	return (
-		<div className="space-y-3">
-			{likely.notice ? (
-				<p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground">
-					{likely.notice}
-				</p>
-			) : null}
-			<div className="grid gap-4 sm:grid-cols-2">
-				<PredictionDirection
-					players={likely.rises}
-					direction="RISE"
-					locale={locale}
-					title={labels.trendRises}
-					emptyLabel={labels.noTrendRises}
-					labels={labels}
-				/>
-				<PredictionDirection
-					players={likely.falls}
-					direction="FALL"
-					locale={locale}
-					title={labels.trendFalls}
-					emptyLabel={labels.noTrendFalls}
-					labels={labels}
-				/>
-			</div>
+		<div className="grid gap-4 sm:grid-cols-2">
+			<PredictionDirection
+				players={likely.rises}
+				direction="RISE"
+				locale={locale}
+				title={labels.trendRises}
+				emptyLabel={labels.noTrendRises}
+				labels={labels}
+			/>
+			<PredictionDirection
+				players={likely.falls}
+				direction="FALL"
+				locale={locale}
+				title={labels.trendFalls}
+				emptyLabel={labels.noTrendFalls}
+				labels={labels}
+			/>
 		</div>
 	)
 }
@@ -444,11 +457,11 @@ export function HomePriceChangeCarousel({
 	locale,
 	labels
 }: HomePriceChangeCarouselProps) {
+	const shareRef = useRef<HTMLDivElement | null>(null)
 	const slides: HomeAutoCarouselSlide[] = [
 		{
 			id: 'today',
 			label: labels.todayPage,
-			enabled: actual.state !== 'UNAVAILABLE',
 			content: (
 				<TodayPage
 					actual={actual}
@@ -460,7 +473,6 @@ export function HomePriceChangeCarousel({
 		{
 			id: 'likely',
 			label: labels.likelyPage,
-			enabled: likely.state !== 'UNAVAILABLE',
 			content: (
 				<LikelyPage
 					likely={likely}
@@ -470,11 +482,13 @@ export function HomePriceChangeCarousel({
 			)
 		}
 	]
-	if (!slides.some(slide => slide.enabled !== false)) return null
 
 	return (
 		<Card
+			ref={shareRef}
 			aria-labelledby="home-price-changes-title"
+			data-share-preserve-width="true"
+			data-share-fit-content="true"
 			className="flex h-full flex-col rounded-none p-4 sm:rounded-lg sm:p-6 lg:p-8"
 		>
 			<HomeAutoCarousel
@@ -491,8 +505,20 @@ export function HomePriceChangeCarousel({
 						</h2>
 						<p className="mt-1 max-w-sm text-xs text-muted-foreground">
 							{slide.id === 'today'
-								? labels.todayDescription
-								: labels.likelyDescription}
+								? (
+										<LocalUpdatedLabel
+											value={actual.capturedAt}
+											prefix={labels.todayUpdatedPrefix}
+											fallback={labels.todayDescription}
+										/>
+								  )
+								: (
+										<LocalUpdatedLabel
+											value={likely.capturedAt}
+											prefix={labels.todayUpdatedPrefix}
+											fallback={labels.likelyDescription}
+										/>
+								  )}
 						</p>
 					</div>
 				)}
@@ -502,17 +528,29 @@ export function HomePriceChangeCarousel({
 					const label =
 						slide.id === 'today' ? labels.openRecorded : labels.openPredictions
 					return (
-						<Link
-							href={href}
-							prefetch={false}
-							className="inline-flex min-h-9 shrink-0 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
+						<div
+							className="flex shrink-0 items-center gap-3"
+							data-share-exclude="true"
 						>
-							{label}
-							<ArrowRight
-								aria-hidden="true"
-								className="size-4"
+							<Link
+								href={href}
+								prefetch={false}
+								className="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-primary-ink underline-offset-4 hover:underline"
+							>
+								{label}
+								<ArrowRight
+									aria-hidden="true"
+									className="size-4"
+								/>
+							</Link>
+							<ShareActions
+								actions={['image']}
+								text={slide.label}
+								imageRef={shareRef}
+								title={slide.label}
+								compact
 							/>
-						</Link>
+						</div>
 					)
 				}}
 			/>
