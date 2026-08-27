@@ -149,13 +149,12 @@
     font-family: Arial, Helvetica, sans-serif !important;
   }
 
-  [data-share-rendering='true'] h1,
-  [data-share-rendering='true'] h2,
-  [data-share-rendering='true'] h3,
-  [data-share-rendering='true'] [data-share-title='true'],
-  [data-share-rendering='true'] [data-share-meta='true'] {
-    white-space: nowrap !important;
-  }
+	[data-share-rendering='true'] h1,
+	[data-share-rendering='true'] h2,
+	[data-share-rendering='true'] h3,
+	[data-share-rendering='true'] [data-share-title='true'] {
+		white-space: nowrap !important;
+	}
 
   /* League titles share the row with a fixed status cluster. Let the title
      consume the remaining width and wrap instead of inheriting an ellipsis

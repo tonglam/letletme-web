@@ -69,4 +69,30 @@ describe('live points GraphQL document', () => {
 		assert.ok(score)
 		assert.equal(score?.eventPoints, 71)
 	})
+
+	it('keeps an explicit null calculation mode untraceable', () => {
+		const score = traceableOfficialManagerScore({
+			eventPoints: 71,
+			netEventPoints: 71,
+			totalPoints: 71,
+			totalScope: 'OVERALL',
+			eventRank: 1,
+			overallRank: 1,
+			leagueRank: null,
+			transferCost: 0,
+			source: 'FPL_FINAL_RESULT',
+			state: 'FINAL',
+			calculationMode: null,
+			eventPointSemantics: 'ZERO_COST_EQUIVALENT',
+			revision: 'final:1:6953:test',
+			checkedAt: '2026-08-27T08:08:31.281Z',
+			upstreamUpdatedAt: null,
+			staleAt: null,
+			nextRefreshAt: null,
+			reconciliation: 'MATCHED',
+			reasonCodes: []
+		})
+
+		assert.equal(score, undefined)
+	})
 })

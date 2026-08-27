@@ -70,6 +70,7 @@ function MatchCardComponent({
 							match={match}
 							imageRef={shareRef}
 							onTextFallback={setManualShareText}
+							onTextFallbackClear={() => setManualShareText(null)}
 						/>
 				) : null}
 				<MatchNavigation

@@ -20,7 +20,7 @@ const DEFAULT_AUTHORITY_LABELS: LiveManagerScoreAuthorityLabels = {
 function effectiveCalculationMode(
 	score: Pick<LiveManagerScore, 'calculationMode' | 'source'>
 ): LiveManagerScore['calculationMode'] {
-	if (score.calculationMode) return score.calculationMode
+	if (score.calculationMode !== undefined) return score.calculationMode
 	if (score.source === 'FPL_EVENT_LIVE') return 'PROJECTED_AUTOSUBS'
 	if (score.source === 'FPL_FINAL_RESULT') return 'FINAL_RESULT'
 	return null

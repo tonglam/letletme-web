@@ -27,7 +27,8 @@ export function ShareActions({
 	disabled = false,
 	actions = ['text', 'image'] as ShareActionKind[],
 	compact = false,
-	onTextFallback
+	onTextFallback,
+	onTextFallbackClear
 }: {
 	text: ShareTextValue
 	imageRef?: RefObject<HTMLElement | null>
@@ -39,6 +40,7 @@ export function ShareActions({
 	actions?: ShareActionKind[]
 	compact?: boolean
 	onTextFallback?: (text: string) => void
+	onTextFallbackClear?: () => void
 }) {
 	const t = useTranslations('Share')
 	const [textShared, setTextShared] = useState(false)
@@ -68,6 +70,7 @@ export function ShareActions({
 		const result = await shareText(value, { title })
 		if (result === 'shared') {
 			setManualShareText(null)
+			onTextFallbackClear?.()
 			setTextShared(true)
 			notifyShareSuccess(t('shareTextShared'))
 			window.setTimeout(() => setTextShared(false), 2000)
@@ -75,6 +78,7 @@ export function ShareActions({
 		}
 		if (result === 'copied') {
 			setManualShareText(null)
+			onTextFallbackClear?.()
 			setTextShared(true)
 			notifyShareSuccess(t('shareTextCopied'))
 			window.setTimeout(() => setTextShared(false), 2000)
@@ -85,7 +89,7 @@ export function ShareActions({
 			else setManualShareText(value)
 			reportFailure(result)
 		}
-	}, [onTextFallback, reportFailure, resolveText, t, title])
+	}, [onTextFallback, onTextFallbackClear, reportFailure, resolveText, t, title])
 
 	const handleImageShare = useCallback(async () => {
 		const element =

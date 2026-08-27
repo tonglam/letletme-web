@@ -10,11 +10,13 @@ import { formatMatchShareText } from './match-share'
 export function MatchShareButton({
 	match,
 	imageRef,
-	onTextFallback
+	onTextFallback,
+	onTextFallbackClear
 }: {
 	match: Match
 	imageRef: RefObject<HTMLElement | null>
 	onTextFallback?: (text: string) => void
+	onTextFallbackClear?: () => void
 }) {
 	const t = useTranslations('LiveMatches')
 	const locale = useLocale() as AppLocale
@@ -54,6 +56,7 @@ export function MatchShareButton({
 			title={`${match.homeTeam.shortName} – ${match.awayTeam.shortName}`}
 			compact
 			onTextFallback={onTextFallback}
+			onTextFallbackClear={onTextFallbackClear}
 			className="flex flex-wrap items-center justify-end gap-2"
 		/>
 	)

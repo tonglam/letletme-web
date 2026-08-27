@@ -554,7 +554,8 @@ export async function MarketDashboard({
 	requestedDate,
 	dailyDates,
 	revision = null,
-	locale
+	locale,
+	glance
 }: {
 	pulse: MarketPulse | null
 	ownership: OwnershipResult | null
@@ -563,6 +564,7 @@ export async function MarketDashboard({
 	dailyDates: string[]
 	revision?: string | null
 	locale: string
+	glance?: ReactNode
 }) {
 	const t: MarketT = await getTranslations('Market')
 	const priceChangeDate = pulse
@@ -754,8 +756,7 @@ export async function MarketDashboard({
 	return (
 		<div className="space-y-8">
 			{pulse ? (
-				<>
-					<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
+				<section className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
 						<CoverageMeta
 							coverage={pulse.coverage}
 							locale={locale}
@@ -765,8 +766,8 @@ export async function MarketDashboard({
 							{t(`viewMode.${viewMode}`)}
 						</p>
 					</section>
-				</>
 			) : null}
+			{glance}
 			{order.map(id => (
 				<section key={id}>{sectionById[id]}</section>
 			))}

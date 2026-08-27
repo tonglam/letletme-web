@@ -119,11 +119,12 @@ describe('public GraphQL cache contract', () => {
 	})
 
 	it('correlates signed capacity page runs without making cache keys request-derived', async () => {
-		const [playerStats, fixtures, market, serverContext, publicServer] =
+		const [playerStats, fixtures, market, marketDashboard, serverContext, publicServer] =
 			await Promise.all([
 				read('app/[locale]/explore/player-stats/page.tsx'),
 				read('app/[locale]/explore/fixtures/page.tsx'),
 				read('app/[locale]/explore/market/page.tsx'),
+				read('app/data/market/MarketDashboard.tsx'),
 				read('lib/server-user-context.ts'),
 				read('lib/graphql-server.ts')
 			])
@@ -147,6 +148,11 @@ describe('public GraphQL cache contract', () => {
 		assert.match(
 			market,
 			/<Suspense fallback=\{null\}>[\s\S]*<MarketGlanceContent/
+		)
+		assert.match(market, /const marketGlance = \(/)
+		assert.match(market, /glance=\{marketGlance\}/)
+		assert.ok(
+			marketDashboard.indexOf('{glance}') < marketDashboard.indexOf('{order.map')
 		)
 		assert.match(market, /renderAvailableGlance/)
 		assert.match(serverContext, /capacityRequestIdForHeaders/)

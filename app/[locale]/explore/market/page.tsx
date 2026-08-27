@@ -215,6 +215,17 @@ async function renderMarketContent({
 	const dailyCoverage =
 		dailyOverview?.coverage ??
 		(!date && ownership?.period === 'DAILY' ? ownership.coverage : null)
+	const marketGlance = (
+		<Suspense fallback={null}>
+			<MarketGlanceContent
+				period={period}
+				dailyOverview={dailyOverview}
+				gameweekOverview={gameweekOverview}
+				glanceOverviewPromise={glanceOverviewPromise}
+				locale={locale}
+			/>
+		</Suspense>
+	)
 
 	return (
 		<>
@@ -246,16 +257,8 @@ async function renderMarketContent({
 				})}
 				revision={revision}
 				locale={locale}
+				glance={marketGlance}
 			/>
-			<Suspense fallback={null}>
-				<MarketGlanceContent
-					period={period}
-					dailyOverview={dailyOverview}
-					gameweekOverview={gameweekOverview}
-					glanceOverviewPromise={glanceOverviewPromise}
-					locale={locale}
-				/>
-			</Suspense>
 			{!pulse ? (
 				<section className="mt-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
 					<MarketPlayerLookupLauncher initialOpen />

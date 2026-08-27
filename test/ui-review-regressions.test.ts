@@ -467,7 +467,11 @@ describe('homepage share images', () => {
 		)
 		assert.match(
 			styles,
-			/\[data-share-rendering='true'\] h1,[\s\S]*\[data-share-rendering='true'\] \[data-share-meta='true'\][\s\S]*white-space: nowrap !important/
+			/\[data-share-rendering='true'\] h1,[\s\S]*white-space: nowrap !important/
+		)
+		assert.doesNotMatch(
+			styles,
+			/\[data-share-rendering='true'\] \[data-share-meta='true'\][\s\S]*white-space: nowrap !important/
 		)
 		assert.match(
 			deadline,
@@ -619,6 +623,7 @@ describe('live match share card', () => {
 		assert.match(source, /data-live-match-card="true"/)
 		assert.match(source, /data-share-exclude="true"[\s\S]*<MatchShareButton/)
 		assert.match(source, /onTextFallback=\{setManualShareText\}/)
+		assert.match(source, /onTextFallbackClear=\{\(\) => setManualShareText\(null\)\}/)
 		assert.match(
 			source,
 			/<div data-share-exclude="true">[\s\S]*<ShareTextFallback/
