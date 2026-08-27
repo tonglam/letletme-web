@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { playerDataAvailabilityIssues } from '../app/data/player-stats/_lib/player-data-availability'
+import {
+	playerDataAvailabilityIssues,
+	playerDataAvailabilityIssuesForPlayers
+} from '../app/data/player-stats/_lib/player-data-availability'
 import type {
 	PlayerDataSectionAvailability,
 	PlayerDataState
@@ -67,6 +70,38 @@ describe('player data availability presentation', () => {
 					sourceCheckedAt: null
 				}
 			]
+		)
+	})
+
+	it('keeps comparison-player limitations visible and attributed', () => {
+		const authoritative = {
+			isFullyAuthoritative: true,
+			market: section('READY'),
+			historicalTeam: section('EMPTY'),
+			fixtures: section('READY'),
+			recentGameweeks: section('READY')
+		}
+		const issues = playerDataAvailabilityIssuesForPlayers([
+			{ id: 1, webName: 'Saka', dataAvailability: authoritative },
+			{
+				id: 2,
+				webName: 'Palmer',
+				dataAvailability: {
+					...authoritative,
+					isFullyAuthoritative: false,
+					fixtures: section('FALLBACK')
+				}
+			}
+		])
+
+		assert.deepEqual(
+			issues.map(issue => [
+				issue.playerId,
+				issue.playerName,
+				issue.section,
+				issue.state
+			]),
+			[[2, 'Palmer', 'fixtures', 'FALLBACK']]
 		)
 	})
 })

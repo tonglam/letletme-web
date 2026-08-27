@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { parse, visit } from 'graphql'
-import { PLAYER_STATS_DESK_QUERIES } from '../lib/graphql/operations/players'
+import {
+	PLAYER_STATS_DESK_MAX_AST_NODES,
+	PLAYER_STATS_DESK_QUERIES
+} from '../lib/graphql/operations/players'
 import {
 	mergePlayerStatsDeskLoadResults,
 	normalizePlayerStatsDeskResult,
@@ -89,8 +92,8 @@ describe('player stats desk contract', () => {
 			let nodes = 0
 			visit(document, { enter: () => void (nodes += 1) })
 			assert.ok(
-				nodes < 200,
-				`${section} desk query has ${nodes} AST nodes (production limit 200)`
+				nodes <= PLAYER_STATS_DESK_MAX_AST_NODES,
+				`${section} desk query has ${nodes} AST nodes (production limit ${PLAYER_STATS_DESK_MAX_AST_NODES})`
 			)
 		}
 	})

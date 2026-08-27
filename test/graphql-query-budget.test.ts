@@ -18,6 +18,7 @@ import {
 } from '../lib/graphql/operations/price-changes'
 import {
 	GET_PLAYER_STATS_DESK_OVERVIEW,
+	PLAYER_STATS_DESK_MAX_AST_NODES,
 	GET_PLAYER_STATE_PROFILE,
 	SEARCH_PLAYERS_FOR_PICKER
 } from '../lib/graphql/operations/players'
@@ -166,12 +167,13 @@ describe('GraphQL request budget', () => {
 		)
 	})
 
-	it('keeps the Player Stats desk overview below the production guard', () => {
+	it('keeps the Player Stats desk overview within its bounded production guard', () => {
 		const document = parse(GET_PLAYER_STATS_DESK_OVERVIEW)
 		let astNodes = 0
 		visit(document, { enter: () => void (astNodes += 1) })
+		assert.equal(astNodes, 254)
 		assert.ok(
-			astNodes < 200,
+			astNodes <= PLAYER_STATS_DESK_MAX_AST_NODES,
 			`GET_PLAYER_STATS_DESK_OVERVIEW has ${astNodes} AST nodes`
 		)
 	})

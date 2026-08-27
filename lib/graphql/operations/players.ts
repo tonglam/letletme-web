@@ -681,6 +681,11 @@ const PLAYER_STATS_DESK_ARGUMENTS = `
   (playerIds: $playerIds, eventId: $eventId, horizon: $horizon)
 `
 
+// GraphQL grants only this fixed, maximum-two-player desk root a scoped AST
+// allowance above the generic 200-node ceiling. Keep Web's exact documents
+// bound to the same admission contract.
+export const PLAYER_STATS_DESK_MAX_AST_NODES = 280
+
 export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
   query GetPlayerStatsDeskOverview ${PLAYER_STATS_DESK_VARIABLES} {
     playerStatsDesk ${PLAYER_STATS_DESK_ARGUMENTS} {
@@ -693,8 +698,17 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
 				id webName teamShortName elementType elementTypeName
 				price
 				statsContext { season status }
-				injuryAvailability { status }
-				dataAvailability { isFullyAuthoritative }
+				injuryAvailability {
+					status news newsAdded observedDate capturedAt
+					chanceOfPlayingThisRound chanceOfPlayingNextRound stale
+				}
+				dataAvailability {
+					isFullyAuthoritative
+					market { state reasonCode revision sourceCheckedAt }
+					historicalTeam { state reasonCode revision sourceCheckedAt }
+					fixtures { state reasonCode revision sourceCheckedAt }
+					recentGameweeks { state reasonCode revision sourceCheckedAt }
+				}
 				totalPoints selectedByPercent transfersInEvent transfersOutEvent
 				fixtures { id event againstTeamShortName wasHome finished difficulty bgw }
 			}
