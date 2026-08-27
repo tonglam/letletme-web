@@ -12,6 +12,7 @@ import {
 	type MyFplReviewState,
 	type MyFplSnapshotMeta
 } from '@/lib/graphql/operations/my-fpl'
+import type { FplClassicLeagueRank } from '@/lib/graphql/operations/leagues'
 import {
 	type EntryTournament,
 	type TournamentEntryRankingSummary,
@@ -47,6 +48,7 @@ import {
 
 export interface TournamentStatsClientProps {
 	entryId: number
+	initialFplClassicRanks: FplClassicLeagueRank[]
 	initialCurrentGameweek: number
 	initialLatestFinalizedGameweek?: number | null
 	initialTournaments: EntryTournament[]

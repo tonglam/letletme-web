@@ -72,6 +72,7 @@ describe('Home fixtures route', () => {
 			response.headers.get('cache-control'),
 			HOME_FIXTURES_PUBLIC_CACHE_CONTROL
 		)
+		assert.match(HOME_FIXTURES_PUBLIC_CACHE_CONTROL, /stale-if-error=86400/)
 		assert.equal(response.headers.get('etag'), homeFixturesEtag(payload))
 		assert.deepEqual(await response.json(), payload)
 	})
@@ -133,6 +134,7 @@ describe('Home fixtures route', () => {
 			response.headers.get('cache-control'),
 			HOME_FIXTURES_LIVE_CACHE_CONTROL
 		)
+		assert.match(HOME_FIXTURES_LIVE_CACHE_CONTROL, /stale-if-error=300/)
 		assert.equal(response.headers.get('etag'), homeFixturesEtag(payload))
 	})
 })

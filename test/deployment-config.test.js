@@ -24,10 +24,7 @@ test('uses one Git SHA for the self-hosted build and its Vercel-safe prefix for 
 			await config.generateBuildId(),
 			'0123456789abcdef0123456789abcdef01234567'
 		)
-		assert.equal(
-			config.deploymentId,
-			'0123456789abcdef0123456789abcdef'
-		)
+		assert.equal(config.deploymentId, '0123456789abcdef0123456789abcdef')
 		assert.ok(config.deploymentId.length <= 32)
 		assert.equal(config.output, 'standalone')
 		assert.equal(config.experimental.runtimeServerDeploymentId, false)
@@ -50,12 +47,21 @@ test('uses one Git SHA for the self-hosted build and its Vercel-safe prefix for 
 		])
 		assert.equal(config.poweredByHeader, false)
 		assert.equal(
-			rules[0].headers.find(header => header.key === 'X-Content-Type-Options').value,
+			rules[0].headers.find(header => header.key === 'X-Content-Type-Options')
+				.value,
 			'nosniff'
 		)
-		assert.equal(
-			rules[0].headers.find(header => header.key === 'Content-Security-Policy').value.includes("object-src 'none'"),
-			true
+		const contentSecurityPolicy = rules[0].headers.find(
+			header => header.key === 'Content-Security-Policy'
+		).value
+		assert.equal(contentSecurityPolicy.includes("object-src 'none'"), true)
+		assert.match(
+			contentSecurityPolicy,
+			/script-src[^;]*https:\/\/static\.cloudflareinsights\.com[^;]*https:\/\/vercel\.live/
+		)
+		assert.match(
+			contentSecurityPolicy,
+			/connect-src[^;]*https:\/\/cloudflareinsights\.com[^;]*https:\/\/vercel\.live/
 		)
 		assert.deepEqual(rules[1], {
 			source: '/miniprogram.webp',

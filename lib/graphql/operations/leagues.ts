@@ -39,6 +39,35 @@ export interface EntryLeaguesResponse {
 	entryLeagues: EntryLeague[]
 }
 
+export interface FplClassicLeagueRank {
+	leagueId: number
+	name: string
+	rank: number | null
+	previousRank: number | null
+	officialKind: OfficialLeagueKind | null
+}
+
+/**
+ * Keep FPL Classic leagues visible until they are explicitly tracked as a
+ * LetLetMe competition. Tracked leagues remain in the competition selector.
+ */
+export function selectUntrackedFplClassicLeagueRanks(
+	leagues: readonly EntryLeague[]
+): FplClassicLeagueRank[] {
+	return leagues
+		.filter(
+			league =>
+				league.type.toUpperCase() === 'CLASSIC' && league.tournamentId === null
+		)
+		.map(league => ({
+			leagueId: league.id,
+			name: league.name,
+			rank: league.entryRank,
+			previousRank: league.entryLastRank,
+			officialKind: league.officialKind
+		}))
+}
+
 export const GET_PUBLIC_LEAGUE_TRENDS = `
   query PublicLeagueTrends {
     publicLeagueTrends {

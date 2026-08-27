@@ -7,6 +7,11 @@ import {
 import { parseTournamentStatsView } from '@/app/me/tournament/_lib/tournament-stats-url'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import {
+	GET_ENTRY_LEAGUES,
+	selectUntrackedFplClassicLeagueRanks,
+	type EntryLeaguesResponse
+} from '@/lib/graphql/operations/leagues'
+import {
 	GET_MY_FPL_COMPETITION_BOARD,
 	GET_MY_FPL_COMPETITIONS_DESK,
 	type MyFplCompetitionAggregate,
@@ -85,6 +90,25 @@ export default async function TournamentStatsPage({
 		timing.finish('redirect-bind')
 		redirect(localizeHref('/onboarding/bind-entry', locale))
 	}
+
+	const fplClassicRanksPromise = timing
+		.measure('fpl-classic-ranks', () =>
+			executeServerQueryWithSession<EntryLeaguesResponse>(
+				session,
+				GET_ENTRY_LEAGUES,
+				{ entryId },
+				{ cache: 'no-store', timeoutMs: 1_500 }
+			)
+		)
+		.then(response =>
+			selectUntrackedFplClassicLeagueRanks(response.entryLeagues)
+		)
+		.catch(error => {
+			console.warn('[tournament stats] FPL Classic ranks unavailable', {
+				error: error instanceof Error ? error.name : 'UnknownError'
+			})
+			return []
+		})
 
 	const requestedTournamentId = positiveInteger(sp.tournamentId)
 	const requestedEventId = positiveInteger(sp.gw)
@@ -217,12 +241,14 @@ export default async function TournamentStatsPage({
 		console.error('[tournament stats] Failed to seed finalized desk:', error)
 		initialError = t('tournamentStatsFailed')
 	}
+	const initialFplClassicRanks = await fplClassicRanksPromise
 	timing.finish(initialError ? 'unavailable' : 'ready')
 
 	return (
 		<Suspense fallback={<TournamentStatsFallback />}>
 			<TournamentStatsClient
 				entryId={entryId}
+				initialFplClassicRanks={initialFplClassicRanks}
 				initialCurrentGameweek={currentGameweek}
 				initialLatestFinalizedGameweek={initialLatestFinalizedGameweek}
 				initialTournaments={initialTournaments}
