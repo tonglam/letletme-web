@@ -1,8 +1,56 @@
 import type { PriceChangePlayer } from '@/lib/graphql/operations/price-changes'
+import type { SquadPickSeed } from '@/lib/squad-picks'
+
+export const PRICE_CHANGE_SHARE_STATUSES = [
+	'LIKELY_FALL',
+	'VERY_LIKELY_FALL'
+] as const
+
+export const PRICE_CHANGE_SHARE_MAX_PLAYERS = 20
+
+/** Keep price-prediction shares focused on the actionable fall signals. */
+export function selectPriceChangeSharePlayers(
+	players: readonly PriceChangePlayer[]
+): PriceChangePlayer[] {
+	return players.filter(player =>
+		PRICE_CHANGE_SHARE_STATUSES.some(status => status === player.status)
+	)
+}
+
+function squadPlayerKey(webName: string, teamShortName: string): string {
+	return `${webName.trim().toLowerCase()}::${teamShortName.trim().toLowerCase()}`
+}
+
+/** Match the linked squad to the board before either share format filters it. */
+export function selectPriceChangeSquadPlayers(
+	players: readonly PriceChangePlayer[],
+	picks: readonly SquadPickSeed[]
+): PriceChangePlayer[] {
+	const playerById = new Map(
+		players.map(player => [player.playerId, player])
+	)
+	const playerByKey = new Map(
+		players.map(player => [
+			squadPlayerKey(player.webName, player.teamShortName),
+			player
+		])
+	)
+
+	return picks
+		.map(
+			pick =>
+				(pick.elementId != null
+					? playerById.get(pick.elementId)
+					: undefined) ??
+				playerByKey.get(squadPlayerKey(pick.webName, pick.teamShortName))
+		)
+		.filter((player): player is PriceChangePlayer => player != null)
+}
 
 export type PriceChangeShareLabels = {
 	title: string
 	scope: string
+	updated: string
 	deadline: string
 	progress: string
 	signal: string
@@ -28,18 +76,22 @@ function formatMovement(player: PriceChangePlayer): string {
 
 export function formatPriceChangeShareText({
 	players,
+	updatedAtLabel,
 	deadlineLabel,
 	labels,
-	maxPlayers = 20,
+	maxPlayers = PRICE_CHANGE_SHARE_MAX_PLAYERS,
 }: {
 	players: readonly PriceChangePlayer[]
+	updatedAtLabel?: string | null
 	deadlineLabel?: string | null
 	labels: PriceChangeShareLabels
 	maxPlayers?: number
 }): string {
-	const selected = players.slice(0, maxPlayers)
+	const sharePlayers = selectPriceChangeSharePlayers(players)
+	const selected = sharePlayers.slice(0, maxPlayers)
 	const sections = [
 		`${labels.title} · ${labels.scope}`,
+		...(updatedAtLabel ? [`${labels.updated}: ${updatedAtLabel}`] : []),
 		...(deadlineLabel ? [`${labels.deadline}: ${deadlineLabel}`] : []),
 		'',
 	]
@@ -52,8 +104,8 @@ export function formatPriceChangeShareText({
 				`- ${player.webName} ${player.teamShortName} · ${formatPrice(player.currentPrice)} · ${labels.progress} ${formatPercent(player.progressPercent)} · ${labels.signal} ${labels.status[player.status]} · ${labels.movement} ${formatMovement(player)}`,
 			)
 		}
-		if (players.length > selected.length) {
-			sections.push(`… +${players.length - selected.length}`)
+		if (sharePlayers.length > selected.length) {
+			sections.push(`… +${sharePlayers.length - selected.length}`)
 		}
 	}
 

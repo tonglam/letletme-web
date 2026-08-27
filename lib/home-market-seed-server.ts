@@ -29,7 +29,10 @@ const loadHomeMarketDeskFromOrigin = unstable_cache(
 				undefined,
 				{
 					cache: 'no-store',
-					timeoutMs: 2_000,
+					// This aggregate powers an optional Suspense section. Keep the
+					// standard public-read deadline so a cold GraphQL/DB read is not
+					// incorrectly treated as unavailable after only two seconds.
+					timeoutMs: 5_000,
 					suppressErrorLog: true
 				}
 			)

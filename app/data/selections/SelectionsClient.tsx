@@ -1154,6 +1154,7 @@ export default function SelectionsClient({
 							aria-labelledby="sel-ownership"
 							className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
 							ref={ownershipShareRef}
+							data-share-preserve-width="true"
 						>
 							<SectionTitle
 								id="sel-ownership"
@@ -1199,6 +1200,7 @@ export default function SelectionsClient({
 							aria-labelledby="sel-captain"
 							className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
 							ref={captainShareRef}
+							data-share-preserve-width="true"
 						>
 							<SectionTitle
 								id="sel-captain"
@@ -1244,6 +1246,7 @@ export default function SelectionsClient({
 							aria-labelledby="sel-transfers"
 							className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
 							ref={transfersShareRef}
+							data-share-preserve-width="true"
 						>
 							<SectionTitle
 								id="sel-transfers"

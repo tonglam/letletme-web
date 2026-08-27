@@ -633,7 +633,7 @@ export default function GameweekStatsClient({
 									<TeamOfTheWeekSection
 										currentEventId={visibleGameweek}
 										dreamTeam={dreamTeam}
-										showShareActions={false}
+										showShareActions
 									/>
 								)
 							) : null}
@@ -643,6 +643,7 @@ export default function GameweekStatsClient({
 									ref={haulShareRef}
 									data-share-fit-content="true"
 									data-share-preserve-width="true"
+									data-share-reserve-brand-space="true"
 									className="min-w-0"
 								>
 									<StatsSectionCard

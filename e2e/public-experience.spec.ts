@@ -206,11 +206,11 @@ test('home team of the week shows each player name, gameweek score, and detail a
 	).toBeVisible()
 	await expect(dreamTeamCard.getByText(/\d+ 名球员/)).toHaveCount(0)
 	await expect(
-		dreamTeamCard.getByRole('button', { name: '文字', exact: true })
-	).toBeVisible()
-	await expect(
 		dreamTeamCard.getByRole('button', { name: '图片', exact: true })
 	).toBeVisible()
+	await expect(
+		dreamTeamCard.getByRole('button', { name: '文字', exact: true })
+	).toHaveCount(0)
 
 	const playerCards = pitch.locator('button[aria-label^="查看 "]')
 	const playerCount = await playerCards.count()

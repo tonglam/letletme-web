@@ -21,10 +21,9 @@ describe('theme bootstrap', () => {
 
 		assert.ok(source.includes("from 'next/script'"))
 		assert.ok(source.includes('<Script'))
-		assert.ok(source.includes('id="theme-bootstrap"'))
+		assert.ok(source.includes('id="shell-controls-bootstrap"'))
 		assert.ok(source.includes('strategy="beforeInteractive"'))
-		assert.ok(source.includes('dangerouslySetInnerHTML'))
-		assert.ok(source.includes("localStorage.getItem('theme')"))
+		assert.doesNotMatch(source, /dangerouslySetInnerHTML|themeBootstrapScript/)
 		assert.ok(source.includes('<ShellControlsReady />'))
 		assert.ok(source.includes('src="/theme-bootstrap.js"'))
 		assert.equal(source.includes('<script'), false)
@@ -43,17 +42,11 @@ describe('theme bootstrap', () => {
 			)
 		])
 
-		assert.ok(layout.includes('id="theme-bootstrap"'))
-		assert.match(
-			layout,
-			/id="theme-bootstrap"[\s\S]*dangerouslySetInnerHTML=\{\{ __html: themeBootstrapScript \}\}/
-		)
 		assert.match(
 			layout,
 			/id="shell-controls-bootstrap"[\s\S]*data-cfasync="false"[\s\S]*src="\/theme-bootstrap\.js"[\s\S]*strategy="beforeInteractive"/
 		)
 		assert.doesNotMatch(layout, /blocking="render"|fetchPriority="high"/)
-		assert.match(layout, /const themeBootstrapScript = `[\s\S]*localStorage/)
 		assert.ok(bootstrap.includes("localStorage.getItem('theme')"))
 		assert.match(bootstrap, /data-shell-hydrated[\s\S]*shellReadyEvent/)
 		assert.ok(shellReady.includes("'letletme:shell-ready'"))
@@ -95,7 +88,7 @@ describe('live auto-sub presentation', () => {
 		for (const source of [playerRow, squadPitch]) {
 			assert.doesNotMatch(source, />\s*AS\{[^}]+\}\s*</)
 			assert.match(source, /\{\w+ \? '↑' : '↓'\}/)
-}
+		}
 		assert.match(squadPitch, /grid-cols-\[1fr_auto\]/)
 		assert.match(
 			squadPitch,
@@ -117,6 +110,51 @@ describe('dream team share image', () => {
 			source,
 			/<SquadPitch[\s\S]*ref=\{shareRef\}[\s\S]*showHeader[\s\S]*title=\{t\('teamOfWeek'\)\}/
 		)
+		assert.match(
+			source,
+			/<ShareActions[\s\S]*actions=\{\['image'\]\}[\s\S]*imageRef=\{shareRef\}/
+		)
+	})
+})
+
+describe('full league list sharing', () => {
+	it('shares the complete view-all list from its dialog', async () => {
+		const [autoCarousel, leagueCarousel] = await Promise.all([
+			readFile(
+				new URL('../components/home/HomeAutoCarousel.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../components/home/PersonalLeagueCarousel.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		assert.match(autoCarousel, /fullContentId/)
+		assert.match(autoCarousel, /data-share-fit-content="true"/)
+		assert.match(autoCarousel, /data-share-full-content="true"/)
+		assert.match(autoCarousel, /data-share-reserve-brand-space="true"/)
+		assert.match(
+			autoCarousel,
+			/renderFullContentAction\(activeSlide, fullContentId\)/
+		)
+		assert.match(
+			autoCarousel,
+			/flex min-w-0 items-start justify-between gap-4 pr-12/
+		)
+		assert.match(
+			leagueCarousel,
+			/renderFullContentAction=\{\(slide, fullContentId\)/
+		)
+		assert.match(leagueCarousel, /imageTargetId=\{fullContentId\}/)
+		assert.match(leagueCarousel, /actions=\{\['image'\]\}/)
+		assert.match(
+			await readFile(new URL('../app/globals.css', import.meta.url), 'utf8'),
+			/\[data-share-rendering='true'\]\s+\[data-home-league-name='true'\][\s\S]*overflow: visible !important[\s\S]*text-overflow: clip !important[\s\S]*white-space: normal !important/
+		)
 	})
 })
 
@@ -136,7 +174,10 @@ describe('my squad fixture pitch', () => {
 			)
 		])
 
-		assert.match(desk, /<SquadPitch[\s\S]*onPlayerClick=\{handlePitchPlayerClick\}/)
+		assert.match(
+			desk,
+			/<SquadPitch[\s\S]*onPlayerClick=\{handlePitchPlayerClick\}/
+		)
 		assert.match(desk, /<Dialog[\s\S]*<FixtureDetailRow/)
 		assert.match(desk, /data-schedule-pitch="true"/)
 		assert.match(desk, /fixtureSchedule,/)
@@ -162,7 +203,10 @@ describe('team FDR average scale', () => {
 		assert.match(source, /const averageFdrTier = fdrTier\(row\.avgFdr\)/)
 		assert.match(source, /FDR_TEAM_CELL\[averageFdrTier\]/)
 		assert.match(source, /formatAvgFdrOutOfFive\(value\)/)
-		assert.match(source, /bg-gradient-to-r from-success\/80 via-warning\/80 to-destructive\/80/)
+		assert.match(
+			source,
+			/bg-gradient-to-r from-success\/80 via-warning\/80 to-destructive\/80/
+		)
 		assert.match(source, /style=\{\{ left: `\$\{markerPosition\}%` \}\}/)
 		assert.match(source, /data-fdr-average=\{formatted\}/)
 	})
@@ -171,9 +215,15 @@ describe('team FDR average scale', () => {
 describe('fixture section sharing', () => {
 	it('keeps team FDR sharing with its section and adds squad-pitch image sharing', async () => {
 		const [page, desk] = await Promise.all([
-			readFile(new URL('../app/data/fixtures/FixturesClient.tsx', import.meta.url), 'utf8'),
 			readFile(
-				new URL('../app/data/fixtures/_components/MySquadFdrDesk.tsx', import.meta.url),
+				new URL('../app/data/fixtures/FixturesClient.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/data/fixtures/_components/MySquadFdrDesk.tsx',
+					import.meta.url
+				),
 				'utf8'
 			)
 		])
@@ -187,8 +237,22 @@ describe('fixture section sharing', () => {
 			page,
 			/<Card[\s\S]*aria-labelledby="fdr-teams"[\s\S]*<ShareActions[\s\S]*imageRef=\{teamFdrShareRef\}/
 		)
+		assert.match(
+			page,
+			/<Card[\s\S]*aria-labelledby="fdr-teams"[\s\S]*data-share-expand-width="true"/
+		)
 		assert.match(page, /text=\{shareText\}/)
 		assert.match(desk, /<SquadPitch[\s\S]*ref=\{shareRef\}/)
+		assert.match(
+			page,
+			/className="font-display text-lg font-bold tracking-tight sm:text-xl"/
+		)
+		assert.doesNotMatch(page, /t\('pageIntro'\)/)
+		assert.doesNotMatch(page, /t\('actionsMySquadNote'/)
+		const teamFdrHeadingIndex = page.indexOf('id="fdr-teams"')
+		const sortControlIndex = page.indexOf("t('sortEasiest')")
+		assert.ok(teamFdrHeadingIndex >= 0)
+		assert.ok(sortControlIndex > teamFdrHeadingIndex)
 	})
 })
 
@@ -214,11 +278,15 @@ describe('explore gameweek dream team presentation', () => {
 			source,
 			/const haulShareText[\s\S]*imageRef=\{haulShareRef\}[\s\S]*actions=\{\['text', 'image'\]\}/
 		)
+		assert.match(
+			source,
+			/ref=\{haulShareRef\}[\s\S]*data-share-fit-content="true"[\s\S]*data-share-reserve-brand-space="true"/
+		)
 		assert.match(source, /useMatchPlayerDetail\(visibleGameweek\)/)
 		assert.match(source, /onPlayerClick=\{handleHaulPlayerClick\}/)
 		assert.match(
 			source,
-			/<TeamOfTheWeekSection[\s\S]*currentEventId=\{visibleGameweek\}[\s\S]*dreamTeam=\{dreamTeam\}[\s\S]*showShareActions=\{false\}/
+			/<TeamOfTheWeekSection[\s\S]*currentEventId=\{visibleGameweek\}[\s\S]*dreamTeam=\{dreamTeam\}[\s\S]*showShareActions/
 		)
 		assert.doesNotMatch(source, /<PlayerList[\s\S]*players=\{dreamTeam\}/)
 		assert.match(surfaces, /action\?: ReactNode/)
@@ -293,12 +361,14 @@ describe('data freshness timestamp precision', () => {
 		]) {
 			assert.match(source, /timeStyle: 'medium'/)
 		}
+		assert.match(tournament, /data-share-expand-width="true"/)
+		assert.doesNotMatch(tournament, /data-share-preserve-width="true"/)
 	})
 })
 
 describe('homepage share images', () => {
 	it('adds image actions without exporting carousel controls', async () => {
-		const [carousel, market, price, deadline, leagues, marketTeaser] =
+		const [carousel, market, price, deadline, leagues, marketTeaser, styles] =
 			await Promise.all([
 				readFile(
 					new URL('../components/home/HomeAutoCarousel.tsx', import.meta.url),
@@ -329,7 +399,8 @@ describe('homepage share images', () => {
 				readFile(
 					new URL('../components/home/MarketTeaser.tsx', import.meta.url),
 					'utf8'
-				)
+				),
+				readFile(new URL('../app/globals.css', import.meta.url), 'utf8')
 			])
 
 		assert.equal(carousel.match(/data-share-exclude="true"/g)?.length, 2)
@@ -340,30 +411,117 @@ describe('homepage share images', () => {
 			assert.match(source, /data-share-fit-content="true"/)
 			assert.match(source, /<ShareActions[\s\S]*actions=\{\['image'\]\}/)
 		}
+		assert.match(market, /data-share-title="true"/)
+		assert.match(market, /data-share-meta="true"/)
 		assert.match(market, /LocalUpdatedLabel/)
 		assert.match(market, /ownershipUpdatedAt/)
+		assert.match(market, /availabilityUpdatedAt/)
+		assert.match(market, /availabilityUpdatedPrefix/)
+		assert.doesNotMatch(market, /availabilityDescription/)
+		assert.match(price, /data-share-title="true"/)
+		assert.match(price, /data-share-meta="true"/)
 		assert.match(price, /LocalUpdatedLabel/)
 		assert.match(price, /value=\{likely\.capturedAt\}/)
+		assert.match(
+			price,
+			/return \(\s*<div className="space-y-6">\s*<PriceChangeDirection/
+		)
+		assert.match(
+			price,
+			/return \(\s*<div className="space-y-6">\s*<PriceChangeDirection[\s\S]*?items=\{likely\.rises\}/
+		)
+		assert.doesNotMatch(
+			price,
+			/function LikelyPage[\s\S]*?grid gap-4 sm:grid-cols-2/
+		)
 		assert.doesNotMatch(price, /likely\.notice/)
 		assert.match(price, /capturedAt: string \| null/)
+		const likelyRowStart = price.indexOf('function LikelyPlayerRow')
+		const likelyPageStart = price.indexOf('function LikelyPage')
+		assert.ok(likelyRowStart >= 0 && likelyPageStart > likelyRowStart)
+		const likelyRow = price.slice(likelyRowStart, likelyPageStart)
+		assert.match(likelyRow, /data-share-price-prediction-row="true"/)
+		assert.match(likelyRow, /data-share-price-prediction-content="true"/)
+		assert.match(likelyRow, /data-share-price-prediction-progress="true"/)
+		assert.match(likelyRow, /data-share-price-prediction-status="true"/)
+		assert.ok(
+			likelyRow.indexOf('data-share-price-prediction-progress') <
+				likelyRow.indexOf('data-share-price-prediction-status')
+		)
+		assert.doesNotMatch(likelyRow, /grid-cols-|row-start-|row-span-/)
+		assert.match(
+			styles,
+			/data-share-price-prediction-row[\s\S]*display: flex !important[\s\S]*align-items: flex-start !important/
+		)
 		assert.match(marketTeaser, /ownershipUpdatedAt/)
 		assert.match(marketTeaser, /lastUpdated', \{ date: '' \}/)
 		assert.match(deadline, /data-share-preserve-width="true"/)
 		assert.match(deadline, /data-share-deadline-actions="true"/)
 		assert.match(
-			await readFile(
-				new URL('../app/globals.css', import.meta.url),
-				'utf8'
-			),
+			styles,
 			/data-share-deadline-actions[\s\S]*flex: 1 1 auto !important[\s\S]*width: auto !important[\s\S]*margin-left: auto !important[\s\S]*justify-content: flex-end !important/
 		)
 		assert.match(
+			styles,
+			/\[data-share-rendering='true'\],\s*\[data-share-rendering='true'\] \*\s*\{[\s\S]*font-family: Arial, Helvetica, sans-serif !important/
+		)
+		assert.match(
+			styles,
+			/\[data-share-rendering='true'\] h1,[\s\S]*white-space: nowrap !important/
+		)
+		assert.doesNotMatch(
+			styles,
+			/\[data-share-rendering='true'\] \[data-share-meta='true'\][\s\S]*white-space: nowrap !important/
+		)
+		assert.match(
 			deadline,
-			/buttonClassName="text-primary-ink hover:text-primary-ink"/
+			/buttonClassName="border-electric\/35 bg-fascia-foreground\/5 text-electric hover:border-electric hover:bg-electric\/10 hover:text-electric"/
 		)
 		assert.match(leagues, /data-share-preserve-width="true"/)
 		assert.match(leagues, /data-share-fit-content="true"/)
+		assert.match(leagues, /data-share-personal-leagues="true"/)
 		assert.match(leagues, /<ShareActions[\s\S]*actions=\{\['image'\]\}/)
+		assert.match(
+			styles,
+			/data-share-personal-leagues[\s\S]*box-sizing: border-box !important[\s\S]*padding: 1rem !important/
+		)
+		assert.match(
+			styles,
+			/data-share-full-content[\s\S]*max-height: none !important[\s\S]*overflow: visible !important/
+		)
+		assert.match(
+			styles,
+			/data-share-reserve-brand-space[\s\S]*box-sizing: border-box !important[\s\S]*padding-bottom: 3rem !important/
+		)
+	})
+})
+
+describe('countdown share layout', () => {
+	it('keeps the share title readable when the card is captured from a narrow slot', async () => {
+		const [source, styles] = await Promise.all([
+			readFile(
+				new URL('../components/home/CountdownCard.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(new URL('../app/globals.css', import.meta.url), 'utf8')
+		])
+
+		assert.match(source, /data-countdown-header="true"/)
+		assert.match(source, /data-countdown-copy="true"/)
+		assert.match(source, /data-countdown-title="true"/)
+		assert.match(source, /data-countdown-deadline="true"/)
+		assert.match(
+			styles,
+			/data-countdown-header[\s\S]*display: block !important/
+		)
+		assert.match(
+			styles,
+			/data-countdown-title[\s\S]*white-space: nowrap !important/
+		)
+		assert.match(
+			styles,
+			/data-share-deadline-actions[\s\S]*position: absolute !important/
+		)
 	})
 })
 
@@ -387,14 +545,23 @@ describe('share notifications', () => {
 			)
 		])
 
-		for (const source of [sharedActions, matchActions]) {
-			assert.match(source, /notifyShareSuccess/)
-			assert.match(source, /notifyShareWarning/)
-			assert.doesNotMatch(
-				source,
-				/from ['"]sonner['"]|toast\.(success|warning)/
-			)
-		}
+		assert.match(sharedActions, /notifyShareSuccess/)
+		assert.match(sharedActions, /notifyShareWarning/)
+		assert.match(sharedActions, /shareUnavailable/)
+		assert.doesNotMatch(
+			sharedActions,
+			/from ['"]sonner['"]|toast\.(success|warning)/
+		)
+		assert.match(matchActions, /<ShareActions/)
+		assert.match(matchActions, /compact/)
+		assert.doesNotMatch(
+			matchActions,
+			/from ['"]sonner['"]|toast\.(success|warning)/
+		)
+		assert.doesNotMatch(
+			matchActions,
+			/shareElementImage|copyTextToClipboard|notifyShareSuccess|notifyShareWarning/
+		)
 		assert.match(notification, /id: SHARE_NOTIFICATION_ID/)
 		assert.match(notification, /duration: 2400/)
 		assert.match(
@@ -427,7 +594,7 @@ describe('player detail share card', () => {
 		assert.match(source, /share-player-team min-w-0 truncate/)
 		assert.match(
 			source,
-			/<ShareActions[\s\S]*imageRef=\{shareRef\}[\s\S]*actions=\{\['image'\]\}/
+			/<ShareActions[\s\S]*imageRef=\{shareRef\}[\s\S]*actions=\{\['image'\]\}[\s\S]*compact/
 		)
 		assert.match(source, /max-h-\[calc\(100dvh-1rem\)\][\s\S]*overflow-y-auto/)
 		assert.doesNotMatch(source, /max-h-\[min\(60vh,28rem\)\]/)
@@ -455,6 +622,12 @@ describe('live match share card', () => {
 		assert.match(source, /data-share-fit-content="true"/)
 		assert.match(source, /data-live-match-card="true"/)
 		assert.match(source, /data-share-exclude="true"[\s\S]*<MatchShareButton/)
+		assert.match(source, /onTextFallback=\{setManualShareText\}/)
+		assert.match(source, /onTextFallbackClear=\{\(\) => setManualShareText\(null\)\}/)
+		assert.match(
+			source,
+			/<div data-share-exclude="true">[\s\S]*<ShareTextFallback/
+		)
 		assert.match(playerList, /data-share-exclude="true"/)
 		assert.doesNotMatch(source, /<div ref=\{shareRef\}/)
 
@@ -510,6 +683,35 @@ describe('live match share card', () => {
 			liveMatches,
 			/scrollIntoView\(\{ behavior: 'smooth', block: 'start' \}\)/
 		)
+	})
+})
+
+describe('price prediction share scopes', () => {
+	it('keeps linked-squad text and image sharing separate from the all-player board', async () => {
+		const [board, squad] = await Promise.all([
+			readFile(
+				new URL('../app/data/price-changes/PriceChangesBoard.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(
+				new URL(
+					'../app/data/price-changes/PriceChangeSquadPitch.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
+
+		assert.match(board, /mySquadBoardPlayers/)
+		assert.match(
+			board,
+			/<ShareActions[\s\S]*text=\{squadShareText\}[\s\S]*imageRef=\{mySquadShareRef\}/
+		)
+		assert.match(
+			board,
+			/<PriceChangeSquadPitch[\s\S]*shareRef=\{mySquadShareRef\}/
+		)
+		assert.match(squad, /ref=\{shareRef\}/)
 	})
 })
 

@@ -597,7 +597,6 @@ export default function TrendsClient({
 										text={shareText}
 										imageRef={shareRef}
 										title={committed.cohort.displayName}
-										compact
 									/>
 								</div>
 							</div>
@@ -611,7 +610,10 @@ export default function TrendsClient({
 									{t('denominatorMissing')}
 								</p>
 							) : null}
-							<div ref={shareRef}>
+							<div
+								ref={shareRef}
+								data-share-preserve-width="true"
+							>
 								<div className="grid gap-4 md:grid-cols-2">
 									{committed.sections.map(section => {
 										const availability = resolveTrendAvailabilityState(section)

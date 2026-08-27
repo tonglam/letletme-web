@@ -279,7 +279,10 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 					title={stats.teamName}
 				/>
 			</div>
-			<div ref={shareRef}>
+			<div
+				ref={shareRef}
+				data-share-preserve-width="true"
+			>
 				<SquadPitch
 					onPlayerClick={handlePitchPlayerClick}
 					players={players}

@@ -10,13 +10,11 @@ import { GameweekBadge } from '@/components/stats/GameweekBadge'
 import { ShareActions } from '@/components/share/ShareActions'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { APP_URL } from '@/i18n/config'
-import { localizePathname, type AppLocale } from '@/i18n/routing'
 import type { HomeGameweekPlayer } from '@/lib/graphql/operations/home'
 import { resolveSquadTeamCode } from '@/lib/squad-pitch-team-codes'
 import type { PlayerStat } from '@/types/match'
-import { useLocale, useTranslations } from 'next-intl'
-import { useCallback, useMemo, useRef } from 'react'
+import { useTranslations } from 'next-intl'
+import { useCallback, useRef } from 'react'
 
 const HOME_POSITION_MAP: Record<
 	HomeGameweekPlayer['position'],
@@ -75,7 +73,6 @@ function TeamOfTheWeekCard({
 }) {
 	const t = useTranslations('Home')
 	const tPitch = useTranslations('LivePoints')
-	const locale = useLocale() as AppLocale
 	const shareRef = useRef<HTMLElement | null>(null)
 	const {
 		closePlayerDetail,
@@ -112,29 +109,6 @@ function TeamOfTheWeekCard({
 		},
 		[openPlayerDetail, teamOfTheWeek]
 	)
-	const shareText = useMemo(() => {
-		if (teamOfTheWeek.length === 0) return ''
-		const origin =
-			typeof window !== 'undefined' ? window.location.origin : APP_URL.origin
-		const shareUrl = new URL(
-			localizePathname('/explore/gameweek', locale),
-			origin
-		)
-		if (currentEventId != null) {
-			shareUrl.searchParams.set('gw', String(currentEventId))
-		}
-
-		return [
-			`# ${t('teamOfWeek')}${currentEventId != null ? ` · GW${currentEventId}` : ''}`,
-			'',
-			...teamOfTheWeek.map(
-				player =>
-					`- ${player.webName} ${player.teamShortName} · ${player.totalPoints} ${tPitch('pointsAbbreviation')}`
-			),
-			'',
-			shareUrl.toString()
-		].join('\n')
-	}, [currentEventId, locale, t, tPitch, teamOfTheWeek])
 	return (
 		<>
 			<Card
@@ -155,7 +129,8 @@ function TeamOfTheWeekCard({
 					</h2>
 					{showShareActions && teamOfTheWeek.length > 0 && !isLoading ? (
 						<ShareActions
-							text={shareText}
+							actions={['image']}
+							text={t('teamOfWeek')}
 							imageRef={shareRef}
 							title={t('teamOfWeek')}
 							className="flex shrink-0 flex-wrap items-center gap-2"

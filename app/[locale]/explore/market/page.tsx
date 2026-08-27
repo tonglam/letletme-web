@@ -1,5 +1,8 @@
 import { MarketPlayerLookupLauncher } from '@/app/data/market/MarketPriceExplorer'
-import { MarketDashboard } from '@/app/data/market/MarketDashboard'
+import {
+	MarketDashboard,
+	MarketGlance
+} from '@/app/data/market/MarketDashboard'
 import { RouteReadyMarker } from '@/components/analytics/RouteReadyMarker'
 import PageShell from '@/components/layout/PageShell'
 import { StatsPageHeader } from '@/components/stats/StatsSurfaces'
@@ -87,6 +90,49 @@ type MarketContentProps = {
 	date: string | null
 }
 
+type MarketOverview = MarketOwnershipOverviewResponse['marketOwnershipOverview']
+
+async function MarketGlanceContent({
+	period,
+	dailyOverview,
+	gameweekOverview,
+	glanceOverviewPromise,
+	locale
+}: {
+	period: MarketOwnershipPeriod
+	dailyOverview: MarketOverview | null
+	gameweekOverview: MarketOverview | null
+	glanceOverviewPromise: Promise<
+		PromiseSettledResult<MarketOwnershipOverviewResponse>
+	>
+	locale: string
+}) {
+	const renderAvailableGlance = () => (
+		<MarketGlance
+			dailyOwnership={dailyOverview}
+			gameweekOwnership={gameweekOverview}
+			locale={locale}
+		/>
+	)
+	const glanceResult = await glanceOverviewPromise
+	if (glanceResult.status === 'rejected') {
+		unstable_rethrow(glanceResult.reason)
+		return renderAvailableGlance()
+	}
+	const alternateOverview = normalizeMarketOwnershipOverview(glanceResult.value)
+	if (!alternateOverview) return renderAvailableGlance()
+
+	return (
+		<MarketGlance
+			dailyOwnership={period === 'DAILY' ? dailyOverview : alternateOverview}
+			gameweekOwnership={
+				period === 'GAMEWEEK' ? gameweekOverview : alternateOverview
+			}
+			locale={locale}
+		/>
+	)
+}
+
 async function renderMarketContent({
 	locale,
 	period,
@@ -96,6 +142,9 @@ async function renderMarketContent({
 	const translationPromise = getTranslations('Market')
 	const dataPromise = loadMarketPulseSummary(7)
 	const overviewPromise = loadMarketOwnershipOverview(period)
+	const glanceOverviewPromise = Promise.allSettled([
+		loadMarketOwnershipOverview(period === 'DAILY' ? 'GAMEWEEK' : 'DAILY')
+	]).then(([result]) => result)
 	const t = await translationPromise
 	let pulse: MarketPulse | null = null
 	let revision: string | null = null
@@ -104,6 +153,8 @@ async function renderMarketContent({
 		| MarketOwnershipDayResponse['marketOwnershipDay']
 		| null = null
 	let dailyOverview:
+		MarketOwnershipOverviewResponse['marketOwnershipOverview'] | null = null
+	let gameweekOverview:
 		MarketOwnershipOverviewResponse['marketOwnershipOverview'] | null = null
 	let publishedDate: string | null = null
 
@@ -127,6 +178,7 @@ async function renderMarketContent({
 		const overview = normalizeMarketOwnershipOverview(overviewResult.value)
 		if (overview) {
 			dailyOverview = period === 'DAILY' ? overview : null
+			gameweekOverview = period === 'GAMEWEEK' ? overview : null
 			publishedDate =
 				date && isPublishedMarketOwnershipDate(date, overview.coverage)
 					? date
@@ -163,6 +215,17 @@ async function renderMarketContent({
 	const dailyCoverage =
 		dailyOverview?.coverage ??
 		(!date && ownership?.period === 'DAILY' ? ownership.coverage : null)
+	const marketGlance = (
+		<Suspense fallback={null}>
+			<MarketGlanceContent
+				period={period}
+				dailyOverview={dailyOverview}
+				gameweekOverview={gameweekOverview}
+				glanceOverviewPromise={glanceOverviewPromise}
+				locale={locale}
+			/>
+		</Suspense>
+	)
 
 	return (
 		<>
@@ -194,6 +257,7 @@ async function renderMarketContent({
 				})}
 				revision={revision}
 				locale={locale}
+				glance={marketGlance}
 			/>
 			{!pulse ? (
 				<section className="mt-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
