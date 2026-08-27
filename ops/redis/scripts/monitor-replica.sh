@@ -41,7 +41,7 @@ primary_has_healthy_replicas() {
 		replica_offset=$(sed -n 's/.*offset=\([^,]*\).*/\1/p' <<<"$line" | tr -d '\r')
 		read_only=''
 		if [[ $host =~ ^[A-Za-z0-9_.:-]+$ && $port =~ ^[0-9]+$ && $port -le 65535 ]]; then
-			if read_only_output=$(redis-cli -h "$host" -p "$port" -t "$replica_probe_timeout_seconds" --no-auth-warning CONFIG GET replica-read-only 2>/dev/null); then
+			if read_only_output=$(timeout "${replica_probe_timeout_seconds}s" redis-cli -h "$host" -p "$port" --no-auth-warning CONFIG GET replica-read-only 2>/dev/null); then
 				read_only=$(sed -n '2p' <<<"$read_only_output" | tr -d '\r')
 			else
 				read_only=''
