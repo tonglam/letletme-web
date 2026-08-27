@@ -7,6 +7,7 @@ import {
 	GET_ENTRY,
 	type EntryOverallSnapshot,
 	type EntryLookupStatus,
+	type EntryPersistenceState,
 	type EntrySummaryResponse
 } from '@/lib/graphql/operations/entries'
 import { executeQuery } from '@/lib/graphql-client'
@@ -19,7 +20,7 @@ import { LivePointsDashboard } from './_components/LivePointsDashboard'
 import { LivePointsLoading } from './_components/LivePointsLoading'
 import { useLivePoints } from './_hooks/useLivePoints'
 import { useTranslations } from 'next-intl'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface LivePointsClientProps {
 	initialEntryId: number
@@ -28,6 +29,7 @@ interface LivePointsClientProps {
 	initialSnapshot?: LiveSnapshotStatus | null
 	initialOverall?: EntryOverallSnapshot
 	initialEntryLookupStatus?: EntryLookupStatus
+	initialEntryPersistenceState?: EntryPersistenceState | null
 }
 
 export default function LivePointsClient({
@@ -36,7 +38,8 @@ export default function LivePointsClient({
 	initialLiveData,
 	initialSnapshot,
 	initialOverall,
-	initialEntryLookupStatus
+	initialEntryLookupStatus,
+	initialEntryPersistenceState
 }: LivePointsClientProps) {
 	const t = useTranslations('LivePoints')
 	const livePoints = useLivePoints({
@@ -49,6 +52,10 @@ export default function LivePointsClient({
 	const [entryLookupStatus, setEntryLookupStatus] = useState<
 		EntryLookupStatus | undefined
 	>(initialEntryLookupStatus)
+	const [entryPersistenceState, setEntryPersistenceState] = useState<
+		EntryPersistenceState | null | undefined
+	>(initialEntryPersistenceState)
+	const [entryLookupReloadRevision, setEntryLookupReloadRevision] = useState(0)
 	const overallLoadedKeyRef = useRef<string | null>(
 		initialOverall != null ? `${initialEntryId}:${initialEventId}` : null
 	)
@@ -56,9 +63,21 @@ export default function LivePointsClient({
 	useEffect(() => {
 		setOverall(initialOverall)
 		setEntryLookupStatus(initialEntryLookupStatus)
+		setEntryPersistenceState(initialEntryPersistenceState)
 		overallLoadedKeyRef.current =
 			initialOverall != null ? `${initialEntryId}:${initialEventId}` : null
-	}, [initialEntryId, initialEventId, initialEntryLookupStatus, initialOverall])
+	}, [
+		initialEntryId,
+		initialEventId,
+		initialEntryLookupStatus,
+		initialEntryPersistenceState,
+		initialOverall
+	])
+
+	const retryEntryLookup = useCallback(() => {
+		overallLoadedKeyRef.current = null
+		setEntryLookupReloadRevision(revision => revision + 1)
+	}, [])
 
 	useEffect(() => {
 		const selectedGw = livePoints.selectedGameweek ?? livePoints.currentGameweek
@@ -67,6 +86,8 @@ export default function LivePointsClient({
 			selectedGw !== livePoints.currentGameweek
 		) {
 			setOverall(undefined)
+			setEntryLookupStatus(undefined)
+			setEntryPersistenceState(undefined)
 			overallLoadedKeyRef.current = null
 			return
 		}
@@ -83,6 +104,7 @@ export default function LivePointsClient({
 			.then(response => {
 				if (cancelled) return
 				setEntryLookupStatus(response.entryLookup.status)
+				setEntryPersistenceState(response.entryLookup.persistenceState)
 				if (
 					response.entryLookup.status !== 'FOUND' ||
 					!response.entryLookup.entry
@@ -102,6 +124,7 @@ export default function LivePointsClient({
 			.catch(error => {
 				if (!cancelled) overallLoadedKeyRef.current = null
 				if (!cancelled) setEntryLookupStatus('UNAVAILABLE')
+				if (!cancelled) setEntryPersistenceState(undefined)
 				console.warn('[live points] overall snapshot fetch failed:', error)
 			})
 
@@ -111,7 +134,8 @@ export default function LivePointsClient({
 	}, [
 		livePoints.activeEntryId,
 		livePoints.currentGameweek,
-		livePoints.selectedGameweek
+		livePoints.selectedGameweek,
+		entryLookupReloadRevision
 	])
 	const entrySearch = (
 		<EntrySearchForm
@@ -156,6 +180,7 @@ export default function LivePointsClient({
 				isRefreshing={livePoints.isRefreshing}
 				error={livePoints.error}
 				entryLookupStatus={entryLookupStatus}
+				entryPersistenceState={entryPersistenceState}
 				isPageActive={livePoints.isPageActive}
 				shouldAutoRefresh={livePoints.shouldAutoRefresh}
 				liveData={livePoints.liveData}
@@ -165,6 +190,7 @@ export default function LivePointsClient({
 				onGameweekChange={livePoints.changeGameweek}
 				onAutoRefresh={livePoints.autoRefresh}
 				onRefresh={livePoints.refresh}
+				onEntryLookupRetry={retryEntryLookup}
 				nextRefreshAt={
 					livePoints.snapshot?.nextRefreshAt ??
 					livePoints.liveData?.score?.nextRefreshAt ??

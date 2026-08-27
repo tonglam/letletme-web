@@ -7,6 +7,7 @@ import {
 	GET_ENTRY,
 	type EntryOverallSnapshot,
 	type EntryLookupStatus,
+	type EntryPersistenceState,
 	type EntrySummaryResponse
 } from '@/lib/graphql/operations/entries'
 import {
@@ -69,6 +70,7 @@ export default async function LivePointsPage({ params }: PageProps) {
 	let initialSnapshot: LiveSnapshotStatus | null = null
 	let initialOverall: EntryOverallSnapshot | undefined
 	let initialEntryLookupStatus: EntryLookupStatus | undefined
+	let initialEntryPersistenceState: EntryPersistenceState | null | undefined
 
 	if (entryId) {
 		const [liveResult, overallResult] = await Promise.allSettled([
@@ -101,6 +103,8 @@ export default async function LivePointsPage({ params }: PageProps) {
 		}
 		if (overallResult.status === 'fulfilled') {
 			initialEntryLookupStatus = overallResult.value.entryLookup.status
+			initialEntryPersistenceState =
+				overallResult.value.entryLookup.persistenceState
 			const entry = overallResult.value.entryLookup.entry
 			if (entry) {
 				initialOverall = {
@@ -113,6 +117,7 @@ export default async function LivePointsPage({ params }: PageProps) {
 			}
 		} else if (overallResult.status === 'rejected') {
 			initialEntryLookupStatus = 'UNAVAILABLE'
+			initialEntryPersistenceState = undefined
 			console.error(
 				'[live points] Failed to seed current entry overall:',
 				overallResult.reason
@@ -128,6 +133,7 @@ export default async function LivePointsPage({ params }: PageProps) {
 			initialSnapshot={initialSnapshot}
 			initialOverall={initialOverall}
 			initialEntryLookupStatus={initialEntryLookupStatus}
+			initialEntryPersistenceState={initialEntryPersistenceState}
 		/>
 	)
 }

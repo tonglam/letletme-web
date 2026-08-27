@@ -7,6 +7,7 @@ import {
 	GET_ENTRY,
 	type EntryOverallSnapshot,
 	type EntryLookupStatus,
+	type EntryPersistenceState,
 	type EntrySummaryResponse
 } from '@/lib/graphql/operations/entries'
 import {
@@ -92,6 +93,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	let initialSnapshot: LiveSnapshotStatus | null = null
 	let initialOverall: EntryOverallSnapshot | undefined
 	let initialEntryLookupStatus: EntryLookupStatus | undefined
+	let initialEntryPersistenceState: EntryPersistenceState | null | undefined
 
 	if (Number.isInteger(entryId) && entryId > 0) {
 		const [liveResult, overallResult] = await Promise.allSettled([
@@ -129,6 +131,8 @@ export default async function Page({ params, searchParams }: PageProps) {
 
 		if (overallResult.status === 'fulfilled' && overallResult.value) {
 			initialEntryLookupStatus = overallResult.value.entryLookup.status
+			initialEntryPersistenceState =
+				overallResult.value.entryLookup.persistenceState
 			const entry = overallResult.value.entryLookup.entry
 			if (entry) {
 				initialOverall = {
@@ -141,6 +145,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			}
 		} else if (overallResult.status === 'rejected') {
 			initialEntryLookupStatus = 'UNAVAILABLE'
+			initialEntryPersistenceState = undefined
 			console.error(
 				'Failed to seed team overall snapshot:',
 				overallResult.reason
@@ -159,6 +164,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			initialSnapshot={initialSnapshot}
 			initialOverall={initialOverall}
 			initialEntryLookupStatus={initialEntryLookupStatus}
+			initialEntryPersistenceState={initialEntryPersistenceState}
 		/>
 	)
 }
