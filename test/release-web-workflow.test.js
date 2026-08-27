@@ -86,6 +86,21 @@ test('Vercel candidate uses a remote unaliased Production build', () => {
 	assert.doesNotMatch(workflow, /vercel@\$\{VERCEL_CLI_VERSION\}" (?:pull|build)(?:\s|\\)/)
 })
 
+test('signed Tencent release archive carries the same public live flag', () => {
+	assert.match(
+		workflow,
+		/printf 'NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=%s\\n' "\$WEB_PRICE_CHANGE_LIVE_ENABLED" > "\$tmp_root\/\.env\.production"/
+	)
+	assert.match(
+		workflow,
+		/tar --append --file="\$tmp_root\/release\.tar" -C "\$tmp_root" \.env\.production/
+	)
+	assert.match(
+		workflow,
+		/identical client bundle without copying any host secrets/
+	)
+})
+
 test('Vercel candidate reaches READY and passes protected health verification before routing changes', () => {
 	const commands = extractVercelCommands(workflow)
 	const inspectCommand = commands.find((line) =>

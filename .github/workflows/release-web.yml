@@ -311,7 +311,18 @@ jobs:
           node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null
 
           tmp_root="$(mktemp -d)"
+          case "$WEB_PRICE_CHANGE_LIVE_ENABLED" in
+            true|false) ;;
+            *) echo "invalid LETLETME_PRICE_CHANGE_LIVE_ENABLED value: $WEB_PRICE_CHANGE_LIVE_ENABLED" >&2; exit 1 ;;
+          esac
           git archive --format=tar "$RELEASE_SHA" > "$tmp_root/release.tar"
+          # The Tencent release tool builds from the signed archive and uses a
+          # deliberately narrow host-env allowlist.  Carry the same public
+          # feature flag in the signed source so both origins compile the
+          # identical client bundle without copying any host secrets.
+          printf 'NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=%s\n' "$WEB_PRICE_CHANGE_LIVE_ENABLED" > "$tmp_root/.env.production"
+          chmod 0600 "$tmp_root/.env.production"
+          tar --append --file="$tmp_root/release.tar" -C "$tmp_root" .env.production
           printf '%s\n' "$RELEASE_SHA" > "$tmp_root/.letletme-release-sha"
           tar --append --file="$tmp_root/release.tar" -C "$tmp_root" .letletme-release-sha
           gzip -c "$tmp_root/release.tar" > "$tmp_root/release.tar.gz"
