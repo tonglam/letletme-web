@@ -1,5 +1,5 @@
 import {
-	gameweekDeskCacheControl,
+	gameweekDeskCacheHeaders,
 	gameweekDeskResponseFromResult,
 	GAMEWEEK_DESK_UNCACHEABLE_CONTROL,
 	parseGameweekDeskParams,
@@ -61,10 +61,9 @@ export function createGameweekDeskRouteHandler(
 			return NextResponse.json(gameweekDeskResponseFromResult(result), {
 				status: 200,
 				headers: {
-					'Cache-Control':
-						result.outcome === 'complete'
-							? gameweekDeskCacheControl(result)
-							: GAMEWEEK_DESK_UNCACHEABLE_CONTROL
+					...(result.outcome === 'complete'
+						? gameweekDeskCacheHeaders(result)
+						: { 'Cache-Control': GAMEWEEK_DESK_UNCACHEABLE_CONTROL })
 				}
 			})
 		} catch (error) {

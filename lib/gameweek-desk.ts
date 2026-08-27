@@ -15,7 +15,11 @@ export const GAMEWEEK_DESK_PUBLIC_CACHE_CONTROL =
 export const GAMEWEEK_DESK_SETTLED_CACHE_CONTROL =
 	'public, s-maxage=60, stale-while-revalidate=60, no-transform'
 export const GAMEWEEK_DESK_FINAL_CACHE_CONTROL =
-	'public, s-maxage=3600, stale-while-revalidate=86400, no-transform'
+	// The core publication can advance after a live event is settled (for
+	// example, a late correction or a roster publication). Keep the final desk
+	// short-lived so a CDN hit cannot hide a newer producer revision for an
+	// entire hour. The route also emits CDN-specific directives below.
+	'public, s-maxage=60, stale-while-revalidate=60, no-transform'
 export const GAMEWEEK_DESK_UNCACHEABLE_CONTROL = 'no-store'
 
 export type GameweekDeskLoadResult = GameweekDeskData & {
@@ -207,4 +211,21 @@ export function gameweekDeskCacheControl(
 	return shortWindow
 		? 'public, s-maxage=30, stale-while-revalidate=30, no-transform'
 		: GAMEWEEK_DESK_PUBLIC_CACHE_CONTROL
+}
+
+/**
+ * Keep the application and both CDN-specific cache policies identical.
+ * Dynamic Next responses may normalize Cache-Control before reaching the
+ * edge; the explicit directives are required for revision-sensitive data.
+ */
+export function gameweekDeskCacheHeaders(
+	data: GameweekDeskData,
+	now = Date.now()
+): Record<string, string> {
+	const cacheControl = gameweekDeskCacheControl(data, now)
+	return {
+		'Cache-Control': cacheControl,
+		'CDN-Cache-Control': cacheControl,
+		'Vercel-CDN-Cache-Control': cacheControl
+	}
 }
