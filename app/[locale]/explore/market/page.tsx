@@ -102,16 +102,25 @@ async function MarketGlanceContent({
 	period: MarketOwnershipPeriod
 	dailyOverview: MarketOverview | null
 	gameweekOverview: MarketOverview | null
-	glanceOverviewPromise: Promise<MarketOwnershipOverviewResponse>
+	glanceOverviewPromise: Promise<
+		PromiseSettledResult<MarketOwnershipOverviewResponse>
+	>
 	locale: string
 }) {
-	const [glanceResult] = await Promise.allSettled([glanceOverviewPromise])
+	const renderAvailableGlance = () => (
+		<MarketGlance
+			dailyOwnership={dailyOverview}
+			gameweekOwnership={gameweekOverview}
+			locale={locale}
+		/>
+	)
+	const glanceResult = await glanceOverviewPromise
 	if (glanceResult.status === 'rejected') {
 		unstable_rethrow(glanceResult.reason)
-		return null
+		return renderAvailableGlance()
 	}
 	const alternateOverview = normalizeMarketOwnershipOverview(glanceResult.value)
-	if (!alternateOverview) return null
+	if (!alternateOverview) return renderAvailableGlance()
 
 	return (
 		<MarketGlance
@@ -133,9 +142,9 @@ async function renderMarketContent({
 	const translationPromise = getTranslations('Market')
 	const dataPromise = loadMarketPulseSummary(7)
 	const overviewPromise = loadMarketOwnershipOverview(period)
-	const glanceOverviewPromise = loadMarketOwnershipOverview(
-		period === 'DAILY' ? 'GAMEWEEK' : 'DAILY'
-	)
+	const glanceOverviewPromise = Promise.allSettled([
+		loadMarketOwnershipOverview(period === 'DAILY' ? 'GAMEWEEK' : 'DAILY')
+	]).then(([result]) => result)
 	const t = await translationPromise
 	let pulse: MarketPulse | null = null
 	let revision: string | null = null

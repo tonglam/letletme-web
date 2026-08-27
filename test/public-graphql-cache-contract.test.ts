@@ -142,8 +142,13 @@ describe('public GraphQL cache contract', () => {
 		assert.doesNotMatch(market, /dataResult, overviewResult, glanceOverviewResult/)
 		assert.match(
 			market,
+			/const glanceOverviewPromise = Promise\.allSettled\(\[\s*loadMarketOwnershipOverview/
+		)
+		assert.match(
+			market,
 			/<Suspense fallback=\{null\}>[\s\S]*<MarketGlanceContent/
 		)
+		assert.match(market, /renderAvailableGlance/)
 		assert.match(serverContext, /capacityRequestIdForHeaders/)
 		assert.match(publicServer, /capacityRequestIdForCurrentRun/)
 		assert.match(
