@@ -17,6 +17,7 @@ install -d -o root -g root -m 0700 "$daily_dir" "$weekly_dir"
 export REDISCLI_AUTH=$(< "$secret_file")
 
 redis_cli=(redis-cli -h 127.0.0.1 -p 6379 --no-auth-warning)
+max_replication_offset_lag_bytes=${REDIS_MAX_REPLICATION_OFFSET_LAG_BYTES:-1048576}
 field() {
 	local name=$1 input=$2
 	sed -n "s/^${name}://p" <<<"$input" | tr -d '\r'
@@ -38,9 +39,49 @@ replica_is_healthy() {
 		$syncing == 0 ]]
 }
 
+primary_has_healthy_replicas() {
+	local input=$1
+	local connected master_offset
+	connected=$(field connected_slaves "$input")
+	master_offset=$(field master_repl_offset "$input")
+	[[ $connected =~ ^[0-9]+$ && $connected -gt 0 ]] || return 1
+	[[ $master_offset =~ ^[0-9]+$ ]] || return 1
+	[[ $max_replication_offset_lag_bytes =~ ^[0-9]+$ ]] || return 1
+
+	local healthy=0 line host port state lag replica_offset read_only offset_lag
+	while IFS= read -r line; do
+		host=$(sed -n 's/.*ip=\([^,]*\).*/\1/p' <<<"$line" | tr -d '\r')
+		port=$(sed -n 's/.*port=\([^,]*\).*/\1/p' <<<"$line" | tr -d '\r')
+		state=$(sed -n 's/.*state=\([^,]*\).*/\1/p' <<<"$line" | tr -d '\r')
+		lag=$(sed -n 's/.*lag=\([^,]*\).*/\1/p' <<<"$line" | tr -d '\r')
+		replica_offset=$(sed -n 's/.*offset=\([^,]*\).*/\1/p' <<<"$line" | tr -d '\r')
+		read_only=''
+		if [[ $host =~ ^[A-Za-z0-9_.:-]+$ && $port =~ ^[0-9]+$ && $port -le 65535 ]]; then
+			read_only=$(redis-cli -h "$host" -p "$port" --no-auth-warning CONFIG GET replica-read-only 2>/dev/null | sed -n '2p' | tr -d '\r')
+		fi
+		if [[ $state == online && $lag =~ ^[0-9]+$ && $lag -le 30 && $replica_offset =~ ^[0-9]+$ && $read_only == 1 ]] && (( master_offset >= replica_offset )); then
+			offset_lag=$((master_offset - replica_offset))
+			if (( offset_lag <= max_replication_offset_lag_bytes )); then
+				healthy=$((healthy + 1))
+			fi
+		fi
+	done < <(grep -E '^slave[0-9]+:' <<<"$input" || true)
+	[[ $healthy -eq $connected ]]
+}
+
+replication_is_healthy() {
+	local input=$1
+	case $(field role "$input") in
+		slave) replica_is_healthy "$input" ;;
+		master) primary_has_healthy_replicas "$input" ;;
+		*) return 1 ;;
+	esac
+}
+
 replication_before=$("${redis_cli[@]}" INFO replication)
-if ! replica_is_healthy "$replication_before"; then
-	echo "Redis replica is stale or disconnected; refusing backup" >&2
+role=$(field role "$replication_before")
+if ! replication_is_healthy "$replication_before"; then
+	echo "Redis replication topology is stale or disconnected (role=$role); refusing backup" >&2
 	exit 1
 fi
 
@@ -69,8 +110,8 @@ done
 [[ $in_progress == 0 && $status == ok ]]
 
 replication_after=$("${redis_cli[@]}" INFO replication)
-if ! replica_is_healthy "$replication_after"; then
-	echo "Redis replica became stale or disconnected; refusing backup" >&2
+if ! replication_is_healthy "$replication_after"; then
+	echo "Redis replication topology became stale or disconnected; refusing backup" >&2
 	exit 1
 fi
 
@@ -84,8 +125,8 @@ install -o root -g root -m 0600 "$redis_dir/$dbfilename" "$tmp"
 redis-check-rdb "$tmp" >/dev/null
 
 replication_after_copy=$("${redis_cli[@]}" INFO replication)
-if ! replica_is_healthy "$replication_after_copy"; then
-	echo "Redis replica became stale or disconnected; refusing backup" >&2
+if ! replication_is_healthy "$replication_after_copy"; then
+	echo "Redis replication topology became stale or disconnected; refusing backup" >&2
 	exit 1
 fi
 
@@ -114,4 +155,4 @@ for stale in "${weekly_backups[@]:4}"; do
 	rm -f -- "$stale" "$stale.sha256"
 done
 
-echo "redis replica backup created: $target"
+echo "redis $role backup created: $target"
