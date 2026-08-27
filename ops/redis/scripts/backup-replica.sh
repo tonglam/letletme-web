@@ -38,9 +38,36 @@ replica_is_healthy() {
 		$syncing == 0 ]]
 }
 
+primary_has_healthy_replicas() {
+	local input=$1
+	local connected
+	connected=$(field connected_slaves "$input")
+	[[ $connected =~ ^[0-9]+$ && $connected -gt 0 ]] || return 1
+
+	local healthy=0 line state lag
+	while IFS= read -r line; do
+		state=$(sed -n 's/.*state=\([^,]*\).*/\1/p' <<<"$line" | tr -d '\r')
+		lag=$(sed -n 's/.*lag=\([^,]*\).*/\1/p' <<<"$line" | tr -d '\r')
+		if [[ $state == online && $lag =~ ^[0-9]+$ && $lag -le 30 ]]; then
+			healthy=$((healthy + 1))
+		fi
+	done < <(grep -E '^slave[0-9]+:' <<<"$input" || true)
+	[[ $healthy -eq $connected ]]
+}
+
+replication_is_healthy() {
+	local input=$1
+	case $(field role "$input") in
+		slave) replica_is_healthy "$input" ;;
+		master) primary_has_healthy_replicas "$input" ;;
+		*) return 1 ;;
+	esac
+}
+
 replication_before=$("${redis_cli[@]}" INFO replication)
-if ! replica_is_healthy "$replication_before"; then
-	echo "Redis replica is stale or disconnected; refusing backup" >&2
+role=$(field role "$replication_before")
+if ! replication_is_healthy "$replication_before"; then
+	echo "Redis replication topology is stale or disconnected (role=$role); refusing backup" >&2
 	exit 1
 fi
 
@@ -69,8 +96,8 @@ done
 [[ $in_progress == 0 && $status == ok ]]
 
 replication_after=$("${redis_cli[@]}" INFO replication)
-if ! replica_is_healthy "$replication_after"; then
-	echo "Redis replica became stale or disconnected; refusing backup" >&2
+if ! replication_is_healthy "$replication_after"; then
+	echo "Redis replication topology became stale or disconnected; refusing backup" >&2
 	exit 1
 fi
 
@@ -84,8 +111,8 @@ install -o root -g root -m 0600 "$redis_dir/$dbfilename" "$tmp"
 redis-check-rdb "$tmp" >/dev/null
 
 replication_after_copy=$("${redis_cli[@]}" INFO replication)
-if ! replica_is_healthy "$replication_after_copy"; then
-	echo "Redis replica became stale or disconnected; refusing backup" >&2
+if ! replication_is_healthy "$replication_after_copy"; then
+	echo "Redis replication topology became stale or disconnected; refusing backup" >&2
 	exit 1
 fi
 
@@ -114,4 +141,4 @@ for stale in "${weekly_backups[@]:4}"; do
 	rm -f -- "$stale" "$stale.sha256"
 done
 
-echo "redis replica backup created: $target"
+echo "redis $role backup created: $target"
