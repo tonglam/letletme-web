@@ -32,7 +32,7 @@ import { PlayerPriceHistoryBlock } from './PlayerPriceHistoryBlock'
 import { PlayerRecentGameweeks } from './PlayerRecentGameweeks'
 import { PlayerStateContext, PlayerStateProfile } from './PlayerStateProfile'
 import type { PlayerEvidenceSection } from '../_hooks/usePlayerDetailSlot'
-import { playerDataAvailabilityIssues } from '../_lib/player-data-availability'
+import { playerDataAvailabilityIssuesForPlayers } from '../_lib/player-data-availability'
 import {
 	PlayerSectionNav,
 	scrollToPlayerStatsSection
@@ -789,9 +789,10 @@ export function PlayerStatsView({
 
 	if (!player) return null
 
-	const dataAvailabilityIssues = playerDataAvailabilityIssues(
-		player.dataAvailability
-	)
+	const dataAvailabilityIssues = playerDataAvailabilityIssuesForPlayers([
+		player,
+		...(comparison ? [comparison] : [])
+	])
 
 	const currentAsOf = player.statsContext.asOfEventId ?? anchorGw
 	const shareText = [
@@ -1066,7 +1067,7 @@ export function PlayerStatsView({
 						<ul className="mt-2 flex flex-wrap gap-2">
 							{dataAvailabilityIssues.map(issue => (
 								<li
-									key={`${issue.section}:${issue.state}`}
+									key={`${issue.playerId}:${issue.section}:${issue.state}`}
 									className={
 										issue.state === 'UNAVAILABLE'
 											? 'rounded-full border border-destructive/30 bg-destructive/5 px-2 py-1 text-destructive'
@@ -1075,7 +1076,7 @@ export function PlayerStatsView({
 												: 'rounded-full border border-border/70 bg-background/70 px-2 py-1 text-foreground'
 									}
 								>
-									{dataSectionLabels[issue.section]}:{' '}
+									{issue.playerName} · {dataSectionLabels[issue.section]}:{' '}
 									{dataStateLabels[issue.state]}
 								</li>
 							))}

@@ -13,17 +13,12 @@ import type {
 	LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import { Link } from '@/i18n/navigation'
-import { executeQuery } from '@/lib/graphql-client'
-import {
-	GET_ENTRY,
-	type EntrySummaryResponse
-} from '@/lib/graphql/operations/entries'
 import { ArrowLeft } from 'lucide-react'
 import { useTranslations } from 'next-intl'
-import { useCallback, useEffect, useRef, useState } from 'react'
 import { LivePointsDashboard } from '../_components/LivePointsDashboard'
 import { LivePointsLoading } from '../_components/LivePointsLoading'
 import { useLivePoints } from '../_hooks/useLivePoints'
+import { useEntryOverall } from '../_hooks/useEntryOverall'
 
 interface TeamPointsClientProps {
 	entryId: number
@@ -58,92 +53,25 @@ export default function TeamPointsClient({
 		initialLiveData,
 		initialSnapshot
 	})
-	const [overall, setOverall] = useState(initialOverall)
-	const [entryLookupStatus, setEntryLookupStatus] = useState<
-		EntryLookupStatus | undefined
-	>(initialEntryLookupStatus)
-	const [entryPersistenceState, setEntryPersistenceState] = useState<
-		EntryPersistenceState | null | undefined
-	>(initialEntryPersistenceState)
-	const [entryLookupReloadRevision, setEntryLookupReloadRevision] = useState(0)
-	const overallLoadedKeyRef = useRef<string | null>(
-		initialOverall != null ? `${entryId}:${initialEventId}` : null
-	)
-
-	useEffect(() => {
-		setOverall(initialOverall)
-		setEntryLookupStatus(initialEntryLookupStatus)
-		setEntryPersistenceState(initialEntryPersistenceState)
-		overallLoadedKeyRef.current =
-			initialOverall != null ? `${entryId}:${initialEventId}` : null
-	}, [
+	const {
+		overall,
+		entryLookupStatus,
+		entryPersistenceState,
+		retryEntryLookup
+	} = useEntryOverall({
 		entryId,
+		currentGameweek: livePoints.currentGameweek,
+		selectedGameweek: livePoints.selectedGameweek,
+		initialEntryId: entryId,
 		initialEventId,
+		initialOverall,
 		initialEntryLookupStatus,
-		initialEntryPersistenceState,
-		initialOverall
-	])
-
-	const retryEntryLookup = useCallback(() => {
-		overallLoadedKeyRef.current = null
-		setEntryLookupReloadRevision(revision => revision + 1)
-	}, [])
-
-	useEffect(() => {
-		const selectedGw = livePoints.selectedGameweek ?? livePoints.currentGameweek
-		if (entryId <= 0 || selectedGw !== livePoints.currentGameweek) {
-			setOverall(undefined)
-			setEntryLookupStatus(undefined)
-			setEntryPersistenceState(undefined)
-			overallLoadedKeyRef.current = null
-			return
-		}
-		const overallKey = `${entryId}:${livePoints.currentGameweek}`
-		if (overallLoadedKeyRef.current === overallKey) return
-		overallLoadedKeyRef.current = overallKey
-
-		let cancelled = false
-		void executeQuery<EntrySummaryResponse>(
-			GET_ENTRY,
-			{ id: entryId },
-			{ cache: 'no-store' }
-		)
-			.then(response => {
-				if (cancelled) return
-				setEntryLookupStatus(response.entryLookup.status)
-				setEntryPersistenceState(response.entryLookup.persistenceState)
-				if (
-					response.entryLookup.status !== 'FOUND' ||
-					!response.entryLookup.entry
-				) {
-					setOverall(undefined)
-					return
-				}
-				const entry = response.entryLookup.entry
-				setOverall({
-					overallPoints: entry.overallPoints,
-					overallRank: entry.overallRank,
-					teamValue: entry.teamValue,
-					bank: entry.bank,
-					totalTransfers: entry.totalTransfers
-				})
-			})
-			.catch(error => {
-				if (!cancelled) overallLoadedKeyRef.current = null
-				if (!cancelled) setEntryLookupStatus('UNAVAILABLE')
-				if (!cancelled) setEntryPersistenceState(undefined)
-				console.warn('[live points] overall snapshot fetch failed:', error)
-			})
-
-		return () => {
-			cancelled = true
-		}
-	}, [
-		entryId,
-		livePoints.currentGameweek,
-		livePoints.selectedGameweek,
-		entryLookupReloadRevision
-	])
+		initialEntryPersistenceState
+	})
+	const refreshAll = async () => {
+		retryEntryLookup()
+		await livePoints.refresh()
+	}
 
 	const hasCompetitionContext = Boolean(tournamentId) && from !== 'home'
 	const backParams = new URLSearchParams()
@@ -183,7 +111,7 @@ export default function TeamPointsClient({
 				benchPlayers={livePoints.benchPlayers}
 				onGameweekChange={livePoints.changeGameweek}
 				onAutoRefresh={livePoints.autoRefresh}
-				onRefresh={livePoints.refresh}
+				onRefresh={refreshAll}
 				onEntryLookupRetry={retryEntryLookup}
 				nextRefreshAt={
 					livePoints.snapshot?.nextRefreshAt ??

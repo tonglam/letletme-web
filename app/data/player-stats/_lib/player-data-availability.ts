@@ -14,6 +14,13 @@ export type PlayerDataAvailabilityIssue = Readonly<{
 	sourceCheckedAt: string | null
 }>
 
+export type PlayerDataAvailabilityIssueWithPlayer =
+	PlayerDataAvailabilityIssue &
+		Readonly<{
+			playerId: number
+			playerName: string
+		}>
+
 const AUTHORITATIVE_STATES = new Set<PlayerDataState>([
 	'READY',
 	'EMPTY',
@@ -63,4 +70,20 @@ export function playerDataAvailabilityIssues(
 		})
 	}
 	return issues
+}
+
+export function playerDataAvailabilityIssuesForPlayers(
+	players: ReadonlyArray<{
+		id: number
+		webName: string
+		dataAvailability: PlayerDetailDataAvailability | null | undefined
+	}>
+): PlayerDataAvailabilityIssueWithPlayer[] {
+	return players.flatMap(player =>
+		playerDataAvailabilityIssues(player.dataAvailability).map(issue => ({
+			...issue,
+			playerId: player.id,
+			playerName: player.webName
+		}))
+	)
 }
