@@ -46,10 +46,7 @@ describe('price-change live delivery contract', () => {
 		])
 
 		assert.match(client, /export type PriceChangeLiveSeed = Pick</)
-		assert.match(
-			client,
-			/'revision' \| 'deadline' \| 'nextDeadlines'/
-		)
+		assert.match(client, /'revision' \| 'deadline' \| 'nextDeadlines'/)
 		assert.match(client, /export function usePriceChangeLiveUpdates/)
 		assert.match(desk, /revision: board\.revision/)
 		assert.match(desk, /deadline: board\.deadline/)
@@ -60,7 +57,10 @@ describe('price-change live delivery contract', () => {
 		assert.doesNotMatch(carousel, /durableBoard/)
 		assert.match(carousel, /isPriceChangeObservedEventAtLeastAsNew/)
 		assert.match(carousel, /usePriceChangeLiveUpdates\(\{/)
-		assert.match(carousel, /buildHomePriceChangePredictionState\(board, locale\)/)
+		assert.match(
+			carousel,
+			/buildHomePriceChangePredictionState\(board, locale\)/
+		)
 		assert.match(carousel, /data-price-change-live-state=\{liveState\}/)
 		assert.match(carousel, /data-price-change-revision=\{liveRevision\}/)
 	})

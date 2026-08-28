@@ -1,4 +1,3 @@
-import { MarketPlayerLookupLauncher } from '@/app/data/market/MarketPriceExplorer'
 import {
 	MarketDashboard,
 	MarketGlance
@@ -283,11 +282,6 @@ async function renderMarketContent({
 				locale={locale}
 				glance={marketGlance}
 			/>
-			{!pulse ? (
-				<section className="mt-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-					<MarketPlayerLookupLauncher initialOpen />
-				</section>
-			) : null}
 		</>
 	)
 }

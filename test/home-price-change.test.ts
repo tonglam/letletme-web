@@ -174,7 +174,10 @@ describe('homepage price-change projection', () => {
 		})
 
 		assert.equal(observed?.state, 'AVAILABLE')
-		assert.deepEqual(observed?.rises.map(item => item.player.playerId), [1])
+		assert.deepEqual(
+			observed?.rises.map(item => item.player.playerId),
+			[1]
+		)
 	})
 
 	it('rejects an older observed event during a refreshed render', () => {
@@ -188,14 +191,8 @@ describe('homepage price-change projection', () => {
 		}
 		const older = { ...current, observedAt: '2026-08-29T00:00:02.000Z' }
 
-		assert.equal(
-			isPriceChangeObservedEventAtLeastAsNew(older, current),
-			false
-		)
-		assert.equal(
-			isPriceChangeObservedEventAtLeastAsNew(current, older),
-			true
-		)
+		assert.equal(isPriceChangeObservedEventAtLeastAsNew(older, current), false)
+		assert.equal(isPriceChangeObservedEventAtLeastAsNew(current, older), true)
 	})
 
 	it('keeps the five strongest likely rises and falls from a live board', () => {

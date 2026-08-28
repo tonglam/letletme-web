@@ -555,13 +555,15 @@ async function MarketPriceSection({
 	dailyPriceChanges,
 	dailyPriceChangeDate,
 	marketRevision,
-	locale
+	locale,
+	initialOpen
 }: {
 	priceChangePromise: Promise<PriceChangeBoard | null>
 	dailyPriceChanges: MarketPriceChange[]
 	dailyPriceChangeDate: string | null
 	marketRevision: string | null
 	locale: string
+	initialOpen: boolean
 }) {
 	const priceChangeBoard = await priceChangePromise
 	const observedPriceChanges = priceChangeBoard
@@ -579,7 +581,102 @@ async function MarketPriceSection({
 			marketRevision={marketRevision}
 			priceRevision={observedPriceChanges?.eventRevision ?? null}
 			priceBoard={priceChangeBoard}
+			initialOpen={initialOpen}
 		/>
+	)
+}
+
+function MarketPriceSectionFallback({
+	changes,
+	changeDate,
+	locale,
+	t
+}: {
+	changes: MarketPriceChange[]
+	changeDate: string | null
+	locale: string
+	t: MarketT
+}) {
+	const rises = changes.filter(change => change.direction === 'RISE')
+	const falls = changes.filter(change => change.direction === 'FALL')
+	const column = (items: MarketPriceChange[], rising: boolean) => (
+		<div className="min-w-0 rounded-lg border border-border/60 bg-muted/15 px-3 py-3 dark:bg-muted/10">
+			<p
+				className={cn(
+					'mb-2.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em]',
+					rising ? 'text-success' : 'text-destructive'
+				)}
+			>
+				{rising ? t('priceRises') : t('priceFalls')}
+				<span className="ml-1.5 font-mono text-muted-foreground">
+					({items.length})
+				</span>
+			</p>
+			{items.length === 0 ? (
+				<EmptyHint>{t('noData')}</EmptyHint>
+			) : (
+				<ul className="w-full">
+					{items.map(change => (
+						<li
+							key={`${change.player.playerId}-${change.changeDate}-${change.direction}`}
+							className="border-b border-border/40 py-2.5 last:border-b-0"
+						>
+							<div className="flex w-full items-center gap-2.5">
+								<PositionBadge player={change.player} />
+								<span className="min-w-0 flex-1">
+									<PlayerStatsAnchor
+										playerId={change.player.playerId}
+										locale={locale}
+										className="market-player-link"
+									>
+										{change.player.webName}
+									</PlayerStatsAnchor>
+									<span className="block truncate text-[11px] text-muted-foreground">
+										{change.player.teamShortName}
+									</span>
+								</span>
+								<span className="shrink-0 text-right">
+									<span
+										className={cn(
+											'block font-display text-sm font-semibold tabular-nums leading-tight',
+											rising ? 'text-success' : 'text-destructive'
+										)}
+									>
+										{rising ? '+' : '−'}£
+										{(Math.abs(change.change) / 10).toFixed(1)}m
+									</span>
+									<span className="block text-[10px] tabular-nums text-muted-foreground">
+										£{(change.oldPrice / 10).toFixed(1)}m → £
+										{(change.newPrice / 10).toFixed(1)}m
+									</span>
+								</span>
+							</div>
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
+	)
+
+	return (
+		<section
+			aria-labelledby="market-prices"
+			aria-busy="true"
+			className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+		>
+			<SectionTitle id="market-prices">{t('priceTitle')}</SectionTitle>
+			<p className="mb-4 text-[11px] text-muted-foreground">
+				{t('priceBoardMeta', {
+					rises: rises.length,
+					falls: falls.length,
+					date: formatCalendarDate(changeDate, locale)
+				})}
+			</p>
+			<div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+				{column(rises, true)}
+				{column(falls, false)}
+			</div>
+		</section>
 	)
 }
 
@@ -646,18 +743,14 @@ export async function MarketDashboard({
 				: ownership.coverage.toDate
 			: (requestedDate ?? dailyDates.at(-1) ?? null)
 
-	const dailyPriceSection =
-		pulse || priceChangeBoard || priceChangePromise ? (
-			<MarketPriceExplorer
-				changes={dailyPriceChanges}
-				changeDate={dailyPriceChangeDate}
-				observedAt={null}
-				locale={locale}
-				marketRevision={marketRevision}
-				priceRevision={null}
-				priceBoard={null}
-			/>
-		) : null
+	const dailyPriceSection = pulse ? (
+		<MarketPriceSectionFallback
+			changes={dailyPriceChanges}
+			changeDate={dailyPriceChangeDate}
+			locale={locale}
+			t={t}
+		/>
+	) : null
 	const priceSection = priceChangePromise ? (
 		<Suspense fallback={dailyPriceSection}>
 			<MarketPriceSection
@@ -666,6 +759,7 @@ export async function MarketDashboard({
 				dailyPriceChangeDate={dailyPriceChangeDate}
 				marketRevision={marketRevision}
 				locale={locale}
+				initialOpen={!pulse}
 			/>
 		</Suspense>
 	) : pulse || priceChangeBoard ? (
@@ -677,6 +771,7 @@ export async function MarketDashboard({
 			marketRevision={marketRevision}
 			priceRevision={priceRevision}
 			priceBoard={priceChangeBoard}
+			initialOpen={!pulse}
 		/>
 	) : null
 	const ownershipSection = (
