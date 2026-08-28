@@ -1,5 +1,8 @@
 import type { MarketPriceChange } from '@/lib/graphql/operations/market'
-import type { PriceChangeBoard } from '@/lib/graphql/operations/price-changes'
+import type {
+	PriceChangeBoard,
+	PriceChangeObservedEvent
+} from '@/lib/graphql/operations/price-changes'
 
 export type ObservedPriceChangeState = {
 	state: 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE'
@@ -19,6 +22,31 @@ function compareChange(
 	return (
 		Math.abs(right.change) - Math.abs(left.change) ||
 		left.player.playerId - right.player.playerId
+	)
+}
+
+function observedEventOrder(
+	event: PriceChangeObservedEvent | null | undefined
+): readonly [number, number] | null {
+	if (!event) return null
+	const deadline = Date.parse(event.deadline)
+	const observedAt = Date.parse(event.observedAt)
+	if (!Number.isFinite(deadline) || !Number.isFinite(observedAt)) return null
+	return [deadline, observedAt]
+}
+
+export function isPriceChangeObservedEventAtLeastAsNew(
+	next: PriceChangeObservedEvent | null | undefined,
+	current: PriceChangeObservedEvent | null | undefined
+): boolean {
+	const nextOrder = observedEventOrder(next)
+	if (!nextOrder) return false
+	if (!current) return true
+	const currentOrder = observedEventOrder(current)
+	if (!currentOrder) return true
+	return (
+		nextOrder[0] > currentOrder[0] ||
+		(nextOrder[0] === currentOrder[0] && nextOrder[1] >= currentOrder[1])
 	)
 }
 

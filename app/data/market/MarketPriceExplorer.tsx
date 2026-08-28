@@ -22,7 +22,10 @@ import {
 	formatPriceMovementShareText
 } from '@/app/data/market/_lib/market-price-share'
 import { marketRevisionParam } from '@/lib/market-client'
-import { mapLatestPriceChangeEvent } from '@/lib/price-change-observed'
+import {
+	isPriceChangeObservedEventAtLeastAsNew,
+	mapLatestPriceChangeEvent
+} from '@/lib/price-change-observed'
 import {
 	type PriceChangeLiveSeed,
 	usePriceChangeLiveUpdates
@@ -75,31 +78,6 @@ function marketPlayerToDirectory(player: MarketPlayer): PlayerDirectoryItem {
 			shortName: player.teamShortName
 		}
 	}
-}
-
-function observedEventOrder(
-	event: PriceChangeObservedEvent | null | undefined
-): readonly [number, number] | null {
-	if (!event) return null
-	const deadline = Date.parse(event.deadline)
-	const observedAt = Date.parse(event.observedAt)
-	if (!Number.isFinite(deadline) || !Number.isFinite(observedAt)) return null
-	return [deadline, observedAt]
-}
-
-function isObservedEventAtLeastAsNew(
-	next: PriceChangeObservedEvent | null | undefined,
-	current: PriceChangeObservedEvent | null
-): boolean {
-	const nextOrder = observedEventOrder(next)
-	if (!nextOrder) return false
-	if (!current) return true
-	const currentOrder = observedEventOrder(current)
-	if (!currentOrder) return true
-	return (
-		nextOrder[0] > currentOrder[0] ||
-		(nextOrder[0] === currentOrder[0] && nextOrder[1] >= currentOrder[1])
-	)
 }
 
 function PositionBadge({ player }: { player: MarketPlayer }) {
@@ -458,7 +436,10 @@ export function MarketPriceExplorer({
 			if (
 				!nextObserved ||
 				!nextEvent ||
-				!isObservedEventAtLeastAsNew(nextEvent, lastObservedEventRef.current)
+				!isPriceChangeObservedEventAtLeastAsNew(
+					nextEvent,
+					lastObservedEventRef.current
+				)
 			) {
 				return false
 			}

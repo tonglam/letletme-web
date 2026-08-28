@@ -6,7 +6,10 @@ import type {
 } from '../lib/graphql/operations/price-changes'
 import type { MarketPriceChange } from '../lib/graphql/operations/market'
 import { buildHomePriceChangePredictionState } from '../lib/home-price-change'
-import { mapLatestPriceChangeEvent } from '../lib/price-change-observed'
+import {
+	isPriceChangeObservedEventAtLeastAsNew,
+	mapLatestPriceChangeEvent
+} from '../lib/price-change-observed'
 
 function player(
 	id: number,
@@ -135,6 +138,63 @@ describe('homepage price-change projection', () => {
 				fallCount: 0,
 				changeDate: '2026-08-29'
 			}
+		)
+	})
+
+	it('keeps a changed event available when prediction freshness is unavailable', () => {
+		const observed = mapLatestPriceChangeEvent({
+			...board([], 'UNAVAILABLE'),
+			latestEvent: {
+				deadline: '2026-08-29T00:00:00.000Z',
+				changeDate: '2026-08-29',
+				observedAt: '2026-08-29T00:00:03.000Z',
+				outcome: 'CHANGED',
+				changedPlayerCount: 1,
+				changes: [
+					{
+						player: {
+							playerId: 1,
+							playerCode: 1,
+							webName: 'Player 1',
+							teamId: 1,
+							teamName: 'Team 1',
+							teamShortName: 'T1',
+							position: 'MIDFIELDER',
+							price: 50,
+							selectedByPercent: 0
+						},
+						changeDate: '2026-08-29',
+						oldPrice: 50,
+						newPrice: 51,
+						change: 1,
+						direction: 'RISE'
+					}
+				]
+			}
+		})
+
+		assert.equal(observed?.state, 'AVAILABLE')
+		assert.deepEqual(observed?.rises.map(item => item.playerId), [1])
+	})
+
+	it('rejects an older observed event during a refreshed render', () => {
+		const current = {
+			deadline: '2026-08-29T00:00:00.000Z',
+			changeDate: '2026-08-29',
+			observedAt: '2026-08-29T00:00:03.000Z',
+			outcome: 'CHANGED' as const,
+			changedPlayerCount: 1,
+			changes: []
+		}
+		const older = { ...current, observedAt: '2026-08-29T00:00:02.000Z' }
+
+		assert.equal(
+			isPriceChangeObservedEventAtLeastAsNew(older, current),
+			false
+		)
+		assert.equal(
+			isPriceChangeObservedEventAtLeastAsNew(current, older),
+			true
 		)
 	})
 

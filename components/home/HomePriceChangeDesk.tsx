@@ -219,7 +219,7 @@ export async function HomePriceChangeDesk() {
 				actual={actual}
 				likely={likely}
 				liveSeed={liveSeed}
-				durableBoard={priceChangeBoard ?? undefined}
+				observedEvent={priceChangeBoard?.latestEvent ?? null}
 				locale={locale}
 				labels={labels}
 			/>

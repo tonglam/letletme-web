@@ -14,6 +14,7 @@ import { Link } from '@/i18n/navigation'
 import type { MarketPriceChange } from '@/lib/graphql/operations/market'
 import type {
 	PriceChangeBoard,
+	PriceChangeObservedEvent,
 	PriceChangePlayer,
 	PriceChangePredictionStatus,
 	PriceChangeLiveState
@@ -22,7 +23,10 @@ import {
 	buildHomePriceChangePredictionState,
 	type HomePriceChangePredictionState
 } from '@/lib/home-price-change'
-import { mapLatestPriceChangeEvent } from '@/lib/price-change-observed'
+import {
+	isPriceChangeObservedEventAtLeastAsNew,
+	mapLatestPriceChangeEvent
+} from '@/lib/price-change-observed'
 import {
 	type PriceChangeLiveSeed,
 	usePriceChangeLiveUpdates
@@ -76,7 +80,7 @@ export type HomePriceChangeCarouselProps = {
 	}
 	likely: HomePriceChangePredictionState
 	liveSeed: PriceChangeLiveSeed
-	durableBoard?: PriceChangeBoard
+	observedEvent?: PriceChangeObservedEvent | null
 	locale: string
 	labels: HomePriceChangeCarouselLabels
 }
@@ -466,13 +470,16 @@ export function HomePriceChangeCarousel({
 	actual,
 	likely: initialLikely,
 	liveSeed,
-	durableBoard,
+	observedEvent,
 	locale,
 	labels
 }: HomePriceChangeCarouselProps) {
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const [currentActual, setCurrentActual] = useState(actual)
 	const lastActualRef = useRef(actual)
+	const lastActualEventRef = useRef<PriceChangeObservedEvent | null>(
+		observedEvent ?? null
+	)
 	const [likely, setLikely] = useState(initialLikely)
 	const [liveState, setLiveState] = useState<PriceChangeLiveState>(
 		initialLikely.state === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'DURABLE'
@@ -480,11 +487,24 @@ export function HomePriceChangeCarousel({
 	const [liveRevision, setLiveRevision] = useState(liveSeed.revision)
 
 	useEffect(() => {
-		if (actual.eventRevision || !lastActualRef.current.eventRevision) {
+		if (observedEvent) {
+			if (
+				isPriceChangeObservedEventAtLeastAsNew(
+					observedEvent,
+					lastActualEventRef.current
+				)
+			) {
+				setCurrentActual(actual)
+				lastActualRef.current = actual
+				lastActualEventRef.current = observedEvent
+			}
+			return
+		}
+		if (!lastActualEventRef.current) {
 			setCurrentActual(actual)
 			lastActualRef.current = actual
 		}
-	}, [actual])
+	}, [actual, observedEvent])
 
 	useEffect(() => {
 		setLikely(initialLikely)
@@ -496,12 +516,19 @@ export function HomePriceChangeCarousel({
 
 	usePriceChangeLiveUpdates({
 		seed: liveSeed,
-		durableBoard,
 		onUpdate: (board, state) => {
 			const nextActual = actualFromBoard(board, labels)
-			if (nextActual) {
+			const nextEvent = board.latestEvent ?? null
+			if (
+				nextActual &&
+				isPriceChangeObservedEventAtLeastAsNew(
+					nextEvent,
+					lastActualEventRef.current
+				)
+			) {
 				setCurrentActual(nextActual)
 				lastActualRef.current = nextActual
+				lastActualEventRef.current = nextEvent
 			}
 			setLikely(buildHomePriceChangePredictionState(board, locale))
 			setLiveState(state)
