@@ -26,8 +26,12 @@ import {
 	RECENT_PLAYERS_MAX,
 	serializeRecentPlayers
 } from '../_lib/recent-player-storage'
+import {
+	mergePlayerDetailEvidence,
+	type PlayerEvidenceSection
+} from '../_lib/player-detail-evidence'
 
-export type PlayerEvidenceSection = 'fixtures' | 'recent' | 'season' | 'process'
+export type { PlayerEvidenceSection } from '../_lib/player-detail-evidence'
 
 type PlayerDetailLoadResult =
 	| { status: 'loaded'; detail: PlayerDetailData }
@@ -421,12 +425,10 @@ export function usePlayerDetailSlot({
 				const evidence = entry?.evidence
 				if (!evidence) throw new Error('Player evidence unavailable')
 				const processState = entry?.state
-				startTransition(() => {
-					setPlayerDetail(previous =>
-						previous
-							? { ...previous, ...evidence }
-							: (evidence as PlayerDetailData)
-					)
+					startTransition(() => {
+						setPlayerDetail(previous =>
+							mergePlayerDetailEvidence(previous, evidence, section)
+						)
 					if (section === 'process' && isProcessState(processState)) {
 						setPlayerStateProfile(previous => {
 							if (!previous || previous.playerId !== processState.playerId)
