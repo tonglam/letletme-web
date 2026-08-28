@@ -4,6 +4,11 @@ import type {
 	PriceChangeObservedEvent
 } from '@/lib/graphql/operations/price-changes'
 
+export type PriceChangeObservedEventMetadata = Pick<
+	PriceChangeObservedEvent,
+	'deadline' | 'observedAt'
+>
+
 export type ObservedPriceChangeState = {
 	state: 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE'
 	observedAt: string | null
@@ -26,7 +31,7 @@ function compareChange(
 }
 
 function observedEventOrder(
-	event: PriceChangeObservedEvent | null | undefined
+	event: PriceChangeObservedEventMetadata | null | undefined
 ): readonly [number, number] | null {
 	if (!event) return null
 	const deadline = Date.parse(event.deadline)
@@ -36,8 +41,8 @@ function observedEventOrder(
 }
 
 export function isPriceChangeObservedEventAtLeastAsNew(
-	next: PriceChangeObservedEvent | null | undefined,
-	current: PriceChangeObservedEvent | null | undefined
+	next: PriceChangeObservedEventMetadata | null | undefined,
+	current: PriceChangeObservedEventMetadata | null | undefined
 ): boolean {
 	const nextOrder = observedEventOrder(next)
 	if (!nextOrder) return false

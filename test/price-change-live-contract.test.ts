@@ -64,4 +64,17 @@ describe('price-change live delivery contract', () => {
 		assert.match(carousel, /data-price-change-live-state=\{liveState\}/)
 		assert.match(carousel, /data-price-change-revision=\{liveRevision\}/)
 	})
+
+	it('keeps the full board on the server side of the market boundary', async () => {
+		const [dashboard, explorer] = await Promise.all([
+			read('app/data/market/MarketDashboard.tsx'),
+			read('app/data/market/MarketPriceExplorer.tsx')
+		])
+
+		assert.match(dashboard, /liveSeed=\{priceLiveSeed\}/)
+		assert.match(dashboard, /observedEvent=\{priceEventMetadata\}/)
+		assert.doesNotMatch(dashboard, /priceBoard=\{priceChangeBoard\}/)
+		assert.doesNotMatch(explorer, /durableBoard:/)
+		assert.doesNotMatch(explorer, /priceBoard\?: PriceChangeBoard/)
+	})
 })

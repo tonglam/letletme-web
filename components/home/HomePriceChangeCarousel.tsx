@@ -14,7 +14,6 @@ import { Link } from '@/i18n/navigation'
 import type { MarketPriceChange } from '@/lib/graphql/operations/market'
 import type {
 	PriceChangeBoard,
-	PriceChangeObservedEvent,
 	PriceChangePlayer,
 	PriceChangePredictionStatus,
 	PriceChangeLiveState
@@ -25,7 +24,8 @@ import {
 } from '@/lib/home-price-change'
 import {
 	isPriceChangeObservedEventAtLeastAsNew,
-	mapLatestPriceChangeEvent
+	mapLatestPriceChangeEvent,
+	type PriceChangeObservedEventMetadata
 } from '@/lib/price-change-observed'
 import {
 	type PriceChangeLiveSeed,
@@ -80,7 +80,7 @@ export type HomePriceChangeCarouselProps = {
 	}
 	likely: HomePriceChangePredictionState
 	liveSeed: PriceChangeLiveSeed
-	observedEvent?: PriceChangeObservedEvent | null
+	observedEvent?: PriceChangeObservedEventMetadata | null
 	locale: string
 	labels: HomePriceChangeCarouselLabels
 }
@@ -477,7 +477,7 @@ export function HomePriceChangeCarousel({
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const [currentActual, setCurrentActual] = useState(actual)
 	const lastActualRef = useRef(actual)
-	const lastActualEventRef = useRef<PriceChangeObservedEvent | null>(
+	const lastActualEventRef = useRef<PriceChangeObservedEventMetadata | null>(
 		observedEvent ?? null
 	)
 	const [likely, setLikely] = useState(initialLikely)
@@ -518,7 +518,12 @@ export function HomePriceChangeCarousel({
 		seed: liveSeed,
 		onUpdate: (board, state) => {
 			const nextActual = actualFromBoard(board, labels)
-			const nextEvent = board.latestEvent ?? null
+			const nextEvent = board.latestEvent
+				? {
+						deadline: board.latestEvent.deadline,
+						observedAt: board.latestEvent.observedAt
+					}
+				: null
 			if (
 				nextActual &&
 				isPriceChangeObservedEventAtLeastAsNew(

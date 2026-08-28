@@ -80,8 +80,8 @@ export async function HomePriceChangeDesk() {
 	let actualDate: string | null = null
 	const priceChangeBoard =
 		predictionResult.status === 'fulfilled'
-		? predictionResult.value.priceChangeBoard
-		: null
+			? predictionResult.value.priceChangeBoard
+			: null
 	const observed = priceChangeBoard
 		? mapLatestPriceChangeEvent(priceChangeBoard)
 		: null
@@ -222,7 +222,14 @@ export async function HomePriceChangeDesk() {
 				actual={actual}
 				likely={likely}
 				liveSeed={liveSeed}
-				observedEvent={priceChangeBoard?.latestEvent ?? null}
+				observedEvent={
+					priceChangeBoard?.latestEvent
+						? {
+								deadline: priceChangeBoard.latestEvent.deadline,
+								observedAt: priceChangeBoard.latestEvent.observedAt
+							}
+						: null
+				}
 				locale={locale}
 				labels={labels}
 			/>

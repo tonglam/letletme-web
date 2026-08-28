@@ -18,7 +18,11 @@ import type {
 } from '@/lib/graphql/operations/market'
 import type { PriceChangeBoard } from '@/lib/graphql/operations/price-changes'
 import { getMarketViewMode } from '@/lib/market'
-import { mapLatestPriceChangeEvent } from '@/lib/price-change-observed'
+import {
+	mapLatestPriceChangeEvent,
+	type PriceChangeObservedEventMetadata
+} from '@/lib/price-change-observed'
+import type { PriceChangeLiveSeed } from '@/lib/price-change-live-client'
 import { Link } from '@/i18n/navigation'
 import { cn } from '@/lib/utils'
 import { getTranslations } from 'next-intl/server'
@@ -47,6 +51,26 @@ function formatOwnership(value: number, locale: string): string {
 
 function formatPlayerPrice(value: number): string {
 	return `£${(value / 10).toFixed(1)}m`
+}
+
+function priceChangeLiveSeed(
+	board: PriceChangeBoard | null,
+	priceRevision: string | null
+): PriceChangeLiveSeed {
+	return {
+		revision: board?.revision ?? priceRevision ?? 'unavailable',
+		deadline: board?.deadline ?? null,
+		nextDeadlines: board?.nextDeadlines ?? []
+	}
+}
+
+function priceChangeEventMetadata(
+	board: PriceChangeBoard | null
+): PriceChangeObservedEventMetadata | null {
+	const event = board?.latestEvent
+	return event
+		? { deadline: event.deadline, observedAt: event.observedAt }
+		: null
 }
 
 function PositionBadge({ player }: { player: MarketPlayer }) {
@@ -569,6 +593,11 @@ async function MarketPriceSection({
 	const observedPriceChanges = priceChangeBoard
 		? mapLatestPriceChangeEvent(priceChangeBoard)
 		: null
+	const observedEvent = priceChangeEventMetadata(priceChangeBoard)
+	const liveSeed = priceChangeLiveSeed(
+		priceChangeBoard,
+		observedPriceChanges?.eventRevision ?? null
+	)
 	const latestPriceChanges = observedPriceChanges
 		? [...observedPriceChanges.rises, ...observedPriceChanges.falls]
 		: dailyPriceChanges
@@ -580,7 +609,11 @@ async function MarketPriceSection({
 			locale={locale}
 			marketRevision={marketRevision}
 			priceRevision={observedPriceChanges?.eventRevision ?? null}
-			priceBoard={priceChangeBoard}
+			liveSeed={liveSeed}
+			observedEvent={observedEvent}
+			initialLiveState={
+				priceChangeBoard?.status === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'DURABLE'
+			}
 			initialOpen={initialOpen}
 		/>
 	)
@@ -727,6 +760,8 @@ export async function MarketDashboard({
 		observedPriceChanges?.changeDate ?? dailyPriceChangeDate
 	const priceObservedAt = observedPriceChanges?.observedAt ?? null
 	const priceRevision = observedPriceChanges?.eventRevision ?? null
+	const priceLiveSeed = priceChangeLiveSeed(priceChangeBoard, priceRevision)
+	const priceEventMetadata = priceChangeEventMetadata(priceChangeBoard)
 	const hasMovers =
 		ownership !== null &&
 		(ownership.risers.length > 0 || ownership.fallers.length > 0)
@@ -770,7 +805,11 @@ export async function MarketDashboard({
 			locale={locale}
 			marketRevision={marketRevision}
 			priceRevision={priceRevision}
-			priceBoard={priceChangeBoard}
+			liveSeed={priceLiveSeed}
+			observedEvent={priceEventMetadata}
+			initialLiveState={
+				priceChangeBoard?.status === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'DURABLE'
+			}
 			initialOpen={!pulse}
 		/>
 	) : null

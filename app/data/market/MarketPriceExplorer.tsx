@@ -12,7 +12,6 @@ import type {
 } from '@/lib/graphql/operations/market'
 import type {
 	PriceChangeBoard,
-	PriceChangeObservedEvent,
 	PriceChangeLiveState
 } from '@/lib/graphql/operations/price-changes'
 import type { PlayerDirectoryItem } from '@/lib/graphql/operations/players'
@@ -24,7 +23,8 @@ import {
 import { marketRevisionParam } from '@/lib/market-client'
 import {
 	isPriceChangeObservedEventAtLeastAsNew,
-	mapLatestPriceChangeEvent
+	mapLatestPriceChangeEvent,
+	type PriceChangeObservedEventMetadata
 } from '@/lib/price-change-observed'
 import {
 	type PriceChangeLiveSeed,
@@ -38,7 +38,6 @@ import {
 	Suspense,
 	useCallback,
 	useEffect,
-	useMemo,
 	useRef,
 	useState,
 	type ComponentProps,
@@ -389,7 +388,9 @@ export function MarketPriceExplorer({
 	locale,
 	marketRevision,
 	priceRevision,
-	priceBoard,
+	liveSeed,
+	observedEvent,
+	initialLiveState = 'DURABLE',
 	initialOpen = false
 }: {
 	changes: MarketPriceChange[]
@@ -398,36 +399,26 @@ export function MarketPriceExplorer({
 	locale: string
 	marketRevision: string | null
 	priceRevision: string | null
-	priceBoard?: PriceChangeBoard | null
+	liveSeed: PriceChangeLiveSeed
+	observedEvent?: PriceChangeObservedEventMetadata | null
+	initialLiveState?: PriceChangeLiveState
 	initialOpen?: boolean
 }) {
 	const t = useTranslations('Market')
 	const [seedPlayer, setSeedPlayer] = useState<PlayerDirectoryItem | null>(null)
 	const shareRef = useRef<HTMLElement | null>(null)
-	const initialObserved = priceBoard
-		? mapLatestPriceChangeEvent(priceBoard)
-		: null
 	const [latestPriceChanges, setLatestPriceChanges] = useState(changes)
 	const [currentChangeDate, setCurrentChangeDate] = useState(changeDate)
 	const [currentObservedAt, setCurrentObservedAt] = useState(observedAt)
 	const [currentPriceRevision, setCurrentPriceRevision] =
 		useState(priceRevision)
-	const [liveState, setLiveState] = useState<PriceChangeLiveState>(
-		priceBoard?.status === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'DURABLE'
-	)
-	const lastObservedEventRef = useRef<PriceChangeObservedEvent | null>(
-		priceBoard?.latestEvent ?? null
+	const [liveState, setLiveState] =
+		useState<PriceChangeLiveState>(initialLiveState)
+	const lastObservedEventRef = useRef<PriceChangeObservedEventMetadata | null>(
+		observedEvent ?? null
 	)
 	const lastEventRevisionRef = useRef<string | null>(
-		initialObserved?.eventRevision ?? null
-	)
-	const liveSeed: PriceChangeLiveSeed = useMemo(
-		() => ({
-			revision: priceBoard?.revision ?? priceRevision ?? 'unavailable',
-			deadline: priceBoard?.deadline ?? null,
-			nextDeadlines: priceBoard?.nextDeadlines ?? []
-		}),
-		[priceBoard, priceRevision]
+		observedEvent ? priceRevision : null
 	)
 	const applyObservedBoard = useCallback(
 		(nextBoard: PriceChangeBoard): boolean => {
@@ -447,7 +438,10 @@ export function MarketPriceExplorer({
 			setCurrentChangeDate(nextObserved.changeDate)
 			setCurrentObservedAt(nextObserved.observedAt)
 			setCurrentPriceRevision(nextObserved.eventRevision)
-			lastObservedEventRef.current = nextEvent
+			lastObservedEventRef.current = {
+				deadline: nextEvent.deadline,
+				observedAt: nextEvent.observedAt
+			}
 			lastEventRevisionRef.current = nextObserved.eventRevision
 			return true
 		},
@@ -455,7 +449,21 @@ export function MarketPriceExplorer({
 	)
 
 	useEffect(() => {
-		if (priceBoard && applyObservedBoard(priceBoard)) return
+		if (
+			observedEvent &&
+			isPriceChangeObservedEventAtLeastAsNew(
+				observedEvent,
+				lastObservedEventRef.current
+			)
+		) {
+			setLatestPriceChanges(changes)
+			setCurrentChangeDate(changeDate)
+			setCurrentObservedAt(observedAt)
+			setCurrentPriceRevision(priceRevision)
+			lastObservedEventRef.current = observedEvent
+			lastEventRevisionRef.current = priceRevision
+			return
+		}
 		// A daily market snapshot or a temporary cursor failure must not erase
 		// an already observed 07:00 event. Only use the old snapshot fallback
 		// while no immutable event has ever been received in this mount.
@@ -465,18 +473,10 @@ export function MarketPriceExplorer({
 			setCurrentObservedAt(observedAt)
 			setCurrentPriceRevision(priceRevision)
 		}
-	}, [
-		applyObservedBoard,
-		changeDate,
-		changes,
-		observedAt,
-		priceBoard,
-		priceRevision
-	])
+	}, [changeDate, changes, observedAt, priceRevision, observedEvent])
 
 	usePriceChangeLiveUpdates({
 		seed: liveSeed,
-		durableBoard: priceBoard ?? undefined,
 		onUpdate: (nextBoard, state) => {
 			applyObservedBoard(nextBoard)
 			setLiveState(state)
