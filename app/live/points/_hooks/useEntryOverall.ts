@@ -50,6 +50,9 @@ export function useEntryOverall({
 	const loadedKeyRef = useRef<string | null>(
 		initialOverall != null ? `${initialEntryId}:${initialEventId}` : null
 	)
+	const lookupKeyRef = useRef<string | null>(
+		`${initialEntryId}:${initialEventId}`
+	)
 	const retryKeyRef = useRef<string | null>(null)
 	const automaticRetryCountRef = useRef(0)
 
@@ -59,6 +62,7 @@ export function useEntryOverall({
 		setEntryPersistenceState(initialEntryPersistenceState)
 		loadedKeyRef.current =
 			initialOverall != null ? `${initialEntryId}:${initialEventId}` : null
+		lookupKeyRef.current = `${initialEntryId}:${initialEventId}`
 		retryKeyRef.current = null
 		automaticRetryCountRef.current = 0
 	}, [
@@ -83,12 +87,22 @@ export function useEntryOverall({
 			setEntryLookupStatus(undefined)
 			setEntryPersistenceState(undefined)
 			loadedKeyRef.current = null
+			lookupKeyRef.current = null
 			retryKeyRef.current = null
 			automaticRetryCountRef.current = 0
 			return
 		}
 
 		const lookupKey = `${entryId}:${currentGameweek}`
+		if (lookupKeyRef.current !== lookupKey) {
+			// A new entry must not inherit the previous entry's status while its
+			// lookup is pending. Keep retry state separate so a same-entry retry
+			// does not look like a new selection.
+			setOverall(undefined)
+			setEntryLookupStatus(undefined)
+			setEntryPersistenceState(undefined)
+			lookupKeyRef.current = lookupKey
+		}
 		if (loadedKeyRef.current === lookupKey) return
 		if (retryKeyRef.current !== lookupKey) {
 			retryKeyRef.current = lookupKey
