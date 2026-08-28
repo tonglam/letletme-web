@@ -7,7 +7,10 @@ import {
 	type PerformanceCorrelation,
 	type PlayerStatsCacheStatus
 } from '@/lib/analytics/performance-correlation'
-import type { PlayerStatsDeskSection } from '@/lib/graphql/operations/players'
+import type {
+	PlayerDetailDataAvailability,
+	PlayerStatsDeskSection
+} from '@/lib/graphql/operations/players'
 import type { PlayerStatsDeskResponse } from '@/lib/player-stats-desk'
 
 const CACHE_TTL_MS = 5 * 60 * 1000
@@ -29,6 +32,7 @@ type PendingDeskRequest = {
 }
 
 type DeskRequestOptions = PerformanceCorrelation & {
+	bypassCache?: boolean
 	signal?: AbortSignal
 }
 
@@ -66,7 +70,11 @@ function readCache(key: string): PlayerStatsDeskResponse | undefined {
 }
 
 function writeCache(key: string, response: PlayerStatsDeskResponse): void {
-	if (response.unavailablePlayerIds.length > 0) return
+	if (
+		response.unavailablePlayerIds.length > 0 ||
+		!responseIsAuthoritative(response)
+	)
+		return
 	responseCache.set(key, {
 		expiresAt: Date.now() + CACHE_TTL_MS,
 		response
@@ -76,6 +84,42 @@ function writeCache(key: string, response: PlayerStatsDeskResponse): void {
 		if (typeof oldest !== 'string') break
 		responseCache.delete(oldest)
 	}
+}
+
+const responseIsAuthoritative = (
+	response: PlayerStatsDeskResponse
+): boolean => {
+	if (response.section === 'overview') {
+		return response.entries.every(entry => {
+			const availability = entry.overview?.dataAvailability
+			return Boolean(availability && isAuthoritativeAvailability(availability))
+		})
+	}
+	if (response.section === 'context') return true
+	return response.entries.every(entry => {
+		if (!entry.evidence) return false
+		const availability = entry.evidence.dataAvailability
+		return Boolean(availability && isAuthoritativeAvailability(availability))
+	})
+}
+
+function isAuthoritativeAvailability(
+	availability: PlayerDetailDataAvailability
+): boolean {
+	return (
+		availability.isFullyAuthoritative &&
+		[
+			availability.seasonStats,
+			availability.market,
+			availability.historicalTeam,
+			availability.fixtures,
+			availability.recentGameweeks
+		].every(
+			section =>
+				section != null &&
+				['READY', 'EMPTY', 'NOT_APPLICABLE'].includes(section.state)
+		)
+	)
 }
 
 function reportDeskResponse(
@@ -138,13 +182,18 @@ export async function requestPlayerStatsDesk(
 	const request = canonicalRequest(input)
 	const key = requestKey(request)
 	const startedAt = typeof performance === 'undefined' ? 0 : performance.now()
-	const cached = readCache(key)
+	if (options.bypassCache) responseCache.delete(key)
+	const cached = options.bypassCache ? undefined : readCache(key)
 	if (cached) {
 		reportDeskResponse(startedAt, options, 'hit')
 		return cached
 	}
 	const existing = pendingRequests.get(key)
-	if (existing && !existing.controller.signal.aborted) {
+	if (existing && options.bypassCache && !existing.controller.signal.aborted) {
+		existing.controller.abort()
+		pendingRequests.delete(key)
+	}
+	if (existing && !options.bypassCache && !existing.controller.signal.aborted) {
 		attachConsumer(existing, options.signal)
 		return existing.promise
 	}
@@ -164,6 +213,7 @@ export async function requestPlayerStatsDesk(
 	if (options.interactionId) {
 		requestHeaders['X-LetLetMe-Interaction-Id'] = options.interactionId
 	}
+	if (options.bypassCache) requestHeaders['Cache-Control'] = 'no-cache'
 	const pending: PendingDeskRequest = {
 		controller,
 		promise: Promise.resolve(null as never),
@@ -176,6 +226,7 @@ export async function requestPlayerStatsDesk(
 		method: 'GET',
 		credentials: 'same-origin',
 		headers: requestHeaders,
+		cache: options.bypassCache ? 'no-store' : 'default',
 		signal: controller.signal
 	})
 		.then(async response => {

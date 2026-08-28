@@ -571,11 +571,18 @@ export default function PlayerStatsClient({
 						]
 							.map(Number)
 							.filter(value => Number.isInteger(value) && value > 0)
-						firstPlayer.selectPlayer(firstPlayer.selectedPlayer, batchPlayerIds)
+						firstPlayer.selectPlayer(
+							firstPlayer.selectedPlayer,
+							batchPlayerIds,
+							{
+								bypassCache: true
+							}
+						)
 						if (secondPlayer.selectedPlayer) {
 							secondPlayer.selectPlayer(
 								secondPlayer.selectedPlayer,
-								batchPlayerIds
+								batchPlayerIds,
+								{ bypassCache: true }
 							)
 						}
 					}}

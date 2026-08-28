@@ -19,7 +19,17 @@ import {
 
 const overviewEntry = (playerId: number) => ({
 	playerId,
-	overview: { id: playerId } as never,
+	overview: {
+		id: playerId,
+		dataAvailability: {
+			isFullyAuthoritative: true,
+			seasonStats: { state: 'READY' },
+			market: { state: 'READY' },
+			historicalTeam: { state: 'READY' },
+			fixtures: { state: 'READY' },
+			recentGameweeks: { state: 'READY' }
+		}
+	} as never,
 	state: { playerId, trend: 'STABLE', dimensions: [] } as never
 })
 
@@ -146,6 +156,42 @@ describe('player stats desk contract', () => {
 		assert.deepEqual(result.unavailablePlayerIds, [13])
 	})
 
+	it('does not treat a stale overview as a complete cacheable result', () => {
+		const result = normalizePlayerStatsDeskResult(
+			{
+				eventId: 4,
+				horizon: 5,
+				entries: [
+					{
+						playerId: 13,
+						overview: {
+							status: 'AVAILABLE',
+							value: {
+								id: 13,
+								dataAvailability: {
+									isFullyAuthoritative: false,
+									seasonStats: { state: 'READY' },
+									market: { state: 'STALE' },
+									historicalTeam: { state: 'READY' },
+									fixtures: { state: 'READY' },
+									recentGameweeks: { state: 'READY' }
+								}
+							} as never
+						},
+						state: {
+							status: 'AVAILABLE',
+							value: { playerId: 13, trend: 'UNKNOWN', dimensions: [] }
+						} as never
+					}
+				]
+			},
+			[13],
+			'overview'
+		)
+		assert.equal(result.outcome, 'partial')
+		assert.deepEqual(result.unavailablePlayerIds, [13])
+	})
+
 	it('distinguishes valid empty values, missing players, and temporary field failures', () => {
 		const available = normalizePlayerStatsDeskResult(
 			{
@@ -154,7 +200,20 @@ describe('player stats desk contract', () => {
 				entries: [
 					{
 						playerId: 13,
-						overview: { status: 'AVAILABLE', value: { id: 13 } } as never,
+						overview: {
+							status: 'AVAILABLE',
+							value: {
+								id: 13,
+								dataAvailability: {
+									isFullyAuthoritative: true,
+									seasonStats: { state: 'READY' },
+									market: { state: 'READY' },
+									historicalTeam: { state: 'READY' },
+									fixtures: { state: 'READY' },
+									recentGameweeks: { state: 'READY' }
+								}
+							} as never
+						} as never,
 						state: {
 							status: 'AVAILABLE',
 							value: { playerId: 13, trend: 'UNKNOWN', dimensions: [] }

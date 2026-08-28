@@ -33,6 +33,10 @@ type PlayerDetailLoadResult =
 	| { status: 'loaded'; detail: PlayerDetailData }
 	| { status: 'not-found' | 'failed' | 'superseded'; detail: null }
 
+type PlayerDetailInteractionContext = PerformanceCorrelation & {
+	bypassCache?: boolean
+}
+
 function readRecentPlayers(storageKey: string): PlayerDirectoryOption[] {
 	try {
 		return parseRecentPlayers(window.localStorage.getItem(storageKey))
@@ -236,7 +240,7 @@ export function usePlayerDetailSlot({
 		async (
 			player: PlayerDirectoryOption,
 			batchPlayerIds?: number[],
-			interactionContext?: PerformanceCorrelation
+			interactionContext?: PlayerDetailInteractionContext
 		): Promise<PlayerDetailLoadResult> => {
 			if (!eventId) {
 				setError(t('currentGameweekUnavailable'))
@@ -269,7 +273,8 @@ export function usePlayerDetailSlot({
 					{
 						signal: controller.signal,
 						navigationId,
-						interactionId: interactionContext?.interactionId
+						interactionId: interactionContext?.interactionId,
+						bypassCache: interactionContext?.bypassCache
 					}
 				)
 				if (requestId !== requestIdRef.current || controller.signal.aborted) {
@@ -478,7 +483,7 @@ export function usePlayerDetailSlot({
 		(
 			player: PlayerDirectoryOption,
 			batchPlayerIds?: number[],
-			interactionContext?: PerformanceCorrelation
+			interactionContext?: PlayerDetailInteractionContext
 		) => {
 			setError(null)
 			setStateError(null)
