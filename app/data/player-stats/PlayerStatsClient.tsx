@@ -565,12 +565,19 @@ export default function PlayerStatsClient({
 					comparisonStateError={secondPlayer.stateError}
 					retryPlayerData={() => {
 						if (!firstPlayer.selectedPlayer) return
-						firstPlayer.selectPlayer(
-							firstPlayer.selectedPlayer,
-							[firstSelectedPlayerId, secondSelectedPlayerId]
-								.map(Number)
-								.filter(value => Number.isInteger(value) && value > 0)
-						)
+						const batchPlayerIds = [
+							firstSelectedPlayerId,
+							secondSelectedPlayerId
+						]
+							.map(Number)
+							.filter(value => Number.isInteger(value) && value > 0)
+						firstPlayer.selectPlayer(firstPlayer.selectedPlayer, batchPlayerIds)
+						if (secondPlayer.selectedPlayer) {
+							secondPlayer.selectPlayer(
+								secondPlayer.selectedPlayer,
+								batchPlayerIds
+							)
+						}
 					}}
 					loadEvidence={section =>
 						firstPlayer.loadEvidence(
