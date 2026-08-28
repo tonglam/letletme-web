@@ -174,7 +174,7 @@ describe('homepage price-change projection', () => {
 		})
 
 		assert.equal(observed?.state, 'AVAILABLE')
-		assert.deepEqual(observed?.rises.map(item => item.playerId), [1])
+		assert.deepEqual(observed?.rises.map(item => item.player.playerId), [1])
 	})
 
 	it('rejects an older observed event during a refreshed render', () => {
