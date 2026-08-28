@@ -71,6 +71,40 @@ const contentSecurityPolicy = [
 	...(isProduction ? ['upgrade-insecure-requests'] : [])
 ].join('; ')
 
+const securityHeaders = [
+	...(isProduction
+		? [
+					{
+						key: 'Strict-Transport-Security',
+						value: 'max-age=31536000; includeSubDomains'
+					}
+				]
+		: []),
+	{ key: 'X-Content-Type-Options', value: 'nosniff' },
+	{ key: 'X-Frame-Options', value: 'DENY' },
+	{ key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+	{
+		key: 'Permissions-Policy',
+		value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
+	},
+	{ key: 'Content-Security-Policy', value: contentSecurityPolicy }
+]
+
+const runtimeHeaders = [
+	{ key: 'X-Letletme-Origin', value: deploymentOrigin },
+	{ key: 'X-Letletme-Release', value: releaseSha },
+	...securityHeaders
+]
+
+// Immutable Next assets already carry a content-addressed path. Do not attach
+// the mutable application release identity to a response that EdgeOne may
+// retain for a year; otherwise an unchanged asset can expose the release that
+// originally populated the cache rather than the release serving the page.
+const staticHeaders = [
+	{ key: 'X-Letletme-Origin', value: deploymentOrigin },
+	...securityHeaders
+]
+
 const nextConfig = {
 	output: 'standalone',
 	poweredByHeader: false,
@@ -85,28 +119,15 @@ const nextConfig = {
 	async headers() {
 		return [
 			{
-				source: '/:path*',
-				headers: [
-					{ key: 'X-Letletme-Origin', value: deploymentOrigin },
-					{ key: 'X-Letletme-Release', value: releaseSha },
-					...(isProduction
-						? [
-								{
-									key: 'Strict-Transport-Security',
-									value: 'max-age=31536000; includeSubDomains'
-								}
-							]
-						: []),
-					{ key: 'X-Content-Type-Options', value: 'nosniff' },
-					{ key: 'X-Frame-Options', value: 'DENY' },
-					{ key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-					{
-						key: 'Permissions-Policy',
-						value:
-							'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
-					},
-					{ key: 'Content-Security-Policy', value: contentSecurityPolicy }
-				]
+				source: '/_next/static/:path*',
+				headers: staticHeaders
+			},
+			{
+				// Keep release attribution on runtime responses, but exclude the
+				// immutable static namespace so its long-lived CDN entries do not
+				// preserve a misleading application release header.
+				source: '/((?!_next/static/).*)',
+				headers: runtimeHeaders
 			},
 			{
 				source: '/miniprogram.webp',

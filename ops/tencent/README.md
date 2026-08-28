@@ -132,7 +132,9 @@ and OAuth callback remains on Vercel. Do not route auth API traffic to Tencent.
 Next.js 16 intentionally uses an internal constant `.next/BUILD_ID` whenever
 `deploymentId` is enabled. The release gate therefore checks the configured
 `generateBuildId()` value, the full-SHA release header, and the built deployment
-manifest. For this Tencent self-hosted path, the deployment ID is the
+manifest. Runtime responses expose the full-SHA release header; immutable
+`/_next/static/*` responses intentionally omit that mutable header and are
+validated by their content hash and cache policy. For this Tencent self-hosted path, the deployment ID is the
 deterministic first 32 characters of the same full Git SHA. Vercel Git builds
 intentionally omit the custom ID and use Vercel's unique platform deployment
 ID instead; reusing a commit-derived custom ID there would make a redeploy of

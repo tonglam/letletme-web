@@ -182,7 +182,10 @@ The cache policy is deliberately narrow:
 
 1. Never cache non-`GET`/`HEAD`, `/api/*`, health, Auth, RSC, requests with
    Cookie/Authorization, or 4xx/5xx responses.
-2. Cache only `/_next/static/*` as immutable after verifying the release SHA.
+2. Cache only `/_next/static/*` as immutable after verifying the asset content
+   and cache headers. Immutable static responses do not carry the mutable
+   application `X-Letletme-Release` header; verify release parity on HTML,
+   RSC, health, and API responses instead.
 3. Let `/_next/image` and other public files follow the origin response until
    a separate cache test proves they are safe.
 4. HTML, Server Actions, sessions, and API responses must never be EdgeOne
@@ -194,7 +197,8 @@ release SHA during a release transition. Public diagnostics remain:
 
 - `GET /healthz`
 - `X-Letletme-Origin: tencent|vercel`
-- `X-Letletme-Release: <40-char-sha>`
+- `X-Letletme-Release: <40-char-sha>` on runtime responses; absent on
+  `/_next/static/*`
 - `X-Letletme-Edge: edgeone|direct-vercel|cloudflare-fallback`
 
 ## ICP and Tencent origin gate
