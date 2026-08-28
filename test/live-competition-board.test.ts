@@ -17,6 +17,7 @@ import {
 	readLiveBoardLastGood,
 	resolveAnchoredGameweek,
 	resolveUrlGameweekSelection,
+	shouldRefreshLiveBoardManagerCoverage,
 	shouldAutoRefreshLiveBoardPage,
 	shouldSyncLiveBoardSearchInput,
 	writeLiveBoardLastGood
@@ -270,6 +271,31 @@ describe('live competition board request coordination', () => {
 		assert.equal(shouldAutoRefreshLiveBoardPage(2), false)
 		assert.equal(shouldAutoRefreshLiveBoardPage(5), false)
 		assert.equal(shouldAutoRefreshLiveBoardPage(null), false)
+	})
+
+	it('keeps polling page one while manager coverage is pending', () => {
+		assert.equal(
+			shouldRefreshLiveBoardManagerCoverage(
+				page({ managerRefreshQueued: true, managerNextRefreshAt: null })
+			),
+			true
+		)
+		assert.equal(
+			shouldRefreshLiveBoardManagerCoverage(page({ deferredEntryCount: 2 })),
+			true
+		)
+		assert.equal(
+			shouldRefreshLiveBoardManagerCoverage(
+				page({ managerDataAvailability: 'PARTIAL' })
+			),
+			true
+		)
+		assert.equal(
+			shouldRefreshLiveBoardManagerCoverage(
+				page({ page: 2, managerRefreshQueued: true })
+			),
+			false
+		)
 	})
 
 	it('blocks pagination while a replacement query is in flight', () => {

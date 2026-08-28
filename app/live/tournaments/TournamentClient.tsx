@@ -42,6 +42,7 @@ import {
 	readLiveBoardLastGood,
 	resolveAnchoredGameweek,
 	resolveUrlGameweekSelection,
+	shouldRefreshLiveBoardManagerCoverage,
 	shouldAutoRefreshLiveBoardPage,
 	shouldSyncLiveBoardSearchInput,
 	writeLiveBoardLastGood,
@@ -144,6 +145,7 @@ type PendingBoardReplacement = {
 	eventId: number
 	query: BoardQueryState
 	options: { preserve: boolean; expectedScope: string }
+	resolve: (accepted: boolean) => void
 }
 
 const boardPartialMessage = (
@@ -293,6 +295,7 @@ export default function TournamentClient({
 	const [queryState, setQueryState] =
 		useState<BoardQueryState>(defaultQueryState)
 	const queryStateRef = useRef(queryState)
+	const desiredQueryRef = useRef(queryState)
 	const [searchInput, setSearchInput] = useState('')
 	const searchInputRef = useRef(searchInput)
 	const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
@@ -318,8 +321,32 @@ export default function TournamentClient({
 		boardFreshnessMarker(initialBoardPage)
 	)
 	const shareRef = useRef<HTMLDivElement | null>(null)
+	const queuePendingReplacement = useCallback(
+		(
+			tournamentId: number,
+			eventId: number,
+			query: BoardQueryState,
+			options: { preserve: boolean; expectedScope: string }
+		): Promise<boolean> =>
+			new Promise(resolve => {
+				const previous = pendingReplacementRef.current
+				if (previous) previous.resolve(previous.query.search === query.search)
+				pendingReplacementRef.current = {
+					tournamentId,
+					eventId,
+					query,
+					options,
+					resolve
+				}
+			}),
+		[]
+	)
 	const updateSearchInput = useCallback((value: string): void => {
 		searchInputRef.current = value
+		desiredQueryRef.current = {
+			...desiredQueryRef.current,
+			search: value.trim()
+		}
 		setSearchInput(value)
 	}, [])
 
@@ -520,13 +547,7 @@ export default function TournamentClient({
 			// after this replacement has advanced requestVersionRef.
 			setIsLoadingMore(false)
 			if (rateLimitSecondsRef.current > 0) {
-				pendingReplacementRef.current = {
-					tournamentId,
-					eventId,
-					query,
-					options
-				}
-				return false
+				return queuePendingReplacement(tournamentId, eventId, query, options)
 			}
 			const searchInputAtStart = searchInputRef.current
 			replaceAbortRef.current?.abort()
@@ -604,14 +625,15 @@ export default function TournamentClient({
 				return true
 			} catch (error) {
 				if (controller.signal.aborted) return false
+				let queuedReplacement: Promise<boolean> | null = null
 				if (error instanceof LiveBoardRequestError && error.status === 429) {
 					const cooldown = Math.max(1, error.retryAfterSeconds ?? 30)
-					pendingReplacementRef.current = {
+					queuedReplacement = queuePendingReplacement(
 						tournamentId,
 						eventId,
 						query,
 						options
-					}
+					)
 					rateLimitSecondsRef.current = cooldown
 					setRateLimitSeconds(cooldown)
 				}
@@ -623,7 +645,7 @@ export default function TournamentClient({
 						options.preserve ? t('refreshFailedRetained') : t('standingsFailed')
 					)
 				}
-				return false
+				return queuedReplacement ?? false
 			} finally {
 				if (replaceAbortRef.current === controller) {
 					replaceAbortRef.current = null
@@ -635,7 +657,15 @@ export default function TournamentClient({
 				}
 			}
 		},
-		[buildVariables, entryId, season, sessionCacheKey, t, updateSearchInput]
+		[
+			buildVariables,
+			entryId,
+			queuePendingReplacement,
+			season,
+			sessionCacheKey,
+			t,
+			updateSearchInput
+		]
 	)
 
 	useEffect(() => {
@@ -652,9 +682,13 @@ export default function TournamentClient({
 		replaceInFlightRef.current = false
 		requestVersionRef.current += 1
 		refreshInFlightRef.current = null
+		const pendingReplacement = pendingReplacementRef.current
 		pendingReplacementRef.current = null
+		pendingReplacement?.resolve(false)
 		acceptedBoardFreshnessRef.current = null
-		queryStateRef.current = defaultQueryState()
+		const resetQuery = defaultQueryState()
+		queryStateRef.current = resetQuery
+		desiredQueryRef.current = resetQuery
 		setQueryState(queryStateRef.current)
 		updateSearchInput('')
 		setShowAdvancedFilters(false)
@@ -690,6 +724,7 @@ export default function TournamentClient({
 		const eventId = selectedGameweek
 		const nextQuery = defaultQueryState()
 		queryStateRef.current = nextQuery
+		desiredQueryRef.current = nextQuery
 		setQueryState(nextQuery)
 		updateSearchInput('')
 		setShowAdvancedFilters(false)
@@ -779,6 +814,7 @@ export default function TournamentClient({
 		if (!pending) return
 		if (pending.options.expectedScope !== activeScopeRef.current) {
 			pendingReplacementRef.current = null
+			pending.resolve(false)
 			return
 		}
 		pendingReplacementRef.current = null
@@ -787,15 +823,19 @@ export default function TournamentClient({
 			pending.eventId,
 			pending.query,
 			pending.options
-		)
+		).then(pending.resolve)
 	}, [rateLimitSeconds, replaceFirstPage])
 
 	useEffect(() => {
 		if (!scopeKey || !selectedTournamentId || !standingsReady) return
 		if (searchInput === queryState.search) return
 		const timer = window.setTimeout(() => {
-			const requestedInput = searchInput
-			const next = { ...queryStateRef.current, search: requestedInput.trim() }
+			const requestedInput = searchInputRef.current
+			const next = {
+				...desiredQueryRef.current,
+				search: requestedInput.trim()
+			}
+			desiredQueryRef.current = next
 			void replaceFirstPage(
 				Number(selectedTournamentId),
 				selectedGameweek,
@@ -806,6 +846,7 @@ export default function TournamentClient({
 					!accepted &&
 					shouldSyncLiveBoardSearchInput(requestedInput, searchInputRef.current)
 				) {
+					desiredQueryRef.current = queryStateRef.current
 					updateSearchInput(queryStateRef.current.search)
 				}
 			})
@@ -826,10 +867,12 @@ export default function TournamentClient({
 	const applyFilters = useCallback(
 		async (filters: LiveBoardFilterState): Promise<boolean> => {
 			if (!scopeKey || !selectedTournamentId) return false
+			const nextQuery = { ...desiredQueryRef.current, filters }
+			desiredQueryRef.current = nextQuery
 			return replaceFirstPage(
 				Number(selectedTournamentId),
 				selectedGameweek,
-				{ ...queryStateRef.current, filters },
+				nextQuery,
 				{ preserve: entries.length > 0, expectedScope: scopeKey }
 			)
 		},
@@ -845,14 +888,16 @@ export default function TournamentClient({
 	const applySort = useCallback(
 		(column: TournamentSortColumn, direction: TournamentSortDirection) => {
 			if (!scopeKey || !selectedTournamentId) return
+			const nextQuery = {
+				...desiredQueryRef.current,
+				sortColumn: column,
+				sortDirection: direction
+			}
+			desiredQueryRef.current = nextQuery
 			void replaceFirstPage(
 				Number(selectedTournamentId),
 				selectedGameweek,
-				{
-					...queryStateRef.current,
-					sortColumn: column,
-					sortDirection: direction
-				},
+				nextQuery,
 				{ preserve: entries.length > 0, expectedScope: scopeKey }
 			)
 		},
@@ -986,7 +1031,7 @@ export default function TournamentClient({
 		const request = replaceFirstPage(
 			Number(selectedTournamentId),
 			selectedGameweek,
-			queryStateRef.current,
+			desiredQueryRef.current,
 			{ preserve: entries.length > 0, expectedScope: scopeKey }
 		)
 		refreshInFlightRef.current = request
@@ -1037,24 +1082,18 @@ export default function TournamentClient({
 				boardPage?.managerNextRefreshAt &&
 				Date.parse(boardPage.managerNextRefreshAt) <= Date.now()
 			)
+			const managerCoveragePending =
+				shouldRefreshLiveBoardManagerCoverage(boardPage)
 			if (
 				shouldAutoRefreshLiveBoardPage(boardPage?.page ?? null) &&
-				(boardPublicationChanged || managerScoreDue)
+				(boardPublicationChanged || managerScoreDue || managerCoveragePending)
 			) {
 				await refresh()
 			}
 		} catch {
 			if (entries.length > 0) setResultsError(t('refreshFailedRetained'))
 		}
-	}, [
-		boardPage?.page,
-		boardPage?.managerNextRefreshAt,
-		currentGameweek,
-		entries.length,
-		gameweekFromUrl,
-		refresh,
-		t
-	])
+	}, [boardPage, currentGameweek, entries.length, gameweekFromUrl, refresh, t])
 
 	const managerStatus = useMemo(() => {
 		if (!boardPage) return t('scoreConfirming')

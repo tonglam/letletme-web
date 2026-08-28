@@ -368,6 +368,25 @@ export const isCurrentLiveBoardRequest = (
 export const shouldAutoRefreshLiveBoardPage = (page: number | null): boolean =>
 	page === 1
 
+export const shouldRefreshLiveBoardManagerCoverage = (
+	page: Pick<
+		EntryLiveCompetitionBoardPage,
+		| 'page'
+		| 'managerRefreshQueued'
+		| 'deferredEntryCount'
+		| 'coverageState'
+		| 'managerDataAvailability'
+	> | null
+): boolean =>
+	Boolean(
+		page &&
+		page.page === 1 &&
+		(page.managerRefreshQueued ||
+			page.deferredEntryCount > 0 ||
+			page.coverageState === 'WARMING' ||
+			page.managerDataAvailability === 'PARTIAL')
+	)
+
 export const canLoadMoreLiveBoard = (input: {
 	hasMore: boolean
 	isLoadingMore: boolean
