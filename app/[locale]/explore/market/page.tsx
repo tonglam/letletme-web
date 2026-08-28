@@ -17,11 +17,13 @@ import {
 	type MarketOwnershipOverviewResponse,
 	type MarketOwnershipPeriod
 } from '@/lib/graphql/operations/market'
+import type { PriceChangeBoard } from '@/lib/graphql/operations/price-changes'
 import {
 	loadMarketOwnershipDay,
 	loadMarketOwnershipOverview,
 	loadMarketPulseSummary
 } from '@/lib/market-overview-server'
+import { loadPriceChangeBoard } from '@/lib/price-change-server'
 import {
 	isPublishedMarketOwnershipDate,
 	normalizeMarketOwnershipDate
@@ -143,12 +145,14 @@ async function renderMarketContent({
 	const translationPromise = getTranslations('Market')
 	const dataPromise = loadMarketPulseSummary(7)
 	const overviewPromise = loadMarketOwnershipOverview(period)
+	const priceChangePromise = loadPriceChangeBoard()
 	const glanceOverviewPromise = Promise.allSettled([
 		loadMarketOwnershipOverview(period === 'DAILY' ? 'GAMEWEEK' : 'DAILY')
 	]).then(([result]) => result)
 	const t = await translationPromise
 	let pulse: MarketPulse | null = null
 	let revision: string | null = null
+	let priceChangeBoard: PriceChangeBoard | null = null
 	let ownership:
 		| MarketOwnershipOverviewResponse['marketOwnershipOverview']
 		| MarketOwnershipDayResponse['marketOwnershipDay']
@@ -159,10 +163,8 @@ async function renderMarketContent({
 		MarketOwnershipOverviewResponse['marketOwnershipOverview'] | null = null
 	let publishedDate: string | null = null
 
-	const [dataResult, overviewResult] = await Promise.allSettled([
-		dataPromise,
-		overviewPromise
-	])
+	const [dataResult, overviewResult, priceChangeResult] =
+		await Promise.allSettled([dataPromise, overviewPromise, priceChangePromise])
 	if (dataResult.status === 'fulfilled') {
 		const summary = normalizeMarketPulseSummaryResponse(dataResult.value)
 		if (summary) {
@@ -197,6 +199,15 @@ async function renderMarketContent({
 			overviewResult.reason
 		)
 	}
+	if (priceChangeResult.status === 'fulfilled') {
+		priceChangeBoard = priceChangeResult.value.priceChangeBoard
+	} else {
+		unstable_rethrow(priceChangeResult.reason)
+		console.error(
+			'[market] price-change board fetch failed:',
+			priceChangeResult.reason
+		)
+	}
 	if (publishedDate) {
 		const [dayResult] = await Promise.allSettled([
 			loadMarketOwnershipDay(publishedDate)
@@ -218,8 +229,8 @@ async function renderMarketContent({
 		(!date && ownership?.period === 'DAILY' ? ownership.coverage : null)
 	const updatedAt =
 		(publishedDate
-			? ownership?.coverage.capturedAt ?? pulse?.coverage.capturedAt
-			: pulse?.coverage.capturedAt ?? ownership?.coverage.capturedAt) ?? null
+			? (ownership?.coverage.capturedAt ?? pulse?.coverage.capturedAt)
+			: (pulse?.coverage.capturedAt ?? ownership?.coverage.capturedAt)) ?? null
 	const marketGlance = (
 		<Suspense fallback={null}>
 			<MarketGlanceContent
@@ -271,7 +282,8 @@ async function renderMarketContent({
 					latestDate: dailyCoverage?.latestDate ?? null,
 					missingDates: dailyCoverage?.missingDates ?? []
 				})}
-				revision={revision}
+				marketRevision={revision}
+				priceChangeBoard={priceChangeBoard}
 				locale={locale}
 				glance={marketGlance}
 			/>

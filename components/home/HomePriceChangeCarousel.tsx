@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/card'
 import { Link } from '@/i18n/navigation'
 import type { MarketPriceChange } from '@/lib/graphql/operations/market'
 import type {
+	PriceChangeBoard,
 	PriceChangePlayer,
 	PriceChangePredictionStatus,
 	PriceChangeLiveState
@@ -21,6 +22,7 @@ import {
 	buildHomePriceChangePredictionState,
 	type HomePriceChangePredictionState
 } from '@/lib/home-price-change'
+import { mapLatestPriceChangeEvent } from '@/lib/price-change-observed'
 import {
 	type PriceChangeLiveSeed,
 	usePriceChangeLiveUpdates
@@ -68,9 +70,13 @@ export type HomePriceChangeCarouselProps = {
 		capturedAt: string | null
 		rises: MarketPriceChange[]
 		falls: MarketPriceChange[]
+		riseCount: number
+		fallCount: number
+		eventRevision: string | null
 	}
 	likely: HomePriceChangePredictionState
 	liveSeed: PriceChangeLiveSeed
+	durableBoard?: PriceChangeBoard
 	locale: string
 	labels: HomePriceChangeCarouselLabels
 }
@@ -93,6 +99,24 @@ function priceChangeHref(playerId: number, locale: string): string {
 		p1: String(playerId),
 		localePathPrefix: locale === 'en' ? '' : `/${locale}`
 	})
+}
+
+function actualFromBoard(
+	board: PriceChangeBoard,
+	labels: HomePriceChangeCarouselLabels
+): HomePriceChangeCarouselProps['actual'] | null {
+	const observed = mapLatestPriceChangeEvent(board)
+	if (!observed) return null
+	return {
+		state: observed.state,
+		coverageLabel: labels.todayDescription,
+		capturedAt: observed.observedAt,
+		rises: observed.rises.slice(0, 5),
+		falls: observed.falls.slice(0, 5),
+		riseCount: observed.riseCount,
+		fallCount: observed.fallCount,
+		eventRevision: observed.eventRevision
+	}
 }
 
 function EmptyState({
@@ -140,12 +164,14 @@ function PriceChangeDirection<T>({
 	direction,
 	title,
 	emptyLabel,
+	count,
 	renderItem
 }: {
 	items: readonly T[]
 	direction: 'RISE' | 'FALL'
 	title: string
 	emptyLabel: string
+	count?: number
 	renderItem: (item: T) => ReactNode
 }) {
 	const isRise = direction === 'RISE'
@@ -166,7 +192,7 @@ function PriceChangeDirection<T>({
 				/>
 				{title}
 				<span className="font-mono text-xs text-muted-foreground">
-					({items.length})
+					({count ?? items.length})
 				</span>
 			</h3>
 			{items.length === 0 ? (
@@ -263,6 +289,7 @@ function TodayPage({
 		<div className="space-y-6">
 			<PriceChangeDirection
 				items={actual.rises}
+				count={actual.riseCount}
 				direction="RISE"
 				title={labels.priceRises}
 				emptyLabel={labels.noPriceRises}
@@ -276,6 +303,7 @@ function TodayPage({
 			/>
 			<PriceChangeDirection
 				items={actual.falls}
+				count={actual.fallCount}
 				direction="FALL"
 				title={labels.priceFalls}
 				emptyLabel={labels.noPriceFalls}
@@ -438,15 +466,25 @@ export function HomePriceChangeCarousel({
 	actual,
 	likely: initialLikely,
 	liveSeed,
+	durableBoard,
 	locale,
 	labels
 }: HomePriceChangeCarouselProps) {
 	const shareRef = useRef<HTMLDivElement | null>(null)
+	const [currentActual, setCurrentActual] = useState(actual)
+	const lastActualRef = useRef(actual)
 	const [likely, setLikely] = useState(initialLikely)
 	const [liveState, setLiveState] = useState<PriceChangeLiveState>(
 		initialLikely.state === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'DURABLE'
 	)
 	const [liveRevision, setLiveRevision] = useState(liveSeed.revision)
+
+	useEffect(() => {
+		if (actual.eventRevision || !lastActualRef.current.eventRevision) {
+			setCurrentActual(actual)
+			lastActualRef.current = actual
+		}
+	}, [actual])
 
 	useEffect(() => {
 		setLikely(initialLikely)
@@ -458,12 +496,19 @@ export function HomePriceChangeCarousel({
 
 	usePriceChangeLiveUpdates({
 		seed: liveSeed,
+		durableBoard,
 		onUpdate: (board, state) => {
+			const nextActual = actualFromBoard(board, labels)
+			if (nextActual) {
+				setCurrentActual(nextActual)
+				lastActualRef.current = nextActual
+			}
 			setLikely(buildHomePriceChangePredictionState(board, locale))
 			setLiveState(state)
 			setLiveRevision(board.revision)
 		},
 		onReset: state => {
+			setCurrentActual(lastActualRef.current)
 			setLikely(initialLikely)
 			setLiveState(state)
 			setLiveRevision(liveSeed.revision)
@@ -476,7 +521,7 @@ export function HomePriceChangeCarousel({
 			label: labels.todayPage,
 			content: (
 				<TodayPage
-					actual={actual}
+					actual={currentActual}
 					locale={locale}
 					labels={labels}
 				/>
@@ -522,27 +567,27 @@ export function HomePriceChangeCarousel({
 							data-share-meta="true"
 							className="mt-1 max-w-sm text-xs text-muted-foreground"
 						>
-							{slide.id === 'today'
-								? (
-										<LocalUpdatedLabel
-											value={actual.capturedAt}
-											prefix={labels.todayUpdatedPrefix}
-											fallback={labels.todayDescription}
-										/>
-								  )
-								: (
-										<LocalUpdatedLabel
-											value={likely.capturedAt}
-											prefix={labels.todayUpdatedPrefix}
-											fallback={labels.likelyDescription}
-										/>
-								  )}
+							{slide.id === 'today' ? (
+								<LocalUpdatedLabel
+									value={currentActual.capturedAt}
+									prefix={labels.todayUpdatedPrefix}
+									fallback={labels.todayDescription}
+								/>
+							) : (
+								<LocalUpdatedLabel
+									value={likely.capturedAt}
+									prefix={labels.todayUpdatedPrefix}
+									fallback={labels.likelyDescription}
+								/>
+							)}
 						</p>
 					</div>
 				)}
 				renderAction={slide => {
 					const href =
-						slide.id === 'today' ? '/explore/market' : '/explore/price-predictions'
+						slide.id === 'today'
+							? '/explore/market'
+							: '/explore/price-predictions'
 					const label =
 						slide.id === 'today' ? labels.openRecorded : labels.openPredictions
 					return (

@@ -7,6 +7,7 @@ import type { HomeMarketDesk } from '@/lib/graphql/operations/home'
 import type { MarketPriceChange } from '@/lib/graphql/operations/market'
 import { loadHomeMarketDesk } from '@/lib/home-market-seed-server'
 import { buildHomePriceChangePredictionState } from '@/lib/home-price-change'
+import { mapLatestPriceChangeEvent } from '@/lib/price-change-observed'
 import { loadPriceChangeBoard } from '@/lib/price-change-server'
 import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
 import { getLocale, getTranslations } from 'next-intl/server'
@@ -77,18 +78,50 @@ export async function HomePriceChangeDesk() {
 
 	let actual: HomePriceChangeCarouselProps['actual']
 	let actualDate: string | null = null
-	if (deskResult.status === 'rejected') {
+	const priceChangeBoard =
+		predictionResult.status === 'fulfilled'
+			? predictionResult.value.priceChangeBoard
+			: null
+	const observed = priceChangeBoard
+		? mapLatestPriceChangeEvent(priceChangeBoard)
+		: null
+	if (observed) {
+		actualDate = observed.changeDate
+		actual = {
+			state: observed.state,
+			coverageLabel: actualDate
+				? tHome('homePriceChangesTodayDescription', {
+						date: formatCalendarDate(actualDate, locale)
+					})
+				: null,
+			capturedAt: observed.observedAt,
+			rises: observed.rises.slice(0, 5),
+			falls: observed.falls.slice(0, 5),
+			riseCount: observed.riseCount,
+			fallCount: observed.fallCount,
+			eventRevision: observed.eventRevision
+		}
+	} else if (deskResult.status === 'rejected') {
 		actual = {
 			state: 'UNAVAILABLE',
 			coverageLabel: null,
 			capturedAt: null,
 			rises: [],
-			falls: []
+			falls: [],
+			riseCount: 0,
+			fallCount: 0,
+			eventRevision: null
 		}
 	} else {
 		const desk = deskResult.value.homeMarketDesk
 		const latest = mapActualPriceChanges(desk)
 		actualDate = latest.date
+		const rises = latest.changes
+			.filter(change => change.direction === 'RISE')
+			.sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
+		const falls = latest.changes
+			.filter(change => change.direction === 'FALL')
+			.sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
 		actual = {
 			state:
 				desk.priceChangesState === 'UNAVAILABLE'
@@ -102,14 +135,11 @@ export async function HomePriceChangeDesk() {
 					})
 				: null,
 			capturedAt: desk.capturedAt,
-			rises: latest.changes
-				.filter(change => change.direction === 'RISE')
-				.sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
-				.slice(0, 5),
-			falls: latest.changes
-				.filter(change => change.direction === 'FALL')
-				.sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
-				.slice(0, 5)
+			rises: rises.slice(0, 5),
+			falls: falls.slice(0, 5),
+			riseCount: rises.length,
+			fallCount: falls.length,
+			eventRevision: null
 		}
 	}
 
@@ -127,7 +157,7 @@ export async function HomePriceChangeDesk() {
 			falls: []
 		}
 	} else {
-		const board = predictionResult.value.priceChangeBoard
+		const board = priceChangeBoard ?? predictionResult.value.priceChangeBoard
 		likely = buildHomePriceChangePredictionState(board, locale)
 		liveSeed = {
 			revision: board.revision,
@@ -189,6 +219,7 @@ export async function HomePriceChangeDesk() {
 				actual={actual}
 				likely={likely}
 				liveSeed={liveSeed}
+				durableBoard={priceChangeBoard ?? undefined}
 				locale={locale}
 				labels={labels}
 			/>

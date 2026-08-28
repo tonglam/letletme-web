@@ -15,7 +15,9 @@ import type {
 	MarketOwnershipOverview,
 	MarketOwnershipPeriod
 } from '@/lib/graphql/operations/market'
+import type { PriceChangeBoard } from '@/lib/graphql/operations/price-changes'
 import { getMarketViewMode } from '@/lib/market'
+import { mapLatestPriceChangeEvent } from '@/lib/price-change-observed'
 import { Link } from '@/i18n/navigation'
 import { cn } from '@/lib/utils'
 import { getTranslations } from 'next-intl/server'
@@ -552,7 +554,8 @@ export async function MarketDashboard({
 	requestedPeriod,
 	requestedDate,
 	dailyDates,
-	revision = null,
+	marketRevision = null,
+	priceChangeBoard = null,
 	locale,
 	glance
 }: {
@@ -561,12 +564,16 @@ export async function MarketDashboard({
 	requestedPeriod: MarketOwnershipPeriod
 	requestedDate: string | null
 	dailyDates: string[]
-	revision?: string | null
+	marketRevision?: string | null
+	priceChangeBoard?: PriceChangeBoard | null
 	locale: string
 	glance?: ReactNode
 }) {
 	const t: MarketT = await getTranslations('Market')
-	const priceChangeDate = pulse
+	const observedPriceChanges = priceChangeBoard
+		? mapLatestPriceChangeEvent(priceChangeBoard)
+		: null
+	const dailyPriceChangeDate = pulse
 		? (pulse.priceChanges
 				.map(c => c.changeDate)
 				.sort()
@@ -574,11 +581,18 @@ export async function MarketDashboard({
 			pulse.coverage.latestDate ??
 			null)
 		: null
-	const latestPriceChanges = priceChangeDate
+	const dailyPriceChanges = dailyPriceChangeDate
 		? (pulse?.priceChanges ?? []).filter(
-				change => change.changeDate === priceChangeDate
+				change => change.changeDate === dailyPriceChangeDate
 			)
 		: []
+	const latestPriceChanges = observedPriceChanges
+		? [...observedPriceChanges.rises, ...observedPriceChanges.falls]
+		: dailyPriceChanges
+	const priceChangeDate =
+		observedPriceChanges?.changeDate ?? dailyPriceChangeDate
+	const priceObservedAt = observedPriceChanges?.observedAt ?? null
+	const priceRevision = observedPriceChanges?.eventRevision ?? null
 	const hasMovers =
 		ownership !== null &&
 		(ownership.risers.length > 0 || ownership.fallers.length > 0)
@@ -595,14 +609,18 @@ export async function MarketDashboard({
 				: ownership.coverage.toDate
 			: (requestedDate ?? dailyDates.at(-1) ?? null)
 
-	const priceSection = pulse ? (
-		<MarketPriceExplorer
-			changes={latestPriceChanges}
-			changeDate={priceChangeDate}
-			locale={locale}
-			revision={revision}
-		/>
-	) : null
+	const priceSection =
+		pulse || priceChangeBoard ? (
+			<MarketPriceExplorer
+				changes={latestPriceChanges}
+				changeDate={priceChangeDate}
+				observedAt={priceObservedAt}
+				locale={locale}
+				marketRevision={marketRevision}
+				priceRevision={priceRevision}
+				priceBoard={priceChangeBoard}
+			/>
+		) : null
 	const ownershipSection = (
 		<section
 			aria-labelledby="market-ownership"
@@ -708,7 +726,7 @@ export async function MarketDashboard({
 				/>
 				<MarketAvailabilityDisclosure
 					days={pulse?.coverage.requestedDays ?? 0}
-					revision={revision}
+					revision={marketRevision}
 					count={
 						pulse?.availabilityUpdateCount ??
 						pulse?.availabilityUpdates.length ??

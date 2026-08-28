@@ -1,6 +1,7 @@
 'use client'
 
 import { MarketPositionBadge } from '@/components/data/MarketMarkup'
+import { MarketLocalUpdated } from '@/components/data/MarketLocalUpdated'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
@@ -9,6 +10,10 @@ import type {
 	MarketPlayer,
 	MarketPriceChange
 } from '@/lib/graphql/operations/market'
+import type {
+	PriceChangeBoard,
+	PriceChangeLiveState
+} from '@/lib/graphql/operations/price-changes'
 import type { PlayerDirectoryItem } from '@/lib/graphql/operations/players'
 import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import {
@@ -16,6 +21,11 @@ import {
 	formatPriceMovementShareText
 } from '@/app/data/market/_lib/market-price-share'
 import { marketRevisionParam } from '@/lib/market-client'
+import { mapLatestPriceChangeEvent } from '@/lib/price-change-observed'
+import {
+	type PriceChangeLiveSeed,
+	usePriceChangeLiveUpdates
+} from '@/lib/price-change-live-client'
 import { ShareActions } from '@/components/share/ShareActions'
 import { Search } from 'lucide-react'
 import { useTranslations } from 'next-intl'
@@ -23,6 +33,7 @@ import {
 	lazy,
 	Suspense,
 	useCallback,
+	useEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -326,7 +337,7 @@ function PriceColumns({
 													p1: String(change.player.playerId),
 													localePathPrefix: locale === 'en' ? '' : `/${locale}`
 												})}
-													className="pointer-events-auto market-player-link"
+												className="pointer-events-auto market-player-link"
 											>
 												{change.player.webName}
 											</a>
@@ -370,30 +381,108 @@ function PriceColumns({
 export function MarketPriceExplorer({
 	changes,
 	changeDate,
+	observedAt,
 	locale,
-	revision,
+	marketRevision,
+	priceRevision,
+	priceBoard,
 	initialOpen = false
 }: {
 	changes: MarketPriceChange[]
 	changeDate: string | null
+	observedAt: string | null
 	locale: string
-	revision: string | null
+	marketRevision: string | null
+	priceRevision: string | null
+	priceBoard?: PriceChangeBoard | null
 	initialOpen?: boolean
 }) {
 	const t = useTranslations('Market')
 	const [seedPlayer, setSeedPlayer] = useState<PlayerDirectoryItem | null>(null)
 	const shareRef = useRef<HTMLElement | null>(null)
-	const latestPriceChanges = useMemo(() => changes, [changes])
+	const initialObserved = priceBoard
+		? mapLatestPriceChangeEvent(priceBoard)
+		: null
+	const [latestPriceChanges, setLatestPriceChanges] = useState(changes)
+	const [currentChangeDate, setCurrentChangeDate] = useState(changeDate)
+	const [currentObservedAt, setCurrentObservedAt] = useState(observedAt)
+	const [currentPriceRevision, setCurrentPriceRevision] =
+		useState(priceRevision)
+	const [liveState, setLiveState] = useState<PriceChangeLiveState>(
+		priceBoard?.status === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'DURABLE'
+	)
+	const lastEventRevisionRef = useRef<string | null>(
+		initialObserved?.eventRevision ?? priceRevision
+	)
+	const liveSeed: PriceChangeLiveSeed = useMemo(
+		() => ({
+			revision: priceBoard?.revision ?? priceRevision ?? 'unavailable',
+			deadline: priceBoard?.deadline ?? null,
+			nextDeadlines: priceBoard?.nextDeadlines ?? []
+		}),
+		[priceBoard, priceRevision]
+	)
+
+	useEffect(() => {
+		const nextObserved = priceBoard
+			? mapLatestPriceChangeEvent(priceBoard)
+			: null
+		if (nextObserved) {
+			setLatestPriceChanges([...nextObserved.rises, ...nextObserved.falls])
+			setCurrentChangeDate(nextObserved.changeDate)
+			setCurrentObservedAt(nextObserved.observedAt)
+			setCurrentPriceRevision(nextObserved.eventRevision)
+			lastEventRevisionRef.current = nextObserved.eventRevision
+			return
+		}
+		// A daily market snapshot or a temporary cursor failure must not erase
+		// an already observed 07:00 event. Only use the old snapshot fallback
+		// while no immutable event has ever been received in this mount.
+		if (!lastEventRevisionRef.current) {
+			setLatestPriceChanges(changes)
+			setCurrentChangeDate(changeDate)
+			setCurrentObservedAt(observedAt)
+			setCurrentPriceRevision(priceRevision)
+		}
+	}, [changeDate, changes, observedAt, priceBoard, priceRevision])
+
+	usePriceChangeLiveUpdates({
+		seed: liveSeed,
+		durableBoard: priceBoard ?? undefined,
+		onUpdate: (nextBoard, state) => {
+			const nextObserved = mapLatestPriceChangeEvent(nextBoard)
+			if (nextObserved) {
+				setLatestPriceChanges([...nextObserved.rises, ...nextObserved.falls])
+				setCurrentChangeDate(nextObserved.changeDate)
+				setCurrentObservedAt(nextObserved.observedAt)
+				setCurrentPriceRevision(nextObserved.eventRevision)
+				lastEventRevisionRef.current = nextObserved.eventRevision
+			}
+			setLiveState(state)
+		},
+		onReset: state => {
+			// Keep the last event visible while the cursor is temporarily
+			// unavailable. The daily snapshot is only a pre-event fallback.
+			if (!lastEventRevisionRef.current) {
+				setLatestPriceChanges(changes)
+				setCurrentChangeDate(changeDate)
+				setCurrentObservedAt(observedAt)
+				setCurrentPriceRevision(priceRevision)
+			}
+			setLiveState(state)
+		}
+	})
+
 	const handleSelectPricePlayer = useCallback(
 		(player: MarketPlayer) => {
 			markRouteReadyStart(
 				window.location.pathname,
 				performance.now(),
-				`${player.playerId}:${marketRevisionParam(revision)}`
+				`${player.playerId}:${marketRevisionParam(marketRevision)}`
 			)
 			setSeedPlayer(marketPlayerToDirectory(player))
 		},
-		[revision]
+		[marketRevision]
 	)
 
 	return (
@@ -402,6 +491,8 @@ export function MarketPriceExplorer({
 			className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
 			ref={shareRef}
 			data-share-preserve-width="true"
+			data-price-change-live-state={liveState}
+			data-price-change-revision={currentPriceRevision ?? 'fallback'}
 		>
 			<SectionTitle
 				id="market-prices"
@@ -409,7 +500,7 @@ export function MarketPriceExplorer({
 					latestPriceChanges.length > 0 ? (
 						<PriceShareActions
 							changes={latestPriceChanges}
-							changeDate={changeDate}
+							changeDate={currentChangeDate}
 							imageRef={shareRef}
 						/>
 					) : null
@@ -421,9 +512,14 @@ export function MarketPriceExplorer({
 				{t('priceBoardMeta', {
 					rises: latestPriceChanges.filter(c => c.direction === 'RISE').length,
 					falls: latestPriceChanges.filter(c => c.direction === 'FALL').length,
-					date: formatCalendarDate(changeDate, locale) || '—'
+					date: formatCalendarDate(currentChangeDate, locale) || '—'
 				})}
 			</p>
+			{currentObservedAt ? (
+				<p className="mb-4 text-[11px] text-muted-foreground">
+					<MarketLocalUpdated capturedAt={currentObservedAt} />
+				</p>
+			) : null}
 			<PriceColumns
 				changes={latestPriceChanges}
 				locale={locale}
@@ -437,7 +533,7 @@ export function MarketPriceExplorer({
 					initialOpen={initialOpen}
 					seedPlayer={seedPlayer}
 					onClearSeed={() => setSeedPlayer(null)}
-					revision={revision}
+					revision={marketRevision}
 				/>
 			</div>
 		</section>
