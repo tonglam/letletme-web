@@ -18,6 +18,20 @@ const availabilitySectionForEvidence: Partial<
 	process: 'seasonStats'
 }
 
+const AUTHORITATIVE_STATES = new Set(['READY', 'EMPTY', 'NOT_APPLICABLE'])
+
+function recomputeAuthority(
+	availability: PlayerDetailDataAvailability
+): boolean {
+	return [
+		availability.seasonStats,
+		availability.market,
+		availability.historicalTeam,
+		availability.fixtures,
+		availability.recentGameweeks
+	].every(section => AUTHORITATIVE_STATES.has(section.state))
+}
+
 /**
  * Evidence requests select one data subset. Preserve the authority snapshot
  * for unrelated subsets so a healthy response for recent or production data
@@ -38,7 +52,9 @@ export function mergePlayerDetailEvidence(
 	const dataAvailability = { ...previousAvailability }
 	if (availabilitySection) {
 		const nextSection = evidenceAvailability[availabilitySection]
-		if (nextSection !== undefined) dataAvailability[availabilitySection] = nextSection
+		if (nextSection !== undefined)
+			dataAvailability[availabilitySection] = nextSection
 	}
+	dataAvailability.isFullyAuthoritative = recomputeAuthority(dataAvailability)
 	return { ...previous, ...evidence, dataAvailability }
 }
