@@ -167,7 +167,10 @@ const validateScore = (
 	if (!nonEmptyString(value.revision)) missing.push(`${path}.revision`)
 	if (!validDate(value.checkedAt) || value.checkedAt === null)
 		missing.push(`${path}.checkedAt`)
-	if (value.reconciliation !== 'MATCHED' && value.reconciliation !== 'NO_LINEUP')
+	if (
+		value.reconciliation !== 'MATCHED' &&
+		value.reconciliation !== 'NO_LINEUP'
+	)
 		missing.push(`${path}.reconciliation`)
 
 	if (!isRecord(value.provenance)) {
@@ -376,6 +379,25 @@ export const canLoadMoreLiveBoard = (input: {
 	!input.replacementPending &&
 	!input.rateLimited
 
+export const canStartLiveBoardRefresh = (input: {
+	replacementPending: boolean
+	refreshPending: boolean
+}): boolean => !input.replacementPending && !input.refreshPending
+
+export type LiveBoardFreshnessMarker = {
+	eventId: number
+	revision: string | null
+}
+
+export const liveBoardPublicationChanged = (
+	accepted: LiveBoardFreshnessMarker | null,
+	observed: LiveBoardFreshnessMarker | null
+): boolean =>
+	!observed ||
+	!accepted ||
+	accepted.eventId !== observed.eventId ||
+	(accepted.revision !== observed.revision && observed.revision !== null)
+
 export const shouldSyncLiveBoardSearchInput = (
 	requestedInput: string,
 	currentInput: string
@@ -428,6 +450,25 @@ export const liveBoardLastGoodKey = (scope: LastGoodScope): string =>
 		scope.tournamentId
 	].join(':')
 
+const liveBoardHasUsableLastGoodRows = (
+	page: EntryLiveCompetitionBoardPage
+): boolean => {
+	const visibleRows = page.viewerRow
+		? [...page.rows, page.viewerRow]
+		: page.rows
+	if (page.dataAvailability === 'SCHEDULED') return visibleRows.length > 0
+	if (
+		page.managerDataAvailability === 'UNAVAILABLE' ||
+		page.officialCoverage <= 0
+	)
+		return false
+	return visibleRows.some(
+		row =>
+			row.score.source !== 'UNAVAILABLE' &&
+			typeof row.score.eventPoints === 'number'
+	)
+}
+
 export const readLiveBoardLastGood = (
 	storage: Storage | null,
 	scope: LastGoodScope
@@ -451,6 +492,10 @@ export const readLiveBoardLastGood = (
 		) {
 			return null
 		}
+		if (!liveBoardHasUsableLastGoodRows(page)) {
+			storage.removeItem(liveBoardLastGoodKey(scope))
+			return null
+		}
 		return page
 	} catch {
 		return null
@@ -463,6 +508,7 @@ export const writeLiveBoardLastGood = (
 	page: EntryLiveCompetitionBoardPage
 ): void => {
 	if (!storage || !scope.sessionKey || page.page !== 1) return
+	if (!liveBoardHasUsableLastGoodRows(page)) return
 	if (
 		page.season !== scope.season ||
 		page.eventId !== scope.eventId ||

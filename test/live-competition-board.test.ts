@@ -7,10 +7,12 @@ import {
 	LiveBoardInvalidResponseError,
 	LiveBoardRequestError,
 	canLoadMoreLiveBoard,
+	canStartLiveBoardRefresh,
 	fetchEntryLiveCompetitionBoard,
 	isCurrentLiveBoardRequest,
 	isLiveBoardRevisionGoneCode,
 	liveBoardLastGoodKey,
+	liveBoardPublicationChanged,
 	parseEntryLiveCompetitionBoardPage,
 	readLiveBoardLastGood,
 	resolveAnchoredGameweek,
@@ -229,6 +231,31 @@ describe('live competition board contract', () => {
 		writeLiveBoardLastGood(storage, scope, page())
 		assert.equal(storage.length, 1)
 	})
+
+	it('never stores or restores an all-unavailable board as last-good data', () => {
+		const storage = new MemoryStorage()
+		const unavailable = page({
+			managerRevision: null,
+			managerDataAvailability: 'UNAVAILABLE',
+			officialCoverage: 0,
+			unavailableEntryCount: 65,
+			partial: true
+		})
+		writeLiveBoardLastGood(storage, scope, unavailable)
+		assert.equal(storage.length, 0)
+
+		const key = liveBoardLastGoodKey(scope)
+		storage.setItem(
+			key,
+			JSON.stringify({
+				contractVersion: LIVE_BOARD_CONTRACT_VERSION,
+				savedAt: '2026-08-23T10:00:00.000Z',
+				page: unavailable
+			})
+		)
+		assert.equal(readLiveBoardLastGood(storage, scope), null)
+		assert.equal(storage.getItem(key), null)
+	})
 })
 
 describe('live competition board request coordination', () => {
@@ -263,6 +290,47 @@ describe('live competition board request coordination', () => {
 				rateLimited: false
 			}),
 			true
+		)
+	})
+
+	it('coalesces heartbeat refreshes behind an active replacement request', () => {
+		assert.equal(
+			canStartLiveBoardRefresh({
+				replacementPending: true,
+				refreshPending: false
+			}),
+			false
+		)
+		assert.equal(
+			canStartLiveBoardRefresh({
+				replacementPending: false,
+				refreshPending: false
+			}),
+			true
+		)
+	})
+
+	it('refreshes only when the accepted board publication identity changes', () => {
+		assert.equal(
+			liveBoardPublicationChanged(
+				{ eventId: 1, revision: '1230' },
+				{ eventId: 1, revision: '1230' }
+			),
+			false
+		)
+		assert.equal(
+			liveBoardPublicationChanged(
+				{ eventId: 1, revision: '1230' },
+				{ eventId: 1, revision: '1231' }
+			),
+			true
+		)
+		assert.equal(
+			liveBoardPublicationChanged(
+				{ eventId: 1, revision: '1230' },
+				{ eventId: 1, revision: null }
+			),
+			false
 		)
 	})
 

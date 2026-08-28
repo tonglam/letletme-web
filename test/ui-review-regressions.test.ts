@@ -623,7 +623,10 @@ describe('live match share card', () => {
 		assert.match(source, /data-live-match-card="true"/)
 		assert.match(source, /data-share-exclude="true"[\s\S]*<MatchShareButton/)
 		assert.match(source, /onTextFallback=\{setManualShareText\}/)
-		assert.match(source, /onTextFallbackClear=\{\(\) => setManualShareText\(null\)\}/)
+		assert.match(
+			source,
+			/onTextFallbackClear=\{\(\) => setManualShareText\(null\)\}/
+		)
 		assert.match(
 			source,
 			/<div data-share-exclude="true">[\s\S]*<ShareTextFallback/
@@ -690,7 +693,10 @@ describe('price prediction share scopes', () => {
 	it('keeps linked-squad text and image sharing separate from the all-player board', async () => {
 		const [board, squad] = await Promise.all([
 			readFile(
-				new URL('../app/data/price-changes/PriceChangesBoard.tsx', import.meta.url),
+				new URL(
+					'../app/data/price-changes/PriceChangesBoard.tsx',
+					import.meta.url
+				),
 				'utf8'
 			),
 			readFile(
@@ -760,8 +766,8 @@ describe('My FPL hydration', () => {
 })
 
 describe('live tournament filter visibility', () => {
-	it('keeps both advanced filters recoverable after dismissal', async () => {
-		const [clientSource, ownershipSource, exposureSource] = await Promise.all([
+	it('keeps ownership and team-exposure filters reachable in the paged board', async () => {
+		const [clientSource, filtersSource] = await Promise.all([
 			readFile(
 				new URL(
 					'../app/live/tournaments/TournamentClient.tsx',
@@ -771,40 +777,32 @@ describe('live tournament filter visibility', () => {
 			),
 			readFile(
 				new URL(
-					'../components/player/PlayerOwnershipFilter.tsx',
+					'../components/tournament/LiveCompetitionBoardFilters.tsx',
 					import.meta.url
 				),
-				'utf8'
-			),
-			readFile(
-				new URL('../components/player/TeamExposureFilter.tsx', import.meta.url),
 				'utf8'
 			)
 		])
 
-		assert.match(clientSource, /setShowOwnershipFilter\(true\)/)
-		assert.match(clientSource, /setShowTeamExposureFilter\(true\)/)
-		assert.match(clientSource, /filtersT\('showFilter'/)
-		assert.match(ownershipSource, /t\("hideFilter"/)
-		assert.match(exposureSource, /t\('hideFilter'/)
+		assert.match(clientSource, /setShowAdvancedFilters\(open => !open\)/)
+		assert.match(clientSource, /<LiveCompetitionBoardFilters/)
+		assert.match(filtersSource, /t\('playerOwnership'\)/)
+		assert.match(filtersSource, /t\('teamExposure'\)/)
 	})
 
-	it('uses the event-aware live desk for official H2H board fallback', async () => {
+	it('keeps official H2H on its authoritative view and off the manager board', async () => {
 		const source = await readFile(
 			new URL('../app/live/tournaments/TournamentClient.tsx', import.meta.url),
 			'utf8'
 		)
 
-		assert.ok(source.includes('GET_TOURNAMENT_LIVE_DESK'))
-		assert.ok(source.includes("detailDesk?.kind !== 'OFFICIAL_H2H'"))
-		assert.ok(
-			source.includes(
-				'{ entryId, selectedTournamentId: tournamentId, ref: null }'
-			)
+		assert.ok(source.includes('isOfficialH2HTournament(selectedTournament)'))
+		assert.ok(source.includes('selectedTournamentIsOfficialH2H ||'))
+		assert.match(
+			source,
+			/selectedTournamentIsOfficialH2H \? \(\s*<OfficialH2HCompetitionView/
 		)
-		assert.ok(
-			source.includes('response.entryLiveCompetitionsDesk.eventId !== eventId')
-		)
+		assert.doesNotMatch(source, /GET_TOURNAMENT_LIVE_DESK/)
 	})
 
 	it('allows keyboard gameweek navigation on official H2H boards', async () => {

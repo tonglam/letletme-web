@@ -33,15 +33,9 @@ import {
 	rollupBreakdownStats,
 	selectLiveDataForExplainResponse
 } from '../_lib/live-points-model'
+import { resolveLivePointsPayloadState } from '../_lib/live-points-availability'
 
 const LIVE_DATA_RETRY_DELAYS_MS = [1500, 3000, 7000, 12000] as const
-
-function isPendingEntrySync(live: LiveCalcData) {
-	return (
-		live.pickList.length === 0 &&
-		(!live.entryName?.trim() || live.score?.state === 'UNAVAILABLE')
-	)
-}
 
 interface UseLivePointsOptions {
 	initialEntryId: number
@@ -251,14 +245,16 @@ export function useLivePoints({
 					if (requestId !== requestIdRef.current) return
 
 					if (live.pickList.length === 0) {
+						const payloadState = resolveLivePointsPayloadState(live)
 						const retryState = liveDataRetryRef.current ?? {
 							requestKey,
 							attempt: 0
 						}
 						liveDataRetryRef.current = retryState
-						const retryDelay = isPendingEntrySync(live)
-							? LIVE_DATA_RETRY_DELAYS_MS[retryState.attempt]
-							: undefined
+						const retryDelay =
+							payloadState === 'PENDING_SYNC'
+								? LIVE_DATA_RETRY_DELAYS_MS[retryState.attempt]
+								: undefined
 
 						if (retryDelay !== undefined) {
 							retryState.attempt += 1
@@ -281,7 +277,11 @@ export function useLivePoints({
 						setStartingPlayers([])
 						setBenchPlayers([])
 						acceptSnapshot(live.snapshot ?? null)
-						setError(undefined)
+						setError(
+							payloadState === 'LINEUP_UNAVAILABLE'
+								? t('lineupUnavailable')
+								: undefined
+						)
 						return
 					}
 

@@ -133,6 +133,7 @@ export const GET_LIVE_POINTS = `
     calcLivePointsByEntry(eventId: $eventId, entryId: $entryId) {
       entry
       event
+      availability
       entryName
       playerName
       chip
@@ -261,6 +262,7 @@ export interface LivePick {
 export interface LiveCalcData {
 	entry: number
 	event: number
+	availability?: 'READY' | 'NO_PICKS' | 'LINEUP_UNAVAILABLE'
 	entryName?: string
 	playerName?: string
 	chip?: string | null
