@@ -199,6 +199,15 @@ otherwise answer a conditional revalidation with `304` and retain stale
 response metadata. The purge is part of the fail-closed release step; if it
 cannot be submitted, the workflow keeps EdgeOne on the all-Vercel route.
 
+The purge call uses a separate production-environment CAM identity, exposed to
+GitHub Actions as `EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID` and
+`EDGEONE_PURGE_TENCENTCLOUD_SECRET_KEY`. Its only required EdgeOne API action
+is `teo:CreatePurgeTask`; it must not be reused for route mutation, origin ACL,
+DNSPod, or application credentials. The existing
+`EDGEONE_TENCENTCLOUD_SECRET_ID`/`KEY` pair remains limited to the managed
+route and origin-ACL operations. If the purge identity is absent or lacks its
+action, the preflight fails before any release route mutation.
+
 The Tencent origin must return `X-Letletme-Origin: tencent` and the exact
 release SHA. Vercel must return `X-Letletme-Origin: vercel` and the same exact
 release SHA during a release transition. Public diagnostics remain:

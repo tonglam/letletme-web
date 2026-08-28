@@ -132,6 +132,8 @@ jobs:
           TENCENT_RELEASE_SIGNING_KEY: ${{ secrets.TENCENT_RELEASE_SIGNING_KEY }}
           EDGEONE_TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_ID }}
           EDGEONE_TENCENTCLOUD_SECRET_KEY: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_KEY }}
+          EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID }}
+          EDGEONE_PURGE_TENCENTCLOUD_SECRET_KEY: ${{ secrets.EDGEONE_PURGE_TENCENTCLOUD_SECRET_KEY }}
           EDGEONE_ZONE_ID: ${{ secrets.EDGEONE_ZONE_ID }}
           EDGEONE_RULE_ID: ${{ secrets.EDGEONE_RULE_ID }}
           EDGEONE_RULE_ALL_VERCEL_JSON: ${{ secrets.EDGEONE_RULE_ALL_VERCEL_JSON }}
@@ -143,6 +145,7 @@ jobs:
             TENCENT_SSH_PRIVATE_KEY TENCENT_SSH_JUMP_PRIVATE_KEY TENCENT_SSH_KNOWN_HOSTS \
             TENCENT_RELEASE_SIGNING_KEY \
             EDGEONE_TENCENTCLOUD_SECRET_ID EDGEONE_TENCENTCLOUD_SECRET_KEY EDGEONE_ZONE_ID \
+            EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID EDGEONE_PURGE_TENCENTCLOUD_SECRET_KEY \
             EDGEONE_RULE_ID EDGEONE_RULE_ALL_VERCEL_JSON EDGEONE_RULE_SPLIT_JSON \
             EDGEONE_TENCENT_HEALTH_URL; do
             [[ -n "${!name:-}" ]] || { echo "missing required production secret: $name" >&2; exit 1; }
@@ -228,6 +231,8 @@ jobs:
           TENCENT_RELEASE_SIGNING_KEY: ${{ secrets.TENCENT_RELEASE_SIGNING_KEY }}
           EDGEONE_TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_ID }}
           EDGEONE_TENCENTCLOUD_SECRET_KEY: ${{ secrets.EDGEONE_TENCENTCLOUD_SECRET_KEY }}
+          EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID: ${{ secrets.EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID }}
+          EDGEONE_PURGE_TENCENTCLOUD_SECRET_KEY: ${{ secrets.EDGEONE_PURGE_TENCENTCLOUD_SECRET_KEY }}
           EDGEONE_ZONE_ID: ${{ secrets.EDGEONE_ZONE_ID }}
           EDGEONE_RULE_ID: ${{ secrets.EDGEONE_RULE_ID }}
           EDGEONE_RULE_ALL_VERCEL_JSON: ${{ secrets.EDGEONE_RULE_ALL_VERCEL_JSON }}
@@ -434,7 +439,9 @@ jobs:
           # after the source is fixed. Delete only the managed Next static
           # prefixes after both origins and the split route are healthy. The
           # trap above restores all-Vercel routing if the purge is rejected.
-          node ops/release/edgeone-purge.mjs
+          TENCENTCLOUD_SECRET_ID="$EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID" \
+            TENCENTCLOUD_SECRET_KEY="$EDGEONE_PURGE_TENCENTCLOUD_SECRET_KEY" \
+            node ops/release/edgeone-purge.mjs
           route_changed=0
           cleanup_remote_root
           echo "Vercel and Tencent are active at exact SHA $RELEASE_SHA; EdgeOne split routing restored."
