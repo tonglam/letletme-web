@@ -819,13 +819,21 @@ export const GET_PLAYER_STATS_DESK_PROCESS = /* GraphQL */ `
       eventId horizon
       entries {
         playerId
-        evidence {
-          status
-          value {
-            id webName teamShortName elementType elementTypeName
-			statsContext { scope season asOfEventId status }
-            expectedGoals expectedAssists expectedGoalInvolvements expectedGoalsConceded
-            influence creativity threat ictIndex
+	        evidence {
+	          status
+	          value {
+	            id webName teamShortName elementType elementTypeName
+				statsContext { scope season asOfEventId status }
+				dataAvailability {
+					isFullyAuthoritative
+					seasonStats { state reasonCode revision sourceCheckedAt }
+					market { state reasonCode revision sourceCheckedAt }
+					historicalTeam { state reasonCode revision sourceCheckedAt }
+					fixtures { state reasonCode revision sourceCheckedAt }
+					recentGameweeks { state reasonCode revision sourceCheckedAt }
+				}
+	            expectedGoals expectedAssists expectedGoalInvolvements expectedGoalsConceded
+	            influence creativity threat ictIndex
           }
         }
         state {

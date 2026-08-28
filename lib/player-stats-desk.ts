@@ -161,7 +161,8 @@ function entryComplete(
 			(statuses.state ?? (entry.state != null ? 'AVAILABLE' : 'NOT_FOUND')) ===
 				'AVAILABLE' &&
 			entry.evidence != null &&
-			entry.state != null
+			entry.state != null &&
+			overviewIsAuthoritative(entry.evidence.dataAvailability)
 		)
 	return (
 		(statuses.evidence ??

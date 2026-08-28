@@ -205,16 +205,18 @@ describe('player stats desk client cache', () => {
 		assert.equal(calls, 2)
 	})
 
-	it('caches a complete process response without an overview authority object', async () => {
+	it('does not cache a process response without an overview authority object', async () => {
 		let calls = 0
 		const processResponse = {
 			...responseBody,
 			section: 'process' as const,
-			entries: [{
-				playerId: 13,
-				evidence: { id: 13 },
-				state: { playerId: 13 }
-			}],
+			entries: [
+				{
+					playerId: 13,
+					evidence: { id: 13 },
+					state: { playerId: 13 }
+				}
+			],
 			unavailablePlayerIds: []
 		}
 		globalThis.fetch = async () => {
@@ -224,6 +226,6 @@ describe('player stats desk client cache', () => {
 		const input = { playerIds: [13], eventId: 1, section: 'process' as const }
 		await requestPlayerStatsDesk(input)
 		await requestPlayerStatsDesk(input)
-		assert.equal(calls, 1)
+		assert.equal(calls, 2)
 	})
 })

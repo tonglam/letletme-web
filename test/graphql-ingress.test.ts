@@ -102,6 +102,21 @@ describe('GraphQL ingress v2', () => {
 		})
 	})
 
+	it('rejects a Mini bearer that omits the canonical ingress headers', () => {
+		const ingress = buildGraphQLProxyIngress({
+			headers: new Headers({
+				authorization: `Bearer ${'a'.repeat(32)}`,
+				'user-agent': 'Mozilla/5.0'
+			}),
+			secret: 'test-secret',
+			workload: 'market'
+		})
+		assert.deepEqual(ingress, {
+			ok: false,
+			message: 'Canonical Mini Program ingress headers are required'
+		})
+	})
+
 	it('does not treat an ordinary WeChat webview as a legacy Mini client', () => {
 		const ingress = buildGraphQLProxyIngress({
 			headers: new Headers({
@@ -138,17 +153,22 @@ describe('GraphQL ingress v2', () => {
 		)
 		assert.equal(
 			graphQLWorkloadForDocument({
-				query: 'query Mixed { eventFixtures(eventId: 1) { id } marketPulse(days: 7) { coverage } }'
+				query:
+					'query Mixed { eventFixtures(eventId: 1) { id } marketPulse(days: 7) { coverage } }'
 			}),
 			'market'
 		)
 		assert.equal(
 			graphQLWorkloadForDocument({
-				query: 'query MetaMixed { marketPulse(days: 7) { coverage } __typename }'
+				query:
+					'query MetaMixed { marketPulse(days: 7) { coverage } __typename }'
 			}),
 			'market'
 		)
-		assert.equal(graphQLWorkloadForDocument({ query: 'not graphql' }), 'public-other')
+		assert.equal(
+			graphQLWorkloadForDocument({ query: 'not graphql' }),
+			'public-other'
+		)
 	})
 
 	it('keeps equivalent public live roots in the gameweek workload', () => {

@@ -101,11 +101,13 @@ const responseIsAuthoritative = (
 			const statuses = entry.fieldStatuses ?? {}
 			return (
 				(statuses.evidence ??
-					(entry.evidence != null ? 'AVAILABLE' : 'NOT_FOUND')) === 'AVAILABLE' &&
-				(statuses.state ?? (entry.state != null ? 'AVAILABLE' : 'NOT_FOUND')) ===
+					(entry.evidence != null ? 'AVAILABLE' : 'NOT_FOUND')) ===
 					'AVAILABLE' &&
+				(statuses.state ??
+					(entry.state != null ? 'AVAILABLE' : 'NOT_FOUND')) === 'AVAILABLE' &&
 				entry.evidence != null &&
-				entry.state != null
+				entry.state != null &&
+				isAuthoritativeAvailability(entry.evidence.dataAvailability)
 			)
 		})
 	}
@@ -117,10 +119,10 @@ const responseIsAuthoritative = (
 }
 
 function isAuthoritativeAvailability(
-	availability: PlayerDetailDataAvailability
+	availability: PlayerDetailDataAvailability | null | undefined
 ): boolean {
 	return (
-		availability.isFullyAuthoritative &&
+		availability?.isFullyAuthoritative === true &&
 		[
 			availability.seasonStats,
 			availability.market,

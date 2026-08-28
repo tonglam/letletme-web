@@ -55,11 +55,20 @@ function workloadForRootField(field: string): GraphQLWorkload {
 	if (/market|ownership|transfer|price|playervalue|availability/i.test(field)) {
 		return 'market'
 	}
-	if (/playerstats|playerdetail|playerstate|picker|^player$|^players$|team/i.test(field)) {
+	if (
+		/playerstats|playerdetail|playerstate|picker|^player$|^players$|team/i.test(
+			field
+		)
+	) {
 		return 'player-stats'
 	}
-	if (/gameweek|eventoverall|eventstats|dreamteam/i.test(field)) return 'gameweek'
-	if (/home|publicevents|currentandnextevents|coreeventcontext|currenteventinfo|notice/i.test(field)) {
+	if (/gameweek|eventoverall|eventstats|dreamteam/i.test(field))
+		return 'gameweek'
+	if (
+		/home|publicevents|currentandnextevents|coreeventcontext|currenteventinfo|notice/i.test(
+			field
+		)
+	) {
 		return 'home'
 	}
 	if (/myfpl|entry|live|tournament|competition|league|trend/i.test(field)) {
@@ -127,7 +136,9 @@ export function graphQLWorkloadForDocument(body: unknown): GraphQLWorkload {
 	}
 }
 
-export function validateMiniProgramDeviceId(value: string | null): string | null {
+export function validateMiniProgramDeviceId(
+	value: string | null
+): string | null {
 	return value && SAFE_DEVICE_ID.test(value) ? value : null
 }
 
@@ -164,6 +175,16 @@ export function buildGraphQLProxyIngress({
 				},
 				secret
 			)
+		}
+	}
+	// The only forwardable Authorization value is the Mini bearer contract.
+	// Once such a credential is present, silently classifying the request as a
+	// browser would bypass the Mini device/abuse buckets if the canonical client
+	// headers were omitted. Require the complete Mini ingress contract instead.
+	if (headers.get('authorization') !== null) {
+		return {
+			ok: false,
+			message: 'Canonical Mini Program ingress headers are required'
 		}
 	}
 	// A Mini Program request is identified only by the canonical client and
