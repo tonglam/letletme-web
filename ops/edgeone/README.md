@@ -191,6 +191,14 @@ The cache policy is deliberately narrow:
 4. HTML, Server Actions, sessions, and API responses must never be EdgeOne
    HITs.
 
+After a successful Vercel promote, Tencent activation, and split-route health
+check, the production release workflow submits a scoped EdgeOne `purge_prefix`
+task with the `delete` method for `/_next/static/` on the formal host and the
+Vercel-origin canary. Direct deletion is intentional: immutable objects may
+otherwise answer a conditional revalidation with `304` and retain stale
+response metadata. The purge is part of the fail-closed release step; if it
+cannot be submitted, the workflow keeps EdgeOne on the all-Vercel route.
+
 The Tencent origin must return `X-Letletme-Origin: tencent` and the exact
 release SHA. Vercel must return `X-Letletme-Origin: vercel` and the same exact
 release SHA during a release transition. Public diagnostics remain:
