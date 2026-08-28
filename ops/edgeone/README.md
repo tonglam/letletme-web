@@ -205,8 +205,12 @@ GitHub Actions as `EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID` and
 is `teo:CreatePurgeTask`; it must not be reused for route mutation, origin ACL,
 DNSPod, or application credentials. The existing
 `EDGEONE_TENCENTCLOUD_SECRET_ID`/`KEY` pair remains limited to the managed
-route and origin-ACL operations. If the purge identity is absent or lacks its
-action, the preflight fails before any release route mutation.
+route and origin-ACL operations. Release preflight submits one delete task for
+the non-existent canary path
+`/__letletme_purge_authorization_probe__`; this changes no application object
+and proves the purge permission before any release route mutation. If the
+purge identity is absent or lacks its action, preflight fails before the route
+is changed.
 
 The Tencent origin must return `X-Letletme-Origin: tencent` and the exact
 release SHA. Vercel must return `X-Letletme-Origin: vercel` and the same exact

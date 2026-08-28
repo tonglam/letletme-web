@@ -13,6 +13,22 @@ test('builds a delete purge for only the managed static prefixes', async () => {
 	})
 })
 
+test('provides a non-existent target for authorization preflight', async () => {
+	const { PURGE_AUTHORIZATION_PROBE_TARGET, buildPurgePayload } = await import(
+		'../ops/release/edgeone-purge.mjs'
+	)
+	assert.match(
+		PURGE_AUTHORIZATION_PROBE_TARGET,
+		/^https:\/\/eo-personal-canary\.letletme\.top\//
+	)
+	assert.deepEqual(buildPurgePayload('zone-test', [PURGE_AUTHORIZATION_PROBE_TARGET]), {
+		Targets: [PURGE_AUTHORIZATION_PROBE_TARGET],
+		Type: 'purge_prefix',
+		Method: 'delete',
+		ZoneId: 'zone-test'
+	})
+})
+
 test('creates a signed purge task without exposing credential values', async () => {
 	const { createPurgeTask } = await import('../ops/release/edgeone-purge.mjs')
 	let request

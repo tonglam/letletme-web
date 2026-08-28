@@ -13,6 +13,11 @@ export const STATIC_PURGE_TARGETS = Object.freeze([
 	'https://eo-personal-canary.letletme.top/_next/static/'
 ])
 
+// A non-existent canary path used only to prove that the purge identity is
+// authorized before the release workflow mutates any route or origin state.
+export const PURGE_AUTHORIZATION_PROBE_TARGET =
+	'https://eo-personal-canary.letletme.top/__letletme_purge_authorization_probe__'
+
 function sha256(value) {
 	return createHash('sha256').update(value).digest('hex')
 }

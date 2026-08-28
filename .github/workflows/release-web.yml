@@ -154,6 +154,12 @@ jobs:
           export TENCENTCLOUD_SECRET_KEY="$EDGEONE_TENCENTCLOUD_SECRET_KEY"
           node ops/release/edgeone-mode.mjs --mode all-vercel --dry-run >/dev/null
           node ops/release/edgeone-mode.mjs --mode split --dry-run >/dev/null
+          # Create a purge task for a non-existent canary path so invalid or
+          # revoked purge credentials fail before any route mutation.
+          TENCENTCLOUD_SECRET_ID="$EDGEONE_PURGE_TENCENTCLOUD_SECRET_ID" \
+            TENCENTCLOUD_SECRET_KEY="$EDGEONE_PURGE_TENCENTCLOUD_SECRET_KEY" \
+            node ops/release/edgeone-purge.mjs \
+              --target https://eo-personal-canary.letletme.top/__letletme_purge_authorization_probe__ >/dev/null
 
       - name: Build remotely and stage Vercel production candidate
         if: steps.automation-gate.outputs.enabled == 'true' && steps.build-gate.outputs.deploy == 'true'
