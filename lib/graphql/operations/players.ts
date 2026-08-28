@@ -24,7 +24,7 @@ export const GET_PLAYER_DETAIL = `
       id webName teamShortName elementType elementTypeName
       price startPrice
 			statsContext { scope season asOfEventId status }
-      availability {
+      availability: injuryAvailability {
         status news newsAdded observedDate capturedAt
         chanceOfPlayingThisRound chanceOfPlayingNextRound stale
       }
@@ -72,7 +72,7 @@ export const GET_PLAYER_OVERALL = `
       id webName teamShortName elementType elementTypeName
       price startPrice
 			statsContext { scope season asOfEventId status }
-      availability {
+      availability: injuryAvailability {
         status news newsAdded observedDate capturedAt
         chanceOfPlayingThisRound chanceOfPlayingNextRound stale
       }
@@ -649,7 +649,7 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
 			id webName teamShortName elementType elementTypeName
 			price
 				statsContext { season status }
-				availability {
+				availability: injuryAvailability {
 					status news observedDate
 				chanceOfPlayingThisRound chanceOfPlayingNextRound
 			}
