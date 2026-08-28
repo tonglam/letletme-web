@@ -192,6 +192,40 @@ describe('player stats desk contract', () => {
 		assert.deepEqual(result.unavailablePlayerIds, [13])
 	})
 
+	it('does not treat degraded evidence as complete or cacheable', () => {
+		for (const section of ['recent', 'production'] as const) {
+			const result = normalizePlayerStatsDeskResult(
+				{
+					eventId: 4,
+					horizon: 5,
+					entries: [
+						{
+							playerId: 13,
+							evidence: {
+								status: 'AVAILABLE',
+								value: {
+									id: 13,
+									dataAvailability: {
+										isFullyAuthoritative: false,
+										seasonStats: { state: 'READY' },
+										market: { state: 'FALLBACK' },
+										historicalTeam: { state: 'READY' },
+										fixtures: { state: 'READY' },
+										recentGameweeks: { state: 'READY' }
+									}
+								} as never
+							} as never
+						}
+					]
+				},
+				[13],
+				section
+			)
+			assert.equal(result.outcome, 'partial')
+			assert.deepEqual(result.unavailablePlayerIds, [13])
+		}
+	})
+
 	it('distinguishes valid empty values, missing players, and temporary field failures', () => {
 		const available = normalizePlayerStatsDeskResult(
 			{
