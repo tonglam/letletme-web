@@ -56,6 +56,7 @@ import {
 } from '@/lib/tournament/lifecycle'
 import {
 	readLiveTournamentSelection,
+	resolveLiveTournamentSelection,
 	writeLiveTournamentSelection
 } from '@/lib/tournament/live-selection'
 import {
@@ -235,6 +236,8 @@ export default function TournamentClient({
 		gameweekFromUrl === null || gameweekFromUrl > initialEventId
 	)
 	const lastUrlGameweekRef = useRef(gameweekFromUrl)
+	const selectionRestoreEntryIdRef = useRef<number | null>(null)
+	const cachedTournamentIdRef = useRef<string | null>(null)
 	const requestedTournamentId =
 		tournamentIdFromUrl ?? restoredTournamentId ?? initialSelectedTournamentId
 	const selectedTournament = useMemo(() => {
@@ -390,52 +393,46 @@ export default function TournamentClient({
 			// Optional storage.
 		}
 		if (tournamentIdFromUrl) {
-			if (
-				tournaments.some(tournament => tournament.id === tournamentIdFromUrl)
-			) {
-				setRestoredTournamentId(tournamentIdFromUrl)
-				writeLiveTournamentSelection(storage, entryId, tournamentIdFromUrl)
+			const resolution = resolveLiveTournamentSelection({
+				availableIds: tournaments.map(tournament => tournament.id),
+				urlTournamentId: tournamentIdFromUrl,
+				cachedTournamentId: cachedTournamentIdRef.current,
+				initialTournamentId: initialSelectedTournamentId
+			})
+			if (resolution.source === 'unknown-url') {
+				setSelectionRestoreComplete(true)
+				return
+			}
+			if (resolution.selectedId) {
+				setRestoredTournamentId(resolution.selectedId)
+				cachedTournamentIdRef.current = resolution.selectedId
+				writeLiveTournamentSelection(storage, entryId, resolution.selectedId)
 			}
 			setSelectionRestoreComplete(true)
 			return
 		}
-		const stored = readLiveTournamentSelection(storage, entryId)
-		const next =
-			stored && tournaments.some(tournament => tournament.id === stored)
-				? stored
-				: initialSelectedTournamentId &&
-					  tournaments.some(
-							tournament => tournament.id === initialSelectedTournamentId
-					  )
-					? initialSelectedTournamentId
-					: tournaments[0]?.id
-		if (next) {
-			setRestoredTournamentId(next)
-			writeLiveTournamentSelection(storage, entryId, next)
+		if (selectionRestoreEntryIdRef.current !== entryId) {
+			selectionRestoreEntryIdRef.current = entryId
+			cachedTournamentIdRef.current = readLiveTournamentSelection(
+				storage,
+				entryId
+			)
+			setRestoredTournamentId(null)
+		}
+		const resolution = resolveLiveTournamentSelection({
+			availableIds: tournaments.map(tournament => tournament.id),
+			cachedTournamentId: cachedTournamentIdRef.current,
+			initialTournamentId: initialSelectedTournamentId
+		})
+		if (resolution.selectedId) {
+			setRestoredTournamentId(resolution.selectedId)
+			if (!resolution.cachedId) {
+				cachedTournamentIdRef.current = resolution.selectedId
+				writeLiveTournamentSelection(storage, entryId, resolution.selectedId)
+			}
 		}
 		setSelectionRestoreComplete(true)
 	}, [entryId, initialSelectedTournamentId, tournamentIdFromUrl, tournaments])
-
-	useEffect(() => {
-		if (
-			!selectionRestoreComplete ||
-			!tournamentIdFromUrl ||
-			tournaments.length === 0 ||
-			tournaments.some(tournament => tournament.id === tournamentIdFromUrl)
-		)
-			return
-		const fallback = tournaments[0]
-		if (!fallback) return
-		const params = new URLSearchParams({ tournamentId: fallback.id })
-		if (gameweekFromUrl) params.set('gw', String(gameweekFromUrl))
-		router.replace(`/live/competitions?${params.toString()}`)
-	}, [
-		gameweekFromUrl,
-		router,
-		selectionRestoreComplete,
-		tournamentIdFromUrl,
-		tournaments
-	])
 
 	useEffect(() => {
 		if (
@@ -950,7 +947,16 @@ export default function TournamentClient({
 				setResultsError(t('refreshFailedRetained'))
 			}
 		} finally {
-			setIsLoadingMore(false)
+			if (
+				isCurrentLiveBoardRequest(
+					version,
+					requestVersionRef.current,
+					scopeKey,
+					activeScopeRef.current
+				)
+			) {
+				setIsLoadingMore(false)
+			}
 		}
 	}, [
 		boardPage,
@@ -1258,7 +1264,10 @@ export default function TournamentClient({
 							} catch {
 								// URL navigation remains authoritative.
 							}
-							router.replace(`/live/competitions?tournamentId=${id}`)
+							const params = new URLSearchParams({ tournamentId: id })
+							if (selectedGameweek > 0)
+								params.set('gw', String(selectedGameweek))
+							router.replace(`/live/competitions?${params.toString()}`)
 						}}
 					/>
 				) : null}
