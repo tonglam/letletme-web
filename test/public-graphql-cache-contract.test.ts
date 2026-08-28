@@ -183,5 +183,14 @@ describe('public GraphQL cache contract', () => {
 		)
 		assert.match(client, /void loadPlayerStatsView\(\)/)
 		assert.match(client, /interactionId: interaction\.interactionId/)
+		const retryStart = client.indexOf('retryPlayerData={() =>')
+		const retryEnd = client.indexOf('loadEvidence=', retryStart)
+		const retry = client.slice(retryStart, retryEnd)
+		assert.match(retry, /firstPlayer\.selectPlayer\([\s\S]*bypassCache: true/)
+		assert.match(
+			retry,
+			/secondPlayer\.selectPlayer\([\s\S]*batchPlayerIds\s*\n\s*\)/
+		)
+		assert.doesNotMatch(retry, /secondPlayer\.selectPlayer\([\s\S]*bypassCache/)
 	})
 })

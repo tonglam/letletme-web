@@ -581,8 +581,7 @@ export default function PlayerStatsClient({
 						if (secondPlayer.selectedPlayer) {
 							secondPlayer.selectPlayer(
 								secondPlayer.selectedPlayer,
-								batchPlayerIds,
-								{ bypassCache: true }
+								batchPlayerIds
 							)
 						}
 					}}
