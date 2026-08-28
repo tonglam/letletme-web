@@ -50,6 +50,10 @@ function appendServerTiming(headers, name, durationMs) {
 	headers.set('Server-Timing', existing ? `${existing}, ${entry}` : entry)
 }
 
+function isStaticAssetRequest(request) {
+	return new URL(request.url).pathname.startsWith('/_next/static/')
+}
+
 function annotateResponse(request, response, env, originDurationMs) {
 	if (request.headers.get('upgrade')?.toLowerCase() === 'websocket') {
 		return response
@@ -70,7 +74,11 @@ function annotateResponse(request, response, env, originDurationMs) {
 	headers.set('X-Letletme-Edge', env.EDGE_MARKER || 'cloudflare-fallback')
 	headers.set('X-Letletme-Origin', 'vercel')
 	appendServerTiming(headers, 'edge-origin', originDurationMs)
-	if (!headers.has('X-Letletme-Release')) {
+	if (isStaticAssetRequest(request)) {
+		// Immutable assets must not retain release metadata from a cached
+		// response or reintroduce the mutable header on the fallback path.
+		headers.delete('X-Letletme-Release')
+	} else if (!headers.has('X-Letletme-Release')) {
 		headers.set('X-Letletme-Release', 'unknown')
 	}
 	return new Response(request.method === 'HEAD' ? null : response.body, {

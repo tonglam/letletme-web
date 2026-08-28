@@ -38,7 +38,20 @@ test('uses one Git SHA for the self-hosted build and its Vercel-safe prefix for 
 			LETLETME_RELEASE_SHA: '0123456789abcdef0123456789abcdef01234567'
 		})
 		const rules = await config.headers()
-		assert.deepEqual(rules[0].headers.slice(0, 2), [
+		const staticRule = rules.find(
+			rule => rule.source === '/_next/static/:path*'
+		)
+		const runtimeRule = rules.find(
+			rule => rule.source === '/((?!_next/static/).*)'
+		)
+		assert.deepEqual(staticRule.headers.slice(0, 1), [
+			{ key: 'X-Letletme-Origin', value: 'tencent' }
+		])
+		assert.equal(
+			staticRule.headers.some(header => header.key === 'X-Letletme-Release'),
+			false
+		)
+		assert.deepEqual(runtimeRule.headers.slice(0, 2), [
 			{ key: 'X-Letletme-Origin', value: 'tencent' },
 			{
 				key: 'X-Letletme-Release',
@@ -47,11 +60,11 @@ test('uses one Git SHA for the self-hosted build and its Vercel-safe prefix for 
 		])
 		assert.equal(config.poweredByHeader, false)
 		assert.equal(
-			rules[0].headers.find(header => header.key === 'X-Content-Type-Options')
+			runtimeRule.headers.find(header => header.key === 'X-Content-Type-Options')
 				.value,
 			'nosniff'
 		)
-		const contentSecurityPolicy = rules[0].headers.find(
+		const contentSecurityPolicy = runtimeRule.headers.find(
 			header => header.key === 'Content-Security-Policy'
 		).value
 		assert.equal(contentSecurityPolicy.includes("object-src 'none'"), true)
@@ -63,7 +76,7 @@ test('uses one Git SHA for the self-hosted build and its Vercel-safe prefix for 
 			contentSecurityPolicy,
 			/connect-src[^;]*https:\/\/cloudflareinsights\.com[^;]*https:\/\/vercel\.live/
 		)
-		assert.deepEqual(rules[1], {
+		assert.deepEqual(rules[2], {
 			source: '/miniprogram.webp',
 			headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }]
 		})
