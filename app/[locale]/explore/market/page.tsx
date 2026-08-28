@@ -163,8 +163,12 @@ async function renderMarketContent({
 		MarketOwnershipOverviewResponse['marketOwnershipOverview'] | null = null
 	let publishedDate: string | null = null
 
-	const [dataResult, overviewResult, priceChangeResult] =
-		await Promise.allSettled([dataPromise, overviewPromise, priceChangePromise])
+	const priceChangeResultPromise = Promise.allSettled([priceChangePromise])
+	const [dataResult, overviewResult] = await Promise.allSettled([
+		dataPromise,
+		overviewPromise
+	])
+	const [priceChangeResult] = await priceChangeResultPromise
 	if (dataResult.status === 'fulfilled') {
 		const summary = normalizeMarketPulseSummaryResponse(dataResult.value)
 		if (summary) {
