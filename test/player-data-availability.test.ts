@@ -1,0 +1,127 @@
+import assert from 'node:assert/strict'
+import { describe, it } from 'node:test'
+import {
+	playerDataAvailabilityIssues,
+	playerDataAvailabilityIssuesForPlayers
+} from '../app/data/player-stats/_lib/player-data-availability'
+import type {
+	PlayerDataSectionAvailability,
+	PlayerDataState
+} from '../lib/graphql/operations/players'
+
+const section = (state: PlayerDataState): PlayerDataSectionAvailability => ({
+	state,
+	reasonCode: `${state}_REASON`,
+	revision: 'revision-1',
+	sourceCheckedAt: '2026-08-28T00:00:00.000Z'
+})
+
+describe('player data availability presentation', () => {
+	it('treats only READY, EMPTY, and NOT_APPLICABLE as authoritative', () => {
+		for (const state of ['READY', 'EMPTY', 'NOT_APPLICABLE'] as const) {
+			assert.deepEqual(
+				playerDataAvailabilityIssues({
+					isFullyAuthoritative: true,
+					seasonStats: section(state),
+					market: section(state),
+					historicalTeam: section(state),
+					fixtures: section(state),
+					recentGameweeks: section(state)
+				}),
+				[]
+			)
+		}
+	})
+
+	it('preserves stale, fallback, and unavailable as distinct section issues', () => {
+		const issues = playerDataAvailabilityIssues({
+			isFullyAuthoritative: false,
+			seasonStats: section('READY'),
+			market: section('STALE'),
+			historicalTeam: section('FALLBACK'),
+			fixtures: section('UNAVAILABLE'),
+			recentGameweeks: section('EMPTY')
+		})
+
+		assert.deepEqual(
+			issues.map(issue => [issue.section, issue.state]),
+			[
+				['market', 'STALE'],
+				['historicalTeam', 'FALLBACK'],
+				['fixtures', 'UNAVAILABLE']
+			]
+		)
+		assert.equal(issues[0]?.reasonCode, 'STALE_REASON')
+		assert.equal(issues[0]?.sourceCheckedAt, '2026-08-28T00:00:00.000Z')
+	})
+
+	it('fails closed when the aggregate flag contradicts authoritative sections', () => {
+		assert.deepEqual(
+			playerDataAvailabilityIssues({
+				isFullyAuthoritative: false,
+				seasonStats: section('READY'),
+				market: section('READY'),
+				historicalTeam: section('EMPTY'),
+				fixtures: section('NOT_APPLICABLE'),
+				recentGameweeks: section('READY')
+			}),
+			[
+				{
+					section: 'player',
+					state: 'UNAVAILABLE',
+					reasonCode: 'INCONSISTENT_AVAILABILITY',
+					sourceCheckedAt: null
+				}
+			]
+		)
+	})
+
+	it('keeps comparison-player limitations visible and attributed', () => {
+		const authoritative = {
+			isFullyAuthoritative: true,
+			seasonStats: section('READY'),
+			market: section('READY'),
+			historicalTeam: section('EMPTY'),
+			fixtures: section('READY'),
+			recentGameweeks: section('READY')
+		}
+		const issues = playerDataAvailabilityIssuesForPlayers([
+			{ id: 1, webName: 'Saka', dataAvailability: authoritative },
+			{
+				id: 2,
+				webName: 'Palmer',
+				dataAvailability: {
+					...authoritative,
+					isFullyAuthoritative: false,
+					fixtures: section('FALLBACK')
+				}
+			}
+		])
+
+		assert.deepEqual(
+			issues.map(issue => [
+				issue.playerId,
+				issue.playerName,
+				issue.section,
+				issue.state
+			]),
+			[[2, 'Palmer', 'fixtures', 'FALLBACK']]
+		)
+	})
+
+	it('surfaces season aggregate failures independently from recent gameweeks', () => {
+		const issues = playerDataAvailabilityIssues({
+			isFullyAuthoritative: false,
+			seasonStats: section('UNAVAILABLE'),
+			market: section('READY'),
+			historicalTeam: section('EMPTY'),
+			fixtures: section('READY'),
+			recentGameweeks: section('READY')
+		})
+
+		assert.deepEqual(
+			issues.map(issue => [issue.section, issue.state]),
+			[['seasonStats', 'UNAVAILABLE']]
+		)
+	})
+})

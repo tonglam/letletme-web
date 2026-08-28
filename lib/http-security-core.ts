@@ -219,7 +219,6 @@ export type GraphQLTrafficClass =
 	| 'web_browser'
 	| 'web_rsc'
 	| 'service'
-	| 'legacy'
 
 export type GraphQLWorkload =
 	| 'interactive'
@@ -233,7 +232,7 @@ export type GraphQLWorkload =
 export type IngressEnvelopeV2 = {
 	v: 2
 	aud: 'letletme-graphql'
-	trafficClass: Exclude<GraphQLTrafficClass, 'legacy'>
+	trafficClass: GraphQLTrafficClass
 	subject: string
 	abuseSubject: string | null
 	workload: GraphQLWorkload
@@ -274,28 +273,9 @@ export function buildOpaqueRscSubject(
 	return opaqueSubject('rate-limit:web-rsc', workload, secret)
 }
 
-export function buildIngressContextHeaders(
-	subject: string,
-	secret: string,
-	nowSeconds = Math.floor(Date.now() / 1000)
-): Record<string, string> {
-	const payload = JSON.stringify({
-		aud: 'letletme-graphql',
-		sub: subject,
-		iat: nowSeconds,
-		exp: nowSeconds + 60
-	})
-	return {
-		'X-Ingress-Context': Buffer.from(payload).toString('base64url'),
-		'X-Ingress-Context-Sig': createHmac('sha256', secret)
-			.update(payload)
-			.digest('base64url')
-	}
-}
-
 export function buildIngressContextHeadersV2(
 	input: {
-		trafficClass: Exclude<GraphQLTrafficClass, 'legacy'>
+		trafficClass: GraphQLTrafficClass
 		subject: string
 		abuseSubject: string | null
 		workload: GraphQLWorkload

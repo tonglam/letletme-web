@@ -1,5 +1,4 @@
 import {
-	buildIngressContextHeaders,
 	buildIngressContextHeadersV2,
 	buildOpaqueAbuseSubject,
 	buildOpaqueMiniDeviceSubject,
@@ -35,7 +34,7 @@ const CONSERVATIVE_WORKLOAD_ORDER = [
 export type GraphQLProxyIngress =
 	| {
 			ok: true
-			trafficClass: 'mini' | 'web_browser' | 'legacy'
+			trafficClass: 'mini' | 'web_browser'
 			workload: GraphQLWorkload
 			headers: Record<string, string>
 	  }
@@ -56,11 +55,20 @@ function workloadForRootField(field: string): GraphQLWorkload {
 	if (/market|ownership|transfer|price|playervalue|availability/i.test(field)) {
 		return 'market'
 	}
-	if (/playerstats|playerdetail|playerstate|picker|^player$|^players$|team/i.test(field)) {
+	if (
+		/playerstats|playerdetail|playerstate|picker|^player$|^players$|team/i.test(
+			field
+		)
+	) {
 		return 'player-stats'
 	}
-	if (/gameweek|eventoverall|eventstats|dreamteam/i.test(field)) return 'gameweek'
-	if (/home|publicevents|currentandnextevents|coreeventcontext|currenteventinfo|notice/i.test(field)) {
+	if (/gameweek|eventoverall|eventstats|dreamteam/i.test(field))
+		return 'gameweek'
+	if (
+		/home|publicevents|currentandnextevents|coreeventcontext|currenteventinfo|notice/i.test(
+			field
+		)
+	) {
 		return 'home'
 	}
 	if (/myfpl|entry|live|tournament|competition|league|trend/i.test(field)) {
@@ -128,12 +136,10 @@ export function graphQLWorkloadForDocument(body: unknown): GraphQLWorkload {
 	}
 }
 
-export function validateMiniProgramDeviceId(value: string | null): string | null {
+export function validateMiniProgramDeviceId(
+	value: string | null
+): string | null {
 	return value && SAFE_DEVICE_ID.test(value) ? value : null
-}
-
-function looksLikeLegacyMiniProgram(headers: Headers): boolean {
-	return /\bminiProgram\b/i.test(headers.get('user-agent') ?? '')
 }
 
 export function buildGraphQLProxyIngress({
@@ -171,15 +177,27 @@ export function buildGraphQLProxyIngress({
 			)
 		}
 	}
-	const subject = buildOpaqueRateLimitSubject(headers, secret)
-	if (looksLikeLegacyMiniProgram(headers)) {
+	// The only forwardable Authorization value is the Mini bearer contract.
+	// Once such a credential is present, silently classifying the request as a
+	// browser would bypass the Mini device/abuse buckets if the canonical client
+	// headers were omitted. Require the complete Mini ingress contract instead.
+	if (headers.get('authorization') !== null) {
 		return {
-			ok: true,
-			trafficClass: 'legacy',
-			workload: 'public-other',
-			headers: buildIngressContextHeaders(subject, secret)
+			ok: false,
+			message: 'Canonical Mini Program ingress headers are required'
 		}
 	}
+	// A Mini Program request is identified only by the canonical client and
+	// device headers above. An old Mini Program must not silently enter the web
+	// bucket when it omits that contract; reject the recognizable old runtime so
+	// it fails closed instead of receiving a misleading web response.
+	if (/\bminiProgram\b/i.test(headers.get('user-agent') ?? '')) {
+		return {
+			ok: false,
+			message: 'Canonical Mini Program ingress headers are required'
+		}
+	}
+	const subject = buildOpaqueRateLimitSubject(headers, secret)
 	return {
 		ok: true,
 		trafficClass: 'web_browser',

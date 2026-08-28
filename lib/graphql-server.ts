@@ -80,7 +80,7 @@ export function withPublicRouteGraphQLIngress<T>(
 // Use this instead of executeQuery in RSC pages.
 // Server-side calls bypass the /api/graphql proxy (which normally adds
 // X-User-Context from the session cookie), so protected fields like
-// entryTournaments would get a 401 without this wrapper.
+// entryParticipatingTournaments would get a 401 without this wrapper.
 export async function executeServerQuery<T>(
 	query: string,
 	variables?: Record<string, unknown>,

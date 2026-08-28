@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 
 export {
-	buildIngressContextHeaders,
+	buildIngressContextHeadersV2,
 	buildOpaqueRateLimitSubject,
 	PayloadTooLargeError,
 	ResponseReadAbortedError,

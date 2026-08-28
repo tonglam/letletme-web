@@ -97,7 +97,7 @@ jobs:
       - run: npm run worker:dry-run
       - run: npm run watchdog:dry-run
       - run: npm run lint
-      - run: npx tsc --noEmit
+      - run: npm run typecheck
       - name: Verify operational shell scripts
         run: bash -n ops/tencent/scripts/*.sh ops/redis/scripts/*.sh
       - run: npm run build
@@ -193,4 +193,6 @@ jobs:
       - name: Validate GraphQL operations against the pinned schema
         env:
           GRAPHQL_SCHEMA_MODULE: ${{ github.workspace }}/graphql-contract/src/graphql/schema.ts
+          REDIS_URL: redis://127.0.0.1:6379
+          RATE_LIMIT_REDIS_URL: redis://127.0.0.1:6380
         run: npm run contract:graphql

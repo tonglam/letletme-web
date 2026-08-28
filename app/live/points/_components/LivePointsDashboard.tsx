@@ -11,7 +11,11 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { APP_URL } from '@/i18n/config'
 import { localizePathname, type AppLocale } from '@/i18n/routing'
-import type { EntryOverallSnapshot } from '@/lib/graphql/operations/entries'
+import type {
+	EntryOverallSnapshot,
+	EntryLookupStatus,
+	EntryPersistenceState
+} from '@/lib/graphql/operations/entries'
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
 import {
 	liveManagerScoreAuthorityLabel,
@@ -24,6 +28,10 @@ import { Loader2, RefreshCw } from 'lucide-react'
 import { useFormatter, useLocale, useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { NumberFormatOptions } from 'use-intl'
+import {
+	entryLookupPresentation,
+	entryPersistencePresentation
+} from '../_lib/entry-lookup-presentation'
 import { deriveLiveTeamStats } from '../_lib/live-points-model'
 import { mapPlayersToSquadPitch } from '../_lib/live-points-squad-pitch'
 import { formatLivePointsShareText } from '../_lib/live-points-share'
@@ -36,6 +44,8 @@ export function LivePointsDashboard({
 	isLoading,
 	isRefreshing,
 	error,
+	entryLookupStatus,
+	entryPersistenceState,
 	isPageActive,
 	shouldAutoRefresh,
 	liveData,
@@ -45,6 +55,7 @@ export function LivePointsDashboard({
 	onGameweekChange,
 	onAutoRefresh,
 	onRefresh,
+	onEntryLookupRetry,
 	nextRefreshAt
 }: {
 	entrySearch?: ReactNode
@@ -53,6 +64,8 @@ export function LivePointsDashboard({
 	isLoading: boolean
 	isRefreshing: boolean
 	error?: string
+	entryLookupStatus?: EntryLookupStatus
+	entryPersistenceState?: EntryPersistenceState | null
 	isPageActive: boolean
 	shouldAutoRefresh: boolean
 	liveData?: LiveCalcData
@@ -62,12 +75,17 @@ export function LivePointsDashboard({
 	onGameweekChange: (gameweek: number) => void
 	onAutoRefresh: () => Promise<void>
 	onRefresh: () => Promise<void>
+	onEntryLookupRetry: () => void
 	nextRefreshAt?: string | null
 }) {
 	const t = useTranslations('LivePoints')
 	const format = useFormatter()
 	const locale = useLocale() as AppLocale
 	const autoRefreshEnabled = shouldAutoRefresh && isPageActive
+	const lookupPresentation = entryLookupPresentation(entryLookupStatus)
+	const persistencePresentation = entryPersistencePresentation(
+		entryPersistenceState
+	)
 	const squadPitchPlayers = mapPlayersToSquadPitch(startingPlayers)
 	const squadPitchBenchPlayers = mapPlayersToSquadPitch(benchPlayers)
 	const formatOverallPoints = (
@@ -315,6 +333,51 @@ export function LivePointsDashboard({
 							aria-hidden="true"
 						/>
 						<span>{t('updating')}</span>
+					</div>
+				) : null}
+				{!isRefreshing && lookupPresentation ? (
+					<div
+						className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-destructive"
+						role="alert"
+						data-testid="entry-lookup-status"
+					>
+						<p>
+							{t(lookupPresentation.messageKey)}
+						</p>
+						{lookupPresentation.retryable ? (
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onClick={onEntryLookupRetry}
+							>
+								{t('refresh')}
+							</Button>
+						) : null}
+					</div>
+				) : null}
+				{!isRefreshing && !lookupPresentation && persistencePresentation ? (
+					<div
+						className={cn(
+							'mb-3 flex flex-wrap items-center justify-between gap-2 text-sm',
+							persistencePresentation.retryable
+								? 'text-destructive'
+								: 'text-muted-foreground'
+						)}
+						role={persistencePresentation.retryable ? 'alert' : 'status'}
+						data-testid="entry-persistence-status"
+					>
+						<p>{t(persistencePresentation.messageKey)}</p>
+						{persistencePresentation.retryable ? (
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onClick={onEntryLookupRetry}
+							>
+								{t('refresh')}
+							</Button>
+						) : null}
 					</div>
 				) : null}
 				{!isRefreshing && error ? (

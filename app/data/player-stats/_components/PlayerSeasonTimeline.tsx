@@ -137,7 +137,7 @@ function PlayerHeader({
 	const tMarket = useTranslations('Market')
 	const format = useFormatter()
 	const code = positionCode(player)
-	const availability = player.availability
+	const availability = player.injuryAvailability
 	const statusKey = availability
 		? marketAvailabilityStatusKey(availability.status)
 		: null
@@ -417,7 +417,9 @@ function TimelineCell({
 								className={cn(
 									'min-w-0 max-w-full break-words text-right font-medium tabular-nums',
 									currentCellWins &&
-										(accent === 'primary' ? 'text-primary-ink' : 'text-warning'),
+										(accent === 'primary'
+											? 'text-primary-ink'
+											: 'text-warning'),
 									signal.analysisStatus !== 'READY' &&
 										'font-normal text-muted-foreground'
 								)}
@@ -593,7 +595,7 @@ function FragmentRow({
 		first && second && first.position === second.position
 			? first.signals.map((signal, index) =>
 					comparableWinner(signal, second.signals[index], true)
-				  )
+				)
 			: []
 	return (
 		<div

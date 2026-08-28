@@ -1,18 +1,31 @@
 export const GET_ENTRY = `
   query GetEntry($id: Int!) {
-    entry(id: $id) {
-      id
-      entryName
-      playerName
-      overallPoints
-      overallRank
-      teamValue
-      bank
-      totalTransfers
-      region
+    entryLookup(id: $id) {
+      status
+      retryable
+      source
+      persistenceState
+      entry {
+        id
+        entryName
+        playerName
+        overallPoints
+        overallRank
+        teamValue
+        bank
+        totalTransfers
+        region
+      }
     }
   }
 `
+
+export type EntryLookupStatus =
+	'FOUND' | 'NOT_FOUND' | 'INVALID_ID' | 'SATURATED' | 'UNAVAILABLE'
+
+export type EntryLookupSource = 'DATABASE' | 'FPL'
+export type EntryPersistenceState =
+	'NOT_REQUIRED' | 'QUEUED' | 'FAILED_RETRYABLE'
 
 export interface EntrySummary {
 	id: number
@@ -27,7 +40,13 @@ export interface EntrySummary {
 }
 
 export interface EntrySummaryResponse {
-	entry: EntrySummary | null
+	entryLookup: {
+		status: EntryLookupStatus
+		retryable: boolean
+		source: EntryLookupSource | null
+		persistenceState: EntryPersistenceState | null
+		entry: EntrySummary | null
+	}
 }
 
 export type EntryOverallSnapshot = Pick<

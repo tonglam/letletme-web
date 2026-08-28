@@ -96,6 +96,40 @@ const playerStatsContext = {
 	expectedRowCount: pickerPlayers.length
 }
 
+const authoritativePlayerDataAvailability = () => ({
+	isFullyAuthoritative: true,
+	seasonStats: {
+		state: 'READY',
+		reasonCode: null,
+		revision: 'player-season-e2e-v1',
+		sourceCheckedAt: '2026-08-13T09:40:00.000Z'
+	},
+	market: {
+		state: 'READY',
+		reasonCode: null,
+		revision: 'player-market-e2e-v1',
+		sourceCheckedAt: '2026-08-13T09:40:00.000Z'
+	},
+	historicalTeam: {
+		state: 'EMPTY',
+		reasonCode: null,
+		revision: 'player-history-e2e-v1',
+		sourceCheckedAt: '2026-08-13T09:40:00.000Z'
+	},
+	fixtures: {
+		state: 'READY',
+		reasonCode: null,
+		revision: 'player-fixtures-e2e-v1',
+		sourceCheckedAt: '2026-08-13T09:40:00.000Z'
+	},
+	recentGameweeks: {
+		state: 'READY',
+		reasonCode: null,
+		revision: 'player-recent-e2e-v1',
+		sourceCheckedAt: '2026-08-13T09:40:00.000Z'
+	}
+})
+
 const playerDetail = playerId => {
 	const player =
 		pickerPlayers.find(candidate => candidate.id === playerId) ??
@@ -111,7 +145,7 @@ const playerDetail = playerId => {
 		statsContext: {
 			...playerStatsContext
 		},
-		availability: {
+		injuryAvailability: {
 			status: 'a',
 			news: '',
 			newsAdded: null,
@@ -121,6 +155,7 @@ const playerDetail = playerId => {
 			chanceOfPlayingNextRound: 100,
 			stale: false
 		},
+		dataAvailability: authoritativePlayerDataAvailability(),
 		totalPoints: player.totalPoints,
 		selectedByPercent: player.selectedByPercent,
 		form: player.form,
@@ -889,8 +924,8 @@ const server = createServer((request, response) => {
 						statsContext: {
 							...playerStatsContext
 						},
-						availability: {
-							status: 'AVAILABLE',
+						injuryAvailability: {
+							status: 'a',
 							news: '',
 							newsAdded: null,
 							observedDate: '2026-08-13',
@@ -899,6 +934,7 @@ const server = createServer((request, response) => {
 							chanceOfPlayingNextRound: 100,
 							stale: false
 						},
+						dataAvailability: authoritativePlayerDataAvailability(),
 						totalPoints: 181,
 						selectedByPercent: 32.5,
 						form: 6.2,
@@ -1243,16 +1279,22 @@ const server = createServer((request, response) => {
 			}
 			json(response, 200, {
 				data: {
-					entry: {
-						id: entryId,
-						entryName: 'E2E United',
-						playerName: 'Test Manager',
-						overallPoints: 1234,
-						overallRank: 56789,
-						teamValue: 1005,
-						bank: 10,
-						totalTransfers: 22,
-						region: 'Australia'
+					entryLookup: {
+						status: 'FOUND',
+						retryable: false,
+						source: 'DATABASE',
+						persistenceState: 'NOT_REQUIRED',
+						entry: {
+							id: entryId,
+							entryName: 'E2E United',
+							playerName: 'Test Manager',
+							overallPoints: 1234,
+							overallRank: 56789,
+							teamValue: 1005,
+							bank: 10,
+							totalTransfers: 22,
+							region: 'Australia'
+						}
 					}
 				}
 			})

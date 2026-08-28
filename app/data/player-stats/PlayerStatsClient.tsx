@@ -563,6 +563,28 @@ export default function PlayerStatsClient({
 					comparisonError={secondPlayer.error}
 					stateError={firstPlayer.stateError}
 					comparisonStateError={secondPlayer.stateError}
+					retryPlayerData={() => {
+						if (!firstPlayer.selectedPlayer) return
+						const batchPlayerIds = [
+							firstSelectedPlayerId,
+							secondSelectedPlayerId
+						]
+							.map(Number)
+							.filter(value => Number.isInteger(value) && value > 0)
+						firstPlayer.selectPlayer(
+							firstPlayer.selectedPlayer,
+							batchPlayerIds,
+							{
+								bypassCache: true
+							}
+						)
+						if (secondPlayer.selectedPlayer) {
+							secondPlayer.selectPlayer(
+								secondPlayer.selectedPlayer,
+								batchPlayerIds
+							)
+						}
+					}}
 					loadEvidence={section =>
 						firstPlayer.loadEvidence(
 							section,

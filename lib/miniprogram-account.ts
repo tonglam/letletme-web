@@ -48,7 +48,7 @@ export interface MiniProgramAccountProfile {
 	effectiveEntryId: number | null
 	effectiveEntrySource: MiniProgramEntryChoice | null
 	entryConflict: boolean
-	/** Compatibility fields: these only ever represent a verified Web binding. */
+	/** Verified Web binding fields retained as part of the canonical profile. */
 	fplEntryId: number | null
 	fplEntryBoundAt: string | null
 	fplEntryVerifiedAt: string | null
@@ -87,28 +87,15 @@ type MiniProgramAccountWithCreation = MiniProgramAccount & {
 }
 
 export type MiniProgramWeChatLoginResult =
-	| {
-			contractVersion: 1
-			linked: false
-			observability?: undefined
-		}
-	| {
-			contractVersion: 1
-			linked: true
-			token: string
-			expiresAt: string
-			profile: MiniProgramAccountProfile
-			observability?: MiniProgramSessionAudit
-		}
-	| {
-			contractVersion: 2
-			authenticated: true
-			webAccountLinked: boolean
-			token: string
-			expiresAt: string
-			profile: MiniProgramAccountProfile
-			observability?: MiniProgramSessionAudit
-		}
+	{
+		contractVersion: 2
+		authenticated: true
+		webAccountLinked: boolean
+		token: string
+		expiresAt: string
+		profile: MiniProgramAccountProfile
+		observability?: MiniProgramSessionAudit
+	}
 
 function generateEmailCode(): string {
 	return String(randomInt(0, 1000000)).padStart(6, '0')
@@ -186,7 +173,7 @@ async function findOrCreateMiniProgramAccount(input: {
 	tx: MiniProgramTransaction
 	identity: WeChatIdentity
 	now: Date
-	legacyWebUserId?: string | null
+	existingWebUserId?: string | null
 }): Promise<MiniProgramAccountWithCreation> {
 	const inserted = await input.tx
 		.insert(schema.miniProgramAccount)
@@ -194,7 +181,7 @@ async function findOrCreateMiniProgramAccount(input: {
 			id: randomUUID(),
 			openid: input.identity.openId,
 			unionid: input.identity.unionId,
-			// Link the legacy Web user only after the account row is locked below.
+			// Link an existing Web user only after the account row is locked below.
 			// Keeping the insert standalone gives every auth flow the same
 			// account-then-user lock order and avoids a user/account deadlock.
 			linkedWebUserId: null,
@@ -235,28 +222,28 @@ async function findOrCreateMiniProgramAccount(input: {
 		throw new MiniProgramAuthError('WeChat identity is already in use', 409)
 	}
 	if (
-		input.legacyWebUserId &&
+		input.existingWebUserId &&
 		account.linkedWebUserId &&
-		account.linkedWebUserId !== input.legacyWebUserId
+		account.linkedWebUserId !== input.existingWebUserId
 	) {
 		throw new MiniProgramAuthError('WeChat identity is already in use', 409)
 	}
 
-	if (input.legacyWebUserId) {
-		const [legacyUser] = await input.tx
+	if (input.existingWebUserId) {
+		const [existingUser] = await input.tx
 			.select({ id: schema.user.id, openid: schema.user.openid })
 			.from(schema.user)
-			.where(eq(schema.user.id, input.legacyWebUserId))
+			.where(eq(schema.user.id, input.existingWebUserId))
 			.limit(1)
 			.for('update')
-		if (!legacyUser || legacyUser.openid !== input.identity.openId) {
+		if (!existingUser || existingUser.openid !== input.identity.openId) {
 			throw new MiniProgramAuthError('Unauthenticated', 401)
 		}
 	}
 
 	const unionid = account.unionid ?? input.identity.unionId
 	const linkedWebUserId =
-		account.linkedWebUserId ?? input.legacyWebUserId ?? null
+		account.linkedWebUserId ?? input.existingWebUserId ?? null
 	if (
 		unionid !== account.unionid ||
 		linkedWebUserId !== account.linkedWebUserId
@@ -596,7 +583,7 @@ async function signInStandaloneMiniProgram(input: {
 	const token = generateToken()
 	const expiresAt = new Date(now.getTime() + SESSION_TTL_MS)
 	const audit = await db.transaction(async tx => {
-		const [legacyUser] = await tx
+		const [existingUser] = await tx
 			.select()
 			.from(schema.user)
 			.where(eq(schema.user.openid, input.identity.openId))
@@ -606,7 +593,7 @@ async function signInStandaloneMiniProgram(input: {
 			tx,
 			identity: input.identity,
 			now,
-			legacyWebUserId: legacyUser?.id
+			existingWebUserId: existingUser?.id
 		})
 
 		const sessionId = randomUUID()
@@ -651,80 +638,22 @@ async function signInStandaloneMiniProgram(input: {
 	}
 }
 
-async function signInLegacyMiniProgram(input: {
-	identity: WeChatIdentity
-	deviceId: string
-}): Promise<MiniProgramWeChatLoginResult> {
-	const [user] = await db
-		.select()
-		.from(schema.user)
-		.where(eq(schema.user.openid, input.identity.openId))
-		.limit(1)
-	if (!user) return { contractVersion: 1, linked: false }
-
-	const now = new Date()
-	const token = generateToken()
-	const expiresAt = new Date(now.getTime() + SESSION_TTL_MS)
-	const audit = await db.transaction(async tx => {
-		const account = await findOrCreateMiniProgramAccount({
-			tx,
-			identity: input.identity,
-			now,
-			legacyWebUserId: user.id
-		})
-		if (!account || account.linkedWebUserId !== user.id) {
-			throw new MiniProgramAuthError('Unauthenticated', 401)
-		}
-		const sessionId = randomUUID()
-		const revokedSessions = await tx
-			.update(schema.miniProgramSession)
-			.set({ revokedAt: now })
-			.where(
-				and(
-					eq(schema.miniProgramSession.accountId, account.id),
-					eq(schema.miniProgramSession.deviceId, input.deviceId),
-					isNull(schema.miniProgramSession.revokedAt)
-				)
-			)
-			.returning({ id: schema.miniProgramSession.id })
-		await tx.insert(schema.miniProgramSession).values({
-			id: sessionId,
-			tokenHash: hashMiniProgramSecret(token),
-			accountId: account.id,
-			userId: user.id,
-			deviceId: input.deviceId,
-			expiresAt,
-			lastUsedAt: now
-		})
-		return {
-			sessionId,
-			accountId: account.id,
-			webUserId: user.id,
-			deviceId: input.deviceId,
-			newAccount: account.created,
-			revokedSessionCount: revokedSessions.length
-		}
-	})
-	return {
-		contractVersion: 1,
-		linked: true,
-		token,
-		expiresAt: expiresAt.toISOString(),
-		profile: await loadAccountProfile(audit.accountId),
-		observability: audit
-	}
-}
-
 export async function signInMiniProgramWithWeChat(input: {
 	code: unknown
 	deviceId: unknown
-	contractVersion?: unknown
+	contractVersion: unknown
 }): Promise<MiniProgramWeChatLoginResult> {
+	if (input.contractVersion !== 2) {
+		throw new MiniProgramAuthError(
+			'Unsupported Mini Program authentication contract',
+			426,
+			undefined,
+			'UNSUPPORTED_AUTH_CONTRACT'
+		)
+	}
 	const identity = await exchangeWeChatLoginCode(input.code)
 	const deviceId = assertValidDeviceId(input.deviceId)
-	return input.contractVersion === 2
-		? signInStandaloneMiniProgram({ identity, deviceId })
-		: signInLegacyMiniProgram({ identity, deviceId })
+	return signInStandaloneMiniProgram({ identity, deviceId })
 }
 
 export async function getMiniProgramProfileByToken(

@@ -26,12 +26,20 @@ import {
 	RECENT_PLAYERS_MAX,
 	serializeRecentPlayers
 } from '../_lib/recent-player-storage'
+import {
+	mergePlayerDetailEvidence,
+	type PlayerEvidenceSection
+} from '../_lib/player-detail-evidence'
 
-export type PlayerEvidenceSection = 'fixtures' | 'recent' | 'season' | 'process'
+export type { PlayerEvidenceSection } from '../_lib/player-detail-evidence'
 
 type PlayerDetailLoadResult =
 	| { status: 'loaded'; detail: PlayerDetailData }
 	| { status: 'not-found' | 'failed' | 'superseded'; detail: null }
+
+type PlayerDetailInteractionContext = PerformanceCorrelation & {
+	bypassCache?: boolean
+}
 
 function readRecentPlayers(storageKey: string): PlayerDirectoryOption[] {
 	try {
@@ -69,9 +77,9 @@ function withEmptyStateContext(
 		reasons: core.reasons.map(reason => ({ code: reason.code })),
 		profileRadar: core.profileRadar
 			? {
+					...core.profileRadar,
 					source: 'FPL',
 					season: core.season,
-					...core.profileRadar,
 					sampleMinutes: 0,
 					smallSample: false,
 					axes: core.profileRadar.axes.map(axis => ({
@@ -237,7 +245,7 @@ export function usePlayerDetailSlot({
 		async (
 			player: PlayerDirectoryOption,
 			batchPlayerIds?: number[],
-			interactionContext?: PerformanceCorrelation
+			interactionContext?: PlayerDetailInteractionContext
 		): Promise<PlayerDetailLoadResult> => {
 			if (!eventId) {
 				setError(t('currentGameweekUnavailable'))
@@ -270,7 +278,8 @@ export function usePlayerDetailSlot({
 					{
 						signal: controller.signal,
 						navigationId,
-						interactionId: interactionContext?.interactionId
+						interactionId: interactionContext?.interactionId,
+						bypassCache: interactionContext?.bypassCache
 					}
 				)
 				if (requestId !== requestIdRef.current || controller.signal.aborted) {
@@ -416,12 +425,10 @@ export function usePlayerDetailSlot({
 				const evidence = entry?.evidence
 				if (!evidence) throw new Error('Player evidence unavailable')
 				const processState = entry?.state
-				startTransition(() => {
-					setPlayerDetail(previous =>
-						previous
-							? { ...previous, ...evidence }
-							: (evidence as PlayerDetailData)
-					)
+					startTransition(() => {
+						setPlayerDetail(previous =>
+							mergePlayerDetailEvidence(previous, evidence, section)
+						)
 					if (section === 'process' && isProcessState(processState)) {
 						setPlayerStateProfile(previous => {
 							if (!previous || previous.playerId !== processState.playerId)
@@ -479,7 +486,7 @@ export function usePlayerDetailSlot({
 		(
 			player: PlayerDirectoryOption,
 			batchPlayerIds?: number[],
-			interactionContext?: PerformanceCorrelation
+			interactionContext?: PlayerDetailInteractionContext
 		) => {
 			setError(null)
 			setStateError(null)

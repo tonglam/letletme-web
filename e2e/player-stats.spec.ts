@@ -21,6 +21,24 @@ test('player desk endpoint returns one cacheable batch and rejects invalid input
 	expect(
 		payload.entries.map((entry: { playerId: number }) => entry.playerId)
 	).toEqual([1, 2])
+	expect(payload.entries[0].overview).toMatchObject({
+		injuryAvailability: {
+			status: 'a',
+			news: '',
+			observedDate: '2026-08-13',
+			chanceOfPlayingThisRound: 100,
+			chanceOfPlayingNextRound: 100
+		},
+		dataAvailability: {
+			isFullyAuthoritative: true,
+			seasonStats: { state: 'READY' },
+			market: { state: 'READY' },
+			historicalTeam: { state: 'EMPTY' },
+			fixtures: { state: 'READY' },
+			recentGameweeks: { state: 'READY' }
+		}
+	})
+	expect(payload.entries[0].overview).not.toHaveProperty('availability')
 
 	const invalid = await request.get(
 		'/api/player-stats/desk?playerIds=1,1&eventId=33&horizon=5&section=overview'

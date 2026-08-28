@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { parse, visit } from 'graphql'
-import { PLAYER_STATS_DESK_QUERIES } from '../lib/graphql/operations/players'
+import {
+	PLAYER_STATS_DESK_MAX_AST_NODES,
+	PLAYER_STATS_DESK_QUERIES
+} from '../lib/graphql/operations/players'
 import {
 	mergePlayerStatsDeskLoadResults,
 	normalizePlayerStatsDeskResult,
@@ -16,7 +19,17 @@ import {
 
 const overviewEntry = (playerId: number) => ({
 	playerId,
-	overview: { id: playerId } as never,
+	overview: {
+		id: playerId,
+		dataAvailability: {
+			isFullyAuthoritative: true,
+			seasonStats: { state: 'READY' },
+			market: { state: 'READY' },
+			historicalTeam: { state: 'READY' },
+			fixtures: { state: 'READY' },
+			recentGameweeks: { state: 'READY' }
+		}
+	} as never,
 	state: { playerId, trend: 'STABLE', dimensions: [] } as never
 })
 
@@ -89,8 +102,8 @@ describe('player stats desk contract', () => {
 			let nodes = 0
 			visit(document, { enter: () => void (nodes += 1) })
 			assert.ok(
-				nodes < 200,
-				`${section} desk query has ${nodes} AST nodes (production limit 200)`
+				nodes <= PLAYER_STATS_DESK_MAX_AST_NODES,
+				`${section} desk query has ${nodes} AST nodes (production limit ${PLAYER_STATS_DESK_MAX_AST_NODES})`
 			)
 		}
 	})
@@ -143,6 +156,76 @@ describe('player stats desk contract', () => {
 		assert.deepEqual(result.unavailablePlayerIds, [13])
 	})
 
+	it('does not treat a stale overview as a complete cacheable result', () => {
+		const result = normalizePlayerStatsDeskResult(
+			{
+				eventId: 4,
+				horizon: 5,
+				entries: [
+					{
+						playerId: 13,
+						overview: {
+							status: 'AVAILABLE',
+							value: {
+								id: 13,
+								dataAvailability: {
+									isFullyAuthoritative: false,
+									seasonStats: { state: 'READY' },
+									market: { state: 'STALE' },
+									historicalTeam: { state: 'READY' },
+									fixtures: { state: 'READY' },
+									recentGameweeks: { state: 'READY' }
+								}
+							} as never
+						},
+						state: {
+							status: 'AVAILABLE',
+							value: { playerId: 13, trend: 'UNKNOWN', dimensions: [] }
+						} as never
+					}
+				]
+			},
+			[13],
+			'overview'
+		)
+		assert.equal(result.outcome, 'partial')
+		assert.deepEqual(result.unavailablePlayerIds, [13])
+	})
+
+	it('does not treat degraded evidence as complete or cacheable', () => {
+		for (const section of ['recent', 'production'] as const) {
+			const result = normalizePlayerStatsDeskResult(
+				{
+					eventId: 4,
+					horizon: 5,
+					entries: [
+						{
+							playerId: 13,
+							evidence: {
+								status: 'AVAILABLE',
+								value: {
+									id: 13,
+									dataAvailability: {
+										isFullyAuthoritative: false,
+										seasonStats: { state: 'READY' },
+										market: { state: 'FALLBACK' },
+										historicalTeam: { state: 'READY' },
+										fixtures: { state: 'READY' },
+										recentGameweeks: { state: 'READY' }
+									}
+								} as never
+							} as never
+						}
+					]
+				},
+				[13],
+				section
+			)
+			assert.equal(result.outcome, 'partial')
+			assert.deepEqual(result.unavailablePlayerIds, [13])
+		}
+	})
+
 	it('distinguishes valid empty values, missing players, and temporary field failures', () => {
 		const available = normalizePlayerStatsDeskResult(
 			{
@@ -151,7 +234,20 @@ describe('player stats desk contract', () => {
 				entries: [
 					{
 						playerId: 13,
-						overview: { status: 'AVAILABLE', value: { id: 13 } } as never,
+						overview: {
+							status: 'AVAILABLE',
+							value: {
+								id: 13,
+								dataAvailability: {
+									isFullyAuthoritative: true,
+									seasonStats: { state: 'READY' },
+									market: { state: 'READY' },
+									historicalTeam: { state: 'READY' },
+									fixtures: { state: 'READY' },
+									recentGameweeks: { state: 'READY' }
+								}
+							} as never
+						} as never,
 						state: {
 							status: 'AVAILABLE',
 							value: { playerId: 13, trend: 'UNKNOWN', dimensions: [] }
