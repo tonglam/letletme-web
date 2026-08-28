@@ -96,6 +96,19 @@ const responseIsAuthoritative = (
 		})
 	}
 	if (response.section === 'context') return true
+	if (response.section === 'process') {
+		return response.entries.every(entry => {
+			const statuses = entry.fieldStatuses ?? {}
+			return (
+				(statuses.evidence ??
+					(entry.evidence != null ? 'AVAILABLE' : 'NOT_FOUND')) === 'AVAILABLE' &&
+				(statuses.state ?? (entry.state != null ? 'AVAILABLE' : 'NOT_FOUND')) ===
+					'AVAILABLE' &&
+				entry.evidence != null &&
+				entry.state != null
+			)
+		})
+	}
 	return response.entries.every(entry => {
 		if (!entry.evidence) return false
 		const availability = entry.evidence.dataAvailability

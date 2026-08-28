@@ -204,4 +204,26 @@ describe('player stats desk client cache', () => {
 		await requestPlayerStatsDesk(input)
 		assert.equal(calls, 2)
 	})
+
+	it('caches a complete process response without an overview authority object', async () => {
+		let calls = 0
+		const processResponse = {
+			...responseBody,
+			section: 'process' as const,
+			entries: [{
+				playerId: 13,
+				evidence: { id: 13 },
+				state: { playerId: 13 }
+			}],
+			unavailablePlayerIds: []
+		}
+		globalThis.fetch = async () => {
+			calls += 1
+			return Response.json(processResponse)
+		}
+		const input = { playerIds: [13], eventId: 1, section: 'process' as const }
+		await requestPlayerStatsDesk(input)
+		await requestPlayerStatsDesk(input)
+		assert.equal(calls, 1)
+	})
 })
