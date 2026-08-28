@@ -230,7 +230,8 @@ test('executeQuery caches only allowlisted public browser responses', async () =
 		await executeQuery(query)
 		assert.equal(calls, 1)
 
-		const privateQuery = 'query EntryTournaments { entryTournaments { id } }'
+		const privateQuery =
+			'query EntryParticipatingTournaments { entryParticipatingTournaments(entryId: 1) { id } }'
 		await executeQuery(privateQuery)
 		await executeQuery(privateQuery)
 		assert.equal(calls, 3)
