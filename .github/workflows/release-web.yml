@@ -429,6 +429,12 @@ jobs:
           grep -qi '^x-letletme-origin: tencent' <<<"$tencent_headers"
           grep -qi "^x-letletme-release: $RELEASE_SHA" <<<"$tencent_headers"
           grep -qi '^x-letletme-edge: edgeone' <<<"$tencent_headers"
+
+          # Immutable objects can retain headers from a previous release even
+          # after the source is fixed. Delete only the managed Next static
+          # prefixes after both origins and the split route are healthy. The
+          # trap above restores all-Vercel routing if the purge is rejected.
+          node ops/release/edgeone-purge.mjs
           route_changed=0
           cleanup_remote_root
           echo "Vercel and Tencent are active at exact SHA $RELEASE_SHA; EdgeOne split routing restored."
