@@ -515,6 +515,10 @@ export default function TournamentClient({
 			query: BoardQueryState,
 			options: { preserve: boolean; expectedScope: string }
 		): Promise<boolean> => {
+			// A replacement invalidates every page after the first one. Clear the
+			// pagination indicator even when the old load-more request finishes
+			// after this replacement has advanced requestVersionRef.
+			setIsLoadingMore(false)
 			if (rateLimitSecondsRef.current > 0) {
 				pendingReplacementRef.current = {
 					tournamentId,

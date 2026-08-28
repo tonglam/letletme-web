@@ -805,6 +805,24 @@ describe('live tournament filter visibility', () => {
 		assert.doesNotMatch(source, /GET_TOURNAMENT_LIVE_DESK/)
 	})
 
+	it('clears pagination state when replacing a live board query', async () => {
+		const source = await readFile(
+			new URL('../app/live/tournaments/TournamentClient.tsx', import.meta.url),
+			'utf8'
+		)
+		const replacementStart = source.indexOf('const replaceFirstPage')
+		const replacementEnd = source.indexOf(
+			'\n\tuseEffect(() => {',
+			replacementStart
+		)
+		const replacementSource = source.slice(replacementStart, replacementEnd)
+
+		assert.match(
+			replacementSource,
+			/\): Promise<boolean> => \{\s*\/\/ A replacement invalidates[\s\S]*setIsLoadingMore\(false\)\s*if \(rateLimitSecondsRef\.current > 0\)/
+		)
+	})
+
 	it('allows keyboard gameweek navigation on official H2H boards', async () => {
 		const source = await readFile(
 			new URL(
