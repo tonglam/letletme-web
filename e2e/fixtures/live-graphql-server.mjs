@@ -98,6 +98,12 @@ const playerStatsContext = {
 
 const authoritativePlayerDataAvailability = () => ({
 	isFullyAuthoritative: true,
+	seasonStats: {
+		state: 'READY',
+		reasonCode: null,
+		revision: 'player-season-e2e-v1',
+		sourceCheckedAt: '2026-08-13T09:40:00.000Z'
+	},
 	market: {
 		state: 'READY',
 		reasonCode: null,

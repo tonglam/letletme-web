@@ -31,6 +31,7 @@ test('player desk endpoint returns one cacheable batch and rejects invalid input
 		},
 		dataAvailability: {
 			isFullyAuthoritative: true,
+			seasonStats: { state: 'READY' },
 			market: { state: 'READY' },
 			historicalTeam: { state: 'EMPTY' },
 			fixtures: { state: 'READY' },

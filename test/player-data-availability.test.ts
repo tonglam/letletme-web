@@ -22,6 +22,7 @@ describe('player data availability presentation', () => {
 			assert.deepEqual(
 				playerDataAvailabilityIssues({
 					isFullyAuthoritative: true,
+					seasonStats: section(state),
 					market: section(state),
 					historicalTeam: section(state),
 					fixtures: section(state),
@@ -35,6 +36,7 @@ describe('player data availability presentation', () => {
 	it('preserves stale, fallback, and unavailable as distinct section issues', () => {
 		const issues = playerDataAvailabilityIssues({
 			isFullyAuthoritative: false,
+			seasonStats: section('READY'),
 			market: section('STALE'),
 			historicalTeam: section('FALLBACK'),
 			fixtures: section('UNAVAILABLE'),
@@ -57,6 +59,7 @@ describe('player data availability presentation', () => {
 		assert.deepEqual(
 			playerDataAvailabilityIssues({
 				isFullyAuthoritative: false,
+				seasonStats: section('READY'),
 				market: section('READY'),
 				historicalTeam: section('EMPTY'),
 				fixtures: section('NOT_APPLICABLE'),
@@ -76,6 +79,7 @@ describe('player data availability presentation', () => {
 	it('keeps comparison-player limitations visible and attributed', () => {
 		const authoritative = {
 			isFullyAuthoritative: true,
+			seasonStats: section('READY'),
 			market: section('READY'),
 			historicalTeam: section('EMPTY'),
 			fixtures: section('READY'),
@@ -102,6 +106,22 @@ describe('player data availability presentation', () => {
 				issue.state
 			]),
 			[[2, 'Palmer', 'fixtures', 'FALLBACK']]
+		)
+	})
+
+	it('surfaces season aggregate failures independently from recent gameweeks', () => {
+		const issues = playerDataAvailabilityIssues({
+			isFullyAuthoritative: false,
+			seasonStats: section('UNAVAILABLE'),
+			market: section('READY'),
+			historicalTeam: section('EMPTY'),
+			fixtures: section('READY'),
+			recentGameweeks: section('READY')
+		})
+
+		assert.deepEqual(
+			issues.map(issue => [issue.section, issue.state]),
+			[['seasonStats', 'UNAVAILABLE']]
 		)
 	})
 })

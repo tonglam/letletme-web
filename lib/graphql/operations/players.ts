@@ -30,6 +30,7 @@ export const GET_PLAYER_DETAIL = `
 	  }
 	  dataAvailability {
 	    isFullyAuthoritative
+	    seasonStats { state reasonCode revision sourceCheckedAt }
 	    market { state reasonCode revision sourceCheckedAt }
 	    historicalTeam { state reasonCode revision sourceCheckedAt }
 	    fixtures { state reasonCode revision sourceCheckedAt }
@@ -85,6 +86,7 @@ export const GET_PLAYER_OVERALL = `
       }
       dataAvailability {
         isFullyAuthoritative
+		seasonStats { state reasonCode revision sourceCheckedAt }
         market { state reasonCode revision sourceCheckedAt }
         historicalTeam { state reasonCode revision sourceCheckedAt }
         fixtures { state reasonCode revision sourceCheckedAt }
@@ -115,6 +117,7 @@ const PLAYER_EVIDENCE_IDENTITY = `
       }
       dataAvailability {
         isFullyAuthoritative
+		seasonStats { state reasonCode revision sourceCheckedAt }
         market { state reasonCode revision sourceCheckedAt }
         historicalTeam { state reasonCode revision sourceCheckedAt }
         fixtures { state reasonCode revision sourceCheckedAt }
@@ -200,10 +203,11 @@ export interface PlayerDataSectionAvailability {
 
 export interface PlayerDetailDataAvailability {
 	isFullyAuthoritative: boolean
-	market?: PlayerDataSectionAvailability
-	historicalTeam?: PlayerDataSectionAvailability
-	fixtures?: PlayerDataSectionAvailability
-	recentGameweeks?: PlayerDataSectionAvailability
+	seasonStats: PlayerDataSectionAvailability
+	market: PlayerDataSectionAvailability
+	historicalTeam: PlayerDataSectionAvailability
+	fixtures: PlayerDataSectionAvailability
+	recentGameweeks: PlayerDataSectionAvailability
 }
 
 export interface PlayerRecentOpponent {
@@ -704,6 +708,7 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
 				}
 				dataAvailability {
 					isFullyAuthoritative
+					seasonStats { state reasonCode revision sourceCheckedAt }
 					market { state reasonCode revision sourceCheckedAt }
 					historicalTeam { state reasonCode revision sourceCheckedAt }
 					fixtures { state reasonCode revision sourceCheckedAt }

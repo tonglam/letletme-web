@@ -631,6 +631,7 @@ export function PlayerStatsView({
 	const tl = useTranslations('PlayerStats.labels')
 	const common = useTranslations('Common')
 	const dataSectionLabels = {
+		seasonStats: t('dataSectionSeasonStats'),
 		market: t('sectionNavMarket'),
 		historicalTeam: t('sectionNavHistory'),
 		fixtures: t('sectionNavFixtures'),
