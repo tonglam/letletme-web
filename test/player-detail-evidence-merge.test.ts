@@ -76,4 +76,22 @@ describe('player detail evidence merge', () => {
 		)
 		assert.equal(next.dataAvailability.isFullyAuthoritative, true)
 	})
+
+	it('preserves a fresh unrelated degradation from an evidence response', () => {
+		const previous = detail(availability('READY', 'READY', 'READY'))
+		const next = mergePlayerDetailEvidence(
+			previous,
+			{
+				dataAvailability: {
+					...previous.dataAvailability,
+					fixtures: { state: 'STALE' },
+					recentGameweeks: { state: 'READY' }
+				}
+			} as never,
+			'recent'
+		)
+		assert.equal(next.dataAvailability.fixtures.state, 'STALE')
+		assert.equal(next.dataAvailability.recentGameweeks.state, 'READY')
+		assert.equal(next.dataAvailability.isFullyAuthoritative, false)
+	})
 })

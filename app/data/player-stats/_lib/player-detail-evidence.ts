@@ -19,6 +19,7 @@ const availabilitySectionForEvidence: Partial<
 }
 
 const AUTHORITATIVE_STATES = new Set(['READY', 'EMPTY', 'NOT_APPLICABLE'])
+const DEGRADED_STATES = new Set(['STALE', 'FALLBACK', 'UNAVAILABLE'])
 
 function recomputeAuthority(
 	availability: PlayerDetailDataAvailability
@@ -50,10 +51,22 @@ export function mergePlayerDetailEvidence(
 	}
 	const availabilitySection = availabilitySectionForEvidence[section]
 	const dataAvailability = { ...previousAvailability }
-	if (availabilitySection) {
-		const nextSection = evidenceAvailability[availabilitySection]
-		if (nextSection !== undefined)
-			dataAvailability[availabilitySection] = nextSection
+	for (const key of Object.keys(
+		previousAvailability
+	) as AvailabilitySection[]) {
+		const nextSection = evidenceAvailability[key]
+		if (nextSection === undefined) continue
+		// The selected evidence request owns its section and may improve or
+		// degrade it. For unrelated sections, only carry forward a fresh
+		// degradation; an authoritative partial response cannot erase the prior
+		// warning or replace its values without refreshing that section.
+		if (
+			key === availabilitySection ||
+			DEGRADED_STATES.has(nextSection.state) ||
+			!dataAvailability[key]
+		) {
+			dataAvailability[key] = nextSection
+		}
 	}
 	dataAvailability.isFullyAuthoritative = recomputeAuthority(dataAvailability)
 	return { ...previous, ...evidence, dataAvailability }
