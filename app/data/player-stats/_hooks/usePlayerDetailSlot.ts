@@ -77,9 +77,9 @@ function withEmptyStateContext(
 		reasons: core.reasons.map(reason => ({ code: reason.code })),
 		profileRadar: core.profileRadar
 			? {
+					...core.profileRadar,
 					source: 'FPL',
 					season: core.season,
-					...core.profileRadar,
 					sampleMinutes: 0,
 					smallSample: false,
 					axes: core.profileRadar.axes.map(axis => ({
