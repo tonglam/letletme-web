@@ -17,7 +17,6 @@ import {
 	type MarketOwnershipOverviewResponse,
 	type MarketOwnershipPeriod
 } from '@/lib/graphql/operations/market'
-import type { PriceChangeBoard } from '@/lib/graphql/operations/price-changes'
 import {
 	loadMarketOwnershipDay,
 	loadMarketOwnershipOverview,
@@ -146,13 +145,17 @@ async function renderMarketContent({
 	const dataPromise = loadMarketPulseSummary(7)
 	const overviewPromise = loadMarketOwnershipOverview(period)
 	const priceChangePromise = loadPriceChangeBoard()
+		.then(response => response.priceChangeBoard)
+		.catch(error => {
+			console.error('[market] price-change board fetch failed:', error)
+			return null
+		})
 	const glanceOverviewPromise = Promise.allSettled([
 		loadMarketOwnershipOverview(period === 'DAILY' ? 'GAMEWEEK' : 'DAILY')
 	]).then(([result]) => result)
 	const t = await translationPromise
 	let pulse: MarketPulse | null = null
 	let revision: string | null = null
-	let priceChangeBoard: PriceChangeBoard | null = null
 	let ownership:
 		| MarketOwnershipOverviewResponse['marketOwnershipOverview']
 		| MarketOwnershipDayResponse['marketOwnershipDay']
@@ -163,12 +166,10 @@ async function renderMarketContent({
 		MarketOwnershipOverviewResponse['marketOwnershipOverview'] | null = null
 	let publishedDate: string | null = null
 
-	const priceChangeResultPromise = Promise.allSettled([priceChangePromise])
 	const [dataResult, overviewResult] = await Promise.allSettled([
 		dataPromise,
 		overviewPromise
 	])
-	const [priceChangeResult] = await priceChangeResultPromise
 	if (dataResult.status === 'fulfilled') {
 		const summary = normalizeMarketPulseSummaryResponse(dataResult.value)
 		if (summary) {
@@ -201,15 +202,6 @@ async function renderMarketContent({
 		console.error(
 			'[market] ownership coverage fetch failed:',
 			overviewResult.reason
-		)
-	}
-	if (priceChangeResult.status === 'fulfilled') {
-		priceChangeBoard = priceChangeResult.value.priceChangeBoard
-	} else {
-		unstable_rethrow(priceChangeResult.reason)
-		console.error(
-			'[market] price-change board fetch failed:',
-			priceChangeResult.reason
 		)
 	}
 	if (publishedDate) {
@@ -287,7 +279,7 @@ async function renderMarketContent({
 					missingDates: dailyCoverage?.missingDates ?? []
 				})}
 				marketRevision={revision}
-				priceChangeBoard={priceChangeBoard}
+				priceChangePromise={priceChangePromise}
 				locale={locale}
 				glance={marketGlance}
 			/>

@@ -8,6 +8,7 @@ import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
 import type {
 	MarketAvailabilityUpdate,
 	MarketPlayer,
+	MarketPriceChange,
 	MarketPulse,
 	MarketTransferMover,
 	MarketOwnershipDay,
@@ -23,6 +24,7 @@ import { cn } from '@/lib/utils'
 import { getTranslations } from 'next-intl/server'
 import type { useTranslations } from 'next-intl'
 import { HeartPulse, Sparkles } from 'lucide-react'
+import { Suspense } from 'react'
 import type { ReactNode } from 'react'
 
 type MarketT = ReturnType<typeof useTranslations<'Market'>>
@@ -548,6 +550,39 @@ function NewPlayersBlock({
 	)
 }
 
+async function MarketPriceSection({
+	priceChangePromise,
+	dailyPriceChanges,
+	dailyPriceChangeDate,
+	marketRevision,
+	locale
+}: {
+	priceChangePromise: Promise<PriceChangeBoard | null>
+	dailyPriceChanges: MarketPriceChange[]
+	dailyPriceChangeDate: string | null
+	marketRevision: string | null
+	locale: string
+}) {
+	const priceChangeBoard = await priceChangePromise
+	const observedPriceChanges = priceChangeBoard
+		? mapLatestPriceChangeEvent(priceChangeBoard)
+		: null
+	const latestPriceChanges = observedPriceChanges
+		? [...observedPriceChanges.rises, ...observedPriceChanges.falls]
+		: dailyPriceChanges
+	return (
+		<MarketPriceExplorer
+			changes={latestPriceChanges}
+			changeDate={observedPriceChanges?.changeDate ?? dailyPriceChangeDate}
+			observedAt={observedPriceChanges?.observedAt ?? null}
+			locale={locale}
+			marketRevision={marketRevision}
+			priceRevision={observedPriceChanges?.eventRevision ?? null}
+			priceBoard={priceChangeBoard}
+		/>
+	)
+}
+
 export async function MarketDashboard({
 	pulse,
 	ownership,
@@ -556,6 +591,7 @@ export async function MarketDashboard({
 	dailyDates,
 	marketRevision = null,
 	priceChangeBoard = null,
+	priceChangePromise,
 	locale,
 	glance
 }: {
@@ -566,6 +602,7 @@ export async function MarketDashboard({
 	dailyDates: string[]
 	marketRevision?: string | null
 	priceChangeBoard?: PriceChangeBoard | null
+	priceChangePromise?: Promise<PriceChangeBoard | null>
 	locale: string
 	glance?: ReactNode
 }) {
@@ -609,18 +646,39 @@ export async function MarketDashboard({
 				: ownership.coverage.toDate
 			: (requestedDate ?? dailyDates.at(-1) ?? null)
 
-	const priceSection =
-		pulse || priceChangeBoard ? (
+	const dailyPriceSection =
+		pulse || priceChangeBoard || priceChangePromise ? (
 			<MarketPriceExplorer
-				changes={latestPriceChanges}
-				changeDate={priceChangeDate}
-				observedAt={priceObservedAt}
+				changes={dailyPriceChanges}
+				changeDate={dailyPriceChangeDate}
+				observedAt={null}
 				locale={locale}
 				marketRevision={marketRevision}
-				priceRevision={priceRevision}
-				priceBoard={priceChangeBoard}
+				priceRevision={null}
+				priceBoard={null}
 			/>
 		) : null
+	const priceSection = priceChangePromise ? (
+		<Suspense fallback={dailyPriceSection}>
+			<MarketPriceSection
+				priceChangePromise={priceChangePromise}
+				dailyPriceChanges={dailyPriceChanges}
+				dailyPriceChangeDate={dailyPriceChangeDate}
+				marketRevision={marketRevision}
+				locale={locale}
+			/>
+		</Suspense>
+	) : pulse || priceChangeBoard ? (
+		<MarketPriceExplorer
+			changes={latestPriceChanges}
+			changeDate={priceChangeDate}
+			observedAt={priceObservedAt}
+			locale={locale}
+			marketRevision={marketRevision}
+			priceRevision={priceRevision}
+			priceBoard={priceChangeBoard}
+		/>
+	) : null
 	const ownershipSection = (
 		<section
 			aria-labelledby="market-ownership"

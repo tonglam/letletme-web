@@ -51,7 +51,10 @@ export function mapLatestPriceChangeEvent(
 		.filter(change => change.direction === 'FALL')
 		.sort(compareChange)
 	return {
-		state: board.status === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'AVAILABLE',
+		// The observed event is independently valid evidence. Prediction
+		// freshness may be unavailable while this immutable event remains
+		// displayable, especially during a delayed durable reconciliation.
+		state: 'AVAILABLE',
 		observedAt: event.observedAt,
 		changeDate: event.changeDate,
 		rises,
