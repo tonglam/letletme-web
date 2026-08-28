@@ -606,6 +606,7 @@
 		"invalidEntry": "Enter a valid FPL entry ID.",
 		"noCurrentGameweek": "No current gameweek was found.",
 		"loadFailed": "Live points could not be loaded. Please try again.",
+		"lineupUnavailable": "Live squad data is temporarily unavailable. Please try again shortly.",
 		"playerDetails": "{player} — Player Details",
 		"teamLogo": "{team} logo",
 		"totalPoints": "Total Points",

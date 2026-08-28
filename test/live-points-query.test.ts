@@ -19,15 +19,13 @@ function astNodeCount(document: string): number {
 describe('live points GraphQL document', () => {
 	it('stays within the development gateway AST-node limit', () => {
 		const count = astNodeCount(GET_LIVE_POINTS)
-		assert.ok(
-			count <= 200,
-			`GET_LIVE_POINTS contains ${count} AST nodes`
-		)
+		assert.ok(count <= 200, `GET_LIVE_POINTS contains ${count} AST nodes`)
 	})
 
 	it('retains fields needed for score rendering on the legacy schema', () => {
 		assert.match(GET_LIVE_POINTS, /pickActive/)
 		assert.match(GET_LIVE_POINTS, /autoSub/)
+		assert.match(GET_LIVE_POINTS, /availability/)
 		assert.match(GET_LIVE_POINTS, /nextRefreshAt/)
 		assert.match(GET_LIVE_POINTS, /reconciliation/)
 		assert.match(GET_LIVE_POINTS, /effectiveLineup/)

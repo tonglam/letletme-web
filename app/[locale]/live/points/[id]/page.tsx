@@ -37,9 +37,30 @@ export default async function Page({ params, searchParams }: PageProps) {
 	const { id } = await getPageLocale(params)
 	const { from, gw, tournamentId } = await searchParams
 	const entryId = Number(id)
+	const requestedGameweekValue = typeof gw === 'string' ? Number(gw) : null
+	const speculativeEventId =
+		requestedGameweekValue !== null &&
+		Number.isInteger(requestedGameweekValue) &&
+		requestedGameweekValue >= 1 &&
+		requestedGameweekValue <= 38
+			? requestedGameweekValue
+			: null
+	// Competition links carry an explicit GW. Start that independent score read
+	// while the shared lifecycle context is loading, then retain it only after
+	// the context validates that the requested event belongs to this season.
+	const speculativeLiveRequest =
+		Number.isInteger(entryId) && entryId > 0 && speculativeEventId !== null
+			? executeServerQuery<LiveCalcDataResponse>(
+					GET_LIVE_POINTS,
+					{ eventId: speculativeEventId, entryId },
+					{ cache: 'no-store' }
+				)
+			: null
+	// The lifecycle gate can return before this read is needed; attach a handler
+	// immediately so an invalid/expired GW never creates an unhandled rejection.
+	void speculativeLiveRequest?.catch(() => undefined)
 
 	const { presentation, liveContext } = await getLivePageContext()
-	const requestedGameweekValue = typeof gw === 'string' ? Number(gw) : null
 	const historicalMaxGameweek =
 		liveContext?.anchorEventId ??
 		presentation.currentEventId ??
@@ -93,11 +114,13 @@ export default async function Page({ params, searchParams }: PageProps) {
 
 	if (Number.isInteger(entryId) && entryId > 0) {
 		const [liveResult, overallResult] = await Promise.allSettled([
-			executeServerQuery<LiveCalcDataResponse>(
-				GET_LIVE_POINTS,
-				{ eventId: initialEventId, entryId },
-				{ cache: 'no-store' }
-			),
+			speculativeLiveRequest && initialEventId === speculativeEventId
+				? speculativeLiveRequest
+				: executeServerQuery<LiveCalcDataResponse>(
+						GET_LIVE_POINTS,
+						{ eventId: initialEventId, entryId },
+						{ cache: 'no-store' }
+					),
 			seedCurrentOverall
 				? executeServerQuery<EntrySummaryResponse>(
 						GET_ENTRY,

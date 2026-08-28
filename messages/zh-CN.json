@@ -606,6 +606,7 @@
 		"invalidEntry": "请输入有效的 FPL 参赛 ID。",
 		"noCurrentGameweek": "找不到当前轮次。",
 		"loadFailed": "实时积分加载失败，请重试。",
+		"lineupUnavailable": "实时阵容数据暂时不可用，请稍后重试。",
 		"playerDetails": "{player} — 球员详情",
 		"teamLogo": "{team} 队徽",
 		"totalPoints": "总积分",
