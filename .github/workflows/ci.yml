@@ -18,6 +18,8 @@ env:
   GRAPHQL_SERVICE_TOKEN: e2e-graphql-service-token-at-least-thirty-two-bytes
   BACKEND_PROXY_SECRET: ci-backend-proxy-secret
   BUG_REPORT_CLEANUP_SECRET: ci-bug-report-cleanup-secret-at-least-thirty-two-bytes
+  REDIS_URL: redis://127.0.0.1:6379
+  RATE_LIMIT_REDIS_URL: redis://127.0.0.1:6380
 
 jobs:
   verify:

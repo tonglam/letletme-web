@@ -46,18 +46,35 @@ describe('price-change live delivery contract', () => {
 		])
 
 		assert.match(client, /export type PriceChangeLiveSeed = Pick</)
-		assert.match(
-			client,
-			/'revision' \| 'deadline' \| 'nextDeadlines'/
-		)
+		assert.match(client, /'revision' \| 'deadline' \| 'nextDeadlines'/)
 		assert.match(client, /export function usePriceChangeLiveUpdates/)
 		assert.match(desk, /revision: board\.revision/)
 		assert.match(desk, /deadline: board\.deadline/)
 		assert.match(desk, /nextDeadlines: board\.nextDeadlines/)
 		assert.doesNotMatch(desk, /players: board\.players/)
+		assert.doesNotMatch(desk, /durableBoard=/)
+		assert.match(carousel, /observedEvent/)
+		assert.doesNotMatch(carousel, /durableBoard/)
+		assert.match(carousel, /isPriceChangeObservedEventAtLeastAsNew/)
 		assert.match(carousel, /usePriceChangeLiveUpdates\(\{/)
-		assert.match(carousel, /buildHomePriceChangePredictionState\(board, locale\)/)
+		assert.match(
+			carousel,
+			/buildHomePriceChangePredictionState\(board, locale\)/
+		)
 		assert.match(carousel, /data-price-change-live-state=\{liveState\}/)
 		assert.match(carousel, /data-price-change-revision=\{liveRevision\}/)
+	})
+
+	it('keeps the full board on the server side of the market boundary', async () => {
+		const [dashboard, explorer] = await Promise.all([
+			read('app/data/market/MarketDashboard.tsx'),
+			read('app/data/market/MarketPriceExplorer.tsx')
+		])
+
+		assert.match(dashboard, /liveSeed=\{priceLiveSeed\}/)
+		assert.match(dashboard, /observedEvent=\{priceEventMetadata\}/)
+		assert.doesNotMatch(dashboard, /priceBoard=\{priceChangeBoard\}/)
+		assert.doesNotMatch(explorer, /durableBoard:/)
+		assert.doesNotMatch(explorer, /priceBoard\?: PriceChangeBoard/)
 	})
 })

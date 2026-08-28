@@ -70,6 +70,7 @@ function withEmptyStateContext(
 		profileRadar: core.profileRadar
 			? {
 					source: 'FPL',
+					season: core.season,
 					...core.profileRadar,
 					sampleMinutes: 0,
 					smallSample: false,

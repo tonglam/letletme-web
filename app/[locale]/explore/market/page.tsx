@@ -1,4 +1,3 @@
-import { MarketPlayerLookupLauncher } from '@/app/data/market/MarketPriceExplorer'
 import {
 	MarketDashboard,
 	MarketGlance
@@ -22,6 +21,7 @@ import {
 	loadMarketOwnershipOverview,
 	loadMarketPulseSummary
 } from '@/lib/market-overview-server'
+import { loadPriceChangeBoard } from '@/lib/price-change-server'
 import {
 	isPublishedMarketOwnershipDate,
 	normalizeMarketOwnershipDate
@@ -143,6 +143,12 @@ async function renderMarketContent({
 	const translationPromise = getTranslations('Market')
 	const dataPromise = loadMarketPulseSummary(7)
 	const overviewPromise = loadMarketOwnershipOverview(period)
+	const priceChangePromise = loadPriceChangeBoard()
+		.then(response => response.priceChangeBoard)
+		.catch(error => {
+			console.error('[market] price-change board fetch failed:', error)
+			return null
+		})
 	const glanceOverviewPromise = Promise.allSettled([
 		loadMarketOwnershipOverview(period === 'DAILY' ? 'GAMEWEEK' : 'DAILY')
 	]).then(([result]) => result)
@@ -218,8 +224,8 @@ async function renderMarketContent({
 		(!date && ownership?.period === 'DAILY' ? ownership.coverage : null)
 	const updatedAt =
 		(publishedDate
-			? ownership?.coverage.capturedAt ?? pulse?.coverage.capturedAt
-			: pulse?.coverage.capturedAt ?? ownership?.coverage.capturedAt) ?? null
+			? (ownership?.coverage.capturedAt ?? pulse?.coverage.capturedAt)
+			: (pulse?.coverage.capturedAt ?? ownership?.coverage.capturedAt)) ?? null
 	const marketGlance = (
 		<Suspense fallback={null}>
 			<MarketGlanceContent
@@ -271,15 +277,11 @@ async function renderMarketContent({
 					latestDate: dailyCoverage?.latestDate ?? null,
 					missingDates: dailyCoverage?.missingDates ?? []
 				})}
-				revision={revision}
+				marketRevision={revision}
+				priceChangePromise={priceChangePromise}
 				locale={locale}
 				glance={marketGlance}
 			/>
-			{!pulse ? (
-				<section className="mt-8 rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5">
-					<MarketPlayerLookupLauncher initialOpen />
-				</section>
-			) : null}
 		</>
 	)
 }

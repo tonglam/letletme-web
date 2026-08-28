@@ -24,7 +24,7 @@ export const GET_PLAYER_DETAIL = `
       id webName teamShortName elementType elementTypeName
       price startPrice
 			statsContext { scope season asOfEventId status }
-      availability {
+      availability: injuryAvailability {
         status news newsAdded observedDate capturedAt
         chanceOfPlayingThisRound chanceOfPlayingNextRound stale
       }
@@ -72,7 +72,7 @@ export const GET_PLAYER_OVERALL = `
       id webName teamShortName elementType elementTypeName
       price startPrice
 			statsContext { scope season asOfEventId status }
-      availability {
+      availability: injuryAvailability {
         status news newsAdded observedDate capturedAt
         chanceOfPlayingThisRound chanceOfPlayingNextRound stale
       }
@@ -552,7 +552,7 @@ export type PlayerStateOverviewData = Pick<
 > & {
 	reasons: Array<Pick<PlayerStateReason, 'code'>>
 	profileRadar:
-		| (Pick<PlayerRadarProfile, 'position' | 'season' | 'asOfEventId'> & {
+		| (Pick<PlayerRadarProfile, 'position' | 'asOfEventId'> & {
 				axes: Array<
 					Pick<
 						PlayerRadarAxis,
@@ -649,7 +649,7 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
 			id webName teamShortName elementType elementTypeName
 			price
 				statsContext { season status }
-				availability {
+				availability: injuryAvailability {
 					status news observedDate
 				chanceOfPlayingThisRound chanceOfPlayingNextRound
 			}
@@ -664,7 +664,7 @@ export const GET_PLAYER_STATS_DESK_OVERVIEW = /* GraphQL */ `
             trend confidence providerMode
             reasons { code }
             profileRadar {
-              position season asOfEventId
+              position asOfEventId
               axes { code value percentile unit available }
             }
             dimensions {

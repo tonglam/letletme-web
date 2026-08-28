@@ -1,3 +1,5 @@
+import type { MarketPriceChange } from './market'
+
 export type PriceChangePredictionStatus =
 	| 'VERY_LIKELY_RISE'
 	| 'LIKELY_RISE'
@@ -31,6 +33,17 @@ export type PriceChangePlayer = {
 	calibrating: boolean
 }
 
+export type PriceChangeObservedOutcome = 'CHANGED' | 'NO_CHANGE'
+
+export type PriceChangeObservedEvent = {
+	deadline: string
+	changeDate: string
+	observedAt: string
+	outcome: PriceChangeObservedOutcome
+	changedPlayerCount: number
+	changes: MarketPriceChange[]
+}
+
 export type PriceChangeBoard = {
 	status: PriceChangeBoardStatus
 	source: 'FPL_BOOTSTRAP'
@@ -42,6 +55,7 @@ export type PriceChangeBoard = {
 	expectedPlayerCount: number
 	observedPlayerCount: number
 	players: PriceChangePlayer[]
+	latestEvent?: PriceChangeObservedEvent | null
 }
 
 export type PriceChangeLiveState = 'PROVISIONAL' | 'DURABLE' | 'UNAVAILABLE'
@@ -88,8 +102,37 @@ export const EMPTY_PRICE_CHANGE_BOARD: PriceChangeBoard = {
 	revision: 'unavailable',
 	expectedPlayerCount: 0,
 	observedPlayerCount: 0,
-	players: []
+	players: [],
+	latestEvent: null
 }
+
+const PRICE_CHANGE_OBSERVED_EVENT_FIELDS = /* GraphQL */ `
+	latestEvent {
+		deadline
+		changeDate
+		observedAt
+		outcome
+		changedPlayerCount
+		changes {
+			player {
+				playerId
+				playerCode
+				webName
+				teamId
+				teamName
+				teamShortName
+				position
+				price
+				selectedByPercent
+			}
+			changeDate
+			oldPrice
+			newPrice
+			change
+			direction
+		}
+	}
+`
 
 export const GET_PRICE_CHANGE_BOARD = /* GraphQL */ `
 	query GetPriceChangeBoard {
@@ -103,6 +146,7 @@ export const GET_PRICE_CHANGE_BOARD = /* GraphQL */ `
 			revision
 			expectedPlayerCount
 			observedPlayerCount
+			${PRICE_CHANGE_OBSERVED_EVENT_FIELDS}
 			players {
 				playerId
 				playerCode
@@ -151,6 +195,7 @@ const PRICE_CHANGE_LIVE_BOARD_FIELDS = /* GraphQL */ `
 		revision
 		expectedPlayerCount
 		observedPlayerCount
+		${PRICE_CHANGE_OBSERVED_EVENT_FIELDS}
 		players {
 			playerId
 			playerCode

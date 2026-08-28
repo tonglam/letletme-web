@@ -8,6 +8,7 @@ import { CALENDAR_DATE_TIME_ZONE, parseCalendarDate } from '@/lib/calendar-date'
 import type {
 	MarketAvailabilityUpdate,
 	MarketPlayer,
+	MarketPriceChange,
 	MarketPulse,
 	MarketTransferMover,
 	MarketOwnershipDay,
@@ -15,12 +16,19 @@ import type {
 	MarketOwnershipOverview,
 	MarketOwnershipPeriod
 } from '@/lib/graphql/operations/market'
+import type { PriceChangeBoard } from '@/lib/graphql/operations/price-changes'
 import { getMarketViewMode } from '@/lib/market'
+import {
+	mapLatestPriceChangeEvent,
+	type PriceChangeObservedEventMetadata
+} from '@/lib/price-change-observed'
+import type { PriceChangeLiveSeed } from '@/lib/price-change-live-client'
 import { Link } from '@/i18n/navigation'
 import { cn } from '@/lib/utils'
 import { getTranslations } from 'next-intl/server'
 import type { useTranslations } from 'next-intl'
 import { HeartPulse, Sparkles } from 'lucide-react'
+import { Suspense } from 'react'
 import type { ReactNode } from 'react'
 
 type MarketT = ReturnType<typeof useTranslations<'Market'>>
@@ -43,6 +51,26 @@ function formatOwnership(value: number, locale: string): string {
 
 function formatPlayerPrice(value: number): string {
 	return `£${(value / 10).toFixed(1)}m`
+}
+
+function priceChangeLiveSeed(
+	board: PriceChangeBoard | null,
+	priceRevision: string | null
+): PriceChangeLiveSeed {
+	return {
+		revision: board?.revision ?? priceRevision ?? 'unavailable',
+		deadline: board?.deadline ?? null,
+		nextDeadlines: board?.nextDeadlines ?? []
+	}
+}
+
+function priceChangeEventMetadata(
+	board: PriceChangeBoard | null
+): PriceChangeObservedEventMetadata | null {
+	const event = board?.latestEvent
+	return event
+		? { deadline: event.deadline, observedAt: event.observedAt }
+		: null
 }
 
 function PositionBadge({ player }: { player: MarketPlayer }) {
@@ -546,13 +574,154 @@ function NewPlayersBlock({
 	)
 }
 
+async function MarketPriceSection({
+	priceChangePromise,
+	dailyPriceChanges,
+	dailyPriceChangeDate,
+	marketRevision,
+	locale,
+	initialOpen
+}: {
+	priceChangePromise: Promise<PriceChangeBoard | null>
+	dailyPriceChanges: MarketPriceChange[]
+	dailyPriceChangeDate: string | null
+	marketRevision: string | null
+	locale: string
+	initialOpen: boolean
+}) {
+	const priceChangeBoard = await priceChangePromise
+	const observedPriceChanges = priceChangeBoard
+		? mapLatestPriceChangeEvent(priceChangeBoard)
+		: null
+	const observedEvent = priceChangeEventMetadata(priceChangeBoard)
+	const liveSeed = priceChangeLiveSeed(
+		priceChangeBoard,
+		observedPriceChanges?.eventRevision ?? null
+	)
+	const latestPriceChanges = observedPriceChanges
+		? [...observedPriceChanges.rises, ...observedPriceChanges.falls]
+		: dailyPriceChanges
+	return (
+		<MarketPriceExplorer
+			changes={latestPriceChanges}
+			changeDate={observedPriceChanges?.changeDate ?? dailyPriceChangeDate}
+			observedAt={observedPriceChanges?.observedAt ?? null}
+			locale={locale}
+			marketRevision={marketRevision}
+			priceRevision={observedPriceChanges?.eventRevision ?? null}
+			liveSeed={liveSeed}
+			observedEvent={observedEvent}
+			initialLiveState={
+				priceChangeBoard?.status === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'DURABLE'
+			}
+			initialOpen={initialOpen}
+		/>
+	)
+}
+
+function MarketPriceSectionFallback({
+	changes,
+	changeDate,
+	locale,
+	t
+}: {
+	changes: MarketPriceChange[]
+	changeDate: string | null
+	locale: string
+	t: MarketT
+}) {
+	const rises = changes.filter(change => change.direction === 'RISE')
+	const falls = changes.filter(change => change.direction === 'FALL')
+	const column = (items: MarketPriceChange[], rising: boolean) => (
+		<div className="min-w-0 rounded-lg border border-border/60 bg-muted/15 px-3 py-3 dark:bg-muted/10">
+			<p
+				className={cn(
+					'mb-2.5 font-display text-[11px] font-semibold uppercase tracking-[0.12em]',
+					rising ? 'text-success' : 'text-destructive'
+				)}
+			>
+				{rising ? t('priceRises') : t('priceFalls')}
+				<span className="ml-1.5 font-mono text-muted-foreground">
+					({items.length})
+				</span>
+			</p>
+			{items.length === 0 ? (
+				<EmptyHint>{t('noData')}</EmptyHint>
+			) : (
+				<ul className="w-full">
+					{items.map(change => (
+						<li
+							key={`${change.player.playerId}-${change.changeDate}-${change.direction}`}
+							className="border-b border-border/40 py-2.5 last:border-b-0"
+						>
+							<div className="flex w-full items-center gap-2.5">
+								<PositionBadge player={change.player} />
+								<span className="min-w-0 flex-1">
+									<PlayerStatsAnchor
+										playerId={change.player.playerId}
+										locale={locale}
+										className="market-player-link"
+									>
+										{change.player.webName}
+									</PlayerStatsAnchor>
+									<span className="block truncate text-[11px] text-muted-foreground">
+										{change.player.teamShortName}
+									</span>
+								</span>
+								<span className="shrink-0 text-right">
+									<span
+										className={cn(
+											'block font-display text-sm font-semibold tabular-nums leading-tight',
+											rising ? 'text-success' : 'text-destructive'
+										)}
+									>
+										{rising ? '+' : '−'}£
+										{(Math.abs(change.change) / 10).toFixed(1)}m
+									</span>
+									<span className="block text-[10px] tabular-nums text-muted-foreground">
+										£{(change.oldPrice / 10).toFixed(1)}m → £
+										{(change.newPrice / 10).toFixed(1)}m
+									</span>
+								</span>
+							</div>
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
+	)
+
+	return (
+		<section
+			aria-labelledby="market-prices"
+			aria-busy="true"
+			className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
+		>
+			<SectionTitle id="market-prices">{t('priceTitle')}</SectionTitle>
+			<p className="mb-4 text-[11px] text-muted-foreground">
+				{t('priceBoardMeta', {
+					rises: rises.length,
+					falls: falls.length,
+					date: formatCalendarDate(changeDate, locale)
+				})}
+			</p>
+			<div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+				{column(rises, true)}
+				{column(falls, false)}
+			</div>
+		</section>
+	)
+}
+
 export async function MarketDashboard({
 	pulse,
 	ownership,
 	requestedPeriod,
 	requestedDate,
 	dailyDates,
-	revision = null,
+	marketRevision = null,
+	priceChangeBoard = null,
+	priceChangePromise,
 	locale,
 	glance
 }: {
@@ -561,12 +730,17 @@ export async function MarketDashboard({
 	requestedPeriod: MarketOwnershipPeriod
 	requestedDate: string | null
 	dailyDates: string[]
-	revision?: string | null
+	marketRevision?: string | null
+	priceChangeBoard?: PriceChangeBoard | null
+	priceChangePromise?: Promise<PriceChangeBoard | null>
 	locale: string
 	glance?: ReactNode
 }) {
 	const t: MarketT = await getTranslations('Market')
-	const priceChangeDate = pulse
+	const observedPriceChanges = priceChangeBoard
+		? mapLatestPriceChangeEvent(priceChangeBoard)
+		: null
+	const dailyPriceChangeDate = pulse
 		? (pulse.priceChanges
 				.map(c => c.changeDate)
 				.sort()
@@ -574,11 +748,20 @@ export async function MarketDashboard({
 			pulse.coverage.latestDate ??
 			null)
 		: null
-	const latestPriceChanges = priceChangeDate
+	const dailyPriceChanges = dailyPriceChangeDate
 		? (pulse?.priceChanges ?? []).filter(
-				change => change.changeDate === priceChangeDate
+				change => change.changeDate === dailyPriceChangeDate
 			)
 		: []
+	const latestPriceChanges = observedPriceChanges
+		? [...observedPriceChanges.rises, ...observedPriceChanges.falls]
+		: dailyPriceChanges
+	const priceChangeDate =
+		observedPriceChanges?.changeDate ?? dailyPriceChangeDate
+	const priceObservedAt = observedPriceChanges?.observedAt ?? null
+	const priceRevision = observedPriceChanges?.eventRevision ?? null
+	const priceLiveSeed = priceChangeLiveSeed(priceChangeBoard, priceRevision)
+	const priceEventMetadata = priceChangeEventMetadata(priceChangeBoard)
 	const hasMovers =
 		ownership !== null &&
 		(ownership.risers.length > 0 || ownership.fallers.length > 0)
@@ -595,12 +778,39 @@ export async function MarketDashboard({
 				: ownership.coverage.toDate
 			: (requestedDate ?? dailyDates.at(-1) ?? null)
 
-	const priceSection = pulse ? (
+	const dailyPriceSection = pulse ? (
+		<MarketPriceSectionFallback
+			changes={dailyPriceChanges}
+			changeDate={dailyPriceChangeDate}
+			locale={locale}
+			t={t}
+		/>
+	) : null
+	const priceSection = priceChangePromise ? (
+		<Suspense fallback={dailyPriceSection}>
+			<MarketPriceSection
+				priceChangePromise={priceChangePromise}
+				dailyPriceChanges={dailyPriceChanges}
+				dailyPriceChangeDate={dailyPriceChangeDate}
+				marketRevision={marketRevision}
+				locale={locale}
+				initialOpen={!pulse}
+			/>
+		</Suspense>
+	) : pulse || priceChangeBoard ? (
 		<MarketPriceExplorer
 			changes={latestPriceChanges}
 			changeDate={priceChangeDate}
+			observedAt={priceObservedAt}
 			locale={locale}
-			revision={revision}
+			marketRevision={marketRevision}
+			priceRevision={priceRevision}
+			liveSeed={priceLiveSeed}
+			observedEvent={priceEventMetadata}
+			initialLiveState={
+				priceChangeBoard?.status === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'DURABLE'
+			}
+			initialOpen={!pulse}
 		/>
 	) : null
 	const ownershipSection = (
@@ -708,7 +918,7 @@ export async function MarketDashboard({
 				/>
 				<MarketAvailabilityDisclosure
 					days={pulse?.coverage.requestedDays ?? 0}
-					revision={revision}
+					revision={marketRevision}
 					count={
 						pulse?.availabilityUpdateCount ??
 						pulse?.availabilityUpdates.length ??
