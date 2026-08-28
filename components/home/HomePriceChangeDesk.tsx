@@ -80,12 +80,15 @@ export async function HomePriceChangeDesk() {
 	let actualDate: string | null = null
 	const priceChangeBoard =
 		predictionResult.status === 'fulfilled'
-			? predictionResult.value.priceChangeBoard
-			: null
+		? predictionResult.value.priceChangeBoard
+		: null
 	const observed = priceChangeBoard
 		? mapLatestPriceChangeEvent(priceChangeBoard)
 		: null
 	if (observed) {
+		// latestEvent is the authoritative 07:00 event. Once it exists, the
+		// legacy daily market snapshot is intentionally not allowed to replace
+		// it, even if that snapshot was captured later at 09:25.
 		actualDate = observed.changeDate
 		actual = {
 			state: observed.state,
