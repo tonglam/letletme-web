@@ -4,6 +4,7 @@ import type {
 	PlayerStatsDeskSection,
 	PlayerStatsDeskFieldStatus,
 	PlayerStatsDeskFieldResult,
+	PlayerDetailDataAvailability,
 	PlayerDetailData,
 	PlayerStateOverviewData,
 	PlayerStateProfileCoreData,
@@ -26,6 +27,23 @@ export type PlayerStatsDeskResponse = Omit<
 
 export type PlayerStatsDeskLoadResult = PlayerStatsDeskResponse & {
 	outcome: 'complete' | 'partial' | 'failed' | 'not-found'
+}
+
+const AUTHORITATIVE_DATA_STATES = new Set(['READY', 'EMPTY', 'NOT_APPLICABLE'])
+
+function overviewIsAuthoritative(
+	availability: PlayerDetailDataAvailability | null | undefined
+): boolean {
+	return Boolean(
+		availability?.isFullyAuthoritative &&
+		[
+			availability.seasonStats,
+			availability.market,
+			availability.historicalTeam,
+			availability.fixtures,
+			availability.recentGameweeks
+		].every(section => section && AUTHORITATIVE_DATA_STATES.has(section.state))
+	)
 }
 
 export type PlayerStatsDeskNormalizedEntry = {
@@ -126,6 +144,7 @@ function entryComplete(
 				(entry.overview != null ? 'AVAILABLE' : 'NOT_FOUND')) === 'AVAILABLE' &&
 			(statuses.state ?? (entry.state != null ? 'AVAILABLE' : 'NOT_FOUND')) ===
 				'AVAILABLE' &&
+			overviewIsAuthoritative(entry.overview?.dataAvailability) &&
 			entry.overview != null &&
 			entry.state != null
 		)

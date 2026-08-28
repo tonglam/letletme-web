@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
 import {
 	clearPlayerStatsDeskClientCache,
+	primePlayerStatsDeskCache,
 	requestPlayerStatsDesk
 } from '../lib/player-stats-desk-client'
 
@@ -11,8 +12,36 @@ const responseBody = {
 	horizon: 5,
 	section: 'overview' as const,
 	entries: [
-		{ playerId: 13, overview: { id: 13 }, state: { playerId: 13 } },
-		{ playerId: 27, overview: { id: 27 }, state: { playerId: 27 } }
+		{
+			playerId: 13,
+			overview: {
+				id: 13,
+				dataAvailability: {
+					isFullyAuthoritative: true,
+					seasonStats: { state: 'READY' },
+					market: { state: 'READY' },
+					historicalTeam: { state: 'READY' },
+					fixtures: { state: 'READY' },
+					recentGameweeks: { state: 'READY' }
+				}
+			},
+			state: { playerId: 13 }
+		},
+		{
+			playerId: 27,
+			overview: {
+				id: 27,
+				dataAvailability: {
+					isFullyAuthoritative: true,
+					seasonStats: { state: 'READY' },
+					market: { state: 'READY' },
+					historicalTeam: { state: 'READY' },
+					fixtures: { state: 'READY' },
+					recentGameweeks: { state: 'READY' }
+				}
+			},
+			state: { playerId: 27 }
+		}
 	],
 	unavailablePlayerIds: []
 }
@@ -127,6 +156,52 @@ describe('player stats desk client cache', () => {
 			eventId: 1,
 			section: 'overview'
 		})
+		assert.equal(calls, 2)
+	})
+
+	it('bypasses the browser cache for an explicit retry', async () => {
+		let calls = 0
+		const seenCaches: RequestCache[] = []
+		const seenHeaders: Headers[] = []
+		globalThis.fetch = async (_input, init) => {
+			calls += 1
+			seenCaches.push(init?.cache ?? 'default')
+			seenHeaders.push(new Headers(init?.headers))
+			return Response.json(responseBody)
+		}
+		const input = { playerIds: [13], eventId: 1, section: 'overview' as const }
+		await requestPlayerStatsDesk(input)
+		await requestPlayerStatsDesk(input, { bypassCache: true })
+		await requestPlayerStatsDesk(input)
+		assert.equal(calls, 2)
+		assert.deepEqual(seenCaches, ['default', 'no-store'])
+		assert.equal(seenHeaders[1]?.get('cache-control'), 'no-cache')
+	})
+
+	it('does not cache a response whose overview is not authoritative', async () => {
+		let calls = 0
+		const degradedResponse = {
+			...responseBody,
+			entries: responseBody.entries.map(entry => ({
+				...entry,
+				overview: {
+					...entry.overview,
+					dataAvailability: { isFullyAuthoritative: false }
+				}
+			}))
+		}
+		globalThis.fetch = async () => {
+			calls += 1
+			return Response.json(degradedResponse)
+		}
+		const input = {
+			playerIds: [13, 27],
+			eventId: 1,
+			section: 'overview' as const
+		}
+		primePlayerStatsDeskCache(input, degradedResponse as never)
+		await requestPlayerStatsDesk(input)
+		await requestPlayerStatsDesk(input)
 		assert.equal(calls, 2)
 	})
 })

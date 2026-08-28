@@ -778,10 +778,18 @@ function playerStatsDeskEvidenceQuery(
         playerId
         evidence {
           status
-          value {
-            id webName teamShortName elementType elementTypeName
-			statsContext { scope season asOfEventId status }
-            ${fields}
+			value {
+				id webName teamShortName elementType elementTypeName
+				statsContext { scope season asOfEventId status }
+				dataAvailability {
+					isFullyAuthoritative
+					seasonStats { state reasonCode revision sourceCheckedAt }
+					market { state reasonCode revision sourceCheckedAt }
+					historicalTeam { state reasonCode revision sourceCheckedAt }
+					fixtures { state reasonCode revision sourceCheckedAt }
+					recentGameweeks { state reasonCode revision sourceCheckedAt }
+				}
+				${fields}
           }
         }
       }
