@@ -5,7 +5,12 @@ import type {
 } from '@/lib/graphql/operations/players'
 
 export type PlayerDataSection =
-	'market' | 'historicalTeam' | 'fixtures' | 'recentGameweeks' | 'player'
+	| 'seasonStats'
+	| 'market'
+	| 'historicalTeam'
+	| 'fixtures'
+	| 'recentGameweeks'
+	| 'player'
 
 export type PlayerDataAvailabilityIssue = Readonly<{
 	section: PlayerDataSection
@@ -38,6 +43,7 @@ export function playerDataAvailabilityIssues(
 ): PlayerDataAvailabilityIssue[] {
 	if (!availability) return []
 	const sections = [
+		['seasonStats', availability.seasonStats],
 		['market', availability.market],
 		['historicalTeam', availability.historicalTeam],
 		['fixtures', availability.fixtures],
