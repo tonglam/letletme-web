@@ -68,16 +68,11 @@ const loadCompletePlayerStatsDeskByPlayerFromOrigin = (
 	horizon: number,
 	section: PlayerStatsDeskSection
 ) =>
-	loadCompletePlayerStatsDeskFromOrigin(
-		[playerId],
-		eventId,
-		horizon,
-		section
-	)
+	loadCompletePlayerStatsDeskFromOrigin([playerId], eventId, horizon, section)
 
 const loadCompletePlayerStatsDeskByPlayer = unstable_cache(
 	loadCompletePlayerStatsDeskByPlayerFromOrigin,
-	['graphql', 'player-stats-desk', 'v1'],
+	['graphql', 'player-stats-desk', 'v2'],
 	{ revalidate: RevalidateSeconds.publicStats, tags: [CacheTag.gameweekStats] }
 )
 
@@ -112,12 +107,7 @@ export async function loadPlayerStatsDesk(
 	const results = await Promise.all(
 		playerIds.map(playerId =>
 			resolvePlayerStatsDesk(() =>
-				loadPlayerStatsDeskByPlayerCached(
-					playerId,
-					eventId,
-					horizon,
-					section
-				)
+				loadPlayerStatsDeskByPlayerCached(playerId, eventId, horizon, section)
 			)
 		)
 	)
@@ -140,11 +130,6 @@ export function loadPlayerStatsDeskForPublicRoute(
 	section: PlayerStatsDeskSection
 ): Promise<PlayerStatsDeskLoadResult> {
 	return resolvePlayerStatsDesk(() =>
-		loadCompletePlayerStatsDeskFromOrigin(
-			playerIds,
-			eventId,
-			horizon,
-			section
-		)
+		loadCompletePlayerStatsDeskFromOrigin(playerIds, eventId, horizon, section)
 	)
 }

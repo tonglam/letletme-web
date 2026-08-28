@@ -106,6 +106,7 @@ describe('public GraphQL cache contract', () => {
 			playerDesk,
 			/unstable_cache\(\s*loadCompletePlayerStatsDeskByPlayerFromOrigin/
 		)
+		assert.match(playerDesk, /\['graphql', 'player-stats-desk', 'v2'\]/)
 		assert.match(playerDesk, /playerIds\.map\(playerId/)
 		assert.match(
 			playerDesk,
@@ -119,15 +120,21 @@ describe('public GraphQL cache contract', () => {
 	})
 
 	it('correlates signed capacity page runs without making cache keys request-derived', async () => {
-		const [playerStats, fixtures, market, marketDashboard, serverContext, publicServer] =
-			await Promise.all([
-				read('app/[locale]/explore/player-stats/page.tsx'),
-				read('app/[locale]/explore/fixtures/page.tsx'),
-				read('app/[locale]/explore/market/page.tsx'),
-				read('app/data/market/MarketDashboard.tsx'),
-				read('lib/server-user-context.ts'),
-				read('lib/graphql-server.ts')
-			])
+		const [
+			playerStats,
+			fixtures,
+			market,
+			marketDashboard,
+			serverContext,
+			publicServer
+		] = await Promise.all([
+			read('app/[locale]/explore/player-stats/page.tsx'),
+			read('app/[locale]/explore/fixtures/page.tsx'),
+			read('app/[locale]/explore/market/page.tsx'),
+			read('app/data/market/MarketDashboard.tsx'),
+			read('lib/server-user-context.ts'),
+			read('lib/graphql-server.ts')
+		])
 		for (const source of [playerStats, fixtures, market]) {
 			assert.match(source, /withCapacityRunForRequest/)
 		}
@@ -140,7 +147,10 @@ describe('public GraphQL cache contract', () => {
 			/isPublishedMarketOwnershipDate\([\s\S]*loadMarketOwnershipDay\(publishedDate\)/
 		)
 		assert.match(market, /const \[dataResult, overviewResult\]/)
-		assert.doesNotMatch(market, /dataResult, overviewResult, glanceOverviewResult/)
+		assert.doesNotMatch(
+			market,
+			/dataResult, overviewResult, glanceOverviewResult/
+		)
 		assert.match(
 			market,
 			/const glanceOverviewPromise = Promise\.allSettled\(\[\s*loadMarketOwnershipOverview/
@@ -152,7 +162,8 @@ describe('public GraphQL cache contract', () => {
 		assert.match(market, /const marketGlance = \(/)
 		assert.match(market, /glance=\{marketGlance\}/)
 		assert.ok(
-			marketDashboard.indexOf('{glance}') < marketDashboard.indexOf('{order.map')
+			marketDashboard.indexOf('{glance}') <
+				marketDashboard.indexOf('{order.map')
 		)
 		assert.match(market, /renderAvailableGlance/)
 		assert.match(serverContext, /capacityRequestIdForHeaders/)
