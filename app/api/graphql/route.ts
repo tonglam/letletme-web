@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
 	const requestTiming = new RequestTiming()
 	const startedAt = Date.now()
 	const requestId = resolveRequestId(request.headers.get('x-request-id'))
-	let observedTrafficClass: 'mini' | 'web_browser' | 'legacy' | 'development' =
+	let observedTrafficClass: 'mini' | 'web_browser' | 'development' =
 		'development'
 	const observeResponse = (
 		response: Response,
@@ -346,7 +346,7 @@ function surfaceForWorkload(
 
 function deviceGroupForRequest(
 	request: Request,
-	trafficClass: 'mini' | 'web_browser' | 'legacy' | 'development'
+	trafficClass: 'mini' | 'web_browser' | 'development'
 ): ClientSignalDeviceGroup {
 	if (trafficClass === 'mini') return 'wechat_phone'
 	const userAgent = request.headers.get('user-agent') ?? ''
@@ -390,7 +390,7 @@ function observeProxyResponse(
 		workload: string
 		responseBodyOk: boolean
 		request: Request
-		trafficClass: 'mini' | 'web_browser' | 'legacy' | 'development'
+		trafficClass: 'mini' | 'web_browser' | 'development'
 	}
 ): Response {
 	const result = proxyResult(response.status, input.responseBodyOk)

@@ -79,7 +79,7 @@ describe('GraphQL proxy read path', () => {
 		assert.match(route, /data\.coreEventContext\?\.revision/)
 	})
 
-	it('logs the effective signed workload for legacy ingress', () => {
+	it('logs the effective signed workload for every canonical ingress', () => {
 		const route = readFileSync(
 			new URL('../app/api/graphql/route.ts', import.meta.url),
 			'utf8'

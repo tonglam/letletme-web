@@ -1,5 +1,4 @@
 import {
-	buildIngressContextHeaders,
 	buildIngressContextHeadersV2,
 	buildOpaqueAbuseSubject,
 	buildOpaqueMiniDeviceSubject,
@@ -35,7 +34,7 @@ const CONSERVATIVE_WORKLOAD_ORDER = [
 export type GraphQLProxyIngress =
 	| {
 			ok: true
-			trafficClass: 'mini' | 'web_browser' | 'legacy'
+			trafficClass: 'mini' | 'web_browser'
 			workload: GraphQLWorkload
 			headers: Record<string, string>
 	  }
@@ -132,10 +131,6 @@ export function validateMiniProgramDeviceId(value: string | null): string | null
 	return value && SAFE_DEVICE_ID.test(value) ? value : null
 }
 
-function looksLikeLegacyMiniProgram(headers: Headers): boolean {
-	return /\bminiProgram\b/i.test(headers.get('user-agent') ?? '')
-}
-
 export function buildGraphQLProxyIngress({
 	headers,
 	secret,
@@ -171,15 +166,17 @@ export function buildGraphQLProxyIngress({
 			)
 		}
 	}
-	const subject = buildOpaqueRateLimitSubject(headers, secret)
-	if (looksLikeLegacyMiniProgram(headers)) {
+	// A Mini Program request is identified only by the canonical client and
+	// device headers above. An old Mini Program must not silently enter the web
+	// bucket when it omits that contract; reject the recognizable old runtime so
+	// it fails closed instead of receiving a misleading web response.
+	if (/\bminiProgram\b/i.test(headers.get('user-agent') ?? '')) {
 		return {
-			ok: true,
-			trafficClass: 'legacy',
-			workload: 'public-other',
-			headers: buildIngressContextHeaders(subject, secret)
+			ok: false,
+			message: 'Canonical Mini Program ingress headers are required'
 		}
 	}
+	const subject = buildOpaqueRateLimitSubject(headers, secret)
 	return {
 		ok: true,
 		trafficClass: 'web_browser',

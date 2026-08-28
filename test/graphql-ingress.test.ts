@@ -90,21 +90,16 @@ describe('GraphQL ingress v2', () => {
 		assert.equal(new Set(devices.map(item => item.abuseSubject)).size, 1)
 	})
 
-	it('keeps old Mini clients on the signed v1 legacy path', () => {
+	it('rejects old Mini clients that do not send the canonical ingress contract', () => {
 		const ingress = buildGraphQLProxyIngress({
 			headers: new Headers({ 'user-agent': 'MicroMessenger miniProgram' }),
 			secret: 'test-secret',
 			workload: 'market'
 		})
-		assert.equal(ingress.ok, true)
-		if (!ingress.ok) return
-		assert.equal(ingress.trafficClass, 'legacy')
-		assert.deepEqual(Object.keys(decode(ingress.headers)).sort(), [
-			'aud',
-			'exp',
-			'iat',
-			'sub'
-		])
+		assert.deepEqual(ingress, {
+			ok: false,
+			message: 'Canonical Mini Program ingress headers are required'
+		})
 	})
 
 	it('does not treat an ordinary WeChat webview as a legacy Mini client', () => {

@@ -3,7 +3,7 @@ import { createHmac } from 'node:crypto'
 import test from 'node:test'
 
 import {
-	buildIngressContextHeaders,
+	buildIngressContextHeadersV2,
 	buildOpaqueRateLimitSubject,
 	PayloadTooLargeError,
 	readBoundedBytes,
@@ -201,14 +201,27 @@ test('opaque rate subjects and ingress signatures never contain raw IPs', () => 
 	const subject = buildOpaqueRateLimitSubject(headers, 'secret')
 	assert.match(subject, /^[a-f0-9]{64}$/)
 	assert.equal(subject.includes('1.2.3.4'), false)
-	const signed = buildIngressContextHeaders(subject, 'secret', 100)
+	const signed = buildIngressContextHeadersV2(
+		{
+			trafficClass: 'web_browser',
+			subject,
+			abuseSubject: null,
+			workload: 'public-other'
+		},
+		'secret',
+		100
+	)
 	const payload = Buffer.from(
 		signed['X-Ingress-Context'],
 		'base64url'
 	).toString()
 	assert.deepEqual(JSON.parse(payload), {
+		v: 2,
 		aud: 'letletme-graphql',
-		sub: subject,
+		trafficClass: 'web_browser',
+		subject,
+		abuseSubject: null,
+		workload: 'public-other',
 		iat: 100,
 		exp: 160
 	})

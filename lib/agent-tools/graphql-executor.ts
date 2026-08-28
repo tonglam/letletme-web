@@ -7,7 +7,10 @@ import type { AgentSession } from '@/lib/agent-tools/contracts'
 import type { AgentGraphQLExecutor } from '@/lib/agent-tools/runtime'
 import { executeQuery } from '@/lib/graphql-client'
 import { buildGraphQLUserContextHeaders } from '@/lib/graphql-envelope'
-import { buildIngressContextHeaders } from '@/lib/http-security-core'
+import { graphQLWorkloadForDocument } from '@/lib/graphql-ingress'
+import {
+	buildIngressContextHeadersV2
+} from '@/lib/http-security-core'
 
 export const executeAgentGraphQL: AgentGraphQLExecutor = async (
 	document,
@@ -22,8 +25,17 @@ export const executeAgentGraphQL: AgentGraphQLExecutor = async (
 	const subject = createHmac('sha256', secret)
 		.update(`rate-limit:agent:${session.user.id}`)
 		.digest('hex')
+	const workload = graphQLWorkloadForDocument({ query: document })
 	const headers = {
-		...buildIngressContextHeaders(subject, secret),
+		...buildIngressContextHeadersV2(
+			{
+				trafficClass: 'service',
+				subject,
+				abuseSubject: null,
+				workload
+			},
+			secret
+		),
 		...buildGraphQLUserContextHeaders(session.user, secret),
 		'X-Request-Id': requestId
 	}
