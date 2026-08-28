@@ -106,8 +106,12 @@ Before touching DNSPod NS or production records:
    SNI and Host `letletme.top`.
 3. Verify `/healthz`, homepage, RSC, static chunk, image, safe API POST, and a
    1-5 MB upload.
-4. Require `X-Letletme-Origin: vercel`,
+4. For runtime responses (`/healthz`, homepage, RSC, image, API, and upload),
+   require `X-Letletme-Origin: vercel`,
    `X-Letletme-Edge: cloudflare-fallback`, and the exact current release SHA.
+   For `/_next/static/*`, require `X-Letletme-Origin: vercel`, no
+   `X-Letletme-Release`, immutable cache headers, and a content hash matching
+   the direct Vercel asset.
 5. Verify spoofed internal headers cannot choose a client IP, and two source
    IPs do not share the same rate-limit identity.
 6. Verify dynamic responses never HIT and the second static request does HIT.

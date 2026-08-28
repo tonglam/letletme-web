@@ -87,3 +87,21 @@ test('does not manufacture trusted proxy headers without a valid Cloudflare IP',
 	assert.equal(forwarded.headers.has('x-letletme-proxy-client-ip'), false)
 	assert.equal(forwarded.headers.has('x-letletme-proxy-secret'), false)
 })
+
+test('removes mutable release metadata from static responses on the fallback path', async () => {
+	const response = await fetchVercel(
+		new Request('https://letletme.top/_next/static/chunks/app.js'),
+		env,
+		async () =>
+			new Response('static', {
+				headers: {
+					'Cache-Control': 'public, max-age=31536000, immutable',
+					'X-Letletme-Release': 'stale-release'
+				}
+			})
+	)
+
+	assert.equal(response.headers.get('x-letletme-origin'), 'vercel')
+	assert.equal(response.headers.get('x-letletme-release'), null)
+	assert.equal(response.headers.get('cache-control'), 'public, max-age=31536000, immutable')
+})
