@@ -174,6 +174,51 @@ describe('live competition board contract', () => {
 		assert.equal(parsed.viewerRow?.entry, 6953)
 	})
 
+	it('accepts a stale live score that is not comparable during refresh', () => {
+		const currentRow = page().rows[0]
+		const parsed = parseEntryLiveCompetitionBoardPage(
+			page({
+				rows: [
+					{
+						...currentRow,
+						score: {
+							...currentRow.score,
+							state: 'STALE',
+							reconciliation: 'NOT_COMPARABLE',
+							staleAt: '2026-08-23T10:01:30.000Z',
+							nextRefreshAt: null
+						}
+					}
+				]
+			})
+		)
+		assert.equal(parsed.rows[0]?.score.state, 'STALE')
+		assert.equal(parsed.rows[0]?.score.reconciliation, 'NOT_COMPARABLE')
+	})
+
+	it('still rejects not-comparable scores while marked fresh', () => {
+		const currentRow = page().rows[0]
+		assert.throws(
+			() =>
+				parseEntryLiveCompetitionBoardPage(
+					page({
+						rows: [
+							{
+								...currentRow,
+								score: {
+									...currentRow.score,
+									reconciliation: 'NOT_COMPARABLE'
+								}
+							}
+						]
+					})
+				),
+			(error: unknown) =>
+				error instanceof LiveBoardInvalidResponseError &&
+				error.missingFields.includes('rows[0].score.reconciliation')
+		)
+	})
+
 	it('rejects malformed success payloads with the stable contract error', () => {
 		assert.throws(
 			() =>
