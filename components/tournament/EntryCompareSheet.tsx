@@ -24,7 +24,7 @@ interface EntryCompareSheetProps {
 	gameweek: number
 	/** Optional live-board context supplied by the paginated standings table. */
 	tournamentId?: number
-	playerRevision?: string
+	scoreCoreRevision?: string
 	onRevisionGone?: () => Promise<void>
 	open: boolean
 	onOpenChange: (open: boolean) => void

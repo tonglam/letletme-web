@@ -59,7 +59,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 			<>
 				<LiveContractMarker
 					status="UNAVAILABLE"
-					revision={liveContext?.revision ?? 'unavailable'}
+					revision={liveContext?.scoreCoreRevision ?? 'unavailable'}
 					expected={0}
 					observed={0}
 				/>
@@ -78,7 +78,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 			<>
 				<LiveContractMarker
 					status="UNAVAILABLE"
-					revision={liveContext?.revision ?? 'unavailable'}
+					revision={liveContext?.scoreCoreRevision ?? 'unavailable'}
 					expected={0}
 					observed={0}
 				/>
@@ -107,7 +107,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 				executePublicServerQuery('gameweek', query, variables, options),
 			currentEventId,
 			{
-				revision: liveContext?.revision,
+				scoreCoreRevision: liveContext?.scoreCoreRevision,
 				includeFixturePlayers: false
 			}
 		)
@@ -147,12 +147,12 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 		: liveContext?.dataAvailability === 'UNAVAILABLE'
 			? 'UNAVAILABLE'
 			: liveContext?.stale ||
-				  liveContext?.dataAvailability === 'LAST_GOOD' ||
-				  liveContext?.dataAvailability === 'PARTIAL'
+				  liveContext?.dataAvailability === 'STALE' ||
+				  liveContext?.dataAvailability === 'DEGRADED'
 				? 'STALE'
 				: 'READY'
 	const markerRevision =
-		snapshot?.revision ?? liveContext?.revision ?? 'unavailable'
+		snapshot?.scoreCoreRevision ?? liveContext?.scoreCoreRevision ?? 'unavailable'
 	const markerObserved = matches.length
 
 	return (

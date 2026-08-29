@@ -140,15 +140,15 @@ function parsePostVariables(
 			typeof value.ref.season !== 'string' ||
 			value.ref.season.length === 0 ||
 			value.ref.eventId !== value.eventId ||
-			typeof value.ref.revision !== 'string' ||
-			value.ref.revision.length === 0
+			typeof value.ref.scoreCoreRevision !== 'string' ||
+			value.ref.scoreCoreRevision.length === 0
 		) {
 			return null
 		}
 		ref = {
 			season: value.ref.season,
 			eventId: value.ref.eventId as number,
-			revision: value.ref.revision
+			scoreCoreRevision: value.ref.scoreCoreRevision
 		}
 	}
 	const expectedBoardRevision = value.expectedBoardRevision ?? null
@@ -219,7 +219,7 @@ export async function POST(
 	} catch (error) {
 		const code = error instanceof GraphQLRequestError ? error.code : null
 		const status =
-			code === 'LIVE_BOARD_REVISION_GONE' || code === 'LIVE_REVISION_GONE'
+			code === 'LIVE_SCORE_REVISION_GONE'
 				? 409
 				: code === 'RATE_LIMITED' ||
 					  code === 'UPSTREAM_RATE_LIMITED' ||
@@ -271,13 +271,13 @@ export async function GET(
 	const tournamentId = Number((await context.params).id)
 	const params = new URL(request.url).searchParams
 	const eventId = Number(params.get('eventId'))
-	const revision = params.get('revision')
+	const scoreCoreRevision = params.get('scoreCoreRevision')
 	if (
 		!Number.isSafeInteger(tournamentId) ||
 		tournamentId <= 0 ||
 		!Number.isSafeInteger(eventId) ||
 		eventId <= 0 ||
-		!revision
+		!scoreCoreRevision
 	)
 		return NextResponse.json(
 			{ error: 'Invalid live competition parameters' },
@@ -292,16 +292,16 @@ export async function GET(
 					{ entryId, selectedTournamentId: tournamentId, ref },
 					{ cache: 'no-store', signal: request.signal, ...recoveryOptions }
 				),
-			{ season: String(getCurrentSeasonKey()), eventId, revision }
+				{ season: String(getCurrentSeasonKey()), eventId, scoreCoreRevision }
 		)
 		return NextResponse.json(data, {
 			headers: { 'Cache-Control': 'private, no-store' }
 		})
 	} catch (error) {
-		const status = String(error).includes('LIVE_REVISION_GONE') ? 409 : 502
+			const status = String(error).includes('LIVE_SCORE_REVISION_GONE') ? 409 : 502
 		return NextResponse.json(
 			{
-				error: status === 409 ? 'LIVE_REVISION_GONE' : 'Competition unavailable'
+					error: status === 409 ? 'LIVE_SCORE_REVISION_GONE' : 'Competition unavailable'
 			},
 			{ status, headers: { 'Cache-Control': 'private, no-store' } }
 		)

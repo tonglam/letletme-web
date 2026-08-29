@@ -132,7 +132,7 @@ export function LiveMatchesClient({
 			eventIds?: {
 				currentEventId?: number
 				nextEventId?: number | null
-				revision?: string | null
+				scoreCoreRevision?: string | null
 			}
 		) => {
 			if (isFetchInFlight.current) {
@@ -161,8 +161,8 @@ export function LiveMatchesClient({
 					eventIds?.currentEventId ?? resolvedCurrentEventId ?? null,
 					{
 						preferHttp: true,
-						revision:
-							eventIds?.revision ?? snapshotRef.current?.revision ?? null
+						scoreCoreRevision:
+							eventIds?.scoreCoreRevision ?? snapshotRef.current?.scoreCoreRevision ?? null
 					}
 				)
 				if (!mountedRef.current) return
@@ -252,13 +252,13 @@ export function LiveMatchesClient({
 					await fetchMatches(true, {
 						currentEventId: observedCurrentEventId,
 						nextEventId: observedNextEventId,
-						revision: observedSnapshot?.revision ?? null
+						scoreCoreRevision: observedSnapshot?.scoreCoreRevision ?? null
 					})
 					return
 				}
 				// Once the selected matchday is terminal, this heartbeat is only
 				// for discovering a new event identity. Do not reload the same
-				// finalized desk just because its checkedAt changed.
+				// finalized desk just because its source check time changed.
 				if (
 					shouldPollLiveMatchesTransition({
 						isPageActive,
@@ -276,7 +276,7 @@ export function LiveMatchesClient({
 					return
 				}
 				await fetchMatches(true, {
-					revision: observedSnapshot?.revision ?? null
+						scoreCoreRevision: observedSnapshot?.scoreCoreRevision ?? null
 				})
 			} catch (probeError) {
 				console.error('Failed to check live match freshness:', probeError)
@@ -394,7 +394,7 @@ export function LiveMatchesClient({
 		nextEventId: resolvedNextEventId,
 		snapshot
 	})
-	const lastUpdatedAt = snapshot?.checkedAt ?? null
+	const lastUpdatedAt = snapshot?.sourceCheckedAt ?? null
 	const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string | null>(null)
 	useEffect(() => {
 		if (!lastUpdatedAt) {

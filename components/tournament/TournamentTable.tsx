@@ -65,7 +65,7 @@ interface TournamentTableProps {
 		filteredEntries: number
 		isLoadingMore: boolean
 		onLoadMore: () => void
-		playerRevision: string
+		scoreCoreRevision: string
 		onRevisionGone?: () => Promise<void>
 	}
 }
@@ -693,7 +693,7 @@ export function TournamentTable({
 					tournamentId={
 						serverControl && tournamentId ? Number(tournamentId) : undefined
 					}
-					playerRevision={serverControl?.playerRevision}
+					scoreCoreRevision={serverControl?.scoreCoreRevision}
 					onRevisionGone={serverControl?.onRevisionGone}
 					open={isCompareOpen}
 					onOpenChange={setIsCompareOpen}

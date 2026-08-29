@@ -212,7 +212,7 @@ const loadHomeFixturesFromOrigin = async (
 				}
 				return {
 					season: desk.season,
-					revision: desk.revision,
+					revision: desk.scoreCoreRevision,
 					eventId: desk.eventId,
 					source: 'LIVE' as const,
 					state: liveStateToHomeState(desk.state),

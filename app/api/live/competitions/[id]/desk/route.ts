@@ -24,10 +24,10 @@ export async function GET(
 ) {
 	const url = new URL(request.url)
 	const eventValue = uniqueParam(url.searchParams, 'eventId')
-	const revision = uniqueParam(url.searchParams, 'revision')
+	const scoreCoreRevision = uniqueParam(url.searchParams, 'scoreCoreRevision')
 	if (
 		eventValue === undefined ||
-		revision === undefined ||
+		scoreCoreRevision === undefined ||
 		(eventValue !== null && !/^(?:[1-9]|[12]\d|3[0-8])$/.test(eventValue))
 	) {
 		return NextResponse.json(
@@ -69,9 +69,9 @@ export async function GET(
 					headers: { 'Cache-Control': 'private, no-store, no-transform' }
 				}
 			)
-		if (revision !== null && revision !== desk.revision) {
+		if (scoreCoreRevision !== null && scoreCoreRevision !== desk.live?.scoreCoreRevision) {
 			return NextResponse.json(
-				{ error: 'Revision mismatch.', revision: desk.revision },
+				{ error: 'Score revision mismatch.', scoreCoreRevision: desk.live?.scoreCoreRevision ?? null },
 				{
 					status: 409,
 					headers: { 'Cache-Control': 'private, no-store, no-transform' }

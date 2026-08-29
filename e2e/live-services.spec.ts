@@ -3,6 +3,64 @@ import AxeBuilder from '@axe-core/playwright'
 
 const graphqlFixtureUrl = 'http://127.0.0.1:4100/graphql'
 
+const liveRevisionVector = (revision: string) => ({
+	publicationId: `e2e-live-${revision.slice(0, 8)}`,
+	generation: 1,
+	lifecycle: revision,
+	fixtureIdentity: revision,
+	scoreCore: revision,
+	displayStats: revision,
+	explain: revision,
+	picksBase: revision,
+	officialAdjustment: null,
+	previousTotals: null,
+	finalResult: null,
+	rules: revision,
+	algorithm: 'live-points-v2-algorithm-1',
+	input: revision
+})
+
+const liveTimes = (
+	sourceCheckedAt = '2026-08-04T18:00:30.000Z',
+	publishedAt = '2026-08-04T18:00:00.000Z'
+) => ({
+	sourceCheckedAt,
+	contentUpdatedAt: publishedAt,
+	publishedAt,
+	checkpointedAt: null,
+	servedAt: sourceCheckedAt,
+	staleAt: sourceCheckedAt,
+	nextRefreshAt: '2026-08-04T18:01:00.000Z'
+})
+
+const liveDelivery = (state: 'FRESH' | 'UNAVAILABLE') => ({
+	state,
+	servedFrom: 'REDIS_CURRENT',
+	reasonCodes: []
+})
+
+const liveSnapshot = (revision = 'a'.repeat(64)) => ({
+	season: '2627',
+	eventId: 33,
+	state: 'LIVE_ACTIVE',
+	revisions: liveRevisionVector(revision),
+	times: liveTimes(),
+	delivery: liveDelivery('FRESH')
+})
+
+const liveScore = (eventPoints: number, revision: string) => ({
+	eventPoints,
+	netEventPoints: eventPoints,
+	totalPoints: 1234,
+	totalScope: 'OVERALL',
+	transferCost: 0,
+	source: 'FPL_EVENT_LIVE',
+	calculationMode: 'PROJECTED_AUTOSUBS',
+	revisions: liveRevisionVector(revision),
+	times: liveTimes(),
+	delivery: liveDelivery('FRESH')
+})
+
 // Let the browser continue to the deterministic fixture server.  Keeping the
 // response on the normal browser network path avoids coupling Playwright's
 // fake clock to a route handler that buffers a second request with route.fetch.
@@ -214,24 +272,30 @@ test('scheduled live points does not show a polling label and recovers manually'
 			}))
 			const recoveryResponse = {
 				data: {
-					liveSnapshot: {
-						eventId: 33,
-						revision: 'recovery-revision',
-						state: 'LIVE',
-						publishedAt: '2026-08-04T18:00:00.000Z',
-						checkedAt: '2026-08-04T18:00:30.000Z'
-					},
 					calcLivePointsByEntry: {
+						availability: 'READY',
+						delivery: liveDelivery('FRESH'),
+						snapshot: liveSnapshot('recovery-revision'),
 						entry: 999,
 						event: 33,
 						entryName: 'E2E United',
 						playerName: 'Test Manager',
 						chip: null,
-						livePoints: 22,
-						transferCost: 0,
-						liveNetPoints: 22,
-						liveTotalPoints: 1234,
+						score: liveScore(22, 'recovery-revision'),
+						rank: null,
+						provisional: true,
+						region: null,
+						startedEvent: 1,
+						value: 100,
+						bank: 0,
+						teamValue: 100,
+						totalTransfers: 0,
+						lastValue: 100,
+						playedCaptain: 1,
+						activeCaptain: { id: 1, name: 'Player 1', points: 6 },
 						captainName: 'Player 1',
+						played: 11,
+						toPlay: 0,
 						pickList
 					}
 				}
@@ -263,16 +327,19 @@ test('scheduled live points does not show a polling label and recovers manually'
 							nextEventId: 34,
 							anchorEventId: 33,
 							latestFinalizedEventId: 32,
-							revision: 'a'.repeat(24),
-							state: 'SCHEDULED',
-							windowState: 'EVENT_SCHEDULED',
+							scoreCoreRevision: 'a'.repeat(64),
+							state: 'PICKS_PROBE',
+							windowState: 'PRE_DEADLINE',
 							producerState: 'PICKS_PROBE',
 							anchorMode: 'CURRENT',
-							dataAvailability: 'SCHEDULED',
+							dataAvailability: 'UNAVAILABLE',
 							nextRefreshAt: '2026-08-04T18:35:00.000Z',
 							publishedAt: '2026-08-04T18:00:00.000Z',
-							checkedAt: '2026-08-04T18:00:30.000Z',
-							source: 'CORE',
+							sourceCheckedAt: '2026-08-04T18:00:30.000Z',
+							source: 'REDIS_CURRENT',
+							revisions: liveRevisionVector('a'.repeat(64)),
+							times: liveTimes(),
+							delivery: liveDelivery('UNAVAILABLE'),
 							stale: false
 						}
 					}
@@ -334,9 +401,21 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 			liveMatchdayDesk: {
 				season: '2627',
 				eventId: 33,
-				revision,
-				state: 'LIVE',
+				scoreCoreRevision: revision,
+				state: 'LIVE_ACTIVE',
+				windowState: 'LIVE_ACTIVE',
+				dataAvailability: 'FRESH',
+				sourceCheckedAt: '2026-08-04T18:30:30.000Z',
 				publishedAt: '2026-08-04T18:30:00.000Z',
+				source: 'REDIS_CURRENT',
+				stale: false,
+				nextRefreshAt: '2026-08-04T18:31:00.000Z',
+				revisions: liveRevisionVector(revision),
+				times: liveTimes(
+					'2026-08-04T18:30:30.000Z',
+					'2026-08-04T18:30:00.000Z'
+				),
+				delivery: liveDelivery('FRESH'),
 				matches: [
 					{
 						fixtureId: 101,
@@ -407,16 +486,22 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 							nextEventId: 34,
 							anchorEventId: 33,
 							latestFinalizedEventId: 32,
-							revision,
+							scoreCoreRevision: revision,
 							state: 'LIVE_ACTIVE',
 							windowState: 'LIVE_ACTIVE',
 							producerState: 'LIVE_ACTIVE',
 							anchorMode: 'CURRENT',
 							dataAvailability: 'FRESH',
 							nextRefreshAt: '2026-08-04T18:31:00.000Z',
-							checkedAt: '2026-08-04T18:30:30.000Z',
+							sourceCheckedAt: '2026-08-04T18:30:30.000Z',
 							publishedAt: '2026-08-04T18:30:00.000Z',
 							source: 'REDIS',
+							revisions: liveRevisionVector(revision),
+							times: liveTimes(
+								'2026-08-04T18:30:30.000Z',
+								'2026-08-04T18:30:00.000Z'
+							),
+							delivery: liveDelivery('FRESH'),
 							stale: false
 						}
 					}

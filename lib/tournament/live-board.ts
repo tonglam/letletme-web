@@ -63,6 +63,9 @@ const validDate = (value: unknown): value is string | null =>
 const nonEmptyString = (value: unknown): value is string =>
 	typeof value === 'string' && value.trim().length > 0
 
+const isStringArray = (value: unknown): value is string[] =>
+	Array.isArray(value) && value.every(item => typeof item === 'string')
+
 export class LiveBoardInvalidResponseError extends Error {
 	readonly code = 'LIVE_BOARD_INVALID_RESPONSE'
 	readonly missingFields: string[]
@@ -114,18 +117,12 @@ const validateScore = (
 		missing.push(path)
 		return
 	}
-	for (const field of [
-		'eventPoints',
-		'netEventPoints',
-		'totalPoints',
-		'overallRank',
-		'transferCost'
-	]) {
-		if (!isNullableNumber(value[field])) missing.push(`${path}.${field}`)
-	}
-	for (const field of ['source', 'state', 'eventPointSemantics']) {
-		if (typeof value[field] !== 'string') missing.push(`${path}.${field}`)
-	}
+	if (!isNonNegativeInteger(value.eventPoints)) missing.push(`${path}.eventPoints`)
+	if (!isNonNegativeInteger(value.netEventPoints)) missing.push(`${path}.netEventPoints`)
+	if (!isNullableNumber(value.totalPoints)) missing.push(`${path}.totalPoints`)
+	if (value.totalScope !== 'OVERALL' && value.totalScope !== 'UNKNOWN')
+		missing.push(`${path}.totalScope`)
+	if (!isNonNegativeInteger(value.transferCost)) missing.push(`${path}.transferCost`)
 	if (
 		value.source !== 'FPL_EVENT_LIVE' &&
 		value.source !== 'FPL_FINAL_RESULT' &&
@@ -133,111 +130,68 @@ const validateScore = (
 	)
 		missing.push(`${path}.source`)
 	if (
-		value.reconciliation !== 'MATCHED' &&
-		value.reconciliation !== 'NO_LINEUP' &&
-		value.reconciliation !== 'SOURCE_SKEW' &&
-		value.reconciliation !== 'NOT_COMPARABLE'
-	)
-		missing.push(`${path}.reconciliation`)
-	if (
 		value.calculationMode !== 'PROJECTED_AUTOSUBS' &&
-		value.calculationMode !== 'FINAL_RESULT' &&
-		value.calculationMode !== null
+		value.calculationMode !== 'FINAL_RESULT'
 	)
 		missing.push(`${path}.calculationMode`)
-	if (!validDate(value.checkedAt)) missing.push(`${path}.checkedAt`)
-	if (!validDate(value.nextRefreshAt)) missing.push(`${path}.nextRefreshAt`)
 
-	if (value.source === 'UNAVAILABLE') {
-		if (
-			value.calculationMode !== null ||
-			value.algorithmVersion !== null ||
-			value.revision !== null ||
-			value.checkedAt !== null ||
-			value.provenance !== null
-		)
-			missing.push(`${path}.unavailableTraceability`)
-		return
-	}
-
-	const expectedMode =
-		value.source === 'FPL_EVENT_LIVE' ? 'PROJECTED_AUTOSUBS' : 'FINAL_RESULT'
-	if (value.calculationMode !== expectedMode)
-		missing.push(`${path}.calculationMode`)
-	if (!nonEmptyString(value.revision)) missing.push(`${path}.revision`)
-	if (!validDate(value.checkedAt) || value.checkedAt === null)
-		missing.push(`${path}.checkedAt`)
-	if (
-		value.reconciliation !== 'MATCHED' &&
-		value.reconciliation !== 'NO_LINEUP'
-	)
-		missing.push(`${path}.reconciliation`)
-
-	if (!isRecord(value.provenance)) {
-		missing.push(`${path}.provenance`)
-		return
-	}
-	const provenance = value.provenance
-	if (provenance.scoreSource !== value.source)
-		missing.push(`${path}.provenance.scoreSource`)
-	if (provenance.calculationMode !== expectedMode)
-		missing.push(`${path}.provenance.calculationMode`)
-	if (!nonEmptyString(provenance.inputRevision))
-		missing.push(`${path}.provenance.inputRevision`)
-	if (!nonEmptyString(provenance.scoreRevision))
-		missing.push(`${path}.provenance.scoreRevision`)
-	if (!validDate(provenance.liveCheckedAt))
-		missing.push(`${path}.provenance.liveCheckedAt`)
-	if (!validDate(provenance.picksCheckedAt))
-		missing.push(`${path}.provenance.picksCheckedAt`)
-	if (!validDate(provenance.resultCheckedAt))
-		missing.push(`${path}.provenance.resultCheckedAt`)
-	if (!validDate(provenance.dataCheckedAt))
-		missing.push(`${path}.provenance.dataCheckedAt`)
-	if (!validDate(provenance.rankCheckedAt))
-		missing.push(`${path}.provenance.rankCheckedAt`)
-
-	if (expectedMode === 'PROJECTED_AUTOSUBS') {
-		if (value.algorithmVersion !== 'fpl-projected-autosubs-v1')
-			missing.push(`${path}.algorithmVersion`)
-		if (provenance.algorithmVersion !== 'fpl-projected-autosubs-v1')
-			missing.push(`${path}.provenance.algorithmVersion`)
-		for (const field of [
-			'livePublicationId',
-			'liveRevision',
-			'picksRevision',
-			'previousTotalsRevision'
-		]) {
-			if (!nonEmptyString(provenance[field]))
-				missing.push(`${path}.provenance.${field}`)
-		}
-		if (
-			provenance.resultRevision !== null ||
-			provenance.resultCheckedAt !== null ||
-			provenance.dataCheckedAt !== null
-		)
-			missing.push(`${path}.provenance.resultFields`)
+	if (!isRecord(value.revisions)) {
+		missing.push(`${path}.revisions`)
 	} else {
-		if (value.algorithmVersion !== null)
-			missing.push(`${path}.algorithmVersion`)
-		if (provenance.algorithmVersion !== null)
-			missing.push(`${path}.provenance.algorithmVersion`)
-		if (
-			provenance.livePublicationId !== null ||
-			provenance.liveRevision !== null ||
-			provenance.liveCheckedAt !== null ||
-			provenance.previousTotalsRevision !== null
-		)
-			missing.push(`${path}.provenance.liveFields`)
-		for (const field of ['picksRevision', 'resultRevision']) {
-			if (!nonEmptyString(provenance[field]))
-				missing.push(`${path}.provenance.${field}`)
+		for (const field of [
+			'publicationId',
+			'lifecycle',
+			'fixtureIdentity',
+			'scoreCore',
+			'displayStats',
+			'explain',
+			'rules',
+			'algorithm',
+			'input'
+		]) {
+			if (!nonEmptyString(value.revisions[field]))
+				missing.push(`${path}.revisions.${field}`)
 		}
-		if (
-			provenance.resultCheckedAt === null ||
-			provenance.dataCheckedAt === null
-		)
-			missing.push(`${path}.provenance.resultCheckedAt`)
+		if (!isNonNegativeInteger(value.revisions.generation))
+			missing.push(`${path}.revisions.generation`)
+		for (const field of [
+			'picksBase',
+			'officialAdjustment',
+			'previousTotals',
+			'finalResult'
+		]) {
+			if (!isNullableString(value.revisions[field]))
+				missing.push(`${path}.revisions.${field}`)
+		}
+	}
+
+	if (!isRecord(value.times)) {
+		missing.push(`${path}.times`)
+	} else {
+		for (const field of [
+			'sourceCheckedAt',
+			'contentUpdatedAt',
+			'publishedAt',
+			'servedAt',
+			'staleAt'
+		]) {
+			if (!validDate(value.times[field]) || value.times[field] === null)
+				missing.push(`${path}.times.${field}`)
+		}
+		for (const field of ['checkpointedAt', 'nextRefreshAt']) {
+			if (!validDate(value.times[field])) missing.push(`${path}.times.${field}`)
+		}
+	}
+
+	if (!isRecord(value.delivery)) {
+		missing.push(`${path}.delivery`)
+	} else {
+		if (!['FRESH', 'STALE', 'DEGRADED', 'FINAL', 'UNAVAILABLE'].includes(String(value.delivery.state)))
+			missing.push(`${path}.delivery.state`)
+		if (!['REDIS_CURRENT', 'REDIS_PREVIOUS', 'PROCESS_LKG', 'POSTGRES_CHECKPOINT', 'FINAL_RESULT'].includes(String(value.delivery.servedFrom)))
+			missing.push(`${path}.delivery.servedFrom`)
+		if (!isStringArray(value.delivery.reasonCodes))
+			missing.push(`${path}.delivery.reasonCodes`)
 	}
 }
 
@@ -254,10 +208,7 @@ const validateRow = (
 		'entry',
 		'rank',
 		'overallRank',
-		'livePoints',
 		'transferCost',
-		'liveNetPoints',
-		'liveTotalPoints',
 		'played',
 		'toPlay',
 		'captainId',
@@ -298,14 +249,14 @@ export function parseEntryLiveCompetitionBoardPage(
 	for (const field of [
 		'season',
 		'boardRevision',
-		'playerRevision',
 		'dataAvailability'
 	]) {
 		if (typeof root[field] !== 'string' || root[field].length === 0)
 			missing.push(field)
 	}
-	for (const field of ['managerDataAvailability', 'managerServedFrom']) {
-		if (typeof root[field] !== 'string') missing.push(field)
+	if (!isNullableString(root.scoreCoreRevision)) missing.push('scoreCoreRevision')
+	for (const field of ['revisions', 'times', 'delivery']) {
+		if (!isRecord(root[field])) missing.push(field)
 	}
 	if (
 		root.coverageState !== 'WARMING' &&
@@ -324,13 +275,31 @@ export function parseEntryLiveCompetitionBoardPage(
 	]) {
 		if (!isNonNegativeInteger(root[field])) missing.push(field)
 	}
-	for (const field of ['partial', 'hasMore', 'managerRefreshQueued']) {
+	for (const field of ['partial', 'hasMore']) {
 		if (typeof root[field] !== 'boolean') missing.push(field)
 	}
-	if (!isNullableString(root.managerRevision)) missing.push('managerRevision')
-	if (!validDate(root.managerCheckedAt)) missing.push('managerCheckedAt')
-	if (!validDate(root.managerNextRefreshAt))
-		missing.push('managerNextRefreshAt')
+	if (isRecord(root.times)) {
+		for (const field of ['sourceCheckedAt', 'contentUpdatedAt', 'publishedAt', 'servedAt', 'staleAt']) {
+			if (!validDate(root.times[field]) || root.times[field] === null) missing.push(`times.${field}`)
+		}
+		for (const field of ['checkpointedAt', 'nextRefreshAt']) {
+			if (!validDate(root.times[field])) missing.push(`times.${field}`)
+		}
+	}
+	if (isRecord(root.delivery)) {
+		if (!['FRESH', 'STALE', 'DEGRADED', 'FINAL', 'UNAVAILABLE'].includes(String(root.delivery.state))) missing.push('delivery.state')
+		if (!['REDIS_CURRENT', 'REDIS_PREVIOUS', 'PROCESS_LKG', 'POSTGRES_CHECKPOINT', 'FINAL_RESULT'].includes(String(root.delivery.servedFrom))) missing.push('delivery.servedFrom')
+		if (!isStringArray(root.delivery.reasonCodes)) missing.push('delivery.reasonCodes')
+	}
+	if (isRecord(root.revisions)) {
+		for (const field of ['publicationId', 'lifecycle', 'fixtureIdentity', 'scoreCore', 'displayStats', 'explain', 'rules', 'algorithm', 'input']) {
+			if (!nonEmptyString(root.revisions[field])) missing.push(`revisions.${field}`)
+		}
+		if (!isNonNegativeInteger(root.revisions.generation)) missing.push('revisions.generation')
+		for (const field of ['picksBase', 'officialAdjustment', 'previousTotals', 'finalResult']) {
+			if (!isNullableString(root.revisions[field])) missing.push(`revisions.${field}`)
+		}
+	}
 	if (
 		typeof root.officialCoverage !== 'number' ||
 		!Number.isFinite(root.officialCoverage) ||
@@ -368,25 +337,6 @@ export const isCurrentLiveBoardRequest = (
 export const shouldAutoRefreshLiveBoardPage = (page: number | null): boolean =>
 	page === 1
 
-export const shouldRefreshLiveBoardManagerCoverage = (
-	page: Pick<
-		EntryLiveCompetitionBoardPage,
-		| 'page'
-		| 'managerRefreshQueued'
-		| 'deferredEntryCount'
-		| 'coverageState'
-		| 'managerDataAvailability'
-	> | null
-): boolean =>
-	Boolean(
-		page &&
-		page.page === 1 &&
-		(page.managerRefreshQueued ||
-			page.deferredEntryCount > 0 ||
-			page.coverageState === 'WARMING' ||
-			page.managerDataAvailability === 'PARTIAL')
-	)
-
 export const canLoadMoreLiveBoard = (input: {
 	hasMore: boolean
 	isLoadingMore: boolean
@@ -405,7 +355,7 @@ export const canStartLiveBoardRefresh = (input: {
 
 export type LiveBoardFreshnessMarker = {
 	eventId: number
-	revision: string | null
+	scoreCoreRevision: string | null
 }
 
 export const liveBoardPublicationChanged = (
@@ -415,7 +365,8 @@ export const liveBoardPublicationChanged = (
 	!observed ||
 	!accepted ||
 	accepted.eventId !== observed.eventId ||
-	(accepted.revision !== observed.revision && observed.revision !== null)
+	(accepted.scoreCoreRevision !== observed.scoreCoreRevision &&
+		observed.scoreCoreRevision !== null)
 
 export const shouldSyncLiveBoardSearchInput = (
 	requestedInput: string,
@@ -423,7 +374,7 @@ export const shouldSyncLiveBoardSearchInput = (
 ): boolean => requestedInput === currentInput
 
 export const isLiveBoardRevisionGoneCode = (code: string): boolean =>
-	code === 'LIVE_BOARD_REVISION_GONE' || code === 'LIVE_REVISION_GONE'
+	code === 'LIVE_SCORE_REVISION_GONE'
 
 export const resolveAnchoredGameweek = (input: {
 	nextEvent: number
@@ -475,11 +426,8 @@ const liveBoardHasUsableLastGoodRows = (
 	const visibleRows = page.viewerRow
 		? [...page.rows, page.viewerRow]
 		: page.rows
-	if (page.dataAvailability === 'SCHEDULED') return visibleRows.length > 0
-	if (
-		page.managerDataAvailability === 'UNAVAILABLE' ||
-		page.officialCoverage <= 0
-	)
+	if (page.dataAvailability === 'UNAVAILABLE') return visibleRows.length > 0
+	if (page.delivery.state === 'UNAVAILABLE' || page.officialCoverage <= 0)
 		return false
 	return visibleRows.some(
 		row =>
@@ -608,7 +556,7 @@ export const boardRowToTournamentEntry = (
 	gwPoints: row.score.eventPoints,
 	gwNetPoints: row.score.netEventPoints,
 	eventCost: row.score.transferCost,
-	overallRank: row.score.overallRank ?? row.overallRank,
+		overallRank: row.overallRank,
 	livePoints: row.score.eventPoints,
 	totalPoints:
 		row.score.totalScope === 'OVERALL' ? row.score.totalPoints : null,
@@ -617,7 +565,9 @@ export const boardRowToTournamentEntry = (
 	teamValue: row.teamValue,
 	picks: [],
 	chips: chipFlags(row.chip),
-	stale: row.score.state === 'STALE'
+		stale:
+			row.score.delivery.state === 'STALE' ||
+			row.score.delivery.state === 'DEGRADED'
 })
 
 const sleep = (milliseconds: number): Promise<void> =>
@@ -650,9 +600,10 @@ export async function fetchEntryLiveCompetitionBoard(
 					method: 'POST',
 					cache: 'no-store',
 					credentials: 'include',
-					headers: {
-						'Content-Type': 'application/json',
-						Accept: 'application/json'
+						headers: {
+							'Content-Type': 'application/json',
+							Accept: 'application/json',
+							'X-LetLetMe-Contract': 'live-points-v2'
 					},
 					body: JSON.stringify(variables),
 					signal: options.signal

@@ -27,7 +27,7 @@ import { useEffect, useMemo, useState } from 'react'
 type Props = {
 	tournamentId: number
 	eventId: number
-	playerRevision: string
+	scoreCoreRevision: string
 	value: LiveBoardFilterState
 	disabled?: boolean
 	onApply: (next: LiveBoardFilterState) => Promise<boolean>
@@ -81,7 +81,7 @@ const cloneFilters = (value: LiveBoardFilterState): LiveBoardFilterState => ({
 export function LiveCompetitionBoardFilters({
 	tournamentId,
 	eventId,
-	playerRevision,
+	scoreCoreRevision,
 	value,
 	disabled,
 	onApply,
@@ -111,7 +111,7 @@ export function LiveCompetitionBoardFilters({
 		setLoadError(false)
 		const params = new URLSearchParams({
 			eventId: String(eventId),
-			revision: playerRevision
+			revision: scoreCoreRevision
 		})
 		void fetch(
 			`/api/live/competitions/${tournamentId}/selection-index?${params.toString()}`,
@@ -145,8 +145,7 @@ export function LiveCompetitionBoardFilters({
 				const requestError = error as { code?: string; status?: number }
 				if (
 					requestError.status === 409 ||
-					requestError.code === 'LIVE_BOARD_REVISION_GONE' ||
-					requestError.code === 'LIVE_REVISION_GONE'
+					requestError.code === 'LIVE_SCORE_REVISION_GONE'
 				) {
 					setRows([])
 					setLoadError(false)
@@ -162,7 +161,7 @@ export function LiveCompetitionBoardFilters({
 				if (!controller.signal.aborted) setLoading(false)
 			})
 		return () => controller.abort()
-	}, [eventId, onRevisionGone, playerRevision, tournamentId])
+	}, [eventId, onRevisionGone, scoreCoreRevision, tournamentId])
 
 	const selectedOwnerIds = new Set(draft.ownership?.playerIds ?? [])
 	const selectedCaptainIds = new Set(draft.captainPlayerIds)

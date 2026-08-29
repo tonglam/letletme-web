@@ -37,10 +37,10 @@ export interface LiveMatchdayDeskPayload extends LiveMatchdayDeskResponse {
 	fixturePlayers?: LiveFixturePlayersData[]
 }
 
-type LiveRef = { season: string; eventId: number; revision: string }
+	type LiveRef = { season: string; eventId: number; scoreCoreRevision: string }
 
 export type LiveFixturePlayerFailureCode =
-	| 'LIVE_REVISION_GONE'
+	| 'LIVE_SCORE_REVISION_GONE'
 	| 'LIVE_PUBLICATION_UNAVAILABLE'
 	| 'RATE_LIMITED'
 	| 'UNAUTHENTICATED'
@@ -65,21 +65,20 @@ const FIXTURE_PLAYER_BATCH_SIZE = 5
 const FIXTURE_PLAYER_BATCH_CONCURRENCY = 2
 
 const REVISION_RECOVERY_OPTIONS = {
-	handledErrorCodes: ['LIVE_REVISION_GONE']
+	handledErrorCodes: ['LIVE_SCORE_REVISION_GONE']
 } as const
 
 const isSettledDesk = (
 	desk: LiveMatchdayDeskResponse['liveMatchdayDesk']
 ): boolean =>
-	desk.state === 'SETTLED' &&
+	desk.state === 'FINALIZED' &&
 	(desk.windowState === 'FINALIZED' || desk.dataAvailability === 'FINAL')
 
 const hasCoherentLiveRevision = (
 	desk: LiveMatchdayDeskResponse['liveMatchdayDesk']
 ): boolean =>
-	(desk.source === 'REDIS' || desk.source === 'POSTGRES') &&
-	Boolean(desk.liveRevision) &&
-	desk.revision === desk.liveRevision
+	Boolean(desk.scoreCoreRevision) &&
+	desk.revisions.scoreCore === desk.scoreCoreRevision
 
 export function getPreferredLiveMatchesTab(
 	matches: readonly Match[]
@@ -127,7 +126,7 @@ export const liveFixturePlayerFailureCode = (
 ): LiveFixturePlayerFailureCode => {
 	const code = errorCode(error)
 	if (
-		code === 'LIVE_REVISION_GONE' ||
+		code === 'LIVE_SCORE_REVISION_GONE' ||
 		code === 'LIVE_PUBLICATION_UNAVAILABLE' ||
 		code === 'RATE_LIMITED' ||
 		code === 'UNAUTHENTICATED' ||
@@ -147,7 +146,7 @@ export const liveFixturePlayerFailureCode = (
 		return 'REQUEST_CANCELLED'
 	const message =
 		error instanceof Error || typeof error === 'string' ? String(error) : ''
-	if (message.includes('LIVE_REVISION_GONE')) return 'LIVE_REVISION_GONE'
+	if (message.includes('LIVE_SCORE_REVISION_GONE')) return 'LIVE_SCORE_REVISION_GONE'
 	if (message.includes('LIVE_PUBLICATION_UNAVAILABLE'))
 		return 'LIVE_PUBLICATION_UNAVAILABLE'
 	return 'DETAIL_UNAVAILABLE'
@@ -167,8 +166,8 @@ const fixturePlayerBatchCanFallback = (error: unknown): boolean => {
 	return code !== null && RECOVERABLE_FIXTURE_PLAYER_BATCH_CODES.has(code)
 }
 
-const liveRevisionGone = (error: unknown): boolean =>
-	liveFixturePlayerFailureCode(error) === 'LIVE_REVISION_GONE'
+const liveScoreRevisionGone = (error: unknown): boolean =>
+	liveFixturePlayerFailureCode(error) === 'LIVE_SCORE_REVISION_GONE'
 
 const isExpectedFixtureDetail = (
 	detail: LiveFixturePlayersData | null | undefined,
@@ -177,7 +176,7 @@ const isExpectedFixtureDetail = (
 ): detail is LiveFixturePlayersData =>
 	detail?.season === ref.season &&
 	detail.eventId === ref.eventId &&
-	detail.revision === ref.revision &&
+	detail.scoreCoreRevision === ref.scoreCoreRevision &&
 	detail.fixtureId === fixtureId
 
 const mapFixturePlayer = (row: LiveFixturePerformance): PlayerStat | null => {
@@ -258,11 +257,11 @@ async function loadPublicationFixturePlayers(
 	fixtureIds: number[],
 	onFailure?: (failure: LiveFixturePlayerLoadFailure) => void
 ): Promise<LiveFixturePlayersData[]> {
-	if (!desk.liveRevision || fixtureIds.length === 0) return []
+	if (!desk.scoreCoreRevision || fixtureIds.length === 0) return []
 	const ref: LiveRef = {
 		season: desk.season,
 		eventId: desk.eventId,
-		revision: desk.liveRevision
+		scoreCoreRevision: desk.scoreCoreRevision
 	}
 	const batches = Array.from(
 		{ length: Math.ceil(fixtureIds.length / FIXTURE_PLAYER_BATCH_SIZE) },
@@ -296,7 +295,7 @@ async function loadPublicationFixturePlayers(
 				{ cache: 'no-store', signal: loadAbortController.signal }
 			)
 			if (isExpectedFixtureDetail(response.liveFixturePlayers, ref, fixtureId)) {
-				return { ...response.liveFixturePlayers, source: 'LIVE_PUBLICATION' }
+				return response.liveFixturePlayers
 			}
 			reportFailure('fixture', [fixtureId], 'DETAIL_UNAVAILABLE')
 			return null
@@ -358,7 +357,7 @@ async function loadPublicationFixturePlayers(
 			const detail =
 				response[`fixture${index}` as keyof LiveFixturePlayersBatchResponse]
 			if (isExpectedFixtureDetail(detail, ref, fixtureId)) {
-				details.push({ ...detail, source: 'LIVE_PUBLICATION' })
+				details.push(detail)
 			} else {
 				missingFixtureIds.push(fixtureId)
 			}
@@ -435,8 +434,7 @@ async function loadDurableFixturePlayers(
 		.map(match => ({
 			season: desk.season,
 			eventId: desk.eventId,
-			revision: null,
-			source: 'DURABLE_DB' as const,
+			scoreCoreRevision: desk.scoreCoreRevision,
 			fixtureId: match.fixtureId,
 			players: performances.filter(performance => {
 				const teamId = performance.player?.team?.id
@@ -503,7 +501,7 @@ export async function loadLiveMatchdayDesk(
 	try {
 		desk = await queryDesk(ref, ref ? REVISION_RECOVERY_OPTIONS : undefined)
 	} catch (error) {
-		if (!ref || !liveRevisionGone(error)) throw error
+		if (!ref || !liveScoreRevisionGone(error)) throw error
 		desk = await queryDesk(null)
 		recoveredRevision = true
 	}
@@ -524,7 +522,7 @@ export async function loadLiveMatchdayDesk(
 	try {
 		return await withOptionalFixturePlayers(desk)
 	} catch (error) {
-		if (!recoveredRevision && liveRevisionGone(error)) {
+		if (!recoveredRevision && liveScoreRevisionGone(error)) {
 			const refreshed = await queryDesk(null)
 			try {
 				return await withOptionalFixturePlayers(refreshed)
@@ -562,7 +560,7 @@ export function transformLiveMatches(
 		homeTeam: {
 			id: row.homeTeamId,
 			name: row.homeTeamName,
-			shortName: row.homeTeamShortName || getTeamShortName(row.homeTeamName),
+			shortName: getTeamShortName(row.homeTeamName),
 			score: row.homeScore ?? 0,
 			possession: 0,
 			shots: 0,
@@ -573,7 +571,7 @@ export function transformLiveMatches(
 		awayTeam: {
 			id: row.awayTeamId,
 			name: row.awayTeamName,
-			shortName: row.awayTeamShortName || getTeamShortName(row.awayTeamName),
+			shortName: getTeamShortName(row.awayTeamName),
 			score: row.awayScore ?? 0,
 			possession: 0,
 			shots: 0,
@@ -595,64 +593,6 @@ export function transformLiveMatches(
 	return mergeLiveFixturePlayers(matches, fixturePlayers)
 }
 
-export function transformUpcomingFixtures(
-	fixtures: ReadonlyArray<
-		| LiveMatchdayDeskRow
-		| {
-				id: number
-				homeTeam: { name: string; shortName: string }
-				awayTeam: { name: string; shortName: string }
-				homeScore: number | null
-				awayScore: number | null
-				kickoffTime: string
-				minutes?: number
-		  }
-	>
-): Match[] {
-	return fixtures.map(fixture => ({
-		id: `next-${'fixtureId' in fixture ? fixture.fixtureId : fixture.id}`,
-		eventId: 'eventId' in fixture ? fixture.eventId : undefined,
-		homeTeam: {
-			name:
-				'homeTeamName' in fixture
-					? fixture.homeTeamName
-					: fixture.homeTeam.name,
-			shortName:
-				'homeTeamName' in fixture
-					? fixture.homeTeamShortName || getTeamShortName(fixture.homeTeamName)
-					: fixture.homeTeam.shortName ||
-						getTeamShortName(fixture.homeTeam.name),
-			score: fixture.homeScore ?? 0,
-			possession: 0,
-			shots: 0,
-			shotsOnTarget: 0,
-			corners: 0,
-			players: []
-		},
-		awayTeam: {
-			name:
-				'awayTeamName' in fixture
-					? fixture.awayTeamName
-					: fixture.awayTeam.name,
-			shortName:
-				'awayTeamName' in fixture
-					? fixture.awayTeamShortName || getTeamShortName(fixture.awayTeamName)
-					: fixture.awayTeam.shortName ||
-						getTeamShortName(fixture.awayTeam.name),
-			score: fixture.awayScore ?? 0,
-			possession: 0,
-			shots: 0,
-			shotsOnTarget: 0,
-			corners: 0,
-			players: []
-		},
-		status: 'UPCOMING',
-		minute: fixture.minutes ?? 0,
-		kickoff: fixture.kickoffTime ?? '',
-		viewers: 0
-	}))
-}
-
 export interface LiveMatchesSnapshot {
 	matches: Match[]
 	snapshot: LiveSnapshotStatus | null
@@ -664,9 +604,9 @@ export interface LiveMatchesSnapshot {
 }
 
 export interface LiveMatchesLoadOptions {
-	/** Browser refreshes use the cacheable revision-aware GET route. */
+	/** Browser refreshes use the V2 score-core revision-aware GET route. */
 	preferHttp?: boolean
-	revision?: string | null
+	scoreCoreRevision?: string | null
 	/** Initial RSC can defer the large player section to the browser refresh. */
 	includeFixturePlayers?: boolean
 	signal?: AbortSignal
@@ -684,11 +624,11 @@ export async function getLiveMatchesSnapshot(
 	options: LiveMatchesLoadOptions = {}
 ): Promise<LiveMatchesSnapshot> {
 	let desk: LiveMatchdayDeskPayload
-	if (options.preferHttp && currentEventId && options.revision) {
+	if (options.preferHttp && currentEventId && options.scoreCoreRevision) {
 		const params = new URLSearchParams({
 			season: String(getCurrentSeasonKey()),
 			eventId: String(currentEventId),
-			revision: options.revision,
+				scoreCoreRevision: options.scoreCoreRevision,
 			includePlayers: options.includeFixturePlayers === false ? '0' : '1'
 		})
 		const response = await fetch(`/api/live/matches?${params.toString()}`, {
@@ -700,11 +640,11 @@ export async function getLiveMatchesSnapshot(
 		desk = (await response.json()) as LiveMatchdayDeskPayload
 	} else {
 		const ref =
-			currentEventId && options.revision
+				currentEventId && options.scoreCoreRevision
 				? {
 						season: String(getCurrentSeasonKey()),
 						eventId: currentEventId,
-						revision: options.revision
+						scoreCoreRevision: options.scoreCoreRevision
 					}
 				: null
 		desk = await loadLiveMatchdayDesk(executor, ref, {
@@ -715,14 +655,16 @@ export async function getLiveMatchesSnapshot(
 	const snapshot = desk.liveMatchdayDesk
 		? {
 				eventId: desk.liveMatchdayDesk.eventId,
-				revision: hasCoherentLiveRevision(desk.liveMatchdayDesk)
-					? desk.liveMatchdayDesk.liveRevision
-					: null,
+					scoreCoreRevision: hasCoherentLiveRevision(desk.liveMatchdayDesk)
+						? desk.liveMatchdayDesk.scoreCoreRevision
+						: null,
 				state: desk.liveMatchdayDesk.windowState ?? desk.liveMatchdayDesk.state,
 				publishedAt: hasCoherentLiveRevision(desk.liveMatchdayDesk)
 					? desk.liveMatchdayDesk.publishedAt
 					: null,
-				checkedAt: desk.liveMatchdayDesk.sourceCheckedAt ?? null,
+					revisions: desk.liveMatchdayDesk.revisions,
+					times: desk.liveMatchdayDesk.times,
+					delivery: desk.liveMatchdayDesk.delivery,
 				windowState: desk.liveMatchdayDesk.windowState,
 				dataAvailability: desk.liveMatchdayDesk.dataAvailability,
 				nextRefreshAt: desk.liveMatchdayDesk.nextRefreshAt
@@ -734,7 +676,6 @@ export async function getLiveMatchesSnapshot(
 				desk.liveMatchdayDesk?.matches ?? [],
 				desk.fixturePlayers ?? []
 			),
-			...transformUpcomingFixtures(desk.liveMatchdayDesk?.nextFixtures ?? [])
 		],
 		snapshot,
 		currentEventId: current,

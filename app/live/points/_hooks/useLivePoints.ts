@@ -245,6 +245,10 @@ export function useLivePoints({
 					if (requestId !== requestIdRef.current) return
 
 					if (live.pickList.length === 0) {
+						const retainedLive =
+							latestLiveDataRef.current?.requestKey === requestKey
+								? latestLiveDataRef.current.live
+								: undefined
 						const payloadState = resolveLivePointsPayloadState(live)
 						const retryState = liveDataRetryRef.current ?? {
 							requestKey,
@@ -255,6 +259,29 @@ export function useLivePoints({
 							payloadState === 'PENDING_SYNC'
 								? LIVE_DATA_RETRY_DELAYS_MS[retryState.attempt]
 								: undefined
+
+						// A same-entry refresh may temporarily return PENDING or
+						// UNAVAILABLE while the producer is repairing its input. Keep
+						// the last complete event response painted; an empty response
+						// is never allowed to erase a valid pitch.
+						if (retainedLive) {
+							setLiveData(retainedLive)
+							setStartingPlayers(current =>
+								current.length > 0
+									? current
+									: mapLiveDataToPlayers(retainedLive, new Map()).filter(
+											player => !player.isBench
+										)
+							)
+							setBenchPlayers(current =>
+								current.length > 0
+									? current
+									: mapLiveDataToPlayers(retainedLive, new Map()).filter(
+											player => player.isBench
+										)
+							)
+							setError(undefined)
+						}
 
 						if (retryDelay !== undefined) {
 							retryState.attempt += 1
@@ -268,6 +295,13 @@ export function useLivePoints({
 							return
 						}
 
+						if (retainedLive) {
+							liveDataRetryRef.current = null
+							retryingRequestIdRef.current = null
+							setIsRefreshing(false)
+							return
+						}
+
 						// Do not paint an empty pitch after the bounded sync window.
 						// Keep the page in its explicit no-data state instead.
 						liveDataRetryRef.current = null
@@ -277,11 +311,7 @@ export function useLivePoints({
 						setStartingPlayers([])
 						setBenchPlayers([])
 						acceptSnapshot(live.snapshot ?? null)
-						setError(
-							payloadState === 'LINEUP_UNAVAILABLE'
-								? t('lineupUnavailable')
-								: undefined
-						)
+						setError(undefined)
 						return
 					}
 
@@ -295,7 +325,7 @@ export function useLivePoints({
 					hasLoadedLiveDataRef.current = true
 					latestLiveDataRef.current = { requestKey, live }
 					setLiveData(live)
-					acceptSnapshot(liveResponse.calcLivePointsByEntry.snapshot ?? null)
+					acceptSnapshot(liveResponse.calcLivePointsByEntry.snapshot)
 					setStartingPlayers(allPlayers.filter(player => !player.isBench))
 					setBenchPlayers(allPlayers.filter(player => player.isBench))
 					void enrichLivePointBreakdowns(requestId, eventId, live, requestKey)
@@ -405,14 +435,7 @@ export function useLivePoints({
 			}
 			const observedSnapshot = liveContextToSnapshot(probe.liveContext)
 			const latestLive = latestLiveDataRef.current
-			const managerScoreDue = Boolean(
-				latestLive?.live.score?.nextRefreshAt &&
-				Date.parse(latestLive.live.score.nextRefreshAt) <= Date.now()
-			)
-			if (
-				!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot) &&
-				!managerScoreDue
-			) {
+			if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
 				acceptSnapshot(observedSnapshot)
 				setError(undefined)
 				if (
@@ -447,10 +470,16 @@ export function useLivePoints({
 		const initialSnapshotKey = initialSnapshot
 			? [
 					initialSnapshot.eventId,
-					initialSnapshot.revision,
+					initialSnapshot.scoreCoreRevision ??
+						initialSnapshot.revisions?.scoreCore ??
+						'',
 					initialSnapshot.state,
-					initialSnapshot.publishedAt,
-					initialSnapshot.checkedAt
+					initialSnapshot.publishedAt ??
+						initialSnapshot.times?.publishedAt ??
+						'',
+					initialSnapshot.sourceCheckedAt ??
+						initialSnapshot.times?.sourceCheckedAt ??
+						''
 				].join(':')
 			: ''
 		const seedKey = [
@@ -458,7 +487,7 @@ export function useLivePoints({
 			initialEventId,
 			initialSelectedGameweek ?? '',
 			initialLiveData?.event ?? '',
-			initialLiveData?.score?.revision ?? '',
+			initialLiveData?.score?.revisions.input ?? '',
 			initialSnapshotKey
 		].join(':')
 
@@ -557,7 +586,7 @@ export function useLivePoints({
 	useEffect(() => {
 		if (
 			!isPageActive ||
-			snapshot?.state !== 'SETTLED' ||
+			snapshot?.state !== 'FINALIZED' ||
 			selectedGameweek === undefined ||
 			snapshot.eventId !== selectedGameweek
 		) {
@@ -594,7 +623,7 @@ export function useLivePoints({
 		isPageActive,
 		selectedGameweek,
 		snapshot?.eventId,
-		snapshot?.revision,
+		snapshot?.scoreCoreRevision ?? snapshot?.revisions?.scoreCore,
 		snapshot?.state
 	])
 
@@ -603,9 +632,7 @@ export function useLivePoints({
 		currentEventId: currentGameweek,
 		selectedEventId: selectedGameweek,
 		snapshot,
-		managerScoreState: liveData?.score?.state,
-		managerNextRefreshAt: liveData?.score?.nextRefreshAt,
-		windowState: snapshot?.windowState ?? snapshot?.state,
+		windowState: snapshot?.state,
 		nextRefreshAt: snapshot?.nextRefreshAt
 	})
 

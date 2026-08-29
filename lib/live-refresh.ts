@@ -11,12 +11,12 @@ export const LIVE_EXPLAIN_REFRESH_INTERVAL_MS = 10 * 60 * 1000
 
 export function isLiveRefreshTerminalState(state?: string | null): boolean {
 	return (
-		state === 'SETTLED' ||
 		state === 'FINAL' ||
 		state === 'GW_REVIEW' ||
 		state === 'FINALIZED' ||
 		state === 'BETWEEN_GAMEWEEKS' ||
 		state === 'OFFSEASON'
+		|| state === 'DAY_SETTLING'
 	)
 }
 
@@ -49,13 +49,12 @@ export function liveContextToSnapshot(
 		return null
 	}
 	return {
+		season: context.season,
 		eventId: context.anchorEventId,
-		revision: context.revision,
+		scoreCoreRevision: context.scoreCoreRevision,
 		state: context.windowState,
 		publishedAt: context.publishedAt ?? null,
-		checkedAt: context.checkedAt ?? null,
-		windowState: context.windowState,
-		dataAvailability: context.dataAvailability,
+		sourceCheckedAt: context.sourceCheckedAt ?? null,
 		nextRefreshAt: context.nextRefreshAt
 	}
 }
@@ -65,8 +64,6 @@ export function shouldPollLiveSnapshot({
 	currentEventId,
 	selectedEventId,
 	snapshot,
-	managerScoreState,
-	managerNextRefreshAt,
 	windowState,
 	nextRefreshAt
 }: {
@@ -74,28 +71,18 @@ export function shouldPollLiveSnapshot({
 	currentEventId?: number
 	selectedEventId?: number
 	snapshot?: LiveSnapshotStatus | null
-	/** Official manager score may refresh after the player snapshot settles. */
-	managerScoreState?: string | null
-	managerNextRefreshAt?: string | null
 	windowState?: string | null
 	nextRefreshAt?: string | null
 }): boolean {
 	if (!isPageActive || !currentEventId || selectedEventId !== currentEventId) {
 		return false
 	}
-	// The player snapshot can settle before the official manager score. Keep the
-	// score refresh alive during that bounded settling window, even if the live
-	// window itself already reports a terminal state.
-	if (managerScoreState === 'SETTLING') {
-		return Boolean(snapshot && snapshot.eventId === selectedEventId)
-	}
 	// Once the gameweek has moved into review/finalization or the gap between
-	// gameweeks, the selected entry is durable data. Do not let a stale
-	// nextRefreshAt or manager score deadline re-arm the live countdown.
+	// gameweeks, the selected publication is durable data. Do not let a stale
+	// nextRefreshAt re-arm the live countdown.
 	if (
 		isLiveRefreshTerminalState(snapshot?.state) ||
-		isLiveRefreshTerminalState(windowState) ||
-		isLiveRefreshTerminalState(managerScoreState)
+		isLiveRefreshTerminalState(windowState)
 	) {
 		return false
 	}
@@ -103,15 +90,13 @@ export function shouldPollLiveSnapshot({
 	// confirmed as live. Do not turn uncertainty into a background refresh loop;
 	// the user can still request a fresh snapshot with the manual button.
 	if (!snapshot || snapshot.eventId !== selectedEventId) return false
-	// Keep the normal countdown armed for both due and future official manager
+	// Keep the normal countdown armed for both due and future publication
 	// refreshes. React will not re-evaluate this predicate merely because time
 	// passed, so disabling it for a future deadline would leave stale scores
 	// stuck until a manual refresh.
-	if (managerNextRefreshAt && Number.isFinite(Date.parse(managerNextRefreshAt)))
-		return true
 	if (nextRefreshAt && Number.isFinite(Date.parse(nextRefreshAt))) return true
 
-	return snapshot.state !== 'SETTLED'
+	return !isLiveRefreshTerminalState(snapshot.state)
 }
 
 export function shouldRefreshLiveExplain(
@@ -128,8 +113,7 @@ export function liveSnapshotNeedsRefresh(
 	if (!accepted || !observed) return true
 	return (
 		accepted.eventId !== observed.eventId ||
-		accepted.revision !== observed.revision ||
-		accepted.checkedAt !== observed.checkedAt
+		accepted.scoreCoreRevision !== observed.scoreCoreRevision
 	)
 }
 

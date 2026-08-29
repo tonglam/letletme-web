@@ -44,14 +44,13 @@ import {
 import {
 	buildTournamentEntries,
 	buildTournamentStats,
-	countTraceableTournamentScores,
+	countReadyTournamentScores,
 	getRetainedFailedEntryIds,
-	getTournamentManagerNextRefreshAt,
+	getTournamentNextRefreshAt,
 	mergeDegradedTournamentEntryIds,
 	mergePartialTournamentRows,
 	shouldShowTournamentResultsFatalError
 } from '@/lib/tournament/liveEntries'
-import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
 import { Link, useRouter } from '@/i18n/navigation'
 import {
 	ArrowLeft,
@@ -449,18 +448,16 @@ export default function TournamentDetailClient({
 	useEffect(() => {
 		rowsRef.current = rows
 	}, [rows])
-	const managerNextRefreshAt = useMemo(
-		() => getTournamentManagerNextRefreshAt(rows),
+	const nextRefreshAt = useMemo(
+		() => getTournamentNextRefreshAt(rows),
 		[rows]
 	)
-	const managerScoreSettling = rows.some(row => row.score?.state === 'SETTLING')
-	const managerScoreStatus = useMemo(() => {
-		const states = rows.flatMap(row => {
-			const score = traceableOfficialManagerScore(row.score)
-			return score ? [score.state] : []
-		})
-		const available = countTraceableTournamentScores(rows)
-		if (states.includes('SETTLING')) return scoreT('scoreSettling')
+	const liveScoreStatus = useMemo(() => {
+		const states = rows
+			.map(row => row.score?.delivery.state)
+			.filter((state): state is NonNullable<typeof state> => Boolean(state))
+		const available = countReadyTournamentScores(rows)
+		if (states.includes('DEGRADED')) return scoreT('scoreDelayed')
 		if (states.includes('STALE')) return scoreT('scoreDelayed')
 		if (
 			states.some(state => String(state) === 'FALLBACK') ||
@@ -655,7 +652,7 @@ export default function TournamentDetailClient({
 					setIsRefreshing(true)
 					setError(null)
 					const requestedRevision =
-						revision ?? snapshotRef.current?.revision ?? null
+						revision ?? snapshotRef.current?.scoreCoreRevision ?? null
 					let response: TournamentLivePointsResponse
 					if (requestedRevision) {
 						const params = new URLSearchParams({
@@ -713,14 +710,15 @@ export default function TournamentDetailClient({
 						return merged
 					})
 					acceptSnapshot(
-						batch.revision
+						batch.scoreCoreRevision
 							? {
 									eventId: batch.eventId,
-									revision: batch.revision,
+									scoreCoreRevision: batch.scoreCoreRevision,
 									state: (batch.windowState ??
 										batch.state) as LiveSnapshotStatus['state'],
-									publishedAt: null,
-									checkedAt: null
+									windowState: batch.windowState as LiveSnapshotStatus['windowState'],
+									dataAvailability: batch.dataAvailability as LiveSnapshotStatus['dataAvailability'],
+									publishedAt: null
 								}
 							: null
 					)
@@ -788,17 +786,11 @@ export default function TournamentDetailClient({
 				)
 				if (generation !== refreshGenerationRef.current) return
 				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
-				const managerScoreDue = Boolean(
-					managerNextRefreshAt && Date.parse(managerNextRefreshAt) <= Date.now()
-				)
-				if (
-					!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot) &&
-					!managerScoreDue
-				) {
+				if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
 					acceptSnapshot(observedSnapshot)
 					return
 				}
-				await refreshStandings(observedSnapshot?.revision ?? null)
+				await refreshStandings(observedSnapshot?.scoreCoreRevision ?? null)
 			} catch (probeError) {
 				if (generation !== refreshGenerationRef.current) return
 				console.error('Failed to check live tournament freshness:', probeError)
@@ -818,7 +810,7 @@ export default function TournamentDetailClient({
 		isOfficialH2H,
 		refreshStandings,
 		standingsReady,
-		managerNextRefreshAt
+		nextRefreshAt
 	])
 
 	const entries = useMemo(
@@ -864,8 +856,6 @@ export default function TournamentDetailClient({
 		currentEventId: currentGameweek,
 		selectedEventId: currentGameweek,
 		snapshot,
-		managerScoreState: managerScoreSettling ? 'SETTLING' : null,
-		managerNextRefreshAt,
 		windowState: snapshot?.windowState ?? snapshot?.state,
 		nextRefreshAt: snapshot?.nextRefreshAt
 	})
@@ -1108,7 +1098,7 @@ export default function TournamentDetailClient({
 						) : null}
 						{currentTournament && (!isOfficialH2H || rows.length > 0) ? (
 							<p className="mb-4 text-right text-xs text-muted-foreground">
-								{managerScoreStatus}
+								{liveScoreStatus}
 							</p>
 						) : null}
 

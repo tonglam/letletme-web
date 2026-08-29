@@ -99,7 +99,7 @@ export function isGameweekDeskData(value: unknown): value is GameweekDeskData {
 	if (
 		typeof value.season !== 'string' ||
 		typeof value.coreRevision !== 'string' ||
-		!isNullableString(value.liveRevision) ||
+		!isNullableString(value.scoreCoreRevision) ||
 		typeof value.anchorEventId !== 'number' ||
 		typeof value.eventId !== 'number' ||
 		!Number.isSafeInteger(value.anchorEventId) ||
@@ -196,7 +196,7 @@ export function gameweekDeskCacheControl(
 	if (data.lifecycle === 'SETTLED') {
 		// A settled desk can precede the canonical live publication. Once its
 		// revision is present, the historical response can retain long caching.
-		return data.liveRevision === null
+		return data.scoreCoreRevision === null
 			? GAMEWEEK_DESK_SETTLED_CACHE_CONTROL
 			: GAMEWEEK_DESK_FINAL_CACHE_CONTROL
 	}

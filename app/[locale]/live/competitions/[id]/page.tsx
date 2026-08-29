@@ -110,10 +110,15 @@ export default async function Page({ params, searchParams }: PageProps) {
 					})
 					initialSnapshot = {
 						eventId: detail.live.eventId,
-						revision: detail.live.revision,
+						scoreCoreRevision: detail.live.scoreCoreRevision,
 						state: detail.live.state as LiveSnapshotStatus['state'],
-						publishedAt: null,
-						checkedAt: null
+						revisions: detail.live.revisions ?? undefined,
+						times: detail.live.times ?? undefined,
+						delivery: detail.live.delivery ?? undefined,
+						publishedAt: detail.live.times?.publishedAt ?? null,
+						sourceCheckedAt: detail.live.times?.sourceCheckedAt ?? null,
+						contentUpdatedAt: detail.live.times?.contentUpdatedAt ?? null,
+						nextRefreshAt: detail.live.times?.nextRefreshAt ?? null
 					}
 				}
 			}

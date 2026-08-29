@@ -54,7 +54,7 @@ export async function GET(
 	} catch (error) {
 		const code = error instanceof GraphQLRequestError ? error.code : null
 		const status =
-			code === 'LIVE_BOARD_REVISION_GONE' || code === 'LIVE_REVISION_GONE'
+			code === 'LIVE_SCORE_REVISION_GONE'
 				? 409
 				: code === 'UNAUTHENTICATED'
 					? 401

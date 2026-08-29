@@ -4,9 +4,9 @@ import {
 } from '@/lib/graphql/operations/tournaments'
 import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 import {
-	hasTraceableOfficialEventPoints,
-	traceableOfficialManagerScore
-} from '@/lib/live-manager-score'
+	hasTraceableLiveEventPoints,
+	traceableLiveScore
+} from '@/lib/live-score-v2'
 import { type TournamentEntry } from '@/types/tournament'
 
 export type LiveTournamentStats = {
@@ -49,9 +49,15 @@ export const appendDegradedTournamentRows = ({
 				entry: entryId,
 				entryName: metadata?.entryName ?? `Entry ${entryId}`,
 				playerName: metadata?.playerName ?? '—',
-				overallRank: 0,
+				rank: {
+					eventRank: null,
+					overallRank: 0,
+					leagueRank: null,
+					revision: null,
+					contentUpdatedAt: null,
+					state: 'UNAVAILABLE'
+				},
 				chip: null,
-				transferCost: 0,
 				played: 0,
 				toPlay: 0,
 				captainName: 'N/A',
@@ -88,16 +94,13 @@ export const getTournamentLiveBatchSeed = (
 		rows: response.entryLiveCompetitionsDesk.board ?? [],
 		snapshot: {
 			eventId: response.entryLiveCompetitionsDesk.eventId,
-			revision: response.entryLiveCompetitionsDesk.revision,
+			scoreCoreRevision: response.entryLiveCompetitionsDesk.scoreCoreRevision,
 			state: (response.entryLiveCompetitionsDesk.windowState ??
 				response.entryLiveCompetitionsDesk
 					.state) as LiveSnapshotStatus['state'],
 			publishedAt: null,
-			checkedAt: null,
-			windowState: response.entryLiveCompetitionsDesk
-				.windowState as LiveSnapshotStatus['windowState'],
-			dataAvailability: response.entryLiveCompetitionsDesk
-				.dataAvailability as LiveSnapshotStatus['dataAvailability'],
+			windowState: response.entryLiveCompetitionsDesk.windowState as LiveSnapshotStatus['windowState'],
+			dataAvailability: response.entryLiveCompetitionsDesk.dataAvailability as LiveSnapshotStatus['dataAvailability'],
 			nextRefreshAt: response.entryLiveCompetitionsDesk.nextRefreshAt ?? null
 		},
 		failedCount: failedEntryIds.length,
@@ -121,23 +124,18 @@ const isPositiveOverallRank = (
 ): value is number =>
 	typeof value === 'number' && Number.isSafeInteger(value) && value > 0
 
-const resolveOverallRank = (
-	liveOverallRank: number | null | undefined,
-	lastKnownOverallRank: number | null | undefined
-): number => {
-	if (isPositiveOverallRank(liveOverallRank)) return liveOverallRank
-	return isPositiveOverallRank(lastKnownOverallRank) ? lastKnownOverallRank : 0
-}
+const resolveOverallRank = (value: number | null | undefined): number =>
+	isPositiveOverallRank(value) ? value : 0
 
 export const buildRankMap = (
 	rows: TournamentLiveCalcData[]
 ): Map<number, number> => {
 	const isOfficialSource = (row: TournamentLiveCalcData): boolean =>
-		traceableOfficialManagerScore(row.score) !== undefined
+			traceableLiveScore(row.score) !== undefined
 	const rankableRows = rows.filter(row => {
 		return (
 			isOfficialSource(row) &&
-			hasTraceableOfficialEventPoints(row.score) &&
+				hasTraceableLiveEventPoints(row.score) &&
 			typeof row.score?.netEventPoints === 'number'
 		)
 	})
@@ -187,7 +185,7 @@ export const buildTournamentEntries = (
 	const currentRankByEntryId = buildRankMap(rankSource)
 
 	return currentRows.map(row => {
-		const score = traceableOfficialManagerScore(row.score)
+		const score = traceableLiveScore(row.score)
 		const headlineEventPoints = score?.eventPoints ?? null
 		const headlineNetPoints = score?.netEventPoints ?? null
 		const headlineTotalPoints =
@@ -196,7 +194,7 @@ export const buildTournamentEntries = (
 				: null
 		const captainPick = row.pickList.find(player => player.isCaptain)
 		const effectiveCaptainPick =
-			score?.state === 'FINAL'
+			score?.delivery.state === 'FINAL'
 				? (row.pickList.find(player => (player.multiplier ?? 0) >= 2) ??
 					captainPick)
 				: captainPick
@@ -207,18 +205,17 @@ export const buildTournamentEntries = (
 				? effectiveCaptainPick.totalPoints
 				: 0)
 		const stale = Boolean(staleIds?.has(row.entry))
-		// The score carries the freshest official OR. GraphQL's top-level value
-		// is the last-known official fallback while the live summary catches up.
-		const overallRank = resolveOverallRank(score?.overallRank, row.overallRank)
+		// Rank is an independent lane. A missing rank never invalidates the score.
+		const overallRank = resolveOverallRank(row.rank?.overallRank)
 
 		return {
 			id: String(row.entry),
 			rank: stale
 				? 0
-				: hasTraceableOfficialEventPoints(row.score) &&
-					  typeof row.rank === 'number' &&
-					  row.rank > 0
-					? row.rank
+				: hasTraceableLiveEventPoints(row.score) &&
+					  typeof row.rank?.eventRank === 'number' &&
+					  row.rank.eventRank > 0
+					? row.rank.eventRank
 					: (currentRankByEntryId.get(row.entry) ?? 0),
 			teamName: row.entryName ?? `Entry ${row.entry}`,
 			managerName: row.playerName ?? '-',
@@ -233,10 +230,6 @@ export const buildTournamentEntries = (
 			gwNetPoints: headlineNetPoints ?? undefined,
 			eventCost: score?.transferCost,
 			overallRank,
-			lastOverallRank:
-				typeof row.lastOverallRank === 'number'
-					? row.lastOverallRank
-					: undefined,
 			livePoints: headlineEventPoints,
 			totalPoints: headlineTotalPoints,
 			playersPlayed: row.played ?? 0,
@@ -262,10 +255,10 @@ export const buildTournamentEntries = (
 	})
 }
 
-export const countTraceableTournamentScores = (
+export const countReadyTournamentScores = (
 	rows: readonly TournamentLiveCalcData[]
 ): number =>
-	rows.filter(row => hasTraceableOfficialEventPoints(row.score)).length
+	rows.filter(row => hasTraceableLiveEventPoints(row.score)).length
 
 export const getBoundedTraceableTournamentCoverage = ({
 	rows,
@@ -277,7 +270,7 @@ export const getBoundedTraceableTournamentCoverage = ({
 	officialCoverage?: number | null
 }): number => {
 	const total = Math.max(0, Math.floor(totalEntries))
-	const rowCoverage = Math.min(total, countTraceableTournamentScores(rows))
+	const rowCoverage = Math.min(total, countReadyTournamentScores(rows))
 	if (rowCoverage === 0) return 0
 	if (
 		typeof officialCoverage !== 'number' ||
@@ -298,11 +291,11 @@ export const getBoundedTraceableTournamentCoverage = ({
  * deadline even when the accompanying score is rejected by provenance checks,
  * otherwise a settled player snapshot can stop polling before the score heals.
  */
-export const getTournamentManagerNextRefreshAt = (
+export const getTournamentNextRefreshAt = (
 	rows: readonly TournamentLiveCalcData[]
 ): string | null => {
 	const refreshTimes = rows
-		.map(row => row.score?.nextRefreshAt)
+		.map(row => row.score?.times.nextRefreshAt)
 		.filter(
 			(value): value is string =>
 				typeof value === 'string' && Number.isFinite(Date.parse(value))

@@ -1,4 +1,46 @@
-import type { LiveManagerScore, LiveSnapshotStatus } from './live'
+import type {
+	LiveDelivery,
+	LivePointsScore,
+	LiveRevisionVector,
+	LiveSnapshotStatus,
+	LiveTimes
+} from './live'
+
+const LIVE_POINTS_SCORE_FRAGMENT = `
+  fragment LivePointsScoreFields on LiveScore {
+    eventPoints
+    netEventPoints
+    totalPoints
+    totalScope
+    transferCost
+    source
+    calculationMode
+    revisions {
+      publicationId generation lifecycle fixtureIdentity scoreCore displayStats
+      explain picksBase officialAdjustment previousTotals finalResult rules algorithm input
+    }
+    times { sourceCheckedAt contentUpdatedAt publishedAt checkpointedAt servedAt staleAt nextRefreshAt }
+    delivery { state servedFrom reasonCodes }
+  }
+`
+
+// Tournament desks only need the fields required to render and rank rows.
+// Keep the full revision vector on the canonical entry/live-points queries,
+// but do not repeat explain/display metadata for every board row.
+const LIVE_POINTS_SCORE_SUMMARY_FRAGMENT = `
+  fragment LivePointsScoreSummaryFields on LiveScore {
+    eventPoints
+    netEventPoints
+    totalPoints
+    totalScope
+    transferCost
+    source
+    calculationMode
+    revisions { input }
+    times { sourceCheckedAt contentUpdatedAt nextRefreshAt }
+    delivery { state }
+  }
+`
 
 export const TOURNAMENT_INFO_FIELDS = `
   fragment TournamentInfoFields on TournamentInfo {
@@ -139,7 +181,10 @@ export const GET_MANAGEABLE_TOURNAMENTS_LIST = `
 
 export type EntryTournamentState = 'ACTIVE' | 'INACTIVE' | 'FINISHED'
 export type TournamentSetupStatus =
-	'PENDING' | 'PROCESSING' | 'READY' | 'FAILED'
+	| 'PENDING'
+	| 'PROCESSING'
+	| 'READY'
+	| 'FAILED'
 export type TournamentSetupPhase =
 	| 'QUEUED'
 	| 'SYNCING_ENTRIES'
@@ -331,6 +376,7 @@ const TOURNAMENT_DETAIL_INFO_FIELDS = `
 `
 
 export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_DETAIL_INFO_FIELDS}
+${LIVE_POINTS_SCORE_SUMMARY_FRAGMENT}
   query GetTournamentDetailDesk($tournamentId: Int!, $entryId: Int!, $eventId: Int) {
     tournamentDetailDesk(tournamentId: $tournamentId, entryId: $entryId, eventId: $eventId) {
       revision
@@ -355,16 +401,12 @@ export const GET_TOURNAMENT_DETAIL_DESK = `${TOURNAMENT_DETAIL_INFO_FIELDS}
         }
       }
       live {
-        eventId revision state partial failedEntryIds totalEntries
+        eventId scoreCoreRevision state failedEntryIds
+        times { sourceCheckedAt contentUpdatedAt publishedAt nextRefreshAt }
         rows {
-          entry provisional rank entryName playerName overallRank lastOverallRank overallPoints teamValue bank value
-          chip livePoints transferCost liveNetPoints liveTotalPoints played toPlay captainName
-          score {
-            eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
-            transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
-            calculationMode algorithmVersion
-            staleAt nextRefreshAt reconciliation reasonCodes
-          }
+          entry entryName playerName teamValue bank chip transferCost played toPlay captainName
+          score { ...LivePointsScoreSummaryFields }
+          rank { eventRank overallRank }
           activeCaptain { name points }
           pickList { element webName elementTypeName position multiplier isCaptain isViceCaptain teamShortName teamName totalPoints }
         }
@@ -402,11 +444,14 @@ export interface TournamentDetailDeskResponse {
 		officialH2H: TournamentOfficialH2H | null
 		live: {
 			eventId: number
-			revision: string | null
+			scoreCoreRevision: string | null
 			state: string
 			partial: boolean
 			failedEntryIds: number[]
 			totalEntries: number
+			revisions: LiveRevisionVector | null
+			times: LiveTimes | null
+			delivery: LiveDelivery | null
 			rows: TournamentLiveCalcData[]
 		} | null
 	} | null
@@ -752,56 +797,30 @@ export const LIVE_TOURNAMENT_INFO_FIELDS = `
   }
 `
 
-export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_TOURNAMENT_INFO_FIELDS}
-  query GetEntryLiveCompetitionsDesk($entryId: Int!, $selectedTournamentId: Int, $ref: LiveRevisionRefInput) {
-    entryLiveCompetitionsDesk(entryId: $entryId, selectedTournamentId: $selectedTournamentId, ref: $ref) {
-      eventId
-      revision
-      state
-      windowState
-      dataAvailability
-      tournaments { ...LiveTournamentInfoFields }
+export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_POINTS_SCORE_SUMMARY_FRAGMENT}
+  query GetEntryLiveCompetitionsDesk($entryId: Int!, $selectedTournamentId: Int, $ref: LivePublicationRefInput) {
+	    entryLiveCompetitionsDesk(entryId: $entryId, selectedTournamentId: $selectedTournamentId, ref: $ref) {
+	      eventId
+	      scoreCoreRevision
+	      state
+	      windowState
+	      dataAvailability
       selectedTournamentId
-      managerRevision
       officialCoverage
       unavailableEntryIds
       partial
       failedEntryIds
       totalEntries
       board {
-        entry
-        rank
-        entryName
-        playerName
-        overallRank
-        lastOverallRank
-        teamValue
-        bank
+		        entry
+		        entryName
+		        playerName
+		        teamValue
+		        bank
         chip
-        score {
-          eventPoints
-          netEventPoints
-          totalPoints
-          totalScope
-          eventRank
-          overallRank
-          leagueRank
-          transferCost
-          source
-          state
-          eventPointSemantics
-          calculationMode
-          algorithmVersion
-          revision
-          checkedAt
-          upstreamUpdatedAt
-          staleAt
-          nextRefreshAt
-          reconciliation
-          reasonCodes
-        }
-        transferCost
-        played
+        score { ...LivePointsScoreSummaryFields }
+        rank { eventRank overallRank }
+	        played
         toPlay
         captainName
         activeCaptain {
@@ -840,14 +859,17 @@ export interface BatchCalcMeta {
 export interface TournamentLiveCalcData {
 	entry: number
 	provisional?: boolean
-	rank?: number
-	score?: LiveManagerScore
+	rank?: {
+		eventRank: number | null
+		overallRank: number | null
+		leagueRank: number | null
+		revision: string | null
+		contentUpdatedAt: string | null
+		state: LivePointsScore['delivery']['state']
+	} | null
+	score?: LivePointsScore
 	entryName: string
 	playerName: string
-	overallRank: number
-	/** Previous overall rank (for OR delta when available). */
-	lastOverallRank?: number | null
-	overallPoints?: number | null
 	/** Squad value in £m as returned by LiveCalcData (e.g. 100.5 → £100.5m). */
 	teamValue?: number | null
 	/** ITB in £m as returned by LiveCalcData. */
@@ -855,10 +877,6 @@ export interface TournamentLiveCalcData {
 	/** teamValue + bank. */
 	value?: number | null
 	chip: string | null
-	livePoints?: number
-	transferCost: number
-	liveNetPoints?: number
-	liveTotalPoints?: number
 	played: number
 	toPlay: number
 	captainName: string
@@ -892,14 +910,16 @@ export interface TournamentLiveCalcData {
 export interface TournamentLivePointsResponse {
 	entryLiveCompetitionsDesk: {
 		eventId: number
-		revision: string | null
+		scoreCoreRevision: string | null
 		state: string
 		windowState?: string
 		dataAvailability?: string
 		nextRefreshAt?: string | null
 		tournaments: LiveEntryTournament[]
 		selectedTournamentId: number | null
-		managerRevision?: string | null
+		revisions: import('./live').LiveRevisionVector | null
+		times: import('./live').LiveTimes | null
+		delivery: import('./live').LiveDelivery | null
 		officialCoverage?: number
 		unavailableEntryIds?: number[]
 		partial: boolean
@@ -940,7 +960,7 @@ export interface EntryLiveCompetitionBoardVariables {
 	entryId: number
 	tournamentId: number
 	eventId: number
-	ref?: { season: string; eventId: number; revision: string } | null
+	ref?: { season: string; eventId: number; scoreCoreRevision: string } | null
 	page?: number
 	pageSize?: number
 	sort?: EntryLiveCompetitionBoardSort
@@ -961,10 +981,7 @@ export interface EntryLiveCompetitionBoardRow {
 	overallRank: number
 	teamValue: number
 	chip: string
-	livePoints: number
 	transferCost: number
-	liveNetPoints: number
-	liveTotalPoints: number
 	played: number
 	toPlay: number
 	captainId: number
@@ -978,14 +995,11 @@ export interface EntryLiveCompetitionBoardPage {
 	eventId: number
 	tournamentId: number
 	boardRevision: string
-	playerRevision: string
-	managerRevision: string | null
+	scoreCoreRevision: string | null
 	dataAvailability: string
-	managerDataAvailability: string
-	managerServedFrom: 'REDIS' | 'POSTGRES' | 'MIXED' | 'NONE'
-	managerRefreshQueued: boolean
-	managerCheckedAt: string | null
-	managerNextRefreshAt: string | null
+	revisions: import('./live').LiveRevisionVector
+	times: import('./live').LiveTimes
+	delivery: import('./live').LiveDelivery
 	coverageState: 'WARMING' | 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE'
 	rankScope: 'FULL_FIELD' | 'AVAILABLE_ROWS'
 	computedEntries: number
@@ -1011,12 +1025,12 @@ export interface EntryLiveCompetitionBoardResponse {
 	entryLiveCompetitionBoard: EntryLiveCompetitionBoardPage
 }
 
-export const GET_ENTRY_LIVE_COMPETITION_BOARD = `
+export const GET_ENTRY_LIVE_COMPETITION_BOARD = `${LIVE_POINTS_SCORE_FRAGMENT}
   query GetEntryLiveCompetitionBoard(
     $entryId: Int!
     $tournamentId: Int!
     $eventId: Int!
-    $ref: LiveRevisionRefInput
+    $ref: LivePublicationRefInput
     $page: Int
     $pageSize: Int
     $sort: EntryLiveCompetitionBoardSort
@@ -1044,9 +1058,11 @@ export const GET_ENTRY_LIVE_COMPETITION_BOARD = `
       teamCountRules: $teamCountRules
       expectedBoardRevision: $expectedBoardRevision
     ) {
-      season eventId tournamentId boardRevision playerRevision managerRevision
-      dataAvailability managerDataAvailability managerServedFrom managerRefreshQueued
-      managerCheckedAt managerNextRefreshAt coverageState rankScope computedEntries
+	      season eventId tournamentId boardRevision scoreCoreRevision dataAvailability
+	      revisions { publicationId generation lifecycle fixtureIdentity scoreCore displayStats explain picksBase officialAdjustment previousTotals finalResult rules algorithm input }
+	      times { sourceCheckedAt contentUpdatedAt publishedAt checkpointedAt servedAt staleAt nextRefreshAt }
+	      delivery { state servedFrom reasonCodes }
+	      coverageState rankScope computedEntries
       deferredEntryCount failedEntryCount unavailableEntryCount officialCoverage
       unavailableEntryIds failedEntryIds partial totalEntries filteredEntries page pageSize hasMore
       highestEventPoints averageEventPoints
@@ -1055,31 +1071,22 @@ export const GET_ENTRY_LIVE_COMPETITION_BOARD = `
     }
   }
 
-  fragment EntryLiveCompetitionBoardRowFields on EntryLiveCompetitionBoardRow {
-    entry entryName playerName rank overallRank teamValue chip livePoints
-    transferCost liveNetPoints liveTotalPoints played toPlay captainId
-    captainName captainPoints
-    score { ...EntryLiveCompetitionScoreFields }
-  }
+	fragment EntryLiveCompetitionBoardRowFields on EntryLiveCompetitionBoardRow {
+	    entry entryName playerName rank overallRank teamValue chip
+	    transferCost played toPlay captainId
+	    captainName captainPoints
+	    score { ...EntryLiveCompetitionScoreFields }
+	  }
 
-  fragment EntryLiveCompetitionScoreFields on LiveManagerScore {
-    eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
-    transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
-    calculationMode algorithmVersion
-    provenance {
-      scoreSource calculationMode algorithmVersion inputRevision scoreRevision rankRevision
-      livePublicationId liveRevision liveCheckedAt picksRevision picksCheckedAt
-      previousTotalsRevision previousTotalsThroughEventId resultRevision resultCheckedAt
-      dataCheckedAt rankSource rankCheckedAt
-    }
-    staleAt nextRefreshAt reconciliation reasonCodes
+  fragment EntryLiveCompetitionScoreFields on LiveScore {
+    ...LivePointsScoreFields
   }
 `
 
 export const GET_TOURNAMENT_SELECTION_INDEX = `
-  query GetTournamentSelectionIndex($entryId: Int!, $tournamentId: Int!, $ref: LiveRevisionRefInput!) {
+  query GetTournamentSelectionIndex($entryId: Int!, $tournamentId: Int!, $ref: LivePublicationRefInput!) {
     tournamentSelectionIndex(entryId: $entryId, tournamentId: $tournamentId, ref: $ref) {
-      tournamentId eventId revision
+      tournamentId eventId scoreCoreRevision
       rows { playerId playerName teamId teamName teamShortName position count percentage }
     }
   }
@@ -1100,23 +1107,19 @@ export interface TournamentSelectionIndexResponse {
 	tournamentSelectionIndex: {
 		tournamentId: number
 		eventId: number
-		revision: string
+		scoreCoreRevision: string
 		rows: TournamentSelectionIndexRow[]
 	}
 }
 
-export const GET_TOURNAMENT_ENTRY_SQUADS = `
-  query GetTournamentEntrySquads($entryId: Int!, $tournamentId: Int!, $comparedEntryIds: [Int!]!, $ref: LiveRevisionRefInput!) {
+export const GET_TOURNAMENT_ENTRY_SQUADS = `${LIVE_POINTS_SCORE_FRAGMENT}
+  query GetTournamentEntrySquads($entryId: Int!, $tournamentId: Int!, $comparedEntryIds: [Int!]!, $ref: LivePublicationRefInput!) {
     tournamentEntrySquads(entryId: $entryId, tournamentId: $tournamentId, comparedEntryIds: $comparedEntryIds, ref: $ref) {
-      tournamentId eventId revision
+      tournamentId eventId scoreCoreRevision
       entries {
-        entry entryName playerName livePoints liveNetPoints liveTotalPoints transferCost
-        score {
-          eventPoints netEventPoints totalPoints totalScope eventRank overallRank leagueRank
-          transferCost source state eventPointSemantics revision checkedAt upstreamUpdatedAt
-          calculationMode algorithmVersion
-          staleAt nextRefreshAt reconciliation reasonCodes
-        }
+        entry entryName playerName transferCost
+        score { ...LivePointsScoreFields }
+        rank { eventRank overallRank leagueRank revision contentUpdatedAt state }
         pickList {
           element webName elementTypeName position multiplier pickActive autoSub
           isCaptain isViceCaptain teamShortName teamName totalPoints minutes starts
@@ -1131,7 +1134,7 @@ export interface TournamentEntrySquadsResponse {
 	tournamentEntrySquads: {
 		tournamentId: number
 		eventId: number
-		revision: string
+		scoreCoreRevision: string
 		entries: TournamentLiveCalcData[]
 	}
 }

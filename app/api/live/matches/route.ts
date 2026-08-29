@@ -11,16 +11,16 @@ async function handleGet(request: Request) {
 	const params = new URL(request.url).searchParams
 	const season = params.get('season')
 	const eventId = Number(params.get('eventId'))
-	const revision = params.get('revision')
+	const scoreCoreRevision = params.get('scoreCoreRevision')
 	const includeFixturePlayers = params.get('includePlayers') !== '0'
 	if (
 		!/^\d{4}$/.test(season ?? '') ||
 		!Number.isSafeInteger(eventId) ||
 		eventId <= 0 ||
-		!revision
+		!scoreCoreRevision
 	)
 		return NextResponse.json(
-			{ error: 'Invalid live revision' },
+			{ error: 'Invalid live score revision' },
 			{ status: 400 }
 		)
 	try {
@@ -31,7 +31,7 @@ async function handleGet(request: Request) {
 			{
 				season: season!,
 				eventId,
-				revision
+				scoreCoreRevision
 			},
 			{
 				includeFixturePlayers,
@@ -39,7 +39,7 @@ async function handleGet(request: Request) {
 					console.warn('[live-matches] fixture player section unavailable', {
 						season: failure.season,
 						eventId: failure.eventId,
-						revision: failure.revision,
+						scoreCoreRevision: failure.scoreCoreRevision,
 						stage: failure.stage,
 						fixtureIds: failure.fixtureIds,
 						code: failure.code
