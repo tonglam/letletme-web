@@ -167,9 +167,14 @@ const validateScore = (
 	if (!nonEmptyString(value.revision)) missing.push(`${path}.revision`)
 	if (!validDate(value.checkedAt) || value.checkedAt === null)
 		missing.push(`${path}.checkedAt`)
+	const staleLiveScoreNotComparable =
+		value.source === 'FPL_EVENT_LIVE' &&
+		(value.state === 'STALE' || value.state === 'SETTLING') &&
+		value.reconciliation === 'NOT_COMPARABLE'
 	if (
 		value.reconciliation !== 'MATCHED' &&
-		value.reconciliation !== 'NO_LINEUP'
+		value.reconciliation !== 'NO_LINEUP' &&
+		!staleLiveScoreNotComparable
 	)
 		missing.push(`${path}.reconciliation`)
 
