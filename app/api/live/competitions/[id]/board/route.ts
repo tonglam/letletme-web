@@ -14,6 +14,11 @@ import { loadTournamentLiveDeskWithRevisionRecovery } from '@/lib/tournament/liv
 
 export const dynamic = 'force-dynamic'
 
+// Full-field tournament boards (including large classic leagues) can require
+// several upstream/cache reads on a cold revision. Keep this budget scoped to
+// the board route; the request signal still aborts work when the client leaves.
+const LIVE_COMPETITION_BOARD_TIMEOUT_MS = 20_000
+
 const noStoreHeaders = (requestId?: string): Record<string, string> => ({
 	'Cache-Control': 'private, no-store',
 	...(requestId ? { 'X-Request-Id': requestId } : {})
@@ -204,7 +209,11 @@ export async function POST(
 				session,
 				GET_ENTRY_LIVE_COMPETITION_BOARD,
 				variables as unknown as Record<string, unknown>,
-				{ cache: 'no-store', signal: request.signal, timeoutMs: 3_000 }
+				{
+					cache: 'no-store',
+					signal: request.signal,
+					timeoutMs: LIVE_COMPETITION_BOARD_TIMEOUT_MS
+				}
 			)
 		return NextResponse.json(data, { headers: noStoreHeaders(requestId) })
 	} catch (error) {
