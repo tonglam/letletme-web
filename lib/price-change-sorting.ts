@@ -24,7 +24,7 @@ export const DEFAULT_PRICE_CHANGE_SCOPE: PriceChangeScope = 'likely'
 
 export const DEFAULT_PRICE_CHANGE_SORT: PriceChangeSortState = {
 	column: 'progress',
-	direction: 'desc',
+	direction: 'desc'
 }
 
 const signalLikelihoodRank: Record<PriceChangePlayer['status'], number> = {
@@ -34,7 +34,7 @@ const signalLikelihoodRank: Record<PriceChangePlayer['status'], number> = {
 	LIKELY_FALL: 2,
 	UNLIKELY: 1,
 	LOCKED: 0,
-	CALIBRATING: 0,
+	CALIBRATING: 0
 }
 
 /** Players likely to move are the primary default audience for this board. */
@@ -56,9 +56,18 @@ export function matchesPriceChangePlayer(
 	}: {
 		scope?: PriceChangeScope
 		movement?: PriceChangeMovementFilter
-	} = {},
+	} = {}
 ): boolean {
-	if (scope === 'likely' && !isLikelyToChange(player)) return false
+	// Locked/calibrating is an explicit operational filter, not a prediction
+	// likelihood. It must remain reachable even while the board defaults to
+	// the likely-to-change scope.
+	if (
+		scope === 'likely' &&
+		movement !== 'locked' &&
+		!isLikelyToChange(player)
+	) {
+		return false
+	}
 	if (movement === 'rise' && player.progressPercent <= 0) return false
 	if (movement === 'fall' && player.progressPercent >= 0) return false
 	if (
@@ -77,10 +86,12 @@ export function matchesPriceChangePlayer(
  */
 export function priceChangeRelevanceScore(
 	player: PriceChangePlayer,
-	squadElementIds: ReadonlySet<number>,
+	squadElementIds: ReadonlySet<number>
 ): number {
-	return (isLikelyToChange(player) ? 2 : 0) +
+	return (
+		(isLikelyToChange(player) ? 2 : 0) +
 		(squadElementIds.has(player.playerId) ? 1 : 0)
+	)
 }
 
 export function priceChangeMovementValue(player: PriceChangePlayer): number {
@@ -90,7 +101,7 @@ export function priceChangeMovementValue(player: PriceChangePlayer): number {
 function compareNullableNumbers(
 	left: number | null,
 	right: number | null,
-	direction: PriceChangeSortDirection,
+	direction: PriceChangeSortDirection
 ): number {
 	if (left == null && right == null) return 0
 	if (left == null) return 1
@@ -102,7 +113,7 @@ function compareNullableNumbers(
 function sortValue(
 	player: PriceChangePlayer,
 	column: PriceChangeSortColumn,
-	purchasePrices: Readonly<Record<string, number>>,
+	purchasePrices: Readonly<Record<string, number>>
 ): number | null {
 	switch (column) {
 		case 'price':
@@ -131,13 +142,13 @@ export function sortPriceChangePlayers(
 		sort = DEFAULT_PRICE_CHANGE_SORT,
 		squadElementIds = new Set<number>(),
 		purchasePrices = {},
-		locale,
+		locale
 	}: {
 		sort?: PriceChangeSortState
 		squadElementIds?: ReadonlySet<number>
 		purchasePrices?: Readonly<Record<string, number>>
 		locale?: string
-	} = {},
+	} = {}
 ): PriceChangePlayer[] {
 	const relevanceFirst =
 		sort.column === DEFAULT_PRICE_CHANGE_SORT.column &&
@@ -154,7 +165,7 @@ export function sortPriceChangePlayers(
 		const primary = compareNullableNumbers(
 			sortValue(left, sort.column, purchasePrices),
 			sortValue(right, sort.column, purchasePrices),
-			sort.direction,
+			sort.direction
 		)
 		if (primary !== 0) return primary
 
@@ -188,10 +199,12 @@ export function selectPriceChangePlayers(
 		squadElementIds?: ReadonlySet<number>
 		purchasePrices?: Readonly<Record<string, number>>
 		locale?: string
-	} = {},
+	} = {}
 ): PriceChangePlayer[] {
 	return sortPriceChangePlayers(
-		players.filter(player => matchesPriceChangePlayer(player, { scope, movement })),
+		players.filter(player =>
+			matchesPriceChangePlayer(player, { scope, movement })
+		),
 		{
 			sort,
 			squadElementIds,

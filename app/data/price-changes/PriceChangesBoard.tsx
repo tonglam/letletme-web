@@ -202,7 +202,7 @@ function ownershipClass(trend: PriceChangePlayer['ownershipTrend']): string {
 
 function statusAlertVariant(
 	status: PriceChangeBoard['status'],
-	officialUpdating = false,
+	officialUpdating = false
 ): 'info' | 'warning' | 'destructive' | null {
 	if (officialUpdating) return null
 	if (status === 'PARTIAL') return 'info'
@@ -274,7 +274,7 @@ export function PriceChangesBoard({
 	mySquadState,
 	initialScope = DEFAULT_PRICE_CHANGE_SCOPE,
 	initialMovement = 'all',
-	isOfficialUpdating = false,
+	isOfficialUpdating = false
 }: {
 	board: PriceChangeBoard
 	locale: string
@@ -290,7 +290,9 @@ export function PriceChangesBoard({
 	const router = useRouter()
 	const hydrated = useHydrated()
 	const [search, setSearch] = useState('')
-	const [scope, setScope] = useState<PriceChangeScope>(initialScope)
+	const [scope, setScope] = useState<PriceChangeScope>(
+		initialMovement === 'locked' ? 'all' : initialScope
+	)
 	const [movement, setMovement] =
 		useState<PriceChangeMovementFilter>(initialMovement)
 	const [sort, setSort] = useState<PriceChangeSortState>(
@@ -302,8 +304,7 @@ export function PriceChangesBoard({
 	const [liveState, setLiveState] = useState<
 		'PROVISIONAL' | 'DURABLE' | 'UNAVAILABLE'
 	>('DURABLE')
-	const isUpdatingNotice =
-		isOfficialUpdating && displayBoard.status !== 'READY'
+	const isUpdatingNotice = isOfficialUpdating && displayBoard.status !== 'READY'
 	const mySquad = useMemo(() => new Set(mySquadElementIds), [mySquadElementIds])
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const mySquadShareRef = useRef<HTMLDivElement | null>(null)
@@ -342,7 +343,7 @@ export function PriceChangesBoard({
 	}, [router])
 
 	useEffect(() => {
-		setScope(initialScope)
+		setScope(initialMovement === 'locked' ? 'all' : initialScope)
 		setMovement(initialMovement)
 		setPage(1)
 	}, [initialMovement, initialScope])
@@ -392,7 +393,16 @@ export function PriceChangesBoard({
 			squadElementIds: scope === 'likely' ? new Set<number>() : mySquad,
 			locale
 		})
-	}, [displayBoard.players, locale, movement, mySquad, scope, search, sort, teamId])
+	}, [
+		displayBoard.players,
+		locale,
+		movement,
+		mySquad,
+		scope,
+		search,
+		sort,
+		teamId
+	])
 
 	const pageCount = Math.max(1, Math.ceil(filteredPlayers.length / PAGE_SIZE))
 	const safePage = Math.min(page, pageCount)
@@ -441,10 +451,7 @@ export function PriceChangesBoard({
 		setSort({ column, direction })
 		setPage(1)
 	}
-	const alertVariant = statusAlertVariant(
-		displayBoard.status,
-		isUpdatingNotice,
-	)
+	const alertVariant = statusAlertVariant(displayBoard.status, isUpdatingNotice)
 	const from = filteredPlayers.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1
 	const to = Math.min(safePage * PAGE_SIZE, filteredPlayers.length)
 	const shareScopePlayers = useMemo(() => {
@@ -737,7 +744,9 @@ export function PriceChangesBoard({
 							<Select
 								value={movement}
 								onValueChange={value => {
-									setMovement(value as PriceChangeMovementFilter)
+									const nextMovement = value as PriceChangeMovementFilter
+									setMovement(nextMovement)
+									if (nextMovement === 'locked') setScope('all')
 									setPage(1)
 								}}
 							>

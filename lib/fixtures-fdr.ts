@@ -3,7 +3,11 @@ import type {
 	FixtureSignalPlayer
 } from '@/lib/graphql/operations/market'
 
-export type FdrHorizon = 3 | 5 | 8
+/**
+ * Supported planning windows. 1, 2, and 4 are terminal-season values used
+ * when fewer than the normal 3/5/8 selectable gameweeks remain.
+ */
+export type FdrHorizon = 1 | 2 | 3 | 4 | 5 | 8
 
 export const DEFAULT_FDR_HORIZON: FdrHorizon = 5
 export const FDR_HORIZONS: FdrHorizon[] = [3, 5, 8]

@@ -1,5 +1,6 @@
 import type { EventsResponse } from '@/lib/graphql/operations/events'
 import { pickCurrentEventId } from '@/lib/events-current'
+import type { FdrHorizon } from '@/lib/fixtures-fdr'
 
 /**
  * Review-page gameweek anchor (My Team / My Tournament).
@@ -9,10 +10,7 @@ import { pickCurrentEventId } from '@/lib/events-current'
  * still open Season history / last-known tournament field.
  */
 export type ReviewGameweekAnchorSource =
-	| 'current'
-	| 'next-derived'
-	| 'history'
-	| 'none'
+	'current' | 'next-derived' | 'history' | 'none'
 
 export type ReviewGameweekAnchor = {
 	/** isCurrent id when present; null when FPL has no current event */
@@ -37,7 +35,7 @@ function positiveId(value: unknown): number | null {
  */
 export function resolveReviewGameweekAnchor(
 	events: EventsResponse | null | undefined,
-	opts?: { historyMaxEventId?: number | null },
+	opts?: { historyMaxEventId?: number | null }
 ): ReviewGameweekAnchor {
 	const currentGw = pickCurrentEventId(events)
 	if (currentGw != null) {
@@ -69,7 +67,7 @@ export function resolveReviewGameweekAnchor(
  * matches that are still in progress.
  */
 export function resolveFixturePlanningGameweek(
-	events: EventsResponse | null | undefined,
+	events: EventsResponse | null | undefined
 ): number | null {
 	const currentGw = pickCurrentEventId(events)
 	const nextGw = positiveId(events?.next?.[0]?.id)
@@ -86,9 +84,32 @@ export function resolveFixturePlanningGameweek(
 	return currentGw ?? nextGw
 }
 
+/**
+ * Keep a forward-looking fixture request inside the 38-gameweek season.
+ * Near the season boundary the API accepts a shorter window, so the review
+ * page should request the exact number of remaining gameweeks instead of
+ * sending an invalid five-gameweek range.
+ */
+export function resolveFixturePlanningHorizon(
+	fromGw: number,
+	requestedHorizon: FdrHorizon
+): FdrHorizon | null {
+	if (
+		!Number.isInteger(fromGw) ||
+		fromGw < 1 ||
+		fromGw > 38 ||
+		!Number.isInteger(requestedHorizon) ||
+		requestedHorizon < 1
+	) {
+		return null
+	}
+
+	return Math.min(requestedHorizon, 38 - fromGw + 1) as FdrHorizon
+}
+
 /** Max eventId from entry history results (for Team review anchor). */
 export function maxEventIdFromHistory(
-	results: Array<{ eventId?: number | null }> | null | undefined,
+	results: Array<{ eventId?: number | null }> | null | undefined
 ): number | null {
 	if (!results?.length) return null
 	let max = 0
@@ -100,9 +121,7 @@ export function maxEventIdFromHistory(
 }
 
 /** True only before GW1; between later GWs also uses `next-derived`. */
-export function isPreseasonReviewAnchor(
-	anchor: ReviewGameweekAnchor,
-): boolean {
+export function isPreseasonReviewAnchor(anchor: ReviewGameweekAnchor): boolean {
 	return (
 		anchor.currentGw === null &&
 		anchor.source === 'next-derived' &&
