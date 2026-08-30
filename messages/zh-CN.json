@@ -2218,6 +2218,8 @@
 		"reviewTournamentScore": "赛事积分",
 		"reviewMatchups": "本轮对战",
 		"reviewBye": "轮空",
+		"reviewGroupLabel": "小组",
+		"reviewGroup": "第 {group} 组",
 		"reviewAverage": "平均队伍",
 		"reviewNetShort": "净分",
 		"reviewStandings": "对战积分榜",

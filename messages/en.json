@@ -2218,6 +2218,8 @@
 		"reviewTournamentScore": "Tournament score",
 		"reviewMatchups": "Matchups",
 		"reviewBye": "Bye",
+		"reviewGroupLabel": "Group",
+		"reviewGroup": "Group {group}",
 		"reviewAverage": "Average",
 		"reviewNetShort": "net",
 		"reviewStandings": "Standings",

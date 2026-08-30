@@ -315,7 +315,9 @@ function H2HReview({
 							className="rounded-xl border border-slate-100 bg-slate-50 p-3"
 						>
 							<div className="mb-2 text-xs text-slate-500">
-								{match.isBye ? t('reviewBye') : `GW ${match.groupId}`}
+								{match.isBye
+									? t('reviewBye')
+									: t('reviewGroup', { group: match.groupId })}
 							</div>
 							<div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-sm">
 								<div>
@@ -354,18 +356,20 @@ function H2HReview({
 				<div className="mt-3 overflow-x-auto">
 					<table className="min-w-full text-left text-sm">
 						<thead className="text-xs text-slate-500">
-							<tr>
-								<th className="px-2 py-2">#</th>
-								<th className="px-2 py-2">{t('team')}</th>
+								<tr>
+									<th className="px-2 py-2">#</th>
+									<th className="px-2 py-2">{t('reviewGroupLabel')}</th>
+									<th className="px-2 py-2">{t('team')}</th>
 								<th className="px-2 py-2 text-right">
 									{t('reviewMatchPoints')}
 								</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y">
-							{review.standings.map(row => (
-								<tr key={row.entryId}>
-									<td className="px-2 py-2 font-medium">{row.rank}</td>
+								{review.standings.map(row => (
+									<tr key={`${row.groupId}-${row.entryId}`}>
+										<td className="px-2 py-2 font-medium">{row.rank}</td>
+										<td className="px-2 py-2">{row.groupId}</td>
 									<td className="px-2 py-2">{row.entryName}</td>
 									<td className="px-2 py-2 text-right font-medium">
 										{row.matchPoints}
