@@ -404,7 +404,7 @@ ${LIVE_POINTS_SCORE_SUMMARY_FRAGMENT}
         eventId scoreCoreRevision state failedEntryIds
         times { sourceCheckedAt contentUpdatedAt publishedAt nextRefreshAt }
         rows {
-          entry entryName playerName teamValue bank chip transferCost played toPlay captainName
+          entry entryName playerName teamValue bank chip played toPlay captainName
           score { ...LivePointsScoreSummaryFields }
           rank { eventRank overallRank }
           activeCaptain { name points }
@@ -1117,7 +1117,7 @@ export const GET_TOURNAMENT_ENTRY_SQUADS = `${LIVE_POINTS_SCORE_FRAGMENT}
     tournamentEntrySquads(entryId: $entryId, tournamentId: $tournamentId, comparedEntryIds: $comparedEntryIds, ref: $ref) {
       tournamentId eventId scoreCoreRevision
       entries {
-        entry entryName playerName transferCost
+        entry entryName playerName
         score { ...LivePointsScoreFields }
         rank { eventRank overallRank leagueRank revision contentUpdatedAt state }
         pickList {
