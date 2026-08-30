@@ -10,6 +10,11 @@ on:
         description: 'Exact origin/main SHA to release'
         required: true
         type: string
+      maintenance_mode:
+        description: 'Serve the maintenance surface and keep EdgeOne on all-Vercel'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -25,6 +30,7 @@ env:
   # variable.  The safe default remains off until the Data hot watcher has
   # been verified in production.
   WEB_PRICE_CHANGE_LIVE_ENABLED: ${{ vars.LETLETME_PRICE_CHANGE_LIVE_ENABLED || 'false' }}
+  WEB_MAINTENANCE_MODE: ${{ inputs.maintenance_mode || false }}
 
 jobs:
   deploy:
@@ -43,6 +49,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          case "$WEB_MAINTENANCE_MODE" in
+            true|false) ;;
+            *) echo "invalid maintenance_mode: $WEB_MAINTENANCE_MODE" >&2; exit 1 ;;
+          esac
           if [[ "${{ vars.LETLETME_RELEASE_AUTOMATION_ENABLED }}" != "true" ]]; then
             echo "enabled=false" >> "$GITHUB_OUTPUT"
             echo "Web release automation is disabled until production credentials and EdgeOne snapshots are configured."
@@ -188,8 +198,12 @@ jobs:
             --force \
             --build-env "LETLETME_RELEASE_SHA=$RELEASE_SHA" \
             --build-env "NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=$WEB_PRICE_CHANGE_LIVE_ENABLED" \
+            --build-env "MAINTENANCE_MODE=$WEB_MAINTENANCE_MODE" \
+            --build-env "MAINTENANCE_RETRY_AFTER_SECONDS=420" \
             --env "LETLETME_RELEASE_SHA=$RELEASE_SHA" \
             --env "NEXT_PUBLIC_PRICE_CHANGE_LIVE_ENABLED=$WEB_PRICE_CHANGE_LIVE_ENABLED" \
+            --env "MAINTENANCE_MODE=$WEB_MAINTENANCE_MODE" \
+            --env "MAINTENANCE_RETRY_AFTER_SECONDS=420" \
             --meta "gitSha=$RELEASE_SHA" \
             --token "$VERCEL_TOKEN" > /tmp/vercel-candidate-url
           candidate_url="$(tr -d '\r\n' < /tmp/vercel-candidate-url)"
@@ -426,6 +440,17 @@ jobs:
             echo "promoted Vercel alias did not converge to $RELEASE_SHA" >&2
             exit 1
           }
+
+          if [[ "$WEB_MAINTENANCE_MODE" == true ]]; then
+            # The maintenance dispatch is the traffic barrier for the hard
+            # cutover.  Keep the public route on the verified Vercel
+            # maintenance candidate and do not activate/split Tencent until
+            # the final non-maintenance Web release is ready.
+            route_changed=0
+            cleanup_remote_root
+            echo "Vercel maintenance barrier is active at exact SHA $RELEASE_SHA; EdgeOne remains all-Vercel."
+            exit 0
+          fi
 
           ssh -F "$ssh_dir/config" letletme-tencent \
             "sudo /usr/local/libexec/letletme-release activate '$RELEASE_SHA'"
