@@ -403,7 +403,8 @@ export function LiveMatchesClient({
 		selectedEventId: pollingEventId,
 		snapshot,
 		windowState: snapshot?.windowState ?? snapshot?.state,
-		nextRefreshAt: snapshot?.nextRefreshAt
+		nextRefreshAt: snapshot?.nextRefreshAt,
+		isOfficialUpdating
 	}) || shouldPollLiveMatchesTransition({
 		isPageActive,
 		currentEventId: resolvedCurrentEventId,

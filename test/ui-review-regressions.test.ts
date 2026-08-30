@@ -351,6 +351,9 @@ describe('explore trends presentation', () => {
 		for (const text of [source, zhMessages, enMessages]) {
 			assert.doesNotMatch(text, /ROUND READ|signalDeskDescription|heroKicker/)
 		}
+		assert.match(source, /from ['"]@\/i18n\/navigation['"]/)
+		assert.match(source, /setCohortId\(committed\.cohort\.id\)/)
+		assert.match(source, /updateUrl\([\s\S]*'replace'\)/)
 	})
 })
 

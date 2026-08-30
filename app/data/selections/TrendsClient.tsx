@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, ArrowRight, RefreshCw, Sparkles } from 'lucide-react'
@@ -729,7 +729,8 @@ export default function TrendsClient({
 					? ((payload as { trendCohortSnapshot?: TrendDesk })
 							.trendCohortSnapshot ?? null)
 					: (payload as TrendDesk)
-			if (!desk || requestGeneration !== generation.current) return
+			if (requestGeneration !== generation.current) return
+			if (!desk) throw new Error('trend desk unavailable')
 			cache.current.set(key, desk)
 			startTransition(() => setCommitted(desk))
 		} catch (requestError) {
@@ -738,7 +739,23 @@ export default function TrendsClient({
 				requestError.name === 'AbortError'
 			)
 				return
-			if (requestGeneration === generation.current) setError(t('statsError'))
+			if (requestGeneration === generation.current) {
+				// The URL and selectors optimistically move while the request is in
+				// flight. On failure, restore the last rendered desk so controls never
+				// name one cohort while the metrics visibly belong to another.
+				if (committed) {
+					setAccess(committed.cohort.access)
+					setCohortId(committed.cohort.id)
+					setEventId(committed.eventId)
+					updateUrl(
+						committed.cohort.access,
+						committed.cohort.id,
+						committed.eventId,
+						'replace'
+					)
+				}
+				setError(t('statsError'))
+			}
 		} finally {
 			inFlight.current.delete(key)
 			if (requestGeneration === generation.current) setPending(false)

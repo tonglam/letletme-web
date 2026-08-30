@@ -67,7 +67,8 @@ export function shouldPollLiveSnapshot({
 	selectedEventId,
 	snapshot,
 	windowState,
-	nextRefreshAt
+	nextRefreshAt,
+	isOfficialUpdating = false
 }: {
 	isPageActive: boolean
 	currentEventId?: number
@@ -75,6 +76,8 @@ export function shouldPollLiveSnapshot({
 	snapshot?: LiveSnapshotStatus | null
 	windowState?: string | null
 	nextRefreshAt?: string | null
+	/** The official post-deadline sync is expected to have no live snapshot yet. */
+	isOfficialUpdating?: boolean
 }): boolean {
 	if (!isPageActive || !currentEventId || selectedEventId !== currentEventId) {
 		return false
@@ -88,10 +91,13 @@ export function shouldPollLiveSnapshot({
 	) {
 		return false
 	}
-	// A missing or mismatched snapshot means the selected round cannot be
-	// confirmed as live. Do not turn uncertainty into a background refresh loop;
-	// the user can still request a fresh snapshot with the manual button.
-	if (!snapshot || snapshot.eventId !== selectedEventId) return false
+	// During FPL's expected post-deadline sync the first live request can be
+	// intentionally unavailable. Keep a cheap context heartbeat armed so the
+	// page can discover the published snapshot without a manual reload. Outside
+	// that explicit lifecycle state, uncertainty must remain manual-only.
+	if (!snapshot || snapshot.eventId !== selectedEventId) {
+		return isOfficialUpdating
+	}
 	// Keep the normal countdown armed for both due and future publication
 	// refreshes. React will not re-evaluate this predicate merely because time
 	// passed, so disabling it for a future deadline would leave stale scores

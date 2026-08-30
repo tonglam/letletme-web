@@ -29,6 +29,7 @@ import {
 	type TeamFdrRow
 } from '@/lib/fixtures-fdr'
 import { positionBadgeClass } from '@/lib/position-style'
+import { resolveFixturePlanningHorizon } from '@/lib/review-gameweek'
 import { cn, normalizePosition, type PositionCode } from '@/lib/utils'
 import { TrendingDown, TrendingUp, Users } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
@@ -397,6 +398,19 @@ export default function FixturesClient({
 	const [loading, setLoading] = useState(false)
 	const [loadError, setLoadError] = useState(false)
 	const [focusedTeamId, setFocusedTeamId] = useState<number | null>(null)
+	const selectableHorizons = useMemo(() => {
+		const remaining = resolveFixturePlanningHorizon(fromGw, 8)
+		if (remaining == null) return FDR_HORIZONS
+		const options = new Set<FdrHorizon>(
+			FDR_HORIZONS.filter(option => option <= remaining)
+		)
+		// Near the season boundary the exact remaining window is more useful
+		// than leaving the user with no selected control at all.
+		if (remaining < 3 || (horizon <= remaining && !options.has(horizon))) {
+			options.add(remaining)
+		}
+		return Array.from(options).sort((a, b) => a - b)
+	}, [fromGw, horizon])
 
 	const squadKeySet = useMemo(() => new Set(mySquadKeys), [mySquadKeys])
 	const mySquadExposure = useMemo(
@@ -425,17 +439,23 @@ export default function FixturesClient({
 
 	const selectHorizon = useCallback(
 		(next: FdrHorizon) => {
-			if (next === horizon || next === pendingHorizon) return
+			const effectiveNext = resolveFixturePlanningHorizon(fromGw, next)
+			if (
+				effectiveNext == null ||
+				effectiveNext === horizon ||
+				effectiveNext === pendingHorizon
+			)
+				return
 			requestGenerationRef.current += 1
 			requestRef.current?.abort()
-			if (next < horizon) {
+			if (effectiveNext < horizon) {
 				setPendingHorizon(null)
 				setLoading(false)
 				setLoadError(false)
-				startTransition(() => setHorizon(next))
+				startTransition(() => setHorizon(effectiveNext))
 				return
 			}
-			const targetEnd = Math.min(38, fromGw + next - 1)
+			const targetEnd = fromGw + effectiveNext - 1
 			const missing = Array.from(
 				{ length: targetEnd - fromGw + 1 },
 				(_, index) => fromGw + index
@@ -446,7 +466,7 @@ export default function FixturesClient({
 			if (missing.length === 0) {
 				setPendingHorizon(null)
 				setLoadError(false)
-				startTransition(() => setHorizon(next))
+				startTransition(() => setHorizon(effectiveNext))
 				return
 			}
 			const first = missing[0]!
@@ -454,7 +474,7 @@ export default function FixturesClient({
 			const generation = requestGenerationRef.current
 			const controller = new AbortController()
 			requestRef.current = controller
-			setPendingHorizon(next)
+			setPendingHorizon(effectiveNext)
 			setLoading(true)
 			setLoadError(false)
 			void fetch(`/api/fixtures/window?fromGw=${first}&count=${count}`, {
@@ -482,7 +502,7 @@ export default function FixturesClient({
 					setFixturesByEvent(new Map(cacheRef.current))
 					setPendingHorizon(null)
 					setLoadError(false)
-					startTransition(() => setHorizon(next))
+					startTransition(() => setHorizon(effectiveNext))
 				})
 				.catch(error => {
 					if (
@@ -602,7 +622,7 @@ export default function FixturesClient({
 					{/* Controls */}
 					<Card className="mb-8 p-4 sm:p-5">
 						<div className="flex flex-wrap gap-1.5">
-							{FDR_HORIZONS.map(h => (
+							{selectableHorizons.map(h => (
 								<button
 									key={h}
 									type="button"

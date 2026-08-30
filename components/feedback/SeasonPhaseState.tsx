@@ -1,4 +1,5 @@
 import { PageState } from '@/components/feedback/PageState'
+import { SeasonPhaseAutoRefresh } from '@/components/feedback/SeasonPhaseAutoRefresh'
 import { SeasonPhaseRetry } from '@/components/feedback/SeasonPhaseRetry'
 import { Link } from '@/i18n/navigation'
 import type {
@@ -70,26 +71,29 @@ export async function SeasonPhaseState({
 	if (isOfficialLiveUpdatingSignal(presentation.signal)) {
 		const updatingGameweek =
 			presentation.currentEventId ?? presentation.nextEventId ?? gameweek
-		return (
-			<PageState
-				icon={RefreshCw}
-				title={t('updatingTitle')}
-				description={t('updatingDescription', {
-					gameweek: updatingGameweek,
-				})}
-				actions={
-					<>
-						<Link className="underline underline-offset-4" href="/explore/fixtures">
-							{t('viewFixtures')}
-						</Link>
-						<Link className="underline underline-offset-4" href="/explore/market">
-							{t('viewMarket')}
-						</Link>
-					</>
-				}
-				role="status"
-			/>
-		)
+			return (
+				<>
+					<SeasonPhaseAutoRefresh />
+					<PageState
+						icon={RefreshCw}
+						title={t('updatingTitle')}
+						description={t('updatingDescription', {
+							gameweek: updatingGameweek,
+						})}
+						actions={
+							<>
+								<Link className="underline underline-offset-4" href="/explore/fixtures">
+									{t('viewFixtures')}
+								</Link>
+								<Link className="underline underline-offset-4" href="/explore/market">
+									{t('viewMarket')}
+								</Link>
+							</>
+						}
+						role="status"
+					/>
+				</>
+			)
 	}
 
 	if (presentation.phase === 'OFFSEASON') {

@@ -149,6 +149,22 @@ describe('Live Points V2 web contract', () => {
 		}), false)
 	})
 
+	it('polls through the expected official sync when the first snapshot is absent', () => {
+		assert.equal(shouldPollLiveSnapshot({
+			isPageActive: true,
+			currentEventId: 2,
+			selectedEventId: 2,
+			snapshot: null,
+			isOfficialUpdating: true
+		}), true)
+		assert.equal(shouldPollLiveSnapshot({
+			isPageActive: true,
+			currentEventId: 2,
+			selectedEventId: 2,
+			snapshot: null
+		}), false)
+	})
+
 	it('maps delivery timestamps without using source checks as content revisions', () => {
 		const snapshot = liveContextToSnapshot({
 			season: '2627',

@@ -710,7 +710,8 @@ export function useLivePoints({
 		selectedEventId: selectedGameweek,
 		snapshot,
 		windowState: snapshot?.state,
-		nextRefreshAt: snapshot?.nextRefreshAt
+		nextRefreshAt: snapshot?.nextRefreshAt,
+		isOfficialUpdating
 	})
 
 	return {

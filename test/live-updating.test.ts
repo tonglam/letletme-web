@@ -47,6 +47,7 @@ describe('official live updating state', () => {
 		])
 
 		assert.match(phaseState, /isOfficialLiveUpdatingSignal\(presentation\.signal\)/)
+		assert.match(phaseState, /<SeasonPhaseAutoRefresh \/>/)
 		assert.match(phaseState, /role="status"/)
 		assert.match(priceBoard, /if \(officialUpdating\) return null/)
 		assert.match(priceBoard, /role="status"/)
