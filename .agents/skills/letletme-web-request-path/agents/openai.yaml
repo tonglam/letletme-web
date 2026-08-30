@@ -1,0 +1,4 @@
+interface:
+  display_name: LetLetMe Web Request Path
+  short_description: Trace Web routes, auth, GraphQL, and browser behavior
+  default_prompt: Trace this LetLetMe Web change through the owning route, server or browser request path, contract boundary, and narrow verification.
