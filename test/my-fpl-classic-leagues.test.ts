@@ -56,8 +56,8 @@ describe('My FPL Classic league visibility', () => {
 		)
 	})
 
-	it('loads ranks on the server and passes them into the deterministic header', async () => {
-		const [page, client, header] = await Promise.all([
+	it('seeds the settled tournament review through the V2 server contract', async () => {
+		const [page, client] = await Promise.all([
 			readFile(
 				new URL(
 					'../app/[locale]/my-fpl/competitions/page.tsx',
@@ -67,25 +67,22 @@ describe('My FPL Classic league visibility', () => {
 			),
 			readFile(
 				new URL(
-					'../app/me/tournament/TournamentStatsClient.tsx',
-					import.meta.url
-				),
-				'utf8'
-			),
-			readFile(
-				new URL(
-					'../app/me/tournament/_components/TournamentStatsHeader.tsx',
+					'../app/me/tournament/TournamentReviewV2Client.tsx',
 					import.meta.url
 				),
 				'utf8'
 			)
 		])
 
-		assert.match(page, /GET_ENTRY_LEAGUES/)
-		assert.match(page, /selectUntrackedFplClassicLeagueRanks/)
-		assert.match(page, /timeoutMs: 1_500/)
-		assert.match(page, /initialFplClassicRanks=\{initialFplClassicRanks\}/)
-		assert.match(client, /fplClassicRanks=\{props\.initialFplClassicRanks\}/)
-		assert.match(header, /t\('fplClassicRanks'\)/)
+		assert.match(page, /GET_MY_TOURNAMENT_REVIEW_CATALOG/)
+		assert.match(page, /GET_MY_TOURNAMENT_GAMEWEEK_REVIEW/)
+		assert.match(page, /GET_MY_TOURNAMENT_SEASON_REVIEW/)
+		assert.match(page, /latestSettledEventId/)
+		assert.match(page, /initialCatalog=\{initialCatalog\}/)
+		assert.match(page, /initialGameweekReview=\{initialGameweekReview\}/)
+		assert.match(client, /GET_MY_TOURNAMENT_REVIEW_CATALOG/)
+		assert.match(client, /GET_MY_TOURNAMENT_GAMEWEEK_REVIEW/)
+		assert.match(client, /GET_MY_TOURNAMENT_SEASON_REVIEW/)
+		assert.match(client, /CONTRACT = 'my-tournament-review-v2'/)
 	})
 })
