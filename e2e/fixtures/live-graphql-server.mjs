@@ -379,12 +379,82 @@ const livePicks = Array.from({ length: 15 }, (_, index) => {
 		isGwStarted: true,
 		isGwFinished: false,
 		isPlayed: true,
+		isCaptain: element === 1,
+		isViceCaptain: element === 2,
+		multiplier: element === 1 ? 2 : 1,
+		pickActive: element <= 11,
+		autoSub: false,
+		bgw: false,
 		expectedGoals: null,
 		expectedAssists: null,
 		expectedGoalInvolvements: null,
 		expectedGoalsConceded: null,
 		inDreamTeam: false
 	}
+})
+
+const liveRevisionVector = revision => ({
+	publicationId: `e2e-live-${revision.slice(0, 8)}`,
+	generation: 1,
+	lifecycle: revision,
+	fixtureIdentity: revision,
+	scoreCore: revision,
+	displayStats: revision,
+	explain: revision,
+	picksBase: revision,
+	officialAdjustment: null,
+	previousTotals: null,
+	finalResult: null,
+	rules: revision,
+	algorithm: 'live-points-v2-algorithm-1',
+	input: revision
+})
+
+const liveTimes = (
+	sourceCheckedAt = '2026-08-04T18:00:30.000Z',
+	publishedAt = '2026-08-04T18:00:00.000Z'
+) => ({
+	sourceCheckedAt,
+	contentUpdatedAt: publishedAt,
+	publishedAt,
+	checkpointedAt: null,
+	servedAt: sourceCheckedAt,
+	staleAt: sourceCheckedAt,
+	nextRefreshAt: '2026-08-04T18:01:00.000Z'
+})
+
+const liveDelivery = state => ({
+	state,
+	servedFrom: 'REDIS_CURRENT',
+	reasonCodes: []
+})
+
+const liveSnapshot = ({
+	eventId = 33,
+	revision = 'a'.repeat(64),
+	state = 'LIVE_ACTIVE',
+	sourceCheckedAt = '2026-08-04T18:00:30.000Z',
+	publishedAt = '2026-08-04T18:00:00.000Z'
+} = {}) => ({
+	season: '2627',
+	eventId,
+	state,
+	revisions: liveRevisionVector(revision),
+	times: liveTimes(sourceCheckedAt, publishedAt),
+	delivery: liveDelivery(state === 'FINALIZED' ? 'FINAL' : 'FRESH')
+})
+
+const liveScore = (eventPoints = 22, revision = 'a'.repeat(64)) => ({
+	eventPoints,
+	netEventPoints: eventPoints,
+	totalPoints: 1234,
+	totalScope: 'OVERALL',
+	transferCost: 0,
+	source: 'FPL_EVENT_LIVE',
+	calculationMode: 'PROJECTED_AUTOSUBS',
+	revisions: liveRevisionVector(revision),
+	times: liveTimes(),
+	delivery: liveDelivery('FRESH')
 })
 
 let recoveryEntryRequestCount = 0
@@ -462,7 +532,7 @@ const server = createServer((request, response) => {
 						gameweekDesk: {
 							season: '2627',
 							coreRevision: '7',
-							liveRevision: '8',
+							scoreCoreRevision: '8',
 							eventId,
 							lifecycle: 'PROVISIONAL',
 							overviewState: 'AVAILABLE',
@@ -687,7 +757,7 @@ const server = createServer((request, response) => {
 					gameweekDesk: {
 						season: '2627',
 						coreRevision: '7',
-						liveRevision: scheduled ? null : '8',
+						scoreCoreRevision: scheduled ? null : '8',
 						anchorEventId: 33,
 						eventId,
 						currentEventId: 33,
@@ -1120,22 +1190,27 @@ const server = createServer((request, response) => {
 						nextEventId: 34,
 						anchorEventId: 33,
 						latestFinalizedEventId: 32,
-						revision: 'a'.repeat(24),
-						state: liveHydrationFixtureEnabled ? 'LIVE_ACTIVE' : 'SCHEDULED',
+						scoreCoreRevision: 'a'.repeat(64),
+						state: liveHydrationFixtureEnabled ? 'LIVE_ACTIVE' : 'PICKS_PROBE',
 						windowState: liveHydrationFixtureEnabled
 							? 'LIVE_ACTIVE'
-							: 'EVENT_SCHEDULED',
+							: 'PRE_DEADLINE',
 						producerState: liveHydrationFixtureEnabled
 							? 'LIVE_ACTIVE'
 							: 'PICKS_PROBE',
 						anchorMode: 'CURRENT',
 						dataAvailability: liveHydrationFixtureEnabled
 							? 'FRESH'
-							: 'SCHEDULED',
+							: 'UNAVAILABLE',
 						nextRefreshAt: '2026-08-04T18:01:00.000Z',
 						sourceCheckedAt: '2026-08-04T18:00:30.000Z',
-						checkedAt: '2026-08-04T18:00:30.000Z',
 						publishedAt: '2026-08-04T18:00:00.000Z',
+						source: 'REDIS_CURRENT',
+						revisions: liveRevisionVector('a'.repeat(64)),
+						times: liveTimes(),
+						delivery: liveDelivery(
+							liveHydrationFixtureEnabled ? 'FRESH' : 'UNAVAILABLE'
+						),
 						stale: false
 					}
 				}
@@ -1151,55 +1226,41 @@ const server = createServer((request, response) => {
 					liveMatchdayDesk: {
 						season: '2627',
 						eventId: 33,
-						revision: 'a'.repeat(24),
-						state: liveHydrationFixtureEnabled ? 'LIVE' : 'SCHEDULED',
+						scoreCoreRevision: 'a'.repeat(64),
+						state: liveHydrationFixtureEnabled ? 'LIVE_ACTIVE' : 'PRE_DEADLINE',
 						windowState: liveHydrationFixtureEnabled
 							? 'LIVE_ACTIVE'
-							: 'EVENT_SCHEDULED',
+							: 'PRE_DEADLINE',
 						dataAvailability: liveHydrationFixtureEnabled
 							? 'FRESH'
-							: 'SCHEDULED',
-						liveRevision: 'a'.repeat(24),
+							: 'UNAVAILABLE',
 						nextRefreshAt: '2026-08-04T18:01:00.000Z',
 						sourceCheckedAt: '2026-08-04T18:00:30.000Z',
 						publishedAt: '2026-08-04T18:00:00.000Z',
+						source: 'REDIS_CURRENT',
+						revisions: liveRevisionVector('a'.repeat(64)),
+						times: liveTimes(),
+						delivery: liveDelivery(
+							liveHydrationFixtureEnabled ? 'FRESH' : 'UNAVAILABLE'
+						),
 						stale: false,
-						matches: liveHydrationFixtureEnabled
-							? [
-									{
-										fixtureId: match.matchId,
-										eventId: 33,
-										homeTeamId: match.homeTeamId,
-										homeTeamName: match.homeTeamName,
-										awayTeamId: match.awayTeamId,
-										awayTeamName: match.awayTeamName,
-										homeScore: match.homeScore,
-										awayScore: match.awayScore,
-										kickoffTime: match.kickoffTime,
-										minutes: match.minutes,
-										started: true,
-										finished: false
-									}
-								]
-							: [],
-						nextFixtures: liveHydrationFixtureEnabled
-							? []
-							: [
-									{
-										fixtureId: match.matchId,
-										eventId: 33,
-										homeTeamId: match.homeTeamId,
-										homeTeamName: match.homeTeamName,
-										awayTeamId: match.awayTeamId,
-										awayTeamName: match.awayTeamName,
-										homeScore: match.homeScore,
-										awayScore: match.awayScore,
-										kickoffTime: match.kickoffTime,
-										minutes: 0,
-										started: false,
-										finished: false
-									}
-								],
+						matches: [
+							{
+								fixtureId: match.matchId,
+								eventId: 33,
+								homeTeamId: match.homeTeamId,
+								homeTeamName: match.homeTeamName,
+								awayTeamId: match.awayTeamId,
+								awayTeamName: match.awayTeamName,
+								homeScore: match.homeScore,
+								awayScore: match.awayScore,
+								kickoffTime: match.kickoffTime,
+								minutes: liveHydrationFixtureEnabled ? match.minutes : 0,
+								started: liveHydrationFixtureEnabled,
+								finished: false
+							}
+						],
+						nextFixtures: [],
 						highlights: []
 					}
 				}
@@ -1217,24 +1278,31 @@ const server = createServer((request, response) => {
 			}
 			json(response, 200, {
 				data: {
-					liveSnapshot: {
-						eventId: 33,
-						revision: 'a'.repeat(24),
-						state: 'LIVE',
-						publishedAt: '2026-08-04T18:00:00.000Z',
-						checkedAt: '2026-08-04T18:00:30.000Z'
-					},
+					liveSnapshot: liveSnapshot(),
 					calcLivePointsByEntry: {
+						availability: 'READY',
+						delivery: liveDelivery('FRESH'),
+						snapshot: liveSnapshot(),
 						entry: requestedEntry,
 						event: 33,
 						entryName: 'E2E United',
 						playerName: 'Test Manager',
 						chip: null,
-						livePoints: 22,
-						transferCost: 0,
-						liveNetPoints: 22,
-						liveTotalPoints: 1234,
+						score: liveScore(),
+						rank: null,
+						provisional: true,
+						region: null,
+						startedEvent: 1,
+						value: 100,
+						bank: 0,
+						teamValue: 100,
+						totalTransfers: 0,
+						lastValue: 100,
+						playedCaptain: 1,
+						activeCaptain: { id: 1, name: 'Player 1', points: 6 },
 						captainName: 'Player 1',
+						played: 11,
+						toPlay: 0,
 						pickList: livePicks
 					}
 				}

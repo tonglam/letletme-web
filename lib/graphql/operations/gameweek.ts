@@ -3,7 +3,7 @@ export const GET_GAMEWEEK_DESK = `
     gameweekDesk(eventId: $eventId) {
       season
       coreRevision
-      liveRevision
+      scoreCoreRevision
       anchorEventId
       eventId
       currentEventId
@@ -12,6 +12,7 @@ export const GET_GAMEWEEK_DESK = `
       lifecycle
       deadlineTime
       publishedAt
+      sourceCheckedAt
       overviewState
       boardsState
       overview {
@@ -79,7 +80,7 @@ export type GameweekOverviewPlayer = {
 export type GameweekDeskData = {
 	season: string
 	coreRevision: string
-	liveRevision: string | null
+	scoreCoreRevision: string | null
 	anchorEventId: number
 	eventId: number
 	currentEventId: number | null
@@ -88,6 +89,7 @@ export type GameweekDeskData = {
 	lifecycle: GameweekLifecycle
 	deadlineTime: string | null
 	publishedAt: string | null
+	sourceCheckedAt: string | null
 	overviewState: GameweekSectionState
 	boardsState: GameweekSectionState
 	overview: {

@@ -115,7 +115,7 @@ export default function TeamPointsClient({
 				onEntryLookupRetry={retryEntryLookup}
 				nextRefreshAt={
 					livePoints.snapshot?.nextRefreshAt ??
-					livePoints.liveData?.score?.nextRefreshAt ??
+					livePoints.liveData?.score?.times.nextRefreshAt ??
 					null
 				}
 			/>

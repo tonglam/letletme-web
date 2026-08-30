@@ -1,25 +1,25 @@
 import { GraphQLRequestError } from '@/lib/graphql-client'
 import type { TournamentLivePointsResponse } from '@/lib/graphql/operations/tournaments'
 
-export type TournamentLiveRevisionRef = {
+export type TournamentLiveScoreRef = {
 	season: string
 	eventId: number
-	revision: string
+	scoreCoreRevision: string
 } | null
 
 type TournamentDeskExecutor = (
-	ref: TournamentLiveRevisionRef,
+	ref: TournamentLiveScoreRef,
 	options?: { handledErrorCodes?: readonly string[] }
 ) => Promise<TournamentLivePointsResponse>
 
 const REVISION_RECOVERY_OPTIONS = {
-	handledErrorCodes: ['LIVE_REVISION_GONE']
+	handledErrorCodes: ['LIVE_SCORE_REVISION_GONE']
 } as const
 
-export const isLiveRevisionGone = (error: unknown): boolean =>
+export const isLiveScoreRevisionGone = (error: unknown): boolean =>
 	(error instanceof GraphQLRequestError &&
-		error.code === 'LIVE_REVISION_GONE') ||
-	String(error).includes('LIVE_REVISION_GONE')
+		error.code === 'LIVE_SCORE_REVISION_GONE') ||
+	String(error).includes('LIVE_SCORE_REVISION_GONE')
 
 /**
  * A publication can advance between the context read and a tournament desk
@@ -27,12 +27,12 @@ export const isLiveRevisionGone = (error: unknown): boolean =>
  */
 export async function loadTournamentLiveDeskWithRevisionRecovery(
 	execute: TournamentDeskExecutor,
-	ref: TournamentLiveRevisionRef
+	ref: TournamentLiveScoreRef
 ): Promise<TournamentLivePointsResponse> {
 	try {
 		return await execute(ref, ref ? REVISION_RECOVERY_OPTIONS : undefined)
 	} catch (error) {
-		if (!ref || !isLiveRevisionGone(error)) throw error
+		if (!ref || !isLiveScoreRevisionGone(error)) throw error
 		return execute(null)
 	}
 }

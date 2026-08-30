@@ -69,6 +69,19 @@ const PUBLIC_BROWSER_OPERATION_ALLOWLIST = new Set([
 	'SearchEntries'
 ])
 
+export const LIVE_POINTS_CONTRACT_HEADER = 'X-LetLetMe-Contract'
+export const LIVE_POINTS_CONTRACT_VERSION = 'live-points-v2'
+
+/**
+ * Live Points is a breaking contract. Keep the gate in the shared request
+ * path so an individual page, RSC seed, or explain refresh cannot silently
+ * omit the required V2 header.
+ */
+export const requiresLivePointsV2Contract = (query: string): boolean =>
+	/\b(?:calcLivePointsByEntry|calcLivePointsForEntries|entryLiveCompetitionBoard|entryLiveCompetitionsDesk|liveSnapshot|liveContext|liveMatchdayDesk|liveFixturePlayers|liveScores|playerLive|eventLive|eventLiveExplain|eventLiveExplains|tournamentSelectionIndex|tournamentEntrySquads)\s*(?:\(|\{)/.test(
+		query
+	)
+
 export const extractOperationName = (query: string): string | undefined =>
 	query.match(
 		/\b(?:query|mutation|subscription)\s+([A-Za-z_][A-Za-z0-9_]*)/
@@ -82,7 +95,9 @@ const syntheticBrowserTelemetryHeaders = (): Record<string, string> => {
 	if (
 		params.get('_perfSource') === 'synthetic' ||
 		params.get('cold') !== null ||
-		Array.from(params.keys()).some(key => /^_[a-z0-9-]*perf(?:ormance)?$/i.test(key))
+		Array.from(params.keys()).some(key =>
+			/^_[a-z0-9-]*perf(?:ormance)?$/i.test(key)
+		)
 	)
 		return { 'X-Letletme-Perf-Source': 'synthetic' }
 	return {}
@@ -206,7 +221,10 @@ async function doFetch<T>(
 			headers: {
 				'Content-Type': 'application/json',
 				...(isClient ? syntheticBrowserTelemetryHeaders() : {}),
-				...extraHeaders
+				...extraHeaders,
+				...(requiresLivePointsV2Contract(query)
+					? { [LIVE_POINTS_CONTRACT_HEADER]: LIVE_POINTS_CONTRACT_VERSION }
+					: {})
 			},
 			body: JSON.stringify({
 				operationName: extractOperationName(query),

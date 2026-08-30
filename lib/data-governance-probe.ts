@@ -45,7 +45,9 @@ export type DataGovernanceProbeResponse = {
 
 export class DataGovernanceProbeError extends Error {
 	readonly code:
-		'INVALID_REQUEST' | 'UNSUPPORTED_CONTRACT' | 'BUSINESS_DATA_UNAVAILABLE'
+		| 'INVALID_REQUEST'
+		| 'UNSUPPORTED_CONTRACT'
+		| 'BUSINESS_DATA_UNAVAILABLE'
 
 	constructor(code: DataGovernanceProbeError['code'], message: string) {
 		super(message)
@@ -358,9 +360,10 @@ async function probeLivePicks(
 			'live points loader returned the wrong event'
 		)
 	}
-	const liveRevision = live.snapshot?.revision ?? live.score?.revision
+	const scoreCoreRevision =
+		live.snapshot?.revisions?.scoreCore ?? live.score?.revisions.scoreCore
 	return {
-		revision: revision(liveRevision),
+		revision: revision(scoreCoreRevision),
 		complete: pickCountIsComplete(live.pickList) && live.snapshot != null
 	}
 }
@@ -491,7 +494,7 @@ export async function probeDataContract(
 			case 'live-snapshot': {
 				const { eventId, season } = await resolveProbeEvent(input)
 				const desk = await loadGameweekDesk(eventId)
-				if (desk.liveRevision === null) {
+				if (desk.scoreCoreRevision === null) {
 					throw new DataGovernanceProbeError(
 						'BUSINESS_DATA_UNAVAILABLE',
 						'live snapshot has no canonical live revision'
@@ -503,7 +506,7 @@ export async function probeDataContract(
 						'live snapshot season does not match the requested scope'
 					)
 				}
-				graphqlRevision = revision(desk.liveRevision)
+				graphqlRevision = revision(desk.scoreCoreRevision)
 				complete =
 					desk.eventId === eventId &&
 					desk.overviewState === 'AVAILABLE' &&

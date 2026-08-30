@@ -1,5 +1,5 @@
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
-import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
+import { traceableLiveScore } from '@/lib/live-score-v2'
 export {
 	copyElementImageToClipboard,
 	copyTextToClipboard,
@@ -51,11 +51,7 @@ export type FormatLivePointsShareInput = {
 		| 'entryName'
 		| 'entry'
 		| 'playerName'
-		| 'livePoints'
-		| 'liveNetPoints'
-		| 'liveTotalPoints'
 		| 'score'
-		| 'transferCost'
 		| 'chip'
 		| 'captainName'
 	>
@@ -132,7 +128,7 @@ export function formatLivePointsShareText({
 		(liveData.entry ? `Entry ${liveData.entry}` : 'FPL Team')
 	const manager = liveData.playerName?.trim()
 	const chip = formatChip(liveData.chip, labels)
-	const score = traceableOfficialManagerScore(liveData.score)
+	const score = traceableLiveScore(liveData.score)
 	const transferCost = score?.transferCost ?? null
 	const hitsPart =
 		transferCost != null && transferCost > 0

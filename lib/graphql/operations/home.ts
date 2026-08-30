@@ -71,7 +71,7 @@ export const GET_HOME_GAMEWEEK = /* GraphQL */ `
 			gameweekDesk {
 				season
 				coreRevision
-				liveRevision
+				scoreCoreRevision
 				eventId
 				lifecycle
 				overviewState
@@ -463,9 +463,10 @@ export type HomeGameweek = {
 	gameweekDesk: {
 		season: string
 		coreRevision: string
-		liveRevision: string | null
+		scoreCoreRevision: string | null
 		eventId: number
-		lifecycle: 'SCHEDULED' | 'PROVISIONAL' | 'SETTLED'
+				lifecycle: 'SCHEDULED' | 'PROVISIONAL' | 'SETTLED'
+			sourceCheckedAt: string | null
 		overviewState: 'PENDING' | 'AVAILABLE' | 'UNAVAILABLE'
 		boardsState: 'PENDING' | 'AVAILABLE' | 'UNAVAILABLE'
 		overview: {

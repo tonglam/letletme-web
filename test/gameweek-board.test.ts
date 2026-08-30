@@ -32,9 +32,9 @@ describe('gameweek boards', () => {
 	})
 
 	it('uses explicit snapshot states and only authoritative event fallbacks', () => {
-		assert.equal(resolveGameweekDisplayState('LIVE', null), 'provisional')
-		assert.equal(resolveGameweekDisplayState('SETTLED', null), 'settled')
-		assert.equal(resolveGameweekDisplayState('SCHEDULED', null), 'scheduled')
+		assert.equal(resolveGameweekDisplayState('LIVE_ACTIVE', null), 'provisional')
+		assert.equal(resolveGameweekDisplayState('FINALIZED', null), 'settled')
+		assert.equal(resolveGameweekDisplayState('PRE_DEADLINE', null), 'scheduled')
 		assert.equal(
 			resolveGameweekDisplayState(null, {
 				id: 1,

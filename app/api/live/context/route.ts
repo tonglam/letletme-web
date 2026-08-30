@@ -30,7 +30,7 @@ async function handleGet(request: Request) {
 			data.coreEventContext?.revision ?? 'none',
 			data.liveContext?.anchorEventId ?? 'none',
 			data.liveContext?.nextEventId ?? 'none',
-			data.liveContext?.revision ?? 'none',
+			data.liveContext?.scoreCoreRevision ?? 'none',
 			data.liveContext?.windowState ?? 'none',
 			data.liveContext?.dataAvailability ?? 'none'
 		].join(':')

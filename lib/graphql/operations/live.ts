@@ -101,11 +101,35 @@ export const GET_GAMEWEEK_BOARDS = `
       totalPoints
     }
     liveSnapshot(eventId: $eventId) {
+		season
       eventId
-      revision
       state
-      publishedAt
-      checkedAt
+		revisions {
+			publicationId
+			generation
+			lifecycle
+			fixtureIdentity
+			scoreCore
+			displayStats
+			explain
+			picksBase
+			officialAdjustment
+			previousTotals
+			finalResult
+			rules
+			algorithm
+			input
+		}
+		times {
+			sourceCheckedAt
+			contentUpdatedAt
+			publishedAt
+			checkpointedAt
+			servedAt
+			staleAt
+			nextRefreshAt
+		}
+		delivery { state servedFrom reasonCodes }
     }
   }
 `
@@ -125,9 +149,6 @@ export interface GameweekBoardsResponse {
 	liveSnapshot: LiveSnapshotStatus | null
 }
 
-// Keep this document below the 200 AST-node limit while retaining the
-// published calculated lineup. The live-points UI still has a safe pick-level
-// projection fallback for responses that do not contain an optional lineup.
 export const GET_LIVE_POINTS = `
   query GetLiveCalcPoints($eventId: Int!, $entryId: Int!) {
     calcLivePointsByEntry(eventId: $eventId, entryId: $entryId) {
@@ -142,41 +163,33 @@ export const GET_LIVE_POINTS = `
         netEventPoints
         totalPoints
         totalScope
-        eventRank
-        overallRank
-        leagueRank
         transferCost
         source
-        state
-        eventPointSemantics
-		effectiveLineup {
-		  elementId
-		  position
-		  sourceMultiplier
-		  effectiveMultiplier
-		  pickActive
-		  autoSub
-		  isCaptain
-		  isViceCaptain
-		  captainForScoring
-		}
-        revision
-        checkedAt
-        upstreamUpdatedAt
-        staleAt
-        nextRefreshAt
-	        reconciliation
-	        reasonCodes
+		calculationMode
+			revisions {
+				scoreCore
+				picksBase
+				officialAdjustment
+				previousTotals
+				finalResult
+				input
+			}
+			times {
+				sourceCheckedAt
+				contentUpdatedAt
+				publishedAt
+				nextRefreshAt
+			}
+			delivery { state }
+				}
+		      snapshot {
+			eventId
+			state
+		      }
+		      rank {
+			overallRank
 	      }
-	      snapshot {
-	        eventId
-	        revision
-	        state
-	        publishedAt
-	        checkedAt
-	      }
-      transferCost
-      captainName
+	      captainName
       pickList {
         element
         elementType
@@ -200,8 +213,8 @@ export const GET_LIVE_POINTS = `
         bps
         totalPoints
         starts
-        isGwStarted
-        isGwFinished
+	        isGwStarted
+	        isGwFinished
         isPlayed
         isCaptain
         isViceCaptain
@@ -211,10 +224,9 @@ export const GET_LIVE_POINTS = `
         bgw
         expectedGoals
         expectedAssists
-        expectedGoalInvolvements
-        expectedGoalsConceded
-        inDreamTeam
-      }
+	        expectedGoalInvolvements
+	        expectedGoalsConceded
+	      }
     }
   }
 `
@@ -262,76 +274,89 @@ export interface LivePick {
 export interface LiveCalcData {
 	entry: number
 	event: number
-	availability?: 'READY' | 'NO_PICKS' | 'LINEUP_UNAVAILABLE'
-	entryName?: string
-	playerName?: string
-	chip?: string | null
-	score?: LiveManagerScore
-	livePoints?: number
-	transferCost: number
-	liveNetPoints?: number
-	liveTotalPoints?: number
+	availability: 'READY' | 'PENDING' | 'NO_PICKS' | 'UNAVAILABLE'
+	delivery: LiveDelivery
+	snapshot: LiveSnapshotStatus
+	score: LivePointsScore
+	rank: LiveRank | null
+	provisional: boolean
+	entryName: string
+	playerName: string
+	region: string | null
+	chip: string
+	startedEvent: number
+	value: number
+	bank: number
+	teamValue: number
+	totalTransfers: number
+	lastValue: number
+	played: number
+	toPlay: number
+	playedCaptain: number
+	activeCaptain: { id: number; name: string; points: number }
 	captainName: string
 	pickList: LivePick[]
-	snapshot?: LiveSnapshotStatus | null
 }
 
-export type LiveManagerScore = {
-	eventPoints: number | null
-	netEventPoints: number | null
-	totalPoints: number | null
-	totalScope: 'OVERALL' | 'CLASSIC_PHASE' | 'UNKNOWN'
-	eventRank: number | null
-	overallRank: number | null
-	leagueRank: number | null
-	transferCost: number
-	source: 'FPL_EVENT_LIVE' | 'FPL_FINAL_RESULT' | 'UNAVAILABLE'
-	state: 'FRESH' | 'STALE' | 'SETTLING' | 'FINAL' | 'UNAVAILABLE'
-	eventPointSemantics: 'GROSS' | 'NET' | 'ZERO_COST_EQUIVALENT' | 'UNKNOWN'
-	calculationMode?: 'PROJECTED_AUTOSUBS' | 'FINAL_RESULT' | null
-	algorithmVersion?: string | null
-	provenance?: LiveManagerScoreProvenance | null
-	effectiveLineup?: LiveManagerScoreEffectiveLineup[] | null
-	revision: string | null
-	checkedAt: string | null
-	upstreamUpdatedAt: string | null
-	staleAt: string | null
+export interface LiveRevisionVector {
+	publicationId: string
+	generation: number
+	lifecycle: string
+	fixtureIdentity: string
+	scoreCore: string
+	displayStats: string
+	explain: string
+	picksBase: string | null
+	officialAdjustment: string | null
+	previousTotals: string | null
+	finalResult: string | null
+	rules: string
+	algorithm: string
+	input: string
+}
+
+export interface LiveTimes {
+	sourceCheckedAt: string
+	contentUpdatedAt: string
+	publishedAt: string
+	checkpointedAt: string | null
+	servedAt: string
+	staleAt: string
 	nextRefreshAt: string | null
-	reconciliation: 'MATCHED' | 'SOURCE_SKEW' | 'NOT_COMPARABLE' | 'NO_LINEUP'
+}
+
+export interface LiveDelivery {
+	state: 'FRESH' | 'STALE' | 'DEGRADED' | 'FINAL' | 'UNAVAILABLE'
+	servedFrom:
+		| 'REDIS_CURRENT'
+		| 'REDIS_PREVIOUS'
+		| 'PROCESS_LKG'
+		| 'POSTGRES_CHECKPOINT'
+		| 'FINAL_RESULT'
+		| 'UNAVAILABLE'
 	reasonCodes: string[]
 }
 
-export type LiveManagerScoreProvenance = {
-	scoreSource: 'FPL_EVENT_LIVE' | 'FPL_FINAL_RESULT'
+export interface LivePointsScore {
+	eventPoints: number
+	netEventPoints: number
+	totalPoints: number | null
+	totalScope: 'OVERALL' | 'UNKNOWN'
+	transferCost: number
+	source: 'FPL_EVENT_LIVE' | 'FPL_FINAL_RESULT' | 'UNAVAILABLE'
 	calculationMode: 'PROJECTED_AUTOSUBS' | 'FINAL_RESULT'
-	algorithmVersion: string | null
-	inputRevision: string
-	scoreRevision: string
-	rankRevision: string | null
-	livePublicationId: string | null
-	liveRevision: string | null
-	liveCheckedAt: string | null
-	picksRevision: string | null
-	picksCheckedAt: string | null
-	previousTotalsRevision: string | null
-	previousTotalsThroughEventId: number | null
-	resultRevision: string | null
-	resultCheckedAt: string | null
-	dataCheckedAt: string | null
-	rankSource: 'FPL_ENTRY_SUMMARY' | 'FPL_CLASSIC_STANDINGS' | null
-	rankCheckedAt: string | null
+	revisions: LiveRevisionVector
+	times: LiveTimes
+	delivery: LiveDelivery
 }
 
-export type LiveManagerScoreEffectiveLineup = {
-	elementId: number
-	position: number
-	sourceMultiplier: number
-	effectiveMultiplier: number
-	pickActive: boolean
-	autoSub: boolean
-	isCaptain: boolean
-	isViceCaptain: boolean
-	captainForScoring: boolean
+export interface LiveRank {
+	eventRank: number | null
+	overallRank: number | null
+	leagueRank: number | null
+	revision: string | null
+	contentUpdatedAt: string | null
+	state: LiveDelivery['state']
 }
 
 export interface LiveCalcDataResponse {
@@ -340,9 +365,6 @@ export interface LiveCalcDataResponse {
 }
 
 export type LiveSnapshotState =
-	| 'SCHEDULED'
-	| 'LIVE'
-	| 'SETTLED'
 	| 'PRE_DEADLINE'
 	| 'PICKS_WAIT'
 	| 'PICKS_PROBE'
@@ -353,19 +375,25 @@ export type LiveSnapshotState =
 	| 'GW_REVIEW'
 	| 'FINALIZED'
 	| 'PRESEASON'
-	| 'EVENT_SCHEDULED'
 	| 'BETWEEN_GAMEWEEKS'
 	| 'OFFSEASON'
+	| 'UNAVAILABLE'
 
 export interface LiveSnapshotStatus {
+	season?: string
 	eventId: number
-	/** Nullable when the window is scheduled or retaining core/final data without a live publication. */
-	revision: string | null
 	state: LiveSnapshotState
-	publishedAt: string | null
-	checkedAt: string | null
+	/** Window metadata used by matches/tournament transition polling. */
 	windowState?: LiveWindowState
 	dataAvailability?: LiveDataAvailability
+	revisions?: LiveRevisionVector
+	times?: LiveTimes
+	delivery?: LiveDelivery
+	publicationId?: string | null
+	scoreCoreRevision?: string | null
+	contentUpdatedAt?: string | null
+	sourceCheckedAt?: string | null
+	publishedAt?: string | null
 	nextRefreshAt?: string | null
 }
 
@@ -374,51 +402,57 @@ export interface LiveSnapshotResponse {
 }
 
 export const GET_LIVE_MATCHDAY_DESK = `
-  query GetLiveMatchdayDesk($ref: LiveRevisionRefInput) {
-    liveMatchdayDesk(ref: $ref) {
-      season
-      eventId
-      revision
-      state
-      windowState
-      dataAvailability
-	      liveRevision
-	      sourceCheckedAt
-	      publishedAt
-	      nextRefreshAt
-			stale
+  query GetLiveMatchdayDesk($ref: LivePublicationRefInput) {
+		liveMatchdayDesk(ref: $ref) {
+			season
+			eventId
+			scoreCoreRevision
+			state
+			windowState
+			dataAvailability
+			sourceCheckedAt
+			publishedAt
 			source
+			stale
+			nextRefreshAt
+			revisions {
+				publicationId
+				generation
+				lifecycle
+				fixtureIdentity
+				scoreCore
+				displayStats
+				explain
+				picksBase
+				officialAdjustment
+				previousTotals
+				finalResult
+				rules
+				algorithm
+				input
+			}
+			times {
+				sourceCheckedAt
+				contentUpdatedAt
+				publishedAt
+				checkpointedAt
+				servedAt
+				staleAt
+				nextRefreshAt
+			}
+			delivery { state servedFrom reasonCodes }
 		matches {
         fixtureId
         eventId
         homeTeamId
         homeTeamName
-		homeTeamShortName
         awayTeamId
         awayTeamName
-		awayTeamShortName
         homeScore
         awayScore
         kickoffTime
 		minutes
 		started
-			finished
-			finishedProvisional
-		}
-		nextFixtures {
-			fixtureId
-			eventId
-			homeTeamId
-			homeTeamName
-			homeTeamShortName
-			awayTeamId
-			awayTeamName
-			awayTeamShortName
-			homeScore
-			awayScore
-			kickoffTime
-			minutes
-			started
 			finished
 			finishedProvisional
 		}
@@ -570,10 +604,10 @@ export interface LiveMatchdayDeskRow {
 	eventId: number
 	homeTeamId: number
 	homeTeamName: string
-	homeTeamShortName: string
+	homeTeamShortName?: string
 	awayTeamId: number
 	awayTeamName: string
-	awayTeamShortName: string
+	awayTeamShortName?: string
 	homeScore: number | null
 	awayScore: number | null
 	kickoffTime: string | null
@@ -586,18 +620,19 @@ export interface LiveMatchdayDeskRow {
 export interface LiveMatchdayDesk {
 	season: string
 	eventId: number
-	revision: string
+	scoreCoreRevision: string
 	state: LiveSnapshotState
 	windowState: LiveWindowState
 	dataAvailability: LiveDataAvailability
-	liveRevision: string | null
 	publishedAt: string
-	source: 'REDIS' | 'POSTGRES' | 'CORE' | 'STALE'
+	source: LiveSnapshotSource
 	sourceCheckedAt?: string | null
 	stale?: boolean
+	revisions: LiveRevisionVector
+	times: LiveTimes
+	delivery: LiveDelivery
 	nextRefreshAt?: string | null
 	matches: LiveMatchdayDeskRow[]
-	nextFixtures: LiveMatchdayDeskRow[]
 }
 
 export interface LiveMatchdayDeskResponse {
@@ -617,11 +652,12 @@ export const GET_LIVE_CONTEXT = `
 		}
 		liveContext {
 			season
-      eventId: currentEventId
+			coreRevision
+	      eventId: currentEventId
       nextEventId
       anchorEventId
       latestFinalizedEventId
-      revision: liveRevision
+      scoreCoreRevision
       state
       windowState
       producerState
@@ -629,10 +665,16 @@ export const GET_LIVE_CONTEXT = `
       dataAvailability
       nextRefreshAt
       publishedAt
-      checkedAt: sourceCheckedAt
-      source
-      stale
-    }
+	      sourceCheckedAt
+	      source
+	      stale
+	      revisions {
+			publicationId generation lifecycle fixtureIdentity scoreCore displayStats
+			explain picksBase officialAdjustment previousTotals finalResult rules algorithm input
+		}
+		times { sourceCheckedAt contentUpdatedAt publishedAt checkpointedAt servedAt staleAt nextRefreshAt }
+		delivery { state servedFrom reasonCodes }
+	    }
   }
 `
 
@@ -642,7 +684,7 @@ export interface LiveContextResponse {
 		season: string
 		eventId: number | null
 		nextEventId: number | null
-		revision: string | null
+		scoreCoreRevision: string | null
 		state: LiveSnapshotState
 		windowState: LiveWindowState
 		producerState: LiveProducerState
@@ -651,16 +693,27 @@ export interface LiveContextResponse {
 		anchorEventId: number | null
 		latestFinalizedEventId: number | null
 		publishedAt: string | null
-		checkedAt: string | null
+		sourceCheckedAt: string | null
 		nextRefreshAt: string | null
-		source: 'REDIS' | 'POSTGRES' | 'CORE' | 'STALE' | null
+		source: LiveSnapshotSource | null
 		stale: boolean
+		revisions: LiveRevisionVector
+		times: LiveTimes
+		delivery: LiveDelivery
 	} | null
 }
 
+export type LiveSnapshotSource =
+	| 'REDIS_CURRENT'
+	| 'REDIS_PREVIOUS'
+	| 'POSTGRES_CHECKPOINT'
+	| 'PROCESS_LKG'
+	| 'FINAL_RESULT'
+	| 'UNAVAILABLE'
+
 export type LiveWindowState =
 	| 'PRESEASON'
-	| 'EVENT_SCHEDULED'
+	| 'PRE_DEADLINE'
 	| 'LIVE_ACTIVE'
 	| 'DAY_SETTLING'
 	| 'BETWEEN_FIXTURES'
@@ -681,17 +734,17 @@ export type LiveProducerState =
 	| 'FINALIZED'
 
 export type LiveDataAvailability =
-	'SCHEDULED' | 'FRESH' | 'LAST_GOOD' | 'FINAL' | 'PARTIAL' | 'UNAVAILABLE'
+	'FRESH' | 'STALE' | 'DEGRADED' | 'FINAL' | 'UNAVAILABLE'
 
 export type LiveAnchorMode =
 	'UPCOMING' | 'CURRENT' | 'PREVIOUS_FINAL' | 'OFFSEASON'
 
 export const GET_LIVE_FIXTURE_PLAYERS = `
-  query GetLiveFixturePlayers($ref: LiveRevisionRefInput!, $fixtureId: Int!) {
-    liveFixturePlayers(ref: $ref, fixtureId: $fixtureId) {
-      season
-      eventId
-      revision
+  query GetLiveFixturePlayers($ref: LivePublicationRefInput!, $fixtureId: Int!) {
+		liveFixturePlayers(ref: $ref, fixtureId: $fixtureId) {
+		season
+		eventId
+		scoreCoreRevision
       fixtureId
       players {
         player { id webName position team { id name shortName } }
@@ -730,10 +783,9 @@ export interface LiveFixturePerformance {
 export interface LiveFixturePlayersData {
 	season: string
 	eventId: number
-	revision: string | null
+	scoreCoreRevision: string
 	fixtureId: number
 	players: LiveFixturePerformance[]
-	source?: 'LIVE_PUBLICATION' | 'DURABLE_DB'
 }
 
 export interface LiveFixturePlayersResponse {
@@ -769,7 +821,7 @@ export interface EventLivePerformancesResponse {
 
 const LIVE_FIXTURE_PLAYERS_FRAGMENT = `
 	fragment LiveFixturePlayersBatchFields on LiveFixturePlayers {
-		season eventId revision fixtureId
+		season eventId scoreCoreRevision fixtureId
 		players {
 			player { id webName position team { id name shortName } }
 			minutes goalsScored assists cleanSheets goalsConceded ownGoals
@@ -793,7 +845,7 @@ export function buildLiveFixturePlayersBatchQuery(count: number): string {
 	).join('\n\t\t')
 	return `
 		query GetLiveFixturePlayersBatch(
-			$ref: LiveRevisionRefInput!
+			$ref: LivePublicationRefInput!
 			${definitions}
 		) {
 			${selections}

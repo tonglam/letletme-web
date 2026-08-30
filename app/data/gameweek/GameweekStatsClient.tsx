@@ -377,7 +377,7 @@ export default function GameweekStatsClient({
 			<RouteReadyMarker
 				name="GAMEWEEK_CONTENT_READY"
 				ready={!isLoading}
-				readyKey={`${committedDesk.eventId}:${committedDesk.coreRevision}:${committedDesk.liveRevision ?? ''}`}
+			readyKey={`${committedDesk.eventId}:${committedDesk.coreRevision}:${committedDesk.scoreCoreRevision ?? ''}`}
 				audienceHint="public"
 				goodMs={1_000}
 				poorMs={1_500}

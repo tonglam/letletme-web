@@ -120,7 +120,7 @@ export default function LivePointsClient({
 				onEntryLookupRetry={retryEntryLookup}
 				nextRefreshAt={
 					livePoints.snapshot?.nextRefreshAt ??
-					livePoints.liveData?.score?.nextRefreshAt ??
+					livePoints.liveData?.score?.times.nextRefreshAt ??
 					null
 				}
 			/>
