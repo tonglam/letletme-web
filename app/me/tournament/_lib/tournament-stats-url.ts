@@ -11,7 +11,7 @@ export type TournamentStatsPageView = 'gameweek' | 'season'
 export const TOURNAMENT_STATS_PATH = '/my-fpl/competitions'
 
 export function parseTournamentStatsView(
-	value: string | null | undefined,
+	value: string | null | undefined
 ): TournamentStatsPageView {
 	return value === 'gameweek' ? 'gameweek' : 'season'
 }
@@ -19,7 +19,7 @@ export function parseTournamentStatsView(
 export function parseTournamentStatsGw(
 	value: string | null | undefined,
 	maxGw: number,
-	fallback: number,
+	fallback: number
 ): number {
 	const n = Number(value)
 	if (!Number.isFinite(n) || n < 1) return fallback
@@ -32,6 +32,7 @@ export function buildTournamentStatsQueryString(opts: {
 	tournamentId?: string | number | null
 	view: TournamentStatsPageView
 	gw?: number | null
+	scope?: 'ACCESSIBLE' | 'ALL'
 }): string {
 	const params = new URLSearchParams()
 	if (opts.tournamentId != null && String(opts.tournamentId).length > 0) {
@@ -42,6 +43,9 @@ export function buildTournamentStatsQueryString(opts: {
 	}
 	if (opts.gw != null && opts.gw > 0) {
 		params.set('gw', String(opts.gw))
+	}
+	if (opts.scope === 'ALL') {
+		params.set('scope', 'all')
 	}
 	return params.toString()
 }

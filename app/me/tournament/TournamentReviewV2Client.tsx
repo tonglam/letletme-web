@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { usePathname, useRouter } from '@/i18n/navigation'
 import { executeQuery, type GraphQLRequestError } from '@/lib/graphql-client'
 import {
 	GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
@@ -20,6 +21,13 @@ import {
 	type MyTournamentSeasonReview,
 	type MyTournamentSeasonReviewResponse
 } from '@/lib/graphql/operations/my-fpl'
+import { buildTournamentStatsQueryString } from './_lib/tournament-stats-url'
+import {
+	mergeTournamentReviewEventIds,
+	tournamentReviewPointsRow,
+	tournamentReviewPointsSummary,
+	type TournamentReviewV2View
+} from './_lib/tournament-review-v2'
 
 type Catalog = MyTournamentReviewCatalogResponse['myTournamentReviewCatalog']
 
@@ -30,6 +38,7 @@ export interface TournamentReviewV2ClientProps {
 	initialView: 'gameweek' | 'season'
 	initialSelectedTournamentId: number | null
 	initialEventId: number | null
+	initialFinalizedEventIds: number[]
 	initialGameweekReview: MyTournamentGameweekReview | null
 	initialSeasonReview: MyTournamentSeasonReview | null
 	initialError: string | null
@@ -43,7 +52,8 @@ const formatLabel = (
 ) => {
 	if (format === 'H2H') return t('reviewFormatH2H')
 	if (format === 'KNOCKOUT') return t('reviewFormatKnockout')
-	return t('reviewFormatPoints')
+	if (format === 'POINTS') return t('reviewFormatPoints')
+	return t('reviewFormatUnknown')
 }
 
 const stateLabel = (
@@ -160,11 +170,13 @@ function Freshness({
 	freshness: MyTournamentReviewFreshness | null | undefined
 }) {
 	const t = useTranslations('TournamentStats')
+	const [hydrated, setHydrated] = useState(false)
+	useEffect(() => setHydrated(true), [])
 	if (!freshness) return null
 	return (
 		<div className="text-xs text-slate-500">
 			{t('reviewFreshness', { seconds: freshness.ageSeconds })} ·{' '}
-			{new Date(freshness.publishedAt).toLocaleString()}
+			{hydrated ? new Date(freshness.publishedAt).toLocaleString() : '—'}
 		</div>
 	)
 }
@@ -196,36 +208,44 @@ function LoadMore({
 
 function PointsReview({
 	points,
+	view,
 	loadingMore,
 	onLoadMore
 }: {
 	points: MyTournamentReviewPoints
+	view: TournamentReviewV2View
 	loadingMore: boolean
 	onLoadMore?: () => void
 }) {
 	const t = useTranslations('TournamentStats')
+	const summary = tournamentReviewPointsSummary(points, view)
+	const grossLabel =
+		view === 'season' ? t('reviewSeasonGross') : t('reviewGross')
+	const netLabel = view === 'season' ? t('reviewSeasonNet') : t('reviewNet')
 	return (
 		<div className="space-y-4">
 			<div className="grid gap-3 sm:grid-cols-3">
 				<div className="rounded-2xl border bg-white p-4 shadow-sm">
 					<div className="text-xs uppercase tracking-wide text-slate-500">
-						{t('reviewGross')}
+						{grossLabel}
 					</div>
 					<div className="mt-1 text-2xl font-semibold text-slate-950">
-						{numberOrDash(points.grossPointsTotal)}
+						{numberOrDash(summary.grossTotal)}
 					</div>
 					<div className="text-xs text-slate-500">
-						{t('reviewGrossAverage', { value: points.grossPointsAverage })}
+						{t('reviewGrossAverage', { value: summary.grossAverage })}
 					</div>
 				</div>
 				<div className="rounded-2xl border bg-white p-4 shadow-sm">
 					<div className="text-xs uppercase tracking-wide text-slate-500">
-						{t('reviewNet')}
+						{netLabel}
 					</div>
 					<div className="mt-1 text-2xl font-semibold text-slate-950">
-						{numberOrDash(points.netPointsTotal)}
+						{numberOrDash(summary.netTotal)}
 					</div>
-					<div className="text-xs text-slate-500">{t('reviewNetHint')}</div>
+					<div className="text-xs text-slate-500">
+						{view === 'season' ? t('reviewSeasonNetHint') : t('reviewNetHint')}
+					</div>
 				</div>
 				<div className="rounded-2xl border bg-white p-4 shadow-sm">
 					<div className="text-xs uppercase tracking-wide text-slate-500">
@@ -245,43 +265,48 @@ function PointsReview({
 						<tr>
 							<th className="px-4 py-3">{t('rank')}</th>
 							<th className="px-4 py-3">{t('team')}</th>
-							<th className="px-4 py-3 text-right">{t('reviewGross')}</th>
+							<th className="px-4 py-3 text-right">{grossLabel}</th>
 							<th className="px-4 py-3 text-right">{t('reviewCost')}</th>
-							<th className="px-4 py-3 text-right">{t('reviewNet')}</th>
+							<th className="px-4 py-3 text-right">{netLabel}</th>
 							<th className="px-4 py-3 text-right">
 								{t('reviewTournamentScore')}
 							</th>
 						</tr>
 					</thead>
 					<tbody className="divide-y">
-						{points.rows.map(row => (
-							<tr
-								key={row.entryId}
-								className="text-slate-700"
-							>
-								<td className="px-4 py-3 font-medium">
-									{numberOrDash(row.rank)}
-								</td>
-								<td className="px-4 py-3">
-									<div className="font-medium text-slate-950">
-										{row.entryName}
-									</div>
-									<div className="text-xs text-slate-500">{row.playerName}</div>
-								</td>
-								<td className="px-4 py-3 text-right">
-									{numberOrDash(row.grossPoints)}
-								</td>
-								<td className="px-4 py-3 text-right text-rose-700">
-									{numberOrDash(row.transferCost)}
-								</td>
-								<td className="px-4 py-3 text-right font-medium">
-									{numberOrDash(row.netPoints)}
-								</td>
-								<td className="px-4 py-3 text-right">
-									{numberOrDash(row.tournamentScore)}
-								</td>
-							</tr>
-						))}
+						{points.rows.map(row => {
+							const displayed = tournamentReviewPointsRow(row, view)
+							return (
+								<tr
+									key={row.entryId}
+									className="text-slate-700"
+								>
+									<td className="px-4 py-3 font-medium">
+										{numberOrDash(row.rank)}
+									</td>
+									<td className="px-4 py-3">
+										<div className="font-medium text-slate-950">
+											{row.entryName}
+										</div>
+										<div className="text-xs text-slate-500">
+											{row.playerName}
+										</div>
+									</td>
+									<td className="px-4 py-3 text-right">
+										{numberOrDash(displayed.grossPoints)}
+									</td>
+									<td className="px-4 py-3 text-right text-rose-700">
+										{numberOrDash(displayed.transferCost)}
+									</td>
+									<td className="px-4 py-3 text-right font-medium">
+										{numberOrDash(displayed.netPoints)}
+									</td>
+									<td className="px-4 py-3 text-right">
+										{numberOrDash(row.tournamentScore)}
+									</td>
+								</tr>
+							)
+						})}
 					</tbody>
 				</table>
 				<LoadMore
@@ -324,7 +349,7 @@ function H2HReview({
 									<div className="font-medium">
 										{match.home?.isAverage
 											? t('reviewAverage')
-											: (match.home?.entryName ?? t('reviewAverage'))}
+											: (match.home?.entryName ?? t('reviewBye'))}
 									</div>
 									<div className="text-xs text-slate-500">
 										{numberOrDash(match.home?.netPoints)} {t('reviewNetShort')}
@@ -335,7 +360,7 @@ function H2HReview({
 									<div className="font-medium">
 										{match.away?.isAverage
 											? t('reviewAverage')
-											: (match.away?.entryName ?? t('reviewAverage'))}
+											: (match.away?.entryName ?? t('reviewBye'))}
 									</div>
 									<div className="text-xs text-slate-500">
 										{numberOrDash(match.away?.netPoints)} {t('reviewNetShort')}
@@ -356,20 +381,20 @@ function H2HReview({
 				<div className="mt-3 overflow-x-auto">
 					<table className="min-w-full text-left text-sm">
 						<thead className="text-xs text-slate-500">
-								<tr>
-									<th className="px-2 py-2">#</th>
-									<th className="px-2 py-2">{t('reviewGroupLabel')}</th>
-									<th className="px-2 py-2">{t('team')}</th>
+							<tr>
+								<th className="px-2 py-2">#</th>
+								<th className="px-2 py-2">{t('reviewGroupLabel')}</th>
+								<th className="px-2 py-2">{t('team')}</th>
 								<th className="px-2 py-2 text-right">
 									{t('reviewMatchPoints')}
 								</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y">
-								{review.standings.map(row => (
-									<tr key={`${row.groupId}-${row.entryId}`}>
-										<td className="px-2 py-2 font-medium">{row.rank}</td>
-										<td className="px-2 py-2">{row.groupId}</td>
+							{review.standings.map(row => (
+								<tr key={`${row.groupId}-${row.entryId}`}>
+									<td className="px-2 py-2 font-medium">{row.rank}</td>
+									<td className="px-2 py-2">{row.groupId}</td>
 									<td className="px-2 py-2">{row.entryName}</td>
 									<td className="px-2 py-2 text-right font-medium">
 										{row.matchPoints}
@@ -437,11 +462,13 @@ function KnockoutReview({
 function ReviewPayload({
 	review,
 	format,
+	view,
 	loadingMore,
 	onLoadMore
 }: {
 	review: MyTournamentGameweekReview | MyTournamentSeasonReview
 	format: MyTournamentReviewFormat | null
+	view: TournamentReviewV2View
 	loadingMore: boolean
 	onLoadMore?: () => void
 }) {
@@ -465,6 +492,7 @@ function ReviewPayload({
 		return (
 			<PointsReview
 				points={review.points}
+				view={view}
 				loadingMore={loadingMore}
 				onLoadMore={onLoadMore}
 			/>
@@ -479,17 +507,23 @@ export default function TournamentReviewV2Client({
 	initialView,
 	initialSelectedTournamentId,
 	initialEventId,
+	initialFinalizedEventIds,
 	initialGameweekReview,
 	initialSeasonReview,
 	initialError
 }: TournamentReviewV2ClientProps) {
 	const t = useTranslations('TournamentStats')
+	const router = useRouter()
+	const pathname = usePathname()
 	const [catalog, setCatalog] = useState(initialCatalog)
 	const [scope, setScope] = useState<MyTournamentReviewScope>(initialScope)
 	const [selectedTournamentId, setSelectedTournamentId] = useState<
 		number | null
 	>(initialSelectedTournamentId)
 	const [eventId, setEventId] = useState<number | null>(initialEventId)
+	const [finalizedEventIds, setFinalizedEventIds] = useState(
+		initialFinalizedEventIds
+	)
 	const [view, setView] = useState<'gameweek' | 'season'>(initialView)
 	const [gameweekReview, setGameweekReview] = useState(initialGameweekReview)
 	const [seasonReview, setSeasonReview] = useState(initialSeasonReview)
@@ -506,11 +540,40 @@ export default function TournamentReviewV2Client({
 		[catalog.tournaments, selectedTournamentId]
 	)
 
-	const loadReview = async (tournamentId: number, nextEventId: number) => {
+	const replaceRoute = useCallback(
+		(next: {
+			tournamentId?: number | null
+			eventId?: number | null
+			view?: TournamentReviewV2View
+			scope?: MyTournamentReviewScope
+		}) => {
+			const query = buildTournamentStatsQueryString({
+				tournamentId:
+					next.tournamentId === undefined
+						? selectedTournamentId
+						: next.tournamentId,
+				view: next.view ?? view,
+				gw: next.eventId === undefined ? eventId : next.eventId,
+				scope: next.scope ?? scope
+			})
+			router.replace(query ? `${pathname}?${query}` : pathname, {
+				scroll: false
+			})
+		},
+		[eventId, pathname, router, scope, selectedTournamentId, view]
+	)
+
+	const loadReview = async (
+		tournamentId: number,
+		nextEventId: number,
+		replaceAvailableEvents = false
+	) => {
 		const requestId = ++requestSequence.current
 		setLoading(true)
 		setLoadingMore(false)
 		setError(null)
+		setGameweekReview(null)
+		setSeasonReview(null)
 		try {
 			const [gameweek, season] = await Promise.all([
 				executeQuery<MyTournamentGameweekReviewResponse>(
@@ -527,6 +590,14 @@ export default function TournamentReviewV2Client({
 			if (requestId !== requestSequence.current) return
 			setGameweekReview(gameweek.myTournamentGameweekReview)
 			setSeasonReview(season.myTournamentSeasonReview)
+			setFinalizedEventIds(previous =>
+				replaceAvailableEvents
+					? season.myTournamentSeasonReview.finalizedEventIds
+					: mergeTournamentReviewEventIds(
+							previous,
+							season.myTournamentSeasonReview.finalizedEventIds
+						)
+			)
 		} catch (loadError) {
 			if (requestId !== requestSequence.current) return
 			const requestError = loadError as GraphQLRequestError
@@ -541,17 +612,23 @@ export default function TournamentReviewV2Client({
 	}
 
 	const loadMore = async () => {
-		if (loadingMore || !selectedTournamentId || !eventId) return
+		if (loading || loadingMore || !selectedTournamentId || !eventId) return
 		const activeReview = view === 'gameweek' ? gameweekReview : seasonReview
 		const nextCursor =
 			activeReview?.points?.nextCursor ??
 			activeReview?.h2h?.nextCursor ??
 			activeReview?.knockout?.nextCursor
 		if (!nextCursor) return
-		const requestId = ++requestSequence.current
 		const requestView = view
 		const requestTournamentId = selectedTournamentId
 		const requestEventId = eventId
+		const requestRevision =
+			requestView === 'gameweek' ? gameweekReview?.scope?.revision : null
+		if (requestView === 'gameweek' && !requestRevision) {
+			setError(t('loadFailed'))
+			return
+		}
+		const requestId = ++requestSequence.current
 		setLoadingMore(true)
 		setError(null)
 		try {
@@ -562,11 +639,19 @@ export default function TournamentReviewV2Client({
 						tournamentId: requestTournamentId,
 						eventId: requestEventId,
 						first: 100,
-						after: nextCursor
+						after: nextCursor,
+						revision: requestRevision
 					},
 					{ cache: 'no-store', contract: CONTRACT }
 				)
 				if (requestId !== requestSequence.current) return
+				if (
+					response.myTournamentGameweekReview.scope?.revision !==
+					requestRevision
+				)
+					throw new Error(
+						'Tournament review revision changed during pagination'
+					)
 				setGameweekReview(previous =>
 					previous
 						? mergeGameweekPage(previous, response.myTournamentGameweekReview)
@@ -632,11 +717,17 @@ export default function TournamentReviewV2Client({
 				nextSelected?.latestFinalizedEventId ??
 				null
 			setEventId(nextEventId)
+			setFinalizedEventIds([])
 			setGameweekReview(null)
 			setSeasonReview(null)
-			if (nextSelected && nextEventId)
-				void loadReview(nextSelected.tournamentId, nextEventId)
-			else setLoading(false)
+			replaceRoute({
+				tournamentId: nextSelected?.tournamentId ?? null,
+				eventId: nextEventId,
+				scope: nextScope
+			})
+			if (nextSelected && nextEventId) {
+				void loadReview(nextSelected.tournamentId, nextEventId, true)
+			} else setLoading(false)
 		} catch (loadError) {
 			if (requestId !== requestSequence.current) return
 			const requestError = loadError as GraphQLRequestError
@@ -652,12 +743,25 @@ export default function TournamentReviewV2Client({
 	useEffect(() => {
 		if (!selectedTournamentId || !eventId) return
 		if (gameweekReview || seasonReview) return
-		void loadReview(selectedTournamentId, eventId)
+		void loadReview(selectedTournamentId, eventId, true)
 		// Initial server data is intentionally used once; subsequent changes load explicitly.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [])
 
 	const chooseTournament = (value: string) => {
+		++requestSequence.current
+		if (!value) {
+			setSelectedTournamentId(null)
+			setEventId(null)
+			setFinalizedEventIds([])
+			setGameweekReview(null)
+			setSeasonReview(null)
+			setLoading(false)
+			setLoadingMore(false)
+			setError(null)
+			replaceRoute({ tournamentId: null, eventId: null })
+			return
+		}
 		const nextId = Number(value)
 		const tournament = catalog.tournaments.find(
 			item => item.tournamentId === nextId
@@ -667,9 +771,14 @@ export default function TournamentReviewV2Client({
 			tournament.latestAvailableEventId ?? tournament.latestFinalizedEventId
 		setSelectedTournamentId(nextId)
 		setEventId(nextEventId)
+		setFinalizedEventIds([])
 		setGameweekReview(null)
 		setSeasonReview(null)
-		if (nextEventId) void loadReview(nextId, nextEventId)
+		setLoading(false)
+		setLoadingMore(false)
+		setError(null)
+		replaceRoute({ tournamentId: nextId, eventId: nextEventId })
+		if (nextEventId) void loadReview(nextId, nextEventId, true)
 	}
 
 	const chooseEvent = (value: string) => {
@@ -682,12 +791,14 @@ export default function TournamentReviewV2Client({
 		)
 			return
 		setEventId(nextEventId)
+		replaceRoute({ eventId: nextEventId })
 		void loadReview(selectedTournamentId, nextEventId)
 	}
 
 	const chooseView = (nextView: 'gameweek' | 'season') => {
 		setLoadingMore(false)
 		setView(nextView)
+		replaceRoute({ view: nextView })
 	}
 
 	const format =
@@ -698,9 +809,6 @@ export default function TournamentReviewV2Client({
 	const activeReview = view === 'gameweek' ? gameweekReview : seasonReview
 	const state =
 		activeReview?.state ?? selectedTournament?.state ?? 'UNAVAILABLE'
-	const finalizedEventIds =
-		seasonReview?.finalizedEventIds ?? (eventId ? [eventId] : [])
-
 	return (
 		<div className="min-h-screen bg-slate-50">
 			<div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -872,7 +980,8 @@ export default function TournamentReviewV2Client({
 										<ReviewPayload
 											review={activeReview}
 											format={format}
-											loadingMore={loadingMore}
+											view={view}
+											loadingMore={loading || loadingMore}
 											onLoadMore={() => void loadMore()}
 										/>
 									</div>

@@ -16,6 +16,8 @@ import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { Suspense } from 'react'
 import { RouteLoaderTiming } from '@/lib/route-loader-timing'
+import { parseTournamentStatsView } from '@/app/me/tournament/_lib/tournament-stats-url'
+import { selectTournamentReviewEventId } from '@/app/me/tournament/_lib/tournament-review-v2'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,7 +75,7 @@ export default async function TournamentStatsPage({
 		timing.measure('session', () => getVerifiedEntryContext())
 	])
 	const { locale } = pageLocale
-	const initialView = sp.view === 'season' ? 'season' : 'gameweek'
+	const initialView = parseTournamentStatsView(sp.view)
 	const scope = requestedScope(sp.scope)
 
 	const { session, entryId } = context
@@ -98,6 +100,7 @@ export default async function TournamentStatsPage({
 		}
 	let initialSelectedTournamentId: number | null = null
 	let initialEventId: number | null = null
+	let initialFinalizedEventIds: number[] = []
 	let initialGameweekReview:
 		MyTournamentGameweekReviewResponse['myTournamentGameweekReview'] | null =
 		null
@@ -128,44 +131,64 @@ export default async function TournamentStatsPage({
 			selected?.latestAvailableEventId ??
 			selected?.latestFinalizedEventId ??
 			null
-		// The review contract is finalized-only. A URL cannot opt into an
-		// unsettled/future round, including when the catalog has no current
-		// publication yet.
-		initialEventId =
-			selected && latestSettledEventId
-				? requestedEventId && requestedEventId <= latestSettledEventId
-					? requestedEventId
-					: latestSettledEventId
-				: null
-
-		if (initialSelectedTournamentId && initialEventId) {
-			const [gameweekResponse, seasonResponse] = await timing.measure(
-				'my-tournament-review-v2-snapshots',
+		if (initialSelectedTournamentId && latestSettledEventId) {
+			// Resolve the tournament's immutable event set before accepting a URL
+			// gameweek. A positive event below the latest one may still predate a
+			// custom tournament and therefore have no publication.
+			const latestSeasonResponse = await timing.measure(
+				'my-tournament-review-v2-event-index',
 				() =>
-					Promise.all([
-						executeServerQueryWithSession<MyTournamentGameweekReviewResponse>(
-							session,
-							GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
-							{
-								tournamentId: initialSelectedTournamentId,
-								eventId: initialEventId,
-								first: 100
-							},
-							{ cache: 'no-store', contract: 'my-tournament-review-v2' }
-						),
-						executeServerQueryWithSession<MyTournamentSeasonReviewResponse>(
-							session,
-							GET_MY_TOURNAMENT_SEASON_REVIEW,
-							{
-								tournamentId: initialSelectedTournamentId,
-								throughEventId: initialEventId
-							},
-							{ cache: 'no-store', contract: 'my-tournament-review-v2' }
-						)
-					])
+					executeServerQueryWithSession<MyTournamentSeasonReviewResponse>(
+						session,
+						GET_MY_TOURNAMENT_SEASON_REVIEW,
+						{
+							tournamentId: initialSelectedTournamentId,
+							throughEventId: latestSettledEventId,
+							first: 100
+						},
+						{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+					)
 			)
-			initialGameweekReview = gameweekResponse.myTournamentGameweekReview
-			initialSeasonReview = seasonResponse.myTournamentSeasonReview
+			const latestSeasonReview = latestSeasonResponse.myTournamentSeasonReview
+			initialFinalizedEventIds = latestSeasonReview.finalizedEventIds
+			initialEventId = selectTournamentReviewEventId(
+				requestedEventId,
+				latestSettledEventId,
+				initialFinalizedEventIds
+			)
+
+			if (initialEventId) {
+				const [gameweekResponse, seasonResponse] = await timing.measure(
+					'my-tournament-review-v2-snapshots',
+					() =>
+						Promise.all([
+							executeServerQueryWithSession<MyTournamentGameweekReviewResponse>(
+								session,
+								GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
+								{
+									tournamentId: initialSelectedTournamentId,
+									eventId: initialEventId,
+									first: 100
+								},
+								{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+							),
+							initialEventId === latestSettledEventId
+								? Promise.resolve(latestSeasonResponse)
+								: executeServerQueryWithSession<MyTournamentSeasonReviewResponse>(
+										session,
+										GET_MY_TOURNAMENT_SEASON_REVIEW,
+										{
+											tournamentId: initialSelectedTournamentId,
+											throughEventId: initialEventId,
+											first: 100
+										},
+										{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+									)
+						])
+				)
+				initialGameweekReview = gameweekResponse.myTournamentGameweekReview
+				initialSeasonReview = seasonResponse.myTournamentSeasonReview
+			}
 		}
 	} catch (error) {
 		// Keep server logs free of query variables, identities, and upstream
@@ -185,6 +208,7 @@ export default async function TournamentStatsPage({
 				initialView={initialView}
 				initialSelectedTournamentId={initialSelectedTournamentId}
 				initialEventId={initialEventId}
+				initialFinalizedEventIds={initialFinalizedEventIds}
 				initialGameweekReview={initialGameweekReview}
 				initialSeasonReview={initialSeasonReview}
 				initialError={initialError}

@@ -1006,10 +1006,7 @@ describe('asynchronous selection safety', () => {
 		])
 
 		assert.match(competitionPage, /my-tournament-review-v2/)
-		assert.match(
-			competitionPage,
-			/requestedEventId && requestedEventId <= latestSettledEventId/
-		)
+		assert.match(competitionPage, /selectTournamentReviewEventId\(/)
 		assert.match(tournamentClient, /const handleNavigateSeason = useCallback/)
 		assert.match(
 			tournamentClient,

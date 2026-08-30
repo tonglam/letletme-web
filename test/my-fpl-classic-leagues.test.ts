@@ -78,11 +78,21 @@ describe('My FPL Classic league visibility', () => {
 		assert.match(page, /GET_MY_TOURNAMENT_GAMEWEEK_REVIEW/)
 		assert.match(page, /GET_MY_TOURNAMENT_SEASON_REVIEW/)
 		assert.match(page, /latestSettledEventId/)
+		assert.match(page, /selectTournamentReviewEventId/)
 		assert.match(page, /initialCatalog=\{initialCatalog\}/)
+		assert.match(page, /initialFinalizedEventIds=\{initialFinalizedEventIds\}/)
 		assert.match(page, /initialGameweekReview=\{initialGameweekReview\}/)
 		assert.match(client, /GET_MY_TOURNAMENT_REVIEW_CATALOG/)
 		assert.match(client, /GET_MY_TOURNAMENT_GAMEWEEK_REVIEW/)
 		assert.match(client, /GET_MY_TOURNAMENT_SEASON_REVIEW/)
 		assert.match(client, /CONTRACT = 'my-tournament-review-v2'/)
+		assert.match(client, /if \(loading \|\| loadingMore/)
+		assert.match(client, /revision: requestRevision/)
+		assert.match(
+			client,
+			/setGameweekReview\(null\)[\s\S]*setSeasonReview\(null\)/
+		)
+		assert.match(client, /\+\+requestSequence\.current/)
+		assert.match(client, /replaceRoute\(\{ eventId: nextEventId \}\)/)
 	})
 })
