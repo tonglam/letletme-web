@@ -35,3 +35,10 @@
 - Auth/database changes require matching auth tests and, when database access is available, `npm run db:migrate:status`, `npm run db:runtime-contract`, and the migration/role checks relevant to the change.
 - Playwright requires an isolated `letletme_web_runtime` test database, a matching direct URL, task-owned Web/GraphQL ports, and the production-shaped standalone server configured in `playwright.config.ts`. Never reuse or kill an unowned listener.
 - Keep local, preview, and production evidence separate. A production claim needs the observed `X-Letletme-Release`/origin, a representative API result, and the rendered browser path.
+
+## Governance and review
+
+- Global routes in `.codex/global-skills.json` resolve through the versioned `/Users/tong/.codex` mount. If it is unavailable, stop and report the missing dependency.
+- Use `$gh-codex-review-loop` for PR work. A review may be skipped only after two consecutive explicit quota-limit responses for the unchanged head; record both responses and the exact SHA. This never waives CI, findings, or cleanup.
+- Every P0-P3 finding must be dispositioned and its thread resolved. Only a finding confined to tests/scripts gets the time exception: implement P0/P1, and explain plus resolve P2/P3 without implementation time. P2/P3 anywhere else must be actually fixed and verified.
+- After merge, clean only the exact corresponding worktree, local branch, and remote branch after verifying identity; leave unrelated WIP untouched.
