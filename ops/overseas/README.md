@@ -31,8 +31,21 @@ forwarding identity fall back to the socket address for direct DNSPod traffic.
    GraphQL blue/green selector: the installer creates the blue and green
    upstream files, `/etc/nginx/snippets/letletme-graphql-active.conf`, the
    allowlisted switch helper, and `/var/lib/letletme-graphql/active-slot`.
-   The Nginx `http` block must include that active selector exactly once. Stop
-   before staging this site unless all of these checks succeed:
+   The Nginx `http` block must include that active selector exactly once. On a
+   fresh host, install the tracked loader under `conf.d`; on an existing host,
+   retain an existing exact include and do not add a duplicate upstream:
+
+   ```sh
+   if ! sudo grep -RqsF \
+     'include /etc/nginx/snippets/letletme-graphql-active.conf;' \
+     /etc/nginx/nginx.conf /etc/nginx/conf.d; then
+     sudo install -o root -g root -m 0644 \
+       ops/overseas/nginx/letletme-graphql-active-loader.conf \
+       /etc/nginx/conf.d/letletme-graphql-active-loader.conf
+   fi
+   ```
+
+   Stop before staging this site unless all of these checks succeed:
 
    ```sh
    sudo test -L /etc/nginx/snippets/letletme-graphql-active.conf
