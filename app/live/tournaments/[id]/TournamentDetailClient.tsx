@@ -718,7 +718,12 @@ export default function TournamentDetailClient({
 										batch.state) as LiveSnapshotStatus['state'],
 									windowState: batch.windowState as LiveSnapshotStatus['windowState'],
 									dataAvailability: batch.dataAvailability as LiveSnapshotStatus['dataAvailability'],
-									publishedAt: null
+									publishedAt: batch.times?.publishedAt ?? null,
+									sourceCheckedAt: batch.times?.sourceCheckedAt ?? null,
+									nextRefreshAt: batch.nextRefreshAt ?? batch.times?.nextRefreshAt ?? null,
+									revisions: batch.revisions ?? undefined,
+									times: batch.times ?? undefined,
+									delivery: batch.delivery ?? undefined
 								}
 							: null
 					)

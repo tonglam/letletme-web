@@ -99,6 +99,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$WEB_MAINTENANCE_MODE" == true ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "Maintenance mode requires a fresh Web deployment even when the SHA is otherwise documentation-only."
+            exit 0
+          fi
           previous_headers=''
           if ! previous_headers="$(curl --fail --silent --show-error --max-time 15 -D - -o /dev/null https://vercel-origin.letletme.top/healthz)"; then
             echo "current production health is unavailable; fail-open to a full Web build" >&2

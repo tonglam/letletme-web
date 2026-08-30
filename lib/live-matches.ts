@@ -3,6 +3,11 @@ import {
 	type EventsResponse
 } from '@/lib/graphql/operations/events'
 import {
+	GET_HOME_EVENT_FIXTURES,
+	type HomeEventFixturesGraphQLResponse,
+	type HomeFixture
+} from '@/lib/graphql/operations/home'
+import {
 	buildLiveFixturePlayersBatchQuery,
 	GET_EVENT_LIVE_PERFORMANCES,
 	GET_LIVE_FIXTURE_PLAYERS,
@@ -593,6 +598,90 @@ export function transformLiveMatches(
 	return mergeLiveFixturePlayers(matches, fixturePlayers)
 }
 
+type CoreFixture = Omit<HomeFixture, 'eventId'>
+
+/**
+ * The live desk owns the score overlay for its anchor event. Once that event
+ * is settled, the next event's core fixture schedule is the only safe source
+ * for the upcoming view; do not manufacture it from the settled live rows.
+ */
+export function transformCoreFixturesToMatches(
+	eventId: number,
+	fixtures: readonly CoreFixture[]
+): Match[] {
+	return fixtures.map(fixture => ({
+		id: String(fixture.id),
+		eventId,
+		homeTeam: {
+			id: fixture.homeTeam.id,
+			name: fixture.homeTeam.name,
+			shortName: fixture.homeTeam.shortName,
+			score: fixture.homeScore ?? 0,
+			possession: 0,
+			shots: 0,
+			shotsOnTarget: 0,
+			corners: 0,
+			players: []
+		},
+		awayTeam: {
+			id: fixture.awayTeam.id,
+			name: fixture.awayTeam.name,
+			shortName: fixture.awayTeam.shortName,
+			score: fixture.awayScore ?? 0,
+			possession: 0,
+			shots: 0,
+			shotsOnTarget: 0,
+			corners: 0,
+			players: []
+		},
+		status: fixture.finished
+			? 'FT'
+			: fixture.started
+				? 'LIVE'
+				: 'NOT_STARTED',
+		minute: 0,
+		kickoff: fixture.kickoffTime ?? '',
+		viewers: 0
+	}))
+}
+
+const shouldLoadNextEventFixtures = (
+	desk: LiveMatchdayDeskResponse['liveMatchdayDesk'] | null | undefined,
+	currentEventId: number | null,
+	nextEventId: number | null
+): boolean => {
+	if (!desk || !currentEventId || !nextEventId || currentEventId === nextEventId)
+		return false
+	if (desk.state === 'FINALIZED' || desk.windowState === 'FINALIZED') return true
+	const rows = desk.matches ?? []
+	return (
+		rows.length > 0 &&
+		rows.every(row => row.finished || row.finishedProvisional)
+	)
+}
+
+async function loadNextEventMatches(
+	executor: QueryExecutor,
+	currentEventId: number | null,
+	nextEventId: number | null,
+	desk: LiveMatchdayDeskResponse['liveMatchdayDesk'] | null | undefined
+): Promise<Match[]> {
+	if (!shouldLoadNextEventFixtures(desk, currentEventId, nextEventId)) return []
+	try {
+		const response = await executor<HomeEventFixturesGraphQLResponse>(
+			GET_HOME_EVENT_FIXTURES,
+			{ eventId: nextEventId },
+			{ cache: 'no-store' }
+		)
+		return transformCoreFixturesToMatches(nextEventId!, response.eventFixtures)
+	} catch (error) {
+		// Upcoming fixtures are an enhancement to the settled desk. A failed
+		// core read must not erase the current event or make the live page fail.
+		console.error('[live/matches] failed to load next event fixtures:', error)
+		return []
+	}
+}
+
 export interface LiveMatchesSnapshot {
 	matches: Match[]
 	snapshot: LiveSnapshotStatus | null
@@ -652,6 +741,12 @@ export async function getLiveMatchesSnapshot(
 		})
 	}
 	const current = validEventId(desk.liveMatchdayDesk?.eventId) ?? currentEventId
+	const nextMatches = await loadNextEventMatches(
+		executor,
+		current,
+		nextEventId,
+		desk.liveMatchdayDesk
+	)
 	const snapshot = desk.liveMatchdayDesk
 		? {
 				eventId: desk.liveMatchdayDesk.eventId,
@@ -676,6 +771,7 @@ export async function getLiveMatchesSnapshot(
 				desk.liveMatchdayDesk?.matches ?? [],
 				desk.fixturePlayers ?? []
 			),
+			...nextMatches
 		],
 		snapshot,
 		currentEventId: current,

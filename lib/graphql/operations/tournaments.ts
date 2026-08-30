@@ -805,6 +805,17 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_POINTS_SCORE_SUMMARY_FRAGMENT}
 	      state
 	      windowState
 	      dataAvailability
+	      nextRefreshAt
+	      revisions {
+	        publicationId generation lifecycle fixtureIdentity scoreCore
+	        displayStats explain picksBase officialAdjustment previousTotals
+	        finalResult rules algorithm input
+	      }
+	      times {
+	        sourceCheckedAt contentUpdatedAt publishedAt checkpointedAt
+	        servedAt staleAt nextRefreshAt
+	      }
+	      delivery { state servedFrom reasonCodes }
       selectedTournamentId
       officialCoverage
       unavailableEntryIds
