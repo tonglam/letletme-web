@@ -30,7 +30,7 @@ export function ShareActions({
 	onTextFallback,
 	onTextFallbackClear
 }: {
-	text: ShareTextValue
+	text?: ShareTextValue
 	imageRef?: RefObject<HTMLElement | null>
 	imageTargetId?: string
 	title?: string
@@ -49,7 +49,7 @@ export function ShareActions({
 	const imageShareInFlight = useRef(false)
 
 	const resolveText = useCallback(
-		() => (typeof text === 'function' ? text() : text),
+		() => (text == null ? '' : typeof text === 'function' ? text() : text),
 		[text]
 	)
 
@@ -89,7 +89,14 @@ export function ShareActions({
 			else setManualShareText(value)
 			reportFailure(result)
 		}
-	}, [onTextFallback, onTextFallbackClear, reportFailure, resolveText, t, title])
+	}, [
+		onTextFallback,
+		onTextFallbackClear,
+		reportFailure,
+		resolveText,
+		t,
+		title
+	])
 
 	const handleImageShare = useCallback(async () => {
 		const element =

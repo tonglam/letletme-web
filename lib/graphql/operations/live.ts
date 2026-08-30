@@ -747,7 +747,7 @@ export const GET_LIVE_FIXTURE_PLAYERS = `
 		scoreCoreRevision
       fixtureId
       players {
-        player { id webName position team { id name shortName } }
+        player { id webName price position team { id name shortName } }
         minutes goalsScored assists cleanSheets goalsConceded ownGoals
         penaltiesSaved penaltiesMissed yellowCards redCards saves bonus bps
         defensiveContribution totalPoints starts inDreamTeam
@@ -760,6 +760,7 @@ export interface LiveFixturePerformance {
 	player: {
 		id: number
 		webName: string
+		price: number
 		position: 'GOALKEEPER' | 'DEFENDER' | 'MIDFIELDER' | 'FORWARD'
 		team: { id: number; name: string; shortName: string } | null
 	} | null
@@ -804,7 +805,7 @@ export const GET_EVENT_LIVE_PERFORMANCES = `
 	query GetEventLivePerformances($eventId: Int!) {
 		eventLive(eventId: $eventId) {
 			performances {
-				player { id webName position team { id name shortName } }
+				player { id webName price position team { id name shortName } }
 				minutes goalsScored assists cleanSheets goalsConceded ownGoals
 				penaltiesSaved penaltiesMissed yellowCards redCards saves bonus bps
 				defensiveContribution totalPoints starts inDreamTeam
@@ -823,7 +824,7 @@ const LIVE_FIXTURE_PLAYERS_FRAGMENT = `
 	fragment LiveFixturePlayersBatchFields on LiveFixturePlayers {
 		season eventId scoreCoreRevision fixtureId
 		players {
-			player { id webName position team { id name shortName } }
+			player { id webName price position team { id name shortName } }
 			minutes goalsScored assists cleanSheets goalsConceded ownGoals
 			penaltiesSaved penaltiesMissed yellowCards redCards saves bonus bps
 			defensiveContribution totalPoints

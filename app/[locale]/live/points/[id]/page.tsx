@@ -2,6 +2,7 @@ import TeamPointsClient from '@/app/live/points/[id]/TeamPointsClient'
 import { SeasonPhaseState } from '@/components/feedback/SeasonPhaseState'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getLivePageContext } from '@/lib/live-context-server'
+import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
 import { liveContextToSnapshot } from '@/lib/live-refresh'
 import {
 	GET_ENTRY,
@@ -55,7 +56,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			? executeServerQuery<LiveCalcDataResponse>(
 					GET_LIVE_POINTS,
 					{ eventId: speculativeEventId, entryId },
-					{ cache: 'no-store' }
+					{ cache: 'no-store', suppressErrorLog: true }
 				)
 			: null
 	// The lifecycle gate can return before this read is needed; attach a handler
@@ -63,6 +64,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 	void speculativeLiveRequest?.catch(() => undefined)
 
 	const { presentation, liveContext } = await getLivePageContext()
+	const isOfficialUpdating = isOfficialLiveUpdatingContext(liveContext)
 	const historicalMaxGameweek =
 		liveContext?.anchorEventId ??
 		presentation.currentEventId ??
@@ -120,11 +122,14 @@ export default async function Page({ params, searchParams }: PageProps) {
 		const [liveResult, overallResult] = await Promise.allSettled([
 			speculativeLiveRequest && initialEventId === speculativeEventId
 				? speculativeLiveRequest
-				: executeServerQuery<LiveCalcDataResponse>(
-						GET_LIVE_POINTS,
-						{ eventId: initialEventId, entryId },
-						{ cache: 'no-store' }
-					),
+					: executeServerQuery<LiveCalcDataResponse>(
+							GET_LIVE_POINTS,
+							{ eventId: initialEventId, entryId },
+							{
+								cache: 'no-store',
+								suppressErrorLog: isOfficialUpdating
+							}
+						),
 			seedCurrentOverall
 				? executeServerQuery<EntrySummaryResponse>(
 						GET_ENTRY,
@@ -148,7 +153,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 					: null) ??
 				liveData.snapshot ??
 				null
-		} else {
+		} else if (!isOfficialUpdating) {
 			console.error('Failed to seed live points page:', liveResult.reason)
 		}
 
@@ -188,6 +193,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			initialOverall={initialOverall}
 			initialEntryLookupStatus={initialEntryLookupStatus}
 			initialEntryPersistenceState={initialEntryPersistenceState}
+			isOfficialUpdating={isOfficialUpdating}
 		/>
 	)
 }

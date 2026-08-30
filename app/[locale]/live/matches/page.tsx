@@ -5,6 +5,7 @@ import { executePublicServerQuery } from '@/lib/graphql-server'
 import { getLiveMatchesSnapshot } from '@/lib/live-matches'
 import { selectLiveMatchEvent } from '@/lib/live-match-selection'
 import { getLivePageContext } from '@/lib/live-context-server'
+import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
 import { getTranslations } from 'next-intl/server'
 
 type PageProps = { params: LocaleParams }
@@ -50,6 +51,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 	// next event identity. The match desk then reads the same revision directly
 	// in RSC, avoiding a second event query or self-HTTP hop.
 	const { presentation, liveContext } = await getLivePageContext()
+	const isOfficialUpdating = isOfficialLiveUpdatingContext(liveContext)
 	if (
 		(!liveContext?.anchorEventId && presentation.phase !== 'PRESEASON') ||
 		liveContext?.windowState === 'OFFSEASON' ||
@@ -108,7 +110,8 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 			currentEventId,
 			{
 				scoreCoreRevision: liveContext?.scoreCoreRevision,
-				includeFixturePlayers: false
+				includeFixturePlayers: false,
+				suppressErrorLog: isOfficialUpdating
 			}
 		)
 		matches = live.matches
@@ -139,8 +142,10 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 			)
 		}
 	} catch (error) {
-		console.error('Failed to fetch live matches:', error)
-		initialError = t('matchesFailed')
+		if (!isOfficialUpdating) {
+			console.error('Failed to fetch live matches:', error)
+			initialError = t('matchesFailed')
+		}
 	}
 	const markerStatus = initialError
 		? 'UNAVAILABLE'
@@ -170,6 +175,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 				selectedEventId={renderedSelectedEventId}
 				nextEventId={renderedNextEventId ?? undefined}
 				initialSnapshot={snapshot}
+				isOfficialUpdating={isOfficialUpdating}
 			/>
 		</>
 	)

@@ -210,6 +210,64 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 	}
 })
 
+test('a bound squad opens a selectable gameweek range and preserves the 8-GW share pitch', async ({
+	page
+}) => {
+	const session = await createSession({ entryId: 15702 })
+	const fixtureWindowRequests: string[] = []
+	page.on('request', request => {
+		if (request.url().includes('/api/fixtures/window?')) {
+			fixtureWindowRequests.push(request.url())
+		}
+	})
+	try {
+		await useCookie(page, session.cookie)
+		await page.goto('/explore/fixtures')
+
+		await expect(page.locator('[data-page-fdr-legend="true"]')).toHaveCount(1)
+		const pitch = page.locator('[data-schedule-pitch="true"]')
+		await expect(pitch).toBeVisible()
+		const initialRequestCount = fixtureWindowRequests.length
+		await pitch.getByRole('button').first().click()
+
+		const dialog = page.getByRole('dialog')
+		await expect(dialog).toBeVisible()
+		await expect(dialog.locator('#my-squad-fixture-range-from')).toBeVisible()
+		await expect(dialog.locator('#my-squad-fixture-range-to')).toBeVisible()
+		await dialog.locator('#my-squad-fixture-range-from').selectOption('1')
+		await dialog.locator('#my-squad-fixture-range-to').selectOption('38')
+		const schedule = dialog.locator('ol')
+		await expect(schedule.getByText('GW1', { exact: true })).toBeVisible()
+		await expect(schedule.getByText('GW38', { exact: true })).toBeVisible()
+		await expect(dialog.getByText('2–1', { exact: true })).toBeVisible()
+		await expect(dialog.getByText('Finished', { exact: true })).toHaveCount(0)
+		await expect(dialog.getByRole('button', { name: 'Image' })).toBeVisible()
+		await expect
+			.poll(() => fixtureWindowRequests.length)
+			.toBe(initialRequestCount + 8)
+
+		await dialog.getByRole('button', { name: 'Close' }).click()
+		await expect(dialog).toHaveCount(0)
+
+		const eightGws = page.getByRole('button', { name: '8 GWs' })
+		await eightGws.click()
+		await expect(eightGws).toHaveAttribute('aria-pressed', 'true')
+		// The fixture seed is anchored at GW33, so the requested eight-gameweek
+		// horizon is correctly clipped at the season boundary (GW38).
+		await expect(pitch.locator('[role="listitem"]')).toHaveCount(
+			15 * Math.min(8, 39 - 33)
+		)
+		await expect(
+			pitch.locator('[data-share-preserve-width="true"]')
+		).toHaveClass(/aspect-\[/)
+		await expect(
+			page.locator('#my-squad').getByRole('button', { name: 'Image' })
+		).toBeVisible()
+	} finally {
+		await session.cleanup()
+	}
+})
+
 test('the server-rendered signed navigation logs out through a same-origin POST', async ({
 	page
 }) => {

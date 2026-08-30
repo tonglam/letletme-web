@@ -16,6 +16,12 @@ export type PriceChangeSortState = {
 	direction: PriceChangeSortDirection
 }
 
+export type PriceChangeMovementFilter = 'all' | 'rise' | 'fall' | 'locked'
+
+export type PriceChangeScope = 'all' | 'likely'
+
+export const DEFAULT_PRICE_CHANGE_SCOPE: PriceChangeScope = 'likely'
+
 export const DEFAULT_PRICE_CHANGE_SORT: PriceChangeSortState = {
 	column: 'progress',
 	direction: 'desc',
@@ -39,6 +45,30 @@ export function isLikelyToChange(player: PriceChangePlayer): boolean {
 		player.status === 'LIKELY_FALL' ||
 		player.status === 'VERY_LIKELY_FALL'
 	)
+}
+
+/** Keep the homepage summary and the detail board on the same filter semantics. */
+export function matchesPriceChangePlayer(
+	player: PriceChangePlayer,
+	{
+		scope = 'all',
+		movement = 'all'
+	}: {
+		scope?: PriceChangeScope
+		movement?: PriceChangeMovementFilter
+	} = {},
+): boolean {
+	if (scope === 'likely' && !isLikelyToChange(player)) return false
+	if (movement === 'rise' && player.progressPercent <= 0) return false
+	if (movement === 'fall' && player.progressPercent >= 0) return false
+	if (
+		movement === 'locked' &&
+		player.status !== 'LOCKED' &&
+		player.status !== 'CALIBRATING'
+	) {
+		return false
+	}
+	return true
 }
 
 /**
@@ -139,4 +169,34 @@ export function sortPriceChangePlayers(
 		if (name !== 0) return name
 		return left.playerId - right.playerId
 	})
+}
+
+/** Apply the canonical prediction scope before applying the board sort. */
+export function selectPriceChangePlayers(
+	players: readonly PriceChangePlayer[],
+	{
+		scope = 'all',
+		movement = 'all',
+		sort = DEFAULT_PRICE_CHANGE_SORT,
+		squadElementIds = new Set<number>(),
+		purchasePrices = {},
+		locale
+	}: {
+		scope?: PriceChangeScope
+		movement?: PriceChangeMovementFilter
+		sort?: PriceChangeSortState
+		squadElementIds?: ReadonlySet<number>
+		purchasePrices?: Readonly<Record<string, number>>
+		locale?: string
+	} = {},
+): PriceChangePlayer[] {
+	return sortPriceChangePlayers(
+		players.filter(player => matchesPriceChangePlayer(player, { scope, movement })),
+		{
+			sort,
+			squadElementIds,
+			purchasePrices,
+			locale
+		}
+	)
 }

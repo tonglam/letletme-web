@@ -44,6 +44,7 @@ export function LivePointsDashboard({
 	isLoading,
 	isRefreshing,
 	error,
+	isOfficialUpdating,
 	entryLookupStatus,
 	entryPersistenceState,
 	isPageActive,
@@ -64,6 +65,7 @@ export function LivePointsDashboard({
 	isLoading: boolean
 	isRefreshing: boolean
 	error?: string
+	isOfficialUpdating?: boolean
 	entryLookupStatus?: EntryLookupStatus
 	entryPersistenceState?: EntryPersistenceState | null
 	isPageActive: boolean
@@ -395,7 +397,7 @@ export function LivePointsDashboard({
 						className="mb-3 text-sm text-muted-foreground"
 						role="status"
 					>
-						{t('noData')}
+						{isOfficialUpdating ? t('officialUpdating') : t('noData')}
 					</p>
 				) : null}
 			</div>

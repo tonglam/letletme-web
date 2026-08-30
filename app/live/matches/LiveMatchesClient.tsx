@@ -28,6 +28,7 @@ import {
 	getPreferredLiveMatchesTab
 } from '@/lib/live-matches'
 import { selectLiveMatchEvent } from '@/lib/live-match-selection'
+import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
 import { usePageActive } from '@/hooks/use-page-active'
 import type { Match } from '@/types/match'
 import { RefreshCw } from 'lucide-react'
@@ -74,7 +75,8 @@ export function LiveMatchesClient({
 	currentEventId,
 	selectedEventId: initialSelectedEventId,
 	nextEventId,
-	initialSnapshot
+	initialSnapshot,
+	isOfficialUpdating: initialOfficialUpdating = false
 }: {
 	initialMatches: Match[]
 	initialError?: string | null
@@ -82,6 +84,7 @@ export function LiveMatchesClient({
 	selectedEventId?: number
 	nextEventId?: number
 	initialSnapshot?: LiveSnapshotStatus | null
+	isOfficialUpdating?: boolean
 }) {
 	const t = useTranslations('LiveMatches')
 	const format = useFormatter()
@@ -101,6 +104,9 @@ export function LiveMatchesClient({
 	)
 	const [isLoading, setIsLoading] = useState(false)
 	const [isRefreshing, setIsRefreshing] = useState(false)
+	const [isOfficialUpdating, setIsOfficialUpdating] = useState(
+		initialOfficialUpdating
+	)
 	const [error, setError] = useState<string | null>(initialError ?? null)
 	const [snapshot, setSnapshot] = useState<LiveSnapshotStatus | null>(
 		initialSnapshot ?? null
@@ -161,6 +167,7 @@ export function LiveMatchesClient({
 					eventIds?.currentEventId ?? resolvedCurrentEventId ?? null,
 					{
 						preferHttp: true,
+						suppressErrorLog: isOfficialUpdating,
 						scoreCoreRevision:
 							eventIds?.scoreCoreRevision ?? snapshotRef.current?.scoreCoreRevision ?? null
 					}
@@ -186,11 +193,11 @@ export function LiveMatchesClient({
 				setResolvedCurrentEventId(lifecycleCurrentEventId)
 				setSelectedEventId(nextSelectedEventId)
 				setResolvedNextEventId(data.nextEventId ?? undefined)
-					acceptSnapshot(
-							nextSelectedEventId === lifecycleCurrentEventId
-								? data.snapshot
-								: null
-					)
+				acceptSnapshot(
+					nextSelectedEventId === lifecycleCurrentEventId
+						? data.snapshot
+						: null
+				)
 				hasLastGoodData.current = true
 
 				if (
@@ -200,9 +207,11 @@ export function LiveMatchesClient({
 					setActiveTab(getPreferredLiveMatchesTab(mappedMatches))
 				}
 			} catch (err) {
-				console.error('Failed to fetch live matches:', err)
-				if (mountedRef.current) {
-					setError(t(hasLastGoodData.current ? 'refreshFailed' : 'loadFailed'))
+				if (!isOfficialUpdating) {
+					console.error('Failed to fetch live matches:', err)
+					if (mountedRef.current) {
+						setError(t(hasLastGoodData.current ? 'refreshFailed' : 'loadFailed'))
+					}
 				}
 			} finally {
 				isFetchInFlight.current = false
@@ -218,7 +227,13 @@ export function LiveMatchesClient({
 				}
 			}
 		},
-		[acceptSnapshot, resolvedCurrentEventId, resolvedNextEventId, t]
+		[
+			acceptSnapshot,
+			isOfficialUpdating,
+			resolvedCurrentEventId,
+			resolvedNextEventId,
+			t
+		]
 	)
 
 	const autoRefreshMatches = useCallback((): Promise<void> => {
@@ -232,9 +247,13 @@ export function LiveMatchesClient({
 				const probe = await executeQuery<LiveContextResponse>(
 					GET_LIVE_CONTEXT,
 					undefined,
-					{ cache: 'no-store' }
+					{
+						cache: 'no-store',
+						suppressErrorLog: isOfficialUpdating
+					}
 				)
 				const context = probe.liveContext
+				setIsOfficialUpdating(isOfficialLiveUpdatingContext(context))
 				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
 				const observedCurrentEventId = context?.anchorEventId ?? undefined
 				const observedNextEventId = context?.nextEventId ?? undefined
@@ -265,10 +284,10 @@ export function LiveMatchesClient({
 						currentEventId: resolvedCurrentEventId,
 						nextEventId: resolvedNextEventId,
 						snapshot: snapshotRef.current
-						})
+					})
 				) {
-						setError(null)
-						return
+					setError(null)
+					return
 				}
 				if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
 					acceptSnapshot(observedSnapshot)
@@ -276,11 +295,13 @@ export function LiveMatchesClient({
 					return
 				}
 				await fetchMatches(true, {
-						scoreCoreRevision: observedSnapshot?.scoreCoreRevision ?? null
+					scoreCoreRevision: observedSnapshot?.scoreCoreRevision ?? null
 				})
 			} catch (probeError) {
-				console.error('Failed to check live match freshness:', probeError)
-				setError(t('refreshFailed'))
+				if (!isOfficialUpdating) {
+					console.error('Failed to check live match freshness:', probeError)
+					setError(t('refreshFailed'))
+				}
 			}
 		})()
 		freshnessRequestRef.current = request
@@ -294,6 +315,7 @@ export function LiveMatchesClient({
 		acceptSnapshot,
 		fetchMatches,
 		isPageActive,
+		isOfficialUpdating,
 		resolvedCurrentEventId,
 		resolvedNextEventId,
 		t
@@ -664,12 +686,16 @@ export function LiveMatchesClient({
 										match={match}
 										allMatches={activeMatches}
 										currentIndex={i}
-						eventId={selectedEventId}
+											eventId={selectedEventId}
 									/>
 								))
 							) : (
 								<p className="rounded-lg border border-border/80 bg-card py-8 text-center text-muted-foreground shadow-sm">
-									{activeTabConfig ? t(activeTabConfig.labelKey) : t('none')}
+									{isOfficialUpdating && matches.length === 0
+										? t('officialUpdating')
+										: activeTabConfig
+											? t(activeTabConfig.labelKey)
+											: t('none')}
 								</p>
 							)}
 						</TabsContent>

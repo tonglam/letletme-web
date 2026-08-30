@@ -270,13 +270,13 @@ function ScheduleFixtureStrip({
 					className={`flex min-w-0 items-center justify-center rounded-[clamp(0.12rem,0.35cqi,0.24rem)] border px-[clamp(0.08rem,0.32cqi,0.2rem)] font-mono text-[clamp(0.36rem,1.05cqi,0.62rem)] font-bold leading-none tabular-nums ${compact ? 'h-[clamp(0.62rem,1.9cqi,1rem)]' : 'h-[clamp(0.72rem,2.2cqi,1.15rem)]'} ${scheduleFixtureClass(fixture)}`}
 				>
 					<span
-						className="sm:hidden"
+						className="share-pitch-fixture-dot sm:hidden"
 						aria-hidden="true"
 					>
 						●
 					</span>
 					<span
-						className="hidden sm:inline"
+						className="share-pitch-fixture-value hidden sm:inline"
 						aria-hidden="true"
 					>
 						{fixture.value}

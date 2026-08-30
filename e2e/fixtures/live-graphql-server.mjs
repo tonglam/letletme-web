@@ -326,21 +326,32 @@ const planningFixturesForEvent = eventId => {
 		homeTeam,
 		awayTeam,
 		homeTeamDifficulty,
-		awayTeamDifficulty
+		awayTeamDifficulty,
+		result = {}
 	) => ({
 		id,
 		code: id,
 		event,
 		kickoffTime: '2026-08-09T15:00:00.000Z',
-		finished: false,
-		started: false,
+		finished: result.finished ?? false,
+		started: result.started ?? result.finished ?? false,
 		homeTeam,
 		awayTeam,
-		homeScore: null,
-		awayScore: null,
+		homeScore: result.homeScore ?? null,
+		awayScore: result.awayScore ?? null,
 		homeTeamDifficulty,
 		awayTeamDifficulty
 	})
+	if (eventId === 1) {
+		return [
+			fixture(1001, arsenal, chelsea, 2, 4, {
+				finished: true,
+				started: true,
+				homeScore: 2,
+				awayScore: 1
+			})
+		]
+	}
 	if (eventId === 33) {
 		return [
 			fixture(3301, arsenal, chelsea, 2, 4),
@@ -392,6 +403,21 @@ const livePicks = Array.from({ length: 15 }, (_, index) => {
 		inDreamTeam: false
 	}
 })
+
+const squadPicks = livePicks.map(pick => ({
+	...pick,
+	elementTypeName:
+		pick.element <= 2
+			? 'GOALKEEPER'
+			: pick.element <= 7
+				? 'DEFENDER'
+				: pick.element <= 12
+					? 'MIDFIELDER'
+					: 'FORWARD',
+	isCaptain: pick.element === 1,
+	isViceCaptain: pick.element === 2,
+	multiplier: pick.element === 1 ? 2 : 1
+}))
 
 const liveRevisionVector = revision => ({
 	publicationId: `e2e-live-${revision.slice(0, 8)}`,
@@ -1304,6 +1330,49 @@ const server = createServer((request, response) => {
 						played: 11,
 						toPlay: 0,
 						pickList: livePicks
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('GetEntryHistory')) {
+			json(response, 200, {
+				data: {
+					entryHistory: {
+						results: [{ eventId: 33 }],
+						history: []
+					}
+				}
+			})
+			return
+		}
+		if (query.includes('GetEntryEventResult')) {
+			const entryId = Number(variables.entryId)
+			const eventId = Number(variables.eventId) || 33
+			json(response, 200, {
+				data: {
+					entryEventResult: {
+						eventId,
+						eventPoints: 22,
+						overallPoints: 1234,
+						overallRank: 56789,
+						eventTransfers: 0,
+						eventTransfersCost: 0,
+						eventNetPoints: 22,
+						eventBenchPoints: 0,
+						eventChip: null,
+						eventCaptainPoints: 12,
+						eventPlayedCaptain: { webName: 'Player 1' },
+						eventPicks: squadPicks,
+						teamValue: 1005,
+						bank: 10,
+						entry: {
+							id: entryId,
+							entryName: 'E2E United',
+							playerName: 'Test Manager',
+							totalTransfers: 22,
+							region: 'Australia'
+						}
 					}
 				}
 			})

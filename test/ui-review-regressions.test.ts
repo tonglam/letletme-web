@@ -178,25 +178,65 @@ describe('my squad fixture pitch', () => {
 			desk,
 			/<SquadPitch[\s\S]*onPlayerClick=\{handlePitchPlayerClick\}/
 		)
-		assert.match(desk, /<Dialog[\s\S]*<FixtureDetailRow/)
+		assert.match(desk, /<Dialog[\s\S]*<FullSeasonSchedule/)
 		assert.match(desk, /data-schedule-pitch="true"/)
 		assert.match(desk, /fixtureSchedule,/)
+		assert.match(desk, /FULL_SEASON_EVENT_IDS = Array\.from\([\s\S]*length: 38/)
+		assert.match(desk, /FULL_SEASON_WINDOWS = Array\.from\([\s\S]*length: 8/)
+		assert.match(desk, /function CompactFixtureRow/)
+		assert.match(desk, /fixture\.finished/)
+		assert.match(desk, /`FDR \$\{difficulty\}`/)
+		assert.match(desk, /mySquadRangeLabel/)
+		assert.match(desk, /<select/)
+		assert.match(desk, /data-share-preserve-width="true"/)
+		assert.match(desk, /mySquadShareTitle/)
+		assert.doesNotMatch(desk, /mySquadDetailDescription|mySquadDetailLegend/)
+		assert.doesNotMatch(desk, /FdrLegend/)
+		assert.doesNotMatch(desk, /mySquadPitchDifficulty/)
+		assert.doesNotMatch(desk, /fixtureScorePending/)
+		assert.match(desk, /data-retry-squad-schedule="true"/)
+		assert.match(
+			desk,
+			/-mx-4 overflow-hidden rounded-xl border border-border\/60 bg-\[#210025\]/
+		)
+		assert.match(desk, /-mx-4 overflow-hidden rounded-xl/)
+		assert.match(desk, /mx-auto w-full max-w-3xl/)
+		assert.match(desk, /className="rounded-none border-0 shadow-none"/)
+		assert.doesNotMatch(desk, /<SquadPitch[\s\S]*max-w-3xl/)
 		assert.doesNotMatch(desk, /<table\b|overflow-x-auto/)
 		assert.match(pitch, /SCHEDULE_FDR_CLASS/)
 		assert.match(pitch, /fixtureSchedule\?/)
+		assert.match(pitch, /share-pitch-fixture-value/)
 		assert.match(pitch, /role="listitem"/)
+		const styles = await readFile(
+			new URL('../app/globals.css', import.meta.url),
+			'utf8'
+		)
+		assert.match(
+			styles,
+			/data-share-rendering='true'\] \.share-pitch-fixture-value[\s\S]*display: inline !important/
+		)
 	})
 })
 
 describe('team FDR average scale', () => {
 	it('shows exact averages with a continuous difficulty marker', async () => {
-		const source = await readFile(
-			new URL(
-				'../app/data/fixtures/_components/FdrMatrix.tsx',
-				import.meta.url
+		const [source, detail] = await Promise.all([
+			readFile(
+				new URL(
+					'../app/data/fixtures/_components/FdrMatrix.tsx',
+					import.meta.url
+				),
+				'utf8'
 			),
-			'utf8'
-		)
+			readFile(
+				new URL(
+					'../app/data/fixtures/_components/TeamFdrDetailDialog.tsx',
+					import.meta.url
+				),
+				'utf8'
+			)
+		])
 
 		assert.match(source, /function FdrAverageCell\(/)
 		assert.match(source, /const FDR_TEAM_CELL/)
@@ -209,6 +249,36 @@ describe('team FDR average scale', () => {
 		)
 		assert.match(source, /style=\{\{ left: `\$\{markerPosition\}%` \}\}/)
 		assert.match(source, /data-fdr-average=\{formatted\}/)
+		assert.match(source, /TeamFdrDetailDialog/)
+		assert.match(source, /setSelectedTeam\(row\)/)
+		assert.match(source, /openTeamFixtureDetail/)
+		assert.match(source, /function fixtureScore\(/)
+		assert.match(source, /const value = cell\.finished/)
+		assert.match(source, /score \?\? t\('fixtureScorePending'\)/)
+		assert.match(source, /`FDR \$\{cell\.difficulty\}`/)
+		assert.match(
+			source,
+			/const teamName = row\.teamName\.trim\(\) \|\| row\.teamShortName/
+		)
+		assert.match(
+			source,
+			/whitespace-nowrap font-display text-xs font-bold leading-tight tracking-wide/
+		)
+		assert.match(
+			source,
+			/mt-0\.5 inline-flex rounded border border-primary\/35 bg-primary\/15 px-1 py-px font-mono text-\[0\.625rem\] font-medium/
+		)
+		assert.match(
+			detail,
+			/FULL_SEASON_EVENT_IDS = Array\.from\([\s\S]*length: 38/
+		)
+		assert.match(detail, /FULL_SEASON_WINDOWS = Array\.from\([\s\S]*length: 8/)
+		assert.match(detail, /ref=\{shareRef\}/)
+		assert.match(detail, /data-share-fit-content="true"/)
+		assert.match(detail, /data-share-preserve-width="true"/)
+		assert.match(detail, /actions=\{\['image'\]\}/)
+		assert.match(detail, /<DialogDescription className="sr-only">/)
+		assert.doesNotMatch(detail, /t\('teamDetailLegend'\)/)
 	})
 })
 
@@ -233,6 +303,8 @@ describe('fixture section sharing', () => {
 			/<SectionHead[\s\S]*id="my-squad-heading"[\s\S]*<ShareActions[\s\S]*actions=\{\['image'\]\}/
 		)
 		assert.match(page, /imageRef=\{mySquadShareRef\}/)
+		assert.match(page, /data-page-fdr-legend="true"/)
+		assert.doesNotMatch(page, /\/\* FDR legend \*\//)
 		assert.match(
 			page,
 			/<Card[\s\S]*aria-labelledby="fdr-teams"[\s\S]*<ShareActions[\s\S]*imageRef=\{teamFdrShareRef\}/
@@ -241,7 +313,11 @@ describe('fixture section sharing', () => {
 			page,
 			/<Card[\s\S]*aria-labelledby="fdr-teams"[\s\S]*data-share-expand-width="true"/
 		)
-		assert.match(page, /text=\{shareText\}/)
+		assert.match(
+			page,
+			/<Card[\s\S]*aria-labelledby="fdr-teams"[\s\S]*<ShareActions[\s\S]*actions=\{\['image'\]\}/
+		)
+		assert.doesNotMatch(page, /text=\{shareText\}/)
 		assert.match(desk, /<SquadPitch[\s\S]*ref=\{shareRef\}/)
 		assert.match(
 			page,
@@ -253,6 +329,44 @@ describe('fixture section sharing', () => {
 		const sortControlIndex = page.indexOf("t('sortEasiest')")
 		assert.ok(teamFdrHeadingIndex >= 0)
 		assert.ok(sortControlIndex > teamFdrHeadingIndex)
+	})
+})
+
+describe('explore trends presentation', () => {
+	it('uses the shared page shell, tabs, and formation view without marketing copy', async () => {
+		const [source, zhMessages, enMessages] = await Promise.all([
+			readFile(
+				new URL('../app/data/selections/TrendsClient.tsx', import.meta.url),
+				'utf8'
+			),
+			readFile(new URL('../messages/zh-CN.json', import.meta.url), 'utf8'),
+			readFile(new URL('../messages/en.json', import.meta.url), 'utf8')
+		])
+
+		assert.match(source, /StatsPageHeader/)
+		assert.match(source, /StatsTabsShell/)
+		assert.match(source, /TabsTrigger/)
+		assert.match(source, /function TrendSquadPitch/)
+		assert.match(source, /PERSONAL_EXPOSURE/)
+		for (const text of [source, zhMessages, enMessages]) {
+			assert.doesNotMatch(text, /ROUND READ|signalDeskDescription|heroKicker/)
+		}
+	})
+})
+
+describe('fixture controls copy', () => {
+	it('removes the redundant range label and divider', async () => {
+		const source = await readFile(
+			new URL('../app/data/fixtures/FixturesClient.tsx', import.meta.url),
+			'utf8'
+		)
+
+		assert.doesNotMatch(source, /horizonLabel/)
+		assert.doesNotMatch(source, /t\('controlsLabel'\)|t\('controlsHint'/)
+		assert.doesNotMatch(
+			source,
+			/className="mb-3 border-b border-border\/50 pb-2"/
+		)
 	})
 })
 
@@ -276,11 +390,28 @@ describe('explore gameweek dream team presentation', () => {
 		assert.match(source, /function mapDreamTeamPlayers\(/)
 		assert.match(
 			source,
-			/const haulShareText[\s\S]*imageRef=\{haulShareRef\}[\s\S]*actions=\{\['text', 'image'\]\}/
+			/const canShareHauls[\s\S]*imageRef=\{haulShareRef\}[\s\S]*actions=\{\['image'\]\}/
 		)
+		assert.doesNotMatch(source, /actions=\{\['text', 'image'\]\}/)
 		assert.match(
 			source,
 			/ref=\{haulShareRef\}[\s\S]*data-share-fit-content="true"[\s\S]*data-share-reserve-brand-space="true"/
+		)
+		assert.match(
+			source,
+			/const overviewShareRef = useRef<HTMLElement \| null>\(null\)/
+		)
+		assert.match(
+			source,
+			/data-gameweek-overview="true"[\s\S]*data-share-fit-content="true"[\s\S]*data-share-preserve-width="true"/
+		)
+		assert.match(
+			source,
+			/overviewShareTitle = t\('overview', \{ gameweek: visibleGameweek \}\)/
+		)
+		assert.match(
+			source,
+			/<ShareActions[\s\S]*actions=\{\['image'\]\}[\s\S]*imageRef=\{overviewShareRef\}/
 		)
 		assert.match(source, /useMatchPlayerDetail\(visibleGameweek\)/)
 		assert.match(source, /onPlayerClick=\{handleHaulPlayerClick\}/)

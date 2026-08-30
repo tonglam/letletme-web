@@ -168,7 +168,6 @@ export default function GameweekStatsClient({
 	initialDesk
 }: GameweekStatsClientProps) {
 	const t = useTranslations('GameweekStats')
-	const tLivePoints = useTranslations('LivePoints')
 	const formatter = useFormatter()
 	const [selectedGameweek, setSelectedGameweek] = useState(initialDesk.eventId)
 	const [committedDesk, setCommittedDesk] = useState(initialDesk)
@@ -287,6 +286,7 @@ export default function GameweekStatsClient({
 	const isOverviewPending = committedDesk.overviewState === 'PENDING'
 	const isBoardsUnavailable = committedDesk.boardsState === 'UNAVAILABLE'
 	const isBoardsPending = committedDesk.boardsState === 'PENDING'
+	const overviewShareRef = useRef<HTMLElement | null>(null)
 	const haulShareRef = useRef<HTMLDivElement | null>(null)
 	const {
 		closePlayerDetail,
@@ -298,7 +298,7 @@ export default function GameweekStatsClient({
 
 	const formatStat = useCallback(
 		(value: number | null, fallbackTip = t('pendingOfficial')) =>
-			(typeof value === 'number' ? String(value) : fallbackTip),
+			typeof value === 'number' ? String(value) : fallbackTip,
 		[t]
 	)
 	const formatCount = (value: number | null, fallbackTip = t('notProvided')) =>
@@ -348,29 +348,15 @@ export default function GameweekStatsClient({
 		},
 		[haulPlayers, openPlayerDetail]
 	)
-	const haulShareText =
+	const canShareHauls =
 		!isLoading &&
 		!isScheduledSelection &&
 		!isBoardsPending &&
 		!isBoardsUnavailable &&
 		haulPlayers.length > 0
-			? [
-					`# ${t('doubleDigitHauls')} · GW${visibleGameweek}`,
-					'',
-					...haulPlayers.map(
-						player =>
-							`- ${player.name} ${player.team ?? '—'} · ${player.points} ${tLivePoints('pointsAbbreviation')}`
-					),
-					'',
-					typeof window !== 'undefined'
-						? (() => {
-								const shareUrl = new URL(window.location.href)
-								shareUrl.searchParams.set('gw', String(visibleGameweek))
-								return shareUrl.toString()
-							})()
-						: `https://letletme.top/explore/gameweek?gw=${visibleGameweek}`
-				].join('\n')
-			: ''
+	const overviewShareTitle = t('overview', { gameweek: visibleGameweek })
+	const canShareOverview =
+		!isLoading && committedDesk.overviewState === 'AVAILABLE'
 
 	return (
 		<>
@@ -424,21 +410,41 @@ export default function GameweekStatsClient({
 
 						{/* Overview — same scoreboard structure, lighter mid-plum bg */}
 						<section
+							ref={overviewShareRef}
 							className="scoreboard-lifted mb-6 rounded-xl sm:mb-8"
 							aria-labelledby="gw-overview-title"
+							data-gameweek-overview="true"
+							data-share-fit-content="true"
+							data-share-preserve-width="true"
+							data-share-reserve-brand-space="true"
 						>
 							<div className="flex flex-wrap items-center justify-between gap-2 border-b border-fascia-foreground/10 px-4 py-3 sm:px-5">
 								<h2
 									id="gw-overview-title"
+									data-share-title="true"
 									className="font-display text-lg font-bold tracking-wide text-fascia-foreground sm:text-xl"
 								>
-									{t('overview', { gameweek: visibleGameweek })}
+									{overviewShareTitle}
 								</h2>
-								{isLoading ? (
-									<span className="font-mono text-label uppercase tracking-wide text-fascia-foreground/60">
-										{t('loadingOverview')}
-									</span>
-								) : null}
+								<div
+									className="flex shrink-0 items-center gap-3"
+									data-share-exclude="true"
+								>
+									{isLoading ? (
+										<span className="font-mono text-label uppercase tracking-wide text-fascia-foreground/60">
+											{t('loadingOverview')}
+										</span>
+									) : null}
+									{canShareOverview ? (
+										<ShareActions
+											actions={['image']}
+											text={overviewShareTitle}
+											imageRef={overviewShareRef}
+											title={overviewShareTitle}
+											buttonClassName="border-fascia-foreground/25 bg-fascia-foreground/10 text-fascia-foreground hover:border-electric hover:bg-electric/10 hover:text-electric"
+										/>
+									) : null}
+								</div>
 							</div>
 							{isOverviewUnavailable ? (
 								<Alert
@@ -651,12 +657,12 @@ export default function GameweekStatsClient({
 										title={t('doubleDigitHauls')}
 										description={t('haulDescription')}
 										action={
-											haulShareText ? (
+											canShareHauls ? (
 												<ShareActions
-													text={haulShareText}
+													text={t('doubleDigitHauls')}
 													imageRef={haulShareRef}
 													title={t('doubleDigitHauls')}
-													actions={['text', 'image']}
+													actions={['image']}
 												/>
 											) : null
 										}

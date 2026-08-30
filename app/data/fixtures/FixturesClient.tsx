@@ -2,7 +2,6 @@
 
 import { FdrMatrix } from '@/app/data/fixtures/_components/FdrMatrix'
 import { MySquadFdrDesk } from '@/app/data/fixtures/_components/MySquadFdrDesk'
-import { formatTeamTickerShareText } from '@/app/data/fixtures/_lib/fixtures-share'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import PageShell from '@/components/layout/PageShell'
 import { ShareActions } from '@/components/share/ShareActions'
@@ -23,7 +22,6 @@ import {
 	FDR_HORIZONS,
 	formatAvgFdr,
 	formatAvgFdrOutOfFive,
-	orderFdrTeamsForDisplay,
 	squadMatchKey,
 	type FdrHorizon,
 	type FdrReviewCandidate,
@@ -34,8 +32,7 @@ import { positionBadgeClass } from '@/lib/position-style'
 import { cn, normalizePosition, type PositionCode } from '@/lib/utils'
 import { TrendingDown, TrendingUp, Users } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
-import { localizePathname, type AppLocale } from '@/i18n/routing'
-import { useLocale, useTranslations } from 'next-intl'
+import { useTranslations } from 'next-intl'
 import {
 	useCallback,
 	useEffect,
@@ -45,7 +42,6 @@ import {
 	startTransition,
 	type ReactNode
 } from 'react'
-import { toast } from 'sonner'
 
 type PosFilter = 'ALL' | Exclude<PositionCode, 'UNK'>
 
@@ -391,7 +387,6 @@ export default function FixturesClient({
 	squadState?: SquadLoadState
 }) {
 	const t = useTranslations('Fixtures')
-	const locale = useLocale() as AppLocale
 	const teamFdrShareRef = useRef<HTMLDivElement | null>(null)
 	const mySquadShareRef = useRef<HTMLElement | null>(null)
 
@@ -400,6 +395,7 @@ export default function FixturesClient({
 	const [sort, setSort] = useState<'easiest' | 'hardest'>('easiest')
 	const [posFilter, setPosFilter] = useState<PosFilter>('ALL')
 	const [loading, setLoading] = useState(false)
+	const [loadError, setLoadError] = useState(false)
 	const [focusedTeamId, setFocusedTeamId] = useState<number | null>(null)
 
 	const squadKeySet = useMemo(() => new Set(mySquadKeys), [mySquadKeys])
@@ -435,6 +431,7 @@ export default function FixturesClient({
 			if (next < horizon) {
 				setPendingHorizon(null)
 				setLoading(false)
+				setLoadError(false)
 				startTransition(() => setHorizon(next))
 				return
 			}
@@ -448,6 +445,7 @@ export default function FixturesClient({
 			)
 			if (missing.length === 0) {
 				setPendingHorizon(null)
+				setLoadError(false)
 				startTransition(() => setHorizon(next))
 				return
 			}
@@ -458,6 +456,7 @@ export default function FixturesClient({
 			requestRef.current = controller
 			setPendingHorizon(next)
 			setLoading(true)
+			setLoadError(false)
 			void fetch(`/api/fixtures/window?fromGw=${first}&count=${count}`, {
 				signal: controller.signal,
 				headers: { accept: 'application/json' }
@@ -482,6 +481,7 @@ export default function FixturesClient({
 					)
 					setFixturesByEvent(new Map(cacheRef.current))
 					setPendingHorizon(null)
+					setLoadError(false)
 					startTransition(() => setHorizon(next))
 				})
 				.catch(error => {
@@ -490,9 +490,12 @@ export default function FixturesClient({
 						generation !== requestGenerationRef.current
 					)
 						return
-					console.error('[fixtures] horizon fetch failed:', error)
+					console.warn(
+						'[fixtures] horizon fetch failed:',
+						error instanceof Error ? error.name : 'UnknownError'
+					)
 					setPendingHorizon(null)
-					toast.error(t('loadFailed'))
+					setLoadError(true)
 				})
 				.finally(() => {
 					if (generation === requestGenerationRef.current) {
@@ -501,7 +504,7 @@ export default function FixturesClient({
 					}
 				})
 		},
-		[fromGw, horizon, pendingHorizon, t, unknownEventIds]
+		[fromGw, horizon, pendingHorizon, unknownEventIds]
 	)
 
 	const model = useMemo(
@@ -515,28 +518,6 @@ export default function FixturesClient({
 			}),
 		[fixturesByEvent, fromGw, horizon, knownTeams, marketSignals, unknownEvents]
 	)
-	const shareText = useMemo(() => {
-		const orderedTeams = orderFdrTeamsForDisplay(model.teams, sort)
-		const origin =
-			typeof window !== 'undefined'
-				? window.location.origin
-				: 'https://letletme.top'
-		const shareUrl = new URL(
-			localizePathname('/explore/fixtures', locale),
-			origin
-		).toString()
-		return formatTeamTickerShareText({
-			fromGw,
-			horizon,
-			teams: orderedTeams,
-			labels: {
-				title: t('teamsTitle'),
-				none: t('emptyTeams'),
-				footer: shareUrl
-			}
-		})
-	}, [fromGw, horizon, locale, model.teams, sort, t])
-
 	const filterByPos = useCallback(
 		(list: FdrReviewCandidate[]) => {
 			if (posFilter === 'ALL') return list
@@ -619,47 +600,59 @@ export default function FixturesClient({
 					<StatsPageHeader title={t('title')} />
 
 					{/* Controls */}
-					<Card
-						role="region"
-						aria-label={t('controlsLabel')}
-						className="mb-8 p-4 sm:p-5"
-					>
-						<div className="mb-3 border-b border-border/50 pb-2">
-							<p className="eyebrow sm:text-caption">{t('controlsLabel')}</p>
-							<p className="mt-0.5 text-caption text-muted-foreground">
-								{t('controlsHint', {
-									from: fromGw,
-									to: Math.min(38, fromGw + horizon - 1)
-								})}
+					<Card className="mb-8 p-4 sm:p-5">
+						<div className="flex flex-wrap gap-1.5">
+							{FDR_HORIZONS.map(h => (
+								<button
+									key={h}
+									type="button"
+									onClick={() => selectHorizon(h)}
+									className={cn(
+										'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
+										horizon === h
+											? 'border-success bg-success text-success-foreground'
+											: 'border-border/70 bg-background text-muted-foreground hover:text-foreground'
+									)}
+									aria-pressed={horizon === h}
+									aria-busy={pendingHorizon === h}
+								>
+									{t('horizonN', { n: h })}
+								</button>
+							))}
+						</div>
+						<div
+							data-page-fdr-legend="true"
+							role="group"
+							aria-label={t('fdrLegend')}
+							className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/50 pt-3 text-caption text-muted-foreground"
+						>
+							<span className="font-display font-semibold uppercase tracking-caps">
+								{t('fdrLegend')}
+							</span>
+							{[1, 2, 3, 4, 5].map(d => (
+								<span
+									key={d}
+									className={cn(
+										'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-label font-semibold tabular-nums',
+										FDR_CELL[d]
+									)}
+								>
+									<span
+										className={cn('size-1.5 rounded-full', FDR_DOT[d])}
+										aria-hidden="true"
+									/>
+									{d}
+								</span>
+							))}
+						</div>
+						{loadError ? (
+							<p
+								className="mt-3 text-xs text-destructive"
+								role="alert"
+							>
+								{t('loadFailed')}
 							</p>
-						</div>
-						<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-							<div>
-								<p className="mb-1.5 text-caption font-medium text-muted-foreground">
-									{t('horizonLabel')}
-								</p>
-								<div className="flex flex-wrap gap-1.5">
-									{FDR_HORIZONS.map(h => (
-										<button
-											key={h}
-											type="button"
-											onClick={() => selectHorizon(h)}
-											className={cn(
-												'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
-												horizon === h
-													? 'border-success bg-success text-success-foreground'
-													: 'border-border/70 bg-background text-muted-foreground hover:text-foreground'
-											)}
-											aria-pressed={horizon === h}
-											aria-busy={pendingHorizon === h}
-										>
-											{t('horizonN', { n: h })}
-										</button>
-									))}
-								</div>
-							</div>
-						</div>
-						{loading ? (
+						) : loading ? (
 							<p className="mt-3 text-xs text-muted-foreground">
 								{t('loading')}
 							</p>
@@ -783,28 +776,6 @@ export default function FixturesClient({
 						/>
 					</Card>
 
-					{/* FDR legend */}
-					<p className="mb-4 flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
-						<span className="font-display font-semibold uppercase tracking-caps">
-							{t('fdrLegend')}
-						</span>
-						{[1, 2, 3, 4, 5].map(d => (
-							<span
-								key={d}
-								className={cn(
-									'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-label font-semibold',
-									FDR_CELL[d]
-								)}
-							>
-								<span
-									className={cn('size-1.5 rounded-full', FDR_DOT[d])}
-									aria-hidden="true"
-								/>
-								{d}
-							</span>
-						))}
-					</p>
-
 					{/* Team FDR matrix */}
 					<Card
 						role="region"
@@ -846,9 +817,9 @@ export default function FixturesClient({
 										))}
 									</div>
 									<ShareActions
-										text={shareText}
 										imageRef={teamFdrShareRef}
 										title={t('teamsTitle')}
+										actions={['image']}
 									/>
 								</div>
 							}

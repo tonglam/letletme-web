@@ -71,20 +71,46 @@ describe('resolveReviewGameweekAnchor', () => {
 })
 
 describe('resolveFixturePlanningGameweek', () => {
-	it('uses the active event and otherwise starts at the upcoming event', () => {
+	it('keeps the active event while it is live', () => {
+		assert.equal(
+			resolveFixturePlanningGameweek({
+				current: [{ id: 28 }],
+				next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }],
+				latestFinishedEventId: 27,
+			}),
+			28,
+		)
+	})
+
+	it('starts at the upcoming event once the current event is finished', () => {
+		assert.equal(
+			resolveFixturePlanningGameweek({
+				current: [{ id: 28 }],
+				next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }],
+				latestFinishedEventId: 28,
+			}),
+			29,
+		)
+	})
+
+	it('uses the upcoming event when the current event has already rolled off', () => {
+		assert.equal(
+			resolveFixturePlanningGameweek({
+				current: [],
+				next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }],
+				latestFinishedEventId: 28,
+			}),
+			29,
+		)
+	})
+
+	it('retains the legacy current/next fallback when lifecycle metadata is absent', () => {
 		assert.equal(
 			resolveFixturePlanningGameweek({
 				current: [{ id: 28 }],
 				next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }],
 			}),
 			28,
-		)
-		assert.equal(
-			resolveFixturePlanningGameweek({
-				current: [],
-				next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }],
-			}),
-			29,
 		)
 	})
 })

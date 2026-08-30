@@ -355,8 +355,9 @@ test('scheduled live points does not show a polling label and recovers manually'
 		page.getByRole('heading', { level: 1, name: 'Live Points' })
 	).toBeVisible()
 	await expect(
-		page.getByText('Live points could not be loaded. Please try again.', {
-			exact: true
+		page.getByRole('status').filter({
+			hasText:
+				'Official data is updating. Live points will appear when the official data is published.'
 		})
 	).toBeVisible()
 	await expect(page.getByText(/Next refresh in \d+s/)).toHaveCount(0)

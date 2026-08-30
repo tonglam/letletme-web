@@ -30,6 +30,7 @@ type QueryExecutorOptions = {
 	cache?: RequestCache
 	signal?: AbortSignal
 	handledErrorCodes?: readonly string[]
+	suppressErrorLog?: boolean
 }
 
 export type QueryExecutor = <T>(
@@ -64,6 +65,7 @@ export interface LiveFixturePlayerLoadFailure extends LiveRef {
 type LiveMatchdayDeskLoadOptions = {
 	includeFixturePlayers?: boolean
 	onFixturePlayerFailure?: (failure: LiveFixturePlayerLoadFailure) => void
+	suppressErrorLog?: boolean
 }
 
 const FIXTURE_PLAYER_BATCH_SIZE = 5
@@ -190,6 +192,7 @@ const mapFixturePlayer = (row: LiveFixturePerformance): PlayerStat | null => {
 		player: row.player.webName,
 		element: row.player.id,
 		elementType: POSITION_ELEMENT_TYPE[row.player.position],
+		price: row.player.price,
 		minutes: row.minutes ?? 0,
 		goals: row.goalsScored ?? 0,
 		assists: row.assists ?? 0,
@@ -499,7 +502,11 @@ export async function loadLiveMatchdayDesk(
 		executor<LiveMatchdayDeskResponse>(
 			GET_LIVE_MATCHDAY_DESK,
 			{ ref: nextRef },
-			{ ...queryOptions, cache: 'no-store' }
+			{
+				...queryOptions,
+				cache: 'no-store',
+				suppressErrorLog: options.suppressErrorLog
+			}
 		)
 	let recoveredRevision = false
 	let desk: LiveMatchdayDeskResponse
@@ -698,6 +705,7 @@ export interface LiveMatchesLoadOptions {
 	scoreCoreRevision?: string | null
 	/** Initial RSC can defer the large player section to the browser refresh. */
 	includeFixturePlayers?: boolean
+	suppressErrorLog?: boolean
 	signal?: AbortSignal
 }
 
@@ -737,7 +745,8 @@ export async function getLiveMatchesSnapshot(
 					}
 				: null
 		desk = await loadLiveMatchdayDesk(executor, ref, {
-			includeFixturePlayers: options.includeFixturePlayers
+		includeFixturePlayers: options.includeFixturePlayers,
+		suppressErrorLog: options.suppressErrorLog
 		})
 	}
 	const current = validEventId(desk.liveMatchdayDesk?.eventId) ?? currentEventId

@@ -1,19 +1,25 @@
 import type { PriceChangePlayer } from '@/lib/graphql/operations/price-changes'
 import type { SquadPickSeed } from '@/lib/squad-picks'
+import { isLikelyToChange } from '@/lib/price-change-sorting'
 
 export const PRICE_CHANGE_SHARE_STATUSES = [
+	'LIKELY_RISE',
+	'VERY_LIKELY_RISE',
 	'LIKELY_FALL',
 	'VERY_LIKELY_FALL'
 ] as const
 
 export const PRICE_CHANGE_SHARE_MAX_PLAYERS = 20
 
-/** Keep price-prediction shares focused on the actionable fall signals. */
+/** Keep one-image/text prediction shares focused on actionable rise/fall signals. */
 export function selectPriceChangeSharePlayers(
 	players: readonly PriceChangePlayer[]
 ): PriceChangePlayer[] {
-	return players.filter(player =>
-		PRICE_CHANGE_SHARE_STATUSES.some(status => status === player.status)
+	return players.filter(
+		player =>
+			isLikelyToChange(player) &&
+			player.progressPercent !== 0 &&
+			PRICE_CHANGE_SHARE_STATUSES.some(status => status === player.status)
 	)
 }
 

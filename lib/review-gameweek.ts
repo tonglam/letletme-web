@@ -59,11 +59,31 @@ export function resolveReviewGameweekAnchor(
 	return { currentGw: null, anchorGw: null, source: 'none' }
 }
 
-/** Current active event, otherwise the next event, for forward fixture planning. */
+/**
+ * Resolve the first gameweek for a forward-looking fixture view.
+ *
+ * `current` can remain on a just-finished GW until FPL advances its event
+ * lifecycle. Once the authoritative core context says that current GW is
+ * finished, the upcoming event is the useful starting point for planning.
+ * During a live GW, keep the current event so the window includes the
+ * matches that are still in progress.
+ */
 export function resolveFixturePlanningGameweek(
 	events: EventsResponse | null | undefined,
 ): number | null {
-	return pickCurrentEventId(events) ?? positiveId(events?.next?.[0]?.id)
+	const currentGw = pickCurrentEventId(events)
+	const nextGw = positiveId(events?.next?.[0]?.id)
+	const latestFinishedGw = positiveId(events?.latestFinishedEventId)
+
+	const currentHasFinished =
+		currentGw != null &&
+		latestFinishedGw != null &&
+		latestFinishedGw >= currentGw
+	if (currentHasFinished && nextGw != null && nextGw > latestFinishedGw) {
+		return nextGw
+	}
+
+	return currentGw ?? nextGw
 }
 
 /** Max eventId from entry history results (for Team review anchor). */

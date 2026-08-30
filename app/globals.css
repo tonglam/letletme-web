@@ -3,138 +3,138 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    /* LetLetMe matchday palette — floodlights, chalk and aubergine */
-    --plum: 288 100% 11%; /* #38003c deep aubergine */
-    --electric: 152 100% 50%; /* #00ff85 pitch green */
-    --pink: 330 100% 58%; /* #ff2882 broadcast pink */
-    --fascia: 288 56% 8%; /* stadium fascia: always dark, both themes */
-    --fascia-foreground: 48 33% 96%; /* chalk white */
-    --sticker: 288 84% 10%; /* hard offset shadow, light theme */
-    --sticker-alpha: 1;
+	:root {
+		/* LetLetMe matchday palette — floodlights, chalk and aubergine */
+		--plum: 288 100% 11%; /* #38003c deep aubergine */
+		--electric: 152 100% 50%; /* #00ff85 pitch green */
+		--pink: 330 100% 58%; /* #ff2882 broadcast pink */
+		--fascia: 288 56% 8%; /* stadium fascia: always dark, both themes */
+		--fascia-foreground: 48 33% 96%; /* chalk white */
+		--sticker: 288 84% 10%; /* hard offset shadow, light theme */
+		--sticker-alpha: 1;
 
-    --background: 48 30% 97%;
-    --foreground: 288 42% 13%;
-    --card: 0 0% 100%;
-    --card-foreground: 288 42% 13%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 288 42% 13%;
-    --primary: 152 100% 41%;
-    --primary-foreground: 288 100% 9%;
-    --primary-ink: 152 100% 26%; /* green text on light surfaces (WCAG AA) */
-    --secondary: 288 16% 91%;
-    --secondary-foreground: 288 42% 15%;
-    --muted: 44 18% 93%;
-    --muted-foreground: 287 12% 38%;
-    --accent: 152 46% 90%;
-    --accent-foreground: 288 45% 14%;
-    --destructive: 346 78% 44%;
-    --destructive-foreground: 0 0% 98%;
-    --success: 152 100% 26%;
-    --success-foreground: 0 0% 100%;
-    --warning: 36 92% 30%;
-    --warning-foreground: 0 0% 100%;
-    --info: 288 60% 32%;
-    --info-foreground: 48 33% 96%;
-    --border: 287 14% 84%;
-    --input: 287 14% 80%;
-    --ring: 152 100% 34%;
-    --chart-1: 152 100% 38%;
-    --chart-2: 330 100% 58%;
-    --chart-3: 288 62% 34%;
-    --chart-4: 42 92% 52%;
-    --chart-5: 190 85% 42%;
-    --radius: 0.5rem;
-    --pitch-line: 152 65% 28%;
-    --pitch-alpha: 0.14;
+		--background: 48 30% 97%;
+		--foreground: 288 42% 13%;
+		--card: 0 0% 100%;
+		--card-foreground: 288 42% 13%;
+		--popover: 0 0% 100%;
+		--popover-foreground: 288 42% 13%;
+		--primary: 152 100% 41%;
+		--primary-foreground: 288 100% 9%;
+		--primary-ink: 152 100% 25%; /* green text on light surfaces (WCAG AA) */
+		--secondary: 288 16% 91%;
+		--secondary-foreground: 288 42% 15%;
+		--muted: 44 18% 93%;
+		--muted-foreground: 287 12% 38%;
+		--accent: 152 46% 90%;
+		--accent-foreground: 288 45% 14%;
+		--destructive: 346 78% 44%;
+		--destructive-foreground: 0 0% 98%;
+		--success: 152 100% 26%;
+		--success-foreground: 0 0% 100%;
+		--warning: 36 92% 30%;
+		--warning-foreground: 0 0% 100%;
+		--info: 288 60% 32%;
+		--info-foreground: 48 33% 96%;
+		--border: 287 14% 84%;
+		--input: 287 14% 80%;
+		--ring: 152 100% 34%;
+		--chart-1: 152 100% 38%;
+		--chart-2: 330 100% 58%;
+		--chart-3: 288 62% 34%;
+		--chart-4: 42 92% 52%;
+		--chart-5: 190 85% 42%;
+		--radius: 0.5rem;
+		--pitch-line: 152 65% 28%;
+		--pitch-alpha: 0.14;
 
-    /* Scoreboard scale — always dark in both themes, like --fascia */
-    --scoreboard-1: 288 60% 6%;
-    --scoreboard-2: 288 52% 10%;
-    --scoreboard-3: 288 48% 16%;
-    --scoreboard-4: 288 42% 22%;
-    --scoreboard-cell: 288 40% 20%;
-    --scoreboard-glow: 288 45% 28%;
-    --scoreboard-deep: 288 80% 4%;
-  }
-  .dark {
-    --sticker: 152 100% 50%;
-    --sticker-alpha: 0.35;
-    --pitch-line: 152 100% 50%;
-    --pitch-alpha: 0.2;
+		/* Scoreboard scale — always dark in both themes, like --fascia */
+		--scoreboard-1: 288 60% 6%;
+		--scoreboard-2: 288 52% 10%;
+		--scoreboard-3: 288 48% 16%;
+		--scoreboard-4: 288 42% 22%;
+		--scoreboard-cell: 288 40% 20%;
+		--scoreboard-glow: 288 45% 28%;
+		--scoreboard-deep: 288 80% 4%;
+	}
+	.dark {
+		--sticker: 152 100% 50%;
+		--sticker-alpha: 0.35;
+		--pitch-line: 152 100% 50%;
+		--pitch-alpha: 0.2;
 
-    --background: 288 48% 5%;
-    --foreground: 48 28% 95%;
-    --card: 288 38% 9%;
-    --card-foreground: 48 28% 95%;
-    --popover: 288 38% 9%;
-    --popover-foreground: 48 28% 95%;
-    --primary: 152 100% 50%;
-    --primary-foreground: 288 100% 8%;
-    --primary-ink: 152 100% 50%;
-    --secondary: 288 28% 14%;
-    --secondary-foreground: 48 28% 95%;
-    --muted: 288 24% 13%;
-    --muted-foreground: 286 14% 62%;
-    --accent: 152 32% 13%;
-    --accent-foreground: 152 72% 66%;
-    --destructive: 346 82% 62%;
-    --destructive-foreground: 288 60% 8%;
-    --success: 152 100% 50%;
-    --success-foreground: 288 100% 8%;
-    --warning: 42 96% 58%;
-    --warning-foreground: 38 100% 10%;
-    --info: 330 100% 62%;
-    --info-foreground: 288 60% 8%;
-    --border: 288 24% 17%;
-    --input: 288 24% 22%;
-    --ring: 152 100% 50%;
-    --chart-1: 152 100% 50%;
-    --chart-2: 330 100% 62%;
-    --chart-3: 288 55% 60%;
-    --chart-4: 42 96% 58%;
-    --chart-5: 190 90% 55%;
-  }
+		--background: 288 48% 5%;
+		--foreground: 48 28% 95%;
+		--card: 288 38% 9%;
+		--card-foreground: 48 28% 95%;
+		--popover: 288 38% 9%;
+		--popover-foreground: 48 28% 95%;
+		--primary: 152 100% 50%;
+		--primary-foreground: 288 100% 8%;
+		--primary-ink: 152 100% 50%;
+		--secondary: 288 28% 14%;
+		--secondary-foreground: 48 28% 95%;
+		--muted: 288 24% 13%;
+		--muted-foreground: 286 14% 62%;
+		--accent: 152 32% 13%;
+		--accent-foreground: 152 72% 66%;
+		--destructive: 346 82% 62%;
+		--destructive-foreground: 288 60% 8%;
+		--success: 152 100% 50%;
+		--success-foreground: 288 100% 8%;
+		--warning: 42 96% 58%;
+		--warning-foreground: 38 100% 10%;
+		--info: 330 100% 62%;
+		--info-foreground: 288 60% 8%;
+		--border: 288 24% 17%;
+		--input: 288 24% 22%;
+		--ring: 152 100% 50%;
+		--chart-1: 152 100% 50%;
+		--chart-2: 330 100% 62%;
+		--chart-3: 288 55% 60%;
+		--chart-4: 42 96% 58%;
+		--chart-5: 190 90% 55%;
+	}
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-  html {
-    scroll-behavior: smooth;
-  }
-  body {
-    @apply bg-background font-sans text-foreground;
-  }
-  html[lang='zh-CN'] body {
-    font-family:
-      var(--font-barlow),
-      -apple-system,
-      BlinkMacSystemFont,
-      'Segoe UI',
-      'PingFang SC',
-      'Hiragino Sans GB',
-      'Microsoft YaHei',
-      'Noto Sans CJK SC',
-      sans-serif;
-  }
-  h1,
-  h2,
-  h3 {
-    @apply font-display;
-  }
-  :focus {
-    scroll-margin-top: 5rem;
-  }
-  ::selection {
-    background: hsl(var(--electric) / 0.85);
-    color: hsl(var(--plum));
-  }
+	* {
+		@apply border-border;
+	}
+	html {
+		scroll-behavior: smooth;
+	}
+	body {
+		@apply bg-background font-sans text-foreground;
+	}
+	html[lang='zh-CN'] body {
+		font-family:
+			var(--font-barlow),
+			-apple-system,
+			BlinkMacSystemFont,
+			'Segoe UI',
+			'PingFang SC',
+			'Hiragino Sans GB',
+			'Microsoft YaHei',
+			'Noto Sans CJK SC',
+			sans-serif;
+	}
+	h1,
+	h2,
+	h3 {
+		@apply font-display;
+	}
+	:focus {
+		scroll-margin-top: 5rem;
+	}
+	::selection {
+		background: hsl(var(--electric) / 0.85);
+		color: hsl(var(--plum));
+	}
 }
 
 @layer components {
-  /*
+	/*
    * Share exports are rendered in a foreignObject without the app's next/font
    * faces embedded. html-to-image measures the live element first, then
    * renders the clone with a fallback font. Different fallback metrics can
@@ -144,10 +144,17 @@
    * toggled only while html-to-image is capturing; normal page typography is
    * unchanged.
    */
-  [data-share-rendering='true'],
-  [data-share-rendering='true'] * {
-    font-family: Arial, Helvetica, sans-serif !important;
-  }
+	[data-share-rendering='true'],
+	[data-share-rendering='true'] * {
+		font-family: Arial, Helvetica, sans-serif !important;
+	}
+
+	/* The homepage fixture desk keeps a minimum height for the live layout,
+     but a share image should end after the selected match day instead of
+     exporting that empty layout reserve. */
+	[data-share-rendering='true'][data-home-matches] {
+		min-height: 0 !important;
+	}
 
 	[data-share-rendering='true'] h1,
 	[data-share-rendering='true'] h2,
@@ -156,506 +163,541 @@
 		white-space: nowrap !important;
 	}
 
-  /* League titles share the row with a fixed status cluster. Let the title
+	/* League titles share the row with a fixed status cluster. Let the title
      consume the remaining width and wrap instead of inheriting an ellipsis
      from a compact row treatment. This applies to both the live page and its
      light-mode share export. */
-  .home-league-name {
-    display: block !important;
-    max-width: none !important;
-    min-width: 0 !important;
-    overflow: visible !important;
-    overflow-wrap: anywhere !important;
-    text-overflow: clip !important;
-    white-space: normal !important;
-    word-break: break-word !important;
-  }
+	.home-league-name {
+		display: block !important;
+		max-width: none !important;
+		min-width: 0 !important;
+		overflow: visible !important;
+		overflow-wrap: anywhere !important;
+		text-overflow: clip !important;
+		white-space: normal !important;
+		word-break: break-word !important;
+	}
 
-  /* html-to-image clones the target into a foreignObject. Keep the
+	/* html-to-image clones the target into a foreignObject. Keep the
      no-ellipsis contract explicit in that cloned tree too, even if a compact
      utility class is added to a league row later. */
-  [data-share-rendering='true'] [data-home-league-name='true'] {
-    display: block !important;
-    max-width: none !important;
-    min-width: 0 !important;
-    overflow: visible !important;
-    overflow-wrap: anywhere !important;
-    text-overflow: clip !important;
-    white-space: normal !important;
-    word-break: break-word !important;
-  }
+	[data-share-rendering='true'] [data-home-league-name='true'] {
+		display: block !important;
+		max-width: none !important;
+		min-width: 0 !important;
+		overflow: visible !important;
+		overflow-wrap: anywhere !important;
+		text-overflow: clip !important;
+		white-space: normal !important;
+		word-break: break-word !important;
+	}
 
-  [data-share-rendering='true'] .share-pitch-title {
-    font-size: clamp(0.62rem, 1.85cqi, 1.05rem) !important;
-    letter-spacing: 0 !important;
-  }
+	[data-share-rendering='true'] .share-pitch-title {
+		font-size: clamp(0.62rem, 1.85cqi, 1.05rem) !important;
+		letter-spacing: 0 !important;
+	}
 
-  [data-share-rendering='true'] .share-pitch-player-name {
-    font-family: Arial, Helvetica, sans-serif !important;
-    font-size: clamp(0.4rem, 1.1cqi, 0.64rem) !important;
-    letter-spacing: -0.025em !important;
-  }
+	[data-share-rendering='true'] .share-pitch-player-name {
+		font-family: Arial, Helvetica, sans-serif !important;
+		font-size: clamp(0.4rem, 1.1cqi, 0.64rem) !important;
+		letter-spacing: -0.025em !important;
+	}
 
-  /* Keep player-detail labels and team names on one measured line in the
+	/* The pitch uses dots for a compact narrow-screen schedule, but an image
+     share must keep the actual FDR values visible. */
+	[data-share-rendering='true'] .share-pitch-fixture-dot {
+		display: none !important;
+	}
+
+	[data-share-rendering='true'] .share-pitch-fixture-value {
+		display: inline !important;
+	}
+
+	/* Keep player-detail labels and team names on one measured line in the
      foreignObject clone. Otherwise html-to-image can wrap the count while
      the points value stays vertically centered against the original row. */
-  [data-share-rendering='true'] .share-player-breakdown-label {
-    white-space: nowrap !important;
-  }
+	[data-share-rendering='true'] .share-player-breakdown-label {
+		white-space: nowrap !important;
+	}
 
-  [data-share-rendering='true'] .share-player-team {
-    flex-shrink: 0 !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
-    white-space: nowrap !important;
-  }
+	[data-share-rendering='true'] .share-player-team {
+		flex-shrink: 0 !important;
+		overflow: visible !important;
+		text-overflow: clip !important;
+		white-space: nowrap !important;
+	}
 
-  /* Match exports must preserve the full FPL team name. The normal card uses
+	/* Match exports must preserve the full FPL team name. The normal card uses
      truncate to protect the responsive page layout, but that rule can measure
      the foreignObject clone too narrowly and turn a complete name into an
      ellipsis. Keep the share-only label intrinsic and on one line. */
-  [data-share-rendering='true'] .share-match-team-name {
-    flex: 0 0 auto !important;
-    font-family: Arial, Helvetica, sans-serif !important;
-    font-size: clamp(0.62rem, 1.6cqi, 0.95rem) !important;
-    line-height: 1.2 !important;
-    width: max-content !important;
-    max-width: none !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
-    white-space: nowrap !important;
-  }
+	[data-share-rendering='true'] .share-match-team-name {
+		flex: 0 0 auto !important;
+		font-family: Arial, Helvetica, sans-serif !important;
+		font-size: clamp(0.62rem, 1.6cqi, 0.95rem) !important;
+		line-height: 1.2 !important;
+		width: max-content !important;
+		max-width: none !important;
+		overflow: visible !important;
+		text-overflow: clip !important;
+		white-space: nowrap !important;
+	}
 
-  /* A highlight is one data unit: name, club and value move together to the
+	/* A highlight is one data unit: name, club and value move together to the
      next row instead of wrapping the name inside the pill and drifting the
      value vertically. */
-  [data-share-rendering='true'] .share-match-highlight-item {
-    flex: 0 0 auto !important;
-    flex-wrap: nowrap !important;
-    min-width: max-content !important;
-    white-space: nowrap !important;
-  }
+	[data-share-rendering='true'] .share-match-highlight-item {
+		flex: 0 0 auto !important;
+		flex-wrap: nowrap !important;
+		min-width: max-content !important;
+		white-space: nowrap !important;
+	}
 
-  [data-share-rendering='true'] .share-match-highlight-item > span {
-    flex: 0 0 auto !important;
-    font-family: Arial, Helvetica, sans-serif !important;
-    white-space: nowrap !important;
-  }
+	[data-share-rendering='true'] .share-match-highlight-item > span {
+		flex: 0 0 auto !important;
+		font-family: Arial, Helvetica, sans-serif !important;
+		white-space: nowrap !important;
+	}
 
-  /* Price-prediction rows contain a player, a progress bar and a status pill.
+	/* Price-prediction rows contain a player, a progress bar and a status pill.
      Keep them as one explicit flex column in the foreignObject clone. A grid
      row-start/row-span layout can be re-autoplaced by html-to-image when the
      cloned grid styles are resolved in a different order, which puts the
      status pill above the progress bar. */
-  [data-share-rendering='true'] [data-share-price-prediction-row='true'] {
-    display: flex !important;
-    align-items: flex-start !important;
-    gap: 0.75rem !important;
-  }
+	[data-share-rendering='true'] [data-share-price-prediction-row='true'] {
+		display: flex !important;
+		align-items: flex-start !important;
+		gap: 0.75rem !important;
+	}
 
-  [data-share-rendering='true']
-    [data-share-price-prediction-content='true'] {
-    display: block !important;
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-  }
+	[data-share-rendering='true'] [data-share-price-prediction-content='true'] {
+		display: block !important;
+		flex: 1 1 auto !important;
+		min-width: 0 !important;
+	}
 
-  [data-share-rendering='true']
-    [data-share-price-prediction-progress='true'],
-  [data-share-rendering='true'] [data-share-price-prediction-status='true'] {
-    display: flex !important;
-    min-width: 0 !important;
-  }
+	[data-share-rendering='true'] [data-share-price-prediction-progress='true'],
+	[data-share-rendering='true'] [data-share-price-prediction-status='true'] {
+		display: flex !important;
+		min-width: 0 !important;
+	}
 
-  [data-share-rendering='true'] [data-share-price-prediction-status='true'] {
-    align-items: flex-start !important;
-    min-height: 1rem !important;
-  }
+	[data-share-rendering='true'] [data-share-price-prediction-status='true'] {
+		align-items: flex-start !important;
+		min-height: 1rem !important;
+	}
 
-  /* The image filter removes the share control, but its flex slot can remain
+	/* The image filter removes the share control, but its flex slot can remain
      in the cloned deadline header. Let the remaining badge own the full
      right-hand slot; otherwise the cloned wrapper keeps the share button's
      intrinsic width and the GW badge drifts inward. */
-  [data-share-rendering='true'] [data-share-deadline-actions='true'] {
-    flex: 1 1 auto !important;
-    width: auto !important;
-    min-width: 0 !important;
-    margin-left: auto !important;
-    justify-content: flex-end !important;
-  }
+	[data-share-rendering='true'] [data-share-deadline-actions='true'] {
+		flex: 1 1 auto !important;
+		width: auto !important;
+		min-width: 0 !important;
+		margin-left: auto !important;
+		justify-content: flex-end !important;
+	}
 
-  /* Countdown exports use the same narrow two-column slot as the homepage.
+	/* Countdown exports use the same narrow two-column slot as the homepage.
      Keep the badge out of the copy's flex calculation so the eyebrow and
      gameweek remain a single readable line instead of colliding with the
      timer grid. The badge is still pinned to the same top-right position. */
-  [data-share-rendering='true'][data-countdown-card]
-    [data-countdown-header='true'] {
-    position: relative !important;
-    display: block !important;
-  }
+	[data-share-rendering='true'][data-countdown-card]
+		[data-countdown-header='true'] {
+		position: relative !important;
+		display: block !important;
+	}
 
-  [data-share-rendering='true'][data-countdown-card]
-    [data-countdown-copy='true'] {
-    width: 100% !important;
-    max-width: none !important;
-  }
+	[data-share-rendering='true'][data-countdown-card]
+		[data-countdown-copy='true'] {
+		width: 100% !important;
+		max-width: none !important;
+	}
 
-  [data-share-rendering='true'][data-countdown-card]
-    [data-countdown-eyebrow='true'],
-  [data-share-rendering='true'][data-countdown-card]
-    [data-countdown-title='true'] {
-    white-space: nowrap !important;
-  }
+	[data-share-rendering='true'][data-countdown-card]
+		[data-countdown-eyebrow='true'],
+	[data-share-rendering='true'][data-countdown-card]
+		[data-countdown-title='true'] {
+		white-space: nowrap !important;
+	}
 
-  [data-share-rendering='true'][data-countdown-card]
-    [data-share-deadline-actions='true'] {
-    position: absolute !important;
-    top: 0 !important;
-    right: 0 !important;
-    width: auto !important;
-    min-width: 0 !important;
-    margin: 0 !important;
-    flex: none !important;
-  }
+	[data-share-rendering='true'][data-countdown-card]
+		[data-share-deadline-actions='true'] {
+		position: absolute !important;
+		top: 0 !important;
+		right: 0 !important;
+		width: auto !important;
+		min-width: 0 !important;
+		margin: 0 !important;
+		flex: none !important;
+	}
 
-  [data-share-rendering='true'][data-countdown-card]
-    [data-share-deadline-actions='true']
-    > [data-share-exclude='true'] {
-    display: none !important;
-  }
+	[data-share-rendering='true'][data-countdown-card]
+		[data-share-deadline-actions='true']
+		> [data-share-exclude='true'] {
+		display: none !important;
+	}
 
-  [data-share-rendering='true'][data-countdown-card]
-    [data-countdown-deadline] > span {
-    white-space: nowrap !important;
-  }
+	[data-share-rendering='true'][data-countdown-card]
+		[data-countdown-deadline]
+		> span {
+		white-space: nowrap !important;
+	}
 
-  /* Export only the active slide. In the live carousel, the flex track uses
+	/* Export only the active slide. In the live carousel, the flex track uses
      every slide to determine its height; that is useful for stable page
      layout, but leaves a large empty tail in a single-slide share image. */
-  [data-share-rendering='true'] [data-share-carousel-inactive='true'] {
-    display: none !important;
-  }
+	[data-share-rendering='true'] [data-share-carousel-inactive='true'] {
+		display: none !important;
+	}
 
-  [data-share-rendering='true'] [data-share-carousel-track='true'] {
-    transform: none !important;
-    transition: none !important;
-  }
+	[data-share-rendering='true'] [data-share-carousel-track='true'] {
+		transform: none !important;
+		transition: none !important;
+	}
 
-	[data-share-rendering='true'][data-share-fit-content='true']:not([data-share-capture-height='true']) {
-    align-self: flex-start !important;
-    height: auto !important;
-    min-height: 0 !important;
-  }
+	[data-share-rendering='true'][data-share-fit-content='true']:not(
+			[data-share-capture-height='true']
+		) {
+		align-self: flex-start !important;
+		height: auto !important;
+		min-height: 0 !important;
+	}
 
-  /* A full-list target can be opened inside a scrollable dialog for viewing,
+	/* A full-list target can be opened inside a scrollable dialog for viewing,
    * but the exported clone must contain the complete list. Reserve a small
    * bottom-only safe area for the composited brand signature as well; this
    * keeps the last row readable without widening the share canvas. */
-  [data-share-rendering='true'][data-share-full-content='true'] {
-    max-height: none !important;
-    overflow: visible !important;
-  }
+	[data-share-rendering='true'][data-share-full-content='true'] {
+		max-height: none !important;
+		overflow: visible !important;
+	}
 
-  [data-share-rendering='true'][data-share-reserve-brand-space='true'] {
-    box-sizing: border-box !important;
-    padding-bottom: 3rem !important;
-  }
+	[data-share-rendering='true'][data-share-reserve-brand-space='true'] {
+		box-sizing: border-box !important;
+		padding-bottom: 3rem !important;
+	}
 
 	/* The personal-league carousel is itself the share root. Its normal page
      spacing comes from PersonalDesk, so the standalone export needs its own
      inset after capture resets the root margin to zero. Keep the inset inside
      the existing width; it must not widen the image canvas. */
-  [data-share-rendering='true'][data-share-personal-leagues='true'] {
-    box-sizing: border-box !important;
-    padding: 1rem !important;
-  }
+	[data-share-rendering='true'][data-share-personal-leagues='true'] {
+		box-sizing: border-box !important;
+		padding: 1rem !important;
+	}
 
-  /* Compact repeated Market rows. These preserve the generic Badge/link
+	/* Compact repeated Market rows. These preserve the generic Badge/link
      treatment while keeping the HTML and Flight payload small. */
-  .market-position-badge,
-  .market-status-badge {
-    @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
-  }
-  .market-position-badge {
-    @apply shrink-0;
-  }
-  .market-position-badge--gkp {
-    @apply border-transparent bg-amber-300 text-amber-950;
-  }
-  .market-position-badge--def {
-    @apply border-transparent bg-electric text-plum;
-  }
-  .market-position-badge--mid {
-    @apply border-transparent bg-pink text-plum;
-  }
-  .market-position-badge--fwd {
-    @apply border-transparent bg-plum text-electric;
-  }
-  .market-position-badge--unknown {
-    @apply bg-secondary text-secondary-foreground;
-  }
-  .market-status-badge--available {
-    @apply border-transparent bg-secondary text-secondary-foreground;
-  }
-  .market-status-badge--outline {
-    @apply text-foreground;
-  }
-  .market-player-link {
-    @apply block whitespace-nowrap text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
-  }
-  .market-player-link--compact {
-    @apply block whitespace-nowrap text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
-  }
-  .market-player-subtext {
-    @apply truncate text-[11px] text-muted-foreground;
-  }
-  .market-dense-row {
-    @apply grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0;
-  }
-  .market-dense-row__trailing {
-    @apply shrink-0 text-right;
-  }
-  .market-mover-row {
-    @apply relative overflow-hidden border-b border-border/50 py-2 last:border-b-0;
-  }
-  .market-mover-bar {
-    @apply absolute inset-y-0 left-0 opacity-[0.07];
-  }
-  .market-mover-content {
-    @apply relative flex items-start gap-2.5;
-  }
-  .market-availability-row {
-    @apply py-2.5 first:pt-0 last:pb-0;
-  }
-  .market-availability-content {
-    @apply flex items-start gap-2.5;
-  }
-  .market-availability-link {
-    @apply whitespace-nowrap text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
-  }
-  .market-availability-meta {
-    @apply mt-0.5 text-[11px] text-muted-foreground;
-  }
-  .market-availability-body {
-    @apply mt-1.5 text-sm leading-snug text-foreground;
-  }
-  .market-availability-date {
-    @apply mt-1 text-[11px] text-muted-foreground;
-  }
+	.market-position-badge,
+	.market-status-badge {
+		@apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
+	}
+	.market-position-badge {
+		@apply shrink-0;
+	}
+	.market-position-badge--gkp {
+		@apply border-transparent bg-amber-300 text-amber-950;
+	}
+	.market-position-badge--def {
+		@apply border-transparent bg-electric text-plum;
+	}
+	.market-position-badge--mid {
+		@apply border-transparent bg-pink text-plum;
+	}
+	.market-position-badge--fwd {
+		@apply border-transparent bg-plum text-electric;
+	}
+	.market-position-badge--unknown {
+		@apply bg-secondary text-secondary-foreground;
+	}
+	.market-status-badge--available {
+		@apply border-transparent bg-secondary text-secondary-foreground;
+	}
+	.market-status-badge--outline {
+		@apply text-foreground;
+	}
+	.market-player-link {
+		@apply block whitespace-nowrap text-sm font-medium leading-tight text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
+	}
+	.market-player-link--compact {
+		@apply block whitespace-nowrap text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
+	}
+	.market-player-subtext {
+		@apply truncate text-[11px] text-muted-foreground;
+	}
+	.market-dense-row {
+		@apply grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 border-b border-border/50 py-2.5 last:border-b-0;
+	}
+	.market-dense-row__trailing {
+		@apply shrink-0 text-right;
+	}
+	.market-mover-row {
+		@apply relative overflow-hidden border-b border-border/50 py-2 last:border-b-0;
+	}
+	.market-mover-bar {
+		@apply absolute inset-y-0 left-0 opacity-[0.07];
+	}
+	.market-mover-content {
+		@apply relative flex items-start gap-2.5;
+	}
+	.market-availability-row {
+		@apply py-2.5 first:pt-0 last:pb-0;
+	}
+	.market-availability-content {
+		@apply flex items-start gap-2.5;
+	}
+	.market-availability-link {
+		@apply whitespace-nowrap text-sm font-medium text-primary-ink underline decoration-primary/35 underline-offset-2 hover:decoration-primary;
+	}
+	.market-availability-meta {
+		@apply mt-0.5 text-[11px] text-muted-foreground;
+	}
+	.market-availability-body {
+		@apply mt-1.5 text-sm leading-snug text-foreground;
+	}
+	.market-availability-date {
+		@apply mt-1 text-[11px] text-muted-foreground;
+	}
 
-  .home-market-mover-row {
-    @apply grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 rounded-lg border px-3 py-2.5;
-  }
-  .home-market-mover-meta {
-    @apply col-start-2 mt-1 flex min-w-0 items-center justify-between gap-2;
-  }
+	.home-market-mover-row {
+		@apply grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 rounded-lg border px-3 py-2.5;
+	}
+	.home-market-mover-meta {
+		@apply col-start-2 mt-1 flex min-w-0 items-center justify-between gap-2;
+	}
 
-  @media (max-width: 639px) {
-    .market-mover-content {
-      @apply grid grid-cols-[auto_minmax(0,1fr)] items-start;
-    }
-    .market-mover-content > :last-child {
-      @apply col-start-2 justify-self-start text-left;
-    }
-  }
+	@media (max-width: 639px) {
+		.market-mover-content {
+			@apply grid grid-cols-[auto_minmax(0,1fr)] items-start;
+		}
+		.market-mover-content > :last-child {
+			@apply col-start-2 justify-self-start text-left;
+		}
+	}
 
-  /* Broadcast chyron label — green tick + condensed caps */
-  .chyron {
-    @apply inline-flex items-center gap-2.5 font-display text-xs font-semibold uppercase tracking-caps-wide text-muted-foreground;
-  }
-  .chyron::before {
-    content: '';
-    @apply h-3.5 w-1 shrink-0 bg-primary;
-    box-shadow: 0 0 10px hsl(var(--electric) / 0.55);
-  }
+	/* Broadcast chyron label — green tick + condensed caps */
+	.chyron {
+		@apply inline-flex items-center gap-2.5 font-display text-xs font-semibold uppercase tracking-caps-wide text-muted-foreground;
+	}
+	.chyron::before {
+		content: '';
+		@apply h-3.5 w-1 shrink-0 bg-primary;
+		box-shadow: 0 0 10px hsl(var(--electric) / 0.55);
+	}
 
-  /* Eyebrow — a chyron without the tick: the site's micro caps label
+	/* Eyebrow — a chyron without the tick: the site's micro caps label
      for stat labels, table headers, section kickers. Color is
      muted-foreground by default; override with a plain text-* utility. */
-  .eyebrow {
-    @apply font-display text-label font-semibold uppercase tracking-caps text-muted-foreground;
-  }
+	.eyebrow {
+		@apply font-display text-label font-semibold uppercase tracking-caps text-muted-foreground;
+	}
 
-  /* Stadium fascia — the always-dark plum band used by header and footer */
-  .fascia {
-    background:
-      radial-gradient(ellipse 90% 140% at 50% -40%, hsl(var(--plum) / 0.9), transparent 70%),
-      hsl(var(--fascia));
-    color: hsl(var(--fascia-foreground));
-  }
+	/* Stadium fascia — the always-dark plum band used by header and footer */
+	.fascia {
+		background:
+			radial-gradient(
+				ellipse 90% 140% at 50% -40%,
+				hsl(var(--plum) / 0.9),
+				transparent 70%
+			),
+			hsl(var(--fascia));
+		color: hsl(var(--fascia-foreground));
+	}
 
-  /* Inset panel — recessed fill for stat tiles, hint boxes, table headers.
+	/* Inset panel — recessed fill for stat tiles, hint boxes, table headers.
      Single source for hand-paired bg-muted/40 dark:bg-muted/25 (+border-border/70).
      Sets border-color only; call sites keep `rounded-lg border` composition. */
-  .surface-inset {
-    @apply border-border/70 bg-muted/40 dark:bg-muted/25;
-  }
+	.surface-inset {
+		@apply border-border/70 bg-muted/40 dark:bg-muted/25;
+	}
 
-  /* Fainter inset — subtle tinted strips (was bg-muted/15 dark:bg-muted/10) */
-  .surface-inset-soft {
-    @apply border-border/60 bg-muted/15 dark:bg-muted/10;
-  }
+	/* Fainter inset — subtle tinted strips (was bg-muted/15 dark:bg-muted/10) */
+	.surface-inset-soft {
+		@apply border-border/60 bg-muted/15 dark:bg-muted/10;
+	}
 
-  /* "This row is you" highlight (was bg-primary/5 dark:bg-primary/10) */
-  .row-self {
-    @apply bg-primary/5 dark:bg-primary/10;
-  }
+	/* "This row is you" highlight (was bg-primary/5 dark:bg-primary/10) */
+	.row-self {
+		@apply bg-primary/5 dark:bg-primary/10;
+	}
 
-  /* Scoreboard panel — dark board with a green glass edge, works in both themes */
-  .scoreboard {
-    position: relative;
-    overflow: hidden;
-    border: 1px solid hsl(var(--electric) / 0.28);
-    background:
-      radial-gradient(ellipse 120% 90% at 50% -30%, hsl(var(--plum) / 0.65), transparent 60%),
-      linear-gradient(180deg, hsl(var(--scoreboard-2)), hsl(var(--scoreboard-1)));
-    color: hsl(var(--fascia-foreground));
-    box-shadow:
-      inset 0 1px 0 hsl(var(--electric) / 0.22),
-      inset 0 0 32px hsl(var(--scoreboard-deep) / 0.55),
-      0 24px 48px -24px hsl(var(--scoreboard-deep) / 0.65);
-  }
+	/* Scoreboard panel — dark board with a green glass edge, works in both themes */
+	.scoreboard {
+		position: relative;
+		overflow: hidden;
+		border: 1px solid hsl(var(--electric) / 0.28);
+		background:
+			radial-gradient(
+				ellipse 120% 90% at 50% -30%,
+				hsl(var(--plum) / 0.65),
+				transparent 60%
+			),
+			linear-gradient(
+				180deg,
+				hsl(var(--scoreboard-2)),
+				hsl(var(--scoreboard-1))
+			);
+		color: hsl(var(--fascia-foreground));
+		box-shadow:
+			inset 0 1px 0 hsl(var(--electric) / 0.22),
+			inset 0 0 32px hsl(var(--scoreboard-deep) / 0.55),
+			0 24px 48px -24px hsl(var(--scoreboard-deep) / 0.65);
+	}
 
-  /*
+	/*
    * Lighter scoreboard for in-page stats (same structure/contrast language as .scoreboard,
    * but mid plum — not near-black fascia).
    */
-  .scoreboard-lifted {
-    position: relative;
-    overflow: hidden;
-    border: 1px solid hsl(var(--electric) / 0.3);
-    background:
-      radial-gradient(ellipse 110% 90% at 50% -35%, hsl(var(--electric) / 0.12), transparent 55%),
-      radial-gradient(ellipse 100% 80% at 80% 100%, hsl(var(--scoreboard-glow) / 0.45), transparent 60%),
-      linear-gradient(180deg, hsl(var(--scoreboard-4)), hsl(var(--scoreboard-3)));
-    color: hsl(var(--fascia-foreground));
-    box-shadow:
-      inset 0 1px 0 hsl(var(--electric) / 0.2),
-      0 18px 36px -22px hsl(var(--scoreboard-deep) / 0.45);
-  }
+	.scoreboard-lifted {
+		position: relative;
+		overflow: hidden;
+		border: 1px solid hsl(var(--electric) / 0.3);
+		background:
+			radial-gradient(
+				ellipse 110% 90% at 50% -35%,
+				hsl(var(--electric) / 0.12),
+				transparent 55%
+			),
+			radial-gradient(
+				ellipse 100% 80% at 80% 100%,
+				hsl(var(--scoreboard-glow) / 0.45),
+				transparent 60%
+			),
+			linear-gradient(
+				180deg,
+				hsl(var(--scoreboard-4)),
+				hsl(var(--scoreboard-3))
+			);
+		color: hsl(var(--fascia-foreground));
+		box-shadow:
+			inset 0 1px 0 hsl(var(--electric) / 0.2),
+			0 18px 36px -22px hsl(var(--scoreboard-deep) / 0.45);
+	}
 
-  /* Green marker swipe behind a headline keyword */
-  .marker {
-    @apply relative inline-block px-[0.14em] text-[hsl(var(--plum))];
-    background: linear-gradient(
-      100deg,
-      transparent 1%,
-      hsl(var(--electric)) 4% 97%,
-      transparent 99.5%
-    );
-    transform: rotate(-1deg);
-    box-decoration-break: clone;
-    -webkit-box-decoration-break: clone;
-  }
+	/* Green marker swipe behind a headline keyword */
+	.marker {
+		@apply relative inline-block px-[0.14em] text-[hsl(var(--plum))];
+		background: linear-gradient(
+			100deg,
+			transparent 1%,
+			hsl(var(--electric)) 4% 97%,
+			transparent 99.5%
+		);
+		transform: rotate(-1deg);
+		box-decoration-break: clone;
+		-webkit-box-decoration-break: clone;
+	}
 }
 
 @layer utilities {
-  /* Pitch markings — centre-circle arcs framing the content + halfway line */
-  .pitch-markings {
-    --_line: hsl(var(--pitch-line, var(--electric)) / var(--pitch-alpha, 0.16));
-    background-image:
-      radial-gradient(
-        circle 320px at 97% 24%,
-        transparent 318px,
-        var(--_line) 319px,
-        var(--_line) 320.5px,
-        transparent 321.5px
-      ),
-      radial-gradient(
-        circle 210px at 3% 108%,
-        transparent 208px,
-        var(--_line) 209px,
-        var(--_line) 210.5px,
-        transparent 211.5px
-      ),
-      linear-gradient(to bottom, var(--_line), var(--_line));
-    background-size:
-      100% 100%,
-      100% 100%,
-      100% 1.5px;
-    background-position:
-      0 0,
-      0 0,
-      0 66%;
-    background-repeat: no-repeat;
-  }
+	/* Pitch markings — centre-circle arcs framing the content + halfway line */
+	.pitch-markings {
+		--_line: hsl(var(--pitch-line, var(--electric)) / var(--pitch-alpha, 0.16));
+		background-image:
+			radial-gradient(
+				circle 320px at 97% 24%,
+				transparent 318px,
+				var(--_line) 319px,
+				var(--_line) 320.5px,
+				transparent 321.5px
+			),
+			radial-gradient(
+				circle 210px at 3% 108%,
+				transparent 208px,
+				var(--_line) 209px,
+				var(--_line) 210.5px,
+				transparent 211.5px
+			),
+			linear-gradient(to bottom, var(--_line), var(--_line));
+		background-size:
+			100% 100%,
+			100% 100%,
+			100% 1.5px;
+		background-position:
+			0 0,
+			0 0,
+			0 66%;
+		background-repeat: no-repeat;
+	}
 
-  /* Fanzine photocopy grain. The element must establish its own positioning
+	/* Fanzine photocopy grain. The element must establish its own positioning
      (sticky/relative) — this utility deliberately does NOT set position, so
      it never overrides `sticky` on the navbar. */
-  .texture-grain {
-    isolation: isolate;
-  }
-  .texture-grain::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    opacity: 0.05;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
+	.texture-grain {
+		isolation: isolate;
+	}
+	.texture-grain::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		pointer-events: none;
+		opacity: 0.05;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+	}
 
-  /* Blinking live dot */
-  .live-dot {
-    @apply relative inline-block size-2 rounded-full bg-primary;
-  }
-  .live-dot::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 9999px;
-    background: hsl(var(--electric));
-    animation: live-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
-  }
+	/* Blinking live dot */
+	.live-dot {
+		@apply relative inline-block size-2 rounded-full bg-primary;
+	}
+	.live-dot::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: 9999px;
+		background: hsl(var(--electric));
+		animation: live-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+	}
 
-  .shadow-sticker {
-    box-shadow: 4px 4px 0 0 hsl(var(--sticker) / var(--sticker-alpha));
-  }
-  .shadow-sticker-sm {
-    box-shadow: 2.5px 2.5px 0 0 hsl(var(--sticker) / var(--sticker-alpha));
-  }
+	.shadow-sticker {
+		box-shadow: 4px 4px 0 0 hsl(var(--sticker) / var(--sticker-alpha));
+	}
+	.shadow-sticker-sm {
+		box-shadow: 2.5px 2.5px 0 0 hsl(var(--sticker) / var(--sticker-alpha));
+	}
 
-  /* Electric text glow — deadline urgency accents */
-  .text-glow-electric {
-    text-shadow: 0 0 18px hsl(var(--electric) / 0.45);
-  }
+	/* Electric text glow — deadline urgency accents */
+	.text-glow-electric {
+		text-shadow: 0 0 18px hsl(var(--electric) / 0.45);
+	}
 }
 
 @keyframes live-ping {
-  0% {
-    transform: scale(1);
-    opacity: 0.9;
-  }
-  75%,
-  100% {
-    transform: scale(2.6);
-    opacity: 0;
-  }
+	0% {
+		transform: scale(1);
+		opacity: 0.9;
+	}
+	75%,
+	100% {
+		transform: scale(2.6);
+		opacity: 0;
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
+	html {
+		scroll-behavior: auto;
+	}
 
-  .live-dot::after {
-    animation: none;
-    opacity: 0;
-  }
+	.live-dot::after {
+		animation: none;
+		opacity: 0;
+	}
 
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-  }
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		scroll-behavior: auto !important;
+		transition-duration: 0.01ms !important;
+	}
 }
 
 @supports selector(:has(*)) {
-  [data-home-market-section]:has([data-home-market-grid]:empty) {
-    display: none;
-  }
+	[data-home-market-section]:has([data-home-market-grid]:empty) {
+		display: none;
+	}
 }

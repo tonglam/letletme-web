@@ -3,6 +3,8 @@ import { describe, it } from 'node:test'
 import type { PriceChangePlayer } from '../lib/graphql/operations/price-changes'
 import {
 	DEFAULT_PRICE_CHANGE_SORT,
+	matchesPriceChangePlayer,
+	selectPriceChangePlayers,
 	sortPriceChangePlayers,
 } from '../lib/price-change-sorting'
 
@@ -39,6 +41,33 @@ function player(
 }
 
 describe('sortPriceChangePlayers', () => {
+	it('uses one likely-rise/fall scope for the homepage and detail board', () => {
+		const players = [
+			player(1, { status: 'LIKELY_RISE', progressPercent: 35 }),
+			player(2, { status: 'VERY_LIKELY_RISE', progressPercent: 80 }),
+			player(3, { status: 'LIKELY_FALL', progressPercent: -70 }),
+			player(4, { status: 'UNLIKELY', progressPercent: 99 }),
+			player(5, { status: 'LOCKED', progressPercent: 100 }),
+		]
+
+		assert.deepEqual(
+			selectPriceChangePlayers(players, {
+				scope: 'likely',
+				movement: 'rise',
+				locale: 'en',
+			}).map(item => item.playerId),
+			[2, 1],
+		)
+		assert.equal(
+			matchesPriceChangePlayer(players[3]!, { scope: 'likely' }),
+			false,
+		)
+		assert.equal(
+			matchesPriceChangePlayer(players[4]!, { scope: 'all', movement: 'locked' }),
+			true,
+		)
+	})
+
 	it('puts likely-to-change squad players first in the default view', () => {
 		const players = [
 			player(4, { status: 'UNLIKELY', progressPercent: 95 }),

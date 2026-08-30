@@ -1,6 +1,5 @@
 "use client";
 
-import { Tournament } from "@/types/tournament";
 import { ChevronDown, Trophy } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
@@ -13,17 +12,23 @@ import { Button } from "@/components/ui/button";
 import { useTranslations } from "next-intl";
 
 interface TournamentSelectorProps {
-  tournaments: Tournament[];
+  tournaments: TournamentSelectorItem[];
   currentTournamentId: string;
   onTournamentChange: (tournamentId: string) => void;
   className?: string;
+}
+
+export interface TournamentSelectorItem {
+  id: string;
+  name: string;
+  leagueType?: string | null;
 }
 
 type TournamentKind = "classic" | "h2h";
 
 interface TournamentKindSelectorProps {
   kind: TournamentKind;
-  tournaments: Tournament[];
+  tournaments: TournamentSelectorItem[];
   currentTournamentId: string;
   onTournamentChange: (tournamentId: string) => void;
   label: string;

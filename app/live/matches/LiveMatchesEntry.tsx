@@ -10,7 +10,8 @@ export function LiveMatchesEntry({
 	currentEventId,
 	selectedEventId,
 	nextEventId,
-	initialSnapshot
+	initialSnapshot,
+	isOfficialUpdating
 }: {
 	initialMatches: Match[]
 	initialError?: string | null
@@ -18,6 +19,7 @@ export function LiveMatchesEntry({
 	selectedEventId?: number
 	nextEventId?: number
 	initialSnapshot?: LiveSnapshotStatus | null
+	isOfficialUpdating?: boolean
 }) {
 	return (
 		<LiveMatchesClient
@@ -27,6 +29,7 @@ export function LiveMatchesEntry({
 			selectedEventId={selectedEventId}
 			nextEventId={nextEventId}
 			initialSnapshot={initialSnapshot}
+			isOfficialUpdating={isOfficialUpdating}
 		/>
 	)
 }
