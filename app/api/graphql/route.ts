@@ -18,6 +18,7 @@ import {
 	GraphQLUpstreamError,
 	readGraphQLUpstream
 } from '@/lib/graphql-proxy-upstream'
+import { resolveServerGraphQLEndpoint } from '@/lib/graphql-endpoint'
 import { shouldResolveGraphQLProxySession } from '@/lib/graphql-proxy-session'
 import { logSafeAuthDiagnostic } from '@/lib/auth-safe-log'
 import { resolveWebVitalSource } from '@/lib/analytics/web-vitals'
@@ -34,8 +35,7 @@ import { forwardClientSignalBatch } from '@/lib/ops-client-signals'
 import { randomUUID } from 'node:crypto'
 import { after, NextRequest, NextResponse } from 'next/server'
 
-const GRAPHQL_ENDPOINT =
-	process.env.GRAPHQL_ENDPOINT || 'http://localhost:4000/graphql'
+const GRAPHQL_ENDPOINT = resolveServerGraphQLEndpoint()
 const MAX_GRAPHQL_BODY_BYTES = 256 * 1024
 const MAX_GRAPHQL_RESPONSE_BYTES = 8 * 1024 * 1024
 const SUCCESS_SIGNAL_SAMPLE_RATE = 0.1

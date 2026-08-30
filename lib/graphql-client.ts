@@ -1,9 +1,10 @@
 import { recordBugReportDiagnostic } from '@/lib/bug-report-diagnostics'
+import { resolveServerGraphQLEndpoint } from '@/lib/graphql-endpoint'
 import { publicGraphQLRequestMessage } from '@/lib/safe-errors'
 
 const getGraphQLEndpoint = () => {
 	if (typeof window === 'undefined') {
-		return process.env.GRAPHQL_ENDPOINT || 'http://localhost:4000/graphql'
+		return resolveServerGraphQLEndpoint()
 	}
 	return `${window.location.origin}/api/graphql`
 }

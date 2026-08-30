@@ -25,16 +25,43 @@ forwarding identity fall back to the socket address for direct DNSPod traffic.
 
 ## Staging without traffic changes
 
-1. Install `nginx/letletme-client-ip.conf` under `/etc/nginx/conf.d`, then
-   install `nginx/letletme-data.conf` as the canonical enabled API/Data site.
-   It explicitly owns `api.letletme.top`, `pop.letletme.top`, and the default
-   listeners; this prevents another site from capturing API traffic because
-   of include order.
-2. Install `nginx/hermes-direct.conf` as the separate
-   `/etc/nginx/sites-enabled/zz-hermes-direct` site.
-3. Run `nginx -t`, reload Nginx, then verify raw `/graphql` still reaches the
-   GraphQL service and Web `/api/graphql` still succeeds before continuing.
-   Confirm all existing containers remain healthy.
+0. Install the accepted [`letletme-vps-ops`](https://github.com/tonglam/letletme-vps-ops)
+   release with its root-owned `bin/install-root.sh --expected-sha=<exact-sha>`
+   entrypoint before installing this site. VPS Ops is the sole owner of the
+   GraphQL blue/green selector: the installer creates the blue and green
+   upstream files, `/etc/nginx/snippets/letletme-graphql-active.conf`, the
+   allowlisted switch helper, and `/var/lib/letletme-graphql/active-slot`.
+1. Deploy the accepted Web release before activating this ingress. The Web
+   `/api/graphql` route must remain in front of GraphQL because it creates the
+   signed ingress envelope. In production, both that route and RSC reads use
+   `https://api.letletme.top/graphql`; absent or fixed `4000`/`4002`
+   `GRAPHQL_ENDPOINT` values are normalized to this canonical active-selector
+   URL.
+2. From the accepted Web checkout, export the exact Web and GraphQL V2 SHAs and
+   run the tracked activation command. It acquires the VPS Ops slot lock
+   exclusively before inspecting the selector and does not release it until
+   after file installation, `nginx -t`, reload, direct readiness, exact Web
+   `/healthz` identity, and the post-reload Web `/api/graphql` V2 probe:
+
+   ```sh
+   export EXPECTED_GRAPHQL_SHA=<exact-accepted-v2-sha>
+   export EXPECTED_WEB_SHA=<exact-accepted-web-sha>
+   sudo env EXPECTED_GRAPHQL_SHA="$EXPECTED_GRAPHQL_SHA" \
+     EXPECTED_WEB_SHA="$EXPECTED_WEB_SHA" \
+     ops/overseas/activate-api-ingress.sh
+   ```
+
+   The command reads `nginx -T` to count the selector include across every
+   effective Nginx include path, including `sites-enabled`; it installs the
+   tracked `conf.d` loader only when the count is zero and rejects duplicates.
+   It also parses the selected upstream file and requires its actual endpoint
+   to equal `127.0.0.1:4000` for blue or `127.0.0.1:4002` for green before any
+   reload. Do not recreate a fixed-port Web or Nginx upstream: that bypasses
+   atomic slot authority and can expose the retired GraphQL contract.
+
+3. Confirm all existing containers remain healthy. The activation command
+   proves the canonical API/Data site, Hermes site, and selector atomically; do
+   not repeat their installation or reload Nginx outside its lock.
 4. With live DNS still pointing at Tunnel, use `curl --resolve` against
    `43.163.91.9`. Until the certificate is expanded, use `-k` only for this
    isolated direct-origin check.
