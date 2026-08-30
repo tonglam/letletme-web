@@ -118,7 +118,7 @@ const validateScore = (
 		return
 	}
 	if (!isNonNegativeInteger(value.eventPoints)) missing.push(`${path}.eventPoints`)
-	if (!isNonNegativeInteger(value.netEventPoints)) missing.push(`${path}.netEventPoints`)
+	if (!isInteger(value.netEventPoints)) missing.push(`${path}.netEventPoints`)
 	if (!isNullableNumber(value.totalPoints)) missing.push(`${path}.totalPoints`)
 	if (value.totalScope !== 'OVERALL' && value.totalScope !== 'UNKNOWN')
 		missing.push(`${path}.totalScope`)
@@ -601,9 +601,9 @@ export async function fetchEntryLiveCompetitionBoard(
 					cache: 'no-store',
 					credentials: 'include',
 						headers: {
-							'Content-Type': 'application/json',
-							Accept: 'application/json',
-							'X-LetLetMe-Contract': 'live-points-v2'
+						'Content-Type': 'application/json',
+						Accept: 'application/json',
+						'X-LetLetMe-Contract': 'live-points-v2'
 					},
 					body: JSON.stringify(variables),
 					signal: options.signal

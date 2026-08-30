@@ -37,6 +37,37 @@ import { resolveLivePointsPayloadState } from '../_lib/live-points-availability'
 
 const LIVE_DATA_RETRY_DELAYS_MS = [1500, 3000, 7000, 12000] as const
 
+/**
+ * GET_LIVE_POINTS keeps the full revision/time vector on LiveScore, which is
+ * the canonical score payload. The snapshot section carries only lifecycle
+ * and delivery fields to stay below the GraphQL AST budget; hydrate the
+ * shared client snapshot from that same response so polling still compares
+ * the exact score-core revision without issuing a second metadata query.
+ */
+const hydrateLiveSnapshot = (
+	live: LiveCalcData | undefined,
+	snapshot: LiveSnapshotStatus | null | undefined
+): LiveSnapshotStatus | null => {
+	const source = snapshot ?? live?.snapshot
+	if (!source) return null
+	const score = live?.score
+	return {
+		...source,
+		eventId: source.eventId ?? live?.event ?? 0,
+		scoreCoreRevision:
+			source.scoreCoreRevision ?? score?.revisions.scoreCore ?? null,
+		contentUpdatedAt:
+			source.contentUpdatedAt ?? score?.times.contentUpdatedAt ?? null,
+		sourceCheckedAt:
+			source.sourceCheckedAt ?? score?.times.sourceCheckedAt ?? null,
+		publishedAt: source.publishedAt ?? score?.times.publishedAt ?? null,
+		nextRefreshAt: source.nextRefreshAt ?? score?.times.nextRefreshAt ?? null,
+		revisions: source.revisions ?? score?.revisions,
+		times: source.times ?? score?.times,
+		delivery: source.delivery ?? score?.delivery ?? live?.delivery
+	}
+}
+
 interface UseLivePointsOptions {
 	initialEntryId: number
 	initialEventId: number
@@ -55,6 +86,10 @@ export function useLivePoints({
 	const t = useTranslations('LivePoints')
 	const isPageActive = usePageActive()
 	const seededEventId = initialLiveData?.event ?? initialEventId
+	const initialLiveSnapshot = hydrateLiveSnapshot(
+		initialLiveData,
+		initialSnapshot
+	)
 	const followsAnchorRef = useRef(initialSelectedGameweek == null)
 	const [currentGameweek, setCurrentGameweek] = useState<number>(initialEventId)
 	const [selectedGameweek, setSelectedGameweek] = useState<number | undefined>(
@@ -69,9 +104,9 @@ export function useLivePoints({
 		initialLiveData
 	)
 	const [snapshot, setSnapshot] = useState<LiveSnapshotStatus | null>(
-		initialSnapshot ?? null
+		initialLiveSnapshot
 	)
-	const snapshotRef = useRef<LiveSnapshotStatus | null>(initialSnapshot ?? null)
+	const snapshotRef = useRef<LiveSnapshotStatus | null>(initialLiveSnapshot)
 	const [startingPlayers, setStartingPlayers] = useState<Player[]>(() =>
 		initialLiveData
 			? mapLiveDataToPlayers(initialLiveData, new Map()).filter(
@@ -310,7 +345,7 @@ export function useLivePoints({
 						setLiveData(undefined)
 						setStartingPlayers([])
 						setBenchPlayers([])
-						acceptSnapshot(live.snapshot ?? null)
+						acceptSnapshot(hydrateLiveSnapshot(live, live.snapshot))
 						setError(undefined)
 						return
 					}
@@ -325,7 +360,12 @@ export function useLivePoints({
 					hasLoadedLiveDataRef.current = true
 					latestLiveDataRef.current = { requestKey, live }
 					setLiveData(live)
-					acceptSnapshot(liveResponse.calcLivePointsByEntry.snapshot)
+					acceptSnapshot(
+						hydrateLiveSnapshot(
+							live,
+							liveResponse.calcLivePointsByEntry.snapshot
+						)
+					)
 					setStartingPlayers(allPlayers.filter(player => !player.isBench))
 					setBenchPlayers(allPlayers.filter(player => player.isBench))
 					void enrichLivePointBreakdowns(requestId, eventId, live, requestKey)
@@ -467,18 +507,18 @@ export function useLivePoints({
 	])
 
 	useEffect(() => {
-		const initialSnapshotKey = initialSnapshot
+		const initialSnapshotKey = initialLiveSnapshot
 			? [
-					initialSnapshot.eventId,
-					initialSnapshot.scoreCoreRevision ??
-						initialSnapshot.revisions?.scoreCore ??
+					initialLiveSnapshot.eventId,
+					initialLiveSnapshot.scoreCoreRevision ??
+						initialLiveSnapshot.revisions?.scoreCore ??
 						'',
-					initialSnapshot.state,
-					initialSnapshot.publishedAt ??
-						initialSnapshot.times?.publishedAt ??
+					initialLiveSnapshot.state,
+					initialLiveSnapshot.publishedAt ??
+						initialLiveSnapshot.times?.publishedAt ??
 						'',
-					initialSnapshot.sourceCheckedAt ??
-						initialSnapshot.times?.sourceCheckedAt ??
+					initialLiveSnapshot.sourceCheckedAt ??
+						initialLiveSnapshot.times?.sourceCheckedAt ??
 						''
 				].join(':')
 			: ''
@@ -510,7 +550,7 @@ export function useLivePoints({
 			currentRequestKeyRef.current = requestKey
 			latestLiveDataRef.current = { requestKey, live: initialLiveData }
 			setLiveData(initialLiveData)
-			acceptSnapshot(initialSnapshot ?? null)
+			acceptSnapshot(initialLiveSnapshot)
 			const allPlayers = mapLiveDataToPlayers(
 				initialLiveData,
 				breakdownLookupForRequest(breakdownCacheRef.current, requestKey)

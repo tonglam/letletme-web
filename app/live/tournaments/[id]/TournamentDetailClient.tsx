@@ -657,7 +657,7 @@ export default function TournamentDetailClient({
 					if (requestedRevision) {
 						const params = new URLSearchParams({
 							eventId: String(currentGameweek),
-							revision: requestedRevision
+							scoreCoreRevision: requestedRevision
 						})
 						const httpResponse = await fetch(
 							`/api/live/competitions/${currentTournament.id}/board?${params.toString()}`,

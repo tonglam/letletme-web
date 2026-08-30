@@ -16,7 +16,6 @@ export function isLiveRefreshTerminalState(state?: string | null): boolean {
 		state === 'FINALIZED' ||
 		state === 'BETWEEN_GAMEWEEKS' ||
 		state === 'OFFSEASON'
-		|| state === 'DAY_SETTLING'
 	)
 }
 

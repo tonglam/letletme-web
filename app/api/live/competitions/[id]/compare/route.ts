@@ -17,7 +17,7 @@ export async function GET(
 	const tournamentId = Number((await context.params).id)
 	const params = new URL(request.url).searchParams
 	const eventId = Number(params.get('eventId'))
-	const revision = params.get('revision')
+	const scoreCoreRevision = params.get('scoreCoreRevision')
 	const entryIds = (params.get('entryIds') ?? '')
 		.split(',')
 		.map(Number)
@@ -27,7 +27,7 @@ export async function GET(
 		tournamentId <= 0 ||
 		!Number.isSafeInteger(eventId) ||
 		eventId <= 0 ||
-		!revision ||
+		!scoreCoreRevision ||
 		entryIds.length < 1 ||
 		entryIds.length > 2 ||
 		new Set(entryIds).size !== entryIds.length
@@ -44,7 +44,11 @@ export async function GET(
 				entryId,
 				tournamentId,
 				comparedEntryIds: entryIds,
-				ref: { season: String(getCurrentSeasonKey()), eventId, revision }
+				ref: {
+					season: String(getCurrentSeasonKey()),
+					eventId,
+					scoreCoreRevision
+				}
 			},
 			{ cache: 'no-store', signal: request.signal }
 		)

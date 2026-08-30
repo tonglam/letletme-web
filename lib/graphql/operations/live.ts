@@ -193,35 +193,10 @@ export const GET_LIVE_POINTS = `
 		}
 		delivery { state servedFrom reasonCodes }
 			}
-			snapshot {
+	      snapshot {
 		season
 		eventId
 		state
-		revisions {
-			publicationId
-			generation
-			lifecycle
-			fixtureIdentity
-			scoreCore
-			displayStats
-			explain
-			picksBase
-			officialAdjustment
-			previousTotals
-			finalResult
-			rules
-			algorithm
-			input
-		}
-		times {
-			sourceCheckedAt
-			contentUpdatedAt
-			publishedAt
-			checkpointedAt
-			servedAt
-			staleAt
-			nextRefreshAt
-		}
 		delivery { state servedFrom reasonCodes }
 	      }
 	      rank {
@@ -256,6 +231,7 @@ export const GET_LIVE_POINTS = `
         bps
         totalPoints
         starts
+	        isGwStarted
 	        isGwFinished
         isPlayed
         isCaptain
@@ -266,9 +242,9 @@ export const GET_LIVE_POINTS = `
         bgw
         expectedGoals
         expectedAssists
-        expectedGoalInvolvements
-        expectedGoalsConceded
-        inDreamTeam
+	        expectedGoalInvolvements
+	        expectedGoalsConceded
+	        inDreamTeam
       }
     }
   }

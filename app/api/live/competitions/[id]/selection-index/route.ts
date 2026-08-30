@@ -17,13 +17,13 @@ export async function GET(
 	const tournamentId = Number((await context.params).id)
 	const params = new URL(request.url).searchParams
 	const eventId = Number(params.get('eventId'))
-	const revision = params.get('revision')
+	const scoreCoreRevision = params.get('scoreCoreRevision')
 	if (
 		!Number.isSafeInteger(tournamentId) ||
 		tournamentId <= 0 ||
 		!Number.isSafeInteger(eventId) ||
 		eventId <= 0 ||
-		!revision
+		!scoreCoreRevision
 	)
 		return NextResponse.json(
 			{ error: 'Invalid live competition parameters' },
@@ -36,7 +36,11 @@ export async function GET(
 			{
 				entryId,
 				tournamentId,
-				ref: { season: String(getCurrentSeasonKey()), eventId, revision }
+				ref: {
+					season: String(getCurrentSeasonKey()),
+					eventId,
+					scoreCoreRevision
+				}
 			},
 			{ cache: 'no-store', signal: request.signal }
 		)

@@ -111,7 +111,7 @@ export function LiveCompetitionBoardFilters({
 		setLoadError(false)
 		const params = new URLSearchParams({
 			eventId: String(eventId),
-			revision: scoreCoreRevision
+			scoreCoreRevision
 		})
 		void fetch(
 			`/api/live/competitions/${tournamentId}/selection-index?${params.toString()}`,

@@ -401,7 +401,7 @@ ${LIVE_POINTS_SCORE_SUMMARY_FRAGMENT}
         }
       }
       live {
-        eventId scoreCoreRevision state failedEntryIds
+        eventId scoreCoreRevision state partial failedEntryIds
         times { sourceCheckedAt contentUpdatedAt publishedAt nextRefreshAt }
         rows {
           entry entryName playerName teamValue bank chip played toPlay captainName
