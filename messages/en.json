@@ -536,6 +536,8 @@
 		"none": "No matches available",
 		"refresh": "Refresh matches",
 		"lastUpdated": "Updated {time}",
+		"detailUpdating": "Player data is updating",
+		"detailUpdatingSince": "Player data is updating · last detail {time}",
 		"loading": "Loading matches…",
 		"error": "Error: {message}",
 		"loadFailed": "Matches could not be loaded. Please try again.",

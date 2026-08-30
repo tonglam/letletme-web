@@ -405,7 +405,6 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 				snapshot: {
 					season: '2627',
 					eventId: 33,
-					nextEventId: 34,
 					state: 'LIVE_ACTIVE',
 					revisions: {
 						deskPublicationId: `e2e-matchday-${revision.slice(0, 8)}`,
@@ -429,7 +428,11 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 						servedAt: '2026-08-04T18:30:30.000Z',
 						nextRefreshAt: '2026-08-04T18:31:00.000Z'
 					},
-					detailDelivery: liveDelivery('FRESH'),
+					detailDelivery: {
+						state: 'PENDING',
+						servedFrom: null,
+						reasonCodes: ['DETAIL_NOT_PUBLISHED']
+					},
 					matches: [
 						{
 							fixtureId: 101,
@@ -542,7 +545,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 
 	await page.clock.fastForward(90_000)
 	await expect.poll(() => heavyRequestCount).toBe(1)
-	expect(probeCount).toBe(1)
+	expect(probeCount).toBe(0)
 	releaseFirstResponse?.()
 	await expect(page.getByRole('tab', { name: 'Live Now' })).toHaveAttribute(
 		'aria-selected',
@@ -552,7 +555,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 
 	await page.clock.fastForward(30_000)
 	await expect.poll(() => heavyRequestCount).toBe(2)
-	expect(probeCount).toBe(2)
+	expect(probeCount).toBe(0)
 	await expect(
 		page.getByRole('alert').filter({
 			hasText: 'Latest match update failed. Showing the last available scores.'
@@ -564,10 +567,10 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	await expect(page.getByText(/Auto refresh in/)).toHaveCount(0)
 	await page.clock.fastForward(60_000)
 	expect(heavyRequestCount).toBe(2)
-	expect(probeCount).toBe(2)
+	expect(probeCount).toBe(0)
 
 	await context.setOffline(false)
 	await expect.poll(() => heavyRequestCount).toBe(3)
-	expect(probeCount).toBe(3)
+	expect(probeCount).toBe(0)
 	await expect(page.getByText(/2\s*[–-]\s*0/)).toBeVisible()
 })

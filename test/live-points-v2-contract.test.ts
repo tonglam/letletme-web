@@ -12,6 +12,7 @@ import {
 import {
 	LIVE_MATCHES_CONTRACT_VERSION,
 	LIVE_POINTS_CONTRACT_VERSION,
+	liveContractVersionForQuery,
 	requiresLiveMatchesV2Contract,
 	requiresLivePointsV2Contract
 } from '../lib/graphql-client'
@@ -70,6 +71,14 @@ describe('Live Points V2 web contract', () => {
 		assert.equal(requiresLivePointsV2Contract(matchdayQuery), false)
 		assert.equal(LIVE_MATCHES_CONTRACT_VERSION, 'live-matches-v2')
 		assert.equal(LIVE_POINTS_CONTRACT_VERSION, 'live-points-v2')
+		assert.equal(liveContractVersionForQuery(matchdayQuery), 'live-matches-v2')
+		assert.throws(
+			() =>
+				liveContractVersionForQuery(
+					'query Mixed { liveMatchday { availability } liveContext { season } }'
+				),
+			/LIVE_CONTRACT_MIXED_OPERATION/
+		)
 	})
 
 	it('requests only V2 fields and keeps duplicate score aliases out of the document', () => {

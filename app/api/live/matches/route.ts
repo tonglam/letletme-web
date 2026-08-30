@@ -3,7 +3,11 @@ import {
 	executePublicServerQuery,
 	withPublicRouteGraphQLIngress
 } from '@/lib/graphql-server'
-import { loadLiveMatchdayV2, type QueryExecutor } from '@/lib/live-matches'
+import {
+	loadLiveMatchdayV2,
+	parseLiveMatchesRequestParams,
+	type QueryExecutor
+} from '@/lib/live-matches'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,26 +19,20 @@ async function handleGet(request: Request) {
 		)
 	}
 	const params = new URL(request.url).searchParams
-	const season = params.get('season')
-	const eventId = Number(params.get('eventId'))
-	if (
-		!/^\d{4}$/.test(season ?? '') ||
-		!Number.isSafeInteger(eventId) ||
-		eventId <= 0
-	)
+	const parsed = parseLiveMatchesRequestParams(params)
+	if (!parsed.ok) {
 		return NextResponse.json(
-			{ error: 'Invalid live matchday request' },
-			{ status: 400 }
+			{ error: parsed.error },
+			{ status: parsed.status, headers: { 'Cache-Control': 'no-store' } }
 		)
+	}
+	const { eventId } = parsed
 	try {
 		const executor: QueryExecutor = (query, variables, options) =>
 			executePublicServerQuery('gameweek', query, variables, options)
 		const data = await loadLiveMatchdayV2(executor, eventId)
 		const snapshot = data.liveMatchday.snapshot
-		if (
-			snapshot &&
-			(snapshot.season !== season || snapshot.eventId !== eventId)
-		) {
+		if (snapshot && eventId !== undefined && snapshot.eventId !== eventId) {
 			return NextResponse.json(
 				{ error: 'LIVE_MATCHDAY_EVENT_MISMATCH' },
 				{ status: 409, headers: { 'Cache-Control': 'no-store' } }

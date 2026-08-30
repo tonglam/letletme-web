@@ -34,7 +34,7 @@ describe('GraphQL proxy read path', () => {
 		assert.match(route, /buildGraphQLProxyIngress/)
 		assert.match(route, /copySafeGraphQLUpstreamHeaders/)
 		assert.match(route, /request\.headers\.get\('X-LetLetMe-Contract'\)/)
-		assert.match(route, /headers\['X-LetLetMe-Contract'\] = livePointsContract/)
+		assert.match(route, /headers\['X-LetLetMe-Contract'\] = liveContract/)
 		assert.match(route, /includeRateLimitMetadata: cacheControl === 'no-store'/)
 		assert.match(
 			route,

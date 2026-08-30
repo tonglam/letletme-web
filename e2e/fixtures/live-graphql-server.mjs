@@ -458,7 +458,6 @@ const liveDelivery = state => ({
 const liveMatchdaySnapshot = ({ match, state, revision }) => ({
 	season: '2627',
 	eventId: 33,
-	nextEventId: 34,
 	state,
 	revisions: {
 		deskPublicationId: `e2e-matchday-${revision.slice(0, 8)}`,
@@ -466,25 +465,36 @@ const liveMatchdaySnapshot = ({ match, state, revision }) => ({
 		lifecycle: revision,
 		fixtureIdentity: revision,
 		scoreState: revision,
-		detailPublicationId: `e2e-match-detail-${revision.slice(0, 8)}`,
-		detailGeneration: 1,
-		playerDetail: revision
+		detailPublicationId:
+			state === 'PRE_DEADLINE'
+				? null
+				: `e2e-match-detail-${revision.slice(0, 8)}`,
+		detailGeneration: state === 'PRE_DEADLINE' ? null : 1,
+		playerDetail: state === 'PRE_DEADLINE' ? null : revision
 	},
 	times: {
 		deskSourceCheckedAt: '2026-08-04T18:00:30.000Z',
 		deskContentUpdatedAt: '2026-08-04T18:00:00.000Z',
 		deskPublishedAt: '2026-08-04T18:00:00.000Z',
 		deskStaleAt: '2026-08-04T18:01:07.500Z',
-		detailSourceCheckedAt: '2026-08-04T18:00:30.000Z',
-		detailContentUpdatedAt: '2026-08-04T18:00:00.000Z',
-		detailPublishedAt: '2026-08-04T18:00:00.000Z',
-		detailStaleAt: '2026-08-04T18:01:07.500Z',
+		detailSourceCheckedAt:
+			state === 'PRE_DEADLINE' ? null : '2026-08-04T18:00:30.000Z',
+		detailContentUpdatedAt:
+			state === 'PRE_DEADLINE' ? null : '2026-08-04T18:00:00.000Z',
+		detailPublishedAt:
+			state === 'PRE_DEADLINE' ? null : '2026-08-04T18:00:00.000Z',
+		detailStaleAt: state === 'PRE_DEADLINE' ? null : '2026-08-04T18:01:07.500Z',
 		servedAt: '2026-08-04T18:00:30.000Z',
 		nextRefreshAt: '2026-08-04T18:01:00.000Z'
 	},
-	detailDelivery: liveDelivery(
-		state === 'FINALIZED' ? 'FINAL' : state === 'PRE_DEADLINE' ? 'UNAVAILABLE' : 'FRESH'
-	),
+	detailDelivery:
+		state === 'PRE_DEADLINE'
+			? {
+					state: 'PENDING',
+					servedFrom: null,
+					reasonCodes: ['DETAIL_NOT_PUBLISHED']
+				}
+			: liveDelivery(state === 'FINALIZED' ? 'FINAL' : 'FRESH'),
 	matches: [
 		{
 			fixtureId: match.matchId,
@@ -1303,10 +1313,8 @@ const server = createServer((request, response) => {
 			json(response, 200, {
 				data: {
 					liveMatchday: {
-						availability: liveHydrationFixtureEnabled ? 'READY' : 'UNAVAILABLE',
-						delivery: liveDelivery(
-							liveHydrationFixtureEnabled ? 'FRESH' : 'UNAVAILABLE'
-						),
+						availability: 'READY',
+						delivery: liveDelivery('FRESH'),
 						snapshot: liveMatchdaySnapshot({
 							match,
 							state,

@@ -1,24 +1,12 @@
 import {
-	GET_CURRENT_AND_NEXT_EVENTS,
-	type EventsResponse
-} from '@/lib/graphql/operations/events'
-import {
-	GET_HOME_EVENT_FIXTURES,
-	type HomeEventFixturesGraphQLResponse,
-	type HomeFixture
-} from '@/lib/graphql/operations/home'
-import {
 	GET_LIVE_MATCHDAY,
 	type LiveMatchdayDelivery,
-	type LiveMatchdayDeliveryState,
 	type LiveMatchdayFixture,
 	type LiveMatchdayPlayer,
 	type LiveMatchdayResponse,
-	type LiveMatchdaySnapshot,
-	type LiveSnapshotStatus
+	type LiveMatchdaySnapshot
 } from '@/lib/graphql/operations/live'
 import { executeQuery } from '@/lib/graphql-client'
-import { getCurrentSeasonKey } from '@/lib/season'
 import type { Match, PlayerStat } from '@/types/match'
 
 export type QueryExecutorOptions = {
@@ -36,6 +24,17 @@ export type QueryExecutor = <T>(
 ) => Promise<T>
 
 export type LiveMatchdayV2Payload = LiveMatchdayResponse
+
+/**
+ * Client-owned metadata for one complete Match V2 publication. Keep the
+ * producer's revision vector, timestamps, and delivery states intact: Match
+ * publications are not Live Points snapshots and must never fabricate picks,
+ * rules, algorithm, or checkpoint provenance.
+ */
+export type LiveMatchdayStatus = Omit<LiveMatchdaySnapshot, 'matches'> & {
+	availability: LiveMatchdayResponse['liveMatchday']['availability']
+	delivery: LiveMatchdayDelivery
+}
 
 const statValue = (
 	player: LiveMatchdayPlayer,
@@ -56,19 +55,6 @@ const positionElementType: Record<LiveMatchdayPlayer['position'], number> = {
 	MIDFIELDER: 3,
 	FORWARD: 4
 }
-
-const matchdayDeliveryToLiveDelivery = (
-	delivery: LiveMatchdayDelivery
-): NonNullable<LiveSnapshotStatus['delivery']> => ({
-	state: delivery.state === 'PENDING' ? 'UNAVAILABLE' : delivery.state,
-	servedFrom: delivery.servedFrom ?? 'UNAVAILABLE',
-	reasonCodes: delivery.reasonCodes
-})
-
-const deliveryStateToAvailability = (
-	state: LiveMatchdayDeliveryState
-): NonNullable<LiveSnapshotStatus['dataAvailability']> =>
-	state === 'PENDING' ? 'UNAVAILABLE' : state
 
 const mapLiveMatchdayPlayer = (player: LiveMatchdayPlayer): PlayerStat => ({
 	player: player.webName,
@@ -94,65 +80,65 @@ const mapLiveMatchdayPlayer = (player: LiveMatchdayPlayer): PlayerStat => ({
 	totalPoints: player.totalPoints
 })
 
-const matchdaySnapshotToLiveStatus = (
+const matchdaySnapshotToStatus = (
 	snapshot: LiveMatchdaySnapshot,
 	result: LiveMatchdayResponse['liveMatchday']
-): LiveSnapshotStatus => {
-	const scoreRevision = snapshot.revisions.scoreState
-	const detailRevision = snapshot.revisions.playerDetail
-	const contentUpdatedAt = [
-		snapshot.times.deskContentUpdatedAt,
-		snapshot.times.detailContentUpdatedAt
-	]
-		.filter((value): value is string => Boolean(value))
-		.sort((left, right) => Date.parse(right) - Date.parse(left))[0]
-	const dataAvailability =
-		result.availability === 'READY'
-			? deliveryStateToAvailability(result.delivery.state)
-			: 'UNAVAILABLE'
+): LiveMatchdayStatus => {
 	return {
 		season: snapshot.season,
 		eventId: snapshot.eventId,
-		scoreCoreRevision: scoreRevision,
 		state: snapshot.state,
-		windowState: snapshot.state,
-		dataAvailability,
-		publishedAt: snapshot.times.deskPublishedAt,
-		sourceCheckedAt: snapshot.times.deskSourceCheckedAt,
-		contentUpdatedAt: contentUpdatedAt ?? snapshot.times.deskContentUpdatedAt,
-		nextRefreshAt: snapshot.times.nextRefreshAt,
-		revisions: {
-			publicationId: snapshot.revisions.deskPublicationId,
-			generation: snapshot.revisions.deskGeneration,
-			lifecycle: snapshot.revisions.lifecycle,
-			fixtureIdentity: snapshot.revisions.fixtureIdentity,
-			scoreCore: scoreRevision,
-			displayStats: detailRevision ?? scoreRevision,
-			explain: detailRevision ?? scoreRevision,
-			picksBase: null,
-			officialAdjustment: null,
-			previousTotals: null,
-			finalResult: null,
-			rules: 'live-matches-v2',
-			algorithm: 'live-matches-v2',
-			input:
-				snapshot.revisions.detailPublicationId ??
-				snapshot.revisions.deskPublicationId
-		},
-		times: {
-			sourceCheckedAt: snapshot.times.deskSourceCheckedAt,
-			contentUpdatedAt: snapshot.times.deskContentUpdatedAt,
-			publishedAt: snapshot.times.deskPublishedAt,
-			checkpointedAt: null,
-			servedAt: snapshot.times.servedAt,
-			staleAt:
-				snapshot.times.deskStaleAt ??
-				snapshot.times.nextRefreshAt ??
-				snapshot.times.servedAt,
-			nextRefreshAt: snapshot.times.nextRefreshAt
-		},
-		delivery: matchdayDeliveryToLiveDelivery(result.delivery)
+		revisions: snapshot.revisions,
+		times: snapshot.times,
+		detailDelivery: snapshot.detailDelivery,
+		availability: result.availability,
+		delivery: result.delivery
 	}
+}
+
+const MATCH_LIFECYCLE_STATES = new Set([
+	'PRE_DEADLINE',
+	'LIVE_ACTIVE',
+	'BETWEEN_FIXTURES',
+	'DAY_SETTLING',
+	'GW_REVIEW',
+	'FINALIZED'
+])
+
+const MATCH_DELIVERY_STATES = new Set([
+	'FRESH',
+	'STALE',
+	'DEGRADED',
+	'FINAL',
+	'PENDING',
+	'UNAVAILABLE'
+])
+
+const MATCH_SERVED_FROM = new Set([
+	'REDIS_CURRENT',
+	'REDIS_PREVIOUS',
+	'PROCESS_LKG',
+	'POSTGRES_CHECKPOINT'
+])
+
+const isTimestamp = (value: unknown): value is string =>
+	typeof value === 'string' && Number.isFinite(Date.parse(value))
+
+const isOptionalTimestamp = (value: unknown): boolean =>
+	value === null || isTimestamp(value)
+
+const isMatchDelivery = (value: unknown): value is LiveMatchdayDelivery => {
+	if (!value || typeof value !== 'object') return false
+	const delivery = value as LiveMatchdayDelivery
+	return (
+		MATCH_DELIVERY_STATES.has(delivery.state) &&
+		(delivery.servedFrom === null ||
+			MATCH_SERVED_FROM.has(delivery.servedFrom)) &&
+		Array.isArray(delivery.reasonCodes) &&
+		delivery.reasonCodes.every(
+			reason => typeof reason === 'string' && reason.length > 0
+		)
+	)
 }
 
 const mapLiveMatchdayFixture = (fixture: LiveMatchdayFixture): Match => {
@@ -237,23 +223,89 @@ export function validateLiveMatchdayV2(
 		throw new Error('LIVE_MATCHDAY_INCOHERENT')
 	}
 	const result = payload.liveMatchday
-	const snapshot = result.snapshot
-	if (result.availability === 'READY' && !snapshot) {
+	if (
+		(result.availability !== 'READY' &&
+			result.availability !== 'UNAVAILABLE') ||
+		!isMatchDelivery(result.delivery)
+	) {
 		throw new Error('LIVE_MATCHDAY_INCOHERENT')
 	}
-	if (!snapshot) return payload
+	const snapshot = result.snapshot
+	if (result.availability === 'UNAVAILABLE') {
+		if (
+			snapshot !== null ||
+			result.delivery.state !== 'UNAVAILABLE' ||
+			result.delivery.servedFrom !== null
+		) {
+			throw new Error('LIVE_MATCHDAY_INCOHERENT')
+		}
+		return payload
+	}
+	if (
+		!snapshot ||
+		result.delivery.state === 'UNAVAILABLE' ||
+		result.delivery.state === 'PENDING' ||
+		result.delivery.servedFrom === null
+	) {
+		throw new Error('LIVE_MATCHDAY_INCOHERENT')
+	}
+	if (!snapshot.revisions || !snapshot.times) {
+		throw new Error('LIVE_MATCHDAY_INCOHERENT')
+	}
+	const detailRevisionPresent =
+		typeof snapshot.revisions.detailPublicationId === 'string' &&
+		snapshot.revisions.detailPublicationId.length > 0 &&
+		Number.isSafeInteger(snapshot.revisions.detailGeneration) &&
+		Number(snapshot.revisions.detailGeneration) > 0 &&
+		typeof snapshot.revisions.playerDetail === 'string' &&
+		snapshot.revisions.playerDetail.length > 0
+	const detailRevisionAbsent =
+		snapshot.revisions.detailPublicationId === null &&
+		snapshot.revisions.detailGeneration === null &&
+		snapshot.revisions.playerDetail === null
 	if (
 		!snapshot.season ||
 		!Number.isSafeInteger(snapshot.eventId) ||
 		snapshot.eventId <= 0 ||
+		!MATCH_LIFECYCLE_STATES.has(snapshot.state) ||
 		!snapshot.revisions.deskPublicationId ||
 		!Number.isSafeInteger(snapshot.revisions.deskGeneration) ||
 		snapshot.revisions.deskGeneration <= 0 ||
+		!snapshot.revisions.lifecycle ||
+		!snapshot.revisions.fixtureIdentity ||
 		!snapshot.revisions.scoreState ||
-		!snapshot.times.deskSourceCheckedAt ||
-		!snapshot.times.deskContentUpdatedAt ||
-		!snapshot.times.deskPublishedAt ||
+		(!detailRevisionPresent && !detailRevisionAbsent) ||
+		!isTimestamp(snapshot.times.deskSourceCheckedAt) ||
+		!isTimestamp(snapshot.times.deskContentUpdatedAt) ||
+		!isTimestamp(snapshot.times.deskPublishedAt) ||
+		!isOptionalTimestamp(snapshot.times.deskStaleAt) ||
+		!isOptionalTimestamp(snapshot.times.detailSourceCheckedAt) ||
+		!isOptionalTimestamp(snapshot.times.detailContentUpdatedAt) ||
+		!isOptionalTimestamp(snapshot.times.detailPublishedAt) ||
+		!isOptionalTimestamp(snapshot.times.detailStaleAt) ||
+		!isTimestamp(snapshot.times.servedAt) ||
+		!isOptionalTimestamp(snapshot.times.nextRefreshAt) ||
+		!isMatchDelivery(snapshot.detailDelivery) ||
 		!Array.isArray(snapshot.matches)
+	) {
+		throw new Error('LIVE_MATCHDAY_INCOHERENT')
+	}
+	if (
+		detailRevisionAbsent !==
+			(snapshot.times.detailSourceCheckedAt === null &&
+				snapshot.times.detailContentUpdatedAt === null &&
+				snapshot.times.detailPublishedAt === null &&
+				snapshot.times.detailStaleAt === null) ||
+		(detailRevisionAbsent &&
+			(snapshot.detailDelivery.servedFrom !== null ||
+				!['PENDING', 'DEGRADED'].includes(snapshot.detailDelivery.state))) ||
+		(detailRevisionPresent &&
+			(snapshot.detailDelivery.servedFrom === null ||
+				['PENDING', 'UNAVAILABLE'].includes(snapshot.detailDelivery.state))) ||
+		(result.delivery.state === 'FINAL' &&
+			(snapshot.state !== 'FINALIZED' ||
+				snapshot.detailDelivery.state !== 'FINAL' ||
+				!detailRevisionPresent))
 	) {
 		throw new Error('LIVE_MATCHDAY_INCOHERENT')
 	}
@@ -269,6 +321,20 @@ export function validateLiveMatchdayV2(
 			fixture.homeTeamId <= 0 ||
 			fixture.awayTeamId <= 0 ||
 			fixture.homeTeamId === fixture.awayTeamId ||
+			!fixture.homeTeamName ||
+			!fixture.homeTeamShortName ||
+			!fixture.awayTeamName ||
+			!fixture.awayTeamShortName ||
+			(fixture.homeScore !== null &&
+				(!Number.isSafeInteger(fixture.homeScore) || fixture.homeScore < 0)) ||
+			(fixture.awayScore !== null &&
+				(!Number.isSafeInteger(fixture.awayScore) || fixture.awayScore < 0)) ||
+			(fixture.kickoffTime !== null && !isTimestamp(fixture.kickoffTime)) ||
+			!Number.isSafeInteger(fixture.minutes) ||
+			fixture.minutes < 0 ||
+			typeof fixture.started !== 'boolean' ||
+			typeof fixture.finished !== 'boolean' ||
+			typeof fixture.finishedProvisional !== 'boolean' ||
 			!Array.isArray(fixture.players)
 		) {
 			throw new Error('LIVE_MATCHDAY_INCOHERENT')
@@ -282,7 +348,12 @@ export function validateLiveMatchdayV2(
 				playerIds.has(player.id) ||
 				(player.teamId !== fixture.homeTeamId &&
 					player.teamId !== fixture.awayTeamId) ||
-				!Number.isFinite(player.totalPoints) ||
+				!player.webName ||
+				!Object.prototype.hasOwnProperty.call(
+					positionElementType,
+					player.position
+				) ||
+				!Number.isSafeInteger(player.totalPoints) ||
 				!Array.isArray(player.stats)
 			) {
 				throw new Error('LIVE_MATCHDAY_INCOHERENT')
@@ -333,100 +404,12 @@ export function getPreferredLiveMatchesTab(
 	return 'live'
 }
 
-type CoreFixture = Omit<HomeFixture, 'eventId'>
-
-/**
- * Once the published matchday is terminal, the next event's core fixture
- * schedule is the only safe source for the upcoming view.
- */
-export function transformCoreFixturesToMatches(
-	eventId: number,
-	fixtures: readonly CoreFixture[]
-): Match[] {
-	return fixtures.map(fixture => ({
-		id: String(fixture.id),
-		eventId,
-		homeTeam: {
-			id: fixture.homeTeam.id,
-			name: fixture.homeTeam.name,
-			shortName: fixture.homeTeam.shortName,
-			score: fixture.homeScore ?? 0,
-			possession: 0,
-			shots: 0,
-			shotsOnTarget: 0,
-			corners: 0,
-			players: []
-		},
-		awayTeam: {
-			id: fixture.awayTeam.id,
-			name: fixture.awayTeam.name,
-			shortName: fixture.awayTeam.shortName,
-			score: fixture.awayScore ?? 0,
-			possession: 0,
-			shots: 0,
-			shotsOnTarget: 0,
-			corners: 0,
-			players: []
-		},
-		status: fixture.finished ? 'FT' : fixture.started ? 'LIVE' : 'NOT_STARTED',
-		minute: 0,
-		kickoff: fixture.kickoffTime ?? '',
-		viewers: 0
-	}))
-}
-
-const shouldLoadNextEventFixtures = (
-	snapshot: LiveMatchdaySnapshot | null | undefined,
-	currentEventId: number | null,
-	nextEventId: number | null
-): boolean => {
-	if (
-		!snapshot ||
-		!currentEventId ||
-		!nextEventId ||
-		currentEventId === nextEventId
-	)
-		return false
-	if (snapshot.state === 'FINALIZED') return true
-	return (
-		snapshot.matches.length > 0 &&
-		snapshot.matches.every(
-			fixture => fixture.finished || fixture.finishedProvisional
-		)
-	)
-}
-
-async function loadNextEventMatches(
-	executor: QueryExecutor,
-	currentEventId: number | null,
-	nextEventId: number | null,
-	snapshot: LiveMatchdaySnapshot | null | undefined
-): Promise<Match[]> {
-	if (!shouldLoadNextEventFixtures(snapshot, currentEventId, nextEventId))
-		return []
-	try {
-		const response = await executor<HomeEventFixturesGraphQLResponse>(
-			GET_HOME_EVENT_FIXTURES,
-			{ eventId: nextEventId },
-			{ cache: 'no-store' }
-		)
-		return transformCoreFixturesToMatches(nextEventId!, response.eventFixtures)
-	} catch (error) {
-		// Upcoming fixtures are an enhancement to a settled publication. A
-		// failed core read must not erase the current event or its LKG.
-		console.error('[live/matches] failed to load next event fixtures:', error)
-		return []
-	}
-}
-
 export interface LiveMatchesSnapshot {
 	matches: Match[]
-	snapshot: LiveSnapshotStatus | null
+	snapshot: LiveMatchdayStatus | null
 	currentEventId: number | null
-	nextEventId: number | null
-	windowState?: string
-	dataAvailability?: string
-	nextRefreshAt?: string | null
+	availability: LiveMatchdayResponse['liveMatchday']['availability']
+	delivery: LiveMatchdayDelivery
 }
 
 export interface LiveMatchesLoadOptions {
@@ -440,9 +423,9 @@ export interface LiveMatchesLoadOptions {
  * UNAVAILABLE is a delivery observation, not an empty successful matchday.
  */
 export function canReplaceLiveMatchesLkg(
-	value: Pick<LiveMatchesSnapshot, 'snapshot' | 'dataAvailability'>
+	value: Pick<LiveMatchesSnapshot, 'snapshot' | 'availability'>
 ): boolean {
-	return value.snapshot !== null && value.dataAvailability !== 'UNAVAILABLE'
+	return value.snapshot !== null && value.availability === 'READY'
 }
 
 const validEventId = (value: unknown): number | null =>
@@ -453,19 +436,53 @@ const validEventId = (value: unknown): number | null =>
 const LIVE_MATCHES_CONTRACT_HEADER = 'X-LetLetMe-Contract'
 const LIVE_MATCHES_CONTRACT_VERSION = 'live-matches-v2'
 
+export type LiveMatchesRequestParams =
+	| { ok: true; eventId: number | undefined }
+	| {
+			ok: false
+			status: 400 | 426
+			error: 'Invalid live matchday request' | 'CLIENT_UPGRADE_REQUIRED'
+	  }
+
+export function parseLiveMatchesRequestParams(
+	params: URLSearchParams
+): LiveMatchesRequestParams {
+	const legacyParameters = [
+		'season',
+		'revision',
+		'scoreCoreRevision',
+		'includePlayers'
+	]
+	if (legacyParameters.some(parameter => params.has(parameter))) {
+		return { ok: false, status: 426, error: 'CLIENT_UPGRADE_REQUIRED' }
+	}
+	let hasUnknownParameter = false
+	params.forEach((_value, parameter) => {
+		if (parameter !== 'eventId') hasUnknownParameter = true
+	})
+	if (hasUnknownParameter) {
+		return { ok: false, status: 400, error: 'Invalid live matchday request' }
+	}
+	const values = params.getAll('eventId')
+	if (values.length === 0) return { ok: true, eventId: undefined }
+	const eventId = Number(values[0])
+	if (values.length > 1 || !Number.isSafeInteger(eventId) || eventId <= 0) {
+		return { ok: false, status: 400, error: 'Invalid live matchday request' }
+	}
+	return { ok: true, eventId }
+}
+
 export async function getLiveMatchesSnapshot(
-	nextEventId: number | null,
 	executor: QueryExecutor = executeQuery,
 	currentEventId: number | null = null,
 	options: LiveMatchesLoadOptions = {}
 ): Promise<LiveMatchesSnapshot> {
 	let payload: LiveMatchdayV2Payload
-	if (options.preferHttp && currentEventId) {
-		const params = new URLSearchParams({
-			season: String(getCurrentSeasonKey()),
-			eventId: String(currentEventId)
-		})
-		const response = await fetch(`/api/live/matches?${params.toString()}`, {
+	if (options.preferHttp) {
+		const params = new URLSearchParams()
+		if (currentEventId) params.set('eventId', String(currentEventId))
+		const query = params.size > 0 ? `?${params.toString()}` : ''
+		const response = await fetch(`/api/live/matches${query}`, {
 			cache: 'no-store',
 			headers: {
 				[LIVE_MATCHES_CONTRACT_HEADER]: LIVE_MATCHES_CONTRACT_VERSION
@@ -488,31 +505,13 @@ export async function getLiveMatchesSnapshot(
 		throw new Error('LIVE_MATCHDAY_EVENT_MISMATCH')
 	}
 	const current = validEventId(matchday?.eventId) ?? currentEventId
-	const resolvedNextEventId = validEventId(matchday?.nextEventId) ?? nextEventId
-	const nextMatches = await loadNextEventMatches(
-		executor,
-		current,
-		resolvedNextEventId,
-		matchday
-	)
-	const snapshot = matchday
-		? matchdaySnapshotToLiveStatus(matchday, result)
-		: null
+	const snapshot = matchday ? matchdaySnapshotToStatus(matchday, result) : null
 
 	return {
-		matches: [
-			...(matchday ? transformLiveMatchdayV2(matchday) : []),
-			...nextMatches
-		],
+		matches: matchday ? transformLiveMatchdayV2(matchday) : [],
 		snapshot,
 		currentEventId: current,
-		nextEventId: resolvedNextEventId,
-		windowState: matchday?.state,
-		dataAvailability:
-			result.availability === 'READY' ? result.delivery.state : 'UNAVAILABLE',
-		nextRefreshAt: matchday?.times.nextRefreshAt ?? null
+		availability: result.availability,
+		delivery: result.delivery
 	}
 }
-
-export { GET_CURRENT_AND_NEXT_EVENTS }
-export type { EventsResponse }

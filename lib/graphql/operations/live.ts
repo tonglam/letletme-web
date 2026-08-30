@@ -409,7 +409,6 @@ export const GET_LIVE_MATCHDAY = `
 			snapshot {
 				season
 				eventId
-				nextEventId
 				state
 				revisions {
 					deskPublicationId
@@ -548,7 +547,6 @@ export type LiveMatchdayState =
 export interface LiveMatchdaySnapshot {
 	season: string
 	eventId: number
-	nextEventId: number | null
 	state: LiveMatchdayState
 	revisions: LiveMatchdayRevisionVector
 	times: LiveMatchdayTimes
@@ -575,7 +573,6 @@ export const GET_LIVE_MATCHDAY_FIXTURE_SUMMARY = `
 			snapshot {
 				season
 				eventId
-				nextEventId
 				state
 				revisions {
 					deskPublicationId
@@ -619,7 +616,6 @@ export type LiveMatchdayFixtureSummary = Omit<LiveMatchdayFixture, 'players'>
 export interface LiveMatchdaySummarySnapshot {
 	season: string
 	eventId: number
-	nextEventId: number | null
 	state: LiveMatchdayState
 	revisions: Pick<
 		LiveMatchdayRevisionVector,

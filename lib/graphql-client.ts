@@ -87,6 +87,15 @@ export const requiresLivePointsV2Contract = (query: string): boolean =>
 export const requiresLiveMatchesV2Contract = (query: string): boolean =>
 	/\bliveMatchday\s*(?:\(|\{)/.test(query)
 
+export const liveContractVersionForQuery = (query: string): string | null => {
+	const matches = requiresLiveMatchesV2Contract(query)
+	const points = requiresLivePointsV2Contract(query)
+	if (matches && points) throw new Error('LIVE_CONTRACT_MIXED_OPERATION')
+	if (matches) return LIVE_MATCHES_CONTRACT_VERSION
+	if (points) return LIVE_POINTS_CONTRACT_VERSION
+	return null
+}
+
 export const extractOperationName = (query: string): string | undefined =>
 	query.match(
 		/\b(?:query|mutation|subscription)\s+([A-Za-z_][A-Za-z0-9_]*)/
@@ -220,6 +229,7 @@ async function doFetch<T>(
 
 	let requestId: string | undefined
 	try {
+		const liveContractVersion = liveContractVersionForQuery(query)
 		const fetchOptions: RequestInit & { next?: ExecuteQueryOptions['next'] } = {
 			method: 'POST',
 			cache,
@@ -227,15 +237,11 @@ async function doFetch<T>(
 				'Content-Type': 'application/json',
 				...(isClient ? syntheticBrowserTelemetryHeaders() : {}),
 				...extraHeaders,
-				...(requiresLiveMatchesV2Contract(query)
+				...(liveContractVersion
 					? {
-							[LIVE_POINTS_CONTRACT_HEADER]: LIVE_MATCHES_CONTRACT_VERSION
+							[LIVE_POINTS_CONTRACT_HEADER]: liveContractVersion
 						}
-					: requiresLivePointsV2Contract(query)
-						? {
-								[LIVE_POINTS_CONTRACT_HEADER]: LIVE_POINTS_CONTRACT_VERSION
-							}
-						: {})
+					: {})
 			},
 			body: JSON.stringify({
 				operationName: extractOperationName(query),

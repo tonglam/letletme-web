@@ -536,6 +536,8 @@
 		"none": "暂无比赛",
 		"refresh": "刷新比赛",
 		"lastUpdated": "更新于 {time}",
+		"detailUpdating": "球员数据正在更新",
+		"detailUpdatingSince": "球员数据正在更新 · 明细更新于 {time}",
 		"loading": "正在加载比赛…",
 		"error": "错误：{message}",
 		"loadFailed": "比赛数据加载失败，请重试。",
