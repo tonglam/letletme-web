@@ -47,9 +47,9 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 	await getPageLocale(params)
 	const t = await getTranslations('States')
 
-	// The shared lifecycle context is the single public gate for current and
-	// next event identity. The match desk then reads the same revision directly
-	// in RSC, avoiding a second event query or self-HTTP hop.
+	// The shared lifecycle context selects the current/next event. The match
+	// publication owns its own desk/detail revisions and is read directly in
+	// RSC; a global Live Points revision is not comparable here.
 	const { presentation, liveContext } = await getLivePageContext()
 	const isOfficialUpdating = isOfficialLiveUpdatingContext(liveContext)
 	if (
@@ -61,7 +61,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 			<>
 				<LiveContractMarker
 					status="UNAVAILABLE"
-					revision={liveContext?.scoreCoreRevision ?? 'unavailable'}
+					revision="unavailable"
 					expected={0}
 					observed={0}
 				/>
@@ -80,7 +80,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 			<>
 				<LiveContractMarker
 					status="UNAVAILABLE"
-					revision={liveContext?.scoreCoreRevision ?? 'unavailable'}
+					revision="unavailable"
 					expected={0}
 					observed={0}
 				/>
@@ -107,12 +107,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 			nextEventId,
 			(query, variables, options) =>
 				executePublicServerQuery('gameweek', query, variables, options),
-			currentEventId,
-			{
-				scoreCoreRevision: liveContext?.scoreCoreRevision,
-				includeFixturePlayers: false,
-				suppressErrorLog: isOfficialUpdating
-			}
+			currentEventId
 		)
 		matches = live.matches
 		snapshot = live.snapshot
@@ -156,8 +151,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 				  liveContext?.dataAvailability === 'DEGRADED'
 				? 'STALE'
 				: 'READY'
-	const markerRevision =
-		snapshot?.scoreCoreRevision ?? liveContext?.scoreCoreRevision ?? 'unavailable'
+	const markerRevision = snapshot?.scoreCoreRevision ?? 'unavailable'
 	const markerObserved = matches.length
 
 	return (

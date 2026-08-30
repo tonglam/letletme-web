@@ -59,7 +59,6 @@ describe('GraphQL proxy read path', () => {
 		for (const path of [
 			'../app/api/live/context/route.ts',
 			'../app/api/live/matches/route.ts',
-			'../app/api/live/matches/[fixtureId]/players/route.ts',
 			'../app/api/fixtures/window/route.ts',
 			'../app/api/gameweek/desk/route.ts',
 			'../app/api/home/fixtures/route.ts',

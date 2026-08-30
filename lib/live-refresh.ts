@@ -130,6 +130,25 @@ export function liveSnapshotNeedsRefresh(
 	)
 }
 
+/**
+ * Matchday payloads are owned by the score/fixture publication. Changes to
+ * picks, rank, or unrelated live-point projections must not refetch the full
+ * fixture-and-player payload.
+ */
+export function liveMatchdayNeedsRefresh(
+	accepted: LiveSnapshotStatus | null | undefined,
+	observed: LiveSnapshotStatus | null | undefined
+): boolean {
+	if (!accepted || !observed) return true
+	return (
+		accepted.eventId !== observed.eventId ||
+		accepted.scoreCoreRevision !== observed.scoreCoreRevision ||
+		accepted.revisions?.scoreCore !== observed.revisions?.scoreCore ||
+		accepted.revisions?.displayStats !== observed.revisions?.displayStats ||
+		accepted.revisions?.fixtureIdentity !== observed.revisions?.fixtureIdentity
+	)
+}
+
 export function liveRefreshEventIdentityChanged(
 	acceptedCurrentEventId: number | undefined,
 	acceptedNextEventId: number | undefined,

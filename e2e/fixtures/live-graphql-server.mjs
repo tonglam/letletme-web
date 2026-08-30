@@ -455,6 +455,58 @@ const liveDelivery = state => ({
 	reasonCodes: []
 })
 
+const liveMatchdaySnapshot = ({ match, state, revision }) => ({
+	season: '2627',
+	eventId: 33,
+	nextEventId: 34,
+	state,
+	revisions: {
+		deskPublicationId: `e2e-matchday-${revision.slice(0, 8)}`,
+		deskGeneration: 1,
+		lifecycle: revision,
+		fixtureIdentity: revision,
+		scoreState: revision,
+		detailPublicationId: `e2e-match-detail-${revision.slice(0, 8)}`,
+		detailGeneration: 1,
+		playerDetail: revision
+	},
+	times: {
+		deskSourceCheckedAt: '2026-08-04T18:00:30.000Z',
+		deskContentUpdatedAt: '2026-08-04T18:00:00.000Z',
+		deskPublishedAt: '2026-08-04T18:00:00.000Z',
+		deskStaleAt: '2026-08-04T18:01:07.500Z',
+		detailSourceCheckedAt: '2026-08-04T18:00:30.000Z',
+		detailContentUpdatedAt: '2026-08-04T18:00:00.000Z',
+		detailPublishedAt: '2026-08-04T18:00:00.000Z',
+		detailStaleAt: '2026-08-04T18:01:07.500Z',
+		servedAt: '2026-08-04T18:00:30.000Z',
+		nextRefreshAt: '2026-08-04T18:01:00.000Z'
+	},
+	detailDelivery: liveDelivery(
+		state === 'FINALIZED' ? 'FINAL' : state === 'PRE_DEADLINE' ? 'UNAVAILABLE' : 'FRESH'
+	),
+	matches: [
+		{
+			fixtureId: match.matchId,
+			eventId: 33,
+			homeTeamId: match.homeTeamId,
+			homeTeamName: match.homeTeamName,
+			homeTeamShortName: match.homeTeamShortName,
+			awayTeamId: match.awayTeamId,
+			awayTeamName: match.awayTeamName,
+			awayTeamShortName: match.awayTeamShortName,
+			homeScore: match.homeScore,
+			awayScore: match.awayScore,
+			kickoffTime: match.kickoffTime,
+			minutes: match.minutes,
+			started: state === 'LIVE_ACTIVE',
+			finished: false,
+			finishedProvisional: false,
+			players: []
+		}
+	]
+})
+
 const liveSnapshot = ({
 	eventId = 33,
 	revision = 'a'.repeat(64),
@@ -1243,51 +1295,23 @@ const server = createServer((request, response) => {
 			})
 			return
 		}
-		if (query.includes('GetLiveMatchdayDesk')) {
+		if (query.includes('GetLiveMatchday')) {
 			const match = liveHydrationFixtureEnabled
 				? hydrationLiveMatch
 				: scheduledMatch
+			const state = liveHydrationFixtureEnabled ? 'LIVE_ACTIVE' : 'PRE_DEADLINE'
 			json(response, 200, {
 				data: {
-					liveMatchdayDesk: {
-						season: '2627',
-						eventId: 33,
-						scoreCoreRevision: 'a'.repeat(64),
-						state: liveHydrationFixtureEnabled ? 'LIVE_ACTIVE' : 'PRE_DEADLINE',
-						windowState: liveHydrationFixtureEnabled
-							? 'LIVE_ACTIVE'
-							: 'PRE_DEADLINE',
-						dataAvailability: liveHydrationFixtureEnabled
-							? 'FRESH'
-							: 'UNAVAILABLE',
-						nextRefreshAt: '2026-08-04T18:01:00.000Z',
-						sourceCheckedAt: '2026-08-04T18:00:30.000Z',
-						publishedAt: '2026-08-04T18:00:00.000Z',
-						source: 'REDIS_CURRENT',
-						revisions: liveRevisionVector('a'.repeat(64)),
-						times: liveTimes(),
+					liveMatchday: {
+						availability: liveHydrationFixtureEnabled ? 'READY' : 'UNAVAILABLE',
 						delivery: liveDelivery(
 							liveHydrationFixtureEnabled ? 'FRESH' : 'UNAVAILABLE'
 						),
-						stale: false,
-						matches: [
-							{
-								fixtureId: match.matchId,
-								eventId: 33,
-								homeTeamId: match.homeTeamId,
-								homeTeamName: match.homeTeamName,
-								awayTeamId: match.awayTeamId,
-								awayTeamName: match.awayTeamName,
-								homeScore: match.homeScore,
-								awayScore: match.awayScore,
-								kickoffTime: match.kickoffTime,
-								minutes: liveHydrationFixtureEnabled ? match.minutes : 0,
-								started: liveHydrationFixtureEnabled,
-								finished: false
-							}
-						],
-						nextFixtures: [],
-						highlights: []
+						snapshot: liveMatchdaySnapshot({
+							match,
+							state,
+							revision: 'a'.repeat(64)
+						})
 					}
 				}
 			})

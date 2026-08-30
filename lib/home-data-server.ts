@@ -21,8 +21,8 @@ import {
 	type HomePersonalDeskResponse
 } from '@/lib/graphql/operations/home'
 import {
-	GET_LIVE_MATCHDAY_DESK,
-	type LiveMatchdayDeskResponse
+	GET_LIVE_MATCHDAY_FIXTURE_SUMMARY,
+	type LiveMatchdayFixtureSummaryResponse
 } from '@/lib/graphql/operations/live'
 import {
 	buildLiveCoreFixtureFallback,
@@ -200,25 +200,30 @@ const loadHomeFixturesFromOrigin = async (
 		if (core.currentEventId === eventId) {
 			try {
 				const liveResponse =
-					await executePublicServerQuery<LiveMatchdayDeskResponse>(
+					await executePublicServerQuery<LiveMatchdayFixtureSummaryResponse>(
 						'fixtures',
-						GET_LIVE_MATCHDAY_DESK,
-						undefined,
+						GET_LIVE_MATCHDAY_FIXTURE_SUMMARY,
+						{ eventId },
 						{ cache: 'no-store', timeoutMs: 5_000, suppressErrorLog: true }
 					)
-				const desk = liveResponse.liveMatchdayDesk
+				const desk = liveResponse.liveMatchday.snapshot
+				if (!desk || liveResponse.liveMatchday.availability !== 'READY') {
+					throw new Error('LIVE_PUBLICATION_UNAVAILABLE')
+				}
 				if (desk.eventId !== eventId) {
 					throw new Error('LIVE_EVENT_CHANGED')
 				}
 				return {
 					season: desk.season,
-					revision: desk.scoreCoreRevision,
+					revision: desk.revisions.scoreState,
 					eventId: desk.eventId,
 					source: 'LIVE' as const,
 					state: liveStateToHomeState(desk.state),
-					sourceCheckedAt: desk.sourceCheckedAt ?? null,
-					publishedAt: desk.publishedAt ?? null,
-					stale: desk.stale ?? false,
+					sourceCheckedAt: desk.times.deskSourceCheckedAt,
+					publishedAt: desk.times.deskPublishedAt,
+					stale:
+						liveResponse.liveMatchday.delivery.state === 'STALE' ||
+						liveResponse.liveMatchday.delivery.state === 'DEGRADED',
 					fixtures: mergeLiveFixturesIntoHomeFixtures(
 						desk.matches,
 						response.eventFixtures

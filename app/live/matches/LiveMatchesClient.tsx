@@ -18,8 +18,8 @@ import {
 } from '@/lib/graphql/operations/live'
 import {
 	liveRefreshEventIdentityChanged,
+	liveMatchdayNeedsRefresh,
 	liveContextToSnapshot,
-	liveSnapshotNeedsRefresh,
 	shouldPollLiveMatchesTransition,
 	shouldPollLiveSnapshot
 } from '@/lib/live-refresh'
@@ -122,7 +122,6 @@ export function LiveMatchesClient({
 	const mountedRef = useRef(true)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
 	const hasLastGoodData = useRef(initialMatches.length > 0)
-	const hasRequestedInitialFixturePlayers = useRef(false)
 	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
 		snapshotRef.current = next
 		setSnapshot(next)
@@ -141,8 +140,8 @@ export function LiveMatchesClient({
 			eventIds?: {
 				currentEventId?: number
 				nextEventId?: number | null
-				scoreCoreRevision?: string | null
-			}
+			},
+			prefetched?: Awaited<ReturnType<typeof getLiveMatchesSnapshot>>
 		) => {
 			if (isFetchInFlight.current) {
 				// Coalesce concurrent manual/auto refreshes into one trailing fetch.
@@ -164,20 +163,16 @@ export function LiveMatchesClient({
 						? (eventIds.nextEventId ?? null)
 						: (resolvedNextEventId ?? null)
 
-				const data = await getLiveMatchesSnapshot(
-					resolvedNextEventIdForSnapshot,
-					executeQuery,
-					eventIds?.currentEventId ?? resolvedCurrentEventId ?? null,
-					{
-						preferHttp: true,
-						suppressErrorLog:
-							officialUpdatingRef.current || officialSyncPendingRef.current,
-						scoreCoreRevision:
-							eventIds?.scoreCoreRevision ??
-							snapshotRef.current?.scoreCoreRevision ??
-							null
-					}
-				)
+				const data =
+					prefetched ??
+					(await getLiveMatchesSnapshot(
+						resolvedNextEventIdForSnapshot,
+						executeQuery,
+						eventIds?.currentEventId ?? resolvedCurrentEventId ?? null,
+						{
+							preferHttp: true
+						}
+					))
 				if (!mountedRef.current) return
 				const lifecycleCurrentEventId =
 					data.currentEventId ??
@@ -203,10 +198,6 @@ export function LiveMatchesClient({
 				acceptSnapshot(
 					nextSelectedEventId === lifecycleCurrentEventId ? data.snapshot : null
 				)
-				officialSyncPendingRef.current = false
-				officialUpdatingRef.current = false
-				setIsOfficialSyncPending(false)
-				setIsOfficialUpdating(false)
 				hasLastGoodData.current = true
 
 				if (!hasUserSelectedTab.current && !hasSavedTabPreference.current) {
@@ -246,49 +237,9 @@ export function LiveMatchesClient({
 
 		const request = (async () => {
 			try {
-				const probe = await executeQuery<LiveContextResponse>(
-					GET_LIVE_CONTEXT,
-					undefined,
-					{
-						cache: 'no-store',
-						suppressErrorLog:
-							officialUpdatingRef.current || officialSyncPendingRef.current
-					}
-				)
-				const context = probe.liveContext
-				const observedOfficialUpdating = isOfficialLiveUpdatingContext(context)
-				officialUpdatingRef.current = observedOfficialUpdating
-				if (observedOfficialUpdating && !snapshotRef.current) {
-					officialSyncPendingRef.current = true
-				}
-				setIsOfficialSyncPending(officialSyncPendingRef.current)
-				setIsOfficialUpdating(
-					observedOfficialUpdating || officialSyncPendingRef.current
-				)
-				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
-				const observedCurrentEventId = context?.anchorEventId ?? undefined
-				const observedNextEventId = context?.nextEventId ?? undefined
-				const eventIdentityChanged =
-					Boolean(observedCurrentEventId) &&
-					liveRefreshEventIdentityChanged(
-						resolvedCurrentEventId,
-						resolvedNextEventId,
-						observedCurrentEventId,
-						observedNextEventId
-					)
-				if (eventIdentityChanged) {
-					setResolvedCurrentEventId(observedCurrentEventId)
-					setResolvedNextEventId(observedNextEventId)
-					await fetchMatches(true, {
-						currentEventId: observedCurrentEventId,
-						nextEventId: observedNextEventId,
-						scoreCoreRevision: observedSnapshot?.scoreCoreRevision ?? null
-					})
-					return
-				}
-				// Once the selected matchday is terminal, this heartbeat is only
-				// for discovering a new event identity. Do not reload the same
-				// finalized desk just because its source check time changed.
+				// A terminal matchday only needs the global lifecycle probe to find
+				// the next event. During an active matchday the matchday publication
+				// itself is the only freshness authority.
 				if (
 					shouldPollLiveMatchesTransition({
 						isPageActive,
@@ -297,17 +248,55 @@ export function LiveMatchesClient({
 						snapshot: snapshotRef.current
 					})
 				) {
+					const probe = await executeQuery<LiveContextResponse>(
+						GET_LIVE_CONTEXT,
+						undefined,
+						{ cache: 'no-store' }
+					)
+					const context = probe.liveContext
+					const observedSnapshot = liveContextToSnapshot(probe.liveContext)
+					const observedCurrentEventId = context?.anchorEventId ?? undefined
+					const observedNextEventId = context?.nextEventId ?? undefined
+					if (
+						Boolean(observedCurrentEventId) &&
+						liveRefreshEventIdentityChanged(
+							resolvedCurrentEventId,
+							resolvedNextEventId,
+							observedCurrentEventId,
+							observedNextEventId
+						)
+					) {
+						setResolvedCurrentEventId(observedCurrentEventId)
+						setResolvedNextEventId(observedNextEventId)
+						await fetchMatches(true, {
+							currentEventId: observedCurrentEventId,
+							nextEventId: observedNextEventId
+						})
+						return
+					}
 					setError(null)
 					return
 				}
-				if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
+
+				const observedData = await getLiveMatchesSnapshot(
+					resolvedNextEventId ?? null,
+					executeQuery,
+					resolvedCurrentEventId,
+					{ preferHttp: true }
+				)
+				const observedSnapshot = observedData.snapshot
+				// An unavailable publication is an observation failure, not permission
+				// to erase or refetch the last complete board.
+				if (!observedSnapshot) {
+					setError(t('refreshFailed'))
+					return
+				}
+				if (!liveMatchdayNeedsRefresh(snapshotRef.current, observedSnapshot)) {
 					acceptSnapshot(observedSnapshot)
 					setError(null)
 					return
 				}
-				await fetchMatches(true, {
-					scoreCoreRevision: observedSnapshot?.scoreCoreRevision ?? null
-				})
+				await fetchMatches(true, undefined, observedData)
 			} catch (probeError) {
 				if (!officialUpdatingRef.current && !officialSyncPendingRef.current) {
 					console.error('Failed to check live match freshness:', probeError)
@@ -366,23 +355,6 @@ export function LiveMatchesClient({
 	const tabCountLabel = (tab: LiveMatchesTab) =>
 		t('matchCount', { count: matchesByTab[tab].length })
 	useEffect(() => {
-		if (
-			hasRequestedInitialFixturePlayers.current ||
-			!initialMatches.some(
-				match =>
-					match.status === 'LIVE' ||
-					match.status === 'HT' ||
-					match.status === 'FT'
-			)
-		)
-			return
-		hasRequestedInitialFixturePlayers.current = true
-		// Keep the score/status desk in the first RSC payload and hydrate the
-		// optional player section in the background.
-		void fetchMatches(true)
-	}, [fetchMatches, initialMatches])
-
-	useEffect(() => {
 		if (hasUserSelectedTab.current) return
 		if (hasSavedTabPreference.current) return
 		let savedTab: string | null = null
@@ -418,8 +390,7 @@ export function LiveMatchesClient({
 			selectedEventId: pollingEventId,
 			snapshot,
 			windowState: snapshot?.windowState ?? snapshot?.state,
-			nextRefreshAt: snapshot?.nextRefreshAt,
-			isOfficialUpdating: isOfficialUpdating || isOfficialSyncPending
+			nextRefreshAt: snapshot?.nextRefreshAt
 		}) ||
 		shouldPollLiveMatchesTransition({
 			isPageActive,
@@ -433,7 +404,7 @@ export function LiveMatchesClient({
 		nextEventId: resolvedNextEventId,
 		snapshot
 	})
-	const lastUpdatedAt = snapshot?.sourceCheckedAt ?? null
+	const lastUpdatedAt = snapshot?.contentUpdatedAt ?? null
 	const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string | null>(null)
 	useEffect(() => {
 		if (!lastUpdatedAt) {

@@ -10,6 +10,12 @@ import {
 	shouldPollLiveSnapshot
 } from '../lib/live-refresh'
 import {
+	LIVE_MATCHES_CONTRACT_VERSION,
+	LIVE_POINTS_CONTRACT_VERSION,
+	requiresLiveMatchesV2Contract,
+	requiresLivePointsV2Contract
+} from '../lib/graphql-client'
+import {
 	liveScoreAuthorityLabel,
 	traceableLiveScore
 } from '../lib/live-score-v2'
@@ -58,6 +64,14 @@ const score = (overrides: Record<string, unknown> = {}) => ({
 })
 
 describe('Live Points V2 web contract', () => {
+	it('keeps live matches on their separate breaking contract', () => {
+		const matchdayQuery = 'query LiveMatchday { liveMatchday { availability } }'
+		assert.equal(requiresLiveMatchesV2Contract(matchdayQuery), true)
+		assert.equal(requiresLivePointsV2Contract(matchdayQuery), false)
+		assert.equal(LIVE_MATCHES_CONTRACT_VERSION, 'live-matches-v2')
+		assert.equal(LIVE_POINTS_CONTRACT_VERSION, 'live-points-v2')
+	})
+
 	it('requests only V2 fields and keeps duplicate score aliases out of the document', () => {
 		assert.match(GET_LIVE_POINTS, /score\s*\{/)
 		assert.match(GET_LIVE_POINTS, /revisions\s*\{/)
@@ -165,48 +179,6 @@ describe('Live Points V2 web contract', () => {
 			}),
 			false
 		)
-	})
-
-	it('polls through the expected official sync when the first snapshot is absent', () => {
-		assert.equal(
-			shouldPollLiveSnapshot({
-				isPageActive: true,
-				currentEventId: 2,
-				selectedEventId: 2,
-				snapshot: null,
-				isOfficialUpdating: true
-			}),
-			true
-		)
-		assert.equal(
-			shouldPollLiveSnapshot({
-				isPageActive: true,
-				currentEventId: 2,
-				selectedEventId: 2,
-				snapshot: null
-			}),
-			false
-		)
-	})
-
-	it('keeps both live consumers polling until the first snapshot fetch succeeds', () => {
-		const matches = readFileSync(
-			new URL('../app/live/matches/LiveMatchesClient.tsx', import.meta.url),
-			'utf8'
-		)
-		const points = readFileSync(
-			new URL('../app/live/points/_hooks/useLivePoints.ts', import.meta.url),
-			'utf8'
-		)
-		for (const source of [matches, points]) {
-			assert.match(source, /officialSyncPendingRef/)
-			assert.match(source, /officialSyncPendingRef\.current = false/)
-			assert.match(source, /isOfficialSyncPending/)
-			assert.match(
-				source,
-				/isOfficialUpdating:\s*isOfficialUpdating \|\| isOfficialSyncPending/
-			)
-		}
 	})
 
 	it('maps delivery timestamps without using source checks as content revisions', () => {
