@@ -31,74 +31,37 @@ forwarding identity fall back to the socket address for direct DNSPod traffic.
    GraphQL blue/green selector: the installer creates the blue and green
    upstream files, `/etc/nginx/snippets/letletme-graphql-active.conf`, the
    allowlisted switch helper, and `/var/lib/letletme-graphql/active-slot`.
-   The Nginx `http` block must include that active selector exactly once. On a
-   fresh host, install the tracked loader under `conf.d`; on an existing host,
-   retain an existing exact include and do not add a duplicate upstream:
-
-   ```sh
-   if ! sudo grep -RqsF \
-     'include /etc/nginx/snippets/letletme-graphql-active.conf;' \
-     /etc/nginx/nginx.conf /etc/nginx/conf.d; then
-     sudo install -o root -g root -m 0644 \
-       ops/overseas/nginx/letletme-graphql-active-loader.conf \
-       /etc/nginx/conf.d/letletme-graphql-active-loader.conf
-   fi
-   ```
-
-   Export the exact accepted GraphQL V2 release SHA. Stop before staging this
-   site unless the selector identity and that selected backend both pass while
-   holding the VPS Ops slot lock:
+1. Deploy the accepted Web release before activating this ingress. The Web
+   `/api/graphql` route must remain in front of GraphQL because it creates the
+   signed ingress envelope. In production, both that route and RSC reads use
+   `https://api.letletme.top/graphql`; absent or fixed `4000`/`4002`
+   `GRAPHQL_ENDPOINT` values are normalized to this canonical active-selector
+   URL.
+2. From the accepted Web checkout, export the exact Web and GraphQL V2 SHAs and
+   run the tracked activation command. It acquires the VPS Ops slot lock
+   exclusively before inspecting the selector and does not release it until
+   after file installation, `nginx -t`, reload, direct readiness, exact Web
+   `/healthz` identity, and the post-reload Web `/api/graphql` V2 probe:
 
    ```sh
    export EXPECTED_GRAPHQL_SHA=<exact-accepted-v2-sha>
-   sudo test -f /var/lib/letletme-graphql/switch-slot.lock
+   export EXPECTED_WEB_SHA=<exact-accepted-web-sha>
    sudo env EXPECTED_GRAPHQL_SHA="$EXPECTED_GRAPHQL_SHA" \
-     flock -s /var/lib/letletme-graphql/switch-slot.lock \
-     bash -eu -o pipefail -c '
-       if [[ ! "$EXPECTED_GRAPHQL_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-         echo "EXPECTED_GRAPHQL_SHA must be exactly 40 lowercase hex characters" >&2
-         exit 1
-       fi
-       test -L /etc/nginx/snippets/letletme-graphql-active.conf
-       test -x /usr/local/sbin/letletme-graphql-switch-slot
-       test -f /var/lib/letletme-graphql/active-slot
-       active_slot=$(tr -d "[:space:]" < /var/lib/letletme-graphql/active-slot)
-       case "$active_slot" in
-         blue) active_port=4000 ;;
-         green) active_port=4002 ;;
-         *) echo "invalid GraphQL active-slot state" >&2; exit 1 ;;
-       esac
-       active_target=$(readlink -- /etc/nginx/snippets/letletme-graphql-active.conf)
-       test "$active_target" = "/etc/nginx/snippets/letletme-graphql.$active_slot.conf"
-       nginx -T 2>&1 | grep -q "upstream letletme_graphql_active"
-       curl --fail --silent --show-error --max-time 10 \
-         "http://127.0.0.1:$active_port/health/deploy" |
-         python3 -c "
-import json, os, sys
-payload = json.load(sys.stdin)
-expected = os.environ[\"EXPECTED_GRAPHQL_SHA\"]
-if payload.get(\"status\") != \"ok\":
-    raise SystemExit(\"selected GraphQL slot is not deploy-ready\")
-if payload.get(\"contractVersion\") != \"live-points-v2\":
-    raise SystemExit(\"selected GraphQL slot is not the V2 contract\")
-if payload.get(\"deploySha\") != expected:
-    raise SystemExit(\"selected GraphQL slot release identity does not match\")
-"
-     '
+     EXPECTED_WEB_SHA="$EXPECTED_WEB_SHA" \
+     ops/overseas/activate-api-ingress.sh
    ```
 
-   Do not recreate a fixed-port upstream in this repository: that would bypass
-   the atomic slot authority and could expose the retired GraphQL contract.
-1. Install `nginx/letletme-client-ip.conf` under `/etc/nginx/conf.d`, then
-   install `nginx/letletme-data.conf` as the canonical enabled API/Data site.
-   It explicitly owns `api.letletme.top`, `pop.letletme.top`, and the default
-   listeners; this prevents another site from capturing API traffic because
-   of include order.
-2. Install `nginx/hermes-direct.conf` as the separate
-   `/etc/nginx/sites-enabled/zz-hermes-direct` site.
-3. Run `nginx -t`, reload Nginx, then verify raw `/graphql` still reaches the
-   GraphQL service and Web `/api/graphql` still succeeds before continuing.
-   Confirm all existing containers remain healthy.
+   The command reads `nginx -T` to count the selector include across every
+   effective Nginx include path, including `sites-enabled`; it installs the
+   tracked `conf.d` loader only when the count is zero and rejects duplicates.
+   It also parses the selected upstream file and requires its actual endpoint
+   to equal `127.0.0.1:4000` for blue or `127.0.0.1:4002` for green before any
+   reload. Do not recreate a fixed-port Web or Nginx upstream: that bypasses
+   atomic slot authority and can expose the retired GraphQL contract.
+
+3. Confirm all existing containers remain healthy. The activation command
+   proves the canonical API/Data site, Hermes site, and selector atomically; do
+   not repeat their installation or reload Nginx outside its lock.
 4. With live DNS still pointing at Tunnel, use `curl --resolve` against
    `43.163.91.9`. Until the certificate is expanded, use `-k` only for this
    isolated direct-origin check.
