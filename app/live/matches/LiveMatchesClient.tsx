@@ -24,6 +24,7 @@ import {
 	shouldPollLiveSnapshot
 } from '@/lib/live-refresh'
 import {
+	canReplaceLiveMatchesLkg,
 	getLiveMatchesSnapshot,
 	getPreferredLiveMatchesTab
 } from '@/lib/live-matches'
@@ -174,6 +175,11 @@ export function LiveMatchesClient({
 						}
 					))
 				if (!mountedRef.current) return
+				const replaceablePublication = canReplaceLiveMatchesLkg(data)
+				if (!replaceablePublication && hasLastGoodData.current) {
+					setError(t('refreshFailed'))
+					return
+				}
 				const lifecycleCurrentEventId =
 					data.currentEventId ??
 					eventIds?.currentEventId ??
@@ -198,7 +204,7 @@ export function LiveMatchesClient({
 				acceptSnapshot(
 					nextSelectedEventId === lifecycleCurrentEventId ? data.snapshot : null
 				)
-				hasLastGoodData.current = true
+				hasLastGoodData.current = replaceablePublication
 
 				if (!hasUserSelectedTab.current && !hasSavedTabPreference.current) {
 					setActiveTab(getPreferredLiveMatchesTab(mappedMatches))

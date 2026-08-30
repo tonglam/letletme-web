@@ -6,7 +6,10 @@ import type {
 	LiveMatchdaySnapshot
 } from '../lib/graphql/operations/live'
 import {
+	canReplaceLiveMatchesLkg,
 	getLiveMatchesSnapshot,
+	type QueryExecutor,
+	type QueryExecutorOptions,
 	transformCoreFixturesToMatches,
 	transformLiveMatchdayV2,
 	validateLiveMatchdayV2
@@ -124,17 +127,25 @@ const response = (
 describe('live matchday V2 publication', () => {
 	it('projects embedded players without a fixture detail fan-out', async () => {
 		const calls: string[] = []
+		const timeouts: Array<number | undefined> = []
+		const executor: QueryExecutor = async <T>(
+			query: string,
+			_variables?: Record<string, unknown>,
+			options?: QueryExecutorOptions
+		): Promise<T> => {
+			calls.push(query)
+			timeouts.push(options?.timeoutMs)
+			return response() as T
+		}
 		const data = await getLiveMatchesSnapshot(
 			null,
-			async <T>(query: string): Promise<T> => {
-				calls.push(query)
-				return response() as T
-			}
+			executor
 		)
 
 		assert.equal(calls.length, 1)
 		assert.match(calls[0] ?? '', /liveMatchday\(eventId:/)
 		assert.doesNotMatch(calls[0] ?? '', /liveFixturePlayers|eventLive\(/)
+		assert.deepEqual(timeouts, [5_000])
 		assert.equal(data.matches.length, 1)
 		assert.equal(data.matches[0]?.homeTeam.players[0]?.player, 'Home Player')
 		assert.equal(data.matches[0]?.homeTeam.players[0]?.minutes, 33)
@@ -178,6 +189,24 @@ describe('live matchday V2 publication', () => {
 		assert.equal(data.currentEventId, 33)
 		assert.equal(data.dataAvailability, 'UNAVAILABLE')
 		assert.equal(data.snapshot, null)
+		assert.equal(canReplaceLiveMatchesLkg(data), false)
+	})
+
+	it('allows only a complete publication to replace the same-event browser LKG', async () => {
+		const ready = await getLiveMatchesSnapshot(
+			33,
+			async <T>(): Promise<T> => response() as T,
+			33
+		)
+		const unavailable = await getLiveMatchesSnapshot(
+			33,
+			async <T>(): Promise<T> =>
+				response({ availability: 'UNAVAILABLE', snapshot: null }) as T,
+			33
+		)
+
+		assert.equal(canReplaceLiveMatchesLkg(ready), true)
+		assert.equal(canReplaceLiveMatchesLkg(unavailable), false)
 	})
 
 	it('transforms a V2 snapshot directly', () => {

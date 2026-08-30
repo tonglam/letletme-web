@@ -21,9 +21,10 @@ import { executeQuery } from '@/lib/graphql-client'
 import { getCurrentSeasonKey } from '@/lib/season'
 import type { Match, PlayerStat } from '@/types/match'
 
-type QueryExecutorOptions = {
+export type QueryExecutorOptions = {
 	cache?: RequestCache
 	signal?: AbortSignal
+	timeoutMs?: number
 	handledErrorCodes?: readonly string[]
 	suppressErrorLog?: boolean
 }
@@ -310,7 +311,7 @@ export async function loadLiveMatchdayV2(
 	const payload = await executor<LiveMatchdayV2Payload>(
 		GET_LIVE_MATCHDAY,
 		{ eventId: eventId ?? null },
-		{ cache: 'no-store' }
+		{ cache: 'no-store', timeoutMs: 5_000 }
 	)
 	return validateLiveMatchdayV2(payload)
 }
@@ -432,6 +433,16 @@ export interface LiveMatchesLoadOptions {
 	/** Browser refreshes use the V2 publication GET route. */
 	preferHttp?: boolean
 	signal?: AbortSignal
+}
+
+/**
+ * Only a complete same-event V2 publication may replace a browser LKG.
+ * UNAVAILABLE is a delivery observation, not an empty successful matchday.
+ */
+export function canReplaceLiveMatchesLkg(
+	value: Pick<LiveMatchesSnapshot, 'snapshot' | 'dataAvailability'>
+): boolean {
+	return value.snapshot !== null && value.dataAvailability !== 'UNAVAILABLE'
 }
 
 const validEventId = (value: unknown): number | null =>
