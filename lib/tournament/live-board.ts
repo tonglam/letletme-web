@@ -188,7 +188,7 @@ const validateScore = (
 	} else {
 		if (!['FRESH', 'STALE', 'DEGRADED', 'FINAL', 'UNAVAILABLE'].includes(String(value.delivery.state)))
 			missing.push(`${path}.delivery.state`)
-		if (!['REDIS_CURRENT', 'REDIS_PREVIOUS', 'PROCESS_LKG', 'POSTGRES_CHECKPOINT', 'FINAL_RESULT'].includes(String(value.delivery.servedFrom)))
+		if (!['REDIS_CURRENT', 'REDIS_PREVIOUS', 'PROCESS_LKG', 'POSTGRES_CHECKPOINT', 'FINAL_RESULT', 'UNAVAILABLE'].includes(String(value.delivery.servedFrom)))
 			missing.push(`${path}.delivery.servedFrom`)
 		if (!isStringArray(value.delivery.reasonCodes))
 			missing.push(`${path}.delivery.reasonCodes`)
@@ -288,7 +288,7 @@ export function parseEntryLiveCompetitionBoardPage(
 	}
 	if (isRecord(root.delivery)) {
 		if (!['FRESH', 'STALE', 'DEGRADED', 'FINAL', 'UNAVAILABLE'].includes(String(root.delivery.state))) missing.push('delivery.state')
-		if (!['REDIS_CURRENT', 'REDIS_PREVIOUS', 'PROCESS_LKG', 'POSTGRES_CHECKPOINT', 'FINAL_RESULT'].includes(String(root.delivery.servedFrom))) missing.push('delivery.servedFrom')
+		if (!['REDIS_CURRENT', 'REDIS_PREVIOUS', 'PROCESS_LKG', 'POSTGRES_CHECKPOINT', 'FINAL_RESULT', 'UNAVAILABLE'].includes(String(root.delivery.servedFrom))) missing.push('delivery.servedFrom')
 		if (!isStringArray(root.delivery.reasonCodes)) missing.push('delivery.reasonCodes')
 	}
 	if (isRecord(root.revisions)) {

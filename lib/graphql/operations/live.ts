@@ -352,6 +352,7 @@ export interface LiveDelivery {
 		| 'PROCESS_LKG'
 		| 'POSTGRES_CHECKPOINT'
 		| 'FINAL_RESULT'
+		| 'UNAVAILABLE'
 	reasonCodes: string[]
 }
 
@@ -727,6 +728,7 @@ export type LiveSnapshotSource =
 	| 'POSTGRES_CHECKPOINT'
 	| 'PROCESS_LKG'
 	| 'FINAL_RESULT'
+	| 'UNAVAILABLE'
 
 export type LiveWindowState =
 	| 'PRESEASON'
