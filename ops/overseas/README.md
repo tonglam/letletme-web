@@ -25,6 +25,24 @@ forwarding identity fall back to the socket address for direct DNSPod traffic.
 
 ## Staging without traffic changes
 
+0. Install the accepted [`letletme-vps-ops`](https://github.com/tonglam/letletme-vps-ops)
+   release with its root-owned `bin/install-root.sh --expected-sha=<exact-sha>`
+   entrypoint before installing this site. VPS Ops is the sole owner of the
+   GraphQL blue/green selector: the installer creates the blue and green
+   upstream files, `/etc/nginx/snippets/letletme-graphql-active.conf`, the
+   allowlisted switch helper, and `/var/lib/letletme-graphql/active-slot`.
+   The Nginx `http` block must include that active selector exactly once. Stop
+   before staging this site unless all of these checks succeed:
+
+   ```sh
+   sudo test -L /etc/nginx/snippets/letletme-graphql-active.conf
+   sudo test -x /usr/local/sbin/letletme-graphql-switch-slot
+   sudo test -f /var/lib/letletme-graphql/active-slot
+   sudo nginx -T 2>&1 | grep -q 'upstream letletme_graphql_active'
+   ```
+
+   Do not recreate a fixed-port upstream in this repository: that would bypass
+   the atomic slot authority and could expose the retired GraphQL contract.
 1. Install `nginx/letletme-client-ip.conf` under `/etc/nginx/conf.d`, then
    install `nginx/letletme-data.conf` as the canonical enabled API/Data site.
    It explicitly owns `api.letletme.top`, `pop.letletme.top`, and the default
