@@ -45,13 +45,46 @@ forwarding identity fall back to the socket address for direct DNSPod traffic.
    fi
    ```
 
-   Stop before staging this site unless all of these checks succeed:
+   Export the exact accepted GraphQL V2 release SHA. Stop before staging this
+   site unless the selector identity and that selected backend both pass while
+   holding the VPS Ops slot lock:
 
    ```sh
-   sudo test -L /etc/nginx/snippets/letletme-graphql-active.conf
-   sudo test -x /usr/local/sbin/letletme-graphql-switch-slot
-   sudo test -f /var/lib/letletme-graphql/active-slot
-   sudo nginx -T 2>&1 | grep -q 'upstream letletme_graphql_active'
+   export EXPECTED_GRAPHQL_SHA=<exact-accepted-v2-sha>
+   sudo test -f /var/lib/letletme-graphql/switch-slot.lock
+   sudo env EXPECTED_GRAPHQL_SHA="$EXPECTED_GRAPHQL_SHA" \
+     flock -s /var/lib/letletme-graphql/switch-slot.lock \
+     bash -eu -o pipefail -c '
+       if [[ ! "$EXPECTED_GRAPHQL_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+         echo "EXPECTED_GRAPHQL_SHA must be exactly 40 lowercase hex characters" >&2
+         exit 1
+       fi
+       test -L /etc/nginx/snippets/letletme-graphql-active.conf
+       test -x /usr/local/sbin/letletme-graphql-switch-slot
+       test -f /var/lib/letletme-graphql/active-slot
+       active_slot=$(tr -d "[:space:]" < /var/lib/letletme-graphql/active-slot)
+       case "$active_slot" in
+         blue) active_port=4000 ;;
+         green) active_port=4002 ;;
+         *) echo "invalid GraphQL active-slot state" >&2; exit 1 ;;
+       esac
+       active_target=$(readlink -- /etc/nginx/snippets/letletme-graphql-active.conf)
+       test "$active_target" = "/etc/nginx/snippets/letletme-graphql.$active_slot.conf"
+       nginx -T 2>&1 | grep -q "upstream letletme_graphql_active"
+       curl --fail --silent --show-error --max-time 10 \
+         "http://127.0.0.1:$active_port/health/deploy" |
+         python3 -c "
+import json, os, sys
+payload = json.load(sys.stdin)
+expected = os.environ[\"EXPECTED_GRAPHQL_SHA\"]
+if payload.get(\"status\") != \"ok\":
+    raise SystemExit(\"selected GraphQL slot is not deploy-ready\")
+if payload.get(\"contractVersion\") != \"live-points-v2\":
+    raise SystemExit(\"selected GraphQL slot is not the V2 contract\")
+if payload.get(\"deploySha\") != expected:
+    raise SystemExit(\"selected GraphQL slot release identity does not match\")
+"
+     '
    ```
 
    Do not recreate a fixed-port upstream in this repository: that would bypass
