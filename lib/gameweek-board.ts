@@ -73,9 +73,19 @@ export function resolveGameweekDisplayState(
 	snapshotState: LiveSnapshotState | null | undefined,
 	event: GameweekBoardEvent | null | undefined,
 ): GameweekDisplayState {
-	if (snapshotState === 'LIVE') return 'provisional'
-	if (snapshotState === 'SETTLED') return 'settled'
-	if (snapshotState === 'SCHEDULED') return 'scheduled'
+	if (
+		snapshotState === 'LIVE_ACTIVE' ||
+		snapshotState === 'BETWEEN_FIXTURES' ||
+		snapshotState === 'DAY_SETTLING' ||
+		snapshotState === 'GW_REVIEW'
+	) return 'provisional'
+	if (snapshotState === 'FINALIZED') return 'settled'
+	if (
+		snapshotState === 'PRE_DEADLINE' ||
+		snapshotState === 'PICKS_WAIT' ||
+		snapshotState === 'PICKS_PROBE' ||
+		snapshotState === 'PICKS_SYNC'
+	) return 'scheduled'
 	if (event?.finished) return 'settled'
 	if (event?.isNext) return 'scheduled'
 	return null

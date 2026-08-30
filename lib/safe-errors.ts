@@ -66,8 +66,11 @@ export function publicGraphQLRequestMessage(
 	) {
 		return 'The request was invalid.'
 	}
-	if (code === 'LIVE_REVISION_GONE') {
+	if (code === 'LIVE_SCORE_REVISION_GONE') {
 		return 'The live snapshot is no longer available.'
+	}
+	if (code === 'CLIENT_UPGRADE_REQUIRED') {
+		return 'Please update the app to view Live Points.'
 	}
 	return 'The data service is unavailable.'
 }

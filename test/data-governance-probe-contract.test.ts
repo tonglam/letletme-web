@@ -9,11 +9,11 @@ describe('data governance consumer probe contract', () => {
 	it('requires ready market evidence and a canonical, matching live revision', async () => {
 		const source = await read('lib/data-governance-probe.ts')
 		assert.match(source, /market\.status === 'READY'/)
-		assert.match(source, /if \(desk\.liveRevision === null\)/)
+		assert.match(source, /if \(desk\.scoreCoreRevision === null\)/)
 		assert.match(source, /desk\.season !== season/)
 		assert.doesNotMatch(
 			source,
-			/revision\(desk\.liveRevision \?\? desk\.coreRevision\)/
+			/revision\(desk\.scoreCoreRevision \?\? desk\.coreRevision\)/
 		)
 	})
 

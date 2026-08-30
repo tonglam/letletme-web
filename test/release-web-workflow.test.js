@@ -33,9 +33,12 @@ test('Vercel CI uses the scoped project environment without relinking', () => {
 		'VERCEL_ORG_ID and VERCEL_PROJECT_ID must replace interactive project linking in CI'
 	)
 	const vercelCommands = extractVercelCommands(workflow)
-	assert.equal(vercelCommands.length, 4, 'the release must contain exactly four Vercel commands')
-	for (const command of ['deploy', 'inspect', 'curl', 'promote']) {
-		const matches = vercelCommands.filter((line) =>
+	assert.ok(
+		vercelCommands.length >= 4,
+		'the release must contain the candidate deploy, inspect, health curl, and promote commands'
+	)
+	for (const command of ['deploy', 'inspect', 'promote']) {
+		const matches = vercelCommands.filter(line =>
 			line.startsWith(`npx --yes "vercel@\${VERCEL_CLI_VERSION}" ${command} `)
 		)
 		assert.equal(matches.length, 1, `${command} must appear exactly once`)
@@ -45,7 +48,23 @@ test('Vercel CI uses the scoped project environment without relinking', () => {
 			`${command} must use the restricted production token explicitly`
 		)
 	}
-	const promoteCommand = vercelCommands.find((line) =>
+	const curlCommands = vercelCommands.filter(line =>
+		line.startsWith('npx --yes "vercel@${VERCEL_CLI_VERSION}" curl ')
+	)
+	assert.ok(curlCommands.length >= 1, 'the candidate health curl must exist')
+	for (const command of curlCommands) {
+		assert.match(
+			command,
+			/(?:^|\s)--token "\$VERCEL_TOKEN"(?:\s|$)/,
+			'candidate curl must use the restricted production token explicitly'
+		)
+		assert.match(
+			command,
+			/(?:^|\s)--deployment "\$candidate_url"(?:\s|$)/,
+			'candidate curl must target the staged deployment'
+		)
+	}
+	const promoteCommand = vercelCommands.find(line =>
 		line.startsWith('npx --yes "vercel@${VERCEL_CLI_VERSION}" promote ')
 	)
 	assert.match(
@@ -56,7 +75,7 @@ test('Vercel CI uses the scoped project environment without relinking', () => {
 })
 
 test('Vercel candidate uses a remote unaliased Production build', () => {
-	const [deployCommand] = extractVercelCommands(workflow).filter((line) =>
+	const [deployCommand] = extractVercelCommands(workflow).filter(line =>
 		line.startsWith('npx --yes "vercel@${VERCEL_CLI_VERSION}" deploy ')
 	)
 
@@ -83,7 +102,10 @@ test('Vercel candidate uses a remote unaliased Production build', () => {
 	)
 	assert.match(deployCommand, /(?:^|\s)--meta "gitSha=\$RELEASE_SHA"(?:\s|$)/)
 	assert.doesNotMatch(deployCommand, /(?:^|\s)--prebuilt(?:\s|$)/)
-	assert.doesNotMatch(workflow, /vercel@\$\{VERCEL_CLI_VERSION\}" (?:pull|build)(?:\s|\\)/)
+	assert.doesNotMatch(
+		workflow,
+		/vercel@\$\{VERCEL_CLI_VERSION\}" (?:pull|build)(?:\s|\\)/
+	)
 })
 
 test('signed Tencent release archive carries the same public live flag', () => {
@@ -103,10 +125,10 @@ test('signed Tencent release archive carries the same public live flag', () => {
 
 test('Vercel candidate reaches READY and passes protected health verification before routing changes', () => {
 	const commands = extractVercelCommands(workflow)
-	const inspectCommand = commands.find((line) =>
+	const inspectCommand = commands.find(line =>
 		line.startsWith('npx --yes "vercel@${VERCEL_CLI_VERSION}" inspect ')
 	)
-	const curlCommand = commands.find((line) =>
+	const curlCommand = commands.find(line =>
 		line.startsWith('npx --yes "vercel@${VERCEL_CLI_VERSION}" curl ')
 	)
 
@@ -120,8 +142,12 @@ test('Vercel candidate reaches READY and passes protected health verification be
 	assert.match(workflow, /value\.release !== process\.env\.RELEASE_SHA/)
 
 	const readyCheck = workflow.indexOf('value.readyState !== "READY"')
-	const healthCheck = workflow.indexOf('value.release !== process.env.RELEASE_SHA')
-	const routeChange = workflow.indexOf('node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null')
+	const healthCheck = workflow.indexOf(
+		'value.release !== process.env.RELEASE_SHA'
+	)
+	const routeChange = workflow.indexOf(
+		'node ops/release/edgeone-mode.mjs --mode all-vercel >/dev/null'
+	)
 	assert.ok(readyCheck >= 0 && readyCheck < routeChange)
 	assert.ok(healthCheck >= 0 && healthCheck < routeChange)
 	assert.doesNotMatch(

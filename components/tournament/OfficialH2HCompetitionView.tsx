@@ -20,7 +20,7 @@ import {
 	type TournamentOfficialH2H,
 	type TournamentOfficialH2HResponse
 } from '@/lib/graphql/operations/tournaments'
-import { traceableOfficialH2HScore } from '@/lib/live-manager-score'
+import { traceableH2HScore } from '@/lib/live-score-v2'
 import { shouldShowOfficialH2HStandings } from '@/lib/tournament/official-h2h-presentation'
 import { cn, formatInteger } from '@/lib/utils'
 import {
@@ -580,7 +580,7 @@ export function OfficialH2HCompetitionView({
 		return () => window.clearInterval(timer)
 	}, [isCurrentEvent, isPageActive, refresh])
 
-	const hasTraceableScore = traceableOfficialH2HScore(snapshot)
+	const hasTraceableScore = traceableH2HScore(snapshot)
 	const standings = useMemo(
 		() =>
 			hasTraceableScore

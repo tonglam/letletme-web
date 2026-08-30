@@ -1,5 +1,5 @@
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
-import { traceableOfficialManagerScore } from '@/lib/live-manager-score'
+import { traceableLiveScore } from '@/lib/live-score-v2'
 import type { Player, PlayerBreakdownStat } from '@/types/player'
 import { deriveLiveAutoSubProjection } from './live-auto-subs'
 
@@ -321,7 +321,7 @@ export function mapLiveDataToPlayers(
 }
 
 export function deriveLiveTeamStats(live: LiveCalcData) {
-	const score = traceableOfficialManagerScore(live.score)
+	const score = traceableLiveScore(live.score)
 	const autoSubProjection = deriveLiveAutoSubProjection(live)
 	const activePlayerIds = new Set(autoSubProjection.activePlayerIds)
 	const startingPicks = live.pickList.filter(pick =>

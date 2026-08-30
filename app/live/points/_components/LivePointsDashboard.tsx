@@ -18,9 +18,9 @@ import type {
 } from '@/lib/graphql/operations/entries'
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
 import {
-	liveManagerScoreAuthorityLabel,
-	traceableOfficialManagerScore
-} from '@/lib/live-manager-score'
+	liveScoreAuthorityLabel,
+	traceableLiveScore
+} from '@/lib/live-score-v2'
 import { cn } from '@/lib/utils'
 import type { Player } from '@/types/player'
 import type { PlayerDetail } from '@/types/player-detail'
@@ -134,12 +134,15 @@ export function LivePointsDashboard({
 		)
 	})()
 	const gameweek = selectedGameweek ?? liveData?.event ?? currentGameweek
-	const officialScore = traceableOfficialManagerScore(liveData?.score)
+	const officialScore = traceableLiveScore(liveData?.score)
 	const officialEventPoints = officialScore?.eventPoints ?? null
 	const officialTotalPoints =
 		officialScore?.totalScope === 'OVERALL' ? officialScore.totalPoints : null
 	const lastUpdatedAt =
-		officialScore?.checkedAt ?? liveData?.snapshot?.checkedAt ?? null
+		officialScore?.times.contentUpdatedAt ??
+		liveData?.snapshot?.times?.contentUpdatedAt ??
+		liveData?.score?.times.contentUpdatedAt ??
+		null
 	const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string | null>(null)
 	useEffect(() => {
 		if (!lastUpdatedAt) {
@@ -200,7 +203,7 @@ export function LivePointsDashboard({
 	}
 	const showLiveOverallRank = overall != null && gameweek === currentGameweek
 	const officialOverallRank =
-		officialScore?.overallRank ?? overall?.overallRank ?? null
+		liveData?.rank?.overallRank ?? overall?.overallRank ?? null
 	const pitchHeaderStats = liveData
 		? {
 				eyebrow: showLiveOverallRank

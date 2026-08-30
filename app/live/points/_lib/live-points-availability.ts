@@ -1,14 +1,7 @@
 import type { LiveCalcData } from '@/lib/graphql/operations/live'
 
 export type LivePointsPayloadState =
-	'READY' | 'PENDING_SYNC' | 'LINEUP_UNAVAILABLE' | 'NO_DATA'
-
-const unavailableReasonCodes = new Set([
-	'UPSTREAM_UNAVAILABLE',
-	'UPSTREAM_RATE_LIMITED',
-	'SOURCE_TOO_OLD',
-	'SOURCE_SKEW'
-])
+	'READY' | 'PENDING_SYNC' | 'NO_DATA'
 
 /**
  * Classify an entry payload before rendering or scheduling another request.
@@ -20,32 +13,8 @@ export function resolveLivePointsPayloadState(
 ): LivePointsPayloadState {
 	if (live.pickList.length > 0) return 'READY'
 
-	if (
-		live.availability === 'LINEUP_UNAVAILABLE' ||
-		live.availability === 'READY'
-	) {
-		return 'LINEUP_UNAVAILABLE'
-	}
-
-	if (
-		live.availability === undefined &&
-		live.score?.reasonCodes.some(reason => unavailableReasonCodes.has(reason))
-	) {
-		return 'LINEUP_UNAVAILABLE'
-	}
-
-	if (live.availability === 'NO_PICKS' || live.availability === undefined) {
-		if (
-			live.score?.source === 'FPL_FINAL_RESULT' &&
-			live.score.state === 'FINAL'
-		) {
-			return 'NO_DATA'
-		}
-
-		if (!live.entryName?.trim() || live.score?.state === 'UNAVAILABLE') {
-			return 'PENDING_SYNC'
-		}
-	}
+	if (live.availability === 'PENDING') return 'PENDING_SYNC'
+	if (live.availability === 'NO_PICKS') return 'NO_DATA'
 
 	return 'NO_DATA'
 }

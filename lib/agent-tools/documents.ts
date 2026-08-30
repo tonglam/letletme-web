@@ -245,7 +245,7 @@ export const COMPETITION_AVAILABILITY_DOCUMENT = `
       season revision sourceCheckedAt currentEventId nextEventId nextDeadlineTime latestFinishedEventId
     }
     liveContext {
-      season coreRevision currentEventId liveRevision sourceCheckedAt
+      season coreRevision currentEventId scoreCoreRevision sourceCheckedAt
     }
   }
 `
@@ -259,7 +259,10 @@ export const COMPETITION_CONTEXT_DOCUMENT = `
   ) {
     coreEventContext { season revision sourceCheckedAt }
     liveSnapshot(eventId: $eventId) @include(if: $includeLive) {
-      season eventId revision state publishedAt checkedAt
+      season eventId state
+      revisions { scoreCore }
+      times { sourceCheckedAt contentUpdatedAt publishedAt }
+      delivery { state servedFrom reasonCodes }
     }
     tournament(tournamentId: $competitionId, entryId: $entryId) {
       id name creator adminEntryId leagueId leagueType sourceLeagueName rosterMode rosterSyncStatus
@@ -283,7 +286,10 @@ export const COMPETITION_DOCUMENT = `
   ) {
     coreEventContext { season revision sourceCheckedAt }
     liveSnapshot(eventId: $eventId) @include(if: $includeLive) {
-      season eventId revision state publishedAt checkedAt
+      season eventId state
+      revisions { scoreCore }
+      times { sourceCheckedAt contentUpdatedAt publishedAt }
+      delivery { state servedFrom reasonCodes }
     }
     tournament(tournamentId: $competitionId, entryId: $entryId) {
       id adminEntryId standingsReadyAt updatedAt

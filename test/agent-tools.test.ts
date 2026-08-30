@@ -778,10 +778,18 @@ test('competition cursors expire when the live standings publication changes', a
 		liveSnapshot: {
 			season: '2627',
 			eventId: 1,
-			revision,
-			state: 'LIVE',
-			publishedAt: '2026-08-20T00:00:00.000Z',
-			checkedAt: '2026-08-20T00:03:00.000Z'
+			state: 'LIVE_ACTIVE',
+			revisions: { scoreCore: revision },
+			times: {
+				sourceCheckedAt: '2026-08-20T00:03:00.000Z',
+				contentUpdatedAt: '2026-08-20T00:03:00.000Z',
+				publishedAt: '2026-08-20T00:00:00.000Z'
+			},
+			delivery: {
+				state: 'FRESH',
+				servedFrom: 'REDIS_CURRENT',
+				reasonCodes: []
+			}
 		},
 		tournament
 	})
@@ -791,7 +799,7 @@ test('competition cursors expire when the live standings publication changes', a
 			season: '2627',
 			coreRevision: 'core-7',
 			currentEventId: 1,
-			liveRevision: revision,
+			scoreCoreRevision: revision,
 			sourceCheckedAt: '2026-08-20T00:03:00.000Z'
 		}
 	})
@@ -865,7 +873,7 @@ test('preseason competitions return authorized metadata without unpublished resu
 						season: '2627',
 						coreRevision: 'core-7',
 						currentEventId: null,
-						liveRevision: null,
+						scoreCoreRevision: null,
 						sourceCheckedAt: null
 					}
 				}
@@ -905,7 +913,7 @@ test('current competitions wait for the actual live publication revision', async
 			season: '2627',
 			coreRevision: 'core-7',
 			currentEventId: 1,
-			liveRevision: null,
+			scoreCoreRevision: null,
 			sourceCheckedAt: null
 		}
 	]
@@ -997,7 +1005,7 @@ test('missing competition membership is denied without revealing existence', asy
 						season: '2627',
 						coreRevision: 'core-7',
 						currentEventId: 1,
-						liveRevision: '11',
+						scoreCoreRevision: '11',
 						sourceCheckedAt: '2026-08-20T00:03:00.000Z'
 					}
 				}
@@ -1008,8 +1016,18 @@ test('missing competition membership is denied without revealing existence', asy
 				liveSnapshot: {
 					season: '2627',
 					eventId: 1,
-					revision: '11',
-					checkedAt: '2026-08-20T00:03:00.000Z'
+					state: 'LIVE_ACTIVE',
+					revisions: { scoreCore: '11' },
+					times: {
+						sourceCheckedAt: '2026-08-20T00:03:00.000Z',
+						contentUpdatedAt: '2026-08-20T00:03:00.000Z',
+						publishedAt: '2026-08-20T00:03:00.000Z'
+					},
+					delivery: {
+						state: 'FRESH',
+						servedFrom: 'REDIS_CURRENT',
+						reasonCodes: []
+					}
 				},
 				tournament: null
 			}

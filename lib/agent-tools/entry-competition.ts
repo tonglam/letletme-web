@@ -149,7 +149,7 @@ const competitionKey = (
 		entryId,
 		season: core.season,
 		coreRevision: core.revision,
-		standingsRevision: liveSnapshot?.revision ?? null,
+		standingsRevision: liveSnapshot?.revisions.scoreCore ?? null,
 		tournamentUpdatedAt: tournament.updatedAt,
 		standingsReadyAt: tournament.standingsReadyAt
 	})
@@ -164,8 +164,10 @@ type CompetitionTournament = {
 type CompetitionLiveSnapshot = {
 	season: string
 	eventId: number
-	revision: string
-	checkedAt: string
+	state: string
+	revisions: { scoreCore: string }
+	times: { sourceCheckedAt: string; contentUpdatedAt: string; publishedAt: string }
+	delivery: { state: string; servedFrom: string; reasonCodes: string[] }
 } | null
 
 type CompetitionContext = {
@@ -178,7 +180,7 @@ type CompetitionLiveContext = {
 	season: string
 	coreRevision: string
 	currentEventId: number | null
-	liveRevision: string | null
+	scoreCoreRevision: string | null
 	sourceCheckedAt: string | null
 }
 
@@ -201,7 +203,7 @@ const hasPublishedLiveEvent = (
 	return (
 		core.currentEventId === eventId &&
 		live?.currentEventId === eventId &&
-		live.liveRevision !== null
+		live.scoreCoreRevision !== null
 	)
 }
 
@@ -242,11 +244,11 @@ const assertCurrentLiveRevision = (
 	eventId: number,
 	liveSnapshot: CompetitionLiveSnapshot | undefined
 ): void => {
-	const expected = availability.liveContext?.liveRevision ?? null
+	const expected = availability.liveContext?.scoreCoreRevision ?? null
 	if (
 		availability.coreEventContext.currentEventId === eventId &&
 		expected !== null &&
-		liveSnapshot?.revision !== expected
+		liveSnapshot?.revisions.scoreCore !== expected
 	) {
 		throw new AgentToolError(
 			'UPSTREAM_UNAVAILABLE',
@@ -384,6 +386,6 @@ export async function runCompetition(
 		coreRevisions(result.coreEventContext),
 		[],
 		{ nextCursor },
-		result.liveSnapshot?.checkedAt ?? result.coreEventContext.sourceCheckedAt
+		result.liveSnapshot?.times.sourceCheckedAt ?? result.coreEventContext.sourceCheckedAt
 	)
 }

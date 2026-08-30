@@ -42,7 +42,6 @@ import {
 	readLiveBoardLastGood,
 	resolveAnchoredGameweek,
 	resolveUrlGameweekSelection,
-	shouldRefreshLiveBoardManagerCoverage,
 	shouldAutoRefreshLiveBoardPage,
 	shouldSyncLiveBoardSearchInput,
 	writeLiveBoardLastGood,
@@ -133,10 +132,10 @@ const pageRows = (
 const boardFreshnessMarker = (
 	page: EntryLiveCompetitionBoardPage | null
 ): LiveBoardFreshnessMarker | null =>
-	page?.playerRevision
+	page?.scoreCoreRevision
 		? {
 				eventId: page.eventId,
-				revision: page.playerRevision
+				scoreCoreRevision: page.scoreCoreRevision
 			}
 		: null
 
@@ -168,7 +167,7 @@ const boardPartialMessage = (
 	}
 	if (
 		page.unavailableEntryCount > 0 ||
-		page.managerDataAvailability === 'UNAVAILABLE'
+		page.delivery.state === 'UNAVAILABLE'
 	) {
 		return messages.unavailable
 	}
@@ -1077,16 +1076,24 @@ export default function TournamentClient({
 			const boardPublicationChanged = liveBoardPublicationChanged(
 				accepted,
 				observedSnapshot
+					? {
+							eventId: observedSnapshot.eventId,
+							scoreCoreRevision: observedSnapshot.scoreCoreRevision ?? null
+						}
+					: null
 			)
-			const managerScoreDue = Boolean(
-				boardPage?.managerNextRefreshAt &&
-				Date.parse(boardPage.managerNextRefreshAt) <= Date.now()
+			const refreshDue = Boolean(
+				boardPage?.times.nextRefreshAt &&
+				Date.parse(boardPage.times.nextRefreshAt) <= Date.now()
 			)
-			const managerCoveragePending =
-				shouldRefreshLiveBoardManagerCoverage(boardPage)
+			const deliveryNeedsRefresh =
+				boardPage?.delivery.state === 'STALE' ||
+				boardPage?.delivery.state === 'DEGRADED' ||
+				boardPage?.coverageState === 'WARMING' ||
+				boardPage?.coverageState === 'PARTIAL'
 			if (
 				shouldAutoRefreshLiveBoardPage(boardPage?.page ?? null) &&
-				(boardPublicationChanged || managerScoreDue || managerCoveragePending)
+				(boardPublicationChanged || refreshDue || deliveryNeedsRefresh)
 			) {
 				await refresh()
 			}
@@ -1095,7 +1102,7 @@ export default function TournamentClient({
 		}
 	}, [boardPage, currentGameweek, entries.length, gameweekFromUrl, refresh, t])
 
-	const managerStatus = useMemo(() => {
+	const liveStatus = useMemo(() => {
 		if (!boardPage) return t('scoreConfirming')
 		if (showingLastGood) return t('showingLastGood')
 		if (boardPage.failedEntryCount > 0)
@@ -1110,15 +1117,15 @@ export default function TournamentClient({
 			boardPage.coverageState === 'PARTIAL'
 		)
 			return t('coverageWarming')
-		if (boardPage.managerDataAvailability === 'LAST_GOOD')
+		if (boardPage.delivery.state === 'DEGRADED')
 			return t('scoreOfficialDelayed')
 		if (
-			boardPage.managerDataAvailability === 'PARTIAL' ||
-			(boardPage.officialCoverage > 0 && boardPage.officialCoverage < 1)
+			boardPage.delivery.state === 'STALE' ||
+				(boardPage.officialCoverage > 0 && boardPage.officialCoverage < 1)
 		)
 			return t('scorePartiallyAvailable')
 		if (
-			boardPage.managerDataAvailability === 'UNAVAILABLE' ||
+			boardPage.delivery.state === 'UNAVAILABLE' ||
 			boardPage.officialCoverage === 0
 		)
 			return t('scoreOfficialUnavailable')
@@ -1149,7 +1156,7 @@ export default function TournamentClient({
 		return parts.join(' · ')
 	}, [boardPage, t])
 
-	const updatedAt = exactUpdatedAt(boardPage?.managerCheckedAt ?? null)
+	const updatedAt = exactUpdatedAt(boardPage?.times.contentUpdatedAt ?? null)
 	const visibleEntries = useMemo(
 		() => (contentScopeKey === scopeKey ? entries : []),
 		[contentScopeKey, entries, scopeKey]
@@ -1180,7 +1187,7 @@ export default function TournamentClient({
 						filteredEntries: boardPage.filteredEntries,
 						isLoadingMore: isLoadingMore || isRefreshing || isLoadingInitial,
 						onLoadMore: () => void loadMore(),
-						playerRevision: boardPage.playerRevision,
+							scoreCoreRevision: boardPage.scoreCoreRevision ?? '',
 						onRevisionGone: handleBoardRevisionGone
 					}
 				: undefined,
@@ -1333,7 +1340,7 @@ export default function TournamentClient({
 								<LiveAutoRefreshCountdown
 									enabled={autoRefreshEnabled}
 									onRefresh={autoRefresh}
-									nextRefreshAt={boardPage?.managerNextRefreshAt}
+									nextRefreshAt={boardPage?.times.nextRefreshAt}
 									renderLabel={seconds => t('nextRefresh', { seconds })}
 								/>
 								<Button
@@ -1356,7 +1363,7 @@ export default function TournamentClient({
 								</Button>
 							</div>
 							<p className="mt-2 text-right text-xs text-muted-foreground">
-								{managerStatus}
+								{liveStatus}
 								{updatedAt ? ` · ${t('lastUpdated', { time: updatedAt })}` : ''}
 							</p>
 							{boardCoverageSummary ? (
@@ -1476,7 +1483,7 @@ export default function TournamentClient({
 										<LiveCompetitionBoardFilters
 											tournamentId={Number(selectedTournament.id)}
 											eventId={selectedGameweek}
-											playerRevision={boardPage.playerRevision}
+										scoreCoreRevision={boardPage.scoreCoreRevision ?? ''}
 											value={queryState.filters}
 											disabled={isRefreshing || rateLimitSeconds > 0}
 											onApply={applyFilters}
