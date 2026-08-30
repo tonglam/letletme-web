@@ -1208,7 +1208,9 @@ const server = createServer((request, response) => {
 						source: 'REDIS_CURRENT',
 						revisions: liveRevisionVector('a'.repeat(64)),
 						times: liveTimes(),
-						delivery: liveDelivery(liveHydrationFixtureEnabled ? 'FRESH' : 'UNAVAILABLE'),
+						delivery: liveDelivery(
+							liveHydrationFixtureEnabled ? 'FRESH' : 'UNAVAILABLE'
+						),
 						stale: false
 					}
 				}
@@ -1238,44 +1240,27 @@ const server = createServer((request, response) => {
 						source: 'REDIS_CURRENT',
 						revisions: liveRevisionVector('a'.repeat(64)),
 						times: liveTimes(),
-						delivery: liveDelivery(liveHydrationFixtureEnabled ? 'FRESH' : 'UNAVAILABLE'),
+						delivery: liveDelivery(
+							liveHydrationFixtureEnabled ? 'FRESH' : 'UNAVAILABLE'
+						),
 						stale: false,
-						matches: liveHydrationFixtureEnabled
-							? [
-									{
-										fixtureId: match.matchId,
-										eventId: 33,
-										homeTeamId: match.homeTeamId,
-										homeTeamName: match.homeTeamName,
-										awayTeamId: match.awayTeamId,
-										awayTeamName: match.awayTeamName,
-										homeScore: match.homeScore,
-										awayScore: match.awayScore,
-										kickoffTime: match.kickoffTime,
-										minutes: match.minutes,
-										started: true,
-										finished: false
-									}
-								]
-							: [],
-						nextFixtures: liveHydrationFixtureEnabled
-							? []
-							: [
-									{
-										fixtureId: match.matchId,
-										eventId: 33,
-										homeTeamId: match.homeTeamId,
-										homeTeamName: match.homeTeamName,
-										awayTeamId: match.awayTeamId,
-										awayTeamName: match.awayTeamName,
-										homeScore: match.homeScore,
-										awayScore: match.awayScore,
-										kickoffTime: match.kickoffTime,
-										minutes: 0,
-										started: false,
-										finished: false
-									}
-								],
+						matches: [
+							{
+								fixtureId: match.matchId,
+								eventId: 33,
+								homeTeamId: match.homeTeamId,
+								homeTeamName: match.homeTeamName,
+								awayTeamId: match.awayTeamId,
+								awayTeamName: match.awayTeamName,
+								homeScore: match.homeScore,
+								awayScore: match.awayScore,
+								kickoffTime: match.kickoffTime,
+								minutes: liveHydrationFixtureEnabled ? match.minutes : 0,
+								started: liveHydrationFixtureEnabled,
+								finished: false
+							}
+						],
+						nextFixtures: [],
 						highlights: []
 					}
 				}
