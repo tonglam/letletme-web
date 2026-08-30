@@ -117,12 +117,13 @@ const validateScore = (
 		missing.push(path)
 		return
 	}
-	if (!isNonNegativeInteger(value.eventPoints)) missing.push(`${path}.eventPoints`)
+	if (!isInteger(value.eventPoints)) missing.push(`${path}.eventPoints`)
 	if (!isInteger(value.netEventPoints)) missing.push(`${path}.netEventPoints`)
 	if (!isNullableNumber(value.totalPoints)) missing.push(`${path}.totalPoints`)
 	if (value.totalScope !== 'OVERALL' && value.totalScope !== 'UNKNOWN')
 		missing.push(`${path}.totalScope`)
-	if (!isNonNegativeInteger(value.transferCost)) missing.push(`${path}.transferCost`)
+	if (!isNonNegativeInteger(value.transferCost))
+		missing.push(`${path}.transferCost`)
 	if (
 		value.source !== 'FPL_EVENT_LIVE' &&
 		value.source !== 'FPL_FINAL_RESULT' &&
@@ -186,9 +187,22 @@ const validateScore = (
 	if (!isRecord(value.delivery)) {
 		missing.push(`${path}.delivery`)
 	} else {
-		if (!['FRESH', 'STALE', 'DEGRADED', 'FINAL', 'UNAVAILABLE'].includes(String(value.delivery.state)))
+		if (
+			!['FRESH', 'STALE', 'DEGRADED', 'FINAL', 'UNAVAILABLE'].includes(
+				String(value.delivery.state)
+			)
+		)
 			missing.push(`${path}.delivery.state`)
-		if (!['REDIS_CURRENT', 'REDIS_PREVIOUS', 'PROCESS_LKG', 'POSTGRES_CHECKPOINT', 'FINAL_RESULT', 'UNAVAILABLE'].includes(String(value.delivery.servedFrom)))
+		if (
+			![
+				'REDIS_CURRENT',
+				'REDIS_PREVIOUS',
+				'PROCESS_LKG',
+				'POSTGRES_CHECKPOINT',
+				'FINAL_RESULT',
+				'UNAVAILABLE'
+			].includes(String(value.delivery.servedFrom))
+		)
 			missing.push(`${path}.delivery.servedFrom`)
 		if (!isStringArray(value.delivery.reasonCodes))
 			missing.push(`${path}.delivery.reasonCodes`)
@@ -246,15 +260,12 @@ export function parseEntryLiveCompetitionBoardPage(
 	]) {
 		if (!isInteger(root[field])) missing.push(field)
 	}
-	for (const field of [
-		'season',
-		'boardRevision',
-		'dataAvailability'
-	]) {
+	for (const field of ['season', 'boardRevision', 'dataAvailability']) {
 		if (typeof root[field] !== 'string' || root[field].length === 0)
 			missing.push(field)
 	}
-	if (!isNullableString(root.scoreCoreRevision)) missing.push('scoreCoreRevision')
+	if (!isNullableString(root.scoreCoreRevision))
+		missing.push('scoreCoreRevision')
 	for (const field of ['revisions', 'times', 'delivery']) {
 		if (!isRecord(root[field])) missing.push(field)
 	}
@@ -279,25 +290,66 @@ export function parseEntryLiveCompetitionBoardPage(
 		if (typeof root[field] !== 'boolean') missing.push(field)
 	}
 	if (isRecord(root.times)) {
-		for (const field of ['sourceCheckedAt', 'contentUpdatedAt', 'publishedAt', 'servedAt', 'staleAt']) {
-			if (!validDate(root.times[field]) || root.times[field] === null) missing.push(`times.${field}`)
+		for (const field of [
+			'sourceCheckedAt',
+			'contentUpdatedAt',
+			'publishedAt',
+			'servedAt',
+			'staleAt'
+		]) {
+			if (!validDate(root.times[field]) || root.times[field] === null)
+				missing.push(`times.${field}`)
 		}
 		for (const field of ['checkpointedAt', 'nextRefreshAt']) {
 			if (!validDate(root.times[field])) missing.push(`times.${field}`)
 		}
 	}
 	if (isRecord(root.delivery)) {
-		if (!['FRESH', 'STALE', 'DEGRADED', 'FINAL', 'UNAVAILABLE'].includes(String(root.delivery.state))) missing.push('delivery.state')
-		if (!['REDIS_CURRENT', 'REDIS_PREVIOUS', 'PROCESS_LKG', 'POSTGRES_CHECKPOINT', 'FINAL_RESULT', 'UNAVAILABLE'].includes(String(root.delivery.servedFrom))) missing.push('delivery.servedFrom')
-		if (!isStringArray(root.delivery.reasonCodes)) missing.push('delivery.reasonCodes')
+		if (
+			!['FRESH', 'STALE', 'DEGRADED', 'FINAL', 'UNAVAILABLE'].includes(
+				String(root.delivery.state)
+			)
+		)
+			missing.push('delivery.state')
+		if (
+			![
+				'REDIS_CURRENT',
+				'REDIS_PREVIOUS',
+				'PROCESS_LKG',
+				'POSTGRES_CHECKPOINT',
+				'FINAL_RESULT',
+				'UNAVAILABLE'
+			].includes(String(root.delivery.servedFrom))
+		)
+			missing.push('delivery.servedFrom')
+		if (!isStringArray(root.delivery.reasonCodes))
+			missing.push('delivery.reasonCodes')
 	}
 	if (isRecord(root.revisions)) {
-		for (const field of ['publicationId', 'lifecycle', 'fixtureIdentity', 'scoreCore', 'displayStats', 'explain', 'rules', 'algorithm', 'input']) {
-			if (!nonEmptyString(root.revisions[field])) missing.push(`revisions.${field}`)
+		for (const field of [
+			'publicationId',
+			'lifecycle',
+			'fixtureIdentity',
+			'scoreCore',
+			'displayStats',
+			'explain',
+			'rules',
+			'algorithm',
+			'input'
+		]) {
+			if (!nonEmptyString(root.revisions[field]))
+				missing.push(`revisions.${field}`)
 		}
-		if (!isNonNegativeInteger(root.revisions.generation)) missing.push('revisions.generation')
-		for (const field of ['picksBase', 'officialAdjustment', 'previousTotals', 'finalResult']) {
-			if (!isNullableString(root.revisions[field])) missing.push(`revisions.${field}`)
+		if (!isNonNegativeInteger(root.revisions.generation))
+			missing.push('revisions.generation')
+		for (const field of [
+			'picksBase',
+			'officialAdjustment',
+			'previousTotals',
+			'finalResult'
+		]) {
+			if (!isNullableString(root.revisions[field]))
+				missing.push(`revisions.${field}`)
 		}
 	}
 	if (
@@ -556,7 +608,7 @@ export const boardRowToTournamentEntry = (
 	gwPoints: row.score.eventPoints,
 	gwNetPoints: row.score.netEventPoints,
 	eventCost: row.score.transferCost,
-		overallRank: row.overallRank,
+	overallRank: row.overallRank,
 	livePoints: row.score.eventPoints,
 	totalPoints:
 		row.score.totalScope === 'OVERALL' ? row.score.totalPoints : null,
@@ -565,9 +617,9 @@ export const boardRowToTournamentEntry = (
 	teamValue: row.teamValue,
 	picks: [],
 	chips: chipFlags(row.chip),
-		stale:
-			row.score.delivery.state === 'STALE' ||
-			row.score.delivery.state === 'DEGRADED'
+	stale:
+		row.score.delivery.state === 'STALE' ||
+		row.score.delivery.state === 'DEGRADED'
 })
 
 const sleep = (milliseconds: number): Promise<void> =>
@@ -600,7 +652,7 @@ export async function fetchEntryLiveCompetitionBoard(
 					method: 'POST',
 					cache: 'no-store',
 					credentials: 'include',
-						headers: {
+					headers: {
 						'Content-Type': 'application/json',
 						Accept: 'application/json',
 						'X-LetLetMe-Contract': 'live-points-v2'

@@ -181,10 +181,7 @@ export const GET_MANAGEABLE_TOURNAMENTS_LIST = `
 
 export type EntryTournamentState = 'ACTIVE' | 'INACTIVE' | 'FINISHED'
 export type TournamentSetupStatus =
-	| 'PENDING'
-	| 'PROCESSING'
-	| 'READY'
-	| 'FAILED'
+	'PENDING' | 'PROCESSING' | 'READY' | 'FAILED'
 export type TournamentSetupPhase =
 	| 'QUEUED'
 	| 'SYNCING_ENTRIES'
@@ -802,27 +799,20 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_POINTS_SCORE_SUMMARY_FRAGMENT}
 	    entryLiveCompetitionsDesk(entryId: $entryId, selectedTournamentId: $selectedTournamentId, ref: $ref) {
 	      eventId
 	      scoreCoreRevision
-	      state
-	      windowState
-	      dataAvailability
-	      nextRefreshAt
-	      revisions {
-	        publicationId generation lifecycle fixtureIdentity scoreCore
-	        displayStats explain picksBase officialAdjustment previousTotals
-	        finalResult rules algorithm input
-	      }
-	      times {
-	        sourceCheckedAt contentUpdatedAt publishedAt checkpointedAt
-	        servedAt staleAt nextRefreshAt
-	      }
-	      delivery { state servedFrom reasonCodes }
-      selectedTournamentId
-      officialCoverage
+      state
+      windowState
+      dataAvailability
+      revisions {
+        publicationId generation lifecycle fixtureIdentity scoreCore
+        displayStats explain picksBase officialAdjustment previousTotals
+        finalResult rules algorithm input
+      }
+      times {
+        sourceCheckedAt contentUpdatedAt publishedAt nextRefreshAt
+      }
+      delivery { state servedFrom reasonCodes }
       unavailableEntryIds
-      partial
       failedEntryIds
-      deferredEntryCount
-      totalEntries
       board {
 		        entry
 		        entryName
@@ -831,8 +821,8 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_POINTS_SCORE_SUMMARY_FRAGMENT}
 		        bank
         chip
         score { ...LivePointsScoreSummaryFields }
-        rank { eventRank overallRank }
-	        played
+	        rank { overallRank }
+		        played
         toPlay
         captainName
         activeCaptain {

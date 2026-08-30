@@ -448,10 +448,7 @@ export default function TournamentDetailClient({
 	useEffect(() => {
 		rowsRef.current = rows
 	}, [rows])
-	const nextRefreshAt = useMemo(
-		() => getTournamentNextRefreshAt(rows),
-		[rows]
-	)
+	const nextRefreshAt = useMemo(() => getTournamentNextRefreshAt(rows), [rows])
 	const liveScoreStatus = useMemo(() => {
 		const states = rows
 			.map(row => row.score?.delivery.state)
@@ -716,11 +713,13 @@ export default function TournamentDetailClient({
 									scoreCoreRevision: batch.scoreCoreRevision,
 									state: (batch.windowState ??
 										batch.state) as LiveSnapshotStatus['state'],
-									windowState: batch.windowState as LiveSnapshotStatus['windowState'],
-									dataAvailability: batch.dataAvailability as LiveSnapshotStatus['dataAvailability'],
+									windowState:
+										batch.windowState as LiveSnapshotStatus['windowState'],
+									dataAvailability:
+										batch.dataAvailability as LiveSnapshotStatus['dataAvailability'],
 									publishedAt: batch.times?.publishedAt ?? null,
 									sourceCheckedAt: batch.times?.sourceCheckedAt ?? null,
-									nextRefreshAt: batch.nextRefreshAt ?? batch.times?.nextRefreshAt ?? null,
+									nextRefreshAt: batch.times?.nextRefreshAt ?? null,
 									revisions: batch.revisions ?? undefined,
 									times: batch.times ?? undefined,
 									delivery: batch.delivery ?? undefined
