@@ -86,6 +86,27 @@ describe('Live Points V2 web contract', () => {
 			}),
 			true
 		)
+		assert.equal(
+			liveSnapshotNeedsRefresh(
+				{
+					...accepted,
+					revisions: {
+						...score().revisions,
+						scoreCore: revision('a'),
+						picksBase: revision('p')
+					}
+				},
+				{
+					...accepted,
+					revisions: {
+						...score().revisions,
+						scoreCore: revision('a'),
+						picksBase: revision('q')
+					}
+				}
+			),
+			true
+		)
 	})
 
 	it('does not turn a due refresh deadline into a full Live Points reload', () => {

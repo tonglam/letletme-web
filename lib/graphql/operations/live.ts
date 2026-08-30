@@ -166,47 +166,29 @@ export const GET_LIVE_POINTS = `
         transferCost
         source
 		calculationMode
-		revisions {
-			publicationId
-			generation
-			lifecycle
-			fixtureIdentity
-			scoreCore
-			displayStats
-			explain
-			picksBase
-			officialAdjustment
-			previousTotals
-			finalResult
-			rules
-			algorithm
-			input
-		}
-		times {
-			sourceCheckedAt
-			contentUpdatedAt
-			publishedAt
-			checkpointedAt
-			servedAt
-			staleAt
-			nextRefreshAt
-		}
-		delivery { state servedFrom reasonCodes }
+			revisions {
+				scoreCore
+				picksBase
+				officialAdjustment
+				previousTotals
+				finalResult
+				input
 			}
-	      snapshot {
-		season
-		eventId
-		state
-		delivery { state servedFrom reasonCodes }
+			times {
+				sourceCheckedAt
+				contentUpdatedAt
+				publishedAt
+				nextRefreshAt
+			}
+			delivery { state }
+				}
+		      snapshot {
+			eventId
+			state
+		      }
+		      rank {
+			overallRank
 	      }
-	      rank {
-		eventRank
-		overallRank
-		leagueRank
-		revision
-		contentUpdatedAt
-		state
-      }
 	      captainName
       pickList {
         element
@@ -244,8 +226,7 @@ export const GET_LIVE_POINTS = `
         expectedAssists
 	        expectedGoalInvolvements
 	        expectedGoalsConceded
-	        inDreamTeam
-      }
+	      }
     }
   }
 `

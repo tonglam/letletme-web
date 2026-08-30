@@ -426,7 +426,7 @@ const liveBoardHasUsableLastGoodRows = (
 	const visibleRows = page.viewerRow
 		? [...page.rows, page.viewerRow]
 		: page.rows
-	if (page.dataAvailability === 'UNAVAILABLE') return visibleRows.length > 0
+	if (page.dataAvailability === 'UNAVAILABLE') return false
 	if (page.delivery.state === 'UNAVAILABLE' || page.officialCoverage <= 0)
 		return false
 	return visibleRows.some(

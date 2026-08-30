@@ -54,7 +54,10 @@ export function liveContextToSnapshot(
 		state: context.windowState,
 		publishedAt: context.publishedAt ?? null,
 		sourceCheckedAt: context.sourceCheckedAt ?? null,
-		nextRefreshAt: context.nextRefreshAt
+		nextRefreshAt: context.nextRefreshAt,
+		revisions: context.revisions,
+		times: context.times,
+		delivery: context.delivery
 	}
 }
 
@@ -112,7 +115,12 @@ export function liveSnapshotNeedsRefresh(
 	if (!accepted || !observed) return true
 	return (
 		accepted.eventId !== observed.eventId ||
-		accepted.scoreCoreRevision !== observed.scoreCoreRevision
+		accepted.scoreCoreRevision !== observed.scoreCoreRevision ||
+		accepted.revisions?.scoreCore !== observed.revisions?.scoreCore ||
+		accepted.revisions?.picksBase !== observed.revisions?.picksBase ||
+		accepted.revisions?.officialAdjustment !==
+			observed.revisions?.officialAdjustment ||
+		accepted.revisions?.finalResult !== observed.revisions?.finalResult
 	)
 }
 
