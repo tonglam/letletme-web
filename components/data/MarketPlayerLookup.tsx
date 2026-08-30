@@ -83,6 +83,10 @@ export function MarketPlayerLookup({
 	const revisionParam = marketRevisionParam(revision)
 
 	useEffect(() => {
+		setSelectedPlayer(seedPlayer ?? null)
+	}, [seedPlayer])
+
+	useEffect(() => {
 		const generation = ++searchGeneration.current
 		const controller = new AbortController()
 		if (!searchOpen || normalizedSearch.length < MIN_SEARCH_LENGTH) {
