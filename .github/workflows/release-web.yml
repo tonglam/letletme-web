@@ -236,6 +236,24 @@ jobs:
             if (value.status !== "ok" || value.origin !== "vercel") process.exit(1);
             if (value.release !== process.env.RELEASE_SHA) process.exit(1);
           '
+          if [[ "$WEB_MAINTENANCE_MODE" == true ]]; then
+            npx --yes "vercel@${VERCEL_CLI_VERSION}" curl /api/graphql \
+              --yes \
+              --deployment "$candidate_url" \
+              --token "$VERCEL_TOKEN" \
+              -- \
+              --silent \
+              --show-error \
+              --dump-header /tmp/vercel-maintenance-headers \
+              --output /tmp/vercel-maintenance-body
+            awk 'NR == 1 { gsub("\\r", "", $0); if ($2 != "503") exit 1 }' \
+              /tmp/vercel-maintenance-headers
+            node --input-type=module -e '
+              import fs from "node:fs";
+              const value = JSON.parse(fs.readFileSync("/tmp/vercel-maintenance-body", "utf8"));
+              if (value.code !== "MAINTENANCE_MODE") process.exit(1);
+            '
+          fi
           echo "candidate_url=${candidate_url#https://}" >> "$GITHUB_OUTPUT"
         id: vercel-candidate
 
