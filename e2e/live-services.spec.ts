@@ -215,7 +215,7 @@ test('live points enriches all fifteen picks through one bounded GraphQL root', 
 	expect(explainBatchRequests).toBe(1)
 })
 
-test('scheduled live points does not show a polling label and recovers manually', async ({
+test('official-sync live points auto-refreshes without a polling label', async ({
 	page
 }) => {
 	test.skip(
@@ -362,12 +362,12 @@ test('scheduled live points does not show a polling label and recovers manually'
 	).toBeVisible()
 	await expect(page.getByText(/Next refresh in \d+s/)).toHaveCount(0)
 
-	// A scheduled round is intentionally not auto-refreshed.  The user can
-	// still request a fresh snapshot explicitly when the round becomes live.
+	// The official post-deadline sync is expected lifecycle work.  It should
+	// recover through the cheap refresh loop without asking the user to retry.
 	await page.clock.runFor(30_000)
-	await expect.poll(() => clientLivePointsRequests).toBe(1)
-	await page.getByRole('button', { name: 'Refresh', exact: true }).click()
-	await expect.poll(() => clientLivePointsRequests).toBe(2)
+	await expect
+		.poll(() => clientLivePointsRequests)
+		.toBeGreaterThan(1)
 	// Flush the React update queued by the second network response while the
 	// browser fake clock is installed.
 	await page.clock.runFor(1)

@@ -4,10 +4,11 @@ import type {
 } from '@/lib/graphql/operations/market'
 
 /**
- * Supported planning windows. 1, 2, and 4 are terminal-season values used
- * when fewer than the normal 3/5/8 selectable gameweeks remain.
+ * Supported planning windows. The normal controls are 3/5/8; the remaining
+ * values are available as exact terminal-season windows when fewer than eight
+ * gameweeks remain.
  */
-export type FdrHorizon = 1 | 2 | 3 | 4 | 5 | 8
+export type FdrHorizon = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
 
 export const DEFAULT_FDR_HORIZON: FdrHorizon = 5
 export const FDR_HORIZONS: FdrHorizon[] = [3, 5, 8]

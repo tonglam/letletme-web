@@ -405,12 +405,12 @@ export default function FixturesClient({
 			FDR_HORIZONS.filter(option => option <= remaining)
 		)
 		// Near the season boundary the exact remaining window is more useful
-		// than leaving the user with no selected control at all.
-		if (remaining < 3 || (horizon <= remaining && !options.has(horizon))) {
+		// than offering a control that would request an invalid GW39+ range.
+		if (remaining < 8 && !options.has(remaining)) {
 			options.add(remaining)
 		}
 		return Array.from(options).sort((a, b) => a - b)
-	}, [fromGw, horizon])
+	}, [fromGw])
 
 	const squadKeySet = useMemo(() => new Set(mySquadKeys), [mySquadKeys])
 	const mySquadExposure = useMemo(

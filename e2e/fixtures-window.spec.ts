@@ -109,7 +109,7 @@ test('team FDR search filters and highlights the matching team', async ({
 	await expect(teamFdr.locator('tbody tr')).toHaveCount(3)
 })
 
-test('8-GW switch keeps 5 GWs committed, sends one GET, then reuses memory cache', async ({
+test('terminal horizon switch keeps 5 GWs committed, sends one GET, then reuses memory cache', async ({
 	page
 }) => {
 	let requestCount = 0
@@ -137,19 +137,19 @@ test('8-GW switch keeps 5 GWs committed, sends one GET, then reuses memory cache
 	await page.goto('/explore/fixtures')
 
 	const fiveGws = page.getByRole('button', { name: '5 GWs' })
-	const eightGws = page.getByRole('button', { name: '8 GWs' })
-	await eightGws.click()
+	const sixGws = page.getByRole('button', { name: '6 GWs' })
+	await sixGws.click()
 	await requestStarted
 	await expect(fiveGws).toHaveAttribute('aria-pressed', 'true')
-	await expect(eightGws).toHaveAttribute('aria-busy', 'true')
+	await expect(sixGws).toHaveAttribute('aria-busy', 'true')
 	await expect(page.getByText('Loading more gameweeks…')).toBeVisible()
 	await expect(page.getByRole('columnheader', { name: 'GW38' })).toHaveCount(0)
 
-	await eightGws.click()
+	await sixGws.click()
 	expect(requestCount).toBe(1)
 	releaseRequest()
-	await expect(eightGws).toHaveAttribute('aria-pressed', 'true')
-	await expect(eightGws).toHaveAttribute('aria-busy', 'false')
+	await expect(sixGws).toHaveAttribute('aria-pressed', 'true')
+	await expect(sixGws).toHaveAttribute('aria-busy', 'false')
 	await expect(page.getByRole('columnheader', { name: 'GW38' })).toBeVisible()
 	await expect
 		.poll(() =>
@@ -165,8 +165,8 @@ test('8-GW switch keeps 5 GWs committed, sends one GET, then reuses memory cache
 
 	await fiveGws.click()
 	await expect(fiveGws).toHaveAttribute('aria-pressed', 'true')
-	await eightGws.click()
-	await expect(eightGws).toHaveAttribute('aria-pressed', 'true')
+	await sixGws.click()
+	await expect(sixGws).toHaveAttribute('aria-pressed', 'true')
 	expect(requestCount).toBe(1)
 })
 
@@ -190,8 +190,8 @@ test('partial fixture window commits unavailable cells instead of BGWs', async (
 		route.fulfill({ status: 204, body: '' })
 	)
 	await page.goto('/explore/fixtures')
-	await page.getByRole('button', { name: '8 GWs' }).click()
-	await expect(page.getByRole('button', { name: '8 GWs' })).toHaveAttribute(
+	await page.getByRole('button', { name: '6 GWs' }).click()
+	await expect(page.getByRole('button', { name: '6 GWs' })).toHaveAttribute(
 		'aria-pressed',
 		'true'
 	)
@@ -205,7 +205,7 @@ test('partial fixture window commits unavailable cells instead of BGWs', async (
 	await expect(firstRowCells.nth(gw38Column)).not.toContainText('BGW')
 })
 
-test('failed fixture window keeps the committed horizon and can be retried', async ({
+test('failed terminal fixture window keeps the committed horizon and can be retried', async ({
 	page
 }) => {
 	let requestCount = 0
@@ -225,15 +225,15 @@ test('failed fixture window keeps the committed horizon and can be retried', asy
 	await page.goto('/explore/fixtures')
 
 	const fiveGws = page.getByRole('button', { name: '5 GWs' })
-	const eightGws = page.getByRole('button', { name: '8 GWs' })
-	await eightGws.click()
+	const sixGws = page.getByRole('button', { name: '6 GWs' })
+	await sixGws.click()
 	await expect(
 		page.getByText('Could not load fixtures for this horizon.')
 	).toBeVisible()
 	await expect(fiveGws).toHaveAttribute('aria-pressed', 'true')
-	await expect(eightGws).toHaveAttribute('aria-busy', 'false')
+	await expect(sixGws).toHaveAttribute('aria-busy', 'false')
 
-	await eightGws.click()
+	await sixGws.click()
 	await expect.poll(() => requestCount).toBe(2)
 })
 
@@ -266,7 +266,7 @@ test('switching back during a request cancels stale horizon intent', async ({
 		route.fulfill({ status: 204, body: '' })
 	)
 	await page.goto('/explore/fixtures')
-	await page.getByRole('button', { name: '8 GWs' }).click()
+	await page.getByRole('button', { name: '6 GWs' }).click()
 	await firstStarted
 	await page.getByRole('button', { name: '3 GWs' }).click()
 	await expect(page.getByRole('button', { name: '3 GWs' })).toHaveAttribute(
@@ -275,8 +275,8 @@ test('switching back during a request cancels stale horizon intent', async ({
 	)
 	releaseFirst()
 
-	await page.getByRole('button', { name: '8 GWs' }).click()
-	await expect(page.getByRole('button', { name: '8 GWs' })).toHaveAttribute(
+	await page.getByRole('button', { name: '6 GWs' }).click()
+	await expect(page.getByRole('button', { name: '6 GWs' })).toHaveAttribute(
 		'aria-pressed',
 		'true'
 	)

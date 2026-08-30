@@ -210,7 +210,7 @@ test('a bound user receives the complete compact Team Desk in one commit', async
 	}
 })
 
-test('a bound squad opens a selectable gameweek range and preserves the 8-GW share pitch', async ({
+test('a bound squad opens a selectable gameweek range and preserves the terminal share pitch', async ({
 	page
 }) => {
 	const session = await createSession({ entryId: 15702 })
@@ -249,13 +249,13 @@ test('a bound squad opens a selectable gameweek range and preserves the 8-GW sha
 		await dialog.getByRole('button', { name: 'Close' }).click()
 		await expect(dialog).toHaveCount(0)
 
-		const eightGws = page.getByRole('button', { name: '8 GWs' })
-		await eightGws.click()
-		await expect(eightGws).toHaveAttribute('aria-pressed', 'true')
-		// The fixture seed is anchored at GW33, so the requested eight-gameweek
-		// horizon is correctly clipped at the season boundary (GW38).
+		const sixGws = page.getByRole('button', { name: '6 GWs' })
+		await sixGws.click()
+		await expect(sixGws).toHaveAttribute('aria-pressed', 'true')
+		// The fixture seed is anchored at GW33, so the terminal horizon exposes
+		// the exact six remaining gameweeks through the season boundary (GW38).
 		await expect(pitch.locator('[role="listitem"]')).toHaveCount(
-			15 * Math.min(8, 39 - 33)
+			15 * Math.min(6, 39 - 33)
 		)
 		await expect(
 			pitch.locator('[data-share-preserve-width="true"]')
