@@ -106,6 +106,8 @@ export const getTournamentLiveBatchSeed = (
 		failedCount: failedEntryIds.length,
 		failedEntryIds,
 		degradedEntryIds,
+		deferredEntryCount:
+			response.entryLiveCompetitionsDesk.deferredEntryCount ?? 0,
 		officialCoverage: response.entryLiveCompetitionsDesk.officialCoverage ?? 0,
 		unavailableEntryIds,
 		totalEntries: response.entryLiveCompetitionsDesk.totalEntries

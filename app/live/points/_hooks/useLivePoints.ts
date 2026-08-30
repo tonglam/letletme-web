@@ -55,16 +55,16 @@ const hydrateLiveSnapshot = (
 		...source,
 		eventId: source.eventId ?? live?.event ?? 0,
 		scoreCoreRevision:
-			source.scoreCoreRevision ?? score?.revisions.scoreCore ?? null,
+			score?.revisions.scoreCore ?? source.scoreCoreRevision ?? null,
 		contentUpdatedAt:
-			source.contentUpdatedAt ?? score?.times.contentUpdatedAt ?? null,
+			score?.times.contentUpdatedAt ?? source.contentUpdatedAt ?? null,
 		sourceCheckedAt:
-			source.sourceCheckedAt ?? score?.times.sourceCheckedAt ?? null,
-		publishedAt: source.publishedAt ?? score?.times.publishedAt ?? null,
-		nextRefreshAt: source.nextRefreshAt ?? score?.times.nextRefreshAt ?? null,
-		revisions: source.revisions ?? score?.revisions,
-		times: source.times ?? score?.times,
-		delivery: source.delivery ?? score?.delivery ?? live?.delivery
+			score?.times.sourceCheckedAt ?? source.sourceCheckedAt ?? null,
+		publishedAt: score?.times.publishedAt ?? source.publishedAt ?? null,
+		nextRefreshAt: score?.times.nextRefreshAt ?? source.nextRefreshAt ?? null,
+		revisions: score?.revisions ?? source.revisions,
+		times: score?.times ?? source.times,
+		delivery: score?.delivery ?? source.delivery ?? live?.delivery
 	}
 }
 

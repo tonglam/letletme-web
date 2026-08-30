@@ -821,6 +821,7 @@ export const GET_TOURNAMENT_LIVE_DESK = `${LIVE_POINTS_SCORE_SUMMARY_FRAGMENT}
       unavailableEntryIds
       partial
       failedEntryIds
+      deferredEntryCount
       totalEntries
       board {
 		        entry
@@ -935,6 +936,7 @@ export interface TournamentLivePointsResponse {
 		unavailableEntryIds?: number[]
 		partial: boolean
 		failedEntryIds: number[]
+		deferredEntryCount: number
 		totalEntries: number
 		board: TournamentLiveCalcData[]
 	}
