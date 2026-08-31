@@ -365,7 +365,9 @@ test('official-sync live points auto-refreshes without a polling label', async (
 	// The official post-deadline sync is expected lifecycle work.  It should
 	// recover through the cheap refresh loop without asking the user to retry.
 	await page.clock.runFor(30_000)
-	await expect.poll(() => clientLivePointsRequests).toBeGreaterThan(1)
+	await expect
+		.poll(() => clientLivePointsRequests)
+		.toBeGreaterThan(1)
 	// Flush the React update queued by the second network response while the
 	// browser fake clock is installed.
 	await page.clock.runFor(1)
@@ -397,42 +399,61 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 
 	const liveResponse = (score: number, revision: string) => ({
 		data: {
-			liveMatchdayDesk: {
-				season: '2627',
-				eventId: 33,
-				scoreCoreRevision: revision,
-				state: 'LIVE_ACTIVE',
-				windowState: 'LIVE_ACTIVE',
-				dataAvailability: 'FRESH',
-				sourceCheckedAt: '2026-08-04T18:30:30.000Z',
-				publishedAt: '2026-08-04T18:30:00.000Z',
-				source: 'REDIS_CURRENT',
-				stale: false,
-				nextRefreshAt: '2026-08-04T18:31:00.000Z',
-				revisions: liveRevisionVector(revision),
-				times: liveTimes(
-					'2026-08-04T18:30:30.000Z',
-					'2026-08-04T18:30:00.000Z'
-				),
+			liveMatchday: {
+				availability: 'READY',
 				delivery: liveDelivery('FRESH'),
-				matches: [
-					{
-						fixtureId: 101,
-						eventId: 33,
-						homeTeamId: 1,
-						homeTeamName: 'Arsenal',
-						homeScore: score,
-						awayTeamId: 2,
-						awayTeamName: 'Chelsea',
-						awayScore: 0,
-						kickoffTime: '2026-08-04T19:00:00.000Z',
-						minutes: 12,
-						started: true,
-						finished: false
-					}
-				],
-				nextFixtures: [],
-				highlights: []
+				snapshot: {
+					season: '2627',
+					eventId: 33,
+					state: 'LIVE_ACTIVE',
+					revisions: {
+						deskPublicationId: `e2e-matchday-${revision.slice(0, 8)}`,
+						deskGeneration: 1,
+						lifecycle: revision,
+						fixtureIdentity: revision,
+						scoreState: revision,
+						detailPublicationId: null,
+						detailGeneration: null,
+						playerDetail: null
+					},
+					times: {
+						deskSourceCheckedAt: '2026-08-04T18:30:30.000Z',
+						deskContentUpdatedAt: '2026-08-04T18:30:00.000Z',
+						deskPublishedAt: '2026-08-04T18:30:00.000Z',
+						deskStaleAt: '2026-08-04T18:31:07.500Z',
+						detailSourceCheckedAt: null,
+						detailContentUpdatedAt: null,
+						detailPublishedAt: null,
+						detailStaleAt: null,
+						servedAt: '2026-08-04T18:30:30.000Z',
+						nextRefreshAt: '2026-08-04T18:31:00.000Z'
+					},
+					detailDelivery: {
+						state: 'PENDING',
+						servedFrom: null,
+						reasonCodes: ['DETAIL_NOT_PUBLISHED']
+					},
+					matches: [
+						{
+							fixtureId: 101,
+							eventId: 33,
+							homeTeamId: 1,
+							homeTeamName: 'Arsenal',
+							homeTeamShortName: 'ARS',
+							awayTeamId: 2,
+							awayTeamName: 'Chelsea',
+							awayTeamShortName: 'CHE',
+							homeScore: score,
+							awayScore: 0,
+							kickoffTime: '2026-08-04T19:00:00.000Z',
+							minutes: 12,
+							started: true,
+							finished: false,
+							finishedProvisional: false,
+							players: []
+						}
+					]
+				}
 			}
 		}
 	})
@@ -508,10 +529,6 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 			})
 			return
 		}
-		if (payload.query?.includes('GetLiveMatchdayDesk')) {
-			// The desk is the only heavy request after a changed context revision.
-		}
-
 		await continueToGraphqlFixture(route)
 	})
 
@@ -528,7 +545,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 
 	await page.clock.fastForward(90_000)
 	await expect.poll(() => heavyRequestCount).toBe(1)
-	expect(probeCount).toBe(1)
+	expect(probeCount).toBe(0)
 	releaseFirstResponse?.()
 	await expect(page.getByRole('tab', { name: 'Live Now' })).toHaveAttribute(
 		'aria-selected',
@@ -538,7 +555,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 
 	await page.clock.fastForward(30_000)
 	await expect.poll(() => heavyRequestCount).toBe(2)
-	expect(probeCount).toBe(2)
+	expect(probeCount).toBe(0)
 	await expect(
 		page.getByRole('alert').filter({
 			hasText: 'Latest match update failed. Showing the last available scores.'
@@ -550,10 +567,10 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 	await expect(page.getByText(/Auto refresh in/)).toHaveCount(0)
 	await page.clock.fastForward(60_000)
 	expect(heavyRequestCount).toBe(2)
-	expect(probeCount).toBe(2)
+	expect(probeCount).toBe(0)
 
 	await context.setOffline(false)
 	await expect.poll(() => heavyRequestCount).toBe(3)
-	expect(probeCount).toBe(3)
+	expect(probeCount).toBe(0)
 	await expect(page.getByText(/2\s*[–-]\s*0/)).toBeVisible()
 })
