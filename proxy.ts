@@ -235,6 +235,13 @@ export async function proxy(req: NextRequest) {
 			maintenance.retryAfterSeconds
 		)
 	}
+	const developmentMyFplMock =
+		process.env.NODE_ENV !== 'production' &&
+		pathname === '/my-fpl/team' &&
+		req.nextUrl.searchParams.get('mock') === '1'
+	if (developmentMyFplMock) {
+		return withDocumentCacheHeaders(req, i18nResponse, false)
+	}
 	const protectedPage = isProtectedPage(pathname)
 
 	if (!protectedPage) {

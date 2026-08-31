@@ -1,42 +1,41 @@
-import { useMemo } from 'react'
-import { useFormatter, useTranslations } from 'next-intl'
-import type { TeamSeasonLogs } from '../_lib/team-stats-model'
 import {
 	DataTable,
 	DataTd,
 	DataTh,
 	DataThead,
-	DataTr,
+	DataTr
 } from '@/components/data/DataTable'
+import type { MyFplSelectionRules } from '@/lib/graphql/operations/my-fpl'
+import { useFormatter, useTranslations } from 'next-intl'
+import { useMemo } from 'react'
+import type { TeamSeasonLogs } from '../_lib/team-stats-model'
 import { TeamGameweekLink } from './TeamGameweekLink'
 import { TeamMetricGrid, TeamMetricTile } from './TeamMetricTile'
-
-/**
- * Official FPL: one of each chip before the GW19 deadline, one of each after.
- * GW1–19 → first half; GW20–38 → second half.
- */
-export const CHIP_HALF_SPLIT_GW = 19
-const PER_HALF_ALLOWANCE = 1
 
 const CHIP_ORDER = [
 	'WILDCARD',
 	'FREE_HIT',
 	'BENCH_BOOST',
 	'TRIPLE_CAPTAIN',
+	'MANAGER'
 ] as const
 
-type ChipFamily = (typeof CHIP_ORDER)[number]
-type HalfKey = 'first' | 'second'
+type ChipFamily = string
 
-function halfForGameweek(gameweek: number): HalfKey {
-	return gameweek <= CHIP_HALF_SPLIT_GW ? 'first' : 'second'
+type ChipWindow = {
+	key: string
+	startEvent: number
+	stopEvent: number
+	allowances: Record<string, number>
 }
 
 function normalizeChipFamily(raw: string): ChipFamily | null {
 	const chip = raw.toUpperCase().replace(/[\s-]+/g, '_')
 	if (chip === 'NONE' || chip === '') return null
 	if (chip === 'WC' || chip === 'WILDCARD') return 'WILDCARD'
-	if (chip === 'FH' || chip === 'FREEHIT' || chip === 'FREE_HIT') return 'FREE_HIT'
+	if (chip === 'FH' || chip === 'FREEHIT' || chip === 'FREE_HIT') {
+		return 'FREE_HIT'
+	}
 	if (
 		chip === 'BB' ||
 		chip === 'BBOOST' ||
@@ -53,12 +52,20 @@ function normalizeChipFamily(raw: string): ChipFamily | null {
 	) {
 		return 'TRIPLE_CAPTAIN'
 	}
-	return null
+	if (
+		chip === 'AM' ||
+		chip === 'MANAGER' ||
+		chip === 'ASSISTANT_MANAGER' ||
+		chip === 'ASSISTANTMANAGER'
+	) {
+		return 'MANAGER'
+	}
+	return chip
 }
 
 function familyLabel(
 	family: ChipFamily,
-	t: ReturnType<typeof useTranslations<'TeamStats'>>,
+	t: ReturnType<typeof useTranslations<'TeamStats'>>
 ): string {
 	switch (family) {
 		case 'WILDCARD':
@@ -69,200 +76,262 @@ function familyLabel(
 			return t('benchBoost')
 		case 'TRIPLE_CAPTAIN':
 			return t('tripleCaptain')
+		case 'MANAGER':
+			return t('assistantManager')
+		default:
+			return family
+				.toLowerCase()
+				.split('_')
+				.map(word => word.charAt(0).toUpperCase() + word.slice(1))
+				.join(' ')
 	}
 }
 
-function emptyHalfCounts(): Record<ChipFamily, number> {
-	return {
-		WILDCARD: 0,
-		FREE_HIT: 0,
-		BENCH_BOOST: 0,
-		TRIPLE_CAPTAIN: 0,
-	}
+const emptyChipCounts = (): Record<string, number> => ({})
+
+function orderChipFamilies(families: Iterable<string>): string[] {
+	const order = new Map(CHIP_ORDER.map((family, index) => [family, index]))
+	return Array.from(new Set(families)).sort((left, right) => {
+		const leftIndex = order.get(left as (typeof CHIP_ORDER)[number])
+		const rightIndex = order.get(right as (typeof CHIP_ORDER)[number])
+		if (leftIndex !== undefined || rightIndex !== undefined) {
+			return (
+				(leftIndex ?? Number.MAX_SAFE_INTEGER) -
+				(rightIndex ?? Number.MAX_SAFE_INTEGER)
+			)
+		}
+		return left.localeCompare(right)
+	})
 }
 
-/**
- * Season chip inventory by half — not tied to the selected gameweek scoreboard.
- */
-export function TeamChipsTab({ stats }: { stats: TeamSeasonLogs }) {
+function buildChipWindows(rules: MyFplSelectionRules | null): ChipWindow[] {
+	if (!rules) return []
+	const byWindow = new Map<string, ChipWindow>()
+	for (const chip of rules.chips) {
+		const family = normalizeChipFamily(chip.name)
+		if (!family) continue
+		const key = `${chip.startEvent}:${chip.stopEvent}`
+		const window = byWindow.get(key) ?? {
+			key,
+			startEvent: chip.startEvent,
+			stopEvent: chip.stopEvent,
+			allowances: emptyChipCounts()
+		}
+		window.allowances[family] = (window.allowances[family] ?? 0) + chip.number
+		byWindow.set(key, window)
+	}
+	return Array.from(byWindow.values()).sort(
+		(a, b) => a.startEvent - b.startEvent || a.stopEvent - b.stopEvent
+	)
+}
+
+function windowLabel(window: ChipWindow): string {
+	return window.startEvent === window.stopEvent
+		? `GW${window.startEvent}`
+		: `GW${window.startEvent}–${window.stopEvent}`
+}
+
+export function TeamChipsTab({
+	stats,
+	rules
+}: {
+	stats: TeamSeasonLogs
+	rules: MyFplSelectionRules | null
+}) {
 	const t = useTranslations('TeamStats')
 	const format = useFormatter()
 
-	const { inventory, firstUsed, secondUsed, firstLeft, secondLeft } =
-		useMemo(() => {
-			const first = emptyHalfCounts()
-			const second = emptyHalfCounts()
+	const { windows, inventory, summaries } = useMemo(() => {
+		const windows = buildChipWindows(rules)
+		const usedByWindow = new Map<string, Record<string, number>>()
+		for (const window of windows) {
+			usedByWindow.set(window.key, emptyChipCounts())
+		}
 
-			for (const row of stats.chipUsageRows) {
-				const family = normalizeChipFamily(row.chip)
-				const gw = Number(row.gameweek)
-				if (!family || !Number.isFinite(gw) || gw <= 0) continue
-				const half = halfForGameweek(gw)
-				if (half === 'first') first[family] += 1
-				else second[family] += 1
+		for (const row of stats.chipUsageRows) {
+			const family = normalizeChipFamily(row.chip)
+			const gameweek = Number(row.gameweek)
+			if (!family || !Number.isFinite(gameweek) || gameweek <= 0) continue
+			const window = windows.find(
+				item => gameweek >= item.startEvent && gameweek <= item.stopEvent
+			)
+			if (window) {
+				const used = usedByWindow.get(window.key)!
+				used[family] = (used[family] ?? 0) + 1
 			}
+		}
 
-			const inventory = CHIP_ORDER.map(family => {
-				const usedFirst = first[family]
-				const usedSecond = second[family]
+		const families = orderChipFamilies(
+			windows.flatMap(window => Object.keys(window.allowances))
+		)
+		const inventory = families.map(family => ({
+			family,
+			label: familyLabel(family, t),
+			windows: windows.map(window => {
+				const allowance = window.allowances[family] ?? 0
+				const used = usedByWindow.get(window.key)?.[family] ?? 0
 				return {
-					family,
-					label: familyLabel(family, t),
-					first: {
-						used: usedFirst,
-						remaining: Math.max(0, PER_HALF_ALLOWANCE - usedFirst),
-					},
-					second: {
-						used: usedSecond,
-						remaining: Math.max(0, PER_HALF_ALLOWANCE - usedSecond),
-					},
+					key: window.key,
+					allowance,
+					used,
+					remaining: Math.max(0, allowance - used)
 				}
 			})
-
-			const sumUsed = (half: HalfKey) =>
-				CHIP_ORDER.reduce(
-					(n, f) => n + (half === 'first' ? first[f] : second[f]),
-					0,
-				)
-			const sumLeft = (half: HalfKey) =>
-				CHIP_ORDER.reduce((n, f) => {
-					const used = half === 'first' ? first[f] : second[f]
-					return n + Math.max(0, PER_HALF_ALLOWANCE - used)
-				}, 0)
-
+		}))
+		const summaries = windows.map(window => {
+			const used = families.reduce(
+				(total, family) =>
+					total + (usedByWindow.get(window.key)?.[family] ?? 0),
+				0
+			)
+			const allowance = families.reduce(
+				(total, family) => total + (window.allowances[family] ?? 0),
+				0
+			)
 			return {
-				inventory,
-				firstUsed: sumUsed('first'),
-				secondUsed: sumUsed('second'),
-				firstLeft: sumLeft('first'),
-				secondLeft: sumLeft('second'),
+				key: window.key,
+				label: windowLabel(window),
+				used,
+				remaining: Math.max(0, allowance - used),
+				allowance
 			}
-		}, [stats.chipUsageRows, t])
+		})
+
+		return { windows, inventory, summaries }
+	}, [rules, stats.chipUsageRows, t])
 
 	return (
 		<div className="space-y-6">
-			{/* Half-season inventory */}
 			<div>
-				<p className="mb-1 eyebrow">
-					{t('chipBalance')}
-				</p>
+				<p className="mb-1 eyebrow">{t('chipBalance')}</p>
 				<p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-					{t('chipBalanceHint')}
+					{windows.length > 0
+						? t('chipBalanceHintConfigured')
+						: t('chipRulesUnavailable')}
 				</p>
 
-				{/* Half summaries — fixed-height metric tiles, one value line each */}
-				<TeamMetricGrid cols={2} className="mb-3">
-					<TeamMetricTile
-						label={t('chipHalfFirst')}
-						value={t('chipHalfValue', {
-							used: firstUsed,
-							left: firstLeft,
-							max: CHIP_ORDER.length,
-						})}
-						tone="primary"
-					/>
-					<TeamMetricTile
-						label={t('chipHalfSecond')}
-						value={t('chipHalfValue', {
-							used: secondUsed,
-							left: secondLeft,
-							max: CHIP_ORDER.length,
-						})}
-						tone="primary"
-					/>
-				</TeamMetricGrid>
+				{summaries.length > 0 ? (
+					<>
+						<TeamMetricGrid
+							cols={Math.min(3, Math.max(2, summaries.length)) as 2 | 3}
+							className="mb-3"
+						>
+							{summaries.map(summary => (
+								<TeamMetricTile
+									key={summary.key}
+									label={summary.label}
+									value={t('chipWindowValue', {
+										used: summary.used,
+										left: summary.remaining,
+										max: summary.allowance
+									})}
+									tone="primary"
+								/>
+							))}
+						</TeamMetricGrid>
 
-				<DataTable minWidthClass="min-w-[26rem]">
-					<DataThead>
-						<DataTh>{t('chip')}</DataTh>
-						<DataTh align="center" className="w-20">
-							{t('chipHalfFirstShort')}
-							<br />
-							<span className="font-normal normal-case tracking-normal text-muted-foreground/80">
-								{t('chipsUsed')}/{t('chipsRemaining')}
-							</span>
-						</DataTh>
-						<DataTh align="center" className="w-20">
-							{t('chipHalfSecondShort')}
-							<br />
-							<span className="font-normal normal-case tracking-normal text-muted-foreground/80">
-								{t('chipsUsed')}/{t('chipsRemaining')}
-							</span>
-						</DataTh>
-					</DataThead>
-					<tbody>
-						{inventory.map(row => (
-							<DataTr key={row.family}>
-								<DataTd className="text-sm font-medium">
-									{row.label}
-								</DataTd>
-								<DataTd align="center" className="font-mono text-xs tabular-nums">
-									<span className="font-semibold">{row.first.used}</span>
-									<span className="text-muted-foreground"> / </span>
-									<span
-										className={
-											row.first.remaining > 0
-												? 'font-bold text-primary-ink'
-												: 'text-muted-foreground'
-										}
+						<DataTable minWidthClass="min-w-[30rem]">
+							<DataThead>
+								<DataTh>{t('chip')}</DataTh>
+								{windows.map(window => (
+									<DataTh
+										key={window.key}
+										align="center"
+										className="w-24"
 									>
-										{row.first.remaining}
-									</span>
-								</DataTd>
-								<DataTd align="center" className="font-mono text-xs tabular-nums">
-									<span className="font-semibold">{row.second.used}</span>
-									<span className="text-muted-foreground"> / </span>
-									<span
-										className={
-											row.second.remaining > 0
-												? 'font-bold text-primary-ink'
-												: 'text-muted-foreground'
-										}
-									>
-										{row.second.remaining}
-									</span>
-								</DataTd>
-							</DataTr>
-						))}
-					</tbody>
-				</DataTable>
+										{windowLabel(window)}
+										<br />
+										<span className="font-normal normal-case tracking-normal text-muted-foreground/80">
+											{t('chipsUsed')}/{t('chipsRemaining')}
+										</span>
+									</DataTh>
+								))}
+							</DataThead>
+							<tbody>
+								{inventory.map(row => (
+									<DataTr key={row.family}>
+										<DataTd className="text-sm font-medium">{row.label}</DataTd>
+										{row.windows.map(cell => (
+											<DataTd
+												key={cell.key}
+												align="center"
+												className="font-mono text-xs tabular-nums"
+											>
+												{cell.allowance > 0 ? (
+													<>
+														<span className="font-semibold">{cell.used}</span>
+														<span className="text-muted-foreground"> / </span>
+														<span
+															className={
+																cell.remaining > 0
+																	? 'font-bold text-primary-ink'
+																	: 'text-muted-foreground'
+															}
+														>
+															{cell.remaining}
+														</span>
+													</>
+												) : (
+													'—'
+												)}
+											</DataTd>
+										))}
+									</DataTr>
+								))}
+							</tbody>
+						</DataTable>
+					</>
+				) : null}
 			</div>
 
-			{/* When used + that gameweek outcome */}
 			<div>
-				<p className="mb-2 eyebrow">
-					{t('chipPlayLog')}
-				</p>
+				<p className="mb-2 eyebrow">{t('chipPlayLog')}</p>
 				{stats.chipUsageRows.length === 0 ? (
 					<p className="text-sm text-muted-foreground">{t('noChipsPlayed')}</p>
 				) : (
 					<DataTable minWidthClass="min-w-[24rem]">
 						<DataThead>
-							<DataTh align="center" className="w-12">
+							<DataTh
+								align="center"
+								className="w-12"
+							>
 								{t('gameweekShort')}
 							</DataTh>
-							<DataTh className="w-16">{t('chipHalf')}</DataTh>
+							<DataTh className="w-24">{t('chipRuleWindow')}</DataTh>
 							<DataTh>{t('chip')}</DataTh>
-							<DataTh align="center" className="w-12">
+							<DataTh
+								align="center"
+								className="w-12"
+							>
 								{t('pointsShort')}
 							</DataTh>
-							<DataTh align="center" className="w-12">
+							<DataTh
+								align="center"
+								className="w-12"
+							>
 								{t('netShort')}
 							</DataTh>
-							<DataTh align="right" className="w-14">
+							<DataTh
+								align="right"
+								className="w-14"
+							>
 								{t('gameweekRank')}
 							</DataTh>
 						</DataThead>
 						<tbody>
 							{stats.chipUsageRows.map(row => {
-								const gw = Number(row.gameweek)
-								const half =
-									Number.isFinite(gw) && gw > 0
-										? halfForGameweek(gw)
-										: null
+								const gameweek = Number(row.gameweek)
+								const window = windows.find(
+									item =>
+										gameweek >= item.startEvent && gameweek <= item.stopEvent
+								)
+								const family = normalizeChipFamily(row.chip)
 								return (
 									<DataTr key={`${row.gameweek}-${row.chip}`}>
-										<DataTd align="center" className="text-xs">
+										<DataTd
+											align="center"
+											className="text-xs"
+										>
 											<TeamGameweekLink
 												gameweek={row.gameweek}
 												className="text-muted-foreground hover:text-primary-ink"
@@ -271,17 +340,10 @@ export function TeamChipsTab({ stats }: { stats: TeamSeasonLogs }) {
 											</TeamGameweekLink>
 										</DataTd>
 										<DataTd className="font-mono text-label uppercase tracking-wide text-muted-foreground">
-											{half === 'first'
-												? t('chipHalfFirstShort')
-												: half === 'second'
-													? t('chipHalfSecondShort')
-													: '—'}
+											{window ? windowLabel(window) : '—'}
 										</DataTd>
 										<DataTd className="text-sm font-medium">
-											{familyLabel(
-												normalizeChipFamily(row.chip) ?? 'WILDCARD',
-												t,
-											)}
+											{family ? familyLabel(family, t) : row.chip}
 										</DataTd>
 										<DataTd
 											align="center"
@@ -301,9 +363,7 @@ export function TeamChipsTab({ stats }: { stats: TeamSeasonLogs }) {
 										>
 											{row.rank == null
 												? '—'
-												: format.number(row.rank, {
-														notation: 'compact',
-													})}
+												: format.number(row.rank, { notation: 'compact' })}
 										</DataTd>
 									</DataTr>
 								)

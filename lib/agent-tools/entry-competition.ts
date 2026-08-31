@@ -53,16 +53,16 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 			}>(options, ENTRY_SNAPSHOT_DOCUMENT, { id: entryId }),
 			executeDocument<{
 				coreEventContext: CoreContext
-				myFplTeamDesk: {
+				myFplManagerReview: {
 					state: string
 					context: {
 						season: string
 						coreRevision: string
 					}
-					history: unknown[]
+					timeline: unknown[]
 					[key: string]: unknown
 				}
-			}>(options, OWN_ENTRY_DOCUMENT, { eventId: input.eventId })
+			}>(options, OWN_ENTRY_DOCUMENT, {})
 		])
 		if (!snapshot.entrySnapshot) {
 			throw new AgentToolError(
@@ -76,9 +76,9 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 			snapshot.coreEventContext.season !== deskResult.coreEventContext.season ||
 			snapshot.coreEventContext.revision !==
 				deskResult.coreEventContext.revision ||
-			deskResult.myFplTeamDesk.context.season !==
+			deskResult.myFplManagerReview.context.season !==
 				snapshot.coreEventContext.season ||
-			deskResult.myFplTeamDesk.context.coreRevision !==
+			deskResult.myFplManagerReview.context.coreRevision !==
 				snapshot.coreEventContext.revision
 		) {
 			throw new AgentToolError(
@@ -88,11 +88,11 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 				true
 			)
 		}
-		const desk = deskResult.myFplTeamDesk
+		const review = deskResult.myFplManagerReview
 		const warnings: AgentWarning[] = []
-		if (desk.state !== 'READY') {
+		if (review.state !== 'READY') {
 			warnings.push({
-				code: `ENTRY_EXTENSION_${desk.state}`,
+				code: `ENTRY_EXTENSION_${review.state}`,
 				message: 'Some verified-entry analysis is not ready for this period.'
 			})
 		}
@@ -102,8 +102,8 @@ export async function runEntry(options: ToolRunOptions<'letletme_entry'>) {
 				accessScope: 'self',
 				entry: snapshot.entrySnapshot,
 				extensions: {
-					...desk,
-					history: desk.history.slice(-input.historyLimit)
+					...review,
+					timeline: review.timeline.slice(-input.historyLimit)
 				}
 			},
 			coreRevisions(deskResult.coreEventContext),

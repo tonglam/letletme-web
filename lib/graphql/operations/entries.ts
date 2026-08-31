@@ -142,7 +142,7 @@ export interface EntryEventResult {
 	eventId: number
 	eventPoints: number
 	overallPoints: number
-	overallRank: number
+	overallRank: number | null
 	eventTransfers: number
 	eventTransfersCost: number
 	eventNetPoints: number
@@ -243,7 +243,7 @@ export interface EntryHistoryItem {
 	eventPoints: number
 	eventRank: number | null
 	overallPoints: number
-	overallRank: number
+	overallRank: number | null
 	eventTransfers: number
 	eventTransfersCost: number
 	eventNetPoints: number

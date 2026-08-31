@@ -7,6 +7,7 @@ import type {
 	EntrySeasonHistoryItem
 } from '@/lib/graphql/operations/entries'
 import type {
+	MyFplManagerReview,
 	MyFplReviewState,
 	MyFplSnapshotMeta
 } from '@/lib/graphql/operations/my-fpl'
@@ -21,14 +22,16 @@ import {
 	hydrateTeamStatsSessionCache,
 	identityFromEventResult,
 	mapApiDataToTeamStats,
-	peekEntryDeskState,
 	peekEntryEventResult,
 	peekEntryGameweekState,
 	peekEntryHistory,
 	peekEntryHistoryState,
 	peekEntrySnapshotMeta,
+	peekManagerReview,
+	peekManagerReviewState,
 	peekTransferHistory,
 	peekTransferHistoryState,
+	reviewRevisionForGameweek,
 	seedTransferHistoryCache,
 	isSnapshotRequestSuperseded,
 	type SeasonIdentity,
@@ -52,13 +55,14 @@ interface UseTeamStatsOptions {
 	loadGameweekData: boolean
 	initialEntryEventResult: EntryEventResult | null
 	initialEntryGameweekState?: MyFplReviewState
-	initialDeskState?: MyFplReviewState
+	initialReviewState?: MyFplReviewState
 	initialPastSeasonsState?: MyFplReviewState
 	initialEntryHistory?: InitialEntryHistory
 	initialEntryIdentity?: InitialEntryIdentity
 	/** null = deferred client fetch; array = already complete */
 	initialEntryTransfers?: EntryGameweekTransfers[] | null
 	initialEntryTransfersState?: MyFplReviewState
+	initialManagerReview: MyFplManagerReview | null
 	initialError: string | null
 	initialRequestComplete: boolean
 	preseason: boolean
@@ -69,10 +73,10 @@ interface UseTeamStatsOptions {
  * Session cache (Map in team-stats-model) is the source of truth for fetched
  * payloads. React state is the view projection only.
  *
- * load paths:
- * - season critical: SSR history + identity
- * - transfers: deferred once if not in session cache
- * - gameweek: on demand when loadGameweekData + selectedGameweek
+ * Load paths:
+ * - season critical: one manager-review snapshot containing history,
+ *   decisions, rules, holdings, and transfers
+ * - gameweek: on demand, pinned to the same snapshot revision
  */
 export function useTeamStats({
 	entryId,
@@ -81,12 +85,13 @@ export function useTeamStats({
 	loadGameweekData,
 	initialEntryEventResult,
 	initialEntryGameweekState,
-	initialDeskState = 'EMPTY',
+	initialReviewState = 'EMPTY',
 	initialPastSeasonsState,
 	initialEntryHistory = null,
 	initialEntryIdentity = null,
 	initialEntryTransfers = null,
 	initialEntryTransfersState,
+	initialManagerReview,
 	initialError,
 	initialRequestComplete,
 	preseason,
@@ -94,7 +99,11 @@ export function useTeamStats({
 }: UseTeamStatsOptions) {
 	const t = useTranslations('TeamStats')
 	const [currentGameweek, setCurrentGameweek] = useState(initialCurrentGameweek)
-	const [deskState, setDeskState] = useState<MyFplReviewState>(initialDeskState)
+	const [reviewState, setReviewState] =
+		useState<MyFplReviewState>(initialReviewState)
+	const [managerReview, setManagerReview] = useState<MyFplManagerReview | null>(
+		initialManagerReview
+	)
 	const [selectedGameweek, setSelectedGameweek] = useState(
 		initialSelectedGameweek && initialSelectedGameweek > 0
 			? initialSelectedGameweek
@@ -178,7 +187,9 @@ export function useTeamStats({
 		initialEntryGameweekState ?? (initialEntryEventResult ? 'READY' : undefined)
 	)
 	const [gameweekRetryNonce, setGameweekRetryNonce] = useState(0)
-	const [emptyStateMessage, setEmptyStateMessage] = useState<string | null>(null)
+	const [emptyStateMessage, setEmptyStateMessage] = useState<string | null>(
+		null
+	)
 
 	const identityRef = useRef<SeasonIdentity | null>(identity0)
 	const gwRequestIdRef = useRef(0)
@@ -190,13 +201,14 @@ export function useTeamStats({
 			entryId,
 			seedGw,
 			currentGameweek: initialCurrentGameweek,
-			deskState: initialDeskState,
+			reviewState: initialReviewState,
 			history: initialEntryHistory,
 			historyState: initialPastSeasonsState,
 			event: initialEntryEventResult,
 			eventState: initialEntryGameweekState,
 			transfers: initialEntryTransfers,
 			transfersState: initialEntryTransfersState,
+			review: initialManagerReview,
 			snapshotMeta: initialSnapshotMeta
 		})
 	}, [
@@ -206,9 +218,10 @@ export function useTeamStats({
 		initialPastSeasonsState,
 		initialEntryHistory,
 		initialEntryIdentity,
-		initialDeskState,
+		initialReviewState,
 		initialEntryTransfers,
 		initialEntryTransfersState,
+		initialManagerReview,
 		initialCurrentGameweek,
 		initialRequestComplete,
 		seedGw,
@@ -222,7 +235,7 @@ export function useTeamStats({
 		setSeasonLogs(buildSeasonLogs(history.results, history.history, transfers))
 	}
 
-	// History fallback if SSR missed (session cache empty)
+	// Manager-review fallback if SSR missed (session cache empty)
 	useEffect(() => {
 		let cancelled = false
 		let retryTimer: number | undefined
@@ -232,19 +245,19 @@ export function useTeamStats({
 				if (!cancelled) setHistoryRetryNonce(value => value + 1)
 			}, 10_000)
 		}
-		const cachedDeskState = peekEntryDeskState(entryId)
+		const cachedReviewState = peekManagerReviewState(entryId)
 		const cachedHistoryState = peekEntryHistoryState(entryId)
 		const forceHistoryFetch =
 			historyRetryNonce > 0 &&
-			(cachedDeskState === 'PENDING' || cachedHistoryState === 'PENDING')
+			(cachedReviewState === 'PENDING' || cachedHistoryState === 'PENDING')
 		const cachedHistory = forceHistoryFetch
 			? undefined
 			: peekEntryHistory(entryId)
 		if (cachedHistory !== undefined && !forceHistoryFetch) {
-			if (cachedDeskState) setDeskState(cachedDeskState)
+			if (cachedReviewState) setReviewState(cachedReviewState)
 			const cachedState = cachedHistoryState
 			if (cachedState) setPastSeasonsState(cachedState)
-			if (cachedDeskState === 'PENDING' || cachedState === 'PENDING')
+			if (cachedReviewState === 'PENDING' || cachedState === 'PENDING')
 				scheduleRetry()
 			return () => {
 				cancelled = true
@@ -263,13 +276,14 @@ export function useTeamStats({
 					snapshotRevisionRef.current = nextSnapshotMeta.revision
 				}
 				setSnapshotMeta(nextSnapshotMeta)
-				const nextDeskState = peekEntryDeskState(entryId)
-				if (nextDeskState) setDeskState(nextDeskState)
+				const nextReviewState = peekManagerReviewState(entryId)
+				if (nextReviewState) setReviewState(nextReviewState)
+				setManagerReview(peekManagerReview(entryId) ?? null)
 				const nextPastSeasonsState = peekEntryHistoryState(entryId)
 				if (nextPastSeasonsState) {
 					setPastSeasonsState(nextPastSeasonsState)
 				}
-				if (nextDeskState === 'PENDING' || nextPastSeasonsState === 'PENDING')
+				if (nextReviewState === 'PENDING' || nextPastSeasonsState === 'PENDING')
 					scheduleRetry()
 				if (initialCurrentGameweek <= 0) {
 					setCurrentGameweek(
@@ -330,6 +344,7 @@ export function useTeamStats({
 					snapshotRevisionRef.current = nextSnapshotMeta.revision
 				}
 				setSnapshotMeta(nextSnapshotMeta)
+				setManagerReview(peekManagerReview(entryId) ?? null)
 				const state = peekTransferHistoryState(entryId) ?? 'READY'
 				setTransferState(state)
 				if (state === 'PENDING') {
@@ -438,7 +453,10 @@ export function useTeamStats({
 					{
 						isCurrentGameweek: selectedGameweek === currentGameweek,
 						force: forceGameweekFetch,
-						snapshotRevision: snapshotRevisionRef.current
+						snapshotRevision: reviewRevisionForGameweek(
+							snapshotMeta,
+							selectedGameweek
+						)
 					}
 				)
 				if (requestId !== gwRequestIdRef.current) return
@@ -446,12 +464,6 @@ export function useTeamStats({
 					peekEntryGameweekState(entryId, selectedGameweek) ??
 					(entryEventResult ? 'READY' : undefined)
 				setGameweekState(resolvedState)
-				const nextSnapshotMeta = peekEntrySnapshotMeta(entryId) ?? null
-				if (nextSnapshotMeta?.revision) {
-					snapshotRevisionRef.current = nextSnapshotMeta.revision
-				}
-				setSnapshotMeta(nextSnapshotMeta)
-
 				if (!entryEventResult) {
 					setTeamStats(null)
 					if (resolvedState === 'PENDING') {
@@ -540,7 +552,8 @@ export function useTeamStats({
 
 	return {
 		currentGameweek,
-		deskState,
+		reviewState,
+		managerReview,
 		emptyStateMessage,
 		error: gameweekError ?? baseError,
 		gameweekState,

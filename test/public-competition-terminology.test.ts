@@ -55,7 +55,7 @@ test('public competition copy is complete and contains no accidental legacy term
 				myCompetitions: 'My Competitions',
 				browseCompetitions: 'Browse competitions',
 				createCompetition: 'New Competition',
-				myTournament: 'My Competitions'
+				myTournament: 'Competition Review'
 			},
 			home: {
 				liveCompetitionStandings: 'Live competition standings',
@@ -70,13 +70,13 @@ test('public competition copy is complete and contains no accidental legacy term
 			messages: readMessages('zh-CN'),
 			navigation: {
 				live: '实时',
-				myFpl: '我的 FPL',
+				myFpl: 'My FPL',
 				competitions: '赛事',
 				explore: '探索',
 				myCompetitions: '我的赛事',
 				browseCompetitions: '浏览赛事',
 				createCompetition: '新建赛事',
-				myTournament: '赛事'
+				myTournament: '赛事复盘'
 			},
 			home: {
 				liveCompetitionStandings: '赛事实时积分榜',

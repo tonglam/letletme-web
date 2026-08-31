@@ -656,10 +656,10 @@ test('verified-entry extensions must declare the same core revision', async () =
 			assert.equal(document, OWN_ENTRY_DOCUMENT)
 			return {
 				coreEventContext: contextResult.coreEventContext,
-				myFplTeamDesk: {
+				myFplManagerReview: {
 					state: 'READY',
 					context: { season: '2627', coreRevision: 'core-6' },
-					history: []
+					timeline: []
 				}
 			}
 		})

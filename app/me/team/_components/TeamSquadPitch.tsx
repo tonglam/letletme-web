@@ -155,8 +155,10 @@ export function TeamSquadPitch({ stats }: { stats: TeamStatsViewModel }) {
 	const shareRef = useRef<HTMLDivElement | null>(null)
 	const [selectedPlayer, setSelectedPlayer] = useState<PlayerDetail | null>(null)
 	const formatOverallRank = useCallback(
-		(value: number) =>
-			value <= 0 ? '—' : format.number(value, { notation: 'compact' }),
+		(value: number | null) =>
+			value == null || value <= 0
+				? '—'
+				: format.number(value, { notation: 'compact' }),
 		[format]
 	)
 

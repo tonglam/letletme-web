@@ -3,8 +3,8 @@ import { describe, it } from 'node:test'
 import {
 	buildPersonalPurchasePrices,
 	calculateSellingPrice,
+	type PersonalPriceReview,
 } from '../lib/price-change-personal'
-import type { MyFplTeamTransfers } from '../lib/graphql/operations/my-fpl'
 import type { SquadPickSeed } from '../lib/squad-picks'
 
 const pick: SquadPickSeed = {
@@ -18,58 +18,34 @@ const pick: SquadPickSeed = {
 	isViceCaptain: false,
 }
 
-const transfers: MyFplTeamTransfers = {
-	state: 'READY',
-	context: {
-		season: '2026/27',
-		coreRevision: 'test',
-		currentEventId: 2,
-		nextEventId: 3,
-		latestFinalizedEventId: 2,
-		latestPublishedEventId: 2,
-	},
-	gameweeks: [
+const review = (freeHitEvents: number[] = []): PersonalPriceReview => ({
+	timeline: [1, 2].map(eventId => ({
+		eventId,
+		eventChip: freeHitEvents.includes(eventId) ? 'FREE_HIT' : 'NONE',
+	})),
+	transfers: [
 		{
 			eventId: 1,
-			eventTransfers: 1,
-			eventTransfersCost: 0,
 			transfers: [
 				{
-					eventId: 1,
-					elementInWebName: 'Example',
-					elementInTypeName: 'MIDFIELDER',
-					elementInTeamShortName: 'TST',
+					elementIn: 101,
 					elementInCost: 70,
-					elementOutWebName: 'Other',
-					elementOutTypeName: 'MIDFIELDER',
-					elementOutTeamShortName: 'OTH',
-					elementOutCost: 60,
 					time: '2026-08-01T10:00:00.000Z',
 				},
 			],
 		},
 		{
 			eventId: 2,
-			eventTransfers: 1,
-			eventTransfersCost: 0,
 			transfers: [
 				{
-					eventId: 2,
-					elementInWebName: 'Example',
-					elementInTypeName: 'MIDFIELDER',
-					elementInTeamShortName: 'TST',
+					elementIn: 101,
 					elementInCost: 75,
-					elementOutWebName: 'Other',
-					elementOutTypeName: 'MIDFIELDER',
-					elementOutTeamShortName: 'OTH',
-					elementOutCost: 60,
 					time: '2026-08-08T10:00:00.000Z',
 				},
 			],
 		},
 	],
-	snapshotMeta: null,
-}
+})
 
 describe('calculateSellingPrice', () => {
 	it('passes through losses and shares gains rounded down', () => {
@@ -84,8 +60,7 @@ describe('buildPersonalPurchasePrices', () => {
 		const result = buildPersonalPurchasePrices({
 			picks: [pick],
 			startPrices: [{ elementId: 101, startPrice: 60 }],
-			transfers,
-			historyChips: new Map(),
+			review: review(),
 		})
 		assert.equal(result.state, 'READY')
 		assert.equal(result.purchasePrices['101'], 75)
@@ -95,8 +70,7 @@ describe('buildPersonalPurchasePrices', () => {
 		const result = buildPersonalPurchasePrices({
 			picks: [pick],
 			startPrices: [{ elementId: 101, startPrice: 60 }],
-			transfers,
-			historyChips: new Map([[1, 'FREE_HIT']]),
+			review: review([1]),
 		})
 		assert.equal(result.purchasePrices['101'], 75)
 	})
@@ -105,6 +79,7 @@ describe('buildPersonalPurchasePrices', () => {
 		const result = buildPersonalPurchasePrices({
 			picks: [pick],
 			startPrices: [{ elementId: 101, startPrice: 60 }],
+			review: null,
 		})
 		assert.equal(result.state, 'READY')
 		assert.equal(result.purchasePrices['101'], 60)
