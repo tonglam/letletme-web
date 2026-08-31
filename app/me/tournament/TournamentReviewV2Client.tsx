@@ -68,7 +68,7 @@ const stateLabel = (
 }
 
 const numberOrDash = (value: number | null | undefined) =>
-	value === null || value === undefined ? '—' : value.toLocaleString()
+	value === null || value === undefined ? '—' : value.toLocaleString('en-US')
 
 function mergePointsPage(
 	previous: MyTournamentReviewPoints,
@@ -807,8 +807,10 @@ export default function TournamentReviewV2Client({
 		selectedTournament?.latestFormat ??
 		null
 	const activeReview = view === 'gameweek' ? gameweekReview : seasonReview
-	const state =
-		activeReview?.state ?? selectedTournament?.state ?? 'UNAVAILABLE'
+	const state: MyTournamentReviewState =
+		error && !activeReview
+			? 'UNAVAILABLE'
+			: (activeReview?.state ?? selectedTournament?.state ?? 'UNAVAILABLE')
 	return (
 		<div className="min-h-screen bg-slate-50">
 			<div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
