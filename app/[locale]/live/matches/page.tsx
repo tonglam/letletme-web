@@ -48,6 +48,7 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 		executePublicServerQuery('gameweek', query, variables, options)
 	let live: Awaited<ReturnType<typeof getLiveMatchesSnapshot>> | null = null
 	let initialError: string | null = null
+	const loadPageContext = () => getLivePageContext()
 
 	// The Match active-event pointer is the normal page authority. This keeps a
 	// READY render to one GraphQL root and avoids coupling Match availability to
@@ -59,8 +60,28 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 		initialError = t('matchesFailed')
 	}
 
+	// An event-less Match request may legitimately return a fallback
+	// publication. Before seeding the client, corroborate that fallback's event
+	// with the lifecycle anchor so REDIS_PREVIOUS/process-LKG/checkpoint data
+	// cannot pin the page to an older gameweek.
+	const fallbackSnapshot =
+		live?.snapshot && live.delivery.servedFrom !== 'REDIS_CURRENT'
+			? live.snapshot
+			: null
+	const fallbackSnapshotEventId = fallbackSnapshot?.eventId
+	const fallbackContext = fallbackSnapshot ? await loadPageContext() : null
+	if (fallbackContext && fallbackSnapshot) {
+		const context = fallbackContext
+		const activeEventId =
+			context.liveContext?.anchorEventId ?? context.presentation.currentEventId
+		if (activeEventId !== fallbackSnapshotEventId) {
+			live = null
+		}
+	}
+
 	if (!live?.snapshot) {
-		const { presentation, liveContext } = await getLivePageContext()
+		const { presentation, liveContext } =
+			fallbackContext ?? (await loadPageContext())
 		const fallbackEventId =
 			liveContext?.anchorEventId ?? presentation.currentEventId
 		if (
@@ -85,8 +106,20 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 			)
 		}
 		try {
-			live = await getLiveMatchesSnapshot(executor, fallbackEventId)
-			initialError = null
+			const explicitLive = await getLiveMatchesSnapshot(
+				executor,
+				fallbackEventId
+			)
+			if (
+				explicitLive.snapshot &&
+				explicitLive.snapshot.eventId !== fallbackEventId
+			) {
+				live = null
+				initialError = t('matchesFailed')
+			} else {
+				live = explicitLive
+				initialError = null
+			}
 		} catch (error) {
 			console.error('Failed to fetch explicit live matchday:', error)
 			initialError = t('matchesFailed')

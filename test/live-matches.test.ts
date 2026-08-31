@@ -588,6 +588,37 @@ describe('live matchday V2 publication', () => {
 		assert.equal(canReplaceLiveMatchesLkg(olderDetail, retainedSnapshot), false)
 	})
 
+	it('keeps an accepted empty detail publication authoritative', async () => {
+		const accepted = await getLiveMatchesSnapshot(
+			async <T>(): Promise<T> =>
+				response({
+					snapshot: snapshot({
+						matches: [
+							{
+								...snapshot().matches[0]!,
+								players: []
+							}
+						]
+					})
+				}) as T,
+			33
+		)
+		const candidate = await getLiveMatchesSnapshot(
+			async <T>(): Promise<T> => response() as T,
+			33
+		)
+
+		const retained = retainLiveMatchPlayerDetails(
+			candidate.matches,
+			accepted.matches,
+			{ preferAcceptedDetails: true }
+		)
+		assert.deepEqual(retained[0]?.homeTeam.players, [])
+		assert.deepEqual(retained[0]?.awayTeam.players, [])
+		assert.deepEqual(retained[0]?.bonusPoints, [])
+		assert.deepEqual(retained[0]?.bps, [])
+	})
+
 	it('adopts heartbeat metadata without rebuilding fixtures and reloads only Match revisions', async () => {
 		const ready = await getLiveMatchesSnapshot(
 			async <T>(): Promise<T> => response() as T

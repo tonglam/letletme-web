@@ -884,6 +884,29 @@ describe('live match share card', () => {
 	})
 })
 
+describe('live match active-event fallback', () => {
+	it('corroborates fallback snapshots before seeding the client', async () => {
+		const source = await readFile(
+			new URL(
+				'../app/[locale]/live/matches/page.tsx',
+				import.meta.url
+			),
+			'utf8'
+		)
+
+		assert.match(
+			source,
+			/live\?\.snapshot && live\.delivery\.servedFrom !== 'REDIS_CURRENT'/
+		)
+		assert.match(source, /loadPageContext\(\)/)
+		assert.match(
+			source,
+			/context\.liveContext\?\.anchorEventId \?\? context\.presentation\.currentEventId/
+		)
+		assert.match(source, /const explicitLive = await getLiveMatchesSnapshot\(/)
+	})
+})
+
 describe('price prediction share scopes', () => {
 	it('keeps linked-squad text and image sharing separate from the all-player board', async () => {
 		const [board, squad] = await Promise.all([

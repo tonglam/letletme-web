@@ -188,11 +188,42 @@ describe('Live Points V2 web contract', () => {
 		assert.equal(livePointsRequestChangesEvent(undefined, 2), false)
 	})
 
+	it('re-probes official lifecycle before fetching after returning to current GW', () => {
+		const hook = readFileSync(
+			new URL('../app/live/points/_hooks/useLivePoints.ts', import.meta.url),
+			'utf8'
+		)
+		assert.match(hook, /refreshOfficialSyncStateForCurrentEvent/)
+		assert.match(
+			hook,
+			/const selectingCurrentGameweek =\s*gameweek === currentGameweekRef\.current/
+		)
+		assert.match(
+			hook,
+			/await refreshOfficialSyncStateForCurrentEvent\(\s*gameweek\s*\)/
+		)
+		assert.match(hook, /officialSyncPendingRef\.current = shouldKeepSyncPending/)
+		assert.match(hook, /gameweekSelectionRef\.current/)
+	})
+
 	it('scopes official sync error suppression to the active event', () => {
 		assert.equal(shouldSuppressOfficialLiveErrors(1, 1, true, false), true)
 		assert.equal(shouldSuppressOfficialLiveErrors(2, 1, true, false), false)
 		assert.equal(shouldSuppressOfficialLiveErrors(2, 1, false, true), false)
 		assert.equal(shouldSuppressOfficialLiveErrors(1, 1, false, true), true)
+	})
+
+	it('re-probes official sync when returning from a historical gameweek', () => {
+		const hook = readFileSync(
+			new URL('../app/live/points/_hooks/useLivePoints.ts', import.meta.url),
+			'utf8'
+		)
+		assert.match(hook, /refreshOfficialSyncStateForCurrentEvent/)
+		assert.match(
+			hook,
+			/if \(selectingCurrentGameweek\)[\s\S]*refreshOfficialSyncStateForCurrentEvent\(gameweek\)/
+		)
+		assert.match(hook, /cache: 'no-store',[\s\S]*suppressErrorLog: true/)
 	})
 
 	it('does not turn a due refresh deadline into a full Live Points reload', () => {

@@ -248,13 +248,13 @@ export function retainLiveMatchPlayerDetails(
 		if (!previous) return match
 
 		const homePlayers =
-			preferAcceptedDetails && previous.homeTeam.players.length > 0
+			preferAcceptedDetails
 				? previous.homeTeam.players
 				: match.homeTeam.players.length > 0
 					? match.homeTeam.players
 					: previous.homeTeam.players
 		const awayPlayers =
-			preferAcceptedDetails && previous.awayTeam.players.length > 0
+			preferAcceptedDetails
 				? previous.awayTeam.players
 				: match.awayTeam.players.length > 0
 					? match.awayTeam.players
@@ -267,16 +267,16 @@ export function retainLiveMatchPlayerDetails(
 			awayPlayers === match.awayTeam.players
 				? match.awayTeam
 				: { ...match.awayTeam, players: awayPlayers }
-		const bonusPoints =
-			(preferAcceptedDetails ||
-				match.bonusPoints == null ||
-				match.bonusPoints.length === 0) &&
-			(previous.bonusPoints?.length ?? 0) > 0
+		const bonusPoints = preferAcceptedDetails
+			? previous.bonusPoints
+			: (match.bonusPoints == null || match.bonusPoints.length === 0) &&
+				  (previous.bonusPoints?.length ?? 0) > 0
 				? previous.bonusPoints
 				: match.bonusPoints
-		const bps =
-			(preferAcceptedDetails || match.bps == null || match.bps.length === 0) &&
-			(previous.bps?.length ?? 0) > 0
+		const bps = preferAcceptedDetails
+			? previous.bps
+			: (match.bps == null || match.bps.length === 0) &&
+				  (previous.bps?.length ?? 0) > 0
 				? previous.bps
 				: match.bps
 

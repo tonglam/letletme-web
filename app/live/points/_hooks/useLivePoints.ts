@@ -145,6 +145,7 @@ export function useLivePoints({
 	)
 	const [activeEntryId, setActiveEntryId] = useState(initialEntryId)
 	const currentGameweekRef = useRef(initialEventId)
+	const gameweekSelectionRef = useRef(0)
 	const requestIdRef = useRef(0)
 	const hasLoadedLiveDataRef = useRef(Boolean(initialLiveData))
 	const skipInitialFetchRef = useRef(Boolean(initialLiveData))
@@ -197,6 +198,60 @@ export function useLivePoints({
 		liveDataRetryRef.current = null
 		retryingRequestIdRef.current = null
 	}, [])
+	const refreshOfficialSyncStateForCurrentEvent = useCallback(
+		async (
+			eventId: number,
+			selectionId = gameweekSelectionRef.current
+		) => {
+			try {
+				const probe = await executeQuery<LiveContextResponse>(
+					GET_LIVE_CONTEXT,
+					undefined,
+					{
+						cache: 'no-store',
+						suppressErrorLog: true
+					}
+				)
+				if (selectionId !== gameweekSelectionRef.current) return
+				const context = probe.liveContext
+				const observedCurrentGameweek =
+					context?.anchorEventId ?? currentGameweekRef.current
+				const selectedIsCurrent = eventId === observedCurrentGameweek
+				const observedOfficialUpdating =
+					selectedIsCurrent && isOfficialLiveUpdatingContext(context)
+				const hasAuthoritativeCurrentEvent = context?.anchorEventId != null
+				const selectedSnapshotIsMissing =
+					!snapshotRef.current || snapshotRef.current.eventId !== eventId
+				currentGameweekRef.current = observedCurrentGameweek
+				setCurrentGameweek(current =>
+					current === observedCurrentGameweek
+						? current
+						: observedCurrentGameweek
+				)
+				officialUpdatingRef.current = observedOfficialUpdating
+				officialSyncPendingRef.current =
+					selectedIsCurrent &&
+					selectedSnapshotIsMissing &&
+					(!hasAuthoritativeCurrentEvent || observedOfficialUpdating)
+				setIsOfficialSyncPending(officialSyncPendingRef.current)
+				setIsOfficialUpdating(
+					observedOfficialUpdating || officialSyncPendingRef.current
+				)
+			} catch {
+				if (selectionId !== gameweekSelectionRef.current) return
+				// A failed lifecycle probe must not strand a newly selected current
+				// event with polling disabled. Keep sync pending so the next heartbeat
+				// can re-probe instead of requiring a manual reload.
+				const shouldKeepSyncPending =
+					eventId === currentGameweekRef.current
+				officialUpdatingRef.current = false
+				officialSyncPendingRef.current = shouldKeepSyncPending
+				setIsOfficialSyncPending(shouldKeepSyncPending)
+				setIsOfficialUpdating(shouldKeepSyncPending)
+			}
+		},
+		[]
+	)
 
 	const enrichLivePointBreakdowns = useCallback(
 		async (
@@ -481,6 +536,7 @@ export function useLivePoints({
 			return false
 		}
 
+		gameweekSelectionRef.current += 1
 		requestIdRef.current += 1
 		resetLiveDataRetry()
 		currentRequestKeyRef.current = null
@@ -500,19 +556,35 @@ export function useLivePoints({
 
 	const changeGameweek = useCallback(
 		(gameweek: number) => {
+			const selectionId = ++gameweekSelectionRef.current
 			resetLiveDataRetry()
 			followsAnchorRef.current = false
 			lastExplainAttemptAtRef.current = 0
-			if (gameweek !== currentGameweekRef.current) {
+			const selectingCurrentGameweek =
+				gameweek === currentGameweekRef.current
+			if (!selectingCurrentGameweek) {
 				officialUpdatingRef.current = false
 				officialSyncPendingRef.current = false
 				setIsOfficialUpdating(false)
 				setIsOfficialSyncPending(false)
 			}
 			setSelectedGameweek(gameweek)
-			void fetchLivePointsForGameweek(gameweek)
+			void (async () => {
+				if (selectingCurrentGameweek) {
+					// Historical selections intentionally clear the official-sync hint.
+					// Re-probe when returning to the anchor event so an in-progress FPL
+					// post-deadline sync re-arms polling before the first request fails.
+					await refreshOfficialSyncStateForCurrentEvent(gameweek)
+				}
+				if (selectionId !== gameweekSelectionRef.current) return
+				await fetchLivePointsForGameweek(gameweek)
+			})()
 		},
-		[fetchLivePointsForGameweek, resetLiveDataRetry]
+		[
+			fetchLivePointsForGameweek,
+			refreshOfficialSyncStateForCurrentEvent,
+			resetLiveDataRetry
+		]
 	)
 
 	const refresh = useCallback(async () => {
