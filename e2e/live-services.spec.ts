@@ -397,7 +397,11 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 		releaseFirstResponse = resolve
 	})
 
-	const liveResponse = (score: number, revision: string) => ({
+	const liveResponse = (
+		score: number,
+		revision: string,
+		deskGeneration: number
+	) => ({
 		data: {
 			liveMatchday: {
 				availability: 'READY',
@@ -408,7 +412,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 					state: 'LIVE_ACTIVE',
 					revisions: {
 						deskPublicationId: `e2e-matchday-${revision.slice(0, 8)}`,
-						deskGeneration: 1,
+						deskGeneration,
 						lifecycle: revision,
 						fixtureIdentity: revision,
 						scoreState: revision,
@@ -464,7 +468,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 			await firstResponseGate
 			await route.fulfill({
 				status: 200,
-				json: liveResponse(1, 'b'.repeat(24)).data
+				json: liveResponse(1, 'b'.repeat(24), 2).data
 			})
 			return
 		}
@@ -477,7 +481,7 @@ test('scheduled match polling is overlap-safe, keeps last-good data, and resumes
 		}
 		await route.fulfill({
 			status: 200,
-			json: liveResponse(2, 'c'.repeat(24)).data
+			json: liveResponse(2, 'c'.repeat(24), 3).data
 		})
 	})
 
