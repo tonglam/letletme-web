@@ -1,21 +1,21 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import type { LiveMatchdayFixtureSummary } from '../lib/graphql/operations/live'
+import type { LiveMatchdayDeskRow } from '../lib/graphql/operations/live'
 import {
 	buildLiveCoreFixtureFallback,
 	mergeLiveFixturesIntoHomeFixtures
 } from '../lib/home-fixtures-merge'
 
-const liveRow = (partial: Partial<LiveMatchdayFixtureSummary> = {}) =>
+const liveRow = (partial: Partial<LiveMatchdayDeskRow> = {}) =>
 	({
 		fixtureId: 1,
 		eventId: 1,
 		homeTeamId: 1,
 		homeTeamName: 'Arsenal',
-		homeTeamShortName: '',
+		homeTeamShortName: undefined,
 		awayTeamId: 7,
 		awayTeamName: 'Coventry City',
-		awayTeamShortName: '',
+		awayTeamShortName: undefined,
 		homeScore: 3,
 		awayScore: 0,
 		kickoffTime: '2026-08-21T19:00:00.000Z',
@@ -24,7 +24,7 @@ const liveRow = (partial: Partial<LiveMatchdayFixtureSummary> = {}) =>
 		finished: false,
 		finishedProvisional: false,
 		...partial
-	}) as LiveMatchdayFixtureSummary
+	}) as LiveMatchdayDeskRow
 
 describe('mergeLiveFixturesIntoHomeFixtures', () => {
 	it('keeps core team identity and kickoff data when live rows omit abbreviations', () => {

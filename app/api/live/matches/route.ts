@@ -3,41 +3,50 @@ import {
 	executePublicServerQuery,
 	withPublicRouteGraphQLIngress
 } from '@/lib/graphql-server'
-import {
-	loadLiveMatchdayV2,
-	parseLiveMatchesRequestParams,
-	type QueryExecutor
-} from '@/lib/live-matches'
+import { loadLiveMatchdayDesk, type QueryExecutor } from '@/lib/live-matches'
 
 export const dynamic = 'force-dynamic'
 
 async function handleGet(request: Request) {
-	if (request.headers.get('X-LetLetMe-Contract') !== 'live-matches-v2') {
-		return NextResponse.json(
-			{ error: 'CLIENT_UPGRADE_REQUIRED' },
-			{ status: 426, headers: { 'Cache-Control': 'no-store' } }
-		)
-	}
 	const params = new URL(request.url).searchParams
-	const parsed = parseLiveMatchesRequestParams(params)
-	if (!parsed.ok) {
+	const season = params.get('season')
+	const eventId = Number(params.get('eventId'))
+	const scoreCoreRevision = params.get('scoreCoreRevision')
+	const includeFixturePlayers = params.get('includePlayers') !== '0'
+	if (
+		!/^\d{4}$/.test(season ?? '') ||
+		!Number.isSafeInteger(eventId) ||
+		eventId <= 0 ||
+		!scoreCoreRevision
+	)
 		return NextResponse.json(
-			{ error: parsed.error },
-			{ status: parsed.status, headers: { 'Cache-Control': 'no-store' } }
+			{ error: 'Invalid live score revision' },
+			{ status: 400 }
 		)
-	}
-	const { eventId } = parsed
 	try {
 		const executor: QueryExecutor = (query, variables, options) =>
 			executePublicServerQuery('gameweek', query, variables, options)
-		const data = await loadLiveMatchdayV2(executor, eventId)
-		const snapshot = data.liveMatchday.snapshot
-		if (snapshot && eventId !== undefined && snapshot.eventId !== eventId) {
-			return NextResponse.json(
-				{ error: 'LIVE_MATCHDAY_EVENT_MISMATCH' },
-				{ status: 409, headers: { 'Cache-Control': 'no-store' } }
-			)
-		}
+		const data = await loadLiveMatchdayDesk(
+			executor,
+			{
+				season: season!,
+				eventId,
+				scoreCoreRevision
+			},
+			{
+				includeFixturePlayers,
+				onFixturePlayerFailure: failure => {
+					console.warn('[live-matches] fixture player section unavailable', {
+						season: failure.season,
+						eventId: failure.eventId,
+						scoreCoreRevision: failure.scoreCoreRevision,
+						stage: failure.stage,
+						fixtureIds: failure.fixtureIds,
+						code: failure.code
+					})
+				}
+			}
+		)
 		const response = NextResponse.json(data)
 		response.headers.set(
 			'Cache-Control',

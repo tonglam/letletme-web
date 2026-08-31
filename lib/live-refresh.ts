@@ -2,7 +2,6 @@ import type {
 	LiveContextResponse,
 	LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
-import type { LiveMatchdayStatus } from '@/lib/live-matches'
 
 // Context is a cheap ETag probe. Keep it more frequent than the Data live
 // publication poll so a newly published revision is noticed promptly without
@@ -29,41 +28,17 @@ export function isLiveRefreshTerminalState(state?: string | null): boolean {
 export function shouldPollLiveMatchesTransition({
 	isPageActive,
 	currentEventId,
+	nextEventId,
 	snapshot
 }: {
 	isPageActive: boolean
 	currentEventId?: number
-	snapshot?: LiveMatchdayStatus | null
+	nextEventId?: number
+	snapshot?: LiveSnapshotStatus | null
 }): boolean {
-	if (!isPageActive || !currentEventId) return false
+	if (!isPageActive || !currentEventId || !nextEventId) return false
 	if (!snapshot || snapshot.eventId !== currentEventId) return false
-	return isLiveRefreshTerminalState(snapshot.state)
-}
-
-/** Match V2 uses its own lifecycle and server cadence, never LP freshness. */
-export function shouldPollLiveMatchday({
-	isPageActive,
-	currentEventId,
-	selectedEventId,
-	snapshot
-}: {
-	isPageActive: boolean
-	currentEventId?: number
-	selectedEventId?: number
-	snapshot?: LiveMatchdayStatus | null
-}): boolean {
-	if (!isPageActive || !currentEventId || selectedEventId !== currentEventId) {
-		return false
-	}
-	// A known event with no desk is a recoverable cold/unavailable state. Keep
-	// bounded retries enabled so the page can recover without a manual reload.
-	if (!snapshot) return true
-	if (snapshot.eventId !== selectedEventId) return false
-	if (isLiveRefreshTerminalState(snapshot.state)) return false
-	// The countdown consumes the server-provided nextRefreshAt when present;
-	// the boolean only decides whether non-terminal Match observations remain
-	// eligible for polling.
-	return true
+	return isLiveRefreshTerminalState(snapshot.windowState ?? snapshot.state)
 }
 
 export function liveContextToSnapshot(
@@ -152,25 +127,6 @@ export function liveSnapshotNeedsRefresh(
 		accepted.revisions?.officialAdjustment !==
 			observed.revisions?.officialAdjustment ||
 		accepted.revisions?.finalResult !== observed.revisions?.finalResult
-	)
-}
-
-/**
- * Matchday payloads are owned by the score/fixture publication. Changes to
- * picks, rank, or unrelated live-point projections must not refetch the full
- * fixture-and-player payload.
- */
-export function liveMatchdayNeedsRefresh(
-	accepted: LiveMatchdayStatus | null | undefined,
-	observed: LiveMatchdayStatus | null | undefined
-): boolean {
-	if (!accepted || !observed) return true
-	return (
-		accepted.eventId !== observed.eventId ||
-		accepted.revisions.lifecycle !== observed.revisions.lifecycle ||
-		accepted.revisions.fixtureIdentity !== observed.revisions.fixtureIdentity ||
-		accepted.revisions.scoreState !== observed.revisions.scoreState ||
-		accepted.revisions.playerDetail !== observed.revisions.playerDetail
 	)
 }
 

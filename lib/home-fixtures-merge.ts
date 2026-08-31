@@ -1,4 +1,4 @@
-import type { LiveMatchdayFixtureSummary } from '@/lib/graphql/operations/live'
+import type { LiveMatchdayDeskRow } from '@/lib/graphql/operations/live'
 import type {
 	HomeFixture,
 	HomeFixturesResponse
@@ -33,11 +33,10 @@ function mergeTeam(
 
 /**
  * Keep fixture identity in the core contract and overlay only live facts.
- * The matchday publication is allowed to provide short names, while core
- * fixture identity remains authoritative for kickoff and missing metadata.
+ * The live desk intentionally does not own team abbreviations or kickoff data.
  */
 export function mergeLiveFixturesIntoHomeFixtures(
-	rows: readonly LiveMatchdayFixtureSummary[],
+	rows: readonly LiveMatchdayDeskRow[],
 	coreFixtures: readonly CoreHomeFixture[]
 ): HomeFixture[] {
 	const coreByFixtureId = new Map(

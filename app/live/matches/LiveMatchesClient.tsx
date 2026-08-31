@@ -13,19 +13,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
 	GET_LIVE_CONTEXT,
-	type LiveContextResponse
+	type LiveContextResponse,
+	type LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
 import {
-	liveMatchdayNeedsRefresh,
+	liveRefreshEventIdentityChanged,
+	liveContextToSnapshot,
+	liveSnapshotNeedsRefresh,
 	shouldPollLiveMatchesTransition,
-	shouldPollLiveMatchday
+	shouldPollLiveSnapshot
 } from '@/lib/live-refresh'
 import {
-	canReplaceLiveMatchesLkg,
 	getLiveMatchesSnapshot,
-	getPreferredLiveMatchesTab,
-	type LiveMatchdayStatus
+	getPreferredLiveMatchesTab
 } from '@/lib/live-matches'
+import { selectLiveMatchEvent } from '@/lib/live-match-selection'
+import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
 import { usePageActive } from '@/hooks/use-page-active'
 import type { Match } from '@/types/match'
 import { RefreshCw } from 'lucide-react'
@@ -67,13 +70,17 @@ export function LiveMatchesClient({
 	initialError,
 	currentEventId,
 	selectedEventId: initialSelectedEventId,
-	initialSnapshot
+	nextEventId,
+	initialSnapshot,
+	isOfficialUpdating: initialOfficialUpdating = false
 }: {
 	initialMatches: Match[]
 	initialError?: string | null
 	currentEventId?: number
 	selectedEventId?: number
-	initialSnapshot?: LiveMatchdayStatus | null
+	nextEventId?: number
+	initialSnapshot?: LiveSnapshotStatus | null
+	isOfficialUpdating?: boolean
 }) {
 	const t = useTranslations('LiveMatches')
 	const format = useFormatter()
@@ -85,24 +92,38 @@ export function LiveMatchesClient({
 	const [selectedEventId, setSelectedEventId] = useState<number | undefined>(
 		initialSelectedEventId ?? currentEventId
 	)
+	const [resolvedNextEventId, setResolvedNextEventId] = useState<
+		number | undefined
+	>(nextEventId)
 	const [activeTab, setActiveTab] = useState<LiveMatchesTab>(() =>
 		getPreferredLiveMatchesTab(initialMatches)
 	)
 	const [isLoading, setIsLoading] = useState(false)
 	const [isRefreshing, setIsRefreshing] = useState(false)
+	const [isOfficialUpdating, setIsOfficialUpdating] = useState(
+		initialOfficialUpdating
+	)
+	const [isOfficialSyncPending, setIsOfficialSyncPending] = useState(
+		initialOfficialUpdating && !initialSnapshot
+	)
+	const officialUpdatingRef = useRef(initialOfficialUpdating)
+	const officialSyncPendingRef = useRef(
+		initialOfficialUpdating && !initialSnapshot
+	)
 	const [error, setError] = useState<string | null>(initialError ?? null)
-	const [snapshot, setSnapshot] = useState<LiveMatchdayStatus | null>(
+	const [snapshot, setSnapshot] = useState<LiveSnapshotStatus | null>(
 		initialSnapshot ?? null
 	)
-	const snapshotRef = useRef<LiveMatchdayStatus | null>(initialSnapshot ?? null)
+	const snapshotRef = useRef<LiveSnapshotStatus | null>(initialSnapshot ?? null)
 	const hasSavedTabPreference = useRef(false)
 	const hasUserSelectedTab = useRef(false)
 	const isFetchInFlight = useRef(false)
 	const pendingRefreshRef = useRef(false)
 	const mountedRef = useRef(true)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
-	const hasLastGoodData = useRef(initialSnapshot != null)
-	const acceptSnapshot = useCallback((next: LiveMatchdayStatus | null) => {
+	const hasLastGoodData = useRef(initialMatches.length > 0)
+	const hasRequestedInitialFixturePlayers = useRef(false)
+	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
 		snapshotRef.current = next
 		setSnapshot(next)
 	}, [])
@@ -117,8 +138,11 @@ export function LiveMatchesClient({
 	const fetchMatches = useCallback(
 		async (
 			isRefresh = false,
-			eventIds?: { currentEventId?: number },
-			prefetched?: Awaited<ReturnType<typeof getLiveMatchesSnapshot>>
+			eventIds?: {
+				currentEventId?: number
+				nextEventId?: number | null
+				scoreCoreRevision?: string | null
+			}
 		) => {
 			if (isFetchInFlight.current) {
 				// Coalesce concurrent manual/auto refreshes into one trailing fetch.
@@ -135,38 +159,67 @@ export function LiveMatchesClient({
 					setIsLoading(true)
 				}
 				setError(null)
-				const data =
-					prefetched ??
-					(await getLiveMatchesSnapshot(
-						executeQuery,
-						eventIds?.currentEventId ?? resolvedCurrentEventId ?? null,
-						{
-							preferHttp: true
-						}
-					))
+				const resolvedNextEventIdForSnapshot =
+					eventIds && 'nextEventId' in eventIds
+						? (eventIds.nextEventId ?? null)
+						: (resolvedNextEventId ?? null)
+
+				const data = await getLiveMatchesSnapshot(
+					resolvedNextEventIdForSnapshot,
+					executeQuery,
+					eventIds?.currentEventId ?? resolvedCurrentEventId ?? null,
+					{
+						preferHttp: true,
+						suppressErrorLog:
+							officialUpdatingRef.current || officialSyncPendingRef.current,
+						scoreCoreRevision:
+							eventIds?.scoreCoreRevision ??
+							snapshotRef.current?.scoreCoreRevision ??
+							null
+					}
+				)
 				if (!mountedRef.current) return
-				const replaceablePublication = canReplaceLiveMatchesLkg(data)
-				if (!replaceablePublication && hasLastGoodData.current) {
-					if (data.snapshot !== null) setError(t('refreshFailed'))
-					return
-				}
 				const lifecycleCurrentEventId =
 					data.currentEventId ??
 					eventIds?.currentEventId ??
 					resolvedCurrentEventId
-				setMatches(data.matches)
+				const nextSelectedEventId = lifecycleCurrentEventId
+					? selectLiveMatchEvent(
+							data.matches,
+							lifecycleCurrentEventId,
+							new Date()
+						)
+					: undefined
+				const mappedMatches =
+					nextSelectedEventId && nextSelectedEventId !== lifecycleCurrentEventId
+						? data.matches.filter(
+								match => match.eventId === nextSelectedEventId
+							)
+						: data.matches
+				setMatches(mappedMatches)
 				setResolvedCurrentEventId(lifecycleCurrentEventId)
-				setSelectedEventId(lifecycleCurrentEventId)
-				acceptSnapshot(data.snapshot)
-				hasLastGoodData.current = replaceablePublication
+				setSelectedEventId(nextSelectedEventId)
+				setResolvedNextEventId(data.nextEventId ?? undefined)
+				acceptSnapshot(
+					nextSelectedEventId === lifecycleCurrentEventId ? data.snapshot : null
+				)
+				officialSyncPendingRef.current = false
+				officialUpdatingRef.current = false
+				setIsOfficialSyncPending(false)
+				setIsOfficialUpdating(false)
+				hasLastGoodData.current = true
 
 				if (!hasUserSelectedTab.current && !hasSavedTabPreference.current) {
-					setActiveTab(getPreferredLiveMatchesTab(data.matches))
+					setActiveTab(getPreferredLiveMatchesTab(mappedMatches))
 				}
 			} catch (err) {
-				console.error('Failed to fetch live matches:', err)
-				if (mountedRef.current) {
-					setError(t(hasLastGoodData.current ? 'refreshFailed' : 'loadFailed'))
+				if (!officialUpdatingRef.current && !officialSyncPendingRef.current) {
+					console.error('Failed to fetch live matches:', err)
+					if (mountedRef.current) {
+						setError(
+							t(hasLastGoodData.current ? 'refreshFailed' : 'loadFailed')
+						)
+					}
 				}
 			} finally {
 				isFetchInFlight.current = false
@@ -182,7 +235,7 @@ export function LiveMatchesClient({
 				}
 			}
 		},
-		[acceptSnapshot, resolvedCurrentEventId, t]
+		[acceptSnapshot, resolvedCurrentEventId, resolvedNextEventId, t]
 	)
 
 	const autoRefreshMatches = useCallback((): Promise<void> => {
@@ -193,67 +246,73 @@ export function LiveMatchesClient({
 
 		const request = (async () => {
 			try {
-				const transitionProbe = shouldPollLiveMatchesTransition({
-					isPageActive,
-					currentEventId: resolvedCurrentEventId,
-					snapshot: snapshotRef.current
-				})
-				if (transitionProbe) {
-					const probe = await executeQuery<LiveContextResponse>(
-						GET_LIVE_CONTEXT,
-						undefined,
-						{ cache: 'no-store' }
-					)
-					const observedCurrentEventId =
-						probe.liveContext?.anchorEventId ?? undefined
-					if (
-						observedCurrentEventId &&
-						observedCurrentEventId !== resolvedCurrentEventId
-					) {
-						await fetchMatches(true, {
-							currentEventId: observedCurrentEventId
-						})
-						return
+				const probe = await executeQuery<LiveContextResponse>(
+					GET_LIVE_CONTEXT,
+					undefined,
+					{
+						cache: 'no-store',
+						suppressErrorLog:
+							officialUpdatingRef.current || officialSyncPendingRef.current
 					}
-					setError(null)
-					return
-				}
-				const observedData = await getLiveMatchesSnapshot(
-					executeQuery,
-					resolvedCurrentEventId,
-					{ preferHttp: true }
 				)
-				const observedSnapshot = observedData.snapshot
-				// An unavailable publication is an observation failure, not permission
-				// to erase or refetch the last complete board.
-				if (!observedSnapshot) {
-					// A valid V2 response without a snapshot is the normal post-deadline
-					// sync window. Keep the countdown armed and retain any LKG.
+				const context = probe.liveContext
+				const observedOfficialUpdating = isOfficialLiveUpdatingContext(context)
+				officialUpdatingRef.current = observedOfficialUpdating
+				if (observedOfficialUpdating && !snapshotRef.current) {
+					officialSyncPendingRef.current = true
+				}
+				setIsOfficialSyncPending(officialSyncPendingRef.current)
+				setIsOfficialUpdating(
+					observedOfficialUpdating || officialSyncPendingRef.current
+				)
+				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
+				const observedCurrentEventId = context?.anchorEventId ?? undefined
+				const observedNextEventId = context?.nextEventId ?? undefined
+				const eventIdentityChanged =
+					Boolean(observedCurrentEventId) &&
+					liveRefreshEventIdentityChanged(
+						resolvedCurrentEventId,
+						resolvedNextEventId,
+						observedCurrentEventId,
+						observedNextEventId
+					)
+				if (eventIdentityChanged) {
+					setResolvedCurrentEventId(observedCurrentEventId)
+					setResolvedNextEventId(observedNextEventId)
+					await fetchMatches(true, {
+						currentEventId: observedCurrentEventId,
+						nextEventId: observedNextEventId,
+						scoreCoreRevision: observedSnapshot?.scoreCoreRevision ?? null
+					})
+					return
+				}
+				// Once the selected matchday is terminal, this heartbeat is only
+				// for discovering a new event identity. Do not reload the same
+				// finalized desk just because its source check time changed.
+				if (
+					shouldPollLiveMatchesTransition({
+						isPageActive,
+						currentEventId: resolvedCurrentEventId,
+						nextEventId: resolvedNextEventId,
+						snapshot: snapshotRef.current
+					})
+				) {
 					setError(null)
 					return
 				}
-				if (
-					observedData.currentEventId &&
-					observedData.currentEventId !== resolvedCurrentEventId
-				) {
-					await fetchMatches(
-						true,
-						{
-							currentEventId: observedData.currentEventId
-						},
-						observedData
-					)
-					return
-				}
-				if (!liveMatchdayNeedsRefresh(snapshotRef.current, observedSnapshot)) {
+				if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
 					acceptSnapshot(observedSnapshot)
 					setError(null)
 					return
 				}
-				await fetchMatches(true, undefined, observedData)
+				await fetchMatches(true, {
+					scoreCoreRevision: observedSnapshot?.scoreCoreRevision ?? null
+				})
 			} catch (probeError) {
-				console.error('Failed to check live match freshness:', probeError)
-				setError(t('refreshFailed'))
+				if (!officialUpdatingRef.current && !officialSyncPendingRef.current) {
+					console.error('Failed to check live match freshness:', probeError)
+					setError(t('refreshFailed'))
+				}
 			}
 		})()
 		freshnessRequestRef.current = request
@@ -263,7 +322,14 @@ export function LiveMatchesClient({
 			}
 		})
 		return request
-	}, [acceptSnapshot, fetchMatches, isPageActive, resolvedCurrentEventId, t])
+	}, [
+		acceptSnapshot,
+		fetchMatches,
+		isPageActive,
+		resolvedCurrentEventId,
+		resolvedNextEventId,
+		t
+	])
 
 	const handleTabChange = (value: string) => {
 		if (!isLiveMatchesTab(value)) return
@@ -300,6 +366,23 @@ export function LiveMatchesClient({
 	const tabCountLabel = (tab: LiveMatchesTab) =>
 		t('matchCount', { count: matchesByTab[tab].length })
 	useEffect(() => {
+		if (
+			hasRequestedInitialFixturePlayers.current ||
+			!initialMatches.some(
+				match =>
+					match.status === 'LIVE' ||
+					match.status === 'HT' ||
+					match.status === 'FT'
+			)
+		)
+			return
+		hasRequestedInitialFixturePlayers.current = true
+		// Keep the score/status desk in the first RSC payload and hydrate the
+		// optional player section in the background.
+		void fetchMatches(true)
+	}, [fetchMatches, initialMatches])
+
+	useEffect(() => {
 		if (hasUserSelectedTab.current) return
 		if (hasSavedTabPreference.current) return
 		let savedTab: string | null = null
@@ -329,23 +412,28 @@ export function LiveMatchesClient({
 
 	const pollingEventId = resolvedCurrentEventId
 	const autoRefreshEnabled =
-		shouldPollLiveMatchday({
+		shouldPollLiveSnapshot({
 			isPageActive,
 			currentEventId: pollingEventId,
 			selectedEventId: pollingEventId,
-			snapshot
+			snapshot,
+			windowState: snapshot?.windowState ?? snapshot?.state,
+			nextRefreshAt: snapshot?.nextRefreshAt,
+			isOfficialUpdating: isOfficialUpdating || isOfficialSyncPending
 		}) ||
 		shouldPollLiveMatchesTransition({
 			isPageActive,
 			currentEventId: resolvedCurrentEventId,
+			nextEventId: resolvedNextEventId,
 			snapshot
 		})
 	const transitionPolling = shouldPollLiveMatchesTransition({
 		isPageActive,
 		currentEventId: resolvedCurrentEventId,
+		nextEventId: resolvedNextEventId,
 		snapshot
 	})
-	const lastUpdatedAt = snapshot?.times.deskContentUpdatedAt ?? null
+	const lastUpdatedAt = snapshot?.sourceCheckedAt ?? null
 	const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string | null>(null)
 	useEffect(() => {
 		if (!lastUpdatedAt) {
@@ -369,37 +457,6 @@ export function LiveMatchesClient({
 			})
 		)
 	}, [format, lastUpdatedAt])
-	const detailDelayed =
-		matches.some(match => match.status !== 'NOT_STARTED') &&
-		(snapshot?.detailDelivery.state === 'PENDING' ||
-			snapshot?.detailDelivery.state === 'STALE' ||
-			snapshot?.detailDelivery.state === 'DEGRADED')
-	const detailUpdatedAt = snapshot?.times.detailContentUpdatedAt ?? null
-	const [detailUpdatedLabel, setDetailUpdatedLabel] = useState<string | null>(
-		null
-	)
-	useEffect(() => {
-		if (!detailUpdatedAt) {
-			setDetailUpdatedLabel(null)
-			return
-		}
-		const parsed = new Date(detailUpdatedAt)
-		if (Number.isNaN(parsed.getTime())) {
-			setDetailUpdatedLabel(null)
-			return
-		}
-		const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-		setDetailUpdatedLabel(
-			format.dateTime(parsed, {
-				day: 'numeric',
-				month: 'short',
-				hour: '2-digit',
-				minute: '2-digit',
-				second: '2-digit',
-				timeZone: browserTimeZone
-			})
-		)
-	}, [detailUpdatedAt, format])
 	const activeTabConfig = TAB_CONFIG.find(config => config.value === activeTab)
 	const activeMatches = matchesByTab[activeTab]
 
@@ -486,16 +543,6 @@ export function LiveMatchesClient({
 
 	const headerActions = (
 		<div className="flex flex-wrap items-center justify-end gap-2">
-			{detailDelayed ? (
-				<span
-					className="whitespace-nowrap text-xs text-amber-700 dark:text-amber-300"
-					role="status"
-				>
-					{detailUpdatedLabel
-						? t('detailUpdatingSince', { time: detailUpdatedLabel })
-						: t('detailUpdating')}
-				</span>
-			) : null}
 			{lastUpdatedAt && lastUpdatedLabel ? (
 				<time
 					dateTime={lastUpdatedAt}
@@ -522,9 +569,7 @@ export function LiveMatchesClient({
 					<LiveAutoRefreshCountdown
 						enabled={autoRefreshEnabled}
 						onRefresh={autoRefreshMatches}
-						nextRefreshAt={
-							transitionPolling ? null : snapshot?.times.nextRefreshAt
-						}
+						nextRefreshAt={transitionPolling ? null : snapshot?.nextRefreshAt}
 						renderLabel={seconds => t('autoRefresh', { seconds })}
 						showLabel={false}
 					/>
@@ -661,13 +706,8 @@ export function LiveMatchesClient({
 									/>
 								))
 							) : (
-								<p
-									className="rounded-lg border border-border/80 bg-card py-8 text-center text-muted-foreground shadow-sm"
-									role={
-										!snapshot && matches.length === 0 ? 'status' : undefined
-									}
-								>
-									{!snapshot && matches.length === 0
+								<p className="rounded-lg border border-border/80 bg-card py-8 text-center text-muted-foreground shadow-sm">
+									{isOfficialUpdating && matches.length === 0
 										? t('officialUpdating')
 										: activeTabConfig
 											? t(activeTabConfig.labelKey)

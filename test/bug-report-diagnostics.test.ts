@@ -31,7 +31,7 @@ describe('browser bug-report diagnostics', () => {
 	it('maps browser facts into the bounded cross-client metadata contract', () => {
 		recordBugReportDiagnostic({
 			at: '2026-08-20T00:00:00.000Z',
-			operation: 'LiveMatchday',
+			operation: 'LiveFixturePlayers',
 			requestId: 'request-1',
 			code: 'UPSTREAM_GRAPHQL_ERROR',
 			status: 502
@@ -67,7 +67,7 @@ describe('browser bug-report diagnostics', () => {
 		assert.deepEqual(meta.operations, [
 			{
 				at: '2026-08-20T00:00:00.000Z',
-				operation: 'LiveMatchday',
+				operation: 'LiveFixturePlayers',
 				requestId: 'request-1',
 				code: 'UPSTREAM_GRAPHQL_ERROR',
 				status: 502
