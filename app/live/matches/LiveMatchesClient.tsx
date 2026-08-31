@@ -20,6 +20,7 @@ import {
 	canReplaceLiveMatchesLkg,
 	getLiveMatchesSnapshot,
 	getPreferredLiveMatchesTab,
+	retainLiveMatchPlayerPrices,
 	type LiveMatchdayStatus
 } from '@/lib/live-matches'
 import { usePageActive } from '@/hooks/use-page-active'
@@ -75,6 +76,7 @@ export function LiveMatchesClient({
 	const format = useFormatter()
 	const isPageActive = usePageActive()
 	const [matches, setMatches] = useState<Match[]>(initialMatches)
+	const matchesRef = useRef<Match[]>(initialMatches)
 	const [resolvedCurrentEventId, setResolvedCurrentEventId] = useState<
 		number | undefined
 	>(currentEventId)
@@ -99,6 +101,7 @@ export function LiveMatchesClient({
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
 	const hasLastGoodData = useRef(initialSnapshot != null)
 	const acceptMatches = useCallback((next: Match[]) => {
+		matchesRef.current = next
 		setMatches(next)
 	}, [])
 	const acceptSnapshot = useCallback((next: LiveMatchdayStatus | null) => {
@@ -158,11 +161,20 @@ export function LiveMatchesClient({
 					if (data.snapshot !== null) setError(t('refreshFailed'))
 					return
 				}
+				const acceptedSnapshot = snapshotRef.current
+				const canRetainPrices =
+					data.snapshot !== null &&
+					acceptedSnapshot !== null &&
+					data.snapshot.season === acceptedSnapshot.season &&
+					data.snapshot.eventId === acceptedSnapshot.eventId
+				const matchesForAcceptance = canRetainPrices
+					? retainLiveMatchPlayerPrices(data.matches, matchesRef.current)
+					: data.matches
 				const lifecycleCurrentEventId =
 					data.currentEventId ??
 					(eventIds?.useActiveEvent ? undefined : eventIds?.currentEventId) ??
 					resolvedCurrentEventId
-				acceptMatches(data.matches)
+				acceptMatches(matchesForAcceptance)
 				setResolvedCurrentEventId(lifecycleCurrentEventId)
 				setSelectedEventId(lifecycleCurrentEventId)
 				acceptSnapshot(data.snapshot)

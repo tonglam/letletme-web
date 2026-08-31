@@ -416,6 +416,7 @@ export const GET_LIVE_MATCHDAY = `
 						lifecycle
 						fixtureIdentity
 						scoreState
+						corePriceRevision
 						detailPublicationId
 						detailGeneration
 						playerDetail
@@ -484,6 +485,8 @@ export interface LiveMatchdayRevisionVector {
 	lifecycle: string
 	fixtureIdentity: string
 	scoreState: string
+	/** Core publication revision used for the optional player price enrichment. */
+	corePriceRevision: string | null
 	detailPublicationId: string | null
 	detailGeneration: number | null
 	playerDetail: string | null
@@ -514,8 +517,8 @@ export interface LiveMatchdayPlayer {
 	webName: string
 	position: 'GOALKEEPER' | 'DEFENDER' | 'MIDFIELDER' | 'FORWARD'
 	teamId: number
-	/** Current canonical FPL price in tenths of £m. */
-	price: number
+	/** Current canonical FPL price in tenths of £m; absent on older payloads. */
+	price?: number | null
 	totalPoints: number
 	stats: LiveMatchdayPlayerStat[]
 }
