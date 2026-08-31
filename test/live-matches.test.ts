@@ -9,6 +9,7 @@ import {
 	canReplaceLiveMatchesLkg,
 	getLiveMatchesSnapshot,
 	parseLiveMatchesRequestParams,
+	retainLiveMatchPlayerDetails,
 	retainLiveMatchPlayerPrices,
 	type QueryExecutor,
 	type QueryExecutorOptions,
@@ -401,6 +402,42 @@ describe('live matchday V2 publication', () => {
 			),
 			true
 		)
+		assert.equal(
+			canReplaceLiveMatchesLkg(
+				{
+					...older,
+					snapshot: {
+						...older.snapshot!,
+						season: '2627',
+						eventId: 38
+					}
+				},
+				{
+					...accepted.snapshot!,
+					season: '2728',
+					eventId: 1
+				}
+			),
+			false
+		)
+		assert.equal(
+			canReplaceLiveMatchesLkg(
+				{
+					...newer,
+					snapshot: {
+						...newer.snapshot!,
+						season: '2829',
+						eventId: 1
+					}
+				},
+				{
+					...accepted.snapshot!,
+					season: '2728',
+					eventId: 38
+				}
+			),
+			true
+		)
 	})
 
 	it('retains accepted prices when a newer same-event desk loses Core enrichment', async () => {
@@ -439,6 +476,45 @@ describe('live matchday V2 publication', () => {
 		assert.equal(retained[0]?.homeTeam.players[0]?.price, 55)
 		assert.equal(retained[0]?.homeTeam.players[0]?.totalPoints, 9)
 		assert.equal(retained[0]?.awayTeam.players[0]?.price, undefined)
+	})
+
+	it('retains accepted player details when a newer desk has scores but no detail rows', async () => {
+		const accepted = await getLiveMatchesSnapshot(
+			async <T>(): Promise<T> => response() as T,
+			33
+		)
+		const candidateSnapshot = snapshot({
+			revisions: {
+				...snapshot().revisions,
+				deskGeneration: 2,
+				deskPublicationId: 'desk-2',
+				detailGeneration: 2,
+				detailPublicationId: 'detail-2',
+				playerDetail: 'players-2'
+			},
+			matches: [
+				{
+					...snapshot().matches[0]!,
+					homeScore: 2,
+					players: []
+				}
+			]
+		})
+		const candidate = await getLiveMatchesSnapshot(
+			async <T>(): Promise<T> =>
+				response({ snapshot: candidateSnapshot }) as T,
+			33
+		)
+
+		const retained = retainLiveMatchPlayerDetails(
+			candidate.matches,
+			accepted.matches
+		)
+		assert.equal(retained[0]?.homeTeam.score, 2)
+		assert.equal(retained[0]?.homeTeam.players[0]?.player, 'Home Player')
+		assert.equal(retained[0]?.awayTeam.players[0]?.player, 'Away Player')
+		assert.equal(retained[0]?.bonusPoints?.[0]?.player, 'Home Player')
+		assert.equal(retained[0]?.bps?.[0]?.player, 'Away Player')
 	})
 
 	it('adopts heartbeat metadata without rebuilding fixtures and reloads only Match revisions', async () => {

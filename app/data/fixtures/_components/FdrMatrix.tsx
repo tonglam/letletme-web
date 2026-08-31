@@ -357,7 +357,10 @@ export function FdrMatrix({
 									</td>
 									{eventIds.map(gw => {
 										const gameweek = byEvent.get(gw)
-										if (gameweek?.unknown) {
+										if (
+											gameweek?.unknown &&
+											gameweek.fixtures.length === 0
+										) {
 											return (
 												<td
 													key={gw}
@@ -387,6 +390,15 @@ export function FdrMatrix({
 												className="px-1.5 py-1.5"
 											>
 												<div className="flex flex-col gap-1">
+													{gameweek.unknown ? (
+														<span
+															title={t('fixtureUnavailable')}
+															aria-label={t('fixtureUnavailable')}
+															className="mx-auto inline-flex rounded border border-warning/40 bg-warning/10 px-1 py-px font-mono text-[0.55rem] font-semibold leading-none text-muted-foreground"
+														>
+															?
+														</span>
+													) : null}
 													{gameweek.dgw ? (
 														<span className="text-center font-mono text-micro font-semibold uppercase tracking-wide text-muted-foreground">
 															{t('dgw')}

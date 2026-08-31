@@ -20,6 +20,7 @@ import {
 	canReplaceLiveMatchesLkg,
 	getLiveMatchesSnapshot,
 	getPreferredLiveMatchesTab,
+	retainLiveMatchPlayerDetails,
 	retainLiveMatchPlayerPrices,
 	type LiveMatchdayStatus
 } from '@/lib/live-matches'
@@ -162,13 +163,19 @@ export function LiveMatchesClient({
 					return
 				}
 				const acceptedSnapshot = snapshotRef.current
-				const canRetainPrices =
+				const canRetainAcceptedDetails =
 					data.snapshot !== null &&
 					acceptedSnapshot !== null &&
 					data.snapshot.season === acceptedSnapshot.season &&
 					data.snapshot.eventId === acceptedSnapshot.eventId
-				const matchesForAcceptance = canRetainPrices
-					? retainLiveMatchPlayerPrices(data.matches, matchesRef.current)
+				const matchesWithRetainedDetails = canRetainAcceptedDetails
+					? retainLiveMatchPlayerDetails(data.matches, matchesRef.current)
+					: data.matches
+				const matchesForAcceptance = canRetainAcceptedDetails
+					? retainLiveMatchPlayerPrices(
+							matchesWithRetainedDetails,
+							matchesRef.current
+						)
 					: data.matches
 				const lifecycleCurrentEventId =
 					data.currentEventId ??

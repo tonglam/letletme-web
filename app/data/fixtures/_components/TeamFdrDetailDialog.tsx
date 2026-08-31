@@ -141,7 +141,7 @@ function TeamFixtureDetailRow({
 				) : null}
 			</div>
 
-			{gameweek.unknown ? (
+			{gameweek.unknown && gameweek.fixtures.length === 0 ? (
 				<p className="mt-2 rounded-lg border border-dashed border-warning/45 bg-warning/5 px-2.5 py-2 text-caption text-muted-foreground">
 					{t('fixtureUnavailable')}
 				</p>
@@ -151,6 +151,14 @@ function TeamFixtureDetailRow({
 				</p>
 			) : (
 				<div className="mt-2 grid gap-1.5">
+					{gameweek.unknown ? (
+						<span
+							title={t('fixtureUnavailable')}
+							className="w-fit rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 font-mono text-micro font-semibold text-muted-foreground"
+						>
+							{t('fixtureUnavailable')}
+						</span>
+					) : null}
 					{gameweek.fixtures.map(cell => {
 						const score = teamFixtureScore(cell)
 						const status = cell.finished

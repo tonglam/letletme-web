@@ -132,6 +132,15 @@ const normalizedCorePriceRevision = (
 	value: string | null | undefined
 ): string | null => (typeof value === 'string' ? value : null)
 
+function compareLiveMatchSeasons(left: string, right: string): number {
+	const leftNumber = Number(left)
+	const rightNumber = Number(right)
+	if (Number.isSafeInteger(leftNumber) && Number.isSafeInteger(rightNumber)) {
+		return leftNumber - rightNumber
+	}
+	return left.localeCompare(right)
+}
+
 const isMatchDelivery = (value: unknown): value is LiveMatchdayDelivery => {
 	if (!value || typeof value !== 'object') return false
 	const delivery = value as LiveMatchdayDelivery
@@ -263,6 +272,70 @@ export function retainLiveMatchPlayerPrices(
 		return homeTeam === match.homeTeam && awayTeam === match.awayTeam
 			? match
 			: { ...match, homeTeam, awayTeam }
+	})
+}
+
+/**
+ * Keep player detail rows and derived BPS/bonus data visible when a newer
+ * score desk is published before its detail publication is usable. The
+ * candidate's fixture score and lifecycle fields remain authoritative; only
+ * missing per-fixture detail is filled from the accepted same-event board.
+ */
+export function retainLiveMatchPlayerDetails(
+	candidate: readonly Match[],
+	accepted: readonly Match[]
+): Match[] {
+	const acceptedByFixtureId = new Map(
+		accepted.map(match => [match.id, match])
+	)
+
+	return candidate.map(match => {
+		const previous = acceptedByFixtureId.get(match.id)
+		if (!previous) return match
+
+		const homePlayers =
+			match.homeTeam.players.length > 0
+				? match.homeTeam.players
+				: previous.homeTeam.players
+		const awayPlayers =
+			match.awayTeam.players.length > 0
+				? match.awayTeam.players
+				: previous.awayTeam.players
+		const homeTeam =
+			homePlayers === match.homeTeam.players
+				? match.homeTeam
+				: { ...match.homeTeam, players: homePlayers }
+		const awayTeam =
+			awayPlayers === match.awayTeam.players
+				? match.awayTeam
+				: { ...match.awayTeam, players: awayPlayers }
+		const bonusPoints =
+			(match.bonusPoints == null || match.bonusPoints.length === 0) &&
+			(previous.bonusPoints?.length ?? 0) > 0
+				? previous.bonusPoints
+				: match.bonusPoints
+		const bps =
+			(match.bps == null || match.bps.length === 0) &&
+			(previous.bps?.length ?? 0) > 0
+				? previous.bps
+				: match.bps
+
+		if (
+			homeTeam === match.homeTeam &&
+			awayTeam === match.awayTeam &&
+			bonusPoints === match.bonusPoints &&
+			bps === match.bps
+		) {
+			return match
+		}
+
+		return {
+			...match,
+			homeTeam,
+			awayTeam,
+			...(bonusPoints !== match.bonusPoints ? { bonusPoints } : {}),
+			...(bps !== match.bps ? { bps } : {})
+		}
 	})
 }
 
@@ -489,9 +562,16 @@ export function canReplaceLiveMatchesLkg(
 		value.snapshot.eventId !== accepted.eventId
 	) {
 		// Generations are scoped to season/event. A lifecycle transition may
-		// replace the previous event, but same-event generations are ordered.
+		// replace the previous event, but both season and same-season event IDs
+		// must move forward so an eventless fallback cannot repaint an older
+		// season after the new season has already been accepted.
+		const seasonOrder = compareLiveMatchSeasons(
+			value.snapshot.season,
+			accepted.season
+		)
+		if (seasonOrder < 0) return false
 		if (
-			value.snapshot.season === accepted.season &&
+			seasonOrder === 0 &&
 			value.snapshot.eventId < accepted.eventId
 		) {
 			return false

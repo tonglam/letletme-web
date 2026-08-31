@@ -196,7 +196,7 @@ function CompactFixtureRow({
 				GW{eventId}
 			</span>
 			<div className="flex min-w-0 flex-wrap gap-1.5">
-				{unknown ? (
+				{unknown && teamFixtures.length === 0 ? (
 					<span
 						title={t('fixtureUnavailable')}
 						className="inline-flex items-center rounded-md border border-warning/45 bg-warning/10 px-2 py-1 font-mono text-label font-bold tabular-nums text-foreground"
@@ -208,36 +208,49 @@ function CompactFixtureRow({
 						{t('bgw')}
 					</span>
 				) : (
-					teamFixtures.map(({ fixture, isHome, opponent, difficulty }) => {
-						const score = fixtureScore(fixture, isHome)
-						const value =
-							fixture.finished || (fixture.started && score)
-								? (score ?? '—')
-								: `FDR ${difficulty}`
-						const venue = isHome ? t('fixtureHomeShort') : t('fixtureAwayShort')
-
-						return (
+					<>
+						{unknown ? (
 							<span
-								key={fixture.id}
-								title={`${opponent.name} · ${venue} · ${value}`}
-								aria-label={`${opponent.name} · ${venue} · ${value}`}
-								className={cn(
-									'inline-flex min-w-[7.25rem] items-center gap-1.5 rounded-md border px-2 py-1',
-									FDR_CELL[difficulty]
-								)}
+								title={t('fixtureUnavailable')}
+								aria-label={t('fixtureUnavailable')}
+								className="inline-flex items-center rounded-md border border-warning/45 bg-warning/10 px-1.5 py-1 font-mono text-micro font-bold tabular-nums text-muted-foreground"
 							>
-								<span className="min-w-0 truncate font-display text-label font-bold tracking-wide">
-									{opponent.shortName}
-								</span>
-								<span className="shrink-0 font-mono text-[0.6rem] font-bold uppercase text-muted-foreground">
-									{venue}
-								</span>
-								<strong className="ml-auto shrink-0 font-mono text-label font-bold tabular-nums">
-									{value}
-								</strong>
+								?
 							</span>
-						)
-					})
+						) : null}
+						{teamFixtures.map(({ fixture, isHome, opponent, difficulty }) => {
+							const score = fixtureScore(fixture, isHome)
+							const value =
+								fixture.finished || (fixture.started && score)
+									? (score ?? '—')
+									: `FDR ${difficulty}`
+							const venue = isHome
+								? t('fixtureHomeShort')
+								: t('fixtureAwayShort')
+
+							return (
+								<span
+									key={fixture.id}
+									title={`${opponent.name} · ${venue} · ${value}`}
+									aria-label={`${opponent.name} · ${venue} · ${value}`}
+									className={cn(
+										'inline-flex min-w-[7.25rem] items-center gap-1.5 rounded-md border px-2 py-1',
+										FDR_CELL[difficulty]
+									)}
+								>
+									<span className="min-w-0 truncate font-display text-label font-bold tracking-wide">
+										{opponent.shortName}
+									</span>
+									<span className="shrink-0 font-mono text-[0.6rem] font-bold uppercase text-muted-foreground">
+										{venue}
+									</span>
+									<strong className="ml-auto shrink-0 font-mono text-label font-bold tabular-nums">
+										{value}
+									</strong>
+								</span>
+							)
+						})}
+					</>
 				)}
 			</div>
 		</li>

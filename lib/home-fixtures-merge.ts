@@ -1,6 +1,10 @@
-import type { LiveMatchdayFixtureSummary } from '@/lib/graphql/operations/live'
+import type {
+	LiveMatchdayFixtureSummary,
+	LiveMatchdaySummarySnapshot
+} from '@/lib/graphql/operations/live'
 import type {
 	HomeFixture,
+	HomeFixtureState,
 	HomeFixturesResponse
 } from '@/lib/graphql/operations/home'
 
@@ -10,6 +14,40 @@ type CoreHomeFixtureContext = {
 	season: string
 	revision: string
 	sourceCheckedAt: string | null
+}
+
+export function homeFixtureStateFromLiveState(state: string): HomeFixtureState {
+	if (state === 'SETTLED' || state === 'FINALIZED' || state === 'GW_REVIEW') {
+		return 'SETTLED'
+	}
+	if (
+		state === 'SCHEDULED' ||
+		state === 'PRE_DEADLINE' ||
+		state === 'PICKS_WAIT'
+	) {
+		return 'SCHEDULED'
+	}
+	return 'LIVE'
+}
+
+export function buildHomeLiveFixtureRevision(
+	snapshot: Pick<LiveMatchdaySummarySnapshot, 'revisions'>
+): string {
+	const {
+		deskPublicationId,
+		deskGeneration,
+		lifecycle,
+		fixtureIdentity,
+		scoreState
+	} = snapshot.revisions
+	return [
+		'live',
+		deskPublicationId,
+		String(deskGeneration),
+		lifecycle,
+		fixtureIdentity,
+		scoreState
+	].join(':')
 }
 
 function safeText(value: unknown): string {

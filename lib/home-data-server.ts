@@ -11,7 +11,6 @@ import {
 	GET_HOME_PUBLIC_BOOTSTRAP,
 	type HomeEventFixturesGraphQLResponse,
 	type HomeFixture,
-	type HomeFixtureState,
 	type HomeFixturesResponse,
 	type HomeGameweek,
 	type HomeGameweekResponse,
@@ -25,7 +24,9 @@ import {
 	type LiveMatchdayFixtureSummaryResponse
 } from '@/lib/graphql/operations/live'
 import {
+	buildHomeLiveFixtureRevision,
 	buildLiveCoreFixtureFallback,
+	homeFixtureStateFromLiveState,
 	mergeLiveFixturesIntoHomeFixtures
 } from '@/lib/home-fixtures-merge'
 import { cache } from 'react'
@@ -46,20 +47,6 @@ function withEventId(
 	eventId: number
 ): HomeFixture[] {
 	return fixtures.map(fixture => ({ ...fixture, eventId }))
-}
-
-function liveStateToHomeState(state: string): HomeFixtureState {
-	if (state === 'SETTLED' || state === 'FINALIZED') {
-		return 'SETTLED'
-	}
-	if (
-		state === 'SCHEDULED' ||
-		state === 'PRE_DEADLINE' ||
-		state === 'PICKS_WAIT'
-	) {
-		return 'SCHEDULED'
-	}
-	return 'LIVE'
 }
 
 const getHomePublicBootstrapFromOrigin = unstable_cache(
@@ -215,10 +202,10 @@ const loadHomeFixturesFromOrigin = async (
 				}
 				return {
 					season: desk.season,
-					revision: desk.revisions.scoreState,
+					revision: buildHomeLiveFixtureRevision(desk),
 					eventId: desk.eventId,
 					source: 'LIVE' as const,
-					state: liveStateToHomeState(desk.state),
+					state: homeFixtureStateFromLiveState(desk.state),
 					sourceCheckedAt: desk.times.deskSourceCheckedAt,
 					publishedAt: desk.times.deskPublishedAt,
 					stale:

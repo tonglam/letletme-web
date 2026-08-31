@@ -184,6 +184,8 @@ describe('my squad fixture pitch', () => {
 		assert.match(desk, /FULL_SEASON_EVENT_IDS = Array\.from\([\s\S]*length: 38/)
 		assert.match(desk, /FULL_SEASON_WINDOWS = Array\.from\([\s\S]*length: 8/)
 		assert.match(desk, /function CompactFixtureRow/)
+		assert.match(desk, /unknown && teamFixtures\.length === 0/)
+		assert.match(desk, /unknown \? \([\s\S]*fixtureUnavailable/)
 		assert.match(desk, /fixture\.finished/)
 		assert.match(desk, /`FDR \$\{difficulty\}`/)
 		assert.match(desk, /mySquadRangeLabel/)
@@ -255,6 +257,14 @@ describe('team FDR average scale', () => {
 		assert.match(source, /setSelectedTeam\(row\)/)
 		assert.match(source, /openTeamFixtureDetail/)
 		assert.match(source, /function fixtureScore\(/)
+		assert.match(
+			source,
+			/gameweek\?\.unknown &&[\s\S]*gameweek\.fixtures\.length === 0/
+		)
+		assert.match(
+			detail,
+			/gameweek\.unknown && gameweek\.fixtures\.length === 0/
+		)
 		assert.match(source, /const value = cell\.finished/)
 		assert.match(source, /score \?\? t\('fixtureScorePending'\)/)
 		assert.match(source, /`FDR \$\{cell\.difficulty\}`/)
