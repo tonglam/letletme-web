@@ -9,7 +9,6 @@ import {
 	canReplaceLiveMatchesLkg,
 	getLiveMatchesSnapshot,
 	parseLiveMatchesRequestParams,
-	retainLiveMatchPlayerPrices,
 	type QueryExecutor,
 	type QueryExecutorOptions,
 	transformLiveMatchdayV2,
@@ -31,7 +30,6 @@ const snapshot = (overrides: Partial<LiveMatchdaySnapshot> = {}) =>
 			lifecycle: 'life-1',
 			fixtureIdentity: 'fixture-1',
 			scoreState: 'score-1',
-			corePriceRevision: 'core-1',
 			detailPublicationId: 'detail-1',
 			detailGeneration: 1,
 			playerDetail: 'players-1'
@@ -98,6 +96,7 @@ const snapshot = (overrides: Partial<LiveMatchdaySnapshot> = {}) =>
 						webName: 'Away Player',
 						position: 'FORWARD',
 						teamId: 2,
+						price: 50,
 						totalPoints: 2,
 						stats: [
 							{
@@ -290,13 +289,15 @@ describe('live matchday V2 publication', () => {
 		assert.equal(canReplaceLiveMatchesLkg(data), false)
 	})
 
-	it('accepts a V2 payload without the optional Core price revision', async () => {
+	it('rejects a V2 payload without the required canonical player price', async () => {
 		const data = response()
-		const revisions = data.liveMatchday.snapshot!
-			.revisions as unknown as Record<string, unknown>
-		delete revisions.corePriceRevision
+		const player = data.liveMatchday.snapshot!.matches[0]!.players[0]!
+		delete (player as Partial<typeof player>).price
 
-		assert.doesNotThrow(() => validateLiveMatchdayV2(data))
+		assert.throws(
+			() => validateLiveMatchdayV2(data),
+			/LIVE_MATCHDAY_INCOHERENT/
+		)
 	})
 
 	it('allows only a complete publication to replace the same-event browser LKG', async () => {
@@ -403,44 +404,6 @@ describe('live matchday V2 publication', () => {
 		)
 	})
 
-	it('retains accepted prices when a newer same-event desk loses Core enrichment', async () => {
-		const accepted = await getLiveMatchesSnapshot(
-			async <T>(): Promise<T> => response() as T,
-			33
-		)
-		const candidateSnapshot = snapshot({
-			revisions: {
-			...snapshot().revisions,
-			deskGeneration: 2,
-			deskPublicationId: 'desk-2',
-			corePriceRevision: null
-		},
-		matches: [
-			{
-				...snapshot().matches[0]!,
-				players: snapshot().matches[0]!.players.map(player => ({
-					...player,
-					price: undefined,
-					totalPoints: (player.totalPoints ?? 0) + 1
-				}))
-			}
-		]
-		})
-		const candidate = await getLiveMatchesSnapshot(
-			async <T>(): Promise<T> => response({ snapshot: candidateSnapshot }) as T,
-			33
-		)
-
-		assert.equal(canReplaceLiveMatchesLkg(candidate, accepted.snapshot), true)
-		const retained = retainLiveMatchPlayerPrices(
-			candidate.matches,
-			accepted.matches
-		)
-		assert.equal(retained[0]?.homeTeam.players[0]?.price, 55)
-		assert.equal(retained[0]?.homeTeam.players[0]?.totalPoints, 9)
-		assert.equal(retained[0]?.awayTeam.players[0]?.price, undefined)
-	})
-
 	it('adopts heartbeat metadata without rebuilding fixtures and reloads only Match revisions', async () => {
 		const ready = await getLiveMatchesSnapshot(
 			async <T>(): Promise<T> => response() as T
@@ -466,13 +429,6 @@ describe('live matchday V2 publication', () => {
 			liveMatchdayNeedsRefresh(accepted, {
 				...heartbeat,
 				revisions: { ...heartbeat.revisions, playerDetail: 'players-2' }
-			}),
-			true
-		)
-		assert.equal(
-			liveMatchdayNeedsRefresh(accepted, {
-				...heartbeat,
-				revisions: { ...heartbeat.revisions, corePriceRevision: 'core-2' }
 			}),
 			true
 		)
