@@ -1,6 +1,12 @@
 import TournamentReviewV2Client from '@/app/me/tournament/TournamentReviewV2Client'
 import { executeServerQueryWithSession } from '@/lib/graphql-server'
 import {
+	GET_ENTRY_LEAGUES,
+	selectUntrackedFplClassicLeagueRanks,
+	type EntryLeaguesResponse,
+	type FplClassicLeagueRank
+} from '@/lib/graphql/operations/leagues'
+import {
 	GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
 	GET_MY_TOURNAMENT_REVIEW_CATALOG,
 	GET_MY_TOURNAMENT_SEASON_REVIEW,
@@ -59,6 +65,12 @@ const positiveInteger = (value: string | undefined): number | null => {
 const requestedScope = (value: string | undefined): MyTournamentReviewScope =>
 	value?.toLowerCase() === 'all' ? 'ALL' : 'ACCESSIBLE'
 
+const isScopeAuthorizationError = (error: unknown): boolean => {
+	if (!error || typeof error !== 'object') return false
+	const candidate = error as { code?: unknown; status?: unknown }
+	return candidate.code === 'FORBIDDEN' || candidate.status === 403
+}
+
 /**
  * V2 is the only new consumer path: this page reads immutable, finalized
  * tournament-review publications. Unsettled gameweeks remain in Live.
@@ -76,7 +88,7 @@ export default async function TournamentStatsPage({
 	])
 	const { locale } = pageLocale
 	const initialView = parseTournamentStatsView(sp.view)
-	const scope = requestedScope(sp.scope)
+	let scope = requestedScope(sp.scope)
 
 	const { session, entryId } = context
 	if (!session) {
@@ -87,6 +99,25 @@ export default async function TournamentStatsPage({
 		timing.finish('redirect-bind')
 		redirect(localizeHref('/onboarding/bind-entry', locale))
 	}
+
+	const fplClassicRanksPromise: Promise<FplClassicLeagueRank[]> = timing
+		.measure('fpl-classic-ranks', () =>
+			executeServerQueryWithSession<EntryLeaguesResponse>(
+				session,
+				GET_ENTRY_LEAGUES,
+				{ entryId },
+				{ cache: 'no-store', timeoutMs: 1_500 }
+			)
+		)
+		.then(response =>
+			selectUntrackedFplClassicLeagueRanks(response.entryLeagues)
+		)
+		.catch(error => {
+			console.warn('[tournament review] FPL Classic ranks unavailable', {
+				error: error instanceof Error ? error.name : 'UnknownError'
+			})
+			return []
+		})
 
 	const requestedTournamentId = positiveInteger(sp.tournamentId)
 	const requestedEventId = positiveInteger(sp.gw)
@@ -109,16 +140,35 @@ export default async function TournamentStatsPage({
 	let initialError: string | null = null
 
 	try {
-		const catalogResponse = await timing.measure(
-			'my-tournament-review-v2-catalog',
-			() =>
-				executeServerQueryWithSession<MyTournamentReviewCatalogResponse>(
-					session,
-					GET_MY_TOURNAMENT_REVIEW_CATALOG,
-					{ scope },
-					{ cache: 'no-store', contract: 'my-tournament-review-v2' }
-				)
-		)
+		let catalogResponse: MyTournamentReviewCatalogResponse
+		try {
+			catalogResponse = await timing.measure(
+				'my-tournament-review-v2-catalog',
+				() =>
+					executeServerQueryWithSession<MyTournamentReviewCatalogResponse>(
+						session,
+						GET_MY_TOURNAMENT_REVIEW_CATALOG,
+						{ scope },
+						{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+					)
+			)
+		} catch (error) {
+			// A query-string scope is a preference, not proof of the platform
+			// admin capability. Fall back to the viewer's accessible catalog when
+			// a shared/manual `scope=all` URL is opened by a normal user.
+			if (scope !== 'ALL' || !isScopeAuthorizationError(error)) throw error
+			scope = 'ACCESSIBLE'
+			catalogResponse = await timing.measure(
+				'my-tournament-review-v2-catalog-accessible-fallback',
+				() =>
+					executeServerQueryWithSession<MyTournamentReviewCatalogResponse>(
+						session,
+						GET_MY_TOURNAMENT_REVIEW_CATALOG,
+						{ scope },
+						{ cache: 'no-store', contract: 'my-tournament-review-v2' }
+					)
+			)
+		}
 		initialCatalog = catalogResponse.myTournamentReviewCatalog
 		const selected =
 			initialCatalog.tournaments.find(
@@ -197,12 +247,14 @@ export default async function TournamentStatsPage({
 		console.error('[tournament review v2] Finalized review seed unavailable')
 		initialError = t('tournamentStatsFailed')
 	}
+	const initialFplClassicRanks = await fplClassicRanksPromise
 
 	timing.finish(initialError ? 'unavailable' : 'ready')
 	return (
 		<Suspense fallback={<TournamentReviewFallback />}>
 			<TournamentReviewV2Client
 				entryId={entryId}
+				initialFplClassicRanks={initialFplClassicRanks}
 				initialCatalog={initialCatalog}
 				initialScope={scope}
 				initialView={initialView}

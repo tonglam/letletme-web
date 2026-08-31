@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { usePathname, useRouter } from '@/i18n/navigation'
 import { executeQuery, type GraphQLRequestError } from '@/lib/graphql-client'
+import type { FplClassicLeagueRank } from '@/lib/graphql/operations/leagues'
 import {
 	GET_MY_TOURNAMENT_GAMEWEEK_REVIEW,
 	GET_MY_TOURNAMENT_REVIEW_CATALOG,
@@ -33,6 +34,7 @@ type Catalog = MyTournamentReviewCatalogResponse['myTournamentReviewCatalog']
 
 export interface TournamentReviewV2ClientProps {
 	entryId: number
+	initialFplClassicRanks: FplClassicLeagueRank[]
 	initialCatalog: Catalog
 	initialScope: MyTournamentReviewScope
 	initialView: 'gameweek' | 'season'
@@ -69,6 +71,57 @@ const stateLabel = (
 
 const numberOrDash = (value: number | null | undefined) =>
 	value === null || value === undefined ? '—' : value.toLocaleString('en-US')
+
+function ClassicLeagueRanks({ ranks }: { ranks: FplClassicLeagueRank[] }) {
+	const t = useTranslations('TournamentStats')
+	if (ranks.length === 0) return null
+	return (
+		<section className="rounded-2xl border bg-white p-4 shadow-sm">
+			<div>
+				<p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+					{t('fplClassicRanks')}
+				</p>
+				<p className="mt-1 text-xs leading-5 text-slate-500">
+					{t('fplClassicRanksHint')}
+				</p>
+			</div>
+			<ul className="mt-3 grid gap-2 sm:grid-cols-2">
+				{ranks.map(league => {
+					const movement =
+						league.rank !== null && league.previousRank !== null
+							? league.previousRank - league.rank
+							: null
+					return (
+						<li
+							key={league.leagueId}
+							className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5"
+						>
+							<span className="min-w-0 truncate text-sm font-semibold text-slate-950">
+								{league.name}
+							</span>
+							<span className="shrink-0 text-right">
+								<span className="block text-base font-bold tabular-nums text-slate-950">
+									{league.rank === null
+										? t('noData')
+										: `#${numberOrDash(league.rank)}`}
+								</span>
+								{movement !== null ? (
+									<span className="block text-xs text-slate-500">
+										{movement > 0
+											? t('up', { count: movement })
+											: movement < 0
+												? t('down', { count: Math.abs(movement) })
+												: t('noChange')}
+									</span>
+								) : null}
+							</span>
+						</li>
+					)
+				})}
+			</ul>
+		</section>
+	)
+}
 
 function mergePointsPage(
 	previous: MyTournamentReviewPoints,
@@ -502,6 +555,7 @@ function ReviewPayload({
 
 export default function TournamentReviewV2Client({
 	entryId,
+	initialFplClassicRanks,
 	initialCatalog,
 	initialScope,
 	initialView,
@@ -525,6 +579,10 @@ export default function TournamentReviewV2Client({
 		initialFinalizedEventIds
 	)
 	const [view, setView] = useState<'gameweek' | 'season'>(initialView)
+	const viewRef = useRef(view)
+	useEffect(() => {
+		viewRef.current = view
+	}, [view])
 	const [gameweekReview, setGameweekReview] = useState(initialGameweekReview)
 	const [seasonReview, setSeasonReview] = useState(initialSeasonReview)
 	const [loading, setLoading] = useState(false)
@@ -723,7 +781,8 @@ export default function TournamentReviewV2Client({
 			replaceRoute({
 				tournamentId: nextSelected?.tournamentId ?? null,
 				eventId: nextEventId,
-				scope: nextScope
+				scope: nextScope,
+				view: viewRef.current
 			})
 			if (nextSelected && nextEventId) {
 				void loadReview(nextSelected.tournamentId, nextEventId, true)
@@ -797,6 +856,7 @@ export default function TournamentReviewV2Client({
 
 	const chooseView = (nextView: 'gameweek' | 'season') => {
 		setLoadingMore(false)
+		viewRef.current = nextView
 		setView(nextView)
 		replaceRoute({ view: nextView })
 	}
@@ -835,6 +895,8 @@ export default function TournamentReviewV2Client({
 						)}
 					</div>
 				</div>
+
+				<ClassicLeagueRanks ranks={initialFplClassicRanks} />
 
 				<div className="mt-6 grid gap-5 lg:grid-cols-[280px_1fr]">
 					<aside className="space-y-3">
