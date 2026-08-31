@@ -1,15 +1,16 @@
 import {
 	Compass,
+	Database,
 	DivideIcon as LucideIcon,
 	Medal,
 	Newspaper,
 	Timer,
-	UserRound,
+	UserRound
 } from 'lucide-react'
 
 interface MenuItem {
 	id: string
-	labelKey: 'live' | 'briefing' | 'myFpl' | 'competitions' | 'explore'
+	labelKey: 'live' | 'briefing' | 'myFpl' | 'competitions' | 'explore' | 'data'
 	icon: typeof LucideIcon
 	directHref?: string
 	items: {
@@ -21,6 +22,7 @@ interface MenuItem {
 			| 'myFplTeam'
 			| 'myTournament'
 			| 'myCompetitions'
+			| 'browseCompetitions'
 			| 'createCompetition'
 			| 'gameweek'
 			| 'fixtures'
@@ -33,8 +35,8 @@ interface MenuItem {
 }
 
 /**
- * The public information architecture has five sections:
- *   Live / Briefing / My FPL / Competitions / Explore.
+ * The public information architecture has five visible sections:
+ *   Live / My FPL / Competitions / Explore / Data.
  *
  * These names are the only public navigation vocabulary. Internal component
  * names may continue to describe the underlying data model.
@@ -47,15 +49,15 @@ const allMenuItems: MenuItem[] = [
 		items: [
 			{ labelKey: 'livePoints', href: '/live/points' },
 			{ labelKey: 'liveCompetitions', href: '/live/competitions' },
-			{ labelKey: 'liveMatches', href: '/live/matches' },
-		],
+			{ labelKey: 'liveMatches', href: '/live/matches' }
+		]
 	},
 	{
 		id: 'briefing',
 		labelKey: 'briefing',
 		icon: Newspaper,
 		directHref: '/briefing/week',
-		items: [{ labelKey: 'briefingWeek', href: '/briefing/week' }],
+		items: [{ labelKey: 'briefingWeek', href: '/briefing/week' }]
 	},
 	{
 		id: 'myFpl',
@@ -63,17 +65,17 @@ const allMenuItems: MenuItem[] = [
 		icon: UserRound,
 		items: [
 			{ labelKey: 'myFplTeam', href: '/my-fpl/team' },
-			{ labelKey: 'myTournament', href: '/my-fpl/competitions' },
-		],
+			{ labelKey: 'myTournament', href: '/my-fpl/competitions' }
+		]
 	},
 	{
 		id: 'competitions',
 		labelKey: 'competitions',
 		icon: Medal,
 		items: [
-			{ labelKey: 'myCompetitions', href: '/competitions/browse?mine=true' },
-			{ labelKey: 'createCompetition', href: '/competitions/create' },
-		],
+			{ labelKey: 'browseCompetitions', href: '/competitions/browse' },
+			{ labelKey: 'createCompetition', href: '/competitions/create' }
+		]
 	},
 	{
 		id: 'explore',
@@ -84,10 +86,15 @@ const allMenuItems: MenuItem[] = [
 			{ labelKey: 'fixtures', href: '/explore/fixtures' },
 			{ labelKey: 'market', href: '/explore/market' },
 			{ labelKey: 'pricePredictions', href: '/explore/price-predictions' },
-			{ labelKey: 'trends', href: '/explore/selections' },
-			{ labelKey: 'players', href: '/explore/player-stats' },
-		],
+			{ labelKey: 'trends', href: '/explore/selections' }
+		]
 	},
+	{
+		id: 'data',
+		labelKey: 'data',
+		icon: Database,
+		items: [{ labelKey: 'players', href: '/explore/player-stats' }]
+	}
 ]
 
 // Keep the briefing routes available while the public navigation entry is

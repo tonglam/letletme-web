@@ -11,13 +11,12 @@ import {
 	loadFixturePlanningSignals
 } from '@/lib/fixture-planning-seed-server'
 import type { FixturePlanningFixture } from '@/lib/fixture-window'
+import { type FixturePlanningMarketSignals } from '@/lib/graphql/operations/market'
+import { type TeamForPickerItem } from '@/lib/graphql/operations/players'
 import {
-	type FixturePlanningMarketSignals,
-} from '@/lib/graphql/operations/market'
-import {
-	type TeamForPickerItem,
-} from '@/lib/graphql/operations/players'
-import { resolveFixturePlanningGameweek } from '@/lib/review-gameweek'
+	resolveFixturePlanningGameweek,
+	resolveFixturePlanningHorizon
+} from '@/lib/review-gameweek'
 import { loadEntrySquadPicks } from '@/lib/load-entry-squad-picks'
 import {
 	squadPickKeys,
@@ -54,7 +53,10 @@ async function renderFixturesPage({ params }: PageProps) {
 		return <CurrentGameweekUnavailable titleKey="fixturesUnavailableTitle" />
 	}
 
-	const horizon = DEFAULT_FDR_HORIZON
+	const horizon = resolveFixturePlanningHorizon(fromGw, DEFAULT_FDR_HORIZON)
+	if (horizon == null) {
+		return <CurrentGameweekUnavailable titleKey="fixturesUnavailableTitle" />
+	}
 
 	const fixturesByEvent: Record<number, FixturePlanningFixture[]> = {}
 	let marketSignals: FixturePlanningMarketSignals | null = null
@@ -92,7 +94,7 @@ async function renderFixturesPage({ params }: PageProps) {
 				: Promise.resolve({
 						picks: [] as SquadPickSeed[],
 						state: 'unbound' as const
-			}),
+					}),
 			loadFixtureTeams().catch(err => {
 				console.error('[fixtures] team directory seed failed:', err)
 				return { teams: [] }

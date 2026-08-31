@@ -21,7 +21,7 @@ export const GET_TREND_COHORT_SNAPSHOT = `
       sections {
         capability state
         evidenceContext { availabilityState coverageState exact denominator sampleSize methodKey methodVersion limitations }
-        rows { elementId playerName playerPosition teamShortName count percentage }
+        rows { elementId playerName playerPosition teamShortName count percentage isCaptain isViceCaptain }
       }
     }
   }
@@ -62,6 +62,8 @@ export type TrendDeskRow = {
 	teamShortName: string
 	count: number
 	percentage: number | null
+	isCaptain?: boolean | null
+	isViceCaptain?: boolean | null
 }
 
 export type TrendDeskSection = {

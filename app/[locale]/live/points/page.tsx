@@ -2,6 +2,7 @@ import LivePointsClient from '@/app/live/points/LivePointsClient'
 import { SeasonPhaseState } from '@/components/feedback/SeasonPhaseState'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getLivePageContext } from '@/lib/live-context-server'
+import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
 import { liveContextToSnapshot } from '@/lib/live-refresh'
 import {
 	GET_ENTRY,
@@ -37,6 +38,7 @@ export default async function LivePointsPage({ params }: PageProps) {
 	await getPageLocale(params)
 
 	const { presentation, liveContext } = await getLivePageContext()
+	const isOfficialUpdating = isOfficialLiveUpdatingContext(liveContext)
 	if (
 		presentation.phase === 'PRESEASON' ||
 		liveContext?.windowState === 'PRESEASON' ||
@@ -74,11 +76,14 @@ export default async function LivePointsPage({ params }: PageProps) {
 
 	if (entryId) {
 		const [liveResult, overallResult] = await Promise.allSettled([
-			executeServerQuery<LiveCalcDataResponse>(
-				GET_LIVE_POINTS,
-				{ eventId: currentEventId, entryId },
-				{ cache: 'no-store' }
-			),
+				executeServerQuery<LiveCalcDataResponse>(
+					GET_LIVE_POINTS,
+					{ eventId: currentEventId, entryId },
+					{
+						cache: 'no-store',
+						suppressErrorLog: isOfficialUpdating
+					}
+				),
 			executeServerQuery<EntrySummaryResponse>(
 				GET_ENTRY,
 				{ id: entryId },
@@ -95,7 +100,7 @@ export default async function LivePointsPage({ params }: PageProps) {
 				liveContextToSnapshot(liveContext) ??
 				liveData.snapshot ??
 				null
-		} else {
+			} else if (!isOfficialUpdating) {
 			console.error(
 				'[live points] Failed to seed current entry:',
 				liveResult.reason
@@ -134,6 +139,7 @@ export default async function LivePointsPage({ params }: PageProps) {
 			initialOverall={initialOverall}
 			initialEntryLookupStatus={initialEntryLookupStatus}
 			initialEntryPersistenceState={initialEntryPersistenceState}
+			isOfficialUpdating={isOfficialUpdating}
 		/>
 	)
 }

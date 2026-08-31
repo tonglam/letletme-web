@@ -8,6 +8,16 @@ import type {
 export type MarketPositionCode =
 	MarketPlayer['position'] | 'GKP' | 'DEF' | 'MID' | 'FWD'
 
+export type MarketPositionFilter = 'ALL' | MarketPlayer['position']
+
+export const MARKET_POSITION_FILTERS: readonly MarketPositionFilter[] = [
+	'ALL',
+	'GOALKEEPER',
+	'DEFENDER',
+	'MIDFIELDER',
+	'FORWARD'
+]
+
 export type MarketCoverageMode = 'empty' | 'one-day' | 'tracking'
 export type MarketTeaserMode = 'price' | 'selected' | 'empty'
 export type MarketViewMode =
@@ -71,4 +81,12 @@ export function shortMarketPosition(
 		case 'FWD':
 			return 'FWD'
 	}
+}
+
+export function filterMarketPlayersByPosition(
+	players: readonly MarketPlayer[],
+	position: MarketPositionFilter
+): MarketPlayer[] {
+	if (position === 'ALL') return [...players]
+	return players.filter(player => player.position === position)
 }

@@ -12,22 +12,19 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { executeQuery } from '@/lib/graphql-client'
 import {
-	GET_LIVE_CONTEXT,
-	type LiveContextResponse,
-	type LiveSnapshotStatus
-} from '@/lib/graphql/operations/live'
-import {
-	liveRefreshEventIdentityChanged,
-	liveContextToSnapshot,
-	liveSnapshotNeedsRefresh,
+	liveMatchdayNeedsRefresh,
 	shouldPollLiveMatchesTransition,
-	shouldPollLiveSnapshot
+	shouldPollLiveMatchday
 } from '@/lib/live-refresh'
 import {
+	canReplaceLiveMatchesLkg,
 	getLiveMatchesSnapshot,
-	getPreferredLiveMatchesTab
+	getPreferredLiveMatchesTab,
+	retainLiveMatchdayDetailRevision,
+	retainLiveMatchPlayerDetails,
+	shouldRetainAcceptedLiveMatchDetails,
+	type LiveMatchdayStatus
 } from '@/lib/live-matches'
-import { selectLiveMatchEvent } from '@/lib/live-match-selection'
 import { usePageActive } from '@/hooks/use-page-active'
 import type { Match } from '@/types/match'
 import { RefreshCw } from 'lucide-react'
@@ -61,11 +58,7 @@ const TAB_CONFIG: ReadonlyArray<{
 ] as const
 
 function isLiveMatchesTab(value: string): value is LiveMatchesTab {
-	return (
-		value === 'live' ||
-		value === 'finished' ||
-		value === 'not-started'
-	)
+	return value === 'live' || value === 'finished' || value === 'not-started'
 }
 
 export function LiveMatchesClient({
@@ -73,15 +66,13 @@ export function LiveMatchesClient({
 	initialError,
 	currentEventId,
 	selectedEventId: initialSelectedEventId,
-	nextEventId,
 	initialSnapshot
 }: {
 	initialMatches: Match[]
 	initialError?: string | null
 	currentEventId?: number
 	selectedEventId?: number
-	nextEventId?: number
-	initialSnapshot?: LiveSnapshotStatus | null
+	initialSnapshot?: LiveMatchdayStatus | null
 }) {
 	const t = useTranslations('LiveMatches')
 	const format = useFormatter()
@@ -93,28 +84,29 @@ export function LiveMatchesClient({
 	const [selectedEventId, setSelectedEventId] = useState<number | undefined>(
 		initialSelectedEventId ?? currentEventId
 	)
-	const [resolvedNextEventId, setResolvedNextEventId] = useState<
-		number | undefined
-	>(nextEventId)
 	const [activeTab, setActiveTab] = useState<LiveMatchesTab>(() =>
 		getPreferredLiveMatchesTab(initialMatches)
 	)
 	const [isLoading, setIsLoading] = useState(false)
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [error, setError] = useState<string | null>(initialError ?? null)
-	const [snapshot, setSnapshot] = useState<LiveSnapshotStatus | null>(
+	const [snapshot, setSnapshot] = useState<LiveMatchdayStatus | null>(
 		initialSnapshot ?? null
 	)
-	const snapshotRef = useRef<LiveSnapshotStatus | null>(initialSnapshot ?? null)
+	const snapshotRef = useRef<LiveMatchdayStatus | null>(initialSnapshot ?? null)
+	const matchesRef = useRef<Match[]>(initialMatches)
 	const hasSavedTabPreference = useRef(false)
 	const hasUserSelectedTab = useRef(false)
 	const isFetchInFlight = useRef(false)
-	const pendingRefreshRef = useRef(false)
+	const pendingRefreshRef = useRef<{ useActiveEvent: boolean } | null>(null)
 	const mountedRef = useRef(true)
 	const freshnessRequestRef = useRef<Promise<void> | null>(null)
-	const hasLastGoodData = useRef(initialMatches.length > 0)
-	const hasRequestedInitialFixturePlayers = useRef(false)
-	const acceptSnapshot = useCallback((next: LiveSnapshotStatus | null) => {
+	const hasLastGoodData = useRef(initialSnapshot != null)
+	const acceptMatches = useCallback((next: Match[]) => {
+		matchesRef.current = next
+		setMatches(next)
+	}, [])
+	const acceptSnapshot = useCallback((next: LiveMatchdayStatus | null) => {
 		snapshotRef.current = next
 		setSnapshot(next)
 	}, [])
@@ -129,15 +121,16 @@ export function LiveMatchesClient({
 	const fetchMatches = useCallback(
 		async (
 			isRefresh = false,
-			eventIds?: {
-				currentEventId?: number
-				nextEventId?: number | null
-				scoreCoreRevision?: string | null
-			}
+			eventIds?: { currentEventId?: number; useActiveEvent?: boolean },
+			prefetched?: Awaited<ReturnType<typeof getLiveMatchesSnapshot>>
 		) => {
 			if (isFetchInFlight.current) {
 				// Coalesce concurrent manual/auto refreshes into one trailing fetch.
-				if (isRefresh) pendingRefreshRef.current = true
+				if (isRefresh) {
+					pendingRefreshRef.current = {
+						useActiveEvent: eventIds?.useActiveEvent === true
+					}
+				}
 				return
 			}
 
@@ -150,54 +143,61 @@ export function LiveMatchesClient({
 					setIsLoading(true)
 				}
 				setError(null)
-				const resolvedNextEventIdForSnapshot =
-					eventIds && 'nextEventId' in eventIds
-						? (eventIds.nextEventId ?? null)
-						: (resolvedNextEventId ?? null)
-
-				const data = await getLiveMatchesSnapshot(
-					resolvedNextEventIdForSnapshot,
-					executeQuery,
-					eventIds?.currentEventId ?? resolvedCurrentEventId ?? null,
-					{
-						preferHttp: true,
-						scoreCoreRevision:
-							eventIds?.scoreCoreRevision ?? snapshotRef.current?.scoreCoreRevision ?? null
-					}
-				)
+				const data =
+					prefetched ??
+					(await getLiveMatchesSnapshot(
+						executeQuery,
+						eventIds?.useActiveEvent
+							? null
+							: (eventIds?.currentEventId ?? resolvedCurrentEventId ?? null),
+						{
+							preferHttp: true
+						}
+					))
 				if (!mountedRef.current) return
+				const acceptedSnapshot = snapshotRef.current
+				const canRetainAcceptedDetails =
+					data.snapshot !== null &&
+					acceptedSnapshot !== null &&
+					data.snapshot.season === acceptedSnapshot.season &&
+					data.snapshot.eventId === acceptedSnapshot.eventId
+				const retainAcceptedDetailRevision =
+					canRetainAcceptedDetails &&
+					data.snapshot !== null &&
+					acceptedSnapshot !== null &&
+					shouldRetainAcceptedLiveMatchDetails(data.snapshot, acceptedSnapshot)
+				const matchesWithRetainedDetails = retainAcceptedDetailRevision
+					? retainLiveMatchPlayerDetails(data.matches, matchesRef.current, {
+							detailFallback: 'accepted'
+						})
+					: data.matches
+				const snapshotWithRetainedDetails =
+					retainAcceptedDetailRevision && data.snapshot && acceptedSnapshot
+						? retainLiveMatchdayDetailRevision(data.snapshot, acceptedSnapshot)
+						: data.snapshot
+				const replaceablePublication = canReplaceLiveMatchesLkg(
+					{
+						...data,
+						snapshot: snapshotWithRetainedDetails
+					},
+					acceptedSnapshot
+				)
+				if (!replaceablePublication && hasLastGoodData.current) {
+					if (data.snapshot !== null) setError(t('refreshFailed'))
+					return
+				}
 				const lifecycleCurrentEventId =
-					data.currentEventId ?? eventIds?.currentEventId ?? resolvedCurrentEventId
-				const nextSelectedEventId = lifecycleCurrentEventId
-					? selectLiveMatchEvent(
-							data.matches,
-							lifecycleCurrentEventId,
-							new Date()
-						)
-					: undefined
-				const mappedMatches =
-					nextSelectedEventId &&
-					nextSelectedEventId !== lifecycleCurrentEventId
-						? data.matches.filter(
-								match => match.eventId === nextSelectedEventId
-							)
-						: data.matches
-				setMatches(mappedMatches)
+					data.currentEventId ??
+					(eventIds?.useActiveEvent ? undefined : eventIds?.currentEventId) ??
+					resolvedCurrentEventId
+				acceptMatches(matchesWithRetainedDetails)
 				setResolvedCurrentEventId(lifecycleCurrentEventId)
-				setSelectedEventId(nextSelectedEventId)
-				setResolvedNextEventId(data.nextEventId ?? undefined)
-					acceptSnapshot(
-							nextSelectedEventId === lifecycleCurrentEventId
-								? data.snapshot
-								: null
-					)
-				hasLastGoodData.current = true
+				setSelectedEventId(lifecycleCurrentEventId)
+				acceptSnapshot(snapshotWithRetainedDetails)
+				hasLastGoodData.current = replaceablePublication
 
-				if (
-					!hasUserSelectedTab.current &&
-					!hasSavedTabPreference.current
-				) {
-					setActiveTab(getPreferredLiveMatchesTab(mappedMatches))
+				if (!hasUserSelectedTab.current && !hasSavedTabPreference.current) {
+					setActiveTab(getPreferredLiveMatchesTab(matchesWithRetainedDetails))
 				}
 			} catch (err) {
 				console.error('Failed to fetch live matches:', err)
@@ -207,18 +207,22 @@ export function LiveMatchesClient({
 			} finally {
 				isFetchInFlight.current = false
 				if (!mountedRef.current) {
-					pendingRefreshRef.current = false
+					pendingRefreshRef.current = null
 					return
 				}
 				setIsLoading(false)
 				setIsRefreshing(false)
-				if (pendingRefreshRef.current) {
-					pendingRefreshRef.current = false
-					void fetchMatches(true)
+				const pendingRefresh = pendingRefreshRef.current
+				if (pendingRefresh) {
+					pendingRefreshRef.current = null
+					void fetchMatches(
+						true,
+						pendingRefresh.useActiveEvent ? { useActiveEvent: true } : undefined
+					)
 				}
 			}
 		},
-		[acceptSnapshot, resolvedCurrentEventId, resolvedNextEventId, t]
+		[acceptMatches, acceptSnapshot, resolvedCurrentEventId, t]
 	)
 
 	const autoRefreshMatches = useCallback((): Promise<void> => {
@@ -229,55 +233,78 @@ export function LiveMatchesClient({
 
 		const request = (async () => {
 			try {
-				const probe = await executeQuery<LiveContextResponse>(
-					GET_LIVE_CONTEXT,
-					undefined,
-					{ cache: 'no-store' }
-				)
-				const context = probe.liveContext
-				const observedSnapshot = liveContextToSnapshot(probe.liveContext)
-				const observedCurrentEventId = context?.anchorEventId ?? undefined
-				const observedNextEventId = context?.nextEventId ?? undefined
-				const eventIdentityChanged =
-					Boolean(observedCurrentEventId) &&
-					liveRefreshEventIdentityChanged(
-						resolvedCurrentEventId,
-						resolvedNextEventId,
-						observedCurrentEventId,
-						observedNextEventId
+				const transitionProbe = shouldPollLiveMatchesTransition({
+					isPageActive,
+					currentEventId: resolvedCurrentEventId,
+					snapshot: snapshotRef.current
+				})
+				if (transitionProbe) {
+					// Match V2 owns the active-event pointer for this page. A Live
+					// Points context probe can be stale or unavailable after the
+					// current event has moved on.
+					const observedData = await getLiveMatchesSnapshot(
+						executeQuery,
+						null,
+						{ preferHttp: true }
 					)
-				if (eventIdentityChanged) {
-					setResolvedCurrentEventId(observedCurrentEventId)
-					setResolvedNextEventId(observedNextEventId)
-					await fetchMatches(true, {
-						currentEventId: observedCurrentEventId,
-						nextEventId: observedNextEventId,
-						scoreCoreRevision: observedSnapshot?.scoreCoreRevision ?? null
-					})
-					return
-				}
-				// Once the selected matchday is terminal, this heartbeat is only
-				// for discovering a new event identity. Do not reload the same
-				// finalized desk just because its source check time changed.
-				if (
-					shouldPollLiveMatchesTransition({
-						isPageActive,
-						currentEventId: resolvedCurrentEventId,
-						nextEventId: resolvedNextEventId,
-						snapshot: snapshotRef.current
-						})
-				) {
-						setError(null)
+					const observedCurrentEventId =
+						observedData.currentEventId ?? undefined
+					if (
+						observedCurrentEventId &&
+						observedCurrentEventId !== resolvedCurrentEventId
+					) {
+						await fetchMatches(
+							true,
+							{ currentEventId: observedCurrentEventId },
+							observedData
+						)
 						return
-				}
-				if (!liveSnapshotNeedsRefresh(snapshotRef.current, observedSnapshot)) {
-					acceptSnapshot(observedSnapshot)
+					}
+					if (
+						observedData.snapshot &&
+						liveMatchdayNeedsRefresh(snapshotRef.current, observedData.snapshot)
+					) {
+						await fetchMatches(true, undefined, observedData)
+						return
+					}
 					setError(null)
 					return
 				}
-				await fetchMatches(true, {
-						scoreCoreRevision: observedSnapshot?.scoreCoreRevision ?? null
-				})
+				const observedData = await getLiveMatchesSnapshot(
+					executeQuery,
+					resolvedCurrentEventId,
+					{ preferHttp: true }
+				)
+				const observedSnapshot = observedData.snapshot
+				// An unavailable publication is an observation failure, not permission
+				// to erase or refetch the last complete board.
+				if (!observedSnapshot) {
+					// A valid V2 response without a snapshot is the normal post-deadline
+					// sync window. Keep the countdown armed and retain any LKG.
+					setError(null)
+					return
+				}
+				if (
+					observedData.currentEventId &&
+					observedData.currentEventId !== resolvedCurrentEventId
+				) {
+					await fetchMatches(
+						true,
+						{
+							currentEventId: observedData.currentEventId
+						},
+						observedData
+					)
+					return
+				}
+				if (!liveMatchdayNeedsRefresh(snapshotRef.current, observedSnapshot)) {
+					if (canReplaceLiveMatchesLkg(observedData, snapshotRef.current)) {
+						acceptSnapshot(observedSnapshot)
+					}
+					setError(null)
+					return
+				}
+				await fetchMatches(true, undefined, observedData)
 			} catch (probeError) {
 				console.error('Failed to check live match freshness:', probeError)
 				setError(t('refreshFailed'))
@@ -290,14 +317,7 @@ export function LiveMatchesClient({
 			}
 		})
 		return request
-	}, [
-		acceptSnapshot,
-		fetchMatches,
-		isPageActive,
-		resolvedCurrentEventId,
-		resolvedNextEventId,
-		t
-	])
+	}, [acceptSnapshot, fetchMatches, isPageActive, resolvedCurrentEventId, t])
 
 	const handleTabChange = (value: string) => {
 		if (!isLiveMatchesTab(value)) return
@@ -334,23 +354,6 @@ export function LiveMatchesClient({
 	const tabCountLabel = (tab: LiveMatchesTab) =>
 		t('matchCount', { count: matchesByTab[tab].length })
 	useEffect(() => {
-		if (
-			hasRequestedInitialFixturePlayers.current ||
-			!initialMatches.some(
-				match =>
-					match.status === 'LIVE' ||
-					match.status === 'HT' ||
-					match.status === 'FT'
-			)
-		)
-			return
-		hasRequestedInitialFixturePlayers.current = true
-		// Keep the score/status desk in the first RSC payload and hydrate the
-		// optional player section in the background.
-		void fetchMatches(true)
-	}, [fetchMatches, initialMatches])
-
-	useEffect(() => {
 		if (hasUserSelectedTab.current) return
 		if (hasSavedTabPreference.current) return
 		let savedTab: string | null = null
@@ -359,7 +362,11 @@ export function LiveMatchesClient({
 		} catch {
 			return
 		}
-		if (savedTab && isLiveMatchesTab(savedTab) && matchesByTab[savedTab].length > 0) {
+		if (
+			savedTab &&
+			isLiveMatchesTab(savedTab) &&
+			matchesByTab[savedTab].length > 0
+		) {
 			hasSavedTabPreference.current = true
 			const timeoutId = window.setTimeout(() => setActiveTab(savedTab), 0)
 			return () => window.clearTimeout(timeoutId)
@@ -375,26 +382,30 @@ export function LiveMatchesClient({
 	}, [matchesByTab])
 
 	const pollingEventId = resolvedCurrentEventId
-	const autoRefreshEnabled = shouldPollLiveSnapshot({
-		isPageActive,
-		currentEventId: pollingEventId,
-		selectedEventId: pollingEventId,
-		snapshot,
-		windowState: snapshot?.windowState ?? snapshot?.state,
-		nextRefreshAt: snapshot?.nextRefreshAt
-	}) || shouldPollLiveMatchesTransition({
-		isPageActive,
-		currentEventId: resolvedCurrentEventId,
-		nextEventId: resolvedNextEventId,
-		snapshot
-	})
+	const autoRefreshEnabled =
+		shouldPollLiveMatchday({
+			isPageActive,
+			currentEventId: pollingEventId,
+			selectedEventId: pollingEventId,
+			snapshot
+		}) ||
+		shouldPollLiveMatchesTransition({
+			isPageActive,
+			currentEventId: resolvedCurrentEventId,
+			snapshot
+		})
 	const transitionPolling = shouldPollLiveMatchesTransition({
 		isPageActive,
 		currentEventId: resolvedCurrentEventId,
-		nextEventId: resolvedNextEventId,
 		snapshot
 	})
-	const lastUpdatedAt = snapshot?.sourceCheckedAt ?? null
+	const refreshMatches = useCallback(() => {
+		void fetchMatches(
+			true,
+			transitionPolling ? { useActiveEvent: true } : undefined
+		)
+	}, [fetchMatches, transitionPolling])
+	const lastUpdatedAt = snapshot?.times.deskContentUpdatedAt ?? null
 	const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string | null>(null)
 	useEffect(() => {
 		if (!lastUpdatedAt) {
@@ -418,6 +429,37 @@ export function LiveMatchesClient({
 			})
 		)
 	}, [format, lastUpdatedAt])
+	const detailDelayed =
+		matches.some(match => match.status !== 'NOT_STARTED') &&
+		(snapshot?.detailDelivery.state === 'PENDING' ||
+			snapshot?.detailDelivery.state === 'STALE' ||
+			snapshot?.detailDelivery.state === 'DEGRADED')
+	const detailUpdatedAt = snapshot?.times.detailContentUpdatedAt ?? null
+	const [detailUpdatedLabel, setDetailUpdatedLabel] = useState<string | null>(
+		null
+	)
+	useEffect(() => {
+		if (!detailUpdatedAt) {
+			setDetailUpdatedLabel(null)
+			return
+		}
+		const parsed = new Date(detailUpdatedAt)
+		if (Number.isNaN(parsed.getTime())) {
+			setDetailUpdatedLabel(null)
+			return
+		}
+		const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+		setDetailUpdatedLabel(
+			format.dateTime(parsed, {
+				day: 'numeric',
+				month: 'short',
+				hour: '2-digit',
+				minute: '2-digit',
+				second: '2-digit',
+				timeZone: browserTimeZone
+			})
+		)
+	}, [detailUpdatedAt, format])
 	const activeTabConfig = TAB_CONFIG.find(config => config.value === activeTab)
 	const activeMatches = matchesByTab[activeTab]
 
@@ -438,8 +480,7 @@ export function LiveMatchesClient({
 				return
 			}
 
-			const eventTarget =
-				event.target instanceof Element ? event.target : null
+			const eventTarget = event.target instanceof Element ? event.target : null
 			if (
 				eventTarget?.closest(
 					'input, textarea, select, [contenteditable="true"], [role="dialog"], [data-radix-dialog-content]'
@@ -505,6 +546,16 @@ export function LiveMatchesClient({
 
 	const headerActions = (
 		<div className="flex flex-wrap items-center justify-end gap-2">
+			{detailDelayed ? (
+				<span
+					className="whitespace-nowrap text-xs text-amber-700 dark:text-amber-300"
+					role="status"
+				>
+					{detailUpdatedLabel
+						? t('detailUpdatingSince', { time: detailUpdatedLabel })
+						: t('detailUpdating')}
+				</span>
+			) : null}
 			{lastUpdatedAt && lastUpdatedLabel ? (
 				<time
 					dateTime={lastUpdatedAt}
@@ -517,7 +568,7 @@ export function LiveMatchesClient({
 			<Button
 				variant="outline"
 				size="icon"
-				onClick={() => fetchMatches(true)}
+				onClick={refreshMatches}
 				disabled={isRefreshing || isLoading}
 				className="shrink-0"
 			>
@@ -528,13 +579,15 @@ export function LiveMatchesClient({
 			</Button>
 			<div className="min-h-4">
 				{!isLoading || isRefreshing ? (
-						<LiveAutoRefreshCountdown
-							enabled={autoRefreshEnabled}
-							onRefresh={autoRefreshMatches}
-							nextRefreshAt={transitionPolling ? null : snapshot?.nextRefreshAt}
-							renderLabel={seconds => t('autoRefresh', { seconds })}
-							showLabel={false}
-						/>
+					<LiveAutoRefreshCountdown
+						enabled={autoRefreshEnabled}
+						onRefresh={autoRefreshMatches}
+						nextRefreshAt={
+							transitionPolling ? null : snapshot?.times.nextRefreshAt
+						}
+						renderLabel={seconds => t('autoRefresh', { seconds })}
+						showLabel={false}
+					/>
 				) : null}
 			</div>
 		</div>
@@ -582,7 +635,7 @@ export function LiveMatchesClient({
 							{t('error', { message: error })}
 						</p>
 						<Button
-							onClick={() => fetchMatches(true)}
+							onClick={refreshMatches}
 							variant="outline"
 						>
 							{t('tryAgain')}
@@ -664,12 +717,21 @@ export function LiveMatchesClient({
 										match={match}
 										allMatches={activeMatches}
 										currentIndex={i}
-						eventId={selectedEventId}
+										eventId={selectedEventId}
 									/>
 								))
 							) : (
-								<p className="rounded-lg border border-border/80 bg-card py-8 text-center text-muted-foreground shadow-sm">
-									{activeTabConfig ? t(activeTabConfig.labelKey) : t('none')}
+								<p
+									className="rounded-lg border border-border/80 bg-card py-8 text-center text-muted-foreground shadow-sm"
+									role={
+										!snapshot && matches.length === 0 ? 'status' : undefined
+									}
+								>
+									{!snapshot && matches.length === 0
+										? t('officialUpdating')
+										: activeTabConfig
+											? t(activeTabConfig.labelKey)
+											: t('none')}
 								</p>
 							)}
 						</TabsContent>

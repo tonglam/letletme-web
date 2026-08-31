@@ -23,6 +23,7 @@ export type CountdownCardProps = {
 	}
 	expiredBadge?: ReactNode
 	expiredLabel?: ReactNode
+	expiredTone?: 'warning' | 'info'
 	headerAction?: ReactNode
 	variant?: CountdownVariant
 	className?: string
@@ -62,6 +63,7 @@ export const CountdownCard = forwardRef<HTMLDivElement, CountdownCardProps>(
 			unitLabels,
 			expiredBadge,
 			expiredLabel,
+			expiredTone = 'warning',
 			headerAction,
 			variant = 'dark',
 			className
@@ -80,6 +82,7 @@ export const CountdownCard = forwardRef<HTMLDivElement, CountdownCardProps>(
 		const [deadlinePassed, setDeadlinePassed] = useState(false)
 		const [formattedDeadline, setFormattedDeadline] = useState('')
 		const dark = variant === 'dark'
+		const expiredInfo = expiredTone === 'info'
 
 		useEffect(() => {
 			if (!hasDeadline) {
@@ -168,17 +171,25 @@ export const CountdownCard = forwardRef<HTMLDivElement, CountdownCardProps>(
 					<div
 						className={cn(
 							'mt-5 flex items-center gap-3 rounded-xl border px-4 py-3.5',
-							dark
-								? 'border-pink/40 bg-pink/10'
-								: 'border-warning/40 bg-warning/10'
+								dark
+									? expiredInfo
+										? 'border-electric/40 bg-electric/10'
+										: 'border-pink/40 bg-pink/10'
+									: expiredInfo
+										? 'border-primary/30 bg-primary/[0.06]'
+										: 'border-warning/40 bg-warning/10'
 						)}
 					>
 						<span
 							className={cn(
 								'flex size-9 shrink-0 items-center justify-center rounded-lg',
 								dark
-									? 'bg-pink/20 text-pink'
-									: 'bg-warning/20 text-warning-foreground'
+									? expiredInfo
+										? 'bg-electric/15 text-electric'
+										: 'bg-pink/20 text-pink'
+									: expiredInfo
+										? 'bg-primary/10 text-primary-ink'
+										: 'bg-warning/20 text-warning-foreground'
 							)}
 						>
 							<CalendarClock
@@ -192,8 +203,12 @@ export const CountdownCard = forwardRef<HTMLDivElement, CountdownCardProps>(
 									className={cn(
 										'inline-flex rounded-sm px-2 py-0.5 font-display text-xs font-bold uppercase tracking-caps-wide',
 										dark
-											? 'bg-pink text-pink-950'
-											: 'bg-warning/20 text-warning-foreground'
+											? expiredInfo
+												? 'bg-electric text-plum'
+												: 'bg-pink text-pink-950'
+											: expiredInfo
+												? 'bg-primary/10 text-primary-ink'
+												: 'bg-warning/20 text-warning-foreground'
 									)}
 								>
 									{expiredBadge}

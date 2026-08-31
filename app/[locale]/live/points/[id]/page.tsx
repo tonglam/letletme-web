@@ -2,6 +2,7 @@ import TeamPointsClient from '@/app/live/points/[id]/TeamPointsClient'
 import { SeasonPhaseState } from '@/components/feedback/SeasonPhaseState'
 import { getPageLocale, getPageMetadata, type LocaleParams } from '@/i18n/page'
 import { getLivePageContext } from '@/lib/live-context-server'
+import { isOfficialLiveUpdatingContext } from '@/lib/live-updating'
 import { liveContextToSnapshot } from '@/lib/live-refresh'
 import {
 	GET_ENTRY,
@@ -55,7 +56,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			? executeServerQuery<LiveCalcDataResponse>(
 					GET_LIVE_POINTS,
 					{ eventId: speculativeEventId, entryId },
-					{ cache: 'no-store' }
+					{ cache: 'no-store', suppressErrorLog: true }
 				)
 			: null
 	// The lifecycle gate can return before this read is needed; attach a handler
@@ -108,6 +109,9 @@ export default async function Page({ params, searchParams }: PageProps) {
 		)
 	}
 	const initialEventId = requestedGameweek ?? currentEventId
+	const isOfficialUpdating =
+		initialEventId === currentEventId &&
+		isOfficialLiveUpdatingContext(liveContext)
 	const seedCurrentOverall = initialEventId === currentEventId
 
 	let initialLiveData: LiveCalcData | undefined
@@ -123,7 +127,10 @@ export default async function Page({ params, searchParams }: PageProps) {
 				: executeServerQuery<LiveCalcDataResponse>(
 						GET_LIVE_POINTS,
 						{ eventId: initialEventId, entryId },
-						{ cache: 'no-store' }
+						{
+							cache: 'no-store',
+							suppressErrorLog: isOfficialUpdating
+						}
 					),
 			seedCurrentOverall
 				? executeServerQuery<EntrySummaryResponse>(
@@ -148,7 +155,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 					: null) ??
 				liveData.snapshot ??
 				null
-		} else {
+		} else if (!isOfficialUpdating) {
 			console.error('Failed to seed live points page:', liveResult.reason)
 		}
 
@@ -188,6 +195,7 @@ export default async function Page({ params, searchParams }: PageProps) {
 			initialOverall={initialOverall}
 			initialEntryLookupStatus={initialEntryLookupStatus}
 			initialEntryPersistenceState={initialEntryPersistenceState}
+			isOfficialUpdating={isOfficialUpdating}
 		/>
 	)
 }

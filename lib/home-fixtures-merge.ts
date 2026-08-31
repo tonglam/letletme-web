@@ -1,6 +1,10 @@
-import type { LiveMatchdayDeskRow } from '@/lib/graphql/operations/live'
+import type {
+	LiveMatchdayFixtureSummary,
+	LiveMatchdaySummarySnapshot
+} from '@/lib/graphql/operations/live'
 import type {
 	HomeFixture,
+	HomeFixtureState,
 	HomeFixturesResponse
 } from '@/lib/graphql/operations/home'
 
@@ -10,6 +14,40 @@ type CoreHomeFixtureContext = {
 	season: string
 	revision: string
 	sourceCheckedAt: string | null
+}
+
+export function homeFixtureStateFromLiveState(state: string): HomeFixtureState {
+	if (state === 'SETTLED' || state === 'FINALIZED' || state === 'GW_REVIEW') {
+		return 'SETTLED'
+	}
+	if (
+		state === 'SCHEDULED' ||
+		state === 'PRE_DEADLINE' ||
+		state === 'PICKS_WAIT'
+	) {
+		return 'SCHEDULED'
+	}
+	return 'LIVE'
+}
+
+export function buildHomeLiveFixtureRevision(
+	snapshot: Pick<LiveMatchdaySummarySnapshot, 'revisions'>
+): string {
+	const {
+		deskPublicationId,
+		deskGeneration,
+		lifecycle,
+		fixtureIdentity,
+		scoreState
+	} = snapshot.revisions
+	return [
+		'live',
+		deskPublicationId,
+		String(deskGeneration),
+		lifecycle,
+		fixtureIdentity,
+		scoreState
+	].join(':')
 }
 
 function safeText(value: unknown): string {
@@ -33,10 +71,11 @@ function mergeTeam(
 
 /**
  * Keep fixture identity in the core contract and overlay only live facts.
- * The live desk intentionally does not own team abbreviations or kickoff data.
+ * The matchday publication is allowed to provide short names, while core
+ * fixture identity remains authoritative for kickoff and missing metadata.
  */
 export function mergeLiveFixturesIntoHomeFixtures(
-	rows: readonly LiveMatchdayDeskRow[],
+	rows: readonly LiveMatchdayFixtureSummary[],
 	coreFixtures: readonly CoreHomeFixture[]
 ): HomeFixture[] {
 	const coreByFixtureId = new Map(

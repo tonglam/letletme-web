@@ -62,6 +62,8 @@ export interface NextEvent {
 export interface EventsResponse {
 	current: CurrentEvent[]
 	next: NextEvent[]
+	/** Latest event known to be finished, used by forward-looking fixture views. */
+	latestFinishedEventId?: number | null
 }
 
 // Query to fetch tournaments joined by current entry

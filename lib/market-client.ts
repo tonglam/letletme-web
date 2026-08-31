@@ -19,7 +19,10 @@ export async function fetchMarketJson<T>(
 		const key = `${path}?${query.toString()}`
 		const cached = valueCache.get(key)
 		if (cached !== undefined) return cached as T
-		const existing = pending.get(key)
+		// A request with a consumer-owned AbortSignal must not reuse another
+		// consumer's request: React Strict Mode can cancel the first effect while
+		// the second effect is already asking for the same resource.
+		const existing = signal ? undefined : pending.get(key)
 		if (existing) return (await existing) as T
 
 		const request = fetch(`/api/market/${path}?${query.toString()}`, {
@@ -41,7 +44,7 @@ export async function fetchMarketJson<T>(
 			valueCache.set(key, body)
 			return body
 		})
-		pending.set(key, request)
+		if (!signal) pending.set(key, request)
 		try {
 			return await request
 		} catch (error) {
@@ -54,7 +57,7 @@ export async function fetchMarketJson<T>(
 			}
 			throw error
 		} finally {
-			pending.delete(key)
+			if (!signal && pending.get(key) === request) pending.delete(key)
 		}
 	}
 	throw new Error('market revision retry exhausted')

@@ -3,7 +3,7 @@ import 'server-only'
 import { CacheTag, RevalidateSeconds } from '@/lib/cache-policy'
 import {
 	loadFixtureWindowWithExecutor,
-	type FixtureWindowLoadResult,
+	type FixtureWindowLoadResult
 } from '@/lib/fixture-window'
 import { executePublicServerQuery } from '@/lib/graphql-server'
 import { unstable_cache } from 'next/cache'
@@ -19,7 +19,7 @@ class IncompleteFixtureWindowError extends Error {
 
 const loadCompleteFixtureWindowFromOrigin = async (
 	fromGw: number,
-	count: number,
+	count: number
 ): Promise<FixtureWindowLoadResult> => {
 	const key = `fixture-window:${fromGw}:${count}`
 	return coalescePublicSeed(key, async () => {
@@ -32,12 +32,10 @@ const loadCompleteFixtureWindowFromOrigin = async (
 			fromGw,
 			count,
 			(query, variables) =>
-				executePublicServerQuery<unknown>(
-					'fixtures',
-					query,
-					variables,
-					{ cache: 'no-store', timeoutMs: 5_000 }
-				)
+				executePublicServerQuery<unknown>('fixtures', query, variables, {
+					cache: 'no-store',
+					timeoutMs: 5_000
+				})
 		)
 		if (result.outcome !== 'complete') {
 			throw new IncompleteFixtureWindowError(result)
@@ -48,15 +46,18 @@ const loadCompleteFixtureWindowFromOrigin = async (
 
 const loadCompleteFixtureWindow = unstable_cache(
 	loadCompleteFixtureWindowFromOrigin,
-	['graphql', 'fixture-window', 'v1'],
-	{ revalidate: RevalidateSeconds.publicStats, tags: [CacheTag.fixtures, CacheTag.events] },
+	['graphql', 'fixture-window', 'v2'],
+	{
+		revalidate: RevalidateSeconds.publicStats,
+		tags: [CacheTag.fixtures, CacheTag.events]
+	}
 )
 
 const loadFixtureWindowCached = cache(loadCompleteFixtureWindow)
 
 export async function loadFixtureWindow(
 	fromGw: number,
-	count: number,
+	count: number
 ): Promise<FixtureWindowLoadResult> {
 	try {
 		return await loadFixtureWindowCached(fromGw, count)
@@ -69,7 +70,7 @@ export async function loadFixtureWindow(
 /** The public API already owns the shared CDN TTL, so it must bypass Data Cache. */
 export async function loadFixtureWindowForPublicRoute(
 	fromGw: number,
-	count: number,
+	count: number
 ): Promise<FixtureWindowLoadResult> {
 	try {
 		return await loadCompleteFixtureWindowFromOrigin(fromGw, count)

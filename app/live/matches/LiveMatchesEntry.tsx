@@ -1,23 +1,21 @@
 'use client'
 
 import { LiveMatchesClient } from '@/app/live/matches/LiveMatchesClient'
+import type { LiveMatchdayStatus } from '@/lib/live-matches'
 import type { Match } from '@/types/match'
-import type { LiveSnapshotStatus } from '@/lib/graphql/operations/live'
 
 export function LiveMatchesEntry({
 	initialMatches,
 	initialError,
 	currentEventId,
 	selectedEventId,
-	nextEventId,
 	initialSnapshot
 }: {
 	initialMatches: Match[]
 	initialError?: string | null
 	currentEventId?: number
 	selectedEventId?: number
-	nextEventId?: number
-	initialSnapshot?: LiveSnapshotStatus | null
+	initialSnapshot?: LiveMatchdayStatus | null
 }) {
 	return (
 		<LiveMatchesClient
@@ -25,7 +23,6 @@ export function LiveMatchesEntry({
 			initialError={initialError}
 			currentEventId={currentEventId}
 			selectedEventId={selectedEventId}
-			nextEventId={nextEventId}
 			initialSnapshot={initialSnapshot}
 		/>
 	)

@@ -1,11 +1,13 @@
 import { PageState } from '@/components/feedback/PageState'
+import { SeasonPhaseAutoRefresh } from '@/components/feedback/SeasonPhaseAutoRefresh'
 import { SeasonPhaseRetry } from '@/components/feedback/SeasonPhaseRetry'
 import { Link } from '@/i18n/navigation'
 import type {
 	SeasonPresentation,
 	SeasonPresentationPhase,
 } from '@/lib/season-presentation'
-import { CalendarX2 } from 'lucide-react'
+import { isOfficialLiveUpdatingSignal } from '@/lib/live-updating'
+import { CalendarX2, RefreshCw } from 'lucide-react'
 import { getFormatter, getTranslations } from 'next-intl/server'
 
 type LiveFeature = 'points' | 'competition' | 'matches'
@@ -64,6 +66,34 @@ export async function SeasonPhaseState({
 				role="alert"
 			/>
 		)
+	}
+
+	if (isOfficialLiveUpdatingSignal(presentation.signal)) {
+		const updatingGameweek =
+			presentation.currentEventId ?? presentation.nextEventId ?? gameweek
+			return (
+				<>
+					<SeasonPhaseAutoRefresh />
+					<PageState
+						icon={RefreshCw}
+						title={t('updatingTitle')}
+						description={t('updatingDescription', {
+							gameweek: updatingGameweek,
+						})}
+						actions={
+							<>
+								<Link className="underline underline-offset-4" href="/explore/fixtures">
+									{t('viewFixtures')}
+								</Link>
+								<Link className="underline underline-offset-4" href="/explore/market">
+									{t('viewMarket')}
+								</Link>
+							</>
+						}
+						role="status"
+					/>
+				</>
+			)
 	}
 
 	if (presentation.phase === 'OFFSEASON') {

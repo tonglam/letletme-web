@@ -53,8 +53,9 @@ test('public competition copy is complete and contains no accidental legacy term
 				competitions: 'Competitions',
 				explore: 'Explore',
 				myCompetitions: 'My Competitions',
+				browseCompetitions: 'Browse competitions',
 				createCompetition: 'New Competition',
-				myTournament: 'My Tournament'
+				myTournament: 'My Competitions'
 			},
 			home: {
 				liveCompetitionStandings: 'Live competition standings',
@@ -73,6 +74,7 @@ test('public competition copy is complete and contains no accidental legacy term
 				competitions: '赛事',
 				explore: '探索',
 				myCompetitions: '我的赛事',
+				browseCompetitions: '浏览赛事',
 				createCompetition: '新建赛事',
 				myTournament: '赛事'
 			},
@@ -146,7 +148,7 @@ test('competition navigation and homepage entry routes remain aligned', () => {
 
 	for (const href of [
 		"href: '/live/competitions'",
-		"href: '/competitions/browse?mine=true'",
+		"href: '/competitions/browse'",
 		"href: '/competitions/create'",
 		"href: '/my-fpl/competitions'"
 	]) {

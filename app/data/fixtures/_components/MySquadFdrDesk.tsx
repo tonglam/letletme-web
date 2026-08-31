@@ -5,6 +5,7 @@ import {
 	type SquadPitchFixture,
 	type SquadPitchPlayer
 } from '@/components/squad-pitch/SquadPitch'
+import { ShareActions } from '@/components/share/ShareActions'
 import { Badge } from '@/components/ui/badge'
 import {
 	Dialog,
@@ -18,15 +19,27 @@ import { positionBadgeClass } from '@/lib/position-style'
 import { resolveSquadTeamCode } from '@/lib/squad-pitch-team-codes'
 import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
 import {
+	isFixtureWindowResponse,
+	type FixturePlanningFixture,
+	type FixtureWindowResponse
+} from '@/lib/fixture-window'
+import { mergeFixtureWindowSchedules } from '@/lib/fixture-window-schedule'
+import {
 	buildSquadFdrRows,
-	formatAvgFdrOutOfFive,
 	sortSquadForPlanning,
 	type SquadFdrRow,
 	type TeamFdrRow
 } from '@/lib/fixtures-fdr'
 import { cn } from '@/lib/utils'
 import { CalendarDays } from 'lucide-react'
-import { useCallback, useMemo, useState, type RefObject } from 'react'
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type RefObject
+} from 'react'
 import { useTranslations } from 'next-intl'
 
 const FDR_CELL: Record<number, string> = {
@@ -37,15 +50,25 @@ const FDR_CELL: Record<number, string> = {
 	5: 'border-destructive/40 bg-destructive/15 text-foreground'
 }
 
-const FDR_DOT: Record<number, string> = {
-	1: 'bg-success',
-	2: 'bg-success/70',
-	3: 'bg-muted-foreground/50',
-	4: 'bg-warning',
-	5: 'bg-destructive'
-}
-
 type PitchPosition = SquadPitchPlayer['position']
+
+const FULL_SEASON_EVENT_IDS = Array.from(
+	{ length: 38 },
+	(_, index) => index + 1
+)
+const FULL_SEASON_WINDOWS = Array.from({ length: 8 }, (_, index) => {
+	const fromGw = index * 5 + 1
+	return {
+		fromGw,
+		count: Math.min(5, 39 - fromGw)
+	}
+})
+
+type FullSeasonSchedule = {
+	fixturesByEvent: Map<number, FixturePlanningFixture[]>
+	unavailableEventIds: ReadonlySet<number>
+	failedWindowCount: number
+}
 
 function pitchPosition(value: string): PitchPosition {
 	const normalized = value.trim().toUpperCase()
@@ -99,8 +122,10 @@ function buildPitchSchedule(
 
 		const difficulty = clampFdr(
 			gameweek.averageFdr ??
-				gameweek.fixtures.reduce((sum, fixture) => sum + fixture.difficulty, 0) /
-					gameweek.fixtures.length
+				gameweek.fixtures.reduce(
+					(sum, fixture) => sum + fixture.difficulty,
+					0
+				) / gameweek.fixtures.length
 		)
 		const values = gameweek.fixtures.map(fixture => String(fixture.difficulty))
 		const details = gameweek.fixtures.map(
@@ -119,88 +144,416 @@ function buildPitchSchedule(
 	})
 }
 
-function FixtureDetailRow({
+function fixtureForTeam(fixture: FixturePlanningFixture, teamId: number) {
+	const isHome = fixture.homeTeam.id === teamId
+	const isAway = fixture.awayTeam.id === teamId
+	if (!isHome && !isAway) return null
+
+	return {
+		fixture,
+		isHome,
+		opponent: isHome ? fixture.awayTeam : fixture.homeTeam,
+		difficulty: clampFdr(
+			isHome ? fixture.homeTeamDifficulty : fixture.awayTeamDifficulty
+		)
+	}
+}
+
+function fixtureScore(
+	fixture: FixturePlanningFixture,
+	isHome: boolean
+): string | null {
+	const ownScore = isHome ? fixture.homeScore : fixture.awayScore
+	const opponentScore = isHome ? fixture.awayScore : fixture.homeScore
+	if (typeof ownScore !== 'number' || typeof opponentScore !== 'number') {
+		return null
+	}
+	return `${ownScore}–${opponentScore}`
+}
+
+function CompactFixtureRow({
 	eventId,
-	gameweek,
+	fixtures,
+	unknown,
+	teamId,
 	t
 }: {
 	eventId: number
-	gameweek: SquadFdrRow['gameweeks'][number] | undefined
+	fixtures: FixturePlanningFixture[]
+	unknown: boolean
+	teamId: number
 	t: ReturnType<typeof useTranslations<'Fixtures'>>
 }) {
-	const status = gameweek?.unknown
-		? t('fixtureUnavailable')
-		: !gameweek || gameweek.bgw || gameweek.fixtures.length === 0
-			? t('bgw')
-			: null
+	const teamFixtures = fixtures
+		.map(fixture => fixtureForTeam(fixture, teamId))
+		.filter(
+			(fixture): fixture is NonNullable<typeof fixture> => fixture !== null
+		)
 
 	return (
-		<div className="rounded-lg border border-border/60 bg-muted/10 p-3">
-			<div className="mb-2 flex items-center justify-between gap-3">
-				<span className="font-display text-sm font-bold tracking-wide">
-					GW{eventId}
-				</span>
-				{gameweek?.averageFdr != null ? (
-					<span className="font-mono text-caption font-semibold tabular-nums text-muted-foreground">
-						{t('fixtureAverage', {
-							value: formatAvgFdrOutOfFive(gameweek.averageFdr)
-						})}
+		<li className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-2 border-b border-border/60 py-1.5 last:border-b-0 sm:grid-cols-[4rem_minmax(0,1fr)] sm:gap-3">
+			<span className="font-mono text-caption font-bold tabular-nums text-muted-foreground">
+				GW{eventId}
+			</span>
+			<div className="flex min-w-0 flex-wrap gap-1.5">
+				{unknown && teamFixtures.length === 0 ? (
+					<span
+						title={t('fixtureUnavailable')}
+						className="inline-flex items-center rounded-md border border-warning/45 bg-warning/10 px-2 py-1 font-mono text-label font-bold tabular-nums text-foreground"
+					>
+						?
 					</span>
-				) : null}
-			</div>
+				) : teamFixtures.length === 0 ? (
+					<span className="inline-flex items-center rounded-md border border-dashed border-border/70 px-2 py-1 font-mono text-label font-semibold text-muted-foreground">
+						{t('bgw')}
+					</span>
+				) : (
+					<>
+						{unknown ? (
+							<span
+								title={t('fixtureUnavailable')}
+								aria-label={t('fixtureUnavailable')}
+								className="inline-flex items-center rounded-md border border-warning/45 bg-warning/10 px-1.5 py-1 font-mono text-micro font-bold tabular-nums text-muted-foreground"
+							>
+								?
+							</span>
+						) : null}
+						{teamFixtures.map(({ fixture, isHome, opponent, difficulty }) => {
+							const score = fixtureScore(fixture, isHome)
+							const value =
+								fixture.finished || (fixture.started && score)
+									? (score ?? '—')
+									: `FDR ${difficulty}`
+							const venue = isHome
+								? t('fixtureHomeShort')
+								: t('fixtureAwayShort')
 
-			{status ? (
-				<p className="rounded-md border border-dashed border-border/70 px-3 py-2 text-sm text-muted-foreground">
-					{status}
-				</p>
-			) : (
-				<div className="flex flex-wrap gap-2">
-					{gameweek?.fixtures.map(fixture => (
-						<div
-							key={fixture.fixtureId}
-							className={cn(
-								'flex min-w-[7.25rem] flex-col rounded-md border px-3 py-2',
-								FDR_CELL[fixture.difficulty]
-							)}
-						>
-							<span className="font-display text-sm font-bold tracking-wide">
-								{fixture.opponentShortName}
-							</span>
-							<span className="mt-0.5 font-mono text-caption tabular-nums text-muted-foreground">
-								{fixture.wasHome ? 'H' : 'A'} ·{' '}
-								{t('fixtureDifficulty', {
-									difficulty: fixture.difficulty
-								})}
-							</span>
-						</div>
-					))}
-				</div>
-			)}
+							return (
+								<span
+									key={fixture.id}
+									title={`${opponent.name} · ${venue} · ${value}`}
+									aria-label={`${opponent.name} · ${venue} · ${value}`}
+									className={cn(
+										'inline-flex min-w-[7.25rem] items-center gap-1.5 rounded-md border px-2 py-1',
+										FDR_CELL[difficulty]
+									)}
+								>
+									<span className="min-w-0 truncate font-display text-label font-bold tracking-wide">
+										{opponent.shortName}
+									</span>
+									<span className="shrink-0 font-mono text-[0.6rem] font-bold uppercase text-muted-foreground">
+										{venue}
+									</span>
+									<strong className="ml-auto shrink-0 font-mono text-label font-bold tabular-nums">
+										{value}
+									</strong>
+								</span>
+							)
+						})}
+					</>
+				)}
+			</div>
+		</li>
+	)
+}
+
+async function requestFixtureWindow(
+	window: { fromGw: number; count: number },
+	signal: AbortSignal
+): Promise<FixtureWindowResponse> {
+	const response = await fetch(
+		`/api/fixtures/window?fromGw=${window.fromGw}&count=${window.count}`,
+		{
+			signal,
+			headers: { accept: 'application/json' }
+		}
+	)
+	const payload: unknown = await response.json().catch(() => null)
+	if (!response.ok || !isFixtureWindowResponse(payload)) {
+		throw new Error('fixture window unavailable')
+	}
+	return payload
+}
+
+function mergeFullSeasonSchedule(
+	results: PromiseSettledResult<FixtureWindowResponse>[],
+	previous: FullSeasonSchedule | null = null
+): FullSeasonSchedule {
+	return mergeFixtureWindowSchedules(
+		results,
+		FULL_SEASON_WINDOWS,
+		fixtures => fixtures,
+		previous
+	)
+}
+
+function clampEventId(value: number): number {
+	return Math.min(38, Math.max(1, Math.round(value)))
+}
+
+function defaultScheduleRange(fromGw: number, horizon: number) {
+	const start = clampEventId(fromGw)
+	const count = Math.min(5, Math.max(1, Math.round(horizon)))
+	return {
+		from: start,
+		to: Math.min(38, start + count - 1)
+	}
+}
+
+function PlayerScheduleRangeControls({
+	fromGw,
+	toGw,
+	onFromChange,
+	onToChange,
+	t
+}: {
+	fromGw: number
+	toGw: number
+	onFromChange: (value: number) => void
+	onToChange: (value: number) => void
+	t: ReturnType<typeof useTranslations<'Fixtures'>>
+}) {
+	return (
+		<div
+			data-share-exclude="true"
+			className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-muted/20 px-2.5 py-2"
+		>
+			<span className="mr-1 font-display text-label font-bold uppercase tracking-caps text-muted-foreground">
+				{t('mySquadRangeLabel')}
+			</span>
+			<label className="flex items-center gap-1.5 text-caption font-semibold text-muted-foreground">
+				<span>{t('mySquadRangeFrom')}</span>
+				<select
+					id="my-squad-fixture-range-from"
+					value={fromGw}
+					onChange={event => onFromChange(Number(event.target.value))}
+					className="h-8 rounded-md border border-border/70 bg-background px-2 font-mono text-caption font-bold tabular-nums text-foreground outline-none transition-colors focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring"
+				>
+					{FULL_SEASON_EVENT_IDS.filter(eventId => eventId <= toGw).map(
+						eventId => (
+							<option
+								key={eventId}
+								value={eventId}
+							>
+								GW{eventId}
+							</option>
+						)
+					)}
+				</select>
+			</label>
+			<span className="font-mono text-caption text-muted-foreground">–</span>
+			<label className="flex items-center gap-1.5 text-caption font-semibold text-muted-foreground">
+				<span>{t('mySquadRangeTo')}</span>
+				<select
+					id="my-squad-fixture-range-to"
+					value={toGw}
+					onChange={event => onToChange(Number(event.target.value))}
+					className="h-8 rounded-md border border-border/70 bg-background px-2 font-mono text-caption font-bold tabular-nums text-foreground outline-none transition-colors focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring"
+				>
+					{FULL_SEASON_EVENT_IDS.filter(eventId => eventId >= fromGw).map(
+						eventId => (
+							<option
+								key={eventId}
+								value={eventId}
+							>
+								GW{eventId}
+							</option>
+						)
+					)}
+				</select>
+			</label>
 		</div>
 	)
 }
 
-function FdrLegend({ label }: { label: string }) {
+function FullSeasonSchedule({
+	selectedRow,
+	teamName,
+	schedule,
+	state,
+	fromGw,
+	horizon,
+	t,
+	onRetry
+}: {
+	selectedRow: SquadFdrRow
+	teamName: string
+	schedule: FullSeasonSchedule | null
+	state: 'idle' | 'loading' | 'ready' | 'error'
+	fromGw: number
+	horizon: number
+	t: ReturnType<typeof useTranslations<'Fixtures'>>
+	onRetry: () => void
+}) {
+	const scheduleShareRef = useRef<HTMLDivElement | null>(null)
+	const initialRange = useMemo(
+		() => defaultScheduleRange(fromGw, horizon),
+		[fromGw, horizon]
+	)
+	const [rangeFrom, setRangeFrom] = useState(initialRange.from)
+	const [rangeTo, setRangeTo] = useState(initialRange.to)
+
+	useEffect(() => {
+		setRangeFrom(initialRange.from)
+		setRangeTo(initialRange.to)
+	}, [initialRange])
+
+	const visibleEventIds = useMemo(
+		() =>
+			FULL_SEASON_EVENT_IDS.filter(
+				eventId => eventId >= rangeFrom && eventId <= rangeTo
+			),
+		[rangeFrom, rangeTo]
+	)
+	const resolvedTeamName = teamName.trim() || selectedRow.teamShortName
+	const position = pitchPosition(selectedRow.positionCode)
+
 	return (
-		<div className="flex flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
-			<span className="mr-1 font-display font-semibold uppercase tracking-caps">
-				{label}
-			</span>
-			{[1, 2, 3, 4, 5].map(difficulty => (
-				<span
-					key={difficulty}
-					className={cn(
-						'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-label font-semibold tabular-nums',
-						FDR_CELL[difficulty]
-					)}
+		<div
+			ref={scheduleShareRef}
+			data-share-fit-content="true"
+			data-share-preserve-width="true"
+			className="space-y-3 rounded-xl border border-border/70 bg-background p-3 sm:p-4"
+		>
+			<div className="relative pr-12">
+				<DialogHeader className="min-w-0">
+					<div className="flex min-w-0 items-center gap-2">
+						<Badge
+							className={cn(
+								positionBadgeClass(selectedRow.positionCode),
+								'px-2 py-0.5 text-label font-bold'
+							)}
+						>
+							{position}
+						</Badge>
+						<DialogTitle className="min-w-0 truncate whitespace-nowrap font-display text-lg tracking-wide sm:text-xl">
+							{selectedRow.webName}
+						</DialogTitle>
+					</div>
+					<DialogDescription className="sr-only">
+						{t('mySquadDialogDescription', { player: selectedRow.webName })}
+					</DialogDescription>
+					<div
+						className="mt-1.5 inline-flex max-w-full items-center gap-2 self-start rounded-md border border-primary/35 bg-primary/10 px-2 py-1 text-caption text-primary-ink"
+						title={resolvedTeamName}
+						aria-label={`${t('mySquadCurrentTeam')}: ${resolvedTeamName}`}
+					>
+						<span className="font-mono font-black uppercase tracking-wide">
+							{selectedRow.teamShortName}
+						</span>
+						<span className="truncate font-semibold">{resolvedTeamName}</span>
+					</div>
+				</DialogHeader>
+				{state === 'ready' && schedule ? (
+					<div
+						data-share-exclude="true"
+						className="absolute right-0 top-0"
+					>
+						<ShareActions
+							imageRef={scheduleShareRef}
+							title={t('mySquadShareTitle', {
+								player: selectedRow.webName
+							})}
+							actions={['image']}
+							compact
+						/>
+					</div>
+				) : null}
+			</div>
+
+			{state === 'error' ? (
+				<div
+					className="rounded-lg border border-dashed border-destructive/40 bg-destructive/5 px-3 py-4 text-center"
+					role="alert"
 				>
-					<span
-						className={cn('size-1.5 rounded-full', FDR_DOT[difficulty])}
+					<p className="text-caption text-muted-foreground">
+						{t('mySquadScheduleLoadFailed')}
+					</p>
+					<button
+						type="button"
+						className="mt-2 rounded-md border border-border/70 bg-background px-3 py-1.5 text-caption font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						data-retry-squad-schedule="true"
+						onClick={onRetry}
+					>
+						{t('retrySchedule')}
+					</button>
+				</div>
+			) : state === 'idle' || state === 'loading' || !schedule ? (
+				<div
+					className="rounded-lg border border-dashed border-border/70 bg-muted/10 px-3 py-4"
+					role="status"
+					aria-live="polite"
+				>
+					<p className="text-caption text-muted-foreground">
+						{t('mySquadScheduleLoading')}
+					</p>
+					<div
+						className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-8"
 						aria-hidden="true"
+					>
+						{Array.from({ length: 8 }, (_, index) => (
+							<span
+								key={index}
+								className="h-1.5 animate-pulse rounded-full bg-border/70"
+							/>
+						))}
+					</div>
+				</div>
+			) : (
+				<>
+					<PlayerScheduleRangeControls
+						fromGw={rangeFrom}
+						toGw={rangeTo}
+						onFromChange={value => {
+							setRangeFrom(value)
+							setRangeTo(current => Math.max(current, value))
+						}}
+						onToChange={value => {
+							setRangeTo(value)
+							setRangeFrom(current => Math.min(current, value))
+						}}
+						t={t}
 					/>
-					{difficulty}
-				</span>
-			))}
+					<ol
+						className="divide-y divide-border/60 rounded-lg border border-border/70 bg-muted/10 px-2 sm:px-3"
+						aria-label={t('mySquadRangeSummary', {
+							from: rangeFrom,
+							to: rangeTo
+						})}
+					>
+						{visibleEventIds.map(eventId => (
+							<CompactFixtureRow
+								key={eventId}
+								eventId={eventId}
+								fixtures={schedule.fixturesByEvent.get(eventId) ?? []}
+								unknown={schedule.unavailableEventIds.has(eventId)}
+								teamId={selectedRow.teamId}
+								t={t}
+							/>
+						))}
+					</ol>
+					{schedule.failedWindowCount > 0 ? (
+						<div
+							className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-foreground"
+							role="status"
+						>
+							<span>
+								{t('mySquadSchedulePartial', {
+									failed: schedule.failedWindowCount,
+									total: FULL_SEASON_WINDOWS.length
+								})}
+							</span>
+							<button
+								type="button"
+								className="rounded-md border border-border/70 bg-background px-2.5 py-1 font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								onClick={onRetry}
+							>
+								{t('retrySchedule')}
+							</button>
+						</div>
+					) : null}
+				</>
+			)}
 		</div>
 	)
 }
@@ -224,6 +577,14 @@ export function MySquadFdrDesk({
 }) {
 	const t = useTranslations('Fixtures')
 	const [selectedRow, setSelectedRow] = useState<SquadFdrRow | null>(null)
+	const [fullSeasonSchedule, setFullSeasonSchedule] =
+		useState<FullSeasonSchedule | null>(null)
+	const [fullSeasonScheduleState, setFullSeasonScheduleState] = useState<
+		'idle' | 'loading' | 'ready' | 'error'
+	>('idle')
+	const fullSchedulePromiseRef =
+		useRef<Promise<FullSeasonSchedule | null> | null>(null)
+	const fullScheduleAbortRef = useRef<AbortController | null>(null)
 
 	const rows = useMemo(
 		() => sortSquadForPlanning(buildSquadFdrRows(picks, teams)),
@@ -274,12 +635,80 @@ export function MySquadFdrDesk({
 		return { starters, bench, rowById }
 	}, [eventIds, rows, t])
 
+	const loadFullSeasonSchedule = useCallback(
+		(force = false) => {
+			if (
+				!force &&
+				fullSeasonSchedule &&
+				fullSeasonSchedule.failedWindowCount === 0
+			) {
+				return Promise.resolve(fullSeasonSchedule)
+			}
+			if (fullSchedulePromiseRef.current) return fullSchedulePromiseRef.current
+
+			const controller = new AbortController()
+			const previousSchedule = fullSeasonSchedule
+			fullScheduleAbortRef.current = controller
+			setFullSeasonScheduleState('loading')
+
+			const promise = Promise.allSettled(
+				FULL_SEASON_WINDOWS.map(window =>
+					requestFixtureWindow(window, controller.signal)
+				)
+			)
+				.then(results => {
+					if (controller.signal.aborted) return null
+					if (!results.some(result => result.status === 'fulfilled')) {
+						if (!previousSchedule) {
+							throw new Error('full season fixture schedule unavailable')
+						}
+						const retainedSchedule = {
+							...previousSchedule,
+							failedWindowCount: FULL_SEASON_WINDOWS.length
+						}
+						setFullSeasonSchedule(retainedSchedule)
+						setFullSeasonScheduleState('ready')
+						return retainedSchedule
+					}
+
+					const schedule = mergeFullSeasonSchedule(results, previousSchedule)
+					setFullSeasonSchedule(schedule)
+					setFullSeasonScheduleState('ready')
+					return schedule
+				})
+				.catch(() => {
+					if (!controller.signal.aborted) {
+						setFullSeasonScheduleState('error')
+					}
+					return null
+				})
+				.finally(() => {
+					if (fullSchedulePromiseRef.current === promise) {
+						fullSchedulePromiseRef.current = null
+						fullScheduleAbortRef.current = null
+					}
+				})
+
+			fullSchedulePromiseRef.current = promise
+			return promise
+		},
+		[fullSeasonSchedule]
+	)
+
+	useEffect(() => {
+		return () => {
+			fullScheduleAbortRef.current?.abort()
+		}
+	}, [])
+
 	const handlePitchPlayerClick = useCallback(
 		(playerId: string) => {
 			const row = pitchData.rowById.get(playerId)
-			if (row) setSelectedRow(row)
+			if (!row) return
+			setSelectedRow(row)
+			void loadFullSeasonSchedule()
 		},
-		[pitchData.rowById]
+		[loadFullSeasonSchedule, pitchData.rowById]
 	)
 
 	if (picks.length === 0) {
@@ -315,9 +744,10 @@ export function MySquadFdrDesk({
 		)
 	}
 
-	const selectedPosition = selectedRow
-		? pitchPosition(selectedRow.positionCode)
-		: null
+	const selectedTeamName = selectedRow
+		? (teams.find(team => team.teamId === selectedRow.teamId)?.teamName ??
+			selectedRow.teamShortName)
+		: ''
 
 	return (
 		<>
@@ -333,56 +763,50 @@ export function MySquadFdrDesk({
 							className="size-4 text-success"
 							aria-hidden="true"
 						/>
-						{t('mySquadPitchHint', {
-							from: fromGw,
-							to: eventIds.at(-1) ?? fromGw
-						})}
+						{t('mySquadPitchHint')}
 					</p>
-					<FdrLegend label={t('fdrLegend')} />
 				</div>
 
-				<div className="overflow-hidden rounded-xl border border-border/60 bg-[#210025] shadow-[0_20px_45px_-28px_rgba(21,0,25,0.75)]">
-					<SquadPitch
-						ref={shareRef}
-						players={pitchData.starters}
-						benchPlayers={pitchData.bench}
-						benchTitle={t('squadSubstitutes')}
-						benchPointsLabel={t('fdrLegend')}
-						onPlayerClick={handlePitchPlayerClick}
-						labels={{
-							formation: t('mySquadTitle'),
-							positions: {
-								GKP: t('positionGoalkeeper'),
-								DEF: t('positionDefenders'),
-								MID: t('positionMidfielders'),
-								FWD: t('positionForwards')
-							},
-							captain: t('squadCaptain'),
-							viceCaptain: t('squadViceCaptain'),
-							total: t('fdrLegend'),
-							playerDetails: player =>
-								t('openSquadFixtureDetail', { player: player.webName })
-						}}
-						title={t('mySquadTitle')}
-						headerStats={{
-							eyebrow: t('mySquadPitchWindow', {
-								from: fromGw,
-								to: eventIds.at(-1) ?? fromGw
-							}),
-							details: [
-								{
-									label: t('mySquadPitchPlayers'),
-									value: String(rows.length),
-									accent: true
+				<div className="-mx-4 overflow-hidden rounded-xl border border-border/60 bg-[#210025] shadow-[0_20px_45px_-28px_rgba(21,0,25,0.75)] sm:-mx-5">
+					<div className="mx-auto w-full max-w-3xl">
+						<SquadPitch
+							ref={shareRef}
+							players={pitchData.starters}
+							benchPlayers={pitchData.bench}
+							benchTitle={t('squadSubstitutes')}
+							benchPointsLabel={t('fdrLegend')}
+							onPlayerClick={handlePitchPlayerClick}
+							labels={{
+								formation: t('mySquadTitle'),
+								positions: {
+									GKP: t('positionGoalkeeper'),
+									DEF: t('positionDefenders'),
+									MID: t('positionMidfielders'),
+									FWD: t('positionForwards')
 								},
-								{
-									label: t('mySquadPitchDifficulty'),
-									value: '1–5'
-								}
-							]
-						}}
-						className="rounded-none border-0 shadow-none"
-					/>
+								captain: t('squadCaptain'),
+								viceCaptain: t('squadViceCaptain'),
+								total: t('fdrLegend'),
+								playerDetails: player =>
+									t('openSquadFixtureDetail', { player: player.webName })
+							}}
+							title={t('mySquadTitle')}
+							headerStats={{
+								eyebrow: t('mySquadPitchWindow', {
+									from: fromGw,
+									to: eventIds.at(-1) ?? fromGw
+								}),
+								details: [
+									{
+										label: t('mySquadPitchPlayers'),
+										value: String(rows.length),
+										accent: true
+									}
+								]
+							}}
+							className="rounded-none border-0 shadow-none"
+						/>
+					</div>
 				</div>
 			</div>
 
@@ -392,43 +816,19 @@ export function MySquadFdrDesk({
 					if (!open) setSelectedRow(null)
 				}}
 			>
-				<DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-xl overflow-y-auto overscroll-contain sm:max-w-xl">
+				<DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-2xl overflow-y-auto overscroll-contain p-3 sm:max-w-2xl sm:p-4">
 					{selectedRow ? (
-						<>
-							<DialogHeader className="pr-8">
-								<DialogTitle className="flex flex-wrap items-center gap-2 font-display tracking-wide">
-									<Badge
-										className={cn(
-											positionBadgeClass(selectedRow.positionCode),
-											'px-2 py-0.5 text-label font-bold'
-										)}
-									>
-										{selectedPosition}
-									</Badge>
-									<span>{selectedRow.webName}</span>
-								</DialogTitle>
-								<DialogDescription>
-										{selectedRow.teamShortName} ·{' '}
-									{t('mySquadDetailDescription', {
-										from: fromGw,
-										to: eventIds.at(-1) ?? fromGw
-									})}
-								</DialogDescription>
-							</DialogHeader>
-
-							<div className="grid gap-2.5">
-								{eventIds.map(eventId => (
-									<FixtureDetailRow
-										key={eventId}
-										eventId={eventId}
-										gameweek={selectedRow.gameweeks.find(
-											item => item.eventId === eventId
-										)}
-										t={t}
-									/>
-								))}
-							</div>
-						</>
+						<FullSeasonSchedule
+							key={rowId(selectedRow)}
+							selectedRow={selectedRow}
+							teamName={selectedTeamName}
+							schedule={fullSeasonSchedule}
+							state={fullSeasonScheduleState}
+							fromGw={fromGw}
+							horizon={horizon}
+							t={t}
+							onRetry={() => void loadFullSeasonSchedule(true)}
+						/>
 					) : null}
 				</DialogContent>
 			</Dialog>

@@ -11,7 +11,6 @@ import {
 	GET_HOME_PUBLIC_BOOTSTRAP,
 	type HomeEventFixturesGraphQLResponse,
 	type HomeFixture,
-	type HomeFixtureState,
 	type HomeFixturesResponse,
 	type HomeGameweek,
 	type HomeGameweekResponse,
@@ -21,11 +20,13 @@ import {
 	type HomePersonalDeskResponse
 } from '@/lib/graphql/operations/home'
 import {
-	GET_LIVE_MATCHDAY_DESK,
-	type LiveMatchdayDeskResponse
+	GET_LIVE_MATCHDAY_FIXTURE_SUMMARY,
+	type LiveMatchdayFixtureSummaryResponse
 } from '@/lib/graphql/operations/live'
 import {
+	buildHomeLiveFixtureRevision,
 	buildLiveCoreFixtureFallback,
+	homeFixtureStateFromLiveState,
 	mergeLiveFixturesIntoHomeFixtures
 } from '@/lib/home-fixtures-merge'
 import { cache } from 'react'
@@ -46,20 +47,6 @@ function withEventId(
 	eventId: number
 ): HomeFixture[] {
 	return fixtures.map(fixture => ({ ...fixture, eventId }))
-}
-
-function liveStateToHomeState(state: string): HomeFixtureState {
-	if (state === 'SETTLED' || state === 'FINALIZED') {
-		return 'SETTLED'
-	}
-	if (
-		state === 'SCHEDULED' ||
-		state === 'PRE_DEADLINE' ||
-		state === 'PICKS_WAIT'
-	) {
-		return 'SCHEDULED'
-	}
-	return 'LIVE'
 }
 
 const getHomePublicBootstrapFromOrigin = unstable_cache(
@@ -200,25 +187,30 @@ const loadHomeFixturesFromOrigin = async (
 		if (core.currentEventId === eventId) {
 			try {
 				const liveResponse =
-					await executePublicServerQuery<LiveMatchdayDeskResponse>(
+					await executePublicServerQuery<LiveMatchdayFixtureSummaryResponse>(
 						'fixtures',
-						GET_LIVE_MATCHDAY_DESK,
-						undefined,
+						GET_LIVE_MATCHDAY_FIXTURE_SUMMARY,
+						{ eventId },
 						{ cache: 'no-store', timeoutMs: 5_000, suppressErrorLog: true }
 					)
-				const desk = liveResponse.liveMatchdayDesk
+				const desk = liveResponse.liveMatchday.snapshot
+				if (!desk || liveResponse.liveMatchday.availability !== 'READY') {
+					throw new Error('LIVE_PUBLICATION_UNAVAILABLE')
+				}
 				if (desk.eventId !== eventId) {
 					throw new Error('LIVE_EVENT_CHANGED')
 				}
 				return {
 					season: desk.season,
-					revision: desk.scoreCoreRevision,
+					revision: buildHomeLiveFixtureRevision(desk),
 					eventId: desk.eventId,
 					source: 'LIVE' as const,
-					state: liveStateToHomeState(desk.state),
-					sourceCheckedAt: desk.sourceCheckedAt ?? null,
-					publishedAt: desk.publishedAt ?? null,
-					stale: desk.stale ?? false,
+					state: homeFixtureStateFromLiveState(desk.state),
+					sourceCheckedAt: desk.times.deskSourceCheckedAt,
+					publishedAt: desk.times.deskPublishedAt,
+					stale:
+						liveResponse.liveMatchday.delivery.state === 'STALE' ||
+						liveResponse.liveMatchday.delivery.state === 'DEGRADED',
 					fixtures: mergeLiveFixturesIntoHomeFixtures(
 						desk.matches,
 						response.eventFixtures

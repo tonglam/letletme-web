@@ -66,9 +66,10 @@ describe('price-change live delivery contract', () => {
 	})
 
 	it('keeps the full board on the server side of the market boundary', async () => {
-		const [dashboard, explorer] = await Promise.all([
+		const [dashboard, explorer, lookup] = await Promise.all([
 			read('app/data/market/MarketDashboard.tsx'),
-			read('app/data/market/MarketPriceExplorer.tsx')
+			read('app/data/market/MarketPriceExplorer.tsx'),
+			read('components/data/MarketPlayerLookup.tsx')
 		])
 
 		assert.match(dashboard, /liveSeed=\{priceLiveSeed\}/)
@@ -76,5 +77,6 @@ describe('price-change live delivery contract', () => {
 		assert.doesNotMatch(dashboard, /priceBoard=\{priceChangeBoard\}/)
 		assert.doesNotMatch(explorer, /durableBoard:/)
 		assert.doesNotMatch(explorer, /priceBoard\?: PriceChangeBoard/)
+		assert.match(lookup, /setSelectedPlayer\(seedPlayer \?\? null\)/)
 	})
 })

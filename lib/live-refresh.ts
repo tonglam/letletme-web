@@ -2,6 +2,7 @@ import type {
 	LiveContextResponse,
 	LiveSnapshotStatus
 } from '@/lib/graphql/operations/live'
+import type { LiveMatchdayStatus } from '@/lib/live-matches'
 
 // Context is a cheap ETag probe. Keep it more frequent than the Data live
 // publication poll so a newly published revision is noticed promptly without
@@ -20,6 +21,22 @@ export function isLiveRefreshTerminalState(state?: string | null): boolean {
 }
 
 /**
+ * Official post-deadline sync is scoped to the active event. A historical
+ * event must report ordinary request failures even while the current event is
+ * waiting for its official input publication.
+ */
+export function shouldSuppressOfficialLiveErrors(
+	eventId: number,
+	currentEventId: number,
+	isOfficialUpdating: boolean,
+	isOfficialSyncPending: boolean
+): boolean {
+	return (
+		eventId === currentEventId && (isOfficialUpdating || isOfficialSyncPending)
+	)
+}
+
+/**
  * A finished matchday still needs a cheap lifecycle probe so an open matches
  * page can discover the next gameweek. This does not authorize another live
  * score refresh; the caller only reloads the desk when the event identity
@@ -28,17 +45,41 @@ export function isLiveRefreshTerminalState(state?: string | null): boolean {
 export function shouldPollLiveMatchesTransition({
 	isPageActive,
 	currentEventId,
-	nextEventId,
 	snapshot
 }: {
 	isPageActive: boolean
 	currentEventId?: number
-	nextEventId?: number
-	snapshot?: LiveSnapshotStatus | null
+	snapshot?: LiveMatchdayStatus | null
 }): boolean {
-	if (!isPageActive || !currentEventId || !nextEventId) return false
+	if (!isPageActive || !currentEventId) return false
 	if (!snapshot || snapshot.eventId !== currentEventId) return false
-	return isLiveRefreshTerminalState(snapshot.windowState ?? snapshot.state)
+	return isLiveRefreshTerminalState(snapshot.state)
+}
+
+/** Match V2 uses its own lifecycle and server cadence, never LP freshness. */
+export function shouldPollLiveMatchday({
+	isPageActive,
+	currentEventId,
+	selectedEventId,
+	snapshot
+}: {
+	isPageActive: boolean
+	currentEventId?: number
+	selectedEventId?: number
+	snapshot?: LiveMatchdayStatus | null
+}): boolean {
+	if (!isPageActive || !currentEventId || selectedEventId !== currentEventId) {
+		return false
+	}
+	// A known event with no desk is a recoverable cold/unavailable state. Keep
+	// bounded retries enabled so the page can recover without a manual reload.
+	if (!snapshot) return true
+	if (snapshot.eventId !== selectedEventId) return false
+	if (isLiveRefreshTerminalState(snapshot.state)) return false
+	// The countdown consumes the server-provided nextRefreshAt when present;
+	// the boolean only decides whether non-terminal Match observations remain
+	// eligible for polling.
+	return true
 }
 
 export function liveContextToSnapshot(
@@ -67,7 +108,8 @@ export function shouldPollLiveSnapshot({
 	selectedEventId,
 	snapshot,
 	windowState,
-	nextRefreshAt
+	nextRefreshAt,
+	isOfficialUpdating = false
 }: {
 	isPageActive: boolean
 	currentEventId?: number
@@ -75,6 +117,8 @@ export function shouldPollLiveSnapshot({
 	snapshot?: LiveSnapshotStatus | null
 	windowState?: string | null
 	nextRefreshAt?: string | null
+	/** The official post-deadline sync is expected to have no live snapshot yet. */
+	isOfficialUpdating?: boolean
 }): boolean {
 	if (!isPageActive || !currentEventId || selectedEventId !== currentEventId) {
 		return false
@@ -88,10 +132,13 @@ export function shouldPollLiveSnapshot({
 	) {
 		return false
 	}
-	// A missing or mismatched snapshot means the selected round cannot be
-	// confirmed as live. Do not turn uncertainty into a background refresh loop;
-	// the user can still request a fresh snapshot with the manual button.
-	if (!snapshot || snapshot.eventId !== selectedEventId) return false
+	// During FPL's expected post-deadline sync the first live request can be
+	// intentionally unavailable. Keep a cheap context heartbeat armed so the
+	// page can discover the published snapshot without a manual reload. Outside
+	// that explicit lifecycle state, uncertainty must remain manual-only.
+	if (!snapshot || snapshot.eventId !== selectedEventId) {
+		return isOfficialUpdating
+	}
 	// Keep the normal countdown armed for both due and future publication
 	// refreshes. React will not re-evaluate this predicate merely because time
 	// passed, so disabling it for a future deadline would leave stale scores
@@ -121,6 +168,95 @@ export function liveSnapshotNeedsRefresh(
 		accepted.revisions?.officialAdjustment !==
 			observed.revisions?.officialAdjustment ||
 		accepted.revisions?.finalResult !== observed.revisions?.finalResult
+	)
+}
+
+export function livePointsRequestChangesEvent(
+	acceptedEventId: number | null | undefined,
+	requestedEventId: number
+): boolean {
+	return acceptedEventId != null && acceptedEventId !== requestedEventId
+}
+
+/**
+ * A refresh response may come from a fallback publication that is older than
+ * the response already painted. Keep the accepted same-event publication
+ * monotonic so a transient Redis/Data fallback cannot move the score
+ * backwards. Generation is the primary order; publishedAt is only a
+ * tie-breaker for snapshots that do not expose a complete revision vector.
+ */
+export function canReplaceLivePointsSnapshot(
+	candidate: LiveSnapshotStatus | null | undefined,
+	accepted: LiveSnapshotStatus | null | undefined
+): boolean {
+	if (!candidate) return false
+	if (!accepted) return true
+	if (candidate.eventId !== accepted.eventId) return false
+
+	const candidateGeneration = candidate.revisions?.generation
+	const acceptedGeneration = accepted.revisions?.generation
+	if (
+		typeof candidateGeneration === 'number' &&
+		typeof acceptedGeneration === 'number' &&
+		Number.isSafeInteger(candidateGeneration) &&
+		Number.isSafeInteger(acceptedGeneration)
+	) {
+		if (candidateGeneration !== acceptedGeneration) {
+			return candidateGeneration > acceptedGeneration
+		}
+
+		const candidatePublicationId = candidate.revisions?.publicationId
+		const acceptedPublicationId = accepted.revisions?.publicationId
+		if (candidatePublicationId && acceptedPublicationId) {
+			return candidatePublicationId === acceptedPublicationId
+		}
+	}
+
+	const candidatePublishedAt = Date.parse(
+		candidate.times?.publishedAt ?? candidate.publishedAt ?? ''
+	)
+	const acceptedPublishedAt = Date.parse(
+		accepted.times?.publishedAt ?? accepted.publishedAt ?? ''
+	)
+	if (
+		Number.isFinite(candidatePublishedAt) &&
+		Number.isFinite(acceptedPublishedAt)
+	) {
+		return candidatePublishedAt >= acceptedPublishedAt
+	}
+
+	// V2 snapshots should always carry generation/publication evidence. If a
+	// degraded legacy-shaped snapshot reaches this client, fail closed instead
+	// of allowing an unorderable response to overwrite the accepted one.
+	return false
+}
+
+/**
+ * Matchday payloads are owned by the score/fixture publication. Changes to
+ * picks, rank, or unrelated live-point projections must not refetch the full
+ * fixture-and-player payload.
+ */
+export function liveMatchdayNeedsRefresh(
+	accepted: LiveMatchdayStatus | null | undefined,
+	observed: LiveMatchdayStatus | null | undefined
+): boolean {
+	if (!accepted || !observed) return true
+	const acceptedDetailGeneration = accepted.revisions.detailGeneration
+	const observedDetailGeneration = observed.revisions.detailGeneration
+	const observedDetailIsNotNewer =
+		acceptedDetailGeneration !== null &&
+		(observedDetailGeneration === null ||
+			observedDetailGeneration < acceptedDetailGeneration ||
+			(observedDetailGeneration === acceptedDetailGeneration &&
+				observed.revisions.detailPublicationId !==
+					accepted.revisions.detailPublicationId))
+	return (
+		accepted.eventId !== observed.eventId ||
+		accepted.revisions.lifecycle !== observed.revisions.lifecycle ||
+		accepted.revisions.fixtureIdentity !== observed.revisions.fixtureIdentity ||
+		accepted.revisions.scoreState !== observed.revisions.scoreState ||
+		(!observedDetailIsNotNewer &&
+			accepted.revisions.playerDetail !== observed.revisions.playerDetail)
 	)
 }
 
