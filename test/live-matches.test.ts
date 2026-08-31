@@ -297,6 +297,76 @@ describe('live matchday V2 publication', () => {
 		assert.equal(canReplaceLiveMatchesLkg(unavailable), false)
 	})
 
+	it('does not replace the browser LKG with an older same-event publication', async () => {
+		const accepted = await getLiveMatchesSnapshot(
+			async <T>(): Promise<T> =>
+				response({
+					snapshot: snapshot({
+						revisions: {
+							...snapshot().revisions,
+							deskGeneration: 2,
+							deskPublicationId: 'desk-2',
+							detailGeneration: 2,
+							detailPublicationId: 'detail-2'
+						}
+					})
+				}) as T,
+			33
+		)
+		const older = await getLiveMatchesSnapshot(
+			async <T>(): Promise<T> =>
+				response({
+					snapshot: snapshot({
+						revisions: {
+							...snapshot().revisions,
+							deskGeneration: 1,
+							deskPublicationId: 'desk-1'
+						}
+					})
+				}) as T,
+			33
+		)
+		const newer = await getLiveMatchesSnapshot(
+			async <T>(): Promise<T> =>
+				response({
+					snapshot: snapshot({
+						revisions: {
+							...snapshot().revisions,
+							deskGeneration: 3,
+							deskPublicationId: 'desk-3'
+						}
+					})
+				}) as T,
+			33
+		)
+		const olderDetail = await getLiveMatchesSnapshot(
+			async <T>(): Promise<T> =>
+				response({
+					snapshot: snapshot({
+						revisions: {
+							...snapshot().revisions,
+							deskGeneration: 2,
+							deskPublicationId: 'desk-2',
+							detailGeneration: 1,
+							detailPublicationId: 'detail-1'
+						}
+					})
+				}) as T,
+			33
+		)
+
+		assert.equal(canReplaceLiveMatchesLkg(older, accepted.snapshot), false)
+		assert.equal(canReplaceLiveMatchesLkg(newer, accepted.snapshot), true)
+		assert.equal(canReplaceLiveMatchesLkg(olderDetail, accepted.snapshot), false)
+		assert.equal(
+			canReplaceLiveMatchesLkg(
+				{ ...older, snapshot: { ...older.snapshot!, eventId: 34 } },
+				accepted.snapshot
+			),
+			true
+		)
+	})
+
 	it('adopts heartbeat metadata without rebuilding fixtures and reloads only Match revisions', async () => {
 		const ready = await getLiveMatchesSnapshot(
 			async <T>(): Promise<T> => response() as T

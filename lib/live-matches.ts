@@ -423,9 +423,31 @@ export interface LiveMatchesLoadOptions {
  * UNAVAILABLE is a delivery observation, not an empty successful matchday.
  */
 export function canReplaceLiveMatchesLkg(
-	value: Pick<LiveMatchesSnapshot, 'snapshot' | 'availability'>
+	value: Pick<LiveMatchesSnapshot, 'snapshot' | 'availability'>,
+	accepted?: LiveMatchdayStatus | null
 ): boolean {
-	return value.snapshot !== null && value.availability === 'READY'
+	if (value.snapshot === null || value.availability !== 'READY') return false
+	if (!accepted) return true
+	if (
+		value.snapshot.season !== accepted.season ||
+		value.snapshot.eventId !== accepted.eventId
+	) {
+		// Generations are scoped to season/event. A lifecycle transition may
+		// replace the previous event, but same-event generations are ordered.
+		return true
+	}
+
+	const candidate = value.snapshot.revisions
+	const current = accepted.revisions
+	if (candidate.deskGeneration < current.deskGeneration) return false
+	if (candidate.deskGeneration > current.deskGeneration) return true
+	if (candidate.deskPublicationId !== current.deskPublicationId) return false
+
+	if (current.detailGeneration === null) return true
+	if (candidate.detailGeneration === null) return false
+	if (candidate.detailGeneration < current.detailGeneration) return false
+	if (candidate.detailGeneration > current.detailGeneration) return true
+	return candidate.detailPublicationId === current.detailPublicationId
 }
 
 const validEventId = (value: unknown): number | null =>

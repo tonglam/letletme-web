@@ -145,7 +145,10 @@ export function LiveMatchesClient({
 						}
 					))
 				if (!mountedRef.current) return
-				const replaceablePublication = canReplaceLiveMatchesLkg(data)
+				const replaceablePublication = canReplaceLiveMatchesLkg(
+					data,
+					snapshotRef.current
+				)
 				if (!replaceablePublication && hasLastGoodData.current) {
 					if (data.snapshot !== null) setError(t('refreshFailed'))
 					return
