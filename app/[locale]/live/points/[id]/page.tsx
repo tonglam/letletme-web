@@ -64,7 +64,6 @@ export default async function Page({ params, searchParams }: PageProps) {
 	void speculativeLiveRequest?.catch(() => undefined)
 
 	const { presentation, liveContext } = await getLivePageContext()
-	const isOfficialUpdating = isOfficialLiveUpdatingContext(liveContext)
 	const historicalMaxGameweek =
 		liveContext?.anchorEventId ??
 		presentation.currentEventId ??
@@ -110,6 +109,9 @@ export default async function Page({ params, searchParams }: PageProps) {
 		)
 	}
 	const initialEventId = requestedGameweek ?? currentEventId
+	const isOfficialUpdating =
+		initialEventId === currentEventId &&
+		isOfficialLiveUpdatingContext(liveContext)
 	const seedCurrentOverall = initialEventId === currentEventId
 
 	let initialLiveData: LiveCalcData | undefined
@@ -122,14 +124,14 @@ export default async function Page({ params, searchParams }: PageProps) {
 		const [liveResult, overallResult] = await Promise.allSettled([
 			speculativeLiveRequest && initialEventId === speculativeEventId
 				? speculativeLiveRequest
-					: executeServerQuery<LiveCalcDataResponse>(
-							GET_LIVE_POINTS,
-							{ eventId: initialEventId, entryId },
-							{
-								cache: 'no-store',
-								suppressErrorLog: isOfficialUpdating
-							}
-						),
+				: executeServerQuery<LiveCalcDataResponse>(
+						GET_LIVE_POINTS,
+						{ eventId: initialEventId, entryId },
+						{
+							cache: 'no-store',
+							suppressErrorLog: isOfficialUpdating
+						}
+					),
 			seedCurrentOverall
 				? executeServerQuery<EntrySummaryResponse>(
 						GET_ENTRY,

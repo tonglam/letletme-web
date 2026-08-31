@@ -734,7 +734,8 @@ export function PriceChangesBoard({
 							<Select
 								value={scope}
 								onValueChange={value => {
-									const nextScope = value as PriceChangeScope
+									const nextScope: PriceChangeScope =
+										movement === 'locked' ? 'all' : (value as PriceChangeScope)
 									setScope(nextScope)
 									setPage(1)
 									updateFilterUrl(nextScope, movement)

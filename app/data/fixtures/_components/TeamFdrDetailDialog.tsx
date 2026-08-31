@@ -80,10 +80,11 @@ async function requestFixtureWindow(
 }
 
 function mergeFullSeasonSchedule(
-	results: PromiseSettledResult<FixtureWindowResponse>[]
+	results: PromiseSettledResult<FixtureWindowResponse>[],
+	previous: FullSeasonSchedule | null = null
 ): FullSeasonSchedule {
-	const fixturesByEvent = new Map<number, FdrPlanningFixture[]>()
-	const unavailableEventIds = new Set<number>()
+	const fixturesByEvent = new Map(previous?.fixturesByEvent ?? [])
+	const unavailableEventIds = new Set(previous?.unavailableEventIds ?? [])
 	let failedWindowCount = 0
 
 	results.forEach((result, index) => {
@@ -96,18 +97,21 @@ function mergeFullSeasonSchedule(
 
 		if (result.status === 'rejected') {
 			failedWindowCount += 1
-			eventIds.forEach(eventId => unavailableEventIds.add(eventId))
+			eventIds.forEach(eventId => {
+				if (!fixturesByEvent.has(eventId)) unavailableEventIds.add(eventId)
+			})
 			return
 		}
 
+		eventIds.forEach(eventId => unavailableEventIds.delete(eventId))
 		Object.entries(result.value.fixturesByEvent).forEach(
 			([rawEventId, fixtures]) => {
 				fixturesByEvent.set(Number(rawEventId), fixtures.map(toPlanningFixture))
 			}
 		)
-		result.value.unknownEventIds.forEach(eventId =>
-			unavailableEventIds.add(eventId)
-		)
+		result.value.unknownEventIds.forEach(eventId => {
+			if (!fixturesByEvent.has(eventId)) unavailableEventIds.add(eventId)
+		})
 	})
 
 	return { fixturesByEvent, unavailableEventIds, failedWindowCount }
@@ -346,6 +350,7 @@ export function TeamFdrDetailDialog({
 			if (promiseRef.current) return promiseRef.current
 
 			const controller = new AbortController()
+			const previousSchedule = schedule
 			abortRef.current = controller
 			setState('loading')
 
@@ -357,10 +362,22 @@ export function TeamFdrDetailDialog({
 				.then(results => {
 					if (controller.signal.aborted) return null
 					if (!results.some(result => result.status === 'fulfilled')) {
-						throw new Error('full season fixture schedule unavailable')
+						if (!previousSchedule) {
+							throw new Error('full season fixture schedule unavailable')
+						}
+						const retainedSchedule = {
+							...previousSchedule,
+							failedWindowCount: FULL_SEASON_WINDOWS.length
+						}
+						setSchedule(retainedSchedule)
+						setState('ready')
+						return retainedSchedule
 					}
 
-					const nextSchedule = mergeFullSeasonSchedule(results)
+					const nextSchedule = mergeFullSeasonSchedule(
+						results,
+						previousSchedule
+					)
 					setSchedule(nextSchedule)
 					setState('ready')
 					return nextSchedule
