@@ -756,7 +756,12 @@ export function PriceChangesBoard({
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="likely">{t('scopeLikely')}</SelectItem>
+									<SelectItem
+										value="likely"
+										disabled={movement === 'locked'}
+									>
+										{t('scopeLikely')}
+									</SelectItem>
 									<SelectItem value="all">{t('scopeAll')}</SelectItem>
 								</SelectContent>
 							</Select>

@@ -86,13 +86,15 @@ export default async function LiveMatchesPage({ params }: PageProps) {
 		}
 		try {
 			live = await getLiveMatchesSnapshot(executor, fallbackEventId)
-			if (live.snapshot) initialError = null
+			initialError = null
 		} catch (error) {
 			console.error('Failed to fetch explicit live matchday:', error)
 			initialError = t('matchesFailed')
 		}
 	}
-	if (!live?.snapshot) initialError ??= t('matchesFailed')
+	// A valid V2 response without a snapshot is the expected official sync
+	// window, not a page error. The client keeps polling until it is published.
+	if (!live) initialError ??= t('matchesFailed')
 
 	const matches = live?.matches ?? []
 	const snapshot = live?.snapshot ?? null

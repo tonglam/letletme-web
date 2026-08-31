@@ -110,7 +110,8 @@ function mergeFullSeasonSchedule(
 			}
 		)
 		result.value.unknownEventIds.forEach(eventId => {
-			if (!fixturesByEvent.has(eventId)) unavailableEventIds.add(eventId)
+			fixturesByEvent.delete(eventId)
+			unavailableEventIds.add(eventId)
 		})
 	})
 

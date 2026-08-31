@@ -147,7 +147,7 @@ export function LiveMatchesClient({
 				if (!mountedRef.current) return
 				const replaceablePublication = canReplaceLiveMatchesLkg(data)
 				if (!replaceablePublication && hasLastGoodData.current) {
-					setError(t('refreshFailed'))
+					if (data.snapshot !== null) setError(t('refreshFailed'))
 					return
 				}
 				const lifecycleCurrentEventId =
@@ -227,7 +227,9 @@ export function LiveMatchesClient({
 				// An unavailable publication is an observation failure, not permission
 				// to erase or refetch the last complete board.
 				if (!observedSnapshot) {
-					setError(t('refreshFailed'))
+					// A valid V2 response without a snapshot is the normal post-deadline
+					// sync window. Keep the countdown armed and retain any LKG.
+					setError(null)
 					return
 				}
 				if (
@@ -659,8 +661,17 @@ export function LiveMatchesClient({
 									/>
 								))
 							) : (
-								<p className="rounded-lg border border-border/80 bg-card py-8 text-center text-muted-foreground shadow-sm">
-									{activeTabConfig ? t(activeTabConfig.labelKey) : t('none')}
+								<p
+									className="rounded-lg border border-border/80 bg-card py-8 text-center text-muted-foreground shadow-sm"
+									role={
+										!snapshot && matches.length === 0 ? 'status' : undefined
+									}
+								>
+									{!snapshot && matches.length === 0
+										? t('officialUpdating')
+										: activeTabConfig
+											? t(activeTabConfig.labelKey)
+											: t('none')}
 								</p>
 							)}
 						</TabsContent>
