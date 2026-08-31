@@ -63,7 +63,7 @@ describe('formatPriceChangeShareText', () => {
 		assert.match(text, /https:\/\/letletme\.top\/en\/explore\/price-predictions/)
 	})
 
-	it('keeps only likely-fall statuses in every prediction share source', () => {
+	it('keeps both actionable rise and fall statuses in one prediction share', () => {
 		const players: PriceChangePlayer[] = [
 			{ ...basePlayer, playerId: 1, status: 'LIKELY_RISE' },
 			{ ...basePlayer, playerId: 2, status: 'LIKELY_FALL' },
@@ -74,7 +74,7 @@ describe('formatPriceChangeShareText', () => {
 		const selected = selectPriceChangeSharePlayers(players)
 		assert.deepEqual(
 			selected.map(player => player.status),
-			['LIKELY_FALL', 'VERY_LIKELY_FALL']
+			['LIKELY_RISE', 'LIKELY_FALL', 'VERY_LIKELY_FALL']
 		)
 
 		const text = formatPriceChangeShareText({
@@ -101,13 +101,13 @@ describe('formatPriceChangeShareText', () => {
 		})
 
 		assert.match(text, /Example EXM/)
-		assert.equal(text.includes('Very likely rise'), false)
+		assert.match(text, /Signal Likely rise/)
 		assert.equal(text.includes('Unlikely'), false)
 	})
 
-	it('keeps a non-empty explanation when the selected scope has no fall rows', () => {
+	it('keeps a non-empty explanation when the selected scope has no actionable rows', () => {
 		const text = formatPriceChangeShareText({
-			players: [{ ...basePlayer, status: 'LIKELY_RISE' }],
+			players: [{ ...basePlayer, status: 'UNLIKELY', progressPercent: 0 }],
 			labels: {
 				title: 'Price Changes',
 				scope: 'My squad',
@@ -116,7 +116,7 @@ describe('formatPriceChangeShareText', () => {
 				progress: 'Progress',
 				signal: 'Signal',
 				movement: 'Net transfers',
-				none: 'No shareable fall predictions for this squad.',
+				none: 'No shareable price-change predictions for this squad.',
 				status: {
 					VERY_LIKELY_RISE: 'Very likely rise',
 					LIKELY_RISE: 'Likely rise',
@@ -129,7 +129,7 @@ describe('formatPriceChangeShareText', () => {
 			}
 		})
 
-		assert.match(text, /No shareable fall predictions for this squad\./)
+		assert.match(text, /No shareable price-change predictions for this squad\./)
 	})
 
 	it('matches linked squad picks by element id first and player identity second', () => {

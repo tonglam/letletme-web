@@ -1,21 +1,23 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import type { LiveMatchdayDeskRow } from '../lib/graphql/operations/live'
+import type { LiveMatchdayFixtureSummary } from '../lib/graphql/operations/live'
 import {
+	buildHomeLiveFixtureRevision,
 	buildLiveCoreFixtureFallback,
+	homeFixtureStateFromLiveState,
 	mergeLiveFixturesIntoHomeFixtures
 } from '../lib/home-fixtures-merge'
 
-const liveRow = (partial: Partial<LiveMatchdayDeskRow> = {}) =>
+const liveRow = (partial: Partial<LiveMatchdayFixtureSummary> = {}) =>
 	({
 		fixtureId: 1,
 		eventId: 1,
 		homeTeamId: 1,
 		homeTeamName: 'Arsenal',
-		homeTeamShortName: undefined,
+		homeTeamShortName: '',
 		awayTeamId: 7,
 		awayTeamName: 'Coventry City',
-		awayTeamShortName: undefined,
+		awayTeamShortName: '',
 		homeScore: 3,
 		awayScore: 0,
 		kickoffTime: '2026-08-21T19:00:00.000Z',
@@ -24,9 +26,47 @@ const liveRow = (partial: Partial<LiveMatchdayDeskRow> = {}) =>
 		finished: false,
 		finishedProvisional: false,
 		...partial
-	}) as LiveMatchdayDeskRow
+	}) as LiveMatchdayFixtureSummary
 
 describe('mergeLiveFixturesIntoHomeFixtures', () => {
+	it('uses every live fixture revision that can change the home projection', () => {
+		const base = {
+			revisions: {
+				deskPublicationId: 'desk-1',
+				deskGeneration: 1,
+				lifecycle: 'LIVE_ACTIVE',
+				fixtureIdentity: 'fixtures-1',
+				scoreState: 'scores-1'
+			}
+		}
+		const revision = buildHomeLiveFixtureRevision(base)
+		assert.equal(
+			revision,
+			'live:desk-1:1:LIVE_ACTIVE:fixtures-1:scores-1'
+		)
+		for (const key of [
+			'deskPublicationId',
+			'deskGeneration',
+			'lifecycle',
+			'fixtureIdentity',
+			'scoreState'
+		] as const) {
+			const changed = {
+				...base,
+				revisions: {
+					...base.revisions,
+					[key]: key === 'deskGeneration' ? 2 : `${key}-2`
+				}
+			}
+			assert.notEqual(buildHomeLiveFixtureRevision(changed), revision)
+		}
+	})
+
+	it('treats the V2 GW review lifecycle as settled for home fixtures', () => {
+		assert.equal(homeFixtureStateFromLiveState('GW_REVIEW'), 'SETTLED')
+		assert.equal(homeFixtureStateFromLiveState('LIVE_ACTIVE'), 'LIVE')
+	})
+
 	it('keeps core team identity and kickoff data when live rows omit abbreviations', () => {
 		const [fixture] = mergeLiveFixturesIntoHomeFixtures(
 			[liveRow()],

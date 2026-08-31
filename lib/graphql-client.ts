@@ -72,6 +72,7 @@ const PUBLIC_BROWSER_OPERATION_ALLOWLIST = new Set([
 
 export const LIVE_POINTS_CONTRACT_HEADER = 'X-LetLetMe-Contract'
 export const LIVE_POINTS_CONTRACT_VERSION = 'live-points-v2'
+export const LIVE_MATCHES_CONTRACT_VERSION = 'live-matches-v2'
 
 /**
  * Live Points is a breaking contract. Keep the gate in the shared request
@@ -79,9 +80,21 @@ export const LIVE_POINTS_CONTRACT_VERSION = 'live-points-v2'
  * omit the required V2 header.
  */
 export const requiresLivePointsV2Contract = (query: string): boolean =>
-	/\b(?:calcLivePointsByEntry|calcLivePointsForEntries|entryLiveCompetitionBoard|entryLiveCompetitionsDesk|liveSnapshot|liveContext|liveMatchdayDesk|liveFixturePlayers|liveScores|playerLive|eventLive|eventLiveExplain|eventLiveExplains|tournamentSelectionIndex|tournamentEntrySquads)\s*(?:\(|\{)/.test(
+	/\b(?:calcLivePointsByEntry|calcLivePointsForEntries|entryLiveCompetitionBoard|entryLiveCompetitionsDesk|liveSnapshot|liveContext|liveScores|playerLive|eventLive|eventLiveExplain|eventLiveExplains|tournamentSelectionIndex|tournamentEntrySquads)\s*(?:\(|\{)/.test(
 		query
 	)
+
+export const requiresLiveMatchesV2Contract = (query: string): boolean =>
+	/\bliveMatchday\s*(?:\(|\{)/.test(query)
+
+export const liveContractVersionForQuery = (query: string): string | null => {
+	const matches = requiresLiveMatchesV2Contract(query)
+	const points = requiresLivePointsV2Contract(query)
+	if (matches && points) throw new Error('LIVE_CONTRACT_MIXED_OPERATION')
+	if (matches) return LIVE_MATCHES_CONTRACT_VERSION
+	if (points) return LIVE_POINTS_CONTRACT_VERSION
+	return null
+}
 
 export const extractOperationName = (query: string): string | undefined =>
 	query.match(
@@ -216,6 +229,7 @@ async function doFetch<T>(
 
 	let requestId: string | undefined
 	try {
+		const liveContractVersion = liveContractVersionForQuery(query)
 		const fetchOptions: RequestInit & { next?: ExecuteQueryOptions['next'] } = {
 			method: 'POST',
 			cache,
@@ -223,8 +237,10 @@ async function doFetch<T>(
 				'Content-Type': 'application/json',
 				...(isClient ? syntheticBrowserTelemetryHeaders() : {}),
 				...extraHeaders,
-				...(requiresLivePointsV2Contract(query)
-					? { [LIVE_POINTS_CONTRACT_HEADER]: LIVE_POINTS_CONTRACT_VERSION }
+				...(liveContractVersion
+					? {
+							[LIVE_POINTS_CONTRACT_HEADER]: liveContractVersion
+						}
 					: {})
 			},
 			body: JSON.stringify({

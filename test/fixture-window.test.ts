@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 import { parse, visit } from 'graphql'
 import {
 	buildFixtureWindowQuery,
+	buildFixtureWindowRanges,
 	fixtureWindowEventIds,
 	isFixtureWindowResponse,
 	loadFixtureWindowWithExecutor,
@@ -10,13 +11,14 @@ import {
 	parseFixtureWindowParams,
 	rateFixtureWindowReady,
 	type FixturePlanningFixture,
-	type FixtureWindowLoadResult,
+	type FixtureWindowLoadResult
 } from '../lib/fixture-window'
+import { mergeFixtureWindowSchedules } from '../lib/fixture-window-schedule'
 import {
 	createFixtureWindowRouteHandler,
 	FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL,
 	FIXTURE_WINDOW_UNCACHEABLE_CONTROL,
-	fixtureWindowCacheHeaders,
+	fixtureWindowCacheHeaders
 } from '../lib/fixture-window-route'
 
 const backendFixture = (id = 101) => ({
@@ -31,7 +33,7 @@ const backendFixture = (id = 101) => ({
 	homeScore: null,
 	awayScore: null,
 	homeTeamDifficulty: 2,
-	awayTeamDifficulty: 4,
+	awayTeamDifficulty: 4
 })
 
 const planningFixture = (eventId: number): FixturePlanningFixture => ({
@@ -41,34 +43,34 @@ const planningFixture = (eventId: number): FixturePlanningFixture => ({
 	homeTeam: { id: 1, name: 'Arsenal', shortName: 'ARS' },
 	awayTeam: { id: 2, name: 'Chelsea', shortName: 'CHE' },
 	homeTeamDifficulty: 2,
-	awayTeamDifficulty: 4,
+	awayTeamDifficulty: 4
 })
 
 const result = (
-	overrides: Partial<FixtureWindowLoadResult> = {},
+	overrides: Partial<FixtureWindowLoadResult> = {}
 ): FixtureWindowLoadResult => ({
 	fromGw: 10,
 	toGw: 11,
 	fixturesByEvent: {
 		'10': [planningFixture(10)],
-		'11': [],
+		'11': []
 	},
 	unknownEventIds: [],
 	outcome: 'complete',
 	path: 'batch',
-	...overrides,
+	...overrides
 })
 
 const quietLogger = {
 	info: () => undefined,
-	error: () => undefined,
+	error: () => undefined
 }
 
 function assertCacheHeaders(response: Response, expected: string) {
 	for (const name of [
 		'cache-control',
 		'cdn-cache-control',
-		'vercel-cdn-cache-control',
+		'vercel-cdn-cache-control'
 	]) {
 		assert.equal(response.headers.get(name), expected, name)
 	}
@@ -78,7 +80,7 @@ describe('fixture window input and query', () => {
 	it('strictly validates parameters and the GW38 boundary', () => {
 		assert.deepEqual(
 			parseFixtureWindowParams(new URLSearchParams('fromGw=38&count=1')),
-			{ ok: true, fromGw: 38, count: 1 },
+			{ ok: true, fromGw: 38, count: 1 }
 		)
 		for (const query of [
 			'',
@@ -88,12 +90,30 @@ describe('fixture window input and query', () => {
 			'fromGw=1&count=0',
 			'fromGw=1&count=6',
 			'fromGw=1.5&count=1',
-			'fromGw=1&fromGw=2&count=1',
+			'fromGw=1&fromGw=2&count=1'
 		]) {
-			assert.equal(parseFixtureWindowParams(new URLSearchParams(query)).ok, false)
+			assert.equal(
+				parseFixtureWindowParams(new URLSearchParams(query)).ok,
+				false
+			)
 		}
 		assert.deepEqual(fixtureWindowEventIds(34, 5), [34, 35, 36, 37, 38])
 		assert.throws(() => fixtureWindowEventIds(35, 5), RangeError)
+	})
+
+	it('splits sparse missing gameweeks into bounded contiguous windows', () => {
+		assert.deepEqual(buildFixtureWindowRanges([2, 5, 6, 7, 8]), [
+			{ fromGw: 2, count: 1 },
+			{ fromGw: 5, count: 4 }
+		])
+		assert.deepEqual(buildFixtureWindowRanges([1, 2, 3, 4, 5, 6, 7]), [
+			{ fromGw: 1, count: 5 },
+			{ fromGw: 6, count: 2 }
+		])
+		assert.deepEqual(buildFixtureWindowRanges([7, 5, 5, 6]), [
+			{ fromGw: 5, count: 3 }
+		])
+		assert.throws(() => buildFixtureWindowRanges([0]), RangeError)
 	})
 
 	it('builds one shared-fragment alias query for every supported count', () => {
@@ -101,16 +121,16 @@ describe('fixture window input and query', () => {
 			const query = buildFixtureWindowQuery(count)
 			const document = parse(query)
 			const operation = document.definitions.find(
-				definition => definition.kind === 'OperationDefinition',
+				definition => definition.kind === 'OperationDefinition'
 			)
 			assert.ok(operation?.kind === 'OperationDefinition')
 			assert.equal(operation.selectionSet.selections.length, count)
 			assert.equal(operation.variableDefinitions?.length, count)
 			assert.equal(
 				document.definitions.filter(
-					definition => definition.kind === 'FragmentDefinition',
+					definition => definition.kind === 'FragmentDefinition'
 				).length,
-				1,
+				1
 			)
 			let astNodes = 0
 			visit(document, { enter: () => void (astNodes += 1) })
@@ -123,11 +143,32 @@ describe('fixture window input and query', () => {
 			id: 101,
 			eventId: 12,
 			finished: false,
+			started: false,
 			homeTeam: { id: 1, name: 'Arsenal', shortName: 'ARS' },
 			awayTeam: { id: 2, name: 'Chelsea', shortName: 'CHE' },
+			homeScore: null,
+			awayScore: null,
 			homeTeamDifficulty: 2,
-			awayTeamDifficulty: 4,
+			awayTeamDifficulty: 4
 		})
+	})
+
+	it('keeps finished scores in the planning DTO', () => {
+		const fixture = mapFixturePlanningFixture(
+			{
+				...backendFixture(),
+				finished: true,
+				started: true,
+				homeScore: 2,
+				awayScore: 1
+			},
+			12
+		)
+
+		assert.equal(fixture.finished, true)
+		assert.equal(fixture.started, true)
+		assert.equal(fixture.homeScore, 2)
+		assert.equal(fixture.awayScore, 1)
 	})
 
 	it('rates the window-ready metric at the 1s and 1.5s thresholds', () => {
@@ -150,9 +191,9 @@ describe('fixture window loader', () => {
 				return {
 					event0: [backendFixture(1_001)],
 					event1: [],
-					event2: [backendFixture(1_201)],
+					event2: [backendFixture(1_201)]
 				}
-			},
+			}
 		)
 
 		assert.equal(calls, 1)
@@ -174,9 +215,9 @@ describe('fixture window loader', () => {
 				if (variables.event0 === 21) throw new Error('GW21 failed')
 				return {
 					event0:
-						variables.event0 === 20 ? [] : [backendFixture(variables.event0)],
+						variables.event0 === 20 ? [] : [backendFixture(variables.event0)]
 				}
-			},
+			}
 		)
 
 		assert.equal(calls, 4)
@@ -202,19 +243,110 @@ describe('fixture window loader', () => {
 				fromGw: 10,
 				toGw: 11,
 				fixturesByEvent: { '10': [] },
-				unknownEventIds: [],
+				unknownEventIds: []
 			}),
-			false,
+			false
 		)
 		assert.equal(
 			isFixtureWindowResponse({
 				fromGw: 10,
 				toGw: 11,
 				fixturesByEvent: { '10': [], '11': [] },
-				unknownEventIds: [11],
+				unknownEventIds: [11]
 			}),
-			false,
+			false
 		)
+	})
+
+	it('keeps fulfilled partial windows retryable', () => {
+		const merged = mergeFixtureWindowSchedules(
+			[
+				{
+					status: 'fulfilled',
+					value: {
+						fromGw: 10,
+						toGw: 11,
+						fixturesByEvent: { '10': [planningFixture(10)] },
+						unknownEventIds: [11]
+					}
+				}
+			],
+			[{ fromGw: 10, count: 2 }],
+			fixtures => fixtures
+		)
+
+		assert.equal(merged.failedWindowCount, 1)
+		assert.deepEqual(Array.from(merged.unavailableEventIds), [11])
+		assert.deepEqual(merged.fixturesByEvent.get(10), [planningFixture(10)])
+	})
+
+	it('marks a rejected sparse range unavailable when another range succeeds', () => {
+		const merged = mergeFixtureWindowSchedules(
+			[
+				{
+					status: 'fulfilled',
+					value: {
+						fromGw: 2,
+						toGw: 2,
+						fixturesByEvent: { '2': [] },
+						unknownEventIds: []
+					}
+				},
+				{ status: 'rejected', reason: new Error('GW5 unavailable') }
+			],
+			[
+				{ fromGw: 2, count: 1 },
+				{ fromGw: 5, count: 1 }
+			],
+			fixtures => fixtures
+		)
+
+		assert.equal(merged.failedWindowCount, 1)
+		assert.deepEqual(Array.from(merged.unavailableEventIds), [5])
+		assert.deepEqual(merged.fixturesByEvent.get(2), [])
+	})
+
+	it('keeps a retained fixture retryable when its range rejects', () => {
+		const merged = mergeFixtureWindowSchedules(
+			[{ status: 'rejected', reason: new Error('GW11 unavailable') }],
+			[{ fromGw: 11, count: 1 }],
+			fixtures => fixtures,
+			{
+				fixturesByEvent: new Map([[11, [planningFixture(11)]]]),
+				unavailableEventIds: new Set<number>(),
+				failedWindowCount: 0
+			}
+		)
+
+		assert.deepEqual(merged.fixturesByEvent.get(11), [planningFixture(11)])
+		assert.equal(merged.unavailableEventIds.has(11), true)
+	})
+
+	it('retains an earlier fixture row when a retry marks that event unknown', () => {
+		const merged = mergeFixtureWindowSchedules(
+			[
+				{
+					status: 'fulfilled',
+					value: {
+						fromGw: 10,
+						toGw: 11,
+						fixturesByEvent: { '10': [planningFixture(10)] },
+						unknownEventIds: [11]
+					}
+				}
+			],
+			[{ fromGw: 10, count: 2 }],
+			fixtures => fixtures,
+			{
+				fixturesByEvent: new Map([[11, [planningFixture(11)]]]),
+				unavailableEventIds: new Set<number>(),
+				failedWindowCount: 0
+			}
+		)
+
+		assert.deepEqual(merged.fixturesByEvent.get(11), [planningFixture(11)])
+		assert.equal(merged.unavailableEventIds.has(11), true)
+		assert.equal(merged.failedWindowCount, 1)
 	})
 })
 
@@ -222,10 +354,10 @@ describe('fixture window route handler', () => {
 	it('returns a cacheable 200 only for complete windows', async () => {
 		const handler = createFixtureWindowRouteHandler(
 			async () => result(),
-			quietLogger,
+			quietLogger
 		)
 		const response = await handler(
-			new Request('https://letletme.top/api/fixtures/window?fromGw=10&count=2'),
+			new Request('https://letletme.top/api/fixtures/window?fromGw=10&count=2')
 		)
 		assert.equal(response.status, 200)
 		assertCacheHeaders(response, FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL)
@@ -234,17 +366,17 @@ describe('fixture window route handler', () => {
 			{
 				'Cache-Control': FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL,
 				'CDN-Cache-Control': FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL,
-				'Vercel-CDN-Cache-Control': FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL,
-			},
+				'Vercel-CDN-Cache-Control': FIXTURE_WINDOW_PUBLIC_CACHE_CONTROL
+			}
 		)
 		assert.deepEqual(await response.json(), {
 			fromGw: 10,
 			toGw: 11,
 			fixturesByEvent: {
 				'10': [planningFixture(10)],
-				'11': [],
+				'11': []
 			},
-			unknownEventIds: [],
+			unknownEventIds: []
 		})
 	})
 
@@ -255,12 +387,12 @@ describe('fixture window route handler', () => {
 					fixturesByEvent: { '10': [planningFixture(10)] },
 					unknownEventIds: [11],
 					outcome: 'partial',
-					path: 'fallback',
+					path: 'fallback'
 				}),
-			quietLogger,
+			quietLogger
 		)
 		const response = await handler(
-			new Request('https://letletme.top/api/fixtures/window?fromGw=10&count=2'),
+			new Request('https://letletme.top/api/fixtures/window?fromGw=10&count=2')
 		)
 		assert.equal(response.status, 200)
 		assertCacheHeaders(response, FIXTURE_WINDOW_UNCACHEABLE_CONTROL)
@@ -268,15 +400,12 @@ describe('fixture window route handler', () => {
 
 	it('returns 400 before loading invalid parameters', async () => {
 		let called = false
-		const handler = createFixtureWindowRouteHandler(
-			async () => {
-				called = true
-				return result()
-			},
-			quietLogger,
-		)
+		const handler = createFixtureWindowRouteHandler(async () => {
+			called = true
+			return result()
+		}, quietLogger)
 		const response = await handler(
-			new Request('https://letletme.top/api/fixtures/window?fromGw=38&count=2'),
+			new Request('https://letletme.top/api/fixtures/window?fromGw=38&count=2')
 		)
 		assert.equal(response.status, 400)
 		assert.equal(called, false)
@@ -290,12 +419,12 @@ describe('fixture window route handler', () => {
 					fixturesByEvent: {},
 					unknownEventIds: [10, 11],
 					outcome: 'failed',
-					path: 'fallback',
+					path: 'fallback'
 				}),
-			quietLogger,
+			quietLogger
 		)
 		const response = await handler(
-			new Request('https://letletme.top/api/fixtures/window?fromGw=10&count=2'),
+			new Request('https://letletme.top/api/fixtures/window?fromGw=10&count=2')
 		)
 		assert.equal(response.status, 502)
 		assertCacheHeaders(response, FIXTURE_WINDOW_UNCACHEABLE_CONTROL)

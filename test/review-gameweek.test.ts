@@ -4,7 +4,8 @@ import {
 	isPreseasonReviewAnchor,
 	maxEventIdFromHistory,
 	resolveFixturePlanningGameweek,
-	resolveReviewGameweekAnchor,
+	resolveFixturePlanningHorizon,
+	resolveReviewGameweekAnchor
 } from '@/lib/review-gameweek'
 
 describe('resolveReviewGameweekAnchor', () => {
@@ -13,35 +14,35 @@ describe('resolveReviewGameweekAnchor', () => {
 			isPreseasonReviewAnchor({
 				currentGw: null,
 				anchorGw: 1,
-				source: 'next-derived',
+				source: 'next-derived'
 			}),
-			true,
+			true
 		)
 		assert.equal(
 			isPreseasonReviewAnchor({
 				currentGw: null,
 				anchorGw: 4,
-				source: 'next-derived',
+				source: 'next-derived'
 			}),
-			false,
+			false
 		)
 	})
 	it('prefers isCurrent when present', () => {
 		const result = resolveReviewGameweekAnchor({
 			current: [{ id: 28 }],
-			next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }],
+			next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }]
 		})
 		assert.deepEqual(result, {
 			currentGw: 28,
 			anchorGw: 28,
-			source: 'current',
+			source: 'current'
 		})
 	})
 
 	it('derives from next when current is empty', () => {
 		const result = resolveReviewGameweekAnchor({
 			current: [],
-			next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }],
+			next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }]
 		})
 		assert.equal(result.currentGw, null)
 		assert.equal(result.anchorGw, 28)
@@ -51,12 +52,12 @@ describe('resolveReviewGameweekAnchor', () => {
 	it('uses history max when events empty', () => {
 		const result = resolveReviewGameweekAnchor(
 			{ current: [], next: [] },
-			{ historyMaxEventId: 22 },
+			{ historyMaxEventId: 22 }
 		)
 		assert.deepEqual(result, {
 			currentGw: null,
 			anchorGw: 22,
-			source: 'history',
+			source: 'history'
 		})
 	})
 
@@ -65,27 +66,65 @@ describe('resolveReviewGameweekAnchor', () => {
 		assert.deepEqual(result, {
 			currentGw: null,
 			anchorGw: null,
-			source: 'none',
+			source: 'none'
 		})
 	})
 })
 
 describe('resolveFixturePlanningGameweek', () => {
-	it('uses the active event and otherwise starts at the upcoming event', () => {
+	it('keeps the active event while it is live', () => {
 		assert.equal(
 			resolveFixturePlanningGameweek({
 				current: [{ id: 28 }],
 				next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }],
+				latestFinishedEventId: 27
 			}),
-			28,
+			28
 		)
+	})
+
+	it('starts at the upcoming event once the current event is finished', () => {
+		assert.equal(
+			resolveFixturePlanningGameweek({
+				current: [{ id: 28 }],
+				next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }],
+				latestFinishedEventId: 28
+			}),
+			29
+		)
+	})
+
+	it('uses the upcoming event when the current event has already rolled off', () => {
 		assert.equal(
 			resolveFixturePlanningGameweek({
 				current: [],
 				next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }],
+				latestFinishedEventId: 28
 			}),
-			29,
+			29
 		)
+	})
+
+	it('retains the legacy current/next fallback when lifecycle metadata is absent', () => {
+		assert.equal(
+			resolveFixturePlanningGameweek({
+				current: [{ id: 28 }],
+				next: [{ id: 29, deadlineTime: '2026-01-01T00:00:00Z' }]
+			}),
+			28
+		)
+	})
+})
+
+describe('resolveFixturePlanningHorizon', () => {
+	it('clamps the planning window at the end of the season', () => {
+		assert.equal(resolveFixturePlanningHorizon(35, 5), 4)
+		assert.equal(resolveFixturePlanningHorizon(37, 5), 2)
+		assert.equal(resolveFixturePlanningHorizon(38, 5), 1)
+	})
+
+	it('rejects an out-of-season starting gameweek', () => {
+		assert.equal(resolveFixturePlanningHorizon(39, 5), null)
 	})
 })
 
@@ -93,7 +132,7 @@ describe('maxEventIdFromHistory', () => {
 	it('returns max positive eventId', () => {
 		assert.equal(
 			maxEventIdFromHistory([{ eventId: 3 }, { eventId: 12 }, { eventId: 7 }]),
-			12,
+			12
 		)
 	})
 

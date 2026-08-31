@@ -15,6 +15,21 @@ test('homepage streams its real shell and prevents CDN script rewriting', async 
 	expect(html).not.toContain('aria-label="Loading page"')
 })
 
+test('homepage deadline follows the next event rather than the active event', async ({
+	page
+}) => {
+	await page.goto('/zh-CN')
+
+	const deadlineCard = page.locator('[data-countdown-card="dark"]')
+	await expect(deadlineCard).toBeVisible()
+	await expect(
+		deadlineCard.getByRole('heading', { name: '第 34 轮', exact: true })
+	).toBeVisible()
+	await expect(
+		deadlineCard.getByRole('heading', { name: '第 33 轮', exact: true })
+	).toHaveCount(0)
+})
+
 test('web-vitals ingestion accepts the public proxy origin and rejects others', async ({
 	request
 }) => {
@@ -121,17 +136,23 @@ test('footer QR disclosure stays inside the mobile viewport', async ({
 	expect((bounds?.x ?? 0) + (bounds?.width ?? 391)).toBeLessThanOrEqual(390)
 })
 
-test('home keeps the four-section vocabulary and competition entry links aligned', async ({
+test('home keeps the five-section vocabulary and competition entry links aligned', async ({
 	page
 }) => {
 	await page.goto('/')
 
 	const header = page.getByRole('navigation', { name: 'Primary' })
-	for (const id of ['live', 'myFpl', 'competitions', 'explore']) {
+	for (const id of ['live', 'myFpl', 'competitions', 'explore', 'data']) {
 		await expect(
 			header.locator(`details[data-navigation-group="${id}"] > summary`)
 		).toBeVisible()
 	}
+	await header
+		.locator('details[data-navigation-group="data"] > summary')
+		.click()
+	await expect(
+		header.getByRole('link', { name: 'Players', exact: true })
+	).toHaveAttribute('href', '/explore/player-stats')
 	await header
 		.locator('details[data-navigation-group="myFpl"] > summary')
 		.click()
@@ -161,11 +182,17 @@ test('home keeps the four-section vocabulary and competition entry links aligned
 
 	await page.goto('/zh-CN')
 	const chineseHeader = page.getByRole('navigation', { name: '主导航' })
-	for (const id of ['live', 'myFpl', 'competitions', 'explore']) {
+	for (const id of ['live', 'myFpl', 'competitions', 'explore', 'data']) {
 		await expect(
 			chineseHeader.locator(`details[data-navigation-group="${id}"] > summary`)
 		).toBeVisible()
 	}
+	await chineseHeader
+		.locator('details[data-navigation-group="data"] > summary')
+		.click()
+	await expect(
+		chineseHeader.getByRole('link', { name: '球员', exact: true })
+	).toHaveAttribute('href', '/zh-CN/explore/player-stats')
 
 	await expect(
 		page.getByRole('link', { name: '赛事实时积分榜', exact: true })
@@ -370,13 +397,16 @@ test('server-rendered mobile navigation opens and closes after navigation', asyn
 	const mobileMenu = page.locator('details[data-navigation-mobile]')
 	await mobileMenu.locator(':scope > summary').click()
 	await expect(mobileMenu).toHaveAttribute('open', '')
-	for (const label of ['Live', 'My FPL', 'Competitions', 'Explore']) {
+	for (const label of ['Live', 'My FPL', 'Competitions', 'Explore', 'Data']) {
 		await expect(mobileMenu.getByText(label, { exact: true })).toBeVisible()
 	}
 
 	await expect(
+		mobileMenu.getByRole('link', { name: 'Browse competitions', exact: true })
+	).toHaveAttribute('href', '/competitions/browse')
+	await expect(
 		mobileMenu.getByRole('link', { name: 'My Competitions', exact: true })
-	).toHaveAttribute('href', '/competitions/browse?mine=true')
+	).toHaveAttribute('href', '/my-fpl/competitions')
 	await expect(
 		mobileMenu.getByRole('link', { name: 'New Competition', exact: true })
 	).toHaveAttribute('href', '/competitions/create')
@@ -420,7 +450,7 @@ test('Simplified Chinese mobile navigation uses the same competition vocabulary'
 	const mobileMenu = page.locator('details[data-navigation-mobile]')
 	await mobileMenu.locator(':scope > summary').click()
 	await expect(mobileMenu).toHaveAttribute('open', '')
-	for (const label of ['实时', '我的 FPL', '赛事', '探索']) {
+	for (const label of ['实时', '我的 FPL', '赛事', '探索', '数据']) {
 		await expect(
 			mobileMenu.locator('section > p').filter({ hasText: label })
 		).toBeVisible()
@@ -558,8 +588,11 @@ test('signed-out Trends exposes only curated public aggregates on mobile', async
 		page.getByRole('heading', { level: 1, name: 'Trends' })
 	).toBeVisible()
 	await expect(
+		page.getByRole('combobox', { name: 'Active league' })
+	).toHaveValue('competition:777')
+	await expect(
 		page.getByRole('heading', { level: 2, name: 'E2E Public League' })
-	).toBeVisible()
+	).toHaveCount(0)
 	await expect(
 		page.getByText('Link an FPL entry to add My Leagues.')
 	).toBeVisible()

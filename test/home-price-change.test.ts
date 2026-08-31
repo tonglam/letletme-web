@@ -216,6 +216,8 @@ describe('homepage price-change projection', () => {
 
 		assert.equal(projection.state, 'AVAILABLE')
 		assert.equal(projection.capturedAt, '2026-08-28T07:00:00.000Z')
+		assert.equal(projection.riseTotal, 6)
+		assert.equal(projection.fallTotal, 6)
 		assert.deepEqual(
 			projection.rises.map(item => item.playerId),
 			[2, 4, 5, 6, 3]

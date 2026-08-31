@@ -11,8 +11,13 @@ export type FixturePlanningFixture = {
 	id: number
 	eventId: number
 	finished: boolean
+	/** Optional for backwards compatibility with already cached windows. */
+	started?: boolean
 	homeTeam: FixturePlanningTeam
 	awayTeam: FixturePlanningTeam
+	/** Null when the fixture has not produced a score yet. */
+	homeScore?: number | null
+	awayScore?: number | null
 	homeTeamDifficulty: number
 	awayTeamDifficulty: number
 }
@@ -31,20 +36,16 @@ export type FixtureWindowLoadResult = FixtureWindowResponse & {
 
 export type FixtureWindowQueryExecutor = (
 	query: string,
-	variables: Record<string, number>,
+	variables: Record<string, number>
 ) => Promise<unknown>
 
 export type FixtureWindowParamsResult =
-	| { ok: true; fromGw: number; count: number }
-	| { ok: false; error: string }
+	{ ok: true; fromGw: number; count: number } | { ok: false; error: string }
 
-export type FixtureWindowReadyRating =
-	| 'good'
-	| 'needs-improvement'
-	| 'poor'
+export type FixtureWindowReadyRating = 'good' | 'needs-improvement' | 'poor'
 
 export function rateFixtureWindowReady(
-	durationMs: number,
+	durationMs: number
 ): FixtureWindowReadyRating {
 	if (durationMs <= 1_000) return 'good'
 	if (durationMs <= 1_500) return 'needs-improvement'
@@ -54,7 +55,7 @@ export function rateFixtureWindowReady(
 const POSITIVE_INTEGER = /^[1-9]\d*$/
 
 export function parseFixtureWindowParams(
-	searchParams: URLSearchParams,
+	searchParams: URLSearchParams
 ): FixtureWindowParamsResult {
 	const fromValues = searchParams.getAll('fromGw')
 	const countValues = searchParams.getAll('count')
@@ -98,7 +99,9 @@ function assertFixtureWindowInput(fromGw: number, count: number): void {
 		count > FIXTURE_WINDOW_MAX_COUNT ||
 		fromGw + count - 1 > FIXTURE_WINDOW_MAX_EVENT_ID
 	) {
-		throw new RangeError('Fixture window must be 1-5 consecutive GWs within 1-38')
+		throw new RangeError(
+			'Fixture window must be 1-5 consecutive GWs within 1-38'
+		)
 	}
 }
 
@@ -107,16 +110,59 @@ export function fixtureWindowEventIds(fromGw: number, count: number): number[] {
 	return Array.from({ length: count }, (_, index) => fromGw + index)
 }
 
+export type FixtureWindowRange = {
+	fromGw: number
+	count: number
+}
+
+/**
+ * Split a sparse set of missing gameweeks into valid consecutive API windows.
+ * The route accepts at most five consecutive gameweeks per request; keeping
+ * gaps out of each range prevents a successful response from being mistaken
+ * for coverage of an event that was never requested.
+ */
+export function buildFixtureWindowRanges(
+	eventIds: readonly number[]
+): FixtureWindowRange[] {
+	const uniqueEventIds = Array.from(new Set(eventIds)).sort((a, b) => a - b)
+	if (
+		uniqueEventIds.some(
+			eventId =>
+				!Number.isInteger(eventId) ||
+				eventId < 1 ||
+				eventId > FIXTURE_WINDOW_MAX_EVENT_ID
+		)
+	) {
+		throw new RangeError('Fixture event IDs must be integers within 1-38')
+	}
+	if (uniqueEventIds.length === 0) return []
+
+	const ranges: FixtureWindowRange[] = []
+	let rangeFromGw = uniqueEventIds[0]!
+	let count = 1
+	for (const eventId of uniqueEventIds.slice(1)) {
+		if (eventId === rangeFromGw + count && count < FIXTURE_WINDOW_MAX_COUNT) {
+			count += 1
+			continue
+		}
+		ranges.push({ fromGw: rangeFromGw, count })
+		rangeFromGw = eventId
+		count = 1
+	}
+	ranges.push({ fromGw: rangeFromGw, count })
+	return ranges
+}
+
 export function buildFixtureWindowQuery(count: number): string {
 	assertFixtureWindowInput(1, count)
 	const variables = Array.from(
 		{ length: count },
-		(_, index) => `$event${index}: Int!`,
+		(_, index) => `$event${index}: Int!`
 	).join(', ')
 	const aliases = Array.from(
 		{ length: count },
 		(_, index) =>
-			`event${index}: eventFixtures(eventId: $event${index}) { ...FixturePlanningFields }`,
+			`event${index}: eventFixtures(eventId: $event${index}) { ...FixturePlanningFields }`
 	).join('\n    ')
 
 	return /* GraphQL */ `
@@ -127,6 +173,7 @@ export function buildFixtureWindowQuery(count: number): string {
   fragment FixturePlanningFields on Fixture {
     id
     finished
+    started
     homeTeam {
       id
       name
@@ -137,6 +184,8 @@ export function buildFixtureWindowQuery(count: number): string {
       name
       shortName
     }
+    homeScore
+    awayScore
     homeTeamDifficulty
     awayTeamDifficulty
   }
@@ -163,16 +212,19 @@ function readPlanningTeam(value: unknown): FixturePlanningTeam {
 
 export function mapFixturePlanningFixture(
 	value: unknown,
-	eventId: number,
+	eventId: number
 ): FixturePlanningFixture {
 	if (!isRecord(value)) throw new TypeError('Fixture was not an object')
 	const {
 		id,
 		finished,
+		started,
 		homeTeam,
 		awayTeam,
+		homeScore,
+		awayScore,
 		homeTeamDifficulty,
-		awayTeamDifficulty,
+		awayTeamDifficulty
 	} = value
 	if (
 		typeof id !== 'number' ||
@@ -181,7 +233,10 @@ export function mapFixturePlanningFixture(
 		typeof homeTeamDifficulty !== 'number' ||
 		!Number.isFinite(homeTeamDifficulty) ||
 		typeof awayTeamDifficulty !== 'number' ||
-		!Number.isFinite(awayTeamDifficulty)
+		!Number.isFinite(awayTeamDifficulty) ||
+		(started !== undefined && typeof started !== 'boolean') ||
+		!isNullableScore(homeScore) ||
+		!isNullableScore(awayScore)
 	) {
 		throw new TypeError('Fixture planning fields were invalid')
 	}
@@ -190,19 +245,31 @@ export function mapFixturePlanningFixture(
 		id,
 		eventId,
 		finished,
+		started: started ?? finished,
 		homeTeam: readPlanningTeam(homeTeam),
 		awayTeam: readPlanningTeam(awayTeam),
+		homeScore: homeScore ?? null,
+		awayScore: awayScore ?? null,
 		homeTeamDifficulty,
-		awayTeamDifficulty,
+		awayTeamDifficulty
 	}
+}
+
+function isNullableScore(value: unknown): value is number | null | undefined {
+	return (
+		value === undefined ||
+		value === null ||
+		(typeof value === 'number' && Number.isFinite(value) && value >= 0)
+	)
 }
 
 function readAliasFixtures(
 	response: unknown,
 	alias: string,
-	eventId: number,
+	eventId: number
 ): FixturePlanningFixture[] {
-	if (!isRecord(response)) throw new TypeError('Fixture window response was invalid')
+	if (!isRecord(response))
+		throw new TypeError('Fixture window response was invalid')
 	const fixtures = response[alias]
 	if (!Array.isArray(fixtures)) {
 		throw new TypeError(`Fixture window alias ${alias} was unavailable`)
@@ -212,14 +279,14 @@ function readAliasFixtures(
 
 function variablesForEventIds(eventIds: number[]): Record<string, number> {
 	return Object.fromEntries(
-		eventIds.map((eventId, index) => [`event${index}`, eventId]),
+		eventIds.map((eventId, index) => [`event${index}`, eventId])
 	)
 }
 
 export async function loadFixtureWindowWithExecutor(
 	fromGw: number,
 	count: number,
-	execute: FixtureWindowQueryExecutor,
+	execute: FixtureWindowQueryExecutor
 ): Promise<FixtureWindowLoadResult> {
 	const eventIds = fixtureWindowEventIds(fromGw, count)
 	const toGw = eventIds[eventIds.length - 1]!
@@ -228,13 +295,13 @@ export async function loadFixtureWindowWithExecutor(
 	try {
 		const response = await execute(
 			buildFixtureWindowQuery(count),
-			variablesForEventIds(eventIds),
+			variablesForEventIds(eventIds)
 		)
 		eventIds.forEach((eventId, index) => {
 			fixturesByEvent[String(eventId)] = readAliasFixtures(
 				response,
 				`event${index}`,
-				eventId,
+				eventId
 			)
 		})
 		return {
@@ -243,16 +310,19 @@ export async function loadFixtureWindowWithExecutor(
 			fixturesByEvent,
 			unknownEventIds: [],
 			outcome: 'complete',
-			path: 'batch',
+			path: 'batch'
 		}
 	} catch {
 		const results = await Promise.allSettled(
 			eventIds.map(async eventId => {
 				const response = await execute(buildFixtureWindowQuery(1), {
-					event0: eventId,
+					event0: eventId
 				})
-				return [eventId, readAliasFixtures(response, 'event0', eventId)] as const
-			}),
+				return [
+					eventId,
+					readAliasFixtures(response, 'event0', eventId)
+				] as const
+			})
 		)
 		const unknownEventIds: number[] = []
 		results.forEach((result, index) => {
@@ -271,19 +341,19 @@ export async function loadFixtureWindowWithExecutor(
 			unknownEventIds,
 			outcome:
 				unknownEventIds.length === eventIds.length ? 'failed' : 'partial',
-			path: 'fallback',
+			path: 'fallback'
 		}
 	}
 }
 
 export function fixtureWindowResponseFromResult(
-	result: FixtureWindowLoadResult,
+	result: FixtureWindowLoadResult
 ): FixtureWindowResponse {
 	return {
 		fromGw: result.fromGw,
 		toGw: result.toGw,
 		fixturesByEvent: result.fixturesByEvent,
-		unknownEventIds: result.unknownEventIds,
+		unknownEventIds: result.unknownEventIds
 	}
 }
 
@@ -297,13 +367,19 @@ function isPlanningTeam(value: unknown): value is FixturePlanningTeam {
 	)
 }
 
-function isPlanningFixture(value: unknown, eventId: number): value is FixturePlanningFixture {
+function isPlanningFixture(
+	value: unknown,
+	eventId: number
+): value is FixturePlanningFixture {
 	return (
 		isRecord(value) &&
 		typeof value.id === 'number' &&
 		Number.isInteger(value.id) &&
 		value.eventId === eventId &&
 		typeof value.finished === 'boolean' &&
+		(value.started === undefined || typeof value.started === 'boolean') &&
+		isNullableScore(value.homeScore) &&
+		isNullableScore(value.awayScore) &&
 		isPlanningTeam(value.homeTeam) &&
 		isPlanningTeam(value.awayTeam) &&
 		typeof value.homeTeamDifficulty === 'number' &&
@@ -313,7 +389,9 @@ function isPlanningFixture(value: unknown, eventId: number): value is FixturePla
 	)
 }
 
-export function isFixtureWindowResponse(value: unknown): value is FixtureWindowResponse {
+export function isFixtureWindowResponse(
+	value: unknown
+): value is FixtureWindowResponse {
 	if (!isRecord(value)) return false
 	const { fromGw, toGw, fixturesByEvent, unknownEventIds } = value
 	if (
@@ -337,7 +415,7 @@ export function isFixtureWindowResponse(value: unknown): value is FixtureWindowR
 				typeof eventId === 'number' &&
 				Number.isInteger(eventId) &&
 				eventId >= fromGw &&
-				eventId <= toGw,
+				eventId <= toGw
 		)
 	) {
 		return false
@@ -357,15 +435,16 @@ export function isFixtureWindowResponse(value: unknown): value is FixtureWindowR
 				fixtures.every(fixture => isPlanningFixture(fixture, eventId))
 			if (valid) fixtureEventIds.push(eventId)
 			return valid
-		},
+		}
 	)
 	if (!fixturesAreValid) return false
-	if (fixtureEventIds.some(eventId => unknownEventIds.includes(eventId))) return false
+	if (fixtureEventIds.some(eventId => unknownEventIds.includes(eventId)))
+		return false
 
 	const coveredEventIds = new Set([...fixtureEventIds, ...unknownEventIds])
 	if (coveredEventIds.size !== toGw - fromGw + 1) return false
 	return Array.from(
 		{ length: toGw - fromGw + 1 },
-		(_, index) => fromGw + index,
+		(_, index) => fromGw + index
 	).every(eventId => coveredEventIds.has(eventId))
 }

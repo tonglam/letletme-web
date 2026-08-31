@@ -2,7 +2,6 @@
 
 import { FdrMatrix } from '@/app/data/fixtures/_components/FdrMatrix'
 import { MySquadFdrDesk } from '@/app/data/fixtures/_components/MySquadFdrDesk'
-import { formatTeamTickerShareText } from '@/app/data/fixtures/_lib/fixtures-share'
 import { playerStatsHref } from '@/app/data/player-stats/_lib/player-stats-url'
 import PageShell from '@/components/layout/PageShell'
 import { ShareActions } from '@/components/share/ShareActions'
@@ -14,16 +13,17 @@ import type { FixturePlanningMarketSignals } from '@/lib/graphql/operations/mark
 import type { SquadLoadState, SquadPickSeed } from '@/lib/squad-picks'
 import { buildSquadTeamExposure } from '@/lib/squad-picks'
 import {
+	buildFixtureWindowRanges,
 	isFixtureWindowResponse,
 	type FixturePlanningFixture
 } from '@/lib/fixture-window'
+import { mergeFixtureWindowSchedules } from '@/lib/fixture-window-schedule'
 import {
 	buildFdrDeskModel,
 	DEFAULT_FDR_HORIZON,
 	FDR_HORIZONS,
 	formatAvgFdr,
 	formatAvgFdrOutOfFive,
-	orderFdrTeamsForDisplay,
 	squadMatchKey,
 	type FdrHorizon,
 	type FdrReviewCandidate,
@@ -31,11 +31,11 @@ import {
 	type TeamFdrRow
 } from '@/lib/fixtures-fdr'
 import { positionBadgeClass } from '@/lib/position-style'
+import { resolveFixturePlanningHorizon } from '@/lib/review-gameweek'
 import { cn, normalizePosition, type PositionCode } from '@/lib/utils'
 import { TrendingDown, TrendingUp, Users } from 'lucide-react'
 import { Link } from '@/i18n/navigation'
-import { localizePathname, type AppLocale } from '@/i18n/routing'
-import { useLocale, useTranslations } from 'next-intl'
+import { useTranslations } from 'next-intl'
 import {
 	useCallback,
 	useEffect,
@@ -45,7 +45,6 @@ import {
 	startTransition,
 	type ReactNode
 } from 'react'
-import { toast } from 'sonner'
 
 type PosFilter = 'ALL' | Exclude<PositionCode, 'UNK'>
 
@@ -391,7 +390,6 @@ export default function FixturesClient({
 	squadState?: SquadLoadState
 }) {
 	const t = useTranslations('Fixtures')
-	const locale = useLocale() as AppLocale
 	const teamFdrShareRef = useRef<HTMLDivElement | null>(null)
 	const mySquadShareRef = useRef<HTMLElement | null>(null)
 
@@ -400,7 +398,21 @@ export default function FixturesClient({
 	const [sort, setSort] = useState<'easiest' | 'hardest'>('easiest')
 	const [posFilter, setPosFilter] = useState<PosFilter>('ALL')
 	const [loading, setLoading] = useState(false)
+	const [loadError, setLoadError] = useState(false)
 	const [focusedTeamId, setFocusedTeamId] = useState<number | null>(null)
+	const selectableHorizons = useMemo(() => {
+		const remaining = resolveFixturePlanningHorizon(fromGw, 8)
+		if (remaining == null) return FDR_HORIZONS
+		const options = new Set<FdrHorizon>(
+			FDR_HORIZONS.filter(option => option <= remaining)
+		)
+		// Near the season boundary the exact remaining window is more useful
+		// than offering a control that would request an invalid GW39+ range.
+		if (remaining < 8 && !options.has(remaining)) {
+			options.add(remaining)
+		}
+		return Array.from(options).sort((a, b) => a - b)
+	}, [fromGw])
 
 	const squadKeySet = useMemo(() => new Set(mySquadKeys), [mySquadKeys])
 	const mySquadExposure = useMemo(
@@ -429,70 +441,92 @@ export default function FixturesClient({
 
 	const selectHorizon = useCallback(
 		(next: FdrHorizon) => {
-			if (next === horizon || next === pendingHorizon) return
+			const effectiveNext = resolveFixturePlanningHorizon(fromGw, next)
+			if (effectiveNext == null || effectiveNext === pendingHorizon) return
 			requestGenerationRef.current += 1
 			requestRef.current?.abort()
-			if (next < horizon) {
+			if (effectiveNext < horizon) {
 				setPendingHorizon(null)
 				setLoading(false)
-				startTransition(() => setHorizon(next))
+				setLoadError(false)
+				startTransition(() => setHorizon(effectiveNext))
 				return
 			}
-			const targetEnd = Math.min(38, fromGw + next - 1)
+			const targetEnd = fromGw + effectiveNext - 1
 			const missing = Array.from(
 				{ length: targetEnd - fromGw + 1 },
 				(_, index) => fromGw + index
 			).filter(
-				eventId =>
-					!cacheRef.current.has(eventId) && !unknownEventIds.includes(eventId)
+				eventId => !cacheRef.current.has(eventId) || unknownEvents.has(eventId)
 			)
-			if (missing.length === 0) {
+			if (effectiveNext === horizon && missing.length === 0) {
 				setPendingHorizon(null)
-				startTransition(() => setHorizon(next))
+				setLoadError(false)
 				return
 			}
-			const first = missing[0]!
-			const count = Math.min(5, missing.length)
+			if (missing.length === 0) {
+				setPendingHorizon(null)
+				setLoadError(false)
+				startTransition(() => setHorizon(effectiveNext))
+				return
+			}
+			const windows = buildFixtureWindowRanges(missing)
 			const generation = requestGenerationRef.current
 			const controller = new AbortController()
 			requestRef.current = controller
-			setPendingHorizon(next)
+			setPendingHorizon(effectiveNext)
 			setLoading(true)
-			void fetch(`/api/fixtures/window?fromGw=${first}&count=${count}`, {
-				signal: controller.signal,
-				headers: { accept: 'application/json' }
-			})
-				.then(async response => {
+			setLoadError(false)
+			void Promise.allSettled(
+				windows.map(async window => {
+					const response = await fetch(
+						`/api/fixtures/window?fromGw=${window.fromGw}&count=${window.count}`,
+						{
+							signal: controller.signal,
+							headers: { accept: 'application/json' }
+						}
+					)
 					const payload: unknown = await response.json().catch(() => null)
 					if (!response.ok || !isFixtureWindowResponse(payload))
 						throw new Error('fixture window unavailable')
-					if (generation !== requestGenerationRef.current) return
-					for (const [rawEventId, fixtures] of Object.entries(
-						payload.fixturesByEvent
-					)) {
-						cacheRef.current.set(Number(rawEventId), fixtures)
-					}
-					setUnknownEventIds(previous =>
-						Array.from(
-							new Set([
-								...previous.filter(id => !payload.unknownEventIds.includes(id)),
-								...payload.unknownEventIds
-							])
-						)
-					)
-					setFixturesByEvent(new Map(cacheRef.current))
-					setPendingHorizon(null)
-					startTransition(() => setHorizon(next))
+					return payload
 				})
-				.catch(error => {
+			)
+				.then(results => {
 					if (
 						controller.signal.aborted ||
 						generation !== requestGenerationRef.current
 					)
 						return
-					console.error('[fixtures] horizon fetch failed:', error)
+
+					const fulfilledCount = results.filter(
+						result => result.status === 'fulfilled'
+					).length
+
+					if (fulfilledCount === 0) {
+						setPendingHorizon(null)
+						setLoadError(true)
+						return
+					}
+
+					const merged = mergeFixtureWindowSchedules(
+						results,
+						windows,
+						fixtures => fixtures,
+						{
+							fixturesByEvent: cacheRef.current,
+							unavailableEventIds: unknownEvents,
+							failedWindowCount: 0
+						}
+					)
+					cacheRef.current = merged.fixturesByEvent
+					setUnknownEventIds(
+						Array.from(merged.unavailableEventIds).sort((a, b) => a - b)
+					)
+					setFixturesByEvent(new Map(merged.fixturesByEvent))
 					setPendingHorizon(null)
-					toast.error(t('loadFailed'))
+					setLoadError(merged.failedWindowCount > 0)
+					startTransition(() => setHorizon(effectiveNext))
 				})
 				.finally(() => {
 					if (generation === requestGenerationRef.current) {
@@ -501,7 +535,7 @@ export default function FixturesClient({
 					}
 				})
 		},
-		[fromGw, horizon, pendingHorizon, t, unknownEventIds]
+		[fromGw, horizon, pendingHorizon, unknownEvents]
 	)
 
 	const model = useMemo(
@@ -515,28 +549,6 @@ export default function FixturesClient({
 			}),
 		[fixturesByEvent, fromGw, horizon, knownTeams, marketSignals, unknownEvents]
 	)
-	const shareText = useMemo(() => {
-		const orderedTeams = orderFdrTeamsForDisplay(model.teams, sort)
-		const origin =
-			typeof window !== 'undefined'
-				? window.location.origin
-				: 'https://letletme.top'
-		const shareUrl = new URL(
-			localizePathname('/explore/fixtures', locale),
-			origin
-		).toString()
-		return formatTeamTickerShareText({
-			fromGw,
-			horizon,
-			teams: orderedTeams,
-			labels: {
-				title: t('teamsTitle'),
-				none: t('emptyTeams'),
-				footer: shareUrl
-			}
-		})
-	}, [fromGw, horizon, locale, model.teams, sort, t])
-
 	const filterByPos = useCallback(
 		(list: FdrReviewCandidate[]) => {
 			if (posFilter === 'ALL') return list
@@ -619,47 +631,59 @@ export default function FixturesClient({
 					<StatsPageHeader title={t('title')} />
 
 					{/* Controls */}
-					<Card
-						role="region"
-						aria-label={t('controlsLabel')}
-						className="mb-8 p-4 sm:p-5"
-					>
-						<div className="mb-3 border-b border-border/50 pb-2">
-							<p className="eyebrow sm:text-caption">{t('controlsLabel')}</p>
-							<p className="mt-0.5 text-caption text-muted-foreground">
-								{t('controlsHint', {
-									from: fromGw,
-									to: Math.min(38, fromGw + horizon - 1)
-								})}
+					<Card className="mb-8 p-4 sm:p-5">
+						<div className="flex flex-wrap gap-1.5">
+							{selectableHorizons.map(h => (
+								<button
+									key={h}
+									type="button"
+									onClick={() => selectHorizon(h)}
+									className={cn(
+										'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
+										horizon === h
+											? 'border-success bg-success text-success-foreground'
+											: 'border-border/70 bg-background text-muted-foreground hover:text-foreground'
+									)}
+									aria-pressed={horizon === h}
+									aria-busy={pendingHorizon === h}
+								>
+									{t('horizonN', { n: h })}
+								</button>
+							))}
+						</div>
+						<div
+							data-page-fdr-legend="true"
+							role="group"
+							aria-label={t('fdrLegend')}
+							className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/50 pt-3 text-caption text-muted-foreground"
+						>
+							<span className="font-display font-semibold uppercase tracking-caps">
+								{t('fdrLegend')}
+							</span>
+							{[1, 2, 3, 4, 5].map(d => (
+								<span
+									key={d}
+									className={cn(
+										'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-label font-semibold tabular-nums',
+										FDR_CELL[d]
+									)}
+								>
+									<span
+										className={cn('size-1.5 rounded-full', FDR_DOT[d])}
+										aria-hidden="true"
+									/>
+									{d}
+								</span>
+							))}
+						</div>
+						{loadError ? (
+							<p
+								className="mt-3 text-xs text-destructive"
+								role="alert"
+							>
+								{t('loadFailed')}
 							</p>
-						</div>
-						<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-							<div>
-								<p className="mb-1.5 text-caption font-medium text-muted-foreground">
-									{t('horizonLabel')}
-								</p>
-								<div className="flex flex-wrap gap-1.5">
-									{FDR_HORIZONS.map(h => (
-										<button
-											key={h}
-											type="button"
-											onClick={() => selectHorizon(h)}
-											className={cn(
-												'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
-												horizon === h
-													? 'border-success bg-success text-success-foreground'
-													: 'border-border/70 bg-background text-muted-foreground hover:text-foreground'
-											)}
-											aria-pressed={horizon === h}
-											aria-busy={pendingHorizon === h}
-										>
-											{t('horizonN', { n: h })}
-										</button>
-									))}
-								</div>
-							</div>
-						</div>
-						{loading ? (
+						) : loading ? (
 							<p className="mt-3 text-xs text-muted-foreground">
 								{t('loading')}
 							</p>
@@ -783,28 +807,6 @@ export default function FixturesClient({
 						/>
 					</Card>
 
-					{/* FDR legend */}
-					<p className="mb-4 flex flex-wrap items-center gap-2 text-caption text-muted-foreground">
-						<span className="font-display font-semibold uppercase tracking-caps">
-							{t('fdrLegend')}
-						</span>
-						{[1, 2, 3, 4, 5].map(d => (
-							<span
-								key={d}
-								className={cn(
-									'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-label font-semibold',
-									FDR_CELL[d]
-								)}
-							>
-								<span
-									className={cn('size-1.5 rounded-full', FDR_DOT[d])}
-									aria-hidden="true"
-								/>
-								{d}
-							</span>
-						))}
-					</p>
-
 					{/* Team FDR matrix */}
 					<Card
 						role="region"
@@ -846,9 +848,9 @@ export default function FixturesClient({
 										))}
 									</div>
 									<ShareActions
-										text={shareText}
 										imageRef={teamFdrShareRef}
 										title={t('teamsTitle')}
+										actions={['image']}
 									/>
 								</div>
 							}

@@ -157,7 +157,9 @@ export async function HomePriceChangeDesk() {
 			state: 'UNAVAILABLE',
 			capturedAt: null,
 			rises: [],
-			falls: []
+			falls: [],
+			riseTotal: 0,
+			fallTotal: 0
 		}
 	} else {
 		const board = priceChangeBoard ?? predictionResult.value.priceChangeBoard
@@ -201,6 +203,10 @@ export async function HomePriceChangeDesk() {
 		noTrendRises: tHome('homeNoTrendRises'),
 		noTrendFalls: tHome('homeNoTrendFalls'),
 		noLikelyToChange: tHome('homeNoLikelyToChange'),
+		topCountLabel: tHome('homePriceChangesTopCount', {
+			shown: '{shown}',
+			total: '{total}'
+		}),
 		likelyUnavailable: tHome('homeLikelyUnavailable'),
 		likelyUnavailableDescription: tHome('homeLikelyUnavailableDescription'),
 		dataUnavailable: tMarket('dataUnavailable'),

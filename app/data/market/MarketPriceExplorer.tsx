@@ -31,6 +31,7 @@ import {
 	usePriceChangeLiveUpdates
 } from '@/lib/price-change-live-client'
 import { ShareActions } from '@/components/share/ShareActions'
+import { useMarketPlayerSelection } from './MarketPlayerSelection'
 import { Search } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 import {
@@ -64,21 +65,6 @@ function formatCalendarDate(value: string | null, locale: string): string {
 	}).format(parsed)
 }
 
-function marketPlayerToDirectory(player: MarketPlayer): PlayerDirectoryItem {
-	return {
-		id: player.playerId,
-		webName: player.webName,
-		position: player.position,
-		price: player.price,
-		selectedByPercent: player.selectedByPercent,
-		team: {
-			id: player.teamId,
-			name: player.teamName,
-			shortName: player.teamShortName
-		}
-	}
-}
-
 function PositionBadge({ player }: { player: MarketPlayer }) {
 	return <MarketPositionBadge position={player.position} />
 }
@@ -97,7 +83,7 @@ function SectionTitle({
 			<div className="min-w-0">
 				<h2
 					id={id}
-					className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+					className="font-display text-xl font-bold tracking-tight text-foreground sm:text-2xl"
 				>
 					{children}
 				</h2>
@@ -140,13 +126,15 @@ export function MarketPlayerLookupLauncher({
 	seedPlayer,
 	compact = true,
 	initialOpen = false,
-	onClearSeed
+	onClearSeed,
+	onSelectPlayer
 }: {
 	revision?: string | null
 	seedPlayer?: PlayerDirectoryItem | null
 	compact?: boolean
 	initialOpen?: boolean
 	onClearSeed?: () => void
+	onSelectPlayer?: (player: PlayerDirectoryItem) => void
 }) {
 	const t = useTranslations('Market')
 	const [open, setOpen] = useState(initialOpen || seedPlayer != null)
@@ -164,6 +152,7 @@ export function MarketPlayerLookupLauncher({
 				autoFocus={openedByUser || searchTerm.trim().length >= 2}
 				seedPlayer={seedPlayer}
 				onClearSeed={onClearSeed}
+				onSelectPlayer={onSelectPlayer}
 				revision={revision}
 			/>
 		)
@@ -405,7 +394,12 @@ export function MarketPriceExplorer({
 	initialOpen?: boolean
 }) {
 	const t = useTranslations('Market')
-	const [seedPlayer, setSeedPlayer] = useState<PlayerDirectoryItem | null>(null)
+	const {
+		selectedPlayer: seedPlayer,
+		selectPlayer,
+		selectDirectoryPlayer,
+		clearSelectedPlayer
+	} = useMarketPlayerSelection()
 	const shareRef = useRef<HTMLElement | null>(null)
 	const [latestPriceChanges, setLatestPriceChanges] = useState(changes)
 	const [currentChangeDate, setCurrentChangeDate] = useState(changeDate)
@@ -501,14 +495,15 @@ export function MarketPriceExplorer({
 				performance.now(),
 				`${player.playerId}:${marketRevisionParam(marketRevision)}`
 			)
-			setSeedPlayer(marketPlayerToDirectory(player))
+			selectPlayer(player)
 		},
-		[marketRevision]
+		[marketRevision, selectPlayer]
 	)
 
 	return (
 		<section
 			aria-labelledby="market-prices"
+			id="market-prices-share"
 			className="rounded-xl border border-border/80 bg-card/40 p-4 shadow-sm sm:p-5"
 			ref={shareRef}
 			data-share-preserve-width="true"
@@ -553,7 +548,8 @@ export function MarketPriceExplorer({
 					compact={latestPriceChanges.length > 0}
 					initialOpen={initialOpen}
 					seedPlayer={seedPlayer}
-					onClearSeed={() => setSeedPlayer(null)}
+					onSelectPlayer={selectDirectoryPlayer}
+					onClearSeed={clearSelectedPlayer}
 					revision={marketRevision}
 				/>
 			</div>

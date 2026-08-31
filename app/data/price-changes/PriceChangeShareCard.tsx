@@ -20,9 +20,18 @@ function formatPercent(value: number): string {
 }
 
 function statusClass(status: PriceChangePlayer['status']): string {
+	if (status.includes('RISE')) {
+		return status === 'VERY_LIKELY_RISE'
+			? 'border-success/50 bg-success/10 text-success'
+			: 'border-success/35 bg-success/5 text-success'
+	}
 	return status === 'VERY_LIKELY_FALL'
 		? 'border-destructive/50 bg-destructive/10 text-destructive'
 		: 'border-destructive/35 bg-destructive/5 text-destructive'
+}
+
+function progressClass(status: PriceChangePlayer['status']): string {
+	return status.includes('RISE') ? 'text-success' : 'text-destructive'
 }
 
 export function PriceChangeShareCard({
@@ -105,7 +114,12 @@ export function PriceChangeShareCard({
 										</p>
 									</div>
 									<div className="flex shrink-0 items-center gap-3">
-										<span className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums text-destructive">
+										<span
+											className={cn(
+												'whitespace-nowrap font-mono text-sm font-semibold tabular-nums',
+												progressClass(player.status)
+											)}
+										>
 											{formatPercent(player.progressPercent)}
 										</span>
 										<span

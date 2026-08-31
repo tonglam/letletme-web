@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+
 import {
 	buildPlayerStatsQueryString,
 	isPlayerStatsSupportingSection,
 	parsePlayerStatsPlayerId,
+	playerStatsHref,
 	playerStatsSectionFromHash
 } from '../app/data/player-stats/_lib/player-stats-url'
 
@@ -46,5 +48,22 @@ describe('player stats URL contract', () => {
 		assert.equal(isPlayerStatsSupportingSection('market'), true)
 		assert.equal(isPlayerStatsSupportingSection('coverage'), true)
 		assert.equal(isPlayerStatsSupportingSection('process'), false)
+	})
+
+	it('keeps the locale prefix when linking from localized pitch views', () => {
+		assert.equal(
+			playerStatsHref({
+				p1: '10',
+				localePathPrefix: '/zh-CN'
+			}),
+			'/zh-CN/explore/player-stats?p1=10'
+		)
+	})
+
+	it('leaves the default locale path unprefixed', () => {
+		assert.equal(
+			playerStatsHref({ p1: '10', localePathPrefix: '' }),
+			'/explore/player-stats?p1=10'
+		)
 	})
 })

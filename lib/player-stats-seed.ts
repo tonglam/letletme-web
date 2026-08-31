@@ -128,15 +128,16 @@ function eventsFromContext(context: CoreEventContextData): EventsResponse {
 	return {
 		current:
 			context.currentEventId == null ? [] : [{ id: context.currentEventId }],
-		next:
-			context.nextEventId == null
-				? []
-				: [
-						{
-							id: context.nextEventId,
-							deadlineTime: context.nextDeadlineTime ?? ''
-						}
-					]
+			next:
+				context.nextEventId == null
+					? []
+					: [
+							{
+								id: context.nextEventId,
+								deadlineTime: context.nextDeadlineTime ?? ''
+							}
+						],
+			latestFinishedEventId: context.latestFinishedEventId
 	}
 }
 

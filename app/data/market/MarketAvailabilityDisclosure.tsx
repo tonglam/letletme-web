@@ -7,8 +7,10 @@ import { fetchMarketJson, marketRevisionParam } from '@/lib/market-client'
 import { markRouteReadyStart } from '@/lib/analytics/route-navigation'
 import { MARKET_AVAILABILITY_HIGHLIGHT_LIMIT } from '@/lib/market'
 import { useRouter } from '@/i18n/navigation'
+import { Input } from '@/components/ui/input'
 import { useLocale, useTranslations } from 'next-intl'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Search, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type LoadedSnapshot = {
 	key: string
@@ -40,6 +42,7 @@ export function MarketAvailabilityDisclosure({
 	count: number
 }) {
 	const t = useTranslations('Market')
+	const tExplore = useTranslations('MarketExplore')
 	const common = useTranslations('Common')
 	const locale = useLocale()
 	const router = useRouter()
@@ -50,11 +53,14 @@ export function MarketAvailabilityDisclosure({
 	const [loadingKey, setLoadingKey] = useState<string | null>(null)
 	const [error, setError] = useState<AvailabilityError | null>(null)
 	const [readySnapshot, setReadySnapshot] = useState<ReadySnapshot | null>(null)
+	const [searchTerm, setSearchTerm] = useState('')
 	const detailsRef = useRef<HTMLDetailsElement | null>(null)
 	const latestSnapshotKey = useRef(snapshotKey)
 	const loadInitialRef = useRef<() => Promise<void>>(async () => {})
-	const loadedUpdates =
-		loadedSnapshot?.key === snapshotKey ? loadedSnapshot.items : []
+	const loadedUpdates = useMemo(
+		() => (loadedSnapshot?.key === snapshotKey ? loadedSnapshot.items : []),
+		[loadedSnapshot, snapshotKey]
+	)
 	const isLoaded = loadedSnapshot?.key === snapshotKey
 	const loading = loadingKey?.startsWith(`${snapshotKey}:`) ?? false
 	const nextOffset =
@@ -62,8 +68,17 @@ export function MarketAvailabilityDisclosure({
 	const revisionChanged =
 		error?.key === snapshotKey && error.kind === 'revision'
 	const unavailable = error?.key === snapshotKey && error.kind === 'unavailable'
+	const hasSnapshotError = error?.key === snapshotKey
 	const availabilityReadyKey =
 		readySnapshot?.key === snapshotKey ? readySnapshot.readyKey : null
+	const normalizedSearch = searchTerm.trim().toLocaleLowerCase()
+	const searchActive = normalizedSearch.length >= 2
+	const filteredUpdates = useMemo(() => {
+		if (!searchActive) return loadedUpdates
+		return loadedUpdates.filter(update =>
+			update.player.webName.toLocaleLowerCase().includes(normalizedSearch)
+		)
+	}, [loadedUpdates, normalizedSearch, searchActive])
 
 	const loadPage = useCallback(
 		async (offset: number) => {
@@ -161,6 +176,18 @@ export function MarketAvailabilityDisclosure({
 		if (detailsRef.current?.open) void loadInitialRef.current()
 	}, [snapshotKey])
 
+	useEffect(() => {
+		if (
+			!searchActive ||
+			!isLoaded ||
+			loading ||
+			hasSnapshotError ||
+			nextOffset === null
+		)
+			return
+		void loadPage(nextOffset)
+	}, [hasSnapshotError, isLoaded, loadPage, loading, nextOffset, searchActive])
+
 	return (
 		<>
 			<RouteReadyMarker
@@ -207,20 +234,96 @@ export function MarketAvailabilityDisclosure({
 									{t('dataUnavailable')}
 								</p>
 							) : null}
-							{isLoaded && !loading && !revisionChanged ? (
+							{isLoaded && !revisionChanged ? (
 								<>
-									<p className="mb-3 text-xs text-muted-foreground">
-										{t('observationCount', {
-											observed: loadedUpdates.length,
-											requested: loadedSnapshot?.totalCount ?? count
+									<div
+										className="mb-4 space-y-2"
+										data-share-exclude="true"
+									>
+										<label
+											htmlFor="market-availability-search"
+											className="text-sm font-semibold"
+										>
+											{tExplore('availabilitySearchLabel')}
+										</label>
+										<div className="relative">
+											<Search
+												aria-hidden="true"
+												className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+											/>
+											<Input
+												id="market-availability-search"
+												type="search"
+												value={searchTerm}
+												onChange={event => setSearchTerm(event.target.value)}
+												placeholder={tExplore('availabilitySearchPlaceholder')}
+												maxLength={50}
+												className="h-11 pl-9 pr-11"
+												aria-describedby="market-availability-search-status"
+											/>
+											{searchTerm ? (
+												<button
+													type="button"
+													aria-label={t('clearSearch')}
+													onClick={() => setSearchTerm('')}
+													className="absolute right-0 top-0 flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+												>
+													<X
+														aria-hidden="true"
+														className="size-4"
+													/>
+												</button>
+											) : null}
+										</div>
+						<p
+							id="market-availability-search-status"
+											role="status"
+											aria-live="polite"
+											className="text-xs text-muted-foreground"
+										>
+											{!searchActive
+											? tExplore('availabilitySearchPrompt')
+											: hasSnapshotError
+												? tExplore('availabilitySearchLoadFailed')
+												: loading || nextOffset !== null
+													? tExplore('availabilitySearchLoading', {
+																loaded: loadedUpdates.length,
+																total: loadedSnapshot?.totalCount ?? count
+															})
+														: filteredUpdates.length === 0
+														? tExplore('availabilitySearchNoMatches')
+														: tExplore('availabilitySearchResults', {
+																	count: filteredUpdates.length
 										})}
-									</p>
-									<MarketAvailabilityClientList
-										updates={loadedUpdates}
-										locale={locale}
-										t={t}
-									/>
-									{nextOffset !== null ? (
+						</p>
+						{searchActive && unavailable && nextOffset !== null ? (
+							<button
+								type="button"
+								className="rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
+								onClick={() => void loadPage(nextOffset)}
+								disabled={loading}
+							>
+								{loading
+									? tExplore('availabilitySearchRetrying')
+									: tExplore('availabilitySearchRetry')}
+							</button>
+						) : null}
+					</div>
+									{searchActive &&
+									!loading &&
+									nextOffset === null &&
+									filteredUpdates.length === 0 ? (
+										<p className="rounded-md border border-dashed border-border/70 px-3 py-5 text-center text-xs text-muted-foreground">
+										{tExplore('availabilitySearchNoMatches')}
+										</p>
+									) : (
+										<MarketAvailabilityClientList
+											updates={filteredUpdates}
+											locale={locale}
+											t={t}
+										/>
+									)}
+									{!searchActive && nextOffset !== null ? (
 										<button
 											type="button"
 											className="mt-3 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"

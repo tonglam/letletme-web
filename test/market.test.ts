@@ -6,6 +6,7 @@ import type {
 	MarketPulse
 } from '../lib/graphql/operations/market'
 import {
+	filterMarketPlayersByPosition,
 	getMarketCoverageMode,
 	getMarketTeaserMode,
 	getMarketViewMode,
@@ -125,5 +126,23 @@ describe('Market presentation rules', () => {
 		assert.equal(shortMarketPosition('DEF'), 'DEF')
 		assert.equal(shortMarketPosition('MID'), 'MID')
 		assert.equal(shortMarketPosition('FWD'), 'FWD')
+	})
+
+	it('filters the most-selected list by one position without changing source order', () => {
+		const players = [
+			player({ playerId: 1, position: 'MIDFIELDER' }),
+			player({ playerId: 2, position: 'DEFENDER' }),
+			player({ playerId: 3, position: 'MIDFIELDER' })
+		]
+		assert.deepEqual(
+			filterMarketPlayersByPosition(players, 'MIDFIELDER').map(
+				item => item.playerId
+			),
+			[1, 3]
+		)
+		assert.deepEqual(
+			filterMarketPlayersByPosition(players, 'ALL').map(item => item.playerId),
+			[1, 2, 3]
+		)
 	})
 })

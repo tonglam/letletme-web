@@ -72,16 +72,17 @@ export const getCurrentAndNextEvents = cache(
 					context.currentEventId == null
 						? []
 						: [{ id: context.currentEventId }],
-				next:
-					context.nextEventId == null
-						? []
-						: [
-								{
-									id: context.nextEventId,
-									deadlineTime: context.nextDeadlineTime ?? ''
-								}
-							]
-			}
+					next:
+						context.nextEventId == null
+							? []
+							: [
+									{
+										id: context.nextEventId,
+										deadlineTime: context.nextDeadlineTime ?? ''
+									}
+								],
+					latestFinishedEventId: context.latestFinishedEventId
+				}
 		} catch (err) {
 			console.error('[events] Failed to fetch current and next events:', err)
 			return null
